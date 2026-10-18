@@ -597,3 +597,9 @@ allocator.
   granule's PREVIOUS contents), and the RTL lane cautions to check the value before naming any mechanism.
 - **The compiler lane's probe** reads the granule back raw (both halves with plain `ld`, plus the tag) before and after
   the init, with and without a plain pre-touch. Pre-registered go/no-go: "the pre-touch changes the reading".
+
+### Arm pb9, result (2026-10-18 15:22-15:30): 4 of 4 cells the same, with no cause-6 fault
+
+`records/pb9.board.txt`. ffmpeg/pool, stock (vp2-malloc): MISSED 4 on silicon, as predicted, with both generic controls
+faulting. Its prebuilt CMake build of the pool sources reaches no cause-6 fault, so the silicon-only fault is not
+common to everything built from these sources. It is the contrast case for the probe.

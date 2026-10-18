@@ -1,0 +1,22 @@
+# Tier 3 board reading, arm pb9: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-ffmpeg-pool-stock platform board:caplifive_vp2_bf3db3175 cells 4 tally {"MISSED": 4}
+# controls [["bounds-malloc", "fault"], ["pool-return-90", "complete"], ["uaf-malloc", "fault"]]
+00_461fb22053_af_join_dedup_bound image b5fbf89fba9c30c2 MISSED cause None at None reached True completed True attribution null
+01_1886c3269d_h264_refs_partial_clear image d417df960714bb96 MISSED cause None at None reached True completed True attribution null
+02_316531e61c_vidstab_parked_plane_pointer image 362fe4f5c050c74d MISSED cause None at None reached True completed True attribution null
+03_5c66a3ab51_vvc_nonref_output_releases_tabs image 85e72385382ec745 MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_461fb22053_af_join_dedup_bound: verdict MISSED cause None pc None
+  SAME 01_1886c3269d_h264_refs_partial_clear: verdict MISSED cause None pc None
+  SAME 02_316531e61c_vidstab_parked_plane_pointer: verdict MISSED cause None pc None
+  SAME 03_5c66a3ab51_vvc_nonref_output_releases_tabs: verdict MISSED cause None pc None
+  4 of 4 cells the same
+## the boot
+  T3SEQ pb9 BEGIN 15:22:06 ffmpeg/pool-repros virtual-malloc (4 extra args)
+  T3SEQ pb9 END 15:30:32 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-ffmpeg-pool-stock): {'MISSED': 4}
+  T3SEQ pb9 PAYLOAD stage 2557328 B, 1008777 B gzip; firmware 17467912 B
+  BOARD_RUN_START 15:22:06 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 15 files, stage 2557328 bytes
+  firmware 2f1d187960dc4f03 17467912 B
+  DRIVER rc=0 15:30:32
+  BOARD_RUN_DONE 15:30:32
