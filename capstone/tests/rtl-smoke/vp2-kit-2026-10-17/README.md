@@ -1621,3 +1621,14 @@ Pre-registered at 6e8181b4b99c. Result lines are in `board-tier12/results/board-
   - **Predicted:** vm-contract identity, as on a2a0b2f4 (the esconly boot).
   - **A failure** means the pin code is harmful merely by being present, the Q-26 class. The Tier 2 suite with
     `arena_pin=1` then waits.
+
+### The arena-pin Tier 1 boot, result (2026-10-18 12:09-12:15): the pin code is harmless by being present
+
+Pre-registered at e1eb22d1633e. Result lines are in `board-tier12/results/board-vp2-tier12-ap1.result-lines.txt`.
+- **Read as predicted:** vm-contract identity on module 3005ed52 with arena_pin at its default (off), banner
+  `arena-pin-1`. b0-stats and b0-hello read their oracles.
+- **Compared by script:** the vm-contract fault line equals boots 4c and be in cause (25), code offset (0x140f0) and
+  entry (0x94c). The fault address is the heap's, and it moves on every boot.
+- **Next:** Tier 2 boot 5 on the same module, with arena_pin=1 for the whole suite and the kit applications run
+  (`vm-suite-inner-b5.sh`, `boot3/run-tier12-b5.sh`). It is pre-registered separately, against the reference QEMU
+  record of that exact suite.

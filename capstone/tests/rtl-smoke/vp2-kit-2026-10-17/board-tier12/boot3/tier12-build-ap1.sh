@@ -1,6 +1,6 @@
 #!/bin/bash
-# vp2 Tier 2 boot 4 (the record): as r13's build (monitor 007d81d) with the module queue's revision (3005ed52e860c7af, arena-pin-1 on a2a0b2f4, arena_pin off by default) and
-# vm-suite-inner-ap1.sh (run.py's suite with S-25's steps not run).
+# vp2 arena-pin Tier 1 boot: as r13's build (monitor 007d81d) with module 3005ed52e860c7af (arena-pin-1 on a2a0b2f4, arena_pin off by
+# default). The stage's suite is boot 4b's and is not run (Tier 1 alone).
 #
 # Ends by itself.
 main() {
