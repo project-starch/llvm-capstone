@@ -36,6 +36,7 @@ CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
 import appvm  # noqa: E402
+import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -116,6 +117,8 @@ def main():
     where.add_argument("--state", type=Path, help="a persistent capstone-vm (physical profile)")
     where.add_argument("--virtual-kit", type=Path, help="the virtual platform kit (tools/virtualvm.py); "
                        "every control and case then runs in ONE boot")
+    where.add_argument("--board-kit", type=Path, help="a vp2 board kit (tools/boardvm.py): the same boot on the "
+                       "board; the bundle records arm vp2-<arm>")
     p.add_argument("--bindir", type=Path, required=True)
     p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--out", type=Path)
@@ -131,13 +134,14 @@ def main():
         sys.exit(f"arm {a.arm!r} is not a Capstone domain arm of this corpus: {decl['arm_configurations']}")
     spec = v.load_arms()[config]
     build = json.loads((a.bindir / "build.json").read_text())
-    if build_identity(build) != HEAP[config] or (spec["target"] == "capstone-virtual") != bool(a.virtual_kit or appvm.profile(a.state) == "virtual"):
+    if build_identity(build) != HEAP[config] or (spec["target"] == "capstone-virtual") != bool(a.virtual_kit or a.board_kit or appvm.profile(a.state) == "virtual"):
         print(f"CONTROL-FAILED {a.bindir} was built as {build_identity(build)!r} and the run is on "
-              f"{'the virtual kit' if a.virtual_kit else 'a physical VM'}; arm {a.arm} is {config}, "
+              f"{'the virtual kit' if a.virtual_kit else 'the board kit' if a.board_kit else 'a physical VM'}; arm {a.arm} is {config}, "
               f"which needs {HEAP[config]!r} on {spec['target']}", file=sys.stderr)
         return 75
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = a.out or (CORPUS / "results" / f"{stamp}-qemu" / a.arm)
+    rec = boardvm.record_arm(a.arm, a.board_kit)
+    out = a.out or (CORPUS / "results" / f"{stamp}-{'vp2' if a.board_kit else 'qemu'}" / rec)
     raw = a.raw or Path("/tmp/capstone/c-repros-raw") / f"{stamp}-{a.arm}"
     raw.mkdir(parents=True, exist_ok=True)
 
@@ -157,14 +161,15 @@ def main():
     plan += [(f"{d.name}-control", a.bindir / f"{d.name}-control.dom", [str(int(d.name[:2]))])
              for d in found if (a.bindir / f"{d.name}-control.dom").is_file()]
 
-    if a.virtual_kit:
-        batch = virtualvm.Batch(raw / "stage")
+    if a.virtual_kit or a.board_kit:
+        Batch, kit = boardvm.select(a.virtual_kit, a.board_kit)
+        batch = Batch(raw / "stage")
         for name, image, argv in plan:
             batch.put(f"images/{image.name}", image)
             batch.step(name, f"./capstone-vexec ./images/{image.name} {' '.join(argv)}")
-        runs, serial, completed = batch.execute(a.virtual_kit, raw / "guest", timeout=300 + 120 * len(plan))
+        runs, serial, completed = batch.execute(kit, raw / "guest", timeout=300 + 120 * len(plan))
         print(f"  virtual boot: {'completed' if completed else 'DID NOT COMPLETE'}; serial {serial}", flush=True)
-        platform = virtualvm.platform(a.virtual_kit, a.llvm_bin / "clang", HERE)
+        platform = boardvm.run_platform(a.virtual_kit, a.board_kit, a.llvm_bin / "clang", HERE, raw / "guest")
     else:
         appvm.require_up(a.state)
         share = Path(json.loads((a.state / "config.json").read_text())["share"])
@@ -188,13 +193,13 @@ def main():
         claims = json.loads((d / "case.json").read_text())
         image = a.bindir / f"{d.name}.dom"
         if not image.is_file():
-            o = v.Observation(case=d.name, arm=a.arm, infra="build-failed", notes=f"no image at {image}")
+            o = v.Observation(case=d.name, arm=rec, infra="build-failed", notes=f"no image at {image}")
         elif d.name not in runs:
-            o = v.Observation(case=d.name, arm=a.arm, infra="infra", notes="the boot ended before this case ran")
+            o = v.Observation(case=d.name, arm=rec, infra="infra", notes="the boot ended before this case ran")
         else:
             text, result = runs[d.name]
             o = observe(number, text, result, v.Symbols(a.llvm_bin, image), claims.get("fault_sites", ()))
-            o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(image)
+            o.case, o.arm, o.image_sha256 = d.name, rec, v.sha256(image)
             # The case's own negative control is read for EVERY case that faulted, not only for
             # one the declared function did not already place. The two answer different
             # questions -- where the fault is, and whether the arm would fault anyway -- and
@@ -224,9 +229,9 @@ def main():
         rows.append((o, verdict))
         print(f"{d.name:<56} {verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:90]}", flush=True)
 
-    record = v.write_bundle(out, "postgres/c-repros", a.arm, rows, {
+    record = v.write_bundle(out, "postgres/c-repros", rec, rows, {
         "configuration": config, "build": build, "platform": platform})
-    print(f"--- {a.arm} ({config}): {record['tally']}\nresults: {out}")
+    print(f"--- {rec} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 

@@ -91,6 +91,13 @@ def main():
                    ("a board run records vp2-<arm>",
                     rvc.record_arm(ns(arm="virtual-malloc", arm_name=None, board_kit="k")) == "vp2-malloc"),
                    ("--arm-name wins", rvc.record_arm(ns(arm="virtual-malloc", arm_name="x", board_kit="k")) == "x")]
+        # the helpers the corpus-specific runners (postgres c-repros, mmgr, sql) use
+        checks += [("boardvm.record_arm on a board run", boardvm.record_arm("virtual-pg-pools", "k") == "vp2-pg-pools"),
+                   ("boardvm.record_arm off the board", boardvm.record_arm("virtual-malloc", None) == "virtual-malloc"),
+                   ("boardvm.select picks BoardBatch for a board kit",
+                    boardvm.select(None, "bk") == (boardvm.BoardBatch, "bk")),
+                   ("boardvm.select picks virtualvm.Batch for a QEMU kit",
+                    boardvm.select("vk", None) == (boardvm.virtualvm.Batch, "vk"))]
     for what, ok in checks:
         bad += not ok
         print(f"{'ok  ' if ok else 'FAIL'} {what}")

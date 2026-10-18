@@ -70,6 +70,27 @@ def record_firmware(record, work):
     return record
 
 
+def record_arm(arm, board):
+    """The arm a run records: a board run records under vp2-<arm without "virtual-">, which corpus.json maps to the
+    same configuration, so the QEMU bundle stays the corpus's current record of the virtual arm."""
+    if not board:
+        return arm
+    return "vp2-" + (arm[len("virtual-"):] if arm.startswith("virtual-") else arm)
+
+
+def select(virtual_kit, board_kit):
+    """For a corpus runner with --virtual-kit | --board-kit: (Batch class, kit). Both share put()/step()/execute()."""
+    return (BoardBatch, board_kit) if board_kit else (virtualvm.Batch, virtual_kit)
+
+
+def run_platform(virtual_kit, board_kit, compiler, runner, work):
+    """The platform record for either kit; a board record takes its firmware and kernel from the recipe's record in
+    <work> (the guest directory the batch executed in)."""
+    if board_kit:
+        return record_firmware(platform(board_kit, compiler, runner), work)
+    return virtualvm.platform(virtual_kit, compiler, runner)
+
+
 def read_env(path):
     """KEY=value lines (no shell expansion: the recipe sources the same file, so keep the values literal)."""
     env = {}
