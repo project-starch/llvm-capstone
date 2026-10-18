@@ -570,3 +570,15 @@ prediction cut to those cases (`subset-bundle.py`).
   information. sq1's record is therefore 6 of 33 cells measured, with the cause of all 33 confirmed. The arm becomes
   measurable once the Sublet memsys5 heap derives representable children (Q-15's consequence, the compiler lane's
   work).
+
+### Arm fso, result (2026-10-18 15:01-15:12): pymalloc's silicon-only fault, in a second port
+
+`records/fso.board.txt`. ffmpeg/subobject vp2-malloc reads NO-READING:control-failed 9, against a predicted MISSED 9.
+Both generic controls pass in the same boot (28 and 25).
+- **Every case's FIXED run faults:** `cause=6 address=0x12` at `sd a4, 0x10(a5)` after the same `stc`/`ldc`
+  spill-reload. That is metadata-allocator.c's `b = (struct block *)(arena + used); b->size = size`.
+- **The same idiom as pymalloc's backing.c:** a static capability global set once by an init function from a large
+  allocation, an adjacent static `size_t used`, and `b = global + used` reading cursor 2 at the first allocation.
+- **A lead, not a mechanism (the compiler lane's probe tests it):** the init's capability store may be a fresh .bss
+  page's first touch, which is S-25's trigger. A pre-touch arm will tell. The RTL lane is asked whether R-57 also
+  predicts the reloaded value 2.
