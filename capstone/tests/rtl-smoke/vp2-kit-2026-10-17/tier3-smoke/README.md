@@ -582,3 +582,18 @@ Both generic controls pass in the same boot (28 and 25).
 - **A lead, not a mechanism (the compiler lane's probe tests it):** the init's capability store may be a fresh .bss
   page's first touch, which is S-25's trigger. A pre-touch arm will tell. The RTL lane is asked whether R-57 also
   predicts the reloaded value 2.
+
+### Arm pb12, result (2026-10-18 15:12-15:22): the same silicon-only fault, in a third port
+
+`records/pb12.board.txt`. memcached/allocator, stock (vp2-malloc), reads control-failed 9 against a predicted CAUGHT 1,
+MISSED 8. The board has 19 faults of `cause=6 address=0x12` (the chunk-free-90 control and every case) and QEMU none.
+Both generic controls pass. That is three ports: pymalloc, ffmpeg's pool/metadata allocator and memcached's
+allocator.
+- **The RTL lane's reading, from bf3db3175's source: R-57 cannot produce this.**
+  - An invalid ghost never writes, forwards or shadows.
+  - A lost STC leaves the granule's previous contents, zero on fresh .bss.
+  - R-57 always wedges, and these programs run on.
+  So the cursor of 2 needs its own explanation. A non-zero wrong value is the stale-refill class's shape (the
+  granule's PREVIOUS contents), and the RTL lane cautions to check the value before naming any mechanism.
+- **The compiler lane's probe** reads the granule back raw (both halves with plain `ld`, plus the tag) before and after
+  the init, with and without a plain pre-touch. Pre-registered go/no-go: "the pre-touch changes the reading".

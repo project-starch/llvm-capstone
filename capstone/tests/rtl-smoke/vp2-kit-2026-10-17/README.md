@@ -1689,3 +1689,8 @@ Pre-registered at ef24d082c2ea. Result lines are in `board-tier12/results/board-
   - The record of Tier 2 stays boot 4c.
   - Tier 3 runs with the pin OFF (the rule pre-registered with the kits): the pin removes no wedge here, and pin-off is
     4c's configuration.
+
+**Citation note (2026-10-18).** The compiler lane's branch lane/compiler-exact-bounds-iii was force-pushed on the lead's
+word, to remove an account path. Its pre-15:15 hashes cited in this kit (for example 52b2e742d2d8, the Q-26 revert,
+and 457b78f27e10, run.py's revision) resolve through
+`capstone/docs/history/18-10-2026_15-14-45_lane-history-rewrite-hash-map.md`.
