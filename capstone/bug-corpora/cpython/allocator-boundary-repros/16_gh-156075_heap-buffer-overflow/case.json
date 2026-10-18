@@ -16,13 +16,13 @@
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the trigger began (ABR BEGIN; no marker at the access in an upstream reproducer)) and completed with no fault; the trigger ended with RAISED RuntimeError",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc"
+      "verdict_from": "results/2026-10-18-review/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "NO-READING",
-      "verdict_note": "cause=28 pc=0x3fb50aced0 in advance_with_locations; in advance_with_locations; ASan sites ['read_byte', 'read_varint']",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools",
+      "verdict_note": "cause=28 pc=0x3f850a6f5c in advance_with_locations; in advance_with_locations; ASan sites ['read_byte', 'read_varint']",
+      "verdict_from": "results/2026-10-18-review/virtual-nested-pools",
       "verdict_reason": "unattributed"
     },
     "cheribsd-revocation": {
