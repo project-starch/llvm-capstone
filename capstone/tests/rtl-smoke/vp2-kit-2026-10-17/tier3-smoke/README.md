@@ -267,3 +267,22 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
   - The stage was 1,657,992 B, 686,071 B gzipped.
   - The firmware stayed at 17,467,912 B, the clean size's 2 MiB step, well under the 26,000,000-byte cap.
 - **The time:** bake, firmware and boot to the end of the batch took 8 minutes for 9 steps.
+
+## Tier 3's 26 arms on the board: which runner, and what each still needs (2026-10-18)
+
+| runner | arms | board path |
+|---|---|---|
+| `tools/run-virtual-cases.py` (case.c corpora and the prebuilt ffmpeg pool / memcached allocator ports) | 13: ffmpeg carved x2, plain-heap, plain-temporal, pool x2, subobject; memcached allocator x2, plain-heap, plain-temporal; wireshark plain-heap, plain-temporal | `--board-kit`, validated by the pilot |
+| `postgres/c-repros/shared/run-arm.py`, `mmgr-repros/shared/run-defects.py`, `sql-repros/shared/run-arm.py` (virtualvm.Batch) | 5 | `--board-kit` (lane 0d542dc4f97b), the same BoardBatch drop-in |
+| `sqlite/engine-repros/shared/run-virtual.py`, `wireshark/wmem-repros/shared/run-defects.py` (appvm.run_app) | 4 | the appvm batch session (`tools/board/appvm-session.py`). Its QEMU control (`session-control.sh`) passes: wmem virtual-malloc collected, booted once on the v6-fix kit and read back equals the direct appvm run of the same builds in 23 of 23 cells by image, with the share linked and the marker read through /mnt/host |
+| `cpython/*/runners/virtual/run-virtual.py` (appvm.run_app with a staged stdlib) | 4 | **blocked on payload**: the staged CPython 3.13 stdlib is 287 MB raw and 86 MB gzipped, against about 8.5 MB of headroom under the 26 MB cap. These arms need a stdlib trimmed to what the scripts import, which is its own design. |
+
+- **Every board arm records under `vp2-<arm>`.** The QEMU bundle stays the virtual arm's current record.
+- **The sql runner's payload is not measured yet.** It stages the PostgreSQL share and an initdb'd cluster. The
+  recipe's 26 MB cap check stops it before any boot if it does not fit.
+- **The order on the board,** after the pinned bundles and the arena-pin module:
+  - the 13 run-virtual-cases arms first: the pilot's path, a 9-step boot is about 8 minutes;
+  - then the postgres three;
+  - then the two appvm corpora.
+  - Each boot runs b0-stats and b0-hello first (S-26's warm-up).
+  - A wedge with R-57's signature (a commit count with no valid bits) is S-25's residual, recorded as that.
