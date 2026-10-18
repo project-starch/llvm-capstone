@@ -33,5 +33,6 @@
     "memcpy",
     "PyBytes_FromStringAndSize"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 1048576) at memcpy ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors_memintrinsics.inc:117 | memcpy /usr/include/x86_64-linux-gnu/bits/string_fortified.h:29 | PyBytes_FromStringAndSize Objects/bytesobject.c:159. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 1048576) at memcpy ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors_memintrinsics.inc:117 | memcpy /usr/include/x86_64-linux-gnu/bits/string_fortified.h:29 | PyBytes_FromStringAndSize Objects/bytesobject.c:159. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "③ WITHDRAWN by the 2026-10-18 review. Spatial defect, and this one is NON-NESTED: the ASan heap report survives PYTHONMALLOC=pymalloc, so the object is libc malloc's. Both Capstone arms catch it properly, cause=28 on `lbu a4, 0x0(a1)`. CheriBSD reports si_code=2 PROT_CHERI_TAG instead of si_code=1 PROT_CHERI_BOUNDS -- its malloc rounds the request up to a size class, so the overread stays inside the capability and what faults is the use of what was read. The two Capstone arms bound the same object to the request and see the access itself."
 }
