@@ -7,9 +7,10 @@ main() {
   local W=${1:?after} O=${2:?out} S; S=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
   local H=/mnt/hdd/$USER/capstone I=/mnt/hdd/$USER/capstone/t3-images-nb K=/mnt/hdd/$USER/capstone/t3-smoke/bkit7
   local LB=/tmp/capstone/vp2-prep/llvm-bin-v6 C=/tmp/capstone/wt-gate/capstone/bug-corpora end=$(( $(date +%s) + 14400 )) g t
-  until grep -a -q "T3PG DONE\|T3PG STOP\|^STOP" "$W" 2>/dev/null || [ "$(date +%s)" -ge $end ]; do sleep 15; done
+  local AFTER=${AFTER_PATTERN:-T3PG DONE\|T3PG STOP\|^STOP}
+  until grep -a -q "$AFTER" "$W" 2>/dev/null || [ "$(date +%s)" -ge $end ]; do sleep 15; done
   sleep 20
-  grep -a -q "T3PG DONE\|T3PG STOP\|^STOP" "$W" || { echo "STOP: $W has not ended" >> "$O"; return 1; }
+  grep -a -q "$AFTER" "$W" || { echo "STOP: $W has not ended" >> "$O"; return 1; }
   # the pymalloc probe arms first (PROBES, e.g. "ppA ppB ppC"): <mnt-hdd>/capstone/pym-probe-hosted-<A|B|C>, scored at once
   for t in ${PROBES:-}; do
     pgrep -f "fpga_driver[.]run_baked" > /dev/null && { echo "T3APPVM STOP: a driver is running" >> "$O"; return 1; }
@@ -20,6 +21,7 @@ main() {
     echo "T3APPVM $t END rc=$? $(date +%T)" >> "$O"
     bash "$S/score-arm.sh" "$t" "$H/t3-pred-$t/out" "$H/t3-run/$t" "$O" >> "$O" 2>&1
   done
+  [ "${PROBES_ONLY:-}" = 1 ] && { echo "T3APPVM QUEUE2 DONE $(date +%T) (probes only)" >> "$O"; return 0; }
   for g in a b c d e f; do
     t=sq0$g
     pgrep -f "fpga_driver[.]run_baked" > /dev/null && { echo "T3APPVM STOP: a driver is running" >> "$O"; return 1; }
