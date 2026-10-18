@@ -818,3 +818,13 @@ silicon):
     on a resume;
   - `capstone_dom_switcher.anvil:584` writes it whenever `set_ra != 0`, unless the request is a good mode-1 entry.
 - S-27 records all this in ISSUES.
+
+### Arm sq0, subsets e and f, and the arm in full (2026-10-18 17:42-18:05): 18 of 33 cells the same
+
+- sq0e reads 5 of 6 and sq0f 3 of 3.
+- Over the six subsets, sq0 (sqlite/engine-repros vp2-malloc) reads 18 of 33 cells equal to its prediction. The other
+  15 carry S-27's register-2 fault (tval 2, or a5 among the faulting instruction's operands).
+- **The bundles:** each subset ran on its own firmware (its own stage), so the arm is filed as six verdicts-v1 bundles,
+  `sqlite/engine-repros/results/2026-10-18-vp2/vp2-malloc-sq0{a..f}`, and sq1's single subset as
+  `vp2-nested-pools-sq1a`. Each carries its own platform record. Combining them is the fold's decision, and corpus.json
+  is untouched.
