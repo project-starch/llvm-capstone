@@ -11,7 +11,7 @@ observe() reads a virtual step exactly as it reads a physical run. Nothing here 
 
 The platform is a kit directory holding exactly what the qualification recorded:
 qemu-system-riscv64 (+ libslirp.so.0), images/{Image,fw_jump.elf,rootfs.ext2},
-adapter/capstone-vexec, adapter/module/capstone_vm.ko.
+adapter/capstone-vexec, adapter/module/capstone_vm.ko, and optionally adapter/module/params (see module_params()).
 """
 import os
 import re
@@ -27,6 +27,53 @@ STAGED = REPO / "capstone/runtime/virtual/run-staged.py"
 FILES = ("qemu-system-riscv64", "images/Image", "images/fw_jump.elf", "images/rootfs.ext2",
          "adapter/capstone-vexec", "adapter/module/capstone_vm.ko")
 BEGIN, END = "@@STEP-BEGIN ", "@@STEP-END "
+PARAMS = "adapter/module/params"
+SYSFS = "/sys/module/capstone_vm/parameters"
+
+
+def module_params(kit):
+    """The kit's module parameters: adapter/module/params, one `name=value` per line (# comments allowed). The guest
+    script writes each through sysfs right after insmod and prints its read-back as `@@PARAM name=<value>`; the run is
+    refused unless every one reads back as set (check_params). No file: no parameters, and the script is unchanged."""
+    f = Path(kit) / PARAMS
+    if not f.is_file():
+        return []
+    params = []
+    for line in f.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = re.fullmatch(r"([a-z_][a-z0-9_]*)=([A-Za-z0-9]+)", line)
+        if not m:
+            raise ValueError(f"{f}: {line!r} is not name=value")
+        params.append((m.group(1), m.group(2)))
+    return params
+
+
+def param_lines(params):
+    """The guest lines that set the parameters and print their read-back; a parameter the module does not have, or a
+    write that fails, ends the batch."""
+    return [f"[ -f {SYSFS}/{n} ] && echo {v} > {SYSFS}/{n} && echo \"@@PARAM {n}=$(cat {SYSFS}/{n})\" || "
+            f"{{ echo '@@PARAM {n} REFUSED'; echo VIRTUAL_STAGED_DONE; exit 1; }}" for n, v in params]
+
+
+def check_params(params, text):
+    """Raise unless every parameter was read back exactly once, as set: a bool reads Y for 1/y/Y and N for 0/n/N, any
+    other parameter its own value. A boot whose module did not run the kit's configuration is not a record of it."""
+    bools = {"1": "Y", "y": "Y", "Y": "Y", "0": "N", "n": "N", "N": "N"}
+    for n, v in params:
+        got = re.findall(rf"^@@PARAM {n}=(\S+)$", text, re.M)
+        if len(got) != 1 or got[0] not in (v, bools.get(v, v)):
+            raise RuntimeError(f"module parameter {n}={v}: read back {got or 'nothing'}; the boot did not run the "
+                               f"kit's configuration (or never reached the batch)")
+
+
+def record_params(record, kit):
+    """Add the kit's module parameters to a platform record, only when it has any (records without stay as before)."""
+    params = module_params(kit)
+    if params:
+        record["module_params"] = " ".join(f"{n}={v}" for n, v in params)
+    return record
 
 
 def platform(kit, compiler, runner):
@@ -39,7 +86,7 @@ def platform(kit, compiler, runner):
     record["runner"] = sha256(runner)
     record["judge"] = sha256(Path(__file__).with_name("verdicts.py"))
     record["profile"] = "virtual"
-    return record
+    return record_params(record, kit)
 
 
 class Batch:
@@ -49,6 +96,7 @@ class Batch:
             sys.exit(f"{self.stage} exists; a batch stages into a fresh directory")
         self.stage.mkdir(parents=True)
         self.steps = []
+        self.params = []
 
     def put(self, dest, source=None, text=None):
         """Stage a file, a directory tree, or text at /mnt/vm/<dest>."""
@@ -74,7 +122,7 @@ class Batch:
                  # The launcher prints its `capstone-exec: domain fault cause= pc= ... code=` line only
                  # with diagnostics on (as run-ports.py runs it); without it a fault is a bare
                  # SIGSEGV, which no observe() may read as the mechanism reporting.
-                 "export CAPSTONE_EXEC_DIAGNOSTICS=1"]
+                 "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + param_lines(self.params)
         for name, command in self.steps:
             lines += [f"echo '{BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
                       "cat /tmp/step.out", f"echo \"{END}{name} $rc\""]
@@ -87,6 +135,7 @@ class Batch:
         shutil.copy2(kit / "adapter/capstone-vexec", self.stage / "capstone-vexec")
         (self.stage / "capstone-vexec").chmod(0o755)
         shutil.copy2(kit / "adapter/module/capstone_vm.ko", self.stage / "capstone_vm.ko")
+        self.params = module_params(kit)
         (self.stage / "gate.sh").write_text(self.script())
         size = sum(f.stat().st_size for f in self.stage.rglob("*") if f.is_file())
         env = dict(os.environ)
@@ -99,6 +148,7 @@ class Batch:
                               "--disk-mib", str(max(1024, (size >> 20) * 2 + 256))], env=env)
         serial = Path(work) / "serial.log"
         text = serial.read_text(errors="replace").replace("\r\n", "\n") if serial.exists() else ""
+        check_params(self.params, text)
         return split(text), serial, run.returncode == 0
 
 
