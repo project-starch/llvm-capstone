@@ -471,7 +471,8 @@ def fixture_record(fixture, preinstalled):
     writes that beside the fixture as <fixture>.provenance.json, so it is carried here when it
     exists and its absence is recorded rather than passed over.
     """
-    record = {"cluster_tree_sha256": tree_sha(fixture), "preinstalled": sorted(preinstalled)}
+    record = {"cluster_tree_sha256": tree_sha(fixture), "cluster_stable_tree_sha256": stable_tree_sha(fixture),
+              "preinstalled": sorted(preinstalled)}
     # make-fixture.py writes <fixture>.provenance.json. A fixture built before it did leaves only
     # its run record, <fixture>.json, which carries the builder image's sha256 under image_sha256
     # -- the same fact under another name. Either is taken, and the record says which file it came
@@ -498,6 +499,30 @@ def fixture_record(fixture, preinstalled):
                                  "run record, so which image created its extensions is not "
                                  "recorded in this run")
     return record
+
+
+# The files PostgreSQL stamps with the time (pg_control, pgstat.stat, the WAL checkpoint record): two otherwise identical
+# clusters differ in them, so a REBUILT fixture never matches cluster_tree_sha256. The stable hash leaves them out and is
+# computed exactly as ports/postgres/app/build-native16-fixture.py's cluster_stable_tree_sha256, so a bundle's value can be
+# compared with the builder manifest's directly.
+TIME_BEARING = ("global/pg_control", "pg_stat/", "pg_wal/0")
+
+
+def stable_tree_sha(root):
+    import hashlib
+    h = hashlib.sha256()
+    root = Path(root)
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if path.is_file() and relative.startswith(TIME_BEARING):
+            continue
+        if path.is_dir():
+            h.update(b"d\0" + relative.encode() + b"\0")
+        elif path.is_file() and not path.is_symlink():
+            h.update(b"f\0" + relative.encode() + b"\0" + hashlib.sha256(path.read_bytes()).hexdigest().encode() + b"\0")
+        else:
+            raise ValueError(f"nonregular cluster entry: {path}")
+    return h.hexdigest()
 
 
 def tree_sha(root):
