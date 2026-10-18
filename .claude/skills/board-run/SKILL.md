@@ -39,6 +39,12 @@ Deterministic, never delegated, same standing as `precommit-scan.sh`. It checks 
 in the artifact, images are distinct, the control has a published passing record
 (`ref/known-good-controls.md`), the DTS matches the resident bitstream, and the slot budget.
 
+**A boot run with the driver's preflight off (`PREFLIGHT=0`, as every vp2 Tier 1/2/3 recipe does) is UNGATED,
+and its record must say so.** The driver itself prints "Any verdict from this boot is UNGATED -- say so when reporting
+it". A whole Tier 3 campaign's records omitted this until an auditor read the driver logs (2026-10-18). State it in the
+result lines and the commit message. Name the checks that stood in for the C-gates: image identity by sha256, the
+fault line's image hash, the firmware cap, and the recipe's pins.
+
 ## 0. Before you spend a boot — three offline checks
 
 Each of these has cost real board time when skipped.

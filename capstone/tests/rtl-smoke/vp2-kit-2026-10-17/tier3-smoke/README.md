@@ -839,3 +839,10 @@ its first control.
 - **Note, for after the S-27 workaround:** with every resume clobbering the context's a5 on this module, a re-run of
   wm0 and wm1 on the patched module will show whether these wedges were downstream of S-27. They stay attributed as
   recorded until then.
+
+**Amendment to ppE4's pre-registration (before its boot).** Its QEMU twin (this lane's, agreeing with the compiler
+lane's) reads 19 MISSED and 1 NO-READING:setup-fault: case 00 faults `cause=24 address=0x40` in memset+0x2c, in setup,
+before the `sd` it was built to discriminate. That is E4's deliberately broken linear `metadata` going through memset.
+So ppE4 cannot separate 0x11 from 0x12. Its prediction is now the QEMU twin's own reading
+(`records/ppE4.prediction.txt`), and a difference on silicon is what gets read. ppE3 is unchanged: no mismatch, and the
+fault anyway.
