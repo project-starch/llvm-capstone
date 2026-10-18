@@ -516,3 +516,18 @@ and 98 cells on silicon, every cell equal to the QEMU prediction on the same ima
   run). It matched itself and stopped before booting anything; this is CLAUDE.md's pgrep rule. No board time was lost:
   the appvm queue (pym0, pym1, sq1a) took the board next. The re-queued waiter checks only patterns its own command
   line cannot contain.
+
+### Arm pym0, result (2026-10-18 14:25-14:36): a silicon-only DIFF. Every pymalloc program faults in its first raw allocation with cause 6 at address 0x12; QEMU completes the same bytes
+
+`records/pym0.board.txt`. The board's collected images equalled the prediction's 21. The boot completed all 21 steps,
+and compare-pilot.py reads 0 of 20 cells the same.
+- **Every program faults the same way, the uaf-block control included:** `cause=6` (store address misaligned) at code
+  offset 0x159c8, address 0x12, checkpoint `last=0x39`. So the control reads "none" and every cell is control-failed.
+- **The site** (defect-00, `llvm-objdump` with the frozen tools): `pym_raw_malloc+792`, `sd a4, 0x10(a5)`. That is
+  backing.c `b->size = n`, where `b = metadata + used` is built from the `metadata` capability global plus the `used`
+  integer, stored to a stack slot by `stc`, and reloaded by `ldc` just before.
+  - So on silicon `b`'s cursor is 2 at the first `pym_raw_malloc` call. That call is main.c's scratch calloc, right
+    after `pym_backing_init` stored `metadata = aligned_alloc(16384, 16 MiB)`.
+- **Not a mechanism:** a cursor of 2 is also boot 4's signature (a destination cursor of 2), which was the Q-26 wait
+  rewrite. This module does not carry that rewrite, and a shape is not a cause. The diagnosis is handed to the compiler
+  lane, which owns the port. pym1, the same backing code under the Sublet arm, is the next data point.
