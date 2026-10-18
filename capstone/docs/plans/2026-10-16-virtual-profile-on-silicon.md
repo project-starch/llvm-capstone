@@ -964,3 +964,63 @@ index so a reused record would revive stale capabilities, which keeps the module
 record and makes the collecting arms honest "no reading on bf3db3175" rows; S-21/S-22, whose fix is a design choice about
 where the caller's snapshot lives; and the switcher's `satp` write without a flush, whose cost has to be measured rather
 than guessed. Those are tree B.
+
+## S-21/S-22: where the caller's snapshot should live, the options (the RTL lane, 2026-10-18, for the semantics owner to rule)
+
+**The defect, restated from the sources.** A virtual ENTRY saves the trusted caller's ids 0..66 at `save_base = base_addr
++ 1024` (`commit_stage.sv:617`) and every ESCAPE restores them from `restore_base = sup_runv_frame_i + 1024` (`:856`),
+with the caller's FP state a further 1024 above that; the restore path has no check of any kind
+(`capstone_dom_switcher.anvil`, `restore_io` and the walk). A child thread's frame is a page the DOMAIN holds a
+capability to, so a context can read the kernel's saved registers and write what the kernel will resume on. The second
+consequence, from the same reading: a resume does not CONSUME the slots it loads, so the frame keeps tagged copies of
+x1..x31 after every resume, LINEAR ones included.
+
+**What the frame is actually used for below the snapshot.** The hardware writes and reads the register slots at
+`+64 + 16i`, the event words at `+16..+40`, the raw a0 at `+48`, the a0..a7 views at `+576..+632`, the collection list
+pointers at `+640` and `+648`, mstatus at `+920`, the hidden satp/srevroot/options at `+928..+944`, and the FP area at
+`+656..+912`. The reference model never checks beyond `+656` (`capstone_supervisor.c:844`, and `VIRTUAL_FRAME_SIZE` is
+576 at `:709`). **Everything the ABI needs is below +1024, which is exactly where the snapshot begins.**
+
+### Option A, software only, no RTL and no model change: narrow the capability the domain receives
+
+The domain does not need the whole page. If the module and the adapter hand it a capability bounded to
+`[frame, frame + 1024)` instead of the page, the snapshot at `+1024..+2312` is outside its bounds and unreachable, while
+every ABI-visible word stays in range. 1024 is a power of two and the frame is page-aligned, so the bound is exactly
+representable and no rounding applies.
+
+- **The module would have to:** derive the thread's frame capability with those bounds before handing it over
+  (`thread.c` builds the frame today and grants the page), and keep granting the page to nothing else.
+- **The adapter would have to:** the same, for the kit's own frames.
+- **Cost:** none in hardware, none in the model, and it fixes both consequences at once, since a domain that cannot
+  reach `+1024..` also cannot read the stale LINEAR copies left in the slots below it — no, it CAN still read those,
+  the slots being below 1024. See the second question.
+
+### Option B, one CSR: a kernel-only save base
+
+Give the switcher a save base of its own instead of `frame + 1024`: a 64-bit CSR the trusted side writes before entry,
+used as `save_base` and `restore_base`. The snapshot then lives wherever the kernel chooses, in a page no domain ever
+sees.
+
+- **RTL cost:** about 64 flops plus a mux on two fields of the request; the switcher is otherwise unchanged.
+- **The module and the adapter:** allocate a kernel-only page per thread and write the CSR at entry.
+- **The model:** a new CSR and the same relocation, so a kit prediction and a silicon run keep agreeing.
+- **When it is worth it:** only if the ABI ever needs the domain to see above `+1024`, or if relying on every caller to
+  narrow its grant is judged too fragile. It is the robust fix; Option A is the cheap one.
+
+### Option C, the snapshot in flops: rejected with its number
+
+67 ids at 129 live bits is about **8,600 flops** for one slot, on a design already marginal on routability at 178k LUT.
+Not viable, stated so it is visibly rejected rather than silently dropped.
+
+### The second question, the consuming resume
+
+- **Hardware:** the resume walk gains a zero pass over the 31 slots and their tags, like ENTRY's. Cost is 31 extra
+  memory writes on EVERY resume, which is measurable and not free: va-runv2's resumes are the baseline to measure
+  against before this is chosen.
+- **Software:** the trusted side zeroes the slots after each escape it handles. Free in hardware, a per-escape duty that
+  can be forgotten, and it is the same class of promise as the narrowed grant in Option A.
+
+**My recommendation, for the owner to accept or overrule:** Option A plus the software clear, both of which land today
+with no bitstream, and Option B kept as the robust fix for whenever the ABI outgrows the 1024-byte boundary. If the
+owner would rather not rest a security boundary on every caller getting its grant right, Option B with the hardware
+clear is the pair to build, and then it belongs in tree B with its own arm rather than in the batch now in synthesis.
