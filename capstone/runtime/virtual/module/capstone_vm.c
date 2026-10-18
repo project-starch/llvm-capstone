@@ -1064,9 +1064,41 @@ static void pin_ahead(struct context *c, struct arena *a,
  * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
  * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
  * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
-#define CV_DIAG_TAG "resolve-sites-4"
+#define CV_DIAG_TAG "resolve-sites-6"
+
+/* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
+ * and the disagreement is settleable by measurement rather than by argument. During board rungs
+ * the driver sets the console to level 1, so only KERN_EMERG reaches the UART; but `dmesg` reads
+ * the ring buffer, which the console level does NOT filter, so a KERN_WARNING line is fully
+ * readable that way. Default 0 keeps these at pr_warn and off a console the driver quiets on
+ * purpose, where an unexpected line can break the harness's own parsing. Setting it to 1 puts
+ * every diagnostic on the console directly, for a boot where the dmesg route turns out not to
+ * work. 0644, so one boot can try both without a rebuild. */
+static bool diag_emerg;
+module_param(diag_emerg, bool, 0644);
+static unsigned eloop_prints, refuse_prints, childframe_prints;
+
+#define CV_EMIT(fmt, ...) do {                      \
+    if (diag_emerg) pr_emerg(fmt, ##__VA_ARGS__);   \
+    else            pr_warn(fmt, ##__VA_ARGS__);    \
+} while (0)
+
+/* A DETERMINISTIC budget, never pr_*_ratelimited, for any line a verdict reads. Rate limiting is
+ * time-based: it drops lines unpredictably, and the line it drops is as likely as not the first
+ * one -- which is the only one that matters for a must-fire control. A count always emits the
+ * first CV_DIAG_BUDGET occurrences, so "absent" means "did not happen" rather than "was dropped".
+ * This module had three verdict-bearing lines on pr_warn_ratelimited: the -ELOOP message that a
+ * branch returns on, the thread-create refusal that is a positive control for the next boot, and
+ * the child-frame status. All three are now budgeted instead. */
+#define CV_DIAG_BUDGET 4U
+#define CV_EMIT_FIRST(counter, fmt, ...) do {       \
+    if ((counter) < CV_DIAG_BUDGET) {               \
+        ++(counter);                                \
+        CV_EMIT(fmt, ##__VA_ARGS__);                \
+    }                                               \
+} while (0)
 #define CV_RESOLVE_FAIL(site, fmt, ...)                                            \
-    pr_warn("capstone_vm: resolve refused at %s: addr 0x%lx cause %lu need 0x%lx "  \
+    CV_EMIT("capstone_vm: resolve refused at %s: addr 0x%lx cause %lu need 0x%lx "  \
             "pc 0x%lx prev(addr 0x%lx cause %lu rep %u) " fmt "\n",                 \
             site, address, cause, required, t->frame[4],                            \
             t->last_fault_addr, t->last_fault_cause, t->fault_repeat,               \
@@ -1153,10 +1185,11 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
              * CV_RESOLVE then repeats it. */
             if (address == t->last_fault_addr && cause == t->last_fault_cause) {
                 if (++t->fault_repeat > CV_FAULT_REPEAT_MAX) {
-                    pr_warn_ratelimited("capstone_vm: fault at 0x%lx cause %lu resolved %u times "
-                                        "with no change; the page is pinned and the PTE is "
-                                        "untouched by this module\n",
-                                        address, cause, t->fault_repeat);
+                    CV_EMIT_FIRST(eloop_prints,
+                                  "capstone_vm: fault at 0x%lx cause %lu resolved %u times "
+                                  "with no change; the page is pinned and the PTE is "
+                                  "untouched by this module\n",
+                                  address, cause, t->fault_repeat);
                     return -ELOOP;
                 }
             } else {
@@ -1264,14 +1297,19 @@ retry:
          * domain's own require(tid > 0, "thread create"), which a pre-registration can state and a
          * judge can check. */
         if (slot_live(NULL) + 1 > supervisor_slots) {
-            /* pr_warn, NOT pr_info: the board console does not show KERN_INFO, so an INFO
-             * refusal is invisible in a transcript and reads as "the refusal never happened".
-             * Measured by the board lane on boots r6 and r7 -- this exact line never appeared
-             * although `threads` demonstrably hit it (the step exits 1 at its own
-             * require(tid > 0)), while the kernel's own pr_warn lines do appear. A diagnostic that
-             * cannot be seen on the machine it is for is not a diagnostic. */
-            pr_warn_ratelimited("capstone_vm: thread create refused, %lu supervisor slot%s in use\n",
-                                supervisor_slots, supervisor_slots == 1 ? "" : "s");
+            /* RETRACTED PREMISE (2026-10-18): this comment said the console "does not show
+             * KERN_INFO ... while the kernel's own pr_warn lines do appear". Wrong, and not mine
+             * to have repeated. The driver sets the console to level 1 before its first rung, so
+             * it shows KERN_EMERG only; the pr_warn lines that were cited as appearing were all
+             * printed during boot, before the quieting. r6/r7's absence of this line was the
+             * console level, not the printk level.
+             *
+             * This line is the must-fire positive control for the next boot, so it is budgeted
+             * rather than rate-limited: the launcher retries a refused create, and a time-based
+             * limiter would drop exactly the occurrence a judge reads. */
+            CV_EMIT_FIRST(refuse_prints,
+                          "capstone_vm: thread create refused, %lu supervisor slot%s in use\n",
+                          supervisor_slots, supervisor_slots == 1 ? "" : "s");
             rc = -EBUSY; goto out;
         }
         t = kvzalloc(sizeof(*t), GFP_KERNEL);
@@ -1324,8 +1362,9 @@ retry:
             restore_root(old_root);
             local_irq_restore(flags); preempt_enable();
             if (st) {
-                pr_warn_ratelimited("capstone_vm: child frame grant not retired (status %lu); "
-                                    "refusing the thread\n", st);
+                CV_EMIT_FIRST(childframe_prints,
+                              "capstone_vm: child frame grant not retired (status %lu); "
+                              "refusing the thread\n", st);
                 rc = -EACCES;
                 goto thread_unwind;
             }
@@ -1645,8 +1684,13 @@ static int __init init(void)
      * __get_free_pages() allocation whose order is computed from this. */
     if (node_flat_records < 2 || node_flat_records > CV_FLAT_RECORDS_MAX ||
         (node_flat_records * CAP_REV_TABLE_RECORD) % PAGE_SIZE) {
-        pr_err("capstone_vm: node_flat_records=%lu must be 2..%lu and a whole number of pages\n",
-               node_flat_records, CV_FLAT_RECORDS_MAX);
+        /* pr_emerg, like the banner and for the same reason: this REFUSES the load, so the
+         * banner will be absent, and a reader needs to tell "refused for this reason" apart from
+         * "did not load, cause unknown". At pr_err it is level 3 and invisible on a console the
+         * driver has quieted, which would make a deliberate refusal indistinguishable from a
+         * failure. One line, at insmod, before any rung. */
+        pr_emerg("capstone_vm: node_flat_records=%lu must be 2..%lu and a whole number of pages\n",
+                 node_flat_records, CV_FLAT_RECORDS_MAX);
         return -EINVAL;
     }
 #endif
@@ -1666,8 +1710,11 @@ static int __init init(void)
         int rc = misc_register(&device);
         if (rc)
             return rc;
-        pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu\n",
-                 CV_DIAG_TAG, supervisor_slots);
+        /* Always KERN_EMERG, independent of diag_emerg: this is the line that tells a reader
+         * whether the module loaded at all, so it must survive the quieted console even when the
+         * rest are being read through dmesg. One line per insmod, before the rungs begin. */
+        pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu, diag_emerg=%d\n",
+                 CV_DIAG_TAG, supervisor_slots, diag_emerg);
         return 0;
     }
 }
