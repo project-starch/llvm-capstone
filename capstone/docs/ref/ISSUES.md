@@ -2043,6 +2043,33 @@ the census row (`docs/plans/2026-10-18-vp2-silicon-census.tsv`, plain JALR) carr
   silicon, because the capability check fires whenever nothing else has.
   - A prediction that compares causes needs the order modelled. One that compares caught versus missed does not.
 
+## Q-32 — a module told more supervisor slots than the platform has lets an unprivileged domain halt the guest: capstone_vm's `supervisor_slots` is not checked against capstone-qemu's `x-capstone-supervisor-slots` `OPEN — kit-gate rule in force, filed 2026-10-18 by the compiler lane`
+
+**What happened.** The module revision's frame negative tests (lane `module-resume-rd-x0`, 2026-10-18) loaded capstone_vm
+with `supervisor_slots=2` on the QEMU prediction kit (capstone-qemu b290f5656600, binary 7a4f3a64776f0c88), whose -cpu
+string never set `x-capstone-supervisor-slots`. Every test that created a child thread and let the launcher enter it
+halted the guest: `[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x8002522a, tval = 0x0` (a store through a
+null capability, `rs1 = x7`, value 0, in the firmware's range), badaddr the region base + 0x10. Boots on the old and the
+fixed module, and with and without a preceding `twice`, all halt the same way. A boot with no child entry does not.
+
+**Why.** The module parameter only TELLS the module how many saved-context slots exist (`capstone_vm.c:299-300`, default
+1, 0444). capstone-qemu's slot count is the CPU property `x-capstone-supervisor-slots` (`target/riscv/cpu.c:1897`, default
+1; `supervisor_slot_count()` clamps it, `capstone_supervisor.c:32-36`). With the module at 2 and QEMU at 1, the module admits
+a second live context the platform cannot hold. Entering it reaches the firmware path that faults. The mechanism inside the
+firmware is not established. vp2 runs 1 and 1, so the board was never exposed.
+
+**The rule (the semantics owner, 2026-10-18).** Before any boot, the kit gate asserts that the -cpu string's
+`x-capstone-supervisor-slots` equals the module's `supervisor_slots`. A mismatch is a refused boot. The board kit asserts
+1 = 1. The tool is `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/slot-match-gate.py`:
+- `--kit KIT` before the boot (what the kit wrapper appends);
+- `--applied-log KIT/applied.log` after it (the -cpu string actually used);
+- `--board` for vp2.
+Negative-tested: module 2 / QEMU 1 refused (tonight's halting configuration, on the real `qkit7-rev2/applied.log`); module
+1 / QEMU 2 refused; 2 / 2 and 1 / 1 pass; an empty log or a missing wrapper is NO-DATA (exit 2), never a pass.
+
+**Open.** What the firmware does at 0x8002522a when a second context is entered on a one-slot QEMU. A guest halt reachable
+from an unprivileged domain is a finding even behind a configuration error, and it belongs to the QEMU/firmware owner.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
