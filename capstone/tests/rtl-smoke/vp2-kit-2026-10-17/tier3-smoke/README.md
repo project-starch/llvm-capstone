@@ -411,3 +411,6 @@ and `t3-images-nb/ARMS.spec`, one boot each, in that order.
   freeze. No commit since bbc46be9d596 touches `capstone/ports` or `capstone/runtime`, and the image-hash gate
   catches any drift regardless.
 - **The order after wm1:** mph, fph, fpt, fca, fcs.
+- **wph** (wireshark/plain-heap, vp2-malloc): CAUGHT 12, its record. `records/wph.prediction.txt`.
+- **wpt** (wireshark/plain-temporal, vp2-malloc): CAUGHT 10, its record. `records/wpt.prediction.txt`.
+- **The order after wm1:** mph, fph, fpt, fca, fcs, wph, wpt.
