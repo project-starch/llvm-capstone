@@ -21,3 +21,17 @@ cmake --fresh -S "$CAPSTONE_REPO_ROOT/capstone/runtime/application" -B "$SDK" -G
   -DCAPSTONE_APPLICATION_DATA_BYTES=33554432 -DCAPSTONE_APPLICATION_ARENA_BYTES=67108864 \
   -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS_RELEASE=-O1 "$@"
 cmake --build "$SDK" -j"${JOBS:-8}"
+# CAPSTONE_SDK_EXTRA_CODEGEN appends words to the SDK's sdk.json codegen after the build, so every
+# later `capstone-cc` compile carries them and the runtime archives are untouched. It is how the vp2
+# Tier 3 campaign's t3-freeze-nb SDK got -fno-builtin (the C-81 axis) by hand: that SDK's sdk.json is
+# its only file newer than its build. Unset, the SDK is unchanged. capstone-cc still validates the
+# result against the profile, so an FP, ABI or gp option here is refused at the first compile.
+if [[ -n ${CAPSTONE_SDK_EXTRA_CODEGEN:-} ]]; then
+  python3 - "$SDK/sdk.json" $CAPSTONE_SDK_EXTRA_CODEGEN <<'APPEND'
+import json, sys
+path, extra = sys.argv[1], sys.argv[2:]
+config = json.load(open(path))
+config["codegen"] = list(config["codegen"]) + [w for w in extra if w not in config["codegen"]]
+json.dump(config, open(path, "w"), indent=2)
+APPEND
+fi
