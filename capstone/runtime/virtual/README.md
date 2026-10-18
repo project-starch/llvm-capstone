@@ -23,10 +23,11 @@ The [application gate](result.json) runs a normal C program, the explicit
 same-`mm` thread contract, SQLite's shell and the mruby interpreter. The
 existing ports build through the common SDK; applications must be rebuilt for
 its virtual profile. An ELF marker prevents the loader from accepting an image
-built for the physical calling convention. VM-service version 5 runs musl mallocng locally and adds its Linux mremap
-slow path. The launcher accepts version-2/3 images and rejects version-1,
-withdrawn native-heap version-4 and physical images. Rebuild the SDK and
-application together. ABI v6 runs on the default QEMU profile; v5 images are refused.
+built for the physical calling convention. Image version 7 runs musl mallocng
+locally (with its Linux mremap slow path) and is linked as two load segments:
+text mapped from the image file without write permission, and writable data
+after it. The launcher accepts version 7 only, and an image of an earlier
+version must be rebuilt with the SDK. ABI v7 runs on the default QEMU profile.
 
 ## Execution and memory
 
@@ -209,8 +210,8 @@ metadata). It returns a consumed linear grant or a scalar negative errno.
 UNMAP removes an exact whole visible mapping. PROTECT operates on a page range
 inside one registered payload mapping. WAIT yields to Linux without holding
 the transport lock. Metadata mappings are not exposed to public protection or
-retirement services. New images carry `CPONVVM5`; the launcher also accepts
-`CPONVVM2` and `CPONVVM3` images. Version 4 is withdrawn. REMAP is an internal
+retirement services. Images carry `CPONVVM7` (two load segments, see
+`link.ld`); the launcher accepts no other version. REMAP is an internal
 heap VM operation; ordinary malloc/free execute locally. Application ABI-v2's
 ordinary delegated system-service format remains independent of this marker.
 

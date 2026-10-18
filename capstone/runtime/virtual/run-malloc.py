@@ -22,7 +22,7 @@ def image_abi(path):
     """Read the ABI off the image instead of asserting it. A hard-coded 5 here reported "ABI 5"
     for every v6 run -- a printed constant that reads exactly like a measurement."""
     data = open(path, 'rb').read()
-    found = [v for v, m in ((5, b'CPONVVM5'), (6, b'CPONVVM6')) if data.count(m) == 1]
+    found = [v for v, m in ((7, b'CPONVVM7'),) if data.count(m) == 1]
     if len(found) != 1:
         raise SystemExit(f'{path}: cannot identify the VM ABI magic (matched {found})')
     return found[0]

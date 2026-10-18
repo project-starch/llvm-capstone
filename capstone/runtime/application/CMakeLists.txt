@@ -7,8 +7,11 @@ set(CMAKE_C_STANDARD 11)
 option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter (OFF: the physical profile)" ON)
 set(profile_codegen)
 set(sdk_profile physical)
+set(sdk_script my_first_domain/link.ld)
 if(CAPSTONE_APPLICATION_VIRTUAL)
   set(sdk_profile virtual)
+  # Two load segments, text mapped from the image file (virtual/link.ld).
+  set(sdk_script runtime/virtual/link.ld)
   set(sdk_allocator mallocng)
   include("${CMAKE_CURRENT_LIST_DIR}/../cmake/VirtualCodegen.cmake")
   set(profile_codegen ${CAPSTONE_VIRTUAL_CODEGEN})
@@ -89,7 +92,7 @@ if(CAPSTONE_APPLICATION_SDK)
   \"cc\": \"${CMAKE_C_COMPILER}\",
   \"ld\": \"${CMAKE_LINKER}\",
   \"musl\": \"${PORT_MUSL_ROOT}\",
-  \"script\": \"${capstone}/my_first_domain/link.ld\",
+  \"script\": \"${capstone}/${sdk_script}\",
   \"runtime\": \"$<TARGET_FILE:application-runtime>\",
   \"libc\": \"${CAPSTONE_MUSL_ARCHIVE}\",
   \"builtins\": \"$<TARGET_FILE:capstone-application-builtins>\"
