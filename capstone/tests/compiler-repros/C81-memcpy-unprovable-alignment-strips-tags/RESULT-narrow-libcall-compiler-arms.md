@@ -63,6 +63,26 @@ present. Read the direction, not the status: every "unexpected" row moved from *
 kept*. Updating that table is a decision for whenever the flag's default changes, not part of this
 result.
 
+## The toolchain is STALE by the project's own gate — what that does and does not affect
+
+Found after these arms were committed, while setting up the image arms:
+`toolchain-fresh` reports `llvm-lane-c27` **STALE** — 206 ninja steps pending, 33 of them
+compile/tablegen outside the revision chain — and `build-corpus-images.sh` will not produce an
+artifact from it.
+
+**What it does not affect: the readings above.** Both arms were compiled by the *same* binary and
+differ only by the flag, so whatever state that binary is in cancels in the difference. The 33
+out-of-chain steps the gate names are all `ObjCopy`/`DXContainer`, nothing in Capstone codegen, and
+the prototype's own source was checked identical between the built revision and the branch head.
+
+**What it does affect: any absolute claim.** "This is what the compiler does today" is not
+supported by a stale build — only "this is what the flag changes in this build" is. The table above
+is a difference, so it stands; nothing here should be quoted as dev's current behaviour.
+
+**And it blocks the image arms**, which is how it was found: the corpus build gates on freshness
+and refuses, correctly. A rebuild is required first — on this host that is `-j12`, not the `-j90`
+the gate's message suggests, which is another machine's constant.
+
 ## What is NOT established here
 
 Nothing about whether the direction is sound in a running image. The wholesale flag's fault (mruby
