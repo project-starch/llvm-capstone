@@ -15,3 +15,7 @@
 # NO-READING:infra 5 (rc 75), then "T3PG STOP after pgc: the boot did not complete" (rc 1), and pgm0 never starts. Its
 # completion test is the batch's own ^VIRTUAL_STAGED_DONE in raw/guest/board.txt (one in mpt's real transcript), because
 # the mmgr runner prints no boot line.
+# subset-bundle.py (a prediction cut to the board's cases, for the sqlite arms' --only boots): mpt's board cases against
+# fph's prediction are REFUSED (rc 1); against mpt's own prediction, the whole set and a one-case subset both compare
+# SAME under compare-pilot.py. score-queue.sh waits on each arm's END line and scores it with score-arm.sh (tested on
+# mpt both ways: 3 of 3 SAME; CELLS DIFFER rc 2 against another arm's prediction).
