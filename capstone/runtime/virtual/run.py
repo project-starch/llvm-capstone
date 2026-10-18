@@ -32,6 +32,17 @@ PARALLEL_BLOCK = (
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 insmod capstone_vm.ko || exit 1
+# The module's own lines, read from the kernel RING BUFFER rather than relied on reaching the
+# console. The console level does not filter the buffer. run.py itself never lowers that level --
+# but six sibling runners do (`dmesg -n 1` in run-malloc/-hosted/-ports/-safety/-fp/-pthreads), and
+# on the board the baked driver sets it to 1 before its first rung, which is what voided two boots'
+# diagnostics. A reading that depends on the console staying open is one edit away from being void,
+# so this reads the same way the board records do.
+# The banner is this read's OWN control: absent, the route is broken and every module-line absence
+# in this run is void rather than a reading -- which is why it reports instead of printing nothing.
+dmesg | grep 'capstone_vm:' | sed 's/^/KMSG:/'
+dmesg | grep -q 'capstone_vm: loaded, diag' \
+  || echo 'KMSG_CONTROL_FAILED: no load banner in the ring buffer -- module-line absences in this run are VOID'
 export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
 ./capstone-vexec contract.dom ok argument > /tmp/ok.out 2>&1
 echo VM_EXIT:normal:$?
@@ -76,6 +87,9 @@ if [ -f perl.dom ]; then
     cat /tmp/perl-smoke.out
   fi
 fi
+# Second read, before the module goes away: everything it printed during the run, in one place,
+# independent of whatever the console level was doing.
+dmesg | grep 'capstone_vm:' | sed 's/^/KMSG:/'
 rmmod capstone_vm
 echo VM_EXIT:cleanup:$?
 if [ -f legacy.dom ]; then

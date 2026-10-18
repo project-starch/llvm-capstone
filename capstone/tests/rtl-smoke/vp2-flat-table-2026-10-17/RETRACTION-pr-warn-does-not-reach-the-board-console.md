@@ -71,3 +71,37 @@ Board module: `06d663f30bf29825…` (`vermagic=6.4.14`, RVC 0, banner level 0, f
   fits comfortably in 128 KB.
 - The positive control r12 relies on is real: `capstone_vm: thread create refused, 1 supervisor
   slot in use` fires **3 times** in each of the two QEMU controls, through the production harness.
+
+## Channel audit of my own QEMU records — asked for by both lanes, and they stand
+
+The same `dmesg -n 1` mechanism exists on the QEMU side (`tools/virtualvm.py:71` and others), so a
+module line absent from a QEMU serial log is void the same way. Audited rather than assumed:
+
+* **`run.py`, which produced all three of my controls, contains ZERO `dmesg -n` or `printk`
+  references, and so does the `gate.sh` it bakes.** The console level is never lowered there. The
+  six runners that do lower it are `run-malloc.py:68`, `run-hosted.py`, `run-ports.py`,
+  `run-safety.py`, `run-fp.py` and `run-pthreads.py`.
+* **Direction matters and it is favourable here.** My readings were *positive* — banner, six site
+  lines, three `thread create refused` — and an observed line cannot have been suppressed. Their
+  presence at level 4, at t≈271 s in the same log, is itself an internal control showing level-4
+  output was reaching serial in that window.
+* **The one absence claim I made — "zero `remap` lines" — therefore stands**, on both grounds: the
+  harness never lowered the level, and level-4 lines demonstrably arrived during the window.
+* **`run-malloc.py` is a harness I did use earlier**, so its records were checked too. The rows
+  they rest on (`CAPSTONE_VM_ADD_REFUSED` and friends) come from `exec.c:210` via
+  `fprintf(stderr, ...)` — launcher stderr, which `dmesg -n 1` cannot touch. `ea37cbd801e6`'s
+  "the both-satisfied cell is empty" is a stderr-based absence and is unaffected.
+
+**Defence in depth, since the above is one edit from being false:** `run.py` now reads the module's
+lines from the ring buffer (`dmesg | grep 'capstone_vm:'`, prefixed `KMSG:`) after the `insmod` and
+again before the `rmmod`, so QEMU and board records are read the same way. The banner is that
+read's own control and it **reports** rather than printing nothing:
+`KMSG_CONTROL_FAILED: no load banner in the ring buffer -- module-line absences in this run are
+VOID`. Negative-tested both ways before committing: it fires on a banner-less buffer and is silent
+on one with a banner.
+
+**A commit title of mine that now rests on the withdrawn premise:** `69db2f133b93` *"Board-facing
+refusals must be pr_warn: KERN_INFO is invisible in a board transcript"*. The conclusion it reached
+(do not use `pr_info` for a board-facing refusal) is still right; its stated reason is not, for the
+reason given above. It is on a lane branch and rewriting it would be a force-push, so it is
+recorded here instead — which is where a reader following the trail will arrive.
