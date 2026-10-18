@@ -1190,3 +1190,202 @@ Pre-registered at bc776696ec59. Result lines in `board-tier12/results/board-vp2-
 - **sparse-churn wedged.** The transcript stops mid-line. The apertures show M, a stall, a pending store, and the domain
   switcher at index 56 with a register write in flight. The trap log names a pc six instructions after the module's
   CSRUNV. Sent to the RTL lane.
+
+## Pre-registered (2026-10-18, before boot r9): every vm-suite step except sparse-churn, which goes last
+
+**The changes** from r8, two stage files:
+- **The module:** the compiler lane's production ce3a542d00acce86 (69db2f133b93: S-24's -ELOOP bound, the
+  thread-create refusal at pr_warn, S-21's child-frame retire).
+- **The suite:** `board-tier12/vm-suite-inner-r9.sh`, run.py's guest script with sparse-churn moved to the end, before
+  rmmod, because it wedged the core in r8. Everything else is in run.py's order.
+
+**The pins.** Firmware b47f82487c6030f6 (the monitor unchanged, 007d81d). board-check reads to the end of the
+transcript when vm-suite has no END marker. Run by `boot3/run-tier12-r9.sh b47f82487c6030f6`, dry-run in
+`boot3/dryrun-r9.txt`.
+
+**Predictions:**
+- **Tier 1:** identity.
+- **vm-suite, against QEMU's record (q30-run),** step by step:
+  - normal 0, threads 1, vm **139** (r8's terminal store fault, the module's !same path, which this module keeps;
+    QEMU 1), nested 0, nested-stale 139, heap-threads 1;
+  - stale, bounds, retired, vm-ro-write, vm-none-read, vm-guard, vm-padding and sparse-stale each 139, with their
+    pre-registered faults;
+  - preempt 143, parallel_one 0, parallel_two 0, sqlite_write 0, sqlite_read 0, mruby 0;
+  - then sparse-churn: a **wedge** as in r8, or 0 if r8's wedge was not deterministic.
+- Every step from stale to mruby is a first silicon reading. A differing exit is named with its fault line.
+
+### Boot r9, result (2026-10-18 06:51-07:04): Tier 1 identity (fourth boot, the production module); vm-suite reads 13 steps as pre-registered, then sparse-stale wedges the core exactly where sparse-churn did in r8
+
+Pre-registered at 2727936779cd. Result lines in `board-tier12/results/board-vp2-tier12-r9.result-lines.txt`.
+- **Tier 1:** identity on the compiler lane's ce3a542d00acce86.
+- **vm-suite, all as pre-registered:**
+  - normal 0, threads 1, vm 139 (r8's store fault), nested 0, nested-stale 139, heap-threads 1;
+  - stale, bounds, retired, vm-ro-write, vm-none-read, vm-guard and vm-padding each 139.
+- **sparse-stale wedged.** It ran in run.py's place, before the relocated sparse-churn. The transcript stops mid-way
+  through the launcher's slot-12 grant line, as r8's sparse-churn did. The apertures are r8's in every field but the
+  trap log.
+- **One reproducer, the RTL lane's.** On both boots the domain's commit pc is contract.dom VA 0x20e98, `free+4`, free()'s
+  first store. Both sparse modes begin `*slot = malloc(64); free(*slot);`.
+
+## Pre-registered (2026-10-18, before boot r10): both sparse steps last, so preempt, the parallel pair, sqlite and mruby are read
+
+**The change:** only the suite script, `board-tier12/vm-suite-inner-r10.sh`: sparse-stale, then sparse-churn, after
+every other step. The module (ce3a542d00acce86) and the monitor (007d81d) are r9's. Firmware 9b3eb92a963acb7c. Run by
+`boot3/run-tier12-r10.sh 9b3eb92a963acb7c`.
+
+**Predictions:**
+- Tier 1 identity; then r9's thirteen exits.
+- **Then the first silicon readings, from QEMU's record (svadu=false reads the same, the compiler lane's
+  fe8c4283f8ad):** preempt 143, parallel_one 0, parallel_two 0 (serialized by the queue), sqlite_write 0 with
+  SQLITE_SUM=5050, sqlite_read 0 with SQLITE_PERSIST=100, mruby 0 with MRUBY_SUM=5050 and MRUBY_FILE=virtual.
+- **Then sparse-stale:** a wedge at r8/r9's point, with sparse-churn behind it as collateral.
+
+### Boot r10, result (2026-10-18 07:06-07:19): preempt, the parallel pair and every earlier step read as QEMU's; sqlite_write wedges the core in M
+
+Pre-registered at bb4981135515. Result lines in `board-tier12/results/board-vp2-tier12-r10.result-lines.txt`.
+- **Tier 1:** identity, the fifth boot.
+- **vm-suite, through parallel_two, as pre-registered:**
+  - r9's thirteen exits;
+  - then the first silicon readings of **preempt 143, parallel_one 0 and parallel_two 0**. Both serialized processes
+    print VIRTUAL_APPLICATION_OK with QEMU's 24 grants.
+- **sqlite_write wedged.** Its output goes to a file, so the transcript shows nothing of it. The apertures differ from
+  the sparse wedge: M, not stalled, an instruction valid at commit, the LSU idle, no monitor tag.
+- **Silicon count so far:** 16 of vm-suite's 22 steps read. 15 match QEMU, and `vm` diverges (the module's store-fault
+  path). sqlite_write wedges, and sqlite_read, mruby and the two sparse steps (a wedge of their own) are not yet read.
+
+## Pre-registered (2026-10-18, before boot r11): which resolve() refusal ends `vm`, and does a fence before every CSRUNV remove the sparse wedge
+
+**The changes:**
+- **The module:** f02ca82ea9b2dd61 (the compiler lane's d66030133aa6):
+  - every terminal return of resolve() prints `capstone_vm: resolve refused at <site>: ...` at pr_warn, at most one
+    line per step;
+  - a banner at insmod (`capstone_vm: loaded, diag resolve-sites-3, supervisor_slots=1`);
+  - the S-24 -ELOOP bound;
+  - `fence_before_entry` (default 0, 0644: a `fence rw,rw` before each of the four CSRUNV sites when set).
+- **The suite:** `board-tier12/vm-suite-inner-r11.sh`.
+  - sqlite is deferred to r12: r10's wedge is a second unknown, and it would cost the control.
+  - The sparse pair runs with the fence set through sysfs, then sparse-stale runs with it cleared, last.
+  - Each flip echoes the value read back.
+- **The pins.** Firmware 4c2685def8817a87; monitor 007d81d unchanged. Run by `boot3/run-tier12-r11.sh
+  4c2685def8817a87`, dry-run in `boot3/dryrun-r11.txt`.
+
+**Predictions:**
+- **Tier 1:** identity.
+- **The banner must appear.** If it does not, every absent site line in this boot is void.
+- **`vm`:** the compiler lane's per-site table (`vp2-flat-table-2026-10-17/PREREGISTRATION-resolve-refusal-sites.md` on
+  lane/compiler-exact-bounds-iii, pushed before the run).
+  - **`remap`** with cause 15, pfn_old != pfn_new, and prev(the same address, cause 13): the COW-on-write mechanism.
+  - Another site names its own mechanism.
+  - No site line with the banner present means the store does not fail in resolve() at all, and the !same deduction
+    is refuted.
+  - vm-ro-write and vm-none-read are predicted to print `vma` lines, as on QEMU (the compiler lane's control).
+- **The other returning steps:** as r9/r10, plus mruby 0 with MRUBY_SUM=5050 and MRUBY_FILE=virtual (the first silicon
+  reading).
+- **The fence, read as four outcomes** (the semantics owner's table):
+  - **fence=1 returns, fence=0 wedges:** the fence orders the race, which is a kit-side fix.
+  - **Both wedge:** not the fence.
+  - **Both return:** the race is timing-sensitive and the print or the order moved it. That is its own finding, not
+    a fence pass.
+  - **fence=1 wedges and fence=0 returns:** a different variable.
+
+### Boot r11, result (2026-10-18 07:49-08:02): mruby wedges the core like sqlite_write; the module's console lines were unreadable, and a claim behind r8 is retracted
+
+Pre-registered at b6521767bae0. Result lines are in `board-tier12/results/board-vp2-tier12-r11.result-lines.txt`.
+- **Tier 1:** b0-stats 0, b0-hello 0, vm-contract 0 (identity, the sixth boot), and 4 FRTY retries.
+- **vm-suite through parallel_two:** as r10. The 16 exits and the 9 launcher fault lines equal r10's in cause and in
+  code-relative pc, compared by script.
+- **mruby, its first silicon attempt: the core WEDGED.**
+  - All 15 apertures equal r10's sqlite_write wedge: M, not stalled, an instruction valid at commit, the LSU idle,
+    store state 0, switcher index 56.
+  - Two large applications now wedge the same way. The sparse wedge's signature is different: stalled, with a pending
+    store.
+  - The fence flips and the sparse steps were not reached, so r11 has no fence reading.
+- **The banner and the refusal lines are VOID, not absent.**
+  - The baked driver's cold_boot sets `/proc/sys/kernel/printk` to 1 before rung 1
+    (`fpga_driver/run_ladder_perf_fpga.py:201`, called at :272). Its DEVOK marker is in the stream.
+  - From then on the console prints only KERN_EMERG. The reconstructed UART stream has 695 kernel lines before that
+    setup and 0 after it.
+- **RETRACTED with this boot** (dev 9e645777a5fb):
+  - the board lane's claim that the console shows pr_warn: its evidence was boot-time lines;
+  - r8's "the A/D candidate is refuted", which rested on absent pr_warn DIAG and -ELOOP lines. The candidate is
+    unresolved. The r8 section above is corrected.
+- **What would have caught it:** the banner was designed as the must-fire control, and it did its job: its absence
+  is how this was found. The wrong part was the claim that chose the level. A same-level line had been checked only
+  at boot, never inside a rung.
+- **The ordering slip:** the suite put sparse-churn, a second expected wedge, between the two halves of the fence
+  pair, so a churn wedge would have cost the fence=0 arm. The batching rule already says this (at most one expected
+  wedge, last). r12 takes the compiler lane's order.
+
+## Pre-registered (2026-10-18, before boot r12): resolve()'s refusal site read from the ring buffer, and the fence pair alone
+
+**The changes from r11:**
+- **The module** is 06d663f30bf29825 (the compiler lane's 0b963e269b4e).
+  - It is r11's code: the llvm-objdump disassembly is equal line for line (5296 lines) and the section tables match.
+  - The one change is the load banner, now at KERN_EMERG (level 0). It is the only module line the rung console can
+    show. The five site lines and "thread create refused" stay at level 4. Diag tag resolve-sites-4.
+- **The suite** is `board-tier12/vm-suite-inner-r12.sh`.
+  - **The module's lines** are read from the ring buffer, `dmesg | grep capstone_vm:`, prefixed KMSG-:
+    - right after `vm`;
+    - again after the returning steps, with the buffer's line count.
+    - There is no `-c`: busybox 1.36.1's dmesg supports it, but the whole-buffer read needs nothing more.
+  - **mruby and sqlite are out:** r10 and r11 wedge on them alike.
+  - **The fence pair goes in the compiler lane's order:** echo 1 with its read-back, sparse-stale, echo 0 with its
+    read-back, sparse-stale, then sparse-churn LAST. Each read-back is labelled with the step it precedes.
+- **Unchanged:** the firmware is 778836000a52d476, monitor 007d81d; the extracted monitor sources equal r11's.
+- **The run:** `boot3/run-tier12-r12.sh 778836000a52d476`, dry-run in `boot3/dryrun-r12.txt`.
+
+**Predictions:**
+- **Tier 1:** identity.
+- **The console banner, exactly once:** `capstone_vm: loaded, diag resolve-sites-4, supervisor_slots=1`, at the
+  vm-contract insmod. If it is absent, the module did not load, and the boot is a different failure.
+- **The vm-suite steps through parallel_two:** as r10 and r11.
+- **The KMSG window after `vm`:**
+  - **The must-fire:** threads' `capstone_vm: thread create refused`. If it is absent, the window is VOID: neither a
+    site line nor its absence reads.
+  - **`vm`'s site line,** per the compiler lane's table (PREREGISTRATION-resolve-refusal-sites.md on
+    lane/compiler-exact-bounds-iii):
+    - `remap` with cause 15, pfn_old != pfn_new, and prev = (the same address, cause 13): the COW-on-write mechanism;
+    - `vma`, `anon`, `pin` or `arena`: each names its own mechanism;
+    - must-fire present and no site line: the store does not fail in resolve(), and the !same deduction is refuted.
+  - **What the A/D candidate predicts:** an `-ELOOP` line, "fault at ... resolved N times with no change".
+- **The KMSG window after the returning steps:** the compiler lane's QEMU control predicts `vma` lines for vm-ro-write
+  and vm-none-read.
+- **The fence pair** (the runtime lane's four outcomes):
+  - fence=1 sparse-stale returns and fence=0 wedges: the fence orders the race.
+  - Both wedge: not the fence.
+  - Both return: timing-sensitive, its own finding; sparse-churn then runs as the last unknown.
+  - fence=1 wedges and fence=0 would have returned: unreadable in this order. That is a different variable, and it
+    would need its own boot.
+- **sparse-churn:** the expected wedge (r8), last. It is reached only if both sparse-stale arms return.
+
+### Boot r12, result (2026-10-18 08:21-08:33): `vm` is a store fault loop that S-24's bound ends; the fence does not remove the sparse wedge
+
+Pre-registered at 585f4391f32e. Result lines are in `board-tier12/results/board-vp2-tier12-r12.result-lines.txt`.
+Every pre-registered reading held.
+- **Tier 1:** identity, the seventh boot; 4 FRTY retries.
+- **The console banner,** once at the vm-contract insmod: `capstone_vm: loaded, diag resolve-sites-4,
+  supervisor_slots=1`, at KERN_EMERG. It also confirms the retraction's mechanism: level 0 passes the quieted
+  console.
+- **Through parallel_two:** the 16 exits and 9 launcher fault lines equal r11's, compared by script.
+- **`vm`: a loop, not a single fault.**
+  - The dmesg window after `vm` holds the must-fire (threads' "thread create refused") and two -ELOOP lines: `fault
+    at 0x3faf4ba000 cause 15 resolved 65 times with no change; the page is pinned and the PTE is untouched by this
+    module` (and 66, the launcher's repeat).
+  - 0x3faf4ba000 is the launcher's own fault address: the store `p[8192] = 23` after `mprotect(p, 12288, RW)`.
+  - No resolve() refusal site fired, so the `!same` deduction is refuted.
+  - The A/D-loop candidate's predicted reading, an -ELOOP line, is what printed. r8's refutation of it was retracted
+    this morning, and it was wrong in substance as well as in method.
+  - What makes the store fault again after each resolution is open. It goes to the compiler lane, which owns the
+    module, and to the RTL lane for the walker's side.
+- **The vma lines:** vm-ro-write, vm-none-read and vm-guard print `vma` lines, need 0x2 against flags without
+  VM_WRITE and need 0x1 against flags without VM_READ, as the compiler lane's QEMU control predicts.
+- **The fence:**
+  - fence_before_entry read back `Y`, and sparse-stale WEDGED.
+  - All 15 switch apertures equal r8's and r9's fence-less sparse wedges, compared by script. The commit pc's code
+    offset is also the same.
+  - The fence does not remove the sparse wedge. The fence-off arms come from other boots and module builds.
+  - This is also the RTL lane's prediction for its ghost-store candidate, an STC whose translation faults retiring
+    without the exception. That candidate is in simulation.
+- **A runner defect, caught by the live monitor:** the "FENCE flips" extraction matched digits, but the bool
+  parameter reads back `Y`, so the extraction was empty. The result lines take the flip from the transcript. Later
+  runners match `[0-9YN]`.

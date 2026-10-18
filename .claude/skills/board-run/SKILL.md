@@ -267,6 +267,12 @@ rung), never from the raw `driver.log`,** and scope even a live watch to the lin
 grant refusals and fault lines as the boot in progress. Only their repeated base addresses gave them
 away.
 
+**During rungs the console shows only KERN_EMERG.** `cold_boot` sets `/proc/sys/kernel/printk` to 1 before the first
+rung (`run_ladder_perf_fpga.py:201`), so a module's pr_warn or pr_err never reaches the transcript. The rfence
+warnings you see are boot-time, from before that setup. Read kernel lines in the guest script with `dmesg` after the
+step, matched by content. Positive-control the read with a line that must have fired in the same window. Boot r11
+(2026-10-18) lost its whole diagnostic this way, and an earlier "A/D refuted" rested on the same invisible lines.
+
 ### Switch values are not just a mux selector — the low three bits steal the console
 
 Setting the virtual switches to read a debug register also drives three control bits, so a
