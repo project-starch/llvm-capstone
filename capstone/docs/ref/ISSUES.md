@@ -526,6 +526,28 @@ touch) and the kit applications' fresh-page capability stores wedge the core. Ev
 the compiler lane's answer on where a capability store can be a first touch, which decides the scope of the module's
 pre-touch. QEMU escapes the faulting STC as kind 4 and cannot show this.
 
+## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `OPEN — read on silicon 2026-10-18 in five Tier 3 smoke boots: three without a classic domain run before the first virtual context spun in every context, two with b0-hello first returned in every context; mechanism unknown (state that the first classic domain call sets up, on the monitor's or the RTL's side); the workaround, a classic domain run before the first virtual context, is in every Tier 1/2 boot and in the Tier 3 recipe`
+
+Siblings: S-23 (the same virtual entry path), S-25.
+
+**Readings** (lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README.md`; the same
+launcher b27afefc and module ce3a542d in every boot; b0-stats runs `capstone-exec --stats` and no domain):
+
+| smoke boot | rungs before the first virtual context | what the virtual contexts did |
+|---|---|---|
+| 1 | b0-stats (with the classic /capstone.ko by mistake) | the first never returned in 13 minutes |
+| 2 | b0-stats | the first never returned; SIGINT after 3 minutes |
+| 3 | b0-stats | Tier 1's own contract.dom `ok` and three corpus controls each spun to a 150 s bound: launcher in state R, wchan 0, no grant after the image's five, no FRTY; at rest 228 = index 107 (the switcher's last walk an ESCAPE) |
+| 4 | b0-stats, b0-hello, vm-contract | every context returned; the controls equal QEMU's (cause 28 at 0x104d8, cause 25 at 0x10524, exit 75) |
+| 5 | b0-stats, b0-hello | every context returned; the controls equal QEMU's again |
+
+- Every Tier 1/2 boot ran b0-hello before any virtual rung, which is why this was never seen there.
+- Once the first context of a boot spun, every later one did too (boot 3).
+- The read at the bound is from /proc. The resting 228 is valid at rest, because it is a register that only a walk
+  changes. The dynamic apertures are not, because of the LED stretcher.
+- **The next question,** for the monitor and RTL lanes: what the first classic domain call sets up that the virtual
+  entry path relies on.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**

@@ -208,3 +208,19 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
 - **The batch spins as in boots 2-3** (state R at the bound, no mark): b0-hello is not enough. Then what made boot 4
   work is a first virtual context run by Tier 1's script, and the batch gate is the variable only for the FIRST
   context of a boot.
+
+## Result, the fifth smoke boot (2026-10-18 09:13-09:21): b0-hello alone is the warm-up
+
+- **The rungs:** b0-stats 0, b0-hello 0, then the batch. vm-contract did not run. Firmware 535688fd0d434ae9.
+- **Every batch step returned:**
+  - contract-ok: VM_CONTRACT_FAIL:environment, exit 1, as in boot 4;
+  - control-bounds-malloc: cause 28 at 0x104d8;
+  - control-uaf-malloc: cause 25 at 0x10524;
+  - control-clean: exit 75.
+  - The three controls equal QEMU's by script, for the second time.
+- **So a classic domain run is the warm-up** the first virtual context after a cold boot needs. Filed as ISSUES S-26.
+- **The S-23 retry (FRTY) count, by rung, compared by script:**
+  - Tier 1's vm-contract rung: 1, over its two launcher processes (boot 4 and r12);
+  - r12's vm-suite: 3, over about 17 processes;
+  - the batch: 0, over four processes, in boots 4 and 5.
+  - So the retry is not once per process; it depends on the step.
