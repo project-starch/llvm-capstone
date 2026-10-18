@@ -1205,6 +1205,16 @@ static unsigned long resume_satp_refreshes, resume_satp_changed;
 module_param(resume_satp_refreshes, ulong, 0444);
 module_param(resume_satp_changed, ulong, 0444);
 
+/* CV_THREAD_CREATE on a frame that already backs a thread is refused BEFORE the frame is pinned (the
+ * revision's negative test, 2026-10-18). Before this, the second create pinned the same page, so its
+ * t->frame WAS the live child's frame; its ancestor retire then failed (already retired) and the unwind's
+ * clear_thread_frame() zeroed bytes 0..655 of the LIVE child's frame (satp, root, event words, PCC,
+ * x1..x31), whose next CV_STEP failed -EINVAL. Only the domain's own thread could be harmed, and on vp2
+ * every create is refused by the one slot, so it was self-inflicted and multi-slot only. Counted by
+ * busy_frame_refusals; the line is pr_emerg with a count budget so the board console shows it. */
+static unsigned long busy_frame_refusals;
+module_param(busy_frame_refusals, ulong, 0444);
+
 /* resolve_pte prints the faulting PTE once, when the bound trips. It is the check on this lane's
  * OWN conclusion that GUP sets A and D -- which was read out of the source, never measured on the
  * board -- so a boot where A and D come back clear refutes that reading rather than confirming a
@@ -1508,6 +1518,12 @@ retry:
         struct cv_thread *t;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         if (!r.frame || !find_arena(c, r.frame, PAGE_SIZE)) { rc = -EINVAL; goto out; }
+        if (arena_has_thread_frame(c, find_arena(c, r.frame, PAGE_SIZE))) {
+            if (++busy_frame_refusals <= CV_DIAG_BUDGET)
+                pr_emerg("capstone_vm: thread create refused: frame 0x%llx already backs a thread "
+                         "(refusals %lu)\n", (unsigned long long)r.frame, busy_frame_refusals);
+            rc = -EBUSY; goto out;
+        }
         if (thread_count(c) >= 32) { rc = -ENOSPC; goto out; }
         /* Refuse at CREATE, not at the join. The caller is itself a live frame -- it escaped to
          * make this ioctl -- so on a one-slot machine the child could never be entered. Admitting
