@@ -44,7 +44,7 @@ main() {
     echo "STUB child env: $(bash -c 'echo "BAKE_REPLACE_KO=${BAKE_REPLACE_KO:-UNSET} BOARD_BUILDROOT=${BOARD_BUILDROOT:-UNSET}"')"
     echo "STUB bake: bash $KIT/bake-manifest.sh $MAN $IMG"
     echo "STUB firmware: FW_WRAP=$BOARD_FW_WRAP FW_MON=$BOARD_FW_MON FW_IMAGE_DIR=$IMG bash $BOARD_FW_RECIPE $FW \"$BOARD_FW_DEFINES\""
-    echo "STUB driver: BAKED_CTL=/test-domains/vbatch/ctl.sh BAKED_RUNGS=\"b0-stats vbatch\" BAKED_TIMEOUT=$TO BAKED_OUT=$W/board.txt in $BOARD_DRIVER_DIR"
+    echo "STUB driver: BAKED_CTL=/test-domains/vbatch/ctl.sh BAKED_RUNGS=\"${BOARD_RUNGS:-b0-stats vbatch}\" BAKED_TIMEOUT=$TO BAKED_OUT=$W/board.txt in $BOARD_DRIVER_DIR"
     return 3
   fi
   # 2. bake
@@ -65,10 +65,13 @@ main() {
   # 4. the driver
   [ "$(sha256sum "$BOARD_DRIVER_DIR/fpga_driver/run_baked_rungs_fpga.py" | cut -c1-16)" = "$BOARD_DRIVER_SHA" ] \
     || { echo "STOP: the driver is not the pinned one" >> "$L"; return 2; }
-  mkdir -p "$W/oracles"; echo 0 > "$W/oracles/b0-stats.oracle"; echo 0 > "$W/oracles/vbatch.oracle"
+  # BOARD_RUNGS (board.env, optional): the rungs in order, the batch rung among them; every oracle is 0.
+  local RUNGS=${BOARD_RUNGS:-b0-stats vbatch} r
+  case " $RUNGS " in *" vbatch "*) ;; *) echo "STOP: BOARD_RUNGS ($RUNGS) has no vbatch rung" >> "$L"; return 2;; esac
+  mkdir -p "$W/oracles"; for r in $RUNGS; do echo 0 > "$W/oracles/$r.oracle"; done
   ( cd "$BOARD_DRIVER_DIR" || exit 1
     FPGA_BITSTREAM=$BOARD_BITSTREAM.bit FPGA_URL="$(cat "${BOARD_URL_FILE:-$HOME/.claude-kisp/secrets/fpga-console-url}")" \
-      FPGA_FW=$FW/fw_payload.bin BAKED_CTL=/test-domains/vbatch/ctl.sh BAKED_RUNGS="b0-stats vbatch" LADDER_FPGA_DIR=$W/oracles \
+      FPGA_FW=$FW/fw_payload.bin BAKED_CTL=/test-domains/vbatch/ctl.sh BAKED_RUNGS="$RUNGS" LADDER_FPGA_DIR=$W/oracles \
       BAKED_TIMEOUT=$TO BAKED_IDLE_S=200 PREFLIGHT=0 BAKED_WEDGE_APERTURES=1 BAKED_FINAL_APERTURES=1 BAKED_OUT=$W/board.txt \
       timeout $((TO + 1800)) python3 -m fpga_driver.run_baked_rungs_fpga > "$W/driver.log" 2>&1 & runner=$!
     ABORT_ON_ENTRY_STALL=1 ENTRY_STALL_S=420 bash board-watchdog.sh "$W/driver.log" 900 $runner > "$W/watchdog.log" 2>&1 & wd=$!

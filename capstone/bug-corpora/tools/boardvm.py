@@ -98,7 +98,13 @@ def rung_segment(transcript, rung=RUNG):
 
 
 class BoardBatch(virtualvm.Batch):
-    """put() and step() as virtualvm.Batch; put() returns the guest path under /test-domains/<BATCH>/."""
+    """put() and step() as virtualvm.Batch; put() returns the guest path under /test-domains/<BATCH>/.
+    other_ctl is the controller every rung other than the batch's goes to: the board controls' b0run.sh by default,
+    or a kit's own controller (the vp2 Tier 1 vmrun.sh, which runs vm-contract and hands b0-* to b0run.sh)."""
+
+    def __init__(self, stage, other_ctl="/test-domains/b0run.sh"):
+        super().__init__(stage)
+        self.other_ctl = other_ctl
 
     def put(self, dest, source=None, text=None):
         super().put(dest, source, text)
@@ -131,7 +137,7 @@ class BoardBatch(virtualvm.Batch):
             f"  sh /test-domains/{BATCH}/gate.sh 2>&1; rc=$?",
             f"  echo \"RESULT {RUNG} retval=$rc\"",
             "else",
-            "  exec /test-domains/b0run.sh \"$@\"",
+            f"  exec {self.other_ctl} \"$@\"",
             "fi", ""])
 
     def execute(self, kit, work, timeout):

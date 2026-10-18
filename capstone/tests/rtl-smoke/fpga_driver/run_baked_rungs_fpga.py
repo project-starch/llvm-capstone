@@ -316,11 +316,14 @@ def main():
                     f"collateral, not results")
                 break
         else:
-            # BAKED_FINAL_APERTURES=1: no rung wedged, so read the same apertures from the RESTING core after the last
-            # rung. It is the control for every wedge reading: at rest the store buffer's commit count (193) must be 0
-            # with no valid bits in 221. A non-zero count after a healthy boot is a standing desync (the RTL lane's
-            # 2026-10-18 ghost entry: a capability store whose translation faulted inside a context). The shell is idle
-            # here, so the odd switch values that take the console's TX pin cost nothing.
+            # BAKED_FINAL_APERTURES=1: no rung wedged, so read the same apertures after the last rung. ONLY THE STATIC
+            # FIELDS READ AT REST: 228 (the switcher's cur_idx, changed only by a walk), the latched trap log and the
+            # R-43 record. The board's LED pulse stretcher holds every bit high for ~2^20 cycles after it pulses
+            # (ariane_xilinx.sv:956-966), so on a running core -- and idle Linux is running -- each dynamic field
+            # (192-195, 219-227) reads as the OR over that window: the first read gave a commit count of 7 for a 4-deep
+            # queue. A commit-queue control needs a parked core (wfi with interrupts masked, or a debug halt). A
+            # wedge's read is valid because a wedged core is still. The shell is idle here, so the odd switch values
+            # that take the console's TX pin cost nothing.
             if os.environ.get("BAKED_FINAL_APERTURES") == "1":
                 log("no rung wedged: reading the resting core's apertures (BAKED_FINAL_APERTURES=1)")
                 ap = read_wedge_apertures(console)
