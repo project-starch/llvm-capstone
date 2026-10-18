@@ -1424,3 +1424,22 @@ Every pre-registered reading held.
   - A resolve() site line there would name a different failure.
 - **The other returning steps:** as r12. The fix covers cause 15 only, so the cause-13 steps (vm-none-read,
   vm-guard) keep their `vma` refusals.
+
+### Boot r13, result (2026-10-18 09:34-09:42): S-24 is read on silicon and fixed. The PTE has D clear, and faulting the page in for write before the pin makes `vm` read QEMU's status
+
+Pre-registered at ad7ef6004ffc. Result lines are in `board-tier12/results/board-vp2-tier12-r13.result-lines.txt`.
+Every pre-registered reading held, compared by script.
+- **Tier 1:** identity, the eighth boot.
+- **The console banner,** once: resolve-sites-10.
+- **`vm` with resolve_dirty=N:** exit 139. The bound line sits at the launcher's fault address and now carries the
+  PTE: `val=0x20331857 present=1 write=1 young=1 dirty=0`.
+  - The low byte 0x57 decodes to V, R, W, U and A set, with D clear: the runtime lane's account, read on silicon.
+  - The RTL raises a store page fault while D is clear and never sets it.
+  - GUP's `follow_page_pte` marks the struct page dirty, not the PTE (board tree `mm/gup.c:624-627`).
+- **`vm` with resolve_dirty=Y:** exit 1, with `VM_CONTRACT_FAIL:execute through mapping PCC`, QEMU's own status and
+  failure point. No new bound line after the flip; threads2's refusal is the window's must-fire.
+- **The other returning steps:** equal to r12's in exits and in every fault line's cause and code offset. The three
+  `vma` refusals hold the predicted relation. The fix covers cause 15, and a store to a mapping without VM_WRITE still
+  refuses at `vma`.
+- **The runner's per-window KMSG counts are cumulative.** dmesg is not cleared, so later windows repeat earlier
+  lines. The result lines take each window's new lines by timestamp.
