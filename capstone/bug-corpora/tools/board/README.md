@@ -40,3 +40,10 @@ The checks:
 - `BOARDVM_STUB_TRANSCRIPT=<file>` makes BoardBatch.execute take a canned transcript instead of the board.
 - The first real use is a pre-registered smoke boot: the virtual positive control alone. It goes through the board-run
   skill like any other boot.
+
+**A warm-up before the batch is required on vp2 (bf3db3175).** The first virtual context after a cold boot, with no
+classic domain and no Tier 1 rung before it, spins after the image's grants and never returns (smoke boots 1-3,
+2026-10-18). Run the validated sequence: `BOARD_RUNGS="b0-stats b0-hello vm-contract vbatch"`, with the vp2 Tier 1
+files (`vmrun.sh`, `vm/vm-contract.sh`, `vm/contract.dom`, the kit's launcher and module under `vm/`) in
+`BOARD_BASE_MANIFEST`, and `BoardBatch(..., other_ctl="/test-domains/vmrun.sh")`. The record is in
+`tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README.md`.

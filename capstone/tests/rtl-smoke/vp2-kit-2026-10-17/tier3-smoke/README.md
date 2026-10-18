@@ -163,3 +163,37 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
     preamble), independent of the warm-up.
   - **vm-contract hangs:** the base set or the recipe's image differs from the Tier 1 bake. The batch's reading is
     then collateral.
+
+## Result, the fourth smoke boot (2026-10-18 09:01-09:10): the backend reads the controls exactly as QEMU does, once a warm-up runs first
+
+**Firmware** dca331cb55bb2363; the bake's module checks both printed. The rungs read:
+- **b0-stats 0, b0-hello 0.**
+- **vm-contract** (Tier 1's own rung) reads identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25.
+  One FRTY, as in every Tier 1 boot.
+- **The batch, every step returned well inside its bound:**
+  - **contract-ok:** all its grants (slots 0-8) and its stats, then `VM_CONTRACT_FAIL:environment`, exit 1. That is
+    expected: the batch gate does not export `CAPSTONE_VM_CONTRACT=environment`, which Tier 1's script does. The
+    step's point was that it no longer spins.
+  - **The three controls** equal the QEMU smoke's readings in cause and code-relative pc, compared by script on the
+    two smoke outputs:
+
+    | step | board | QEMU |
+    |---|---|---|
+    | control-bounds-malloc | mark, cause 28 at code offset 0x104d8 | the same |
+    | control-uaf-malloc | mark, cause 25 at 0x10524 | the same |
+    | control-clean | exit 75 | the same |
+
+    The image is controls.dom 491655742d378fcd, the sha256 in the launcher's own fault line.
+- **The resting apertures** read 228 = index 107, as before. The dynamic fields are the stretcher's OR and are not
+  recorded as a reading.
+
+**What the four smoke boots separate:**
+- In boots 1-3, no classic domain and no Tier 1 rung ran before the batch. The first virtual context then spun in R
+  after the image's five grants, with no S-23 retry and the switcher resting at an ESCAPE. Every later context in
+  those boots did the same.
+- In boot 4 the batch ran after b0-hello and vm-contract, and every step returned.
+- So on vp2 the first virtual context after a cold boot needs a warm-up run before it. Which of b0-hello (a classic
+  domain) and vm-contract (a first virtual context) is the warm-up is not separated yet.
+- Every Tier 1/2 boot ran both before any virtual step, which is why this was never seen there.
+- **The Tier 3 recipe carries the validated sequence:** `BOARD_RUNGS="b0-stats b0-hello vm-contract vbatch"`, with
+  Tier 1's files in the base set (bkit4).
