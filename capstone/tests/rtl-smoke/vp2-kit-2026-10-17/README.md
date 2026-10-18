@@ -1357,3 +1357,35 @@ Pre-registered at b6521767bae0. Result lines are in `board-tier12/results/board-
   - fence=1 wedges and fence=0 would have returned: unreadable in this order. That is a different variable, and it
     would need its own boot.
 - **sparse-churn:** the expected wedge (r8), last. It is reached only if both sparse-stale arms return.
+
+### Boot r12, result (2026-10-18 08:21-08:33): `vm` is a store fault loop that S-24's bound ends; the fence does not remove the sparse wedge
+
+Pre-registered at 585f4391f32e. Result lines are in `board-tier12/results/board-vp2-tier12-r12.result-lines.txt`.
+Every pre-registered reading held.
+- **Tier 1:** identity, the seventh boot; 4 FRTY retries.
+- **The console banner,** once at the vm-contract insmod: `capstone_vm: loaded, diag resolve-sites-4,
+  supervisor_slots=1`, at KERN_EMERG. It also confirms the retraction's mechanism: level 0 passes the quieted
+  console.
+- **Through parallel_two:** the 16 exits and 9 launcher fault lines equal r11's, compared by script.
+- **`vm`: a loop, not a single fault.**
+  - The dmesg window after `vm` holds the must-fire (threads' "thread create refused") and two -ELOOP lines: `fault
+    at 0x3faf4ba000 cause 15 resolved 65 times with no change; the page is pinned and the PTE is untouched by this
+    module` (and 66, the launcher's repeat).
+  - 0x3faf4ba000 is the launcher's own fault address: the store `p[8192] = 23` after `mprotect(p, 12288, RW)`.
+  - No resolve() refusal site fired, so the `!same` deduction is refuted.
+  - The A/D-loop candidate's predicted reading, an -ELOOP line, is what printed. r8's refutation of it was retracted
+    this morning, and it was wrong in substance as well as in method.
+  - What makes the store fault again after each resolution is open. It goes to the compiler lane, which owns the
+    module, and to the RTL lane for the walker's side.
+- **The vma lines:** vm-ro-write, vm-none-read and vm-guard print `vma` lines, need 0x2 against flags without
+  VM_WRITE and need 0x1 against flags without VM_READ, as the compiler lane's QEMU control predicts.
+- **The fence:**
+  - fence_before_entry read back `Y`, and sparse-stale WEDGED.
+  - All 15 switch apertures equal r8's and r9's fence-less sparse wedges, compared by script. The commit pc's code
+    offset is also the same.
+  - The fence does not remove the sparse wedge. The fence-off arms come from other boots and module builds.
+  - This is also the RTL lane's prediction for its ghost-store candidate, an STC whose translation faults retiring
+    without the exception. That candidate is in simulation.
+- **A runner defect, caught by the live monitor:** the "FENCE flips" extraction matched digits, but the bool
+  parameter reads back `Y`, so the extraction was empty. The result lines take the flip from the transcript. Later
+  runners match `[0-9YN]`.
