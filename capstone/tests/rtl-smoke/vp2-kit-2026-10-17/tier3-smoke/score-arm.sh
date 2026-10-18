@@ -3,6 +3,9 @@
 # the bundle's cells, compare-pilot.py against the prediction (cell by cell, by image), the boot lines, and, when the boot
 # did not complete, the wedge apertures; then copies the board bundle into its corpus's results/2026-10-18-vp2/<arm>/
 # (never over an existing one). Prints the comparison's last line; exit = compare-pilot.py's (0 all same).
+# KIT_DESC names another kit in the record's header; RESULTS_DIR files the bundle under another results/ directory (a
+# different module's bundles must not share a directory with, or be refused by, the bkit7 ones); ARM_DIR files it under
+# another arm directory (a subset boot's bundle, e.g. vp2-malloc-sq0b, as sq0's were renamed on 3005ed52).
 main() {
   set -u
   local tag=${1:?tag} P=${2:?prediction bundle} D=${3:?board run dir} Q=${4:?seq out} S; S=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -11,7 +14,7 @@ main() {
   [ -f "$B/inputs.json" ] || { echo "NO DATA: $B/inputs.json missing"; return 2; }
   [ -e "$out" ] && { echo "REFUSED: $out exists"; return 1; }
   local rc
-  { echo "# Tier 3 board reading, arm $tag: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only."
+  { echo "# Tier 3 board reading, arm $tag: ${KIT_DESC:-kit bkit7 (module 3005ed52, pin off)}, SDK t3-freeze-nb. Result lines only."
     python3 "$S/tier3-cells.py" "$B"
     echo "## compare-pilot.py <prediction bundle> <board bundle>"
     python3 "$S/compare-pilot.py" "$P" "$B" | sed 's/^/  /'
@@ -26,7 +29,7 @@ main() {
   # the board bundle into its corpus, beside the QEMU bundles (results/2026-10-18-vp2/<recorded arm>/), for the fold
   local corpus arm dst
   read -r corpus arm < <(python3 -c "import json,sys; j=json.load(open(sys.argv[1])); print(j['corpus'], j['arm'])" "$B/inputs.json")
-  dst=$(cd "$S/../../../.." && pwd)/bug-corpora/$corpus/results/2026-10-18-vp2/$arm
+  dst=$(cd "$S/../../../.." && pwd)/bug-corpora/$corpus/results/${RESULTS_DIR:-2026-10-18-vp2}/${ARM_DIR:-$arm}
   if [ -n "$corpus" ] && [ -d "$(dirname "$(dirname "$dst")")" ] && [ ! -e "$dst" ]; then
     # a runner may record a build path under the account's scratch disk: the committed copy names it <mnt-hdd>, as the
     # corpora's older bundles name theirs <scratch> (precommit-scan blocks the account name)

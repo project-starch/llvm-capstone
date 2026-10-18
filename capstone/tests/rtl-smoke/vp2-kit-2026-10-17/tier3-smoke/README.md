@@ -882,3 +882,121 @@ fault anyway.
   it. The reading does not depend on it.
 - **Not booted:** ppA2, ppE, ppE1 and ppE2 of the settling batch. E3's reading and the paired boot on the S-27
   workaround module (next) answer what they were built for. ppE's QEMU twin is filed as `records/ppE.prediction.txt`.
+
+### The S-27 paired boot, pre-registered (2026-10-18, before its boots): the workaround module against 3005ed52's records
+
+**The module:** d71f207a3af5546b, from the compiler lane's e5775346cc8e (origin/module-resume-rd-x0).
+- The entry/resume CSRUNV is issued with rd = x0, so nothing is written into the context's x(rd).
+- The event kind is read back from frame +16. On bf3db3175 every ESCAPE writes it there: the EVENT walk saves CSR id 70
+  at +16 (`capstone_dom_switcher.anvil:466-467`). A REFUSE writes {2, 29} at +16 and +24 itself (`:424-429`).
+- The kit gates, re-run here by stage-module.sh: qemu-only-csr-census 0 of 4,762 instructions; vp2-silicon-gate as
+  trusted_S: 0 refused, 0 candidates, 4 conditional.
+
+**Boot 1, Tier 1** (`board-tier12/boot3/run-tier12-wa1.sh`):
+- Firmware ad5e84f761dd0f7c (Image e4b6e7535a0a2a77; monitor 007d81d with the S-23 fetch retry; wrapper 1269c77).
+- The stage is ap1's with one line changed, the module, and the bake's cpio check finds d71f207a by hash.
+- Reference: ap1 (firmware 83e5c5c6d6f89471, module 3005ed52).
+- **Predicted:**
+  - b0-stats, b0-hello and vm-contract as their oracles (0, 0, 0);
+  - vm-contract's identity branch: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139);
+  - the banner once, and 0 "wrote no event record" lines.
+- **Readings against the module on silicon:** any refusal line (the +16 record not written), vm-contract off its oracle,
+  or a wedge.
+
+**Boot 2, pym0** (`tier3-pair-wa1.sh`):
+- It runs only if boot 1 reads as predicted.
+- Kit bkit7-fix6 is bkit7 with the module swapped (`diff -r`: the module, and board.env's manifest path, whose content is
+  unchanged).
+- The same runner arguments and the same 21 images (`t3-images-nb/pym0.images.SHA256SUMS`) as pym0 on bkit7.
+- **Predicted:** the QEMU verdict.
+  - Control uaf-block completes and the 20 cells read MISSED, equal to `records/pym0.prediction.txt` (this lane's twin
+    on 5bfc38f8).
+  - The same holds against the compiler lane's twin on the new module's QEMU build, 28882779c95b94ad (`t3-pym0-fix6`,
+    20 of 20 identical to the record).
+- **Reference on 3005ed52:** `records/pym0.board.txt`, 0 of 20, every cell control-failed by cause 6 at 0x12.
+- **The pair is two-sided if pym0 reads 20 of 20 here.**
+- **Readings that are not that, named in advance:**
+  - the 0x12 fault again: another resume site writes x(rd);
+  - a different fault: a second defect, unmasked;
+  - an S-mode oops at a collect site: pym0 collected, and this kit has no stopgap;
+  - cause 0xcafe0001 on a fault line: a refused CSRUNV.
+- **CV_STATS is not read on the board in boot 2.** The batch session gives each step only the runner's environment, and
+  adding CAPSTONE_VM_STATS would make the pair differ in two things. pym0's collection count comes from the compiler
+  lane's QEMU census.
+
+Both boots are UNGATED (PREFLIGHT=0); image identity by sha256 is the substitute. The dry run is `dryrun-pair-wa1.txt`.
+
+### fso, pb12 and pb10 on the workaround kit, pre-registered (2026-10-18, before their boots), behind the pair
+
+`tier3-fix6-seq.sh` starts when the pair ends. It runs only if pym0 read 20 of 20 on bkit7-fix6. Otherwise it HOLDS
+and the pair's RESULTS go to the runtime lane first. Each arm is its ARMS.spec line under the tag `<arm>-fix6`, through
+`tier3-seq.sh` on bkit7-fix6. Each is scored against the same prediction bundle as its 3005ed52 run (the compiler
+lane's nb record, `t3-<arm>/bundle`). The compiler lane's census reads 0 collections on all three (qkit7-fix6), and its
+gate reads them identical per case on the two modules' QEMU builds.
+- **fso-fix6** (ffmpeg/subobject, vp2-malloc): MISSED 9 with both controls as predicted. On 3005ed52 it read 0 of 9,
+  control-failed by S-27's 0x12 fault at the allocator's `sd`.
+- **pb12-fix6** (memcached/allocator, vp2-malloc): CAUGHT 1, MISSED 8. On 3005ed52 it read 0 of 9, the same S-27 face.
+- **pb10-fix6** (ffmpeg/pool, Sublet, vp2-nested-pools): CAUGHT 4, last in the boot order.
+  - On 3005ed52 it read 1 of 4: case 01's BUGGY run ended in a kernel panic on a load refused under covering CPMP region
+    21 (S-23's data face, the RTL lane's attribution).
+  - The module change does not touch that path, so S-27's workaround is NOT predicted to change it.
+  - A recurrence is S-23's data face at N=2. A clean 4 of 4 is one boot without the window, not a fix.
+- Each record names kit bkit7-fix6 and module d71f207a3af5546b. The bundles are filed under
+  `results/2026-10-18-vp2-rdx0/<arm>`, apart from 3005ed52's.
+- UNGATED (PREFLIGHT=0), as every Tier 3 boot. Dry run: `dryrun-fix6-seq.txt`.
+
+### pym1, sq0b-e, wm0 and wm1 on the workaround kit, pre-registered (2026-10-18, before their boots), after fso/pb12/pb10
+
+`tier3-fix6-appvm.sh` runs after `FIX6SEQ DONE` (a HOLD or STOP there holds it too).
+- Each arm is one boot through `tier3-appvm-arm.sh` on bkit7-fix6, with its 3005ed52 run's runner arguments.
+- Its collected images must equal its `t3-images-nb` list before the boot. pym1's and wm0's arguments were also checked
+  by a collect-only run.
+- Each is scored against its 3005ed52 run's prediction, under the tag `<arm>-fix6`. The bundles are filed under
+  `results/2026-10-18-vp2-rdx0/` (sq0's as `vp2-malloc-sq0<x>`).
+- The compiler lane's census reads 0 collections on every one of them (qkit7-fix6).
+
+**Predicted** (the 3005ed52 reading in brackets):
+- **pym1-fix6** (vp2-nested-pools): CAUGHT 20. [0 of 20, S-27's 0x12 fault in every step.]
+- **sq0b-fix6 to sq0e-fix6** (vp2-malloc, six cases each): the sq0 prediction cut to each subset (subset-bundle.py).
+  [1, 2, 1 and 5 of 6; the rest carried S-27's register-2 faults.]
+- **wm0-fix6** (vp2-malloc): MISSED 23. [A wedge in the uaf-jumbo control, R-57's face per the RTL lane.]
+- **wm1-fix6** (vp2-nested-pools): NO-READING:control-failed 23, the QEMU twin's own reading. [A wedge in its first
+  control, wm0's face.]
+
+**What would re-attribute the wedges:** if wm0 and wm1 now reach their predictions, the wedges were downstream of S-27,
+and R-57's attribution for them is withdrawn. If either wedges again with the same apertures, R-57's attribution stands
+at N=2.
+
+UNGATED (PREFLIGHT=0). Dry run: `dryrun-fix6-appvm.txt`.
+
+### The S-27 paired boot, results (2026-10-18 19:14-20:12): both boots read as pre-registered; pym0 reaches its QEMU verdict on d71f207a
+
+**Boot 1, Tier 1** (`board-tier12/results/board-vp2-tier12-wa1.result-lines.txt`):
+- b0-stats, b0-hello and vm-contract read as their oracles, and vm-contract takes the identity branch.
+- "REFUSED-CSRUNV (must-fire) 0; banner 1".
+- Every line equals ap1's on 3005ed52, including the FRTY address and vm-contract's fault offset.
+
+**Boot 2, pym0 on bkit7-fix6** (`records/pym0-fix6.board.txt`):
+- 21 of 21 steps ran, and the boot completed. Control uaf-block completed, and the 20 cases read MISSED.
+- That is 20 of 20 cells the same as `records/pym0.prediction.txt`, and 20 of 20 against the compiler lane's twin on
+  the new module's QEMU build (28882779c95b94ad).
+- The session shows 0 domain fault lines, the banner once and 0 refusal lines.
+- Each program now runs for minutes, where on 3005ed52 each faulted within seconds; the boot took 52 minutes against 11.
+
+**The pair:**
+- The 21 staged `.dom` files are sha256-identical, file by file, between this boot and pym0's on 3005ed52. The runner
+  (fdc271ee3c107951), launcher (b27afefc09c6cae6) and monitor (007d81d) are the same.
+- The firmware and kernel hashes differ, by the bake of the other module into the initramfs. The kits differ in the
+  module alone (`diff -r`).
+- **On module 3005ed52e860c7af: 0 of 20, every step control-failed by cause 6 at 0x12. On module d71f207a3af5546b: 20
+  of 20 at the QEMU verdict.**
+- The module change is the resume CSRUNV's rd = x0, together with the sentinel store and fence before it and the kind
+  read from frame +16. The pair confirms the workaround. That the rd write is the mechanism rests on E3's reading and
+  the RTL lane's simulation arm with them.
+- How S-27's status is worded in ISSUES waits for a claim-auditor pass.
+
+**A slip, caught before it was reported:** a live read of the driver log at 19:45 showed `cause=25` at code offset
+0x140f0. It looked like a fault in case 05 (disassembled there: an `ldc` in insert_to_freepool). It was the previous
+boot's console, replayed on connect: Tier 1's vm-contract, whose identity branch is exactly that stale access, at that
+offset. Scoping the read to after the session's first marker removed it. The board-run skill already says to scope a
+live scan to the run's own load.
