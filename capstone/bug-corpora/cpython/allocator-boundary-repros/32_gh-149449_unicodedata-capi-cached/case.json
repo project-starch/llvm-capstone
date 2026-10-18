@@ -34,5 +34,6 @@
   "fault_sites": [
     "PyCodec_NameReplaceErrors"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at PyCodec_NameReplaceErrors Python/codecs.c:968. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at PyCodec_NameReplaceErrors Python/codecs.c:968. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "③ WITHDRAWN by the 2026-10-18 review. Temporal defect. ② faults cause=25 INVALID_CAP on `ldc a4, 0x0(s2)` and stands. CheriBSD reports si_code=5 PROT_CHERI_PERM, which is neither the bounds code nor the revocation code the selftest establishes (bounds=1, revoked=2); a permission fault is not this arm's mechanism reporting the stale access. ① is already NO-READING here, faulting with cause=12, an instruction page fault -- the CPU trapping a jump into non-code, as the earlier round also recorded."
 }
