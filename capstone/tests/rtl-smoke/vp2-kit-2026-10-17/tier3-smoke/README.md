@@ -1114,3 +1114,10 @@ budget.
 **VOID** if the bundle's fixture record is not 173aa5b35c1b57b9, or its image not 81ee24a0a1e957c9.
 
 UNGATED (PREFLIGHT=0). Dry run: `dryrun-sql-arm.txt`.
+
+**Amendment to the fence discriminator's wording (2026-10-18 21:25, before its boot; the prediction is unchanged):**
+- In 3005ed52's source, `fence_before_entry` makes `run()` emit `fence rw,rw` before the CSRUNV, and nothing else
+  (e5775346cc8e^ `capstone_vm.c:616-625`). There is no `sfence.vma`.
+- So the arm separates MEMORY ORDERING from the rd = x0 change and says nothing about the TLB.
+- On the TLB side, the board kernel brings up one hart ("smp: Brought up 1 node, 1 CPU", pym0-fix6's raw console).
+  That is what closes the module's resume-boundary TLB gap on vp2 today (the runtime lane's point).
