@@ -521,6 +521,7 @@ below made by script):
 | r12 | sparse-stale, fence before every CSRUNV | 1 | none | 3 | 0x25 | 0xc4 | identical to r8: the fence does not remove it |
 | r10 | sqlite_write | 4 | none | 0 | 0x1d | 0x80 (idle) | the queue full, every unit ready |
 | r11 | mruby (its first silicon attempt) | 4 | none | 0 | 0x1d | 0x80 | identical to r10 |
+| 5 | sqlite_write, under the module's arena pin (3005ed52, arena_pin=1 read back) | 4 | none | 0 | 0x1d | 0x80 | identical to r10 in all 15 switch apertures: the pin does not reach it |
 
 - **Every wedge:** 228 = 0xb8, the switcher's index 56. The RTL lane reads that from the source as residue: cur_idx
   after a non-service RESUME, never reset.
@@ -530,9 +531,15 @@ below made by script):
   acknowledged.
 
 **Consequence on this bitstream:** the sparse steps (`*slot = malloc(64)`, a capability store as a page's first
-touch) and the kit applications' fresh-page capability stores wedge the core. Every further virtual record waits for
-the compiler lane's answer on where a capability store can be a first touch, which decides the scope of the module's
-pre-touch. QEMU escapes the faulting STC as kind 4 and cannot show this.
+touch) and the kit applications' fresh-page capability stores wedge the core. QEMU escapes the faulting STC as kind 4
+and cannot show this.
+- **The module's arena pin does not remove the kit-application face.** It pins the rest of a faulting arena ahead
+  of use. Boot 5 ran it on module 3005ed52, with Tier 1 passing on that module first:
+  - sqlite_write wedged with r10's signature;
+  - every returning step equalled boot 4c.
+  So the kit applications (sqlite_write, sqlite_read, mruby) wait on R-57's RTL fix, as the sparse pair does.
+- **The Tier 2 record stays boot 4c.**
+- **Tier 3 runs with the pin off.** A wedge there with this signature is read as S-25.
 
 ## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `OPEN — read on silicon 2026-10-18 in five Tier 3 smoke boots: three without a classic domain run before the first virtual context spun in every context, two with b0-hello first returned in every context; mechanism unknown (state that the first classic domain call sets up, on the monitor's or the RTL's side); the workaround, a classic domain run before the first virtual context, is in every Tier 1/2 boot and in the Tier 3 recipe`
 
