@@ -1602,3 +1602,22 @@ Pre-registered at 6e8181b4b99c. Result lines are in `board-tier12/results/board-
   the module's content or layout, and its QEMU control could not see it.
 - The module of record stays a56fc415 (boot 4c). The fix is the compiler lane's, and its next revision gets a Tier 1
   board boot before it carries anything.
+
+## The compiler lane's revert, and the arena pin: Tier 1 first (pre-registered 2026-10-18)
+
+- **The Q-26 wait rewrite is withdrawn** (the compiler lane's 52b2e742d2d8). The lane reports that its committed
+  source rebuilds byte-identically to a2a0b2f49d790cc6, the esconly module.
+  - That module's silicon proof is Tier 1 only (the bisection's esconly boot). The full-suite record stays boot 4c on
+    a56fc415, which differs from it by the inert escape-print code.
+  - The lane's constraint on the mechanism: for a first context, the only part of the rewrite that executed was one
+    plain store to a module global, right after run() returned, inside the interrupt-disabled region.
+- **The arena pin:** module 3005ed52e860c7af (tag `arena-pin-1`), built on a2a0b2f4.
+  - One condition term widens pin_ahead's existing forward-pinning loop to the rest of the arena, from the faulting
+    page, and only when `arena_pin` is set. It defaults OFF.
+  - Verified here: sums, vermagic 6.4.14, 0 compressed instructions, the banner at KERN_EMERG, four more instructions
+    than a2a0b2f4.
+- **This boot is Tier 1 alone,** with arena_pin at its default: b0-stats, b0-hello, vm-contract, on firmware
+  83e5c5c6d6f89471, run by `boot3/run-tier12-ap1.sh 83e5c5c6d6f89471`.
+  - **Predicted:** vm-contract identity, as on a2a0b2f4 (the esconly boot).
+  - **A failure** means the pin code is harmful merely by being present, the Q-26 class. The Tier 2 suite with
+    `arena_pin=1` then waits.
