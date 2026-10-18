@@ -1,0 +1,8 @@
+# merge-subset-bundles.py controls (2026-10-18 21:45), on the six 3005ed52 sq0 subset bundles
+# (sqlite/engine-repros/results/2026-10-18-vp2/vp2-malloc-sq0{a..f}):
+# - merge of all six: "MERGED 6 subsets, 33 cells, tally {'MISSED': 15, 'CAUGHT': 5, 'NO-READING:unattributed': 13}";
+#   firmware and kernel "per-subset", the subsets map carrying each one's firmware, kernel, record and images-list hash;
+#   the merged verdicts.jsonl equals the six subsets' lines byte for byte (sorted cmp).
+# - a subset whose platform.module was altered: "REFUSED: platform.module differs", exit 2.
+# - the same subset given twice: "REFUSED: case 00_adfb203a7d_fts5_getvarint_stale_read in both sq0a and sq0a2", exit 2.
+# - a subset whose tally was altered: "REFUSED: sq0c's own tally/cases do not recompute", exit 2.
