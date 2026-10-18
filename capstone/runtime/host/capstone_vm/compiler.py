@@ -352,9 +352,10 @@ def arch_extensions(arch: str, what: str) -> set[str]:
     return extensions
 
 
-def check_object(data: bytes, what: str, virtual: bool, helpers_allowed: bool = False) -> None:
+def check_object(data: bytes, what: str, virtual: bool, helpers_allowed: bool = False,
+                 archive_defines: frozenset[str] = frozenset()) -> None:
     try:
-        check_elf(data, what, virtual, helpers_allowed)
+        check_elf(data, what, virtual, helpers_allowed, archive_defines)
     except (IndexError, struct.error, UnicodeDecodeError) as error:
         raise ValueError(f"{what}: malformed ELF object ({error})") from None
 
@@ -362,7 +363,8 @@ def check_object(data: bytes, what: str, virtual: bool, helpers_allowed: bool = 
 SHT_SYMTAB, SHT_NOBITS, SHT_LLVM_DEPENDENT_LIBRARIES = 2, 8, 0x6FFF4C04
 
 
-def check_elf(data: bytes, what: str, virtual: bool, helpers_allowed: bool) -> None:
+def check_elf(data: bytes, what: str, virtual: bool, helpers_allowed: bool,
+              archive_defines: frozenset[str] = frozenset()) -> None:
     if data[:4] == b"BC\xc0\xde" or data[:4] == b"\xde\xc0\x17\x0b":
         raise ValueError(f"{what}: LLVM bitcode (LTO) is not a supported link input")
     if data[:4] != b"\x7fELF":
@@ -393,6 +395,7 @@ def check_elf(data: bytes, what: str, virtual: bool, helpers_allowed: bool) -> N
     def name(header):
         end = names.find(b"\0", header[0])
         return names[header[0]:end].decode(errors="replace")
+    attests_hard_float = False
     for header in sections:
         if header[1] == SHT_LLVM_DEPENDENT_LIBRARIES:
             raise ValueError(f"{what}: names dependent libraries (.deplibs); link them explicitly")
@@ -404,9 +407,18 @@ def check_elf(data: bytes, what: str, virtual: bool, helpers_allowed: bool) -> N
                 fp = {e for e in extensions if FP_FEATURE.match(e)}
                 if virtual and fp != {"f", "d"}:
                     raise ValueError(f"{what}: ISA {arch}: the virtual profile needs F and D and nothing else of the FP or vector units")
+                attests_hard_float = True
                 if not virtual and fp:
                     raise ValueError(f"{what}: ISA {arch}: the physical profile has no FP or vector unit")
-        if virtual and not helpers_allowed and header[1] == SHT_SYMTAB:
+    # A reference to a binary32/binary64 helper is soft-float code -- unless the SAME archive
+    # defines that helper and this member itself attests hard F and D. That is compiler-rt's
+    # own internal call (__fixdfdi calls __fixunsdfdi) in a port that merges the builtins into
+    # its libc archive (cpython's libc-and-builtins.a). An object with no attributes, or a
+    # helper nothing in the archive defines, is still refused.
+    if virtual and not helpers_allowed:
+        for header in sections:
+            if header[1] != SHT_SYMTAB:
+                continue
             if header[6] >= e_shnum or header[9] != 24:
                 raise ValueError(f"{what}: malformed symbol table")
             strtab = contents(sections[header[6]])
@@ -415,11 +427,46 @@ def check_elf(data: bytes, what: str, virtual: bool, helpers_allowed: bool) -> N
                 st_name, _, _, st_shndx = struct.unpack_from("<IBBH", table, offset)
                 if st_shndx == 0 and st_name:
                     symbol = strtab[st_name:strtab.find(b"\0", st_name)].decode(errors="replace")
-                    if symbol in SOFT_FLOAT_HELPERS:
+                    if symbol in SOFT_FLOAT_HELPERS and not (attests_hard_float and symbol in archive_defines):
                         raise ValueError(f"{what}: calls {symbol}: soft-float code in a hard-float link")
 
 
+def defined_symbols(data: bytes) -> frozenset[str]:
+    """The global and weak symbols an ELF64 object defines. A malformed object
+    defines nothing here; check_object reports it."""
+    try:
+        if data[:4] != b"\x7fELF" or len(data) < 64:
+            return frozenset()
+        e_shoff = struct.unpack_from("<Q", data, 40)[0]
+        e_shentsize, e_shnum = struct.unpack_from("<HH", data, 58)
+        if e_shentsize != 64 or e_shoff + e_shnum * 64 > len(data):
+            return frozenset()
+        sections = [struct.unpack_from("<IIQQQQIIQQ", data, e_shoff + i * 64) for i in range(e_shnum)]
+        out = set()
+        for header in sections:
+            if header[1] != SHT_SYMTAB or header[6] >= e_shnum or header[9] != 24:
+                continue
+            link = sections[header[6]]
+            strtab = data[link[4]:link[4] + link[5]]
+            table = data[header[4]:header[4] + header[5]]
+            for offset in range(24, len(table) - 23, 24):
+                st_name, st_info, _, st_shndx = struct.unpack_from("<IBBH", table, offset)
+                if st_name and st_shndx != 0 and (st_info >> 4) in (1, 2):  # GLOBAL, WEAK
+                    out.add(strtab[st_name:strtab.find(b"\0", st_name)].decode(errors="replace"))
+        return frozenset(out)
+    except (IndexError, struct.error):
+        return frozenset()
+
+
 def check_archive(path: Path, virtual: bool, helpers_allowed: bool = False) -> None:
+    members = archive_members(path)
+    defines = frozenset().union(*(defined_symbols(body) for _, body in members))
+    for name, body in members:
+        check_object(body, f"{path}({name})", virtual, helpers_allowed, defines)
+
+
+def archive_members(path: Path) -> list[tuple[str, bytes]]:
+    members = []
     data = path.read_bytes()
     if data.startswith(b"!<thin>\n"):
         raise ValueError(f"{path}: thin archives are not supported link inputs")
@@ -446,8 +493,9 @@ def check_archive(path: Path, virtual: bool, helpers_allowed: bool = False) -> N
             if raw.startswith("/") and raw[1:].isdigit():
                 start = int(raw[1:])
                 raw = long_names[start:long_names.find(b"\n", start)].decode(errors="replace")
-            check_object(member, f"{path}({raw.rstrip('/')})", virtual, helpers_allowed)
+            members.append((raw.rstrip('/'), member))
         at = body + size + (size & 1)
+    return members
 
 
 def check_link_inputs(paths: list[Path], config: dict) -> None:

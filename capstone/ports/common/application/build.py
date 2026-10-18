@@ -139,6 +139,15 @@ def main():
          '-DCMAKE_C_FLAGS_RELEASE=-O1' +
          (' -DCAPSTONE_LEVEL0_STATS' if args.instrument else ''), '-DCAPSTONE_APPLICATION_GRANT_BYTES=' + str({'mruby': 32, 'perl': 32}.get(args.nested, 0) << 20)])
     run(['cmake', '--build', sdk, '-j8'])
+    # The same post-build edit build-sdk.sh makes for CAPSTONE_SDK_EXTRA_CODEGEN, so this relink
+    # SDK's recorded codegen matches the SDK the port compiled with. For a pure relink nothing is
+    # compiled with it; it still governs any source this script compiles (--instrument, regions.c,
+    # the sqlite/ffmpeg workloads).
+    extra_codegen = os.environ.get('CAPSTONE_SDK_EXTRA_CODEGEN', '').split()
+    if extra_codegen:
+        config = json.loads((sdk / 'sdk.json').read_text())
+        config['codegen'] = list(config['codegen']) + [w for w in extra_codegen if w not in config['codegen']]
+        (sdk / 'sdk.json').write_text(json.dumps(config, indent=2))
     probe = out / 'memory.o'
     defines = (['-DEXP_MRB_GC_SUBLET'] if args.nested == 'mruby' else []) + (['-DEXP_MRB_GC_GAPS'] if args.gc_gaps else [])
     if args.reuse_gap: defines += ['-DEXP_PG_REUSE_GAP']
