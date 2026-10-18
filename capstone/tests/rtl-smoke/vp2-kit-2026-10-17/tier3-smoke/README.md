@@ -828,3 +828,14 @@ silicon):
   `sqlite/engine-repros/results/2026-10-18-vp2/vp2-malloc-sq0{a..f}`, and sq1's single subset as
   `vp2-nested-pools-sq1a`. Each carries its own platform record. Combining them is the fold's decision, and corpus.json
   is untouched.
+
+### Arm wm1, result (2026-10-18 18:05-18:16): a wedge in the first control, the same face as wm0
+
+`records/wm1.board.txt`. wmem's nested-pools arm ran session-share, then wedged in `virtual-nested-pools-00-uaf-chunk`,
+its first control.
+- Its apertures equal wm0's in 14 of 15 switch fields: count 4, WAIT_STORE_READY, a capability write unacknowledged,
+  the switcher at index 28, not in M-mode.
+- Only 221's valid bits differ (0111 here, 1101 in wm0), so the invalid entry sits in another slot. The same R-57 face.
+- **Note, for after the S-27 workaround:** with every resume clobbering the context's a5 on this module, a re-run of
+  wm0 and wm1 on the patched module will show whether these wedges were downstream of S-27. They stay attributed as
+  recorded until then.
