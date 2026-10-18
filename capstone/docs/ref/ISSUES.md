@@ -478,6 +478,19 @@ access fault` at `mod_node_page_state+0x40` (cause 5, badaddr = mtval) and panic
     excluded.
   - The Oops is in interrupt context under `unpin_user_page`, not shown to be the caller's first access after a
     CSRUNV return, which is S-23's defining condition.
+  - **Repeated exactly (2026-10-18, pb10-fix6b, module d71f207a, kit bkit7-fix6t; dev e304763af4db).** The same step
+    panicked with the same MTVL (BC2C0825), CPMX and INJS, the 48-line CPMP dump identical to the first boot's, and the
+    same kernel path (`mod_node_page_state+0x40` from `unpin_user_page+0x2a`).
+    - A refusal that repeats at one physical address from one caller on two boots and two modules is a deterministic
+      sequence. That weighs against a timing window and toward the persistent-false-deny caveat above.
+  - **A candidate for that deny (the RTL lane's, 2026-10-18; a hypothesis, not established):**
+    - The allow needs `cpmp_revnode_valid_q[i]` (`pmp_data_if.sv:143-151`). Invalidation compares the broadcast id with
+      the tracked id on the INDEX only, `[15:0]` (`:96-108`, deliberate since ids are {generation, index}).
+    - So freeing any node with index N clears every entry tracking index N, whatever its generation or namespace.
+    - Nothing re-validates the entry, so the deny is permanent: R-38's class.
+    - This fits a context teardown (unpin), needs no table in flux, and is deterministic.
+    - The discriminator is an RTL simulation arm: an entry tracking N, a revoke of another node sharing N (across the
+      virtual/physical namespace too), then a load giving a load access fault with the physical address.
 - The fetch-retry workaround does not cover data accesses. The RTL lane's conditions for a data-side retry: S or U
   origin; a loaded entry covering mtval for the access type; the bounded no-progress guard; inject when nothing covers
   it; never for AMOs or LR/SC. Its prediction: a data retry succeeds on its first attempt.
