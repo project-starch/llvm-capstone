@@ -73,24 +73,32 @@ BROKEN = re.compile(r"SystemError|returned NULL without setting an exception|"
                     r"error return without exception set")
 
 
-def stage_stdlib(build, share):
-    """PYTHONHOME for the guest: the release's Lib, compiled by the build's own native 3.13.7."""
+def stage_stdlib(build, share, closure=None):
+    """PYTHONHOME for the guest: the release's Lib, compiled by the build's own native 3.13.7. With CLOSURE (a file
+    from tools/board/stdlib-closure.py, paths relative to Lib), only those files: the vp2 board's payload cannot carry
+    the whole Lib. A trimmed run counts only after a QEMU A/B shows every reading equal to the full Lib's."""
     lib = build / "source/src/Python-3.13.7/Lib"
     native = build / "source/build-python/python"
     home = share / "cpy"
     stamp = home / ".staged-from"
-    if stamp.is_file() and stamp.read_text() == str(lib) and \
+    origin = str(lib) + (f" closure {closure} {v.sha256(closure)}" if closure else "")
+    if stamp.is_file() and stamp.read_text() == origin and \
             (home / "lib/python3.13/_sysconfigdata__linux_.py").is_file():
         return
     shutil.rmtree(home, ignore_errors=True)
-    shutil.copytree(lib, home / "lib/python3.13", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
+    if closure:
+        for rel in Path(closure).read_text().split():
+            (home / "lib/python3.13" / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(lib / rel, home / "lib/python3.13" / rel)
+    else:
+        shutil.copytree(lib, home / "lib/python3.13", ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     # sysconfig's build-time variables, which prepare-cpython-capstone.sh generates for the target.
     pybuild = build / "source/build" / (build / "source/build/pybuilddir.txt").read_text().strip()
     shutil.copy(pybuild / "_sysconfigdata__linux_.py", home / "lib/python3.13")
     # Some test files are deliberately invalid Python, so compileall's status is not checked.
     subprocess.run([str(native), "-m", "compileall", "-q", "-f", "-d", "/mnt/host/cpy/lib/python3.13",
                     str(home / "lib/python3.13")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    stamp.write_text(str(lib))
+    stamp.write_text(origin)
 
 
 def run_script(a, share, image, directory, script, tag):
@@ -184,6 +192,8 @@ def main():
     p.add_argument("--raw", type=Path, required=True)
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--timeout", type=int, default=300)
+    p.add_argument("--stdlib-closure", type=Path, help="stage only these Lib files (tools/board/stdlib-closure.py); "
+                   "for the vp2 board's payload, valid only after a QEMU A/B against the full Lib")
     a = p.parse_args()
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
@@ -200,7 +210,7 @@ def main():
         return 75
     share = Path(json.loads((a.state / "config.json").read_text())["share"])
     a.raw.mkdir(parents=True, exist_ok=True)
-    stage_stdlib(a.build, share)
+    stage_stdlib(a.build, share, a.stdlib_closure)
     symbols = v.Symbols(a.llvm_bin, image)
 
     # The interpreter must work before anything it does means something.
