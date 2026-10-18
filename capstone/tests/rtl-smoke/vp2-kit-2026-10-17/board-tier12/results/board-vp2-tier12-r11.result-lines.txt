@@ -1,0 +1,74 @@
+# vp2 boot r11 (Tier 1+2), 2026-10-18 07:49-08:02: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload 4c2685def8817a87
+# (monitor 007d81d), module f02ca82ea9b2dd61 (resolve-refusal sites, banner, fence_before_entry), suite vm-suite-inner-r11.sh.
+# Pre-registered at lane vp2-tier12 b6521767bae0. Result lines only, from run3r11/board.txt and SEQ.
+
+DRIVER rc=1 08:02:06; watchdog lines 49
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=NONE oracle=22 NOT-AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+VM-SUITE board-check rc=1 :: 18 of 41 true; 15 off the pre-registration ['sparse-churn', 'sparse-stale', 'sqlite_write', 'sqlite_read', 'mruby', 'fault_causes', 'nested_denial_site', 'vm_denial_sites', 'vm_denial_operations', 'linux_pages_released', 'linux_demand_faults', 'sparse_recycling', 'sqlite_results', 'mruby_results', 'completed']
+FRTY retries 4 at       4 FRTY:0111109C 
+DIAG fault repeats: 
+ELOOP lines: 
+BANNER: 
+FENCE flips: 
+REFUSAL lines: 
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_R11_DONE 08:02:06
+
+## vm-suite exits, in order
+  VM_EXIT:normal:0
+  VM_EXIT:threads:1
+  VM_EXIT:vm:139
+  VM_EXIT:nested:0
+  VM_EXIT:nested-stale:139
+  VM_EXIT:heap-threads:1
+  VM_EXIT:stale:139
+  VM_EXIT:bounds:139
+  VM_EXIT:retired:139
+  VM_EXIT:vm-ro-write:139
+  VM_EXIT:vm-none-read:139
+  VM_EXIT:vm-guard:139
+  VM_EXIT:vm-padding:139
+  VM_EXIT:preempt:143
+  VM_EXIT:parallel_one:0
+  VM_EXIT:parallel_two:0
+  As r10 through parallel_two: the 16 exits and the 9 launcher fault lines equal r10's in cause and in code-relative
+  pc (compared by script). vm's is cause=15 at the arena base + 0x2000, code offset 0x124ac, as in r8-r10. Then mruby: the core WEDGED. The step's own output goes to
+  /tmp/mruby.out, so nothing of it reaches the transcript, which ends after the parallel pair's cat. The fence flips
+  and the sparse steps were not reached.
+## the module's console lines (banner, site lines): VOID, not absent
+  The baked driver sets /proc/sys/kernel/printk to 1 before rung 1 (fpga_driver/run_ladder_perf_fpga.py:201, from
+  cold_boot at :272; its DEVOK marker is in the stream), so during rungs the console prints only KERN_EMERG. The
+  reconstructed UART stream has 695 kernel lines before that setup and 0 after it. The banner and the site lines are
+  pr_warn: neither their presence nor their absence could be read. RETRACTED with this boot: the claim that the console
+  shows pr_warn, and r8's A/D refutation that rested on it (dev 9e645777a5fb).
+## the wedge apertures (mruby)
+  sw=255 TRAP LOG {seen,mcause[6:0]} 0x88 10001000
+  sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1d 00011101
+  sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x80 10000000
+  sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+  sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x03 00000011
+  sw=228 {1,dom_switch_idx[6:0]} 0xb8 10111000
+  sw=229 {load_state[3:0],0000} 0x00 00000000
+  sw=192 {0000000,commit_instr[0].valid} 0x01 00000001
+  sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+  sw=194 {000000,store_state} 0x00 00000000
+  sw=195 {0000,load_state} 0x00 00000000
+  sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0x00 00000000
+  sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x40 01000000
+  sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0x00 00000000
+  sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+  commit pc (scoreboard slot 0; stale after a flush) 0x0000003fa3001b28
+  trap-log mepc 0x0000000000035a88
+  trap-log tval 0x0000000000000073
+  rev_node_debug_ex 0x0000004e00000000
+  rev_node_head_ex 0x006d
+  rev_node_serving_idx_ex 0x00000000
+  Equal to r10's sqlite_write wedge in all 15 switch apertures (compared by script): 224 = 0x1d (privM, lsu_rdy, dyn_rdy, flu_rdy; no
+  flush), 225 = 0x80 (tbe only: not stalled, no pending store), commit valid, store_buf_commit_cnt 4, store and load
+  state 0, switcher index 56, LSU bypass empty, no tag operation. 227 reads 0x03 (reg_req.is_set, data_req.metadata_en).
+  The trap log (0x88, mepc 0x35a88, tval 0x73 = the ecall encoding) is also r9's and r10's: residue, not a reading
+  of this wedge. Different from the sparse wedge (r8: stalled, wstore, store_state 3).

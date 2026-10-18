@@ -1287,3 +1287,31 @@ Pre-registered at bb4981135515. Result lines in `board-tier12/results/board-vp2-
   - **Both return:** the race is timing-sensitive and the print or the order moved it. That is its own finding, not
     a fence pass.
   - **fence=1 wedges and fence=0 returns:** a different variable.
+
+### Boot r11, result (2026-10-18 07:49-08:02): mruby wedges the core like sqlite_write; the module's console lines were unreadable, and a claim behind r8 is retracted
+
+Pre-registered at b6521767bae0. Result lines are in `board-tier12/results/board-vp2-tier12-r11.result-lines.txt`.
+- **Tier 1:** b0-stats 0, b0-hello 0, vm-contract 0 (identity, the sixth boot), and 4 FRTY retries.
+- **vm-suite through parallel_two:** as r10. The 16 exits and the 9 launcher fault lines equal r10's in cause and in
+  code-relative pc, compared by script.
+- **mruby, its first silicon attempt: the core WEDGED.**
+  - All 15 apertures equal r10's sqlite_write wedge: M, not stalled, an instruction valid at commit, the LSU idle,
+    store state 0, switcher index 56.
+  - Two large applications now wedge the same way. The sparse wedge's signature is different: stalled, with a pending
+    store.
+  - The fence flips and the sparse steps were not reached, so r11 has no fence reading.
+- **The banner and the refusal lines are VOID, not absent.**
+  - The baked driver's cold_boot sets `/proc/sys/kernel/printk` to 1 before rung 1
+    (`fpga_driver/run_ladder_perf_fpga.py:201`, called at :272). Its DEVOK marker is in the stream.
+  - From then on the console prints only KERN_EMERG. The reconstructed UART stream has 695 kernel lines before that
+    setup and 0 after it.
+- **RETRACTED with this boot** (dev 9e645777a5fb):
+  - the board lane's claim that the console shows pr_warn: its evidence was boot-time lines;
+  - r8's "the A/D candidate is refuted", which rested on absent pr_warn DIAG and -ELOOP lines. The candidate is
+    unresolved. The r8 section above is corrected.
+- **What would have caught it:** the banner was designed as the must-fire control, and it did its job: its absence
+  is how this was found. The wrong part was the claim that chose the level. A same-level line had been checked only
+  at boot, never inside a rung.
+- **The ordering slip:** the suite put sparse-churn, a second expected wedge, between the two halves of the fence
+  pair, so a churn wedge would have cost the fence=0 arm. The batching rule already says this (at most one expected
+  wedge, last). r12 takes the compiler lane's order.
