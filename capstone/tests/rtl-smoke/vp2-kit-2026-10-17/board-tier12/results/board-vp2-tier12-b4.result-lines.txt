@@ -1,0 +1,35 @@
+# vp2 Tier 2 boot 4, 2026-10-18 11:09-11:22: caplifive_vp2_bf3db3175 (resident), fw_payload 8b8d946fadcb4b13 (monitor
+# 007d81d), module 29c8e54e969e04a7 (resolve-sites-12), suite vm-suite-inner-b4.sh. Pre-registered at lane vp2-tier12
+# f7487e0f1cd9. VOID as a Tier 2 record: the module's board arm faults every virtual context at startup.
+
+DRIVER rc=1 11:22:06; watchdog lines 48
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=922 oracle=0 NOT-AS-ORACLE
+RUNG vm-suite retval=NONE oracle=17 NOT-AS-ORACLE
+VM-CONTRACT BRANCH other: ok-line=False exits=['VM_EXIT:normal:139', 'VM_EXIT:stale:139'] causes=['cause=24', 'cause=24'] monitor=[]
+VM-SUITE board-check rc=1 :: 8 of 41 true; 25 off the pre-registration ['normal', 'nested', 'sparse-churn', 'sparse-stale', 'preempt', 'parallel_one', 'parallel_two', 'sqlite_write', 'sqlite_read', 'mruby', 'normal_output', 'fault_causes', 'nested_output', 'nested_denial_site', 'vm_denial_sites', 'vm_denial_operations', 'same_va_reuse', 'spin_entered', 'linux_pages_released', 'linux_demand_faults', 'unused_pages_not_populated', 'sparse_recycling', 'sqlite_results', 'mruby_results', 'completed']
+FRTY retries 0 at 
+DIAG fault repeats: 
+ELOOP lines: 
+BANNER (console, pr_emerg; KMSG copies excluded):       1 capstone_vm: loaded, diag resolve-sites-12, supervisor_slots=1;
+RESOLVE_DIRTY read-back: RESOLVE_DIRTY:Y:default 
+NOT RUN (S-25): 
+KMSG window VM: 1 lines, END 1; thread-refused (must-fire) 0; bound lines 0; refusal sites 
+KMSG window RETURNING: 0 lines, END 0; thread-refused (must-fire) 0; bound lines 0; refusal sites 
+VM exits: VM_EXIT:normal:139 VM_EXIT:stale:139 VM_EXIT:normal:139 VM_EXIT:threads:139 VM_EXIT:vm:139 VM_EXIT:nested:139 VM_EXIT:nested-stale:139 VM_EXIT:heap-threads:139 VM_EXIT:stale:139 VM_EXIT:bounds:139 VM_EXIT:retired:139 VM_EXIT:vm-ro-write:139 VM_EXIT:vm-none-read:139 VM_EXIT:vm-guard:139 VM_EXIT:vm-padding:139 VM_EXIT:preempt:139 
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_B4_DONE 11:22:06
+
+## every virtual context's fault line (vm-contract and vm-suite), as printed
+  16 x cause=24 pc=...1d94 address=0x2 entry=unknown
+  (pc offset 0x1d94 from each context's code base in every line; the image is contract.dom 125705371837ea92)
+## the stop after preempt
+  The vm-suite rung stopped returning after VM_EXIT:preempt:139 (the parallel pair). The aperture read the driver took
+  then is a LIVE core's: 224 = 0xff, 225 = 0xd5, 193 = 0x07, 221 = 0xfe, 228 = 0xeb (index 107), the LED stretcher's OR
+  of a running core, as in the Tier 3 smoke's resting read. Not a stilled core, not a reading.
+## the attribution
+  Byte-identical to r13, where this rung read identity: contract.dom, launcher b27afefc, monitor 007d81d (extracted
+  sources equal), vm-contract.sh. The variable is the module: a56fc415 (r13) -> 29c8e54e. Its QEMU arm (4397583b) passed
+  the compiler lane's control, so the defect is in the board arm or in what only silicon exercises. Sent to the
+  compiler lane with the verbatim lines.

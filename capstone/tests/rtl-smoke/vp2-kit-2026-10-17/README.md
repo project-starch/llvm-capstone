@@ -1443,3 +1443,162 @@ Every pre-registered reading held, compared by script.
   refuses at `vma`.
 - **The runner's per-window KMSG counts are cumulative.** dmesg is not cleared, so later windows repeat earlier
   lines. The result lines take each window's new lines by timestamp.
+
+## Pre-registered (2026-10-18, before Tier 2 boot 4): the Tier 2 record on the module queue's revision, S-25's steps not run
+
+- **The module:** 29c8e54e969e04a7 (the compiler lane's resolve-sites-12).
+  - S-26's escape line (raw event words, budget 16).
+  - resolve_dirty on by default.
+  - The Q-26 wait fix: its QEMU control has 0 kernel WARNINGs where the baseline had 1, and a suite verdict
+    byte-identical to the baseline.
+  - Verified here: sums, 4684 instructions with 0 compressed, the banner at KERN_EMERG, vermagic 6.4.14.
+  - The arena pin is NOT in it.
+- **The suite:** `board-tier12/vm-suite-inner-b4.sh`, run.py's guest script.
+  - **NOT RUN (S-25, R-57),** each printing `VM_NOT_RUN:<step>:S-25`: sparse-stale, sparse-churn, sqlite_write,
+    sqlite_read and mruby. A capability store as a page's first touch wedges the core on bf3db3175, and the arena pin
+    is not in this module.
+  - resolve_dirty is read back before `vm`, as a reading rather than an assumed default.
+  - The module's lines are read from dmesg.
+- **Firmware:** 8b8d946fadcb4b13; the monitor (007d81d) is unchanged and its extracted sources equal r13's.
+- **The run:** `boot3/run-tier12-b4.sh 8b8d946fadcb4b13`, dry-run in `boot3/dryrun-b4.txt`, with its own oracle of 17
+  exits.
+
+**The prediction:** the compiler lane's QEMU run on the reference pin, capstone-qemu b290f5656600 (binary
+7a4f3a64776f0c88) with svadu=false, QEMU module arm 4397583b38a54a22.
+- Its first run booted completely, and its 22 VM_EXIT lines were read here from its serial.log. Its judge then
+  crashed on a missing CAPSTONE_LLVM_BIN, and that run's directory was replaced by the re-run. The judged record
+  (pass count and false set) follows from the re-run and is added beside the result.
+- **For the 17 steps this boot runs:** normal 0, threads 1, vm 1, nested 0, nested-stale 139, heap-threads 1,
+  stale 139, bounds 139, retired 139, vm-ro-write 139, vm-none-read 139, vm-guard 139, vm-padding 139, preempt 143,
+  parallel_one 0, parallel_two 0, cleanup 0.
+  - The board's cleanup reads 1, because its kernel cannot unload the module, as in every board boot.
+- **The fault lines:** each step's cause and code offset as r12 and r13 read them on the board, compared by script.
+- **The board-specific readings:**
+  - Tier 1 identity.
+  - The console banner once (resolve-sites-12).
+  - resolve_dirty reads back Y.
+  - The VM window holds threads' must-fire and no bound line.
+  - The returning window holds the `vma` refusals with their need/flags relation.
+  - No wedge.
+
+### Tier 2 boot 4, result (2026-10-18 11:09-11:22): VOID as a record. Module 29c8e54e's board arm faults every virtual context at startup
+
+Pre-registered at f7487e0f1cd9. Result lines are in `board-tier12/results/board-vp2-tier12-b4.result-lines.txt`.
+- **b0-stats 0 and b0-hello 0.** The console banner printed (resolve-sites-12), and resolve_dirty read back Y.
+- **Every virtual context faulted before its HELLO,** at the same place, Tier 1's own vm-contract included
+  (retval 922, the first Tier 1 failure in nine boots): `cause=24` at code offset 0x1d94, `address=0x2`,
+  `entry=unknown`.
+  - Every vm-suite step through preempt exits 139.
+  - No S-23 retry fired.
+  - The dmesg window after `vm` holds only the banner.
+- **The rung then stopped returning in the parallel pair.** The driver's aperture read shows a LIVE core (the LED
+  stretcher's OR: 224 = 0xff, 193 = 7, index 107), so it is a hang with Linux running, not a reading.
+- **The attribution:** everything but the module is byte-identical to r13: contract.dom, the launcher, the monitor
+  sources and vm-contract.sh. The variable is the module, a56fc415 to 29c8e54e.
+  - Its QEMU arm passed the control, so the defect lives in the board arm or in a path only silicon exercises.
+  - The verbatim lines went to the compiler lane.
+  - Tier 2's record waits for a corrected module. r13's a56fc415 remains the last module read good on silicon.
+
+## Pre-registered (2026-10-18, before Tier 2 boot 4b): the record on module a00109e9 (resolve_dirty off by default, on for `vm` alone)
+
+- **The module:** a00109e9738a4b95 (the compiler lane's resolve-sites-13, commit 8bc0c4dd88cc). It is 29c8e54e with
+  resolve_dirty defaulting OFF.
+  - Verified here: the llvm-objdump text is identical, 5730 lines; `.sdata` is 8 bytes shorter, the initialised-true
+    variable gone; the only other difference is the tag string.
+  - The lane's source diff isolates boot 4's regression to that default.
+- **The suite:** `vm-suite-inner-b4b.sh`, boot 4's except that resolve_dirty is read back at its default, set to Y
+  for `vm` alone, and cleared right after, each with a read-back. This is how r13's dirty=Y arm read it.
+- **Firmware** dea932c3051aeebf; the monitor is unchanged.
+- **The run:** `boot3/run-tier12-b4b.sh dea932c3051aeebf`, dry-run in `boot3/dryrun-b4b.txt`.
+- **Predicted:**
+  - Tier 1 identity, which boot 4 lost.
+  - The banner (resolve-sites-13).
+  - The read-backs N, then Y, then N.
+  - The 17 exits as boot 4's pre-registration lists them, from the reference-pin QEMU run: normal 0, threads 1,
+    vm 1, nested 0, nested-stale 139, heap-threads 1, the seven 139s, preempt 143, the parallel pair 0, cleanup
+    (0 on QEMU, 1 on the board).
+  - Fault lines as r12 and r13.
+  - No cause-24 startup fault.
+  - The five S-25 steps NOT RUN.
+  - No wedge.
+
+## Pre-registered (2026-10-18, before Tier 2 boot 4c): r13's module with boot 4b's suite. It is the control for the module attribution, and the Tier 2 record
+
+- **Boot 4b** (module a00109e9, resolve_dirty read back N at its default) faulted every context exactly as boot 4
+  did: cause 24 at code offset 0x1d94, address 0x2. So resolve_dirty's default was not the variable.
+- **The staged files differ from r13's only in the module and the suite,** compared by script. The first failing
+  context, vm-contract's, uses no suite.
+- **Boot 4c puts r13's module back:** a56fc415ad7133aa (resolve-sites-10, from `diag-r13/`, sums ok). Everything
+  else is boot 4b's.
+  - The suite `vm-suite-inner-b4b.sh`: resolve_dirty read back at its default, Y for `vm` alone, then N.
+  - The five S-25 steps are not run.
+  - Firmware baa132ee2fbd535e; the monitor is unchanged.
+- **The run:** `boot3/run-tier12-b4c.sh baa132ee2fbd535e`.
+- **Predicted:**
+  - Tier 1 identity, as in every boot with a56fc415 (r11's code base through r13).
+  - No cause-24 fault.
+  - The read-backs N, then Y, then N.
+  - The 17 exits as the reference-pin QEMU run reads them: vm 1 under the explicit Y, and cleanup 1 on the board.
+  - Fault lines as r12 and r13.
+  - No wedge.
+- **What it decides:** if 4c reads identity, the regression is in what changed from a56fc415 to 29c8e54e/a00109e9
+  other than the default: the Q-26 wait rewrite or the escape-print code. If 4c fails too, the module is not the
+  variable, and something else in the boot changed.
+
+### Tier 2 boot 4b, result (2026-10-18 11:26-11:38): VOID as a record. resolve_dirty's default was not the variable
+
+Pre-registered at 5143ae4e0601. Result lines are in `board-tier12/results/board-vp2-tier12-b4b.result-lines.txt`.
+- resolve_dirty read back N at its default, Y before `vm` and N after it.
+- **Every context faulted as in boot 4,** Tier 1 included (retval 922): cause 24 at code offset 0x1d94, address 0x2.
+  - 0x1d94 is contract.dom VA 0x11d94, memset+0x2c, `sb a1, 0x0(a3)` with a3 the destination.
+  - So memset was handed a pointer whose cursor is 2, a value read out of memory before HELLO.
+- **The pre-registered "no cause-24 fault" failed.** The compiler lane's attribution to the resolve_dirty default
+  is withdrawn by this boot.
+- **The module is still the variable:** only it and the suite differ from r13, and the first failing context uses
+  no suite. Boot 4c is the control.
+
+### Tier 2 boot 4c, result (2026-10-18 11:38-11:46): THE TIER 2 RECORD. Every run.py step outside S-25 reads QEMU's result on silicon
+
+Pre-registered at 8ac6cc3143d8. Result lines are in `board-tier12/results/board-vp2-tier12-b4c.result-lines.txt`.
+Every pre-registered reading held, compared by script.
+- **Tier 1:** identity.
+- **The 17 exits equal the reference-pin QEMU prediction** (capstone-qemu b290f5656600, svadu=false):
+  - `vm` reads 1 under resolve_dirty=Y for it alone, read back N, then Y, then N. This is S-24's fix.
+  - cleanup reads 1 because the board kernel cannot unload the module.
+- **The 16 steps shared with r13** equal it in exit and in every fault line.
+- **S-25's five steps were not run.** They wait on the RTL fix (R-57) or the module's arena pin.
+- **No wedge.**
+- **The module control:** with 4b's suite, image, launcher and monitor, only the module changed (a00109e9 there,
+  a56fc415 here). 4b failed every context and 4c reads the record, so boot 4's regression lies in the Q-26 wait
+  rewrite or the escape-print code. It is bisected next.
+
+## Pre-registered (2026-10-18, before the two module-bisection boots): which change breaks every context, the Q-26 wait or the escape print
+
+- **The two modules,** the compiler lane's, each a single change from a56fc415's source:
+  - **q26only:** ko 69c11f908ad27c6b, banner `bisect-q26only`, the Q-26 wait rewrite alone.
+  - **esconly:** ko a2a0b2f49d790cc6, banner `bisect-esconly`, the escape-print code alone. It is guarded by
+    `diag_escapes`, which defaults false.
+  - Both verified here: sums, vermagic 6.4.14, 0 compressed instructions, launcher b27afefc.
+  - The lane rebuilt a56fc415 from its source byte-identically, so its builds are reproducible.
+- **Each boot runs Tier 1 alone** (b0-stats, b0-hello, vm-contract). A failing module would otherwise hold the board
+  about 13 minutes in the suite's parallel pair.
+  - Firmware for q26only: 884e7e9c6f7b6a54. Its stage record is in the attic's `vm-bq-*`.
+  - Firmware for esconly: 1b7d8ad056dcc2d9.
+  - Run by `boot3/run-tier12-bq.sh` and `boot3/run-tier12-be.sh`, q26only first.
+- **Predicted** (the lane's, before either boot): q26only FAILS (cause 24 at memset+0x2c on the first context),
+  and esconly PASSES (vm-contract identity), because its code cannot execute with diag_escapes off.
+- **If esconly fails,** the regression is not in the module's logic but in its content, size or layout. That would
+  say no logic-level reading of this module can be trusted until it is explained.
+- **If both pass,** the two changes break only together.
+
+### The module bisection, result (2026-10-18 11:49-12:01): the Q-26 wait rewrite alone breaks every context on silicon
+
+Pre-registered at 6e8181b4b99c. Result lines are in `board-tier12/results/board-vp2-module-bisection.result-lines.txt`.
+- **q26only (the Q-26 wait rewrite alone) FAILS** with boot 4's signature: cause 24 at memset+0x2c, address 0x2, on
+  both vm-contract contexts.
+- **esconly (the escape-print code alone) PASSES:** vm-contract identity.
+- Each banner names the module that booted.
+- This matches the compiler lane's prediction in both directions. The regression is the Q-26 change's logic, not
+  the module's content or layout, and its QEMU control could not see it.
+- The module of record stays a56fc415 (boot 4c). The fix is the compiler lane's, and its next revision gets a Tier 1
+  board boot before it carries anything.
