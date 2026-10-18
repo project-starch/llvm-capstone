@@ -1453,3 +1453,36 @@ fph and then pgc, pgm0, pgm1 still to run. It resumes after this boot. UNGATED (
     control is still OPEN. The reduced capacity did not bring the must-fire ahead of the first-touch wedge.
 - **Verdict:** module 39d8492d passes Tier 1 on silicon. Its stopgap is unverified on silicon until R-57/S-25's fix.
   UNGATED (PREFLIGHT=0).
+
+### The re-run's first four arms, results (2026-10-18 23:51 to 2026-10-19 00:28), and sql0 re-registered on module 39d8492d (before its boot)
+
+**Results** on kit bkit7-fix6t (module d71f207a3af5546b), each as predicted, the QEMU tally again:
+- mpt-fix6b CAUGHT 3 (3 of 3);
+- pb9-fix6b MISSED 4 (4 of 4);
+- mph-fix6b CAUGHT 9 (9 of 9);
+- fpt-fix6b CAUGHT 13 (13 of 13).
+The bundles are under each corpus's `results/2026-10-18-vp2-rdx0/vp2-malloc`. The chain was held after fpt for the
+revision's Tier 1 boot. A first hold left fca's next arm running in its own `timeout` process group; it was stopped,
+the shared image's restore was finished by hand, and fca re-ran from the start.
+
+**sql0 on module 39d8492d (`tier3-sql-arm-rev2.sh`)** is re-registered by the runtime lane's ruling: sql0 FIRST, on
+the new module, ahead of the d71f207a chain.
+- **The kit:** bkit7-rev2s is bkit7-rev2 (module 39d8492d) with bkit7-fix6s's recipe and `BOARD_TIMEOUT_MULT=4`. It
+  differs from bkit7-fix6s in the module alone (`diff -r`, apart from the manifest path).
+- **Image, fixture, runner and judge** as the d71f207a registration above, which was superseded before any boot:
+  lt0 81ee24a0a1e957c9, fixture record 173aa5b35c1b57b9, runner 292e7440305d3ad3, judge 2ed6701045dd5689.
+- **Predicted** as the QEMU record `t3-sql-virtual-malloc/bundle`: CAUGHT 02 and 03, MISSED 01 and 04-09, both
+  controls fault. The compiler lane's gate reads the five-item revision 16 of 16 identical on QEMU, so the record
+  stands.
+- **VOID** unless the fixture record and the image match after the boot.
+- **The record and bundle:** `records/sql0-rev2.board.txt` and `postgres/sql-repros/results/2026-10-19-vp2-rev2/`.
+- **Order:** it starts on a trigger file once the d71f207a chain is held after fca-fix6b and the board is idle. The
+  chain (wpt, wph, fcs, fph, then pgc/pgm0/pgm1) resumes after it. If tree A's flash becomes authorised and sealed
+  while sql0 runs, sql0 finishes first.
+- **Dry run:** the guard, pass and VOID branches, on a stubbed runner. UNGATED (PREFLIGHT=0).
+
+**fca-fix6b, result (2026-10-19 00:46-00:56):** ffmpeg/carved vp2-malloc on kit bkit7-fix6t (module d71f207a3af5546b),
+MISSED 13, 13 of 13 as predicted, its 3005ed52 reading again. Bundle
+`ffmpeg/carved-repros/results/2026-10-18-vp2-rdx0/vp2-malloc`. The chain was then held for sql0-rev2: the holder
+killed the chain's group and wpt's `timeout` group within 6 s of fca's END, before wpt built anything. UNGATED
+(PREFLIGHT=0).
