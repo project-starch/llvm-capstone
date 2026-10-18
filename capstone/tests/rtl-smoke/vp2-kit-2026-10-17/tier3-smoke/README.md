@@ -1017,3 +1017,77 @@ UNGATED (PREFLIGHT=0). Dry run: `dryrun-fix6-appvm.txt`.
 boot's console, replayed on connect: Tier 1's vm-contract, whose identity branch is exactly that stale access, at that
 offset. Scoping the read to after the session's first marker removed it. The board-run skill already says to scope a
 live scan to the run's own load.
+
+### The S-27 fence discriminator, pre-registered (2026-10-18, before its boot): 3005ed52 with fence_before_entry=1 on pym0
+
+**Why:** the claim-auditor found that d71f207a's resume site differs from 3005ed52's in four ways, so the pair does not
+separate rd = x0 from the fence on silicon. The other three are rd x15 -> x0, the kind read from +16, and a ~0 sentinel
+at +16. On 3005ed52 the fence exists behind the `fence_before_entry` parameter, off in bkit7.
+
+**The arm:** kit bkit7-fence is bkit7 with `adapter/module/params` = `fence_before_entry=1` (`diff -r`: the params file,
+and board.env's manifest path, whose content is unchanged). It runs pym0's 21 images with the same runner arguments, in
+one boot after the fix6 appvm chain (`tier3-fence-arm.sh`). The batch refuses a boot whose module did not read the
+parameter back.
+
+**Predicted (the RTL lane's mechanism):**
+- 21 of 21 steps fault `cause=6 address=0x12` at pym_raw_malloc+792, as pym0 read on 3005ed52;
+- 20 of 20 the same against that board bundle; 0 of 20 against the QEMU prediction;
+- "@@PARAM fence_before_entry=Y" once.
+
+**Readings:**
+- That reading rules the fence OUT as what cures S-27. It does not separate rd = x0 from the sentinel or the +16 read,
+  though the mechanism names rd. The RTL lane's va-rdclob, which has no fence, carries that.
+- 0 faults would mean the fence alone suffices, and the rd account is reopened.
+
+UNGATED (PREFLIGHT=0). Dry run: `dryrun-fence-arm.txt`.
+
+### Amendment (2026-10-18 20:40, before fso-fix6 ends): fso-fix6's batch budget is too short; fso, pb12 and pb10 re-run on a scaled budget
+
+- **The budget:** `run-virtual-cases.py` gives a board batch 300 + 60 s per step (:235/:554). The kit recipe passes
+  that as the driver's per-rung wait (BAKED_TIMEOUT). For fso's 20 steps that is 1500 s.
+- **Why it runs short:** on 3005ed52 every step faulted within seconds. On d71f207a they run to completion, about 1.9
+  min a step here (9 steps in the rung's first 17 min).
+- **So fso-fix6's batch rung (from about 20:19:40) is cut at about 20:44:40, with about 13 of 20 steps read.** The
+  steps it reads are valid readings. The rest score NO-READING:infra, a budget void, not a module reading.
+- **Consequences:** tier3-seq.sh stops after a boot that does not complete, so pb12-fix6 and pb10-fix6 do not run.
+  The appvm chain is unaffected: its sessions budget at least 300 s a step (pym1 6600 s, sq0b 2700 s, wm0 15900 s).
+- **The re-run** (`tier3-fix6b-seq.sh`): fso, pb12 and pb10 under tags `<arm>-fix6b` on kit bkit7-fix6t, after the
+  fence arm.
+  - bkit7-fix6t is bkit7-fix6 with `BOARD_STEP_S=300` in board.env. board-run.sh scales the per-step part, giving
+    300 + 300 s per step. The recipe's stub mode reads 1500 vs 6300 for 20 steps.
+  - The module, launcher, runner (hash unchanged) and images are unchanged.
+  - The predictions are unchanged (fso MISSED 9; pb12 CAUGHT 1, MISSED 8; pb10 CAUGHT 4).
+- **fso-fix6's partial bundle is not filed in the corpus.** Its record keeps the steps it read, marked as a budget
+  void. Dry run: `dryrun-fix6b-seq.txt`.
+
+### postgres/sql-repros vp2-malloc on the workaround module, pre-registered (2026-10-18, before its boot): sql0-fix6, last in the queue
+
+**The arm** (`tier3-sql-arm.sh`, after the fix6b sequence):
+- The compiler lane's lt0 image, `t3-new6/postgres-lt0/image/postgres.dom` (81ee24a0a1e957c9, CPONVVM6, -fno-builtin
+  through the SDK hook). The gate is checked before the boot.
+- The native16 fixture `t3-new6/tmp/pgfixture/cluster`, nothing pre-installed. run-arm.py records the tree as
+  173aa5b35c1b57b9; the builder's own hash is 1287b5822d166345.
+- sql-repros' run-arm.py, `--arm virtual-malloc --board-kit bkit7-fix6s`, in one boot of 21 single-user postgres
+  sessions: 5 preflights, 2 controls, the cases, and their control.sql sessions.
+- The runner (292e7440305d3ad3) and judge (2ed6701045dd5689) hashes equal the QEMU record's.
+
+**The kit:** bkit7-fix6s is bkit7-fix6 with `BOARD_TIMEOUT_MULT=4`, which board-run.sh multiplies into the runner's
+budget.
+- The runner gives 600 + 300 s a session, 6900 s here. The recipe's stub mode reads 27600.
+- The reason: on vp2 a step takes about 18 times its QEMU time. pym0's twin ran 21 steps in 3.3 min, and silicon took
+  about 2.1 min a step.
+- The QEMU record took about 47 s a session (16.5 min for the boot). So about 13-15 min a session is expected here,
+  and the boot runs 4-5 hours. It goes last because a hung session would hold the board to the budget. The idle limit
+  still ends a wedged core.
+
+**Predicted** (the QEMU record `t3-sql-virtual-malloc/bundle`, qkit7, module 5bfc38f8):
+- CAUGHT 02 and 03 (cause 28 in memcpy, attributed by control.sql);
+- MISSED 01 and 04-09;
+- both controls (bounds-malloc, uaf-malloc) fault;
+- case 03's CREATE EXTENSION ltree runs without pre-install.
+- The compiler lane's gate reads every bundle the same on the two modules' QEMU builds, so the 5bfc38f8 record
+  stands for d71f207a.
+
+**VOID** if the bundle's fixture record is not 173aa5b35c1b57b9, or its image not 81ee24a0a1e957c9.
+
+UNGATED (PREFLIGHT=0). Dry run: `dryrun-sql-arm.txt`.

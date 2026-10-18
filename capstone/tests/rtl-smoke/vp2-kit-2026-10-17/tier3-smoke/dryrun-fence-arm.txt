@@ -1,0 +1,8 @@
+# tier3-fence-arm.sh dry run (2026-10-18 20:32), the arm script stubbed (pym0's 3005ed52 board run copied in, with one
+# "@@PARAM fence_before_entry=Y" line appended), the real compare-pilot.py and score-arm.sh under a dry-run tag:
+# - guard: run beside fso-fix6's live boot, "FENCE STOP: a driver is running" (the guard's positive control).
+# - pass (FIX6APPVM DONE): the arm runs on bkit7-fence with pym0's image list; the record carries the read-back
+#   ("1 @@PARAM fence_before_entry=Y") and the fault lines folded by pc low bits (20 at 159c8, 1 at 1610c, all 0x12);
+#   against pym0's 3005ed52 board bundle "20 of 20 cells the same", against the QEMU prediction "0 of 20"; FENCE DONE.
+# The dry run's record and bundle were removed by name afterwards. Not exercised: the module-hash and params checks
+# (the kit is the real one).
