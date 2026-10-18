@@ -1,0 +1,33 @@
+# Tier 3 prediction, arm fpt: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 14 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-mallocng platform qkit7-wrapper cells 13 tally {"CAUGHT": 13}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_716d2a47c565_ops_dispatch_interior_alias_after_free image 53662fd95414d879 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+01_c98810ab47fa_hw_base_encode_list_walk_reads_freed_link image 44492682b67bef66 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+02_43de8b328b62_lzf_write_cursor_stale_after_realloc image dc55562e7f2ad27a CAUGHT cause 25 at fft_write_probe+88 reached True completed False attribution "probe"
+03_dc87758775e2_aviobuf_checksum_ptr_stale_after_realloc image 3db375e4bdf347df CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+04_4b2248594c7f_jpeg2000_packed_headers_stream_stale_base image 0d87176a7d58d48a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+05_d6458f6a8bf1_aacdec_tag_che_map_keeps_freed_element image fa876caaf5976272 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+06_e8714f6f93d1_h264_delayed_pic_holds_interior_pointers image 0aab3927a37ee326 CAUGHT cause 25 at fft_write_probe+88 reached True completed False attribution "probe"
+07_a43e9cdd442b_isom_extradata_freed_before_callee_frees_it image 0fd9219c897cb4f7 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+08_8a4ea9644833_diracdec_realloc_on_the_wrong_field image 33963753168ba11a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+09_265731f201f1_tx_subcontext_field_left_dangling_on_failure image 144f16ff7114fa9a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+10_e7a65142b972_aacpsy_clears_the_local_not_the_field image fe53bb5595e2bec2 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+11_ba28222a14ab_ratecontrol_expr_field_not_cleared image bc28d440721f529a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+12_2e04d35c69e6_vlc_buf_freed_by_callee_then_read image 8b02ccc7e722eb9a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+# image 53662fd95414d879  00_716d2a47c565_ops_dispatch_interior_alias_after_free.dom
+# image 44492682b67bef66  01_c98810ab47fa_hw_base_encode_list_walk_reads_freed_link.dom
+# image dc55562e7f2ad27a  02_43de8b328b62_lzf_write_cursor_stale_after_realloc.dom
+# image 3db375e4bdf347df  03_dc87758775e2_aviobuf_checksum_ptr_stale_after_realloc.dom
+# image 0d87176a7d58d48a  04_4b2248594c7f_jpeg2000_packed_headers_stream_stale_base.dom
+# image fa876caaf5976272  05_d6458f6a8bf1_aacdec_tag_che_map_keeps_freed_element.dom
+# image 0aab3927a37ee326  06_e8714f6f93d1_h264_delayed_pic_holds_interior_pointers.dom
+# image 0fd9219c897cb4f7  07_a43e9cdd442b_isom_extradata_freed_before_callee_frees_it.dom
+# image 33963753168ba11a  08_8a4ea9644833_diracdec_realloc_on_the_wrong_field.dom
+# image 144f16ff7114fa9a  09_265731f201f1_tx_subcontext_field_left_dangling_on_failure.dom
+# image fe53bb5595e2bec2  10_e7a65142b972_aacpsy_clears_the_local_not_the_field.dom
+# image bc28d440721f529a  11_ba28222a14ab_ratecontrol_expr_field_not_cleared.dom
+# image 8b02ccc7e722eb9a  12_2e04d35c69e6_vlc_buf_freed_by_callee_then_read.dom
+# image 491655742d378fcd  controls.dom

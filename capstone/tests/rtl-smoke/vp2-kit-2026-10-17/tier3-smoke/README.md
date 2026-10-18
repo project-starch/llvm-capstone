@@ -392,3 +392,13 @@ This is the pilot's reading on the same image bytes, now on the campaign's modul
   - Silicon's bounds are not exact, so silicon is predicted to refuse the same derive. A jumbo control that completes
     on the board would be a finding about Q-15 on silicon.
 - **The order:** wm0, then wm1, one boot each.
+
+### Arms mph, fph, fpt, pre-registered (2026-10-18): the compiler lane's nb predictions, each on the board's bytes
+
+Each record was written by `register-prediction.sh`, which first checked that the run's staged images equal
+`t3-images-nb/<tag>.images.SHA256SUMS`, and that its module is 5bfc38f8.
+- **mph** (memcached/plain-heap, vp2-malloc): CAUGHT 9. `records/mph.prediction.txt`.
+- **fph** (ffmpeg/plain-heap, vp2-malloc): CAUGHT 25. `records/fph.prediction.txt`.
+- **fpt** (ffmpeg/plain-temporal, vp2-malloc): CAUGHT 13. `records/fpt.prediction.txt`.
+Each tally is its corpus record's. These three boot after wm1, through `tier3-seq.sh` with `--sdk t3-freeze-nb/sdk`
+and `t3-images-nb/ARMS.spec`, one boot each, in that order.

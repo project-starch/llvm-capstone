@@ -1,0 +1,25 @@
+# Tier 3 prediction, arm mph: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 10 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-mallocng platform qkit7-wrapper cells 9 tally {"CAUGHT": 9}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_ddee3e2_authfile_scan_past_calloc image 9e53cb3b887149bc CAUGHT cause 28 at mch_write_probe+88 reached True completed False attribution "probe"
+01_d5d9ff0_cachedump_end_marker_off_by_one image b4be246f62f553cf CAUGHT cause 28 at mch_write_probe+88 reached True completed False attribution "probe"
+02_391f2e4762bf_freesuffix_realloc_sized_in_bytes image 97705ea727359a8c CAUGHT cause 28 at mch_write_probe+88 reached True completed False attribution "probe"
+03_16a809e2a062_cache_create_freelist_sized_by_object image e8a556411f27d119 CAUGHT cause 28 at mch_write_probe+88 reached True completed False attribution "probe"
+04_40aff8b0f113_stats_end_marker_past_exact_buffer image e8a95ba7105d7de2 CAUGHT cause 28 at mch_write_probe+88 reached True completed False attribution "probe"
+05_49f3b0ca9b57_out_string_crlf_copied_with_its_nul image a8f11631c2720f0f CAUGHT cause 28 at mch_write_probe+88 reached True completed False attribution "probe"
+06_212c3820c7bb_key_hash_filter_tag_length_underflow image 28b2eef0b46080e9 CAUGHT cause 28 at mch_read_probe+56 reached True completed False attribution "probe"
+07_0f605245cf3f_bin_delete_logs_unterminated_key image 77555e8a17cc0f21 CAUGHT cause 28 at mch_read_probe+56 reached True completed False attribution "probe"
+08_fa51ad8452d5_slab_list_shuffle_reads_one_past image 43172a773ea3fbb8 CAUGHT cause 28 at mch_read_probe+56 reached True completed False attribution "probe"
+# image 9e53cb3b887149bc  00_ddee3e2_authfile_scan_past_calloc.dom
+# image b4be246f62f553cf  01_d5d9ff0_cachedump_end_marker_off_by_one.dom
+# image 97705ea727359a8c  02_391f2e4762bf_freesuffix_realloc_sized_in_bytes.dom
+# image e8a556411f27d119  03_16a809e2a062_cache_create_freelist_sized_by_object.dom
+# image e8a95ba7105d7de2  04_40aff8b0f113_stats_end_marker_past_exact_buffer.dom
+# image a8f11631c2720f0f  05_49f3b0ca9b57_out_string_crlf_copied_with_its_nul.dom
+# image 28b2eef0b46080e9  06_212c3820c7bb_key_hash_filter_tag_length_underflow.dom
+# image 77555e8a17cc0f21  07_0f605245cf3f_bin_delete_logs_unterminated_key.dom
+# image 43172a773ea3fbb8  08_fa51ad8452d5_slab_list_shuffle_reads_one_past.dom
+# image 491655742d378fcd  controls.dom
