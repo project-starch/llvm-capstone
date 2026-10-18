@@ -1443,3 +1443,40 @@ Every pre-registered reading held, compared by script.
   refuses at `vma`.
 - **The runner's per-window KMSG counts are cumulative.** dmesg is not cleared, so later windows repeat earlier
   lines. The result lines take each window's new lines by timestamp.
+
+## Pre-registered (2026-10-18, before Tier 2 boot 4): the Tier 2 record on the module queue's revision, S-25's steps not run
+
+- **The module:** 29c8e54e969e04a7 (the compiler lane's resolve-sites-12).
+  - S-26's escape line (raw event words, budget 16).
+  - resolve_dirty on by default.
+  - The Q-26 wait fix: its QEMU control has 0 kernel WARNINGs where the baseline had 1, and a suite verdict
+    byte-identical to the baseline.
+  - Verified here: sums, 4684 instructions with 0 compressed, the banner at KERN_EMERG, vermagic 6.4.14.
+  - The arena pin is NOT in it.
+- **The suite:** `board-tier12/vm-suite-inner-b4.sh`, run.py's guest script.
+  - **NOT RUN (S-25, R-57),** each printing `VM_NOT_RUN:<step>:S-25`: sparse-stale, sparse-churn, sqlite_write,
+    sqlite_read and mruby. A capability store as a page's first touch wedges the core on bf3db3175, and the arena pin
+    is not in this module.
+  - resolve_dirty is read back before `vm`, as a reading rather than an assumed default.
+  - The module's lines are read from dmesg.
+- **Firmware:** 8b8d946fadcb4b13; the monitor (007d81d) is unchanged and its extracted sources equal r13's.
+- **The run:** `boot3/run-tier12-b4.sh 8b8d946fadcb4b13`, dry-run in `boot3/dryrun-b4.txt`, with its own oracle of 17
+  exits.
+
+**The prediction:** the compiler lane's QEMU run on the reference pin, capstone-qemu b290f5656600 (binary
+7a4f3a64776f0c88) with svadu=false, QEMU module arm 4397583b38a54a22.
+- Its first run booted completely, and its 22 VM_EXIT lines were read here from its serial.log. Its judge then
+  crashed on a missing CAPSTONE_LLVM_BIN, and that run's directory was replaced by the re-run. The judged record
+  (pass count and false set) follows from the re-run and is added beside the result.
+- **For the 17 steps this boot runs:** normal 0, threads 1, vm 1, nested 0, nested-stale 139, heap-threads 1,
+  stale 139, bounds 139, retired 139, vm-ro-write 139, vm-none-read 139, vm-guard 139, vm-padding 139, preempt 143,
+  parallel_one 0, parallel_two 0, cleanup 0.
+  - The board's cleanup reads 1, because its kernel cannot unload the module, as in every board boot.
+- **The fault lines:** each step's cause and code offset as r12 and r13 read them on the board, compared by script.
+- **The board-specific readings:**
+  - Tier 1 identity.
+  - The console banner once (resolve-sites-12).
+  - resolve_dirty reads back Y.
+  - The VM window holds threads' must-fire and no bound line.
+  - The returning window holds the `vma` refusals with their need/flags relation.
+  - No wedge.
