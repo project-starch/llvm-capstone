@@ -603,3 +603,30 @@ allocator.
 `records/pb9.board.txt`. ffmpeg/pool, stock (vp2-malloc): MISSED 4 on silicon, as predicted, with both generic controls
 faulting. Its prebuilt CMake build of the pool sources reaches no cause-6 fault, so the silicon-only fault is not
 common to everything built from these sources. It is the contrast case for the probe.
+- Checked with `llvm-nm`: pb9's images define `av_malloc` but not `ff2_memory_init`. The stock build's allocator
+  does not use the static arena, whereas fso's images define both. So the fault tracks the static-arena idiom:
+  consistent with it, and not yet a mechanism.
+
+### Arm pb10, result (2026-10-18 15:30-15:42): a kernel panic on a load refused under a covering region, S-23's data face (the RTL lane's attribution)
+
+`records/pb10.board.txt`. ffmpeg/pool, Sublet (vp2-nested-pools).
+- **What ran:** case 00 read CAUGHT, as predicted. Case 01's FIXED run returned 0. In its BUGGY run the monitor printed
+  its region dump (29 regions), then `MTVL:BC2C0825 CPMX:00000002`. Linux took `Oops - load access fault` at
+  `mod_node_page_state+0x40` (cause 5, badaddr = mtval = 0xbc2c0825) and panicked. Cases 02 and 03 did not run.
+- **The covering region:** decoding the dump, region 21 `[0xac100000, 0xc0000000)`, RWX, is loaded in CPMP slot 7 and
+  covers 0xbc2c0825. So a kernel data load was refused under a covering executable entry.
+- **The attribution (the RTL lane, from bf3db3175):** S-23's data face.
+  - The fetch check (`pmp_data_if.sv:239-246`) and the data check (`:300-310`) are one comparator over one decoded
+    array. Both go live when the escape returns the privilege to the caller (`csr_regfile.sv:2124-2127`), while the
+    RESTORE walk is still writing the CPMP ids.
+  - The fetch side is guarded by kill_s1 and flush_if for the whole busy window. The LSU keeps a dom-switch exemption
+    from that flush, R-50's subject, which 429c60b32 narrowed but did not remove. So the data side can show this where
+    the fetch side rarely does.
+  - The monitor's fetch-retry (VP2_FETCH_RETRY) cannot cover a data access.
+- **Caveat:** CPMX is the monitor's own print from swap_cpmp and cannot name the entry the comparator used. Region 21
+  covering mtval is this lane's decode of the dump.
+- **The post-panic apertures are not a reading:** a commit count of 7 in a 4-deep queue, and 0xff fields.
+- **A candidate workaround, not adopted:** a data-side retry in the monitor. The RTL lane's conditions: S or U origin
+  only; a loaded entry covering mtval for the access type; the same bounded no-progress guard; inject as today when
+  nothing covers it; never for AMOs or LR/SC.
+  - Its prediction: if the window is the mechanism, a data retry succeeds on its first attempt.

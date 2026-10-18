@@ -1,0 +1,62 @@
+# Tier 3 board reading, arm pb10: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-nested-pools configuration virtual-ffmpeg-pool-sublet platform board:caplifive_vp2_bf3db3175 cells 4 tally {"CAUGHT": 1, "NO-READING:infra": 3}
+# controls [["bounds-malloc", "fault"], ["pool-return-90", "fault"], ["uaf-malloc", "fault"]]
+00_461fb22053_af_join_dedup_bound image df5eea02db56843a CAUGHT cause 25 at ff2_case_run+1464 reached True completed False attribution "function"
+01_1886c3269d_h264_refs_partial_clear image 0f1bfd544ecc559d NO-READING:infra cause None at None reached False completed False attribution null
+02_316531e61c_vidstab_parked_plane_pointer image 84fbc193c1709b0a NO-READING:infra cause None at None reached False completed False attribution null
+03_5c66a3ab51_vvc_nonref_output_releases_tabs image d6666b4618df1d6e NO-READING:infra cause None at None reached False completed False attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_461fb22053_af_join_dedup_bound: verdict CAUGHT cause 25 pc ff2_case_run+1464
+  DIFF 01_1886c3269d_h264_refs_partial_clear: verdict NO-READING cause None pc None
+      verdict: qemu CAUGHT board NO-READING
+      reason: qemu None board infra
+      reached: qemu True board False
+      cause: qemu 25 board None
+      pc_off: qemu ff2_case_run+664 board None
+      attribution: qemu "function" board null
+  DIFF 02_316531e61c_vidstab_parked_plane_pointer: verdict NO-READING cause None pc None
+      verdict: qemu CAUGHT board NO-READING
+      reason: qemu None board infra
+      reached: qemu True board False
+      cause: qemu 25 board None
+      pc_off: qemu ff2_case_run+384 board None
+      attribution: qemu "function" board null
+  DIFF 03_5c66a3ab51_vvc_nonref_output_releases_tabs: verdict NO-READING cause None pc None
+      verdict: qemu CAUGHT board NO-READING
+      reason: qemu None board infra
+      reached: qemu True board False
+      cause: qemu 25 board None
+      pc_off: qemu ff2_case_run+816 board None
+      attribution: qemu "function" board null
+  1 of 4 cells the same
+## the boot
+  T3SEQ pb10 BEGIN 15:30:32 ffmpeg/pool-repros virtual-nested-pools (4 extra args)
+  T3SEQ pb10 END 15:41:59 rc=0 :: virtual boot: DID NOT COMPLETE :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 1, 'NO-READING:infra': 3}
+  T3SEQ pb10 PAYLOAD stage 2577104 B, 1015945 B gzip; firmware 17467912 B
+  BOARD_RUN_START 15:30:32 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 15 files, stage 2577104 bytes
+  firmware 6c34a01e13e96103 17467912 B
+  DRIVER rc=1 15:41:59
+  BOARD_RUN_DONE 15:41:59
+## the wedge apertures
+  sw=255 TRAP LOG {seen,mcause[6:0]} 0x8f 10001111
+  sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0xff 11111111
+  sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0xd5 11010101
+  sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+  sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x02 00000010
+  sw=228 {1,dom_switch_idx[6:0]} 0xeb 11101011
+  sw=229 {load_state[3:0],0000} 0x00 00000000
+  sw=192 {0000000,commit_instr[0].valid} 0x01 00000001
+  sw=193 {00000,store_buf_commit_cnt} 0x07 00000111
+  sw=194 {000000,store_state} 0x03 00000011
+  sw=195 {0000,load_state} 0x00 00000000
+  sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0xff 11111111
+  sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0xcf 11001111
+  sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0xfe 11111110
+  sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x6e 01101110
+  commit pc (scoreboard slot 0; stale after a flush) 0xffffffff803ffffe
+  trap-log mepc 0xffffffff803773ee
+  trap-log tval 0x000000000000eff7
+  rev_node_debug_ex 0x0000006800000000
+  rev_node_head_ex 0x006d
+  rev_node_serving_idx_ex 0x00000000
