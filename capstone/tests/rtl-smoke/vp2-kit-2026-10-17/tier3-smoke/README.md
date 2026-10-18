@@ -1232,3 +1232,20 @@ UNGATED (PREFLIGHT=0). The count of the 3005ed52 cells that carried S-27 is corr
 - ISSUES S-27's status is updated to match.
 - The bundle (`cpython/pymalloc-repros/results/2026-10-18-vp2-fence/vp2-malloc`) is a discriminator record, not a fold
   input. UNGATED (PREFLIGHT=0).
+
+**Two notes added after the fence result (2026-10-18 22:35):**
+- **The fence arm is silent about translation.** `fence rw,rw` orders memory accesses and invalidates no TLB entry;
+  only `sfence.vma` does. So "a fence before entry changed nothing" says nothing about a stale-translation window (the
+  RTL lane's va-satpstale candidate for S-23).
+- **pb10's MTVL is a PHYSICAL address,** which settles the VA-versus-PA question raised against the S-23 data-face
+  decode.
+  - A data-side CPMP refusal from S-mode under capmode reports `tval = cpmp_paddr_x`, which is `lsu_paddr_i`
+    (`pmp_data_if.sv:135`, `:304-313` at bf3db3175). Only the standard PMP path reports the virtual address
+    (`:283-288`).
+  - 0xbc2c0825 cannot be a kernel virtual address, so the refusal came from the CPMP path.
+  - So region 21 [0xAC100000, 0xC0000000) did cover the refused physical address in the dump. That is the same
+    comparison the CPMP makes (`:146-147`).
+  - **Consequence for the candidates:** a stale translation alone cannot produce this refusal. Under a steady table
+    the page is covered, whichever table translated to it. The refusal still needs the CPMP table to be in flux at the
+    access, which is S-23's window.
+  - A stale translation could still be a contributing step, but it is not sufficient here.
