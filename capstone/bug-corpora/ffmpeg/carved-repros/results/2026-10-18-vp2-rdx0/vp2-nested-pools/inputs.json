@@ -1,0 +1,39 @@
+{
+  "arm": "vp2-nested-pools",
+  "build": {
+    "cc_args": [
+      "-DFFC_SUBLET_CARVE",
+      "-I/tmp/capstone/wt-gate/capstone/runtime/include"
+    ],
+    "flags": [
+      "-O0",
+      "-DCORPUS_VIRTUAL"
+    ],
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 13,
+  "configuration": "virtual-ffmpeg-carve",
+  "contract": "verdicts-v1",
+  "corpus": "ffmpeg/carved-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "17fe24b7e5dbc5d11baa4267ff2becbfa4ea0ce2df26b37f441a01132a31cddf",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "bd7536c5f8c150b3dd820a692384f7f9db6c8ae5c10d6e24449b8cd093373b04",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "d71f207a3af5546b02c123b0273d67ad3e8ba798b9bc0e05ec23c1c07a409cec",
+    "monitor": "007d81d",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2_bf3db3175",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "9b5e409c92e1fe664882c544a788df56ace6b86b50893af6a3050751bb09dac7"
+  },
+  "tally": {
+    "CAUGHT": 13
+  }
+}

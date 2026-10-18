@@ -1548,3 +1548,19 @@ The first form stopped at the firmware cap. This one changes the image and the f
   956173e054762e91 and its image 64010720f1a6b3bc.
 - Records `records/sql0-rev2b.board.txt` and `postgres/sql-repros/results/2026-10-19-vp2-rev2/`.
 - **Dry run:** under-cap pass, over-cap stop with no boot, and VOID on a wrong fixture. UNGATED (PREFLIGHT=0).
+
+### The re-run's last four arms, pgc's dead boot, and sql0's measured firmware (2026-10-19 01:00-01:52)
+
+- **wpt-fix6b CAUGHT 10, wph-fix6b CAUGHT 12, fcs-fix6b CAUGHT 13, fph-fix6b CAUGHT 25:** each N of N as predicted, on
+  kit bkit7-fix6t (module d71f207a3af5546b).
+  - The bundles are under `results/2026-10-18-vp2-rdx0/` in wireshark/plain-temporal-repros (vp2-malloc),
+    wireshark/plain-heap-repros (vp2-malloc), ffmpeg/carved-repros (vp2-nested-pools) and ffmpeg/plain-heap-repros
+    (vp2-malloc).
+  - **All nine arms that matched on 3005ed52 now match on d71f207a too,** 102 cells in all.
+- **pgc-fix6b did not boot (infra):** the watchdog logged "NO-BOOT 466s load_image issued, no boot banner and no
+  download for 421s; JTAG transfer moved nothing", aborted the runner (driver rc 130), and the board was released. No
+  board transcript, every cell NO-READING:infra, so it is not a reading.
+  - The run is moved to the attic, and its record kept as `records/pgc-fix6b-noboot.board.txt`. Its all-infra bundle
+    is not filed. pgc, pgm0 and pgm1 re-queue after sql0 (the board-run skill: infra, retry).
+- **sql0-rev2b's measure-only bake read 25,856,520 B**, under 26,000,000: the stage was 28,809,586 B in 1,072 files.
+  The board boot on bkit7-rev2s started at 01:52:19. UNGATED (PREFLIGHT=0).
