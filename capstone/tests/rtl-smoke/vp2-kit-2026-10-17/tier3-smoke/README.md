@@ -1114,3 +1114,29 @@ budget.
 **VOID** if the bundle's fixture record is not 173aa5b35c1b57b9, or its image not 81ee24a0a1e957c9.
 
 UNGATED (PREFLIGHT=0). Dry run: `dryrun-sql-arm.txt`.
+
+**Amendment to the fence discriminator's wording (2026-10-18 21:25, before its boot; the prediction is unchanged):**
+- In 3005ed52's source, `fence_before_entry` makes `run()` emit `fence rw,rw` before the CSRUNV, and nothing else
+  (e5775346cc8e^ `capstone_vm.c:616-625`). There is no `sfence.vma`.
+- So the arm separates MEMORY ORDERING from the rd = x0 change and says nothing about the TLB.
+- On the TLB side, the board kernel brings up one hart ("smp: Brought up 1 node, 1 CPU", pym0-fix6's raw console).
+  That is what closes the module's resume-boundary TLB gap on vp2 today (the runtime lane's point).
+
+### Queue change (2026-10-18 21:35, before the boots concerned): sql0 moves to the next module; sq0a and sq0f join the d71f207a set
+
+- **The runtime lane's ruling:**
+  - The d71f207a chain finishes as pre-registered (sq0c-e, wm0, wm1, the fence arm, the fix6b trio), so every bundle
+    of that set names one module.
+  - Then the next module revision gets its Tier 1 boot.
+  - Then sql0, cpython allocator-boundary and pg-pools run on the NEW module.
+- **sql0-fix6's chain is stopped.** It was still waiting, so no boot was spent. Its pre-registration above is
+  superseded before any boot; the arm is re-registered on the new module.
+- **The fold maps an arm to ONE bundle,** so sq0's six subsets must carry one module to merge. sq0a and sq0f ran only
+  on 3005ed52, so they re-run as sq0a-fix6 and sq0f-fix6 (`tier3-fix6c.sh`, after the fix6b trio). The
+  `tier3-fix6-appvm.sh` invocation is unchanged, started through a trigger file.
+  - **Predicted:** sq0's prediction cut to each subset. They matched it on 3005ed52 (6 of 6, 3 of 3) with no S-27
+    fault, so the same reading is expected.
+- **Not mergeable as asked:** firmware and kernel differ across subset boots by construction. Each bakes its own
+  stage. The 3005ed52 subsets agree in the 11 other platform fields. How to merge is the runtime lane's ruling.
+- Dry run: the wrapper started the appvm script on its trigger with arms sq0a and sq0f, which were scored 6 of 6 and
+  3 of 3 on stubbed readings.
