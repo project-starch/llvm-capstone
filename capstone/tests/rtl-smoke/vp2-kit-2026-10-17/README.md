@@ -1591,7 +1591,7 @@ Every pre-registered reading held, compared by script.
   say no logic-level reading of this module can be trusted until it is explained.
 - **If both pass,** the two changes break only together.
 
-### The module bisection, result (2026-10-18 11:50-12:08): the Q-26 wait rewrite alone breaks every context on silicon
+### The module bisection, result (2026-10-18 11:49-12:01): the Q-26 wait rewrite alone breaks every context on silicon
 
 Pre-registered at 6e8181b4b99c. Result lines are in `board-tier12/results/board-vp2-module-bisection.result-lines.txt`.
 - **q26only (the Q-26 wait rewrite alone) FAILS** with boot 4's signature: cause 24 at memset+0x2c, address 0x2, on
