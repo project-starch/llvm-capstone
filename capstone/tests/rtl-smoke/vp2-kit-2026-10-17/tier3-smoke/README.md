@@ -765,3 +765,15 @@ it". The substitute checks are the campaign's own:
 - every fault line's sha256 equal to a staged image's;
 - the firmware cap;
 - the recipe's monitor and driver pins.
+
+### Arm sq0 subsets a and b, results (2026-10-18 16:51-17:16): a is 6 of 6; b is 1 of 6, a fourth port with silicon-only faults including the value 2
+
+- **sq0a** (cases 00-05): 6 of 6 cells the same as predicted.
+- **sq0b** (cases 06-11): 1 of 6. QEMU completes all six on the same bytes. On silicon, all at -O0 SQLite code:
+  - 06 and 10 fault `cause=24 address=0x2`, an untagged capability with cursor 2 dereferenced, at idxLargestIndex+232
+    and sqlite3AuthCheck+112;
+  - 07 and 08 fault 28 (bounds) at sqlite3VdbeMakeReady+1776 and sqlite3VdbeAddOp3+504;
+  - 09 faults 29 at freeSpace+48.
+- The value 2 as an untagged capability is the allocators' value and boot 4's (cause 24 at contract.dom's memset, a
+  destination cursor of 2). This is an observation, not a mechanism: the open question is the same one as the
+  allocators', recorded above.
