@@ -1216,3 +1216,19 @@ UNGATED (PREFLIGHT=0). The count of the 3005ed52 cells that carried S-27 is corr
   - The 3005ed52 wm1 bundle was filed (`2026-10-18-vp2/vp2-nested-pools`). It is likewise a wedge in the first control,
     and the fold should treat it as no reading.
 - UNGATED (PREFLIGHT=0).
+
+### The S-27 fence discriminator, result (2026-10-18 22:11-22:22): the fence is ruled out, as predicted
+
+`records/pym0-fence.board.txt`. Kit bkit7-fence: module 3005ed52e860c7af with `fence_before_entry=1`.
+- **The run:** pym0's 21 images, gate-checked equal to the list. The batch read the parameter back once:
+  "@@PARAM fence_before_entry=Y".
+- **The reading:** all 21 steps fault `cause=6 address=0x12` (20 at pc offset …159c8, 1 at …1610c), so every cell is
+  control-failed.
+- **Against pym0 on 3005ed52 without the fence:** 20 of 20 cells the same. Against the QEMU prediction: 0 of 20.
+- **So `fence rw,rw` before every CSRUNV does not cure S-27,** and the cure in d71f207a is in its other changes: rd =
+  x0, the sentinel, the +16 kind read.
+  - On silicon rd = x0 is still not separated from the sentinel and the +16 read. The RTL lane's va-rdclob, which has
+    neither, carries that.
+- ISSUES S-27's status is updated to match.
+- The bundle (`cpython/pymalloc-repros/results/2026-10-18-vp2-fence/vp2-malloc`) is a discriminator record, not a fold
+  input. UNGATED (PREFLIGHT=0).
