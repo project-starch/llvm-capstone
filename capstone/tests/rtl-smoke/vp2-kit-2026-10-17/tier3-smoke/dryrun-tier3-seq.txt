@@ -1,0 +1,10 @@
+# tier3-seq.sh dry run (2026-10-18), BOARDVM_STUB_TRANSCRIPT in place of the recipe, kit bkit6, the v9 SDK:
+# - the pilot's own silicon transcript, memcached/plain-temporal-repros virtual-malloc: the runner rebuilt the four images
+#   byte-identical to the pilot's (f76b089115a659f4, c6c3b4490abef1c9, 2126edc5837f79fc, controls 491655742d378fcd),
+#   read CAUGHT 3 as the pilot did, and the sequence reached T3SEQ DONE;
+# - the same transcript cut after case 01's first STEP-BEGIN, with a second arm queued: "virtual boot: DID NOT
+#   COMPLETE", case 00 CAUGHT, cases 01 and 02 NO-READING:infra, then "T3SEQ STOP after w1" (rc 1), and the second
+#   arm never started;
+# - a kit directory that does not exist: "STOP: .../board.env is missing" (rc 2) before anything runs.
+# - the outer timeout: under `timeout 3 python3 -> subprocess bash`, the grandchild bash's EXIT trap ran on the
+#   SIGTERM (rc 124), so a timed-out arm takes its recipe down and the bake still restores the shared buildroot.
