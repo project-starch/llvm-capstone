@@ -1,0 +1,13 @@
+# Boot 5 runner dry run (2026-10-18), driver stubbed, two synthetic transcripts:
+# - complete: ARENA_PIN:Y:suite read back; the three resolve_dirty read-backs; VM_BEGIN for sqlite_write, sqlite_read and
+#   mruby; the four kit result lines; the APPS dmesg window (1 line, END 1); the two sparse VM_NOT_RUN markers; every
+#   VM_EXIT extracted; the runner reaches TIER12_B5_DONE.
+# - a wedge in mruby (the transcript ends after VM_BEGIN:mruby, no END marker): BEGUN names mruby while the exits stop
+#   at sqlite_read, the KIT line holds SQLite's two results only, the APPS window reads 0 lines and END 0, vm-suite's
+#   retval reads NONE; the runner still reaches TIER12_B5_DONE.
+# Without T1_EXPECT_FALSE the runner refuses to start (rc 1), so it cannot run unscored.
+# After the false set was fixed from the QEMU record (runner sha256 bb39833361f6bbfa, the file armed):
+# - both transcripts above again: the runner reaches TIER12_B5_DONE on each, as before;
+# - the QEMU-derived transcript (b5-prediction.txt's serial in board rung format, cleanup set to 1, ARENA_PIN:Y:suite added):
+#   "RUNG vm-suite retval=20 oracle=20 AS-ORACLE", "VM-SUITE board-check rc=0 :: 25 of 41 true; 0 off the
+#   pre-registration []", the four kit lines extracted. So a board run that reads the prediction scores as a pass.

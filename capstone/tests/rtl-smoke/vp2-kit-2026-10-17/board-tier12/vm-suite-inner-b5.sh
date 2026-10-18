@@ -1,0 +1,79 @@
+#!/bin/sh
+# vp2 Tier 2 boot 5 (the arena pin, module 3005ed52, built on a2a0b2f4): arena_pin is set for the whole suite and
+# read back; resolve_dirty (default off in this module, read back) is set for `vm` ALONE and cleared right after. The
+# kit applications run after every returning step: sqlite_write, sqlite_read, then mruby last, each a wedge risk
+# until the pin proves out (r10's sqlite_write and r11's mruby wedged the core without it). The sparse pair stays NOT
+# RUN (S-25: a capability store as a page's first touch wedges the core on bf3db3175, R-57). Otherwise as boot 4b. The
+# module's lines are read from the ring buffer with dmesg, the console showing only KERN_EMERG during rungs.
+cd /test-domains/vm || exit 1
+grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko || exit 1   # board: the contract rung may have loaded it, and the board kernel cannot unload
+export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
+echo 1 > /sys/module/capstone_vm/parameters/arena_pin; echo ARENA_PIN:$(cat /sys/module/capstone_vm/parameters/arena_pin):suite
+./capstone-vexec contract.dom ok argument > /tmp/ok.out 2>&1
+echo VM_EXIT:normal:$?
+cat /tmp/ok.out
+./capstone-vexec contract.dom threads > /tmp/threads.out 2>&1
+echo VM_EXIT:threads:$?
+cat /tmp/threads.out
+# resolve_dirty's default is read back, not assumed (module 3005ed52 declares it off).
+echo RESOLVE_DIRTY:$(cat /sys/module/capstone_vm/parameters/resolve_dirty):default
+echo 1 > /sys/module/capstone_vm/parameters/resolve_dirty; echo RESOLVE_DIRTY:$(cat /sys/module/capstone_vm/parameters/resolve_dirty):before-vm
+./capstone-vexec contract.dom vm 2>&1
+echo VM_EXIT:vm:$?
+dmesg | grep -a "capstone_vm:" | sed 's/^/KMSG-AFTER-VM: /'; echo KMSG-AFTER-VM-END
+echo 0 > /sys/module/capstone_vm/parameters/resolve_dirty; echo RESOLVE_DIRTY:$(cat /sys/module/capstone_vm/parameters/resolve_dirty):after-vm
+for mode in nested nested-stale heap-threads stale bounds retired vm-ro-write vm-none-read vm-guard vm-padding; do
+  ./capstone-vexec contract.dom "$mode" 2>&1
+  echo VM_EXIT:$mode:$?
+done
+./capstone-vexec contract.dom spin > /tmp/spin.out 2>&1 & spin=$!
+# QEMU startup includes Linux image loading and the first delegated rounds;
+# allow the child to publish its readiness before testing signal termination.
+sleep 5
+kill -TERM "$spin" 2>/dev/null
+wait "$spin"; echo VM_EXIT:preempt:$?
+cat /tmp/spin.out
+./capstone-vexec contract.dom ok argument > /tmp/one.out 2>&1 & one=$!
+./capstone-vexec contract.dom ok argument > /tmp/two.out 2>&1 & two=$!
+wait "$one"; echo VM_EXIT:parallel_one:$?
+wait "$two"; echo VM_EXIT:parallel_two:$?
+cat /tmp/one.out /tmp/two.out
+# vp2 boot r12: the module's lines after the returning steps (the compiler lane predicts `vma` site lines for
+# vm-ro-write and vm-none-read: a second positive control), then a count of the buffer as its window.
+dmesg | grep -a "capstone_vm:" | sed 's/^/KMSG-AFTER-RETURNING: /'; echo KMSG-AFTER-RETURNING-END lines=$(dmesg | wc -l)
+# vp2 boot 5: the kit applications, under the arena pin (r10's sqlite_write and r11's mruby wedged the core without it)
+# Each step's output goes to a file (run.py's form), so a VM_BEGIN line names the step a wedge leaves silent.
+echo VM_BEGIN:sqlite_write
+./capstone-vexec sqlite3.dom /tmp/virtual.db "CREATE TABLE t(n); WITH RECURSIVE x(n) AS (VALUES(1) UNION ALL SELECT n+1 FROM x WHERE n<100) INSERT INTO t SELECT n FROM x; SELECT 'SQLITE_SUM='||sum(n) FROM t;" > /tmp/sqlite.out 2>&1
+echo VM_EXIT:sqlite_write:$?
+cat /tmp/sqlite.out
+echo VM_BEGIN:sqlite_read
+./capstone-vexec sqlite3.dom /tmp/virtual.db "SELECT 'SQLITE_PERSIST='||count(*) FROM t;" > /tmp/sqlite.out 2>&1
+echo VM_EXIT:sqlite_read:$?
+cat /tmp/sqlite.out
+echo VM_BEGIN:mruby
+./capstone-vexec mruby.dom -e 'puts "MRUBY_SUM=#{(1..100).inject(0){|s,n| s+n}}"; File.open("/tmp/virtual-ruby", "w"){|f| f.write("virtual")}; puts "MRUBY_FILE=#{File.read("/tmp/virtual-ruby")}"' > /tmp/mruby.out 2>&1
+echo VM_EXIT:mruby:$?
+cat /tmp/mruby.out
+dmesg | grep -a "capstone_vm:" | sed 's/^/KMSG-AFTER-APPS: /'; echo KMSG-AFTER-APPS-END
+if [ -f perl.dom ]; then
+  ./capstone-vexec perl.dom -e 'my $sum = 0; $sum += $_ for 1..100; open my $w, ">", "/tmp/virtual-perl" or die $!; print $w "virtual"; close $w; open my $r, "<", "/tmp/virtual-perl" or die $!; my $text = <$r>; close $r; print "PERL_VIRTUAL_OK sum=$sum file=$text\n"' > /tmp/perl.out 2>&1
+  echo VM_EXIT:perl:$?
+  cat /tmp/perl.out
+  if [ -f perl-smoke.pl ]; then
+    mkdir -p /tmp/virtual-perl-files
+    cp /test-domains/vm/perl-smoke.pl /tmp/virtual-perl-files/smoke.pl
+    CAPSTONE_PERL_SMOKE_OBJECTS=2000 ./capstone-vexec perl.dom /test-domains/vm/perl-smoke.pl /tmp/virtual-perl-files > /tmp/perl-smoke.out 2>&1
+    echo VM_EXIT:perl_smoke:$?
+    cat /tmp/perl-smoke.out
+  fi
+fi
+echo 'VM_NOT_RUN:sparse-stale:S-25'; echo 'VM_NOT_RUN:sparse-churn:S-25'
+rmmod capstone_vm
+echo VM_EXIT:cleanup:$?
+if [ -f legacy.dom ]; then
+  ./capstone-vexec legacy.dom ok argument > /tmp/legacy.out 2>&1
+  echo VM_EXIT:legacy:$?
+  cat /tmp/legacy.out
+fi
+echo VIRTUAL_RUNTIME_DONE
