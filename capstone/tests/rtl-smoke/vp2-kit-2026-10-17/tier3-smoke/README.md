@@ -1333,3 +1333,18 @@ Kit bkit7-fix6t (BOARD_STEP_S=300), module d71f207a3af5546b.
 - **On 3005ed52** the same arm read 18 of 33, with 14 cells carrying S-27.
 - **The d71f207a set is complete:** pym0, pym1, fso, pb12 and sq0 match their predictions. pb10 repeats its S-23
   data-face panic. wm0 and wm1 wedge as before (R-57). UNGATED (PREFLIGHT=0).
+
+### The matched arms re-run on the workaround module, pre-registered (2026-10-18 23:55, before their boots)
+
+The board is idle until the module revision's handover, or the lead's word on tree A. The nine run-virtual-cases arms
+that matched their predictions on 3005ed52 re-run on d71f207a, so the fold can name one module for every arm.
+- **How:** `tier3-fix6b-seq.sh` (dry-run before), kit bkit7-fix6t, tags `<arm>-fix6b`, the same predictions. The
+  order is shortest first: mpt, pb9, mph, fpt, fca, wpt, wph, fcs, fph.
+- **Predicted:** each reads its 3005ed52 reading again, the QEMU prediction:
+  - mpt CAUGHT 3; pb9 MISSED 4; mph CAUGHT 9; fpt CAUGHT 13; fca MISSED 13; wpt CAUGHT 10; wph CAUGHT 12;
+    fcs CAUGHT 13; fph CAUGHT 25.
+  - None of them read an S-27 fault on 3005ed52.
+- **What a difference would mean:** a cell that differs is a module regression, read at its first failure.
+- **Interruption:** if the revision's Tier 1 boot or the tree A flash becomes due, the chain finishes its current arm
+  and the rest are held (stop it between arms by its process group).
+- UNGATED (PREFLIGHT=0).
