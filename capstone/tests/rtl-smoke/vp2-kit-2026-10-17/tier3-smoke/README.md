@@ -224,3 +224,66 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
   - r12's vm-suite: 3, over about 17 processes;
   - the batch: 0, over four processes, in boots 4 and 5.
   - So the retry is not once per process; it depends on the step.
+
+## Pre-registered (2026-10-18): the Tier 3 runner pilot, one corpus arm end to end (not a record)
+
+- **What:** `pilot.sh <t3-smoke>/bkit6 <scratch>` runs `run-virtual-cases.py --board-kit` on memcached
+  plain-temporal-repros, arm virtual-malloc: its controls and three cases, fixed and buggy.
+  - The SDK is the v9 kit's.
+  - The bundle goes to scratch, not under the corpus's results/.
+  - bkit6 is bkit3 with `BOARD_RUNGS="b0-stats b0-hello vbatch"`. The warm-up is S-26's; the scripts are dev's.
+- **What it answers:**
+  - **The path:** the runner's build, plan, BoardBatch boot, observe and verdicts writer, on silicon.
+  - **The payload:** each image's size and gzip size, the stage's, and the firmware against the 26,000,000-byte cap.
+    This is the first measured point of the boot plan.
+  - **Observe on a real case:** whether it yields the same fields as QEMU, cell by cell (`compare-pilot.py`, tested
+    two-sided: SAME on itself, DIFF on a changed offset).
+- **The prediction:** the compiler lane's QEMU record of the same images on the reference pin, capstone-qemu
+  b290f5656600 with svadu=false, matched by image sha256.
+  - Until it exists, the reference is the v6-kit QEMU bundle of this corpus. Its images differ, so only verdict,
+    cause and symbol+offset are comparable: CAUGHT, cause 25 at `mct_read_probe+56`, `mct_write_probe+88` and
+    `mct_read_probe+56`.
+- **A wedge is S-25's,** if its signature is a commit count with no valid bits. It is recorded as that, not as the
+  runner's failure.
+
+## Result, the runner pilot (2026-10-18 09:26-09:34): the whole path works on silicon, and the three cells read as QEMU's
+
+- **The path:** `run-virtual-cases.py --board-kit` built the images with the v9 SDK, staged them, baked, booted and
+  observed, then wrote a verdicts-v1 bundle. inputs.json records machine `board`, firmware 8c10d8afb64ba949, the
+  kernel, launcher b27afefc, module ce3a542d and monitor 007d81d.
+- **The rungs:** b0-stats 0 and b0-hello 0 (S-26's warm-up), then the batch.
+- **The controls:** bounds-malloc and uaf-malloc both fault, as the configuration expects.
+- **The cases:** all three fixed arms exit 0, and all three buggy arms fault with cause 25.
+  - The verdicts: 00 CAUGHT at `mct_read_probe+56`, 01 CAUGHT at `mct_write_probe+88`, 02 CAUGHT at
+    `mct_read_probe+56`, each reached and attributed by probe.
+  - Against the v6-kit QEMU bundle of this corpus (different images), verdict, cause, symbol+offset, reached,
+    completed and attribution are equal in all three cells, compared by script.
+  - **Against the reference pin** (the compiler lane's record on capstone-qemu b290f5656600, `cpu.txt` showing
+    svadu=false, the smoke kit with only the QEMU binary swapped), `compare-pilot.py` reads **3 of 3 cells the same
+    by image**: the three image hashes match, and verdict, cause, symbol+offset, reached, completed, attribution and
+    both controls are equal.
+- **The payload, the boot plan's first measured point:**
+  - Each case image is about 197 KB, about 76.6 KB gzipped; controls.dom 75.1 KB gzipped.
+  - The stage was 1,657,992 B, 686,071 B gzipped.
+  - The firmware stayed at 17,467,912 B, the clean size's 2 MiB step, well under the 26,000,000-byte cap.
+- **The time:** bake, firmware and boot to the end of the batch took 8 minutes for 9 steps.
+
+## Tier 3's 26 arms on the board: which runner, and what each still needs (2026-10-18)
+
+| runner | arms | board path |
+|---|---|---|
+| `tools/run-virtual-cases.py` (case.c corpora and the prebuilt ffmpeg pool / memcached allocator ports) | 13: ffmpeg carved x2, plain-heap, plain-temporal, pool x2, subobject; memcached allocator x2, plain-heap, plain-temporal; wireshark plain-heap, plain-temporal | `--board-kit`, validated by the pilot |
+| `postgres/c-repros/shared/run-arm.py`, `mmgr-repros/shared/run-defects.py`, `sql-repros/shared/run-arm.py` (virtualvm.Batch) | 5 | `--board-kit` (lane 0d542dc4f97b), the same BoardBatch drop-in |
+| `sqlite/engine-repros/shared/run-virtual.py`, `wireshark/wmem-repros/shared/run-defects.py` (appvm.run_app) | 4 | the appvm batch session (`tools/board/appvm-session.py`). Its QEMU control (`session-control.sh`) passes: wmem virtual-malloc collected, booted once on the v6-fix kit and read back equals the direct appvm run of the same builds in 23 of 23 cells by image, with the share linked and the marker read through /mnt/host |
+| `cpython/pymalloc-repros/runners/virtual/run-virtual.py` (appvm.run_app, per-case fixtures in the share, no stdlib) | 2 | the appvm batch session, as wmem: each fixture path is unique per case number and its content a function of that number |
+| `cpython/allocator-boundary-repros/runners/virtual/run-virtual.py` (appvm.run_app with a staged stdlib) | 2 | **needs a trimmed stdlib**. The full CPython 3.13 Lib is 287 MB raw and 86 MB gzipped, against about 8.5 MB of headroom under the cap. The static import closure (modulefinder over the 84 trigger and control scripts and the runner's launch.py, plus the interpreter's startup modules) is 328 files: 7.6 MB of source, 1.9 MB gzipped. modulefinder misses dynamic imports, so a trimmed stdlib must first equal the full one on QEMU, every reading identical, before it boots. |
+
+- **Every board arm records under `vp2-<arm>`.** The QEMU bundle stays the virtual arm's current record.
+- **The sql runner's payload is not measured yet.** It stages the PostgreSQL share and an initdb'd cluster. The
+  recipe's 26 MB cap check stops it before any boot if it does not fit.
+- **The order on the board,** after the pinned bundles and the arena-pin module:
+  - the 13 run-virtual-cases arms first: the pilot's path, a 9-step boot is about 8 minutes;
+  - then the postgres three;
+  - then the two appvm corpora.
+  - Each boot runs b0-stats and b0-hello first (S-26's warm-up).
+  - A wedge with R-57's signature (a commit count with no valid bits) is S-25's residual, recorded as that.

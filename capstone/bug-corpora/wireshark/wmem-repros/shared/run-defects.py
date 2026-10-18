@@ -109,6 +109,8 @@ def main():
     if appvm.profile(a.state) != "virtual":
         p.error(f"{a.state} is not a virtual-profile VM")
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
+    import boardvm
+    rec = boardvm.record_arm(a.arm, appvm.on_board(a.state))  # vp2-<arm> for a board session
     spec = v.load_arms()[config]
     for build in (a.hosted_build, a.controls_hosted_build):
         cache = (build / "CMakeCache.txt").read_text()
@@ -142,20 +144,20 @@ def main():
     for n, d in enumerate(dirs(CORPUS)):
         claims = json.loads((d / "case.json").read_text())
         if not program(a.hosted_build, d).is_file():
-            o = v.Observation(case=d.name, arm=a.arm, infra="build-failed", notes=f"no {stem_of(d)}")
+            o = v.Observation(case=d.name, arm=rec, infra="build-failed", notes=f"no {stem_of(d)}")
         else:
             image, text, result = run(a.hosted_build, d, n)
             o = observe_hosted(n, text, result, v.Symbols(a.llvm_bin, image), set(claims.get("fault_sites", [])))
             o.image_sha256 = v.sha256(image)
-        o.case, o.arm, o.controls = d.name, a.arm, list(controls)
+        o.case, o.arm, o.controls = d.name, rec, list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
         print(f"{'DIFF' if verdict[0] != VIRTUAL_PREDICTED[a.arm] else 'ok  '} {d.name[:46]:<46} "
               f"{verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:90]}", flush=True)
-    record = v.write_bundle(a.output, f"wireshark/{CORPUS.name}", a.arm, rows, {
+    record = v.write_bundle(a.output, f"wireshark/{CORPUS.name}", rec, rows, {
         "configuration": config, "predicted": VIRTUAL_PREDICTED[a.arm],
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
-    print(f"--- {a.arm} ({config}): {record['tally']}")
+    print(f"--- {rec} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 

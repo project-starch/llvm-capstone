@@ -1,0 +1,32 @@
+# vp2 Tier 2 boot 4b, 2026-10-18 11:26-11:38: caplifive_vp2_bf3db3175 (resident), fw_payload dea932c3051aeebf (monitor
+# 007d81d), module a00109e9738a4b95 (resolve-sites-13: 29c8e54e with resolve_dirty off by default), suite
+# vm-suite-inner-b4b.sh. Pre-registered at lane vp2-tier12 5143ae4e0601. VOID as a record: as boot 4.
+
+DRIVER rc=1 11:38:22; watchdog lines 48
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=922 oracle=0 NOT-AS-ORACLE
+RUNG vm-suite retval=NONE oracle=17 NOT-AS-ORACLE
+VM-CONTRACT BRANCH other: ok-line=False exits=['VM_EXIT:normal:139', 'VM_EXIT:stale:139'] causes=['cause=24', 'cause=24'] monitor=[]
+VM-SUITE board-check rc=1 :: 8 of 41 true; 25 off the pre-registration ['normal', 'nested', 'sparse-churn', 'sparse-stale', 'preempt', 'parallel_one', 'parallel_two', 'sqlite_write', 'sqlite_read', 'mruby', 'normal_output', 'fault_causes', 'nested_output', 'nested_denial_site', 'vm_denial_sites', 'vm_denial_operations', 'same_va_reuse', 'spin_entered', 'linux_pages_released', 'linux_demand_faults', 'unused_pages_not_populated', 'sparse_recycling', 'sqlite_results', 'mruby_results', 'completed']
+FRTY retries 0 at 
+DIAG fault repeats: 
+ELOOP lines: 
+BANNER (console, pr_emerg; KMSG copies excluded):       1 capstone_vm: loaded, diag resolve-sites-13, supervisor_slots=1;
+RESOLVE_DIRTY read-back: RESOLVE_DIRTY:N:default RESOLVE_DIRTY:Y:before-vm RESOLVE_DIRTY:N:after-vm 
+NOT RUN (S-25): 
+KMSG window VM: 1 lines, END 1; thread-refused (must-fire) 0; bound lines 0; refusal sites 
+KMSG window RETURNING: 0 lines, END 0; thread-refused (must-fire) 0; bound lines 0; refusal sites 
+VM exits: VM_EXIT:normal:139 VM_EXIT:stale:139 VM_EXIT:normal:139 VM_EXIT:threads:139 VM_EXIT:vm:139 VM_EXIT:nested:139 VM_EXIT:nested-stale:139 VM_EXIT:heap-threads:139 VM_EXIT:stale:139 VM_EXIT:bounds:139 VM_EXIT:retired:139 VM_EXIT:vm-ro-write:139 VM_EXIT:vm-none-read:139 VM_EXIT:vm-guard:139 VM_EXIT:vm-padding:139 VM_EXIT:preempt:139 
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_B4B_DONE 11:38:22
+
+## every virtual context's fault line, as printed
+  16 x cause=24 pc=...1d94 address=0x2 entry=unknown
+  (code offset 0x1d94 in every line = contract.dom VA 0x11d94, memset+0x2c, `sb a1, 0x0(a3)` with a3 = memset's
+  destination: memset was handed a pointer whose cursor is 2, a value read out of memory before HELLO)
+## scored
+  resolve_dirty read back N at its default, Y before vm, N after it. Every context faulted as in boot 4, Tier 1
+  included (922). The pre-registered "no cause-24 fault" failed: resolve_dirty's default was NOT the variable. The
+  module still is (stage sums compared by script: only the module and the suite differ from r13, and the first failing
+  context uses no suite). The rung then hung in the parallel pair; the aperture read is a live core's (stretcher OR).

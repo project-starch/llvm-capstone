@@ -467,7 +467,7 @@ Siblings: S-21 and S-22 (the same CSRUNV ENTRY/ESCAPE walks, a different consequ
 **Fix:** the RTL lane's, pre-registered for the next bitstream beside S-21/S-22's. The likely shape is to restore the
 caller's CPMPs before the pc reaches the frontend, or to hold the fetch until the walk ends.
 
-## S-24 — silicon only: the virtual `vm` step's store after `mprotect(RW)` faults with cause 15 on a pinned page again and again; the module's resolve() pins the same page and nothing changes until its 64-repeat bound ends the step `OPEN — the loop READ on silicon 2026-10-18 (vp2 boot r12, the module's own line); mechanism PROPOSED by the runtime lane (the RTL needs W and D for a store and never sets D, and GUP marks the struct page dirty rather than the PTE), its PTE reading pending; the fix is the module's (fault the page in through the kernel's write-fault path before the pin)`
+## S-24 — silicon only: the virtual `vm` step's store after `mprotect(RW)` faults with cause 15 on a pinned page again and again; the module's resolve() pins the same page and nothing changes until its 64-repeat bound ends the step `EXPLAINED AND FIXED ON SILICON 2026-10-18 (vp2 boot r13, module a56fc415ad7133aa): the PTE at the loop reads D = 0 with V R W A set, as the runtime lane's account predicted (the RTL needs W and D for a store and never sets D; GUP marks the struct page dirty, not the PTE); with the module's resolve_dirty (fault the page in through the kernel's write path before the pin) `vm` reads QEMU's status, 1 at execute through mapping PCC. The fix lands in the module queue's revision (compiler lane)`
 
 Siblings: S-25 (the other virtual-path silicon failure, a different mechanism), S-23, Q-30.
 
@@ -495,8 +495,16 @@ cannot show during rungs (RETRACTED, dev 9e645777a5fb). The `!same` attribution 
 - **Open against it:** QEMU with svadu=false passed `vm` (the plan's svadu measurement). The proposal must explain
   why QEMU's walker does not loop there.
 
-**Fix:** the module faults the page in through the kernel's write-fault path (which sets D) before pinning. Compiler
-lane, in the module queue's next revision.
+**Boot r13** (module a56fc415ad7133aa, both arms in one boot, each window with its own must-fire):
+- **resolve_dirty off:** 139, and the bound line's PTE `val=0x20331857 present=1 write=1 young=1 dirty=0`, the
+  predicted reading.
+- **resolve_dirty on:** exit 1 with `VM_CONTRACT_FAIL:execute through mapping PCC`, QEMU's own status and failure
+  point, and no new bound line.
+- The svadu=false objection above is answered by the compiler lane: QEMU's guest kernel handles the D-clear store
+  fault itself, while the RTL escapes it to the module, so the QEMU kit cannot show S-24 at all.
+
+**Fix:** the module faults the page in through the kernel's write-fault path (which sets D) before pinning, for
+cause 15 (`resolve_dirty`). Compiler lane, in the module queue's next revision.
 
 ## S-25 — silicon only (vp2 bf3db3175): a capability store whose translation faults inside a virtual context retires with no exception and leaves a ghost entry in the store buffer's commit queue, which never drains; one ghost wedges every later DYN operation, four wedge every store `OPEN — mechanism REPORTED confirmed in simulation by the RTL lane (va-runv8 against its plain-sd control on bf3db3175, pre-registered at capstone-ariane 179b06610; the result itself not yet committed when this entry was filed), consistent with every board wedge reading; the RTL defect is R-57 (filed by the RTL lane, dev 891186fc9d93, where the trace chain and the readings sit); its fix (carry the store exception to the STC's writeback, as R-56 did for loads; capstone-ariane virtual-profile-2-c 2114e11bd) is the next bitstream's; until then no capability store may be the first access to a page (docs/design/virtual-capstone/isa.md)`
 

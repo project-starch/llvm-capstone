@@ -120,6 +120,8 @@ def main():
     platform_args = p.add_mutually_exclusive_group(required=True)
     platform_args.add_argument("--state", type=Path, help="a capstone_vm VM started --profile virtual")
     platform_args.add_argument("--virtual-kit", type=Path, help="run all cases and their safe variants in one fresh boot")
+    platform_args.add_argument("--board-kit", type=Path, help="the same boot on the vp2 board (tools/boardvm.py); the "
+                               "bundle records arm vp2-<arm>")
     p.add_argument("--arm", required=True, choices=sorted(VIRTUAL_SUBLET))
     p.add_argument("--hosted-build", type=Path, required=True,
                    help="the port configured with the capstone-application preset, -DPG_CORPUS_DIR=<corpus>")
@@ -128,6 +130,8 @@ def main():
     p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--raw", type=Path, required=True, help="console logs; outside the bundle")
     a = p.parse_args()
+    import boardvm
+    rec = boardvm.record_arm(a.arm, a.board_kit)
     import appvm
     if a.state and appvm.profile(a.state) != "virtual":
         p.error(f"{a.state} is not a virtual-profile VM")
@@ -145,9 +149,9 @@ def main():
     a.raw.mkdir(parents=True, exist_ok=True)
 
     staged_runs = None
-    if a.virtual_kit:
-        import virtualvm
-        batch = virtualvm.Batch(a.raw / "stage")
+    if a.virtual_kit or a.board_kit:
+        Batch, kit = boardvm.select(a.virtual_kit, a.board_kit)
+        batch = Batch(a.raw / "stage")
         for label, build, cases in (("control", a.controls_hosted_build, dirs(CORPUS / "controls")),
                                      ("case", a.hosted_build, dirs(CORPUS))):
             for n, d in enumerate(cases):
@@ -158,7 +162,7 @@ def main():
                     name = f"{label}-{image.name}"
                     batch.put(f"images/{name}", image)
                     batch.step(name, f"./capstone-vexec ./images/{name} 0 {n}")
-        staged_runs, _, _ = batch.execute(a.virtual_kit, a.raw / "guest", 300 + 60 * len(batch.steps))
+        staged_runs, _, _ = batch.execute(kit, a.raw / "guest", 300 + 60 * len(batch.steps))
 
     def run(build, d, n, *, control=False):
         image = program(build, d, control=control)
@@ -182,7 +186,7 @@ def main():
     for n, d in enumerate(dirs(CORPUS)):
         claims = json.loads((d / "case.json").read_text())
         if not program(a.hosted_build, d).is_file():
-            o = v.Observation(case=d.name, arm=a.arm, infra="build-failed", notes=f"no {stem_of(d)}")
+            o = v.Observation(case=d.name, arm=rec, infra="build-failed", notes=f"no {stem_of(d)}")
         else:
             image, text, result = run(a.hosted_build, d, n)
             o = observe_hosted(n, text, result, v.Symbols(a.llvm_bin, image), set(claims.get("fault_sites", [])))
@@ -193,16 +197,17 @@ def main():
                     cimage, ctext, cresult = run(a.hosted_build, d, n, control=True)
                     co = observe_hosted(n, ctext, cresult, v.Symbols(a.llvm_bin, cimage), set())
                 qualify_fault(o, co)
-        o.case, o.arm, o.controls = d.name, a.arm, list(controls)
+        o.case, o.arm, o.controls = d.name, rec, list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
         print(f"{'DIFF' if verdict[0] != VIRTUAL_PREDICTED[a.arm] else 'ok  '} {d.name[:46]:<46} "
               f"{verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:90]}", flush=True)
-    record = v.write_bundle(a.output, f"postgres/{CORPUS.name}", a.arm, rows, {
+    record = v.write_bundle(a.output, f"postgres/{CORPUS.name}", rec, rows, {
         "configuration": config, "predicted": VIRTUAL_PREDICTED[a.arm],
-        "platform": (virtualvm.platform(a.virtual_kit, a.llvm_bin / "clang", HERE) if a.virtual_kit
+        "platform": (boardvm.run_platform(a.virtual_kit, a.board_kit, a.llvm_bin / "clang", HERE, a.raw / "guest")
+                     if a.virtual_kit or a.board_kit
                      else appvm.platform(a.state, a.llvm_bin / "clang", HERE))})
-    print(f"--- {a.arm} ({config}): {record['tally']}")
+    print(f"--- {rec} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 

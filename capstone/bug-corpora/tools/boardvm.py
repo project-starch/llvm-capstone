@@ -16,7 +16,8 @@ execute():
 A board kit is a directory holding:
 - board.env: shell assignments the recipe sources (the bitstream, the monitor and wrapper worktrees and their
   commits, the firmware defines, the payload cap);
-- adapter/capstone-vexec and adapter/module/capstone_vm.ko;
+- adapter/capstone-vexec and adapter/module/capstone_vm.ko, and optionally adapter/module/params (virtualvm's
+  module_params(): set through sysfs after insmod, read back, and the run refused unless every one reads as set);
 - board-run.sh, the recipe: board-run.sh <stage dir> <work dir> <timeout s>.
 The recipe writes <work>/board.txt (the driver's per-rung transcript) and <work>/SEQ, and exits 0 when the board ran.
 
@@ -55,7 +56,7 @@ def platform(kit, compiler, runner):
     record["judge"] = sha256(Path(__file__).with_name("verdicts.py"))
     record["profile"] = "virtual"
     record["machine"] = "board"
-    return record
+    return virtualvm.record_params(record, kit)
 
 
 def record_firmware(record, work):
@@ -68,6 +69,27 @@ def record_firmware(record, work):
             if k in ("firmware", "kernel") and v:
                 record[k] = v.strip()
     return record
+
+
+def record_arm(arm, board):
+    """The arm a run records: a board run records under vp2-<arm without "virtual-">, which corpus.json maps to the
+    same configuration, so the QEMU bundle stays the corpus's current record of the virtual arm."""
+    if not board:
+        return arm
+    return "vp2-" + (arm[len("virtual-"):] if arm.startswith("virtual-") else arm)
+
+
+def select(virtual_kit, board_kit):
+    """For a corpus runner with --virtual-kit | --board-kit: (Batch class, kit). Both share put()/step()/execute()."""
+    return (BoardBatch, board_kit) if board_kit else (virtualvm.Batch, virtual_kit)
+
+
+def run_platform(virtual_kit, board_kit, compiler, runner, work):
+    """The platform record for either kit; a board record takes its firmware and kernel from the recipe's record in
+    <work> (the guest directory the batch executed in)."""
+    if board_kit:
+        return record_firmware(platform(board_kit, compiler, runner), work)
+    return virtualvm.platform(virtual_kit, compiler, runner)
 
 
 def read_env(path):
@@ -120,7 +142,7 @@ class BoardBatch(virtualvm.Batch):
         lines = ["#!/bin/sh", f"cd /test-domains/{BATCH} || exit 1", "dmesg -n 1",
                  'grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }',
                  "chmod 666 /dev/capstone-vm",
-                 "export CAPSTONE_EXEC_DIAGNOSTICS=1",
+                 "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + virtualvm.param_lines(self.params) + [
                  f"( i=0; while [ $i -lt 2000 ]; do sleep {HEARTBEAT_S}; i=$((i+1)); echo \"@@HB $i\"; done ) & hb=$!"]
         for name, command in self.steps:
             lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
@@ -149,6 +171,7 @@ class BoardBatch(virtualvm.Batch):
         shutil.copy2(kit / "adapter/capstone-vexec", self.stage / "capstone-vexec")
         (self.stage / "capstone-vexec").chmod(0o755)
         shutil.copy2(kit / "adapter/module/capstone_vm.ko", self.stage / "capstone_vm.ko")
+        self.params = virtualvm.module_params(kit)
         (self.stage / "gate.sh").write_text(self.script())
         (self.stage / "ctl.sh").write_text(self.controller())
         (self.stage / "ctl.sh").chmod(0o755)
@@ -167,5 +190,6 @@ class BoardBatch(virtualvm.Batch):
         seg, ended = rung_segment(transcript.read_text(errors="replace"))
         if seg is None:
             return {}, transcript, False
+        virtualvm.check_params(self.params, seg.replace("\r\n", "\n"))
         steps = virtualvm.split(seg.replace("\r\n", "\n"))
         return steps, transcript, ran and ended and "VIRTUAL_STAGED_DONE" in seg

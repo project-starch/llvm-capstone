@@ -1,0 +1,36 @@
+# vp2 module bisection, 2026-10-18: two single-change modules from a56fc415's source (the compiler lane's), Tier 1 alone
+# (b0-stats, b0-hello, vm-contract), one boot each. Pre-registered at lane vp2-tier12 6e8181b4b99c.
+
+## run3bq
+TIER12_BQ_START 11:49:55 fw 884e7e9c6f7b6a54
+DRIVER rc=1 11:55:38; watchdog lines 22
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=922 oracle=0 NOT-AS-ORACLE
+VM-CONTRACT BRANCH other: ok-line=False exits=['VM_EXIT:normal:139', 'VM_EXIT:stale:139'] causes=['cause=24', 'cause=24'] monitor=[]
+FRTY retries 0 at 
+BANNER (console, pr_emerg; KMSG copies excluded):       1 capstone_vm: loaded, diag bisect-q26only, supervisor_slots=1;
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_BQ_DONE 11:55:38
+  capstone-exec: domain fault cause=24 pc=0x3f98101d94 address=0x2 entry=unknown last=0x0 preparing=0x0 sha256=125705371837ea92ee10e
+  capstone-exec: domain fault cause=24 pc=0x3f7fc81d94 address=0x2 entry=unknown last=0x0 preparing=0x0 sha256=125705371837ea92ee10e
+
+## run3be
+TIER12_BE_START 11:55:38 fw 1b7d8ad056dcc2d9
+DRIVER rc=0 12:01:26; watchdog lines 23
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+FRTY retries 1 at       1 FRTY:011110E0 
+BANNER (console, pr_emerg; KMSG copies excluded):       1 capstone_vm: loaded, diag bisect-esconly, supervisor_slots=1;
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_BE_DONE 12:01:26
+  capstone-exec: domain fault cause=25 pc=0x3fb31140f0 address=0x3fb31f0060 entry=0x3fb310094c code=0x3fb3100000-0x3fb3180000 last=0
+
+## scored
+  q26only (ko 69c11f908ad27c6b, the Q-26 wait rewrite alone): FAILS, with boot 4's and 4b's signature, cause 24 at
+  memset+0x2c (code offset 0x1d94), address 0x2, on both contract.dom contexts; vm-contract retval 922.
+  esconly (ko a2a0b2f49d790cc6, the escape-print code alone): PASSES, vm-contract identity.
+  Both as the compiler lane predicted before either boot. Its QEMU control passed q26only's change (34/41 on both
+  pins), so the defect is board-only. The module of record stays a56fc415 (boot 4c).

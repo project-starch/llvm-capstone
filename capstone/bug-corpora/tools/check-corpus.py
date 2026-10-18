@@ -126,6 +126,9 @@ ARM_ORACLES = {
     "virtual-pg-pools": {"oracle"},
     # A nested allocator's own pool port on the virtual profile, for ports other than PostgreSQL.
     "virtual-nested-pools": {"oracle"},
+    "vp2-malloc": {"oracle"},
+    "vp2-pg-pools": {"oracle"},
+    "vp2-nested-pools": {"oracle"},
     # Silicon (the FPGA): the case built for the silicon ABI and run on the board, read from the board
     # transcript by tools/silicon-verdicts.py. tools/arms.json says what each configuration is.
     "silicon-lifetimes": {"oracle"},
