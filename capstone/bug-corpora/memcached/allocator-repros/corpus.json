@@ -18,7 +18,8 @@
     "virtual-malloc",
     "virtual-nested-pools",
     "silicon-mc-stock",
-    "silicon-mc-sublet"
+    "silicon-mc-sublet",
+    "vp2-malloc"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -52,12 +53,14 @@
     "virtual-malloc": "virtual-memcached-stock",
     "virtual-nested-pools": "virtual-memcached-sublet",
     "silicon-mc-stock": "silicon-memcached-stock",
-    "silicon-mc-sublet": "silicon-memcached-sublet"
+    "silicon-mc-sublet": "silicon-memcached-sublet",
+    "vp2-malloc": "virtual-memcached-stock"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
     "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools",
     "silicon-mc-stock": "results/2026-10-16-silicon/silicon-mc-stock",
-    "silicon-mc-sublet": "results/2026-10-16-silicon/silicon-mc-sublet"
+    "silicon-mc-sublet": "results/2026-10-16-silicon/silicon-mc-sublet",
+    "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
   }
 }

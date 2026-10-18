@@ -13,7 +13,7 @@
 | third-party defects, as cases | `capstone/bug-corpora/` | 297 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 30 | one self-contained report per defect, the folder is the report |
-| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 140 open, 77 resolved | the registry, not reproduced cases |
+| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 143 open, 77 resolved | the registry, not reproduced cases |
 
 Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 4 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `whisper/ggml-context`.
 
