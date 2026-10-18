@@ -1486,3 +1486,65 @@ MISSED 13, 13 of 13 as predicted, its 3005ed52 reading again. Bundle
 `ffmpeg/carved-repros/results/2026-10-18-vp2-rdx0/vp2-malloc`. The chain was then held for sql0-rev2: the holder
 killed the chain's group and wpt's `timeout` group within 6 s of fca's END, before wpt built anything. UNGATED
 (PREFLIGHT=0).
+
+### sql0-rev2 stopped at the firmware cap (2026-10-19 00:57-00:58), and the payload rule for every new pre-registration
+
+- **sql0-rev2 did not boot.** The kit recipe's DECLARED-bake cap stopped it after the bake and firmware build, before
+  the board: `STOP: firmware 30050824 B over the cap 26000000`. No board time was spent.
+  - The stage was 65,953,267 B in 1,668 files. bin/postgres is 21.7 MB, and the native16 fixture is ~41 MB: one 16.8
+    MB WAL segment, and template1, template0 and postgres at 8 MB each.
+  - The runtime lane ruled that the cap stays at 26,000,000 B. The fixture shrinks instead, from the compiler lane: a
+    1 MB WAL segment, template0 only if a case needs it, GMT-only zoneinfo.
+  - Its QEMU A/B must read every sql cell equal to the native16 record, carry the new fixture_record hash, and print
+    the stage bytes and the estimated firmware size. sql0's re-registration on 39d8492d gates on that hash.
+- **My miss:** the sql0 pre-registration never sized the stage against the cap. The recipe's gate caught it, which is
+  that cap's first positive control.
+- **From now on every new pre-registration carries the stage bytes and the estimated firmware size.**
+- **Applied to pgc/pgm0/pgm1, before they run.** Measured from their 3005ed52 runs, the same images and builds:
+  - pgc: stage 3,192,428 B in 15 files;
+  - pgm0: stage 5,780,035 B;
+  - pgm1: stage 5,972,411 B;
+  - firmware 19,565,064 B each, 6.4 MB under the cap.
+  - The d71f207a module is 4 KiB larger than 3005ed52's, which does not move the 2 MiB-padded firmware.
+
+**Amendment to the tree A flash plan (2026-10-19 01:06, before any flash; still NOT authorised): the bitstream is sealed
+and pulled.**
+- **The seal:** synth lane, capstone-ariane virtual-profile-2-c 8522d72fe. Routed WNS -18.985 (vp2: -19.019), TNS
+  -1,032,423.812, LUTLP-1 0, route 39 min with no congestion failure.
+- **The file:** `caplifive_vp2c_8522d72fe.bit`, 11,443,722 B, sha256
+  ba1339bcd1f6fbb4a8d9322990ae054e9494853553802d004bcd4ec2e30f5e7e.
+  - Pulled from the synth host's work-fpga output and verified against that sha256 before it was named. It is kept
+    read-only in the board lane's bitstream directory, beside `caplifive_vp2_bf3db3175.bit`.
+- **At the flash:**
+  - register it under that name;
+  - confirm `caplifive_vp2_bf3db3175.bit` is still registered, as the flash-back path;
+  - read back `nv_bitstream_name`; it must be `caplifive_vp2c_8522d72fe.bit`. The readback is recorded with the
+    session.
+- **Where the flash falls:** at the next arm boundary of the d71f207a re-run once authorised. An arm in flight finishes
+  first.
+
+### sql0 on module 39d8492d, second form, pre-registered (2026-10-19 01:46, before its boot): sql0-rev2b
+
+The first form stopped at the firmware cap. This one changes the image and the fixture, both re-gated on QEMU:
+- **The image:** `t3-new6/postgres-lt0-dl/image/postgres.dom`, 64010720f1a6b3bc, `llvm-objcopy --discard-locals` of
+  81ee24a0.
+  - It drops 216,837 `.L` labels. The single PT_LOAD segment, .capstone_virtual and .capstone_domreq are
+    byte-identical, and so is every non-.L symbol (checked by this lane and the compiler lane independently).
+  - All 6 sql fault_sites and the record's evidence symbol (memcpy) are non-.L and present.
+- **The fixture:** `t3-new6/tmp/pgfixture-trim/cluster`, run-arm record 956173e054762e91. It is the native16 cluster
+  without template0/template1 and with a 1 MiB WAL segment.
+- **`--pg-share`:** the share the native16 record used.
+- **The prediction:** `t3-sql-trim-vm/bundle`, the QEMU record on exactly these inputs (qkit7):
+  - CAUGHT 02 and 03 (cause 28 at memcpy+200), MISSED 01 and 04-09, both controls fault;
+  - 9 of 9 cells equal to the native16 record, evidence text included. The compiler lane's comparator and this lane's
+    both read 0 differ, and both catch a planted difference.
+- **The size:** the stage shrinks by 37,143,681 B raw against the first form's 65,953,267. The firmware grows in
+  2 MiB steps, so the estimate means either 25,859,336 B (under the cap) or 27,956,488 B (over).
+  - A measure-only bake decides it first, on kit bkit7-rev2m: bkit7-rev2s with a recipe stop after the firmware build
+    and the cap check, so it never reaches the board.
+  - The board boot on bkit7-rev2s follows only if the measured firmware is under 26,000,000 B. If it is over, the
+    fixture is trimmed again (the runtime lane's ruling).
+- **When:** after the postgres chain (`tier3-sql-arm-rev2b.sh`). VOID unless the bundle's fixture record is
+  956173e054762e91 and its image 64010720f1a6b3bc.
+- Records `records/sql0-rev2b.board.txt` and `postgres/sql-repros/results/2026-10-19-vp2-rev2/`.
+- **Dry run:** under-cap pass, over-cap stop with no boot, and VOID on a wrong fixture. UNGATED (PREFLIGHT=0).
