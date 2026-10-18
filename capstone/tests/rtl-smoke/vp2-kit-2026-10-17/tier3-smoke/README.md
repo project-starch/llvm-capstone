@@ -882,3 +882,46 @@ fault anyway.
   it. The reading does not depend on it.
 - **Not booted:** ppA2, ppE, ppE1 and ppE2 of the settling batch. E3's reading and the paired boot on the S-27
   workaround module (next) answer what they were built for. ppE's QEMU twin is filed as `records/ppE.prediction.txt`.
+
+### The S-27 paired boot, pre-registered (2026-10-18, before its boots): the workaround module against 3005ed52's records
+
+**The module:** d71f207a3af5546b, from the compiler lane's e5775346cc8e (origin/module-resume-rd-x0).
+- The entry/resume CSRUNV is issued with rd = x0, so nothing is written into the context's x(rd).
+- The event kind is read back from frame +16. On bf3db3175 every ESCAPE writes it there: the EVENT walk saves CSR id 70
+  at +16 (`capstone_dom_switcher.anvil:466-467`). A REFUSE writes {2, 29} at +16 and +24 itself (`:424-429`).
+- The kit gates, re-run here by stage-module.sh: qemu-only-csr-census 0 of 4,762 instructions; vp2-silicon-gate as
+  trusted_S: 0 refused, 0 candidates, 4 conditional.
+
+**Boot 1, Tier 1** (`board-tier12/boot3/run-tier12-wa1.sh`):
+- Firmware ad5e84f761dd0f7c (Image e4b6e7535a0a2a77; monitor 007d81d with the S-23 fetch retry; wrapper 1269c77).
+- The stage is ap1's with one line changed, the module, and the bake's cpio check finds d71f207a by hash.
+- Reference: ap1 (firmware 83e5c5c6d6f89471, module 3005ed52).
+- **Predicted:**
+  - b0-stats, b0-hello and vm-contract as their oracles (0, 0, 0);
+  - vm-contract's identity branch: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139);
+  - the banner once, and 0 "wrote no event record" lines.
+- **Readings against the module on silicon:** any refusal line (the +16 record not written), vm-contract off its oracle,
+  or a wedge.
+
+**Boot 2, pym0** (`tier3-pair-wa1.sh`):
+- It runs only if boot 1 reads as predicted.
+- Kit bkit7-fix6 is bkit7 with the module swapped (`diff -r`: the module, and board.env's manifest path, whose content is
+  unchanged).
+- The same runner arguments and the same 21 images (`t3-images-nb/pym0.images.SHA256SUMS`) as pym0 on bkit7.
+- **Predicted:** the QEMU verdict.
+  - Control uaf-block completes and the 20 cells read MISSED, equal to `records/pym0.prediction.txt` (this lane's twin
+    on 5bfc38f8).
+  - The same holds against the compiler lane's twin on the new module's QEMU build, 28882779c95b94ad (`t3-pym0-fix6`,
+    20 of 20 identical to the record).
+- **Reference on 3005ed52:** `records/pym0.board.txt`, 0 of 20, every cell control-failed by cause 6 at 0x12.
+- **The pair is two-sided if pym0 reads 20 of 20 here.**
+- **Readings that are not that, named in advance:**
+  - the 0x12 fault again: another resume site writes x(rd);
+  - a different fault: a second defect, unmasked;
+  - an S-mode oops at a collect site: pym0 collected, and this kit has no stopgap;
+  - cause 0xcafe0001 on a fault line: a refused CSRUNV.
+- **CV_STATS is not read on the board in boot 2.** The batch session gives each step only the runner's environment, and
+  adding CAPSTONE_VM_STATS would make the pair differ in two things. pym0's collection count comes from the compiler
+  lane's QEMU census.
+
+Both boots are UNGATED (PREFLIGHT=0); image identity by sha256 is the substitute. The dry run is `dryrun-pair-wa1.txt`.

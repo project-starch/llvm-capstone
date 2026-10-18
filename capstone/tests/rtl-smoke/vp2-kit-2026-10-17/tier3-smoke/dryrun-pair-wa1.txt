@@ -1,0 +1,12 @@
+# tier3-pair-wa1.sh dry run (2026-10-18 19:12), both boots stubbed, the real run-tier12-wa1.sh under its T1_* stubs:
+# - pass: the driver stub writes ap1's transcript (3005ed52's Tier 1 boot). The runner reads "RUNG vm-contract retval=0
+#   oracle=0 AS-ORACLE" and "REFUSED-CSRUNV (must-fire) 0; banner 1"; the gate passes, the arm stub runs with the real
+#   argument list (bkit7-fix6, cases-OFF, controls-OFF), score-arm.sh writes the record under the dry-run tag and files the
+#   bundle under the dry-run results directory, "20 of 20 cells the same (rc 0)", and the fix6 twin comparison reads 20 of
+#   20; PAIR DONE.
+# - badrung: the stub sets vm-contract's retval to 922. "PAIR GATE: vm-contract not as its oracle", PAIR STOP, no arm.
+# - refused: the stub appends one "capstone_vm: CSRUNV action 4 wrote no event record" line. "REFUSED-CSRUNV (must-fire)
+#   1; banner 1", PAIR GATE, PAIR STOP, no arm.
+# - noseq: the Tier 1 step replaced by a binary that writes nothing. "PAIR STOP: Tier 1 has no complete SEQ", no arm.
+# The dry run's record and bundle were removed by name afterwards. Not exercised: the kit-module hash gate (the kit is
+# the real one) and the running-driver guard.
