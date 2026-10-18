@@ -1560,6 +1560,7 @@ The first form stopped at the firmware cap. This one changes the image and the f
 - **pgc-fix6b did not boot (infra):** the watchdog logged "NO-BOOT 466s load_image issued, no boot banner and no
   download for 421s; JTAG transfer moved nothing", aborted the runner (driver rc 130), and the board was released. No
   board transcript, every cell NO-READING:infra, so it is not a reading.
-  - The run is moved to the attic, and pgc, pgm0 and pgm1 re-queue after sql0 (the board-run skill: infra, retry).
+  - The run is moved to the attic, and its record kept as `records/pgc-fix6b-noboot.board.txt`. Its all-infra bundle
+    is not filed. pgc, pgm0 and pgm1 re-queue after sql0 (the board-run skill: infra, retry).
 - **sql0-rev2b's measure-only bake read 25,856,520 B**, under 26,000,000: the stage was 28,809,586 B in 1,072 files.
   The board boot on bkit7-rev2s started at 01:52:19. UNGATED (PREFLIGHT=0).
