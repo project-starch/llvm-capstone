@@ -1498,3 +1498,26 @@ Pre-registered at f7487e0f1cd9. Result lines are in `board-tier12/results/board-
   - Its QEMU arm passed the control, so the defect lives in the board arm or in a path only silicon exercises.
   - The verbatim lines went to the compiler lane.
   - Tier 2's record waits for a corrected module. r13's a56fc415 remains the last module read good on silicon.
+
+## Pre-registered (2026-10-18, before Tier 2 boot 4b): the record on module a00109e9 (resolve_dirty off by default, on for `vm` alone)
+
+- **The module:** a00109e9738a4b95 (the compiler lane's resolve-sites-13, commit 8bc0c4dd88cc). It is 29c8e54e with
+  resolve_dirty defaulting OFF.
+  - Verified here: the llvm-objdump text is identical, 5730 lines; `.sdata` is 8 bytes shorter, the initialised-true
+    variable gone; the only other difference is the tag string.
+  - The lane's source diff isolates boot 4's regression to that default.
+- **The suite:** `vm-suite-inner-b4b.sh`, boot 4's except that resolve_dirty is read back at its default, set to Y
+  for `vm` alone, and cleared right after, each with a read-back. This is how r13's dirty=Y arm read it.
+- **Firmware** dea932c3051aeebf; the monitor is unchanged.
+- **The run:** `boot3/run-tier12-b4b.sh dea932c3051aeebf`, dry-run in `boot3/dryrun-b4b.txt`.
+- **Predicted:**
+  - Tier 1 identity, which boot 4 lost.
+  - The banner (resolve-sites-13).
+  - The read-backs N, then Y, then N.
+  - The 17 exits as boot 4's pre-registration lists them, from the reference-pin QEMU run: normal 0, threads 1,
+    vm 1, nested 0, nested-stale 139, heap-threads 1, the seven 139s, preempt 143, the parallel pair 0, cleanup
+    (0 on QEMU, 1 on the board).
+  - Fault lines as r12 and r13.
+  - No cause-24 startup fault.
+  - The five S-25 steps NOT RUN.
+  - No wedge.
