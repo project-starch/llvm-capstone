@@ -589,6 +589,36 @@ launcher b27afefc and module ce3a542d in every boot; b0-stats runs `capstone-exe
 - **The next question,** for the monitor and RTL lanes: what the first classic domain call sets up that the virtual
   entry path relies on.
 
+## S-28 — a second instruction retiring beside a CSRUNV is re-executed when the caller resumes, because the gate that would hold the second port tests a flag a CSRUNV deliberately leaves clear `REAL IN SOURCE, NOT EXERCISED (bf3db3175); FIXED on virtual-profile-2-c 8522d72fe as a defensive term, recorded as R-50's unexercised trigger was; found 2026-10-18 by the semantics owner's auditor, confirmed from the sources by the RTL lane`
+
+**The chain.** A CSRUNV's result pack sets `dom_switch_en = 1'b0` and `runv_en = 1'b1`, and the header says so outright:
+"dom_switch_en stays 0, commit dispatches the switcher itself" (`capstone_unit.anvilh`, above `create_result_pack_runv`
+in `capstone_dyn_unit.anvil`). The commit stage's second-port condition (`commit_stage.sv:890-900`) tests
+`!commit_instr_i[0].cap_result.dom_switch_en` and nothing about `runv_en`, so it does not hold port 1 for a CSRUNV. The
+switcher request's `pc_next` is the CSRUNV's `pc + 4` (`:609`), which is the second instruction's own pc, so an
+instruction that retires beside a CSRUNV runs once before the entry and again when the caller resumes: its register
+write lands twice, and a store would land twice.
+
+**Why it has never been seen.** Every caller uses the CSRUNV's result immediately, which creates a dependency that
+prevents the pairing: the kit's module assigns `t->event = run(...)`, and the directed arms all follow the instruction
+with a `mv` of its destination. So the condition needs a caller that places an INDEPENDENT instruction there.
+
+**The arm, and why its reading is VOID** (va-rdclob's `-DDUAL` build, pre-registered at lane `5dbb8908c` before the run,
+result recorded in the arm's header). It places `addi t5, t5, 1`, independent of the CSRUNV, immediately after the entry,
+so nothing but the gate could stop the pairing, and prints t5 after the escape: 2 if the condition fires, 1 if the
+pairing is excluded, and VOID unless the trace shows a `port=1` commit in the same cycle as the CSRUNV's `port=0`. Both
+trees read t5 = 1 with ZERO such commits, so the pairing never happened and the reading says nothing about the gate. Not
+established either way: the scoreboard presents its second entry unconditionally (`scoreboard.sv:149-150`), so the
+pairing is not structurally excluded, and the likely reason is the second instruction's completion timing against the
+switcher's ack rather than a rule. Further arm time was judged not worth it (the semantics owner, 2026-10-18).
+
+**Incidental, and worth keeping:** that same run confirms S-27 once more, reading 2 on the resident tree and 0 on the
+fixed one.
+
+**The fix** (`8522d72fe`): one term, `&& !(CVA6Cfg.CAPSTONE_EXT && commit_instr_i[0].cap_result.runv_en)`, added to that
+condition beside its neighbours. It ships with its trigger unexercised, and the bitstream built from tree A therefore
+carries NO reading for it; claiming one would be the vacuous-gate mistake this registry has recorded before.
+
 ## S-27 — silicon only (vp2 bf3db3175): in -O0 virtual programs of four ports the register a5 (x15) holds the integer 2 at the faulting instruction where QEMU, on the same images, holds the intended value; the allocators' `sd a4,0x10(a5)` faults 6 at 0x12 and SQLite's sites fault 24 with tval 2 `OPEN — UNGATED boots (PREFLIGHT=0; image identity by sha256 is the substitute); read 2026-10-18 in Tier 3 (pym0, pym1, fso, pb12, sq0b-d) and a four-arm probe; CANDIDATE (the RTL lane, from bf3db3175's source and its simulation arm va-rdclob fb3f87b6c): every RESUME of a virtual context writes the literal 2 into the context's x(rd), rd being the trusted caller's CSRUNV destination, and the module's resuming CSRUNV has rd = x15; a settling batch is pre-registered against it (lane vp2-tier12 098a03999c14); a module workaround (the resume CSRUNV with rd = x0) is being written by the compiler lane`
 
 Siblings: S-25 and R-57 (excluded below), S-23 (the same Tier 3 boots), Tier 2 boot 4 (cause 24 with a destination cursor
