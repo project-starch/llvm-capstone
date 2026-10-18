@@ -647,6 +647,10 @@ static u64 test_events, test_injections, test_stops, test_initial_stops, test_vi
 static u64 test_consumed, test_checks, test_checks_irqs_on, test_entries;
 static u64 test_gup_requests, test_gup_max, test_short_results, test_gup_pending;
 static bool test_pending, test_expired, test_in_step;
+/* Faults whose first resolution came from the launcher's CV_RESOLVE: a stop
+ * fell between the fault and its resolution in CV_STEP, so it got the full
+ * pin-ahead window. Real quantum ends and signals cause these too. */
+static u64 test_launcher_first;
 
 static void test_hook(unsigned long at)
 {
@@ -685,10 +689,12 @@ static void test_report(const char *why)
 {
     pr_info("capstone_vm test %s: injections=%llu stops=%llu initial_stops=%llu "
             "violations=%llu consumed=%llu gup_requests=%llu gup_max=%llu short_results=%llu "
-            "gup_pending=%llu checks=%llu checks_irqs_on=%llu entries=%llu\n",
+            "gup_pending=%llu checks=%llu checks_irqs_on=%llu entries=%llu "
+            "launcher_first=%llu\n",
             why, test_injections, test_stops, test_initial_stops, test_violations,
             test_consumed, test_gup_requests, test_gup_max, test_short_results,
-            test_gup_pending, test_checks, test_checks_irqs_on, test_entries);
+            test_gup_pending, test_checks, test_checks_irqs_on, test_entries,
+            test_launcher_first);
 }
 #define TEST_HOOK(at) test_hook(at)
 #define TEST_GUP(pages) test_gup(pages)
@@ -699,6 +705,7 @@ static void test_report(const char *why)
         if (initial) ++test_initial_stops; } } while (0)
 #define TEST_STEP_BEGIN() do { test_in_step = true; } while (0)
 #define TEST_IOCTL_DONE() do { test_pending = test_expired = test_in_step = false; } while (0)
+#define TEST_RESOLVE(a, i) do { if (!test_in_step && !(a)->pages[i]) ++test_launcher_first; } while (0)
 #else
 #define TEST_HOOK(at) do { } while (0)
 #define TEST_GUP(pages) do { } while (0)
@@ -708,6 +715,7 @@ static void test_report(const char *why)
 #define TEST_STOPPED(initial) do { } while (0)
 #define TEST_STEP_BEGIN() do { } while (0)
 #define TEST_IOCTL_DONE() do { } while (0)
+#define TEST_RESOLVE(a, i) do { } while (0)
 #endif
 
 /* Pending work for this task, or the end of its budget: return to the
@@ -806,6 +814,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         if (!PageAnon(page) || page_mapcount(page) != 1) {
             mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
         }
+        TEST_RESOLVE(a, index);
         if (!a->pages[index])
             pin_ahead(c, a, v, index + 1, deadline);
         mmap_read_unlock(c->mm);
