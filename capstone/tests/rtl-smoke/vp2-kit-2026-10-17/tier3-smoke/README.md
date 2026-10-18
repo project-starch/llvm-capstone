@@ -1293,3 +1293,28 @@ own word in this session; a relayed one does not count. Nothing below runs befor
 
 **Stops:** any canary mismatch, a readback naming another bitstream, or an arm vector mismatch stops the session
 before the Linux steps. A failed canary means flashing back to bf3db3175 needs the lead's word again.
+
+### fso, pb12 and pb10 re-run on the scaled budget (2026-10-18 22:22-23:27): fso 9 of 9, pb12 9 of 9, and pb10 repeats its S-23 panic exactly
+
+Kit bkit7-fix6t (BOARD_STEP_S=300), module d71f207a3af5546b.
+- **fso-fix6b** (ffmpeg/subobject, vp2-malloc): MISSED 9, 9 of 9 as predicted. On 3005ed52 it read 0 of 9. The boot
+  took 43 minutes inside a 6300 s budget.
+  - Bundle: `ffmpeg/subobject-repros/results/2026-10-18-vp2-rdx0/vp2-malloc`. The budget-void fso-fix6 bundle was
+    never filed, so this one takes the arm's place.
+- **pb12-fix6b** (memcached/allocator, vp2-malloc): CAUGHT 1, MISSED 8, 9 of 9 as predicted. On 3005ed52 it read 0 of
+  9.
+  - Bundle: `memcached/allocator-repros/results/2026-10-18-vp2-rdx0/vp2-malloc`.
+- **pb10-fix6b** (ffmpeg/pool, Sublet): the same as on 3005ed52, and not a budget void.
+  - Case 00 reads CAUGHT. Case 01's BUGGY run panics the kernel, so cases 02-03 never run: 1 of 4.
+  - The panic matches pb10's on 3005ed52 line for line: `MTVL:BC2C0825`, `CPMX:00000002`, `INJS:00000002`, and all 48
+    lines of the CPMP dump identical.
+  - The kernel side matches too: `Oops - load access fault` at `mod_node_page_state+0x40`, called from
+    `unpin_user_page+0x2a`.
+- **What this means for S-23's data face:**
+  - MTVL is the CPMP's physical address (`pmp_data_if.sv:135`, `:304-313`), and region 21 covers it in both dumps.
+  - The refusal now repeats at the same physical address, from the same caller and in the same step, on two boots and
+    two modules. That is a deterministic sequence, not the scatter a random timing window would give.
+  - The RTL lane's window reading (the CPMP table in flux while the RESTORE walk writes it) still fits only if the
+    window is hit identically each time. The record says so, and the RTL lane has the two captures.
+- **The pb10-fix6b bundle is not filed:** 3 of its 4 cells never ran.
+- UNGATED (PREFLIGHT=0).
