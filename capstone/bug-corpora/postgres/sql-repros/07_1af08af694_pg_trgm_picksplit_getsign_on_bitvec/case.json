@@ -33,5 +33,10 @@
   },
   "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle. The physical spatial/sublet pair measured 2026-10-06 to 2026-10-10 stays in results/",
   "nested": true,
-  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it.",
+  "fault_sites": [
+    "gtrgm_picksplit",
+    "pg_popcount_optimized"
+  ],
+  "fault_sites_why": "Derived from the source, not from a run. The defective read is sizebitvec(GETSIGN(cache[j].sign), siglen) at trgm_gist.c:900 and :913, inside gtrgm_picksplit. The chain from there has no branch: trgm_gist.c:651 sizebitvec returns pg_popcount(sign, siglen), and pg_bitutils.h:360 pg_popcount returns pg_popcount_optimized(buf, bytes), which performs the loads. sizebitvec and hemdistsign are static and inlined in this build, so the two symbols that can carry the pc are gtrgm_picksplit and pg_popcount_optimized. Same shape as case 01, which declares DCH_to_char with strcpy and __stpcpy: the defect's own function, plus the callee that performs the access. control.sql is what separates the two: it builds the same index with sparse rows only, so the branch holding the defect is never entered."
 }
