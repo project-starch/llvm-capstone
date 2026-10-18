@@ -1,3 +1,46 @@
+2026-10-19 (the RTL lane's night: S-29 found, fixed and landed; tree A's vectors; tree B not yet gated): **The
+virtual-context switcher installs and restores `satp` with NO TLB flush, in both directions, demonstrated in
+simulation and fixed.** S-29 is on dev (`ca39b3b859ab`, extended at `75aab3df524d`) and the fix is on
+capstone-ariane `virtual-profile-2-c` `d427e7391`, an UNQUALIFIED flush-all carried from the CSR file through the
+EX stage, the LSU and the MMU to the instruction and data TLBs. The arm is `va-satpstale` with ten builds; the
+decisive readings are a pair differing by exactly one retired `sfence.vma` whose fifth reading differs with it,
+and a no-access control that attributes the stale entry to the context's own access. QEMU is the stricter side and
+is the reference (the semantics owner's ruling); there is **no corpus consequence today**, because every CSRUNV the
+module issues runs with the caller's live satp equal to the context's, and the one outside that guarantee, the
+teardown discard, installs nothing (`commit_stage.sv:599-602`, three state bits at `csr_regfile.sv:2142-2144`).
+**The instruction TLB carries the window too**, read by the `-DFETCH_FACE` builds: the caller's first fetch after an
+escape resolves to the CONTEXT's physical page. Bounds, all written into the arm's header: the data-side window is
+an ABI RULE in both directions, not something software cannot work around, since the escape always returns to
+CSRUNV+4 and one fence there covers it — the first framing claimed otherwise and was refuted by this arm's own
+control. Two further claims were WITHDRAWN after an audit: "the only mechanism" for the entry-side coupling (an
+in-flight page-table walk is not excluded, and that alternative bears on the fix's sufficiency), and that a stale
+translation could not reach S-23's signature at all (**a caller at U hitting a context-installed U page passes the
+page-permission check and is then refused by the instruction-side capability check with a PHYSICAL address, which
+is S-23's exact signature**; `pmp_data_if.sv:241`). A `-DCALLER_U` build with a narrowed region is owed.
+**Q-31's missing reading is in:** a plain load with an UNTAGGED base inside a virtual context is REFUSED with cause
+24, and the escape kind is 2, the terminal kind, so such a refusal ends the context rather than pausing it.
+**A candidate for S-23's data face, which the runtime lane identified as R-44's class rather than new:** the CPMP
+allow term has six conditions, the sixth being the entry's revocation-node validity, and invalidation compares the
+node INDEX only, ignoring the generation (`pmp_data_if.sv:96-108`, `:143-151`), so freeing a node can permanently
+invalidate an unrelated live entry sharing the index. The discriminator is a simulation arm, owed, and it should
+cross the namespace as the board lane asks. R-44's own entry (`ISSUES.md:1111`) and the plan at
+`docs/plans/r44-cpmp-evidence-tracker.md` already hold the fix design, waiting on the lead.
+**Tree A (`8522d72fe`) is routed and sealed-pending:** WNS −19.025 pre-seal against vp2's −19.072, inside the band,
+WHS +0.054, no congestion failure, routed in ~38 min. **Its area prediction is REFUTED:** TOP 180,838 LUT against a
+predicted ~178,560, +2,432 where the per-change list summed to about +154, with FF +46 against ~+137 predicted. The
+synth lane's reading is that stems cannot attribute it on this design, and I withdrew my own discriminator with it;
+the one traceable piece is `stc_lsu_ex_q` at +224 LUT, R-57's, over its 150 bound. No attribution builds were spent,
+by agreement, since routing decided the question that mattered. **Tree A's 25 bare-arm vectors are all IDENTICAL to
+their published bf3db3175 vectors** (`7ba0a7afc87a`), with the extractor controlled per arm by reproducing all 25
+on the base tree; note that identical vectors mean these arms do NOT exercise S-27, not that it works.
+**Tree B is NOT gated.** It is flush-only at `d427e7391`. Lint passes with all eleven counters at baseline AND the
+UNOPTFLAT membership identical BY NAME to the base, 40 each way, positive-controlled — a gap the plan had carried.
+But the sweep and the supervised list were VOIDED by my own error: run concurrently in one worktree, they share
+`verif/sim/trace_rvfi_hart_00.dasm`, which is the file every reading is extracted from. Both are re-running
+serially. **R-57's two saved-exception registers are SHARED-SAFE** (structural: one functional unit, one issue port,
+a single-threaded DYN dispatch loop), with the caveat that the area saving is in the capture mux and the read-side
+priority chain rather than the flops; a candidate for the batch after tree B.
+
 2026-10-18 (boot 3's ruling, the census): **Boot 3-T1 on vp2: C-27's fix holds, then every virtual application faults at its
 first malloc, `csrr a0, 0xcc0` (Q-21's urevavail, which the application runtime polled and only QEMU answered). Ruled as
 before: QEMU's default stops implementing 0xcc0 and 0x5c0 (capstone-qemu virtual-capstone-v7 3b8040d5ff6e909ab30c0ecc32fc76
