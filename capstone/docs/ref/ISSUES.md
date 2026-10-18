@@ -717,8 +717,25 @@ the instruction TLB is never observed. A context's fetches DO translate under it
 the arm that would measure it points the caller's code virtual address at a different physical page under the
 context's chain, and is owed. Containment is also untested: both reachable physical pages lie inside the single
 capability region the arm installs, so what is shown is translation crossing the boundary, not the regions failing
-to contain it. A further control is owed: an arm whose context never touches the probe address, whose fifth reading
-must then be the caller's value with no fence.
+to contain it.
+
+**The origin of the stale entry, and the plain-load reading, both settled the same evening** (run `satpctl` on
+bf3db3175, two further arms of the same file, both exactly as pre-registered, no exceptions, harness SUCCESS):
+
+| arm | readings | retired |
+|---|---|---|
+| `va-satpstale-bn` (the context never touches the probe address) | 0xaaaa, 0xcccc, 3, 11, **0xaaaa**, 0x55 | 28985 |
+| `va-satpstale-bp` (a plain load with an UNTAGGED base in the context) | 0xaaaa, 0, **2**, **24**, 0xaaaa, 0x55 | 28983 |
+
+The first closes what this row previously listed as owed. Against `va-satpstale-b` on the same tree, which reads
+the context's page fifth, the two differ in exactly one thing, whether the context accessed that address, and the
+fifth reading differs with it — so the caller read an entry the CONTEXT's own access installed, and the
+escape-direction reading no longer rests on the pair alone. The second is the reading Q-31's ordering answer was
+missing: `lla` yields an untagged integer, the same form the caller uses at S where such a load succeeds, and in a
+context it is REFUSED with **cause 24**, which confirms both halves at once (no tag from `lla` in capmode, and the
+check does reach a context, because a context runs at M). The escape kind is **2**, the terminal kind, so such a
+refusal ends the context rather than pausing it; and the second reading of 0 confirms, independently of the cause
+word, that the refusal landed before the context stored anything.
 
 **A WITHDRAWN claim, kept because it was sent to two lanes.** The first framing said the escape direction was a
 defect software cannot work around, "an escape is asynchronous, so the caller resumes with no instruction of its own
