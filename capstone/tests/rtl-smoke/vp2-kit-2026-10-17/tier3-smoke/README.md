@@ -721,3 +721,47 @@ that is the stack spill.
   first-touch arm. -O0 frames spill to s0-relative slots, and a capability store as a fresh page's first access is
   S-25's trigger, though R-57 as analysed cannot lose a store without a wedge. A software arm E, pre-touching the
   stack, would split those.
+
+### RETRACTION (2026-10-18 17:20): "the capability spill store is lost; the reload returns the slot's previous contents" is refuted for the probe arms
+
+This README stated, in the pb12 section's correction and the probe results above (lane commits 896b1ccc6b2c and
+8852ebcaebdd), that the defect is a capability spill store that did not land, so the reload returns the stack slot's
+previous contents, and that "a 2 in live stack data needs no explanation". A claim-auditor refuted that for ppA-ppD:
+- **The slot's last contents are known.** In every probe image, `b`'s slot (pym_raw_malloc's `s0-0x70`, `DW_OP_fbreg
+  -112`) is [main_sp-0xc0, main_sp-0xb0), exactly the probe's locals `au`/`am`. pym_probe_addrs writes them with plain
+  `sd`, and nothing writes there again before the `stc`.
+  - Their values are printed on the board, e.g. ppA's `&used=0x3f8dae3d20`.
+  - A dropped `stc`, or a reload of the last contents, would put a5 = &used and fault at &used+0x10, which is
+    8-aligned. The board reads `address=0x12` in all four arms.
+- **So where the 2 comes from is NOT established.** The directed simulation seeded the slot with 2 to match the board,
+  so it shows only that a non-capability 2 in a5 gives this fault. It does not explain the probe arms.
+- **This holds if the faulting call is the first pym_raw_malloc, which nothing measures.** If a later call faults,
+  "first block" must come out instead.
+- **What stands:** the four ports' readings, the shared code sequence (the auditor disassembled every distinct
+  faulting image and pc: always `sd a4,0x10(a5)` after the same `stc`/`ldc` of `s0-0x70`), image identity with the QEMU
+  twins, the global being right at init, and ppD's fence not preventing it. "Never reaches memory" is withdrawn with
+  the mechanism.
+- **Also corrected:** "QEMU runs the same bytes clean" means no cause-6 fault and no address 0x12. The twins do fault,
+  with the arms' own detections and controls.
+- **The open hypotheses (the auditor's):**
+  - (a) the reload returns a version of the line older than its last plain stores;
+  - (b) a value not from this slot at all;
+  - (c) b is already 2 at the `stc`;
+  - (d) a later call faults, not the first.
+- **The settling arms, one batched boot (asked of the compiler lane):**
+  - a marker after `pym_raw_calloc`, pinning which call faults;
+  - a sentinel plain `sd` into `s0-0x70` right before `b = …`: sentinel+0x10 means a dropped store, still 0x12 means
+    not the slot;
+  - a readout of the slot halves, the global and `used` with plain loads when b's cursor is not metadata + used;
+  - ppA as the control.
+  - The RTL lane adds a 64-byte dump around the slot, to catch a store landing at the wrong offset.
+- **What would have caught it:** the frame-layout check the auditor did. The probe's own locals overlap the spill slot,
+  so the "previous contents" the mechanism predicts were on the board all along.
+
+**All Tier 3 boots are UNGATED by the driver's C-gates.** The recipe runs the baked-rung driver with PREFLIGHT=0, as
+every vp2 Tier 1/2 boot does, and the driver prints "Any verdict from this boot is UNGATED -- say so when reporting
+it". The substitute checks are the campaign's own:
+- every image equal by sha256 to its prediction's (register-prediction.sh, EXPECT_IMAGES);
+- every fault line's sha256 equal to a staged image's;
+- the firmware cap;
+- the recipe's monitor and driver pins.
