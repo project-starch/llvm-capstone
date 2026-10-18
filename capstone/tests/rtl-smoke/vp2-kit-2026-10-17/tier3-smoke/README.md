@@ -119,3 +119,47 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
   - **The resting apertures** (the RTL lane's control, if nothing wedges): 193 = 0 with no valid bit in 221, 225
     bit 3 = 0, 227 bit 7 = 0, 228 = 0xb8 or 0x9f (index 56 or 31). A non-zero 193 with fewer valid bits than the
     count is a ghost entry counted in this boot.
+
+## Result, the diagnostic boot (2026-10-18 08:40-08:57): Tier 1's own contract.dom hangs under the batch gate too
+
+- **The bake:** the replaced and stock module checks both printed. Firmware 29cfc290d4e01078; its monitor sources
+  and defines equal r12's. b0-stats 0.
+- **Every step hit the 150 s bound.** In each, the launcher was in state R with wchan 0: running, not sleeping or
+  blocked in the kernel. SIGTERM ended it with 143.
+  - **contract-ok:** the launcher printed the image's five grants (slots 0-4). In every Tier 1 boot the next line
+    is slot 5, the domain's first runtime grant, and the step ends with VIRTUAL_APPLICATION_OK in seconds.
+  - **The three controls:** none printed its `CONTROL ... mark`.
+  - The monitor's S-23 retry (FRTY) never fired. It fires about once per launcher process in every Tier 1 boot.
+- **So the variable is the batch environment, not the corpus image.** The known-good image fails the same way.
+- **The resting apertures (BAKED_FINAL_APERTURES) are not readable as a snapshot.** The pre-registered
+  `193 = 0` was an instrument error.
+  - The RTL lane quoted the source: the board's LED pulse stretcher holds each bit high for about 2^20 cycles
+    (ariane_xilinx.sv:956-966).
+  - So on a running core every dynamic aperture reads as the OR over that window. This read gave 193 = 7 for a
+    4-deep queue, and 221 = 0xfe, a combination no single cycle can hold.
+  - **What stays valid at rest:** 228 = 0xeb, index 107, the switcher's rest value after an ESCAPE. The four contexts
+    escaped and were never resumed: the kernel side never reached the module's resume path. And the latched trap log.
+  - The driver's comment now says this. A commit-queue control needs a parked core.
+
+## Pre-registered (2026-10-18, before the fourth smoke boot): Tier 1's rung, then the batch gate, in one boot
+
+- **The rungs:** b0-stats, b0-hello, vm-contract, vbatch.
+  - **vm-contract** is Tier 1's own rung: vmrun.sh with vm-contract.sh in /test-domains/vm. Its contract.dom
+    (125705371837ea92), launcher (b27afefc) and module (ce3a542d, the r9/r10 module) are byte-identical to the batch's.
+  - **vbatch** is the diagnostic batch: contract-ok, then the three controls.
+- **bkit4** differs from bkit3 in four ways:
+  - `BOARD_RUNGS`, so the recipe runs any rung list containing vbatch, with an oracle of 0 for each rung;
+  - the batch controller hands every other rung to vmrun.sh (`--other-ctl`, boardvm `other_ctl`);
+  - the Tier 1 files are added to the base set, pinned as copies in the kit;
+  - the driver comment (fd38816a90c64c22).
+- **The bound's probe** now prints the launcher and its children twice, 2 s apart: state, utime, stime, wchan and
+  the current syscall. A utime that grows means spinning in user space; a stime that grows means spinning in the
+  kernel.
+- **What the boot separates:**
+  - **vm-contract 0 and the batch's contract-ok 0:** a virtual context needs a warm-up (a classic domain run, or
+    Tier 1's rung) before the first one. The controls then give their first silicon readings: cause 28, cause 25,
+    exit 75.
+  - **vm-contract 0 and contract-ok hangs:** the batch gate's environment is the variable (its cwd, image path or
+    preamble), independent of the warm-up.
+  - **vm-contract hangs:** the base set or the recipe's image differs from the Tier 1 bake. The batch's reading is
+    then collateral.

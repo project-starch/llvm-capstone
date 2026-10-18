@@ -26,8 +26,12 @@ def bounded(cmd):
     """A step command that always returns unless the launcher is unkillable. At BOUND_S the watcher prints every
     thread's state and wchan (R spinning, S sleeping, D uninterruptible), sends SIGTERM, and SIGKILL 10 s later. The
     step then prints the module's lines from the ring buffer."""
-    watch = (f"( sleep {BOUND_S}; for t in /proc/$p/task/*; do echo \"BOUND-STATE $(cut -d' ' -f1-3 $t/stat) "
-             f"wchan=$(cat $t/wchan 2>/dev/null)\"; done; kill -TERM $p; sleep 10; kill -KILL $p ) 2>/dev/null & w=$!")
+    # The launcher and its children (the spawner is a separate process), twice 2 s apart: state, utime and stime
+    # (fields 14, 15: spinning in user or in the kernel), wchan and the current syscall.
+    probe = ("for d in /proc/[0-9]*; do s=$(cat $d/stat 2>/dev/null) || continue; set -- $s; "
+             "if [ \"$1\" = \"$p\" ] || [ \"$4\" = \"$p\" ]; then echo \"BOUND-STATE pid=$1 $2 $3 ppid=$4 utime=${14} "
+             "stime=${15} wchan=$(cat $d/wchan 2>/dev/null) syscall=$(cut -d' ' -f1 $d/syscall 2>/dev/null)\"; fi; done")
+    watch = (f"( sleep {BOUND_S}; {probe}; sleep 2; {probe}; kill -TERM $p; sleep 10; kill -KILL $p ) 2>/dev/null & w=$!")
     return (f"export CAPSTONE_VM_STATS=1; {cmd} & p=$!; {watch}; "
             f"wait $p; rc=$?; kill $w 2>/dev/null; echo \"BOUNDED-EXIT $rc\"; "
             f"dmesg | grep -a 'capstone_vm:' | tail -12 | sed 's/^/KMSG: /'; exit $rc")
@@ -39,9 +43,11 @@ def main():
     p.add_argument("--controls", type=Path, required=True)
     p.add_argument("--contract", type=Path, required=True)
     p.add_argument("--raw", type=Path, required=True)
+    p.add_argument("--other-ctl", default="/test-domains/b0run.sh",
+                   help="the controller for every rung but the batch (the vp2 Tier 1 vmrun.sh runs vm-contract)")
     p.add_argument("--print-script", action="store_true", help="print the guest script and run nothing")
     a = p.parse_args()
-    b = boardvm.BoardBatch(a.raw / "stage")
+    b = boardvm.BoardBatch(a.raw / "stage", other_ctl=a.other_ctl)
     b.put("images/contract.dom", a.contract)
     b.put("images/controls.dom", a.controls)
     steps = [("contract-ok", bounded("./capstone-vexec ./images/contract.dom ok argument"), None)]
