@@ -531,3 +531,14 @@ and compare-pilot.py reads 0 of 20 cells the same.
 - **Not a mechanism:** a cursor of 2 is also boot 4's signature (a destination cursor of 2), which was the Q-26 wait
   rewrite. This module does not carry that rewrite, and a shape is not a cause. The diagnosis is handed to the compiler
   lane, which owns the port. pym1, the same backing code under the Sublet arm, is the next data point.
+
+### Arm pym1, result (2026-10-18 14:36-14:47): the same silicon-only fault under the Sublet arm, 0 of 20
+
+`records/pym1.board.txt`. Every program faults `cause=6 address=0x12 last=0x39` at code offset 0x15e5c of its own image,
+pym_raw_malloc's `b->size` store, as in pym0. So the fault does not depend on the arm.
+- The launcher's region grants match QEMU's through slot 12, the last before the fault: the same order, sizes,
+  registers and permissions, including the 16 MiB metadata request and the 64 MiB arena.
+- The compiler lane has a lead. aligned_alloc(16384, …) promises only 16 KiB alignment, while Q-15's granule for
+  16 MiB and 64 MiB is 32 KiB and 128 KiB. The earlier silicon run used level0, which over-aligned those regions. The
+  lane is building a probe that prints both regions' bases, the reloaded `metadata` and `b`, and a 4 KiB control,
+  predicted on QEMU first. Not a mechanism yet: the lead does not predict cause 6 at a cursor of 2.
