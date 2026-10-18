@@ -1064,7 +1064,7 @@ static void pin_ahead(struct context *c, struct arena *a,
  * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
  * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
  * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
-#define CV_DIAG_TAG "resolve-sites-9"
+#define CV_DIAG_TAG "resolve-sites-10"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
@@ -1275,12 +1275,27 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             }
             /* S-24: make the kernel set D for a STORE before reporting success, so the retry can
              * make progress. Only for cause 15 -- a read fault needs no D, and A is set by the
-             * populate on the path that allocated the page. Unlocked: fixup_user_fault takes
-             * mmap_read_lock itself. A failure is not fatal here; the repeat bound still catches a
-             * loop, and the PTE print says what the entry looked like. */
+             * populate on the path that allocated the page. A failure is not fatal here; the repeat
+             * bound still catches a loop and the PTE print says what the entry looked like.
+             *
+             * THE CALLER MUST HOLD mmap_read_lock. An earlier version of this did not, on the
+             * strength of a comment I wrote asserting the function takes the lock itself; it does
+             * not, and QEMU answered with `kernel BUG at include/linux/mmap_lock.h:156` --
+             * find_vma's mmap_assert_locked -- through find_extend_vma from fixup_user_fault. The
+             * contract is in the source: "This function will not return with an unlocked
+             * mmap_lock" (mm/gup.c:1260), so a plain lock/unlock pair around it is correct even
+             * though it may drop and retake the lock internally when `unlocked` is non-NULL.
+             *
+             * That same docstring is why this function is the right one rather than a hand-rolled
+             * fixup: it "will in turn perform all the necessary SW fixup of the dirty and young
+             * bits in the PTE, while get_user_pages() only guarantees to update these in the struct
+             * page... on such architectures, gup() will not be enough to make a subsequent access
+             * succeed" (mm/gup.c:1251-1258). That is S-24, described by the kernel. */
             if (resolve_dirty && cause == 15) {
                 bool unlocked = false;   /* fixup_user_fault takes bool *, in both kernels */
+                mmap_read_lock(c->mm);
                 fixup_user_fault(c->mm, address & PAGE_MASK, FAULT_FLAG_WRITE, &unlocked);
+                mmap_read_unlock(c->mm);
             }
             /* The operation GUP skips on a repeat: its sfence.vma is inside the pte_same guard, so
              * an unchanged entry gets none. Two facts for whoever reads the result: the domain runs
