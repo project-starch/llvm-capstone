@@ -1,0 +1,33 @@
+{
+  "arm": "cheribsd-revocation",
+  "kernel": "15.0-CURRENT",
+  "revocation_default": "1",
+  "revocation_every_free_default": "0",
+  "pg_bin": "/usr/local/pgsql/bin",
+  "base_cluster": "/home/pg/data",
+  "started_utc": "20261018-082228",
+  "extensions_wanted": "fuzzystrmatch ltree pgcorpus_reach pg_trgm ",
+  "extensions_available": "fuzzystrmatch ltree pgcorpus_reach pg_trgm",
+  "mechanism_gate": {
+    "case": "02",
+    "verdict": "detected",
+    "passed": true,
+    "applied": true,
+    "kind": "a corpus case required to be detected, which is weaker than a purpose-built control: it says the mechanism reported on something in this configuration, not that it would have reported on each silent case"
+  },
+  "ran": "trigger.sql",
+  "ran_sha256": {
+    "01_12a6206864a0_to_char_tz_overflow": "a03b0279a3ca761b44d3b568cd88147b39c008b5112f552041b3f24ed892aaa1",
+    "02_3ed3dbbf44_ts_headline_int16_overflow": "769cdd4fe9c23ed51e54b46e66d7fd84ae5d06651fba76c814d717d7e979ab80",
+    "03_8c34261109_ltree_lquery_uint16_overflow": "0d8fd29a0fc8c4be49d7bcecc8639d601690e5b241a2fa323835951d22be8849",
+    "04_3d160401b65e_oidvector_oob_read": "38dbd9dfcf40c96899cdd711f6ea48007cc54b8bd88fae288f903a2949a52f46",
+    "05_849da8210539_ascii_multibyte_oob_read": "5d4548e22a7c0dc9ad85ad5df5aad6db14b0cad15090357c891af981870d5a19",
+    "06_e91dcfccaa_regexp_conv_buf_overrun": "757d93d9deb1b055baa7db84d5e41ff6872bd13e65dd289d020f3466279e14ab",
+    "07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec": "9ca94c356d62f2337ec496013e1dbedc1d1941c3e12f9dff455f979b9591f549",
+    "08_c4d51b6274_levenshtein_stop_column_oob_write": "28586f0cf7704f903554b0ea1900ea6536b9acf5a1237a7880a9c633add4cd88",
+    "09_7a7d9693c7_pgp_sesskey_overflow": "d79cbb0d2e49aa6330e2ebced5ae426f1f22fe20a37fb25e47044074625230a3"
+  },
+  "only": "all",
+  "cases": 9,
+  "scored": 9
+}
