@@ -41,6 +41,12 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=24 pc=0x84806c64 in sqlite3BtreeUpdateMeta; by function: sqlite3BtreeUpdateMeta is where host ASan reported it; the trapping instruction is `ldc a1, 0x80(a1)` at sqlite3BtreeUpdateMeta+0x48, trap tval 0x0",
       "verdict_from": "results/2026-10-16-silicon/silicon-sqlite-stock"
+    },
+    "vp2-malloc": {
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3f9c826bc4 in sqlite3BtreeUpdateMeta; by function: sqlite3BtreeUpdateMeta is where host ASan reported it",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10280b794; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10200b994; cheribsd-revocation run 2026-10-04/05: no verdict: backup step1 rc=0",

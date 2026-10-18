@@ -41,6 +41,12 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=24 pc=0x828a7d7c in sqlite3DropTriggerPtr; by function: sqlite3DropTriggerPtr is where host ASan reported it; the trapping instruction is `ldc a3, 0x0(a1)` at sqlite3DropTriggerPtr+0x154, trap tval 0x0",
       "verdict_from": "results/2026-10-16-silicon/silicon-sqlite-stock"
+    },
+    "vp2-malloc": {
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3fbd58b8f8 in sqlite3DropTriggerPtr; by function: sqlite3DropTriggerPtr is where host ASan reported it",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021300c8; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1020a8f18; cheribsd-revocation run 2026-10-04/05: no verdict: detachtrig before drop",

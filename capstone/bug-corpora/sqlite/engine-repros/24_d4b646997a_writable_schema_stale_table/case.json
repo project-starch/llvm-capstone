@@ -41,6 +41,12 @@
       "verdict": "MISSED",
       "verdict_note": "reached (the case ran and printed its own lines; no marker at the access on this harness: wschema insert rc=11 (database disk image is malformed) / wschema NOTRAP done) and completed with no fault",
       "verdict_from": "results/2026-10-16-silicon/silicon-sqlite-stock"
+    },
+    "vp2-malloc": {
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3faa1555ec in sqlite3OpenTable; by function: sqlite3OpenTable is where host ASan reported it",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
     }
   },
   "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=14, witnesses=1)",
