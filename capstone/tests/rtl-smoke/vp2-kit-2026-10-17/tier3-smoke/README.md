@@ -1564,3 +1564,22 @@ The first form stopped at the firmware cap. This one changes the image and the f
     is not filed. pgc, pgm0 and pgm1 re-queue after sql0 (the board-run skill: infra, retry).
 - **sql0-rev2b's measure-only bake read 25,856,520 B**, under 26,000,000: the stage was 28,809,586 B in 1,072 files.
   The board boot on bkit7-rev2s started at 01:52:19. UNGATED (PREFLIGHT=0).
+
+### Two silent boots in a row (pgc-fix6b 01:42, sql0-rev2b 01:52), and a board-health control pre-registered (2026-10-19 02:05)
+
+- **What happened:** both boots downloaded their firmware completely over JTAG ("19565064 bytes in 146.10s",
+  "25856520 bytes in 193.07s"). After `continue` there was no UART output at all, until the watchdog aborted each at
+  ~420 s.
+  - fph-fix6b's boot at 01:30 ran normally.
+  - So two different firmwares, back to back, are silent. That is the board-run skill's AMBIGUOUS row: a dead firmware
+    or a dead UART relay. Neither is a reading. sql0-rev2b is VOID by its own gate (no bundle).
+- **An instrument defect:** the watchdog labelled both "NO-BOOT: load_image issued, no boot banner and no download ...
+  JTAG transfer moved nothing". The download DID complete.
+  - Its download detection most likely missed the size line, which the console delivered split across two gdb events.
+  - The label is wrong, though aborting a silent boot was still right. To be fixed in board-watchdog.sh before it is
+    relied on to tell a dead transfer from a dead boot.
+- **The control, before any further long boot:** wa1's firmware ad5e84f761dd0f7c (Tier 1 only: b0-stats, b0-hello,
+  vm-contract), run by `run-tier12-wa1.sh` into a fresh directory. It booted and passed at 19:14 tonight.
+  - **Predicted:** identical to wa1 (three rungs as their oracles, the identity branch, 0 refusal lines).
+  - **If it is silent too,** the board or console is down. The queue stops and the board owner is told.
+  - **If it boots,** the two silent boots were transient. sql0-rev2b and the postgres arms re-run.
