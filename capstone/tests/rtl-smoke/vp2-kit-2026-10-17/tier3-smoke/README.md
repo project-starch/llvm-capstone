@@ -310,3 +310,37 @@ read-only copy: `<mnt-hdd>/capstone/t3-freeze`.
 - **The plain case.c arms' images**, built from it with no boot, for the hash-matched predictions:
   `<mnt-hdd>/capstone/t3-images/<tag>.images.SHA256SUMS`. There are 7 arms and 92 images. controls.dom is
   491655742d378fcd in all of them.
+
+## Tier 3 proper: the campaign's rules, pre-registered once (2026-10-18), and each arm's prediction before its boot
+
+**The configuration.**
+- Board kit `bkit7`:
+  - module 3005ed52 with arena_pin OFF (boot 5: the pin removes no wedge, and pin-off is 4c's configuration);
+  - launcher b27afefc;
+  - monitor 007d81d with the vp2 defines;
+  - rungs b0-stats, b0-hello (S-26's warm-up), then vbatch.
+- SDK `t3-freeze`.
+- One arm per boot, through `tier3-seq.sh` with the arm's line from `t3-images/ARMS.spec`. The board records `vp2-<arm>`.
+
+**The prediction for each arm:** the compiler lane's QEMU run of the same images. Its kit is `t3-smoke/qkit7`:
+- capstone-qemu b290f5656600, binary 7a4f3a64776f0c88;
+- behind a wrapper (5f731f99ec6a19b2) that strips exact bounds and appends svadu=false, logging every -cpu string;
+- module 5bfc38f8, the QEMU-kernel build of 3005ed52's source, with no params.
+
+That run's images must equal the board's staged list by sha256. The run's cells, as `tier3-cells.py` lines, are
+committed under `records/<tag>.prediction.txt` before that arm boots.
+
+**The comparison:** `compare-pilot.py <prediction bundle> <board bundle>`, cell by cell, by image.
+- **Pass:** every cell and both controls SAME: verdict, reason, reached, completed, cause, symbol+offset, attribution.
+- **A wedge:** the batch ends early, and the cells after it read NO-READING:infra.
+  - The driver's apertures are compared with `board-tier12/boot3/compare-wedge-apertures.py`.
+  - R-57's signature (a commit count with no valid bit) is read as S-25's residual on this bitstream, not as the
+    case's verdict.
+  - The unreached cells are re-run in a later boot, from the next case on (`--only`).
+- **Any DIFF** is a finding. It is read from the case's own transcript before anything is said about it.
+
+**Arm mpt** (memcached/plain-temporal, 3 cases), the first boot, prediction in `records/mpt.prediction.txt`:
+- CAUGHT 3, each cause 25 at its labelled probe (mct_read_probe+56, mct_write_probe+88, mct_read_probe+56);
+- both controls fault.
+
+This is the pilot's reading on the same image bytes, now on the campaign's module and frozen SDK.
