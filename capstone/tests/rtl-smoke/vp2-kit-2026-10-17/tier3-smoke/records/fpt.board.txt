@@ -1,0 +1,40 @@
+# Tier 3 board reading, arm fpt: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2_bf3db3175 cells 13 tally {"CAUGHT": 13}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_716d2a47c565_ops_dispatch_interior_alias_after_free image 53662fd95414d879 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+01_c98810ab47fa_hw_base_encode_list_walk_reads_freed_link image 44492682b67bef66 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+02_43de8b328b62_lzf_write_cursor_stale_after_realloc image dc55562e7f2ad27a CAUGHT cause 25 at fft_write_probe+88 reached True completed False attribution "probe"
+03_dc87758775e2_aviobuf_checksum_ptr_stale_after_realloc image 3db375e4bdf347df CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+04_4b2248594c7f_jpeg2000_packed_headers_stream_stale_base image 0d87176a7d58d48a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+05_d6458f6a8bf1_aacdec_tag_che_map_keeps_freed_element image fa876caaf5976272 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+06_e8714f6f93d1_h264_delayed_pic_holds_interior_pointers image 0aab3927a37ee326 CAUGHT cause 25 at fft_write_probe+88 reached True completed False attribution "probe"
+07_a43e9cdd442b_isom_extradata_freed_before_callee_frees_it image 0fd9219c897cb4f7 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+08_8a4ea9644833_diracdec_realloc_on_the_wrong_field image 33963753168ba11a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+09_265731f201f1_tx_subcontext_field_left_dangling_on_failure image 144f16ff7114fa9a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+10_e7a65142b972_aacpsy_clears_the_local_not_the_field image fe53bb5595e2bec2 CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+11_ba28222a14ab_ratecontrol_expr_field_not_cleared image bc28d440721f529a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+12_2e04d35c69e6_vlc_buf_freed_by_callee_then_read image 8b02ccc7e722eb9a CAUGHT cause 25 at fft_read_probe+56 reached True completed False attribution "probe"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_716d2a47c565_ops_dispatch_interior_alias_after_free: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 01_c98810ab47fa_hw_base_encode_list_walk_reads_freed_link: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 02_43de8b328b62_lzf_write_cursor_stale_after_realloc: verdict CAUGHT cause 25 pc fft_write_probe+88
+  SAME 03_dc87758775e2_aviobuf_checksum_ptr_stale_after_realloc: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 04_4b2248594c7f_jpeg2000_packed_headers_stream_stale_base: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 05_d6458f6a8bf1_aacdec_tag_che_map_keeps_freed_element: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 06_e8714f6f93d1_h264_delayed_pic_holds_interior_pointers: verdict CAUGHT cause 25 pc fft_write_probe+88
+  SAME 07_a43e9cdd442b_isom_extradata_freed_before_callee_frees_it: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 08_8a4ea9644833_diracdec_realloc_on_the_wrong_field: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 09_265731f201f1_tx_subcontext_field_left_dangling_on_failure: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 10_e7a65142b972_aacpsy_clears_the_local_not_the_field: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 11_ba28222a14ab_ratecontrol_expr_field_not_cleared: verdict CAUGHT cause 25 pc fft_read_probe+56
+  SAME 12_2e04d35c69e6_vlc_buf_freed_by_callee_then_read: verdict CAUGHT cause 25 pc fft_read_probe+56
+  13 of 13 cells the same
+## the boot
+  T3SEQ fpt BEGIN 13:35:21 ffmpeg/plain-temporal-repros virtual-malloc 
+  T3SEQ fpt END 13:45:33 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 13}
+  T3SEQ fpt PAYLOAD stage 3677396 B, 1469422 B gzip; firmware 19565064 B
+  BOARD_RUN_START 13:35:24 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 23 files, stage 3677396 bytes
+  firmware 1575db0bbacee426 19565064 B
+  DRIVER rc=0 13:45:33
+  BOARD_RUN_DONE 13:45:33

@@ -480,3 +480,8 @@ control). Each was predicted with `tier3-appvm-arm.sh --virtual-kit qkit7` and r
   rule says.
 - **The order after the chain now running:** pym0, pym1, then sq1 (one subset boot first: a Q-15 check on silicon), then
   sq0's subsets, then wm1 last.
+
+### Arms fph and fpt, results (2026-10-18 13:23-13:45): 25 of 25 and 13 of 13 cells the same
+
+`records/fph.board.txt` and `records/fpt.board.txt`: CAUGHT 25 and CAUGHT 13 on silicon, by image, as predicted.
+`t3-status.py` prints the campaign's state from `records/` alone.
