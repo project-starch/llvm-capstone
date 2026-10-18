@@ -455,3 +455,28 @@ corpus record's.
   question first.
 - **The order after the current seven:** fso, pb12, pb9, pb10 through `tier3-seq.sh`; then pgc, pgm0, pgm1 through
   their own runners with `--board-kit bkit7`.
+
+### Arm mph, result (2026-10-18 13:13-13:23): 9 of 9 cells the same as the prediction
+
+`records/mph.board.txt`. memcached/plain-heap, vp2-malloc, firmware 1b353d22aa552e5e. CAUGHT 9, and both controls
+fault. compare-pilot.py reads 9 of 9 SAME by image.
+
+### Arms sq0, sq1 (sqlite/engine-repros) and pym0, pym1 (cpython/pymalloc-repros), pre-registered (2026-10-18): the board lane's qkit7 predictions through the appvm session
+
+Built on t3-freeze-nb (sqlite with its two extension sources, all 33 cases; pymalloc's hosted replay, 20 cases and its
+control). Each was predicted with `tier3-appvm-arm.sh --virtual-kit qkit7` and registered by `register-prediction.sh`.
+- **pym0** (vp2-malloc): MISSED 20, its record. 2.1 MB gzipped, one boot.
+- **pym1** (vp2-nested-pools): CAUGHT 20, its record. 2.1 MB gzipped, one boot.
+- **sq0** (vp2-malloc, memsys5): CAUGHT 5, MISSED 26, NO-READING:inconclusive 1, NO-READING:unattributed 1.
+- **sq1** (vp2-nested-pools, memsys5 with Sublet): NO-READING:control-failed 33.
+  - Both controls die with cause 29 at address 0, during the Sublet heap's setup.
+  - This is v6-fix's own reading without exact bounds: 29 at the memsys5 Sublet derive, Q-15, a (iii) derive site.
+    There, exact bounds returned every built cell to the record.
+  - On silicon, whose bounds are inexact, the same refusal is predicted.
+- **The sqlite payload:** about 28.6 MB gzipped per arm, against roughly 8.5 MB of headroom. So each sqlite arm runs as
+  several boots, selected with the runner's `--only`, and each boot is compared with the prediction's cells for the
+  same cases.
+- **The sqlite risk:** these are the workloads whose relatives wedged Tier 2 (S-25). A wedge reads as the pre-registered
+  rule says.
+- **The order after the chain now running:** pym0, pym1, then sq1 (one subset boot first: a Q-15 check on silicon), then
+  sq0's subsets, then wm1 last.
