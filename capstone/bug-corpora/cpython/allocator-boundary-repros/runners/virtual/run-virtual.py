@@ -101,6 +101,12 @@ def stage_stdlib(build, share, closure=None):
     stamp.write_text(origin)
 
 
+def guest_env(a):
+    """-e pairs for every --guest-env KEY=VALUE: the variables a nondeterminism control pins in the guest (for example
+    PYTHONHASHSEED=0). Empty by default, so a run without them is the invocation it always was."""
+    return [w for kv in (a.guest_env or []) for w in ("-e", kv)]
+
+
 def run_script(a, share, image, directory, script, tag):
     """Stage DIRECTORY's .py files and run SCRIPT there through launch.py."""
     stage = share / "abr" / tag
@@ -109,7 +115,7 @@ def run_script(a, share, image, directory, script, tag):
     for f in directory.glob("*.py"):
         shutil.copy(f, stage / f.name)
     (stage / "launch.py").write_text(LAUNCH)
-    env = ["-e", "PYTHONHOME=/mnt/host/cpy", "-e", "PYTHONDONTWRITEBYTECODE=1"]
+    env = ["-e", "PYTHONHOME=/mnt/host/cpy", "-e", "PYTHONDONTWRITEBYTECODE=1", *guest_env(a)]
     return appvm.run_app(a.state, image, ["launch.py", script], a.raw / tag,
                          run_args=("--cwd", f"/mnt/host/abr/{tag}", *env), timeout=a.timeout)
 
@@ -192,6 +198,8 @@ def main():
     p.add_argument("--raw", type=Path, required=True)
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--timeout", type=int, default=300)
+    p.add_argument("--guest-env", action="append", metavar="KEY=VALUE",
+                   help="an extra environment variable for every guest run (repeatable), e.g. PYTHONHASHSEED=0")
     p.add_argument("--stdlib-closure", type=Path, help="stage only these Lib files (tools/board/stdlib-closure.py); "
                    "for the vp2 board's payload, valid only after a QEMU A/B against the full Lib")
     a = p.parse_args()
@@ -216,7 +224,7 @@ def main():
     # The interpreter must work before anything it does means something.
     (share / "abr").mkdir(exist_ok=True)
     text, result = appvm.run_app(a.state, image, ["-S", "-c", WORKLOAD], a.raw / "workload",
-                                 run_args=("-e", "PYTHONHOME=/mnt/host/cpy"), timeout=a.timeout)
+                                 run_args=("-e", "PYTHONHOME=/mnt/host/cpy", *guest_env(a)), timeout=a.timeout)
     # In an appvm session's collect pass nothing runs: run_app returns its sentinel and no
     # result. Treating that as a failed workload stopped the collect after one call, so the
     # boot ran only the workload and the read pass asked for steps it never recorded.
