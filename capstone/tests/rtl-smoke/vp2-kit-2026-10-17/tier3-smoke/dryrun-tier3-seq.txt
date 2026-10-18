@@ -11,3 +11,7 @@
 # - the optional fourth spec field (extra runner arguments): fso (14 --cc-arg, one of them -Daligned_alloc(a,n)=malloc(n))
 #   and pb12 (--prebuilt, --prebuilt-controls) staged through tier3-seq.sh from t3-images/ARMS.spec give images
 #   byte-identical to their direct runner invocations' lists.
+# tier3-pg-arm.sh (the postgres arms' own runners with --board-kit), stubbed with an empty transcript: pgc runs, reads
+# NO-READING:infra 5 (rc 75), then "T3PG STOP after pgc: the boot did not complete" (rc 1), and pgm0 never starts. Its
+# completion test is the batch's own ^VIRTUAL_STAGED_DONE in raw/guest/board.txt (one in mpt's real transcript), because
+# the mmgr runner prints no boot line.
