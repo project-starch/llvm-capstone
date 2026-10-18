@@ -57,15 +57,19 @@ def attributes(arch: str) -> bytes:
 
 
 def elf(arch: str | None = None, undefined: tuple[str, ...] = (), flags: int = 0,
-        machine: int = 259) -> bytes:
+        machine: int = 259, defined: tuple[str, ...] = ()) -> bytes:
     """A minimal ELF64 relocatable object: shstrtab, optional attributes,
-    and a symbol table with the given undefined symbols."""
+    and a symbol table with the given undefined symbols and the given global
+    definitions (placed in section 1, which any non-zero index stands for)."""
     names = b"\0.shstrtab\0.capstone.attributes\0.symtab\0.strtab\0"
-    strtab = b"\0" + b"".join(s.encode() + b"\0" for s in undefined)
+    strtab = b"\0" + b"".join(s.encode() + b"\0" for s in undefined + defined)
     symtab = bytes(24)
     at = 1
     for s in undefined:
         symtab += struct.pack("<IBBHQQ", at, 0x10, 0, 0, 0, 0)
+        at += len(s) + 1
+    for s in defined:
+        symtab += struct.pack("<IBBHQQ", at, 0x10, 0, 1, 0, 0)
         at += len(s) + 1
     blobs = [names, attributes(arch) if arch else b"", symtab, strtab]
     offsets, data = [], bytearray(64)
@@ -334,6 +338,24 @@ class LinkInputTests(unittest.TestCase):
             builtins.write_bytes(archive({"subdf3.o": elf(self.SOFT, ("__adddf3",))}))
             with self.assertRaises(ValueError):
                 check_link_inputs([builtins], config)
+
+    def test_an_archive_may_satisfy_its_own_members_helpers(self):
+        # A port that merges compiler-rt's builtins into its libc archive (cpython's
+        # libc-and-builtins.a) carries compiler-rt's own internal calls: __fixdfdi calls
+        # __fixunsdfdi. A member's reference to a soft-float helper is satisfied when the
+        # SAME archive defines it AND the member attests hard float itself.
+        fixdfdi = elf(self.HARD, ("__fixunsdfdi",))
+        fixunsdfdi = elf(self.HARD, defined=("__fixunsdfdi",))
+        self.check(archive({"fixdfdi.o": fixdfdi, "fixunsdfdi.o": fixunsdfdi}), VIRTUAL)
+        # Nothing in the archive defines it: still refused (the board lane's negative test).
+        self.refused(archive({"fixdfdi.o": fixdfdi}), VIRTUAL)
+        # Defined beside it, but the caller does not attest hard float: still refused.
+        self.refused(archive({"x.o": elf(None, ("__fixunsdfdi",)), "fixunsdfdi.o": fixunsdfdi}), VIRTUAL)
+        self.refused(archive({"x.o": elf(self.SOFT, ("__fixunsdfdi",)), "fixunsdfdi.o": fixunsdfdi}), VIRTUAL)
+        # The archive defines a DIFFERENT helper: still refused.
+        self.refused(archive({"x.o": elf(self.HARD, ("__adddf3",)), "fixunsdfdi.o": fixunsdfdi}), VIRTUAL)
+        # A definition in another input does not satisfy: each archive answers for itself.
+        self.refused(fixdfdi, VIRTUAL)
 
     def test_archives_check_every_member(self):
         self.check(archive({"a.o": elf(self.HARD), "a-long-member-name.o": elf(None)}), VIRTUAL)
