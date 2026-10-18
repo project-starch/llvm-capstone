@@ -1,5 +1,5 @@
 #!/bin/bash
-# The appvm arms' board queue after a given sequence ends: sq0's six --only subsets (each scored at once against the
+# The appvm arms' board queue after a given sequence ends: the probe arms named in PROBES, then sq0's six --only subsets (each scored at once against the
 # prediction cut to its cases), then wm1 last (the known wedge risk). Waits for <after>'s end marker; checks only
 # patterns its own command line cannot contain. Usage: tier3-appvm-queue.sh <after seq out> <out>. Ends by itself.
 main() {
@@ -10,6 +10,16 @@ main() {
   until grep -a -q "T3PG DONE\|T3PG STOP\|^STOP" "$W" 2>/dev/null || [ "$(date +%s)" -ge $end ]; do sleep 15; done
   sleep 20
   grep -a -q "T3PG DONE\|T3PG STOP\|^STOP" "$W" || { echo "STOP: $W has not ended" >> "$O"; return 1; }
+  # the pymalloc probe arms first (PROBES, e.g. "ppA ppB ppC"): <mnt-hdd>/capstone/pym-probe-hosted-<A|B|C>, scored at once
+  for t in ${PROBES:-}; do
+    pgrep -f "fpga_driver[.]run_baked" > /dev/null && { echo "T3APPVM STOP: a driver is running" >> "$O"; return 1; }
+    echo "T3APPVM $t BEGIN $(date +%T)" >> "$O"
+    EXPECT_IMAGES=$I/$t.images.SHA256SUMS taskset -c 16-31 timeout 10800 bash "$S/tier3-appvm-arm.sh" --board-kit $K "$H/t3-run/$t" \
+      $C/cpython/pymalloc-repros/runners/virtual/run-virtual.py --arm virtual-malloc --build "$H/pym-probe-hosted-${t#pp}" \
+      --controls-build $I/pym/controls-OFF --llvm-bin $LB >> "$O" 2>&1
+    echo "T3APPVM $t END rc=$? $(date +%T)" >> "$O"
+    bash "$S/score-arm.sh" "$t" "$H/t3-pred-$t/out" "$H/t3-run/$t" "$O" >> "$O" 2>&1
+  done
   for g in a b c d e f; do
     t=sq0$g
     pgrep -f "fpga_driver[.]run_baked" > /dev/null && { echo "T3APPVM STOP: a driver is running" >> "$O"; return 1; }
