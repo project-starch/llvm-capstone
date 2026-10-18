@@ -56,7 +56,7 @@
     "virtual-pg-pools": "virtual-mallocng-pg-pools"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
-    "virtual-pg-pools": "results/2026-10-11-virtual/virtual-pg-pools"
+    "virtual-malloc": "results/2026-10-18-review/virtual-malloc",
+    "virtual-pg-pools": "results/2026-10-18-review/virtual-pg-pools"
   }
 }

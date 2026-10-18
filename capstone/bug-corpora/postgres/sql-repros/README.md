@@ -67,24 +67,66 @@ CheriBSD runs each case **twice**: the plain purecap build gives the verdict, an
 `Assert()` and its `MEMORY_CONTEXT_CHECKING` chunk sentinel. Its runner is not yet on the shared
 judge.
 
-## Measured 2026-10-11
+## Measured 2026-10-18, case by case
 
-On the Sublet platform (QEMU `af37cc32`, module `a1c6cb6b`, launcher `3975314a`), the
-servers built from c775cdf0, bundles in `results/2026-10-11-virtual`, every control as
-declared:
+Bundles in `results/2026-10-18-review`, on the emulator this repo pins
+(`capstone/capstone-qemu d35af47b163c`) with a compiler carrying the C-80 fix, against a
+cluster from `ports/postgres/app/build-native16-fixture.py`. Every control as declared,
+including the four the pools arm runs through both `malloc` and `palloc`:
 
 | arm | CAUGHT | MISSED | NO-READING |
 |---|---|---|---|
-| `virtual-malloc` | 02, 03 | 01, 04-09 | -- |
-| `virtual-pg-pools` (patch 0003) | 01, 02, 03, 04, 06 | 05, 08 | 07, 09 (unattributed) |
+| `virtual-malloc` | 02, 03, **08** | 01, 04, 05, 06, 07, 09 | -- |
+| `virtual-pg-pools` (patch 0003) | 01, 02, 03, 04, 06, **07**, **08** | 05 | 09 (unattributed) |
+| `cheribsd-revocation` | 02, 03, **08** | 01, 04, 05, 06, 07, 09 | -- |
 
-07 faults in `pg_popcount_optimized` during the CREATE INDEX whose picksplit the defect
-reads past a signature in, and 09 in `memcpy` in the pgcrypto session-key path; neither
-case has a control or a declared fault site, so the judge does not count them, and
-naming a site after the run would fit the instrument to the reading. The exact-request
-bounds of 93971f29 (`results/2026-10-11-exact`) also faulted 05, and faulted 07 in
-`nsphash_lookup`: PostgreSQL's word-at-a-time string hash reading the aligned word that
-holds a terminator, a false positive that `MAXALIGN` bounds removed.
+**Two of those cells are false positives and the four-cell tables withdraw them**: 08 on
+`virtual-malloc` and on `cheribsd-revocation`. 08 is this corpus's only out-of-bounds
+WRITE, and a write leaves damage behind. The pools arm faults on the store itself
+(`cause=28` in `varstr_levenshtein_less_equal`); the other two let it succeed and fault
+later, in `AllocSetReset`, on allocator bookkeeping the store had cleared the tag of --
+`cause=24` on the virtual arm and `code=PROT_CHERI_TAG` under `ktrace -t s` on CheriBSD.
+Counting them the arms read 3 / 9, 7 / 9 and 3 / 9; withdrawn, 2 / 9, 7 / 9 and 2 / 9.
+`tools/verdicts.py` would score the first automatically if `virtual-mallocng` declared
+`catch_causes` as SQLite's configurations do, but that configuration is shared by eleven
+corpora across four lanes, so it is left to them.
+
+### What the 2026-10-18 review changed
+
+**08 was not reaching its defect.** Its two cost triples overflow and return a negative
+distance, which is upstream's "nonsensical results", but `levenshtein.c:159` takes
+`if (max_d >= max_theo_d) max_d = -1`, which leaves `stop_column` at its default `m + 1`
+(`:138`), and the store at `:240` is guarded by `stop_column < m` with `m` already
+incremented. The three MISSED verdicts it carried measured nothing. The trigger now
+carries two rungs solved from that arithmetic, `stop_column = -1` and `-16`, and a
+`control.sql` that reaches the same store at a valid index.
+
+A ladder across the chunk boundary settles what the arm sees. `prev` is
+`palloc(2 * (m+1) * sizeof(int))` and the chunk capability covers
+`[data - 32, data + MAXALIGN(request))`, so the store is inside the bound until
+`stop_column <= -9`. Probed on both virtual arms, eight rungs: the pools arm completes at
+-1, -4 and -8 and faults at -9, -12, -16, -32 and -64, every one at the same instruction;
+`virtual-malloc` completes at every rung but -16. -32 completes and -36 faults, so the
+boundary is measured rather than assumed, and base missing the store at every rung is
+what makes the pools arm's catches chunk-level rather than block-level.
+
+**07 was faulting at its defect all along and could not be attributed.** The chain has no
+branch: `sizebitvec(GETSIGN(cache[j].sign), siglen)` at `:900` and `:913` inside
+`gtrgm_picksplit`, `:651` returns `pg_popcount`, `pg_bitutils.h:360` returns
+`pg_popcount_optimized`, which performs the loads; `sizebitvec` and `hemdistsign` are
+static and inlined, so `case.json` declares the two symbols that can carry the pc. Its new
+`control.sql` builds the same index with sparse rows only, so no signature goes all-true
+and the branch holding the defect is never entered.
+
+**05 and 09 are the two the pools arm does not catch, for different reasons.** 05's
+over-read leaves the request and stays inside `MAXALIGN(5) = 16`; the exact-request bounds
+of 93971f29 (`results/2026-10-11-exact`) faulted it in `ascii`, and also faulted 07 in
+`nsphash_lookup` -- PostgreSQL's word-at-a-time string hash reading the aligned word that
+holds a terminator, a false positive `MAXALIGN` bounds removed. That trade-off is a
+configuration choice with a measured cost on both sides. 09's `memcpy` overruns
+`sess_key[32]`, a member of the 184-byte `PGP_Context`, into the next member: the chunk
+bound is the struct and is correct, `palloc` never saw `sess_key`, and the case faults in
+the same place on both bound settings, so bound width is irrelevant to it.
 
 ## What these results do not say
 
