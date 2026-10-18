@@ -1017,3 +1017,26 @@ UNGATED (PREFLIGHT=0). Dry run: `dryrun-fix6-appvm.txt`.
 boot's console, replayed on connect: Tier 1's vm-contract, whose identity branch is exactly that stale access, at that
 offset. Scoping the read to after the session's first marker removed it. The board-run skill already says to scope a
 live scan to the run's own load.
+
+### The S-27 fence discriminator, pre-registered (2026-10-18, before its boot): 3005ed52 with fence_before_entry=1 on pym0
+
+**Why:** the claim-auditor found that d71f207a's resume site differs from 3005ed52's in four ways, so the pair does not
+separate rd = x0 from the fence on silicon. The other three are rd x15 -> x0, the kind read from +16, and a ~0 sentinel
+at +16. On 3005ed52 the fence exists behind the `fence_before_entry` parameter, off in bkit7.
+
+**The arm:** kit bkit7-fence is bkit7 with `adapter/module/params` = `fence_before_entry=1` (`diff -r`: the params file,
+and board.env's manifest path, whose content is unchanged). It runs pym0's 21 images with the same runner arguments, in
+one boot after the fix6 appvm chain (`tier3-fence-arm.sh`). The batch refuses a boot whose module did not read the
+parameter back.
+
+**Predicted (the RTL lane's mechanism):**
+- 21 of 21 steps fault `cause=6 address=0x12` at pym_raw_malloc+792, as pym0 read on 3005ed52;
+- 20 of 20 the same against that board bundle; 0 of 20 against the QEMU prediction;
+- "@@PARAM fence_before_entry=Y" once.
+
+**Readings:**
+- That reading rules the fence OUT as what cures S-27. It does not separate rd = x0 from the sentinel or the +16 read,
+  though the mechanism names rd. The RTL lane's va-rdclob, which has no fence, carries that.
+- 0 faults would mean the fence alone suffices, and the rd account is reopened.
+
+UNGATED (PREFLIGHT=0). Dry run: `dryrun-fence-arm.txt`.
