@@ -1389,3 +1389,38 @@ Every pre-registered reading held.
 - **A runner defect, caught by the live monitor:** the "FENCE flips" extraction matched digits, but the bool
   parameter reads back `Y`, so the extraction was empty. The result lines take the flip from the transcript. Later
   runners match `[0-9YN]`.
+
+## Pre-registered (2026-10-18, before boot r13): S-24 two-sided, the `vm` loop with resolve_dirty off and on (a diagnostic, not a Tier 2 record)
+
+- **The module:** a56fc415ad7133aa (the compiler lane's resolve-sites-10).
+  - It passed its QEMU control 34/41, byte-identical to the baseline, with resolve_dirty=1 and resolve_pte=1.
+  - 4683 instructions, 0 compressed.
+  - Two new 0644 parameters, both bool, reading back Y/N:
+    - `resolve_dirty`: for a cause-15 fault, fault the page in through the kernel's write path before the pin;
+    - `resolve_pte`: print the faulting PTE in the bound line.
+  - `fault_repeat_max` stays at its default, 64, so the bound is comparable with r12's.
+- **The suite:** `board-tier12/vm-suite-inner-r13.sh`.
+  1. normal and threads.
+  2. `resolve_pte`=Y, then `vm` with resolve_dirty=N, then a dmesg read.
+  3. `resolve_dirty`=Y.
+  4. threads again: the post-flip window's own must-fire.
+  5. `vm` again, then a dmesg read.
+  6. The other returning steps, with resolve_dirty=Y.
+  - No sparse steps (S-25) and no kit applications.
+- **Unchanged:** firmware 3df8df7da5c9ea30, monitor 007d81d; the extracted sources equal r12's. Run by
+  `boot3/run-tier12-r13.sh 3df8df7da5c9ea30`, dry-run in `boot3/dryrun-r13.txt`.
+
+**Predictions:**
+- **Tier 1:** identity.
+- **The console banner,** once, with tag resolve-sites-10.
+- **`vm` with resolve_dirty=N:** exit 139, as r8-r12.
+  - The VM0 window holds threads' must-fire and the bound line at the launcher's fault address, cause 15, now with
+    the PTE.
+  - The runtime lane's account predicts `present=1 write=1 young=1 dirty=0`. A `dirty=1` refutes the account,
+    including the fix's premise.
+- **`vm` with resolve_dirty=Y:** exit 1, QEMU's status, with the cause left as a reading.
+  - The VM1 window holds threads2's must-fire and no bound line. The PTE print belongs to the bound, so its absence
+    is expected.
+  - A resolve() site line there would name a different failure.
+- **The other returning steps:** as r12. The fix covers cause 15 only, so the cause-13 steps (vm-none-read,
+  vm-guard) keep their `vma` refusals.
