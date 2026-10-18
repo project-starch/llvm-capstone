@@ -34,5 +34,6 @@
     "PyUnicode_GET_LENGTH",
     "unicode_fromformat_write_str"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at PyUnicode_GET_LENGTH Include/cpython/unicodeobject.h:280 | unicode_fromformat_write_str Objects/unicodeobject.c:2561. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at PyUnicode_GET_LENGTH Include/cpython/unicodeobject.h:280 | unicode_fromformat_write_str Objects/unicodeobject.c:2561. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "③ WITHDRAWN by the 2026-10-18 review. Spatial defect. ② faults cause=28 on `ld s2, 0x20(a1)`. CheriBSD reports si_code=2 PROT_CHERI_TAG, not BOUNDS. This case is held out of the 29-case denominator (`cap`), so the withdrawal does not change a cell total; it is recorded so the row is not read as a CheriBSD detection."
 }
