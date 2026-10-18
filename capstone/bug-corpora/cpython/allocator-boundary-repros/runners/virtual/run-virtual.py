@@ -187,6 +187,8 @@ def main():
     a = p.parse_args()
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
+    import boardvm
+    rec = boardvm.record_arm(a.arm, appvm.on_board(a.state))  # vp2-<arm> for a board session
     spec = v.load_arms()[config]
     manifest = json.loads((a.build / "image/manifest.json").read_text())
     image = a.build / "image/cpython.dom"
@@ -237,17 +239,17 @@ def main():
         if o.fault and o.reached and not o.attribution and (d / "negative_control.py").is_file():
             attribute_by_control(a, share, image, d, o, symbols, claims.get("control_probe"))
         o.image_sha256 = v.sha256(image)
-        o.case, o.arm, o.controls = d.name, a.arm, list(controls)
+        o.case, o.arm, o.controls = d.name, rec, list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
         print(f"{d.name[:52]:<52} {verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:80]}",
               flush=True)
-    record = v.write_bundle(a.output, "cpython/allocator-boundary-repros", a.arm, rows, {
+    record = v.write_bundle(a.output, "cpython/allocator-boundary-repros", rec, rows, {
         "configuration": config, "predicted": PREDICTED[a.arm],
         "build": {k: manifest.get(k) for k in ("application", "profile", "nested", "image_sha256",
                                                "runtime_revision", "runtime_dirty", "stack_bytes")},
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
-    print(f"--- {a.arm} ({config}): {record['tally']}")
+    print(f"--- {rec} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 
