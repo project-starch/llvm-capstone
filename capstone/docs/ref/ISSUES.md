@@ -2720,6 +2720,61 @@ everything inside delegated domains, are unaffected.
 > - flash back to 0568f93a9 (cursorless, without the FP fixes);
 > - build the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back).
 
+### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
+
+**What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
+hands the DYN unit an `lsu_result_pack_t` of {trans_id, cap_result} with no exception field (`capstone_unit.anvilh:703-706`),
+its data check hard-codes NO_EXCEPTION (`capstone_dyn_unit.anvil:749-752`), and the DYN unit completes every STC that reaches
+the syncer with `ex_code::NO_EXCEPTION`, throwing the syncer's answer away (`:760-790`, `let _ = recv cap_store_ri.res`).
+`ex_stage.sv:1341` forwards the LSU's store exception only for a normal store (`forward_normal_store_valid`); the R-56 merge
+at `:1305-1327` exists for loads only and its one consumer is `cva6.sv:1516`. So an stc whose address translation raises a
+page fault retires with `ex.valid` 0, no escape and no trap, and the stored capability is silently lost. The commit stage then
+asserts `commit_lsu_o` for it (`commit_stage.sv:510-521`, `op == STC`, inside the else of `ex.valid`), although the store unit
+had popped the request through its access-exception block with `st_valid` 0, pushing nothing (`store_unit.sv:341`). In the
+store buffer `commit_i` copies the speculative queue's head into the commit queue and increments the count whatever the head
+holds (`store_buffer.sv:291-295`): an INVALID entry becomes a counted head that never raises `data_req`, so `no_st_pending`
+stays 0 for ever; and the same `commit_i` decrements the speculative count with no guard (`:166-171`), which on an empty
+speculative queue wraps the 3-bit count 0 -> 7, so `ready_o` for every later normal store is 0 until a flush (`:189`).
+
+**The matched pair** (va-runv8.S, lane virtual-profile-2-c 179b06610 pre-registered, results 79cb5d648 and dd7c46f9a; traces
+in vp7-wt/.sup/runv8, sdafter7): va-runv2's setup, the context's first instruction a store through s4 into the unmapped page.
+- control `-DFAULT_SD` (a plain sd): 0x2 0x4 0x4 0xf 0x55, SUCCESS after 128,120 cycles, the pre-registered line (kind 4,
+  cause 15, then M's own store and fence complete).
+- the stc: 0x2 only, FAILED at the cycle limit. 112493 the store unit takes the stc into WAIT_TRANSLATION; 112898 it leaves
+  through the exception exit with `st_valid` 0 and the lsu-bypass pops the STC; 113262 "STC completed", 113276/113277
+  writeback and commit of the STC with `ex=0`, the rvfi trace retiring it with no trap; 113283 the ecall's escape walk makes
+  its first write and the commit queue already reads `cnt_q=1 head_valid=0` (one write of an invalid entry into slot 2 after
+  four drains since 112000: only `commit_i` writes an invalid entry; no dom-switch push and no flush in between; the S-16
+  $fatal did not fire). The walk's three SAVE writes raise the count to 4 (`valid=1011`) and its fourth waits for ever
+  (`IDLE <-> WAIT_STORE_READY` with `sel_dom=1`, `st_ready=0`): the ESCAPE never finishes, S-16's end state from a new cause.
+- `-DSD_AFTER` (a plain store to a mapped page right behind the stc): on bf3db3175 the sd leaves WAIT_TRANSLATION at 113545
+  with `st_ready` 0 and sits in WAIT_STORE_READY to the limit; every dump reads `cnt=1 valid=0000 data_req=0 ready_o=0
+  spec_cnt=7`. That is the board's r8/r9 state line for line (193 = 1, 221 = 0x00, store_state 3 with an SD at the LSU head,
+  issue stalled, the DYN op behind it waiting on the store syncer). On the fixed tree: the control's line.
+- Instrument facts from the audit: the pre-registered downstream readings for the stc arm (3, 3, 11, "store stuck") were all
+  wrong, because the walk wedges before any reading; and `store_buffer.sv`'s "store stuck" print (:117-124) is gated on a
+  VALID head, so it can never fire on this condition. The mechanism was as read; the predictions downstream of it were not.
+
+**Board correspondence** (vp2, the board lane's result lines r8..r12): r8/r9 sparse-churn/sparse-stale = one ghost and a plain
+store behind it, demonstrated; r10/r11 sqlite_write/mruby = count 4 with no valid bit, every unit ready, M code running:
+consistent with four unpushed stc commits before any valid push, NOT demonstrated (the demonstration ends at 4/1011). r12's
+`fence rw,rw` before CSRUNV wedged identically, as predicted: the fence orders nothing this depends on. The switcher's index 56
+in every wedge is residue (cur_idx is never reset; 56 is the rest value after a non-reply RESUME), not a stall point.
+
+**The fix** (virtual-profile-2-c 2114e11bd): `ex_stage.sv` keeps the LSU's store exception for the trans_id the DYN unit is
+completing (same cycle or saved, cleared on flush and when consumed; R-56's pattern) and merges it into the one CAP_WB
+exception port, so the stc retires with cause 15 and a context escapes with kind 4; `commit_lsu` is then gated by `ex.valid`
+as for a plain store, which covers both faces (no ghost, no underflow). No change to the Anvil units or the store buffer. Lint
+gate PASS at the committed baseline (LATCH 52, MULTIDRIVEN 3, ALWCOMBORDER 0, UNOPTFLAT 40, UNUSEDSIGNAL 1395); va-runv8,
+va-runv8-sd and va-runv8-sdafter all read 0x2 0x4 0x4 0xf 0x55 SUCCESS after 128,120 cycles; va-runv2 unchanged (37 readings).
+The 95-test sweep and the supervised list run on the combined tree before the hash goes to synthesis. **Residuals:** the
+speculative count's unguarded decrement and the commit queue's unguarded copy remain as they are (the fix removes the only
+known producer of an unpushed commit); a store-side cause other than a page fault (an access fault, a misaligned stc) takes
+the same merged path. R-49 remains the other producer of a ghost count, fixed on 715bdd1fe.
+
+**Software rule on bf3db3175** (S-25, isa.md, the semantics owner): no capability store may be the first access to a page
+under the virtual profile; the module pins a whole arena at its first kind-4 fault; the kit's sparse steps are not available.
+
 ### R-56 — a page fault raised at a capability LOAD's translation was dropped on the way to writeback, because an LDC's result is routed through the DYN unit whose result packet carries only the capability cause `LATENT ON EVERY BITSTREAM, UNREACHABLE THERE (capability loads were never translated); FIXED on virtual-profile 16345658f (ex_stage.sv carries the LSU's exception beside the DYN result for that trans_id; cva6.sv lets it replace the capability port's exception record)`
 
 Found by vb-trans.S arm 4 on 2026-10-16: the load unit's own result line read `ex=1` in state WAIT_TRANSLATION and

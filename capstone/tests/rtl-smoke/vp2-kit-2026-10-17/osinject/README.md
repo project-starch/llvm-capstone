@@ -111,3 +111,21 @@ injection.
 - **The two-sided half:** a classic domain's fault must still return CAPSTONE_DOMAIN_FAULT_RETVAL to its caller. No
   sim arm links the real monitor C. That half goes to the board, as a control rung before vm-contract in the next
   Tier 1 boot on the patched firmware: a classic domain that faults must return its fault code, as it does today.
+
+## Revision 3 (2026-10-18, pre-registered before its run): the shared CEPC injection entry
+
+The board lane unified `_inject_s_trap` for both targets (capstone-sbi `vp2/inject-shared` 04c6c89e7fd6, on
+`vp2/tier1-monitor` 1e9451a): the faulting pc is read with `CCSRRW(t0, CCSR_CEPC, x0)` instead of `csrr t0, mepc`, and
+the return target is written with `CCSRRW(x0, CCSR_CEPC, t0)` instead of `csrw mepc, t0`; `inject_into_s` in the C half
+changes the same way (not in this arm). On the RTL CEPC's cursor IS mepc (csr_regfile.sv:2616-2621, Q-28), so the arm
+must read exactly revision 2's 23 values; QEMU's half was proved by the board lane on 3b8040d5ff6e.
+- **Pinned (check each sha256 before building):** capstone-sbi 04c6c89e7fd6
+  - `sbi_capstone.S` 819747aab8865303ddc5e5344bceb27aaba05ef4ef92d5a16ed1781c382548be (changed: the two CCSRRWs)
+  - `capstone_csmint.S` 4600d04680158edf90396cc303cbb5aff4e2a286c9a0f302058ecd41232d6fbf (unchanged since fba7812)
+  - `sbi_capstone.h` 2c6f6bcab4ce180ee642382228ad52fb171bdb3840370bfad3f794cdba5dded1 (unchanged)
+- **The arm source is revision 2's, byte-identical** (va-osinject.S sha256 12510f1b91a6d97f392d...). Only the include
+  changes.
+- **Prediction:** rows 1, 2 and 3 read exactly revision 2's values (23 of 23); the control ends at the cycle limit
+  with no reading, as before. A difference in sepc or SPP would mean CEPC's cursor is not mepc on this path, which
+  Q-28's reading of the CSR file says cannot happen; a difference in t2/s5/s6 would mean the CCSRRW form clobbers a
+  register the csrr form did not.

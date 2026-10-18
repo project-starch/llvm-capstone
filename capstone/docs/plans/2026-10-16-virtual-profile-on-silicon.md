@@ -881,3 +881,19 @@ N = 2, 4, 8.
 | synthesis vp1 / vp2 | synth lane | SEALED 2026-10-18 and graded above: vp1 WNS -15.615, vp2 -19.019, LUTLP-1 0 on both; the WNS predictions hold on the endpoint rule, the area rows were refuted and the growth attributed (below) |
 | attribution A / B | RTL + synth lanes | B sealed: Q-15's cone is not the growth; A's area read before its seal: D3 moves the cones' hierarchy home, it is not the logic; the growth is the DYN unit's unregistered result chain (90 -> 105 sources), real logic from item D; the per-module own-cell key is refuted as an instrument. A FAILED TO ROUTE after ~5 h (congestion: 242 signals, 171 overlaps; no bitstream, no routed WNS); routability at ~178k LUT is marginal and netlist-dependent |
 | vp2b timing contingency | RTL lane | NOT BUILT: vp2's canary passed. The section stands as the record; the fix it names (collapse the DYN unit's sends onto one result register, cycle-neutral) is DEFERRED, not scheduled, for whatever bitstream follows |
+
+## RTL fixes accumulating for the next bitstream (no build scheduled; the trigger is a corpus class the module cannot work around)
+
+Written 2026-10-18 by the RTL lane after the semantics owner's decision. Each item lands on `virtual-profile-2-c` with its
+lint numbers and its directed arm; the sweep and the supervised list run once on the combined tree before any handoff.
+
+| item | commit | arm (reads on the fixed tree) | pre-registered for the build |
+|---|---|---|---|
+| R-57, the store exception carried to the STC's writeback (store-side twin of R-56) | 2114e11bd | va-runv8, -sd, -sdafter: 0x2 0x4 0x4 0xf 0x55, 128,120 cycles; va-runv2 unchanged | one exception_t register, a trans_id compare and a 4-way mux in ex_stage: LUTs up by tens, FFs by ~70, no Anvil change, no new term in an UNOPTFLAT cone (UNOPTFLAT 40 by stem unchanged), WNS inside the standing band |
+| Q-24, medeleg mask gains causes 24-30 | 3244170b0 | va-osinject (the monitor's injection path unchanged) | lint baseline, no timing exposure |
+| S-21/S-22, the caller snapshot out of any domain-reachable page, and a consuming resume (the 31 slots cleared after loading) | not yet designed | the +1024 marker arm (va-runv2 variant, requested by the board lane) as the negative control | costed when designed: the snapshot's new location decides flops vs a kernel-only save area |
+| S-23, the caller's first fetch after a return refused | mechanism open | a va-runv2 variant with fence.i inside the context (the return fetch misses the icache), pre-registered before its run | after the mechanism |
+| the switcher's satp write carries no flush | low priority, recorded | | |
+
+Go/no-go for the build, per CLAUDE.md: every item above has its arm reading on the combined tree, the sweep identical, the
+lint gate at baseline by name, and the predicted LUT/FF/WNS written here before the handoff.

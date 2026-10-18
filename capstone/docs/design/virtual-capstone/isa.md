@@ -314,8 +314,10 @@ retires with no exception and no kind-4 escape while commit still counts it: a g
 commit queue that never drains, wedging every later DYN operation (the sparse steps) or, after four, every store
 (the kit applications). Confirmed by a matched pair in simulation (va-runv8 vs its plain-sd control). The RTL fix
 (the store exception carried to the STC's writeback, as R-56 did for loads) is the next bitstream's; until then the
-trusted adapter or the runtime touches a fresh page with a plain access before any capability store reaches it. QEMU
-escapes the faulting STC as kind 4 and cannot show this.
+trusted adapter pins a whole arena on its first kind-4 fault (every allocator-owned arena is first touched by
+enframe's plain prefix load, so no stc reaches an unpinned page through malloc'd memory), and a region whose
+first access is an stc through a pointer obtained without the allocator (a direct mmap) is not supported on this
+bitstream (the kit's sparse steps are that case). QEMU escapes the faulting STC as kind 4 and cannot show this.
 
 **Trusted S performs no capability memory access (ruled 2026-10-18, Q-23).** An `LDC` or `STC`
 whose base register is an integer reads 24 (tval = the base register) in every mode, as on the RTL.
