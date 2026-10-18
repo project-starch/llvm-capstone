@@ -1425,3 +1425,31 @@ arm-set predictions are in.
 **The re-run chain on d71f207a is HELD** at an arm boundary for this boot: after fpt-fix6b, with fca, wpt, wph, fcs,
 fph and then pgc, pgm0, pgm1 still to run. It resumes after this boot. UNGATED (PREFLIGHT=0). Dry run:
 `rev7/dryrun-rev7.txt`.
+
+### Module revision 39d8492d's Tier 1 boot, result (2026-10-19 00:31-00:42): Tier 1 passes; sparse-churn wedges with S-25's sparse-churn face, before the stopgap could fire
+
+`board-tier12/results/board-vp2-tier12-rev7.result-lines.txt`. Firmware 7a53759a4773c81b.
+- **As pre-registered:**
+  - b0-stats, b0-hello and vm-contract read as their oracles, with vm-contract's identity branch. That is identical to
+    ap1 (3005ed52) and wa1 (d71f207a).
+  - `@@PARAM` diag_emerg=Y, node_flat_records=4096 and supervisor_slots=1. One banner, "loaded, diag arena-pin-1,
+    supervisor_slots=1, diag_emerg=1", and 0 refusal lines.
+  - The counters before vm-contract read (0, 0, 0, 0). resume_satp_changed and busy_frame_refusals read 0 at all
+    three reads taken.
+- **The counter deltas, and a slip in my own check:**
+  - `ok` printed `CAPSTONE_VM_STATS ... steps=511 faults=426`. 426 is exactly QEMU's count for `ok`.
+  - The deltas across vm-contract are resume_sfences 447 and resume_satp_refreshes 550.
+  - `stale` faults with cause 25 and prints no STATS line. My judge's prediction, "the deltas equal the sums over
+    vm-contract's TWO STATS lines", could therefore never be checked exactly, and the judge reported NO DATA on it.
+  - What the reading supports: `ok`'s 426 resolved faults are inside the delta (447 = 426 + `stale`'s unprinted
+    faults), and 550 >= `ok`'s 510 = steps - 1.
+  - That is consistent with item 3 and item 4 running on every resume, but not the exact equality pre-registered. The
+    exact check needs the counters read between `ok` and `stale`.
+- **sparse-churn wedged the core** (`VM_BEGIN:sparse-churn`, no VM_EXIT, driver rc 1).
+  - The apertures equal S-25's sparse-churn face from r8, r9 and r12 in every column that table records: count 1, no
+    valid bits, store_state 3 (WAIT_STORE_READY), 224 = 0x25, 225 = 0xc4, and the switcher at index 56.
+  - So it is S-25 again (N=4 for this face), now on module 39d8492d at node_flat_records=4096.
+  - The wedge came before exhaustion. The stopgap's "collect skipped" was never reached, so its silicon positive
+    control is still OPEN. The reduced capacity did not bring the must-fire ahead of the first-touch wedge.
+- **Verdict:** module 39d8492d passes Tier 1 on silicon. Its stopgap is unverified on silicon until R-57/S-25's fix.
+  UNGATED (PREFLIGHT=0).
