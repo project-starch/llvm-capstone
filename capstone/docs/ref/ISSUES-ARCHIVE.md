@@ -3328,7 +3328,8 @@ treatment.
 ### C-27 — `delin` of a NONLIN gp is a spec/RTL trap that QEMU hides `FIXED 2026-09-05 — the DELIN is dropped under the NONLIN-gp contract`
 
 > ⚠ **THIS FIXED STATUS IS RETRACTED (2026-10-18).** The default and image-gp ABIs were never
-> fixed; only the gp-captable parenthetical was true. The entry below is kept verbatim as the
+> fixed; only the gp-captable parenthetical was true (the image-gp fix landed 2026-10-18, see
+> C-27 in `ISSUES.md`). The entry below is kept verbatim as the
 > record of what was claimed. See **C-27 in `ISSUES.md`** for the four ways the tree refutes it
 > and for what it cost (vp2's Tier 1/2 boot 2). Do not cite this entry as evidence that the
 > DELIN is absent.
