@@ -1571,3 +1571,22 @@ Every pre-registered reading held, compared by script.
 - **The module control:** with 4b's suite, image, launcher and monitor, only the module changed (a00109e9 there,
   a56fc415 here). 4b failed every context and 4c reads the record, so boot 4's regression lies in the Q-26 wait
   rewrite or the escape-print code. It is bisected next.
+
+## Pre-registered (2026-10-18, before the two module-bisection boots): which change breaks every context, the Q-26 wait or the escape print
+
+- **The two modules,** the compiler lane's, each a single change from a56fc415's source:
+  - **q26only:** ko 69c11f908ad27c6b, banner `bisect-q26only`, the Q-26 wait rewrite alone.
+  - **esconly:** ko a2a0b2f49d790cc6, banner `bisect-esconly`, the escape-print code alone. It is guarded by
+    `diag_escapes`, which defaults false.
+  - Both verified here: sums, vermagic 6.4.14, 0 compressed instructions, launcher b27afefc.
+  - The lane rebuilt a56fc415 from its source byte-identically, so its builds are reproducible.
+- **Each boot runs Tier 1 alone** (b0-stats, b0-hello, vm-contract). A failing module would otherwise hold the board
+  about 13 minutes in the suite's parallel pair.
+  - Firmware for q26only: 884e7e9c6f7b6a54. Its stage record is in the attic's `vm-bq-*`.
+  - Firmware for esconly: 1b7d8ad056dcc2d9.
+  - Run by `boot3/run-tier12-bq.sh` and `boot3/run-tier12-be.sh`, q26only first.
+- **Predicted** (the lane's, before either boot): q26only FAILS (cause 24 at memset+0x2c on the first context),
+  and esconly PASSES (vm-contract identity), because its code cannot execute with diag_escapes off.
+- **If esconly fails,** the regression is not in the module's logic but in its content, size or layout. That would
+  say no logic-level reading of this module can be trusted until it is explained.
+- **If both pass,** the two changes break only together.
