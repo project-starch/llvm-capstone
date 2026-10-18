@@ -1059,3 +1059,17 @@ UNGATED (PREFLIGHT=0). Dry run: `dryrun-fence-arm.txt`.
   - The predictions are unchanged (fso MISSED 9; pb12 CAUGHT 1, MISSED 8; pb10 CAUGHT 4).
 - **fso-fix6's partial bundle is not filed in the corpus.** Its record keeps the steps it read, marked as a budget
   void. Dry run: `dryrun-fix6b-seq.txt`.
+
+### fso-fix6, result (2026-10-18 20:12-20:45): 6 of 6 cells read as predicted before the batch budget cut the boot; a budget void for the other 3
+
+`records/fso-fix6.board.txt`. As the amendment above said, the batch rung ran out of its 1500 s wait.
+- **The six cases that ran** (00-05, buggy and fixed) read MISSED, as predicted. On 3005ed52 the same arm read 0 of 9,
+  every cell control-failed by S-27's 0x12 fault.
+- **The controls fire as positive controls should:** bounds-malloc faults 28 and uaf-malloc faults 25.
+  - Those two are the boot's only fault lines. There is no 0x12 fault.
+- **Cases 06-08 never ran.** They score NO-READING:infra, a budget void and not a module reading. The re-run on
+  bkit7-fix6t (fso-fix6b) reads them.
+- **compare-pilot.py** crashed on a cell with no board image. It now reports such a cell as NOT RUN and counts it
+  against the total. The record was rewritten with the fixed scorer.
+- **The partial bundle is not filed in the corpus.**
+- **The sequence stopped after fso**, so pb12-fix6 and pb10-fix6 did not run. Both are in the fix6b re-run.

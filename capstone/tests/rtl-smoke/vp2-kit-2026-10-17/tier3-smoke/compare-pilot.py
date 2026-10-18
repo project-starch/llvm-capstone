@@ -10,7 +10,8 @@ Per cell (observation.case), it compares:
 - the fault's symbol+offset (or its pc relative to the code base);
 - the attribution.
 Then it compares the controls by name and observed value.
-Prints one line per cell, SAME or DIFF with the differing fields.
+Prints one line per cell, SAME or DIFF with the differing fields (VOID when the images differ, NOT RUN when a
+side has no image).
 Exit 0 when every cell and control is the same, 1 when any differs, 2 when a bundle is missing or the cells do not
 match (no data is never a pass)."""
 import json
@@ -55,6 +56,13 @@ def main():
         return 2
     bad = 0
     for case in sorted(q):
+        if not q[case]["image"] or not b[case]["image"]:
+            # a cell with no image on one side never ran there (a boot cut short, a setup that stopped first)
+            side = "board" if not b[case]["image"] else "qemu"
+            print(f"NOT RUN {case}: no image on the {side} side ({(b if side == 'board' else q)[case]['verdict']}, "
+                  f"{(b if side == 'board' else q)[case]['reason']})")
+            bad += 1
+            continue
         if q[case]["image"] != b[case]["image"]:
             print(f"VOID {case}: images differ ({q[case]['image'][:16]} vs {b[case]['image'][:16]})")
             bad += 1
