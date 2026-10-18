@@ -663,3 +663,22 @@ probe did not perturb the bug.
   - ppB differing from ppA: the first-touch class. ppB the same as ppA: not first-touch.
   - The regions not granule-aligned on silicon: the representability lead is live.
   - All ok AND no fault in all three: the probe perturbed the trigger. That is a null result, not a pass.
+
+### Arms pgc, pgm0 and pgm1, results (2026-10-18 15:41-16:08): 15 of 15 cells the same, and a second matched pair on silicon
+
+`records/pg{c,m0,m1}.board.txt`.
+- **pgc** (postgres/c-repros, vp2-malloc): CAUGHT 5.
+- **pgm0** (postgres/mmgr, vp2-malloc): MISSED 5.
+- **pgm1** (vp2-pg-pools): CAUGHT 5. The same five memory-context cases are missed under malloc and caught under the
+  pools configuration, and each arm's own controls fire with the polarity it declares.
+
+### Probe arm D, pre-registered (2026-10-18): a fence after the capability spill
+
+`pym-probe-hosted-D` (the compiler lane's image, ebc820195bd37f93, verified). pym_raw_malloc is exactly production's plus
+one `fence rw, rw`, at 0x259ac between the spill `stc` and the reload `ldc`. The compiler lane checked this over the
+whole function. D carries ppA's readouts and falls through to the real path.
+- **The prediction:** its QEMU twin reads MISSED 20 with every probe value right (`records/ppD.prediction.txt`).
+- **The reading on silicon, if a lost spill store is the mechanism:** ppA faults at pym_raw_malloc and ppD does not. The
+  fence would then be a working software rule for -O0 corpus code on this bitstream.
+- **If ppD still faults:** the fence does not order the lost store, which is information for the RTL lane's next arm
+  (an escape or switcher flush).
