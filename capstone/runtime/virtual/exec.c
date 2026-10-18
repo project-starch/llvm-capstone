@@ -898,6 +898,16 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                 fprintf(stderr, "capstone-exec: exit image=%s sha256=%s\n",
                         image_path ? image_path : "?", host.image_sha256);
             }
+            const char *profile = tid == 0 ? getenv("CAPSTONE_PROFILE_RECORD") : NULL;
+            if (profile && *profile) {
+                /* No digest here: hashing a large image is most of a short run's
+                 * instructions. The profiler hashes the image itself. */
+                int fd = open(profile, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+                if (fd >= 0) {
+                    capstone_delegate_image_record(fd, h, image_path);
+                    close(fd);
+                }
+            }
             /* exit_group stops all native workers before Linux releases
              * mappings and the adapter fd. Unmapping here would race a
              * worker completing its blocked delegated read. */

@@ -309,7 +309,7 @@ def start(args: argparse.Namespace, state: Path) -> int:
     with lock(state):
         files = {key: require_file(getattr(args, key)) for key in
                  ("qemu", "kernel", "firmware", "rootfs")}
-        for key in ("launcher", "ssh_server", "module", "job_helper"):
+        for key in ("launcher", "ssh_server", "module", "job_helper", "plugin"):
             if getattr(args, key, None):
                 files[key] = require_file(getattr(args, key))
         if "launcher" in files and "job_helper" not in files:
@@ -329,6 +329,16 @@ def start(args: argparse.Namespace, state: Path) -> int:
         share_model = getattr(args, "share_model", "none")
         if share_model not in SHARE_MODELS:
             raise VMError(f"Share model must be one of {', '.join(SHARE_MODELS)}")
+        # A TCG plugin (QEMU -plugin) and its key=value arguments, e.g. capstone-qemu's
+        # contrib/plugins/capprof.c. Its content hash is part of the identity like every file.
+        plugin_args = list(getattr(args, "plugin_args", None) or [])
+        if plugin_args and "plugin" not in files:
+            raise VMError("--plugin-arg needs --plugin")
+        if any("," in value or "=" not in value for value in plugin_args):
+            raise VMError("Plugin arguments must be key=value without commas")
+        # Without CF_PCREL a translated block belongs to one virtual pc, so a plugin's
+        # instruction addresses are the addresses that ran (capstone-qemu's x-pcrel).
+        no_pcrel = bool(getattr(args, "no_pcrel", False))
         share = args.share.resolve(strict=True)
         if not share.is_dir() or "," in str(share):
             raise VMError("Share must be a directory whose path contains no comma")
@@ -356,6 +366,10 @@ def start(args: argparse.Namespace, state: Path) -> int:
         if share_model != "none":
             # Likewise recorded only when it differs from the default.
             identity_config["share_model"] = share_model
+        if plugin_args:
+            identity_config["plugin_args"] = plugin_args
+        if no_pcrel:
+            identity_config["pcrel"] = False
         if running(state):
             old = json.loads((state / "config.json").read_text())
             if old.get("identity") != identity_config or args.port not in (0, old["port"]):
@@ -453,6 +467,10 @@ insmod /mnt/control/module
             "-cpu", ("rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true"
                      + (",x-capstone-exact-bounds=true" if exact_bounds else "")) if profile == "virtual" else "rv64,sstc=false,h=false,sv48=false,sv57=false",
         ]
+        if no_pcrel:
+            command[-1] += ",x-pcrel=false"
+        if "plugin" in files:
+            command += ["-plugin", ",".join([str(files["plugin"]), *plugin_args])]
         config = {"port": port, "share": str(share), "command": command, "identity": identity_config}
         (state / "config.json").write_text(json.dumps(config, indent=2) + "\n")
         global_lock = Path(os.environ.get("CAPSTONE_QEMU_LOCK", Path.home() / ".capstone-locks/qemu.lock"))
@@ -523,6 +541,12 @@ def main(argv: list[str] | None = None) -> int:
                          "files live in host xattrs (needs a host filesystem with user xattrs), "
                          "so the guest's root owns what it creates; on the host such files are "
                          "the QEMU user's with mode 0600 (directories 0700)")
+    up.add_argument("--plugin", type=Path, help="QEMU TCG plugin (-plugin), e.g. capprof")
+    up.add_argument("--plugin-arg", dest="plugin_args", action="append", default=[],
+                    help="key=value argument for --plugin, repeatable")
+    up.add_argument("--no-pcrel", action="store_true",
+                    help="QEMU keys translated blocks by virtual pc too (x-pcrel=false), so a "
+                         "plugin's instruction addresses are the addresses that ran")
     up.add_argument("--port", type=int, default=0)
     up.add_argument("--memory", default="8G")
     up.add_argument("--cma-mib", type=int, default=512,
@@ -564,7 +588,9 @@ def main(argv: list[str] | None = None) -> int:
                             process_cache_mib=config.get("process_cache_mib", 384),
                             environment=config["environment"], profile=config.get("profile", "physical"),
                             exact_bounds=config.get("exact_bounds", False),
-                            share_model=config.get("share_model", "none"), port=0, boot_timeout=120)
+                            share_model=config.get("share_model", "none"),
+                            plugin_args=config.get("plugin_args", []),
+                            no_pcrel=config.get("pcrel", True) is False, port=0, boot_timeout=120)
             return start(argparse.Namespace(**settings), state)
         if args.action == "status":
             active = running(state)

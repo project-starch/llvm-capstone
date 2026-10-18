@@ -110,4 +110,10 @@ void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host 
                                     uint64_t address, uint64_t ra, uint64_t fp,
                                     const uint64_t *chain, unsigned chain_len);
 
+/* The image record: the fault record's entry, code range and image (and the
+ * digest if already known), without a fault, for profilers that map domain
+ * pcs to the image. */
+void capstone_delegate_image_record(int fd, const struct capstone_delegate_host *host,
+                                    const char *image);
+
 #endif
