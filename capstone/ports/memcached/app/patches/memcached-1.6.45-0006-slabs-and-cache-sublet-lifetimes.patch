@@ -76,12 +76,26 @@ so the items it restores are not children of a generation and their first free f
      struct _stritem  *head;     /* always points to the owner chunk */
 --- a/slabs.c
 +++ b/slabs.c
-@@ -66,6 +66,24 @@
+@@ -66,6 +66,38 @@
     smaller ones will be made.  */
  static void slabs_preallocate (const unsigned int maxslabs);
  
 +#ifdef MC_CAPSTONE_SUBLET
 +#include <capstone/capability.h>
++#include <capstone/representable.h>
++
++/* Q-15: on the compact bounds format (vp2, and capstone-qemu without exact bounds) CDERIVE refuses
++ * (29) any child it cannot hold exactly: from 4 KiB up its base and length must be multiples of the
++ * granule 2^(msb(len)-9). slabs_init rounds each class size up to its granule (capstone_repr_round),
++ * so the items at page + i * size are representable by construction; the pad is at the TAIL only,
++ * never over the item header or a neighbour. q15_pad[] is that pad per class, and the totals below
++ * are the over-approximation this costs, read by slabs_q15_counts() (the allocator build has no
++ * usable stdio, so the caller prints them). */
++static unsigned int q15_pad[MAX_NUMBER_OF_SLAB_CLASSES];
++static unsigned long q15_items, q15_padded, q15_pad_total, q15_pad_max;
++void slabs_q15_counts(unsigned long out[4]) {
++    out[0] = q15_items; out[1] = q15_padded; out[2] = q15_pad_total; out[3] = q15_pad_max;
++}
 +
 +/* Sublet: a CDERIVE child of parent, starting at p. */
 +static inline void *sublet_derive(void *parent, const void *p, size_t size) {
@@ -101,13 +115,27 @@ so the items it restores are not children of a generation and their first free f
  /*
   * Figures out which slab class (chunk size) is required to store an item of
   * a given size.
-@@ -354,7 +372,14 @@
+@@ -251,6 +283,11 @@
+         /* Make sure items are always n-byte aligned */
+         if (size % CHUNK_ALIGN_BYTES)
+             size += CHUNK_ALIGN_BYTES - (size % CHUNK_ALIGN_BYTES);
++#ifdef MC_CAPSTONE_SUBLET
++        /* Q-15: a representable chunk length (the identity below 4 KiB). */
++        q15_pad[i] = (unsigned int)(capstone_repr_round(size) - size);
++        size = capstone_repr_round(size);
++#endif
+ 
+         slabclass[i].size = size;
+         slabclass[i].perslab = settings.slab_page_size / slabclass[i].size;
+@@ -354,7 +391,16 @@
  static void split_slab_page_into_freelist(char *ptr, const unsigned int id) {
      slabclass_t *p = &slabclass[id];
      int x;
 +#ifdef MC_CAPSTONE_SUBLET
 +    /* The page's chunks in this class are children of one generation. */
-+    void *gen = sublet_derive(ptr, ptr, (size_t)p->size * p->perslab);
++    /* Q-15: the generation's length rounded up to its own granule; a page is a power of two, so the
++     * rounded length still lies within it. */
++    void *gen = sublet_derive(ptr, ptr, capstone_repr_round((size_t)p->size * p->perslab));
 +#endif
      for (x = 0; x < p->perslab; x++) {
 +#ifdef MC_CAPSTONE_SUBLET
@@ -116,20 +144,26 @@ so the items it restores are not children of a generation and their first free f
          do_slabs_free(ptr, id);
          ptr += p->size;
      }
-@@ -437,7 +462,12 @@
+@@ -437,7 +483,18 @@
          it->it_flags &= ~ITEM_SLABBED;
          it->refcount = 1;
          p->sl_curr--;
 +#ifdef MC_CAPSTONE_SUBLET
 +        /* The caller's chunk is a child of the page's generation. */
 +        ret = sublet_derive(it->sublet_parent, it, p->size);
++        q15_items++;
++        if (q15_pad[id]) {
++            q15_padded++;
++            q15_pad_total += q15_pad[id];
++            if (q15_pad[id] > q15_pad_max) q15_pad_max = q15_pad[id];
++        }
 +#else
          ret = (void *)it;
 +#endif
      } else {
          ret = NULL;
      }
-@@ -481,6 +511,9 @@
+@@ -481,6 +538,9 @@
  
      item_chunk *next_chunk;
      while (chunk) {
@@ -139,7 +173,7 @@ so the items it restores are not children of a generation and their first free f
          assert(chunk->it_flags == ITEM_CHUNK);
          chunk->it_flags = ITEM_SLABBED;
          p = &slabclass[chunk->slabs_clsid];
-@@ -637,6 +670,12 @@
+@@ -637,6 +697,12 @@
      }
      mem_malloced += size;
  
@@ -152,7 +186,7 @@ so the items it restores are not children of a generation and their first free f
      return ret;
  }
  
-@@ -667,6 +706,9 @@
+@@ -667,6 +733,9 @@
  
  void slabs_free(void *ptr, unsigned int id) {
      pthread_mutex_lock(&slabs_lock);
@@ -162,7 +196,7 @@ so the items it restores are not children of a generation and their first free f
      do_slabs_free(ptr, id);
      pthread_mutex_unlock(&slabs_lock);
  }
-@@ -755,6 +797,12 @@
+@@ -755,6 +824,12 @@
      slabclass_t *s_cls = &slabclass[sid];
      slabclass_t *d_cls = &slabclass[did];
  
