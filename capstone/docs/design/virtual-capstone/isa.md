@@ -227,8 +227,10 @@ live registers until a later ENTRY zeroes them (a linearity residual on silicon,
 the RTL item for the next bitstream is a consuming resume). The trusted adapter therefore treats the register slots as the context's live
 state and OVERWRITES +224 with the reply; a check that the slot is empty is QEMU-shaped and wrong on silicon (vp2's
 boot 3-T1 repeat stopped on it). QEMU's escape, which kept the callee in its own save state and left the slots
-zero, is brought to the RTL's behaviour in the pin that follows 3b8040d5ff6e; the +576..+639 views and the event
-words are unchanged.
+zero, matches the RTL from b290f5656600 (every kind writes the slots before the caller is restored; the resume
+loads them; the hidden words +920..+944 and the FP area stay QEMU-internal, a recorded residual); the +576..+639
+views and the event words are unchanged. A context's instruction fetch is permission-checked as USER on the RTL
+(`cva6_mmu.sv:140`, `:377-379`), so a context can never execute from a page without the U bit.
 
 **The caller's snapshot at +1024..+2304 must never sit in a page the application can reach (found
 2026-10-18 by the board lane's auditor, filed as an S-entry).** On the RTL every escape restores the S caller
@@ -329,15 +331,16 @@ suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`,
 capabilities into registers from S; it is a test scaffold with no silicon equivalent, no production
 kit sets it, and their passes say nothing about trusted S. The follow-up that retires the property
 is rewriting that bootstrap onto the `CSRUNV` route. The reference QEMU for the virtual profile is
-capstone-qemu `virtual-capstone-v7` 3b8040d5ff6e (three commits on d35af47b163c: descriptor v7 and the
+capstone-qemu `virtual-capstone-v7` b290f5656600 (four commits on d35af47b163c: descriptor v7 and the
 scalar-S gate at f2f15f8fc70c; strict DELIN and `x-capstone-supervisor-slots`, default 1 as on
 silicon, clamped 1..32, at 852c5bc76774; `scapctl` and `urevavail` illegal by default under
-`x-capstone-test-csrs` at 3b8040d5ff6e). Tier 0 on it at the defaults: sublet-lifetimes 119/119,
-runtime run.sh 69/69, index8 PASS, fp 60/60 (three isolation cases set 32 slots explicitly),
-exact-bounds 4/4; virtual-capstone-m1 74/74, movc 67/67 and trusted-linux-u-access 71/71 with
-`x-capstone-test-s-ldc` and `x-capstone-test-csrs` set by their runners (their bootstrap selects
-protected U through `scapctl`). No prediction kit sets any of the three properties; the kit gate
-parses their values. The adapter obtains
+`x-capstone-test-csrs` at 3b8040d5ff6e; the escape writing the frame's register slots and the resume
+loading them, Q-30, at b290f5656600). Tier 0 on it at the suites' own settings: virtual-capstone-m1
+74/74, movc 67/67, sublet-lifetimes 119/119, runtime run.sh 71/71 (69 + frame_slots ×2), index8 PASS,
+fp 60/60 (three isolation cases set 32 slots explicitly), exact-bounds 4/4, trusted-linux-u-access
+71/71 (m1, movc and trusted-linux set `x-capstone-test-s-ldc` and `x-capstone-test-csrs`: their
+bootstrap selects protected U through `scapctl`). No prediction kit sets any of the three properties;
+the kit gate parses their values; the prediction kit runs with `svadu=false`. The adapter obtains
 every capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
 The Q-12 protected-path changes did not change legacy physical C transfers.
 
