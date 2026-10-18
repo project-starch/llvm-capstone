@@ -64,3 +64,58 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
 - **If control-bounds-malloc hangs again** with the process-ABI module in place, the hang is not the recipe's. It is a
   silicon reading of `capstone-exec`'s fault path in a corpus image, and it is recorded with the batch rung's last
   lines.
+
+## Result, second smoke boot (2026-10-18 08:13-08:20): control-bounds-malloc hangs again, with the recipe fixed
+
+- **The recipe did what was pre-registered.**
+  - The bake printed `cpio /capstone.ko: the replaced module` (f2a2645cc570dcc6) after baking and `the stock module`
+    after the restore.
+  - Firmware ccff4dcfc354591a, 17,467,912 B; b0-stats 0.
+- **The batch rung entered control-bounds-malloc and never left it.**
+  - The heartbeat kept printing (`@@HB 1..3`), so Linux was alive. The step printed nothing, because its output goes
+    to a file until it ends.
+  - The monitor's S-23 retry line (FRTY), which fires about once per launcher process in every Tier 1 boot, never
+    appeared. The process never reached its first retire.
+  - QEMU faults this control with cause 28 within seconds.
+- **The run was ended by SIGINT after about 3 minutes in the step.** The first smoke ran 13 minutes without the step
+  ending. The driver released the board, and no board.txt was written: an interrupted driver never reaches that step.
+  This record comes from the scoped stream.
+- **This is not the recipe's defect,** as pre-registered. Two facts narrow it:
+  - The adapter (launcher b27afefc, module ce3a542d) is Tier 1's own, and Tier 1 runs contract.dom through it on
+    every boot.
+  - A live Linux rules out the RTL lane's ghost-store wedge (a faulting STC leaving a commit-queue entry that never
+    drains), which stops the whole core.
+
+## Pre-registered (2026-10-18, before the third smoke boot): the diagnostic smoke, every step made to return
+
+- **The run:** `smoke-diag.py --board-kit <t3-smoke>/bkit3 --controls <t3-smoke>/bin/controls.dom --contract
+  <stage>/vm/contract.dom --raw <t3-smoke>/board-diag`.
+- **The steps,** in one boot through the same BoardBatch backend:
+  1. **contract-ok:** Tier 1's contract.dom (125705371837ea92), `ok argument`. It is the matched arm: the same gate
+     script, launcher, module and batch environment, with a different image.
+  2. **The three controls,** each bounded.
+     - At 150 s a watcher prints every launcher thread's `/proc` state and wchan (R spinning, S sleeping,
+       D uninterruptible), then sends SIGTERM, and SIGKILL 10 s later.
+     - Each step then prints the module's lines from the ring buffer (dmesg). The console shows only KERN_EMERG
+       during rungs.
+- **bkit3** differs from bkit2 in three ways:
+  - the recipe reads the core's apertures after the last rung when nothing wedged (driver 79eaf36851e12d05,
+    `BAKED_FINAL_APERTURES`, tested offline in four arms with a negative control);
+  - the bake's restore removes the directories that held only its files;
+  - boardvm's docstring no longer claims a preflight.
+  - Module, launcher, monitor and defines are unchanged.
+- **Predicted:**
+  - **The bake:** the replaced and stock module checks as before, and no `test-domains/vbatch` directory left in
+    the shared overlay afterwards.
+  - b0-stats 0.
+  - **contract-ok:** `BOUNDED-EXIT 0` and `VIRTUAL_APPLICATION_OK`. If it fails, the batch environment itself is
+    the variable.
+  - **control-bounds-malloc, if the hang repeats:**
+    - `BOUNDED-EXIT 143`, or 137 after the SIGKILL;
+    - the BOUND-STATE lines name where the launcher is;
+    - whether `CONTROL bounds-malloc mark` printed says whether the image reached main().
+  - **control-bounds-malloc, if it returns:** QEMU's cause 28.
+  - **uaf-malloc and clean,** if reached: cause 25, and exit 75.
+  - **The resting apertures** (the RTL lane's control, if nothing wedges): 193 = 0 with no valid bit in 221, 225
+    bit 3 = 0, 227 bit 7 = 0, 228 = 0xb8 or 0x9f (index 56 or 31). A non-zero 193 with fewer valid bits than the
+    count is a ghost entry counted in this boot.
