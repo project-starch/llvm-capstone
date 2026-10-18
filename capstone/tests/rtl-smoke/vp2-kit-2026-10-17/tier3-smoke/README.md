@@ -1522,3 +1522,29 @@ and pulled.**
     session.
 - **Where the flash falls:** at the next arm boundary of the d71f207a re-run once authorised. An arm in flight finishes
   first.
+
+### sql0 on module 39d8492d, second form, pre-registered (2026-10-19 01:46, before its boot): sql0-rev2b
+
+The first form stopped at the firmware cap. This one changes the image and the fixture, both re-gated on QEMU:
+- **The image:** `t3-new6/postgres-lt0-dl/image/postgres.dom`, 64010720f1a6b3bc, `llvm-objcopy --discard-locals` of
+  81ee24a0.
+  - It drops 216,837 `.L` labels. The single PT_LOAD segment, .capstone_virtual and .capstone_domreq are
+    byte-identical, and so is every non-.L symbol (checked by this lane and the compiler lane independently).
+  - All 6 sql fault_sites and the record's evidence symbol (memcpy) are non-.L and present.
+- **The fixture:** `t3-new6/tmp/pgfixture-trim/cluster`, run-arm record 956173e054762e91. It is the native16 cluster
+  without template0/template1 and with a 1 MiB WAL segment.
+- **`--pg-share`:** the share the native16 record used.
+- **The prediction:** `t3-sql-trim-vm/bundle`, the QEMU record on exactly these inputs (qkit7):
+  - CAUGHT 02 and 03 (cause 28 at memcpy+200), MISSED 01 and 04-09, both controls fault;
+  - 9 of 9 cells equal to the native16 record, evidence text included. The compiler lane's comparator and this lane's
+    both read 0 differ, and both catch a planted difference.
+- **The size:** the stage shrinks by 37,143,681 B raw against the first form's 65,953,267. The firmware grows in
+  2 MiB steps, so the estimate means either 25,859,336 B (under the cap) or 27,956,488 B (over).
+  - A measure-only bake decides it first, on kit bkit7-rev2m: bkit7-rev2s with a recipe stop after the firmware build
+    and the cap check, so it never reaches the board.
+  - The board boot on bkit7-rev2s follows only if the measured firmware is under 26,000,000 B. If it is over, the
+    fixture is trimmed again (the runtime lane's ruling).
+- **When:** after the postgres chain (`tier3-sql-arm-rev2b.sh`). VOID unless the bundle's fixture record is
+  956173e054762e91 and its image 64010720f1a6b3bc.
+- Records `records/sql0-rev2b.board.txt` and `postgres/sql-repros/results/2026-10-19-vp2-rev2/`.
+- **Dry run:** under-cap pass, over-cap stop with no boot, and VOID on a wrong fixture. UNGATED (PREFLIGHT=0).
