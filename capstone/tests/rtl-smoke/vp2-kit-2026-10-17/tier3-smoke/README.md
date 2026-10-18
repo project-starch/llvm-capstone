@@ -925,3 +925,22 @@ fault anyway.
   lane's QEMU census.
 
 Both boots are UNGATED (PREFLIGHT=0); image identity by sha256 is the substitute. The dry run is `dryrun-pair-wa1.txt`.
+
+### fso, pb12 and pb10 on the workaround kit, pre-registered (2026-10-18, before their boots), behind the pair
+
+`tier3-fix6-seq.sh` starts when the pair ends. It runs only if pym0 read 20 of 20 on bkit7-fix6. Otherwise it HOLDS
+and the pair's RESULTS go to the runtime lane first. Each arm is its ARMS.spec line under the tag `<arm>-fix6`, through
+`tier3-seq.sh` on bkit7-fix6. Each is scored against the same prediction bundle as its 3005ed52 run (the compiler
+lane's nb record, `t3-<arm>/bundle`). The compiler lane's census reads 0 collections on all three (qkit7-fix6), and its
+gate reads them identical per case on the two modules' QEMU builds.
+- **fso-fix6** (ffmpeg/subobject, vp2-malloc): MISSED 9 with both controls as predicted. On 3005ed52 it read 0 of 9,
+  control-failed by S-27's 0x12 fault at the allocator's `sd`.
+- **pb12-fix6** (memcached/allocator, vp2-malloc): CAUGHT 1, MISSED 8. On 3005ed52 it read 0 of 9, the same S-27 face.
+- **pb10-fix6** (ffmpeg/pool, Sublet, vp2-nested-pools): CAUGHT 4, last in the boot order.
+  - On 3005ed52 it read 1 of 4: case 01's BUGGY run ended in a kernel panic on a load refused under covering CPMP region
+    21 (S-23's data face, the RTL lane's attribution).
+  - The module change does not touch that path, so S-27's workaround is NOT predicted to change it.
+  - A recurrence is S-23's data face at N=2. A clean 4 of 4 is one boot without the window, not a fix.
+- Each record names kit bkit7-fix6 and module d71f207a3af5546b. The bundles are filed under
+  `results/2026-10-18-vp2-rdx0/<arm>`, apart from 3005ed52's.
+- UNGATED (PREFLIGHT=0), as every Tier 3 boot. Dry run: `dryrun-fix6-seq.txt`.
