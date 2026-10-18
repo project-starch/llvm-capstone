@@ -807,3 +807,14 @@ silicon):
   field. Scored on the FIRST fault only: E4 breaks linearity by construction, so its QEMU twin faults later too.
 
 **A reading that refutes it:** E or E2 not faulting, E3 printing a mismatch, E4 reading 0x11, or the marker printing.
+
+### Arm sq0 subsets c and d, results (2026-10-18 17:16-17:42): 2 of 6 and 1 of 6, the same register-2 shape
+
+- **sq0c:** `cause=24 address=0x2` twice and `cause=29 address=0x2` once.
+- **sq0d:** cause 24 and 29 at 0x2, twice each, and one cause 13 at an address made of ASCII bytes (a string read as a
+  pointer).
+- The candidate's source citation was checked here at bf3db3175:
+  - `commit_stage.sv` builds the CSRUNV request with `set_ra = rd` and `ra_data` the literal 2, with `runv_mode` 3 or 4
+    on a resume;
+  - `capstone_dom_switcher.anvil:584` writes it whenever `set_ra != 0`, unless the request is a good mode-1 entry.
+- S-27 records all this in ISSUES.
