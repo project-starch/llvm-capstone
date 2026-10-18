@@ -1363,3 +1363,21 @@ that matched their predictions on 3005ed52 re-run on d71f207a, so the fold can n
 - **pgm1 and the Q-15 repair:** the runtime lane predicts the repair leaves pgm1 unchanged, since its recorded faults
   do not use the ≥4 KiB large-chunk paths. So this reading stays valid after the repair.
 - UNGATED (PREFLIGHT=0). Dry run: `dryrun-pg-fix6.txt`.
+
+**Amendment to the tree A flash plan's step 2 (2026-10-19 00:05, before any flash; still NOT authorised):** the
+arm-set predictions are in.
+- **The table:** dev 7ba0a7afc87a, `vp2-bare-2026-10-17/results/rtl-sim-vectors-8522d72fe.txt`. All 25 arms are
+  IDENTICAL on tree A's RTL to bf3db3175's vectors, count and values.
+- **So step 2 gates on the existing `rtl-sim-vectors.txt` values,** each arm by the sha256 of the `.bin` the board
+  loads, exactly 25 arms.
+- **The instrument's control:** the rebuilt extractor reproduces all 25 published bf3db3175 vectors exactly.
+  - It fails four distinct ways on purpose: a missing count word, a hole in the values, a wrong recorder address, an
+    empty trace.
+  - Every arm ends at the cycle limit by design, so the gate keys on the recorder's count word and values, never on the
+    harness verdict.
+- **Two arms are vp1 images** not in that folder: q17-order and vb-trans-off. Their CSRUNV column reads "?".
+- **The RTL lane's caveat, quoted:** "an identical vector is exactly what you get when no acknowledged RESUME with a
+  non-zero rd ever happens, and S-27's fix deliberately leaves rd alone on a first entry. So this set does not
+  exercise S-27 and must not be cited as evidence that it works."
+  - The same holds for R-57 (these images run in M-mode with no translation), Q-24 and S-28.
+  - S-27's RTL fix on silicon is therefore step 6's (pym0 on module 3005ed52), not step 2's.
