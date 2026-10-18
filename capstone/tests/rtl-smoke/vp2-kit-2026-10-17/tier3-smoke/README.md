@@ -847,7 +847,7 @@ So ppE4 cannot separate 0x11 from 0x12. Its prediction is now the QEMU twin's ow
 (`records/ppE4.prediction.txt`), and a difference on silicon is what gets read. ppE3 is unchanged: no mismatch, and the
 fault anyway.
 
-### ppE3 on silicon (2026-10-18 18:39-18:50): no mismatch, and a5's value 8 becomes 2 across the page-fault resume, as the candidate predicts
+### ppE3 on silicon (2026-10-18 18:39-18:50): no mismatch, and the fault moves to the next use of a5, which reads short of the 8 written into it
 
 `records/ppE3.board.txt`.
 - **No MISMATCH line:** the plain-load compare found the slot holding the right `b`. The global's readouts are right.
@@ -855,12 +855,24 @@ fault anyway.
   `&used` (the probe printed `&used=0x3f870e40b0`). From E3's disassembly:
   - `li a5, 0x8` at 0x25c64 sets the size of `used`. Nothing writes a5 again before 0x25cac.
   - `sd a2, 0x10(a4)` at 0x25c90 is `b->size = n`. In E3's register allocation `b` is in a4, not a5. It is the first
-    store into the fresh metadata page, so it page-faults, and the module resumes the context.
-  - `add a5, a4, a5` then `shrink a2, a4, a5` (0x25cac, 0x25cb0) build bounds of a5's length over `used`, and the 8-byte
-    `ld a4, 0(a2)` faults on bounds at `&used`. That fits a length of 2, the resume's literal, where 8 was written.
-- **So moving `b` out of a5 moved the symptom to the next use of a5, and its value is 2.** The candidate (every resume
-  writes 2 into x(rd), and the module's resume rd is x15) predicts exactly this. The "lost spill store" reading cannot,
-  because the slot was right.
+    store into the fresh metadata page, so it is expected to page-fault and be resumed by the module. That is
+    inferred: this boot printed no escape lines and read no stats.
+  - `add a5, a4, a5` then `shrink a2, a4, a5` (0x25cac, 0x25cb0) build bounds of a5's length over `used`. The 8-byte
+    `ld a4, 0(a2)` faults on bounds at the window's base, `&used`.
+  - **That gives a5 < 8 at that point**, where 8 was written and nothing writes a5 in between. A length of 2, the
+    resume's literal, fits, but this reading does not fix the value. The exact 2 is measured by the allocators'
+    0x12 faults (tval = 2 + 0x10).
+- **So moving `b` out of a5 moved the symptom to the next use of a5, whose value changed with no instruction writing
+  it.**
+  - The register is clobbered, not the stack slot, since the slot was right. That is what the candidate (every resume
+    writes 2 into x(rd), and the module's resume rd is x15) predicts, and what the "lost spill store" reading cannot
+    produce.
+  - E3 does not separate the rd write from other register-clobbering mechanisms; the source and the simulation arm do.
+- **RETRACTION (2026-10-18, found by a claim-auditor before S-27's status line was written):**
+  - This section first said a5's value "8 becomes 2" and "its value is 2". A bounds fault at the window's base gives
+    only a5 < 8.
+  - The text above replaces that wording. The first version is on dev at 4303f2993d57, and on the lane at
+    7dfa3c19999d, whose commit subjects repeat it.
 
 ### ppE4 on silicon (2026-10-18 18:50-19:01): the first fault at 0x12, not 0x11; the amended prediction differs in all 20 cells
 
@@ -990,9 +1002,14 @@ UNGATED (PREFLIGHT=0). Dry run: `dryrun-fix6-appvm.txt`.
   module alone (`diff -r`).
 - **On module 3005ed52e860c7af: 0 of 20, every step control-failed by cause 6 at 0x12. On module d71f207a3af5546b: 20
   of 20 at the QEMU verdict.**
-- The module change is the resume CSRUNV's rd = x0, together with the sentinel store and fence before it and the kind
-  read from frame +16. The pair confirms the workaround. That the rd write is the mechanism rests on E3's reading and
-  the RTL lane's simulation arm with them.
+- The module change is the resume CSRUNV's rd = x0, together with the sentinel store and the fence before it (now
+  unconditional; on 3005ed52 it was a parameter, off) and the kind read from frame +16. The pair confirms the
+  workaround.
+- That the rd write is the mechanism rests on the RTL source (bf3db3175's finish() and commit_stage's set_ra / ra_data)
+  and the RTL lane's simulation arm. On silicon it is not yet separated from the fence or the sentinel.
+  - The cheap discriminator is 3005ed52 with `fence_before_entry=1` on pym0's images: 21 of 21 at 0x12 if the rd write
+    is the cause.
+  - (This sentence first credited E3 as well. See E3's retraction above.)
 - How S-27's status is worded in ISSUES waits for a claim-auditor pass.
 
 **A slip, caught before it was reported:** a live read of the driver log at 19:45 showed `cause=25` at code offset
