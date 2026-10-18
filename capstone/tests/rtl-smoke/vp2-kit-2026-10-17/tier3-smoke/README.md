@@ -224,3 +224,24 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
   - r12's vm-suite: 3, over about 17 processes;
   - the batch: 0, over four processes, in boots 4 and 5.
   - So the retry is not once per process; it depends on the step.
+
+## Pre-registered (2026-10-18): the Tier 3 runner pilot, one corpus arm end to end (not a record)
+
+- **What:** `pilot.sh <t3-smoke>/bkit6 <scratch>` runs `run-virtual-cases.py --board-kit` on memcached
+  plain-temporal-repros, arm virtual-malloc: its controls and three cases, fixed and buggy.
+  - The SDK is the v9 kit's.
+  - The bundle goes to scratch, not under the corpus's results/.
+  - bkit6 is bkit3 with `BOARD_RUNGS="b0-stats b0-hello vbatch"`. The warm-up is S-26's; the scripts are dev's.
+- **What it answers:**
+  - **The path:** the runner's build, plan, BoardBatch boot, observe and verdicts writer, on silicon.
+  - **The payload:** each image's size and gzip size, the stage's, and the firmware against the 26,000,000-byte cap.
+    This is the first measured point of the boot plan.
+  - **Observe on a real case:** whether it yields the same fields as QEMU, cell by cell (`compare-pilot.py`, tested
+    two-sided: SAME on itself, DIFF on a changed offset).
+- **The prediction:** the compiler lane's QEMU record of the same images on the reference pin, capstone-qemu
+  b290f5656600 with svadu=false, matched by image sha256.
+  - Until it exists, the reference is the v6-kit QEMU bundle of this corpus. Its images differ, so only verdict,
+    cause and symbol+offset are comparable: CAUGHT, cause 25 at `mct_read_probe+56`, `mct_write_probe+88` and
+    `mct_read_probe+56`.
+- **A wedge is S-25's,** if its signature is a commit count with no valid bits. It is recorded as that, not as the
+  runner's failure.
