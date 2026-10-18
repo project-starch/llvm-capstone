@@ -134,7 +134,8 @@
         "virtual-nested-pools",
         "silicon-level0",
         "silicon-carve-bounds",
-        "silicon-carve-sublet"
+        "silicon-carve-sublet",
+        "vp2-malloc"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -175,14 +176,16 @@
         "virtual-nested-pools": "virtual-ffmpeg-carve",
         "silicon-level0": "silicon-ffmpeg-carve-level0",
         "silicon-carve-bounds": "silicon-ffmpeg-carve-bounds",
-        "silicon-carve-sublet": "silicon-ffmpeg-carve-sublet"
+        "silicon-carve-sublet": "silicon-ffmpeg-carve-sublet",
+        "vp2-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
         "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools",
         "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
         "silicon-carve-bounds": "results/2026-10-16-silicon/silicon-carve-bounds",
-        "silicon-carve-sublet": "results/2026-10-16-silicon/silicon-carve-sublet"
+        "silicon-carve-sublet": "results/2026-10-16-silicon/silicon-carve-sublet",
+        "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
       },
       "where": "capstone/bug-corpora/ffmpeg/carved-repros"
     },
@@ -266,7 +269,8 @@
         "native-fix-differential",
         "virtual-malloc",
         "silicon-lifetimes",
-        "silicon-level0"
+        "silicon-level0",
+        "vp2-malloc"
       ],
       "arm_keys": {},
       "status": "measured",
@@ -294,12 +298,14 @@
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng",
         "silicon-lifetimes": "silicon-level0-lifetimes",
-        "silicon-level0": "silicon-level0"
+        "silicon-level0": "silicon-level0",
+        "vp2-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
         "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
-        "silicon-level0": "results/2026-10-16-silicon/silicon-level0"
+        "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
+        "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
       },
       "where": "capstone/bug-corpora/ffmpeg/plain-temporal-repros"
     },
@@ -384,7 +390,8 @@
         "virtual-malloc",
         "virtual-nested-pools",
         "silicon-pool-stock",
-        "silicon-pool-sublet"
+        "silicon-pool-sublet",
+        "vp2-malloc"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -417,13 +424,15 @@
         "virtual-malloc": "virtual-ffmpeg-pool-stock",
         "virtual-nested-pools": "virtual-ffmpeg-pool-sublet",
         "silicon-pool-stock": "silicon-ffmpeg-pool-stock",
-        "silicon-pool-sublet": "silicon-ffmpeg-pool-sublet"
+        "silicon-pool-sublet": "silicon-ffmpeg-pool-sublet",
+        "vp2-malloc": "virtual-ffmpeg-pool-stock"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
         "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools",
         "silicon-pool-stock": "results/2026-10-16-silicon/silicon-pool-stock",
-        "silicon-pool-sublet": "results/2026-10-16-silicon/silicon-pool-sublet"
+        "silicon-pool-sublet": "results/2026-10-16-silicon/silicon-pool-sublet",
+        "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
       },
       "where": "capstone/bug-corpora/ffmpeg/pool-repros"
     },
@@ -660,7 +669,8 @@
         "cheribsd-subobject",
         "virtual-malloc",
         "silicon-lifetimes",
-        "silicon-level0"
+        "silicon-level0",
+        "vp2-malloc"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -691,12 +701,14 @@
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng",
         "silicon-lifetimes": "silicon-level0-lifetimes",
-        "silicon-level0": "silicon-level0"
+        "silicon-level0": "silicon-level0",
+        "vp2-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
         "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
-        "silicon-level0": "results/2026-10-16-silicon/silicon-level0"
+        "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
+        "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
       },
       "where": "capstone/bug-corpora/memcached/plain-heap-repros"
     },
@@ -718,7 +730,8 @@
         "native-fix-differential",
         "virtual-malloc",
         "silicon-lifetimes",
-        "silicon-level0"
+        "silicon-level0",
+        "vp2-malloc"
       ],
       "arm_keys": {},
       "status": "measured",
@@ -744,12 +757,14 @@
       "arm_configurations": {
         "virtual-malloc": "virtual-mallocng",
         "silicon-lifetimes": "silicon-level0-lifetimes",
-        "silicon-level0": "silicon-level0"
+        "silicon-level0": "silicon-level0",
+        "vp2-malloc": "virtual-mallocng"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
         "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
-        "silicon-level0": "results/2026-10-16-silicon/silicon-level0"
+        "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
+        "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
       },
       "where": "capstone/bug-corpora/memcached/plain-temporal-repros"
     },
@@ -2129,7 +2144,7 @@
     }
   ],
   "issues": {
-    "open": 143,
+    "open": 144,
     "resolved": 77
   },
   "fixtures": [
