@@ -300,6 +300,23 @@ Read and consume must use the same translated physical granule, including
 when a PTE was changed without a translation fence. A fault leaves bytes,
 tags and registers unchanged; a retry moves once.
 
+**A and D are software's on vp2 (S-24, found 2026-10-18).** The RTL's walker never sets the accessed or dirty
+bit: a load or fetch on a leaf with A clear, and a store on a leaf with W or D clear, raise a page fault and
+install no TLB entry (`cva6_ptw.sv:453/468/477-481`, `cva6_mmu.sv:142/602`). Linux's GUP on a present page marks
+the struct page, not the PTE, so the trusted adapter resolves a kind-4 STORE fault on a present page through the
+kernel's write-fault path (`fixup_user_fault` with FAULT_FLAG_WRITE, which sets D and fences the address) before
+pinning; a read fault's populate sets A. The prediction kit runs QEMU with svadu=false so hardware A/D never hides
+this class.
+
+**On vp2 (bf3db3175) a capability store must not be the first access to a page (S-25, found 2026-10-18).** The
+RTL's store syncer hands the DYN unit a response with no exception field, so an `STC` whose translation faults
+retires with no exception and no kind-4 escape while commit still counts it: a ghost entry in the store buffer's
+commit queue that never drains, wedging every later DYN operation (the sparse steps) or, after four, every store
+(the kit applications). Confirmed by a matched pair in simulation (va-runv8 vs its plain-sd control). The RTL fix
+(the store exception carried to the STC's writeback, as R-56 did for loads) is the next bitstream's; until then the
+trusted adapter or the runtime touches a fresh page with a plain access before any capability store reaches it. QEMU
+escapes the faulting STC as kind 4 and cannot show this.
+
 **Trusted S performs no capability memory access (ruled 2026-10-18, Q-23).** An `LDC` or `STC`
 whose base register is an integer reads 24 (tval = the base register) in every mode, as on the RTL.
 QEMU's earlier experimental "trusted-kernel context spill" branches (an S-mode scalar-address `LDC`,
