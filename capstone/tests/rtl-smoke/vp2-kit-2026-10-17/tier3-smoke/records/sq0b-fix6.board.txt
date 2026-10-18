@@ -1,0 +1,23 @@
+# Tier 3 board reading, arm sq0b-fix6: kit bkit7-fix6 (module d71f207a3af5546b, the S-27 workaround: resume rd = x0), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-sqlite-memsys5 platform board:caplifive_vp2_bf3db3175 cells 6 tally {"MISSED": 5, "NO-READING:inconclusive": 1}
+# controls [["bounds-mem5", "complete"], ["uaf-mem5", "complete"]]
+06_0c8c9a64b3_expert_rem_ctx_freed image f0791810ea9ead9d NO-READING:inconclusive cause None at None reached True completed False attribution null
+07_129371553c_fts3_destroy_oom_stale_table image 419ab751526fbc74 MISSED cause None at None reached True completed True attribution null
+08_51dd67080a_fts3_offsets_stale_buffer image a4cad6d31164429c MISSED cause None at None reached True completed True attribution null
+09_fix-2026-08-17_fts3_snippet_stale_buffer image d5923d07bec0f523 MISSED cause None at None reached True completed True attribution null
+10_becd68ba0d_fts3_snippet_or_stale_iter image 4c9b16c908bd0d1e MISSED cause None at None reached True completed True attribution null
+11_dee0359ddb_fts3_zterm_stale_buffer image cd812e5b8f479451 MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 06_0c8c9a64b3_expert_rem_ctx_freed: verdict NO-READING cause None pc None
+  SAME 07_129371553c_fts3_destroy_oom_stale_table: verdict MISSED cause None pc None
+  SAME 08_51dd67080a_fts3_offsets_stale_buffer: verdict MISSED cause None pc None
+  SAME 09_fix-2026-08-17_fts3_snippet_stale_buffer: verdict MISSED cause None pc None
+  SAME 10_becd68ba0d_fts3_snippet_or_stale_iter: verdict MISSED cause None pc None
+  SAME 11_dee0359ddb_fts3_zterm_stale_buffer: verdict MISSED cause None pc None
+  6 of 6 cells the same
+## the boot
+  BOARD_RUN_START 20:58:31 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 18 files, stage 24911033 bytes
+  firmware a67de2cde89ad15c 23759368 B
+  DRIVER rc=0 21:11:39
+  BOARD_RUN_DONE 21:11:39

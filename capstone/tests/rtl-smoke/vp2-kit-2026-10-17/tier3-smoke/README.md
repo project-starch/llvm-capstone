@@ -1155,3 +1155,27 @@ Withdrawn: the sq0 summary's "the other 15 carry S-27's register-2 fault" (dev 4
 - Cases 19 and 20 then show the cause-priority DIFF on d71f207a, with their verdicts as predicted.
 - The evidence is sq0d-fix6 (`records/sq0d-fix6.board.txt`, below). On the workaround module, case 22 faults as it did on
   3005ed52.
+
+### sq0b-e on the workaround module, results (2026-10-18 20:58-21:48): 21 of 24 cells as predicted in every field, all 24 in verdict
+
+`records/sq0{b,c,d,e}-fix6.board.txt`. Kit bkit7-fix6, module d71f207a3af5546b. Each subset's images are gate-checked.
+The bundles are under `sqlite/engine-repros/results/2026-10-18-vp2-rdx0/vp2-malloc-sq0<x>`, and the merged arm bundle
+follows once sq0a and sq0f have run.
+
+| subset | d71f207a (every field) | d71f207a (verdict) | 3005ed52 (every field) |
+|---|---|---|---|
+| sq0b | 6 / 6 | 6 / 6 | 1 / 6 |
+| sq0c | 6 / 6 | 6 / 6 | 2 / 6 |
+| sq0d | 3 / 6 | 6 / 6 | 1 / 6 |
+| sq0e | 6 / 6 | 6 / 6 | 5 / 6 |
+
+**sq0d's three field DIFFs differ in the fault CAUSE alone.** Each has the same verdict, the same faulting
+symbol+offset, the same attribution and the same tval on both sides:
+- cases 19 and 20 (rtree stale node, `nodeRelease+144`): silicon cause 4 (load misaligned), QEMU cause 24, tval 0x17;
+- case 22 (spellfix stale vtab, `editDist3FindLang+244`, `lw a0, 0(a0)`): silicon cause 13 (load page fault), QEMU
+  cause 24, tval 0x74746973272c276e (ASCII: the freed vtab's memory now holds a string).
+- So for a load through an untagged register holding a bad address, silicon reports the address exception and QEMU the
+  capability one. An rtl-oracle is reading bf3db3175 and capstone-qemu to say why. Until it reports this is an
+  observation, N=3 cells in one boot, not a mechanism.
+
+UNGATED (PREFLIGHT=0). The count of the 3005ed52 cells that carried S-27 is corrected in the RETRACTION just above.
