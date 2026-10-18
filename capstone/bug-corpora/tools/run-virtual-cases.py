@@ -124,6 +124,17 @@ def observe_control(name, text, result):
     return "complete" if f"CONTROL {name} RETURNED" in text else "none"
 
 
+def record_arm(a):
+    """The arm name the bundle records. --arm stays the virtual arm, for the configuration and adapter lookups; a board
+    run records under its own name, vp2-<arm without "virtual-">, which corpus.json maps to the SAME configuration, so
+    the QEMU bundle is never displaced as the corpus's current record of the virtual arm."""
+    if a.arm_name:
+        return a.arm_name
+    if a.board_kit:
+        return "vp2-" + (a.arm[len("virtual-"):] if a.arm.startswith("virtual-") else a.arm)
+    return a.arm
+
+
 def backend(a):
     """(kit, Batch class, the kit's required files, platform(kit, compiler, runner)) for --virtual-kit or --board-kit.
     The board record's firmware and kernel come from the recipe's own record after the run (boardvm.record_firmware)."""
@@ -136,6 +147,7 @@ def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--corpus", type=Path, required=True)
     p.add_argument("--arm", required=True)
+    p.add_argument("--arm-name", help="the arm the bundle records (default: --arm; with --board-kit, vp2-<arm>)")
     kits = p.add_mutually_exclusive_group(required=True)
     kits.add_argument("--virtual-kit", type=Path, help="the QEMU kit (virtualvm)")
     kits.add_argument("--board-kit", type=Path,
@@ -149,6 +161,7 @@ def main():
     p.add_argument("--prebuilt", type=Path, help="the port's capstone-application build of the corpus")
     p.add_argument("--prebuilt-controls", type=Path, help="the same build of the corpus's virtual controls")
     a = p.parse_args()
+    rec = record_arm(a)
     corpus = a.corpus.resolve()
     if a.prebuilt:
         return run_hosted(a, corpus)
@@ -173,8 +186,8 @@ def main():
         print(f"CONTROL-FAILED kit {kit} lacks {missing}", file=sys.stderr)
         return 75
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = a.out or (corpus / "results" / f"{stamp}-virtual" / a.arm)
-    raw = a.raw or Path("/tmp/capstone/virtual-cases-raw") / f"{stamp}-{corpus.parent.name}-{corpus.name}-{a.arm}"
+    out = a.out or (corpus / "results" / f"{stamp}-{'vp2' if a.board_kit else 'virtual'}" / rec)
+    raw = a.raw or Path("/tmp/capstone/virtual-cases-raw") / f"{stamp}-{corpus.parent.name}-{corpus.name}-{rec}"
     bindir = raw / "bin"
     bindir.mkdir(parents=True, exist_ok=False)
     cc = a.sdk / "capstone-cc"
@@ -250,30 +263,30 @@ def main():
         number = str(int(d.name[:2]))
         sites = json.loads((d / "case.json").read_text()).get("fault_sites") or ()
         if d.name in build_errors:
-            o = v.Observation(case=d.name, arm=a.arm, infra="build-failed", notes=build_errors[d.name])
+            o = v.Observation(case=d.name, arm=rec, infra="build-failed", notes=build_errors[d.name])
         elif f"{d.name}-buggy" not in runs or f"{d.name}-fixed" not in runs:
-            o = v.Observation(case=d.name, arm=a.arm, infra="infra", notes="the boot ended before this case ran")
+            o = v.Observation(case=d.name, arm=rec, infra="infra", notes="the boot ended before this case ran")
         else:
             ftext, fres = runs[f"{d.name}-fixed"]
             btext, bres = runs[f"{d.name}-buggy"]
             if not fixed_ok(number, ftext, fres):
-                o = v.Observation(case=d.name, arm=a.arm, infra="control-failed",
+                o = v.Observation(case=d.name, arm=rec, infra="control-failed",
                                   notes="the FIXED run of the same image did not print VERDICT FIXED and exit 0: "
                                         + (next((l for l in ftext.splitlines() if "VERDICT" in l or "CONTROL-FAILED" in l),
                                                 str(fres)))[:200])
             else:
                 o = observe(number, btext, bres, v.Symbols(a.llvm_bin, built[d.name]), sites)
-            o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(built[d.name])
+            o.case, o.arm, o.image_sha256 = d.name, rec, v.sha256(built[d.name])
         o.controls = list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
         print(f"{d.name:<60} {verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:90]}", flush=True)
 
-    record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", a.arm, rows, {
+    record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", rec, rows, {
         "configuration": config, "build": {"sdk_identity": [heap, profile], "cc_args": [local_path(c) for c in a.cc_arg],
                                            "flags": ["-O0", "-DCORPUS_VIRTUAL"]},
         "platform": platform})
-    print(f"--- {a.arm} ({config}): {record['tally']}\nresults: {out}")
+    print(f"--- {rec} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 
@@ -461,6 +474,7 @@ def fixed_hosted(n, mode, text, result, done):
 
 
 def run_hosted(a, corpus):
+    rec = record_arm(a)
     if corpus.name not in HOSTED:
         sys.exit(f"CONTROL-FAILED {corpus}: --prebuilt takes {sorted(HOSTED)}")
     ad = HOSTED[corpus.name]
@@ -489,8 +503,8 @@ def run_hosted(a, corpus):
         return 75
     mode = ad["mode"][a.arm]
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = a.out or (corpus / "results" / f"{stamp}-virtual" / a.arm)
-    raw = a.raw or Path("/tmp/capstone/virtual-cases-raw") / f"{stamp}-{corpus.parent.name}-{corpus.name}-{a.arm}"
+    out = a.out or (corpus / "results" / f"{stamp}-{'vp2' if a.board_kit else 'virtual'}" / rec)
+    raw = a.raw or Path("/tmp/capstone/virtual-cases-raw") / f"{stamp}-{corpus.parent.name}-{corpus.name}-{rec}"
     bindir = raw / "bin"
     bindir.mkdir(parents=True, exist_ok=False)
     found = sorted(d for d in corpus.glob("[0-9][0-9]_*") if (d / "case.c").is_file())
@@ -574,12 +588,12 @@ def run_hosted(a, corpus):
     for d in found:
         n = str(int(d.name[:2]))
         if f"{d.name}-buggy" not in runs or f"{d.name}-fixed" not in runs:
-            o = v.Observation(case=d.name, arm=a.arm, infra="infra", notes="the boot ended before this case ran")
+            o = v.Observation(case=d.name, arm=rec, infra="infra", notes="the boot ended before this case ran")
         else:
             ftext, fres = runs[f"{d.name}-fixed"]
             btext, bres = runs[f"{d.name}-buggy"]
             if not (fixed_ok(n, ftext, fres) if caseline else fixed_hosted(n, mode, ftext, fres, ad["done"])):
-                o = v.Observation(case=d.name, arm=a.arm, infra="control-failed",
+                o = v.Observation(case=d.name, arm=rec, infra="control-failed",
                                   notes="the FIXED run of the same image did not finish with VERDICT FIXED and exit 0: "
                                         + (next((l for l in ftext.splitlines() if "VERDICT" in l or "CONTROL-FAILED" in l),
                                                 str(fres)))[:200])
@@ -591,7 +605,7 @@ def run_hosted(a, corpus):
                 o = observe_hosted(n, mode, btext, bres, v.Symbols(a.llvm_bin, programs[d.name]), ad["probe"](d),
                                    ad["ready"], ad["done"], bool(ad["buggy"][a.arm]), sites,
                                    label_addresses(a.llvm_bin, programs[d.name], set(sites)))
-        o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(programs[d.name])
+        o.case, o.arm, o.image_sha256 = d.name, rec, v.sha256(programs[d.name])
         o.controls = list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
@@ -600,14 +614,14 @@ def run_hosted(a, corpus):
     cache_text = (a.prebuilt / ad.get("cache_dir", "") / "CMakeCache.txt").read_text()
     opts = {k: re.search(rf"^{k}:\w+=(.*)$", cache_text, re.M)
             for k in (*ad["cache"][a.arm], "CMAKE_BUILD_TYPE", "CMAKE_C_FLAGS")}
-    record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", a.arm, rows, {
+    record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", rec, rows, {
         "configuration": config,
         "build": {"sdk_identity": [heap, profile], "prebuilt": local_path(str(a.prebuilt)),
                   "cache": {k: (local_path(m.group(1)) if m else None) for k, m in opts.items()},
                   "argv": {"fixed": run_argv("fixed", "N"), "buggy": run_argv("buggy", "N")},
                   "controls": {c: v.sha256(prog) for c, (_, prog) in port_controls.items()}},
         "platform": platform})
-    print(f"--- {a.arm} ({config}): {record['tally']}\nresults: {out}")
+    print(f"--- {rec} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 

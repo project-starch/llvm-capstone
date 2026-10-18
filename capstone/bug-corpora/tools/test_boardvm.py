@@ -79,6 +79,18 @@ def main():
         p = boardvm.platform(kit_dir, None, Path(__file__))
         checks += [("the qemu key names the board", p["qemu"] == "board:caplifive_vp2_bf3db3175"),
                    ("the monitor is recorded", p["monitor"] == "007d81d")]
+        # run-virtual-cases.py records a board run under its own arm, so the QEMU bundle stays the virtual arm's record
+        import argparse
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("rvc", Path(__file__).with_name("run-virtual-cases.py"))
+        rvc = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(rvc)
+        ns = argparse.Namespace
+        checks += [("a QEMU run records the virtual arm",
+                    rvc.record_arm(ns(arm="virtual-malloc", arm_name=None, board_kit=None)) == "virtual-malloc"),
+                   ("a board run records vp2-<arm>",
+                    rvc.record_arm(ns(arm="virtual-malloc", arm_name=None, board_kit="k")) == "vp2-malloc"),
+                   ("--arm-name wins", rvc.record_arm(ns(arm="virtual-malloc", arm_name="x", board_kit="k")) == "x")]
     for what, ok in checks:
         bad += not ok
         print(f"{'ok  ' if ok else 'FAIL'} {what}")
