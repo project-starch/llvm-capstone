@@ -1,0 +1,194 @@
+# Tier 3 board reading, arm wm0-fix6: kit bkit7-fix6 (module d71f207a3af5546b, the S-27 workaround: resume rd = x0), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-wmem platform board:caplifive_vp2_bf3db3175 cells 23 tally {"NO-READING:control-failed": 23}
+# controls [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+00_3c8be14c82_rpcrdma_write_offsets_global image 86fd8e04a8bd334e NO-READING:control-failed cause None at None reached False completed False attribution null
+01_c14d731e45_cms_oid_global image f9218b640fb6ea21 NO-READING:control-failed cause None at None reached False completed False attribution null
+02_99da8c2cdc_mdb_address_column image 33fcd23b3fb5d237 NO-READING:control-failed cause None at None reached False completed False attribution null
+03_6eab9f83ab_cola_info_column image 32a845a5c744ca1c NO-READING:control-failed cause None at None reached False completed False attribution null
+04_b48759e4a4_qnet6_col_set_str image ec066b9abc5d8e57 NO-READING:control-failed cause None at None reached False completed False attribution null
+05_5a109265a6_usbll_address_struct image adb52ef371bf5e1f NO-READING:control-failed cause None at None reached False completed False attribution null
+06_a8b16d74e1_x509if_last_dn_static image e136d4c5c350e9e9 NO-READING:control-failed cause None at None reached False completed False attribution null
+07_fb504bc76c_mysql_auth_method image d5d978fb005c6467 NO-READING:control-failed cause None at None reached False completed False attribution null
+08_31ab1a0a17_sip_cseq_method image d49418cbd9cd9a12 NO-READING:control-failed cause None at None reached False completed False attribution null
+09_693dc40936_geonw_proto_data_tvb image d16dbf7482e1e010 NO-READING:control-failed cause None at None reached False completed False attribution null
+10_6fd3af5e99_t38_reassembly_buffer image 82aaa49cda9e497b NO-READING:control-failed cause None at None reached False completed False attribution null
+11_3a5f82dfb5_http_header_map image 55baee106f62fbba NO-READING:control-failed cause None at None reached False completed False attribution null
+12_90bb3a5c9e_xml_root_name_recycled image e9fc1ee708a2b303 NO-READING:control-failed cause None at None reached False completed False attribution null
+13_0261fd7da6_http_range_cursor_past_chunk image cb559721df25f24c NO-READING:control-failed cause None at None reached False completed False attribution null
+14_1d8acb21ab_solaredge_payload_six_past image 6630182266449f2a NO-READING:control-failed cause None at None reached False completed False attribution null
+15_d24613c461_opcua_padding_below_chunk image e9b55a1e844997d1 NO-READING:control-failed cause None at None reached False completed False attribution null
+16_e8ef9df09d_dcp_etsi_rs_parity_write image 3849f78246252a0a NO-READING:control-failed cause None at None reached False completed False attribution null
+17_5a560f3f6a_dns_one_byte_write image 71d1020771e4b990 NO-READING:control-failed cause None at None reached False completed False attribution null
+18_716a200295_rtps_batch_sample_info_unguarded image 34d73aaa7754c843 NO-READING:control-failed cause None at None reached False completed False attribution null
+19_4a4871a831_ntlmssp_blob_length_before_check image de2c829c566334c9 NO-READING:control-failed cause None at None reached False completed False attribution null
+20_ed20250c13_proto_undecoded_bitmap_unbounded image aa3bc776d1b14c35 NO-READING:control-failed cause None at None reached False completed False attribution null
+21_69dac89280_tcp_flags_str_sixteen_bytes image 3751bec143736b75 NO-READING:control-failed cause None at None reached False completed False attribution null
+22_c702b44a01_usbhid_output_usages_freed_twice image 696127102b3be2e4 NO-READING:control-failed cause None at None reached False completed False attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  DIFF 00_3c8be14c82_rpcrdma_write_offsets_global: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 01_c14d731e45_cms_oid_global: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 02_99da8c2cdc_mdb_address_column: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 03_6eab9f83ab_cola_info_column: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 04_b48759e4a4_qnet6_col_set_str: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 05_5a109265a6_usbll_address_struct: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 06_a8b16d74e1_x509if_last_dn_static: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 07_fb504bc76c_mysql_auth_method: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 08_31ab1a0a17_sip_cseq_method: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 09_693dc40936_geonw_proto_data_tvb: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 10_6fd3af5e99_t38_reassembly_buffer: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 11_3a5f82dfb5_http_header_map: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 12_90bb3a5c9e_xml_root_name_recycled: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 13_0261fd7da6_http_range_cursor_past_chunk: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 14_1d8acb21ab_solaredge_payload_six_past: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 15_d24613c461_opcua_padding_below_chunk: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 16_e8ef9df09d_dcp_etsi_rs_parity_write: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 17_5a560f3f6a_dns_one_byte_write: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 18_716a200295_rtps_batch_sample_info_unguarded: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 19_4a4871a831_ntlmssp_blob_length_before_check: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 20_ed20250c13_proto_undecoded_bitmap_unbounded: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 21_69dac89280_tcp_flags_str_sixteen_bytes: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  DIFF 22_c702b44a01_usbhid_output_usages_freed_twice: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]] board [["bounds-chunk", "none"], ["uaf-chunk", "complete"], ["uaf-jumbo", "none"]]
+  0 of 23 cells the same
+## the boot
+  BOARD_RUN_START 21:48:28 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 36 files, stage 8644051 bytes
+  firmware ed5989c3d7e05ce0 19565064 B
+  DRIVER rc=1 21:59:46
+  BOARD_RUN_DONE 21:59:46
+## the wedge apertures
+  sw=255 TRAP LOG {seen,mcause[6:0]} 0x88 10001000
+  sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1e 00011110
+  sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+  sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+  sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x05 00000101
+  sw=228 {1,dom_switch_idx[6:0]} 0x9c 10011100
+  sw=229 {load_state[3:0],0000} 0x00 00000000
+  sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+  sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+  sw=194 {000000,store_state} 0x03 00000011
+  sw=195 {0000,load_state} 0x00 00000000
+  sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0x00 00000000
+  sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x40 01000000
+  sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0xb0 10110000
+  sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+  commit pc (scoreboard slot 0; stale after a flush) 0x0000003f8f196f54
+  trap-log mepc 0x0000000000035a88
+  trap-log tval 0x0000000000000073
+  rev_node_debug_ex 0x0000002d00000000
+  rev_node_head_ex 0x006d
+  rev_node_serving_idx_ex 0x00000000
