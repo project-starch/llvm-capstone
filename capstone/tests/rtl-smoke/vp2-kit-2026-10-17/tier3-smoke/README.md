@@ -258,8 +258,10 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
     `mct_read_probe+56`, each reached and attributed by probe.
   - Against the v6-kit QEMU bundle of this corpus (different images), verdict, cause, symbol+offset, reached,
     completed and attribution are equal in all three cells, compared by script.
-  - The reference-pin record (b290f5656600 with svadu=false), from the compiler lane, is still owed for the
-    cell-by-cell comparison by image.
+  - **Against the reference pin** (the compiler lane's record on capstone-qemu b290f5656600, `cpu.txt` showing
+    svadu=false, the smoke kit with only the QEMU binary swapped), `compare-pilot.py` reads **3 of 3 cells the same
+    by image**: the three image hashes match, and verdict, cause, symbol+offset, reached, completed, attribution and
+    both controls are equal.
 - **The payload, the boot plan's first measured point:**
   - Each case image is about 197 KB, about 76.6 KB gzipped; controls.dom 75.1 KB gzipped.
   - The stage was 1,657,992 B, 686,071 B gzipped.
