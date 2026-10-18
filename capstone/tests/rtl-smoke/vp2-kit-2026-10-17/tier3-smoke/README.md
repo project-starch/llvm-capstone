@@ -1381,3 +1381,47 @@ arm-set predictions are in.
   exercise S-27 and must not be cited as evidence that it works."
   - The same holds for R-57 (these images run in M-mode with no translation), Q-24 and S-28.
   - S-27's RTL fix on silicon is therefore step 6's (pym0 on module 3005ed52), not step 2's.
+
+### Module revision 39d8492d's Tier 1 boot, pre-registered (2026-10-19, before the boot): rev7
+
+**The module:** board module 39d8492d5c18216b, from the compiler lane's lane module-resume-rd-x0 a0a256575831 (code
+76cfc60b3626: five items on e5775346cc8e).
+- **The items:**
+  - (1) the collect stopgap: -ENOMEM, and the pr_emerg "collect skipped";
+  - (2) frame tests;
+  - (3) a resume sfence.vma of the resolved address;
+  - (4) a satp refresh from +928 before every resume;
+  - (5) a busy-frame refusal before the pin.
+- **The gates, re-run by stage-rev7.sh:** qemu-only-csr-census and vp2-silicon-gate.
+- **Firmware:** fw_payload 7a53759a4773c81b (Image dcfc2e15bf1bbd77) (monitor 007d81d with the S-23 fetch retry, as wa1).
+- **The stage** is wa1's with exactly three files changed: the module (d71f207a -> 39d8492d), `vm/vm-contract.sh` and
+  `vm/vm-suite-inner.sh` (both `board-tier12/rev7/`).
+
+**The boot:** rungs b0-stats, b0-hello, vm-contract, vm-suite.
+- vm-contract loads the module with `diag_emerg=1 node_flat_records=4096`. diag_emerg puts CV_EMIT_FIRST lines at
+  KERN_EMERG, and the reduced capacity lets sparse-churn exhaust within a few thousand allocations.
+- It reads both parameters and supervisor_slots back, then the four counters before `ok` and after `stale`.
+- vm-suite runs sparse-churn LAST between two counter reads.
+- **The risk:** sparse-churn has never run on vp2. It was held under S-25, since a first-touch capability store has
+  wedged the core (R-57). A wedge there is an S-25/R-57 reading taken after every other reading, not a module
+  verdict.
+
+**Predicted** (the compiler lane's QEMU readings on b290f5656600 + svadu=false, and rev7-judge.py's checks):
+- b0-stats 0, b0-hello 0, vm-contract 0 with the identity branch (VIRTUAL_APPLICATION_OK, then the stale access
+  denied with 25), as ap1 and wa1.
+- `@@PARAM` diag_emerg=Y, node_flat_records=4096, supervisor_slots=1. The banner reads "loaded, diag arena-pin-1,
+  supervisor_slots=1, diag_emerg=1", once, with 0 refusal lines.
+- **The counters across vm-contract** (deltas, since the totals run from insmod):
+  - resume_sfences = the sum of `faults=` over vm-contract's two CAPSTONE_VM_STATS lines, and > 0;
+  - resume_satp_refreshes = the sum of `steps - 1`;
+  - resume_satp_changed and busy_frame_refusals are 0 at every read.
+- **sparse-churn:** `VM_EXIT:sparse-churn:1`, `VM_CONTRACT_FAIL:recycling allocation`, and the console's "capstone_vm:
+  collect skipped: collection is not available on bf3db3175" at least once.
+  - On QEMU at 4096: collect skipped at 3,584 nodes, then exit 1.
+- **vm-suite** retval 1, the count of its VM_EXIT lines.
+- **Readings that are not that:** a counter delta off (the resume path not as built); collect skipped absent (the
+  must-fire not reaching the console, or the stopgap not taken); a wedge in sparse-churn (S-25/R-57).
+
+**The re-run chain on d71f207a is HELD** at an arm boundary for this boot: after fpt-fix6b, with fca, wpt, wph, fcs,
+fph and then pgc, pgm0, pgm1 still to run. It resumes after this boot. UNGATED (PREFLIGHT=0). Dry run:
+`rev7/dryrun-rev7.txt`.
