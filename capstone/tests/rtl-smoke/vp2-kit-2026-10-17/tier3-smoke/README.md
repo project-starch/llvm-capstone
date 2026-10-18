@@ -682,3 +682,42 @@ whole function. D carries ppA's readouts and falls through to the real path.
   fence would then be a working software rule for -O0 corpus code on this bitstream.
 - **If ppD still faults:** the fence does not order the lost store, which is information for the RTL lane's next arm
   (an escape or switcher flush).
+
+**A provenance fact for the frozen SDK (the compiler lane, 2026-10-18).** t3-freeze's runtime archive
+(libapplication-runtime.a d10e4e75f12f601a) was built from the v9 kit's tree at f6dfd19d9396. That tree's vm-abi.h makes
+virtual ABI 6 current, and every Tier 3 image carries the magic `CPONVVM6`. dev's vm-abi.h defines only ABIs 2, 3 and
+5, and of all remote refs only the compiler lane's branch carries ABI 6. So the campaign's runtime revision lives on that
+branch, and an SDK built from dev makes ABI-5 images, which the kit's launcher refuses (`virtual ABI: Exec format
+error`, exit 126).
+
+### ppA on silicon (2026-10-18 16:08-16:19): the global is right; the fault recurs in the real path
+
+The probe's readings on silicon:
+- `metadata`'s raw low word equals the 16 MiB region, and the capability has the right base and end with its cursor at
+  the base.
+- `used` is 0. ok v1=1, v2=1.
+- Both regions are granule-aligned (mod 32K = 0, mod 128K = 0), so the representability lead is dead on silicon too.
+- Then the original fault, `cause=6 address=0x12`, recurs at the same pc in the real path.
+
+So the init's store to the global landed, and the lost store is elsewhere. With the RTL lane's directed simulation,
+that is the stack spill.
+
+### The pymalloc probe, results (2026-10-18 16:08-16:51): the global is intact, the stack spill store is lost, and a fence after it does not help
+
+`records/pp{A,B,C,D}.board.txt`. The images equalled the predictions' 21 in every arm.
+- **ppA, ppB and ppC read identically.**
+  - The global's granule is right: the raw low word is the 16 MiB region; the capability's base, end and cursor are
+    right; `used` is 0; both regions are granule-aligned.
+  - ppC reads zeros before the init.
+  - Then the real path faults `cause=6 address=0x12` at pym_raw_malloc's `sd a4,0x10(a5)`, as in production.
+  - So the init's store landed, the plain pre-touch changes nothing, and the lost store is the stack spill, which the
+    RTL lane's directed simulation reproduces value for value.
+- **ppD, the same function plus one `fence rw, rw` between the spill `stc` and the reload `ldc`: still faults.** The
+  fault is at pc offset 0x159cc, production's plus 4, so the fence was in the executed code. All 21 programs fault the
+  same way.
+  - A fence drains every pending store before the reload, and the reload still reads the slot's old contents. So the
+    capability store never reaches memory, or lands elsewhere. A fence is NOT a software rule for it.
+- **Open, with the RTL and compiler lanes:** the RTL lane's escape and switcher-flush arms, and a fresh-stack-page
+  first-touch arm. -O0 frames spill to s0-relative slots, and a capability store as a fresh page's first access is
+  S-25's trigger, though R-57 as analysed cannot lose a store without a wedge. A software arm E, pre-touching the
+  stack, would split those.
