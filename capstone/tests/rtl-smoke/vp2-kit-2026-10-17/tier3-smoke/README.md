@@ -1598,3 +1598,25 @@ The first form stopped at the firmware cap. This one changes the image and the f
 - **Every queue is stopped.** No further board time is spent until the board owner checks the board and its console.
 - **Owed after it is back:** sql0-rev2b, pgc/pgm0/pgm1, and the tree A flash if authorised. Before any of them, one
   short control boot, which must print the OpenSBI banner.
+
+### The no-boot diagnostic session, pre-registered (2026-10-19 02:40, before it runs)
+
+fpga1's read-only check of board #1's host found the UART path alive: the FT232R present and not re-enumerated, no
+kernel event since 01:25, the console service up since 2026-09-03. Its journal shows every session since 01:30
+downloading completely, with the core at PC 0x10504-0x10544 at attach (the bootrom), then `continue`. So the silence
+is board-side.
+
+**The session** (`fpga_driver/diag_noboot_fpga.py`, wa1's firmware ad5e84f761dd0f7c):
+- the cold_boot sequence up to `continue`, plus `monitor verify_image` and the first 8 words at 0x80000000 against the
+  file;
+- the UART bytes for 12 s after `continue`;
+- then `monitor halt`, never reset, and pc, mcause, mepc, mtval, mstatus, a0, ra and sp, with two more pc samples
+  across resume/halt.
+- The board is released (power off) at the end. A power cycle and the short control boot come only after these
+  readings are recorded.
+
+**What each reading means:**
+- a verify mismatch: the image did not land in DDR;
+- pc in the bootrom (0x10000-0x10fff): the core never left it after `continue`;
+- a non-zero mcause or pc at the trap vector: an early fault;
+- pc moving inside 0x80000000..: the firmware runs, and the console output is what is lost.
