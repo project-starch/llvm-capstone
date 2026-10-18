@@ -49,6 +49,7 @@ CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
 import appvm  # noqa: E402
+import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -350,7 +351,7 @@ def measure(args, spec, raw, preinstalled, symbols):
                 session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw)
             continue
         o = observe(case_dir, text, result, available, preinstalled, symbols)
-        o.arm, o.image_sha256, o.controls = args.arm, v.sha256(args.image), list(controls)
+        o.arm, o.image_sha256, o.controls = args.rec, v.sha256(args.image), list(controls)
         if o.fault and o.reached and not o.attribution and (case_dir / "control.sql").is_file():
             ctext, cresult = session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw)
             if faulted(ctext, cresult):
@@ -374,6 +375,8 @@ def main():
     where.add_argument("--state", type=Path, help="a persistent capstone-vm (physical profile)")
     where.add_argument("--virtual-kit", type=Path, help="the virtual platform kit (tools/virtualvm.py); "
                        "every session then runs in ONE boot")
+    where.add_argument("--board-kit", type=Path, help="the same boot on the vp2 board (tools/boardvm.py); the "
+                       "bundle records arm vp2-<arm>")
     parser.add_argument("--share", type=Path, help="physical: defaults to the state's own share")
     parser.add_argument("--image", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True,
@@ -400,15 +403,16 @@ def main():
         sys.exit(f"arm {args.arm!r} is not a virtual arm of this corpus")
     spec = v.load_arms()[config]
     nested, heap, root = identity(args.image)
-    if (nested, heap) != BUILD[config] or (spec["target"] == "capstone-virtual") != bool(args.virtual_kit or appvm.profile(args.state) == "virtual"):
+    if (nested, heap) != BUILD[config] or (spec["target"] == "capstone-virtual") != bool(args.virtual_kit or args.board_kit or appvm.profile(args.state) == "virtual"):
         print(f"CONTROL-FAILED {args.image} is nested={nested} heap={heap} and the run is on "
-              f"{'the virtual kit' if args.virtual_kit else 'a physical VM'}; arm {args.arm} is {config}, "
+              f"{'the virtual kit' if args.virtual_kit else 'the board kit' if args.board_kit else 'a physical VM'}; arm {args.arm} is {config}, "
               f"which needs nested={BUILD[config][0]} heap={BUILD[config][1]} on {spec['target']}",
               file=sys.stderr)
         return 75
     args.extensions = args.extensions or root / "share" / "extension"
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = args.out or CORPUS / "results" / f"{stamp}-qemu" / args.arm
+    args.rec = boardvm.record_arm(args.arm, args.board_kit)
+    out = args.out or CORPUS / "results" / f"{stamp}-{'vp2' if args.board_kit else 'qemu'}" / args.rec
     raw = args.raw or Path("/tmp/capstone/sql-repros-raw") / f"{stamp}-{args.arm}"
     raw.mkdir(parents=True, exist_ok=True)
     preinstalled = {e.strip() for e in args.preinstalled.split(",") if e.strip()}
@@ -418,8 +422,9 @@ def main():
     pg_share = args.pg_share = args.pg_share or args.fixture.parent / "install/share/postgresql"
     if not (pg_share / "timezonesets").is_dir():
         sys.exit(f"no PostgreSQL share at {pg_share}")
-    if args.virtual_kit:
-        args.batch = virtualvm.Batch(raw / "stage")
+    if args.virtual_kit or args.board_kit:
+        Batch, kit = boardvm.select(args.virtual_kit, args.board_kit)
+        args.batch = Batch(raw / "stage")
         args.batch.put("bin/postgres", args.image)
         args.batch.put("share", pg_share)
         if args.extensions.is_dir():
@@ -428,11 +433,11 @@ def main():
         args.batch.put("pgcluster", args.fixture)
         measure(args, spec, raw, preinstalled, symbols)            # plan every session
         args.runs, serial, completed = args.batch.execute(
-            args.virtual_kit, raw / "guest", timeout=600 + 300 * len(args.batch.steps))
+            kit, raw / "guest", timeout=600 + 300 * len(args.batch.steps))
         print(f"  virtual boot: {'completed' if completed else 'DID NOT COMPLETE'}; "
               f"{len(args.runs)}/{len(args.batch.steps)} sessions ran; serial {serial}", flush=True)
         args.replay = True
-        platform = virtualvm.platform(args.virtual_kit, args.llvm_bin / "clang", HERE)
+        platform = boardvm.run_platform(args.virtual_kit, args.board_kit, args.llvm_bin / "clang", HERE, raw / "guest")
     else:
         vmconfig = json.loads((args.state / "config.json").read_text())
         args.share = args.share or Path(vmconfig["share"])
@@ -442,12 +447,12 @@ def main():
         platform = appvm.platform(args.state, args.llvm_bin / "clang", HERE)
     wanted, available, rows = measure(args, spec, raw, preinstalled, symbols)
 
-    record = v.write_bundle(out, "postgres/sql-repros", args.arm, rows, {
+    record = v.write_bundle(out, "postgres/sql-repros", args.rec, rows, {
         "configuration": config, "image": {"sha256": v.sha256(args.image), "nested": nested, "heap": heap},
         "fixture": fixture_record(args.fixture, preinstalled),
         "extensions": {"wanted": wanted, "available": sorted(available)},
         "platform": platform})
-    print(f"--- {args.arm} ({config}): {record['tally']}\nresults: {out}")
+    print(f"--- {args.rec} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 

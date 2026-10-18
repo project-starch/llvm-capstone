@@ -128,11 +128,7 @@ def record_arm(a):
     """The arm name the bundle records. --arm stays the virtual arm, for the configuration and adapter lookups; a board
     run records under its own name, vp2-<arm without "virtual-">, which corpus.json maps to the SAME configuration, so
     the QEMU bundle is never displaced as the corpus's current record of the virtual arm."""
-    if a.arm_name:
-        return a.arm_name
-    if a.board_kit:
-        return "vp2-" + (a.arm[len("virtual-"):] if a.arm.startswith("virtual-") else a.arm)
-    return a.arm
+    return a.arm_name or boardvm.record_arm(a.arm, a.board_kit)
 
 
 def backend(a):
