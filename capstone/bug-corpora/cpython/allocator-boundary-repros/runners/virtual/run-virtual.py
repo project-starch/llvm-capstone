@@ -65,7 +65,17 @@ except BaseException as e:
 os.write(1, b"ABR RETURNED\\n")
 '''
 WORKLOAD = ('import json,gc; a=[{"n":n} for n in range(1000)]; '
-            'assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")')
+            'assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")\n'
+            # The guest's own reading of the pins a nondeterminism control depends on, in the same process (so the
+            # session's step count is unchanged): the kernel command line (norandmaps), the hash-randomisation flag,
+            # the seed it sees, and hash("abc"), which is the same in every run only when the seed is fixed. A board
+            # record and its QEMU record must agree on these; the bundle's inputs.json carries them as `guest`.
+            'import os,sys\n'
+            'try: c=open("/proc/cmdline").read().strip()\n'
+            'except Exception as e: c="UNREADABLE "+type(e).__name__\n'
+            'print("ABR-ENV "+json.dumps({"kernel_cmdline":c,"hash_randomization":sys.flags.hash_randomization,'
+            '"pythonhashseed":os.environ.get("PYTHONHASHSEED"),"hash_abc":hash("abc")}))')
+ENV_LINE = re.compile(r"^ABR-ENV (\{.*\})\s*$", re.M)
 CAPACITY = re.compile(r"MemoryError|cannot allocate|out of memory")
 # The interpreter itself failing: a C function returned an error without setting one. It is not the
 # program running to its end, and the physical runner already read it as a failed run.
@@ -230,6 +240,9 @@ def main():
     # boot ran only the workload and the read pass asked for steps it never recorded.
     collecting = text.startswith("[runner] SESSION COLLECT")
     qualified = "CPYTHON-OK 1000" in text or collecting
+    m = ENV_LINE.search(text)
+    # "unread" rather than an absent field: a record that cannot show its pins must say so.
+    guest = {"guest_env": list(a.guest_env or []), **(json.loads(m.group(1)) if m else {"reading": "unread"})}
     print(f"  workload {'ok' if qualified else 'FAILED'}", flush=True)
     if not qualified:
         print(f"CONTROL-FAILED the interpreter did not run the workload; see {a.raw / 'workload.out'}",
@@ -279,7 +292,7 @@ def main():
         "configuration": config, "predicted": PREDICTED[a.arm],
         "build": {k: manifest.get(k) for k in ("application", "profile", "nested", "image_sha256",
                                                "runtime_revision", "runtime_dirty", "stack_bytes")},
-        "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
+        "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE), "guest": guest})
     print(f"--- {rec} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
