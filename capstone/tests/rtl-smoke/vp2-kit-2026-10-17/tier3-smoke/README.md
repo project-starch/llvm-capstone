@@ -414,3 +414,44 @@ and `t3-images-nb/ARMS.spec`, one boot each, in that order.
 - **wph** (wireshark/plain-heap, vp2-malloc): CAUGHT 12, its record. `records/wph.prediction.txt`.
 - **wpt** (wireshark/plain-temporal, vp2-malloc): CAUGHT 10, its record. `records/wpt.prediction.txt`.
 - **The order after wm1:** mph, fph, fpt, fca, fcs, wph, wpt.
+
+### Arm wm0, result (2026-10-18 13:02-13:13): the core wedges in the uaf-jumbo control, a signature that is neither S-25's kit-application face nor R-49 as fixed
+
+`records/wm0.board.txt`. The board's collected images equalled the prediction's 26, then the boot ran 2 of 26 steps:
+session-share 0, then uaf-chunk 0 (as predicted, it completes). Then `virtual-malloc-01-uaf-jumbo` began and the core
+went silent: no heartbeat, and the driver read the wedge apertures at its idle limit.
+- **The apertures:**
+  - store unit WAIT_STORE_READY (194 = 3);
+  - commit count 4 with valid bits 1101 (193 = 4, 221 = 0xd0), so one counted slot is invalid;
+  - the data request valid and unacknowledged, with write_en and metadata_en (226 = 0x80, 227 = 0x05): a
+    capability store outstanding;
+  - a domain switch in progress (225 = 0x88: tbe, domsw), not in M-mode (224 = 0x1e), switcher index 28 (228 = 0x9c).
+- **Against S-25's kit-application wedge (r10):** it differs in 8 of 15 apertures (`compare-wedge-apertures.py`).
+  r10 has no valid bit at all, privM, and an idle store unit.
+- **Against R-49** (a switcher write pushed over a full commit queue, the switch never finishing): the shape matches
+  (WAIT_STORE_READY, count 4, a starving data request with write_en). But R-49 is fixed on silicon, and its fix
+  192a5e624 is an ancestor of bf3db3175, checked with `git merge-base`. So a matching shape is not that mechanism.
+- **Read so far, not a mechanism:** the invalid counted slot is R-57's ghost. A switch that then starves is what a
+  full commit queue does to the switcher. The control is a use-after-free of a jumbo block, which on QEMU faults 25 at
+  the probe. The attribution is handed to the RTL lane, with the apertures as recorded.
+- **The cells:** NO-READING:control-failed 23, from a boot that did not complete. That is not a verdict on any case.
+- **wm1 did not run** (the loop stops after a boot that does not complete). Its prediction has the same uaf-jumbo
+  control. It goes last in the campaign, as the one known wedge risk.
+
+### Arms fso, pb12, pb9, pb10, pgc, pgm0, pgm1, pre-registered (2026-10-18): the compiler lane's nb predictions
+
+Each was registered by `register-prediction.sh`: the board's bytes and module 5bfc38f8 were checked. Every tally is its
+corpus record's.
+- **fso** (ffmpeg/subobject, vp2-malloc): MISSED 9. On v6-fix it was control-failed, from the pool code's tag loss, and
+  `-fno-builtin` clears it.
+- **pb12** (memcached/allocator, stock, vp2-malloc): CAUGHT 1, MISSED 8.
+- **pb9** (ffmpeg/pool, stock, vp2-malloc): MISSED 4.
+- **pb10** (ffmpeg/pool, Sublet, vp2-nested-pools): CAUGHT 4. Its pool-return control flips polarity against pb9.
+- **pgc** (postgres/c-repros, vp2-malloc): CAUGHT 5.
+- **pgm0** (postgres/mmgr, vp2-malloc): MISSED 5.
+- **pgm1** (postgres/mmgr, vp2-pg-pools): CAUGHT 5. Its uaf-chunk control flips polarity against pgm0.
+- **pb13** (memcached/allocator, Sublet) is not registered: its QEMU run is VOID (exit 75). The 11 images match, but its
+  chunk-free-90 control and every fixed build fault 29 at address 0, so nothing can be scored. That is a prediction-side
+  question first.
+- **The order after the current seven:** fso, pb12, pb9, pb10 through `tier3-seq.sh`; then pgc, pgm0, pgm1 through
+  their own runners with `--board-kit bkit7`.
