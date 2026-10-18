@@ -51,8 +51,8 @@ The current `CSRETIRE` helper ignores rs2.
 | CSR | Address | Meaning |
 |---|---|---|
 | `srevroot` | `0x5c1` | S/M read/write physical lifetime-table base, rounded down to 4 KiB |
-| `urevavail` | `0xcc0` | Read-only available IDs; zero for an invalid/missing table |
-| `scapctl` | `0x5c0` | S/M; bit 0 controls the separate protected-U experiment; read-only bit 8 advertises exact shadow bounds |
+| `urevavail` | `0xcc0` | **Illegal instruction by default (Q-21, as on vp2; QEMU from 3b8040d5ff6e).** Under the test-only property `x-capstone-test-csrs` only: read-only available IDs. The adapter computes `capacity − next + free_count` from the table header; the application runtime never reads it (availability inside a context is the kind-5 pressure event) |
+| `scapctl` | `0x5c0` | **Illegal instruction by default (Q-22, as on vp2; QEMU from 3b8040d5ff6e).** Under `x-capstone-test-csrs` only: bit 0 selects the protected-U experiment, read-only bit 8 advertises exact shadow bounds. The adapter never touches it and reads exact bounds as 0 |
 
 `scapctl` is not how the launcher enters virtual C. `CSRUNV` binds both roots
 when admitting a context, then restores them from saved state on resume.
@@ -97,7 +97,7 @@ suite can be run both ways as a two-sided control. This opt-in QEMU profile
 supports mallocng object geometry without allocator-specific instructions;
 it requires more metadata than a tag bit and is not an RTL encoding.
 All checks precede table and slot mutation. Success creates a private senior
-ancestor and a linear child. The scalar ancestor lets the adapter later
+ancestor and a child of the descriptor's type (LINEAR by default, NONLIN with bit 8). The scalar ancestor lets the adapter later
 retire every application derivation under that arena without keeping a REV
 capability in ordinary kernel C state.
 
@@ -221,6 +221,30 @@ QEMU's internally saved continuations.
 | 576..639 | 64 total | Scalar cursor/value views of a0..a7 |
 | 640, 648 | 8 each | Collection page count, physical page-list address |
 
+**The register slots after an escape (ruled 2026-10-18, Q-30; the RTL is the reference).** On every escape the
+context's x1..x31 are written WITH their tags into the frame's own register slots (+64 + 16·i, the PCC at +64) and
+the caller is restored over the register file; the resume loads the slots back (the pc from +64, +4 after a reply),
+and zeroes only +224 (x10's slot) after a reply (action 2); a non-reply resume zeroes nothing, and the restore read
+does not consume, so after every resume the frame keeps tagged copies of x1..x31, LINEAR ones included, beside the
+live registers until a later ENTRY zeroes them (a linearity residual on silicon, recorded with the S-entry below;
+the RTL item for the next bitstream is a consuming resume). The trusted adapter therefore treats the register slots as the context's live
+state and OVERWRITES +224 with the reply; a check that the slot is empty is QEMU-shaped and wrong on silicon (vp2's
+boot 3-T1 repeat stopped on it). QEMU's escape, which kept the callee in its own save state and left the slots
+zero, matches the RTL from b290f5656600 (every kind writes the slots before the caller is restored; the resume
+loads them; the hidden words +920..+944 and the FP area stay QEMU-internal, a recorded residual); the +576..+639
+views and the event words are unchanged. A context's instruction fetch is permission-checked as USER on the RTL
+(`cva6_mmu.sv:140`, `:377-379`), so a context can never execute from a page without the U bit.
+
+**The caller's snapshot at +1024..+2304 must never sit in a page the application can reach (found
+2026-10-18 by the board lane's auditor, filed as an S-entry).** On the RTL every escape restores the S caller
+(pc, x1..x31, the S and M CSRs, FP) from frame+1024 with no check, so a domain holding a capability to a
+child thread's frame page could write the kernel's saved pc/sp/satp/stvec and have the next escape load them.
+QEMU keeps the caller in its own slot and cannot show it. Rule: the trusted adapter makes a child thread's
+frame unreachable by the domain before its first entry (it retires the frame arena's ancestor after pinning the
+page and keeps the page kernel-only; the main thread's frame is a kernel page already); and the RTL item for the
+next bitstream keeps the caller snapshot out of any domain-reachable page. Item D's decision 1 placed the
+snapshot in the frame on QEMU's assumption that the frame is not mapped into the application.
+
 The base frame is 576 bytes; nonzero options require 640 bytes; collection
 requires 656 bytes. Unknown options are rejected. First entry consumes and
 clears all 32 initial PCC/GPR slots. Later resumes use the saved continuation;
@@ -281,6 +305,25 @@ Read and consume must use the same translated physical granule, including
 when a PTE was changed without a translation fence. A fault leaves bytes,
 tags and registers unchanged; a retry moves once.
 
+**A and D are software's on vp2 (S-24, found 2026-10-18).** The RTL's walker never sets the accessed or dirty
+bit: a load or fetch on a leaf with A clear, and a store on a leaf with W or D clear, raise a page fault and
+install no TLB entry (`cva6_ptw.sv:453/468/477-481`, `cva6_mmu.sv:142/602`). Linux's GUP on a present page marks
+the struct page, not the PTE, so the trusted adapter resolves a kind-4 STORE fault on a present page through the
+kernel's write-fault path (`fixup_user_fault` with FAULT_FLAG_WRITE, which sets D and fences the address) before
+pinning; a read fault's populate sets A. The prediction kit runs QEMU with svadu=false so hardware A/D never hides
+this class.
+
+**On vp2 (bf3db3175) a capability store must not be the first access to a page (S-25, found 2026-10-18).** The
+RTL's store syncer hands the DYN unit a response with no exception field, so an `STC` whose translation faults
+retires with no exception and no kind-4 escape while commit still counts it: a ghost entry in the store buffer's
+commit queue that never drains, wedging every later DYN operation (the sparse steps) or, after four, every store
+(the kit applications). Confirmed by a matched pair in simulation (va-runv8 vs its plain-sd control). The RTL fix
+(the store exception carried to the STC's writeback, as R-56 did for loads) is the next bitstream's; until then the
+trusted adapter pins a whole arena on its first kind-4 fault (every allocator-owned arena is first touched by
+enframe's plain prefix load, so no stc reaches an unpinned page through malloc'd memory), and a region whose
+first access is an stc through a pointer obtained without the allocator (a direct mmap) is not supported on this
+bitstream (the kit's sparse steps are that case). QEMU escapes the faulting STC as kind 4 and cannot show this.
+
 **Trusted S performs no capability memory access (ruled 2026-10-18, Q-23).** An `LDC` or `STC`
 whose base register is an integer reads 24 (tval = the base register) in every mode, as on the RTL.
 QEMU's earlier experimental "trusted-kernel context spill" branches (an S-mode scalar-address `LDC`,
@@ -291,11 +334,30 @@ suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`,
 capabilities into registers from S; it is a test scaffold with no silicon equivalent, no production
 kit sets it, and their passes say nothing about trusted S. The follow-up that retires the property
 is rewriting that bootstrap onto the `CSRUNV` route. The reference QEMU for the virtual profile is
-capstone-qemu `virtual-capstone-v7` f2f15f8fc70c (one commit on d35af47b163c); Tier 0 on it: m1 73/73,
-movc 67/67, sublet-lifetimes 119/119, trusted-linux-u-access 71/71, runtime run.sh 69/69, index8 PASS,
-fp 60/60, exact-bounds 4/4. The adapter obtains
+capstone-qemu `virtual-capstone-v7` b290f5656600 (four commits on d35af47b163c: descriptor v7 and the
+scalar-S gate at f2f15f8fc70c; strict DELIN and `x-capstone-supervisor-slots`, default 1 as on
+silicon, clamped 1..32, at 852c5bc76774; `scapctl` and `urevavail` illegal by default under
+`x-capstone-test-csrs` at 3b8040d5ff6e; the escape writing the frame's register slots and the resume
+loading them, Q-30, at b290f5656600). Tier 0 on it at the suites' own settings: virtual-capstone-m1
+74/74, movc 67/67, sublet-lifetimes 119/119, runtime run.sh 71/71 (69 + frame_slots ×2), index8 PASS,
+fp 60/60 (three isolation cases set 32 slots explicitly), exact-bounds 4/4, trusted-linux-u-access
+71/71 (m1, movc and trusted-linux set `x-capstone-test-s-ldc` and `x-capstone-test-csrs`: their
+bootstrap selects protected U through `scapctl`). No prediction kit sets any of the three properties;
+the kit gate parses their values; the prediction kit runs with `svadu=false`. The adapter obtains
 every capability it needs through `CSMINT` (descriptor v7) and never holds one in a register.
 The Q-12 protected-path changes did not change legacy physical C transfers.
+
+**`DELIN` of a non-LINEAR capability faults with 26 (ruled 2026-10-18).** The RTL raises 26 for any
+non-LINEAR rs1 (`capstone_dyn_unit.anvil:794-801`); QEMU's earlier no-op for a NONLIN operand is
+replaced by the same fault in the default profile, so a prediction run sees what silicon sees. The
+image gp is NONLIN by ABI (every launch grant is). The `-capstone-image-gp` materialization of a
+global address today is `scc`/`cincoffset` off gp followed by a `delin` that is dead on QEMU and
+faults on vp2 (boot 2 of the virtual profile, 2026-10-18: 525 of contract.dom's 530 delins): this is
+C-27, which ISSUES-ARCHIVE recorded FIXED while the backend still emits it unconditionally. Dropping
+the `delin` is sound only under the asserted NONLIN-gp ABI (two consumers rely on the base being
+NONLIN: the copy hazard and the SHRINK double read), and that decision is reserved to the project
+lead (`CapstoneISASemantics.md:52`); the semantics owner's recommendation is to drop it with the
+contract asserted in the backend and the pin flipped.
 
 | Cause | Capability fault |
 |---|---|

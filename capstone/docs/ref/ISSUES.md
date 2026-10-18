@@ -339,6 +339,215 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 **Impact.** A program that branches on these errnos (ENODEV for an unsupported file mapping, ENOMEM for an oversize mapping) takes another path. No port has been checked for such a dependency.
 
 
+## S-21 — silicon only: every CSRUNV escape restores the S caller's registers and CSRs (M-mode ones included) from frame+1024, and a child thread's frame is a page the domain can write `OPEN — security, silicon only, found 2026-10-18 by the board lane reading vp2 Tier 1 boot 3-T1's repeat (confirmed from source by the claim-auditor and two-sided by the RTL lane; NOT YET DEMONSTRATED, the RTL lane's sim arm is pre-registered); RULED the same day by the semantics owner: the module makes a child frame unreachable before its first entry (the compiler lane), and the RTL keeps the caller snapshot out of the frame on the next bitstream (the RTL lane); a consequence of vp2 item D's decision 1`
+
+Siblings: S-22 (the paused context's OWN state, read back from the same domain-reachable frame), Q-30 (the frame slots'
+visibility after an escape, which is how this was found). The main thread is not affected: its frame is a kernel page.
+
+**The chain** (capstone-ariane bf3db3175, the vp2 bitstream; module capstone_vm.c as built into ko ed24f827):
+1. **ENTRY saves the S caller at frame+1024.** The request carries save_base = base_addr + 1024 (commit_stage.sv:617);
+   the CSR file latches base_addr as runv_frame (:626; csr_regfile.sv:2117).
+2. **Every escape restores it from there.** The escape request has restore_base = sup_runv_frame_i + 1024
+   (commit_stage.sv:853-856); the walk restores ids 0..66 from it (capstone_dom_switcher.anvil:508), the FP state from
+   frame+2048 (:527-533). Every escape kind runs it, the quantum included, so no ECALL is needed.
+3. **Nothing on the restore path checks what it loads.** restore_io (:121-147) reads the word and sets the register
+   with has_metadata = metadata_en; the pc comes from id 0 (frontend.sv:462-466); x1..x31 are written unfiltered
+   (issue_read_operands.sv:1649-1651); CSR ids 1..25 and 57..66 are written with no privilege gate
+   (csr_regfile.sv:2008-2070), which includes S state (mstatus, satp, stvec, sepc, sscratch) and M state (mtvec,
+   mscratch, medeleg, mideleg, mie, mip, mepc/cepc, ctvec, cpmp0..15). Only the privilege level is a flop
+   (runv_caller_priv_q, csr_regfile.sv:2120/2127). "Not found" is the strength of this point: greps of the restore
+   path for a privilege or tag test, by the auditor and by the RTL lane, found none.
+4. **A child thread's frame is domain-writable.** The domain builds it in a 4 KiB page it holds a NONLIN RW copy of
+   (runtime/virtual/thread.c:36-61, cap_vm_copyable) and names it in the thread-create service. CV_THREAD_CREATE
+   (capstone_vm.c:1021-1045) checks find_arena(frame, PAGE_SIZE) and pins the page; it does not retire, revoke or
+   remap the grant, and retire() refuses -EBUSY while the arena is a thread frame (:516), so the grant stays live.
+5. So a domain can write the saved S pc, sp, tp, satp and stvec, and M-mode trap state, into its child's frame+1024..,
+   and the child's next escape loads them into the S caller: a kernel compromise directly; the path through mtvec or
+   medeleg to M is the auditor's inference, not traced end to end. Reading the page also leaks the kernel's live GPRs
+   and the tagged M CSRs that ENTRY saved there.
+
+**QEMU cannot show it.** QEMU keeps the caller in the context slot (save_state(&call->caller), capstone_supervisor.c
+:971, restored at :439), and its own comment requires the frame be "not mapped into the application" (:685-686).
+Item D's decision 1 (docs/plans/2026-10-17-vp2-item-d-csrunv-rtl.md, "the frame is the context storage", the caller's
+snapshot at frame+1024) was taken by the semantics owner on 2026-10-17 on that assumption, and the module's child
+frames break it.
+
+**Demonstration (pending).** The RTL lane's arm on bf3db3175: a va-runv2 variant whose context stores a marker into
+the caller's sp slot of its frame before its ECALL, the S supervisor printing sp after CSRUNV returns (prediction: sp
+reads the marker), plus an arm on an M CSR. The slot's offset is taken from the switcher's own save walk in the trace
+(the auditor's layout reads +1408, the RTL lane's +1120).
+
+**Fixes, as ruled.** (a) The module (the compiler lane, the queue's revision): CSRETIRE the frame arena's ancestor once
+the pinned page is in hand, so the domain's copy is dead (25 on access), keep the page kernel-only, and refuse
+CV_THREAD_CREATE if the retire fails; a two-sided run.py check, a domain that writes its child's frame+1024.. before the
+ECALL reads 25 after the fix and reaches the ECALL on the pre-fix module. Trusted S cannot copy tagged capabilities
+(Q-23), so copying the start frame into a kernel page is not available. (b) The RTL (next bitstream, costed and
+pre-registered by the RTL lane): the caller snapshot kept out of the frame, in a kernel-only save area or the CSR file
+for the one slot, since (a) relies on the adapter never granting a frame page.
+
+**Exposure today** (verified at llvm-capstone 457b78f27e10). A child frame runs only in a second context slot.
+- **vp2 has one slot.** The RTL refuses a second CSRUNV with 29 while the creator's context holds the slot (Q-26).
+- **From the Q-26 queue (39cf6763d3a6) onward**, the module refuses CV_THREAD_CREATE with -EBUSY whenever a frame is
+  live, and its caller always is (capstone_vm.c:1123-1126; `supervisor_slots` is 1 and fixed after load). So on vp2
+  no child frame is ever created.
+- **With the earlier modules** (ed24f827, which boots 1-3 ran), the child frame is admitted at create. Whether a
+  creator can leave the slot while its child survives was not examined.
+- **QEMU keeps the caller internal at any slot count**, so this issue does not apply to QEMU.
+- **The live case** is a multi-slot bitstream, or a module admitting child frames on one slot.
+
+**Impact.** Benign programs run unaffected (Tier 1/2 proceed). Any claim that the virtual profile isolates the kernel
+from a domain ON SILICON must not outrun this issue until (a) is on the board and the demonstration arm reads 25.
+
+## S-22 — silicon only: the paused context's own state stays in its frame, so a domain that can write a child thread's frame can change that thread's satp, srevroot and mstatus on resume and reload stale tagged register copies `OPEN — security, silicon only, filed 2026-10-18 beside S-21 from the RTL lane's two-sided read; the same module fix as S-21 covers it today; the RTL fixes (a consuming resume, the hidden words out of the frame) are the RTL lane's for the next bitstream`
+
+Siblings: S-21 (the S caller's snapshot at frame+1024, restored on every escape; same frame, same module fix), Q-30.
+
+**The two mechanisms** (bf3db3175):
+1. **Resume re-reads privileged context state from the frame.** RESUME loads the context's mstatus from +920 and its
+   satp, srevroot and options from the hidden words at +928..+944 (capstone_dom_switcher.anvil:310-316, rsteps 2-5);
+   QEMU keeps them internal. The runtime suite's case 28 (immutable_resume_roots) rewrites +0/+8/+56, not +928..,
+   so it does not cover this. A domain with RW to its child's frame could therefore give the child a page table
+   root, a revocation root or an mstatus of its choosing at the child's next resume.
+2. **Resume does not consume the slots.** The restore read is a plain read (restore_io; load_unit.sv:197-234), and only
+   +224 is zeroed, after a reply (anvil :297, :338-340); a non-reply resume zeroes nothing. So after every resume the
+   frame keeps tagged copies of x1..x31, LINEAR ones included, beside the live registers, until a later ENTRY zeroes
+   them: a domain holding RW to the frame can LDC a stale LINEAR copy after a resume, a linearity residual.
+
+**Fixes.** (a) The module fix of S-21 makes the frame unreachable to the domain, which closes both. (b) The RTL lane
+(next bitstream): a consuming resume (the switcher clears the 31 slots and tags after loading them) and the hidden
+words out of the frame. QEMU is being brought to the RTL's behaviour as it is (slots written on escape, +224 zeroed on
+action 2 only), not to the fixed one, so the kit's predictions see what silicon does.
+
+**Exposure today.** As S-21's: no child frame is created on vp2 from the Q-26 queue (39cf6763d3a6) onward.
+- The hidden-word read does not apply to QEMU, which keeps those words internal.
+- The stale-copy residual will apply to a multi-slot QEMU configuration once QEMU writes the escape slots into the frame
+  (the RTL lane's next pin).
+
+**Not demonstrated.** Source reading only.
+
+## S-23 — silicon only: the S caller's first instruction fetch after a CSRUNV or CSRETIRE returns is refused (instruction access fault, mtval physical) although a loaded RWX CPMP entry covers it when M reads the CSRs; the kernel panics `OPEN — found 2026-10-18 by the board lane on vp2 (caplifive_vp2_bf3db3175), N = 3 panics; WORKED AROUND in the monitor (capstone-sbi vp2/fetch-retry 007d81d, CAPSTONE_VP2_FETCH_RETRY), which every virtual-application claim on vp2 must cite; the root cause and the RTL fix for the next bitstream are the RTL lane's`
+
+Siblings: S-21 and S-22 (the same CSRUNV ENTRY/ESCAPE walks, a different consequence), Q-30.
+
+**Reading** (llvm-capstone lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/`, result lines per boot):
+- **Boot 3-T1's third run and the CPMX diagnostic run** (module 0cc4760d21fde17a, the compiler lane's 457b78f27e10),
+  and **boot r5** (the same module with CSRUNV moved to a 64-byte line start). Each reads:
+  - Linux "Oops - instruction access fault" at `vm_ioctl+0xb60` (r5: +0xba4), the instruction right after the
+    module's CSRUNV;
+  - badaddr = mtval = the PHYSICAL address of that instruction (epc and mtval share their low 12 bits), with the monitor
+    first printing MTVL, CPMX and INJS;
+  - then a panic.
+- **The CPMX diagnostic** (capstone-sbi vp2/cpmx-diag 0c772b0), read in M after the fault, on two boots: CPMP entry 3
+  holds region 14, decoded [0x80100000, 0xAC000000), permissions 0x7, covering mtval. All loaded entries are RWX.
+- So the fetch was refused under a covering executable entry, and the CSR held it when M looked.
+- **Placement.** The earlier module ed24f827 (CSRUNV at .text 0x37f4) returned without a fault on two boots. Why is
+  unexplained. Line position is ruled out by r5.
+- **Boot r6** (0cc4760d21fde17a, the retry monitor): the monitor retried twice, both at retire+0xdc, the instruction
+  after a CSRETIRE, before the first grant. After that, none of the hundreds of CSRUNV returns faulted.
+
+**The candidate mechanism** (an rtl-oracle reading of bf3db3175, not yet demonstrated):
+- ENTRY's init strobe zeroes the one real CPMP bank (`csr_regfile.sv:2059-2066`, reg_id 69: `cpmp_d = '0;
+  cpmp_tag_d = '0`). This is harmless while the context runs at M, since the checks skip M (`pmp_data_if.sv:241`, `:306`).
+- The ESCAPE's RESTORE walk writes id 0, the pc, first (`capstone_dom_switcher.anvil:508`). The frontend takes it at
+  once (`frontend.sv:88-90`, `:462-465`, overriding the busy hold at `:458-460`), while the CPMP ids 9..24 come later
+  in the same walk.
+- `kill_s1` with `flush_if_o` held for the whole busy window (`frontend.sv:345`, `commit_stage.sv:870`,
+  `controller.sv:215-224`, the guard at `cva6_icache.sv:313-315`) is meant to discard fetches in that window. Whether
+  it has a gap, around busy's drop, an in-flight MISS, or when priv returns to S, is UNRESOLVED.
+- The fetch and data checks share one comparator over one decoded array (`pmp_data_if.sv:134-189`). There is no second
+  CPMP copy and no cached deny.
+
+**Workaround (not a fix).** capstone-sbi vp2/fetch-retry 007d81d, `CAPSTONE_VP2_FETCH_RETRY`, FPGA, off by default.
+- When an S/U instruction-fetch access fault arrives and a loaded CPMP entry with X covers mtval, the monitor reports
+  `FRTY:<mepc>`, executes sfence.vma and fence.i, and returns to the faulting pc.
+- A second refusal at the same pc with fewer than 4096 instructions retired since is injected as before.
+- It grants nothing the CPMP does not. Define-off builds are byte-identical.
+- Boots before r6 did not carry it.
+
+**Fix:** the RTL lane's, pre-registered for the next bitstream beside S-21/S-22's. The likely shape is to restore the
+caller's CPMPs before the pc reaches the frontend, or to hold the fetch until the walk ends.
+
+## S-24 — silicon only: the virtual `vm` step's store after `mprotect(RW)` faults with cause 15 on a pinned page again and again; the module's resolve() pins the same page and nothing changes until its 64-repeat bound ends the step `OPEN — the loop READ on silicon 2026-10-18 (vp2 boot r12, the module's own line); mechanism PROPOSED by the runtime lane (the RTL needs W and D for a store and never sets D, and GUP marks the struct page dirty rather than the PTE), its PTE reading pending; the fix is the module's (fault the page in through the kernel's write-fault path before the pin)`
+
+Siblings: S-25 (the other virtual-path silicon failure, a different mechanism), S-23, Q-30.
+
+**Reading** (llvm-capstone lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/`, result lines per boot):
+- **The step:** `vm` in run.py's suite (contract.dom) stores `p[8192] = 23` after `mprotect(p, 12288, RW)`, on an arena
+  page first touched read-only. On silicon it exits 139 with `domain fault cause=15` at the arena base + 0x2000, the
+  same code offset in r8, r9, r10, r11 and r12. QEMU passes this store.
+- **Boot r12** (module 06d663f30bf29825, the module's lines read from dmesg with a must-fire in the same window):
+  `capstone_vm: fault at 0x3faf4ba000 cause 15 resolved 65 times with no change; the page is pinned and the PTE is
+  untouched by this module`, at the launcher's own fault address. None of resolve()'s five refusal sites fired.
+- **Boots r6 and r7** (modules without the repeat bound): `vm` made no progress for 25 minutes. That is consistent
+  with the same loop, unbounded.
+
+**Withdrawn on the way:** r8's "the A/D candidate is refuted" rested on absent pr_warn lines that the board console
+cannot show during rungs (RETRACTED, dev 9e645777a5fb). The `!same` attribution was a deduction; r12 refutes it.
+
+**Mechanism, as proposed by the runtime lane** (not yet confirmed by a reading):
+- The RTL raises a store page fault unless the PTE has W and D, and never sets A or D itself (no Svadu).
+- The module's resolve() pins with GUP. On a present anonymous page, `follow_page_pte` calls `set_page_dirty(page)`
+  and leaves the PTE's D clear. Board tree `mm/gup.c:624-627`; only `follow_pfn_pte`, `:481-482`, calls
+  `pte_mkdirty`.
+- So the walker sees the same D = 0 PTE on every retry.
+- **The confirming reading,** pre-registered by the runtime lane: a PTE print at the loop shows V, R, W and A set
+  and D = 0.
+- **Open against it:** QEMU with svadu=false passed `vm` (the plan's svadu measurement). The proposal must explain
+  why QEMU's walker does not loop there.
+
+**Fix:** the module faults the page in through the kernel's write-fault path (which sets D) before pinning. Compiler
+lane, in the module queue's next revision.
+
+## S-25 — silicon only (vp2 bf3db3175): a capability store whose translation faults inside a virtual context retires with no exception and leaves a ghost entry in the store buffer's commit queue, which never drains; one ghost wedges every later DYN operation, four wedge every store `OPEN — mechanism REPORTED confirmed in simulation by the RTL lane (va-runv8 against its plain-sd control on bf3db3175, pre-registered at capstone-ariane 179b06610; the result itself not yet committed when this entry was filed), consistent with every board wedge reading; the RTL defect is R-57 (filed by the RTL lane, dev 891186fc9d93, where the trace chain and the readings sit); its fix (carry the store exception to the STC's writeback, as R-56 did for loads; capstone-ariane virtual-profile-2-c 2114e11bd) is the next bitstream's; until then no capability store may be the first access to a page (docs/design/virtual-capstone/isa.md)`
+
+Siblings: R-57 (this defect's RTL entry), S-24 (the `vm` loop, a different mechanism), R-56 (the load-side twin), R-49
+(the same ghost-count shape, another cause).
+
+**Board readings** (lane vp2-tier12, the wedge apertures read by the driver after each wedge; every comparison
+below made by script):
+
+| boot | step | 193 count | 221 valid bits | 194 store_state | 224 | 225 | reading |
+|---|---|---|---|---|---|---|---|
+| r8 | sparse-churn | 1 | none | 3 (WAIT_STORE_READY) | 0x25 | 0xc4 (stall, wstore) | a DYN op behind the store syncer |
+| r9 | sparse-stale | 1 | none | 3 | 0x25 | 0xc4 | identical to r8 |
+| r12 | sparse-stale, fence before every CSRUNV | 1 | none | 3 | 0x25 | 0xc4 | identical to r8: the fence does not remove it |
+| r10 | sqlite_write | 4 | none | 0 | 0x1d | 0x80 (idle) | the queue full, every unit ready |
+| r11 | mruby (its first silicon attempt) | 4 | none | 0 | 0x1d | 0x80 | identical to r10 |
+
+- **Every wedge:** 228 = 0xb8, the switcher's index 56. The RTL lane reads that from the source as residue: cur_idx
+  after a non-service RESUME, never reset.
+- **The trap log** (0x88/0x89) is residue too.
+- **The diagnosis rests on the count without valid bits.** The RTL lane reports that its simulation reproduces the
+  sparse face: cnt_q = 1 with no valid head before the escape's first write, then the walk's fourth write never
+  acknowledged.
+
+**Consequence on this bitstream:** the sparse steps (`*slot = malloc(64)`, a capability store as a page's first
+touch) and the kit applications' fresh-page capability stores wedge the core. Every further virtual record waits for
+the compiler lane's answer on where a capability store can be a first touch, which decides the scope of the module's
+pre-touch. QEMU escapes the faulting STC as kind 4 and cannot show this.
+
+## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `OPEN — read on silicon 2026-10-18 in five Tier 3 smoke boots: three without a classic domain run before the first virtual context spun in every context, two with b0-hello first returned in every context; mechanism unknown (state that the first classic domain call sets up, on the monitor's or the RTL's side); the workaround, a classic domain run before the first virtual context, is in every Tier 1/2 boot and in the Tier 3 recipe`
+
+Siblings: S-23 (the same virtual entry path), S-25.
+
+**Readings** (lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README.md`; the same
+launcher b27afefc and module ce3a542d in every boot; b0-stats runs `capstone-exec --stats` and no domain):
+
+| smoke boot | rungs before the first virtual context | what the virtual contexts did |
+|---|---|---|
+| 1 | b0-stats (with the classic /capstone.ko by mistake) | the first never returned in 13 minutes |
+| 2 | b0-stats | the first never returned; SIGINT after 3 minutes |
+| 3 | b0-stats | Tier 1's own contract.dom `ok` and three corpus controls each spun to a 150 s bound: launcher in state R, wchan 0, no grant after the image's five, no FRTY; at rest 228 = index 107 (the switcher's last walk an ESCAPE) |
+| 4 | b0-stats, b0-hello, vm-contract | every context returned; the controls equal QEMU's (cause 28 at 0x104d8, cause 25 at 0x10524, exit 75) |
+| 5 | b0-stats, b0-hello | every context returned; the controls equal QEMU's again |
+
+- Every Tier 1/2 boot ran b0-hello before any virtual rung, which is why this was never seen there.
+- Once the first context of a boot spun, every later one did too (boot 3).
+- The read at the bound is from /proc. The resting 228 is valid at rest, because it is a register that only a walk
+  changes. The dynamic apertures are not, because of the LED stretcher.
+- **The next question,** for the monitor and RTL lanes: what the first classic domain call sets up that the virtual
+  entry path relies on.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
@@ -1423,7 +1632,7 @@ store permission.
 - The directed test needs the missing arm: a non-consuming ldc from a read-only page through an RW capability completes
   on both sides. The `sparse-stale` contract mode is the Tier 2 check on the board.
 
-## Q-21 — CSR 0xcc0 (`urevavail`, the lifetime table's available-identity count) exists in QEMU and not on the RTL, where a read is an illegal instruction `OPEN — RTL/QEMU divergence, filed 2026-10-18 by the RTL lane answering the module's flat-table question; software rule in place (the module computes availability from the header), no RTL change requested`
+## Q-21 — CSR 0xcc0 (`urevavail`, the lifetime table's available-identity count) exists in QEMU and not on the RTL, where a read is an illegal instruction `RULED 2026-10-18 (boot 3): the RTL is the reference, QEMU's default no longer implements 0xcc0 (capstone-qemu virtual-capstone-v7 3b8040d5ff6e: an illegal instruction, kept only under the test-only property x-capstone-test-csrs for three bootstrap suites); the module computes availability from the header and the APPLICATION RUNTIME's malloc and realloc, which polled 0xcc0, lose the read (availability inside a context is the kind-5 event); filed the same day from the module's flat-table question, no RTL change`
 
 QEMU (capstone-qemu d35af47b163c) implements CSR 0xcc0 under `capstone_vm` (`csr.c:4876`, `read_urevavail` :4164-4169):
 it returns `capstone_urevavail` (`capstone_table.c:199-205`) = `cap_rev_table_avail` = capacity − next-unused +
@@ -1438,6 +1647,15 @@ from the header words it owns, capacity − next-unused + free_count, saturating
 RTL's header view does (`ex_stage.sv:1397-1398`). **RTL candidate, not requested:** a read-only 0xcc0 returning the unit's
 latched header view (vp_cap − vp_next + vp_free_cnt) could ride a vp2b build; it would read the value as of the last
 allocation, not live, so the software rule stays the definition either way.
+
+**The consequence reached further than the module (vp2's boot 3-T1, board lane).** Past the C-27 fix every virtual
+application faulted at its first malloc with cause 2 at `csrr a0, 0xcc0`: the APPLICATION runtime's malloc and realloc
+polled urevavail, and only QEMU answered. Ruling as for Q-23 and Q-25: QEMU's default stops implementing 0xcc0 and 0x5c0
+(virtual-capstone-v7 3b8040d5ff6e; `csr.c` predicate `capstone_vm_test_csrs`), the three Tier 0 suites whose bootstrap
+selects protected U through scapctl set `x-capstone-test-csrs` for themselves (virtual-capstone-m1, movc-untagged-source,
+trusted-linux-u-access; the five others need nothing), the runtime removes the reads (the compiler lane), and the board
+lane's CSR census gate reads the decoder's table (`docs/plans/2026-10-18-vp2-silicon-census.tsv`) rather than a memory
+of it. The RTL does not change.
 
 ## Q-22 — CSR 0x5c0 (`scapctl`, QEMU's "protected U" switch) exists in QEMU and not on the RTL, which behaves as PU = 0: U mode outside a context is never in the table namespace `OPEN — RTL/QEMU divergence, filed 2026-10-18 by the RTL lane answering the module's CSR list; CLOSED FOR THE CORPUS KITS the same day: the module reads 0x5c0 once and never writes it, the silicon adapter is built without the read, and no kit path runs in U outside a context`
 
@@ -1521,6 +1739,87 @@ stack swap is undone; `fault_return_from_domain` refuses to run without an activ
 `(1 << 24) | ... | (1 << 30)`; with medeleg bits clear by default nothing changes until firmware sets them. The CSMINT
 emulation's register restore is exact on both exits (`sbi_capstone.S:14-45` save, `:163-200` restore, `capstone_csmint.S:13-16`)
 and is not involved.
+
+## Q-25 — DELIN of a NON-LINEAR capability: the RTL refuses with 26, QEMU treated it as a no-op `RULED 2026-10-18 by the semantics owner after vp2's boot 2 (the RTL is the reference: a delin of a non-linear capability is a programming error); QEMU fixed on virtual-capstone-v7 852c5bc7677440b95736b5fc22bc158cce3f6479; the runtime glue's delin of a NONLIN gp is the compiler lane's to remove`
+
+vp2's boot 2 (board lane, vp2-tier12 279d993e273d): every virtual step faulted with cause 26 at contract.dom's `delin a0`
+in `__capstone_cap_init`, right after `scc a0, gp, a0`, because gp is granted NONLIN (`linear = 0`). The RTL's DYN unit
+(`capstone_dyn_unit.anvil:794-801`) raises UNEXPECTED_OPERAND (24) for an untagged rs1 and UNEXPECTED_CAP_TYPE (26) for
+any rs1 that is not LINEAR, NONLIN included; QEMU's `helper_csdelin` (d35af47b163c `op_helper.c:1540-1575`) returned
+early for a NONLIN rd ("treat delin as idempotent rather than faulting") and raised 26 for an UNTAGGED rd where the RTL
+raises 24. The S-15 class (the silicon-mimic note) reached the reference model: QEMU's run.py accepted a glue silicon
+refuses. **Ruling:** the RTL stays; QEMU's default raises 26 on every non-LINEAR rd and 24 on an untagged one. No suite
+depended on the no-op (Tier 0 identical: m1 73/73 then 74/74 with the control, movc 67/67, sublet-lifetimes 119/119,
+trusted-linux-u-access 71/71, runtime 69/69, index8 PASS, fp 60/60, exact-bounds 4/4); the positive control is
+table.S case 21 (`delin_of_nonlin_is_26`: a second DELIN of the same capability reads 26 and the type stays NONLIN).
+The run.py control on the UNFIXED glue must fail at the same delin (cause 26) before the fixed glue passes (the
+compiler lane).
+
+## Q-26 — saved virtual contexts: the RTL holds ONE, QEMU held THIRTY-TWO, so every parallel step passed on QEMU and refuses with 29 on silicon `KIT MISMATCH, pre-registered 2026-10-18 from vp2's boot 2 (parallel_one read the pre-registered 29 trap at its second CSRUNV); QEMU gains x-capstone-supervisor-slots defaulting to 1 on virtual-capstone-v7 852c5bc7677440b95736b5fc22bc158cce3f6479; the module serializes contexts (compiler lane)`
+
+RTL: one saved context in the CSR file (`csr_regfile.sv:152` `sup_runv_used_o // the one slot holds a saved context`,
+`:2868`; the design decision in `docs/plans/2026-10-17-vp2-item-d-csrunv-rtl.md:64`), and commit refuses action 0
+whenever the slot is used and the request is not a resume of the same frame (`commit_stage.sv:274-278`, the trap at
+`:1021-1027`, mcause 29). QEMU (d35af47b163c): `#define SUPERVISOR_SLOTS 32` (`capstone_supervisor.c:27`, a compile-time
+constant), `helper_csrunv` refusing only when no empty slot remains (`:878`), so a second, third, ... frame entered
+while others are paused each took a slot. The 29 at boot 2 came at parallel_one, after sixteen earlier steps had each
+launched and been discarded cleanly, so it is the one-slot refusal and not a silicon reading. **Both closures taken:**
+the QEMU property `x-capstone-supervisor-slots` (default 1, up to 32 by explicit setting, named in the suites that
+need it and never set by a prediction kit; the compiler lane's kit gate parses it beside the test-only LDC property), so
+the reference refuses as silicon does; and the module serializes contexts on vp2 (at most one outstanding). What
+serialization may NOT do: discard (action 1) and re-enter a frame as a substitute for a resume. A fresh ENTRY
+(`capstone_dom_switcher.anvil:157-158`, `:548-552`) loads the PCC and x1..x31 as the escape left them but takes
+satp/srevroot/options from the module's words +0/+8/+56, runs the init strobe (`:190-194`: CSRs zero, mstatus from the
+caller with FS Initial, fcsr 0) and zeroes fpr0..31 (`:207-208`), while RESUME (`:295-345`) restores the FP state from
++656..+912, mstatus from +920 and the hidden words from +928..+944, and adds 4 to the pc only on a service reply; after a
+kind-3 escape the saved pc is the ecall itself and the kernel cannot advance a PCC slot (a scalar store untags it). So
+discard-and-re-enter equals a resume only for an integer-only context paused by a quantum escape.
+
+## Q-27 — CSRUNV action 3: the RTL refuses it at execute as an illegal instruction (2), QEMU refuses it with 29 unless a paused context exists, where it collects `OPEN — low priority, filed 2026-10-18 from the same read; the plan says action 3 is illegal (collection is software)`
+
+RTL: the DYN unit's CSRUNV handler raises ILLEGAL_INSTRUCTION for `rs2.cursor > 2` (capstone_dyn_unit.anvil, func
+CSRUNV), so action 3 never reaches commit. QEMU d35af47b163c `capstone_supervisor.c:881-887`: action 3 with a paused
+call frees identities and writes rd; without one it raises 29. The plan's row for item D says action 3 is illegal and
+collection is software; QEMU's arm is the odd one. No kit issues action 3 today; a one-line QEMU change (action > 2
+illegal) when the next QEMU commit is cut, or a ruling if the collector is wanted in the reference.
+
+## Q-28 — the trap return register under capability mode: the RTL keeps ONE cursor (CEPC's cursor is mepc) and returns through mepc; QEMU under cap_mem keeps CEPC and mepc as two registers, writes only CEPC on a trap and returns through CEPC `OPEN — low priority, filed 2026-10-18 by the RTL lane; the shared monitor entry avoids it by using CCSRRW CEPC on both targets, and the next monitor author will meet it`
+
+RTL (`virtual-profile-2-d` bf3db3175): a hardware trap writes mepc (`csr_regfile.sv:2324`) and untags cepc (:2329); the
+capability CSR CEPC reads `mepc_q` as its cursor with `{cepc_tag_q, cepc_q}` as its metadata, and a CCSRRW write sets
+`mepc_d` beside `cepc_d` (:2616-2621); mret returns through mepc (:3092). So `csrr/csrw mepc` and `CCSRRW CEPC` name the
+same return address, and the FPGA monitor's mepc-based `_inject_s_trap` (capstone-sbi db23ffd) was right on silicon
+(va-osinject, 14 and 23 of 23 readings). QEMU (d35af47b163c): under cap_mem a trap writes `env->cepc` (a capability for a
+PRV_C trap, a scalar otherwise) and NOT mepc (`cpu_helper.c:1986-1991`), and mret returns through CEPC whenever
+`capstone_u_active` is clear or the previous privilege was C (`op_helper.c:352-356`); the kit's QEMU firmware sets
+cap_mem through CAPENTER and never writes scapctl, so mepc is stale there and a monitor that reads or writes mepc for
+an S-origin trap re-faults (the board lane's first QEMU-kit injection build, refuted by the auditor before handover).
+**Rule for monitor code:** read the faulting pc and write the return target through `CCSRRW CEPC` (the ecall path's
+shape, `sbi_capstone.S:88-90`), never through mepc; it is the same register on the RTL and the only one QEMU honours.
+The semantics owner's ruling (2026-10-18): one CEPC-based `_inject_s_trap` in the shared source, no target `#ifdef`, the
+FPGA and QEMU entries byte-paired, proved by va-osinject on bf3db3175 (predictions unchanged) and the kit's `threads`
+step with INJS 0x1d on QEMU. Whether QEMU should also write mepc on a trap under cap_mem, to match the RTL's one-cursor
+model, is a question for the next QEMU commit, not a blocker.
+
+## Q-29 — fetch against the PC capability: QEMU and the RTL apply the same four refusals with the same codes, and differ only in their ORDER when two hold at once and in SCOPE (QEMU checks virtual-C blocks only, the RTL every M-with-capmode fetch) `OPEN — low priority, filed 2026-10-18 by the RTL lane after a RETRACTION: the first form of this entry's claim, "QEMU has no fetch check", was wrong and the fix ruled on it was withdrawn the same day; neither residual touches a corpus context`
+
+RTL (bf3db3175): commit checks the fetched pc against the PCC whenever priv is M with capmode and the PCC is tagged
+(`commit_stage.sv:370-393`), a CSRUNV context included: wrong type 26, no X 27, outside the bounds 28, dead 25, tested in
+that order (:379-391), so a dead PCC that is also out of bounds reads 28. A plain JALR/JAL/branch sets no PC metadata
+(`branch_unit.sv:76-100`, `frontend.sv:476-478`): the PCC keeps its bounds and only the cursor moves, and the check is
+on the target. QEMU (`virtual-capstone-v7` 3b8040d5ff6e): `capstone_supervisor.c:982-1062` (`pcc_identity_cause`,
+`pcc_bounds_hold`, `pcc_fetch_cause`, `capstone_pcc_fetch_ok`, `helper_capstone_check_pcc`,
+`helper_capstone_check_pcc_block`) applies the same four refusals with the same codes; the translator ends a block
+before an instruction the PCC would not let it fetch and the block-entry helper re-checks under the PCC of the moment
+(`translate.c:1425-1433`), one-instruction exact. `tests/virtual-capstone-runtime` proves it on 3b8040d5: pcc_bounds (5),
+fetch_full_width (18), cap_execute (3), revoked_pcc (6), revoked_cached_pcc (19), all passing at the default.
+**Residual (b), order:** QEMU tests liveness FIRST (25 before 26/27/28), the RTL LAST; visible only when two conditions
+hold at once, which no kit creates. **Residual (c), scope:** QEMU checks blocks with `ctx->capstone_virtual_c` set, so
+the legacy-C monitor's own PCC is unchecked on QEMU and checked on silicon; a monitor jump outside its PCC faults on the
+board only. The semantics owner's ruling (2026-10-18): the RTL is the reference for both; recorded, not implemented,
+until a kit or the monitor exercises either. The retraction: the "no fetch check" claim came from grepping `pc_cap` in
+two files and dismissing the hits in a third unread, and from not opening the suite that tests exactly this behaviour;
+the census row (`docs/plans/2026-10-18-vp2-silicon-census.tsv`, plain JALR) carries the same correction.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
@@ -2442,6 +2741,61 @@ everything inside delegated domains, are unaffected.
 > alternatives are:
 > - flash back to 0568f93a9 (cursorless, without the FP fixes);
 > - build the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back).
+
+### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
+
+**What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
+hands the DYN unit an `lsu_result_pack_t` of {trans_id, cap_result} with no exception field (`capstone_unit.anvilh:703-706`),
+its data check hard-codes NO_EXCEPTION (`capstone_dyn_unit.anvil:749-752`), and the DYN unit completes every STC that reaches
+the syncer with `ex_code::NO_EXCEPTION`, throwing the syncer's answer away (`:760-790`, `let _ = recv cap_store_ri.res`).
+`ex_stage.sv:1341` forwards the LSU's store exception only for a normal store (`forward_normal_store_valid`); the R-56 merge
+at `:1305-1327` exists for loads only and its one consumer is `cva6.sv:1516`. So an stc whose address translation raises a
+page fault retires with `ex.valid` 0, no escape and no trap, and the stored capability is silently lost. The commit stage then
+asserts `commit_lsu_o` for it (`commit_stage.sv:510-521`, `op == STC`, inside the else of `ex.valid`), although the store unit
+had popped the request through its access-exception block with `st_valid` 0, pushing nothing (`store_unit.sv:341`). In the
+store buffer `commit_i` copies the speculative queue's head into the commit queue and increments the count whatever the head
+holds (`store_buffer.sv:291-295`): an INVALID entry becomes a counted head that never raises `data_req`, so `no_st_pending`
+stays 0 for ever; and the same `commit_i` decrements the speculative count with no guard (`:166-171`), which on an empty
+speculative queue wraps the 3-bit count 0 -> 7, so `ready_o` for every later normal store is 0 until a flush (`:189`).
+
+**The matched pair** (va-runv8.S, lane virtual-profile-2-c 179b06610 pre-registered, results 79cb5d648 and dd7c46f9a; traces
+in vp7-wt/.sup/runv8, sdafter7): va-runv2's setup, the context's first instruction a store through s4 into the unmapped page.
+- control `-DFAULT_SD` (a plain sd): 0x2 0x4 0x4 0xf 0x55, SUCCESS after 128,120 cycles, the pre-registered line (kind 4,
+  cause 15, then M's own store and fence complete).
+- the stc: 0x2 only, FAILED at the cycle limit. 112493 the store unit takes the stc into WAIT_TRANSLATION; 112898 it leaves
+  through the exception exit with `st_valid` 0 and the lsu-bypass pops the STC; 113262 "STC completed", 113276/113277
+  writeback and commit of the STC with `ex=0`, the rvfi trace retiring it with no trap; 113283 the ecall's escape walk makes
+  its first write and the commit queue already reads `cnt_q=1 head_valid=0` (one write of an invalid entry into slot 2 after
+  four drains since 112000: only `commit_i` writes an invalid entry; no dom-switch push and no flush in between; the S-16
+  $fatal did not fire). The walk's three SAVE writes raise the count to 4 (`valid=1011`) and its fourth waits for ever
+  (`IDLE <-> WAIT_STORE_READY` with `sel_dom=1`, `st_ready=0`): the ESCAPE never finishes, S-16's end state from a new cause.
+- `-DSD_AFTER` (a plain store to a mapped page right behind the stc): on bf3db3175 the sd leaves WAIT_TRANSLATION at 113545
+  with `st_ready` 0 and sits in WAIT_STORE_READY to the limit; every dump reads `cnt=1 valid=0000 data_req=0 ready_o=0
+  spec_cnt=7`. That is the board's r8/r9 state line for line (193 = 1, 221 = 0x00, store_state 3 with an SD at the LSU head,
+  issue stalled, the DYN op behind it waiting on the store syncer). On the fixed tree: the control's line.
+- Instrument facts from the audit: the pre-registered downstream readings for the stc arm (3, 3, 11, "store stuck") were all
+  wrong, because the walk wedges before any reading; and `store_buffer.sv`'s "store stuck" print (:117-124) is gated on a
+  VALID head, so it can never fire on this condition. The mechanism was as read; the predictions downstream of it were not.
+
+**Board correspondence** (vp2, the board lane's result lines r8..r12): r8/r9 sparse-churn/sparse-stale = one ghost and a plain
+store behind it, demonstrated; r10/r11 sqlite_write/mruby = count 4 with no valid bit, every unit ready, M code running:
+consistent with four unpushed stc commits before any valid push, NOT demonstrated (the demonstration ends at 4/1011). r12's
+`fence rw,rw` before CSRUNV wedged identically, as predicted: the fence orders nothing this depends on. The switcher's index 56
+in every wedge is residue (cur_idx is never reset; 56 is the rest value after a non-reply RESUME), not a stall point.
+
+**The fix** (virtual-profile-2-c 2114e11bd): `ex_stage.sv` keeps the LSU's store exception for the trans_id the DYN unit is
+completing (same cycle or saved, cleared on flush and when consumed; R-56's pattern) and merges it into the one CAP_WB
+exception port, so the stc retires with cause 15 and a context escapes with kind 4; `commit_lsu` is then gated by `ex.valid`
+as for a plain store, which covers both faces (no ghost, no underflow). No change to the Anvil units or the store buffer. Lint
+gate PASS at the committed baseline (LATCH 52, MULTIDRIVEN 3, ALWCOMBORDER 0, UNOPTFLAT 40, UNUSEDSIGNAL 1395); va-runv8,
+va-runv8-sd and va-runv8-sdafter all read 0x2 0x4 0x4 0xf 0x55 SUCCESS after 128,120 cycles; va-runv2 unchanged (37 readings).
+The 95-test sweep and the supervised list run on the combined tree before the hash goes to synthesis. **Residuals:** the
+speculative count's unguarded decrement and the commit queue's unguarded copy remain as they are (the fix removes the only
+known producer of an unpushed commit); a store-side cause other than a page fault (an access fault, a misaligned stc) takes
+the same merged path. R-49 remains the other producer of a ghost count, fixed on 715bdd1fe.
+
+**Software rule on bf3db3175** (S-25, isa.md, the semantics owner): no capability store may be the first access to a page
+under the virtual profile; the module pins a whole arena at its first kind-4 fault; the kit's sparse steps are not available.
 
 ### R-56 — a page fault raised at a capability LOAD's translation was dropped on the way to writeback, because an LDC's result is routed through the DYN unit whose result packet carries only the capability cause `LATENT ON EVERY BITSTREAM, UNREACHABLE THERE (capability loads were never translated); FIXED on virtual-profile 16345658f (ex_stage.sv carries the LSU's exception beside the DYN result for that trans_id; cva6.sv lets it replace the capability port's exception record)`
 
@@ -4485,7 +4839,10 @@ want of window coverage, which is a monitor CPMP-setup question and not a type c
 > `1` in the same boot (the host counts the module's dmesg line across its own create_region;
 > commit 0f150add), so the line reaches the capture and fires exactly when the arithmetic says it
 > must. Every earlier "zero rounding lines" reading (sw63/66/68/71) is now informative rather than
-> uninformative. The arena gate (`arena-mismatch-gate.py`) now refuses a non-representable `--expect`
+> uninformative. **[RETRACTED 2026-10-18: "the line reaches the capture" and the sentence after it.** sw72
+> counted the line in dmesg, the ring buffer. But the line is `pr_info` (modcapstone `capstone.c:306` at d04bd83, `:352` at 8fd1ea1249a9), and the board drivers set `/proc/sys/kernel/printk` to 1 before the first rung (`fpga_driver/run_ladder_perf_fpga.py:201`, since 2026-07-25), so it can never reach the UART capture; the sw74 note below says as much. The capture's zeros
+> (sw63/66/71/73) carry no information. The geometry conclusions stand on the power-of-two sizes, as the
+> measurements doc says. Found by the vp2 board lane's audit after boot r11.**]** The arena gate (`arena-mismatch-gate.py`) now refuses a non-representable `--expect`
 > up front, mirroring `capstone_repr_granule`; 1,419,584 is its negative control.
 >
 > **2026-09-14, boots sw74 / sw74b — the reclaim of the rounded arena completes (twice), and what that

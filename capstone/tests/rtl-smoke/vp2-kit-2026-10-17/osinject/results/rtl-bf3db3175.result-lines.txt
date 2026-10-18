@@ -1,0 +1,25 @@
+# va-osinject on capstone-ariane bf3db3175's RTL (the RTL lane, 2026-10-17), the monitor's trap entry from capstone-sbi
+# vp2/os-trap-inject db23ffd (sbi_capstone.S 7b23b6a67540fd45..., sbi_capstone.h 2c6f6bcab4ce180e...,
+# capstone_csmint.S 77c5f13019379cdf...), through run-sup-ladder.sh. Pre-registered at lane 37e1ba256a83 (../README.md).
+# Addresses from nm on the built ELF: slotA 0x80009000, ldc_s 0x8000103c, ldc_u 0x80002008.
+# Verified by the board lane from the commit traces themselves (copies in /tmp/capstone/osinject-rtl, originals under
+# the RTL lane's vp7 worktree .sup/osinj/; capstone-ariane HEAD bf3db3175, only the testlist entries and this arm added):
+# - each injection's committed values in _inject_s_trap: a5 = mcause 0x18, a6 = mtval 0x80009000, t0 = mepc (ldc_s, then
+#   ldc_u), mstatus.MPP 1 then 0, mepc := stvec 0x80001090 (s_trap);
+# - S's s_trap read (priv 1): scause 0x18, stval 0x80009000, sstatus 0x200000100 (SPP 1) and 0x200000020 (SPP 0, SPIE
+#   1), sepc 0x8000103c and 0x80002008;
+# - t2 = 0x7777 stored to the frame by the entry and reloaded by return_to_sumode;
+# - the main run's last tohost write is 1 (pass); the control's 151,929 commits never reach s_trap or _inject_s_trap,
+#   and write nothing to tohost.
+# Build identities: each run's own disassembly. va-osinject.dasm sha256 b7a83bba9b977dc7d766c3f666a6d557ba00c521203de9466a3c1bf470faebec,
+# the control's e86300abef22956084f6b3c0a3518ca61babd4d397ef27f6ce7b2d84db853780 (the flow names the object after the
+# source, so the control's build overwrote the main arm's .o).
+
+row 1, S origin   scause 0x18  stval 0x80009000 (slotA)  SPP 1  sepc 0x8000103c (ldc_s)  t2 0x7777  s5 0x5555  s6 0x6666   AS PREDICTED
+row 2, U origin   scause 0x18  stval 0x80009000 (slotA)  SPP 0  sepc 0x80002008 (ldc_u)  t2 0x7777  s5 0x5555  s6 0x6666   AS PREDICTED
+pass marker       SUCCESS after 67,173 cycles                                                                            AS PREDICTED
+control (-DOSINJECT_CONTROL)   no reading, no pass marker; ends at the cycle limit (4,000,013 cycles, FAILED)          AS PREDICTED
+
+# Each row's report ecall is the second trap after an injection; both printed, so the entry swapped CSCRATCH back both
+# times (on boot 1 it did not). stval is rs1's value (the DYN unit's tval is operand_a, latched at issue), and LDC is not
+# gated in U; neither written-down alternative branch occurred.

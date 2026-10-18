@@ -261,7 +261,17 @@ silence** (~130 KiB/s), so a lower threshold aborts healthy runs *mid-upload*. T
 default did exactly that and produced a session's worth of false "will not boot" / "cyclic boot" /
 "firmware is broken" diagnoses. Scope any log scan to **this run's own `load_image`** — the
 console replays ~548 KB of the previous boot on connect, so grepping the whole log matches
-stale markers.
+stale markers. **Read results from the driver's per-rung transcript (`BAKED_OUT`, already cut per
+rung), never from the raw `driver.log`,** and scope even a live watch to the lines after this run's
+`monitor load_image`. On 2026-10-18 a monitor over the raw `driver.log` reported the previous boot's
+grant refusals and fault lines as the boot in progress. Only their repeated base addresses gave them
+away.
+
+**During rungs the console shows only KERN_EMERG.** `cold_boot` sets `/proc/sys/kernel/printk` to 1 before the first
+rung (`run_ladder_perf_fpga.py:201`), so a module's pr_warn or pr_err never reaches the transcript. The rfence
+warnings you see are boot-time, from before that setup. Read kernel lines in the guest script with `dmesg` after the
+step, matched by content. Positive-control the read with a line that must have fired in the same window. Boot r11
+(2026-10-18) lost its whole diagnostic this way, and an earlier "A/D refuted" rested on the same invisible lines.
 
 ### Switch values are not just a mux selector — the low three bits steal the console
 
@@ -291,6 +301,12 @@ Rules that follow:
 * **Post-run odd reads are safe by construction**: `debug_led_o` goes to the LEDs, a different pin
   from the console TX, so an odd aperture cannot corrupt the reading itself — it can only steal
   console output happening at the same time.
+* **A read of a RUNNING core is an OR, not a snapshot.** The LED pulse stretcher holds every bit high
+  for about 2^20 cycles (`ariane_xilinx.sv:956-966`), so each dynamic aperture (192-195, 219-227) reads
+  as the OR over that window. Idle Linux is running. Only a still core gives a snapshot: wedged, or
+  parked in `wfi` with interrupts masked. At rest, only 228 (the switcher's last index), the latched
+  trap log and the R-43 record read true. The first resting read on vp2 gave a commit count of 7 for a
+  4-deep queue (2026-10-18).
 
 ## 3. THE ORDERING RULE — this is what makes a verdict valid
 

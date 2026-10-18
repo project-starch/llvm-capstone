@@ -1,0 +1,15 @@
+# Tier 1/2's judge and boot script, checked 2026-10-17 22:2x-22:33 before the boot. The QEMU record is the flat kit's
+# run.py serial (c14933904de4, PASS 41/41). The board-format transcripts wrap that serial in the driver's rung framing:
+# echoed command lines, CRLF, VMHB heartbeat lines, and cleanup failing as the board kernel makes it fail.
+## the judge (board-check.py, run.py's analysis block from c14933904de4)
+flat QEMU serial                                   rc=0  41 of 41 true
+QEMU serial, one VM_EXIT altered (vm-none-read)    rc=1  40 of 41 true; off: vm-none-read
+QEMU serial with BOARD_EXPECT_FALSE=cleanup        rc=1  41 of 41 true; off: cleanup (true on QEMU, as it must be)
+board-format, OLD unanchored judge                 NO DATA (it matched the driver's echoed command line)
+board-format, anchored judge, EXPECT_FALSE=cleanup rc=0  40 of 41 true; cleanup False (pre-registered false)
+board-format, sqlite_read altered                  rc=1  39 of 41 true; off: sqlite_read
+board-format, segment duplicated                   rc=2  NO DATA: 2 segments (need exactly 1)
+## run-tier1.sh with only the driver stubbed (the stub asserts BAKED_CTL, BAKED_RUNGS and FPGA_BITSTREAM)
+clean transcript      every RUNG AS-ORACLE; VM-CONTRACT BRANCH identity; VM-SUITE board-check rc=0 (40 of 41)
+layout branch         vm-contract retval=922 NOT-AS-ORACLE; VM-CONTRACT BRANCH layout (29 before VIRTUAL_APPLICATION_OK)
+no transcript         NO DATA: no board transcript (rc 2)

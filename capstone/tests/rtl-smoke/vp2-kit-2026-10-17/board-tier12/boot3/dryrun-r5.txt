@@ -1,0 +1,13 @@
+# The batched Tier 1+2 boot (run-tier12-r5.sh) with every pin real (firmware 8129241bb6debad2, the stage with module
+# 82250f627aba01f1, run.py 85461f0e25ab66bf, the lane driver) and only the driver stubbed (it asserts the four-rung
+# BAKED_RUNGS). 2026-10-18 05:1x.
+synthetic clean transcript (board framing; vm-suite = the q30-run QEMU serial with cleanup failing as on the board)
+                              b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 22, all AS-ORACLE; BRANCH identity;
+                              board-check rc 0 "33 of 41 true; 0 off the pre-registration"; CPMX-DIAG NO DATA (rc 2)
+the third run's transcript    vm-contract NONE, vm-suite NONE; BRANCH injected; board-check NO DATA (rc 2); CPMX-DIAG NO DATA
+the diagnostic run's          the same, and CPMX-DIAG covered-loaded: CPMP entry 3 (region 14, [0x80100000, 0xac000000), perm 0x7)
+no transcript                 NO DATA: no board transcript (rc 2)
+wrong firmware hash           STOP: the firmware is not the pre-registered one (rc 1)
+(Two construction errors in the dry run's own inputs, fixed before this table: the synthetic suite was first cut at the
+first grant line, which follows `VM_EXIT:normal` in run.py's script, and held 21 exits; the build script's summary
+check was mangled by a sed so it could never match, which would have STOPped a good build.)

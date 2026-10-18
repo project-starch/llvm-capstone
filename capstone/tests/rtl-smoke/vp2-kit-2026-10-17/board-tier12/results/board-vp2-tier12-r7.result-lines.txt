@@ -1,0 +1,24 @@
+# vp2 boot r7 (Tier 1+2), 2026-10-18 06:00-06:31: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload 684684692449f302
+# (monitor capstone-sbi vp2/fetch-retry 007d81d, as r6), module 8fdfa127cf13a7c2 (0cc4760d21fde17a + a pr_info report of
+# a page fault resolve() sees again; resolve-diag.patch). Pre-registered at lane vp2-tier12 2482b9c61c59. Ended by SIGINT
+# at 06:31 after `vm` stalled again; the lines come from driver.log scoped to this run's load_image.
+
+RESULT b0-stats retval=0
+RESULT b0-hello retval=0
+RESULT vm-contract retval=0
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+FRTY retries 2 at  2 FRTY:01110E44
+  VM_EXIT:normal:0
+  VM_EXIT:stale:139
+  VM_EXIT:normal:0
+  VM_EXIT:threads:1
+  vm-suite's `vm` stalled at r6's point: after its second launch's `slot=9 bytes=16384` grant (mmap(8193, PROT_READ)),
+  heartbeats only (VMHB 1..48) until the SIGINT.
+## the diagnostic: VOID
+  No `capstone_vm: DIAG` line appeared, and that reads nothing: the board's console does not show KERN_INFO. The
+  module's own pr_info_ratelimited "thread create refused" is absent from this transcript (and r6's) although `threads`
+  hit it (VM_CONTRACT_FAIL:thread create), while the kernel's pr_warn lines (sbi.c:213) are present. The DIAG print was
+  pr_info. The positive control that would have caught this before the boot was in r6's transcript.
+  [CORRECTED 2026-10-18: the conclusion (the diagnostic is void) stands, the mechanism does not. During rungs the
+  console shows only KERN_EMERG: the baked driver sets printk=1 before rung 1. The sbi.c pr_warn lines are
+  boot-time, from before that setup.]

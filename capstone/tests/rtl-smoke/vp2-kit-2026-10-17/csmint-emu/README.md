@@ -569,3 +569,251 @@ Linux `rdtime` crossed the hook's fall-through, va-csmint-ft's path, and Linux's
 
 **Still vp2-only:** a CSMINT that the hook handles. Here none could be issued (the static scan above), and on this
 bitstream a valid one would wedge (`csrr` srevroot).
+
+## Descriptor v7 on the combined monitor, capstone-sbi vp2/tier1-monitor fba7812 (2026-10-18)
+
+The runtime lane's semantics ruling (Q-23) replaced the three-word descriptor with six words:
+- w0 base, w1 end, w2 perms (bits 0-3) with bit 8 = NONLIN, w3 the cursor (base <= cursor <= end);
+- w4 a second slot (0 = none; LINEAR with a second slot is refused with 29);
+- w5 reserved, which must be 0.
+
+The order of refusals is: the access-shaped refusals (6, 15, 13) before the semantic one (29), and w4 is checked like
+the first slot. The routine is capstone-sbi vp2/csmint-v7 (729a340, then 67ed67f). 67ed67f emulates only a CSMINT
+from S: the claim-auditor found the routine emulating one from U, and QEMU refuses CSMINT at PRV_U at decode.
+fba7812 merges it with the S-trap injection (vp2/os-trap-inject f8bfde5).
+
+Pinned:
+- sbi_capstone.S 7b23b6a67540fd45cee4fa2bd66f5cdd7098b9c5208e1b0ce244367a5d520365
+- capstone_csmint.S 4600d04680158edf90396cc303cbb5aff4e2a286c9a0f302058ecd41232d6fbf
+- sbi_capstone.h 2c6f6bcab4ce180ee642382228ad52fb171bdb3840370bfad3f794cdba5dded1
+- sbi_capstone.c 2ff807a6db2bce15127fe349f4fb0ef508c1ebfdcea62cb25b2612bd2184d7aa (not linked by these arms)
+
+- **va-csmint-mon v7** is the RTL lane's, in capstone-ariane virtual-profile-2-c. 2639bd078 re-pre-registered it with
+  81 readings: 18 rows of three, then a readback of 27. It read all 81 on 729a340's routine. 7b8c0d979 moves its pin to
+  fba7812, where 0 of 81 values differ (SUCCESS after 211,099 cycles).
+- **va-csmint-entry v7** is this folder's `va-csmint-entry.S`, sha256 602a0bf1e99d869f…, written by the RTL lane. It
+  applies mon's v7 rewrite to the v6 file (7b1155f93d15):
+  - six-word descriptors at a 64-byte stride;
+  - rows 11-16;
+  - the readback of slotC, slotD and slotE, with slotB's page carved into four slots.
+
+  Its prediction is mon's 81 readings at its own layout, the same rule the v6 run used. The prediction is in the
+  file's header; the file was not committed before the run. On bf3db3175 it read 81 values, SUCCESS after 215,008
+  cycles (`results/rtl-bf3db3175-v7-entry.result-lines.txt`). 64 values equal mon's. The other 17 are address-valued,
+  and each sits exactly 0x1000 below mon's, at this arm's layout. The file here is the bytes the run compiled: the RTL
+  lane's run script copied it in just before the ladder, and its sha256 and an unchanged mtime match. The executed
+  trace agrees too: the row offsets 64..640 and the report sequence 1-16, 21, 17, 22, 18, 99.
+- **va-osinject revision 2** (`../osinject/`) adds the U-origin CSMINT row on the same files: 23 of 23 as predicted.
+
+
+## Boot BLb, pre-registered (2026-10-18, before the boot): capstone-bootstrap's capstone-sbi pointer bumped to dafe4f2, BL's control on the resident vp2
+
+**What it settles.** caplifive-opensbi's capstone-bootstrap points at capstone-sbi 234ee66. Bumping it to dafe4f2
+brings in three commits:
+- c3293b3: the CSMINT hook, behind CAPSTONE_VP2_CSMINT;
+- 83966bc: the S-trap injection, which is FPGA-only and compiled into every FPGA build;
+- dafe4f2: the v7 routine, behind the flag.
+
+With the flag off, the change against boot P's monitor (ebe0a25, whose tree is 234ee66's) is the injection and its
+domain-call counter. The runtime lane asked for BL's control before any physical-line record cites the bumped
+firmware: one boot on that firmware, flag off, with BL's image set, repeating boot P's readings within BL's bands.
+
+**The firmware (arm B):** fw_payload 2a0850a406d1229c, gate 25712 of 32768 B.
+- **Wrapper:** 1269c77, boot P's and BL's wrapper. capstone-bootstrap's head 3ab5655 differs from it only by the
+  capstone-sbi pointer, so this is the bumped wrapper's tree.
+- **Monitor:** capstone-sbi dafe4f2. Its four files were checked in the build's extracted source: sbi_capstone.c
+  c8172e5abc09687e…, sbi_capstone.S 7b23b6a67540fd45…, capstone_csmint.S 4600d04680158edf…, sbi_capstone.h
+  2c6f6bcab4ce180e….
+- **Defines and Image:** boot P's three supervised-call defines, without CAPSTONE_VP2_CSMINT, and BL's Image
+  ae58cf97765442da.
+- **Symbols:** `_inject_s_trap` is in the ELF and `csmint_dispatch` is not.
+
+**A second variable, and how the design handles it.** P and BL ran on caplifive_sublet_d93a8d66b. The resident
+bitstream is vp2 (caplifive_vp2_bf3db3175), and putting d93a8d66b back is a reflash, which is the lead's call. I found
+no vp2 record of the B-series rungs:
+- vp2's sessions ran the bare arms and the corpus;
+- Tier 1/2 kept only b0-stats and b0-hello, dropping the rest for image size.
+- **Arm B runs first:** BL's ten rungs in BL's order, P's oracles, on the bumped firmware.
+  - If B reads boot P within BL's bands, the control passes. Neither the firmware nor the bitstream moved any reading.
+- **Arm A runs next only if B differs:** boot P's own firmware, 1b44a465d96753b2, on vp2. It is the arm that differs
+  from B by the firmware alone.
+  - B is then judged against A within the same bands, and A against P says what the bitstream changes.
+  - A firmware difference shows as B ≠ A; a bitstream one as A ≠ P with B = A.
+- **The d93a8d66b reading of the bumped firmware** waits for the next residency of that bitstream.
+
+**Predictions for B** (boot P's readings, BL's bands):
+- **Retvals:** b0-stats 0, b0-hello 0, b5-hello 0, b5-mruby-e-stats 0, b5-mruby-stdin-stats 0, b5-mruby-bench 0,
+  r54-bounds 64, cw-pool 0, b6-sublet 0, b0-stats2 0.
+- **mruby's hashes:** 53c234e5e8472b6a, 5476dba1f4bd59f1, 8d1539bc79e2b630.
+- **Bench times within 0.5 %** of boot P's: 138315, 45514, 2458, 30708 and 81907 ms.
+- **No EXCT, EXCS, RGNF or ILLX, and no INJS, NODM or INJL.** An INJS would be a trap from S that boot P's monitor
+  could not have survived. P did not wedge, so none is expected, and one would be a reading in its own right.
+- **Exploratory:** the launch ticks, against P's.
+
+**What a difference would say** (read no further than the first failure; arm A then runs):
+- **Linux does not boot, or a B-series rung differs on both arms:** vp2 differs from d93a8d66b for this image set,
+  not the firmware.
+- **B differs and A does not:** the bump. The first suspect is the counter or the injection on a path P's monitor
+  handled differently.
+
+**The scripts** (`bootblb/`), checked before the boot:
+- **judge-blb.py** applies BL's bands mechanically. Against boot P's run-scoped transcript, BL's own run reads PASS.
+  These each read DIFFER: BL's altered-copy control (a retval and a hash), so_lists moved 1.71 %, and an INJS line.
+  An empty transcript reads NO DATA.
+  - The comparison must use the run-scoped `board-bootp.txt`, never the raw capture. A first try took
+    `board-bootp-raw.txt` by `ls | head -1`, and BL then read DIFFER against its own committed IDENTICAL. The scripts
+    pin the path, and P's transcript by sha256/16 5fb970fff3b3ea24.
+- **board-bootblb.sh B|A <fw hash>** STOPs on any of these:
+  - a wrong firmware hash;
+  - a driver other than the lane's 4ae259caae50b35d;
+  - a changed P transcript;
+  - a shared tree not at df0e9a8 / 93440d5;
+  - an existing output directory.
+- **A stubbed dry run** read each branch as written: B passing, B differing, no transcript, a wrong firmware, and
+  arm A with B the same, B different, or B absent.
+
+### Boot BLb, result (2026-10-18 01:24-01:51): DIFFER, as pre-registered. One reading, so_lists, is 0.57 % faster on the bumped firmware
+
+Result lines: `bootblb/results-bootblb.txt`.
+- **Arm B** (bumped firmware 2a0850a406d1229c) against boot P: DIFFER.
+  - All ten retvals and all three mruby hashes are identical, and there is no monitor tag of any kind.
+  - Four of the five bench times are inside the band: mandel_term +0.00 %, fib +0.32 %, so_mandelbrot −0.07 % and
+    ao_render −0.06 %.
+  - **so_lists reads 2444 ms against 2458, −0.57 %, outside the 0.5 % band.**
+- **Arm A** (boot P's own firmware 1b44a465d96753b2, on vp2) against boot P: PASS.
+  - Everything is inside the band, so_lists exactly 2458. The bitstream, vp2 against d93a8d66b, moves none of
+    these readings.
+- **B against A:** DIFFER, on so_lists alone (−0.57 %); fib reads +0.37 %. The launch ticks match P's within 0.3 s
+  per stage.
+
+**The pre-registered reading is "B differs and A does not: the bump",** so the control has not passed and the pointer
+bump does not land on it. That rule cannot separate a real effect from the draw-to-draw spread of the shortest
+benchmark: 14 ms on 2.4 s, in the faster direction, where BL's own so_lists read +0.33 % against P.
+
+## Boot BLb repeat, pre-registered (2026-10-18, after B and A, before B2 and A2): one more draw per arm, alternating
+
+**Design.** Arm B2 is the bumped firmware 2a0850a406d1229c, then arm A2 is boot P's 1b44a465d96753b2. Everything else
+is as in B and A: the vp2 bitstream, BL's Image and ten rungs, the judge and the bands. Run order B, A, B2, A2.
+
+**Readings, written down before the draws:**
+- **The 0.57 % was the spread, not the bump:** B2's so_lists is within 0.5 % of A's 2458, i.e. 2446-2470 ms, and B2
+  against A2 reads PASS. The control then passes on B2, and the pointer lands, citing all four arms.
+- **The bump moved so_lists:** B2 reads 2445 ms or less again, and A2 stays within the band of 2458.
+  - That is a real effect of dafe4f2 on the firmware, however small, faster rather than slower. It is reported, and
+    it needs a mechanism before the bump lands. The candidate is a monitor code or data layout change on the
+    rdtime trap path, which every Linux time read takes.
+- **Anything else** (a retval, a hash, a tag, another time outside the band) is read like arm B: no further than its
+  first difference.
+- **A2 reading outside the band of P** would mean the spread is wider than BL's bands assumed. The 0.5 % band is
+  then too tight for so_lists, and that is reported as such, not used to pass B.
+
+### Boot BLb repeat, result (2026-10-18 01:52-02:19): the bump moved so_lists, as pre-registered, and fib with it; a placement mechanism, supported but not confirmed
+
+Result lines: `bootblb/results-bootblb.txt`.
+- **All four vp2 arms** read all ten retvals identical, the three mruby hashes the same, and no monitor tag.
+- **B2** (bumped firmware) reads so_lists 2445 ms, which is "2445 or less again". **A2** (P's firmware) reads 2469,
+  +0.45 % from P, inside the band. That is the pre-registered reading "the bump moved so_lists".
+
+Bench times in ms. P and BL are on d93a8d66b; A, A2, B and B2 are on vp2.
+
+| benchmark | P | BL | A | A2 | B | B2 | mean B − A | spread A | spread B |
+|---|---|---|---|---|---|---|---|---|---|
+| mandel_term | 138315 | 138351 | 138338 | 138304 | 138320 | 138290 | −0.01 % | 0.02 % | 0.02 % |
+| fib | 45514 | 45524 | 45491 | 45512 | 45658 | 45639 | **+0.32 %** | 0.05 % | 0.04 % |
+| so_lists | 2458 | 2466 | 2458 | 2469 | 2444 | 2445 | **−0.77 %** | 0.45 % | 0.04 % |
+| so_mandelbrot | 30708 | 30683 | 30685 | 30668 | 30685 | 30674 | +0.01 % | 0.06 % | 0.04 % |
+| ao_render | 81907 | 81931 | 81881 | 81870 | 81854 | 81892 | −0.00 % | 0.01 % | 0.05 % |
+
+- **Two effects of the bump:** fib is slower by 0.3 %, inside the band but systematic (four unbumped draws within 33 ms,
+  both bumped draws about 140 ms above them), and so_lists is faster by 0.7 %. The other three benchmarks do not move.
+  Effects of opposite sign on two benchmarks, with nothing moving elsewhere, point to code placement, not to added
+  work.
+
+**The mechanism, supported but not confirmed.** I compared the two monitors' `.cap_text`, extracted with the cross
+objcopy. The control is handle_exception, which changed and reads DIFFER. A 2-byte-shifted compare also reads DIFFER.
+- **The M-mode timer-interrupt path,** which every Linux timer tick takes, is byte-identical code at new addresses.
+  `_cap_trap_entry` is identical at the same address. `_handle_ints` (26 B) and `return_to_sumode` (76 B) are
+  identical, each moved +0x6a behind the new `_inject_s_trap` block. `handle_interrupt` (160 B) is identical, moved
+  +0x230 behind the counter brackets in the domain-call functions above it.
+- **handle_exception,** the path of every trapped Linux time read, is recompiled and 152 bytes larger (632 → 784).
+- **So the bump changes where the monitor's hot paths sit in the I-cache** against each benchmark's own code. Confirming
+  it would need a firmware that reproduces the shift without the code change, such as P's monitor padded by the same
+  amounts. That firmware has not been built.
+- **Instrument note:** the first byte comparison used the host's objcopy, which cannot read RISC-V ELF. It extracted
+  nothing and printed "IDENTICAL" for every function. handle_exception, which changed, exposed it.
+
+**Landing.** The pre-registered rule is "a real effect, which needs a mechanism before the bump lands". The mechanism is
+the candidate above, not a confirmed one, so the pointer is not landed on this record. Whether this is enough to land
+it, with the timing baselines for the physical line re-taken on the bumped firmware (B and B2 rather than P), goes to
+the runtime lane, who asked for the bump. The alternative is the padding arm first.
+
+## Boot BLb arm C, pre-registered (2026-10-18, before the boot): boot P's monitor padded to the bumped monitor's code placement
+
+The runtime lane's ruling: run this arm, then land the pointer whatever it reads, citing A, A2, B, B2 and C. It turns
+the candidate mechanism into a confirmed or refuted one.
+
+**The firmware:** fw_payload 4dca1649894c6f15, gate PASS (25680 B, P's).
+- **Built from boot P's own sources:** monitor ebe0a25, wrapper 1269c77, P's three defines and BL's Image.
+- **The build** is `bootblb/build-fpga-fw-pad.sh`, the shared build-fpga-fw.sh plus one step, `FW_PAD=bootblb`.
+  - **Control:** without that step the copy reproduces boot P's firmware byte for byte, 1b44a465d96753b2.
+- **The step inserts `.skip` padding only where control never falls through.** Each insertion point is required to
+  occur exactly once.
+  - 0x6a bytes after `j return_to_sumode`, before `_handle_ints`, in the assembly;
+  - 0x1c6 bytes after a `ret`, before `handle_interrupt`, in the generated C;
+  - 0x11c bytes after a `ret`, before `handle_exception`, in the generated C.
+- **Checked in the built monitor object** (`.cap_text` with the cross objcopy). These sit at arm B's addresses with
+  boot P's exact bytes:
+  - `_handle_ints` 0x1bc;
+  - `return_to_sumode` 0x1d6;
+  - `handle_interrupt` 0x94da;
+  - `handle_exception`'s entry 0x99d8. Its bytes are P's 632, which differ from B's 784 (the control).
+  - `_cap_trap_entry` is at 0x68 in all three.
+
+**What it does not reproduce, so a refutation is not over-read:**
+- **B's 6-byte shift of `_handle_branch_1`.** That is executed code on the exception-return path, which stays at
+  P's 0x144.
+- **B's global data layout.** The counter global moved every later gp slot; this firmware keeps P's.
+- **B's recompiled handle_exception body, and the counter brackets in the domain-call functions.**
+
+**Readings, written down before the boot.** Unbumped draws: fib 45491-45524 and so_lists 2458-2469. Bumped draws:
+fib 45639-45658 and so_lists 2444-2445.
+- **Placement confirmed:** so_lists 2450 ms or less and fib 45600 ms or more, the bumped side on both. The effect is
+  the code placement of the timer path and handle_exception's entry.
+- **Placement refuted:** so_lists 2455 ms or more and fib 45540 ms or less, the unbumped side on both. The effect is
+  then in what C does not reproduce. Per the runtime lane's ruling it is recorded as "handle_exception's
+  recompilation, not attributed further", with the data layout and `_handle_branch_1` named as untested alternatives.
+- **Anything between, or one benchmark on each side:** a partial reading, reported with both numbers and not forced
+  into either.
+- **Retvals, hashes and tags must be P's.** A difference there is a finding of its own and is read first.
+
+The pointer lands after C whatever C reads. Physical-line timing baselines are re-taken on the bumped firmware and
+cite B and B2, or C's reading if it refutes placement. Retval, hash and tag records are unaffected.
+
+### Boot BLb arm C, result (2026-10-18 02:26-02:39): placement CONFIRMED, as pre-registered
+
+Result lines: `bootblb/results-bootblb.txt`.
+- **Correctness:** retvals, hashes and tags as P's: all ten retvals identical, the three mruby hashes the same, no
+  monitor tag.
+- **fib 45665 ms** (45600 or more) and **so_lists 2424 ms** (2450 or less): the bumped side on both, which is the
+  pre-registered "placement confirmed".
+- **What it shows:** boot P's own monitor code, padded to the bumped monitor's placement of the M-mode timer path and
+  of handle_exception's entry, reproduces the timing shift. The bump's effect is code placement, not added work.
+
+| benchmark | P | BL | A | A2 | B | B2 | C | C − mean(A) |
+|---|---|---|---|---|---|---|---|---|
+| mandel_term | 138315 | 138351 | 138338 | 138304 | 138320 | 138290 | 138343 | +0.02 % |
+| fib | 45514 | 45524 | 45491 | 45512 | 45658 | 45639 | 45665 | +0.36 % |
+| so_lists | 2458 | 2466 | 2458 | 2469 | 2444 | 2445 | 2424 | −1.60 % |
+| so_mandelbrot | 30708 | 30683 | 30685 | 30668 | 30685 | 30674 | 30655 | −0.07 % |
+| ao_render | 81907 | 81931 | 81881 | 81870 | 81854 | 81892 | 81828 | −0.06 % |
+
+- **Beyond the criteria:** C's so_lists is about 20 ms below B's. C differs from B in placement elsewhere:
+  - P's data layout;
+  - `_handle_branch_1` at P's address;
+  - code that was not padded.
+  - So so_lists moves with monitor placement at the 1 % level generally, not only with the two paths padded here.
+  - A timing baseline is valid only for the firmware it was measured on.
+
+**The record rule** (the runtime lane's ruling, applied now that the pointer lands):
+- **Timing:** physical-line timing baselines are re-taken on the bumped firmware and cite B and B2 for timing, not P.
+- **Everything else:** retval, hash and tag records are unaffected.
