@@ -1348,3 +1348,18 @@ that matched their predictions on 3005ed52 re-run on d71f207a, so the fold can n
 - **Interruption:** if the revision's Tier 1 boot or the tree A flash becomes due, the chain finishes its current arm
   and the rest are held (stop it between arms by its process group).
 - UNGATED (PREFLIGHT=0).
+
+### pgc, pgm0 and pgm1 on the workaround module, pre-registered (2026-10-18 23:55, before their boots), after the nine
+
+`tier3-pg-fix6.sh` runs after the nine-arm re-run ends. It uses `tier3-pg-arm.sh` unchanged, with kit bkit7-fix6t
+(module d71f207a3af5546b) and the t3-freeze-nb pg builds. The records are `<arm>-fix6b`, and the bundles go under
+`results/2026-10-18-vp2-rdx0/`.
+- **The predictions:** the compiler lane's QEMU records, `t3-<arm>/bundle`, made through the qkit7 wrapper with
+  svadu=false applied:
+  - pgc (postgres/c-repros, vp2-malloc): CAUGHT 5;
+  - pgm0 (postgres/mmgr, vp2-malloc): MISSED 5;
+  - pgm1 (postgres/mmgr, vp2-pg-pools): CAUGHT 5.
+- On 3005ed52 all three read 15 of 15, the second matched pair (pgm0 against pgm1).
+- **pgm1 and the Q-15 repair:** the runtime lane predicts the repair leaves pgm1 unchanged, since its recorded faults
+  do not use the ≥4 KiB large-chunk paths. So this reading stays valid after the repair.
+- UNGATED (PREFLIGHT=0). Dry run: `dryrun-pg-fix6.txt`.
