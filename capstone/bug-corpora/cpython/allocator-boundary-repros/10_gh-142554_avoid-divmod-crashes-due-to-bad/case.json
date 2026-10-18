@@ -33,5 +33,6 @@
     "pylong_int_divmod",
     "l_divmod"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at pylong_int_divmod Objects/longobject.c:4328 | l_divmod Objects/longobject.c:4406. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at pylong_int_divmod Objects/longobject.c:4328 | l_divmod Objects/longobject.c:4406. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "① and ③ WITHDRAWN by the 2026-10-18 review. Spatial defect. ② faults cause=28 on `ldc a2, 0x40(a0)`. ① faults cause=24 on `ldc a4, 0x10(a2)` at address=0x10 -- the base register held a small integer, not a capability, so this is a dereference of what the overread returned -- and ③ reports si_code=2 PROT_CHERI_TAG."
 }
