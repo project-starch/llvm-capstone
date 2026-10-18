@@ -483,14 +483,36 @@ access fault` at `mod_node_page_state+0x40` (cause 5, badaddr = mtval) and panic
     same kernel path (`mod_node_page_state+0x40` from `unpin_user_page+0x2a`).
     - A refusal that repeats at one physical address from one caller on two boots and two modules is a deterministic
       sequence. That weighs against a timing window and toward the persistent-false-deny caveat above.
-  - **A candidate for that deny (the RTL lane's, 2026-10-18; a hypothesis, not established):**
+  - **A candidate for that deny (the RTL lane's, 2026-10-18/19; a hypothesis, not established):**
     - The allow needs `cpmp_revnode_valid_q[i]` (`pmp_data_if.sv:143-151`). Invalidation compares the broadcast id with
-      the tracked id on the INDEX only, `[15:0]` (`:96-108`, deliberate since ids are {generation, index}).
+      the tracked id on the INDEX only, `[15:0]` (`:96-108`). That is deliberate, since ids are {generation, index} and a
+      full compare would stop firing once generations advance.
     - So freeing any node with index N clears every entry tracking index N, whatever its generation or namespace.
-    - Nothing re-validates the entry, so the deny is permanent: R-38's class.
-    - This fits a context teardown (unpin), needs no table in flux, and is deterministic.
-    - The discriminator is an RTL simulation arm: an entry tracking N, a revoke of another node sharing N (across the
-      virtual/physical namespace too), then a load giving a load access fault with the physical address.
+      Nothing re-validates it, so the deny is permanent.
+    - That is R-38's OUTCOME (a permanent false deny), reached by a mechanism R-38's Stage 0 fix knowingly left in
+      place. If it is confirmed it wants its own entry, since a reader of R-38 would take Stage 0 as closing it.
+    - It fits a context teardown (unpin), needs no table in flux, and is deterministic.
+    - **The namespace flush re-arms rather than re-queries.** On `revnode_ns_flush_i` every tracked id is zeroed and
+      `cpmp_revnode_valid_d[i]` set to 1, "re-adopted next cycle as on an entry write, assumed valid" (`:109-114`). That
+      is the same assumed-live posture as the adopt (R-44's direction).
+    - So a namespace crossing can create a false deny (through the index-only compare) or clear one (through the flush),
+      depending on order. The strobe is csupctl bit 2 (`csr_regfile.sv:2002`; `:150`, "the revocation trackers
+      forget"), a software-written CSR, so the crossing is reachable in a directed test.
+    - **The discriminator** is an RTL simulation arm, owed by the RTL lane: an entry tracking a physical node of
+      generation >= 1 at index N, a free of a virtual (0, N), then a load giving a load access fault with the physical
+      address.
+- **S-23's FETCH face has a demonstrated mechanism, in simulation (RTL lane, satpu2 on bf3db3175,
+  `virtual-profile-2-c` 97f559bd2):** a stale translation alone.
+  - **Without a post-escape `sfence.vma`:** the caller's first fetch after an escape (dropped to U by sret) takes cause
+    1 with mtval 0x80014000. That is the physical page the CONTEXT's chain maps, starting exactly at the end of the
+    caller's one capability region [0x80000000, 0x80014000).
+  - **With the fence:** cause 12, with the virtual address.
+  - The pair differs by one `sfence.vma`. The refusal is the instruction-side capability check reporting the physical
+    address: S-23's fetch signature, with no capability table in flux.
+  - Not yet on silicon. Tree B's satp flush is its board test.
+  - **So S-23 has two faces, possibly with two mechanisms:** the fetch face, demonstrated as a stale translation; and
+    the data face (pb10), a COVERED refusal that a stale translation cannot produce, its mechanism OPEN with the
+    candidate above.
 - The fetch-retry workaround does not cover data accesses. The RTL lane's conditions for a data-side retry: S or U
   origin; a loaded entry covering mtval for the access type; the bounded no-progress guard; inject when nothing covers
   it; never for AMOs or LR/SC. Its prediction: a data retry succeeds on its first attempt.
