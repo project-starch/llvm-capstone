@@ -1666,3 +1666,26 @@ mruby.dom equal the stage's by sha256.
 - **A returning step differs from 4c.** QEMU shows the pin moving none, so a change would be a silicon-only effect of
   the pin. The kit applications are then not read as a record, and the pin moves to just before sqlite_write in a
   re-run.
+
+### Tier 2 boot 5, result (2026-10-18 12:31-12:44): the arena pin does not carry the kit applications. sqlite_write wedges with r10's exact signature
+
+Pre-registered at ef24d082c2ea. Result lines are in `board-tier12/results/board-vp2-tier12-b5.result-lines.txt`.
+- **Refuted for the kit applications.** sqlite_write wedged under arena_pin=1 (read back Y). Its 15 switch apertures
+  equal r10's sqlite_write wedge and r11's mruby wedge, compared by `boot3/compare-wedge-apertures.py`. That script's
+  negative control is r8's sparse wedge, which differs in 8.
+  - The shared signature is store-buffer commit count 4 with no commit-queue valid bit (R-57's kit-application face),
+    privM, and the LSU idle.
+  - So S-25's kit-application wedge is not a first touch the arena pin reaches.
+  - sqlite_read and mruby did not run.
+- **Everything else held:**
+  - Tier 1 identity;
+  - the read-backs;
+  - the 16 returning exits in order;
+  - all 8 returning fault lines, equal to 4c in cause, code offset and entry (`boot3/score-b5.py`). So the pin moves no
+    returning step on silicon, as on QEMU.
+- **What follows:**
+  - Tier 2 records the kit applications as not passing on bf3db3175 with module 3005ed52, with or without the pin.
+    They wait on R-57's RTL fix.
+  - The record of Tier 2 stays boot 4c.
+  - Tier 3 runs with the pin OFF (the rule pre-registered with the kits): the pin removes no wedge here, and pin-off is
+    4c's configuration.
