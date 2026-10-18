@@ -287,3 +287,26 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
   - then the two appvm corpora.
   - Each boot runs b0-stats and b0-hello first (S-26's warm-up).
   - A wedge with R-57's signature (a commit count with no valid bits) is S-25's residual, recorded as that.
+
+## The campaign's SDK, frozen (2026-10-18)
+
+The v9 SDK's `sdk.json` named a live LLVM build directory (`llvm-lane-c27`), which the compiler lane rebuilt
+incrementally at 08:06 today. clang is a thin driver over `lib/*.so` (BUILD_SHARED_LIBS), so a rebuild can change
+codegen with the driver's hash unchanged. Over a 26-boot campaign that would split the records across two compilers
+without anything showing it. So every Tier 3 arm, on the board and in its QEMU prediction, is compiled from a frozen,
+read-only copy: `<mnt-hdd>/capstone/t3-freeze`.
+- **What it holds:** llvm-lane-c27's bin and lib, plus the v9 SDK, libc, musl and link script, with `sdk.json` pointing
+  at the copies. Each copy was compared equal to its source.
+- **Identity:**
+  - `MANIFEST.SHA256` sha256/16 44528aa3d25debd5, over 6685 files, 119 of them `lib/*.so`.
+  - `libLLVMCapstoneCodeGen.so` 43e1781e3f1a5e5d. The compiler lane identifies it as the post-08:06 library, the one
+    the pilot and its recent records used.
+  - clang-22 a5be1a4d621513eb, the bundles' `compiler` field. That is the driver alone, so cite the manifest.
+- **Self-contained, checked three ways:**
+  - `ldd`: all 103 of clang's libraries resolve inside the copy.
+  - strace of a full corpus build: the only opens naming the live tree are ENOENT probes for system libraries,
+    through the RUNPATH's absolute fallback.
+  - The pilot's four images rebuild byte-identical from it.
+- **The plain case.c arms' images**, built from it with no boot, for the hash-matched predictions:
+  `<mnt-hdd>/capstone/t3-images/<tag>.images.SHA256SUMS`. There are 7 arms and 92 images. controls.dom is
+  491655742d378fcd in all of them.
