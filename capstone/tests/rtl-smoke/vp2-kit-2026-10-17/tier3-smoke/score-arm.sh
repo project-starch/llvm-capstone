@@ -1,7 +1,8 @@
 #!/bin/bash
 # score-arm.sh <tag> <prediction bundle> <board run dir> <seq out>: write records/<tag>.board.txt from one arm's board run:
 # the bundle's cells, compare-pilot.py against the prediction (cell by cell, by image), the boot lines, and, when the boot
-# did not complete, the wedge apertures. Prints the comparison's last line; exit = compare-pilot.py's (0 all same).
+# did not complete, the wedge apertures; then copies the board bundle into its corpus's results/2026-10-18-vp2/<arm>/
+# (never over an existing one). Prints the comparison's last line; exit = compare-pilot.py's (0 all same).
 main() {
   set -u
   local tag=${1:?tag} P=${2:?prediction bundle} D=${3:?board run dir} Q=${4:?seq out} S; S=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -22,6 +23,13 @@ main() {
       awk '/wedge apertures =====/{f=1;next} f&&/^(sw=|commit pc|trap-log|rev_node)/{print "  "$0} f&&/^$/{exit}' "$G/board.txt"
     fi; } > "$out"
   python3 "$S/compare-pilot.py" "$P" "$B" > /dev/null; rc=$?
+  # the board bundle into its corpus, beside the QEMU bundles (results/2026-10-18-vp2/<recorded arm>/), for the fold
+  local corpus arm dst
+  read -r corpus arm < <(python3 -c "import json,sys; j=json.load(open(sys.argv[1])); print(j['corpus'], j['arm'])" "$B/inputs.json")
+  dst=$(cd "$S/../../../.." && pwd)/bug-corpora/$corpus/results/2026-10-18-vp2/$arm
+  if [ -n "$corpus" ] && [ -d "$(dirname "$(dirname "$dst")")" ] && [ ! -e "$dst" ]; then
+    mkdir -p "$dst" && cp "$B/inputs.json" "$B/verdicts.jsonl" "$dst/" && echo "$tag: bundle -> ${dst#*/capstone/}"
+  fi
   echo "$tag: $(grep -a 'cells the same\|CELLS DIFFER\|NO DATA' "$out" | tail -1 | sed 's/^ *//') (rc $rc)"
   return $rc
 }

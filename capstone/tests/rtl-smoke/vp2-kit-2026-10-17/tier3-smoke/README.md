@@ -485,3 +485,8 @@ control). Each was predicted with `tier3-appvm-arm.sh --virtual-kit qkit7` and r
 
 `records/fph.board.txt` and `records/fpt.board.txt`: CAUGHT 25 and CAUGHT 13 on silicon, by image, as predicted.
 `t3-status.py` prints the campaign's state from `records/` alone.
+
+**The wmem arms' position on bf3db3175 (2026-10-18).** The runner runs uaf-jumbo, the control wm0 wedged in, before any
+case in every boot, on both arms. So neither wmem arm can be measured on this bitstream until the RTL lane attributes
+that wedge, and either a software rule avoids it or the next bitstream fixes it. This is the current position, not a
+result pending wm1. wm1 stays last in the queue, where a wedge costs nothing else.
