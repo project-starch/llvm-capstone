@@ -1,0 +1,32 @@
+# Tier 3 board reading, arm pb12-fix6b: kit bkit7-fix6t (module d71f207a3af5546b, the S-27 workaround; batch budget 300 s per step), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-memcached-stock platform board:caplifive_vp2_bf3db3175 cells 9 tally {"CAUGHT": 1, "MISSED": 8}
+# controls [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]]
+00_7af02b0c87_rbuf_copied_after_cache_free image 85f0d8e8c662f3ec MISSED cause None at None reached True completed True attribution null
+01_0ad4de66ae_io_walk_reads_freed_link image 55dad5ff346f52a0 MISSED cause None at None reached True completed True attribution null
+02_59bd02ce29_tail_repair_frees_referenced_item image cb27adc59a4c5c69 MISSED cause None at None reached True completed True attribution null
+03_a8c4a82787_refcount_overflow_frees_linked_item image 9863d6c5101d1529 MISSED cause None at None reached True completed True attribution null
+04_152ddb68f7_unlocked_refcount_drift image 2b1676c6e8eb7f9a MISSED cause None at None reached True completed True attribution null
+05_2d61f18_item_data_one_past image e35ef3180e8fc043 MISSED cause None at None reached True completed True attribution null
+06_78eb770_suffix_write_no_space image bf756b13f2adbad6 MISSED cause None at None reached True completed True attribution null
+07_ecdb011_unterminated_key_read image d8b054148f51a48c MISSED cause None at None reached True completed True attribution null
+08_e8364b5_ascii_all_spaces_scan_past_rbuf image 4ee0176bda1164ee CAUGHT cause 28 at mc_case_body+396 reached True completed False attribution "function"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_7af02b0c87_rbuf_copied_after_cache_free: verdict MISSED cause None pc None
+  SAME 01_0ad4de66ae_io_walk_reads_freed_link: verdict MISSED cause None pc None
+  SAME 02_59bd02ce29_tail_repair_frees_referenced_item: verdict MISSED cause None pc None
+  SAME 03_a8c4a82787_refcount_overflow_frees_linked_item: verdict MISSED cause None pc None
+  SAME 04_152ddb68f7_unlocked_refcount_drift: verdict MISSED cause None pc None
+  SAME 05_2d61f18_item_data_one_past: verdict MISSED cause None pc None
+  SAME 06_78eb770_suffix_write_no_space: verdict MISSED cause None pc None
+  SAME 07_ecdb011_unterminated_key_read: verdict MISSED cause None pc None
+  SAME 08_e8364b5_ascii_all_spaces_scan_past_rbuf: verdict CAUGHT cause 28 pc mc_case_body+396
+  9 of 9 cells the same
+## the boot
+  T3SEQ pb12-fix6b BEGIN 23:06:10 memcached/allocator-repros virtual-malloc (4 extra args)
+  T3SEQ pb12-fix6b END 23:16:05 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-memcached-stock): {'CAUGHT': 1, 'MISSED': 8}
+  T3SEQ pb12-fix6b PAYLOAD stage 3875532 B, 1519094 B gzip; firmware 19565064 B
+  BOARD_RUN_START 23:06:10 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 20 files, stage 3875532 bytes
+  firmware 851cab0567701df2 19565064 B
+  DRIVER rc=0 23:16:05
+  BOARD_RUN_DONE 23:16:05
