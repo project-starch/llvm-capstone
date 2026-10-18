@@ -542,3 +542,31 @@ pym_raw_malloc's `b->size` store, as in pym0. So the fault does not depend on th
   16 MiB and 64 MiB is 32 KiB and 128 KiB. The earlier silicon run used level0, which over-aligned those regions. The
   lane is building a probe that prints both regions' bases, the reloaded `metadata` and `b`, and a 4 KiB control,
   predicted on QEMU first. Not a mechanism yet: the lead does not predict cause 6 at a cursor of 2.
+
+**wm0's wedge, attributed (the RTL lane, from bf3db3175's source, 2026-10-18): a third face of R-57.**
+- 225 has dom_switch_busy set, so a switcher walk is in progress. 228 is index 28, which is x3, early in the register
+  block. 226/227 show the walk's 16-byte capability WRITE outstanding: a SAVE step.
+- 194 shows the store unit in WAIT_STORE_READY. 221 shows valid 1101 with no data request: the entry at the read
+  pointer is the invalid one.
+- So the ghost sits at the queue's HEAD, the queue never drains, and the switcher's next write is correctly refused
+  forever. That is R-49's fix doing its job on top of R-57's stuck queue.
+- The bit decode was checked here against the driver's own aperture labels. The fix on virtual-profile-2-c 2114e11bd
+  covers it.
+- **Not closed:** which store produced the ghost. The discriminator is the compiler lane's: does wmem's jumbo path make
+  a capability store a fresh page's first access?
+  - If yes, the wmem software rule on this bitstream is a pre-touch in the jumbo allocator.
+  - If no, there is a second producer, with S-24's shape (a present, writable page with D clear) as the next arm.
+
+### Arm sq1, subset a, result (2026-10-18 14:47-15:00): Q-15's refusal confirmed on silicon, 6 of 6 cells the same
+
+`records/sq1a.board.txt`: sqlite/engine-repros vp2-nested-pools, cases 00-05 with both controls, compared against the
+prediction cut to those cases (`subset-bundle.py`).
+- **Both memsys5 controls fault with cause 29 at `capstone_cap_derive+156`,** the Sublet heap's CDERIVE. So every cell
+  is control-failed, as predicted, and as the DYN unit's vctx-gated round-trip refusal says it must.
+- **The fault line's address differs and is not scored:** silicon reports a non-zero address (the child's cursor) where
+  QEMU reports 0. compare-pilot compares cause and symbol+offset, which are equal.
+- **The other five sq1 subsets are not booted.** Every boot runs these two controls first on the same image set, and
+  their refusal is now read on silicon, so each subset could only repeat control-failed. That is five boots of no
+  information. sq1's record is therefore 6 of 33 cells measured, with the cause of all 33 confirmed. The arm becomes
+  measurable once the Sublet memsys5 heap derives representable children (Q-15's consequence, the compiler lane's
+  work).

@@ -28,7 +28,11 @@ main() {
   read -r corpus arm < <(python3 -c "import json,sys; j=json.load(open(sys.argv[1])); print(j['corpus'], j['arm'])" "$B/inputs.json")
   dst=$(cd "$S/../../../.." && pwd)/bug-corpora/$corpus/results/2026-10-18-vp2/$arm
   if [ -n "$corpus" ] && [ -d "$(dirname "$(dirname "$dst")")" ] && [ ! -e "$dst" ]; then
-    mkdir -p "$dst" && cp "$B/inputs.json" "$B/verdicts.jsonl" "$dst/" && echo "$tag: bundle -> ${dst#*/capstone/}"
+    # a runner may record a build path under the account's scratch disk: the committed copy names it <mnt-hdd>, as the
+    # corpora's older bundles name theirs <scratch> (precommit-scan blocks the account name)
+    mkdir -p "$dst" && sed "s|/mnt/hdd/$USER/|<mnt-hdd>/|g; s|/home/$USER/|<home>/|g" "$B/inputs.json" > "$dst/inputs.json" \
+      && sed "s|/mnt/hdd/$USER/|<mnt-hdd>/|g; s|/home/$USER/|<home>/|g" "$B/verdicts.jsonl" > "$dst/verdicts.jsonl" \
+      && echo "$tag: bundle -> ${dst#*/capstone/}"
   fi
   echo "$tag: $(grep -a 'cells the same\|CELLS DIFFER\|NO DATA' "$out" | tail -1 | sed 's/^ *//') (rc $rc)"
   return $rc
