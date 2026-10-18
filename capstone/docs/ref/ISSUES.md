@@ -2909,6 +2909,13 @@ the same merged path. R-49 remains the other producer of a ghost count, fixed on
 **Software rule on bf3db3175** (S-25, isa.md, the semantics owner): no capability store may be the first access to a page
 under the virtual profile; the module pins a whole arena at its first kind-4 fault; the kit's sparse steps are not available.
 
+> **Residual found by the synthesis audit (2026-10-18), parity rather than regression:** the saved store-side exception
+> is a SINGLE-ENTRY hold, so a second faulting capability store arriving before the first is consumed overwrites the
+> pending one (`ex_stage.sv:1346`). The load side has the identical shape (`:1320-1321`), so this matches the merge it
+> mirrors, but it rests on an unverified assumption that two cannot be in flight; the comment at `:1352` asserts only
+> that a load and a store cannot complete on the capability writeback port in the same cycle, which is a different
+> claim. No arm exercises two faulting capability stores in flight.
+
 ### R-56 — a page fault raised at a capability LOAD's translation was dropped on the way to writeback, because an LDC's result is routed through the DYN unit whose result packet carries only the capability cause `LATENT ON EVERY BITSTREAM, UNREACHABLE THERE (capability loads were never translated); FIXED on virtual-profile 16345658f (ex_stage.sv carries the LSU's exception beside the DYN result for that trans_id; cva6.sv lets it replace the capability port's exception record)`
 
 Found by vb-trans.S arm 4 on 2026-10-16: the load unit's own result line read `ex=1` in state WAIT_TRANSLATION and

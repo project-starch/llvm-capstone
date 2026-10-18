@@ -929,10 +929,33 @@ at 178,757 LUT failed `route_design` on congestion after 6h40m with 242 unrouted
 | S-28, `commit_stage.sv` | 0 | ~1, one AND term on an existing condition | none |
 
 So the prediction is **+0.09 % area, about 178,560 LUT**, WNS inside the standing noise band around −19.019 (a null RTL
-change has moved WNS by 3.7 ns on this design, so a few ns either way is not a signal), and **no congestion failure
-predicted**, since the design stays essentially at the resident size and well below the 178,757 that failed to route. If
-it fails to route anyway, that is a reading about this design's marginality at its current size, not about these four
-changes, and attribution goes by which instance's cone holds the unrouted nets.
+change has moved WNS by 3.7 ns on this design, so a few ns either way is not a signal).
+
+**Corrected, after the synthesis audit of the combined diff (2026-10-18), because my own first version of this paragraph
+was too comfortable.** The auditor measured `exception_t` at 203 bits with about 129 live in this configuration, so
+R-57 duplicates the resident load-side group at roughly **130 flops** and widens a 2:1 mux to 4:1 for **+0 to 150 LUT**.
+That is about HALF the +351 LUT delta that failed `route_design` on congestion at 178,757, so R-57 alone sits **in the
+same regime as that failure rather than clearly under it**, and a congestion failure is a live outcome of this build
+rather than something I predict against. What I do predict: if it fails to route, the unrouted nets' cones name the
+cause, and the per-change table above is what attributes it. Routability is the thing this build tests that no check
+here can.
+
+**Q-24 deserves a line the audit added and I had not written.** It is the one change that UN-PRUNES logic in a cone that
+already carries a combinational loop: `csr_regfile.sv:2250` reads `medeleg_q[ex_i.cause[5:0]]` into `trap_to_priv_lvl`,
+which is UNOPTFLAT #28, and bits 24..30 were constant zero before, so synthesis folded them away. It adds **no input** to
+that cone, since `medeleg_q[63:0]` was already the dynamic mux's input, but it makes seven bits real: about 7 flops and
+7 un-folded mux inputs, also reaching `csr_rdata` and the switcher's register response. No width hazard, the mask being
+64-bit with cause 30 the largest shift.
+
+**The audit's other findings, recorded so the build is not re-audited:** no new UNOPTFLAT member, verified by NAME and
+not by count (40 on both sides, none new, none gone, checked against three earlier listings); the five signals R-57's
+logic reads are already in the documented ring, so the change adds fanout rather than a new edge, and its mirror is in
+the resident routed bitstream; the three new registers are assigned in exactly one `always_ff` and no LATCH, MULTIDRIVEN
+or BLKSEQ line falls in the four changed files; the switcher request struct has 15 named fields, all driven, with S-27
+changing one value; and the escape and the refusal both still write their register, the refusal being mode-1-only so
+S-27's condition is the exact complement of the mode it must not touch. The residual the audit could not close, and
+nothing here can: a cycle routed entirely through a net Verilator already chose as a loop break would be absorbed with
+no new name and no count change. Synthesis settles that.
 
 **What this bitstream does NOT answer, so nothing waits on it:** S-23, the caller's first fetch after a return, whose
 mechanism is open after two refuted candidates and whose monitor fetch-retry workaround must stay enabled; S-26, the
