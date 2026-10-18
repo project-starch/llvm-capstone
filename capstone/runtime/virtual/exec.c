@@ -123,10 +123,17 @@ static unsigned long long now_ns(void)
     return (unsigned long long)t.tv_sec * 1000000000 + t.tv_nsec;
 }
 
+/* Set from CV_PROFILE before anything is reserved. Without exact bounds a
+ * grant's capability covers a power-of-two, size-aligned range; with them it
+ * covers exactly the pages. Rounding a 16.9 MB image to 32 MB made the module
+ * allocate, pin and at exit sweep 4000 pages no domain could use. */
+static int exact_bounds;
+
 static size_t rounded(size_t n)
 {
     size_t size = 4096;
     if (!n || n > CV_MAX_REGION_BYTES) return 0;
+    if (exact_bounds) return (n + 4095) & ~(size_t)4095;
     while (size < n) size <<= 1;
     return size;
 }
@@ -139,24 +146,31 @@ static void *private_pages(void *p, size_t bytes)
     }
     return p;
 }
-static void *reserve(size_t bytes)
+/* bytes at an address aligned to align (a power of two, at least a page). */
+static void *reserve_aligned(size_t bytes, size_t align)
 {
     /* Let Linux reuse the most recently retired range if it is still free.
      * A fresh grant always creates new identities, even at this same VA. */
-    if (reuse_address && bytes == reuse_bytes) {
+    if (reuse_address && bytes == reuse_bytes && !((uintptr_t)reuse_address & (align - 1))) {
         void *p = mmap(reuse_address, bytes, PROT_READ | PROT_WRITE,
                        MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED_NOREPLACE, -1, 0);
         reuse_address = NULL;
         if (p != MAP_FAILED) return private_pages(p, bytes);
     }
-    char *raw = mmap(NULL, bytes * 2, PROT_READ | PROT_WRITE,
+    size_t extra = align > 4096 ? align : 0;
+    char *raw = mmap(NULL, bytes + extra, PROT_READ | PROT_WRITE,
                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
     if (raw == MAP_FAILED) return NULL;
-    uintptr_t base = ((uintptr_t)raw + bytes - 1) & ~(bytes - 1);
+    uintptr_t base = ((uintptr_t)raw + align - 1) & ~(align - 1);
     if (base != (uintptr_t)raw) munmap(raw, base - (uintptr_t)raw);
-    size_t tail = (uintptr_t)raw + bytes * 2 - base - bytes;
+    size_t tail = (uintptr_t)raw + bytes + extra - base - bytes;
     if (tail) munmap((void *)(base + bytes), tail);
     return private_pages((void *)base, bytes);
+}
+/* A grant's range: page-aligned with exact bounds, size-aligned without. */
+static void *reserve(size_t bytes)
+{
+    return reserve_aligned(bytes, exact_bounds ? 4096 : bytes);
 }
 /* The last mapping starting at or below p, or NULL. */
 static struct mapping *map_floor(uintptr_t p)
@@ -256,7 +270,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         p = mmap(NULL, bytes, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
         if (p == MAP_FAILED) return -errno;
         p = private_pages(p, bytes);
-    } else p = reserve(bytes);
+    } else p = reserve_aligned(bytes, exact_bounds ? alignment : bytes);
     if (!p) return -errno;
     /* Padding remains inaccessible, including after later mprotect calls.
      * No capability reply exists until registration has succeeded. */
@@ -722,13 +736,16 @@ int main(int argc, char **argv)
     if (spawner.socket < 0) { int error = capstone_spawner_start(&spawner);
         if (error) { errno = error; return die("spawner"); } }
     host.spawner = &spawner;
+    /* The CPU profile decides how grants are sized, so it is read before the
+     * image is reserved. */
+    device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
+    if (device < 0) { close(fd); return die("open"); }
+    uint64_t profile = 0;
+    exact_bounds = !ioctl(device, CV_PROFILE, &profile) && (profile & 0x100);
     void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
     if (load(fd, &image, &image_bytes, &entry, &stack_bytes)) { close(fd); perror("capstone-vexec: virtual ABI"); return 126; }
     host.private_fds[host.private_count++] = fd;
-    device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
-    if (device < 0) { munmap(image, image_bytes); return die("open"); }
-    uint64_t profile = 0;
-    if (local_malloc && (ioctl(device, CV_PROFILE, &profile) || !(profile & 0x100))) {
+    if (local_malloc && !exact_bounds) {
         munmap(image, image_bytes); errno = ENOTSUP; return die("exact-bounds CPU profile required");
     }
     if (grant(image, image_bytes, 3, 7, entry, 0, 0)) { munmap(image, image_bytes); return die("image grant"); }

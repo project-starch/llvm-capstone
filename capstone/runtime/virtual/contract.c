@@ -74,13 +74,33 @@ static void vm_contract(void)
     p[0] = 17; p[8192] = 23;
     require(!mprotect(p + 4096, 4096, PROT_NONE), "guard page");
     require(p[0] == 17 && p[8192] == 23, "guard neighbours");
+    /* Rights cannot reach past the mapping's last page. With power-of-two
+     * grants the page after it is padding of this grant; with page-rounded
+     * grants (exact bounds) it may be another mapping of the same domain, so
+     * the range straddles the end instead: it can never be one mapping's. */
     errno = 0;
-    require(mprotect(p + 12288, 4096, PROT_READ) == -1 && errno == EINVAL,
-            "padding cannot gain rights");
+    require(mprotect(p + 8192, 8192, PROT_READ) == -1 && errno == EINVAL,
+            "rights cannot extend past the mapping");
     errno = 0;
     require(munmap(p + 4096, 4096) == -1 && errno == EINVAL,
             "partial unmap refused");
     require(!mprotect(p, 12288, PROT_NONE) && !munmap(p, 8193), "protected whole retire");
+    /* Real padding, under either grant shape: an application mapping aligned
+     * beyond its size keeps the rest of its grant (bytes = alignment) out of
+     * reach, so mprotect is checked against the visible bytes, not the grant. */
+    sublet_cap aligned;
+    require(!cap_vm_acquire(&aligned, 4096, 16384, PROT_READ | PROT_WRITE, 7, CAP_VM_MAPPING),
+            "aligned mapping");
+    char *a = cap_vm_copyable(&aligned);
+    require(!(__builtin_capstone_cap_get_cursor(a) & 16383), "aligned mapping alignment");
+    require(!mprotect(a, 4096, PROT_READ), "aligned mapping protect");
+    errno = 0;
+    require(mprotect(a + 4096, 4096, PROT_READ) == -1 && errno == EINVAL,
+            "padding cannot gain rights");
+    errno = 0;
+    require(mprotect(a + 8192, 4096, PROT_READ) == -1 && errno == EINVAL,
+            "padding past the visible end cannot gain rights");
+    require(!munmap(a, 4096), "aligned mapping retire");
     char *q = mmap(NULL, 4096, PROT_READ | PROT_WRITE, flags, -1, 0);
     require(q != MAP_FAILED, "executable mapping");
     /* Execute this mapping as an explicit C context. Ordinary gp-free calls
