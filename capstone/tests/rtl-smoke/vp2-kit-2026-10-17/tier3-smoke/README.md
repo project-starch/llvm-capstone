@@ -197,3 +197,14 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
 - Every Tier 1/2 boot ran both before any virtual step, which is why this was never seen there.
 - **The Tier 3 recipe carries the validated sequence:** `BOARD_RUNGS="b0-stats b0-hello vm-contract vbatch"`, with
   Tier 1's files in the base set (bkit4).
+
+## Pre-registered (2026-10-18, before the fifth smoke boot): which rung is the warm-up
+
+- **The one change from boot 4:** `BOARD_RUNGS="b0-stats b0-hello vbatch"`. vm-contract does not run. The kit is
+  bkit5, a copy of bkit4: base set, recipe, driver, module, launcher, monitor and the batch's four steps are all
+  unchanged.
+- **The batch returns as in boot 4** (contract-ok exit 1 with VM_CONTRACT_FAIL:environment, then cause 28, cause 25,
+  exit 75): a classic domain run (b0-hello) is the warm-up.
+- **The batch spins as in boots 2-3** (state R at the bound, no mark): b0-hello is not enough. Then what made boot 4
+  work is a first virtual context run by Tier 1's script, and the batch gate is the variable only for the FIRST
+  context of a boot.
