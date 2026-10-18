@@ -280,6 +280,7 @@ MODULE_PARM_DESC(supervisor_slots,
 static DECLARE_WAIT_QUEUE_HEAD(slot_wait);
 /* The wait condition, evaluated WITHOUT vm_lock: it takes the lock itself, because the sleeper
  * released it. A false wake just re-checks. */
+static bool slot_free_now(void);
 
 /* Live frames across EVERY context, and one of them if asked. vm_lock is held by every caller. */
 static unsigned slot_live(struct cv_thread **holder)
@@ -298,17 +299,14 @@ static unsigned slot_live(struct cv_thread **holder)
 
 /* Evaluated by wait_event_interruptible WITHOUT vm_lock held -- the sleeper released it -- so this
  * takes the lock itself. A spurious wake simply re-checks. */
-/* A LOCK-FREE hint, because the condition of a wait_event runs with the task state already set to
- * TASK_INTERRUPTIBLE and must not block. The previous version called mutex_lock_interruptible()
- * here and QEMU answered with `do not call blocking ops when !TASK_RUNNING` at
- * kernel/sched/core.c:9831, through prepare_to_wait_event -- a warning on every boot that ran the
- * sparse tail, and a deadlock hazard in principle.
- *
- * The hint is written under vm_lock at each point a frame can stop being live, and read with
- * READ_ONCE in the condition. It is allowed to be stale in the optimistic direction: the waiter
- * returns -EAGAIN regardless and the launcher retries, so the wait is only there to stop a hot
- * spin. The timeout at the wait site is what makes a MISSED hint harmless rather than a hang. */
-static bool slot_free_hint = true;
+static bool slot_free_now(void)
+{
+    bool free;
+    if (mutex_lock_interruptible(&vm_lock)) return true;   /* let the sleeper return -EINTR */
+    free = slot_live(NULL) < supervisor_slots;
+    mutex_unlock(&vm_lock);
+    return free;
+}
 static u64 allocated_total, high_water, collections_total, reclaimed_total;
 
 static unsigned long run(unsigned long frame, unsigned long action);
@@ -1066,7 +1064,12 @@ static void pin_ahead(struct context *c, struct arena *a,
  * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
  * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
  * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
-#define CV_DIAG_TAG "resolve-sites-13"
+static bool diag_escapes;
+module_param(diag_escapes, bool, 0644);
+static unsigned escape_prints;
+#define CV_ESCAPE_BUDGET 16U
+
+#define CV_DIAG_TAG "bisect-esconly"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
@@ -1134,45 +1137,8 @@ module_param(fault_repeat_max, ulong, 0644);
  * (cpu_helper.c:1124-1131 returns TRANSLATE_FAIL when A/D need updating and hade is false).
  *
  * Default off so the production path is unchanged and the arm is two-sided in one boot. */
-/* DEFAULT OFF AGAIN. Turning it on by default regressed every virtual context on silicon in
- * boot 4, Tier 1 included: cause 24 at code offset 0x1d94 with address 0x2, before HELLO,
- * image-independent, with the banner printed and resolve_dirty reading back Y. a56fc415, identical
- * but for this default, read identity on the same rung.
- *
- * Why the earlier silicon evidence did not catch it: r13 set resolve_dirty through sysfs for the
- * `vm` step ALONE, after Tier 1 and threads had already run with it off. Boot 4 was the first time
- * any path other than `vm` executed this call on silicon. So "it worked on silicon" was true and
- * about one step, and I generalised it to a default -- which is the same shape as a pass on a
- * subset read as a pass.
- *
- * The hypothesis for the mechanism, NOT established: fixup_user_fault calls handle_mm_fault, which
- * may install a DIFFERENT page (a COW break or a zero-page promotion) while the module still holds
- * the old one pinned in a->pages[index]. The domain would then run through a mapping whose backing
- * the module never authorised, which is a capability fault rather than a page fault and is
- * consistent with cause 24 before HELLO. Testing that needs a page-identity re-check after the
- * fixup -- the same comparison the `remap` site already makes -- and that is the next change, with
- * its own control. Until then this stays off and `vm` is read by flipping it for that step only,
- * exactly as r13 did. */
 static bool resolve_dirty;
 module_param(resolve_dirty, bool, 0644);
-
-/* S-26: the first virtual context after a cold boot spins in R after the image's five grants
- * unless a classic domain ran first. The RTL side reads the switcher as not depending on a prior
- * CALL, so the question is what the module sees at each escape. This prints the frame's event
- * words RAW -- kind, cause, pc, tval, a0 at +16, +24, +32, +40, +48 -- because a raw word cannot
- * mis-decode and the spin sits inside the first few escapes, where a decode bug would be
- * indistinguishable from the thing being measured.
- *
- * BUDGETED at 16, not rate-limited, and the budget is small on purpose: a normal boot runs ~460
- * steps, so a line per escape with a generous budget is a great deal of UART on a console that is
- * also the harness's input. 16 covers the image's five grants and what follows, which is the
- * window the spin sits in. Rate limiting was rejected for the reason that bit the thread-refusal
- * line: a time-based limiter drops the FIRST occurrence as readily as any, and here the first
- * escapes are the only ones that matter. */
-static bool diag_escapes;
-module_param(diag_escapes, bool, 0644);
-static unsigned escape_prints;
-#define CV_ESCAPE_BUDGET 16U
 
 #define CV_EMIT(fmt, ...) do {                      \
     if (diag_emerg) pr_emerg(fmt, ##__VA_ARGS__);   \
@@ -1568,12 +1534,7 @@ thread_unwind:
             if (slot_live(&holder) >= supervisor_slots) {
                 if (holder && holder->context == c) { rc = -EBUSY; goto out; }
                 mutex_unlock(&vm_lock);
-                /* _timeout, so a hint lost to a race costs one retry rather than a hang; the
-                 * return value is deliberately ignored for that reason -- 0 (timed out) and >0
-                 * (hinted) both mean "go round again". A signal still returns -ERESTARTSYS. */
-                if (wait_event_interruptible_timeout(slot_wait,
-                                                     READ_ONCE(slot_free_hint),
-                                                     msecs_to_jiffies(50)) < 0)
+                if (wait_event_interruptible(slot_wait, slot_free_now()))
                     return -EINTR;
                 return -EAGAIN;   /* the launcher's loop retries EAGAIN, as it does for the quantum */
             }
@@ -1616,13 +1577,9 @@ thread_unwind:
                 t->frame[7] = 3;
             }
             t->event = run(t->frame_pa, action);
-            if (!t->started) WRITE_ONCE(slot_free_hint, false);   /* a slot is now live */
             t->started = true; t->reply_cap = false;
             local_irq_restore(flags); preempt_enable();
             ++c->stats.steps;
-            /* After the entry returns and OUTSIDE the atomic region, so a print cannot extend the
-             * window with interrupts off. event is run()'s own return, the five words are the
-             * frame's. */
             if (diag_escapes && escape_prints < CV_ESCAPE_BUDGET) {
                 ++escape_prints;
                 CV_EMIT("capstone_vm: escape %u action %lu event %lu frame kind 0x%lx cause 0x%lx "
@@ -1684,7 +1641,7 @@ out:
     /* Q-26: one wake covers every way a frame can stop occupying the slot --
      * terminal exit, a discard, an error path -- instead of enumerating them and
      * missing one. A spurious wake costs a re-check. */
-    WRITE_ONCE(slot_free_hint, true); wake_up_all(&slot_wait);
+    wake_up_all(&slot_wait);
     mutex_unlock(&vm_lock);
     return rc;
 }
@@ -1829,7 +1786,7 @@ static int vm_release(struct inode *inode, struct file *f)
     }
     node_free_table(c);
     mmdrop(c->mm); kvfree(c);
-    WRITE_ONCE(slot_free_hint, true); wake_up_all(&slot_wait);   /* the released context's frames are gone */
+    wake_up_all(&slot_wait);   /* the released context's frames are gone */
     mutex_unlock(&vm_lock);
     return 0;
 }
