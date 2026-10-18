@@ -48,6 +48,9 @@ struct cv_thread {
      * for ever while resolve() keeps reporting success. Bounded and reported rather than spun. */
     unsigned long last_fault_addr, last_fault_cause;
     unsigned fault_repeat;
+    /* A fault was resolved and the context has not been resumed since: the resume flushes the
+     * resolved address on the resuming hart first (resume_sfences). */
+    bool sfence_pending;
 };
 struct context {
     struct list_head link;
@@ -1172,6 +1175,19 @@ static unsigned eloop_prints, refuse_prints, childframe_prints, refused_prints;
 static bool resolve_sfence;
 module_param(resolve_sfence, bool, 0644);
 
+/* The resume boundary's TLB workaround for bf3db3175 (the satp ruling, 2026-10-18). The kernel's
+ * own flush for a PTE it changes is local to the hart that resolved the fault (riscv
+ * update_mmu_cache = local_flush_tlb_page), resolve and resume can be separate ioctls, and a repeat
+ * fault on an unchanged entry gets no flush at all (GUP's flush sits inside its pte_same guard). So
+ * the RESUMING hart flushes the resolved address itself, with interrupts off immediately before the
+ * resume CSRUNV, so a migration in between cannot defeat it: `sfence.vma addr, x0`, all ASIDs, one
+ * page. It cannot cover the ESCAPE's restore of the caller, which happens inside the CSRUNV with no
+ * instruction of ours in between. On today's platforms (one hart each) the boundary is already
+ * closed by the single hart; this makes it a property of the code. resume_sfences counts the
+ * flushes, read-only in /sys/module/capstone_vm/parameters/ (CV_STATS is the launcher's ABI). */
+static unsigned long resume_sfences;
+module_param(resume_sfences, ulong, 0444);
+
 /* resolve_pte prints the faulting PTE once, when the bound trips. It is the check on this lane's
  * OWN conclusion that GUP sets A and D -- which was read out of the source, never measured on the
  * board -- so a boot where A and D come back clear refutes that reading rather than confirming a
@@ -1650,6 +1666,11 @@ thread_unwind:
                 t->frame[1] = virt_to_phys(c->table);
                 t->frame[7] = 3;
             }
+            if (t->sfence_pending) {
+                asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");
+                t->sfence_pending = false;
+                ++resume_sfences;
+            }
             t->event = run_event(t, action);
             t->started = true; t->reply_cap = false;
             local_irq_restore(flags); preempt_enable();
@@ -1694,6 +1715,7 @@ thread_unwind:
             }
             if (resolve(c, t, budget_end))
                 break;
+            t->sfence_pending = true;
             ++c->stats.faults;
         }
         if (t->event == 5) {
@@ -1716,6 +1738,7 @@ thread_unwind:
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
+        if (!rc) t->sfence_pending = true;
     } else if (op == CV_RETIRE) {
         u64 id;
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
