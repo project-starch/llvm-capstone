@@ -1,0 +1,11 @@
+# tier3-fix6-appvm.sh dry run (2026-10-18 20:01-20:02), the arm script stubbed (each arm's 3005ed52 board run copied in
+# as its reading), the real score-arm.sh and subset-bundle.py under dry-run tags, results and subset directories:
+# - first try, beside pym0's live boot: "FIX6APPVM STOP: a driver is running", the guard's positive control on the real
+#   board driver; its pattern was then made overridable (FIX6A_DRVPAT) for the stubbed run.
+# - done (the seq out reads FIX6SEQ DONE): pym1, sq0b-e, wm0, wm1 in order, each with its t3-images-nb list as
+#   EXPECT_IMAGES and its 3005ed52 runner arguments; sq0's subsets cut by subset-bundle.py (6 of 33 cells each) and filed
+#   as vp2-malloc-sq0<x>; the scores reproduce the 3005ed52 records' own readings (pym1 0/20, sq0b 1/6, sq0c 2/6, sq0d 1/6,
+#   sq0e 5/6, wm0 0/23, wm1 0/23), so the scorer reads what it is given; FIX6APPVM DONE.
+# - hold (FIX6SEQ HOLD): FIX6APPVM HOLD naming it; nothing runs.
+# pym1's and wm0's runner arguments were also checked by a collect-only run on bkit7-fix6 (no boot): 21 and 26 images,
+# equal to their lists. The dry run's records and bundles were removed by name afterwards.

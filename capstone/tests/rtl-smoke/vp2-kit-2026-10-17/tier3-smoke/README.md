@@ -944,3 +944,27 @@ gate reads them identical per case on the two modules' QEMU builds.
 - Each record names kit bkit7-fix6 and module d71f207a3af5546b. The bundles are filed under
   `results/2026-10-18-vp2-rdx0/<arm>`, apart from 3005ed52's.
 - UNGATED (PREFLIGHT=0), as every Tier 3 boot. Dry run: `dryrun-fix6-seq.txt`.
+
+### pym1, sq0b-e, wm0 and wm1 on the workaround kit, pre-registered (2026-10-18, before their boots), after fso/pb12/pb10
+
+`tier3-fix6-appvm.sh` runs after `FIX6SEQ DONE` (a HOLD or STOP there holds it too).
+- Each arm is one boot through `tier3-appvm-arm.sh` on bkit7-fix6, with its 3005ed52 run's runner arguments.
+- Its collected images must equal its `t3-images-nb` list before the boot. pym1's and wm0's arguments were also checked
+  by a collect-only run.
+- Each is scored against its 3005ed52 run's prediction, under the tag `<arm>-fix6`. The bundles are filed under
+  `results/2026-10-18-vp2-rdx0/` (sq0's as `vp2-malloc-sq0<x>`).
+- The compiler lane's census reads 0 collections on every one of them (qkit7-fix6).
+
+**Predicted** (the 3005ed52 reading in brackets):
+- **pym1-fix6** (vp2-nested-pools): CAUGHT 20. [0 of 20, S-27's 0x12 fault in every step.]
+- **sq0b-fix6 to sq0e-fix6** (vp2-malloc, six cases each): the sq0 prediction cut to each subset (subset-bundle.py).
+  [1, 2, 1 and 5 of 6; the rest carried S-27's register-2 faults.]
+- **wm0-fix6** (vp2-malloc): MISSED 23. [A wedge in the uaf-jumbo control, R-57's face per the RTL lane.]
+- **wm1-fix6** (vp2-nested-pools): NO-READING:control-failed 23, the QEMU twin's own reading. [A wedge in its first
+  control, wm0's face.]
+
+**What would re-attribute the wedges:** if wm0 and wm1 now reach their predictions, the wedges were downstream of S-27,
+and R-57's attribution for them is withdrawn. If either wedges again with the same apertures, R-57's attribution stands
+at N=2.
+
+UNGATED (PREFLIGHT=0). Dry run: `dryrun-fix6-appvm.txt`.
