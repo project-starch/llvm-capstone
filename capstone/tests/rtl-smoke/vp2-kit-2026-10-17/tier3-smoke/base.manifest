@@ -3,3 +3,8 @@
 /tmp/capstone/wt-b0/capstone/runtime/silicon/b0run.sh|test-domains/b0run.sh|0755
 /tmp/capstone/b0/fpga-exec/capstone-exec|usr/bin/capstone-exec|0755
 /tmp/capstone/b0/fpga-exec/capstone-job|usr/bin/capstone-job|0755
+<t3-smoke>/bkit4/tier1/vmrun.sh|test-domains/vmrun.sh|0755
+<t3-smoke>/bkit4/tier1/vm/vm-contract.sh|test-domains/vm/vm-contract.sh|0755
+<t3-smoke>/bkit4/tier1/vm/contract.dom|test-domains/vm/contract.dom|0644
+<t3-smoke>/bkit4/adapter/capstone-vexec|test-domains/vm/capstone-vexec|0755
+<t3-smoke>/bkit4/adapter/module/capstone_vm.ko|test-domains/vm/capstone_vm.ko|0644
