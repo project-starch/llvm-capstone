@@ -406,10 +406,23 @@ static void restore_root(unsigned long root)
 {
     asm volatile("csrw 0x5c1, %0" : : "r"(root) : "memory");
 }
+/* Clear every capability tag in a page, keeping its bytes. A scalar store
+ * clears the tag of the 16-byte granule it writes into, whatever its width
+ * (capstone-qemu's store hook rounds both ends to granules; on the RTL a
+ * plain store writes ctag 0 for the granule), so rewriting one 8-byte word
+ * of each granule is enough: half the loads and stores of rewriting every
+ * word, which was most of 519.lbm_r's module instructions. */
+static void clear_page_tags(struct page *page)
+{
+    unsigned long *p = page_address(page);
+    for (unsigned j = 0; j < PAGE_SIZE / sizeof(*p); j += 16 / sizeof(*p))
+        WRITE_ONCE(p[j], READ_ONCE(p[j]));
+}
+
 static int retire(struct context *c, struct arena *a, bool destroying)
 {
     unsigned long flags, old, status;
-    unsigned i, j;
+    unsigned i;
     if (!destroying && arena_has_thread_frame(c, a))
         return -EBUSY;
     if (!destroying) {
@@ -426,11 +439,8 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     /* Clear every tag before returning frames to Linux. Later collection can
      * reuse dead IDs only after sweeping all remaining namespace storage. */
     for (i = 0; i < a->count; ++i) {
-        unsigned long *p;
         if (!a->pages[i]) continue;
-        p = page_address(a->pages[i]);
-        for (j = 0; j < PAGE_SIZE / sizeof(*p); ++j)
-            WRITE_ONCE(p[j], READ_ONCE(p[j]));
+        clear_page_tags(a->pages[i]);
         set_page_dirty_lock(a->pages[i]);
         unpin_user_page(a->pages[i]);
         --c->stats.pinned_pages;
@@ -612,10 +622,8 @@ static int remap_end(struct context *c, const struct cv_remap *r)
     }
     restore_root(root); local_irq_restore(flags); preempt_enable();
     for (unsigned i=count; i<a->count; ++i) {
-        unsigned long *p;
         if (!a->pages[i]) continue;
-        p = page_address(a->pages[i]);
-        for (unsigned j=0; j<PAGE_SIZE/sizeof(*p); ++j) WRITE_ONCE(p[j], READ_ONCE(p[j]));
+        clear_page_tags(a->pages[i]);
         set_page_dirty_lock(a->pages[i]); unpin_user_page(a->pages[i]);
         --c->stats.pinned_pages;
     }
