@@ -1480,3 +1480,21 @@ Every pre-registered reading held, compared by script.
   - The VM window holds threads' must-fire and no bound line.
   - The returning window holds the `vma` refusals with their need/flags relation.
   - No wedge.
+
+### Tier 2 boot 4, result (2026-10-18 11:09-11:22): VOID as a record. Module 29c8e54e's board arm faults every virtual context at startup
+
+Pre-registered at f7487e0f1cd9. Result lines are in `board-tier12/results/board-vp2-tier12-b4.result-lines.txt`.
+- **b0-stats 0 and b0-hello 0.** The console banner printed (resolve-sites-12), and resolve_dirty read back Y.
+- **Every virtual context faulted before its HELLO,** at the same place, Tier 1's own vm-contract included
+  (retval 922, the first Tier 1 failure in nine boots): `cause=24` at code offset 0x1d94, `address=0x2`,
+  `entry=unknown`.
+  - Every vm-suite step through preempt exits 139.
+  - No S-23 retry fired.
+  - The dmesg window after `vm` holds only the banner.
+- **The rung then stopped returning in the parallel pair.** The driver's aperture read shows a LIVE core (the LED
+  stretcher's OR: 224 = 0xff, 193 = 7, index 107), so it is a hang with Linux running, not a reading.
+- **The attribution:** everything but the module is byte-identical to r13: contract.dom, the launcher, the monitor
+  sources and vm-contract.sh. The variable is the module, a56fc415 to 29c8e54e.
+  - Its QEMU arm passed the control, so the defect lives in the board arm or in a path only silicon exercises.
+  - The verbatim lines went to the compiler lane.
+  - Tier 2's record waits for a corrected module. r13's a56fc415 remains the last module read good on silicon.
