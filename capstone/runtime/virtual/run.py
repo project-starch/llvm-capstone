@@ -185,6 +185,15 @@ def main():
            '-device', 'virtio-blk-device,drive=gate', '-cpu',
            'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true'
            + (',x-capstone-exact-bounds=true' if a.exact_bounds else '')]
+    # Same knob as run-staged.py, for the same reason: a reference pin differing only in a CPU
+    # property must not need a wrapper script, because virtualvm.platform() and this runner's own
+    # inputs record hash the qemu PATH, so a wrapper is what the record would name instead of the
+    # real binary. Empty by default, so an unset variable cannot change a recorded run; the
+    # resolved string is printed because the record stores paths and hashes, never the argv.
+    cpu_extra = os.environ.get('CAPSTONE_QEMU_CPU_EXTRA', '').strip()
+    if cpu_extra:
+        cmd[-1] += ',' + cpu_extra.lstrip(',')
+    print(f'run.py: -cpu {cmd[-1]}', flush=True)
     with open(os.environ['CAPSTONE_QEMU_LOCK'], 'a+b') as lock, (work/'serial.log').open('wb') as log:
         fcntl.flock(lock, fcntl.LOCK_EX)
         guest = subprocess.Popen(cmd, env=dict(os.environ, TMPDIR=str(work)), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
