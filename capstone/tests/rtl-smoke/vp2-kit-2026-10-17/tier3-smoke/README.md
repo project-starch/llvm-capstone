@@ -490,3 +490,16 @@ control). Each was predicted with `tier3-appvm-arm.sh --virtual-kit qkit7` and r
 case in every boot, on both arms. So neither wmem arm can be measured on this bitstream until the RTL lane attributes
 that wedge, and either a software rule avoids it or the next bitstream fixes it. This is the current position, not a
 result pending wm1. wm1 stays last in the queue, where a wedge costs nothing else.
+
+### Arms fca and fcs, results (2026-10-18 13:45-14:05): the first matched pair on silicon. The same 13 carved cases are MISSED under malloc and CAUGHT under the Sublet carve, every cell as predicted
+
+`records/fca.board.txt`, `records/fcs.board.txt`; the bundles are in `ffmpeg/carved-repros/results/2026-10-18-vp2/`.
+- **fca** (vp2-malloc): MISSED 13, and both generic controls fault in the same boot. So the detector fires on this
+  image, and the zero is the configuration's.
+- **fcs** (vp2-nested-pools, `-DFFC_SUBLET_CARVE`): CAUGHT 13. The carve controls read as declared: live-carve
+  completes, uaf-carve faults.
+- **The arm is the only variable:** the same corpus, the same cases, and both readings equal the QEMU prediction cell
+  by cell, by image.
+- **No carve derive was refused on silicon.** The carve's children are representable under Q-15's rule, which bf3db3175
+  implements as the DYN unit's vctx-gated round-trip refusal (`capstone_dyn_unit.anvil` CDERIVE, `ex_stage.sv`
+  dyn_child_repr_q).
