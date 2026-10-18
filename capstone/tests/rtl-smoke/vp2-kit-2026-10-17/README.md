@@ -1521,3 +1521,26 @@ Pre-registered at f7487e0f1cd9. Result lines are in `board-tier12/results/board-
   - No cause-24 startup fault.
   - The five S-25 steps NOT RUN.
   - No wedge.
+
+## Pre-registered (2026-10-18, before Tier 2 boot 4c): r13's module with boot 4b's suite. It is the control for the module attribution, and the Tier 2 record
+
+- **Boot 4b** (module a00109e9, resolve_dirty read back N at its default) faulted every context exactly as boot 4
+  did: cause 24 at code offset 0x1d94, address 0x2. So resolve_dirty's default was not the variable.
+- **The staged files differ from r13's only in the module and the suite,** compared by script. The first failing
+  context, vm-contract's, uses no suite.
+- **Boot 4c puts r13's module back:** a56fc415ad7133aa (resolve-sites-10, from `diag-r13/`, sums ok). Everything
+  else is boot 4b's.
+  - The suite `vm-suite-inner-b4b.sh`: resolve_dirty read back at its default, Y for `vm` alone, then N.
+  - The five S-25 steps are not run.
+  - Firmware baa132ee2fbd535e; the monitor is unchanged.
+- **The run:** `boot3/run-tier12-b4c.sh baa132ee2fbd535e`.
+- **Predicted:**
+  - Tier 1 identity, as in every boot with a56fc415 (r11's code base through r13).
+  - No cause-24 fault.
+  - The read-backs N, then Y, then N.
+  - The 17 exits as the reference-pin QEMU run reads them: vm 1 under the explicit Y, and cleanup 1 on the board.
+  - Fault lines as r12 and r13.
+  - No wedge.
+- **What it decides:** if 4c reads identity, the regression is in what changed from a56fc415 to 29c8e54e/a00109e9
+  other than the default: the Q-26 wait rewrite or the escape-print code. If 4c fails too, the module is not the
+  variable, and something else in the boot changed.
