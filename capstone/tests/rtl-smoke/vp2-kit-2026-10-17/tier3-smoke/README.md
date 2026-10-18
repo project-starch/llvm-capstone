@@ -1333,3 +1333,95 @@ Kit bkit7-fix6t (BOARD_STEP_S=300), module d71f207a3af5546b.
 - **On 3005ed52** the same arm read 18 of 33, with 14 cells carrying S-27.
 - **The d71f207a set is complete:** pym0, pym1, fso, pb12 and sq0 match their predictions. pb10 repeats its S-23
   data-face panic. wm0 and wm1 wedge as before (R-57). UNGATED (PREFLIGHT=0).
+
+### The matched arms re-run on the workaround module, pre-registered (2026-10-18 23:55, before their boots)
+
+The board is idle until the module revision's handover, or the lead's word on tree A. The nine run-virtual-cases arms
+that matched their predictions on 3005ed52 re-run on d71f207a, so the fold can name one module for every arm.
+- **How:** `tier3-fix6b-seq.sh` (dry-run before), kit bkit7-fix6t, tags `<arm>-fix6b`, the same predictions. The
+  order is shortest first: mpt, pb9, mph, fpt, fca, wpt, wph, fcs, fph.
+- **Predicted:** each reads its 3005ed52 reading again, the QEMU prediction:
+  - mpt CAUGHT 3; pb9 MISSED 4; mph CAUGHT 9; fpt CAUGHT 13; fca MISSED 13; wpt CAUGHT 10; wph CAUGHT 12;
+    fcs CAUGHT 13; fph CAUGHT 25.
+  - None of them read an S-27 fault on 3005ed52.
+- **What a difference would mean:** a cell that differs is a module regression, read at its first failure.
+- **Interruption:** if the revision's Tier 1 boot or the tree A flash becomes due, the chain finishes its current arm
+  and the rest are held (stop it between arms by its process group).
+- UNGATED (PREFLIGHT=0).
+
+### pgc, pgm0 and pgm1 on the workaround module, pre-registered (2026-10-18 23:55, before their boots), after the nine
+
+`tier3-pg-fix6.sh` runs after the nine-arm re-run ends. It uses `tier3-pg-arm.sh` unchanged, with kit bkit7-fix6t
+(module d71f207a3af5546b) and the t3-freeze-nb pg builds. The records are `<arm>-fix6b`, and the bundles go under
+`results/2026-10-18-vp2-rdx0/`.
+- **The predictions:** the compiler lane's QEMU records, `t3-<arm>/bundle`, made through the qkit7 wrapper with
+  svadu=false applied:
+  - pgc (postgres/c-repros, vp2-malloc): CAUGHT 5;
+  - pgm0 (postgres/mmgr, vp2-malloc): MISSED 5;
+  - pgm1 (postgres/mmgr, vp2-pg-pools): CAUGHT 5.
+- On 3005ed52 all three read 15 of 15, the second matched pair (pgm0 against pgm1).
+- **pgm1 and the Q-15 repair:** the runtime lane predicts the repair leaves pgm1 unchanged, since its recorded faults
+  do not use the ≥4 KiB large-chunk paths. So this reading stays valid after the repair.
+- UNGATED (PREFLIGHT=0). Dry run: `dryrun-pg-fix6.txt`.
+
+**Amendment to the tree A flash plan's step 2 (2026-10-19 00:05, before any flash; still NOT authorised):** the
+arm-set predictions are in.
+- **The table:** dev 7ba0a7afc87a, `vp2-bare-2026-10-17/results/rtl-sim-vectors-8522d72fe.txt`. All 25 arms are
+  IDENTICAL on tree A's RTL to bf3db3175's vectors, count and values.
+- **So step 2 gates on the existing `rtl-sim-vectors.txt` values,** each arm by the sha256 of the `.bin` the board
+  loads, exactly 25 arms.
+- **The instrument's control:** the rebuilt extractor reproduces all 25 published bf3db3175 vectors exactly.
+  - It fails four distinct ways on purpose: a missing count word, a hole in the values, a wrong recorder address, an
+    empty trace.
+  - Every arm ends at the cycle limit by design, so the gate keys on the recorder's count word and values, never on the
+    harness verdict.
+- **Two arms are vp1 images** not in that folder: q17-order and vb-trans-off. Their CSRUNV column reads "?".
+- **The RTL lane's caveat, quoted:** "an identical vector is exactly what you get when no acknowledged RESUME with a
+  non-zero rd ever happens, and S-27's fix deliberately leaves rd alone on a first entry. So this set does not
+  exercise S-27 and must not be cited as evidence that it works."
+  - The same holds for R-57 (these images run in M-mode with no translation), Q-24 and S-28.
+  - S-27's RTL fix on silicon is therefore step 6's (pym0 on module 3005ed52), not step 2's.
+
+### Module revision 39d8492d's Tier 1 boot, pre-registered (2026-10-19, before the boot): rev7
+
+**The module:** board module 39d8492d5c18216b, from the compiler lane's lane module-resume-rd-x0 a0a256575831 (code
+76cfc60b3626: five items on e5775346cc8e).
+- **The items:**
+  - (1) the collect stopgap: -ENOMEM, and the pr_emerg "collect skipped";
+  - (2) frame tests;
+  - (3) a resume sfence.vma of the resolved address;
+  - (4) a satp refresh from +928 before every resume;
+  - (5) a busy-frame refusal before the pin.
+- **The gates, re-run by stage-rev7.sh:** qemu-only-csr-census and vp2-silicon-gate.
+- **Firmware:** fw_payload 7a53759a4773c81b (Image dcfc2e15bf1bbd77) (monitor 007d81d with the S-23 fetch retry, as wa1).
+- **The stage** is wa1's with exactly three files changed: the module (d71f207a -> 39d8492d), `vm/vm-contract.sh` and
+  `vm/vm-suite-inner.sh` (both `board-tier12/rev7/`).
+
+**The boot:** rungs b0-stats, b0-hello, vm-contract, vm-suite.
+- vm-contract loads the module with `diag_emerg=1 node_flat_records=4096`. diag_emerg puts CV_EMIT_FIRST lines at
+  KERN_EMERG, and the reduced capacity lets sparse-churn exhaust within a few thousand allocations.
+- It reads both parameters and supervisor_slots back, then the four counters before `ok` and after `stale`.
+- vm-suite runs sparse-churn LAST between two counter reads.
+- **The risk:** sparse-churn has never run on vp2. It was held under S-25, since a first-touch capability store has
+  wedged the core (R-57). A wedge there is an S-25/R-57 reading taken after every other reading, not a module
+  verdict.
+
+**Predicted** (the compiler lane's QEMU readings on b290f5656600 + svadu=false, and rev7-judge.py's checks):
+- b0-stats 0, b0-hello 0, vm-contract 0 with the identity branch (VIRTUAL_APPLICATION_OK, then the stale access
+  denied with 25), as ap1 and wa1.
+- `@@PARAM` diag_emerg=Y, node_flat_records=4096, supervisor_slots=1. The banner reads "loaded, diag arena-pin-1,
+  supervisor_slots=1, diag_emerg=1", once, with 0 refusal lines.
+- **The counters across vm-contract** (deltas, since the totals run from insmod):
+  - resume_sfences = the sum of `faults=` over vm-contract's two CAPSTONE_VM_STATS lines, and > 0;
+  - resume_satp_refreshes = the sum of `steps - 1`;
+  - resume_satp_changed and busy_frame_refusals are 0 at every read.
+- **sparse-churn:** `VM_EXIT:sparse-churn:1`, `VM_CONTRACT_FAIL:recycling allocation`, and the console's "capstone_vm:
+  collect skipped: collection is not available on bf3db3175" at least once.
+  - On QEMU at 4096: collect skipped at 3,584 nodes, then exit 1.
+- **vm-suite** retval 1, the count of its VM_EXIT lines.
+- **Readings that are not that:** a counter delta off (the resume path not as built); collect skipped absent (the
+  must-fire not reaching the console, or the stopgap not taken); a wedge in sparse-churn (S-25/R-57).
+
+**The re-run chain on d71f207a is HELD** at an arm boundary for this boot: after fpt-fix6b, with fca, wpt, wph, fcs,
+fph and then pgc, pgm0, pgm1 still to run. It resumes after this boot. UNGATED (PREFLIGHT=0). Dry run:
+`rev7/dryrun-rev7.txt`.
