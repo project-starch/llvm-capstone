@@ -36,8 +36,13 @@ on the base tree; note that identical vectors mean these arms do NOT exercise S-
 **Tree B is NOT gated.** It is flush-only at `d427e7391`. Lint passes with all eleven counters at baseline AND the
 UNOPTFLAT membership identical BY NAME to the base, 40 each way, positive-controlled — a gap the plan had carried.
 But the sweep and the supervised list were VOIDED by my own error: run concurrently in one worktree, they share
-`verif/sim/trace_rvfi_hart_00.dasm`, which is the file every reading is extracted from. Both are re-running
-serially. **R-57's two saved-exception registers are SHARED-SAFE** (structural: one functional unit, one issue port,
+`verif/sim/trace_rvfi_hart_00.dasm`, which is the file every reading is extracted from. Re-run serially, **the
+95-test sweep is GREEN: 92 identical in exceptions, readings and retired counts, 0 differing, 0 missing, with the
+three random generators excused by name because they are absent on both sides, and the comparator's own self-test
+fired first (status 0 clean, 1 on a one-sided absence, 1 when nothing is excused).** Use the IN-TREE comparator,
+`verif/sim/sweep-compare.py` with its committed `sweep-expected-missing.txt`; the older copy under `sup-runs` has
+no excuse list and returns status 1 on exactly that clean result. The 152-test supervised list is still running
+and tree B is not gated until it lands. **R-57's two saved-exception registers are SHARED-SAFE** (structural: one functional unit, one issue port,
 a single-threaded DYN dispatch loop), with the caveat that the area saving is in the capture mux and the read-side
 priority chain rather than the flops; a candidate for the batch after tree B.
 
