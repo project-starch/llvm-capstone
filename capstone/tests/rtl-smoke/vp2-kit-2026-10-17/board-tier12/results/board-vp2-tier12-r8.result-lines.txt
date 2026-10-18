@@ -28,6 +28,10 @@ TIER12_R8_DONE 06:45:49
   TERMINAL page fault on its first occurrence, with no DIAG and no -ELOOP line anywhere in the boot:
     capstone-exec: domain fault cause=15 pc=0x3fa89124ac address=0x3fa8992000 entry=0x3fa890094c code=0x3fa8900000-0x3fa8980000 last=0xc0de0001 preparing=0xc0de0001 sha256=12
   So no (address, cause) repeated on the already-pinned path, and the A/D loop hypothesis is not what happened here.
+  [RETRACTED 2026-10-18: the two sentences above. The DIAG and -ELOOP lines are pr_warn, and during rungs the board
+  console shows only KERN_EMERG: the baked driver sets printk=1 before rung 1. Their absence reads nothing, and
+  "terminal on its first occurrence" has no other support. The A/D candidate is unresolved. See the kit README's r8
+  section.]
   resolve() returned an error on the first store fault: its already-pinned branch returns -EACCES when the newly
   pinned page differs from the arena's (`if (!same) return -EACCES;`), the branch the compiler lane identifies. QEMU's
   `vm` passes this store and fails later, at "execute through mapping PCC" (vm:1).

@@ -1139,8 +1139,12 @@ the live PTE value via follow_pte.
 Result lines in `board-tier12/results/board-vp2-tier12-r7.result-lines.txt`.
 - **Tier 1:** b0-stats 0, b0-hello 0, vm-contract 0 (identity), one retry before the first grant.
 - **vm-suite:** normal 0 and threads 1, then `vm` stalled after the mmap(8193, PROT_READ) grant, as in r6.
-- **No DIAG line, which reads nothing.** The board's console does not show KERN_INFO: the module's own pr_info "thread
-  create refused" is absent here and in r6, while the kernel's pr_warn lines show. The diagnostic was pr_info.
+- **No DIAG line, which reads nothing.** ~~The board's console does not show KERN_INFO: the module's own pr_info "thread
+  create refused" is absent here and in r6, while the kernel's pr_warn lines show. The diagnostic was pr_info.~~
+  - **Corrected 2026-10-18:** the conclusion stands, but the mechanism was wrong.
+    - The baked driver sets `/proc/sys/kernel/printk` to 1 before the first rung (`fpga_driver/run_ladder_perf_fpga.py:201`), so during rungs the console shows only KERN_EMERG. pr_warn is hidden too.
+    - The pr_warn lines cited above as showing were printed during boot, before that setup. In boot r11 there are
+      695 kernel lines before it and 0 after it.
 
 ## Pre-registered (2026-10-18, before boot r8): S-24's -ELOOP module, with the PTE printed at pr_warn
 
@@ -1166,14 +1170,23 @@ Pre-registered at bc776696ec59. Result lines in `board-tier12/results/board-vp2-
 - **Tier 1:** b0-stats 0, b0-hello 0, vm-contract 0 (identity), two retries as before.
 - **vm-suite**, in order: normal 0, threads 1, vm 139, nested 0, nested-stale 139/25, heap-threads 1, then a wedge in
   sparse-churn.
-- **`vm`: the A/D candidate is refuted.**
-  - The store after `mprotect(p, 12288, RW)` faulted (cause 15) at the arena's base + 8192, and it was TERMINAL on its
-    first occurrence.
-  - No DIAG and no -ELOOP line anywhere in the boot, so no fault repeated on the already-pinned path. The prediction
-    "the PTE shows A clear" does not hold.
-  - resolve() returned -EACCES from `if (!same)`. The compiler lane takes it, with a first-fault print of both page
-    pointers next.
-  - QEMU passes this store.
+- **`vm`: RETRACTED 2026-10-18. The A/D candidate is NOT refuted; it is unresolved.**
+  - **The original bullet** said the candidate was refuted, because the fault was "TERMINAL on its first occurrence"
+    and there was "no DIAG and no -ELOOP line anywhere in the boot, so no fault repeated".
+  - **Why that reads nothing:** those lines were pr_warn, and during rungs the console shows only KERN_EMERG (r7's
+    corrected bullet above). "Terminal on its first occurrence" had no other support, because the launcher prints
+    the same fault line whether the fault ended the step at once or after the module's 64-repeat -ELOOP bound.
+  - **What stands:**
+    - the store after `mprotect(p, 12288, RW)` faulted (cause 15) at the arena's base + 8192;
+    - `vm` exits 139, with the same launcher line in r8, r9, r10 and r11;
+    - QEMU passes this store.
+  - **A reading, not a conclusion:**
+    - r6 and r7 had no repeat bound. `vm` made no progress for 25 minutes after its last printed line, the
+      mmap(8193, PROT_READ) grant, and nothing prints between that grant and this store.
+    - r8-r11 had the bound, and `vm` exits 139 within seconds.
+    - A fault loop ended by the bound reads this way, and so does a terminal fault in r8 beside an unrelated r6/r7
+      stall.
+  - **Not a reading:** resolve()'s `if (!same)` is a deduction from the source.
 - **sparse-churn wedged.** The transcript stops mid-line. The apertures show M, a stall, a pending store, and the domain
   switcher at index 56 with a register write in flight. The trap log names a pc six instructions after the module's
   CSRUNV. Sent to the RTL lane.
