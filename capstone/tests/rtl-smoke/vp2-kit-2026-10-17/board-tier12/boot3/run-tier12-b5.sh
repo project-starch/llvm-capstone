@@ -12,7 +12,10 @@ LLVM_BIN=/tmp/capstone/llvm-dev-current-20261017/bin
 DRV_DIR=/tmp/capstone/wt-gate/capstone/tests/rtl-smoke
 DRV_SHA=fd38816a90c64c22
 J=/tmp/capstone/wt-gate/capstone/tests/rtl-smoke/vp2-kit-2026-10-17/board-tier12/boot3
-EXPECT_FALSE=${T1_EXPECT_FALSE:?the false set of the reference QEMU record of this suite}
+# The false set: the compiler lane's QEMU record of run.py under arena_pin=1 (b290f565, svadu=false, module 5bfc38f8 =
+# 3005ed52's source), with the sparse pair's lines cut from its serial (b5-prediction.txt) -- 15 -- plus cleanup (the board
+# kernel cannot unload the module).
+EXPECT_FALSE=threads,vm,heap-threads,sparse-churn,sparse-stale,threads_output,fault_causes,vm_denial_sites,vm_contract,heap_threads,vm_denial_operations,linux_pages_released,linux_demand_faults,shared_heap_pages_released,sparse_recycling,cleanup
 main() {
   set -u
   local T=/tmp/capstone/tier1 D=${T1_OUT:-/tmp/capstone/tier1/run3b5} FW=${T1_FW:-/tmp/capstone/tier1/fw3b5/fw_payload.bin}

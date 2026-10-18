@@ -1632,3 +1632,37 @@ Pre-registered at e1eb22d1633e. Result lines are in `board-tier12/results/board-
 - **Next:** Tier 2 boot 5 on the same module, with arena_pin=1 for the whole suite and the kit applications run
   (`vm-suite-inner-b5.sh`, `boot3/run-tier12-b5.sh`). It is pre-registered separately, against the reference QEMU
   record of that exact suite.
+
+## Pre-registered (2026-10-18, before Tier 2 boot 5): the kit applications under the arena pin
+
+**What runs.** Module 3005ed52 (Tier 1 passed above) with `vm-suite-inner-b5.sh` (sha256 2338355a1e1029eb) on firmware
+606c8673c897d4c0. The bake checked the suite and module by hash inside the built cpio.
+- `boot3/run-tier12-b5.sh 606c8673c897d4c0` (runner sha256 bb39833361f6bbfa, dry-run three ways in
+  `boot3/dryrun-b5.txt`). Rungs: b0-stats, b0-hello, vm-contract, vm-suite.
+- arena_pin=1 for the whole suite, read back. resolve_dirty is read back at its default (off), set for `vm` alone, and
+  cleared after it.
+- The kit applications run after every returning step, each behind a `VM_BEGIN` line: sqlite_write, sqlite_read,
+  then mruby last. The sparse pair stays NOT RUN (S-25).
+
+**The prediction** is derived by script from the compiler lane's QEMU record of run.py under arena_pin=1
+(`boot3/b5-prediction.txt`, `boot3/derive-b5-prediction.py`). It is matched by image: contract.dom, sqlite3.dom and
+mruby.dom equal the stage's by sha256.
+- **Tier 1:** identity.
+- **The read-backs:** `ARENA_PIN:Y:suite`; `RESOLVE_DIRTY` N, then Y, then N.
+- **20 exits, vm-suite retval 20.** The 17 returning exits are boot 4c's: the pin moves none of them on QEMU (22 of 22
+  equal with the pin on and off). Then sqlite_write 0, sqlite_read 0, mruby 0, and cleanup 1.
+- **The kit lines:** SQLITE_SUM=5050, SQLITE_PERSIST=100, MRUBY_SUM=5050, MRUBY_FILE=virtual.
+- **run.py's analysis: 25 of 41 true.** The 16 false are QEMU's 15 for this suite plus cleanup.
+  - The 15 include `linux_demand_faults`. Under the pin it is false on QEMU even with the sparse pair run (33/41 there),
+    because it counts the lazy demand faults the pin removes.
+- **Not predicted, recorded:** the APPS dmesg window, and the per-launch VM_STATS fault counts.
+
+**The readings that would refute it, written now:**
+- **A kit application wedges.** The BEGUN line names the step, and the wedge apertures are compared with r10/r11's
+  15-aperture signature. An equal signature is S-25's residual, a first touch that the pin does not reach. Tier 2 then
+  records the kit applications as not passing on bf3db3175 with this module.
+- **A kit application returns a wrong value or exit.** That is a new finding, read from its own output and the APPS
+  window.
+- **A returning step differs from 4c.** QEMU shows the pin moving none, so a change would be a silicon-only effect of
+  the pin. The kit applications are then not read as a record, and the pin moves to just before sqlite_write in a
+  re-run.
