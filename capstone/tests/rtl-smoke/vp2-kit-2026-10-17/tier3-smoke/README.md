@@ -1175,7 +1175,13 @@ symbol+offset, the same attribution and the same tval on both sides:
 - case 22 (spellfix stale vtab, `editDist3FindLang+244`, `lw a0, 0(a0)`): silicon cause 13 (load page fault), QEMU
   cause 24, tval 0x74746973272c276e (ASCII: the freed vtab's memory now holds a string).
 - So for a load through an untagged register holding a bad address, silicon reports the address exception and QEMU the
-  capability one. An rtl-oracle is reading bf3db3175 and capstone-qemu to say why. Until it reports this is an
-  observation, N=3 cells in one boot, not a mechanism.
+  capability one.
+- **Traced (ISSUES Q-31):** this is exception ORDER, not a missing check.
+  - Inside a context the LSU's tag check is live: the context runs at raw M, and ppE3's 28 comes from the same block.
+  - A misaligned exception wins the merge (`load_store_unit.sv:1113-1114`), and a non-canonical address page-faults in
+    the MMU (`cva6_mmu.sv:533-534`, `:630-631`). QEMU tests the tag first.
+  - No verdict can flip, since an aligned, canonical address still meets the tag check.
+  - (A first rtl-oracle pass concluded that the check is not live in a context. It had missed the raw-M privilege and
+    is superseded.)
 
 UNGATED (PREFLIGHT=0). The count of the 3005ed52 cells that carried S-27 is corrected in the RETRACTION just above.

@@ -1943,6 +1943,40 @@ until a kit or the monitor exercises either. The retraction: the "no fetch check
 two files and dismissing the hits in a third unread, and from not opening the suite that tests exactly this behaviour;
 the census row (`docs/plans/2026-10-18-vp2-silicon-census.tsv`, plain JALR) carries the same correction.
 
+
+## Q-31 — a plain load through an UNTAGGED base in a vp2 virtual context: the RTL reports the address trap when the address is also bad (4 misaligned, 13 non-canonical), QEMU the capability trap (24); an ORDERING divergence with no verdict consequence `OPEN — observed 2026-10-18 on vp2 bf3db3175 (sq0d-fix6, module d71f207a; case 22 also on 3005ed52), N=3 cells, UNGATED boots; mechanism read in the RTL at bf3db3175 by the RTL lane and checked here line by line; which order is the reference is the semantics owner's ruling (as Q-29)`
+
+**The cells** (sqlite/engine-repros vp2-malloc, `tier3-smoke/records/sq0d-fix6.board.txt`; QEMU: `t3-pred-sq0`, qkit7):
+
+| case | image | pc (image offset) | instruction | tval | silicon | QEMU |
+|---|---|---|---|---|---|---|
+| 19 rtree_cursor_stale_node | 0a7a279444bdc8cb | 0x2151d4 (`nodeRelease+144`) | `lw a1, 0x18(a2)` after `ldc a2, 0(a0)` | 0x17 | 4 | 24 |
+| 20 rtree_inode0_stale_node | 998e7bf1039a1ba0 | 0x215548 (`nodeRelease+144`) | the same | 0x17 | 4 | 24 |
+| 22 spellfix_oom_stale_vtab | 951357ff10648ce8 | 0x1ff6c (`editDist3FindLang+244`) | `lw a0, 0(a0)` | 0x74746973272c276e | 13 | 24 |
+
+- **The operands:** in 19 and 20 the effective address is 0x17, so a2 holds -1 (an untagged stale node), and 0x17 is
+  misaligned for `lw`. In 22, a0 holds ASCII bytes, non-canonical under Sv39.
+- **The verdicts agree** (CAUGHT / NO-READING as predicted). The judge attributes by pc and does not read the cause.
+
+**The mechanism** (bf3db3175, the RTL lane's reading, each line re-read here):
+- **The tag check is live inside a context.**
+  - `load_store_unit.sv:1318-1320` gates it on `capmode_i && ld_st_priv_lvl_i == PRIV_LVL_M`.
+  - A CSRUNV context runs at raw M: the entry's init strobe, reg 69, sets `priv_lvl_d = riscv::PRIV_LVL_M`
+    (`csr_regfile.sv:2059`, `:2070`). Its U-ness is only the MMU's view for PTE permissions,
+    `eff_ld_st_priv_lvl = vctx_i ? PRIV_LVL_U : ld_st_priv_lvl_i` (`cva6_mmu.sv:141`).
+  - An untagged rs1 raises 24 at `:1341-1343`.
+  - The same block gave ppE3's 28 (bounds) for a TAGGED base, which is the positive control that it runs in a context.
+- **The order:** the capability exception is merged only if no misaligned exception holds the slot:
+  `if (CAPSTONE_EXT && cap_exception.valid && !misaligned_exception.valid) misaligned_exception = cap_exception;`
+  (`load_store_unit.sv:1113-1114`). That gives cases 19 and 20.
+- **A non-canonical address** fails the MMU's Sv39 check (`canonical_addr_check`, `cva6_mmu.sv:533-534`) and raises
+  LOAD_PAGE_FAULT (`:630-631`). That gives case 22.
+- **QEMU** tests the tag first, in `_helper_access_with_cap` (`target/riscv/op_helper.c`), so it reports 24 for all
+  three.
+- **No verdict flip is possible:** there is no path by which an aligned, canonical, mapped integer address loads on
+  silicon, because the capability check fires whenever nothing else has.
+  - A prediction that compares causes needs the order modelled. One that compares caught versus missed does not.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
