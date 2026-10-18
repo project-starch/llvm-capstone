@@ -818,3 +818,67 @@ silicon):
     on a resume;
   - `capstone_dom_switcher.anvil:584` writes it whenever `set_ra != 0`, unless the request is a good mode-1 entry.
 - S-27 records all this in ISSUES.
+
+### Arm sq0, subsets e and f, and the arm in full (2026-10-18 17:42-18:05): 18 of 33 cells the same
+
+- sq0e reads 5 of 6 and sq0f 3 of 3.
+- Over the six subsets, sq0 (sqlite/engine-repros vp2-malloc) reads 18 of 33 cells equal to its prediction. The other
+  15 carry S-27's register-2 fault (tval 2, or a5 among the faulting instruction's operands).
+- **The bundles:** each subset ran on its own firmware (its own stage), so the arm is filed as six verdicts-v1 bundles,
+  `sqlite/engine-repros/results/2026-10-18-vp2/vp2-malloc-sq0{a..f}`, and sq1's single subset as
+  `vp2-nested-pools-sq1a`. Each carries its own platform record. Combining them is the fold's decision, and corpus.json
+  is untouched.
+
+### Arm wm1, result (2026-10-18 18:05-18:16): a wedge in the first control, the same face as wm0
+
+`records/wm1.board.txt`. wmem's nested-pools arm ran session-share, then wedged in `virtual-nested-pools-00-uaf-chunk`,
+its first control.
+- Its apertures equal wm0's in 14 of 15 switch fields: count 4, WAIT_STORE_READY, a capability write unacknowledged,
+  the switcher at index 28, not in M-mode.
+- Only 221's valid bits differ (0111 here, 1101 in wm0), so the invalid entry sits in another slot. The same R-57 face.
+- **Note, for after the S-27 workaround:** with every resume clobbering the context's a5 on this module, a re-run of
+  wm0 and wm1 on the patched module will show whether these wedges were downstream of S-27. They stay attributed as
+  recorded until then.
+
+**Amendment to ppE4's pre-registration (before its boot).** Its QEMU twin (this lane's, agreeing with the compiler
+lane's) reads 19 MISSED and 1 NO-READING:setup-fault: case 00 faults `cause=24 address=0x40` in memset+0x2c, in setup,
+before the `sd` it was built to discriminate. That is E4's deliberately broken linear `metadata` going through memset.
+So ppE4 cannot separate 0x11 from 0x12. Its prediction is now the QEMU twin's own reading
+(`records/ppE4.prediction.txt`), and a difference on silicon is what gets read. ppE3 is unchanged: no mismatch, and the
+fault anyway.
+
+### ppE3 on silicon (2026-10-18 18:39-18:50): no mismatch, and a5's value 8 becomes 2 across the page-fault resume, as the candidate predicts
+
+`records/ppE3.board.txt`.
+- **No MISMATCH line:** the plain-load compare found the slot holding the right `b`. The global's readouts are right.
+- **The fault moved:** `cause=28 address=0x3f870e40b0` (bounds) at pc offset 0x15cb4, and that address is exactly
+  `&used` (the probe printed `&used=0x3f870e40b0`). From E3's disassembly:
+  - `li a5, 0x8` at 0x25c64 sets the size of `used`. Nothing writes a5 again before 0x25cac.
+  - `sd a2, 0x10(a4)` at 0x25c90 is `b->size = n`. In E3's register allocation `b` is in a4, not a5. It is the first
+    store into the fresh metadata page, so it page-faults, and the module resumes the context.
+  - `add a5, a4, a5` then `shrink a2, a4, a5` (0x25cac, 0x25cb0) build bounds of a5's length over `used`, and the 8-byte
+    `ld a4, 0(a2)` faults on bounds at `&used`. That fits a length of 2, the resume's literal, where 8 was written.
+- **So moving `b` out of a5 moved the symptom to the next use of a5, and its value is 2.** The candidate (every resume
+  writes 2 into x(rd), and the module's resume rd is x15) predicts exactly this. The "lost spill store" reading cannot,
+  because the slot was right.
+
+### ppE4 on silicon (2026-10-18 18:50-19:01): the first fault at 0x12, not 0x11; the amended prediction differs in all 20 cells
+
+`records/ppE4.board.txt`.
+- **The reading:** all 21 virtual steps (the control and the 20 cases) fault the same way:
+  - `cause=6 address=0x12` at pym_raw_malloc+792;
+  - that is `sd a4, 0x10(a5)` at 0x259c8 in image bcb51ed62c66d12e, right after `ldc a5, 0(a0)` reloads `b`.
+  - Every cell scores NO-READING:control-failed.
+- **The twin, by contrast:** its control completes, and case 00 faults `cause=24 address=0x40` at memset+0x2c.
+- **Both faults come after the same 14 CAPSTONE_VM_ADD_OK grants** (slots 0-13, with the 8 MB, 16 MB, 64 MB and 16 MB
+  linear grants), so silicon REACHED the `sd` the arm was built to discriminate. The value it read is 0x12: the
+  resume's literal 2, not a type field (0x11).
+- **The amendment above was wrong.** It said ppE4 "cannot separate 0x11 from 0x12", reasoning from the twin's setup
+  fault. It did separate them, and the reading is the original pre-registration's (0x12).
+  - The operative prediction was the amended one (the twin's reading), and silicon differs from it in every cell.
+  - The 0x12 reading is therefore scored as an observation, not as a pre-registered confirmation.
+- **Not settled:** whether the twin's memset comes after this `sd` in program order (calloc's memset of the new block,
+  backing.c:90-92), or whether silicon passes a memset that QEMU faults in. A backtrace on the twin's fault would settle
+  it. The reading does not depend on it.
+- **Not booted:** ppA2, ppE, ppE1 and ppE2 of the settling batch. E3's reading and the paired boot on the S-27
+  workaround module (next) answer what they were built for. ppE's QEMU twin is filed as `records/ppE.prediction.txt`.
