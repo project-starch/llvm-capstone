@@ -30,7 +30,11 @@
       "verdict_from": "results/2026-10-11-virtual/virtual-pg-pools"
     }
   },
-  "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle. The physical spatial/sublet pair measured 2026-10-06 to 2026-10-10 stays in results/",
+  "status": "trigger REPLACED 2026-10-18: the previous cost triples never reached the write at all (levenshtein.c:159 set max_d = -1, which leaves stop_column at its default m+1, and the write is guarded by stop_column < m), so the three MISSED verdicts recorded before that date measured nothing. The new trigger carries two rungs, stop_column = -1 and -16, solved from the source arithmetic; control.sql reaches the same write at a valid index. measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle. The physical spatial/sublet pair measured 2026-10-06 to 2026-10-10 stays in results/",
   "nested": true,
-  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it.",
+  "fault_sites": [
+    "varstr_levenshtein_less_equal"
+  ],
+  "fault_sites_why": "The write is levenshtein.c:240 `prev[stop_column] = max_d + 1`, inside varstr_levenshtein_less_equal -- the LESS_EQUAL compilation of the file, which is the only one where stop_column is a variable. Derived from the source and recorded in PROVENANCE.md before the run, not from where any arm happened to fault."
 }
