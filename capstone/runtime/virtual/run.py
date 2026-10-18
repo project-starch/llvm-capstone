@@ -31,7 +31,7 @@ PARALLEL_BLOCK = (
 
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
-insmod capstone_vm.ko || exit 1
+insmod capstone_vm.ko __MODULE_ARGS__ || exit 1
 # The module's own lines, read from the kernel RING BUFFER rather than relied on reaching the
 # console. The console level does not filter the buffer. run.py itself never lowers that level --
 # but six sibling runners do (`dmesg -n 1` in run-malloc/-hosted/-ports/-safety/-fp/-pthreads), and
@@ -112,6 +112,11 @@ def main():
     p.add_argument('--perl-smoke', type=Path)
     p.add_argument('--legacy-application', type=Path)
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
+    # Module parameters at insmod, so a two-sided module experiment is one run rather than a
+    # rebuild. Empty by default and the substitution then leaves the insmod line exactly as it
+    # was, so an unused option cannot change a recorded run.
+    p.add_argument('--module-args', default='',
+                   help="Parameters appended to insmod (e.g. 'resolve_pte=1 fault_repeat_max=1')")
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept "
                         'so the suite can be run both ways as a two-sided control.')
@@ -147,7 +152,10 @@ def main():
     if a.perl: shutil.copyfile(a.perl, stage/'perl.dom')
     if a.perl_smoke: shutil.copyfile(a.perl_smoke, stage/'perl-smoke.pl')
     if a.legacy_application: shutil.copyfile(a.legacy_application, stage/'legacy.dom')
-    script = SCRIPT
+    # Empty args leave the line byte-identical to the pre-option script: ' __MODULE_ARGS__'
+    # collapses with its leading space, so no trailing whitespace is introduced either.
+    script = SCRIPT.replace(' __MODULE_ARGS__',
+                            (' ' + a.module_args.strip()) if a.module_args.strip() else '')
     if a.skip_recycling:
         script = script.replace(' sparse-churn', '').replace(' sparse-stale', '')
     if a.parallel_last:
