@@ -1047,15 +1047,24 @@ static void pin_ahead(struct context *c, struct arena *a,
  * unlike a print per fault, which would be ~426 UART lines per step (measured) and could
  * perturb or wedge the very boot it exists to observe.
  *
- * pr_warn, not pr_info: the board console drops KERN_INFO, which is what voided r7's
- * diagnostic -- an invisible print and a print that never fired read identically.
+ * RETRACTED PREMISE (2026-10-18). This comment used to say "pr_warn, not pr_info: the board
+ * console drops KERN_INFO". That was wrong, and it was my own repetition of a peer lane's claim
+ * rather than something I checked. The board driver's cold_boot runs
+ * `echo 1 > /proc/sys/kernel/printk` before its first rung, so from then on the console carries
+ * KERN_EMERG and nothing else -- r7's pr_info and r11's pr_warn were voided by the same cause,
+ * the console LEVEL, and the level of these lines was never the variable. Every line below is
+ * level 4 and the one pr_err is level 3, so NONE of them reaches that console.
+ * They are therefore read from the kernel ring buffer with dmesg, which the console level does
+ * not filter. The level is kept at pr_warn deliberately: raising these to KERN_EMERG would put
+ * them on a console the driver quiets on purpose, where an unexpected line can break the
+ * ladder's own parsing. The one exception is the load banner -- see init().
  * page_to_pfn, not %p: %p is hashed, so two values are comparable for equality within a
  * single boot and for nothing else.
  *
  * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
  * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
  * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
-#define CV_DIAG_TAG "resolve-sites-3"
+#define CV_DIAG_TAG "resolve-sites-4"
 #define CV_RESOLVE_FAIL(site, fmt, ...)                                            \
     pr_warn("capstone_vm: resolve refused at %s: addr 0x%lx cause %lu need 0x%lx "  \
             "pc 0x%lx prev(addr 0x%lx cause %lu rep %u) " fmt "\n",                 \
@@ -1642,16 +1651,23 @@ static int __init init(void)
     }
 #endif
     {
-        /* MUST-FIRE control for every CV_RESOLVE_FAIL above. Fires exactly once per insmod
-         * at the same level, so the log separates the two readings r7 could not: a boot
-         * WITHOUT this line proves the level is being dropped and any absent diagnostic is
-         * void; a boot WITH it proves an absent diagnostic really did not fire. Bump
-         * CV_DIAG_TAG whenever the lines above change shape. */
+        /* MUST-FIRE control for every CV_RESOLVE_FAIL above, and the ONE line here at
+         * KERN_EMERG. The board driver's cold_boot sets the console to level 1 before its first
+         * rung, so a pr_warn banner cannot reach that console -- which is exactly how r11's
+         * diagnostic came back void. pr_emerg survives it, and it is affordable precisely
+         * because it fires once per insmod, before the rungs begin, where it cannot interleave
+         * with the ladder's markers. The site lines above stay at pr_warn and are read with
+         * dmesg, because one unexpected EMERG line mid-stream can break the harness's parsing.
+         *
+         * So: banner present => the module loaded at this revision, and an absent site line
+         * below really did not fire. Banner absent => the module did not load at all, which is
+         * a different and louder failure than a filtered print. Bump CV_DIAG_TAG whenever the
+         * lines above change shape. */
         int rc = misc_register(&device);
         if (rc)
             return rc;
-        pr_warn("capstone_vm: loaded, diag %s, supervisor_slots=%lu\n",
-                CV_DIAG_TAG, supervisor_slots);
+        pr_emerg("capstone_vm: loaded, diag %s, supervisor_slots=%lu\n",
+                 CV_DIAG_TAG, supervisor_slots);
         return 0;
     }
 }
