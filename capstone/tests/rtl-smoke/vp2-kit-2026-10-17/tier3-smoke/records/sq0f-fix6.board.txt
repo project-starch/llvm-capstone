@@ -1,0 +1,17 @@
+# Tier 3 board reading, arm sq0f-fix6: kit bkit7-fix6 (module d71f207a3af5546b, the S-27 workaround: resume rd = x0), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-sqlite-memsys5 platform board:caplifive_vp2_bf3db3175 cells 3 tally {"MISSED": 3}
+# controls [["bounds-mem5", "complete"], ["uaf-mem5", "complete"]]
+30_fz06_recordcompareint_overread image cfda000b37a2246d MISSED cause None at None reached True completed True attribution null
+31_fz10_dbstat_decodepage_overflow image 36892332b55959f2 MISSED cause None at None reached True completed True attribution null
+32_fz11_dbstat_freechain_overflow image 2eb86624e79164f6 MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 30_fz06_recordcompareint_overread: verdict MISSED cause None pc None
+  SAME 31_fz10_dbstat_decodepage_overflow: verdict MISSED cause None pc None
+  SAME 32_fz11_dbstat_freechain_overflow: verdict MISSED cause None pc None
+  3 of 3 cells the same
+## the boot
+  BOARD_RUN_START 23:39:56 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 15 files, stage 14410832 bytes
+  firmware c84175e19821be55 21662216 B
+  DRIVER rc=0 23:50:03
+  BOARD_RUN_DONE 23:50:03

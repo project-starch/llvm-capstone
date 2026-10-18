@@ -1,0 +1,129 @@
+{
+  "amalgamation_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "arm": "vp2-malloc",
+  "build": {
+    "arm": "memsys5",
+    "groups": {
+      "core": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_PREUPDATE_HOOK",
+        "-DSQLITE_COUNTOFVIEW_OPTIMIZATION"
+      ],
+      "coreT": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-USQLITE_OMIT_TEMPDB"
+      ],
+      "ext": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "fts3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "fts3P": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4",
+        "-DSQLITE_ENABLE_FTS3_PARENTHESIS"
+      ],
+      "fts5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "json": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_JSON1"
+      ],
+      "memfs3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "memfs5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "memfsdb": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_DBSTAT_VTAB"
+      ],
+      "memfsp": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "rtree": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_RTREE",
+        "-DSQLITE_RTREE_INT_ONLY",
+        "-USQLITE_OMIT_SHARED_CACHE"
+      ]
+    },
+    "opt": "-O0",
+    "sdk": "<mnt-hdd>/capstone/t3-freeze-nb/sdk"
+  },
+  "cases": 33,
+  "configuration": "virtual-sqlite-memsys5",
+  "contract": "verdicts-v1",
+  "corpus": "sqlite/engine-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "per-subset",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "per-subset",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "d71f207a3af5546b02c123b0273d67ad3e8ba798b9bc0e05ec23c1c07a409cec",
+    "monitor": "007d81d",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2_bf3db3175",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "4400e4c1386b72ee94723d97ff4bbe27776156d90db8ed74161773493c334dd2"
+  },
+  "predicted": "MISSED",
+  "subsets": {
+    "sq0a": {
+      "firmware": "53da15d38a3df71c10bbdea749ab557d46c77615ad97985d055912572b1e46ae",
+      "images_sha256": "a4c4876d32865a7c1f25f67aa3fafd5d9d1f8d07209255144df7deea6bf208a3",
+      "kernel": "ce7659a472e388f6fa2ae74bd38041493ceba300c3b9e2f30da8f1dc350bdd9f",
+      "record": "capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/sq0a-fix6.board.txt"
+    },
+    "sq0b": {
+      "firmware": "a67de2cde89ad15cf6a036a881a8ea4a475b13cb1d0ec7acd0c23e0c1c5299f4",
+      "images_sha256": "73868fbdc2479500946360fb37b1e4da9e104287d7b1323c7aed29fab11617be",
+      "kernel": "619d287211f089d7ebdf3974e39a6c66e4cd7eeb18ac336dc9e131fe2aec2edd",
+      "record": "capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/sq0b-fix6.board.txt"
+    },
+    "sq0c": {
+      "firmware": "e15e26b9423bed4f860196326bdd5341e911a6cd137e50eef3999e42de9c4a9d",
+      "images_sha256": "aa6b4007c3f603b59f69bbe21984c402934b96811c944a6996179bf69feb21c4",
+      "kernel": "c488f64ccee346adaf4e1a18e77d51ff937353de12fc41af137ea425d9b0d8e6",
+      "record": "capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/sq0c-fix6.board.txt"
+    },
+    "sq0d": {
+      "firmware": "ffac175f384869faa4935819123d193555444fe1d8519386e68dae8fc9ccba82",
+      "images_sha256": "7b3424b71c916e716687a9c782387f309ceec0c1e2862d14747701412ddf7f30",
+      "kernel": "42884a1060724a8c096220980936a73fbe80ab2dc35c7e8f75d543c83564e16f",
+      "record": "capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/sq0d-fix6.board.txt"
+    },
+    "sq0e": {
+      "firmware": "e26fda0a9b846ef6aec0d15f67e1eba4255095e3631df00ecfc4c18c5b570f4d",
+      "images_sha256": "a09553d90abd36ac3fdae9e8d5bbb0516a163928495f97e3d18615e5268a7f2b",
+      "kernel": "6b581cda428bb85da9cb26d2d1b319949e29b725c4360f816e5fb81055a38ce0",
+      "record": "capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/sq0e-fix6.board.txt"
+    },
+    "sq0f": {
+      "firmware": "c84175e19821be553794aea5ff23fc93a87f125d562e31399ae8165df897f282",
+      "images_sha256": "fdadac5557200ae0f79b808a9bdb9075bba61d9cf62ca23a91e1882ae0396b20",
+      "kernel": "53d2e2f1bdf20095865e7c3f6757cce5eac5f8f1c05b4c230489a2398135e910",
+      "record": "capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/sq0f-fix6.board.txt"
+    }
+  },
+  "subsets_note": "platform.firmware and platform.kernel are per subset: each subset boot bakes its own stage into the initramfs. For the pym0 pair a claim-auditor showed the kernel to be a relink of the same text with a different initramfs, and the firmware equal outside its embedded Image (2026-10-18).",
+  "tally": {
+    "CAUGHT": 5,
+    "MISSED": 26,
+    "NO-READING:inconclusive": 1,
+    "NO-READING:unattributed": 1
+  }
+}

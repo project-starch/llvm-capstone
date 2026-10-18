@@ -1318,3 +1318,18 @@ Kit bkit7-fix6t (BOARD_STEP_S=300), module d71f207a3af5546b.
     window is hit identically each time. The record says so, and the RTL lane has the two captures.
 - **The pb10-fix6b bundle is not filed:** 3 of its 4 cells never ran.
 - UNGATED (PREFLIGHT=0).
+
+### sq0a and sq0f on the workaround module, and sq0 merged (2026-10-18 23:27-23:50): 33 of 33 cells as predicted in verdict
+
+- **sq0a-fix6:** 6 of 6. **sq0f-fix6:** 3 of 3. Kit bkit7-fix6, module d71f207a3af5546b, images gate-checked.
+- **All six sq0 subsets now carry d71f207a.** They are merged by `merge-subset-bundles.py` into
+  `sqlite/engine-repros/results/2026-10-18-vp2-rdx0/vp2-malloc`, the bundle the fold points to.
+  - The merge holds 33 cells, tally CAUGHT 5, MISSED 26, NO-READING 2 (inconclusive 1, unattributed 1). That equals
+    the QEMU prediction's tally.
+  - The 11 shared platform fields are identical across the subsets. Firmware and kernel are recorded per subset.
+  - The merged lines are the subsets' own, byte for byte.
+- **Against the prediction:** 30 of 33 cells the same in every field, and 33 of 33 in verdict. The three field
+  differences are sq0d's cases 19, 20 and 22, the fault cause only (Q-31: the RTL's trap order).
+- **On 3005ed52** the same arm read 18 of 33, with 14 cells carrying S-27.
+- **The d71f207a set is complete:** pym0, pym1, fso, pb12 and sq0 match their predictions. pb10 repeats its S-23
+  data-face panic. wm0 and wm1 wedge as before (R-57). UNGATED (PREFLIGHT=0).
