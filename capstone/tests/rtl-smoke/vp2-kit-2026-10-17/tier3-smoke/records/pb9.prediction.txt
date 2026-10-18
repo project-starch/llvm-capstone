@@ -1,0 +1,16 @@
+# Tier 3 prediction, arm pb9: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 6 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-ffmpeg-pool-stock platform qkit7-wrapper cells 4 tally {"MISSED": 4}
+# controls [["bounds-malloc", "fault"], ["pool-return-90", "complete"], ["uaf-malloc", "fault"]]
+00_461fb22053_af_join_dedup_bound image b5fbf89fba9c30c2 MISSED cause None at None reached True completed True attribution null
+01_1886c3269d_h264_refs_partial_clear image d417df960714bb96 MISSED cause None at None reached True completed True attribution null
+02_316531e61c_vidstab_parked_plane_pointer image 362fe4f5c050c74d MISSED cause None at None reached True completed True attribution null
+03_5c66a3ab51_vvc_nonref_output_releases_tabs image 85e72385382ec745 MISSED cause None at None reached True completed True attribution null
+# image 491655742d378fcd  controls.dom
+# image b5fbf89fba9c30c2  defect-00
+# image d417df960714bb96  defect-01
+# image 362fe4f5c050c74d  defect-02
+# image 85e72385382ec745  defect-03
+# image 37d3965e588ddb44  defect-90

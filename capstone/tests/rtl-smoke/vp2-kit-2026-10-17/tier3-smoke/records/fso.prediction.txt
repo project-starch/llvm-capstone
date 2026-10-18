@@ -1,0 +1,25 @@
+# Tier 3 prediction, arm fso: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 10 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-mallocng platform qkit7-wrapper cells 9 tally {"MISSED": 9}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_8864fd0aec_cbs_h265_pic_timing_member image a0f57569427f6892 MISSED cause None at None reached True completed True attribution null
+01_68845e26f7_vulkan_hevc_refpicset_member image a1dcc9a1404caa98 MISSED cause None at None reached True completed True attribution null
+02_e058af88ab_vulkan_hevc_dpb_member image 8030f85dcd793f4b MISSED cause None at None reached True completed True attribution null
+03_89de2f0de1_aac_arith_last_member image aaa867ae4fc894f2 MISSED cause None at None reached True completed True attribution null
+04_1a00ea51cb_rtsp_control_url_underflow image f0c0f3c2cf5aed80 MISSED cause None at None reached True completed True attribution null
+05_d29ff88422_vulkan_av1_tile_sizes image f4e9b603d669aed0 MISSED cause None at None reached True completed True attribution null
+06_a809a784ec_vvc_entry_point_start_ctu image ecde6cc230d056f3 MISSED cause None at None reached True completed True attribution null
+07_275e217b10_hlsenc_key_uri_strlcpy_size image a4e2c8c0717cf4b6 MISSED cause None at None reached True completed True attribution null
+08_fb862976df_cbs_h266_col_width_val image f027eb86aafd79eb MISSED cause None at None reached True completed True attribution null
+# image a0f57569427f6892  00_8864fd0aec_cbs_h265_pic_timing_member.dom
+# image a1dcc9a1404caa98  01_68845e26f7_vulkan_hevc_refpicset_member.dom
+# image 8030f85dcd793f4b  02_e058af88ab_vulkan_hevc_dpb_member.dom
+# image aaa867ae4fc894f2  03_89de2f0de1_aac_arith_last_member.dom
+# image f0c0f3c2cf5aed80  04_1a00ea51cb_rtsp_control_url_underflow.dom
+# image f4e9b603d669aed0  05_d29ff88422_vulkan_av1_tile_sizes.dom
+# image ecde6cc230d056f3  06_a809a784ec_vvc_entry_point_start_ctu.dom
+# image a4e2c8c0717cf4b6  07_275e217b10_hlsenc_key_uri_strlcpy_size.dom
+# image f027eb86aafd79eb  08_fb862976df_cbs_h266_col_width_val.dom
+# image 491655742d378fcd  controls.dom

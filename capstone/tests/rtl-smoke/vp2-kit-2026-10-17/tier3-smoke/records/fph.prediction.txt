@@ -1,0 +1,57 @@
+# Tier 3 prediction, arm fph: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 26 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-mallocng platform qkit7-wrapper cells 25 tally {"CAUGHT": 25}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_d133b4a231_showcwt_kernel_scan_past_array image e07696b6559ea0b2 CAUGHT cause 28 at ffh_read_probe+56 reached True completed False attribution "probe"
+01_bcbf3a5630_vf_scale_format_list_compaction image 36770b42f97bf589 CAUGHT cause 28 at ffh_read_probe_u8+56 reached True completed False attribution "probe"
+02_56309e476a_vf_vif_mirror_below_base image 149d284f0cda2bd1 CAUGHT cause 28 at ffh_read_probe+56 reached True completed False attribution "probe"
+03_495b402f27_diracdec_edge_emu_buffer_undersized image 1ccc4cf09a366fa2 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+04_b3c7ebc1ed_swaprect_temp_sized_for_plane0 image 78c2228087bdd0a9 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+05_8553e6ef57_cbs_av1_t35_payload_unpadded image 06bf50def35f62c5 CAUGHT cause 28 at ffh_read_probe_u8+56 reached True completed False attribution "probe"
+06_041d4f010e_prores_raw_header_len_unchecked image 91dc0e4050e95ffb CAUGHT cause 28 at ffh_read_probe_u8+56 reached True completed False attribution "probe"
+07_8880a174d0_librist_read_ignores_caller_size image 857c5c7595ec94d9 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+08_b2df2f4f22_mpegenc_system_header_fixed_128 image bc174e4cb7b775ea CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+09_16b2049d4d_cfhd_transform2_wider_than_plane image fe10a62ca781c762 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+10_989444060d5f_lut3d_size2_computed_before_directive image d577f32335e09b82 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+11_76645e096fab_exif_string_clone_drops_terminator image 706ed81d2952230b CAUGHT cause 28 at ffh_read_probe_u8+56 reached True completed False attribution "probe"
+12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators image 343cf65b8dd3b211 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+13_8af6c71d96f4_vif_single_reflection_indexes_below_base image 5e4fea1fd709c5f2 CAUGHT cause 28 at ffh_read_probe+56 reached True completed False attribution "probe"
+14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked image c0b320e5fd009d9e CAUGHT cause 28 at ffh_read_probe_u8+56 reached True completed False attribution "probe"
+15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size image 20f58eadf864fbee CAUGHT cause 28 at ffh_read_probe_u8+56 reached True completed False attribution "probe"
+16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry image 3641c5fc48cf8bbb CAUGHT cause 28 at ffh_read_probe_u8+56 reached True completed False attribution "probe"
+17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu image c276eab9dc3a58ef CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane image 2eee553bd8434f7a CAUGHT cause 28 at ffh_read_probe_u8+56 reached True completed False attribution "probe"
+19_905a4324030e_showcwt_position_initialised_to_sono_size image 5041425895efe0b7 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case image 1f91da0d40d386e2 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame image e60ad2c526da4831 CAUGHT cause 28 at ffh_read_probe+56 reached True completed False attribution "probe"
+22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added image 177ad63605dc3e95 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight image 705bf8eed1419b43 CAUGHT cause 28 at ffh_write_probe_u8+88 reached True completed False attribution "probe"
+24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window image babd2960f74a6be3 CAUGHT cause 28 at ffh_read_probe_u8+56 reached True completed False attribution "probe"
+# image e07696b6559ea0b2  00_d133b4a231_showcwt_kernel_scan_past_array.dom
+# image 36770b42f97bf589  01_bcbf3a5630_vf_scale_format_list_compaction.dom
+# image 149d284f0cda2bd1  02_56309e476a_vf_vif_mirror_below_base.dom
+# image 1ccc4cf09a366fa2  03_495b402f27_diracdec_edge_emu_buffer_undersized.dom
+# image 78c2228087bdd0a9  04_b3c7ebc1ed_swaprect_temp_sized_for_plane0.dom
+# image 06bf50def35f62c5  05_8553e6ef57_cbs_av1_t35_payload_unpadded.dom
+# image 91dc0e4050e95ffb  06_041d4f010e_prores_raw_header_len_unchecked.dom
+# image 857c5c7595ec94d9  07_8880a174d0_librist_read_ignores_caller_size.dom
+# image bc174e4cb7b775ea  08_b2df2f4f22_mpegenc_system_header_fixed_128.dom
+# image fe10a62ca781c762  09_16b2049d4d_cfhd_transform2_wider_than_plane.dom
+# image d577f32335e09b82  10_989444060d5f_lut3d_size2_computed_before_directive.dom
+# image 706ed81d2952230b  11_76645e096fab_exif_string_clone_drops_terminator.dom
+# image 343cf65b8dd3b211  12_ad956ff076ea_drawtext_bbox_buffer_ignores_separators.dom
+# image 5e4fea1fd709c5f2  13_8af6c71d96f4_vif_single_reflection_indexes_below_base.dom
+# image c0b320e5fd009d9e  14_789d7b1b1dff_ffv1dec_fltmap_index_unmasked.dom
+# image 20f58eadf864fbee  15_e9e6fb879835_tdsc_raw_tile_read_by_geometry_not_size.dom
+# image 3641c5fc48cf8bbb  16_ca1c1f29ce47_img2enc_split_planes_read_by_geometry.dom
+# image c276eab9dc3a58ef  17_18761f9fb55c_rtpdec_av1_output_cursor_advanced_for_skipped_obu.dom
+# image 2eee553bd8434f7a  18_e8031e5b9ad2_showcwt_du_scroll_reads_row_past_plane.dom
+# image 5041425895efe0b7  19_905a4324030e_showcwt_position_initialised_to_sono_size.dom
+# image 1f91da0d40d386e2  20_bbdce45fda1e_diracdec_mctmp_rows_below_worst_case.dom
+# image e60ad2c526da4831  21_3fbb9560821b_afir_crossfade_reads_beyond_input_frame.dom
+# image 177ad63605dc3e95  22_242ff799c75f_tdsc_cursor_advanced_by_a_stride_the_loop_already_added.dom
+# image 705bf8eed1419b43  23_f45da79b2c33_exr_dwa_block_written_full_eight_by_eight.dom
+# image babd2960f74a6be3  24_162f75b5e679_exr_pxr24_uint_branch_strides_by_the_data_window.dom
+# image 491655742d378fcd  controls.dom

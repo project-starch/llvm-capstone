@@ -287,3 +287,232 @@ board boot, through the same three steps as a QEMU boot (`smoke.py`).
   - then the two appvm corpora.
   - Each boot runs b0-stats and b0-hello first (S-26's warm-up).
   - A wedge with R-57's signature (a commit count with no valid bits) is S-25's residual, recorded as that.
+
+## The campaign's SDK, frozen (2026-10-18)
+
+The v9 SDK's `sdk.json` named a live LLVM build directory (`llvm-lane-c27`), which the compiler lane rebuilt
+incrementally at 08:06 today. clang is a thin driver over `lib/*.so` (BUILD_SHARED_LIBS), so a rebuild can change
+codegen with the driver's hash unchanged. Over a 26-boot campaign that would split the records across two compilers
+without anything showing it. So every Tier 3 arm, on the board and in its QEMU prediction, is compiled from a frozen,
+read-only copy: `<mnt-hdd>/capstone/t3-freeze`.
+- **What it holds:** llvm-lane-c27's bin and lib, plus the v9 SDK, libc, musl and link script, with `sdk.json` pointing
+  at the copies. Each copy was compared equal to its source.
+- **Identity:**
+  - `MANIFEST.SHA256` sha256/16 44528aa3d25debd5, over 6685 files, 119 of them `lib/*.so`.
+  - `libLLVMCapstoneCodeGen.so` 43e1781e3f1a5e5d. The compiler lane identifies it as the post-08:06 library, the one
+    the pilot and its recent records used.
+  - clang-22 a5be1a4d621513eb, the bundles' `compiler` field. That is the driver alone, so cite the manifest.
+- **Self-contained, checked three ways:**
+  - `ldd`: all 103 of clang's libraries resolve inside the copy.
+  - strace of a full corpus build: the only opens naming the live tree are ENOENT probes for system libraries,
+    through the RUNPATH's absolute fallback.
+  - The pilot's four images rebuild byte-identical from it.
+- **The plain case.c arms' images**, built from it with no boot, for the hash-matched predictions:
+  `<mnt-hdd>/capstone/t3-images/<tag>.images.SHA256SUMS`. There are 7 arms and 92 images. controls.dom is
+  491655742d378fcd in all of them.
+
+## Tier 3 proper: the campaign's rules, pre-registered once (2026-10-18), and each arm's prediction before its boot
+
+**The configuration.**
+- Board kit `bkit7`:
+  - module 3005ed52 with arena_pin OFF (boot 5: the pin removes no wedge, and pin-off is 4c's configuration);
+  - launcher b27afefc;
+  - monitor 007d81d with the vp2 defines;
+  - rungs b0-stats, b0-hello (S-26's warm-up), then vbatch.
+- SDK `t3-freeze`.
+- One arm per boot, through `tier3-seq.sh` with the arm's line from `t3-images/ARMS.spec`. The board records `vp2-<arm>`.
+
+**The prediction for each arm:** the compiler lane's QEMU run of the same images. Its kit is `t3-smoke/qkit7`:
+- capstone-qemu b290f5656600, binary 7a4f3a64776f0c88;
+- behind a wrapper (5f731f99ec6a19b2) that strips exact bounds and appends svadu=false, logging every -cpu string;
+- module 5bfc38f8, the QEMU-kernel build of 3005ed52's source, with no params.
+
+That run's images must equal the board's staged list by sha256. The run's cells, as `tier3-cells.py` lines, are
+committed under `records/<tag>.prediction.txt` before that arm boots.
+
+**The comparison:** `compare-pilot.py <prediction bundle> <board bundle>`, cell by cell, by image.
+- **Pass:** every cell and both controls SAME: verdict, reason, reached, completed, cause, symbol+offset, attribution.
+- **A wedge:** the batch ends early, and the cells after it read NO-READING:infra.
+  - The driver's apertures are compared with `board-tier12/boot3/compare-wedge-apertures.py`.
+  - R-57's signature (a commit count with no valid bit) is read as S-25's residual on this bitstream, not as the
+    case's verdict.
+  - The unreached cells are re-run in a later boot, from the next case on (`--only`).
+- **Any DIFF** is a finding. It is read from the case's own transcript before anything is said about it.
+
+**Arm mpt** (memcached/plain-temporal, 3 cases), the first boot, prediction in `records/mpt.prediction.txt`:
+- CAUGHT 3, each cause 25 at its labelled probe (mct_read_probe+56, mct_write_probe+88, mct_read_probe+56);
+- both controls fault.
+
+This is the pilot's reading on the same image bytes, now on the campaign's module and frozen SDK.
+
+**Amendment (2026-10-18, before the second arm): the SDK is `t3-freeze-nb`, the frozen tree with `-fno-builtin`.**
+- **Why:** the frozen v9 SDK compiled applications without `-fno-builtin`. Its `sdk.json` codegen lacks the flag,
+  which the plan pins for Tiers 1-3 and which Run 5 showed clears mmgr case 00's tag loss.
+- **What changed:** `t3-freeze-nb` is the same frozen tree with `-fno-builtin` appended to the codegen. The compiler
+  lane checked that the two `sdk.json` files differ in that key alone, by that one item.
+- **mpt** has four byte-identical images either way, so its pre-registration and boot stand for this SDK.
+- **The other arms' images** are in `t3-images-nb/` (the prebuilt trees rebuilt there too). Against v9 they differ in
+  0 to 2 images for the plain arms, and in nearly all for fso and the four prebuilt arms.
+- **Caveat 1, from the compiler lane's measurement:** `-fno-builtin` is a PARTIAL mitigation for C-81. It diverts
+  explicit `memcpy` calls, but not `__builtin_memcpy` and not a copy the compiler synthesises. Its scanner reads
+  `copy32_unknown_builtin` as losing tags at -O0, -O1 and -O2, with the flag on. So a clean cell here is no evidence
+  about C-81 exposure.
+- **Caveat 2:** Tier 1/2's application images (contract, sqlite3, mruby) were v9 without the flag. A cross-tier
+  comparison of application behaviour compares two build configurations.
+
+### Arm mpt, result (2026-10-18 12:50-12:58): 3 of 3 cells the same as the prediction; the campaign's first silicon record
+
+`records/mpt.board.txt`. memcached/plain-temporal-repros, recorded vp2-malloc. Firmware 55cd2bc4d221b627
+(17,467,912 B, the clean base's 2 MiB step); module 3005ed52 with the pin off.
+- **CAUGHT 3**, each with cause 25 at the predicted probe. Both controls fault.
+- `compare-pilot.py` against the compiler lane's qkit7 prediction reads 3 of 3 SAME, by image sha256.
+- The boot completed: VIRTUAL_STAGED_DONE, and the batch rung returned 0.
+- Its images are byte-identical on t3-freeze and t3-freeze-nb, so this reading stands under the amendment.
+
+### Arms wm0 and wm1 (wireshark/wmem-repros), pre-registered (2026-10-18): through the appvm batch session, predicted on qkit7 by the board lane
+
+- **The mechanism:** `tier3-appvm-arm.sh` runs `run-defects.py` through `tools/board/appvm-session.py`: collect, one
+  boot, read. The prediction ran it with `--virtual-kit qkit7`, and the board runs it with `--board-kit bkit7`. The
+  hosted builds are `t3-images-nb/wmem/{cases,controls}-{OFF,ON}`, made on t3-freeze-nb.
+- **The image check:** with `EXPECT_IMAGES` set to the prediction's list, the board's collected images must equal the
+  prediction's by sha256 before the boot, or the script stops. Dry-run both ways: another arm's list stops it, and the
+  right list passes.
+- **These two predictions are the board lane's run on the same qkit7**, an amendment for the appvm arms. The lock was
+  free, and the compiler lane was told and can re-run them as a cross-check.
+- **wm0 (virtual-malloc, recorded vp2-malloc), `records/wm0.prediction.txt`:**
+  - MISSED 23, every case completing;
+  - the controls: bounds-chunk complete, uaf-chunk complete, uaf-jumbo fault.
+  - This equals the corpus record and the v6-fix run.
+- **wm1 (virtual-nested-pools, recorded vp2-nested-pools), `records/wm1.prediction.txt`:** NO-READING:control-failed 23.
+  - The cases themselves fault 25 at `wm_probe`.
+  - But the uaf-jumbo control faults with cause 29 during setup, before its ready mark, so the runner voids every
+    cell.
+  - This is the v6-fix run's reading exactly: wmem patch 0001's jumbo-block derive is refused by Q-15 with exact
+    bounds off. The exact-bounds rerun there returned 22 of 23 cells to the record.
+  - Silicon's bounds are not exact, so silicon is predicted to refuse the same derive. A jumbo control that completes
+    on the board would be a finding about Q-15 on silicon.
+- **The order:** wm0, then wm1, one boot each.
+
+### Arms mph, fph, fpt, pre-registered (2026-10-18): the compiler lane's nb predictions, each on the board's bytes
+
+Each record was written by `register-prediction.sh`, which first checked that the run's staged images equal
+`t3-images-nb/<tag>.images.SHA256SUMS`, and that its module is 5bfc38f8.
+- **mph** (memcached/plain-heap, vp2-malloc): CAUGHT 9. `records/mph.prediction.txt`.
+- **fph** (ffmpeg/plain-heap, vp2-malloc): CAUGHT 25. `records/fph.prediction.txt`.
+- **fpt** (ffmpeg/plain-temporal, vp2-malloc): CAUGHT 13. `records/fpt.prediction.txt`.
+Each tally is its corpus record's. These three boot after wm1, through `tier3-seq.sh` with `--sdk t3-freeze-nb/sdk`
+and `t3-images-nb/ARMS.spec`, one boot each, in that order.
+- **fca** (ffmpeg/carved, virtual-malloc, recorded vp2-malloc): MISSED 13, its record. `records/fca.prediction.txt`.
+- **fcs** (ffmpeg/carved, virtual-nested-pools, recorded vp2-nested-pools): CAUGHT 13, its record.
+  `records/fcs.prediction.txt`.
+  - All four carve controls read as expected: live-carve complete; uaf-carve, uaf-malloc and bounds-malloc fault.
+  - Cases 00 and 10 read NO-READING control-failed on v6-fix, a NULL from the module's add(). Here they read CAUGHT.
+- **Provenance:** fcs and fso compile port sources from the lane worktree and `ffmpeg-buffer-pool`, both outside the
+  freeze. No commit since bbc46be9d596 touches `capstone/ports` or `capstone/runtime`, and the image-hash gate
+  catches any drift regardless.
+- **The order after wm1:** mph, fph, fpt, fca, fcs.
+- **wph** (wireshark/plain-heap, vp2-malloc): CAUGHT 12, its record. `records/wph.prediction.txt`.
+- **wpt** (wireshark/plain-temporal, vp2-malloc): CAUGHT 10, its record. `records/wpt.prediction.txt`.
+- **The order after wm1:** mph, fph, fpt, fca, fcs, wph, wpt.
+
+### Arm wm0, result (2026-10-18 13:02-13:13): the core wedges in the uaf-jumbo control, a signature that is neither S-25's kit-application face nor R-49 as fixed
+
+`records/wm0.board.txt`. The board's collected images equalled the prediction's 26, then the boot ran 2 of 26 steps:
+session-share 0, then uaf-chunk 0 (as predicted, it completes). Then `virtual-malloc-01-uaf-jumbo` began and the core
+went silent: no heartbeat, and the driver read the wedge apertures at its idle limit.
+- **The apertures:**
+  - store unit WAIT_STORE_READY (194 = 3);
+  - commit count 4 with valid bits 1101 (193 = 4, 221 = 0xd0), so one counted slot is invalid;
+  - the data request valid and unacknowledged, with write_en and metadata_en (226 = 0x80, 227 = 0x05): a
+    capability store outstanding;
+  - a domain switch in progress (225 = 0x88: tbe, domsw), not in M-mode (224 = 0x1e), switcher index 28 (228 = 0x9c).
+- **Against S-25's kit-application wedge (r10):** it differs in 8 of 15 apertures (`compare-wedge-apertures.py`).
+  r10 has no valid bit at all, privM, and an idle store unit.
+- **Against R-49** (a switcher write pushed over a full commit queue, the switch never finishing): the shape matches
+  (WAIT_STORE_READY, count 4, a starving data request with write_en). But R-49 is fixed on silicon, and its fix
+  192a5e624 is an ancestor of bf3db3175, checked with `git merge-base`. So a matching shape is not that mechanism.
+- **Read so far, not a mechanism:** the invalid counted slot is R-57's ghost. A switch that then starves is what a
+  full commit queue does to the switcher. The control is a use-after-free of a jumbo block, which on QEMU faults 25 at
+  the probe. The attribution is handed to the RTL lane, with the apertures as recorded.
+- **The cells:** NO-READING:control-failed 23, from a boot that did not complete. That is not a verdict on any case.
+- **wm1 did not run** (the loop stops after a boot that does not complete). Its prediction has the same uaf-jumbo
+  control. It goes last in the campaign, as the one known wedge risk.
+
+### Arms fso, pb12, pb9, pb10, pgc, pgm0, pgm1, pre-registered (2026-10-18): the compiler lane's nb predictions
+
+Each was registered by `register-prediction.sh`: the board's bytes and module 5bfc38f8 were checked. Every tally is its
+corpus record's.
+- **fso** (ffmpeg/subobject, vp2-malloc): MISSED 9. On v6-fix it was control-failed, from the pool code's tag loss, and
+  `-fno-builtin` clears it.
+- **pb12** (memcached/allocator, stock, vp2-malloc): CAUGHT 1, MISSED 8.
+- **pb9** (ffmpeg/pool, stock, vp2-malloc): MISSED 4.
+- **pb10** (ffmpeg/pool, Sublet, vp2-nested-pools): CAUGHT 4. Its pool-return control flips polarity against pb9.
+- **pgc** (postgres/c-repros, vp2-malloc): CAUGHT 5.
+- **pgm0** (postgres/mmgr, vp2-malloc): MISSED 5.
+- **pgm1** (postgres/mmgr, vp2-pg-pools): CAUGHT 5. Its uaf-chunk control flips polarity against pgm0.
+- **pb13** (memcached/allocator, Sublet) is not registered: its QEMU run is VOID (exit 75). The 11 images match, but its
+  chunk-free-90 control and every fixed build fault 29 at address 0, so nothing can be scored. That is a prediction-side
+  question first.
+- **The order after the current seven:** fso, pb12, pb9, pb10 through `tier3-seq.sh`; then pgc, pgm0, pgm1 through
+  their own runners with `--board-kit bkit7`.
+
+### Arm mph, result (2026-10-18 13:13-13:23): 9 of 9 cells the same as the prediction
+
+`records/mph.board.txt`. memcached/plain-heap, vp2-malloc, firmware 1b353d22aa552e5e. CAUGHT 9, and both controls
+fault. compare-pilot.py reads 9 of 9 SAME by image.
+
+### Arms sq0, sq1 (sqlite/engine-repros) and pym0, pym1 (cpython/pymalloc-repros), pre-registered (2026-10-18): the board lane's qkit7 predictions through the appvm session
+
+Built on t3-freeze-nb (sqlite with its two extension sources, all 33 cases; pymalloc's hosted replay, 20 cases and its
+control). Each was predicted with `tier3-appvm-arm.sh --virtual-kit qkit7` and registered by `register-prediction.sh`.
+- **pym0** (vp2-malloc): MISSED 20, its record. 2.1 MB gzipped, one boot.
+- **pym1** (vp2-nested-pools): CAUGHT 20, its record. 2.1 MB gzipped, one boot.
+- **sq0** (vp2-malloc, memsys5): CAUGHT 5, MISSED 26, NO-READING:inconclusive 1, NO-READING:unattributed 1.
+- **sq1** (vp2-nested-pools, memsys5 with Sublet): NO-READING:control-failed 33.
+  - Both controls die with cause 29 at address 0, during the Sublet heap's setup.
+  - This is v6-fix's own reading without exact bounds: 29 at the memsys5 Sublet derive, Q-15, a (iii) derive site.
+    There, exact bounds returned every built cell to the record.
+  - On silicon, whose bounds are inexact, the same refusal is predicted.
+- **The sqlite payload:** about 28.6 MB gzipped per arm, against roughly 8.5 MB of headroom. So each sqlite arm runs as
+  several boots, selected with the runner's `--only`, and each boot is compared with the prediction's cells for the
+  same cases.
+- **The sqlite risk:** these are the workloads whose relatives wedged Tier 2 (S-25). A wedge reads as the pre-registered
+  rule says.
+- **The order after the chain now running:** pym0, pym1, then sq1 (one subset boot first: a Q-15 check on silicon), then
+  sq0's subsets, then wm1 last.
+
+### Arms fph and fpt, results (2026-10-18 13:23-13:45): 25 of 25 and 13 of 13 cells the same
+
+`records/fph.board.txt` and `records/fpt.board.txt`: CAUGHT 25 and CAUGHT 13 on silicon, by image, as predicted.
+`t3-status.py` prints the campaign's state from `records/` alone.
+
+**The wmem arms' position on bf3db3175 (2026-10-18).** The runner runs uaf-jumbo, the control wm0 wedged in, before any
+case in every boot, on both arms. So neither wmem arm can be measured on this bitstream until the RTL lane attributes
+that wedge, and either a software rule avoids it or the next bitstream fixes it. This is the current position, not a
+result pending wm1. wm1 stays last in the queue, where a wedge costs nothing else.
+
+### Arms fca and fcs, results (2026-10-18 13:45-14:05): the first matched pair on silicon. The same 13 carved cases are MISSED under malloc and CAUGHT under the Sublet carve, every cell as predicted
+
+`records/fca.board.txt`, `records/fcs.board.txt`; the bundles are in `ffmpeg/carved-repros/results/2026-10-18-vp2/`.
+- **fca** (vp2-malloc): MISSED 13, and both generic controls fault in the same boot. So the detector fires on this
+  image, and the zero is the configuration's.
+- **fcs** (vp2-nested-pools, `-DFFC_SUBLET_CARVE`): CAUGHT 13. The carve controls read as declared: live-carve
+  completes, uaf-carve faults.
+- **The arm is the only variable:** the same corpus, the same cases, and both readings equal the QEMU prediction cell
+  by cell, by image.
+- **No carve derive was refused on silicon.** The carve's children are representable under Q-15's rule, which bf3db3175
+  implements as the DYN unit's vctx-gated round-trip refusal (`capstone_dyn_unit.anvil` CDERIVE, `ex_stage.sv`
+  dyn_child_repr_q).
+
+### Arms wph and wpt, results (2026-10-18 14:05-14:25): 12 of 12 and 10 of 10 cells the same
+
+`records/wph.board.txt`, `records/wpt.board.txt`: CAUGHT 12 and CAUGHT 10 on silicon, as predicted. The bundles are in
+`wireshark/plain-{heap,temporal}-repros/results/2026-10-18-vp2/vp2-malloc`.
+
+**The first seven case arms are through:** mph, fph, fpt, fca, fcs, wph and wpt, with mpt before them. That is 8 arms
+and 98 cells on silicon, every cell equal to the QEMU prediction on the same image bytes.
+- **A slip in the queue, recorded so it is not repeated.** The chained waiter for fso and the pool and postgres arms
+  checked `pgrep -f "tier3-seq[.]sh"`, and its own command line contained `tier3-seq.sh` (the script it was about to
+  run). It matched itself and stopped before booting anything; this is CLAUDE.md's pgrep rule. No board time was lost:
+  the appvm queue (pym0, pym1, sq1a) took the board next. The re-queued waiter checks only patterns its own command
+  line cannot contain.

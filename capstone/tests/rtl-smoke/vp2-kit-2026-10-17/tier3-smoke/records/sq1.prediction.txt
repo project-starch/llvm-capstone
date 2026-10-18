@@ -1,0 +1,74 @@
+# Tier 3 prediction, arm sq1: the board lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 35 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-nested-pools configuration virtual-sqlite-memsys5-pools platform qkit7-wrapper cells 33 tally {"NO-READING:control-failed": 33}
+# controls [["bounds-mem5", "none"], ["uaf-mem5", "none"]]
+00_adfb203a7d_fts5_getvarint_stale_read image 84a191d1c2bdbfa4 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+01_5e4233a9e4_agginfo_stale_after_realloc image d8fb0ae5fdeb89b2 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+02_b9e0f62c3a_backup_pager_after_detach image cb07df1127edaf42 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+03_e464802d49_blob_close_after_db_close image f997541f4b372b16 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+04_8504d37b99_blob_write_after_reopen image 29c27788e35e1307 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+05_6397a78b2b_detach_with_pending_trigger image 5fe167ada49354ae NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+06_0c8c9a64b3_expert_rem_ctx_freed image ce9c6adb678afe14 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+07_129371553c_fts3_destroy_oom_stale_table image df330e165fe127ed NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+08_51dd67080a_fts3_offsets_stale_buffer image b303be9f45f47cfb NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+09_fix-2026-08-17_fts3_snippet_stale_buffer image 2e3fdcaf27ca3d35 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+10_becd68ba0d_fts3_snippet_or_stale_iter image da3d2d60f2747c07 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+11_dee0359ddb_fts3_zterm_stale_buffer image b9fb2263aa2268b5 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+12_fb8ca7de0c_fts5_inplace_stale_leaf image cb8b6d5ebdb967ac NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+13_fix-2026-06-08_fts5_near_stale_phrase image 8ef357fec532791f NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+14_25e3073741_fts5_structure_release_refcount image 4cf04659fe7e22d3 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+15_2639ddc474_fts5_vocab_eof_stale_poslist image a88025adf8ce470e NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+16_unfixed_json_each_root_stale_key image 7ae781f5f71b0653 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+17_28001204f4_json_each_static_stale_key image d1cb8c9589654c10 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+18_mem5-design_memsys5_inband_freelist_overwrite image f279db90cef2ab50 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+19_c8c9cdd9dd_rtree_cursor_stale_node image a913a0aaef55367c NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+20_d21bd37c7c_rtree_inode0_stale_node image 998a6448dcf020f6 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+21_eab0e10304_rtree_static_bind_stale_text image 3f4f7332e39efe27 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+22_fix-2026-07-26_spellfix_oom_stale_vtab image bb1a8762eaec3247 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+23_eab0e10304_fts3_static_bind_stale_text image ad91c4489ad4610a NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+24_d4b646997a_writable_schema_stale_table image 3f8d64c3033dfae8 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+25_415540ddaa_fts5_getvarint_overread image fb2363ebaf5d12f6 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+26_8f5b14a5c2_fts5_decode_getvarint32_overread image 9529d8377d78bbdf NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+27_a783931794_fts3_getvarint_overread image 699e4b43f792d954 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+28_c7def600bd_fts3_matchinfo_overread image c98415fec070fba2 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+29_fz02_btree_get4byte_page_overread image 46f884fb4e9b36ad NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+30_fz06_recordcompareint_overread image 1915bbb904985303 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+31_fz10_dbstat_decodepage_overflow image bfda8d7a3ea3a049 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+32_fz11_dbstat_freechain_overflow image 11206d343eb9edc0 NO-READING:control-failed cause 29 at capstone_cap_derive+156 reached True completed False attribution null
+# image 84a191d1c2bdbfa4  00_adfb203a7d_fts5_getvarint_stale_read-84a191d1c2bdbfa4.dom
+# image d8fb0ae5fdeb89b2  01_5e4233a9e4_agginfo_stale_after_realloc-d8fb0ae5fdeb89b2.dom
+# image cb07df1127edaf42  02_b9e0f62c3a_backup_pager_after_detach-cb07df1127edaf42.dom
+# image f997541f4b372b16  03_e464802d49_blob_close_after_db_close-f997541f4b372b16.dom
+# image 29c27788e35e1307  04_8504d37b99_blob_write_after_reopen-29c27788e35e1307.dom
+# image 5fe167ada49354ae  05_6397a78b2b_detach_with_pending_trigger-5fe167ada49354ae.dom
+# image ce9c6adb678afe14  06_0c8c9a64b3_expert_rem_ctx_freed-ce9c6adb678afe14.dom
+# image df330e165fe127ed  07_129371553c_fts3_destroy_oom_stale_table-df330e165fe127ed.dom
+# image b303be9f45f47cfb  08_51dd67080a_fts3_offsets_stale_buffer-b303be9f45f47cfb.dom
+# image 2e3fdcaf27ca3d35  09_fix-2026-08-17_fts3_snippet_stale_buffer-2e3fdcaf27ca3d35.dom
+# image da3d2d60f2747c07  10_becd68ba0d_fts3_snippet_or_stale_iter-da3d2d60f2747c07.dom
+# image b9fb2263aa2268b5  11_dee0359ddb_fts3_zterm_stale_buffer-b9fb2263aa2268b5.dom
+# image cb8b6d5ebdb967ac  12_fb8ca7de0c_fts5_inplace_stale_leaf-cb8b6d5ebdb967ac.dom
+# image 8ef357fec532791f  13_fix-2026-06-08_fts5_near_stale_phrase-8ef357fec532791f.dom
+# image 4cf04659fe7e22d3  14_25e3073741_fts5_structure_release_refcount-4cf04659fe7e22d3.dom
+# image a88025adf8ce470e  15_2639ddc474_fts5_vocab_eof_stale_poslist-a88025adf8ce470e.dom
+# image 7ae781f5f71b0653  16_unfixed_json_each_root_stale_key-7ae781f5f71b0653.dom
+# image d1cb8c9589654c10  17_28001204f4_json_each_static_stale_key-d1cb8c9589654c10.dom
+# image f279db90cef2ab50  18_mem5-design_memsys5_inband_freelist_overwrite-f279db90cef2ab50.dom
+# image a913a0aaef55367c  19_c8c9cdd9dd_rtree_cursor_stale_node-a913a0aaef55367c.dom
+# image 998a6448dcf020f6  20_d21bd37c7c_rtree_inode0_stale_node-998a6448dcf020f6.dom
+# image 3f4f7332e39efe27  21_eab0e10304_rtree_static_bind_stale_text-3f4f7332e39efe27.dom
+# image bb1a8762eaec3247  22_fix-2026-07-26_spellfix_oom_stale_vtab-bb1a8762eaec3247.dom
+# image ad91c4489ad4610a  23_eab0e10304_fts3_static_bind_stale_text-ad91c4489ad4610a.dom
+# image 3f8d64c3033dfae8  24_d4b646997a_writable_schema_stale_table-3f8d64c3033dfae8.dom
+# image fb2363ebaf5d12f6  25_415540ddaa_fts5_getvarint_overread-fb2363ebaf5d12f6.dom
+# image 9529d8377d78bbdf  26_8f5b14a5c2_fts5_decode_getvarint32_overread-9529d8377d78bbdf.dom
+# image 699e4b43f792d954  27_a783931794_fts3_getvarint_overread-699e4b43f792d954.dom
+# image c98415fec070fba2  28_c7def600bd_fts3_matchinfo_overread-c98415fec070fba2.dom
+# image 46f884fb4e9b36ad  29_fz02_btree_get4byte_page_overread-46f884fb4e9b36ad.dom
+# image 1915bbb904985303  30_fz06_recordcompareint_overread-1915bbb904985303.dom
+# image bfda8d7a3ea3a049  31_fz10_dbstat_decodepage_overflow-bfda8d7a3ea3a049.dom
+# image 11206d343eb9edc0  32_fz11_dbstat_freechain_overflow-11206d343eb9edc0.dom
+# image 6e6cecbc28c5ad10  control_bounds_mem5-6e6cecbc28c5ad10.dom
+# image 18569d695a96670a  control_uaf_mem5-18569d695a96670a.dom

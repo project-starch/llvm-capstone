@@ -1,0 +1,47 @@
+# Tier 3 prediction, arm pym1: the board lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 21 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-nested-pools configuration virtual-pymalloc-pools platform qkit7-wrapper cells 20 tally {"CAUGHT": 20}
+# controls [["uaf-block", "fault"]]
+00_gh-143543_groupby_reentrant_eq image 8f2700f319d148d1 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+01_gh-146613_grouper_parent_key image 7bc2c0aab08ed53a CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+02_gh-142829_hamt_eq_interior_cursor image 92e53f349d59c600 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+03_gh-142831_json_encoder_list_item image e2853f861bd72274 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+04_gh-145244_json_encoder_dict_key image e1b9263768ec74e1 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+05_gh-148660_odict_copy_stale_link image 35e42b66e55c91f9 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+06_gh-151295_bytes_join_reentrant_buffer image 09e58c3274ee0b06 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+07_gh-148395_decompressor_next_in image 5c37a77ca0fe3b30 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+08_gh-112127_atexit_unregister_borrowed_tuple image 4948dc87d4d13f53 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+09_gh-139210_iterparse_event_name image 83adf48172cf644a CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+10_gh-142560_bytearray_search_realloc image 058bd61c83b20f98 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+11_gh-142783_zoneinfo_eager_decref image 7645d1abe4e4e3a5 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+12_gh-143004_counter_update_borrowed_value image 0a0f4826e9b5a93c CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+13_gh-144833_ssl_decref_self_then_read image 25f235ffdda27c6d CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+14_gh-146011_decimal_signaldict_outlives_context image cd2f4ec0e4137077 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+15_gh-149449_unicodedata_capi_cached image 1d23af4d38057e9a CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+16_gh-151403_fork_exec_fspath image 8d6a12935cb29b3c CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+17_gh-151416_spawnv_fspath image 433c2e79f4df9570 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+18_gh-151695_curses_screen_encoding_global image a5c4f9819c0c2b50 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+19_gh-153539_textio_tell_reentrant_decoder image cae0d28288a75d65 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+# image 8f2700f319d148d1  defect-00-8f2700f319d148d1.dom
+# image 9e3cd0dde2dae292  defect-00-9e3cd0dde2dae292.dom
+# image 7bc2c0aab08ed53a  defect-01-7bc2c0aab08ed53a.dom
+# image 92e53f349d59c600  defect-02-92e53f349d59c600.dom
+# image e2853f861bd72274  defect-03-e2853f861bd72274.dom
+# image e1b9263768ec74e1  defect-04-e1b9263768ec74e1.dom
+# image 35e42b66e55c91f9  defect-05-35e42b66e55c91f9.dom
+# image 09e58c3274ee0b06  defect-06-09e58c3274ee0b06.dom
+# image 5c37a77ca0fe3b30  defect-07-5c37a77ca0fe3b30.dom
+# image 4948dc87d4d13f53  defect-08-4948dc87d4d13f53.dom
+# image 83adf48172cf644a  defect-09-83adf48172cf644a.dom
+# image 058bd61c83b20f98  defect-10-058bd61c83b20f98.dom
+# image 7645d1abe4e4e3a5  defect-11-7645d1abe4e4e3a5.dom
+# image 0a0f4826e9b5a93c  defect-12-0a0f4826e9b5a93c.dom
+# image 25f235ffdda27c6d  defect-13-25f235ffdda27c6d.dom
+# image cd2f4ec0e4137077  defect-14-cd2f4ec0e4137077.dom
+# image 1d23af4d38057e9a  defect-15-1d23af4d38057e9a.dom
+# image 8d6a12935cb29b3c  defect-16-8d6a12935cb29b3c.dom
+# image 433c2e79f4df9570  defect-17-433c2e79f4df9570.dom
+# image a5c4f9819c0c2b50  defect-18-a5c4f9819c0c2b50.dom
+# image cae0d28288a75d65  defect-19-cae0d28288a75d65.dom
