@@ -34,5 +34,6 @@
     "_PyFrame_Initialize",
     "_PyEvalFramePushAndInit"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (WRITE 8) at _PyFrame_Initialize Include/internal/pycore_frame.h:150 | _PyEvalFramePushAndInit Python/ceval.c:1724. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (WRITE 8) at _PyFrame_Initialize Include/internal/pycore_frame.h:150 | _PyEvalFramePushAndInit Python/ceval.c:1724. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "③ WITHDRAWN by the 2026-10-18 review. Spatial defect. ② faults cause=28 on `stc zero, 0x0(a3)`, the defective store. CheriBSD reports si_code=2 PROT_CHERI_TAG, which is the untagged-dereference code and not the bounds code, so the store succeeded there."
 }
