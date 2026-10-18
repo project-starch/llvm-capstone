@@ -503,3 +503,16 @@ result pending wm1. wm1 stays last in the queue, where a wedge costs nothing els
 - **No carve derive was refused on silicon.** The carve's children are representable under Q-15's rule, which bf3db3175
   implements as the DYN unit's vctx-gated round-trip refusal (`capstone_dyn_unit.anvil` CDERIVE, `ex_stage.sv`
   dyn_child_repr_q).
+
+### Arms wph and wpt, results (2026-10-18 14:05-14:25): 12 of 12 and 10 of 10 cells the same
+
+`records/wph.board.txt`, `records/wpt.board.txt`: CAUGHT 12 and CAUGHT 10 on silicon, as predicted. The bundles are in
+`wireshark/plain-{heap,temporal}-repros/results/2026-10-18-vp2/vp2-malloc`.
+
+**The first seven case arms are through:** mph, fph, fpt, fca, fcs, wph and wpt, with mpt before them. That is 8 arms
+and 98 cells on silicon, every cell equal to the QEMU prediction on the same image bytes.
+- **A slip in the queue, recorded so it is not repeated.** The chained waiter for fso and the pool and postgres arms
+  checked `pgrep -f "tier3-seq[.]sh"`, and its own command line contained `tier3-seq.sh` (the script it was about to
+  run). It matched itself and stopped before booting anything; this is CLAUDE.md's pgrep rule. No board time was lost:
+  the appvm queue (pym0, pym1, sq1a) took the board next. The re-queued waiter checks only patterns its own command
+  line cannot contain.
