@@ -1,0 +1,69 @@
+TREE A (capstone-ariane 8522d72fe) BOARD ARM VECTORS, simulated 2026-10-19
+Instrument control: all 25 of these same arms re-simulated on bf3db3175 reproduce the
+published 2026-10-17 vectors EXACTLY (25/25, count and values). Every arm ends in a spin
+loop, so each hits the 2,000,000-cycle limit and the harness prints FAILED; that is normal
+and the vector is the recorder's contents, not the harness verdict.
+
+PREDICTION, from the images themselves: tree A's four changes are S-27 (an acknowledged
+RESUME writes the refuse literal into the context's x(rd) when rd != x0), S-28 (a
+second-port retirement gate beside a CSRUNV, documented as not exercised), R-57 (a
+capability STORE whose TRANSLATION faults) and Q-24 (medeleg). These images run in M-mode
+with no translation, so R-57 cannot reach them; none names medeleg. So only an image
+containing a CSRUNV with rd != x0 can differ at all.
+
+arm                    CSRUNV  predicted  result
+------------------------------------------------
+q17-order              ?       identical  IDENTICAL
+va-alloc               0       identical  IDENTICAL
+va-alloc-corrupt       0       identical  IDENTICAL
+va-alloc-exhaust       0       identical  IDENTICAL
+va-alloc-off           0       identical  IDENTICAL
+va-barrier             0       identical  IDENTICAL
+va-csmint-emu          0       identical  IDENTICAL
+va-csmint-mon          0       identical  IDENTICAL
+va-flat                0       identical  IDENTICAL
+va-flat-off            0       identical  IDENTICAL
+va-ns-collide          0       identical  IDENTICAL
+va-ns-collide-off      0       identical  IDENTICAL
+va-q15                 3       may differ IDENTICAL
+va-runv                3       may differ IDENTICAL
+va-runv-quantum        3       may differ IDENTICAL
+va-runv2               11      may differ IDENTICAL
+va-runv3               4       may differ IDENTICAL
+va-runv4               4       may differ IDENTICAL
+va-runv5               3       may differ IDENTICAL
+va-runv6               0       identical  IDENTICAL
+va-runv7               3       may differ IDENTICAL
+va-straddle            0       identical  IDENTICAL
+vb-trans-off           ?       identical  IDENTICAL
+vb-trans-plain-vp2     0       identical  IDENTICAL
+vb-trans-vp2           0       identical  IDENTICAL
+
+SUMMARY: 25 identical, 0 differ, 0 without a vector, of 25 arms
+
+IMAGE IDENTITY (sha256 of the .bin the board loads):
+  q17-order              (vp1 image, not in this folder)
+  va-alloc               4f346db72ed8337b5c56c47c57979b27c8ea2b1b847513367a8049e3067260d3
+  va-alloc-corrupt       123ce8c012c7e7f9c1ae9d4aecd4fd061d1f47031a416d419f08e5228198fcf6
+  va-alloc-exhaust       3ed79f75b2f9237712404d7bab37208bf1dde2e514e389a6cae12e815f70154c
+  va-alloc-off           cbef3379e9a8b4ad6042ce0791bb09ead390516f39cfc3e77c4706679e306694
+  va-barrier             28202d0d516170e8f6ff0f53b9e8c338646986426448de5f020b041b1b0e5a93
+  va-csmint-emu          c2defd4da83049214070a2b3c2b93c03aeda5503e670d375a61990b822b21ddc
+  va-csmint-mon          600b48c94fabddc3885f667a2f81b400826e29cb833e8d0363c971f5df63b8ea
+  va-flat                08b1ba902363901dfd8ec79fd1904c1e28896e38632b81585f0abfdea6a0ada9
+  va-flat-off            407e1a8a13293e7f76b7a40632cd9a29e1a89ab6f32d00d2893c4b08a6f5b0f8
+  va-ns-collide          47605a54f9682c0bf34b29f7691fd77e0943ca574d1f5da0e298881985b469a3
+  va-ns-collide-off      90e3d70e14fd406aaf3a3dbabaa7b69eab4827409bfd30cfdc3af89eeecc8528
+  va-q15                 ee0959d19d8f0a82d88c028bb2caccce9ea777d942b072c4c970afa4254d32e8
+  va-runv                f764c436cdb526879db9352a671a76dd544a5da2b6d7bdb933b0c17e242ef1e5
+  va-runv-quantum        34934ab8b2271c8cedd040b5d0a013b5e37aea38845c9e105d6bad0f4c6492f0
+  va-runv2               7b8ab66e23607d31e3e26738cfef42f267edc3c9246269235c0246fa15b16ec1
+  va-runv3               d967dcdea54e3a867ab92d7386b26aebbb7c4f18a17d53b18818634e07c5715c
+  va-runv4               e8ac8002db62b1e8f024aed762f5c12f00bb7aee86ea0b96a1d38849bad8533d
+  va-runv5               a5c00ebb2d79ed1bcd250bf8cccd2bc2709c1f4bb5003d16ee649bb8c25c3d68
+  va-runv6               7922462bf7b1a21de86e5b6f4e0316183a1bb62a0e97913c4e782f9774aa7f33
+  va-runv7               8edbfa78d1ec7acf035fbb9f836d8d170c9a73e7cd5201347953242e9933bd00
+  va-straddle            f7ea04e9d24ea60dcdd4b1d1ae00b6f14f362e81bab0d060939da6a143e22196
+  vb-trans-off           (vp1 image, not in this folder)
+  vb-trans-plain-vp2     38508a4220203bf13073512a4361d0a8b45ef89bf456f11df452129d1411b430
+  vb-trans-vp2           0c325b29ba5cc6403a02b52fb304865e976df38444d28bc6354f03ddf40797dd
