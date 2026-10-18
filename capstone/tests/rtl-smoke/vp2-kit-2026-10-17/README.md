@@ -1315,3 +1315,45 @@ Pre-registered at b6521767bae0. Result lines are in `board-tier12/results/board-
 - **The ordering slip:** the suite put sparse-churn, a second expected wedge, between the two halves of the fence
   pair, so a churn wedge would have cost the fence=0 arm. The batching rule already says this (at most one expected
   wedge, last). r12 takes the compiler lane's order.
+
+## Pre-registered (2026-10-18, before boot r12): resolve()'s refusal site read from the ring buffer, and the fence pair alone
+
+**The changes from r11:**
+- **The module** is 06d663f30bf29825 (the compiler lane's 0b963e269b4e).
+  - It is r11's code: the llvm-objdump disassembly is equal line for line (5296 lines) and the section tables match.
+  - The one change is the load banner, now at KERN_EMERG (level 0). It is the only module line the rung console can
+    show. The five site lines and "thread create refused" stay at level 4. Diag tag resolve-sites-4.
+- **The suite** is `board-tier12/vm-suite-inner-r12.sh`.
+  - **The module's lines** are read from the ring buffer, `dmesg | grep capstone_vm:`, prefixed KMSG-:
+    - right after `vm`;
+    - again after the returning steps, with the buffer's line count.
+    - There is no `-c`: busybox 1.36.1's dmesg supports it, but the whole-buffer read needs nothing more.
+  - **mruby and sqlite are out:** r10 and r11 wedge on them alike.
+  - **The fence pair goes in the compiler lane's order:** echo 1 with its read-back, sparse-stale, echo 0 with its
+    read-back, sparse-stale, then sparse-churn LAST. Each read-back is labelled with the step it precedes.
+- **Unchanged:** the firmware is 778836000a52d476, monitor 007d81d; the extracted monitor sources equal r11's.
+- **The run:** `boot3/run-tier12-r12.sh 778836000a52d476`, dry-run in `boot3/dryrun-r12.txt`.
+
+**Predictions:**
+- **Tier 1:** identity.
+- **The console banner, exactly once:** `capstone_vm: loaded, diag resolve-sites-4, supervisor_slots=1`, at the
+  vm-contract insmod. If it is absent, the module did not load, and the boot is a different failure.
+- **The vm-suite steps through parallel_two:** as r10 and r11.
+- **The KMSG window after `vm`:**
+  - **The must-fire:** threads' `capstone_vm: thread create refused`. If it is absent, the window is VOID: neither a
+    site line nor its absence reads.
+  - **`vm`'s site line,** per the compiler lane's table (PREREGISTRATION-resolve-refusal-sites.md on
+    lane/compiler-exact-bounds-iii):
+    - `remap` with cause 15, pfn_old != pfn_new, and prev = (the same address, cause 13): the COW-on-write mechanism;
+    - `vma`, `anon`, `pin` or `arena`: each names its own mechanism;
+    - must-fire present and no site line: the store does not fail in resolve(), and the !same deduction is refuted.
+  - **What the A/D candidate predicts:** an `-ELOOP` line, "fault at ... resolved N times with no change".
+- **The KMSG window after the returning steps:** the compiler lane's QEMU control predicts `vma` lines for vm-ro-write
+  and vm-none-read.
+- **The fence pair** (the runtime lane's four outcomes):
+  - fence=1 sparse-stale returns and fence=0 wedges: the fence orders the race.
+  - Both wedge: not the fence.
+  - Both return: timing-sensitive, its own finding; sparse-churn then runs as the last unknown.
+  - fence=1 wedges and fence=0 would have returned: unreadable in this order. That is a different variable, and it
+    would need its own boot.
+- **sparse-churn:** the expected wedge (r8), last. It is reached only if both sparse-stale arms return.
