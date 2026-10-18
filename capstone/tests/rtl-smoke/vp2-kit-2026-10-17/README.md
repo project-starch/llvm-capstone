@@ -1544,3 +1544,15 @@ Pre-registered at f7487e0f1cd9. Result lines are in `board-tier12/results/board-
 - **What it decides:** if 4c reads identity, the regression is in what changed from a56fc415 to 29c8e54e/a00109e9
   other than the default: the Q-26 wait rewrite or the escape-print code. If 4c fails too, the module is not the
   variable, and something else in the boot changed.
+
+### Tier 2 boot 4b, result (2026-10-18 11:26-11:38): VOID as a record. resolve_dirty's default was not the variable
+
+Pre-registered at 5143ae4e0601. Result lines are in `board-tier12/results/board-vp2-tier12-b4b.result-lines.txt`.
+- resolve_dirty read back N at its default, Y before `vm` and N after it.
+- **Every context faulted as in boot 4,** Tier 1 included (retval 922): cause 24 at code offset 0x1d94, address 0x2.
+  - 0x1d94 is contract.dom VA 0x11d94, memset+0x2c, `sb a1, 0x0(a3)` with a3 the destination.
+  - So memset was handed a pointer whose cursor is 2, a value read out of memory before HELLO.
+- **The pre-registered "no cause-24 fault" failed.** The compiler lane's attribution to the resolve_dirty default
+  is withdrawn by this boot.
+- **The module is still the variable:** only it and the suite differ from r13, and the first failing context uses
+  no suite. Boot 4c is the control.
