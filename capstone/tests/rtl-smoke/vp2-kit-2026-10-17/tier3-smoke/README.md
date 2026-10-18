@@ -630,3 +630,26 @@ common to everything built from these sources. It is the contrast case for the p
   only; a loaded entry covering mtval for the access type; the same bounded no-progress guard; inject as today when
   nothing covers it; never for AMOs or LR/SC.
   - Its prediction: if the window is the mechanism, a data retry succeeds on its first attempt.
+
+### The pymalloc probe, pre-registered (2026-10-18): three arms, ppA, ppB and ppC, each one boot, before the sqlite subsets
+
+These are the compiler lane's images, verified against the hashes it sent. Case 00 is the probe in each hosted build;
+cases 01-19 are the production images, as a built-in control. All three run `pym_backing_init` and
+`pym_allocator_init` exactly once, in production order, and print nothing until every value is captured. Then they
+print, and fall through into the real path. So the original cause-6 fault, if it recurs, is the control that the
+probe did not perturb the bug.
+- **ppA (faithful):** the global's granule as two plain loads, `used` as a plain load, and the capability via `lcc`
+  (type, base, end, cursor). Read right after the init's store (v1) and after allocator_init (v2).
+- **ppB (pre-touch):** ppA, plus one plain byte store into the globals' page before the init.
+- **ppC (pre-read):** ppA, plus the granule and `used` read with plain loads BEFORE the init: the previous contents.
+- **The prediction:** the QEMU twins on qkit7 (`records/pp{A,B,C}.prediction.txt`, whose probe lines are copied in).
+  Every value is right: raw lo equals the 16 MiB region, its end minus base is 16 MiB, `used` is 0, ok v1=1 v2=1, the
+  before-init values are zeros, the regions are granule-aligned, and MISSED 20.
+- **How the silicon reading names the class** (the compiler lane's table, with the RTL lane's go/no-go):
+  - ppC's before-init lo, hi or `used` non-zero, especially 2: stale contents before the init (the stale-refill class).
+  - raw lo right but the capability's cursor wrong: the capability load or decode.
+  - raw lo right in v1 but wrong in v2: forwarded, then lost.
+  - `used` = 2: the other global is the corrupted one.
+  - ppB differing from ppA: the first-touch class. ppB the same as ppA: not first-touch.
+  - The regions not granule-aligned on silicon: the representability lead is live.
+  - All ok AND no fault in all three: the probe perturbed the trigger. That is a null result, not a pass.
