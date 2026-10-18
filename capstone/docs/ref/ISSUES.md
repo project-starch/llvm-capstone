@@ -457,6 +457,31 @@ Siblings: S-21 and S-22 (the same CSRUNV ENTRY/ESCAPE walks, a different consequ
 - The fetch and data checks share one comparator over one decoded array (`pmp_data_if.sv:134-189`). There is no second
   CPMP copy and no cached deny.
 
+**A data face, filed here by shape (Tier 3 arm pb10, 2026-10-18, UNGATED; the RTL lane's attribution).** On the ffmpeg
+pool's Sublet arm, the monitor printed its region dump and `MTVL:BC2C0825 CPMX:00000002`. Linux then took `Oops - load
+access fault` at `mod_node_page_state+0x40` (cause 5, badaddr = mtval) and panicked.
+- Decoding the dump, region 21 `[0xac100000, 0xc0000000)`, RWX, is loaded in CPMP slot 7 and covers mtval. So a kernel
+  data load was refused under a covering entry. The monitor's own `CPHT:00000007` ("this LOADED entry covers mtval",
+  `sbi_capstone.c:3586`) agrees. badaddr is physical (the Oops's `a3 : ffffffd83c2c0825`, `lb a3, 0(a3)` through the linear
+  map), which only the CPMP data check reports (`pmp_data_if.sv:313`; classic PMP reports the vaddr), so the refusal is
+  CPMP's.
+- The data check (`pmp_data_if.sv:302-319`, comparator `cpmp_check` `:134-152`) is the fetch check's twin (`:238-255`)
+  over the same decoded `cpmp_fat[]`. The RTL lane infers both go live when the escape returns the privilege
+  (`csr_regfile.sv:2125-2131`), while the RESTORE walk is still writing.
+- The fetch side is guarded by kill_s1 and flush_if over the busy window. The LSU keeps a dom-switch flush exemption,
+  R-50's subject, narrowed by 429c60b32 but still present.
+- Caveats:
+  - CPMX is the monitor's own print and cannot name the entry the comparator used.
+  - An objection from this lane's auditor: `flush_commit_o = flush_commit | dom_switch_busy_i` (`commit_stage.sv:870`)
+    holds the flush for the whole walk. So the timing account as written does not predict a kernel load mid-walk.
+  - A persistent false deny (`cpmp_revnode_valid_q`, the tag and type terms at `:144-149`, none printed) is not
+    excluded.
+  - The Oops is in interrupt context under `unpin_user_page`, not shown to be the caller's first access after a
+    CSRUNV return, which is S-23's defining condition.
+- The fetch-retry workaround does not cover data accesses. The RTL lane's conditions for a data-side retry: S or U
+  origin; a loaded entry covering mtval for the access type; the bounded no-progress guard; inject when nothing covers
+  it; never for AMOs or LR/SC. Its prediction: a data retry succeeds on its first attempt.
+
 **Workaround (not a fix).** capstone-sbi vp2/fetch-retry 007d81d, `CAPSTONE_VP2_FETCH_RETRY`, FPGA, off by default.
 - When an S/U instruction-fetch access fault arrives and a loaded CPMP entry with X covers mtval, the monitor reports
   `FRTY:<mepc>`, executes sfence.vma and fence.i, and returns to the faulting pc.
@@ -522,11 +547,12 @@ below made by script):
 | r10 | sqlite_write | 4 | none | 0 | 0x1d | 0x80 (idle) | the queue full, every unit ready |
 | r11 | mruby (its first silicon attempt) | 4 | none | 0 | 0x1d | 0x80 | identical to r10 |
 | 5 | sqlite_write, under the module's arena pin (3005ed52, arena_pin=1 read back) | 4 | none | 0 | 0x1d | 0x80 | identical to r10 in all 15 switch apertures: the pin does not reach it |
+| Tier 3 wm0 (UNGATED, PREFLIGHT=0) | wireshark/wmem uaf-jumbo control (3005ed52, pin off) | 4 | 1101 (the invalid one at the read pointer, inferred from st_data_req = 0) | 3 (WAIT_STORE_READY) | 0x1e | 0x88 (tbe, domsw) | attributed by the RTL lane to R-57's third face: a ghost at the queue's HEAD, the switcher's SAVE (index 28, a capability write, 227 = 0x05) refused forever. This reading is also R-49's own simulated end state (cnt 4, valid 0111, data_req 0), so the attribution rests on R-49's path being closed (192a5e624 is in bf3db3175), not on the apertures telling the two apart. Which store made the ghost is open |
 
-- **Every wedge:** 228 = 0xb8, the switcher's index 56. The RTL lane reads that from the source as residue: cur_idx
+- **Every wedge before Tier 3:** 228 = 0xb8, the switcher's index 56. (wm0 reads 0x9c, index 28.) The RTL lane reads that from the source as residue: cur_idx
   after a non-service RESUME, never reset.
 - **The trap log** (0x88/0x89) is residue too.
-- **The diagnosis rests on the count without valid bits.** The RTL lane reports that its simulation reproduces the
+- **The diagnosis of r8-r12 and boot 5 rests on the count without valid bits** (wm0's reading has three valid bits, and its attribution rests on R-49's path being closed). The RTL lane reports that its simulation reproduces the
   sparse face: cnt_q = 1 with no valid head before the escape's first write, then the walk's fourth write never
   acknowledged.
 
@@ -563,6 +589,47 @@ launcher b27afefc and module ce3a542d in every boot; b0-stats runs `capstone-exe
 - **The next question,** for the monitor and RTL lanes: what the first classic domain call sets up that the virtual
   entry path relies on.
 
+## S-27 — silicon only (vp2 bf3db3175): in -O0 virtual programs of four ports the register a5 (x15) holds the integer 2 at the faulting instruction where QEMU, on the same images, holds the intended value; the allocators' `sd a4,0x10(a5)` faults 6 at 0x12 and SQLite's sites fault 24 with tval 2 `OPEN — UNGATED boots (PREFLIGHT=0; image identity by sha256 is the substitute); read 2026-10-18 in Tier 3 (pym0, pym1, fso, pb12, sq0b-d) and a four-arm probe; CANDIDATE (the RTL lane, from bf3db3175's source and its simulation arm va-rdclob fb3f87b6c): every RESUME of a virtual context writes the literal 2 into the context's x(rd), rd being the trusted caller's CSRUNV destination, and the module's resuming CSRUNV has rd = x15; a settling batch is pre-registered against it (lane vp2-tier12 098a03999c14); a module workaround (the resume CSRUNV with rd = x0) is being written by the compiler lane`
+
+Siblings: S-25 and R-57 (excluded below), S-23 (the same Tier 3 boots), Tier 2 boot 4 (cause 24 with a destination cursor
+of 2 in every context, from the Q-26 wait rewrite; vp2 kit README), R-29 (its fix 776d9d859 is in bf3db3175).
+
+**Readings** (lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/`; module 3005ed52,
+monitor 007d81d; every fault line's image sha256 equals the QEMU twin's staged file):
+- **On silicon a DYN fault's tval is rs1's value, not an address** (`cva6.sv:1522`, `ex_stage.sv:1176-1185`). So
+  "address 0x2" on a cause-24 line reads "the base register holds 2".
+- **The allocators** (pymalloc's pym_raw_malloc, ffmpeg's av_malloc, memcached's mcp_meta_alloc; pym0, pym1, fso, pb12
+  and probes ppA-D): every distinct (image, pc) lands on `sd a4, 0x10(a5)` and faults `cause=6 address=0x12`, so
+  a5 = 2.
+  - The `sd` is the first store into the fresh metadata region, i.e. an instruction replayed after a page-fault
+    resume.
+  - The global and `used` read right on silicon (the probe). A fence between the spill and the reload does not
+    prevent it.
+- **SQLite** (sq0b, cases 06-11; sq0c and sq0d similar):
+  - case 10 faults at `stc a2, 0x0(a5)` (rs1 = x15) with tval 2, ONE instruction after `shrink a5, a6, a7` wrote a5;
+  - case 06 faults at `ldc a5, 0x0(a5)` with tval 2, after an `stc` through the same a5 retired in the same
+    straight-line block;
+  - so x15 changed to 2 with no instruction writing it, and the neighbouring stack pages were already written: an
+    asynchronous event, not a first touch;
+  - other cases fault 28 and 29 with a5 among a `shrink`'s operands, consistent but not counted.
+- **QEMU on the same images** reaches none of these: no cause-6 fault, no 2 (SQLite 06 aborts on the case's own
+  assertion after its use-after-free; 07-11 complete).
+- **In-situ controls:** in the same calls, other capability spills and reloads work (the `link` slot). pb9 (stock
+  ffmpeg pool) matches its prediction with no cause-6 fault.
+
+**Excluded:**
+- **R-57.** Its counted-invalid entry stops the queue from draining. Here the core runs every later program of the
+  boot, thousands of stores.
+- **The lost-spill reading,** retracted: a claim-auditor showed that in the probe arms the slot's last contents were the
+  probe's locals (&used and &metadata), not 2. Lane b602b9c7d142.
+
+**The candidate fits every reading so far:**
+- the value is a hard-coded literal, so it is always exactly 2;
+- the register is the module's resume rd, so always a5;
+- it needs a resume: a page fault at the allocators' first-touch `sd`, and an asynchronous escape in SQLite;
+- the reference model writes the kind only on an escape, so QEMU never shows it.
+
+The RTL fix the lane names is to exempt modes 3 and 4 in finish(), or to give the resume request a zero set_ra.
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**

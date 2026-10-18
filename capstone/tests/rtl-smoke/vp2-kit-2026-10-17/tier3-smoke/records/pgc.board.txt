@@ -1,0 +1,23 @@
+# Tier 3 board reading, arm pgc: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2_bf3db3175 cells 5 tally {"CAUGHT": 5}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_CVE-2026-6477_pqfn_unbounded_result_copy image 32f800c0a5e8a846 CAUGHT cause 28 at memcpy+156 reached True completed False attribution "function"
+01_CVE-2026-19385_pgdump_transform_list_overread image 08287c363fd0a44c CAUGHT cause 28 at pgclient_case_run+352 reached True completed False attribution "function"
+02_CVE-2026-16241_ecpg_bytea_negative_length image 8cb785772ca139d2 CAUGHT cause 28 at ecpg_hex_decode+700 reached True completed False attribution "function"
+03_5d61bdd114_saslprep_truncated_utf8_overread image d724e24bb0978fb3 CAUGHT cause 28 at pg_utf8_islegal+376 reached True completed False attribution "function"
+04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer image 0d645b005d28510d CAUGHT cause 28 at pgclient_consume_content+228 reached True completed False attribution "function"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_CVE-2026-6477_pqfn_unbounded_result_copy: verdict CAUGHT cause 28 pc memcpy+156
+  SAME 01_CVE-2026-19385_pgdump_transform_list_overread: verdict CAUGHT cause 28 pc pgclient_case_run+352
+  SAME 02_CVE-2026-16241_ecpg_bytea_negative_length: verdict CAUGHT cause 28 pc ecpg_hex_decode+700
+  SAME 03_5d61bdd114_saslprep_truncated_utf8_overread: verdict CAUGHT cause 28 pc pg_utf8_islegal+376
+  SAME 04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer: verdict CAUGHT cause 28 pc pgclient_consume_content+228
+  5 of 5 cells the same
+## the boot
+  T3PG pgc BEGIN 15:41:59
+  T3PG pgc END rc=0 15:50:38 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 5}
+  BOARD_RUN_START 15:41:59 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 20 files, stage 3192428 bytes
+  firmware 2c495d3f46d0bd00 19565064 B
+  DRIVER rc=0 15:50:38
+  BOARD_RUN_DONE 15:50:38

@@ -1,0 +1,79 @@
+# Tier 3 board reading, arm pb12: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-memcached-stock platform board:caplifive_vp2_bf3db3175 cells 9 tally {"NO-READING:control-failed": 9}
+# controls [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+00_7af02b0c87_rbuf_copied_after_cache_free image 85f0d8e8c662f3ec NO-READING:control-failed cause None at None reached False completed False attribution null
+01_0ad4de66ae_io_walk_reads_freed_link image 55dad5ff346f52a0 NO-READING:control-failed cause None at None reached False completed False attribution null
+02_59bd02ce29_tail_repair_frees_referenced_item image cb27adc59a4c5c69 NO-READING:control-failed cause None at None reached False completed False attribution null
+03_a8c4a82787_refcount_overflow_frees_linked_item image 9863d6c5101d1529 NO-READING:control-failed cause None at None reached False completed False attribution null
+04_152ddb68f7_unlocked_refcount_drift image 2b1676c6e8eb7f9a NO-READING:control-failed cause None at None reached False completed False attribution null
+05_2d61f18_item_data_one_past image e35ef3180e8fc043 NO-READING:control-failed cause None at None reached False completed False attribution null
+06_78eb770_suffix_write_no_space image bf756b13f2adbad6 NO-READING:control-failed cause None at None reached False completed False attribution null
+07_ecdb011_unterminated_key_read image d8b054148f51a48c NO-READING:control-failed cause None at None reached False completed False attribution null
+08_e8364b5_ascii_all_spaces_scan_past_rbuf image 4ee0176bda1164ee NO-READING:control-failed cause None at None reached False completed False attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  DIFF 00_7af02b0c87_rbuf_copied_after_cache_free: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]] board [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+  DIFF 01_0ad4de66ae_io_walk_reads_freed_link: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]] board [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+  DIFF 02_59bd02ce29_tail_repair_frees_referenced_item: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]] board [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+  DIFF 03_a8c4a82787_refcount_overflow_frees_linked_item: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]] board [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+  DIFF 04_152ddb68f7_unlocked_refcount_drift: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]] board [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+  DIFF 05_2d61f18_item_data_one_past: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]] board [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+  DIFF 06_78eb770_suffix_write_no_space: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]] board [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+  DIFF 07_ecdb011_unterminated_key_read: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+      controls: qemu [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]] board [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+  DIFF 08_e8364b5_ascii_all_spaces_scan_past_rbuf: verdict NO-READING cause None pc None
+      verdict: qemu CAUGHT board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      cause: qemu 28 board None
+      pc_off: qemu mc_case_body+396 board None
+      attribution: qemu "function" board null
+      controls: qemu [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]] board [["bounds-malloc", "fault"], ["chunk-free-90", "none"], ["uaf-malloc", "fault"]]
+  0 of 9 cells the same
+## the boot
+  T3SEQ pb12 BEGIN 15:12:16 memcached/allocator-repros virtual-malloc (4 extra args)
+  T3SEQ pb12 END 15:22:06 rc=75 :: virtual boot: completed :: --- vp2-malloc (virtual-memcached-stock): {'NO-READING:control-failed': 9}
+  T3SEQ pb12 PAYLOAD stage 3874724 B, 1518826 B gzip; firmware 19565064 B
+  BOARD_RUN_START 15:12:16 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 20 files, stage 3874724 bytes
+  firmware b1b3daaaa0bc70d0 19565064 B
+  DRIVER rc=0 15:22:06
+  BOARD_RUN_DONE 15:22:06

@@ -1,0 +1,43 @@
+# Tier 3 board reading, arm sq0c: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-sqlite-memsys5 platform board:caplifive_vp2_bf3db3175 cells 6 tally {"MISSED": 2, "NO-READING:unattributed": 4}
+# controls [["bounds-mem5", "complete"], ["uaf-mem5", "complete"]]
+12_fb8ca7de0c_fts5_inplace_stale_leaf image 039327cf1d32e98e NO-READING:unattributed cause 29 at sqlite3RunParser+1604 reached True completed False attribution null
+13_fix-2026-06-08_fts5_near_stale_phrase image ae9ae0c0ae0ff7e8 MISSED cause None at None reached True completed True attribution null
+14_25e3073741_fts5_structure_release_refcount image 23241b9edeaa08d3 NO-READING:unattributed cause 24 at memcpy+200 reached True completed False attribution null
+15_2639ddc474_fts5_vocab_eof_stale_poslist image 789d5707d4bdf9b5 NO-READING:unattributed cause 24 at memcpy+200 reached True completed False attribution null
+16_unfixed_json_each_root_stale_key image 9e9f43ca5a824c35 MISSED cause None at None reached True completed True attribution null
+17_28001204f4_json_each_static_stale_key image b7db0e236f2bad1b NO-READING:unattributed cause 28 at sqlite3LockAndPrepare+96 reached True completed False attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  DIFF 12_fb8ca7de0c_fts5_inplace_stale_leaf: verdict NO-READING cause 29 pc sqlite3RunParser+1604
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board unattributed
+      completed: qemu True board False
+      cause: qemu None board 29
+      pc_off: qemu None board sqlite3RunParser+1604
+  SAME 13_fix-2026-06-08_fts5_near_stale_phrase: verdict MISSED cause None pc None
+  DIFF 14_25e3073741_fts5_structure_release_refcount: verdict NO-READING cause 24 pc memcpy+200
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board unattributed
+      completed: qemu True board False
+      cause: qemu None board 24
+      pc_off: qemu None board memcpy+200
+  DIFF 15_2639ddc474_fts5_vocab_eof_stale_poslist: verdict NO-READING cause 24 pc memcpy+200
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board unattributed
+      completed: qemu True board False
+      cause: qemu None board 24
+      pc_off: qemu None board memcpy+200
+  SAME 16_unfixed_json_each_root_stale_key: verdict MISSED cause None pc None
+  DIFF 17_28001204f4_json_each_static_stale_key: verdict NO-READING cause 28 pc sqlite3LockAndPrepare+96
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board unattributed
+      completed: qemu True board False
+      cause: qemu None board 28
+      pc_off: qemu None board sqlite3LockAndPrepare+96
+  2 of 6 cells the same
+## the boot
+  BOARD_RUN_START 17:16:50 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 18 files, stage 24789358 bytes
+  firmware 42f9c3326336a07a 23759368 B
+  DRIVER rc=0 17:29:33
+  BOARD_RUN_DONE 17:29:33

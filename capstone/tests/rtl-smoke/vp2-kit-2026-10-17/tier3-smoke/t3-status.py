@@ -8,7 +8,8 @@ from pathlib import Path
 
 R = Path(__file__).with_name("records")
 ORDER = ["mpt", "mph", "fph", "fpt", "fca", "fcs", "wph", "wpt", "fso", "pb12", "pb13", "pb9", "pb10", "pgc", "pgm0",
-         "pgm1", "wm0", "wm1", "pym0", "pym1", "sq0", "sq1"]
+         "pgm1", "wm0", "wm1", "pym0", "pym1", "sq0", "sq1", "sq1a", "sq0a", "sq0b", "sq0c", "sq0d", "sq0e", "sq0f",
+         "ppA", "ppB", "ppC", "ppD"]
 
 
 def head(p, key):

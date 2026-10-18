@@ -516,3 +516,305 @@ and 98 cells on silicon, every cell equal to the QEMU prediction on the same ima
   run). It matched itself and stopped before booting anything; this is CLAUDE.md's pgrep rule. No board time was lost:
   the appvm queue (pym0, pym1, sq1a) took the board next. The re-queued waiter checks only patterns its own command
   line cannot contain.
+
+### Arm pym0, result (2026-10-18 14:25-14:36): a silicon-only DIFF. Every pymalloc program faults in its first raw allocation with cause 6 at address 0x12; QEMU completes the same bytes
+
+`records/pym0.board.txt`. The board's collected images equalled the prediction's 21. The boot completed all 21 steps,
+and compare-pilot.py reads 0 of 20 cells the same.
+- **Every program faults the same way, the uaf-block control included:** `cause=6` (store address misaligned) at code
+  offset 0x159c8, address 0x12, checkpoint `last=0x39`. So the control reads "none" and every cell is control-failed.
+- **The site** (defect-00, `llvm-objdump` with the frozen tools): `pym_raw_malloc+792`, `sd a4, 0x10(a5)`. That is
+  backing.c `b->size = n`, where `b = metadata + used` is built from the `metadata` capability global plus the `used`
+  integer, stored to a stack slot by `stc`, and reloaded by `ldc` just before.
+  - So on silicon `b`'s cursor is 2 at the first `pym_raw_malloc` call. That call is main.c's scratch calloc, right
+    after `pym_backing_init` stored `metadata = aligned_alloc(16384, 16 MiB)`.
+- **Not a mechanism:** a cursor of 2 is also boot 4's signature (a destination cursor of 2), which was the Q-26 wait
+  rewrite. This module does not carry that rewrite, and a shape is not a cause. The diagnosis is handed to the compiler
+  lane, which owns the port. pym1, the same backing code under the Sublet arm, is the next data point.
+
+### Arm pym1, result (2026-10-18 14:36-14:47): the same silicon-only fault under the Sublet arm, 0 of 20
+
+`records/pym1.board.txt`. Every program faults `cause=6 address=0x12 last=0x39` at code offset 0x15e5c of its own image,
+pym_raw_malloc's `b->size` store, as in pym0. So the fault does not depend on the arm.
+- The launcher's region grants match QEMU's through slot 12, the last before the fault: the same order, sizes,
+  registers and permissions, including the 16 MiB metadata request and the 64 MiB arena.
+- The compiler lane has a lead. aligned_alloc(16384, …) promises only 16 KiB alignment, while Q-15's granule for
+  16 MiB and 64 MiB is 32 KiB and 128 KiB. The earlier silicon run used level0, which over-aligned those regions. The
+  lane is building a probe that prints both regions' bases, the reloaded `metadata` and `b`, and a 4 KiB control,
+  predicted on QEMU first. Not a mechanism yet: the lead does not predict cause 6 at a cursor of 2.
+
+**wm0's wedge, attributed (the RTL lane, from bf3db3175's source, 2026-10-18): a third face of R-57.**
+- 225 has dom_switch_busy set, so a switcher walk is in progress. 228 is index 28, which is x3, early in the register
+  block. 226/227 show the walk's 16-byte capability WRITE outstanding: a SAVE step.
+- 194 shows the store unit in WAIT_STORE_READY. 221 shows valid 1101 with no data request: the entry at the read
+  pointer is the invalid one.
+- So the ghost sits at the queue's HEAD, the queue never drains, and the switcher's next write is correctly refused
+  forever. That is R-49's fix doing its job on top of R-57's stuck queue.
+- The bit decode was checked here against the driver's own aperture labels. The fix on virtual-profile-2-c 2114e11bd
+  covers it.
+- **Not closed:** which store produced the ghost. The discriminator is the compiler lane's: does wmem's jumbo path make
+  a capability store a fresh page's first access?
+  - If yes, the wmem software rule on this bitstream is a pre-touch in the jumbo allocator.
+  - If no, there is a second producer, with S-24's shape (a present, writable page with D clear) as the next arm.
+
+### Arm sq1, subset a, result (2026-10-18 14:47-15:00): Q-15's refusal confirmed on silicon, 6 of 6 cells the same
+
+`records/sq1a.board.txt`: sqlite/engine-repros vp2-nested-pools, cases 00-05 with both controls, compared against the
+prediction cut to those cases (`subset-bundle.py`).
+- **Both memsys5 controls fault with cause 29 at `capstone_cap_derive+156`,** the Sublet heap's CDERIVE. So every cell
+  is control-failed, as predicted, and as the DYN unit's vctx-gated round-trip refusal says it must.
+- **The fault line's address differs and is not scored:** silicon reports a non-zero address (the child's cursor) where
+  QEMU reports 0. compare-pilot compares cause and symbol+offset, which are equal.
+- **The other five sq1 subsets are not booted.** Every boot runs these two controls first on the same image set, and
+  their refusal is now read on silicon, so each subset could only repeat control-failed. That is five boots of no
+  information. sq1's record is therefore 6 of 33 cells measured, with the cause of all 33 confirmed. The arm becomes
+  measurable once the Sublet memsys5 heap derives representable children (Q-15's consequence, the compiler lane's
+  work).
+
+### Arm fso, result (2026-10-18 15:01-15:12): pymalloc's silicon-only fault, in a second port
+
+`records/fso.board.txt`. ffmpeg/subobject vp2-malloc reads NO-READING:control-failed 9, against a predicted MISSED 9.
+Both generic controls pass in the same boot (28 and 25).
+- **Every case's FIXED run faults:** `cause=6 address=0x12` at `sd a4, 0x10(a5)` after the same `stc`/`ldc`
+  spill-reload. That is metadata-allocator.c's `b = (struct block *)(arena + used); b->size = size`.
+- **The same idiom as pymalloc's backing.c:** a static capability global set once by an init function from a large
+  allocation, an adjacent static `size_t used`, and `b = global + used` reading cursor 2 at the first allocation.
+- **A lead, not a mechanism (the compiler lane's probe tests it):** the init's capability store may be a fresh .bss
+  page's first touch, which is S-25's trigger. A pre-touch arm will tell. The RTL lane is asked whether R-57 also
+  predicts the reloaded value 2.
+
+### Arm pb12, result (2026-10-18 15:12-15:22): the same silicon-only fault, in a third port
+
+`records/pb12.board.txt`. memcached/allocator, stock (vp2-malloc), reads control-failed 9 against a predicted CAUGHT 1,
+MISSED 8. The board has 19 faults of `cause=6 address=0x12` (the chunk-free-90 control and every case) and QEMU none.
+Both generic controls pass. That is three ports: pymalloc, ffmpeg's pool/metadata allocator and memcached's
+allocator.
+- **The RTL lane's reading, from bf3db3175's source: R-57 is excluded.** R-57's ghost stops the commit queue from
+  ever draining, so the very next store of any kind would stall forever. These programs run on and fault at the
+  next instruction.
+  - CORRECTED (2026-10-18, the RTL lane's retraction): this section first gave two more legs, that "a lost STC
+    leaves zero on fresh .bss" and that a ghost never writes. The first is VOID: it assumed the reloaded granule was
+    the .bss global, but the reload is of a STACK spill slot (below). The exclusion rests on the one mechanical leg
+    above.
+- **The directed simulation (the RTL lane):** drop only the spill `stc` from the ports' exact sequence, with the
+  stack slot seeded with 2. The reload then reads a non-capability, and `sd n, 0x10(b)` faults cause 6 at address
+  0x12, value for value the ports' reading.
+  - So the defect is a capability spill store that did not land. The reload returns the slot's previous contents,
+    and a 2 in live stack data needs no explanation.
+  - With the store present, the sequence is correct in simulation, with and without the intervening load.
+  - The RTL lane's next hypothesis, from source: a committed store dropped by a flush (`store_unit.sv:283` gates the
+    push on `!flush_i`, and `:351` returns the unit to IDLE on a flush). In a virtual context flushes are frequent,
+    and nothing wedges.
+- **The compiler lane's probe** reads the granule back raw (both halves with plain `ld`, plus the tag) before and after
+  the init, with and without a plain pre-touch. Pre-registered go/no-go: "the pre-touch changes the reading".
+
+### Arm pb9, result (2026-10-18 15:22-15:30): 4 of 4 cells the same, with no cause-6 fault
+
+`records/pb9.board.txt`. ffmpeg/pool, stock (vp2-malloc): MISSED 4 on silicon, as predicted, with both generic controls
+faulting. Its prebuilt CMake build of the pool sources reaches no cause-6 fault, so the silicon-only fault is not
+common to everything built from these sources. It is the contrast case for the probe.
+- Checked with `llvm-nm`: pb9's images define `av_malloc` but not `ff2_memory_init`. The stock build's allocator
+  does not use the static arena, whereas fso's images define both. So the fault tracks the static-arena idiom:
+  consistent with it, and not yet a mechanism.
+
+### Arm pb10, result (2026-10-18 15:30-15:42): a kernel panic on a load refused under a covering region, S-23's data face (the RTL lane's attribution)
+
+`records/pb10.board.txt`. ffmpeg/pool, Sublet (vp2-nested-pools).
+- **What ran:** case 00 read CAUGHT, as predicted. Case 01's FIXED run returned 0. In its BUGGY run the monitor printed
+  its region dump (29 regions), then `MTVL:BC2C0825 CPMX:00000002`. Linux took `Oops - load access fault` at
+  `mod_node_page_state+0x40` (cause 5, badaddr = mtval = 0xbc2c0825) and panicked. Cases 02 and 03 did not run.
+- **The covering region:** decoding the dump, region 21 `[0xac100000, 0xc0000000)`, RWX, is loaded in CPMP slot 7 and
+  covers 0xbc2c0825. So a kernel data load was refused under a covering executable entry.
+- **The attribution (the RTL lane, from bf3db3175):** S-23's data face.
+  - The fetch check (`pmp_data_if.sv:239-246`) and the data check (`:300-310`) are one comparator over one decoded
+    array. Both go live when the escape returns the privilege to the caller (`csr_regfile.sv:2124-2127`), while the
+    RESTORE walk is still writing the CPMP ids.
+  - The fetch side is guarded by kill_s1 and flush_if for the whole busy window. The LSU keeps a dom-switch exemption
+    from that flush, R-50's subject, which 429c60b32 narrowed but did not remove. So the data side can show this where
+    the fetch side rarely does.
+  - The monitor's fetch-retry (VP2_FETCH_RETRY) cannot cover a data access.
+- **Caveat:** CPMX is the monitor's own print from swap_cpmp and cannot name the entry the comparator used. Region 21
+  covering mtval is this lane's decode of the dump.
+- **The post-panic apertures are not a reading:** a commit count of 7 in a 4-deep queue, and 0xff fields.
+- **A candidate workaround, not adopted:** a data-side retry in the monitor. The RTL lane's conditions: S or U origin
+  only; a loaded entry covering mtval for the access type; the same bounded no-progress guard; inject as today when
+  nothing covers it; never for AMOs or LR/SC.
+  - Its prediction: if the window is the mechanism, a data retry succeeds on its first attempt.
+
+### The pymalloc probe, pre-registered (2026-10-18): three arms, ppA, ppB and ppC, each one boot, before the sqlite subsets
+
+These are the compiler lane's images, verified against the hashes it sent. Case 00 is the probe in each hosted build;
+cases 01-19 are the production images, as a built-in control. All three run `pym_backing_init` and
+`pym_allocator_init` exactly once, in production order, and print nothing until every value is captured. Then they
+print, and fall through into the real path. So the original cause-6 fault, if it recurs, is the control that the
+probe did not perturb the bug.
+- **ppA (faithful):** the global's granule as two plain loads, `used` as a plain load, and the capability via `lcc`
+  (type, base, end, cursor). Read right after the init's store (v1) and after allocator_init (v2).
+- **ppB (pre-touch):** ppA, plus one plain byte store into the globals' page before the init.
+- **ppC (pre-read):** ppA, plus the granule and `used` read with plain loads BEFORE the init: the previous contents.
+- **The prediction:** the QEMU twins on qkit7 (`records/pp{A,B,C}.prediction.txt`, whose probe lines are copied in).
+  Every value is right: raw lo equals the 16 MiB region, its end minus base is 16 MiB, `used` is 0, ok v1=1 v2=1, the
+  before-init values are zeros, the regions are granule-aligned, and MISSED 20.
+- **How the silicon reading names the class** (the compiler lane's table, with the RTL lane's go/no-go):
+  - ppC's before-init lo, hi or `used` non-zero, especially 2: stale contents before the init (the stale-refill class).
+  - raw lo right but the capability's cursor wrong: the capability load or decode.
+  - raw lo right in v1 but wrong in v2: forwarded, then lost.
+  - `used` = 2: the other global is the corrupted one.
+  - ppB differing from ppA: the first-touch class. ppB the same as ppA: not first-touch.
+  - The regions not granule-aligned on silicon: the representability lead is live.
+  - All ok AND no fault in all three: the probe perturbed the trigger. That is a null result, not a pass.
+
+### Arms pgc, pgm0 and pgm1, results (2026-10-18 15:41-16:08): 15 of 15 cells the same, and a second matched pair on silicon
+
+`records/pg{c,m0,m1}.board.txt`.
+- **pgc** (postgres/c-repros, vp2-malloc): CAUGHT 5.
+- **pgm0** (postgres/mmgr, vp2-malloc): MISSED 5.
+- **pgm1** (vp2-pg-pools): CAUGHT 5. The same five memory-context cases are missed under malloc and caught under the
+  pools configuration, and each arm's own controls fire with the polarity it declares.
+
+### Probe arm D, pre-registered (2026-10-18): a fence after the capability spill
+
+`pym-probe-hosted-D` (the compiler lane's image, ebc820195bd37f93, verified). pym_raw_malloc is exactly production's plus
+one `fence rw, rw`, at 0x259ac between the spill `stc` and the reload `ldc`. The compiler lane checked this over the
+whole function. D carries ppA's readouts and falls through to the real path.
+- **The prediction:** its QEMU twin reads MISSED 20 with every probe value right (`records/ppD.prediction.txt`).
+- **The reading on silicon, if a lost spill store is the mechanism:** ppA faults at pym_raw_malloc and ppD does not. The
+  fence would then be a working software rule for -O0 corpus code on this bitstream.
+- **If ppD still faults:** the fence does not order the lost store, which is information for the RTL lane's next arm
+  (an escape or switcher flush).
+
+**A provenance fact for the frozen SDK (the compiler lane, 2026-10-18).** t3-freeze's runtime archive
+(libapplication-runtime.a d10e4e75f12f601a) was built from the v9 kit's tree at f6dfd19d9396. That tree's vm-abi.h makes
+virtual ABI 6 current, and every Tier 3 image carries the magic `CPONVVM6`. dev's vm-abi.h defines only ABIs 2, 3 and
+5, and of all remote refs only the compiler lane's branch carries ABI 6. So the campaign's runtime revision lives on that
+branch, and an SDK built from dev makes ABI-5 images, which the kit's launcher refuses (`virtual ABI: Exec format
+error`, exit 126).
+
+### ppA on silicon (2026-10-18 16:08-16:19): the global is right; the fault recurs in the real path
+
+The probe's readings on silicon:
+- `metadata`'s raw low word equals the 16 MiB region, and the capability has the right base and end with its cursor at
+  the base.
+- `used` is 0. ok v1=1, v2=1.
+- Both regions are granule-aligned (mod 32K = 0, mod 128K = 0), so the representability lead is dead on silicon too.
+- Then the original fault, `cause=6 address=0x12`, recurs at the same pc in the real path.
+
+So the init's store to the global landed, and the lost store is elsewhere. With the RTL lane's directed simulation,
+that is the stack spill.
+
+### The pymalloc probe, results (2026-10-18 16:08-16:51): the global is intact, the stack spill store is lost, and a fence after it does not help
+
+`records/pp{A,B,C,D}.board.txt`. The images equalled the predictions' 21 in every arm.
+- **ppA, ppB and ppC read identically.**
+  - The global's granule is right: the raw low word is the 16 MiB region; the capability's base, end and cursor are
+    right; `used` is 0; both regions are granule-aligned.
+  - ppC reads zeros before the init.
+  - Then the real path faults `cause=6 address=0x12` at pym_raw_malloc's `sd a4,0x10(a5)`, as in production.
+  - So the init's store landed, the plain pre-touch changes nothing, and the lost store is the stack spill, which the
+    RTL lane's directed simulation reproduces value for value.
+- **ppD, the same function plus one `fence rw, rw` between the spill `stc` and the reload `ldc`: still faults.** The
+  fault is at pc offset 0x159cc, production's plus 4, so the fence was in the executed code. All 21 programs fault the
+  same way.
+  - A fence drains every pending store before the reload, and the reload still reads the slot's old contents. So the
+    capability store never reaches memory, or lands elsewhere. A fence is NOT a software rule for it.
+- **Open, with the RTL and compiler lanes:** the RTL lane's escape and switcher-flush arms, and a fresh-stack-page
+  first-touch arm. -O0 frames spill to s0-relative slots, and a capability store as a fresh page's first access is
+  S-25's trigger, though R-57 as analysed cannot lose a store without a wedge. A software arm E, pre-touching the
+  stack, would split those.
+
+### RETRACTION (2026-10-18 17:20): "the capability spill store is lost; the reload returns the slot's previous contents" is refuted for the probe arms
+
+This README stated, in the pb12 section's correction and the probe results above (lane commits 896b1ccc6b2c and
+8852ebcaebdd), that the defect is a capability spill store that did not land, so the reload returns the stack slot's
+previous contents, and that "a 2 in live stack data needs no explanation". A claim-auditor refuted that for ppA-ppD:
+- **The slot's last contents are known.** In every probe image, `b`'s slot (pym_raw_malloc's `s0-0x70`, `DW_OP_fbreg
+  -112`) is [main_sp-0xc0, main_sp-0xb0), exactly the probe's locals `au`/`am`. pym_probe_addrs writes them with plain
+  `sd`, and nothing writes there again before the `stc`.
+  - Their values are printed on the board, e.g. ppA's `&used=0x3f8dae3d20`.
+  - A dropped `stc`, or a reload of the last contents, would put a5 = &used and fault at &used+0x10, which is
+    8-aligned. The board reads `address=0x12` in all four arms.
+- **So where the 2 comes from is NOT established.** The directed simulation seeded the slot with 2 to match the board,
+  so it shows only that a non-capability 2 in a5 gives this fault. It does not explain the probe arms.
+- **This holds if the faulting call is the first pym_raw_malloc, which nothing measures.** If a later call faults,
+  "first block" must come out instead.
+- **What stands:** the four ports' readings, the shared code sequence (the auditor disassembled every distinct
+  faulting image and pc: always `sd a4,0x10(a5)` after the same `stc`/`ldc` of `s0-0x70`), image identity with the QEMU
+  twins, the global being right at init, and ppD's fence not preventing it. "Never reaches memory" is withdrawn with
+  the mechanism.
+- **Also corrected:** "QEMU runs the same bytes clean" means no cause-6 fault and no address 0x12. The twins do fault,
+  with the arms' own detections and controls.
+- **The open hypotheses (the auditor's):**
+  - (a) the reload returns a version of the line older than its last plain stores;
+  - (b) a value not from this slot at all;
+  - (c) b is already 2 at the `stc`;
+  - (d) a later call faults, not the first.
+- **The settling arms, one batched boot (asked of the compiler lane):**
+  - a marker after `pym_raw_calloc`, pinning which call faults;
+  - a sentinel plain `sd` into `s0-0x70` right before `b = …`: sentinel+0x10 means a dropped store, still 0x12 means
+    not the slot;
+  - a readout of the slot halves, the global and `used` with plain loads when b's cursor is not metadata + used;
+  - ppA as the control.
+  - The RTL lane adds a 64-byte dump around the slot, to catch a store landing at the wrong offset.
+- **What would have caught it:** the frame-layout check the auditor did. The probe's own locals overlap the spill slot,
+  so the "previous contents" the mechanism predicts were on the board all along.
+
+**All Tier 3 boots are UNGATED by the driver's C-gates.** The recipe runs the baked-rung driver with PREFLIGHT=0, as
+every vp2 Tier 1/2 boot does, and the driver prints "Any verdict from this boot is UNGATED -- say so when reporting
+it". The substitute checks are the campaign's own:
+- every image equal by sha256 to its prediction's (register-prediction.sh, EXPECT_IMAGES);
+- every fault line's sha256 equal to a staged image's;
+- the firmware cap;
+- the recipe's monitor and driver pins.
+
+### Arm sq0 subsets a and b, results (2026-10-18 16:51-17:16): a is 6 of 6; b is 1 of 6, a fourth port with silicon-only faults including the value 2
+
+- **sq0a** (cases 00-05): 6 of 6 cells the same as predicted.
+- **sq0b** (cases 06-11): 1 of 6. QEMU completes all six on the same bytes. On silicon, all at -O0 SQLite code:
+  - 06 and 10 fault `cause=24 address=0x2`, an untagged capability with cursor 2 dereferenced, at idxLargestIndex+232
+    and sqlite3AuthCheck+112;
+  - 07 and 08 fault 28 (bounds) at sqlite3VdbeMakeReady+1776 and sqlite3VdbeAddOp3+504;
+  - 09 faults 29 at freeSpace+48.
+- The value 2 as an untagged capability is the allocators' value and boot 4's (cause 24 at contract.dom's memset, a
+  destination cursor of 2). This is an observation, not a mechanism: the open question is the same one as the
+  allocators', recorded above.
+
+### The settling batch, pre-registered (2026-10-18, before its boots): ppA2, ppE, ppE1, ppE2, ppE3, ppE4, scored against a named candidate
+
+**The candidate** (the RTL lane, from bf3db3175's source and its simulation arm va-rdclob, fb3f87b6c; not yet shown on
+silicon):
+- Every RESUME of a virtual context writes the literal integer 2 into the CONTEXT's x(rd), where rd is the trusted
+  caller's CSRUNV destination register.
+- `commit_stage.sv:610-624` builds one request for entry and resumes, with `ra_data` the bad-frame refusal's kind 2.
+  The switcher's finish() writes it for modes 3 and 4, which it does not exempt.
+- The module's resuming call site (capstone_vm.c:1600, `.text+0x40c8` in 3005ed52) has rd = x15 = a5, by the compiler
+  lane's decode.
+- **Supporting, from this lane's auditor:** every 2-fault read directly has a5 = 2.
+  - The allocators' `sd a4,0x10(a5)` is the first store into the fresh metadata region. It page-faults, and is replayed
+    after the module resumes the context.
+  - SQLite cases 06 and 10: a5 goes from a valid capability to 2 with no instruction writing it. There the resume is
+    not at the fault point, which suggests an asynchronous escape. N=1 each.
+  - On silicon, a cause-24 fault's tval is rs1's value (`ex_stage.sv:1176-1185`, `cva6.sv:1522`), so "address 0x2"
+    reads "a5 = 2".
+
+**Predictions under the candidate, written before the boots:**
+- **ppA2** (ppA re-run, the control): as ppA. The global is right, then the fault recurs at 0x12.
+- **ppE** (stack pre-touch): STILL faults at 0x12. The fresh page is the metadata mapping, not the stack.
+- **ppE1** (a marker after the first pym_raw_calloc): no marker. The first call faults.
+- **ppE2** (a sentinel in b's slot): STILL faults at 0x12, not sentinel+0x10.
+- **ppE3** (a plain-load compare of b): NO mismatch, and the fault anyway. The slot holds the right b; a5 is overwritten
+  after the reload, by the resume.
+- **ppE4** (metadata a LINEAR grant): the first fault at 0x12, NOT 0x11. The 2 is the resume's literal, not a type
+  field. Scored on the FIRST fault only: E4 breaks linearity by construction, so its QEMU twin faults later too.
+
+**A reading that refutes it:** E or E2 not faulting, E3 printing a mismatch, E4 reading 0x11, or the marker printing.
+
+### Arm sq0 subsets c and d, results (2026-10-18 17:16-17:42): 2 of 6 and 1 of 6, the same register-2 shape
+
+- **sq0c:** `cause=24 address=0x2` twice and `cause=29 address=0x2` once.
+- **sq0d:** cause 24 and 29 at 0x2, twice each, and one cause 13 at an address made of ASCII bytes (a string read as a
+  pointer).
+- The candidate's source citation was checked here at bf3db3175:
+  - `commit_stage.sv` builds the CSRUNV request with `set_ra = rd` and `ra_data` the literal 2, with `runv_mode` 3 or 4
+    on a resume;
+  - `capstone_dom_switcher.anvil:584` writes it whenever `set_ra != 0`, unless the request is a good mode-1 entry.
+- S-27 records all this in ISSUES.
