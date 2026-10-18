@@ -1060,6 +1060,29 @@ UNGATED (PREFLIGHT=0). Dry run: `dryrun-fence-arm.txt`.
 - **fso-fix6's partial bundle is not filed in the corpus.** Its record keeps the steps it read, marked as a budget
   void. Dry run: `dryrun-fix6b-seq.txt`.
 
+### fso-fix6, result (2026-10-18 20:12-20:45): 6 of 6 cells read as predicted before the batch budget cut the boot; a budget void for the other 3
+
+`records/fso-fix6.board.txt`. As the amendment above said, the batch rung ran out of its 1500 s wait.
+- **The six cases that ran** (00-05, buggy and fixed) read MISSED, as predicted. On 3005ed52 the same arm read 0 of 9,
+  every cell control-failed by S-27's 0x12 fault.
+- **The controls fire as positive controls should:** bounds-malloc faults 28 and uaf-malloc faults 25.
+  - Those two are the boot's only fault lines. There is no 0x12 fault.
+- **Cases 06-08 never ran.** They score NO-READING:infra, a budget void and not a module reading. The re-run on
+  bkit7-fix6t (fso-fix6b) reads them.
+- **compare-pilot.py** crashed on a cell with no board image. It now reports such a cell as NOT RUN and counts it
+  against the total. The record was rewritten with the fixed scorer.
+- **The partial bundle is not filed in the corpus.**
+- **The sequence stopped after fso**, so pb12-fix6 and pb10-fix6 did not run. Both are in the fix6b re-run.
+
+### pym1-fix6, result (2026-10-18 20:45-20:58): CAUGHT 20, 20 of 20 cells as predicted (0 of 20 on 3005ed52)
+
+`records/pym1-fix6.board.txt`. The images are pym1's list, gate-checked, on kit bkit7-fix6 (module d71f207a3af5546b).
+- **The cells:** every case reads CAUGHT, and control uaf-block faults as predicted. That makes 21 fault lines, the
+  detections themselves. Nothing faults at 0x12.
+- **On 3005ed52** the same images read 0 of 20, every step control-failed by S-27's 0x12 fault.
+- **Timing:** the boot took 13 minutes, because a caught program ends at its detection.
+- **The bundle:** `cpython/pymalloc-repros/results/2026-10-18-vp2-rdx0/vp2-nested-pools`. UNGATED (PREFLIGHT=0).
+
 ### postgres/sql-repros vp2-malloc on the workaround module, pre-registered (2026-10-18, before its boot): sql0-fix6, last in the queue
 
 **The arm** (`tier3-sql-arm.sh`, after the fix6b sequence):
