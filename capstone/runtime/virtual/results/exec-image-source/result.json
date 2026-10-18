@@ -1,0 +1,149 @@
+{
+  "schema": 1,
+  "status": "PASS",
+  "checks": {
+    "completed": true,
+    "exec_in_place": true,
+    "exec_refused_returns_enoexec": true,
+    "exec_native_returns_enosys": true,
+    "running_image_not_writable": true,
+    "denial_check_rejects_other_errors": true,
+    "holder_unaffected": true,
+    "writable_after_exit": true,
+    "open_writer_refused": true,
+    "runs_after_writer_closed": true,
+    "ext4_mounted": true,
+    "ext4_running_image_not_writable": true,
+    "ext4_hard_link_writer_refused": true,
+    "ext4_holder_unaffected": true,
+    "ext4_link_writable_after_exit": true,
+    "mapped_writer_refused": true,
+    "runs_after_mapping_gone": true,
+    "image_twice_busy": true,
+    "text_from_other_file_refused": true,
+    "memfd_unsealed_refused": true,
+    "memfd_write_sealed_only_refused": true,
+    "memfd_sealed_runs": true,
+    "other_filesystem_runs_from_copy": true,
+    "ninep_runs_from_copy": true,
+    "cleanup": true,
+    "inputs_unchanged": true
+  },
+  "lines": {
+    "EXEC": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3fac300000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3fac100000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3fac3d0000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3fac280000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3fac3b0000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3fac3cc000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3fac3c8000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3fac3c0000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3fac3a4000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_PARENT pid=93 CAPSTONE_VM_ADD_OK slot=0 base=0x3f8a700000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3f8a500000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3f8a7b0000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3f8a680000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3f8a790000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3f8a7ac000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3f8a7a8000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3f8a7a0000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3f8a784000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_CHILD pid=93 "
+    },
+    "REFUSED": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3fa8f00000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3fa8d00000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3fa8fcc000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3fa8e80000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3fa8fb0000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3fa8fd0000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3fa8fc8000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3fa8fc0000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3fa8fa4000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_REFUSED rc=-1 errno=8 pid=100 "
+    },
+    "REFUSED_NATIVE": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3f89f80000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3f89e00000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3f8a018000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3f89f00000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3f89f60000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3f8a014000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3f8a010000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3f8a008000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3f89f74000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_REFUSED rc=-1 errno=38 pid=105 "
+    },
+    "WRITE_WHILE_RUNNING": {
+      "rc": null,
+      "text": "denied /mnt/vm/gate.sh: line 18: can't create /tmp/e.dom: Text file busy "
+    },
+    "CONTROL_WRITE": {
+      "rc": null,
+      "text": "denied sh: write error: Input/output error "
+    },
+    "HOLD": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3fb6080000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3fb5f00000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3fb6168000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3fb6000000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3fb6150000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3fb616c000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3fb6164000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3fb6148000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3fb613c000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_HOLDING EXEC_CONTRACT_HELD "
+    },
+    "WRITE_AFTER_EXIT": {
+      "rc": null,
+      "text": "allowed"
+    },
+    "OPEN_WRITER": {
+      "rc": "126",
+      "text": "capstone-vexec: image: Text file busy "
+    },
+    "AFTER_WRITER": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3fb7380000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3fb7200000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3fb7474000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3fb7300000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3fb7460000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3fb7470000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3fb745c000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3fb7454000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3fb7448000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_CHILD pid=127 "
+    },
+    "EXT4_FS": {
+      "rc": null,
+      "text": "ext4"
+    },
+    "EXT4_WRITE": {
+      "rc": null,
+      "text": "denied /mnt/vm/gate.sh: line 44: can't create /mnt/e4/e.dom: Text file busy "
+    },
+    "EXT4_LINK_WRITE": {
+      "rc": null,
+      "text": "denied /mnt/vm/gate.sh: line 46: can't create /mnt/e4/link.dom: Text file busy "
+    },
+    "EXT4_HOLD": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3f8db00000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3f8d900000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3f8dbd0000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3f8da80000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3f8dbb0000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3f8dbcc000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3f8dbc8000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3f8dbc0000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3f8dba4000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_HOLDING EXEC_CONTRACT_HELD "
+    },
+    "EXT4_LINK_AFTER": {
+      "rc": null,
+      "text": "allowed"
+    },
+    "MAPPED_WRITER": {
+      "rc": "126",
+      "text": "capstone-vexec: image: Text file busy "
+    },
+    "AFTER_MAPPING": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3fa6600000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3fa6400000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3fa669c000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3fa6580000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3fa65e0000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3fa66a0000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3fa6698000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3fa6690000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3fa6684000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_CHILD pid=161 "
+    },
+    "IMAGE_TWICE": {
+      "rc": "0",
+      "text": "IMAGE_TWICE first=ok second=EBUSY held=ETXTBSY released=ok "
+    },
+    "TEXT_SOURCE": {
+      "rc": "0",
+      "text": "TEXT_SOURCE image=ok other=EACCES noimage=EACCES "
+    },
+    "COPY_FS": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3fa6b00000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3fa6900000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3fa6b84000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3fa6a80000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3fa6ae0000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3fa6b88000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3fa6b80000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3fa6af8000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3fa6ad4000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_CHILD pid=176 "
+    },
+    "NINEP_FDS": {
+      "rc": null,
+      "text": "memfd=1 share=0"
+    },
+    "NINEP": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3fbd380000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3fbd200000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3fbd474000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3fbd300000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3fbd460000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3fbd478000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3fbd470000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3fbd458000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3fbd44c000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_HOLDING EXEC_CONTRACT_HELD "
+    },
+    "MEMFD_open": {
+      "rc": "126",
+      "text": "capstone-vexec: image: Text file busy "
+    },
+    "MEMFD_write": {
+      "rc": "126",
+      "text": "capstone-vexec: image: Text file busy "
+    },
+    "MEMFD_sealed": {
+      "rc": "0",
+      "text": "CAPSTONE_VM_ADD_OK slot=0 base=0x3f92000000 bytes=524288 reg=3 perms=7 linear=0 CAPSTONE_VM_ADD_OK slot=1 base=0x3f91e00000 bytes=1048576 reg=2 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=2 base=0x3f920bc000 bytes=16384 reg=10 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=3 base=0x3f91f80000 bytes=262144 reg=11 perms=6 linear=0 CAPSTONE_VM_ADD_OK slot=4 base=0x3f920a0000 bytes=65536 reg=12 perms=4 linear=0 CAPSTONE_VM_ADD_OK slot=5 base=0x3f920b8000 bytes=8192 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=6 base=0x3f920b4000 bytes=16384 reg=10 perms=6 linear=1 CAPSTONE_VM_ADD_OK slot=7 base=0x3f92098000 bytes=16384 reg=10 perms=7 linear=1 CAPSTONE_VM_ADD_OK slot=8 base=0x3f9208c000 bytes=49152 reg=10 perms=6 linear=1 EXEC_CONTRACT_CHILD pid=205 "
+    }
+  },
+  "sha256": {
+    "qemu": "bd6cd022b07794cf3f7055d7dc3d9b54e14fe27f2e4edb07d3e394bc0f97d1ea",
+    "application": "fa9a6b773e767214c1785639a2bc424a716dee3459594c6664ff08e1d3ad9860",
+    "helper": "2d0ca15397e75bc6e761c5052c8360233c18e8124e11fab2bcfb5b1de2929e06",
+    "launcher": "c513e8895ed2aa2e1a6f0d4d2ab717be6556bf287b3187f8687e3d4d6813ab0e",
+    "module": "8426446326fb320c806167979ca7e541d2134f0b6c615a4c3f79702579025cf9",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "fw_jump.elf": "4dd4a2ade361a8bdb9cc45aeca02c6b7309b60d1e8701c2a4ed91c117a495f16",
+    "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "source_sha256": {
+    "run-exec.py": "02a992cedebab44c66ec9605aed8ec3a9b95a652d8da46effa560fd7cf3915b6",
+    "exec-contract.c": "842abf0ee07087d7c33e871b7e3b0932f4136035a9ffb7826ddf7739a1e6ab59",
+    "memfd-launch.c": "fa571ccfc4b1d124c38ff09b48f4de158d01b3d11d9267ed3ffe975f8971a553",
+    "run-staged.py": "c0a695f88284b1365476b4ac95e30c472df99c1039b77a34389ab5ff8df4bd2e"
+  },
+  "gate_sha256": "ab664ce944e9dee78314dedd0e8121e7c93d313589c528b3e3f3032ecab3f9a3",
+  "share_host_filesystem": "ext2/ext3",
+  "scope": "one hart; images on tmpfs, on ext4 over a loop device, in memfds, on ramfs and on 9p (sealed copy); exec in place of a valid and a non-image file"
+}

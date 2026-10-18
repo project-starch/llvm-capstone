@@ -75,6 +75,8 @@ cp /mnt/vm/exec.dom /mnt/e4/m.dom && chmod 755 /mnt/e4/m.dom
 /mnt/vm/memfd-launch mapped $V /mnt/e4/m.dom > o4m 2>&1; echo "@@MAPPED_WRITER rc=$? $(tr '\n' ' ' < o4m)"
 $V /mnt/e4/m.dom child > o4n 2>&1; echo "@@AFTER_MAPPING rc=$? $(tr '\n' ' ' < o4n)"
 /mnt/vm/memfd-launch image-twice /mnt/e4/m.dom > o4t 2>&1; echo "@@IMAGE_TWICE rc=$? $(tr '\n' ' ' < o4t)"
+cp /mnt/vm/exec.dom /mnt/e4/o.dom && chmod 755 /mnt/e4/o.dom
+/mnt/vm/memfd-launch text-source /mnt/e4/m.dom /mnt/e4/o.dom > o4s 2>&1; echo "@@TEXT_SOURCE rc=$? $(tr '\n' ' ' < o4s)"
 mkdir -p /tmp/r && mount -t ramfs ramfs /tmp/r && cp /mnt/vm/exec.dom /tmp/r/e.dom && chmod 755 /tmp/r/e.dom
 exec 9>>/tmp/r/e.dom
 $V /tmp/r/e.dom child > o8 2>&1; echo "@@COPY_FS rc=$? $(tr '\n' ' ' < o8)"
@@ -198,6 +200,11 @@ def main():
         # until the device is closed.
         'image_twice_busy': rc('IMAGE_TWICE') == 0 and
             'IMAGE_TWICE first=ok second=EBUSY held=ETXTBSY released=ok' in text('IMAGE_TWICE'),
+        # The module serves image text only from the image file it denied writers to: the same
+        # request with the text taken from another file (identical bytes, another inode), and
+        # with no image registered, is refused; with the text from the image it is admitted.
+        'text_from_other_file_refused': rc('TEXT_SOURCE') == 0 and
+            'TEXT_SOURCE image=ok other=EACCES noimage=EACCES' in text('TEXT_SOURCE'),
         'memfd_unsealed_refused': rc('MEMFD_open') == 126 and BUSY in text('MEMFD_open') and
             CHILD not in text('MEMFD_open'),
         'memfd_write_sealed_only_refused': rc('MEMFD_write') == 126 and BUSY in text('MEMFD_write') and
