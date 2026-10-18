@@ -551,7 +551,11 @@ ladder looks conclusive and is also exactly what you see when every arm reports 
 failure. A single matched pair localises more reliably than a long ladder, because the difference
 between the two arms *is* the variable. When arms differ in more than one respect — link address,
 return value, path taken on the way out — the ladder measures whichever difference you did not
-intend.
+intend. **Pre-register every arm's value, the ones expected NOT to move included.** A fix that works
+for the wrong reason reads as a partial success — some arms move, the rest look untouched — and what
+makes it a contradiction instead is having written down beforehand what the unchanged arms must say.
+On 2026-10-18 a TLB-flush fix moved one arm of four and left its twin, instruction-identical up to
+the change, reading the pre-fix value; the prediction named all four, so one run caught it.
 
 **8. Reduce until the bug fits a DIRECTED TEST, then LEAVE THE BOARD.** The board gives ~one bit
 per boot; simulation gives a full instruction+memory trace in 14 s but cannot run a 1.6 MB
