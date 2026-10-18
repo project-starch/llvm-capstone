@@ -1583,3 +1583,18 @@ The first form stopped at the firmware cap. This one changes the image and the f
   - **Predicted:** identical to wa1 (three rungs as their oracles, the identity branch, 0 refusal lines).
   - **If it is silent too,** the board or console is down. The queue stops and the board owner is told.
   - **If it boots,** the two silent boots were transient. sql0-rev2b and the postgres arms re-run.
+
+**The control's result (2026-10-19 02:12-02:22): silent too. The board is unavailable from this side.**
+- wa1's firmware ad5e84f761dd0f7c, which booted and passed at 19:14, downloaded completely ("19565064 bytes in
+  146.43s") and then gave no UART after `continue`. The watchdog aborted it at 570 s, driver rc 130, no transcript.
+- **That is four boots in a row, the same way:** pgc-fix6b 01:42, sql0-rev2b 01:52, pgc-fix6b again 02:02 (the
+  postgres chain's retry), and this control.
+  - They cover two kits and three firmwares, one of them known-good.
+  - Each JTAG download completed at the normal ~130 KiB/s, and each was silent after `continue`.
+  - `flash_state` still names `caplifive_vp2_bf3db3175.bit` in each.
+  - The last good boot was fph-fix6b, 01:30-01:42.
+- **No reading at all,** and the cause is not known from this side: a dead UART relay, a board-side fault, or a
+  volatile bitstream change that `nv_bitstream_name` would not show.
+- **Every queue is stopped.** No further board time is spent until the board owner checks the board and its console.
+- **Owed after it is back:** sql0-rev2b, pgc/pgm0/pgm1, and the tree A flash if authorised. Before any of them, one
+  short control boot, which must print the OpenSBI banner.
