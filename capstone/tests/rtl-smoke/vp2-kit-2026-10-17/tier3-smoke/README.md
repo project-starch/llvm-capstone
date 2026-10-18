@@ -359,3 +359,12 @@ This is the pilot's reading on the same image bytes, now on the campaign's modul
   about C-81 exposure.
 - **Caveat 2:** Tier 1/2's application images (contract, sqlite3, mruby) were v9 without the flag. A cross-tier
   comparison of application behaviour compares two build configurations.
+
+### Arm mpt, result (2026-10-18 12:50-12:58): 3 of 3 cells the same as the prediction; the campaign's first silicon record
+
+`records/mpt.board.txt`. memcached/plain-temporal-repros, recorded vp2-malloc. Firmware 55cd2bc4d221b627
+(17,467,912 B, the clean base's 2 MiB step); module 3005ed52 with the pin off.
+- **CAUGHT 3**, each with cause 25 at the predicted probe. Both controls fault.
+- `compare-pilot.py` against the compiler lane's qkit7 prediction reads 3 of 3 SAME, by image sha256.
+- The boot completed: VIRTUAL_STAGED_DONE, and the batch rung returned 0.
+- Its images are byte-identical on t3-freeze and t3-freeze-nb, so this reading stands under the amendment.
