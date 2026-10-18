@@ -52,6 +52,19 @@
 // RUN: %clang --target=riscv64-unknown-elf -### -S -O3 %s 2>&1 | FileCheck -check-prefix=CHECK3-64 %s
 // RUN: %clang --target=riscv64-unknown-elf -### -S -Os %s 2>&1 | FileCheck -check-prefix=CHECKs-64 %s
 
+// Capstone omits the frame pointer when optimizing, as RISC-V does; it is not
+// in the list above, and without this it fell through to a frame in every
+// function at every level.
+// RUN: %clang --target=capstone32-unknown-elf -### -S -O0 %s 2>&1 | FileCheck -check-prefix=CHECK0-32 %s
+// RUN: %clang --target=capstone32-unknown-elf -### -S -O2 %s 2>&1 | FileCheck -check-prefix=CHECK2-32 %s
+// RUN: %clang --target=capstone64-unknown-elf -### -S -O0 %s 2>&1 | FileCheck -check-prefix=CHECK0-64 %s
+// RUN: %clang --target=capstone64-unknown-elf -### -S -O1 %s 2>&1 | FileCheck -check-prefix=CHECK1-64 %s
+// RUN: %clang --target=capstone64-unknown-elf -### -S -O2 %s 2>&1 | FileCheck -check-prefix=CHECK2-64 %s
+// RUN: %clang --target=capstone64-unknown-elf -### -S -Os %s 2>&1 | FileCheck -check-prefix=CHECKs-64 %s
+// RUN: %clang --target=capstone64-unknown-linux-gnu -### -S -O0 %s 2>&1 | FileCheck -check-prefix=CHECK0-64 %s
+// RUN: %clang --target=capstone64-unknown-linux-gnu -### -S -O2 %s 2>&1 | FileCheck -check-prefix=CHECK2-64 %s
+// RUN: %clang --target=capstone64-unknown-elf -### -S -O2 -fno-omit-frame-pointer %s 2>&1 | FileCheck -check-prefix=CHECK0-64 %s
+
 // RUN: %clang --target=riscv32-unknown-linux-gnu -### -S -O0 %s 2>&1 | FileCheck -check-prefix=CHECK0-32 %s
 // RUN: %clang --target=riscv32-unknown-linux-gnu -### -S -O1 %s 2>&1 | FileCheck -check-prefix=CHECK1-32 %s
 // RUN: %clang --target=riscv32-unknown-linux-gnu -### -S -O2 %s 2>&1 | FileCheck -check-prefix=CHECK2-32 %s
