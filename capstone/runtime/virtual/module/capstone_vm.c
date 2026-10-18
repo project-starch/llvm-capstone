@@ -1064,7 +1064,7 @@ static void pin_ahead(struct context *c, struct arena *a,
  * The prev(...) fields cost nothing -- they are already on the thread for the -ELOOP
  * bound -- and they carry the discriminator: prev addr == this addr with prev cause 13,
  * and cause 15 here, is the read-then-write COW signature that is the hypothesis. */
-#define CV_DIAG_TAG "resolve-sites-6"
+#define CV_DIAG_TAG "resolve-sites-9"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
@@ -1077,6 +1077,63 @@ static void pin_ahead(struct context *c, struct arena *a,
 static bool diag_emerg;
 module_param(diag_emerg, bool, 0644);
 static unsigned eloop_prints, refuse_prints, childframe_prints;
+
+/* r12's reading: for `vm`, NONE of resolve()'s five refusal sites fired and the S-24 bound did --
+ * the same address and cause 65 times with no change. So the !same deduction is refuted and the
+ * remaining question is disjunct 1 vs 2 of the A/D narrowing, which that line cannot separate.
+ *
+ * resolve_sfence is the behavioural discriminator, and it exists because of the pte_same guard in
+ * GUP rather than as a guess: follow_page_pte only calls set_pte_at + update_mmu_cache (and hence
+ * sfence.vma) when the entry actually CHANGES, so on the second and later faults of this loop A
+ * and D are already set, nothing is written, and NO fence is issued at all. Under disjunct 1 that
+ * is exactly the missing operation. The loop ending with this on is disjunct 1; the loop
+ * persisting is disjunct 2, and the question leaves the module.
+ *
+ * Default off so the production path is unchanged, 0644 so one boot tries both. */
+static bool resolve_sfence;
+module_param(resolve_sfence, bool, 0644);
+
+/* resolve_pte prints the faulting PTE once, when the bound trips. It is the check on this lane's
+ * OWN conclusion that GUP sets A and D -- which was read out of the source, never measured on the
+ * board -- so a boot where A and D come back clear refutes that reading rather than confirming a
+ * walker defect. NOT version-guarded: follow_pte has the same signature and is EXPORT_SYMBOL_GPL
+ * in both 6.1.0 and 6.4.14, so the instrument is identical on QEMU and the board and can be
+ * validated before a board boot is spent on it, which a board-only guard would have prevented. */
+static bool resolve_pte;
+module_param(resolve_pte, bool, 0644);
+
+/* The bound as a PARAMETER, so the -ELOOP path can be made to FIRE before a board boot is spent
+ * on it. On QEMU `vm`'s store passes, so at the production bound of 64 this path never executes
+ * and the PTE read above would reach silicon unvalidated -- which is the shape this project has
+ * repeatedly paid for. Repeats do occur on QEMU (the launcher's idempotent CV_RESOLVE re-presents
+ * a fault, visible as `prev(addr == addr, rep ...)` in the site lines), so a low value trips the
+ * bound there and exercises the read end to end. Default is the production value. */
+static unsigned long fault_repeat_max = CV_FAULT_REPEAT_MAX;
+module_param(fault_repeat_max, ulong, 0644);
+
+/* S-24's FIX, and the reason it is a kernel call and not a fence.
+ *
+ * GUP does NOT set the PTE's A or D bits for an anonymous page: follow_page_pte's FOLL_TOUCH block
+ * (mm/gup.c:624-633) marks the struct page with set_page_dirty/mark_page_accessed and says in its
+ * own comment that pte_mkyoung "would be more correct here" and is deliberately avoided. (The
+ * block that DOES set them, with set_pte_at and update_mmu_cache, is follow_pfn_pte -- the
+ * no-struct-page path. Quoting that one instead is the error RETRACTION-gup-does-not-set-A-or-D-
+ * on-an-anon-page.md withdraws.)
+ *
+ * So a store to a present, writable page whose D is clear faults; the hardware installs no TLB
+ * entry and does not set D itself; resolve() pins a page that is already pinned and reports
+ * success having changed nothing; and the store faults again. That is r12's reading exactly:
+ * "resolved 65 times with no change".
+ *
+ * fixup_user_fault drives the kernel's OWN write-fault path, which reaches handle_pte_fault's
+ * writable-pte case and performs pte_mkdirty + ptep_set_access_flags + update_mmu_cache -- D set
+ * and the sfence issued. EXPORT_SYMBOL_GPL with the same signature in 6.1.0 and 6.4.14, so no
+ * version guard and the fix is testable on QEMU: under svadu=false QEMU faults the same way
+ * (cpu_helper.c:1124-1131 returns TRANSLATE_FAIL when A/D need updating and hade is false).
+ *
+ * Default off so the production path is unchanged and the arm is two-sided in one boot. */
+static bool resolve_dirty;
+module_param(resolve_dirty, bool, 0644);
 
 #define CV_EMIT(fmt, ...) do {                      \
     if (diag_emerg) pr_emerg(fmt, ##__VA_ARGS__);   \
@@ -1184,12 +1241,31 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
              * and the quantum stops the entry before the retry, and the launcher's idempotent
              * CV_RESOLVE then repeats it. */
             if (address == t->last_fault_addr && cause == t->last_fault_cause) {
-                if (++t->fault_repeat > CV_FAULT_REPEAT_MAX) {
+                if (++t->fault_repeat > fault_repeat_max) {
+                    unsigned long pv = 0;
+                    int prc = -ENOSYS;
+                    if (resolve_pte) {
+                        pte_t *ptep;
+                        spinlock_t *ptl;
+                        mmap_read_lock(c->mm);
+                        prc = follow_pte(c->mm, address, &ptep, &ptl);
+                        if (!prc) {
+                            pv = pte_val(*ptep);
+                            pte_unmap_unlock(ptep, ptl);
+                        }
+                        mmap_read_unlock(c->mm);
+                    }
                     CV_EMIT_FIRST(eloop_prints,
                                   "capstone_vm: fault at 0x%lx cause %lu resolved %u times "
                                   "with no change; the page is pinned and the PTE is "
-                                  "untouched by this module\n",
-                                  address, cause, t->fault_repeat);
+                                  "untouched by this module; pte rc=%d val=0x%lx "
+                                  "present=%d write=%d young=%d dirty=%d pfn=0x%lx\n",
+                                  address, cause, t->fault_repeat, prc, pv,
+                                  prc ? -1 : !!pte_present(__pte(pv)),
+                                  prc ? -1 : !!pte_write(__pte(pv)),
+                                  prc ? -1 : !!pte_young(__pte(pv)),
+                                  prc ? -1 : !!pte_dirty(__pte(pv)),
+                                  prc ? 0UL : (unsigned long)pte_pfn(__pte(pv)));
                     return -ELOOP;
                 }
             } else {
@@ -1197,6 +1273,23 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
                 t->last_fault_cause = cause;
                 t->fault_repeat = 1;
             }
+            /* S-24: make the kernel set D for a STORE before reporting success, so the retry can
+             * make progress. Only for cause 15 -- a read fault needs no D, and A is set by the
+             * populate on the path that allocated the page. Unlocked: fixup_user_fault takes
+             * mmap_read_lock itself. A failure is not fatal here; the repeat bound still catches a
+             * loop, and the PTE print says what the entry looked like. */
+            if (resolve_dirty && cause == 15) {
+                bool unlocked = false;   /* fixup_user_fault takes bool *, in both kernels */
+                fixup_user_fault(c->mm, address & PAGE_MASK, FAULT_FLAG_WRITE, &unlocked);
+            }
+            /* The operation GUP skips on a repeat: its sfence.vma is inside the pte_same guard, so
+             * an unchanged entry gets none. Two facts for whoever reads the result: the domain runs
+             * under the SAME satp as this ioctl -- frame[0] is read from CSR_SATP and nothing else
+             * assigns it, while select_root() writes CSR 0x5c1, the capability-table root, not satp
+             * -- and this is the all-ASID form (`sfence.vma rs1`, rs2 = x0), so an ASID mismatch
+             * cannot explain a missed flush in either direction. */
+            if (resolve_sfence)
+                asm volatile("sfence.vma %0" : : "r"(address) : "memory");
             return 0;
         }
         t->last_fault_addr = address;
