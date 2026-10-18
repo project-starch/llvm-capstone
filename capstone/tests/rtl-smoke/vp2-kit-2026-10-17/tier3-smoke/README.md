@@ -1249,3 +1249,47 @@ UNGATED (PREFLIGHT=0). The count of the 3005ed52 cells that carried S-27 is corr
     the page is covered, whichever table translated to it. The refusal still needs the CPMP table to be in flux at the
     access, which is S-23's window.
   - A stale translation could still be a contributing step, but it is not sufficient here.
+
+### Tree A flash plan, pre-registered (2026-10-18 22:45): NOT AUTHORISED until the lead says so in this lane's own session
+
+Tree A is capstone-ariane `virtual-profile-2-c` 8522d72fe, carrying the fixes for R-57, Q-24, S-27 and S-28. It is
+not sealed yet: synthesis is in implementation, and a congestion failure is a live outcome. A flash needs the lead's
+own word in this session; a relayed one does not count. Nothing below runs before that.
+
+**Where the flash falls:** at a chain boundary, never inside a bundle.
+- The d71f207a set finishes first: fso/pb12/pb10-fix6b, then sq0a/sq0f-fix6. That way every bundle of the set, and the
+  merged sq0 bundle, names one bitstream.
+- The flash goes after `FIX6APPVM DONE` in `t3-run-fix6c.out`, and before the module revision's Tier 1 boot if that
+  has not started. If tree A seals while a chain runs, the chain finishes its current arm and the next one is held.
+- Everything is pushed (lane and dev) before the flash.
+
+**Before the flash:**
+- `GET /api/bitstreams` must list `caplifive_vp2_bf3db3175.bit`, so the flash-back path exists.
+- Register tree A's sealed `.bit` under the name the synth lane gives, with its sha256 recorded here before the
+  upload.
+- Then the HOW-TO-LAUNCH-ON-FPGA sequence: power on, settle ~30 s, `POST /api/flash-bitstream`, wait for a FRESH
+  `flash_state=done`.
+- Read back `nv_bitstream_name`. It must equal tree A's name, or the session stops.
+
+**The session, each step gating the next, in vp2's order (dev 987bf254ee40):**
+1. **The canary,** two passes: S-16, floor and s1gap. Predicted identical to d93a8d66b's readings in each pass, and
+   pass 1 identical to pass 2, so 9 of 9.
+2. **The arm set:** each arm equal to the board vector the RTL lane simulates for that exact image on tree A's RTL.
+   The vectors are needed from the RTL lane before the flash. vp2's 25 arms are re-simulated, plus any arm tree A's
+   fixes add (S-27's va-rdclob, R-57's capability-store pair, S-28).
+3. **Corpus set 7** on the same firmware payload: 33 of 33 records identical.
+4. **Tier 1** with the module revision current at that time (d71f207a, or its successor once its own Tier 1 has passed
+   on bf3db3175).
+   - Predicted the same readings as on bf3db3175: the S-27 workaround is harmless on fixed RTL.
+   - Firmware: the same monitor (007d81d with the S-23 fetch retry; tree A does not fix S-23), with the DTS checked
+     against the new bitstream by the preflight.
+5. **wm0, then wm1,** as R-57's positive controls on the then-current kit. Predicted to RUN instead of wedging, reading
+   their QEMU predictions (wm0 MISSED 23; wm1 its twin's control-failed 23). Each wedged with the same apertures on
+   both modules on bf3db3175.
+6. **pym0 on the OLD module 3005ed52 (kit bkit7),** as S-27's control on the fixed RTL.
+   - The RTL now exempts resume modes 3/4 from the rd write, so even the module's rd = x15 is not clobbered.
+   - Predicted 20 of 20 at the QEMU verdict (control complete, MISSED 20), against 0 of 20 on bf3db3175 with the same
+     images. That is the RTL fix two-sided on silicon.
+
+**Stops:** any canary mismatch, a readback naming another bitstream, or an arm vector mismatch stops the session
+before the Linux steps. A failed canary means flashing back to bf3db3175 needs the lead's word again.
