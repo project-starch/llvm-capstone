@@ -1040,3 +1040,22 @@ parameter back.
 - 0 faults would mean the fence alone suffices, and the rd account is reopened.
 
 UNGATED (PREFLIGHT=0). Dry run: `dryrun-fence-arm.txt`.
+
+### Amendment (2026-10-18 20:40, before fso-fix6 ends): fso-fix6's batch budget is too short; fso, pb12 and pb10 re-run on a scaled budget
+
+- **The budget:** `run-virtual-cases.py` gives a board batch 300 + 60 s per step (:235/:554). The kit recipe passes
+  that as the driver's per-rung wait (BAKED_TIMEOUT). For fso's 20 steps that is 1500 s.
+- **Why it runs short:** on 3005ed52 every step faulted within seconds. On d71f207a they run to completion, about 1.9
+  min a step here (9 steps in the rung's first 17 min).
+- **So fso-fix6's batch rung (from about 20:19:40) is cut at about 20:44:40, with about 13 of 20 steps read.** The
+  steps it reads are valid readings. The rest score NO-READING:infra, a budget void, not a module reading.
+- **Consequences:** tier3-seq.sh stops after a boot that does not complete, so pb12-fix6 and pb10-fix6 do not run.
+  The appvm chain is unaffected: its sessions budget at least 300 s a step (pym1 6600 s, sq0b 2700 s, wm0 15900 s).
+- **The re-run** (`tier3-fix6b-seq.sh`): fso, pb12 and pb10 under tags `<arm>-fix6b` on kit bkit7-fix6t, after the
+  fence arm.
+  - bkit7-fix6t is bkit7-fix6 with `BOARD_STEP_S=300` in board.env. board-run.sh scales the per-step part, giving
+    300 + 300 s per step. The recipe's stub mode reads 1500 vs 6300 for 20 steps.
+  - The module, launcher, runner (hash unchanged) and images are unchanged.
+  - The predictions are unchanged (fso MISSED 9; pb12 CAUGHT 1, MISSED 8; pb10 CAUGHT 4).
+- **fso-fix6's partial bundle is not filed in the corpus.** Its record keeps the steps it read, marked as a budget
+  void. Dry run: `dryrun-fix6b-seq.txt`.
