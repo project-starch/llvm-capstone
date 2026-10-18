@@ -968,3 +968,35 @@ and R-57's attribution for them is withdrawn. If either wedges again with the sa
 at N=2.
 
 UNGATED (PREFLIGHT=0). Dry run: `dryrun-fix6-appvm.txt`.
+
+### The S-27 paired boot, results (2026-10-18 19:14-20:12): both boots read as pre-registered; pym0 reaches its QEMU verdict on d71f207a
+
+**Boot 1, Tier 1** (`board-tier12/results/board-vp2-tier12-wa1.result-lines.txt`):
+- b0-stats, b0-hello and vm-contract read as their oracles, and vm-contract takes the identity branch.
+- "REFUSED-CSRUNV (must-fire) 0; banner 1".
+- Every line equals ap1's on 3005ed52, including the FRTY address and vm-contract's fault offset.
+
+**Boot 2, pym0 on bkit7-fix6** (`records/pym0-fix6.board.txt`):
+- 21 of 21 steps ran, and the boot completed. Control uaf-block completed, and the 20 cases read MISSED.
+- That is 20 of 20 cells the same as `records/pym0.prediction.txt`, and 20 of 20 against the compiler lane's twin on
+  the new module's QEMU build (28882779c95b94ad).
+- The session shows 0 domain fault lines, the banner once and 0 refusal lines.
+- Each program now runs for minutes, where on 3005ed52 each faulted within seconds; the boot took 52 minutes against 11.
+
+**The pair:**
+- The 21 staged `.dom` files are sha256-identical, file by file, between this boot and pym0's on 3005ed52. The runner
+  (fdc271ee3c107951), launcher (b27afefc09c6cae6) and monitor (007d81d) are the same.
+- The firmware and kernel hashes differ, by the bake of the other module into the initramfs. The kits differ in the
+  module alone (`diff -r`).
+- **On module 3005ed52e860c7af: 0 of 20, every step control-failed by cause 6 at 0x12. On module d71f207a3af5546b: 20
+  of 20 at the QEMU verdict.**
+- The module change is the resume CSRUNV's rd = x0, together with the sentinel store and fence before it and the kind
+  read from frame +16. The pair confirms the workaround. That the rd write is the mechanism rests on E3's reading and
+  the RTL lane's simulation arm with them.
+- How S-27's status is worded in ISSUES waits for a claim-auditor pass.
+
+**A slip, caught before it was reported:** a live read of the driver log at 19:45 showed `cause=25` at code offset
+0x140f0. It looked like a fault in case 05 (disassembled there: an `ldc` in insert_to_freepool). It was the previous
+boot's console, replayed on connect: Tier 1's vm-contract, whose identity branch is exactly that stale access, at that
+offset. Scoping the read to after the session's first marker removed it. The board-run skill already says to scope a
+live scan to the run's own load.
