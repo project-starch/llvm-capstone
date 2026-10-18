@@ -95,6 +95,39 @@ would still expose §1. `enframe` runs on the allocation path for every slot it 
 requires a pointer obtained some other way; I have not found such a path, and I have not proved
 there is none.
 
+## 6b. Why the QEMU kit cannot show S-24 — it is the PTE's STATE, not trap delivery
+
+One wrong explanation is recorded here so it is not rediscovered. I argued in correspondence that
+on QEMU a D-clear store fault inside a context is delivered to the **guest kernel's** handler,
+which sets D transparently. **That is refuted**, at the source, and the refutation is the RTL
+lane's: `cpu_helper.c:1813` calls `capstone_supervisor_trap()` **before any delegation** and
+returns with `exception_index = RISCV_EXCP_NONE` when it consumes the trap, and
+`capstone_supervisor.c:466-476` maps causes 12/13/15 to kind 4 under options bit 2 and then
+`escape(...); return true;`. So a trap raised while a context is active never reaches the guest
+kernel, on QEMU exactly as on the RTL (`commit_stage.sv:263-268`). QEMU's `svadu=false` walker also
+does fault a store on a clear D (§6a / `cpu_helper.c:1124-1131`).
+
+**So the difference between the two targets is the PTE's state at the fault, not how the fault is
+delivered** — which is what §4's table already says, and what the measurement supports: with
+`fault_repeat_max=1`, which trips the bound on the *first* repeat, the suite gave **34/41 unchanged
+and ZERO `-ELOOP` lines**. (I had pre-registered that the pass count would *drop* under that bound.
+It did not, and the non-drop is additional evidence the repeat branch is never reached on QEMU.)
+
+The pre-registered readings for `resolve_pte`, which must now be read on **both** targets:
+
+* **board:** `D = 0` at the loop, with V, R, W and A set;
+* **QEMU:** either *not present* at the first store, or `D` already **1**.
+
+The likely mechanism for the difference, to be confirmed by those prints rather than asserted: on
+QEMU the page is created by the write itself, so GUP's `faultin_page` → `handle_mm_fault` →
+`do_anonymous_page` makes the PTE dirty; on the board it was read-touched first (the zero page or a
+clean anon page under `PROT_READ`, then `mprotect` RW: present, writable, D clear) and
+`follow_page_pte` sets nothing. The launcher's touch order and the two kernels' populate paths
+decide it.
+
+The fix — `fixup_user_fault` with `FAULT_FLAG_WRITE` for a present page — is correct on both
+targets regardless of which way that falls.
+
 ## 7. Not a verdict on the RTL candidate
 
 This says what the software does. Whether a faulting STC retires with no exception and leaves a
