@@ -777,3 +777,33 @@ it". The substitute checks are the campaign's own:
 - The value 2 as an untagged capability is the allocators' value and boot 4's (cause 24 at contract.dom's memset, a
   destination cursor of 2). This is an observation, not a mechanism: the open question is the same one as the
   allocators', recorded above.
+
+### The settling batch, pre-registered (2026-10-18, before its boots): ppA2, ppE, ppE1, ppE2, ppE3, ppE4, scored against a named candidate
+
+**The candidate** (the RTL lane, from bf3db3175's source and its simulation arm va-rdclob, fb3f87b6c; not yet shown on
+silicon):
+- Every RESUME of a virtual context writes the literal integer 2 into the CONTEXT's x(rd), where rd is the trusted
+  caller's CSRUNV destination register.
+- `commit_stage.sv:610-624` builds one request for entry and resumes, with `ra_data` the bad-frame refusal's kind 2.
+  The switcher's finish() writes it for modes 3 and 4, which it does not exempt.
+- The module's resuming call site (capstone_vm.c:1600, `.text+0x40c8` in 3005ed52) has rd = x15 = a5, by the compiler
+  lane's decode.
+- **Supporting, from this lane's auditor:** every 2-fault read directly has a5 = 2.
+  - The allocators' `sd a4,0x10(a5)` is the first store into the fresh metadata region. It page-faults, and is replayed
+    after the module resumes the context.
+  - SQLite cases 06 and 10: a5 goes from a valid capability to 2 with no instruction writing it. There the resume is
+    not at the fault point, which suggests an asynchronous escape. N=1 each.
+  - On silicon, a cause-24 fault's tval is rs1's value (`ex_stage.sv:1176-1185`, `cva6.sv:1522`), so "address 0x2"
+    reads "a5 = 2".
+
+**Predictions under the candidate, written before the boots:**
+- **ppA2** (ppA re-run, the control): as ppA. The global is right, then the fault recurs at 0x12.
+- **ppE** (stack pre-touch): STILL faults at 0x12. The fresh page is the metadata mapping, not the stack.
+- **ppE1** (a marker after the first pym_raw_calloc): no marker. The first call faults.
+- **ppE2** (a sentinel in b's slot): STILL faults at 0x12, not sentinel+0x10.
+- **ppE3** (a plain-load compare of b): NO mismatch, and the fault anyway. The slot holds the right b; a5 is overwritten
+  after the reload, by the resume.
+- **ppE4** (metadata a LINEAR grant): the first fault at 0x12, NOT 0x11. The 2 is the resume's literal, not a type
+  field. Scored on the FIRST fault only: E4 breaks linearity by construction, so its QEMU twin faults later too.
+
+**A reading that refutes it:** E or E2 not faulting, E3 printing a mismatch, E4 reading 0x11, or the marker printing.
