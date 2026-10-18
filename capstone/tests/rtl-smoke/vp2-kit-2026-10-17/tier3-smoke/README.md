@@ -1082,3 +1082,35 @@ UNGATED (PREFLIGHT=0). Dry run: `dryrun-fence-arm.txt`.
 - **On 3005ed52** the same images read 0 of 20, every step control-failed by S-27's 0x12 fault.
 - **Timing:** the boot took 13 minutes, because a caught program ends at its detection.
 - **The bundle:** `cpython/pymalloc-repros/results/2026-10-18-vp2-rdx0/vp2-nested-pools`. UNGATED (PREFLIGHT=0).
+
+### postgres/sql-repros vp2-malloc on the workaround module, pre-registered (2026-10-18, before its boot): sql0-fix6, last in the queue
+
+**The arm** (`tier3-sql-arm.sh`, after the fix6b sequence):
+- The compiler lane's lt0 image, `t3-new6/postgres-lt0/image/postgres.dom` (81ee24a0a1e957c9, CPONVVM6, -fno-builtin
+  through the SDK hook). The gate is checked before the boot.
+- The native16 fixture `t3-new6/tmp/pgfixture/cluster`, nothing pre-installed. run-arm.py records the tree as
+  173aa5b35c1b57b9; the builder's own hash is 1287b5822d166345.
+- sql-repros' run-arm.py, `--arm virtual-malloc --board-kit bkit7-fix6s`, in one boot of 21 single-user postgres
+  sessions: 5 preflights, 2 controls, the cases, and their control.sql sessions.
+- The runner (292e7440305d3ad3) and judge (2ed6701045dd5689) hashes equal the QEMU record's.
+
+**The kit:** bkit7-fix6s is bkit7-fix6 with `BOARD_TIMEOUT_MULT=4`, which board-run.sh multiplies into the runner's
+budget.
+- The runner gives 600 + 300 s a session, 6900 s here. The recipe's stub mode reads 27600.
+- The reason: on vp2 a step takes about 18 times its QEMU time. pym0's twin ran 21 steps in 3.3 min, and silicon took
+  about 2.1 min a step.
+- The QEMU record took about 47 s a session (16.5 min for the boot). So about 13-15 min a session is expected here,
+  and the boot runs 4-5 hours. It goes last because a hung session would hold the board to the budget. The idle limit
+  still ends a wedged core.
+
+**Predicted** (the QEMU record `t3-sql-virtual-malloc/bundle`, qkit7, module 5bfc38f8):
+- CAUGHT 02 and 03 (cause 28 in memcpy, attributed by control.sql);
+- MISSED 01 and 04-09;
+- both controls (bounds-malloc, uaf-malloc) fault;
+- case 03's CREATE EXTENSION ltree runs without pre-install.
+- The compiler lane's gate reads every bundle the same on the two modules' QEMU builds, so the 5bfc38f8 record
+  stands for d71f207a.
+
+**VOID** if the bundle's fixture record is not 173aa5b35c1b57b9, or its image not 81ee24a0a1e957c9.
+
+UNGATED (PREFLIGHT=0). Dry run: `dryrun-sql-arm.txt`.
