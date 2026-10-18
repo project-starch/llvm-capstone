@@ -7,8 +7,8 @@ sealed copy. Checked from the guest: exec in place (same pid), exec of a
 truncated image (ENOEXEC, in the caller) and of a native program (ENOSYS),
 writing a running image (denied) and the same image after exit (allowed), a
 launch while a writer is open (refused) and after it closed, memfds in three
-seal states, and an image on a ramfs (run from a sealed copy). Images run from
-/tmp, a tmpfs."""
+seal states, and images on a ramfs and on 9p (both run from a sealed copy: the
+launcher's image descriptor is checked on 9p). Images run from /tmp, a tmpfs."""
 import argparse
 import hashlib
 import json
@@ -50,6 +50,22 @@ mkdir -p /tmp/r && mount -t ramfs ramfs /tmp/r && cp /mnt/vm/exec.dom /tmp/r/e.d
 exec 9>>/tmp/r/e.dom
 $V /tmp/r/e.dom child > o8 2>&1; echo "@@COPY_FS rc=$? $(tr '\n' ' ' < o8)"
 exec 9>&-
+mkdir -p /mnt/9p
+if mount -t 9p -o trans=virtio,version=9p2000.L gate9p /mnt/9p; then
+  # 9p (cache=none) makes a new inode at each lookup: the module refuses it
+  # and the launcher holds a sealed copy, not the 9p file.
+  mkfifo /tmp/release9
+  $V /mnt/9p/exec.dom hold < /tmp/release9 > o9 2>&1 &
+  pid=$!
+  exec 6> /tmp/release9
+  n=0; while ! grep -q EXEC_CONTRACT_HOLDING o9 && [ $n -lt 30 ]; do sleep 1; n=$((n+1)); done
+  fds=$(ls -l /proc/$pid/fd 2>/dev/null)
+  echo "@@NINEP_FDS memfd=$(echo "$fds" | grep -c 'memfd:capstone-application') share=$(echo "$fds" | grep -c '/mnt/9p/')"
+  exec 6>&-
+  wait $pid; echo "@@NINEP rc=$? $(tr '\n' ' ' < o9)"
+else
+  echo "@@NINEP_FDS mount-failed"
+fi
 for mode in open write sealed; do
   /mnt/vm/memfd-launch $mode $V /mnt/vm/exec.dom > o7 2>&1; echo "@@MEMFD_$mode rc=$? $(tr '\n' ' ' < o7)"
 done
@@ -84,10 +100,12 @@ def main():
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
     (stage/'gate.sh').write_text(SCRIPT)
+    share = a.work / 'share'; share.mkdir()
+    shutil.copy2(inputs['application'], share/'exec.dom')
     run = subprocess.run([os.environ.get('PYTHON', 'python3'),
         str(HERE/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images),
         '--stage', str(stage), '--work', str(a.work/'guest'), '--disk-mib', '64',
-        '--timeout', str(a.timeout)])
+        '--timeout', str(a.timeout), '--share', str(share)])
     log = (a.work/'guest/serial.log').read_text(errors='replace').replace('\r', '')
     lines = {m.group(1): (m.group(2), m.group(3)) for m in
              re.finditer(r'^@@(\w+)(?: rc=(\d+))? ?(.*)$', log, re.M)}
@@ -126,6 +144,9 @@ def main():
         # the image runs from a sealed copy, so a writer open on the file does
         # not stop it (a direct load would fail with ETXTBSY).
         'other_filesystem_runs_from_copy': rc('COPY_FS') == 0 and CHILD in text('COPY_FS'),
+        # 9p: the launcher's image descriptor is the sealed copy, not the 9p file.
+        'ninep_runs_from_copy': rc('NINEP') == 0 and 'EXEC_CONTRACT_HELD' in text('NINEP') and
+            text('NINEP_FDS') == 'memfd=1 share=0',
         'cleanup': len(census) == 1 and all(
             s['live_domains'] == s['live_regions'] == s['live_bytes'] == 0 for s in census),
     }
@@ -138,7 +159,11 @@ def main():
                                 for p in [Path(__file__), HERE/'exec-contract.c',
                                           HERE/'memfd-launch.c', HERE/'run-staged.py']},
               'gate_sha256': hashlib.sha256(SCRIPT.encode()).hexdigest(),
-              'scope': 'one hart; images on tmpfs, in memfds and on ramfs (sealed copy); exec in place of a valid and a non-image file'}
+              # The 9p check catches a launcher that trusts statfs() only where the
+              # share's host filesystem would pass such a check (ext4, tmpfs, ...).
+              'share_host_filesystem': subprocess.run(['stat', '-f', '-c', '%T', str(share)],
+                                                      capture_output=True, text=True).stdout.strip(),
+              'scope': 'one hart; images on tmpfs, in memfds, on ramfs and on 9p (sealed copy); exec in place of a valid and a non-image file'}
     (a.work/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)
     return 0 if all(checks.values()) else 1

@@ -8,7 +8,6 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/vfs.h>
 #include <unistd.h>
 
 static int within(uint64_t offset, uint64_t bytes, size_t size) {
@@ -115,30 +114,16 @@ int capstone_application_open(const char *path) {
   return fd;
 }
 
-int capstone_application_lockable(int fd) {
-  struct statfs s;
-  if (fstatfs(fd, &s))
-    return 0;
-  switch ((unsigned long)s.f_type) {
-  case 0x01021994UL: /* tmpfs, memfds */
-  case 0xEF53UL:     /* ext2, ext3, ext4 */
-  case 0x9123683EUL: /* btrfs */
-  case 0x58465342UL: /* xfs */
-  case 0xE0F5E1E2UL: /* erofs */
-  case 0x73717368UL: /* squashfs */
-    return 1;
-  }
-  return 0;
-}
-
 int capstone_application_fixed(int fd) {
   /* A file with a name (tmpfs, ext4) was opened for writing through
    * that name, and Linux counted every such writer: the denial excludes
    * them all. A memfd is created unlinked (__shmem_file_setup clears its
    * link count) and its creating descriptor is not counted in i_writecount,
-   * so for an unlinked, sealable file the seals have to exclude writers.
-   * An ordinary tmpfs file answers F_GET_SEALS too (F_SEAL_SEAL), which is
-   * why the link count, not the seals, tells the two apart. */
+   * so an unlinked, sealable file must be sealed. That also refuses an
+   * unsealed tmpfs file that was unlinked (or made with O_TMPFILE), whose
+   * writers are counted: the link count cannot tell it from a memfd, and
+   * refusing is the safe side. An ordinary tmpfs file answers F_GET_SEALS
+   * too (F_SEAL_SEAL), so the seals alone cannot tell either. */
   struct stat st;
   if (fstat(fd, &st))
     return -1;
@@ -174,11 +159,7 @@ int capstone_application_inspect(int fd, struct capstone_application_descriptor_
   return 0;
 }
 
-int capstone_application_image(const char *path,
-                               struct capstone_application_descriptor_v2 *out) {
-  int source = capstone_application_open(path);
-  if (source < 0)
-    return -1;
+int capstone_application_copy(int source, struct capstone_application_descriptor_v2 *out) {
   int image = -1, error = 0;
   struct stat st;
   if (fstat(source, &st)) {
@@ -194,11 +175,13 @@ int capstone_application_image(const char *path,
     error = errno;
     goto done;
   }
+  /* pread from the start: the copy is of this open file, whatever its offset,
+   * never of whatever its path names by now. */
   char buf[65536];
-  off_t remaining = st.st_size;
-  while (remaining) {
-    size_t wanted = remaining < (off_t)sizeof buf ? (size_t)remaining : sizeof buf;
-    ssize_t n = read(source, buf, wanted);
+  off_t at = 0;
+  while (at < st.st_size) {
+    size_t wanted = st.st_size - at < (off_t)sizeof buf ? (size_t)(st.st_size - at) : sizeof buf;
+    ssize_t n = pread(source, buf, wanted, at);
     if (n < 0 && errno == EINTR)
       continue;
     if (n <= 0) {
@@ -216,7 +199,7 @@ int capstone_application_image(const char *path,
       }
       written += (size_t)k;
     }
-    remaining -= n;
+    at += n;
   }
   if (fcntl(image, F_ADD_SEALS, F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_SEAL)) {
     error = errno;
@@ -225,12 +208,23 @@ int capstone_application_image(const char *path,
   if (capstone_application_inspect(image, out))
     error = errno;
 done:
-  close(source);
   if (error) {
     if (image >= 0)
       close(image);
     errno = error;
     return -1;
   }
+  return image;
+}
+
+int capstone_application_image(const char *path,
+                               struct capstone_application_descriptor_v2 *out) {
+  int source = capstone_application_open(path);
+  if (source < 0)
+    return -1;
+  int image = capstone_application_copy(source, out);
+  int error = errno;
+  close(source);
+  errno = error;
   return image;
 }

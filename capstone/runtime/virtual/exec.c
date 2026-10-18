@@ -494,6 +494,35 @@ struct exec_state {
 };
 #define EXEC_STATE_MAGIC UINT64_C(0x4350455845433031)
 
+/* Deny writers to the image held by *fd (CV_IMAGE). Where the module cannot
+ * (EOPNOTSUPP: a filesystem that does not keep one inode per file, such as
+ * 9p), *fd becomes a sealed copy read from that same open file, reopened
+ * read-only, and writers to the copy are denied instead. */
+static int image_denied(int *fd, struct capstone_application_descriptor_v2 *desc)
+{
+    char path[64];
+    if (capstone_application_fixed(*fd))
+        return -1;
+    if (!ioctl(device, CV_IMAGE, fd))
+        return 0;
+    if (errno != EOPNOTSUPP)
+        return -1;
+    int copy = capstone_application_copy(*fd, desc);
+    if (copy < 0)
+        return -1;
+    snprintf(path, sizeof path, "/proc/self/fd/%d", copy);
+    int sealed = capstone_application_open(path);
+    int error = errno;
+    close(copy);
+    if (sealed < 0) {
+        errno = error;
+        return -1;
+    }
+    close(*fd);
+    *fd = image_fd = sealed;
+    return capstone_application_fixed(sealed) || ioctl(device, CV_IMAGE, fd) ? -1 : 0;
+}
+
 static int above_stdio(int fd) {
   if (fd < 0 || fd >= 3) return fd;
   int parked = fcntl(fd, F_DUPFD_CLOEXEC, 3);
@@ -848,23 +877,7 @@ int main(int argc, char **argv)
      * validated are the bytes loaded, and the domain cannot write its own
      * image while it runs. After exec in place, and on 9p, NFS or FUSE, the
      * image is a sealed copy, which the denial accepts as fixed. */
-    const char *source = resumed.magic ? resumed_path : image_path;
-    int fd = capstone_application_open(source);
-    if (fd >= 0 && !capstone_application_lockable(fd)) {
-        /* On a filesystem whose inodes do not track every writer, load a
-         * sealed copy, reopened read-only so the module accepts it. */
-        char copy_path[64];
-        int copy = capstone_application_image(source, &desc);
-        close(fd);
-        fd = -1;
-        if (copy >= 0) {
-            snprintf(copy_path, sizeof copy_path, "/proc/self/fd/%d", copy);
-            fd = capstone_application_open(copy_path);
-            int error = errno;
-            close(copy);
-            errno = error;
-        }
-    }
+    int fd = capstone_application_open(resumed.magic ? resumed_path : image_path);
     int image_error = errno;
     if (resumed.magic) close(resumed.image);
     errno = image_error;
@@ -875,8 +888,7 @@ int main(int argc, char **argv)
     host.spawner = &spawner;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) return die("open");
-    if (capstone_application_fixed(fd) || ioctl(device, CV_IMAGE, &fd) ||
-        capstone_application_inspect(fd, &desc)) {
+    if (image_denied(&fd, &desc) || capstone_application_inspect(fd, &desc)) {
         perror("capstone-vexec: image"); cleanup(); return 126;
     }
     void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
