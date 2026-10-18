@@ -1188,6 +1188,23 @@ module_param(resolve_sfence, bool, 0644);
 static unsigned long resume_sfences;
 module_param(resume_sfences, ulong, 0444);
 
+/* The resume boundary's satp refresh for bf3db3175 (the RTL lane, 2026-10-18): the ENTRY reads satp
+ * from frame[0] (switcher anvil:168-169), the ESCAPE saves the context's live satp to +928 (:479) and
+ * the RESUME restores it from +928 (:313). CVA6's ASID_WIDTH is 16 on this build
+ * (build_config_pkg.sv:41), so the kernel's ASID allocator is live, and if it rolls its generation
+ * while this process is switched out the mm gets a new ASID while +928 still holds the old one --
+ * which the kernel may have handed to another mm. So before every resume the module writes the mm's
+ * CURRENT satp, read on the resuming hart in the process's own context, into +928; +936 (srevroot)
+ * and +944 (options) are left as the escape saved them. resume_satp_refreshes counts the writes;
+ * resume_satp_changed counts those where a NONZERO saved word differed, the instrument that shows a
+ * rollover. capstone-qemu's escape does not write +928 (its frame ends at x31) and its resume restores
+ * an internal copy, so on QEMU the word reads 0 until the first refresh, the refresh is a no-op, and
+ * changed stays 0 there by construction. */
+#define CV_FRAME_SAVED_SATP (928 / 8)
+static unsigned long resume_satp_refreshes, resume_satp_changed;
+module_param(resume_satp_refreshes, ulong, 0444);
+module_param(resume_satp_changed, ulong, 0444);
+
 /* resolve_pte prints the faulting PTE once, when the bound trips. It is the check on this lane's
  * OWN conclusion that GUP sets A and D -- which was read out of the source, never measured on the
  * board -- so a boot where A and D come back clear refutes that reading rather than confirming a
@@ -1670,6 +1687,13 @@ thread_unwind:
                 asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");
                 t->sfence_pending = false;
                 ++resume_sfences;
+            }
+            if (t->started) {
+                /* run_event's fence orders this store before the CSRUNV, with the sentinel's. */
+                unsigned long satp = csr_read(CSR_SATP), saved = t->frame[CV_FRAME_SAVED_SATP];
+                if (saved && saved != satp) ++resume_satp_changed;
+                WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
+                ++resume_satp_refreshes;
             }
             t->event = run_event(t, action);
             t->started = true; t->reply_cap = false;
