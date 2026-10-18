@@ -467,6 +467,65 @@ Siblings: S-21 and S-22 (the same CSRUNV ENTRY/ESCAPE walks, a different consequ
 **Fix:** the RTL lane's, pre-registered for the next bitstream beside S-21/S-22's. The likely shape is to restore the
 caller's CPMPs before the pc reaches the frontend, or to hold the fetch until the walk ends.
 
+## S-24 — silicon only: the virtual `vm` step's store after `mprotect(RW)` faults with cause 15 on a pinned page again and again; the module's resolve() pins the same page and nothing changes until its 64-repeat bound ends the step `OPEN — the loop READ on silicon 2026-10-18 (vp2 boot r12, the module's own line); mechanism PROPOSED by the runtime lane (the RTL needs W and D for a store and never sets D, and GUP marks the struct page dirty rather than the PTE), its PTE reading pending; the fix is the module's (fault the page in through the kernel's write-fault path before the pin)`
+
+Siblings: S-25 (the other virtual-path silicon failure, a different mechanism), S-23, Q-30.
+
+**Reading** (llvm-capstone lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/`, result lines per boot):
+- **The step:** `vm` in run.py's suite (contract.dom) stores `p[8192] = 23` after `mprotect(p, 12288, RW)`, on an arena
+  page first touched read-only. On silicon it exits 139 with `domain fault cause=15` at the arena base + 0x2000, the
+  same code offset in r8, r9, r10, r11 and r12. QEMU passes this store.
+- **Boot r12** (module 06d663f30bf29825, the module's lines read from dmesg with a must-fire in the same window):
+  `capstone_vm: fault at 0x3faf4ba000 cause 15 resolved 65 times with no change; the page is pinned and the PTE is
+  untouched by this module`, at the launcher's own fault address. None of resolve()'s five refusal sites fired.
+- **Boots r6 and r7** (modules without the repeat bound): `vm` made no progress for 25 minutes. That is consistent
+  with the same loop, unbounded.
+
+**Withdrawn on the way:** r8's "the A/D candidate is refuted" rested on absent pr_warn lines that the board console
+cannot show during rungs (RETRACTED, dev 9e645777a5fb). The `!same` attribution was a deduction; r12 refutes it.
+
+**Mechanism, as proposed by the runtime lane** (not yet confirmed by a reading):
+- The RTL raises a store page fault unless the PTE has W and D, and never sets A or D itself (no Svadu).
+- The module's resolve() pins with GUP. On a present anonymous page, `follow_page_pte` calls `set_page_dirty(page)`
+  and leaves the PTE's D clear. Board tree `mm/gup.c:624-627`; only `follow_pfn_pte`, `:481-482`, calls
+  `pte_mkdirty`.
+- So the walker sees the same D = 0 PTE on every retry.
+- **The confirming reading,** pre-registered by the runtime lane: a PTE print at the loop shows V, R, W and A set
+  and D = 0.
+- **Open against it:** QEMU with svadu=false passed `vm` (the plan's svadu measurement). The proposal must explain
+  why QEMU's walker does not loop there.
+
+**Fix:** the module faults the page in through the kernel's write-fault path (which sets D) before pinning. Compiler
+lane, in the module queue's next revision.
+
+## S-25 — silicon only (vp2 bf3db3175): a capability store whose translation faults inside a virtual context retires with no exception and leaves a ghost entry in the store buffer's commit queue, which never drains; one ghost wedges every later DYN operation, four wedge every store `OPEN — mechanism REPORTED confirmed in simulation by the RTL lane (va-runv8 against its plain-sd control on bf3db3175, pre-registered at capstone-ariane 179b06610; the result itself not yet committed when this entry was filed), consistent with every board wedge reading; the RTL fix (carry the store exception to the STC's writeback, as R-56 did for loads) is the next bitstream's; until then no capability store may be the first access to a page (docs/design/virtual-capstone/isa.md)`
+
+Siblings: S-24 (the `vm` loop, a different mechanism), R-56 (the load-side twin), R-49 (the same ghost-count shape,
+another cause).
+
+**Board readings** (lane vp2-tier12, the wedge apertures read by the driver after each wedge; every comparison
+below made by script):
+
+| boot | step | 193 count | 221 valid bits | 194 store_state | 224 | 225 | reading |
+|---|---|---|---|---|---|---|---|
+| r8 | sparse-churn | 1 | none | 3 (WAIT_STORE_READY) | 0x25 | 0xc4 (stall, wstore) | a DYN op behind the store syncer |
+| r9 | sparse-stale | 1 | none | 3 | 0x25 | 0xc4 | identical to r8 |
+| r12 | sparse-stale, fence before every CSRUNV | 1 | none | 3 | 0x25 | 0xc4 | identical to r8: the fence does not remove it |
+| r10 | sqlite_write | 4 | none | 0 | 0x1d | 0x80 (idle) | the queue full, every unit ready |
+| r11 | mruby (its first silicon attempt) | 4 | none | 0 | 0x1d | 0x80 | identical to r10 |
+
+- **Every wedge:** 228 = 0xb8, the switcher's index 56. The RTL lane reads that from the source as residue: cur_idx
+  after a non-service RESUME, never reset.
+- **The trap log** (0x88/0x89) is residue too.
+- **The diagnosis rests on the count without valid bits.** The RTL lane reports that its simulation reproduces the
+  sparse face: cnt_q = 1 with no valid head before the escape's first write, then the walk's fourth write never
+  acknowledged.
+
+**Consequence on this bitstream:** the sparse steps (`*slot = malloc(64)`, a capability store as a page's first
+touch) and the kit applications' fresh-page capability stores wedge the core. Every further virtual record waits for
+the compiler lane's answer on where a capability store can be a first touch, which decides the scope of the module's
+pre-touch. QEMU escapes the faulting STC as kind 4 and cannot show this.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
