@@ -217,7 +217,11 @@ def main():
     (share / "abr").mkdir(exist_ok=True)
     text, result = appvm.run_app(a.state, image, ["-S", "-c", WORKLOAD], a.raw / "workload",
                                  run_args=("-e", "PYTHONHOME=/mnt/host/cpy"), timeout=a.timeout)
-    qualified = "CPYTHON-OK 1000" in text
+    # In an appvm session's collect pass nothing runs: run_app returns its sentinel and no
+    # result. Treating that as a failed workload stopped the collect after one call, so the
+    # boot ran only the workload and the read pass asked for steps it never recorded.
+    collecting = text.startswith("[runner] SESSION COLLECT")
+    qualified = "CPYTHON-OK 1000" in text or collecting
     print(f"  workload {'ok' if qualified else 'FAILED'}", flush=True)
     if not qualified:
         print(f"CONTROL-FAILED the interpreter did not run the workload; see {a.raw / 'workload.out'}",
@@ -246,7 +250,16 @@ def main():
         claims = json.loads((d / "case.json").read_text())
         text, result = run_script(a, share, image, d, claims["trigger"], d.name)
         o = observe(text, result, symbols, set(claims.get("fault_sites", [])))
-        if o.fault and o.reached and not o.attribution and (d / "negative_control.py").is_file():
+        if collecting:
+            # A session's collect pass has no results, so it cannot know which cases the read pass
+            # will attribute by control. Record each case's probe and negative control
+            # unconditionally, under the names attribute_by_control asks for; the read pass uses
+            # only the ones it needs.
+            if claims.get("control_probe"):
+                run_script(a, share, image, d, claims["control_probe"], d.name + "-probe")
+            if (d / "negative_control.py").is_file():
+                run_script(a, share, image, d, "negative_control.py", d.name + "-control")
+        elif o.fault and o.reached and not o.attribution and (d / "negative_control.py").is_file():
             attribute_by_control(a, share, image, d, o, symbols, claims.get("control_probe"))
         o.image_sha256 = v.sha256(image)
         o.case, o.arm, o.controls = d.name, rec, list(controls)
