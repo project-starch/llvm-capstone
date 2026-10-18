@@ -513,6 +513,10 @@ static long exec_in_place(void) {
                             CAPSTONE_SPAWN_STRINGS + 1, envp, CAPSTONE_SPAWN_STRINGS + 1, paths,
                             CAPSTONE_SPAWN_ACTIONS, &view))
     return -EINVAL;
+  /* The new image is copied into a sealed memfd and checked here, while the
+   * caller still exists to receive any error. The copy, not the file, is what
+   * crosses the exec: nothing can change it between this check and the new
+   * launcher's, and the module's denial of writers ends with this process. */
   int checked = above_stdio(capstone_application_image(view.path, &descriptor));
   if (checked < 0) return -errno;
   if (!view.argc) { close(checked); return -EINVAL; }
@@ -838,7 +842,29 @@ int main(int argc, char **argv)
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];
     if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);
-    int fd = capstone_application_image(resumed.magic ? resumed_path : image_path, &desc);
+    /* No copy of the image on a local filesystem: the module denies writers
+     * to the file (CV_IMAGE) before it is validated, and holds that until
+     * this process ends, as Linux does for a running executable. The bytes
+     * validated are the bytes loaded, and the domain cannot write its own
+     * image while it runs. After exec in place, and on 9p, NFS or FUSE, the
+     * image is a sealed copy, which the denial accepts as fixed. */
+    const char *source = resumed.magic ? resumed_path : image_path;
+    int fd = capstone_application_open(source);
+    if (fd >= 0 && !capstone_application_lockable(fd)) {
+        /* On a filesystem whose inodes do not track every writer, load a
+         * sealed copy, reopened read-only so the module accepts it. */
+        char copy_path[64];
+        int copy = capstone_application_image(source, &desc);
+        close(fd);
+        fd = -1;
+        if (copy >= 0) {
+            snprintf(copy_path, sizeof copy_path, "/proc/self/fd/%d", copy);
+            fd = capstone_application_open(copy_path);
+            int error = errno;
+            close(copy);
+            errno = error;
+        }
+    }
     int image_error = errno;
     if (resumed.magic) close(resumed.image);
     errno = image_error;
@@ -847,11 +873,15 @@ int main(int argc, char **argv)
     if (spawner.socket < 0) { int error = capstone_spawner_start(&spawner);
         if (error) { errno = error; return die("spawner"); } }
     host.spawner = &spawner;
-    void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
-    if (load(fd, &image, &image_bytes, &entry, &stack_bytes)) { close(fd); perror("capstone-vexec: virtual ABI"); return 126; }
-    host.private_fds[host.private_count++] = fd;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
-    if (device < 0) { munmap(image, image_bytes); return die("open"); }
+    if (device < 0) return die("open");
+    if (capstone_application_fixed(fd) || ioctl(device, CV_IMAGE, &fd) ||
+        capstone_application_inspect(fd, &desc)) {
+        perror("capstone-vexec: image"); cleanup(); return 126;
+    }
+    void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
+    if (load(fd, &image, &image_bytes, &entry, &stack_bytes)) { perror("capstone-vexec: virtual ABI"); cleanup(); return 126; }
+    host.private_fds[host.private_count++] = fd;
     /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
      * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
      * so the launcher runs on the default profile. The bit may still be set; it is not read. */

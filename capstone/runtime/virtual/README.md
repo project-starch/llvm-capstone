@@ -397,6 +397,24 @@ reschedule, a signal, an expired budget or `SIGKILL` at four points of
 follows an injection, that pins and fault counts match uninjected runs, that GUP is
 never asked for more than 16 pages, and that every `FOLL_PIN` pin is released.
 
+The launcher validates and loads an image without copying the file first. It
+opens the image read-only and asks the module (`CV_IMAGE`) to deny writers to
+it, as Linux does for a running executable: a launch while the image is open
+for writing fails with `ETXTBSY`, and so does opening a running image for
+writing, the application's own delegated `open` included, until the process
+ends. This holds where Linux keeps one inode per file (tmpfs, ext2/3/4,
+btrfs, xfs, erofs, squashfs). A memfd must be sealed against writing, growing
+and shrinking, because its own writable descriptor is not counted. On any
+other filesystem (9p, NFS, FUSE, overlayfs), and for exec in place, the image
+is a sealed memfd copy. `run-exec.py` checks this from the guest, with
+`exec-contract.c` built like `node.dom` and `memfd-launch.c` built static for
+the guest:
+
+```sh
+python3 capstone/runtime/virtual/run-exec.py ... --application "$out/exec.dom" \
+  --helper <memfd-launch>
+```
+
 ## Qualification and limits
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)

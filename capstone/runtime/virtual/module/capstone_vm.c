@@ -14,6 +14,7 @@
 #include <linux/log2.h>
 #include <linux/rbtree.h>
 #include <linux/xarray.h>
+#include <linux/file.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -86,6 +87,8 @@ struct context {
      * per retire from free_count before and after, so one module reads correctly on both bitstreams:
      * on one without the item free_count never moves and pushed_flat stays 0. */
     unsigned long pushed_flat;
+    /* The image file, writers denied from CV_IMAGE until release. */
+    struct file *image;
     wait_queue_head_t remap_wait;
     struct arena *remapping;
     struct page **remap_pages;
@@ -1678,6 +1681,19 @@ retry:
     } else if (op == CV_PROFILE) {
         u64 profile = c->exact_bounds ? 0x100 : 0;
         rc = copy_to_user((void __user *)arg, &profile, sizeof(profile)) ? -EFAULT : 0;
+    } else if (op == CV_IMAGE) {
+        /* Linux's own protection of a running executable (fs/exec.c):
+         * existing writers make it fail with ETXTBSY, later opens for
+         * writing fail with ETXTBSY until the context is released. */
+        __s32 fd;
+        struct file *file;
+        if (copy_from_user(&fd, (void __user *)arg, sizeof(fd))) rc = -EFAULT;
+        else if (c->image) rc = -EBUSY;
+        else if (!(file = fget(fd))) rc = -EBADF;
+        else if (!S_ISREG(file_inode(file)->i_mode) || !(file->f_mode & FMODE_READ) ||
+                 (file->f_mode & FMODE_WRITE)) { fput(file); rc = -EINVAL; }
+        else if ((rc = deny_write_access(file))) fput(file);
+        else c->image = file;
     } else if (op == CV_REMAP_BEGIN || op == CV_REMAP_END) {
         struct cv_remap r;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
@@ -2158,6 +2174,7 @@ static int vm_release(struct inode *inode, struct file *f)
         kvfree(t);
     }
     node_free_table(c);
+    if (c->image) { allow_write_access(c->image); fput(c->image); }
     mmdrop(c->mm); kvfree(c);
     wake_up_all(&slot_wait);   /* the released context's frames are gone */
     mutex_unlock(&vm_lock);

@@ -8,6 +8,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
 #include <unistd.h>
 
 static int within(uint64_t offset, uint64_t bytes, size_t size) {
@@ -100,9 +101,82 @@ static int inspect(const unsigned char *data, size_t size,
   return 0;
 }
 
+int capstone_application_open(const char *path) {
+  int fd = open(path, O_RDONLY | O_CLOEXEC);
+  if (fd < 0)
+    return -1;
+  struct stat st;
+  int error = fstat(fd, &st) ? errno : S_ISREG(st.st_mode) ? 0 : ENOEXEC;
+  if (error) {
+    close(fd);
+    errno = error;
+    return -1;
+  }
+  return fd;
+}
+
+int capstone_application_lockable(int fd) {
+  struct statfs s;
+  if (fstatfs(fd, &s))
+    return 0;
+  switch ((unsigned long)s.f_type) {
+  case 0x01021994UL: /* tmpfs, memfds */
+  case 0xEF53UL:     /* ext2, ext3, ext4 */
+  case 0x9123683EUL: /* btrfs */
+  case 0x58465342UL: /* xfs */
+  case 0xE0F5E1E2UL: /* erofs */
+  case 0x73717368UL: /* squashfs */
+    return 1;
+  }
+  return 0;
+}
+
+int capstone_application_fixed(int fd) {
+  /* A file with a name (tmpfs, ext4) was opened for writing through
+   * that name, and Linux counted every such writer: the denial excludes
+   * them all. A memfd is created unlinked (__shmem_file_setup clears its
+   * link count) and its creating descriptor is not counted in i_writecount,
+   * so for an unlinked, sealable file the seals have to exclude writers.
+   * An ordinary tmpfs file answers F_GET_SEALS too (F_SEAL_SEAL), which is
+   * why the link count, not the seals, tells the two apart. */
+  struct stat st;
+  if (fstat(fd, &st))
+    return -1;
+  if (st.st_nlink)
+    return 0;
+  int seals = fcntl(fd, F_GET_SEALS);
+  int needed = F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK;
+  if (seals >= 0 && (seals & needed) != needed) {
+    errno = ETXTBSY;
+    return -1;
+  }
+  return 0;
+}
+
+int capstone_application_inspect(int fd, struct capstone_application_descriptor_v2 *out) {
+  struct stat st;
+  if (fstat(fd, &st))
+    return -1;
+  if (!S_ISREG(st.st_mode) || st.st_size < (off_t)sizeof(Elf64_Ehdr) ||
+      st.st_size > 512 * 1024 * 1024) {
+    errno = ENOEXEC;
+    return -1;
+  }
+  void *data = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (data == MAP_FAILED)
+    return -1;
+  int error = inspect(data, (size_t)st.st_size, out);
+  munmap(data, (size_t)st.st_size);
+  if (error) {
+    errno = error;
+    return -1;
+  }
+  return 0;
+}
+
 int capstone_application_image(const char *path,
                                struct capstone_application_descriptor_v2 *out) {
-  int source = open(path, O_RDONLY | O_CLOEXEC);
+  int source = capstone_application_open(path);
   if (source < 0)
     return -1;
   int image = -1, error = 0;
@@ -111,8 +185,7 @@ int capstone_application_image(const char *path,
     error = errno;
     goto done;
   }
-  if (!S_ISREG(st.st_mode) || st.st_size < (off_t)sizeof(Elf64_Ehdr) ||
-      st.st_size > 512 * 1024 * 1024) {
+  if (st.st_size < (off_t)sizeof(Elf64_Ehdr) || st.st_size > 512 * 1024 * 1024) {
     error = ENOEXEC;
     goto done;
   }
@@ -149,13 +222,8 @@ int capstone_application_image(const char *path,
     error = errno;
     goto done;
   }
-  void *data = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, image, 0);
-  if (data == MAP_FAILED) {
+  if (capstone_application_inspect(image, out))
     error = errno;
-    goto done;
-  }
-  error = inspect(data, (size_t)st.st_size, out);
-  munmap(data, (size_t)st.st_size);
 done:
   close(source);
   if (error) {
