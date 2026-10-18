@@ -670,6 +670,72 @@ The RTL fix the lane names is to exempt modes 3 and 4 in finish(), or to give th
 - Of the probes: E3 moved `b` out of a5. The fault moved to the next use of a5, which read below the 8 written into it
   (a bounds fault at &used), and the stack slot was right. So the clobber is in the register. E3 does not fix the value
   (lane retraction 798310157901). E4 read 0x12, not 0x11, at the discriminating store.
+## S-29 — the virtual-context switcher installs and restores `satp` with no TLB flush, so a context can be served the caller's translation of a virtual address and the caller, after an escape, the context's `DEMONSTRATED IN SIMULATION 2026-10-18 on bf3db3175 by the RTL lane (va-satpstale, four arms, no exceptions); FIXED on virtual-profile-2-c d427e7391 (an unqualified flush-all on the switcher's satp write), lint at baseline on all eleven counters with the UNOPTFLAT membership identical BY NAME to the base; QEMU is the STRICTER side and is the reference (it flushes on every entry, escape and resume whose translation state differs, and keeps a context's translations in an index no other context reads), ruled by the semantics owner; NO CORPUS CONSEQUENCE today, because every CSRUNV the module issues runs with the caller's live satp equal to the context's; for the caller's DATA accesses the window is an ABI RULE IN BOTH DIRECTIONS, not something software cannot work around; the surface a fence cannot cover is the caller's first instruction FETCH after an escape, which is S-23's shape and is NOT observed here`
+
+**Siblings:** S-23 (the fetch face, where this window is the strongest candidate and NOT the demonstrated
+mechanism — the board lane showed pb10's refused address is physical and covered by a loaded region, so a stale
+translation alone cannot produce that capture), R-57 and S-25 (unrelated, the store-exception path), S-21/S-22
+(the frame's contents, also the RTL lane's for the next bitstream).
+
+**What the RTL does.** The switcher writes `satp` through its register port, reg id 66, on both of its walks, and
+nothing on that path flushes a TLB. `grep -c flush_tlb core/csr_regfile.sv` is 0 at bf3db3175. There is exactly one
+driver of `flush_tlb_o` in the whole core, `controller.sv:176`, and it is gated on `sfence_vma_i`, whose only source
+is a retired `SFENCE_VMA` at `commit_stage.sv:691-694`. The switcher's own pipeline flush (`controller.sv:215-226`)
+sets the five pipeline flushes and not the TLB flush. The architectural `csrw satp` path is no different; what
+distinguishes the switcher is that the caller cannot follow its write with an `sfence.vma` of its own.
+
+**Readings** (`va-satpstale`, capstone-ariane, simulation on bf3db3175; the arms differ only in two defines, the
+values are CAPPRINT readings in order, every arm no exceptions and harness SUCCESS):
+
+| arm | fences | readings | retired |
+|---|---|---|---|
+| `va-satpstale` | none | 0xaaaa, **0xaaaa**, 3, 11, **0xaaaa**, 0x55 | 28983 |
+| `va-satpstale-f` | after the escape | 0xaaaa, **0xaaaa**, 3, 11, 0xaaaa, 0x55 | 28984 |
+| `va-satpstale-b` | before the entry | 0xaaaa, **0xbbbb**, 3, 11, **0xbbbb**, 0x55 | 28984 |
+| `va-satpstale-bf` | both | 0xaaaa, **0xbbbb**, 3, 11, **0xaaaa**, 0x55 | 28985 |
+
+The second reading is the context's own read of a virtual address its chain maps to one physical page and the
+caller's chain maps to another; the fifth is the caller's first access after the escape returns. Two chains are
+built explicitly by one macro run twice, identical but for that one leaf.
+
+- **The entry direction:** with no fence the context reads the CALLER's page. One `sfence.vma` before the entry
+  flips it, which proves in the same change that the chain is built correctly, that `sfence.vma` flushes, and that
+  the frame's `satp` word takes effect. The first run's own trace also shows the live `satp` at the escape walk's
+  reg-66 transaction as the context's root, so the context demonstrably ran under its own chain and was served the
+  caller's.
+- **The escape direction:** `-b` against `-bf` is a matched pair differing by exactly ONE retired instruction, the
+  caller's `sfence.vma` after the escape, confirmed by a full retired-sequence diff and not by the count alone, and
+  the fifth reading differs with it. Both runs are cycle-identical through the load.
+- **ASID is 0 on both chains**, read back from the switcher's own transactions, so nothing makes the stale entries
+  non-matching. The switcher's walks run with translation forced off (`cva6.sv:838`), so its frame accesses are
+  physical and cannot have installed the entry; only the context's own access can have.
+
+**Bounds, written down because the shapes are close enough to confuse.** It is a stale DATA translation. S-23 is a
+FETCH refused with a physical address, and this arm's caller text page is mapped identically under both chains, so
+the instruction TLB is never observed. A context's fetches DO translate under its own `satp`
+(`cva6.sv:1910` and `:1912` OR `vctx_eff` into both translation enables), so the fetch face is real and unmeasured;
+the arm that would measure it points the caller's code virtual address at a different physical page under the
+context's chain, and is owed. Containment is also untested: both reachable physical pages lie inside the single
+capability region the arm installs, so what is shown is translation crossing the boundary, not the regions failing
+to contain it. A further control is owed: an arm whose context never touches the probe address, whose fifth reading
+must then be the caller's value with no fence.
+
+**A WITHDRAWN claim, kept because it was sent to two lanes.** The first framing said the escape direction was a
+defect software cannot work around, "an escape is asynchronous, so the caller resumes with no instruction of its own
+in which to have fenced". That is refuted by this arm's own control: the escape returns to CSRUNV+4 whatever its
+kind, since the escape walk restores ids 0..66 with no kind-dependent branch and the saved id 0 is the request's
+`pc_next`, so one `sfence.vma` there covers every escape. Static by design and observed for the ecall kind only.
+
+**The fix, and a hazard for anyone re-implementing it.** The first implementation (withdrawn, `8f1bcd4cc`) raised a
+pulse on the satp write and OR'd it into the MMU's `flush_tlb_i`. That input is not a flush-all: `cva6_tlb` qualifies
+it by `asid_to_be_flushed_i` and `vaddr_to_be_flushed_i`, and those two latch the EX stage's rs1/rs2 forwarding on
+EVERY cycle, so they are meaningful only for an actual `sfence.vma`; the instruction and data TLBs therefore flushed
+one arbitrary entry. The shared TLB is unqualified and did clear, which made the failure partial. It was caught
+because three of the four arms read exactly their pre-fix values while only the fenceless one changed, which is
+impossible, the fenceless arm and the post-escape-fence arm being instruction-identical up to the entry. `d427e7391`
+carries an unqualified flush-all from the CSR file through the EX stage, the LSU and the MMU to both TLBs, and all
+four arms then read the pre-registered set with the negative control unchanged to the cycle.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
