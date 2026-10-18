@@ -393,7 +393,9 @@ explicitly.
   under the contract "gp is NONLIN at entry" (`cincoffset` copies metadata, so the result is
   already NONLIN on all three). Tests: `audit-delin-nonlin.S` (expect `UNEXPECTED_CAP_TYPE`;
   control on LINEAR → no exception), `sem-delin-not-on-nonlin-gp.ll`, and `CT-NOT: delin` added
-  to `cap-gp-captable.ll`. This is the project lead's call on ABI direction — **decision point**.
+  to `cap-gp-captable.ll`. This is the project lead's call on ABI direction — **decided 2026-10-18:
+  drop the DELIN under the asserted NONLIN-gp contract**, implemented for `-capstone-image-gp`
+  (C-27 in `ISSUES.md`); the default ABI keeps it.
 - Per-instruction rows for `cincoffset/cincoffsetimm` (also: a *tagged* rs2 traps on spec/RTL,
   QEMU accepts it — and the compiler reads addresses as `EXTRACT_SUBREG` with no ALU write, so an
   X-half of a live capability can reach rs2 on silicon: `audit-cincoffset-tagged-rs2.S`,

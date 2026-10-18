@@ -32,6 +32,7 @@ extern cl::opt<bool> CapstoneGpFree;
 // reach this pseudo (they lower to ldc gp[i] earlier); this covers the gp-free
 // fallback for the remaining non-indexable symbol refs.
 bool capstoneGpFreeAbiActive();
+bool capstoneImageGpAbiActive();
 
 #define Capstone_EXPAND_PSEUDO_NAME "Capstone pseudo instruction expansion pass"
 #define Capstone_PRERA_EXPAND_PSEUDO_NAME "Capstone Pre-RA pseudo instruction expansion pass"
@@ -377,8 +378,50 @@ bool CapstoneExpandPseudo::expandCapGlobalBase(MachineBasicBlock &MBB,
   BuildMI(MBB, MBBI, DL, TII->get(BaseOpc), DstReg)
       .addReg(Capstone::C3)
       .addReg(SrcReg, getKillRegState(MBBI->getOperand(1).isKill()));
-  // DELIN is tied: $rd = $cap_in, both are DstReg.
-  BuildMI(MBB, MBBI, DL, TII->get(Capstone::DELIN), DstReg).addReg(DstReg);
+  // C-27. The DELIN below is emitted for every gp-derived global base EXCEPT
+  // under the image-gp ABI, where it is both unnecessary and fatal on silicon.
+  //
+  // Why it exists at all: SCC and CIncOffset INHERIT gp's type, so the
+  // materialised base is LINEAR iff gp is, and a LINEAR base cannot be used the
+  // way a global base is used. Two consumers depend on it being NONLIN:
+  //   * it is COPIED -- one base serves several accesses, and `movc rd, rs1`
+  //     nulls a tagged non-NONLIN source (task-005 finding C3);
+  //   * selectLGA's SHRINK path READS IT TWICE (the cursor, then SHRINK), and a
+  //     LINEAR value cannot be used more than once
+  //     (CapstoneISelDAGToDAG.cpp, "Done AFTER DELIN so the SHRINK operates on
+  //     the NONLINEAR (freely copyable) capability").
+  //
+  // Why it goes under image-gp: that ABI's gp is supplied by the virtual
+  // application's launch grant, and the trusted adapter grants every launch slot
+  // NONLIN (reg=3, linear=0) -- it never hands out a LINEAR gp, and deliberately
+  // so, since a delin of a register derived from a LINEAR gp would write the
+  // shared node's linear bit on every global access. The base is therefore
+  // ALREADY NONLIN and the DELIN is a no-op in principle. In practice it was
+  // worse than a no-op: `delin` of a non-LINEAR capability is UNEXPECTED_CAP_TYPE
+  // per the spec and raises cause 26 on the RTL, while QEMU's helper returned
+  // early on NONLIN and hid it. So the sequence was QEMU-only by construction.
+  //
+  // What it cost: vp2's Tier 1/2 boot 2 (2026-10-18). EVERY virtual step faulted
+  // with cause 26 at `delin a0` immediately after `scc a0, gp, a0` in
+  // __capstone_cap_init. It is not one glue site: 525 of contract.dom's 530
+  // delins are gp-derived, 5,983 of 5,988 in sqlite3.dom, 9,859 of 9,863 in
+  // mruby -- i.e. this materialisation, at every global access in the image.
+  //
+  // THE REMOVAL IS SOUND ONLY UNDER THAT ABI GUARANTEE, which is why it is keyed
+  // to capstoneImageGpAbiActive() and not to gp-free alone: a gp-free build whose
+  // gp is not the image grant keeps the DELIN, and so does the default capability
+  // ABI. If a configuration is ever made that activates image-gp AND hands a
+  // LINEAR gp, both consumers above break again -- the first `movc` nulls the
+  // shared base, and with -capstone-shrink-globals the double read is illegal.
+  // The guarantee is documented on the -capstone-image-gp option itself.
+  //
+  // The pseudo's `Size = 8` in CapstoneInstrInfo.td is left alone: it now
+  // OVERestimates by one instruction here, and an overestimate is the safe
+  // direction for branch relaxation (an underestimate would not be).
+  if (!capstoneImageGpAbiActive()) {
+    // DELIN is tied: $rd = $cap_in, both are DstReg.
+    BuildMI(MBB, MBBI, DL, TII->get(Capstone::DELIN), DstReg).addReg(DstReg);
+  }
 
   MBBI->eraseFromParent();
   return true;

@@ -10117,8 +10117,23 @@ override from its absence". Neither printed exit 75.
 
 ## Compiler / toolchain (ours)
 
-### C-27 — `delin` of a NONLIN gp-derived global base traps on silicon (cause 26) `REOPENED 2026-10-18 — the FIXED 2026-09-05 claim in ISSUES-ARCHIVE.md is WRONG and cost vp2's Tier 1/2 boot 2. The lead ruled the same day to drop the DELIN under the image-gp contract; this entry closes when the pins and the rebuilt images are green`
+### C-27 — `delin` of a NONLIN gp-derived global base traps on silicon (cause 26) `FIXED 2026-10-18 under -capstone-image-gp (the vp2 virtual SDK's ABI), on dev with the backend fix; the default capability ABI keeps the DELIN by design. Reopened the same day: the FIXED 2026-09-05 claim in ISSUES-ARCHIVE.md was WRONG and cost vp2's Tier 1/2 boot 2`
 
+> **CLOSED 2026-10-18 — the lead's word, given in the compiler lane's session: drop the DELIN under
+> the asserted NONLIN-gp contract.** `expandCapGlobalBase` emits no `delin` when
+> `capstoneImageGpAbiActive()` holds; the contract (gp is NONLIN at entry) is a stated precondition of
+> `-capstone-image-gp`, in its `cl::desc` and above the option. Validation:
+> - lit: `gp-table-linear-delin.ll` pins three ABIs two-sidedly with `--implicit-check-not=delin`
+>   (CAP default 2 delins, CT captable 0, IG image-gp 0); the IG arm negative-tested by splicing one
+>   `delin` back in.
+> - census on the rebuilt images: gp-derived delins 0, totals 530→5 (contract.dom), 5,988→5 (sqlite3),
+>   9,863→4 (mruby), falling by exactly the old gp-derived counts, so the delins are gone and not moved
+>   out of the window. The residuals are `ldc`-fed allocator-glue sites (`RESULT-delin-residuals.md`).
+> - run.py 41/41 with zero false tests on the rebuilt images (the old pin, as the control).
+> - silicon: on vp2 boot 3-T1 every virtual run of the rebuilt contract.dom (`f2017064`) passes
+>   `__capstone_cap_init` for the first time and stops later, at malloc's `csrr 0xcc0` (Q-21)
+>   (`tests/rtl-smoke/vp2-kit-2026-10-17/README.md`, `board-vp2-tier12-3t1.result-lines.txt`).
+>
 > **RETRACTION of "FIXED 2026-09-05 — the DELIN is dropped under the NONLIN-gp contract".**
 > That archive entry (kept verbatim in `ISSUES-ARCHIVE.md`, with a pointer here) says "Fixed by not
 > emitting the DELIN under the NONLIN-gp contract (the gp-captable ABI never needed it)". Only the
