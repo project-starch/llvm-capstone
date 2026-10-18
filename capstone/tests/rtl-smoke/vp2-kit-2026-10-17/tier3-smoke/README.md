@@ -1202,3 +1202,17 @@ UNGATED (PREFLIGHT=0). The count of the 3005ed52 cells that carried S-27 is corr
   not remove this wedge.
 - **The bundle is not filed:** 21 of its cells never ran, and the 3005ed52 wm0 bundle was not filed either.
 - wm1-fix6 follows. UNGATED (PREFLIGHT=0).
+
+### wm1-fix6, result (2026-10-18 21:59-22:11): the same wedge as on 3005ed52; neither wmem wedge is downstream of S-27
+
+`records/wm1-fix6.board.txt`. Kit bkit7-fix6, module d71f207a3af5546b, wm1's 26 images gate-checked.
+- **The boot ran 1 of 26 steps,** and the core wedged in the first control, as on 3005ed52.
+- **The wedge apertures equal wm1's on 3005ed52 in every field but two:**
+  - sw=221's commit-queue valid bits: 1011 here, 0111 there;
+  - the commit pc, which sits at the same code offset (…8988) in a different load.
+- **Together with wm0-fix6,** both wmem arms wedge identically with and without S-27's workaround. R-57's attribution
+  (the RTL lane's) holds at N=2 per arm, and wmem's silicon arms wait for a bitstream with R-57's fix.
+- **The bundle is not filed:** 25 of 26 steps never ran, the same rule as wm0-fix6.
+  - The 3005ed52 wm1 bundle was filed (`2026-10-18-vp2/vp2-nested-pools`). It is likewise a wedge in the first control,
+    and the fold should treat it as no reading.
+- UNGATED (PREFLIGHT=0).
