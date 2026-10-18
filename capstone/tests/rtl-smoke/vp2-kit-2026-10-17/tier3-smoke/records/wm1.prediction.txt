@@ -1,0 +1,55 @@
+# Tier 3 prediction, arm wm1: the board lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 26 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-nested-pools configuration virtual-wmem-pools platform qkit7-wrapper cells 23 tally {"NO-READING:control-failed": 23}
+# controls [["bounds-chunk", "fault"], ["uaf-chunk", "fault"], ["uaf-jumbo", "none"]]
+00_3c8be14c82_rpcrdma_write_offsets_global image 16219b5bebb1203c NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+01_c14d731e45_cms_oid_global image 16fdcc091f0c2285 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+02_99da8c2cdc_mdb_address_column image 842e18adcd061ce4 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+03_6eab9f83ab_cola_info_column image fdef3a357b5edd55 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+04_b48759e4a4_qnet6_col_set_str image b13b6054ee584fec NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+05_5a109265a6_usbll_address_struct image bc6e3b697ff3f744 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+06_a8b16d74e1_x509if_last_dn_static image 7bd7154404fb7826 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+07_fb504bc76c_mysql_auth_method image a9e1a0b6b7e1f080 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+08_31ab1a0a17_sip_cseq_method image 61f2dba5a512f150 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+09_693dc40936_geonw_proto_data_tvb image 5b292a67288f36ee NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+10_6fd3af5e99_t38_reassembly_buffer image 86ad0bd252a3fb8a NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+11_3a5f82dfb5_http_header_map image 85bd2880f8936bbd NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+12_90bb3a5c9e_xml_root_name_recycled image 35263cca20f9cd8f NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+13_0261fd7da6_http_range_cursor_past_chunk image af6751a07b07b31a NO-READING:control-failed cause 28 at wm_probe+56 reached True completed False attribution "probe"
+14_1d8acb21ab_solaredge_payload_six_past image c2f324a352aa136e NO-READING:control-failed cause 28 at wm_probe+56 reached True completed False attribution "probe"
+15_d24613c461_opcua_padding_below_chunk image bbfe3c4c8205a386 NO-READING:control-failed cause 28 at wm_probe+56 reached True completed False attribution "probe"
+16_e8ef9df09d_dcp_etsi_rs_parity_write image acb572875b3cafb6 NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+17_5a560f3f6a_dns_one_byte_write image 7ef413235caadaae NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+18_716a200295_rtps_batch_sample_info_unguarded image cdf6ab2192e7d86d NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+19_4a4871a831_ntlmssp_blob_length_before_check image 8d9a816614bd9757 NO-READING:control-failed cause 28 at wm_probe+56 reached True completed False attribution "probe"
+20_ed20250c13_proto_undecoded_bitmap_unbounded image ed9d0e7ae2295c7f NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+21_69dac89280_tcp_flags_str_sixteen_bytes image 404cbfe7afb9bc2a NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+22_c702b44a01_usbhid_output_usages_freed_twice image 9d18f9646799ec2b NO-READING:control-failed cause 25 at capstone_cap_revoke_child+88 reached True completed False attribution null
+# image 16219b5bebb1203c  00-rpcrdma-write-offsets-global-16219b5bebb1203c.dom
+# image cfd77272d182a4f6  00-uaf-chunk-cfd77272d182a4f6.dom
+# image 16fdcc091f0c2285  01-cms-oid-global-16fdcc091f0c2285.dom
+# image eca7288eecb01736  01-uaf-jumbo-eca7288eecb01736.dom
+# image 1776057e3be015cc  02-bounds-chunk-1776057e3be015cc.dom
+# image 842e18adcd061ce4  02-mdb-address-column-842e18adcd061ce4.dom
+# image fdef3a357b5edd55  03-cola-info-column-fdef3a357b5edd55.dom
+# image b13b6054ee584fec  04-qnet6-col-set-str-b13b6054ee584fec.dom
+# image bc6e3b697ff3f744  05-usbll-address-struct-bc6e3b697ff3f744.dom
+# image 7bd7154404fb7826  06-x509if-last-dn-static-7bd7154404fb7826.dom
+# image a9e1a0b6b7e1f080  07-mysql-auth-method-a9e1a0b6b7e1f080.dom
+# image 61f2dba5a512f150  08-sip-cseq-method-61f2dba5a512f150.dom
+# image 5b292a67288f36ee  09-geonw-proto-data-tvb-5b292a67288f36ee.dom
+# image 86ad0bd252a3fb8a  10-t38-reassembly-buffer-86ad0bd252a3fb8a.dom
+# image 85bd2880f8936bbd  11-http-header-map-85bd2880f8936bbd.dom
+# image 35263cca20f9cd8f  12-xml-root-name-recycled-35263cca20f9cd8f.dom
+# image af6751a07b07b31a  13-http-range-cursor-past-chunk-af6751a07b07b31a.dom
+# image c2f324a352aa136e  14-solaredge-payload-six-past-c2f324a352aa136e.dom
+# image bbfe3c4c8205a386  15-opcua-padding-below-chunk-bbfe3c4c8205a386.dom
+# image acb572875b3cafb6  16-dcp-etsi-rs-parity-write-acb572875b3cafb6.dom
+# image 7ef413235caadaae  17-dns-one-byte-write-7ef413235caadaae.dom
+# image cdf6ab2192e7d86d  18-rtps-batch-sample-info-unguarded-cdf6ab2192e7d86d.dom
+# image 8d9a816614bd9757  19-ntlmssp-blob-length-before-check-8d9a816614bd9757.dom
+# image ed9d0e7ae2295c7f  20-proto-undecoded-bitmap-unbounded-ed9d0e7ae2295c7f.dom
+# image 404cbfe7afb9bc2a  21-tcp-flags-str-sixteen-bytes-404cbfe7afb9bc2a.dom
+# image 9d18f9646799ec2b  22-usbhid-output-usages-freed-twice-9d18f9646799ec2b.dom

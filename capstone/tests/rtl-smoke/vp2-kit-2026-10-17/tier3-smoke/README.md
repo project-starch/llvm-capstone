@@ -368,3 +368,27 @@ This is the pilot's reading on the same image bytes, now on the campaign's modul
 - `compare-pilot.py` against the compiler lane's qkit7 prediction reads 3 of 3 SAME, by image sha256.
 - The boot completed: VIRTUAL_STAGED_DONE, and the batch rung returned 0.
 - Its images are byte-identical on t3-freeze and t3-freeze-nb, so this reading stands under the amendment.
+
+### Arms wm0 and wm1 (wireshark/wmem-repros), pre-registered (2026-10-18): through the appvm batch session, predicted on qkit7 by the board lane
+
+- **The mechanism:** `tier3-appvm-arm.sh` runs `run-defects.py` through `tools/board/appvm-session.py`: collect, one
+  boot, read. The prediction ran it with `--virtual-kit qkit7`, and the board runs it with `--board-kit bkit7`. The
+  hosted builds are `t3-images-nb/wmem/{cases,controls}-{OFF,ON}`, made on t3-freeze-nb.
+- **The image check:** with `EXPECT_IMAGES` set to the prediction's list, the board's collected images must equal the
+  prediction's by sha256 before the boot, or the script stops. Dry-run both ways: another arm's list stops it, and the
+  right list passes.
+- **These two predictions are the board lane's run on the same qkit7**, an amendment for the appvm arms. The lock was
+  free, and the compiler lane was told and can re-run them as a cross-check.
+- **wm0 (virtual-malloc, recorded vp2-malloc), `records/wm0.prediction.txt`:**
+  - MISSED 23, every case completing;
+  - the controls: bounds-chunk complete, uaf-chunk complete, uaf-jumbo fault.
+  - This equals the corpus record and the v6-fix run.
+- **wm1 (virtual-nested-pools, recorded vp2-nested-pools), `records/wm1.prediction.txt`:** NO-READING:control-failed 23.
+  - The cases themselves fault 25 at `wm_probe`.
+  - But the uaf-jumbo control faults with cause 29 during setup, before its ready mark, so the runner voids every
+    cell.
+  - This is the v6-fix run's reading exactly: wmem patch 0001's jumbo-block derive is refused by Q-15 with exact
+    bounds off. The exact-bounds rerun there returned 22 of 23 cells to the record.
+  - Silicon's bounds are not exact, so silicon is predicted to refuse the same derive. A jumbo control that completes
+    on the board would be a finding about Q-15 on silicon.
+- **The order:** wm0, then wm1, one boot each.
