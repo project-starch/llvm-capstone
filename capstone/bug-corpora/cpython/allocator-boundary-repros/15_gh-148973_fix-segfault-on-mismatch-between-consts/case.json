@@ -33,5 +33,6 @@
     "remove_unused_consts",
     "_PyCfg_OptimizeCodeUnit"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (WRITE 8) at remove_unused_consts Python/flowgraph.c:2048 | _PyCfg_OptimizeCodeUnit Python/flowgraph.c:2481. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (WRITE 8) at remove_unused_consts Python/flowgraph.c:2048 | _PyCfg_OptimizeCodeUnit Python/flowgraph.c:2481. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "① WITHDRAWN by the 2026-10-18 review. Spatial defect. ② faults cause=28 on `sd a7, 0x0(t0)`, the defective store. ① faults cause=24 on `ldc a1, 0x10(a0)` at address=0x12 -- a tiny non-capability base, so a dereference of what was read, not the read. CheriBSD is silent on this case."
 }
