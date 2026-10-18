@@ -402,3 +402,12 @@ Each record was written by `register-prediction.sh`, which first checked that th
 - **fpt** (ffmpeg/plain-temporal, vp2-malloc): CAUGHT 13. `records/fpt.prediction.txt`.
 Each tally is its corpus record's. These three boot after wm1, through `tier3-seq.sh` with `--sdk t3-freeze-nb/sdk`
 and `t3-images-nb/ARMS.spec`, one boot each, in that order.
+- **fca** (ffmpeg/carved, virtual-malloc, recorded vp2-malloc): MISSED 13, its record. `records/fca.prediction.txt`.
+- **fcs** (ffmpeg/carved, virtual-nested-pools, recorded vp2-nested-pools): CAUGHT 13, its record.
+  `records/fcs.prediction.txt`.
+  - All four carve controls read as expected: live-carve complete; uaf-carve, uaf-malloc and bounds-malloc fault.
+  - Cases 00 and 10 read NO-READING control-failed on v6-fix, a NULL from the module's add(). Here they read CAUGHT.
+- **Provenance:** fcs and fso compile port sources from the lane worktree and `ffmpeg-buffer-pool`, both outside the
+  freeze. No commit since bbc46be9d596 touches `capstone/ports` or `capstone/runtime`, and the image-hash gate
+  catches any drift regardless.
+- **The order after wm1:** mph, fph, fpt, fca, fcs.
