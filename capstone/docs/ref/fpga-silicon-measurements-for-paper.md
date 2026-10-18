@@ -3843,7 +3843,7 @@ and saying so was this document's own "a clean result is not evidence until the 
 fire" rule being broken in the act of invoking it. (Bench-lane audit.) **Closed 2026-09-13 by boot
 sw72:** the line fired once on a `bigregion.user 1419584` arm and zero times on the `4194304` arm of
 the same boot, positive and negative control together (§7o), so the zeros above now say what they
-appear to say.
+appear to say. **[RETRACTED 2026-10-18: sw72's count was taken from dmesg. The line is `pr_info` (modcapstone `capstone.c:306` at d04bd83, `:352` at 8fd1ea1249a9), and the board drivers set `/proc/sys/kernel/printk` to 1 before the first rung (`fpga_driver/run_ladder_perf_fpga.py:201`, since 2026-07-25), so it can never reach the UART capture. So the capture's zeros above still say nothing; the power-of-two argument below is what licenses the comparison.]**
 
 **The positive control is cheap and is owed:** one `--pool`-derived arm, where 1,419,584 rounds by
 1,728, shows the line once. After that a zero means something permanently. Until then the correct
@@ -4146,7 +4146,7 @@ board pair projects to 3.83 h + 4.52 h; the pre-registered cycle ratio for sw73 
 *Boot sw72, the controls boot* (control `retval=4`): **R-33's rounding log fired for the first time
 anywhere** — `bigregion.user 1419584` (rebuilt to count the module's "not representable" line in
 dmesg) reports `not-representable-lines=1`, and the representable `4194304` arm reports `0`, positive
-and negative control in one boot; every earlier "zero rounding lines" reading is now informative.
+and negative control in one boot; every earlier "zero rounding lines" reading is now informative **[RETRACTED 2026-10-18: not for the UART capture, which can never carry this pr_info line during a rung; sw72 controlled the dmesg channel only]**.
 **The S-15 instrument is fixed and controlled:** the measurement host now reads every REV_SHARED
 region's first word back after the share (default-on; a planted sentinel in the arena makes
 "unchanged" a positive reading). Negative control on QEMU (fix image): no trap line, sentinel
@@ -4199,7 +4199,7 @@ native board instret is 164.4× §4g's size-1 board instret (578,533,909) and 1.
 icount, consistent; (4) NOMEM, the named hours-in failure (128 MiB built against 120 MiB measured
 need) — absent: `RC 0` and the oracle hash on the domain arm; (5) `capinit-reload-scan` — satisfied by
 staging the scanned image by hash (the driver's manifest check). Also read: the module's rounding line
-fired 0 times (informative since sw72's positive control); the share-readback instrument printed no
+fired 0 times (informative since sw72's positive control **[RETRACTED 2026-10-18: a capture zero; uninformative, see §7o's bracket]**); the share-readback instrument printed no
 `share-trap` line and read the arena sentinel back unchanged (`SQ: arena0=1592590336` = `0x5EED0000`)
 before `G/enter` — the negative reading on silicon for a measurement image; all three shares returned
 (`SHA5`→`SHA6`); watchdog never fired.

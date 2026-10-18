@@ -19,3 +19,6 @@ FRTY retries 2 at  2 FRTY:01110E44
   module's own pr_info_ratelimited "thread create refused" is absent from this transcript (and r6's) although `threads`
   hit it (VM_CONTRACT_FAIL:thread create), while the kernel's pr_warn lines (sbi.c:213) are present. The DIAG print was
   pr_info. The positive control that would have caught this before the boot was in r6's transcript.
+  [CORRECTED 2026-10-18: the conclusion (the diagnostic is void) stands, the mechanism does not. During rungs the
+  console shows only KERN_EMERG: the baked driver sets printk=1 before rung 1. The sbi.c pr_warn lines are
+  boot-time, from before that setup.]
