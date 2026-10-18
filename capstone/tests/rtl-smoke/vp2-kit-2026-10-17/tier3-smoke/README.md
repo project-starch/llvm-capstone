@@ -1506,3 +1506,19 @@ killed the chain's group and wpt's `timeout` group within 6 s of fca's END, befo
   - pgm1: stage 5,972,411 B;
   - firmware 19,565,064 B each, 6.4 MB under the cap.
   - The d71f207a module is 4 KiB larger than 3005ed52's, which does not move the 2 MiB-padded firmware.
+
+**Amendment to the tree A flash plan (2026-10-19 01:06, before any flash; still NOT authorised): the bitstream is sealed
+and pulled.**
+- **The seal:** synth lane, capstone-ariane virtual-profile-2-c 8522d72fe. Routed WNS -18.985 (vp2: -19.019), TNS
+  -1,032,423.812, LUTLP-1 0, route 39 min with no congestion failure.
+- **The file:** `caplifive_vp2c_8522d72fe.bit`, 11,443,722 B, sha256
+  ba1339bcd1f6fbb4a8d9322990ae054e9494853553802d004bcd4ec2e30f5e7e.
+  - Pulled from the synth host's work-fpga output and verified against that sha256 before it was named. It is kept
+    read-only in the board lane's bitstream directory, beside `caplifive_vp2_bf3db3175.bit`.
+- **At the flash:**
+  - register it under that name;
+  - confirm `caplifive_vp2_bf3db3175.bit` is still registered, as the flash-back path;
+  - read back `nv_bitstream_name`; it must be `caplifive_vp2c_8522d72fe.bit`. The readback is recorded with the
+    session.
+- **Where the flash falls:** at the next arm boundary of the d71f207a re-run once authorised. An arm in flight finishes
+  first.
