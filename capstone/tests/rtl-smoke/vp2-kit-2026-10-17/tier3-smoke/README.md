@@ -822,8 +822,9 @@ silicon):
 ### Arm sq0, subsets e and f, and the arm in full (2026-10-18 17:42-18:05): 18 of 33 cells the same
 
 - sq0e reads 5 of 6 and sq0f 3 of 3.
-- Over the six subsets, sq0 (sqlite/engine-repros vp2-malloc) reads 18 of 33 cells equal to its prediction. The other
-  15 carry S-27's register-2 fault (tval 2, or a5 among the faulting instruction's operands).
+- Over the six subsets, sq0 (sqlite/engine-repros vp2-malloc) reads 18 of 33 cells equal to its prediction. Of the
+  other 15, 14 carry S-27's register-2 fault, and case 22 differs only in its fault cause, on both modules. (This line
+  first said all 15 carried S-27; see the RETRACTION in the sq0b-e workaround section below.)
 - **The bundles:** each subset ran on its own firmware (its own stage), so the arm is filed as six verdicts-v1 bundles,
   `sqlite/engine-repros/results/2026-10-18-vp2/vp2-malloc-sq0{a..f}`, and sq1's single subset as
   `vp2-nested-pools-sq1a`. Each carries its own platform record. Combining them is the fold's decision, and corpus.json
@@ -1140,3 +1141,17 @@ UNGATED (PREFLIGHT=0). Dry run: `dryrun-sql-arm.txt`.
   stage. The 3005ed52 subsets agree in the 11 other platform fields. How to merge is the runtime lane's ruling.
 - Dry run: the wrapper started the appvm script on its trigger with arms sq0a and sq0f, which were scored 6 of 6 and
   3 of 3 on stubbed readings.
+
+### RETRACTION (partial, 2026-10-18 21:50): case 22 of sq0 never carried S-27; 14 of the 15 non-matching 3005ed52 cells did, not 15
+
+Withdrawn: the sq0 summary's "the other 15 carry S-27's register-2 fault" (dev 4303f2993d57).
+- Case 22 was never S-27. On 3005ed52 it faulted exactly as it does on d71f207a (cause 13, the same pc, the same ASCII
+  tval). Its faulting instruction has no a5 operand and its tval is not 2.
+- It was counted among the 15 because it was a field DIFF. Its DIFF is the cause-priority one below.
+- **Corrected count: 14 of the 15 carried S-27.**
+  - 9 had tval 2: 06, 10, 12, 14, 15, 19, 20, 21, 23.
+  - 5 faulted 28/29 at real addresses: 07, 08, 09, 17, 26. These are now confirmed S-27-downstream: each reads as
+    predicted on the workaround module.
+- Cases 19 and 20 then show the cause-priority DIFF on d71f207a, with their verdicts as predicted.
+- The evidence is sq0d-fix6 (`records/sq0d-fix6.board.txt`, below). On the workaround module, case 22 faults as it did on
+  3005ed52.
