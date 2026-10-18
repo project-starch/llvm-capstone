@@ -1,7 +1,7 @@
 ; RUN: llc -mtriple=capstone64 -filetype=asm -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -filetype=obj -verify-machineinstrs < %s -o %t.o
 ; RUN: llvm-readobj -r %t.o | FileCheck %s --check-prefix=OBJ
-; RUN: llvm-objdump -s -j .rodata %t.o | FileCheck %s --check-prefix=BYTES
+; RUN: llvm-objdump -s -j .rodata -j .data %t.o | FileCheck %s --check-prefix=BYTES
 ; RUN: %llc_cap -O0 < %s -o /dev/null
 ; RUN: %llc_cap -O1 < %s -o /dev/null
 
@@ -47,19 +47,22 @@ define ptr addrspace(200) @get() addrspace(200) {
   ret ptr addrspace(200) @mixed
 }
 
-; Object view (measured 2026-09-04).  Only the @sym slot of @mixed (.rodata
-; +0x20) is relocated; the three integer slots and @boundary carry none, and
-; the bytes show the boundary value ZERO-extended: low quad 0x8000000000000000,
-; high quad 0.  Type NAMES print as "Unknown" until C-37.
+; Object view (measured 2026-09-04, sections 2026-10-18).  @mixed holds a
+; capability slot that __capstone_cap_init writes, so it is placed in .data;
+; @int_only, @boundary and @sym stay in .rodata.  Only the @sym slot of @mixed
+; (.data+0x10) is relocated; the two integer slots and @boundary carry none,
+; and the bytes show the boundary value ZERO-extended: low quad
+; 0x8000000000000000, high quad 0.  Type NAMES print as "Unknown" until C-37.
 ; MUTATION: replace the first `inttoptr (i128 14 ...)` of @mixed with `@sym`
-; -> a relocation at 0x10 appears before the 0x20 line and it fails
-; (performed 2026-09-04).
-; OBJ: .rela.rodata {
-; OBJ-NEXT: 0x20 {{R_Capstone_64|Unknown}} sym 0x0
+; -> a relocation at 0x0 appears before the 0x10 line and it fails.
+; OBJ: .rela.data {
+; OBJ-NEXT: 0x10 {{R_Capstone_64|Unknown}} sym 0x0
 ; OBJ-NEXT: }
-; BYTES: 0000 0e000000 00000000 00000000 00000000
-; BYTES-NEXT: 0010 0e000000 00000000 00000000 00000000
-; BYTES-NEXT: 0020 00000000 00000000 00000000 00000000
-; BYTES-NEXT: 0030 01000000 00000000 00000000 00000000
-; BYTES-NEXT: 0040 00000000 00000080 00000000 00000000
-; BYTES-NEXT: 0050 07000000 00000000
+; BYTES:      Contents of section .rodata:
+; BYTES-NEXT: 0000 0e000000 00000000 00000000 00000000
+; BYTES-NEXT: 0010 00000000 00000080 00000000 00000000
+; BYTES-NEXT: 0020 07000000 00000000
+; BYTES-NEXT: Contents of section .data:
+; BYTES-NEXT: 0000 0e000000 00000000 00000000 00000000
+; BYTES-NEXT: 0010 00000000 00000000 00000000 00000000
+; BYTES-NEXT: 0020 01000000 00000000 00000000 00000000

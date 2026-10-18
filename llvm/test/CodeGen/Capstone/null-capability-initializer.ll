@@ -25,11 +25,12 @@ entry:
 }
 
 
-; Object view (measured 2026-09-04): the null slot at .rodata+0 carries NO
-; relocation -- the first and only .rela.rodata entry is the @pair half at
+; Object view (measured 2026-09-04): the null slot at .data+0 carries NO
+; relocation -- the first and only .rela.data entry is the @pair half at
 ; 0x10.  Type NAMES print as "Unknown" until C-37.
 ; MUTATION: replace the null with `@pair` -> a relocation at 0x0 appears first
 ; and the 0x10 line fails (performed 2026-09-04).
-; OBJ: .rela.rodata {
+; (__capstone_cap_init writes the holder, so it is placed with the writable data.)
+; OBJ: .rela.data {
 ; OBJ-NEXT: 0x10 {{R_Capstone_64|Unknown}} pair 0x0
 ; OBJ-NEXT: }
