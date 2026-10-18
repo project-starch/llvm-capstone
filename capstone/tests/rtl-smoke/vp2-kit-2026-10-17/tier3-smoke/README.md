@@ -344,3 +344,18 @@ committed under `records/<tag>.prediction.txt` before that arm boots.
 - both controls fault.
 
 This is the pilot's reading on the same image bytes, now on the campaign's module and frozen SDK.
+
+**Amendment (2026-10-18, before the second arm): the SDK is `t3-freeze-nb`, the frozen tree with `-fno-builtin`.**
+- **Why:** the frozen v9 SDK compiled applications without `-fno-builtin`. Its `sdk.json` codegen lacks the flag,
+  which the plan pins for Tiers 1-3 and which Run 5 showed clears mmgr case 00's tag loss.
+- **What changed:** `t3-freeze-nb` is the same frozen tree with `-fno-builtin` appended to the codegen. The compiler
+  lane checked that the two `sdk.json` files differ in that key alone, by that one item.
+- **mpt** has four byte-identical images either way, so its pre-registration and boot stand for this SDK.
+- **The other arms' images** are in `t3-images-nb/` (the prebuilt trees rebuilt there too). Against v9 they differ in
+  0 to 2 images for the plain arms, and in nearly all for fso and the four prebuilt arms.
+- **Caveat 1, from the compiler lane's measurement:** `-fno-builtin` is a PARTIAL mitigation for C-81. It diverts
+  explicit `memcpy` calls, but not `__builtin_memcpy` and not a copy the compiler synthesises. Its scanner reads
+  `copy32_unknown_builtin` as losing tags at -O0, -O1 and -O2, with the flag on. So a clean cell here is no evidence
+  about C-81 exposure.
+- **Caveat 2:** Tier 1/2's application images (contract, sqlite3, mruby) were v9 without the flag. A cross-tier
+  comparison of application behaviour compares two build configurations.

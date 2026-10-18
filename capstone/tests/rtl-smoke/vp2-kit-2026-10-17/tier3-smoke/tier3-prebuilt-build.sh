@@ -5,8 +5,8 @@
 # Usage: tier3-prebuilt-build.sh <out>. Ends by itself.
 main() {
   set -u
-  local O=${1:?out} F=/mnt/hdd/$USER/capstone/t3-freeze G=/tmp/capstone/wt-gate
-  local SDK=$F/sdk INC=$F/llvm/lib/clang/22/include C=$G/capstone/bug-corpora
+  local O=${1:?out} F=/mnt/hdd/$USER/capstone/t3-freeze G=/tmp/capstone/wt-gate; local SDKROOT=${T3_SDKROOT:-$F}
+  local SDK=$SDKROOT/sdk INC=$F/llvm/lib/clang/22/include C=$G/capstone/bug-corpora
   export CAPSTONE_SDK=$SDK
   local LB=-DCAPSTONE_LLVM_BUILD_DIR=$F/llvm FFA=-DFFPOOL_ARCHIVE=/tmp/capstone/ffmpeg-buffer-pool/download/ffmpeg-9.0.1.tar.xz
   local spec n corpus arm opts B r1 r2
