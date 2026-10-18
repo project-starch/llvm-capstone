@@ -315,6 +315,18 @@ def main():
                 log(f"STOPPING after {r} wedged: {len(RUNGS) - pos} later rung(s) are "
                     f"collateral, not results")
                 break
+        else:
+            # BAKED_FINAL_APERTURES=1: no rung wedged, so read the same apertures from the RESTING core after the last
+            # rung. It is the control for every wedge reading: at rest the store buffer's commit count (193) must be 0
+            # with no valid bits in 221. A non-zero count after a healthy boot is a standing desync (the RTL lane's
+            # 2026-10-18 ghost entry: a capability store whose translation faulted inside a context). The shell is idle
+            # here, so the odd switch values that take the console's TX pin cost nothing.
+            if os.environ.get("BAKED_FINAL_APERTURES") == "1":
+                log("no rung wedged: reading the resting core's apertures (BAKED_FINAL_APERTURES=1)")
+                ap = read_wedge_apertures(console)
+                for line in ap:
+                    log(f"  APERTURE {line}")
+                transcript.append("===== final apertures (no wedge) =====\n" + "\n".join(ap) + "\n")
     finally:
         print("RUN_DONE", flush=True)
         try:

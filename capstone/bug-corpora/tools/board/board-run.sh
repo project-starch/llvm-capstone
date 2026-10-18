@@ -7,7 +7,8 @@
 #   3. builds the firmware on it (BOARD_FW_RECIPE with FW_WRAP/FW_MON/FW_IMAGE_DIR and BOARD_FW_DEFINES), and requires
 #      the dom_stack gate and the firmware size under BOARD_FW_CAP (the DECLARED-bake cap);
 #   4. boots it through the baked-rung driver: b0-stats (the board control) first, then the batch rung, with the
-#      watchdog;
+#      watchdog; the core's apertures are read after a wedge, and after the last rung when nothing wedged (the
+#      resting control: the store buffer's commit count must be 0);
 #   5. writes <work>/board.txt (the driver's per-rung transcript), <work>/SEQ and <work>/firmware.txt.
 # Exit 0 when the board ran (the transcript exists); 2 on a refused input; 1 on a failed step.
 # BOARD_STUB=1 prints what would run and runs nothing (exit 3): the dry run of the recipe itself.
@@ -68,7 +69,7 @@ main() {
   ( cd "$BOARD_DRIVER_DIR" || exit 1
     FPGA_BITSTREAM=$BOARD_BITSTREAM.bit FPGA_URL="$(cat "${BOARD_URL_FILE:-$HOME/.claude-kisp/secrets/fpga-console-url}")" \
       FPGA_FW=$FW/fw_payload.bin BAKED_CTL=/test-domains/vbatch/ctl.sh BAKED_RUNGS="b0-stats vbatch" LADDER_FPGA_DIR=$W/oracles \
-      BAKED_TIMEOUT=$TO BAKED_IDLE_S=200 PREFLIGHT=0 BAKED_WEDGE_APERTURES=1 BAKED_OUT=$W/board.txt \
+      BAKED_TIMEOUT=$TO BAKED_IDLE_S=200 PREFLIGHT=0 BAKED_WEDGE_APERTURES=1 BAKED_FINAL_APERTURES=1 BAKED_OUT=$W/board.txt \
       timeout $((TO + 1800)) python3 -m fpga_driver.run_baked_rungs_fpga > "$W/driver.log" 2>&1 & runner=$!
     ABORT_ON_ENTRY_STALL=1 ENTRY_STALL_S=420 bash board-watchdog.sh "$W/driver.log" 900 $runner > "$W/watchdog.log" 2>&1 & wd=$!
     wait $runner; rc=$?; sleep 2; kill $wd 2>/dev/null; wait $wd 2>/dev/null

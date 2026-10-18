@@ -8,7 +8,8 @@ execute():
 - writes the guest script for /test-domains/<BATCH>/;
 - hands the stage to the board kit's recipe, which bakes it into a private board image (the Tier 1 recipe: a manifest
   of explicit names, the shared buildroot restored in an EXIT trap, the initramfs checked by hash), builds the
-  firmware, runs the preflight, and boots through the baked-rung driver with the watchdog;
+  firmware (the dom_stack gate and the payload cap), and boots through the baked-rung driver with the watchdog
+  (the driver's own preflight is off, as in every vp2 Tier 1/2 boot);
 - reads the batch rung's own segment from the driver's per-rung transcript, never the raw capture (the console replays
   the previous boot on connect; amendment 1).
 

@@ -63,9 +63,17 @@ main() {
   fi
   echo "$(date +%T) shared image restored; BAKE_DONE"
 }
-restore_files() {  # <buildroot> <out>: remove exactly the manifest's files; put the stock /capstone.ko back
-  local FB=$1 OUT=$2 h dst
+restore_files() {  # <buildroot> <out>: remove exactly the manifest's files and the directories that held only them;
+  # put the stock /capstone.ko back. rmdir removes a directory only when it is empty, so a directory that held
+  # anything else stays. (The first smoke bake left test-domains/vbatch/images behind, empty.)
+  local FB=$1 OUT=$2 h dst d root
   while read -r h dst; do rm -f "$FB/overlay/$dst" "$FB/build-fpga/target/$dst"; done < "$OUT/manifest.txt"
+  while read -r h dst; do
+    for root in "$FB/overlay" "$FB/build-fpga/target"; do
+      d=$(dirname "$dst")
+      while [ "$d" != . ] && [ "$d" != test-domains ] && [ "$d" != usr/bin ]; do rmdir "$root/$d" 2>/dev/null || break; d=$(dirname "$d"); done
+    done
+  done < "$OUT/manifest.txt"
   [ -f "$OUT/capstone.ko.stock" ] && cp "$OUT/capstone.ko.stock" "$FB/build-fpga/target/capstone.ko"
   return 0
 }
