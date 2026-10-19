@@ -2182,3 +2182,81 @@ UNGATED (PREFLIGHT=0).
   (pc & 0xffff = 0x4238, the CDERIVE at image VA 0x24238); VM_EXIT 139. Every value is the QEMU twin's
   (a5dec6a32c49b3d3 at 4096).
 - No CPMX refusal anywhere in the boot (CPMX-DIAG: no dump). FRTY retried twice, both at 011113AC (`retire+0x220`).
+
+### sql0-treeA, result (2026-10-19 17:03-17:18, board 1, tree A): BLOCKED by S-23's data face in its first postgres session (pb10's exact signature); no SQL reading
+
+- **The harness worked this time:** the measure-only bake read 25,856,520 B, as predicted; firmware 9efda912a753e75d;
+  stage 28,810,594 B. The boot reached the batch, and postgres served its first session (`preflight-00`).
+- **The panic:**
+  - The console after this boot's own load_image runs `@@STEP-BEGIN preflight-00`, `@@HB 1`, `@@HB 2`, then
+    `FRTY:01713D98` (the module's base differs this boot, so that is `vm_ioctl+0xab0`, the instruction after its
+    CSRUNV), then the region and CPMP dump (slot 7 = region 21 [0xAC100000, 0xC0000000) RWX, CPHT 7), then
+    `MTVL:BC2C0825 CPMX:00000002 INJS:00000002`.
+  - Linux took `Oops - load access fault` at `mod_node_page_state+0x40` from `unpin_user_page+0x2a` (a3
+    ffffffd83c2c0825, badaddr 0xbc2c0825, cause 5), "Fatal exception in interrupt".
+  - The same physical address, kernel path and a3 as pb10's two boots on bf3db3175, here with a different Image and
+    program.
+- **Verdict:** VOID by the chain's own gate (no bundle). It is not a harness defect this time: the first SQL session
+  hit S-23's data face. sql0 cannot be measured on silicon until S-23's data face is fixed or worked around.
+  - Both tree A instances (step 4's sparse-churn and this) show a fetch retry at `vm_ioctl+0xab0`, right after a
+    CSRUNV return, just before the data refusal. That ordering is an observation; its relation to the refusal is not
+    established.
+- The runner fix (the batch path, chmod 700) and the kit fix (staged execute bits) are confirmed on silicon by this
+  boot: postgres ran.
+
+### S-26's firming arms on tree A, pre-registered (2026-10-19 17:35, before the boots): two cold boots, `run-s26.sh cur-esc var1k`
+
+The runtime lane's two arms, which firm up the pair after the auditor.
+- **cur-esc** (9e4924294f94eafe, on image 3537c881f1020464):
+  - The image is today's Tier 1 stage (rev8's) with only `vm/vm-contract.sh` swapped for the pair's script plus
+    `diag_escapes=1` at insmod (1c151e73cffe3224). The stage was restored to its record afterwards.
+  - The firmware is cur's: the QNT0 print, no boot write.
+  - Rungs: b0-stats, vm-contract.
+  - **Predicted** (the runtime and RTL lanes): QNT0 00000000; VM_SPIN at the 150 s bound with resume_satp_refreshes
+    growing; and every printed escape (`capstone_vm: escape ... frame kind 0x1 cause 0x0`, budgeted) **kind 1, cause 0**,
+    the quantum's masked cause.
+- **var1k** (2406f5a523ca00e4, on the pair's image 89baf46451448872):
+  - var's firmware with CAPSTONE_BOOT_QUANTUM=1000 in place of 2,000,000. The compiled ELF has `li t1,1000; csrw 0x7c3`
+    in cap_env_init. So it differs from var by that one value.
+  - Rungs: b0-stats, vm-contract. Cold, with no STEP and no b0-hello.
+  - **Predicted** (the RTL lane, written before it runs): the context retires nothing and spins, the same signature as
+    QNT0 = 0: QNT0 000003E8; VM_SPIN at the bound with resume_satp_refreshes growing. The RTL lane's tree-A bracket is
+    identical to bf3db3175's: q0 and 1,000 retire nothing (28,987), 1,500 starts the context (28,989), 2,000 completes
+    (29,030).
+  - **A completion instead** means silicon differs from the simulation, the first suspect being the testbench's fixed
+    12-cycle delay on each of the entry walk's ~70 register transactions. It would also settle mir's ambiguity: mir's
+    return would then be the quantum, not STEP state.
+- **The judge:** `s26-judge.py` with the two new arms. It is tested on EDITED COPIES OF THE REAL run directories
+  (board.txt and board-raw.txt), not on written fixtures:
+  - cur-esc with eight kind-1/cause-0 escape lines PASS; with one kind 0x2 FAIL; with none FAIL;
+  - var1k on cur's spinning run with QNT0 000003E8 PASS; on var's returning run FAIL.
+  - The three real arms re-judge unchanged: var PASS, cur PASS, mir FAIL.
+- Board 1, cold boots, UNGATED (PREFLIGHT=0).
+
+### sql0's harness ran clean, and S-23 blocked it: the cpython boots after the firming arms
+
+The cpython allocator-boundary boots follow, pre-registered separately. A kernel panic there is S-23's NO-READING, not
+a cpython verdict, and a fourth instance with its MTVL is evidence the RTL lane needs.
+
+### S-26's firming arms, results (2026-10-19 17:29-17:45, board 1, tree A, module 39d8492d): cur-esc as predicted; var1k's prediction FAILS (1,000 at boot, cold, no STEP, completes)
+
+| Arm | QNT0 | vm-contract | Escapes | Verdict |
+|---|---|---|---|---|
+| cur-esc (9e4924294f94eafe) | 00000000 | 930, VM_SPIN; resume_satp_refreshes 22,182 → 73,398 → 124,590 | 16 printed (the budget), every one `frame kind 0x1 cause 0x0` | **as predicted** |
+| var1k (2406f5a523ca00e4) | 000003E8 | 0, identity branch; `steps=41805 faults=426` | — | **prediction FAILS** (930 predicted, from the RTL lane's tree-A simulation) |
+
+- **cur-esc settles the auditor's open point.** The escape kind is now observed, not inferred: the spin at quantum 0 is a
+  loop of kind-1 escapes with cause 0, re-entered continuously. Its counters reproduce cur's (22,621 → 73,763 →
+  124,857) to within 2%.
+- **var1k answers the two questions the mirror left open:**
+  - **The threshold:** with a 1,000-cycle quantum written at boot, cold, and no process-ABI STEP, the context completes
+    on silicon, where the RTL simulation (tree A and bf3db3175 alike) has 1,000 retire nothing.
+  - **mir's ambiguity:** var1k's 41,805 steps match mir's 42,151 (after b0-hello's STEP), so the quantum decides,
+    and STEP state does not.
+  - On silicon the threshold for no progress lies below 1,000. The RTL lane's first suspect for the difference is the
+    testbench's fixed 12-cycle delay on each of the entry walk's ~70 register transactions.
+- **S-26 at this point** (N=1 per arm, UNGATED):
+  - a quantum of 0 at the first CSRUNV gives a loop of kind-1, cause-0 escapes without progress;
+  - writing 2,000,000 at boot, or 1,000, removes it with no STEP;
+  - the threshold is between 0 and 1,000 cycles on silicon.
+- A silicon bracket (100 / 300 / 600 in one boot) is now worth a boot, by the RTL lane's own condition.
