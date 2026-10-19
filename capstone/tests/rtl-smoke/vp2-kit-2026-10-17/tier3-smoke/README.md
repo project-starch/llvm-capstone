@@ -2920,3 +2920,24 @@ on the QEMU stage, and `mkdir -p` on an existing directory does nothing. So the 
     [ffffffffffffe220, ffffffffffffe410). That is a defect candidate sent to the runtime owner, not variance.
   - sql0 on QEMU is therefore not deterministic. Until a set-valued record exists, a board cell that mismatches the
     single record is reported as "possibly variance", not as a verdict.
+
+### sql0-drt2, pre-registered (2026-10-19 21:00, before its boot): sql0's cells through the S-23 retry, with the empty-directory fix
+
+**The arm:** `tier3-sql-arm-rev2j.sh` c718db518a1716a4, on board 1 after sql0-csr
+(`chain-drt2.sh` 40abe5065abc3f2d). It is sql0-drt with ONE change, the runner: run-arm.py 8826a2ca21a33acd.
+Kits bkit7-rev2xD / bkit7-rev2xmD and monitor f13dbc5 are sql0-drt's.
+
+**Gates, as the runtime lane ruled:**
+- **(a)** the static command diff, required by the runner;
+- **(b)** the must-fire: no `could not open directory` in any session, and the positive control answered. A
+  failure STOPs before scoring. Its dry run tripped on a planted FATAL line.
+
+**Prediction:**
+- 21 sessions run, with the deny carried by DRT1 retries as in sql0-drt (no DRTX, no Oops). The DRT1 count is a
+  reading.
+- The cells are scored against t3-sql-trim-vm/bundle (9 cells). Predicted as that record:
+  - CAUGHT 02 and 03;
+  - MISSED 01 and 04-09;
+  - both controls fault.
+- A cell that differs is reported as "possibly variance", not as a verdict, until a set-valued sql0 record exists. The
+  QEMU A arm itself read 8 of 9, with 03 out of the denominator.
