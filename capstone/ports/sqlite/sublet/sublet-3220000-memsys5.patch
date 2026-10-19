@@ -36,6 +36,19 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
 # block carries the heap's data rights; issued from a static array, that
 # includes execute.
 #
+# Q-15, option (iii): on the compact bounds format CDERIVE refuses (29) a
+# child whose length is not a multiple of its bounds granule (exact below
+# 4 KiB, else 2^(msb(len)-9)). So the recorded request is rounded up to its
+# granule (capstone_repr_round, runtime/include/capstone/representable.h),
+# and so is the lookaside's sz*cnt. The pad is tail only and stays inside
+# the block: a block is a power-of-two number of atoms, so its size is a
+# multiple of any granule up to it, and the pool base carries the heap's
+# granule alignment (repro322_common.h). A child starts on its block, so
+# placement is unchanged. Every derive is counted, and every padded one with
+# its pad (sqlite3CapstoneQ15Pad; the corpus prints Q15_PAD after a completed
+# case). An overrun into the pad is not caught: a CAUGHT case that becomes
+# MISSED that way is a true MISSED, pad-masked, and counted.
+#
 # setupLookaside derives the buffer's lifetime and a generation below it,
 # from a memsys5 block or a buffer the application supplied alike.
 # sqlite3DbMallocRawNN returns a child of the generation bounded to the slot
@@ -48,15 +61,16 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
 # goes back on its own free list without a free.
 --- a/sqlite3-capstone.c
 +++ b/sqlite3-capstone.c
-@@ -19,6 +19,7 @@
+@@ -19,6 +19,8 @@
  */
  #define SQLITE_CORE 1
  #define SQLITE_AMALGAMATION 1
 +#include <capstone/capability.h>
++#include <capstone/representable.h>
  #ifndef SQLITE_PRIVATE
  # define SQLITE_PRIVATE static
  #endif
-@@ -15141,6 +15142,8 @@
+@@ -15141,6 +15143,8 @@
    LookasideSlot *pFree;   /* List of available buffers */
    void *pStart;           /* First byte of available memory space */
    void *pEnd;             /* First byte past end of available space */
@@ -65,7 +79,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  };
  struct LookasideSlot {
    LookasideSlot *pNext;    /* Next buffer in the list of free buffers */
-@@ -22955,6 +22958,16 @@
+@@ -22955,6 +22959,16 @@
  #ifdef SQLITE_ENABLE_MEMSYS5
  
  /*
@@ -82,7 +96,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  ** A minimum allocation is an instance of the following structure.
  ** Larger allocations are an array of these structures where the
  ** size of the array is a power of 2.
-@@ -22994,6 +23007,7 @@
+@@ -22994,6 +23008,7 @@
    int szAtom;      /* Smallest possible allocation in bytes */
    int nBlock;      /* Number of szAtom sized blocks in zPool */
    u8 *zPool;       /* Memory available to be allocated */
@@ -90,7 +104,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    
    /*
    ** Mutex to control access to the memory allocation subsystem.
-@@ -23027,6 +23041,13 @@
+@@ -23027,8 +23042,48 @@
    */
    u8 *aCtrl;
  
@@ -101,10 +115,45 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
 +  */
 +  u32 *aReq;
 +
++  /*
++  ** Q-15 (option iii): on the compact bounds format a child must be
++  ** representable, so its length is rounded up to its granule (tail pad
++  ** only, inside the block).  Counted, and read by sqlite3CapstoneQ15Pad.
++  */
++  u64 q15Items, q15Padded, q15PadBytes, q15PadMax;
++
  } mem5;
  
++/* CAPSTONE_Q15_TRACE=1 in the environment prints every padded derive as it
++** happens, so a case that faults still shows which pads it had: a case with
++** none cannot be pad-masked.  Read once; inert when unset. */
++static void capstoneQ15Note(u64 pad){
++  static int trace = -1;
++  mem5.q15Items++;
++  if( pad ){
++    mem5.q15Padded++;
++    mem5.q15PadBytes += pad;
++    if( mem5.q15PadMax<pad ) mem5.q15PadMax = pad;
++    if( trace<0 ){
++      const char *z = getenv("CAPSTONE_Q15_TRACE");
++      trace = z && z[0]=='1';
++    }
++    if( trace ){
++      fprintf(stderr, "Q15_PADDED item=%llu pad=%llu\n",
++              (unsigned long long)mem5.q15Items, (unsigned long long)pad);
++    }
++  }
++}
++/* items, padded, pad_bytes_total, pad_bytes_max: the Q15_PAD line's fields */
++SQLITE_API void sqlite3CapstoneQ15Pad(unsigned long *aOut){
++  aOut[0] = mem5.q15Items; aOut[1] = mem5.q15Padded;
++  aOut[2] = mem5.q15PadBytes; aOut[3] = mem5.q15PadMax;
++}
++
  /*
-@@ -23101,7 +23122,7 @@
+ ** Access the static variable through a macro for SQLITE_OMIT_WSD.
+ */
+@@ -23101,7 +23156,7 @@
    assert( p!=0 );
    i = (int)(((u8 *)p-mem5.zPool)/mem5.szAtom);
    assert( i>=0 && i<mem5.nBlock );
@@ -113,19 +162,23 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    return iSize;
  }
  
-@@ -23178,8 +23199,9 @@
+@@ -23178,8 +23233,13 @@
    memset(&mem5.zPool[i*mem5.szAtom], 0xAA, iFullSz);
  #endif
  
 -  /* Return a pointer to the allocated memory. */
 -  return (void*)&mem5.zPool[i*mem5.szAtom];
-+  /* Return the block as a child of the pool, bounded to the request. */
-+  mem5.aReq[i] = (u32)ROUND8(nByte);
++  /* Return the block as a child of the pool, bounded to the request: the
++  ** request rounded to 8, then up to its bounds granule (Q-15), which stays
++  ** inside the block because a block is a power-of-two number of atoms. */
++  mem5.aReq[i] = (u32)capstone_repr_round(ROUND8(nByte));
++  assert( mem5.aReq[i]<=(u32)iFullSz );
++  capstoneQ15Note(mem5.aReq[i] - ROUND8(nByte));
 +  return capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, mem5.aReq[i]);
  }
  
  /*
-@@ -23189,6 +23211,9 @@
+@@ -23189,6 +23249,9 @@
    u32 size, iLogsize;
    int iBlock;
  
@@ -135,7 +188,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    /* Set iBlock to the index of the block pointed to by pOld in 
    ** the array of mem5.szAtom byte blocks pointed to by mem5.zPool.
    */
-@@ -23290,7 +23315,7 @@
+@@ -23290,7 +23353,7 @@
    int nOld;
    void *p;
    assert( pPrior!=0 );
@@ -144,7 +197,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    assert( nBytes>=0 );
    if( nBytes==0 ){
      return 0;
-@@ -23315,12 +23340,14 @@
+@@ -23315,12 +23378,14 @@
  ** All allocations must be a power of two and must be expressed by a
  ** 32-bit signed integer.  Hence the largest allocation is 0x40000000
  ** or 1073741824 bytes.
@@ -162,7 +215,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  }
  
  /*
-@@ -23373,9 +23400,12 @@
+@@ -23373,9 +23438,12 @@
      mem5.szAtom = mem5.szAtom << 1;
    }
  
@@ -177,7 +230,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  
    for(ii=0; ii<=LOGMAX; ii++){
      mem5.aiFreelist[ii] = -1;
-@@ -23406,6 +23436,10 @@
+@@ -23406,6 +23474,10 @@
  static void memsys5Shutdown(void *NotUsed){
    UNUSED_PARAMETER(NotUsed);
    mem5.mutex = 0;
@@ -188,7 +241,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    return;
  }
  
-@@ -25412,6 +25446,20 @@
+@@ -25412,6 +25484,20 @@
  static int isLookaside(sqlite3 *db, void *p){
    return SQLITE_WITHIN(p, db->lookaside.pStart, db->lookaside.pEnd);
  }
@@ -209,7 +262,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  #else
  #define isLookaside(A,B) 0
  #endif
-@@ -25488,7 +25536,7 @@
+@@ -25488,7 +25574,7 @@
        return;
      }
      if( isLookaside(db, p) ){
@@ -218,7 +271,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  #ifdef SQLITE_DEBUG
        /* Trash all content in the buffer being freed */
        memset(p, 0xaa, db->lookaside.sz);
-@@ -25658,11 +25706,11 @@
+@@ -25658,11 +25744,11 @@
      }else if( (pBuf = db->lookaside.pFree)!=0 ){
        db->lookaside.pFree = pBuf->pNext;
        db->lookaside.anStat[0]++;
@@ -232,7 +285,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
      }else{
        db->lookaside.anStat[2]++;
      }
-@@ -144023,6 +144071,13 @@
+@@ -144023,6 +144109,13 @@
  ** If pStart is not NULL then it is sz*cnt bytes of memory to use for
  ** the lookaside memory.
  */
@@ -246,7 +299,7 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
  static int setupLookaside(sqlite3 *db, void *pBuf, int sz, int cnt){
  #ifndef SQLITE_OMIT_LOOKASIDE
    void *pStart;
-@@ -144030,6 +144085,7 @@
+@@ -144030,6 +144123,7 @@
    if( sqlite3LookasideUsed(db,0)>0 ){
      return SQLITE_BUSY;
    }
@@ -254,18 +307,22 @@ slot is a child of the lookaside's generation, revoked by sqlite3DbFree.
    /* Free any existing lookaside buffer for this handle before
    ** allocating a new one so we don't have to have space for 
    ** both at the same time.
-@@ -144072,6 +144128,10 @@
+@@ -144072,6 +144166,14 @@
      db->lookaside.pEnd = p;
      db->lookaside.bDisable = 0;
      db->lookaside.bMalloced = pBuf==0 ?1:0;
++    /* Q-15: sz*cnt rounded up to its granule (tail pad only), inside pStart,
++    ** whose memsys5 block was rounded the same way. */
 +    db->lookaside.pBlock = capstone_cap_derive(pStart,
-+        (uptr)pStart - __builtin_capstone_cap_get_base(pStart), (u64)sz*cnt);
++        (uptr)pStart - __builtin_capstone_cap_get_base(pStart),
++        capstone_repr_round((u64)sz*cnt));
 +    db->lookaside.pLife = capstone_cap_derive(db->lookaside.pBlock, 0,
-+        (u64)sz*cnt);
++        capstone_repr_round((u64)sz*cnt));
++    capstoneQ15Note(capstone_repr_round((u64)sz*cnt) - (u64)sz*cnt);
    }else{
      db->lookaside.pStart = db;
      db->lookaside.pEnd = db;
-@@ -144599,6 +144659,7 @@
+@@ -144599,6 +144701,7 @@
    db->magic = SQLITE_MAGIC_CLOSED;
    sqlite3_mutex_free(db->mutex);
    assert( sqlite3LookasideUsed(db,0)==0 );

@@ -126,6 +126,19 @@ static int repro_init(void) {
   return 0;
 }
 
+/* Q-15 (option iii) on the Sublet arm: the patch rounds each child's length up to its bounds granule (tail
+ * pad only) and counts it. The line follows a completed case only; a case that faults never prints it. */
+#ifdef REPRO322_VIRTUAL_SUBLET
+void sqlite3CapstoneQ15Pad(unsigned long *aOut);
+#define REPRO322_Q15_REPORT() do { unsigned long q15_[4];                         \
+    sqlite3CapstoneQ15Pad(q15_);                                                    \
+    printf("Q15_PAD items=%lu padded=%lu pad_bytes_total=%lu pad_bytes_max=%lu\n", \
+           q15_[0], q15_[1], q15_[2], q15_[3]); } while (0)
+#else
+/* Empty, not do {} while (0): at -O0 that emits branches, and the other arms' images must not change. */
+#define REPRO322_Q15_REPORT()
+#endif
+
 /* The tag on the command line is the fixture check the contract asks for: a
  * program told to run another case refuses instead of running this one and
  * reporting under the wrong name. BEGIN is printed before anything else, so
@@ -142,6 +155,7 @@ static int repro_init(void) {
     }                                                                    \
     printf("%s BEGIN\n", (TAG));                                         \
     (void)run_case();                                                    \
+    REPRO322_Q15_REPORT();                                               \
     printf("%s RETURNED\n", (TAG));                                      \
     return 0;                                                            \
   }
