@@ -1317,7 +1317,9 @@
         "virtual-malloc",
         "virtual-nested-pools",
         "silicon-wm-stock",
-        "silicon-wm-sublet"
+        "silicon-wm-sublet",
+        "vp2-malloc",
+        "vp2-nested-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -1357,13 +1359,17 @@
         "virtual-malloc": "virtual-wmem",
         "virtual-nested-pools": "virtual-wmem-pools",
         "silicon-wm-stock": "silicon-wmem-stock",
-        "silicon-wm-sublet": "silicon-wmem-sublet"
+        "silicon-wm-sublet": "silicon-wmem-sublet",
+        "vp2-malloc": "virtual-wmem",
+        "vp2-nested-pools": "virtual-wmem-pools"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-11-virtual-23/virtual-malloc",
         "virtual-nested-pools": "results/2026-10-11-virtual-23/virtual-nested-pools",
         "silicon-wm-stock": "results/2026-10-16-silicon/silicon-wm-stock",
-        "silicon-wm-sublet": "results/2026-10-16-silicon/silicon-wm-sublet"
+        "silicon-wm-sublet": "results/2026-10-16-silicon/silicon-wm-sublet",
+        "vp2-malloc": "results/2026-10-19-vp2c-treeA/vp2-malloc",
+        "vp2-nested-pools": "results/2026-10-19-vp2c-treeA/vp2-nested-pools"
       },
       "where": "capstone/bug-corpora/wireshark/wmem-repros"
     },
