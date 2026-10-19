@@ -3789,3 +3789,40 @@ lands. That is the runtime lane's.
 - the pair is NOT one variable;
 - the mechanism is a HYPOTHESIS.
 - Not allowed until the control AND alternative 1 are closed: "is caused by", "removes it", "the floor removed".
+
+### node-floor-2: its own Tier 1 boot, then sql0-nf2-treeB, pre-registered (2026-10-20 05:4x, before either boot): board 2 after the srzdev control; cpyp-DB moves behind them
+
+The auditor's alternative 1, made readable. Module 54d8a3af1158c3f4 (banner node-floor-2), built by the compiler lane
+from runtime lane c2b843ad88ad.
+- **What it adds:** node-floor-1 plus one plain pr_emerg per context in vm_release, after the teardown retires:
+  `capstone_vm: release retires attempted=N succeeded=M first_id=F`. succeeded is the rise in retired_flat, which counts
+  status-0 CSRETIREs only. The runtime lane confirms no rate limit.
+- **Its diff from the control's source** (178e005899b0 → c2b843ad88ad, capstone/runtime/virtual) is one file, +49/−11:
+  the floor, the release line and comments. So the control against this arm is the floor plus an observation-only line.
+- **QEMU Tier 1** (compiler lane node-floor-gate 1748fb5b570e): equal to node-floor-1's, with 26 release lines, each
+  succeeded = attempted and first_id 1024. QEMU cannot reject a retire.
+
+**1. Its Tier 1 boot** (`tier3-smoke/chain-nf2-b2.sh` 7203ffdd918c9ff8 →
+`board-tier12/srz/run-tier1-nf2-b2.sh` ac2dc02731ef143a):
+- image-rev7-nf2 518263d7d0a1d19d, prepared by `board-tier12/srz/nf2-prep.sh` 82ad461d8b14e192;
+- firmware fw-t1-nf2 1ee33cc6631aa766, monitor f13dbc5, dom_stack gate PASS.
+- **The gate:** the four rungs equal t1-old's.
+- **Also read:** the release lines, against the contexts opened (CAPSTONE_VM_ADD_OK slot=0: 3 in t1-nf). A missing line
+  is a shortfall, never a pass. first_id should be 1024 at node_flat_records 4096.
+
+**2. sql0-nf2-treeB** (`tier3-smoke/tier3-sql-arm-rev2p.sh` bdf93fb5cdca2e4b, only on step
+1's PASS):
+- It is sql0-nf with ONE change, the module. Kits bkit7-rev2xBDN2 / bkit7-rev2xmBDN2, from
+  `tier3-smoke/make-nf2-kits.sh` 26a280b4c77c06d4: the BDN kits with only the module changed.
+- **Predicted by the runtime lane:** FRTY 0, DRT1 0, and 21 release lines, one per context, each with succeeded =
+  attempted and first_id 1024.
+- **succeeded < attempted on any line:** supports alternative 1, a rejected CSRETIRE.
+- **Fewer lines than 21:** a shortfall, not a pass. The per-line check runs only over the lines present.
+- **The dry run:** the stub transcript tripped both the shortfall and the rejection lines.
+
+**3. cpyp-DB** now starts on sql0-nf2's SQL DONE, STOP or HOLD. The same runner gets a new trigger argument; its waiting
+process is stopped before it creates anything.
+
+**The supporting argument, not conclusive** (the runtime lane): a CSRETIRE rejected on the non-destroying path makes
+retire() return -EIO, which the launcher surfaces as a failed munmap. sql0-nf's session output equals sql0-srz-treeB's,
+so any unmap-path retires succeeded under the floor. It is not shown that sql0's sessions unmap before teardown.
