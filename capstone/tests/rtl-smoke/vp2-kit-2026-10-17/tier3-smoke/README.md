@@ -2949,3 +2949,19 @@ planted flip fires. So the three QEMU runs read:
 - r3a (old): 8 of 9;
 - r3b (edited): 9 of 9.
 That is consistent with run-to-run variance and not with the edit.
+
+### Tree B on board 2, steps 1-3 and S-29's arms, result (2026-10-19 19:27-21:12): every reading as pre-registered
+
+Result lines are in `records/treeB-board2.result-lines.txt`. UNGATED; every result is board 2.
+- **The flash:** the resident was caplifive_sublet_d93a8d66b; the sealed sha256 was checked before the SPI write; the
+  readback after the power cycle names caplifive_vp2c_8de3c48cf.bit. The whole session ran under the lease client.
+- **The canary: PASS 9 of 9.** S-16 18 arms / 98 readings, the floor 6 arms / 77 readings and s1gap 3 arms all match
+  d93a8d66b's records, on both passes and pass against pass. Board 2's tree B results are therefore comparable with
+  board 1's runs, which were judged against the same records.
+- **The 25 vp2 arms:** 25 of 25 as pre-registered.
+- **Corpus set 7:** 33 of 33 records identical to d93a8d66b's.
+- **S-29's seven bare arms: 7 of 7 as pre-registered for tree B.**
+  - The four arms the flush changes (sv-stale, sv-stale-f, sv-stale-b and sv-fetch) read the RTL lane's tree B column.
+  - sv-stale-bf and sv-stale-bn read as they read on tree A.
+  - This is S-29's satp flush on silicon, N=1 per arm.
+- **Next:** sql0-treeB started at 21:12, then pb10-treeB, the FRTY discriminator.
