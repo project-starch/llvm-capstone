@@ -883,6 +883,46 @@ impossible, the fenceless arm and the post-escape-fence arm being instruction-id
 carries an unqualified flush-all from the CSR file through the EX stage, the LSU and the MMU to both TLBs, and all
 four arms then read the pre-registered set with the negative control unchanged to the cycle.
 
+## S-30 — Linux's genesis region grants S read/write/execute over the shadow-tag array and the revocation-node pool, and nothing in the data path blocks a plain store there `OPEN — by construction, from source (ariane_pkg.sv:612-616, wt_axi_adapter.sv:142-143, capstone_target.h:34-37; the region dump's RDPM 7 and CPPM 7 for slot 7); UNDEMONSTRATED on the board; found 2026-10-19 by the RTL lane's arithmetic on the board lane's S-23 dumps, triaged by the board lane`
+
+Siblings: S-23 (whose dumps showed the region), R-55 (the exact-regions carve that set the region's top).
+
+**What the region is.** Every vp2 dump in S-23's folder (`capstone/tests/fpga-repros/S23-data-face/`) loads region 21 in
+CPMP slot 7: [0xAC100000, 0xC0000000), RDPM 7 and CPPM 7, i.e. RWX for S. `cap_env_init` ends Linux's genesis region at
+`CAPSTONE_DRAM_TOP` = 0xc0000000 (capstone-sbi `capstone_target.h:34-37`, the R-55 exact-regions carve). The header's
+reason, "nothing S-mode uses lies above 0xc0000000", is false for this layout.
+
+**What it covers** (capstone-ariane 8522d72fe and bf3db3175, `ariane_pkg.sv:612-616`):
+- `CAP_TAG_MEM_BASE = MEMORY_TOP = 0xBC2D2D2D` and `CAP_REVNODE_MEM_BASE = 0xBFF00000`. Linux's RAM ends at 0xBC2D1FFF
+  (the boot log's DMA32 range).
+- So [0xBC2D2D2D, 0xC0000000) inside region 21 is the whole shadow-tag array and the whole node pool.
+
+**Nothing in the data path refuses it.** `wt_axi_adapter.sv:142-143` sets `in_data_region` only for paddr below
+`DATA_MEM_TOP` (= `MEMORY_TOP`). Above it a dcache access gets no tag operation (`needs_tag` 0) and goes to AXI as plain
+data. The checks at `:1017-1026` are elaboration and simulation assertions on TAG writes, not a gate on data accesses.
+
+**S can reach it.** The linear map stops at RAM's end, but the board kernel (6.4.14) has `CONFIG_DEVMEM=y` with
+`CONFIG_STRICT_DEVMEM` unset, so root can mmap `/dev/mem` at any physical address. It also has `CONFIG_MODULES=y`, so
+any module can `ioremap`. Either gives a plain S-mode load or store through region 21's RWX grant into tag bytes or
+node records.
+
+**The consequence depends on the trust model in force:**
+- **Inside the virtual profile's trusted-S model** (`docs/design/virtual-capstone/isa.md`: "trusted S", and "trusted S
+  performs no capability memory access") it is a hardening gap.
+- **The same firmware and region are in force while classic process-ABI domains run** (b0-hello in every recipe).
+  Their isolation from Linux is the untrusted-S property, so there it is an escalation path: a plain S store forging a
+  tag (turning data S controls into a capability) or a node record.
+
+**The fix,** for the monitor's queue: one line. Linux's genesis region ends at the tagged region's base, 0xBC2D2D2D, or
+at RAM's end, 0xBC2D2000; and the header comment is corrected. To be batched into ONE monitor revision with S-26's
+boot-time quantum write (caplifive-opensbi s26-boot-quantum aab63d5) and, if the RTL lane's simulation grades it,
+S-23's csupctl bit-2 strobe at the end of `fetch_retry_covered`, so the three cost one QEMU gate and one Tier 1 boot.
+
+**The demonstration, to be pre-registered:** one Linux boot on board 1 that READS `/dev/mem` at 0xBFF00000 (a node
+record) and at the tag byte of a granule known to hold a capability, using the adapter's formula `CAP_TAG_MEM_BASE +
+((paddr - MEMORY_BASE) >> 4)`. Predicted no fault, and a tag byte of 1 (the positive control that the read reaches tag
+memory). No write test without the lead's word.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
