@@ -3163,3 +3163,16 @@ Result lines are in `records/srz-board2.result-lines.txt`. UNGATED.
   compiler and runtime lanes' prediction, and the mechanism the csr arms read (a nonzero srevroot at S at every
   refusal). The fetch face is NOT removed in sql0, so its mechanism differs at least in part. N=1 per arm.
 - The cells are VOID as declared (the old runner's staging defect).
+
+### pb10's srevroot-zero pair, pre-registered (2026-10-20 03:00, before its boots): board 2, tree B, a second program for srz
+
+`tier3-pb10-srz-b2.sh` 709e87a3f2865d58. Two cold boots on pb10-treeB's kit, with
+ONLY capstone_vm.ko changed. pb10-treeB itself ran the S-27 workaround module d71f207a, so it is not the control here.
+- **pb10-39d:** bkit7-pb10B39 5cfb35495f4b7a36, module 39d8492d.
+- **pb10-srz:** bkit7-pb10BZ 45004a9bcda2b099, module 607164b9.
+
+**Predictions:**
+- both read 4 of 4 cells as t3-pb10/bundle (CAUGHT 4);
+- pb10-39d meets the data face as pb10 has (DRT1 ≥ 0; pb10-treeB read 1), and pb10-srz reads **DRT1 0**;
+- FRTY is reported, not predicted, since sql0's fetch retries did not change with srz;
+- **the must-fire:** each run's staged module hash equals its kit's, and the srz banner appears in pb10-srz only.
