@@ -60,3 +60,11 @@ PAD-MASKED candidate, reported as that verdict with its pad, never folded.
 "none" with "fault in capstone_cap_derive" (29) on every case, so NO-READING:control-failed 23.
 
 **E**, the malloc arm (OFF, rebuilt, code identical) on qkit7: equal to t3-pred-wm0 cell by cell.
+
+## Addendum, 2026-10-19, before any reading: what PAD-MASKED means (the semantics owner's ruling)
+
+A case CAUGHT unrepaired and MISSED repaired because its overflow lands in the tail pad is a true MISSED of the
+repaired configuration. On silicon the pad is accessible slack. It is recorded in verdicts.tsv as MISSED, with reason
+`pad-masked` and the pad in bytes in its evidence. It is never excluded, never NO-READING, and never folded under the
+unrepaired verdict. If the count of such cells is nonzero, it goes in the result line and in the commit subject, since
+it is a cost of the Q-15 repair that the paper's tables must carry.
