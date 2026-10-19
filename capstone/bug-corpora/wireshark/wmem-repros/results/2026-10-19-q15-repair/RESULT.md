@@ -30,3 +30,7 @@ Kits:
 
 Each run's `verdicts.jsonl`, `inputs.json` and `SOURCE` (the run directory) are in `A-eb-unrepaired/` to
 `E-compact-malloc/`.
+
+**C' (addendum 2: the board module's QEMU twin).** The repaired images on qkit7-rev2 (module a5dec6a32c49b3d3, which
+never collects, as the board's 39d8492d never does) read 23/23 identical to C. "collect skipped" 0, `cause=29` 0. So C is
+the board's prediction for its own module. Bundle `Cprime-compact-repaired-a5dec6a3/`.

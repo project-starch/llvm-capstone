@@ -1,0 +1,24 @@
+{
+  "arm": "virtual-nested-pools",
+  "cases": 23,
+  "configuration": "virtual-wmem-pools",
+  "contract": "verdicts-v1",
+  "corpus": "wireshark/wmem-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "a405840dce789345422ab901bb44df0a1d166677b564c68303f24ae286b847f0",
+    "module": "a5dec6a32c49b3d31454f4408c5e4d88623a23712e07e773ba260d61da7e992b",
+    "profile": "virtual",
+    "qemu": "56ad3353d7b2e4101f2602690074e09c0a9be9586c1593d9472863682f81fa68",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "780a0975142e2221bd0e442eee1199a63ac73a68556af8c26f83d7d94b0478db"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "CAUGHT": 22,
+    "NO-READING:unattributed": 1
+  }
+}
