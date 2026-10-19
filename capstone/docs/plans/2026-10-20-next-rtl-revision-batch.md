@@ -122,8 +122,12 @@ current values.** `cap-cursor-window`'s W0 ladder today reads base and top EXACT
    writing a span away, with an in-window control still passing.
 
 Reading 3 is the item's real cost and the reason it is listed last: **it changes the ABI for code that is in the
-field today.** It must be sequenced behind the runtime fix, and the board's corpus images rebuilt under the new
-rule, or the acceptance boots will fail for a reason that is not a defect.
+field today.** **The runtime side of that sequencing is already done** — the cursor-window fix landed on dev with
+tier-m at `232d13b220cc` ("form slot offsets in integers before adding them to a capability, so no intermediate
+cursor leaves its own window", `capstone/runtime/virtual/heap.c`), verified here rather than taken on report. So
+the remaining sequencing is just **the corpus and kit images rebuilt from dev before the acceptance boots**, and
+W1's reading changing from PASSES to FAILS as intended. An image built before that commit still carries the
+hoisted-cursor pattern and would fail the acceptance boots for a reason that is not a defect.
 
 ---
 
