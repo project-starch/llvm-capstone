@@ -4209,3 +4209,13 @@ that was being refused, so its presence there predicts nothing about whether tha
 
 **What would have caught it:** asking what the claimed cause predicts at the exact instruction decoded. The decode
 named that instruction, and the claimed cause was the instruction itself.
+
+### node-floor-2 on tree A, Tier 1, result (2026-10-20 07:45-07:51, board 1): PASS
+
+`records/t1-nf2-treeA.result-lines.txt`. UNGATED.
+- **The rungs:** b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1, all as their oracles and as on tree B.
+- **The banner** node-floor-2 is present. DRT1 0, DRTX 0, no Oops.
+- **Release lines:** 3 unique by kernel timestamp, for 3 contexts: attempted 11, 11 and 13, each fully succeeded,
+  first_id 1024. The check's "6" again counts vm-suite's KMSG replay.
+- **So 54d8a3af has passed Tier 1 on both bitstreams.** The scorable sql0 arm waits only on the compiler lane's QEMU
+  reference for runner 7ce203f9.
