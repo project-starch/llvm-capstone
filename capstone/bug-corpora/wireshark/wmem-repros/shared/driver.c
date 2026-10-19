@@ -106,6 +106,17 @@ int main(int argc, char **argv) {
   (void)wm_write_probe; /* the label must exist even where no case writes */
   wm_case_run();
   printf("WM_DEFECT case=%u mode=0 completed\n", wm_case_number);
+#ifdef WM_SUBLET_Q15
+  {
+    /* Patch 0001's Q-15 over-approximation: children issued, children padded,
+     * pad bytes total and largest. A run that faults before here prints none. */
+    extern void wmem_sublet_q15_counts(unsigned long out[4]);
+    unsigned long q[4];
+    wmem_sublet_q15_counts(q);
+    printf("Q15_PAD chunks=%lu padded=%lu pad_bytes_total=%lu pad_bytes_max=%lu\n",
+           q[0], q[1], q[2], q[3]);
+  }
+#endif
   if (differential) {
     /* The defect reproduces when the buggy sequence reached another object's storage and the
      * fixed one did not. A case that cannot say which is INCONCLUSIVE, never a pass. */
