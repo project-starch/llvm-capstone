@@ -51,8 +51,7 @@ define i8 @load_global() {
 ; CAP:      cincoffset {{a[0-9]+}}, gp, {{a[0-9]+}}
 ; CAP:      cjalr ra, 0({{a[0-9]+}})
 ; CAP:      cjalr zero, 0(ra)
-; GPFREE:     auipc [[T:a[0-9]+]], %pcrel_hi(ext_fn)
-; GPFREE:     jalr [[T]]
+; GPFREE:     call ext_fn
 ; GPFREE-NOT: cjalr
 ; GPFREE:     ret
 define void @calls_direct() {

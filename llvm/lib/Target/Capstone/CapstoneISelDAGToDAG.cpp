@@ -2026,17 +2026,66 @@ void CapstoneDAGToDAGISel::selectCall(SDNode *Node) {
     // Extract the symbol (TargetGlobalAddress) from LGA
     SDValue Symbol = Callee.getOperand(0);
 
+    if (capstoneGpFreeAbiActive() &&
+        TM.getCodeModel() != CodeModel::Large) {
+      // gp-free domain ABI: the callee is within the domain image, so a plain
+      // PC-relative call stays inside PCC. A direct call is `call sym`
+      // (PseudoCALL, `tail sym` for a sibling call), which the MC layer
+      // expands to `auipc ra, %pcrel_hi(sym); jalr ra, ra, %pcrel_lo` under one
+      // R_Capstone_CALL_PLT relocation -- the ordinary RISC-V call pair, which
+      // lld resolves for this machine like every %pcrel_hi/%pcrel_lo pair the
+      // backend already emits; the SDK emits no R_Capstone_RELAX, so nothing is
+      // relaxed. Until 2026-10-19 this path materialised the address with
+      // PseudoLLA (auipc; addi) and called through that register (jalr rX): one
+      // instruction more per direct call, and a temporary the register
+      // allocator often had to shuffle around the argument registers (`mv a2,
+      // a0; movc a0, s0; jalr a2`). Measured on the SPEC test inputs, nab makes
+      // 24M direct calls, gcc 0.36M, imagick 0.72M. A symbol with an offset
+      // keeps the register form below.
+      SDValue CallSym;
+      if (auto *GA = dyn_cast<GlobalAddressSDNode>(Symbol)) {
+        if (GA->getOffset() == 0)
+          CallSym = CurDAG->getTargetGlobalAddress(GA->getGlobal(), DL, MVT::i64,
+                                                   0, CapstoneII::MO_CALL);
+      } else if (auto *ES = dyn_cast<ExternalSymbolSDNode>(Symbol)) {
+        CallSym = CurDAG->getTargetExternalSymbol(ES->getSymbol(), MVT::i64,
+                                                  CapstoneII::MO_CALL);
+      }
+      if (CallSym) {
+        bool IsTail = Node->getOpcode() == CapstoneISD::TAIL;
+        SmallVector<SDValue, 8> Ops;
+        Ops.push_back(CallSym);
+        // Forward the argument registers and the register mask, as below.
+        for (unsigned I = 2, E = Node->getNumOperands(); I != E; ++I) {
+          SDValue Op = Node->getOperand(I);
+          if (Op.getValueType() == MVT::Other ||
+              Op.getValueType() == MVT::Glue)
+            continue;
+          Ops.push_back(Op);
+        }
+        Ops.push_back(Chain);
+        if (Node->getGluedNode())
+          Ops.push_back(Node->getOperand(Node->getNumOperands() - 1));
+        SDNode *Call = CurDAG->getMachineNode(
+            IsTail ? Capstone::PseudoTAIL : Capstone::PseudoCALL, DL,
+            CurDAG->getVTList(MVT::Other, MVT::Glue), Ops);
+        ReplaceUses(SDValue(Node, 0), SDValue(Call, 0)); // Chain
+        ReplaceUses(SDValue(Node, 1), SDValue(Call, 1)); // Glue
+        CurDAG->RemoveDeadNode(Node);
+        return;
+      }
+    }
+
     // 1. PseudoLLA: Materialize numeric offset from PC (auipc + addi %pcrel).
     SDNode *Offset = CurDAG->getMachineNode(Capstone::PseudoLLA, DL, PtrVT,
                                             Symbol);
 
     if (capstoneGpFreeAbiActive()) {
-      // gp-free domain ABI: the callee is within the domain image, so the
-      // PC-relative address itself is a valid jump target inside PCC. Skip the
-      // `cincoffset gp` code-capability formation and hand the raw PC-relative
-      // address straight to the (indirect) call, which the AsmPrinter lowers to
-      // a plain `jalr` -- no gp, no cjalr. Reuses PseudoLLA's PC-relative fixup
-      // (the PseudoCALL/auipc+jalr CALL relocation is not wired for Capstone).
+      // gp-free with a symbol the call pseudo cannot name (an interior offset,
+      // or the large code model): the PC-relative address itself is a valid
+      // jump target inside PCC. Skip the `cincoffset gp` code-capability
+      // formation and hand it to the (indirect) call, which the AsmPrinter
+      // lowers to a plain `jalr` -- no gp, no cjalr.
       TargetReg = SDValue(Offset, 0);
     } else {
       // The callee capability, gp moved to the callee: cincoffset + delin in ONE

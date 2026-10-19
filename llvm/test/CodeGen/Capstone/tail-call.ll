@@ -35,7 +35,7 @@ declare i64 @callee(i64)
 ; GPFREE-LABEL: tail_direct:
 ; GPFREE-NOT: jalr ra
 ; GPFREE-NOT: cjalr ra
-; GPFREE: {{j(alr zero, 0\([at][0-9]\)|r [at][0-9])}}
+; GPFREE: tail callee
 define i64 @tail_direct(i64 %x) {
   %y = add i64 %x, 1
   %r = tail call i64 @callee(i64 %y)
