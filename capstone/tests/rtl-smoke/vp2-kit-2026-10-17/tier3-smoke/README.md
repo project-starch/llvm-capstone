@@ -3445,3 +3445,33 @@ fresh indices from about 23 upward. This sweep takes them to about 60,023.
   in a region the monitor minted from the root. A LINEAR covering slot refutes the node-2 part. Each FRTY pc is also to
   be decoded to function+offset against the module's own .ko (retire+0x22c expected in the srz build). That is a
   post-hoc reading, taken from the scoped transcript.
+
+### The fetch face has TWO sites: tonight's FRTY pcs decoded (2026-10-20, post hoc, from the scoped transcripts)
+
+Method: the runtime lane's. The module's .text is loaded page-aligned, so an FRTY pc's low 12 bits locate it in that run's
+own .ko. `frty-decode.py <ko> <binutils prefix> <page-off>...` lists every .text instruction at the offset and flags one
+that follows a CSRUNV (funct7 0x24) or a CSRETIRE (0x53). Only the scoped raw/guest/board.txt was read. board-raw.txt
+opens with the previous boot's tail (the RTL lane's auditor); 14 runs were re-counted, and board.txt equals board-raw.txt
+cut at its own OpenSBI banner in all 14, so no recorded tally moves.
+
+| run | module | FRTY (low 32) × n | decodes to | follows |
+|---|---|---|---|---|
+| sql0-treeB, sql0-csr-treeB | 39d8492d | 017113AC × 21 each | retire+0x220 | CSRETIRE |
+| sql0-srz-treeB | 607164b9 | 017113B8 × 21 | retire+0x22c | CSRETIRE |
+| pb10-39d | 39d8492d | 00F13D98 × 2 | vm_ioctl+0xab0 | CSRUNV |
+| pb10-treeB | d71f207a | 00F14164 × 2 | vm_ioctl+0xac4 | CSRUNV |
+
+- **Each decode is the only custom-op successor at its page offset.** Of the nine instructions at 0xd98 in 39d's .text,
+  for example, only vm_ioctl+0xab0 follows one.
+- **The cross-check that does not use the hypothesis:** the implied .text bases agree across modules on the same kit
+  kernel. Both sql0 builds give 0x01710000. Both pb10 boots give 0x00F10000, with two different modules (39d8492d and
+  d71f207a). sql0-csr's FRTM 82A013AC carries the same page offset, 0x3ac.
+- **What it explains, as a reading and not yet a mechanism:**
+  - pb10's refused fetches follow a CSRUNV in vm_ioctl. In the srz module that CSRUNV (vm_ioctl+0xa94) is followed by
+    `csrw 0x5c1, zero`, and pb10 went from FRTY 2 to 0.
+  - sql0's follow retire's CSRETIRE. No CSRETIRE site in the srz module is followed by a zeroing, and sql0 stayed at
+    21 → 21.
+  - So srz's two outcomes, which looked inconsistent, are two sites, one of which srz covers.
+- **Not settled:** the base is inferred, not read. The next kit bring-up should print
+  `cat /sys/module/capstone_vm/sections/.text` once after insmod (the runtime lane's suggestion), which makes every
+  decode exact. sql0-frs-treeB then gives the covering slot at the CSRETIRE site.
