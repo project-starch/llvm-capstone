@@ -83,15 +83,19 @@ BROKEN = re.compile(r"SystemError|returned NULL without setting an exception|"
                     r"error return without exception set")
 
 
-def stage_stdlib(build, share, closure=None):
+def stage_stdlib(build, share, closure=None, sourceless=False):
     """PYTHONHOME for the guest: the release's Lib, compiled by the build's own native 3.13.7. With CLOSURE (a file
     from tools/board/stdlib-closure.py, paths relative to Lib), only those files: the vp2 board's payload cannot carry
-    the whole Lib. A trimmed run counts only after a QEMU A/B shows every reading equal to the full Lib's."""
+    the whole Lib. A trimmed run counts only after a QEMU A/B shows every reading equal to the full Lib's.
+    SOURCELESS (--stdlib-sourceless, for the vp2 firmware cap): the bytecode is compiled beside each module (compileall
+    -b, the legacy layout CPython's sourceless loader reads) and the .py removed wherever its .pyc exists, so the guest
+    imports the same bytecode without a compile; files that do not compile keep their source. Not heap-neutral by
+    construction (a different loader path, no source stat or read), so a sourceless stage is judged as a stage change."""
     lib = build / "source/src/Python-3.13.7/Lib"
     native = build / "source/build-python/python"
     home = share / "cpy"
     stamp = home / ".staged-from"
-    origin = str(lib) + (f" closure {closure} {v.sha256(closure)}" if closure else "")
+    origin = str(lib) + (f" closure {closure} {v.sha256(closure)}" if closure else "") + (" sourceless" if sourceless else "")
     if stamp.is_file() and stamp.read_text() == origin and \
             (home / "lib/python3.13/_sysconfigdata__linux_.py").is_file():
         return
@@ -106,8 +110,13 @@ def stage_stdlib(build, share, closure=None):
     pybuild = build / "source/build" / (build / "source/build/pybuilddir.txt").read_text().strip()
     shutil.copy(pybuild / "_sysconfigdata__linux_.py", home / "lib/python3.13")
     # Some test files are deliberately invalid Python, so compileall's status is not checked.
-    subprocess.run([str(native), "-m", "compileall", "-q", "-f", "-d", "/mnt/host/cpy/lib/python3.13",
+    subprocess.run([str(native), "-m", "compileall", "-q", "-f", *(["-b"] if sourceless else []),
+                    "-d", "/mnt/host/cpy/lib/python3.13",
                     str(home / "lib/python3.13")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if sourceless:
+        for source in (home / "lib/python3.13").rglob("*.py"):
+            if source.with_suffix(".pyc").is_file():
+                source.unlink()
     stamp.write_text(origin)
 
 
@@ -212,6 +221,9 @@ def main():
                    help="an extra environment variable for every guest run (repeatable), e.g. PYTHONHASHSEED=0")
     p.add_argument("--stdlib-closure", type=Path, help="stage only these Lib files (tools/board/stdlib-closure.py); "
                    "for the vp2 board's payload, valid only after a QEMU A/B against the full Lib")
+    p.add_argument("--stdlib-sourceless", action="store_true",
+                   help="stage compiled bytecode beside each module and drop the .py (the vp2 firmware cap); a stage "
+                   "change, judged against the record before it is used")
     a = p.parse_args()
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
@@ -228,7 +240,7 @@ def main():
         return 75
     share = Path(json.loads((a.state / "config.json").read_text())["share"])
     a.raw.mkdir(parents=True, exist_ok=True)
-    stage_stdlib(a.build, share, a.stdlib_closure)
+    stage_stdlib(a.build, share, a.stdlib_closure, a.stdlib_sourceless)
     symbols = v.Symbols(a.llvm_bin, image)
 
     # The interpreter must work before anything it does means something.
