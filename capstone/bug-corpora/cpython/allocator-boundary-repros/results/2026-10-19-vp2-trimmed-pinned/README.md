@@ -81,6 +81,17 @@ Signature: verdict, attribution, fault cause/offset/symbol, notes, infra. Absolu
 - Outside the set on a varying case is reported as "outside the sampled set".
 - Outside on a stable case is a divergence.
 
+**Grading rule for lt0 on the board** (the semantics owner's ruling, 2026-10-19, written before the board lane
+pre-registers). Five repeats give a SAMPLE of a varying cell's sites, not a prediction of them. A cell whose verdict
+varies across repeats will also show sites the sample never saw, so a new site there is not a moved cell.
+- A **stable** cell must match its set in verdict AND evidence site (the full signature above).
+- A **varying** cell must have a verdict inside its recorded verdict set (the last column of the table). Its site is
+  reported, not graded.
+- A varying cell whose verdict is outside its verdict set is a moved cell, and the re-record rule applies.
+
+**lt0's board image is the stage** (same ruling): `20bcfdd1073976e0` with `stage-closure.txt` and
+`--stdlib-sourceless` (below) is accepted as lt0 for the board, graded against lt0's sets by this rule.
+
 ## How the pin was found, including a retraction
 
 | comparison (lt0 full Lib) | cells differing |
@@ -134,8 +145,9 @@ above. Judged against `prediction.json` lt0, with the evidence text in the signa
   `unicodekeys_lookup_unicode+400`, cause 28) and 31 (CAUGHT at `mro_implementation_unlocked+316`, cause 24).
 
 Each of those three has a verdict inside its set at a site not seen in the sampled runs. That is the allocator-internal
-variance this record already shows. A board reading of the stage is judged against the lt0 sets, and a varying cell
-outside them is reported as "outside the sampled set". Tally: CAUGHT 15, MISSED 14, NO-READING 3 (infra 1, not-reached
+variance this record already shows. By the grading rule above, the stage run reads 23/23 stable and 9/9 varying
+(05, 09 and 31 read CAUGHT, inside their verdict sets ['CAUGHT', 'NO-READING'], ['CAUGHT'] and ['CAUGHT',
+'NO-READING']); a board reading of the stage is graded the same way. Tally: CAUGHT 15, MISSED 14, NO-READING 3 (infra 1, not-reached
 1, unattributed 1).
 
 ## Caveat: trimmed vs full Lib
