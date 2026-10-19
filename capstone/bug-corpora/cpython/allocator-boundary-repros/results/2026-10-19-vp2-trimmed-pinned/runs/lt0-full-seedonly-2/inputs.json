@@ -1,0 +1,36 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "application": "cpython",
+    "image_sha256": "0d322044b91187136b59070ba1b3bfe3371b7fca79b482488888c8d1d70f0555",
+    "nested": "none",
+    "profile": "virtual",
+    "runtime_dirty": false,
+    "runtime_revision": "5b3e6b7939af2608a7edb98784d5b7c70a93ac59",
+    "stack_bytes": 8388608
+  },
+  "cases": 32,
+  "configuration": "virtual-cpython",
+  "contract": "verdicts-v1",
+  "corpus": "cpython/allocator-boundary-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "a405840dce789345422ab901bb44df0a1d166677b564c68303f24ae286b847f0",
+    "module": "5bfc38f808e1effd22e44641e1c7fc8cdde956b418a41ecf66dea206ef75c946",
+    "profile": "virtual",
+    "qemu": "5f731f99ec6a19b2395e9bbe8fc374d996eee59430c0c0c93b5a9e582d55f2cf",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "727b6648108c955110fc2ad8805465b8609aae17787125b3c22124d118706b90"
+  },
+  "predicted": "MISSED",
+  "tally": {
+    "CAUGHT": 14,
+    "MISSED": 12,
+    "NO-READING:infra": 1,
+    "NO-READING:not-reached": 1,
+    "NO-READING:unattributed": 4
+  }
+}
