@@ -2718,3 +2718,34 @@ No prediction among the three is made; the arms discriminate.
 from tree A in its flush-all on every switcher satp write, not only in FRTY's absence, and that changes switch timing
 and the caller's first translations. Outcome 1 now reads: "no FRTY and no refusal is consistent with the data face
 depending on the FRTY path OR on what tree B's flush changes; N=1; cells scored against QEMU". Outcomes 2 and 3 stand.
+
+### sql0-drt, result (2026-10-19 19:06-19:48, board 1, tree A): the data retry carries all 21 postgres sessions through S-23's deny (17 DRT1, 0 DRTX, no Oops); the SQL cells are VOID for a staging defect it exposed
+
+Kit bkit7-rev2xD, monitor f13dbc5, UNGATED. The result lines from this boot only are in
+`records/sql0-drt.result-lines.txt`, read from the reassembled UART stream after the boot's banner.
+- **S-23: the transient branch, as pre-registered.** The data face was met 17 times, every time retried with nothing
+  re-armed, never refused twice at the same mepc, and no Oops.
+  - **The retries:** 17 DRT1, all with mepc 0x803833B6. Against the kernel's System.map that is
+    `_raw_spin_lock_irqsave+0x56`. The map is controlled by sql0-rf's own Oops lines, ffffffff800a22c8 =
+    mod_node_page_state+0x40 and ffffffff800ab24a = unpin_user_page+0x2a, both reproduced.
+  - **The refusal read before each:** RFSL 00070015 (slot 7, region 21), RFTY 0 (LINEAR), RFVD 1. All 17 are read
+    intact, so no DRT1 grades as "RFVD unread".
+  - The interim message's "two garbled RFVDs" was my grep reading UART chunks split mid-line, not a console loss.
+    It is WITHDRAWN.
+  - **The deny's field rate:** 17 in one boot of 21 sessions.
+- **Each DRT1 is followed on the NEXT console line by FRTY:017113AC,** with FRGD 0000000B, so the strobe was issued.
+  FRTY prints mepc only. No FRTY in this or any earlier boot carries a physical mtval, the slot that covered it, or an
+  instruction count. So the distance is one console line, and nothing more can be read.
+  - 0x017113AC is not kernel text, and is left undecoded.
+  - The runtime lane's hypothesis is recorded as a HYPOTHESIS, not a reading: one clear event hits the data slot and
+    the slot covering the fetch, since the fetch and data checks read the same per-slot cpmp_revnode_valid_q
+    (pmp_data_if.sv :149/:170/:185).
+- **The SQL cells are VOID.** "virtual boot: completed; 21/21 sessions ran", then the runner's "POSITIVE CONTROL
+  FAILED: the image did not answer a trivial SELECT". Every session stopped at postgres startup with `FATAL: could not
+  open directory "pg_notify"`.
+  - The board bake's manifest stages FILES only, so the trimmed cluster's 13 empty directories never reach the board.
+    They are pg_commit_ts, pg_dynshmem, pg_logical/{mappings,snapshots}, pg_notify, pg_replslot, pg_serial,
+    pg_snapshots, pg_stat_tmp, pg_tblspc, pg_twophase and pg_wal/{archive_status,summaries}.
+  - Every earlier sql0 boot panicked in session 1, so the defect was never reached.
+  - **The fix:** run-arm.py 8826a2ca21a33acd (lane sql-empty-dirs) records the fixture's empty directories at staging,
+    and each session's step mkdir -p's them after its copy; on QEMU that is a no-op. Its QEMU check is running.
