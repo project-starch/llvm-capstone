@@ -351,7 +351,7 @@ and on nothing that happened in the tree before.
 ## Patches to musl: round counts, capabilities and threads
 
 Under the delegated runtime every syscall is a round trip through the launcher, so the
-port's cost model is the number of rounds, and `musl-patches/` holds the three places where
+port's cost model is the number of rounds, and `musl-patches/` holds the four places where
 upstream musl spends one for nothing on this platform, and five where a pointer does not
 survive the way upstream keeps it: in a `long`, which on capstone64 holds an address and not
 a capability, or in a layout made for pointers of at most 8 bytes.
@@ -382,9 +382,13 @@ a capability, or in a layout made for pointers of at most 8 bytes.
   in `open`, `fopen` and `__fopen_rb_ca`. Linux honours the flag; the second call was
   musl's fallback for kernels that did not. The sites that set the flag on a descriptor
   they did not open (`fdopendir`, `fdopen` with `e`, `freopen` on an open stream) keep it.
+- `0010` the virtual mallocng (`0009`, no `brk`) opens a meta-area reservation, all but its
+  guard page, with one `mprotect` instead of one per page. A meta carries its slots'
+  capabilities here, about a page each, so upstream's page-at-a-time opening cost a round
+  per new group: 268 rounds of the SPEC CPU2017 gcc test job.
 
 The rule for `libc-test/patches/` is unchanged: tests are patched only in how they reach
-memory, never in what they check. Of the library patches, 0001 to 0003 change only its round
+memory, never in what they check. Of the library patches, 0001 to 0003 and 0010 change only its round
 count; 0004, 0005, 0007 and 0008 only keep a pointer a capability, and 0006 gives a type the
 room its pointers need.
 The rest of the saving is in the runtime: identity (`getpid` and friends) and the two clocks
