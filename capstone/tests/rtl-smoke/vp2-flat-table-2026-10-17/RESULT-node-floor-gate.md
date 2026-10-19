@@ -16,3 +16,13 @@ node floor: 43ddff418388992e (banner node-floor-1).
 QEMU cannot show whether a physical id above 1024 exists on the board, which would defeat the floor. The board's
 Tier 1 boot (board module a4aa5668a69b94ee, control 39d8492d5c18216b) and sql0 on tree B against sql0-srz-treeB, with
 FRTY predicted 0, are the test.
+
+## Addendum 1: node-floor-2 (c2b843ad88ad), its QEMU Tier 1 pass
+
+- Module a1fa252f527e5a43, banner node-floor-2.
+- Status lines equal node-floor-1's: 30/45, the same 15 FALSE and 24 exits; banner 2, 'wrote no event record' 0,
+  'collect skipped' 2.
+- 26 release lines on the guest console. Every one reads succeeded = attempted (9 to 17 retires per context) and
+  first_id=1024.
+
+Every prediction holds. Board module: 54d8a3af1158c3f4.
