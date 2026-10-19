@@ -1,0 +1,13 @@
+# s30-old (2026-10-19, board 1, tree A), result lines: monitor lines from this boot's console after its last OpenSBI
+# banner, then the rungs' result lines.
+QNT0:001E8480
+RESULT b0-stats retval=0
+CAPSTONE_VM_STATS arenas=11 pages=496 peak=892 nodes=76 steps=511 faults=426 collections=0 reclaimed=0 rounds=12 bytes_in=214 bytes_out=143 node_bytes=65536 node_capacity=4096 node_growths=0 launch_ns=2576532320 elapsed_ns=6515473280
+VM_EXIT:normal:0
+VM_EXIT:stale:139
+RESULT vm-contract retval=0
+RESULT b0-hello retval=0
+S30R node 0xBFF00000 rc=0 0x0000000000000000
+S30R node 0xBFF00008 rc=0 0x0000000040000000
+S30R tag words read 257 nonzero 23 first 0xBC2DAEA0=0x0000010001000100
+RESULT s30-read retval=0

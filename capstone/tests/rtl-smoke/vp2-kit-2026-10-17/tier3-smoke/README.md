@@ -2661,3 +2661,31 @@ every board-1 assumption replaced: FPGA_BOARD=2, board 2's URL file, dev's drive
 
 Every result records board 2. Before any tree-B-versus-tree-A reading is compared across the two boards, the canary is
 the same image set on both bitstreams, judged against the same d93a8d66b records. UNGATED (PREFLIGHT=0).
+
+### S-30's matched pair, result (2026-10-19 18:50-19:05, board 1, tree A): DEMONSTRATED for user-mode reads, and refused by the held carve
+
+Both arms read as pre-registered (JUDGE PASS each, N=1 per arm, UNGATED). The result lines from each boot only are in
+`records/s30-{old,new}.result-lines.txt`. A claim-auditor checked the readings: each log has one OpenSBI banner, the
+firmware and the judge hashes match, and the image is identical. Its four wording fixes are applied here.
+- **s30-old** (wrapper aab63d5, firmware 4104ef2029145164). From user mode, busybox devmem through /dev/mem read:
+  - both words of the revocation-node pool's first record (0xBFF00000: 0x0, 0x40000000);
+  - the 257 words of the shadow-tag array at dom_stack's tag addresses from 0xBC2DAD60. They returned a sparse 00/01
+    pattern: 23 words nonzero, the one recorded value 0x0000010001000100.
+  - The bytes are not yet matched to the firmware's capability layout. The cheapest settling check is to print all
+    257 words and match them against dom_stack's gp-relative capability offsets.
+  - The canary rungs before the read returned 0.
+- **s30-new** (wrapper 9bee361, firmware f187c4d4f3ade200). The held carve is nominally [0xBC2D2000, 0xC0000000),
+  decoded [0xBC2D0000, 0xC0000000) per S30H.
+  - Both reads were refused at the first address of each group, through the monitor's no-region path (MTVL:BFF00000
+    and MTVL:BC2DAD60, each with CPMX:00000002). No live region covered either address.
+  - Linux's top slot was exact at [0xBC200000, 0xBC2D2000) (this boot's dump: RDID 15, RDBA BC200000, RDEN BC2D2000).
+  - INJS:00000002 is the constant injection code, not mcause; mcause was not printed. devmem died of SIGSEGV
+    (rc 139), and the boot continued.
+  - The canary rungs returned 0, including vm-contract at 511 steps.
+- **The two firmwares differ only in the wrapper source.** Its side effects are the region table and +32 B of monitor
+  globals. Image, monitor (5b5e86b), defines and bitstream are identical.
+- **Residual, kept with the fix.** After the carve, Linux's top region and the unloaded held piece, both LINEAR,
+  overlap in decoded bounds by two pages, [0xBC2D0000, 0xBC2D2000). Linearity's exclusivity there holds by the
+  monitor's discipline: the held piece is never loaded or handed out. Any future use of it (a write path, the pool
+  handed to a domain) must first re-carve it to an exactly representable base at or above 0xBC2D2000.
+- **Not tested:** writes.
