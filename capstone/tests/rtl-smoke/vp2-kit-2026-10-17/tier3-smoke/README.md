@@ -3428,3 +3428,20 @@ fresh indices from about 23 upward. This sweep takes them to about 60,023.
 - **Added here:** board steps in both arms of the same order as the pair's (2234/2235), since rounds and spin are
   unchanged; nodes exactly 23 and 60023.
 - **If FRTY > 0,** the FRSL tuples name the covering slot's region, type and validity in the same boot.
+
+**The sweep is WITHDRAWN, before any boot (2026-10-20 03:5x; the runtime lane's call).**
+- **The reason given:** the RTL lane decoded the surviving fetch retries from the committed captures. They sit at the
+  instruction immediately after the module's CSRETIRE inside retire()'s select_root window: `.text+0x13ac` =
+  retire+0x220, and retire+0x22c in the srz build.
+- **The proposed mechanism:**
+  - that CSRETIRE broadcasts the retiring ancestor's virtual index (2 for a context's first grant);
+  - the index-only compare clears every caller CPMP slot tracking physical node 2 (the NONLIN children of CAPCREATE's
+    root);
+  - the next fetch through such a slot is refused.
+  - No context code is involved, so an in-context sweep cannot reach it.
+- **Status of that claim:** it is the RTL lane's decode, not re-derived here. sql0-frs-treeB tests it.
+- **What is kept:** the image, the firmware and the scripts, unrun. chain-ff60-b2.sh was never launched.
+- **sql0-frs-treeB's prediction, sharpened by the runtime lane:** at every FRTY the covering slot is NONLIN (FRT2 = 1),
+  in a region the monitor minted from the root. A LINEAR covering slot refutes the node-2 part. Each FRTY pc is also to
+  be decoded to function+offset against the module's own .ko (retire+0x22c expected in the srz build). That is a
+  post-hoc reading, taken from the scoped transcript.
