@@ -4182,3 +4182,30 @@ twin (qkit7-nf2, two runs and a PASS line). That arm is pre-registered when the 
   vm-suite's KMSG replay repeats them, each with succeeded = attempted and first_id 1024; DRT1/DRTX/Oops 0.
 - **The tree-A kits for the sql0 arm:** bkit7-rev2xDN2 / bkit7-rev2xmDN2, from `tier3-smoke/make-nf2A-kits.sh`
   9102938b937f9f71: sql0-drt2's kits with only the module changed.
+
+### RETRACTION (2026-10-20 07:5x): "srz's two outcomes are two sites, one of which srz covers" is WITHDRAWN
+
+The section "The fetch face has TWO sites" closed with a reading, which this lane's dev commit dd01abeff035 repeated:
+- that pb10's refused fetches follow a CSRUNV in vm_ioctl;
+- that the srz module follows that CSRUNV with `csrw 0x5c1, zero`;
+- and that this is why pb10 went from FRTY 2 to 0 while sql0 stayed at 21, "two sites, one of which srz covers".
+
+**That inference does not hold, and is withdrawn.** srz's inserted zeroing IS the instruction at CSRUNV+4, the fetch
+that was being refused, so its presence there predicts nothing about whether that fetch is refused.
+- The runtime lane's mechanism for pb10 (a clear left by an earlier module window, healed by srz's window-end flush) is
+  withdrawn by that lane too, for the reason it gives. Region 14 in slot 3 covers the kernel's and the module's text, so
+  a window broadcast that cleared slot 3 would be refused at the very next fetch after that window, the retire site, not
+  later after a CSRUNV.
+- This lane passed that reading to the runtime lane as an explanation, and it was built on.
+- **The status now:** pb10's 2 → 0 under srz is an OPEN ANOMALY that no recorded mechanism predicts. The S-23 entry
+  already said so, and this lane's sentence contradicted it. The reading that would settle it is the RTL lane's
+  one-variable simulation pair (plan on dev 17db5c09fc30), separating srz's inserted instruction from the srevroot value.
+
+**What stands, unchanged:** the decoded sites themselves.
+- sql0's 21 at retire's CSRETIRE successor (retire+0x220 / +0x22c), which the node floor alone removes (sql0-srzdev
+  against sql0-nf2);
+- pb10's 2 at the instruction after vm_ioctl's CSRUNV, on two modules;
+- the base cross-check.
+
+**What would have caught it:** asking what the claimed cause predicts at the exact instruction decoded. The decode
+named that instruction, and the claimed cause was the instruction itself.
