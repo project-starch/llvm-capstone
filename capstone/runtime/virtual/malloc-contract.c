@@ -17,6 +17,14 @@ __attribute__((noinline)) static void fault_store(volatile char *p)
     *p = 0;
 #endif
 }
+/* An allocation whose result is only tested against NULL may be assumed to succeed when malloc and
+ * realloc are treated as builtins (upstream LLVM semantics, not a fork defect), so `!realloc(p, huge)`
+ * can fold to false and the failure path is never observed. Every check that expects an allocation
+ * to FAIL passes the result through this barrier, so the contract means the same with or without
+ * -fno-builtin. Found 2026-10-20: the v6 kit's SDK lacked -fno-builtin and this check read a
+ * folded false (MALLOC_FAIL:failed VM growth preserves original) while the runtime set ENOMEM. */
+static void *kept(void *q)
+{ __asm__ volatile("" : "+r"(q) : : "memory"); return q; }
 static void require(int ok, const char *what)
 { if (!ok) { fprintf(stderr, "MALLOC_FAIL:%s\n", what); exit(1); } }
 static void basic(void)
@@ -33,13 +41,13 @@ static void basic(void)
     p = realloc(p, 101);
     require(p && (uintptr_t)p == old && p[99] == 42, "musl in-place growth");
     errno = 0;
-    require(!realloc(p, SIZE_MAX) && errno == ENOMEM && p[99] == 42,
+    require(!kept(realloc(p, SIZE_MAX)) && errno == ENOMEM && p[99] == 42,
             "failed realloc preserves original");
     free(p);
     p = malloc(200000); require(p != NULL, "large original"); p[199999] = 33;
 #ifdef __CAPSTONE_PURECAP__
     errno = 0;
-    require(!realloc(p, 512UL<<20) && errno == ENOMEM && p[199999] == 33,
+    require(!kept(realloc(p, 512UL<<20)) && errno == ENOMEM && p[199999] == 33,
             "failed VM growth preserves original");
 #endif
     p = realloc(p, 200016); require(p && p[199999] == 33, "large realloc");
