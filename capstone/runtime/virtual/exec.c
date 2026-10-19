@@ -129,8 +129,13 @@ static size_t rounded(size_t n)
 static void *private_pages(void *p, size_t bytes)
 {
     /* Demand resolution accounts for one base page at a time. The module
-     * requires this VMA policy on kernels that can instantiate huge pages. */
-    if (madvise(p, bytes, MADV_NOHUGEPAGE) && errno != EINVAL) {
+     * requires this VMA policy on kernels that can instantiate huge pages.
+     * A kernel built without them answers EINVAL; it does every time, so it
+     * is asked only once. */
+    static int no_huge_pages;
+    if (no_huge_pages) return p;
+    if (madvise(p, bytes, MADV_NOHUGEPAGE)) {
+        if (errno == EINVAL) { no_huge_pages = 1; return p; }
         int error = errno; munmap(p, bytes); errno = error; return NULL;
     }
     return p;
@@ -226,9 +231,10 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
     } else p = reserve(bytes);
     if (!p) return -errno;
     /* Padding remains inaccessible, including after later mprotect calls.
-     * No capability reply exists until registration has succeeded. */
+     * No capability reply exists until registration has succeeded. The range
+     * is mapped readable and writable, so that protection needs no call. */
     if ((visible < bytes && mprotect((char *)p + visible, bytes - visible, PROT_NONE)) ||
-        mprotect(p, visible, prot) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid)) {
+        (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid)) {
         int error = errno;
         munmap(p, bytes);
         return -error;
