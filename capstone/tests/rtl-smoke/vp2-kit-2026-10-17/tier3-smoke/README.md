@@ -2449,3 +2449,47 @@ s30-new now also requires, in this boot's console:
 - both S30R refusals at rc 135 or 139.
 
 `s30-judge.py` is now 5b8cd550ac112e51. A fixture without those lines FAILS, and one with INJS:00000005 in place of 2 FAILS.
+
+### After sql0-fix: the pb10 pair withdrawn, the refusal read pre-registered (2026-10-19 18:35, before its boots)
+
+**sql0-fix, first reading** (its scoring is still running; the full record follows when it ends). In vbatch's first
+postgres session:
+- FRTY:01713D98, with FRGS for 11 loaded slots, slot 7 among them: FRGS:07110015, region 0x15 = 21, live, mapping back;
+- FRGD:0000000B, so the strobe was issued;
+- then MTVL:BC2C0825, INJS:00000002, and an "Oops - load access fault".
+
+That is the same signature as sql0-treeA. On the amended reading, neither the strobe nor its pipeline flush removed the
+deny. The runtime lane's prediction (READ) is refuted.
+
+**The pb10 pair is withdrawn before it ran.** Given sql0-fix, both arms are predicted to panic, and that reading would
+not be informative. The stage-1 chain was stopped before CHAIN_PB10_GO, and sql0-fix's runner finishes on its own. In
+its place, `chain-rf.sh` dc75a0e1b8a319f1 runs on board 1, each step a cold boot, after sql0-fix's runner exits:
+1. **sql0-rf** (`tier3-sql-arm-rev2f.sh` 378c41c038f9d059): sql0-fix with ONE change, the monitor,
+   capstone-sbi 03a1ffe (vp2/s23-refusal-read, pushed: 5b5e86b plus CAPSTONE_S23_REFUSAL_READ). Kits bkit7-rev2xR
+   840c9dce535734fb and bkit7-rev2xmR 27b95ca16a39560a (`make-rf-kits.sh` e9313bc9d65804c3).
+2. S-30's pair, as pre-registered.
+3. S-26's bracket, as pre-registered. Its order relative to S-30 is the only change.
+4. **pb10-rf** (`tier3-pb10-rf.sh` a8ca6fb27afd5025, kit bkit7-pb10R 6d4d6987a7683c51): a second instance of
+   the same reading.
+
+**The refusal read.** At a refusal no region covers, before report_cpmx_diag, each loaded slot is read once:
+- the LCC type (zimm 1) first;
+- only when the type is not 7, the bounds and, if they cover mtval, the validity (zimm 0);
+- then a write-back of exactly that value.
+
+It prints RFSL (slot << 16 | region), RFTY and RFVD (0xffffffff when the validity was not asked). The compiled order
+was checked: read, lcc 1, lcc 3, lcc 4, lcc 0, write-back.
+
+**Predictions:**
+- sql0-rf and pb10-rf panic as before; the read changes no behaviour.
+- At the refusal, slot 7 (region 21) prints **RFTY not 7**, a capability type. This is already implied: every earlier
+  dump ran LCC 3, 4 and 5 on slot 7 at M after the refusal and printed its bounds rather than trapping, and every LCC
+  but zimm 1 raises on NOT_CAP.
+- **RFVD is the reading:**
+  - 0: the physical node is dead, a true deny the monitor's bookkeeping cannot see;
+  - 1: no allow term we can read explains the deny (transient, or the validity bit itself).
+- **If RFTY ever reads 7** (a clear tag), the dump that follows traps at M on its cap_base. That is a predicted
+  consequence, not a new failure. On the console: RFSL, RFTY:00000007 and RFVD:FFFFFFFF, then no RDID, MTVL, CPMX or
+  INJS line, and the boot ends there.
+
+The dry run, with the real kits passing every check, is in `dryrun-rf.txt`.
