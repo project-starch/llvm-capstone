@@ -2689,3 +2689,27 @@ firmware and the judge hashes match, and the image is identical. Its four wordin
   monitor's discipline: the held piece is never loaded or handed out. Any future use of it (a write path, the pool
   handed to a domain) must first re-carve it to an exactly representable base at or above 0xBC2D2000.
 - **Not tested:** writes.
+
+### Tree B's discriminator on board 2, pre-registered (2026-10-19 19:44, before its boots): sql0 and pb10 with the data-retry monitor
+
+The runtime lane asked for this. Tree B's S-29 flush removes the stale I-TLB that triggers FRTY. So on tree B, whether
+S-23's data face still appears says whether it sits downstream of the fetch-retry path or independent of it.
+
+**The arms.** `chain-treeB2-linux.sh` 3dd33c6d7ce43461 runs on board 2 after S-29's seven bare arms
+end DONE (if they end STOP or HOLD, it HOLDs). Each arm is a cold boot:
+1. sql0-treeB (`tier3-sql-arm-rev2h.sh` 7f9a568e54177fb2);
+2. pb10-treeB (`tier3-pb10-treeB2.sh` 2db50c6830ed9024).
+
+**The kits** (`make-treeB2-kits.sh` 5ae8d3f4982efdd5) are the data-retry kits (monitor f13dbc5) with only
+four things changed: tree B's bitstream, FPGA_BOARD=2, board 2's URL file, and dev's driver directory with the lease
+client (the same run_baked_rungs_fpga.py, fd38816a90c64c22). bkit7-rev2xBD 1a3056a854f4fe0b, bkit7-rev2xmBD
+de0d947a4112c93d, bkit7-pb10BD 9248619d2971f0c8. Results go under results/2026-10-19-vp2c-treeB/.
+
+**Each arm reads one of three outcomes:**
+1. **No FRTY and no refusal:** the data face is gone with the fetch face, i.e. it sits downstream of the fetch-retry
+   path. sql0's cells are scored against t3-sql-trim-vm/bundle, pb10's against t3-pb10/bundle (CAUGHT 4).
+2. **No FRTY, but a refusal** (RFSL, RFTY, RFVD, then DRT1, then DRTX or progress): the data face is INDEPENDENT of
+   FRTY. Its refusal-read lines and DRT outcome are graded exactly as sql0-drt's.
+3. **An FRTY:** the fetch face survives tree B's flush. That is a finding about the S-29 fix, reported first.
+
+No prediction among the three is made; the arms discriminate.
