@@ -13,3 +13,12 @@ no fault), that is case 31's MISSED on silicon. QEMU traps all three out-of-boun
 keeps exact bounds in registers between escapes.
 
 Stores are not covered here.
+
+**Correction to the pre-registrations' wording ("a far overrun aliases", 2026-10-20, from the board lane's claim-auditor,
+lane c10210a7c904).** Aliasing is periodic, not "beyond a span". A size-n access at a cursor outside the representable
+window passes iff (cursor - base) mod 2^(E+14) <= len - n, and otherwise traps 28. Checked against the
+compress/decompress model at all 241,984 byte positions out to four spans past this 20,160-byte buffer: 0 mismatches.
+- Overruns up to 45,376 bytes past the end trap. Beyond that, a len-wide band in every 64 KiB span aliases: 25% of
+  positions over four spans, tending to len/span, about 31%.
+- Case 31's cursor is 50,976 bytes past the end and 71,136 past the base: less than one span past the end, and
+  5,600 bytes into the next band.
