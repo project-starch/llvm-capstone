@@ -120,6 +120,77 @@ expectation pre-registered for them and how it held up are in
 [`results/20261006/README.md`](results/20261006/README.md); `probe/counts.py --check` still
 re-derives that page's tables from its matrix.
 
+## Measured 2026-10-19, case by case
+
+Bundle `results/2026-10-18-review`, on the emulator this repo pins
+(`capstone/capstone-qemu d35af47b163c`) with a compiler carrying the C-80 fix,
+against images from `ports/common/application/build-virtual.sh cpython` built
+`CPY_TEST_CAPI=1` -- an image without it fails every case
+`NO-READING:control-failed`, because both controls need `_testinternalcapi`.
+`--timeout 900`: the first attempt recorded two runner timeouts, which are
+failed measurements and not verdicts.
+
+    virtual-malloc        CAUGHT 15  MISSED 13  NO-READING 4
+    virtual-nested-pools  CAUGHT 24  MISSED  6  NO-READING 2
+    cheribsd-revocation   32 of 32 rows, and a negative-control pass in which
+                          nothing faulted
+
+**Thirteen of those cells are withdrawn by review.** A cell counts when the
+mechanism REJECTED the defective access, not when the access succeeded and the
+program faulted afterwards on what it fetched. Which code that is depends on
+the axis, and the guest's own `sicode` selftest establishes the CheriBSD pair
+on this build (`bounds si_code=1`, `revoked si_code=2`):
+
+| axis | Capstone, the mechanism | CheriBSD, the mechanism |
+|---|---|---|
+| spatial | `cause=28` `CAP_OOB` | `si_code=1` `PROT_CHERI_BOUNDS` |
+| temporal | `cause=25` `INVALID_CAP` | `si_code=2` `PROT_CHERI_TAG` (revocation clears the tag) |
+
+`cause=24` `UNEXP_OP_TYPE` -- an untagged value used where a capability was
+required -- is a consequence on either axis.
+
+| arm | withdrawn | cases |
+|---|---:|---|
+| `virtual-malloc` | 6 | 01, 04, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`) |
+| `virtual-nested-pools` | **0** | every one of its 24 catches carries its axis's code |
+| `cheribsd-revocation` | 7 | 01, 03, 05, 08, 09, 10 (spatial, `si_code=2`), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
+
+Counting them the arms read 15 / 29, 23 / 29 and 11 / 29; withdrawn, **9 / 29,
+23 / 29 and 4 / 29**. Each case's own `note` records which fault was which and
+why, and `~/cpython-false-positive-examples/` carries the minimal C.
+
+**The function name cannot make this call, which is why the code has to.**
+Every withdrawn fault resolves to the case's declared `fault_sites`, because
+the defective read and the dereference of what it returned are commonly two
+lines of one function -- `set_dealloc` reads `entry->key` at `setobject.c:505`
+and dereferences it at `:507`. Disassembled at the faulting pc, the two are
+different instructions: `ldc a0, 0x0(s3)`, the capability load of the entry,
+against `ld a1, 0x0(a0)` at `address=0x7`, a plain load through what that
+returned.
+
+**`tools/verdicts.py` could enforce the Capstone half automatically.** Its
+optional `catch_causes` key, which SQLite's two configurations declare as
+`[25, 28]`, would score a `cause=24` fault MISSED. It is not declared here
+only because this branch is cut from `dev`, where that key does not exist yet;
+`virtual-cpython` and `virtual-cpython-pools` are used by this corpus alone, so
+declaring it is safe as soon as the key lands.
+
+### Two cells that moved for a reason worth recording
+
+**Case 02 and case 04 are content-dependent.** 02 was `D 5` on the pools arm in
+`results/2026-10-10-sublet-isa` and is MISSED here; 04 was MISSED in the first
+run of 2026-10-18 and `cause=24` in the re-run, from the same image and the same
+trigger. `_copy_characters` copies a length taken from the field the overread
+fetched, so whether the copy leaves the object depends on what lies past it --
+spaces in one run, `0xff` bytes in another. A cell that turns on the contents of
+neighbouring memory is not a property of the mechanism, and neither reading
+should be presented as one.
+
+**Case 16's fault is real and unattributable.** The pools arm faults `cause=28`
+in `advance_with_locations`, which is not one of the ASan sites its `case.json`
+declares (`read_byte`), so the judge returns NO-READING rather than a catch.
+Naming the site after the run would fit the instrument to the reading.
+
 ## Fidelity, stated as a limitation
 
 The triggers are upstream reproducers driven through the real interpreter, not
