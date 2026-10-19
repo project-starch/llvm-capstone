@@ -3875,3 +3875,16 @@ so any unmap-path retires succeeded under the floor. It is not shown that sql0's
   with Q15_SUBSETS=f, run dir t3-run-treeB/q15bf): 30 CAUGHT, 31 MISSED, 32 CAUGHT, because S-29's satp flush does not
   touch bounds decode.
   - Its dry run wrote the trigger on cpyp-DB's end marker and waited without one.
+
+### q15 subset f, repeat, result (2026-10-20 05:55-06:06, board 1, tree A): case 31 MISSED again, so it is deterministic
+
+`records/q15rf.result-lines.txt`. UNGATED.
+- **The cells:** 30 CAUGHT (vdbeRecordCompareInt+536), 31 MISSED (completed, the same `Q15_PAD items=183 padded=2
+  pad_bytes_total=128 pad_bytes_max=64`), 32 CAUGHT (statDecodePage+704). All three equal to the first run. FRTY 3, no
+  Oops.
+- **Both predictions hold:** this lane's "same three readings if deterministic", and the compiler lane's later "31 MISSED".
+- **A scorer defect, caught by its own guard:** the runner writes the subset prediction to a fixed
+  t3-q15sq/q15<g>.pred, which already existed from the first run. subset-bundle.py refused to overwrite it, and the line
+  read `COMPARE NO DATA`, not a pass. The repeat was scored by hand into q15rf.pred: 2 of 3, with the same DIFF on 31.
+- **q15 subset f on tree B will hit the same collision** and is scored by hand the same way. The runner is not edited
+  while its a-c instance reads it.
