@@ -129,8 +129,13 @@ def session(args, sql_text_or_path, name, raw):
         staged = args.batch.put(f"sql/{name}.sql", sql)
         # The root is /mnt/vm on QEMU and /test-domains/vbatch on the board. The board bake recreates the cluster's
         # directories 0775, and postgres refuses a data directory with group or other write access, hence the chmod.
+        # The board bake stages FILES only, so the cluster's empty directories (pg_notify, pg_serial, pg_snapshots, ...)
+        # never reach the board, and postgres stops at startup: "could not open directory "pg_notify"" in all 21
+        # sessions of sql0-drt (2026-10-19). Each session recreates them after its copy; on QEMU, whose mount carries
+        # them, the mkdir -p is a no-op.
         root = posixpath.dirname(args.cluster_guest)
-        args.batch.step(name, f"rm -rf /tmp/pgd && cp -a {args.cluster_guest} /tmp/pgd && chown -R nobody /tmp/pgd && chmod 700 /tmp/pgd "
+        mk = "".join(f" && mkdir -p /tmp/pgd/{d}" for d in getattr(args, "cluster_empty_dirs", []))
+        args.batch.step(name, f"rm -rf /tmp/pgd && cp -a {args.cluster_guest} /tmp/pgd{mk} && chown -R nobody /tmp/pgd && chmod 700 /tmp/pgd "
                         f"&& su nobody -s /bin/sh -c 'cd {root}; ./capstone-vexec ./bin/postgres "
                         f"{PG_ARGS.format(data='/tmp/pgd')} < {staged}'; rc=$?; rm -rf /tmp/pgd; exit $rc")
         return "", {"kind": "none"}
@@ -437,6 +442,8 @@ def main():
             for source in sorted(args.extensions.iterdir()):
                 args.batch.put(f"share/extension/{source.name}", source)
         args.cluster_guest = args.batch.put("pgcluster", args.fixture)   # the guest path each session copies
+        args.cluster_empty_dirs = sorted(p.relative_to(args.fixture).as_posix() for p in args.fixture.rglob("*")
+                                         if p.is_dir() and not any(p.iterdir()))
         measure(args, spec, raw, preinstalled, symbols)            # plan every session
         args.runs, serial, completed = args.batch.execute(
             kit, raw / "guest", timeout=600 + 300 * len(args.batch.steps))
