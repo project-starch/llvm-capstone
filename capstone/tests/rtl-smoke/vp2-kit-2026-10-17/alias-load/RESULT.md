@@ -22,3 +22,14 @@ compress/decompress model at all 241,984 byte positions out to four spans past t
   positions over four spans, tending to len/span, about 31%.
 - Case 31's cursor is 50,976 bytes past the end and 71,136 past the base: less than one span past the end, and
   5,600 bytes into the next band.
+
+## alias-store (the store twin), result on tree A (board lane, lane f6da1c3aa9e2)
+
+Every pre-registered value holds:
+- **alias +0x10100:** decoded child+0x10000; before=165; AS_STORED; AS_READBACK value=60. The store overwrote the
+  marker 64 KiB away, with no trap.
+- **outside +0x16000:** the same shifted decode; before=90; cause 28 at the cursor; no AS_STORED.
+- **past:** cause 28. **inb:** reads back 60.
+
+So stores alias exactly as loads do, under the same condition. An overrun that meets it is a silent write to another
+object. Filed by the board lane as ISSUES R-60 (dev d338e44c52d3).
