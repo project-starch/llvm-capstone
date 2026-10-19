@@ -2237,3 +2237,26 @@ The runtime lane's two arms, which firm up the pair after the auditor.
 
 The cpython allocator-boundary boots follow, pre-registered separately. A kernel panic there is S-23's NO-READING, not
 a cpython verdict, and a fourth instance with its MTVL is evidence the RTL lane needs.
+
+### S-26's firming arms, results (2026-10-19 17:29-17:45, board 1, tree A, module 39d8492d): cur-esc as predicted; var1k's prediction FAILS (1,000 at boot, cold, no STEP, completes)
+
+| Arm | QNT0 | vm-contract | Escapes | Verdict |
+|---|---|---|---|---|
+| cur-esc (9e4924294f94eafe) | 00000000 | 930, VM_SPIN; resume_satp_refreshes 22,182 → 73,398 → 124,590 | 16 printed (the budget), every one `frame kind 0x1 cause 0x0` | **as predicted** |
+| var1k (2406f5a523ca00e4) | 000003E8 | 0, identity branch; `steps=41805 faults=426` | — | **prediction FAILS** (930 predicted, from the RTL lane's tree-A simulation) |
+
+- **cur-esc settles the auditor's open point.** The escape kind is now observed, not inferred: the spin at quantum 0 is a
+  loop of kind-1 escapes with cause 0, re-entered continuously. Its counters reproduce cur's (22,621 → 73,763 →
+  124,857) to within 2%.
+- **var1k answers the two questions the mirror left open:**
+  - **The threshold:** with a 1,000-cycle quantum written at boot, cold, and no process-ABI STEP, the context completes
+    on silicon, where the RTL simulation (tree A and bf3db3175 alike) has 1,000 retire nothing.
+  - **mir's ambiguity:** var1k's 41,805 steps match mir's 42,151 (after b0-hello's STEP), so the quantum decides,
+    and STEP state does not.
+  - On silicon the threshold for no progress lies below 1,000. The RTL lane's first suspect for the difference is the
+    testbench's fixed 12-cycle delay on each of the entry walk's ~70 register transactions.
+- **S-26 at this point** (N=1 per arm, UNGATED):
+  - a quantum of 0 at the first CSRUNV gives a loop of kind-1, cause-0 escapes without progress;
+  - writing 2,000,000 at boot, or 1,000, removes it with no STEP;
+  - the threshold is between 0 and 1,000 cycles on silicon.
+- A silicon bracket (100 / 300 / 600 in one boot) is now worth a boot, by the RTL lane's own condition.
