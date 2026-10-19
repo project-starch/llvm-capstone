@@ -35,3 +35,27 @@ config["codegen"] = list(config["codegen"]) + [w for w in extra if w not in conf
 json.dump(config, open(path, "w"), indent=2)
 APPEND
 fi
+# The C-81 rule as a GATE, not a habit: a corpus or kit SDK compiles with -fno-builtin. Without it LLVM treats
+# malloc/realloc/free as library builtins and may elide an allocation whose result is only tested against NULL,
+# assuming it succeeds. Upstream does the same. A test that observes an allocation FAILURE then reads nothing:
+# the v6 kit's malloc contract compiled its 512 MiB growth check to an unconditional failure, read as a runtime
+# regression and retracted (2026-10-20). So an SDK without -fno-builtin is REFUSED: its sdk.json is renamed
+# sdk.json.refused, so no capstone-cc compile can use it, and the build exits 3. CAPSTONE_SDK_ALLOW_BUILTINS=1
+# builds one anyway and records that in sdk.json ("builtins_allowed"), so the choice travels with the SDK.
+python3 - "$SDK/sdk.json" "${CAPSTONE_SDK_ALLOW_BUILTINS:-0}" <<'GATE' || exit 3
+import json, os, sys
+path, allow = sys.argv[1], sys.argv[2] == "1"
+config = json.load(open(path))
+if "-fno-builtin" in config.get("codegen", []):
+    sys.exit(0)
+if allow:
+    config["builtins_allowed"] = ("CAPSTONE_SDK_ALLOW_BUILTINS=1 at build: allocation calls may be elided or "
+                                  "assumed to succeed (C-81); not for corpus or contract builds")
+    json.dump(config, open(path, "w"), indent=2)
+    print("build-sdk.sh: builtins ALLOWED by CAPSTONE_SDK_ALLOW_BUILTINS=1 (recorded in sdk.json)", file=sys.stderr)
+    sys.exit(0)
+os.replace(path, path + ".refused")
+print("build-sdk.sh: REFUSED: sdk.json codegen lacks -fno-builtin (C-81). Set CAPSTONE_SDK_EXTRA_CODEGEN=-fno-builtin, "
+      "or CAPSTONE_SDK_ALLOW_BUILTINS=1 to build one deliberately (recorded).", file=sys.stderr)
+sys.exit(1)
+GATE
