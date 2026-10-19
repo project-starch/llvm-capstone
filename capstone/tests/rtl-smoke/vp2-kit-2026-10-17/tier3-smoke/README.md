@@ -4137,3 +4137,28 @@ FRTY 0, DRT1 0, no Oops.
   - alternative 1, that under the floor retire()'s CSRETIRE is silently REJECTED, so nothing broadcasts. node-floor-2's
     release line is the reading, and it runs next on board 2;
   - nothing yet reads the broadcast index or slot 3's node index directly.
+
+### node-floor-2, results (2026-10-20 06:50-07:39, board 2, tree B): Tier 1 PASSES, and every CSRETIRE succeeds under the floor, so the auditor's alternative 1 is REFUTED
+
+`records/nf2.result-lines.txt`. UNGATED.
+
+**Tier 1 (t1-nf2), 06:50-06:57:**
+- The four rungs read as t1-old's, the banner node-floor-2 is present, and DRT1/DRTX/Oops are 0.
+- **Release lines:** the check printed "6 against 3 contexts", but three of the six are the vm-suite rung's
+  `KMSG-AFTER-CHURN:` dmesg replay of the same lines (identical kernel timestamps). Unique, there are 3 release lines for 3
+  contexts: attempted 11, 11 and 13, each succeeded = attempted, first_id 1024 (node_flat_records 4096).
+- Each line precedes its context's ADD_OK line because the kernel prints it at teardown, before the case writes the
+  captured stdout.
+
+**sql0-nf2-treeB, 06:58-07:39:**
+- **The must-fire:** the staged module is 54d8a3af, and the banner appears once.
+- **FRTY 0, DRT1 0,** DRTX 0, no Oops, as predicted.
+- **21 release lines for 21 contexts,** unique by kernel timestamp, with no replay in this transcript. Each reads
+  attempted=24 succeeded=24 first_id=1024.
+- **What this rules out:** retire()'s CSRETIREs are NOT rejected under the floor. Every teardown retire succeeds, so the
+  broadcasts happen, and the fetch face is still 0.
+  - That refutes the audit's alternative 1.
+  - Together with sql0-srzdev-treeB (21 on 90bf036f, the floor commit alone as the variable), the node floor removes
+    the fetch face by changing WHICH index retire broadcasts, not WHETHER it broadcasts.
+- **Still inferred:** that the broadcast index equals slot 3's physical index p. Neither is read directly. The floor's
+  effect is consistent with it, and no other reading on the table explains 21 → 0.
