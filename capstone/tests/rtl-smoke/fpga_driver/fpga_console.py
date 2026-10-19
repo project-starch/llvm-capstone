@@ -92,6 +92,20 @@ def _redact(msg: str, url: str) -> str:
 BOARD_SECRETS = {"1": "~/.claude-kisp/secrets/fpga-console-url", "2": "~/.claude-kisp/secrets/fpga-console-url-board2"}
 BOARD_LOCKS = {"1": "/tmp/capstone/.board.lock", "2": "/tmp/capstone/.board2.lock"}
 
+# SERVER-SIDE LEASES (2026-10-19; the console's board-lease, first mode LEASE_ENFORCE=log). A lease is taken where the
+# local board lock is taken and released where the console is closed; the local flock stays as the backstop. While held,
+# every HTTP call carries X-Lease-Token and every Socket.IO (re)connect emits lease_bind. A thread renews it every
+# LEASE_RENEW_S (agent leases last 10 min). A renew answered 409 "yield" (a person joined the queue) or "reserved" (a
+# booking) sets lease_yield: the current cycle finishes, and power-ON is refused from then on, so no new cycle starts.
+# A console without /api/lease (404) means leases are not available there: the run proceeds under the local lock only.
+# FPGA_LEASE=off skips leases entirely; FPGA_LEASE_PURPOSE names the run (default: the driver and its pid).
+LEASE_HOLDER = "board-lane"
+LEASE_RENEW_S = 240.0
+
+
+class LeaseYield(RuntimeError):
+    """A person is waiting for the board (or a booking starts): no new cycle may start."""
+
 
 def board_id() -> str:
     b = os.environ.get("FPGA_BOARD", "1").strip() or "1"
@@ -193,6 +207,13 @@ class FpgaConsole:
         self._server_restarted = False
         self._uart_gap_chunks = 0
 
+        # Server-side lease (see LEASE_HOLDER): None until taken; "none" when the console has no lease API.
+        self._lease_token: Optional[str] = None
+        self._lease_state = "untaken"
+        self.lease_yield = False
+        self._lease_stop = threading.Event()
+        self._lease_thread: Optional[threading.Thread] = None
+
         self._install_handlers()
 
     # -- connection ---------------------------------------------------------
@@ -241,6 +262,11 @@ class FpgaConsole:
 
     def connect(self, timeout: float = 20.0) -> None:
         self._acquire_board_lock()
+        try:
+            self.lease_take()
+        except Exception:
+            self._board_lock_fd.close()   # refused: give the local lock back too
+            raise
         auth = None
         if C.CONNECT.auth_key and self.token:
             auth = {C.CONNECT.auth_key: self.token}
@@ -295,6 +321,7 @@ class FpgaConsole:
 
     def close(self) -> None:
         self.users_report()
+        self.lease_release()
         try:
             self.sio.disconnect()
         except Exception:  # pragma: no cover - best effort
@@ -327,6 +354,10 @@ class FpgaConsole:
         # ring buffer + current states again or it silently misses the post-reset
         # boot log (this is exactly what stalled the first hardware recon).
         def on_connect() -> None:
+            try:
+                self._lease_bind()
+            except Exception:  # pragma: no cover - best effort; log mode refuses nothing
+                pass
             try:
                 self._resync_history()
             except Exception:  # pragma: no cover - best effort
@@ -801,11 +832,109 @@ class FpgaConsole:
                 )
         return data
 
+    # -- server-side lease ---------------------------------------------------
+    def _lease_url(self, sub: str = "") -> str:
+        return f"{self._api_base}/lease{sub}"
+
+    def _lease_say(self, msg: str) -> None:
+        print(f"[fpga-lease] board {self.board}: {msg}", file=sys.stderr, flush=True)
+
+    def lease_info(self, timeout: float = 10.0) -> Optional[Dict[str, Any]]:
+        """GET /api/lease (open): holder, until, queue, offer, reservations, enforce. None without a lease API."""
+        r = self._http.get(self._lease_url(), timeout=timeout)
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json()
+
+    def lease_take(self, purpose: Optional[str] = None, timeout: float = 15.0) -> None:
+        """Take the board's lease, or refuse to proceed when someone else holds, is offered or has booked it."""
+        if os.environ.get("FPGA_LEASE", "").strip().lower() == "off":
+            self._lease_state = "off"
+            self._lease_say("FPGA_LEASE=off: no lease; local lock only")
+            return
+        purpose = purpose or os.environ.get("FPGA_LEASE_PURPOSE") or f"{os.path.basename(sys.argv[0])} pid {os.getpid()}"
+        try:
+            r = self._http.post(self._lease_url(), json={"holder": LEASE_HOLDER, "purpose": purpose, "kind": "agent"},
+                                timeout=timeout)
+        except Exception as e:
+            raise RuntimeError("[fpga-lease] lease request failed: " + _redact(str(e), self.url)) from None
+        if r.status_code == 404:
+            self._lease_state = "none"
+            self._lease_say("no lease API (404): leases not available; local lock only")
+            return
+        try:
+            d = r.json()
+        except ValueError:
+            d = {}
+        if r.status_code == 409:
+            raise RuntimeError(f"[fpga-lease] board {self.board} is not free: {d.get('code')} by {d.get('holder')!r} "
+                               f"until {d.get('until')}; not starting")
+        if not r.ok or not d.get("token"):
+            raise RuntimeError(f"[fpga-lease] lease take -> HTTP {r.status_code}: {d.get('error', r.text[:200])!r}")
+        self._lease_token = d["token"]
+        self._lease_state = "held"
+        self._http.headers["X-Lease-Token"] = self._lease_token
+        self._lease_say(f"held, until {d.get('until')}, purpose {purpose!r}")
+        self._lease_stop.clear()
+        self._lease_thread = threading.Thread(target=self._lease_renew_loop, name="lease-renew", daemon=True)
+        self._lease_thread.start()
+
+    def _lease_bind(self) -> None:
+        if self._lease_token:
+            self.sio.emit("lease_bind", {"lease_token": self._lease_token}, namespace=C.CONNECT.namespace)
+
+    def lease_renew(self, timeout: float = 15.0) -> Optional[str]:
+        """Renew once. Returns None on success, else the 409 code (yield/reserved set lease_yield) or an error text."""
+        if not self._lease_token:
+            return None
+        try:
+            r = self._http.post(self._lease_url("/renew"), timeout=timeout)
+        except Exception as e:
+            self._lease_say("renew failed (kept): " + _redact(str(e), self.url))
+            return "error"
+        try:
+            d = r.json()
+        except ValueError:
+            d = {}
+        if r.ok:
+            return None
+        code = d.get("code") or f"http {r.status_code}"
+        if r.status_code == 409 and code in ("yield", "reserved"):
+            if not self.lease_yield:
+                self._lease_say(f"YIELD ({code}, waiting {d.get('waiting')}): finishing the current cycle; "
+                                f"no new cycle will start")
+            self.lease_yield = True
+        else:
+            self._lease_say(f"renew refused: {code}")
+        return code
+
+    def _lease_renew_loop(self) -> None:
+        while not self._lease_stop.wait(LEASE_RENEW_S):
+            self.lease_renew()
+
+    def lease_release(self, timeout: float = 15.0) -> None:
+        """DELETE /api/lease with the token. Best effort: an unreleased lease expires on the server."""
+        self._lease_stop.set()
+        tok, self._lease_token = self._lease_token, None
+        if not tok:
+            return
+        try:
+            r = self._http.delete(self._lease_url(), headers={"X-Lease-Token": tok}, timeout=timeout)
+            self._lease_say(f"released (HTTP {r.status_code})")
+        except Exception as e:
+            self._lease_say("release failed (the lease expires on the server): " + _redact(str(e), self.url))
+        self._http.headers.pop("X-Lease-Token", None)
+        self._lease_state = "released"
+
     # -- the five actions ---------------------------------------------------
     def power(self, on: bool = True, timeout: float = 30.0) -> None:
         """Ensure board power is on/off. power_toggle is a *toggle*, so read the
         current power_state first and only toggle when it differs."""
         want = "on" if on else "off"
+        if on and self.lease_yield:
+            raise LeaseYield("[fpga-lease] a person is waiting for the board (or a booking starts): "
+                             "no new cycle may start; finish and release")
         cur = self._current_state(C.POWER_STATE_EVENT, timeout=5.0)
         if cur == want:
             self._log(f"power already {want}")
