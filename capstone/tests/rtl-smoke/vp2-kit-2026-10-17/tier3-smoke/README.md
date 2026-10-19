@@ -2713,3 +2713,8 @@ de0d947a4112c93d, bkit7-pb10BD 9248619d2971f0c8. Results go under results/2026-1
 3. **An FRTY:** the fetch face survives tree B's flush. That is a finding about the S-29 fix, reported first.
 
 No prediction among the three is made; the arms discriminate.
+
+**Amendment to tree B's discriminator (19:50, before either arm started).** Outcome 1 is reworded. Tree B differs
+from tree A in its flush-all on every switcher satp write, not only in FRTY's absence, and that changes switch timing
+and the caller's first translations. Outcome 1 now reads: "no FRTY and no refusal is consistent with the data face
+depending on the FRTY path OR on what tree B's flush changes; N=1; cells scored against QEMU". Outcomes 2 and 3 stand.
