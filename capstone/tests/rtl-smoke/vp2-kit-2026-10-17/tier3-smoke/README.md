@@ -3086,3 +3086,33 @@ runner, pin), `--only 03,17,23`.
   - pc=0 present: it is cpython on this board/bitstream (a tree B pair would follow);
   - **a kernel panic on S-23's data face** (expected at a refusal: there is no retry on 007d81d) ends the boot. Every
     step after it is NO DATA, not a reading. A pc=0 fault before the first refusal still counts.
+
+### The srevroot-zero module on board 2, pre-registered (2026-10-20 01:4x, before its boots): its own Tier 1 pair, then sql0
+
+**The module:** the compiler lane's srevroot-zero, 607164b9c1407c7c (lane module-srevroot-zero, banner "diag
+srevroot-zero-1").
+- The source is 39d8492d's plus the change: `csrw 0x5c1, zero` after each of the 3 on-path CSRUNV sites.
+- It is gated on QEMU: Tier 1 equal two-sided.
+- Per the standing rule, a new module revision gets its own Tier 1 boot before any corpus arm.
+
+**The prep:** `board-tier12/srz/srz-prep.sh` a596bc52f307c2a4.
+- image-rev7-srz 67c2f89aa2e76ec1 is rev7's Tier 1 stage with ONLY capstone_vm.ko swapped.
+- The staged module is read-only. The dry run found that the first swap failed silently and would have baked the old
+  module under the srz label. It is now replaced by removal and checked by hash before the bake. The bake's hash check
+  shows the module present, and the stage is restored to its record.
+- Two firmwares on the retry monitor line (f13dbc5, wrapper aab63d5, the D defines):
+  - t1-old 85fc8dbecd3321a4 on image-rev7 dcfc2e15bf1bbd77;
+  - t1-srz 8502993af385416a on image-rev7-srz.
+
+**The chain:** `chain-srz-b2.sh` ba1089e3987d199f, board 2, tree B, after sql0-csr-treeB.
+1. **t1-old, then t1-srz** (`board-tier12/srz/run-tier1-srz-b2.sh` d8bd6387205dcaa6): rev7's Tier 1 rungs,
+   oracles and judge.
+   - **The gate:** t1-srz's four rung lines must equal t1-old's.
+   - **No prediction for vm-suite itself:** rev7A on tree A read vm-suite NONE (S-23 in step 4), and the retry line may
+     now carry it through.
+   - **Readings:** DRT1 in each boot, and the srz banner.
+2. **sql0-srz-treeB** (`tier3-sql-arm-rev2l.sh` b0e84dbd1241c1fe), ONLY on the gate's PASS. It is
+   sql0-treeB with ONE change, the module (kits bkit7-rev2xBDZ 23804ca5ae765a09 / bkit7-rev2xmBDZ 17f01d55055772a2).
+   - The cells are VOID (the runner stays 1f099612), declared here.
+   - **The must-fire:** the staged module's hash is 607164b9, and the banner appears.
+   - **Prediction (the compiler lane's):** DRT1 16 → 0. A nonzero DRT1 means the residual or the mechanism is wrong.
