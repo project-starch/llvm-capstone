@@ -90,6 +90,13 @@ Capstone process: `virtual-malloc` (the stock pools, every entry one virtual-mal
 `virtual-nested-pools` (`-DFFPOOL_SUBLET=ON`, the port's patch 0003: every hand-out a child lifetime
 of its pool entry, revoked when it returns). Build both, then run each in one boot:
 
+**The SDK is a corpus SDK (C-81).** Build it with `CAPSTONE_SDK_CORPUS=1` exported
+(`CAPSTONE_SDK_CORPUS=1 bash capstone/runtime/virtual/build-sdk.sh <out> <musl>`, or the port's
+builder): `build-sdk.sh` then appends `-fno-builtin` and refuses an SDK whose effective setting is
+otherwise, because with `malloc` as a library builtin LLVM may elide an allocation a case observes.
+`tools/check-sdk-builtins.py <SDK or build>` checks one already built; `run-virtual-cases.py`,
+`run-silicon-cases.py build` and the board's `tier3-appvm-arm.sh` refuse anything else with exit 78.
+
     CAPSTONE_SDK=<virtual SDK> bash shared/build-cases.sh capstone-application <cases> [-DFFPOOL_SUBLET=ON]
     CAPSTONE_SDK=<virtual SDK> bash controls/virtual/shared/build-cases.sh capstone-application <controls> [same]
     python3 ../../tools/run-virtual-cases.py --corpus . --arm virtual-nested-pools \

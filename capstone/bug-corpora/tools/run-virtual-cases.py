@@ -41,6 +41,8 @@ of each run, the reach marker the case prints before its defective access, and t
 function the case's own case.c calls; a fault anywhere else is unattributed.
 
 Exit: 0 judged, 75 nothing could be judged (infrastructure, controls, a wrong build or SDK).
+      78 the SDK's effective codegen is not -fno-builtin and records no builtins_allowed (C-81,
+      tools/check-sdk-builtins.py); checked before anything is built or booted.
 """
 import argparse
 import json
@@ -157,6 +159,12 @@ def main():
     p.add_argument("--prebuilt", type=Path, help="the port's capstone-application build of the corpus")
     p.add_argument("--prebuilt-controls", type=Path, help="the same build of the corpus's virtual controls")
     a = p.parse_args()
+    # C-81: a builtins build can elide the allocations a case observes; refused before anything boots
+    extra = [w for c in a.cc_arg for w in ("--extra", c)]
+    gate = subprocess.run([sys.executable, str(Path(__file__).with_name("check-sdk-builtins.py")), *extra, str(a.sdk)])
+    if gate.returncode:
+        print(f"CONTROL-FAILED {a.sdk}: SDK-BUILTINS gate exit {gate.returncode}", file=sys.stderr)
+        return 78
     rec = record_arm(a)
     corpus = a.corpus.resolve()
     if a.prebuilt:

@@ -90,7 +90,8 @@ if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
 fi
 O=$ROOT/runtime
 if stage runtime; then
-  bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
+  # A corpus image: the SDK builder appends and verifies -fno-builtin (C-81; build-sdk.sh's corpus gate).
+  CAPSTONE_SDK_CORPUS=1 bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA"
 fi
 export CAPSTONE_SDK=$O
