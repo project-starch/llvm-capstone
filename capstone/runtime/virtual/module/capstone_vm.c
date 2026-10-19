@@ -11,6 +11,7 @@
 #include <linux/list.h>
 #include <linux/wait.h>
 #include <linux/ktime.h>
+#include <linux/log2.h>
 #include <asm/csr.h>
 #include <asm/io.h>
 #include <asm/pgtable.h>
@@ -737,9 +738,36 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     memset(a, 0, sizeof(*a));
     return 0;
 }
+/* Slots of the duplicate check's table for n frames: a power of two of at
+ * least 2n, so linear probing stays short. */
+static unsigned long frame_slots(long n)
+{
+    return roundup_pow_of_two(2 * (unsigned long)n);
+}
+
+/* No frame twice among the n pinned pages: each frame number is inserted
+ * into an open-addressing table (frame_slots(n) zeroed entries holding pfn+1);
+ * finding it already there is a duplicate. Expected O(n) (the table is at
+ * most half full); pages keeps the address order the arena records. */
+static bool frames_distinct(struct page **pages, long n, unsigned long *table)
+{
+    unsigned long mask = frame_slots(n) - 1;
+    for (long i = 0; i < n; ++i) {
+        unsigned long key = page_to_pfn(pages[i]) + 1;
+        unsigned long at = (key * 0x9e3779b97f4a7c15UL) >> 32 & mask;
+        while (table[at]) {
+            if (table[at] == key) return false;
+            at = (at + 1) & mask;
+        }
+        table[at] = key;
+    }
+    return true;
+}
+
 static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
 {
-    unsigned i, j, index = 0;
+    unsigned i, index = 0;
+    unsigned long *pfns = NULL;
     struct arena *a = NULL;
     unsigned long flags, old, desc[CV_DESC_WORDS], ancestor, *slot, mapped = 0;
     struct page **pages;
@@ -802,6 +830,10 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     mmap_read_unlock(c->mm);
     pages = kvcalloc(r->bytes / PAGE_SIZE, sizeof(*pages), GFP_KERNEL);
     if (!pages) return -ENOMEM;
+    if (!r->linear) {
+        pfns = kvcalloc(frame_slots(r->bytes / PAGE_SIZE), sizeof(*pfns), GFP_KERNEL);
+        if (!pfns) { kvfree(pages); return -ENOMEM; }
+    }
     n = 0;
     /* Growing RW arenas start with absent PTEs. Linux resolves each first
      * touch through GUP, then the adapter pins that backing until retirement. */
@@ -809,10 +841,11 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         n = pin_user_pages_fast(r->address, r->bytes / PAGE_SIZE, FOLL_WRITE, pages);
         if (n != r->bytes / PAGE_SIZE) goto unpin;
     }
-    for (i = 0; i < n; ++i) {
+    for (i = 0; i < n; ++i)
         if (!PageAnon(pages[i]) || page_mapcount(pages[i]) != 1) goto unpin;
-        for (j = 0; j < i; ++j) if (pages[i] == pages[j]) goto unpin;
-    }
+    if (n > 1 && !frames_distinct(pages, n, pfns)) goto unpin;
+    kvfree(pfns);
+    pfns = NULL;
     slot = t->frame + 8 + r->reg * 2;
     /* Q-30: THE FRAME'S REGISTER SLOTS ARE THE CONTEXT'S LIVE STATE, NOT SPARE SPACE.
      *
@@ -869,6 +902,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     return 0;
 unpin:
     for (i = 0; i < max(n, 0L); ++i) unpin_user_page(pages[i]);
+    kvfree(pfns);
     kvfree(pages);
     return -EFAULT;
 }
