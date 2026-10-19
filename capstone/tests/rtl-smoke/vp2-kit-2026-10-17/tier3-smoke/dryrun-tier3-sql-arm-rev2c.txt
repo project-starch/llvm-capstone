@@ -1,0 +1,12 @@
+# tier3-sql-arm-rev2c.sh dry run (2026-10-19 12:10), the runner stubbed (it writes a guest SEQ reading 30,000,000 B):
+# - [1] the stub's hash as the runner, no override: "SQL STOP: the runner is 662b072ff2555d70, not the board-path fix".
+# - [2] the hash overridden, no CHECK file: "SQL STOP: no QEMU PASS for runner 662b072ff2555d70".
+# - [3] a CHECK reading PASS for another hash: the same STOP.
+# - [4] both gates passed, the default driver guard, beside pgc-fix6b's live boot: "SQL STOP: a driver is running".
+# - [5] the guard pointed at no driver: the measure-only run gets --board-kit bkit7-rev2m and rev2b's image, fixture,
+#   share and llvm-bin; "SQL MEASURE: firmware 30000000 B against 26000000"; "SQL STOP: the measured firmware is not
+#   under the cap; no boot".
+#   Its first attempt read "a driver is running", because the guard pattern sat literally in the dry run's own
+#   command line (pgrep -f). It was re-run with a bracketed pattern.
+# The boot branch after the measure is rev2b's code unchanged, and it ran live on 2026-10-19 11:40.
+# The dry run's directories are in the session scratchpad, never under the run root.

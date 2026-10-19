@@ -1649,3 +1649,44 @@ retry was added, as the production drivers' cold_boot has):**
   - sql0-rev2b (on 39d8492d, the measure-only bake first), then pgc/pgm0/pgm1 on d71f207a.
   - The silent runs are in the attic: sql0-rev2b 01:52, pgc 02:02. pgc's second dead-boot record is kept as
     `records/pgc-fix6b-noboot2.board.txt`, and its all-infra bundle is not filed.
+
+### sql0-rev2b, result (2026-10-19 11:40-11:50): VOID, a runner defect; and sql0-rev2c pre-registered (before its boot)
+
+- **What ran:** the measure-only bake again read 25,856,520 B, under the cap. The boot completed and all 21 sessions
+  ran, in 10 minutes.
+- **What failed:** run-arm.py's own positive control: "the image did not answer a trivial SELECT". Every session's
+  output was `cp: can't stat '/mnt/vm/pgcluster'`.
+- **Why:** sql-repros' `run-arm.py` wrote the batch step with the QEMU kit's mount path, `/mnt/vm`. The board batch
+  stages under `/test-domains/vbatch` (`boardvm.BoardBatch.put`). No postgres code ran, so this is not a reading. The
+  chain's gate refused the bundle (fixture record none, image none), and nothing was filed.
+- **A second defect would have failed the next boot the same way.** The kit's bake recreates staged directories
+  0775. `cp -a` carries that mode into `/tmp/pgd`, and postgres refuses a data directory with group or other write
+  access. Native postgres 17.5 on a copy of the trimmed cluster, with directories 0775 and files 0644, gave
+  `FATAL: data directory ... has invalid permissions` (rc 1). After `chmod 700` on the directory alone it answered
+  `SELECT 1` (rc 0).
+- **The fix (runner sha256/16 1f099612d70a9576):**
+  - the session copies the path that `batch.put("pgcluster")` returns, and `cd`s to that path's directory;
+  - `chmod 700 /tmp/pgd` follows the chown.
+  - The c-repros and mmgr runners carry no `/mnt/vm` and no data directory. They are unaffected, so the pg arms were
+    released first (PGF BEGIN 11:58:33).
+- **The QEMU step is unchanged:** the generated step equals the old literal byte for byte, apart from the added
+  `&& chmod 700 /tmp/pgd`, which is a no-op there because the fixture is already 0700.
+  - The QEMU check re-runs `run-sql-trim.sh`'s exact invocation with only the runner changed
+    (`<mnt-hdd>/capstone/t3-sql-trim-vm-r2`).
+  - It is PASS only if `compare-pilot.py` reads every cell and control the same as `t3-sql-trim-vm/bundle` and 21 of 21
+    sessions ran. The result is written to that directory's `CHECK` as `PASS <runner hash>`.
+
+**sql0-rev2c** (`tier3-sql-arm-rev2c.sh`): rev2b's script with the tag, the run directory and two gates changed. It
+runs only if the runner is 1f099612d70a9576 and the QEMU CHECK reads PASS for it.
+- **Inputs and kits:** rev2b's, unchanged: image 64010720f1a6b3bc, fixture record 956173e054762e91, kit bkit7-rev2s
+  (module 39d8492d, BOARD_TIMEOUT_MULT=4), and the measure-only bake on bkit7-rev2m first.
+- **Size:** rev2b's stage was 28,809,586 B in 1,072 files, with firmware 25,856,520 B. The fix adds about 48 B of gate
+  text per session, about 1 KB in all, so the firmware is expected at 25,856,520 B. The measure-only bake decides
+  before any boot.
+- **Prediction:** rev2b's, i.e. `t3-sql-trim-vm/bundle`:
+  - CAUGHT 02 and 03 (cause 28 at memcpy+200);
+  - MISSED 01 and 04-09;
+  - both controls fault.
+- **When:** after the pg chain ends (PGF DONE, STOP or HOLD in `t3-run-pgf4.out`).
+- **Records:** `records/sql0-rev2c.board.txt` and `postgres/sql-repros/results/2026-10-19-vp2-rev2/`.
+- UNGATED (PREFLIGHT=0).
