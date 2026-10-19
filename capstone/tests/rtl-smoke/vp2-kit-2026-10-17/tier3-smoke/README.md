@@ -3344,3 +3344,50 @@ The compiler lane's kit: dev f1d522d7fff1, with its record on lane q15-memsys5 4
 - **Q15_PAD:** it prints on the 6 MISSED cases only. Its count is recorded as information.
 - **Not predicted:** the silicon faces (S-23 data face, the fetch face); DRT1, DRTX and FRTY are recorded as information.
 - **A wedge** is a result for its subset only. The next subset is its own cold boot.
+
+### sql0-frs-treeB, pre-registered (2026-10-20 03:5x, before its boot): board 2, tree B, srz module, the fetch-slot monitor
+
+The runtime lane's discriminator for the fetch face. The RTL lane has confirmed that vp2's virtual lifetime indices never
+recycle, so the fetch-face pair's 12,800 kills named indices from 3 upward, and none refused a fetch. The refusing code
+slot must therefore track an index the context never names.
+
+**The run:** sql0-srz-treeB (FRTY 21) with ONE change, the monitor. It is capstone-sbi 9697173 (vp2/s23-fetch-slots: c3917e8
+plus FRSL/FRT2/FRVD under CAPSTONE_S23_FETCH_SLOTS).
+- **The instrument:** inside fetch_retry_covered's own read/write-back loop, for each loaded slot that covers mtval (and
+  each loaded slot with no capability), it reports:
+  - FRSL: (slot << 16) | region;
+  - FRT2: the LCC type (0 LINEAR, 1 NONLIN, 7 no capability);
+  - FRVD: the validity on the value read, before the exact write-back.
+- **What c3917e8 adds over f13dbc5** (rev2l's monitor), also observation-only: RFSR/RFSH/RFCT at a data refusal and FRTM
+  beside each FRTY.
+- **The gates, on the generated monitor assembly (the recipe's compile step, the kit's defines):**
+  - 9697173 with the macro off is byte-identical to c3917e8 (sbi_capstone_dom.c.S c15b59787e548dbb,
+    capstone_int_handler.c.S 55500a31efe852b7);
+  - c3917e8 with the macro on is identical too;
+  - 9697173 with the macro on differs only in fetch_retry_covered's blocks, and carries FRSL, FRT2 and FRVD twice each.
+- **The kits:** bkit7-rev2xBFZ (SHA256SUMS eec0866e12a8a5bd) and bkit7-rev2xmBFZ (dc6ca85ba4a510d1), from `make-frs-kits.sh` eeeac171f2b4ba6c. They are the BDZ
+  kits with the monitor directory, its commit and the one define changed. The module is still 607164b9.
+- **The runner:** `tier3-sql-arm-rev2m.sh` ab5de33e7f9a1bf5, which is rev2l with the kits changed.
+  - run-arm.py stays 1f099612, with its QEMU PASS, so the cells are VOID as in rev2l. That is declared now, and they are
+    not scored.
+  - The measure-only bake is first, and it must come in under 26,000,000 B.
+- **The dry run:** it reached SQL DONE on a stub. A missing GO, a busy board and a wrong runner hash each stopped it.
+  - The new FRS parser read the reference sql0-srz-treeB transcript (FRTY 21, no FRSL) as `MUST-FIRE FAILED`, as it
+    must, and parsed a synthetic transcript into its tuples.
+
+**Readings:**
+- the FRTY count (reference 21; the boot is not a repeat, so any count is information);
+- every (FRSL, FRT2, FRVD) tuple with its count;
+- DRT1/DRTX (reference 0 under srz);
+- RFSR at any data refusal;
+- the must-fire: the staged module's hash, the banner, and FRSL lines whenever FRTY > 0.
+
+**The runtime lane's prediction, as given:**
+- the covering slot is NONLIN, from a region derived NONLIN from the root: that means node 2;
+- or it is LINEAR: a fresh physical node, and the monitor's own physical activity is the next suspect.
+
+**Added here:** FRVD is expected to read 1 at every FRTY, as RFVD did at every data refusal, because the trap into M re-arms
+the slot under a nonzero srevroot (RTL lane, csr_regfile.sv:2876-2878). The srz module zeroes srevroot only after
+CSRUNV, so 1 is expected but not certain.
+- A 0 would be the first sighting of a dead node in a refused fetch's covering slot.
+- FRTY 0 makes the boot uninformative for the question. It would not make it a pass.
