@@ -1778,3 +1778,41 @@ word again, and the chain stops instead.
     directory, and a quoted inline stub. Both were fixed before these.
 - **Steps 4-6** (Tier 1 on module 39d8492d, wm0/wm1, and pym0 on 3005ed52) need kits naming the new bitstream. They
   are prepared while steps 1-3 run, and pre-registered before they run.
+
+### Tree A steps 4-6, pre-registered (2026-10-19 13:45, before they run): `tier3-treeA-linux.sh`
+
+They run after steps 1-3 end with `CHAIN_TREEA_STEPS123_DONE`, and any other end holds them. Every boot is
+UNGATED (PREFLIGHT=0).
+
+**Step 4: Tier 1 on module 39d8492d** (`board-tier12/treeA/run-tier12-rev7A.sh`).
+- **The run:** rev7's run with exactly one change, the bitstream. Same stage (stage.SHA256SUMS as rev7's), firmware
+  7a53759a4773c81b, driver fd38816a90c64c22 and judge. rev7 on bf3db3175 is its matched pair.
+- **Predicted** as rev7 read on bf3db3175:
+  - b0-stats, b0-hello and vm-contract as their oracles (0), with the identity branch;
+  - `@@PARAM` diag_emerg=Y, node_flat_records=4096, supervisor_slots=1;
+  - one banner, 0 refusal lines;
+  - resume_satp_changed and busy_frame_refusals 0 at every read.
+- **sparse-churn, which wedged on bf3db3175 with S-25's face** (N=4; S-25 cites R-57). Under tree A's R-57 fix it is
+  predicted to RUN to exhaustion: `VM_EXIT:sparse-churn:1`, `VM_CONTRACT_FAIL:recycling allocation`, and the
+  console's "collect skipped" at least once (the QEMU reading at 4096 nodes: collect skipped at 3,584 nodes, then
+  exit 1).
+  - That reading is also module 39d8492d's stopgap control on silicon, open since rev7.
+  - A wedge with rev7's apertures would mean tree A's R-57 fix does not cover this face.
+- **The judge's exact-counter item** stays NO DATA, as on rev7: `stale` prints no STATS line. So the judge's overall
+  line reads NO DATA, and the per-item lines are the reading.
+
+**Steps 5 and 6** run only if step 4's first three rungs read their oracles. Each arm uses its earlier runner
+arguments and images (`t3-images-nb/<arm>.images.SHA256SUMS`), is scored against the same prediction, and is recorded
+as `<arm>-treeA` under `results/2026-10-19-vp2c-treeA/`.
+- **Step 5: wm0, then wm1,** on kit bkit7-rev2sA. That is bkit7-rev2s (module 39d8492d, budget x4) with only
+  BOARD_BITSTREAM and the kit's own manifest path changed (`diff -r`). They are R-57's positive controls, and each
+  wedged on bf3db3175 on both modules (N=2 per arm).
+  - Predicted to run and read their QEMU predictions: wm0 MISSED 23, and wm1 control-failed 23 (its twin's).
+- **Step 6: pym0 on kit bkit7A.** That is bkit7 (module 3005ed52, resume rd = x15) with the same two changes.
+  - Predicted 20 of 20 at the QEMU verdict, MISSED 20 with the controls complete. On bf3db3175 the same images read
+    0 of 20. That is S-27's RTL fix two-sided on silicon.
+- **Dry run** (stubbed Tier 1 runner, arm and scorer):
+  - all three Tier 1 rungs as oracle: wm0, wm1 and pym0 run with the kits and predictions above, then TAL DONE;
+  - steps 1-3 stopped: TAL HOLD;
+  - vm-contract off its oracle: STOP before any arm;
+  - a driver running: STOP.
