@@ -3577,3 +3577,19 @@ present.
 - **FRTY or DRT1 not 0:** the prediction fails, and pc=0 is read beside them as information.
 - **Not covered by this boot:** srz's Tier 1 was taken on tree B. This is its first boot on tree A. A failure in the
   workload or the controls reads as the module on tree A, not as cpython.
+
+### sql0-frs-treeB, result (2026-10-20 03:53-04:35, board 2, tree B): the covering slot is LINEAR, so the node-2 prediction is REFUTED
+
+`records/sql0-frs.result-lines.txt`. UNGATED. The cells are VOID as declared (the runner's rc=1, as in sql0-csr-treeB).
+- **The must-fire:** the staged module is 607164b9, and the banner appears once.
+- **The other counts:** FRTY 21, all at 017113B8 (retire+0x22c, the instruction after retire's CSRETIRE), with FRTM
+  829F83B8 at every one. DRT1 0, DRTX 0, no Oops.
+- **One covering slot per refused fetch, the same at all 21:** FRSL 0003000E (slot 3, region 14), FRT2 0, FRVD 1.
+- **FRT2 0 is LINEAR.** The type query returns `cap_type - 3'd1` (tree B, capstone_dyn_unit.anvil, func LCC, zimm 1),
+  and LINEAR is 3'b001 (ariane_pkg.sv:663-671 at 8de3c48cf). NONLIN would read 1.
+- **So the runtime lane's prediction (NONLIN, node 2) is refuted.** By its own pre-registered reading, LINEAR means a
+  fresh physical node, and the monitor's own physical activity becomes the next suspect.
+- **FRVD 1 at all 21, as predicted here:** the slot is valid when M reads it, consistent with the trap into M re-arming
+  it. FRVD therefore cannot show whether the slot was dead at the moment of the fetch.
+- **What the reading cannot give:** the covering capability's node INDEX. LCC has no query for it, so whether that index
+  lies under the node floor's bound is not read here. sql0-nf-treeB's FRTY is the only reading of that.
