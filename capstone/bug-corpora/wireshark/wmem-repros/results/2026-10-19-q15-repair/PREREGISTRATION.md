@@ -68,3 +68,12 @@ repaired configuration. On silicon the pad is accessible slack. It is recorded i
 `pad-masked` and the pad in bytes in its evidence. It is never excluded, never NO-READING, and never folded under the
 unrepaired verdict. If the count of such cells is nonzero, it goes in the result line and in the commit subject, since
 it is a cost of the Q-15 repair that the paper's tables must carry.
+
+## Addendum 2, 2026-10-19, before the run: C' on the board module's QEMU twin
+
+Runs B and C used qkit7, whose module (5bfc38f808e1effd) collects. The board's module 39d8492d never collects; its QEMU
+twin is a5dec6a32c49b3d3, and cpython's nested-pools arm did not carry across that difference. **C'** is the repaired
+images (wmq1.images.SHA256SUMS) on qkit7-rev2, which is qkit7 with only the module changed to a5dec6a3 (the same vexec,
+QEMU binary, wrapper and images). Prediction: equal to C cell by cell (CAUGHT 22, case 22 unattributed, all controls as
+in C, no `cause=29`), with no "collect skipped" line on the console. Otherwise C' and not C is the board's prediction,
+with every differing cell listed.
