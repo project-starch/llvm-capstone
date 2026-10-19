@@ -3676,3 +3676,30 @@ The compiler lane's next discriminator for cpython's pc=0 faults, after cpyp-DZ 
   - pc=0 present on tree B excludes S-29 by either route;
   - pc=0 absent implicates something specific to tree A.
 - **Readings:** pc=0 per step, plus DRT1/DRTX/FRTY as information.
+
+### The node-floor module, results (2026-10-20, board 2, tree B): Tier 1 PASSES, and sql0's fetch face is GONE (FRTY 21 → 0), as predicted
+
+`records/t1-nf.result-lines.txt` and `records/sql0-nf.result-lines.txt`. UNGATED.
+
+**Tier 1, 04:36-04:43:**
+- All four rungs read as t1-old's: b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1.
+- The banner node-floor-1 is present. DRT1 0, DRTX 0, FRTY 0, no Oops.
+- The judge's NO DATA is identical to t1-old's, t1-srz's and t1-srzdev's.
+
+**sql0-nf-treeB, 04:44-05:25:**
+- **The must-fire held:** the staged module is a4aa5668, and the banner appears once.
+- **The prediction held:** FRTY 0, DRT1 0, DRTX 0, no Oops, against sql0-srz-treeB's FRTY 21 and DRT1 0.
+- **The zero is not fewer sessions doing less.**
+  - Both boots ran 21 sessions, and each ended in the same declared defect: 21 × `FATAL: could not open directory
+    "pg_notify"` (runner 1f099612; the cells are VOID as declared).
+  - With the monitor's lines removed, both transcripts carry exactly 741 lines, 34 to 61 per step.
+  - What is missing under the node floor is exactly srz's monitor output: 21 FRTY, 231 FRGS and 21 FRGD.
+- **The instrument can fire:** the same monitor and runner read 21 in sql0-srz-treeB.
+
+**The reading:**
+- A one-variable pair: dev's srz module against srz plus the context-table index floor.
+- The fetch face at retire's CSRETIRE is removed by keeping virtual indices away from the physical indices caller slots
+  track. That is the runtime lane's index-collision mechanism, with sql0-frs's LINEAR covering slot.
+- Together with srz at the CSRUNV site (pb10 2 → 0, cpython 9 → 0), both decoded sites of S-23's fetch face, and its
+  data face, read zero on silicon in the programs where they appeared.
+- N=1 per arm.
