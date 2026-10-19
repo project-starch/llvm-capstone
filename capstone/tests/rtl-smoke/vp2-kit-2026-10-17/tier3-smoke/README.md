@@ -3259,3 +3259,20 @@ must-fire matches a FATAL only: `FATAL: .*could not open directory`. Both contro
 - the passing QEMU record r2 reads 0, so it must pass;
 - sql0-drt, with its 21 real pg_notify FATALs, reads 21, so it must stop;
 - sql0-drt2 itself reads 0.
+
+### dev's srevroot-zero module, its own Tier 1 boot, pre-registered (2026-10-20 03:3x, before the boot): board 2 after the fetch-face pair
+
+**The module:** 90bf036f59da1231 (dev 178e005899b0; srevroot-zero unconditional on the tier-m module, banner
+"srevroot-zero-2").
+- **The prep:** `board-tier12/srz/srzdev-prep.sh` 89d5d2124a98d325. image-rev7-srzdev d5edf1ef96674d38 is rev7's Tier 1
+  stage with ONLY capstone_vm.ko swapped. The dry run showed the swap taking (the stage read 90bf036f during the bake),
+  and the stage was restored to 39d8492d.
+- **The firmware:** t1-srzdev fc5a4a1d9629c19f, built with the retry monitor line's recipe.
+- **The arm:** `chain-srzdev-b2.sh` aecff632af846bd9 → `run-tier1-srzdev-b2.sh` bc4b9e865af1517b, one
+  cold boot, rev7's rungs.
+
+**The gate:** its four rung lines must equal t1-old's record (tree B, board 2, 02:06: b0-stats 0, b0-hello 0,
+vm-contract 0, vm-suite 1).
+
+**Readings:** DRT1 and FRTY, plus the banner "srevroot-zero-2" as the must-fire that this module ran. The compiler lane
+expects the srz Tier 1 readings that 607164b9 gave.
