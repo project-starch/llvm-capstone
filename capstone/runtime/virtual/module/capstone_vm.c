@@ -152,14 +152,15 @@ MODULE_PARM_DESC(node_flat_records,
  * capability's revnode by INDEX only (pmp_data_if.sv: the 16-bit compare is deliberate, so a
  * (generation, index) split keeps invalidating), and a context's table is a SEPARATE namespace
  * whose indices the same compare cannot tell from the caller's physical ones. A CSRETIRE in
- * retire()'s window broadcasts the retiring ancestor's VIRTUAL index -- 2 for a context's first
- * grant -- and clears every caller entry tracking PHYSICAL node 2 (the NONLIN children of
- * CAPCREATE's root); the very next fetch through such an entry is refused (the FRTY at
- * retire+0x220 on every sql0 boot). No placement of an instruction can heal it, because the
- * refused fetch IS the instruction after the CSRETIRE. So the module never hands out a virtual
- * index a physical one can share: allocation starts at a floor above the physical namespace's
- * high-water (the monitor recycles physical ids low; nothing on vp2 exports the count, so the
- * floor is generous rather than asserted). The records below the floor stay zero: an all-zero
+ * retire()'s window broadcasts the retiring ancestor's VIRTUAL index; when that index equals the
+ * PHYSICAL node of a caller entry -- on sql0, slot 3's region 14, the kernel's RAM, a LINEAR piece
+ * the monitor carved at boot from a pool whose ids start at 3 (board lane sql0-frs, 2026-10-20) --
+ * the entry is cleared and the very next fetch through it is refused: the FRTY right after the
+ * CSRETIRE, once per sql0 session, since every fresh table repeats the same allocation order. No
+ * placement of an instruction can heal it, because the refused fetch IS the instruction after the
+ * CSRETIRE. So the module never hands out a virtual index a physical one can share: allocation
+ * starts at a floor above the physical namespace's ids (bounded from source in the low tens; nothing
+ * on vp2 exports the count, so the floor is generous rather than asserted). The records below the floor stay zero: an all-zero
  * record is invalid, depth 0, and terminates any walk that reaches it, and neither the bump
  * pointer nor CSNODE allocates below next. The paged (QEMU) build keeps 2; QEMU tracks each
  * namespace separately and has no such collision. A test table smaller than four floors gets a
@@ -1242,7 +1243,7 @@ module_param(diag_escapes, bool, 0644);
 static unsigned escape_prints;
 #define CV_ESCAPE_BUDGET 16U
 
-#define CV_DIAG_TAG "node-floor-1"
+#define CV_DIAG_TAG "node-floor-2"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
@@ -2023,12 +2024,24 @@ static int vm_release(struct inode *inode, struct file *f)
     }
     /* Teardown still clears tags in user frames (including thread start
      * frames) before the final pins are dropped. */
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
-        if (c->arenas[i].pages || c->arenas[i].address)
-            /* The task may be in exit_mm() here.  A teardown must never
-             * call pin_user_pages_fast() to materialize lazy holes; only
-             * already pinned pages can safely be revoked and released. */
-            retire(c, &c->arenas[i], true);
+    {
+        /* S-23: retire() ignores a rejected CSRETIRE when destroying (and counts only successes in
+         * retired_flat), so a teardown whose retires were all rejected would look exactly like one
+         * whose broadcasts no longer collide. This line makes the difference readable: one per
+         * context, always KERN_EMERG because a verdict reads it. */
+        unsigned long attempted = 0, before = c->retired_flat;
+        for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
+            if (c->arenas[i].pages || c->arenas[i].address) {
+                if (!c->arenas[i].ancestor_retired) ++attempted;
+                /* The task may be in exit_mm() here.  A teardown must never
+                 * call pin_user_pages_fast() to materialize lazy holes; only
+                 * already pinned pages can safely be revoked and released. */
+                retire(c, &c->arenas[i], true);
+            }
+        if (node_table_flat)
+            pr_emerg("capstone_vm: release retires attempted=%lu succeeded=%lu first_id=%lu\n",
+                     attempted, c->retired_flat - before, (unsigned long)CV_NODE_FIRST);
+    }
     list_for_each_entry_safe(t, tmp, &c->threads, link) {
         list_del(&t->link);
         if (t->user_frame) { clear_thread_frame(t); drop_thread_frame(t); }
