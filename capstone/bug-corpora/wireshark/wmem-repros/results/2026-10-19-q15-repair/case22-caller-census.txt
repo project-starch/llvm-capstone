@@ -1,0 +1,44 @@
+# case 22's caller census: capstone_cap_revoke_child (tools/caller-census.py, raw-word decode; llvm-objdump/readelf of t3-freeze)
+
+image sha256/16 9d18f9646799ec2b, target capstone_cap_revoke_child:
+== 22-usbhid-output-usages-freed-twice: 39348 instructions parsed (39348 32-bit); capstone_cap_revoke_child copies at ['0x27f44', '0x297ec']
+   caller wmem_sublet_block_renew                  -> copy 0x27f44  x1
+   caller wmem_sublet_block_renew                  -> copy 0x297ec  x1
+   caller wmem_sublet_release                      -> copy 0x27f44  x1
+   caller wmem_sublet_release                      -> copy 0x297ec  x1
+   calls 4; unresolved jalr 45; address-taken 0; data words holding a target address 0 of 2389
+   exit 0
+
+image sha256/16 9d18f9646799ec2b, target wmem_sublet_release:
+== 22-usbhid-output-usages-freed-twice: 39348 instructions parsed (39348 32-bit); wmem_sublet_release copies at ['0x27e90', '0x29358']
+   caller wmem_block_fast_sublet_realloc           -> copy 0x29358  x1
+   caller wmem_block_sublet_release                -> copy 0x27e90  x1
+   calls 2; unresolved jalr 45; address-taken 0; data words holding a target address 0 of 2389
+   exit 0
+
+image sha256/16 cfd77272d182a4f6, target capstone_cap_revoke_child:
+== 00-uaf-chunk: 38924 instructions parsed (38924 32-bit); capstone_cap_revoke_child copies at ['0x27928', '0x291d0']
+   caller wmem_sublet_block_renew                  -> copy 0x27928  x1
+   caller wmem_sublet_block_renew                  -> copy 0x291d0  x1
+   caller wmem_sublet_release                      -> copy 0x27928  x1
+   caller wmem_sublet_release                      -> copy 0x291d0  x1
+   calls 4; unresolved jalr 42; address-taken 0; data words holding a target address 0 of 2389
+   exit 0
+
+image sha256/16 754075bda7ecdd4b, target capstone_cap_revoke_child:
+== 22-usbhid-output-usages-freed-twice: 41625 instructions parsed (41625 32-bit); capstone_cap_revoke_child copies at ['0x2923c', '0x2bb80']
+   caller wmem_sublet_block_renew                  -> copy 0x2923c  x1
+   caller wmem_sublet_block_renew                  -> copy 0x2bb80  x1
+   caller wmem_sublet_release_len                  -> copy 0x2923c  x1
+   caller wmem_sublet_release_len                  -> copy 0x2bb80  x1
+   calls 4; unresolved jalr 55; address-taken 0; data words holding a target address 0 of 2397
+   exit 0
+
+Controls: wmem_sublet_release's callers are found exactly as the source has them (wmem_block_sublet_release,
+wmem_block_fast_sublet_realloc), and a second image (00-uaf-chunk) shows the same two-copy, two-caller pattern.
+Reading: the helper's callers include wmem_sublet_block_renew (free_all's generation renew), so a pc in the helper
+cannot tell the double free from a renew. Case 22 stays NO-READING:unattributed (the semantics owner's ruling,
+2026-10-19; a return-address judge is a corpus backlog item of its own).
+Positive controls for the two exhaustiveness checks, same image: wmem_block_sublet_free (stored into the allocator
+vtable) reads address-taken 1, at 0x23e9c in wmem_block_allocator_init, and exits 1; __stdio_write (a FILE's write
+hook) reads data words holding a target address 1 of 2389 and exits 1.

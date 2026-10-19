@@ -20,6 +20,10 @@ target_include_directories(wireshark-wmem PUBLIC src/shared/shim src/shared
   "${CMAKE_BINARY_DIR}/source-${WM_VARIANT}/wsutil/wmem")
 target_compile_options(wireshark-wmem PRIVATE -Wall -Wextra -ffunction-sections -fdata-sections)
 target_link_libraries(wireshark-wmem PUBLIC Capstone::Runtime)
+if(WM_SUBLET)
+  # Patch 0001 counts its Q-15 tail pad; the corpus driver prints it (Q15_PAD).
+  target_compile_definitions(wireshark-wmem PUBLIC WM_SUBLET_Q15=1)
+endif()
 add_library(Wireshark::Wmem ALIAS wireshark-wmem)
 add_executable(replay src/shared/main.c src/shared/replay.c)
 target_link_libraries(replay PRIVATE Wireshark::Wmem)

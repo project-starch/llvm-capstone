@@ -39,18 +39,35 @@ retires itself.
 # whole block's bounds. A chunk handed out is cleared of them over the
 # caller's range, and so is the range a realloc grows into. block_fast keeps
 # nothing in its chunks.
+#
+# Q-15 (the compact bounds format, vp2's, and capstone-qemu without exact
+# bounds): CDERIVE refuses (29) a child it cannot hold exactly, and from 4 KiB
+# up that means a base and a length on the granule 2^(msb(len)-9)
+# (capstone/representable.h).  Every derive here is exact.  A caller's child
+# is padded at its TAIL only, to capstone_repr_round of its request, and never
+# reaches a chunk header, a block header or a neighbour.  Up to 16 KiB the
+# granule is at most 16, which the 16-byte chunk alignment already meets; from
+# 16 KiB the child is PLACED on its granule inside a chunk served that much
+# larger, with its offset kept below it.  A realloc moves a placed object's
+# bytes back to the chunk's data for the allocator's own copy and up again to
+# the new placement.  A dedicated (jumbo) block is malloc'd at
+# capstone_repr_round of its size and its life and generation cover that
+# length.  The pad is counted; the corpus driver prints it (Q15_PAD).
+# WMEM_SUBLET_Q15_PLANT_UNPADDED_JUMBO restores the unrounded jumbo block, for
+# the planted negative control only.
 --- a/wsutil/wmem/wmem_allocator.h
 +++ b/wsutil/wmem/wmem_allocator.h
-@@ -16,6 +16,8 @@
+@@ -16,6 +16,9 @@
  #include <glib.h>
  #include <string.h>
  
 +#include <capstone/capability.h>
++#include <capstone/representable.h>
 +
  #ifdef __cplusplus
  extern "C" {
  #endif /* __cplusplus */
-@@ -44,6 +46,75 @@
+@@ -44,6 +47,193 @@
      bool                         in_scope;
  };
  
@@ -94,24 +111,142 @@ retires itself.
 +           at < __builtin_capstone_cap_get_end(s->life);
 +}
 +
-+/* The caller's pointer to [ptr, ptr + size), a child of the generation: it
-+ * reaches neither the chunk header nor the block header. */
++/*
++ * Q-15.  On the compact bounds format (vp2's, and capstone-qemu without exact
++ * bounds) CDERIVE refuses (29) a child it cannot hold exactly: from 4 KiB up,
++ * a base and a length on the granule 2^(msb(len)-9) (capstone/representable.h).
++ * Every derive here is made exact, and a child is padded at its TAIL only, so
++ * it never reaches a chunk header, a block header or a neighbour:
++ *
++ *  - a caller's child is [at, at + capstone_repr_round(size)).  Up to 16 KiB
++ *    the granule is at most 16, which the allocators' 16-byte chunk alignment
++ *    already meets, so at is the chunk's data and the allocator serves the
++ *    rounded length (wmem_sublet_request).  From 16 KiB the child is PLACED:
++ *    the allocator serves granule + WMEM_SUBLET_Q15_SLACK bytes more, at is the
++ *    first granule boundary at least WMEM_SUBLET_Q15_SLACK bytes into the data,
++ *    and the offset back to the data is kept in the 8 bytes below at, which the
++ *    child does not cover;
++ *  - a block's life and generation cover a representable length: a dedicated
++ *    (jumbo) block is malloc'd at capstone_repr_round of its size
++ *    (wmem_sublet_block_size), and the system allocator's own exact object puts
++ *    its base on that length's granule.
++ *
++ * The over-approximation is counted (wmem_sublet_q15_counts) and the corpus
++ * driver prints it, as "Q15_PAD chunks=N padded=N pad_bytes_total=N
++ * pad_bytes_max=N".  WMEM_SUBLET_Q15_PLANT_UNPADDED_JUMBO restores the
++ * unrounded jumbo block, for the planted negative control only.
++ */
++#define WMEM_SUBLET_Q15_ALIGN 16UL     /* the allocators' chunk data alignment */
++#define WMEM_SUBLET_Q15_SLACK 16UL     /* below a placed child: its offset */
++
++extern unsigned long wmem_sublet_q15_chunks, wmem_sublet_q15_padded,
++                     wmem_sublet_q15_pad_total, wmem_sublet_q15_pad_max;
++void wmem_sublet_q15_counts(unsigned long out[4]);
++
++/* Whether a child of len bytes is placed past the chunk's data. */
++static inline bool
++wmem_sublet_placed(size_t len)
++{
++    return capstone_repr_granule(len) > WMEM_SUBLET_Q15_ALIGN;
++}
++
++/* The bytes the allocator must serve for a caller's size bytes. */
++static inline size_t
++wmem_sublet_request(size_t size)
++{
++    size_t n = size < 4096 ? size : capstone_repr_round(size);
++
++    return wmem_sublet_placed(n) ?
++        n + capstone_repr_granule(n) + WMEM_SUBLET_Q15_SLACK : n;
++}
++
++/* The length a dedicated block of size bytes is malloc'd at and its
++ * lifetimes cover. */
++static inline size_t
++wmem_sublet_block_size(size_t size)
++{
++#ifdef WMEM_SUBLET_Q15_PLANT_UNPADDED_JUMBO
++    return size;
++#else
++    return capstone_repr_round(size);
++#endif
++}
++
++/* The caller's pointer to its size bytes in the chunk whose data is ptr (the
++ * allocator's pointer, wmem_sublet_request(size) bytes): a child of the
++ * generation, [at, at + capstone_repr_round(size)), that reaches neither the
++ * chunk header nor the block header.  *at_out is the allocator's pointer at at.
++ * A realloc passes move, the bytes it kept at the chunk's data, and a placed
++ * child gets them moved up to at BEFORE its offset is written below at. */
++static inline void *
++wmem_sublet_issue_at(const wmem_sublet_block_t *s, void *ptr, size_t size,
++                     uint8_t **at_out, size_t move)
++{
++    size_t   n = size < 4096 ? size : capstone_repr_round(size);
++    uint8_t *at = (uint8_t *)ptr;
++
++    if (n != size) {
++        wmem_sublet_q15_padded++;
++        wmem_sublet_q15_pad_total += n - size;
++        if (n - size > wmem_sublet_q15_pad_max)
++            wmem_sublet_q15_pad_max = n - size;
++    }
++    wmem_sublet_q15_chunks++;
++    if (wmem_sublet_placed(n)) {
++        unsigned long c = __builtin_capstone_cap_get_cursor(ptr);
++        unsigned long g = capstone_repr_granule(n);
++        unsigned long a = (c + WMEM_SUBLET_Q15_SLACK + g - 1) & ~(g - 1);
++
++        at += a - c;
++        if (move)
++            memmove(at, ptr, move < n ? move : n);
++        *(uint64_t *)(at - 8) = a - c;
++    }
++    if (at_out)
++        *at_out = at;
++    return capstone_cap_derive(s->generation,
++            __builtin_capstone_cap_get_cursor(at) -
++            __builtin_capstone_cap_get_base(s->generation), n);
++}
++
 +static inline void *
 +wmem_sublet_issue(const wmem_sublet_block_t *s, void *ptr, size_t size)
 +{
-+    return capstone_cap_derive(s->generation,
-+            __builtin_capstone_cap_get_cursor(ptr) -
-+            __builtin_capstone_cap_get_base(s->generation), size);
++    return wmem_sublet_issue_at(s, ptr, size, NULL, 0);
 +}
 +
 +/* End the caller's object (CREVOKE), which faults unless ptr is a live
-+ * object of this block, and return the allocator's pointer at its address. */
++ * object of this block, and return the allocator's pointer to the chunk's
++ * data.  A placed object's bytes are moved back to the chunk's data first,
++ * so the allocator's own realloc copies them from where it expects them;
++ * *len_out is the child's length. */
++static inline void *
++wmem_sublet_release_len(const wmem_sublet_block_t *s, void *block, void *ptr,
++                        size_t *len_out, bool move_back)
++{
++    size_t   len = __builtin_capstone_cap_get_end(ptr) -
++                   __builtin_capstone_cap_get_base(ptr);
++    uint8_t *at;
++
++    capstone_cap_revoke_child(s->generation, ptr);
++    at = (uint8_t *)block + (__builtin_capstone_cap_get_cursor(ptr) -
++            __builtin_capstone_cap_get_base(block));
++    if (wmem_sublet_placed(len)) {
++        uint64_t off = *(uint64_t *)(at - 8);
++
++        if (move_back)
++            memmove(at - off, at, len);
++        at -= off;
++    }
++    if (len_out)
++        *len_out = len;
++    return at;
++}
++
 +static inline void *
 +wmem_sublet_release(const wmem_sublet_block_t *s, void *block, void *ptr)
 +{
-+    capstone_cap_revoke_child(s->generation, ptr);
-+    return (uint8_t *)block + (__builtin_capstone_cap_get_cursor(ptr) -
-+            __builtin_capstone_cap_get_base(block));
++    return wmem_sublet_release_len(s, block, ptr, NULL, false);
 +}
 +
 +/* A pointer in no block of the allocator: a stale one faults on this load,
@@ -144,23 +279,33 @@ retires itself.
      wmem_block_add_to_block_list(allocator, block);
  
      /* initialize it */
-@@ -782,6 +784,9 @@
-     block = (wmem_block_hdr_t *) wmem_alloc(NULL, size
+@@ -779,9 +781,12 @@
+     wmem_block_chunk_t *chunk;
+ 
+     /* allocate a new block of exactly the right size */
+-    block = (wmem_block_hdr_t *) wmem_alloc(NULL, size
++    block = (wmem_block_hdr_t *) wmem_alloc(NULL, wmem_sublet_block_size(size
              + WMEM_BLOCK_HEADER_SIZE
-             + WMEM_CHUNK_HEADER_SIZE);
-+    wmem_sublet_block_init(&block->sublet, block, size
+-            + WMEM_CHUNK_HEADER_SIZE);
++            + WMEM_CHUNK_HEADER_SIZE));
++    wmem_sublet_block_init(&block->sublet, block, wmem_sublet_block_size(size
 +            + WMEM_BLOCK_HEADER_SIZE
-+            + WMEM_CHUNK_HEADER_SIZE);
++            + WMEM_CHUNK_HEADER_SIZE));
  
      /* add it to the block list */
      wmem_block_add_to_block_list(allocator, block);
-@@ -825,6 +830,9 @@
-     block = (wmem_block_hdr_t *) wmem_realloc(NULL, block, size
-             + WMEM_BLOCK_HEADER_SIZE
-             + WMEM_CHUNK_HEADER_SIZE);
-+    wmem_sublet_block_init(&block->sublet, block, size
+@@ -822,9 +827,12 @@
+ 
+     block = WMEM_CHUNK_TO_BLOCK(chunk);
+ 
+-    block = (wmem_block_hdr_t *) wmem_realloc(NULL, block, size
++    block = (wmem_block_hdr_t *) wmem_realloc(NULL, block, wmem_sublet_block_size(size
 +            + WMEM_BLOCK_HEADER_SIZE
-+            + WMEM_CHUNK_HEADER_SIZE);
++            + WMEM_CHUNK_HEADER_SIZE));
++    wmem_sublet_block_init(&block->sublet, block, wmem_sublet_block_size(size
+             + WMEM_BLOCK_HEADER_SIZE
+-            + WMEM_CHUNK_HEADER_SIZE);
++            + WMEM_CHUNK_HEADER_SIZE));
  
      if (block->next) {
          block->next->prev = block;
@@ -172,12 +317,25 @@ retires itself.
              cur = cur->next;
          }
      }
-@@ -1089,6 +1098,76 @@
+@@ -1089,6 +1098,107 @@
      wmem_free(NULL, private_data);
  }
  
 +/* SUBLET: the consumer functions above work on the allocator's own pointers;
 + * these hand out and take back the callers'. */
++
++/* Q-15's over-approximation, for both nested allocators (wmem_allocator.h). */
++unsigned long wmem_sublet_q15_chunks, wmem_sublet_q15_padded,
++              wmem_sublet_q15_pad_total, wmem_sublet_q15_pad_max;
++
++void
++wmem_sublet_q15_counts(unsigned long out[4])
++{
++    out[0] = wmem_sublet_q15_chunks;
++    out[1] = wmem_sublet_q15_padded;
++    out[2] = wmem_sublet_q15_pad_total;
++    out[3] = wmem_sublet_q15_pad_max;
++}
 +
 +static wmem_block_hdr_t *
 +wmem_block_sublet_find(wmem_block_allocator_t *allocator, const void *ptr)
@@ -209,14 +367,26 @@ retires itself.
 +    return wmem_sublet_release(&block->sublet, block, ptr);
 +}
 +
++/* For realloc: the object's bytes go back to the chunk's data, and its
++ * length is returned. */
++static void *
++wmem_block_sublet_release_len(wmem_block_allocator_t *allocator, void *ptr,
++                              size_t *len)
++{
++    wmem_block_hdr_t *block = wmem_block_sublet_find(allocator, ptr);
++
++    return wmem_sublet_release_len(&block->sublet, block, ptr, len, true);
++}
++
 +/* A free chunk holds its free-list links, pointers with the whole block's
 + * bounds; the caller's bytes are cleared of them before it gets the chunk. */
 +static void *
 +wmem_block_sublet_alloc(void *private_data, const size_t size)
 +{
-+    void *ptr = wmem_block_alloc(private_data, size);
++    size_t request = wmem_sublet_request(size);
++    void  *ptr = wmem_block_alloc(private_data, request);
 +
-+    memset(ptr, 0, size < sizeof(wmem_block_free_t) ? size : sizeof(wmem_block_free_t));
++    memset(ptr, 0, request < sizeof(wmem_block_free_t) ? request : sizeof(wmem_block_free_t));
 +    return wmem_block_sublet_issue((wmem_block_allocator_t*) private_data,
 +                                   ptr, size);
 +}
@@ -232,24 +402,30 @@ retires itself.
 +wmem_block_sublet_realloc(void *private_data, void *ptr, const size_t size)
 +{
 +    wmem_block_allocator_t *allocator = (wmem_block_allocator_t*) private_data;
-+    size_t                  had;
++    size_t                  had, n;
++    uint8_t                *at;
++    void                   *issued;
 +
 +    /* The caller's object is bounded to its request; bytes past it, which a
-+     * grow brings in, may hold free-list links and are cleared. */
-+    had = __builtin_capstone_cap_get_end(ptr) -
-+          __builtin_capstone_cap_get_base(ptr);
++     * grow brings in, may hold free-list links and are cleared.  The old
++     * object's bytes are at the chunk's data for the allocator's copy, and
++     * the issue moves them up to a placed child. */
 +    ptr = wmem_block_realloc(private_data,
-+                             wmem_block_sublet_release(allocator, ptr), size);
-+    if (size > had) {
-+        memset((uint8_t *)ptr + had, 0, size - had);
++                             wmem_block_sublet_release_len(allocator, ptr, &had),
++                             wmem_sublet_request(size));
++    issued = wmem_sublet_issue_at(&wmem_block_sublet_find(allocator, ptr)->sublet,
++                                  ptr, size, &at, had);
++    n = size < 4096 ? size : capstone_repr_round(size);
++    if (n > had) {
++        memset(at + had, 0, n - had);
 +    }
-+    return wmem_block_sublet_issue(allocator, ptr, size);
++    return issued;
 +}
 +
  void
  wmem_block_allocator_init(wmem_allocator_t *allocator)
  {
-@@ -1096,9 +1175,9 @@
+@@ -1096,9 +1206,9 @@
  
      block_allocator = wmem_new(NULL, wmem_block_allocator_t);
  
@@ -288,21 +464,25 @@ retires itself.
  
      block->pos  = WMEM_BLOCK_HEADER_SIZE;
      block->next = allocator->block_list;
-@@ -95,6 +98,8 @@
+@@ -94,7 +97,9 @@
+ 
          /* allocate/initialize a new block of the necessary size */
          block = (wmem_block_fast_jumbo_t *)wmem_alloc(NULL,
-                 size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
+-                size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
++                wmem_sublet_block_size(size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE));
 +        wmem_sublet_block_init(&block->sublet, block,
-+                size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
++                wmem_sublet_block_size(size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE));
  
          block->next = allocator->jumbo_list;
          if (block->next) {
-@@ -146,6 +151,8 @@
+@@ -145,7 +150,9 @@
+ 
          block = ((wmem_block_fast_jumbo_t*)((uint8_t*)(chunk) - WMEM_JUMBO_HEADER_SIZE));
          block =  (wmem_block_fast_jumbo_t*)wmem_realloc(NULL, block,
-                 size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
+-                size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
++                wmem_sublet_block_size(size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE));
 +        wmem_sublet_block_init(&block->sublet, block,
-+                size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
++                wmem_sublet_block_size(size + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE));
          if (block->prev) {
              block->prev->next = block;
          }
@@ -314,7 +494,7 @@ retires itself.
           nxt = cur->next;
           cur->next = NULL;
           cur = nxt;
-@@ -226,6 +234,64 @@
+@@ -226,6 +234,68 @@
      wmem_free(NULL, private_data);
  }
  
@@ -360,7 +540,7 @@ retires itself.
 +{
 +    return wmem_block_fast_sublet_issue(
 +            (wmem_block_fast_allocator_t*) private_data,
-+            wmem_block_fast_alloc(private_data, size), size);
++            wmem_block_fast_alloc(private_data, wmem_sublet_request(size)), size);
 +}
 +
 +static void *
@@ -369,17 +549,21 @@ retires itself.
 +    wmem_block_fast_allocator_t *allocator = (wmem_block_fast_allocator_t*) private_data;
 +    wmem_sublet_block_t         *sublet;
 +    void                        *block;
++    size_t                       had;
 +
++    /* The old object's bytes go back to the chunk's data for the allocator's
++     * copy; the issue moves them up to a placed child. */
 +    sublet = wmem_block_fast_sublet_find(allocator, ptr, &block);
-+    ptr = wmem_sublet_release(sublet, block, ptr);
-+    return wmem_block_fast_sublet_issue(allocator,
-+            wmem_block_fast_realloc(private_data, ptr, size), size);
++    ptr = wmem_sublet_release_len(sublet, block, ptr, &had, true);
++    ptr = wmem_block_fast_realloc(private_data, ptr, wmem_sublet_request(size));
++    return wmem_sublet_issue_at(wmem_block_fast_sublet_find(allocator, ptr, &block),
++                                ptr, size, NULL, had);
 +}
 +
  void
  wmem_block_fast_allocator_init(wmem_allocator_t *allocator)
  {
-@@ -233,8 +299,8 @@
+@@ -233,8 +303,8 @@
  
      block_allocator = wmem_new(NULL, wmem_block_fast_allocator_t);
  
