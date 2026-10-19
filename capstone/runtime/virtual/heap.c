@@ -10,6 +10,20 @@
 #include "vm.h"
 #include <capstone/representable.h>
 
+/* The two switches of the spatial-versus-temporal measurement (runtime/application CMake
+ * options CAPSTONE_HEAP_LIFETIMES and CAPSTONE_HEAP_SCRUB_FREE, recorded in sdk.json). Both
+ * at 1 is the profile as qualified. LIFETIMES=0: a public object, and a nested group, is a
+ * SHRINK copy of the slot's authority over the same bytes instead of a CDERIVE child, so
+ * free revokes nothing and only a mapping's retirement (munmap, mremap) ends a stale
+ * capability; the lifetime per mapping (mapping_group) remains, so ensure_ids stays.
+ * SCRUB_FREE=0: free leaves the payload's bytes and tags in place (calloc still zeroes). */
+#ifndef CAPSTONE_HEAP_LIFETIMES
+#define CAPSTONE_HEAP_LIFETIMES 1
+#endif
+#ifndef CAPSTONE_HEAP_SCRUB_FREE
+#define CAPSTONE_HEAP_SCRUB_FREE 1
+#endif
+
 #define INDEX_BUCKETS 4096U
 static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
 static sublet_cap pending_mapping;
@@ -149,6 +163,34 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
     }
     return group;
 }
+/* A child of a slot's authority over [base + offset, base + offset + size): the CDERIVE
+ * child with a lifetime of its own, or without lifetimes the narrowed copy that bind_slots
+ * makes for the slot itself (the same rights, the slot's lifetime). */
+static void *issue_child(void *parent, size_t offset, size_t size)
+{
+#if CAPSTONE_HEAP_LIFETIMES
+    return capstone_cap_derive(parent, offset, size);
+#else
+    size_t start = __builtin_capstone_cap_get_base(parent) + offset;
+    void *at = (char *)parent + (ptrdiff_t)(start - __builtin_capstone_cap_get_cursor(parent));
+    /* CDERIVE refuses bounds the encoder cannot represent (cause 29); SHRINK rounds outward on
+     * silicon. A silently widened child would reach into its neighbours where the qualified
+     * arm faults, so the spatial arm would under-report the overflows it exists to measure. */
+    void *child = __builtin_capstone_cap_shrink(at, start, start + size);
+    if (__builtin_capstone_cap_get_base(child) != start ||
+        __builtin_capstone_cap_get_end(child) != start + size)
+        __builtin_trap();
+    return child;
+#endif
+}
+static void end_child(void *parent, void *child)
+{
+#if CAPSTONE_HEAP_LIFETIMES
+    capstone_cap_revoke_child(parent, child);
+#else
+    (void)parent; (void)child;
+#endif
+}
 static void *mapping_group(sublet_cap *grant, size_t bytes)
 {
     return capstone_cap_derive(cap_vm_copyable(grant), 0, bytes);
@@ -216,7 +258,7 @@ void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
                                     struct capstone_malloc_slot *parent)
 {
     size_t base = parent->key;
-    parent->issued = capstone_cap_derive(parent->parent,
+    parent->issued = issue_child(parent->parent,
         base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
     parent->kind = SLOT_NESTED;
     return bind_slots(slots, parent->issued, stride, count);
@@ -237,7 +279,7 @@ void __capstone_malloc_slot_release(struct capstone_malloc_slot *r)
 { unindex(r); r->kind = SLOT_INTERNAL; }
 void __capstone_malloc_nested_release(struct capstone_malloc_slot *r)
 {
-    capstone_cap_revoke_child(r->parent, r->issued);
+    end_child(r->parent, r->issued);
     r->issued = NULL;
     __capstone_malloc_slot_release(r);
 }
@@ -246,10 +288,12 @@ void *__capstone_malloc_prepare_free(void *p)
     struct capstone_malloc_slot *r = __capstone_malloc_find(p);
     if (!r || r->kind == SLOT_NESTED) __builtin_trap();
     if (r->kind == SLOT_PUBLIC) {
+#if CAPSTONE_HEAP_SCRUB_FREE
         /* Remove residual payload capabilities before returning ownership.
          * The slot prefix and musl's offset-cycle state are preserved. */
         memset(backend_pointer(r), 0, r->nominal);
-        capstone_cap_revoke_child(r->parent, r->issued);
+#endif
+        end_child(r->parent, r->issued);
         r->issued = NULL;
         r->kind = SLOT_INTERNAL;
     }
@@ -321,9 +365,9 @@ static void *publish(void *p, size_t n)
     if (!r) __builtin_trap();
     /* Successful in-place realloc replaces the public lifetime; failure
      * never reaches here. Remapping already retired the old mapping. */
-    if (r->issued) capstone_cap_revoke_child(r->parent, r->issued);
+    if (r->issued) end_child(r->parent, r->issued);
     r->kind = SLOT_PUBLIC; r->nominal = n;
-    r->issued = capstone_cap_derive(r->parent,
+    r->issued = issue_child(r->parent,
         r->key - __builtin_capstone_cap_get_base(r->parent), n ? n : 1);
     return r->issued;
 }

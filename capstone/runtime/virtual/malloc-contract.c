@@ -8,6 +8,13 @@
 #include "vm.h"
 #endif
 static void *volatile saved;
+/* Keeps the denial cases' size class populated, so that freeing the probed object never
+ * empties its group and nothing above the object (group, outer slot, mapping) is released:
+ * the probe then reads the OBJECT's lifetime and nothing else's. The anchor and the probe
+ * are the first two allocations of their class in this process, so mallocng places them in
+ * the class's first group (four slots of 112 bytes for 100-byte requests); the witness
+ * below is the distance between them, which a changed policy would break. */
+static void *volatile anchored;
 __attribute__((noinline)) static void fault_store(volatile char *p)
 {
 #ifdef __CAPSTONE_PURECAP__
@@ -56,6 +63,19 @@ static void require(int ok, const char *what)
 #endif
     fflush(stderr);
     exit(1);
+}
+static void anchored_with(const void *p)
+{
+    const char *a = anchored, *q = p;
+    require(a && q && (a < q ? q - a : a - q) < 4096, "anchor and probe share a group");
+}
+/* A denial probe that returned. On the qualified heap that is a failure. A bounds-only heap
+ * (sdk.json heap_lifetimes false) cannot deny a stale object, so run-malloc.py passes
+ * may-survive there and expects this marker from exactly the cases it pre-registers. */
+static int survived(const char *mode, int may_survive)
+{
+    if (may_survive) { printf("MALLOC_SURVIVED:%s\n", mode); fflush(stdout); return 0; }
+    require(0, "denial survived"); return 1;
 }
 static void basic(void)
 {
@@ -291,6 +311,7 @@ static void align_probe(void)
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
+    int may_survive = argc > 2 && !strcmp(argv[2], "may-survive");
     if (!strcmp(mode, "hot")) { hot(0); return 0; }
     if (!strcmp(mode, "hot-service-control")) { hot(1); return 0; }
     if (!strcmp(mode, "population")) { population(); return 0; }
@@ -301,8 +322,9 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "ok")) { basic(); tagged(); return 0; }
     if (!strcmp(mode, "reuse-stale") || !strcmp(mode, "reuse-free")) {
         /* Let upstream offset cycling choose reuse; never force its policy. */
-        char *anchor = malloc(100), *old = malloc(100);
-        require(anchor && old, "reuse setup");
+        anchored = malloc(100);
+        char *old = malloc(100);
+        require(anchored && old, "reuse setup"); anchored_with(old);
         uintptr_t address = (uintptr_t)old;
         saved = old; free(old);
         void *held[4096]; unsigned count = 0;
@@ -315,14 +337,17 @@ int main(int argc, char **argv)
                                            "MALLOC_FAULT_READY:reuse-free");
         fflush(stdout);
         if (!strcmp(mode, "reuse-free")) free(saved); else fault_store(saved);
-        return 1;
+        return survived(mode, may_survive);
     }
     if (!strcmp(mode, "remap-stale")) {
         char *old = malloc(200000); require(old != NULL, "remap stale setup"); saved = old;
         char *next = realloc(old, 400000); require(next != NULL, "remap stale growth");
-        puts("MALLOC_FAULT_READY:remap-stale"); fflush(stdout); fault_store(saved); return 1;
+        puts("MALLOC_FAULT_READY:remap-stale"); fflush(stdout); fault_store(saved);
+        return survived(mode, may_survive);
     }
+    anchored = malloc(100); require(anchored != NULL, "anchor allocation");
     char *p = malloc(100); require(p != NULL, "fault allocation"); saved = p;
+    anchored_with(p);
     if (!strcmp(mode, "inplace-stale")) {
         uintptr_t old = (uintptr_t)p;
         p = realloc(p, 101);
@@ -338,10 +363,17 @@ int main(int argc, char **argv)
         /* This request is not exactly representable in the compressed codec. */
         free(p); p = malloc(200003); require(p != NULL, "precise allocation");
         saved = p; puts("MALLOC_FAULT_READY:bounds"); fflush(stdout);
-        fault_store((volatile char *)saved + 200003);
+#ifdef __CAPSTONE_PURECAP__
+        /* The published bounds are rounded up to what the codec represents, so the first byte
+         * past the request can lie inside them; the store goes to the capability's real end. */
+        size_t reach = __builtin_capstone_cap_get_end(saved) - __builtin_capstone_cap_get_cursor(saved);
+#else
+        size_t reach = 200003;
+#endif
+        fault_store((volatile char *)saved + reach);
     } else if (!strcmp(mode, "interior-free")) {
         puts("MALLOC_FAULT_READY:interior-free"); fflush(stdout); free(p + 1);
     }
     else return 2;
-    require(0, "denial survived"); return 1;
+    return survived(mode, may_survive);
 }

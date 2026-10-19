@@ -90,6 +90,32 @@ source guard, not a proof of identical execution. Mutation controls change
 UNIT, group-count selection and the in-place realloc condition. Runtime
 qualification separately checks behavior, lifetimes and the service boundary.
 
+## Measurement switches
+
+Two CMake options of `runtime/application` build the arms of the spatial-versus-temporal
+comparison; `sdk.json` records them as `heap_lifetimes` and `heap_scrub_free`, and
+`build-sdk.sh` forwards them (`-DCAPSTONE_HEAP_LIFETIMES=OFF`). Both ON is the heap
+described above and the only qualified configuration.
+
+- `CAPSTONE_HEAP_LIFETIMES=OFF`: a public object, and a nested group, is a SHRINK copy of
+  the slot's authority over the same bytes instead of a CDERIVE child. Bounds and rights
+  are those of the child; what is missing is the lifetime of its own, so `free` revokes
+  nothing and a stale capability stays usable until its mapping is retired (`munmap`,
+  `mremap`). The lifetime per mapping remains, as does the node reserve request. This is
+  the virtual counterpart of level0 without `CAPSTONE_LEVEL0_LIFETIMES`, the paper's
+  "spatial" arm: public heap object lifetimes off, mapping and thread retirement unchanged.
+- `CAPSTONE_HEAP_SCRUB_FREE=OFF`: `free` leaves the payload's bytes and tags in place
+  (`calloc` still zeroes). Residual capabilities in a reused slot are then the next owner's
+  to read.
+
+`run-malloc.py --sdk DIR` reads the SDK's switches and expects, without lifetimes, exactly
+these readings from the anchored denial cases: `bounds` still faults with cause 28,
+`remap-stale` still with cause 25 (the module retired the old mapping), `stale-free` and
+`interior-free` with cause 2 at `cap_malloc_invalid_free` (no slot record), and `stale`,
+`inplace-stale`, `reuse-stale` and `reuse-free` survive and say `MALLOC_SURVIVED`. The
+same harness on the qualified SDK must still read the lifetimes table, which is what shows
+the survive checks can fail.
+
 ## VM remapping
 
 Large realloc follows upstream's mremap branch. Heap mappings use their
