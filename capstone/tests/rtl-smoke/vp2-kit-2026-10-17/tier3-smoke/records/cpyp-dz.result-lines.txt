@@ -1,0 +1,8 @@
+CPP cpyp-DZ BEGIN 04:28:05 kit bkit7-rev2xnDZ monitor f13dbc5
+APPVM collect rc=75 calls=9 04:28:06
+APPVM boot rc=0 05:11:09 :: session <mnt-hdd>/capstone/t3-run-treeA/cpyp-DZ/session: 9/9 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeA/cpyp-DZ/session/guest/board.txt; phase read
+APPVM read rc=0 05:11:10 :: --- vp2-malloc (virtual-cpython): {'MISSED': 2, 'NO-READING:unattributed': 1}
+CPP cpyp-DZ ARM END rc=0 05:11:10
+CPP cpyp-DZ steps: 10 begun, 10 ended; DRT1 0 DRTX 0 FRTY 0 Oops 0; srz banner x1
+CPP cpyp-DZ pc=0 by step:       1 17_gh-157325_fix-an-oob-read-in-the-control       1 23_gh-142560_bytearray-search-realloc       1 23_gh-142560_bytearray-search-realloc-control 
+CPP DONE 05:11:10

@@ -3627,3 +3627,15 @@ runtime lane withdraws the "p >= 1024" escape.
   - FRTY 0 and DRT1 0 confirm the index-collision mechanism at this site;
   - ANY surviving FRTY means a different mechanism, whatever its count.
   - The decoded site and the count are reported either way.
+
+### cpyp-DZ, result (2026-10-20 04:28-05:11, board 1, tree A): the retries are gone, and the pc=0 faults are NOT
+
+`records/cpyp-dz.result-lines.txt`. UNGATED.
+- **The boot:** 10 of 10 steps ran. The srz banner appears once. The module's first boot on tree A, and it completed.
+- **The prediction held:** FRTY 0 and DRT1 0, against cpyp-D's 9 and 1. DRTX 0, no Oops.
+- **pc=0 is unchanged.** `domain fault cause=12 pc=0x0 address=0x0 ... last=0x3f` appears once each in 17-control, 23
+  and 23-control. The lines are the same as cpyp-D's apart from addresses, and so are the steps.
+- **The cells are the same as cpyp-D's:** 03 MISSED, 17 MISSED, 23 NO-READING:unattributed.
+- **The reading:** the pc=0 faults do not need any retry. That rules out the fetch retry and the data retry as their
+  cause, together with everything srz removes. The attribution goes back to the compiler lane: it is cpython on this
+  board, still with no QEMU instance.
