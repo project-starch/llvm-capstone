@@ -908,14 +908,15 @@ static const uint16_t launcher_own[] = {
 };
 
 int capstone_delegate_seccomp(void) {
-  /* Collect the allowlist: delegated shapes are enumerated by number range. */
+  /* Collect the allowlist: every delegated shape below 1100, read from the
+   * table once. Asking the table about each number up to 1100 searched the
+   * whole table for each and was 0.8M instructions of every launch. */
   uint16_t allow[512];
   unsigned n = 0;
-  for (unsigned nr = 0; nr < 1100 && n < 500; ++nr) {
-    const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
-    if (s && s->group == CAPSTONE_GROUP_DELEGATED)
-      allow[n++] = (uint16_t)nr;
-  }
+  const struct capstone_delegate_shape *s;
+  for (size_t i = 0; (s = capstone_delegate_shape_at(i)) && n < 500; ++i)
+    if (s->group == CAPSTONE_GROUP_DELEGATED && s->nr < 1100)
+      allow[n++] = (uint16_t)s->nr;
   for (unsigned i = 0; i < sizeof launcher_own / sizeof launcher_own[0] && n < 510; ++i) {
     unsigned j;
     for (j = 0; j < n && allow[j] != launcher_own[i]; ++j)
@@ -923,6 +924,11 @@ int capstone_delegate_seccomp(void) {
     if (j == n)
       allow[n++] = launcher_own[i];
   }
+  /* The first comparison jumps n instructions ahead, and a classic BPF jump
+   * offset is 8 bits: past 255 entries the filter would allow the wrong
+   * numbers. Refuse to build it instead (n is 143 today). */
+  if (n > 255)
+    return E2BIG;
   {
     struct sock_filter program[3 + 512 + 2];
     unsigned k = 0;

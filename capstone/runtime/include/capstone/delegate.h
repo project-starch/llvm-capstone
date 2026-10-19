@@ -298,6 +298,9 @@ enum {
 
 /* Lookup; NULL for a number outside the table. */
 const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr);
+/* The i-th entry of the shape table, or NULL past its end: every shape once,
+ * for building whole lists (the launcher's seccomp allowlist). */
+const struct capstone_delegate_shape *capstone_delegate_shape_at(size_t i);
 enum capstone_delegate_group capstone_delegate_group_of(uint64_t nr);
 
 /* Fill an entry for one call. The shape decides which arguments are exchange
