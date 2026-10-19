@@ -2119,42 +2119,54 @@ and +150 s, and at the bound kills a still-running `ok` and reports VM_SPIN (ret
 rev8's: module 39d8492d, vm-contract.sh and vm-suite-inner.sh with node_flat_records=4096, and contract-dense.dom
 b6a11ff3 baked. It boots after the S-26 pair; then sql0-treeA.
 
-### S-26's silicon pair, results (2026-10-19 16:35-16:57, board 1, tree A, module 39d8492d): var and cur as predicted; mir's prediction FAILS (a 1,000-cycle quantum completes, at 42,151 steps)
+### S-26's silicon pair, results (2026-10-19 16:35-16:57, board 1, tree A, module 39d8492d): var and cur as predicted; mir's prediction FAILS, and a RETRACTION of four sentences of the first version (claim-auditor)
 
-`board-tier12/s26/run-s26.sh`, image 89baf46451448872, the three firmwares as pre-registered. Each arm was a cold boot,
-and each log carries `[fpga-board] 1`. N=1 per arm; UNGATED (PREFLIGHT=0).
+`board-tier12/s26/run-s26.sh`, image 89baf46451448872, the three firmwares as pre-registered (each driver loaded
+`fw_<sha12>.bin` of its arm's hash; objcopy of each ELF reproduces it). Each arm was a cold boot (power off, toggle,
+on, then reset halt), and each log carries `[fpga-board] 1`. N=1 per arm; UNGATED (PREFLIGHT=0).
 
 | Arm | QNT0 | Rungs | vm-contract | Verdict |
 |---|---|---|---|---|
-| var (883f3af2b9964251) | 001E8480 | b0-stats 0 | 0, identity branch (VIRTUAL_APPLICATION_OK, stale denied with 25) | **as predicted** |
+| var (883f3af2b9964251) | 001E8480 | b0-stats 0 | 0, identity branch, steps=511 faults=426 | **as predicted** |
 | cur (fafbc0e38fb54c60) | 00000000 | b0-stats 0 | 930, VM_SPIN at the 150 s bound | **as predicted** |
-| mir (1a2244dfa19f9d40) | 00000000 | b0-stats 0, b0-hello 0, b0-stats2 0; QNT1 000003E8 at every census | 0, identity branch | **prediction FAILS** (930 predicted) |
+| mir (1a2244dfa19f9d40) | 00000000 | b0-stats 0, b0-hello 0, b0-stats2 0; QNT1 000003E8 at every census | 0, identity branch, steps=42151 faults=426, 62.5 s | **prediction FAILS** (930 predicted) |
 
-- **cur's spin is the escape/resume loop.** resume_satp_refreshes reads 22,621, 73,763 and 124,857 at t30, t90 and t150,
-  about 850 resumes a second. So this README's earlier boot-3 line ("escaped and were never resumed") is wrong for this
-  shape, and the candidate's loop is right.
-- **var vs cur:** both cold, with b0-stats only, and differing only in the boot write of 0x7C3. The quantum at the first
-  CSRUNV decides between the spin and the return, and no process-ABI STEP is needed for the return.
-- **mir: the prediction fails, and why.**
-  - QNT1 printed 6 times during each of b0-stats, b0-hello and b0-stats2, and never during vm-contract. So the first
-    CSRUNV loaded 1,000. (b0-hello's own STEP also ran partly at 1,000, and still returned.)
-  - vm-contract then completed with `CAPSTONE_VM_STATS ... steps=42151 faults=426`, against `ok`'s 511 on rev7 on
-    silicon and 547 on the QEMU twin. The 1,000-cycle quantum preempted about 80 times as often, and the context still
-    made progress.
-  - So on silicon a 1,000-cycle quantum does not livelock this context. That DIFFERS from the RTL lane's simulation on
-    bf3db3175, where budgets 40 to 1,500 retire nothing in a fresh context. A silicon/simulation difference, or a
-    tree A difference, is the RTL lane's to look at.
-  - The mirror therefore did not do what it was designed for: separating "the quantum" from "other state the first
-    STEP initialises". var does that instead.
-- **What this supports, at N=1 per arm, for S-26's registry entry** (a claim-auditor first):
-  - after a cold boot with no process-ABI STEP, 0x7C3 reads 0;
-  - a context entered with that 0 loops in escape and resume without completing;
-  - writing 2,000,000 at boot removes the spin with no STEP.
-  - It does NOT establish where the threshold lies: 1,000 completes on silicon.
-- **The judge's QNT0 source was corrected after the var arm,** with the prediction unchanged. QNT0 prints after OpenSBI's
-  banner and before Linux, outside board.txt. The judge now reads it from board-raw.txt after this boot's last banner.
-  cur's raw console replays var's QNT0:001E8480 before its own banner, and the judge took cur's own 00000000. var's
-  SEQ line shows the first judge's "NO DATA"; its re-judge reads PASS.
+**RETRACTION (2026-10-19, same evening; lane 10e4c990a9d2, not on dev).** The claim-auditor refuted or corrected four
+sentences of the first version. Three went to the runtime and RTL lanes, and the fourth to the RTL lane only; all are
+withdrawn there too.
+- **"b0-hello's own STEP also ran partly at 1,000": REFUTED.** `supervised_invoke` writes CAPSTONE_SUPERVISOR_QUANTUM
+  unconditionally before every arm (`sbi_capstone.c:1001-1002`; in the compiled ELF a 0x1e8480 load immediately
+  precedes the csrw). So every STEP arm ran at 2,000,000. b0-hello's QNT1 lines are its census, before the STEP rounds.
+- **"About 80 times as often": wrong arithmetic.** 42151/511 is the ratio of entries. Non-fault entries are 511 − 426
+  = 85 against 42151 − 426 = 41,725, about 490 times. "1,000 cycles" is the value written to the register, not a
+  measured escape interval.
+- **"cur's raw console replays var's QNT0 before its own banner": false.** cur's board-raw.txt has one banner, one QNT0
+  (00000000) and no 001E8480. The text before the banner is var's last rung. So the judge's anti-replay scoping was
+  never exercised on real data.
+- **"A 1,000-cycle quantum does not livelock on silicon": UNPROVEN as stated.** mir's context followed b0-hello's STEP,
+  so the difference from the RTL simulation (on bf3db3175) is "the quantum and/or state the STEP leaves behind". The
+  arm that would separate them (1,000 written at boot, cold, no b0-hello) has not run.
+
+**What the arms show** (the auditor's wording):
+- **cur.** With no process-ABI STEP, 0x7C3 reads 0 at boot (QNT0). The compiled firmware has no other 0x7C3 writer
+  reachable without a managed context: cur's b0-stats prints only the census, with no domain created. A vm-contract
+  context entered in that state was re-entered about 850 times a second (resume_satp_refreshes 22,621, 73,763 and
+  124,857 at t30, t90 and t150; 125,905 after the kill), with no resolved fault (resume_sfences 0), no runtime grant
+  past slot 4 and no fetch retry. It was killed at 150 s.
+  - **The escape kind was not recorded**, so "kind 1" is inference; a cur repeat with diag_escapes=1 would read it.
+  - The same shape (slots 0-4, no FRTY, the 150 s bound) was seen on 2026-10-18 on an earlier module. This README's
+    boot-3 line ("escaped and never resumed") is wrong for this shape: the context is re-entered continuously.
+- **var.** Writing 0x7C3 = 2,000,000 at boot, with no STEP, let the same vm-contract complete with rev7's identity
+  branch (steps=511, faults=426). var and cur differ at the binary level only inside cap_env_init (a lui/addw/csrw
+  0x7c3, plus register and stack shifts). .rodata, .data and the payload are byte-identical.
+- **mir.** After b0-hello's STEP, a census-written 0x7C3 = 1,000 did not prevent completion: read back 0x3E8, and the
+  only other writer needs a managed-context ecall that vm-contract does not make. That is steps=42,151 and faults=426,
+  in 62.5 s. It does not separate the quantum from state the STEP leaves behind.
+- **The judge's QNT0 source was corrected after the var arm,** with the prediction unchanged. QNT0 prints after
+  OpenSBI's banner and before Linux, outside board.txt, so the judge reads it from board-raw.txt after this boot's last
+  banner. The judge's synthetic tests had put QNT0 in board.txt, where the real driver never writes it: its positive
+  control was not representative. var's on-disk judge.txt still reads the first judge's "NO DATA"; re-judged, it
+  reads PASS. cur and mir were judged by the corrected version.
 
 ### rev8 on tree A, result (2026-10-19 16:56-17:03, board 1): JUDGE PASS on every pre-registered item; module 39d8492d's stopgap control and rev7's exact counter check both close
 
