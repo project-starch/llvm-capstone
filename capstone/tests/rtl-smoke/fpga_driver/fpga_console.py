@@ -97,6 +97,9 @@ BOARD_LOCKS = {"1": "/tmp/capstone/.board.lock", "2": "/tmp/capstone/.board2.loc
 # every HTTP call carries X-Lease-Token and every Socket.IO (re)connect emits lease_bind. A thread renews it every
 # LEASE_RENEW_S (agent leases last 10 min). A renew answered 409 "yield" (a person joined the queue) or "reserved" (a
 # booking) sets lease_yield: the current cycle finishes, and power-ON is refused from then on, so no new cycle starts.
+# A renew answered "not_holder" or "no_lease" means the lease is GONE (a console restart, which also cut power; a
+# force-release; an expiry): lease_lost is set, power-ON is refused, the take is never retried in the same run, and the
+# run is INFRA ("[fpga-lease] LOST"), not a reading. A yield before the run's first power-on is "yielded before start".
 # A console without /api/lease (404) means leases are not available there: the run proceeds under the local lock only.
 # FPGA_LEASE=off skips leases entirely; FPGA_LEASE_PURPOSE names the run (default: the driver and its pid).
 LEASE_HOLDER = "board-lane"
@@ -105,6 +108,10 @@ LEASE_RENEW_S = 240.0
 
 class LeaseYield(RuntimeError):
     """A person is waiting for the board (or a booking starts): no new cycle may start."""
+
+
+class LeaseLost(RuntimeError):
+    """The server no longer holds this run's lease: the run is INFRA, and nothing more may be started."""
 
 
 def board_id() -> str:
@@ -211,6 +218,8 @@ class FpgaConsole:
         self._lease_token: Optional[str] = None
         self._lease_state = "untaken"
         self.lease_yield = False
+        self.lease_lost = False
+        self._powered_on_once = False
         self._lease_stop = threading.Event()
         self._lease_thread: Optional[threading.Thread] = None
 
@@ -905,6 +914,14 @@ class FpgaConsole:
                 self._lease_say(f"YIELD ({code}, waiting {d.get('waiting')}): finishing the current cycle; "
                                 f"no new cycle will start")
             self.lease_yield = True
+        elif code in ("not_holder", "no_lease"):
+            if not self.lease_lost:
+                self._lease_say(f"LOST ({code}): the lease is gone (console restart, force-release or expiry); "
+                                f"INFRA, not a reading; no new power-on, no re-take in this run")
+            self.lease_lost = True
+            self._lease_token = None
+            self._http.headers.pop("X-Lease-Token", None)
+            self._lease_stop.set()
         else:
             self._lease_say(f"renew refused: {code}")
         return code
@@ -932,7 +949,12 @@ class FpgaConsole:
         """Ensure board power is on/off. power_toggle is a *toggle*, so read the
         current power_state first and only toggle when it differs."""
         want = "on" if on else "off"
+        if on and self.lease_lost:
+            raise LeaseLost("[fpga-lease] LOST: the server no longer holds this run's lease; INFRA, not a reading")
         if on and self.lease_yield:
+            if not self._powered_on_once:
+                raise LeaseYield("[fpga-lease] yielded before start: a person is waiting for the board (or a booking "
+                                 "starts); released at once, neither a failure nor a reading")
             raise LeaseYield("[fpga-lease] a person is waiting for the board (or a booking starts): "
                              "no new cycle may start; finish and release")
         cur = self._current_state(C.POWER_STATE_EVENT, timeout=5.0)
@@ -940,6 +962,8 @@ class FpgaConsole:
             self._log(f"power already {want}")
             return
         mark = self.now()
+        if on:
+            self._powered_on_once = True
         self._own_until = mark + timeout + 30.0   # this client's own power transition (the shared-board watch)
         self._emit("power_toggle")
         self.wait_state(C.POWER_STATE_EVENT, want, timeout, since=mark)
