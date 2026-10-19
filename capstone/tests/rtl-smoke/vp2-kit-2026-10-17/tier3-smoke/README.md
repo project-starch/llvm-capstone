@@ -3134,3 +3134,13 @@ Monitor c3917e8, UNGATED. The cells are VOID as declared. Result lines are in `r
     limit stated before the boot.
 - **Next on board 2:** the srz module's Tier 1 pair, then sql0-srz-treeB. That module zeroes srevroot after each CSRUNV
   return, so it tests this mechanism directly: DRT1 is predicted 0.
+
+### pb10-csr, result (2026-10-20 01:16-01:25, board 1, tree A): the same reading in a second program and on the other bitstream
+
+Monitor c3917e8, UNGATED. Result lines are in `records/pb10-csr.result-lines.txt`.
+- **4 of 4 cells the same** as t3-pb10/bundle. Bundle: `ffmpeg/pool-repros/results/2026-10-19-vp2c-treeA/vp2-nested-pools-csr`.
+- **Its one data refusal:** RFSR 81E00000, RFSH 0 and RFCT 0. srevroot = 0x81E00000 (page-aligned, in RAM) with
+  csupctl clear, as in sql0-csr-treeB, and carried by 1 DRT1 at 800A22C8. 0 DRTX and no Oops.
+- **2 FRTY at 00F14164,** each with FRTM 81D3A164. The page offset 0x164 matches mepc.
+- **With sql0-csr-treeB:** two programs on two bitstreams, every refusal under a nonzero, page-aligned srevroot with
+  csupctl.table clear. N=1 boot each.

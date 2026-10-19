@@ -1,0 +1,25 @@
+# pb10-csr (2026-10-20 01:16-01:25, board 1, tree A, monitor c3917e8): runner lines, then this boot's S-23 lines
+PB10 pb10-csr BEGIN 01:16:42 kit bkit7-pb10C monitor c3917e8
+T3SEQ START 01:16:42 kit <mnt-hdd>/capstone/t3-smoke/bkit7-pb10C module d71f207a3af5546b params []
+T3SEQ pb10-csr BEGIN 01:16:42 ffmpeg/pool-repros virtual-nested-pools (4 extra args)
+T3SEQ pb10-csr END 01:25:18 rc=0 :: virtual boot: completed :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 4}
+T3SEQ pb10-csr PAYLOAD stage 2577912 B, 1016202 B gzip; firmware 17467912 B
+T3SEQ pb10-csr IMAGE controls.dom 491655742d378fcd
+T3SEQ DONE 01:25:18
+PB10 pb10-csr SEQ END rc=0 01:25:18
+pb10-csr: bundle -> wt-gate/capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-19-vp2c-treeA/vp2-nested-pools-csr
+pb10-csr: 4 of 4 cells the same (rc 0)
+PB10 DONE 01:25:18
+FRTY:00F14164
+FRTM:81D3A164
+FRGD:0000000B
+FRTY:00F14164
+FRTM:81D3A164
+FRGD:0000000B
+RFSR:81E00000
+RFSH:00000000
+RFCT:00000000
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:800A22C8
