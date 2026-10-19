@@ -16,8 +16,18 @@ def rung(r):
 out, bad = [], 0
 def say(ok, msg):
     global bad; out.append(("OK   " if ok else "FAIL ") + msg); bad += not ok
-q0 = re.findall(r"QNT0:([0-9A-F]{8})", t); q1 = re.findall(r"QNT1:([0-9A-F]{8})", t)
-if not q0: print("NO DATA: no QNT0 line (the firmware's boot print)"); sys.exit(2)
+# QNT0 is printed in cap_env_init, after this boot's OpenSBI banner and before Linux starts; board.txt holds only the
+# rungs, so it is read from board-raw.txt beside it (fixed 2026-10-19 after the var arm, whose raw console carried
+# QNT0:001E8480 at offset 37935, after its banner at 35610, while board.txt had none; the prediction is unchanged).
+# board-raw.txt replays earlier boots first, so only the text after this boot's (the LAST) "OpenSBI v" banner is read:
+# a replayed boot's QNT0 can never be taken as this one's.
+import os
+rawp = os.path.join(os.path.dirname(os.path.abspath(sys.argv[1])), "board-raw.txt")
+raw = open(rawp, errors="replace").read().replace("\r", "") if os.path.exists(rawp) else ""
+b = raw.rfind("OpenSBI v")
+q0 = re.findall(r"QNT0:([0-9A-F]{8})", raw[b:]) if b >= 0 else []
+q1 = re.findall(r"QNT1:([0-9A-F]{8})", t)
+if len(q0) != 1: print(f"NO DATA: {len(q0)} QNT0 lines in this boot's segment of board-raw.txt (want 1)"); sys.exit(2)
 say(q0 == [{"var": "001E8480"}.get(arm, "00000000")], f"QNT0 {q0}")
 if arm == "mir":
     say(len(q1) >= 2 and set(q1) == {"000003E8"}, f"QNT1 {q1} (want 000003E8 at each b0-stats, at least 2)")
