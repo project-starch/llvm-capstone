@@ -561,7 +561,14 @@ are not charged (the counter loads at the entry, `:2097-2101` and `:2110-2114`),
 walk after a TLB flush (the same 1,000-cycle quantum without the pre-entry fence also retires nothing). I have not
 offered a third. **Why it matters:** a context armed below that cost retires nothing, so a scheduler re-entering it
 burns the budget and makes no progress, which is the livelock the exclusion's own comment exists to prevent, and
-the kit's armed quantum must exceed it. The mechanism needs a cycle-level look at that window.
+the kit's armed quantum must exceed it.
+
+**RESULT LINES AND SOURCE, so this stops being prose.** Every quantum value's readings are in
+`docs/history/19-10-2026_15-30-00_quantum-zero-budget-s26-rtl-half.md`, and the arm source with all its builds is
+`capstone-ariane` branch `virtual-profile-2-c` commit **`9b272ff2d`** (a submodule, which is why a search of this
+repository alone does not find it). The startup cost is **between 1,500 and 2,000 cycles**: at 1,500 the context
+retires nothing, at 2,000 its loop completes while the budget still expires before its own exit. A **zero** budget
+is bit-identical to every sub-threshold value, which is S-26's RTL half.
 - **kind 3** by the context's ecall, as today.
 - **kind 4** by a load from an address the context's chain does not map, with options bit 1 set.
 - kind 5 is left out: node pressure needs the allocator's reserve and is a different arm.
