@@ -3176,3 +3176,13 @@ ONLY capstone_vm.ko changed. pb10-treeB itself ran the S-27 workaround module d7
 - pb10-39d meets the data face as pb10 has (DRT1 ≥ 0; pb10-treeB read 1), and pb10-srz reads **DRT1 0**;
 - FRTY is reported, not predicted, since sql0's fetch retries did not change with srz;
 - **the must-fire:** each run's staged module hash equals its kit's, and the srz banner appears in pb10-srz only.
+
+### pb10's srevroot-zero pair, result (2026-10-20 03:00-03:17, board 2, tree B): DRT1 1 → 0 and FRTY 2 → 0, with the cells unchanged
+
+Result lines are in `records/pb10-srz-pair.result-lines.txt`. UNGATED.
+- **pb10-39d:** 4 of 4 cells, CAUGHT 4. Staged module 39d8492d (the must-fire), no srz banner. FRTY 2, DRT1 1, 0 DRTX,
+  no Oops.
+- **pb10-srz:** 4 of 4 cells, CAUGHT 4. Staged module 607164b9, the srz banner ×1. **FRTY 0, DRT1 0,** 0 DRTX, no Oops.
+- **What it adds:** a second program on which srz removes the data face, as predicted. Here the fetch retries also
+  vanish, which they did not in sql0 (21 → 21). Bundles: `ffmpeg/pool-repros/results/2026-10-19-vp2c-treeB/`
+  `vp2-nested-pools-39d` and `vp2-nested-pools-srz`.
