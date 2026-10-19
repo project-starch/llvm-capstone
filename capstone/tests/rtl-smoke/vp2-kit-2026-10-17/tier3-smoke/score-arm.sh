@@ -15,6 +15,13 @@ main() {
   [ -e "$out" ] && { echo "REFUSED: $out exists"; return 1; }
   local rc
   { echo "# Tier 3 board reading, arm $tag: ${KIT_DESC:-kit bkit7 (module 3005ed52, pin off)}, SDK t3-freeze-nb. Result lines only."
+    # The board, from the run's own log (fpga_console prints "[fpga-board] N" for every console it opens, since 2026-10-19):
+    local bl; bl=$(grep -a -h -o '^\[fpga-board\] [12]' "$G"/driver.log 2>/dev/null | sort -u | awk '{print $2}' | paste -sd,)
+    case "$bl" in
+      1|2) echo "# board $bl (from the run log's [fpga-board] line)" ;;
+      "") echo "# board: not recorded in the run log (the run predates board ids, 2026-10-19, when board 1 was the only board)" ;;
+      *) echo "# board: CONFLICT, the run log names boards $bl" ;;
+    esac
     python3 "$S/tier3-cells.py" "$B"
     echo "## compare-pilot.py <prediction bundle> <board bundle>"
     python3 "$S/compare-pilot.py" "$P" "$B" | sed 's/^/  /'

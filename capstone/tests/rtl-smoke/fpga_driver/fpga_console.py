@@ -85,6 +85,27 @@ def _redact(msg: str, url: str) -> str:
     return out
 
 
+# Boards (2026-10-19, board #2 approved for the board lane, phase 1). A run names its board with FPGA_BOARD (1 or 2;
+# unset means 1, so every script written before board #2 keeps meaning board #1). The board selects the console-URL
+# secret file and the host-side lock. The constructor checks that the URL it was given IS that board's secret, so a
+# wrapper that read the wrong file cannot drive the other board. Neither the URL nor the file content is ever printed.
+BOARD_SECRETS = {"1": "~/.claude-kisp/secrets/fpga-console-url", "2": "~/.claude-kisp/secrets/fpga-console-url-board2"}
+BOARD_LOCKS = {"1": "/tmp/capstone/.board.lock", "2": "/tmp/capstone/.board2.lock"}
+
+
+def board_id() -> str:
+    b = os.environ.get("FPGA_BOARD", "1").strip() or "1"
+    if b not in BOARD_SECRETS:
+        raise ValueError(f"FPGA_BOARD={b!r}: the boards are {sorted(BOARD_SECRETS)}")
+    return b
+
+
+def board_url(board: str) -> str:
+    """The console URL of `board`, read from its secret file (mode 600). Never print it."""
+    with open(os.path.expanduser(BOARD_SECRETS[board])) as fh:
+        return fh.read().strip()
+
+
 class FpgaConsole:
     def __init__(
         self,
@@ -100,6 +121,13 @@ class FpgaConsole:
         self.url = url
         self.token = token
         self._log = logger or (lambda m: None)
+        # The board check (see BOARD_SECRETS). Mock and test consoles (allow_unverified, or a client injected) skip it.
+        self.board = board_id()
+        if not allow_unverified and client is None:
+            if url.strip() != board_url(self.board):
+                raise ValueError(f"FPGA_BOARD={self.board}: the console URL given is not board {self.board}'s "
+                                 f"({BOARD_SECRETS[self.board]}); refusing to drive another board")
+            print(f"[fpga-board] {self.board}", file=sys.stderr, flush=True)
 
         if C.PROTOCOL_SOURCE != "verified" and not allow_unverified:
             raise ProtocolNotVerified(
@@ -180,7 +208,7 @@ class FpgaConsole:
         the next one."""
         import fcntl  # local: only board sessions need it
 
-        path = os.environ.get("BOARD_LOCK") or "/tmp/capstone/.board.lock"
+        path = os.environ.get("BOARD_LOCK") or BOARD_LOCKS[getattr(self, "board", None) or board_id()]
         os.makedirs(os.path.dirname(path), exist_ok=True)
         # Kept on the instance so the fd -- and therefore the lock -- lives as long as the
         # console does. A local would be garbage-collected and silently release it.
