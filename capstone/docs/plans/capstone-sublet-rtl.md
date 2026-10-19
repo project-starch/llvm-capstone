@@ -523,6 +523,51 @@ read-side priority chain rather than the flops), and an R-38-class fix if the in
 candidate. The decision is the lead's; this entry exists so that the alternative was weighed rather than defaulted
 into a build.
 
+### Tree B GRADED against the pre-registration above, 2026-10-19, on the sealed reports
+
+Sealed by the synthesis lane: exit 0, `write_bitstream completed successfully`, HEAD `8de3c48cf207`, flow 3h05m14s,
+route 1:14:27, bitstream 11,443,722 B sha256 `0098aa5a99c3bae24b1f64ef676f888182a54286b65e8b69b3aa34145ad56485`,
+the archived copy matching. Four of the five predictions hold and the fifth is a miss by my own band.
+
+| prediction | sealed reading | |
+|---|---|---|
+| routed WNS inside the band, within the noise of tree A's −18.985 | **−16.449**, i.e. +2.536 ns, inside the S2 band of 3.74 | HOLDS |
+| LUTLP-1 = 0 | **0** (CFGBVS-1 ×2) | HOLDS |
+| no loop member inside the MMU or either TLB | routed `check_timing` loops 1, TIMING-23 count 1, the arc `ex_stage_i/lsu_i/lsu_bypass_i/cap_clear_addr_q[55]_i_2` I1→O — in the LSU bypass, **not** the MMU or a TLB. Synthesis stage: 0 MMU/TLB/PTW member lines, control 35 on `store_buffer.sv` | HOLDS |
+| the discriminator: no FAILING ENDPOINT in the MMU's TLB cone | **0 of the worst 20** inside `gen_mmu.i_cva6_mmu`, control returns 1 on a path forced into the MMU. Worst path into the 32 TLB valid flops **+17.094** (6 levels, itlb `tags_q[9].valid`), positive and far from critical; worst into any MMU flop −6.718 (`i_ptw state_q[2]`), ~9.7 ns from critical | HOLDS |
+| area: TOP within ±1,500 LUT of 180,838 | TOP **179,181**, i.e. **−1,657** | **MISS by 157** |
+
+**The area miss is the band's, not the build's, and it is the second time I have made this error.** The
+pre-registration states the floor as "about ±1,000 LUT each", which my own later measurement corrected to **at
+least ±2,500 per module and ±2,000 at TOP**: on this very pair `csr_buffer`, whose source this change does not
+touch, moved **−2,120**, and on the tree A pair it moved about −2,200. Against that floor:
+
+| module | ΔLUT | |
+|---|---|---|
+| `csr_buffer` | −2,120 | source-identical: floor |
+| IRO | +448 | floor |
+| `scoreboard` | +389 | floor |
+| `dom_switcher` | −219 | floor |
+| MMU | −214 | floor, and MMU FF unchanged at 3,497 |
+
+**No module moved above the floor, including every module the change touches**, so TOP's −1,657 is a sum of floor
+movements and the change's own area cost is unmeasurable at this floor. What can be said is the useful half: the
+flush term cost nothing detectable, and nothing in the MMU grew. The band was tighter than the floor I was
+warning other lanes about in the same week, which is exactly the error tree A's refuted "+154 at TOP" was.
+
+**The two arms were graded on their own instruments, as the pre-registration required** — membership on the routed
+loop count and the TIMING-23 arc, timing on the routed worst-path endpoints with a forced-path control — and not
+merged into one. The loop set's churn is itself consistent with the standing floor: tree A's arc was
+`ldc_store_ok_q_i_2` and `d93a8d66b`'s was this same `cap_clear_addr_q` arc, all three in `lsu_bypass`, with no
+source cause in that module on any of the three trees.
+
+**Not flashable on the synthesis machine's rules (WNS negative), and the flash is the lead's word to the board
+lane.** The sufficiency verdict in the pre-registration is unchanged by the seal: the RTL is ready and gated, and
+its own silicon reading remains too weak to buy a cycle alone, so it is a batch candidate rather than a build.
+The seven bare board arms committed under `capstone/tests/rtl-smoke/satpstale-bare-2026-10-19/` are what make a
+tree B flash informative when it happens: four of them must change and two must not, pre-registered before tree
+A's own session read them 7 of 7.
+
 ## The escape-kind arm: first item of the batch after tree B, designed 2026-10-19 from the kind table
 
 **Why it is first.** Two things rest on "every escape returns to CSRUNV+4 whatever its kind", and both are
