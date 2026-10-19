@@ -65,8 +65,11 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
     for (unsigned i = 0; i < count; ++i) {
         size_t start = base + 16 + i * stride;
         size_t end = base + 16 + (i + 1) * stride;
+        /* Offset in integers first: `group + start - base` moves the cursor to ~2*base (or, reassociated,
+         * to ~0) before coming back, and under compact bounds a cursor outside the representable window
+         * re-decodes to different bounds (SHRINK then refuses with garbage current bounds, cause 29). */
         slots[i].parent = __builtin_capstone_cap_shrink(
-            (char *)group + start - base, start, end);
+            (char *)group + (start - base), start, end);
         slots[i].issued = NULL;
     }
     return group;
@@ -121,7 +124,7 @@ void *__capstone_malloc_slot_start(struct capstone_malloc_slot *r)
     return r->parent;
 }
 static void *backend_pointer(struct capstone_malloc_slot *r)
-{ return (char *)r->parent + r->key - __builtin_capstone_cap_get_base(r->parent); }
+{ return (char *)r->parent + (r->key - __builtin_capstone_cap_get_base(r->parent)); }  /* offset first; see bind_slots */
 void __capstone_malloc_slot_release(struct capstone_malloc_slot *r)
 { unindex(r); r->kind = SLOT_INTERNAL; }
 void __capstone_malloc_nested_release(struct capstone_malloc_slot *r)
