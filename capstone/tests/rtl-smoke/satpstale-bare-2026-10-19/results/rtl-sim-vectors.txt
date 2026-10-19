@@ -1,0 +1,21 @@
+Board vectors of THESE images, simulated on each RTL (the RTL lane, 2026-10-19). Format: image (board_rec): count | values.
+Tree A = capstone-ariane 8522d72fe, the RESIDENT bitstream caplifive_vp2c_8522d72fe.bit. Tree B = 8de3c48cf, the satp flush.
+Every arm ends in a spin loop and so reaches the 2,000,000-cycle limit; the vector is the recorder's contents, not the harness verdict.
+
+== tree A 8522d72fe (resident) ==
+VEC sv-stale               (0x0000000080017000): 6 | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55
+VEC sv-fetch               (0x0000000080017000): 5 | 0xaaaa 1 0x80006000 0x80016000 0x55
+VEC sv-stale-b             (0x0000000080017000): 6 | 0xaaaa 0xbbbb 3 0xb 0xbbbb 0x55
+VEC sv-fetch-c             (0x0000000080017000): 5 | 0xaaaa 0xc 0x80006000 0x80006000 0x55
+VEC sv-stale-bf            (0x0000000080017000): 6 | 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55
+VEC sv-stale-f             (0x0000000080017000): 6 | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55
+VEC sv-stale-bn            (0x0000000080017000): 6 | 0xaaaa 0xcccc 3 0xb 0xaaaa 0x55
+
+== tree B 8de3c48cf ==
+VEC sv-fetch               (0x0000000080017000): 5 | 0xaaaa 0xc 0x80006000 0x80006000 0x55
+VEC sv-fetch-c             (0x0000000080017000): 5 | 0xaaaa 0xc 0x80006000 0x80006000 0x55
+VEC sv-stale               (0x0000000080017000): 6 | 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55
+VEC sv-stale-b             (0x0000000080017000): 6 | 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55
+VEC sv-stale-f             (0x0000000080017000): 6 | 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55
+VEC sv-stale-bf            (0x0000000080017000): 6 | 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55
+VEC sv-stale-bn            (0x0000000080017000): 6 | 0xaaaa 0xcccc 3 0xb 0xaaaa 0x55
