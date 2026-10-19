@@ -6,8 +6,13 @@
   with at least one nonzero (the positive control that the reads reach tag memory, since the monitor's region table
   holds capabilities). This is S-30 DEMONSTRATED for reads on the board.
 - s30-new (wrapper 9bee361): exactly two S30H lines in this boot, the held piece's decoded base <= 0xBC2D2000 and end
-  0xC0000000. s30-read retval 3: both groups refused, at their first read, the refusal a signal to devmem, and the boot
-  goes on (RESULT present). The canary rungs before it pass, so Linux's RAM below 0xBC2D2000 is still reachable."""
+  0xC0000000. s30-read retval 3: both groups refused, at their first read, and the boot goes on (RESULT present). The
+  canary rungs before it pass, so Linux's RAM below 0xBC2D2000 is still reachable.
+  A refusal is graded by its LINES, not by an absent value (amended 2026-10-19 18:40, before the boots): busybox devmem
+  opens /dev/mem O_RDONLY and loads through mmap (devmem.c:73-88), so a refused read is a U-mode load access fault.
+  The monitor's no-region path prints MTVL:<the address> and CPMX:00000002, and handle_exception injects it into S
+  with INJS:00000002 (inject_into_s(CAPSTONE_NO_CPMP_REGION), 5b5e86b :3815; pb10's panics read the same pair). Linux kills devmem with a signal, so the shell's rc is 135 (SIGBUS) or 139 (SIGSEGV). Required, in this
+  boot's console: MTVL:BFF00000 and MTVL:BC2DAD60, CPMX:00000002 and INJS:00000002, and both S30R refusals at rc 135 or 139."""
 import os, re, sys
 t = open(sys.argv[1], errors="replace").read().replace("\r", ""); arm = sys.argv[2]
 rawp = os.path.join(os.path.dirname(os.path.abspath(sys.argv[1])), "board-raw.txt")
@@ -37,4 +42,9 @@ else:
     say(len(h) == 2 and int(h[0], 16) <= 0xBC2D2000 and int(h[1], 16) == 0xC0000000,
         f"S30H {h} (want 2 lines: base <= BC2D2000, end C0000000)")
     say(sr == "3", f"s30-read retval {sr} (want 3: both groups refused)")
+    say("MTVL:BFF00000" in seg and "MTVL:BC2DAD60" in seg, "MTVL:BFF00000 and MTVL:BC2DAD60 in this boot (the monitor saw both refusals)")
+    say("CPMX:00000002" in seg and "INJS:00000002" in seg, "CPMX:00000002 and INJS:00000002 in this boot (no region covers it; injected into S)")
+    rcs = re.findall(r"^S30R (?:node|tag) 0x[0-9A-F]+ rc=(\d+)", t, re.M)
+    bad_rc = [r for r in rcs if r != "0"]
+    say(len(bad_rc) == 2 and all(r in ("135", "139") for r in bad_rc), f"refused reads' rc {bad_rc} (want two, each 135 or 139)")
 print("\n".join(out)); print("JUDGE PASS" if not bad else f"JUDGE FAIL ({bad})"); sys.exit(1 if bad else 0)

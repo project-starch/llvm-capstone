@@ -2432,3 +2432,20 @@ FRGS, FRGU and FRGD are reported as bookkeeping. An FRGU still names a slot the 
 reported as such. The tag and validity of the refused slot itself need the next monitor's reads at the refusal:
 `__capfield(tmp, 1)` and `__capfield(tmp, 0)` in swap_cpmp's no-region path. That build is held until the RTL lane says
 whether a CCSRRW read of a CPMP CSR returns the entry's hardware tag.
+
+### Amendment to S-30's pair (2026-10-19 18:42, before its boots): s30-new's refusal is graded by its console lines
+
+The runtime lane asked for this. busybox 1.36.1's devmem opens /dev/mem O_RDONLY|O_SYNC and loads through mmap
+(miscutils/devmem.c:73-88), with no read() path. A refused read is therefore a U-mode load access fault, and it kills
+devmem, not the kernel. On the console it shows as:
+- the monitor's no-region path: the CPMX dump, MTVL:<address> and CPMX:00000002;
+- then INJS:00000002, which is inject_into_s(CAPSTONE_NO_CPMP_REGION) at 5b5e86b :3815, the same pair pb10's panics
+  printed;
+- then the shell's rc 135 (SIGBUS) or 139 (SIGSEGV) for devmem.
+
+s30-new now also requires, in this boot's console:
+- MTVL:BFF00000 and MTVL:BC2DAD60;
+- CPMX:00000002 and INJS:00000002;
+- both S30R refusals at rc 135 or 139.
+
+`s30-judge.py` is now 5b8cd550ac112e51. A fixture without those lines FAILS, and one with INJS:00000005 in place of 2 FAILS.
