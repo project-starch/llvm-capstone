@@ -15,14 +15,14 @@
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3f97119e04 in l_divmod; by function: l_divmod is where host ASan reported the access",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc"
+      "verdict_note": "cause=24 pc=0x3f83110d34 in l_divmod; by function: l_divmod is where host ASan reported the access",
+      "verdict_from": "results/2026-10-18-review/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=28 pc=0x3f82119e00 in l_divmod; by function: l_divmod is where host ASan reported the access",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools"
+      "verdict_note": "cause=28 pc=0x3faa110d30 in l_divmod; by function: l_divmod is where host ASan reported the access",
+      "verdict_from": "results/2026-10-18-review/virtual-nested-pools"
     },
     "cheribsd-revocation": {
       "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."
@@ -33,5 +33,7 @@
     "pylong_int_divmod",
     "l_divmod"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at pylong_int_divmod Objects/longobject.c:4328 | l_divmod Objects/longobject.c:4406. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at pylong_int_divmod Objects/longobject.c:4328 | l_divmod Objects/longobject.c:4406. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "① and ③ WITHDRAWN by the 2026-10-18 review. Spatial defect. ② faults cause=28 on `ldc a2, 0x40(a0)`. ① faults cause=24 on `ldc a4, 0x10(a2)` at address=0x10 -- the base register held a small integer, not a capability, so this is a dereference of what the overread returned -- and ③ reports si_code=2 PROT_CHERI_TAG.",
+  "cheribsd_why_allowed": "CheriBSD runs pymalloc too -- that build has WITH_PYMALLOC 1 and probe/run-cheribsd.sh sets no PYTHONMALLOC -- so on a NESTED case the object is a pymalloc block inside an arena there as well, and CheriBSD's malloc bounds the arena. That, not size-class rounding, is why the defective access succeeds on this arm; rounding is a second and much smaller effect that only matters where the object is malloc's own. Measured 2026-10-19 with tools/cheribsd/capbounds, the rounding at the sizes this corpus allocates is 16->16, 24->32, 48->48, 97->112, 100->112, 184->192, 200->224, 216->224, 400->448, 512->512, 8193->10240, 524321->655360. The 8-byte overshoot here is also three orders of magnitude too small for the representability rule that restored case 08 (a small block keeps its tag out to +16384), so si_code=2 cannot be the bounds rule arriving under the tag code. The access succeeded and the fault is downstream."
 }

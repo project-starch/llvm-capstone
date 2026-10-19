@@ -4,6 +4,8 @@
 #   sicode-selftest       its positive control, run with sicode.so preloaded (bounds, revoked)
 #   quarantine-probe.so   LD_PRELOAD: whether each free entered MRS quarantine, whether memory came
 #                         back while still quarantined, and how many sweeps ran
+#   capbounds             what length malloc actually returns for each size the corpora allocate,
+#                         and how far a cursor can leave the bounds before the tag is cleared
 # The flags are the SDK's own purecap configuration (bin/cheribsd-riscv64-purecap.cfg) with the
 # sysroot named explicitly.
 set -euo pipefail
@@ -20,5 +22,6 @@ CC=("$CHERI_SDK/bin/clang" --target=riscv64-unknown-freebsd13 --sysroot="$CHERI_
 "${CC[@]}" -shared -fPIC "$HERE/sicode.c" -o "$OUT/sicode.so"
 "${CC[@]}" -DSICODE_SELFTEST "$HERE/sicode.c" -o "$OUT/sicode-selftest"
 "${CC[@]}" -shared -fPIC "$PROBE" -o "$OUT/quarantine-probe.so"
+"${CC[@]}" "$HERE/capbounds.c" -o "$OUT/capbounds"
 ( cd "$OUT" && sha256sum sicode.so sicode-selftest quarantine-probe.so > SHA256SUMS )
 cat "$OUT/SHA256SUMS"
