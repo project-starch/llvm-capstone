@@ -3914,3 +3914,35 @@ two bundles):
 **Case 31's mechanism is the compiler lane's candidate, under RTL check:** a load whose cursor sits more than one window
 span past its bounds is checked against bounds decoded at that cursor, which are one span up and contain it.
 q15 subset f on tree B, behind cpyp-DB on board 2, gives 31's second bitstream.
+
+### diag31, pre-registered (2026-10-20 06:1x, before its boot): case 31 with the compiler lane's DIAG31 line, board 1, tree A
+
+The direct reading of case 31's candidate mechanism. The compiler lane's pre-registration is lane diag31 5876e58b6a1e,
+results/2026-10-20-diag31/PREREGISTRATION.md.
+- **The image:** sublet/diag31-statdecodepage.patch, applied after the Sublet patch. Just before statDecodePage's
+  `iOff += getVarint32(&aData[iOff], nPayload)`, and only when `&aData[iOff]` is at or past aData's true end (at most 4
+  times), it prints `DIAG31 adata=<true base>:<true end> cursor=<…> past_end=<…> q_decoded=<LCC base>:<LCC end of that
+  pointer>`.
+  - It adds no load; the program's own getVarint32 load is still the test.
+  - build.json records extra_patches, so this image set can never pass for the arm's images.
+- **The build:** <mnt-hdd>/capstone/diag31-build-full. Case 31 349e5418b72bd614, controls 5acca3a2 and 6d2028dc. SDK
+  t3-freeze-nb, SDK-BUILTINS OK.
+  - EXPECT_IMAGES is diag31.images.SHA256SUMS e6d4c35af624ad23, 3 lines, all three present in the build by content.
+- **The runner:** `tier3-diag31-board1.sh` 855903713265c9ac. It is q15's path, with dev's arm script and run-virtual.py from wt-q15
+  at f1d522d7fff1, on kit bkit7-rev2xD, `--only 31`.
+  - It reports every DIAG31 line, counted both anchored and anywhere in a line, plus the step exits, the faults and
+    FRTY/DRT1/Oops.
+  - Its dry run reached D31 DONE on a stub, and a busy board stopped it.
+- **QEMU control** (qkit7-rev2, the compiler lane):
+  `DIAG31 adata=0x3f8eb61800:0x3f8eb666c0 cursor=0x3f8eb72de0 past_end=50976 q_decoded=0x3f8eb61800:0x3f8eb666c0`,
+  then cause 28 at the load (CAUGHT). There, q_decoded is the true bounds.
+
+**The prediction (the compiler lane's):** q_decoded equals aData's bounds shifted by exactly +0x10000 at both ends, with
+the cursor inside; past_end 50976; no fault at the load, so the case completes (MISSED); the controls fault 25 and 28.
+
+**The readings that decide:**
+- shifted q_decoded and no fault: the load is checked against cursor-relative bounds, so a far overrun aliases instead
+  of trapping;
+- true q_decoded and the case still completing: the load is not checked at all, which is a different finding;
+- a fault: the miss is not deterministic;
+- no DIAG31 line at all, with the case reached: the condition did not occur here, and the reading is void.
