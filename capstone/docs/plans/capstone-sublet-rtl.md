@@ -595,12 +595,26 @@ A clear after the CSRUNV escape has retired is therefore structurally possible.
 would stop firing once generations advance. So a context-namespace node at generation 0 and index N matches a
 kernel entry tracking (g, N) for any g.
 
-**3. The recovery is the ADOPT, not `ns_flush`. Both lanes had this wrong, including me.** `ns_flush` does not fire
-on an escape or on a namespace change: its only driver is a software write of `csupctl` bit 2
-(`csr_regfile.sv:2002`, default cleared each cycle at `:1177`). What re-arms a cleared bit is
-`pmp_data_if.sv:89-94`, which sets validity to 1 whenever a slot's `revnode_id` **differs** from the tracked one,
-i.e. whenever that slot is rewritten with a **different** region, which the monitor's region swapping does. Note
-the adopt needs the id to CHANGE: rewriting the same capability into the slot does not re-arm it.
+**3. WITHDRAWN AND CORRECTED. I claimed `ns_flush` has only a software driver and that is WRONG.** I had grepped
+`ns_flush_strobe_d` in `csr_regfile.sv`, found one assignment, and called it the only driver without tracing the
+signal that actually arrives at the tracker. The signal is `revnode_ns_flush_o`, and `ex_stage.sv:1388` computes it
+from **three** terms:
+`(vctx_rev_q != vctx_rev_qq) || (srevroot_rev_q != srevroot_rev_qq) || ns_flush_strobe_i`,
+where the first two are edge detectors on `vctx_table_i` and `srevroot_i` (`:1379-1385`). **So a namespace change
+fires the flush automatically**, re-arming every tracker as assumed-live (`pmp_data_if.sv:109-114`), and the
+software strobe is only the third way in.
+
+**What decides whether an ESCAPE fires it, which is now the live question.** `csr_regfile.sv:2865-2867`:
+`vctx_table_o` is true when a supervised or virtual context is active, OR at S outside one with
+`srevroot_q != 0`, OR at M with `csupctl.table`. Across an escape `sup_active_q` goes 1 to 0, so:
+- if the kernel at S has **`srevroot_q != 0`** the flag stays true, there is **no edge, no flush**, and a cleared
+  validity bit **persists** across the escape;
+- if **`srevroot_q == 0`** at S the flag falls, the flush fires, and every tracker is re-armed at the escape.
+
+So `srevroot_q` and `sup_active_q` at the fault are the discriminator, and the arm must CONTROL `srevroot` across
+the escape rather than inherit whatever the kernel had. The adopt path at `pmp_data_if.sv:89-94` is still a second
+re-arm route, on a rewrite with a **different** id, and still does not fire when the same capability is written
+back; it is just not the only one.
 
 So the transient shape is: a late broadcast clears the slot, the kernel's next access in that window is refused,
 and the next swap putting a different region there re-adopts it. That matches "read successfully all boot, refused
@@ -613,6 +627,15 @@ same walk length, the same quantum, the same caller access. The index-only mecha
 refusal on the first and a clean read on the second, while ANY other mechanism, including a generic switch
 hazard, predicts the same reading on both. That is what makes the arm discriminate rather than merely reproduce:
 a refusal on both arms would confirm a window and refute this explanation of it.
+
+**Three accesses after the refusal, not one** (the semantics owner's design, once persistence reopened): the
+first with no intervening rewrite of the slot, where a persistent deny refuses again; the second after the slot is
+rewritten with a different region and back, where the adopt re-arms it and the read is clean. Predicted for the
+index-only mechanism on the equal-index arm: **refused, refused, clean**; and clean throughout on the
+different-index control. Both arms must run with `srevroot` CONTROLLED across the escape, for the reason in point
+3 above: with `srevroot != 0` at S the escape fires no namespace flush and a cleared bit persists, while with
+`srevroot == 0` it re-arms at the escape and the second access would read clean for a reason that has nothing to
+do with the index.
 
 **If the pair is clean on both**, record the walk's last memory write cycle relative to the escape's retirement.
 That distinguishes a window that exists and was missed from one that does not exist, and it is the reading that
