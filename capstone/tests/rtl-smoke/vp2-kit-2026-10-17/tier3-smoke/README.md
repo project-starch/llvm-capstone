@@ -3475,3 +3475,20 @@ cut at its own OpenSBI banner in all 14, so no recorded tally moves.
 - **Not settled:** the base is inferred, not read. The next kit bring-up should print
   `cat /sys/module/capstone_vm/sections/.text` once after insmod (the runtime lane's suggestion), which makes every
   decode exact. sql0-frs-treeB then gives the covering slot at the CSRETIRE site.
+
+### Amendment to arm q15 (2026-10-20 04:1x, before ANY of its boots): moved to board 2, tree B
+
+The board-1 queue had done nothing but wait behind the cpython pair, which is three cases on two cold boots and had
+finished 10 steps in 50 minutes. It was stopped by process group, with no q15 run directory created.
+- **The new runner:** `tier3-q15-board2.sh` 42474b8ec5c98dd4. It is board1's with:
+  - the kit bkit7-rev2xBD (tree B 8de3c48cf, board 2), with the same module 39d8492d and monitor f13dbc5 as
+    bkit7-rev2xD, both checked;
+  - the board-2 busy check;
+  - the run root t3-run-treeB/q15<g>;
+  - the wait on sql0-frs-treeB's out (SQL DONE, STOP or HOLD).
+- **Unchanged:** the images, the subsets, the scorer, the prediction (run C, which was confirmed on 39d8492d's QEMU
+  twin) and the readings.
+- **What the move changes:** the bitstream. Tree B adds S-29's satp flush. That is not expected to move a cell; a cell
+  that does move is a reading against run C, as any difference is.
+- **Dry run:** it reached Q15 DONE through subset f. These negatives each stopped it: rc 78, a busy board, and board 1's
+  marker (it waits for sql0-frs's).
