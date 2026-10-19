@@ -470,3 +470,55 @@ or the scoreboard; the routed check_timing at seal is the grade.
 - The scratch arm runner reports RC=1 for a test absent from its list exactly like a failure; "identical" across
   two trees from such arms is void. The sweep's list is the instrument for the bounds-regression tests.
 - A sim-only check that fires after an ENCODING change: print its inputs on the old tree first.
+
+## Tree B, pre-registered 2026-10-19 BEFORE any handoff: the satp flush alone, and why its own bitstream may not be worth a cycle yet
+
+**The hash.** capstone-ariane `virtual-profile-2-c` `8de3c48cf`, whose `core/` is byte-identical to `d427e7391`'s;
+everything after that commit is arm source and testlist only. Against tree A (`8522d72fe`) the whole RTL diff is
+**36 insertions and 3 deletions across six files**: a new output and its default in `csr_regfile.sv`, a one-bit port
+carried through `ex_stage.sv`, `load_store_unit.sv` and `cva6_mmu.sv`, an unqualified valid-clear in `cva6_tlb.sv`,
+and one OR term at the shared TLB's instantiation. `run.tcl` untouched.
+
+**Gates, all green and each with its control fired first.**
+- Lint PASS, all eleven counters at baseline: 52 / 3 / 0 / 0 / 40 / 0 / 2 / 25 / 1395 / 2 / 100. **UNOPTFLAT
+  membership identical BY NAME** to the base, 40 names each way, the comparison positive-controlled by an invented
+  name. This closes the gap the earlier plan carried, that the count had held while the names were never diffed.
+- 95-test sweep against the base: **92 identical, 0 differ, 0 missing**, three random generators excused by name
+  because they produce no log on either side. Status 0 from the in-tree comparator, whose self-test fires in all
+  three directions.
+- 152-test supervised list against the base: **152 identical, 0 differ, 0 missing.** Status 0.
+- The fix's own validation: four arms read the pre-registered set exactly, with the negative control unchanged in
+  every reading, its retired count and its cycle count.
+
+**Predictions, stated against the measured floor rather than tighter than it.**
+- Routed WNS inside the standing band, and within the noise of tree A's −18.985. No tighter claim: a null change on
+  this design has moved WNS by several nanoseconds.
+- **Area: no prediction above the floor, deliberately.** Source-identical modules on this design redistribute by
+  about ±1,000 LUT each (measured on tree A: `dom_switcher` +1,006, `dyn_unit` +1,001, `IRO` −918, `scoreboard`
+  −913, `lsu` +317, `rev_node` +154, all with no source change). A 36-line change cannot be predicted above that,
+  and tree A's refuted +154 is what claiming otherwise looks like. Expected TOP: within ±1,500 LUT of 180,838.
+- LUTLP-1 0.
+- Loop membership: **no prediction that it is unchanged**, which was tree A's miss. Instead: no member inside the
+  MMU or either TLB, because the new signal reaches only the valid flops' clear term, which is a flop input and not
+  a combinational path into the lookup.
+- **The discriminator, an endpoint question rather than a stem one:** will a failing endpoint appear inside the
+  MMU's TLB cone? Predicted NO, for the reason above. A failing endpoint there would mean the flush term reached
+  the lookup path, which is the one way this change could cost timing.
+
+**The three sufficiency questions, and the third one does not pass.**
+1. *Is it enough?* As RTL, yes for S-29: the window is closed in both directions and both TLBs, validated in
+   simulation.
+2. *Can the instrument fail silently?* **Yes, on silicon.** There is no readback of the flush. If it did not fire on
+   hardware, nothing in a board run would say so; the proof that it fires is the simulation pair.
+3. *What will it READ on silicon if the best hypothesis is true?* S-23's fetch panics stop. But with N = 3 panics
+   that is weak evidence, and the board lane's own reading of its one capture favours the DATA face, which this
+   change does not touch. So a boot that stops panicking cannot be told apart from one that was never going to,
+   and a boot that keeps panicking cannot be told apart from a flush that did not fire. **That reading is
+   uninformative, so by the standing rule this change does not justify a bitstream cycle on its own.**
+
+**Recommendation: BATCH it.** The RTL is ready and gated and should be carried forward, but its own silicon reading
+is too weak to buy a cycle. The candidates to batch with it are the consuming resume (ruled, not yet written),
+R-57's shared saved-exception register (audited SHARED-SAFE, and the area it saves is in the capture mux and the
+read-side priority chain rather than the flops), and an R-38-class fix if the index-only-compare arm confirms that
+candidate. The decision is the lead's; this entry exists so that the alternative was weighed rather than defaulted
+into a build.
