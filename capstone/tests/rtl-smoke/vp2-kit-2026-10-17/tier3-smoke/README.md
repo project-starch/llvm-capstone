@@ -3615,3 +3615,15 @@ present.
   - the others are remap_end+0x304 (0x088) and vm_ioctl+0xedc (0x440);
   - the CSRUNV successors are vm_release+0x104 (0x6bc), vm_ioctl+0x7dc (0xd40) and vm_ioctl+0xa20 (0xf84).
 - **FRVD is uninformative** at every refusal: the trap into M re-arms the slot before the read.
+
+**Second amendment to sql0-nf-treeB (2026-10-20 04:4x, the Tier 1 boot still running, before sql0-nf boots).** The
+runtime lane withdraws the "p >= 1024" escape.
+- **The RTL lane's bound on p, from source:** the physical pool's head starts at 3 (INIT_STAGE) and only bumps.
+  Recycling can lower an index, never raise it.
+- **What comes before region 14's carve:** the genesis regions, cap_env_init's four boot-time carves, and the regions
+  created before 14. That is tens of allocations, not thousands. It did not give an exact count, which this boot's own
+  monitor snapshot cannot settle.
+- **The prediction is now one-sided:**
+  - FRTY 0 and DRT1 0 confirm the index-collision mechanism at this site;
+  - ANY surviving FRTY means a different mechanism, whatever its count.
+  - The decoded site and the count are reported either way.
