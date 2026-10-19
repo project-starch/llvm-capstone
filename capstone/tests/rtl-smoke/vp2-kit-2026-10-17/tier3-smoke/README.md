@@ -4162,3 +4162,23 @@ FRTY 0, DRT1 0, no Oops.
     the fetch face by changing WHICH index retire broadcasts, not WHETHER it broadcasts.
 - **Still inferred:** that the broadcast index equals slot 3's physical index p. Neither is read directly. The floor's
   effect is consistent with it, and no other reading on the table explains 21 → 0.
+
+### node-floor-2 on tree A, Tier 1, and the scorable sql0 arm's kits, pre-registered (2026-10-20 07:4x, before the boot): board 1
+
+dev's module board build is now 54d8a3af (node floor on dev at 794d7c5815f5). With srz removing S-23's data face and
+the floor removing its fetch face, sql0 can give scorable postgres cells on silicon for the first time, using dev's
+runner 7ce203f9 (the empty-directory fix). The compiler lane is producing that runner's QEMU reference on 54d8a3af's
+twin (qkit7-nf2, two runs and a PASS line). That arm is pre-registered when the reference reads.
+- **Now: 54d8a3af's Tier 1 boot on TREE A** (board 1, idle). Its Tier 1 so far was on tree B only, and the sql0 arm runs
+  on tree A first.
+  - The runner is `board-tier12/srz/run-tier1-nf2-treeA-b1.sh` 51c5c4d35d14118e:
+    run-tier1-nf2-b2.sh with board 1's fields (bitstream 8522d72fe, board 1's URL file, the lane driver fd38816a,
+    board-free-wait on board 1).
+  - It uses the same firmware fw-t1-nf2 1ee33cc6631aa766 and image-rev7-nf2.
+  - Its dry run on the real tree-B transcript read the four rungs, the banner and the release lines.
+- **The gate:** the four rungs read as their oracles (b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1), as on tree
+  B.
+- **Also read:** the banner node-floor-2; 3 release lines for 3 contexts, counted unique by kernel timestamp because
+  vm-suite's KMSG replay repeats them, each with succeeded = attempted and first_id 1024; DRT1/DRTX/Oops 0.
+- **The tree-A kits for the sql0 arm:** bkit7-rev2xDN2 / bkit7-rev2xmDN2, from `tier3-smoke/make-nf2A-kits.sh`
+  9102938b937f9f71: sql0-drt2's kits with only the module changed.
