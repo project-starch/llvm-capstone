@@ -1816,3 +1816,25 @@ as `<arm>-treeA` under `results/2026-10-19-vp2c-treeA/`.
   - steps 1-3 stopped: TAL HOLD;
   - vm-contract off its oracle: STOP before any arm;
   - a driver running: STOP.
+
+**Amendment to step 4's sparse-churn reading (2026-10-19 13:55, before step 4 runs), from the RTL lane's note on what
+R-57's fix changes.** The fix does not make a faulting capability store succeed. The store's translation still
+faults; the fix makes the exception reach the CAP_WB writeback, instead of the instruction retiring clean with a ghost
+entry left in the store buffer's commit queue. sparse-churn has three readable outcomes on tree A:
+- **(a) It runs to exhaustion:** `VM_EXIT:sparse-churn:1`, the recycling-allocation failure, and "collect skipped" at
+  least once, as QEMU reads. The faults are reported and resolved as QEMU's are. This is the pre-registered
+  prediction, and it closes the stopgap control.
+- **(b) A clean, reported fault ends it** (a domain fault line, VM_EXIT non-zero, no wedge, the next rung or the
+  boot's end reached).
+  - That is R-57's fix reaching the writeback, so it is NOT read as the fix failing.
+  - It is still a DIFF from QEMU, whose run resolves the faults and reaches exhaustion, so it is recorded as a new
+    reading to explain. The stopgap control stays open.
+- **(c) A wedge with rev7's apertures:** tree A's R-57 fix does not cover this face.
+
+Two of tree A's known gaps can show in any step, and neither is a tree A regression:
+- **S-29:** tree A has no satp flush, so a failure that looks like a translation from the wrong address space is
+  S-29 unfixed. The module's caller and its context share the process's satp, so none is expected.
+- **S-23:** the monitor's fetch retry still covers it, so a fetch refused with a PHYSICAL address remains S-23.
+
+The arms phase cannot detect any of tree A's four fixes, since its 25 vectors are identical. Its pass says the images
+and the RTL agree with the base, and nothing about S-27, S-28, R-57 or Q-24.
