@@ -35,12 +35,22 @@ The captures:
   between. On bf3db3175 it comes 18 lines before, with only the next context's image grants (CAPSTONE_VM_ADD_OK) in
   between.
   - On tree A both FRTY pcs are `vm_ioctl+0xab0`, the instruction after the module's CSRUNV; the module base differs
-    per boot, the offset does not.
+    per boot, the offset does not. (These two are the CSRUNV+4 site. Other boots show a CSRETIRE+4 site inside
+    `retire()`, 21 per boot; see the correction below.)
   - This ordering is an observation. Its relation to the refusal is not established.
 
-**Every FRTY is the instruction after the module's CSRUNV in `vm_ioctl`.** The page offset of each pc is matched to
-the instruction after a CSRUNV (funct7 0x24) or CSRETIRE (funct7 0x53) in that run's module .text, and named by the
-enclosing symbol. Exactly one candidate matched in each module:
+**CORRECTED 2026-10-20: this heading used to read "Every FRTY is the instruction after the module's CSRUNV in
+`vm_ioctl`", and that is OVER-GENERAL — true of the four instances tabulated below, false of the 21-per-boot site
+seen on six other boots.** Those are at the instruction after the **CSRETIRE inside `retire()`** (retire+0x220 in
+module 39d8492d, retire+0x22c in 607164b9, both the first instruction of the inlined `restore_root`), which is the
+site that SURVIVES the srevroot-zero module. This entry's own issue-registry Reading block had already recorded a
+CSRETIRE+4 site (boot r6, "both at retire+0xdc, the instruction after a CSRETIRE"), and the committed tier-12
+captures carry seven distinct FRTY pcs, so a single-site claim was never supportable. See ISSUES.md's S-23, which
+now records two sites. **The four instances below are the CSRUNV+4 site and are unchanged as readings**; what was
+wrong was the generalisation over them.
+
+The page offset of each pc is matched to the instruction after a CSRUNV (funct7 0x24) or CSRETIRE (funct7 0x53) in
+that run's module .text, and named by the enclosing symbol. Exactly one candidate matched in each module:
 
 | instance | module | FRTY pc | function |
 |---|---|---|---|
