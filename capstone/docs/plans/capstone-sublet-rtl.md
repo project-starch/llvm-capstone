@@ -575,3 +575,52 @@ carried the overclaim briefly and now carries the cause-set reason instead.
 CONTEXT's value and the fenced reading the caller's own, for each of the three. A saved pc that differs for any
 kind refutes the ABI rule as stated and makes the escape direction a hardware problem again rather than a
 software one, which is exactly why this arm comes before the consuming resume.
+
+## The data face's transient candidate: the three source answers the arm needs, 2026-10-19
+
+The persistent form of the index-only candidate is **refuted**, by the board lane's localisation rather than by
+argument: both refused addresses are in CPU 0's per-CPU unit, and `_raw_spin_lock_irqsave` reads `__mmiowb_state`
+in that page on every acquire, so the page was read successfully throughout the boot. A persistent deny of the
+slot or the page is excluded. The TRANSIENT form survives, and these are the three things it rests on.
+
+**1. The broadcast is the walk's own traffic, so it can be late.** `ex_stage.sv:1615-1616`:
+`revnode_invalidation_valid_o = mem_rev_wr_req_valid && !node_wr_req[31] && !vp_hdr_wr`, id `node_wr_req[29:0]`,
+where `mem_rev_wr_req_valid` is the rev-node unit's `_mem_ch_write_req_valid` (`:1533`). So the broadcast tracks
+the WALK's memory writes, not the retirement of the instruction that started it. R-27's drain
+(`~(|rev_drain_q)` in `capstone_dyn_ready_o`) exists because such traffic outlives a flush, and a switch flushes.
+A clear after the CSRUNV escape has retired is therefore structurally possible.
+
+**2. The compare is index-only.** `pmp_data_if.sv:96-108`: the broadcast carries the full 30-bit id but the test is
+`revnode_invalidation_id_i[15:0] == cpmp_tracked_revnode_id_d[i][15:0]`, deliberately, because a 30-bit compare
+would stop firing once generations advance. So a context-namespace node at generation 0 and index N matches a
+kernel entry tracking (g, N) for any g.
+
+**3. The recovery is the ADOPT, not `ns_flush`. Both lanes had this wrong, including me.** `ns_flush` does not fire
+on an escape or on a namespace change: its only driver is a software write of `csupctl` bit 2
+(`csr_regfile.sv:2002`, default cleared each cycle at `:1177`). What re-arms a cleared bit is
+`pmp_data_if.sv:89-94`, which sets validity to 1 whenever a slot's `revnode_id` **differs** from the tracked one,
+i.e. whenever that slot is rewritten with a **different** region, which the monitor's region swapping does. Note
+the adopt needs the id to CHANGE: rewriting the same capability into the slot does not re-arm it.
+
+So the transient shape is: a late broadcast clears the slot, the kernel's next access in that window is refused,
+and the next swap putting a different region there re-adopts it. That matches "read successfully all boot, refused
+once, in interrupt" with no software strobe involved.
+
+**The matched pair, which is the semantics owner's design and better than reproducing the failure.** The two arms
+must differ in **exactly the index**: the failing arm retires a context node whose 16-bit index EQUALS the index
+the caller's CPMP slot tracks, the control retires one whose index DIFFERS, and everything else is identical, the
+same walk length, the same quantum, the same caller access. The index-only mechanism then predicts a cause-5
+refusal on the first and a clean read on the second, while ANY other mechanism, including a generic switch
+hazard, predicts the same reading on both. That is what makes the arm discriminate rather than merely reproduce:
+a refusal on both arms would confirm a window and refute this explanation of it.
+
+**If the pair is clean on both**, record the walk's last memory write cycle relative to the escape's retirement.
+That distinguishes a window that exists and was missed from one that does not exist, and it is the reading that
+tells the next person whether to try a longer walk or to stop.
+
+**What the arm must pin, and what this note does NOT establish.** The timing claim: whether a context's retire
+walk can still be writing when a kind-1 quantum escape returns the caller. Structural possibility is not
+occurrence. And what the kernel's slot 7 is tracking at that moment, which is a monitor question. The arm comes
+after the escape-kind arm and after the localisation fork the semantics owner set: if the refused pages are the
+module's pinned arena pages or their struct pages, the face is a page-lifetime question and this candidate is not
+the one to build.
