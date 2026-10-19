@@ -30,6 +30,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[6]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import verdicts as v  # noqa: E402
 
 PLATFORM = {  # docs/plans/2026-10-11-protected-same-answers.md, as the corpus runs of 2026-10-11
@@ -202,6 +203,7 @@ def main():
     p.add_argument("--repeats", type=int, default=1)
     p.add_argument("--timeout", type=int, default=1200)
     a = p.parse_args()
+    sdk_builtins.gate([s.split("=", 1)[-1] for s in a.arm], who="cpython:run-controls.py")
     arms = dict(x.split("=", 1) for x in a.arm)
 
     platform = {}

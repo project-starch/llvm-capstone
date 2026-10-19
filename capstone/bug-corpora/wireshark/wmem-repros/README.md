@@ -217,8 +217,8 @@ corpus root and the port builds one program per case:
 (`CAPSTONE_SDK_CORPUS=1 bash capstone/runtime/virtual/build-sdk.sh <out> <musl>`, or the port's
 builder): `build-sdk.sh` then appends `-fno-builtin` and refuses an SDK whose effective setting is
 otherwise, because with `malloc` as a library builtin LLVM may elide an allocation a case observes.
-`tools/check-sdk-builtins.py <SDK or build>` checks one already built; `run-virtual-cases.py`,
-`run-silicon-cases.py build` and the board's `tier3-appvm-arm.sh` refuse anything else with exit 78.
+`tools/check-sdk-builtins.py <SDK or build>` checks one already built; every corpus runner
+(`tools/sdk_builtins.py`, called before anything starts) refuses anything else with exit 78.
 
     cmake --preset capstone-application -S <repo>/capstone/ports/wireshark/wmem -B <out> \
         -DCAPSTONE_SDK=<virtual SDK> -DWM_CORPUS_DIR=<repo>/capstone/bug-corpora/wireshark/wmem-repros \

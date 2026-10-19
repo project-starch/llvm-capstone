@@ -34,6 +34,8 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[6]
+sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 TOOLS = REPO / "capstone/bug-corpora/tools"
 sys.path.insert(0, str(TOOLS))
 import virtualvm  # noqa: E402
@@ -206,6 +208,7 @@ def main():
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--revision", default="unrecorded")
     a = p.parse_args()
+    sdk_builtins.gate([a.build, a.sdk], who="memcached:run-controls.py")
 
     why = cache_says(a.build / "work/port/CMakeCache.txt", CACHE[a.arm], a.sdk)
     if why:

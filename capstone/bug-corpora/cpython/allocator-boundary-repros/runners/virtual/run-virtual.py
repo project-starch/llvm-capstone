@@ -40,6 +40,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[2]
 REPO = HERE.parents[6]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -225,6 +226,7 @@ def main():
                    help="stage compiled bytecode beside each module and drop the .py (the vp2 firmware cap); a stage "
                    "change, judged against the record before it is used")
     a = p.parse_args()
+    sdk_builtins.gate([a.build], who="cpython:run-virtual.py")
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
     import boardvm

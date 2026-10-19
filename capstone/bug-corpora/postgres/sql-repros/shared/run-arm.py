@@ -49,6 +49,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
@@ -399,6 +400,7 @@ def main():
     parser.add_argument("--raw", type=Path, help="console logs, SQL and the virtual stage; never inside the bundle")
     parser.add_argument("--only", help="comma-separated case numbers")
     args = parser.parse_args()
+    sdk_builtins.gate([args.image], who="postgres:run-arm.py")
     args.batch, args.replay, args.runs = None, False, {}
 
     decl = json.loads((CORPUS / "corpus.json").read_text())

@@ -12,6 +12,10 @@ arm=$1; OUT=$K/results; mkdir -p $OUT
 export PYTHONPATH=$RT/host CAPSTONE_QEMU_LOCK=$K/qemu.lock
 case $arm in level0) ;; *) echo "run-arm.sh: arm $arm? (level0; the Sublet-heap arms were removed 2026-10-11)" >&2; exit 2 ;; esac
 ROOT=/tmp/capstone/step-one-ecall; S=$K/vm-$arm
+# C-81: a builtins build is refused before the VM comes up (tools/sdk_builtins.py). The staged image does not say
+# which SDK built it, so MRUBY_SDK names it (or the build root, e.g. build-mruby-domain.sh's MRBD_ROOT); unset, the
+# image's own directory is searched, and a share holding no SDK is refused.
+python3 "$REPO/capstone/bug-corpora/tools/check-sdk-builtins.py" "${MRUBY_SDK:-$K/share/mruby-$arm.dom}" || exit 78
 vm() { python3 -m capstone_vm --state $S "$@"; }
 vm down > /dev/null 2>&1; rm -rf $S
 vm up --qemu $ROOT/qemu-build/qemu-system-riscv64 --kernel /tmp/capstone/delegation-binfmt-linux/arch/riscv/boot/Image \

@@ -34,6 +34,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -69,6 +70,7 @@ def main():
     p.add_argument("--llvm-bin", type=Path, required=True)
     p.add_argument("--smoke", type=Path, default=REPO / "capstone/ports/mruby/app/scripts/smoke.rb")
     a = p.parse_args()
+    sdk_builtins.gate([a.image, a.capi_dir], who="mruby:run-virtual.py")
     if appvm.profile(a.state) != "virtual":
         p.error(f"{a.state} is not a virtual-profile VM")
     share = Path(json.loads((a.state / "config.json").read_text())["share"])

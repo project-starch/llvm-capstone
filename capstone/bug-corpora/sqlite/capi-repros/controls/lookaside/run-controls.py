@@ -35,10 +35,13 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import sys
 import time
 
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[6]
+sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 RUN_STAGED = REPO / 'capstone/runtime/virtual/run-staged.py'
 PROGRAMS = {  # image -> (source dir, prediction per arm)
     'la-control-parent': ('control-parent', {'release': 'completed', 'protected': 'completed'}),
@@ -170,6 +173,7 @@ def main():
                    help="With --rejudge: judge each log against the OTHER arm's prediction. The "
                         "judge's negative test: the stale pair must then come out not held")
     a = p.parse_args()
+    sdk_builtins.gate([a.builds / arm / "stage" for arm in ("release", "protected") if (a.builds / arm).is_dir()], who="sqlite:run-controls.py")
     if a.rejudge:
         runs = []
         for arm in ('release', 'protected'):

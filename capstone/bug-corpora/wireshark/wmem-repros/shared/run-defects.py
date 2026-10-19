@@ -39,6 +39,7 @@ CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/ports/common/host"))
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import verdicts as v  # noqa: E402
 
 PROBES = {"wm_probe": "the labelled read", "wm_write_probe": "the labelled write"}
@@ -105,6 +106,7 @@ def main():
     p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--raw", type=Path, required=True, help="console logs; outside the bundle")
     a = p.parse_args()
+    sdk_builtins.gate([a.hosted_build, a.controls_hosted_build], who="wireshark:run-defects.py")
     import appvm
     if appvm.profile(a.state) != "virtual":
         p.error(f"{a.state} is not a virtual-profile VM")

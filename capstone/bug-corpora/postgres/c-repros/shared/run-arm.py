@@ -35,6 +35,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
@@ -127,6 +128,7 @@ def main():
                    "the bundle, since results are summaries (SCHEMA.md rule 6). Default "
                    "/tmp/capstone/c-repros-raw/<stamp>-<arm>")
     a = p.parse_args()
+    sdk_builtins.gate([a.bindir], who="postgres:run-arm.py")
 
     decl = json.loads((CORPUS / "corpus.json").read_text())
     config = decl["arm_configurations"].get(a.arm)

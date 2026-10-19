@@ -30,6 +30,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[2]
 REPO = HERE.parents[6]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -79,6 +80,7 @@ def main():
     p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--raw", type=Path, required=True)
     a = p.parse_args()
+    sdk_builtins.gate([a.build, a.controls_build], who="cpython:run-virtual.py")
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
     import boardvm

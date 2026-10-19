@@ -12,6 +12,8 @@ set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(cd -- "$HERE/../../../../.." && pwd)
 ARM=$1 IMAGE=$2 KIT=$3 WORK=$4
+# C-81: a builtins build is refused before anything is staged or booted (tools/sdk_builtins.py)
+python3 "$REPO/capstone/bug-corpora/tools/check-sdk-builtins.py" "$IMAGE" || exit 78
 ST=$WORK.stage
 rm -rf "$ST"; mkdir -p "$ST"
 cp "$KIT/adapter/capstone-vexec" "$KIT/adapter/module/capstone_vm.ko" "$ST/"

@@ -30,6 +30,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[2]
 REPO = HERE.parents[6]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -76,6 +77,7 @@ def main():
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--timeout", type=int, default=600, help="seconds per case")
     a = p.parse_args()
+    sdk_builtins.gate([a.perl], who="perl:run-virtual.py")
     if appvm.profile(a.state) != "virtual":
         p.error(f"{a.state} is not a virtual-profile VM")
     image = a.perl / "src/perl-5.36.3/perl"

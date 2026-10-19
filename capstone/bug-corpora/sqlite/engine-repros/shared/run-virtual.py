@@ -31,6 +31,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -86,6 +87,7 @@ def main():
     p.add_argument("--raw", type=Path, required=True)
     p.add_argument("--only", help="comma-separated case number prefixes")
     a = p.parse_args()
+    sdk_builtins.gate([a.build], who="sqlite:run-virtual.py")
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
     import boardvm
