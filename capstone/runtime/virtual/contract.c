@@ -194,6 +194,30 @@ int main(int argc, char **argv)
         puts("VIRTUAL_HEAP_THREADS_OK shared_ownership metadata_growth arena_growth");
         return 0;
     }
+    if (!strcmp(mode, "dense-churn")) {
+        /* The board's stopgap control on silicon: reach collect() without sparse-churn's walk over fresh pages, which
+         * wedged on bf3db3175 (S-25's face) before the table ran out. collect() runs only when the module has retired a
+         * record (node_retired > 0, capstone_vm.c ensure_nodes), so ONE arena is mapped, touched and unmapped first: the
+         * launcher's unmap_arena issues CV_RETIRE. Then every store stays inside one 4 KiB block written up front: each
+         * CDERIVE of a 128-byte child mints a record and none is revoked, so a small flat table (node_flat_records) runs
+         * out in place. The predicted end is the module's "collect skipped" line and the step's terminal exit. */
+        unsigned char *page = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        require(page != MAP_FAILED, "dense retire arena");
+        page[0] = 1;
+        require(!munmap(page, 4096), "dense retire");
+        unsigned char *block = malloc(4096);
+        require(block != NULL, "dense block");
+        memset(block, 0x5a, 4096);
+        for (unsigned i = 0; i < 1000000; ++i) {
+            unsigned char *child = capstone_cap_derive(block, (i % 32) * 128, 128);
+            child[0] = (unsigned char)i;
+            if ((i + 1) % 1000 == 0) {
+                printf("VIRTUAL_DENSE_PROGRESS derived=%u\n", i + 1);
+                fflush(stdout);
+            }
+        }
+        fail("dense churn derived 1000000 children without running out");
+    }
     if (!strcmp(mode, "sparse-churn") || !strcmp(mode, "sparse-stale")) {
         void *reserved = mmap(NULL, 64UL << 20, PROT_NONE,
                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
