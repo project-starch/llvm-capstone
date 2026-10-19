@@ -89,6 +89,9 @@ varies across repeats will also show sites the sample never saw, so a new site t
   reported, not graded.
 - A varying cell whose verdict is outside its verdict set is a moved cell, and the re-record rule applies.
 
+**lt0's board image is the stage** (same ruling): `20bcfdd1073976e0` with `stage-closure.txt` and
+`--stdlib-sourceless` (below) is accepted as lt0 for the board, graded against lt0's sets by this rule.
+
 ## How the pin was found, including a retraction
 
 | comparison (lt0 full Lib) | cells differing |
