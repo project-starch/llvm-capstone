@@ -2572,3 +2572,42 @@ result lines from this boot's console only, after its OpenSBI banner, are in `re
   - Separating it needs the RTL lane's simulation of the walk outliving the instruction, then a module marker on the
     retire and remap paths (a new module revision).
 - **N=1.** pb10-rf, last in this chain, is the second instance.
+
+### S-23b step 1 on sql0 and pb10, pre-registered (2026-10-19 18:57, before their boots); chain-rf stopped, pb10-rf withdrawn
+
+**The monitor:** capstone-sbi f13dbc5 (vp2/s23-data-retry, pushed), which is 03a1ffe plus CAPSTONE_S23_DATA_RETRY, off by
+default. It applies to an S/U load or store access fault, after the refusal read. If some loaded slot passes every
+readable allow term for that access, the access is retried with NOTHING re-armed, and DRT1 is printed with mepc. The
+terms are: tagged, a capability type, bounds covering mtval, perm[2] for a load or perm[1] for a store
+(pmp_data_if.sv cpmp_check at 8522d72fe), and validity 1.
+- Every slot is read and written back exactly, with the same id, so nothing is re-adopted. A true deny recurs, so the
+  retry grants nothing the hardware does not.
+- A second refusal at the same mepc within 4096 instructions prints DRTX and is injected as before.
+- The per-slot re-adopt (step 2) is NOT included. It waits for the RTL lane to confirm the CCSRRW pair.
+- The compiled order was checked: mstatus, mcause, then per slot read, lcc 1, lcc 3/4/5, lcc 0, write-back; then mepc,
+  minstret.
+
+**Kits** (`make-drt-kits.sh` cc086f98e4b98a03): bkit7-rev2xD 2db6294a0ad923cb, bkit7-rev2xmD 360ca0a6dffc1118
+and bkit7-pb10D 67ca0fbb35a614e9. Each is the matching refusal-read kit with only the monitor changed.
+
+**The chain:** chain-rf was stopped at 18:54 while the S-30 pair ran, and run-s30.sh finishes the pair on its own.
+`chain-drt.sh` 46a9f78b1b1a2813 waits for run-s30.sh to exit, then runs, each a cold boot on board 1:
+1. sql0-drt (`tier3-sql-arm-rev2g.sh` 6dcee9f5219ffff7);
+2. pb10-drt (`tier3-pb10-drt.sh` 2abb23c4bbe68ac6);
+3. S-26's bracket, as pre-registered.
+
+**pb10-rf is WITHDRAWN before it ran.** pb10-drt prints the same refusal-read lines, so it gives that reading AND the
+retry.
+
+**Predictions, both arms.** At the first refusal, the refusal read is as sql0-rf's: slot 7, RFTY 0, RFVD 1. Then:
+- **A transient deny** (consistent with the late-broadcast candidate): DRT1 with mepc, no DRTX, no MTVL/CPMX/INJS for
+  that refusal, and no Oops. The session proceeds.
+  - sql0-drt's cells are then scored against t3-sql-trim-vm/bundle, the QEMU record: 9 cells, as rev2d's.
+  - pb10-drt is scored against t3-pb10/bundle (CAUGHT 4).
+  - The number of DRT1 lines in the boot is itself a reading: how often the deny occurs.
+- **A persistent deny** (the slot's tracker cleared and staying cleared): DRT1, then DRTX at the same mepc, then MTVL,
+  CPMX:00000002, INJS:00000002 and the same Oops as sql0-rf. That points at step 2 (the per-slot re-adopt).
+- **Neither**, for example a refusal at a slot that fails a readable term: no DRT1 for it, and the refusal is injected
+  as before, with its RF lines saying which term failed.
+
+The dry run, with the real kits passing every check, is in `dryrun-drt.txt`.
