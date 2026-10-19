@@ -3276,3 +3276,26 @@ vm-contract 0, vm-suite 1).
 
 **Readings:** DRT1 and FRTY, plus the banner "srevroot-zero-2" as the must-fire that this module ran. The compiler lane
 expects the srz Tier 1 readings that 607164b9 gave.
+
+### The fetch-face pair, results (2026-10-20 03:34, board 2, tree B): the prediction did NOT hold
+
+Result lines are in `records/fetch-face-pair.result-lines.txt`. UNGATED.
+- **The boot:** driver rc 0, b0-stats 0, b0-hello 0, ff-pair 0, no Oops, the srz module banner present.
+- **The construct was reached.**
+  - plain: revoke_pairs 0, nodes 23;
+  - ops: revoke_pairs 12800, nodes 12823.
+  - Both arms exit 0 with the same sink (399999801179648).
+- **Escapes happened in both:** CV_STATS steps 2234 against 2235, of the same order as each other, as predicted. QEMU
+  read 12,709 against 12,695. The absolute count is the board's quantum count and is not compared with QEMU's.
+- **FRTY 0 in BOTH arms.** DRT1 0, DRTX 0, and no FRG*/RFSL lines anywhere in the boot.
+  - These counts were taken on board.txt, board-raw.txt and the reassembled UART stream, and all three agree.
+- **The instrument is present.** The firmware's monitor source (fw-ff/opensbi, sbi_capstone.c:3716) reports
+  CAPSTONE_TAG_FRTY on the fetch-retry path.
+  - A string grep of fw_payload.bin is void here: it reads 0 for SHA5 too, while the console printed SHA5 six times.
+    The monitor builds its tags from immediates.
+- **The reading:** in this program, 12,800 in-context CDERIVE+CREVOKE pairs across about 2,234 quantum escapes produce
+  no refused fetch. The runtime lane predicted FRTY > 0 in the ops arm, and that is refuted for this shape.
+- **What it does not settle:**
+  - whether the fetch face needs something sql0 has and this loop lacks: a large text footprint, revocation of a node
+    that Linux's own mappings derive from, or the escape landing in particular code;
+  - why pb10's fetch face vanished under srz (2→0) while sql0's held (21→21).

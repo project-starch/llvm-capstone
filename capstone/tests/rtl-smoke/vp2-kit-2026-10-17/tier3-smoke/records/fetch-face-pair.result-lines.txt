@@ -1,0 +1,20 @@
+FF_START 03:22:10 fw 368b599947b51825 bitstream caplifive_vp2c_8de3c48cf board 2
+DRIVER rc=0 03:34:42
+RUNG b0-stats retval=0
+RUNG b0-hello retval=0
+RUNG ff-pair retval=0
+FF revoke-loop.dom: exit 0 steps 2234 rounds=200 FRTY 0 DRT1 0 DRTX 0
+FF revoke-loop-ops.dom: exit 0 steps 2235 rounds=200 FRTY 0 DRT1 0 DRTX 0
+node_flat_records @@PARAM node_flat_records=16384; srz banner x1; Oops 0
+FF_DONE_RUN 03:34:42
+[  131.928309] capstone_vm: loaded, diag srevroot-zero-1, supervisor_slots=1, diag_emerg=1
+FF_ARM revoke-loop.dom
+FF_BEGIN rounds=200 inner=64 spin=2000000 ops_compiled=0
+FF_DONE rounds=200 revoke_pairs=0 sink=399999801179648
+CAPSTONE_VM_STATS arenas=9 pages=484 peak=484 nodes=23 steps=2234 faults=16 collections=0 reclaimed=0 rounds=5 bytes_in=176 bytes_out=64 node_bytes=262144 node_capacity=16384 node_growths=0 launch_ns=
+FF_EXIT revoke-loop.dom 0
+FF_ARM revoke-loop-ops.dom
+FF_BEGIN rounds=200 inner=64 spin=2000000 ops_compiled=1
+FF_DONE rounds=200 revoke_pairs=12800 sink=399999801179648
+CAPSTONE_VM_STATS arenas=9 pages=484 peak=484 nodes=12823 steps=2235 faults=16 collections=0 reclaimed=0 rounds=5 bytes_in=180 bytes_out=64 node_bytes=262144 node_capacity=16384 node_growths=0 launch_
+FF_EXIT revoke-loop-ops.dom 0
