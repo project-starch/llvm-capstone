@@ -153,10 +153,21 @@ required -- is a consequence on either axis.
 |---|---:|---|
 | `virtual-malloc` | 5 | 01, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`) |
 | `virtual-nested-pools` | **0** | every one of its 26 catches carries its axis's code |
-| `cheribsd-revocation` | 6 | 01, 05, 09, 10, 14 (spatial, `si_code=2`), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
+| `cheribsd-revocation` | 7 | 01, 05, 09, 10, 14 (spatial, `si_code=2`), 31 (temporal, `si_code=2`, decided by `si_addr` -- see below), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
 
 Counting them the arms read 14 / 29, 26 / 29 and 11 / 29; withdrawn, **9 / 29,
-26 / 29 and 5 / 29**. Each case's own `note` records which fault was which and
+26 / 29 and 4 / 29**. On the **nested** rows, 22 of the 29, ③ is 0 in both
+cells and ① is 0 in the spatial one.
+
+**On the temporal axis the fault code alone cannot decide a CheriBSD cell.**
+Revocation clearing a tag and dereferencing a recycled non-capability value both
+report `si_code=2`; only on the spatial axis do the mechanism and the consequence
+carry different codes. `si_addr` is the tiebreaker, against two anchors: case
+`09`, a known consequence, faults at `0x69c7ca`, and case `21`, a known
+mechanism, at `0x426656a8`, a heap address. Case `31` re-ran at `0x5e5f06` --
+`09`'s shape -- so it is withdrawn, and with it the arena-return explanation its
+oracle offered, since that would have put the fault at the stale access on a
+heap address inside the freed block. Each case's own `note` records which fault was which and
 why, and `~/cpython-false-positive-examples/` carries the minimal C.
 
 The denominator is every defect that is live upstream and reproduces on the
