@@ -2155,3 +2155,18 @@ and each log carries `[fpga-board] 1`. N=1 per arm; UNGATED (PREFLIGHT=0).
   banner and before Linux, outside board.txt. The judge now reads it from board-raw.txt after this boot's last banner.
   cur's raw console replays var's QNT0:001E8480 before its own banner, and the judge took cur's own 00000000. var's
   SEQ line shows the first judge's "NO DATA"; its re-judge reads PASS.
+
+### rev8 on tree A, result (2026-10-19 16:56-17:03, board 1): JUDGE PASS on every pre-registered item; module 39d8492d's stopgap control and rev7's exact counter check both close
+
+Firmware 84d5f52ec24cea30 (Image 48bd5c6254863132), rev8's stage, `run3rev8`. Each log carries `[fpga-board] 1`;
+UNGATED (PREFLIGHT=0).
+- **The rungs:** b0-stats 0, b0-hello 0 and vm-contract 0 (the identity branch) read their oracles, and vm-suite reads 1.
+- `@@PARAM` diag_emerg=Y, node_flat_records=4096, supervisor_slots=1. One banner, 0 refusal lines.
+- **rev7's exact check, now made:** across `ok`, resume_sfences rose 426, equal to ok's own STATS faults (426). resume_satp_refreshes
+  rose 510, equal to ok's steps − 1 (511 − 1). resume_satp_changed and busy_frame_refusals read 0 at all five reads.
+  So items 3 and 4 (the resume sfence.vma and the satp refresh) run on every resume, exactly.
+- **The stopgap's positive control on silicon, closed:** dense-churn printed "collect skipped" once (retired 1,
+  available 256, skips 1); progress reached derived=3000; then `domain fault cause=30` at pc 0x3fb8e14238
+  (pc & 0xffff = 0x4238, the CDERIVE at image VA 0x24238); VM_EXIT 139. Every value is the QEMU twin's
+  (a5dec6a32c49b3d3 at 4096).
+- No CPMX refusal anywhere in the boot (CPMX-DIAG: no dump). FRTY retried twice, both at 011113AC (`retire+0x220`).
