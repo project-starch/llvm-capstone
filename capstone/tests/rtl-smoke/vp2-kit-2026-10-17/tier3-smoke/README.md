@@ -1923,3 +1923,29 @@ relaunched behind the S-29 batch.
   exactly 7 arms.
 - **Dry run:** `dryrun-tier3-sv-batch.txt`. These arms say nothing about S-27, S-28, R-57 or Q-24.
 - **The order after the Linux steps** is now: this batch (with rev8's build alongside), rev8's boot, then sql0-treeA.
+
+### Tree A on silicon: flashed, and the canary passes 9 of 9 (2026-10-19 13:41-14:29)
+
+- **Preflight GO (13:41:41):**
+  - the sealed sha256, and the WNS -18.985 inside the band;
+  - set 7's firmware 1d2bbbf37f63f435, and the DTS pairing through the new vp2c row.
+- **Flash (13:41-13:43):** resident before was `caplifive_vp2_bf3db3175.bit`.
+  - The upload took HTTP 201, and bf3db3175 was confirmed in the store as the flash-back path.
+  - The SPI write ran 13:42:01-13:43:32. The readback after the mandatory power cycle is
+    `caplifive_vp2c_8522d72fe.bit`.
+- **Canary, against d93a8d66b's records** (one power cycle per bare image, through infra-retry):
+
+  | Comparison | Pass 1 | Pass 2 |
+  |---|---|---|
+  | S-16 set | 18 arms, 98 reference readings, 0 not identical | the same |
+  | floor | 6 arms, 77 readings, 0 not identical | the same |
+  | s1gap | 3 arms, 0 functional differences | the same |
+
+  - Pass 1 against pass 2 is identical by the same three rules.
+  - `CANARY PASS 9 of 9` at 14:29:14. The 25 arms began at once.
+- **The 25 arms (14:29-14:50):** all 25 read their pre-registered vectors, `VP2ARMS DONE 25 as pre-registered`.
+  Each is compared by count and values with the bf3db3175 vectors the RTL lane showed identical on tree A's RTL.
+- **Corpus set 7 (14:50-14:58):** on firmware 1d2bbbf37f63f435, against d93a8d66b's record: 33 reference records, 33
+  new, 0 differ.
+- **So steps 1-3 end `CHAIN_TREEA_STEPS123_DONE` at 14:58.** As the RTL lane noted, none of these can see tree A's four
+  fixes. They show the images and the RTL agree with the base, so tree A changed nothing they exercise.
