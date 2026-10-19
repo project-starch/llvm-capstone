@@ -3593,3 +3593,25 @@ present.
   it. FRVD therefore cannot show whether the slot was dead at the moment of the fetch.
 - **What the reading cannot give:** the covering capability's node INDEX. LCC has no query for it, so whether that index
   lies under the node floor's bound is not read here. sql0-nf-treeB's FRTY is the only reading of that.
+
+### Amendment to sql0-nf-treeB (2026-10-20 04:4x, the Tier 1 boot running, before sql0-nf boots): the runtime lane's prediction after sql0-frs
+
+- **The runtime lane records its node-2 prediction as failed.** The covering capability is the kernel's main RAM
+  region, carved LINEAR by the monitor at boot. It tracks a fresh physical node p from the monitor's pool (the unit's
+  head starts at 3, and the physical namespace recycles), not CAPCREATE's node 2.
+- **Its mechanism, restated with p in place of 2:** the index-only compare, plus a retire window whose CSRETIRE
+  broadcasts a virtual index equal to p.
+- **Why 21:** each session gets a fresh table starting at the same next index, makes the same allocations, and retires
+  the arena whose ancestor is index p once. So 21 sessions give 21 FRTY.
+- **The floor:** the node-floor module's virtual indices start at 1024, so they can equal p only if p >= 1024.
+- **The prediction, restated:**
+  - **FRTY 0 and DRT1 0:** the collision mechanism is confirmed at this site, and p < 1024.
+  - **FRTY > 0 at a retire CSRETIRE successor:** either p >= 1024 or the mechanism is wrong for this site.
+    - A count of 21, one per session, favours "p >= 1024, the same collision".
+    - A changed count favours a different mechanism.
+  - The count and the decoded site are both reported.
+- **The sites, computed here from a4aa5668's .ko** (the same scan as frty-decode.py):
+  - retire's two CSRETIRE successors are retire+0x220 (page offset 0x53c) and retire+0x260 (0x57c);
+  - the others are remap_end+0x304 (0x088) and vm_ioctl+0xedc (0x440);
+  - the CSRUNV successors are vm_release+0x104 (0x6bc), vm_ioctl+0x7dc (0xd40) and vm_ioctl+0xa20 (0xf84).
+- **FRVD is uninformative** at every refusal: the trap into M re-arms the slot before the read.
