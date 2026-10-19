@@ -93,7 +93,9 @@ if [[ -f "$FW" ]]; then
     # run on the new silicon cannot fall through to the unknown-name block below. caplifive_vp2_*.bit (bf3db3175, the
     # virtual profile's item A/D/E build) keeps the same DTS and capability word (the RTL lane's grade, 2026-10-17):
     # item A's lifetime table lives at srevroot in memory and leaves the physical 65536-node pool unmoved.
-    *65536*|*_r20*|*supcall*|*r51r52*|*_fpb_*|*_sublet_*|*_vp1_*|*_vp2_*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
+    # caplifive_vp2c_*.bit (tree A, capstone-ariane virtual-profile-2-c 8522d72fe) changes four core files over bf3db3175
+    # (commit_stage, csr_regfile, cva6, ex_stage) and no Anvil source, so it keeps vp2's 65536-node pool.
+    *65536*|*_r20*|*supcall*|*r51r52*|*_fpb_*|*_sublet_*|*_vp1_*|*_vp2_*|*_vp2c_*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c2d2000)" \
         || bad "DTS/bitstream MISMATCH: $BITSTREAM needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
     # An unknown name BLOCKS (the lead, 2026-10-04). It used to warn, and _r20 and supcall both fell through that warn
