@@ -3116,3 +3116,21 @@ srevroot-zero-1").
    - The cells are VOID (the runner stays 1f099612), declared here.
    - **The must-fire:** the staged module's hash is 607164b9, and the banner appears.
    - **Prediction (the compiler lane's):** DRT1 16 → 0. A nonzero DRT1 means the residual or the mechanism is wrong.
+
+### sql0-csr-treeB, result (2026-10-20 01:16-01:59, board 2, tree B): srevroot is nonzero, page-aligned, in RAM and constant at every refusal, with csupctl clear, as the namespace-flush mechanism predicts
+
+Monitor c3917e8, UNGATED. The cells are VOID as declared. Result lines are in `records/sql0-csr-treeB.result-lines.txt`.
+- **At each of the 14 S/U data refusals:** RFSR 82B00000, RFSH 00000000 and RFCT 00000000. So srevroot = 0x82B00000
+  every time.
+  - It is page-aligned, inside RAM [0x80000000, 0xBC2D2000), and constant across the boot's refusals, which is one
+    context's table.
+  - csupctl reads 0, so bit 3 (table) is clear.
+  - **That is the pre-registered reading under the namespace-flush mechanism.** The trap into M flushes the namespace
+    and re-arms the slot, which is why every plain retry passes and the refusal read finds the node valid.
+  - N=1 boot. 14 refusals carry 14 DRT1, with 0 DRTX and no Oops.
+- **At each of the 21 FRTY (all at mepc 017113AC):** FRTM 82A013AC.
+  - The page offset 0x3AC equals mepc's, as any translation's must. The physical page 0x82A01000 is constant.
+  - Whether it is the CORRECT translation of mepc cannot be read from this console (no page tables). That was the
+    limit stated before the boot.
+- **Next on board 2:** the srz module's Tier 1 pair, then sql0-srz-treeB. That module zeroes srevroot after each CSRUNV
+  return, so it tests this mechanism directly: DRT1 is predicted 0.
