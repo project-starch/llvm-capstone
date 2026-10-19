@@ -16,6 +16,7 @@ def main():
     p.add_argument('--stage', type=Path, required=True, help='Contains executable gate.sh and application resources')
     p.add_argument('--timeout', type=int, default=600)
     p.add_argument('--disk-mib', type=int, default=1024)
+    p.add_argument('--memory', default='2G', help="Guest RAM, as QEMU's -m takes it")
     p.add_argument('--work', type=Path, required=True, help='New output directory')
     p.add_argument("--exact-bounds", action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept so a suite can be run both ways as a two-sided control.")
@@ -25,7 +26,7 @@ def main():
     with disk.open('wb') as f:
         f.truncate(a.disk_mib << 20)
     subprocess.run(['/sbin/mkfs.ext4', '-F', '-q', '-d', str(a.stage), str(disk)], check=True)
-    cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', '2G', '-smp', '1',
+    cmd = [str(a.qemu), '-M', 'virt-capstone', '-m', a.memory, '-smp', '1',
            '-nographic', '-monitor', 'none', '-serial', 'stdio', '-snapshot',
            '-bios', str(a.images/'fw_jump.elf'), '-kernel', str(a.images/'Image'),
            '-append', 'root=/dev/vda ro',

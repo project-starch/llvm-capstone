@@ -745,6 +745,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     struct page **pages;
     long n;
     if (!r->bytes || r->bytes > CV_MAX_REGION_BYTES ||
+        (!r->linear && r->bytes > CV_MAX_EAGER_BYTES) ||
         ((r->address | r->bytes) & (PAGE_SIZE - 1)) ||
         /* With exact bounds off the encoder quantises both edges, so an arena must be exactly
          * REPRESENTABLE. This used to demand a naturally aligned power of two, which is a much

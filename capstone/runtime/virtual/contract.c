@@ -102,15 +102,66 @@ static void vm_contract(void)
     require(old != NULL, "realloc original");
     old[0] = 33;
     errno = 0;
-    require(!realloc(old, (256UL << 20) + 1) && errno == ENOMEM && old[0] == 33,
+    require(!realloc(old, CV_MAX_REGION_BYTES + 1) && errno == ENOMEM && old[0] == 33,
             "realloc failure preserves original");
     free(old);
     puts("VIRTUAL_VM_OK protections guards requested_length unused_pages execute rollback");
+}
+/* A region above the first profile's 256 MiB, a process above its 1 GiB, both
+ * ceilings, and the release of a freed region's charge. free clears the whole
+ * payload, so only the 600 MiB region is freed; the others stay sparse until
+ * exit, where the module retires them. */
+static void vm_large_contract(void)
+{
+    size_t big = 300UL << 20, bigger = 600UL << 20, half = 1536UL << 20, last = 800UL << 20;
+    char *a = malloc(big);
+    require(a != NULL, "malloc above 256 MiB");
+    a[0] = 1; a[big - 1] = 2;
+    char *b = realloc(a, bigger);
+    require(b != NULL && b[0] == 1 && b[big - 1] == 2, "realloc keeps the data");
+    b[bigger - 1] = 3;
+    char *c = malloc(half), *d = malloc(half);
+    require(c != NULL && d != NULL, "registered VA above 1 GiB");
+    c[0] = 4; c[half - 1] = 5; d[0] = 6; d[half - 1] = 7;
+    /* 600 + 1536 + 1536 + 800 MiB is above 4 GiB, startup regions or not. */
+    errno = 0;
+    require(!malloc(last) && errno == ENOMEM, "the process's ceiling");
+    errno = 0;
+    require(!malloc(CV_MAX_REGION_BYTES + 1) && errno == ENOMEM, "the region ceiling");
+    require(b[bigger - 1] == 3 && c[half - 1] == 5 && d[half - 1] == 7, "data after the refusals");
+    /* Without the 600 MiB charge, 3072 + 800 MiB leaves 224 MiB for the
+     * startup regions: a charge that free leaked would refuse this again. */
+    free(b);
+    char *e = malloc(last);
+    require(e != NULL, "free releases the region's charge");
+    e[0] = 8; e[last - 1] = 9;
+    puts("VIRTUAL_VM_LARGE_OK region aggregate realloc release");
+}
+/* More registered mappings than the first profile's 512: every allocation
+ * above mallocng's mmap threshold is a mapping of its own. One byte of each is
+ * touched, and they are freed again. */
+static void vm_mappings_contract(void)
+{
+    enum { count = 1200 };
+    static char *held[count];
+    const size_t bytes = 140000;
+    for (unsigned i = 0; i < count; ++i) {
+        held[i] = malloc(bytes);
+        require(held[i] != NULL, "mapping above 512");
+        held[i][bytes - 1] = (char)i;
+    }
+    for (unsigned i = 0; i < count; ++i)
+        require(held[i][bytes - 1] == (char)i, "mapping data");
+    for (unsigned i = 0; i < count; ++i)
+        free(held[i]);
+    puts("VIRTUAL_VM_MAPPINGS_OK 1200");
 }
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
     if (!strcmp(mode, "vm")) { vm_contract(); return 0; }
+    if (!strcmp(mode, "vm-large")) { vm_large_contract(); return 0; }
+    if (!strcmp(mode, "vm-mappings")) { vm_mappings_contract(); return 0; }
     if (!strcmp(mode, "vm-ro-write") || !strcmp(mode, "vm-none-read") ||
         !strcmp(mode, "vm-guard") || !strcmp(mode, "vm-padding")) {
         char *p = mmap(NULL, 8193, PROT_READ | PROT_WRITE,
