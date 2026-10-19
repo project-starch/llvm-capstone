@@ -16,13 +16,13 @@
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the trigger began (ABR BEGIN; no marker at the access in an upstream reproducer)) and completed with no fault; the trigger ended with EXIT 1",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc"
+      "verdict_from": "results/2026-10-18-review/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "MISSED",
       "verdict_note": "reached (the trigger began (ABR BEGIN; no marker at the access in an upstream reproducer)) and completed with no fault; the trigger ended with EXIT 1",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools"
+      "verdict_from": "results/2026-10-18-review/virtual-nested-pools"
     },
     "cheribsd-revocation": {
       "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."
@@ -33,5 +33,9 @@
     "unicode_get_hash",
     "_PyDict_Next"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at unicode_get_hash Objects/dictobject.c:440 | _PyDict_Next Objects/dictobject.c:2895. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at unicode_get_hash Objects/dictobject.c:440 | _PyDict_Next Objects/dictobject.c:2895. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "probe": "probe-140551.py",
+  "probe_why": "upstream's reproducer prints no marker at the defective access, so the runner can only record that the trigger began. probe-140551.py builds the same confused dict and prints PROBE-140551 AT-ACCESS immediately before repr(d), the statement that performs the read, and PROBE-140551 PASSED after it. Added by the 2026-10-19 review.",
+  "nesting_measured": "NESTED. Measured on the host with probe-140551.py: under PYTHONMALLOC=malloc ASan reports heap-buffer-overflow between AT-ACCESS and PASSED; under PYTHONMALLOC=pymalloc there is no report at all and the probe reaches PASSED. negative_control.py is clean under both.",
+  "note": "COUNTED as a miss, and marked `◇`: the defect is live by the corpus's own test (it reproduces on the reference ASan build) and the measured binary nevertheless contains no out-of-bounds access. An earlier revision of this review held the row out; it is counted again from 2026-10-19, which is the conservative reading and needs no argument about where to draw the line. The defect is a type confusion: X.__eq__ calls d.clear() mid-insert, the float key 0.0 ends up in a keys object still flagged DK_IS_UNICODE, and unicode_get_hash() reads _PyASCIIObject_CAST(key)->hash. On the host that read is out of bounds and ASan says so exactly: READ of size 8, '0 bytes to the right of 24-byte region', the region allocated by PyFloat_FromDouble. On both capability targets it is NOT out of bounds, because SIZEOF_VOID_P is 16 and every object header grows with it. Read from the two target binaries' own DWARF, not assumed: sizeof(PyFloatObject) is 0x30=48 on both targets against 24 on the host, and offsetof(PyASCIIObject, hash) is 0x28=40 against 24. The field moved +16 and the object grew +24, so the 8-byte read lands 8 bytes INSIDE the object. The defect still runs and still returns a wrong value; the bounds violation does not exist in the binary under test, so no arm is being asked about one. The alternative explanation is ruled out by the patch itself: block_issue() narrows to the exact request (capstone_cap_derive(ao->arena_life, bp - ao->address, nbytes)), so a read one byte past a 24-byte block would have been rejected, as it is on case 01 at 216 bytes."
 }

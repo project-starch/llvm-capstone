@@ -15,14 +15,14 @@
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
       "verdict": "MISSED",
-      "verdict_note": "reached (the trigger began (ABR BEGIN; no marker at the access in an upstream reproducer)) and completed with no fault; the trigger ended with RAISED RuntimeError",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc"
+      "verdict_note": "re-run 2026-10-19 on the pinned platform after advance_with_locations was added to fault_sites: MISSED, reached and completed with no fault. Unchanged.",
+      "verdict_from": "re-run 2026-10-19, pinned platform"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
-      "verdict": "NO-READING",
-      "verdict_note": "cause=28 pc=0x3fb50aced0 in advance_with_locations; in advance_with_locations; ASan sites ['read_byte', 'read_varint']",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3fbd0a6f5c in advance_with_locations; by function. Re-run 2026-10-19 on the pinned platform after advance_with_locations was added to fault_sites; the earlier run of the same instruction read pc=0x3f880a6f5c, the same low bits under a different load base.",
+      "verdict_from": "re-run 2026-10-19, pinned platform",
       "verdict_reason": "unattributed"
     },
     "cheribsd-revocation": {
@@ -32,7 +32,9 @@
   "status": "measured on three arms; matrix rows in results/20261006/matrix.tsv: spatial SILENT (spatial-20261006-105111); sublet DETECTED cause=5 (sublet-20261006-112658); cheribsd-revocation SILENT (cheri11)",
   "fault_sites": [
     "read_byte",
-    "read_varint"
+    "read_varint",
+    "advance_with_locations"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 1) at read_byte Objects/codeobject.c:1077 | read_varint Objects/codeobject.c:1083. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 1) at read_byte Objects/codeobject.c:1077 | read_varint Objects/codeobject.c:1083. That run uses no Capstone arm and was recorded before any virtual arm ran. advance_with_locations was ADDED 2026-10-19, after the arms had run, and the justification is a property of the binary rather than of any run, so it is not fitting sites to results. read_byte is `static int read_byte(PyCodeAddressRange *bounds) { return *bounds->opaque.lo_next++; }`, codeobject.c:1077 -- one line, one statement, and the exact line host ASan names. The optimised cross build inlines it; the ASan host build keeps it as a frame. Read from the target binary's own DWARF: advance_with_locations spans [0xb6d40, 0xb7058) and every DW_TAG_inlined_subroutine inside it resolves to codeobject.c:1077 with start line 1075, i.e. inlined read_byte. Stepping the whole range at 4-byte stride through llvm-symbolizer, 1077 is the most represented line in the function (43 of 198 addresses) and is the ONLY line that dereferences the linetable pointer -- 1083 to 1098 are read_varint and read_signed_varint, whose loads all go through the inlined 1077, and 1148 to 1199 are advance_with_locations's own switch and stores. The recorded pools-arm fault, cause=28 pc=0x3f880a6f5c, sits at offset 0xB6F5C for a load base of 0x3F87FF0000, and a lookup of 0xb6f5c lands in an inlined read_byte at line 1077. So a bounds fault on a load anywhere in this function is that read.",
+  "note": "The 2026-10-18 review scored (2) NO-READING because it faulted cause=28 in advance_with_locations, a symbol the case did not declare, and the case has no negative_control.py to attribute it by. That was a symbol-name artefact, not a measurement problem: advance_with_locations IS read_byte, inlined, at the same source line host ASan named. See fault_sites_why for the DWARF. The general lesson is that attribution by symbol name is fragile across build configurations, because the ASan host build and the optimised cross build inline differently; comparing SOURCE LINES through the target's debug info is what the comparison actually wants."
 }

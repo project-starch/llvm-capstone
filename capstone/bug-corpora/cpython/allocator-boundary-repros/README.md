@@ -120,6 +120,136 @@ expectation pre-registered for them and how it held up are in
 [`results/20261006/README.md`](results/20261006/README.md); `probe/counts.py --check` still
 re-derives that page's tables from its matrix.
 
+## Measured 2026-10-19, case by case
+
+Bundle `results/2026-10-18-review`, on the emulator this repo pins
+(`capstone/capstone-qemu d35af47b163c`) with a compiler carrying the C-80 fix,
+against images from `ports/common/application/build-virtual.sh cpython` built
+`CPY_TEST_CAPI=1` -- an image without it fails every case
+`NO-READING:control-failed`, because both controls need `_testinternalcapi`.
+`--timeout 900`: the first attempt recorded two runner timeouts, which are
+failed measurements and not verdicts.
+
+    virtual-malloc        CAUGHT 15  MISSED 13  NO-READING 4
+    virtual-nested-pools  CAUGHT 24  MISSED  6  NO-READING 2
+    cheribsd-revocation   32 of 32 rows, and a negative-control pass in which
+                          nothing faulted
+
+**Thirteen of those cells are withdrawn by review.** A cell counts when the
+mechanism REJECTED the defective access, not when the access succeeded and the
+program faulted afterwards on what it fetched. Which code that is depends on
+the axis, and the guest's own `sicode` selftest establishes the CheriBSD pair
+on this build (`bounds si_code=1`, `revoked si_code=2`):
+
+| axis | Capstone, the mechanism | CheriBSD, the mechanism |
+|---|---|---|
+| spatial | `cause=28` `CAP_OOB` | `si_code=1` `PROT_CHERI_BOUNDS` |
+| temporal | `cause=25` `INVALID_CAP` | `si_code=2` `PROT_CHERI_TAG` (revocation clears the tag) |
+
+`cause=24` `UNEXP_OP_TYPE` -- an untagged value used where a capability was
+required -- is a consequence on either axis.
+
+| arm | withdrawn | cases |
+|---|---:|---|
+| `virtual-malloc` | 6 | 01, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`), 32 (temporal, `cause=12`, an instruction page fault -- not a capability rule at all) |
+| `virtual-nested-pools` | **0** | every one of its 26 catches carries its axis's code |
+| `cheribsd-revocation` | 7 | 01, 05, 09, 10, 14 (spatial, `si_code=2`), 31 (temporal, `si_code=2`, decided by `si_addr` -- see below), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
+
+Counting them the arms read 15 / 29, 26 / 29 and 11 / 29; withdrawn, **9 / 29,
+26 / 29 and 4 / 29**. On the **nested** rows, 22 of the 29, ③ is 0 in both
+cells and ① is 0 in the spatial one.
+
+**On the temporal axis the fault code alone cannot decide a CheriBSD cell.**
+Revocation clearing a tag and dereferencing a recycled non-capability value both
+report `si_code=2`; only on the spatial axis do the mechanism and the consequence
+carry different codes. `si_addr` is the tiebreaker, against two anchors: case
+`09`, a known consequence, faults at `0x69c7ca`, and case `21`, a known
+mechanism, at `0x426656a8`, a heap address. Case `31` re-ran at `0x5e5f06` --
+`09`'s shape -- so it is withdrawn, and with it the arena-return explanation its
+oracle offered, since that would have put the fault at the stale access on a
+heap address inside the freed block. Each case's own `note` records which fault was which and
+why, and `~/cpython-false-positive-examples/` carries the minimal C.
+
+The denominator is every defect that is live upstream and reproduces on the
+reference ASan build; `11`, `13` and `18` are the three the corpus cannot
+deliver. Four changes moved two withdrawals, recovered one reading, and put a
+caveat on two rows:
+
+* **`06` and `17` are marked `◇`: counted, and the measured binary contains
+  no out-of-bounds access anyway.** On `06`, `SIZEOF_VOID_P` is 16 on both
+  capability targets, so `sizeof(PyFloatObject)` is 48 against the host's 24 and
+  `offsetof(PyASCIIObject, hash)` is 40 against 24 -- both read from the target
+  binaries' DWARF -- and the defective read lands 8 bytes *inside* the object.
+  On `17`, all three targets sink the defective load below the length check that
+  the source puts after it, so with `inleft == 1` it never executes; the plain
+  x86-64 build at the same `-O3` does perform it, so this is instruction
+  scheduling, not a flag. Both rows are counted as misses, which is the
+  conservative reading and needs no argument about where to draw a line. Each
+  gains a probe that marks the access -- `probe-140551.py`, `probe-157325.py` --
+  because upstream's reproducers mark nothing, and `06` gains a
+  `negative_control.py`.
+* **`02`, `03` and `04` are pinned**: five repeats per arm under
+  `PYTHONHASHSEED=0`, because unpinned they moved. `02` and `03` are genuine
+  `cause=28` catches on `virtual-nested-pools` every time; `04` misses on all
+  three arms every time. Two readings disappeared under the pin -- `03`'s
+  `si_code=2` and `04`'s `cause=24` -- and both were unpinned artefacts.
+* **`16` on Sublet was `NO-READING` and is a detection, shown `D 28‖`.** It
+  had faulted `cause=28` in `advance_with_locations`, a symbol the case did not
+  declare. That symbol is `read_byte` inlined: `read_byte` is one statement,
+  `return *bounds->opaque.lo_next++;` at `codeobject.c:1077`, the exact line
+  host ASan names, and the target binary's DWARF shows every
+  `DW_TAG_inlined_subroutine` in `advance_with_locations` resolving to that
+  line, with 1077 the only line in the function that dereferences the linetable
+  pointer. `advance_with_locations` was added to `fault_sites` with that written
+  into `fault_sites_why`, and the case was **re-run** rather than re-scored, so
+  the verdict is the judge's. Attribution by symbol name is fragile across build
+  configurations -- the ASan host build and the optimised cross build inline
+  differently -- and the source line is what the comparison wants.
+* **`08` on CheriBSD is restored to a detection, shown `D 2†`.** Its
+  withdrawal had been reasoned from size-class rounding, which cannot absorb
+  `READ 1048576` out of an 8193-byte region. Re-run in the guest with only the
+  claimed length varied: `malloc(8193)` gets a capability of length 10240, so
+  10240 is the last length that does not fault, 10241 through 24576 fault
+  `si_code=1` PROT_CHERI_BOUNDS, and 32768 upward fault `si_code=2`
+  PROT_CHERI_TAG -- the flip is exactly where `tools/cheribsd/capbounds` finds
+  this block's tag going. Every fault lands at one of two addresses 118 bytes
+  apart, so the copy is stopped at the object's edge whatever is claimed. Past
+  the representable range the arithmetic clears the tag and the same rejection
+  arrives under the tag code, so **`si_code=2` is the spatial mechanism here**.
+  A capability system has three regimes, not two.
+
+**The function name cannot make this call, which is why the code has to.**
+Every withdrawn fault resolves to the case's declared `fault_sites`, because
+the defective read and the dereference of what it returned are commonly two
+lines of one function -- `set_dealloc` reads `entry->key` at `setobject.c:505`
+and dereferences it at `:507`. Disassembled at the faulting pc, the two are
+different instructions: `ldc a0, 0x0(s3)`, the capability load of the entry,
+against `ld a1, 0x0(a0)` at `address=0x7`, a plain load through what that
+returned.
+
+**`tools/verdicts.py` could enforce the Capstone half automatically.** Its
+optional `catch_causes` key, which SQLite's two configurations declare as
+`[25, 28]`, would score a `cause=24` fault MISSED. It is not declared here
+only because this branch is cut from `dev`, where that key does not exist yet;
+`virtual-cpython` and `virtual-cpython-pools` are used by this corpus alone, so
+declaring it is safe as soon as the key lands.
+
+### Two cells that moved for a reason worth recording
+
+**Case 02 and case 04 are content-dependent.** 02 was `D 5` on the pools arm in
+`results/2026-10-10-sublet-isa` and is MISSED here; 04 was MISSED in the first
+run of 2026-10-18 and `cause=24` in the re-run, from the same image and the same
+trigger. `_copy_characters` copies a length taken from the field the overread
+fetched, so whether the copy leaves the object depends on what lies past it --
+spaces in one run, `0xff` bytes in another. A cell that turns on the contents of
+neighbouring memory is not a property of the mechanism, and neither reading
+should be presented as one.
+
+**Case 16's fault is real and unattributable.** The pools arm faults `cause=28`
+in `advance_with_locations`, which is not one of the ASan sites its `case.json`
+declares (`read_byte`), so the judge returns NO-READING rather than a catch.
+Naming the site after the run would fit the instrument to the reading.
+
 ## Fidelity, stated as a limitation
 
 The triggers are upstream reproducers driven through the real interpreter, not

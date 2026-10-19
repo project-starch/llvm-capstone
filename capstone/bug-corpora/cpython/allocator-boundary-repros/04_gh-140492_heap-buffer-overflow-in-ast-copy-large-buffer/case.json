@@ -15,14 +15,14 @@
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3fa31b0954 in _copy_characters; by function: _copy_characters is where host ASan reported the access",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc"
+      "verdict_note": "cause=24 pc=0x3f7e002654 in memcpy; by control: negative_control.py (the same traffic, the offending access made valid) ran to its end on this image without a fault",
+      "verdict_from": "results/2026-10-18-review/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
-      "verdict": "CAUGHT",
-      "verdict_note": "cause=28 pc=0x3fae1b0ba4 in _copy_characters; by function: _copy_characters is where host ASan reported the access",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools"
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger began (ABR BEGIN; no marker at the access in an upstream reproducer)) and completed with no fault; the trigger ended with EXIT 1",
+      "verdict_from": "results/2026-10-18-review/virtual-nested-pools"
     },
     "cheribsd-revocation": {
       "oracle": "the arm does not separate this case, and the admissible outcomes are stated rather than one of them predicted: si_code=1 (PROT_CHERI_BOUNDS) where the access goes beyond the bounds the allocator actually set, si_code=2 (PROT_CHERI_TAG) where it instead lands in memory a revocation sweep has already reclaimed, or completion where it stays inside the bounds the allocator set -- malloc may bound a capability to a rounded size class rather than the requested length. The mechanism is live and the run proves it rather than assuming it: mech-control S_OOB faults with si_code=1. Any other si_code would falsify this."
@@ -33,5 +33,15 @@
   "fault_sites": [
     "_copy_characters"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 4) at _copy_characters Objects/unicodeobject.c:1606. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 4) at _copy_characters Objects/unicodeobject.c:1606. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "Pinned measurement supersedes the single unpinned run. All three arms are silent five times out of five, and this is a genuine MISS, not a false positive and not an unanswerable question. (1)'s earlier `cause=24` reading does NOT reproduce when pinned and is withdrawn as an unpinned artefact; an earlier revision of this note claimed (2) faults cause=28 on `lh a6, 0x8(a2)`, which is wrong and is retracted -- (2) MISSES. Why all three miss, measured: the object is 524321 bytes, so (a) it is above SMALL_REQUEST_THRESHOLD (512) and Sublet, which lives only inside pymalloc, is never called; (b) musl mallocng takes its mmap path for n >= MMAP_THRESHOLD (131052) and attaches the capability over the PAGE-ROUNDED mapping -- needed = n + IB + UNIT = 524341, (needed+4095)&~4095 = 528384, about 4 KB of live slack past the object. enframe()'s __capstone_malloc_slot_key(slot, p, n) does not narrow it: it returns void and takes p by value. The case is NON-NESTED (the ASan report survives PYTHONMALLOC=pymalloc). See ~/cpython-false-positive-examples/03-the-bound-grew-with-the-object.c.",
+  "pinned_measurement": {
+    "method": "five repeats on each of the three arms under PYTHONHASHSEED=0, on the pinned platform (capstone-qemu d35af47b, VM state /tmp/capstone/vm-pinned). Added because unpinned this case did not hold still. The virtual arms ran their configuration's controls before every repeat and the CheriBSD arm ran its si_code self-test before every repeat (bounds si_code=1, revoked si_code=2), so a silent arm is live and silent, not absent.",
+    "arms": {
+      "virtual-malloc": "MISSED x5",
+      "virtual-nested-pools": "MISSED x5",
+      "cheribsd-revocation": "no fault x5 (rc=1, ABR EXIT 1)"
+    }
+  },
+  "target_access_verified": "Checked 2026-10-19, because 04 is one of three all-silent rows and its defect is the same type confusion as 02 and 03 -- a bytes object read through the PyUnicode layout, so the copy's length comes out of the wrong field -- and a field read at the wrong offset is the kind of thing a changed ABI can neutralise, as it did on case 06. It does not here. In the target binary's DWARF, PyBytesObject.ob_size sits at 0x20 and PyASCIIObject.length sits at 0x20: the two offsets COINCIDE on purecap as they do on x86-64, so the misread length is ob_size either way, 524288 both times, and the copy runs with it. The copy cannot be scheduled away, being what the function exists to do, and 02 and 03 -- same family, same code path, smaller objects -- fault cause=28 inside memcpy on the pools arm, which shows that path executing on the target. 04 is a genuine miss."
 }

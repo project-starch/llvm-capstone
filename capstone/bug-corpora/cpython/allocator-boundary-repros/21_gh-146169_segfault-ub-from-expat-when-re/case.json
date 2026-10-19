@@ -14,17 +14,15 @@
   "arms": {
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
-      "verdict": "NO-READING",
-      "verdict_note": "cause=28 pc=0x3f800f35e0 in PyFunction_NewWithQualName; in PyFunction_NewWithQualName; ASan sites ['little2_toUtf8']",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc",
-      "verdict_reason": "unattributed"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3fab6f5f7c in little2_toUtf8; by function: little2_toUtf8 is where host ASan reported the access",
+      "verdict_from": "results/2026-10-18-review/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
-      "verdict": "NO-READING",
-      "verdict_note": "cause=28 pc=0x3f860f35e0 in PyFunction_NewWithQualName; in PyFunction_NewWithQualName; ASan sites ['little2_toUtf8']",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools",
-      "verdict_reason": "unattributed"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f976f61e8 in little2_toUtf8; by function: little2_toUtf8 is where host ASan reported the access",
+      "verdict_from": "results/2026-10-18-review/virtual-nested-pools"
     },
     "cheribsd-revocation": {
       "oracle": "completion is admissible and is the expected outcome under this guest's configuration: the run records security.cheri.runtime_revocation_every_free_default as 0 and runtime_revocation_async as 1, so revocation is sweep-based and asynchronous, and a stale access reached before the next sweep still holds a tagged capability. Where a sweep has run first the access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). A bounds fault would falsify this."
@@ -34,5 +32,6 @@
   "fault_sites": [
     "little2_toUtf8"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 1) at little2_toUtf8 Modules/expat/xmltok.c:723. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 1) at little2_toUtf8 Modules/expat/xmltok.c:723. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "All three arms genuinely detect, and 21 is the only temporal case where that happens. (1) and (2) fault cause=25 INVALID_CAP in little2_toUtf8, the function host ASan names. (3) faults SIGPROT si_code=2 PROT_CHERI_TAG at si_addr=0x426656a8, which on the TEMPORAL axis is the mechanism, not a consequence: revocation clears the tag, and the guest's own sicode selftest prints `revoked si_code=2` for its revoked control. The process died at the fault, which is why the quarantine probe's exit line is absent from the row. Why the sweep intervened here and not on 19, 20 or ten other temporal cases: CheriBSD's revocation is sweep-based (security.cheri.runtime_revocation_every_free_default is 0, runtime_revocation_async is 1), and the sweep trigger in CheriBSD's own MRS (lib/libc/stdlib/malloc/mrs/mrs.c) is `allocated_size >= MIN_REVOKE_HEAP_SIZE` (8 MiB) and then `quarantine->size * 4 >= allocated_size`, i.e. a quarter of the live heap. This case's freed object is 524288 bytes -- the largest in the corpus -- so one free crosses that fraction by itself and the flush is immediate. Every other temporal row frees between 2 and 4355 bytes and is missed, except 31, where the free CheriBSD saw was a returned 1 MiB pymalloc arena rather than the 32-byte block. See results caveat 22."
 }
