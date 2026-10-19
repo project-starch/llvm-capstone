@@ -1690,3 +1690,22 @@ runs only if the runner is 1f099612d70a9576 and the QEMU CHECK reads PASS for it
 - **When:** after the pg chain ends (PGF DONE, STOP or HOLD in `t3-run-pgf4.out`).
 - **Records:** `records/sql0-rev2c.board.txt` and `postgres/sql-repros/results/2026-10-19-vp2-rev2/`.
 - UNGATED (PREFLIGHT=0).
+
+### pgc, pgm0 and pgm1 on the workaround module, results (2026-10-19 11:58-12:24): 15 of 15 cells as predicted
+
+- **The arms,** as pre-registered (kit bkit7-fix6t, module d71f207a3af5546b; firmware 7a2ceb535ace2a18, 19,565,064 B):
+
+  | Arm | Result | Boot |
+  |---|---|---|
+  | pgc-fix6b | CAUGHT 5, 5 of 5 cells the same | 11:58-12:07 |
+  | pgm0-fix6b | MISSED 5, 5 of 5 | 12:07-12:15 |
+  | pgm1-fix6b | CAUGHT 5, 5 of 5 | 12:15-12:24 |
+
+- **The controls** fault in every boot.
+- **Against the same arms on module 3005ed52** (`records/pgc.board.txt`, `pgm0`, `pgm1`): the result lines are
+  identical, cell for cell, and so are the comparison lines. Only the boot times, the stage bytes and the firmware
+  hash differ. So S-27 never reached these arms, as their 3005ed52 reading already implied.
+- **Bundles:** `postgres/c-repros/results/2026-10-18-vp2-rdx0/vp2-malloc`, and `postgres/mmgr-repros/results/2026-10-18-vp2-rdx0/`
+  `vp2-malloc` and `vp2-pg-pools`.
+- **What follows:** sql0-rev2c woke on PGF DONE at 12:24 and stopped on its own gate, "no QEMU PASS for runner
+  1f099612d70a9576". The QEMU check is still queued on the lock. It is re-launched when the check reads PASS.
