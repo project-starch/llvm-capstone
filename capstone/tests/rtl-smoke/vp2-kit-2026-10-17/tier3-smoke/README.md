@@ -3237,3 +3237,25 @@ Result lines are in `records/sql0-csr-drt2.result-lines.txt`. UNGATED.
   - Both are "possibly variance" until a set-valued sql0 record exists.
 - **The lesson,** recorded: a must-fire written as an absence must be run against the PASSING record first. This one
   would have failed on it.
+
+**sql0-drt2, the runtime lane's ruling (2026-10-20, after the result): the bundle is FILED, with its must-fire narrowed
+POST-HOC.**
+- **The reasons, as ruled:**
+  - (a) the over-broad wording was the semantics owner's;
+  - (b) the event the gate exists to catch is objectively absent: 0 pg_notify FATALs in 21 sessions, the positive
+    control answered, both controls faulting;
+  - (c) the line that tripped it is part of the recorded environment, not a board difference: the two zoneinfo LOGs
+    appear identically in QEMU's r2, r3a and r3b.
+- **The bundle:** `postgres/sql-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`, and the board record
+  `records/sql0-drt2.board.txt`.
+- **The cells are information against the single record:** 7 of 9. 03 and 07 are marked "possibly variance, out of
+  denominator (not reached)", and QEMU's A arm also dropped 03. They become verdicts only against the set-valued sql0
+  record the compiler lane is producing.
+- **The second bitstream for the srevroot reading:** sql0-csr on tree A (16 refusals under srevroot 0x82B00000) stands
+  beside sql0-csr-treeB's.
+
+**The gate is fixed for the next run.** `tier3-sql-arm-rev2j.sh` is now d14011e172b29302, and its
+must-fire matches a FATAL only: `FATAL: .*could not open directory`. Both controls were run on real transcripts:
+- the passing QEMU record r2 reads 0, so it must pass;
+- sql0-drt, with its 21 real pg_notify FATALs, reads 21, so it must stop;
+- sql0-drt2 itself reads 0.
