@@ -4030,3 +4030,37 @@ diag31 left one gap: "checked against the shifted bounds" and "not checked at al
   catch this. The values above are read from the raw lines.
 - **Not covered:** stores, and the chained-excursion re-encode, which the compiler lane infers from source and has not
   measured.
+
+### alias-store, pre-registered (2026-10-20 06:3x, before its boot): board 1, tree A, the store twin
+
+The compiler lane's store twin (lane alias-load 6c8f59560766, PREREGISTRATION-store.md), for the auditor's open point.
+The RTL's check covers loads and stores alike (`lsu_ctrl.fu inside {LOAD, STORE}`). If stores alias, a far overrun
+silently WRITES another object.
+- **The image:** alias-store.dom b68b3d2586a91d07, with alias-load's child and arena and the same markers (0xa5 at the
+  alias target, 0x5a at the outside target).
+  - Each process does one `sb a0, 0(s5)`, with s5 = cincoffset(child, offset), then reads the target back through
+    the arena's own in-bounds capability.
+  - The arms and their order are alias-load's.
+- **The pipeline:** `board-tier12/astore/`, the alias-load pipeline with the names, image and hash changed.
+  - astore-prep.sh fefe6022332bf585, b0-bake-astore.sh 1a52322356bfaa27,
+    vmrun-astore.case 1d0ac026b4d45064;
+  - image-astore d26fbc4915cb47a8, with the image checked by sha256 in rootfs.cpio;
+  - firmware a53240c76b0a162f, dom_stack gate PASS.
+  - The runner is run-astore-b1.sh 67392c3831972a71.
+- **The parser:** this time its format was taken from the image's real output, the QEMU run's lines
+  (`AS_READBACK off=<off> value=N`, `AS_STORED off=<off>`). It was controlled on those real lines, reading inb's
+  store and readback 60 and alias's QEMU fault. That is alias-load's slip, not repeated.
+- **QEMU control** (qkit7-rev2): inb reads back 60. alias (before=165), outside (before=90) and past each fault with
+  cause 28 at address = cursor, with no AS_STORED.
+
+**The board prediction (the compiler lane's):**
+- inb: readback 60, then AS_DONE;
+- alias: decoded child+0x10000 : child+0x14ec0, before=165, then AS_STORED and AS_READBACK value=60, then AS_DONE. The
+  store lands 64 KiB away and overwrites the marker;
+- outside: decoded shifted, before=90, cause 28 at address = cursor, no AS_STORED;
+- past: decoded exact, cause 28.
+
+**What decides:**
+- alias reads back 60 while outside faults: stores alias like loads, so an overrun past one span writes without a trap;
+- alias faulting: stores are checked differently;
+- outside completing: out-of-window stores are not checked.
