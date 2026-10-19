@@ -19,6 +19,8 @@ main() {
       var) want=883f3af2b9964251; rungs="b0-stats vm-contract";;
       cur) want=fafbc0e38fb54c60; rungs="b0-stats vm-contract";;
       mir) want=1a2244dfa19f9d40; rungs="b0-stats b0-hello b0-stats2 vm-contract";;
+      cur-esc) want=9e4924294f94eafe; rungs="b0-stats vm-contract";;   # firming arm 1: cur with diag_escapes=1 (image 3537c881f1020464)
+      var1k) want=2406f5a523ca00e4; rungs="b0-stats vm-contract";;     # firming arm 2: var's boot write with 1,000 (image 89baf46451448872)
       *) echo "S26 STOP: unknown arm $a"; return 2;;
     esac
     fw=$X/fw-s26-$a/fw_payload.bin D=${S26R_OUT:-$X}/run-$a O=$X/oracles-$a

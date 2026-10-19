@@ -11,6 +11,11 @@ quantum 0 retires nothing and escapes kind 1, bit-identical for budgets 40 to 1,
 - mir counts only if b0-hello returned 0 (b0-hello's process-ABI STEP ran with 2,000,000): otherwise VOID."""
 import re, sys
 t = open(sys.argv[1], errors="replace").read().replace("\r", ""); arm = sys.argv[2]
+# The firming arms (pre-registered 2026-10-19): cur-esc is cur with diag_escapes=1, judged as cur plus the escape lines;
+# var1k is var's boot write with 1,000, predicted (the RTL lane's tree-A bracket) to SPIN as cur does, with QNT0 000003E8.
+esc = arm == "cur-esc"; QNT = {"var": "001E8480", "var1k": "000003E8"}
+if arm in ("cur-esc", "var1k"): base = "cur"
+else: base = arm
 def rung(r):
     m = re.findall(rf"^RESULT {r} retval=(-?\d+)", t, re.M); return m[-1] if m else None
 out, bad = [], 0
@@ -28,7 +33,7 @@ b = raw.rfind("OpenSBI v")
 q0 = re.findall(r"QNT0:([0-9A-F]{8})", raw[b:]) if b >= 0 else []
 q1 = re.findall(r"QNT1:([0-9A-F]{8})", t)
 if len(q0) != 1: print(f"NO DATA: {len(q0)} QNT0 lines in this boot's segment of board-raw.txt (want 1)"); sys.exit(2)
-say(q0 == [{"var": "001E8480"}.get(arm, "00000000")], f"QNT0 {q0}")
+say(q0 == [QNT.get(arm, "00000000")], f"QNT0 {q0}")
 if arm == "mir":
     say(len(q1) >= 2 and set(q1) == {"000003E8"}, f"QNT1 {q1} (want 000003E8 at each b0-stats, at least 2)")
     if rung("b0-hello") != "0": print("\n".join(out)); print(f"VOID: b0-hello read {rung('b0-hello')}, not 0"); sys.exit(2)
@@ -37,6 +42,10 @@ else:
 vc = rung("vm-contract")
 if vc is None: print("\n".join(out)); print("NO DATA: no vm-contract RESULT (wedge or cut)"); sys.exit(2)
 ref = {w: int(v) for v, w in re.findall(r"^@@PARAM resume_satp_refreshes=(\d+):(t30|t90|t150)$", t, re.M)}
+if esc:
+    e = re.findall(r"capstone_vm: escape \d+ action \d+ event \d+ frame kind (0x[0-9a-f]+) cause (0x[0-9a-f]+)", t)
+    say(len(e) >= 1 and all(k == "0x1" and c == "0x0" for k, c in e),
+        f"escape prints {len(e)}, kinds/causes {sorted(set(e))} (want every one kind 0x1 cause 0x0, at least one)")
 if arm == "var":
     say(vc == "0", f"vm-contract retval {vc} (want 0, identity branch)")
     say("VIRTUAL_APPLICATION_OK" in t and re.search(r"domain fault cause=25 ", t) is not None, "identity branch lines present")
