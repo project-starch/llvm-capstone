@@ -3061,3 +3061,28 @@ Result lines are in `records/cpy-lt0.result-lines.txt`. UNGATED.
 - **S-23 on this boot:** DRT1 14 (all at 800A22C8 = mod_node_page_state+0x40), 0 DRTX, no Oops.
 - **Status:** a board-only finding, reported to the compiler and runtime lanes for attribution. These cells are not a
   verdict on the corpus until it is explained.
+
+### cpython's pc=0 faults: a monitor pair, pre-registered (2026-10-20 01:2x, before its boots): board 1 after sql0-drt2
+
+`tier3-cpy-pair.sh` cd71fa495760776c. The compiler lane's attribution of the 21
+`domain fault cause=12 pc=0x0` lines:
+- each comes right after the delegate served a read (last=0x3f);
+- each comes after the trigger began;
+- 8 of the 11 faulting control steps fault 394-395 console lines in;
+- none appears in any QEMU record or any other board transcript.
+The confound is that cpy-lt0 is the only boot on bkit7-rev2xnD. So: two cold boots with the same stage (image, closure,
+runner, pin), `--only 03,17,23`.
+- **cpyp-D:** kit bkit7-rev2xnD, the retry monitor line (capstone-sbi f13dbc5, wrapper aab63d5, the boot-quantum and S-23
+  defines).
+- **cpyp-A:** kit bkit7-rev2xnA, the pre-S-23 monitor line (capstone-sbi 007d81d, wrapper 1269c77, without those
+  defines). The variable is the WHOLE monitor line: commit, wrapper and defines. The boot quantum cannot matter, since
+  b0-hello's STEP precedes vbatch in both.
+
+**Readings:** per step, the count of `domain fault cause=12 pc=0x0`, plus DRT1/DRTX/Oops.
+- **Predicted for cpyp-D:** pc=0 in 17-control and 23-control as in cpy-lt0, and 03 clean. This repeat tests whether
+  the faults are deterministic.
+- **cpyp-A, the discriminator:**
+  - pc=0 absent where cpyp-D has it: points at the retry monitor line;
+  - pc=0 present: it is cpython on this board/bitstream (a tree B pair would follow);
+  - **a kernel panic on S-23's data face** (expected at a refusal: there is no retry on 007d81d) ends the boot. Every
+    step after it is NO DATA, not a reading. A pc=0 fault before the first refusal still counts.
