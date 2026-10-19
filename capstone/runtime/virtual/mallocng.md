@@ -113,7 +113,7 @@ swap/migration and multi-hart execution are not added by this allocator port.
 
 ## Processor storage contract
 
-ABI v5 requires QEMU's explicit `x-capstone-exact-bounds=true` profile. The
+ABI v6 runs on QEMU's default profile (option iii). The
 launcher checks its advertised bit before starting the image. Version 2/3
 images remain accepted; the withdrawn native-heap version 4 is rejected.
 

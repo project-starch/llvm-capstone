@@ -25,6 +25,9 @@ def main():
     for name in ('adapter', 'application', 'noreturn', 'native', 'qemu', 'images', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=600)
+    p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
+                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
+                        "it is kept so a suite can be run both ways as a two-sided control.")
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
@@ -55,8 +58,8 @@ echo VIRTUAL_STAGED_DONE
 ''')
     subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                     '--images', str(a.images.resolve()), '--stage', str(stage.resolve()),
-                    '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout),
-                    '--exact-bounds'])
+                    '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout)
+                    ] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']))
     serial = a.work / 'guest/serial.log'
     log = serial.read_text(errors='replace').replace('\r', '') if serial.exists() else ''
     arms, arm = {'native': {}, 'virtual': {}}, None

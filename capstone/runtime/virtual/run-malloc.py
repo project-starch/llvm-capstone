@@ -18,12 +18,28 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def image_abi(path):
+    """Read the ABI off the image instead of asserting it. A hard-coded 5 here reported "ABI 5"
+    for every v6 run -- a printed constant that reads exactly like a measurement."""
+    data = open(path, 'rb').read()
+    found = [v for v, m in ((5, b'CPONVVM5'), (6, b'CPONVVM6')) if data.count(m) == 1]
+    if len(found) != 1:
+        raise SystemExit(f'{path}: cannot identify the VM ABI magic (matched {found})')
+    return found[0]
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__)
     for name in ('adapter', 'application', 'native', 'qemu', 'images', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=1800)
     p.add_argument('--skip-churn', action='store_true')
+    # vp2 caps the flat lifetime table at 65536 records (a 16-bit node index), so 70000 cannot be
+    # the count everywhere. Default unchanged for QEMU; silicon and its QEMU prediction run 60000.
+    p.add_argument('--malloc-count', type=int, default=70000)
+    p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
+                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
+                        "it is kept so a suite can be run both ways as a two-sided control.")
     a = p.parse_args()
     nm = Path(os.environ.get('CAPSTONE_LLVM_BIN', '')) / 'llvm-nm'
     symbols = {name: int(value, 16) for value, _, name in
@@ -50,6 +66,7 @@ def main():
     gate = '''#!/bin/sh
 cd /mnt/vm || exit 1
 dmesg -n 1
+export CAPSTONE_MALLOC_COUNT=__MALLOC_COUNT__
 ./native-malloc ok
 echo MALLOC_NATIVE_EXIT:$?
 insmod capstone_vm.ko || exit 1
@@ -60,7 +77,13 @@ echo MALLOC_POPULATION_EXIT:$?
 '''
     if not a.skip_churn:
         gate += 'CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom churn\necho MALLOC_CHURN_EXIT:$?\n'
-    gate += '''CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot
+    gate += '''CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom align-probe
+echo MALLOC_ALIGN_PROBE_EXIT:$?
+CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom predicate
+echo MALLOC_PREDICATE_EXIT:$?
+CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom remap-align
+echo MALLOC_REMAP_ALIGN_EXIT:$?
+CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot
 echo MALLOC_HOT_EXIT:$?
 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot-service-control
 echo MALLOC_HOT_CONTROL_EXIT:$?
@@ -72,20 +95,36 @@ rmmod capstone_vm
 echo MALLOC_CLEANUP:$?
 echo VIRTUAL_STAGED_DONE
 '''
+    gate = gate.replace('__MALLOC_COUNT__', str(a.malloc_count))
+    assert '__MALLOC_COUNT__' not in gate, 'malloc count not substituted'
     (stage / 'gate.sh').write_text(gate)
     run = subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                           '--images', str(a.images.resolve()), '--stage', str(stage.resolve()),
-                          '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout),
-                          '--exact-bounds'])
+                          '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout)
+                          ] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']))
     log = (a.work / 'guest/serial.log').read_text(errors='replace').replace('\r', '')
     checks = {
         'native_reference': 'MALLOC_NATIVE_EXIT:0\n' in log,
         'basic_inplace_mremap_failure': 'MALLOC_BASIC_EXIT:0\n' in log,
         'nonlinear_and_linear_tag_transfer': log.count('MALLOC_TAG_COPY_OK\n') == 2,
-        '70000_simultaneously_live_objects': 'MALLOC_POPULATION_OK\n' in log and 'MALLOC_POPULATION_EXIT:0\n' in log,
+        'simultaneously_live_objects': ('MALLOC_POPULATION_OK\n' in log and
+                                        'MALLOC_POPULATION_EXIT:0\n' in log),
+        # the domain prints the count it used; a missing line means the run is not comparable
+        'malloc_count_reported': ('MALLOC_COUNT_USED %d' % a.malloc_count) in log,
         'cleanup': run.returncode == 0 and 'MALLOC_CLEANUP:0\n' in log,
         'no_kernel_fault': 'Kernel panic' not in log and 'Oops' not in log,
+        # Option (iii): a grow across the 4 MiB granule boundary keeps its contents whichever path
+        # it took, and the count of remaps refused for misalignment is RECORDED rather than
+        # asserted -- mremap returns page-aligned addresses, so the copy is the expected path and
+        # the number is the input to whether an aligned-remap ABI change is worth making.
+        'remap_align_contents_survive': 'MALLOC_REMAP_ALIGN_EXIT:0\n' in log,
+        # A READING, not a pass/fail: both outcomes are informative, so the check only asserts
+        # that the arm reported at all. Reading it as a verdict would be the error it exists to fix.
+        'predicate_arms_reported': (log.count('MALLOC_PRED pow2_above=') == 1 and
+                                    log.count('MALLOC_PRED nonpow2_below=') == 1),
     }
+    remap_counts = [int(n) for n in re.findall(r'MALLOC_REMAP_UNALIGNED (\d+)', log)]
+    checks['remap_align_reported'] = len(remap_counts) == 1
     if not a.skip_churn:
         checks['200000_lifetimes'] = 'MALLOC_CHURN_OK\n' in log and 'MALLOC_CHURN_EXIT:0\n' in log
         checks['collection_exercised'] = any(int(n) > 0 for n in re.findall(r'collections=(\d+)', log))
@@ -113,7 +152,11 @@ echo VIRTUAL_STAGED_DONE
                                                 'MALLOC_HOT_CONTROL_EXIT:0\n' in log)
     checks['real_linux_mremap_growth_and_shrink'] = log.count('CAPSTONE_VM_REMAP_OK') >= 2
     record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
-                  virtual_vm_abi=5, harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
+                  virtual_vm_abi=image_abi(a.application), harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
+                  # The REQUESTED count is not a result. Report it only when the domain
+                  # echoed it back, so a collapsed run cannot publish a figure it never reached.
+                  malloc_count=(a.malloc_count if checks['malloc_count_reported'] else None),
+                  remap_unaligned_fallbacks=(remap_counts[0] if remap_counts else None),
                   exact_bounds='physical shadow metadata; QEMU prototype', skipped=['churn'] if a.skip_churn else [],
                   input_sha256={name: sha(path) for name, path in inputs.items()},
                   gate_sha256=hashlib.sha256(gate.encode()).hexdigest(), runner_sha256=sha(Path(__file__)))

@@ -17,7 +17,8 @@ def main():
     p.add_argument('--timeout', type=int, default=600)
     p.add_argument('--disk-mib', type=int, default=1024)
     p.add_argument('--work', type=Path, required=True, help='New output directory')
-    p.add_argument("--exact-bounds", action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument("--exact-bounds", action=argparse.BooleanOptionalAction, default=False,
+                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept so a suite can be run both ways as a two-sided control.")
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     disk = a.work / 'stage.ext4'
@@ -35,6 +36,22 @@ def main():
            'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true']
     if a.exact_bounds:
         cmd[-1] += ",x-capstone-exact-bounds=true"
+    # CAPSTONE_QEMU_CPU_EXTRA appends to the -cpu string, so a reference pin differing only in a CPU
+    # property (svadu=false, say) needs no wrapper script. A wrapper was the alternative and it is
+    # worse for the RECORD: virtualvm.platform() hashes kit/qemu-system-riscv64, so a wrapper makes
+    # the recorded "qemu" hash the wrapper's rather than the binary's, and a reader cannot tell
+    # which QEMU produced the cells. Empty by default, so an unset variable cannot change a
+    # recorded run -- checked by building the string both ways.
+    #
+    # The resolved string is written into the work directory as well as printed, because a flag
+    # that is not in the artifacts is not evidence: platform() records file hashes and never the
+    # command line, so without cpu.txt a reader cannot tell svadu=false from svadu default.
+    cpu_extra = os.environ.get('CAPSTONE_QEMU_CPU_EXTRA', '').strip()
+    if cpu_extra:
+        cmd[-1] += "," + cpu_extra.lstrip(',')
+    a.work.mkdir(parents=True, exist_ok=True)
+    (a.work / 'cpu.txt').write_text(cmd[-1] + "\n")
+    print(f"run-staged: -cpu {cmd[-1]}", flush=True)
     completed = login = sent = False
     out = b''
     with open(os.environ['CAPSTONE_QEMU_LOCK'], 'a+b') as lock, (a.work/'serial.log').open('wb') as log:

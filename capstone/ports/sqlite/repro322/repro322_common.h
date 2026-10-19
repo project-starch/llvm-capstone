@@ -64,7 +64,18 @@ static int run_case(void);
 #define SQLITE_HEAP_SIZE (1024U * 1024U)
 #endif
 #ifdef REPRO322_VIRTUAL_MEMSYS5
-static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+/* The granule macros below are the freestanding branch's too, which includes this header at its
+ * own top; this branch needs it as well, and build-virtual.py passes the runtime include for both
+ * arms. Without it the first use expands to an undeclared call and the case does not compile. */
+#include <capstone/representable.h>
+/* Option (iii): memsys5 derives mem5.pHeap and mem5.zPool over the WHOLE arena, so the arena's
+ * own base must be a multiple of its bounds granule -- 2048 for 1 MiB, 512 for 256 KiB -- or the
+ * compressed encoder truncates it downward and the pool gains authority below itself. aligned(16)
+ * was enough when QEMU kept exact shadow bounds; it is not under the compact profile. */
+CAPSTONE_REPR_ASSERT_POW2(SQLITE_HEAP_SIZE, "SQLITE_HEAP_SIZE");
+static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]
+    __attribute__((aligned(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
+                           ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE))));
 #endif
 
 static int repro_init(void) {
@@ -143,12 +154,20 @@ static int repro_init(void) {
 #include "sqlite3.h"
 #include "sqlite_hostcall.h"
 
+#include <capstone/representable.h>
 #define CAPSTONE_DPI_REGION_SHARE 1U
 
 #ifndef SQLITE_HEAP_SIZE
 #define SQLITE_HEAP_SIZE (1024U * 1024U)
 #endif
-static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+/* Option (iii): memsys5 derives mem5.pHeap and mem5.zPool over the WHOLE arena, so the arena's
+ * own base must be a multiple of its bounds granule -- 2048 for 1 MiB, 512 for 256 KiB -- or the
+ * compressed encoder truncates it downward and the pool gains authority below itself. aligned(16)
+ * was enough when QEMU kept exact shadow bounds; it is not under the compact profile. */
+CAPSTONE_REPR_ASSERT_POW2(SQLITE_HEAP_SIZE, "SQLITE_HEAP_SIZE");
+static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]
+    __attribute__((aligned(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
+                           ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE))));
 
 
 static volatile struct sqlite_hostcall_v0 *hostcall_metadata;
