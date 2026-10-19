@@ -70,11 +70,11 @@
       "verdict_from": "results/2026-10-19-vp2c-treeA/vp2-malloc"
     },
     "vp2-nested-pools": {
+      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc",
       "verdict": "NO-READING",
-      "verdict_note": "uaf-jumbo: expected fault, observed none",
-      "verdict_from": "results/2026-10-19-vp2c-treeA/vp2-nested-pools",
-      "verdict_reason": "control-failed",
-      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc"
+      "verdict_note": "cause=25 pc=0x3f99f99294 in capstone_cap_revoke_child; in capstone_cap_revoke_child, not a probe or ['wmem_block_sublet_free', 'wmem_block_sublet_release']",
+      "verdict_from": "results/2026-10-19-vp2c-treeB/vp2-nested-pools-q15",
+      "verdict_reason": "unattributed"
     }
   }
 }

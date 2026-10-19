@@ -1,0 +1,27 @@
+{
+  "arm": "vp2-nested-pools",
+  "cases": 23,
+  "configuration": "virtual-wmem-pools",
+  "contract": "verdicts-v1",
+  "corpus": "wireshark/wmem-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "3f8dbadd9fad3a0e6437ac5259f962535c73ce9d06e18c0baadba21247c22af4",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "a74515fe08f94613631bb5e0d4159f0fd20e3ceb96e42991f33e5f0f7791fe22",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "39d8492d5c18216b6271a136e51a56e60e8f711f1dd0be3ce2d2e60712c81fb8",
+    "monitor": "f13dbc5",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY -DCAPSTONE_QUANTUM_PRINT -DCAPSTONE_BOOT_QUANTUM=2000000 -DCAPSTONE_S23_REFUSAL_READ -DCAPSTONE_S23_DATA_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2c_8de3c48cf",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "780a0975142e2221bd0e442eee1199a63ac73a68556af8c26f83d7d94b0478db"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "CAUGHT": 22,
+    "NO-READING:unattributed": 1
+  }
+}

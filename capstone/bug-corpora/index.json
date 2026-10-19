@@ -1372,7 +1372,7 @@
         "silicon-wm-stock": "results/2026-10-16-silicon/silicon-wm-stock",
         "silicon-wm-sublet": "results/2026-10-16-silicon/silicon-wm-sublet",
         "vp2-malloc": "results/2026-10-19-vp2c-treeA/vp2-malloc",
-        "vp2-nested-pools": "results/2026-10-19-vp2c-treeA/vp2-nested-pools"
+        "vp2-nested-pools": "results/2026-10-19-vp2c-treeB/vp2-nested-pools-q15"
       },
       "where": "capstone/bug-corpora/wireshark/wmem-repros"
     },
@@ -2179,7 +2179,7 @@
     }
   ],
   "issues": {
-    "open": 149,
+    "open": 151,
     "resolved": 77
   },
   "fixtures": [

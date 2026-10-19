@@ -63,11 +63,10 @@
       "verdict_from": "results/2026-10-19-vp2c-treeA/vp2-malloc"
     },
     "vp2-nested-pools": {
-      "verdict": "NO-READING",
-      "verdict_note": "uaf-jumbo: expected fault, observed none",
-      "verdict_from": "results/2026-10-19-vp2c-treeA/vp2-nested-pools",
-      "verdict_reason": "control-failed",
-      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc"
+      "oracle": "virtual profile, every object of wmem's block and block_fast allocators a child lifetime of its block (the port's patch 0001, CDERIVE/CREVOKE; tools/arms.json virtual-wmem-pools): as virtual-malloc",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3fa89119e0 in wm_probe; by probe: the pc lies in wm_probe, the labelled read",
+      "verdict_from": "results/2026-10-19-vp2c-treeB/vp2-nested-pools-q15"
     }
   },
   "status": "measured natively (native-detect, native-fix-differential) and on stock CheriBSD (cheribsd-revocation); on virtual Capstone (virtual-malloc, virtual-nested-pools; each arm's verdict_from names its bundle). The Capstone domain arms (spatial, sublet, sublet-chunks, sublet-malloc) and PoisonCap left the case on 2026-10-11 with their builds; their bundles stay in results/.",
