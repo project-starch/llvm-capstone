@@ -768,7 +768,7 @@ whose resuming CSRUNV has rd = x15; the same 21 images by sha256 as on bf3db3175
 20 twice: pym0, and pym0-fence with fence_before_entry=1, every program faulting at 0x12. Only the bitstream differs.
 Bundle: `cpython/pymalloc-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`; record `records/pym0-treeA.board.txt` on
 lane vp2-tier12.
-## S-29 — the virtual-context switcher installs and restores `satp` with no TLB flush, so a context can be served the caller's translation of a virtual address and the caller, after an escape, the context's `DEMONSTRATED IN SIMULATION 2026-10-18 on bf3db3175 by the RTL lane (va-satpstale, four arms, no exceptions); FIXED on virtual-profile-2-c d427e7391 (an unqualified flush-all on the switcher's satp write), lint at baseline on all eleven counters with the UNOPTFLAT membership identical BY NAME to the base; QEMU is the STRICTER side and is the reference (it flushes on every entry, escape and resume whose translation state differs, and keeps a context's translations in an index no other context reads), ruled by the semantics owner; NO CORPUS CONSEQUENCE today, because every CSRUNV the module issues runs with the caller's live satp equal to the context's; for the caller's DATA accesses the window is an ABI RULE IN BOTH DIRECTIONS, not something software cannot work around; the surface a fence cannot cover is the caller's first instruction FETCH after an escape, which is S-23's shape and is NOT observed here`
+## S-29 — the virtual-context switcher installs and restores `satp` with no TLB flush, so a context can be served the caller's translation of a virtual address and the caller, after an escape, the context's `DEMONSTRATED IN SIMULATION 2026-10-18 on bf3db3175 by the RTL lane (va-satpstale, four arms, no exceptions) and CONFIRMED ON SILICON 2026-10-19 on tree A 8522d72fe, 7 of 7 bare arms reading their pre-registered vectors, graded by image hash; FIXED on virtual-profile-2-c d427e7391 (an unqualified flush-all on the switcher's satp write), lint at baseline on all eleven counters with the UNOPTFLAT membership identical BY NAME to the base; QEMU is the STRICTER side and is the reference (it flushes on every entry, escape and resume whose translation state differs, and keeps a context's translations in an index no other context reads), ruled by the semantics owner; NO CORPUS CONSEQUENCE today, because every CSRUNV the module issues runs with the caller's live satp equal to the context's; for the caller's DATA accesses the window is an ABI RULE IN BOTH DIRECTIONS, not something software cannot work around; the surface a fence cannot cover is the caller's first instruction FETCH after an escape, which is S-23's shape and is NOT observed here`
 
 **Siblings:** S-23 (the fetch face, where this window is the strongest candidate and NOT the demonstrated
 mechanism — the board lane showed pb10's refused address is physical and covered by a loaded region, so a stale
@@ -807,6 +807,38 @@ built explicitly by one macro run twice, identical but for that one leaf.
 - **ASID is 0 on both chains**, read back from the switcher's own transactions, so nothing makes the stale entries
   non-matching. The switcher's walks run with translation forced off (`cva6.sv:838`), so its frame accesses are
   physical and cannot have installed the entry; only the context's own access can have.
+
+**CONFIRMED ON SILICON 2026-10-19 — tree A `8522d72fe`, board 1, N = 1 per arm, 7 of 7 as pre-registered.**
+Seven bare M-mode arms built from one source
+(`capstone/tests/rtl-smoke/satpstale-bare-2026-10-19/`, dev `8e1df1e05a3c`) were simulated on each RTL FIRST and
+their vectors committed before the board session; the board lane then ran them on the resident bitstream and every
+arm read its tree A vector exactly, by count and by value. Graded independently by this lane against the folder's
+own `images/SHA256SUMS`: every image sha256, every `board_rec` (0x80017000), every count and every value matched,
+and the comparator was negative-tested first by perturbing one value and one hash, both of which it rejected.
+Record: repo `llvm-capstone`, branch `vp2-tier12`, commit `a51896b135a4`, file
+`capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/sv-treeA.result-lines.txt`.
+
+| arm | silicon reading | what it establishes |
+|---|---|---|
+| `sv-stale`, `sv-stale-f` | `6 \| 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55` | the ENTRY direction: the context reads the CALLER's page where its own table maps 0xbbbb |
+| `sv-stale-b` | `6 \| 0xaaaa 0xbbbb 3 0xb 0xbbbb 0x55` | the ESCAPE direction: the caller's first access after the escape is served the CONTEXT's page |
+| `sv-stale-bf` | `6 \| 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55` | the NEGATIVE CONTROL: one `sfence.vma` apart from `-b`, and it reads its own page |
+| `sv-stale-bn` | `6 \| 0xaaaa 0xcccc 3 0xb 0xaaaa 0x55` | the ORIGIN: with the context never touching the address, nothing installs an entry |
+| `sv-fetch` | `5 \| 0xaaaa 1 0x80006000 0x80016000 0x55` | cause 1 with a PHYSICAL `mtval` differing from the faulting virtual address |
+| `sv-fetch-c` | `5 \| 0xaaaa 0xc 0x80006000 0x80006000 0x55` | its control: one fence earlier, cause 12 with the two values EQUAL |
+
+A reader needs no address table to separate the last two: on the resident bitstream the final two values DIFFER,
+and on a bitstream carrying the flush they are EQUAL.
+
+**What the fetch pair does and does not settle.** It reproduces S-23's fetch SIGNATURE on silicon from a stale
+translation alone — a refused fetch reporting a physical address. It does NOT establish S-23's mechanism: a
+matching shape is not a matching mechanism, and the board lane's own pb10 capture has a refused address that is
+covered by a loaded region, which a stale translation alone does not explain. S-23's data face stays open.
+
+**Tree B `8de3c48cf` is predicted to change four of the seven** — `sv-stale`, `sv-stale-f`, `sv-stale-b` and
+`sv-fetch` — while `sv-stale-bf` and `sv-stale-bn`, which already fence on both sides or never touch the address,
+must read exactly what they read here. Those predictions are committed in the folder's README, so a post-flash
+re-run of the same seven images is a graded test of the fix rather than a fresh measurement.
 
 **Bounds, written down because the shapes are close enough to confuse.** It is a stale DATA translation. S-23 is a
 FETCH refused with a physical address, and this arm's caller text page is mapped identically under both chains, so

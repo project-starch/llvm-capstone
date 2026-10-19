@@ -55,6 +55,32 @@ when it never touches the probe address at all.
   **A reader needs no address table to tell these apart: on tree A the last two values DIFFER, on tree B they are
   EQUAL.**
 
+## What they read on silicon, 2026-10-19
+
+**7 of 7 as pre-registered, on tree A, board 1, N = 1 per arm.** The board lane ran all seven images on the
+resident bitstream between 16:24 and 16:31 and every arm read its tree A column exactly, by count and by value.
+Their record: repo `llvm-capstone`, branch `vp2-tier12`, commit `a51896b135a4`, file
+`capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/sv-treeA.result-lines.txt` (README summary in
+`30d87eadf036`).
+
+Graded independently in this folder's own terms: each arm's image sha256 against `images/SHA256SUMS`, each
+`board_rec` (0x80017000 for all seven), each count and each value as 64-bit integers. All four fields matched for
+all seven arms. The comparator was negative-tested first, by perturbing one arm's distinguishing value and one
+arm's hash; it rejected both, so the clean grade is a reading about the arms and not about the script.
+
+The two readings the set exists for:
+
+- `sv-stale-b` reads **0xbbbb** in position 5 where `sv-stale-bf` reads **0xaaaa** — the escape direction, one
+  `sfence.vma` apart, which is what the satp flush is for.
+- `sv-fetch` reads cause **1** with the last two values **differing** (0x80006000 virtual, 0x80016000 physical)
+  where `sv-fetch-c` reads cause **0xc** with them **equal** — S-23's fetch signature from a stale translation
+  alone. That reproduces the SIGNATURE, not S-23's mechanism: the board lane's own earlier capture has a refused
+  address covered by a loaded region, which a stale translation does not explain.
+
+Tree B's column is therefore now a graded prediction rather than a fresh measurement: re-running these same seven
+images on a bitstream carrying the flush must change `sv-stale`, `sv-stale-f`, `sv-stale-b` and `sv-fetch`, and
+must leave `sv-stale-bf` and `sv-stale-bn` exactly as they read here.
+
 ## What a difference from these vectors means
 
 A value not in the column for the resident bitstream is a finding, not a tolerance. The arms are deterministic:
