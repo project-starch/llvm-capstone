@@ -3186,3 +3186,29 @@ Result lines are in `records/pb10-srz-pair.result-lines.txt`. UNGATED.
 - **What it adds:** a second program on which srz removes the data face, as predicted. Here the fetch retries also
   vanish, which they did not in sql0 (21 → 21). Bundles: `ffmpeg/pool-repros/results/2026-10-19-vp2c-treeB/`
   `vp2-nested-pools-39d` and `vp2-nested-pools-srz`.
+
+### The fetch-face pair, pre-registered (2026-10-20 03:22, before its boot): board 2, tree B, the srz module
+
+The runtime lane's discriminator, with images from the compiler lane (lane fetchface-pair 02cf6152327a).
+- **The images:** revoke-loop.dom 252c16ca3c63cec5 and revoke-loop-ops.dom cf8be80bec87bc03. One source, with
+  `#ifdef WITH_REVOKES` around an inner loop of CDERIVE + CREVOKE, then SPIN arithmetic, during which quantum escapes
+  happen.
+- **The census, by raw word, in main:** CREVOKE 0 against 1. Image-wide it is 3 against 4: the linked runtime's three
+  sites are identical in both images.
+- **QEMU:** steps 12,709 against 12,695, and revoke_pairs 0 against 12,800.
+
+**One cold boot** (`board-tier12/ff/run-ff-b2.sh` 3c025d3ac7666b6e):
+- firmware 368b599947b51825, built with the retry monitor line's recipe;
+- image-ff 9d6944ac3665b56b (`ff/ff-prep.sh` 8fff70d2180cde4c, `ff/b0-bake-ff.sh` 0fc0bc555c773782): rev7's Tier 1
+  stage with the srevroot-zero module 607164b9, plus vmrun.sh's ff-pair case (`ff/vmrun-ff.case` 0531f92e9f3a8063);
+- rungs b0-stats, b0-hello, ff-pair. The pair runs plain then ops, each its own capstone-vexec process with the defaults
+  200 64 2000000, the module loaded with node_flat_records 16384.
+- The bake's hash check shows both images, the module and vmrun.sh present.
+
+**Readings, per arm** (between FF_ARM and FF_EXIT): FRTY count, CV_STATS steps (so that FRTY 0 is not just "no
+escapes"), FF_DONE revoke_pairs, DRT1/DRTX, the exit status.
+
+**Prediction (the runtime lane's):** FRTY 0 for the plain arm and FRTY > 0 for the ops arm, with steps of the same order
+in both (QEMU: 12,709 against 12,695).
+
+**Recorded at 03:2x, while the boot ran and before any result was read.** The first commit of this section was BLOCKED by the precommit scan: the copied bake script carried literal home-directory paths. The boot had already been launched by the same command, so this pre-registration reached the lane after the boot started and before its result. The image was baked by that copy (0fc0bc555c773782). The committed copy (add5df45b284c8c5) differs only in `$HOME/` for the literal paths.

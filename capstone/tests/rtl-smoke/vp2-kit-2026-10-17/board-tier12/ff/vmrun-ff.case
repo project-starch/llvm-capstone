@@ -1,0 +1,16 @@
+  ff-pair)
+    # The fetch-face pair (pre-registered in tier3-smoke/README.md): the two images in turn, plain first, each its own
+    # capstone-vexec process with the defaults 200 rounds x 64 x spin 2000000; the module loaded with node_flat_records
+    # 16384 (ops arm: 12,800 pairs + ~23 nodes). Markers FF_ARM / FF_EXIT bracket each arm's console lines.
+    # RESULT ff-pair retval = the number of arms that did not exit 0.
+    cd /test-domains/vm || { echo "RESULT ff-pair retval=941"; exit 1; }
+    grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko diag_emerg=1 node_flat_records=16384 || { echo "RESULT ff-pair retval=942"; exit 1; }
+    echo "@@PARAM node_flat_records=$(cat /sys/module/capstone_vm/parameters/node_flat_records 2>/dev/null || echo ABSENT)"
+    r=0
+    for img in revoke-loop.dom revoke-loop-ops.dom; do
+      echo "FF_ARM $img"
+      CAPSTONE_VM_STATS=1 ./capstone-vexec $img 200 64 2000000 > /tmp/ff.out 2>&1; s=$?
+      cat /tmp/ff.out; echo "FF_EXIT $img $s"
+      [ $s -eq 0 ] || r=$((r + 1))
+    done
+    echo "RESULT ff-pair retval=$r" ;;
