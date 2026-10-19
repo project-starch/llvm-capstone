@@ -3703,3 +3703,15 @@ The compiler lane's next discriminator for cpython's pc=0 faults, after cpyp-DZ 
 - Together with srz at the CSRUNV site (pb10 2 → 0, cpython 9 → 0), both decoded sites of S-23's fetch face, and its
   data face, read zero on silicon in the programs where they appeared.
 - N=1 per arm.
+
+**CORRECTION to the node-floor reading above (2026-10-20 05:3x, before anything reached dev or ISSUES).** The pair is
+NOT one variable in the sense written.
+- sql0-srz-treeB ran module 607164b9: 39d8492d's source plus the parameterised srevroot zeroing.
+- The node-floor module a4aa5668 is built on DEV's srz module 90bf036f (runtime lane 770daec2dbd6): the unconditional
+  zeroing on the tier-m module base, plus the floor.
+- So the two boots differ by the module base and the form of the zeroing as well as by the floor. "A one-variable pair:
+  dev's srz module against srz plus the context-table index floor" was wrong. dev's srz module 90bf036f has had a
+  Tier 1 boot, but has never run sql0.
+- **What stands:** sql0's fetch face reads 0 under a4aa5668, with session work identical to sql0-srz-treeB's.
+- **What does not yet stand:** that the floor is what removed it. The control that makes it one variable is sql0 on
+  90bf036f, which is pre-registered next.
