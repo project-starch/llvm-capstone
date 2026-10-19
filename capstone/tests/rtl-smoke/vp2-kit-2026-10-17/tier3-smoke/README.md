@@ -1564,3 +1564,88 @@ The first form stopped at the firmware cap. This one changes the image and the f
     is not filed. pgc, pgm0 and pgm1 re-queue after sql0 (the board-run skill: infra, retry).
 - **sql0-rev2b's measure-only bake read 25,856,520 B**, under 26,000,000: the stage was 28,809,586 B in 1,072 files.
   The board boot on bkit7-rev2s started at 01:52:19. UNGATED (PREFLIGHT=0).
+
+### Two silent boots in a row (pgc-fix6b 01:42, sql0-rev2b 01:52), and a board-health control pre-registered (2026-10-19 02:05)
+
+- **What happened:** both boots downloaded their firmware completely over JTAG ("19565064 bytes in 146.10s",
+  "25856520 bytes in 193.07s"). After `continue` there was no UART output at all, until the watchdog aborted each at
+  ~420 s.
+  - fph-fix6b's boot at 01:30 ran normally.
+  - So two different firmwares, back to back, are silent. That is the board-run skill's AMBIGUOUS row: a dead firmware
+    or a dead UART relay. Neither is a reading. sql0-rev2b is VOID by its own gate (no bundle).
+- **An instrument defect:** the watchdog labelled both "NO-BOOT: load_image issued, no boot banner and no download ...
+  JTAG transfer moved nothing". The download DID complete.
+  - Its download detection most likely missed the size line, which the console delivered split across two gdb events.
+  - The label is wrong, though aborting a silent boot was still right. To be fixed in board-watchdog.sh before it is
+    relied on to tell a dead transfer from a dead boot.
+- **The control, before any further long boot:** wa1's firmware ad5e84f761dd0f7c (Tier 1 only: b0-stats, b0-hello,
+  vm-contract), run by `run-tier12-wa1.sh` into a fresh directory. It booted and passed at 19:14 tonight.
+  - **Predicted:** identical to wa1 (three rungs as their oracles, the identity branch, 0 refusal lines).
+  - **If it is silent too,** the board or console is down. The queue stops and the board owner is told.
+  - **If it boots,** the two silent boots were transient. sql0-rev2b and the postgres arms re-run.
+
+**The control's result (2026-10-19 02:12-02:22): silent too. The board is unavailable from this side.**
+- wa1's firmware ad5e84f761dd0f7c, which booted and passed at 19:14, downloaded completely ("19565064 bytes in
+  146.43s") and then gave no UART after `continue`. The watchdog aborted it at 570 s, driver rc 130, no transcript.
+- **That is four boots in a row, the same way:** pgc-fix6b 01:42, sql0-rev2b 01:52, pgc-fix6b again 02:02 (the
+  postgres chain's retry), and this control.
+  - They cover two kits and three firmwares, one of them known-good.
+  - Each JTAG download completed at the normal ~130 KiB/s, and each was silent after `continue`.
+  - `flash_state` still names `caplifive_vp2_bf3db3175.bit` in each.
+  - The last good boot was fph-fix6b, 01:30-01:42.
+- **No reading at all,** and the cause is not known from this side: a dead UART relay, a board-side fault, or a
+  volatile bitstream change that `nv_bitstream_name` would not show.
+- **Every queue is stopped.** No further board time is spent until the board owner checks the board and its console.
+- **Owed after it is back:** sql0-rev2b, pgc/pgm0/pgm1, and the tree A flash if authorised. Before any of them, one
+  short control boot, which must print the OpenSBI banner.
+
+### The no-boot diagnostic session, pre-registered (2026-10-19 02:40, before it runs)
+
+fpga1's read-only check of board #1's host found the UART path alive: the FT232R present and not re-enumerated, no
+kernel event since 01:25, the console service up since 2026-09-03. Its journal shows every session since 01:30
+downloading completely, with the core at PC 0x10504-0x10544 at attach (the bootrom), then `continue`. So the silence
+is board-side.
+
+**The session** (`fpga_driver/diag_noboot_fpga.py`, wa1's firmware ad5e84f761dd0f7c):
+- the cold_boot sequence up to `continue`, plus `monitor verify_image` and the first 8 words at 0x80000000 against the
+  file;
+- the UART bytes for 12 s after `continue`;
+- then `monitor halt`, never reset, and pc, mcause, mepc, mtval, mstatus, a0, ra and sp, with two more pc samples
+  across resume/halt.
+- The board is released (power off) at the end. A power cycle and the short control boot come only after these
+  readings are recorded.
+
+**What each reading means:**
+- a verify mismatch: the image did not land in DDR;
+- pc in the bootrom (0x10000-0x10fff): the core never left it after `continue`;
+- a non-zero mcause or pc at the trap vector: an early fault;
+- pc moving inside 0x80000000..: the firmware runs, and the console output is what is lost.
+
+**The diagnostic's readings (2026-10-19 02:41-03:00; a first attempt at 02:40 timed out in `gdb_start`, so a 3-try
+retry was added, as the production drivers' cold_boot has):**
+- **Before `continue`:**
+  - pc after `monitor reset halt` = 0x10530, the bootrom.
+  - load_image: "downloaded 19565064 bytes in 147.00s".
+  - **verify_image: "verified 19565064 bytes in 151.25s"**, slowly, because no work area is configured, but complete.
+  - The words at 0x80000000 equal the file's (0x00050433 0x000584b3 0x00060933 0x53c000ef ...). **The image is in DDR,
+    intact.**
+- **After `continue`:** 0 UART bytes in 12 s.
+- **`monitor halt` then timed out** (no gdb prompt in 30 s). The debug module could not halt the core, so pc and the
+  trap CSRs could not be read.
+- **What this establishes:** the image reaches DDR intact, and the core, released from the bootrom at 0x80000000,
+  goes silent at once into a state the debugger cannot halt. That is the same on a known-good image that booted at
+  19:14, and it survives the power cycle every session starts with.
+- **What it does not establish:** why. It is board-side and needs the board owner: a full power removal, or a check
+  that the FPGA configuration and its clocks are what they were. A reflash of bf3db3175 would be the lead's call.
+- **No further board time is spent.** The queue stays stopped.
+
+**After the board's reboot (2026-10-19 11:33-11:38): the control passes. The board is back.**
+- The lead rebooted the board, relayed by the runtime lane. The pre-registered control then ran: wa1's firmware
+  ad5e84f761dd0f7c, Tier 1.
+- **It read identical to wa1:** b0-stats, b0-hello and vm-contract as their oracles, the identity branch, banner 1, 0
+  refusal lines, and the same FRTY retry at 011110E8.
+- So the outage from 01:42 was board-side, and it was cleared by the reboot. Its cause is unknown.
+- **Resuming as planned:**
+  - sql0-rev2b (on 39d8492d, the measure-only bake first), then pgc/pgm0/pgm1 on d71f207a.
+  - The silent runs are in the attic: sql0-rev2b 01:52, pgc 02:02. pgc's second dead-boot record is kept as
+    `records/pgc-fix6b-noboot2.board.txt`, and its all-infra bundle is not filed.
