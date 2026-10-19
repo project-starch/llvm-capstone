@@ -1950,43 +1950,44 @@ relaunched behind the S-29 batch.
 - **So steps 1-3 end `CHAIN_TREEA_STEPS123_DONE` at 14:58.** As the RTL lane noted, none of these can see tree A's four
   fixes. They show the images and the RTL agree with the base, so tree A changed nothing they exercise.
 
-### Tree A step 4 (14:59-15:10): Tier 1 as rev7; sparse-churn does NOT wedge, and the boot ends in S-23's data-face shape at a per-CPU address (audit pending)
+### Tree A step 4 (14:59-15:10): Tier 1 as rev7; sparse-churn did not wedge before the boot ended in a kernel panic with S-23's data-face shape (audited; RETRACTION of two claims below)
 
-- **As predicted:** b0-stats, b0-hello and vm-contract read their oracles, with the identity branch, as rev7 on
-  bf3db3175. `@@PARAM` diag_emerg=Y, node_flat_records=4096 and supervisor_slots=1. One banner, 0 refusal lines.
-- **sparse-churn, the matched pair** (same stage, firmware 7a53759a4773c81b and module 39d8492d; only the bitstream
-  differs):
-  - On bf3db3175 it wedged with S-25's face (rev7: 224 0x25, 225 0xc4, store_state 3, commit count 1; N=4 for that
-    face).
-  - On tree A it did NOT wedge (N=1). The console after `VM_BEGIN:sparse-churn` reads `FRTY:01113D98`, the region and
-    CPMP dump, `MTVL:BC2B9440 CPMX:00000002 INJS:00000002`. Linux then took `Oops - load access fault` (cause 5, badaddr
-    0xbc2b9440) at `_raw_spin_lock_irqsave+0x56` from `__wake_up_common_lock+0x4e`, then "Kernel panic - not syncing:
-    Fatal exception in interrupt".
-  - So none of the pre-registered (a), (b) or (c). The wedge is gone; the program went further and the kernel
-    panicked. The stopgap control stays open, and rev8 is its next arm.
-  - "The wedge is gone because of R-57's fix" is the RTL lane's expectation, at N=1. It is recorded separately from
-    the new face: a fix that lets a program run further can expose an older defect.
-- **The panic has S-23's data-face shape, as pb10 recorded it:** slot 7 = region 21 [0xAC100000, 0xC0000000) RWX,
-  CPHT 7, a kernel load through the linear map refused with badaddr = mtval. The address and the caller differ from
-  pb10's.
-- **What CPMX means:** `CPMX:00000002` is `CAPSTONE_NO_CPMP_REGION` (capstone-sbi `sbi_capstone.h:93`, reported at
-  `sbi_capstone.c:3637`). It is a constant reason for that trap path, so it names no failed allow term.
-- **Localisation** (no board time; the boot log's `DMA32 [mem 0x80000000-0xbc2d1fff]`, the CMA pool
-  0xac000000-0xbbffffff, and `percpu: Embedded 15 pages/cpu s23208 r8192 d30040 u61440`):
-  - The Oops's code bytes are `c.ld a4,0(a5)` (`__per_cpu_offset[cpu]`), then `auipc a5,0x7fb` and
-    `addi a5,a5,0x94`, then `c.add a5,a4`, then `lhu a4,0(a5)`. The same pair in the relinked vmlinux names
-    `__mmiowb_state`, which is `__per_cpu_start + 0x1440`.
-  - So in the running kernel (Image dcfc2e15bf1bbd77, the one firmware 7a53759a4773c81b embeds), CPU 0's per-CPU unit
-    is [PA 0xBC2B8000, 0xBC2C7000), and the refused read is `__mmiowb_state` itself.
-  - pb10's 0xBC2C0825 (`mod_node_page_state+0x40`, a per-CPU node-stat byte read through `__per_cpu_offset`) is unit
-    offset 0x8825 at the same base. That is in the dynamic area (0x7AA8-0xF000), where `alloc_percpu` objects live.
-    pb10's own base is not shown; the memory layout is identical.
-- **What that decides:** `_raw_spin_lock_irqsave` reads `__mmiowb_state` unconditionally. So PA page 0xBC2B9000 was
-  read successfully on every spinlock acquire in that boot before the refusal, which refutes a PERSISTENT deny of
-  that page or of slot 7. Both panics are "in interrupt", which fits a transient refusal at one moment.
-  - Neither the escape kind of the last CSRUNV return nor a revocation broadcast is recoverable from either capture.
-    No module print carries them at any diag setting.
-- A claim-auditor is checking this before anything enters ISSUES.md.
+**RETRACTION (2026-10-19, same day; lane b3588262cc83, not on dev).** The first version of this section claimed two
+things that do not hold. The claim-auditor refuted both:
+- **"`__mmiowb_state` read on every spinlock acquire BEFORE the refusal refutes a persistent deny."** Withdrawn. Reads
+  before the refusal rule out only a deny that already existed at those times. A deny created at the moment of a
+  node free is untouched by them. The same argument went to the RTL and runtime lanes, and was withdrawn there too.
+- **"The wedge is gone; the program went further."** Withdrawn. Nothing measures how far sparse-churn ran on either
+  bitstream. A pb10 per-CPU base "the same" as this boot's, and "the memory layout is identical", were assertions;
+  pb10 booted a different Image, and its boot log is not available.
+
+**What the transcript shows** (N=1, UNGATED, PREFLIGHT=0; the auditor checked each point against
+`/tmp/capstone/tier1/run3rev7A/` and the running Image):
+- b0-stats, b0-hello and vm-contract read their oracles, with the identity branch, as rev7 on bf3db3175.
+- **The fetch retry, then the dump.** In sparse-churn the monitor first retried an S fetch at `vm_ioctl+0xab0`, the
+  instruction after the module's CSRUNV (`FRTY:01113D98`; the module base is inferred from two FRTY pcs). It then
+  printed the region and CPMP dump: slot 7 = region 21 [0xAC100000, 0xC0000000) RWX, CPHT 7.
+- **The refusal.** `MTVL:BC2B9440 CPMX:00000002 INJS:00000002`, where both 2s are the constant `CAPSTONE_NO_CPMP_REGION`
+  (`sbi_capstone.h:93`; INJS is not an mcause on this path). The dump and MTVL belong to the load, not to the FRTY: a
+  retried fetch returns before the dump (`sbi_capstone.c:3617-3618`).
+- **The kernel.** Linux took `Oops - load access fault` (cause 5) at `_raw_spin_lock_irqsave+0x56` from
+  `__wake_up_common_lock+0x4e`, in interrupt, and panicked.
+- **The localisation.** The refused load is `lhu` of CPU 0's `__mmiowb_state`, from the Oops's own code bytes, which
+  equal the running Image. Through the linear map, a4 + `__mmiowb_state` = a5 = PA 0xBC2B9440 = MTVL. CPU 0's
+  per-CPU unit is [PA 0xBC2B8000, 0xBC2C7000) in this kernel.
+- **The difference from pb10.** pb10's PA (0xBC2C0825) and kernel caller (`mod_node_page_state`) differ, on
+  bf3db3175 with a different Image. Its CPMP dump was recorded as 48 lines against 45 here.
+- **The same PA was read again AFTER the refusal.** `die()` takes `spin_lock_irqsave(&die_lock)` before printing the
+  Oops line, and every acquire touches `__mmiowb_state`. That read went through slot 7 with no second refusal, so
+  the refusal did not survive the monitor's handling.
+  - Whether that handling re-armed the CPMP revnode trackers is open: a namespace flush across S/M if `srevroot_q` or
+    `sup_active_q` was set at the fault (`ex_stage.sv:1417`, `csr_regfile.sv:2876-2878`). So this does NOT yet refute
+    a persistent deny. `srevroot_q` and `sup_active_q` at the fault are the discriminator.
+- **What the per-CPU locality does not show.** Per-CPU data is the first thing interrupt entry and lock acquisition
+  touch, so any "first kernel access to the window after event X" account predicts it. It favours no account.
+- **The wedge.** sparse-churn did not wedge before the panic, which came about 15 s after VM_BEGIN. How far it ran is
+  not measured, and whether R-57's face would have recurred later is not observed. The apertures after the panic are
+  residue: they match pb10's post-panic ones, and are not an S-25 reading.
 
 ### Tree A step 5, wm0 (15:10-15:20): runs to the end, MISSED 23, 23 of 23 as predicted (on bf3db3175 it wedged in its first control)
 
