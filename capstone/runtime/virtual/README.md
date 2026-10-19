@@ -406,9 +406,21 @@ ends. This holds where Linux keeps one inode per file (tmpfs, ext2/3/4,
 btrfs, xfs, erofs, squashfs). A memfd must be sealed against writing, growing
 and shrinking, because its own writable descriptor is not counted. On any
 other filesystem (9p, NFS, FUSE, overlayfs), and for exec in place, the image
-is a sealed memfd copy. `run-exec.py` checks this from the guest, with
+is a sealed memfd copy; the board's initramfs root is `rootfs`, not on the
+list, so an image under `/` on the board runs from the copy too. The launcher
+maps the file once, validates that mapping and loads from it, so the bytes
+checked are the bytes loaded. What the denial does not stop is a writer below
+the VFS: a raw write to the block device, a loop device whose backing file is
+written, a writeback error followed by eviction. Linux's protection of its own
+executables stops none of those either. Module and launcher are one revision:
+with a module that has no `CV_IMAGE`, every launch fails and says so; there is
+no fallback to the copy. `run-exec.py` checks the denial from the guest, with
 `exec-contract.c` built like `node.dom` and `memfd-launch.c` built static for
-the guest:
+the guest: on tmpfs, on ext4 over a loop device (a writer through a hard link
+and a shared writable mapping older than the launch are both refused, and a
+second `CV_IMAGE` on the same context answers `EBUSY`), in memfds in three
+seal states, and on ramfs and 9p, where the sealed copy is proven to be what
+runs:
 
 ```sh
 python3 capstone/runtime/virtual/run-exec.py ... --application "$out/exec.dom" \

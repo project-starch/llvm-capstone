@@ -435,13 +435,24 @@ static int die(const char *what)
     fprintf(stderr, "capstone-vexec: %s: %s\n", what, strerror(errno));
     cleanup(); return 125;
 }
-static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *stack)
+/* Map the image, validate the mapping and load from it. One mapping, so the
+ * headers and spans checked are the ones indexed below; a second mapping would
+ * trust a check made on other pages. The denial (CV_IMAGE) keeps every writer
+ * Linux counts out from before this until the process ends; a writer below
+ * the VFS (a raw block device, a loop device's backing file) is not stopped. */
+static int load(int fd, struct capstone_application_descriptor_v2 *desc,
+                void **image, size_t *bytes, uintptr_t *entry, size_t *stack)
 {
     struct stat st;
     if (fstat(fd, &st)) return -1;
+    if (!S_ISREG(st.st_mode) || st.st_size < (off_t)sizeof(Elf64_Ehdr) ||
+        st.st_size > 512 * 1024 * 1024) { errno = ENOEXEC; return -1; }
     unsigned char *raw = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (raw == MAP_FAILED) return -1;
-    /* The shared image inspector has validated every header and file span. */
+    if (capstone_application_validate(raw, st.st_size, desc)) {
+        int error = errno;
+        munmap(raw, st.st_size); errno = error; return -1;
+    }
     const Elf64_Ehdr *h = (void *)raw;
     const Elf64_Phdr *ph = (void *)(raw + h->e_phoff);
     const Elf64_Shdr *sh = (void *)(raw + h->e_shoff);
@@ -505,6 +516,14 @@ static int image_denied(int *fd, struct capstone_application_descriptor_v2 *desc
         return -1;
     if (!ioctl(device, CV_IMAGE, fd))
         return 0;
+    if (errno == ENOTTY || errno == EINVAL) {
+        /* An ioctl the module does not know: a module from before CV_IMAGE.
+         * Module and launcher are one revision; there is no older path. */
+        fprintf(stderr, "capstone-vexec: the capstone_vm module does not implement CV_IMAGE: "
+                        "it is from another revision than this launcher\n");
+        errno = ENOSYS;
+        return -1;
+    }
     if (errno != EOPNOTSUPP)
         return -1;
     int copy = capstone_application_copy(*fd, desc);
@@ -873,10 +892,11 @@ int main(int argc, char **argv)
     if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);
     /* No copy of the image on a local filesystem: the module denies writers
      * to the file (CV_IMAGE) before it is validated, and holds that until
-     * this process ends, as Linux does for a running executable. The bytes
-     * validated are the bytes loaded, and the domain cannot write its own
-     * image while it runs. After exec in place, and on 9p, NFS or FUSE, the
-     * image is a sealed copy, which the denial accepts as fixed. */
+     * this process ends, as Linux does for a running executable. load()
+     * validates the one mapping it loads from, so the bytes validated are
+     * the bytes loaded, and the domain cannot write its own image while it
+     * runs. After exec in place, and on 9p, NFS or FUSE, the image is a
+     * sealed copy, which the denial accepts as fixed. */
     int fd = capstone_application_open(resumed.magic ? resumed_path : image_path);
     int image_error = errno;
     if (resumed.magic) close(resumed.image);
@@ -888,11 +908,11 @@ int main(int argc, char **argv)
     host.spawner = &spawner;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) return die("open");
-    if (image_denied(&fd, &desc) || capstone_application_inspect(fd, &desc)) {
+    if (image_denied(&fd, &desc)) { perror("capstone-vexec: image"); cleanup(); return 126; }
+    void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
+    if (load(fd, &desc, &image, &image_bytes, &entry, &stack_bytes)) {
         perror("capstone-vexec: image"); cleanup(); return 126;
     }
-    void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
-    if (load(fd, &image, &image_bytes, &entry, &stack_bytes)) { perror("capstone-vexec: virtual ABI"); cleanup(); return 126; }
     host.private_fds[host.private_count++] = fd;
     /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
      * construction -- the allocator's geometry keeps every rounded bound inside its own slot --

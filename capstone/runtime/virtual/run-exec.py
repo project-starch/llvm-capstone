@@ -7,8 +7,11 @@ sealed copy. Checked from the guest: exec in place (same pid), exec of a
 truncated image (ENOEXEC, in the caller) and of a native program (ENOSYS),
 writing a running image (denied) and the same image after exit (allowed), a
 launch while a writer is open (refused) and after it closed, memfds in three
-seal states, and images on a ramfs and on 9p (both run from a sealed copy: the
-launcher's image descriptor is checked on 9p). Images run from /tmp, a tmpfs."""
+seal states, images on a ramfs and on 9p (both run from a sealed copy: the
+launcher's image descriptor is checked on 9p), and on ext4 over a loop device
+(the denial on a block filesystem: a writer through a hard link and a shared
+writable mapping older than the launch are refused, and CV_IMAGE a second time
+answers EBUSY). The other images run from /tmp, a tmpfs."""
 import argparse
 import hashlib
 import json
@@ -46,6 +49,28 @@ exec 7>>/tmp/f.dom
 $V /tmp/f.dom child > o5 2>&1; echo "@@OPEN_WRITER rc=$? $(tr '\n' ' ' < o5)"
 exec 7>&-
 $V /tmp/f.dom child > o6 2>&1; echo "@@AFTER_WRITER rc=$? $(tr '\n' ' ' < o6)"
+# ext4 on a loop device: the denial on a block filesystem with one inode per
+# file (the arms above run from tmpfs), a writer through a second hard link, a
+# shared writable mapping older than the launch, and the module asked twice.
+dd if=/dev/zero of=/tmp/e4.img bs=1M count=8 2>/dev/null && mke2fs -F /tmp/e4.img >/dev/null 2>&1 && mkdir -p /mnt/e4 && mount -t ext4 -o loop /tmp/e4.img /mnt/e4
+echo "@@EXT4_FS $(sed -n 's/^[^ ]* \/mnt\/e4 \([^ ]*\) .*/\1/p' /proc/mounts)"
+cp /mnt/vm/exec.dom /mnt/e4/e.dom && chmod 755 /mnt/e4/e.dom && ln /mnt/e4/e.dom /mnt/e4/link.dom
+mkfifo /tmp/release4
+$V /mnt/e4/e.dom hold < /tmp/release4 > o4 2>&1 &
+pid=$!
+exec 5> /tmp/release4
+n=0; while ! grep -q EXEC_CONTRACT_HOLDING o4 && [ $n -lt 30 ]; do sleep 1; n=$((n+1)); done
+if ! grep -q EXEC_CONTRACT_HOLDING o4; then echo "@@EXT4_WRITE not-ready"
+elif (echo x >> /mnt/e4/e.dom) 2>/dev/null; then echo "@@EXT4_WRITE allowed"
+else echo "@@EXT4_WRITE denied"; fi
+if (echo x >> /mnt/e4/link.dom) 2>o4l; then echo "@@EXT4_LINK_WRITE allowed"; else echo "@@EXT4_LINK_WRITE denied $(tr '\n' ' ' < o4l)"; fi
+exec 5>&-
+wait $pid; echo "@@EXT4_HOLD rc=$? $(tr '\n' ' ' < o4)"
+if (echo x >> /mnt/e4/link.dom) 2>/dev/null; then echo "@@EXT4_LINK_AFTER allowed"; else echo "@@EXT4_LINK_AFTER denied"; fi
+cp /mnt/vm/exec.dom /mnt/e4/m.dom && chmod 755 /mnt/e4/m.dom
+/mnt/vm/memfd-launch mapped $V /mnt/e4/m.dom > o4m 2>&1; echo "@@MAPPED_WRITER rc=$? $(tr '\n' ' ' < o4m)"
+$V /mnt/e4/m.dom child > o4n 2>&1; echo "@@AFTER_MAPPING rc=$? $(tr '\n' ' ' < o4n)"
+/mnt/vm/memfd-launch image-twice /mnt/e4/m.dom > o4t 2>&1; echo "@@IMAGE_TWICE rc=$? $(tr '\n' ' ' < o4t)"
 mkdir -p /tmp/r && mount -t ramfs ramfs /tmp/r && cp /mnt/vm/exec.dom /tmp/r/e.dom && chmod 755 /tmp/r/e.dom
 exec 9>>/tmp/r/e.dom
 $V /tmp/r/e.dom child > o8 2>&1; echo "@@COPY_FS rc=$? $(tr '\n' ' ' < o8)"
@@ -135,6 +160,25 @@ def main():
         'open_writer_refused': rc('OPEN_WRITER') == 126 and BUSY in text('OPEN_WRITER') and
             CHILD not in text('OPEN_WRITER'),
         'runs_after_writer_closed': rc('AFTER_WRITER') == 0 and CHILD in text('AFTER_WRITER'),
+        # ext4 on a loop device: the denial on a block filesystem, which the
+        # tmpfs arms above never exercise. A hard link names the same inode,
+        # so a writer through it is counted and refused with ETXTBSY.
+        'ext4_mounted': text('EXT4_FS') == 'ext4',
+        'ext4_running_image_not_writable': text('EXT4_WRITE') == 'denied',
+        'ext4_hard_link_writer_refused': text('EXT4_LINK_WRITE').startswith('denied') and
+            BUSY in text('EXT4_LINK_WRITE'),
+        'ext4_holder_unaffected': rc('EXT4_HOLD') == 0 and 'EXEC_CONTRACT_HELD' in text('EXT4_HOLD'),
+        'ext4_link_writable_after_exit': text('EXT4_LINK_AFTER') == 'allowed',
+        # A shared writable mapping made before the launch keeps the file open
+        # for writing after its descriptor closed: the launch is refused, and
+        # runs once the mapping holder is gone.
+        'mapped_writer_refused': rc('MAPPED_WRITER') == 126 and BUSY in text('MAPPED_WRITER') and
+            CHILD not in text('MAPPED_WRITER'),
+        'runs_after_mapping_gone': rc('AFTER_MAPPING') == 0 and CHILD in text('AFTER_MAPPING'),
+        # CV_IMAGE twice on one context: EBUSY, and the first denial stands
+        # until the device is closed.
+        'image_twice_busy': rc('IMAGE_TWICE') == 0 and
+            'IMAGE_TWICE first=ok second=EBUSY held=ETXTBSY released=ok' in text('IMAGE_TWICE'),
         'memfd_unsealed_refused': rc('MEMFD_open') == 126 and BUSY in text('MEMFD_open') and
             CHILD not in text('MEMFD_open'),
         'memfd_write_sealed_only_refused': rc('MEMFD_write') == 126 and BUSY in text('MEMFD_write') and
@@ -163,7 +207,7 @@ def main():
               # share's host filesystem would pass such a check (ext4, tmpfs, ...).
               'share_host_filesystem': subprocess.run(['stat', '-f', '-c', '%T', str(share)],
                                                       capture_output=True, text=True).stdout.strip(),
-              'scope': 'one hart; images on tmpfs, in memfds, on ramfs and on 9p (sealed copy); exec in place of a valid and a non-image file'}
+              'scope': 'one hart; images on tmpfs, on ext4 over a loop device, in memfds, on ramfs and on 9p (sealed copy); exec in place of a valid and a non-image file'}
     (a.work/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)
     return 0 if all(checks.values()) else 1

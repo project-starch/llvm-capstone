@@ -1703,7 +1703,10 @@ retry:
          * existing writers make it fail with ETXTBSY, later opens for
          * writing fail with ETXTBSY until the context is released. It
          * covers every writer only where the filesystem keeps one inode per
-         * file; elsewhere EOPNOTSUPP, and the launcher loads a sealed copy. */
+         * file; elsewhere EOPNOTSUPP, and the launcher loads a sealed copy.
+         * Any file the caller can open for reading can be denied writers
+         * this way, without an execute permission (what MAP_DENYWRITE once
+         * allowed any process): acceptable while the device node is 0600. */
         __s32 fd;
         struct file *file;
         if (copy_from_user(&fd, (void __user *)arg, sizeof(fd))) rc = -EFAULT;

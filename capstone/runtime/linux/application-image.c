@@ -150,8 +150,16 @@ int capstone_application_inspect(int fd, struct capstone_application_descriptor_
   void *data = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
   if (data == MAP_FAILED)
     return -1;
-  int error = inspect(data, (size_t)st.st_size, out);
+  int rc = capstone_application_validate(data, (size_t)st.st_size, out);
+  int error = errno;
   munmap(data, (size_t)st.st_size);
+  errno = error;
+  return rc;
+}
+
+int capstone_application_validate(const void *data, size_t size,
+                                  struct capstone_application_descriptor_v2 *out) {
+  int error = inspect(data, size, out);
   if (error) {
     errno = error;
     return -1;
