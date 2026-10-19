@@ -2788,3 +2788,49 @@ Three cold boots on the bracket image cd3eb03c37325a62, firmwares as pre-registe
   the only gap, since the entry walk's ~840 cycles of fixed testbench delay do not account for it.
 - **For S-26's fix:** any boot-time quantum of 300 or more completes. The shipping value, 2,000,000, completes in 511
   steps.
+
+### cpython allocator-boundary lt0 on the board, pre-registered (2026-10-19 20:40, before the boot): board 1, tree A, the S-23 retry monitor
+
+**The stage** (dev 81fb4e04d42e): image 20bcfdd1073976e0, stage-closure.txt b41545623090d0cf (350 files), and
+run-virtual.py b98e90fc86fafe1a with --stdlib-sourceless. The guest pin is the record's: --guest-env PYTHONHASHSEED=0
+and norandmaps. The arm is virtual-malloc.
+- The firmware was measured at 25,856,520 B, under the 26,000,000 cap (kit bkit7-rev2xmD, margin 143,480 B).
+
+**The kit:** bkit7-rev2xnD 6fea0e2517cdef6a (`make-cpy-kits.sh` b5f8b1978bfbdf6c). It is bkit7-rev2xnA
+(norandmaps through the saved dtb, module 39d8492d) with only the monitor fields changed to the D kits': f13dbc5 and
+wrapper aab63d5, with the refusal read and the data retry.
+
+**The runner:** `tier3-cpy-lt0.sh` 3d03fcd75c666557, through tier3-appvm-arm.sh. Its dry run went through
+the judge on the real stage bundle and through the busy stop.
+
+**The image identity** (the runtime lane's condition for grading 20bcfdd1 against lt0's sets, which were recorded on
+0d322044b9118713), computed with the stock llvm-objcopy and llvm-readelf:
+- these ALLOC sections are byte-equal: .text 3cf77d7b1a481c87, .rodata dc64eea44a362d3d,
+  .capstone_application 2cd06478de22271f, .data f15cb59225aa2c9c, .capstone_cap_init 8399ed7851691e5e and
+  .gct 82c994e2e41c6562;
+- .tdata, .init_array and .fini_array are empty in both;
+- .tbss and .bss are NOBITS;
+- the whole loaded image (objcopy -O binary) is 47dcef5f380b3217 in both, 12,097,563 B.
+- The control: the lt1 image's loaded bytes are 942096f9f1e82dbc, which differ.
+- The non-ALLOC sections were not compared by this method. The image manifest records them as the only change:
+  .L labels in .symtab/.strtab.
+
+**The judge:** `judge-cpy-set.py` b297e291d7629fbd, amended to dev 18a7cf883de3's rule.
+- A STABLE cell must match its full signature, verdict and evidence site.
+- A VARYING cell is graded on its verdict in the recorded set, and its site is reported. A varying verdict outside the
+  set is MOVED.
+- Only the recorded pair 20bcfdd1 → 0d322044 is mapped.
+- Controls, each shown to fire:
+  - the real stage bundle reads 32 of 32 (05, 09 and 31 reported as off-sample sites);
+  - a record run reads 32 of 32;
+  - a planted stable flip reads DIVERGENCE;
+  - a planted varying verdict outside its set reads MOVED;
+  - the lt1 image is refused (NO DATA);
+  - a broken pin reads VOID.
+
+**Prediction:** the pin reads back. Then 23 of 23 stable cells inside, and 9 of 9 varying verdicts inside their sets,
+as the stage's QEMU run read.
+
+**The S-23 reading:** the DRT1/DRTX/Oops counts in this boot. No prediction is made, since the QEMU record ran without
+this monitor. A DRT1 with progress carries the case, as in sql0-drt and pb10-drt. A DRTX or an Oops is reported first.
+lt1 stays off the board, since it needs collection.
