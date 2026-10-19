@@ -8,6 +8,9 @@ and clears the caller's CPMP tracker by index. That route needs the field progra
 realloc, __capstone_malloc_prepare_free, __capstone_malloc_nested_release). This census does not exclude the route.
 It is static presence, not execution, and says nothing of timing.
 
+**The route this census was gathered for is excluded by the issue-stage guard (dev c84903d44c1f); the counts stand as
+static presence only.**
+
 ## Method
 
 - **Op list:** taken from decoder.sv's own cases at capstone-ariane **8522d72fe**, every encoding routed to fu
