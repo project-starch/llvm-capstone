@@ -945,6 +945,50 @@ record) and at the tag byte of a granule known to hold a capability, using the a
 ((paddr - MEMORY_BASE) >> 4)`. Predicted no fault, and a tag byte of 1 (the positive control that the read reaches tag
 memory). No write test without the lead's word.
 
+## S-31 — `pop_region` after a revoke of a REV-holding slot leaves the REVOKE RESULT loaded in the CPMP over pages the release frees `CANDIDATE — containment; from a source trace (monitor capstone-sbi 5b5e86b, module capstone.c), not yet shown on the board; filed 2026-10-19 by the board lane`
+
+Siblings: S-32 (wrong-region pop), S-33 (an emptied slot the bookkeeping still calls loaded), S-23 (whose guard reports this shape).
+
+- **The path.** The module's release (`capstone.c` `ioctl_release_region`, :409-458) calls REVOKE on the region, then
+  POP(1), then `dma_free_pages`. `revoke_region` (sbi_capstone.c :3013-3018, re-read):
+  `rev = read_cpmp(..); if (cap_type(rev) != CAP_TYPE_REV) return 2; r = __revoke(rev); write_cpmp(.., r);`.
+  So for a loaded slot holding a REV (a region shared REV_DEFAULT or REV_BORROWED, or a share_child parent), the
+  revoke's RESULT is written back into the slot. `pop_region` (:3032) then clears `cpmp_region`, `region_cpmp` and
+  `region_live`, and never touches the slot.
+- **Why it matters.** The result is a live capability, LINEAR or UNINIT with the perms kept, per the trace of the RTL
+  REVOKE. It stays in the CPMP over pages the kernel has just been given back, until `swap_cpmp` reuses the slot.
+  `read_cpmp` is a swap (`C_READ_CCSR` is `ccsrrw(rd, ccsr, x0)`, :20), so the paths that read before retiring
+  (split_out_cap's exact fit, REV_TRANSFERRED) are safe. This path writes back.
+- **What would settle it.** A release of a BORROWED region whose slot is loaded, followed by a fetch retry on the S-23a
+  monitor (5b5e86b or later). That should print FRGU for that slot with region 0xffff: a capability in a slot the
+  monitor holds empty.
+
+## S-32 — `pop_region` pops by count, so a stale module mirror of `region_n` pops an unrelated, never-revoked region `CANDIDATE — containment; source trace only, UNVERIFIED by this lane; filed 2026-10-19 by the board lane`
+
+Siblings: S-31, S-33.
+
+- POP takes a count, not an id (`region_i = region_n - i - 1`), and the monitor does no id check of its own. The module
+  requires `region_id == region_n - 1` in its OWN count (`capstone.c:444`).
+- The trace reports that mirror as refreshed only at `capstone.c:365`, `:589` and `process.c:233`. It is not refreshed
+  after DOM_CREATE's middle-carve append (sbi_capstone.c :1870-1872, `region_append`), SHARE_CHILD (head/tail
+  :2900-2917) or `dpi_share_region` (:3956).
+- After any of those, a release would revoke region X and pop some other top entry Y. Y may be loaded and was never
+  revoked, while X stays live over pages returned to the kernel.
+- **What would settle it.** A process-ABI sequence of DOM_CREATE with a middle carve, then REGION_CREATE and its
+  release, with the region table dumped before and after. It should show which index was popped.
+
+## S-33 — `revoke_region` on a loaded slot that holds no REV empties the slot and drops the capability, while `region_cpmp` still says loaded `CANDIDATE — availability; from source (sbi_capstone.c :3013-3015, re-read); filed 2026-10-19 by the board lane`
+
+Siblings: S-31, S-32.
+
+- `rev = read_cpmp(..)` swaps zero into the slot. On a non-REV type the function returns 2 with no write-back, so the
+  capability is dropped. The bookkeeping still maps the region to that slot, and `swap_cpmp` skips loaded regions
+  (:3670).
+- S's next access to the region's own pages is then refused (CPMX, injected). This is reachable through the plain
+  REVOKE ioctl, never-shared regions included.
+- **What would settle it.** REVOKE of a never-shared region S has already touched, then a kernel access to it. That
+  should print CPMX and then INJS.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
