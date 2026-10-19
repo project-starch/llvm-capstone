@@ -65,9 +65,13 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
     for (unsigned i = 0; i < count; ++i) {
         size_t start = base + 16 + i * stride;
         size_t end = base + 16 + (i + 1) * stride;
-        /* Offset in integers first: `group + start - base` moves the cursor to ~2*base (or, reassociated,
-         * to ~0) before coming back, and under compact bounds a cursor outside the representable window
-         * re-decodes to different bounds (SHRINK then refuses with garbage current bounds, cause 29). */
+        /* Offset in integers first. `group + start - base` let the compiler hoist `group - base` (a
+         * capability with its cursor at ~0, far outside its bounds) and keep it live across the loop. A
+         * quantum escape saves every register into the frame COMPRESSED and the resume decodes it back
+         * (capstone-qemu virtual_store_reg/virtual_load_reg; the RTL switcher saves the same way), and
+         * a cursor outside the representable window decodes to different bounds: the next SHRINK then
+         * refuses with garbage current bounds (cause 29), only on the compact profile and only when a
+         * preemption lands inside the loop. */
         slots[i].parent = __builtin_capstone_cap_shrink(
             (char *)group + (start - base), start, end);
         slots[i].issued = NULL;
