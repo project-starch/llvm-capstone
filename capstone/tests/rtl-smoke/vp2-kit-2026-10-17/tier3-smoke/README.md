@@ -2260,3 +2260,106 @@ a cpython verdict, and a fourth instance with its MTVL is evidence the RTL lane 
   - writing 2,000,000 at boot, or 1,000, removes it with no STEP;
   - the threshold is between 0 and 1,000 cycles on silicon.
 - A silicon bracket (100 / 300 / 600 in one boot) is now worth a boot, by the RTL lane's own condition.
+
+### The S-23a/S-26 monitor revision, stage 1, and S-26's silicon bracket, pre-registered (2026-10-19 18:15, before any boot)
+
+Board 1, tree A resident (caplifive_vp2c_8522d72fe). Every boot is cold, PREFLIGHT=0, UNGATED. One script runs it all:
+`chain-fix-stage1.sh` 7c324c86d7630d93.
+
+**The monitor revision** (the runtime and RTL lanes' scope): capstone-sbi 5b5e86b on 007d81d, branch
+vp2/s23-strobe-guard, pushed; wrapper aab63d5.
+- **S-23a:** after a fetch retry (FRTY), one `csrsi 0x7c4, 4` (csupctl's namespace-flush strobe), issued only when a
+  guard vouches for every CPMP slot. A loaded slot must name a live region that names it back. An empty slot must hold
+  no capability (LCC's total type query reads 7).
+  - At every FRTY the monitor prints, for each loaded slot, FRGS = (slot << 24) | (live << 20) | (maps back << 16) |
+    region.
+  - It names each slot it does not vouch for (FRGU).
+  - FRGD = (unvouched << 16) | vouched. Its high half is the verdict: 0 strobes, anything else skips.
+- **S-26:** CAPSTONE_BOOT_QUANTUM=2000000 writes 0x7C3 at boot, and CAPSTONE_QUANTUM_PRINT reports it (QNT0).
+- **Not in stage 1:**
+  - S-23b (the data retry, DRTY): HELD until its guard exists and the RTL lane's probes read.
+  - S-30 (Linux's region below the tag store): its own firmware later, as a matched pair, gated offline first by the
+    r55-regions replay. Design: carve [0xBC2D2000, 0xC0000000) linear and hold it privately. Moving the boundary is not
+    the fix: swap_cpmp loads any live, unloaded slot covering an S fault, with no owner or permission filter, so an
+    appended remainder would stay reachable.
+  - Emptying the CPMP slot in make_hole and pop_region: a source trace of their callers is running first.
+- **Kits:** `make-fix-kits.sh` ed4c2769d7acef6d. Each kit is a recorded kit with board.env lines changed and SHA256SUMS
+  regenerated:
+  - bkit7-rev2xF 1a12f2cbc528d416 and bkit7-rev2xmF d331cdd245a63d52: sql0-treeA's kits on the fix monitor;
+  - bkit7-pb10A f3968b063170d4bb: pb10's panic kit bkit7-fix6t (module d71f207a, BOARD_STEP_S=300) with tree A's
+    bitstream, old monitor 007d81d;
+  - bkit7-pb10F ecd84d4842b1a941: bkit7-pb10A on the fix monitor.
+- **The dry run:** it reached every last step and took every gate branch (`dryrun-fix-stage1.txt`):
+  - the chain on both canary verdicts;
+  - sql0-fix's VOID, HOLD and busy exits, with the real F kits passing its checks;
+  - the pb10 pair's two arms, HOLD and busy, with the real kits passing;
+  - run-s26's fix1 and q600 on the real firmwares through a stub driver;
+  - the judge's new arms on copies of real run dirs. A var run read as fix1 FAILS (no b0-hello), and a 150 s run read
+    as a bracket arm FAILS.
+
+**1. fix1, the canary** (`run-s26.sh fix1`, firmware f40b38ae6b0f74f7 on the pair's image 89baf46451448872; rungs
+b0-stats, vm-contract, b0-hello, so vm-contract runs with NO process-ABI STEP before it):
+- QNT0 001E8480;
+- b0-stats 0;
+- vm-contract 0 on the identity branch, as var's 511 steps;
+- b0-hello 0.
+
+This shows S-26's fix on the monitor that ships. Any FRTY is followed by FRGS lines and an FRGD; predicted high half 0.
+The judge passing writes CHAIN_FIX1_PASS. Anything else stops sql0 and pb10, and the bracket still runs.
+
+**2. sql0-fix** (`tier3-sql-arm-rev2e.sh` ecfa593bc44571a3): sql0-treeA (rev2d) with ONE change, the monitor.
+b0-hello's STEP precedes vbatch, so the boot quantum changes nothing there. Same runner 1f099612d70a9576, image
+64010720f1a6b3bc, fixture 956173e054762e91, a measure-only bake first (cap 26,000,000 B). The runtime lane's
+pre-registration is decisive either way:
+- **slot 7 vouched at the FRTY before the refusal** (FRGS live = 1, maps back = 1; FRGD high half 0): the deny was false,
+  a live capability cleared by a colliding broadcast. The strobe repairs it, and sql0 READS: any refusal is now followed
+  by FRTY, with no Oops. Its cells are scored against t3-sql-trim-vm/bundle as rev2d's would have been.
+- **not vouched** (an FRGU naming the slot, or a capability in a slot the monitor holds empty): the guard has found a
+  retired capability left loaded. There is no strobe and the refusal stays, which is a containment finding of its own.
+
+**3. pb10's matched pair on tree A** (`tier3-pb10-pair.sh` 94f2b6824c9eeb79): ffmpeg/pool, Sublet. Two cold boots that
+differ only in the monitor, the fix arm first:
+- **pb10-fix** (bkit7-pb10F): predicted to READ 4 of 4 as the QEMU prediction bundle t3-pb10/bundle (CAUGHT 4), under
+  the same vouched / not-vouched reading as sql0.
+- **pb10-treeA** (bkit7-pb10A): predicted to panic in case 01 as on bf3db3175 twice: MTVL BC2C0825, mod_node_page_state
+  from unpin_user_page. Tree A does not fix the data face; sql0-treeA panicked on it.
+- **If pb10-treeA does NOT panic:** the pair cannot attribute a pb10-fix READ to the strobe, and it is reported as
+  one-sided.
+- Results are filed as virtual-nested-pools-fix and virtual-nested-pools-treeA under results/2026-10-19-vp2c-treeA/.
+
+**4. S-26's silicon bracket** (`run-s26.sh q600 q300 q100`): three cold boots, DESCENDING, each one variable against
+var1k.
+- **The firmwares:** var1k's recipe (capstone-sbi ba9a0de, wrapper aab63d5, no mirror) with CAPSTONE_BOOT_QUANTUM 600 /
+  300 / 100: q600 85df5930f42dfec1, q300 95f97ad9426a7232, q100 104d3f8f629ccdee.
+- **The image:** cd3eb03c37325a62 (`bracket-prep.sh` bfb58a5d3fb84c1b). It is the pair's stage with only vm-contract.sh
+  swapped for `vm-contract-long.sh` 03ddf824ea953f30: bound 600 s instead of 150 s, counters read at 30 s and then
+  every 60 s. The stage was restored to its record afterwards.
+- **Why three boots and not one ladder:** the ladder would need a new monitor counter and a per-rung-block judge.
+- **Why descending:** a killed spin followed by another rung has never been observed.
+- **Why the longer bound:** var1k took 61.5 s at 1,000, so an arm can still be progressing at 150 s. The counters cannot
+  separate progress from a spin: cur's spin and var1k's progress both grew at ~700 steps/s.
+
+The model, calibrated on var (511 steps at 2,000,000) and var1k (41,805 at 1,000):
+
+    steps(q) - 511 = 41,294 * (1000 - E) / (q - E)
+
+E is the per-entry cost in quantum cycles.
+- A completed arm reads E.
+- An arm cut at the bound reads only a lower bound on E, from its last count. A cut is an INEQUALITY, never "spun".
+- Every completed arm must give the same E, and a spin must have q <= E. If they disagree, the model is wrong.
+
+Steps predicted for each E (the RTL lane's table, checked: at q = 1,000 the formula returns var1k's 41,805):
+
+| E | q = 600 | q = 300 | q = 100 |
+|---|---|---|---|
+| 100 | 74,840 | 186,334 | spin |
+| 200 | 83,099 | 330,863 | spin |
+| 300 | 96,864 | spin | spin |
+| 400 | 124,393 | spin | spin |
+| 500 | 206,981 | spin | spin |
+| 600 or more | spin | spin | spin |
+
+- **The RTL lane's prediction:** E_sil lies between ~660 and 1,000. Its basis is the simulated 1,500-2,000 less the
+  entry walk's ~840 cycles of fixed testbench memory delay, intersected with var1k's completion. So 600 SPINS, and 300
+  and 100 with it.
+- **This lane makes no numeric prediction.** The step count is the primary reading.

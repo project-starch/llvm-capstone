@@ -6,6 +6,11 @@
 #   cur: no boot write (today's monitor); rungs b0-stats vm-contract; predicted to SPIN with growing resume counters.
 #   mir: census write 0x7C3 = 1,000; rungs b0-stats b0-hello b0-stats2 vm-contract; predicted to SPIN (VOID if b0-hello
 #        does not return 0).
+# Added 2026-10-19 evening (pre-registered in tier3-smoke/README.md before their boots):
+#   fix1: the S-23a/S-26 monitor revision's canary (capstone-sbi 5b5e86b, wrapper aab63d5, CAPSTONE_BOOT_QUANTUM=2000000) on
+#         the pair's image; rungs b0-stats vm-contract b0-hello, so vm-contract runs with NO process-ABI STEP before it.
+#   q600, q300, q100: S-26's silicon bracket, var1k's recipe with CAPSTONE_BOOT_QUANTUM 600/300/100 on the bracket image
+#         (the pair's stage with vm-contract's bound at 600 s); vm-contract is a reading (completed with steps, or a bound).
 # Judged by s26-judge.py. Usage: run-s26.sh [arm...] (default var cur mir). Ends by itself. S26R_* stub for the dry run.
 DRV_DIR=/tmp/capstone/wt-gate/capstone/tests/rtl-smoke
 DRV_SHA=fd38816a90c64c22
@@ -21,13 +26,18 @@ main() {
       mir) want=1a2244dfa19f9d40; rungs="b0-stats b0-hello b0-stats2 vm-contract";;
       cur-esc) want=9e4924294f94eafe; rungs="b0-stats vm-contract";;   # firming arm 1: cur with diag_escapes=1 (image 3537c881f1020464)
       var1k) want=2406f5a523ca00e4; rungs="b0-stats vm-contract";;     # firming arm 2: var's boot write with 1,000 (image 89baf46451448872)
+      fix1) want=f40b38ae6b0f74f7; rungs="b0-stats vm-contract b0-hello";;
+      q600) want=85df5930f42dfec1; rungs="b0-stats vm-contract";;
+      q300) want=95f97ad9426a7232; rungs="b0-stats vm-contract";;
+      q100) want=104d3f8f629ccdee; rungs="b0-stats vm-contract";;
       *) echo "S26 STOP: unknown arm $a"; return 2;;
     esac
-    fw=$X/fw-s26-$a/fw_payload.bin D=${S26R_OUT:-$X}/run-$a O=$X/oracles-$a
+    fw=$X/fw-s26-$a/fw_payload.bin; [ $a = fix1 ] && fw=/tmp/capstone/s23fix/fw-canary1/fw_payload.bin
+    D=${S26R_OUT:-$X}/run-$a O=$X/oracles-$a
     [ "$(sha256sum $fw | cut -c1-16)" = "$want" ] || { echo "S26 STOP: $a's firmware is not $want"; return 1; }
     [ -e $D ] && { echo "S26 STOP: $D exists"; return 1; }
     mkdir -p $D $O; for r in b0-stats b0-hello b0-stats2; do echo 0 > $O/$r.oracle; done
-    case $a in var) echo 0;; *) echo 930;; esac > $O/vm-contract.oracle
+    case $a in var|fix1|q*) echo 0;; *) echo 930;; esac > $O/vm-contract.oracle
     ${S26R_WAIT:-bash $DRV_DIR/board-free-wait.sh 3600 1} || { echo "S26 STOP: board 1 stayed busy"; return 1; }
     echo "S26 $a BEGIN $(date +%T) fw $want rungs [$rungs] board 1" | tee -a $D/SEQ
     ( cd $DRV_DIR || exit 1
