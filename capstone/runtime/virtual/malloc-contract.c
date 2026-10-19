@@ -17,8 +17,38 @@ __attribute__((noinline)) static void fault_store(volatile char *p)
     *p = 0;
 #endif
 }
+#ifdef __CAPSTONE_PURECAP__
+extern unsigned long __capstone_malloc_bind_refused;
+extern unsigned long __capstone_malloc_bind_first[6];
+extern unsigned long __capstone_malloc_ng_null;
+extern unsigned long __capstone_malloc_ids_failed;
+extern unsigned long __capstone_malloc_map_calls;
+extern unsigned long __capstone_malloc_map_refused_early;
+extern unsigned long __capstone_malloc_map_refused_acquire;
+extern unsigned long __capstone_malloc_map_last[4];
+#endif
 static void require(int ok, const char *what)
-{ if (!ok) { fprintf(stderr, "MALLOC_FAIL:%s\n", what); exit(1); } }
+{
+    if (ok) return;
+    fprintf(stderr, "MALLOC_FAIL:%s\n", what);
+#ifdef __CAPSTONE_PURECAP__
+    /* Which step refused. Without this a NULL from malloc says only "out of memory". */
+    fprintf(stderr, "MALLOC_WHY bind_refused=%lu ng_null=%lu ids_failed=%lu"
+                    " map_calls=%lu map_early=%lu map_acquire=%lu"
+                    " last_bytes=%lu last_align=%lu last_errno=%lu asked=%lu\n",
+            __capstone_malloc_bind_refused, __capstone_malloc_ng_null,
+            __capstone_malloc_ids_failed, __capstone_malloc_map_calls,
+            __capstone_malloc_map_refused_early, __capstone_malloc_map_refused_acquire,
+            __capstone_malloc_map_last[0], __capstone_malloc_map_last[1],
+            __capstone_malloc_map_last[2], __capstone_malloc_map_last[3]);
+    fprintf(stderr, "MALLOC_WHY2 first_slot=%lu start=%lu end=%lu stride=%lu base=%lu group_end=%lu\n",
+            __capstone_malloc_bind_first[0], __capstone_malloc_bind_first[1],
+            __capstone_malloc_bind_first[2], __capstone_malloc_bind_first[3],
+            __capstone_malloc_bind_first[4], __capstone_malloc_bind_first[5]);
+#endif
+    fflush(stderr);
+    exit(1);
+}
 static void basic(void)
 {
     char *p = calloc(23, 7);
@@ -85,7 +115,16 @@ static void tagged(void)
 }
 static void population(void)
 {
-    enum { COUNT = 70000 };
+    /* vp2 caps the flat lifetime table at 65536 records (a 16-bit node index), which 70000
+     * exceeds by construction. Parameterised so the same source runs at 70000 under QEMU and at
+     * 60000 on silicon; the default is unchanged. The count used is printed and recorded. */
+    unsigned long COUNT = 70000UL;
+    {
+        const char *e = getenv("CAPSTONE_MALLOC_COUNT");
+        if (e && *e) { char *end = 0; unsigned long n = strtoul(e, &end, 10);
+                       if (end && !*end && n) COUNT = n; }
+    }
+    printf("MALLOC_COUNT_USED %lu\n", COUNT); fflush(stdout);
     char **p = malloc(COUNT * sizeof(*p)); require(p != NULL, "population array");
     for (unsigned i = 0; i < COUNT; ++i) {
         p[i] = malloc(17); require(p[i] != NULL, "population allocation"); p[i][0] = i % 127;
@@ -131,6 +170,116 @@ static void hot(int force_service)
     puts("MALLOC_HOT_END"); fflush(stdout);
     for (unsigned i=0; i<64; ++i) free(anchor[i]);
 }
+/* Option (iii): a remapped mapping can come back page-aligned but not granule-aligned, which
+ * __capstone_vm_remap cannot be asked to avoid -- it takes an address and two lengths and no
+ * alignment. The runtime then refuses it and realloc falls through to malloc-plus-copy, so the
+ * cost is a copy and never a widened bound. This REPORTS how often that happened across one grow,
+ * and checks the contents survive whichever path was taken. mremap returns page-aligned addresses,
+ * so at these sizes (granule 8 KiB at 6 MiB, 16 KiB at 12 MiB) the copy is the expected path; the
+ * number is printed so the acceptance runs record it rather than anyone inferring it. */
+#ifdef __CAPSTONE_PURECAP__
+extern unsigned long __capstone_malloc_remap_unaligned;
+#endif
+static void remap_align(void)
+{
+    size_t small = 6u << 20, large = 12u << 20;
+#ifdef __CAPSTONE_PURECAP__
+    unsigned long before = __capstone_malloc_remap_unaligned;
+#else
+    unsigned long before = 0;
+#endif
+    char *p = malloc(small);
+    require(p != NULL, "remap-align setup");
+    memset(p, 0x5A, small);
+    char *q = realloc(p, large);
+    require(q != NULL, "remap-align growth");
+    /* every byte of the old object must still be there, copied or remapped */
+    for (size_t i = 0; i < small; i += 4096)
+        require((unsigned char)q[i] == 0x5A, "remap-align contents");
+    require((unsigned char)q[small - 1] == 0x5A, "remap-align last byte");
+    /* and the grown object must be writable to its end */
+    q[large - 1] = 0x3C;
+    require((unsigned char)q[large - 1] == 0x3C, "remap-align tail writable");
+#ifdef __CAPSTONE_PURECAP__
+    printf("MALLOC_REMAP_UNALIGNED %lu\n", __capstone_malloc_remap_unaligned - before);
+#else
+    printf("MALLOC_REMAP_UNALIGNED %lu\n", before);
+#endif
+    free(q);
+}
+
+#ifdef __CAPSTONE_PURECAP__
+extern unsigned long __capstone_malloc_map_ok[2];
+extern unsigned long __capstone_malloc_map_admitted;
+extern unsigned long __capstone_malloc_map_last[4];
+extern unsigned long __capstone_malloc_map_refused_acquire;
+extern unsigned long __capstone_malloc_map_ok_base;
+extern unsigned long __capstone_malloc_map_last_base;
+#endif
+/* Separates is_power_of_2(bytes) from "bytes > 16384" as the module's arena predicate. Both score
+ * identically on every size measured so far, because each one falls the same side of both. These
+ * two invert the predictions. No require(): a failure here is a READING, not a fault, and both
+ * readings must survive into one run. */
+static void predicate(void)
+{
+    /* group needs 32768 -- a power of two, ABOVE 16384 */
+    void *a = malloc(9341);
+    printf("MALLOC_PRED pow2_above=%s\n", a ? "ALLOCATED" : "NULL");
+    fflush(stdout);
+    if (a) { memset(a, 0x11, 9341); free(a); }
+    /* group needs 12288 -- NOT a power of two, BELOW 16384 */
+    void *b = malloc(2029);
+    printf("MALLOC_PRED nonpow2_below=%s\n", b ? "ALLOCATED" : "NULL");
+    fflush(stdout);
+    if (b) { memset(b, 0x22, 2029); free(b); }
+#ifdef __CAPSTONE_PURECAP__
+    /* The REFUSED mapping's own size, so the NULL arm is a measurement rather than a
+     * prediction from the group model -- which is all the admitted-side figure made it. */
+    printf("MALLOC_PRED admitted=%lu last_ok_bytes=%lu last_ok_align=%lu"
+           " refused=%lu last_refused_bytes=%lu last_refused_align=%lu last_refused_errno=%lu\n",
+           __capstone_malloc_map_admitted, __capstone_malloc_map_ok[0],
+           __capstone_malloc_map_ok[1], __capstone_malloc_map_refused_acquire,
+           __capstone_malloc_map_last[0], __capstone_malloc_map_last[1],
+           __capstone_malloc_map_last[2]);
+    /* The decisive reading: if an ADMITTED mapping's base is not naturally aligned to its own
+     * size, add()'s alignment disjunct cannot be what refuses the others. */
+    printf("MALLOC_PRED ok_base=%lu ok_base_misaligned_vs_size=%lu\n",
+           __capstone_malloc_map_ok_base, __capstone_malloc_map_last_base);
+#endif
+    fflush(stdout);
+}
+/* Produce the one row the record is missing: a POWER-OF-TWO mapping refused with
+ * naturally_aligned=0. The alignment half of add():466 currently rests on the same arm giving
+ * opposite answers across runs plus a 1-in-4 board result, which is behavioural inference, not a
+ * printed disjunct.
+ *
+ * It does not need a lucky boot. A power-of-two mapping is refused whenever mmap does not land it
+ * on its own size, roughly half the time, so FORCING many group mappings in one process makes the
+ * row near-certain. Each size class holds only cnt slots, so keeping every object live forces a
+ * fresh mapping every cnt allocations.
+ *
+ * Deliberately model-free: it does not assume which group a request lands in -- that assumption is
+ * what made the earlier arm measure the wrong thing. It allocates across a spread of classes and
+ * lets the launcher's CAPSTONE_VM_ADD_REFUSED rows report the real sizes and bases.
+ */
+static void align_probe(void)
+{
+    enum { KEEP = 600 };
+    static void *live[KEEP];
+    static const size_t sizes[] = {520, 1000, 2029, 3000, 4100, 6144, 9000, 12000};
+    unsigned n = 0, ok = 0, failed = 0;
+    for (unsigned round = 0; round < KEEP / (sizeof sizes / sizeof *sizes); ++round) {
+        for (unsigned i = 0; i < sizeof sizes / sizeof *sizes && n < KEEP; ++i, ++n) {
+            live[n] = malloc(sizes[i]);
+            if (live[n]) { ok++; memset(live[n], 0x5A, 1); } else failed++;
+        }
+    }
+    printf("MALLOC_ALIGN_PROBE attempted=%u ok=%u failed=%u\n", n, ok, failed);
+    fflush(stdout);
+    for (unsigned i = 0; i < n; ++i) if (live[i]) free(live[i]);
+    puts("MALLOC_ALIGN_PROBE_DONE");
+    fflush(stdout);
+}
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
@@ -138,6 +287,9 @@ int main(int argc, char **argv)
     if (!strcmp(mode, "hot-service-control")) { hot(1); return 0; }
     if (!strcmp(mode, "population")) { population(); return 0; }
     if (!strcmp(mode, "churn")) { churn(); return 0; }
+    if (!strcmp(mode, "remap-align")) { remap_align(); return 0; }
+    if (!strcmp(mode, "predicate")) { predicate(); return 0; }
+    if (!strcmp(mode, "align-probe")) { align_probe(); return 0; }
     if (!strcmp(mode, "ok")) { basic(); tagged(); return 0; }
     if (!strcmp(mode, "reuse-stale") || !strcmp(mode, "reuse-free")) {
         /* Let upstream offset cycling choose reuse; never force its policy. */

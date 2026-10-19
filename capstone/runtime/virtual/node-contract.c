@@ -6,7 +6,20 @@
 #include <string.h>
 #include "vm.h"
 
-#define NODES 70000
+/* vp2 caps the flat lifetime table at 65536 records (a 16-bit node index), which 70000 exceeds
+ * by construction. The count is a parameter so the same source runs at 70000 under QEMU, where
+ * the namespace is wider, and at 60000 on silicon. CAPSTONE_NODE_COUNT overrides it; the default
+ * is unchanged, so an existing invocation behaves exactly as before. The count used is PRINTED,
+ * and run-nodes.py records it -- a run whose count is not in the record cannot be compared with
+ * one whose count differed. */
+static unsigned long node_count(void)
+{
+    const char *e = getenv("CAPSTONE_NODE_COUNT");
+    unsigned long n = 0;
+    if (e && *e) { char *end = 0; n = strtoul(e, &end, 10); if (end && *end) n = 0; }
+    return n ? n : 70000UL;
+}
+#define NODES (node_count())
 static unsigned char *volatile stale;
 static void require(int ok, const char *message)
 {
@@ -36,13 +49,13 @@ int main(int argc, char **argv)
             stale = sublet_take(&tail);
             stale[0] = 42;
         }
-        for (unsigned i = 0; i < NODES; ++i) {
+        for (unsigned long i = 0; i < NODES; ++i) {
             sublet_handle(&region, &handle);
             /* Losing the REV handle does not retire its structural node. */
             sublet_clear(&handle);
         }
         if (!round) require(stale[0] == 42, "old live capability after growth");
-        printf("NODE_LIVE:%u:%u\n", round, NODES); fflush(stdout);
+        printf("NODE_LIVE:%u:%lu\n", round, NODES); fflush(stdout);
         sublet_give_to(&ancestor, &region);
         /* One growth batch adds at most 4096 slots in this gate. Asking for
          * more forces the retired population through the complete sweep. */

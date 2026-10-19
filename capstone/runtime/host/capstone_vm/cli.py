@@ -316,8 +316,8 @@ def start(args: argparse.Namespace, state: Path) -> int:
         profile = getattr(args, "profile", "physical")
         if profile == "virtual" and not {"launcher", "module"} <= files.keys():
             raise VMError("Virtual profile requires its launcher and module")
-        # The local-mallocng virtual ABI needs QEMU's exact-bounds profile (runtime/virtual/README.md);
-        # run-staged.py turns it on for the qualified gates, and a persistent VM must be able to as well.
+        # Option (iii): the local-mallocng virtual ABI runs on the default profile. The flag stays
+        # so a suite can be run both ways as a two-sided control (runtime/virtual/README.md).
         exact_bounds = bool(getattr(args, "exact_bounds", False))
         if exact_bounds and profile != "virtual":
             raise VMError("--exact-bounds is a virtual-profile QEMU option")
@@ -502,7 +502,7 @@ def main(argv: list[str] | None = None) -> int:
         up.add_argument("--" + option, type=Path, required=True)
     up.add_argument("--profile", choices=("physical", "virtual"), default="physical")
     up.add_argument("--exact-bounds", action="store_true",
-                    help="Virtual profile: QEMU's exact-bounds mode, which the local-mallocng ABI needs")
+                    help="Virtual profile: QEMU's exact-bounds mode. Not required; a two-sided control.")
     for option in ("launcher", "ssh-server", "module", "job-helper"):
         up.add_argument("--" + option, type=Path, help="Override the installed guest component")
     up.add_argument("--port", type=int, default=0)
