@@ -522,3 +522,45 @@ R-57's shared saved-exception register (audited SHARED-SAFE, and the area it sav
 read-side priority chain rather than the flops), and an R-38-class fix if the index-only-compare arm confirms that
 candidate. The decision is the lead's; this entry exists so that the alternative was weighed rather than defaulted
 into a build.
+
+## The escape-kind arm: first item of the batch after tree B, designed 2026-10-19 from the kind table
+
+**Why it is first.** Two things rest on "every escape returns to CSRUNV+4 whatever its kind", and both are
+currently design-static plus one observed kind: S-29's conclusion that the data-side window is an ABI rule a
+single fence at CSRUNV+4 closes, and the consuming resume's design. One arm closes both.
+
+**The kind table, from `commit_stage.sv:264-268`, which determines the whole construction:**
+
+| kind | cause | condition |
+|---|---|---|
+| 1 | preempt | the quantum or an interrupt |
+| 3 | 11 | an ecall, and **only if the frame's options bit 0 is set** |
+| 4 | 12, 13 or 15 | a page fault, and **only if options bit 1 is set** |
+| 5 | insufficient system resources | node pressure |
+| 2 | anything else | terminal |
+
+**This corrects how the existing arms' readings were described.** `va-satpstale`'s frame sets options = 1, so bit 1
+is clear, and that is why its page-fault and refused-load escapes read **kind 2, terminal**: the terminality comes
+from the OPTIONS WORD, not from the nature of the fault. With options = 3 the same page fault is kind 4 and
+resumable. The readings stand; the explanation in their headers should say "terminal because options bit 1 is
+clear" rather than implying a fault is terminal in itself.
+
+**The construction**, one source with three sub-arms, frame options = 3 throughout so the ecall and page-fault
+escapes are both resumable kinds:
+- **kind 1** by setting `CSUPQUANTUM` small. The quantum counts RETIRED INSTRUCTIONS (`sup_count_d = sup_count_q -
+  1` per committed instruction while a context runs), so an expiry is deterministic rather than timing-dependent.
+- **kind 3** by the context's ecall, as today.
+- **kind 4** by a load from an address the context's chain does not map, with options bit 1 set.
+- kind 5 is left out: node pressure needs the allocator's reserve and is a different arm.
+
+**What each sub-arm must read**, so one arm serves both claims:
+1. the escape's kind and cause, from the frame's event words, as today;
+2. **the saved return pc**, which no existing arm reads: the frame's id-0 slot at +64, whose cursor is the parked
+   pc. The claim under test is that it equals CSRUNV+4 for every kind;
+3. the caller's first data access after the escape, both unfenced and with one `sfence.vma` at CSRUNV+4, which is
+   S-29's ABI-rule claim tested per kind rather than for the ecall kind alone.
+
+**Pre-registered expectation:** the saved pc equals CSRUNV+4 for kinds 1, 3 and 4; the unfenced reading is the
+CONTEXT's value and the fenced reading the caller's own, for each of the three. A saved pc that differs for any
+kind refutes the ABI rule as stated and makes the escape direction a hardware problem again rather than a
+software one, which is exactly why this arm comes before the consuming resume.
