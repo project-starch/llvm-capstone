@@ -4064,3 +4064,41 @@ silently WRITES another object.
 - alias reads back 60 while outside faults: stores alias like loads, so an overrun past one span writes without a trap;
 - alias faulting: stores are checked differently;
 - outside completing: out-of-window stores are not checked.
+
+### Case 31's mechanism, audited (2026-10-20 06:4x, claim-auditor): SUPPORTED for loads, with three corrections
+
+**CORRECTION to the diag31 section above:** it says "the same boot's bounds control faults with cause 28 on a plain load".
+The control's faulting instruction (0x22064) is `sb a0, 0x0(a1)`, a STORE. It still shows the LSU's bounds block is live
+in a context, since a cause 28 on sb can come only from load_store_unit.sv:1356. It is not a load, though.
+
+**Supported, from source and the board** (8522d72fe):
+- The LSU decodes `lsu_cap_a = decompress_cap_tagged(lsu_ctrl.cursor_a, …)` (load_store_unit.sv:338), with cursor_a
+  being rs1's cursor, and checks the effective address against that decode (:1353-1356, cause 28).
+- LCC reads the same decode on the same inputs (ex_stage.sv:887; capstone_dyn_unit.anvil:405-406), so the diag's
+  q_decoded is the check's own bounds.
+- The auditor's 64-bit model of compress_bounds/decompress_bounds (ariane_pkg.sv:673-720) reproduces both diag31
+  q_decoded values to the digit, and all four alias-load arms.
+- CINCOFFSET checks the type only, with no tag clear and no representability check (capstone_flu_unit.anvil:29-60).
+- Case 31's access is `lbu a1, 0(a0)` right after `cincoffset a0, a0, a1`, with a0 from an ldc: a capability load.
+- Case 32's statDecodePage is byte-identical and faults 28 on silicon.
+
+**REFUTED as worded:** "an overrun past one window span aliases".
+- With S = 2^(E+14), a byte access at an out-of-window cursor passes iff (cursor − base) mod S ≤ len − size. Otherwise
+  it still traps 28.
+- Case 31's cursor is 50,976 bytes past the END (less than one span) and 71,136 past the base.
+- For its buffer, overruns up to 45,376 bytes past the end trap. Beyond that, about 31% of positions alias: 2,520 of
+  8,192 in the model's four-span scan.
+
+**Inferred, not measured:**
+- stores and LDC/STC: the same decode by source (load_store_unit.sv:1320 covers LOAD and STORE). alias-store is booting
+  on board 1 now.
+- tree B: an identical decode path by source (ariane_pkg.sv unchanged between the trees), not run. q15 subset f on tree B
+  is queued.
+- the bitstream's identity in these boots: a label, not a hash.
+
+**It amends a documented prior finding:** the Q-30 history note's "silicon bites only on instructions that derive
+bounds". Its simulation arm has no load at an out-of-window cursor.
+
+**The wording the auditor allows in ISSUES** is the statement above, with the exact condition, the alias-load
+measurement, the case 31 witness (3 board MISSED, 3 QEMU CAUGHT), "stores and LDC/STC: same decode by source,
+unmeasured", and the Q-30 amendment.
