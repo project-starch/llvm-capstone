@@ -128,6 +128,16 @@ class FpgaConsole:
                 raise ValueError(f"FPGA_BOARD={self.board}: the console URL given is not board {self.board}'s "
                                  f"({BOARD_SECRETS[self.board]}); refusing to drive another board")
             print(f"[fpga-board] {self.board}", file=sys.stderr, flush=True)
+        # THE SHARED-BOARD WATCH (2026-10-19). Board 2's console is shared with a human colleague, and nothing in the
+        # console reserves it. On board 2 every console records the connected-client count (the most it saw is flagged
+        # as possible human interference when above 1, this client), and a power or NV-bitstream transition that this
+        # client did not make stops the run at once: the board is left exactly as found (no power-off, no release),
+        # since a human may be mid-session, and the stop prints [fpga-foreign] so no wrapper retries over it.
+        self._watch = (self.board == "2" and not allow_unverified and client is None)
+        self._own_until = 0.0
+        self._users = {"start": None, "max": None, "last": None, "flagged": False, "samples": []}
+        self._last_power = None
+        self._last_nv = None
 
         if C.PROTOCOL_SOURCE != "verified" and not allow_unverified:
             raise ProtocolNotVerified(
@@ -284,6 +294,7 @@ class FpgaConsole:
         self._log("connected")
 
     def close(self) -> None:
+        self.users_report()
         try:
             self.sio.disconnect()
         except Exception:  # pragma: no cover - best effort
@@ -334,11 +345,67 @@ class FpgaConsole:
             last = self._last_uart_seq
         self._emit("request_history", last_seq=last)
 
+    def users_report(self) -> None:
+        """The client counts this console saw (board 2's watch): printed at close, so every run log carries them."""
+        u = getattr(self, "_users", None)
+        if getattr(self, "_watch", False) and u is not None:
+            t0 = u["samples"][0][0] if u["samples"] else 0.0
+            smp = " ".join(f"{n}@{t - t0:.0f}s" for t, n in u["samples"][-40:])
+            print(f"[fpga-users] board {self.board} start {u['start']} max {u['max']} end {u['last']}"
+                  f"{' FLAGGED' if u['flagged'] else ''}; samples (count@seconds): {smp}", file=sys.stderr, flush=True)
+
+    def _foreign(self, what: str) -> None:
+        """Stop the run: a change on a shared board that this client did not make. Board left as found."""
+        print(f"[fpga-foreign] board {self.board}: {what}, not made by this run; stopping as INFRA, board left as found "
+              f"(no power-off, no release); do not retry over a human session", file=sys.stderr, flush=True)
+        os._exit(75)
+
+    def _watch_event(self, now: float, event: str, data: Any) -> None:
+        if event == C.USER_COUNT_EVENT and isinstance(data, dict):
+            n = data.get(C.USER_COUNT_KEY)
+            if isinstance(n, int):
+                u = self._users
+                if u["start"] is None:
+                    u["start"] = n
+                    print(f"[fpga-users] board {self.board} start {n}", file=sys.stderr, flush=True)
+                u["last"] = n; u["max"] = n if u["max"] is None else max(u["max"], n)
+                prev = u["samples"][-1] if u["samples"] else None
+                u["samples"].append((now, n))
+                # The baseline is the lane's own client count during a run. FPGA_USERS_BASELINE when measured; otherwise
+                # the count this console first saw, so a client JOINING mid-run is still caught. Each board's health
+                # check opens a 1-2 s Socket.IO connection every ~30 s (the board-host session, 2026-10-19), which is
+                # board 1's 2/3 flicker, so a single sample one above the baseline is NOT a flag: two consecutive
+                # samples above it more than 5 s apart are, and so is any sample above baseline + 1.
+                base = os.environ.get("FPGA_USERS_BASELINE", "").strip()
+                base = int(base) if base.isdigit() else u["start"]
+                hit = n > base + 1 or (n > base and prev is not None and prev[1] > base and now - prev[0] > 5.0)
+                if hit and not u["flagged"]:
+                    u["flagged"] = True
+                    print(f"[fpga-users] board {self.board}: {n} connected clients, above the baseline {base}: POSSIBLE "
+                          f"HUMAN INTERFERENCE (another client, perhaps a human or an open browser tab, could act on the "
+                          f"board); this run is not a clean reading", file=sys.stderr, flush=True)
+        elif event == C.POWER_STATE_EVENT and isinstance(data, dict):
+            st = data.get("state")
+            if self._last_power is not None and st is not None and st != self._last_power and now > self._own_until:
+                self._foreign(f"power_state {self._last_power} -> {st}")
+            if st is not None:
+                self._last_power = st
+        elif event == C.LISTEN.get("flash_state") and isinstance(data, dict):
+            nv = data.get("nv_bitstream_name")
+            if self._last_nv is not None and nv is not None and nv != self._last_nv and now > self._own_until:
+                self._foreign(f"nv_bitstream_name {self._last_nv} -> {nv}")
+            if data.get("state") not in (None, "done", "idle") and now > self._own_until:
+                self._foreign(f"flash_state {data.get('state')}")
+            if nv is not None:
+                self._last_nv = nv
+
     def _record(self, event: str, data: Any) -> None:
         now = time.monotonic()
         with self._cond:
             self._events.append((now, event, data))
             self._state[event] = data
+            if getattr(self, "_watch", False):
+                self._watch_event(now, event, data)
             # SERVER RESTART DETECTION. The server stamps every Socket.IO event with a
             # server_epoch minted at process start. A restart forces the board OFF
             # (init_gpio claims the power pin with initial value 0), so a run that spans one
@@ -744,6 +811,7 @@ class FpgaConsole:
             self._log(f"power already {want}")
             return
         mark = self.now()
+        self._own_until = mark + timeout + 30.0   # this client's own power transition (the shared-board watch)
         self._emit("power_toggle")
         self.wait_state(C.POWER_STATE_EVENT, want, timeout, since=mark)
 
@@ -755,6 +823,7 @@ class FpgaConsole:
     def flash_bitstream(self, name: str) -> Any:
         """Flash a stored bitstream to the FPGA (PERSISTENT non-volatile write --
         reprograms the shared board). Blocks until flash_state=done."""
+        self._own_until = self.now() + 900.0      # this client's own flash (the shared-board watch)
         return self._post("flash_bitstream", filename=name)
 
     def load_boot_image(self, name: str, *, attempts: int = 3,
