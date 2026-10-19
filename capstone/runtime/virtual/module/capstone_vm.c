@@ -148,6 +148,29 @@ MODULE_PARM_DESC(node_flat_records,
 #define CV_FLAT_RECORDS CV_FLAT_RECORDS_MAX
 #endif
 #define CV_FLAT_BYTES (CV_FLAT_RECORDS * CAP_REV_TABLE_RECORD)
+/* S-23 (2026-10-20): the first id a context's table allocates. On vp2 a CPMP entry tracks its
+ * capability's revnode by INDEX only (pmp_data_if.sv: the 16-bit compare is deliberate, so a
+ * (generation, index) split keeps invalidating), and a context's table is a SEPARATE namespace
+ * whose indices the same compare cannot tell from the caller's physical ones. A CSRETIRE in
+ * retire()'s window broadcasts the retiring ancestor's VIRTUAL index -- 2 for a context's first
+ * grant -- and clears every caller entry tracking PHYSICAL node 2 (the NONLIN children of
+ * CAPCREATE's root); the very next fetch through such an entry is refused (the FRTY at
+ * retire+0x220 on every sql0 boot). No placement of an instruction can heal it, because the
+ * refused fetch IS the instruction after the CSRETIRE. So the module never hands out a virtual
+ * index a physical one can share: allocation starts at a floor above the physical namespace's
+ * high-water (the monitor recycles physical ids low; nothing on vp2 exports the count, so the
+ * floor is generous rather than asserted). The records below the floor stay zero: an all-zero
+ * record is invalid, depth 0, and terminates any walk that reaches it, and neither the bump
+ * pointer nor CSNODE allocates below next. The paged (QEMU) build keeps 2; QEMU tracks each
+ * namespace separately and has no such collision. A test table smaller than four floors gets a
+ * quarter of its records as the floor, so exhaustion rows still have room. */
+#define CV_NODE_FLOOR_MAX 1024UL
+#if node_table_flat
+#define CV_NODE_FIRST (CV_FLAT_RECORDS / 4 < CV_NODE_FLOOR_MAX ? \
+                       (CV_FLAT_RECORDS / 4 < 2 ? 2UL : CV_FLAT_RECORDS / 4) : CV_NODE_FLOOR_MAX)
+#else
+#define CV_NODE_FIRST 2UL
+#endif
 
 /* S-25's narrow pin: on a fault, take the REST of the arena rather than pin_ahead_pages.
  *
@@ -1219,7 +1242,7 @@ module_param(diag_escapes, bool, 0644);
 static unsigned escape_prints;
 #define CV_ESCAPE_BUDGET 16U
 
-#define CV_DIAG_TAG "srevroot-zero-2"
+#define CV_DIAG_TAG "node-floor-1"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
@@ -1518,7 +1541,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 static void node_stats(struct context *c)
 {
     c->stats.nodes = c->table[3];
-    c->stats.nodes_high_water = c->table[1] - 2;
+    c->stats.nodes_high_water = c->table[1] - CV_NODE_FIRST;
     c->stats.nodes_retired = node_retired(c);
     c->stats.nodes_live = c->stats.nodes_high_water - node_retired(c) - (c->table[2] >> 32);
     c->stats.node_capacity = node_capacity(c);
@@ -1901,9 +1924,11 @@ static int vm_open(struct inode *inode, struct file *f)
         /* RECYCLE set, PAGED clear, capacity fixed and published immediately. Deliberately NO
          * MAGIC at table[4] and no retired word at table[5]: in this format root+32 and root+40
          * are record id 2, the first allocatable id, and QEMU reads neither outside the paged
-         * branch. Writing them would publish a table whose first record is the magic's ASCII. */
+         * branch. Writing them would publish a table whose first record is the magic's ASCII.
+         * Since the S-23 floor, root+32 and root+40 are record 2, inside the never-allocated gap
+         * below CV_NODE_FIRST, and they stay zero for the same reason the whole gap does. */
         c->table[0] = CAP_REV_TABLE_RECYCLE | CV_FLAT_RECORDS;
-        c->table[1] = 2;
+        c->table[1] = CV_NODE_FIRST;
     } else {
         c->table[0] = CAP_REV_TABLE_FLAGS;
         c->table[1] = 2;
@@ -1940,7 +1965,7 @@ static int vm_open(struct inode *inode, struct file *f)
         local_irq_restore(flags); preempt_enable();
     }
 #endif
-    if (available != node_capacity(c) - 2) {
+    if (available != node_capacity(c) - CV_NODE_FIRST) {
         node_free_table(c); free_page((unsigned long)c->frame);
         kvfree(t); kvfree(c); return -EOPNOTSUPP;
     }
