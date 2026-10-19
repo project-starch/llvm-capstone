@@ -3299,3 +3299,48 @@ Result lines are in `records/fetch-face-pair.result-lines.txt`. UNGATED.
   - whether the fetch face needs something sql0 has and this loop lacks: a large text footprint, revocation of a node
     that Linux's own mappings derive from, or the escape landing in particular code;
   - why pb10's fetch face vanished under srz (2→0) while sql0's held (21→21).
+
+### dev's srevroot-zero module, Tier 1 result (2026-10-20 03:35-03:42, board 2, tree B): the gate PASSES
+
+`records/t1-srzdev.result-lines.txt`: firmware fc5a4a1d9629c19f, image-rev7-srzdev d5edf1ef96674d38, module 90bf036f.
+- **The rungs:** b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1. All four read as t1-old's (`CHAIN_SRZDEV T1 GATE PASS`).
+- **Other readings:**
+  - the banner `srevroot-zero-2` is present;
+  - DRT1 0, DRTX 0, FRTY 0, no Oops;
+  - VM exits normal 0 / stale 139 / sparse-churn 1.
+- **The judge's NO DATA** (one CAPSTONE_VM_STATS line inside vm-contract, against the two it wants) and CPMX-DIAG's NO
+  DATA are identical in t1-old's and t1-srz's records. They are a property of the stage, not of the module.
+- **So module 90bf036f has its own Tier 1 boot,** and corpus arms may use it.
+
+### Arm q15 (sqlite/engine-repros vp2-nested-pools, the memsys5 Q-15 repair), pre-registered (2026-10-20 03:4x, before its first boot): board 1, tree A, six --only boots
+
+The compiler lane's kit: dev f1d522d7fff1, with its record on lane q15-memsys5 4060f62c582a under results/2026-10-20-q15-repair.
+- **The images:** build-virtual-nested-pools-q15, 33 cases plus control_uaf_mem5 and control_bounds_mem5, on SDK
+  t3-freeze-nb.
+  - EXPECT_IMAGES is m5q.images.SHA256SUMS (eab23e459a1d0972, 35 lines).
+  - All 35 hashes were matched to the build's .dom files by content. SDK-BUILTINS OK.
+- **The runner:** `tier3-q15-board1.sh` 8d0a3b582aa91d6f. It runs from the dev-pinned worktree /tmp/capstone/wt-q15:
+  - run-virtual.py b3f1aa0ea60442f8;
+  - tier3-appvm-arm.sh 666d920eedef445b, which carries the C-81 gate.
+- **The kit:** bkit7-rev2xD (tree A 8522d72fe, module 39d8492d, monitor f13dbc5, board 1).
+  - It differs from bkit7-rev2xBD only in board, driver directory and bitstream.
+  - Run C was confirmed on 39d8492d's QEMU twin a5dec6a3 (run-Cp-rev2, 33/33).
+- **The split:** sq0's, six cold boots, each with both controls:
+  - a 00-05, b 06-11, c 12-17, d 18-23, e 24-29, f 30-32;
+  - the lists are in `records/q15-subsets/`;
+  - the estimated firmware is at most 24.3 MB against the 26,000,000 B cap. sq1a's 6+2 baked to 23,759,368 B, and q15's
+    images are within 7 KB of the old build's.
+- **The order:** board 1 after the cpython pair ends (CPP DONE/STOP/HOLD).
+- **Scoring:** each boot is scored at once by compare-pilot.py against run C cut to its cases (subset-bundle.py).
+  - The scorer was controlled on real bundles: run-Cp-rev2 reads 33/33 SAME (rc 0), and the pre-repair run A reads 0/33
+    (rc 1).
+  - The dry run reached subset f. These negatives each stopped it: rc 78 from the arm script, a busy board, an existing
+    root, and an unmet wait.
+- **Prediction (run C, cell by cell):**
+  - CAUGHT 27, MISSED 6 (01, 04, 08, 09, 11, 13);
+  - uaf-mem5 faults with cause 25 and bounds-mem5 with cause 28, in every boot;
+  - 0 cause 29;
+  - case 29 (fz02) is CAUGHT in sqlite3Get4byte with cause 28.
+- **Q15_PAD:** it prints on the 6 MISSED cases only. Its count is recorded as information.
+- **Not predicted:** the silicon faces (S-23 data face, the fetch face); DRT1, DRTX and FRTY are recorded as information.
+- **A wedge** is a result for its subset only. The next subset is its own cold boot.
