@@ -2525,3 +2525,21 @@ the RTL lane asked to confirm or kill it.
 - **Its prediction:** RFVD reads 1, and the refusal falls inside a vm ioctl that has just retired or remapped an arena:
   the Oops's call trace names unpin_user_page or wake_up, under capstone_vm's ioctl.
 - RFVD 0 contradicts the branch.
+
+### Correction to the 18:37 amendment (2026-10-19, sql0-rf still running, none of its result read)
+
+The runtime lane withdrew the module-source premise of the named branch as stated.
+- **What the traces show:** the Oops traces print only epc, ra and one frame. That holds for sql0-treeA's, pb10's and
+  tree A step 4's raw driver.log.
+- **Why the premise falls:** the module has nine unpin_user_page sites, and only three follow a lifetime window: :732
+  retire, :870 add, :963 remap. And __wake_up_common_lock is any wait queue. "Both kernel callers sit directly after a
+  CSRETIRE window" is therefore consistent with the evidence, not shown by it.
+
+**The branch now reads only as follows.** Under the late-broadcast candidate (already on the S-23 folder's open list),
+RFVD = 1.
+- The call-trace prediction ("under capstone_vm's ioctl through unpin_user_page or wake_up") is WITHDRAWN as a
+  discriminator. No retire before the refusal will be recorded as observed.
+- sql0-rf is unchanged and stays one variable, the monitor.
+- Tying a refusal to a retire needs a module marker on the retire and remap paths. That is a new module revision, with
+  its own QEMU gate and Tier 1 boot, for a later load, and only if the RTL lane's simulation says the walk outlives the
+  instruction.
