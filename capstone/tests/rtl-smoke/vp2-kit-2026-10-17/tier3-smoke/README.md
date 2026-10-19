@@ -2260,3 +2260,733 @@ a cpython verdict, and a fourth instance with its MTVL is evidence the RTL lane 
   - writing 2,000,000 at boot, or 1,000, removes it with no STEP;
   - the threshold is between 0 and 1,000 cycles on silicon.
 - A silicon bracket (100 / 300 / 600 in one boot) is now worth a boot, by the RTL lane's own condition.
+
+### The S-23a/S-26 monitor revision, stage 1, and S-26's silicon bracket, pre-registered (2026-10-19 18:15, before any boot)
+
+Board 1, tree A resident (caplifive_vp2c_8522d72fe). Every boot is cold, PREFLIGHT=0, UNGATED. One script runs it all:
+`chain-fix-stage1.sh` 7c324c86d7630d93.
+
+**The monitor revision** (the runtime and RTL lanes' scope): capstone-sbi 5b5e86b on 007d81d, branch
+vp2/s23-strobe-guard, pushed; wrapper aab63d5.
+- **S-23a:** after a fetch retry (FRTY), one `csrsi 0x7c4, 4` (csupctl's namespace-flush strobe), issued only when a
+  guard vouches for every CPMP slot. A loaded slot must name a live region that names it back. An empty slot must hold
+  no capability (LCC's total type query reads 7).
+  - At every FRTY the monitor prints, for each loaded slot, FRGS = (slot << 24) | (live << 20) | (maps back << 16) |
+    region.
+  - It names each slot it does not vouch for (FRGU).
+  - FRGD = (unvouched << 16) | vouched. Its high half is the verdict: 0 strobes, anything else skips.
+- **S-26:** CAPSTONE_BOOT_QUANTUM=2000000 writes 0x7C3 at boot, and CAPSTONE_QUANTUM_PRINT reports it (QNT0).
+- **Not in stage 1:**
+  - S-23b (the data retry, DRTY): HELD until its guard exists and the RTL lane's probes read.
+  - S-30 (Linux's region below the tag store): its own firmware later, as a matched pair, gated offline first by the
+    r55-regions replay. Design: carve [0xBC2D2000, 0xC0000000) linear and hold it privately. Moving the boundary is not
+    the fix: swap_cpmp loads any live, unloaded slot covering an S fault, with no owner or permission filter, so an
+    appended remainder would stay reachable.
+  - Emptying the CPMP slot in make_hole and pop_region: a source trace of their callers is running first.
+- **Kits:** `make-fix-kits.sh` ed4c2769d7acef6d. Each kit is a recorded kit with board.env lines changed and SHA256SUMS
+  regenerated:
+  - bkit7-rev2xF 1a12f2cbc528d416 and bkit7-rev2xmF d331cdd245a63d52: sql0-treeA's kits on the fix monitor;
+  - bkit7-pb10A f3968b063170d4bb: pb10's panic kit bkit7-fix6t (module d71f207a, BOARD_STEP_S=300) with tree A's
+    bitstream, old monitor 007d81d;
+  - bkit7-pb10F ecd84d4842b1a941: bkit7-pb10A on the fix monitor.
+- **The dry run:** it reached every last step and took every gate branch (`dryrun-fix-stage1.txt`):
+  - the chain on both canary verdicts;
+  - sql0-fix's VOID, HOLD and busy exits, with the real F kits passing its checks;
+  - the pb10 pair's two arms, HOLD and busy, with the real kits passing;
+  - run-s26's fix1 and q600 on the real firmwares through a stub driver;
+  - the judge's new arms on copies of real run dirs. A var run read as fix1 FAILS (no b0-hello), and a 150 s run read
+    as a bracket arm FAILS.
+
+**1. fix1, the canary** (`run-s26.sh fix1`, firmware f40b38ae6b0f74f7 on the pair's image 89baf46451448872; rungs
+b0-stats, vm-contract, b0-hello, so vm-contract runs with NO process-ABI STEP before it):
+- QNT0 001E8480;
+- b0-stats 0;
+- vm-contract 0 on the identity branch, as var's 511 steps;
+- b0-hello 0.
+
+This shows S-26's fix on the monitor that ships. Any FRTY is followed by FRGS lines and an FRGD; predicted high half 0.
+The judge passing writes CHAIN_FIX1_PASS. Anything else stops sql0 and pb10, and the bracket still runs.
+
+**2. sql0-fix** (`tier3-sql-arm-rev2e.sh` ecfa593bc44571a3): sql0-treeA (rev2d) with ONE change, the monitor.
+b0-hello's STEP precedes vbatch, so the boot quantum changes nothing there. Same runner 1f099612d70a9576, image
+64010720f1a6b3bc, fixture 956173e054762e91, a measure-only bake first (cap 26,000,000 B). The runtime lane's
+pre-registration is decisive either way:
+- **slot 7 vouched at the FRTY before the refusal** (FRGS live = 1, maps back = 1; FRGD high half 0): the deny was false,
+  a live capability cleared by a colliding broadcast. The strobe repairs it, and sql0 READS: any refusal is now followed
+  by FRTY, with no Oops. Its cells are scored against t3-sql-trim-vm/bundle as rev2d's would have been.
+- **not vouched** (an FRGU naming the slot, or a capability in a slot the monitor holds empty): the guard has found a
+  retired capability left loaded. There is no strobe and the refusal stays, which is a containment finding of its own.
+
+**3. pb10's matched pair on tree A** (`tier3-pb10-pair.sh` 94f2b6824c9eeb79): ffmpeg/pool, Sublet. Two cold boots that
+differ only in the monitor, the fix arm first:
+- **pb10-fix** (bkit7-pb10F): predicted to READ 4 of 4 as the QEMU prediction bundle t3-pb10/bundle (CAUGHT 4), under
+  the same vouched / not-vouched reading as sql0.
+- **pb10-treeA** (bkit7-pb10A): predicted to panic in case 01 as on bf3db3175 twice: MTVL BC2C0825, mod_node_page_state
+  from unpin_user_page. Tree A does not fix the data face; sql0-treeA panicked on it.
+- **If pb10-treeA does NOT panic:** the pair cannot attribute a pb10-fix READ to the strobe, and it is reported as
+  one-sided.
+- Results are filed as virtual-nested-pools-fix and virtual-nested-pools-treeA under results/2026-10-19-vp2c-treeA/.
+
+**4. S-26's silicon bracket** (`run-s26.sh q600 q300 q100`): three cold boots, DESCENDING, each one variable against
+var1k.
+- **The firmwares:** var1k's recipe (capstone-sbi ba9a0de, wrapper aab63d5, no mirror) with CAPSTONE_BOOT_QUANTUM 600 /
+  300 / 100: q600 85df5930f42dfec1, q300 95f97ad9426a7232, q100 104d3f8f629ccdee.
+- **The image:** cd3eb03c37325a62 (`bracket-prep.sh` bfb58a5d3fb84c1b). It is the pair's stage with only vm-contract.sh
+  swapped for `vm-contract-long.sh` 03ddf824ea953f30: bound 600 s instead of 150 s, counters read at 30 s and then
+  every 60 s. The stage was restored to its record afterwards.
+- **Why three boots and not one ladder:** the ladder would need a new monitor counter and a per-rung-block judge.
+- **Why descending:** a killed spin followed by another rung has never been observed.
+- **Why the longer bound:** var1k took 61.5 s at 1,000, so an arm can still be progressing at 150 s. The counters cannot
+  separate progress from a spin: cur's spin and var1k's progress both grew at ~700 steps/s.
+
+The model, calibrated on var (511 steps at 2,000,000) and var1k (41,805 at 1,000):
+
+    steps(q) - 511 = 41,294 * (1000 - E) / (q - E)
+
+E is the per-entry cost in quantum cycles.
+- A completed arm reads E.
+- An arm cut at the bound reads only a lower bound on E, from its last count. A cut is an INEQUALITY, never "spun".
+- Every completed arm must give the same E, and a spin must have q <= E. If they disagree, the model is wrong.
+
+Steps predicted for each E (the RTL lane's table, checked: at q = 1,000 the formula returns var1k's 41,805):
+
+| E | q = 600 | q = 300 | q = 100 |
+|---|---|---|---|
+| 100 | 74,840 | 186,334 | spin |
+| 200 | 83,099 | 330,863 | spin |
+| 300 | 96,864 | spin | spin |
+| 400 | 124,393 | spin | spin |
+| 500 | 206,981 | spin | spin |
+| 600 or more | spin | spin | spin |
+
+- **The RTL lane's prediction:** E_sil lies between ~660 and 1,000. Its basis is the simulated 1,500-2,000 less the
+  entry walk's ~840 cycles of fixed testbench memory delay, intersected with var1k's completion. So 600 SPINS, and 300
+  and 100 with it.
+- **This lane makes no numeric prediction.** The step count is the primary reading.
+
+### S-30's matched pair, pre-registered (2026-10-19 18:27, before its boots): after stage 1 and the bracket, board 1
+
+**The fix:** caplifive-opensbi 9bee361 (branch s30-hold-tagstore, pushed, on aab63d5). `cap_env_init` carves
+[0xBC2D2000, 0xC0000000) LINEAR out of Linux's region after R-55's exact cut. The range is the tag store and the
+revocation-node pool, and 0xBC2D2000 is the DTB's RAM end. The piece is held in a monitor global, never in the region
+table, on every FPGA bitstream. Its decoded bounds are reported as S30H base, then end.
+- **The offline gate passed before any boot:** `r55-regions/replay.py --hold 0xBC2D2000:0xC0000000` (567f7f7f0a35a760;
+  the three README controls are unchanged).
+  - On a2-0568f93a9, a2-respin-afcd19bea and a2-sublet-d93a8d66b: OVERLAP 0, no inexact piece, slots 112 / 82 / 116,
+    all under 127.
+  - Linux's top slot is nominal and decoded [0xbc200000, 0xbc2d2000). The held piece is decoded [0xbc2d0000,
+    0xc0000000).
+  - The check's own control fires: the range protected without the carve gives OVERLAP 1.
+
+**The image:** 3d3e400d7b0646ff (`s30-prep.sh` 7ec87535bfc76a8a). It is the pair's stage (rev7's record, with the pair's
+bounded vm-contract.sh, exactly as image-s26) plus ONE vmrun.sh case, s30-read (`vmrun-s30.case` c47423fa27ec0924). The
+stage was restored to its record, and the bake checked by hash that the initramfs carries vmrun.sh.
+
+**s30-read**, the registry's demonstration, READ-ONLY. Every read is user-mode busybox `devmem` through /dev/mem, so a
+refusal reaches devmem as a signal, not a kernel fault.
+- It reads the node pool's first record (0xBFF00000, two words).
+- It reads the tag bytes of the monitor's dom_stack, [0x80080380, 0x80088380), whose globals include the region table:
+  257 aligned 64-bit words from 0xBC2DAD60, which is 0xBC2D2D2D + 0x8038.
+- Each group stops at its first refused read. retval = node refused (1) | tag refused (2).
+- No write is made. A write test needs the lead's word.
+
+**The arms** (`run-s30.sh` c0f9568c0410b84c, judged by `s30-judge.py` 5d6e125bbc535175). Two cold boots that differ
+only in the wrapper. Monitor 5b5e86b, defines as fix1's, rungs b0-stats, vm-contract, b0-hello, s30-read (the read
+last).
+- **s30-old** (wrapper aab63d5, firmware 4104ef2029145164) predicts:
+  - the canary as fix1's: QNT0 001E8480, every rung 0, no Oops;
+  - no S30H line;
+  - s30-read 0, with at least one nonzero tag word. That is the positive control that the reads reach tag memory, and
+    it makes S-30 DEMONSTRATED for reads.
+- **s30-new** (wrapper 9bee361, firmware f187c4d4f3ade200) predicts:
+  - the same canary, so Linux's RAM below 0xBC2D2000 is still reached;
+  - exactly two S30H lines: base <= 0xBC2D2000, end 0xC0000000;
+  - s30-read 3: both groups refused at their first read, and the boot continues.
+- **Reading the outcomes:**
+  - s30-old reading 0 with no nonzero tag word: an instrument failure (the reads did not reach tag memory), not
+    evidence about S-30.
+  - s30-new failing its canary: S-30's carve broke Linux. That is a VOID about the read and a finding about the carve.
+- `chain-s30.sh` b30301b8f9863d2c starts it after stage 1's CHAIN_FIX DONE. If stage 1's process is gone without DONE,
+  it HOLDs.
+- The dry run is in `dryrun-s30.txt`:
+  - the prep and the read rung against a fake devmem (0 when reads pass, 3 when they fault);
+  - both arms through a stub driver;
+  - the judge's fixtures built from fix1's real run dir, with an s30-new fixture judged as s30-old FAILING;
+  - the chain's HOLD branch.
+
+### Amendment to stage 1's reading (2026-10-19 18:27, while sql0-fix runs, before any of its result was read)
+
+The runtime lane withdrew part of the reading (dev b054c5bc926e).
+- **What CPID is:** in the CPMX dumps, CPID is `i | (cpmp_region[i] << 8)` (5b5e86b :3645). "00001507" means slot 7
+  holding region 21, not a revocation-node id.
+- **What CPHT is:** this loop's slot index, not a tag. No tag was ever printed.
+- **What FRGS reads:** the monitor's bookkeeping. It cannot say whether a deny was true or false.
+
+The pre-registered "slot 7 vouched → a false deny, repaired by the strobe" is therefore WITHDRAWN as a grading rule.
+sql0-fix and pb10-fix are graded on the narrower reading:
+- **They READ:** a deny present at the FRTY was removed by the strobe or by its pipeline flush. Which of the two is not
+  separable here.
+- **They panic as before:** both are ruled out as the repair.
+
+FRGS, FRGU and FRGD are reported as bookkeeping. An FRGU still names a slot the monitor cannot account for, and is
+reported as such. The tag and validity of the refused slot itself need the next monitor's reads at the refusal:
+`__capfield(tmp, 1)` and `__capfield(tmp, 0)` in swap_cpmp's no-region path. That build is held until the RTL lane says
+whether a CCSRRW read of a CPMP CSR returns the entry's hardware tag.
+
+### Amendment to S-30's pair (2026-10-19 18:42, before its boots): s30-new's refusal is graded by its console lines
+
+The runtime lane asked for this. busybox 1.36.1's devmem opens /dev/mem O_RDONLY|O_SYNC and loads through mmap
+(miscutils/devmem.c:73-88), with no read() path. A refused read is therefore a U-mode load access fault, and it kills
+devmem, not the kernel. On the console it shows as:
+- the monitor's no-region path: the CPMX dump, MTVL:<address> and CPMX:00000002;
+- then INJS:00000002, which is inject_into_s(CAPSTONE_NO_CPMP_REGION) at 5b5e86b :3815, the same pair pb10's panics
+  printed;
+- then the shell's rc 135 (SIGBUS) or 139 (SIGSEGV) for devmem.
+
+s30-new now also requires, in this boot's console:
+- MTVL:BFF00000 and MTVL:BC2DAD60;
+- CPMX:00000002 and INJS:00000002;
+- both S30R refusals at rc 135 or 139.
+
+`s30-judge.py` is now 5b8cd550ac112e51. A fixture without those lines FAILS, and one with INJS:00000005 in place of 2 FAILS.
+
+### After sql0-fix: the pb10 pair withdrawn, the refusal read pre-registered (2026-10-19 18:35, before its boots)
+
+**sql0-fix, first reading** (its scoring is still running; the full record follows when it ends). In vbatch's first
+postgres session:
+- FRTY:01713D98, with FRGS for 11 loaded slots, slot 7 among them: FRGS:07110015, region 0x15 = 21, live, mapping back;
+- FRGD:0000000B, so the strobe was issued;
+- then MTVL:BC2C0825, INJS:00000002, and an "Oops - load access fault".
+
+That is the same signature as sql0-treeA. On the amended reading, neither the strobe nor its pipeline flush removed the
+deny. The runtime lane's prediction (READ) is refuted.
+
+**The pb10 pair is withdrawn before it ran.** Given sql0-fix, both arms are predicted to panic, and that reading would
+not be informative. The stage-1 chain was stopped before CHAIN_PB10_GO, and sql0-fix's runner finishes on its own. In
+its place, `chain-rf.sh` dc75a0e1b8a319f1 runs on board 1, each step a cold boot, after sql0-fix's runner exits:
+1. **sql0-rf** (`tier3-sql-arm-rev2f.sh` 378c41c038f9d059): sql0-fix with ONE change, the monitor,
+   capstone-sbi 03a1ffe (vp2/s23-refusal-read, pushed: 5b5e86b plus CAPSTONE_S23_REFUSAL_READ). Kits bkit7-rev2xR
+   840c9dce535734fb and bkit7-rev2xmR 27b95ca16a39560a (`make-rf-kits.sh` e9313bc9d65804c3).
+2. S-30's pair, as pre-registered.
+3. S-26's bracket, as pre-registered. Its order relative to S-30 is the only change.
+4. **pb10-rf** (`tier3-pb10-rf.sh` a8ca6fb27afd5025, kit bkit7-pb10R 6d4d6987a7683c51): a second instance of
+   the same reading.
+
+**The refusal read.** At a refusal no region covers, before report_cpmx_diag, each loaded slot is read once:
+- the LCC type (zimm 1) first;
+- only when the type is not 7, the bounds and, if they cover mtval, the validity (zimm 0);
+- then a write-back of exactly that value.
+
+It prints RFSL (slot << 16 | region), RFTY and RFVD (0xffffffff when the validity was not asked). The compiled order
+was checked: read, lcc 1, lcc 3, lcc 4, lcc 0, write-back.
+
+**Predictions:**
+- sql0-rf and pb10-rf panic as before; the read changes no behaviour.
+- At the refusal, slot 7 (region 21) prints **RFTY not 7**, a capability type. This is already implied: every earlier
+  dump ran LCC 3, 4 and 5 on slot 7 at M after the refusal and printed its bounds rather than trapping, and every LCC
+  but zimm 1 raises on NOT_CAP.
+- **RFVD is the reading:**
+  - 0: the physical node is dead, a true deny the monitor's bookkeeping cannot see;
+  - 1: no allow term we can read explains the deny (transient, or the validity bit itself).
+- **If RFTY ever reads 7** (a clear tag), the dump that follows traps at M on its cap_base. That is a predicted
+  consequence, not a new failure. On the console: RFSL, RFTY:00000007 and RFVD:FFFFFFFF, then no RDID, MTVL, CPMX or
+  INJS line, and the boot ends there.
+
+The dry run, with the real kits passing every check, is in `dryrun-rf.txt`.
+
+### Amendment to sql0-rf / pb10-rf (2026-10-19 18:37, sql0-rf booting, before any of its result was read)
+
+**sql0-fix's record.** The run ended 18:35, "virtual boot: DID NOT COMPLETE", and its scoring is VOID: no inputs.json,
+since the first session panicked. This is sql0-treeA's outcome.
+
+**The tag question is closed from source** (dev 21d2433b165c; this replaces the three-writer census sent earlier).
+- On tree A (8522d72fe), cpmp_tag_d has FOUR writers:
+  - the hold (csr_regfile.sv:1189);
+  - the context-entry INIT that zeroes every entry and tag (:2077);
+  - the restore walk (:2091);
+  - the sixteen CCSR sites.
+- The RTL lane answered NO to whether a kernel load can retire during a walk. `flush_commit_o = flush_commit |
+  dom_switch_busy_i` (commit_stage.sv:876) flushes everything in flight for the whole switch, so a refusal sampled on a
+  cleared tag is never taken.
+- Together with the dump inference, RFTY on slot 7 is predicted NOT 7, and RFVD remains the reading.
+
+**A named branch:** the runtime lane's candidate, from the module source (lane module-resume-rd-x0 8807df747411), with
+the RTL lane asked to confirm or kill it.
+- **What the module source shows:**
+  - Both kernel callers in the panics sit directly after a module CSRETIRE window.
+  - retire() (:714-735) runs select_root, CSRETIRE, restore_root, then unpin_user_page on each page. The panics' PC is
+    mod_node_page_state from unpin_user_page.
+  - The remap path (:946-960) runs CSRETIRE + CSMINT, the unpin loop, then wake_up_all. sparse-churn's PC was
+    __wake_up_common_lock.
+  - The CPMP invalidation compare is index-only.
+- **The branch:** the retire walk is still broadcasting after the instruction retires, and a context index equal to slot
+  7's physical index clears slot 7 until the drain flush re-arms it. That is transient, and it fits die()'s clean
+  re-read.
+- **Its prediction:** RFVD reads 1, and the refusal falls inside a vm ioctl that has just retired or remapped an arena:
+  the Oops's call trace names unpin_user_page or wake_up, under capstone_vm's ioctl.
+- RFVD 0 contradicts the branch.
+
+### Correction to the 18:37 amendment (2026-10-19, sql0-rf still running, none of its result read)
+
+The runtime lane withdrew the module-source premise of the named branch as stated.
+- **What the traces show:** the Oops traces print only epc, ra and one frame. That holds for sql0-treeA's, pb10's and
+  tree A step 4's raw driver.log.
+- **Why the premise falls:** the module has nine unpin_user_page sites, and only three follow a lifetime window: :732
+  retire, :870 add, :963 remap. And __wake_up_common_lock is any wait queue. "Both kernel callers sit directly after a
+  CSRETIRE window" is therefore consistent with the evidence, not shown by it.
+
+**The branch now reads only as follows.** Under the late-broadcast candidate (already on the S-23 folder's open list),
+RFVD = 1.
+- The call-trace prediction ("under capstone_vm's ioctl through unpin_user_page or wake_up") is WITHDRAWN as a
+  discriminator. No retire before the refusal will be recorded as observed.
+- sql0-rf is unchanged and stays one variable, the monitor.
+- Tying a refusal to a retire needs a module marker on the retire and remap paths. That is a new module revision, with
+  its own QEMU gate and Tier 1 boot, for a later load, and only if the RTL lane's simulation says the walk outlives the
+  instruction.
+
+### sql0-rf, result (2026-10-19 18:36-18:50, board 1, tree A): the refused slot holds a tagged LINEAR capability whose node is VALID; the deny is not explained by any allow term the monitor can read
+
+Firmware aa718bb72a85a4e9 (capstone-sbi 03a1ffe + wrapper aab63d5), kit bkit7-rev2xR, UNGATED (PREFLIGHT=0). The
+result lines from this boot's console only, after its OpenSBI banner, are in `records/sql0-rf.result-lines.txt`.
+- **The outcome is as predicted, the same panic:** "virtual boot: DID NOT COMPLETE", scoring VOID with no inputs.json.
+  The session sequence was:
+  1. FRTY:01713D98, the same pc as sql0-fix;
+  2. FRGS for 11 loaded slots, slot 7 FRGS:07110015, then FRGD:0000000B (all vouched, strobe issued);
+  3. the refusal read: RFSL:00070015 (slot 7, region 0x15 = 21), RFTY:00000000, RFVD:00000001;
+  4. MTVL:BC2C0825, CPMX:00000002, INJS:00000002;
+  5. Oops - load access fault at mod_node_page_state+0x40, ra unpin_user_page+0x2a.
+- **RFTY 0 is CAP_TYPE_LINEAR.** LCC's type answer is cap_type - 1, and ariane_pkg.sv:662-671 at 8522d72fe has
+  NOT_CAP 0 and LINEAR 1. The slot's hardware tag is SET and it holds a linear capability. This is as predicted (not
+  7), and it is the first direct reading of the tag at a refusal.
+- **RFVD 1:** the physical node answers VALID. The deny is not a dead node.
+- **The CPMX dump agrees:** region 21 is in slot 7, RDEN C0000000, RDPM 7 (RWX). MTVL BC2C0825 lies inside
+  [0xAC100000, 0xC0000000), and the access is a load, which perm 7 grants.
+- **So, of the CPMP allow terms we can read at M, none explains the deny:** tag set, type a capability, bounds covering,
+  permission granting, node valid. What is left is a term M cannot read: the slot's own validity tracker flop
+  (cpmp_revnode_valid_q), or a transient that has passed by the time M looks.
+  - The guarded strobe at the FRTY, which re-arms every tracker, did not prevent the refusal (sql0-fix and sql0-rf
+    alike). So a cleared tracker, if that is the term, was cleared AFTER the FRTY or re-cleared after it.
+- **The late-broadcast candidate** (the 18:37 amendment, as corrected at 69982fff8e4a) predicted RFVD 1. The reading is
+  CONSISTENT with it and does not establish it.
+  - No retire before the refusal is observed; the console prints one frame.
+  - Separating it needs the RTL lane's simulation of the walk outliving the instruction, then a module marker on the
+    retire and remap paths (a new module revision).
+- **N=1.** pb10-rf, last in this chain, is the second instance.
+
+### S-23b step 1 on sql0 and pb10, pre-registered (2026-10-19 18:57, before their boots); chain-rf stopped, pb10-rf withdrawn
+
+**The monitor:** capstone-sbi f13dbc5 (vp2/s23-data-retry, pushed), which is 03a1ffe plus CAPSTONE_S23_DATA_RETRY, off by
+default. It applies to an S/U load or store access fault, after the refusal read. If some loaded slot passes every
+readable allow term for that access, the access is retried with NOTHING re-armed, and DRT1 is printed with mepc. The
+terms are: tagged, a capability type, bounds covering mtval, perm[2] for a load or perm[1] for a store
+(pmp_data_if.sv cpmp_check at 8522d72fe), and validity 1.
+- Every slot is read and written back exactly, with the same id, so nothing is re-adopted. A true deny recurs, so the
+  retry grants nothing the hardware does not.
+- A second refusal at the same mepc within 4096 instructions prints DRTX and is injected as before.
+- The per-slot re-adopt (step 2) is NOT included. It waits for the RTL lane to confirm the CCSRRW pair.
+- The compiled order was checked: mstatus, mcause, then per slot read, lcc 1, lcc 3/4/5, lcc 0, write-back; then mepc,
+  minstret.
+
+**Kits** (`make-drt-kits.sh` cc086f98e4b98a03): bkit7-rev2xD 2db6294a0ad923cb, bkit7-rev2xmD 360ca0a6dffc1118
+and bkit7-pb10D 67ca0fbb35a614e9. Each is the matching refusal-read kit with only the monitor changed.
+
+**The chain:** chain-rf was stopped at 18:54 while the S-30 pair ran, and run-s30.sh finishes the pair on its own.
+`chain-drt.sh` 46a9f78b1b1a2813 waits for run-s30.sh to exit, then runs, each a cold boot on board 1:
+1. sql0-drt (`tier3-sql-arm-rev2g.sh` 6dcee9f5219ffff7);
+2. pb10-drt (`tier3-pb10-drt.sh` 2abb23c4bbe68ac6);
+3. S-26's bracket, as pre-registered.
+
+**pb10-rf is WITHDRAWN before it ran.** pb10-drt prints the same refusal-read lines, so it gives that reading AND the
+retry.
+
+**Predictions, both arms.** At the first refusal, the refusal read is as sql0-rf's: slot 7, RFTY 0, RFVD 1. Then:
+- **A transient deny** (consistent with the late-broadcast candidate): DRT1 with mepc, no DRTX, no MTVL/CPMX/INJS for
+  that refusal, and no Oops. The session proceeds.
+  - sql0-drt's cells are then scored against t3-sql-trim-vm/bundle, the QEMU record: 9 cells, as rev2d's.
+  - pb10-drt is scored against t3-pb10/bundle (CAUGHT 4).
+  - The number of DRT1 lines in the boot is itself a reading: how often the deny occurs.
+- **A persistent deny** (the slot's tracker cleared and staying cleared): DRT1, then DRTX at the same mepc, then MTVL,
+  CPMX:00000002, INJS:00000002 and the same Oops as sql0-rf. That points at step 2 (the per-slot re-adopt).
+- **Neither**, for example a refusal at a slot that fails a readable term: no DRT1 for it, and the refusal is injected
+  as before, with its RF lines saying which term failed.
+
+The dry run, with the real kits passing every check, is in `dryrun-drt.txt`.
+
+### Grading details for sql0-drt / pb10-drt (2026-10-19 19:00, before either boot)
+
+- **Under "transient":** report every DRT1 in the boot with its mepc, decoded to function+offset against the kernel's
+  System.map, as the S-23 folder does, and the count per boot. A single retry at mod_node_page_state is a different
+  reading from dozens across many kernel paths. The count also says how often the deny occurs per session.
+- **DRTX:** it is the persistent branch only at the SAME mepc as a preceding DRT1. The window is keyed on mepc, so no
+  other DRTX can occur.
+- **A refusal that fails the gate** prints no DRT1. It belongs to "neither", and its RF lines name the failing term.
+
+### Tree B on BOARD 2, AUTHORISED and pre-registered (2026-10-19 19:30, before the flash)
+
+**The lead's own word in this lane's session (19:2x):** use both boards, flashed with the latest bitstream. Asked
+"which do you authorize" for board 2, the answer was "конечно прошивай самым последним бистримом" ("of course, flash it
+with the latest bitstream"). The latest sealed bitstream is tree B: caplifive_vp2c_8de3c48cf, sha256 0098aa5a99c3bae2...,
+WNS -16.449, sealed 17:45, the newest in the archive. So:
+- Board 2 is NV-flashed from caplifive_sublet_d93a8d66b to tree B. Volatile flash does not bring up board 2's debug
+  TAP, so it is NV, then a power cycle and 35 s.
+- Board 1 keeps tree A for the S-23/S-26 chain, which continues there.
+
+**Scripts** (private, /tmp/capstone/treeB2-session). They are the tree B session's (the plan, dev ddea90b284fc) with
+every board-1 assumption replaced: FPGA_BOARD=2, board 2's URL file, dev's driver with the lease client
+(/tmp/capstone/wt-b2, dev 10e0d5121da8), and outputs under treeB2-session.
+- `chain-treeB.sh` af7626b66ea49e47, `run-treeB.sh` a8598e714df5bd70,
+  `run-treeB-c7.sh` f63a136b95fc7b34, `flash-bit.py` 4a98cf5a7a081bc2,
+  `preflight-treeB.sh` 5752a96ca5b9fedd.
+- flash-bit.py flashes only tree B. It requires board 2's previous resident caplifive_sublet_d93a8d66b in the store as
+  the flash-back path, and reads the resident back after the power cycle.
+- The preflight was run for real (local checks, no board): GO, the DTS paired with set 7's firmware. A stubbed dry run
+  of the chain reached CHAIN_TREEB_STEPS123_DONE.
+
+**Steps, each gating the next:**
+1. preflight;
+2. flash, with its readback naming tree B;
+3. the canary twice: the S-16 set, the Sublet floor and s1gap, against d93a8d66b's records, then pass 1 against pass 2.
+   Predicted 9 of 9.
+4. the 25 vp2 arms, each against its vector. Predicted 25 of 25: tree B's core/ is byte-identical to d427e7391's, and
+   the 95-test sweep and the 152-test supervised list are identical to tree A.
+5. corpus set 7 against d93a8d66b's record, as on tree A;
+6. then S-29's seven bare arms (`tier3-sv-batch-treeB2.sh` b58de1b7de7ee627, board 2's copy of
+   `tier3-sv-batch-treeB.sh` 5153f65bf6239fcb) against the RTL lane's TREE B column of compare-sv.py.
+   Predicted: sv-stale, sv-stale-f, sv-stale-b and sv-fetch change from tree A's readings to the column, and
+   sv-stale-bf and sv-stale-bn read as on tree A (ISSUES S-29).
+
+**Stops:**
+- a canary failure STOPS with tree B resident on board 2; the flash back to d93a8d66b needs the lead's word.
+- not 25 of 25 STOPS before set 7.
+
+Every result records board 2. Before any tree-B-versus-tree-A reading is compared across the two boards, the canary is
+the same image set on both bitstreams, judged against the same d93a8d66b records. UNGATED (PREFLIGHT=0).
+
+### S-30's matched pair, result (2026-10-19 18:50-19:05, board 1, tree A): DEMONSTRATED for user-mode reads, and refused by the held carve
+
+Both arms read as pre-registered (JUDGE PASS each, N=1 per arm, UNGATED). The result lines from each boot only are in
+`records/s30-{old,new}.result-lines.txt`. A claim-auditor checked the readings: each log has one OpenSBI banner, the
+firmware and the judge hashes match, and the image is identical. Its four wording fixes are applied here.
+- **s30-old** (wrapper aab63d5, firmware 4104ef2029145164). From user mode, busybox devmem through /dev/mem read:
+  - both words of the revocation-node pool's first record (0xBFF00000: 0x0, 0x40000000);
+  - the 257 words of the shadow-tag array at dom_stack's tag addresses from 0xBC2DAD60. They returned a sparse 00/01
+    pattern: 23 words nonzero, the one recorded value 0x0000010001000100.
+  - The bytes are not yet matched to the firmware's capability layout. The cheapest settling check is to print all
+    257 words and match them against dom_stack's gp-relative capability offsets.
+  - The canary rungs before the read returned 0.
+- **s30-new** (wrapper 9bee361, firmware f187c4d4f3ade200). The held carve is nominally [0xBC2D2000, 0xC0000000),
+  decoded [0xBC2D0000, 0xC0000000) per S30H.
+  - Both reads were refused at the first address of each group, through the monitor's no-region path (MTVL:BFF00000
+    and MTVL:BC2DAD60, each with CPMX:00000002). No live region covered either address.
+  - Linux's top slot was exact at [0xBC200000, 0xBC2D2000) (this boot's dump: RDID 15, RDBA BC200000, RDEN BC2D2000).
+  - INJS:00000002 is the constant injection code, not mcause; mcause was not printed. devmem died of SIGSEGV
+    (rc 139), and the boot continued.
+  - The canary rungs returned 0, including vm-contract at 511 steps.
+- **The two firmwares differ only in the wrapper source.** Its side effects are the region table and +32 B of monitor
+  globals. Image, monitor (5b5e86b), defines and bitstream are identical.
+- **Residual, kept with the fix.** After the carve, Linux's top region and the unloaded held piece, both LINEAR,
+  overlap in decoded bounds by two pages, [0xBC2D0000, 0xBC2D2000). Linearity's exclusivity there holds by the
+  monitor's discipline: the held piece is never loaded or handed out. Any future use of it (a write path, the pool
+  handed to a domain) must first re-carve it to an exactly representable base at or above 0xBC2D2000.
+- **Not tested:** writes.
+
+### Tree B's discriminator on board 2, pre-registered (2026-10-19 19:44, before its boots): sql0 and pb10 with the data-retry monitor
+
+The runtime lane asked for this. Tree B's S-29 flush removes the stale I-TLB that triggers FRTY. So on tree B, whether
+S-23's data face still appears says whether it sits downstream of the fetch-retry path or independent of it.
+
+**The arms.** `chain-treeB2-linux.sh` 3dd33c6d7ce43461 runs on board 2 after S-29's seven bare arms
+end DONE (if they end STOP or HOLD, it HOLDs). Each arm is a cold boot:
+1. sql0-treeB (`tier3-sql-arm-rev2h.sh` 7f9a568e54177fb2);
+2. pb10-treeB (`tier3-pb10-treeB2.sh` 2db50c6830ed9024).
+
+**The kits** (`make-treeB2-kits.sh` 5ae8d3f4982efdd5) are the data-retry kits (monitor f13dbc5) with only
+four things changed: tree B's bitstream, FPGA_BOARD=2, board 2's URL file, and dev's driver directory with the lease
+client (the same run_baked_rungs_fpga.py, fd38816a90c64c22). bkit7-rev2xBD 1a3056a854f4fe0b, bkit7-rev2xmBD
+de0d947a4112c93d, bkit7-pb10BD 9248619d2971f0c8. Results go under results/2026-10-19-vp2c-treeB/.
+
+**Each arm reads one of three outcomes:**
+1. **No FRTY and no refusal:** the data face is gone with the fetch face, i.e. it sits downstream of the fetch-retry
+   path. sql0's cells are scored against t3-sql-trim-vm/bundle, pb10's against t3-pb10/bundle (CAUGHT 4).
+2. **No FRTY, but a refusal** (RFSL, RFTY, RFVD, then DRT1, then DRTX or progress): the data face is INDEPENDENT of
+   FRTY. Its refusal-read lines and DRT outcome are graded exactly as sql0-drt's.
+3. **An FRTY:** the fetch face survives tree B's flush. That is a finding about the S-29 fix, reported first.
+
+No prediction among the three is made; the arms discriminate.
+
+**Amendment to tree B's discriminator (19:50, before either arm started).** Outcome 1 is reworded. Tree B differs
+from tree A in its flush-all on every switcher satp write, not only in FRTY's absence, and that changes switch timing
+and the caller's first translations. Outcome 1 now reads: "no FRTY and no refusal is consistent with the data face
+depending on the FRTY path OR on what tree B's flush changes; N=1; cells scored against QEMU". Outcomes 2 and 3 stand.
+
+### sql0-drt, result (2026-10-19 19:06-19:48, board 1, tree A): the data retry carries all 21 postgres sessions through S-23's deny (17 DRT1, 0 DRTX, no Oops); the SQL cells are VOID for a staging defect it exposed
+
+Kit bkit7-rev2xD, monitor f13dbc5, UNGATED. The result lines from this boot only are in
+`records/sql0-drt.result-lines.txt`, read from the reassembled UART stream after the boot's banner.
+- **S-23: the transient branch, as pre-registered.** The data face was met 17 times, every time retried with nothing
+  re-armed, never refused twice at the same mepc, and no Oops.
+  - **The retries:** 17 DRT1, all with mepc 0x803833B6. Against the kernel's System.map that is
+    `_raw_spin_lock_irqsave+0x56`. The map is controlled by sql0-rf's own Oops lines, ffffffff800a22c8 =
+    mod_node_page_state+0x40 and ffffffff800ab24a = unpin_user_page+0x2a, both reproduced.
+  - **The refusal read before each:** RFSL 00070015 (slot 7, region 21), RFTY 0 (LINEAR), RFVD 1. All 17 are read
+    intact, so no DRT1 grades as "RFVD unread".
+  - The interim message's "two garbled RFVDs" was my grep reading UART chunks split mid-line, not a console loss.
+    It is WITHDRAWN.
+  - **The deny's field rate:** 17 in one boot of 21 sessions.
+- **Each DRT1 is followed on the NEXT console line by FRTY:017113AC,** with FRGD 0000000B, so the strobe was issued.
+  FRTY prints mepc only. No FRTY in this or any earlier boot carries a physical mtval, the slot that covered it, or an
+  instruction count. So the distance is one console line, and nothing more can be read.
+  - 0x017113AC is not kernel text, and is left undecoded.
+  - The runtime lane's hypothesis is recorded as a HYPOTHESIS, not a reading: one clear event hits the data slot and
+    the slot covering the fetch, since the fetch and data checks read the same per-slot cpmp_revnode_valid_q
+    (pmp_data_if.sv :149/:170/:185).
+- **The SQL cells are VOID.** "virtual boot: completed; 21/21 sessions ran", then the runner's "POSITIVE CONTROL
+  FAILED: the image did not answer a trivial SELECT". Every session stopped at postgres startup with `FATAL: could not
+  open directory "pg_notify"`.
+  - The board bake's manifest stages FILES only, so the trimmed cluster's 13 empty directories never reach the board.
+    They are pg_commit_ts, pg_dynshmem, pg_logical/{mappings,snapshots}, pg_notify, pg_replslot, pg_serial,
+    pg_snapshots, pg_stat_tmp, pg_tblspc, pg_twophase and pg_wal/{archive_status,summaries}.
+  - Every earlier sql0 boot panicked in session 1, so the defect was never reached.
+  - **The fix:** run-arm.py 8826a2ca21a33acd (lane sql-empty-dirs) records the fixture's empty directories at staging,
+    and each session's step mkdir -p's them after its copy; on QEMU that is a no-op. Its QEMU check is running.
+
+### pb10-drt, result (2026-10-19 19:48-19:57, board 1, tree A): 4 of 4 cells as the QEMU prediction (CAUGHT 4) through S-23's data face, retried once
+
+Kit bkit7-pb10D (module d71f207a, monitor f13dbc5), UNGATED. "virtual boot: completed", vp2-nested-pools CAUGHT 4, and
+compare-pilot 4 of 4 cells the same as t3-pb10/bundle (rc 0). Bundle:
+`ffmpeg/pool-repros/results/2026-10-19-vp2c-treeA/vp2-nested-pools-drt`.
+- **S-23 was met ONCE.** The sequence: RFSL 00070015 (slot 7, region 21), RFVD 00000001, then DRT1 at mepc 0x800A22C8.
+  That is `mod_node_page_state+0x40` (the map is controlled as in sql0-drt), the exact epc of pb10's two panics on
+  bf3db3175.
+- The retry succeeded: 0 DRTX, 0 MTVL/INJS, no Oops. There were 2 FRTY, each with FRGD (counts from this boot's
+  board-raw.txt after its banner).
+- **pb10-rf was withdrawn for this arm,** and this arm gives both of its readings: the refusal read (slot 7, LINEAR
+  capability per sql0-rf, node valid) and the transient branch.
+- **With sql0-drt, that is two programs and two kernel sites,** `_raw_spin_lock_irqsave+0x56` and
+  `mod_node_page_state+0x40`, both refusals under region 21 in slot 7. Both are carried through by a plain retry with
+  nothing re-armed. S-23b step 1 is the workaround on this evidence, and step 2 stays unbuilt.
+
+### S-26's silicon bracket, result (2026-10-19 19:57-20:30, board 1, tree A): E is about 51-57 quantum cycles; 600 and 300 complete, and 100 is cut at the bound still progressing
+
+Three cold boots on the bracket image cd3eb03c37325a62, firmwares as pre-registered, UNGATED. The result lines are in
+`records/s26-q{600,300,100}.result-lines.txt`.
+
+| arm | QNT0 | vm-contract | steps | elapsed | E (model) |
+|---|---|---|---|---|---|
+| q600 | 00000258 | 0, identity branch | 71,911 | 101.7 s | 51 |
+| q300 | 0000012C | 0, identity branch | 160,942 | 219.0 s | 57 |
+| q100 | 00000064 | 930, cut at the 600 s bound | 507,550 at the kill | 600 s | > 20 from the count |
+
+- **The model holds:** the two completed arms give E = 51 and 57, within 6 cycles of each other. The model is
+  steps(q) - 511 = 41,294 (1000 - E) / (q - E), calibrated on var and var1k.
+- **q100 is cut, not spun.** Its refresh counter grew linearly at ~849 steps/s through every 60 s read, from 22,377
+  at 30 s to 506,460 at 600 s. At E = 51-57 the model needs 800,266-906,098 steps, about 940-1,070 s at that rate. So
+  the 600 s bound cut a run that would have finished. A spin would also grow linearly, which is why the bound was
+  pre-registered as an inequality: the reading is E > 20 from the count, and q100 > E by the model.
+- **The RTL lane's prediction is REFUTED:** it predicted 600 spins, with E_sil between ~660 and 1,000. On silicon
+  E is ~51-57 cycles, under a tenth of the simulated threshold (1,500-2,000). The simulation's memory model is not
+  the only gap, since the entry walk's ~840 cycles of fixed testbench delay do not account for it.
+- **For S-26's fix:** any boot-time quantum of 300 or more completes. The shipping value, 2,000,000, completes in 511
+  steps.
+
+### cpython allocator-boundary lt0 on the board, pre-registered (2026-10-19 20:40, before the boot): board 1, tree A, the S-23 retry monitor
+
+**The stage** (dev 81fb4e04d42e): image 20bcfdd1073976e0, stage-closure.txt b41545623090d0cf (350 files), and
+run-virtual.py b98e90fc86fafe1a with --stdlib-sourceless. The guest pin is the record's: --guest-env PYTHONHASHSEED=0
+and norandmaps. The arm is virtual-malloc.
+- The firmware was measured at 25,856,520 B, under the 26,000,000 cap (kit bkit7-rev2xmD, margin 143,480 B).
+
+**The kit:** bkit7-rev2xnD 6fea0e2517cdef6a (`make-cpy-kits.sh` b5f8b1978bfbdf6c). It is bkit7-rev2xnA
+(norandmaps through the saved dtb, module 39d8492d) with only the monitor fields changed to the D kits': f13dbc5 and
+wrapper aab63d5, with the refusal read and the data retry.
+
+**The runner:** `tier3-cpy-lt0.sh` 3d03fcd75c666557, through tier3-appvm-arm.sh. Its dry run went through
+the judge on the real stage bundle and through the busy stop.
+
+**The image identity** (the runtime lane's condition for grading 20bcfdd1 against lt0's sets, which were recorded on
+0d322044b9118713), computed with the stock llvm-objcopy and llvm-readelf:
+- these ALLOC sections are byte-equal: .text 3cf77d7b1a481c87, .rodata dc64eea44a362d3d,
+  .capstone_application 2cd06478de22271f, .data f15cb59225aa2c9c, .capstone_cap_init 8399ed7851691e5e and
+  .gct 82c994e2e41c6562;
+- .tdata, .init_array and .fini_array are empty in both;
+- .tbss and .bss are NOBITS;
+- the whole loaded image (objcopy -O binary) is 47dcef5f380b3217 in both, 12,097,563 B.
+- The control: the lt1 image's loaded bytes are 942096f9f1e82dbc, which differ.
+- The non-ALLOC sections were not compared by this method. The image manifest records them as the only change:
+  .L labels in .symtab/.strtab.
+
+**The judge:** `judge-cpy-set.py` b297e291d7629fbd, amended to dev 18a7cf883de3's rule.
+- A STABLE cell must match its full signature, verdict and evidence site.
+- A VARYING cell is graded on its verdict in the recorded set, and its site is reported. A varying verdict outside the
+  set is MOVED.
+- Only the recorded pair 20bcfdd1 → 0d322044 is mapped.
+- Controls, each shown to fire:
+  - the real stage bundle reads 32 of 32 (05, 09 and 31 reported as off-sample sites);
+  - a record run reads 32 of 32;
+  - a planted stable flip reads DIVERGENCE;
+  - a planted varying verdict outside its set reads MOVED;
+  - the lt1 image is refused (NO DATA);
+  - a broken pin reads VOID.
+
+**Prediction:** the pin reads back. Then 23 of 23 stable cells inside, and 9 of 9 varying verdicts inside their sets,
+as the stage's QEMU run read.
+
+**The S-23 reading:** the DRT1/DRTX/Oops counts in this boot. No prediction is made, since the QEMU record ran without
+this monitor. A DRT1 with progress carries the case, as in sql0-drt and pb10-drt. A DRTX or an Oops is reported first.
+lt1 stays off the board, since it needs collection.
+
+### pb10-csr, pre-registered (2026-10-19 20:53, before its boot): srevroot and csupctl at S-23's refusal
+
+**The monitor:** capstone-sbi c3917e8 (vp2/s23-csr-read, pushed, on f13dbc5), under the same
+CAPSTONE_S23_REFUSAL_READ. At each S/U load or store refusal, before the refusal read, it reports srevroot (0x5c1) as
+RFSR (low 32 bits) and RFSH (high 32 bits), and csupctl (0x7c4) as RFCT. Beside every FRTY it adds the fetch's mtval
+(FRTM). The compiled build carries `csrr 0x5c1` and `csrr 0x7c4`.
+
+**The kit:** bkit7-pb10C 82b6a336099a9461
+(`make-csr-kits.sh` dc8e49cde26e17d6), which is bkit7-pb10D with only the monitor changed.
+
+**The runner:** `tier3-pb10-csr.sh` 3f65cc5847c6f4e4, on board 1 after cpython lt0 ends
+(`chain-csr.sh` a1a70010ea488a88). pb10 is the arm because it met S-23 exactly once in pb10-drt, and one refusal
+settles the question.
+
+**The RTL lane's mechanism, under test.** vctx_table_o is srevroot != 0 at S and csupctl.table at M
+(csr_regfile.sv:2876-2878 on 8522d72fe). The trap into M would therefore be a namespace flush that re-arms every slot.
+That would heal the deny before M looks, which would explain RFVD 1 and why every plain retry passes.
+
+**Predictions** (the runtime lane's):
+- **Under the mechanism:** RFSR/RFSH nonzero and RFCT bit 3 clear at every refusal.
+- **RFSR = RFSH = 0 at a refusal refutes it.**
+- The cells are as pb10-drt's: CAUGHT 4 against t3-pb10/bundle, with the retry carrying the refusal.
+- FRTM is reported, the first physical address of a retried fetch on record.
+
+### Amendment to pb10-csr, and sql0-csr pre-registered (2026-10-19 20:55, before either boot)
+
+- **pb10-csr may meet no refusal at all**, since pb10 met S-23 once in one boot. If it prints no RFSR line, that is NO
+  READING on the mechanism, not a refutation. Its cells are graded as pb10-drt's.
+- **sql0-csr** is an S-23 INSTRUMENT boot, not a corpus reading, and sql0 is the reliable generator (17 refusals in
+  sql0-drt). It runs on board 1 after pb10-csr (`chain-csr2.sh` b78f843843c77c60).
+  - **The runner:** `tier3-sql-arm-rev2i.sh` bb0374481d1ac846, which is sql0-drt with ONE change, the
+    monitor c3917e8.
+  - **The kits:** bkit7-rev2xC e677f77d653b16dd and bkit7-rev2xmC b99cc81bccbc0481, from `make-csr-kits.sh`
+    c14a1918a087eb96.
+  - **The sql runner stays 1f099612 (sql0-drt's), so its cells are VOID** by the known empty-directory staging
+    defect. That is declared here, before the boot, and the cells are not scored.
+  - **The reading:** RFSR/RFSH/RFCT at every refusal, FRTM beside every FRTY, and the DRT1/DRTX/Oops counts.
+- **Predictions for both:**
+  - under the namespace-flush mechanism: srevroot nonzero and RFCT bit 3 clear at every refusal;
+  - srevroot 0 at any refusal refutes it.
+
+**Amendment to pb10-csr and sql0-csr's RFSR prediction (2026-10-19 21:0x, before either boot).** This was traced by the
+RTL lane and checked by the runtime lane on 8522d72fe (capstone_dom_switcher.anvil :170-173, :479-481, the walk ending
+at id 66). The switcher loads srevroot from the frame's second word at CSRUNV entry and saves it at escape, but never
+restores the caller's value. So after any escape, Linux runs at S with srevroot equal to the context's flat-table base
+(the module's virt_to_phys(c->table) in frame[1]). Neither the module nor the launcher prints that address (CV_STATS
+has no such field). The prediction is therefore:
+- under the mechanism, RFSH:RFSR is **page-aligned, inside RAM [0x80000000, 0xBC2D2000), and constant across the
+  refusals within one context's lifetime**;
+- RFCT bit 3 is clear;
+- a different nonzero value means another writer;
+- 0 refutes.
+
+### RETRACTION in the S-26 bracket's record (2026-10-19 21:1x)
+
+The bracket result says: "the simulation's memory model is not the only gap, since the entry walk's ~840 cycles of
+fixed testbench delay do not account for it." That sentence is WITHDRAWN.
+- **The RTL lane's ladder at three memory delays** (19 arms, bf3db3175, one model per delay) finds the first
+  retirement at a budget of:
+  - 100-150 at delay 0;
+  - (1,500, 2,000] at delay 12, the delay behind the recorded 1,500-2,000;
+  - (1,000, 1,500] at delay 40.
+- **What follows:** at zero added latency the simulated startup cost is the same order as silicon's E of 51-57. The
+  testbench's memory model accounts for essentially all of the gap.
+- **Two cautions from the RTL lane:**
+  - the delay knob is NOT monotone: delay 12 runs slower than delay 40;
+  - the ladder measures the budget at which the first instruction retires, which is a different quantity from E.
+- **What would have caught it:** the arithmetic took a single simulated threshold and subtracted an estimated memory
+  cost from it. That is an extrapolation across a testbench parameter, which the standing note on simulated cycle
+  costs already forbids. The sentence should have stated the bound and stopped.
+- **The bracket's silicon readings are unaffected:** E 51 and 57, the cut at q100, and the refutation of "600 spins".
+
+**Runner 8826a2ca's gate, re-ruled by the runtime lane.** No QEMU run can exercise the edit: the 13 directories exist
+on the QEMU stage, and `mkdir -p` on an existing directory does nothing. So the gate is:
+- **(a) the static diff** in `records/runner-8826a2ca-static-diff.txt`. The generated command sequence (t3-sql-trim-vm-r3
+  against -r3a) is 113 of 113 lines identical once the new mkdir clauses are removed; 21 steps carry 13 clauses each.
+  The comparison fires on a planted one-character change.
+- **(b) the board run's must-fire:** no `could not open directory` in any session, and the positive control (the
+  trivial SELECT) answered.
+- **The QEMU arms are recorded as information, not as gates.**
+  - A (the old runner) read 8 of 9 cells, with 03 out of the denominator, and its controls faulted.
+  - B (the new runner) had its uaf-malloc control die early on a SHRINK with garbage current bounds
+    [ffffffffffffe220, ffffffffffffe410). That is a defect candidate sent to the runtime owner, not variance.
+  - sql0 on QEMU is therefore not deterministic. Until a set-valued record exists, a board cell that mismatches the
+    single record is reported as "possibly variance", not as a verdict.
+
+### sql0-drt2, pre-registered (2026-10-19 21:00, before its boot): sql0's cells through the S-23 retry, with the empty-directory fix
+
+**The arm:** `tier3-sql-arm-rev2j.sh` c718db518a1716a4, on board 1 after sql0-csr
+(`chain-drt2.sh` 40abe5065abc3f2d). It is sql0-drt with ONE change, the runner: run-arm.py 8826a2ca21a33acd.
+Kits bkit7-rev2xD / bkit7-rev2xmD and monitor f13dbc5 are sql0-drt's.
+
+**Gates, as the runtime lane ruled:**
+- **(a)** the static command diff, required by the runner;
+- **(b)** the must-fire: no `could not open directory` in any session, and the positive control answered. A
+  failure STOPs before scoring. Its dry run tripped on a planted FATAL line.
+
+**Prediction:**
+- 21 sessions run, with the deny carried by DRT1 retries as in sql0-drt (no DRTX, no Oops). The DRT1 count is a
+  reading.
+- The cells are scored against t3-sql-trim-vm/bundle (9 cells). Predicted as that record:
+  - CAUGHT 02 and 03;
+  - MISSED 01 and 04-09;
+  - both controls fault.
+- A cell that differs is reported as "possibly variance", not as a verdict, until a set-valued sql0 record exists. The
+  QEMU A arm itself read 8 of 9, with 03 out of the denominator.
+
+**Runner 8826a2ca, QEMU information run r3b (21:2x; information, not a gate, per the ruling).** The edited runner
+again, same kit and inputs: 21/21 sessions, both controls fault, 9 of 9 cells the same as t3-sql-trim-vm, and the
+planted flip fires. So the three QEMU runs read:
+- r3 (edited): uaf control died early on the garbage-bounds SHRINK;
+- r3a (old): 8 of 9;
+- r3b (edited): 9 of 9.
+That is consistent with run-to-run variance and not with the edit.
+
+### Tree B on board 2, steps 1-3 and S-29's arms, result (2026-10-19 19:27-21:12): every reading as pre-registered
+
+Result lines are in `records/treeB-board2.result-lines.txt`. UNGATED; every result is board 2.
+- **The flash:** the resident was caplifive_sublet_d93a8d66b; the sealed sha256 was checked before the SPI write; the
+  readback after the power cycle names caplifive_vp2c_8de3c48cf.bit. The whole session ran under the lease client.
+- **The canary: PASS 9 of 9.** S-16 18 arms / 98 readings, the floor 6 arms / 77 readings and s1gap 3 arms all match
+  d93a8d66b's records, on both passes and pass against pass. Board 2's tree B results are therefore comparable with
+  board 1's runs, which were judged against the same records.
+- **The 25 vp2 arms:** 25 of 25 as pre-registered.
+- **Corpus set 7:** 33 of 33 records identical to d93a8d66b's.
+- **S-29's seven bare arms: 7 of 7 as pre-registered for tree B.**
+  - The four arms the flush changes (sv-stale, sv-stale-f, sv-stale-b and sv-fetch) read the RTL lane's tree B column.
+  - sv-stale-bf and sv-stale-bn read as they read on tree A.
+  - This is S-29's satp flush on silicon, N=1 per arm.
+- **Next:** sql0-treeB started at 21:12, then pb10-treeB, the FRTY discriminator.
+
+**A note on tree B's canary (the runtime lane's):** it was graded against d93a8d66b's records, the Sublet bitstream
+board 2 held before. The comparison crosses bitstreams by design: the canary's images and readings are identical on
+both. It is not a same-bitstream repeat.
+
+### wmem vp2-nested-pools with the Q-15 repair, pre-registered (2026-10-19 21:15, before its boot): board 2, tree B, after sql0-treeB and pb10-treeB
+
+**The runner:** `tier3-wmq-board2.sh` 47ffebbab6d35548. It is the compiler lane's invocation (wm1's with
+only the image builds changed): dev's run-defects.py 780a0975142e2221 --arm virtual-nested-pools on t3-new9's
+cases-ON / controls-ON, through tier3-appvm-arm.sh. The planted controls-plant-ON build is NOT used.
+- EXPECT_IMAGES is wmq1.images.SHA256SUMS dae7f5a871e0e477 (26 images).
+- The kit is bkit7-rev2xBD: tree B, board 2, module 39d8492d, the S-23 retry monitor f13dbc5, and the lease client.
+
+**The prediction:** run C (t3-wmq-C/out; dev d75137deed6e, results/2026-10-19-q15-repair), cell by cell. C' on the board
+module's QEMU twin (a5dec6a32c49b3d3) read 23 of 23 identical to it.
+- CAUGHT 22, and NO-READING:unattributed 1 (case 22: cause 25 at capstone_cap_revoke_child+88).
+- The controls: uaf-chunk faults, bounds-chunk faults, and uaf-jumbo faults "fault in wm_probe" in every case.
+- **No cause 29 at capstone_cap_derive.** One would mean the RTL's representability test refuses where QEMU's does
+  not, a finding in itself.
+- No "collect skipped".
+- DRT1/DRTX/Oops are reported as readings.
+- A step dying with "SHRINK illegal operand value" and cause 29 at __capstone_malloc_group_nested is graded as the
+  runtime owner's known candidate (a compressed save/restore of a far-out-of-bounds cursor), not as a new defect.
+
+The dry run, through a stub arm, compared 23 of 23 against C.

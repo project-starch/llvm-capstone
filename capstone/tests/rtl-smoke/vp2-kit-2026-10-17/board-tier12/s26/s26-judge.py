@@ -13,7 +13,8 @@ import re, sys
 t = open(sys.argv[1], errors="replace").read().replace("\r", ""); arm = sys.argv[2]
 # The firming arms (pre-registered 2026-10-19): cur-esc is cur with diag_escapes=1, judged as cur plus the escape lines;
 # var1k is var's boot write with 1,000, predicted (the RTL lane's tree-A bracket) to SPIN as cur does, with QNT0 000003E8.
-esc = arm == "cur-esc"; QNT = {"var": "001E8480", "var1k": "000003E8"}
+esc = arm == "cur-esc"; QNT = {"var": "001E8480", "var1k": "000003E8", "fix1": "001E8480",
+                               "q600": "00000258", "q300": "0000012C", "q100": "00000064"}
 if arm in ("cur-esc", "var1k"): base = "cur"
 else: base = arm
 def rung(r):
@@ -41,6 +42,38 @@ else:
     say(not q1, f"no QNT1 line in {arm} {q1}")
 vc = rung("vm-contract")
 if vc is None: print("\n".join(out)); print("NO DATA: no vm-contract RESULT (wedge or cut)"); sys.exit(2)
+# The bracket arms (pre-registered 2026-10-19 evening) are READINGS, not verdicts. The model, calibrated on var (511 steps
+# at 2,000,000) and var1k (41,805 at 1,000): steps(q) - 511 = 41,294 * (1000 - E) / (q - E), E the per-entry cost in quantum
+# cycles. A completed arm gives E; a run cut at the 600 s bound gives only a lower bound on E, from its last step count.
+if arm in ("q600", "q300", "q100"):
+    q = int(arm[1:]); W = 41294
+    m = re.findall(r"^CAPSTONE_VM_STATS .* steps=(\d+) .* elapsed_ns=(\d+)", t, re.M)
+    if vc == "0" and m:
+        n = int(m[-1][0]) - 511; el = int(m[-1][1]) / 1e9
+        E = (q * n - W * 1000) / (n - W) if n != W else float("nan")
+        out.append(f"READING {arm}: COMPLETED, steps {int(m[-1][0])}, elapsed {el:.1f} s, so E = {E:.0f} (model)")
+        say("VIRTUAL_APPLICATION_OK" in t and re.search(r"domain fault cause=25 ", t) is not None, "identity branch lines present")
+    elif vc == "930" and "VM_SPIN:ok at the 600 s bound" in t:
+        r = re.findall(r"^@@PARAM resume_satp_refreshes=(\d+):(t\d+|after-kill)$", t, re.M)
+        last = int(r[-1][0]) + 1 if r else None
+        if last is None or last - 511 <= W:
+            out.append(f"READING {arm}: CUT at the 600 s bound, {last} steps; no bound on E from this count")
+        else:
+            n = last - 511; lb = (q * n - W * 1000) / (n - W)
+            out.append(f"READING {arm}: CUT at the 600 s bound after {last} steps, so E > {lb:.0f} (model); E >= {q} if it spins")
+        out.append("READING " + arm + " refreshes " + " ".join(f"{w}={v}" for v, w in r))
+    else:
+        say(False, f"vm-contract retval {vc}: neither a completion nor the 600 s bound")
+    print("\n".join(out)); print("JUDGE READING" if not bad else f"JUDGE FAIL ({bad})"); sys.exit(1 if bad else 0)
+if arm == "fix1":
+    # S-26's fix: the boot write leaves 2,000,000, and vm-contract runs before any STEP and completes as var's did.
+    say(rung("b0-stats") == "0", f"b0-stats retval {rung('b0-stats')} (want 0, the control)")
+    say(vc == "0", f"vm-contract retval {vc} (want 0, identity branch, no STEP before it)")
+    say("VIRTUAL_APPLICATION_OK" in t and re.search(r"domain fault cause=25 ", t) is not None, "identity branch lines present")
+    say(rung("b0-hello") == "0", f"b0-hello retval {rung('b0-hello')} (want 0)")
+    st = re.findall(r"^CAPSTONE_VM_STATS .* steps=(\d+) ", t, re.M)
+    out.append(f"NOTE steps {st} (var read 511); FRTY {len(re.findall(r'FRTY:', raw[b:]))}, FRGD {re.findall(r'FRGD:([0-9A-F]{8})', raw[b:])}")
+    print("\n".join(out)); print("JUDGE PASS" if not bad else f"JUDGE FAIL ({bad})"); sys.exit(1 if bad else 0)
 ref = {w: int(v) for v, w in re.findall(r"^@@PARAM resume_satp_refreshes=(\d+):(t30|t90|t150)$", t, re.M)}
 if esc:
     e = re.findall(r"capstone_vm: escape \d+ action \d+ event \d+ frame kind (0x[0-9a-f]+) cause (0x[0-9a-f]+)", t)

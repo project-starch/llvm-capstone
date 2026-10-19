@@ -1,0 +1,26 @@
+# chain-rf dry runs (2026-10-19 18:33), stubbed; scratch paths shown as <scratch>
+## rfdry/out
+CHAIN_RF BEGIN 18:33:41
+CHAIN_RF_GO 18:33:41
+CHAIN_RF SQL0RF END rc=0 18:33:41 :: SQL DONE stub
+CHAIN_RF S30 END rc=0 18:33:41
+CHAIN_RF BRACKET END rc=0 18:33:41
+CHAIN_PB10RF_GO 18:33:41
+CHAIN_RF PB10RF END rc=0 18:33:41 :: PB10 DONE stub
+CHAIN_RF DONE 18:33:41
+## rfdry/out.s30
+stub s30-old s30-new
+## rfdry/out.bracket
+stub q600 q300 q100
+## rfdry/sqlout
+SQL MEASURE: firmware 21000000 B against 26000000 (manifest 9 files, stage 123 bytes)
+T3PG sql0-dry BEGIN 18:33:41 (trigger: CHAIN_RF_GO x)
+T3PG sql0-dry END 18:33:41 rc=0 :: virtual boot: completed  :: 
+SQL VOID: fixture record 00 (want 956173e054762e91), image 00 (want 64010720f1a6b3bc)
+## rfdry/pbout
+PB10 pb10-rf BEGIN 18:33:42 kit bkit7-pb10R monitor 03a1ffe
+T3SEQ pb10-rf BEGIN kit <mnt-hdd>/capstone/t3-smoke/bkit7-pb10R spec [ffmpeg/pool-repros|virtual-nested-pools|--prebuilt <mnt-hdd>/capston
+T3SEQ pb10-rf END rc=1
+PB10 pb10-rf SEQ END rc=0 18:33:42
+STUB SCORE tag=pb10-rf bundle=<mnt-hdd>/capstone/t3-pb10/bundle ARM_DIR=virtual-nested-pools-rf RESULTS_DIR=2026-10-19-vp2c-treeA KIT_DESC=kit bkit7-pb10R (module d71f207a3af5546b, the S-27 workaroun
+PB10 DONE 18:33:42

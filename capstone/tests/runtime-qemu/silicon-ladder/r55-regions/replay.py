@@ -244,7 +244,7 @@ def boot(t, region2_genesis):
     t.split_out_cap(0x80030000, 0x10000, 0)          # the interrupt handler's code (region 1's head)
 
 
-def replay(rec, policy, fmt, region2_start, region2_end):
+def replay(rec, policy, fmt, region2_start, region2_end, hold=None):
     cr.FORMAT, cr.RENORM = fmt, fmt == "full"
     genesis = region2_start - INT_STACK - INT_SEAL
     t = Table(policy, genesis, region2_end)
@@ -256,6 +256,12 @@ def replay(rec, policy, fmt, region2_start, region2_end):
     if policy == "exact":
         for k in range(len(t.slots)):
             t.make_exact(k)
+    if hold is not None:
+        # S-30 (2026-10-19): cap_env_init carves [hold) LINEAR out of Linux's region after the exact cut and keeps it
+        # privately, never appended, so no live slot may cover the tag store and the revocation-node pool. Counted as a
+        # protected range, so OVERLAP counts every live slot whose DECODED bounds still meet it.
+        t.held = t.split_out_cap(hold[0], hold[1] - hold[0], 1)
+        t.protected.append(("held", hold[0], hold[1]))
     t.boot_slots = len(t.slots)
     got = []
     for x in rec:
@@ -277,9 +283,11 @@ def main():
     ap.add_argument("--region2", type=lambda v: int(v, 0), default=0x8008a780)
     ap.add_argument("--region2-end", type=lambda v: int(v, 0), default=TOP)
     ap.add_argument("--show", type=int, default=6)
+    ap.add_argument("--hold", default=None, help="S-30: BASE:END carved linear at boot and held privately")
     a = ap.parse_args()
     rec = json.load(open(a.record))
-    t, got = replay(rec, a.policy, a.format, a.region2, a.region2_end)
+    hold = tuple(int(v, 0) for v in a.hold.split(":")) if a.hold else None
+    t, got = replay(rec, a.policy, a.format, a.region2, a.region2_end, hold)
     bad = 0
     for test, ids, want in got:
         ok = ids == want
@@ -290,6 +298,10 @@ def main():
     ov = t.overlaps()
     print("OVERLAP: %d (protected range, other live slot) pairs; %d protected ranges touched; %d inexact pieces" %
           (len(ov), len({(k, b, e) for k, b, e, *_ in ov}), len(t.inexact)))
+    if hold is not None:
+        lin = [(k, s["nom"], s["cap"][:2]) for k, s in enumerate(t.slots) if s["live"] and s["nom"][1] == hold[0]]
+        print("HOLD: held piece decoded [%#x, %#x); slots ending at %#x: %s" % (t.held[0], t.held[1], hold[0],
+              ", ".join("%d nominal [%#x, %#x) decoded [%#x, %#x)" % (k, n[0], n[1], c[0], c[1]) for k, n, c in lin) or "NONE"))
     for kind, b, e, k, lo, hi in ov[:a.show]:
         print("  %-6s [%#x, %#x) covered by slot %d decoded [%#x, %#x) nominal [%#x, %#x)" %
               (kind, b, e, k, lo, hi, *t.slots[k]["nom"]))
