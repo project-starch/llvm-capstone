@@ -142,6 +142,42 @@ id-preserving rewrite cannot re-arm a cleared validity bit, a csupctl bit-2 writ
 The field mechanism is open, and the cheapest instrument for it is one monitor line printing slot 7's tag,
 cap_type and revnode id at the refusal — not another arm.
 
+## The walk's broadcast timing, answered on tree A 8522d72fe
+
+Asked by the semantics owner against a candidate in which a retire's revocation walk is still broadcasting after
+its CSRETIRE retires. It is not, and the answer relocates the candidate rather than killing it.
+
+**The walk's broadcasts all precede the instruction's result.** `capstone_rev_node.anvil:46-52` sends
+`ep.retire_res(2'd0)` AFTER `call send_revnode_update(...)` and sets `stage := 3'd1` with it, so the response marks
+the walk's end, not its first step (the loop continues at `:86`). `send_revnode_update` (`:1-11`) is
+fire-and-forget — `send mem_ch.write_req(msg_pack) >> cycle 1 >> set mem_write_flag := 1'b0`, with
+`recv mem_ch.write_res` deliberately commented out — and the broadcast taps the write REQUEST, as that file's own
+comment says (`ex_stage.sv:1615` in this tree). `capstone_dyn_unit.anvil:613-639` has CSRETIRE await `retire_res`
+before its own result. So: every broadcast, then the response, then the result, then commit.
+
+**The clear still happens, inside the select_root window.** Those broadcasts carry the CONTEXT's indices, and the
+invalidation compare has no namespace term — `revnode_invalidation_id_i[15:0] == cpmp_tracked_revnode_id_d[i][15:0]`
+— so a context index equal to a physical index held in a CPMP slot clears that slot there and then.
+
+**Whether it persists turns on one thing: whether the rev-node unit was idle when the window opened.** The held
+namespace copies update only on a `!rev_busy` cycle, so:
+
+- unit IDLE at `select_root` -> the held copy sampled the context's root, `restore_root(0)` is a change, the flush
+  fires there, and the deny is repaired before any later kernel access. This is why a re-read of the same address
+  a few instructions later passes.
+- unit BUSY across the whole window -> the held copy never sampled the context's root, `restore_root(0)` is NOT a
+  change, no edge, no flush, and the deny persists.
+
+**That second regime is the same phenomenon as the srevroot workaround's silent collapse** — a held copy skipping
+an intermediate value because the unit was busy across both writes. One fact, not two: what makes the workaround
+fail silently is what makes a deny persist.
+
+**No software-visible drain exists.** `CSR_CSNODEFREE` reads `rev_node_head_i`/`rev_node_free_len_i`
+combinationally (`csr_regfile.sv:1078`), registered outputs that cannot stall, and no CSR exposes `rev_busy`. What
+does work is a dependency drain: any lifetime instruction needing a unit response cannot complete until the unit
+services it. A CSRETIRE with an out-of-range id is not one — it returns from the dyn unit's early branch without
+touching the unit (`capstone_dyn_unit.anvil:618-624`).
+
 ## Owed
 
 The cross-namespace collision arm: a CSRUNV context whose lifetime table hands out an index equal to a physical
