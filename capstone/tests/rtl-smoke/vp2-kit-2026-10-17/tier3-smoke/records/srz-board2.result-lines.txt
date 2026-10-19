@@ -1,0 +1,64 @@
+# the srevroot-zero module on board 2, tree B (2026-10-20 02:00-02:57): chain, Tier 1 SEQ and judge, sql0-srz-treeB runner lines
+CHAIN_SRZ BEGIN 02:00:05
+CHAIN_SRZ t1-old END rc=0 02:06:55 :: RUNG b0-stats retval=0 oracle=0 AS-ORACLE RUNG b0-hello retval=0 oracle=0 AS-ORACLE RUNG vm-contract retval=0 oracle=0 AS-ORACLE RUNG vm-suite retval=1 oracle=1 AS-ORACLE 
+CHAIN_SRZ t1-srz END rc=0 02:13:46 :: RUNG b0-stats retval=0 oracle=0 AS-ORACLE RUNG b0-hello retval=0 oracle=0 AS-ORACLE RUNG vm-contract retval=0 oracle=0 AS-ORACLE RUNG vm-suite retval=1 oracle=1 AS-ORACLE 
+CHAIN_SRZ T1 GATE PASS: t1-srz's four rungs read as t1-old's
+CHAIN_SRZ_SQL_GO 02:13:46
+CHAIN_SRZ SQL0 END rc=0 02:57:04
+CHAIN_SRZ DONE 02:57:04
+## t1-old
+TIER1_SRZ_START t1-old 02:00:05 fw 85fc8dbecd3321a4 bitstream caplifive_vp2c_8de3c48cf board 2
+DRIVER rc=0 02:06:55; watchdog lines 27
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=1 oracle=1 AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+FRTY retries 2 at       2 FRTY:01113D98 
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:1 
+VM_BEGIN without VM_EXIT: 
+JUDGE rc=2 :: JUDGE NO DATA
+  OK   @@PARAM diag_emerg read back ['Y'] (want ['Y'])
+  OK   @@PARAM node_flat_records read back ['4096'] (want ['4096'])
+  OK   @@PARAM supervisor_slots read back ['1'] (want ['1'])
+  NO DATA: 1 CAPSTONE_VM_STATS lines inside vm-contract (want 2: ok, stale)
+  OK   VM_EXIT:sparse-churn ['1'] (want ['1'])
+  OK   VM_CONTRACT_FAIL:recycling allocation present
+  OK   must-fire 'collect skipped' on the console 1 (want >= 1)
+  OK   banner [('1', '1')] (want one, slots 1, diag_emerg 1); refusal lines 0 (want 0)
+  JUDGE NO DATA
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+S-23: DRT1 0 DRTX 0 Oops 0; banner srevroot-zero 0
+TIER1_SRZ_DONE t1-old 02:06:55
+## t1-srz
+TIER1_SRZ_START t1-srz 02:06:55 fw 8502993af385416a bitstream caplifive_vp2c_8de3c48cf board 2
+DRIVER rc=0 02:13:46; watchdog lines 27
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=1 oracle=1 AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+FRTY retries 0 at 
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:1 
+VM_BEGIN without VM_EXIT: 
+JUDGE rc=2 :: JUDGE NO DATA
+  OK   @@PARAM diag_emerg read back ['Y'] (want ['Y'])
+  OK   @@PARAM node_flat_records read back ['4096'] (want ['4096'])
+  OK   @@PARAM supervisor_slots read back ['1'] (want ['1'])
+  NO DATA: 1 CAPSTONE_VM_STATS lines inside vm-contract (want 2: ok, stale)
+  OK   VM_EXIT:sparse-churn ['1'] (want ['1'])
+  OK   VM_CONTRACT_FAIL:recycling allocation present
+  OK   must-fire 'collect skipped' on the console 1 (want >= 1)
+  OK   banner [('1', '1')] (want one, slots 1, diag_emerg 1); refusal lines 0 (want 0)
+  JUDGE NO DATA
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+S-23: DRT1 0 DRTX 0 Oops 0; banner srevroot-zero 2
+TIER1_SRZ_DONE t1-srz 02:13:46
+## sql0-srz-treeB
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 28812314 bytes)
+T3PG sql0-srz-treeB BEGIN 02:14:34 (trigger: CHAIN_SRZ BEGIN 02:00:05)
+T3PG sql0-srz-treeB END 02:57:04 rc=1 :: virtual boot: completed :: 
+SQL CELLS VOID (declared before the boot: the empty-directory staging defect); not scored
+SQL MUST-FIRE: staged module 607164b9c1407c7c (want 607164b9c1407c7c); banner 'diag srevroot-zero-1' x1
+SQL S-23: FRTY 21 DRT1 0 DRTX 0 Oops 0 (sql0-treeB: FRTY 21, DRT1 16)
+SQL DONE 02:57:04

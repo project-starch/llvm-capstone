@@ -3144,3 +3144,22 @@ Monitor c3917e8, UNGATED. Result lines are in `records/pb10-csr.result-lines.txt
 - **2 FRTY at 00F14164,** each with FRTM 81D3A164. The page offset 0x164 matches mepc.
 - **With sql0-csr-treeB:** two programs on two bitstreams, every refusal under a nonzero, page-aligned srevroot with
   csupctl.table clear. N=1 boot each.
+
+### The srevroot-zero module on board 2, result (2026-10-20 02:00-02:57, tree B): S-23's data face is GONE (DRT1 16 → 0), as predicted; the fetch retries are not
+
+Result lines are in `records/srz-board2.result-lines.txt`. UNGATED.
+- **The Tier 1 gate PASSED.** t1-old (39d8492d) and t1-srz (607164b9) read the same on all four rungs, b0-stats 0,
+  b0-hello 0, vm-contract 0 and vm-suite 1, all AS-ORACLE.
+  - Both read the same judge lines: VM_EXIT sparse-churn 1, and the same NO DATA, which is an instrument condition
+    (one CAPSTONE_VM_STATS line inside vm-contract where the judge wants two).
+  - DRT1 0 in both.
+  - FRTY 2 on t1-old and 0 on t1-srz.
+  - The srz banner printed in t1-srz only (2 lines), the must-fire that the swapped module ran.
+- **sql0-srz-treeB, one variable (the module) against sql0-treeB:** the must-fire held (staged module 607164b9, banner
+  ×1).
+  - **DRT1 0 (sql0-treeB: 16).** 0 DRTX, no Oops, and the boot completed.
+  - **FRTY 21 (sql0-treeB: 21), unchanged.**
+- **What this says:** zeroing srevroot after each CSRUNV return removes every data refusal in sql0. That is the
+  compiler and runtime lanes' prediction, and the mechanism the csr arms read (a nonzero srevroot at S at every
+  refusal). The fetch face is NOT removed in sql0, so its mechanism differs at least in part. N=1 per arm.
+- The cells are VOID as declared (the old runner's staging defect).
