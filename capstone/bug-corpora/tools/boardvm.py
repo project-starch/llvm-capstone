@@ -122,6 +122,7 @@ def rung_segment(transcript, rung=RUNG):
 # the module's .text base, printed once after insmod (script())
 MODTEXT_LINE = 'echo "@@MODTEXT $(cat /sys/module/capstone_vm/sections/.text 2>/dev/null || echo ABSENT)"'
 
+
 class BoardBatch(virtualvm.Batch):
     """put() and step() as virtualvm.Batch; put() returns the guest path under /test-domains/<BATCH>/.
     other_ctl is the controller every rung other than the batch's goes to: the board controls' b0run.sh by default,
