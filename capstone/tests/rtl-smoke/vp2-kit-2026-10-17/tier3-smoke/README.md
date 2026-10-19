@@ -3740,3 +3740,52 @@ NOT one variable in the sense written.
 - **cpyp-DB** (`tier3-cpy-b.sh` 5139b3541505f962) now starts on this arm's SQL DONE, STOP or HOLD. Its waiting
   process was stopped before it created anything.
 - **The dry runs:** rev2o reached SQL DONE on a stub. cpyp-DB starts on SQL DONE and keeps waiting on Q15 DONE.
+
+### The node-floor reading, audited (2026-10-20 05:4x, claim-auditor): attribution UNSUPPORTED; what stands, what is inferred
+
+**Supported, read:**
+- **The index-only compare:** vp2's CPMP revnode invalidation compares the low 16 index bits with no namespace term
+  (pmp_data_if.sv:96-108). The broadcast fires on any node record write, with no namespace qualifier
+  (ex_stage.sv:1647-1648). Namespaces are separated only by a flush on edges (ex_stage.sv:1420,
+  pmp_data_if.sv:111-114). All at 8de3c48cf.
+- **The refetch:** CSRETIRE commits with a flush, and its successor is refetched (commit_stage.sv:812-816).
+- **FRTY 21 at this site is reproducible:** 7 of 7 session-capable sql0 boots on both trees and three modules.
+  sql0-treeA, rf and fix read 1 at the CSRUNV site, with no sessions.
+- **The covering slot:** slot 3, region 14, LINEAR.
+
+**Inferred, not read:**
+- that the broadcast virtual index equals slot 3's physical index p;
+- that slot 3 was cleared at the fetch, since FRVD is read after the re-arm;
+- p < 1024, which rests on the pool head starting at 3 (capstone_rev_node.anvil:697) and "tens of allocations";
+- region 14's identity as the kernel's main RAM region, which is the runtime lane's assertion and appears in no
+  transcript;
+- the decode's .text base.
+- **The floor value for sql0 is fixed by source, not read:** the sql0 kits carry no module params file and the boot
+  printed no @@PARAM, so node_flat_records is the default 65536, and CV_NODE_FIRST = min(1024, 65536/4) = 1024
+  (nf capstone_vm.c:167-172).
+
+**Open, beyond the confound (sql0-srzdev-treeB, queued):**
+- **Alternative 1: under the floor, retire()'s CSRETIRE could be REJECTED silently.** retire() ignores a non-zero status,
+  and ++retired_flat fires only on success (nf capstone_vm.c:780, 1680-1704). Then there is no node write and no
+  broadcast, and FRTY reads 0 with the collision untouched.
+- **Nothing in sql0-nf shows that a retire succeeded:** 651 CAPSTONE_VM_ADD_OK in both arms proves the adds. vexec's
+  CAPSTONE_VM_STATS line does not print nodes_retired, and sql0's runner sets no stats.
+- **What closes it:** nodes_retired (wire.h:39, retired_flat in flat mode) read per session on a4aa5668, or a diag line on
+  a non-zero CSRETIRE status. The control does not close it.
+
+**The line count, restated:**
+- the README's "741 lines each" excluded monitor lines AND @@HB heartbeats;
+- the auditor's filter, without monitor lines, reads 847 against 845;
+- by line type the arms differ only in heartbeats (63 against 61) and blanks. CAPSTONE_VM_ADD_OK is 651 in both, and the
+  pg_notify FATAL is 21 in both.
+
+**A stale comment headed for dev:** the floor commit's own comment (770daec2 capstone_vm.c:151-166) states the refuted
+node-2/NONLIN mechanism, and "the FRTY at retire+0x220 on every sql0 boot". It must be rewritten before that commit
+lands. That is the runtime lane's.
+
+**Wording the auditor allows in ISSUES now:**
+- facts: FRTY 21 at the CSRETIRE site (7 of 7); the covering slot; FRTY 0 on a4aa5668 with equal session work; the
+  RTL's index-only compare;
+- the pair is NOT one variable;
+- the mechanism is a HYPOTHESIS.
+- Not allowed until the control AND alternative 1 are closed: "is caused by", "removes it", "the floor removed".
