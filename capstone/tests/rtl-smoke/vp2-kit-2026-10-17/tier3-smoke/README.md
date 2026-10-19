@@ -4004,3 +4004,29 @@ diag31 left one gap: "checked against the shifted bounds" and "not checked at al
 - outside completing with value 90: out-of-window loads are not checked;
 - alias faulting: the case-31 mechanism is wrong.
 - Stores are not covered.
+
+### alias-load, result (2026-10-20 06:28-06:34, board 1, tree A): out-of-window loads ARE checked, against the bounds decoded at their own cursor; every predicted value holds
+
+`records/alias-load.result-lines.txt`. UNGATED. b0-stats 0, b0-hello 0, alias-load 0. FRTY 0, DRT1 0, no Oops.
+- **Checked by script** (child = 20,160 bytes, E=2):
+
+| arm | decoded bounds vs child | cursor in decoded | in true bounds | load |
+|---|---|---|---|---|
+| inb (100) | exact | yes | yes | AL_LOADED value=0, AL_DONE |
+| alias (0x10100) | +0x10000 at both ends | yes | no | AL_LOADED value=165 (the alias marker), AL_DONE |
+| outside (0x16000) | +0x10000 at both ends | no | no | cause 28 at address = cursor |
+| past (0x4ed0) | exact | no | no | cause 28 at address = cursor |
+
+- **What it decides:** the load IS bounds-checked, against bounds decoded at its own cursor.
+  - The two out-of-window arms decode the same shifted bounds. They differ only in where the cursor sits, and only the
+    one whose cursor falls inside that decode passes.
+  - A far overrun therefore aliases exactly when the cursor-relative decode contains the cursor. It reads the aliased
+    byte, here 0xa5, one span away.
+- **Together with diag31, this is case 31's mechanism on silicon:** the cursor is 50,976 bytes past a 20,160-byte buffer,
+  inside the one-span-shifted decode, so it passes and MISSES.
+- **QEMU, by contrast,** keeps exact bounds in the register, and alias, outside and past each fault with 28.
+- **A parser slip:** the SEQ's per-arm `loaded []` is the parser's. Its regex expected `AL_LOADED value=`, while the
+  image prints `AL_LOADED off=<off> value=N`. The dry-run stub was written in the same assumed format, so it could not
+  catch this. The values above are read from the raw lines.
+- **Not covered:** stores, and the chained-excursion re-encode, which the compiler lane infers from source and has not
+  measured.
