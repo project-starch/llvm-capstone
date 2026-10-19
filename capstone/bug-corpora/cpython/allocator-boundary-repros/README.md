@@ -153,9 +153,9 @@ required -- is a consequence on either axis.
 |---|---:|---|
 | `virtual-malloc` | 5 | 01, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`) |
 | `virtual-nested-pools` | **0** | every one of its 25 catches carries its axis's code |
-| `cheribsd-revocation` | 5 | 01, 05, 09, 10 (spatial, `si_code=2`), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
+| `cheribsd-revocation` | 6 | 01, 05, 09, 10, 14 (spatial, `si_code=2`), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
 
-Counting them the arms read 14 / 28, 25 / 28 and 10 / 28; withdrawn, **9 / 28,
+Counting them the arms read 14 / 28, 25 / 28 and 11 / 28; withdrawn, **9 / 28,
 25 / 28 and 5 / 28**. Each case's own `note` records which fault was which and
 why, and `~/cpython-false-positive-examples/` carries the minimal C.
 
