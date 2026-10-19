@@ -1709,3 +1709,72 @@ runs only if the runner is 1f099612d70a9576 and the QEMU CHECK reads PASS for it
   `vp2-malloc` and `vp2-pg-pools`.
 - **What follows:** sql0-rev2c woke on PGF DONE at 12:24 and stopped on its own gate, "no QEMU PASS for runner
   1f099612d70a9576". The QEMU check is still queued on the lock. It is re-launched when the check reads PASS.
+
+### The tree A flash is AUTHORISED (2026-10-19, ~13:28): the lead's own word in this lane's session, "yes, authorize"
+
+The lead answered this lane's direct question ("do you authorize flashing tree A (caplifive_vp2c_8522d72fe.bit)?") in
+this session. That covers the flash of the sealed bitstream above (sha256 ba1339bcd1f6fbb4...) and the pre-registered
+session steps 1-6. Per the plan, it does NOT cover a flash back to bf3db3175 on a canary failure: that needs the lead's
+word again, and the chain stops instead.
+
+### sql0-rev2c, result (2026-10-19 13:01-, module 39d8492d): VOID again, a third board-only defect (the binary's mode)
+
+- **What happened:** the measure-only bake read 25,856,520 B, as predicted, with a stage of 28,810,594 B. That is
+  1,008 B over rev2b's, exactly 21 x 48. The boot ran, and every session exited 1 with:
+  `LOG: invalid binary "./bin/postgres": Permission denied` and `FATAL: ./bin/postgres: could not locate my own
+  executable path`.
+- **Why:** postgres runs as `nobody` and checks with access(X_OK) that its own binary is executable. The kit's
+  recipe (board-run.sh, the manifest's mode column) gives 0755 only to `*.sh` and capstone-vexec, so `bin/postgres` is
+  baked 0644. On QEMU the stage keeps the source mode, 0775. capstone-vexec loads the image itself, so the kernel's
+  exec check never runs; postgres's own check does.
+- **Reproduced natively:** native postgres 17.5 run through the dynamic loader, which needs no execute bit, as
+  capstone-vexec does not, gives the board's exact two lines at 0644 and answers SELECT 1 at 0755. A first test with
+  a plain exec was void, because the kernel refused the exec before postgres ran.
+- **This lane's slip:** after rev2b, this lane judged the 0644 files harmless because "vexec reads bin/postgres as an
+  image". That missed postgres's own check. rev2c's pre-registration implied the runner fix was sufficient, and it
+  was not.
+- **Also checked, and NOT a defect:** the board kernel (6.4.14) has `# CONFIG_SYSVIPC is not set`, where the QEMU
+  kit's 6.1.0 has SysV IPC. But the postgres image defines its own shmget, shmat and shmctl (the virtual runtime's
+  `runtime/virtual/mapping.c`; `llvm-nm`: T at 0x1284c), so no SysV call reaches the kernel.
+- **The fix,** for sql0-rev2d: a kit whose recipe keeps a staged file's execute bit when the source has it. The rev2b
+  stage has three executable files: capstone-vexec, ctl.sh and bin/postgres. The runner is unchanged.
+- **When:** sql0 runs on tree A after the flash session, not before it. Its prediction is QEMU's on either bitstream,
+  and holding the authorised flash for a ~5 h arm is the wrong trade. rev2c's VOID boot ends first; an arm in flight
+  finishes.
+
+### The tree A session, as it will run (scripts private to the board lane, /tmp/capstone/treeA-session)
+
+- **The scripts** are vp2's session scripts (2026-10-17), copied with names, paths and the two plan differences
+  changed. sha256/16:
+  - chain-treeA.sh 65a49c93dfd1321b
+  - preflight-treeA.sh fbe2580a56923d89
+  - flash-bit.py fab3586158b13323
+  - run-treeA.sh e82ca104ebd7fff4
+  - run-treeA-c7.sh 7dc25c47202ffff6
+  - infra-retry.py ecc3967ffccfcc9d
+  - cmp-s1gap.py 58ca15c1983878dc
+  - board-free-wait.sh a5ab0cfd5bd89f21
+- **The order:** the board is free, then the preflight, the flash, the canary twice (9 comparisons), the 25 arms
+  against their vectors, and corpus set 7.
+  - **The preflight:** the sealed sha256, the WNS -18.985 inside the band (>= -19.596), set 7's firmware
+    1d2bbbf37f63f435, and the DTS pairing.
+  - **The flash:** it refuses unless `caplifive_vp2_bf3db3175.bit` is still in the server's store (the flash-back
+    path), and the readback must name tree A.
+- **The two differences from vp2's chain, both the plan's:**
+  - a canary failure STOPS with tree A resident, and does not flash back;
+  - fewer than 25 arms as pre-registered stops the chain before the Linux steps.
+- **The DTS gate:** `preflight-board-run.sh` blocked tree A as an unknown name. Its 65536-node row now includes
+  `*_vp2c_*`. Tree A changes four core files over bf3db3175 (commit_stage, csr_regfile, cva6, ex_stage) and no Anvil
+  source, so the node pool is vp2's.
+  - With the set 7 firmware: tree A GO, bf3db3175 GO, `caplifive_bogus_123.bit` BLOCK.
+  - With a synthetic 1021-node copy of that firmware: tree A BLOCKs on "MISMATCH".
+- **Dry runs,** with stubbed steps and the real preflight, each reaching its pre-registered end:
+  - all pass: `CHAIN_TREEA_STEPS123_DONE`;
+  - a canary failure: `CHAIN_TREEA_STOPPED_CANARY`;
+  - 24 of 25 arms: `CHAIN_TREEA_STOPPED_ARMS`;
+  - a flash failure: STOP on the readback;
+  - the real board-free wait beside sql0-rev2c's live driver, with a 5 s bound: STOP, busy.
+  - The first dry runs found two defects in the dry-run plumbing itself: the scripts read from the override
+    directory, and a quoted inline stub. Both were fixed before these.
+- **Steps 4-6** (Tier 1 on module 39d8492d, wm0/wm1, and pym0 on 3005ed52) need kits naming the new bitstream. They
+  are prepared while steps 1-3 run, and pre-registered before they run.
