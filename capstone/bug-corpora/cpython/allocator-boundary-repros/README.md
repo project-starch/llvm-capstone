@@ -152,14 +152,15 @@ required -- is a consequence on either axis.
 | arm | withdrawn | cases |
 |---|---:|---|
 | `virtual-malloc` | 5 | 01, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`) |
-| `virtual-nested-pools` | **0** | every one of its 25 catches carries its axis's code |
+| `virtual-nested-pools` | **0** | every one of its 26 catches carries its axis's code |
 | `cheribsd-revocation` | 6 | 01, 05, 09, 10, 14 (spatial, `si_code=2`), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
 
-Counting them the arms read 14 / 28, 25 / 28 and 11 / 28; withdrawn, **9 / 28,
-25 / 28 and 5 / 28**. Each case's own `note` records which fault was which and
+Counting them the arms read 14 / 28, 26 / 28 and 11 / 28; withdrawn, **9 / 28,
+26 / 28 and 5 / 28**. Each case's own `note` records which fault was which and
 why, and `~/cpython-false-positive-examples/` carries the minimal C.
 
-Three changes made the denominator 28 and moved two of the withdrawals:
+Four changes made the denominator 28, moved two of the withdrawals and
+recovered one reading:
 
 * **`06` is held out**, not missed. On a purecap ABI `SIZEOF_VOID_P` is 16, so
   `sizeof(PyFloatObject)` is 48 against the host's 24 and
@@ -172,6 +173,18 @@ Three changes made the denominator 28 and moved two of the withdrawals:
   `cause=28` catches on `virtual-nested-pools` every time; `04` misses on all
   three arms every time. Two readings disappeared under the pin -- `03`'s
   `si_code=2` and `04`'s `cause=24` -- and both were unpinned artefacts.
+* **`16` on Sublet was `NO-READING` and is a detection, shown `D 28‖`.** It
+  had faulted `cause=28` in `advance_with_locations`, a symbol the case did not
+  declare. That symbol is `read_byte` inlined: `read_byte` is one statement,
+  `return *bounds->opaque.lo_next++;` at `codeobject.c:1077`, the exact line
+  host ASan names, and the target binary's DWARF shows every
+  `DW_TAG_inlined_subroutine` in `advance_with_locations` resolving to that
+  line, with 1077 the only line in the function that dereferences the linetable
+  pointer. `advance_with_locations` was added to `fault_sites` with that written
+  into `fault_sites_why`, and the case was **re-run** rather than re-scored, so
+  the verdict is the judge's. Attribution by symbol name is fragile across build
+  configurations -- the ASan host build and the optimised cross build inline
+  differently -- and the source line is what the comparison wants.
 * **`08` on CheriBSD is restored to a detection, shown `D 2†`.** Its
   withdrawal had been reasoned from size-class rounding, which cannot absorb
   `READ 1048576` out of an 8193-byte region. Re-run in the guest with only the
