@@ -2834,3 +2834,27 @@ as the stage's QEMU run read.
 **The S-23 reading:** the DRT1/DRTX/Oops counts in this boot. No prediction is made, since the QEMU record ran without
 this monitor. A DRT1 with progress carries the case, as in sql0-drt and pb10-drt. A DRTX or an Oops is reported first.
 lt1 stays off the board, since it needs collection.
+
+### pb10-csr, pre-registered (2026-10-19 20:53, before its boot): srevroot and csupctl at S-23's refusal
+
+**The monitor:** capstone-sbi c3917e8 (vp2/s23-csr-read, pushed, on f13dbc5), under the same
+CAPSTONE_S23_REFUSAL_READ. At each S/U load or store refusal, before the refusal read, it reports srevroot (0x5c1) as
+RFSR (low 32 bits) and RFSH (high 32 bits), and csupctl (0x7c4) as RFCT. Beside every FRTY it adds the fetch's mtval
+(FRTM). The compiled build carries `csrr 0x5c1` and `csrr 0x7c4`.
+
+**The kit:** bkit7-pb10C 82b6a336099a9461
+(`make-csr-kits.sh` dc8e49cde26e17d6), which is bkit7-pb10D with only the monitor changed.
+
+**The runner:** `tier3-pb10-csr.sh` 3f65cc5847c6f4e4, on board 1 after cpython lt0 ends
+(`chain-csr.sh` a1a70010ea488a88). pb10 is the arm because it met S-23 exactly once in pb10-drt, and one refusal
+settles the question.
+
+**The RTL lane's mechanism, under test.** vctx_table_o is srevroot != 0 at S and csupctl.table at M
+(csr_regfile.sv:2876-2878 on 8522d72fe). The trap into M would therefore be a namespace flush that re-arms every slot.
+That would heal the deny before M looks, which would explain RFVD 1 and why every plain retry passes.
+
+**Predictions** (the runtime lane's):
+- **Under the mechanism:** RFSR/RFSH nonzero and RFCT bit 3 clear at every refusal.
+- **RFSR = RFSH = 0 at a refusal refutes it.**
+- The cells are as pb10-drt's: CAUGHT 4 against t3-pb10/bundle, with the retry carrying the refusal.
+- FRTM is reported, the first physical address of a retried fetch on record.
