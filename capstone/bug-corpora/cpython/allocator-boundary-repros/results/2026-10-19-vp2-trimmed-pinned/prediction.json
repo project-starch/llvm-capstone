@@ -286,6 +286,7 @@
      ]
     },
     "15_gh-148973_fix-segfault-on-mismatch-between-consts": {
+     "added_by": "runs/modswap-lt0 (module twin a5dec6a3): its negative control faulted in __capstone_mallocng_free, so NO-READING",
      "n": 5,
      "signatures": [
       {
@@ -296,11 +297,21 @@
        "offset": 0,
        "symbol": "visit_decref",
        "verdict": "CAUGHT"
+      },
+      {
+       "attribution": null,
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 0,
+       "symbol": "visit_decref",
+       "verdict": "NO-READING"
       }
      ],
-     "stable": true,
+     "stable": false,
      "verdicts": [
-      "CAUGHT"
+      "CAUGHT",
+      "NO-READING"
      ]
     },
     "16_gh-156075_heap-buffer-overflow": {
@@ -693,11 +704,12 @@
     "lt0-trim-4",
     "lt0-trim-5"
    ],
-   "stable_cells": 24,
-   "varying_cells": 8
+   "stable_cells": 23,
+   "varying_cells": 9
   },
   "lt1": {
    "arm": "virtual-nested-pools",
+   "board": "NOT for the board until collection exists: on a non-collecting module the nested pools exhaust the 65,536-record flat table (runs/modswap-lt1)",
    "cases": {
     "01_gh-139071_heap-overflow-in-set-dealloc-setobject": {
      "n": 5,
