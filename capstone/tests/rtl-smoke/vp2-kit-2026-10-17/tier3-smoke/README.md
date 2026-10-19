@@ -2965,3 +2965,28 @@ Result lines are in `records/treeB-board2.result-lines.txt`. UNGATED; every resu
   - sv-stale-bf and sv-stale-bn read as they read on tree A.
   - This is S-29's satp flush on silicon, N=1 per arm.
 - **Next:** sql0-treeB started at 21:12, then pb10-treeB, the FRTY discriminator.
+
+**A note on tree B's canary (the runtime lane's):** it was graded against d93a8d66b's records, the Sublet bitstream
+board 2 held before. The comparison crosses bitstreams by design: the canary's images and readings are identical on
+both. It is not a same-bitstream repeat.
+
+### wmem vp2-nested-pools with the Q-15 repair, pre-registered (2026-10-19 21:15, before its boot): board 2, tree B, after sql0-treeB and pb10-treeB
+
+**The runner:** `tier3-wmq-board2.sh` 47ffebbab6d35548. It is the compiler lane's invocation (wm1's with
+only the image builds changed): dev's run-defects.py 780a0975142e2221 --arm virtual-nested-pools on t3-new9's
+cases-ON / controls-ON, through tier3-appvm-arm.sh. The planted controls-plant-ON build is NOT used.
+- EXPECT_IMAGES is wmq1.images.SHA256SUMS dae7f5a871e0e477 (26 images).
+- The kit is bkit7-rev2xBD: tree B, board 2, module 39d8492d, the S-23 retry monitor f13dbc5, and the lease client.
+
+**The prediction:** run C (t3-wmq-C/out; dev d75137deed6e, results/2026-10-19-q15-repair), cell by cell. C' on the board
+module's QEMU twin (a5dec6a32c49b3d3) read 23 of 23 identical to it.
+- CAUGHT 22, and NO-READING:unattributed 1 (case 22: cause 25 at capstone_cap_revoke_child+88).
+- The controls: uaf-chunk faults, bounds-chunk faults, and uaf-jumbo faults "fault in wm_probe" in every case.
+- **No cause 29 at capstone_cap_derive.** One would mean the RTL's representability test refuses where QEMU's does
+  not, a finding in itself.
+- No "collect skipped".
+- DRT1/DRTX/Oops are reported as readings.
+- A step dying with "SHRINK illegal operand value" and cause 29 at __capstone_malloc_group_nested is graded as the
+  runtime owner's known candidate (a compressed save/restore of a far-out-of-bounds cursor), not as a new defect.
+
+The dry run, through a stub arm, compared 23 of 23 against C.
