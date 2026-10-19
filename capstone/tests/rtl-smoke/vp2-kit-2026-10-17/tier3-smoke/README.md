@@ -3212,3 +3212,28 @@ escapes"), FF_DONE revoke_pairs, DRT1/DRTX, the exit status.
 in both (QEMU: 12,709 against 12,695).
 
 **Recorded at 03:2x, while the boot ran and before any result was read.** The first commit of this section was BLOCKED by the precommit scan: the copied bake script carried literal home-directory paths. The boot had already been launched by the same command, so this pre-registration reached the lane after the boot started and before its result. The image was baked by that copy (0fc0bc555c773782). The committed copy (add5df45b284c8c5) differs only in `$HOME/` for the literal paths.
+
+### sql0-csr and sql0-drt2, results (2026-10-20, board 1, tree A)
+
+Result lines are in `records/sql0-csr-drt2.result-lines.txt`. UNGATED.
+- **sql0-csr** (monitor c3917e8, cells VOID as declared): 16 data refusals, each RFSR 82B00000 / RFSH 0 / RFCT 0. That
+  is the same srevroot value and csupctl reading as sql0-csr-treeB, on the other bitstream. 16 DRT1, 0 DRTX, no Oops.
+  21 FRTY with FRTM 82A023AC (mepc offset 0x3AC).
+- **sql0-drt2** (runner 8826a2ca, the empty-directory fix; monitor f13dbc5):
+  - 21 sessions ran, and the positive control answered.
+  - 0 × `could not open directory "pg_notify"`: the defect the fix addresses is gone.
+  - Both controls fault (bounds-malloc, uaf-malloc).
+  - 17 DRT1, all at 803833B6, 0 DRTX, no Oops.
+- **The must-fire as written FIRED, and it was too broad.** It required no `could not open directory` at all. It fired
+  on two LOG lines, not FATALs: `could not open directory "/usr/share/zoneinfo"`, in case 01 (to_char_tz) and its
+  control.
+  - That same LOG appears twice in EVERY QEMU run of this arm, the passing record r2 included (r2, r3a and r3b: 2 each),
+    so the gate as written would have stopped the QEMU record itself.
+  - Its positive control was a planted pg_notify FATAL, never a passing transcript. That was the gap.
+  - The run therefore stopped before scoring, and no bundle is filed. The ruling is the runtime lane's.
+- **The cells, compared by hand AS INFORMATION** (compare-pilot against t3-sql-trim-vm/bundle): 7 of 9 the same.
+  - 03 (QEMU CAUGHT) and 07 (QEMU MISSED) read NO-READING:out-of-denominator, i.e. the trigger was not reached.
+  - 03 dropped out the same way in QEMU's own A arm.
+  - Both are "possibly variance" until a set-valued sql0 record exists.
+- **The lesson,** recorded: a must-fire written as an absence must be run against the PASSING record first. This one
+  would have failed on it.
