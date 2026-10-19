@@ -45,11 +45,20 @@ no excuse list and returns status 1 on exactly that clean result. **The 152-test
 152 of 152 identical, 0 differing, 0 missing. So TREE B IS FULLY GATED at `8de3c48cf`** (its `core/` byte-identical
 to `d427e7391`). Its pre-registration, with the predictions written against the measured LUT floor rather than
 tighter than it and an endpoint discriminator rather than a stem one, is in
-`docs/plans/capstone-sublet-rtl.md`. **It has NOT been handed to synthesis as a build**, and the reason is in that
-entry: the third sufficiency question fails, since the flush has no silicon readback and the one available reading,
-whether S-23's fetch panics stop, cannot be told apart from a boot that was never going to panic. The
-recommendation is to batch it with the consuming resume, R-57's audited register sharing and an R-38-class fix if
-its arm confirms. The lead's call; the hash is ready and nothing further is owed on it. **R-57's two saved-exception registers are SHARED-SAFE** (structural: one functional unit, one issue port,
+`docs/plans/capstone-sublet-rtl.md`. **Its build is LAUNCHED**, and the hold I had placed on it is
+withdrawn. I had failed the third sufficiency question by testing it against the wrong reading, whether S-23's
+fetch panics would stop, which is a weak inference from three panics. The semantics owner pointed out the reading
+I had missed: the arms that found the defect are bare M/S-mode arms of the kind the board already runs, so they
+become board images with predicted vectors on both bitstreams. **They are built, simulated on both and landed at
+`8e1df1e05a3c`** as `capstone/tests/rtl-smoke/satpstale-bare-2026-10-19/`, seven images, two-sided on every face
+against the RESIDENT bitstream, with two controls identical across both. The fetch arm reads S-23's signature on
+tree A, cause 1 with a physical address, and its discriminator needs no address table: **on tree A the last two
+recorded values differ, on tree B they are equal.** So S-29 and S-23's fetch face are silicon readings on the
+resident bitstream, independent of tree B, and tree B's own bitstream is informative by the same arms. Its flash
+stays the lead's word. **Still owed, in order:** the cross-namespace arm for the index-only-compare candidate
+(needs a physical node at generation >= 1, so it depends on the node pool's allocation order), the consuming
+resume (ruled, no RTL yet), R-57's register sharing as an area lever rather than a fix, and a quantum-expiry or
+page-fault escape arm, since every escape reading so far is for the ecall kind. **R-57's two saved-exception registers are SHARED-SAFE** (structural: one functional unit, one issue port,
 a single-threaded DYN dispatch loop), with the caveat that the area saving is in the capture mux and the read-side
 priority chain rather than the flops; a candidate for the batch after tree B.
 
