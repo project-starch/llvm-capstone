@@ -3848,3 +3848,30 @@ so any unmap-path retires succeeded under the floor. It is not shown that sql0's
   q15rf).
   - **Predicted, if the cell is deterministic:** the same three readings, 30 CAUGHT, 31 MISSED, 32 CAUGHT.
   - **If 31 reads CAUGHT,** the cell varies across boots and is recorded as such.
+
+### Case 31: the compiler lane's candidate, and q15 subset f on tree B, pre-registered (2026-10-20 06:0x, before the tree-B boot)
+
+**The candidate,** measured on QEMU and not yet RTL-confirmed (window-counter kit qkit7-wc2):
+- **Not the pad:** case 31's only pads are the two 64-byte lookaside pads, which are the board's Q15_PAD line.
+- **The fault:** at statDecodePage+2024 (`lbu a1, 0(a0)`), a0 has bounds [0x…61800, 0x…666c0), a 20,160-byte page
+  buffer, and cursor 0x…72de0. That is 51,000 bytes past the end, set by `cincoffset a0, a0, iOff` with iOff from the
+  fuzzed page.
+- **The decode:** the compressed fields (E=2, a 64 KiB span), decoded at that cursor, give [0x…71800, 0x…766c0). That is
+  the true bounds shifted up by one span, and they CONTAIN the cursor.
+- **So, IF silicon's load check decodes at the access cursor:** the load passes, reads 64 KiB above the buffer inside
+  the 1 MiB static heap, and the case completes.
+- **Prior art for the decode half:** dev's docs/history/19-10-2026_22-30-00_q30-silicon-half-and-the-issue-guard-measured.md.
+  In simulation, at cursors +0x4000 and +0x10004000, the decoded bounds are "wrong, by exactly the cursor's own
+  16 KiB-region change", because compress_bounds does not take the cursor. It does not show the load check's decode,
+  which is the link an rtl-oracle is reading.
+- **If confirmed:** a bounds overrun of more than one window span aliases instead of trapping on silicon, and Q-30's
+  "self-heals" framing gains that gap.
+
+**The predictions:**
+- **The tree-A repeat** (board 1, started 05:55, pre-registered above as "the same three readings if deterministic"):
+  the compiler lane predicts 31 MISSED again, deterministic, with an identical fault offset across QEMU runs (image
+  offset 0x372de0). That prediction reached this lane AFTER the boot had started, before any of its result was read.
+- **q15 subset f on tree B** (board 2, behind cpyp-DB; `chain-q15bf-b2.sh` 47b4b064396488e0 → tier3-q15-board2.sh
+  with Q15_SUBSETS=f, run dir t3-run-treeB/q15bf): 30 CAUGHT, 31 MISSED, 32 CAUGHT, because S-29's satp flush does not
+  touch bounds decode.
+  - Its dry run wrote the trigger on cpyp-DB's end marker and waited without one.
