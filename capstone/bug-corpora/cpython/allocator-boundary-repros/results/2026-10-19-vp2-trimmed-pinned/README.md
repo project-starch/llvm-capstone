@@ -95,7 +95,48 @@ different without it. The 0/32 at two runs was reported as "the pin", and was **
 third pinned run and the lt1 pair differed. The pin narrows the variance; it does not remove it. Most varying cells
 swing between the defect's own site and a fault inside the allocator (`__capstone_mallocng_free+180`,
 `memset+44`), or between a fault and a clean run: heap-state-dependent placement, not established. The remaining
-source is open. An `-icount` (deterministic TCG time) pair is the next diagnostic and is not part of this record.
+source is open.
+
+**icount diagnostic, 2026-10-19:** two runs, `runs/lt0-icount-1` and `-2`, used the pinned, trimmed lt0 configuration
+under `-icount shift=4,sleep=off` (deterministic TCG time). Their verdicts.jsonl files are byte-identical, including pcs
+and evidence (sha256/16 3d3ea18712f24b89). The pinned pair without icount (lt0-trim-4 and -5) differs. The residual
+variance is therefore consistent with host timing; this rests on N=2.
+- The icount arms ran at --timeout 900 and the others at 300. No step timed out in any arm.
+- The 138 residual console lines (grant bases, unittest timings) reached no verdict field in these two runs. That is an
+  observation about two runs, not a property of the scorer.
+- The diagnostic changes no ruled measurement.
+
+## The board stage for lt0 (2026-10-19): three levers to fit the firmware cap
+
+The trimmed configuration above does not fit the 26,000,000-byte DECLARED-bake cap, so lt0's board stage takes three
+levers.
+1. **Image:** `llvm-objcopy --discard-locals` applied to `0d322044b9118713` gives `20bcfdd1073976e0`. It removes the `.L`
+   labels only; the loaded bytes are identical.
+2. **Stdlib:** a guest-traced closure with whole dynamic packages, `stage-closure.txt` (350 files, sha256/16
+   b41545623090d0cf), in place of closure2's 445.
+3. **Bytecode only:** `--stdlib-sourceless`, which compiles each staged module with `compileall -b`, stages the bytecode
+   beside it and drops the `.py`. It is in `runners/virtual/run-virtual.py` from this commit (sha256/16
+   b98e90fc86fafe1a).
+
+**Size.** Measured by a measure-only board-kit collect of the same image and staging (kit bkit7-rev2xmD):
+- the manifest holds 574 files, and the stage is 23,276,602 bytes;
+- the firmware is 25,856,520 B (bd536b0aab6ee89d), a margin of 143,480 B under the cap.
+
+The measured tree and the run below differ only in the source-mtime field of one generated `.pyc` header and in the
+session marker, both the same size.
+
+**One pinned run against this record:** `runs/lt0-stage-1`, using the module-swap run's kit and module
+(a5dec6a32c49b3d3). Its platform equals `runs/modswap-lt0` in every field but the runner. The guest pin reads back as
+above. Judged against `prediction.json` lt0, with the evidence text in the signature:
+- all 23 stable cells are inside their sets;
+- of the 9 varying cells, 6 are inside;
+- 3 are outside the sampled set: 05 (CAUGHT at `_PyDict_FromItems+144`, cause 28), 09 (CAUGHT at
+  `unicodekeys_lookup_unicode+400`, cause 28) and 31 (CAUGHT at `mro_implementation_unlocked+316`, cause 24).
+
+Each of those three has a verdict inside its set at a site not seen in the sampled runs. That is the allocator-internal
+variance this record already shows. A board reading of the stage is judged against the lt0 sets, and a varying cell
+outside them is reported as "outside the sampled set". Tally: CAUGHT 15, MISSED 14, NO-READING 3 (infra 1, not-reached
+1, unattributed 1).
 
 ## Caveat: trimmed vs full Lib
 
@@ -105,5 +146,6 @@ established trim effects. A smaller Lib does change the heap's history, which is
 
 ## Files
 
-`runs/<name>/{verdicts.jsonl, inputs.json, SOURCE}`: the 18 bundles named above. SOURCE names the run directory
-each came from.
+`runs/<name>/{verdicts.jsonl, inputs.json, SOURCE}`: the 18 bundles named above, plus the board stage's run
+(`lt0-stage-1`) and the icount pair (`lt0-icount-1`, `-2`). SOURCE names the run directory each came from.
+`stage-closure.txt` is the board stage's stdlib closure.
