@@ -2,7 +2,8 @@
 # cpyp-DB (2026-10-20; pre-registered in README.md before the boot, with NO predicted value), board 2, tree B: cpyp-D with
 # ONE change, the bitstream. Kit bkit7-rev2xnBD is bkit7-rev2xnD with tree B's board fields (make-cpyb-kit.sh); module
 # 39d8492d and monitor f13dbc5 as cpyp-D. Tree B differs from tree A by S-29's satp flush. Readings as cpyp-DZ's.
-# Usage: tier3-cpy-b.sh <board 2's q15 out> <out>: starts once it reads Q15 DONE, STOP or HOLD. Ends by itself.
+# Usage: tier3-cpy-b.sh <sql0-srzdev's out> <out>: starts once it reads SQL DONE, STOP or HOLD (moved behind the node
+# floor's control before its boot, 2026-10-20). Ends by itself.
 # CPP_ARM / CPP_BUSY / CPP_ROOT stub.
 main() {
   set -u
@@ -11,8 +12,8 @@ main() {
   local RUN=/tmp/capstone/wt-cpy-meas/capstone/bug-corpora/cpython/allocator-boundary-repros/runners/virtual/run-virtual.py
   local P=/tmp/capstone/land-board/capstone/bug-corpora/cpython/allocator-boundary-repros/results/2026-10-19-vp2-trimmed-pinned
   local IMGD=$H/t3-new7/cpython-lt0-dl a kit mon R B
-  until grep -a -q "^Q15 DONE\|^Q15 STOP\|^Q15 HOLD" "$W" 2>/dev/null || [ "$(date +%s)" -ge $end ]; do sleep 60; done
-  grep -a -q "^Q15 DONE\|^Q15 STOP\|^Q15 HOLD" "$W" || { echo "CPP HOLD: board 2's q15 did not end" >> "$O"; return 1; }
+  until grep -a -q "^SQL DONE\|^SQL STOP\|^SQL HOLD" "$W" 2>/dev/null || [ "$(date +%s)" -ge $end ]; do sleep 60; done
+  grep -a -q "^SQL DONE\|^SQL STOP\|^SQL HOLD" "$W" || { echo "CPP HOLD: sql0-srzdev did not end" >> "$O"; return 1; }
   [ "$(sha256sum $RUN | cut -c1-16)" = b98e90fc86fafe1a ] && [ "$(sha256sum $P/stage-closure.txt | cut -c1-16)" = b41545623090d0cf ] \
     && [ "$(sha256sum $IMGD/image/cpython.dom | cut -c1-16)" = 20bcfdd1073976e0 ] || { echo "CPP STOP: runner, closure or image" >> "$O"; return 1; }
   for a in "cpyp-DB bkit7-rev2xnBD f13dbc5"; do

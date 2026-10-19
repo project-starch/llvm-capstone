@@ -3715,3 +3715,28 @@ NOT one variable in the sense written.
 - **What stands:** sql0's fetch face reads 0 under a4aa5668, with session work identical to sql0-srz-treeB's.
 - **What does not yet stand:** that the floor is what removed it. The control that makes it one variable is sql0 on
   90bf036f, which is pre-registered next.
+
+### sql0-srzdev-treeB, pre-registered (2026-10-20 05:3x, before its boot): the node floor's ONE-variable control, board 2 after q15 a-c; cpyp-DB moves behind it
+
+- **Why:** the correction above. The two lanes give the same source diff between 607164b9 (lane ce25d6de7280) and
+  a4aa5668 (770daec2dbd6): three files, +135/−58, from these changes:
+  - the floor itself (770daec2);
+  - srz made unconditional (178e0058);
+  - #254 (1e1555b6): retire()'s per-page tag clear becomes clear_page_tags, one store per granule. It runs after the
+    CSRETIRE window, but it is in the very function where the FRTY sits;
+  - #257's frames_distinct in add();
+  - #242's larger limits;
+  - #256's test hooks, which compile out of the board build.
+- **The arm:** sql0 on tree B with dev's srz module **90bf036f** (178e005899b0, Tier 1 PASS on tree B). It differs
+  from a4aa5668 only by the floor commit (`git diff 178e005899b0 770daec2dbd6 -- capstone/runtime/virtual/module`, the
+  lanes' check).
+  - Kits bkit7-rev2xBDZD / bkit7-rev2xmBDZD, from `make-srzd-kits.sh` 6c81ab0998f62db4: the BDN kits with only
+    the module different.
+  - Runner `tier3-sql-arm-rev2o.sh` 8419de509ea398c8: rev2n with the kits, module hash, banner
+    (srevroot-zero-2) and tag changed. It starts when board 2's q15 queue ends.
+- **Predicted (both lanes) if the floor is what removed the face:** FRTY 21 and DRT1 0.
+- **FRTY 0** instead puts the removal on the tier-m changes, most likely #254, and not on the floor.
+- **Any other count** is a reading in its own right, and its site is decoded against 90bf036f.
+- **cpyp-DB** (`tier3-cpy-b.sh` 5139b3541505f962) now starts on this arm's SQL DONE, STOP or HOLD. Its waiting
+  process was stopped before it created anything.
+- **The dry runs:** rev2o reached SQL DONE on a stub. cpyp-DB starts on SQL DONE and keeps waiting on Q15 DONE.
