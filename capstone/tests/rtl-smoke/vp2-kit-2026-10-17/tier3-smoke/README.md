@@ -3946,3 +3946,22 @@ the cursor inside; past_end 50976; no fault at the load, so the case completes (
 - true q_decoded and the case still completing: the load is not checked at all, which is a different finding;
 - a fault: the miss is not deterministic;
 - no DIAG31 line at all, with the case reached: the condition did not occur here, and the reading is void.
+
+### diag31, result (2026-10-20 06:12-06:21, board 1, tree A): the decoded bounds are aData's shifted by exactly one 64 KiB span, and the load passes
+
+`records/diag31.result-lines.txt`. UNGATED.
+- **Two DIAG31 lines**, counted the same anchored and anywhere in a line:
+  - `adata=0x3f93f61800:0x3f93f666c0 cursor=0x3f93f72de0 past_end=50976 q_decoded=0x3f93f71800:0x3f93f766c0`
+  - `adata=0x3f93f61800:0x3f93f666c0 cursor=0x3f93f75be0 past_end=62752 q_decoded=0x3f93f71800:0x3f93f766c0`
+- **Checked by script against the prediction:**
+  - base and end are each shifted by exactly +0x10000 (the 20,160-byte buffer);
+  - each cursor lies inside the shifted bounds and outside the true ones;
+  - past_end equals cursor minus the true end, and the first line's 50976 is the predicted value.
+- **The case completed** (exit 0, MISSED), and the controls faulted with 25 and 28. FRTY 1, no Oops.
+- **Against QEMU's control** (qkit7-rev2): there q_decoded is the TRUE bounds, and the load faults with cause 28.
+- **Every pre-registered reading holds.**
+- **What it does not separate on its own:** the two branches "the load is checked against the shifted bounds" and "the
+  load is not checked". Both predict no fault here.
+  - Against "not checked": the same boot's bounds control faults with cause 28 on a plain load, and the RTL reading
+    (load_store_unit.sv, 8522d72fe:1318-1356) decodes the check from the live cursor.
+  - A load at an out-of-window cursor that lies OUTSIDE the shifted bounds would settle it directly.
