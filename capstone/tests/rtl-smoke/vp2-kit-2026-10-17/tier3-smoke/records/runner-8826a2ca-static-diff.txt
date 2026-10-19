@@ -1,0 +1,8 @@
+# runner 8826a2ca21a33acd (lane sql-empty-dirs) against 1f099612d70a9576: the generated per-session command sequence
+# (raw/stage/gate.sh of t3-sql-trim-vm-r3 and -r3a, the same kit and inputs), compared line by line after removing
+# ONLY the new ' && mkdir -p /tmp/pgd/<dir>' clauses from the new runner's lines.
+lines old 113 new 113
+identical after removing the mkdir clauses: 113 of 113 lines; differing: 0
+mkdir clauses per session step: ['pg_commit_ts', 'pg_dynshmem', 'pg_logical/mappings', 'pg_logical/snapshots', 'pg_notify', 'pg_replslot', 'pg_serial', 'pg_snapshots', 'pg_stat_tmp', 'pg_tblspc', 'pg_twophase', 'pg_wal/archive_status', 'pg_wal/summaries'] (13 directories)
+steps carrying them: 21
+# control: the same comparison on a copy with ONE planted change (shared_buffers=5MB on line 8, a line that carries it; a first plant on line 5 changed nothing and was void) reports 1 differing line

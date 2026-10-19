@@ -2887,3 +2887,36 @@ has no such field). The prediction is therefore:
 - RFCT bit 3 is clear;
 - a different nonzero value means another writer;
 - 0 refutes.
+
+### RETRACTION in the S-26 bracket's record (2026-10-19 21:1x)
+
+The bracket result says: "the simulation's memory model is not the only gap, since the entry walk's ~840 cycles of
+fixed testbench delay do not account for it." That sentence is WITHDRAWN.
+- **The RTL lane's ladder at three memory delays** (19 arms, bf3db3175, one model per delay) finds the first
+  retirement at a budget of:
+  - 100-150 at delay 0;
+  - (1,500, 2,000] at delay 12, the delay behind the recorded 1,500-2,000;
+  - (1,000, 1,500] at delay 40.
+- **What follows:** at zero added latency the simulated startup cost is the same order as silicon's E of 51-57. The
+  testbench's memory model accounts for essentially all of the gap.
+- **Two cautions from the RTL lane:**
+  - the delay knob is NOT monotone: delay 12 runs slower than delay 40;
+  - the ladder measures the budget at which the first instruction retires, which is a different quantity from E.
+- **What would have caught it:** the arithmetic took a single simulated threshold and subtracted an estimated memory
+  cost from it. That is an extrapolation across a testbench parameter, which the standing note on simulated cycle
+  costs already forbids. The sentence should have stated the bound and stopped.
+- **The bracket's silicon readings are unaffected:** E 51 and 57, the cut at q100, and the refutation of "600 spins".
+
+**Runner 8826a2ca's gate, re-ruled by the runtime lane.** No QEMU run can exercise the edit: the 13 directories exist
+on the QEMU stage, and `mkdir -p` on an existing directory does nothing. So the gate is:
+- **(a) the static diff** in `records/runner-8826a2ca-static-diff.txt`. The generated command sequence (t3-sql-trim-vm-r3
+  against -r3a) is 113 of 113 lines identical once the new mkdir clauses are removed; 21 steps carry 13 clauses each.
+  The comparison fires on a planted one-character change.
+- **(b) the board run's must-fire:** no `could not open directory` in any session, and the positive control (the
+  trivial SELECT) answered.
+- **The QEMU arms are recorded as information, not as gates.**
+  - A (the old runner) read 8 of 9 cells, with 03 out of the denominator, and its controls faulted.
+  - B (the new runner) had its uaf-malloc control die early on a SHRINK with garbage current bounds
+    [ffffffffffffe220, ffffffffffffe410). That is a defect candidate sent to the runtime owner, not variance.
+  - sql0 on QEMU is therefore not deterministic. Until a set-valued record exists, a board cell that mismatches the
+    single record is reported as "possibly variance", not as a verdict.
