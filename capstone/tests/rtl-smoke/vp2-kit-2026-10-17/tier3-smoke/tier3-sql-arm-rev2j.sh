@@ -3,7 +3,7 @@
 # each session recreates the cluster's 13 empty directories the board bake drops). Kits and monitor are sql0-drt's (D,
 # f13dbc5). The runner's gate is the runtime lane's ruling: (a) the static command diff (records/runner-8826a2ca-static-diff.txt,
 # 113 of 113 lines identical but the mkdir clauses) instead of a QEMU check, which cannot exercise the change; (b) this boot's
-# must-fire: no 'could not open directory' in any session and the positive control answered. Cells are graded against the
+# must-fire: no directory-open FATAL in any session (narrowed 2026-10-20, see README) and the positive control answered. Cells are graded against the
 # single QEMU record, a mismatch reported as 'possibly variance' (sql0 on QEMU is not deterministic). Starts on
 # CHAIN_DRT2_GO. rev2g's header follows.
 # sql0-drt (2026-10-19 evening): sql0-rf (rev2f) with ONE change, the monitor: kits bkit7-rev2xD/bkit7-rev2xmD are the
@@ -87,13 +87,14 @@ main() {
     echo "SQL VOID: fixture record ${fr:-none} (want 956173e054762e91), image ${im:-none} (want 64010720f1a6b3bc)" >> "$O"; return 1
   fi
   echo "SQL inputs as recorded: fixture $fr, image $im" >> "$O"
-  # (b) the must-fire: every session got past postgres's directory open, and the positive control answered.
+  # (b) the must-fire: no session stopped on a directory-open FATAL, and the positive control answered. Its controls: a planted
+  # pg_notify FATAL must trip it, and the passing QEMU record's transcript (t3-sql-trim-vm-r2) must not.
   local B=$R/raw/guest/board.txt nd
-  nd=$(grep -a -c "could not open directory" $B 2>/dev/null)
+  nd=$(grep -a -c "FATAL: .*could not open directory" $B 2>/dev/null)   # a FATAL only (narrowed 2026-10-20, the runtime lane's ruling: a zoneinfo LOG is in every QEMU run)
   if [ "${nd:-x}" != 0 ] || grep -a -q "POSITIVE CONTROL FAILED" "$R/run.log"; then
-    echo "SQL MUST-FIRE FAIL: 'could not open directory' x${nd:-NO-DATA}, positive control $(grep -a -c 'POSITIVE CONTROL FAILED' $R/run.log) failure line(s)" >> "$O"; return 1
+    echo "SQL MUST-FIRE FAIL: directory-open FATAL x${nd:-NO-DATA}, positive control $(grep -a -c 'POSITIVE CONTROL FAILED' $R/run.log) failure line(s)" >> "$O"; return 1
   fi
-  echo "SQL MUST-FIRE OK: no 'could not open directory' in any session; positive control answered" >> "$O"
+  echo "SQL MUST-FIRE OK: no directory-open FATAL in any session; positive control answered" >> "$O"
   echo "SQL S-23: DRT1 $(grep -a -c '^DRT1:' $B) DRTX $(grep -a -c '^DRTX:' $B) Oops $(grep -a -c Oops $B)" >> "$O"
   KIT_DESC="runner 8826a2ca21a33acd (empty dirs recreated); a mismatch with this single record is possibly variance; kit bkit7-rev2xD (module 39d8492d5c18216b, the five-item revision; batch budget x4; staged execute bits kept; monitor capstone-sbi f13dbc5, S-23a guarded strobe, the refusal read and S-23b step 1, wrapper aab63d5 with the boot quantum), tree A caplifive_vp2c_8522d72fe, pin off" \
     RESULTS_DIR=2026-10-19-vp2c-treeA bash "$S/score-arm.sh" "$TAG" "$P" "$R" "$O" >> "$O" 2>&1

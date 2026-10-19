@@ -1,0 +1,131 @@
+# sql0-treeB (2026-10-19, board 2, tree B, monitor f13dbc5): monitor and rung result lines from this boot's transcript
+RESULT b0-stats retval=0
+RESULT b0-hello retval=0
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:04:29.037 GMT [96] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:06:00.536 GMT [106] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:07:32.106 GMT [116] FATAL:  could not open directory "pg_notify": No such file or directory
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:09:04.029 GMT [126] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:10:36.207 GMT [136] FATAL:  could not open directory "pg_notify": No such file or directory
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:12:08.217 GMT [146] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:13:40.198 GMT [156] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:15:12.417 GMT [166] FATAL:  could not open directory "pg_notify": No such file or directory
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:16:44.337 GMT [176] FATAL:  could not open directory "pg_notify": No such file or directory
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:18:16.766 GMT [186] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:19:48.687 GMT [196] FATAL:  could not open directory "pg_notify": No such file or directory
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:21:20.926 GMT [206] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:22:53.088 GMT [216] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:24:25.189 GMT [226] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:25:57.038 GMT [236] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:27:28.639 GMT [246] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:29:00.708 GMT [256] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:30:32.807 GMT [266] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:32:04.818 GMT [276] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:33:36.535 GMT [286] FATAL:  could not open directory "pg_notify": No such file or directory
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:803833B6
+FRTY:017113AC
+FRGD:0000000B
+1970-01-01 00:35:08.514 GMT [296] FATAL:  could not open directory "pg_notify": No such file or directory
+RESULT vbatch retval=0

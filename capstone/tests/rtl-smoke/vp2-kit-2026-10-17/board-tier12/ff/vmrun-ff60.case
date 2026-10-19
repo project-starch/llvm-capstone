@@ -1,0 +1,18 @@
+  ff-sweep)
+    # The fetch-face sweep (pre-registered in tier3-smoke/README.md): the pair's two images in turn, plain first, each its
+    # own capstone-vexec process with 200 rounds x 300 x spin 2000000 (only INNER changes, 64 -> 300: 60,000 pairs in the
+    # ops arm); the module loaded with node_flat_records 65536, the flat table's maximum (60,000 + ~23 nodes, 256 reserve),
+    # read back before any arm runs (retval 943 if not 65536). RESULT ff-sweep retval = the number of arms that did not exit 0.
+    cd /test-domains/vm || { echo "RESULT ff-sweep retval=941"; exit 1; }
+    grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko diag_emerg=1 node_flat_records=65536 || { echo "RESULT ff-sweep retval=942"; exit 1; }
+    nfr=$(cat /sys/module/capstone_vm/parameters/node_flat_records 2>/dev/null || echo ABSENT)
+    echo "@@PARAM node_flat_records=$nfr"
+    [ "$nfr" = 65536 ] || { echo "RESULT ff-sweep retval=943"; exit 1; }
+    r=0
+    for img in revoke-loop.dom revoke-loop-ops.dom; do
+      echo "FF_ARM $img"
+      CAPSTONE_VM_STATS=1 ./capstone-vexec $img 200 300 2000000 > /tmp/ff.out 2>&1; s=$?
+      cat /tmp/ff.out; echo "FF_EXIT $img $s"
+      [ $s -eq 0 ] || r=$((r + 1))
+    done
+    echo "RESULT ff-sweep retval=$r" ;;

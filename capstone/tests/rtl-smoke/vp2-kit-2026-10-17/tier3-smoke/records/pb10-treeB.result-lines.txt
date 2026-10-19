@@ -1,0 +1,19 @@
+# pb10-treeB (2026-10-19, board 2, tree B, monitor f13dbc5): monitor and rung result lines from this boot's transcript
+RESULT b0-stats retval=0
+RESULT b0-hello retval=0
+capstone-exec: domain fault cause=28 pc=0x3fb43104d8 address=0x3fb43d8050 entry=0x3fb430083c code=0x3fb4300000-0x3fb4380000 last=0x42 preparing=0x42 sha256=491655742d378fcda6012f6932f5631724a7bc867ed44f027df253b3d1a8fe1f image=./images/controls.dom
+capstone-exec: domain fault cause=25 pc=0x3f96c90524 address=0x3f96d3f040 entry=0x3f96c8083c code=0x3f96c80000-0x3f96d00000 last=0x42 preparing=0x42 sha256=491655742d378fcda6012f6932f5631724a7bc867ed44f027df253b3d1a8fe1f image=./images/controls.dom
+capstone-exec: domain fault cause=25 pc=0x3f88a1170c address=0x3f88c0b840 entry=0x3f88a0083c code=0x3f88a00000-0x3f88b00000 last=0x42 preparing=0x42 sha256=f7ffffa49e2e53fe4bdd29aa11be74d88757a0ded245c830257f04ac7f530a29 image=./images/defect-90
+capstone-exec: domain fault cause=25 pc=0x3fb3511cb0 address=0x3fb370f8c0 entry=0x3fb350083c code=0x3fb3500000-0x3fb3600000 last=0x42 preparing=0x42 sha256=df5eea02db56843a3a8ddeac90a15b1ef86ecf1bace273e2adfd944fa55c3689 image=./images/defect-00
+FRTY:00F14164
+FRGD:0000000B
+FRTY:00F14164
+FRGD:0000000B
+RFSL:00070015
+RFTY:00000000
+RFVD:00000001
+DRT1:800A22C8
+capstone-exec: domain fault cause=25 pc=0x3f8ea11990 address=0x3f8ebbcc40 entry=0x3f8ea0083c code=0x3f8ea00000-0x3f8eb00000 last=0x42 preparing=0x42 sha256=0f1bfd544ecc559d527eb5f68795429460f589455cdaf47e47b1cc64689ff83a image=./images/defect-01
+capstone-exec: domain fault cause=25 pc=0x3fb4311878 address=0x3fb44c3840 entry=0x3fb430083c code=0x3fb4300000-0x3fb4400000 last=0x42 preparing=0x42 sha256=84fbc193c1709b0a1617ab00d71e8ec9d2e7d16d74ad994f8b9170a6b60b3a3a image=./images/defect-02
+capstone-exec: domain fault cause=25 pc=0x3f9ce11a28 address=0x3f9cfabea0 entry=0x3f9ce0083c code=0x3f9ce00000-0x3f9cf00000 last=0x42 preparing=0x42 sha256=d6666b4618df1d6ea6a5d161727195e5781760e07212aa74730bbae408251ea4 image=./images/defect-03
+RESULT vbatch retval=0

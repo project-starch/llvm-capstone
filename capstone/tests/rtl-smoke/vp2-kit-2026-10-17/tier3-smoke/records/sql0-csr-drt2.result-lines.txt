@@ -1,0 +1,36 @@
+# sql0-csr (board 1, tree A, 2026-10-20 01:26-02:08) and sql0-drt2 (board 1, tree A, 02:09-03:25): runner lines, the compare, S-23 lines
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 28810594 bytes)
+T3PG sql0-csr BEGIN 01:26:27 (trigger: CHAIN_CSR_SQL_GO 01:25:41)
+T3PG sql0-csr END 02:08:22 rc=1 :: virtual boot: completed :: 
+SQL CELLS VOID (declared before the boot: the empty-directory staging defect); not scored
+SQL S-23: DRT1 16 DRTX 0 RFSR      16 RFSR:82B00000  RFSH      16 RFSH:00000000  RFCT      16 RFCT:00000000  FRTM      21 FRTM:82A023AC  Oops 0
+SQL DONE 02:08:22
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 28820191 bytes)
+T3PG sql0-drt2 BEGIN 02:09:29 (trigger: CHAIN_DRT2_GO 02:08:40)
+T3PG sql0-drt2 END 03:25:00 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 1, 'MISSED': 6, 'NO-READING:out-of-denominator': 2}
+SQL inputs as recorded: fixture 956173e054762e91, image 64010720f1a6b3bc
+SQL MUST-FIRE FAIL: 'could not open directory' x2, positive control 0 failure line(s)
+SAME 01_12a6206864a0_to_char_tz_overflow: verdict MISSED cause None pc None
+SAME 02_3ed3dbbf44_ts_headline_int16_overflow: verdict CAUGHT cause 28 pc memcpy+200
+DIFF 03_8c34261109_ltree_lquery_uint16_overflow: verdict NO-READING cause None pc None
+    verdict: qemu CAUGHT board NO-READING
+    reason: qemu None board out-of-denominator
+    reached: qemu True board False
+    cause: qemu 28 board None
+    pc_off: qemu memcpy+200 board None
+    attribution: qemu "control" board null
+SAME 04_3d160401b65e_oidvector_oob_read: verdict MISSED cause None pc None
+SAME 05_849da8210539_ascii_multibyte_oob_read: verdict MISSED cause None pc None
+SAME 06_e91dcfccaa_regexp_conv_buf_overrun: verdict MISSED cause None pc None
+DIFF 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec: verdict NO-READING cause None pc None
+    verdict: qemu MISSED board NO-READING
+    reason: qemu None board out-of-denominator
+    reached: qemu True board False
+    completed: qemu True board False
+SAME 08_c4d51b6274_levenshtein_stop_column_oob_write: verdict MISSED cause None pc None
+SAME 09_7a7d9693c7_pgp_sesskey_overflow: verdict MISSED cause None pc None
+7 of 9 cells the same
+1970-01-01 00:29:05.964 GMT [270] LOG:  could not open directory "/usr/share/zoneinfo": No such file or directory
+1970-01-01 00:31:42.974 GMT [293] LOG:  could not open directory "/usr/share/zoneinfo": No such file or directory
+  control bounds-malloc    fault     (expected fault)
+  control uaf-malloc       fault     (expected fault)

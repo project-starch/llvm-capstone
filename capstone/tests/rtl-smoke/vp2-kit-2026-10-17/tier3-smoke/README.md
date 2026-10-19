@@ -2990,3 +2990,488 @@ module's QEMU twin (a5dec6a32c49b3d3) read 23 of 23 identical to it.
   runtime owner's known candidate (a compressed save/restore of a far-out-of-bounds cursor), not as a new defect.
 
 The dry run, through a stub arm, compared 23 of 23 against C.
+
+**Clarifications to the wmem pre-registration (2026-10-19 21:2x, before its boot), at the runtime lane's check.**
+- **The images.** The kit supplies only the platform half: monitor, module, bitstream, board. The images come from
+  the runner's own collect of t3-new9's cases-ON / controls-ON, i.e. the REPAIRED builds.
+  - tier3-appvm-arm.sh compares the collected set by sha256 against EXPECT_IMAGES = t3-new9/wmq1.images.SHA256SUMS
+    (26 lines, file dae7f5a871e0e477).
+  - It STOPS before the boot if they differ.
+- **The two modules, stated.**
+  - The prediction, run C = C', was taken on QEMU with module a5dec6a32c49b3d3 (qkit7-rev2, for C').
+  - The board runs module 39d8492d5c18216b, from kit bkit7-rev2xBD.
+  - a5dec6a3 is 39d8492d's QEMU twin, the pairing cpython's module-swap record uses.
+  - So the prediction transfers across that twin pair, and not by identity.
+
+### Tree B's discriminator and the wmem arm, results (2026-10-19 21:12-22:17, board 2, tree B, monitor f13dbc5); recorded 2026-10-20
+
+The result lines are in `records/{sql0-treeB,pb10-treeB,wmq-treeB}.result-lines.txt`, from each boot's transcript.
+UNGATED.
+- **The discriminator reads OUTCOME 3: an FRTY on tree B.** Recorded as a reading, N=1 per program:
+  - **sql0-treeB:** FRTY 21 (all at 017113AC), DRT1 16 (all at 803833B6 = `_raw_spin_lock_irqsave+0x56`, each with
+    RFSL 00070015), 0 DRTX and no Oops.
+  - **pb10-treeB:** FRTY 2 (at 00F14164), DRT1 1 (at 800A22C8 = `mod_node_page_state+0x40`, RFSL 00070015), 0 DRTX
+    and no Oops.
+  - So the fetch face SURVIVES tree B's satp flush, and the data face appears with it. This fits the fetch face
+    sharing the data face's mechanism (one per-slot tracker gates both the fetch and data checks) rather than S-29's
+    stale translation alone. It does not establish it: these monitors print no physical mtval at FRTY. The
+    follow-up is sql0-csr-treeB, below.
+- **sql0-treeB's cells are VOID,** as pre-registered: 21 × "could not open directory", the known staging defect of the
+  old runner.
+- **pb10-treeB: 4 of 4 cells the same** as t3-pb10/bundle (CAUGHT 4). The data face was retried once. Bundle:
+  `ffmpeg/pool-repros/results/2026-10-19-vp2c-treeB/vp2-nested-pools-treeB`.
+- **wmem vp2-nested-pools with the Q-15 repair: 23 of 23 cells the same as run C** (CAUGHT 22, NO-READING:unattributed
+  1 at case 22).
+  - The collected images equal wmq1 (26), and 26 of 26 steps ran.
+  - The search found 26 `domain fault cause=` lines, so it fires; 0 of them are cause 29, none at capstone_cap_derive.
+  - 0 "collect skipped", and in this boot 0 DRT1, 0 DRTX and no Oops.
+  - Bundle: `wireshark/wmem-repros/results/2026-10-19-vp2c-treeB/vp2-nested-pools-q15`.
+- **My slip, recorded as it happened:** board 2 sat idle from 22:17 until the next morning. No prompt or error stopped
+  it. I launched board 2's chains without a background wait on their completion, so nothing woke this session when they
+  ended.
+
+### sql0-csr-treeB, pre-registered (2026-10-20, before its boot): outcome 3's follow-up on board 2
+
+**The arm:** `tier3-sql-arm-rev2k.sh` a1b321a8c43ac8a1. It is sql0-treeB with ONE change,
+the monitor c3917e8.
+- **Kits:** bkit7-rev2xBC 15595b28c2bf4dee and bkit7-rev2xmBC d3f077c130e12ee3, the BD kits with only the monitor
+  changed.
+- **The runner stays 1f099612,** so the cells are VOID, declared here, and not scored.
+- **It runs now on board 2.** This time a background wait is set on its end.
+
+**Readings:**
+- **FRTM beside every FRTY.** Under the tracker reading, FRTM is the CORRECT translation of the FRTY's mepc. Under S-29's
+  stale translation it is a different physical page.
+  - **The limit, stated before the boot:** the console carries no page tables, so the correct page cannot be computed
+    from this boot alone. What it can read: FRTM's page offset should equal mepc's (0x3AC for 017113AC), as for any
+    translation; and whether FRTM's page is constant across the FRTYs.
+  - A page-level verdict needs a translation the monitor walks from satp, which goes in the next firmware.
+- **RFSR/RFSH/RFCT at every data refusal,** with the same predictions as board 1's csr arms: page-aligned, in RAM,
+  constant per context, RFCT bit 3 clear; srevroot 0 refutes.
+- **FRTY/DRT1/DRTX/Oops counts.**
+
+### cpython lt0 on the board, result (2026-10-19 20:38 - 2026-10-20 01:16, board 1, tree A): 23 of 32 inside, 7 stable divergences and 2 moved, all of one board-only shape
+
+Result lines are in `records/cpy-lt0.result-lines.txt`. UNGATED.
+- 54/54 steps ran and the boot completed. Tally: CAUGHT 9, MISSED 10, NO-READING 13.
+- **The pin read back.** The judge read 23 of 32 inside their sets, 7 DIVERGENCES on stable cells (10, 13, 23, 25, 28,
+  and two more) and 2 MOVED varying cells (27, 30).
+- **Every cell outside its set reads NO-READING with `domain fault cause=12 pc=0x0`.** That shape is in no QEMU
+  record. The transcript has 21 such lines in 33 domain faults, in cases and controls alike.
+- **S-23 on this boot:** DRT1 14 (all at 800A22C8 = mod_node_page_state+0x40), 0 DRTX, no Oops.
+- **Status:** a board-only finding, reported to the compiler and runtime lanes for attribution. These cells are not a
+  verdict on the corpus until it is explained.
+
+### cpython's pc=0 faults: a monitor pair, pre-registered (2026-10-20 01:2x, before its boots): board 1 after sql0-drt2
+
+`tier3-cpy-pair.sh` cd71fa495760776c. The compiler lane's attribution of the 21
+`domain fault cause=12 pc=0x0` lines:
+- each comes right after the delegate served a read (last=0x3f);
+- each comes after the trigger began;
+- 8 of the 11 faulting control steps fault 394-395 console lines in;
+- none appears in any QEMU record or any other board transcript.
+The confound is that cpy-lt0 is the only boot on bkit7-rev2xnD. So: two cold boots with the same stage (image, closure,
+runner, pin), `--only 03,17,23`.
+- **cpyp-D:** kit bkit7-rev2xnD, the retry monitor line (capstone-sbi f13dbc5, wrapper aab63d5, the boot-quantum and S-23
+  defines).
+- **cpyp-A:** kit bkit7-rev2xnA, the pre-S-23 monitor line (capstone-sbi 007d81d, wrapper 1269c77, without those
+  defines). The variable is the WHOLE monitor line: commit, wrapper and defines. The boot quantum cannot matter, since
+  b0-hello's STEP precedes vbatch in both.
+
+**Readings:** per step, the count of `domain fault cause=12 pc=0x0`, plus DRT1/DRTX/Oops.
+- **Predicted for cpyp-D:** pc=0 in 17-control and 23-control as in cpy-lt0, and 03 clean. This repeat tests whether
+  the faults are deterministic.
+- **cpyp-A, the discriminator:**
+  - pc=0 absent where cpyp-D has it: points at the retry monitor line;
+  - pc=0 present: it is cpython on this board/bitstream (a tree B pair would follow);
+  - **a kernel panic on S-23's data face** (expected at a refusal: there is no retry on 007d81d) ends the boot. Every
+    step after it is NO DATA, not a reading. A pc=0 fault before the first refusal still counts.
+
+### The srevroot-zero module on board 2, pre-registered (2026-10-20 01:4x, before its boots): its own Tier 1 pair, then sql0
+
+**The module:** the compiler lane's srevroot-zero, 607164b9c1407c7c (lane module-srevroot-zero, banner "diag
+srevroot-zero-1").
+- The source is 39d8492d's plus the change: `csrw 0x5c1, zero` after each of the 3 on-path CSRUNV sites.
+- It is gated on QEMU: Tier 1 equal two-sided.
+- Per the standing rule, a new module revision gets its own Tier 1 boot before any corpus arm.
+
+**The prep:** `board-tier12/srz/srz-prep.sh` a596bc52f307c2a4.
+- image-rev7-srz 67c2f89aa2e76ec1 is rev7's Tier 1 stage with ONLY capstone_vm.ko swapped.
+- The staged module is read-only. The dry run found that the first swap failed silently and would have baked the old
+  module under the srz label. It is now replaced by removal and checked by hash before the bake. The bake's hash check
+  shows the module present, and the stage is restored to its record.
+- Two firmwares on the retry monitor line (f13dbc5, wrapper aab63d5, the D defines):
+  - t1-old 85fc8dbecd3321a4 on image-rev7 dcfc2e15bf1bbd77;
+  - t1-srz 8502993af385416a on image-rev7-srz.
+
+**The chain:** `chain-srz-b2.sh` ba1089e3987d199f, board 2, tree B, after sql0-csr-treeB.
+1. **t1-old, then t1-srz** (`board-tier12/srz/run-tier1-srz-b2.sh` d8bd6387205dcaa6): rev7's Tier 1 rungs,
+   oracles and judge.
+   - **The gate:** t1-srz's four rung lines must equal t1-old's.
+   - **No prediction for vm-suite itself:** rev7A on tree A read vm-suite NONE (S-23 in step 4), and the retry line may
+     now carry it through.
+   - **Readings:** DRT1 in each boot, and the srz banner.
+2. **sql0-srz-treeB** (`tier3-sql-arm-rev2l.sh` b0e84dbd1241c1fe), ONLY on the gate's PASS. It is
+   sql0-treeB with ONE change, the module (kits bkit7-rev2xBDZ 23804ca5ae765a09 / bkit7-rev2xmBDZ 17f01d55055772a2).
+   - The cells are VOID (the runner stays 1f099612), declared here.
+   - **The must-fire:** the staged module's hash is 607164b9, and the banner appears.
+   - **Prediction (the compiler lane's):** DRT1 16 → 0. A nonzero DRT1 means the residual or the mechanism is wrong.
+
+### sql0-csr-treeB, result (2026-10-20 01:16-01:59, board 2, tree B): srevroot is nonzero, page-aligned, in RAM and constant at every refusal, with csupctl clear, as the namespace-flush mechanism predicts
+
+Monitor c3917e8, UNGATED. The cells are VOID as declared. Result lines are in `records/sql0-csr-treeB.result-lines.txt`.
+- **At each of the 14 S/U data refusals:** RFSR 82B00000, RFSH 00000000 and RFCT 00000000. So srevroot = 0x82B00000
+  every time.
+  - It is page-aligned, inside RAM [0x80000000, 0xBC2D2000), and constant across the boot's refusals, which is one
+    context's table.
+  - csupctl reads 0, so bit 3 (table) is clear.
+  - **That is the pre-registered reading under the namespace-flush mechanism.** The trap into M flushes the namespace
+    and re-arms the slot, which is why every plain retry passes and the refusal read finds the node valid.
+  - N=1 boot. 14 refusals carry 14 DRT1, with 0 DRTX and no Oops.
+- **At each of the 21 FRTY (all at mepc 017113AC):** FRTM 82A013AC.
+  - The page offset 0x3AC equals mepc's, as any translation's must. The physical page 0x82A01000 is constant.
+  - Whether it is the CORRECT translation of mepc cannot be read from this console (no page tables). That was the
+    limit stated before the boot.
+- **Next on board 2:** the srz module's Tier 1 pair, then sql0-srz-treeB. That module zeroes srevroot after each CSRUNV
+  return, so it tests this mechanism directly: DRT1 is predicted 0.
+
+### pb10-csr, result (2026-10-20 01:16-01:25, board 1, tree A): the same reading in a second program and on the other bitstream
+
+Monitor c3917e8, UNGATED. Result lines are in `records/pb10-csr.result-lines.txt`.
+- **4 of 4 cells the same** as t3-pb10/bundle. Bundle: `ffmpeg/pool-repros/results/2026-10-19-vp2c-treeA/vp2-nested-pools-csr`.
+- **Its one data refusal:** RFSR 81E00000, RFSH 0 and RFCT 0. srevroot = 0x81E00000 (page-aligned, in RAM) with
+  csupctl clear, as in sql0-csr-treeB, and carried by 1 DRT1 at 800A22C8. 0 DRTX and no Oops.
+- **2 FRTY at 00F14164,** each with FRTM 81D3A164. The page offset 0x164 matches mepc.
+- **With sql0-csr-treeB:** two programs on two bitstreams, every refusal under a nonzero, page-aligned srevroot with
+  csupctl.table clear. N=1 boot each.
+
+### The srevroot-zero module on board 2, result (2026-10-20 02:00-02:57, tree B): S-23's data face is GONE (DRT1 16 → 0), as predicted; the fetch retries are not
+
+Result lines are in `records/srz-board2.result-lines.txt`. UNGATED.
+- **The Tier 1 gate PASSED.** t1-old (39d8492d) and t1-srz (607164b9) read the same on all four rungs, b0-stats 0,
+  b0-hello 0, vm-contract 0 and vm-suite 1, all AS-ORACLE.
+  - Both read the same judge lines: VM_EXIT sparse-churn 1, and the same NO DATA, which is an instrument condition
+    (one CAPSTONE_VM_STATS line inside vm-contract where the judge wants two).
+  - DRT1 0 in both.
+  - FRTY 2 on t1-old and 0 on t1-srz.
+  - The srz banner printed in t1-srz only (2 lines), the must-fire that the swapped module ran.
+- **sql0-srz-treeB, one variable (the module) against sql0-treeB:** the must-fire held (staged module 607164b9, banner
+  ×1).
+  - **DRT1 0 (sql0-treeB: 16).** 0 DRTX, no Oops, and the boot completed.
+  - **FRTY 21 (sql0-treeB: 21), unchanged.**
+- **What this says:** zeroing srevroot after each CSRUNV return removes every data refusal in sql0. That is the
+  compiler and runtime lanes' prediction, and the mechanism the csr arms read (a nonzero srevroot at S at every
+  refusal). The fetch face is NOT removed in sql0, so its mechanism differs at least in part. N=1 per arm.
+- The cells are VOID as declared (the old runner's staging defect).
+
+### pb10's srevroot-zero pair, pre-registered (2026-10-20 03:00, before its boots): board 2, tree B, a second program for srz
+
+`tier3-pb10-srz-b2.sh` 709e87a3f2865d58. Two cold boots on pb10-treeB's kit, with
+ONLY capstone_vm.ko changed. pb10-treeB itself ran the S-27 workaround module d71f207a, so it is not the control here.
+- **pb10-39d:** bkit7-pb10B39 5cfb35495f4b7a36, module 39d8492d.
+- **pb10-srz:** bkit7-pb10BZ 45004a9bcda2b099, module 607164b9.
+
+**Predictions:**
+- both read 4 of 4 cells as t3-pb10/bundle (CAUGHT 4);
+- pb10-39d meets the data face as pb10 has (DRT1 ≥ 0; pb10-treeB read 1), and pb10-srz reads **DRT1 0**;
+- FRTY is reported, not predicted, since sql0's fetch retries did not change with srz;
+- **the must-fire:** each run's staged module hash equals its kit's, and the srz banner appears in pb10-srz only.
+
+### pb10's srevroot-zero pair, result (2026-10-20 03:00-03:17, board 2, tree B): DRT1 1 → 0 and FRTY 2 → 0, with the cells unchanged
+
+Result lines are in `records/pb10-srz-pair.result-lines.txt`. UNGATED.
+- **pb10-39d:** 4 of 4 cells, CAUGHT 4. Staged module 39d8492d (the must-fire), no srz banner. FRTY 2, DRT1 1, 0 DRTX,
+  no Oops.
+- **pb10-srz:** 4 of 4 cells, CAUGHT 4. Staged module 607164b9, the srz banner ×1. **FRTY 0, DRT1 0,** 0 DRTX, no Oops.
+- **What it adds:** a second program on which srz removes the data face, as predicted. Here the fetch retries also
+  vanish, which they did not in sql0 (21 → 21). Bundles: `ffmpeg/pool-repros/results/2026-10-19-vp2c-treeB/`
+  `vp2-nested-pools-39d` and `vp2-nested-pools-srz`.
+
+### The fetch-face pair, pre-registered (2026-10-20 03:22, before its boot): board 2, tree B, the srz module
+
+The runtime lane's discriminator, with images from the compiler lane (lane fetchface-pair 02cf6152327a).
+- **The images:** revoke-loop.dom 252c16ca3c63cec5 and revoke-loop-ops.dom cf8be80bec87bc03. One source, with
+  `#ifdef WITH_REVOKES` around an inner loop of CDERIVE + CREVOKE, then SPIN arithmetic, during which quantum escapes
+  happen.
+- **The census, by raw word, in main:** CREVOKE 0 against 1. Image-wide it is 3 against 4: the linked runtime's three
+  sites are identical in both images.
+- **QEMU:** steps 12,709 against 12,695, and revoke_pairs 0 against 12,800.
+
+**One cold boot** (`board-tier12/ff/run-ff-b2.sh` 3c025d3ac7666b6e):
+- firmware 368b599947b51825, built with the retry monitor line's recipe;
+- image-ff 9d6944ac3665b56b (`ff/ff-prep.sh` 8fff70d2180cde4c, `ff/b0-bake-ff.sh` 0fc0bc555c773782): rev7's Tier 1
+  stage with the srevroot-zero module 607164b9, plus vmrun.sh's ff-pair case (`ff/vmrun-ff.case` 0531f92e9f3a8063);
+- rungs b0-stats, b0-hello, ff-pair. The pair runs plain then ops, each its own capstone-vexec process with the defaults
+  200 64 2000000, the module loaded with node_flat_records 16384.
+- The bake's hash check shows both images, the module and vmrun.sh present.
+
+**Readings, per arm** (between FF_ARM and FF_EXIT): FRTY count, CV_STATS steps (so that FRTY 0 is not just "no
+escapes"), FF_DONE revoke_pairs, DRT1/DRTX, the exit status.
+
+**Prediction (the runtime lane's):** FRTY 0 for the plain arm and FRTY > 0 for the ops arm, with steps of the same order
+in both (QEMU: 12,709 against 12,695).
+
+**Recorded at 03:2x, while the boot ran and before any result was read.** The first commit of this section was BLOCKED by the precommit scan: the copied bake script carried literal home-directory paths. The boot had already been launched by the same command, so this pre-registration reached the lane after the boot started and before its result. The image was baked by that copy (0fc0bc555c773782). The committed copy (add5df45b284c8c5) differs only in `$HOME/` for the literal paths.
+
+### sql0-csr and sql0-drt2, results (2026-10-20, board 1, tree A)
+
+Result lines are in `records/sql0-csr-drt2.result-lines.txt`. UNGATED.
+- **sql0-csr** (monitor c3917e8, cells VOID as declared): 16 data refusals, each RFSR 82B00000 / RFSH 0 / RFCT 0. That
+  is the same srevroot value and csupctl reading as sql0-csr-treeB, on the other bitstream. 16 DRT1, 0 DRTX, no Oops.
+  21 FRTY with FRTM 82A023AC (mepc offset 0x3AC).
+- **sql0-drt2** (runner 8826a2ca, the empty-directory fix; monitor f13dbc5):
+  - 21 sessions ran, and the positive control answered.
+  - 0 × `could not open directory "pg_notify"`: the defect the fix addresses is gone.
+  - Both controls fault (bounds-malloc, uaf-malloc).
+  - 17 DRT1, all at 803833B6, 0 DRTX, no Oops.
+- **The must-fire as written FIRED, and it was too broad.** It required no `could not open directory` at all. It fired
+  on two LOG lines, not FATALs: `could not open directory "/usr/share/zoneinfo"`, in case 01 (to_char_tz) and its
+  control.
+  - That same LOG appears twice in EVERY QEMU run of this arm, the passing record r2 included (r2, r3a and r3b: 2 each),
+    so the gate as written would have stopped the QEMU record itself.
+  - Its positive control was a planted pg_notify FATAL, never a passing transcript. That was the gap.
+  - The run therefore stopped before scoring, and no bundle is filed. The ruling is the runtime lane's.
+- **The cells, compared by hand AS INFORMATION** (compare-pilot against t3-sql-trim-vm/bundle): 7 of 9 the same.
+  - 03 (QEMU CAUGHT) and 07 (QEMU MISSED) read NO-READING:out-of-denominator, i.e. the trigger was not reached.
+  - 03 dropped out the same way in QEMU's own A arm.
+  - Both are "possibly variance" until a set-valued sql0 record exists.
+- **The lesson,** recorded: a must-fire written as an absence must be run against the PASSING record first. This one
+  would have failed on it.
+
+**sql0-drt2, the runtime lane's ruling (2026-10-20, after the result): the bundle is FILED, with its must-fire narrowed
+POST-HOC.**
+- **The reasons, as ruled:**
+  - (a) the over-broad wording was the semantics owner's;
+  - (b) the event the gate exists to catch is objectively absent: 0 pg_notify FATALs in 21 sessions, the positive
+    control answered, both controls faulting;
+  - (c) the line that tripped it is part of the recorded environment, not a board difference: the two zoneinfo LOGs
+    appear identically in QEMU's r2, r3a and r3b.
+- **The bundle:** `postgres/sql-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`, and the board record
+  `records/sql0-drt2.board.txt`.
+- **The cells are information against the single record:** 7 of 9. 03 and 07 are marked "possibly variance, out of
+  denominator (not reached)", and QEMU's A arm also dropped 03. They become verdicts only against the set-valued sql0
+  record the compiler lane is producing.
+- **The second bitstream for the srevroot reading:** sql0-csr on tree A (16 refusals under srevroot 0x82B00000) stands
+  beside sql0-csr-treeB's.
+
+**The gate is fixed for the next run.** `tier3-sql-arm-rev2j.sh` is now d14011e172b29302, and its
+must-fire matches a FATAL only: `FATAL: .*could not open directory`. Both controls were run on real transcripts:
+- the passing QEMU record r2 reads 0, so it must pass;
+- sql0-drt, with its 21 real pg_notify FATALs, reads 21, so it must stop;
+- sql0-drt2 itself reads 0.
+
+### dev's srevroot-zero module, its own Tier 1 boot, pre-registered (2026-10-20 03:3x, before the boot): board 2 after the fetch-face pair
+
+**The module:** 90bf036f59da1231 (dev 178e005899b0; srevroot-zero unconditional on the tier-m module, banner
+"srevroot-zero-2").
+- **The prep:** `board-tier12/srz/srzdev-prep.sh` 89d5d2124a98d325. image-rev7-srzdev d5edf1ef96674d38 is rev7's Tier 1
+  stage with ONLY capstone_vm.ko swapped. The dry run showed the swap taking (the stage read 90bf036f during the bake),
+  and the stage was restored to 39d8492d.
+- **The firmware:** t1-srzdev fc5a4a1d9629c19f, built with the retry monitor line's recipe.
+- **The arm:** `chain-srzdev-b2.sh` aecff632af846bd9 → `run-tier1-srzdev-b2.sh` bc4b9e865af1517b, one
+  cold boot, rev7's rungs.
+
+**The gate:** its four rung lines must equal t1-old's record (tree B, board 2, 02:06: b0-stats 0, b0-hello 0,
+vm-contract 0, vm-suite 1).
+
+**Readings:** DRT1 and FRTY, plus the banner "srevroot-zero-2" as the must-fire that this module ran. The compiler lane
+expects the srz Tier 1 readings that 607164b9 gave.
+
+### The fetch-face pair, results (2026-10-20 03:34, board 2, tree B): the prediction did NOT hold
+
+Result lines are in `records/fetch-face-pair.result-lines.txt`. UNGATED.
+- **The boot:** driver rc 0, b0-stats 0, b0-hello 0, ff-pair 0, no Oops, the srz module banner present.
+- **The construct was reached.**
+  - plain: revoke_pairs 0, nodes 23;
+  - ops: revoke_pairs 12800, nodes 12823.
+  - Both arms exit 0 with the same sink (399999801179648).
+- **Escapes happened in both:** CV_STATS steps 2234 against 2235, of the same order as each other, as predicted. QEMU
+  read 12,709 against 12,695. The absolute count is the board's quantum count and is not compared with QEMU's.
+- **FRTY 0 in BOTH arms.** DRT1 0, DRTX 0, and no FRG*/RFSL lines anywhere in the boot.
+  - These counts were taken on board.txt, board-raw.txt and the reassembled UART stream, and all three agree.
+- **The instrument is present.** The firmware's monitor source (fw-ff/opensbi, sbi_capstone.c:3716) reports
+  CAPSTONE_TAG_FRTY on the fetch-retry path.
+  - A string grep of fw_payload.bin is void here: it reads 0 for SHA5 too, while the console printed SHA5 six times.
+    The monitor builds its tags from immediates.
+- **The reading:** in this program, 12,800 in-context CDERIVE+CREVOKE pairs across about 2,234 quantum escapes produce
+  no refused fetch. The runtime lane predicted FRTY > 0 in the ops arm, and that is refuted for this shape.
+- **What it does not settle:**
+  - whether the fetch face needs something sql0 has and this loop lacks: a large text footprint, revocation of a node
+    that Linux's own mappings derive from, or the escape landing in particular code;
+  - why pb10's fetch face vanished under srz (2→0) while sql0's held (21→21).
+
+### dev's srevroot-zero module, Tier 1 result (2026-10-20 03:35-03:42, board 2, tree B): the gate PASSES
+
+`records/t1-srzdev.result-lines.txt`: firmware fc5a4a1d9629c19f, image-rev7-srzdev d5edf1ef96674d38, module 90bf036f.
+- **The rungs:** b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1. All four read as t1-old's (`CHAIN_SRZDEV T1 GATE PASS`).
+- **Other readings:**
+  - the banner `srevroot-zero-2` is present;
+  - DRT1 0, DRTX 0, FRTY 0, no Oops;
+  - VM exits normal 0 / stale 139 / sparse-churn 1.
+- **The judge's NO DATA** (one CAPSTONE_VM_STATS line inside vm-contract, against the two it wants) and CPMX-DIAG's NO
+  DATA are identical in t1-old's and t1-srz's records. They are a property of the stage, not of the module.
+- **So module 90bf036f has its own Tier 1 boot,** and corpus arms may use it.
+
+### Arm q15 (sqlite/engine-repros vp2-nested-pools, the memsys5 Q-15 repair), pre-registered (2026-10-20 03:4x, before its first boot): board 1, tree A, six --only boots
+
+The compiler lane's kit: dev f1d522d7fff1, with its record on lane q15-memsys5 4060f62c582a under results/2026-10-20-q15-repair.
+- **The images:** build-virtual-nested-pools-q15, 33 cases plus control_uaf_mem5 and control_bounds_mem5, on SDK
+  t3-freeze-nb.
+  - EXPECT_IMAGES is m5q.images.SHA256SUMS (eab23e459a1d0972, 35 lines).
+  - All 35 hashes were matched to the build's .dom files by content. SDK-BUILTINS OK.
+- **The runner:** `tier3-q15-board1.sh` 8d0a3b582aa91d6f. It runs from the dev-pinned worktree /tmp/capstone/wt-q15:
+  - run-virtual.py b3f1aa0ea60442f8;
+  - tier3-appvm-arm.sh 666d920eedef445b, which carries the C-81 gate.
+- **The kit:** bkit7-rev2xD (tree A 8522d72fe, module 39d8492d, monitor f13dbc5, board 1).
+  - It differs from bkit7-rev2xBD only in board, driver directory and bitstream.
+  - Run C was confirmed on 39d8492d's QEMU twin a5dec6a3 (run-Cp-rev2, 33/33).
+- **The split:** sq0's, six cold boots, each with both controls:
+  - a 00-05, b 06-11, c 12-17, d 18-23, e 24-29, f 30-32;
+  - the lists are in `records/q15-subsets/`;
+  - the estimated firmware is at most 24.3 MB against the 26,000,000 B cap. sq1a's 6+2 baked to 23,759,368 B, and q15's
+    images are within 7 KB of the old build's.
+- **The order:** board 1 after the cpython pair ends (CPP DONE/STOP/HOLD).
+- **Scoring:** each boot is scored at once by compare-pilot.py against run C cut to its cases (subset-bundle.py).
+  - The scorer was controlled on real bundles: run-Cp-rev2 reads 33/33 SAME (rc 0), and the pre-repair run A reads 0/33
+    (rc 1).
+  - The dry run reached subset f. These negatives each stopped it: rc 78 from the arm script, a busy board, an existing
+    root, and an unmet wait.
+- **Prediction (run C, cell by cell):**
+  - CAUGHT 27, MISSED 6 (01, 04, 08, 09, 11, 13);
+  - uaf-mem5 faults with cause 25 and bounds-mem5 with cause 28, in every boot;
+  - 0 cause 29;
+  - case 29 (fz02) is CAUGHT in sqlite3Get4byte with cause 28.
+- **Q15_PAD:** it prints on the 6 MISSED cases only. Its count is recorded as information.
+- **Not predicted:** the silicon faces (S-23 data face, the fetch face); DRT1, DRTX and FRTY are recorded as information.
+- **A wedge** is a result for its subset only. The next subset is its own cold boot.
+
+### sql0-frs-treeB, pre-registered (2026-10-20 03:5x, before its boot): board 2, tree B, srz module, the fetch-slot monitor
+
+The runtime lane's discriminator for the fetch face. The RTL lane has confirmed that vp2's virtual lifetime indices never
+recycle, so the fetch-face pair's 12,800 kills named indices from 3 upward, and none refused a fetch. The refusing code
+slot must therefore track an index the context never names.
+
+**The run:** sql0-srz-treeB (FRTY 21) with ONE change, the monitor. It is capstone-sbi 9697173 (vp2/s23-fetch-slots: c3917e8
+plus FRSL/FRT2/FRVD under CAPSTONE_S23_FETCH_SLOTS).
+- **The instrument:** inside fetch_retry_covered's own read/write-back loop, for each loaded slot that covers mtval (and
+  each loaded slot with no capability), it reports:
+  - FRSL: (slot << 16) | region;
+  - FRT2: the LCC type (0 LINEAR, 1 NONLIN, 7 no capability);
+  - FRVD: the validity on the value read, before the exact write-back.
+- **What c3917e8 adds over f13dbc5** (rev2l's monitor), also observation-only: RFSR/RFSH/RFCT at a data refusal and FRTM
+  beside each FRTY.
+- **The gates, on the generated monitor assembly (the recipe's compile step, the kit's defines):**
+  - 9697173 with the macro off is byte-identical to c3917e8 (sbi_capstone_dom.c.S c15b59787e548dbb,
+    capstone_int_handler.c.S 55500a31efe852b7);
+  - c3917e8 with the macro on is identical too;
+  - 9697173 with the macro on differs only in fetch_retry_covered's blocks, and carries FRSL, FRT2 and FRVD twice each.
+- **The kits:** bkit7-rev2xBFZ (SHA256SUMS eec0866e12a8a5bd) and bkit7-rev2xmBFZ (dc6ca85ba4a510d1), from `make-frs-kits.sh` eeeac171f2b4ba6c. They are the BDZ
+  kits with the monitor directory, its commit and the one define changed. The module is still 607164b9.
+- **The runner:** `tier3-sql-arm-rev2m.sh` ab5de33e7f9a1bf5, which is rev2l with the kits changed.
+  - run-arm.py stays 1f099612, with its QEMU PASS, so the cells are VOID as in rev2l. That is declared now, and they are
+    not scored.
+  - The measure-only bake is first, and it must come in under 26,000,000 B.
+- **The dry run:** it reached SQL DONE on a stub. A missing GO, a busy board and a wrong runner hash each stopped it.
+  - The new FRS parser read the reference sql0-srz-treeB transcript (FRTY 21, no FRSL) as `MUST-FIRE FAILED`, as it
+    must, and parsed a synthetic transcript into its tuples.
+
+**Readings:**
+- the FRTY count (reference 21; the boot is not a repeat, so any count is information);
+- every (FRSL, FRT2, FRVD) tuple with its count;
+- DRT1/DRTX (reference 0 under srz);
+- RFSR at any data refusal;
+- the must-fire: the staged module's hash, the banner, and FRSL lines whenever FRTY > 0.
+
+**The runtime lane's prediction, as given:**
+- the covering slot is NONLIN, from a region derived NONLIN from the root: that means node 2;
+- or it is LINEAR: a fresh physical node, and the monitor's own physical activity is the next suspect.
+
+**Added here:** FRVD is expected to read 1 at every FRTY, as RFVD did at every data refusal, because the trap into M re-arms
+the slot under a nonzero srevroot (RTL lane, csr_regfile.sv:2876-2878). The srz module zeroes srevroot only after
+CSRUNV, so 1 is expected but not certain.
+- A 0 would be the first sighting of a dead node in a refused fetch's covering slot.
+- FRTY 0 makes the boot uninformative for the question. It would not make it a pass.
+
+### The fetch-face sweep, pre-registered (2026-10-20 03:5x, before its boot): board 2 after sql0-frs-treeB, one cold boot
+
+The runtime lane's follow-up to the pair. The RTL lane confirmed that vp2's virtual lifetime indices never recycle (the kill
+pushes to the free list only in the physical namespace, capstone_rev_node.anvil:528-544), so the ops arm's kills name
+fresh indices from about 23 upward. This sweep takes them to about 60,023.
+- **The only intended variable:** INNER, from 64 to 300. The pair's two images are unchanged (252c16ca / cf8be80b), and
+  INNER is an argv: `capstone-vexec <img> 200 300 2000000`, so rounds and spin are unchanged. The plain arm runs first
+  with the same arguments; in its source INNER is read only inside the `#ifdef WITH_REVOKES` loop.
+- **The module table is required to change:** node_flat_records goes from 16384 to 65536, the flat table's maximum
+  (CV_FLAT_RECORDS_MAX), with a reserve of 256. The case reads it back and exits retval 943 unless it reads 65536.
+- **Declared second change (observation-only):** the firmware is on the fetch-slot monitor 9697173 with
+  CAPSTONE_S23_FETCH_SLOTS instead of f13dbc5, so a refused fetch in the sweep also reports its covering slot.
+  - Its fetch-retry decision is unchanged: the generated assembly differs from c3917e8's only by the added reports in
+    fetch_retry_covered.
+  - c3917e8 over f13dbc5 adds only RFSR/RFSH/RFCT at a data refusal and FRTM beside FRTY.
+- **The artifacts:**
+  - `board-tier12/ff/ff60-prep.sh` 051da2e0e76321e2, from ff-prep.sh with the case and the names
+    changed; `ff/vmrun-ff60.case` e1c2b29105d8784b;
+  - image-ff60 101da9f4fb832b7d, the bake's per-file sha256 check over rootfs.cpio all present;
+  - firmware fw-ff60 1b7e827176895824, 19,565,064 B, dom_stack gate PASS, wrapper aab63d5, monitor 9697173.
+- **The run:** `board-tier12/ff/run-ff60-b2.sh` a95f2f13a8c39c71 through
+  `tier3-smoke/chain-ff60-b2.sh` ceff9e549fe8d5eb. Rungs b0-stats, b0-hello, ff-sweep.
+  - The parser now records the whole FF_DONE line and the nodes, which the pair's parser dropped.
+  - It was controlled on the pair's real transcript, recovering nodes 23/12823, and on synthetics, where FRTY with no
+    FRSL trips `MUST-FIRE FAILED`.
+  - The dry run reached FF_DONE_RUN, and a wrong firmware stopped it.
+  - The prep's dry run on a stage copy restored the stage and passed csbi-frs with the new define.
+
+**Predictions:**
+- **The runtime lane:** FRTY > 0 in the ops arm if the refusing code slot's physical index lies between about 12,823 and
+  60,000, and FRTY 0 otherwise.
+- **The compiler lane's QEMU on qkit7-srz (module 2fcef16d, 607164b9's twin):** node_flat_records 65536, revoke_pairs
+  60000, nodes 60023, steps 12706, exit 0. Its margin is 65,536 - 256 - 60,023 = 5,257 records.
+- **Added here:** board steps in both arms of the same order as the pair's (2234/2235), since rounds and spin are
+  unchanged; nodes exactly 23 and 60023.
+- **If FRTY > 0,** the FRSL tuples name the covering slot's region, type and validity in the same boot.
+
+**The sweep is WITHDRAWN, before any boot (2026-10-20 03:5x; the runtime lane's call).**
+- **The reason given:** the RTL lane decoded the surviving fetch retries from the committed captures. They sit at the
+  instruction immediately after the module's CSRETIRE inside retire()'s select_root window: `.text+0x13ac` =
+  retire+0x220, and retire+0x22c in the srz build.
+- **The proposed mechanism:**
+  - that CSRETIRE broadcasts the retiring ancestor's virtual index (2 for a context's first grant);
+  - the index-only compare clears every caller CPMP slot tracking physical node 2 (the NONLIN children of CAPCREATE's
+    root);
+  - the next fetch through such a slot is refused.
+  - No context code is involved, so an in-context sweep cannot reach it.
+- **Status of that claim:** it is the RTL lane's decode, not re-derived here. sql0-frs-treeB tests it.
+- **What is kept:** the image, the firmware and the scripts, unrun. chain-ff60-b2.sh was never launched.
+- **sql0-frs-treeB's prediction, sharpened by the runtime lane:** at every FRTY the covering slot is NONLIN (FRT2 = 1),
+  in a region the monitor minted from the root. A LINEAR covering slot refutes the node-2 part. Each FRTY pc is also to
+  be decoded to function+offset against the module's own .ko (retire+0x22c expected in the srz build). That is a
+  post-hoc reading, taken from the scoped transcript.
+
+### The fetch face has TWO sites: tonight's FRTY pcs decoded (2026-10-20, post hoc, from the scoped transcripts)
+
+Method: the runtime lane's. The module's .text is loaded page-aligned, so an FRTY pc's low 12 bits locate it in that run's
+own .ko. `frty-decode.py <ko> <binutils prefix> <page-off>...` lists every .text instruction at the offset and flags one
+that follows a CSRUNV (funct7 0x24) or a CSRETIRE (0x53). Only the scoped raw/guest/board.txt was read. board-raw.txt
+opens with the previous boot's tail (the RTL lane's auditor); 14 runs were re-counted, and board.txt equals board-raw.txt
+cut at its own OpenSBI banner in all 14, so no recorded tally moves.
+
+| run | module | FRTY (low 32) × n | decodes to | follows |
+|---|---|---|---|---|
+| sql0-treeB, sql0-csr-treeB | 39d8492d | 017113AC × 21 each | retire+0x220 | CSRETIRE |
+| sql0-srz-treeB | 607164b9 | 017113B8 × 21 | retire+0x22c | CSRETIRE |
+| pb10-39d | 39d8492d | 00F13D98 × 2 | vm_ioctl+0xab0 | CSRUNV |
+| pb10-treeB | d71f207a | 00F14164 × 2 | vm_ioctl+0xac4 | CSRUNV |
+
+- **Each decode is the only custom-op successor at its page offset.** Of the nine instructions at 0xd98 in 39d's .text,
+  for example, only vm_ioctl+0xab0 follows one.
+- **The cross-check that does not use the hypothesis:** the implied .text bases agree across modules on the same kit
+  kernel. Both sql0 builds give 0x01710000. Both pb10 boots give 0x00F10000, with two different modules (39d8492d and
+  d71f207a). sql0-csr's FRTM 82A013AC carries the same page offset, 0x3ac.
+- **What it explains, as a reading and not yet a mechanism:**
+  - pb10's refused fetches follow a CSRUNV in vm_ioctl. In the srz module that CSRUNV (vm_ioctl+0xa94) is followed by
+    `csrw 0x5c1, zero`, and pb10 went from FRTY 2 to 0.
+  - sql0's follow retire's CSRETIRE. No CSRETIRE site in the srz module is followed by a zeroing, and sql0 stayed at
+    21 → 21.
+  - So srz's two outcomes, which looked inconsistent, are two sites, one of which srz covers.
+- **Not settled:** the base is inferred, not read. The next kit bring-up should print
+  `cat /sys/module/capstone_vm/sections/.text` once after insmod (the runtime lane's suggestion), which makes every
+  decode exact. sql0-frs-treeB then gives the covering slot at the CSRETIRE site.

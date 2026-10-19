@@ -1,0 +1,24 @@
+# pb10's srevroot-zero pair (2026-10-20 03:00-03:17, board 2, tree B)
+PB10 pb10-39d BEGIN 02:59:22 kit bkit7-pb10B39 monitor f13dbc5
+T3SEQ START 02:59:22 kit <mnt-hdd>/capstone/t3-smoke/bkit7-pb10B39 module 39d8492d5c18216b params []
+T3SEQ pb10-39d BEGIN 02:59:22 ffmpeg/pool-repros virtual-nested-pools (4 extra args)
+T3SEQ pb10-39d END 03:08:25 rc=0 :: virtual boot: completed :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 4}
+T3SEQ pb10-39d PAYLOAD stage 2576328 B, 1015696 B gzip; firmware 17467912 B
+T3SEQ pb10-39d IMAGE controls.dom 491655742d378fcd
+T3SEQ DONE 03:08:25
+PB10 pb10-39d SEQ END rc=0 03:08:25
+PB10 pb10-39d S-23: staged module 39d8492d5c18216b (want 39d8492d5c18216b); srz banner x0; FRTY 2 DRT1 1 DRTX 0 Oops 0
+pb10-39d: bundle -> wt-gate/capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-19-vp2c-treeB/vp2-nested-pools-39d
+pb10-39d: 4 of 4 cells the same (rc 0)
+PB10 pb10-srz BEGIN 03:08:25 kit bkit7-pb10BZ monitor f13dbc5
+T3SEQ START 03:08:25 kit <mnt-hdd>/capstone/t3-smoke/bkit7-pb10BZ module 607164b9c1407c7c params []
+T3SEQ pb10-srz BEGIN 03:08:25 ffmpeg/pool-repros virtual-nested-pools (4 extra args)
+T3SEQ pb10-srz END 03:17:28 rc=0 :: virtual boot: completed :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 4}
+T3SEQ pb10-srz PAYLOAD stage 2578048 B, 1016139 B gzip; firmware 17467912 B
+T3SEQ pb10-srz IMAGE controls.dom 491655742d378fcd
+T3SEQ DONE 03:17:28
+PB10 pb10-srz SEQ END rc=0 03:17:28
+PB10 pb10-srz S-23: staged module 607164b9c1407c7c (want 607164b9c1407c7c); srz banner x1; FRTY 0 DRT1 0 DRTX 0 Oops 0
+pb10-srz: bundle -> wt-gate/capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-19-vp2c-treeB/vp2-nested-pools-srz
+pb10-srz: 4 of 4 cells the same (rc 0)
+PB10 DONE 03:17:28
