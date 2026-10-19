@@ -33,3 +33,12 @@ site is NOT certified; if it does, it does so identically in both arms, once, be
 Both exit 0. The node count shows the 12,800 derive/revoke pairs executed. The vp2 flat module never collects, so
 `ROUNDS*INNER` plus about 23 startup nodes must stay below the table's capacity (node_flat_records, 65,536 at the
 default page count), or the -ops arm ends in cause 30 like dense-churn.
+
+**The 60,000-pair sweep (the runtime lane's request, 2026-10-20): the same -ops image, arguments `200 300 2000000`.**
+Only INNER changes (64 to 300), so the image, its sha256 and its census are the ones above. On QEMU kit qkit7-srz
+(module 2fcef16d09e81269, the QEMU twin of board-2 module 607164b9c1407c7c), it read node_flat_records=65536,
+FF_DONE revoke_pairs=60000, and `CAPSTONE_VM_STATS nodes=60023 steps=12706 faults=16`, exit 0.
+- Margin: 65,536 - 256 reserved - 60,023 = 5,257 records.
+- Steps equal the 12,800-pair runs' (12,695 and 12,709), so no extra escapes appeared, and so no node-pressure pause.
+  A console grep for kind 5 or pressure reads 0, but that grep has not been shown to fire.
+- Virtual indices swept: about 23 to 60,023. They never recycle on vp2.
