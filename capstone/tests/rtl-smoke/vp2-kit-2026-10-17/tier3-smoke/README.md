@@ -3029,3 +3029,23 @@ UNGATED.
 - **My slip, recorded as it happened:** board 2 sat idle from 22:17 until the next morning. No prompt or error stopped
   it. I launched board 2's chains without a background wait on their completion, so nothing woke this session when they
   ended.
+
+### sql0-csr-treeB, pre-registered (2026-10-20, before its boot): outcome 3's follow-up on board 2
+
+**The arm:** `tier3-sql-arm-rev2k.sh` a1b321a8c43ac8a1. It is sql0-treeB with ONE change,
+the monitor c3917e8.
+- **Kits:** bkit7-rev2xBC 15595b28c2bf4dee and bkit7-rev2xmBC d3f077c130e12ee3, the BD kits with only the monitor
+  changed.
+- **The runner stays 1f099612,** so the cells are VOID, declared here, and not scored.
+- **It runs now on board 2.** This time a background wait is set on its end.
+
+**Readings:**
+- **FRTM beside every FRTY.** Under the tracker reading, FRTM is the CORRECT translation of the FRTY's mepc. Under S-29's
+  stale translation it is a different physical page.
+  - **The limit, stated before the boot:** the console carries no page tables, so the correct page cannot be computed
+    from this boot alone. What it can read: FRTM's page offset should equal mepc's (0x3AC for 017113AC), as for any
+    translation; and whether FRTM's page is constant across the FRTYs.
+  - A page-level verdict needs a translation the monitor walks from satp, which goes in the next firmware.
+- **RFSR/RFSH/RFCT at every data refusal,** with the same predictions as board 1's csr arms: page-aligned, in RAM,
+  constant per context, RFCT bit 3 clear; srevroot 0 refutes.
+- **FRTY/DRT1/DRTX/Oops counts.**
