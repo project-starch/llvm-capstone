@@ -4102,3 +4102,21 @@ bounds". Its simulation arm has no load at an out-of-window cursor.
 **The wording the auditor allows in ISSUES** is the statement above, with the exact condition, the alias-load
 measurement, the case 31 witness (3 board MISSED, 3 QEMU CAUGHT), "stores and LDC/STC: same decode by source,
 unmeasured", and the Q-30 amendment.
+
+### alias-store, result (2026-10-20 06:39-06:45, board 1, tree A): out-of-window STORES alias like loads, so a far overrun silently writes another location
+
+`records/alias-store.result-lines.txt`. UNGATED. The image sha in the fault lines is b68b3d2586a91d07, as registered.
+FRTY 0, DRT1 0, no Oops.
+
+| arm | decoded vs child | before | store | readback |
+|---|---|---|---|---|
+| inb (100) | exact | 0 | AS_STORED | 60 |
+| alias (0x10100) | +0x10000 at both ends | 165 | AS_STORED, no fault | **60**: the marker 64 KiB away is overwritten |
+| outside (0x16000) | +0x10000 at both ends | 90 | cause 28 at address = cursor, no AS_STORED | — |
+| past (0x4ed0) | exact | 0 | cause 28 at address = cursor | — |
+
+- **Every predicted value holds.** The store half of case 31's mechanism is now measured, not inferred.
+  - A `sb` through a capability whose cursor is out of window is checked against the bounds decoded at that cursor.
+  - When that decode contains the cursor, it writes one span away without a trap.
+- **QEMU** faults alias, outside and past with 28.
+- **Still not measured:** LDC/STC (capability loads and stores, which take the same decode by source) and tree B.
