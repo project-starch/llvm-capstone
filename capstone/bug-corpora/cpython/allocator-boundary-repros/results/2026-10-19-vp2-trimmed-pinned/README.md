@@ -89,8 +89,16 @@ varies across repeats will also show sites the sample never saw, so a new site t
   reported, not graded.
 - A varying cell whose verdict is outside its verdict set is a moved cell, and the re-record rule applies.
 
-**lt0's board image is the stage** (same ruling): `20bcfdd1073976e0` with `stage-closure.txt` and
-`--stdlib-sourceless` (below) is accepted as lt0 for the board, graded against lt0's sets by this rule.
+**lt0's board image is the stage.** `20bcfdd1073976e0`, with `stage-closure.txt` and `--stdlib-sourceless` (below),
+is graded against lt0's sets on the semantics owner's CONDITION for the image. That condition is separate from the
+grading ruling above: 20bcfdd1 may stand for 0d322044 only if every loaded section is byte-equal, otherwise the board is
+graded against the stage run's own cells. **Basis: the loaded sections are byte-equal.**
+- The single PT_LOAD (vaddr 0x10000, filesz 12,097,563, memsz 12,969,936) is sha256/16 47dcef5f380b3217 in both images.
+- All 11 ALLOC sections are equal: `.text` 3cf77d7b1a481c87, `.rodata` dc64eea44a362d3d, `.capstone_application`
+  2cd06478de22271f, `.data` f15cb59225aa2c9c, `.capstone_cap_init` 8399ed7851691e5e, `.gct` 82c994e2e41c6562; `.tdata`,
+  `.init_array` and `.fini_array` are empty, and `.tbss` and `.bss` are NOBITS of equal size.
+- The files differ only outside the loaded content.
+- Control: lt0 against lt1 reads a different PT_LOAD (942096f9f1e82dbc).
 
 ## How the pin was found, including a retraction
 
