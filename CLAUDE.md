@@ -710,11 +710,22 @@ it, and treat a conclusion with no quoted evidence as unverified.
 Full roster, rationale, and prompt patterns: **`docs/ref/SUBAGENTS.md`**.
 
 **FPGA/board sessions may be run by EITHER Opus lane (A or B)** — B is explicitly
-**not** prohibited from the board (permanent rule). The board is a single shared
-physical resource (secret token, human-in-the-loop, can't be parallelized), so board
-sessions are **serialized across lanes**: never two at once — coordinate timing and
-hand off sequentially. (Built-in **subagents** still never touch the board; the
-corpus-runner is board-free.)
+**not** prohibited from the board (permanent rule). There are **two boards** since 2026-10-19 (#1, and #2 on its
+own console). Each is a single shared physical resource (secret token, human-in-the-loop), so board sessions are
+**serialized per board**: never two on the same board at once. Coordinate timing and hand off sequentially.
+- **Name the board** in every run with `FPGA_BOARD=1|2`; unset means board 1, and the console prints `[fpga-board] N`
+  either way. It selects the console-URL secret (`~/.claude-kisp/secrets/fpga-console-url`, or `...-board2`) and that
+  board's host lock (`/tmp/capstone/.board.lock`, `/tmp/capstone/.board2.lock`). `fpga_console` refuses a URL that is
+  not the named board's.
+- "Is the board free" is `capstone/tests/rtl-smoke/board-busy.py <board>` (or `board-free-wait.sh <s> <board>`), never
+  a bare `pgrep`.
+- **Board #2 flashes NV only, then a power cycle:** a volatile flash does not bring up its debug TAP.
+- **Linux-side bakes stay serialized across BOTH boards.** They share one buildroot tree, and every bake holds
+  `/tmp/capstone/.buildroot-bake.lock` for its whole length. Only bare-image runs (the canary, vector arms) run on both
+  boards at once.
+- **A result records its board.** Compare results across boards only after the same canary or control firmware has
+  agreed on both.
+- Built-in **subagents** still never touch the board; the corpus-runner is board-free.
 
 Peer **lane B** (a separate Opus session on `capstone-bootstrap-b`) is a different
 thing from subagents — see `capstone/docs/ref/SUBAGENTS.md` (the peer-lane
