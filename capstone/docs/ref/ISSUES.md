@@ -10232,6 +10232,53 @@ override from its absence". Neither printed exit 75.
 - Both lines are artefacts of an empty guest log.
 - Before reading one as a result, check the per-probe `run-*.log` for any `LT-RESULT` line.
 
+### I-15 — `cap-tag-cache.S` has been VOID from its test 3 onward since it was written, and the 95-test sweep cannot see it `FIXED 2026-10-19 by the RTL lane (rewritten with checked expectations and a negative control); the readings below are from its own last run before the rewrite`
+
+Two defects, each enough on its own:
+
+1. **Its payload capability was LINEAR.** `a6` was created `CAP_TYPE_LIN`, and an `stc` of a LINEAR capability
+   MOVES it, so the file's first `stc` consumed it and every later `stc` stored `cnull`.
+2. **Every expectation was a COMMENT.** "should show valid capability" is not a check. The only way the file could
+   fail was to stop reaching `RVTEST_PASS`, so the sweep has reported it passing for as long as it has existed.
+
+**Read from its own run on bf3db3175** (`verif/sim/out_2026-10-18`, `capprint-readings.py`, 1331 retired, 18
+readings). Test 1 reads the payload's cursor `0x80003000`; from there on the readings are about `cnull`:
+
+| arm | reading | should have been |
+|---|---|---|
+| test 1, `stc` then `ldc` | `0x80003000` | a capability — correct, and the only sound arm |
+| test 2, both words plain-written | `0xdeadbeef0badc0de` | untagged — correct, because test 1's `DELIN` + re-`stc` had restored a NONLIN capability first |
+| test 3, `stc`, evict, `ldc` | **`0x0`** | the payload's cursor; the slot held `cnull` |
+| test 4, `stc`, both words written, `ldc` | `0xcafecafecafecafe` | untagged, but of a granule that never held a capability |
+| test 5, four granules | **`0x0` x4** | four capabilities |
+| test 6, store-to-load forwarding | **`0x0`** | a capability |
+
+**What it cost.** Test 3 is the only place in the suite where "a capability's tag survives an eviction and refill"
+was supposed to be measured, and it never was. That question was first answered on 2026-10-19 by
+`tag-half-store.S`, written for a different purpose (whether ONE 8-byte store clears a granule's tag). Its
+eviction control reads type 1 after a capacity-forced sweep, which is the reading test 3 was meant to produce.
+Its sweep also shows a second flaw in the old arm: 300 reads at a 128-byte stride touch only every eighth set of
+a 256-set cache and can miss the granule's set entirely, so even with a live payload the arm could have read a
+hit and called it a refill.
+
+**The fix, and its own control.** The payload is re-minted before every arm and is NONLIN, so an `stc` copies it;
+a LINEAR payload now appears in exactly one arm, where the move is the thing measured. Every expectation is a
+`bne` to `RVTEST_FAIL` with its own TESTNUM, the type read through the total type query (`lcc` zimm 1, which
+answers 7 for a non-capability instead of raising). The eviction arm carries a positive control that it really
+evicted — `mcycle` around a hot `ldc` and around the swept one, failing if the swept load is not at least 8
+cycles slower — so a sweep that silently misses the set now fails instead of reading like a surviving tag. A
+core returning 0 from `mcycle` fails that control too, which is the right direction. `-DNEGCTL` builds
+`cap-tag-cache-neg`, whose first expectation is deliberately wrong: a check that has never rejected anything is
+not a passing check. It reads `*** FAILED *** (tohost = 11) after 1423 cycles` on bf3db3175, stopping on T1 --
+11 being the TESTNUM, since `RVTEST_FAIL` writes `(11 << 1) | 1 = 23` and the harness prints the number with the
+done bit shifted off. The rewrite itself passes with every arm reading a real value: T1 `(0x80003000, 1)`, T2
+`(0x80003000, 0)` then `(0, 7)`, T3 `(0xdeadbeef0badc0de, 7)`, T4 a 9-cycle hot `ldc` against an 88-cycle swept
+one and then `(0x80003000, 1)`, T5 four times `(0x80003000, 1)`, T6 `(0x80003000, 1)`.
+
+**The class, not just this file.** A test whose expectations are comments reports PASS while measuring nothing,
+and a suite of such tests reports a clean sweep. This one sat in the sweep for months. Any arm whose "expected"
+values live only in comments should be read as unmeasured until its checks are in the instruction stream.
+
 ## Compiler / toolchain (ours)
 
 ### C-27 — `delin` of a NONLIN gp-derived global base traps on silicon (cause 26) `FIXED 2026-10-18 under -capstone-image-gp (the vp2 virtual SDK's ABI), on dev with the backend fix; the default capability ABI keeps the DELIN by design. Reopened the same day: the FIXED 2026-09-05 claim in ISSUES-ARCHIVE.md was WRONG and cost vp2's Tier 1/2 boot 2`
