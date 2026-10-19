@@ -2765,3 +2765,26 @@ compare-pilot 4 of 4 cells the same as t3-pb10/bundle (rc 0). Bundle:
 - **With sql0-drt, that is two programs and two kernel sites,** `_raw_spin_lock_irqsave+0x56` and
   `mod_node_page_state+0x40`, both refusals under region 21 in slot 7. Both are carried through by a plain retry with
   nothing re-armed. S-23b step 1 is the workaround on this evidence, and step 2 stays unbuilt.
+
+### S-26's silicon bracket, result (2026-10-19 19:57-20:30, board 1, tree A): E is about 51-57 quantum cycles; 600 and 300 complete, and 100 is cut at the bound still progressing
+
+Three cold boots on the bracket image cd3eb03c37325a62, firmwares as pre-registered, UNGATED. The result lines are in
+`records/s26-q{600,300,100}.result-lines.txt`.
+
+| arm | QNT0 | vm-contract | steps | elapsed | E (model) |
+|---|---|---|---|---|---|
+| q600 | 00000258 | 0, identity branch | 71,911 | 101.7 s | 51 |
+| q300 | 0000012C | 0, identity branch | 160,942 | 219.0 s | 57 |
+| q100 | 00000064 | 930, cut at the 600 s bound | 507,550 at the kill | 600 s | > 20 from the count |
+
+- **The model holds:** the two completed arms give E = 51 and 57, within 6 cycles of each other. The model is
+  steps(q) - 511 = 41,294 (1000 - E) / (q - E), calibrated on var and var1k.
+- **q100 is cut, not spun.** Its refresh counter grew linearly at ~849 steps/s through every 60 s read, from 22,377
+  at 30 s to 506,460 at 600 s. At E = 51-57 the model needs 800,266-906,098 steps, about 940-1,070 s at that rate. So
+  the 600 s bound cut a run that would have finished. A spin would also grow linearly, which is why the bound was
+  pre-registered as an inequality: the reading is E > 20 from the count, and q100 > E by the model.
+- **The RTL lane's prediction is REFUTED:** it predicted 600 spins, with E_sil between ~660 and 1,000. On silicon
+  E is ~51-57 cycles, under a tenth of the simulated threshold (1,500-2,000). The simulation's memory model is not
+  the only gap, since the entry walk's ~840 cycles of fixed testbench delay do not account for it.
+- **For S-26's fix:** any boot-time quantum of 300 or more completes. The shipping value, 2,000,000, completes in 511
+  steps.

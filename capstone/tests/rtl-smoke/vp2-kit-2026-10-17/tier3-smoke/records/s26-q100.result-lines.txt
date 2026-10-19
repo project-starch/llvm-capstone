@@ -1,0 +1,22 @@
+# q100 (2026-10-19, board 1, tree A): judge and rung lines
+OK   QNT0 ['00000064']
+OK   no QNT1 line in q100 []
+READING q100: CUT at the 600 s bound after 507550 steps, so E > 20 (model); E >= 100 if it spins
+READING q100 refreshes t30=22377 t60=48737 t120=99603 t180=150509 t240=201300 t300=252196 t360=303042 t420=353877 t480=404748 t540=455580 t600=506460 after-kill=507549
+JUDGE READING
+RESULT b0-stats retval=0
+@@PARAM resume_satp_refreshes=0:before-ok
+@@PARAM resume_satp_refreshes=22377:t30
+@@PARAM resume_satp_refreshes=48737:t60
+@@PARAM resume_satp_refreshes=99603:t120
+@@PARAM resume_satp_refreshes=150509:t180
+@@PARAM resume_satp_refreshes=201300:t240
+@@PARAM resume_satp_refreshes=252196:t300
+@@PARAM resume_satp_refreshes=303042:t360
+@@PARAM resume_satp_refreshes=353877:t420
+@@PARAM resume_satp_refreshes=404748:t480
+@@PARAM resume_satp_refreshes=455580:t540
+@@PARAM resume_satp_refreshes=506460:t600
+VM_SPIN:ok at the 600 s bound
+@@PARAM resume_satp_refreshes=507549:after-kill
+RESULT vm-contract retval=930
