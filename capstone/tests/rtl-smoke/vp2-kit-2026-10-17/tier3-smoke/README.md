@@ -4120,3 +4120,20 @@ FRTY 0, DRT1 0, no Oops.
   - When that decode contains the cursor, it writes one span away without a trap.
 - **QEMU** faults alias, outside and past with 28.
 - **Still not measured:** LDC/STC (capability loads and stores, which take the same decode by source) and tree B.
+
+### sql0-srzdev-treeB, result (2026-10-20 06:08-06:50, board 2, tree B): FRTY 21 on dev's srz module, so the FLOOR COMMIT is the variable that removes the fetch face
+
+`records/sql0-srzdev.result-lines.txt`. UNGATED. The cells are VOID as declared (runner 1f099612).
+- **The must-fire:** the staged module is 90bf036f, and the banner srevroot-zero-2 appears once.
+- **FRTY 21**, all at 0171148C, DRT1 0, DRTX 0, no Oops. The prediction held: FRTY 21, DRT1 0.
+- **The site:** frty-decode.py against 90bf036f's own .ko gives retire+0x220, the unique CSRETIRE successor at page
+  offset 0x48c. That is the same site as every sql0 boot.
+- **The session work equals sql0-nf-treeB's:**
+  - 21 steps, 741 lines outside the monitor's lines and heartbeats, 651 CAPSTONE_VM_ADD_OK, and 21 pg_notify FATALs;
+  - the only difference is the 21 FRTY with their 231 FRGS and 21 FRGD.
+- **So the one-variable pair** (90bf036f against a4aa5668, which differ by the floor commit 770daec2 alone) reads FRTY
+  21 → 0. The tier-m changes (#254, #257, #242, the srz form) did not remove the face, and the floor commit did.
+- **Still open, from the audit:**
+  - alternative 1, that under the floor retire()'s CSRETIRE is silently REJECTED, so nothing broadcasts. node-floor-2's
+    release line is the reading, and it runs next on board 2;
+  - nothing yet reads the broadcast index or slot 3's node index directly.
