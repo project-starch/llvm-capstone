@@ -552,6 +552,17 @@ escapes are both resumable kinds:
 - **kind 3** by the context's ecall, as today.
 - **kind 4** by a load from an address the context's chain does not map, with options bit 1 set.
 - kind 5 is left out: node pressure needs the allocator's reserve and is a different arm.
+- **a fourth sub-arm, a cause-24 CAPABILITY refusal under options = 3, predicted kind 2.** The semantics owner
+  asked for it so the capability case is a reading rather than either lane's inference, and the prediction is what
+  distinguishes "the options word re-kinds only page faults" from "it re-kinds any resumable-looking fault". The
+  table re-kinds to 4 only for causes 12, 13 and 15 (`commit_stage.sv:266`), and 24 is not among them, so it
+  should fall through to 2 whatever the options say. A reading of kind 4 would mean the table is wrong about its
+  own cause set, which would reopen Q-31.
+
+**A correction that belongs with this design.** I first wrote that the options word makes a cause-24 refusal
+resumable. It does not: the re-kinding is restricted to that three-cause set. The correction applies only to the
+PAGE-FAULT reading of the S-29 arm, where kind 2 is a consequence of options bit 1 being clear. The arm's header
+carried the overclaim briefly and now carries the cause-set reason instead.
 
 **What each sub-arm must read**, so one arm serves both claims:
 1. the escape's kind and cause, from the frame's event words, as today;
