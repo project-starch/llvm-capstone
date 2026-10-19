@@ -33,3 +33,29 @@ repaired configuration. On silicon the pad is accessible slack. It is recorded i
 `pad-masked` and the pad in bytes in its evidence. It is never excluded, never NO-READING, and never folded under the
 unrepaired verdict. If the count of such cells is nonzero, it goes in the result line and in the commit subject, since
 it is a cost of the Q-15 repair that the paper's tables must carry.
+
+## Step 2 READ (2026-10-20): the prediction FAILS for memcached; the cache-path repair and its re-run, pre-registered
+
+**Readings** on qkit7 (compact), against step 1:
+- pgm1 5/5 and sql 9/9 are identical.
+- pb13 is 7/9: cases 00 and 08 read NO-READING:control-failed. Both refuse 29, in their buggy AND fixed runs, at
+  `capstone_cap_derive+0x9c` (word 0xa2e395db, CDERIVE).
+- This pre-registration's check "no console carries a 29" was VOID as run: it grepped `raw/*`, which are directories,
+  so it read no console. There are four such lines.
+
+**Cause:** a caller census of `capstone_cap_derive` in case 00's image names `do_cache_alloc` (2 calls) and
+`sublet_derive`. cache.c derives the object's lifetime and the caller's child over `bufsize` = object + 16 (the
+lifetime slot). For the read buffer that is 16384 + 16 = 16400, which is not a multiple of its granule, 32.
+
+**Repair**, in 0006 (regenerated from the patched tree; it applies with fuzz 0 and reproduces it):
+- cache_create rounds bufsize to `capstone_repr_round` (a tail pad only; malloc's exact object puts the base on the
+  granule) and keeps the pad in cache_t.q15_pad;
+- do_cache_alloc counts it through slabs_q15_note(), a weak reference, so builds without slabs.c still link;
+- the cache pad therefore appears in the Q15_PAD line.
+- Images: t3-new8b/prebuilt/b13 (defect-00 6ab1d1d0148d, defect-08 47c236c38400). All differ from t3-new8's and carry
+  slabs_q15_note.
+
+**Re-run predictions** (pb13 only):
+- step 1 (qkit7-eb): every cell identical to t3-eb-pb13 (9/9). A CAUGHT to MISSED flip is a pad-masked cell, counted.
+- step 2 (qkit7): every cell identical to that step 1, and 0 `cause=29` lines, counted in the FILE
+  `raw/guest/serial.log` with its line count printed beside the hit count.
