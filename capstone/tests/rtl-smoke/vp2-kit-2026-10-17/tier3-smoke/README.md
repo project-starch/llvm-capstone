@@ -2620,3 +2620,44 @@ The dry run, with the real kits passing every check, is in `dryrun-drt.txt`.
 - **DRTX:** it is the persistent branch only at the SAME mepc as a preceding DRT1. The window is keyed on mepc, so no
   other DRTX can occur.
 - **A refusal that fails the gate** prints no DRT1. It belongs to "neither", and its RF lines name the failing term.
+
+### Tree B on BOARD 2, AUTHORISED and pre-registered (2026-10-19 19:30, before the flash)
+
+**The lead's own word in this lane's session (19:2x):** use both boards, flashed with the latest bitstream. Asked
+"which do you authorize" for board 2, the answer was "конечно прошивай самым последним бистримом" ("of course, flash it
+with the latest bitstream"). The latest sealed bitstream is tree B: caplifive_vp2c_8de3c48cf, sha256 0098aa5a99c3bae2...,
+WNS -16.449, sealed 17:45, the newest in the archive. So:
+- Board 2 is NV-flashed from caplifive_sublet_d93a8d66b to tree B. Volatile flash does not bring up board 2's debug
+  TAP, so it is NV, then a power cycle and 35 s.
+- Board 1 keeps tree A for the S-23/S-26 chain, which continues there.
+
+**Scripts** (private, /tmp/capstone/treeB2-session). They are the tree B session's (the plan, dev ddea90b284fc) with
+every board-1 assumption replaced: FPGA_BOARD=2, board 2's URL file, dev's driver with the lease client
+(/tmp/capstone/wt-b2, dev 10e0d5121da8), and outputs under treeB2-session.
+- `chain-treeB.sh` af7626b66ea49e47, `run-treeB.sh` a8598e714df5bd70,
+  `run-treeB-c7.sh` f63a136b95fc7b34, `flash-bit.py` 4a98cf5a7a081bc2,
+  `preflight-treeB.sh` 5752a96ca5b9fedd.
+- flash-bit.py flashes only tree B. It requires board 2's previous resident caplifive_sublet_d93a8d66b in the store as
+  the flash-back path, and reads the resident back after the power cycle.
+- The preflight was run for real (local checks, no board): GO, the DTS paired with set 7's firmware. A stubbed dry run
+  of the chain reached CHAIN_TREEB_STEPS123_DONE.
+
+**Steps, each gating the next:**
+1. preflight;
+2. flash, with its readback naming tree B;
+3. the canary twice: the S-16 set, the Sublet floor and s1gap, against d93a8d66b's records, then pass 1 against pass 2.
+   Predicted 9 of 9.
+4. the 25 vp2 arms, each against its vector. Predicted 25 of 25: tree B's core/ is byte-identical to d427e7391's, and
+   the 95-test sweep and the 152-test supervised list are identical to tree A.
+5. corpus set 7 against d93a8d66b's record, as on tree A;
+6. then S-29's seven bare arms (`tier3-sv-batch-treeB2.sh` b58de1b7de7ee627, board 2's copy of
+   `tier3-sv-batch-treeB.sh` 5153f65bf6239fcb) against the RTL lane's TREE B column of compare-sv.py.
+   Predicted: sv-stale, sv-stale-f, sv-stale-b and sv-fetch change from tree A's readings to the column, and
+   sv-stale-bf and sv-stale-bn read as on tree A (ISSUES S-29).
+
+**Stops:**
+- a canary failure STOPS with tree B resident on board 2; the flash back to d93a8d66b needs the lead's word.
+- not 25 of 25 STOPS before set 7.
+
+Every result records board 2. Before any tree-B-versus-tree-A reading is compared across the two boards, the canary is
+the same image set on both bitstreams, judged against the same d93a8d66b records. UNGATED (PREFLIGHT=0).
