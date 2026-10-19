@@ -527,6 +527,33 @@ access fault` at `mod_node_page_state+0x40` (cause 5, badaddr = mtval) and panic
 **Fix:** the RTL lane's, pre-registered for the next bitstream beside S-21/S-22's. The likely shape is to restore the
 caller's CPMPs before the pc reaches the frontend, or to hold the fetch until the walk ends.
 
+
+**A second data-face instance (2026-10-19, tree A caplifive_vp2c_8522d72fe, Tier 1 step 4, module 39d8492d, firmware
+7a53759a4773c81b, rev7's stage; N=1, UNGATED; audited by a claim-auditor; lane vp2-tier12, README "Tree A step 4").**
+- **The sequence:** in sparse-churn the monitor first retried an S fetch at `vm_ioctl+0xab0`, the instruction after the
+  module's CSRUNV (`FRTY:01113D98`; the module base is inferred from two FRTY pcs). It then printed the region and CPMP
+  dump, with slot 7 = region 21 [0xAC100000, 0xC0000000) RWX and CPHT 7. Then `MTVL:BC2B9440 CPMX:00000002
+  INJS:00000002`, where both 2s are the constant CAPSTONE_NO_CPMP_REGION.
+- **The kernel:** Linux took `Oops - load access fault` (cause 5) at `_raw_spin_lock_irqsave+0x56` from
+  `__wake_up_common_lock+0x4e`, in interrupt, and panicked.
+- **The refused load** is `lhu` of CPU 0's `__mmiowb_state`, from the Oops's code bytes, which equal the running
+  Image. Its address maps through the linear map to PA 0xBC2B9440. CPU 0's per-CPU unit is [0xBC2B8000, 0xBC2C7000) in
+  this kernel.
+- **Against pb10:** the physical address and kernel caller differ from pb10's (0xBC2C0825, `mod_node_page_state`; pb10
+  ran on bf3db3175 with a different Image, so whether its address is per-CPU is not shown).
+- **The same PA was read again through slot 7 by die()'s `spin_lock_irqsave`** before the Oops line, with no second
+  refusal. So the refusal did not survive the monitor's handling.
+  - Whether that handling re-armed the CPMP revnode trackers is open: a namespace flush fires on an edge of
+    vctx_table or srevroot (`ex_stage.sv:1379-1388`), and vctx_table across S/M depends on srevroot_q at the fault. So
+    this does not yet refute a persistent deny; srevroot_q at the fault is the discriminator.
+- **The wedge:** sparse-churn did not wedge before the panic, about 15 s after VM_BEGIN; on bf3db3175 it wedged with
+  S-25's face. How far it ran is not measured.
+- **Per-CPU locality favours no account,** since interrupt entry and lock acquisition touch per-CPU data first.
+- **Retracted the same day on the lane** (b1625be347fe): "reads before the refusal refute a persistent deny", "the
+  wedge is gone / went further", and pb10's per-CPU base.
+- **The fetch face from a stale translation alone is now on silicon too:** the RTL lane's sv-fetch arm on tree A read
+  cause 1 with a physical last value (0x80016000) different from the faulting virtual address, beside its control's
+  cause 12 (records/sv-treeA.result-lines.txt on lane vp2-tier12, a51896b135a4).
 ## S-24 — silicon only: the virtual `vm` step's store after `mprotect(RW)` faults with cause 15 on a pinned page again and again; the module's resolve() pins the same page and nothing changes until its 64-repeat bound ends the step `EXPLAINED AND FIXED ON SILICON 2026-10-18 (vp2 boot r13, module a56fc415ad7133aa): the PTE at the loop reads D = 0 with V R W A set, as the runtime lane's account predicted (the RTL needs W and D for a store and never sets D; GUP marks the struct page dirty, not the PTE); with the module's resolve_dirty (fault the page in through the kernel's write path before the pin) `vm` reads QEMU's status, 1 at execute through mapping PCC. The fix lands in the module queue's revision (compiler lane)`
 
 Siblings: S-25 (the other virtual-path silicon failure, a different mechanism), S-23, Q-30.
@@ -602,7 +629,7 @@ and cannot show this.
 - **The Tier 2 record stays boot 4c.**
 - **Tier 3 runs with the pin off.** A wedge there with this signature is read as S-25.
 
-## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `OPEN — read on silicon 2026-10-18 in five Tier 3 smoke boots: three without a classic domain run before the first virtual context spun in every context, two with b0-hello first returned in every context; mechanism unknown (state that the first classic domain call sets up, on the monitor's or the RTL's side); the workaround, a classic domain run before the first virtual context, is in every Tier 1/2 boot and in the Tier 3 recipe`
+## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `QUANTUM CANDIDATE SUPPORTED ON SILICON 2026-10-19 (tree A, a matched pair, N=1 per arm, UNGATED): with no process-ABI STEP since a cold boot, csupquantum (0x7C3) is still 0 and a first virtual context is re-entered continuously without progress; writing 0x7C3 = 2,000,000 at boot removes the spin with no STEP. The escape kind was not recorded and the threshold is not established. Workaround: any process-ABI STEP first (b0-hello), as every recipe does. Proposed fix: a boot-time 0x7C3 write in the monitor (the var firmware's, caplifive-opensbi s26-boot-quantum aab63d5)`
 
 Siblings: S-23 (the same virtual entry path), S-25.
 
@@ -624,6 +651,35 @@ launcher b27afefc and module ce3a542d in every boot; b0-stats runs `capstone-exe
 - **The next question,** for the monitor and RTL lanes: what the first classic domain call sets up that the virtual
   entry path relies on.
 
+
+**The silicon pair (2026-10-19, tree A caplifive_vp2c_8522d72fe, board 1, module 39d8492d; N=1 per arm, UNGATED;
+lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README.md`, "S-26's silicon pair").**
+- **The candidate** (the compiler lane's read, audited by the runtime lane's claim-auditor): 0x7C3 resets to 0, and its
+  only writer is the monitor's `supervised_invoke` (`sbi_capstone.c:1002`). On this firmware that is reached by a
+  process-ABI STEP (`context_step`), RESUME_SHARE or a managed domain's region share; never by a classic DOM_CALL (only
+  under CAPSTONE_SUPERVISE_CLASSIC_TEST). So the variable is "a process-ABI STEP before the first CSRUNV", not "a
+  classic domain". b0-hello is a process-ABI launch, and b0-stats only reads 0xFC4.
+- **cur** (today's monitor; b0-stats, vm-contract; cold):
+  - With no STEP, 0x7C3 reads 0 at boot (QNT0). The compiled firmware has no other 0x7C3 writer reachable without a
+    managed context.
+  - The vm-contract context was re-entered about 850 times a second (resume_satp_refreshes 22,621, 73,763 and 124,857
+    at t30, t90 and t150), with no resolved fault (resume_sfences 0), no runtime grant past slot 4 and no fetch retry.
+    It was killed at 150 s.
+  - The escape kind was NOT recorded, so "kind 1" is inference; a repeat with diag_escapes=1 would read it. The 150 s
+    shape matches 2026-10-18's diagnostic boot on an earlier module. The first readings' "escaped and never resumed"
+    is wrong for this shape: the context is re-entered continuously.
+- **var** (identical but for a boot-time `csrw 0x7c3` in cap_env_init; the byte diff is confined there): QNT0 001E8480.
+  The same vm-contract completed with the identity branch (steps=511, faults=426), with no STEP.
+- **mir** (a census-written 0x7C3 = 1,000 after b0-hello's STEP; b0-stats, b0-hello, b0-stats2, vm-contract):
+  - It was predicted to spin, and completed (steps=42,151, faults=426, 62.5 s). The prediction FAILS.
+  - Because the context followed a STEP, this does not separate the quantum from state the STEP leaves behind, and its
+    difference from the RTL lane's simulation (on bf3db3175, budgets 40-1,500 retiring nothing) is "the quantum and/or
+    prior STEP", not established as silicon against simulation.
+  - The separating arm (1,000 written at boot, cold, no b0-hello) has not run.
+- **QEMU cannot show this:** it arms a constant 5 ms of virtual time at every entry, so a quantum-0 livelock is a model
+  divergence.
+- **A retraction on the lane** (505f702de812) withdrew four over-reaches of the first results write-up: "b0-hello's STEP
+  ran at 1,000", "80 times as often", "cur's console replayed var's QNT0", and an unqualified "1,000 does not livelock".
 ## S-28 — a second instruction retiring beside a CSRUNV is re-executed when the caller resumes, because the gate that would hold the second port tests a flag a CSRUNV deliberately leaves clear `REAL IN SOURCE, NOT EXERCISED (bf3db3175); FIXED on virtual-profile-2-c 8522d72fe as a defensive term, recorded as R-50's unexercised trigger was; found 2026-10-18 by the semantics owner's auditor, confirmed from the sources by the RTL lane`
 
 **The chain.** A CSRUNV's result pack sets `dom_switch_en = 1'b0` and `runv_en = 1'b1`, and the header says so outright:
@@ -654,7 +710,7 @@ fixed one.
 condition beside its neighbours. It ships with its trigger unexercised, and the bitstream built from tree A therefore
 carries NO reading for it; claiming one would be the vacuous-gate mistake this registry has recorded before.
 
-## S-27 — silicon only (vp2 bf3db3175): in -O0 virtual programs of four ports the register a5 (x15) holds the integer 2 at the faulting instruction where QEMU, on the same images, holds the intended value; the allocators' `sd a4,0x10(a5)` faults 6 at 0x12 and SQLite's sites fault 24 with tval 2 `OPEN in silicon (the RTL fix is on the accumulating list); MECHANISM CONFIRMED IN SOURCE AND SIMULATION: every acknowledged RESUME (modes 3 and 4) with rd != x0 writes an untagged 2 into register 25 + rd, i.e. the context's x(rd), after the context's x1..x31 are loaded (commit_stage.sv:606-624, set_ra :614, ra_data :615; capstone_dom_switcher.anvil:584 and :588; checked here at bf3db3175; the RTL lane's arm va-rdclob fb3f87b6c and its seeded rd-vs-rs2 control d23a37344), and module 3005ed52's resuming CSRUNV has rd = x15; SOFTWARE WORKAROUND TWO-SIDED ON SILICON 2026-10-18, one boot per side: pym0's 21 images (staged .dom files sha256-identical) fault 21/21 with cause 6 at 0x12 on module 3005ed52e860c7af (its 19 production images in 7 of 7 boots on that module) and reach the QEMU verdict on module d71f207a3af5546b (control complete, MISSED 20, 20 of 20 cells the same, every per-case decision digest equal to QEMU's); d71f207a's resume site differs in four ways (rd x15 -> x0, the kind read from frame +16, a ~0 sentinel stored there, an unconditional fence that 3005ed52 had as a parameter, off), the FENCE IS RULED OUT on silicon: 3005ed52 with fence_before_entry=1 (read back Y) faults 21/21 at 0x12 on the same images, 20 of 20 cells equal to its unfenced boot (2026-10-18, pre-registered 55f8ecba6536); rd = x0 is not separated on silicon from the ~0 sentinel and the +16 kind read, and the simulation arm va-rdclob, which has neither, carries that; UNGATED boots (PREFLIGHT=0; image identity by sha256 is the substitute); fix: the RTL exempts modes 3 and 4 in finish(); workaround: module d71f207a3af5546b (the compiler lane's e5775346cc8e)`
+## S-27 — silicon only (vp2 bf3db3175): in -O0 virtual programs of four ports the register a5 (x15) holds the integer 2 at the faulting instruction where QEMU, on the same images, holds the intended value; the allocators' `sd a4,0x10(a5)` faults 6 at 0x12 and SQLite's sites fault 24 with tval 2 `RTL FIX TWO-SIDED ON SILICON 2026-10-19 (tree A 8522d72fe: pym0's images on module 3005ed52 read 20 of 20 at the QEMU verdict, against 0 of 20 on bf3db3175 twice; N=1 on tree A, UNGATED); MECHANISM CONFIRMED IN SOURCE AND SIMULATION: every acknowledged RESUME (modes 3 and 4) with rd != x0 writes an untagged 2 into register 25 + rd, i.e. the context's x(rd), after the context's x1..x31 are loaded (commit_stage.sv:606-624, set_ra :614, ra_data :615; capstone_dom_switcher.anvil:584 and :588; checked here at bf3db3175; the RTL lane's arm va-rdclob fb3f87b6c and its seeded rd-vs-rs2 control d23a37344), and module 3005ed52's resuming CSRUNV has rd = x15; SOFTWARE WORKAROUND TWO-SIDED ON SILICON 2026-10-18, one boot per side: pym0's 21 images (staged .dom files sha256-identical) fault 21/21 with cause 6 at 0x12 on module 3005ed52e860c7af (its 19 production images in 7 of 7 boots on that module) and reach the QEMU verdict on module d71f207a3af5546b (control complete, MISSED 20, 20 of 20 cells the same, every per-case decision digest equal to QEMU's); d71f207a's resume site differs in four ways (rd x15 -> x0, the kind read from frame +16, a ~0 sentinel stored there, an unconditional fence that 3005ed52 had as a parameter, off), the FENCE IS RULED OUT on silicon: 3005ed52 with fence_before_entry=1 (read back Y) faults 21/21 at 0x12 on the same images, 20 of 20 cells equal to its unfenced boot (2026-10-18, pre-registered 55f8ecba6536); rd = x0 is not separated on silicon from the ~0 sentinel and the +16 kind read, and the simulation arm va-rdclob, which has neither, carries that; UNGATED boots (PREFLIGHT=0; image identity by sha256 is the substitute); fix: the RTL exempts modes 3 and 4 in finish(); workaround: module d71f207a3af5546b (the compiler lane's e5775346cc8e)`
 
 Siblings: S-25 and R-57 (excluded below), S-23 (the same Tier 3 boots), Tier 2 boot 4 (cause 24 with a destination cursor
 of 2 in every context, from the Q-26 wait rewrite; vp2 kit README), R-29 (its fix 776d9d859 is in bf3db3175).
@@ -705,6 +761,13 @@ The RTL fix the lane names is to exempt modes 3 and 4 in finish(), or to give th
 - Of the probes: E3 moved `b` out of a5. The fault moved to the next use of a5, which read below the 8 written into it
   (a bounds fault at &used), and the stack slot was right. So the clobber is in the register. E3 does not fix the value
   (lane retraction 798310157901). E4 read 0x12, not 0x11, at the discriminating store.
+
+**The RTL fix on silicon (2026-10-19, tree A caplifive_vp2c_8522d72fe, board 1).** pym0 on kit bkit7A (module 3005ed52,
+whose resuming CSRUNV has rd = x15; the same 21 images by sha256 as on bf3db3175) read `vp2-malloc (virtual-pymalloc):
+{'MISSED': 20}`, 20 of 20 cells the same as the QEMU prediction. On bf3db3175 the same images on the same module read 0 of
+20 twice: pym0, and pym0-fence with fence_before_entry=1, every program faulting at 0x12. Only the bitstream differs.
+Bundle: `cpython/pymalloc-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`; record `records/pym0-treeA.board.txt` on
+lane vp2-tier12.
 ## S-29 — the virtual-context switcher installs and restores `satp` with no TLB flush, so a context can be served the caller's translation of a virtual address and the caller, after an escape, the context's `DEMONSTRATED IN SIMULATION 2026-10-18 on bf3db3175 by the RTL lane (va-satpstale, four arms, no exceptions); FIXED on virtual-profile-2-c d427e7391 (an unqualified flush-all on the switcher's satp write), lint at baseline on all eleven counters with the UNOPTFLAT membership identical BY NAME to the base; QEMU is the STRICTER side and is the reference (it flushes on every entry, escape and resume whose translation state differs, and keeps a context's translations in an index no other context reads), ruled by the semantics owner; NO CORPUS CONSEQUENCE today, because every CSRUNV the module issues runs with the caller's live satp equal to the context's; for the caller's DATA accesses the window is an ABI RULE IN BOTH DIRECTIONS, not something software cannot work around; the surface a fence cannot cover is the caller's first instruction FETCH after an escape, which is S-23's shape and is NOT observed here`
 
 **Siblings:** S-23 (the fetch face, where this window is the strongest candidate and NOT the demonstrated
