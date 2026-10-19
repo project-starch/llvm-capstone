@@ -3654,3 +3654,25 @@ against run C, so the subsets split by board. That follows the lead's instructio
   on that module's QEMU twin. A cell that differs between the two bitstreams' subsets cannot be compared across them,
   since they hold different cases. Each is read only against run C.
 - Nothing else changes.
+
+### cpyp-DB, pre-registered (2026-10-20 05:1x, before its boot) with NO predicted value: board 2, last; cpyp-D with ONE change, the bitstream
+
+The compiler lane's next discriminator for cpython's pc=0 faults, after cpyp-DZ excluded the retries.
+- **Excluded first, from source** (the compiler lane): vp2's latched rd as the mechanism. The only CSRUNVs that still
+  carry a real rd are stops, and every resume re-latches rd = x0.
+- **The kit:** bkit7-rev2xnBD, from `make-cpyb-kit.sh` 9963d90651a6275f. It is bkit7-rev2xnD (norandmaps,
+  module 39d8492d, monitor f13dbc5) with tree B's board fields, exactly as bkit7-rev2xBD differs from bkit7-rev2xD;
+  checked by diff. Tree B adds S-29's satp flush.
+- **The runner:** `tier3-cpy-b.sh` 41053fd133caf80b, cpyp-DZ's with the kit, board and run root changed. It
+  starts when board 2's q15 queue ends. Its dry run on cpyp-D's transcript reproduces cpyp-D's readings, and a busy
+  board stopped it.
+- **No prediction is registered,** at the compiler lane's request. It first proposed "pc=0 absent", on the reading that
+  a stale translation alone gives cause 12 on tree A. It then corrected itself, and the record above confirms the
+  correction: on tree A a stale translation alone gives cause 1, with a physical last different from the faulting
+  address (sv-fetch), and cause 12 with the two equal is the control's reading and tree B's. cpython's
+  `cause=12 pc=0x0 address=0x0` is the correct fault for a jump to 0. So the stale-FETCH route is out, and the arm
+  can reach S-29 only through stale DATA: a function pointer or return address read as 0.
+- **Both outcomes are informative:**
+  - pc=0 present on tree B excludes S-29 by either route;
+  - pc=0 absent implicates something specific to tree A.
+- **Readings:** pc=0 per step, plus DRT1/DRTX/FRTY as information.
