@@ -3313,6 +3313,61 @@ everything inside delegated domains, are unaffected.
 
 ### R-59 — a CSRUNV frame whose `srevroot` word is between 1 and 4095 passes the switcher's non-zero precheck and then installs ZERO, so the context is admitted and runs OUTSIDE the lifetime-table namespace · `OPEN, source-derived 2026-10-19 by the RTL lane's auditor on tree A (8522d72fe), filed separately from R-58 deliberately (one issue, one folder) although both are in the same walk. `runv_precheck_step` accepts any non-zero word at dom_base+8 (capstone_dom_switcher.anvil:381-387) while the id-67 write masks the low 12 bits (csr_regfile.sv:2051), so a word in 1..4095 satisfies "srevroot non-zero" and the CSR ends up 0 -- and `vctx_table_o`'s term 2 then reads false for that context (:2876-2878). No reading yet; a one-arm test is a frame with +8 = 0x800 plus a context-side CSNODE, which should be illegal at decode where the same arm with +8 = a real 4 KiB-aligned table admits it. The fix is to make the two agree: either the precheck rejects a word with low bits set, or it tests the masked value`
 
+
+### R-60 — a load or store through a capability whose cursor lies OUTSIDE its representable window is bounds-checked against the compressed bounds decoded AT THAT CURSOR, which are the true bounds shifted by whole window spans; when that shifted decode contains the cursor the access passes and touches memory one or more spans away, without a trap · `CHARACTERISED on silicon 2026-10-20 (tree A, board 1; N=1 per arm; the bitstream identity is the run's label, not a hash). Mechanism read in RTL and audited. QEMU traps (cause 28) in every arm. Stores MEASURED. LDC/STC and tree B by source only`
+
+**What happens** (capstone-ariane 8522d72fe, read by the compiler lane's rtl-oracle and re-read by a claim-auditor):
+- The register file holds capabilities compressed. CINCOFFSET checks only the capability type: it neither clears the tag
+  nor checks representability (`capstone_flu_unit.anvil:29-60`; at writeback `compress_cap`, `ex_stage.sv:1739,1753`).
+  The only representability check found is CDERIVE's (`capstone_dyn_unit.anvil:830`).
+- The LSU decodes `lsu_cap_a = decompress_cap_tagged(lsu_ctrl.cursor_a, lsu_ctrl.cap_metadata_a)` from rs1's LIVE cursor
+  (`load_store_unit.sv:338`), for loads and stores alike (`lsu_ctrl.fu inside {LOAD, STORE}`, `:1320`). It raises cause 28
+  when `lsu_ea_full < bound_start || lsu_ea_full + size > bound_end` against THAT decode (`:1353-1356`).
+- LCC reads the same decode on the same inputs (`ex_stage.sv:887`; `capstone_dyn_unit.anvil:405-406`).
+- Contexts run at M, so this path applies to every virtual-context access (the gate `ld_st_priv_lvl_i == PRIV_LVL_M`).
+
+**The exact condition** (byte-width model of `ariane_pkg.sv:673-720` at 64 bits; the auditor's, cross-checked by the
+compiler lane at 241,984 positions with 0 mismatches):
+- With S = 2^(E+14), a cursor in window k decodes to [base + kS, end + kS).
+- A size-n access at an out-of-window cursor therefore PASSES iff (cursor − base) mod S ≤ len − n. Otherwise it still
+  traps 28.
+- So "any overrun past one span aliases" is wrong. For a 20,160-byte E=2 object, overruns up to 45,376 bytes past the
+  end trap, and beyond that about len/S ≈ 31% of positions alias.
+
+**Measured on silicon** (board lane vp2-tier12; compiler lane alias-load 0e647b3ce4cf and 6c8f59560766, diag31
+5876e58b6a1e):
+- **alias-load** (image 4aa36d96, a 20,160-byte child): the arms at +0x10100 and +0x16000 decode the SAME shifted bounds
+  (child+0x10000).
+  - At +0x10100 the cursor lies inside them, and the `lbu` reads the aliased marker (165).
+  - At +0x16000 it lies outside, and the load traps 28 at the cursor.
+  - In-window +100 loads, and +0x4ed0 (16 bytes past the end) traps.
+- **alias-store** (image b68b3d25): the same arms with one `sb`. At +0x10100 the store lands and overwrites the marker
+  64 KiB away, with no trap. +0x16000 and +0x4ed0 trap 28.
+- **QEMU** (qkit7-rev2) keeps exact bounds in registers between escapes and traps 28 in every out-of-bounds arm.
+
+**Corpus witness, sqlite/engine-repros case 31 (fz10, statDecodePage):**
+- The access is `lbu a1, 0(a0)` right after `cincoffset a0, a0, a1`, with iOff taken from the fuzzed page. Its cursor is
+  50,976 bytes past the end of a 20,160-byte page buffer, 71,136 past the base.
+- The diag31 boot reads LCC bounds shifted by exactly +0x10000, containing the cursor. The load passes and the case
+  completes.
+- It is MISSED on three boots (two on image 7bce22b0, one on the diag image 349e5418), against CAUGHT 28 on QEMU in three
+  runs.
+- q15's other 32 cells match QEMU. The bundles are under sqlite/engine-repros/results/2026-10-20-vp2c-tree{A,B}/.
+
+**What this amends:** the Q-30 silicon note (docs/history/19-10-2026_22-30-00_q30-...) says silicon "self-heals" a
+cursor excursion and bites only on instructions that DERIVE bounds (SHRINK, TIGHTEN, CDERIVE). Plain loads and stores
+made DURING an excursion bite too. That note's simulation arm has no access at an out-of-window cursor.
+
+**Not measured:**
+- LDC/STC, which take the same decode by source (`capstone_dyn_unit.anvil:666-670, 733-736`);
+- tree B 8de3c48cf, whose decode path is identical by source (q15 subset f on tree B is queued on board 2);
+- a chain of excursions. A CINCOFFSET from an already out-of-window cursor re-encodes the shifted decode, which may make
+  the wrong bounds permanent. That is the compiler lane's inference from source.
+
+**Consequence for corpus verdicts:** on vp2 a spatial overrun of more than the in-window slack can be MISSED by silicon
+where QEMU catches it. A board-only MISSED on a far, data-dependent offset should be checked against this condition
+before being read as a cell difference. A store that aliases is a silent write to another object.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
