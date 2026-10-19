@@ -1638,3 +1638,14 @@ retry was added, as the production drivers' cold_boot has):**
 - **What it does not establish:** why. It is board-side and needs the board owner: a full power removal, or a check
   that the FPGA configuration and its clocks are what they were. A reflash of bf3db3175 would be the lead's call.
 - **No further board time is spent.** The queue stays stopped.
+
+**After the board's reboot (2026-10-19 11:33-11:38): the control passes. The board is back.**
+- The lead rebooted the board, relayed by the runtime lane. The pre-registered control then ran: wa1's firmware
+  ad5e84f761dd0f7c, Tier 1.
+- **It read identical to wa1:** b0-stats, b0-hello and vm-contract as their oracles, the identity branch, banner 1, 0
+  refusal lines, and the same FRTY retry at 011110E8.
+- So the outage from 01:42 was board-side, and it was cleared by the reboot. Its cause is unknown.
+- **Resuming as planned:**
+  - sql0-rev2b (on 39d8492d, the measure-only bake first), then pgc/pgm0/pgm1 on d71f207a.
+  - The silent runs are in the attic: sql0-rev2b 01:52, pgc 02:02. pgc's second dead-boot record is kept as
+    `records/pgc-fix6b-noboot2.board.txt`, and its all-infra bundle is not filed.
