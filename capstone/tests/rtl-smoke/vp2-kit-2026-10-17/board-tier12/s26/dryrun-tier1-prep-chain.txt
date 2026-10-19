@@ -1,0 +1,10 @@
+# tier1-prep-chain.sh dry run (2026-10-19 16:25), on a copy of the Tier 1 stage, with the bake, the firmware recipe and
+# rev8's two steps stubbed:
+# - the bake saw the pair's vm-contract.sh (6be39dbbf3bd427a); the stage then returned to rev7's record, with rev7's
+#   script (67780eebca30b73c) verified against stage.SHA256SUMS;
+# - the three firmwares, from wrapper wt-wrap-s26 and monitor csbi-s26 on the saved image, each got only its own defines:
+#   cur QUANTUM_PRINT; var + BOOT_QUANTUM=2000000; mir + MIRROR_QUANTUM=1000;
+# - rev8's staging and build followed, and the chain ended PREP DONE.
+# The pair's vm-contract.sh, on the host with a stubbed capstone-vexec and the bound shortened: spinning, it reads the
+# counters growing (28, 56, 84), kills `ok` and reports retval 930; returning, it ends as rev7's (ok 0, stale 139,
+# retval 0).

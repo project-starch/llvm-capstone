@@ -1778,3 +1778,407 @@ word again, and the chain stops instead.
     directory, and a quoted inline stub. Both were fixed before these.
 - **Steps 4-6** (Tier 1 on module 39d8492d, wm0/wm1, and pym0 on 3005ed52) need kits naming the new bitstream. They
   are prepared while steps 1-3 run, and pre-registered before they run.
+
+### Tree A steps 4-6, pre-registered (2026-10-19 13:45, before they run): `tier3-treeA-linux.sh`
+
+They run after steps 1-3 end with `CHAIN_TREEA_STEPS123_DONE`, and any other end holds them. Every boot is
+UNGATED (PREFLIGHT=0).
+
+**Step 4: Tier 1 on module 39d8492d** (`board-tier12/treeA/run-tier12-rev7A.sh`).
+- **The run:** rev7's run with exactly one change, the bitstream. Same stage (stage.SHA256SUMS as rev7's), firmware
+  7a53759a4773c81b, driver fd38816a90c64c22 and judge. rev7 on bf3db3175 is its matched pair.
+- **Predicted** as rev7 read on bf3db3175:
+  - b0-stats, b0-hello and vm-contract as their oracles (0), with the identity branch;
+  - `@@PARAM` diag_emerg=Y, node_flat_records=4096, supervisor_slots=1;
+  - one banner, 0 refusal lines;
+  - resume_satp_changed and busy_frame_refusals 0 at every read.
+- **sparse-churn, which wedged on bf3db3175 with S-25's face** (N=4; S-25 cites R-57). Under tree A's R-57 fix it is
+  predicted to RUN to exhaustion: `VM_EXIT:sparse-churn:1`, `VM_CONTRACT_FAIL:recycling allocation`, and the
+  console's "collect skipped" at least once (the QEMU reading at 4096 nodes: collect skipped at 3,584 nodes, then
+  exit 1).
+  - That reading is also module 39d8492d's stopgap control on silicon, open since rev7.
+  - A wedge with rev7's apertures would mean tree A's R-57 fix does not cover this face.
+- **The judge's exact-counter item** stays NO DATA, as on rev7: `stale` prints no STATS line. So the judge's overall
+  line reads NO DATA, and the per-item lines are the reading.
+
+**Steps 5 and 6** run only if step 4's first three rungs read their oracles. Each arm uses its earlier runner
+arguments and images (`t3-images-nb/<arm>.images.SHA256SUMS`), is scored against the same prediction, and is recorded
+as `<arm>-treeA` under `results/2026-10-19-vp2c-treeA/`.
+- **Step 5: wm0, then wm1,** on kit bkit7-rev2sA. That is bkit7-rev2s (module 39d8492d, budget x4) with only
+  BOARD_BITSTREAM and the kit's own manifest path changed (`diff -r`). They are R-57's positive controls, and each
+  wedged on bf3db3175 on both modules (N=2 per arm).
+  - Predicted to run and read their QEMU predictions: wm0 MISSED 23, and wm1 control-failed 23 (its twin's).
+- **Step 6: pym0 on kit bkit7A.** That is bkit7 (module 3005ed52, resume rd = x15) with the same two changes.
+  - Predicted 20 of 20 at the QEMU verdict, MISSED 20 with the controls complete. On bf3db3175 the same images read
+    0 of 20. That is S-27's RTL fix two-sided on silicon.
+- **Dry run** (stubbed Tier 1 runner, arm and scorer):
+  - all three Tier 1 rungs as oracle: wm0, wm1 and pym0 run with the kits and predictions above, then TAL DONE;
+  - steps 1-3 stopped: TAL HOLD;
+  - vm-contract off its oracle: STOP before any arm;
+  - a driver running: STOP.
+
+**Amendment to step 4's sparse-churn reading (2026-10-19 13:55, before step 4 runs), from the RTL lane's note on what
+R-57's fix changes.** The fix does not make a faulting capability store succeed. The store's translation still
+faults; the fix makes the exception reach the CAP_WB writeback, instead of the instruction retiring clean with a ghost
+entry left in the store buffer's commit queue. sparse-churn has three readable outcomes on tree A:
+- **(a) It runs to exhaustion:** `VM_EXIT:sparse-churn:1`, the recycling-allocation failure, and "collect skipped" at
+  least once, as QEMU reads. The faults are reported and resolved as QEMU's are. This is the pre-registered
+  prediction, and it closes the stopgap control.
+- **(b) A clean, reported fault ends it** (a domain fault line, VM_EXIT non-zero, no wedge, the next rung or the
+  boot's end reached).
+  - That is R-57's fix reaching the writeback, so it is NOT read as the fix failing.
+  - It is still a DIFF from QEMU, whose run resolves the faults and reaches exhaustion, so it is recorded as a new
+    reading to explain. The stopgap control stays open.
+- **(c) A wedge with rev7's apertures:** tree A's R-57 fix does not cover this face.
+
+Two of tree A's known gaps can show in any step, and neither is a tree A regression:
+- **S-29:** tree A has no satp flush, so a failure that looks like a translation from the wrong address space is
+  S-29 unfixed. The module's caller and its context share the process's satp, so none is expected.
+- **S-23:** the monitor's fetch retry still covers it, so a fetch refused with a PHYSICAL address remains S-23.
+
+The arms phase cannot detect any of tree A's four fixes, since its 25 vectors are identical. Its pass says the images
+and the RTL agree with the base, and nothing about S-27, S-28, R-57 or Q-24.
+
+### sql0 on tree A, pre-registered (2026-10-19 14:00, before its boot): sql0-treeA (`tier3-sql-arm-rev2d.sh`)
+
+- **The arm:** rev2c with two changes. It runs on tree A, and the kit keeps a staged file's execute bit.
+  - Kits bkit7-rev2xA (boot) and bkit7-rev2xmA (measure-only) are bkit7-rev2s and bkit7-rev2m with BOARD_BITSTREAM
+    caplifive_vp2c_8522d72fe and one recipe line: a source file that is executable stages 0755, else 0644.
+  - The runner (1f099612d70a9576, its QEMU PASS), image 64010720f1a6b3bc, fixture record 956173e054762e91, the size
+    gate and the void gates are rev2c's.
+  - It runs only after the tree A Linux steps end `TAL DONE`.
+- **Size:** the stage is expected at 28,810,594 B, rev2c's; modes do not change a cpio's length. The firmware is
+  expected at 25,856,520 B, and the measure-only bake decides before any boot.
+- **Prediction:** QEMU's, `t3-sql-trim-vm/bundle`, as for rev2b and rev2c:
+  - CAUGHT 02 and 03 (cause 28 at memcpy+200);
+  - MISSED 01 and 04-09;
+  - both controls fault.
+  - A session failing on a board-only harness difference makes the arm VOID, not a DIFF, as rev2b and rev2c were.
+- **Records:** `records/sql0-treeA.board.txt` and `postgres/sql-repros/results/2026-10-19-vp2c-treeA/`.
+- **Dry run:** `dryrun-tier3-sql-arm-rev2d.txt`. UNGATED (PREFLIGHT=0).
+
+### rev8 on tree A, pre-registered (2026-10-19 13:55, before its stage, build and boot): the stopgap's control without sparse-churn, and rev7's exact counter check
+
+- **Why it runs whatever step 4 reads:**
+  - It closes rev7's exact-counter check either way: the counters are read between `ok` and `stale`.
+  - If step 4's sparse-churn does not reach "collect skipped" (outcomes b or c), rev8 is the stopgap control that
+    does not depend on R-57.
+- **The stage** (`board-tier12/rev8/`), changed from rev7's in three files: vm-contract.sh (node_flat_records=4096,
+  plus a counter read after `ok`), vm-suite-inner.sh (dense-churn in place of sparse-churn), and contract-dense.dom
+  added.
+  - contract-dense.dom is the compiler lane's image b6a11ff3ba726646 (lane module-resume-rd-x0 8807df747411): v9's
+    contract.dom plus a `dense-churn` mode. It retires one arena, then derives children inside one already-written
+    4096-byte block.
+  - It passes qemu-only-csr-census (0), and vp2-silicon-gate with one attributed site: libc_exit_fini's LDC at
+    0x24f9c, checked by the gate against the image (fini_array_size=0). A wrong-address control FAILs.
+- **When:** `rev8-prep.sh` stages and builds only after the tree A Linux steps end TAL DONE. Step 4 reads the stage
+  against rev7's record, and steps 5-6 bake in the same buildroot. The firmware hash is pinned here before the boot.
+- **Predicted:** the compiler lane's QEMU readings on the twin module a5dec6a32c49b3d3 (kit qkit7-rev2) at 4096. At
+  256 the launcher's own image grant is refused, so that value is VOID.
+  - b0-stats, b0-hello and vm-contract read their oracles (0), and vm-suite reads 1.
+  - Across `ok`: resume_sfences rises by `ok`'s own STATS faults, and resume_satp_refreshes by its steps - 1. QEMU
+    reads 426 of faults=426 and 546 of steps=547. The board's own STATS values are used, since silicon's `ok` read
+    steps=511 on rev7.
+  - resume_satp_changed and busy_frame_refusals read 0 at all five reads.
+  - **dense-churn:**
+    - "collect skipped" exactly once, with retired 1 and skips 1 (QEMU: available 256);
+    - progress lines up to derived=3000;
+    - `domain fault cause=30` (the table exhausted) at the loop's CDERIVE, image VA 0x24238 (pc & 0xffff == 0x4238);
+    - VM_EXIT:dense-churn:139.
+- **The judge,** `rev8-judge.py`: PASS on a synthetic transcript of the QEMU readings, FAIL on the same transcript
+  with cause 28 planted, and NO DATA on rev7's real transcript.
+
+**The order after the tree A Linux steps:** rev8's prep and boot, then the RTL lane's S-29 bare arms (pre-registered
+on receipt), then sql0-treeA. sql0-treeA's first waiter, which woke on TAL DONE, was stopped by process group before it
+did anything (its out file is empty). Its measure-only bake would have shared the buildroot with rev8's bake. It is
+relaunched behind the S-29 batch.
+
+### S-29 and S-23's fetch face on tree A, pre-registered (2026-10-19 14:05, before they run): seven bare arms
+
+- **The arms:** the RTL lane's seven images (dev 8e1df1e05a3c, `capstone/tests/rtl-smoke/satpstale-bare-2026-10-19/`),
+  matched by its `images/SHA256SUMS` (all seven OK), with board_rec 0x80017000 in each.
+  - Their wrapper, prologue, linker script and instruction header are byte-identical to the 25 arms'. So they run
+    through the same bare runner and infra-retry, one power cycle each.
+- **Predicted:** each reads its tree A vector from that folder's `results/rtl-sim-vectors.txt`:
+
+  | Arm | Predicted vector |
+  |---|---|
+  | sv-stale | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55 |
+  | sv-stale-f | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55 |
+  | sv-stale-b | 0xaaaa 0xbbbb 3 0xb 0xbbbb 0x55 |
+  | sv-stale-bf | 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55 |
+  | sv-stale-bn | 0xaaaa 0xcccc 3 0xb 0xaaaa 0x55 |
+  | sv-fetch-c | 0xaaaa 0xc 0x80006000 0x80006000 0x55 |
+  | sv-fetch | 0xaaaa 1 0x80006000 0x80016000 0x55 |
+
+  - sv-fetch is cause 1, with a PHYSICAL last value different from the faulting virtual address before it. That is
+    S-23's signature from a stale translation alone. On tree B it reads cause 12 with the two equal.
+  - sv-stale-bf (doubly fenced) and sv-stale-bn (no probe access) read the same on both trees. A difference on
+    either is about the image or the harness, not the window.
+  - Every arm ends in a spin loop at the cycle limit; the vector is the recorder's contents.
+- **When:** after the tree A Linux steps end, on TAL DONE or STOP, since bare arms do not need Linux. A HOLD holds
+  them. They run while rev8's firmware builds, which never touches the board.
+  - Order: the five va-satpstale arms, then the satpu2 pair last (sv-fetch-c, then sv-fetch).
+- **Compared** by `compare-sv.py` (count and values as 64-bit integers). The batch fails unless the table gives
+  exactly 7 arms.
+- **Dry run:** `dryrun-tier3-sv-batch.txt`. These arms say nothing about S-27, S-28, R-57 or Q-24.
+- **The order after the Linux steps** is now: this batch (with rev8's build alongside), rev8's boot, then sql0-treeA.
+
+### Tree A on silicon: flashed, and the canary passes 9 of 9 (2026-10-19 13:41-14:29)
+
+- **Preflight GO (13:41:41):**
+  - the sealed sha256, and the WNS -18.985 inside the band;
+  - set 7's firmware 1d2bbbf37f63f435, and the DTS pairing through the new vp2c row.
+- **Flash (13:41-13:43):** resident before was `caplifive_vp2_bf3db3175.bit`.
+  - The upload took HTTP 201, and bf3db3175 was confirmed in the store as the flash-back path.
+  - The SPI write ran 13:42:01-13:43:32. The readback after the mandatory power cycle is
+    `caplifive_vp2c_8522d72fe.bit`.
+- **Canary, against d93a8d66b's records** (one power cycle per bare image, through infra-retry):
+
+  | Comparison | Pass 1 | Pass 2 |
+  |---|---|---|
+  | S-16 set | 18 arms, 98 reference readings, 0 not identical | the same |
+  | floor | 6 arms, 77 readings, 0 not identical | the same |
+  | s1gap | 3 arms, 0 functional differences | the same |
+
+  - Pass 1 against pass 2 is identical by the same three rules.
+  - `CANARY PASS 9 of 9` at 14:29:14. The 25 arms began at once.
+- **The 25 arms (14:29-14:50):** all 25 read their pre-registered vectors, `VP2ARMS DONE 25 as pre-registered`.
+  Each is compared by count and values with the bf3db3175 vectors the RTL lane showed identical on tree A's RTL.
+- **Corpus set 7 (14:50-14:58):** on firmware 1d2bbbf37f63f435, against d93a8d66b's record: 33 reference records, 33
+  new, 0 differ.
+- **So steps 1-3 end `CHAIN_TREEA_STEPS123_DONE` at 14:58.** As the RTL lane noted, none of these can see tree A's four
+  fixes. They show the images and the RTL agree with the base, so tree A changed nothing they exercise.
+
+### Tree A step 4 (14:59-15:10): Tier 1 as rev7; sparse-churn did not wedge before the boot ended in a kernel panic with S-23's data-face shape (audited; RETRACTION of two claims below)
+
+**RETRACTION (2026-10-19, same day; lane b3588262cc83, not on dev).** The first version of this section claimed two
+things that do not hold. The claim-auditor refuted both:
+- **"`__mmiowb_state` read on every spinlock acquire BEFORE the refusal refutes a persistent deny."** Withdrawn. Reads
+  before the refusal rule out only a deny that already existed at those times. A deny created at the moment of a
+  node free is untouched by them. The same argument went to the RTL and runtime lanes, and was withdrawn there too.
+- **"The wedge is gone; the program went further."** Withdrawn. Nothing measures how far sparse-churn ran on either
+  bitstream. A pb10 per-CPU base "the same" as this boot's, and "the memory layout is identical", were assertions;
+  pb10 booted a different Image, and its boot log is not available.
+
+**What the transcript shows** (N=1, UNGATED, PREFLIGHT=0; the auditor checked each point against
+`/tmp/capstone/tier1/run3rev7A/` and the running Image):
+- b0-stats, b0-hello and vm-contract read their oracles, with the identity branch, as rev7 on bf3db3175.
+- **The fetch retry, then the dump.** In sparse-churn the monitor first retried an S fetch at `vm_ioctl+0xab0`, the
+  instruction after the module's CSRUNV (`FRTY:01113D98`; the module base is inferred from two FRTY pcs). It then
+  printed the region and CPMP dump: slot 7 = region 21 [0xAC100000, 0xC0000000) RWX, CPHT 7.
+- **The refusal.** `MTVL:BC2B9440 CPMX:00000002 INJS:00000002`, where both 2s are the constant `CAPSTONE_NO_CPMP_REGION`
+  (`sbi_capstone.h:93`; INJS is not an mcause on this path). The dump and MTVL belong to the load, not to the FRTY: a
+  retried fetch returns before the dump (`sbi_capstone.c:3617-3618`).
+- **The kernel.** Linux took `Oops - load access fault` (cause 5) at `_raw_spin_lock_irqsave+0x56` from
+  `__wake_up_common_lock+0x4e`, in interrupt, and panicked.
+- **The localisation.** The refused load is `lhu` of CPU 0's `__mmiowb_state`, from the Oops's own code bytes, which
+  equal the running Image. Through the linear map, a4 + `__mmiowb_state` = a5 = PA 0xBC2B9440 = MTVL. CPU 0's
+  per-CPU unit is [PA 0xBC2B8000, 0xBC2C7000) in this kernel.
+- **The difference from pb10.** pb10's PA (0xBC2C0825) and kernel caller (`mod_node_page_state`) differ, on
+  bf3db3175 with a different Image. Its CPMP dump was recorded as 48 lines against 45 here.
+- **The same PA was read again AFTER the refusal.** `die()` takes `spin_lock_irqsave(&die_lock)` before printing the
+  Oops line, and every acquire touches `__mmiowb_state`. That read went through slot 7 with no second refusal, so
+  the refusal did not survive the monitor's handling.
+  - Whether that handling re-armed the CPMP revnode trackers is open: a namespace flush across S/M if `srevroot_q` or
+    `sup_active_q` was set at the fault (`ex_stage.sv:1417`, `csr_regfile.sv:2876-2878`). So this does NOT yet refute
+    a persistent deny. `srevroot_q` and `sup_active_q` at the fault are the discriminator.
+- **What the per-CPU locality does not show.** Per-CPU data is the first thing interrupt entry and lock acquisition
+  touch, so any "first kernel access to the window after event X" account predicts it. It favours no account.
+- **The wedge.** sparse-churn did not wedge before the panic, which came about 15 s after VM_BEGIN. How far it ran is
+  not measured, and whether R-57's face would have recurred later is not observed. The apertures after the panic are
+  residue: they match pb10's post-panic ones, and are not an S-25 reading.
+
+### Tree A step 5, wm0 (15:10-15:20): runs to the end, MISSED 23, 23 of 23 as predicted (on bf3db3175 it wedged in its first control)
+
+- **The run:** kit bkit7-rev2sA, 26 of 26 steps, boot completed. `vp2-malloc (virtual-wmem): {'MISSED': 23}`, 23 of 23
+  cells the same as the QEMU prediction. The bundle is under
+  `wireshark/wmem-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`.
+- **The uaf-jumbo control,** where both bf3db3175 runs wedged, now ends in a reported `domain fault cause=25`.
+- **A confound:** the module differs too. On bf3db3175, wm0 wedged on modules 3005ed52 and d71f207a, and module
+  39d8492d never ran wm0 there. 39d8492d adds a resume sfence.vma and a satp refresh, which could plausibly bear on a
+  first-touch store.
+  - So wm0 is not a clean pair for R-57.
+  - The clean pairs are step 4's sparse-churn (module 39d8492d on both bitstreams) and step 6's pym0 (3005ed52 on
+    both).
+
+### Tree A steps 5-6 (15:20-16:24): wm1 runs to the end, and pym0 on module 3005ed52 reads 20 of 20 where bf3db3175 read 0 of 20; TAL DONE
+
+- **wm1** (kit bkit7-rev2sA): 26 of 26 steps, boot completed. `vp2-nested-pools (virtual-wmem-pools):
+  {'NO-READING:control-failed': 23}`, 23 of 23 cells the same as its prediction (its QEMU twin's control-failed 23).
+  On bf3db3175 it wedged in its first control, on both modules. wm0's caveat applies: module 39d8492d never ran wm1
+  on bf3db3175, so this is not a clean R-57 pair.
+- **pym0** (kit bkit7A: module 3005ed52, resume rd = x15; images as on bf3db3175, `t3-images-nb/pym0.images.SHA256SUMS`,
+  21 of 21): 21 of 21 steps, `vp2-malloc (virtual-pymalloc): {'MISSED': 20}`, 20 of 20 cells the same as the QEMU
+  prediction.
+  - On bf3db3175 the same images on the same module read 0 of 20: every program faulted at 0x12, S-27's clobber
+    (pym0, and pym0-fence with the fence on).
+  - Only the bitstream differs. **S-27's RTL fix is two-sided on silicon: N=1 on tree A against N=2 on bf3db3175.**
+  - Bundle: `cpython/pymalloc-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`.
+- `TAL DONE 16:24:27`. Every boot UNGATED (PREFLIGHT=0).
+
+### After the tree A Linux steps (2026-10-19 16:25)
+
+- **The S-29 bare batch** began on board 1 at 16:24:55. Board 2's cross-board canary was in its pass 2 at the same
+  time, the first parallel bare runs on the two boards (board #2 phase 1, dev 685e2c3118f2).
+- **The Tier 1 prep chain** (`board-tier12/s26/tier1-prep-chain.sh`), launched on TAL DONE, does these in order:
+  1. stages S-26's pair image: rev7's stage with only `vm/vm-contract.sh` swapped for the pair's bounded,
+     counter-reading one;
+  2. bakes it under the buildroot bake lock;
+  3. restores the stage to rev7's record;
+  4. builds the pair's three firmwares on that Image (wrapper aab63d5 and monitor ba9a0de, differing only in
+     defines);
+  5. stages and builds rev8 (node_flat_records=4096).
+  - It replaces rev8-prep.sh's waiter, which was stopped by process group before it did anything. The two would
+    otherwise have staged the same Tier 1 stage at once.
+  - Its stubbed dry run on a copy of the stage: the bake saw the pair's script (6be39dbbf3bd427a), the stage
+    returned to rev7's record (67780eebca30b73c), each firmware got only its own defines, and rev8 followed.
+  - **The Tier 1 bake now also bakes `contract-dense.dom`** when the stage holds it (rev8). Without it, rev8's cpio
+    check would have stopped its build.
+- **The order of the remaining boots on board 1:**
+  1. the S-26 pair (three short boots: current cold, variant cold, mirror warm), pre-registered with its firmware
+     hashes once the chain has built them;
+  2. rev8;
+  3. sql0-treeA;
+  4. the two cpython allocator-boundary boots.
+  - The runtime lane moved the S-26 pair ahead of rev8: two short boots that decide a root cause, against
+    sql0-treeA's five hours.
+
+### S-29 and S-23's fetch face on tree A, result (2026-10-19 16:24-16:31): 7 of 7 arms read their tree A vectors
+
+- **Board 1,** resident caplifive_vp2c_8522d72fe.bit, one power cycle each, through the 25 arms' runner. That runner is
+  in the wt-b0 tree, whose console predates the `[fpga-board]` line, so the runs carry none. The board is board 1 by
+  the host lock and the runner's resident-bitstream assertion.
+- **Compared by `compare-sv.py`**, count and values as 64-bit integers, against the RTL lane's simulated tree A vectors
+  (dev 8e1df1e05a3c): `SVBATCH DONE 7 of 7 as pre-registered`.
+
+  | Arm | Vector |
+  |---|---|
+  | sv-stale | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55 |
+  | sv-stale-f | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55 |
+  | sv-stale-b | 0xaaaa 0xbbbb 3 0xb 0xbbbb 0x55 |
+  | sv-stale-bf | 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55 |
+  | sv-stale-bn | 0xaaaa 0xcccc 3 0xb 0xaaaa 0x55 |
+  | sv-fetch-c | 0xaaaa 0xc 0x80006000 0x80006000 0x55 |
+  | sv-fetch | 0xaaaa 1 0x80006000 0x80016000 0x55 |
+
+- **What it shows on silicon,** at N=1 per arm:
+  - **S-29's stale translation:** sv-stale and sv-stale-f read the stale 0xaaaa.
+  - **S-23's fetch face from a stale translation alone:** sv-fetch takes cause 1 with a PHYSICAL last value
+    (0x80016000) different from the faulting virtual address, where its control sv-fetch-c takes cause 12 with the two
+    equal.
+  - **The cross-tree controls agree with the simulation,** sv-stale-bf (doubly fenced) and sv-stale-bn (no probe
+    access). That makes the other arms readings rather than harness differences.
+  - Tree B (the satp flush) is predicted to change sv-stale, sv-stale-f, sv-stale-b and sv-fetch. These arms say
+    nothing about S-27, S-28, R-57 or Q-24.
+
+### S-26's silicon pair on tree A, pre-registered (2026-10-19 16:36, before the boots): three cold boots, `board-tier12/s26/run-s26.sh`
+
+**The candidate** (the compiler lane's read, audited by the runtime lane's claim-auditor: PLAUSIBLE BUT UNPROVEN).
+- csupquantum (0x7C3) resets to 0. Its only writer is the monitor's `supervised_invoke` (`sbi_capstone.c:1002`), which on
+  this firmware is reached by a process-ABI STEP (`context_step`), never by a classic DOM_CALL.
+- So a virtual context entered before any process-ABI STEP loads a 0 countdown. It is preempted before its first
+  instruction and escapes kind 1, again and again. b0-hello is a process-ABI launch, which is why it is S-26's
+  workaround; b0-stats only reads 0xFC4.
+- **The RTL basis** (the RTL lane, simulation on bf3db3175): a context entering with quantum 0 retires nothing and
+  escapes kind 1, cause 0, bit-identically for budgets 40 through 1,500. At 2,000 the loop completes.
+- **A model divergence:** QEMU arms a constant 5 ms of virtual time at every entry, so it can never show a quantum-0
+  livelock.
+
+**The arms.** Image 89baf46451448872 is rev7's stage with only `vm/vm-contract.sh` swapped for the pair's
+(6be39dbbf3bd427a). That script runs `ok` in the background, reads resume_sfences and resume_satp_refreshes at +30, +90
+and +150 s, and at the bound kills a still-running `ok` and reports VM_SPIN (retval 930).
+- **The firmwares** are all built on that Image, from wrapper aab63d5 (caplifive-opensbi s26-boot-quantum) and monitor
+  ba9a0de (capstone-sbi s26-mirror-quantum), and differ only in defines. Each prints QNT0, 0x7C3 as boot leaves it.
+  Checked in the compiled ELFs:
+
+  | Firmware | Defines | 0x7C3 writes and reads |
+  |---|---|---|
+  | cur fafbc0e38fb54c60 | QNT0 print only | 1 write (supervised_invoke), 1 read |
+  | var 883f3af2b9964251 | + CAPSTONE_BOOT_QUANTUM=2000000 | 2 writes, 1 read |
+  | mir 1a2244dfa19f9d40 | + CAPSTONE_MIRROR_QUANTUM=1000, a census-handler write, read back as QNT1 | 2 writes, 2 reads |
+
+- **The order:** var, then cur, then mir; each a cold boot on board 1, tree A, module 39d8492d.
+- **Predicted** (`s26-judge.py`):
+  - **var** (b0-stats, vm-contract): QNT0 001E8480, and vm-contract returns 0 with rev7's identity branch.
+  - **cur** (b0-stats, vm-contract): QNT0 00000000, then VM_SPIN (930) with resume_satp_refreshes strictly growing
+    across t30 < t90 < t150, the escape/resume loop. Flat counters would be the other reading, escaped and never
+    resumed (this README's boot-3 line). Neither is established today.
+  - **mir** (b0-stats, b0-hello, b0-stats2, vm-contract): QNT0 00000000, QNT1 000003E8 at each b0-stats, b0-hello 0,
+    then VM_SPIN with growing counters. **VOID if b0-hello does not return 0.**
+  - A spin where a return is predicted, or the reverse, is a FAIL. The judge reads it so, tested on synthetic
+    transcripts of every outcome.
+- **What it decides:** var returning and cur spinning, both cold with b0-stats only, isolates the quantum at the first
+  CSRUNV. mir spinning after a passing b0-hello separates "the quantum" from other state the first STEP sets up.
+- A claim-auditor reads the result before S-26's registry entry changes.
+- **Dry run:** a stub driver writing each arm's predicted transcript gives each arm exactly its firmware, rungs,
+  oracles, board 1 and tree A, and the judge reads PASS for all three. The chain's own dry run is
+  `board-tier12/s26/dryrun-tier1-prep-chain.txt`. UNGATED (PREFLIGHT=0).
+
+**rev8's firmware, pinned before its boot:** 84d5f52ec24cea30, 19,565,064 B (Image 48bd5c6254863132). The stage is
+rev8's: module 39d8492d, vm-contract.sh and vm-suite-inner.sh with node_flat_records=4096, and contract-dense.dom
+b6a11ff3 baked. It boots after the S-26 pair; then sql0-treeA.
+
+### S-26's silicon pair, results (2026-10-19 16:35-16:57, board 1, tree A, module 39d8492d): var and cur as predicted; mir's prediction FAILS, and a RETRACTION of four sentences of the first version (claim-auditor)
+
+`board-tier12/s26/run-s26.sh`, image 89baf46451448872, the three firmwares as pre-registered (each driver loaded
+`fw_<sha12>.bin` of its arm's hash; objcopy of each ELF reproduces it). Each arm was a cold boot (power off, toggle,
+on, then reset halt), and each log carries `[fpga-board] 1`. N=1 per arm; UNGATED (PREFLIGHT=0).
+
+| Arm | QNT0 | Rungs | vm-contract | Verdict |
+|---|---|---|---|---|
+| var (883f3af2b9964251) | 001E8480 | b0-stats 0 | 0, identity branch, steps=511 faults=426 | **as predicted** |
+| cur (fafbc0e38fb54c60) | 00000000 | b0-stats 0 | 930, VM_SPIN at the 150 s bound | **as predicted** |
+| mir (1a2244dfa19f9d40) | 00000000 | b0-stats 0, b0-hello 0, b0-stats2 0; QNT1 000003E8 at every census | 0, identity branch, steps=42151 faults=426, 62.5 s | **prediction FAILS** (930 predicted) |
+
+**RETRACTION (2026-10-19, same evening; lane 10e4c990a9d2, not on dev).** The claim-auditor refuted or corrected four
+sentences of the first version. Three went to the runtime and RTL lanes, and the fourth to the RTL lane only; all are
+withdrawn there too.
+- **"b0-hello's own STEP also ran partly at 1,000": REFUTED.** `supervised_invoke` writes CAPSTONE_SUPERVISOR_QUANTUM
+  unconditionally before every arm (`sbi_capstone.c:1001-1002`; in the compiled ELF a 0x1e8480 load immediately
+  precedes the csrw). So every STEP arm ran at 2,000,000. b0-hello's QNT1 lines are its census, before the STEP rounds.
+- **"About 80 times as often": wrong arithmetic.** 42151/511 is the ratio of entries. Non-fault entries are 511 − 426
+  = 85 against 42151 − 426 = 41,725, about 490 times. "1,000 cycles" is the value written to the register, not a
+  measured escape interval.
+- **"cur's raw console replays var's QNT0 before its own banner": false.** cur's board-raw.txt has one banner, one QNT0
+  (00000000) and no 001E8480. The text before the banner is var's last rung. So the judge's anti-replay scoping was
+  never exercised on real data.
+- **"A 1,000-cycle quantum does not livelock on silicon": UNPROVEN as stated.** mir's context followed b0-hello's STEP,
+  so the difference from the RTL simulation (on bf3db3175) is "the quantum and/or state the STEP leaves behind". The
+  arm that would separate them (1,000 written at boot, cold, no b0-hello) has not run.
+
+**What the arms show** (the auditor's wording):
+- **cur.** With no process-ABI STEP, 0x7C3 reads 0 at boot (QNT0). The compiled firmware has no other 0x7C3 writer
+  reachable without a managed context: cur's b0-stats prints only the census, with no domain created. A vm-contract
+  context entered in that state was re-entered about 850 times a second (resume_satp_refreshes 22,621, 73,763 and
+  124,857 at t30, t90 and t150; 125,905 after the kill), with no resolved fault (resume_sfences 0), no runtime grant
+  past slot 4 and no fetch retry. It was killed at 150 s.
+  - **The escape kind was not recorded**, so "kind 1" is inference; a cur repeat with diag_escapes=1 would read it.
+  - The same shape (slots 0-4, no FRTY, the 150 s bound) was seen on 2026-10-18 on an earlier module. This README's
+    boot-3 line ("escaped and never resumed") is wrong for this shape: the context is re-entered continuously.
+- **var.** Writing 0x7C3 = 2,000,000 at boot, with no STEP, let the same vm-contract complete with rev7's identity
+  branch (steps=511, faults=426). var and cur differ at the binary level only inside cap_env_init (a lui/addw/csrw
+  0x7c3, plus register and stack shifts). .rodata, .data and the payload are byte-identical.
+- **mir.** After b0-hello's STEP, a census-written 0x7C3 = 1,000 did not prevent completion: read back 0x3E8, and the
+  only other writer needs a managed-context ecall that vm-contract does not make. That is steps=42,151 and faults=426,
+  in 62.5 s. It does not separate the quantum from state the STEP leaves behind.
+- **The judge's QNT0 source was corrected after the var arm,** with the prediction unchanged. QNT0 prints after
+  OpenSBI's banner and before Linux, outside board.txt, so the judge reads it from board-raw.txt after this boot's last
+  banner. The judge's synthetic tests had put QNT0 in board.txt, where the real driver never writes it: its positive
+  control was not representative. var's on-disk judge.txt still reads the first judge's "NO DATA"; re-judged, it
+  reads PASS. cur and mir were judged by the corrected version.
+
+### rev8 on tree A, result (2026-10-19 16:56-17:03, board 1): JUDGE PASS on every pre-registered item; module 39d8492d's stopgap control and rev7's exact counter check both close
+
+Firmware 84d5f52ec24cea30 (Image 48bd5c6254863132), rev8's stage, `run3rev8`. Each log carries `[fpga-board] 1`;
+UNGATED (PREFLIGHT=0).
+- **The rungs:** b0-stats 0, b0-hello 0 and vm-contract 0 (the identity branch) read their oracles, and vm-suite reads 1.
+- `@@PARAM` diag_emerg=Y, node_flat_records=4096, supervisor_slots=1. One banner, 0 refusal lines.
+- **rev7's exact check, now made:** across `ok`, resume_sfences rose 426, equal to ok's own STATS faults (426). resume_satp_refreshes
+  rose 510, equal to ok's steps − 1 (511 − 1). resume_satp_changed and busy_frame_refusals read 0 at all five reads.
+  So items 3 and 4 (the resume sfence.vma and the satp refresh) run on every resume, exactly.
+- **The stopgap's positive control on silicon, closed:** dense-churn printed "collect skipped" once (retired 1,
+  available 256, skips 1); progress reached derived=3000; then `domain fault cause=30` at pc 0x3fb8e14238
+  (pc & 0xffff = 0x4238, the CDERIVE at image VA 0x24238); VM_EXIT 139. Every value is the QEMU twin's
+  (a5dec6a32c49b3d3 at 4096).
+- No CPMX refusal anywhere in the boot (CPMX-DIAG: no dump). FRTY retried twice, both at 011113AC (`retire+0x220`).

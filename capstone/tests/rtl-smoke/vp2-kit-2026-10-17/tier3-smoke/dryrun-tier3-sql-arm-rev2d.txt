@@ -1,0 +1,9 @@
+# tier3-sql-arm-rev2d.sh dry run (2026-10-19 14:00), the runner stubbed (a guest SEQ reading 30,000,000 B), the kits and
+# the runner/QEMU-PASS gates real (the stub's hash given as the runner, its PASS line as the CHECK):
+# - [1] the trigger reads "TAL STOP": "SQL HOLD: the tree A Linux steps did not end DONE (TAL STOP: dry)".
+# - [2] "TAL DONE": both kits pass the tree A + execute-bit check, and the measure-only run gets
+#   --board-kit bkit7-rev2xmA; "SQL MEASURE: firmware 30000000 B"; "SQL STOP: ... not under the cap; no boot".
+# The execute-bit check's pattern, under GNU grep (what the script runs): present in bkit7-rev2xA and bkit7-rev2xmA,
+# absent in bkit7-rev2sA. The interactive shell's grep is ugrep and read "absent" for all three; that reading was void.
+# The mode rule itself, through the kit's own stub mode on a two-file stage: bkit7-rev2xA writes bin/postgres|0755 and
+# plain.sql|0644; bkit7-rev2sA writes bin/postgres|0644.
