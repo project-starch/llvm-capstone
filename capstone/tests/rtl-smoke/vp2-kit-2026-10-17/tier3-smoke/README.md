@@ -2611,3 +2611,12 @@ retry.
   as before, with its RF lines saying which term failed.
 
 The dry run, with the real kits passing every check, is in `dryrun-drt.txt`.
+
+### Grading details for sql0-drt / pb10-drt (2026-10-19 19:00, before either boot)
+
+- **Under "transient":** report every DRT1 in the boot with its mepc, decoded to function+offset against the kernel's
+  System.map, as the S-23 folder does, and the count per boot. A single retry at mod_node_page_state is a different
+  reading from dozens across many kernel paths. The count also says how often the deny occurs per session.
+- **DRTX:** it is the persistent branch only at the SAME mepc as a preceding DRT1. The window is keyed on mepc, so no
+  other DRTX can occur.
+- **A refusal that fails the gate** prints no DRT1. It belongs to "neither", and its RF lines name the failing term.
