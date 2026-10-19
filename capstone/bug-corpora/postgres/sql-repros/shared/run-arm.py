@@ -37,6 +37,7 @@ Exit: 0 judged, 75 nothing could be judged.
 """
 import argparse
 import json
+import posixpath
 import re
 import shutil
 import subprocess
@@ -125,8 +126,11 @@ def session(args, sql_text_or_path, name, raw):
         return args.runs.get(name, ("", {"kind": "none"}))
     if args.batch is not None:
         staged = args.batch.put(f"sql/{name}.sql", sql)
-        args.batch.step(name, "rm -rf /tmp/pgd && cp -a /mnt/vm/pgcluster /tmp/pgd && chown -R nobody /tmp/pgd "
-                        f"&& su nobody -s /bin/sh -c 'cd /mnt/vm; ./capstone-vexec ./bin/postgres "
+        # The root is /mnt/vm on QEMU and /test-domains/vbatch on the board. The board bake recreates the cluster's
+        # directories 0775, and postgres refuses a data directory with group or other write access, hence the chmod.
+        root = posixpath.dirname(args.cluster_guest)
+        args.batch.step(name, f"rm -rf /tmp/pgd && cp -a {args.cluster_guest} /tmp/pgd && chown -R nobody /tmp/pgd && chmod 700 /tmp/pgd "
+                        f"&& su nobody -s /bin/sh -c 'cd {root}; ./capstone-vexec ./bin/postgres "
                         f"{PG_ARGS.format(data='/tmp/pgd')} < {staged}'; rc=$?; rm -rf /tmp/pgd; exit $rc")
         return "", {"kind": "none"}
     data = f"pgdata-{name}"
@@ -430,7 +434,7 @@ def main():
         if args.extensions.is_dir():
             for source in sorted(args.extensions.iterdir()):
                 args.batch.put(f"share/extension/{source.name}", source)
-        args.batch.put("pgcluster", args.fixture)
+        args.cluster_guest = args.batch.put("pgcluster", args.fixture)   # the guest path each session copies
         measure(args, spec, raw, preinstalled, symbols)            # plan every session
         args.runs, serial, completed = args.batch.execute(
             kit, raw / "guest", timeout=600 + 300 * len(args.batch.steps))
