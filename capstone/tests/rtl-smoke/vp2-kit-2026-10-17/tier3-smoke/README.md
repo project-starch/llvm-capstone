@@ -3492,3 +3492,52 @@ finished 10 steps in 50 minutes. It was stopped by process group, with no q15 ru
   that does move is a reading against run C, as any difference is.
 - **Dry run:** it reached Q15 DONE through subset f. These negatives each stopped it: rc 78, a busy board, and board 1's
   marker (it waits for sql0-frs's).
+
+### The node-floor module: its own Tier 1 boot, then sql0-nf-treeB, pre-registered (2026-10-20 04:2x, before either boot): board 2 after sql0-frs; q15 moves behind them
+
+The runtime lane's fix candidate for the fetch face's CSRETIRE site. Module a4aa5668a69b94ee (banner node-floor-1),
+built by the compiler lane from runtime lane 770daec2dbd6: dev's srz module plus a context-table index floor, so that no
+virtual index the module retires can equal a physical index a caller CPMP slot tracks.
+- **Its QEMU gate** (compiler lane node-floor-gate 959b78723765):
+  - Tier 1 equal two-sided against dev's srz module;
+  - chain 15/15 and mpt equal;
+  - counters and --stats equal, nodes_high_water 76;
+  - dense-churn moved exactly as computed.
+  - Census: 0 RVC, vermagic 6.4.14, silicon gate 0 refused / 4 conditional, srz-check 3 of 3.
+
+**1. Its Tier 1 boot** (`chain-nf-b2.sh` ddfd880297bfcf0a → `board-tier12/srz/run-tier1-nf-b2.sh`
+08d30204752e71a0):
+- **Image and firmware:**
+  - image-rev7-nf 5b03b416e0daced2: rev7's Tier 1 stage with only capstone_vm.ko swapped, prepared by
+    `board-tier12/srz/nf-prep.sh` c708be4386c92ec1 (srzdev-prep.sh renamed). The bake checked the
+    module by sha256 inside rootfs.cpio, and the stage was restored to its record.
+  - firmware fw-t1-nf 31ffb070549d07f2: the retry monitor line f13dbc5 and wrapper aab63d5, dom_stack gate PASS.
+- **The gate:** rev7's four rungs must equal t1-old's record. The control is the 39d8492d record, and t1-srz and t1-srzdev
+  passed the same gate.
+- **Also read:** the banner node-floor-1, DRT1, DRTX, FRTY and Oops.
+- **Not a Tier 1 rung:** dense-churn, which is the one QEMU reading the floor moves.
+- **On PASS** the chain writes CHAIN_NF_SQL_GO; on anything else it writes STOP, which holds step 2.
+
+**2. sql0-nf-treeB** (`tier3-sql-arm-rev2n.sh` 1a7f184d41168136):
+- **The one variable:** sql0-srz-treeB (rev2l) with ONE change, the module. The kits are bkit7-rev2xBDN / bkit7-rev2xmBDN
+  from `make-nf-kits.sh` e12c6f9f2db7e994: the BDZ kits with only adapter/module/capstone_vm.ko
+  replaced.
+- **Unchanged:** monitor f13dbc5, runner 1f099612. The cells are VOID as in rev2l, declared now and not scored.
+- **The runtime lane's prediction:** FRTY 0, against sql0-srz-treeB's 21, all of which were at retire's CSRETIRE site
+  (retire+0x22c).
+- **Added here:**
+  - DRT1 stays 0, as under srz;
+  - the must-fire is the staged module's hash and the banner;
+  - any FRTY that remains is decoded with frty-decode.py against a4aa5668.
+- **What a non-zero FRTY could mean,** in the compiler lane's words: a physical id above 1024 would defeat the floor, and
+  nothing on vp2 exports that count, so FRTY is the only reading of it.
+
+**3. q15 moves behind step 2.** This is an amendment before any of q15's boots. The board-2 queue was waiting on
+sql0-frs, and it is restarted with sql0-nf's out as its trigger: SQL DONE, or the HOLD written when step 1 fails. Nothing
+else in q15 changes.
+
+**The dry runs:**
+- the chain's PASS and FAIL branches, on t1-old's own SEQ and on a copy with one rung changed;
+- rev2n end to end on a stub runner;
+- rev2n HOLDs on the FAIL branch's STOP;
+- nf-prep on a copy of the stage.
