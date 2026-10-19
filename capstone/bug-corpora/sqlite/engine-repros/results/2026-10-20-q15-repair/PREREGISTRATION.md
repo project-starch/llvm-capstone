@@ -44,3 +44,18 @@ case 29 faulted (cause 28). So prediction B for case 29 below is informed by tha
   Controls fire.
 - **D: unrepaired on qkit7 (compact), the planted negative.** NO-READING control-failed on all 33, with cause 29 in
   capstone_cap_derive in the controls, as sq1 read. If D does not read 29, C's 0 says nothing about the repair.
+
+## Addendum 1, before the runs: C' on the board modules' QEMU twins
+
+C ran on kit qkit7, whose module (5bfc38f808e1effd) is the collecting one, not the board's. As for wmem's C', the
+repaired images are run on two kits that differ from qkit7 only in the module (same launcher a405840dce789345, same
+QEMU 7a4f3a64776f0c88):
+- **C'-rev2:** qkit7-rev2, module a5dec6a32c49b3d3, the twin of board module 39d8492d5c18216b.
+- **C'-srz:** qkit7-srz, module 2fcef16d09e81269, the twin of srevroot-zero board module 607164b9c1407c7c.
+
+The images are staged at t3-images-nb/sqlite/build-virtual-nested-pools-q15, a byte-identical copy of the repaired
+build. The board's EXPECT_IMAGES is m5q.images.SHA256SUMS: run C's 35 collected images.
+
+**Prediction for each:** equal to C cell by cell (CAUGHT 27, MISSED 6, the same fault cause and function per case),
+controls fault, 0 cause 29, no "collect skipped" line, and collected images equal m5q.images.SHA256SUMS. A cell that
+differs makes that run the board's prediction for its module, with the cell listed.
