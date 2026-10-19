@@ -39,6 +39,14 @@ The captures:
     `retire()`, 21 per boot; see the correction below.)
   - This ordering is an observation. Its relation to the refusal is not established.
 
+**WORKED AROUND IN THE MODULE (2026-10-20, board 2, tree B, sql0, one variable, N=1 per arm): the node floor
+takes FRTY from 21 to 0 and DRT1 to 0.** dev's srz module 90bf036f reads FRTY 21, all at retire+0x220 against its
+own .ko; module a4aa5668, the same base plus only the floor commit, reads 0. N=1 each side, but the baseline it
+displaces reproduced on six boots. A third arm with a release line per context read `attempted=24 succeeded=24
+first_id=1024` on 21 of 21 teardowns, so the retires still happen: the floor works by changing WHICH index the
+window's CSRETIRE broadcasts, not whether it broadcasts. **The collision itself is still INFERRED** -- no boot
+has printed the refusing slot's tracked index or the broadcast index.
+
 **THE COVERING SLOT IS IDENTIFIED (2026-10-20, sql0-frs): slot 3, region 14, the kernel's main RAM
 [0x80100000, 0xAC000000), LCC type LINEAR, on all 21 refusals.** So the colliding index is the fresh PHYSICAL
 node the monitor's LINEAR carving gave that region at boot — not CAPCREATE's static node 2, which an earlier
