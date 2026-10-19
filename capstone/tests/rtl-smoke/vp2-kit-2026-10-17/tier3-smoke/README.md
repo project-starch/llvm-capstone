@@ -2875,3 +2875,15 @@ That would heal the deny before M looks, which would explain RFVD 1 and why ever
 - **Predictions for both:**
   - under the namespace-flush mechanism: srevroot nonzero and RFCT bit 3 clear at every refusal;
   - srevroot 0 at any refusal refutes it.
+
+**Amendment to pb10-csr and sql0-csr's RFSR prediction (2026-10-19 21:0x, before either boot).** This was traced by the
+RTL lane and checked by the runtime lane on 8522d72fe (capstone_dom_switcher.anvil :170-173, :479-481, the walk ending
+at id 66). The switcher loads srevroot from the frame's second word at CSRUNV entry and saves it at escape, but never
+restores the caller's value. So after any escape, Linux runs at S with srevroot equal to the context's flat-table base
+(the module's virt_to_phys(c->table) in frame[1]). Neither the module nor the launcher prints that address (CV_STATS
+has no such field). The prediction is therefore:
+- under the mechanism, RFSH:RFSR is **page-aligned, inside RAM [0x80000000, 0xBC2D2000), and constant across the
+  refusals within one context's lifetime**;
+- RFCT bit 3 is clear;
+- a different nonzero value means another writer;
+- 0 refutes.
