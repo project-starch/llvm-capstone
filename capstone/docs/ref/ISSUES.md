@@ -905,7 +905,7 @@ impossible, the fenceless arm and the post-escape-fence arm being instruction-id
 carries an unqualified flush-all from the CSR file through the EX stage, the LSU and the MMU to both TLBs, and all
 four arms then read the pre-registered set with the negative control unchanged to the cycle.
 
-## S-30 — Linux's genesis region grants S read/write/execute over the shadow-tag array and the revocation-node pool, and nothing in the data path blocks a plain store there `OPEN — by construction, from source (ariane_pkg.sv:612-616, wt_axi_adapter.sv:142-143, capstone_target.h:34-37; the region dump's RDPM 7 and CPPM 7 for slot 7); UNDEMONSTRATED on the board; found 2026-10-19 by the RTL lane's arithmetic on the board lane's S-23 dumps, triaged by the board lane`
+## S-30 — Linux's genesis region grants S read/write/execute over the shadow-tag array and the revocation-node pool, and nothing in the data path blocks a plain store there `OPEN — DEMONSTRATED on the board for user-mode reads (2026-10-19, tree A, N=1); the fix (caplifive-opensbi 9bee361, a held linear carve) refuses those reads in a matched pair, NOT YET LANDED; writes untested; found 2026-10-19 by the RTL lane's arithmetic on the board lane's S-23 dumps, triaged by the board lane`
 
 Siblings: S-23 (whose dumps showed the region), R-55 (the exact-regions carve that set the region's top).
 
@@ -944,6 +944,25 @@ S-23's csupctl bit-2 strobe at the end of `fetch_retry_covered`, so the three co
 record) and at the tag byte of a granule known to hold a capability, using the adapter's formula `CAP_TAG_MEM_BASE +
 ((paddr - MEMORY_BASE) >> 4)`. Predicted no fault, and a tag byte of 1 (the positive control that the read reaches tag
 memory). No write test without the lead's word.
+
+**The board, 2026-10-19 (lane vp2-tier12 b667eaa35c0b, tier3-smoke README "S-30's matched pair"; audited).** Two
+cold boots on tree A, firmwares differing only in the wrapper (monitor 5b5e86b, same image and defines).
+- **Old wrapper aab63d5, firmware 4104ef2029145164.** User-mode busybox devmem through /dev/mem read the node pool's
+  first record (0xBFF00000: 0x0, 0x40000000). It also read 257 words at dom_stack's shadow-tag addresses from
+  0xBC2DAD60, getting a sparse 00/01 pattern: 23 nonzero, one recorded as 0x0000010001000100. Not yet matched against
+  the firmware's capability layout.
+- **Fix wrapper 9bee361, firmware f187c4d4f3ade200.** The held carve is nominally [0xBC2D2000, 0xC0000000), decoded
+  [0xBC2D0000, 0xC0000000) (S30H).
+  - Both reads were refused at their first address through the no-region path (MTVL:BFF00000 and MTVL:BC2DAD60, each
+    with CPMX:00000002; INJS:00000002 is the injection code, not mcause). devmem died of SIGSEGV.
+  - Linux's top slot was exact at [0xBC200000, 0xBC2D2000), and the canary rungs passed, vm-contract included.
+- **Why the fix is a held carve and not a moved boundary:** swap_cpmp loads ANY live, not-yet-loaded slot covering an
+  S fault, with no owner or permission filter. A remainder left in the table would therefore stay reachable by faulting
+  into it.
+- **Residual:** the unloaded held piece and Linux's top region, both LINEAR, overlap in decoded bounds by two pages,
+  [0xBC2D0000, 0xBC2D2000). Exclusivity there holds by the monitor never loading or handing out the held piece. Any
+  future use of it must first re-carve it to an exactly representable base at or above 0xBC2D2000.
+- **Open:** writes; N>1; landing 9bee361 onto the monitor line; the header comment in capstone_target.h.
 
 ## S-31 — `pop_region` after a revoke of a REV-holding slot leaves the REVOKE RESULT loaded in the CPMP over pages the release frees `CANDIDATE — containment; from a source trace (monitor capstone-sbi 5b5e86b, module capstone.c), not yet shown on the board; filed 2026-10-19 by the board lane`
 
