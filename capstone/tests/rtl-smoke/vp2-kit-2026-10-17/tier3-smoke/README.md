@@ -3639,3 +3639,18 @@ runtime lane withdraws the "p >= 1024" escape.
 - **The reading:** the pc=0 faults do not need any retry. That rules out the fetch retry and the data retry as their
   cause, together with everything srz removes. The attribution goes back to the compiler lane: it is cpython on this
   board, still with no QEMU instance.
+
+### Third amendment to arm q15 (2026-10-20 05:1x, before ANY of its boots): split across both boards
+
+Board 1 is free after cpyp-DZ, and board 2 is booting sql0-nf. Each q15 subset is its own cold boot, scored on its own
+against run C, so the subsets split by board. That follows the lead's instruction to run on both boards.
+- **Board 1, tree A:** subsets d, e and f (18-23, 24-29, 30-32), starting now.
+  - It uses `tier3-q15-board1.sh`, as first pre-registered: kit bkit7-rev2xD, run roots t3-run/q15<g>.
+  - Its trigger is cpy-pair's out, which already reads CPP DONE. Q15_SUBSETS="d e f", and its out is
+    fix-session/q15def.out.
+- **Board 2, tree B:** subsets a, b and c (00-05, 06-11, 12-17), after sql0-nf.
+  - It uses `tier3-q15-board2.sh`: kit bkit7-rev2xBD, run roots t3-run-treeB/q15<g>. Q15_SUBSETS="a b c".
+- **The bitstream is recorded per subset.** Both kits carry module 39d8492d and monitor f13dbc5, and run C was confirmed
+  on that module's QEMU twin. A cell that differs between the two bitstreams' subsets cannot be compared across them,
+  since they hold different cases. Each is read only against run C.
+- Nothing else changes.
