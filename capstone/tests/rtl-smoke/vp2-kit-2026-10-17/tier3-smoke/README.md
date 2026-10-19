@@ -2493,3 +2493,35 @@ was checked: read, lcc 1, lcc 3, lcc 4, lcc 0, write-back.
   INJS line, and the boot ends there.
 
 The dry run, with the real kits passing every check, is in `dryrun-rf.txt`.
+
+### Amendment to sql0-rf / pb10-rf (2026-10-19 18:37, sql0-rf booting, before any of its result was read)
+
+**sql0-fix's record.** The run ended 18:35, "virtual boot: DID NOT COMPLETE", and its scoring is VOID: no inputs.json,
+since the first session panicked. This is sql0-treeA's outcome.
+
+**The tag question is closed from source** (dev 21d2433b165c; this replaces the three-writer census sent earlier).
+- On tree A (8522d72fe), cpmp_tag_d has FOUR writers:
+  - the hold (csr_regfile.sv:1189);
+  - the context-entry INIT that zeroes every entry and tag (:2077);
+  - the restore walk (:2091);
+  - the sixteen CCSR sites.
+- The RTL lane answered NO to whether a kernel load can retire during a walk. `flush_commit_o = flush_commit |
+  dom_switch_busy_i` (commit_stage.sv:876) flushes everything in flight for the whole switch, so a refusal sampled on a
+  cleared tag is never taken.
+- Together with the dump inference, RFTY on slot 7 is predicted NOT 7, and RFVD remains the reading.
+
+**A named branch:** the runtime lane's candidate, from the module source (lane module-resume-rd-x0 8807df747411), with
+the RTL lane asked to confirm or kill it.
+- **What the module source shows:**
+  - Both kernel callers in the panics sit directly after a module CSRETIRE window.
+  - retire() (:714-735) runs select_root, CSRETIRE, restore_root, then unpin_user_page on each page. The panics' PC is
+    mod_node_page_state from unpin_user_page.
+  - The remap path (:946-960) runs CSRETIRE + CSMINT, the unpin loop, then wake_up_all. sparse-churn's PC was
+    __wake_up_common_lock.
+  - The CPMP invalidation compare is index-only.
+- **The branch:** the retire walk is still broadcasting after the instruction retires, and a context index equal to slot
+  7's physical index clears slot 7 until the drain flush re-arms it. That is transient, and it fits die()'s clean
+  re-read.
+- **Its prediction:** RFVD reads 1, and the refusal falls inside a vm ioctl that has just retired or remapped an arena:
+  the Oops's call trace names unpin_user_page or wake_up, under capstone_vm's ioctl.
+- RFVD 0 contradicts the branch.
