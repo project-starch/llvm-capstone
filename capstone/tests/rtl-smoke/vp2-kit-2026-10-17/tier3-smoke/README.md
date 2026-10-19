@@ -2749,3 +2749,19 @@ Kit bkit7-rev2xD, monitor f13dbc5, UNGATED. The result lines from this boot only
   - Every earlier sql0 boot panicked in session 1, so the defect was never reached.
   - **The fix:** run-arm.py 8826a2ca21a33acd (lane sql-empty-dirs) records the fixture's empty directories at staging,
     and each session's step mkdir -p's them after its copy; on QEMU that is a no-op. Its QEMU check is running.
+
+### pb10-drt, result (2026-10-19 19:48-19:57, board 1, tree A): 4 of 4 cells as the QEMU prediction (CAUGHT 4) through S-23's data face, retried once
+
+Kit bkit7-pb10D (module d71f207a, monitor f13dbc5), UNGATED. "virtual boot: completed", vp2-nested-pools CAUGHT 4, and
+compare-pilot 4 of 4 cells the same as t3-pb10/bundle (rc 0). Bundle:
+`ffmpeg/pool-repros/results/2026-10-19-vp2c-treeA/vp2-nested-pools-drt`.
+- **S-23 was met ONCE.** The sequence: RFSL 00070015 (slot 7, region 21), RFVD 00000001, then DRT1 at mepc 0x800A22C8.
+  That is `mod_node_page_state+0x40` (the map is controlled as in sql0-drt), the exact epc of pb10's two panics on
+  bf3db3175.
+- The retry succeeded: 0 DRTX, 0 MTVL/INJS, no Oops. There were 2 FRTY, each with FRGD (counts from this boot's
+  board-raw.txt after its banner).
+- **pb10-rf was withdrawn for this arm,** and this arm gives both of its readings: the refusal read (slot 7, LINEAR
+  capability per sql0-rf, node valid) and the transient branch.
+- **With sql0-drt, that is two programs and two kernel sites,** `_raw_spin_lock_irqsave+0x56` and
+  `mod_node_page_state+0x40`, both refusals under region 21 in slot 7. Both are carried through by a plain retry with
+  nothing re-armed. S-23b step 1 is the workaround on this evidence, and step 2 stays unbuilt.
