@@ -3002,3 +3002,30 @@ The dry run, through a stub arm, compared 23 of 23 against C.
   - The board runs module 39d8492d5c18216b, from kit bkit7-rev2xBD.
   - a5dec6a3 is 39d8492d's QEMU twin, the pairing cpython's module-swap record uses.
   - So the prediction transfers across that twin pair, and not by identity.
+
+### Tree B's discriminator and the wmem arm, results (2026-10-19 21:12-22:17, board 2, tree B, monitor f13dbc5); recorded 2026-10-20
+
+The result lines are in `records/{sql0-treeB,pb10-treeB,wmq-treeB}.result-lines.txt`, from each boot's transcript.
+UNGATED.
+- **The discriminator reads OUTCOME 3: an FRTY on tree B.** Recorded as a reading, N=1 per program:
+  - **sql0-treeB:** FRTY 21 (all at 017113AC), DRT1 16 (all at 803833B6 = `_raw_spin_lock_irqsave+0x56`, each with
+    RFSL 00070015), 0 DRTX and no Oops.
+  - **pb10-treeB:** FRTY 2 (at 00F14164), DRT1 1 (at 800A22C8 = `mod_node_page_state+0x40`, RFSL 00070015), 0 DRTX
+    and no Oops.
+  - So the fetch face SURVIVES tree B's satp flush, and the data face appears with it. This fits the fetch face
+    sharing the data face's mechanism (one per-slot tracker gates both the fetch and data checks) rather than S-29's
+    stale translation alone. It does not establish it: these monitors print no physical mtval at FRTY. The
+    follow-up is sql0-csr-treeB, below.
+- **sql0-treeB's cells are VOID,** as pre-registered: 21 × "could not open directory", the known staging defect of the
+  old runner.
+- **pb10-treeB: 4 of 4 cells the same** as t3-pb10/bundle (CAUGHT 4). The data face was retried once. Bundle:
+  `ffmpeg/pool-repros/results/2026-10-19-vp2c-treeB/vp2-nested-pools-treeB`.
+- **wmem vp2-nested-pools with the Q-15 repair: 23 of 23 cells the same as run C** (CAUGHT 22, NO-READING:unattributed
+  1 at case 22).
+  - The collected images equal wmq1 (26), and 26 of 26 steps ran.
+  - The search found 26 `domain fault cause=` lines, so it fires; 0 of them are cause 29, none at capstone_cap_derive.
+  - 0 "collect skipped", and in this boot 0 DRT1, 0 DRTX and no Oops.
+  - Bundle: `wireshark/wmem-repros/results/2026-10-19-vp2c-treeB/vp2-nested-pools-q15`.
+- **My slip, recorded as it happened:** board 2 sat idle from 22:17 until the next morning. No prompt or error stopped
+  it. I launched board 2's chains without a background wait on their completion, so nothing woke this session when they
+  ended.
