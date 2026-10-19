@@ -3391,3 +3391,40 @@ the slot under a nonzero srevroot (RTL lane, csr_regfile.sv:2876-2878). The srz 
 CSRUNV, so 1 is expected but not certain.
 - A 0 would be the first sighting of a dead node in a refused fetch's covering slot.
 - FRTY 0 makes the boot uninformative for the question. It would not make it a pass.
+
+### The fetch-face sweep, pre-registered (2026-10-20 03:5x, before its boot): board 2 after sql0-frs-treeB, one cold boot
+
+The runtime lane's follow-up to the pair. The RTL lane confirmed that vp2's virtual lifetime indices never recycle (the kill
+pushes to the free list only in the physical namespace, capstone_rev_node.anvil:528-544), so the ops arm's kills name
+fresh indices from about 23 upward. This sweep takes them to about 60,023.
+- **The only intended variable:** INNER, from 64 to 300. The pair's two images are unchanged (252c16ca / cf8be80b), and
+  INNER is an argv: `capstone-vexec <img> 200 300 2000000`, so rounds and spin are unchanged. The plain arm runs first
+  with the same arguments; in its source INNER is read only inside the `#ifdef WITH_REVOKES` loop.
+- **The module table is required to change:** node_flat_records goes from 16384 to 65536, the flat table's maximum
+  (CV_FLAT_RECORDS_MAX), with a reserve of 256. The case reads it back and exits retval 943 unless it reads 65536.
+- **Declared second change (observation-only):** the firmware is on the fetch-slot monitor 9697173 with
+  CAPSTONE_S23_FETCH_SLOTS instead of f13dbc5, so a refused fetch in the sweep also reports its covering slot.
+  - Its fetch-retry decision is unchanged: the generated assembly differs from c3917e8's only by the added reports in
+    fetch_retry_covered.
+  - c3917e8 over f13dbc5 adds only RFSR/RFSH/RFCT at a data refusal and FRTM beside FRTY.
+- **The artifacts:**
+  - `board-tier12/ff/ff60-prep.sh` 051da2e0e76321e2, from ff-prep.sh with the case and the names
+    changed; `ff/vmrun-ff60.case` e1c2b29105d8784b;
+  - image-ff60 101da9f4fb832b7d, the bake's per-file sha256 check over rootfs.cpio all present;
+  - firmware fw-ff60 1b7e827176895824, 19,565,064 B, dom_stack gate PASS, wrapper aab63d5, monitor 9697173.
+- **The run:** `board-tier12/ff/run-ff60-b2.sh` a95f2f13a8c39c71 through
+  `tier3-smoke/chain-ff60-b2.sh` ceff9e549fe8d5eb. Rungs b0-stats, b0-hello, ff-sweep.
+  - The parser now records the whole FF_DONE line and the nodes, which the pair's parser dropped.
+  - It was controlled on the pair's real transcript, recovering nodes 23/12823, and on synthetics, where FRTY with no
+    FRSL trips `MUST-FIRE FAILED`.
+  - The dry run reached FF_DONE_RUN, and a wrong firmware stopped it.
+  - The prep's dry run on a stage copy restored the stage and passed csbi-frs with the new define.
+
+**Predictions:**
+- **The runtime lane:** FRTY > 0 in the ops arm if the refusing code slot's physical index lies between about 12,823 and
+  60,000, and FRTY 0 otherwise.
+- **The compiler lane's QEMU on qkit7-srz (module 2fcef16d, 607164b9's twin):** node_flat_records 65536, revoke_pairs
+  60000, nodes 60023, steps 12706, exit 0. Its margin is 65,536 - 256 - 60,023 = 5,257 records.
+- **Added here:** board steps in both arms of the same order as the pair's (2234/2235), since rounds and spin are
+  unchanged; nodes exactly 23 and 60023.
+- **If FRTY > 0,** the FRSL tuples name the covering slot's region, type and validity in the same boot.
