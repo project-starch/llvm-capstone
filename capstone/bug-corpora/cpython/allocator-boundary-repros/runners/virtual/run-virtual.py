@@ -65,7 +65,17 @@ except BaseException as e:
 os.write(1, b"ABR RETURNED\\n")
 '''
 WORKLOAD = ('import json,gc; a=[{"n":n} for n in range(1000)]; '
-            'assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")')
+            'assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")\n'
+            # The guest's own reading of the pins a nondeterminism control depends on, in the same process (so the
+            # session's step count is unchanged): the kernel command line (norandmaps), the hash-randomisation flag,
+            # the seed it sees, and hash("abc"), which is the same in every run only when the seed is fixed. A board
+            # record and its QEMU record must agree on these; the bundle's inputs.json carries them as `guest`.
+            'import os,sys\n'
+            'try: c=open("/proc/cmdline").read().strip()\n'
+            'except Exception as e: c="UNREADABLE "+type(e).__name__\n'
+            'print("ABR-ENV "+json.dumps({"kernel_cmdline":c,"hash_randomization":sys.flags.hash_randomization,'
+            '"pythonhashseed":os.environ.get("PYTHONHASHSEED"),"hash_abc":hash("abc")}))')
+ENV_LINE = re.compile(r"^ABR-ENV (\{.*\})\s*$", re.M)
 CAPACITY = re.compile(r"MemoryError|cannot allocate|out of memory")
 # The interpreter itself failing: a C function returned an error without setting one. It is not the
 # program running to its end, and the physical runner already read it as a failed run.
@@ -101,6 +111,12 @@ def stage_stdlib(build, share, closure=None):
     stamp.write_text(origin)
 
 
+def guest_env(a):
+    """-e pairs for every --guest-env KEY=VALUE: the variables a nondeterminism control pins in the guest (for example
+    PYTHONHASHSEED=0). Empty by default, so a run without them is the invocation it always was."""
+    return [w for kv in (a.guest_env or []) for w in ("-e", kv)]
+
+
 def run_script(a, share, image, directory, script, tag):
     """Stage DIRECTORY's .py files and run SCRIPT there through launch.py."""
     stage = share / "abr" / tag
@@ -109,7 +125,7 @@ def run_script(a, share, image, directory, script, tag):
     for f in directory.glob("*.py"):
         shutil.copy(f, stage / f.name)
     (stage / "launch.py").write_text(LAUNCH)
-    env = ["-e", "PYTHONHOME=/mnt/host/cpy", "-e", "PYTHONDONTWRITEBYTECODE=1"]
+    env = ["-e", "PYTHONHOME=/mnt/host/cpy", "-e", "PYTHONDONTWRITEBYTECODE=1", *guest_env(a)]
     return appvm.run_app(a.state, image, ["launch.py", script], a.raw / tag,
                          run_args=("--cwd", f"/mnt/host/abr/{tag}", *env), timeout=a.timeout)
 
@@ -192,6 +208,8 @@ def main():
     p.add_argument("--raw", type=Path, required=True)
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--timeout", type=int, default=300)
+    p.add_argument("--guest-env", action="append", metavar="KEY=VALUE",
+                   help="an extra environment variable for every guest run (repeatable), e.g. PYTHONHASHSEED=0")
     p.add_argument("--stdlib-closure", type=Path, help="stage only these Lib files (tools/board/stdlib-closure.py); "
                    "for the vp2 board's payload, valid only after a QEMU A/B against the full Lib")
     a = p.parse_args()
@@ -216,12 +234,15 @@ def main():
     # The interpreter must work before anything it does means something.
     (share / "abr").mkdir(exist_ok=True)
     text, result = appvm.run_app(a.state, image, ["-S", "-c", WORKLOAD], a.raw / "workload",
-                                 run_args=("-e", "PYTHONHOME=/mnt/host/cpy"), timeout=a.timeout)
+                                 run_args=("-e", "PYTHONHOME=/mnt/host/cpy", *guest_env(a)), timeout=a.timeout)
     # In an appvm session's collect pass nothing runs: run_app returns its sentinel and no
     # result. Treating that as a failed workload stopped the collect after one call, so the
     # boot ran only the workload and the read pass asked for steps it never recorded.
     collecting = text.startswith("[runner] SESSION COLLECT")
     qualified = "CPYTHON-OK 1000" in text or collecting
+    m = ENV_LINE.search(text)
+    # "unread" rather than an absent field: a record that cannot show its pins must say so.
+    guest = {"guest_env": list(a.guest_env or []), **(json.loads(m.group(1)) if m else {"reading": "unread"})}
     print(f"  workload {'ok' if qualified else 'FAILED'}", flush=True)
     if not qualified:
         print(f"CONTROL-FAILED the interpreter did not run the workload; see {a.raw / 'workload.out'}",
@@ -271,7 +292,7 @@ def main():
         "configuration": config, "predicted": PREDICTED[a.arm],
         "build": {k: manifest.get(k) for k in ("application", "profile", "nested", "image_sha256",
                                                "runtime_revision", "runtime_dirty", "stack_bytes")},
-        "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
+        "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE), "guest": guest})
     print(f"--- {rec} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
