@@ -39,6 +39,13 @@ The captures:
     `retire()`, 21 per boot; see the correction below.)
   - This ordering is an observation. Its relation to the refusal is not established.
 
+**THE COVERING SLOT IS IDENTIFIED (2026-10-20, sql0-frs): slot 3, region 14, the kernel's main RAM
+[0x80100000, 0xAC000000), LCC type LINEAR, on all 21 refusals.** So the colliding index is the fresh PHYSICAL
+node the monitor's LINEAR carving gave that region at boot — not CAPCREATE's static node 2, which an earlier
+hypothesis in the message traffic proposed and which this reading refutes. Bounded from source at the low tens:
+the physical pool's head starts at 3 and only bumps. A floor on the context tables' first allocatable index
+therefore covers it with margin.
+
 **CORRECTED 2026-10-20: this heading used to read "Every FRTY is the instruction after the module's CSRUNV in
 `vm_ioctl`", and that is OVER-GENERAL — true of the four instances tabulated below, false of the 21-per-boot site
 seen on six other boots.** Those are at the instruction after the **CSRETIRE inside `retire()`** (retire+0x220 in

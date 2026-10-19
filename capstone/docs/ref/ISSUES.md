@@ -472,6 +472,19 @@ Siblings: S-21 and S-22 (the same CSRUNV ENTRY/ESCAPE walks, a different consequ
 - **UNRESOLVED, and it bears on whether "one defect" is the right framing**: on sql0 the CSRUNV+4 site appears
   only in the three boots whose monitor lacks the data retry, and never in the six retry boots; either those
   boots ended at the panic before `retire()` ran, or the monitor build changes which indices collide.
+- **THE COLLIDING INDEX IS IDENTIFIED IN THE FIELD (2026-10-20, board 2, sql0-frs, lane 2027abf7e590), and it
+  is NOT CAPCREATE's node 2.** All 21 refused fetches at retire+0x22c have exactly one covering slot, the same
+  every time: **slot 3 holding region 14, the kernel's main RAM [0x80100000, 0xAC000000), LCC type LINEAR**
+  (validity 1, uninformative because the trap re-arms). So the index that collides is the **fresh PHYSICAL node
+  p** the monitor's LINEAR carving gave region 14 at boot, and the mechanism holds with p in place of 2. The
+  count fits: each session's fresh table starts at the same next and makes the same allocation sequence, so the
+  arena whose ancestor is virtual index p retires once per session — 21 sessions, 21 refusals.
+  **p is bounded from source at the low tens, not thousands**: the physical pool's head starts at 3
+  (`INIT_STAGE` sets `head := 16'd3`) and only ever bumps, recycling can lower an index but never raise it, and
+  the allocations preceding region 14's carve are the genesis regions plus the four boot carves of `cap_env_init`
+  plus the regions created before it — tens. **Consequence for the module-side floor: a floor of 1024 covers p
+  with a wide margin, so a SURVIVING FRTY after the floor cannot be explained as p >= 1024** and would be a
+  different mechanism. That makes the floor arm a clean test rather than an ambiguous one.
 - **An instrument warning for anyone re-deriving these counts**: `raw/guest/board-raw.txt` ACCUMULATES the
   previous arm's console tail (one boot's file carries another boot's 21 FRTY lines), so any count taken from it
   must be cut at that boot's OpenSBI banner. The scoped `board.txt` is the source.
