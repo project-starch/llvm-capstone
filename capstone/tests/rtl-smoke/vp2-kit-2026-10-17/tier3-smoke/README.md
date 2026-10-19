@@ -3541,3 +3541,39 @@ else in q15 changes.
 - rev2n end to end on a stub runner;
 - rev2n HOLDs on the FAIL branch's STOP;
 - nf-prep on a copy of the stage.
+
+### cpython's pc=0 monitor pair, result (2026-10-20 03:25-04:26, board 1, tree A): cpyp-A gives NO DATA on the question
+
+`records/cpy-pair.result-lines.txt`. UNGATED.
+- **cpyp-D** (bkit7-rev2xnD, monitor f13dbc5):
+  - 10 of 10 steps ran;
+  - `domain fault cause=12 pc=0x0` once each in 17-control, 23 and 23-control. The repeat holds for 17-control and
+    23-control; 23 itself is an extra, which the prediction did not include. 03 is clean, as predicted;
+  - the cells read MISSED 2 and NO-READING:unattributed 1;
+  - DRT1 1 (in the workload), 0 DRTX, no Oops;
+  - FRTY 01513D98 at the start of every step: page offset 0xd98, the vm_ioctl CSRUNV site.
+- **cpyp-A** (bkit7-rev2xnA, monitor 007d81d): `Oops - load access fault` and a kernel panic in control-uaf-block, the
+  third step. That is S-23's data face with no retry, the outcome named in the pre-registration. Its two completed steps
+  (session-share and workload) carry no pc=0 in cpyp-D either. So, as pre-registered, every later step is NO DATA, and
+  the pair does not discriminate.
+
+### cpyp-DZ, pre-registered (2026-10-20 04:2x, before its boot): board 1, tree A; cpyp-D with ONE change, the module
+
+Because cpyp-A cannot get past the data face, this arm removes the retries rather than the retry line.
+- **The kit:** bkit7-rev2xnDZ, from `make-cpyz-kit.sh` 317ee4b79e9cb94c. It is bkit7-rev2xnD with only
+  capstone_vm.ko changed, to the srevroot-zero module 607164b9.
+- **The runner:** `tier3-cpy-z.sh` c7052ab5b21c89fb, the pair's runner reduced to this one arm, with FRTY and the
+  srz banner added to the readings. Runner, closure, image and --only 03,17,23 are cpyp-D's.
+- **The dry run:** fed cpyp-D's real transcript as a stand-in, it reproduces cpyp-D's readings (FRTY 9, DRT1 1, pc=0 in
+  three steps), so every counter can fire. A busy board stopped it, and a missing GO made it wait.
+
+**Predicted from pb10-srz (FRTY 2 → 0 and DRT1 1 → 0 at the same CSRUNV site):** FRTY 0 and DRT1 0, with the banner
+present.
+
+**The readings that decide:**
+- **pc=0 absent in 17-control, 23 and 23-control:** the pc=0 faults ride on the stale-root window. This arm cannot
+  separate the retry from the srevroot state itself.
+- **pc=0 present with FRTY 0 and DRT1 0:** they are not the retries' doing.
+- **FRTY or DRT1 not 0:** the prediction fails, and pc=0 is read beside them as information.
+- **Not covered by this boot:** srz's Tier 1 was taken on tree B. This is its first boot on tree A. A failure in the
+  workload or the controls reads as the module on tree A, not as cpython.

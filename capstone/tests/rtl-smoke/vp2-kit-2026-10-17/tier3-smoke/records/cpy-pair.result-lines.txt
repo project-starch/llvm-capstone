@@ -1,0 +1,15 @@
+CPP cpyp-D BEGIN 03:25:45 kit bkit7-rev2xnD monitor f13dbc5
+APPVM collect rc=75 calls=9 03:25:47
+APPVM boot rc=0 04:08:51 :: session <mnt-hdd>/capstone/t3-run-treeA/cpyp-D/session: 9/9 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeA/cpyp-D/session/guest/board.txt; phase read
+APPVM read rc=0 04:08:53 :: --- vp2-malloc (virtual-cpython): {'MISSED': 2, 'NO-READING:unattributed': 1}
+CPP cpyp-D ARM END rc=0 04:08:53
+CPP cpyp-D steps: 10 begun, 10 ended; DRT1 1 DRTX 0 Oops 0
+CPP cpyp-D pc=0 by step:       1 17_gh-157325_fix-an-oob-read-in-the-control       1 23_gh-142560_bytearray-search-realloc       1 23_gh-142560_bytearray-search-realloc-control 
+CPP cpyp-A BEGIN 04:08:53 kit bkit7-rev2xnA monitor 007d81d
+APPVM collect rc=75 calls=9 04:08:53
+APPVM boot rc=1 04:25:55 :: session <mnt-hdd>/capstone/t3-run-treeA/cpyp-A/session: 2/9 steps ran; share linked; boot DID NOT COMPLETE; transcript <mnt-hdd>/capstone/t3-run-treeA/cpyp-A/session/guest/board.txt; phase read
+APPVM read rc=75 04:25:56 :: --- vp2-malloc (virtual-cpython): {'NO-READING:infra': 3}
+CPP cpyp-A ARM END rc=0 04:25:56
+CPP cpyp-A steps: 3 begun, 2 ended; DRT1 0 DRTX 0 Oops 1
+CPP cpyp-A pc=0 by step: 
+CPP DONE 04:25:56
