@@ -32,5 +32,14 @@
   "fault_sites": [
     "_copy_characters"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 4) at _copy_characters Objects/unicodeobject.c:1606. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 4) at _copy_characters Objects/unicodeobject.c:1606. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "pinned_measurement": {
+    "method": "five repeats on each of the three arms under PYTHONHASHSEED=0, on the pinned platform (capstone-qemu d35af47b, VM state /tmp/capstone/vm-pinned). Added because unpinned this case did not hold still. The virtual arms ran their configuration's controls before every repeat and the CheriBSD arm ran its si_code self-test before every repeat (bounds si_code=1, revoked si_code=2), so a silent arm is live and silent, not absent.",
+    "arms": {
+      "virtual-malloc": "MISSED x5",
+      "virtual-nested-pools": "CAUGHT cause=28 in memcpy x5, attributed by negative_control.py; the faulting pc differs only in the load base across the five (0x3f89002654, 0x3fb9002654, 0x3fab002654, 0x3f7f002654, 0x3f9f002654) -- one instruction",
+      "cheribsd-revocation": "no fault x5 (rc=1, ABR EXIT 1)"
+    }
+  },
+  "note": "Pinned measurement supersedes the single unpinned run. (2) is a genuine detection: cause=28 CAP_OOB on the defective copy itself, five times out of five, with its negative control clean on the same image. (1) and (3) are silent five times out of five. The defect is a type confusion -- a bytes object read through the PyUnicode layout, so the copy's length comes out of the wrong field -- and the over-read that follows is what (2) rejects. See ~/cpython-false-positive-examples/02-same-bytes-two-meanings.c."
 }

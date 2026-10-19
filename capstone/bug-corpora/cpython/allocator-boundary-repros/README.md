@@ -151,13 +151,33 @@ required -- is a consequence on either axis.
 
 | arm | withdrawn | cases |
 |---|---:|---|
-| `virtual-malloc` | 6 | 01, 04, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`) |
-| `virtual-nested-pools` | **0** | every one of its 24 catches carries its axis's code |
-| `cheribsd-revocation` | 7 | 01, 03, 05, 08, 09, 10 (spatial, `si_code=2`), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
+| `virtual-malloc` | 5 | 01, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`) |
+| `virtual-nested-pools` | **0** | every one of its 25 catches carries its axis's code |
+| `cheribsd-revocation` | 6 | 01, 05, 08, 09, 10 (spatial, `si_code=2`), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
 
-Counting them the arms read 15 / 29, 23 / 29 and 11 / 29; withdrawn, **9 / 29,
-23 / 29 and 4 / 29**. Each case's own `note` records which fault was which and
+Counting them the arms read 14 / 28, 25 / 28 and 10 / 28; withdrawn, **9 / 28,
+25 / 28 and 4 / 28**. Each case's own `note` records which fault was which and
 why, and `~/cpython-false-positive-examples/` carries the minimal C.
+
+Three changes made the denominator 28 and moved two of the withdrawals:
+
+* **`06` is held out**, not missed. On a purecap ABI `SIZEOF_VOID_P` is 16, so
+  `sizeof(PyFloatObject)` is 48 against the host's 24 and
+  `offsetof(PyASCIIObject, hash)` is 40 against 24 -- both read from the target
+  binaries' DWARF. The defective read lands 8 bytes *inside* the object, so no
+  arm is being asked about an out-of-bounds access. The case now carries
+  `probe-140551.py`, which marks the access, and a `negative_control.py`.
+* **`02`, `03` and `04` are pinned**: five repeats per arm under
+  `PYTHONHASHSEED=0`, because unpinned they moved. `02` and `03` are genuine
+  `cause=28` catches on `virtual-nested-pools` every time; `04` misses on all
+  three arms every time. Two readings disappeared under the pin -- `03`'s
+  `si_code=2` and `04`'s `cause=24` -- and both were unpinned artefacts.
+* **`08` on CheriBSD is suspended, shown `D* 2?`.** Its withdrawal was reasoned
+  from size-class rounding, which cannot absorb `READ 1048576` out of an
+  8193-byte region. A megabyte-long overshoot is outside a compressed
+  capability's representable range, so the tag may have been cleared by the
+  arithmetic -- which would make it a detection. `ONLY=08 bash
+  probe/run-cheribsd.sh <out>` records `SICODE ... addr=` and decides it.
 
 **The function name cannot make this call, which is why the code has to.**
 Every withdrawn fault resolves to the case's declared `fault_sites`, because

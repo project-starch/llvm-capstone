@@ -34,5 +34,13 @@
     "_copy_characters"
   ],
   "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 4) at _copy_characters Objects/unicodeobject.c:1606. That run uses no Capstone arm and was recorded before any virtual arm ran.",
-  "note": "① WITHDRAWN by the 2026-10-19 review. Spatial defect, and NON-NESTED -- the ASan heap report survives PYTHONMALLOC=pymalloc, so the object is libc malloc's. ② faults cause=28 CAP_OOB on `lh a6, 0x8(a2)`, the defective load. ① faults cause=24 UNEXP_OP_TYPE, which is a dereference of a value the access had already been allowed to fetch, not the bounds check. This cell is also unstable across rounds: the first full run of 2026-10-18 recorded ① MISSED and the re-run with a longer timeout recorded this cause-24 fault, which is consistent with a fault that depends on what happens to lie past the object rather than on the mechanism."
+  "note": "Pinned measurement supersedes the single unpinned run. All three arms are silent five times out of five, and this is a genuine MISS, not a false positive and not an unanswerable question. (1)'s earlier `cause=24` reading does NOT reproduce when pinned and is withdrawn as an unpinned artefact; an earlier revision of this note claimed (2) faults cause=28 on `lh a6, 0x8(a2)`, which is wrong and is retracted -- (2) MISSES. Why all three miss, measured: the object is 524321 bytes, so (a) it is above SMALL_REQUEST_THRESHOLD (512) and Sublet, which lives only inside pymalloc, is never called; (b) musl mallocng takes its mmap path for n >= MMAP_THRESHOLD (131052) and attaches the capability over the PAGE-ROUNDED mapping -- needed = n + IB + UNIT = 524341, (needed+4095)&~4095 = 528384, about 4 KB of live slack past the object. enframe()'s __capstone_malloc_slot_key(slot, p, n) does not narrow it: it returns void and takes p by value. The case is NON-NESTED (the ASan report survives PYTHONMALLOC=pymalloc). See ~/cpython-false-positive-examples/03-the-bound-grew-with-the-object.c.",
+  "pinned_measurement": {
+    "method": "five repeats on each of the three arms under PYTHONHASHSEED=0, on the pinned platform (capstone-qemu d35af47b, VM state /tmp/capstone/vm-pinned). Added because unpinned this case did not hold still. The virtual arms ran their configuration's controls before every repeat and the CheriBSD arm ran its si_code self-test before every repeat (bounds si_code=1, revoked si_code=2), so a silent arm is live and silent, not absent.",
+    "arms": {
+      "virtual-malloc": "MISSED x5",
+      "virtual-nested-pools": "MISSED x5",
+      "cheribsd-revocation": "no fault x5 (rc=1, ABR EXIT 1)"
+    }
+  }
 }

@@ -33,5 +33,13 @@
     "_copy_characters"
   ],
   "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 4) at _copy_characters Objects/unicodeobject.c:1606. That run uses no Capstone arm and was recorded before any virtual arm ran.",
-  "note": "③ WITHDRAWN by the 2026-10-18 review. Spatial defect; CheriBSD faults with si_code=2 PROT_CHERI_TAG, not si_code=1 PROT_CHERI_BOUNDS, so the overread succeeded and the fault is on a dereference of what it returned. Both Capstone arms are MISSED on this case, which is consistent: nothing rejected the access. The guest's sicode selftest confirms the two codes are distinguishable on this build (bounds=1, revoked=2)."
+  "note": "Pinned measurement supersedes the single unpinned run. (2) is a genuine detection: cause=28 CAP_OOB on the defective copy, five times out of five, negative control clean. (1) silent x5. (3) silent x5 -- this REPLACES the unpinned `D* 2` reading, which was an artefact: pinned, CheriBSD does not fault on this case at all. Same type confusion as 02.",
+  "pinned_measurement": {
+    "method": "five repeats on each of the three arms under PYTHONHASHSEED=0, on the pinned platform (capstone-qemu d35af47b, VM state /tmp/capstone/vm-pinned). Added because unpinned this case did not hold still. The virtual arms ran their configuration's controls before every repeat and the CheriBSD arm ran its si_code self-test before every repeat (bounds si_code=1, revoked si_code=2), so a silent arm is live and silent, not absent.",
+    "arms": {
+      "virtual-malloc": "MISSED x5",
+      "virtual-nested-pools": "CAUGHT cause=28 in memcpy x5, attributed by negative_control.py",
+      "cheribsd-revocation": "no fault x5 (rc=1, ABR EXIT 1)"
+    }
+  }
 }
