@@ -1,0 +1,24 @@
+# Tier 3 board reading, arm q15e: kit bkit7-rev2xD (module 39d8492d; monitor capstone-sbi f13dbc5), tree A caplifive_vp2c_8522d72fe on board 1, q15 subset e, SDK t3-freeze-nb. Result lines only.
+# board 1 (from the run log's [fpga-board] line)
+# arm vp2-nested-pools configuration virtual-sqlite-memsys5-pools platform board:caplifive_vp2c_8522d72fe cells 6 tally {"CAUGHT": 6}
+# controls [["bounds-mem5", "fault"], ["uaf-mem5", "fault"]]
+24_d4b646997a_writable_schema_stale_table image 030a3f1c4d3b665c CAUGHT cause 25 at sqlite3OpenTable+268 reached True completed False attribution "function"
+25_415540ddaa_fts5_getvarint_overread image 48a5ce41e79177d5 CAUGHT cause 28 at sqlite3Fts5GetVarint+80 reached True completed False attribution "function"
+26_8f5b14a5c2_fts5_decode_getvarint32_overread image 2102e1e8ba971e86 CAUGHT cause 28 at sqlite3Fts5GetVarint32+80 reached True completed False attribution "function"
+27_a783931794_fts3_getvarint_overread image 2d398e54c1a30fe1 CAUGHT cause 28 at sqlite3Fts3GetVarint+1048 reached True completed False attribution "function"
+28_c7def600bd_fts3_matchinfo_overread image 84a3b113146d8dba CAUGHT cause 28 at fts3EvalUpdateCounts+360 reached True completed False attribution "function"
+29_fz02_btree_get4byte_page_overread image ea0b07ab1915ef48 CAUGHT cause 28 at sqlite3Get4byte+56 reached True completed False attribution "function"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 24_d4b646997a_writable_schema_stale_table: verdict CAUGHT cause 25 pc sqlite3OpenTable+268
+  SAME 25_415540ddaa_fts5_getvarint_overread: verdict CAUGHT cause 28 pc sqlite3Fts5GetVarint+80
+  SAME 26_8f5b14a5c2_fts5_decode_getvarint32_overread: verdict CAUGHT cause 28 pc sqlite3Fts5GetVarint32+80
+  SAME 27_a783931794_fts3_getvarint_overread: verdict CAUGHT cause 28 pc sqlite3Fts3GetVarint+1048
+  SAME 28_c7def600bd_fts3_matchinfo_overread: verdict CAUGHT cause 28 pc fts3EvalUpdateCounts+360
+  SAME 29_fz02_btree_get4byte_page_overread: verdict CAUGHT cause 28 pc sqlite3Get4byte+56
+  6 of 6 cells the same
+## the boot
+  BOARD_RUN_START 05:27:48 bitstream caplifive_vp2c_8522d72fe monitor f13dbc5
+  manifest 18 files, stage 24742458 bytes
+  firmware b2b343c04ae97714 23759368 B
+  DRIVER rc=0 05:42:27
+  BOARD_RUN_DONE 05:42:27

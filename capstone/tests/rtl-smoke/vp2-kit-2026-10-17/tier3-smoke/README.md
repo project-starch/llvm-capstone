@@ -3475,3 +3475,442 @@ cut at its own OpenSBI banner in all 14, so no recorded tally moves.
 - **Not settled:** the base is inferred, not read. The next kit bring-up should print
   `cat /sys/module/capstone_vm/sections/.text` once after insmod (the runtime lane's suggestion), which makes every
   decode exact. sql0-frs-treeB then gives the covering slot at the CSRETIRE site.
+
+### Amendment to arm q15 (2026-10-20 04:1x, before ANY of its boots): moved to board 2, tree B
+
+The board-1 queue had done nothing but wait behind the cpython pair, which is three cases on two cold boots and had
+finished 10 steps in 50 minutes. It was stopped by process group, with no q15 run directory created.
+- **The new runner:** `tier3-q15-board2.sh` 42474b8ec5c98dd4. It is board1's with:
+  - the kit bkit7-rev2xBD (tree B 8de3c48cf, board 2), with the same module 39d8492d and monitor f13dbc5 as
+    bkit7-rev2xD, both checked;
+  - the board-2 busy check;
+  - the run root t3-run-treeB/q15<g>;
+  - the wait on sql0-frs-treeB's out (SQL DONE, STOP or HOLD).
+- **Unchanged:** the images, the subsets, the scorer, the prediction (run C, which was confirmed on 39d8492d's QEMU
+  twin) and the readings.
+- **What the move changes:** the bitstream. Tree B adds S-29's satp flush. That is not expected to move a cell; a cell
+  that does move is a reading against run C, as any difference is.
+- **Dry run:** it reached Q15 DONE through subset f. These negatives each stopped it: rc 78, a busy board, and board 1's
+  marker (it waits for sql0-frs's).
+
+### The node-floor module: its own Tier 1 boot, then sql0-nf-treeB, pre-registered (2026-10-20 04:2x, before either boot): board 2 after sql0-frs; q15 moves behind them
+
+The runtime lane's fix candidate for the fetch face's CSRETIRE site. Module a4aa5668a69b94ee (banner node-floor-1),
+built by the compiler lane from runtime lane 770daec2dbd6: dev's srz module plus a context-table index floor, so that no
+virtual index the module retires can equal a physical index a caller CPMP slot tracks.
+- **Its QEMU gate** (compiler lane node-floor-gate 959b78723765):
+  - Tier 1 equal two-sided against dev's srz module;
+  - chain 15/15 and mpt equal;
+  - counters and --stats equal, nodes_high_water 76;
+  - dense-churn moved exactly as computed.
+  - Census: 0 RVC, vermagic 6.4.14, silicon gate 0 refused / 4 conditional, srz-check 3 of 3.
+
+**1. Its Tier 1 boot** (`chain-nf-b2.sh` ddfd880297bfcf0a → `board-tier12/srz/run-tier1-nf-b2.sh`
+08d30204752e71a0):
+- **Image and firmware:**
+  - image-rev7-nf 5b03b416e0daced2: rev7's Tier 1 stage with only capstone_vm.ko swapped, prepared by
+    `board-tier12/srz/nf-prep.sh` c708be4386c92ec1 (srzdev-prep.sh renamed). The bake checked the
+    module by sha256 inside rootfs.cpio, and the stage was restored to its record.
+  - firmware fw-t1-nf 31ffb070549d07f2: the retry monitor line f13dbc5 and wrapper aab63d5, dom_stack gate PASS.
+- **The gate:** rev7's four rungs must equal t1-old's record. The control is the 39d8492d record, and t1-srz and t1-srzdev
+  passed the same gate.
+- **Also read:** the banner node-floor-1, DRT1, DRTX, FRTY and Oops.
+- **Not a Tier 1 rung:** dense-churn, which is the one QEMU reading the floor moves.
+- **On PASS** the chain writes CHAIN_NF_SQL_GO; on anything else it writes STOP, which holds step 2.
+
+**2. sql0-nf-treeB** (`tier3-sql-arm-rev2n.sh` 1a7f184d41168136):
+- **The one variable:** sql0-srz-treeB (rev2l) with ONE change, the module. The kits are bkit7-rev2xBDN / bkit7-rev2xmBDN
+  from `make-nf-kits.sh` e12c6f9f2db7e994: the BDZ kits with only adapter/module/capstone_vm.ko
+  replaced.
+- **Unchanged:** monitor f13dbc5, runner 1f099612. The cells are VOID as in rev2l, declared now and not scored.
+- **The runtime lane's prediction:** FRTY 0, against sql0-srz-treeB's 21, all of which were at retire's CSRETIRE site
+  (retire+0x22c).
+- **Added here:**
+  - DRT1 stays 0, as under srz;
+  - the must-fire is the staged module's hash and the banner;
+  - any FRTY that remains is decoded with frty-decode.py against a4aa5668.
+- **What a non-zero FRTY could mean,** in the compiler lane's words: a physical id above 1024 would defeat the floor, and
+  nothing on vp2 exports that count, so FRTY is the only reading of it.
+
+**3. q15 moves behind step 2.** This is an amendment before any of q15's boots. The board-2 queue was waiting on
+sql0-frs, and it is restarted with sql0-nf's out as its trigger: SQL DONE, or the HOLD written when step 1 fails. Nothing
+else in q15 changes.
+
+**The dry runs:**
+- the chain's PASS and FAIL branches, on t1-old's own SEQ and on a copy with one rung changed;
+- rev2n end to end on a stub runner;
+- rev2n HOLDs on the FAIL branch's STOP;
+- nf-prep on a copy of the stage.
+
+### cpython's pc=0 monitor pair, result (2026-10-20 03:25-04:26, board 1, tree A): cpyp-A gives NO DATA on the question
+
+`records/cpy-pair.result-lines.txt`. UNGATED.
+- **cpyp-D** (bkit7-rev2xnD, monitor f13dbc5):
+  - 10 of 10 steps ran;
+  - `domain fault cause=12 pc=0x0` once each in 17-control, 23 and 23-control. The repeat holds for 17-control and
+    23-control; 23 itself is an extra, which the prediction did not include. 03 is clean, as predicted;
+  - the cells read MISSED 2 and NO-READING:unattributed 1;
+  - DRT1 1 (in the workload), 0 DRTX, no Oops;
+  - FRTY 01513D98 at the start of every step: page offset 0xd98, the vm_ioctl CSRUNV site.
+- **cpyp-A** (bkit7-rev2xnA, monitor 007d81d): `Oops - load access fault` and a kernel panic in control-uaf-block, the
+  third step. That is S-23's data face with no retry, the outcome named in the pre-registration. Its two completed steps
+  (session-share and workload) carry no pc=0 in cpyp-D either. So, as pre-registered, every later step is NO DATA, and
+  the pair does not discriminate.
+
+### cpyp-DZ, pre-registered (2026-10-20 04:2x, before its boot): board 1, tree A; cpyp-D with ONE change, the module
+
+Because cpyp-A cannot get past the data face, this arm removes the retries rather than the retry line.
+- **The kit:** bkit7-rev2xnDZ, from `make-cpyz-kit.sh` 317ee4b79e9cb94c. It is bkit7-rev2xnD with only
+  capstone_vm.ko changed, to the srevroot-zero module 607164b9.
+- **The runner:** `tier3-cpy-z.sh` c7052ab5b21c89fb, the pair's runner reduced to this one arm, with FRTY and the
+  srz banner added to the readings. Runner, closure, image and --only 03,17,23 are cpyp-D's.
+- **The dry run:** fed cpyp-D's real transcript as a stand-in, it reproduces cpyp-D's readings (FRTY 9, DRT1 1, pc=0 in
+  three steps), so every counter can fire. A busy board stopped it, and a missing GO made it wait.
+
+**Predicted from pb10-srz (FRTY 2 → 0 and DRT1 1 → 0 at the same CSRUNV site):** FRTY 0 and DRT1 0, with the banner
+present.
+
+**The readings that decide:**
+- **pc=0 absent in 17-control, 23 and 23-control:** the pc=0 faults ride on the stale-root window. This arm cannot
+  separate the retry from the srevroot state itself.
+- **pc=0 present with FRTY 0 and DRT1 0:** they are not the retries' doing.
+- **FRTY or DRT1 not 0:** the prediction fails, and pc=0 is read beside them as information.
+- **Not covered by this boot:** srz's Tier 1 was taken on tree B. This is its first boot on tree A. A failure in the
+  workload or the controls reads as the module on tree A, not as cpython.
+
+### sql0-frs-treeB, result (2026-10-20 03:53-04:35, board 2, tree B): the covering slot is LINEAR, so the node-2 prediction is REFUTED
+
+`records/sql0-frs.result-lines.txt`. UNGATED. The cells are VOID as declared (the runner's rc=1, as in sql0-csr-treeB).
+- **The must-fire:** the staged module is 607164b9, and the banner appears once.
+- **The other counts:** FRTY 21, all at 017113B8 (retire+0x22c, the instruction after retire's CSRETIRE), with FRTM
+  829F83B8 at every one. DRT1 0, DRTX 0, no Oops.
+- **One covering slot per refused fetch, the same at all 21:** FRSL 0003000E (slot 3, region 14), FRT2 0, FRVD 1.
+- **FRT2 0 is LINEAR.** The type query returns `cap_type - 3'd1` (tree B, capstone_dyn_unit.anvil, func LCC, zimm 1),
+  and LINEAR is 3'b001 (ariane_pkg.sv:663-671 at 8de3c48cf). NONLIN would read 1.
+- **So the runtime lane's prediction (NONLIN, node 2) is refuted.** By its own pre-registered reading, LINEAR means a
+  fresh physical node, and the monitor's own physical activity becomes the next suspect.
+- **FRVD 1 at all 21, as predicted here:** the slot is valid when M reads it, consistent with the trap into M re-arming
+  it. FRVD therefore cannot show whether the slot was dead at the moment of the fetch.
+- **What the reading cannot give:** the covering capability's node INDEX. LCC has no query for it, so whether that index
+  lies under the node floor's bound is not read here. sql0-nf-treeB's FRTY is the only reading of that.
+
+### Amendment to sql0-nf-treeB (2026-10-20 04:4x, the Tier 1 boot running, before sql0-nf boots): the runtime lane's prediction after sql0-frs
+
+- **The runtime lane records its node-2 prediction as failed.** The covering capability is the kernel's main RAM
+  region, carved LINEAR by the monitor at boot. It tracks a fresh physical node p from the monitor's pool (the unit's
+  head starts at 3, and the physical namespace recycles), not CAPCREATE's node 2.
+- **Its mechanism, restated with p in place of 2:** the index-only compare, plus a retire window whose CSRETIRE
+  broadcasts a virtual index equal to p.
+- **Why 21:** each session gets a fresh table starting at the same next index, makes the same allocations, and retires
+  the arena whose ancestor is index p once. So 21 sessions give 21 FRTY.
+- **The floor:** the node-floor module's virtual indices start at 1024, so they can equal p only if p >= 1024.
+- **The prediction, restated:**
+  - **FRTY 0 and DRT1 0:** the collision mechanism is confirmed at this site, and p < 1024.
+  - **FRTY > 0 at a retire CSRETIRE successor:** either p >= 1024 or the mechanism is wrong for this site.
+    - A count of 21, one per session, favours "p >= 1024, the same collision".
+    - A changed count favours a different mechanism.
+  - The count and the decoded site are both reported.
+- **The sites, computed here from a4aa5668's .ko** (the same scan as frty-decode.py):
+  - retire's two CSRETIRE successors are retire+0x220 (page offset 0x53c) and retire+0x260 (0x57c);
+  - the others are remap_end+0x304 (0x088) and vm_ioctl+0xedc (0x440);
+  - the CSRUNV successors are vm_release+0x104 (0x6bc), vm_ioctl+0x7dc (0xd40) and vm_ioctl+0xa20 (0xf84).
+- **FRVD is uninformative** at every refusal: the trap into M re-arms the slot before the read.
+
+**Second amendment to sql0-nf-treeB (2026-10-20 04:4x, the Tier 1 boot still running, before sql0-nf boots).** The
+runtime lane withdraws the "p >= 1024" escape.
+- **The RTL lane's bound on p, from source:** the physical pool's head starts at 3 (INIT_STAGE) and only bumps.
+  Recycling can lower an index, never raise it.
+- **What comes before region 14's carve:** the genesis regions, cap_env_init's four boot-time carves, and the regions
+  created before 14. That is tens of allocations, not thousands. It did not give an exact count, which this boot's own
+  monitor snapshot cannot settle.
+- **The prediction is now one-sided:**
+  - FRTY 0 and DRT1 0 confirm the index-collision mechanism at this site;
+  - ANY surviving FRTY means a different mechanism, whatever its count.
+  - The decoded site and the count are reported either way.
+
+### cpyp-DZ, result (2026-10-20 04:28-05:11, board 1, tree A): the retries are gone, and the pc=0 faults are NOT
+
+`records/cpyp-dz.result-lines.txt`. UNGATED.
+- **The boot:** 10 of 10 steps ran. The srz banner appears once. The module's first boot on tree A, and it completed.
+- **The prediction held:** FRTY 0 and DRT1 0, against cpyp-D's 9 and 1. DRTX 0, no Oops.
+- **pc=0 is unchanged.** `domain fault cause=12 pc=0x0 address=0x0 ... last=0x3f` appears once each in 17-control, 23
+  and 23-control. The lines are the same as cpyp-D's apart from addresses, and so are the steps.
+- **The cells are the same as cpyp-D's:** 03 MISSED, 17 MISSED, 23 NO-READING:unattributed.
+- **The reading:** the pc=0 faults do not need any retry. That rules out the fetch retry and the data retry as their
+  cause, together with everything srz removes. The attribution goes back to the compiler lane: it is cpython on this
+  board, still with no QEMU instance.
+
+### Third amendment to arm q15 (2026-10-20 05:1x, before ANY of its boots): split across both boards
+
+Board 1 is free after cpyp-DZ, and board 2 is booting sql0-nf. Each q15 subset is its own cold boot, scored on its own
+against run C, so the subsets split by board. That follows the lead's instruction to run on both boards.
+- **Board 1, tree A:** subsets d, e and f (18-23, 24-29, 30-32), starting now.
+  - It uses `tier3-q15-board1.sh`, as first pre-registered: kit bkit7-rev2xD, run roots t3-run/q15<g>.
+  - Its trigger is cpy-pair's out, which already reads CPP DONE. Q15_SUBSETS="d e f", and its out is
+    fix-session/q15def.out.
+- **Board 2, tree B:** subsets a, b and c (00-05, 06-11, 12-17), after sql0-nf.
+  - It uses `tier3-q15-board2.sh`: kit bkit7-rev2xBD, run roots t3-run-treeB/q15<g>. Q15_SUBSETS="a b c".
+- **The bitstream is recorded per subset.** Both kits carry module 39d8492d and monitor f13dbc5, and run C was confirmed
+  on that module's QEMU twin. A cell that differs between the two bitstreams' subsets cannot be compared across them,
+  since they hold different cases. Each is read only against run C.
+- Nothing else changes.
+
+### cpyp-DB, pre-registered (2026-10-20 05:1x, before its boot) with NO predicted value: board 2, last; cpyp-D with ONE change, the bitstream
+
+The compiler lane's next discriminator for cpython's pc=0 faults, after cpyp-DZ excluded the retries.
+- **Excluded first, from source** (the compiler lane): vp2's latched rd as the mechanism. The only CSRUNVs that still
+  carry a real rd are stops, and every resume re-latches rd = x0.
+- **The kit:** bkit7-rev2xnBD, from `make-cpyb-kit.sh` 9963d90651a6275f. It is bkit7-rev2xnD (norandmaps,
+  module 39d8492d, monitor f13dbc5) with tree B's board fields, exactly as bkit7-rev2xBD differs from bkit7-rev2xD;
+  checked by diff. Tree B adds S-29's satp flush.
+- **The runner:** `tier3-cpy-b.sh` 41053fd133caf80b, cpyp-DZ's with the kit, board and run root changed. It
+  starts when board 2's q15 queue ends. Its dry run on cpyp-D's transcript reproduces cpyp-D's readings, and a busy
+  board stopped it.
+- **No prediction is registered,** at the compiler lane's request. It first proposed "pc=0 absent", on the reading that
+  a stale translation alone gives cause 12 on tree A. It then corrected itself, and the record above confirms the
+  correction: on tree A a stale translation alone gives cause 1, with a physical last different from the faulting
+  address (sv-fetch), and cause 12 with the two equal is the control's reading and tree B's. cpython's
+  `cause=12 pc=0x0 address=0x0` is the correct fault for a jump to 0. So the stale-FETCH route is out, and the arm
+  can reach S-29 only through stale DATA: a function pointer or return address read as 0.
+- **Both outcomes are informative:**
+  - pc=0 present on tree B excludes S-29 by either route;
+  - pc=0 absent implicates something specific to tree A.
+- **Readings:** pc=0 per step, plus DRT1/DRTX/FRTY as information.
+
+### The node-floor module, results (2026-10-20, board 2, tree B): Tier 1 PASSES, and sql0's fetch face is GONE (FRTY 21 → 0), as predicted
+
+`records/t1-nf.result-lines.txt` and `records/sql0-nf.result-lines.txt`. UNGATED.
+
+**Tier 1, 04:36-04:43:**
+- All four rungs read as t1-old's: b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1.
+- The banner node-floor-1 is present. DRT1 0, DRTX 0, FRTY 0, no Oops.
+- The judge's NO DATA is identical to t1-old's, t1-srz's and t1-srzdev's.
+
+**sql0-nf-treeB, 04:44-05:25:**
+- **The must-fire held:** the staged module is a4aa5668, and the banner appears once.
+- **The prediction held:** FRTY 0, DRT1 0, DRTX 0, no Oops, against sql0-srz-treeB's FRTY 21 and DRT1 0.
+- **The zero is not fewer sessions doing less.**
+  - Both boots ran 21 sessions, and each ended in the same declared defect: 21 × `FATAL: could not open directory
+    "pg_notify"` (runner 1f099612; the cells are VOID as declared).
+  - With the monitor's lines removed, both transcripts carry exactly 741 lines, 34 to 61 per step.
+  - What is missing under the node floor is exactly srz's monitor output: 21 FRTY, 231 FRGS and 21 FRGD.
+- **The instrument can fire:** the same monitor and runner read 21 in sql0-srz-treeB.
+
+**The reading:**
+- A one-variable pair: dev's srz module against srz plus the context-table index floor.
+- The fetch face at retire's CSRETIRE is removed by keeping virtual indices away from the physical indices caller slots
+  track. That is the runtime lane's index-collision mechanism, with sql0-frs's LINEAR covering slot.
+- Together with srz at the CSRUNV site (pb10 2 → 0, cpython 9 → 0), both decoded sites of S-23's fetch face, and its
+  data face, read zero on silicon in the programs where they appeared.
+- N=1 per arm.
+
+**CORRECTION to the node-floor reading above (2026-10-20 05:3x, before anything reached dev or ISSUES).** The pair is
+NOT one variable in the sense written.
+- sql0-srz-treeB ran module 607164b9: 39d8492d's source plus the parameterised srevroot zeroing.
+- The node-floor module a4aa5668 is built on DEV's srz module 90bf036f (runtime lane 770daec2dbd6): the unconditional
+  zeroing on the tier-m module base, plus the floor.
+- So the two boots differ by the module base and the form of the zeroing as well as by the floor. "A one-variable pair:
+  dev's srz module against srz plus the context-table index floor" was wrong. dev's srz module 90bf036f has had a
+  Tier 1 boot, but has never run sql0.
+- **What stands:** sql0's fetch face reads 0 under a4aa5668, with session work identical to sql0-srz-treeB's.
+- **What does not yet stand:** that the floor is what removed it. The control that makes it one variable is sql0 on
+  90bf036f, which is pre-registered next.
+
+### sql0-srzdev-treeB, pre-registered (2026-10-20 05:3x, before its boot): the node floor's ONE-variable control, board 2 after q15 a-c; cpyp-DB moves behind it
+
+- **Why:** the correction above. The two lanes give the same source diff between 607164b9 (lane ce25d6de7280) and
+  a4aa5668 (770daec2dbd6): three files, +135/−58, from these changes:
+  - the floor itself (770daec2);
+  - srz made unconditional (178e0058);
+  - #254 (1e1555b6): retire()'s per-page tag clear becomes clear_page_tags, one store per granule. It runs after the
+    CSRETIRE window, but it is in the very function where the FRTY sits;
+  - #257's frames_distinct in add();
+  - #242's larger limits;
+  - #256's test hooks, which compile out of the board build.
+- **The arm:** sql0 on tree B with dev's srz module **90bf036f** (178e005899b0, Tier 1 PASS on tree B). It differs
+  from a4aa5668 only by the floor commit (`git diff 178e005899b0 770daec2dbd6 -- capstone/runtime/virtual/module`, the
+  lanes' check).
+  - Kits bkit7-rev2xBDZD / bkit7-rev2xmBDZD, from `make-srzd-kits.sh` 6c81ab0998f62db4: the BDN kits with only
+    the module different.
+  - Runner `tier3-sql-arm-rev2o.sh` 8419de509ea398c8: rev2n with the kits, module hash, banner
+    (srevroot-zero-2) and tag changed. It starts when board 2's q15 queue ends.
+- **Predicted (both lanes) if the floor is what removed the face:** FRTY 21 and DRT1 0.
+- **FRTY 0** instead puts the removal on the tier-m changes, most likely #254, and not on the floor.
+- **Any other count** is a reading in its own right, and its site is decoded against 90bf036f.
+- **cpyp-DB** (`tier3-cpy-b.sh` 5139b3541505f962) now starts on this arm's SQL DONE, STOP or HOLD. Its waiting
+  process was stopped before it created anything.
+- **The dry runs:** rev2o reached SQL DONE on a stub. cpyp-DB starts on SQL DONE and keeps waiting on Q15 DONE.
+
+### The node-floor reading, audited (2026-10-20 05:4x, claim-auditor): attribution UNSUPPORTED; what stands, what is inferred
+
+**Supported, read:**
+- **The index-only compare:** vp2's CPMP revnode invalidation compares the low 16 index bits with no namespace term
+  (pmp_data_if.sv:96-108). The broadcast fires on any node record write, with no namespace qualifier
+  (ex_stage.sv:1647-1648). Namespaces are separated only by a flush on edges (ex_stage.sv:1420,
+  pmp_data_if.sv:111-114). All at 8de3c48cf.
+- **The refetch:** CSRETIRE commits with a flush, and its successor is refetched (commit_stage.sv:812-816).
+- **FRTY 21 at this site is reproducible:** 7 of 7 session-capable sql0 boots on both trees and three modules.
+  sql0-treeA, rf and fix read 1 at the CSRUNV site, with no sessions.
+- **The covering slot:** slot 3, region 14, LINEAR.
+
+**Inferred, not read:**
+- that the broadcast virtual index equals slot 3's physical index p;
+- that slot 3 was cleared at the fetch, since FRVD is read after the re-arm;
+- p < 1024, which rests on the pool head starting at 3 (capstone_rev_node.anvil:697) and "tens of allocations";
+- region 14's identity as the kernel's main RAM region, which is the runtime lane's assertion and appears in no
+  transcript;
+- the decode's .text base.
+- **The floor value for sql0 is fixed by source, not read:** the sql0 kits carry no module params file and the boot
+  printed no @@PARAM, so node_flat_records is the default 65536, and CV_NODE_FIRST = min(1024, 65536/4) = 1024
+  (nf capstone_vm.c:167-172).
+
+**Open, beyond the confound (sql0-srzdev-treeB, queued):**
+- **Alternative 1: under the floor, retire()'s CSRETIRE could be REJECTED silently.** retire() ignores a non-zero status,
+  and ++retired_flat fires only on success (nf capstone_vm.c:780, 1680-1704). Then there is no node write and no
+  broadcast, and FRTY reads 0 with the collision untouched.
+- **Nothing in sql0-nf shows that a retire succeeded:** 651 CAPSTONE_VM_ADD_OK in both arms proves the adds. vexec's
+  CAPSTONE_VM_STATS line does not print nodes_retired, and sql0's runner sets no stats.
+- **What closes it:** nodes_retired (wire.h:39, retired_flat in flat mode) read per session on a4aa5668, or a diag line on
+  a non-zero CSRETIRE status. The control does not close it.
+
+**The line count, restated:**
+- the README's "741 lines each" excluded monitor lines AND @@HB heartbeats;
+- the auditor's filter, without monitor lines, reads 847 against 845;
+- by line type the arms differ only in heartbeats (63 against 61) and blanks. CAPSTONE_VM_ADD_OK is 651 in both, and the
+  pg_notify FATAL is 21 in both.
+
+**A stale comment headed for dev:** the floor commit's own comment (770daec2 capstone_vm.c:151-166) states the refuted
+node-2/NONLIN mechanism, and "the FRTY at retire+0x220 on every sql0 boot". It must be rewritten before that commit
+lands. That is the runtime lane's.
+
+**Wording the auditor allows in ISSUES now:**
+- facts: FRTY 21 at the CSRETIRE site (7 of 7); the covering slot; FRTY 0 on a4aa5668 with equal session work; the
+  RTL's index-only compare;
+- the pair is NOT one variable;
+- the mechanism is a HYPOTHESIS.
+- Not allowed until the control AND alternative 1 are closed: "is caused by", "removes it", "the floor removed".
+
+### node-floor-2: its own Tier 1 boot, then sql0-nf2-treeB, pre-registered (2026-10-20 05:4x, before either boot): board 2 after the srzdev control; cpyp-DB moves behind them
+
+The auditor's alternative 1, made readable. Module 54d8a3af1158c3f4 (banner node-floor-2), built by the compiler lane
+from runtime lane c2b843ad88ad.
+- **What it adds:** node-floor-1 plus one plain pr_emerg per context in vm_release, after the teardown retires:
+  `capstone_vm: release retires attempted=N succeeded=M first_id=F`. succeeded is the rise in retired_flat, which counts
+  status-0 CSRETIREs only. The runtime lane confirms no rate limit.
+- **Its diff from the control's source** (178e005899b0 → c2b843ad88ad, capstone/runtime/virtual) is one file, +49/−11:
+  the floor, the release line and comments. So the control against this arm is the floor plus an observation-only line.
+- **QEMU Tier 1** (compiler lane node-floor-gate 1748fb5b570e): equal to node-floor-1's, with 26 release lines, each
+  succeeded = attempted and first_id 1024. QEMU cannot reject a retire.
+
+**1. Its Tier 1 boot** (`tier3-smoke/chain-nf2-b2.sh` 7203ffdd918c9ff8 →
+`board-tier12/srz/run-tier1-nf2-b2.sh` ac2dc02731ef143a):
+- image-rev7-nf2 518263d7d0a1d19d, prepared by `board-tier12/srz/nf2-prep.sh` 82ad461d8b14e192;
+- firmware fw-t1-nf2 1ee33cc6631aa766, monitor f13dbc5, dom_stack gate PASS.
+- **The gate:** the four rungs equal t1-old's.
+- **Also read:** the release lines, against the contexts opened (CAPSTONE_VM_ADD_OK slot=0: 3 in t1-nf). A missing line
+  is a shortfall, never a pass. first_id should be 1024 at node_flat_records 4096.
+
+**2. sql0-nf2-treeB** (`tier3-smoke/tier3-sql-arm-rev2p.sh` bdf93fb5cdca2e4b, only on step
+1's PASS):
+- It is sql0-nf with ONE change, the module. Kits bkit7-rev2xBDN2 / bkit7-rev2xmBDN2, from
+  `tier3-smoke/make-nf2-kits.sh` 26a280b4c77c06d4: the BDN kits with only the module changed.
+- **Predicted by the runtime lane:** FRTY 0, DRT1 0, and 21 release lines, one per context, each with succeeded =
+  attempted and first_id 1024.
+- **succeeded < attempted on any line:** supports alternative 1, a rejected CSRETIRE.
+- **Fewer lines than 21:** a shortfall, not a pass. The per-line check runs only over the lines present.
+- **The dry run:** the stub transcript tripped both the shortfall and the rejection lines.
+
+**3. cpyp-DB** now starts on sql0-nf2's SQL DONE, STOP or HOLD. The same runner gets a new trigger argument; its waiting
+process is stopped before it creates anything.
+
+**The supporting argument, not conclusive** (the runtime lane): a CSRETIRE rejected on the non-destroying path makes
+retire() return -EIO, which the launcher surfaces as a failed munmap. sql0-nf's session output equals sql0-srz-treeB's,
+so any unmap-path retires succeeded under the floor. It is not shown that sql0's sessions unmap before teardown.
+
+### Arm q15, subsets d-f, results (2026-10-20 05:13-05:53, board 1, tree A): 14 of 15 cells as run C; case 31 is a board-only MISSED
+
+`records/q15def.result-lines.txt`. UNGATED. Each subset was scored at once against run C cut to its cases.
+- **q15d (18-23):** 6 of 6 the same. DRT1 1, FRTY 5, no Oops.
+- **q15e (24-29):** 6 of 6 the same. Case 29 (fz02) is CAUGHT with cause 28, as predicted. FRTY 6.
+- **q15f (30-32):** 2 of 3 the same. FRTY 3.
+- **Every subset:** the controls read uaf 25 and bounds 28 in every boot, and cause 29 never appears.
+- **The moved cell, 31_fz10_dbstat_decodepage_overflow:**
+  - run C reads CAUGHT, cause 28 at statDecodePage+2024;
+  - the board reads MISSED: the case COMPLETED, exit 0, and printed
+    `Q15_PAD items=183 padded=2 pad_bytes_total=128 pad_bytes_max=64`.
+- **What that line does and does not mean.** In the Q15 record, 31 of 33 cases have padded derives in QEMU too.
+  Q15_PAD prints at exit, so in QEMU it appears only on the cases that complete. Its values here (2 padded, at most 64
+  bytes) match that record's completed cases: the lookaside buffer's block and its generation.
+  - So the padding itself is not the difference. What differs is that the overflow at statDecodePage was not caught on
+    silicon.
+  - N=1. Whether it repeats, and whether it is bitstream-dependent, is unread. Board 2 runs a-c only, not 31.
+- **Next:** q15f repeated on the same kit, board 1, one cold boot (`Q15_ROOT=t3-run/q15r`, so the run directory is
+  q15rf).
+  - **Predicted, if the cell is deterministic:** the same three readings, 30 CAUGHT, 31 MISSED, 32 CAUGHT.
+  - **If 31 reads CAUGHT,** the cell varies across boots and is recorded as such.
+
+### Case 31: the compiler lane's candidate, and q15 subset f on tree B, pre-registered (2026-10-20 06:0x, before the tree-B boot)
+
+**The candidate,** measured on QEMU and not yet RTL-confirmed (window-counter kit qkit7-wc2):
+- **Not the pad:** case 31's only pads are the two 64-byte lookaside pads, which are the board's Q15_PAD line.
+- **The fault:** at statDecodePage+2024 (`lbu a1, 0(a0)`), a0 has bounds [0x…61800, 0x…666c0), a 20,160-byte page
+  buffer, and cursor 0x…72de0. That is 51,000 bytes past the end, set by `cincoffset a0, a0, iOff` with iOff from the
+  fuzzed page.
+- **The decode:** the compressed fields (E=2, a 64 KiB span), decoded at that cursor, give [0x…71800, 0x…766c0). That is
+  the true bounds shifted up by one span, and they CONTAIN the cursor.
+- **So, IF silicon's load check decodes at the access cursor:** the load passes, reads 64 KiB above the buffer inside
+  the 1 MiB static heap, and the case completes.
+- **Prior art for the decode half:** dev's docs/history/19-10-2026_22-30-00_q30-silicon-half-and-the-issue-guard-measured.md.
+  In simulation, at cursors +0x4000 and +0x10004000, the decoded bounds are "wrong, by exactly the cursor's own
+  16 KiB-region change", because compress_bounds does not take the cursor. It does not show the load check's decode,
+  which is the link an rtl-oracle is reading.
+- **If confirmed:** a bounds overrun of more than one window span aliases instead of trapping on silicon, and Q-30's
+  "self-heals" framing gains that gap.
+
+**The predictions:**
+- **The tree-A repeat** (board 1, started 05:55, pre-registered above as "the same three readings if deterministic"):
+  the compiler lane predicts 31 MISSED again, deterministic, with an identical fault offset across QEMU runs (image
+  offset 0x372de0). That prediction reached this lane AFTER the boot had started, before any of its result was read.
+- **q15 subset f on tree B** (board 2, behind cpyp-DB; `chain-q15bf-b2.sh` 47b4b064396488e0 → tier3-q15-board2.sh
+  with Q15_SUBSETS=f, run dir t3-run-treeB/q15bf): 30 CAUGHT, 31 MISSED, 32 CAUGHT, because S-29's satp flush does not
+  touch bounds decode.
+  - Its dry run wrote the trigger on cpyp-DB's end marker and waited without one.
+
+### q15 subset f, repeat, result (2026-10-20 05:55-06:06, board 1, tree A): case 31 MISSED again, so it is deterministic
+
+`records/q15rf.result-lines.txt`. UNGATED.
+- **The cells:** 30 CAUGHT (vdbeRecordCompareInt+536), 31 MISSED (completed, the same `Q15_PAD items=183 padded=2
+  pad_bytes_total=128 pad_bytes_max=64`), 32 CAUGHT (statDecodePage+704). All three equal to the first run. FRTY 3, no
+  Oops.
+- **Both predictions hold:** this lane's "same three readings if deterministic", and the compiler lane's later "31 MISSED".
+- **A scorer defect, caught by its own guard:** the runner writes the subset prediction to a fixed
+  t3-q15sq/q15<g>.pred, which already existed from the first run. subset-bundle.py refused to overwrite it, and the line
+  read `COMPARE NO DATA`, not a pass. The repeat was scored by hand into q15rf.pred: 2 of 3, with the same DIFF on 31.
+- **q15 subset f on tree B will hit the same collision** and is scored by hand the same way. The runner is not edited
+  while its a-c instance reads it.
+
+### Arm q15, result (2026-10-20 05:13-06:08, six boots on two boards): 32 of 33 cells as run C; case 31 is a deterministic board-only MISSED
+
+**Subsets a-c (board 2, tree B, kit bkit7-rev2xBD):** 18 of 18 the same. `records/q15abc.result-lines.txt`.
+- Q15_PAD prints 2, 3 and 1 times, in exactly the predicted MISSED cases (01 and 04; 08, 09 and 11; 13).
+- FRTY 6 in each boot, DRT1 0, cause 29 never, no Oops.
+
+**Subsets d-f (board 1, tree A, kit bkit7-rev2xD):** 14 of 15. Case 31 is MISSED, and it repeats (above).
+
+**The arm, against the prediction (CAUGHT 27, MISSED 6):** CAUGHT 26, MISSED 7.
+- The six predicted MISSED cells all hold.
+- Every predicted CAUGHT cell holds except 31, including case 29 (fz02, cause 28 in sqlite3Get4byte, not pad-masked).
+- Both controls fault as predicted in all six boots: uaf-mem5 25, bounds-mem5 28.
+- cause 29 appears 0 times. Q-15's refusal is gone on silicon, where sq1 read control-failed 33.
+
+**Filed, one bundle per bitstream** (merge-subset-bundles refuses subsets whose platforms differ, so the bitstreams are
+two bundles):
+- `sqlite/engine-repros/results/2026-10-20-vp2c-treeB/vp2-nested-pools`: CAUGHT 12, MISSED 6;
+- `.../2026-10-20-vp2c-treeA/vp2-nested-pools`: CAUGHT 14, MISSED 1.
+- Each subset's own bundle sits beside it (vp2-nested-pools-q15<g>), with its board record in `records/q15<g>.board.txt`.
+- The tree-A repeat of f is filed separately (vp2-nested-pools-q15f-repeat, `records/q15rf.board.txt`). Combining the
+  bundles is the fold's decision.
+
+**Case 31's mechanism is the compiler lane's candidate, under RTL check:** a load whose cursor sits more than one window
+span past its bounds is checked against bounds decoded at that cursor, which are one span up and contain it.
+q15 subset f on tree B, behind cpyp-DB on board 2, gives 31's second bitstream.

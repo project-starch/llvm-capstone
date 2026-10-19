@@ -1,0 +1,41 @@
+Q15 q15d BEGIN 05:13:41 only 18,19,20,21,22,23
+Q15 q15d ARM END rc=0 05:27:47
+Q15 q15d COMPARE vs run C rc=0 :: 6 of 6 cells the same
+Q15 q15d readings: Q15_PAD 0; cause=29 0; DRT1 1 DRTX 0 FRTY 5 Oops 0
+Q15 q15e BEGIN 05:27:47 only 24,25,26,27,28,29
+Q15 q15e ARM END rc=0 05:42:27
+Q15 q15e COMPARE vs run C rc=0 :: 6 of 6 cells the same
+Q15 q15e readings: Q15_PAD 0; cause=29 0; DRT1 0 DRTX 0 FRTY 6 Oops 0
+Q15 q15f BEGIN 05:42:27 only 30,31,32
+Q15 q15f ARM END rc=0 05:53:18
+Q15 q15f COMPARE vs run C rc=1 :: 2 of 3 cells the same
+Q15 q15f readings: Q15_PAD 1; cause=29 0; DRT1 0 DRTX 0 FRTY 3 Oops 0
+Q15 DONE 05:53:18
+## compare-pilot q15d
+SAME 18_mem5-design_memsys5_inband_freelist_overwrite: verdict CAUGHT cause 25 pc run_case+764
+SAME 19_c8c9cdd9dd_rtree_cursor_stale_node: verdict CAUGHT cause 25 pc nodeRelease+144
+SAME 20_d21bd37c7c_rtree_inode0_stale_node: verdict CAUGHT cause 25 pc nodeHashLookup+240
+SAME 21_eab0e10304_rtree_static_bind_stale_text: verdict CAUGHT cause 25 pc memcpy+184
+SAME 22_fix-2026-07-26_spellfix_oom_stale_vtab: verdict CAUGHT cause 25 pc editDist3FindLang+164
+SAME 23_eab0e10304_fts3_static_bind_stale_text: verdict CAUGHT cause 25 pc memcpy+184
+6 of 6 cells the same
+## compare-pilot q15e
+SAME 24_d4b646997a_writable_schema_stale_table: verdict CAUGHT cause 25 pc sqlite3OpenTable+268
+SAME 25_415540ddaa_fts5_getvarint_overread: verdict CAUGHT cause 28 pc sqlite3Fts5GetVarint+80
+SAME 26_8f5b14a5c2_fts5_decode_getvarint32_overread: verdict CAUGHT cause 28 pc sqlite3Fts5GetVarint32+80
+SAME 27_a783931794_fts3_getvarint_overread: verdict CAUGHT cause 28 pc sqlite3Fts3GetVarint+1048
+SAME 28_c7def600bd_fts3_matchinfo_overread: verdict CAUGHT cause 28 pc fts3EvalUpdateCounts+360
+SAME 29_fz02_btree_get4byte_page_overread: verdict CAUGHT cause 28 pc sqlite3Get4byte+56
+6 of 6 cells the same
+## compare-pilot q15f
+SAME 30_fz06_recordcompareint_overread: verdict CAUGHT cause 28 pc vdbeRecordCompareInt+536
+DIFF 31_fz10_dbstat_decodepage_overflow: verdict MISSED cause None pc None
+    verdict: qemu CAUGHT board MISSED
+    completed: qemu False board True
+    cause: qemu 28 board None
+    pc_off: qemu statDecodePage+2024 board None
+    attribution: qemu "function" board null
+SAME 32_fz11_dbstat_freechain_overflow: verdict CAUGHT cause 28 pc statDecodePage+704
+2 of 3 cells the same
+## q15f case 31 Q15_PAD
+Q15_PAD items=183 padded=2 pad_bytes_total=128 pad_bytes_max=64
