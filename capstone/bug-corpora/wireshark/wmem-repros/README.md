@@ -100,6 +100,18 @@ A fault counts as the defect's only at the labelled read or write probe, resolve
 image's own symbols; a silence counts as MISSED only when the arm's controls
 ([`controls/`](controls/README.md)) behaved in the same invocation.
 
+**Q-15, the compact bounds format (2026-10-19).** On vp2 and on capstone-qemu without exact bounds, CDERIVE refuses
+(cause 29) a child it cannot hold exactly. `virtual-nested-pools` therefore read NO-READING:control-failed 23 there: the
+uaf-jumbo control's own jumbo derive was refused. Patch 0001 now makes every derive exact (tail pad only). The arm reads
+on the compact profile cell for cell as with exact bounds ([`results/2026-10-19-q15-repair/`](results/2026-10-19-q15-repair/RESULT.md)).
+The pad report is unmeasured in this arm: `Q15_PAD` prints only after a completed case, every nested-pools case faults
+first, and the pad-masked count (0) stands on the verdicts.
+
+case 22 reads NO-READING:unattributed in Debug builds where capstone_cap_revoke_child is emitted out of line; its
+callers include wmem_sublet_block_renew, so pc attribution cannot reach the declared free (caller census 4d30d15a50df,
+[`results/2026-10-19-q15-repair/case22-caller-census.txt`](results/2026-10-19-q15-repair/case22-caller-census.txt)); the
+2026-10-11 CAUGHT came from an older build.
+
 ## History: the Capstone domain arms, 2026-09-21 to 2026-10-09
 
 The `spatial`, `sublet`, `sublet-chunks` and `sublet-malloc` arms ran the cases as freestanding
