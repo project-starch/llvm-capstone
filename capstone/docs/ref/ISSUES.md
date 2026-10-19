@@ -554,6 +554,18 @@ caller's CPMPs before the pc reaches the frontend, or to hold the fetch until th
 - **The fetch face from a stale translation alone is now on silicon too:** the RTL lane's sv-fetch arm on tree A read
   cause 1 with a physical last value (0x80016000) different from the faulting virtual address, beside its control's
   cause 12 (records/sv-treeA.result-lines.txt on lane vp2-tier12, a51896b135a4).
+
+**A third instance at 0xBC2C0825, and every instance in one place (2026-10-19).**
+- sql0-treeA's FIRST postgres session (tree A, module 39d8492d) panicked with pb10's exact signature: MTVL BC2C0825,
+  `mod_node_page_state+0x40` from `unpin_user_page+0x2a`, a3 ffffffd83c2c0825. That is a different Image and program.
+  The postgres SQL arm is therefore blocked on silicon by this face.
+- All four instances (pb10, pb10-fix6b, tree A step 4, sql0-treeA) are tabulated by script in
+  `capstone/tests/fpga-repros/S23-data-face/`. Every one is preceded, in the same step, by a monitor fetch retry at
+  the instruction after the module's CSRUNV in `vm_ioctl` (+0xa2c, +0xac4 and +0xab0 in the three modules).
+- **The candidates.** The runtime lane's first is the FRTY handler's read-null-write-back of every CPMP entry. The RTL
+  lane's sharper one: a revocation broadcast clears slot 7's validity, the same-id write-back cannot re-arm it, and
+  the handler only hands execution back to the access that is then refused. Tree B (no FRTY) is predicted to show
+  whether the face survives without the fetch-retry path.
 ## S-24 — silicon only: the virtual `vm` step's store after `mprotect(RW)` faults with cause 15 on a pinned page again and again; the module's resolve() pins the same page and nothing changes until its 64-repeat bound ends the step `EXPLAINED AND FIXED ON SILICON 2026-10-18 (vp2 boot r13, module a56fc415ad7133aa): the PTE at the loop reads D = 0 with V R W A set, as the runtime lane's account predicted (the RTL needs W and D for a store and never sets D; GUP marks the struct page dirty, not the PTE); with the module's resolve_dirty (fault the page in through the kernel's write path before the pin) `vm` reads QEMU's status, 1 at execute through mapping PCC. The fix lands in the module queue's revision (compiler lane)`
 
 Siblings: S-25 (the other virtual-path silicon failure, a different mechanism), S-23, Q-30.
@@ -629,7 +641,7 @@ and cannot show this.
 - **The Tier 2 record stays boot 4c.**
 - **Tier 3 runs with the pin off.** A wedge there with this signature is read as S-25.
 
-## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `QUANTUM CANDIDATE SUPPORTED ON SILICON 2026-10-19 (tree A, a matched pair, N=1 per arm, UNGATED): with no process-ABI STEP since a cold boot, csupquantum (0x7C3) is still 0 and a first virtual context is re-entered continuously without progress; writing 0x7C3 = 2,000,000 at boot removes the spin with no STEP. The escape kind was not recorded and the threshold is not established. Workaround: any process-ABI STEP first (b0-hello), as every recipe does. Proposed fix: a boot-time 0x7C3 write in the monitor (the var firmware's, caplifive-opensbi s26-boot-quantum aab63d5)`
+## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `MECHANISM SUPPORTED ON SILICON 2026-10-19 (tree A, N=1 per arm, UNGATED; five cold boots): with no process-ABI STEP since a cold boot, csupquantum (0x7C3) is still 0 and a first virtual context loops in escapes of kind 1, cause 0 (diag_escapes, 16 of 16) without progress; writing 2,000,000 or 1,000 at boot removes the spin with no STEP. On silicon the no-progress threshold lies below 1,000 cycles, where the RTL simulation retires nothing up to 1,500. Workaround: any process-ABI STEP first (b0-hello), as every recipe does. Proposed fix: a boot-time 0x7C3 write in the monitor (the var firmware's, caplifive-opensbi s26-boot-quantum aab63d5)`
 
 Siblings: S-23 (the same virtual entry path), S-25.
 
@@ -680,6 +692,16 @@ lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README
   divergence.
 - **A retraction on the lane** (505f702de812) withdrew four over-reaches of the first results write-up: "b0-hello's STEP
   ran at 1,000", "80 times as often", "cur's console replayed var's QNT0", and an unqualified "1,000 does not livelock".
+
+**The firming arms (2026-10-19, the same board and module; lane vp2-tier12 README, "S-26's firming arms, results").**
+- **cur-esc** (cur plus `diag_escapes=1`): QNT0 0; VM_SPIN, with resume_satp_refreshes 22,182 → 73,398 → 124,590.
+  Every printed escape is `frame kind 0x1 cause 0x0` (16 of 16, the budget). The escape kind is now observed.
+- **var1k** (var's boot write at 1,000; cold; b0-stats then vm-contract; no STEP): QNT0 000003E8. It COMPLETED
+  (steps=41805, faults=426), against the RTL lane's prediction, from its tree-A bracket, that it would spin.
+  - Its step count matches mir's (42,151, after b0-hello's STEP), so mir's return was the quantum, not STEP state.
+  - The RTL lane's first suspect for the difference is the testbench's fixed 12-cycle delay on each of the entry
+    walk's ~70 register transactions.
+- **The fix stands as proposed:** a boot-time 0x7C3 write in the monitor, batched with S-30's region end.
 ## S-28 — a second instruction retiring beside a CSRUNV is re-executed when the caller resumes, because the gate that would hold the second port tests a flag a CSRUNV deliberately leaves clear `REAL IN SOURCE, NOT EXERCISED (bf3db3175); FIXED on virtual-profile-2-c 8522d72fe as a defensive term, recorded as R-50's unexercised trigger was; found 2026-10-18 by the semantics owner's auditor, confirmed from the sources by the RTL lane`
 
 **The chain.** A CSRUNV's result pack sets `dom_switch_en = 1'b0` and `runv_en = 1'b1`, and the header says so outright:
