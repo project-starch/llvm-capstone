@@ -339,17 +339,26 @@ int __capstone_delegate_ready(void) {
  * takes its high half from the `user` lanes, which a plain store forwards as 0;
  * an 8-byte `ld` of the same word reads correctly. 8-byte moves made the stream
  * byte-exact on two boots. */
+/* The word moves as one ld and one sd. `__builtin_memcpy(&word, s, 8)` from an
+   unsigned char pointer carries no alignment, and the backend lowered it to
+   eight lbu with shifts: 30 instructions per word on every delegated read and
+   write (538.imagick_r's output alone, 864 KB, cost 3.3M instruction attempts
+   here). A typed load of an address the head loop aligned is one ld. */
+typedef uint64_t __attribute__((__may_alias__)) dl_word;
+
 static void dl_bytes(void *dst, const void *src, size_t n) {
   unsigned char *d = dst;
   const unsigned char *s = src;
-  while (n && ((__builtin_capstone_cap_get_cursor(d) | __builtin_capstone_cap_get_cursor((void *)s)) & 7)) { *d++ = *s++; --n; }
-  while (n >= 8) {
-    uint64_t word;
-    __builtin_memcpy(&word, s, 8);   /* an 8-byte load and store, never a capability */
-    *(uint64_t *)d = word;
-    d += 8; s += 8; n -= 8;
+  size_t dc = __builtin_capstone_cap_get_cursor(d), sc = __builtin_capstone_cap_get_cursor((void *)s);
+  if (!((dc ^ sc) & 7)) {   /* equally aligned: a short head, then whole words */
+    while (n && (dc & 7)) { *d++ = *s++; --n; ++dc; }
+    while (n >= 8) {
+      dl_word word = *(const dl_word *)s;   /* an 8-byte load and store, never a capability */
+      *(dl_word *)d = word;
+      d += 8; s += 8; n -= 8;
+    }
   }
-  while (n) { *d++ = *s++; --n; }
+  while (n) { *d++ = *s++; --n; }   /* unequal alignment, or the tail */
 }
 
 /* Offset 0 means NULL for an optional buffer, so no buffer ever lives there:
