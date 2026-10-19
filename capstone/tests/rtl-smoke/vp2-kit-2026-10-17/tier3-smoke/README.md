@@ -2990,3 +2990,15 @@ module's QEMU twin (a5dec6a32c49b3d3) read 23 of 23 identical to it.
   runtime owner's known candidate (a compressed save/restore of a far-out-of-bounds cursor), not as a new defect.
 
 The dry run, through a stub arm, compared 23 of 23 against C.
+
+**Clarifications to the wmem pre-registration (2026-10-19 21:2x, before its boot), at the runtime lane's check.**
+- **The images.** The kit supplies only the platform half: monitor, module, bitstream, board. The images come from
+  the runner's own collect of t3-new9's cases-ON / controls-ON, i.e. the REPAIRED builds.
+  - tier3-appvm-arm.sh compares the collected set by sha256 against EXPECT_IMAGES = t3-new9/wmq1.images.SHA256SUMS
+    (26 lines, file dae7f5a871e0e477).
+  - It STOPS before the boot if they differ.
+- **The two modules, stated.**
+  - The prediction, run C = C', was taken on QEMU with module a5dec6a32c49b3d3 (qkit7-rev2, for C').
+  - The board runs module 39d8492d5c18216b, from kit bkit7-rev2xBD.
+  - a5dec6a3 is 39d8492d's QEMU twin, the pairing cpython's module-swap record uses.
+  - So the prediction transfers across that twin pair, and not by identity.
