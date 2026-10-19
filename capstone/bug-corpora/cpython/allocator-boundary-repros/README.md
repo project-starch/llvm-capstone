@@ -151,11 +151,11 @@ required -- is a consequence on either axis.
 
 | arm | withdrawn | cases |
 |---|---:|---|
-| `virtual-malloc` | 5 | 01, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`) |
+| `virtual-malloc` | 6 | 01, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`), 32 (temporal, `cause=12`, an instruction page fault -- not a capability rule at all) |
 | `virtual-nested-pools` | **0** | every one of its 26 catches carries its axis's code |
 | `cheribsd-revocation` | 7 | 01, 05, 09, 10, 14 (spatial, `si_code=2`), 31 (temporal, `si_code=2`, decided by `si_addr` -- see below), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
 
-Counting them the arms read 14 / 29, 26 / 29 and 11 / 29; withdrawn, **9 / 29,
+Counting them the arms read 15 / 29, 26 / 29 and 11 / 29; withdrawn, **9 / 29,
 26 / 29 and 4 / 29**. On the **nested** rows, 22 of the 29, ③ is 0 in both
 cells and ① is 0 in the spatial one.
 
