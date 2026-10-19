@@ -153,14 +153,15 @@ define ptr addrspace(200) @test_ptr_add_neg_i64(ptr addrspace(200) %p, i64 %offs
 ; C pointer subtraction returns an integer difference between two capability
 ; cursors. Do not select this as full-width i128 scalar subtraction.
 ; CHECK-LABEL: test_ptrdiff:
-; Each address read is ONE integer write (C-31): the low half of the register IS
-; the cursor, but reading it with a bare sub-register copy left the consumer's
-; register tagged on the RTL, so ptrtoint is PseudoTRUNC_CAP (`addi rd, rs, 0`,
-; printed `mv`), here with rd = rs.  Then the subtraction.
-; CHECK-DAG: mv a0, a0
-; CHECK-DAG: mv a1, a1
-; CHECK: sub a0, a0, a1
-; CHECK: cjalr zero, 0(ra)
+; An address read is an integer write (C-31, PseudoTRUNC_CAP) wherever the
+; integer can reach a capability instruction's operand or a copy of it. The
+; subtrahend is read straight from its register by the `sub`
+; (CapstoneCursorReadFold); the minuend keeps its write, since `sub rd, rs, x0`
+; would be a copy of rs (cursor-read-fold.ll has the controls).
+; CHECK-NOT: mv a1, a1
+; CHECK: mv a0, a0
+; CHECK-NEXT: sub a0, a0, a1
+; CHECK-NEXT: cjalr zero, 0(ra)
 define i64 @test_ptrdiff(ptr addrspace(200) %p, ptr addrspace(200) %q) {
   %pi = ptrtoint ptr addrspace(200) %p to i128
   %qi = ptrtoint ptr addrspace(200) %q to i128
