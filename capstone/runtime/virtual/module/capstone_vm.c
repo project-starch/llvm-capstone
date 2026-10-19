@@ -641,13 +641,37 @@ static bool fence_before_entry;
  * plain load needs no locking against the sysfs write; the write lands between cases. */
 module_param(fence_before_entry, bool, 0644);
 
+/* S-23's data face. The switcher loads srevroot (CSR 0x5c1, its id 67) from frame+8 at CSRUNV entry and
+ * saves it at escape, but the caller's snapshot holds ids 0..66 only, so the caller's srevroot is never
+ * restored (capstone-ariane 8522d72fe capstone_dom_switcher.anvil :154-162, :170-173, :479-481,
+ * :527-538). After every escape, S keeps the CONTEXT's table. select_root() then reads that value as
+ * `old` and, for the same context, writes it unchanged; restore_root(old) writes it back. Neither end
+ * of the window is an edge, and the trackers forget only on an edge of the table-namespace flag or of
+ * srevroot (ex_stage.sv:1417, revnode_ns_flush_o; csr_regfile.sv:2877 puts srevroot != 0 at S in that
+ * flag). A window's CSRETIRE or CSMINT walk broadcasts the context's indices, and a CPMP tracker whose
+ * index collides stays invalid after it, until the kernel's next access through it is refused.
+ *
+ * With srevroot_zero set: every CSRUNV is followed IMMEDIATELY, in the same asm, by csrw 0x5c1 = 0,
+ * restoring the caller's namespace; and restore_root() writes 0 instead of `old`. Every window is then
+ * a real 0 -> table -> 0 pair of edges, and the flush at its end re-arms whatever its walk cleared.
+ * Every capability op in this file other than CSRUNV sits inside a select_root/restore_root window
+ * (CSRETIRE :716 :947 :1596, CSMINT :858 :950 at 8807df747411), so none relies on srevroot after a
+ * CSRUNV returns. A CSR write flushes at commit, so nothing after it runs early. 0644, like
+ * fence_before_entry, so one module can run both arms of a pair; default on. */
+static bool srevroot_zero = true;
+module_param(srevroot_zero, bool, 0644);
+
 static unsigned long run(unsigned long frame, unsigned long action)
 {
     unsigned long result;
     if (fence_before_entry)
         asm volatile("fence rw,rw" ::: "memory");
-    asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2"
-                 : "=&r"(result) : "r"(frame), "r"(action) : "memory");
+    if (srevroot_zero)
+        asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2\n\tcsrw 0x5c1, zero"
+                     : "=&r"(result) : "r"(frame), "r"(action) : "memory");
+    else
+        asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2"
+                     : "=&r"(result) : "r"(frame), "r"(action) : "memory");
     return result;
 }
 /* The same CSRUNV with rd = x0. On vp2 a RESUME writes the literal 2 into the RESUMED CONTEXT's
@@ -658,8 +682,12 @@ static unsigned long run(unsigned long frame, unsigned long action)
  * its run(...) to run_x0(...); the collect site (action 3) cannot, its freed count IS rd. */
 static void run_x0(unsigned long frame, unsigned long action)
 {
-    asm volatile(".insn r 0x5b, 1, 0x24, x0, %0, %1"
-                 : : "r"(frame), "r"(action) : "memory");
+    if (srevroot_zero)
+        asm volatile(".insn r 0x5b, 1, 0x24, x0, %0, %1\n\tcsrw 0x5c1, zero"
+                     : : "r"(frame), "r"(action) : "memory");
+    else
+        asm volatile(".insn r 0x5b, 1, 0x24, x0, %0, %1"
+                     : : "r"(frame), "r"(action) : "memory");
 }
 /* The event record every escape writes at frame+16: kind, cause, pc, address
  * (capstone-qemu target/riscv/capstone_supervisor.c event_write, call->event = frame + 16 :963).
@@ -687,8 +715,12 @@ static unsigned long select_root(struct context *c)
                  : "=&r"(old) : "r"(virt_to_phys(c->table)) : "memory");
     return old;
 }
+/* With srevroot_zero, 0 rather than `old`: S outside a window is in the physical namespace, so the
+ * window's end is an edge and its flush fires (see srevroot_zero). */
 static void restore_root(unsigned long root)
 {
+    if (srevroot_zero)
+        root = 0;
     asm volatile("csrw 0x5c1, %0" : : "r"(root) : "memory");
 }
 static int retire(struct context *c, struct arena *a, bool destroying)
@@ -1146,7 +1178,7 @@ module_param(diag_escapes, bool, 0644);
 static unsigned escape_prints;
 #define CV_ESCAPE_BUDGET 16U
 
-#define CV_DIAG_TAG "arena-pin-1"
+#define CV_DIAG_TAG "srevroot-zero-1"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
