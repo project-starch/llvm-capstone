@@ -3888,3 +3888,29 @@ so any unmap-path retires succeeded under the floor. It is not shown that sql0's
   read `COMPARE NO DATA`, not a pass. The repeat was scored by hand into q15rf.pred: 2 of 3, with the same DIFF on 31.
 - **q15 subset f on tree B will hit the same collision** and is scored by hand the same way. The runner is not edited
   while its a-c instance reads it.
+
+### Arm q15, result (2026-10-20 05:13-06:08, six boots on two boards): 32 of 33 cells as run C; case 31 is a deterministic board-only MISSED
+
+**Subsets a-c (board 2, tree B, kit bkit7-rev2xBD):** 18 of 18 the same. `records/q15abc.result-lines.txt`.
+- Q15_PAD prints 2, 3 and 1 times, in exactly the predicted MISSED cases (01 and 04; 08, 09 and 11; 13).
+- FRTY 6 in each boot, DRT1 0, cause 29 never, no Oops.
+
+**Subsets d-f (board 1, tree A, kit bkit7-rev2xD):** 14 of 15. Case 31 is MISSED, and it repeats (above).
+
+**The arm, against the prediction (CAUGHT 27, MISSED 6):** CAUGHT 26, MISSED 7.
+- The six predicted MISSED cells all hold.
+- Every predicted CAUGHT cell holds except 31, including case 29 (fz02, cause 28 in sqlite3Get4byte, not pad-masked).
+- Both controls fault as predicted in all six boots: uaf-mem5 25, bounds-mem5 28.
+- cause 29 appears 0 times. Q-15's refusal is gone on silicon, where sq1 read control-failed 33.
+
+**Filed, one bundle per bitstream** (merge-subset-bundles refuses subsets whose platforms differ, so the bitstreams are
+two bundles):
+- `sqlite/engine-repros/results/2026-10-20-vp2c-treeB/vp2-nested-pools`: CAUGHT 12, MISSED 6;
+- `.../2026-10-20-vp2c-treeA/vp2-nested-pools`: CAUGHT 14, MISSED 1.
+- Each subset's own bundle sits beside it (vp2-nested-pools-q15<g>), with its board record in `records/q15<g>.board.txt`.
+- The tree-A repeat of f is filed separately (vp2-nested-pools-q15f-repeat, `records/q15rf.board.txt`). Combining the
+  bundles is the fold's decision.
+
+**Case 31's mechanism is the compiler lane's candidate, under RTL check:** a load whose cursor sits more than one window
+span past its bounds is checked against bounds decoded at that cursor, which are one span up and contain it.
+q15 subset f on tree B, behind cpyp-DB on board 2, gives 31's second bitstream.
