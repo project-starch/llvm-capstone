@@ -9,7 +9,7 @@
 __attribute__((__weak__)) void __vm_wait(void) {}
 static int mapping_length(size_t n, unsigned long *bytes)
 {
-    if (!n || n > CAP_VM_MAX_BYTES) { errno = EINVAL; return -1; }
+    if (!n || n > CV_MAX_REGION_BYTES) { errno = EINVAL; return -1; }
     *bytes = (n + 4095) & ~4095UL;
     return 0;
 }

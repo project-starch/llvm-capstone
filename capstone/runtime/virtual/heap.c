@@ -151,7 +151,7 @@ void *__capstone_malloc_map(size_t bytes)
 {
     __capstone_malloc_map_calls++;
     __capstone_malloc_map_last[3] = bytes;
-    if (!bytes || bytes > CAP_VM_MAX_BYTES) {
+    if (!bytes || bytes > CV_MAX_REGION_BYTES) {
         __capstone_malloc_map_refused_early++;
         errno = ENOMEM; return MAP_FAILED;
     }

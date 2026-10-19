@@ -77,7 +77,7 @@ static void basic(void)
     p = malloc(200000); require(p != NULL, "large original"); p[199999] = 33;
 #ifdef __CAPSTONE_PURECAP__
     errno = 0;
-    require(!kept(realloc(p, 512UL<<20)) && errno == ENOMEM && p[199999] == 33,
+    require(!kept(realloc(p, CV_MAX_REGION_BYTES + 1)) && errno == ENOMEM && p[199999] == 33,
             "failed VM growth preserves original");
 #endif
     p = realloc(p, 200016); require(p && p[199999] == 33, "large realloc");
