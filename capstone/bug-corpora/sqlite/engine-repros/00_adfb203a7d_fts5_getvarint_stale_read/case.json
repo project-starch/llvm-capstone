@@ -51,5 +51,7 @@
   "fault_sites": [
     "sqlite3Fts5GetVarint"
   ],
-  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in sqlite3Fts5GetVarint (live_proof); that run is independent of the Capstone arms and predates them."
+  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in sqlite3Fts5GetVarint (live_proof); that run is independent of the Capstone arms and predates them.",
+  "arena_bytes": 1048576,
+  "arena_bytes_why": "the three builders disagreed about this until 2026-10-19 -- the virtual arms used a 1 MiB header default against CheriBSD's 262144 -- and on an arena-granular arm the arena IS the bound, so the spatial row was comparing arenas rather than mechanisms"
 }

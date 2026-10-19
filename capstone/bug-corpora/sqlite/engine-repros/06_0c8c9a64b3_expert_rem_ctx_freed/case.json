@@ -53,5 +53,7 @@
   "fault_sites": [
     "idxRemFunc"
   ],
-  "fault_sites_why": "Calling rem() runs idxRemFunc over the freed IdxRemCtx (consumer; PROVENANCE.md, sqlite3expert.c:1671/1676/1719). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs."
+  "fault_sites_why": "Calling rem() runs idxRemFunc over the freed IdxRemCtx (consumer; PROVENANCE.md, sqlite3expert.c:1671/1676/1719). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs.",
+  "arena_bytes": 1048576,
+  "arena_bytes_why": "the three builders disagreed about this until 2026-10-19 -- the virtual arms used a 1 MiB header default against CheriBSD's 262144 -- and on an arena-granular arm the arena IS the bound, so the spatial row was comparing arenas rather than mechanisms"
 }

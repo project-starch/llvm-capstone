@@ -51,5 +51,6 @@
   "fault_sites": [
     "sqlite3Fts5GetVarint"
   ],
-  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in sqlite3Fts5GetVarint (live_proof); that run is independent of the Capstone arms and predates them."
+  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in sqlite3Fts5GetVarint (live_proof); that run is independent of the Capstone arms and predates them.",
+  "note": "WITHDRAWN by the case-by-case review of 2026-10-17: its trigger does not reach the defect it names. The directory and its number are kept so that every record written against them stays resolvable, and so that the silicon and vp2 arms, whose bundles are keyed to this numbering, are not broken. It is out of the corpus's denominator; see README.md."
 }

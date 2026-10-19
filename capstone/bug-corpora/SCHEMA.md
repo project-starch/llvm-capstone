@@ -88,7 +88,8 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
 `allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
-`fault_sites_why`, `duplicate_of`, `control_probe`, `control_probe_why`. Optional means
+`fault_sites_why`, `duplicate_of`, `control_probe`, `control_probe_why`, `arena_bytes`,
+`arena_bytes_why`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -138,6 +139,17 @@ a run faulted would turn every crash into a catch.
 
 `control_probe` names an existing file inside the case directory. It isolates the
 defect when the full trigger also exercises other defects, so a runner can pair
+`arena_bytes` is the size of the nested allocator's arena this case must be built with, in
+bytes. It is **a property of the case, not of the arm**, and every arm must use the same value
+or the arms are not comparable: on an arena-granular arm the arena IS the bound an over-read
+has to leave to be seen. One SQLite spatial case is CAUGHT on two arms at 262144 and MISSED on
+both at 1048576, from one source. For a temporal case the size cannot change a verdict -- a
+use-after-free inside the arena is invisible at that granularity whatever the size -- so it
+matters there only for whether the trigger has the memory to reach the defect, which is why
+most cases leave it out. Added 2026-10-19, after SQLite's three builders were found to be
+passing three different values with nothing recording any of them. `arena_bytes_why` carries
+the one-sentence reason; a size set without one is a value nobody can later check.
+
 that probe with the safe control. `control_probe_why` is required and explains
 why the full trigger cannot provide that pairing. A control probe does not by
 itself declare a fault site or change a recorded verdict.

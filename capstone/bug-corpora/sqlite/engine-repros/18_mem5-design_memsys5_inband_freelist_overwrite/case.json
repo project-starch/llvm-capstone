@@ -53,5 +53,6 @@
   "fault_sites": [
     "run_case"
   ],
-  "fault_sites_why": "The stale access is the case's own READ through the dangling pointer after memsys5 linked metadata into the freed block (consumer run_case; PROVENANCE.md). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs."
+  "fault_sites_why": "The stale access is the case's own READ through the dangling pointer after memsys5 linked metadata into the freed block (consumer run_case; PROVENANCE.md). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs.",
+  "note": "WITHDRAWN by the case-by-case review of 2026-10-17: a design property of memsys5's in-band free list, not a defect with an upstream fix. The directory and its number are kept so that every record written against them stays resolvable, and so that the silicon and vp2 arms, whose bundles are keyed to this numbering, are not broken. It is out of the corpus's denominator; see README.md."
 }
