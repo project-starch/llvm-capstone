@@ -2858,3 +2858,20 @@ That would heal the deny before M looks, which would explain RFVD 1 and why ever
 - **RFSR = RFSH = 0 at a refusal refutes it.**
 - The cells are as pb10-drt's: CAUGHT 4 against t3-pb10/bundle, with the retry carrying the refusal.
 - FRTM is reported, the first physical address of a retried fetch on record.
+
+### Amendment to pb10-csr, and sql0-csr pre-registered (2026-10-19 20:55, before either boot)
+
+- **pb10-csr may meet no refusal at all**, since pb10 met S-23 once in one boot. If it prints no RFSR line, that is NO
+  READING on the mechanism, not a refutation. Its cells are graded as pb10-drt's.
+- **sql0-csr** is an S-23 INSTRUMENT boot, not a corpus reading, and sql0 is the reliable generator (17 refusals in
+  sql0-drt). It runs on board 1 after pb10-csr (`chain-csr2.sh` b78f843843c77c60).
+  - **The runner:** `tier3-sql-arm-rev2i.sh` bb0374481d1ac846, which is sql0-drt with ONE change, the
+    monitor c3917e8.
+  - **The kits:** bkit7-rev2xC e677f77d653b16dd and bkit7-rev2xmC b99cc81bccbc0481, from `make-csr-kits.sh`
+    c14a1918a087eb96.
+  - **The sql runner stays 1f099612 (sql0-drt's), so its cells are VOID** by the known empty-directory staging
+    defect. That is declared here, before the boot, and the cells are not scored.
+  - **The reading:** RFSR/RFSH/RFCT at every refusal, FRTM beside every FRTY, and the DRT1/DRTX/Oops counts.
+- **Predictions for both:**
+  - under the namespace-flush mechanism: srevroot nonzero and RFCT bit 3 clear at every refusal;
+  - srevroot 0 at any refusal refutes it.
