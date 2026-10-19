@@ -42,5 +42,6 @@
       "virtual-nested-pools": "MISSED x5",
       "cheribsd-revocation": "no fault x5 (rc=1, ABR EXIT 1)"
     }
-  }
+  },
+  "target_access_verified": "Checked 2026-10-19, because 04 is one of three all-silent rows and its defect is the same type confusion as 02 and 03 -- a bytes object read through the PyUnicode layout, so the copy's length comes out of the wrong field -- and a field read at the wrong offset is the kind of thing a changed ABI can neutralise, as it did on case 06. It does not here. In the target binary's DWARF, PyBytesObject.ob_size sits at 0x20 and PyASCIIObject.length sits at 0x20: the two offsets COINCIDE on purecap as they do on x86-64, so the misread length is ob_size either way, 524288 both times, and the copy runs with it. The copy cannot be scheduled away, being what the function exists to do, and 02 and 03 -- same family, same code path, smaller objects -- fault cause=28 inside memcpy on the pools arm, which shows that path executing on the target. 04 is a genuine miss."
 }

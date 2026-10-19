@@ -155,19 +155,28 @@ required -- is a consequence on either axis.
 | `virtual-nested-pools` | **0** | every one of its 26 catches carries its axis's code |
 | `cheribsd-revocation` | 6 | 01, 05, 09, 10, 14 (spatial, `si_code=2`), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
 
-Counting them the arms read 14 / 28, 26 / 28 and 11 / 28; withdrawn, **9 / 28,
-26 / 28 and 5 / 28**. Each case's own `note` records which fault was which and
+Counting them the arms read 14 / 29, 26 / 29 and 11 / 29; withdrawn, **9 / 29,
+26 / 29 and 5 / 29**. Each case's own `note` records which fault was which and
 why, and `~/cpython-false-positive-examples/` carries the minimal C.
 
-Four changes made the denominator 28, moved two of the withdrawals and
-recovered one reading:
+The denominator is every defect that is live upstream and reproduces on the
+reference ASan build; `11`, `13` and `18` are the three the corpus cannot
+deliver. Four changes moved two withdrawals, recovered one reading, and put a
+caveat on two rows:
 
-* **`06` is held out**, not missed. On a purecap ABI `SIZEOF_VOID_P` is 16, so
-  `sizeof(PyFloatObject)` is 48 against the host's 24 and
+* **`06` and `17` are marked `◇`: counted, and the measured binary contains
+  no out-of-bounds access anyway.** On `06`, `SIZEOF_VOID_P` is 16 on both
+  capability targets, so `sizeof(PyFloatObject)` is 48 against the host's 24 and
   `offsetof(PyASCIIObject, hash)` is 40 against 24 -- both read from the target
-  binaries' DWARF. The defective read lands 8 bytes *inside* the object, so no
-  arm is being asked about an out-of-bounds access. The case now carries
-  `probe-140551.py`, which marks the access, and a `negative_control.py`.
+  binaries' DWARF -- and the defective read lands 8 bytes *inside* the object.
+  On `17`, all three targets sink the defective load below the length check that
+  the source puts after it, so with `inleft == 1` it never executes; the plain
+  x86-64 build at the same `-O3` does perform it, so this is instruction
+  scheduling, not a flag. Both rows are counted as misses, which is the
+  conservative reading and needs no argument about where to draw a line. Each
+  gains a probe that marks the access -- `probe-140551.py`, `probe-157325.py` --
+  because upstream's reproducers mark nothing, and `06` gains a
+  `negative_control.py`.
 * **`02`, `03` and `04` are pinned**: five repeats per arm under
   `PYTHONHASHSEED=0`, because unpinned they moved. `02` and `03` are genuine
   `cause=28` catches on `virtual-nested-pools` every time; `04` misses on all
