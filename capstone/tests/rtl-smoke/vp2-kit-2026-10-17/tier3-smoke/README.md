@@ -1856,3 +1856,39 @@ and the RTL agree with the base, and nothing about S-27, S-28, R-57 or Q-24.
   - A session failing on a board-only harness difference makes the arm VOID, not a DIFF, as rev2b and rev2c were.
 - **Records:** `records/sql0-treeA.board.txt` and `postgres/sql-repros/results/2026-10-19-vp2c-treeA/`.
 - **Dry run:** `dryrun-tier3-sql-arm-rev2d.txt`. UNGATED (PREFLIGHT=0).
+
+### rev8 on tree A, pre-registered (2026-10-19 13:55, before its stage, build and boot): the stopgap's control without sparse-churn, and rev7's exact counter check
+
+- **Why it runs whatever step 4 reads:**
+  - It closes rev7's exact-counter check either way: the counters are read between `ok` and `stale`.
+  - If step 4's sparse-churn does not reach "collect skipped" (outcomes b or c), rev8 is the stopgap control that
+    does not depend on R-57.
+- **The stage** (`board-tier12/rev8/`), changed from rev7's in three files: vm-contract.sh (node_flat_records=4096,
+  plus a counter read after `ok`), vm-suite-inner.sh (dense-churn in place of sparse-churn), and contract-dense.dom
+  added.
+  - contract-dense.dom is the compiler lane's image b6a11ff3ba726646 (lane module-resume-rd-x0 8807df747411): v9's
+    contract.dom plus a `dense-churn` mode. It retires one arena, then derives children inside one already-written
+    4096-byte block.
+  - It passes qemu-only-csr-census (0), and vp2-silicon-gate with one attributed site: libc_exit_fini's LDC at
+    0x24f9c, checked by the gate against the image (fini_array_size=0). A wrong-address control FAILs.
+- **When:** `rev8-prep.sh` stages and builds only after the tree A Linux steps end TAL DONE. Step 4 reads the stage
+  against rev7's record, and steps 5-6 bake in the same buildroot. The firmware hash is pinned here before the boot.
+- **Predicted:** the compiler lane's QEMU readings on the twin module a5dec6a32c49b3d3 (kit qkit7-rev2) at 4096. At
+  256 the launcher's own image grant is refused, so that value is VOID.
+  - b0-stats, b0-hello and vm-contract read their oracles (0), and vm-suite reads 1.
+  - Across `ok`: resume_sfences rises by `ok`'s own STATS faults, and resume_satp_refreshes by its steps - 1. QEMU
+    reads 426 of faults=426 and 546 of steps=547. The board's own STATS values are used, since silicon's `ok` read
+    steps=511 on rev7.
+  - resume_satp_changed and busy_frame_refusals read 0 at all five reads.
+  - **dense-churn:**
+    - "collect skipped" exactly once, with retired 1 and skips 1 (QEMU: available 256);
+    - progress lines up to derived=3000;
+    - `domain fault cause=30` (the table exhausted) at the loop's CDERIVE, image VA 0x24238 (pc & 0xffff == 0x4238);
+    - VM_EXIT:dense-churn:139.
+- **The judge,** `rev8-judge.py`: PASS on a synthetic transcript of the QEMU readings, FAIL on the same transcript
+  with cause 28 planted, and NO DATA on rev7's real transcript.
+
+**The order after the tree A Linux steps:** rev8's prep and boot, then the RTL lane's S-29 bare arms (pre-registered
+on receipt), then sql0-treeA. sql0-treeA's first waiter, which woke on TAL DONE, was stopped by process group before it
+did anything (its out file is empty). Its measure-only bake would have shared the buildroot with rev8's bake. It is
+relaunched behind the S-29 batch.
