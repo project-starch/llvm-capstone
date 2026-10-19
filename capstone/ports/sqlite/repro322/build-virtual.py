@@ -55,6 +55,7 @@ the evidence with it.
 """
 import argparse
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -197,6 +198,9 @@ def main():
         patches = ['sublet/sublet-3220000-memsys5.patch']
         if a.pagecache:
             patches.append('sublet/sublet-3220000-pagecache.patch')
+        # REPRO322_EXTRA_PATCHES (':'-separated, relative to ports/sqlite): diagnostic patches applied after the arm's
+        # own, recorded in build.json as extra_patches so a diagnostic image can never pass for the arm's.
+        patches += [x for x in os.environ.get('REPRO322_EXTRA_PATCHES', '').split(':') if x]
         for name in patches:
             patch = REPO / 'capstone/ports/sqlite' / name
             done = subprocess.run(['patch', '-s', '-F0', '-p1', '-d', str(staged)],
@@ -305,7 +309,7 @@ def main():
                                      log.read_text().splitlines(True)
                                      if 'error' in l.lower())[:600])
     (a.out / 'build.json').write_text(json.dumps(dict(
-        arm=arm, sdk=str(a.sdk), amalgamation=str(a.amalgamation), opt=a.opt,
+        arm=arm, sdk=str(a.sdk), extra_patches=os.environ.get('REPRO322_EXTRA_PATCHES', ''), amalgamation=str(a.amalgamation), opt=a.opt,
         groups={g: flags[g] for g in sorted(engine)},
         cases={c.name: dict(tag=t, group=g, extra=e) for c, (t, g, e) in cases.items()},
         built=built, failed=failed, not_applicable=skipped,

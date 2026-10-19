@@ -1,0 +1,27 @@
+--- a/sqlite3-capstone.c
++++ b/sqlite3-capstone.c
+@@ -178057,6 +178057,24 @@
+       }else{
+         u32 nPayload;             /* Bytes of payload total (local+overflow) */
+         int nLocal;               /* Bytes of payload stored locally */
++#define CAPSTONE_DIAG31 1
++#ifdef CAPSTONE_DIAG31
++        /* q15 case 31 diagnostic (an addition, prints only past aData's true end, at most 4 times): the cursor
++        ** the next load is issued at, aData's true bounds (read in window), and the bounds LCC decodes for the
++        ** out-of-window pointer itself. Silicon decoding relative to the cursor reads them shifted by one span. */
++        {
++          static int diag31_n = 0;
++          unsigned char *q31 = &aData[iOff];
++          unsigned long ab31 = __builtin_capstone_cap_get_base(aData), ae31 = __builtin_capstone_cap_get_end(aData);
++          if( (uptr)q31 >= ae31 && diag31_n++ < 4 ){
++            printf("DIAG31 adata=0x%lx:0x%lx cursor=0x%lx past_end=%lu q_decoded=0x%lx:0x%lx\n", ab31, ae31,
++                   (unsigned long)(uptr)q31, (unsigned long)((uptr)q31 - ae31),
++                   (unsigned long)__builtin_capstone_cap_get_base(q31),
++                   (unsigned long)__builtin_capstone_cap_get_end(q31));
++            fflush(stdout);
++          }
++        }
++#endif
+         iOff += getVarint32(&aData[iOff], nPayload);
+         if( p->flags==0x0D ){
+           u64 dummy;
