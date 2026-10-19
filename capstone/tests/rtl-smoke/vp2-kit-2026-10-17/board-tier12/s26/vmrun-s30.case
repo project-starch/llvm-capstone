@@ -1,0 +1,21 @@
+  s30-read)
+    # S-30's read demonstration (pre-registered in ISSUES S-30 and tier3-smoke/README.md): READ-ONLY, user-mode
+    # devmem reads through /dev/mem, so a refusal arrives as a signal to devmem, not as a kernel fault. Two groups:
+    # the revocation-node pool's first record (0xBFF00000, two words) and the tag bytes of the monitor's dom_stack
+    # (its globals, the region table among them: [0x80080380, 0x80088380) -> tag bytes from 0xBC2D2D2D + 0x8038,
+    # read as 257 aligned 64-bit words from 0xBC2DAD60). Each group stops at its first refused read.
+    # RESULT s30-read retval = (node group refused ? 1 : 0) | (tag group refused ? 2 : 0).
+    r=0
+    for a in 0xBFF00000 0xBFF00008; do
+      v=$(devmem $a 64 2>&1); s=$?; echo "S30R node $a rc=$s $v"
+      [ $s -eq 0 ] || { r=$((r | 1)); break; }
+    done
+    a=$((0xBC2DAD60)); n=0; nz=0; first=
+    while [ $n -lt 257 ]; do
+      h=$(printf '0x%X' $a); v=$(devmem $h 64 2>&1); s=$?
+      [ $s -eq 0 ] || { echo "S30R tag $h rc=$s $v"; r=$((r | 2)); break; }
+      case $v in 0x0000000000000000) ;; *) nz=$((nz + 1)); [ -z "$first" ] && first="$h=$v";; esac
+      a=$((a + 8)); n=$((n + 1))
+    done
+    echo "S30R tag words read $n nonzero $nz first ${first:-none}"
+    echo "RESULT s30-read retval=$r" ;;

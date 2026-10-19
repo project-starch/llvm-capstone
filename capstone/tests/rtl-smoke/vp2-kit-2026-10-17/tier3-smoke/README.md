@@ -2363,3 +2363,72 @@ Steps predicted for each E (the RTL lane's table, checked: at q = 1,000 the form
   entry walk's ~840 cycles of fixed testbench memory delay, intersected with var1k's completion. So 600 SPINS, and 300
   and 100 with it.
 - **This lane makes no numeric prediction.** The step count is the primary reading.
+
+### S-30's matched pair, pre-registered (2026-10-19 18:27, before its boots): after stage 1 and the bracket, board 1
+
+**The fix:** caplifive-opensbi 9bee361 (branch s30-hold-tagstore, pushed, on aab63d5). `cap_env_init` carves
+[0xBC2D2000, 0xC0000000) LINEAR out of Linux's region after R-55's exact cut. The range is the tag store and the
+revocation-node pool, and 0xBC2D2000 is the DTB's RAM end. The piece is held in a monitor global, never in the region
+table, on every FPGA bitstream. Its decoded bounds are reported as S30H base, then end.
+- **The offline gate passed before any boot:** `r55-regions/replay.py --hold 0xBC2D2000:0xC0000000` (567f7f7f0a35a760;
+  the three README controls are unchanged).
+  - On a2-0568f93a9, a2-respin-afcd19bea and a2-sublet-d93a8d66b: OVERLAP 0, no inexact piece, slots 112 / 82 / 116,
+    all under 127.
+  - Linux's top slot is nominal and decoded [0xbc200000, 0xbc2d2000). The held piece is decoded [0xbc2d0000,
+    0xc0000000).
+  - The check's own control fires: the range protected without the carve gives OVERLAP 1.
+
+**The image:** 3d3e400d7b0646ff (`s30-prep.sh` 7ec87535bfc76a8a). It is the pair's stage (rev7's record, with the pair's
+bounded vm-contract.sh, exactly as image-s26) plus ONE vmrun.sh case, s30-read (`vmrun-s30.case` c47423fa27ec0924). The
+stage was restored to its record, and the bake checked by hash that the initramfs carries vmrun.sh.
+
+**s30-read**, the registry's demonstration, READ-ONLY. Every read is user-mode busybox `devmem` through /dev/mem, so a
+refusal reaches devmem as a signal, not a kernel fault.
+- It reads the node pool's first record (0xBFF00000, two words).
+- It reads the tag bytes of the monitor's dom_stack, [0x80080380, 0x80088380), whose globals include the region table:
+  257 aligned 64-bit words from 0xBC2DAD60, which is 0xBC2D2D2D + 0x8038.
+- Each group stops at its first refused read. retval = node refused (1) | tag refused (2).
+- No write is made. A write test needs the lead's word.
+
+**The arms** (`run-s30.sh` c0f9568c0410b84c, judged by `s30-judge.py` 5d6e125bbc535175). Two cold boots that differ
+only in the wrapper. Monitor 5b5e86b, defines as fix1's, rungs b0-stats, vm-contract, b0-hello, s30-read (the read
+last).
+- **s30-old** (wrapper aab63d5, firmware 4104ef2029145164) predicts:
+  - the canary as fix1's: QNT0 001E8480, every rung 0, no Oops;
+  - no S30H line;
+  - s30-read 0, with at least one nonzero tag word. That is the positive control that the reads reach tag memory, and
+    it makes S-30 DEMONSTRATED for reads.
+- **s30-new** (wrapper 9bee361, firmware f187c4d4f3ade200) predicts:
+  - the same canary, so Linux's RAM below 0xBC2D2000 is still reached;
+  - exactly two S30H lines: base <= 0xBC2D2000, end 0xC0000000;
+  - s30-read 3: both groups refused at their first read, and the boot continues.
+- **Reading the outcomes:**
+  - s30-old reading 0 with no nonzero tag word: an instrument failure (the reads did not reach tag memory), not
+    evidence about S-30.
+  - s30-new failing its canary: S-30's carve broke Linux. That is a VOID about the read and a finding about the carve.
+- `chain-s30.sh` b30301b8f9863d2c starts it after stage 1's CHAIN_FIX DONE. If stage 1's process is gone without DONE,
+  it HOLDs.
+- The dry run is in `dryrun-s30.txt`:
+  - the prep and the read rung against a fake devmem (0 when reads pass, 3 when they fault);
+  - both arms through a stub driver;
+  - the judge's fixtures built from fix1's real run dir, with an s30-new fixture judged as s30-old FAILING;
+  - the chain's HOLD branch.
+
+### Amendment to stage 1's reading (2026-10-19 18:27, while sql0-fix runs, before any of its result was read)
+
+The runtime lane withdrew part of the reading (dev b054c5bc926e).
+- **What CPID is:** in the CPMX dumps, CPID is `i | (cpmp_region[i] << 8)` (5b5e86b :3645). "00001507" means slot 7
+  holding region 21, not a revocation-node id.
+- **What CPHT is:** this loop's slot index, not a tag. No tag was ever printed.
+- **What FRGS reads:** the monitor's bookkeeping. It cannot say whether a deny was true or false.
+
+The pre-registered "slot 7 vouched → a false deny, repaired by the strobe" is therefore WITHDRAWN as a grading rule.
+sql0-fix and pb10-fix are graded on the narrower reading:
+- **They READ:** a deny present at the FRTY was removed by the strobe or by its pipeline flush. Which of the two is not
+  separable here.
+- **They panic as before:** both are ruled out as the repair.
+
+FRGS, FRGU and FRGD are reported as bookkeeping. An FRGU still names a slot the monitor cannot account for, and is
+reported as such. The tag and validity of the refused slot itself need the next monitor's reads at the refusal:
+`__capfield(tmp, 1)` and `__capfield(tmp, 0)` in swap_cpmp's no-region path. That build is held until the RTL lane says
+whether a CCSRRW read of a CPMP CSR returns the entry's hardware tag.
