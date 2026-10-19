@@ -38,6 +38,22 @@ The captures:
     per boot, the offset does not.
   - This ordering is an observation. Its relation to the refusal is not established.
 
+**Every FRTY is the instruction after the module's CSRUNV in `vm_ioctl`.** The page offset of each pc is matched to
+the instruction after a CSRUNV (funct7 0x24) or CSRETIRE (funct7 0x53) in that run's module .text, and named by the
+enclosing symbol. Exactly one candidate matched in each module:
+
+| instance | module | FRTY pc | function |
+|---|---|---|---|
+| pb10 | 3005ed52 | 00F140CC | `vm_ioctl+0xa2c` (CSRUNV at .text+0x40c8) |
+| pb10-fix6b | d71f207a | 00F14164 | `vm_ioctl+0xac4` (CSRUNV at .text+0x4160) |
+| tree A step 4 | 39d8492d | 01113D98 | `vm_ioctl+0xab0` (CSRUNV at .text+0x3d94) |
+| sql0-treeA | 39d8492d | 01713D98 | `vm_ioctl+0xab0` (a different load base) |
+
+- The method recovers tree A's `vm_ioctl+0xab0`, which a claim-auditor had derived independently.
+- **The FRTY handler is the first candidate** (the runtime lane, 2026-10-19): it reads and writes back every CPMP
+  entry (`sbi_capstone.c:3490-3533`, capstone-sbi 007d81d), slot 7 included, then sfence.vma and fence.i, right
+  before each refusal. The RTL lane is simulating it.
+
 **Two addresses:**
 - **0xBC2C0825, three times** (pb10, pb10-fix6b, sql0-treeA): `mod_node_page_state+0x40` from `unpin_user_page+0x2a`,
   `lb a3,0(a3)` (insn 00068683), a3 ffffffd83c2c0825. That is two bitstreams, three modules, two programs, and Images
