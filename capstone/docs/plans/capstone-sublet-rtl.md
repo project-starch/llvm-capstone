@@ -547,8 +547,21 @@ clear" rather than implying a fault is terminal in itself.
 
 **The construction**, one source with three sub-arms, frame options = 3 throughout so the ecall and page-fault
 escapes are both resumable kinds:
-- **kind 1** by setting `CSUPQUANTUM` small. The quantum counts RETIRED INSTRUCTIONS (`sup_count_d = sup_count_q -
-  1` per committed instruction while a context runs), so an expiry is deterministic rather than timing-dependent.
+- **kind 1** by setting `CSUPQUANTUM` small. **CORRECTED: the quantum is a per-CYCLE budget, not an instruction
+  count.** `csr_regfile.sv:2145`'s condition has **no retirement term** and the block at `:2089` is evaluated every
+  cycle; what the comment restricts is WHEN it counts (while the domain runs, never during the switcher's walks),
+  not what it counts. I wrote "retired instructions" here and said it twice to the semantics owner, inferring it
+  from the condition without noticing the absent term.
+
+**AND A FINDING THAT CAME OUT OF GETTING THAT WRONG.** With the budget at 400 or 1,000 cycles the context retires
+**nothing at all**: the instruction after the CSRUNV in the trace is the caller's own marker at CSRUNV+4. At 4,000
+it completes its whole loop. So more than a thousand cycles are charged to the context between the switcher's walk
+ending and the context's first retirement. Two of my hypotheses are refuted: the caller's pre-entry instructions
+are not charged (the counter loads at the entry, `:2097-2101` and `:2110-2114`), and it is not the cold page-table
+walk after a TLB flush (the same 1,000-cycle quantum without the pre-entry fence also retires nothing). I have not
+offered a third. **Why it matters:** a context armed below that cost retires nothing, so a scheduler re-entering it
+burns the budget and makes no progress, which is the livelock the exclusion's own comment exists to prevent, and
+the kit's armed quantum must exceed it. The mechanism needs a cycle-level look at that window.
 - **kind 3** by the context's ecall, as today.
 - **kind 4** by a load from an address the context's chain does not map, with options bit 1 set.
 - kind 5 is left out: node pressure needs the allocator's reserve and is a different arm.
