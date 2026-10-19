@@ -3965,3 +3965,42 @@ the cursor inside; past_end 50976; no fault at the load, so the case completes (
   - Against "not checked": the same boot's bounds control faults with cause 28 on a plain load, and the RTL reading
     (load_store_unit.sv, 8522d72fe:1318-1356) decodes the check from the live cursor.
   - A load at an out-of-window cursor that lies OUTSIDE the shifted bounds would settle it directly.
+
+### alias-load, pre-registered (2026-10-20 06:2x, before its boot): board 1, tree A, the checked-or-unchecked discriminator for case 31
+
+The compiler lane's test (lane alias-load ae6a930bc0ab, tests/rtl-smoke/vp2-kit-2026-10-17/alias-load/PREREGISTRATION.md).
+diag31 left one gap: "checked against the shifted bounds" and "not checked at all" both predict no fault there.
+- **The image:** alias-load.dom 4aa36d96885ff0ab (SDK t3-freeze-nb). It derives a 20,160-byte child (E=2, a 64 KiB span)
+  at a 64 KiB-aligned static arena + 0x20000.
+  - Each process does one `lbu a2, 0(s4)` through the offset capability itself. LCC reads that capability's bounds
+    just before the load.
+  - Marker bytes: 0xa5 at the alias target, 0x5a at the outside target, both inside the mapped arena.
+- **The arms, one capstone-vexec process each, in this order:**
+  - inb 100;
+  - alias 0x10100;
+  - outside 0x16000;
+  - past 0x4ed0, which is 16 bytes past the end and still in window.
+- **The artifacts:**
+  - `board-tier12/alias/alias-prep.sh` cdd664ab05f10d13, from ff-prep.sh, with the stage's own
+    module 39d8492d and no swap;
+  - `alias/b0-bake-alias.sh` 52026dfbcb5a172c and `alias/vmrun-alias.case`
+    04bab857a9fb12ab;
+  - image-alias de20785c65780151, whose bake checked alias-load.dom by sha256 inside rootfs.cpio;
+  - firmware fw-alias 08b1a40c7373f381 (monitor f13dbc5, wrapper aab63d5, the D defines, dom_stack gate PASS).
+- **The run:** `alias/run-alias-b1.sh` bd4b921091010e3d, one cold boot, rungs b0-stats,
+  b0-hello, alias-load. Its dry run, on a stub transcript of the four predicted shapes, parsed every arm, and a wrong
+  firmware stopped it.
+- **QEMU control** (qkit7-rev2): inb loads 0. alias, outside and past each fault with cause 28 at address = cursor. LCC
+  reads the true bounds in every arm.
+
+**The board prediction (the compiler lane's):**
+- inb: value 0, then AL_DONE;
+- alias: decoded = child+0x10000 : child+0x14ec0, then AL_LOADED value=165, then AL_DONE;
+- outside: decoded shifted by the same span, then cause 28 at address = cursor, with no AL_LOADED;
+- past: decoded exact, then cause 28.
+
+**What decides:**
+- outside faulting with 28 while alias reads 165: the load IS checked, against the bounds decoded at its own cursor;
+- outside completing with value 90: out-of-window loads are not checked;
+- alias faulting: the case-31 mechanism is wrong.
+- Stores are not covered.
