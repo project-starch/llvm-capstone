@@ -1892,3 +1892,34 @@ and the RTL agree with the base, and nothing about S-27, S-28, R-57 or Q-24.
 on receipt), then sql0-treeA. sql0-treeA's first waiter, which woke on TAL DONE, was stopped by process group before it
 did anything (its out file is empty). Its measure-only bake would have shared the buildroot with rev8's bake. It is
 relaunched behind the S-29 batch.
+
+### S-29 and S-23's fetch face on tree A, pre-registered (2026-10-19 14:05, before they run): seven bare arms
+
+- **The arms:** the RTL lane's seven images (dev 8e1df1e05a3c, `capstone/tests/rtl-smoke/satpstale-bare-2026-10-19/`),
+  matched by its `images/SHA256SUMS` (all seven OK), with board_rec 0x80017000 in each.
+  - Their wrapper, prologue, linker script and instruction header are byte-identical to the 25 arms'. So they run
+    through the same bare runner and infra-retry, one power cycle each.
+- **Predicted:** each reads its tree A vector from that folder's `results/rtl-sim-vectors.txt`:
+
+  | Arm | Predicted vector |
+  |---|---|
+  | sv-stale | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55 |
+  | sv-stale-f | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55 |
+  | sv-stale-b | 0xaaaa 0xbbbb 3 0xb 0xbbbb 0x55 |
+  | sv-stale-bf | 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55 |
+  | sv-stale-bn | 0xaaaa 0xcccc 3 0xb 0xaaaa 0x55 |
+  | sv-fetch-c | 0xaaaa 0xc 0x80006000 0x80006000 0x55 |
+  | sv-fetch | 0xaaaa 1 0x80006000 0x80016000 0x55 |
+
+  - sv-fetch is cause 1, with a PHYSICAL last value different from the faulting virtual address before it. That is
+    S-23's signature from a stale translation alone. On tree B it reads cause 12 with the two equal.
+  - sv-stale-bf (doubly fenced) and sv-stale-bn (no probe access) read the same on both trees. A difference on
+    either is about the image or the harness, not the window.
+  - Every arm ends in a spin loop at the cycle limit; the vector is the recorder's contents.
+- **When:** after the tree A Linux steps end, on TAL DONE or STOP, since bare arms do not need Linux. A HOLD holds
+  them. They run while rev8's firmware builds, which never touches the board.
+  - Order: the five va-satpstale arms, then the satpu2 pair last (sv-fetch-c, then sv-fetch).
+- **Compared** by `compare-sv.py` (count and values as 64-bit integers). The batch fails unless the table gives
+  exactly 7 arms.
+- **Dry run:** `dryrun-tier3-sv-batch.txt`. These arms say nothing about S-27, S-28, R-57 or Q-24.
+- **The order after the Linux steps** is now: this batch (with rev8's build alongside), rev8's boot, then sql0-treeA.
