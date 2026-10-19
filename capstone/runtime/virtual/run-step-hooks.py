@@ -193,14 +193,26 @@ def main():
     # uninjected run with the same effective window. A condition raised
     # after a demand GUP stops the pin-ahead window (window 1); one raised
     # before resolution leaves the fault to the launcher's CV_RESOLVE, whose
-    # window is the full one.
+    # window is the full one. A real quantum end or signal can also fall
+    # between a fault and its resolution in CV_STEP, whatever was injected:
+    # the module counts those faults (launcher_first). Each pins up to
+    # window - reference window pages more than the reference would have at
+    # that fault. Each such page is either one the walk never touches (one
+    # more pin) or one whose own fault never happens (one fewer fault event),
+    # never both: the two deltas share that budget. Without such a fault pins
+    # and fault events must match exactly.
     for name, ref in (('resched2', 'base1'), ('signal2', 'base1'), ('deadline2', 'base1'),
                       ('resched3', 'base1'), ('signal3', 'base1'),
                       ('resched1', 'base1'), ('signal1', 'base1'), ('deadline1', 'base1'),
                       ('resched4', 'base16'), ('signal4', 'base16'), ('deadline4', 'base16')):
+        window, ref_window = (int(re.search(r'pin_ahead_pages=(\d+)', CONFIGS[n][0] +
+                                            ' pin_ahead_pages=1').group(1)) for n in (name, ref))
+        late = reports.get(name, {}).get('launcher_first', 0) if window > ref_window else 0
         for mode in CONFIGS[name][1].split():
             got, want = counts(name, mode), counts(ref, mode)
-            checks[f'{name}_{mode}_accounting'] = bool(got and want and got == want)
+            checks[f'{name}_{mode}_accounting'] = bool(
+                got and want and got[0] >= want[0] and got[1] <= want[1] and
+                (got[0] - want[0]) + (want[1] - got[1]) <= late * (window - ref_window))
     # Partial GUP results leave the rest to later faults: every page the walk
     # touched still ends pinned (at least window 1's pins), after more faults
     # than the full window takes.
