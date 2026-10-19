@@ -41,8 +41,15 @@ But the sweep and the supervised list were VOIDED by my own error: run concurren
 three random generators excused by name because they are absent on both sides, and the comparator's own self-test
 fired first (status 0 clean, 1 on a one-sided absence, 1 when nothing is excused).** Use the IN-TREE comparator,
 `verif/sim/sweep-compare.py` with its committed `sweep-expected-missing.txt`; the older copy under `sup-runs` has
-no excuse list and returns status 1 on exactly that clean result. The 152-test supervised list is still running
-and tree B is not gated until it lands. **R-57's two saved-exception registers are SHARED-SAFE** (structural: one functional unit, one issue port,
+no excuse list and returns status 1 on exactly that clean result. **The 152-test supervised list is GREEN too:
+152 of 152 identical, 0 differing, 0 missing. So TREE B IS FULLY GATED at `8de3c48cf`** (its `core/` byte-identical
+to `d427e7391`). Its pre-registration, with the predictions written against the measured LUT floor rather than
+tighter than it and an endpoint discriminator rather than a stem one, is in
+`docs/plans/capstone-sublet-rtl.md`. **It has NOT been handed to synthesis as a build**, and the reason is in that
+entry: the third sufficiency question fails, since the flush has no silicon readback and the one available reading,
+whether S-23's fetch panics stop, cannot be told apart from a boot that was never going to panic. The
+recommendation is to batch it with the consuming resume, R-57's audited register sharing and an R-38-class fix if
+its arm confirms. The lead's call; the hash is ready and nothing further is owed on it. **R-57's two saved-exception registers are SHARED-SAFE** (structural: one functional unit, one issue port,
 a single-threaded DYN dispatch loop), with the caveat that the area saving is in the capture mux and the read-side
 priority chain rather than the flops; a candidate for the batch after tree B.
 
