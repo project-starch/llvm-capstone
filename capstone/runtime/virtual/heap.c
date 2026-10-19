@@ -125,8 +125,14 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
     for (unsigned i = 0; i < count; ++i) {
         size_t start = base + hdr + i * stride;
         size_t end = base + hdr + (i + 1) * stride;
+        /* Offset in integers first (lane runtime/cursor-window, 2026-10-19). `group + start - base`
+         * let the compiler keep a capability with its cursor near 0, far outside its bounds, live
+         * across this loop. On QEMU's compact profile a preemption saves it compressed and the resume
+         * decodes different bounds (capstone_supervisor.c virtual_store_reg/virtual_load_reg); on
+         * silicon a bounds-deriving op issued while it is out of window refuses with 29 (RTL arm
+         * 4eecdf450). Forming `start - base` first keeps every intermediate cursor in the group. */
         slots[i].parent = __builtin_capstone_cap_shrink(
-            (char *)group + start - base, start, end);
+            (char *)group + (start - base), start, end);
         if (__builtin_capstone_cap_get_base(slots[i].parent) != start ||
             __builtin_capstone_cap_get_end(slots[i].parent) != end) {
             if (!__capstone_malloc_bind_refused++) {
@@ -226,7 +232,7 @@ void *__capstone_malloc_slot_start(struct capstone_malloc_slot *r)
     return r->parent;
 }
 static void *backend_pointer(struct capstone_malloc_slot *r)
-{ return (char *)r->parent + r->key - __builtin_capstone_cap_get_base(r->parent); }
+{ return (char *)r->parent + (r->key - __builtin_capstone_cap_get_base(r->parent)); }  /* offset first; see bind_slots */
 void __capstone_malloc_slot_release(struct capstone_malloc_slot *r)
 { unindex(r); r->kind = SLOT_INTERNAL; }
 void __capstone_malloc_nested_release(struct capstone_malloc_slot *r)
