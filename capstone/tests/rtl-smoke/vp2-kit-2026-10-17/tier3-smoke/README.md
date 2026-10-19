@@ -1949,3 +1949,54 @@ relaunched behind the S-29 batch.
   new, 0 differ.
 - **So steps 1-3 end `CHAIN_TREEA_STEPS123_DONE` at 14:58.** As the RTL lane noted, none of these can see tree A's four
   fixes. They show the images and the RTL agree with the base, so tree A changed nothing they exercise.
+
+### Tree A step 4 (14:59-15:10): Tier 1 as rev7; sparse-churn does NOT wedge, and the boot ends in S-23's data-face shape at a per-CPU address (audit pending)
+
+- **As predicted:** b0-stats, b0-hello and vm-contract read their oracles, with the identity branch, as rev7 on
+  bf3db3175. `@@PARAM` diag_emerg=Y, node_flat_records=4096 and supervisor_slots=1. One banner, 0 refusal lines.
+- **sparse-churn, the matched pair** (same stage, firmware 7a53759a4773c81b and module 39d8492d; only the bitstream
+  differs):
+  - On bf3db3175 it wedged with S-25's face (rev7: 224 0x25, 225 0xc4, store_state 3, commit count 1; N=4 for that
+    face).
+  - On tree A it did NOT wedge (N=1). The console after `VM_BEGIN:sparse-churn` reads `FRTY:01113D98`, the region and
+    CPMP dump, `MTVL:BC2B9440 CPMX:00000002 INJS:00000002`. Linux then took `Oops - load access fault` (cause 5, badaddr
+    0xbc2b9440) at `_raw_spin_lock_irqsave+0x56` from `__wake_up_common_lock+0x4e`, then "Kernel panic - not syncing:
+    Fatal exception in interrupt".
+  - So none of the pre-registered (a), (b) or (c). The wedge is gone; the program went further and the kernel
+    panicked. The stopgap control stays open, and rev8 is its next arm.
+  - "The wedge is gone because of R-57's fix" is the RTL lane's expectation, at N=1. It is recorded separately from
+    the new face: a fix that lets a program run further can expose an older defect.
+- **The panic has S-23's data-face shape, as pb10 recorded it:** slot 7 = region 21 [0xAC100000, 0xC0000000) RWX,
+  CPHT 7, a kernel load through the linear map refused with badaddr = mtval. The address and the caller differ from
+  pb10's.
+- **What CPMX means:** `CPMX:00000002` is `CAPSTONE_NO_CPMP_REGION` (capstone-sbi `sbi_capstone.h:93`, reported at
+  `sbi_capstone.c:3637`). It is a constant reason for that trap path, so it names no failed allow term.
+- **Localisation** (no board time; the boot log's `DMA32 [mem 0x80000000-0xbc2d1fff]`, the CMA pool
+  0xac000000-0xbbffffff, and `percpu: Embedded 15 pages/cpu s23208 r8192 d30040 u61440`):
+  - The Oops's code bytes are `c.ld a4,0(a5)` (`__per_cpu_offset[cpu]`), then `auipc a5,0x7fb` and
+    `addi a5,a5,0x94`, then `c.add a5,a4`, then `lhu a4,0(a5)`. The same pair in the relinked vmlinux names
+    `__mmiowb_state`, which is `__per_cpu_start + 0x1440`.
+  - So in the running kernel (Image dcfc2e15bf1bbd77, the one firmware 7a53759a4773c81b embeds), CPU 0's per-CPU unit
+    is [PA 0xBC2B8000, 0xBC2C7000), and the refused read is `__mmiowb_state` itself.
+  - pb10's 0xBC2C0825 (`mod_node_page_state+0x40`, a per-CPU node-stat byte read through `__per_cpu_offset`) is unit
+    offset 0x8825 at the same base. That is in the dynamic area (0x7AA8-0xF000), where `alloc_percpu` objects live.
+    pb10's own base is not shown; the memory layout is identical.
+- **What that decides:** `_raw_spin_lock_irqsave` reads `__mmiowb_state` unconditionally. So PA page 0xBC2B9000 was
+  read successfully on every spinlock acquire in that boot before the refusal, which refutes a PERSISTENT deny of
+  that page or of slot 7. Both panics are "in interrupt", which fits a transient refusal at one moment.
+  - Neither the escape kind of the last CSRUNV return nor a revocation broadcast is recoverable from either capture.
+    No module print carries them at any diag setting.
+- A claim-auditor is checking this before anything enters ISSUES.md.
+
+### Tree A step 5, wm0 (15:10-15:20): runs to the end, MISSED 23, 23 of 23 as predicted (on bf3db3175 it wedged in its first control)
+
+- **The run:** kit bkit7-rev2sA, 26 of 26 steps, boot completed. `vp2-malloc (virtual-wmem): {'MISSED': 23}`, 23 of 23
+  cells the same as the QEMU prediction. The bundle is under
+  `wireshark/wmem-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`.
+- **The uaf-jumbo control,** where both bf3db3175 runs wedged, now ends in a reported `domain fault cause=25`.
+- **A confound:** the module differs too. On bf3db3175, wm0 wedged on modules 3005ed52 and d71f207a, and module
+  39d8492d never ran wm0 there. 39d8492d adds a resume sfence.vma and a satp refresh, which could plausibly bear on a
+  first-touch store.
+  - So wm0 is not a clean pair for R-57.
+  - The clean pairs are step 4's sparse-churn (module 39d8492d on both bitstreams) and step 6's pym0 (3005ed52 on
+    both).
