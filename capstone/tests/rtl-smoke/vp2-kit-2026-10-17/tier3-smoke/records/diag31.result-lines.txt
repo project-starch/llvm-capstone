@@ -1,0 +1,10 @@
+D31 BEGIN 06:12:30
+APPVM collect rc=75 calls=3 06:12:30
+APPVM images equal <mnt-hdd>/capstone/t3-images-nb/diag31.images.SHA256SUMS (3)
+APPVM boot rc=0 06:21:45 :: session <mnt-hdd>/capstone/t3-run/diag31/session: 3/3 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run/diag31/session/guest/board.txt; phase read
+APPVM read rc=0 06:21:45 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'MISSED': 1}
+D31 ARM END rc=0 06:21:45
+D31 LINE DIAG31 adata=0x3f93f61800:0x3f93f666c0 cursor=0x3f93f72de0 past_end=50976 q_decoded=0x3f93f71800:0x3f93f766c0
+D31 LINE DIAG31 adata=0x3f93f61800:0x3f93f666c0 cursor=0x3f93f75be0 past_end=62752 q_decoded=0x3f93f71800:0x3f93f766c0
+D31 readings: DIAG31 lines 2 (anywhere in a line: 2); steps @@STEP-END session-share 0;@@STEP-END control_uaf_mem5 139;@@STEP-END control_bounds_mem5 139;@@STEP-END 31_fz10_dbstat_decodepage_overflow 0;; faults domain fault cause=25 domain fault cause=28 ; FRTY 1 DRT1 0 Oops 0
+D31 DONE 06:21:45

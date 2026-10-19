@@ -3914,3 +3914,271 @@ two bundles):
 **Case 31's mechanism is the compiler lane's candidate, under RTL check:** a load whose cursor sits more than one window
 span past its bounds is checked against bounds decoded at that cursor, which are one span up and contain it.
 q15 subset f on tree B, behind cpyp-DB on board 2, gives 31's second bitstream.
+
+### diag31, pre-registered (2026-10-20 06:1x, before its boot): case 31 with the compiler lane's DIAG31 line, board 1, tree A
+
+The direct reading of case 31's candidate mechanism. The compiler lane's pre-registration is lane diag31 5876e58b6a1e,
+results/2026-10-20-diag31/PREREGISTRATION.md.
+- **The image:** sublet/diag31-statdecodepage.patch, applied after the Sublet patch. Just before statDecodePage's
+  `iOff += getVarint32(&aData[iOff], nPayload)`, and only when `&aData[iOff]` is at or past aData's true end (at most 4
+  times), it prints `DIAG31 adata=<true base>:<true end> cursor=<…> past_end=<…> q_decoded=<LCC base>:<LCC end of that
+  pointer>`.
+  - It adds no load; the program's own getVarint32 load is still the test.
+  - build.json records extra_patches, so this image set can never pass for the arm's images.
+- **The build:** <mnt-hdd>/capstone/diag31-build-full. Case 31 349e5418b72bd614, controls 5acca3a2 and 6d2028dc. SDK
+  t3-freeze-nb, SDK-BUILTINS OK.
+  - EXPECT_IMAGES is diag31.images.SHA256SUMS e6d4c35af624ad23, 3 lines, all three present in the build by content.
+- **The runner:** `tier3-diag31-board1.sh` 855903713265c9ac. It is q15's path, with dev's arm script and run-virtual.py from wt-q15
+  at f1d522d7fff1, on kit bkit7-rev2xD, `--only 31`.
+  - It reports every DIAG31 line, counted both anchored and anywhere in a line, plus the step exits, the faults and
+    FRTY/DRT1/Oops.
+  - Its dry run reached D31 DONE on a stub, and a busy board stopped it.
+- **QEMU control** (qkit7-rev2, the compiler lane):
+  `DIAG31 adata=0x3f8eb61800:0x3f8eb666c0 cursor=0x3f8eb72de0 past_end=50976 q_decoded=0x3f8eb61800:0x3f8eb666c0`,
+  then cause 28 at the load (CAUGHT). There, q_decoded is the true bounds.
+
+**The prediction (the compiler lane's):** q_decoded equals aData's bounds shifted by exactly +0x10000 at both ends, with
+the cursor inside; past_end 50976; no fault at the load, so the case completes (MISSED); the controls fault 25 and 28.
+
+**The readings that decide:**
+- shifted q_decoded and no fault: the load is checked against cursor-relative bounds, so a far overrun aliases instead
+  of trapping;
+- true q_decoded and the case still completing: the load is not checked at all, which is a different finding;
+- a fault: the miss is not deterministic;
+- no DIAG31 line at all, with the case reached: the condition did not occur here, and the reading is void.
+
+### diag31, result (2026-10-20 06:12-06:21, board 1, tree A): the decoded bounds are aData's shifted by exactly one 64 KiB span, and the load passes
+
+`records/diag31.result-lines.txt`. UNGATED.
+- **Two DIAG31 lines**, counted the same anchored and anywhere in a line:
+  - `adata=0x3f93f61800:0x3f93f666c0 cursor=0x3f93f72de0 past_end=50976 q_decoded=0x3f93f71800:0x3f93f766c0`
+  - `adata=0x3f93f61800:0x3f93f666c0 cursor=0x3f93f75be0 past_end=62752 q_decoded=0x3f93f71800:0x3f93f766c0`
+- **Checked by script against the prediction:**
+  - base and end are each shifted by exactly +0x10000 (the 20,160-byte buffer);
+  - each cursor lies inside the shifted bounds and outside the true ones;
+  - past_end equals cursor minus the true end, and the first line's 50976 is the predicted value.
+- **The case completed** (exit 0, MISSED), and the controls faulted with 25 and 28. FRTY 1, no Oops.
+- **Against QEMU's control** (qkit7-rev2): there q_decoded is the TRUE bounds, and the load faults with cause 28.
+- **Every pre-registered reading holds.**
+- **What it does not separate on its own:** the two branches "the load is checked against the shifted bounds" and "the
+  load is not checked". Both predict no fault here.
+  - Against "not checked": the same boot's bounds control faults with cause 28 on a plain load, and the RTL reading
+    (load_store_unit.sv, 8522d72fe:1318-1356) decodes the check from the live cursor.
+  - A load at an out-of-window cursor that lies OUTSIDE the shifted bounds would settle it directly.
+
+### alias-load, pre-registered (2026-10-20 06:2x, before its boot): board 1, tree A, the checked-or-unchecked discriminator for case 31
+
+The compiler lane's test (lane alias-load ae6a930bc0ab, tests/rtl-smoke/vp2-kit-2026-10-17/alias-load/PREREGISTRATION.md).
+diag31 left one gap: "checked against the shifted bounds" and "not checked at all" both predict no fault there.
+- **The image:** alias-load.dom 4aa36d96885ff0ab (SDK t3-freeze-nb). It derives a 20,160-byte child (E=2, a 64 KiB span)
+  at a 64 KiB-aligned static arena + 0x20000.
+  - Each process does one `lbu a2, 0(s4)` through the offset capability itself. LCC reads that capability's bounds
+    just before the load.
+  - Marker bytes: 0xa5 at the alias target, 0x5a at the outside target, both inside the mapped arena.
+- **The arms, one capstone-vexec process each, in this order:**
+  - inb 100;
+  - alias 0x10100;
+  - outside 0x16000;
+  - past 0x4ed0, which is 16 bytes past the end and still in window.
+- **The artifacts:**
+  - `board-tier12/alias/alias-prep.sh` cdd664ab05f10d13, from ff-prep.sh, with the stage's own
+    module 39d8492d and no swap;
+  - `alias/b0-bake-alias.sh` 52026dfbcb5a172c and `alias/vmrun-alias.case`
+    04bab857a9fb12ab;
+  - image-alias de20785c65780151, whose bake checked alias-load.dom by sha256 inside rootfs.cpio;
+  - firmware fw-alias 08b1a40c7373f381 (monitor f13dbc5, wrapper aab63d5, the D defines, dom_stack gate PASS).
+- **The run:** `alias/run-alias-b1.sh` bd4b921091010e3d, one cold boot, rungs b0-stats,
+  b0-hello, alias-load. Its dry run, on a stub transcript of the four predicted shapes, parsed every arm, and a wrong
+  firmware stopped it.
+- **QEMU control** (qkit7-rev2): inb loads 0. alias, outside and past each fault with cause 28 at address = cursor. LCC
+  reads the true bounds in every arm.
+
+**The board prediction (the compiler lane's):**
+- inb: value 0, then AL_DONE;
+- alias: decoded = child+0x10000 : child+0x14ec0, then AL_LOADED value=165, then AL_DONE;
+- outside: decoded shifted by the same span, then cause 28 at address = cursor, with no AL_LOADED;
+- past: decoded exact, then cause 28.
+
+**What decides:**
+- outside faulting with 28 while alias reads 165: the load IS checked, against the bounds decoded at its own cursor;
+- outside completing with value 90: out-of-window loads are not checked;
+- alias faulting: the case-31 mechanism is wrong.
+- Stores are not covered.
+
+### alias-load, result (2026-10-20 06:28-06:34, board 1, tree A): out-of-window loads ARE checked, against the bounds decoded at their own cursor; every predicted value holds
+
+`records/alias-load.result-lines.txt`. UNGATED. b0-stats 0, b0-hello 0, alias-load 0. FRTY 0, DRT1 0, no Oops.
+- **Checked by script** (child = 20,160 bytes, E=2):
+
+| arm | decoded bounds vs child | cursor in decoded | in true bounds | load |
+|---|---|---|---|---|
+| inb (100) | exact | yes | yes | AL_LOADED value=0, AL_DONE |
+| alias (0x10100) | +0x10000 at both ends | yes | no | AL_LOADED value=165 (the alias marker), AL_DONE |
+| outside (0x16000) | +0x10000 at both ends | no | no | cause 28 at address = cursor |
+| past (0x4ed0) | exact | no | no | cause 28 at address = cursor |
+
+- **What it decides:** the load IS bounds-checked, against bounds decoded at its own cursor.
+  - The two out-of-window arms decode the same shifted bounds. They differ only in where the cursor sits, and only the
+    one whose cursor falls inside that decode passes.
+  - A far overrun therefore aliases exactly when the cursor-relative decode contains the cursor. It reads the aliased
+    byte, here 0xa5, one span away.
+- **Together with diag31, this is case 31's mechanism on silicon:** the cursor is 50,976 bytes past a 20,160-byte buffer,
+  inside the one-span-shifted decode, so it passes and MISSES.
+- **QEMU, by contrast,** keeps exact bounds in the register, and alias, outside and past each fault with 28.
+- **A parser slip:** the SEQ's per-arm `loaded []` is the parser's. Its regex expected `AL_LOADED value=`, while the
+  image prints `AL_LOADED off=<off> value=N`. The dry-run stub was written in the same assumed format, so it could not
+  catch this. The values above are read from the raw lines.
+- **Not covered:** stores, and the chained-excursion re-encode, which the compiler lane infers from source and has not
+  measured.
+
+### alias-store, pre-registered (2026-10-20 06:3x, before its boot): board 1, tree A, the store twin
+
+The compiler lane's store twin (lane alias-load 6c8f59560766, PREREGISTRATION-store.md), for the auditor's open point.
+The RTL's check covers loads and stores alike (`lsu_ctrl.fu inside {LOAD, STORE}`). If stores alias, a far overrun
+silently WRITES another object.
+- **The image:** alias-store.dom b68b3d2586a91d07, with alias-load's child and arena and the same markers (0xa5 at the
+  alias target, 0x5a at the outside target).
+  - Each process does one `sb a0, 0(s5)`, with s5 = cincoffset(child, offset), then reads the target back through
+    the arena's own in-bounds capability.
+  - The arms and their order are alias-load's.
+- **The pipeline:** `board-tier12/astore/`, the alias-load pipeline with the names, image and hash changed.
+  - astore-prep.sh fefe6022332bf585, b0-bake-astore.sh 1a52322356bfaa27,
+    vmrun-astore.case 1d0ac026b4d45064;
+  - image-astore d26fbc4915cb47a8, with the image checked by sha256 in rootfs.cpio;
+  - firmware a53240c76b0a162f, dom_stack gate PASS.
+  - The runner is run-astore-b1.sh 67392c3831972a71.
+- **The parser:** this time its format was taken from the image's real output, the QEMU run's lines
+  (`AS_READBACK off=<off> value=N`, `AS_STORED off=<off>`). It was controlled on those real lines, reading inb's
+  store and readback 60 and alias's QEMU fault. That is alias-load's slip, not repeated.
+- **QEMU control** (qkit7-rev2): inb reads back 60. alias (before=165), outside (before=90) and past each fault with
+  cause 28 at address = cursor, with no AS_STORED.
+
+**The board prediction (the compiler lane's):**
+- inb: readback 60, then AS_DONE;
+- alias: decoded child+0x10000 : child+0x14ec0, before=165, then AS_STORED and AS_READBACK value=60, then AS_DONE. The
+  store lands 64 KiB away and overwrites the marker;
+- outside: decoded shifted, before=90, cause 28 at address = cursor, no AS_STORED;
+- past: decoded exact, cause 28.
+
+**What decides:**
+- alias reads back 60 while outside faults: stores alias like loads, so an overrun past one span writes without a trap;
+- alias faulting: stores are checked differently;
+- outside completing: out-of-window stores are not checked.
+
+### Case 31's mechanism, audited (2026-10-20 06:4x, claim-auditor): SUPPORTED for loads, with three corrections
+
+**CORRECTION to the diag31 section above:** it says "the same boot's bounds control faults with cause 28 on a plain load".
+The control's faulting instruction (0x22064) is `sb a0, 0x0(a1)`, a STORE. It still shows the LSU's bounds block is live
+in a context, since a cause 28 on sb can come only from load_store_unit.sv:1356. It is not a load, though.
+
+**Supported, from source and the board** (8522d72fe):
+- The LSU decodes `lsu_cap_a = decompress_cap_tagged(lsu_ctrl.cursor_a, …)` (load_store_unit.sv:338), with cursor_a
+  being rs1's cursor, and checks the effective address against that decode (:1353-1356, cause 28).
+- LCC reads the same decode on the same inputs (ex_stage.sv:887; capstone_dyn_unit.anvil:405-406), so the diag's
+  q_decoded is the check's own bounds.
+- The auditor's 64-bit model of compress_bounds/decompress_bounds (ariane_pkg.sv:673-720) reproduces both diag31
+  q_decoded values to the digit, and all four alias-load arms.
+- CINCOFFSET checks the type only, with no tag clear and no representability check (capstone_flu_unit.anvil:29-60).
+- Case 31's access is `lbu a1, 0(a0)` right after `cincoffset a0, a0, a1`, with a0 from an ldc: a capability load.
+- Case 32's statDecodePage is byte-identical and faults 28 on silicon.
+
+**REFUTED as worded:** "an overrun past one window span aliases".
+- With S = 2^(E+14), a byte access at an out-of-window cursor passes iff (cursor − base) mod S ≤ len − size. Otherwise
+  it still traps 28.
+- Case 31's cursor is 50,976 bytes past the END (less than one span) and 71,136 past the base.
+- For its buffer, overruns up to 45,376 bytes past the end trap. Beyond that, about 31% of positions alias: 2,520 of
+  8,192 in the model's four-span scan.
+
+**Inferred, not measured:**
+- stores and LDC/STC: the same decode by source (load_store_unit.sv:1320 covers LOAD and STORE). alias-store is booting
+  on board 1 now.
+- tree B: an identical decode path by source (ariane_pkg.sv unchanged between the trees), not run. q15 subset f on tree B
+  is queued.
+- the bitstream's identity in these boots: a label, not a hash.
+
+**It amends a documented prior finding:** the Q-30 history note's "silicon bites only on instructions that derive
+bounds". Its simulation arm has no load at an out-of-window cursor.
+
+**The wording the auditor allows in ISSUES** is the statement above, with the exact condition, the alias-load
+measurement, the case 31 witness (3 board MISSED, 3 QEMU CAUGHT), "stores and LDC/STC: same decode by source,
+unmeasured", and the Q-30 amendment.
+
+### alias-store, result (2026-10-20 06:39-06:45, board 1, tree A): out-of-window STORES alias like loads, so a far overrun silently writes another location
+
+`records/alias-store.result-lines.txt`. UNGATED. The image sha in the fault lines is b68b3d2586a91d07, as registered.
+FRTY 0, DRT1 0, no Oops.
+
+| arm | decoded vs child | before | store | readback |
+|---|---|---|---|---|
+| inb (100) | exact | 0 | AS_STORED | 60 |
+| alias (0x10100) | +0x10000 at both ends | 165 | AS_STORED, no fault | **60**: the marker 64 KiB away is overwritten |
+| outside (0x16000) | +0x10000 at both ends | 90 | cause 28 at address = cursor, no AS_STORED | — |
+| past (0x4ed0) | exact | 0 | cause 28 at address = cursor | — |
+
+- **Every predicted value holds.** The store half of case 31's mechanism is now measured, not inferred.
+  - A `sb` through a capability whose cursor is out of window is checked against the bounds decoded at that cursor.
+  - When that decode contains the cursor, it writes one span away without a trap.
+- **QEMU** faults alias, outside and past with 28.
+- **Still not measured:** LDC/STC (capability loads and stores, which take the same decode by source) and tree B.
+
+### sql0-srzdev-treeB, result (2026-10-20 06:08-06:50, board 2, tree B): FRTY 21 on dev's srz module, so the FLOOR COMMIT is the variable that removes the fetch face
+
+`records/sql0-srzdev.result-lines.txt`. UNGATED. The cells are VOID as declared (runner 1f099612).
+- **The must-fire:** the staged module is 90bf036f, and the banner srevroot-zero-2 appears once.
+- **FRTY 21**, all at 0171148C, DRT1 0, DRTX 0, no Oops. The prediction held: FRTY 21, DRT1 0.
+- **The site:** frty-decode.py against 90bf036f's own .ko gives retire+0x220, the unique CSRETIRE successor at page
+  offset 0x48c. That is the same site as every sql0 boot.
+- **The session work equals sql0-nf-treeB's:**
+  - 21 steps, 741 lines outside the monitor's lines and heartbeats, 651 CAPSTONE_VM_ADD_OK, and 21 pg_notify FATALs;
+  - the only difference is the 21 FRTY with their 231 FRGS and 21 FRGD.
+- **So the one-variable pair** (90bf036f against a4aa5668, which differ by the floor commit 770daec2 alone) reads FRTY
+  21 → 0. The tier-m changes (#254, #257, #242, the srz form) did not remove the face, and the floor commit did.
+- **Still open, from the audit:**
+  - alternative 1, that under the floor retire()'s CSRETIRE is silently REJECTED, so nothing broadcasts. node-floor-2's
+    release line is the reading, and it runs next on board 2;
+  - nothing yet reads the broadcast index or slot 3's node index directly.
+
+### node-floor-2, results (2026-10-20 06:50-07:39, board 2, tree B): Tier 1 PASSES, and every CSRETIRE succeeds under the floor, so the auditor's alternative 1 is REFUTED
+
+`records/nf2.result-lines.txt`. UNGATED.
+
+**Tier 1 (t1-nf2), 06:50-06:57:**
+- The four rungs read as t1-old's, the banner node-floor-2 is present, and DRT1/DRTX/Oops are 0.
+- **Release lines:** the check printed "6 against 3 contexts", but three of the six are the vm-suite rung's
+  `KMSG-AFTER-CHURN:` dmesg replay of the same lines (identical kernel timestamps). Unique, there are 3 release lines for 3
+  contexts: attempted 11, 11 and 13, each succeeded = attempted, first_id 1024 (node_flat_records 4096).
+- Each line precedes its context's ADD_OK line because the kernel prints it at teardown, before the case writes the
+  captured stdout.
+
+**sql0-nf2-treeB, 06:58-07:39:**
+- **The must-fire:** the staged module is 54d8a3af, and the banner appears once.
+- **FRTY 0, DRT1 0,** DRTX 0, no Oops, as predicted.
+- **21 release lines for 21 contexts,** unique by kernel timestamp, with no replay in this transcript. Each reads
+  attempted=24 succeeded=24 first_id=1024.
+- **What this rules out:** retire()'s CSRETIREs are NOT rejected under the floor. Every teardown retire succeeds, so the
+  broadcasts happen, and the fetch face is still 0.
+  - That refutes the audit's alternative 1.
+  - Together with sql0-srzdev-treeB (21 on 90bf036f, the floor commit alone as the variable), the node floor removes
+    the fetch face by changing WHICH index retire broadcasts, not WHETHER it broadcasts.
+- **Still inferred:** that the broadcast index equals slot 3's physical index p. Neither is read directly. The floor's
+  effect is consistent with it, and no other reading on the table explains 21 → 0.
+
+### node-floor-2 on tree A, Tier 1, and the scorable sql0 arm's kits, pre-registered (2026-10-20 07:4x, before the boot): board 1
+
+dev's module board build is now 54d8a3af (node floor on dev at 794d7c5815f5). With srz removing S-23's data face and
+the floor removing its fetch face, sql0 can give scorable postgres cells on silicon for the first time, using dev's
+runner 7ce203f9 (the empty-directory fix). The compiler lane is producing that runner's QEMU reference on 54d8a3af's
+twin (qkit7-nf2, two runs and a PASS line). That arm is pre-registered when the reference reads.
+- **Now: 54d8a3af's Tier 1 boot on TREE A** (board 1, idle). Its Tier 1 so far was on tree B only, and the sql0 arm runs
+  on tree A first.
+  - The runner is `board-tier12/srz/run-tier1-nf2-treeA-b1.sh` 51c5c4d35d14118e:
+    run-tier1-nf2-b2.sh with board 1's fields (bitstream 8522d72fe, board 1's URL file, the lane driver fd38816a,
+    board-free-wait on board 1).
+  - It uses the same firmware fw-t1-nf2 1ee33cc6631aa766 and image-rev7-nf2.
+  - Its dry run on the real tree-B transcript read the four rungs, the banner and the release lines.
+- **The gate:** the four rungs read as their oracles (b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1), as on tree
+  B.
+- **Also read:** the banner node-floor-2; 3 release lines for 3 contexts, counted unique by kernel timestamp because
+  vm-suite's KMSG replay repeats them, each with succeeded = attempted and first_id 1024; DRT1/DRTX/Oops 0.
+- **The tree-A kits for the sql0 arm:** bkit7-rev2xDN2 / bkit7-rev2xmDN2, from `tier3-smoke/make-nf2A-kits.sh`
+  9102938b937f9f71: sql0-drt2's kits with only the module changed.

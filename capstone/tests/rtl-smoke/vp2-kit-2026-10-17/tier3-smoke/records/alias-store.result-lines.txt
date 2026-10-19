@@ -1,0 +1,36 @@
+AS_START 06:39:45 fw a53240c76b0a162f bitstream caplifive_vp2c_8522d72fe board 1
+DRIVER rc=0 06:45:43
+RUNG b0-stats retval=0
+RUNG b0-hello retval=0
+RUNG alias-store retval=0
+AS inb off=100: exit 0 stored 1 readback ['60'] done 1 fault []
+AS inb   AS_PRE off=0x64 child=0x3fab390000:0x3fab394ec0 cursor=0x3fab390064 decoded=0x3fab390000:0x3fab394ec0 before=0
+AS alias off=0x10100: exit 0 stored 1 readback ['60'] done 1 fault []
+AS alias   AS_PRE off=0x10100 child=0x3fa0190000:0x3fa0194ec0 cursor=0x3fa01a0100 decoded=0x3fa01a0000:0x3fa01a4ec0 before=165
+AS outside off=0x16000: exit 139 stored 0 readback [] done 0 fault ['cause=28 address=0x3f892a6000']
+AS outside   AS_PRE off=0x16000 child=0x3f89290000:0x3f89294ec0 cursor=0x3f892a6000 decoded=0x3f892a0000:0x3f892a4ec0 before=90
+AS past off=0x4ed0: exit 139 stored 0 readback [] done 0 fault ['cause=28 address=0x3fb0894ed0']
+AS past   AS_PRE off=0x4ed0 child=0x3fb0890000:0x3fb0894ec0 cursor=0x3fb0894ed0 decoded=0x3fb0890000:0x3fb0894ec0 before=0
+module banner x1; FRTY 0 DRT1 0 Oops 0
+AS_DONE_RUN 06:45:43
+## raw AS lines
+AS_ARM inb 100
+AS_PRE off=0x64 child=0x3fab390000:0x3fab394ec0 cursor=0x3fab390064 decoded=0x3fab390000:0x3fab394ec0 before=0
+AS_STORED off=0x64
+AS_READBACK off=0x64 value=60
+AS_DONE
+AS_EXIT inb 0
+AS_ARM alias 0x10100
+AS_PRE off=0x10100 child=0x3fa0190000:0x3fa0194ec0 cursor=0x3fa01a0100 decoded=0x3fa01a0000:0x3fa01a4ec0 before=165
+AS_STORED off=0x10100
+AS_READBACK off=0x10100 value=60
+AS_DONE
+AS_EXIT alias 0
+AS_ARM outside 0x16000
+AS_PRE off=0x16000 child=0x3f89290000:0x3f89294ec0 cursor=0x3f892a6000 decoded=0x3f892a0000:0x3f892a4ec0 before=90
+capstone-exec: domain fault cause=28 pc=0x3f8921064c address=0x3f892a6000 entry=0x3f8920083c code=0x3f89200000-0x3f89300000 last=0x42 preparing=0x42 sha256=b68b3d2586a91d0736f3e7f6230293bb79ed8f9e0af391a1beb8cf6dd238c28e image=alias-store.dom
+AS_EXIT outside 139
+AS_ARM past 0x4ed0
+AS_PRE off=0x4ed0 child=0x3fb0890000:0x3fb0894ec0 cursor=0x3fb0894ed0 decoded=0x3fb0890000:0x3fb0894ec0 before=0
+capstone-exec: domain fault cause=28 pc=0x3fb081064c address=0x3fb0894ed0 entry=0x3fb080083c code=0x3fb0800000-0x3fb0900000 last=0x42 preparing=0x42 sha256=b68b3d2586a91d0736f3e7f6230293bb79ed8f9e0af391a1beb8cf6dd238c28e image=alias-store.dom
+AS_EXIT past 139

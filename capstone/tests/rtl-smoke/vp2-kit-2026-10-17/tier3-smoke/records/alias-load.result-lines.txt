@@ -1,0 +1,34 @@
+AL_START 06:28:57 fw 08b1a40c7373f381 bitstream caplifive_vp2c_8522d72fe board 1
+DRIVER rc=0 06:34:54
+RUNG b0-stats retval=0
+RUNG b0-hello retval=0
+RUNG alias-load retval=0
+AL inb off=100: exit 0 loaded [] done 1 fault []
+AL inb   AL_PRE off=0x64 child=0x3fb3e90000:0x3fb3e94ec0 cursor=0x3fb3e90064 decoded=0x3fb3e90000:0x3fb3e94ec0
+AL alias off=0x10100: exit 0 loaded [] done 1 fault []
+AL alias   AL_PRE off=0x10100 child=0x3fbd690000:0x3fbd694ec0 cursor=0x3fbd6a0100 decoded=0x3fbd6a0000:0x3fbd6a4ec0
+AL outside off=0x16000: exit 139 loaded [] done 0 fault ['cause=28 address=0x3fac6a6000']
+AL outside   AL_PRE off=0x16000 child=0x3fac690000:0x3fac694ec0 cursor=0x3fac6a6000 decoded=0x3fac6a0000:0x3fac6a4ec0
+AL past off=0x4ed0: exit 139 loaded [] done 0 fault ['cause=28 address=0x3fad794ed0']
+AL past   AL_PRE off=0x4ed0 child=0x3fad790000:0x3fad794ec0 cursor=0x3fad794ed0 decoded=0x3fad790000:0x3fad794ec0
+module banner x1; FRTY 0 DRT1 0 Oops 0
+AL_DONE_RUN 06:34:54
+## the raw AL lines (the SEQ parser's AL_LOADED regex missed the off= field; values read here)
+AL_ARM inb 100
+AL_PRE off=0x64 child=0x3fb3e90000:0x3fb3e94ec0 cursor=0x3fb3e90064 decoded=0x3fb3e90000:0x3fb3e94ec0
+AL_LOADED off=0x64 value=0
+AL_DONE
+AL_EXIT inb 0
+AL_ARM alias 0x10100
+AL_PRE off=0x10100 child=0x3fbd690000:0x3fbd694ec0 cursor=0x3fbd6a0100 decoded=0x3fbd6a0000:0x3fbd6a4ec0
+AL_LOADED off=0x10100 value=165
+AL_DONE
+AL_EXIT alias 0
+AL_ARM outside 0x16000
+AL_PRE off=0x16000 child=0x3fac690000:0x3fac694ec0 cursor=0x3fac6a6000 decoded=0x3fac6a0000:0x3fac6a4ec0
+capstone-exec: domain fault cause=28 pc=0x3fac610668 address=0x3fac6a6000 entry=0x3fac60083c code=0x3fac600000-0x3fac700000 last=0x42 preparing=0x42 sha256=4aa36d96885ff0ab7c19ecca91cf7aeecf7346e5a87211abb31e6f084decfdaf image=alias-load.dom
+AL_EXIT outside 139
+AL_ARM past 0x4ed0
+AL_PRE off=0x4ed0 child=0x3fad790000:0x3fad794ec0 cursor=0x3fad794ed0 decoded=0x3fad790000:0x3fad794ec0
+capstone-exec: domain fault cause=28 pc=0x3fad710668 address=0x3fad794ed0 entry=0x3fad70083c code=0x3fad700000-0x3fad800000 last=0x42 preparing=0x42 sha256=4aa36d96885ff0ab7c19ecca91cf7aeecf7346e5a87211abb31e6f084decfdaf image=alias-load.dom
+AL_EXIT past 139
