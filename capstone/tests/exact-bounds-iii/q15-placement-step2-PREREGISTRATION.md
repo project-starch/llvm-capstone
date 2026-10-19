@@ -25,3 +25,11 @@ Prediction:
 - no console carries a `cause=29` attributed to `capstone_cap_derive`.
 
 A cell that differs is reported with its console line. A 29 at `capstone_cap_derive` marks an unrepaired derive site.
+
+## Addendum, 2026-10-19, before any reading: what PAD-MASKED means (the semantics owner's ruling)
+
+A case CAUGHT unrepaired and MISSED repaired because its overflow lands in the tail pad is a true MISSED of the
+repaired configuration. On silicon the pad is accessible slack. It is recorded in verdicts.tsv as MISSED, with reason
+`pad-masked` and the pad in bytes in its evidence. It is never excluded, never NO-READING, and never folded under the
+unrepaired verdict. If the count of such cells is nonzero, it goes in the result line and in the commit subject, since
+it is a cost of the Q-15 repair that the paper's tables must carry.
