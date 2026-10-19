@@ -642,12 +642,31 @@ static bool fence_before_entry;
  * plain load needs no locking against the sysfs write; the write lands between cases. */
 module_param(fence_before_entry, bool, 0644);
 
+/* R-58, S-23's data face: the caller runs in its own lifetime namespace after every CSRUNV.
+ * The switcher loads srevroot (CSR 0x5c1, switcher id 67) from frame+8 at CSRUNV entry, and saves
+ * it at escape, but the caller's snapshot holds ids 0..66 only, so the caller's srevroot is never
+ * restored (capstone-ariane 8522d72fe capstone_dom_switcher.anvil entry :170-173, escape :479-481).
+ * After every escape S kept the CONTEXT's table. select_root() read it as `old`, and for the same
+ * context wrote it back unchanged, so neither end of a window was an edge of the namespace flag
+ * that the trackers flush on (ex_stage.sv:1417). A window's CSRETIRE or CSMINT walk broadcast the
+ * context's indices, and a CPMP tracker whose index collided stayed invalid until the kernel's next
+ * access through it was refused. On the board: sql0-csr read srevroot 0x82B00000 and 0x81E00000 at
+ * every refusal; with this change sql0-srz read DRT1 0 against 16 (tree B, N=1).
+ *
+ * So every CSRUNV is followed IMMEDIATELY, in the same asm, by csrw 0x5c1 = 0, restoring the
+ * caller's (physical) namespace, and restore_root() writes 0. Every window is then a real
+ * 0 -> table -> 0 pair of edges, and the flush at its end re-arms whatever its walk cleared. Every
+ * other capability op in this file sits inside a select_root/restore_root window, so none relies on
+ * srevroot after a CSRUNV returns. A CSR write flushes at commit, so nothing after it runs early.
+ * Unconditional (the runtime lane's ruling, 2026-10-20): it is correct everywhere, a no-op on QEMU,
+ * whose switcher already restores, and on a bitstream carrying the R-58 fix; its cost is a pipeline
+ * flush per write. First version, as a module parameter: lane module-srevroot-zero ce25d6de7280. */
 static unsigned long run(unsigned long frame, unsigned long action)
 {
     unsigned long result;
     if (fence_before_entry)
         asm volatile("fence rw,rw" ::: "memory");
-    asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2"
+    asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2\n\tcsrw 0x5c1, zero"
                  : "=&r"(result) : "r"(frame), "r"(action) : "memory");
     return result;
 }
@@ -659,7 +678,7 @@ static unsigned long run(unsigned long frame, unsigned long action)
  * its run(...) to run_x0(...); the collect site (action 3) cannot, its freed count IS rd. */
 static void run_x0(unsigned long frame, unsigned long action)
 {
-    asm volatile(".insn r 0x5b, 1, 0x24, x0, %0, %1"
+    asm volatile(".insn r 0x5b, 1, 0x24, x0, %0, %1\n\tcsrw 0x5c1, zero"
                  : : "r"(frame), "r"(action) : "memory");
 }
 /* The event record every escape writes at frame+16: kind, cause, pc, address
@@ -688,9 +707,12 @@ static unsigned long select_root(struct context *c)
                  : "=&r"(old) : "r"(virt_to_phys(c->table)) : "memory");
     return old;
 }
+/* 0, not the `root` select_root returned: outside a window S is in the physical namespace, so the
+ * window's end is an edge and its flush fires (R-58; see run()). */
 static void restore_root(unsigned long root)
 {
-    asm volatile("csrw 0x5c1, %0" : : "r"(root) : "memory");
+    (void)root;
+    asm volatile("csrw 0x5c1, zero" : : : "memory");
 }
 /* Clear every capability tag in a page, keeping its bytes. A scalar store
  * clears the tag of the 16-byte granule it writes into, whatever its width
@@ -1197,7 +1219,7 @@ module_param(diag_escapes, bool, 0644);
 static unsigned escape_prints;
 #define CV_ESCAPE_BUDGET 16U
 
-#define CV_DIAG_TAG "arena-pin-1"
+#define CV_DIAG_TAG "srevroot-zero-2"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
