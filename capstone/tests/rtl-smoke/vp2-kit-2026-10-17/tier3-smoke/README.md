@@ -2543,3 +2543,32 @@ RFVD = 1.
 - Tying a refusal to a retire needs a module marker on the retire and remap paths. That is a new module revision, with
   its own QEMU gate and Tier 1 boot, for a later load, and only if the RTL lane's simulation says the walk outlives the
   instruction.
+
+### sql0-rf, result (2026-10-19 18:36-18:50, board 1, tree A): the refused slot holds a tagged LINEAR capability whose node is VALID; the deny is not explained by any allow term the monitor can read
+
+Firmware aa718bb72a85a4e9 (capstone-sbi 03a1ffe + wrapper aab63d5), kit bkit7-rev2xR, UNGATED (PREFLIGHT=0). The
+result lines from this boot's console only, after its OpenSBI banner, are in `records/sql0-rf.result-lines.txt`.
+- **The outcome is as predicted, the same panic:** "virtual boot: DID NOT COMPLETE", scoring VOID with no inputs.json.
+  The session sequence was:
+  1. FRTY:01713D98, the same pc as sql0-fix;
+  2. FRGS for 11 loaded slots, slot 7 FRGS:07110015, then FRGD:0000000B (all vouched, strobe issued);
+  3. the refusal read: RFSL:00070015 (slot 7, region 0x15 = 21), RFTY:00000000, RFVD:00000001;
+  4. MTVL:BC2C0825, CPMX:00000002, INJS:00000002;
+  5. Oops - load access fault at mod_node_page_state+0x40, ra unpin_user_page+0x2a.
+- **RFTY 0 is CAP_TYPE_LINEAR.** LCC's type answer is cap_type - 1, and ariane_pkg.sv:662-671 at 8522d72fe has
+  NOT_CAP 0 and LINEAR 1. The slot's hardware tag is SET and it holds a linear capability. This is as predicted (not
+  7), and it is the first direct reading of the tag at a refusal.
+- **RFVD 1:** the physical node answers VALID. The deny is not a dead node.
+- **The CPMX dump agrees:** region 21 is in slot 7, RDEN C0000000, RDPM 7 (RWX). MTVL BC2C0825 lies inside
+  [0xAC100000, 0xC0000000), and the access is a load, which perm 7 grants.
+- **So, of the CPMP allow terms we can read at M, none explains the deny:** tag set, type a capability, bounds covering,
+  permission granting, node valid. What is left is a term M cannot read: the slot's own validity tracker flop
+  (cpmp_revnode_valid_q), or a transient that has passed by the time M looks.
+  - The guarded strobe at the FRTY, which re-arms every tracker, did not prevent the refusal (sql0-fix and sql0-rf
+    alike). So a cleared tracker, if that is the term, was cleared AFTER the FRTY or re-cleared after it.
+- **The late-broadcast candidate** (the 18:37 amendment, as corrected at 69982fff8e4a) predicted RFVD 1. The reading is
+  CONSISTENT with it and does not establish it.
+  - No retire before the refusal is observed; the console prints one frame.
+  - Separating it needs the RTL lane's simulation of the walk outliving the instruction, then a module marker on the
+    retire and remap paths (a new module revision).
+- **N=1.** pb10-rf, last in this chain, is the second instance.
