@@ -907,49 +907,99 @@ static const uint16_t launcher_own[] = {
   CAPSTONE_SYS_getcwd, 154 /* setpgid */, 155 /* getpgid */, 293 /* rseq */
 };
 
-int capstone_delegate_seccomp(void) {
-  /* Collect the allowlist: every delegated shape below 1100, read from the
-   * table once. Asking the table about each number up to 1100 searched the
-   * whole table for each and was 0.8M instructions of every launch. */
-  uint16_t allow[512];
+static int compare_nr(const void *a, const void *b) {
+  return (int)*(const uint16_t *)a - (int)*(const uint16_t *)b;
+}
+
+/* Emit a search over the sorted numbers allow[lo, hi) into program[*k...]:
+ * a balanced tree of JGE comparisons down to leaves of at most four JEQ,
+ * each leaf ending in its own deny and allow returns. A number takes about
+ * log2(n) + 4 comparisons instead of up to n. That matters at installation:
+ * the kernel emulates the filter once for every syscall number to build its
+ * allow cache, and a linear list of 143 was 1.46M instructions of a launch.
+ * Classic BPF jumps forward only, by at most 255 instructions; a branch over
+ * a larger left subtree goes through a BPF_JA, whose offset is 32 bits. */
+static void seccomp_search(struct sock_filter *program, unsigned *k,
+                           const uint16_t *allow, unsigned lo, unsigned hi) {
+  if (hi - lo <= 4) {
+    unsigned m = hi - lo;
+    for (unsigned i = 0; i < m; ++i)
+      program[(*k)++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, allow[lo + i],
+                                                     (unsigned char)(m - i), 0);
+    program[(*k)++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K,
+                                                   SECCOMP_RET_ERRNO | (ENOSYS & SECCOMP_RET_DATA));
+    program[(*k)++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW);
+    return;
+  }
+  unsigned mid = lo + (hi - lo) / 2, node = (*k)++, far = 0;
+  if (hi - lo > 64)  /* a left subtree this large may be out of a JGE's reach */
+    far = (*k)++;
+  unsigned left = *k;
+  seccomp_search(program, k, allow, lo, mid);
+  unsigned size = *k - left;
+  if (far) {
+    /* nr >= pivot: to the BPF_JA, which skips the left subtree; else past it. */
+    program[node] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JGE | BPF_K, allow[mid], 0, 1);
+    program[far] = (struct sock_filter)BPF_STMT(BPF_JMP | BPF_JA, size);
+  } else {
+    program[node] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JGE | BPF_K, allow[mid],
+                                                 (unsigned char)size, 0);
+  }
+  seccomp_search(program, k, allow, mid, hi);
+}
+
+unsigned capstone_delegate_seccomp_allowlist(uint16_t *allow, unsigned capacity) {
+  /* Every delegated shape below 1100, read from the table once (asking the
+   * table about each number up to 1100 searched the whole table for each and
+   * was 0.8M instructions of every launch), and the launcher's own. */
   unsigned n = 0;
   const struct capstone_delegate_shape *s;
-  for (size_t i = 0; (s = capstone_delegate_shape_at(i)) && n < 500; ++i)
-    if (s->group == CAPSTONE_GROUP_DELEGATED && s->nr < 1100)
+  for (size_t i = 0; (s = capstone_delegate_shape_at(i)); ++i)
+    if (s->group == CAPSTONE_GROUP_DELEGATED && s->nr < 1100) {
+      if (n == capacity)
+        return 0;
       allow[n++] = (uint16_t)s->nr;
-  for (unsigned i = 0; i < sizeof launcher_own / sizeof launcher_own[0] && n < 510; ++i) {
-    unsigned j;
-    for (j = 0; j < n && allow[j] != launcher_own[i]; ++j)
-      ;
-    if (j == n)
-      allow[n++] = launcher_own[i];
+    }
+  for (unsigned i = 0; i < sizeof launcher_own / sizeof launcher_own[0]; ++i) {
+    if (n == capacity)
+      return 0;
+    allow[n++] = launcher_own[i];
   }
-  /* The first comparison jumps n instructions ahead, and a classic BPF jump
-   * offset is 8 bits: past 255 entries the filter would allow the wrong
-   * numbers. Refuse to build it instead (n is 143 today). */
-  if (n > 255)
+  qsort(allow, n, sizeof allow[0], compare_nr);
+  unsigned distinct = 0;
+  for (unsigned i = 0; i < n; ++i)
+    if (!distinct || allow[distinct - 1] != allow[i])
+      allow[distinct++] = allow[i];
+  return distinct;
+}
+
+unsigned capstone_delegate_seccomp_program(const uint16_t *allow, unsigned n,
+                                           struct sock_filter *program) {
+  unsigned k = 0;
+  program[k++] = (struct sock_filter)BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+      offsetof(struct seccomp_data, arch));
+  program[k++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_RISCV64, 1, 0);
+  program[k++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (ENOSYS & SECCOMP_RET_DATA));
+  program[k++] = (struct sock_filter)BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
+      offsetof(struct seccomp_data, nr));
+  seccomp_search(program, &k, allow, 0, n);
+  return k;
+}
+
+int capstone_delegate_seccomp(void) {
+  uint16_t allow[512];
+  unsigned n = capstone_delegate_seccomp_allowlist(allow, 512);
+  if (!n)
     return E2BIG;
-  {
-    struct sock_filter program[3 + 512 + 2];
-    unsigned k = 0;
-    struct sock_fprog fprog;
-    program[k++] = (struct sock_filter)BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
-        offsetof(struct seccomp_data, arch));
-    program[k++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, AUDIT_ARCH_RISCV64, 1, 0);
-    program[k++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (ENOSYS & SECCOMP_RET_DATA));
-    program[k++] = (struct sock_filter)BPF_STMT(BPF_LD | BPF_W | BPF_ABS,
-        offsetof(struct seccomp_data, nr));
-    for (unsigned i = 0; i < n; ++i)
-      program[k++] = (struct sock_filter)BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, allow[i], n - i, 0);
-    program[k++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ERRNO | (ENOSYS & SECCOMP_RET_DATA));
-    program[k++] = (struct sock_filter)BPF_STMT(BPF_RET | BPF_K, SECCOMP_RET_ALLOW);
-    fprog.len = (unsigned short)k;
-    fprog.filter = program;
-    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))
-      return errno;
-    if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &fprog))
-      return errno;
-  }
+  struct sock_filter program[CAPSTONE_SECCOMP_PROGRAM_MAX(512)];
+  struct sock_fprog fprog = {
+    .len = (unsigned short)capstone_delegate_seccomp_program(allow, n, program),
+    .filter = program,
+  };
+  if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0))
+    return errno;
+  if (prctl(PR_SET_SECCOMP, SECCOMP_MODE_FILTER, &fprog))
+    return errno;
   return 0;
 }
 
