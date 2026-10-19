@@ -397,7 +397,8 @@
         "virtual-nested-pools",
         "silicon-pool-stock",
         "silicon-pool-sublet",
-        "vp2-malloc"
+        "vp2-malloc",
+        "vp2-nested-pools"
       ],
       "status": "measured",
       "live_in_pin_recorded": true,
@@ -431,14 +432,16 @@
         "virtual-nested-pools": "virtual-ffmpeg-pool-sublet",
         "silicon-pool-stock": "silicon-ffmpeg-pool-stock",
         "silicon-pool-sublet": "silicon-ffmpeg-pool-sublet",
-        "vp2-malloc": "virtual-ffmpeg-pool-stock"
+        "vp2-malloc": "virtual-ffmpeg-pool-stock",
+        "vp2-nested-pools": "virtual-ffmpeg-pool-sublet"
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-11-virtual/virtual-malloc",
         "virtual-nested-pools": "results/2026-10-11-virtual/virtual-nested-pools",
         "silicon-pool-stock": "results/2026-10-16-silicon/silicon-pool-stock",
         "silicon-pool-sublet": "results/2026-10-16-silicon/silicon-pool-sublet",
-        "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
+        "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+        "vp2-nested-pools": "results/2026-10-19-vp2c-treeA/vp2-nested-pools-drt"
       },
       "where": "capstone/bug-corpora/ffmpeg/pool-repros"
     },
@@ -2168,10 +2171,15 @@
       "id": "S17-ldc-after-supervised-switch-lsu-stuck",
       "title": "S-17 \u2014 on silicon, an LDC right behind the post-CALL `ccsrrw sp <- cscratch` does not complete, and the LSU stays not-ready",
       "has_sha256sums": false
+    },
+    {
+      "id": "S23-data-face",
+      "title": "",
+      "has_sha256sums": false
     }
   ],
   "issues": {
-    "open": 144,
+    "open": 149,
     "resolved": 77
   },
   "fixtures": [
