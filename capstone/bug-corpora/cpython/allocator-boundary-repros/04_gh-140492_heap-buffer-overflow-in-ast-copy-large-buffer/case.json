@@ -14,14 +14,14 @@
   "arms": {
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
-      "verdict": "MISSED",
-      "verdict_note": "reached (the trigger began (ABR BEGIN; no marker at the access in an upstream reproducer)) and completed with no fault; the trigger ended with EXIT 1",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3f7e002654 in memcpy; by control: negative_control.py (the same traffic, the offending access made valid) ran to its end on this image without a fault",
       "verdict_from": "results/2026-10-18-review/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
-      "verdict": "CAUGHT",
-      "verdict_note": "cause=28 pc=0x3f861a65bc in _copy_characters; by function: _copy_characters is where host ASan reported the access",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the trigger began (ABR BEGIN; no marker at the access in an upstream reproducer)) and completed with no fault; the trigger ended with EXIT 1",
       "verdict_from": "results/2026-10-18-review/virtual-nested-pools"
     },
     "cheribsd-revocation": {
@@ -33,5 +33,6 @@
   "fault_sites": [
     "_copy_characters"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 4) at _copy_characters Objects/unicodeobject.c:1606. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 4) at _copy_characters Objects/unicodeobject.c:1606. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "① WITHDRAWN by the 2026-10-19 review. Spatial defect, and NON-NESTED -- the ASan heap report survives PYTHONMALLOC=pymalloc, so the object is libc malloc's. ② faults cause=28 CAP_OOB on `lh a6, 0x8(a2)`, the defective load. ① faults cause=24 UNEXP_OP_TYPE, which is a dereference of a value the access had already been allowed to fetch, not the bounds check. This cell is also unstable across rounds: the first full run of 2026-10-18 recorded ① MISSED and the re-run with a longer timeout recorded this cause-24 fault, which is consistent with a fault that depends on what happens to lie past the object rather than on the mechanism."
 }

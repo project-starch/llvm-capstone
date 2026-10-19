@@ -21,7 +21,7 @@
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "NO-READING",
-      "verdict_note": "cause=28 pc=0x3f850a6f5c in advance_with_locations; in advance_with_locations; ASan sites ['read_byte', 'read_varint']",
+      "verdict_note": "cause=28 pc=0x3f880a6f5c in advance_with_locations; in advance_with_locations; ASan sites ['read_byte', 'read_varint']",
       "verdict_from": "results/2026-10-18-review/virtual-nested-pools",
       "verdict_reason": "unattributed"
     },

@@ -29,9 +29,8 @@
   },
   "predicted": "CAUGHT",
   "tally": {
-    "CAUGHT": 23,
-    "MISSED": 5,
-    "NO-READING:infra": 2,
+    "CAUGHT": 24,
+    "MISSED": 6,
     "NO-READING:not-reached": 1,
     "NO-READING:unattributed": 1
   }

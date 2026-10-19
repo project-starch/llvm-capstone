@@ -15,13 +15,13 @@
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3f7f38f8bc in fnv; by control: probe-142664.py (the defect's tests alone) faults at the trigger's fnv+0x40; negative_control.py (the same tests, the offending access made valid) ran to its end on this image without a fault",
+      "verdict_note": "cause=25 pc=0x3f8938f8bc in fnv; by control: probe-142664.py (the defect's tests alone) faults at the trigger's fnv+0x40; negative_control.py (the same tests, the offending access made valid) ran to its end on this image without a fault",
       "verdict_from": "results/2026-10-18-review/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fa138fb28 in fnv; by control: probe-142664.py (the defect's tests alone) faults at the trigger's fnv+0x40; negative_control.py (the same tests, the offending access made valid) ran to its end on this image without a fault",
+      "verdict_note": "cause=25 pc=0x3f8238fb28 in fnv; by control: probe-142664.py (the defect's tests alone) faults at the trigger's fnv+0x40; negative_control.py (the same tests, the offending access made valid) ran to its end on this image without a fault",
       "verdict_from": "results/2026-10-18-review/virtual-nested-pools"
     },
     "cheribsd-revocation": {

@@ -15,13 +15,13 @@
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fa7002654 in memcpy; by function: memcpy is where host ASan reported the access",
+      "verdict_note": "cause=25 pc=0x3f82002654 in memcpy; by function: memcpy is where host ASan reported the access",
       "verdict_from": "results/2026-10-18-review/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fa3002654 in memcpy; by function: memcpy is where host ASan reported the access",
+      "verdict_note": "cause=25 pc=0x3f8e002654 in memcpy; by function: memcpy is where host ASan reported the access",
       "verdict_from": "results/2026-10-18-review/virtual-nested-pools"
     },
     "cheribsd-revocation": {

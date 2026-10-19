@@ -29,10 +29,10 @@
   },
   "predicted": "MISSED",
   "tally": {
-    "CAUGHT": 13,
+    "CAUGHT": 15,
     "MISSED": 13,
     "NO-READING:inconclusive": 1,
-    "NO-READING:infra": 3,
+    "NO-READING:infra": 1,
     "NO-READING:not-reached": 1,
     "NO-READING:unattributed": 1
   }

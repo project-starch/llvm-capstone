@@ -22,7 +22,7 @@
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=28 pc=0x3fa21d7e88 in unicode_fromformat_write_str; by function: unicode_fromformat_write_str is where host ASan reported the access",
+      "verdict_note": "cause=28 pc=0x3f961d7e88 in unicode_fromformat_write_str; by function: unicode_fromformat_write_str is where host ASan reported the access",
       "verdict_from": "results/2026-10-18-review/virtual-nested-pools"
     },
     "cheribsd-revocation": {
