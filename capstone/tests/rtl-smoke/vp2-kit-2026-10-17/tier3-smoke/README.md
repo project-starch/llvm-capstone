@@ -2941,3 +2941,11 @@ Kits bkit7-rev2xD / bkit7-rev2xmD and monitor f13dbc5 are sql0-drt's.
   - both controls fault.
 - A cell that differs is reported as "possibly variance", not as a verdict, until a set-valued sql0 record exists. The
   QEMU A arm itself read 8 of 9, with 03 out of the denominator.
+
+**Runner 8826a2ca, QEMU information run r3b (21:2x; information, not a gate, per the ruling).** The edited runner
+again, same kit and inputs: 21/21 sessions, both controls fault, 9 of 9 cells the same as t3-sql-trim-vm, and the
+planted flip fires. So the three QEMU runs read:
+- r3 (edited): uaf control died early on the garbage-bounds SHRINK;
+- r3a (old): 8 of 9;
+- r3b (edited): 9 of 9.
+That is consistent with run-to-run variance and not with the edit.
