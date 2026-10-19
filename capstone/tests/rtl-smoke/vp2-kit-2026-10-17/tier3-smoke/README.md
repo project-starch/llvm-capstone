@@ -2043,3 +2043,78 @@ things that do not hold. The claim-auditor refuted both:
   4. the two cpython allocator-boundary boots.
   - The runtime lane moved the S-26 pair ahead of rev8: two short boots that decide a root cause, against
     sql0-treeA's five hours.
+
+### S-29 and S-23's fetch face on tree A, result (2026-10-19 16:24-16:31): 7 of 7 arms read their tree A vectors
+
+- **Board 1,** resident caplifive_vp2c_8522d72fe.bit, one power cycle each, through the 25 arms' runner. That runner is
+  in the wt-b0 tree, whose console predates the `[fpga-board]` line, so the runs carry none. The board is board 1 by
+  the host lock and the runner's resident-bitstream assertion.
+- **Compared by `compare-sv.py`**, count and values as 64-bit integers, against the RTL lane's simulated tree A vectors
+  (dev 8e1df1e05a3c): `SVBATCH DONE 7 of 7 as pre-registered`.
+
+  | Arm | Vector |
+  |---|---|
+  | sv-stale | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55 |
+  | sv-stale-f | 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55 |
+  | sv-stale-b | 0xaaaa 0xbbbb 3 0xb 0xbbbb 0x55 |
+  | sv-stale-bf | 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55 |
+  | sv-stale-bn | 0xaaaa 0xcccc 3 0xb 0xaaaa 0x55 |
+  | sv-fetch-c | 0xaaaa 0xc 0x80006000 0x80006000 0x55 |
+  | sv-fetch | 0xaaaa 1 0x80006000 0x80016000 0x55 |
+
+- **What it shows on silicon,** at N=1 per arm:
+  - **S-29's stale translation:** sv-stale and sv-stale-f read the stale 0xaaaa.
+  - **S-23's fetch face from a stale translation alone:** sv-fetch takes cause 1 with a PHYSICAL last value
+    (0x80016000) different from the faulting virtual address, where its control sv-fetch-c takes cause 12 with the two
+    equal.
+  - **The cross-tree controls agree with the simulation,** sv-stale-bf (doubly fenced) and sv-stale-bn (no probe
+    access). That makes the other arms readings rather than harness differences.
+  - Tree B (the satp flush) is predicted to change sv-stale, sv-stale-f, sv-stale-b and sv-fetch. These arms say
+    nothing about S-27, S-28, R-57 or Q-24.
+
+### S-26's silicon pair on tree A, pre-registered (2026-10-19 16:36, before the boots): three cold boots, `board-tier12/s26/run-s26.sh`
+
+**The candidate** (the compiler lane's read, audited by the runtime lane's claim-auditor: PLAUSIBLE BUT UNPROVEN).
+- csupquantum (0x7C3) resets to 0. Its only writer is the monitor's `supervised_invoke` (`sbi_capstone.c:1002`), which on
+  this firmware is reached by a process-ABI STEP (`context_step`), never by a classic DOM_CALL.
+- So a virtual context entered before any process-ABI STEP loads a 0 countdown. It is preempted before its first
+  instruction and escapes kind 1, again and again. b0-hello is a process-ABI launch, which is why it is S-26's
+  workaround; b0-stats only reads 0xFC4.
+- **The RTL basis** (the RTL lane, simulation on bf3db3175): a context entering with quantum 0 retires nothing and
+  escapes kind 1, cause 0, bit-identically for budgets 40 through 1,500. At 2,000 the loop completes.
+- **A model divergence:** QEMU arms a constant 5 ms of virtual time at every entry, so it can never show a quantum-0
+  livelock.
+
+**The arms.** Image 89baf46451448872 is rev7's stage with only `vm/vm-contract.sh` swapped for the pair's
+(6be39dbbf3bd427a). That script runs `ok` in the background, reads resume_sfences and resume_satp_refreshes at +30, +90
+and +150 s, and at the bound kills a still-running `ok` and reports VM_SPIN (retval 930).
+- **The firmwares** are all built on that Image, from wrapper aab63d5 (caplifive-opensbi s26-boot-quantum) and monitor
+  ba9a0de (capstone-sbi s26-mirror-quantum), and differ only in defines. Each prints QNT0, 0x7C3 as boot leaves it.
+  Checked in the compiled ELFs:
+
+  | Firmware | Defines | 0x7C3 writes and reads |
+  |---|---|---|
+  | cur fafbc0e38fb54c60 | QNT0 print only | 1 write (supervised_invoke), 1 read |
+  | var 883f3af2b9964251 | + CAPSTONE_BOOT_QUANTUM=2000000 | 2 writes, 1 read |
+  | mir 1a2244dfa19f9d40 | + CAPSTONE_MIRROR_QUANTUM=1000, a census-handler write, read back as QNT1 | 2 writes, 2 reads |
+
+- **The order:** var, then cur, then mir; each a cold boot on board 1, tree A, module 39d8492d.
+- **Predicted** (`s26-judge.py`):
+  - **var** (b0-stats, vm-contract): QNT0 001E8480, and vm-contract returns 0 with rev7's identity branch.
+  - **cur** (b0-stats, vm-contract): QNT0 00000000, then VM_SPIN (930) with resume_satp_refreshes strictly growing
+    across t30 < t90 < t150, the escape/resume loop. Flat counters would be the other reading, escaped and never
+    resumed (this README's boot-3 line). Neither is established today.
+  - **mir** (b0-stats, b0-hello, b0-stats2, vm-contract): QNT0 00000000, QNT1 000003E8 at each b0-stats, b0-hello 0,
+    then VM_SPIN with growing counters. **VOID if b0-hello does not return 0.**
+  - A spin where a return is predicted, or the reverse, is a FAIL. The judge reads it so, tested on synthetic
+    transcripts of every outcome.
+- **What it decides:** var returning and cur spinning, both cold with b0-stats only, isolates the quantum at the first
+  CSRUNV. mir spinning after a passing b0-hello separates "the quantum" from other state the first STEP sets up.
+- A claim-auditor reads the result before S-26's registry entry changes.
+- **Dry run:** a stub driver writing each arm's predicted transcript gives each arm exactly its firmware, rungs,
+  oracles, board 1 and tree A, and the judge reads PASS for all three. The chain's own dry run is
+  `board-tier12/s26/dryrun-tier1-prep-chain.txt`. UNGATED (PREFLIGHT=0).
+
+**rev8's firmware, pinned before its boot:** 84d5f52ec24cea30, 19,565,064 B (Image 48bd5c6254863132). The stage is
+rev8's: module 39d8492d, vm-contract.sh and vm-suite-inner.sh with node_flat_records=4096, and contract-dense.dom
+b6a11ff3 baked. It boots after the S-26 pair; then sql0-treeA.
