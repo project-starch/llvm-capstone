@@ -1838,3 +1838,21 @@ Two of tree A's known gaps can show in any step, and neither is a tree A regress
 
 The arms phase cannot detect any of tree A's four fixes, since its 25 vectors are identical. Its pass says the images
 and the RTL agree with the base, and nothing about S-27, S-28, R-57 or Q-24.
+
+### sql0 on tree A, pre-registered (2026-10-19 14:00, before its boot): sql0-treeA (`tier3-sql-arm-rev2d.sh`)
+
+- **The arm:** rev2c with two changes. It runs on tree A, and the kit keeps a staged file's execute bit.
+  - Kits bkit7-rev2xA (boot) and bkit7-rev2xmA (measure-only) are bkit7-rev2s and bkit7-rev2m with BOARD_BITSTREAM
+    caplifive_vp2c_8522d72fe and one recipe line: a source file that is executable stages 0755, else 0644.
+  - The runner (1f099612d70a9576, its QEMU PASS), image 64010720f1a6b3bc, fixture record 956173e054762e91, the size
+    gate and the void gates are rev2c's.
+  - It runs only after the tree A Linux steps end `TAL DONE`.
+- **Size:** the stage is expected at 28,810,594 B, rev2c's; modes do not change a cpio's length. The firmware is
+  expected at 25,856,520 B, and the measure-only bake decides before any boot.
+- **Prediction:** QEMU's, `t3-sql-trim-vm/bundle`, as for rev2b and rev2c:
+  - CAUGHT 02 and 03 (cause 28 at memcpy+200);
+  - MISSED 01 and 04-09;
+  - both controls fault.
+  - A session failing on a board-only harness difference makes the arm VOID, not a DIFF, as rev2b and rev2c were.
+- **Records:** `records/sql0-treeA.board.txt` and `postgres/sql-repros/results/2026-10-19-vp2c-treeA/`.
+- **Dry run:** `dryrun-tier3-sql-arm-rev2d.txt`. UNGATED (PREFLIGHT=0).
