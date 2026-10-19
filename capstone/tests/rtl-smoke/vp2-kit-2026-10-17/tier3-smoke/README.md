@@ -3049,3 +3049,15 @@ the monitor c3917e8.
 - **RFSR/RFSH/RFCT at every data refusal,** with the same predictions as board 1's csr arms: page-aligned, in RAM,
   constant per context, RFCT bit 3 clear; srevroot 0 refutes.
 - **FRTY/DRT1/DRTX/Oops counts.**
+
+### cpython lt0 on the board, result (2026-10-19 20:38 - 2026-10-20 01:16, board 1, tree A): 23 of 32 inside, 7 stable divergences and 2 moved, all of one board-only shape
+
+Result lines are in `records/cpy-lt0.result-lines.txt`. UNGATED.
+- 54/54 steps ran and the boot completed. Tally: CAUGHT 9, MISSED 10, NO-READING 13.
+- **The pin read back.** The judge read 23 of 32 inside their sets, 7 DIVERGENCES on stable cells (10, 13, 23, 25, 28,
+  and two more) and 2 MOVED varying cells (27, 30).
+- **Every cell outside its set reads NO-READING with `domain fault cause=12 pc=0x0`.** That shape is in no QEMU
+  record. The transcript has 21 such lines in 33 domain faults, in cases and controls alike.
+- **S-23 on this boot:** DRT1 14 (all at 800A22C8 = mod_node_page_state+0x40), 0 DRTX, no Oops.
+- **Status:** a board-only finding, reported to the compiler and runtime lanes for attribution. These cells are not a
+  verdict on the corpus until it is explained.
