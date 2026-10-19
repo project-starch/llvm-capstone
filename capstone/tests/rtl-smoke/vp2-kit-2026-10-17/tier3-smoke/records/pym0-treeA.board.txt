@@ -1,0 +1,52 @@
+# Tier 3 board reading, arm pym0-treeA: kit bkit7A (module 3005ed52e860c7af, resume rd = x15), tree A caplifive_vp2c_8522d72fe, pin off, SDK t3-freeze-nb. Result lines only.
+# board: not recorded in the run log (the run predates board ids, 2026-10-19, when board 1 was the only board)
+# arm vp2-malloc configuration virtual-pymalloc platform board:caplifive_vp2c_8522d72fe cells 20 tally {"MISSED": 20}
+# controls [["uaf-block", "complete"]]
+00_gh-143543_groupby_reentrant_eq image 6779cef591a6fb0a MISSED cause None at None reached True completed True attribution null
+01_gh-146613_grouper_parent_key image 44d5d2836b77c66e MISSED cause None at None reached True completed True attribution null
+02_gh-142829_hamt_eq_interior_cursor image 9cd8071f271e8fff MISSED cause None at None reached True completed True attribution null
+03_gh-142831_json_encoder_list_item image 71b14aa74f73b98f MISSED cause None at None reached True completed True attribution null
+04_gh-145244_json_encoder_dict_key image 805d5654e32f2090 MISSED cause None at None reached True completed True attribution null
+05_gh-148660_odict_copy_stale_link image 41381e6a1872d856 MISSED cause None at None reached True completed True attribution null
+06_gh-151295_bytes_join_reentrant_buffer image 67263b93bbb3c0a6 MISSED cause None at None reached True completed True attribution null
+07_gh-148395_decompressor_next_in image 1ea5c7102c5efe33 MISSED cause None at None reached True completed True attribution null
+08_gh-112127_atexit_unregister_borrowed_tuple image 5cb03d97d23c777b MISSED cause None at None reached True completed True attribution null
+09_gh-139210_iterparse_event_name image 9f65981c55ab2a88 MISSED cause None at None reached True completed True attribution null
+10_gh-142560_bytearray_search_realloc image 7ba46bbbafcd941f MISSED cause None at None reached True completed True attribution null
+11_gh-142783_zoneinfo_eager_decref image 5b7671db6d35a38c MISSED cause None at None reached True completed True attribution null
+12_gh-143004_counter_update_borrowed_value image c154e3878f08b355 MISSED cause None at None reached True completed True attribution null
+13_gh-144833_ssl_decref_self_then_read image 73bdd71f1145c074 MISSED cause None at None reached True completed True attribution null
+14_gh-146011_decimal_signaldict_outlives_context image 0328e39ce2f2bc82 MISSED cause None at None reached True completed True attribution null
+15_gh-149449_unicodedata_capi_cached image 5d59307d93a9cc0a MISSED cause None at None reached True completed True attribution null
+16_gh-151403_fork_exec_fspath image 582b22b8bfdad3f1 MISSED cause None at None reached True completed True attribution null
+17_gh-151416_spawnv_fspath image 366fcc7548a9a6b8 MISSED cause None at None reached True completed True attribution null
+18_gh-151695_curses_screen_encoding_global image e9785df7975f2db9 MISSED cause None at None reached True completed True attribution null
+19_gh-153539_textio_tell_reentrant_decoder image f7f2f2f9fdbaf198 MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_gh-143543_groupby_reentrant_eq: verdict MISSED cause None pc None
+  SAME 01_gh-146613_grouper_parent_key: verdict MISSED cause None pc None
+  SAME 02_gh-142829_hamt_eq_interior_cursor: verdict MISSED cause None pc None
+  SAME 03_gh-142831_json_encoder_list_item: verdict MISSED cause None pc None
+  SAME 04_gh-145244_json_encoder_dict_key: verdict MISSED cause None pc None
+  SAME 05_gh-148660_odict_copy_stale_link: verdict MISSED cause None pc None
+  SAME 06_gh-151295_bytes_join_reentrant_buffer: verdict MISSED cause None pc None
+  SAME 07_gh-148395_decompressor_next_in: verdict MISSED cause None pc None
+  SAME 08_gh-112127_atexit_unregister_borrowed_tuple: verdict MISSED cause None pc None
+  SAME 09_gh-139210_iterparse_event_name: verdict MISSED cause None pc None
+  SAME 10_gh-142560_bytearray_search_realloc: verdict MISSED cause None pc None
+  SAME 11_gh-142783_zoneinfo_eager_decref: verdict MISSED cause None pc None
+  SAME 12_gh-143004_counter_update_borrowed_value: verdict MISSED cause None pc None
+  SAME 13_gh-144833_ssl_decref_self_then_read: verdict MISSED cause None pc None
+  SAME 14_gh-146011_decimal_signaldict_outlives_context: verdict MISSED cause None pc None
+  SAME 15_gh-149449_unicodedata_capi_cached: verdict MISSED cause None pc None
+  SAME 16_gh-151403_fork_exec_fspath: verdict MISSED cause None pc None
+  SAME 17_gh-151416_spawnv_fspath: verdict MISSED cause None pc None
+  SAME 18_gh-151695_curses_screen_encoding_global: verdict MISSED cause None pc None
+  SAME 19_gh-153539_textio_tell_reentrant_decoder: verdict MISSED cause None pc None
+  20 of 20 cells the same
+## the boot
+  BOARD_RUN_START 15:31:50 bitstream caplifive_vp2c_8522d72fe monitor 007d81d
+  manifest 51 files, stage 6576381 bytes
+  firmware cc5d23288a13ddb2 19565064 B
+  DRIVER rc=0 16:24:26
+  BOARD_RUN_DONE 16:24:26

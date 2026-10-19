@@ -2001,3 +2001,45 @@ things that do not hold. The claim-auditor refuted both:
   - So wm0 is not a clean pair for R-57.
   - The clean pairs are step 4's sparse-churn (module 39d8492d on both bitstreams) and step 6's pym0 (3005ed52 on
     both).
+
+### Tree A steps 5-6 (15:20-16:24): wm1 runs to the end, and pym0 on module 3005ed52 reads 20 of 20 where bf3db3175 read 0 of 20; TAL DONE
+
+- **wm1** (kit bkit7-rev2sA): 26 of 26 steps, boot completed. `vp2-nested-pools (virtual-wmem-pools):
+  {'NO-READING:control-failed': 23}`, 23 of 23 cells the same as its prediction (its QEMU twin's control-failed 23).
+  On bf3db3175 it wedged in its first control, on both modules. wm0's caveat applies: module 39d8492d never ran wm1
+  on bf3db3175, so this is not a clean R-57 pair.
+- **pym0** (kit bkit7A: module 3005ed52, resume rd = x15; images as on bf3db3175, `t3-images-nb/pym0.images.SHA256SUMS`,
+  21 of 21): 21 of 21 steps, `vp2-malloc (virtual-pymalloc): {'MISSED': 20}`, 20 of 20 cells the same as the QEMU
+  prediction.
+  - On bf3db3175 the same images on the same module read 0 of 20: every program faulted at 0x12, S-27's clobber
+    (pym0, and pym0-fence with the fence on).
+  - Only the bitstream differs. **S-27's RTL fix is two-sided on silicon: N=1 on tree A against N=2 on bf3db3175.**
+  - Bundle: `cpython/pymalloc-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`.
+- `TAL DONE 16:24:27`. Every boot UNGATED (PREFLIGHT=0).
+
+### After the tree A Linux steps (2026-10-19 16:25)
+
+- **The S-29 bare batch** began on board 1 at 16:24:55. Board 2's cross-board canary was in its pass 2 at the same
+  time, the first parallel bare runs on the two boards (board #2 phase 1, dev 685e2c3118f2).
+- **The Tier 1 prep chain** (`board-tier12/s26/tier1-prep-chain.sh`), launched on TAL DONE, does these in order:
+  1. stages S-26's pair image: rev7's stage with only `vm/vm-contract.sh` swapped for the pair's bounded,
+     counter-reading one;
+  2. bakes it under the buildroot bake lock;
+  3. restores the stage to rev7's record;
+  4. builds the pair's three firmwares on that Image (wrapper aab63d5 and monitor ba9a0de, differing only in
+     defines);
+  5. stages and builds rev8 (node_flat_records=4096).
+  - It replaces rev8-prep.sh's waiter, which was stopped by process group before it did anything. The two would
+    otherwise have staged the same Tier 1 stage at once.
+  - Its stubbed dry run on a copy of the stage: the bake saw the pair's script (6be39dbbf3bd427a), the stage
+    returned to rev7's record (67780eebca30b73c), each firmware got only its own defines, and rev8 followed.
+  - **The Tier 1 bake now also bakes `contract-dense.dom`** when the stage holds it (rev8). Without it, rev8's cpio
+    check would have stopped its build.
+- **The order of the remaining boots on board 1:**
+  1. the S-26 pair (three short boots: current cold, variant cold, mirror warm), pre-registered with its firmware
+     hashes once the chain has built them;
+  2. rev8;
+  3. sql0-treeA;
+  4. the two cpython allocator-boundary boots.
+  - The runtime lane moved the S-26 pair ahead of rev8: two short boots that decide a root cause, against
+    sql0-treeA's five hours.
