@@ -119,6 +119,9 @@ def rung_segment(transcript, rung=RUNG):
     return (rest[:nxt.start()] if nxt else rest), False
 
 
+# the module's .text base, printed once after insmod (script())
+MODTEXT_LINE = 'echo "@@MODTEXT $(cat /sys/module/capstone_vm/sections/.text 2>/dev/null || echo ABSENT)"'
+
 class BoardBatch(virtualvm.Batch):
     """put() and step() as virtualvm.Batch; put() returns the guest path under /test-domains/<BATCH>/.
     other_ctl is the controller every rung other than the batch's goes to: the board controls' b0run.sh by default,
@@ -137,11 +140,15 @@ class BoardBatch(virtualvm.Batch):
         - It runs in /test-domains/<BATCH>.
         - insmod is guarded by /proc/modules, because an earlier rung may have loaded the module and the board kernel
           cannot unload it.
+        - The module's .text base is printed once (`@@MODTEXT <addr>`, ABSENT if unreadable): .text is page-aligned, so
+          a monitor line carrying a module pc (FRTY, DRT1) decodes exactly as pc minus this base, instead of by its page
+          offset alone (S-23's fetch face, 2026-10-20).
         - A heartbeat that no observe() reads keeps the driver's idle limit from cutting a long silent step.
         - The final rmmod fails on the board, harmlessly, after the last step."""
         lines = ["#!/bin/sh", f"cd /test-domains/{BATCH} || exit 1", "dmesg -n 1",
                  'grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }',
                  "chmod 666 /dev/capstone-vm",
+                 MODTEXT_LINE,
                  "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + virtualvm.param_lines(self.params) + [
                  f"( i=0; while [ $i -lt 2000 ]; do sleep {HEARTBEAT_S}; i=$((i+1)); echo \"@@HB $i\"; done ) & hb=$!"]
         for name, command in self.steps:

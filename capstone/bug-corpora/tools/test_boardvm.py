@@ -122,6 +122,13 @@ def main():
                   ("the controller parses as sh",
                    subprocess.run(["sh", "-n"], input=b.controller(), text=True).returncode == 0),
                   ("the gate cds into /test-domains/vbatch", "cd /test-domains/vbatch || exit 1" in b.script()),
+                  ("the module's .text base is printed once, after insmod",
+                   b.script().count(boardvm.MODTEXT_LINE) == 1
+                   and b.script().index("insmod capstone_vm.ko") < b.script().index(boardvm.MODTEXT_LINE)),
+                  ("the base line prints ABSENT where the module is not loaded (this host)",
+                   "capstone_vm" in open("/proc/modules").read()
+                   or subprocess.run(["sh", "-c", boardvm.MODTEXT_LINE], capture_output=True, text=True).stdout
+                   == "@@MODTEXT ABSENT\n"),
                   ("put() returns the board path", b.put("x", text="y") == "/test-domains/vbatch/x"),
                   ("the replayed boot's markers are NOT read -- two start markers make the segment unreadable",
                    steps == {} and done is False)]
