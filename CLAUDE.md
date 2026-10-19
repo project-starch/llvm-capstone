@@ -375,7 +375,12 @@ The incident log these were drawn from is in `docs/`; it is evidence, not rules.
 Cheap habits that catch all of the above:
 
 * **Give every detector a positive control.** A gate that has never blocked anything is not a
-  passing gate, it is an unproven one. Negative-test it the day you write it.
+  passing gate, it is an unproven one. Negative-test it the day you write it. **A detector whose
+  condition is a CONJUNCTION needs a control for each operand separately:** proving one term fires
+  says nothing about whether the other is even visible where the check sits. On 2026-10-19 four
+  arms' silence was read off a must-fire (`flush` AND `request owed`) that had a control for the
+  owed term only; the flush-side control, added afterwards, fired ten times per run — had it been
+  silent, every one of those readings was void.
 * **Ask what the instrument cannot distinguish — before the claim goes out, not after.** A
   positive control proves a check *can* fire; it does not prove it separates the hypotheses on
   the table. Both retractions on 2026-08-19 were available to that question in advance: a
