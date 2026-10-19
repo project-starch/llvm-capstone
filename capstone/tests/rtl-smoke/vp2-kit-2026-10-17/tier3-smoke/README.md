@@ -3826,3 +3826,25 @@ process is stopped before it creates anything.
 **The supporting argument, not conclusive** (the runtime lane): a CSRETIRE rejected on the non-destroying path makes
 retire() return -EIO, which the launcher surfaces as a failed munmap. sql0-nf's session output equals sql0-srz-treeB's,
 so any unmap-path retires succeeded under the floor. It is not shown that sql0's sessions unmap before teardown.
+
+### Arm q15, subsets d-f, results (2026-10-20 05:13-05:53, board 1, tree A): 14 of 15 cells as run C; case 31 is a board-only MISSED
+
+`records/q15def.result-lines.txt`. UNGATED. Each subset was scored at once against run C cut to its cases.
+- **q15d (18-23):** 6 of 6 the same. DRT1 1, FRTY 5, no Oops.
+- **q15e (24-29):** 6 of 6 the same. Case 29 (fz02) is CAUGHT with cause 28, as predicted. FRTY 6.
+- **q15f (30-32):** 2 of 3 the same. FRTY 3.
+- **Every subset:** the controls read uaf 25 and bounds 28 in every boot, and cause 29 never appears.
+- **The moved cell, 31_fz10_dbstat_decodepage_overflow:**
+  - run C reads CAUGHT, cause 28 at statDecodePage+2024;
+  - the board reads MISSED: the case COMPLETED, exit 0, and printed
+    `Q15_PAD items=183 padded=2 pad_bytes_total=128 pad_bytes_max=64`.
+- **What that line does and does not mean.** In the Q15 record, 31 of 33 cases have padded derives in QEMU too.
+  Q15_PAD prints at exit, so in QEMU it appears only on the cases that complete. Its values here (2 padded, at most 64
+  bytes) match that record's completed cases: the lookaside buffer's block and its generation.
+  - So the padding itself is not the difference. What differs is that the overflow at statDecodePage was not caught on
+    silicon.
+  - N=1. Whether it repeats, and whether it is bitstream-dependent, is unread. Board 2 runs a-c only, not 31.
+- **Next:** q15f repeated on the same kit, board 1, one cold boot (`Q15_ROOT=t3-run/q15r`, so the run directory is
+  q15rf).
+  - **Predicted, if the cell is deterministic:** the same three readings, 30 CAUGHT, 31 MISSED, 32 CAUGHT.
+  - **If 31 reads CAUGHT,** the cell varies across boots and is recorded as such.
