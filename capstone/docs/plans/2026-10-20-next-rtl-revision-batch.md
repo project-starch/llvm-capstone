@@ -627,6 +627,26 @@ qualifies. The memory ADDRESS composition (`:180`, "address = index only") must 
 addresses the wrong record. The walk's `next`/`prev` link compositions are table indices whose staleness the
 record's own generation check catches.
 
+**`va-alloc` WILL CHANGE AND MUST, and this is written before the sweep rather than explained after it.**
+`va-alloc.S` is registered, so it is in the 95-test sweep, and its pre-registered readings encode the
+PRE-item-6 semantics in so many words: "the unit clears VALID and nulls its links (**retirement is not a
+free-list push; collection is software**)", with "record 6 word1 VALID 0 and FREE 0" and "root+16 is
+unchanged". That is precisely the design the ruling's own rule (6) WITHDREW -- software re-listing by the
+module -- so the arm encodes a rule that no longer holds.
+
+Under item 6 the domain's crevoke of child 6 PUSHES record 6 onto the table's free list, so the predicted
+changes are: **record 6's word1 FREE bit SET** where the arm expects it clear, and the **free-list header
+at slot 1 moving from empty to {head 6, count 1}** where the arm expects root+16 unchanged. Everything
+upstream of the crevoke should be untouched -- the three allocations from 5, 4 and the bump to 6, and the
+`0, 64, 128, 0x19` readings through `s1` -- because the pop path's generation is 0 for all three (two
+come from a free list whose records are at generation 0, one from the bump).
+
+So a `va-alloc` diff in the batch's sweep is **expected and is item 6 working**; a diff anywhere ELSE in
+the three allocations, or no diff at all, is the finding. "No diff at all" would mean the push did not
+fire, which is the silent failure for this item, since an unpushed record simply never recycles and the
+table merely exhausts as it does today. The arm's header has to be updated with the new readings as part of
+item 6 rather than left describing the withdrawn rule.
+
 **Acceptance, pre-registered.** The arms are a stale copy REFUSED and a fresh one PASSING, with three
 controls:
 1. a capability on a recycled index: after kill, push, re-pop and re-node, a load through the STALE copy is
