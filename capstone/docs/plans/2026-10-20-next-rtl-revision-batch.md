@@ -324,6 +324,39 @@ before**; that run also becomes this lane's baseline, committed in place of the 
 hash in its name and the run's date in its header. Read the cycle count beside every verdict: the testharness
 prints SUCCESS at the cycle limit.
 
+## An OPEN SEMANTICS QUESTION found while scoping item 6: CSNODE is admitted at S, not only at M
+
+Recorded here because it outlives the batch and because the verified half is cheap to state. **It is not a
+defect claim**: the implementation matches its own stated intent, and what conflicts is the premise that CSNODE
+is reachable only where the model's CSMINT is.
+
+**Verified, three ways.** The decode admission (`decoder.sv`, funct7 0x54, identical to CSRETIRE) is
+
+    if (CVA6Cfg.CAPSTONE_EXT && !(vctx_table_i && !(sup_active_i && !debug_mode_i)
+                                  && !(CVA6Cfg.RVU && priv_lvl_i == riscv::PRIV_LVL_U))) illegal_instr = 1'b1;
+
+so CSNODE is legal iff the table-namespace flag is set, the caller is not inside a running supervised context,
+and the privilege is not U. **There is no M-mode term**, and `vctx_table_o` is 1 at S whenever
+`!sup_active_q && priv_lvl_q == PRIV_LVL_S && srevroot_q != 0` (`csr_regfile.sv:2886`) -- a condition an S
+caller can create for itself, since srevroot is 0x5C1. **Measured**: `va-srevroot -DSREV_CSNODE` issues a
+CSNODE at S after an escape and it returns a node id (s5 = 0x4, 2026-10-20). And `create_req`
+(`capstone_rev_node.anvil:586-606`) receives rs1's node id, uses it only in a `dprint`, and writes two FRESH
+records with `valid = 1'd1` -- **rs1's prior node is never read or validated.**
+
+**The shape of the concern, NOT a measured escape.** An S caller could set its own srevroot to a table it
+controls, hand CSNODE a capability whose node was revoked, and receive it re-noded onto a fresh valid node that
+later revocation checks resolve as live. Two things are unestablished and must not be skipped: whether a
+caller-built table passes the allocator's header checks, and whether the supported flows ever leave S with a
+non-zero srevroot -- though **R-58 is exactly a defect that leaves the caller holding one it did not set**,
+which is how the measured instance above arose.
+
+**The arm that would settle it**, to be run before any claim enters the registry: at S with a caller-written
+srevroot, derive a child, revoke it, confirm a load through the stale copy FAULTS (the control, without which
+the arm proves nothing), then CSNODE the stale copy and retry the load. The decoder's own comment states the S
+admission is deliberate -- "outside a context and never from U" -- so the question for the semantics owner and
+the lead is whether S should be able to issue CSNODE at all, given the operation it emulates is an M-mode
+monitor one.
+
 ## A PRECONDITION on every image booted on this bitstream
 
 **Every image booted on the batch bitstream -- Tier 1, the corpus kits, and the pb10 FRTY acceptance image --
