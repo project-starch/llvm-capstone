@@ -4257,3 +4257,14 @@ UNSTUBBED call to the runner, meant to show that the real checks pass.
 - A cell in an R-60 aliasing band would read MISSED where QEMU catches it. Neither CAUGHT cell is a far overrun, so none
   is expected.
 - A cell that differs is a reading against this single record, possibly variance, until a repeat.
+
+### cpyp-DB, result (2026-10-20 07:39-08:23, board 2, tree B): pc=0 is unchanged on tree B, so S-29 is excluded by either route
+
+`records/cpyp-db.result-lines.txt`. UNGATED. No prediction was registered.
+- **The boot:** 10 of 10 steps ran.
+- **pc=0:** `domain fault cause=12 pc=0x0 address=0x0 … last=0x3f` appears once each in 17-control, 23 and 23-control, the
+  same steps and line shape as cpyp-D on tree A.
+- **The rest is the same as cpyp-D:** MISSED 2, NO-READING:unattributed 1, FRTY 9, DRT1 1, no Oops.
+- **The reading:** the bitstream, with S-29's satp flush, does not change the faults. With cpyp-DZ (not the retries) and
+  the compiler lane's source exclusions (not vp2's latched rd, not the zero page), the attribution stays open with the
+  compiler lane, and every recorded candidate is now excluded.
