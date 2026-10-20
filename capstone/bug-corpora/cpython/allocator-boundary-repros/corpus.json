@@ -38,7 +38,7 @@
     "virtual-nested-pools": "virtual-cpython-pools"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-18-review/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-18-review/virtual-nested-pools"
+    "virtual-malloc": "results/2026-10-20-review-t1800/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-20-review-t1800/virtual-nested-pools"
   }
 }

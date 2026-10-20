@@ -15,14 +15,14 @@
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3f8938f8bc in fnv; by control: probe-142664.py (the defect's tests alone) faults at the trigger's fnv+0x40; negative_control.py (the same tests, the offending access made valid) ran to its end on this image without a fault",
-      "verdict_from": "results/2026-10-18-review/virtual-malloc"
+      "verdict_note": "cause=25 pc=0x3fbb38f8bc in fnv; by control: probe-142664.py (the defect's tests alone) faults at the trigger's fnv+0x40; negative_control.py (the same tests, the offending access made valid) ran to its end on this image without a fault",
+      "verdict_from": "results/2026-10-20-review-t1800/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3f8238fb28 in fnv; by control: probe-142664.py (the defect's tests alone) faults at the trigger's fnv+0x40; negative_control.py (the same tests, the offending access made valid) ran to its end on this image without a fault",
-      "verdict_from": "results/2026-10-18-review/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3fba38fb28 in fnv; by control: probe-142664.py (the defect's tests alone) faults at the trigger's fnv+0x40; negative_control.py (the same tests, the offending access made valid) ran to its end on this image without a fault",
+      "verdict_from": "results/2026-10-20-review-t1800/virtual-nested-pools"
     },
     "cheribsd-revocation": {
       "oracle": "completion is admissible and is the expected outcome under this guest's configuration: the run records security.cheri.runtime_revocation_every_free_default as 0 and runtime_revocation_async as 1, so revocation is sweep-based and asynchronous, and a stale access reached before the next sweep still holds a tagged capability. Where a sweep has run first the access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). A bounds fault would falsify this."
@@ -35,5 +35,7 @@
   ],
   "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at memcpy /usr/include/x86_64-linux-gnu/bits/string_fortified.h:29 | siphash13 Python/pyhash.c:382. That run uses no Capstone arm and was recorded before any virtual arm ran.",
   "control_probe": "probe-142664.py",
-  "control_probe_why": "trigger.py runs the whole upstream file, which faults at three sites on the physical sublet arm (gh-142664, gh-143195 and gh-92888's test; d3a500f411cb), so no whole-file control can be silent. probe-142664.py runs gh-142664's six tests alone and negative_control.py the same six with the re-entrant release removed; a fault counts by control only when the probe faults in the trigger's function at the trigger's offset and the control is silent."
+  "control_probe_why": "trigger.py runs the whole upstream file, which faults at three sites on the physical sublet arm (gh-142664, gh-143195 and gh-92888's test; d3a500f411cb), so no whole-file control can be silent. probe-142664.py runs gh-142664's six tests alone and negative_control.py the same six with the re-entrant release removed; a fault counts by control only when the probe faults in the trigger's function at the trigger's offset and the control is silent.",
+  "nested": false,
+  "nested_why": "the object is a libc malloc block, so the allocator below bounds the arena it came from, not the block"
 }
