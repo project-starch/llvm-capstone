@@ -15,7 +15,7 @@
       "verdict": "CAUGHT",
       "evidence": "SIGPROT(34) -- a capability violation",
       "run": "defect and control run 2026-10-10 by shared/run-cheribsd.sh against the same deployed purecap tree",
-      "verdict_from": "results/cheribsd-revocation-20261010-094729",
+      "verdict_from": "results/cheribsd-revocation-20261010-094729; re-measured and unchanged (detected) in results/2026-10-18-review/cheribsd-revocation/matrix.tsv",
       "negative_control": "control-held, results/cheribsd-revocation-control-20261010-104207",
       "verdict_note": "Attributed by its own control and by the threshold, bisected in the guest with one backend per input: CREATE EXTENSION ltree alone, and 2, 32 and 63 variants, all exit 0; 64 and 66 variants both exit 162 (SIGPROT). A variant costs 1024 bytes on this build, read back in band as the difference between pg_column_size of a 2-variant and a 3-variant lquery (2080 -> 3104), so 64 is the first count that wraps. The installed pg_config.h in the guest says MAXIMUM_ALIGNOF 8, which is not what the deployed ltree behaves as."
     },

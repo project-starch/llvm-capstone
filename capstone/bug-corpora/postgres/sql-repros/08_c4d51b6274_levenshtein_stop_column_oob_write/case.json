@@ -12,10 +12,11 @@
   "arms": {
     "cheribsd-revocation": {
       "oracle": "the mechanism reports, or the case completes and it did not",
-      "verdict": "MISSED",
-      "evidence": "ran to the prompt with no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
+      "verdict": "CAUGHT",
+      "evidence": "SIGPROT(34) -- a capability violation",
+      "run": "run 2026-10-18 by shared/run-cheribsd.sh against the deployed purecap tree, with the paired control run recorded in results/2026-10-18-review/cheribsd-control",
+      "verdict_from": "results/2026-10-18-review/cheribsd-revocation/matrix.tsv cheribsd-revocation: detected",
+      "verdict_note": "The trigger's statements all answered -- the last returns levenshtein_less_equal = 536870913, the overflowed distance -- and the backend then died without reaching its shutdown checkpoint, which the paired control's log does reach. That is the exit 162 shared/run-cheribsd.sh reads as SIGPROT(34) (its verdict rule at :203). The control ran below the defect's threshold and completed (control-held), so the fault is not something this trigger does to any index. **This cell is withdrawn by the review and the four-cell tables do not count it**: the store itself was ALLOWED, and the fault comes afterwards, in allocator bookkeeping whose tag the store had cleared, reported as code=PROT_CHERI_TAG -- the untagged-dereference consequence, not the bounds mechanism rejecting the access. The earlier reading of this cell came from results/matrix.tsv, which predates the trigger fix described in README.md: on that run the trigger never reached the defective store at all."
     },
     "virtual-malloc": {
       "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
