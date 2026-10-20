@@ -4268,3 +4268,36 @@ UNSTUBBED call to the runner, meant to show that the real checks pass.
 - **The reading:** the bitstream, with S-29's satp flush, does not change the faults. With cpyp-DZ (not the retries) and
   the compiler lane's source exclusions (not vp2's latched rd, not the zero page), the attribution stays open with the
   compiler lane, and every recorded candidate is now excluded.
+
+### pb10's srz-nop pair, pre-registered (2026-10-20 08:2x, before its boots): board 2 after q15 subset f on tree B
+
+The runtime lane's discriminator for pb10's FRTY 2 → 0 under srz, the open anomaly; it was idle-time work. The builds
+are the compiler lane's (srz-nop-pair 5260ec650af4).
+- **The control:** 607164b9, rebuilt from ce25d6de7280 byte-identical to pb10-srz's module.
+- **The variant:** 2a8f85f70d8efcdd (banner srevroot-nopf-1). Both are 4,577 instructions with 0 RVC and an 18,080-byte
+  .text. The .text differs in exactly 3 words, each `csrw 0x5c1, x0` → `nop`, and restore_root's write stays in both.
+- **Its stated limit:** a CSR write also flushes at commit and a nop does not. So the pair separates "the post-CSRUNV
+  write" from "no write", not "the zeroed srevroot" from "the flush". A third arm could split those two.
+
+**1. The variant's own Tier 1 boot** (a new module revision):
+- `tier3-smoke/chain-nop-b2.sh` 7d1b431aecd291db → `board-tier12/srz/run-tier1-nop-b2.sh`
+  1fbabb5552e9af9d, on image-rev7-nop 6372312d8a2593e5 (`nop-prep.sh`
+  3f577493849ccc54, module checked in rootfs.cpio by sha256) and firmware fw-t1-nop 5090454288ce529f
+  (dom_stack PASS).
+- **The gate:** the rungs equal t1-old's. On PASS it writes CHAIN_PBNOP_GO.
+- **Not applicable:** this module base has no release line, so the release check reads 0 lines, by construction, not as
+  a shortfall.
+
+**2. The pair** (`tier3-smoke/tier3-pb10-nop-b2.sh` e6d339c36e1785c4), two cold boots on pb10
+with only the module changed:
+- pb10-srzc on bkit7-pb10BZ, then pb10-nop on bkit7-pb10BN (`make-pb10nop-kit.sh` b604ae4e83aef4df:
+  BZ with only the .ko changed).
+- Each is scored against t3-pb10/bundle and filed under ffmpeg/pool-repros results/2026-10-20-vp2c-treeB.
+
+**The predictions (the compiler lane's):**
+- the control reads FRTY 0, as pb10-srz did;
+- the variant reads FRTY 2 if the post-CSRUNV write removed the retries, or 0 if something else in the srz module did;
+- the cells are 4 of 4 in both.
+
+**The dry runs,** with every call stubbed: the chain's PASS and FAIL branches; the pair through both arms, with the staged
+module checked; the pair HOLDing on FAIL.
