@@ -4716,3 +4716,117 @@ evidence, so both trees read the remedy at once.
   `pc=0x80021d80 rd=x10 rs1=x9 val=0x1 priv=3`, a firmware pc in M-mode. It is one-shot per QEMU process, so it is spent
   before the image runs. The cell pair above is the gate.
 - So SQL_NM_GO and SQL_NMB_GO are written. The predictions stand as pre-registered.
+
+### Rebuilds for the rest of the vp2 corpus, and the gates made ready (2026-10-20 afternoon)
+
+- **The inventory** sent to the compiler lane: every arm compiled from t3-freeze-nb/sdk, whose sdk.json carries
+  `+movc-keeps-integer-source`, so every vp2 board record so far ran flagged images. The pins are
+  `<mnt-hdd>/capstone/t3-images-nb/` (ARMS.spec, `<tag>.images.SHA256SUMS`, the builders).
+- **Group 1, the nine runner-built arms** (mpt mph fph fpt fca fcs wph wpt fso), from the compiler lane:
+  - the unflagged SDK `<mnt-hdd>/capstone/t3-freeze-nb-nomovc/sdk`, v9's recipe with only the CAPSTONE_VIRTUAL_MOVC_KEEP
+    switch (lane sdk-nomovc-f6df 0d916cfa5dcf);
+  - ~~the switch ON reproduces t3-freeze's archives in every ALLOC section and relocation~~ **RETRACTED by the compiler
+    lane the same afternoon:** its archive comparator dropped every unindented hex row, so each section hash was of
+    nothing and only section lists and relocations were compared. Its positive control fired through relocations, so the
+    tool looked sound. Fixed (rows parsed regardless of indent; a sizeless section with no rows is an error) and re-run.
+    The image comparisons (loaded bytes, symbol multisets) never used that tool.
+  - **Superseded:** this SDK's runtime lacks 232d13b2's port. The SDK is being rebuilt from sdk-nomovc-f6df 98bfe0d9ab76
+    (9185c1af6638 carries the port, heap.c with both content-test substrings), and every set is re-staged on it, so the whole
+    pass shares d9787ac2's runtime fix.
+  - 117 images staged as stage-all.sh staged nb's, each differing in bytes from its twin with an equal defined-symbol
+    multiset (the lane's reading).
+  - **Checked here:** the two sdk.json files differ in codegen[19] only (`+` to `-movc-keeps-integer-source`) and in the
+    three archive paths; 117 lines in the new `*.images.SHA256SUMS`.
+  - Their QEMU references (qkit7-nf2 and qkit7-nf2-mn, compared cell by cell) are queued.
+- **cpython:** f796f03b withdrawn (no CPY_TEST_CAPI). The CAPI rebuild 0c57de6c and its -dl 4641b94cae16a757
+  (13,085,592 B) have equal loaded bytes (objcopy -O binary b96a44b161d41f5f) and the same 16,035 non-local symbols as
+  20bcfdd1; .text is +238,680 B (the movc to stc/ldc rewrite). Its five-run record is on the pin, on kits qkit7-nf2-nr and
+  qkit7-nf2-mn-nr (nf2's module, vexec and QEMU, plus norandmaps). The runner is dev ad598d2cc898's run-virtual.py
+  dc606bd178c10780.
+- **judge-cpy-set.py amended:** the record's image is the prediction's own image_sha256, so a rebuilt image's record is
+  judged against its own bytes. The alias still maps only 20bcfdd1 to 0d322044. Controls:
+  - the old record re-judged gives byte-identical output;
+  - the old bundle against a 4641b94c prediction reads NO DATA;
+  - a 4641b94c bundle against that prediction is judged;
+  - the same bundle against the old prediction reads NO DATA.
+- **Kits:** `make-cpyn2-kits.sh` made bkit7-rev2xnDN2 (tree A) and bkit7-rev2xnBDN2 (tree B): the norandmaps kits with only the
+  module changed, to 54d8a3af. Each differs from its parent in the .ko and its own manifest path.
+- **The next bitstream's runtime gate** (R-60's RTL fix; the runtime lane's rule): `r60-runtime-gate.py`. The fix is carried
+  by descent (232d13b2) or by port (5620badda510, under 8f132305), so ancestry is not the test: the runtime lane's first
+  proposal, `merge-base --is-ancestor 232d13b220cc`, refused 8f132305 and was withdrawn. The gate is the content of both
+  hunks in heap.c, plus runtime_dirty false. Controls:
+  - refused: 5b3e6b79 and the 64010720 image's manifest;
+  - passed: 232d13b2, 5620badd, 8f132305 and d9787ac2's manifest;
+  - a dirty manifest is refused, and a bad revision reads NO DATA.
+  - Nothing changes on the resident bitstreams.
+- **Groups 2-6** (prebuilt b9/b10/b12/b13, postgres pgc/mmgr, wmem, pym, sqlite memsys5/nested-pools/q15), from the
+  compiler lane: 334 ELF images rebuilt on t3-freeze-nb-nomovc by each set's own builder, with only the SDK and the
+  output paths changed. Manifest `<mnt-hdd>/capstone/t3-images-nomovc/REBUILT.SHA256SUMS`.
+  - Each rebuilt image differs in loaded bytes from its nb twin, with an equal defined-symbol multiset; 0 missing.
+  - **Builders reproduced on nb first** (each rebuilt on t3-freeze-nb and compared with t3-images-nb):
+    - sqlite memsys5: 35 of 35 in sq0's sums;
+    - q15: byte-equal;
+    - pym: 20 of 20 loaded-byte-equal;
+    - wmem: 60 of 60 loaded-byte-equal;
+    - pgc: 11 of 11 byte-equal;
+    - prebuilt and mmgr: 20 byte-equal and 60 not. In each of the 60 the loaded size and the string multiset are equal,
+      and only the placement of one `__FILE__` build-path string in rodata moves, with the immediates that address it
+      (about 200 B in defect-01). A same-length path does not restore it, so byte reproduction needs the original output
+      path. These two sets reproduce up to that string's placement.
+  - **Stamps:** every reference run writes `<set>.stamp`. It records the runner's path and sha256/16, wt-gate HEAD and its
+    dirty count, the kit's qemu/module/vexec/wrapper hashes, and sdk.json's and tier3-appvm-arm.sh's hashes. The board
+    arms pin those hashes.
+  - QEMU references are queued on qkit7-nf2 and qkit7-nf2-mn, compared cell by cell. A set whose plain and -mn runs differ
+    gets a second plain run, to separate variance from a MOVC site still reached.
+- **The full corpus pass, as planned with the runtime lane:**
+  - one SDK (unflagged), dev's module 54d8a3af, and each arm released as its re-recorded reference lands;
+  - split arm by arm across both boards, with sql0 and cpython lt0 run on BOTH trees as the cross-tree overlap;
+  - excluded: cpython lt1 (the lead's generation item) and pg-pools (its Sublet repair).
+  - **Predicted:** every cell equal to its reference except q15's case 31 (R-60, subset f, nested-pools-q15); S-23's
+    FRTY and DRT1 at 0; no pc=0, and no silicon-only wrong value. A MOVC count is not the must-fire, since a dead
+    integer source nulled is harmless. A pc=0 or a silicon-only wrong value on a rebuilt image is a NEW finding, not C-32.
+  - **Why tree A alone suffices for an arm despite S-29** (tree A lacks its flush): S-29 needs a switch where the
+    context's satp differs from the caller's live satp. The module never makes one:
+    - capstone_vm.c at 794d7c5815f5 (the module's source, unchanged on dev since): :1656 sets frame[0] from
+      csr_read(CSR_SATP) at creation, and :1796 does the same before a context's first start;
+    - :1807-1810 rewrite the escape-saved satp (+928) with the live satp before every later resume, and count
+      resume_satp_changed where a nonzero saved word differed (the citation corrected by the runtime lane, which owns the
+      module: :1288-1300 is the comment block, not the code).
+    - So no corpus arm reaches S-29 on either tree. A module revision touching those lines re-opens it.
+    - **resume_satp_changed** (/sys/module/capstone_vm/parameters/) would show the condition arising at all, and a nonzero
+      value is absorbed by the refresh. It is not read in this pass: the corpus runners echo only the parameters they
+      SET (virtualvm.py:56's `@@PARAM` after a write), and only the Tier 1 rung scripts read others. The construction
+      argument settles S-29 for the pass, and a runner-hash change mid-pass costs more than the corroboration (agreed
+      with the runtime lane). When a runner change is needed for another reason, it gains one end-of-boot dump of every
+      0444 capstone_vm parameter.
+- **For the batch bitstream (not this pass; the runtime lane's note, relayed, not the lead's word here):**
+  - The generation item is batch item 6, as hardware recycling: under the virtual flag, kill and retire push onto the
+    table's free list, and the pop bumps the generation (isa.md, dev 70e09652c929).
+  - A bitstream without the item never recycles, so it fails closed by construction (-ENOMEM at exhaustion, as today).
+    The earlier plan of a load-time probe with a fail-closed banner is WITHDRAWN.
+  - The module change is small (its accounting reads the hardware free count, and collect stays off). It needs its own
+    Tier 1 per tree when it exists.
+  - cpython lt1 then joins as a normal arm, and every image there passes r60-runtime-gate.
+  - Flashing that bitstream needs the lead's own go-ahead in this lane's session.
+- **The pass's reference kit** (the compiler lane's answers, 14:2x):
+  - The mimic kit is qkit7-tB-mimic (cpython: -nr, adding norandmaps):
+    - module a1fa252f (nf2's file, the twin of 54d8a3af) and vexec a405840d;
+    - QEMU 7e5fe043 (capstone-qemu treeb-round 8349888b17a1: kit base b290f565 + R-54 renormalisation + compact rounding);
+    - wrapper 1bacd118.
+    - Every boot logs a SWITCHES line (movc_null_scalar=1, compact_rounding=ON, r60_cleartag=OFF, r59_root_precheck=OFF).
+  - Against silicon:
+    - MOVC null is C-32, the same in both trees (capstone_flu_unit.anvil byte-identical).
+    - Compact rounding matches each tree's own bounds model: 410,946 regions, 0 mismatches on both.
+    - So one kit serves both trees.
+  - "R-60 OFF" models neither silicon's aliasing nor the batch fix, so q15's case 31 is CAUGHT in the reference and
+    MISSED on the board, the known exception.
+  - The plain run qkit7-nf2 (every switch off) is the architectural record beside every bundle. Where plain and mimic
+    differ, a rounding-only run and a second plain run follow.
+  - The rounding positive control (roundprobe: EXACT on nf2, ROUNDED-AS-SILICON on the mimic kit) runs before any
+    reference. sql0 is added to the mimic queue: its reference is nf2 plus MOVC null only, with no rounding.
+- **cpython lt0 4641b94c, the record's first two pinned runs** (the compiler lane):
+  - r1 on qkit7-nf2-nr and -mn on qkit7-nf2-mn-nr agree in 32 of 32 cells, every judge-signature field (compare-pilot rc 0);
+  - -mn's tally is CAUGHT 14, MISSED 14, NO-READING 4; pin OK in both, 54/54 steps;
+  - -mn's one MOVC-NULL line is the QEMU kit's monitor pc 0x80021d80, not the image.
+  - So on the rebuilt image MOVC nulling moves no cell (N=1 per arm; no cell is called stable). The board reference is
+    the mimic run next in the queue, with this r1 as its plain counterpart.

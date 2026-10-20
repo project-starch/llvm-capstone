@@ -18,7 +18,9 @@ AMENDED 2026-10-19 evening to the grading rule on dev (18a7cf883de3, the lt0 REA
   varying verdict outside its set is a MOVED cell (the re-record rule applies);
 - lt0's board image is the stage 20bcfdd1073976e0, accepted as lt0 by a RECORDED identity only: every ALLOC section and
   the loaded image (objcopy -O binary, 47dcef5f380b3217) byte-equal to 0d322044b9118713; the lt1 image's loaded bytes
-  differ (942096f9f1e82dbc), the control. Exactly that pair is mapped; any other image is refused as before."""
+  differ (942096f9f1e82dbc), the control. Exactly that pair is mapped; any other image is refused as before.
+AMENDED 2026-10-20: the record's image is the prediction's own image_sha256 (IMG is only the fallback), so a record of a
+rebuilt image (e.g. the CAPI -dl 4641b94c) is judged against its own bytes; the alias still maps only 20bcfdd1 to 0d322044."""
 import json, sys
 from pathlib import Path
 DEFAULT = Path("/tmp/capstone/land-board/capstone/bug-corpora/cpython/allocator-boundary-repros/results/2026-10-19-vp2-trimmed-pinned/prediction.json")
@@ -44,14 +46,19 @@ def main():
         print(f"VOID: the guest's pin differs in {bad}: {json.dumps(g)}"); return 3
     print(f"pin OK: {json.dumps(g)}")
     cases = pred["cases"]; got = {r["observation"]["case"]: r for r in rows}
+    # the record's image comes from the prediction itself (2026-10-20, for the rebuilt images' records); the hardcoded IMG
+    # is the fallback for a prediction without it, and the 20bcfdd1 alias applies only to the 0d322044 record it was proven for
+    want = str(pred.get("image_sha256") or IMG.get(img, ""))[:16]
+    if len(want) < 16:
+        print(f"NO DATA: the prediction names no image for {img}"); return 2
     if set(got) != set(cases):
         print(f"NO DATA: cases differ from the record: missing {sorted(set(cases) - set(got))}, extra {sorted(set(got) - set(cases))}"); return 2
     n = {"agree": 0, "outside": 0, "diverge": 0}
     for c in sorted(cases):
         r = got[c]; s = sig(r)
         ish = str(r["observation"].get("image_sha256", ""))
-        if not (ish.startswith(IMG[img]) or (img in ALIAS and ish.startswith(ALIAS[img]))):
-            print(f"NO DATA: {c} image {r['observation'].get('image_sha256', '')[:16]} is not the record's {IMG[img]}"); return 2
+        if not (ish.startswith(want) or (want == IMG.get(img) and img in ALIAS and ish.startswith(ALIAS[img]))):
+            print(f"NO DATA: {c} image {r['observation'].get('image_sha256', '')[:16]} is not the record's {want}"); return 2
         if cases[c]["stable"]:
             inside = s in cases[c]["signatures"]
         else:
