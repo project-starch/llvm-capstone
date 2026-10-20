@@ -5244,3 +5244,38 @@ The cancellation at 16:4x was for throughput only, and board 1 is now idle with 
 board 1 as first pre-registered (`tier3-cpy-nm.sh` b83891d11ea65089, kit bkit7-rev2xnDN2, the same prediction 34aec9edf4471196),
 starting on "PASS seq2-1 DONE" (already read). The predictions are unchanged: 32 of 32 inside their sets, no pc=0,
 INJS/INJL 0, and tree A equal to tree B in every cell.
+
+### cpython lt0 on board 2, result (2026-10-20 16:38-22:46, tree B): 32 of 32 in verdict, 31 of 32 in every field (case 01 is Q-31); no pc=0
+
+`records/cpy-nm-b2.result-lines.txt`. UNGATED.
+- **The boot completed:** 54/54 steps, and the driver's transcript ends with the vbatch END line. The pin read back OK
+  (norandmaps, PYTHONHASHSEED=0).
+- **The cells:** CAUGHT 14, MISSED 14, NO-READING 4 (inconclusive, infra, not-reached, unattributed). That is the
+  reference's tally, and the judge reads 31 of 32 inside their sets.
+  - The one DIVERGENCE is case 01 (set_dealloc+284): CAUGHT on both, with cause 4 on silicon where the reference reads 24.
+    Its fault address is 0xffffffffffffffff, so the misaligned check fires before the tag check: Q-31's order. In verdict
+    it is inside its set.
+- **pc=0: 0.** On the old flagged image this arm had 21  lines (C-32's movc-then-jalr).
+- DRT1 0, FRTY 0, no Oops, INJS 0 / INJL 0, the banner present.
+- **A VOID that was recovered, and why:**
+  - The arm took 6 h 8 min, longer than the wrapper's `timeout 21600`, which killed tier3-appvm-arm.sh at 22:38:45.
+  - The board driver, in its own process group with its own 67,800 s bound, ran on and finished the boot at 22:46:32.
+  - The wrapper's limit was set from the old image's 4 h 38 m run, in which many cells died early at pc=0. With C-32
+    fixed every case runs to completion, which is exactly "a fix that lets programs complete breaks their budget" (this
+    lane's own note). It was not recomputed. Board 1's cpython (tier3-cpy-nm.sh, same limit) will hit it too, at about
+    02:47, and is recovered the same way.
+  - The read was recovered by `recover-appvm-read.sh` 60bb13bfd24c1303.
+    - It runs the same parse the killed boot phase would have run: appvm-session.py boot with BOARDVM_STUB_TRANSCRIPT,
+      the dry-run path documented in boardvm.py. Then the read phase. It boots nothing.
+    - It refuses unless the transcript holds the vbatch END line and the session is still in phase collect. It keeps
+      guest/stage aside as guest.board/stage.board, and restores the firmware hashes into platform.json.
+    - **Its known-good control:** on a copy of the completed wm0p run reset to phase collect, it reproduces the original
+      exactly (23 of 23 cells, platform.json and inputs.json identical).
+    - Its first control attempt failed (the stage dir must move aside too) and, worse, ran the read phase after the
+      failed parse. It now stops on a failed parse.
+- **A second defect, caught by its own check:** the repaired-arms chain started on "CPY nm DONE", which tier3-cpy-nm.sh
+  prints even after a timeout. Its board-busy check stopped it before any boot ("REP STOP: board 2 is busy"). It is
+  re-launched now that board 2 is free, with its trigger "-" (at once). The runner is unchanged, `tier3-pass-rep.sh`
+  1086fbe9aad236be.
+- **For the NULL census:** case 01's fault address is -1 (0xffffffffffffffff), the same incidental shape as sqlite 19, and
+  the census's "address < 0x1000" criterion does not catch it. Its criterion should include small negative addresses.
