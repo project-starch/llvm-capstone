@@ -1,0 +1,311 @@
+{
+  "kit": "llvm-capstone capstone/ports/spec-cpu2017 (public: recipes, config, tools, records); the SPEC-derived src.alt packages are private, see srcalt_note",
+  "spec": {
+    "archive": "SPEC17.tar.gz",
+    "archive_sha256": "ed57589944c667d33e242a2f05b2507df729838ce2b177a2a32d890653928d80",
+    "version": "1.0.2",
+    "archive_note": "an installed SPEC CPU2017 1.0.2 tree packed as tar.gz (tools prebuilt for x86_64 Linux); spec-extract.py checks every file against its MANIFEST"
+  },
+  "workloads": {
+    "benchmarks": [
+      "500.perlbench_r",
+      "502.gcc_r",
+      "505.mcf_r",
+      "519.lbm_r",
+      "525.x264_r",
+      "538.imagick_r",
+      "544.nab_r",
+      "557.xz_r",
+      "997.specrand_fr",
+      "999.specrand_ir"
+    ],
+    "sizes": [
+      "test",
+      "train"
+    ],
+    "tune": "base",
+    "copies": 1,
+    "iterations": 1,
+    "vm_policy": "a freshly booted VM (disk snapshot) for each benchmark and size"
+  },
+  "srcalt": {
+    "500.perlbench_r": "packages/500.perlbench_r.capstone.cpu2017.v1.0.tar.xz",
+    "502.gcc_r": "packages/502.gcc_r.capstone.cpu2017.v1.0.tar.xz",
+    "505.mcf_r": "packages/505.mcf_r.capstone.cpu2017.v1.0.tar.xz"
+  },
+  "toolchain": {
+    "repository": "https://github.com/project-starch/llvm-capstone",
+    "base": "77983c438fcbea46a13466616faaf994ee19c8f4",
+    "base_note": "llvm-capstone dev on 2026-10-20 (unchanged since 2026-10-19), plus every open PR of ours that merges in stack order: the eight of q4, the runtime and compiler PRs opened since, and #279 (the heap switches)",
+    "excluded": {
+      "#257": "conflicts with #250 in module/capstone_vm.c (sibling branches of one lane)",
+      "#264 #271 #273 #274": "siblings on #250 that conflict with each other in exec.c (#264 against the #271 chain) and with #261; their authors must settle the order",
+      "#275": "reworked locally after review, the PR head is not the current version",
+      "#243 #244 #253 #255 #256 #258 #259 #260 #276 #280": "perl port patches already in the srcalt packages, docs and corpus reviews, superseded or test-only changes"
+    },
+    "merges": [
+      {
+        "pr": 242,
+        "commit": "ecb936f55ab7ad15be0c16d0e89606f1963305cf",
+        "what": "PR #242 2 GiB per mapping, 4 GiB and 8192 mappings per process"
+      },
+      {
+        "pr": 245,
+        "commit": "218a4a1aa9fbceff883940c59fffb2352e823337",
+        "what": "PR #245 musl pselect6 short fd_sets"
+      },
+      {
+        "pr": 246,
+        "commit": "04292d469c344c70b0a1ff48732d053e5b43b466",
+        "what": "PR #246 C-81/C-77 unknown-alignment copies and byval"
+      },
+      {
+        "pr": 247,
+        "commit": "23bf76011384bb433992065571fa79602b2ef343",
+        "what": "PR #247 C-82 modf/frexp output pointer",
+        "docs_conflicts_to_base": [
+          "capstone/docs/ref/ISSUES.md"
+        ]
+      },
+      {
+        "pr": 248,
+        "commit": "0997fd8990a363b97d03db7a8bc7b4f4f7cdd68f",
+        "what": "PR #248 C-83 __builtin_return_address"
+      },
+      {
+        "pr": 249,
+        "commit": "c30df2aebd2b84ecb504124f4305aef320b20775",
+        "what": "PR #249 C-84 zero-size dynamic alloca"
+      },
+      {
+        "pr": 251,
+        "commit": "feff25bdb3ae35137f913d0e1dcbd3c17b2b39f1",
+        "what": "PR #251 C-85 16-byte common globals",
+        "docs_conflicts_to_base": [
+          "capstone/docs/ref/ISSUES.md"
+        ]
+      },
+      {
+        "pr": 252,
+        "commit": "d437f8ab2069f13593f2a6b9c6970c8d6231fbad",
+        "what": "PR #252 capstone_vm --share-model"
+      },
+      {
+        "pr": 250,
+        "commit": "0ba4bc08c6931ead60c1ed024f85c964af855ef2",
+        "what": "PR #250 growable mapping registry, on #242"
+      },
+      {
+        "pr": 269,
+        "commit": "da19e31be280fbf60b832c325d8dd56ed4cd3bfe",
+        "what": "PR #269 memset stores aligned words",
+        "conflicts": [
+          "capstone/runtime/virtual/hosted-contract.c"
+        ],
+        "resolution": "keep-both",
+        "resolution_note": "both PRs append a test block to hosted-contract.c (#248 return addresses, #269 memset ranges); the merge commit keeps both, in that order"
+      },
+      {
+        "pr": 270,
+        "commit": "c7f689604bc4b3e1b59c9322ca3b259acaa2f5c1",
+        "what": "PR #270 memcpy and memmove word paths, on #269"
+      },
+      {
+        "pr": 254,
+        "commit": "1e1555b67922c33041ea5b6497651c2caf3e9d61",
+        "what": "PR #254 module: page tag clearing one word per granule"
+      },
+      {
+        "pr": 261,
+        "commit": "bd938a43441726a91ff2281e2928bf1f6294f1cd",
+        "what": "PR #261 launcher: two fewer system calls per mapping"
+      },
+      {
+        "pr": 262,
+        "commit": "f05475a56a08c04071bfa2481c93d03ef08b59b9",
+        "what": "PR #262 musl port: mallocng meta-area reservation at once"
+      },
+      {
+        "pr": 272,
+        "commit": "7ed6a900f5c18ab664f2d1748070e45b3a392639",
+        "what": "PR #272 musl runtime: dl_bytes word copy"
+      },
+      {
+        "pr": 263,
+        "commit": "48b446c7af6d0fab668605636a4f5fbff5385e82",
+        "what": "PR #263 launcher seccomp: allowlist as a search tree"
+      },
+      {
+        "pr": 265,
+        "commit": "49c1b69212eb92c8ebcf1c328023699d8ade617a",
+        "what": "PR #265 compiler: capinit holders writable"
+      },
+      {
+        "pr": 266,
+        "commit": "3df3e8019c35655e6583f8594534b0570d9a39ac",
+        "what": "PR #266 driver: no math errno on bare Capstone"
+      },
+      {
+        "pr": 267,
+        "commit": "435f43820c7b08bbe6f9411de5a8e9b041858d38",
+        "what": "PR #267 driver: frame pointer omitted when optimizing"
+      },
+      {
+        "pr": 268,
+        "commit": "8a3ce3d72befebbc11d332c21c47c3e8aaf2615e",
+        "what": "PR #268 compiler: constant-pool load through gp folds %pcrel_lo"
+      },
+      {
+        "pr": 277,
+        "commit": "a6a6f6c896ef2be5dcc689e45eb3ddd33b146092",
+        "what": "PR #277 compiler: cursor-add constant offset folds into the memory operand"
+      },
+      {
+        "pr": 278,
+        "commit": "2a6dd0f5b5e45c4c4bbdf319ada597116d24d334",
+        "what": "PR #278 compiler: cursor read fold"
+      },
+      {
+        "pr": 279,
+        "commit": "75bdc13acfacf09ac0b67332e3aae6a7c47d8636",
+        "what": "PR #279 virtual heap switches CAPSTONE_HEAP_LIFETIMES / CAPSTONE_HEAP_SCRUB_FREE"
+      }
+    ],
+    "commit": "954b77c12813252a0d9fa7f197db1c585aba6ac4",
+    "tree": "fcb729ac892a3ded7ea60da1affb5505a76bc36b",
+    "archive": {
+      "file": "llvm-capstone-954b77c12813252a0d9fa7f197db1c585aba6ac4.tar.zst",
+      "sha256": "bfbdeaf4830ee4a4f801c877976143f9dd755f17c3e629b3f4249e69c68a86a6",
+      "made_by": "git archive --format=tar --prefix=llvm-capstone/ COMMIT | zstd -T0"
+    },
+    "bundle": {
+      "file": "integration-pr-commits-3.bundle",
+      "sha256": "dc5c965d2579c01c1d62164ba711cae0c3cc63861fabe50f0fccb7c52d29df0e",
+      "note": "the 23 PR heads and the integration head (its ancestors include the resolution merge); needs the public dev commits"
+    },
+    "musl": {
+      "file": "musl-1.2.5.tar.gz",
+      "sha256": "a9a118bbe84d8764da0ea0d28b3ab3fae8477fc7e4085d90102b8596fc7c75e4"
+    },
+    "build": {
+      "recipe": "recipes/toolchain.sh",
+      "status": "PENDING: the p12 build of this commit fills host, clang_sha256, libc_sha256 and sdk_inventory_sha256"
+    },
+    "merge_policy": "recipes/integration.sh: merge-tree in this order; a documentation-only conflict takes the base side; the one code conflict takes the recorded resolution commit",
+    "bundle_note": "optional: artifacts/sources/integration-pr-commits-3.bundle (sha256 dc5c965d2579c01c1d62164ba711cae0c3cc63861fabe50f0fccb7c52d29df0e) holds the 23 PR heads as of 2026-10-20 for the day a head moves; recipes/integration.sh fetches the public pull refs otherwise"
+  },
+  "platform": {
+    "qemu": {
+      "repository": "https://github.com/project-starch/capstone-qemu",
+      "commit": "2b6fbe3eaf072425bbf280bada7e24c47358b43c",
+      "archive": {
+        "file": "capstone-qemu-2b6fbe3eaf.tar.zst",
+        "sha256": "a1f8f863aeff3cd9d81a9c4419d2ef338bf5deed23ec9972df488953e4e9eb92"
+      },
+      "configure": [
+        "--enable-slirp",
+        "--target-list=riscv64-softmmu"
+      ]
+    },
+    "files": {
+      "images/Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+      "images/fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+      "images/rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+      "qemu-system-riscv64": "802a1837f95375754f91d1d51f88c4b39f2139240012f3b9b77ef0a2de5de9c2",
+      "adapter/capstone-vexec": "ae5a1c658a50e5d7d4e102173445c8da64db567a909682b3995b09bc69e6785f",
+      "adapter/capstone-job": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+      "adapter/module/capstone_vm.ko": "8337866eeb412e4c12194b8895f4c5a395bf034a62aace2d125cf7085be5e18e",
+      "ssh-server/dropbearmulti": "f4fa3153325d7098785926e5edda553b31dfd9f9cb3448023b83a61e53b77d9b"
+    },
+    "provenance": {
+      "images/Image": "ARTIFACT ONLY: Linux 6.1.0 built 2026-09 from a source tree without git metadata (/tmp/capstone/delegation-binfmt-linux on the authoring host; CONFIG_BINFMT_MISC=y; built with Buildroot 2023.08 gcc 12.3.0). Its build tree is what recipes/adapter.sh builds the module against. The source's origin is not recorded.",
+      "images/fw_jump.elf": "Buildroot output of caplifive-buildroot c64f09b61ecf775887772a930037695235071993 (build-qemu), OpenSBI fw_jump; the buildroot tree had uncommitted changes in package/modcapstone (the physical profile's module, not used by the virtual profile).",
+      "images/rootfs.ext2": "Same Buildroot build as fw_jump.elf.",
+      "qemu-system-riscv64": "recipes/qemu.sh on the build host p12 (Ubuntu 26.04 container, gcc 15.2.0); dynamically linked, so the hash pins that host's build",
+      "adapter": "recipes/adapter.sh from the toolchain archive and capstone-qemu's cap_rev_table_abi.h, against the Image's kernel build tree, Buildroot 2023.08 gcc 12.3.0; reproducible: two builds in different directories gave the same bytes",
+      "ssh-server": "recipes/ssh-server.sh, Buildroot 2023.08 gcc 12.3.0; reproducible (two builds, same bytes)"
+    },
+    "vm": {
+      "tool": "capstone/runtime/host capstone_vm of the toolchain source",
+      "profile": "virtual",
+      "exact_bounds": true,
+      "memory": "8G",
+      "qemu_environment_note": "capstone_vm sets CAPSTONE_GP_NONLIN=1 and CAPSTONE_REV_NODES=65536; both are read only by QEMU's physical-profile paths (fabricated gp, internal revocation tree).",
+      "share_model": "mapped-xattr",
+      "share_model_why": "the guest runs as root; with 9p security_model=none a file root creates on the share is the host user's, and perlbench's t/op/stat.t test 33 (-o) fails"
+    },
+    "ssh_server": {
+      "archive": {
+        "file": "dropbear-2022.83.tar.bz2",
+        "sha256": "bc5a121ffbc94b5171ad5ebe01be42746d50aa797c9549a4639894a16749443b",
+        "note": "upstream release; the hash is the one in dropbear's SHA256SUM.asc (Buildroot's dropbear.hash)"
+      },
+      "recipe": "recipes/ssh-server.sh",
+      "why": "capstone_vm reaches the guest over SSH; the rootfs has no SSH server"
+    }
+  },
+  "runtime": {
+    "note": "the SDKs are built from the toolchain tree itself: PR #279 (the heap switches) is one of its merges, so no patch is applied",
+    "commit": "954b77c12813252a0d9fa7f197db1c585aba6ac4",
+    "tree": "fcb729ac892a3ded7ea60da1affb5505a76bc36b",
+    "files": {}
+  },
+  "toolchain_previous": {
+    "note": "the toolchain of qualification q4 (2026-10-17): dev of that day plus eight PRs",
+    "base": "073d3b9f85d0e34b9ee8044bed71c37a3fc2fc4b",
+    "commit": "193d4495737353adffb9290fa826ebee7ebcf44c",
+    "tree": "34b645f81b8beae5ad9aed5755362a5630f54714",
+    "archive": {
+      "file": "llvm-capstone-193d4495737353adffb9290fa826ebee7ebcf44c.tar.zst",
+      "sha256": "509764a2bba9d09c7ae99a25e22a2748ef1c4c23af620fdb4bfd1112aff84cb3",
+      "made_by": "git archive --format=tar --prefix=llvm-capstone/ COMMIT | zstd"
+    },
+    "bundle": {
+      "file": "integration-pr-commits.bundle",
+      "sha256": "294093993cc7386922f8d4f882d4ea8863974cd73b9ec6e17f10757eeebbbcbc",
+      "note": "the merged PR commits; needs the public base commit"
+    },
+    "build": {
+      "recipe": "recipes/toolchain.sh",
+      "host": "p12, Ubuntu 26.04 container, gcc 15.2.0, cmake 4.2.3, ninja 1.13.2",
+      "clang_sha256": "a5d528223c8687b14ef84dc43f36f55575323dbc818f3a8ef0df886f38b7fbfe",
+      "libc_sha256": "b11ae07bb7430ecbb1dd871eb97ba60815f8e43270bd486fb049474032eb4b8e",
+      "sdk_inventory_sha256": "fcbe31a94d866c2659a1d7b39b893a5a3210ca62bff9185f6c99440388d6108f",
+      "sdk_inventory_note": "sha256 of 'sha256sum' over the SDK's files in LC_ALL=C path order",
+      "clang_sha256_note": "depends on WORKDIR: the assertions build embeds its source paths (2248 occurrences of the workdir in clang-22). Built in kit2/toolchain-v2 from 8f6b6c7d (same compiler sources, other docs) it was 71daa5aa...; both compilers produced byte-identical SPEC executables (q3 with v2, q4 with v3) and the same libc and SDK file count."
+    }
+  },
+  "arms": {
+    "capstone-virtual": {
+      "arm": "virtual-mallocng",
+      "sdk": "sdk",
+      "options": [],
+      "heap_lifetimes": true,
+      "heap_scrub_free": true,
+      "what": "the profile as qualified: a lifetime per public object (CDERIVE on malloc, CREVOKE on free) and the payload zeroed on free"
+    },
+    "capstone-spatial-scrub": {
+      "arm": "virtual-mallocng-spatial-scrub",
+      "sdk": "sdk-spatial-scrub",
+      "options": [
+        "-DCAPSTONE_HEAP_LIFETIMES=OFF"
+      ],
+      "heap_lifetimes": false,
+      "heap_scrub_free": true,
+      "what": "exact bounds, no lifetime per object, payload still zeroed on free: against capstone-virtual it isolates the lifetime machinery"
+    },
+    "capstone-spatial": {
+      "arm": "virtual-mallocng-spatial",
+      "sdk": "sdk-spatial",
+      "options": [
+        "-DCAPSTONE_HEAP_LIFETIMES=OFF",
+        "-DCAPSTONE_HEAP_SCRUB_FREE=OFF"
+      ],
+      "heap_lifetimes": false,
+      "heap_scrub_free": false,
+      "what": "exact bounds only: against capstone-spatial-scrub it isolates the free-time zeroing, against capstone-virtual the mechanism as shipped"
+    }
+  },
+  "arms_note": "runcpu label -> SDK of recipes/sdks.sh; the key is the label and the SPEC executable suffix; capstone-virtual is the qualified configuration of q4 up to heap.c.obj",
+  "srcalt_note": "packages/*.tar.xz are built from SPEC sources (tools/make-srcalt.sh) and never published; the sha256 files pin them; tools/build.sh reads them from CAPSTONE_SPEC_PACKAGES. srcalt-notes/ says what each package changes and why."
+}

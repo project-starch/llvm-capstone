@@ -1,0 +1,453 @@
+{
+  "verdict": "QUALIFIED",
+  "results": {
+    "test": {
+      "500.perlbench_r": {
+        "benchmark": "500.perlbench_r",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:41Z",
+        "end": "2026-10-17T13:35:48Z",
+        "routes": {
+          "guest": 2,
+          "host-spec-tool": 2
+        },
+        "guest_invocations": 2,
+        "spec_reports": [
+          "CPU2017.006.intrate.test.rsf",
+          "CPU2017.006.intrate.test.txt",
+          "CPU2017.006.log"
+        ],
+        "perl_pack_stub": [
+          {
+            "file": "~/spec-cap/kit2/q4/tree/SPEC17/benchspec/CPU/500.perlbench_r/run/run_base_test_capstone-virtual.0000/t/op/pack.t",
+            "before": "b3e0961f7898f5bd40d0b2e22e54e522a1769fdba670b6e1be212a5a7f17a9f5",
+            "checks_stubbed": 4,
+            "after": "e32d7f517eb98a9d4757b9ef411c84654cff4f0c9af6c55384c590927cfb3830",
+            "action": "stubbed"
+          },
+          {
+            "file": "~/spec-cap/kit2/q4/tree/SPEC17/benchspec/CPU/500.perlbench_r/run/run_base_test_capstone-virtual.0000/t/op/pack.t",
+            "before": "e32d7f517eb98a9d4757b9ef411c84654cff4f0c9af6c55384c590927cfb3830",
+            "checks_stubbed": 4,
+            "after": "e32d7f517eb98a9d4757b9ef411c84654cff4f0c9af6c55384c590927cfb3830",
+            "action": "already stubbed"
+          }
+        ]
+      },
+      "502.gcc_r": {
+        "benchmark": "502.gcc_r",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:41Z",
+        "end": "2026-10-17T10:13:34Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.007.intrate.test.rsf",
+          "CPU2017.007.intrate.test.txt",
+          "CPU2017.007.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "505.mcf_r": {
+        "benchmark": "505.mcf_r",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:42Z",
+        "end": "2026-10-17T11:05:55Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 2
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.008.intrate.test.rsf",
+          "CPU2017.008.intrate.test.txt",
+          "CPU2017.008.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "519.lbm_r": {
+        "benchmark": "519.lbm_r",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:43Z",
+        "end": "2026-10-17T10:18:41Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.009.fprate.test.rsf",
+          "CPU2017.009.fprate.test.txt",
+          "CPU2017.009.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "525.x264_r": {
+        "benchmark": "525.x264_r",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:52Z",
+        "end": "2026-10-17T13:51:32Z",
+        "routes": {
+          "host-ldecod": 1,
+          "guest": 4,
+          "host-spec-tool": 3
+        },
+        "guest_invocations": 4,
+        "spec_reports": [
+          "CPU2017.024.intrate.test.rsf",
+          "CPU2017.024.intrate.test.txt",
+          "CPU2017.024.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "538.imagick_r": {
+        "benchmark": "538.imagick_r",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:51Z",
+        "end": "2026-10-17T10:13:43Z",
+        "routes": {
+          "guest": 2,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 2,
+        "spec_reports": [
+          "CPU2017.021.fprate.test.rsf",
+          "CPU2017.021.fprate.test.txt",
+          "CPU2017.021.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "544.nab_r": {
+        "benchmark": "544.nab_r",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:49Z",
+        "end": "2026-10-17T10:22:15Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.010.fprate.test.rsf",
+          "CPU2017.010.fprate.test.txt",
+          "CPU2017.010.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "557.xz_r": {
+        "benchmark": "557.xz_r",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:52Z",
+        "end": "2026-10-17T10:56:48Z",
+        "routes": {
+          "guest": 12,
+          "host-spec-tool": 12
+        },
+        "guest_invocations": 12,
+        "spec_reports": [
+          "CPU2017.023.intrate.test.rsf",
+          "CPU2017.023.intrate.test.txt",
+          "CPU2017.023.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "997.specrand_fr": {
+        "benchmark": "997.specrand_fr",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:51Z",
+        "end": "2026-10-17T10:13:14Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.020.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "999.specrand_ir": {
+        "benchmark": "999.specrand_ir",
+        "size": "test",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:50Z",
+        "end": "2026-10-17T10:13:13Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.016.log"
+        ],
+        "perl_pack_stub": []
+      }
+    },
+    "train": {
+      "500.perlbench_r": {
+        "benchmark": "500.perlbench_r",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:52Z",
+        "end": "2026-10-17T15:20:08Z",
+        "routes": {
+          "guest": 5,
+          "host-spec-tool": 6
+        },
+        "guest_invocations": 5,
+        "spec_reports": [
+          "CPU2017.022.intrate.train.rsf",
+          "CPU2017.022.intrate.train.txt",
+          "CPU2017.022.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "502.gcc_r": {
+        "benchmark": "502.gcc_r",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:51Z",
+        "end": "2026-10-17T17:32:57Z",
+        "routes": {
+          "guest": 3,
+          "host-spec-tool": 3
+        },
+        "guest_invocations": 3,
+        "spec_reports": [
+          "CPU2017.017.intrate.train.rsf",
+          "CPU2017.017.intrate.train.txt",
+          "CPU2017.017.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "505.mcf_r": {
+        "benchmark": "505.mcf_r",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:51Z",
+        "end": "2026-10-17T13:21:54Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 2
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.015.intrate.train.rsf",
+          "CPU2017.015.intrate.train.txt",
+          "CPU2017.015.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "519.lbm_r": {
+        "benchmark": "519.lbm_r",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:50Z",
+        "end": "2026-10-17T11:24:26Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.012.fprate.train.rsf",
+          "CPU2017.012.fprate.train.txt",
+          "CPU2017.012.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "525.x264_r": {
+        "benchmark": "525.x264_r",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:51Z",
+        "end": "2026-10-17T13:32:50Z",
+        "routes": {
+          "host-ldecod": 1,
+          "guest": 4,
+          "host-spec-tool": 3
+        },
+        "guest_invocations": 4,
+        "spec_reports": [
+          "CPU2017.019.intrate.train.rsf",
+          "CPU2017.019.intrate.train.txt",
+          "CPU2017.019.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "538.imagick_r": {
+        "benchmark": "538.imagick_r",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:50Z",
+        "end": "2026-10-17T13:12:39Z",
+        "routes": {
+          "guest": 2,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 2,
+        "spec_reports": [
+          "CPU2017.014.fprate.train.rsf",
+          "CPU2017.014.fprate.train.txt",
+          "CPU2017.014.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "544.nab_r": {
+        "benchmark": "544.nab_r",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:50Z",
+        "end": "2026-10-17T15:16:53Z",
+        "routes": {
+          "guest": 2,
+          "host-spec-tool": 2
+        },
+        "guest_invocations": 2,
+        "spec_reports": [
+          "CPU2017.013.fprate.train.rsf",
+          "CPU2017.013.fprate.train.txt",
+          "CPU2017.013.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "557.xz_r": {
+        "benchmark": "557.xz_r",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:51Z",
+        "end": "2026-10-17T12:12:14Z",
+        "routes": {
+          "guest": 2,
+          "host-spec-tool": 2
+        },
+        "guest_invocations": 2,
+        "spec_reports": [
+          "CPU2017.018.intrate.train.rsf",
+          "CPU2017.018.intrate.train.txt",
+          "CPU2017.018.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "997.specrand_fr": {
+        "benchmark": "997.specrand_fr",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:52Z",
+        "end": "2026-10-17T10:13:07Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.025.log"
+        ],
+        "perl_pack_stub": []
+      },
+      "999.specrand_ir": {
+        "benchmark": "999.specrand_ir",
+        "size": "train",
+        "verdict": "PASS",
+        "reasons": [],
+        "start": "2026-10-17T10:12:49Z",
+        "end": "2026-10-17T10:13:04Z",
+        "routes": {
+          "guest": 1,
+          "host-spec-tool": 1
+        },
+        "guest_invocations": 1,
+        "spec_reports": [
+          "CPU2017.011.log"
+        ],
+        "perl_pack_stub": []
+      }
+    }
+  },
+  "executables": [
+    [
+      "abc7fe2ed9b13041ccf5c4ccb3314db4877bce3568502e7f010ee991b7f2e398",
+      "benchspec/CPU/500.perlbench_r/exe/perlbench_r_base.capstone-virtual"
+    ],
+    [
+      "61ddd59ce3711f57b8b9c23c9ebe6994fab16188df63ddabfc2823074b9c0415",
+      "benchspec/CPU/502.gcc_r/exe/cpugcc_r_base.capstone-virtual"
+    ],
+    [
+      "6f887e52a6e364758b607d92cfa61d382ed50a3973c327c36627f9220192f85b",
+      "benchspec/CPU/505.mcf_r/exe/mcf_r_base.capstone-virtual"
+    ],
+    [
+      "481a0491e71e743937f29a4461fdb7836f0c504a9bf04cefad5696ea151591bd",
+      "benchspec/CPU/519.lbm_r/exe/lbm_r_base.capstone-virtual"
+    ],
+    [
+      "a881d9ba8de8883c25b7b5fc903978bb6e4ca382f24cbc4fd51c9bffdd321c8d",
+      "benchspec/CPU/525.x264_r/exe/imagevalidate_525_base.capstone-virtual"
+    ],
+    [
+      "8d61142308d6861415ebd288d6d07ac0a7682d6166d1b18ed976fe9a82351486",
+      "benchspec/CPU/525.x264_r/exe/ldecod_r_base.capstone-virtual"
+    ],
+    [
+      "ea31d45e77a3b03f821bf848b6f33fae99254cfe5b5850b02b7ffc250ee895a2",
+      "benchspec/CPU/525.x264_r/exe/x264_r_base.capstone-virtual"
+    ],
+    [
+      "a881d9ba8de8883c25b7b5fc903978bb6e4ca382f24cbc4fd51c9bffdd321c8d",
+      "benchspec/CPU/538.imagick_r/exe/imagevalidate_538_base.capstone-virtual"
+    ],
+    [
+      "9e7f0ed93ee3c4ae43eb01b30ea4756475cdbfce298c6f2925eba8bf16bcce3b",
+      "benchspec/CPU/538.imagick_r/exe/imagick_r_base.capstone-virtual"
+    ],
+    [
+      "c848ea9cc291655be021bd1343fd6b73503e715c943045fefc9d811a59c5a985",
+      "benchspec/CPU/544.nab_r/exe/nab_r_base.capstone-virtual"
+    ],
+    [
+      "9f2b387cd3c9374893a29bb04b9b08f36af9069dfe9551209dc73ec0640f68c6",
+      "benchspec/CPU/557.xz_r/exe/xz_r_base.capstone-virtual"
+    ],
+    [
+      "717c60b9ec0ec94c2542e0abbb68df554009993cb3cd6bd0b5231bcea4a4a598",
+      "benchspec/CPU/997.specrand_fr/exe/specrand_fr_base.capstone-virtual"
+    ],
+    [
+      "717c60b9ec0ec94c2542e0abbb68df554009993cb3cd6bd0b5231bcea4a4a598",
+      "benchspec/CPU/999.specrand_ir/exe/specrand_ir_base.capstone-virtual"
+    ]
+  ],
+  "toolchain_commit": "193d4495737353adffb9290fa826ebee7ebcf44c"
+}

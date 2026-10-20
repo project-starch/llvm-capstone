@@ -1,0 +1,44 @@
+{
+ "size": "test",
+ "repetitions": 1,
+ "max_load": 20.0,
+ "labels": [
+  "capstone-virtual",
+  "capstone-spatial-scrub",
+  "capstone-spatial"
+ ],
+ "benchmarks": [
+  "502.gcc_r",
+  "544.nab_r",
+
+2026-10-19T16:54:39Z rep 1 502.gcc_r capstone-virtual cpu 20 group 0
+2026-10-19T16:54:39Z rep 1 544.nab_r capstone-virtual cpu 23 group 1
+2026-10-19T16:54:39Z rep 1 502.gcc_r capstone-spatial-scrub cpu 21 group 0
+2026-10-19T16:54:39Z rep 1 538.imagick_r capstone-virtual cpu 27 group 2
+2026-10-19T16:54:39Z rep 1 544.nab_r capstone-spatial-scrub cpu 24 group 1
+2026-10-19T16:54:39Z rep 1 502.gcc_r capstone-spatial cpu 22 group 0
+2026-10-19T16:54:39Z rep 1 519.lbm_r capstone-virtual cpu 31 group 3
+2026-10-19T16:54:39Z rep 1 538.imagick_r capstone-spatial-scrub cpu 28 group 2
+2026-10-19T16:54:39Z rep 1 544.nab_r capstone-spatial cpu 25 group 1
+2026-10-19T16:54:39Z rep 1 519.lbm_r capstone-spatial-scrub cpu 32 group 3
+2026-10-19T16:54:39Z rep 1 538.imagick_r capstone-spatial cpu 30 group 2
+2026-10-19T16:54:39Z rep 1 519.lbm_r capstone-spatial cpu 33 group 3
+
+benchmarks 502.gcc_r 538.imagick_r 544.nab_r 519.lbm_r (SUBSET via BENCHMARKS)
+kit unknown clean
+sdk capstone-virtual ~/spec-cap/kit2/sdks-v4/sdk profile virtual heap_lifetimes True heap_scrub_free True
+sdk-inventory capstone-virtual ed0771fb445cc575b04838f7f53648db9a0212547e555c83d67690129fa90b6c (103 files)
+sdk capstone-spatial-scrub ~/spec-cap/kit2/sdks-v4/sdk-spatial-scrub profile virtual heap_lifetimes False heap_scrub_free True
+sdk-inventory capstone-spatial-scrub c1ea09ab4d70e4f6b6ac54a82666366a0b3694d57ed18767345485ad0a3f2440 (103 files)
+sdk capstone-spatial ~/spec-cap/kit2/sdks-v4/sdk-spatial profile virtual heap_lifetimes False heap_scrub_free False
+sdk-inventory capstone-spatial e68d6de4772af702af3cc64692b8e3b5e298a716c9944775d290b5f657850d57 (103 files)
+clang e758d31d0bedb4447489a7ba820e5b53f582f6a9addf45b83d10042fd142a84c clang version 22.0.0git
+config 26ff4357dbc87c21c7c9293308fd8dc4930b743e685ead09fb7f0f209108d405 config/capstone-virtual.cfg
+integrity: every benchmark object identical across capstone-virtual capstone-spatial-scrub capstone-spatial
+
+runtime commit 954b77c12813252a0d9fa7f197db1c585aba6ac4 tree fcb729ac892a3ded7ea60da1affb5505a76bc36b patch none
+libc f93ffe3c1e094f41de4417ae706199aa059b8ae7405fabf4fdc815da720e275e
+sdk capstone-virtual sdk heap_lifetimes=True heap_scrub_free=True options=[]
+sdk capstone-spatial-scrub sdk-spatial-scrub heap_lifetimes=False heap_scrub_free=True options=[-DCAPSTONE_HEAP_LIFETIMES=OFF]
+sdk capstone-spatial sdk-spatial heap_lifetimes=False heap_scrub_free=False options=[-DCAPSTONE_HEAP_LIFETIMES=OFF -DCAPSTONE_HEAP_SCRUB_FREE=OFF]
+proof: builtins archive and capstone-cc identical across arms; runtime archives differ in heap.c.obj only
