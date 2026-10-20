@@ -488,7 +488,8 @@ trusted metadata and the one-hart profile.
 
 The QEMU memory encoding is 128 bits: ordinary cursor in the low 64 bits;
 the upper word contains 27 bounds bits, 3 type bits, 4 permission bits and
-a 30-bit node ID. It contains neither generation nor address-space bits.
+a 30-bit node id. In the virtual profile the id is {generation[29:16], index[15:0]}, the packing
+of a physical id (the generation ruling of 2026-10-20 below); it contains no address-space bits.
 The RTL has the same field split (capstone-ariane since d34c26002), but different raw type codes
 (RTL LINEAR 1, NONLIN 2; QEMU LIN 0, NONLIN 1), so the two encodings are not binary-interchangeable;
 the RTL also renormalises bounds where the reference QEMU (b290f5656600) does not (Q-16).

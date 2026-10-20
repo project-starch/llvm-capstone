@@ -61,7 +61,9 @@ checked the claims and the proposals. No simulation or board run was made for th
 ## P0: decide before the next lifetime-table change in the RTL
 
 **1. A transaction rule for every table-mutating instruction.** This covers CDERIVE, CREVOKE, MREV, linear
-SPLIT, REVOKE and CSRETIRE. The rule should state:
+SPLIT, REVOKE and CSRETIRE, and, under the generation ruling of 2026-10-20 (isa.md, "Generations in virtual
+node ids"), CSNODE (its create writes two records, (3a)) and the kill-time push onto the table's free list
+and the pop that recycles a record with its generation bumped ((2)). The rule should state:
 - the checks;
 - their order and cause;
 - that a refused instruction leaves registers, header and records unchanged.
@@ -130,15 +132,24 @@ Malformed metadata has more than one outcome today:
   It should also decide their precedence against node pressure. One universal "corrupt = 29" would be a new
   ruling, not a description.
 
-**3. A coherence protocol for collection.** isa.md requires a sweep before an id is reused. It does not say how
-trusted software makes the RTL's caches see the changed table.
+**3. A coherence protocol for collection.** Restated against the generation ruling (isa.md, 2026-10-20). On the
+VIRTUAL profile there is no sweep and no re-listing: a kill or retire pushes the record onto the table's free
+list and the pop hands out {generation + 1, index} ((2)); coherence rests on LOOKUPS comparing the full 30-bit
+id, so every cache or tracker that answers validity from a stored entry (the LSU revocation cache, the PC
+tracker) tags the entry with all 30 bits, while invalidations may stay index-only ((3)). What this item now
+asks: that the lookup-tag rule is written as a requirement on every such structure, that the composition
+sites of (3a) (the record-read tap, CSNODE's create, CSRETIRE's id check) are listed as its preconditions, and
+that the end-to-end test below targets a recycled index. The PHYSICAL profile keeps the sweep, and for it the
+original question stands: isa.md does not say how trusted software makes the RTL's caches see the changed
+table.
 - The RTL's revocation trackers forget on a `csupctl` bit-2 strobe (`csr_regfile.sv:2013`, cleared at `:1177`,
   wired at `ex_stage.sv:1417`).
 - Rewriting the same `srevroot` flushes the pipeline (`csr_regfile.sv:2014`) but does not invalidate those
   caches.
 - Specify the required sequence before a resume or a reuse.
 - Add the end-to-end test isa.md lists as missing (`isa.md:198-200`): a stale reference reloaded from memory
-  after its id was collected and reused.
+  after its id was collected and reused; on the virtual profile, a stale {g, i} capability reloaded after the
+  index was recycled to {g + 1, i}, which every lookup must refuse.
 
 **4. The capability word's type codes.** See the correction above. Choosing one table is an ABI decision for
 the format owner. It has to keep LCC's software-visible numbering; the RTL's LCC subtracts one
@@ -177,14 +188,27 @@ has a mode gate on either side. On the RTL, U outside a context uses the physica
 - protected U;
 - M-mode emulation.
 
-**8. Field widths fail closed.** The architectural widths are:
-- 30 bits for depth, parent and ids;
-- u32 for links (`isa.md:383-386`, `:403`).
+The table must also carry CSNODE: it is admitted at S whenever the table-namespace flag is set and no
+supervised context runs (the same decoder predicate as CSRETIRE), and its create never reads rs1's prior node;
+isa.md rules this by design under the trusted-S model ((3b)), so the row records the admission, not a defect.
+One name for the predicate: this plan's "table namespace" is the wider term (the virtual-context flag, S with
+`srevroot` non-zero, M with `csupctl.table`); the Q-15 ruling box says "under the virtual-context flag" and
+means the first of the three. Both texts should name the predicate the same way once.
 
-The RTL reads 17 bits of depth and 16 of parent, and silently truncates wider stored values
-(`ex_stage.sv:1431-1433`, `:1584-1585`). An implementation may support less only if it refuses at admission
-and at lookup. Limits should be discoverable through a versioned interface. That interface must not be
-`urevavail` or `scapctl` (illegal by default) or a reserved header field.
+**8. Field widths fail closed.** Revised against the generation ruling (isa.md, 2026-10-20, (1) and (3a)).
+A virtual id is {generation[29:16], index[15:0]}, the packing of a physical id, and a record keeps its
+generation in word 1 bits [59:46], the 14-bit hole between VALID and the 16-bit parent. The 16-bit index and
+parent are therefore the ruled layout, not a truncation, and an admission gate that refuses an id at or
+above 65536 is the defect, not the safeguard: every id of generation 1 or more is such an id, and every gate
+must accept it ((3a)). What must fail closed is the COMPOSITION of ids: every place that forms an id or writes a
+record's generation carries the real generation. The known instances are the record-read tap composing
+{14'd0, index} (`ex_stage.sv:1729`), CSNODE's create writing generation 0, and CSRETIRE's refusal of ids at or
+above 65536 with a record check that compares no generation; CSRETIRE of a stale {g, i} must answer 1 and
+change nothing. Depth is outside the ruling: the RTL reads 17 bits of it against 30 architectural
+(`ex_stage.sv:1431-1433`) and silently truncates wider stored values, and for depth the original demand
+stands (refuse at admission and at lookup, or state the supported width). Limits should be discoverable
+through a versioned interface. That interface must not be `urevavail` or `scapctl` (illegal by default) or a
+reserved header field. Links stay u32 (`isa.md:383-386`, `:403`).
 
 **9. The node reserve and event kinds.** Inside CSRUNV, the RTL applies the 256-id reserve only under the
 translation context (`ex_stage.sv:1409-1410`, `rev_node.anvil:239-246`, `:764-766`).
@@ -199,9 +223,14 @@ translation context (`ex_stage.sv:1409-1410`, `rev_node.anvil:239-246`, `:764-76
 - FREE (its free-list links stay meaningful with VALID = 0) (`cap_rev_tree.c:193-208`,
   `cap_rev_table.c:195-200`, `rev_node.anvil:100-104`).
 
-Require unlinking before recycling. Today QEMU, and the RTL under the table namespace, null only the retired
-head's links (`cap_rev_tree.c:204-206`, `:273-275`; `rev_node.anvil:540-554`). Outside it the RTL keeps the
-links or reuses `next` for its free list (`rev_node.anvil:77-86`, `:528-539`).
+Under the generation ruling ((2)) the kill and the retire PUSH the record onto the table's free list (slot 1)
+under the flag, the pop rewrites it with {generation + 1, index}, and a record at generation 16383 is never
+pushed; the picture of the RTL nulling only the retired head's links (`rev_node.anvil:540-554`) describes
+the bitstream before that item. "Unlinking before recycling" therefore has to be stated as a property of the
+push and the pop: which fields of a pushed record a walker may still read (its free-list use of `next`,
+`rev_node.anvil:77-86`, `:528-539`, overlays a link), and that the pop's rewrite covers every field a walker
+or a lookup reads before the record is handed out again. QEMU's virtual profile implements the same push
+and pop ((5)), so the states and their readers are one specification for both.
 
 **11. Stale capabilities in transport (Q-11, Q-19).** A matrix by type and by machine property for LDC and STC
 of a capability whose node is dead, including consuming LINEAR/REV transfers.
@@ -248,6 +277,10 @@ ended by CREVOKE, REVOKE or DROP, plus the interruption and partial-mutation rul
 instructions" (`commit_stage.sv:794-809`) is how the RTL meets this today; it is not the guarantee itself.
 
 ## Open items already in isa.md: proposed decisions
+
+Two of isa.md's own lines predate the generation ruling and now contradict it: isa.md:141 ("Collection still
+clears their tags before ID reuse: the adapter's sweep") and isa.md:423-424 ("parent in bits 30..59"). They are
+dev's to correct, not this change's; items 3 and 8 above no longer rest on them.
 
 - **CDERIVE rd = 0: keep as it is (it allocates).** `capstone_cap_without_manage` relies on
   `CDERIVE x0, cap, x0` to refuse a wrong operand atomically (`capability.h:66-79`).
