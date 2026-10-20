@@ -4,13 +4,16 @@
 ; address goes on as a value -- into a capability instruction's integer
 ; operand, a store, a copy, a call, a return, or a select's data operands.
 ;
-; MUTATION: disable the pass (-disable-capstone-cursor-read-fold is not a flag;
-; delete the addPass line in CapstoneTargetMachine.cpp) -> every positive
-; CHECK below finds a `mv` before the compare, sub or mask.
+; MUTATION: disable the pass -> every positive CHECK below finds a `mv` before
+; the compare, sub or mask. The OFF run below is that mutation, kept as a flag
+; (-capstone-enable-cursor-read-fold=0) so a board regression can be bisected
+; to this pass without a rebuild.
 ;
 ; The gp-free ABI is the application profile; its returns print as `ret`.
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -capstone-gp-free -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -mattr=+m -O1 -capstone-gp-free -verify-machineinstrs < %s | FileCheck %s
+; RUN: llc -mtriple=capstone64 -mattr=+m -O2 -capstone-gp-free -verify-machineinstrs \
+; RUN:   -capstone-enable-cursor-read-fold=0 < %s | FileCheck %s --check-prefix=OFF
 ; RUN: %llc_cap -O0 -capstone-gp-free < %s -o /dev/null
 ; RUN: %llc_cap -O2 < %s -o /dev/null
 
@@ -22,6 +25,9 @@ target datalayout = "e-m:e-p:64:128-p200:128:128:128:64-i64:64-i128:128-n32:64-S
 ; CHECK:      sd zero, 0(a0)
 ; CHECK-NEXT: cincoffsetimm a0, a0, 8
 ; CHECK-NEXT: bne a0, a1,
+; OFF-LABEL: zero_to:
+; OFF:       mv {{a[0-9]+}}, a0
+; OFF:       beq
 define void @zero_to(ptr addrspace(200) %p, ptr addrspace(200) %end) {
 entry:
   %c = icmp eq ptr addrspace(200) %p, %end
@@ -44,6 +50,9 @@ done:
 ; CHECK:     mv a1, a1
 ; CHECK-NEXT: sub a0, a1, a0
 ; CHECK-NEXT: ret
+; OFF-LABEL: diff:
+; OFF:       mv a0, a0
+; OFF:       sub
 define i64 @diff(ptr addrspace(200) %a, ptr addrspace(200) %b) {
   %ia = ptrtoint ptr addrspace(200) %a to i64
   %ib = ptrtoint ptr addrspace(200) %b to i64
@@ -57,6 +66,9 @@ define i64 @diff(ptr addrspace(200) %a, ptr addrspace(200) %b) {
 ; CHECK:     andi a0, a0, 7
 ; CHECK-NOT: mv
 ; CHECK:     ret
+; OFF-LABEL: low_bits:
+; OFF:       mv a0, a0
+; OFF-NEXT:  andi a0, a0, 7
 define i64 @low_bits(ptr addrspace(200) %p) {
   %i = ptrtoint ptr addrspace(200) %p to i64
   %m = and i64 %i, 7
@@ -69,6 +81,9 @@ define i64 @low_bits(ptr addrspace(200) %p) {
 ; CHECK:     seqz a0, a0
 ; CHECK-NOT: mv
 ; CHECK:     ret
+; OFF-LABEL: is_null:
+; OFF:       mv a0, a0
+; OFF-NEXT:  seqz a0, a0
 define i64 @is_null(ptr addrspace(200) %p) {
   %c = icmp eq ptr addrspace(200) %p, null
   %z = zext i1 %c to i64

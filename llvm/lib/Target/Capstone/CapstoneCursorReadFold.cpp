@@ -15,9 +15,16 @@
 // shadow (alu-write-clears-shadow.S) and so protects every later use.
 //
 // Most reads of an address need no such protection. A compare, a branch, a
-// subtraction or a mask reads the register's low half on both implementations
-// (QEMU reads gpr[i].val, the cursor; the RTL gates metadata reads by opcode,
-// issue_read_operands.sv:1663) and its own result is an integer write. When
+// subtraction or a mask reads the register's low half on both implementations,
+// and its own result is an integer write. QEMU reads gpr[i].val, the cursor.
+// On the RTL the capability metadata travels with every operand
+// (issue_read_operands.sv packs it unconditionally), but only the capability
+// units look at it: core/alu.sv, mult.sv and multiplier.sv never reference
+// cap_metadata, the branch unit reads it only for CJALR and CBNZ
+// (branch_unit.sv:95-101), and UNEXPECTED_OPERAND is the FLU's check on a
+// capability instruction (capstone_flu_unit.anvil:35-36); all read at
+// capstone-ariane 19ac4c22ccfe (virtual-profile-2-c). An earlier citation of
+// issue_read_operands.sv:1663 named S-12's WAW guard, not an opcode gate. When
 // EVERY reader of the extracted address is such an instruction, the address can
 // be read straight from the capability register and the pseudo goes:
 //
