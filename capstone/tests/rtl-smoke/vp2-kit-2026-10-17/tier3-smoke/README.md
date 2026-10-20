@@ -4966,3 +4966,44 @@ configuration.
 
 **wm1** (virtual-nested-pools) is NOT run. Its reference is 23 of 23 NO-READING:control-failed (read rc 75), unchanged
 from the old reference, so a boot would buy no cell.
+
+### The corpus pass: cpython lt0 on the rebuilt image, pre-registered (2026-10-20 16:2x), on BOTH boards as the cross-tree overlap
+
+**The image:** 4641b94cae16a757 (`<mnt-hdd>/capstone/t3-nomovc/cpython-lt0-dl`, 13,085,592 B).
+- It is the CAPI build (build-cpython-capi.sh's recipe, CPY_TEST_CAPI=1) without +movc-keeps-integer-source, relinked
+  with --discard-locals.
+- Its loaded bytes equal the full image's, and its non-local symbols equal 20bcfdd1's (the compiler lane's checks).
+- **Measured here:** a measure-only bake on bkit7-rev2xmDN2 reads stage 23,518,168 B and firmware 25,856,520 B,
+  under the cap (no board access).
+
+**The prediction:** `<mnt-hdd>/capstone/t3-images-cw/lt0-prediction.json` 34aec9edf4471196, from the compiler lane.
+- Three runs: r1 (plain qkit7-nf2-nr), mn (MOVC null only) and the silicon-mimic reference (qkit7-tB-mimic-nr). They
+  agree on all 32 cells.
+- 23 cells are stable, and 9 are varying (05, 07, 09, 15, 16, 19, 27, 30, 31): the old record's varying cells, kept
+  varying by this lane's rule.
+- Case 09 moved against the old record (CAUGHT → NO-READING) and is judged against {NO-READING}.
+- **Checked here:** the mimic reference judges 32 of 32 against it, rc 0, and the old board bundle (20bcfdd1) is refused
+  on the image, rc 2.
+
+**The runner:** `tier3-cpy-nm.sh` b83891d11ea65089.
+- It runs dev d0f0f4b41ae6's run-virtual.py (dc606bd178c10780) and tier3-appvm-arm.sh (666d920eedef445b) from the
+  pinned worktree /tmp/capstone/wt-cpy-pass. These are the hashes of the compiler lane's reference run, whose tree was
+  clean.
+- Closure b41545623090d0cf; --stdlib-sourceless; PYTHONHASHSEED=0.
+- Kits: bkit7-rev2xnDN2 (board 1) and bkit7-rev2xnBDN2 (board 2), norandmaps with module 54d8a3af.
+- The board is booked on the lab hub for 300 min, and the run is refused on a 409.
+- Judged by judge-cpy-set.py, the image read from the prediction.
+- **Its dry run** (`dryrun-cpy-nm.txt`) covered DONE (32 of 32), a planted stable divergence (31 of 32, rc 1), a hold
+  on a previous STOP, busy, and a 409.
+
+**Order:** board 2 after its sq1q15 ("PASS q15p DONE"); board 1 after wm0 ("PASS wm0p DONE"). About 4.5 h each.
+
+**Predictions, on each tree:**
+- The judge reads 32 of 32 inside their sets (rc 0).
+- **No pc=0 anywhere.** The old image's board run had 21  lines (C-32's movc-then-jalr).
+- Case 14 MISSED, as the prediction (stable) and the old board both read.
+- Case 09 NO-READING.
+- DRT1 0, FRTY 0, no Oops. The old run's DRT1 14 was on module 39d8492d; 54d8a3af removes the data face.
+- **Q-31:** the old board run differed from QEMU only in the pc=0 cells, so no Q-31 cause difference is expected. If one
+  appears, it is graded in verdict and named.
+- Tree A equals tree B in every cell.
