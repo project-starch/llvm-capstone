@@ -35,6 +35,7 @@ add_llvm_target(CapstoneCodeGen
   CapstoneCallingConv.cpp
   CapstoneCapGlobalInit.cpp
   CapstoneMergeStrConstants.cpp
+  CapstonePadGlobals.cpp
   CapstoneCodeGenPrepare.cpp
   CapstoneConstantPoolValue.cpp
   CapstoneDeadRegisterDefinitions.cpp

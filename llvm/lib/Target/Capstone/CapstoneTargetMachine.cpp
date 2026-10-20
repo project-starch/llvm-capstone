@@ -121,6 +121,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstoneGatherScatterLoweringPass(*PR);
   initializeCapstoneCodeGenPreparePass(*PR);
   initializeCapstoneCapGlobalInitPass(*PR);
+  initializeCapstonePadGlobalsPassPass(*PR);
   initializeCapstonePostRAExpandPseudoPass(*PR);
   initializeCapstoneMergeBaseOffsetOptPass(*PR);
   initializeCapstoneOptWInstrsPass(*PR);
@@ -488,6 +489,9 @@ void CapstonePassConfig::addIRPasses() {
   // the container (which needsMaterialization() peels). The other order would leave
   // cap-init referring to globals this pass then erases.
   addPass(createCapstoneMergeStrConstantsPass());
+  // -capstone-pad-globals: after merging, so a merged container is padded as
+  // one object; before cap-init, which then walks the padded initializers.
+  addPass(createCapstonePadGlobalsPass());
   addPass(createCapstoneCapGlobalInitPass());
 
   if (getOptLevel() != CodeGenOptLevel::None) {

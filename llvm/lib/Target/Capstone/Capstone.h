@@ -15,6 +15,7 @@
 #define LLVM_LIB_TARGET_Capstone_Capstone_H
 
 #include "MCTargetDesc/CapstoneBaseInfo.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Target/TargetMachine.h"
 
 namespace llvm {
@@ -37,6 +38,11 @@ void initializeCapstoneCapGlobalInitPass(PassRegistry &);
 // Merges private read-only string constants into one cap-table slot. Needed because
 // every global costs a revocation-node allocation and the board's pool is 1021.
 ModulePass *createCapstoneMergeStrConstantsPass();
+// Aligns and tail-pads defined globals to representable bounds under
+// -capstone-pad-globals. See CapstonePadGlobals.cpp.
+ModulePass *createCapstonePadGlobalsPass();
+void initializeCapstonePadGlobalsPassPass(PassRegistry &);
+extern cl::opt<bool> CapstonePadGlobals;
 void initializeCapstoneMergeStrConstantsPass(PassRegistry &);
 
 FunctionPass *createCapstoneDeadRegisterDefinitionsPass();

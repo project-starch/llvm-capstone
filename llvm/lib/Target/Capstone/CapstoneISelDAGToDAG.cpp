@@ -14,6 +14,7 @@
 #include "MCTargetDesc/CapstoneBaseInfo.h"
 #include "MCTargetDesc/CapstoneMCTargetDesc.h"
 #include "MCTargetDesc/CapstoneMatInt.h"
+#include "MCTargetDesc/CapstoneRepresentable.h"
 #include "CapstoneISelLowering.h"
 #include "CapstoneInstrInfo.h"
 #include "CapstoneSelectionDAGInfo.h"
@@ -1725,6 +1726,16 @@ void CapstoneDAGToDAGISel::selectLGA(SDNode *Node) {
           GVar->getValueType()->isSized()) {
         uint64_t Size =
             CurDAG->getDataLayout().getTypeAllocSize(GVar->getValueType());
+        // -capstone-pad-globals: the representable length, which the
+        // defining module reserved (CapstonePadGlobals.cpp). Idempotent, so a
+        // module that only declares G and the one that padded it narrow to
+        // the same bounds. A global in an explicit section is never padded,
+        // so it keeps its own size here; a declaration that omits its
+        // definer's section cannot know, and narrows to at most one granule
+        // past the object, within the outward rounding vp2 applies to the
+        // unpadded SHRINK anyway.
+        if (CapstonePadGlobals && !GVar->hasSection())
+          Size = CapstoneRepresentable::length(Size);
         if (Size > 0) {
           MVT XLenVT = Subtarget->getXLenVT();
           // base = cursor of the materialized capability (= &g), read with the
