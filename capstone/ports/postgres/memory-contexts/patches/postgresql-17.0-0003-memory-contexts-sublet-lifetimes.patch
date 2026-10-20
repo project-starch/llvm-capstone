@@ -42,7 +42,19 @@ the server.
 # code that loads the header deliberately gets the block. Overwriting the
 # stored parent clears its tag and the next pfree faults. The chunk header
 # grows from 16 to 32 bytes, and every block header by two capabilities.
+#
+# Q-15 (the compact bounds format, vp2's): CDERIVE refuses a child it cannot
+# hold exactly, and from 4 KiB up that means a base and a length on the
+# granule 2^(msb(len)-9) (capstone/representable.h). Ordinary chunks already
+# are (at most 8 KiB, 16-byte multiples); a dedicated block for one large chunk
+# is PLACED: malloc SubletLargeMallocSize() bytes and put the block where
+# SubletLargePlace() says, so the chunk after its header starts on its granule,
+# and the block keeps malloc's pointer (SubletBlock.raw) for free and for the
+# large realloc, which now moves to a fresh placed block. Every caller's child
+# is padded at its TAIL only (SubletPadded), never over the block header or a
+# neighbour; the pad is counted and reported once at exit (Q15_PAD).
 diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
+index 64c2f05..74247b8 100644
 --- a/src/backend/utils/mmgr/aset.c
 +++ b/src/backend/utils/mmgr/aset.c
 @@ -187,6 +187,7 @@ typedef struct AllocBlockData
@@ -69,15 +81,56 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  		}
  		else
  		{
-@@ -722,6 +725,7 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
+@@ -587,7 +590,7 @@ AllocSetReset(MemoryContext context)
+ #ifdef CLOBBER_FREED_MEMORY
+ 			wipe_mem(block, block->freeptr - ((char *) block));
+ #endif
+-			free(block);
++			free(block->sublet.raw);
+ 		}
+ 		block = next;
+ 	}
+@@ -677,7 +680,7 @@ AllocSetDelete(MemoryContext context)
+ #endif
+ 
+ 		if (!IsKeeperBlock(set, block))
+-			free(block);
++			free(block->sublet.raw);
+ 
+ 		block = next;
+ 	}
+@@ -702,6 +705,9 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
+ 	MemoryChunk *chunk;
+ 	Size		chunk_size;
+ 	Size		blksize;
++	void	   *raw;
++	char	   *region;
++	Size		region_len;
+ 
+ 	/* validate 'size' is within the limits for the given 'flags' */
+ 	MemoryContextCheckSize(context, size, flags);
+@@ -714,14 +720,18 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
+ #endif
+ 
+ 	blksize = chunk_size + ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
+-	block = (AllocBlock) malloc(blksize);
+-	if (block == NULL)
++	/* Q-15: placed so that the chunk starts on its granule (memutils_memorychunk.h) */
++	raw = malloc(SubletLargeMallocSize(ALLOC_BLOCKHDRSZ, ALLOC_CHUNKHDRSZ + chunk_size));
++	if (raw == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
++	block = (AllocBlock) SubletLargePlace(raw, ALLOC_BLOCKHDRSZ, ALLOC_CHUNKHDRSZ + chunk_size,
++										  &region, &region_len);
+ 
+ 	context->mem_allocated += blksize;
  
  	block->aset = set;
  	block->freeptr = block->endptr = ((char *) block) + blksize;
-+	SubletBlockInit(&block->sublet, block, block, blksize);
++	SubletBlockInit(&block->sublet, raw, region, region_len);
  
  	chunk = (MemoryChunk *) (((char *) block) + ALLOC_BLOCKHDRSZ);
  
-@@ -765,7 +769,7 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
+@@ -765,7 +775,7 @@ AllocSetAllocLarge(MemoryContext context, Size size, int flags)
  	/* Disallow access to the chunk header. */
  	VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
  
@@ -86,7 +139,7 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  }
  
  /*
-@@ -807,7 +811,7 @@ AllocSetAllocChunkFromBlock(MemoryContext context, AllocBlock block,
+@@ -807,7 +817,7 @@ AllocSetAllocChunkFromBlock(MemoryContext context, AllocBlock block,
  	/* Disallow access to the chunk header. */
  	VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
  
@@ -95,7 +148,7 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  }
  
  /*
-@@ -929,6 +933,7 @@ AllocSetAllocFromNewBlock(MemoryContext context, Size size, int flags,
+@@ -929,6 +939,7 @@ AllocSetAllocFromNewBlock(MemoryContext context, Size size, int flags,
  	block->aset = set;
  	block->freeptr = ((char *) block) + ALLOC_BLOCKHDRSZ;
  	block->endptr = ((char *) block) + blksize;
@@ -103,7 +156,7 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  
  	/* Mark unallocated space NOACCESS. */
  	VALGRIND_MAKE_MEM_NOACCESS(block->freeptr,
-@@ -1033,7 +1038,9 @@ AllocSetAlloc(MemoryContext context, Size size, int flags)
+@@ -1033,7 +1044,9 @@ AllocSetAlloc(MemoryContext context, Size size, int flags)
  		/* Disallow access to the chunk header. */
  		VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
  
@@ -114,16 +167,64 @@ diff --git a/src/backend/utils/mmgr/aset.c b/src/backend/utils/mmgr/aset.c
  	}
  
  	/*
-@@ -1242,6 +1249,8 @@ AllocSetRealloc(void *pointer, Size size, int flags)
+@@ -1106,7 +1119,7 @@ AllocSetFree(void *pointer)
+ #ifdef CLOBBER_FREED_MEMORY
+ 		wipe_mem(block, block->freeptr - ((char *) block));
+ #endif
+-		free(block);
++		free(block->sublet.raw);
+ 	}
+ 	else
+ 	{
+@@ -1189,6 +1202,8 @@ AllocSetRealloc(void *pointer, Size size, int flags)
+ 		Size		chksize;
+ 		Size		blksize;
+ 		Size		oldblksize;
++		char	   *region;
++		Size		region_len;
+ 
+ 		block = ExternalChunkGetBlock(chunk);
+ 
+@@ -1225,12 +1240,23 @@ AllocSetRealloc(void *pointer, Size size, int flags)
+ 		blksize = chksize + ALLOC_BLOCKHDRSZ + ALLOC_CHUNKHDRSZ;
+ 		oldblksize = block->endptr - ((char *) block);
+ 
+-		block = (AllocBlock) realloc(block, blksize);
+-		if (block == NULL)
+ 		{
+-			/* Disallow access to the chunk header. */
+-			VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
+-			return MemoryContextAllocationFailure(&set->header, size, flags);
++			/* Q-15: a fresh placed block; realloc() would not keep the chunk on its granule */
++			void	   *raw = malloc(SubletLargeMallocSize(ALLOC_BLOCKHDRSZ, ALLOC_CHUNKHDRSZ + chksize));
++			AllocBlock	moved;
++
++			if (raw == NULL)
++			{
++				/* Disallow access to the chunk header. */
++				VALGRIND_MAKE_MEM_NOACCESS(chunk, ALLOC_CHUNKHDRSZ);
++				return MemoryContextAllocationFailure(&set->header, size, flags);
++			}
++			moved = (AllocBlock) SubletLargePlace(raw, ALLOC_BLOCKHDRSZ, ALLOC_CHUNKHDRSZ + chksize,
++												  &region, &region_len);
++			memcpy(moved, block, Min(oldblksize, blksize));
++			free(block->sublet.raw);
++			block = moved;
++			block->sublet.raw = raw;
+ 		}
+ 
+ 		/* updated separately, not to underflow when (oldblksize > blksize) */
+@@ -1242,6 +1268,8 @@ AllocSetRealloc(void *pointer, Size size, int flags)
  		/* Update pointers since block has likely been moved */
  		chunk = (MemoryChunk *) (((char *) block) + ALLOC_BLOCKHDRSZ);
  		pointer = MemoryChunkGetPointer(chunk);
-+		SubletBlockInit(&block->sublet, block, block, blksize);
++		SubletBlockInit(&block->sublet, block->sublet.raw, region, region_len);
 +		chunk->sublet_parent = block->sublet.generation;
  		if (block->prev)
  			block->prev->next = block;
  		else
 diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
+index c60c9c1..73f9e4a 100644
 --- a/src/backend/utils/mmgr/bump.c
 +++ b/src/backend/utils/mmgr/bump.c
 @@ -91,6 +91,7 @@ struct BumpBlock
@@ -153,7 +254,17 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  		else
  			BumpBlockFree(set, block);
  	}
-@@ -308,7 +313,7 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+@@ -300,6 +305,9 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+ 	Size		chunk_size;
+ 	Size		required_size;
+ 	Size		blksize;
++	void	   *raw;
++	char	   *region;
++	Size		region_len;
+ 
+ 	/* validate 'size' is within the limits for the given 'flags' */
+ 	MemoryContextCheckSize(context, size, flags);
+@@ -308,20 +316,24 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
  	/* ensure there's always space for the sentinel byte */
  	chunk_size = MAXALIGN(size + 1);
  #else
@@ -162,25 +273,36 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  #endif
  
  	required_size = chunk_size + Bump_CHUNKHDRSZ;
-@@ -322,6 +327,7 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+ 	blksize = required_size + Bump_BLOCKHDRSZ;
+ 
+-	block = (BumpBlock *) malloc(blksize);
+-	if (block == NULL)
++	/* Q-15: placed so that the allocation starts on its granule (memutils_memorychunk.h) */
++	raw = malloc(SubletLargeMallocSize(Bump_BLOCKHDRSZ, required_size));
++	if (raw == NULL)
+ 		return NULL;
++	block = (BumpBlock *) SubletLargePlace(raw, Bump_BLOCKHDRSZ, required_size,
++										   &region, &region_len);
+ 
+ 	context->mem_allocated += blksize;
  
  	/* the block is completely full */
  	block->freeptr = block->endptr = ((char *) block) + blksize;
-+	SubletBlockInit(&block->sublet, block, block, blksize);
++	SubletBlockInit(&block->sublet, raw, region, region_len);
  
  #ifdef MEMORY_CONTEXT_CHECKING
  	/* block with a single (used) chunk */
-@@ -359,7 +365,8 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
+@@ -359,7 +371,8 @@ BumpAllocLarge(MemoryContext context, Size size, int flags)
  
  	return MemoryChunkGetPointer(chunk);
  #else
 -	return (void *) (((char *) block) + Bump_BLOCKHDRSZ);
 +	return SubletDerive(block->sublet.generation,
-+						((char *) block) + Bump_BLOCKHDRSZ, chunk_size);
++						((char *) block) + Bump_BLOCKHDRSZ, SubletPadded(chunk_size));
  #endif
  }
  
-@@ -415,7 +422,7 @@ BumpAllocChunkFromBlock(MemoryContext context, BumpBlock *block, Size size,
+@@ -415,7 +428,7 @@ BumpAllocChunkFromBlock(MemoryContext context, BumpBlock *block, Size size,
  
  	return MemoryChunkGetPointer(chunk);
  #else
@@ -189,7 +311,7 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  #endif							/* MEMORY_CONTEXT_CHECKING */
  }
  
-@@ -459,6 +466,7 @@ BumpAllocFromNewBlock(MemoryContext context, Size size, int flags,
+@@ -459,6 +472,7 @@ BumpAllocFromNewBlock(MemoryContext context, Size size, int flags,
  
  	/* initialize the new block */
  	BumpBlockInit(set, block, blksize);
@@ -197,7 +319,7 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
-@@ -501,7 +509,7 @@ BumpAlloc(MemoryContext context, Size size, int flags)
+@@ -501,7 +515,7 @@ BumpAlloc(MemoryContext context, Size size, int flags)
  	/* ensure there's always space for the sentinel byte */
  	chunk_size = MAXALIGN(size + 1);
  #else
@@ -206,7 +328,17 @@ diff --git a/src/backend/utils/mmgr/bump.c b/src/backend/utils/mmgr/bump.c
  #endif
  
  	/*
+@@ -606,7 +620,7 @@ BumpBlockFree(BumpContext *set, BumpBlock *block)
+ 	wipe_mem(block, ((char *) block->endptr - (char *) block));
+ #endif
+ 
+-	free(block);
++	free(block->sublet.raw);
+ }
+ 
+ /*
 diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/generation.c
+index 0238c11..ca45fa3 100644
 --- a/src/backend/utils/mmgr/generation.c
 +++ b/src/backend/utils/mmgr/generation.c
 @@ -93,6 +93,7 @@ struct GenerationBlock
@@ -236,15 +368,40 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  		else
  			GenerationBlockFree(set, block);
  	}
-@@ -375,6 +380,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+@@ -348,6 +353,9 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+ 	Size		chunk_size;
+ 	Size		required_size;
+ 	Size		blksize;
++	void	   *raw;
++	char	   *region;
++	Size		region_len;
+ 
+ 	/* validate 'size' is within the limits for the given 'flags' */
+ 	MemoryContextCheckSize(context, size, flags);
+@@ -361,9 +369,12 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+ 	required_size = chunk_size + Generation_CHUNKHDRSZ;
+ 	blksize = required_size + Generation_BLOCKHDRSZ;
+ 
+-	block = (GenerationBlock *) malloc(blksize);
+-	if (block == NULL)
++	/* Q-15: placed so that the chunk starts on its granule (memutils_memorychunk.h) */
++	raw = malloc(SubletLargeMallocSize(Generation_BLOCKHDRSZ, required_size));
++	if (raw == NULL)
+ 		return MemoryContextAllocationFailure(context, size, flags);
++	block = (GenerationBlock *) SubletLargePlace(raw, Generation_BLOCKHDRSZ, required_size,
++												 &region, &region_len);
+ 
+ 	context->mem_allocated += blksize;
+ 
+@@ -375,6 +386,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
  
  	/* the block is completely full */
  	block->freeptr = block->endptr = ((char *) block) + blksize;
-+	SubletBlockInit(&block->sublet, block, block, blksize);
++	SubletBlockInit(&block->sublet, raw, region, region_len);
  
  	chunk = (MemoryChunk *) (((char *) block) + Generation_BLOCKHDRSZ);
  
-@@ -402,7 +408,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
+@@ -402,7 +414,7 @@ GenerationAllocLarge(MemoryContext context, Size size, int flags)
  	/* Disallow access to the chunk header. */
  	VALGRIND_MAKE_MEM_NOACCESS(chunk, Generation_CHUNKHDRSZ);
  
@@ -253,7 +410,7 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  }
  
  /*
-@@ -447,7 +453,7 @@ GenerationAllocChunkFromBlock(MemoryContext context, GenerationBlock *block,
+@@ -447,7 +459,7 @@ GenerationAllocChunkFromBlock(MemoryContext context, GenerationBlock *block,
  	/* Disallow access to the chunk header. */
  	VALGRIND_MAKE_MEM_NOACCESS(chunk, Generation_CHUNKHDRSZ);
  
@@ -262,7 +419,7 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  }
  
  /*
-@@ -491,6 +497,7 @@ GenerationAllocFromNewBlock(MemoryContext context, Size size, int flags,
+@@ -491,6 +503,7 @@ GenerationAllocFromNewBlock(MemoryContext context, Size size, int flags,
  
  	/* initialize the new block */
  	GenerationBlockInit(set, block, blksize);
@@ -270,10 +427,20 @@ diff --git a/src/backend/utils/mmgr/generation.c b/src/backend/utils/mmgr/genera
  
  	/* add it to the doubly-linked list of blocks */
  	dlist_push_head(&set->blocks, &block->node);
+@@ -677,7 +690,7 @@ GenerationBlockFree(GenerationContext *set, GenerationBlock *block)
+ 	wipe_mem(block, block->blksize);
+ #endif
+ 
+-	free(block);
++	free(block->sublet.raw);
+ }
+ 
+ /*
 diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
+index b42ecec..c091742 100644
 --- a/src/backend/utils/mmgr/mcxt.c
 +++ b/src/backend/utils/mmgr/mcxt.c
-@@ -232,6 +232,55 @@ GetMemoryChunkHeader(const void *pointer)
+@@ -232,6 +232,65 @@ GetMemoryChunkHeader(const void *pointer)
  	return header;
  }
  
@@ -283,6 +450,16 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
 + * (MemoryChunkIssue).  An aligned redirect chunk is a view of an ordinary one
 + * and is passed through.
 + */
++
++/* Q-15's over-approximation (memutils_memorychunk.h), one line at exit. */
++unsigned long sublet_q15_chunks, sublet_q15_padded, sublet_q15_pad_total, sublet_q15_pad_max;
++
++static void __attribute__((destructor))
++SubletQ15Report(void)
++{
++	fprintf(stderr, "Q15_PAD chunks=%lu padded=%lu pad_bytes_total=%lu pad_bytes_max=%lu\n",
++			sublet_q15_chunks, sublet_q15_padded, sublet_q15_pad_total, sublet_q15_pad_max);
++}
 +
 +/* The allocator's pointer at pointer's address, derived from the parent. */
 +static void *
@@ -329,7 +506,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  /*
   * MemoryContextTraverseNext
   *		Helper function to traverse all descendants of a memory context
-@@ -706,6 +755,7 @@ MemoryContextAllowInCriticalSection(MemoryContext context, bool allow)
+@@ -706,6 +765,7 @@ MemoryContextAllowInCriticalSection(MemoryContext context, bool allow)
  MemoryContext
  GetMemoryChunkContext(void *pointer)
  {
@@ -337,7 +514,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  	return MCXT_METHOD(pointer, get_chunk_context) (pointer);
  }
  
-@@ -720,6 +770,7 @@ GetMemoryChunkContext(void *pointer)
+@@ -720,6 +780,7 @@ GetMemoryChunkContext(void *pointer)
  Size
  GetMemoryChunkSpace(void *pointer)
  {
@@ -345,7 +522,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  	return MCXT_METHOD(pointer, get_chunk_space) (pointer);
  }
  
-@@ -1524,6 +1575,7 @@ pfree(void *pointer)
+@@ -1524,6 +1585,7 @@ pfree(void *pointer)
  	MemoryContext context = GetMemoryChunkContext(pointer);
  #endif
  
@@ -353,7 +530,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  	MCXT_METHOD(pointer, free_p) (pointer);
  
  #ifdef USE_VALGRIND
-@@ -1562,7 +1614,8 @@ repalloc(void *pointer, Size size)
+@@ -1562,7 +1624,8 @@ repalloc(void *pointer, Size size)
  	 * this call, consider making it the responsibility of the 'realloc'
  	 * function instead.
  	 */
@@ -363,7 +540,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  
  #ifdef USE_VALGRIND
  	if (method != MCTX_ALIGNED_REDIRECT_ID)
-@@ -1600,7 +1653,9 @@ repalloc_extended(void *pointer, Size size, int flags)
+@@ -1600,7 +1663,9 @@ repalloc_extended(void *pointer, Size size, int flags)
  	 * this call, consider making it the responsibility of the 'realloc'
  	 * function instead.
  	 */
@@ -375,6 +552,7 @@ diff --git a/src/backend/utils/mmgr/mcxt.c b/src/backend/utils/mmgr/mcxt.c
  		return NULL;
  
 diff --git a/src/backend/utils/mmgr/slab.c b/src/backend/utils/mmgr/slab.c
+index 3e15d59..d491ab4 100644
 --- a/src/backend/utils/mmgr/slab.c
 +++ b/src/backend/utils/mmgr/slab.c
 @@ -151,6 +151,7 @@ typedef struct SlabBlock
@@ -403,18 +581,20 @@ diff --git a/src/backend/utils/mmgr/slab.c b/src/backend/utils/mmgr/slab.c
  		/* use the first chunk in the new block */
  		chunk = SlabBlockGetChunk(slab, block, 0);
 diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memutils_memorychunk.h
+index 8d34d18..9a1f1c6 100644
 --- a/src/include/utils/memutils_memorychunk.h
 +++ b/src/include/utils/memutils_memorychunk.h
-@@ -89,6 +89,8 @@
+@@ -89,6 +89,9 @@
  
  #include "utils/memutils_internal.h"
  
 +#include <capstone/capability.h>
++#include <capstone/representable.h>
 +
   /*
    * The maximum allowed value that MemoryContexts can store in the value
    * field.  Must be 1 less than a power of 2.
-@@ -139,6 +141,12 @@ typedef struct MemoryChunk
+@@ -139,6 +142,12 @@ typedef struct MemoryChunk
  	 * one word: MemoryChunkSetHdrMask and its readers are written against
  	 * a single sixty-four-bit field.
  	 */
@@ -427,7 +607,7 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
  	uint64		capstone_pad;
  	/* bitfield for storing details about the chunk */
  	uint64		hdrmask;		/* must be last */
-@@ -263,4 +271,53 @@ MemoryChunkGetBlock(MemoryChunk *chunk)
+@@ -263,4 +272,118 @@ MemoryChunkGetBlock(MemoryChunk *chunk)
  #undef HdrMaskBlockOffset
  #undef HdrMaskCheckMagic
  
@@ -441,12 +621,14 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
 +{
 +	void	   *life;
 +	void	   *generation;
++	void	   *raw;			/* what malloc returned: free() and realloc() take this */
 +} SubletBlock;
 +
 +/* The block [start, start + size) inside the malloc'd object alloc. */
 +static inline void
 +SubletBlockInit(SubletBlock *b, void *alloc, void *start, Size size)
 +{
++	b->raw = alloc;
 +	b->life = capstone_cap_derive(alloc, (char *) start - (char *) alloc, size);
 +	b->generation = capstone_cap_derive(b->life, 0, size);
 +}
@@ -467,6 +649,69 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
 +}
 +
 +/*
++ * Q-15: on the compact bounds format (vp2, and capstone-qemu without exact
++ * bounds) CDERIVE refuses (29) a child it cannot hold exactly; from 4 KiB up
++ * its base and length must be multiples of the granule 2^(msb(len)-9)
++ * (capstone/representable.h).  A child is padded at its TAIL only: its base
++ * never moves below the chunk, so the block header and a neighbour stay out of
++ * the caller's reach.  Chunks inside ordinary blocks are already representable
++ * (at most 8 KiB, 16-byte multiples); a dedicated block for one large chunk is
++ * PLACED instead: malloc SubletLargeMallocSize() bytes and put the block where
++ * SubletLargePlace() says, so that the chunk after the block header starts on
++ * its granule.  The counts are the over-approximation, reported at exit by
++ * mcxt.c.
++ */
++extern unsigned long sublet_q15_chunks, sublet_q15_padded,
++			sublet_q15_pad_total, sublet_q15_pad_max;
++
++/* The malloc size for a dedicated block: hdr bytes of block header, then a chunk of clen bytes. */
++static inline Size
++SubletLargeMallocSize(Size hdr, Size clen)
++{
++	Size		cr = capstone_repr_round(clen);
++	Size		lmax = capstone_repr_round(hdr + capstone_repr_granule(cr) + cr);
++
++	return lmax + capstone_repr_granule(lmax);
++}
++
++/*
++ * Inside raw (SubletLargeMallocSize(hdr, clen) bytes from malloc): the block
++ * address, and the representable region [*start, *start + *len) its lifetimes
++ * cover.  The chunk at block + hdr starts on the granule of its rounded length.
++ */
++static inline void *
++SubletLargePlace(void *raw, Size hdr, Size clen, char **start, Size *len)
++{
++	Size		cr = capstone_repr_round(clen);
++	Size		gc = capstone_repr_granule(cr);
++	Size		gr = capstone_repr_granule(capstone_repr_round(hdr + gc + cr));
++	uintptr_t	r = (uintptr_t) raw;
++	uintptr_t	a = (r + gr - 1) & ~(uintptr_t) (gr - 1);
++	uintptr_t	chunk = (a + hdr + gc - 1) & ~(uintptr_t) (gc - 1);
++
++	*start = (char *) raw + (a - r);
++	*len = capstone_repr_round(chunk + cr - a);
++	return (char *) raw + (chunk - hdr - r);
++}
++
++/* A representable child length for len bytes: the tail pad, counted. */
++static inline Size
++SubletPadded(Size len)
++{
++	Size		r = capstone_repr_round(len);
++
++	sublet_q15_chunks++;
++	if (r != len)
++	{
++		sublet_q15_padded++;
++		sublet_q15_pad_total += r - len;
++		if (r - len > sublet_q15_pad_max)
++			sublet_q15_pad_max = r - len;
++	}
++	return r;
++}
++
++/*
 + * The caller's pointer to chunk: its header and MAXALIGN(size) bytes, a child
 + * of parent.  MAXALIGN and not size: PostgreSQL's own code reads whole
 + * aligned words past a string's terminator (fasthash_accum_cstring_aligned).
@@ -476,7 +721,7 @@ diff --git a/src/include/utils/memutils_memorychunk.h b/src/include/utils/memuti
 +{
 +	chunk->sublet_parent = parent;
 +	return (char *) SubletDerive(parent, chunk,
-+								 sizeof(MemoryChunk) + MAXALIGN(size)) +
++								 SubletPadded(sizeof(MemoryChunk) + MAXALIGN(size))) +
 +		sizeof(MemoryChunk);
 +}
 +

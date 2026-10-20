@@ -10,6 +10,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* Patch 0006's Q-15 over-approximation: items issued, items padded, pad bytes total and largest. The
+ * allocator build has no usable stdio, so this driver prints them, after the verdict. */
+void slabs_q15_counts(unsigned long out[4]);
+
 _Noreturn void mcp_fail(unsigned code) {
   fprintf(stderr, "CONTROL-FAILED %u\n", code);
   exit(75); /* an infrastructure failure is never a verdict */
@@ -37,5 +41,8 @@ int main(int argc, char **argv) {
   printf("VERDICT %s%s\n",
          defect ? "DEFECT-REPRODUCED " : held_up ? "FIXED " : "INCONCLUSIVE",
          defect ? o.defect_text : held_up ? o.fixed_text : "");
+  unsigned long q[4];
+  slabs_q15_counts(q);
+  printf("Q15_PAD items=%lu padded=%lu pad_bytes_total=%lu pad_bytes_max=%lu\n", q[0], q[1], q[2], q[3]);
   return !fixed ? !defect : !held_up;
 }
