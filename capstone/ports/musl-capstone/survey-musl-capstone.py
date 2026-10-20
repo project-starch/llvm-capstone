@@ -178,6 +178,12 @@ def main() -> int:
         return 2
 
     flags = compile_flags(musl)
+
+    def movc_feature() -> str:
+        """runtime/cmake/VirtualCodegen.cmake's CAPSTONE_VIRTUAL_MOVC_KEEP, from the environment (default on)."""
+        keep = os.environ.get("CAPSTONE_VIRTUAL_MOVC_KEEP", "ON").upper() not in ("OFF", "0", "FALSE", "NO")
+        return ("+" if keep else "-") + "movc-keeps-integer-source"
+
     if args.virtual:
         # The virtual code generation of runtime/cmake/VirtualCodegen.cmake: libm
         # and the rest run F and D in hardware under the lp64 calling convention,
@@ -186,7 +192,7 @@ def main() -> int:
                   "-Xclang", "-target-feature", "-Xclang", "+f",
                   "-Xclang", "-target-feature", "-Xclang", "+d",
                   "-Xclang", "-target-abi", "-Xclang", "lp64",
-                  "-Xclang", "-target-feature", "-Xclang", "+movc-keeps-integer-source",
+                  "-Xclang", "-target-feature", "-Xclang", movc_feature(),
                   "-DCAPSTONE_MUSL_MALLOC=1"]
 
     objdir = pathlib.Path(args.objects).resolve() if args.objects else None
