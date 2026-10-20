@@ -4301,3 +4301,16 @@ with only the module changed:
 
 **The dry runs,** with every call stubbed: the chain's PASS and FAIL branches; the pair through both arms, with the staged
 module checked; the pair HOLDing on FAIL.
+
+### q15 subset f on tree B, result (2026-10-20 08:23-08:35, board 2): case 31 is MISSED on tree B too
+
+`records/q15bf.board.txt` and `records/q15bf.result-lines.txt`. UNGATED.
+- **The cells:** 30 CAUGHT (vdbeRecordCompareInt+536), 31 MISSED (completed, with the same
+  `Q15_PAD items=183 padded=2 pad_bytes_total=128 pad_bytes_max=64`), 32 CAUGHT (statDecodePage+704).
+- **The same three readings as both tree-A boots,** as predicted. Cause 29 0, FRTY 3, DRT1 0, no Oops.
+- **So R-60's corpus witness holds on both bitstreams.** Tree B's decode path was identical by source, and is now read.
+- **Filing:** the runner's scorer hit the known collision with the fixed q15f.pred (NO DATA, not a pass). The run was
+  scored by hand into q15bf.pred: 2 of 3, the same DIFF on 31.
+  - The bundle is `sqlite/engine-repros/results/2026-10-20-vp2c-treeB/vp2-nested-pools-q15f`, beside that directory's
+    a-c bundles.
+  - The merged a-c bundle stays as filed. Combining is the fold's decision.

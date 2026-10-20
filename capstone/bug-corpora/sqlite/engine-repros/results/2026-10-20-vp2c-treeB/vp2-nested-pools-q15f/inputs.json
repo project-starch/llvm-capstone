@@ -1,0 +1,88 @@
+{
+  "amalgamation_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "arm": "vp2-nested-pools",
+  "build": {
+    "arm": "memsys5-sublet",
+    "groups": {
+      "core": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_PREUPDATE_HOOK",
+        "-DSQLITE_COUNTOFVIEW_OPTIMIZATION"
+      ],
+      "coreT": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-USQLITE_OMIT_TEMPDB"
+      ],
+      "ext": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "fts3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "fts3P": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4",
+        "-DSQLITE_ENABLE_FTS3_PARENTHESIS"
+      ],
+      "fts5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "json": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_JSON1"
+      ],
+      "memfs3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "memfs5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "memfsdb": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_DBSTAT_VTAB"
+      ],
+      "memfsp": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "rtree": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_RTREE",
+        "-DSQLITE_RTREE_INT_ONLY",
+        "-USQLITE_OMIT_SHARED_CACHE"
+      ]
+    },
+    "opt": "-O0",
+    "sdk": "<mnt-hdd>/capstone/t3-freeze-nb/sdk"
+  },
+  "cases": 3,
+  "configuration": "virtual-sqlite-memsys5-pools",
+  "contract": "verdicts-v1",
+  "corpus": "sqlite/engine-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "f67e735027846a389513bdf4777487fc80026bd5fc80ac5832c9d6f651d74a1c",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "c30a645c85972aa5e65bae3f58abc800fc14f018d4df2cb4942fe807d7045d4c",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "39d8492d5c18216b6271a136e51a56e60e8f711f1dd0be3ce2d2e60712c81fb8",
+    "monitor": "f13dbc5",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY -DCAPSTONE_QUANTUM_PRINT -DCAPSTONE_BOOT_QUANTUM=2000000 -DCAPSTONE_S23_REFUSAL_READ -DCAPSTONE_S23_DATA_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2c_8de3c48cf",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "b3f1aa0ea60442f82193ef57e978f70f2ec377a99c57bcfa41276e95d8464546"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "CAUGHT": 2,
+    "MISSED": 1
+  }
+}
