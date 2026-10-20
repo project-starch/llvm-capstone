@@ -4577,3 +4577,27 @@ Its QEMU Tier 1 equals nf2's (PASS 30/45, FREG 8 = the 8 exit-139 tests).
   dump: `movc s2, a3` left a3 = 0 before `jalr a3`), predicts 07's x1 at a call through a MOVC-copied integer. It
   predicts no specific key for 03. The reading may show whether a zeroed integer fed the comparison.
 - **Not predicted:** S-23 (FRTY 0, DRT1 0 expected as nf2B), and 21 release lines.
+
+### sql0-nf2B and fault-regs-1's Tier 1, results (2026-10-20, board 2, tree B)
+
+**sql0-nf2B (09:42-11:01): identical to sql0-nf2A,** so the CREATE EXTENSION failures do not depend on the bitstream.
+- 7 of 9 cells the same as the QEMU reference. The must-fire held. FRTY 0, DRT1 0. 21 release lines, every CSRETIRE
+  succeeded.
+- 03 and 07 are out of denominator by the same errors: 3 duplicate-key (>=, 12777, 12777, 2200), 2 `operator does not
+  exist: text % text`, and 1 pc=0, as on tree A.
+- That fits C-32 (ISSUES, dev 3f606b097841): MOVC's integer-nulling rule is byte-identical in both trees.
+- `records/sql0-nf2B.result-lines.txt`; bundle postgres/sql-repros results/2026-10-20-vp2c-treeB/vp2-malloc-nf2.
+
+**fault-regs-1's Tier 1 (11:01-11:08): PASS.**
+- The four rungs read as t1-old's, the banner fault-regs-1 is present, and DRT1/DRTX/Oops are 0.
+- 3 unique release lines (the "6" counts the KMSG replay), each fully succeeded, first_id 1024.
+- The silicon positive control fired: one unique FREG block at vm-contract's stale fault (cause 25), whose x0 slot is
+  the fault pc.
+- `records/t1-fr1.result-lines.txt`. sql0-dumpB started on its GO.
+
+**Root cause of the silicon-only stops: C-32** (dev 3f606b097841, checked against the RTL and the QEMU reproduction).
+On vp2, MOVC nulls an untagged integer source, while the corpus SDK compiles with `+movc-keeps-integer-source`.
+- **The lead's decision (2026-10-20):** board-bound corpus images are rebuilt WITHOUT `+movc-keeps-integer-source` until
+  Q-04 (b) is in a bitstream. The compiler's CapstoneLiveSourceCopy then rewrites live-source copies, so silicon and QEMU
+  agree whatever the RTL does.
+- The QEMU references are re-recorded for the rebuilt images.
