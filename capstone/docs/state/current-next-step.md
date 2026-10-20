@@ -1,3 +1,18 @@
+**2026-10-21 05:0x, the vp2 BOARD lane, at its quiet point for the account switch (both boards idle, no hub bookings).**
+The corpus pass on the rebuilt images (the lead's C-32 remedy (b): no `+movc-keeps-integer-source`; dev's module
+54d8a3af; both current bitstreams) is COMPLETE.
+- 24 arms and 346 cells, each graded against the compiler lane's silicon-mimic QEMU reference: 345 equal in verdict and
+  341 in every field.
+- The five differences are ISSUES entries: Q-31 x4 (fault-cause order) and R-60 x1 (sq1q15 case 31).
+- Every arm reads identically on tree A and tree B, and no boot has a pc=0.
+- Record: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README.md`, the "CORPUS PASS ... summary" table
+  and "Quiet point" sections (dev 7333cee38464, 268d5ac8807d).
+- Corrections landed the same night in `bug-corpora/sqlite/engine-repros/results/README.md`: sqlite 02/05/19/24's
+  memsys5 CAUGHT cells are incidental NULL/-1 dereferences, not capability detections (606c8f218a6e, retraction
+  7b4285a9d444). The headline matrix's spatial row (base Capstone's 6 temporal detections) waits on the compiler lane's
+  physical-harness traces, and its framing is the lead's.
+- Open items, with their owners: that README's "Quiet point" list.
+
 2026-10-19 (the RTL lane's night: S-29 found, fixed and landed; tree A's vectors; tree B not yet gated): **The
 virtual-context switcher installs and restores `satp` with NO TLB flush, in both directions, demonstrated in
 simulation and fixed.** S-29 is on dev (`ca39b3b859ab`, extended at `75aab3df524d`) and the fix is on
