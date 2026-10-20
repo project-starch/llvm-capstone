@@ -3933,6 +3933,16 @@ RETURN" rule applied to privilege rather than to control flow.
 >   rebuilt WITHOUT `+movc-keeps-integer-source`, and their QEMU references are re-recorded. The silicon-mimic kits
 >   (`qkit7-*-mn`, with the switch set; the compiler lane) stay as a cross-check: on a rebuilt image they and the plain
 >   kits should agree.
+> - **REMEDY (b) HOLDS ON SILICON for postgres sql0 (2026-10-20 13:00-15:13, both trees; board lane 90eb95dc712f).**
+>   - The image d9787ac28e495969 was rebuilt without the flag (runtime 8f132305; sdk.json `-movc-keeps-integer-source`).
+>   - It reads 9 of 9 cells equal to its QEMU reference on tree A AND tree B (sql0-nmA/nmB, module 54d8a3af). All four
+>     extensions are created, and neither transcript has a duplicate-key, missing-operator or pc=0 line.
+>   - On QEMU the same image reads the same 9 cells with and without `CAPSTONE_MOVC_NULL_SCALAR=1`. The old image fails
+>     03/07 under that same switch, which is the two-sided check.
+>   - **Cell 07's site** (sql0-dumpB, board 2, FREG): ProcessUtilitySlow `mv s2, a1; movc s3, s2; jalr s2`, with s2 = 0
+>     and s3 = list_delete_first. The rebuilt image copies through memory (`stc s2; ldc s3`). Cell 03's site is not
+>     named; its duplicate key is a genuine second insertion.
+>   - The rest of the corpus is being rebuilt the same way, and the earlier vp2 board records all ran flagged images.
 > - **Remedies:**
 >   - (a) set the switch in the kits and re-predict, which is a kit change and a re-pin;
 >   - (b) build board images without `+movc-keeps-integer-source`, so the compiler's CapstoneLiveSourceCopy rewrites
