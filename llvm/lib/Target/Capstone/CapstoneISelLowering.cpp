@@ -26649,6 +26649,15 @@ SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
     if (!SizeXLen)
       reportFatalUsageError(
           "Unsupported dynamic alloca size expression in Capstone PureCap");
+    // A zero-byte alloca (alloca(0), a VLA of length 0) still gets a region of
+    // its own when the result is narrowed: SHRINK refuses an empty range
+    // (base >= end is Illegal operand value, cause 29), and a one-granule
+    // range at an unmoved sp would cover the object below it. The size is
+    // already rounded to the stack alignment, so only the zero case changes.
+    if (CapstoneShrinkStack)
+      SizeXLen = DAG.getNode(
+          ISD::UMAX, dl, XLenVT, SizeXLen,
+          DAG.getConstant(TFL->getStackAlign().value(), dl, XLenVT));
     SDValue OffsetXLen = SizeXLen;
     if (TFL->getStackGrowthDirection() == TargetFrameLowering::StackGrowsDown)
       OffsetXLen = DAG.getNode(ISD::SUB, dl, XLenVT,
