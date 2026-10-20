@@ -4854,3 +4854,35 @@ Bundles: postgres/sql-repros results/2026-10-20-vp2c-tree{A,B}/vp2-malloc-nomovc
 - **The silicon-mimic QEMU run** (the compiler lane, qkit7-tB-mimic, MOVC null plus compact rounding) also reads 9 of 9
   against r1 and -mn. Its rounding positive control has not read yet, so "rounding moves no sql0 cell" waits on it.
 - Booked on the lab hub as board-lane: ids 1-4, each cancelled at the run's end.
+
+### The corpus pass, first arm: sq0 (sqlite engine-repros, virtual-malloc / memsys5) pre-registered (2026-10-20 15:2x), both boards
+
+**The reference** is the compiler lane's silicon-mimic run `<mnt-hdd>/capstone/t3-images-cw/ref-tB-mimic/sq0`.
+- Kit qkit7-tB-mimic: QEMU 7e5fe043, module a1fa252f (54d8a3af's twin), MOVC null and compact rounding ON.
+- The kit's rounding positive control read EXACT on nf2 and ROUNDED-AS-SILICON on the mimic kit.
+- Runner run-virtual.py 4400e4c1386b72ee and tier3-appvm-arm.sh 2852f21b1996be77, both from wt-gate and both named in the
+  stamp.
+- Images: 35 (33 cases, 2 controls), SDK t3-freeze-nb-nomovc-cw (sdk.json 64bc9086452fc30a, the 232d13b2 port).
+- Tally: CAUGHT 4 (02, 05, 19, 22, all cause 24), MISSED 27, NO-READING 2 (06, 20).
+
+**The runner:** `tier3-pass-appvm.sh` a2541a20586b96b3.
+- --only boots of six cases plus both controls.
+- The runner and arm script are pinned to the stamp's hashes, and each boot's collected images to the reference's own
+  session/collect/images cut to its cases (EXPECT_IMAGES).
+- Each boot is scored by compare-pilot.py against the reference cut to its cases.
+- Each boot is booked on the lab hub, and refused on a 409.
+- Kits bkit7-rev2xDN2 (board 1, tree A) and bkit7-rev2xBDN2 (board 2, tree B): module 54d8a3af, monitor f13dbc5.
+- **Its stubbed dry run** (`dryrun-pass-appvm.txt`) covered DONE, busy, a hub 409, the arm script's refusal (78), a
+  wrong runner hash, board 2's kit path, and a planted flip read as 5 of 6, rc 1. The first attempt exposed a read-only
+  bash variable (GROUPS), and the runner was fixed before the recorded runs.
+
+**The split:** board 1 runs groups a, c, e (cases 00-05, 12-17, 24-29) and board 2 runs b, d, f (06-11, 18-23, 30-32).
+sql0 showed tree A equal to tree B, and S-29 is unreachable by construction (above).
+
+**Predictions:**
+- Every group's cells equal the reference: 33 of 33 over the six boots.
+- **Case 24** (writable_schema_stale_table) is MISSED in this reference but was CAUGHT (cause 24, sqlite3OpenTable+648) in
+  the old flagged reference. It is not attributed yet; the compiler lane is separating image, kit and module on QEMU.
+  Its board reading is reported against both, as information.
+- No pc=0; DRT1 0, FRTY 0, no Oops; node-floor-2 banner present.
+- Case 31 is MISSED in this reference, so sq0 carries no R-60 exception. That one is q15's.
