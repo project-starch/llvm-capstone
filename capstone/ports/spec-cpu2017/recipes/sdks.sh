@@ -33,6 +33,7 @@ T=$W/src/llvm-capstone; mkdir -p "$T/llvm" "$T/capstone/docs/plans"
 if [ -n "$PATCH" ]; then
   patch -d "$T" -p1 -N -s -f < "$PATCH" || fail "the runtime patch does not apply to the toolchain source"
 fi
+find "$T" -newermt "$(date -u +%FT%TZ)" -exec touch -h {} + 2>/dev/null || true   # a host clock behind the source's timestamps
 while read -r path want; do
   [ -f "$T/$path" ] || fail "runtime file $path is missing"
   check "$T/$path" "$want"

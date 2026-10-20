@@ -24,6 +24,9 @@ note "musl $(m toolchain.musl.sha256) $(basename "$MUSL")"
 mkdir -p "$W/src" "$W/build" "$W/musl-src" "$W/tmp"
 zstd -dc "$SRC" | tar -C "$W/src" -xf -
 T=$W/src/llvm-capstone
+# A host whose clock is behind the archive's timestamps would make ninja re-run CMake forever
+# ("manifest still dirty"): anything dated in the future is dated now.
+find "$W/src" -newermt "$(date -u +%FT%TZ)" -exec touch -h {} + 2>/dev/null || true
 cp "$MUSL" "$W/musl-src/"
 JOBS=${JOBS:-$(nproc)}
 cd "$W/build"
