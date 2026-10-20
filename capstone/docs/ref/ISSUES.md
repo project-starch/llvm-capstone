@@ -9671,7 +9671,7 @@ unknown alignment correctly needs a run-time alignment test in the expansion; no
   unpack 'p' of a UTF-8-upgraded string (the pointer is rebuilt byte by byte). op/pack.t uses both,
   with constant arguments that are folded at compile time, so the whole file still dies before its
   first test. With those four checks replaced by `pass()` in a staged copy it runs 479 tests and
-  then faults in musl's `modf`, a different compiler defect (C-82).
+  then faults in musl's `modf`, a different compiler defect (C-86).
 - Cost: in perlbench, 208 memcpy call sites become 216 (pp_pack.c +3, regcomp.c +2, re_comp.c +2,
   MD5.c +1); memmove stays at 78. In musl, references to memcpy/memmove go from 134 to 160: the
   `double complex` results of the complex functions (16 bytes, 8-aligned) and `sigset_t` copies.
@@ -9679,7 +9679,7 @@ unknown alignment correctly needs a run-time alignment test in the expansion; no
   relocations, so neither calls itself. Run time not measured. A per-copy "holds no capability"
   marker from clang (CHERI's `no_preserve_cheri_tags` is the model) would let typed copies such as
   `double complex` inline again.
-### C-82 — `modf`, `modff`, `modfl` and `frexp` expanded from their intrinsics pass the output pointer as an integer, so the callee faults storing through it `FIXED 2026-10-16 on compiler/modf-capability-pointer — COMPILER; found 2026-10-16 by SPEC CPU2017 500.perlbench_r (op/pack.t's unpack checksums call modf)`
+### C-86 — `modf`, `modff`, `modfl` and `frexp` expanded from their intrinsics pass the output pointer as an integer, so the callee faults storing through it `FIXED 2026-10-16 on compiler/modf-capability-pointer — COMPILER; found 2026-10-16 by SPEC CPU2017 500.perlbench_r (op/pack.t's unpack checksums call modf)`
 
 **What happens.** clang turns `modf` into `llvm.modf`, and SelectionDAG expands that (and
 `llvm.frexp`) back into a library call that writes one result through a pointer to a stack
@@ -9897,7 +9897,7 @@ this branch, the same build tree with the three source files swapped).**
   calls of the helper, and it failed on both arms. With the dev compiler the file does not build.
 - Gates with this compiler's SDK and ports (memcached, SQLite, mruby, Perl): runtime 43/43, nodes
   and malloc pass; memcached passes 104 and fails `fx24_prediction`, the flake seen on the C-81 and
-  C-82 runs. SQLite's hosted build does not prepare on dev 638493a31981 (its sorter rewrite is now
+  C-86 runs. SQLite's hosted build does not prepare on dev 638493a31981 (its sorter rewrite is now
   applied twice, by `adapt-sqlite-322.sh` and by `prepare-sources.sh`); the run used a copy of
   `prepare-sources.sh` that skips an applied rewrite. That is a separate change.
 
