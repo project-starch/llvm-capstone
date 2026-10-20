@@ -4527,3 +4527,26 @@ Its QEMU Tier 1 equals nf2's (PASS 30/45, FREG 8 = the 8 exit-139 tests).
 - **On PASS** it writes CHAIN_FR1_GO for the sql0 dump arm. That arm is pre-registered separately, when the compiler
   lane's `_bt_check_unique` diag image arrives.
 - **Its dry run,** stubbed: PASS, FAIL, and a start on sql0-nf2B's VOID too.
+
+### cpyp-DF, result (2026-10-20 09:37-10:28, board 1, tree A): every pc=0 is a JUMP THROUGH A ZERO TARGET from one call site, x1 = 3ff6321c14
+
+`records/cpyp-df.result-lines.txt`. UNGATED.
+
+**The fault-regs-srz Tier 1 (t1-frs):** PASS, with the four rungs as t1-old's and the banner present.
+- The silicon positive control fired: one unique FREG block at vm-contract's stale fault (cause 25), whose x0 slot equals
+  the fault pc (3f989140f0).
+
+**cpyp-DF:**
+- 10 of 10 steps ran. FRTY 0, DRT1 0, no Oops.
+- The cells are as cpyp-D/DZ: MISSED 2, NO-READING:unattributed 1.
+- **pc=0** appears once each in 17-control, 23 and 23-control, as predicted, and each with exactly one FREG block (3
+  blocks).
+- **Every block reads:** `kind=4 cause=12 pc=0 addr=0`, x0's slot low word 0 (= the fault pc), the stack readable, and x1..x31
+  non-zero. So none of the NO DATA cases hold.
+- **x1 = 3ff6321c14, marked '*'**, in all three blocks. That is a code address inside cpython.dom (code base 3ff6000000,
+  so image offset 0x321c14), written since the last CSRUNV entry.
+  - This is the pre-registered reading (a): a jump through a zero target. The call site is x1-4 = 3ff6321c10, one and
+    the same site for all three stops. The compiler lane maps it to its function.
+  - Not (b), since x1 is not 0, and not (c), since the slots carry '*' and entry_pcc's low word is non-zero.
+- **One deviation from the pre-registered wording:** the dump reports kind=4, not the kind-2 terminal escape the
+  pre-registration names. That is the compiler lane's to read.
