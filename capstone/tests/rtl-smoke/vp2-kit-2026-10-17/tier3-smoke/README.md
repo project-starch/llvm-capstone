@@ -5406,3 +5406,46 @@ so every arm of the pass has a reading on both bitstreams.
   two trees have not differed in a single cell.
 - The sqlite groups' other-tree runs, pre-registered at 02:5x, complete the remaining two (sq0, sq1q15). The two
   repaired-only arms on tree B are pb13q15/pgm1q15/wm1q15; pgm1q15 is pgm1's rebuild.
+
+### The sqlite groups on their other tree, result (2026-10-21 02:5x-04:56, both boards): every group equals its first tree's reading
+
+`records/pass-sqlite-othertree.result-lines.txt`. UNGATED.
+- sq0 and sq1q15, groups b/d/f on tree A (board 1) and a/c/e on tree B (board 2): each group equals its reference
+  exactly as on its first tree, and each equals its first tree's bundle cell for cell (compare-pilot rc 0 on all 12).
+  That includes sq0 d's three Q-31 cause cells and sq1q15 f's R-60 case 31.
+- All 12 boots read pc=0 0, DRT1 0, FRTY 0, INJS/INJL 0, and the vbatch END line.
+- **Every arm of the pass now has a reading on both bitstreams, and tree A equals tree B in every cell of every arm.**
+  The differences from QEMU (Q-31 x4, R-60 x1) are the same on both trees.
+
+### Quiet point (2026-10-21 05:0x): the lane stops here for the account switch, on the lead's word
+
+- Both boards are idle (board-busy: FREE), no driver is running, and the lab hub holds no booking of this lane.
+- Every pass result is committed here and landed on dev.
+- **Open, for whoever continues:**
+  - the matrix's physical-harness traces of sqlite 02/05/19, the compiler lane's (they decide the headline's spatial
+    6/25), plus the CheriBSD and sublet rows;
+  - cpython 01's set_dealloc trace (the compiler lane);
+  - after the pass, caplifive-sbi #4 (RFENCE): a pb10 pair (PR-head firmware vs the current monitor), pre-registering
+    launch cost and the v0.1-fallback warning count. The PR is on the capstone-bootstrap monitor line while the boards
+    run the vp2 line, so the firmware's base is to be settled with the runtime lane first;
+  - the batch bitstream (its flash is the lead's): before its first boot,
+    - the full firmware build and dom_stack gate of capstone-sbi vp2/fetch-retry-cap 579ef1c, with a two-pc positive
+      control;
+    - the csupctl.table bracket grep;
+    - r60-runtime-gate on every image;
+    - s23-cpmp-rearm (the RTL lane's folder) beside pb10's FRTY;
+    - a known-good aperture read twice as the LED-timing control;
+  - the QEMU kit firmware 6f2b082c's capstone-c revision (rebuild with build-kit-qemu-fw.sh 4674ab6a plain at the
+    original output path, and diff);
+  - the board-sharing system handed over by fpga1 (not yet assigned by the lead; /tmp/capstone/lab-hub/HANDOVER.md).
+
+### Recorded from the lanes overnight
+
+- **For the batch bitstream's acceptance (the RTL lane, from the synthesis lane's sealed run A f08906b78):**
+  - `led_stretch_cnt`, the LED aperture the acceptance reads, sits at WNS -16.233 in the dom_switcher cur_idx_q cone
+    (worst 50 paths -17.936 .. -16.657). So the aperture's own timing is a candidate explanation for an impossible or
+    unstable LED/aperture reading.
+  - The batch first boot samples a known-good aperture (a fixed value, read twice) as a control before any aperture
+    reading is attributed to the design.
+  - The RTL lane will send s23-cpmp-rearm as an S-29-style folder (bare M-mode images from the batch source, vectors
+    simulated on both RTLs, images/SHA256SUMS, board_rec). Its fix reads two-sided in simulation (dev 45e8b7f18de8).
