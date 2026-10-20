@@ -1,0 +1,75 @@
+# tier3-pass-seq2.sh stubbed dry run (2026-10-20 23:22) on the overlapB spec, board 2's path: every line's stamp and runner checks, wm0's appvm line included.
+SEQ START 23:22:27 board 2 spec 4a247c5890282d21 (18 arms)
+PASS fph BEGIN 23:22:27 board 2 kind cases booking 99
+PASS fph END 23:22:27 rc=0 ::  :: --- stub cases
+PASS fph COMPARE vs reference rc=0 :: 25 of 25 cells the same
+PASS fph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fpt BEGIN 23:22:28 board 2 kind cases booking 99
+PASS fpt END 23:22:28 rc=0 ::  :: --- stub cases
+PASS fpt COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fca BEGIN 23:22:28 board 2 kind cases booking 99
+PASS fca END 23:22:28 rc=0 ::  :: --- stub cases
+PASS fca COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fca readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fcs BEGIN 23:22:28 board 2 kind cases booking 99
+PASS fcs END 23:22:28 rc=0 ::  :: --- stub cases
+PASS fcs COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fcs readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fso BEGIN 23:22:28 board 2 kind cases booking 99
+PASS fso END 23:22:28 rc=0 ::  :: --- stub cases
+PASS fso COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS fso readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS mph BEGIN 23:22:28 board 2 kind cases booking 99
+PASS mph END 23:22:28 rc=0 ::  :: --- stub cases
+PASS mph COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS mph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS mpt BEGIN 23:22:28 board 2 kind cases booking 99
+PASS mpt END 23:22:28 rc=0 ::  :: --- stub cases
+PASS mpt COMPARE vs reference rc=0 :: 3 of 3 cells the same
+PASS mpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wph BEGIN 23:22:28 board 2 kind cases booking 99
+PASS wph END 23:22:28 rc=0 ::  :: --- stub cases
+PASS wph COMPARE vs reference rc=0 :: 12 of 12 cells the same
+PASS wph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wpt BEGIN 23:22:28 board 2 kind cases booking 99
+PASS wpt END 23:22:28 rc=0 ::  :: --- stub cases
+PASS wpt COMPARE vs reference rc=0 :: 10 of 10 cells the same
+PASS wpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgc BEGIN 23:22:28 board 2 kind pgc booking 99
+PASS pgc END 23:22:28 rc=0 ::  :: --- stub pgc
+PASS pgc COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgc readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgm0 BEGIN 23:22:28 board 2 kind pgm booking 99
+PASS pgm0 END 23:22:28 rc=0 ::  :: --- stub pgm
+PASS pgm0 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgm1 BEGIN 23:22:28 board 2 kind pgm booking 99
+PASS pgm1 END 23:22:28 rc=0 ::  :: --- stub pgm
+PASS pgm1 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm1 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pym0 BEGIN 23:22:28 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py booking 99
+PASS pym0 END 23:22:28 rc=0 ::  :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+PASS pym0 COMPARE vs reference rc=0 :: 20 of 20 cells the same
+PASS pym0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pym1 BEGIN 23:22:28 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py booking 99
+PASS pym1 END 23:22:28 rc=0 ::  :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+PASS pym1 COMPARE vs reference rc=0 :: 20 of 20 cells the same
+PASS pym1 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pb9 BEGIN 23:22:28 board 2 kind cases booking 99
+PASS pb9 END 23:22:28 rc=0 ::  :: --- stub cases
+PASS pb9 COMPARE vs reference rc=0 :: 4 of 4 cells the same
+PASS pb9 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pb12 BEGIN 23:22:28 board 2 kind cases booking 99
+PASS pb12 END 23:22:28 rc=0 ::  :: --- stub cases
+PASS pb12 COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS pb12 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pb10 BEGIN 23:22:28 board 2 kind cases booking 99
+PASS pb10 END 23:22:28 rc=0 ::  :: --- stub cases
+PASS pb10 COMPARE vs reference rc=0 :: 4 of 4 cells the same
+PASS pb10 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wm0 BEGIN 23:22:28 board 2 kind appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py booking 99
+PASS wm0 END 23:22:28 rc=0 ::  :: --- stub appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py
+PASS wm0 COMPARE vs reference rc=0 :: 23 of 23 cells the same
+PASS wm0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS seq2-2 DONE 23:22:28

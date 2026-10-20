@@ -5357,3 +5357,17 @@ null plus compact rounding, both identical on the two trees).
     look the same in the boot log.
   - It is a bare M-mode arm, run on silicon the way the S-29 sv-* arms were (images and vectors committed before the
     boot).
+
+### The tree-B overlap of the tree-A arms, pre-registered (2026-10-20 23:2x): board 2, 18 arms
+
+Board 2 is idle until morning, and 18 arms read only on tree A: board1.spec's 14, board2.spec's 3 (moved to board 1 at
+20:2x), and wm0. Running them on tree B turns "tree A = tree B" from two overlapping arms (sql0, cpython lt0 pending)
+into the whole corpus but q15/sq0, which ran split across both.
+- **The runner:** `tier3-pass-seq2.sh` 632830e218434065 on board 2 (kit bkit7-rev2xBDN2), spec overlapB 4a247c5890282d21
+  (`records/pass-spec-overlapB.txt`): the same lines as there, plus wm0's appvm line, its runner and arm script pinned
+  to its stamp.
+- **Its stubbed dry run** (`dryrun-pass-overlapB.txt`) passed every line's stamp and runner checks (18 arms, DONE).
+- **Predictions:** every cell equals its reference in every field, i.e. equals tree A's reading of 2026-10-20: 179 + 23
+  = 202 of 202. A difference from tree A would be the first tree difference in the corpus, and would be graded against
+  the reference first.
+  - Any Q-31 cause shape is named. pc=0, DRT1, FRTY, INJS and INJL 0; the vbatch END line in every boot.
