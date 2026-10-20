@@ -4635,7 +4635,11 @@ revision of the earlier images, + 232d13b2's heap.c + a CAPSTONE_VIRTUAL_MOVC_KE
 musl's build, built OFF). Manifests: runtime_dirty false. Checked here:
 - **postgres lt0 d9787ac28e495969** (22,019,184 B; not a --discard-locals relink). Both sdk.json files list
   `-Xclang -target-feature -Xclang -movc-keeps-integer-source`; the board image 64010720's had `+movc-keeps-integer-source`.
-- **cpython lt0 f796f03bfe751b81**, the same sdk.json reading.
+- **cpython lt0 f796f03bfe751b81**, the same sdk.json reading. **WITHDRAWN as a board candidate (the compiler lane, 12:3x):**
+  it was built by build-port-abi6.sh's generic recipe, without CPY_TEST_CAPI=1, so it has no _testinternalcapi or
+  _testlimitedcapi, and its controls failed under the gate kit with ModuleNotFoundError and SkipTest. 20bcfdd1 was built by
+  build-cpython-capi.sh. f796f03b is moved aside (t3-nomovc/cpython-lt0-nocapi), and the CAPI rebuild is the lane's. The
+  31-of-32 re-prediction above ran on the OLD image 20bcfdd1 and is unaffected. No board arm was pre-registered on f796f03b.
 - **QEMU record r1** (t3-sql-nomovc-r1, runner 7ce203f9, kit qkit7-nf2, the trimmed fixture 956173e0): SDK-BUILTINS OK,
   21/21 sessions, all four extensions created, CAUGHT 2 (02, 03 at memcpy, cause 28), MISSED 7, the cells of the old
   image's record. The repeat r2 and the silicon-mimic run (-mn) are running.
@@ -4689,3 +4693,13 @@ image).
   measured firmware reads the same 25,856,520 B for every stage seen since this morning (28.8 MB to 34.5 MB), so that
   check has never been seen to fire. The evidence that a stage of this size fits is this boot. sql0-nmA's pre-measure
   (stage 34,478,535 B) also read 25,856,520 B.
+
+### sql0-nmB pre-registration (2026-10-20, board 2, tree B): the rebuilt postgres image on the second bitstream
+
+sql0-nf2B (rev2r) with only the image changed, as sql0-nmA is to sql0-nf2A. It runs beside sql0-nmA on the same GO
+evidence, so both trees read the remedy at once.
+- **The runner:** `tier3-sql-arm-rev2u.sh` 71b9f8e2fdaa2a2d. Its stubbed dry run (`dryrun-sql-arm-rev2u.txt`) went through
+  every branch as rev2t's. It does not start on sql0-nmA's GO.
+- **It starts on SQL_NMB_GO,** written together with SQL_NM_GO.
+- **Predictions:** sql0-nmA's, on tree B. sql0-nf2B read as sql0-nf2A in every cell, so a tree difference here would
+  be new.
