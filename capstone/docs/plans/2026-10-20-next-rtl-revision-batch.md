@@ -192,6 +192,66 @@ tracker (`valid-fell 1`) and still denies (faults 1). Without that arm, `-s`'s z
 3. Reading 4 (pb10 without the srevroot-zero module) is the board lane's and remains UNMEASURED; reading 5's
    generation case is covered by `r12-recl-cpmp` above.
 
+**THE SECOND DEFECT IS NOW FIXED AND MEASURED TWO-SIDED** (capstone-ariane `31ce73cb6` against its
+pre-fix parent `7784b37ab`, one model build each, `s23-cpmp-rearm`). That arm already existed, written
+2026-10-19 for S-23's data face, and had recorded the resurrection as a FEATURE -- its Q5 is commented
+"THE WORKAROUND" and its Q8 "the S-reachable repair". The audit reframes the same probes as the defect, so
+no new arm was needed; what was needed was the two-sided run.
+
+| probe | parent `7784b37ab` | fixed `31ce73cb6` | |
+|---|---|---|---|
+| Q1, Q2, Q6, Q11a, Q11b, Q13a | ALLOWED | ALLOWED | controls: the instrument still allows when it should |
+| Q3, Q4, Q7, Q9, Q11c, Q11d, Q13b, Q13c | DENIED | DENIED | the broadcast clear and the adopt are untouched |
+| **Q5** (`csrsi csupctl, 4`, the M strobe) | **ALLOWED** | **DENIED** | the re-arm is gone |
+| **Q8** (srevroot write, SPACED) | **ALLOWED** | **DENIED** | the re-arm is gone |
+| **Q10** (srevroot, BACK-TO-BACK) | **ALLOWED** | **DENIED** | the re-arm is gone |
+| **Q12a, Q12b** (one strobe, two slots) | **ALLOWED** | **DENIED** | the strobe's GLOBAL reach is gone |
+| **Q13d** | **ALLOWED** | **DENIED** | the re-arm is gone |
+| total denials (the arm's own `s11`) | 8 | 14 | |
+
+**Exactly six probes flipped, every one of them a re-arm path, and none flipped the other way.** The six
+controls read ALLOWED on BOTH trees, so the fixed tree is not denying blanket; the eight true-deny probes
+read DENIED on both, so the clear and the adopt are unchanged. The arm's own correction note of 2026-10-19
+establishes that every deny in it is a TRUE deny -- each clear is a REVOKE of the handle above that slot's
+own child -- which is what makes six ALLOWED -> DENIED flips readable as the security fix rather than as a
+regression: the denies now PERSIST where they used to be healed, and persisting is correct for a revoked
+node.
+
+**Q8's setup is PROVEN LIVE on both trees, which the first run of that arm was not.** Its Q8/Q10 were void
+by construction in 2026-10-19 (the arm wrote 0 over 0, so no namespace pulse could be produced, and both
+probes read DENIED for the wrong reason). The grading now requires the `SUP ns-flush RISE` line and the
+HELD copy's transition it prints, and both runs show `srevroot 0 -> 0x81000000 -> 0` with 7 RISE lines. A
+DENIED that is void and a DENIED that is the fix are no longer the same reading.
+
+**Item 1's six arms are UNCHANGED on the fixed tree**, re-run in the same build: `va-fetchsplit-s` still
+faults 0 with its four children at 0x100 and the suppressed-clear witness firing, `cap-fetchdeny-f` still
+denies, and `r12-recl-cpmp`'s deltas are byte-identical for the third time. So the namespace gate's effect
+does not depend on the flush, which is what the removal had to show.
+
+**And `va-fetchsplit-i` now certifies what it is cited for**, with `-DFS_SAMETBL` added: it reads
+`0x80009000` where it previously read `0x80007000`, matching `-s` exactly, which confirms by measurement
+that the retracted "unexplained" difference was only the missing define.
+
+**The PC tracker's half is UNMEASURED and removed on a source argument**, recorded as such at the semantics
+owner's instruction rather than claimed two-sided: no route reaches that resurrection, because the
+resurrecting instruction traps first (the check at `commit_stage.sv:389` fires at the commit after the
+clear) or the adopt re-arms independently of the flush. Removing it is still right -- it is logic that can
+only ever wrongly set valid -- but it has no arm.
+
+**A BIGGER HOLE IS OPEN AND NOT YET MEASURED, found while trying to build that arm.** The adopt at
+`commit_stage.sv:400-405` sets valid on ANY change of the PCC's id, justified as "On domain change
+(CALL/RETURN/CAPENTER), assume valid -- DYN unit already checked". A plain trap to M and back is none of
+those and re-checks nothing, yet the id changes twice, so a REVOKED PCC comes back valid after any trap
+round trip, a timer interrupt included. This is R-35's defect in the last consumer that still has it: that
+commit removed exactly this pattern from the LSU, recording that adopt-on-sight made the revocation check
+"VACUOUS" and that "no tracker-local change can fix this ... the fix has to introduce POSITIVE evidence".
+QEMU does not have the hole -- in a virtual-C context it checks the PCC's node at every block entry
+(`capstone_supervisor.c:1099-1114`, emitted per block at `translate.c:1374-1380`), so a revoked PCC faults
+at the next fetch and after any trap round trip -- so this is a QEMU-vs-silicon divergence as well. The arm
+is constructible (revoke S's PCC node, one ecall round trip that touches nothing, probe the next fetch,
+against a control that revokes with no round trip and must trap 25) and is pre-registered to read NO TRAP
+on the current RTL. It is the next measurement.
+
 **A SECOND DEFECT, found by that same audit, means item 1 is not finished and its arms will be re-run.**
 `pmp_data_if.sv` carried, since vp2 item A step 2, `if (revnode_ns_flush_i) begin cpmp_tracked_revnode_id_d[i]
 = '0; cpmp_revnode_valid_d[i] = 1'b1; end` -- every CPMP entry re-armed VALID on any change of `vctx_rev_q` or
