@@ -21251,6 +21251,101 @@ static SDValue recoverCapabilityFromAddressArith(SDNode *N, SelectionDAG &DAG,
   return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::c128, Cap, Offset);
 }
 
+// Reassociate a cursor add whose offset carries a constant the memory operand
+// could hold:
+//
+//   (cincoffset X, (add Y, C))            -> (cincoffset (cincoffset X, Y), C)
+//   (cincoffset X, (shl (add Y, C), S))   -> (cincoffset (cincoffset X, (shl Y, S)), C << S)
+//
+// when C (or C << S) fits a load/store simm12 and every use of the result is a
+// memory operand's address. SelectAddrRegImm then folds the constant into the
+// access and the shared inner cursor serves the whole group: x[3k], x[3k+1],
+// x[3k+2] become one `cincoffset` and three loads at 0, 8 and 16, where the
+// generic combiner left one `add`/`shl` chain and one `cincoffset` per element
+// (DAGCombiner::visitPTRADD only folds a nested pointer add with a constant
+// inner offset, and this target has no reassociation of its own). The
+// reassociation is exact: `cincoffset` moves the cursor and checks nothing, so
+// an intermediate cursor outside the bounds is as harmless as the final one
+// (capstone_flu_unit.anvil:29-51 on the RTL, helper_cscincoffset in QEMU). The
+// offsets stay plain integers of the width they had, so C-31 (an integer
+// operand is an integer write) is untouched, and a constant base is left alone
+// because C-40 lowers a null-based address as an integer in selectCIncOffset.
+// Measured on 544.nab_r's mme34 (SPEC test input): the three-vector accesses
+// cost two extra `addi`, two `slli` and two `cincoffset` per pair, ~120M
+// instruction attempts.
+// A target opcode reaches PerformDAGCombine without a setTargetDAGCombine
+// registration (that bitmap indexes builtin opcodes only).
+static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
+  SDLoc DL(N);
+  EVT VT = N->getValueType(0);
+  SDValue Base = N->getOperand(0);
+  SDValue Off = N->getOperand(1);
+  EVT OffVT = Off.getValueType();
+
+  if (isa<ConstantSDNode>(Base) || Base.isUndef())
+    return SDValue();
+
+  // Every use of the result must be the address of a load or store.
+  for (SDUse &U : N->uses()) {
+    SDNode *User = U.getUser();
+    if (auto *LD = dyn_cast<LoadSDNode>(User)) {
+      if (LD->getBasePtr() != SDValue(N, 0))
+        return SDValue();
+    } else if (auto *ST = dyn_cast<StoreSDNode>(User)) {
+      if (ST->getBasePtr() != SDValue(N, 0) || ST->getValue() == SDValue(N, 0))
+        return SDValue();
+    } else {
+      return SDValue();
+    }
+  }
+
+  SDValue Y;
+  int64_t C;
+  if (Off.getOpcode() == ISD::ADD) {
+    auto *CN = dyn_cast<ConstantSDNode>(Off.getOperand(1));
+    if (!CN)
+      return SDValue();
+    C = CN->getSExtValue();
+    Y = Off.getOperand(0);
+  } else if (Off.getOpcode() == ISD::SHL &&
+             Off.getOperand(0).getOpcode() == ISD::ADD) {
+    auto *SN = dyn_cast<ConstantSDNode>(Off.getOperand(1));
+    auto *CN = dyn_cast<ConstantSDNode>(Off.getOperand(0).getOperand(1));
+    if (!SN || !CN || SN->getZExtValue() >= OffVT.getScalarSizeInBits())
+      return SDValue();
+    unsigned S = SN->getZExtValue();
+    APInt Shifted = CN->getAPIntValue().shl(S);
+    if (Shifted.ashr(S) != CN->getAPIntValue())
+      return SDValue();
+    C = Shifted.getSExtValue();
+    Y = DAG.getNode(ISD::SHL, DL, OffVT, Off.getOperand(0).getOperand(0),
+                    Off.getOperand(1));
+  } else {
+    return SDValue();
+  }
+  if (C == 0 || !isInt<12>(C))
+    return SDValue();
+
+  // The offset may be shared, but only by other cursor adds: each of those is
+  // a candidate for the same rewrite (one that fails the address test above
+  // keeps the old chain, a profitability gap, not a correctness one); any
+  // other reader would certainly keep the old chain alive beside the new.
+  if (!Off.hasOneUse()) {
+    for (SDUse &U : Off->uses()) {
+      SDNode *User = U.getUser();
+      if (User == N)
+        continue;
+      if (User->getOpcode() != CapstoneISD::CIncOffset ||
+          U.getOperandNo() != 1)
+        return SDValue();
+    }
+  }
+
+  SDValue Inner = DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Base, Y);
+  return DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Inner,
+                     DAG.getSignedConstant(C, DL, OffVT));
+}
+
 SDValue CapstoneTargetLowering::PerformDAGCombine(SDNode *N,
                                                DAGCombinerInfo &DCI) const {
   SelectionDAG &DAG = DCI.DAG;
@@ -21278,6 +21373,8 @@ SDValue CapstoneTargetLowering::PerformDAGCombine(SDNode *N,
   switch (N->getOpcode()) {
   default:
     break;
+  case CapstoneISD::CIncOffset:
+    return performCIncOffsetCombine(N, DAG);
   case ISD::ConstantFP: {
     // An fp128 constant is otherwise softened (during type legalization) into
     // an arbitrary 128-bit integer constant, which cannot be materialized as a
