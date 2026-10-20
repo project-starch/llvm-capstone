@@ -1,0 +1,5 @@
+# sanitized copy of the pass spec for board 2 (the run reads the original; sha256/16 5cb2e4c8ad546617)
+# board 2 (tree B), after its cpython lt0: the prebuilt pool/allocator arms, pb10 last (the S-23 arm on earlier modules)
+pb9|cases|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/ffmpeg/pool-repros --arm virtual-malloc --prebuilt <mnt-hdd>/capstone/t3-images-cw/prebuilt/b9/cases --prebuilt-controls <mnt-hdd>/capstone/t3-images-cw/prebuilt/b9/controls
+pb12|cases|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/memcached/allocator-repros --arm virtual-malloc --prebuilt <mnt-hdd>/capstone/t3-images-cw/prebuilt/b12/cases --prebuilt-controls <mnt-hdd>/capstone/t3-images-cw/prebuilt/b12/controls
+pb10|cases|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/ffmpeg/pool-repros --arm virtual-nested-pools --prebuilt <mnt-hdd>/capstone/t3-images-cw/prebuilt/b10/cases --prebuilt-controls <mnt-hdd>/capstone/t3-images-cw/prebuilt/b10/controls

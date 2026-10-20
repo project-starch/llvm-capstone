@@ -5024,3 +5024,68 @@ from the old reference, so a boot would buy no cell.
   - sq0: 33 of 33 in verdict, with Q-31's three cause DIFFs.
   - sq1q15: 32 of 33, the R-60 exception.
   - Every other cell equals the silicon-mimic reference. There is no pc=0 in any boot of the rebuilt images.
+
+### Amendment (2026-10-20 16:4x, before it started): cpython lt0 runs on board 2 only; board 1 takes the remaining arms
+
+The compiler lane released all 17 remaining references at 16:4x, and every plain-vs-mimic comparison reads 0 differing
+cells. Running cpython on both boards would hold both for about 4.5 h, and sql0 has already shown tree A equal to tree B
+cell for cell. So board 1's cpython chain was STOPPED while it was still waiting on wm0, before any check or boot.
+- cpython lt0 runs on board 2 only, as pre-registered.
+- Board 1 takes the sequence below.
+- The cross-tree overlap rests on sql0 (9 of 9 on each tree) plus the per-arm split.
+
+### The corpus pass, the remaining arms, pre-registered (2026-10-20 16:4x): one sequence per board
+
+**The references:** `<mnt-hdd>/capstone/t3-images-cw/ref-tB-mimic/<tag>`, kit qkit7-tB-mimic (switches as sq0's), SDK
+sdk.json 64bc9086452fc30a.
+- The plain qkit7-nf2 runs read 0 differing cells against every mimic reference (the compiler lane), so no silicon switch
+  moves a cell on QEMU.
+- Runner families, each named by its stamps and equal to wt-gate's files, checked here:
+  - run-virtual-cases.py 9b5e409c92e1fe66;
+  - pymalloc run-virtual.py fdc271ee3c107951;
+  - mmgr run-defects.py 543fc02a119c4459;
+  - c-repros run-arm.py 343ecbd79966a2c7.
+
+**The runner:** `tier3-pass-seq.sh` 0a0f9cb4a7f1f0fd: one cold boot per arm.
+- Each runner is checked against its own stamp, and an appvm arm's script and collected images against its reference.
+- Each boot is booked on the hub (refused on a 409) and scored by compare-pilot.py against its reference.
+- A boot that does not complete stops the sequence.
+- The specs live outside the repo, because their paths name the scratch disk. Sanitized copies are
+  `records/pass-spec-board{1,2}.txt`.
+- **Its stubbed dry run** (`dryrun-pass-seq.txt`) covered all 14 board-1 arms (DONE), a planted flip on fph (24 of 25,
+  rc 1), a boot that does not complete (the sequence stops), hold, busy, a 409, and a runner that is not its stamp's.
+  The first flip attempt aimed at fca, whose reference holds no CAUGHT, so it could not fire. It was re-aimed.
+
+**Board 1** (tree A, spec 841d24cbae171832), after wm0: fph, fpt, fca, fcs, fso, mph, mpt, wph, wpt, pgc, pgm0, pgm1, pym0, pym1.
+**Board 2** (tree B, spec 5cb2e4c8ad546617), after its cpython lt0: pb9, pb12, pb10.
+
+| arm | reference | | arm | reference |
+|---|---|---|---|---|
+| fph | CAUGHT 25 | | pgc | CAUGHT 5 |
+| fpt | CAUGHT 13 | | pgm0 | MISSED 5 |
+| fca | MISSED 13 | | pgm1 | CAUGHT 5 |
+| fcs | CAUGHT 13 | | pym0 | MISSED 20 |
+| fso | MISSED 9 | | pym1 | CAUGHT 20 |
+| mph | CAUGHT 9 | | pb9 | MISSED 4 |
+| mpt | CAUGHT 3 | | pb12 | MISSED 8, CAUGHT 1 |
+| wph | CAUGHT 12 | | pb10 | CAUGHT 4 |
+| wpt | CAUGHT 10 | | | |
+
+**Predictions, read against the open entries for these bitstreams first:**
+- Every cell equals its reference IN VERDICT.
+- **Q-31:** where silicon reads an address exception (cause 4, 6 or 13) and the reference reads 24, it is graded in verdict
+  and named Q-31.
+- **R-60:** where silicon reads MISSED and the reference CAUGHT on an out-of-window access, it is reported as R-60's shape,
+  not graded as a finding, until its access is read.
+- Otherwise every field is equal. On their last silicon runs (the vp2 bitstream bf3db3175, modules d71f207a/3005ed52)
+  these arms read their predictions in every field, so a field DIFF other than those two shapes is new.
+- No pc=0; DRT1 0, FRTY 0, no Oops; the node-floor-2 banner in every boot.
+- **pb10:** FRTY 0. Its CSRUNV+4 refusals went to 0 under the srevroot-zero write, which 54d8a3af carries.
+
+**Not run:** sq1, wm1 and pb13. Each reads control-failed on both kits, so a boot buys no cell. pb13 waits on the Sublet
+repair.
+- **wm1 is replaced by wm1q15** (the compiler lane, 16:5x), the REPAIRED wmem nested-pools arm. wm1 was built from
+  wt-gate's pre-repair wmem patch.
+  - wm1q15's images were built from dev d0f0f4b41ae6 (which holds the repair d75137deed6e) on the nomovc-cw SDK.
+  - Its reference reads CAUGHT 22, NO-READING 1 on both kits, the shape of d75137deed6e's own tree-B reading.
+  - Its runner and arm script are dev's, not wt-gate's, so it is pre-registered separately, after these sequences.
