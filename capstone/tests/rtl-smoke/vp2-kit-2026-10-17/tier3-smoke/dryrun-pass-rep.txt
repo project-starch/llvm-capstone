@@ -1,0 +1,32 @@
+# tier3-pass-rep.sh stubbed dry run (2026-10-20 20:21), board 2's path. REP_RUN writes each reference bundle and a driver-form board.txt
+# (for the flip branch, pgm1q15's first CAUGHT made MISSED; for the wedge, pb13q15 ends at b0-hello), REP_BUSY, REP_ROOT, REP_BOOK stubbed.
+== branch all
+REP START 20:21:35 board 2
+PASS pb13q15 BEGIN 20:21:35 board 2 booking 99
+PASS pb13q15 END 20:21:35 rc=0 :: --- stub pb13q15
+PASS pb13q15 COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS pb13q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS pgm1q15 BEGIN 20:21:35 board 2 booking 99
+PASS pgm1q15 END 20:21:35 rc=0 :: --- stub pgm1q15
+PASS pgm1q15 COMPARE vs reference rc=1 :: 4 of 5 cells the same
+PASS pgm1q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS wm1q15 BEGIN 20:21:35 board 2 booking 99
+PASS wm1q15 END 20:21:35 rc=0 :: --- stub wm1q15
+PASS wm1q15 COMPARE vs reference rc=0 :: 23 of 23 cells the same
+PASS wm1q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS rep2 DONE 20:21:35
+== branch wedge
+REP START 20:21:36 board 2
+PASS pb13q15 BEGIN 20:21:36 board 2 booking 99
+PASS pb13q15 END 20:21:36 rc=0 :: --- stub pb13q15
+PASS pb13q15 COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS pb13q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS STOP after pb13q15: the boot did not complete (no vbatch END rc=0 in its transcript)
+== branch hold
+REP HOLD: the previous arm did not end DONE (CPY STOP: x)
+== branch busy
+REP START 20:21:36 board 2
+REP STOP: board 2 is busy
+== branch 409
+REP START 20:21:37 board 2
+REP STOP: the hub refused the booking (409): BOOK FAILED 409

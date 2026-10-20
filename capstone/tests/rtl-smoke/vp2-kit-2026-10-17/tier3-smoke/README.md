@@ -5205,3 +5205,27 @@ was STOPPED while still in its wait, before any check or boot: its out is empty 
 - **pb10 on tree A:** on earlier modules it panicked with S-23's data face there. 54d8a3af removes both faces on tree A
   (sql0-nmA: FRTY 0, DRT1 0).
 - They are run-virtual-cases arms, so both the old and the new completion test apply.
+
+### The corpus pass's repaired arms, pre-registered (2026-10-20 20:2x): pb13q15, pgm1q15, wm1q15 on board 2 after its cpython lt0
+
+These replace pb13 and wm1, whose references read control-failed because their images were built from the PRE-repair
+patches. pgm1q15 is pgm1 rebuilt in the repair tree.
+- **Their references and runners:**
+  - pb13q15 and pgm1q15: the compiler lane's Q-15 gate (lane q15-placement-cw, pre-registered at e02dd7f9908f, read at
+    e2b26ea2c1e4), on qkit7-tB-mimic, from tree d893ec627057.
+    - Here they run from my own worktree /tmp/capstone/wt-q15cw-pass, detached at d893ec627057.
+    - Its runners equal the compiler lane's: run-virtual-cases.py 9b5e409c92e1fe66, mmgr run-defects.py 543fc02a119c4459.
+    - d893ec627057..e2b26ea2c1e4 changes two documents only.
+  - wm1q15: ref-tB-mimic/wm1q15, dev d0f0f4b41ae6's wmem run-defects.py d05e9077541ef3f1 and tier3-appvm-arm.sh
+    666d920eedef445b, from /tmp/capstone/wt-cpy-pass. Its collected images (26) are pinned.
+- **The runner:** `tier3-pass-rep.sh` 1086fbe9aad236be, on kit bkit7-rev2xBDN2.
+  - Each worktree must be clean at its commit, and each runner equal to its hash.
+  - Completion is the driver's vbatch END line; booked on the hub; refused on a 409.
+  - **Its dry run** (`dryrun-pass-rep.txt`) covered DONE, a planted flip on pgm1q15 (4 of 5, rc 1), a wedge that stops
+    the run, hold, busy, and a 409.
+- **It starts on board 2's "CPY nm DONE"** and holds on a cpython STOP or HOLD.
+- **Predictions (each cell equal to its reference in every field, Q-31 and R-60 shapes named as before):**
+  - pb13q15: CAUGHT 7, NO-READING 2 (05, and 08 pad-masked);
+  - pgm1q15: CAUGHT 5;
+  - wm1q15: CAUGHT 22, NO-READING 1 (22).
+  - cause=29 0, the Q-15 refusal gone. pc=0, DRT1, FRTY, INJS and INJL 0.
