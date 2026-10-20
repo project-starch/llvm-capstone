@@ -56,6 +56,21 @@ recorded at ADOPT time from the prevailing flag, which is an approximation with 
 working at generation >= 1"*. The fix must therefore **carry the namespace in the broadcast** and compare it,
 not widen the existing compare.
 
+**WRITTEN 2026-10-20 to the ruling above, and smaller than this document feared.** `pmp_data_if` is
+instantiated ONCE, inside `load_store_unit.sv:630`, so the namespace bit goes ex_stage -> LSU -> pmp and needs
+**no new top-level wire**. Three changes: `ex_stage.sv` gains `revnode_invalidation_vctx_o = vctx_rev_q` beside
+the tap at `:1689` (the HELD flag, which is the same one the tap's own `vp_hdr_wr` qualifier uses at `:1469`,
+so the bit cannot disagree with the write it describes); the LSU passes it straight through to `i_pmp_data_if`
+and uses it nowhere else; and the clear at `pmp_data_if.sv:96` gains `&& !revnode_invalidation_vctx_i`. The
+consumer enumeration behind "only the CPMP trackers" is exhaustive and was checked, not assumed: the whole core
+has three consumers of the broadcast -- the CPMP tracker (`pmp_data_if.sv:96-107`), the LSU revocation cache
+(`load_store_unit.sv:1301`, `:1416`, `:1437`) and the PC tracker (`commit_stage.sv:408-412`) -- and the latter
+two are deliberately untouched. **The synthesis risk is the lowest available for this change**: `vctx_rev_q` is
+a FLOP output, so no new combinational term enters the CPMP cone, and no UNOPTFLAT stem names
+`cpmp`/`pmp_data_if`/`revnode_valid` (checked against the gate's 40 stems). The standing rule about feeding a
+new signal into a cone that already carries a loop therefore does not bite here -- but it is still an edit
+crossing two module boundaries into the CPMP path, so it goes to synthesis before it goes anywhere else.
+
 **Acceptance readings, pre-registered.**
 1. `cap-fetchdeny` firing arm: **still 1 cause-1 fault** at the following instruction. A same-namespace
    collision is a legitimate revocation and must keep denying — a fix that silences this arm has broken
