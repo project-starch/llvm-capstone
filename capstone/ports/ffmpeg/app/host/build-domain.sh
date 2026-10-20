@@ -199,11 +199,15 @@ ff_libdirs() {
   out+=(libavutil)
   printf '%s\n' "${out[*]}"
 }
+# configure compiles through capstone-cc, whose SDK profile fixes the target and refuses
+# `-target` (since 9806524b); the bare-clang compiles below still need it.
+CC_FLAGS=("${FLAGS[@]:2}")
+[[ ${FLAGS[0]} == -target ]] || { echo "FLAGS no longer starts with -target: ${FLAGS[*]:0:2}" >&2; exit 1; }
 if [ ! -f "$XB/libavformat/libavformat.a" ] || [ "$(cat "$XB/.config-key" 2>/dev/null)" != "$CONFIG_KEY" ]; then
   rm -rf "$XB"; mkdir -p "$XB"
   ( cd "$XB" && "${CFGENV[@]}" "$SRC/configure" --enable-cross-compile --cc="$SDK/capstone-cc" --ld="$SDK/capstone-cc" \
       --arch=riscv64 --target-os=none \
-      --extra-cflags="${FLAGS[*]}${FFEXTRA[*]:+ ${FFEXTRA[*]}}" --extra-ldflags="" \
+      --extra-cflags="${CC_FLAGS[*]}${FFEXTRA[*]:+ ${FFEXTRA[*]}}" --extra-ldflags="" \
       --extra-libs="" "${CONFIGURE_OPTS[@]}" > configure.log 2>&1 ) \
     || { echo "FFmpeg configure failed; see $XB/configure.log and $XB/ffbuild/config.log" >&2; exit 1; }
   # av_malloc -> plain malloc: with asm off ALIGN is 16 (libavutil/mem.c:65), exactly
