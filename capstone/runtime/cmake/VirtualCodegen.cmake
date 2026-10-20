@@ -1,6 +1,6 @@
 # Code generation for virtual C: every application, its runtime and builtins.
 # capstone-cc reads the same list from sdk.json, and musl's build
-# (ports/musl-capstone/survey-musl-capstone.py --virtual) passes the same flags.
+# (ports/musl-capstone/survey-musl-capstone.py --profile virtual) passes the same flags.
 # Virtual C runs the F and D extensions in hardware; QEMU's supervisor keeps
 # each context's f registers and fcsr. The calling convention stays lp64:
 # floating-point arguments and results travel in integer registers, as with

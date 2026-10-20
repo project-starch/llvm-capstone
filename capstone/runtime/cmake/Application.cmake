@@ -1,4 +1,7 @@
 include_guard(GLOBAL)
+# The profile every application of the project is built for: virtual unless
+# the project or its cache says OFF (the physical profile).
+option(CAPSTONE_APPLICATION_VIRTUAL "Use the virtual C runtime adapter (OFF: the physical profile)" ON)
 
 # A normal main(argc, argv), linked against the shared musl application ABI:
 # the delegated runtime (ABI v2), the only one. The caller selects the existing

@@ -18,7 +18,7 @@ ROOT=/tmp/capstone/step-one-ecall; S=$K/vm-$arm
 python3 "$REPO/capstone/bug-corpora/tools/check-sdk-builtins.py" "${MRUBY_SDK:-$K/share/mruby-$arm.dom}" || exit 78
 vm() { python3 -m capstone_vm --state $S "$@"; }
 vm down > /dev/null 2>&1; rm -rf $S
-vm up --qemu $ROOT/qemu-build/qemu-system-riscv64 --kernel /tmp/capstone/delegation-binfmt-linux/arch/riscv/boot/Image \
+vm up --profile physical --qemu $ROOT/qemu-build/qemu-system-riscv64 --kernel /tmp/capstone/delegation-binfmt-linux/arch/riscv/boot/Image \
   --firmware $ROOT/new2/opensbi/platform/generic/firmware/fw_jump.elf --rootfs /tmp/capstone/cheap/rootfs.ext2 --share $K/share \
   --module /tmp/capstone/launch-cost/module/module/capstone.ko --launcher /tmp/capstone/v0-removal-stack/guest/capstone-exec \
   --cma-mib 1024 --process-cache-mib 768 > $OUT/up-$arm.log 2>&1 || { echo "up FAILED"; tail -5 $OUT/up-$arm.log; exit 1; }

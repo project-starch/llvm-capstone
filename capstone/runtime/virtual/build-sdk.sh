@@ -16,7 +16,7 @@ mkdir -p "$out/libc"
 mkdir -p "$out/libc/obj"
 rm -f "$out/libc/obj/"*.o "$out/libc/libc-capstone-virtual.a"
 python3 "$here/../../ports/musl-capstone/survey-musl-capstone.py" "$musl" \
-    --virtual --objects "$out/libc/obj" --list-failures --jobs "${JOBS:-16}"
+    --profile virtual --objects "$out/libc/obj" --list-failures --jobs "${JOBS:-16}"
 "$CAPSTONE_LLVM_BIN/llvm-ar" rcs "$out/libc/libc-capstone-virtual.a" "$out/libc/obj/"*.o
 bash "$here/../../ports/common/application/build-sdk.sh" "$out/sdk" "$musl" \
     "$out/libc/libc-capstone-virtual.a" -DCAPSTONE_APPLICATION_VIRTUAL=ON \

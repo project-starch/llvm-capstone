@@ -90,7 +90,8 @@ bash host/run-qemu.sh all    # M1..M5 + the flipped-input control in the selecte
 `CAPSTONE_LLVM_BUILD_DIR=<main clone>/llvm/cmake-build-debug` and
 `CAPSTONE_BUILDROOT_DIR=<main clone>/capstone/caplifive-buildroot`.
 
-The recipe builds musl privately. Select the VM with `CAPSTONE_VM_STATE`;
+The recipe builds musl privately, for `CAPSTONE_APPLICATION_PROFILE` (virtual unless set to
+`physical`). Select the VM with `CAPSTONE_VM_STATE`; it must run the same profile, and
 platform binaries and memory settings belong to that VM's configuration.
 
 All work products go under `$CAPSTONE_TMP_ROOT/ffmpeg-app/` (`FFAPP_WORK`). The tunables are

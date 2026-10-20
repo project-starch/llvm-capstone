@@ -14,8 +14,9 @@
 # differently from every emulator run so far.
 #
 # VM_UP is a script run as `bash "$VM_UP" <state-dir> <share-dir>` with the switch exported: it
-# brings up the lane's guest (python3 -m capstone_vm --state <state-dir> up --share <share-dir>
-# with its qemu, kernel, firmware, rootfs and overrides) and exits 0. capstone_vm records the
+# brings up the lane's guest (python3 -m capstone_vm --state <state-dir> up --profile physical
+# --share <share-dir> with its qemu, kernel, firmware, rootfs and overrides: the lane compares the
+# physical profile with silicon, and capstone_vm's default is virtual) and exits 0. capstone_vm records the
 # switch with the guest. This script stops the guest again with capstone_vm down: a guest holds
 # the QEMU lock for as long as it runs, so it is up only between one arm's nightly and the next.
 # CAPSTONE_SDK is the application SDK the delegated images are built with. libc-test must have

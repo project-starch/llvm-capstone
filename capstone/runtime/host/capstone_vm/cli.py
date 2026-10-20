@@ -314,9 +314,10 @@ def start(args: argparse.Namespace, state: Path) -> int:
                 files[key] = require_file(getattr(args, key))
         if "launcher" in files and "job_helper" not in files:
             files["job_helper"] = require_file(files["launcher"].with_name("capstone-job"))
-        profile = getattr(args, "profile", "physical")
+        profile = getattr(args, "profile", "virtual")
         if profile == "virtual" and not {"launcher", "module"} <= files.keys():
-            raise VMError("Virtual profile requires its launcher and module")
+            raise VMError("Virtual profile requires its launcher and module "
+                          "(--launcher, --module; --profile physical for the physical profile)")
         # Option (iii): the local-mallocng virtual ABI runs on the default profile. The flag stays
         # so a suite can be run both ways as a two-sided control (runtime/virtual/README.md).
         exact_bounds = bool(getattr(args, "exact_bounds", False))
@@ -510,7 +511,7 @@ def main(argv: list[str] | None = None) -> int:
     up = sub.add_parser("up", help="Boot and provision one persistent guest")
     for option in ("qemu", "kernel", "firmware", "rootfs", "share"):
         up.add_argument("--" + option, type=Path, required=True)
-    up.add_argument("--profile", choices=("physical", "virtual"), default="physical")
+    up.add_argument("--profile", choices=("physical", "virtual"), default="virtual")
     up.add_argument("--exact-bounds", action="store_true",
                     help="Virtual profile: QEMU's exact-bounds mode. Not required; a two-sided control.")
     for option in ("launcher", "ssh-server", "module", "job-helper"):
@@ -557,6 +558,7 @@ def main(argv: list[str] | None = None) -> int:
                         raise VMError("VM did not stop after QMP quit")
                     time.sleep(0.05)
             settings = {key: Path(value["path"]) for key, value in config["files"].items()}
+            # A record without "profile" predates the field: those VMs were all physical.
             settings.update(share=Path(config["share"]), memory=config["memory"],
                             cma_mib=config.get("cma_mib", 512),
                             process_cache_mib=config.get("process_cache_mib", 384),

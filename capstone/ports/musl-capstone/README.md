@@ -412,12 +412,20 @@ bash capstone/ports/common/application/build-sdk.sh <SDK> <musl tree> <libc-caps
 python3 capstone/ports/musl-capstone/libc-test/run-libc-test-delegated.py ... --tests inet_pton mntent
 ```
 
-Exit codes: `0` pass, `1` regression against the pinned `BASELINE_OK`, `2` the
+All four follow the virtual profile by default: the survey takes
+`--profile physical`, and `build-musl-capstone.sh` and `build-sdk.sh` take
+`CAPSTONE_APPLICATION_PROFILE=physical`. The archive's name does not record its
+profile; an SDK must be built from an archive of its own profile, and
+`capstone-cc` refuses a link whose objects disagree with the SDK's FP profile.
+
+Exit codes: `0` pass, `1` regression against the expected count (all 1,361 on
+the virtual profile, the pinned `BASELINE_OK` on the physical one), `2` the
 harness could not measure (unprepared tree, no compiler, empty file list, or a
 flipped control).
 
 **The survey has two positive controls**, because a survey that cannot fail is
-not evidence: `src/stdlib/abs.c` must compile and `src/string/strlen.c` must
-fail. If either flips, the script prints ERROR instead of a number. When the
+not evidence: `src/stdlib/abs.c` must compile, and `src/string/strlen.c` must
+fail on the physical profile (on the virtual one every file compiles, so it must
+compile there). If either flips, the script prints ERROR instead of a number. When the
 string routines are replaced, the second control has to be retired on purpose —
 that is the intent, not an accident to work around.
