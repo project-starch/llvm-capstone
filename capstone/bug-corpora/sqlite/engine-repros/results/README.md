@@ -11,6 +11,30 @@ in this corpus.
 | `sublet` | **31** | 2 | 24/25 | 7/8 |
 | `cheribsd-revocation` | **5** | 28 | 5/25 | 0/8 |
 
+> **CORRECTION (2026-10-20): case 24's CAUGHT in verdicts.tsv on the memsys5 malloc arms is an incidental NULL
+> dereference, not a capability detection.** The affected rows are `virtual-malloc` (line 82) and `vp2-malloc` (line 84,
+> the board lane's silicon fold). Both read CAUGHT, cause 24 in sqlite3OpenTable, credited "by function" because host ASan
+> reports the defect there.
+> - **Method:** an LDC trace (capstone-qemu cap-window-counter 043e0dbf23, `CAPSTONE_TRACE_LDC`, kit qkit7-trace = nf2's
+>   files) of the old image 7c8bfc885ea3914a, read by the board lane.
+> - **The trace:** in sqlite3PrimaryKeyIndex the stale Table capability loads TAGGED (va 0x55034, with 1 MiB bounds, not the
+>   Table's own), and pTab->pIndex, at that pointer + 0x20, loads UNTAGGED 0 (va 0x55038). The NULL pPk then faults at
+>   sqlite3OpenTable+648 (`lw 0xb0(a3)`).
+> - So the use-after-free itself is not detected: this arm does not revoke, and the stale capability is valid. The fault
+>   came from what the freed memory happened to hold.
+> - The image rebuilt without `+movc-keeps-integer-source` has the same instructions and different frame sizes. It reads
+>   MISSED on QEMU and on silicon (2026-10-20), and its trace shows no load in sqlite3PrimaryKeyIndex.
+> - **Not affected:**
+>   - the headline matrix, whose spatial row already scores case 24 not-detected;
+>   - the nested-pools row (cause 25, revocation).
+> - **Not assessed:** matrix.tsv's sublet detection of case 24, a kernel-pc halt with cause 24 under an allocator that
+>   does revoke.
+> - The tsv rows are generated (derive-verdicts.py, fold-silicon.py), so they are corrected by regeneration once the oracle
+>   classifies near-zero untagged faults, not by hand.
+> - A census of every pass reference (the compiler lane, null-census.py) finds 6 other CAUGHT cells whose faulting address
+>   is below 0x1000: sqlite 02, 05 and 19, sq1q15 02, cpython lt0 10 and 15. They are CANDIDATES only, each to be read the
+>   same way.
+
 All 33 are clients of **memsys5**, SQLite's arena allocator, so all 33 are
 nested by the allocator that serves them. That is the point of the comparison:
 the three arms run the same defects from the same sources with the same
