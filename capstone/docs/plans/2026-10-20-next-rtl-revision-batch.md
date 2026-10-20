@@ -89,7 +89,16 @@ crossing two module boundaries into the CPMP path, so it goes to synthesis befor
    acceptance instead. Its control (one CAPNODE operand apart, faults 0) must stay at 0, and the `-DFS_IDX`
    variant must keep reading the same four indices (physical 3 and 3, physical 10, next-unused 7) -- if the fix
    changes WHICH indices are allocated, the arm has stopped being a one-variable pair.
-4. **The generation case, which is the one most likely to be forgotten**: an arm that revokes a node at a
+4. **pb10 WITHOUT the srevroot-zero module must read FRTY 0** (the nop module `2a8f85f7`, or any module
+   lacking the zeroing write). The semantics owner parked pb10's CSRUNV+4 anomaly on 2026-10-20 -- unexplained,
+   covered by srz on dev -- with item (1) as the fix for the operative defect whatever the anomaly turns out to
+   be. **This acceptance costs no extra boot**, and it is the anomaly's own test: a nonzero reading there means
+   the anomaly is a SECOND defect and comes back open. The reason it is parked rather than pursued: the
+   timer/SBI explanation predicts the WRONG DIRECTION. Between calls the nop and csrrc variants leave
+   srevroot = table at S, so `vctx_table_o` is 1 and every S->M trap is a 1 -> 0 edge re-arming all slots,
+   while srz leaves srevroot = 0 so its traps are 0 -> 0 and re-arm nothing -- interrupt traps between calls
+   should therefore make nop/csrrc refuse LESS than srz, and the field reads the reverse. No board test for it.
+5. **The generation case, which is the one most likely to be forgotten**: an arm that revokes a node at a
    RECYCLED index, whose generation has been bumped to ≥ 1 by a physical pop (`capstone_rev_node.anvil:289-307`),
    must **still deny**. That is precisely what the index-only compare was chosen to preserve, so it is the
    regression this fix can most easily cause.
