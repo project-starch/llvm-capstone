@@ -240,8 +240,18 @@ outside its representable window (an in-register transit that returns before any
 compressed save is a separate matter: the first is harmless on silicon, the second refuses with 29, the third loses
 bounds on QEMU's compact profile); (2) a corpus cell whose defect overruns far past its object may read MISSED on vp2
 where QEMU reads CAUGHT, and such a difference is this deviation, not a model error; (3) the RTL fix belongs with the
-ISA's intent: clear the tag (or refuse) when CINCOFFSET or SCC moves a cursor outside the representable window, as
-CHERI does, rather than widen the LSU check.
+ISA's intent, rather than a widened LSU check. RULED 2026-10-20 (semantics owner): CINCOFFSET and SCC CLEAR THE TAG
+of their result when its cursor is not representable, and do not trap; the fault then arises at any later use as a
+capability (an untagged operand), never at the arithmetic. Representable is defined by the decode itself: the result's
+cursor c is representable iff decompress_bounds(the source's compressed bounds, c) returns exactly the source's
+[start, end) (ariane_pkg.sv's decompress, the function the LSU checks against, is normative; QEMU's compact profile must
+implement the same predicate on the same inputs, and both are cross-checked by enumeration at the window edges). Why
+clear rather than refuse: pointer arithmetic that is never dereferenced (a loop's end pointer, a hoisted offset) stays
+total, as in CHERI, while every dereference of such a pointer faults; refusing would trap code that computes but never
+uses an out-of-window value. Consequence: a cursor that leaves its window and comes back has LOST its tag, so a transit
+out of the window and back (undefined in C beyond one past the end, and the pattern removed from the runtime at
+232d13b220cc) is no longer tolerated; the compiler must not create one (rule 1 is therefore strengthened, once this
+fix is in silicon, from "never dereference" to "never leave the window").
 
 **CPMP entries are physical (ruled 2026-10-20, semantics owner; S-23, R-60's batch item 1).** A CPMP entry holds only
 a capability of the PHYSICAL namespace. Every supported producer is the monitor's M-mode region path (swap_cpmp, the
