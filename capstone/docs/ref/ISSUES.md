@@ -3900,6 +3900,42 @@ RETURN" rule applied to privilege rather than to control flow.
 
 ### C-32 — `OPEN — LIVE ON SILICON until Q-04 (b) lands in the RTL: the lead decided Q-04 option 1 on 2026-10-14 (plan 2026-10-14-movc-untagged-source.md); capstone-qemu #27 fixes the virtual profile; no RTL commit exists yet (audit 2026-10-16). History: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (2026-09-15), so every optimised-image board number of that port is a lookaside-OFF run; DESIGN A merged 2026-09-15 (46c53b7b6ae2) and measured not to fix this site; reproducer in capstone/tests/c32-sinkfold-repro/`
 
+> **2026-10-20: C-32 IS THE CAUSE OF THE vp2 TIER 3 SILICON-ONLY STOPS, and the 2026-10-14 "resolved for the virtual
+> profile" below holds on QEMU only, not on vp2 silicon.**
+> - Every corpus image is built with `+movc-keeps-integer-source` (sdk.json; checked in t3-freeze-nb, the cpython and
+>   the postgres image SDKs), which QEMU honours (#27).
+> - The resident bitstreams null an untagged MOVC source: capstone_flu_unit.anvil func MOVC, lines 6-26, byte-identical
+>   in 8522d72fe and 8de3c48cf. With rd != rs1 only a CAP_TYPE_NONLIN source is kept, and otherwise rs1 becomes cnull
+>   while rd receives the value. There is no Q-04 (b) commit in capstone-ariane.
+> - **cpython:** the pc=0 in steps 17-control, 23 and 23-control is one site, `movc s2, a3; jalr a3` at VA
+>   0x331c0c/0x331c10 in _PyCfg_OptimizedCfgToInstructionSequence. The board's FREG dump (cpyp-DF, board lane
+>   a3bd6485b755) reads a3 = 0, s2 = PyMem_Calloc's address (VA 0x157e90, untagged), a0 = 1, a1 = 0x70, and
+>   x1 = VA 0x331c14 in all three.
+> - **postgres sql0:** cells 03 and 07 are the same class.
+>   - 03: `CREATE EXTENSION ltree` gives a duplicate key in pg_operator_oprname_l_r_n_index, (>=, 12777, 12777, 2200).
+>   - 07: `CREATE EXTENSION pg_trgm` gives `operator does not exist: text % text`, then pc=0.
+>   - Identical in sql0-drt2 and sql0-nf2A on tree A.
+> - **QEMU reproduces them** with `CAPSTONE_MOVC_NULL_SCALAR=1`, the kits' own switch that makes MOVC follow the RTL
+>   (compiler lane, cpy-fr1-mn and sql-diag-mn; checked here: the switch's one-shot line once per run).
+>   - cpython: 3 pc=0 with x1 at image offset 0x321c14, the board's.
+>   - postgres: 3 duplicate-key and 2 missing-operator lines, as on the board. QEMU shows 2 pc=0 lines where the board
+>     showed 1, a difference recorded, not explained.
+>   - The DIAG-BTU hint shows the existing tuple really is equal (an earlier genuine insert), so CREATE EXTENSION's logic
+>     ran twice; it is not a miscompare.
+>   - Without the switch, every QEMU run passes these points.
+> - **Audit:** a claim-auditor (the compiler lane's) found no other RTL path that keeps an integer MOVC source. The
+>   generated capstone_flu_unit SystemVerilog was not read.
+> - **Kit-fidelity gap:** the 2026-10-15 corpus-on-FPGA plan prescribes `CAPSTONE_MOVC_NULL_SCALAR=1` for the
+>   silicon-mimic QEMU, but the qkit7-* wrappers and the Tier 3 drivers never set it (checked: no MOVC_NULL in the
+>   qkit7-rev2, -nf2 or -fr1 wrappers). So every vp2 kit prediction assumed a kept integer source, which silicon does not
+>   keep. A board cell that differs from its kit prediction should be checked against this first.
+> - **Remedies:**
+>   - (a) set the switch in the kits and re-predict, which is a kit change and a re-pin;
+>   - (b) build board images without `+movc-keeps-integer-source`, so the compiler's CapstoneLiveSourceCopy rewrites
+>     live-source copies and silicon and QEMU agree whatever the RTL does. That touches the lead's Q-04 option-1
+>     decision;
+>   - (c) Q-04 (b) in the RTL.
+
 > **2026-10-14: RESOLVED FOR THE VIRTUAL PROFILE by the Q-04 decision; still open for the physical
 > profile until Q-04 (b) is on a bitstream.** The virtual-profile SDK now compiles every application,
 > the runtime, the builtins and musl with `+movc-keeps-integer-source`, so a live-source copy is
