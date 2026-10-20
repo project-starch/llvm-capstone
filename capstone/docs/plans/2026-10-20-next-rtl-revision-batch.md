@@ -324,7 +324,7 @@ before**; that run also becomes this lane's baseline, committed in place of the 
 hash in its name and the run's date in its header. Read the cycle count beside every verdict: the testharness
 prints SUCCESS at the cycle limit.
 
-## An OPEN SEMANTICS QUESTION found while scoping item 6: CSNODE is admitted at S, not only at M
+## RULED, not open: CSNODE is admitted at S by design (rule 3b)
 
 Recorded here because it outlives the batch and because the verified half is cheap to state. **It is not a
 defect claim**: the implementation matches its own stated intent, and what conflicts is the premise that CSNODE
@@ -350,12 +350,27 @@ caller-built table passes the allocator's header checks, and whether the support
 non-zero srevroot -- though **R-58 is exactly a defect that leaves the caller holding one it did not set**,
 which is how the measured instance above arose.
 
-**The arm that would settle it**, to be run before any claim enters the registry: at S with a caller-written
-srevroot, derive a child, revoke it, confirm a load through the stale copy FAULTS (the control, without which
-the arm proves nothing), then CSNODE the stale copy and retry the load. The decoder's own comment states the S
-admission is deliberate -- "outside a context and never from U" -- so the question for the semantics owner and
-the lead is whether S should be able to issue CSNODE at all, given the operation it emulates is an M-mode
-monitor one.
+**RULED 2026-10-20 by the semantics owner (isa.md rule 3b): BY DESIGN, not a defect, and NO exploit arm is
+needed.** The threat model is that S is trusted. S already holds CSMINT, a trusted root-creation operation that
+mints ANY capability -- any bounds, any rights -- from a descriptor onto fresh nodes, so re-noding one through
+CSNODE gives S strictly less than it already has. Revocation here protects against U contexts, never against
+the trusted kernel. The arm budget goes to item 6's retire control instead.
+
+**Both legs of that ruling check out, and I verified them rather than accepting them** -- the second because it
+is the one that keeps the design safe. Q-23 (CLOSED 2026-10-18) rules that **"trusted S performs NO capability
+memory access"**: an integer-based LDC or STC from S reads 24 on the RTL and, after QEMU was tightened to it, on
+both; the module gets what it needs through the CSMINT descriptor instead, and that entry names "CSNODE inside
+the window (any tagged rs1)" as part of the supported emulation sequence -- so the unvalidated rs1 is
+documented and deliberate, not an oversight. Adding the two paths I checked myself: the escape restores the
+CALLER's own saved registers, not the context's, and a plain `ld` of a frame slot yields the raw word WITHOUT
+its tag, so neither hands S a context's capability.
+
+**The two conditions the rule depends on, so a later change cannot break them silently:**
+1. **U and a running supervised context must never decode CSNODE.** The predicate quoted above excludes both,
+   and items (1) and (6) must keep that true -- neither touches the decoder, which is the easy way to keep it.
+2. **No flow may hand S a context's capability in a register.** Backed by Q-23 plus the two paths above.
+If either changes, this reopens. My R-58 observation is consistent with the ruling rather than against it: R-58
+leaves S holding a non-zero srevroot, which is a CSR value, not a capability in a register.
 
 ## A PRECONDITION on every image booted on this bitstream
 
