@@ -5357,3 +5357,95 @@ null plus compact rounding, both identical on the two trees).
     look the same in the boot log.
   - It is a bare M-mode arm, run on silicon the way the S-29 sv-* arms were (images and vectors committed before the
     boot).
+
+### The tree-B overlap of the tree-A arms, pre-registered (2026-10-20 23:2x): board 2, 18 arms
+
+Board 2 is idle until morning, and 18 arms read only on tree A: board1.spec's 14, board2.spec's 3 (moved to board 1 at
+20:2x), and wm0. Running them on tree B turns "tree A = tree B" from two overlapping arms (sql0, cpython lt0 pending)
+into the whole corpus but q15/sq0, which ran split across both.
+- **The runner:** `tier3-pass-seq2.sh` 632830e218434065 on board 2 (kit bkit7-rev2xBDN2), spec overlapB 4a247c5890282d21
+  (`records/pass-spec-overlapB.txt`): the same lines as there, plus wm0's appvm line, its runner and arm script pinned
+  to its stamp.
+- **Its stubbed dry run** (`dryrun-pass-overlapB.txt`) passed every line's stamp and runner checks (18 arms, DONE).
+- **Predictions:** every cell equals its reference in every field, i.e. equals tree A's reading of 2026-10-20: 179 + 23
+  = 202 of 202. A difference from tree A would be the first tree difference in the corpus, and would be graded against
+  the reference first.
+  - Any Q-31 cause shape is named. pc=0, DRT1, FRTY, INJS and INJL 0; the vbatch END line in every boot.
+
+### cpython lt0 on board 1, result (2026-10-20 20:47 - 10-21 02:54, tree A): identical to tree B, 32 of 32 cells
+
+`records/cpy-nm-b1.result-lines.txt`. UNGATED.
+- The boot completed (54/54 steps), and the read was recovered past the wrapper's timeout exactly as board 2's.
+- The judge reads 31 of 32 inside, with case 01 the same Q-31 cause (4, against the reference's 24). pc=0, DRT1, FRTY,
+  INJS and INJL are 0.
+- **compare-pilot, tree B's bundle against tree A's: 32 of 32 cells the same, rc 0.** cpython is the second arm (after
+  sql0) read on both trees, and the trees agree in every field.
+
+### The sqlite groups on their other tree, pre-registered (2026-10-21 02:5x): full two-tree coverage
+
+sq0 and sq1q15 ran split, groups a/c/e on tree A and b/d/f on tree B. Each group now runs on the tree it has not seen,
+so every arm of the pass has a reading on both bitstreams.
+- **Board 1 (tree A):** sq0 b d f, then sq1q15 b d f, through `tier3-pass-appvm.sh` a2541a20586b96b3 (no chain is executing it; its
+  last runs ended at 16:38). Tags: sq0x, q15x.
+- **Board 2 (tree B):** sq0 a c e, then sq1q15 a c e, through `chain-after-pass.sh` 175e5cf47f9d9737 on its overlap's "PASS seq2-2 DONE".
+- The references, runner hashes and image pins are those of the first runs.
+- **Predictions:**
+  - each group's cells equal the reference as on the other tree;
+  - sq0 d shows the same three Q-31 cause DIFFs (19, 20, 22);
+  - sq1q15 f reads case 31 MISSED (R-60), as on both trees on the old images;
+  - every other field equal; pc=0, DRT1, FRTY 0;
+  - and each group's cells equal its other-tree reading, compared afterwards.
+
+### The tree-B overlap, result (2026-10-20 23:22 - 10-21 03:36, board 2): 202 of 202 cells, and tree B = tree A in every arm
+
+`records/pass-overlapB.result-lines.txt`. UNGATED.
+- All 18 arms equal their silicon-mimic references in every field: 202 of 202.
+- Each arm's tree-B bundle equals its tree-A bundle cell for cell (compare-pilot rc 0 on all 18).
+- All 18 boots read pc=0 0, DRT1 0, FRTY 0, no Oops, the banner, INJS/INJL 0, and the vbatch END line.
+- With sql0 and cpython lt0 (both read on both trees), 20 of the pass's 24 arms are now read on both bitstreams, and the
+  two trees have not differed in a single cell.
+- The sqlite groups' other-tree runs, pre-registered at 02:5x, complete the remaining two (sq0, sq1q15). The two
+  repaired-only arms on tree B are pb13q15/pgm1q15/wm1q15; pgm1q15 is pgm1's rebuild.
+
+### The sqlite groups on their other tree, result (2026-10-21 02:5x-04:56, both boards): every group equals its first tree's reading
+
+`records/pass-sqlite-othertree.result-lines.txt`. UNGATED.
+- sq0 and sq1q15, groups b/d/f on tree A (board 1) and a/c/e on tree B (board 2): each group equals its reference
+  exactly as on its first tree, and each equals its first tree's bundle cell for cell (compare-pilot rc 0 on all 12).
+  That includes sq0 d's three Q-31 cause cells and sq1q15 f's R-60 case 31.
+- All 12 boots read pc=0 0, DRT1 0, FRTY 0, INJS/INJL 0, and the vbatch END line.
+- **Every arm of the pass now has a reading on both bitstreams, and tree A equals tree B in every cell of every arm.**
+  The differences from QEMU (Q-31 x4, R-60 x1) are the same on both trees.
+
+### Quiet point (2026-10-21 05:0x): the lane stops here for the account switch, on the lead's word
+
+- Both boards are idle (board-busy: FREE), no driver is running, and the lab hub holds no booking of this lane.
+- Every pass result is committed here and landed on dev.
+- **Open, for whoever continues:**
+  - the matrix's physical-harness traces of sqlite 02/05/19, the compiler lane's (they decide the headline's spatial
+    6/25), plus the CheriBSD and sublet rows;
+  - cpython 01's set_dealloc trace (the compiler lane);
+  - after the pass, caplifive-sbi #4 (RFENCE): a pb10 pair (PR-head firmware vs the current monitor), pre-registering
+    launch cost and the v0.1-fallback warning count. The PR is on the capstone-bootstrap monitor line while the boards
+    run the vp2 line, so the firmware's base is to be settled with the runtime lane first;
+  - the batch bitstream (its flash is the lead's): before its first boot,
+    - the full firmware build and dom_stack gate of capstone-sbi vp2/fetch-retry-cap 579ef1c, with a two-pc positive
+      control;
+    - the csupctl.table bracket grep;
+    - r60-runtime-gate on every image;
+    - s23-cpmp-rearm (the RTL lane's folder) beside pb10's FRTY;
+    - a known-good aperture read twice as the LED-timing control;
+  - the QEMU kit firmware 6f2b082c's capstone-c revision (rebuild with build-kit-qemu-fw.sh 4674ab6a plain at the
+    original output path, and diff);
+  - the board-sharing system handed over by fpga1 (not yet assigned by the lead; /tmp/capstone/lab-hub/HANDOVER.md).
+
+### Recorded from the lanes overnight
+
+- **For the batch bitstream's acceptance (the RTL lane, from the synthesis lane's sealed run A f08906b78):**
+  - `led_stretch_cnt`, the LED aperture the acceptance reads, sits at WNS -16.233 in the dom_switcher cur_idx_q cone
+    (worst 50 paths -17.936 .. -16.657). So the aperture's own timing is a candidate explanation for an impossible or
+    unstable LED/aperture reading.
+  - The batch first boot samples a known-good aperture (a fixed value, read twice) as a control before any aperture
+    reading is attributed to the design.
+  - The RTL lane will send s23-cpmp-rearm as an S-29-style folder (bare M-mode images from the batch source, vectors
+    simulated on both RTLs, images/SHA256SUMS, board_rec). Its fix reads two-sided in simulation (dev 45e8b7f18de8).
