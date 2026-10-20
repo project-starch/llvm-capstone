@@ -312,7 +312,23 @@ which resolve, **ZERO contain a CSRUNV or funct7 0x24** -- the other three are t
 `sweep-expected-missing.txt`. So the `is_runv` walk is unreachable for the entire sweep. Said plainly so that
 "the sweep identical" claims only what it can.
 
-**This lane has no usable sweep BASELINE, which is a gate gap and not an item-(2) result.** The committed
+**CLOSED 2026-10-20: the baseline exists, the comparison PASSES, and the 29 rc=1 results are attributed.**
+A sweep on `c7e6f604f` (95/95) compared directory-to-directory against the preserved item-2 run
+(`d76acdb59`) reads **92 identical, 0 differ, 0 missing, 3 excused as expected-missing on both sides**, with
+the detector silent on both. Same budget (2,000,000) and same testlist hash on both sides, so the provenance
+gate ACCEPTED the comparison and merely NOTEd the differing commits and core trees -- its first real use, and
+it behaved as designed. Artefacts: `.sup/sweepbase-c7e6f604f` and `.sup/sweepitem2-d76acdb59`, each with its
+PROVENANCE.
+  - **Item (2) is sweep-identical.** That is the gate, and it is now met on a comparison that differs only in
+    RTL: `testlist_capstone.yaml` untouched, none of the 95 sources changed, core trees
+    `6d20dd08905ce6f3` against `fe7cc910e6b0c3e1`.
+  - **The 29 rc=1 results, including the 23 that reach the 2,000,013-cycle limit, are PRE-EXISTING on this
+    lane and not item (2)'s.** They occur identically on both sides. `capsbi-init` and `capenter`, which I
+    refused to attribute earlier, are among them. They remain a separate question about when this lane last
+    had a meaningful functional gate -- the stale 400,000-budget baseline hid them -- and nothing in this batch
+    depends on resolving it.
+
+**The superseded gap, for the record.** The committed
 `verif/sim/sweep-base-7e4dc440f.txt` is from 2026-08-12, **216 commits back**, and `sweep-compare.py` compares
 two result DIRECTORIES, of which this lane has none from a prior run. At 25 of 95 tests, eight already disagree
 with that file's rc column and **five disagree in the IMPROVING direction** (`cincoffset-stale-metadata`,
