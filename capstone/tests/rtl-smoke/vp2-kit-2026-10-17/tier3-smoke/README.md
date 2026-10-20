@@ -4496,3 +4496,18 @@ vm_ioctl's CSRUNV:
   - The window-counter QEMU replay of these two cases is the cheapest first check (the compiler lane's instrument).
 - **The bundle:** postgres/sql-repros results/2026-10-20-vp2c-treeA/vp2-malloc-nf2. 03 and 07 are recorded as this
   board divergence, not as model errors.
+
+### sql0-nf2B, pre-registered (2026-10-20 09:4x, before its boot): board 2, tree B, sql0-nf2A with ONE change, the bitstream
+
+- **The runner:** `tier3-sql-arm-rev2r.sh` 243b91b46fda3ce7, rev2q with the board fields changed: kits bkit7-rev2xBDN2 /
+  bkit7-rev2xmBDN2 (tree B 8de3c48cf, board 2, the same module 54d8a3af and monitor f13dbc5), the board-2 busy check, and
+  results filed under 2026-10-20-vp2c-treeB.
+- **Unchanged:** the runner 7ce203f9, the reference t3-sql-nf2-r1 and the image.
+- **Its stubbed dry run** stopped at the stub's missing inputs (SQL VOID), as it should.
+
+**The prediction:**
+- **as sql0-nf2A:** 7 of 9, with 03 and 07 out of denominator by the same CREATE EXTENSION failures (the duplicate key
+  (>=, 12777, 12777, 2200); , then pc=0);
+- FRTY 0, DRT1 0, and 21 release lines, each fully succeeded.
+- **03 or 07 reaching its trigger on tree B** would make the failures bitstream-dependent. That is information about
+  S-29's flush, which is the only RTL difference between the trees.
