@@ -575,6 +575,25 @@ full id from the payload, identically at `c7e6f604f` and at the lane tip (it was
 `079dc720a`, R-35). The zero-generation site is the READ-side fill's virtual arm above. Same defect, different
 line; the ruling's consequence ("deny every recycled node for good") is correct as stated.
 
+*Recycle: the PUSH was implemented wrongly on 2026-10-20, REVERTED the same day, and is NOT in the tree*
+(capstone-ariane `4406a6702` then `c96aafa9c`). Removing the `*vctx_q == 1'b0` term is only half of what the
+paragraph below says -- it says "and the push must target the table's slot 1 rather than the physical
+header", and only the first clause was done. Both push branches write `free_head`/`free_len`, the PHYSICAL
+free list, which lives in REGISTERS with links threaded through each record's `next`, while a context's
+list lives in the table at slot 1 and threads through `prev`. So the gate alone put a virtual index on the
+physical pool through the wrong field, and a later physical pop would have handed out a node not in that
+pool. **Seven arms were byte-identical across the broken change** -- cap-fetchdeny, cap-fetchdeny-f,
+r12-recl-cpmp, s23-cpmp-rearm's 18 probes and the three va-fetchsplit variants -- while the generated
+rev_node SV grew 443,138 to 458,557 bytes, so this arm set cannot observe the push in EITHER form; the
+corruption is latent in registers nothing in the set allocates from afterwards. It was found by reading the
+branch. `va-alloc` is the arm that would see it, which is why the prediction below matters.
+**What the reimplementation needs**, recorded at the gate in the source as well: a virtual arm writing
+`prev = *vp_free_head`, `vp_free_head := *revoke_index` and `vp_free_cnt + 1`, plus a slot-1 publish that
+can be neither per-node (it doubles the walk's memory traffic) nor a single exit write without a latched
+flag (`node_in` does not live past the cycle boundary and the walk has several exits keyed by `kill_mode`).
+**IN the tree and measured inert over those seven arms**: the generation store and resolve, the pop's
+generation bump, and all four admission gates.
+
 *Recycle (2 sites), and it is SMALLER than the ruling implies, because the virtual free list is already
 wired.* `vp_alloc_slot`'s `*vp_free_head != 30'd0` branch (`capstone_rev_node.anvil:247-259`) already pops
 from the TABLE's free list, already validates the popped record (`fn.valid == 0 && fn.free == 1`, with a
