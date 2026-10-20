@@ -52,6 +52,10 @@ struct cv_thread {
     /* A fault was resolved and the context has not been resumed since: the resume flushes the
      * resolved address on the resuming hart first (resume_sfences). */
     bool sfence_pending;
+    /* The register slots (PCC + x1..x31, frame[8..71]) as they stood at this thread's last CSRUNV,
+     * and how many entries it has made: fault_regs() prints which slots the context changed. */
+    unsigned long entry_regs[64];
+    unsigned long long entries;
 };
 struct context {
     struct list_head link;
@@ -1243,7 +1247,7 @@ module_param(diag_escapes, bool, 0644);
 static unsigned escape_prints;
 #define CV_ESCAPE_BUDGET 16U
 
-#define CV_DIAG_TAG "node-floor-2"
+#define CV_DIAG_TAG "fault-regs-1"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
@@ -1539,6 +1543,41 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
     return -EFAULT;
 }
 
+/* A fault CV_RESOLVE cannot resolve is fatal: the launcher prints its domain-fault line and exits.
+ * Every fatal kind-4 fault passes here exactly once, including those a pending stop sent back
+ * unresolved from CV_STEP's own loop; a terminal (kind 2) escape is printed from CV_STEP with rc 0.
+ * Print the context's registers as the escape saved them (frame[8 + 2r], both words of each slot,
+ * raw), mark '*' each slot that differs from the last CSRUNV entry, the resume PCC slot of that
+ * entry, the delegate argument block (frame[72..79]) and 16 words at x2's low word. KERN_EMERG,
+ * never ratelimited: at most one fatal fault per thread. */
+static void fault_regs(struct context *c, struct cv_thread *t, int rc)
+{
+    unsigned long *f = t->frame, sp = f[8 + 2 * 2], words[16];
+    char line[256];
+    int n;
+    pr_emerg("capstone_vm: FREG thread=%llu rc=%d kind=%lu cause=%lu pc=%lx addr=%lx entries=%llu "
+             "entry_pcc=%lx:%lx\n", (unsigned long long)t->id, rc, f[2], f[3], f[4], f[5], t->entries,
+             t->entry_regs[0], t->entry_regs[1]);
+    for (unsigned r = 0; r < 32; r += 4) {
+        n = scnprintf(line, sizeof line, "capstone_vm: FREG x%u", r);
+        for (unsigned k = r; k < r + 4; ++k) {
+            unsigned long lo = f[8 + 2 * k], hi = f[9 + 2 * k];
+            n += scnprintf(line + n, sizeof line - n, " %lx:%lx%s", lo, hi,
+                           lo != t->entry_regs[2 * k] || hi != t->entry_regs[2 * k + 1] ? "*" : "");
+        }
+        pr_emerg("%s\n", line);
+    }
+    pr_emerg("capstone_vm: FREG args %lx %lx %lx %lx %lx %lx %lx %lx\n",
+             f[72], f[73], f[74], f[75], f[76], f[77], f[78], f[79]);
+    if (current->mm != c->mm || copy_from_user(words, (const void __user *)sp, sizeof words)) {
+        pr_emerg("capstone_vm: FREG stack unreadable sp=%lx\n", sp);
+        return;
+    }
+    for (unsigned i = 0; i < 16; i += 4)
+        pr_emerg("capstone_vm: FREG sp+%#x %lx %lx %lx %lx\n", i * 8, words[i], words[i + 1],
+                 words[i + 2], words[i + 3]);
+}
+
 static void node_stats(struct context *c)
 {
     c->stats.nodes = c->table[3];
@@ -1809,6 +1848,8 @@ thread_unwind:
                 WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
                 ++resume_satp_refreshes;
             }
+            memcpy(t->entry_regs, t->frame + 8, sizeof(t->entry_regs));
+            ++t->entries;
             t->event = run_event(t, action);
             t->started = true; t->reply_cap = false;
             local_irq_restore(flags); preempt_enable();
@@ -1867,6 +1908,7 @@ thread_unwind:
         memcpy(r.args, t->frame + 72, sizeof(r.args));
         r.thread = t->id;
         t->terminal = r.kind == 2;
+        if (t->terminal) fault_regs(c, t, 0);   /* the other fatal path: the launcher faults without CV_RESOLVE */
         if (r.kind == 4 && !resolved) ++c->stats.faults;
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
         if (rc) t->terminal = true;
@@ -1877,6 +1919,7 @@ thread_unwind:
         t = find_thread(c, r.thread);
         rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
         if (!rc) t->sfence_pending = true;
+        else if (t) fault_regs(c, t, rc);
     } else if (op == CV_RETIRE) {
         u64 id;
         if (copy_from_user(&id, (void __user *)arg, sizeof(id))) { rc = -EFAULT; goto out; }
