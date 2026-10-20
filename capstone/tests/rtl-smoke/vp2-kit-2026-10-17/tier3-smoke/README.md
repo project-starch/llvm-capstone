@@ -5371,3 +5371,12 @@ into the whole corpus but q15/sq0, which ran split across both.
   = 202 of 202. A difference from tree A would be the first tree difference in the corpus, and would be graded against
   the reference first.
   - Any Q-31 cause shape is named. pc=0, DRT1, FRTY, INJS and INJL 0; the vbatch END line in every boot.
+
+### cpython lt0 on board 1, result (2026-10-20 20:47 - 10-21 02:54, tree A): identical to tree B, 32 of 32 cells
+
+`records/cpy-nm-b1.result-lines.txt`. UNGATED.
+- The boot completed (54/54 steps), and the read was recovered past the wrapper's timeout exactly as board 2's.
+- The judge reads 31 of 32 inside, with case 01 the same Q-31 cause (4, against the reference's 24). pc=0, DRT1, FRTY,
+  INJS and INJL are 0.
+- **compare-pilot, tree B's bundle against tree A's: 32 of 32 cells the same, rc 0.** cpython is the second arm (after
+  sql0) read on both trees, and the trees agree in every field.
