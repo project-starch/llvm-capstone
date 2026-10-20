@@ -70,8 +70,13 @@ each object and ends its lifetime on free ([virtual runtime](virtual/README.md))
 revoked on free. The musl archive must be built for the same profile
 (`ports/musl-capstone/build-musl-capstone.sh` follows
 `CAPSTONE_APPLICATION_PROFILE`, `virtual` unless set to `physical`). A build
-directory keeps the profile it was first configured with; configure a fresh
-one, or pass the option, to change it.
+directory that recorded the option keeps its profile; configure a fresh one, or
+pass the option, to change it. A directory configured before the virtual default
+existed has no cache entry for the option, so its next reconfigure becomes
+VIRTUAL and stops rebuilding the physical-only probes (runtime/tests/application),
+leaving their old `.dom` files on disk where `run-threads.py` and `run-context.py`
+still load them by path. Delete such a directory, or pass
+`-DCAPSTONE_APPLICATION_VIRTUAL=OFF` once, rather than reusing it.
 
 For Make/configure or another upstream build system, build the same runtime as
 an SDK and give the generated driver to the upstream build as `CC`:
