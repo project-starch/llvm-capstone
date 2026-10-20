@@ -1,0 +1,11 @@
+# sql0-nmA (2026-10-20 13:00-15:13, tree A): result lines, from the arm's own output. Image d9787ac28e495969 (postgres lt0
+# without +movc-keeps-integer-source), module 54d8a3af, runner 7ce203f9, scored against t3-sql-nomovc-r1. UNGATED.
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 34478535 bytes)
+T3PG sql0-nmA BEGIN 13:00:57 (trigger: SQL_NM_GO 12:59:14 (evidence vp2-tier12 30a39b497d39))
+T3PG sql0-nmA END 15:13:49 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 2, 'MISSED': 7}
+SQL inputs as recorded: fixture 956173e054762e91, image d9787ac28e495969
+SQL MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+SQL S-23: FRTY 0 DRT1 0 DRTX 0 Oops 0; banner node-floor-2 x1; release lines 21, with succeeded < attempted 0
+sql0-nmA: bundle -> wt-gate/capstone/bug-corpora/postgres/sql-repros/results/2026-10-20-vp2c-treeA/vp2-malloc-nomovc
+sql0-nmA: 9 of 9 cells the same (rc 0)
+SQL DONE 15:13:49
