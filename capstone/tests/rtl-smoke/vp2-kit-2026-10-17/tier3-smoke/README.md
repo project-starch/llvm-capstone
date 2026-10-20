@@ -4886,3 +4886,26 @@ sql0 showed tree A equal to tree B, and S-29 is unreachable by construction (abo
   Its board reading is reported against both, as information.
 - No pc=0; DRT1 0, FRTY 0, no Oops; node-floor-2 banner present.
 - Case 31 is MISSED in this reference, so sq0 carries no R-60 exception. That one is q15's.
+
+### The corpus pass: sq1q15 pre-registered (2026-10-20 15:2x), chained after sq0 on each board; sq1 not run
+
+**sq1q15** (sqlite engine-repros, virtual-nested-pools with the memsys5 Q-15 repair):
+- The reference is `ref-tB-mimic/sq1q15`, with stamp runner 4400e4c1, wt-gate cdc9bfab8617 dirty 0, appvm-arm 2852f21b,
+  and the kit as sq0's.
+- Images: build-virtual-nested-pools-q15 (the wt-m5 recipe), 35 collected.
+- Tally: CAUGHT 27, MISSED 6.
+- Against the previous q15 references, 31 of 33 are identical. Cases 21 and 23 stay CAUGHT (cause 25 in memcpy) but at
+  memcpy+204 instead of +184, because libc is now built without the flag. The board is graded against +204.
+- **Runner:** `tier3-pass-appvm.sh` a2541a20586b96b3, through `chain-after-pass.sh` 175e5cf47f9d9737, which starts it only when the same
+  board's sq0 out reads "PASS sq0p DONE" and holds on a PASS STOP. Its dry run: `dryrun-chain-after-pass.txt`.
+- **Split:** as sq0's, board 1 a/c/e and board 2 b/d/f.
+- **Predictions:**
+  - 32 of 33 cells equal the reference.
+  - **Case 31** (fz10_dbstat_decodepage_overflow, group f, board 2) reads MISSED on silicon where the reference is
+    CAUGHT (cause 28, statDecodePage): R-60, as on both trees on the old images.
+  - No pc=0; DRT1 0, FRTY 0, no Oops.
+
+**sq1** (unrepaired memsys5-sublet) is NOT run. Its reference is 33 of 33 NO-READING:control-failed: both controls fault
+with cause 29 at entry (read rc 75), the known Q-15 failure, as on the old flagged reference. The board's sq1a
+(2026-10-18) already confirmed that refusal on silicon, so a boot would buy no cell. sq1q15 is the readable arm of this
+configuration.
