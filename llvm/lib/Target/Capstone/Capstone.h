@@ -44,6 +44,9 @@ void initializeCapstoneMergeStrConstantsPass(PassRegistry &);
 
 FunctionPass *createCapstoneDeadRegisterDefinitionsPass();
 
+FunctionPass *createCapstoneCursorReadFoldPass();
+void initializeCapstoneCursorReadFoldPass(PassRegistry &);
+
 void initializeCapstoneDeadRegisterDefinitionsPass(PassRegistry &);
 
 FunctionPass *createCapstoneIndirectBranchTrackingPass();

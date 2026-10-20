@@ -1,0 +1,136 @@
+# CapstoneCursorReadFold keeps the PseudoTRUNC_CAP integer write when a reader
+# of the address is itself a copy (`addi rd, rs, 0`, isCopyInstr): copy
+# propagation would carry the capability register through such a reader to its
+# result's uses, here a cincoffset's integer operand, which is the C-31 escape.
+# A reader that computes (`addi rd, rs, 8`) is folded, and two folded pseudos
+# that share one source leave no stale kill flags behind (the verifier runs).
+# A reader that could become a copy later keeps the pseudo too: a register
+# shift is refused outright, because `sll rd, rs, zero` is rewritten to `addi
+# rd, rs, 0` by simplifyInstruction and a shift amount that only ever holds x0
+# gets x0 substituted by the coalescer. A source killed by an untouched user
+# before the folded reader loses that kill.
+#
+# MUTATION: approve copies (drop the isCopyInstr test AND the immediate check
+# of ADDI in readsAsIntegerOnly) -> @copy_reader loses its PseudoTRUNC_CAP
+# and the first CHECK fails; admit
+# SLL/SRL in readsAsIntegerOnly -> @shift_by_zero folds; keep only the
+# rewritten uses' kill flags cleared -> @killed_before fails the verifier.
+#
+# RUN: llc -mtriple=capstone64 -run-pass=capstone-cursor-read-fold -verify-machineinstrs -o - %s | FileCheck %s
+--- |
+  target triple = "capstone64"
+  define void @copy_reader() { ret void }
+  define void @alu_reader() { ret void }
+  define void @shared_source() { ret void }
+  define void @shift_by_zero() { ret void }
+  define void @killed_before() { ret void }
+...
+---
+name: copy_reader
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $c11
+    ; CHECK-LABEL: name: copy_reader
+    ; CHECK:      [[A:%[0-9]+]]:gpr = COPY [[C:%[0-9]+]].sub_cap_addr
+    ; CHECK-NEXT: [[T:%[0-9]+]]:gpr = PseudoTRUNC_CAP [[A]]
+    ; CHECK-NEXT: [[M:%[0-9]+]]:gpr = ADDI [[T]], 0
+    ; CHECK-NEXT: {{%[0-9]+}}:gpcr = CIncOffset {{%[0-9]+}}, [[M]]
+    %0:gpcr = COPY $c10
+    %1:gpcr = COPY $c11
+    %2:gpr = COPY %0.sub_cap_addr
+    %3:gpr = PseudoTRUNC_CAP %2
+    %4:gpr = ADDI %3, 0
+    %5:gpcr = CIncOffset %1, %4
+    $c10 = COPY %5
+    PseudoRET implicit $c10
+...
+---
+name: alu_reader
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $c11
+    ; CHECK-LABEL: name: alu_reader
+    ; CHECK:      [[A:%[0-9]+]]:gpr = COPY {{%[0-9]+}}.sub_cap_addr
+    ; CHECK-NOT:  PseudoTRUNC_CAP
+    ; CHECK:      [[M:%[0-9]+]]:gpr = ADDI [[A]], 8
+    ; CHECK-NEXT: {{%[0-9]+}}:gpcr = CIncOffset {{%[0-9]+}}, [[M]]
+    %0:gpcr = COPY $c10
+    %1:gpcr = COPY $c11
+    %2:gpr = COPY %0.sub_cap_addr
+    %3:gpr = PseudoTRUNC_CAP %2
+    %4:gpr = ADDI %3, 8
+    %5:gpcr = CIncOffset %1, %4
+    $c10 = COPY %5
+    PseudoRET implicit $c10
+...
+---
+name: shared_source
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $x11
+    ; CHECK-LABEL: name: shared_source
+    ; CHECK:      [[A:%[0-9]+]]:gpr = COPY {{%[0-9]+}}.sub_cap_addr
+    ; CHECK-NOT:  PseudoTRUNC_CAP
+    ; CHECK:      SUB %{{[0-9]+}}, [[A]]
+    ; CHECK:      ANDI [[A]], 7
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY %0.sub_cap_addr
+    %3:gpr = PseudoTRUNC_CAP %2
+    %4:gpr = PseudoTRUNC_CAP %2
+    %5:gpr = SUB %1, killed %3
+    %6:gpr = ANDI killed %4, 7
+    %7:gpr = ADD %5, %6
+    $x10 = COPY %7
+    PseudoRET implicit $x10
+...
+---
+name: shift_by_zero
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $c11
+    ; CHECK-LABEL: name: shift_by_zero
+    ; CHECK:      [[A:%[0-9]+]]:gpr = COPY {{%[0-9]+}}.sub_cap_addr
+    ; CHECK-NEXT: [[Z:%[0-9]+]]:gpr = COPY $x0
+    ; CHECK-NEXT: [[T:%[0-9]+]]:gpr = PseudoTRUNC_CAP [[A]]
+    ; CHECK-NEXT: [[S:%[0-9]+]]:gpr = SLL [[T]], [[Z]]
+    ; CHECK-NEXT: [[U:%[0-9]+]]:gpr = PseudoTRUNC_CAP [[A]]
+    ; CHECK-NEXT: [[R:%[0-9]+]]:gpr = SRL [[U]], $x0
+    %0:gpcr = COPY $c10
+    %1:gpcr = COPY $c11
+    %2:gpr = COPY %0.sub_cap_addr
+    %3:gpr = COPY $x0
+    %4:gpr = PseudoTRUNC_CAP %2
+    %5:gpr = SLL %4, %3
+    %6:gpr = PseudoTRUNC_CAP %2
+    %7:gpr = SRL %6, $x0
+    %8:gpr = ADD %5, %7
+    %9:gpcr = CIncOffset %1, %8
+    $c10 = COPY %9
+    PseudoRET implicit $c10
+...
+---
+name: killed_before
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $x11
+    ; CHECK-LABEL: name: killed_before
+    ; CHECK:      [[A:%[0-9]+]]:gpr = COPY {{%[0-9]+}}.sub_cap_addr
+    ; CHECK-NEXT: [[P:%[0-9]+]]:gpr = ADDI [[A]], 8
+    ; CHECK-NOT:  PseudoTRUNC_CAP
+    ; CHECK:      SUB %{{[0-9]+}}, [[A]]
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpr = COPY %0.sub_cap_addr
+    %3:gpr = PseudoTRUNC_CAP %2
+    %4:gpr = ADDI killed %2, 8
+    %5:gpr = SUB %1, %3
+    %6:gpr = ADD %4, %5
+    $x10 = COPY %6
+    PseudoRET implicit $x10
+...
