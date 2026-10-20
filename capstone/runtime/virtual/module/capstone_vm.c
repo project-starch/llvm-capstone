@@ -16,6 +16,10 @@
 #include <asm/io.h>
 #include <asm/pgtable.h>
 #include "wire.h"
+_Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks and an 8-byte tail");
+#ifndef __uninitialized   /* kernels before 6.9 have no macro for the attribute */
+#define __uninitialized __attribute__((uninitialized))
+#endif
 #include "cap_rev_table_abi.h"
 /* One rule, shared with the launcher and the allocator. No #include of its own and only
  * __builtin_clzl and unsigned long, so it is valid kernel C. */
@@ -1734,7 +1738,10 @@ thread_unwind:
         kvfree(t);
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
     } else if (op == CV_STEP) {
-        struct cv_step r;
+        /* Exempt from the kernel's stack zeroing (a memset call at this size):
+         * copy_from_user fills every byte or the ioctl fails, and every output
+         * member is assigned before the copy back. */
+        struct cv_step r __uninitialized;
         struct cv_thread *t;
         u64 budget_end;
         bool resolved = false;
@@ -1864,7 +1871,13 @@ thread_unwind:
         }
         r.kind = t->frame[2]; r.cause = t->frame[3];
         r.pc = t->frame[4]; r.address = t->frame[5];
-        memcpy(r.args, t->frame + 72, sizeof(r.args));
+        /* Eight loads and stores: for 64 aligned bytes the kernel's memcpy is
+         * a call around a four-byte loop. */
+        r.args[0] = t->frame[72]; r.args[1] = t->frame[73];
+        r.args[2] = t->frame[74]; r.args[3] = t->frame[75];
+        r.args[4] = t->frame[76]; r.args[5] = t->frame[77];
+        r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
+        r.reserved[0] = r.reserved[1] = 0;
         r.thread = t->id;
         t->terminal = r.kind == 2;
         if (r.kind == 4 && !resolved) ++c->stats.faults;
