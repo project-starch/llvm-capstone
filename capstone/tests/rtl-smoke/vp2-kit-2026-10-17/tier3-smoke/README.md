@@ -5229,3 +5229,18 @@ patches. pgm1q15 is pgm1 rebuilt in the repair tree.
   - pgm1q15: CAUGHT 5;
   - wm1q15: CAUGHT 22, NO-READING 1 (22).
   - cause=29 0, the Q-15 refusal gone. pc=0, DRT1, FRTY, INJS and INJL 0.
+
+### pb9, pb12, pb10 on board 1, result (2026-10-20 20:18-20:46, tree A): 17 of 17 cells the same in every field
+
+`records/pass-seq2pb-b1.result-lines.txt`. UNGATED.
+- pb9 reads 4/4, pb12 9/9 and pb10 4/4.
+- Each boot has the vbatch END line, pc=0 0, DRT1 0, FRTY 0, no Oops, and INJS 0 / INJL 0.
+- **pb10 on tree A reads FRTY 0 and DRT1 0** under 54d8a3af. On earlier modules it panicked there with S-23's data face.
+- **Board 1 over the pass:** 17 arms, 179 of 179 cells the same in every field.
+
+### Amendment (2026-10-20 20:4x, before it starts): cpython lt0 ALSO on board 1, the cross-tree overlap restored
+
+The cancellation at 16:4x was for throughput only, and board 1 is now idle with nothing else ready. So cpython lt0 runs on
+board 1 as first pre-registered (`tier3-cpy-nm.sh` b83891d11ea65089, kit bkit7-rev2xnDN2, the same prediction 34aec9edf4471196),
+starting on "PASS seq2-1 DONE" (already read). The predictions are unchanged: 32 of 32 inside their sets, no pc=0,
+INJS/INJL 0, and tree A equal to tree B in every cell.
