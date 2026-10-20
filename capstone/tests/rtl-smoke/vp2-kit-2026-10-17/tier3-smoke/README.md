@@ -4830,3 +4830,27 @@ evidence, so both trees read the remedy at once.
   - -mn's one MOVC-NULL line is the QEMU kit's monitor pc 0x80021d80, not the image.
   - So on the rebuilt image MOVC nulling moves no cell (N=1 per arm; no cell is called stable). The board reference is
     the mimic run next in the queue, with this r1 as its plain counterpart.
+
+### sql0-nmA and sql0-nmB, results (2026-10-20 13:00-15:13, boards 1 and 2, trees A and B): 9 of 9 on both trees; the C-32 remedy holds on silicon
+
+`records/sql0-nmA.result-lines.txt`, `records/sql0-nmB.result-lines.txt`, with the score records `sql0-nm{A,B}.board.txt`.
+Bundles: postgres/sql-repros results/2026-10-20-vp2c-tree{A,B}/vp2-malloc-nomovc. UNGATED.
+- **Every pre-registered reading holds, on both trees:**
+  - the boot completed, with inputs as recorded (fixture 956173e0, image d9787ac2);
+  - the must-fire held;
+  - FRTY 0, DRT1 0, DRTX 0, no Oops; 21 release lines, every CSRETIRE succeeding;
+  - **9 of 9 cells the same as t3-sql-nomovc-r1:** 02 and 03 CAUGHT (cause 28 in memcpy), the other seven MISSED with
+    their trigger statements run.
+- **03 and 07 are back in the denominator:**
+  - all four extensions are created;
+  - checked here in board.txt and run.log on both trees: 0 "duplicate key", 0 "operator does not exist", 0 pc=0, and 0
+    "cannot create" lines.
+  - On the old image 64010720 these two cells failed in CREATE EXTENSION on both trees (sql0-nf2A/nf2B, C-32).
+- **So the lead's remedy (b) works on silicon** for this arm: built without +movc-keeps-integer-source, the image reads
+  what QEMU reads, whatever the RTL's MOVC does with an integer source.
+- **Tree A equals tree B** cell for cell. This is the pass's first cross-tree overlap.
+- **Timing:** the run took 2 h 13 min. With pg_trgm created, step 07 now runs its workload: 561 s on QEMU, about
+  10 times longer on silicon, judged from steps 01-06. The 27,600 s batch budget (x4) held, with a wide margin.
+- **The silicon-mimic QEMU run** (the compiler lane, qkit7-tB-mimic, MOVC null plus compact rounding) also reads 9 of 9
+  against r1 and -mn. Its rounding positive control has not read yet, so "rounding moves no sql0 cell" waits on it.
+- Booked on the lab hub as board-lane: ids 1-4, each cancelled at the run's end.
