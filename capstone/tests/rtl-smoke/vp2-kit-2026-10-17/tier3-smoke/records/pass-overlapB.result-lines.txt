@@ -1,0 +1,113 @@
+# the tree-B overlap (board 2, 2026-10-20 23:22 - 10-21 03:36), tier3-pass-seq2.sh on overlapB: result lines; then INJS/INJL per boot and each arm's tree-B bundle against its tree-A bundle (compare-pilot). UNGATED.
+SEQ START 23:23:00 board 2 spec 4a247c5890282d21 (18 arms)
+PASS fph BEGIN 23:23:01 board 2 kind cases booking 42
+PASS fph END 23:35:46 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 25}
+PASS fph COMPARE vs reference rc=0 :: 25 of 25 cells the same
+PASS fph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fpt BEGIN 23:35:46 board 2 kind cases booking 43
+PASS fpt END 23:46:21 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 13}
+PASS fpt COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fca BEGIN 23:46:21 board 2 kind cases booking 44
+PASS fca END 23:56:37 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'MISSED': 13}
+PASS fca COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fca readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fcs BEGIN 23:56:37 board 2 kind cases booking 45
+PASS fcs END 00:07:23 rc=0 :: virtual boot: completed :: --- vp2-nested-pools (virtual-ffmpeg-carve): {'CAUGHT': 13}
+PASS fcs COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fcs readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fso BEGIN 00:07:23 board 2 kind cases booking 46
+PASS fso END 00:48:11 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'MISSED': 9}
+PASS fso COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS fso readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS mph BEGIN 00:48:12 board 2 kind cases booking 47
+PASS mph END 00:58:00 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 9}
+PASS mph COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS mph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS mpt BEGIN 00:58:01 board 2 kind cases booking 48
+PASS mpt END 01:06:26 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 3}
+PASS mpt COMPARE vs reference rc=0 :: 3 of 3 cells the same
+PASS mpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wph BEGIN 01:06:26 board 2 kind cases booking 49
+PASS wph END 01:16:48 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 12}
+PASS wph COMPARE vs reference rc=0 :: 12 of 12 cells the same
+PASS wph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wpt BEGIN 01:16:48 board 2 kind cases booking 50
+PASS wpt END 01:26:50 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 10}
+PASS wpt COMPARE vs reference rc=0 :: 10 of 10 cells the same
+PASS wpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgc BEGIN 01:26:50 board 2 kind pgc booking 51
+PASS pgc END 01:36:00 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 5}
+PASS pgc COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgc readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgm0 BEGIN 01:36:00 board 2 kind pgm booking 52
+PASS pgm0 END 01:45:02 rc=0 ::  :: --- vp2-malloc (virtual-mallocng-replay): {'MISSED': 5}
+PASS pgm0 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgm1 BEGIN 01:45:02 board 2 kind pgm booking 53
+PASS pgm1 END 01:54:23 rc=0 ::  :: --- vp2-pg-pools (virtual-mallocng-replay-pools): {'CAUGHT': 5}
+PASS pgm1 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm1 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pym0 BEGIN 01:54:23 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py booking 54
+PASS pym0 END 02:43:54 rc=0 :: boot completed :: 
+PASS pym0 COMPARE vs reference rc=0 :: 20 of 20 cells the same
+PASS pym0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pym1 BEGIN 02:43:54 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py booking 55
+PASS pym1 END 02:57:17 rc=0 :: boot completed :: 
+PASS pym1 COMPARE vs reference rc=0 :: 20 of 20 cells the same
+PASS pym1 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pb9 BEGIN 02:57:18 board 2 kind cases booking 57
+PASS pb9 END 03:06:11 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-ffmpeg-pool-stock): {'MISSED': 4}
+PASS pb9 COMPARE vs reference rc=0 :: 4 of 4 cells the same
+PASS pb9 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pb12 BEGIN 03:06:11 board 2 kind cases booking 58
+PASS pb12 END 03:16:35 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-memcached-stock): {'CAUGHT': 1, 'MISSED': 8}
+PASS pb12 COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS pb12 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pb10 BEGIN 03:16:35 board 2 kind cases booking 60
+PASS pb10 END 03:25:47 rc=0 :: virtual boot: completed :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 4}
+PASS pb10 COMPARE vs reference rc=0 :: 4 of 4 cells the same
+PASS pb10 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wm0 BEGIN 03:25:47 board 2 kind appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py booking 62
+PASS wm0 END 03:36:27 rc=0 :: boot completed :: 
+PASS wm0 COMPARE vs reference rc=0 :: 23 of 23 cells the same
+PASS wm0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS seq2-2 DONE 03:36:27
+## INJS / INJL / vbatch END per boot
+fph INJS 0 INJL 0 vbatch-END 1
+fpt INJS 0 INJL 0 vbatch-END 1
+fca INJS 0 INJL 0 vbatch-END 1
+fcs INJS 0 INJL 0 vbatch-END 1
+fso INJS 0 INJL 0 vbatch-END 1
+mph INJS 0 INJL 0 vbatch-END 1
+mpt INJS 0 INJL 0 vbatch-END 1
+wph INJS 0 INJL 0 vbatch-END 1
+wpt INJS 0 INJL 0 vbatch-END 1
+pgc INJS 0 INJL 0 vbatch-END 1
+pgm0 INJS 0 INJL 0 vbatch-END 1
+pgm1 INJS 0 INJL 0 vbatch-END 1
+pym0 INJS 0 INJL 0 vbatch-END 1
+pym1 INJS 0 INJL 0 vbatch-END 1
+pb9 INJS 0 INJL 0 vbatch-END 1
+pb12 INJS 0 INJL 0 vbatch-END 1
+pb10 INJS 0 INJL 0 vbatch-END 1
+wm0 INJS 0 INJL 0 vbatch-END 1
+## tree A against tree B, per arm
+fph 25 of 25 cells the same
+fpt 13 of 13 cells the same
+fca 13 of 13 cells the same
+fcs 13 of 13 cells the same
+fso 9 of 9 cells the same
+mph 9 of 9 cells the same
+mpt 3 of 3 cells the same
+wph 12 of 12 cells the same
+wpt 10 of 10 cells the same
+pgc 5 of 5 cells the same
+pgm0 5 of 5 cells the same
+pgm1 5 of 5 cells the same
+pym0 20 of 20 cells the same
+pym1 20 of 20 cells the same
+pb9 4 of 4 cells the same
+pb12 9 of 9 cells the same
+pb10 4 of 4 cells the same
+wm0 23 of 23 cells the same
