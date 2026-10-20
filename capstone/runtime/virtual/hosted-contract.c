@@ -232,6 +232,56 @@ __attribute__((noinline)) static void frame_addresses(void)
 #endif
 }
 
+/* The library memset over every destination offset 0-47 and every length up
+ * to 300, through a pointer the compiler cannot inline: the bytes inside the
+ * range take the fill value (negative and wide values truncated), the bytes
+ * outside keep theirs, it returns its destination, every 16-byte granule the
+ * range touches loses its tag and every other keeps it; and exactly bounded
+ * objects of 1-300 bytes are filled without a store outside them. */
+static void *(*volatile memset_call)(void *, int, size_t) = memset;
+static int *slots[24];
+
+static void memset_ranges(void)
+{
+    unsigned char before[sizeof slots];
+    unsigned char *b = (unsigned char *)slots;
+    int bytes = 1, returns = 1, bounded = 1;
+#ifdef __CAPSTONE_PURECAP__
+    int tags = 1;
+#endif
+    for (size_t off = 0; off < 48; ++off)
+        for (size_t len = 0; len <= 300 && off + len <= sizeof slots; ++len) {
+            int fill = (int)(off * 37 + len * 11) % 1024 - 512;
+            for (int i = 0; i < 24; ++i)
+                slots[i] = &cells[i];
+            for (size_t i = 0; i < sizeof before; ++i)
+                before[i] = b[i];
+            returns &= memset_call(b + off, fill, len) == b + off;
+            BARRIER();
+            for (size_t i = 0; i < sizeof before; ++i)
+                bytes &= b[i] == (i >= off && i < off + len ? (unsigned char)fill : before[i]);
+#ifdef __CAPSTONE_PURECAP__
+            for (size_t g = 0; g < 24; ++g)
+                tags &= TAG(slots[g]) == !(len && off < g * 16 + 16 && off + len > g * 16);
+#endif
+        }
+    for (size_t n = 1; n <= 300; ++n) {
+        unsigned char *p = malloc(n);
+        if (!p) { bounded = 0; break; }
+        memset_call(p, 0x5a, n);
+        BARRIER();
+        for (size_t i = 0; i < n; ++i)
+            bounded &= p[i] == 0x5a;
+        free(p);
+    }
+    check(bytes, "memset_ranges_bytes");
+    check(returns, "memset_ranges_returns_destination");
+#ifdef __CAPSTONE_PURECAP__
+    check(tags, "memset_ranges_clear_touched_granules_only");
+#endif
+    check(bounded, "memset_bounded_objects");
+}
+
 int main(void)
 {
     for (int i = 0; i < N; ++i) {
@@ -366,6 +416,7 @@ int main(void)
     frame_addresses();
     transfers();
     zero_size_allocas();
+    memset_ranges();
 
     /* Last: before C-77 was fixed the first one faulted. */
     check(hosted_byval_zero(byval_zero), "byval_const_zero_aggregate");
