@@ -4,7 +4,7 @@
  * present in 3.22.0 (or guards a function 3.22.0 has unguarded), and its own regression
  * test ships the triggering database as a hex dump. Host ASan on stock 3.22.0:
  *
- *     heap-use-after-free in sqlite3Fts5GetVarint
+ *     heap-buffer-overflow in sqlite3Fts5GetVarint (an over-read; see PROVENANCE.md)
  *
  * The image is embedded and served by repro322_memfs.c, an in-domain in-memory FILESYSTEM.
  * ext/misc/memvfs.c cannot be used here: it serves only the main database, so the pager

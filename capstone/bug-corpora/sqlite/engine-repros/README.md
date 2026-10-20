@@ -19,8 +19,8 @@ Every case declares one of these, and the table partitions the corpus.
 
 | shape | cases | why it is not the same test |
 |---|---|---|
-| free / stale read | 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24 | the base case: a lifetime ends and a surviving pointer reads the block |
-| read past the end of the record | 25, 26, 27, 28, 29, 30, 31, 32 | the pointer is live; the decode or walk leaves the object |
+| free / stale read | 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24 | the base case: a lifetime ends and a surviving pointer reads the block |
+| read past the end of the record | 0, 25, 26, 27, 28, 29, 30, 31, 32 | the pointer is live; the decode or walk leaves the object |
 
 ## Arms
 
@@ -30,12 +30,23 @@ Every case declares one of these, and the table partitions the corpus.
 | `sublet` | Capstone domain, nested-allocator discipline | does per-sub-allocation revocation notice? |
 | `cheribsd-revocation` | CheriBSD riscv64-purecap, revocation on | does CHERI plus revocation notice? |
 
-## On virtual Capstone (2026-10-10), under the shared judge
+## On virtual Capstone (2026-10-11), under the shared judge
 
 | arm | configuration (`tools/arms.json`) | caught | missed | no reading |
 |---|---|---:|---:|---:|
 | `virtual-malloc` | `virtual-sqlite-memsys5`: memsys5 stock over its static arena; virtual mallocng below sees one object | 4 | 26 | 3 |
 | `virtual-nested-pools` | `virtual-sqlite-memsys5-pools`: memsys5 on its Sublet port, the pool lent linear by the virtual heap | 18 | 13 | 2 |
+
+> **The four counts in this table are the 2026-10-10 bundle's and do not match the bundle this
+> corpus now declares.** `corpus.json`'s `verdict_bundles` names
+> `results/2026-10-11-virtual-request-bounds/<arm>`, and the derived record taken from it --
+> `results/verdicts.tsv`, written by `tools/derive-verdicts.py`, and the `arms` block of every
+> `case.json` -- reads `virtual-malloc` CAUGHT 5 / MISSED 25 / NO-READING 3 and
+> `virtual-nested-pools` CAUGHT 27 / MISSED 6. The bundle is the only original (`../../SCHEMA.md`,
+> "Verdicts: one judge, one original"), so where the two disagree the derived record is what the
+> corpus measured and this table is stale prose. It is left standing rather than rewritten
+> because correcting it moves two published detection counts, which is not a change to make
+> inside a records review; it is flagged here so no reader takes 4 and 18 for current.
 
 Built by `ports/sqlite/repro322/build-virtual.py` (`--memsys5`, `--sublet`) from the adapted 3.22.0
 amalgamation plus `fts5-azarg-patch.py`, run by `shared/run-virtual.py` on a persistent virtual VM,
@@ -80,6 +91,47 @@ too -- and `sqlite3Fts5IterTerm` returns `&z[1]` with `z` NULL (case 12, open, n
 
 **The physical `sublet` arm below is superseded for the per-bug table.** 25 of its 34 "detected"
 were VM halts at one kernel pc that nothing ties to a defect.
+
+## The case-by-case review of 2026-10-15/17
+
+Every case's record was re-read against its own upstream commit, its `PROVENANCE.md` and the
+bundle cells it cites. What that corrected is in each case's `note`; the four findings that
+touch more than one case are here.
+
+**Case 00 is an over-read of a live object, not a use-after-free.** Its own upstream commit
+`adfb203a7d` is "Fix a buffer overread in fts5 ...", and `fts5SegIterReverse` keeps `pLast`
+live across the decode -- only the pages it replaced are released. The case therefore moves
+from the `free / stale read` row of the shape table to `read past the end of the record`, and
+its `shape` field moves with it. ASan named it a use-after-free because it names a report by
+the shadow state of the byte touched, and under one heap layout the over-read lands inside a
+neighbour that had just been freed. The directory name keeps `stale_read`: the run bundles
+refer to the case by that name and renaming it would orphan the measurements that cite it.
+No arm's verdict changes -- only the axis.
+
+**Two cases are duplicates and now say so in the schema rather than only in prose.** 09 records
+the same upstream defect as 10, and 25 the same as 00; each declares `duplicate_of`, and
+`tools/catch-tables.py` leaves both out of every table (`../../SCHEMA.md`, "Optional fields").
+They are kept so numbering and citations stay valid.
+
+**`catch_causes` exists but is NOT declared for these two configurations, deliberately.**
+`tools/verdicts.py` now takes an optional `catch_causes` on a configuration and refuses to call
+a fault outside that set a catch; it is documented in `../../SCHEMA.md` and covered by tests in
+`../../tools/test_verdicts.py`. Declaring `[25, 28]` on `virtual-sqlite-memsys5` and
+`virtual-sqlite-memsys5-pools` would re-score every `cause=24` catch as MISSED, which is the
+reading the review argues for: a `cause=24` fault is the architecture's tag check firing on a
+value the program had already read out of the dead object, one or two frames past an access
+the mechanism allowed. It is not declared here because `tools/derive-verdicts.py` re-judges
+every stored observation against the current `arms.json`, and a bundle is only ever written by
+a runner: declaring the key without re-running the two arms would leave the gate failing on
+every cell it re-scores. The mechanism lands first; the declaration waits on a run.
+
+**The arena is part of the configuration, so a case that depends on it declares `arena_bytes`.**
+3.22.0's `memsys5Init` does not require a power of two, and the two builders default
+differently -- `ports/sqlite/repro322/build-virtual.py` to 1048576 and
+`ports/sqlite/cheribsd/build-corpus-cheri.sh` to 262144. On an arena-granular arm the arena IS
+the bound, so an undeclared case is not comparable across arms: the two runs would differ in
+the size of the only object the mechanism can see. `arena_bytes` and `arena_bytes_why` record
+it per case.
 
 ## What the three arms measured
 

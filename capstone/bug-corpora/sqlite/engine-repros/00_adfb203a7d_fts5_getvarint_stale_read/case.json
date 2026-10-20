@@ -1,14 +1,14 @@
 {
   "case": 0,
   "upstream_fix": "adfb203a7d",
-  "title": "heap-use-after-free in sqlite3Fts5GetVarint",
+  "title": "buffer overread in fts5 (sqlite3Fts5GetVarint), reached through fts5SegIterReverse",
   "consumer": "sqlite3.c (sqlite3Fts5GetVarint)",
   "live_in_pin": true,
   "live_proof": "backport filter: upstream fix adfb203a7d removes code still present in 3.22.0, and its own regression database (decoded from the fix's hex dump) reproduces on stock 3.22.0 under host ASan as heap-use-after-free in sqlite3Fts5GetVarint",
   "allocator_layer": "memsys5",
   "object": "an fts5 leaf-page buffer held by the segment iterator",
   "lifetime_ender": "the page is released while an iterator still refers to it, then the varint decoder reads it",
-  "shape": "free / stale read",
+  "shape": "read past the end of the record",
   "fidelity": "real consumer, real allocator: upstream's own regression image, run statement by statement through stock 3.22.0. Served from repro322_memfs.c rather than a real file -- ext/misc/memvfs.c cannot be used, it serves only the main database so the pager cannot create a rollback journal, and it takes its buffer as an integer in the URI, which on a capability machine is an untagged forged pointer",
   "arms": {
     "spatial": {
@@ -53,5 +53,6 @@
   ],
   "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in sqlite3Fts5GetVarint (live_proof); that run is independent of the Capstone arms and predates them.",
   "arena_bytes": 1048576,
-  "arena_bytes_why": "the three builders disagreed about this until 2026-10-19 -- the virtual arms used a 1 MiB header default against CheriBSD's 262144 -- and on an arena-granular arm the arena IS the bound, so the spatial row was comparing arenas rather than mechanisms"
+  "arena_bytes_why": "the three builders disagreed about this until 2026-10-19 -- the virtual arms used a 1 MiB header default against CheriBSD's 262144 -- and on an arena-granular arm the arena IS the bound, so the spatial row was comparing arenas rather than mechanisms",
+  "note": "TITLE AND DIRECTORY NAME CORRECTED 2026-10-20. Both said use-after-free / stale read; this case's own upstream commit adfb203a7d (2021-10-01) is subject \"Fix a BUFFER OVERREAD in fts5 that could occur when processing an 'ORDER BY rowid DESC' query against corrupt database records\", and the fix replaces fts5DataRead with the leaf-validating fts5LeafRead in fts5SegIterReverse. The measured fault agrees: cause=28, a BOUNDS fault, not cause=25. The title is fixed here; the directory name keeps `stale_read` so that every record written against it stays resolvable, and this note is where the two disagree on purpose. Case 25 is declared a duplicate of this one: its fix 415540ddaa (2021-09-29) guards the same read two days earlier, and the two cases' pools cells are the identical fault record, {cause 28, offset 80, sqlite3Fts5GetVarint}."
 }

@@ -312,6 +312,9 @@ def check_cases(corpus, decl, dirs, problems):
                 problems.append(f"{where}: unknown field {key!r} -- add it to "
                                 f"SCHEMA.md and to this checker, or drop it")
 
+        # Not a power of two: 3.22.0's memsys5Init computes nBlock = nByte / (szAtom + 1) and
+        # then carves descending powers of two greedily, so any multiple is used and only the
+        # tail below one atom is wasted. A multiple of 4096 and a floor are all this can require.
         arena = case.get("arena_bytes")
         if arena is not None and not (isinstance(arena, int) and not isinstance(arena, bool)
                                       and arena >= 65536 and arena % 4096 == 0):

@@ -139,6 +139,10 @@ a run faulted would turn every crash into a catch.
 
 `control_probe` names an existing file inside the case directory. It isolates the
 defect when the full trigger also exercises other defects, so a runner can pair
+that probe with the safe control. `control_probe_why` is required and explains
+why the full trigger cannot provide that pairing. A control probe does not by
+itself declare a fault site or change a recorded verdict.
+
 `arena_bytes` is the size of the nested allocator's arena this case must be built with, in
 bytes. It is **a property of the case, not of the arm**, and every arm must use the same value
 or the arms are not comparable: on an arena-granular arm the arena IS the bound an over-read
@@ -150,9 +154,23 @@ most cases leave it out. Added 2026-10-19, after SQLite's three builders were fo
 passing three different values with nothing recording any of them. `arena_bytes_why` carries
 the one-sentence reason; a size set without one is a value nobody can later check.
 
-that probe with the safe control. `control_probe_why` is required and explains
-why the full trigger cannot provide that pairing. A control probe does not by
-itself declare a fault site or change a recorded verdict.
+Two things about the value, both checked against 3.22.0's own `memsys5Init` rather than assumed.
+**It is not required to be a power of two.** memsys5 computes `nBlock = nByte / (szAtom + 1)` --
+one control byte per atom -- and then carves descending powers of two greedily
+(`for(ii=LOGMAX; ii>=0; ii--){ nAlloc = 1<<ii; if( iOffset+nAlloc <= nBlock ) ... }`), so any size
+is used, just split into several buddy groups, and only the tail below one atom is wasted. The
+checker therefore requires an integer, at least 65536 and a multiple of 4096, and no more.
+**And the declared value is the `SQLITE_HEAP_SIZE`, not the usable arena**, which is smaller by the
+control bytes; a reader comparing a bound against `arena_bytes` should expect that gap.
+
+**A case that does not declare it is NOT comparable across arms today.** The two builders default
+differently -- `ports/sqlite/repro322/build-virtual.py` `HEAP_BYTES_DEFAULT = 1048576`, and
+`ports/sqlite/cheribsd/build-corpus-cheri.sh` `local arena=262144` -- so an undeclared case is
+built at 1 MiB on the virtual arms and at 256 KiB on CheriBSD. For a temporal case that cannot
+change the verdict, which is why most leave it out; for a spatial one it can, and this corpus
+records exactly that (one case CAUGHT on two arms at 262144 and MISSED on both at 1048576).
+Closing it needs either a declaration on every case whose axis is spatial, or one default in
+`ports/`, and the second is the ports lane's to make.
 
 ## Arms
 
@@ -292,6 +310,18 @@ its results under one contract, implemented in `tools/verdicts.py` and tested in
   each configuration and the controls a run of it must show -- a use-after-free control that
   COMPLETES is what shows an arm does not revoke. `arm_configurations` maps the corpus's arm names
   onto it, so two corpora whose `spatial` differ cannot be summed as one.
+* **`catch_causes`, optional per configuration, says which fault causes that arm's MECHANISM can
+  report.** Without it a fault anywhere in a declared `fault_sites` function counts, and that
+  cannot tell a rejected access from a crash two frames later inside the same function, on a value
+  the program was allowed to read out of a dead or overrun object. With it, a fault outside the set
+  scores `MISSED` -- and `NO-READING:control-failed` if the configuration's `controls_for_missed`
+  did not run, because a MISSED needs the controls behaving. The Capstone causes that are a
+  mechanism are `25` `INVALID_CAP` (a lifetime ended) and `28` `CAP_OOB` (a bounds check); `24`
+  `UNEXP_OP_TYPE` is an untagged value used where a capability was required, which is a
+  consequence on either axis. Declaring it RE-JUDGES every stored Observation, so it must land
+  together with a re-fold of each affected corpus's bundle or `check-corpus.py` will fail on every
+  cell it re-scores. Implemented in `tools/verdicts.py`, tested in `tools/test_verdicts.py`; as of
+  2026-10-20 no configuration in `tools/arms.json` declares it.
 * **The bundle is the only original.** `results/<stamp>/<arm>/` holds `verdicts.jsonl` (each
   Observation with its verdict) and `inputs.json` (configuration, and the compiler, QEMU, firmware,
   kernel and runner hashes, each said or said to be `unrecorded`). **`platform.compiler` is the sha256 of
