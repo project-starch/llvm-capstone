@@ -4507,7 +4507,7 @@ vm_ioctl's CSRUNV:
 
 **The prediction:**
 - **as sql0-nf2A:** 7 of 9, with 03 and 07 out of denominator by the same CREATE EXTENSION failures (the duplicate key
-  (>=, 12777, 12777, 2200); , then pc=0);
+  (>=, 12777, 12777, 2200); `operator does not exist: text % text`, then pc=0);
 - FRTY 0, DRT1 0, and 21 release lines, each fully succeeded.
 - **03 or 07 reaching its trigger on tree B** would make the failures bitstream-dependent. That is information about
   S-29's flush, which is the only RTL difference between the trees.
