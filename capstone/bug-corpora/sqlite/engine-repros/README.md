@@ -34,19 +34,16 @@ Every case declares one of these, and the table partitions the corpus.
 
 | arm | configuration (`tools/arms.json`) | caught | missed | no reading |
 |---|---|---:|---:|---:|
-| `virtual-malloc` | `virtual-sqlite-memsys5`: memsys5 stock over its static arena; virtual mallocng below sees one object | 4 | 26 | 3 |
-| `virtual-nested-pools` | `virtual-sqlite-memsys5-pools`: memsys5 on its Sublet port, the pool lent linear by the virtual heap | 18 | 13 | 2 |
+| `virtual-malloc` | `virtual-sqlite-memsys5`: memsys5 stock over its static arena; virtual mallocng below sees one object | 5 | 25 | 3 |
+| `virtual-nested-pools` | `virtual-sqlite-memsys5-pools`: memsys5 on its Sublet port, the pool lent linear by the virtual heap | 27 | 6 | 0 |
 
-> **The four counts in this table are the 2026-10-10 bundle's and do not match the bundle this
-> corpus now declares.** `corpus.json`'s `verdict_bundles` names
-> `results/2026-10-11-virtual-request-bounds/<arm>`, and the derived record taken from it --
-> `results/verdicts.tsv`, written by `tools/derive-verdicts.py`, and the `arms` block of every
-> `case.json` -- reads `virtual-malloc` CAUGHT 5 / MISSED 25 / NO-READING 3 and
-> `virtual-nested-pools` CAUGHT 27 / MISSED 6. The bundle is the only original (`../../SCHEMA.md`,
-> "Verdicts: one judge, one original"), so where the two disagree the derived record is what the
-> corpus measured and this table is stale prose. It is left standing rather than rewritten
-> because correcting it moves two published detection counts, which is not a change to make
-> inside a records review; it is flagged here so no reader takes 4 and 18 for current.
+Those four counts are **transcribed from the bundle `corpus.json` declares**, not measured afresh:
+`verdict_bundles` names `results/2026-10-11-virtual-request-bounds/<arm>`, and this table now
+agrees with the derived record taken from it -- `results/verdicts.tsv`, written by
+`tools/derive-verdicts.py`, and the `arms` block of every `case.json`. Until 2026-10-20 it carried
+the superseded 2026-10-10 bundle's figures, 4 and 18, which contradicted every `case.json` beside
+them. The bundle is the only original (`../../SCHEMA.md`, "Verdicts: one judge, one original"), so
+the figures here follow it.
 
 Built by `ports/sqlite/repro322/build-virtual.py` (`--memsys5`, `--sublet`) from the adapted 3.22.0
 amalgamation plus `fts5-azarg-patch.py`, run by `shared/run-virtual.py` on a persistent virtual VM,
