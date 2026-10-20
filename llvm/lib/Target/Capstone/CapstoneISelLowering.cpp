@@ -10677,6 +10677,26 @@ SDValue CapstoneTargetLowering::lowerVACOPY(SDValue Op, SelectionDAG &DAG) const
                       MachinePointerInfo(DestSV));
 }
 
+// A frame record is two capability-sized slots below the frame pointer: the
+// return address in the upper one (fp - 16; an integer, or the spilled ra
+// capability where calls are capability jumps) and the caller's frame pointer,
+// a capability, in the lower one (fp - 32). The walk therefore steps with
+// capability arithmetic and loads capabilities; RISC-V's XLen-sized slots and
+// integer ADD do not apply.
+static SDValue getFrameAddress(SelectionDAG &DAG, const SDLoc &DL, EVT VT,
+                               unsigned Depth, Register FrameReg,
+                               int CapInBytes) {
+  SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), DL, FrameReg, VT);
+  while (Depth--) {
+    SDValue Ptr = DAG.getMemBasePlusOffset(
+        FrameAddr, TypeSize::getFixed(-2 * CapInBytes), DL);
+    FrameAddr =
+        DAG.getLoad(VT, DL, DAG.getEntryNode(), Ptr,
+                    MachinePointerInfo::getUnknownStack(DAG.getMachineFunction()));
+  }
+  return FrameAddr;
+}
+
 SDValue CapstoneTargetLowering::lowerFRAMEADDR(SDValue Op,
                                             SelectionDAG &DAG) const {
   const CapstoneRegisterInfo &RI = *Subtarget.getRegisterInfo();
@@ -10684,21 +10704,10 @@ SDValue CapstoneTargetLowering::lowerFRAMEADDR(SDValue Op,
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MFI.setFrameAddressIsTaken(true);
   Register FrameReg = RI.getFrameRegister(MF);
-  int XLenInBytes = Subtarget.getXLen() / 8;
+  int CapInBytes = 2 * Subtarget.getXLen() / 8;
 
-  EVT VT = Op.getValueType();
-  SDLoc DL(Op);
-  SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), DL, FrameReg, VT);
-  unsigned Depth = Op.getConstantOperandVal(0);
-  while (Depth--) {
-    int Offset = -(XLenInBytes * 2);
-    SDValue Ptr = DAG.getNode(
-        ISD::ADD, DL, VT, FrameAddr,
-        DAG.getSignedConstant(Offset, DL, getPointerTy(DAG.getDataLayout())));
-    FrameAddr =
-        DAG.getLoad(VT, DL, DAG.getEntryNode(), Ptr, MachinePointerInfo());
-  }
-  return FrameAddr;
+  return getFrameAddress(DAG, SDLoc(Op), Op.getValueType(),
+                         Op.getConstantOperandVal(0), FrameReg, CapInBytes);
 }
 
 SDValue CapstoneTargetLowering::lowerRETURNADDR(SDValue Op,
@@ -10708,24 +10717,38 @@ SDValue CapstoneTargetLowering::lowerRETURNADDR(SDValue Op,
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MFI.setReturnAddressIsTaken(true);
   MVT XLenVT = Subtarget.getXLenVT();
-  int XLenInBytes = Subtarget.getXLen() / 8;
+  int CapInBytes = 2 * Subtarget.getXLen() / 8;
 
+  // llvm.returnaddress yields an address-space-0 pointer: the return address
+  // as an integer. clang turns it into an untagged C pointer.
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
   unsigned Depth = Op.getConstantOperandVal(0);
   if (Depth) {
-    int Off = -XLenInBytes;
-    SDValue FrameAddr = lowerFRAMEADDR(Op, DAG);
-    SDValue Offset = DAG.getSignedConstant(Off, DL, VT);
-    return DAG.getLoad(VT, DL, DAG.getEntryNode(),
-                       DAG.getNode(ISD::ADD, DL, VT, FrameAddr, Offset),
-                       MachinePointerInfo());
+    // The frame record of the frame Depth levels up, reached through
+    // capability frame pointers; its return-address slot is read as an XLen
+    // integer, which for a spilled capability is its cursor (the low half).
+    MFI.setFrameAddressIsTaken(true);
+    EVT CapPtrVT = getPointerTy(DAG.getDataLayout(),
+                                DAG.getDataLayout().getAllocaAddrSpace());
+    SDValue FrameAddr = getFrameAddress(
+        DAG, DL, CapPtrVT, Depth, RI.getFrameRegister(MF), CapInBytes);
+    SDValue Ptr = DAG.getMemBasePlusOffset(
+        FrameAddr, TypeSize::getFixed(-CapInBytes), DL);
+    return DAG.getLoad(VT, DL, DAG.getEntryNode(), Ptr,
+                       MachinePointerInfo::getUnknownStack(MF));
   }
 
   // Return the value of the return address register, marking it an implicit
-  // live-in.
+  // live-in. Where calls are capability jumps, cjalr left a capability in ra,
+  // so the read must be an integer write: PseudoTRUNC_CAP stays an ADDI that
+  // clears the tag even when register allocation gives it ra's own register.
+  // A plain copy would not: a later PseudoBRIDGE_CAP into the same register is
+  // dropped on the premise that its source was last written as an integer.
   Register Reg = MF.addLiveIn(RI.getRARegister(), getRegClassFor(XLenVT));
-  return DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, XLenVT);
+  SDValue RA = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, XLenVT);
+  return SDValue(DAG.getMachineNode(Capstone::PseudoTRUNC_CAP, DL, XLenVT, RA),
+                 0);
 }
 
 SDValue CapstoneTargetLowering::lowerShiftLeftParts(SDValue Op,

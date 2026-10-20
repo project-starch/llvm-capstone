@@ -140,6 +140,75 @@ static void transfers(void)
     free(in);
 }
 
+/* __builtin_return_address and __builtin_frame_address. A return address is
+ * the address after the call, carried by an untagged pointer: it names code and
+ * grants nothing. A frame address is the frame pointer, a tagged capability to
+ * the stack, and one level up is the caller's. Each builtin is used the three
+ * ways the compiler lowers differently: returned, passed as an argument, and
+ * stored. The callers are never inlined and each call is followed by code, so
+ * every frame in the chain exists when it is walked. */
+static void *ra_arg, *ra_stored[2];
+static char *fa_stored[2];
+
+__attribute__((noinline)) static void record_return_address(void *ra) { ra_arg = ra; }
+
+/* The barrier keeps two calls two: without a side effect the compiler sees a
+ * pure function and merges them, and both return to the first call site. */
+__attribute__((noinline)) static void *returned_return_address(void)
+{
+    BARRIER();
+    return __builtin_return_address(0);
+}
+
+__attribute__((noinline)) static void frame_leaf(void)
+{
+    ra_stored[1] = __builtin_return_address(1);
+    fa_stored[1] = __builtin_frame_address(1);
+    BARRIER();
+}
+
+__attribute__((noinline)) static void frame_middle(void)
+{
+    ra_stored[0] = __builtin_return_address(0);
+    fa_stored[0] = __builtin_frame_address(0);
+    record_return_address(__builtin_return_address(0));
+    frame_leaf();
+    BARRIER();
+}
+
+static void frame_addresses(void);
+
+/* A return address lies in frame_addresses, after its entry. A loose bound:
+ * the order check below is what pins each value to its own call site. */
+static int in_caller(void *ra)
+{
+    char *at = ra, *entry = (char *)(void *)frame_addresses;
+    return at > entry && at - entry < 4096;
+}
+
+__attribute__((noinline)) static void frame_addresses(void)
+{
+    void *before = returned_return_address();
+    frame_middle();
+    void *after = returned_return_address();
+    BARRIER();
+    check(in_caller(before) && in_caller(after), "return_address_returned");
+    check(in_caller(ra_stored[0]) && ra_arg == ra_stored[0], "return_address_argument");
+    /* Three calls in straight-line code return to three increasing addresses. */
+    check((char *)before < (char *)ra_stored[0] && (char *)ra_stored[0] < (char *)after,
+          "return_address_call_site_order");
+#ifdef __CAPSTONE_PURECAP__
+    check(!TAG(before) && !TAG(after) && !TAG(ra_stored[0]) && !TAG(ra_arg),
+          "return_address_untagged");
+    /* One level up from the leaf is the middle frame's own view. Depth 1 needs
+     * every frame to keep a frame pointer, which the virtual profile does and a
+     * native -O2 build need not. */
+    check(ra_stored[1] == ra_stored[0] && !TAG(ra_stored[1]), "return_address_depth_1");
+    check(TAG(fa_stored[0]) && TAG(fa_stored[1]) && fa_stored[1] == fa_stored[0],
+          "frame_address_depth_1");
+#endif
+}
+
 int main(void)
 {
     for (int i = 0; i < N; ++i) {
@@ -271,6 +340,7 @@ int main(void)
     check(!TAG(control) && control == &cells[6], "control_byte_copy_drops_tag");
 #endif
 
+    frame_addresses();
     transfers();
 
     /* Last: before C-77 was fixed the first one faulted. */

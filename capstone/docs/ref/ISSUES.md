@@ -9744,6 +9744,80 @@ the branch at the review, `7b1ff902` rebased on dev `a4a41f19`; after = this fix
   the vector `BUILD_VECTOR` and fudge-table producers, which `+f,+d` alone does not reach on
   Capstone.
 
+### C-83 — `__builtin_return_address` is used as a 64-bit pointer where `void *` is a capability, and the frame walk at depth 1 or more is RISC-V's `FIXED 2026-10-16 on compiler/returnaddress-capability — COMPILER; found 2026-10-15 porting SPEC CPU2017 502.gcc_r`
+
+**What happens.** `llvm.returnaddress` is not overloaded on the pointer type: it yields an
+address-space-0 pointer, which on Capstone is a 64-bit integer, and clang returned that value as
+the C `void *` unchanged (`CGBuiltin.cpp`, `BI__builtin_return_address`, `BI_ReturnAddress`).
+- Passed as an argument (`r(__builtin_return_address(0))`, gcc's `ggc` statistics), clang adds an
+  `addrspacecast` to address space 200. `CapstoneTargetMachine::isNoopAddrSpaceCast` answers true
+  for every pair, so the 64-bit value went into a capability argument and `getCopyToParts`
+  asserted ("Unknown mismatch!").
+- Returned from a function, clang stored the 8-byte value into the 16-byte return slot and loaded
+  it back as a capability: the upper half was whatever the slot held.
+- At depth 1 or more both builtins asserted: `lowerFRAMEADDR` stepped the frame pointer with an
+  integer `ADD` on the capability (`VT.isInteger()`), and `lowerRETURNADDR` handed its own
+  integer type to it ("Couldn't find the register class").
+- A function that reads its return address and also spills `ra` failed `-verify-machineinstrs`
+  ("Using an undefined physical register", dev included): the read makes `X1` a live-in, the
+  prologue spills the capability `C1`, and the spill's kill flag looked only at `C1`.
+
+**Fix.**
+- clang makes the C value from the address on Capstone (`ptrtoint`, `inttoptr`): an untagged
+  pointer that carries the return address and grants nothing. Other targets are unchanged.
+  CHERI LLVM instead overloads `llvm.returnaddress` and returns the `ra` capability; here `ra`
+  holds an integer in the virtual and cap-table profiles (calls are `jalr`), so there is no
+  capability to return, and the address is what return-address consumers use (musl's `dlsym`, which
+  takes the caller's `ra` from its own stub, only does `addr2dso((size_t)ra)`).
+- The frame walk follows the frame record, two capability-sized slots below the frame pointer:
+  the saved frame pointer (a capability) at `fp - 32`, loaded with `ldc` and stepped with
+  `PTRADD`, and the return address at `fp - 16`, read with `ld` (where calls are capability jumps
+  `ra` is spilled with `stc`, and the low half is its cursor). The record is laid out this way for
+  ordinary C functions in all three profiles (measured with varargs, many callee-saved registers,
+  `alloca`, over-alignment and a 5000-byte frame, at `-O0` and `-O1`). Other calling conventions
+  (GHC, PreserveMost, interrupt handlers) and save/restore libcalls place it differently and are
+  not covered; a walk also needs every caller to keep a frame pointer, as on any target.
+- Depth 0 reads `ra` through `PseudoTRUNC_CAP`, an integer write that stays an `addi` until MC
+  lowering, so the value is never the capability `cjalr` left in `ra`, even when register
+  allocation reuses `ra`'s register (a later `PseudoBRIDGE_CAP` there is dropped on the premise
+  that its source was last written as an integer).
+- The prologue spill does not kill a callee-saved register any of whose sub-registers is a
+  live-in.
+
+**Not changed, same family (from the review).** `isNoopAddrSpaceCast` still answers true for
+address spaces 0 and 200: the memory-libcall fallback depends on it (`SelectionDAG.cpp`,
+`getMemcpy`/`getMemmove`/`getMemset`), and an `addrspacecast` 200 → 0 → 200 folds to the
+identity, so a lossy cast needs its own design. `__builtin_dwarf_cfa` returns `llvm.eh.dwarf.cfa`'s
+address-space-0 pointer the same way, and the thread pointer is lowered from `X4` as an address-
+space-0 value; both need stack or TLS authority rather than an address and are left open.
+
+**Measured (2026-10-16, assertions-ON Release builds on p12; before = dev 638493a31981, after =
+this branch, the same build tree with the three source files swapped).**
+- Before, `clang -O1` of `void *f(void *p){ r(__builtin_return_address(0)); return p; }` and the
+  hosted contract both abort with "Unknown mismatch!"; `__builtin_frame_address(1)` aborts in
+  `getNode`. After, the reproducers compile in all three profiles at `-O0`, `-O1` and `-O2` with
+  `-verify-machineinstrs`.
+- `llvm/test/CodeGen/Capstone/frame-return-address.ll` (depths 0-2 of both intrinsics, the
+  call-argument shape; virtual and cap-table at `-O2`, virtual and physical at `-O0`, physical at
+  `-O2`, and an MIR check of `PseudoTRUNC_CAP`) and `clang/test/CodeGen/capstone-return-address.c`
+  (returned, passed, stored, frame-address control, riscv64 control) fail before and pass after.
+- Mutations, each rebuilt: clang without the conversion fails the clang test; the frame step at
+  one slot, the return-address slot at 8 bytes, depth 0 without `PseudoTRUNC_CAP`, and the old
+  spill kill flag each fail `frame-return-address.ll`.
+- lit over CodeGen/Capstone, MC/Capstone and clang's Capstone CodeGen/Sema tests, 162 tests: the
+  two new tests go from FAIL to PASS and nothing else changes; `shared-patches-present.test` needs
+  a git checkout, and the drift check passes in the worktree (118 files).
+- musl built by both compilers: all 1361 objects of `libc-capstone.a` byte-identical (musl uses
+  neither builtin).
+- `hosted-contract.c` `frame_addresses()`: virtual 27/27 and native 21/21, the gate 59/59. The
+  call-site order check fired before it was right: without a barrier both compilers merge the two
+  calls of the helper, and it failed on both arms. With the dev compiler the file does not build.
+- Gates with this compiler's SDK and ports (memcached, SQLite, mruby, Perl): runtime 43/43, nodes
+  and malloc pass; memcached passes 104 and fails `fx24_prediction`, the flake seen on the C-81 and
+  C-82 runs. SQLite's hosted build does not prepare on dev 638493a31981 (its sorter rewrite is now
+  applied twice, by `adapt-sqlite-322.sh` and by `prepare-sources.sh`); the run used a copy of
+  `prepare-sources.sh` that skips an applied rewrite. That is a separate change.
+
 ### C-79 — library calls the simplifier emits take and return address-space-0 pointers, so with builtins on a folded `strchr` returns a plain integer `FIXED 2026-10-13 on compiler/libcall-capability-pointers — COMPILER; found 2026-10-13 building SPEC CPU2017 hosted (500.perlbench_r crashed clang, 525.x264_r failed instruction selection)`
 
 **What happens.** `BuildLibCalls.cpp` declares every library function the simplifier emits with
