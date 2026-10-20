@@ -4209,3 +4209,407 @@ that was being refused, so its presence there predicts nothing about whether tha
 
 **What would have caught it:** asking what the claimed cause predicts at the exact instruction decoded. The decode
 named that instruction, and the claimed cause was the instruction itself.
+
+### node-floor-2 on tree A, Tier 1, result (2026-10-20 07:45-07:51, board 1): PASS
+
+`records/t1-nf2-treeA.result-lines.txt`. UNGATED.
+- **The rungs:** b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1, all as their oracles and as on tree B.
+- **The banner** node-floor-2 is present. DRT1 0, DRTX 0, no Oops.
+- **Release lines:** 3 unique by kernel timestamp, for 3 contexts: attempted 11, 11 and 13, each fully succeeded,
+  first_id 1024. The check's "6" again counts vm-suite's KMSG replay.
+- **So 54d8a3af has passed Tier 1 on both bitstreams.** The scorable sql0 arm waits only on the compiler lane's QEMU
+  reference for runner 7ce203f9.
+
+### INCIDENT (2026-10-20 08:15-08:16, board 1): an unregistered boot started from a dry run, and was stopped before any result
+
+While dry-running `tier3-sql-arm-rev2q.sh` (the scored sql0 arm, not yet pre-registered), the test command made a second,
+UNSTUBBED call to the runner, meant to show that the real checks pass.
+- Every check did pass, so the runner went on:
+  - a real measure bake (25,856,520 B);
+  - `T3PG sql0-nf2A BEGIN 08:15:55`;
+  - a real board-1 boot: power on, the bootloader prompt, and one firmware image upload begun.
+- The task was stopped within about a minute. The driver's cleanup released the board (power off, `BOARD_RELEASED`), and
+  board 1 reads FREE.
+- Both bakes ended in `shared image restored; BAKE_DONE`.
+- **No transcript and no result exist**, and nothing was flashed. The run directory was in the scratchpad and was deleted.
+- **The cause:** a dry run must stub EVERY invocation. A "just the checks" call on the real path is a real launch.
+- The arm is pre-registered below, before its real boot.
+
+### sql0-nf2A, the first SCORED sql0 arm on silicon, pre-registered (2026-10-20 08:2x, before its boot): board 1, tree A
+
+- **The runner:** `tier3-sql-arm-rev2q.sh` 0fe9fffc0e15f273. It is sql0-drt2 (rev2j) with these changes:
+  - dev's runner 7ce203f9, from the dev-pinned wt-q15, with its QEMU PASS line (t3-sql-nf2-r2/CHECK, compiler lane
+    sql0-nf2-reference 03b1ecfcd33b);
+  - kits bkit7-rev2xDN2 / bkit7-rev2xmDN2 (module 54d8a3af, Tier 1 PASS on both trees);
+  - the prediction t3-sql-nf2-r1/bundle (QEMU qkit7-nf2, the twin a1fa252f; equal to its repeat r2 and to the old
+    1f099612 record, cell by cell; fixture 956173e054762e91, image 64010720f1a6b3bc).
+  - The rest is rev2j's: the measure-only bake under the 26,000,000 B cap, the narrowed must-fire (no directory-open
+    FATAL, positive control answered), and score-arm into sql-repros results/2026-10-20-vp2c-treeA/vp2-malloc-nf2.
+  - New readings: FRTY, the banner, and the release lines (unique, against 21, with any succeeded < attempted).
+- **Its stubbed dry run** passed every check and stopped at the stub's missing inputs (SQL VOID), as it should. The
+  unstubbed call of the incident above is not a dry run and is not counted.
+
+**The prediction (the compiler lane's):**
+- the 9 cells as the QEMU reference: CAUGHT 2 (02 and 03, cause 28 in memcpy) and MISSED 7 (01, 04-09);
+- 21 of 21 sessions, with the must-fire held;
+- FRTY 0 and DRT1 0, as on sql0-nf2-treeB;
+- 21 release lines, each with succeeded = attempted.
+- A cell in an R-60 aliasing band would read MISSED where QEMU catches it. Neither CAUGHT cell is a far overrun, so none
+  is expected.
+- A cell that differs is a reading against this single record, possibly variance, until a repeat.
+
+### cpyp-DB, result (2026-10-20 07:39-08:23, board 2, tree B): pc=0 is unchanged on tree B, so S-29 is excluded by either route
+
+`records/cpyp-db.result-lines.txt`. UNGATED. No prediction was registered.
+- **The boot:** 10 of 10 steps ran.
+- **pc=0:** `domain fault cause=12 pc=0x0 address=0x0 … last=0x3f` appears once each in 17-control, 23 and 23-control, the
+  same steps and line shape as cpyp-D on tree A.
+- **The rest is the same as cpyp-D:** MISSED 2, NO-READING:unattributed 1, FRTY 9, DRT1 1, no Oops.
+- **The reading:** the bitstream, with S-29's satp flush, does not change the faults. With cpyp-DZ (not the retries) and
+  the compiler lane's source exclusions (not vp2's latched rd, not the zero page), the attribution stays open with the
+  compiler lane, and every recorded candidate is now excluded.
+
+### pb10's srz-nop pair, pre-registered (2026-10-20 08:2x, before its boots): board 2 after q15 subset f on tree B
+
+The runtime lane's discriminator for pb10's FRTY 2 → 0 under srz, the open anomaly; it was idle-time work. The builds
+are the compiler lane's (srz-nop-pair 5260ec650af4).
+- **The control:** 607164b9, rebuilt from ce25d6de7280 byte-identical to pb10-srz's module.
+- **The variant:** 2a8f85f70d8efcdd (banner srevroot-nopf-1). Both are 4,577 instructions with 0 RVC and an 18,080-byte
+  .text. The .text differs in exactly 3 words, each `csrw 0x5c1, x0` → `nop`, and restore_root's write stays in both.
+- **Its stated limit:** a CSR write also flushes at commit and a nop does not. So the pair separates "the post-CSRUNV
+  write" from "no write", not "the zeroed srevroot" from "the flush". A third arm could split those two.
+
+**1. The variant's own Tier 1 boot** (a new module revision):
+- `tier3-smoke/chain-nop-b2.sh` 7d1b431aecd291db → `board-tier12/srz/run-tier1-nop-b2.sh`
+  1fbabb5552e9af9d, on image-rev7-nop 6372312d8a2593e5 (`nop-prep.sh`
+  3f577493849ccc54, module checked in rootfs.cpio by sha256) and firmware fw-t1-nop 5090454288ce529f
+  (dom_stack PASS).
+- **The gate:** the rungs equal t1-old's. On PASS it writes CHAIN_PBNOP_GO.
+- **Not applicable:** this module base has no release line, so the release check reads 0 lines, by construction, not as
+  a shortfall.
+
+**2. The pair** (`tier3-smoke/tier3-pb10-nop-b2.sh` e6d339c36e1785c4), two cold boots on pb10
+with only the module changed:
+- pb10-srzc on bkit7-pb10BZ, then pb10-nop on bkit7-pb10BN (`make-pb10nop-kit.sh` b604ae4e83aef4df:
+  BZ with only the .ko changed).
+- Each is scored against t3-pb10/bundle and filed under ffmpeg/pool-repros results/2026-10-20-vp2c-treeB.
+
+**The predictions (the compiler lane's):**
+- the control reads FRTY 0, as pb10-srz did;
+- the variant reads FRTY 2 if the post-CSRUNV write removed the retries, or 0 if something else in the srz module did;
+- the cells are 4 of 4 in both.
+
+**The dry runs,** with every call stubbed: the chain's PASS and FAIL branches; the pair through both arms, with the staged
+module checked; the pair HOLDing on FAIL.
+
+### q15 subset f on tree B, result (2026-10-20 08:23-08:35, board 2): case 31 is MISSED on tree B too
+
+`records/q15bf.board.txt` and `records/q15bf.result-lines.txt`. UNGATED.
+- **The cells:** 30 CAUGHT (vdbeRecordCompareInt+536), 31 MISSED (completed, with the same
+  `Q15_PAD items=183 padded=2 pad_bytes_total=128 pad_bytes_max=64`), 32 CAUGHT (statDecodePage+704).
+- **The same three readings as both tree-A boots,** as predicted. Cause 29 0, FRTY 3, DRT1 0, no Oops.
+- **So R-60's corpus witness holds on both bitstreams.** Tree B's decode path was identical by source, and is now read.
+- **Filing:** the runner's scorer hit the known collision with the fixed q15f.pred (NO DATA, not a pass). The run was
+  scored by hand into q15bf.pred: 2 of 3, the same DIFF on 31.
+  - The bundle is `sqlite/engine-repros/results/2026-10-20-vp2c-treeB/vp2-nested-pools-q15f`, beside that directory's
+    a-c bundles.
+  - The merged a-c bundle stays as filed. Combining is the fold's decision.
+
+### pb10's srz-nop pair, result (2026-10-20 08:35-09:00, board 2, tree B): the post-CSRUNV write ITSELF removes pb10's refused fetches
+
+`records/pb10-nop.result-lines.txt` and the two board records. UNGATED.
+- **The variant's Tier 1 (t1-nop):** PASS, with the four rungs as t1-old's and the banner srevroot-nopf-1. DRT1 1
+  (803833B6), the data face, which srz's zeroing removes and this build lacks. No prediction was registered for it.
+- **pb10-srzc** (the srz control 607164b9): FRTY 0, DRT1 0, no Oops, 4 of 4 cells. It repeats pb10-srz.
+- **pb10-nop** (2a8f85f7): FRTY 2, at 00F13DDC, which decodes against its own .ko to vm_ioctl+0xa98, the unique CSRUNV
+  successor, which is the nop itself. DRT1 0, no Oops, 4 of 4 cells.
+  - The face is back, at its original site.
+- **The reading:** the two builds have the same instruction count and layout and differ in 3 words only, so timing and
+  allocation are the same. The fetch retries come back exactly when the post-CSRUNV `csrw 0x5c1, x0` becomes a nop. So
+  that write removes them, which the compiler lane's prediction "FRTY 2 if the post-CSRUNV write removed the retries"
+  states.
+- **What it does not separate, as registered:** the zeroed srevroot value from the pipeline flush that any CSR write
+  causes at commit. A third arm, a flushing write that leaves srevroot unchanged, would split them. The compiler lane
+  offered to build it.
+- **No recorded mechanism predicts either branch yet.** The open anomaly is narrowed to "the write at CSRUNV+4", not
+  explained.
+- **Bundles:** ffmpeg/pool-repros results/2026-10-20-vp2c-treeB/vp2-nested-pools-{srzc,nop}.
+
+### pb10's srz-rc arm (the third arm), pre-registered (2026-10-20 09:2x, before its boots): board 2
+
+The compiler lane's third arm (lane srz-rc-arm b976f64ed5aa), splitting pb10's "the write matters" into value versus
+flush. Module c8c8a6f28548637b (banner srevroot-rcf-1).
+- **The change:** the srz source with each post-CSRUNV `csrw 0x5c1, zero` replaced by `csrrc x0, 0x5c1, rA`, where rA
+  is that CSRUNV's own action register. The .text differs from 607164b9 in 3 words (0x1590, 0x3ddc, 0x41a4), with the
+  same layout.
+- **The compiler lane's RTL reading** in both trees:
+  - csrrc with rs1 != 0 writes (decoder.sv:444-448);
+  - any srevroot write flushes (csr_regfile.sv 2014 / 2020);
+  - CSR_CLEAR writes old & ~rA, so the page-aligned value is unchanged;
+  - the trackers' forget pulse (`revnode_ns_flush_o`, ex_stage.sv:1417 / 1420) and vctx_table_o fire on a VALUE
+    change.
+- **So pb10 gets a clean three-way:**
+  - nop: no write (FRTY 2, read);
+  - rc: write plus flush, with no value change;
+  - srzc: write, flush and value change (FRTY 0, read).
+- **Its stated caveat:** the RTL lane leaves open whether the switcher's walk can overlap the next CSR instruction. If it
+  can, csrrc's read of the old value is not guaranteed.
+
+**1. Its own Tier 1 boot:** `tier3-smoke/chain-rc-b2.sh` 1766d380e5b7dc35 →
+`board-tier12/srz/run-tier1-rc-b2.sh` 711d7a51ab591223.
+- image-rev7-rc aead9fdf5a2075c9, from `rc-prep.sh` 9166dfcd3b49547b, with the module checked in
+  rootfs.cpio;
+- firmware fc178ea5e3ad5994, dom_stack PASS.
+- **The gate:** the rungs equal t1-old's. This base has no release line, as for t1-nop.
+
+**2. pb10-rc:** `tier3-smoke/tier3-pb10-rc-b2.sh` 0d7fb361a144c46d, one cold boot on bkit7-pb10BR
+(`make-pb10rc-kit.sh` 628a801b3e2d7d63: BZ with only the .ko changed), scored against t3-pb10/bundle.
+
+**Predictions (the compiler lane's):**
+- FRTY 0 under rc: the flush alone heals;
+- FRTY 2 at vm_ioctl's CSRUNV successor: the value change (the forget pulse or the namespace flag) is what heals;
+- the cells are 4 of 4 either way.
+
+**The dry runs,** with every call stubbed: the chain's PASS and FAIL, and the arm, which HOLDs on FAIL.
+
+### cpyp-DF: cpython's pc=0 with a fatal-fault register dump, pre-registered (2026-10-20 09:2x, before its boots): board 1 after sql0-nf2A
+
+The compiler lane's package A (lane module-fault-regs-srz af50965cbdab). Module 53507c769b51758a (banner
+fault-regs-srz-1): the srz module 607164b9 plus a KERN_EMERG register dump at a fatal fault, so against cpyp-DZ the dump
+is the ONLY variable.
+- **The dump:** at a CV_RESOLVE failure or a terminal kind-2 escape, it prints:
+  - `capstone_vm: FREG thread=.. rc=.. kind=.. cause=.. pc=.. addr=.. entries=.. entry_pcc=lo:hi`;
+  - 8 `FREG xN` lines, 4 slots each, with '*' marking a slot changed since the last CSRUNV entry;
+  - `FREG args`, then 4 `FREG sp+0x..` lines (or `FREG stack unreadable`).
+  - At most one block per thread.
+- **Its QEMU gate** (the compiler lane):
+  - two-sided Tier 1 equal to srz's;
+  - 8 FREG blocks, exactly the 8 exit-139 tests;
+  - planted jump0.dom controls read the null-call arm as x1 = main's return point, and the ret arm as x1 = 0 with the
+    saved ra at sp+0x10.
+
+**1. Its own Tier 1 boot on tree A** (`tier3-smoke/chain-frs-b1.sh` 86c047c2e363bbba →
+`board-tier12/srz/run-tier1-frs-treeA-b1.sh` 76c7b39d8c0f848c):
+- image-rev7-frs 3c6dd5f4ecfbe45c (`frs-prep.sh` b1705eb46250d977) and firmware 34d39bd571b83098;
+- **the gate:** the rungs equal t1-old's;
+- **read:** the FREG blocks. vm-contract's stale branch faults (exit 139), so at least one block is expected there, with
+  x0's low word = the fault pc. That is the silicon positive control.
+
+**2. cpyp-DF** (`tier3-smoke/tier3-cpy-f.sh` f5534549d94b5160, only on step 1's PASS):
+- cpyp-DZ's exact stage and runner with --only 03,17,23, on kit bkit7-rev2xnDF (`make-cpyf-kit.sh`
+  1cb28c641793a9f1: rev2xnDZ with only the .ko changed).
+
+**The prediction (the compiler lane's):**
+- the banner once; DRT1 0 and FRTY 0, as DZ;
+- pc=0 once each in 17-control, 23 and 23-control, each with a FREG block (cause=12 pc=0 addr=0, x0's low word 0);
+- the block decides between:
+  - (a) x1 a '*'-marked code address in cpython.dom: a jump through a zero target, with the call site at x1-4;
+  - (b) x1 = 0: a ret with a cleared ra, with the caller's saved frame in the sp words;
+  - (c) no '*' on any slot and entry_pcc's low word 0: the resume itself landed at 0, on the module/frame side.
+
+**An instrument failure, reported as NO DATA:**
+- a pc=0 line with no FREG block;
+- x1..x31 all zero;
+- `stack unreadable` with x2 inside the 8 MB stack arena.
+
+**The dry runs,** with every call stubbed: the chain's PASS and FAIL, and the arm's FREG extraction per step. The arm
+HOLDs on FAIL.
+
+### cpyp-DFp, pre-registered (2026-10-20 09:3x, before its boot): board 1 after cpyp-DF; cpyp-DF with ONE change, the image
+
+The compiler lane's follow-up.
+- **The image:** t3-cw/p, cpython.dom 7e5ba3b993b98957: cpython-lt0's recorded build replayed with only the runtime
+  archive changed (5b3e6b79 + 232d13b2's heap.c hunks, archive fb593f1e18c2b4b5).
+  - The replay's control arm reproduces the record byte for byte: runtime de225188, image 0d322044, and loaded bytes
+    47dcef5f380b3217, which are 20bcfdd1's loaded bytes.
+  - 232d13b2 removes backend_pointer's out-of-window intermediate. On QEMU it takes escape_out from 6,923 to 359 on
+    --only 03,17,23, and removes a QEMU-only, timing-dependent cause-28 at __capstone_mallocng_free+0xb4.
+  - QEMU on p: no domain fault, with 03/17/23 MISSED.
+- **The runner:** `tier3-smoke/tier3-cpy-fp.sh` 20fb86715f0c3cf1, cpyp-DF's with --build and the image
+  hash changed. It runs only if cpyp-DF reads CPP DONE, and HOLDs on its STOP or HOLD, since the kit carries the same
+  module.
+  - Its dry run passed the p build, and HOLDed on a DF HOLD.
+- **Settled on QEMU (the compiler lane):** with the board's path layout, QEMU's grant sequences equal the board's (03 at
+  all 684 grants; 17-control and 23-control at all 372). So the three pc=0 stops are deterministic and silicon-only, at
+  grant 372 (17-control and 23-control) and 524 (23).
+
+**The prediction (the runtime lane's, written now):** pc=0 PERSISTS on p, at the same grant positions, in 17-control,
+23 and 23-control, each with a FREG block as in cpyp-DF.
+- **If p clears pc=0 on silicon,** the prediction is wrong, and R-60's alias-on-access is the next suspect.
+- Either way, cells 03/17/23 and FRTY/DRT1 are read beside it.
+
+### pb10's srz-rc arm, result (2026-10-20 09:21-09:37, board 2, tree B): the flush alone does NOT heal; the VALUE change does
+
+`records/pb10-rc.result-lines.txt` and its board record. UNGATED.
+- **The rc module's Tier 1 (t1-rc):** PASS, with the four rungs as t1-old's, the banner srevroot-rcf-1, and DRT1 0, DRTX
+  0, no Oops.
+- **pb10-rc** (c8c8a6f2): FRTY 2 at 00F13DDC, which decodes against its own .ko to vm_ioctl+0xa98, the CSRUNV successor:
+  `csrc 0x5c1, s3`, the arm's own non-value-changing write. DRT1 0, no Oops, 4 of 4 cells.
+
+**The three-way on pb10,** each on the same kit with only the .ko changed, and pb10's site the instruction after
+vm_ioctl's CSRUNV:
+
+| arm | the instruction at CSRUNV+4 | write | flush | srevroot value change | FRTY |
+|---|---|---|---|---|---|
+| pb10-nop | nop | no | no | no | 2 |
+| pb10-rc | csrrc x0, 0x5c1, rA | yes | yes | no | 2 |
+| pb10-srzc | csrw 0x5c1, x0 | yes | yes | yes | 0 |
+
+- **So what heals pb10's refused fetches is the VALUE change of srevroot.** On the compiler lane's RTL reading, that
+  is the value-keyed tracker forget pulse (`revnode_ns_flush_o`, ex_stage.sv:1417/1420) or the namespace flag
+  (vctx_table_o), not the CSR write's commit flush.
+- **The arm's stated caveat** (whether the switcher's walk can overlap the next CSR, so csrrc reads a stale value) would,
+  if it bit, make csrrc write a CHANGED value and heal, like srz. It did not heal, so the caveat does not produce this
+  reading.
+- **No recorded mechanism yet says WHY a value change at CSRUNV+4 matters for the fetch at CSRUNV+4.** The anomaly is
+  narrowed to "the forget pulse or the flag", not explained. N=1 per arm, all on tree B.
+- **Bundle:** ffmpeg/pool-repros results/2026-10-20-vp2c-treeB/vp2-nested-pools-rc.
+
+### sql0-nf2A, result (2026-10-20 08:19-09:37, board 1, tree A): the first SCORED postgres arm on vp2 silicon, 7 of 9 cells as QEMU; 03 and 07 fail in CREATE EXTENSION, board-only
+
+`records/sql0-nf2A.board.txt` and `records/sql0-nf2A.result-lines.txt`. UNGATED.
+- **The boot:** completed, with the inputs as recorded (fixture 956173e054762e91, image 64010720f1a6b3bc).
+- **The must-fire held:** no directory-open FATAL in any session, and the positive control answered. All 21 sessions ran.
+- **S-23:** FRTY 0, DRT1 0, DRTX 0, no Oops. The banner node-floor-2 appears once. 21 release lines, every CSRETIRE
+  succeeded.
+- **The cells against the QEMU reference** (t3-sql-nf2-r1): 7 of 9 the same.
+  - 01 and 04-09: MISSED, as QEMU.
+  - 02: CAUGHT, cause 28 at memcpy+200, as QEMU.
+  - **03 (ltree) and 07 (pg_trgm) are NO-READING:out-of-denominator,** because their triggers were not reached.
+- **Why 03 and 07 were not reached, from the transcript:**
+  - 03: `CREATE EXTENSION ltree` fails with `duplicate key value violates unique constraint
+    "pg_operator_oprname_l_r_n_index"`, key `(>=, 12777, 12777, 2200) already exists`, in the case and in its control.
+    The trigger statement then fails with `type "lquery" does not exist`.
+  - 07: `CREATE EXTENSION IF NOT EXISTS pg_trgm` errors with `operator does not exist: text % text`, and the session
+    then dies with `domain fault cause=12 pc=0x0 address=0x0 … last=0x43`. That is cpython's board-only pc=0 shape, in a
+    second port.
+- **These are deterministic and board-only:**
+  - sql0-drt2 (tree A, module 39d8492d, runner 8826a2ca) carries the identical errors: 3 duplicate-key, 2 missing
+    operator, 1 pc=0, at the same key.
+  - QEMU's r1 serial.log, which records the session output (21 backends, its one expected ERROR, 4 domain faults), has
+    none of them.
+  - So these cells are a silicon divergence in catalog maintenance during CREATE EXTENSION, not variance: a false
+    duplicate key in a btree unique index, and a just-created operator not found.
+- **Not attributed.** Suspects, none read:
+  - an R-60 alias (an out-of-window read giving a wrong btree comparison);
+  - the same cause as cpython's pc=0.
+  - The window-counter QEMU replay of these two cases is the cheapest first check (the compiler lane's instrument).
+- **The bundle:** postgres/sql-repros results/2026-10-20-vp2c-treeA/vp2-malloc-nf2. 03 and 07 are recorded as this
+  board divergence, not as model errors.
+
+### sql0-nf2B, pre-registered (2026-10-20 09:4x, before its boot): board 2, tree B, sql0-nf2A with ONE change, the bitstream
+
+- **The runner:** `tier3-sql-arm-rev2r.sh` 243b91b46fda3ce7, rev2q with the board fields changed: kits bkit7-rev2xBDN2 /
+  bkit7-rev2xmBDN2 (tree B 8de3c48cf, board 2, the same module 54d8a3af and monitor f13dbc5), the board-2 busy check, and
+  results filed under 2026-10-20-vp2c-treeB.
+- **Unchanged:** the runner 7ce203f9, the reference t3-sql-nf2-r1 and the image.
+- **Its stubbed dry run** stopped at the stub's missing inputs (SQL VOID), as it should.
+
+**The prediction:**
+- **as sql0-nf2A:** 7 of 9, with 03 and 07 out of denominator by the same CREATE EXTENSION failures (the duplicate key
+  (>=, 12777, 12777, 2200); `operator does not exist: text % text`, then pc=0);
+- FRTY 0, DRT1 0, and 21 release lines, each fully succeeded.
+- **03 or 07 reaching its trigger on tree B** would make the failures bitstream-dependent. That is information about
+  S-29's flush, which is the only RTL difference between the trees.
+
+### fault-regs-1's own Tier 1 boot, pre-registered (2026-10-20 10:1x, before the boot): board 2 after sql0-nf2B
+
+The compiler lane's fault-regs-1 (lane module-fault-regs a486a9666fd9; board module 0d92d06a2abc6298): node-floor-2
+(54d8a3af, the module of sql0-nf2A and sql0-nf2B) plus the FREG fatal-fault dump, so it is one variable against them.
+Its QEMU Tier 1 equals nf2's (PASS 30/45, FREG 8 = the 8 exit-139 tests).
+- **The chain:** `tier3-smoke/chain-fr1-b2.sh` 585b2dad3e7fc579 → `board-tier12/srz/run-tier1-fr1-b2.sh`
+  0569cf9bd51656a7.
+- **The image and firmware:** image-rev7-fr1 a886326e314636bd (`fr1-prep.sh` ca3657683a719587, the
+  module checked in rootfs.cpio) and firmware e24b525b6937a5ac.
+- **The gate:** the rungs equal t1-old's.
+- **Also read:** the banner fault-regs-1; the release lines (this base has them); the FREG blocks, at least one at
+  vm-contract's stale fault, with x0's low word = the fault pc, as the silicon positive control.
+- **On PASS** it writes CHAIN_FR1_GO for the sql0 dump arm. That arm is pre-registered separately, when the compiler
+  lane's `_bt_check_unique` diag image arrives.
+- **Its dry run,** stubbed: PASS, FAIL, and a start on sql0-nf2B's VOID too.
+
+### cpyp-DF, result (2026-10-20 09:37-10:28, board 1, tree A): every pc=0 is a JUMP THROUGH A ZERO TARGET from one call site, x1 = 3ff6321c14
+
+`records/cpyp-df.result-lines.txt`. UNGATED.
+
+**The fault-regs-srz Tier 1 (t1-frs):** PASS, with the four rungs as t1-old's and the banner present.
+- The silicon positive control fired: one unique FREG block at vm-contract's stale fault (cause 25), whose x0 slot equals
+  the fault pc (3f989140f0).
+
+**cpyp-DF:**
+- 10 of 10 steps ran. FRTY 0, DRT1 0, no Oops.
+- The cells are as cpyp-D/DZ: MISSED 2, NO-READING:unattributed 1.
+- **pc=0** appears once each in 17-control, 23 and 23-control, as predicted, and each with exactly one FREG block (3
+  blocks).
+- **Every block reads:** `kind=4 cause=12 pc=0 addr=0`, x0's slot low word 0 (= the fault pc), the stack readable, and x1..x31
+  non-zero. So none of the NO DATA cases hold.
+- **x1 = 3ff6321c14, marked '*'**, in all three blocks. That is a code address inside cpython.dom (code base 3ff6000000,
+  so image offset 0x321c14), written since the last CSRUNV entry.
+  - This is the pre-registered reading (a): a jump through a zero target. The call site is x1-4 = 3ff6321c10, one and
+    the same site for all three stops. The compiler lane maps it to its function.
+  - Not (b), since x1 is not 0, and not (c), since the slots carry '*' and entry_pcc's low word is non-zero.
+- **One deviation from the pre-registered wording:** the dump reports kind=4, not the kind-2 terminal escape the
+  pre-registration names. That is the compiler lane's to read.
+
+### sql0-dumpB, pre-registered (2026-10-20 10:4x, before its boot): board 2 after fault-regs-1's Tier 1; two observation-only changes against sql0-nf2B
+
+- **The module:** fault-regs-1 0d92d06a2abc6298 (node-floor-2 plus the FREG dump). The kits are bkit7-rev2xBDF1 /
+  bkit7-rev2xmBDF1 (`make-fr1-kits.sh` a7f166941e9d6df2), sql0-nf2B's kits with only the .ko changed.
+- **The image:** DIAG-BTU a2bf0a6ed7c6784b (compiler lane pgdiag-btu dc9e65694a96, t3-cw/postgres-diag), the recorded
+  postgres build with only nbtinsert.o changed.
+  - The unmodified object reproduces the record. The duplicate-key ereport gains a HINT printing the existing equal index
+    tuple, the heap tid checked, and the new tuple, each with its raw bytes. The manifest names the patch (diag_patch).
+  - SDK-BUILTINS OK on postgres.dom.
+- **QEMU positive control** (the compiler lane, qkit7-nf2): a planted primary-key violation prints the line once. Case 03
+  prints none, since on QEMU it is CAUGHT at memcpy as usual.
+- **The runner:** `tier3-sql-arm-rev2s.sh` c5c33fde203dc07d, rev2r with the module, kits, image and trigger
+  changed, and READINGS in place of scoring, because a different image voids a cell comparison with the QEMU record.
+  - It reports the cells as information, every DIAG-BTU hint with its step, and every FREG block with its step.
+  - Its stubbed dry run reached SQL DONE with both kinds of reading and an empty cell list read as NO DATA.
+- **It starts on CHAIN_FR1_GO,** fault-regs-1's Tier 1 PASS.
+
+**The expectations:**
+- 03 and 07 fail as on sql0-nf2A/nf2B, if nf2B reads as nf2A.
+- 03's duplicate-key error now carries a DIAG-BTU hint: the two tuples silicon compared, with raw bytes. That is the
+  wrong VALUE that can be compared with QEMU's at the same point.
+- 07's pc=0 now carries a FREG block naming the jump's call site (x1).
+- **The compiler lane's candidate,** MOVC nulling an untagged integer source on vp2 (C-32/Q-04 (b); read from cpyp-DF's
+  dump: `movc s2, a3` left a3 = 0 before `jalr a3`), predicts 07's x1 at a call through a MOVC-copied integer. It
+  predicts no specific key for 03. The reading may show whether a zeroed integer fed the comparison.
+- **Not predicted:** S-23 (FRTY 0, DRT1 0 expected as nf2B), and 21 release lines.
+
+### sql0-nf2B and fault-regs-1's Tier 1, results (2026-10-20, board 2, tree B)
+
+**sql0-nf2B (09:42-11:01): identical to sql0-nf2A,** so the CREATE EXTENSION failures do not depend on the bitstream.
+- 7 of 9 cells the same as the QEMU reference. The must-fire held. FRTY 0, DRT1 0. 21 release lines, every CSRETIRE
+  succeeded.
+- 03 and 07 are out of denominator by the same errors: 3 duplicate-key (>=, 12777, 12777, 2200), 2 `operator does not
+  exist: text % text`, and 1 pc=0, as on tree A.
+- That fits C-32 (ISSUES, dev 3f606b097841): MOVC's integer-nulling rule is byte-identical in both trees.
+- `records/sql0-nf2B.result-lines.txt`; bundle postgres/sql-repros results/2026-10-20-vp2c-treeB/vp2-malloc-nf2.
+
+**fault-regs-1's Tier 1 (11:01-11:08): PASS.**
+- The four rungs read as t1-old's, the banner fault-regs-1 is present, and DRT1/DRTX/Oops are 0.
+- 3 unique release lines (the "6" counts the KMSG replay), each fully succeeded, first_id 1024.
+- The silicon positive control fired: one unique FREG block at vm-contract's stale fault (cause 25), whose x0 slot is
+  the fault pc.
+- `records/t1-fr1.result-lines.txt`. sql0-dumpB started on its GO.
+
+**Root cause of the silicon-only stops: C-32** (dev 3f606b097841, checked against the RTL and the QEMU reproduction).
+On vp2, MOVC nulls an untagged integer source, while the corpus SDK compiles with `+movc-keeps-integer-source`.
+- **The lead's decision (2026-10-20):** board-bound corpus images are rebuilt WITHOUT `+movc-keeps-integer-source` until
+  Q-04 (b) is in a bitstream. The compiler's CapstoneLiveSourceCopy then rewrites live-source copies, so silicon and QEMU
+  agree whatever the RTL does.
+- The QEMU references are re-recorded for the rebuilt images.
+
+### cpyp-DFp, result (2026-10-20 10:28-11:14, board 1, tree A): pc=0 PERSISTS on the fixed-runtime image, as predicted (C-32)
+
+`records/cpyp-dfp.result-lines.txt`. UNGATED.
+- 10 of 10 steps ran. FRTY 0, DRT1 0, no Oops. The cells are as cpyp-DF: MISSED 2, NO-READING:unattributed 1.
+- **pc=0** appears once each in 17-control, 23 and 23-control, each with one FREG block:
+  - `kind=4 cause=12 pc=0`, x0's slot 0;
+  - **x1 = 3ff5321bfc ('*')**, image offset 0x321bfc, the same in all three.
+  - That is 0x18 below cpyp-DF's 0x321c14. The image differs (the runtime archive changed), so the offset moving is
+    expected. The compiler lane maps it to the call site.
+- **The runtime lane's prediction holds:** 232d13b2 (the out-of-window intermediate fix) does not touch MOVC, and the stop
+  is C-32's movc-then-jalr (ISSUES C-32, dev 3f606b097841), so it persists.

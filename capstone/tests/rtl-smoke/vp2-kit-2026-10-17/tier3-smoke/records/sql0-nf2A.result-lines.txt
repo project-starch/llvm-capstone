@@ -1,0 +1,14 @@
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 28822623 bytes)
+T3PG sql0-nf2A BEGIN 08:19:44 (trigger: SQL_NF2A_GO 08:18:56 board 1 free; pre-registration 0b8e5d5b6da2 pushed)
+T3PG sql0-nf2A END 09:37:22 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 1, 'MISSED': 6, 'NO-READING:out-of-denominator': 2}
+SQL inputs as recorded: fixture 956173e054762e91, image 64010720f1a6b3bc
+SQL MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+SQL S-23: FRTY 0 DRT1 0 DRTX 0 Oops 0; banner node-floor-2 x1; release lines 21, with succeeded < attempted 0
+sql0-nf2A: bundle -> wt-gate/capstone/bug-corpora/postgres/sql-repros/results/2026-10-20-vp2c-treeA/vp2-malloc-nf2
+sql0-nf2A: 7 of 9 cells the same (rc 1)
+SQL DONE 09:37:22
+## the two unreached cells' errors (board.txt; identical in sql0-drt2)
+      1 capstone-exec: domain fault cause=12 pc=0x0 address=0x0 entry=0x3f8700094c code=0x3f87000000-0x3f88000000 last=0x43 preparing=0x43 sha256=64010720f1a6
+      3 DETAIL:  Key (oprname, oprleft, oprright, oprnamespace)=(>=, 12777, 12777, 2200) already exists.
+      3 ERROR:  duplicate key value violates unique constraint "pg_operator_oprname_l_r_n_index"
+      2 ERROR:  operator does not exist: text % text

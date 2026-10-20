@@ -1,0 +1,27 @@
+TIER1_SRZ_START t1-nf2 07:45:32 fw 1ee33cc6631aa766 bitstream caplifive_vp2c_8522d72fe board 1
+DRIVER rc=0 07:51:51; watchdog lines 25
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=1 oracle=1 AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+FRTY retries 0 at 
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:1 
+VM_BEGIN without VM_EXIT: 
+JUDGE rc=2 :: JUDGE NO DATA
+  OK   @@PARAM diag_emerg read back ['Y'] (want ['Y'])
+  OK   @@PARAM node_flat_records read back ['4096'] (want ['4096'])
+  OK   @@PARAM supervisor_slots read back ['1'] (want ['1'])
+  NO DATA: 1 CAPSTONE_VM_STATS lines inside vm-contract (want 2: ok, stale)
+  OK   VM_EXIT:sparse-churn ['1'] (want ['1'])
+  OK   VM_CONTRACT_FAIL:recycling allocation present
+  OK   must-fire 'collect skipped' on the console 1 (want >= 1)
+  OK   banner [('1', '1')] (want one, slots 1, diag_emerg 1); refusal lines 0 (want 0)
+  JUDGE NO DATA
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+S-23: DRT1 0 DRTX 0 Oops 0; banner node-floor-2 2
+RELEASE lines 6 against 3 contexts (CAPSTONE_VM_ADD_OK slot=0); succeeded < attempted in 0; first_id ['1024']; attempted ['11', '11', '13', '11', '11', '13']
+TIER1_SRZ_DONE t1-nf2 07:51:51
+[  143.407065] capstone_vm: release retires attempted=11 succeeded=11 first_id=1024
+[  149.243175] capstone_vm: release retires attempted=11 succeeded=11 first_id=1024
+[  167.942045] capstone_vm: release retires attempted=13 succeeded=13 first_id=1024
