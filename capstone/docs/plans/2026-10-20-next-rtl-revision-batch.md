@@ -249,6 +249,28 @@ hoisted-cursor pattern and would fail the acceptance boots for a reason that is 
 
 ---
 
+## What the 95-test sweep does and does not certify for item (2)
+
+**The sweep is a BUILD and REGRESSION check for item (2), not a behavioural one, and the behavioural evidence
+is the four `va-srevroot` arms plus the `va-fetchsplit` arms.** That is checked rather than argued: item (2)'s
+change sits entirely inside `(*commit_req.is_runv == 1'b1)`, a non-runv walk reaches the unchanged
+`cur_idx == 66 -> walk_end()` branch exactly as before, and reading the sources of all 95 sweep tests, 92 of
+which resolve, **ZERO contain a CSRUNV or funct7 0x24** -- the other three are the random generators already on
+`sweep-expected-missing.txt`. So the `is_runv` walk is unreachable for the entire sweep. Said plainly so that
+"the sweep identical" claims only what it can.
+
+**This lane has no usable sweep BASELINE, which is a gate gap and not an item-(2) result.** The committed
+`verif/sim/sweep-base-7e4dc440f.txt` is from 2026-08-12, **216 commits back**, and `sweep-compare.py` compares
+two result DIRECTORIES, of which this lane has none from a prior run. At 25 of 95 tests, eight already disagree
+with that file's rc column and **five disagree in the IMPROVING direction** (`cincoffset-stale-metadata`,
+`cincoffset-linear-clear`, `cincoffsetimm-linear-clear`, `scc-linear-clear`, `stc-register-clear` all read rc 0
+where it records 1/2/2/3). Two disagree in the failing direction -- `capsbi-init` (FAILED at the
+2,000,013-cycle limit against SUCCESS at 1203) and `capenter` -- and **neither can be item (2)** by the
+argument above. They are attributed by a sweep on `c7e6f604f` compared directory-to-directory, and **not
+before**; that run also becomes this lane's baseline, committed in place of the 7e4dc440f file with the commit
+hash in its name and the run's date in its header. Read the cycle count beside every verdict: the testharness
+prints SUCCESS at the cycle limit.
+
 ## Gates before the hash is handed to synthesis
 
 Unchanged from every previous build, and none of them is evidence of synthesizability:
