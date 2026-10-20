@@ -2075,8 +2075,22 @@ q == 1022 with sr + lr > g). 4a21b485b01f is not an ancestor of the pin. So the 
 such a region about half its length short while silicon decodes it whole; a differential reads a divergence on every
 such region. The 2026-10-16 plain corpora agreed only because every object was exact below 4 KiB; the carved corpus
 needed ce1be0c642 with `CAPSTONE_CDERIVE_ROUND=1`, and Q-15's box records 43,591 misses on d35af47b163c, every one an
-R-54 shape. Under the virtual profile with exact bounds (scapctl bit 8) the encoder is bypassed for the stored bounds,
-so this divergence is a physical-profile one. Fix: land the renormalisation on the QEMU shared branch and bump the pin
+R-54 shape. ~~Under the virtual profile with exact bounds (scapctl bit 8) the encoder is bypassed for the stored bounds,
+so this divergence is a physical-profile one.~~ **CORRECTED 2026-10-20 (the compiler lane, checked by the board lane):
+the scope is wider.**
+- The vp2 Tier 3 prediction kits run the COMPACT virtual profile: their QEMU wrapper removes
+  `x-capstone-exact-bounds=true` (qkit7-rev2/qemu-system-riscv64:3,9). So cap_compress is live in every escape save
+  (virtual_store_reg), every Q-15 CDERIVE representability decision (cause 29), and the window predicates.
+- The kits' QEMU (capstone-qemu b290f5656600, virtual-capstone-v7) also lacks 4a21b485b01f:
+  `git merge-base --is-ancestor 4a21b485b01f b290f5656600` is false, and the diff in cap_compress.c is the same +20-line
+  block.
+- **Consequence:** for an R-54-shaped region, the kits' compact QEMU decodes about half the span after any compress
+  round trip, while silicon decodes it whole. QEMU can therefore fault, or refuse with 29, where silicon does not. The
+  reverse cannot happen, so this is no candidate for a silicon-only failure, such as the cpython and postgres pc=0 stops.
+- The fix (the renormalisation block on the kits' QEMU line) is planned as its own commit with a two-sided gate (the
+  compiler lane), and is needed for R-60's tag predicate to match the RTL encoder.
+
+Fix: land the renormalisation on the QEMU shared branch and bump the pin
 (helper lane); until then every physical-profile differential cites which encoder it ran against.
 ## Q-17 — CDERIVE's check order: silicon tested the size window (29) BEFORE the parent's liveness (25), QEMU the reverse `FIXED on virtual-profile 4b958dc3f (2026-10-16): the liveness query precedes the window test; q17-order.S reads 25 on the fixed tree and 29 on capstone-sublet b7e3287e4 in simulation (the positive control), the window-inside case 25 on both; carried by bitstream 1 of the virtual profile, not yet on silicon`
 
