@@ -4662,3 +4662,30 @@ before the GO):
 - **9 of 9 cells as r1:** 02 and 03 CAUGHT (cause 28 in memcpy), the other seven MISSED. sql0 is not deterministic on
   QEMU, so a mismatch in a cell where r1 and r2 differ is read as possibly variance.
 - Not changed by the image: FRTY 0, DRT1 0, 21 release lines with every CSRETIRE succeeding. The must-fire holds.
+
+### sql0-dumpB, result (2026-10-20 11:09-12:32, board 2, tree B): 07's pc=0 is the C-32 movc-then-jalr in ProcessUtilitySlow; 03's duplicate key is a genuine second insertion
+
+`records/sql0-dumpB.result-lines.txt`, `records/sql0-dumpB-07-site.txt`. UNGATED. Readings, not scores (a diagnostic
+image).
+- The boot completed, the must-fire held, FRTY 0, DRT1 0, no Oops, 21 release lines all succeeded. Cells as
+  sql0-nf2A/nf2B: 03 and 07 out of denominator, 02 CAUGHT, six MISSED, as expected.
+- **03 (DIAG-BTU, 3 hints: preflight-02-ltree, 03 and its control, all identical):**
+  - the existing index tuple (>=, 12777, 12777, 2200) at tid (14,31);
+  - the new tuple at tid (14,35), raw bytes equal to the existing one but for the tid.
+  - So silicon compared the right values. The failure is a SECOND insertion of the same pg_operator row inside
+    CREATE EXTENSION ltree, not a corrupted comparison. The site that repeats it is not named by this boot. The C-32
+    attribution of 03 rests on the QEMU reproduction with the MOVC switch.
+- **07 (FREG, 1 block): `kind=4 cause=12 pc=0`.**
+  - x1 is image VA 0x79bcbc, x18 (s2) is 0, and x19 (s3) is VA 0x3d9410, list_delete_first.
+  - In ProcessUtilitySlow: `mv s2, a1` (the function pointer from auipc/addi) at 0x79bc34, then `movc s3, s2` at
+    0x79bc6c, then `jalr s2` at 0x79bcb8. On vp2, MOVC moves s2 into s3 and nulls s2, so the call jumps to 0.
+  - This is C-32's movc-then-jalr shape, the same as cpython's.
+- **The rebuilt image d9787ac2 (sql0-nmA's) has the site rewritten:** `stc s2, -0xf0(s0); ldc s3, -0xf0(s0)`, a copy
+  through memory that keeps s2.
+  - `c32-movc-jalr-path.py` (path-limited: a hit is a candidate, 0 is not absence) finds 1 such pair in DIAG-BTU's
+    ProcessUtilitySlow, the known site, and 0 in d9787ac2's. MOVCs with rd != rs drop from 181 to 62.
+- **The positive control fired,** one FREG block per control (cause 28 bounds, cause 25 use-after-free).
+- **The image fits the cap:** the stage was 34,129,943 B, and its firmware measured 25,856,520 B and booted. The
+  measured firmware reads the same 25,856,520 B for every stage seen since this morning (28.8 MB to 34.5 MB), so that
+  check has never been seen to fire. The evidence that a stage of this size fits is this boot. sql0-nmA's pre-measure
+  (stage 34,478,535 B) also read 25,856,520 B.
