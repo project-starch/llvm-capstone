@@ -667,7 +667,7 @@ static unsigned long run(unsigned long frame, unsigned long action)
     if (fence_before_entry)
         asm volatile("fence rw,rw" ::: "memory");
     if (srevroot_zero)
-        asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2\n\tcsrw 0x5c1, zero"
+        asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2\n\tnop"
                      : "=&r"(result) : "r"(frame), "r"(action) : "memory");
     else
         asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2"
@@ -683,7 +683,7 @@ static unsigned long run(unsigned long frame, unsigned long action)
 static void run_x0(unsigned long frame, unsigned long action)
 {
     if (srevroot_zero)
-        asm volatile(".insn r 0x5b, 1, 0x24, x0, %0, %1\n\tcsrw 0x5c1, zero"
+        asm volatile(".insn r 0x5b, 1, 0x24, x0, %0, %1\n\tnop"
                      : : "r"(frame), "r"(action) : "memory");
     else
         asm volatile(".insn r 0x5b, 1, 0x24, x0, %0, %1"
@@ -1178,7 +1178,7 @@ module_param(diag_escapes, bool, 0644);
 static unsigned escape_prints;
 #define CV_ESCAPE_BUDGET 16U
 
-#define CV_DIAG_TAG "srevroot-zero-1"
+#define CV_DIAG_TAG "srevroot-nopf-1"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
