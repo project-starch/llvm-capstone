@@ -4371,3 +4371,46 @@ flush. Module c8c8a6f28548637b (banner srevroot-rcf-1).
 - the cells are 4 of 4 either way.
 
 **The dry runs,** with every call stubbed: the chain's PASS and FAIL, and the arm, which HOLDs on FAIL.
+
+### cpyp-DF: cpython's pc=0 with a fatal-fault register dump, pre-registered (2026-10-20 09:2x, before its boots): board 1 after sql0-nf2A
+
+The compiler lane's package A (lane module-fault-regs-srz af50965cbdab). Module 53507c769b51758a (banner
+fault-regs-srz-1): the srz module 607164b9 plus a KERN_EMERG register dump at a fatal fault, so against cpyp-DZ the dump
+is the ONLY variable.
+- **The dump:** at a CV_RESOLVE failure or a terminal kind-2 escape, it prints:
+  - `capstone_vm: FREG thread=.. rc=.. kind=.. cause=.. pc=.. addr=.. entries=.. entry_pcc=lo:hi`;
+  - 8 `FREG xN` lines, 4 slots each, with '*' marking a slot changed since the last CSRUNV entry;
+  - `FREG args`, then 4 `FREG sp+0x..` lines (or `FREG stack unreadable`).
+  - At most one block per thread.
+- **Its QEMU gate** (the compiler lane):
+  - two-sided Tier 1 equal to srz's;
+  - 8 FREG blocks, exactly the 8 exit-139 tests;
+  - planted jump0.dom controls read the null-call arm as x1 = main's return point, and the ret arm as x1 = 0 with the
+    saved ra at sp+0x10.
+
+**1. Its own Tier 1 boot on tree A** (`tier3-smoke/chain-frs-b1.sh` 86c047c2e363bbba →
+`board-tier12/srz/run-tier1-frs-treeA-b1.sh` 76c7b39d8c0f848c):
+- image-rev7-frs 3c6dd5f4ecfbe45c (`frs-prep.sh` b1705eb46250d977) and firmware 34d39bd571b83098;
+- **the gate:** the rungs equal t1-old's;
+- **read:** the FREG blocks. vm-contract's stale branch faults (exit 139), so at least one block is expected there, with
+  x0's low word = the fault pc. That is the silicon positive control.
+
+**2. cpyp-DF** (`tier3-smoke/tier3-cpy-f.sh` f5534549d94b5160, only on step 1's PASS):
+- cpyp-DZ's exact stage and runner with --only 03,17,23, on kit bkit7-rev2xnDF (`make-cpyf-kit.sh`
+  1cb28c641793a9f1: rev2xnDZ with only the .ko changed).
+
+**The prediction (the compiler lane's):**
+- the banner once; DRT1 0 and FRTY 0, as DZ;
+- pc=0 once each in 17-control, 23 and 23-control, each with a FREG block (cause=12 pc=0 addr=0, x0's low word 0);
+- the block decides between:
+  - (a) x1 a '*'-marked code address in cpython.dom: a jump through a zero target, with the call site at x1-4;
+  - (b) x1 = 0: a ret with a cleared ra, with the caller's saved frame in the sp words;
+  - (c) no '*' on any slot and entry_pcc's low word 0: the resume itself landed at 0, on the module/frame side.
+
+**An instrument failure, reported as NO DATA:**
+- a pc=0 line with no FREG block;
+- x1..x31 all zero;
+- `stack unreadable` with x2 inside the 8 MB stack arena.
+
+**The dry runs,** with every call stubbed: the chain's PASS and FAIL, and the arm's FREG extraction per step. The arm
+HOLDs on FAIL.
