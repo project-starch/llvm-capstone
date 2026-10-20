@@ -1,0 +1,37 @@
+# tier3-pass-appvm.sh stubbed dry run (2026-10-20 15:19). Every call stubbed: PASS_ARM (a stub arm that writes the
+# reference cut to --only, and, for the flip branch, one MISSED made CAUGHT), PASS_BUSY, PASS_ROOT and PASS_BOOK (the hub).
+# The first attempt failed on every branch with 'GROUPS: variable may not be assigned value' (a read-only bash variable):
+# the runner was fixed (GRPS) before these runs.
+== branch ok
+PASS sq0pa BEGIN 15:19:34 board 1 only 00,01,02,03,04,05 booking 99
+APPVM stub only=00,01,02,03,04,05
+UNBOOK 99: 200
+PASS sq0pa ARM END rc=0 15:19:34
+PASS sq0pa COMPARE vs reference rc=0 :: 6 of 6 cells the same
+PASS sq0pa readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS sq0pf BEGIN 15:19:34 board 1 only 30,31,32 booking 99
+APPVM stub only=30,31,32
+UNBOOK 99: 200
+PASS sq0pf ARM END rc=0 15:19:34
+PASS sq0pf COMPARE vs reference rc=0 :: 3 of 3 cells the same
+PASS sq0pf readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS sq0p DONE 15:19:34
+== branch busy
+PASS STOP: board 1 is busy
+== branch 409
+PASS STOP: the hub refused the booking (409, someone holds board 1): BOOK FAILED 409
+== branch refuse
+PASS sq0pa BEGIN 15:19:35 board 1 only 00,01,02,03,04,05 booking 99
+UNBOOK 99: 200
+PASS sq0pa ARM END rc=78 15:19:35
+PASS STOP: the arm script refused sq0pa (rc=78)
+== branch wronghash
+PASS STOP: runner or arm script is not the reference's (0000000000000000 / 2852f21b1996be77)
+== branch b2flip
+PASS sq0pb BEGIN 15:19:44 board 2 only 06,07,08,09,10,11 booking 99
+APPVM stub only=06,07,08,09,10,11
+UNBOOK 99: 200
+PASS sq0pb ARM END rc=0 15:19:44
+PASS sq0pb COMPARE vs reference rc=1 :: 5 of 6 cells the same
+PASS sq0pb readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS sq0p DONE 15:19:44

@@ -4854,3 +4854,506 @@ Bundles: postgres/sql-repros results/2026-10-20-vp2c-tree{A,B}/vp2-malloc-nomovc
 - **The silicon-mimic QEMU run** (the compiler lane, qkit7-tB-mimic, MOVC null plus compact rounding) also reads 9 of 9
   against r1 and -mn. Its rounding positive control has not read yet, so "rounding moves no sql0 cell" waits on it.
 - Booked on the lab hub as board-lane: ids 1-4, each cancelled at the run's end.
+
+### The corpus pass, first arm: sq0 (sqlite engine-repros, virtual-malloc / memsys5) pre-registered (2026-10-20 15:2x), both boards
+
+**The reference** is the compiler lane's silicon-mimic run `<mnt-hdd>/capstone/t3-images-cw/ref-tB-mimic/sq0`.
+- Kit qkit7-tB-mimic: QEMU 7e5fe043, module a1fa252f (54d8a3af's twin), MOVC null and compact rounding ON.
+- The kit's rounding positive control read EXACT on nf2 and ROUNDED-AS-SILICON on the mimic kit.
+- Runner run-virtual.py 4400e4c1386b72ee and tier3-appvm-arm.sh 2852f21b1996be77, both from wt-gate and both named in the
+  stamp.
+- Images: 35 (33 cases, 2 controls), SDK t3-freeze-nb-nomovc-cw (sdk.json 64bc9086452fc30a, the 232d13b2 port).
+- Tally: CAUGHT 4 (02, 05, 19, 22, all cause 24), MISSED 27, NO-READING 2 (06, 20).
+
+**The runner:** `tier3-pass-appvm.sh` a2541a20586b96b3.
+- --only boots of six cases plus both controls.
+- The runner and arm script are pinned to the stamp's hashes, and each boot's collected images to the reference's own
+  session/collect/images cut to its cases (EXPECT_IMAGES).
+- Each boot is scored by compare-pilot.py against the reference cut to its cases.
+- Each boot is booked on the lab hub, and refused on a 409.
+- Kits bkit7-rev2xDN2 (board 1, tree A) and bkit7-rev2xBDN2 (board 2, tree B): module 54d8a3af, monitor f13dbc5.
+- **Its stubbed dry run** (`dryrun-pass-appvm.txt`) covered DONE, busy, a hub 409, the arm script's refusal (78), a
+  wrong runner hash, board 2's kit path, and a planted flip read as 5 of 6, rc 1. The first attempt exposed a read-only
+  bash variable (GROUPS), and the runner was fixed before the recorded runs.
+
+**The split:** board 1 runs groups a, c, e (cases 00-05, 12-17, 24-29) and board 2 runs b, d, f (06-11, 18-23, 30-32).
+sql0 showed tree A equal to tree B, and S-29 is unreachable by construction (above).
+
+**Predictions:**
+- Every group's cells equal the reference: 33 of 33 over the six boots.
+- **Case 24** (writable_schema_stale_table) is MISSED in this reference but was CAUGHT (cause 24, sqlite3OpenTable+648) in
+  the old flagged reference. It is not attributed yet; the compiler lane is separating image, kit and module on QEMU.
+  Its board reading is reported against both, as information.
+- No pc=0; DRT1 0, FRTY 0, no Oops; node-floor-2 banner present.
+- Case 31 is MISSED in this reference, so sq0 carries no R-60 exception. That one is q15's.
+
+### The corpus pass: sq1q15 pre-registered (2026-10-20 15:2x), chained after sq0 on each board; sq1 not run
+
+**sq1q15** (sqlite engine-repros, virtual-nested-pools with the memsys5 Q-15 repair):
+- The reference is `ref-tB-mimic/sq1q15`, with stamp runner 4400e4c1, wt-gate cdc9bfab8617 dirty 0, appvm-arm 2852f21b,
+  and the kit as sq0's.
+- Images: build-virtual-nested-pools-q15 (the wt-m5 recipe), 35 collected.
+- Tally: CAUGHT 27, MISSED 6.
+- Against the previous q15 references, 31 of 33 are identical. Cases 21 and 23 stay CAUGHT (cause 25 in memcpy) but at
+  memcpy+204 instead of +184, because libc is now built without the flag. The board is graded against +204.
+- **Runner:** `tier3-pass-appvm.sh` a2541a20586b96b3, through `chain-after-pass.sh` 175e5cf47f9d9737, which starts it only when the same
+  board's sq0 out reads "PASS sq0p DONE" and holds on a PASS STOP. Its dry run: `dryrun-chain-after-pass.txt`.
+- **Split:** as sq0's, board 1 a/c/e and board 2 b/d/f.
+- **Predictions:**
+  - 32 of 33 cells equal the reference.
+  - **Case 31** (fz10_dbstat_decodepage_overflow, group f, board 2) reads MISSED on silicon where the reference is
+    CAUGHT (cause 28, statDecodePage): R-60, as on both trees on the old images.
+  - No pc=0; DRT1 0, FRTY 0, no Oops.
+
+**sq1** (unrepaired memsys5-sublet) is NOT run. Its reference is 33 of 33 NO-READING:control-failed: both controls fault
+with cause 29 at entry (read rc 75), the known Q-15 failure, as on the old flagged reference. The board's sq1a
+(2026-10-18) already confirmed that refusal on silicon, so a boot would buy no cell. sq1q15 is the readable arm of this
+configuration.
+
+### The corpus pass, sq0, result (2026-10-20 15:20-15:58, both boards): 33 of 33 in verdict, 30 of 33 in every field; the 3 field DIFFs are Q-31's exception order, the same cells as on the old images
+
+`records/pass-sq0.result-lines.txt`. UNGATED.
+- Six boots: board 1 groups a, c, e and board 2 groups b, d, f.
+  - Every boot completed, its collected images equal to the reference's own.
+  - pc=0 0, DRT1 0, FRTY 0, no Oops, and the node-floor-2 banner in each.
+- **Cells:** a, b, c, e and f read 6, 6, 6, 6 and 3 of their cells the same in every field.
+  - **d reads 3 of 6 in every field, 6 of 6 in verdict.** Cases 19 and 20 (nodeRelease+144) read cause 4 on silicon and
+    24 on QEMU, and case 22 (editDist3FindLang+244) reads 13 and 24.
+  - These are exactly sq0d-fix6's three DIFFs on the old images (2026-10-18). That is ISSUES Q-31, exception order: for
+    a load through an untagged bad address, silicon reports the address exception (misaligned, or a page fault on a
+    non-canonical address) before the tag check, while QEMU tests the tag first. No verdict can flip.
+- **PREDICTION MISSED, by this lane:** the pre-registration said 33 of 33 in every field. It should have predicted
+  these three cells from Q-31, an open entry for this bitstream, which CLAUDE.md requires reading before a
+  pre-registration. The cells are known; the miss is in the pre-registration, not in the arm. sq1q15 and every later
+  arm are checked against Q-31 before their boots.
+- **Case 24** reads MISSED on silicon, as in the new reference (the old flagged reference read CAUGHT). The compiler
+  lane's plain-kit run on the new image also reads MISSED, so the move is not the kit's switches. Image against module
+  is still being separated on QEMU.
+- **The mimic kit does not model Q-31.** Cause fields on the bad-address loads will differ in every arm that has them,
+  so they are graded in verdict, with the cause difference reported.
+- **sq1q15 checked against Q-31 before its result:** on the old images q15's compare-pilot, which grades every field,
+  differed from run C only in case 31 (R-60). So q15 has no Q-31 cell, and its pre-registered 32 of 33 stands unchanged.
+
+### The corpus pass: wm0 pre-registered (2026-10-20 16:2x), board 1 after its sq1q15; wm1 not run; sq0 case 24 attributed to the flag, mechanism open
+
+- **sq0 case 24 moved with the MOVC flag; its mechanism is OPEN** (the compiler lane, QEMU, plain qkit7-nf2, runner
+  4400e4c1, --only 24, N=1 per arm):
+  - Three images on the same kit: the old flagged 7c8bfc88 reads CAUGHT (cause 24, sqlite3OpenTable+648), as the old
+    reference did. The new 0d2223aa (flag off, plus 232d13b2) reads MISSED, and so does 490bfaf4 (flag off, WITHOUT
+    232d13b2). So the flag is the variable, not 232d13b2, the kit or the module, and silicon agrees with MISSED.
+  - **Facts:**
+    - The fault is `lw a3, 0xb0(a3)` with a3 the untagged return value of sqlite3PrimaryKeyIndex, which walks
+      pTab->pIndex.
+    - Both functions have IDENTICAL instruction sequences in the two images. Every frame in the rebuild is 16 bytes
+      larger (stack offsets shifted).
+    - So no check stopped firing on this path.
+  - **Hypothesis, not established:** the old CAUGHT is layout-dependent, i.e. what the freed table's memory held at reuse.
+    A QEMU trace of both images at sqlite3PrimaryKeyIndex's loads (address, freed or not, the loaded value's tag) would
+    settle it, after pass 1.
+  - **Classified for the census as a verdict move with its mechanism open,** not as a lost check in the compiled code.
+    An earlier wording in this lane's report to the lead, "a bug the rebuilt image no longer catches", is withdrawn.
+
+**wm0** (wireshark wmem-repros, virtual-malloc), ONE boot on board 1 (tree A):
+- The reference is `ref-tB-mimic/wm0` (runner run-defects.py 780a0975142e2221, appvm-arm 2852f21b, wt-gate
+  a7948988df2c dirty 0, the kit as sq0's).
+- MISSED 23, unchanged 23 of 23 against the old reference t3-pred-wm0, with no moves.
+- **Runner:** `tier3-pass-one.sh` defd4aeeb9236a67: tier3-pass-appvm.sh's gates, booking and readings, as one boot with the runner
+  path as an argument. It is a new file, because the running sq1q15 chains execute tier3-pass-appvm.sh and a running
+  bash script must not be edited.
+- It is chained by `chain-after.sh` a7a934219e13c167 on board 1's "PASS q15p DONE". Dry runs: `dryrun-pass-one.txt`.
+- **Predictions:** 23 of 23 in every field, all MISSED, as on tree A on 2026-10-19 (wm0 23 of 23). No Q-31 cell, since
+  there are no faults; no pc=0; DRT1 0, FRTY 0, no Oops.
+
+**wm1** (virtual-nested-pools) is NOT run. Its reference is 23 of 23 NO-READING:control-failed (read rc 75), unchanged
+from the old reference, so a boot would buy no cell.
+
+### The corpus pass: cpython lt0 on the rebuilt image, pre-registered (2026-10-20 16:2x), on BOTH boards as the cross-tree overlap
+
+**The image:** 4641b94cae16a757 (`<mnt-hdd>/capstone/t3-nomovc/cpython-lt0-dl`, 13,085,592 B).
+- It is the CAPI build (build-cpython-capi.sh's recipe, CPY_TEST_CAPI=1) without +movc-keeps-integer-source, relinked
+  with --discard-locals.
+- Its loaded bytes equal the full image's, and its non-local symbols equal 20bcfdd1's (the compiler lane's checks).
+- **Measured here:** a measure-only bake on bkit7-rev2xmDN2 reads stage 23,518,168 B and firmware 25,856,520 B,
+  under the cap (no board access).
+
+**The prediction:** `<mnt-hdd>/capstone/t3-images-cw/lt0-prediction.json` 34aec9edf4471196, from the compiler lane.
+- Three runs: r1 (plain qkit7-nf2-nr), mn (MOVC null only) and the silicon-mimic reference (qkit7-tB-mimic-nr). They
+  agree on all 32 cells.
+- 23 cells are stable, and 9 are varying (05, 07, 09, 15, 16, 19, 27, 30, 31): the old record's varying cells, kept
+  varying by this lane's rule.
+- Case 09 moved against the old record (CAUGHT → NO-READING) and is judged against {NO-READING}.
+- **Checked here:** the mimic reference judges 32 of 32 against it, rc 0, and the old board bundle (20bcfdd1) is refused
+  on the image, rc 2.
+
+**The runner:** `tier3-cpy-nm.sh` b83891d11ea65089.
+- It runs dev d0f0f4b41ae6's run-virtual.py (dc606bd178c10780) and tier3-appvm-arm.sh (666d920eedef445b) from the
+  pinned worktree /tmp/capstone/wt-cpy-pass. These are the hashes of the compiler lane's reference run, whose tree was
+  clean.
+- Closure b41545623090d0cf; --stdlib-sourceless; PYTHONHASHSEED=0.
+- Kits: bkit7-rev2xnDN2 (board 1) and bkit7-rev2xnBDN2 (board 2), norandmaps with module 54d8a3af.
+- The board is booked on the lab hub for 300 min, and the run is refused on a 409.
+- Judged by judge-cpy-set.py, the image read from the prediction.
+- **Its dry run** (`dryrun-cpy-nm.txt`) covered DONE (32 of 32), a planted stable divergence (31 of 32, rc 1), a hold
+  on a previous STOP, busy, and a 409.
+
+**Order:** board 2 after its sq1q15 ("PASS q15p DONE"); board 1 after wm0 ("PASS wm0p DONE"). About 4.5 h each.
+
+**Predictions, on each tree:**
+- The judge reads 32 of 32 inside their sets (rc 0).
+- **No pc=0 anywhere.** The old image's board run had 21  lines (C-32's movc-then-jalr).
+- Case 14 MISSED, as the prediction (stable) and the old board both read.
+- Case 09 NO-READING.
+- DRT1 0, FRTY 0, no Oops. The old run's DRT1 14 was on module 39d8492d; 54d8a3af removes the data face.
+- **Q-31:** the old board run differed from QEMU only in the pc=0 cells, so no Q-31 cause difference is expected. If one
+  appears, it is graded in verdict and named.
+- Tree A equals tree B in every cell.
+
+### The corpus pass, sq1q15, result (2026-10-20 15:56-16:38, both boards): 32 of 33 in every field, exactly as pre-registered; case 31 is R-60
+
+`records/pass-sq1q15.result-lines.txt`. UNGATED.
+- Six boots: board 1 a, c, e and board 2 b, d, f.
+  - Every one completed, its collected images equal to the reference's.
+  - pc=0 0, DRT1 0, FRTY 0, no Oops; the banner in each.
+- Groups a-e read 6 of 6 in every field, and f reads 2 of 3.
+  - The DIFF is **case 31** (fz10_dbstat_decodepage_overflow): MISSED on silicon, CAUGHT on QEMU (cause 28,
+    statDecodePage+2024). This is R-60, as on both trees on the old images (2026-10-20 morning).
+- Cases 21 and 23 read CAUGHT at memcpy+204, the rebuilt libc's site, as the reference does.
+- No Q-31 cell, as checked before the result.
+- **The pass so far:**
+  - sql0: 9 of 9 on both trees.
+  - sq0: 33 of 33 in verdict, with Q-31's three cause DIFFs.
+  - sq1q15: 32 of 33, the R-60 exception.
+  - Every other cell equals the silicon-mimic reference. There is no pc=0 in any boot of the rebuilt images.
+
+### Amendment (2026-10-20 16:4x, before it started): cpython lt0 runs on board 2 only; board 1 takes the remaining arms
+
+The compiler lane released all 17 remaining references at 16:4x, and every plain-vs-mimic comparison reads 0 differing
+cells. Running cpython on both boards would hold both for about 4.5 h, and sql0 has already shown tree A equal to tree B
+cell for cell. So board 1's cpython chain was STOPPED while it was still waiting on wm0, before any check or boot.
+- cpython lt0 runs on board 2 only, as pre-registered.
+- Board 1 takes the sequence below.
+- The cross-tree overlap rests on sql0 (9 of 9 on each tree) plus the per-arm split.
+
+### The corpus pass, the remaining arms, pre-registered (2026-10-20 16:4x): one sequence per board
+
+**The references:** `<mnt-hdd>/capstone/t3-images-cw/ref-tB-mimic/<tag>`, kit qkit7-tB-mimic (switches as sq0's), SDK
+sdk.json 64bc9086452fc30a.
+- The plain qkit7-nf2 runs read 0 differing cells against every mimic reference (the compiler lane), so no silicon switch
+  moves a cell on QEMU.
+- Runner families, each named by its stamps and equal to wt-gate's files, checked here:
+  - run-virtual-cases.py 9b5e409c92e1fe66;
+  - pymalloc run-virtual.py fdc271ee3c107951;
+  - mmgr run-defects.py 543fc02a119c4459;
+  - c-repros run-arm.py 343ecbd79966a2c7.
+
+**The runner:** `tier3-pass-seq.sh` 0a0f9cb4a7f1f0fd: one cold boot per arm.
+- Each runner is checked against its own stamp, and an appvm arm's script and collected images against its reference.
+- Each boot is booked on the hub (refused on a 409) and scored by compare-pilot.py against its reference.
+- A boot that does not complete stops the sequence.
+- The specs live outside the repo, because their paths name the scratch disk. Sanitized copies are
+  `records/pass-spec-board{1,2}.txt`.
+- **Its stubbed dry run** (`dryrun-pass-seq.txt`) covered all 14 board-1 arms (DONE), a planted flip on fph (24 of 25,
+  rc 1), a boot that does not complete (the sequence stops), hold, busy, a 409, and a runner that is not its stamp's.
+  The first flip attempt aimed at fca, whose reference holds no CAUGHT, so it could not fire. It was re-aimed.
+
+**Board 1** (tree A, spec 841d24cbae171832), after wm0: fph, fpt, fca, fcs, fso, mph, mpt, wph, wpt, pgc, pgm0, pgm1, pym0, pym1.
+**Board 2** (tree B, spec 5cb2e4c8ad546617), after its cpython lt0: pb9, pb12, pb10.
+
+| arm | reference | | arm | reference |
+|---|---|---|---|---|
+| fph | CAUGHT 25 | | pgc | CAUGHT 5 |
+| fpt | CAUGHT 13 | | pgm0 | MISSED 5 |
+| fca | MISSED 13 | | pgm1 | CAUGHT 5 |
+| fcs | CAUGHT 13 | | pym0 | MISSED 20 |
+| fso | MISSED 9 | | pym1 | CAUGHT 20 |
+| mph | CAUGHT 9 | | pb9 | MISSED 4 |
+| mpt | CAUGHT 3 | | pb12 | MISSED 8, CAUGHT 1 |
+| wph | CAUGHT 12 | | pb10 | CAUGHT 4 |
+| wpt | CAUGHT 10 | | | |
+
+**Predictions, read against the open entries for these bitstreams first:**
+- Every cell equals its reference IN VERDICT.
+- **Q-31:** where silicon reads an address exception (cause 4, 6 or 13) and the reference reads 24, it is graded in verdict
+  and named Q-31.
+- **R-60:** where silicon reads MISSED and the reference CAUGHT on an out-of-window access, it is reported as R-60's shape,
+  not graded as a finding, until its access is read.
+- Otherwise every field is equal. On their last silicon runs (the vp2 bitstream bf3db3175, modules d71f207a/3005ed52)
+  these arms read their predictions in every field, so a field DIFF other than those two shapes is new.
+- No pc=0; DRT1 0, FRTY 0, no Oops; the node-floor-2 banner in every boot.
+- **pb10:** FRTY 0. Its CSRUNV+4 refusals went to 0 under the srevroot-zero write, which 54d8a3af carries.
+
+**Not run:** sq1, wm1 and pb13. Each reads control-failed on both kits, so a boot buys no cell. pb13 waits on the Sublet
+repair.
+- **wm1 is replaced by wm1q15** (the compiler lane, 16:5x), the REPAIRED wmem nested-pools arm. wm1 was built from
+  wt-gate's pre-repair wmem patch.
+  - wm1q15's images were built from dev d0f0f4b41ae6 (which holds the repair d75137deed6e) on the nomovc-cw SDK.
+  - Its reference reads CAUGHT 22, NO-READING 1 on both kits, the shape of d75137deed6e's own tree-B reading.
+  - Its runner and arm script are dev's, not wt-gate's, so it is pre-registered separately, after these sequences.
+
+### Board 1's pass sequence, result (2026-10-20 16:48-19:04, tree A): 11 arms, every cell the same in every field; a FALSE stop after pgm0
+
+`records/pass-seq-b1.result-lines.txt`. UNGATED.
+- **Every graded cell equals its reference in every field:**
+  - fph 25/25, fpt 13/13, fca 13/13, fcs 13/13, fso 9/9;
+  - mph 9/9, mpt 3/3, wph 12/12, wpt 10/10;
+  - pgc 5/5, pgm0 5/5.
+  - That is 117 of 117 cells. Every boot reads pc=0 0, DRT1 0, FRTY 0, no Oops, the banner, and INJS 0 / INJL 0.
+- **No Q-31 or R-60 shape** appeared in these arms.
+- **The sequence STOPPED after pgm0 on "the boot did not complete", and that was false.**
+  - pgm0's transcript ends with `RESULT vbatch retval=0` and `### RUNG 3 vbatch END rc=0 ###`, and its cells read 5 of 5.
+  - The completion test grepped the runner's log for "virtual boot: completed", which run-defects.py (pgm) never prints.
+  - The dry run could not catch it: its stub printed that phrase for every runner kind, which is the assumption under
+    test, so the check was never fed the real pgm output.
+  - The rule was already written ("a gate needs a known-good input too": dry-run on the passing transcript). This lane did
+    not apply it to each runner kind.
+  - pgm1, pym0 and pym1 did not run.
+
+**Pre-registered here, before their boots: pgm1, pym0, pym1 on board 1 (tree A), through `tier3-pass-seq2.sh` .**
+- tier3-pass-seq.sh with ONE change: completion is read from the driver's own transcript (`### RUNG <n> vbatch END rc=0 ###`).
+  - That line is present in every completed pass boot of each kind (cases, pgc, pgm, appvm, sql0).
+  - It is absent from a panicked boot (sql0-treeA) and a wedged one (wm0 on 2026-10-18), which end at b0-hello.
+  - It is a new file because board 2's chain is executing tier3-pass-seq.sh. Its three arms (run-virtual-cases) print the
+    phrase the old test expects, as fph-pgc did here.
+- Spec board1b : the three lines of board1.spec, unchanged (`records/pass-spec-board1b.txt`).
+- Its dry run (`dryrun-pass-seq2.txt`) used a stub that writes the driver's real transcript form and NO completion phrase,
+  through DONE and a wedged arm.
+- **Predictions as pre-registered for these arms:** pgm1 CAUGHT 5, pym0 MISSED 20, pym1 CAUGHT 20, each equal to its
+  reference in every field; INJS/INJL 0; pc=0, DRT1 and FRTY 0.
+
+### The rest of the afternoon's records (from the lanes, read here where stated)
+
+- **sq0 case 24 moved with the MOVC flag; its mechanism is OPEN** (the compiler lane, QEMU, plain qkit7-nf2, runner
+  4400e4c1, --only 24, N=1 per arm):
+  - Three images on the same kit: the old flagged 7c8bfc88 reads CAUGHT (cause 24, sqlite3OpenTable+648), as the old
+    reference did. The new 0d2223aa (flag off, plus 232d13b2) reads MISSED, and so does 490bfaf4 (flag off, WITHOUT
+    232d13b2). So the flag is the variable, not 232d13b2, the kit or the module, and silicon agrees with MISSED.
+  - **Facts:**
+    - The fault is `lw a3, 0xb0(a3)` with a3 the untagged return value of sqlite3PrimaryKeyIndex, which walks
+      pTab->pIndex.
+    - Both functions have IDENTICAL instruction sequences in the two images. Every frame in the rebuild is 16 bytes
+      larger (stack offsets shifted).
+    - So no check stopped firing on this path.
+  - **Hypothesis, not established:** the old CAUGHT is layout-dependent, i.e. what the freed table's memory held at reuse.
+    A QEMU trace of both images at sqlite3PrimaryKeyIndex's loads (address, freed or not, the loaded value's tag) would
+    settle it, after pass 1.
+  - **Classified for the census as a verdict move with its mechanism open,** not as a lost check in the compiled code.
+    An earlier wording in this lane's report to the lead, "a bug the rebuilt image no longer catches", is withdrawn.
+- **After the pass: caplifive-sbi #4 (SBI RFENCE for the one hart), the runtime lane's review:** LAND-AFTER-board-boot.
+  The runtime lane holds the merge until this lane's pair reads.
+  - The pair: firmware built from the PR head fab38bbfe6c3, and a control on the current monitor, each running the same
+    short corpus arm.
+  - Pre-registered: the launch cost, the SBI v0.1-fallback fence-warning count (non-zero on the control, zero with #4),
+    and the arm's cells.
+  - The S-29 bare arms are NOT part of it: they run no Linux, so RFENCE cannot reach them (this lane's own slip, corrected
+    to the runtime lane).
+  - The pass is unaffected: every pass kit builds the monitor from the clean pinned worktree at f13dbc5
+    (board-run.sh:62-64).
+  - The arm: pb10 (four cases, escape-heavy; the runtime lane suggested sql0 or pb10).
+- **The Q-15 repair gate** (the compiler lane, lane q15-placement-cw e2b26ea2c1e4, pre-registered at e02dd7f9908f):
+  - **pb13q15** replaces pb13: 8 of 9 identical to the exact-bounds record. 08 reads NO-READING:control-failed,
+    pre-registered as pad-masked (the scan stops in the 16-byte tail pad).
+  - **pgm1q15:** 5 of 5 identical to t3-pgm1 on every kit.
+  - **pg-pools (sql lt1) does NOT transfer** to the current bitstreams: 03 and 07 move against exact bounds on both QEMU
+    kits, whose consoles carry `collect skipped: collection is not available`. The same image collects on the old
+    compact kit and reads 9 of 9. So it waits on collection, the batch bitstream's generations item, as cpython lt1 does.
+  - wm1q15, pb13q15 (and pgm1q15, which reads as pgm1) go to the boards as a "repaired arms" group after the sequences,
+    with their dev / q15-placement runners pinned by hash.
+- **sq0 case 24's mechanism, established** (the compiler lane, an LDC trace: capstone-qemu cap-window-counter 043e0dbf23,
+  CAPSTONE_TRACE_LDC, kit qkit7-trace; the flagged image against the flag-only rebuild):
+  - The stale Table capability loads TAGGED in both images. This arm (memsys5) does not revoke, so the use-after-free
+    itself is undetected in both.
+  - In the flagged image, sqlite3PrimaryKeyIndex reads pTab->pIndex from the freed memory as an UNTAGGED 0, and the NULL
+    pPk faults at sqlite3OpenTable+648 (`lw 0xb0(a3)`, cause 24).
+  - In the rebuild, the freed flags read differently: the HasRowid branch is taken and nothing is dereferenced.
+    sqlite3PrimaryKeyIndex logs no LDC, while sqlite3OpenTable logs 196 in the same run (the trace's own control).
+  - **So the old CAUGHT was an incidental NULL dereference decided by the freed memory's contents, not a capability
+    detection.** The rebuild changed layout, not a check.
+  - **This corrects the old sq0 records' case 24** (results 2026-10-18-vp2*, vp2-malloc and sq0e), which counted it CAUGHT
+    (attribution function, cause 24). Their sqlite memsys5 tally overstates the detections by one.
+- **The QEMU kits' firmware fw_jump.elf 6f2b082cb677f026, its sources named** (for the runtime lane's provenance
+  question):
+  - Its build tree /tmp/capstone/deleg-gate2/opensbi-T survives, and its own fw_jump.elf hashes to 6f2b082c (built
+    2026-10-01 10:18).
+  - The outer OpenSBI equals cf344cf3884f exactly (0 differing entries both ways, outside build/, the generated .c.S, the
+    objects and the capstone-sbi subtree). The capstone-sbi subtree equals 4674ab6a exactly.
+  - **It is the PLAIN build:** objects.mk has no -DCAPSTONE_S_TRAP_INJECT, and sbi_capstone_init.o has no `_inject_s_trap`.
+  - Still unnamed: the capstone-c revision and defines behind the two generated .c.S, which a rebuild with
+    build-kit-qemu-fw.sh can be compared against after the pass.
+- **The S-trap injection path is not reached by any pass arm so far.** The reference kits boot the PLAIN firmware
+  6f2b082c, which lacks the injection, so an arm reaching it would read differently on QEMU and on silicon.
+  - Silicon's monitor tags every injection INJS, or INJL (sbi_capstone.c:47-49). Both read 0 in all 19 pass boots so far.
+  - The count can fire: INJS appears in earlier, pre-S-23-fix transcripts (sql0-treeA, sql0-fix, sql0-rf, cpyp-A, the
+    first pb10).
+  - Every remaining arm's result records its INJS/INJL count, taken from its transcript, because the running sequence
+    script cannot be edited. A non-zero one flags its reference as needing the injection build.
+  - Tier 1/2 are graded against their own silicon expectations, not these references.
+
+### Board 1's pgm1, pym0, pym1, result (2026-10-20 19:07-20:18, tree A): 45 of 45 cells the same in every field
+
+`records/pass-seq2-b1.result-lines.txt`. UNGATED.
+- pgm1 reads 5/5, pym0 20/20 and pym1 20/20 in every field.
+- Each boot has the driver's vbatch END line, pc=0 0, DRT1 0, FRTY 0, no Oops, the banner, and INJS 0 / INJL 0.
+- **Board 1 over the pass:** 14 arms, 162 of 162 cells the same in every field.
+
+### Amendment (2026-10-20 20:2x, before they started): pb9, pb12, pb10 move to board 1 (tree A)
+
+Board 1 was idle while board 2 still had about 50 minutes of cpython lt0. Board 2's chain (tier3-pass-seq.sh on board2.spec)
+was STOPPED while still in its wait, before any check or boot: its out is empty and no run directory exists.
+- The three arms run on board 1 through `tier3-pass-seq2.sh` 632830e218434065 with the same spec, board2.spec 5cb2e4c8ad546617, unchanged.
+- The predictions are as pre-registered: pb9 MISSED 4, pb12 MISSED 8 / CAUGHT 1, pb10 CAUGHT 4, in every field;
+  INJS/INJL 0; pc=0, DRT1 and FRTY 0.
+- **pb10 on tree A:** on earlier modules it panicked with S-23's data face there. 54d8a3af removes both faces on tree A
+  (sql0-nmA: FRTY 0, DRT1 0).
+- They are run-virtual-cases arms, so both the old and the new completion test apply.
+
+### The corpus pass's repaired arms, pre-registered (2026-10-20 20:2x): pb13q15, pgm1q15, wm1q15 on board 2 after its cpython lt0
+
+These replace pb13 and wm1, whose references read control-failed because their images were built from the PRE-repair
+patches. pgm1q15 is pgm1 rebuilt in the repair tree.
+- **Their references and runners:**
+  - pb13q15 and pgm1q15: the compiler lane's Q-15 gate (lane q15-placement-cw, pre-registered at e02dd7f9908f, read at
+    e2b26ea2c1e4), on qkit7-tB-mimic, from tree d893ec627057.
+    - Here they run from my own worktree /tmp/capstone/wt-q15cw-pass, detached at d893ec627057.
+    - Its runners equal the compiler lane's: run-virtual-cases.py 9b5e409c92e1fe66, mmgr run-defects.py 543fc02a119c4459.
+    - d893ec627057..e2b26ea2c1e4 changes two documents only.
+  - wm1q15: ref-tB-mimic/wm1q15, dev d0f0f4b41ae6's wmem run-defects.py d05e9077541ef3f1 and tier3-appvm-arm.sh
+    666d920eedef445b, from /tmp/capstone/wt-cpy-pass. Its collected images (26) are pinned.
+- **The runner:** `tier3-pass-rep.sh` 1086fbe9aad236be, on kit bkit7-rev2xBDN2.
+  - Each worktree must be clean at its commit, and each runner equal to its hash.
+  - Completion is the driver's vbatch END line; booked on the hub; refused on a 409.
+  - **Its dry run** (`dryrun-pass-rep.txt`) covered DONE, a planted flip on pgm1q15 (4 of 5, rc 1), a wedge that stops
+    the run, hold, busy, and a 409.
+- **It starts on board 2's "CPY nm DONE"** and holds on a cpython STOP or HOLD.
+- **Predictions (each cell equal to its reference in every field, Q-31 and R-60 shapes named as before):**
+  - pb13q15: CAUGHT 7, NO-READING 2 (05, and 08 pad-masked);
+  - pgm1q15: CAUGHT 5;
+  - wm1q15: CAUGHT 22, NO-READING 1 (22).
+  - cause=29 0, the Q-15 refusal gone. pc=0, DRT1, FRTY, INJS and INJL 0.
+
+### pb9, pb12, pb10 on board 1, result (2026-10-20 20:18-20:46, tree A): 17 of 17 cells the same in every field
+
+`records/pass-seq2pb-b1.result-lines.txt`. UNGATED.
+- pb9 reads 4/4, pb12 9/9 and pb10 4/4.
+- Each boot has the vbatch END line, pc=0 0, DRT1 0, FRTY 0, no Oops, and INJS 0 / INJL 0.
+- **pb10 on tree A reads FRTY 0 and DRT1 0** under 54d8a3af. On earlier modules it panicked there with S-23's data face.
+- **Board 1 over the pass:** 17 arms, 179 of 179 cells the same in every field.
+
+### Amendment (2026-10-20 20:4x, before it starts): cpython lt0 ALSO on board 1, the cross-tree overlap restored
+
+The cancellation at 16:4x was for throughput only, and board 1 is now idle with nothing else ready. So cpython lt0 runs on
+board 1 as first pre-registered (`tier3-cpy-nm.sh` b83891d11ea65089, kit bkit7-rev2xnDN2, the same prediction 34aec9edf4471196),
+starting on "PASS seq2-1 DONE" (already read). The predictions are unchanged: 32 of 32 inside their sets, no pc=0,
+INJS/INJL 0, and tree A equal to tree B in every cell.
+
+### cpython lt0 on board 2, result (2026-10-20 16:38-22:46, tree B): 32 of 32 in verdict, 31 of 32 in every field (case 01 is Q-31); no pc=0
+
+`records/cpy-nm-b2.result-lines.txt`. UNGATED.
+- **The boot completed:** 54/54 steps, and the driver's transcript ends with the vbatch END line. The pin read back OK
+  (norandmaps, PYTHONHASHSEED=0).
+- **The cells:** CAUGHT 14, MISSED 14, NO-READING 4 (inconclusive, infra, not-reached, unattributed). That is the
+  reference's tally, and the judge reads 31 of 32 inside their sets.
+  - The one DIVERGENCE is case 01 (set_dealloc+284): CAUGHT on both, with cause 4 on silicon where the reference reads 24.
+    Its fault address is 0xffffffffffffffff, so the misaligned check fires before the tag check: Q-31's order. In verdict
+    it is inside its set.
+- **pc=0: 0.** On the old flagged image this arm had 21  lines (C-32's movc-then-jalr).
+- DRT1 0, FRTY 0, no Oops, INJS 0 / INJL 0, the banner present.
+- **A VOID that was recovered, and why:**
+  - The arm took 6 h 8 min, longer than the wrapper's `timeout 21600`, which killed tier3-appvm-arm.sh at 22:38:45.
+  - The board driver, in its own process group with its own 67,800 s bound, ran on and finished the boot at 22:46:32.
+  - The wrapper's limit was set from the old image's 4 h 38 m run, in which many cells died early at pc=0. With C-32
+    fixed every case runs to completion, which is exactly "a fix that lets programs complete breaks their budget" (this
+    lane's own note). It was not recomputed. Board 1's cpython (tier3-cpy-nm.sh, same limit) will hit it too, at about
+    02:47, and is recovered the same way.
+  - The read was recovered by `recover-appvm-read.sh` 60bb13bfd24c1303.
+    - It runs the same parse the killed boot phase would have run: appvm-session.py boot with BOARDVM_STUB_TRANSCRIPT,
+      the dry-run path documented in boardvm.py. Then the read phase. It boots nothing.
+    - It refuses unless the transcript holds the vbatch END line and the session is still in phase collect. It keeps
+      guest/stage aside as guest.board/stage.board, and restores the firmware hashes into platform.json.
+    - **Its known-good control:** on a copy of the completed wm0p run reset to phase collect, it reproduces the original
+      exactly (23 of 23 cells, platform.json and inputs.json identical).
+    - Its first control attempt failed (the stage dir must move aside too) and, worse, ran the read phase after the
+      failed parse. It now stops on a failed parse.
+- **A second defect, caught by its own check:** the repaired-arms chain started on "CPY nm DONE", which tier3-cpy-nm.sh
+  prints even after a timeout. Its board-busy check stopped it before any boot ("REP STOP: board 2 is busy"). It is
+  re-launched now that board 2 is free, with its trigger "-" (at once). The runner is unchanged, `tier3-pass-rep.sh`
+  1086fbe9aad236be.
+- **For the NULL census:** case 01's fault address is -1 (0xffffffffffffffff), the same incidental shape as sqlite 19, and
+  the census's "address < 0x1000" criterion does not catch it. Its criterion should include small negative addresses.
+
+### The repaired arms, result (2026-10-20 22:48-23:19, board 2, tree B): 37 of 37 cells the same in every field
+
+`records/pass-rep-b2.result-lines.txt`. UNGATED.
+- pb13q15 reads 9/9 (CAUGHT 7, NO-READING:control-failed 2, as its reference), pgm1q15 5/5 and wm1q15 23/23.
+- Each boot has the vbatch END line, pc=0 0, DRT1 0, FRTY 0, no Oops, INJS 0 / INJL 0, and **cause=29 0**: the Q-15
+  refusal is gone on silicon for both repaired Sublet configurations.
+
+### THE CORPUS PASS ON THE REBUILT IMAGES, summary (2026-10-20 13:00-23:19; cpython lt0's tree-A overlap still running)
+
+One SDK (the virtual SDK without +movc-keeps-integer-source, the lead's C-32 remedy (b)), dev's module 54d8a3af, both
+current bitstreams, every arm graded against the compiler lane's silicon-mimic QEMU reference (qkit7-tB-mimic: C-32 MOVC
+null plus compact rounding, both identical on the two trees).
+
+| arm | board / tree | cells | in verdict | every field | the differences |
+|---|---|---:|---:|---:|---|
+| sql0 (postgres sql) | 1 / A and 2 / B | 9 | 9 | 9 | none; tree A = tree B |
+| sq0 (sqlite memsys5) | both | 33 | 33 | 30 | Q-31: 19, 20, 22 (cause 4/4/13 against 24) |
+| sq1q15 (sqlite nested pools, repaired) | both | 33 | 32 | 32 | R-60: case 31 MISSED |
+| wm0 (wmem malloc) | 1 / A | 23 | 23 | 23 | none |
+| fph fpt fca fcs fso mph mpt wph wpt pgc pgm0 | 1 / A | 117 | 117 | 117 | none |
+| pgm1 pym0 pym1 | 1 / A | 45 | 45 | 45 | none |
+| pb9 pb12 pb10 | 1 / A | 17 | 17 | 17 | none (pb10: FRTY 0 on tree A) |
+| cpython lt0 | 2 / B | 32 | 32 | 31 | Q-31: 01 (cause 4, address -1) |
+| pb13q15 pgm1q15 wm1q15 (repaired) | 2 / B | 37 | 37 | 37 | none |
+| **total, 24 arms** | | **346** | **345** | **341** | **all of them already in ISSUES (Q-31 x4, R-60 x1)** |
+
+- **No pc=0 in any boot.** On the flagged images, C-32 stopped sql0's 03/07 and cpython in 21 places.
+- In every boot: DRT1 0, FRTY 0 (S-23 removed by the module on both trees), no Oops, INJS/INJL 0, and the node-floor-2
+  banner present.
+- **Not run:**
+  - sq1, wm1 and pb13 (unrepaired, control-failed on QEMU; replaced by sq1q15, wm1q15 and pb13q15);
+  - pg-pools and cpython lt1 (they need collection, the batch bitstream's generations item).
+- **What the pass changed about the corpus record, and what it did not:**
+  - The cells agree with QEMU. What a CAUGHT cell MEANS is a separate question: sqlite 02, 05, 19 and 24 on the malloc
+    arms are incidental NULL/-1 dereferences (dev 606c8f218a6e, with the retraction 7b4285a9d444). The headline matrix's
+    physical-harness rows of those cases still wait for their traces.
+- **Process record of the day:**
+  - one retraction landed (7b4285a9d444);
+  - one missed prediction (Q-31, sq0);
+  - two false stops caught by their own checks (pgm0's completion phrase; the repaired chain's trigger);
+  - one VOID recovered (cpython board 2's wrapper timeout).
+  - Each is described above with the check that caught it.
+
+### Recorded from the lanes this evening
+
+- **The csupctl.table bracket is tight** (the runtime lane's batch item 1 residual: a physical revocation stamped virtual
+  inside it would keep stale CPMP authority). The monitor at f13dbc5 and the wrapper aab63d5 were read:
+  - capstone_csmint.S:279 is the only setter of bit 3, cleared at :281 or as csm_window_trap's first instruction (:310);
+  - the window holds one CSNODE, with mtvec at csm_window_trap (:276-277);
+  - MIE is 0 by trap entry, and capstone-sbi never sets it. The wrapper's MIE set (sbi_capstone_dom.c:191) is
+    CAPSTONE_TARGET_QEMU-only, at boot;
+  - the other 0x7C4 writers (sbi_capstone.c:1020 csrw of 0/1, :3725 csrsi 4) never set bit 3.
+  - The batch bitstream's firmware gets the same grep at its pre-registration.
+- **For the batch bitstream's firmware (the runtime lane's ruling, isa.md dev e385b7887530):** the CPMP trackers will
+  ignore the namespace flush, so the fetch retry's bit-2 strobe will no longer heal a CPMP deny.
+  - The retry at f13dbc5 is bounded PER PC: one FRTY retry, then a no-progress repeat (same mepc, < 4096 instret) is
+    injected with INJS, or INJL + stop if stvec == mepc (sbi_capstone.c:3676-3725, :3898-3905).
+  - **Residual:** the guard holds one pc, so two alternating refusing pcs would each be retried every time. That is
+    unbounded but not silent, since each retry prints FRTY.
+  - **To do before that firmware boots:** a global retry-without-progress cap (2, then inject), with a two-pc positive
+    control in its pre-registration.
+  - **Written:** capstone-sbi vp2/fetch-retry-cap 579ef1c (pushed), on f13dbc5:
+    - CAPSTONE_FETCH_RETRY_CAP (FPGA, off by default): FETCH_RETRY_MAX_STREAK 2 retries without progress, then FRTC (mepc)
+      and the fault into S;
+    - with the define off, the generated monitor assembly is byte-identical to f13dbc5's (c4eda9f722f5c0a2);
+    - with it on, it compiles.
+    - The full firmware build, its dom_stack gate, and a two-pc positive control that must reach the cap go into the batch
+      bitstream's pre-registration.
+- **The batch bitstream's first boot must also read s23-cpmp-rearm** (the RTL lane, via the runtime lane):
+  - On item 1's fixed RTL, the namespace-flush strobe and srevroot changes no longer re-arm a CPMP entry or the PC
+    tracker. They still flush the LSU revocation cache.
+  - The arm reads Q5 (and Q8) ALLOWED on bf3db3175 and must read DENIED on the fixed RTL. Its simulated flips are
+    pre-registered by the RTL lane.
+  - It runs beside pb10's FRTY 0 check: without it, "the workaround stopped working" and "the defect stopped happening"
+    look the same in the boot log.
+  - It is a bare M-mode arm, run on silicon the way the S-29 sv-* arms were (images and vectors committed before the
+    boot).

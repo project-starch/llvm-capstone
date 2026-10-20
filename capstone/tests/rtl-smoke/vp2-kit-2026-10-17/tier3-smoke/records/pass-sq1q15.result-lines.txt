@@ -1,0 +1,65 @@
+# sq1q15 corpus-pass arm (2026-10-20 15:56-16:38, boards 1 and 2): result lines from both boards' outs. UNGATED.
+## board 1 (tree A), groups a c e
+CHAIN after sq0p DONE 15:56:18
+PASS q15pa BEGIN 15:56:18 board 1 only 00,01,02,03,04,05 booking 11
+APPVM collect rc=75 calls=8 15:56:19
+APPVM images equal <mnt-hdd>/capstone/t3-run-treeA/pass-q15p-lists/q15pa.images.SHA256SUMS (8)
+APPVM boot rc=0 16:09:26 :: session <mnt-hdd>/capstone/t3-run-treeA/pass-q15pa/session: 8/8 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeA/pass-q15pa/session/guest/board.txt; phase read
+APPVM read rc=0 16:09:26 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 4, 'MISSED': 2}
+PASS q15pa ARM END rc=0 16:09:27
+PASS q15pa COMPARE vs reference rc=0 :: 6 of 6 cells the same
+PASS q15pa readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS q15pc BEGIN 16:09:27 board 1 only 12,13,14,15,16,17 booking 13
+APPVM collect rc=75 calls=8 16:09:27
+APPVM images equal <mnt-hdd>/capstone/t3-run-treeA/pass-q15p-lists/q15pc.images.SHA256SUMS (8)
+APPVM boot rc=0 16:23:04 :: session <mnt-hdd>/capstone/t3-run-treeA/pass-q15pc/session: 8/8 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeA/pass-q15pc/session/guest/board.txt; phase read
+APPVM read rc=0 16:23:04 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 5, 'MISSED': 1}
+PASS q15pc ARM END rc=0 16:23:04
+PASS q15pc COMPARE vs reference rc=0 :: 6 of 6 cells the same
+PASS q15pc readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS q15pe BEGIN 16:23:04 board 1 only 24,25,26,27,28,29 booking 15
+APPVM collect rc=75 calls=8 16:23:05
+APPVM images equal <mnt-hdd>/capstone/t3-run-treeA/pass-q15p-lists/q15pe.images.SHA256SUMS (8)
+APPVM boot rc=0 16:37:32 :: session <mnt-hdd>/capstone/t3-run-treeA/pass-q15pe/session: 8/8 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeA/pass-q15pe/session/guest/board.txt; phase read
+APPVM read rc=0 16:37:32 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 6}
+PASS q15pe ARM END rc=0 16:37:32
+PASS q15pe COMPARE vs reference rc=0 :: 6 of 6 cells the same
+PASS q15pe readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS q15p DONE 16:37:32
+## board 2 (tree B), groups b d f
+CHAIN after sq0p DONE 15:58:18
+PASS q15pb BEGIN 15:58:19 board 2 only 06,07,08,09,10,11 booking 12
+APPVM collect rc=75 calls=8 15:58:19
+APPVM images equal <mnt-hdd>/capstone/t3-run-treeB/pass-q15p-lists/q15pb.images.SHA256SUMS (8)
+APPVM boot rc=0 16:12:27 :: session <mnt-hdd>/capstone/t3-run-treeB/pass-q15pb/session: 8/8 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeB/pass-q15pb/session/guest/board.txt; phase read
+APPVM read rc=0 16:12:27 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 3, 'MISSED': 3}
+PASS q15pb ARM END rc=0 16:12:27
+PASS q15pb COMPARE vs reference rc=0 :: 6 of 6 cells the same
+PASS q15pb readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS q15pd BEGIN 16:12:27 board 2 only 18,19,20,21,22,23 booking 14
+APPVM collect rc=75 calls=8 16:12:27
+APPVM images equal <mnt-hdd>/capstone/t3-run-treeB/pass-q15p-lists/q15pd.images.SHA256SUMS (8)
+APPVM boot rc=0 16:26:59 :: session <mnt-hdd>/capstone/t3-run-treeB/pass-q15pd/session: 8/8 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeB/pass-q15pd/session/guest/board.txt; phase read
+APPVM read rc=0 16:26:59 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 6}
+PASS q15pd ARM END rc=0 16:26:59
+PASS q15pd COMPARE vs reference rc=0 :: 6 of 6 cells the same
+PASS q15pd readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS q15pf BEGIN 16:26:59 board 2 only 30,31,32 booking 16
+APPVM collect rc=75 calls=5 16:26:59
+APPVM images equal <mnt-hdd>/capstone/t3-run-treeB/pass-q15p-lists/q15pf.images.SHA256SUMS (5)
+APPVM boot rc=0 16:38:22 :: session <mnt-hdd>/capstone/t3-run-treeB/pass-q15pf/session: 5/5 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeB/pass-q15pf/session/guest/board.txt; phase read
+APPVM read rc=0 16:38:22 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 2, 'MISSED': 1}
+PASS q15pf ARM END rc=0 16:38:23
+PASS q15pf COMPARE vs reference rc=1 :: 2 of 3 cells the same
+PASS q15pf readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS q15p DONE 16:38:23
+## q15pf's comparison
+SAME 30_fz06_recordcompareint_overread: verdict CAUGHT cause 28 pc vdbeRecordCompareInt+536
+DIFF 31_fz10_dbstat_decodepage_overflow: verdict MISSED cause None pc None
+    verdict: qemu CAUGHT board MISSED
+    completed: qemu False board True
+    cause: qemu 28 board None
+    pc_off: qemu statDecodePage+2024 board None
+    attribution: qemu "function" board null
+SAME 32_fz11_dbstat_freechain_overflow: verdict CAUGHT cause 28 pc statDecodePage+704
+2 of 3 cells the same

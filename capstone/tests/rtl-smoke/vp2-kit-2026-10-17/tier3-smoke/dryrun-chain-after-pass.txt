@@ -1,0 +1,13 @@
+# chain-after-pass.sh stubbed dry run (2026-10-20 15:22): the previous out reading DONE (start) and a PASS STOP (hold);
+# the pass runner under it fully stubbed as in dryrun-pass-appvm.txt.
+== branch done
+CHAIN after sq0p DONE 15:22:02
+PASS q15pf BEGIN 15:22:02 board 1 only 30,31,32 booking 99
+APPVM stub only=30,31,32
+UNBOOK 99: 200
+PASS q15pf ARM END rc=0 15:22:02
+PASS q15pf COMPARE vs reference rc=0 :: 3 of 3 cells the same
+PASS q15pf readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS q15p DONE 15:22:02
+== branch stop
+PASS HOLD: sq0p did not end DONE (PASS STOP: board 1 is busy)

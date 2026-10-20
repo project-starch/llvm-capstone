@@ -1,0 +1,35 @@
+# tier3-pass-one.sh and chain-after.sh stubbed dry runs (2026-10-20 16:19), on the wm0 reference. Every call stubbed:
+# PASS_ARM (writes the reference, or the reference with one MISSED made CAUGHT), PASS_BUSY, PASS_ROOT, PASS_BOOK.
+== tier3-pass-one.sh branch ok
+PASS wm0p BEGIN 16:19:20 board 1 whole arm, 26 images, booking 99
+APPVM stub only=
+UNBOOK 99: 200
+PASS wm0p ARM END rc=0 16:19:20
+PASS wm0p COMPARE vs reference rc=0 :: 23 of 23 cells the same
+PASS wm0p readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wm0p DONE 16:19:20
+== tier3-pass-one.sh branch flip
+PASS wm0p BEGIN 16:19:20 board 1 whole arm, 26 images, booking 99
+APPVM stub only=
+UNBOOK 99: 200
+PASS wm0p ARM END rc=0 16:19:20
+PASS wm0p COMPARE vs reference rc=1 :: 22 of 23 cells the same
+PASS wm0p readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wm0p DONE 16:19:20
+== tier3-pass-one.sh branch busy
+PASS STOP: board 1 is busy
+== tier3-pass-one.sh branch 409
+PASS STOP: the hub refused the booking (409, someone holds board 1): BOOK FAILED 409
+== tier3-pass-one.sh branch wrongpath
+PASS STOP: runner or arm script is not the reference's (780a0975142e2221 / 2852f21b1996be77)
+== chain-after.sh branch done
+CHAIN after q15p DONE 16:19:38
+PASS wm0p BEGIN 16:19:38 board 1 whole arm, 26 images, booking 99
+APPVM stub only=
+UNBOOK 99: 200
+PASS wm0p ARM END rc=0 16:19:38
+PASS wm0p COMPARE vs reference rc=0 :: 23 of 23 cells the same
+PASS wm0p readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wm0p DONE 16:19:38
+== chain-after.sh branch hold
+PASS HOLD: q15p did not end DONE (PASS HOLD: sq0p did not end DONE)
