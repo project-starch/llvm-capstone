@@ -8,7 +8,10 @@ freestanding image that brings its own byte-loop memcpy now routes those copies 
 as the inline code did, silently. A static link pulls a definition in only when something references it, so a
 definition present in the image is a definition reached.
 
-Per image: llvm-objdump --disassemble-symbols=memcpy,memmove; a function passes when its body has `ldc rD, ..(rB)`
+Per image: each defined memcpy/memmove FUNC symbol is disassembled by ADDRESS RANGE, its value to value+size, never
+by --disassemble-symbols: that option stops at the next symbol, and a local label such as `.Lpcrel_hi0` inside the
+function (an `auipc` before its loop) cut a body short. A body whose decoded bytes fall short of the symbol size is
+CANNOT-CHECK, never a verdict. A function passes when its body has `ldc rD, ..(rB)`
 and a later `stc rD, ..(rS)` with the same rD and neither base sp (the prologue's spill of s0 to the stack is
 `stc s0, 0(sp)` and must not count). Verdicts: COPIES-CAPS, NO-CAP-COPY (fail), ABSENT (not linked, so not reached).
 
@@ -25,22 +28,32 @@ INSN = re.compile(r'^\s*[0-9a-f]+:\s+(?:[0-9a-f]{2} )+\s*(\S+)\s+(.*)$')
 MEM = re.compile(r'^(\w+),\s*(-?(?:0x)?[0-9a-f]*)\((\w+)\)$')
 
 
-def functions(objdump, image):
-    out = subprocess.run([objdump, '-d', '--disassemble-symbols=memcpy,memmove', str(image)],
-                         capture_output=True, text=True)
+def symbols(readelf, image):
+    """Defined FUNC symbols named memcpy/memmove: [(name, value, size)]."""
+    out = subprocess.run([readelf, '-s', '-W', str(image)], capture_output=True, text=True)
+    if out.returncode != 0:
+        raise RuntimeError(out.stderr.strip() or f'readelf rc {out.returncode}')
+    found = []
+    for line in out.stdout.splitlines():
+        w = line.split()
+        if len(w) >= 8 and w[3] == 'FUNC' and w[6] != 'UND' and w[7] in ('memcpy', 'memmove'):
+            found.append((w[7], int(w[1], 16), int(w[2])))
+    return found
+
+
+def body(objdump, image, value, size):
+    """(instructions, decoded bytes) for [value, value+size)."""
+    out = subprocess.run([objdump, '-d', f'--start-address={value:#x}', f'--stop-address={value + size:#x}',
+                          str(image)], capture_output=True, text=True)
     if out.returncode != 0:
         raise RuntimeError(out.stderr.strip() or f'objdump rc {out.returncode}')
-    bodies, cur = {}, None
+    insns, nbytes = [], 0
     for line in out.stdout.splitlines():
-        m = re.match(r'^[0-9a-f]+ <(memcpy|memmove)>:$', line)
-        if m:
-            cur = bodies.setdefault(m.group(1), [])
-            continue
-        if cur is not None:
-            i = INSN.match(line)
-            if i:
-                cur.append((i.group(1), i.group(2).strip()))
-    return bodies
+        i = INSN.match(line)
+        if i:
+            insns.append((i.group(1), i.group(2).strip()))
+            nbytes += len(re.match(r'^\s*[0-9a-f]+:\s+((?:[0-9a-f]{2} )+)', line).group(1).split())
+    return insns, nbytes
 
 
 def copies_caps(body):
@@ -80,24 +93,26 @@ def main():
             print(f'CANNOT-CHECK {image}: missing, not ELF, or no symbol table')
             unchecked += 1
             continue
+        verdicts = {'memcpy': 'ABSENT', 'memmove': 'ABSENT'}
         try:
-            bodies = functions(objdump, image)
+            for fn, value, size in symbols(readelf, image):
+                insns, nbytes = body(objdump, image, value, size)
+                if size == 0 or nbytes != size:
+                    v = f'CANNOT-CHECK({nbytes}/{size} bytes decoded)'
+                    unchecked += 1
+                else:
+                    v = 'COPIES-CAPS' if copies_caps(insns) else 'NO-CAP-COPY'
+                # Several definitions of one name: the worst verdict stands.
+                if verdicts[fn] == 'ABSENT' or verdicts[fn] == 'COPIES-CAPS':
+                    verdicts[fn] = v
         except RuntimeError as e:
             print(f'CANNOT-CHECK {image}: {e}')
             unchecked += 1
             continue
-        verdicts = {}
-        for fn in ('memcpy', 'memmove'):
-            if fn not in bodies:
-                verdicts[fn] = 'ABSENT'
-            elif not bodies[fn]:
-                verdicts[fn] = 'CANNOT-CHECK'
-                unchecked += 1
-            else:
-                verdicts[fn] = 'COPIES-CAPS' if copies_caps(bodies[fn]) else 'NO-CAP-COPY'
         bad = [fn for fn, v in verdicts.items() if v == 'NO-CAP-COPY']
         failed += bool(bad)
-        print(f"{'FAIL' if bad else 'ok  '} {image} memcpy={verdicts['memcpy']} memmove={verdicts['memmove']}")
+        tag = 'FAIL' if bad else 'CANT' if any(v.startswith('CANNOT') for v in verdicts.values()) else 'ok  '
+        print(f"{tag} {image} memcpy={verdicts['memcpy']} memmove={verdicts['memmove']}")
     n = len(a.images)
     print(f'check-image-copies: {n} images, {failed} with a non-capability copy, {unchecked} cannot-check')
     if unchecked:
