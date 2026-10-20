@@ -61,19 +61,57 @@ not widen the existing compare.
    collision is a legitimate revocation and must keep denying — a fix that silences this arm has broken
    invalidation, not fixed it.
 2. `cap-fetchdeny` control arm: **still 0 faults**.
-3. A NEW cross-namespace arm (the `va-fetchctx` shape with the two coverages split, see below): **0 faults**
-   where today's mechanism predicts a refusal. This is the reading the fix exists for.
+3. The cross-namespace arm, which NOW EXISTS and has its baseline measured: `va-fetchsplit-s`'s firing
+   variant (capstone-ariane, the `FS_SAMETBL` pair) must read **0 faults with the four children still at
+   0x100**, where it reads **faults 1, mtval 0x80001020, mepc - s_code 0x20** on the tree that already carries
+   item (2) -- measured, not predicted, and measured on the right base, which is what makes it item (1)'s
+   reading alone. **Use the SAMETBL
+   pair, not the default pair**: in the default arm the caller's srevroot is `tbl` while the context's is
+   `tbl3`, so item (2) restoring id 67 changes srevroot at the escape, raises a `revnode_ns_flush` edge
+   (`ex_stage.sv:1462`) and re-arms every tracker -- which removes the refusal too, so a 0 there cannot say
+   which item did it. The SAMETBL variant sets the caller's own table to the context's, so the restore writes
+   an unchanged value, no flush fires, and only item (1) can produce the 0. The default pair is item (2)'s
+   acceptance instead. Its control (one CAPNODE operand apart, faults 0) must stay at 0, and the `-DFS_IDX`
+   variant must keep reading the same four indices (physical 3 and 3, physical 10, next-unused 7) -- if the fix
+   changes WHICH indices are allocated, the arm has stopped being a one-variable pair.
 4. **The generation case, which is the one most likely to be forgotten**: an arm that revokes a node at a
    RECYCLED index, whose generation has been bumped to ≥ 1 by a physical pop (`capstone_rev_node.anvil:289-307`),
    must **still deny**. That is precisely what the index-only compare was chosen to preserve, so it is the
    regression this fix can most easily cause.
 
-**A dependency to clear first.** The cross-namespace arm does not exist yet. `va-fetchctx` wedged because the
-caller's CPMP grant covers the whole image, so it covers the context's code too and the collision denies the
-CONTEXT's own fetches; and an M handler cannot repair a CPMP entry while a context is live (CCSRRW to
-0x010..0x01F is a privilege violation while `sup_active_q`, `csr_regfile.sv:3018-3021`). The arm needs the
-caller's S code under the tracked entry and the context's code under a different one. **That is simulation work
-and must be finished before the build**, or item (1) ships with its decisive reading unavailable.
+**That dependency is CLEARED** (2026-10-20, capstone-ariane `c7e6f604f`, audited). It needed three fixes, each
+recorded in the arm's header: the two coverages split so only the caller's own code sits under the tracked entry
+(`va-fetchctx` had one grant over the whole image, so the collision denied the CONTEXT's fetches and the fault
+was the context's); the context entering by ecall so its escape is terminal and `sup_active_q` is 0 when the
+handler repairs the entry (a CCSRRW to 0x010..0x01F is a privilege violation while it is 1,
+`csr_regfile.sv:3018-3021` -- and the clean return now MEASURES that, where the wedge only implied it); and the
+repair sourced from a register minted for it and never written again, after two attempts used registers the
+scaffolding writes as CSRUNV arguments.
+
+**THE DESIGN IS RULED, and the defect is NOT the one this document first named.** The adversarial audit refuted
+the clause "because the compare is index-only": both ids in the arm are generation 0 -- the broadcast is masked
+to `#{14'd0, index}` (`capstone_rev_node.anvil:3-6`) and the physical bump mints `#{14'd0, head}` (`:314`) --
+so a full 30-bit compare fires identically and the arm cannot see the slice. The operative defect is that **ids
+carry no namespace identity**. The semantics owner's ruling, which addresses exactly that and needs no
+per-entry state:
+
+- **ISA rule**: a CPMP entry holds only PHYSICAL-namespace capabilities. Every supported producer is the
+  monitor's M-mode region path with `csupctl.table` clear; a context's virtual nodes live in its registers, its
+  frame and its memory, and the CPMP is INIT-zeroed inside a context anyway.
+- **RTL**: the broadcast carries one namespace bit and **the CPMP trackers act only on PHYSICAL broadcasts**.
+  The LSU revocation cache and the PC tracker keep consuming both, because they do track a context's virtual
+  capabilities. This was chosen over recording a namespace per CPMP entry, which is fragile exactly where it
+  matters: around a switch the escape's restore walk rewrites the caller's entries while the flag may still read
+  virtual, so a re-adopt in that window would tag the caller's physical entries virtual -- bringing the false
+  deny back and missing physical revocations as well.
+- **Monitor invariant**, documented beside the rule: never install into a CPMP entry a capability obtained from
+  a context, a frame or a table-namespace op. The path this lane constructed (an S caller inside the table
+  namespace derives a virtual node, M installs it) is not a supported flow, so under this rule it is a monitor
+  bug rather than a hardware obligation. No hardware check is possible without a bit in the capability word --
+  `cap_metadata_t` is exactly 64 bits -- and none is needed for correctness inside the invariant.
+
+Acceptance reading 4 below becomes more important under this ruling, not less: it is the ONLY arm in the batch
+that exercises the index-only slice at all, since it is the only one with a tracked generation >= 1.
 
 ## (2) R-58: the caller's `srevroot` restored at the escape
 
@@ -105,14 +143,36 @@ first draft, and it comes out SMALLER than that draft said:
   so the divergence this bullet was written to prevent cannot occur. **What this removes is a task, not a
   risk**: if a model is added later it inherits +944 from the RTL.
 
+**WRITTEN AND SIMULATION-VALIDATED 2026-10-20** (capstone-ariane lane `524326f34`, one branch of
+`walk_advance`; no synthesis until the batch is complete). Three of its four acceptance arms read exactly as
+pre-registered and the fourth is refuted as an arm rather than as a fix -- see below. The fix also removes
+`va-fetchsplit`'s CSRUNV+4 refusal (faults 1 -> 0), which is why item (1)'s acceptance moved to the SAMETBL
+pair, and the same-table arm reading faults 1 on this tree is the evidence that the two items are now
+separable.
+
 **Acceptance readings, pre-registered.**
 1. `va-srevroot`: the caller must read **its OWN value back** — `s3 = 0x80006000` and **`s4 = 0x80006000`**, where
    today `s4` reads `0x80007000`, the context's table — with the twenty baseline readings byte-identical.
-2. `va-srevroot -DSREV_CSNODE`: the post-escape CSNODE must be **illegal at decode again (mcause 2)**, where
-   today it succeeds with a node id, because the caller is back outside the table namespace. Two leading `0x2`
-   instead of three.
+2. `va-srevroot-zn` (`-DSREV_ZERO -DSREV_CSNODE`): the post-escape CSNODE must be **illegal at decode again
+   (mcause 2)**, where today it succeeds with a node id, because with its own srevroot back at 0 the caller is
+   outside the table namespace -- so **FOUR leading `0x2` instead of three**, and `s5` 0x4 -> 0x0. (This
+   document first said "two instead of three", which is wrong in the other direction: an extra trap adds a
+   reading, it cannot remove one. It also attached the reading to `-DSREV_CSNODE` alone, where it does not
+   follow -- a non-zero own table is still a table namespace, so the CSNODE stays legal there.)
+2b. `va-srevroot-n` (`-DSREV_CSNODE` alone, own table non-zero) is the stronger arm and is new: the CSNODE
+   stays legal either way, so the reading is the node id, which names WHICH table the caller allocated from --
+   `s5` **0x4 -> 0x3**, `tbl`'s untouched next-unused against the inherited `tbl2`'s 4 (4 because the entry
+   consumed index 3, which is what -zn's present 0x4 shows). Legal/illegal cannot say that.
 3. On silicon, the DATA face at **0 with the OLD module** on the new bitstream — the reading that shows the fix
    removes the persistence rather than the workaround masking it.
+3b. **MEASURED, all three** (128,993 / 128,937 / 129,027 cycles, every arm SUCCESS): `va-srevroot` s4
+   0x80007000 -> **0x80006000** with exactly one of the twenty readings moved; `-z` s4 -> **0x0**, the arm that
+   separates "restored" from "coincidentally equal" because the unfixed arm read the frame's word verbatim;
+   `-zn` **four leading 0x2** and s5 -> **0x0**. A fourth arm, `va-srevroot-n` (`-DSREV_CSNODE` alone), is
+   **REFUTED as an arm**: with a non-zero own table BOTH CSNODEs are legal, so its s5 is the second call's
+   index from the same table and names no table, and its 0x6 against a pre-registered 0x3 is unexplained
+   (UNRESOLVED; tbl's next-unused word would settle whether CSNODE consumes two indices per call). It is not
+   part of item (2)'s acceptance and its s3 = s4 agrees with the fix.
 4. **NOT an acceptance reading**: the surviving CSRETIRE+4 fetch site. R-58 is not required for it (inside the
    window `select_root` deliberately puts the context's table in `srevroot`), and an acceptance test that cannot
    fail for the right reason is worse than none.

@@ -249,7 +249,7 @@ boot carves, region grants), which runs with csupctl.table clear; a context's vi
 and memory, the CPMP is INIT-zeroed inside a context, and the CSMINT emulation writes its re-noded capability into a frame
 slot, never a CPMP entry. Consequences: (1) the monitor must never install into a CPMP entry a capability obtained from a
 context, a frame or any table-namespace operation (a monitor bug if it does; the capability word has no bit by which the
-hardware could check it); (2) a revocation in a context's lifetime namespace can never legitimately invalidate a CPMP
+hardware could check it). **"Physical" here means M-MODE-MINTED, not "minted by whoever is not a context":** an S caller with a non-zero `srevroot` is ITSELF inside the table namespace by `vctx_table_o`'s second clause (`csr_regfile.sv:2885-2887`), so it can derive virtual nodes without being a context, and a capability it hands to M is exactly the case consequence (1) forbids. The RTL lane's measured arm has the caller in that state throughout, which is why its tracked id must be described as M-mode-minted rather than as the caller's; (2) a revocation in a context's lifetime namespace can never legitimately invalidate a CPMP
 entry, so the RTL fix for S-23 is an invalidation broadcast that carries one namespace bit, with the CPMP trackers acting
 only on physical broadcasts while the LSU revocation cache and the PC tracker consume both; (3) one bit suffices only
 because a change of table base flushes every tracker (ex_stage.sv revnode_ns_flush), so that flush must not be narrowed.
