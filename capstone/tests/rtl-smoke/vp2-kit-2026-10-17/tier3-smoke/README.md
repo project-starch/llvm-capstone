@@ -4219,3 +4219,18 @@ named that instruction, and the claimed cause was the instruction itself.
   first_id 1024. The check's "6" again counts vm-suite's KMSG replay.
 - **So 54d8a3af has passed Tier 1 on both bitstreams.** The scorable sql0 arm waits only on the compiler lane's QEMU
   reference for runner 7ce203f9.
+
+### INCIDENT (2026-10-20 08:15-08:16, board 1): an unregistered boot started from a dry run, and was stopped before any result
+
+While dry-running `tier3-sql-arm-rev2q.sh` (the scored sql0 arm, not yet pre-registered), the test command made a second,
+UNSTUBBED call to the runner, meant to show that the real checks pass.
+- Every check did pass, so the runner went on:
+  - a real measure bake (25,856,520 B);
+  - `T3PG sql0-nf2A BEGIN 08:15:55`;
+  - a real board-1 boot: power on, the bootloader prompt, and one firmware image upload begun.
+- The task was stopped within about a minute. The driver's cleanup released the board (power off, `BOARD_RELEASED`), and
+  board 1 reads FREE.
+- Both bakes ended in `shared image restored; BAKE_DONE`.
+- **No transcript and no result exist**, and nothing was flashed. The run directory was in the scratchpad and was deleted.
+- **The cause:** a dry run must stub EVERY invocation. A "just the checks" call on the real path is a real launch.
+- The arm is pre-registered below, before its real boot.
