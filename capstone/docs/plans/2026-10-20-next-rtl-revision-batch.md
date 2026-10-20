@@ -342,10 +342,21 @@ carries the three fields this needs:
 - `runtime_dirty` **must be false FIRST.** It is `bool(git status --porcelain)`, and if the build tree was
   dirty then `runtime_revision` says nothing about what was actually compiled. Check this before the ancestry,
   because a dirty build can pass the ancestry test and still lack the hunk.
-- `merge-base --is-ancestor 232d13b220cc <runtime_revision>`, where `runtime_revision` is
-  `git -C REPO rev-parse HEAD` at build time -- so it is a commit in this repo and the ancestry test is valid.
-  Note what ancestry does NOT exclude: a later revert of the hunk. That is not the case today, and the next
-  field is what makes it moot.
+- **CONTENT, not ancestry.** `git show <runtime_revision>:capstone/runtime/virtual/heap.c` must contain BOTH
+  exact substrings `(char *)group + (start - base)` and
+  `(r->key - __builtin_capstone_cap_get_base(r->parent))`.
+  **The ancestry form that stood here until 2026-10-20 was WRONG and refused exactly the images that
+  qualify**: the lead's rebuilds use runtime `8f132305eea1`, which carries the heap.c change as a PORT
+  (`5620badda510` onto `5b3e6b79`) rather than by descent, and `git merge-base --is-ancestor 232d13b220cc
+  8f132305eea1` **exits 1** -- verified here, as is the content test on four revisions: `5b3e6b79` false and
+  false (must refuse), `232d13b220cc`, `5620badda510` and `8f132305eea1` all true and true (must pass).
+  Content also closes the revert case that ancestry cannot: a later revert keeps the ancestry and loses the
+  hunk.
+  The board lane has this as a script, `r60-runtime-gate.py` on lane `vp2-tier12` (a manifest or `--rev`;
+  exit 0 PASS, 1 REFUSE, 2 NO DATA, with controls run both ways). **Prefer the script once it is reachable
+  and let this text defer to it** -- but the rule is written out here deliberately, because as of this commit
+  the script is NOT on `origin/vp2-tier12` (checked after a fetch; that branch's tip is `30a39b497d39`) and a
+  precondition pointing only at a file nobody can open is no precondition.
 - `runtime_archive_sha256`, the sha256 of the built `libapplication-runtime.a`. **This is the stronger check
   and is revision-independent**: images that must share a runtime must share this hash. Prefer it when
   comparing two images, and use the ancestry test when judging one image on its own.
