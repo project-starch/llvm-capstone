@@ -7,5 +7,6 @@ tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README.md (arm q15).
 - `vp2-nested-pools/`: subsets a, b and c merged (cases 00-17), giving CAUGHT 12 and MISSED 6. All 18 cells equal run C.
   The subsets' own bundles sit beside it, as `vp2-nested-pools-q15{a,b,c}/`.
 - Tree A's subsets d-f are under ../2026-10-20-vp2c-treeA/. Case 31's per-platform note (R-60) is there.
-- Case 31 has not yet run on tree B. Its decode path is identical to tree A's by source, and a tree-B boot of subset f is
-  queued.
+- `vp2-nested-pools-q15f/`: subset f (cases 30-32) on tree B, scored against run C cut to its cases: 30 CAUGHT,
+  31 MISSED, 32 CAUGHT, the same three readings as tree A's two boots. Case 31 is R-60's, as the per-platform note in
+  ../2026-10-20-vp2c-treeA/README.md explains; it holds on both bitstreams.

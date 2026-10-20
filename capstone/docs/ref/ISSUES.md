@@ -3318,7 +3318,7 @@ everything inside delegated domains, are unaffected.
 ### R-59 — a CSRUNV frame whose `srevroot` word is between 1 and 4095 passes the switcher's non-zero precheck and then installs ZERO, so the context is admitted and runs OUTSIDE the lifetime-table namespace · `OPEN, source-derived 2026-10-19 by the RTL lane's auditor on tree A (8522d72fe), filed separately from R-58 deliberately (one issue, one folder) although both are in the same walk. `runv_precheck_step` accepts any non-zero word at dom_base+8 (capstone_dom_switcher.anvil:381-387) while the id-67 write masks the low 12 bits (csr_regfile.sv:2051), so a word in 1..4095 satisfies "srevroot non-zero" and the CSR ends up 0 -- and `vctx_table_o`'s term 2 then reads false for that context (:2876-2878). No reading yet; a one-arm test is a frame with +8 = 0x800 plus a context-side CSNODE, which should be illegal at decode where the same arm with +8 = a real 4 KiB-aligned table admits it. The fix is to make the two agree: either the precheck rejects a word with low bits set, or it tests the masked value`
 
 
-### R-60 — a load or store through a capability whose cursor lies OUTSIDE its representable window is bounds-checked against the compressed bounds decoded AT THAT CURSOR, which are the true bounds shifted by whole window spans; when that shifted decode contains the cursor the access passes and touches memory one or more spans away, without a trap · `CHARACTERISED on silicon 2026-10-20 (tree A, board 1; N=1 per arm; the bitstream identity is the run's label, not a hash). Mechanism read in RTL and audited. QEMU traps (cause 28) in every arm. Stores MEASURED. LDC/STC and tree B by source only`
+### R-60 — a load or store through a capability whose cursor lies OUTSIDE its representable window is bounds-checked against the compressed bounds decoded AT THAT CURSOR, which are the true bounds shifted by whole window spans; when that shifted decode contains the cursor the access passes and touches memory one or more spans away, without a trap · `CHARACTERISED on silicon 2026-10-20 (tree A, board 1; N=1 per arm; the bitstream identity is the run's label, not a hash). Mechanism read in RTL and audited. QEMU traps (cause 28) in every arm. Stores MEASURED. Corpus witness case 31 on BOTH bitstreams. LDC/STC by source only`
 
 **What happens** (capstone-ariane 8522d72fe, read by the compiler lane's rtl-oracle and re-read by a claim-auditor):
 - The register file holds capabilities compressed. CINCOFFSET checks only the capability type: it neither clears the tag
@@ -3364,7 +3364,8 @@ made DURING an excursion bite too. That note's simulation arm has no access at a
 
 **Not measured:**
 - LDC/STC, which take the same decode by source (`capstone_dyn_unit.anvil:666-670, 733-736`);
-- tree B 8de3c48cf, whose decode path is identical by source (q15 subset f on tree B is queued on board 2);
+- tree B 8de3c48cf with the directed arms. Its decode path is identical by source, and case 31 reads MISSED there too
+  (q15 subset f on tree B, 2026-10-20, board 2: 30 CAUGHT, 31 MISSED, 32 CAUGHT, as both tree-A boots);
 - a chain of excursions. A CINCOFFSET from an already out-of-window cursor re-encodes the shifted decode, which may make
   the wrong bounds permanent. That is the compiler lane's inference from source.
 
