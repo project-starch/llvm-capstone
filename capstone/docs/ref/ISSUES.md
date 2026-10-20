@@ -9626,6 +9626,60 @@ and passes against the patched one, and libc-test's `pthread_cond` passes
 libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
 (perl and mruby embed none).
 
+### C-81 — a copy of 16 bytes or more whose 16-byte alignment the compiler cannot prove is inlined as scalar loads and stores, which strip the tags of the capabilities it carries `FIXED 2026-10-16 on compiler/memcpy-unknown-alignment — COMPILER; found 2026-10-15 by SPEC CPU2017 500.perlbench_r (op/pack.t, pack 'p')`
+
+**What happens.** `CapstoneTargetLowering::findOptimalMemOpLowering` sent every memcpy and memmove
+that was not 16-aligned on both ends to its scalar path, sized to the alignment it could prove:
+`memcpy(char *, char *, 16)` became sixteen `lbu`/`sb` pairs. `align 1` means the alignment is
+unknown, not that the bytes hold no pointer, and a scalar store never carries a tag. Perl's
+pack 'p' stores a pointer with `Copy(&aptr, cur, 16, char)` and unpack 'p' reads it back with
+`Copy(s, &aptr, 16, char)`; both buffers are 16-aligned at run time, the round trip returned an
+untagged pointer, and `newSVpv` faulted in `strlen` (cause 24). C-78 had left these copies
+unchanged on purpose; its entry said so.
+
+**Fix.** A memcpy or memmove of 16 bytes or more whose 16-byte alignment is not proven calls
+`memcpy`/`memmove`. musl's implementation checks the run-time alignment of both cursors and copies
+whole granules as capabilities when they match (`string_bounds_safe.c`). Kept inline: copies
+shorter than a granule, and copies from constant data SelectionDAG can read as plain bytes
+(`isMemcpyStrSrc()`), which hold no tagged capability. `llvm.memcpy.inline`
+(`__builtin_memcpy_inline`) cannot become a call: such a copy without proven alignment is now an
+error ("cannot inline a copy of N bytes whose 16-byte alignment is unknown without dropping
+capability tags"), where it used to drop the tags silently; a 16-aligned one is copied as
+capabilities whatever its length (the C-78 residual below), except under the S-06 fixup flag,
+whose hook covers only 32 granules. The libcall flag (`-capstone-lower-memops-via-libcall`) no
+longer declines a forced-inline copy into an empty lowering. Copying a forced-inline copy of
+unknown alignment correctly needs a run-time alignment test in the expansion; not done.
+
+**Measured (2026-10-16, assertions-ON build of this branch on dev 46fcc2b27e5a, p12).**
+- Lit: `llvm/test/CodeGen/Capstone` 124 pass, 1 unsupported, and `shared-patches-present.test`,
+  which needs a git checkout and passes in one; the Capstone tests in `clang/test/CodeGen`,
+  `llvm/test/MC/Capstone` and `llvm/test/Transforms` (32) pass. New tests
+  `memcpy-unknown-alignment-tags.ll`, `memcpy-inline-unknown-alignment.ll`; updated
+  `aggregate-memcpy-align.ll` and `memcpy-capability-granules.ll`, whose under-aligned controls
+  had asserted the scalar copy. Each part of the fix, reverted alone, fails its own tests (recorded
+  in the test headers).
+- `runtime/virtual/hosted-contract.c` gains four copies through external `noinline` wrappers that
+  take `char *` (16 bytes, 24 with a plain tail, 48 with the capability in the middle granule, an
+  overlapping 32-byte memmove). Virtual SDK built from this tree, dev platform (QEMU 2b6fbe3eaf):
+  with this compiler 60 of 60 checks pass; with the previous one (the same memcpy lowering as dev)
+  the four new checks fail.
+- Gates with the new SDK: runtime, nodes, malloc pass; memcached passes 104 and fails
+  `fx24_trigger`, as the kits of #242 and #238 do on their own compilers.
+- perlbench rebuilt with this compiler: `unpack("p", pack("p", $s))` returns the string, through a
+  variable, a copy and `p<`; with the previous compiler every one of those faults. Two shapes still
+  fault and cannot work on any capability machine: `p>` (the pointer is stored byte-reversed) and
+  unpack 'p' of a UTF-8-upgraded string (the pointer is rebuilt byte by byte). op/pack.t uses both,
+  with constant arguments that are folded at compile time, so the whole file still dies before its
+  first test. With those four checks replaced by `pass()` in a staged copy it runs 479 tests and
+  then faults in musl's `modf`, a different compiler defect (C-82).
+- Cost: in perlbench, 208 memcpy call sites become 216 (pp_pack.c +3, regcomp.c +2, re_comp.c +2,
+  MD5.c +1); memmove stays at 78. In musl, references to memcpy/memmove go from 134 to 160: the
+  `double complex` results of the complex functions (16 bytes, 8-aligned) and `sigset_t` copies.
+  musl's own `memcpy.o` and `memmove.o` are byte-identical to the previous build and have no
+  relocations, so neither calls itself. Run time not measured. A per-copy "holds no capability"
+  marker from clang (CHERI's `no_preserve_cheri_tags` is the model) would let typed copies such as
+  `double complex` inline again.
+
 ### C-80 — with F/D enabled, every FP constant that is not an immediate gets an address-space-0 constant-pool address, which Capstone's lowering cannot honour `FIXED 2026-10-14 on compiler/select-fp-constants-capability — COMPILER; found 2026-10-14 building SPEC CPU2017 544.nab_r with +f,+d`
 
 **What happens.** Generic SelectionDAG code that puts a constant into the constant pool types the
@@ -9786,8 +9840,9 @@ the 16-multiple one before it) narrowed the granule count `Op.size() / 16` to 32
 as a 17-byte copy (2^36 + 16 as one capability). The count is now 64-bit;
 `memcpy-capability-granules.ll` gains both sizes, which the narrowed count inlines and the fix sends
 to `memcpy`. **Still open:** a copy forced inline (`llvm.memcpy.inline`) past the budget falls to
-the scalar path and loses its tags.
-### C-77 — a const global aggregate that holds pointers, passed BY VALUE, faults in the virtual profile: the argument copy's memcpy gets its operands through integer moves `OPEN — COMPILER; found 2026-10-11 by the Perl port on the virtual profile (the lexer's "::" bareword path), reduced to a 20-line C program; worked around in the port (ports/perl/musl/patches/5.36.3/0009)`
+the scalar path and loses its tags. *Fixed 2026-10-16 with C-81:* a forced-inline 16-aligned copy
+is copied as capabilities whatever its length (except under the S-06 fixup).
+### C-77 — a const global aggregate that holds pointers, passed BY VALUE, faults in the virtual profile: the argument copy's memcpy gets its operands through integer moves `FIXED 2026-10-16 on compiler/memcpy-unknown-alignment — COMPILER; found 2026-10-11 by the Perl port on the virtual profile (the lexer's "::" bareword path), reduced to a 20-line C program; worked around in the port (ports/perl/musl/patches/5.36.3/0009), which can now go`
 
 **What happens.** Built with a virtual-profile SDK (`-capstone-gp-free -capstone-image-gp`,
 compiler cda7e335ff9f, the p13 kit's) and run on the Sublet-lifetime QEMU, a call that passes a
@@ -9825,6 +9880,17 @@ virtual SDK can carry the same shape.
 **Not done.** The fix belongs in caller-side byval lowering (the C-50 neighbourhood,
 `CapstoneISelLowering.cpp`): the copy's operands must stay in capability registers. Not
 reproduced against a compiler built from a later revision; no lit test yet.
+
+**Fixed (2026-10-16).** The byval copy in `LowerCall` passed default-constructed
+`MachinePointerInfo`s, address space 0, and `SelectionDAG::getMemcpy` types a memcpy call's
+pointer arguments from them (the C-18 fix), so both capabilities went through `mv`. It now passes
+the frame object's info and the IR argument's. Since C-81 a byval copy whose 16-byte alignment is
+not proven (a struct of `long`s) is a memcpy call as well, so this mattered more. Lit:
+`byval-copy-capability-args.ll` checks after instruction selection that the call takes `$c10` and
+`$c11`; with the old pointer infos it takes `$x10` and `$x11` (in the emitted code `mv a0, s0` and
+`mv a1, a4`, as above). At run time `hosted-contract.c` passes the zero constant and one holding
+five pointers by value: both pass with this compiler; with the previous one the first faults and
+the process exits 139. Perl's patch 0009 is no longer needed; it is not removed here.
 
 ### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism read out of the code 2026-09-30`
 
