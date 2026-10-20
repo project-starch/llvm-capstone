@@ -21264,12 +21264,23 @@ static SDValue recoverCapabilityFromAddressArith(SDNode *N, SelectionDAG &DAG,
 // generic combiner left one `add`/`shl` chain and one `cincoffset` per element
 // (DAGCombiner::visitPTRADD only folds a nested pointer add with a constant
 // inner offset, and this target has no reassociation of its own). The
-// reassociation is exact: `cincoffset` moves the cursor and checks nothing, so
-// an intermediate cursor outside the bounds is as harmless as the final one
-// (capstone_flu_unit.anvil:29-51 on the RTL, helper_cscincoffset in QEMU). The
-// offsets stay plain integers of the width they had, so C-31 (an integer
-// operand is an integer write) is untouched, and a constant base is left alone
-// because C-40 lowers a null-based address as an integer in selectCIncOffset.
+// reassociation creates an intermediate cursor X+Y that the source never
+// held, and under R-60 (ruled 2026-10-20) a `cincoffset` whose result leaves
+// the source's representable window writes it UNTAGGED. It stays in the window
+// whenever the access is in bounds: X+Y lies within 2048 bytes of the access
+// (C is simm12), and the window reaches at least 2048 bytes below the base and
+// past the end. That slack was enumerated against QEMU's R-60 predicate
+// (capstone_cursor_representable, capstone-qemu 02f03540d7, by
+// capstone/tests/r60-window-slack/run.sh): 103,045 random
+// exact regions of 16 B..8 GiB, every cursor from base-2048 to end+2048 kept
+// its tag; a 64 KiB demand fails 6,841 of 6,842, so the check can fire. It is
+// a sample of QEMU's model, not of the RTL. What does change is an
+// OUT-of-bounds access (a defect) whose address is still inside the window
+// while X+Y is not: it now faults as an untagged access (cause 24) where it
+// faulted on bounds (cause 28). The offsets stay plain integers of the width
+// they had, so C-31 (an integer operand is an integer write) is untouched, and
+// a constant base is left alone because C-40 lowers a null-based address as
+// an integer in selectCIncOffset.
 // Measured on 544.nab_r's mme34 (SPEC test input): the three-vector accesses
 // cost two extra `addi`, two `slli` and two `cincoffset` per pair, ~120M
 // instruction attempts.
