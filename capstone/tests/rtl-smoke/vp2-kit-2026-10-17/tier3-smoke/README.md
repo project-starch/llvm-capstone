@@ -5279,3 +5279,81 @@ INJS/INJL 0, and tree A equal to tree B in every cell.
   1086fbe9aad236be.
 - **For the NULL census:** case 01's fault address is -1 (0xffffffffffffffff), the same incidental shape as sqlite 19, and
   the census's "address < 0x1000" criterion does not catch it. Its criterion should include small negative addresses.
+
+### The repaired arms, result (2026-10-20 22:48-23:19, board 2, tree B): 37 of 37 cells the same in every field
+
+`records/pass-rep-b2.result-lines.txt`. UNGATED.
+- pb13q15 reads 9/9 (CAUGHT 7, NO-READING:control-failed 2, as its reference), pgm1q15 5/5 and wm1q15 23/23.
+- Each boot has the vbatch END line, pc=0 0, DRT1 0, FRTY 0, no Oops, INJS 0 / INJL 0, and **cause=29 0**: the Q-15
+  refusal is gone on silicon for both repaired Sublet configurations.
+
+### THE CORPUS PASS ON THE REBUILT IMAGES, summary (2026-10-20 13:00-23:19; cpython lt0's tree-A overlap still running)
+
+One SDK (the virtual SDK without +movc-keeps-integer-source, the lead's C-32 remedy (b)), dev's module 54d8a3af, both
+current bitstreams, every arm graded against the compiler lane's silicon-mimic QEMU reference (qkit7-tB-mimic: C-32 MOVC
+null plus compact rounding, both identical on the two trees).
+
+| arm | board / tree | cells | in verdict | every field | the differences |
+|---|---|---:|---:|---:|---|
+| sql0 (postgres sql) | 1 / A and 2 / B | 9 | 9 | 9 | none; tree A = tree B |
+| sq0 (sqlite memsys5) | both | 33 | 33 | 30 | Q-31: 19, 20, 22 (cause 4/4/13 against 24) |
+| sq1q15 (sqlite nested pools, repaired) | both | 33 | 32 | 32 | R-60: case 31 MISSED |
+| wm0 (wmem malloc) | 1 / A | 23 | 23 | 23 | none |
+| fph fpt fca fcs fso mph mpt wph wpt pgc pgm0 | 1 / A | 117 | 117 | 117 | none |
+| pgm1 pym0 pym1 | 1 / A | 45 | 45 | 45 | none |
+| pb9 pb12 pb10 | 1 / A | 17 | 17 | 17 | none (pb10: FRTY 0 on tree A) |
+| cpython lt0 | 2 / B | 32 | 32 | 31 | Q-31: 01 (cause 4, address -1) |
+| pb13q15 pgm1q15 wm1q15 (repaired) | 2 / B | 37 | 37 | 37 | none |
+| **total, 24 arms** | | **346** | **345** | **341** | **all of them already in ISSUES (Q-31 x4, R-60 x1)** |
+
+- **No pc=0 in any boot.** On the flagged images, C-32 stopped sql0's 03/07 and cpython in 21 places.
+- In every boot: DRT1 0, FRTY 0 (S-23 removed by the module on both trees), no Oops, INJS/INJL 0, and the node-floor-2
+  banner present.
+- **Not run:**
+  - sq1, wm1 and pb13 (unrepaired, control-failed on QEMU; replaced by sq1q15, wm1q15 and pb13q15);
+  - pg-pools and cpython lt1 (they need collection, the batch bitstream's generations item).
+- **What the pass changed about the corpus record, and what it did not:**
+  - The cells agree with QEMU. What a CAUGHT cell MEANS is a separate question: sqlite 02, 05, 19 and 24 on the malloc
+    arms are incidental NULL/-1 dereferences (dev 606c8f218a6e, with the retraction 7b4285a9d444). The headline matrix's
+    physical-harness rows of those cases still wait for their traces.
+- **Process record of the day:**
+  - one retraction landed (7b4285a9d444);
+  - one missed prediction (Q-31, sq0);
+  - two false stops caught by their own checks (pgm0's completion phrase; the repaired chain's trigger);
+  - one VOID recovered (cpython board 2's wrapper timeout).
+  - Each is described above with the check that caught it.
+
+### Recorded from the lanes this evening
+
+- **The csupctl.table bracket is tight** (the runtime lane's batch item 1 residual: a physical revocation stamped virtual
+  inside it would keep stale CPMP authority). The monitor at f13dbc5 and the wrapper aab63d5 were read:
+  - capstone_csmint.S:279 is the only setter of bit 3, cleared at :281 or as csm_window_trap's first instruction (:310);
+  - the window holds one CSNODE, with mtvec at csm_window_trap (:276-277);
+  - MIE is 0 by trap entry, and capstone-sbi never sets it. The wrapper's MIE set (sbi_capstone_dom.c:191) is
+    CAPSTONE_TARGET_QEMU-only, at boot;
+  - the other 0x7C4 writers (sbi_capstone.c:1020 csrw of 0/1, :3725 csrsi 4) never set bit 3.
+  - The batch bitstream's firmware gets the same grep at its pre-registration.
+- **For the batch bitstream's firmware (the runtime lane's ruling, isa.md dev e385b7887530):** the CPMP trackers will
+  ignore the namespace flush, so the fetch retry's bit-2 strobe will no longer heal a CPMP deny.
+  - The retry at f13dbc5 is bounded PER PC: one FRTY retry, then a no-progress repeat (same mepc, < 4096 instret) is
+    injected with INJS, or INJL + stop if stvec == mepc (sbi_capstone.c:3676-3725, :3898-3905).
+  - **Residual:** the guard holds one pc, so two alternating refusing pcs would each be retried every time. That is
+    unbounded but not silent, since each retry prints FRTY.
+  - **To do before that firmware boots:** a global retry-without-progress cap (2, then inject), with a two-pc positive
+    control in its pre-registration.
+  - **Written:** capstone-sbi vp2/fetch-retry-cap 579ef1c (pushed), on f13dbc5:
+    - CAPSTONE_FETCH_RETRY_CAP (FPGA, off by default): FETCH_RETRY_MAX_STREAK 2 retries without progress, then FRTC (mepc)
+      and the fault into S;
+    - with the define off, the generated monitor assembly is byte-identical to f13dbc5's (c4eda9f722f5c0a2);
+    - with it on, it compiles.
+    - The full firmware build, its dom_stack gate, and a two-pc positive control that must reach the cap go into the batch
+      bitstream's pre-registration.
+- **The batch bitstream's first boot must also read s23-cpmp-rearm** (the RTL lane, via the runtime lane):
+  - On item 1's fixed RTL, the namespace-flush strobe and srevroot changes no longer re-arm a CPMP entry or the PC
+    tracker. They still flush the LSU revocation cache.
+  - The arm reads Q5 (and Q8) ALLOWED on bf3db3175 and must read DENIED on the fixed RTL. Its simulated flips are
+    pre-registered by the RTL lane.
+  - It runs beside pb10's FRTY 0 check: without it, "the workaround stopped working" and "the defect stopped happening"
+    look the same in the boot log.
+  - It is a bare M-mode arm, run on silicon the way the S-29 sv-* arms were (images and vectors committed before the
+    boot).
