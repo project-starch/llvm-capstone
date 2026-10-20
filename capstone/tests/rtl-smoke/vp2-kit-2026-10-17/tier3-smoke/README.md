@@ -4909,3 +4909,27 @@ sql0 showed tree A equal to tree B, and S-29 is unreachable by construction (abo
 with cause 29 at entry (read rc 75), the known Q-15 failure, as on the old flagged reference. The board's sq1a
 (2026-10-18) already confirmed that refusal on silicon, so a boot would buy no cell. sq1q15 is the readable arm of this
 configuration.
+
+### The corpus pass, sq0, result (2026-10-20 15:20-15:58, both boards): 33 of 33 in verdict, 30 of 33 in every field; the 3 field DIFFs are Q-31's exception order, the same cells as on the old images
+
+`records/pass-sq0.result-lines.txt`. UNGATED.
+- Six boots: board 1 groups a, c, e and board 2 groups b, d, f.
+  - Every boot completed, its collected images equal to the reference's own.
+  - pc=0 0, DRT1 0, FRTY 0, no Oops, and the node-floor-2 banner in each.
+- **Cells:** a, b, c, e and f read 6, 6, 6, 6 and 3 of their cells the same in every field.
+  - **d reads 3 of 6 in every field, 6 of 6 in verdict.** Cases 19 and 20 (nodeRelease+144) read cause 4 on silicon and
+    24 on QEMU, and case 22 (editDist3FindLang+244) reads 13 and 24.
+  - These are exactly sq0d-fix6's three DIFFs on the old images (2026-10-18). That is ISSUES Q-31, exception order: for
+    a load through an untagged bad address, silicon reports the address exception (misaligned, or a page fault on a
+    non-canonical address) before the tag check, while QEMU tests the tag first. No verdict can flip.
+- **PREDICTION MISSED, by this lane:** the pre-registration said 33 of 33 in every field. It should have predicted
+  these three cells from Q-31, an open entry for this bitstream, which CLAUDE.md requires reading before a
+  pre-registration. The cells are known; the miss is in the pre-registration, not in the arm. sq1q15 and every later
+  arm are checked against Q-31 before their boots.
+- **Case 24** reads MISSED on silicon, as in the new reference (the old flagged reference read CAUGHT). The compiler
+  lane's plain-kit run on the new image also reads MISSED, so the move is not the kit's switches. Image against module
+  is still being separated on QEMU.
+- **The mimic kit does not model Q-31.** Cause fields on the bad-address loads will differ in every arm that has them,
+  so they are graded in verdict, with the cause difference reported.
+- **sq1q15 checked against Q-31 before its result:** on the old images q15's compare-pilot, which grades every field,
+  differed from run C only in case 31 (R-60). So q15 has no Q-31 cell, and its pre-registered 32 of 33 stands unchanged.
