@@ -4414,3 +4414,26 @@ is the ONLY variable.
 
 **The dry runs,** with every call stubbed: the chain's PASS and FAIL, and the arm's FREG extraction per step. The arm
 HOLDs on FAIL.
+
+### cpyp-DFp, pre-registered (2026-10-20 09:3x, before its boot): board 1 after cpyp-DF; cpyp-DF with ONE change, the image
+
+The compiler lane's follow-up.
+- **The image:** t3-cw/p, cpython.dom 7e5ba3b993b98957: cpython-lt0's recorded build replayed with only the runtime
+  archive changed (5b3e6b79 + 232d13b2's heap.c hunks, archive fb593f1e18c2b4b5).
+  - The replay's control arm reproduces the record byte for byte: runtime de225188, image 0d322044, and loaded bytes
+    47dcef5f380b3217, which are 20bcfdd1's loaded bytes.
+  - 232d13b2 removes backend_pointer's out-of-window intermediate. On QEMU it takes escape_out from 6,923 to 359 on
+    --only 03,17,23, and removes a QEMU-only, timing-dependent cause-28 at __capstone_mallocng_free+0xb4.
+  - QEMU on p: no domain fault, with 03/17/23 MISSED.
+- **The runner:** `tier3-smoke/tier3-cpy-fp.sh` 20fb86715f0c3cf1, cpyp-DF's with --build and the image
+  hash changed. It runs only if cpyp-DF reads CPP DONE, and HOLDs on its STOP or HOLD, since the kit carries the same
+  module.
+  - Its dry run passed the p build, and HOLDed on a DF HOLD.
+- **Settled on QEMU (the compiler lane):** with the board's path layout, QEMU's grant sequences equal the board's (03 at
+  all 684 grants; 17-control and 23-control at all 372). So the three pc=0 stops are deterministic and silicon-only, at
+  grant 372 (17-control and 23-control) and 524 (23).
+
+**The prediction (the runtime lane's, written now):** pc=0 PERSISTS on p, at the same grant positions, in 17-control,
+23 and 23-control, each with a FREG block as in cpyp-DF.
+- **If p clears pc=0 on silicon,** the prediction is wrong, and R-60's alias-on-access is the next suspect.
+- Either way, cells 03/17/23 and FRTY/DRT1 are read beside it.
