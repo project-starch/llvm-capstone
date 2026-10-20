@@ -137,6 +137,63 @@ per-entry state:
 Acceptance reading 4 below becomes more important under this ruling, not less: it is the ONLY arm in the batch
 that exercises the index-only slice at all, since it is the only one with a tracked generation >= 1.
 
+**ACCEPTANCE MEASURED AND PASSED 2026-10-20** (capstone-ariane `7784b37ab`, six arms in ONE model build;
+the witness counts were pushed in `56b14ef04` BEFORE the run, and the per-arm expectations were sourced from
+each arm's own header rather than from memory).
+
+| arm | pre-registered | read | |
+|---|---|---|---|
+| `cap-fetchdeny` | faults 0, suppressed 0 | faults 0, suppressed 0, valid-fell 0 | PASS |
+| `cap-fetchdeny-f` | faults **1**, suppressed 0 | faults 1, suppressed 0, **valid-fell 1** | PASS |
+| `r12-recl-cpmp` | deltas `0 1 1 0 1 0 1`, count 4 | exactly that, byte-identical to four prior records | PASS |
+| `va-fetchsplit-sc` | faults 0, suppressed **0** | faults 0, suppressed 0 | PASS |
+| `va-fetchsplit-i` | indices 3, 3, 10, 7 | `Revnode_id 3`, `3`, `10`, next-unused `7` | PASS |
+| `va-fetchsplit-s` | faults **0** (was 1), children 0x100 x4, suppressed >= 1 | faults 0, mtval 0, children 0x100 x4, **suppressed 1** | PASS |
+
+The measurement is reading 3: `va-fetchsplit-s` went from `faults 1, mtval 0x80001020, mepc - s_code 0x20`
+on the base to **faults 0, mtval 0, mepc - s_code = minus s_code** here, with the four children still at
+0x100 -- and it is now reading-for-reading IDENTICAL to its one-operand control `va-fetchsplit-sc` at every
+pc. Reading positions were taken from the source's print order (`va-fetchsplit.S:908` is the fault count,
+`:910` its mtval, `:914` the mepc delta), not inferred from a diff.
+
+**The fix's action is PRINTED, not inferred**, which is why the trace gained a witness line before the run:
+
+    117605 SUP cpmp[0] CLEAR SUPPRESSED by namespace: vctx=1 idmatch=1 nsflush=0, valid stays 1
+           | bcast id=00000003 | tracked=00000003
+
+The index matched (virtual 3 against tracked physical 3) and the clear was withheld by the namespace bit
+alone. The witness fired on exactly the two cross-namespace arms (`-s`, `-i`) and stayed silent on their
+one-operand control and on every M-mode broadcast, so it carries its own matched pair inside the one run.
+
+**The instrument is proven live in the same run**: `cap-fetchdeny-f`'s physical collision still clears the
+tracker (`valid-fell 1`) and still denies (faults 1). Without that arm, `-s`'s zero would be an absence.
+
+**Disclosures.**
+1. `r12-recl-cpmp`'s basis is NOT what `56b14ef04` claimed. That message required its readings to be
+   byte-identical to its log in `.sup/sweepitem2-d76acdb59`; **no such log exists** -- the arm is in
+   `testlist_sup.yaml` but not in the 95-test sweep set, so neither base directory (203 and 219 files) holds
+   it. Had the check been implemented as written it would have compared against a missing file. It was never
+   implemented, so nothing passed silently. The basis used instead: four prior runs in
+   `vp7-wt/.sup/{s23,s23b,s23c,s23d}`, all reading identically, agreeing with the arm header's
+   independently-written expectation. Those four directories have no PROVENANCE file, so the RTL behind them
+   is not pinned.
+2. **UNEXPLAINED, and it is in a diagnostic variant rather than a graded reading**: at the same pc (`0x20c4`,
+   `0x20c8`) the `-i` arm reads `s3` and `s4` as `0x80007000` where `-s` and `-sc` both read `0x80009000`.
+   The pcs being identical rules out a code-layout shift, and the `FS_IDX` block writes only `t2`, so the
+   obvious clobber explanation is wrong. It does not touch the graded readings -- `-i`'s pre-registered job is
+   the four indices, which are exact -- but `-i` must NOT be described as byte-identical to `-s`.
+3. Reading 4 (pb10 without the srevroot-zero module) is the board lane's and remains UNMEASURED; reading 5's
+   generation case is covered by `r12-recl-cpmp` above.
+
+**One defect of this lane's own making, recorded because the check that catches it is one grep.** The first
+attempt produced no reading at all: the namespace bit was added as an `ex_stage` OUTPUT PORT, which left
+`cva6.sv:1772`'s instantiation one pin short, and under `-Werror-PINMISSING` the model build failed for all
+six arms inside a minute. The bit has no consumer outside `ex_stage`, so it is now an internal signal
+(`7784b37ab`) and the synthesizable delta is SMALLER than this document first described -- no new top-level
+wire. Nothing was misreported: the freshness stamp and the `vctx=` provenance requirement made every arm read
+VOID rather than present a stale per-day log as a reading, which is exactly how the earlier retracted "item 1
+failed its acceptance" was produced.
+
 ## (2) R-58: the caller's `srevroot` restored at the escape
 
 **What is wrong.** The switcher's SAVE/RESTORE window covers register ids 0..66 and `srevroot` is id 67, so the
