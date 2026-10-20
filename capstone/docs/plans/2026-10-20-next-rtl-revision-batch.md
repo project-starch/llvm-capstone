@@ -27,6 +27,30 @@ in the virtual record decode at `:1431-1433`), and the CPMP tracker compares **1
 (`pmp_data_if.sv:107`). So a VIRTUAL index clears a tracker holding a PHYSICAL one. That is the root cause of
 both S-23 sites.
 
+**An open DESIGN question the fix has to answer, found while clearing the dependency, and the semantics
+owner's to rule on.** "Carry the namespace in the broadcast and compare it" needs something to compare
+AGAINST, and the capability word cannot supply it: `cap_metadata_t` is exactly 64 bits -- `{revnode_id 30,
+perm 4, cap_type 3, bounds 27}` (`ariane_pkg.sv:644-650`, and the comment at `:638-641` records that the 28th
+bounds bit was already spent widening perm) -- so there is **no spare bit for a namespace tag**, and the adopt
+copies only `cpmp_i[i].comp_metadata.revnode_id` (`pmp_data_if.sv:88-94`). The namespace therefore has to be
+recorded at ADOPT time from the prevailing flag, which is an approximation with two consequences:
+
+- **It fixes the false-DENY direction, which is both S-23 faces, and without needing R-58.** Entries installed
+  at M adopt as physical; a context's broadcast carries virtual; they no longer match. `va-fetchsplit`'s firing
+  arm goes from faults 1 to 0 on exactly this.
+- **It opens a missed-INVALIDATION direction, which is the worse failure in security terms**: a capability
+  whose node is VIRTUAL, installed into a CPMP entry while the prevailing flag reads physical, would record
+  physical and then survive a legitimate virtual revocation -- stale authority rather than a false refusal. The
+  path I can construct is R-58's own situation: a caller at S inside the table namespace derives a virtual
+  node, traps to M, and M installs it with `csupctl.table` clear. Whether that is reachable in any supported
+  flow is the ruling I need; if it is, a bit in the capability word (or a refusal to install a cross-namespace
+  node into a CPMP entry) is needed instead.
+- **A ONE-BIT namespace is sufficient only because of the existing flush**, and this must be stated in whatever
+  lands: `revnode_ns_flush_o = (vctx_rev_q != vctx_rev_qq) || (srevroot_rev_q != srevroot_rev_qq) ||
+  ns_flush_strobe_i` (`ex_stage.sv:1462`) re-arms every entry when the TABLE BASE changes, so inside a
+  flush-free window every virtual broadcast belongs to one table. Two different contexts both read "virtual",
+  so a fix that narrows or removes that flush would reintroduce cross-table false clears.
+
 **Why it is not a comparator widening.** `pmp_data_if.sv:96-100` records why the compare is index-only: *"a
 30-bit compare against a tracked (g, i) with g >= 1 would never fire and invalidation would silently stop
 working at generation >= 1"*. The fix must therefore **carry the namespace in the broadcast** and compare it,
@@ -58,9 +82,28 @@ caller's value is never saved and never restored; after any entry or resume the 
 lifetime namespace (`capstone_dom_switcher.anvil:170-173`, `:481`, `:315`, `:527-541`).
 
 **The change**, scoped in R-58's row: id 67 in the caller's snapshot, which extends SAVE and RESTORE together
-through the shared `walk_advance`, with the 8-byte stride placing it at snapshot offset +944. **The reference
-model and any software definition of the snapshot size move with it**, or the two diverge silently — which this
-project files as its own issue class.
+through the shared `walk_advance`. Verified at source 2026-10-20 rather than inherited from this document's
+first draft, and it comes out SMALLER than that draft said:
+
+- **The offset is +944, confirmed by walking the slot sizes.** Ids 0..2 and 9..56 take 16-byte slots and the
+  rest 8 (`capstone_dom_switcher.anvil:669-675`, and the comment there records that the unparenthesised
+  `a < 3 || (a > 8 && a < 57)` once gave 16 bytes to id 0 alone — [[anvil-relational-binds-loosest]]), so
+  0,1,2 at +0/+16/+32, 3..8 at +48..+88, 9..56 at +96..+864, 57..66 at +864..+936. Id 66 ends at +944 and id 67
+  takes +944..+952. The caller's FP block sits at +2048 absolute and the snapshot base is +1024, so
+  1024+952 = 1976 < 2048: **nothing is displaced**, which is why this is a one-branch edit.
+- **The edit is one branch of `walk_advance`** (`:527-532`): the CSRUNV caller's walk jumps 66 -> 75, and it
+  becomes 66 -> 67 -> 75, keeping the save and restore bases as they are. The slot-size selector already
+  yields 8 bytes for id 67 (`:701-703`), and `save_io`/`restore_io` already address id 67 — the ESCAPE and
+  RESUME sequences do exactly that at `:479-481` and `:313-315` — so no new register port is needed.
+- **There is NO software or reference-model definition of the snapshot to move with it.** This document's first
+  draft asserted one; it does not exist. Searched: `snapshot` and the bases 1024/2048 across
+  `capstone/runtime` and `capstone/capstone-ariane/core`; `csrunv`/`CSRUNV` across
+  `capstone-qemu/target/riscv/` (**zero hits** — the `dom_switch` matches there are the physical profile's
+  CAPENTER/CAPEXIT path, `op_helper.c:1777`, `:2551`); and the module's own frame use, which stops at
+  `frame[81]` = +648 (`capstone_vm.c:339-340`, with satp at `frame[0]`, the table at `frame[1]`, options at
+  `frame[7]`, the PCC slot at `frame[8]`/`[12]`). The virtual switcher's frame layout lives in the RTL alone,
+  so the divergence this bullet was written to prevent cannot occur. **What this removes is a task, not a
+  risk**: if a model is added later it inherits +944 from the RTL.
 
 **Acceptance readings, pre-registered.**
 1. `va-srevroot`: the caller must read **its OWN value back** — `s3 = 0x80006000` and **`s4 = 0x80006000`**, where
