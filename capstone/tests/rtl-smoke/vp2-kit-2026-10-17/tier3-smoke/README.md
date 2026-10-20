@@ -5007,3 +5007,20 @@ from the old reference, so a boot would buy no cell.
 - **Q-31:** the old board run differed from QEMU only in the pc=0 cells, so no Q-31 cause difference is expected. If one
   appears, it is graded in verdict and named.
 - Tree A equals tree B in every cell.
+
+### The corpus pass, sq1q15, result (2026-10-20 15:56-16:38, both boards): 32 of 33 in every field, exactly as pre-registered; case 31 is R-60
+
+`records/pass-sq1q15.result-lines.txt`. UNGATED.
+- Six boots: board 1 a, c, e and board 2 b, d, f.
+  - Every one completed, its collected images equal to the reference's.
+  - pc=0 0, DRT1 0, FRTY 0, no Oops; the banner in each.
+- Groups a-e read 6 of 6 in every field, and f reads 2 of 3.
+  - The DIFF is **case 31** (fz10_dbstat_decodepage_overflow): MISSED on silicon, CAUGHT on QEMU (cause 28,
+    statDecodePage+2024). This is R-60, as on both trees on the old images (2026-10-20 morning).
+- Cases 21 and 23 read CAUGHT at memcpy+204, the rebuilt libc's site, as the reference does.
+- No Q-31 cell, as checked before the result.
+- **The pass so far:**
+  - sql0: 9 of 9 on both trees.
+  - sq0: 33 of 33 in verdict, with Q-31's three cause DIFFs.
+  - sq1q15: 32 of 33, the R-60 exception.
+  - Every other cell equals the silicon-mimic reference. There is no pc=0 in any boot of the rebuilt images.
