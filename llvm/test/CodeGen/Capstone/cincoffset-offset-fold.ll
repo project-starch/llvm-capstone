@@ -84,3 +84,68 @@ define i64 @far(ptr addrspace(200) %x, i64 %k) {
   %v = load i64, ptr addrspace(200) %p
   ret i64 %v
 }
+
+; A NEGATIVE constant (p[k-1]) folds the same way, into a negative immediate.
+; This is the side whose intermediate cursor X+Y sits ABOVE the access, so it
+; relies on the representable window reaching past the object's end (see the
+; comment above performCIncOffsetCombine). MUTATION: requiring C > 0 in the
+; combine leaves @prev with an `addi ..., -8` and two cincoffsets.
+; CHECK-LABEL: prev:
+; CHECK:      cincoffset [[B:a[0-9]+]], a0, {{a[0-9]+}}
+; CHECK-NOT:  cincoffset
+; CHECK-DAG:  fld {{f[a-z0-9]+}}, -8([[B]])
+; CHECK-DAG:  fld {{f[a-z0-9]+}}, 0([[B]])
+; CHECK:      ret
+define double @prev(ptr addrspace(200) %x, i64 %k) {
+  %km1 = add i64 %k, -1
+  %p0 = getelementptr double, ptr addrspace(200) %x, i64 %k
+  %p1 = getelementptr double, ptr addrspace(200) %x, i64 %km1
+  %v0 = load double, ptr addrspace(200) %p0
+  %v1 = load double, ptr addrspace(200) %p1
+  %s = fsub double %v0, %v1
+  ret double %s
+}
+
+; Both signs around one shared cursor: x[k] = x[k-1] + x[k+1].
+; CHECK-LABEL: stencil:
+; CHECK:      cincoffset [[B:a[0-9]+]], a0, {{a[0-9]+}}
+; CHECK-NOT:  cincoffset
+; CHECK-DAG:  fld {{f[a-z0-9]+}}, -8([[B]])
+; CHECK-DAG:  fld {{f[a-z0-9]+}}, 8([[B]])
+; CHECK-DAG:  fsd {{f[a-z0-9]+}}, 0([[B]])
+; CHECK:      ret
+define void @stencil(ptr addrspace(200) %x, i64 %k) {
+  %km = add i64 %k, -1
+  %kp = add i64 %k, 1
+  %pm = getelementptr double, ptr addrspace(200) %x, i64 %km
+  %p = getelementptr double, ptr addrspace(200) %x, i64 %k
+  %pp = getelementptr double, ptr addrspace(200) %x, i64 %kp
+  %vm = load double, ptr addrspace(200) %pm
+  %vp = load double, ptr addrspace(200) %pp
+  %s = fadd double %vm, %vp
+  store double %s, ptr addrspace(200) %p
+  ret void
+}
+
+; The simm12 edge: -256 * 8 = -2048 folds ...
+; CHECK-LABEL: edgeneg:
+; CHECK:     cincoffset [[B:a[0-9]+]], a0, {{a[0-9]+}}
+; CHECK-NEXT: ld a0, -2048([[B]])
+define i64 @edgeneg(ptr addrspace(200) %x, i64 %k) {
+  %k1 = add i64 %k, -256
+  %p = getelementptr i64, ptr addrspace(200) %x, i64 %k1
+  %v = load i64, ptr addrspace(200) %p
+  ret i64 %v
+}
+
+; ... CONTROL: -257 * 8 = -2056 does not, and stays in the offset chain.
+; CHECK-LABEL: farneg:
+; CHECK:     addi {{a[0-9]+}}, {{a[0-9]+}}, -257
+; CHECK:     cincoffset {{a[0-9]+}}, a0, {{a[0-9]+}}
+; CHECK:     ld a0, 0({{a[0-9]+}})
+define i64 @farneg(ptr addrspace(200) %x, i64 %k) {
+  %k1 = add i64 %k, -257
+  %p = getelementptr i64, ptr addrspace(200) %x, i64 %k1
+  %v = load i64, ptr addrspace(200) %p
+  ret i64 %v
+}
