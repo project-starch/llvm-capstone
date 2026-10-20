@@ -5380,3 +5380,18 @@ into the whole corpus but q15/sq0, which ran split across both.
   INJS and INJL are 0.
 - **compare-pilot, tree B's bundle against tree A's: 32 of 32 cells the same, rc 0.** cpython is the second arm (after
   sql0) read on both trees, and the trees agree in every field.
+
+### The sqlite groups on their other tree, pre-registered (2026-10-21 02:5x): full two-tree coverage
+
+sq0 and sq1q15 ran split, groups a/c/e on tree A and b/d/f on tree B. Each group now runs on the tree it has not seen,
+so every arm of the pass has a reading on both bitstreams.
+- **Board 1 (tree A):** sq0 b d f, then sq1q15 b d f, through `tier3-pass-appvm.sh` a2541a20586b96b3 (no chain is executing it; its
+  last runs ended at 16:38). Tags: sq0x, q15x.
+- **Board 2 (tree B):** sq0 a c e, then sq1q15 a c e, through `chain-after-pass.sh` 175e5cf47f9d9737 on its overlap's "PASS seq2-2 DONE".
+- The references, runner hashes and image pins are those of the first runs.
+- **Predictions:**
+  - each group's cells equal the reference as on the other tree;
+  - sq0 d shows the same three Q-31 cause DIFFs (19, 20, 22);
+  - sq1q15 f reads case 31 MISSED (R-60), as on both trees on the old images;
+  - every other field equal; pc=0, DRT1, FRTY 0;
+  - and each group's cells equal its other-tree reading, compared afterwards.
