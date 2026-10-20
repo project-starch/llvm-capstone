@@ -772,7 +772,7 @@ SDValue DAGTypeLegalizer::SoftenFloatRes_FFREXP(SDNode *N) {
   SDValue StackSlot = DAG.CreateStackTemporary(VT1);
 
   // The stack temporary lives in the alloca address space; typed in address
-  // space 0, a capability target passes it as an integer (C-82, see
+  // space 0, a capability target passes it as an integer (C-86, see
   // SelectionDAG::expandMultipleResultFPLibCall).
   auto PointerTy = PointerType::get(*DAG.getContext(),
                                     DAG.getDataLayout().getAllocaAddrSpace());
@@ -818,7 +818,7 @@ bool DAGTypeLegalizer::SoftenFloatRes_UnaryWithTwoFPResults(
 
   std::array<SDValue, 2> StackSlots;
   SmallVector<Type *, 3> CallOpsTypeOverrides = {nullptr};
-  // Stack temporaries: alloca address space (C-82, as in SoftenFloatRes_FFREXP).
+  // Stack temporaries: alloca address space (C-86, as in SoftenFloatRes_FFREXP).
   auto PointerTy = PointerType::get(*DAG.getContext(),
                                     DAG.getDataLayout().getAllocaAddrSpace());
   for (unsigned ResNum = 0; ResNum < N->getNumValues(); ++ResNum) {
