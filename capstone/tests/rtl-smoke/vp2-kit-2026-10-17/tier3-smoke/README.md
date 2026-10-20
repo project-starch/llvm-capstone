@@ -5187,3 +5187,21 @@ repair.
   - Every remaining arm's result records its INJS/INJL count, taken from its transcript, because the running sequence
     script cannot be edited. A non-zero one flags its reference as needing the injection build.
   - Tier 1/2 are graded against their own silicon expectations, not these references.
+
+### Board 1's pgm1, pym0, pym1, result (2026-10-20 19:07-20:18, tree A): 45 of 45 cells the same in every field
+
+`records/pass-seq2-b1.result-lines.txt`. UNGATED.
+- pgm1 reads 5/5, pym0 20/20 and pym1 20/20 in every field.
+- Each boot has the driver's vbatch END line, pc=0 0, DRT1 0, FRTY 0, no Oops, the banner, and INJS 0 / INJL 0.
+- **Board 1 over the pass:** 14 arms, 162 of 162 cells the same in every field.
+
+### Amendment (2026-10-20 20:2x, before they started): pb9, pb12, pb10 move to board 1 (tree A)
+
+Board 1 was idle while board 2 still had about 50 minutes of cpython lt0. Board 2's chain (tier3-pass-seq.sh on board2.spec)
+was STOPPED while still in its wait, before any check or boot: its out is empty and no run directory exists.
+- The three arms run on board 1 through `tier3-pass-seq2.sh` 632830e218434065 with the same spec, board2.spec 5cb2e4c8ad546617, unchanged.
+- The predictions are as pre-registered: pb9 MISSED 4, pb12 MISSED 8 / CAUGHT 1, pb10 CAUGHT 4, in every field;
+  INJS/INJL 0; pc=0, DRT1 and FRTY 0.
+- **pb10 on tree A:** on earlier modules it panicked with S-23's data face there. 54d8a3af removes both faces on tree A
+  (sql0-nmA: FRTY 0, DRT1 0).
+- They are run-virtual-cases arms, so both the old and the new completion test apply.
