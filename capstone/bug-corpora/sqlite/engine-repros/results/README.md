@@ -11,10 +11,14 @@ in this corpus.
 | `sublet` | **31** | 2 | 24/25 | 7/8 |
 | `cheribsd-revocation` | **5** | 28 | 5/25 | 0/8 |
 
-> **CORRECTION (2026-10-20): case 24's CAUGHT in verdicts.tsv on the memsys5 malloc arms is an incidental NULL
-> dereference, not a capability detection.** The affected rows are `virtual-malloc` (line 82) and `vp2-malloc` (line 84,
-> the board lane's silicon fold). Both read CAUGHT, cause 24 in sqlite3OpenTable, credited "by function" because host ASan
-> reports the defect there.
+> **CORRECTION (2026-10-20): case 24's CAUGHT in verdicts.tsv on the vp2-malloc arm (line 84, the board lane's silicon
+> fold) is an incidental NULL dereference, not a capability detection.** It reads CAUGHT, cause 24 in sqlite3OpenTable,
+> credited "by function" because host ASan reports the defect there.
+> - **RETRACTED the same evening (an adversarial audit): this box first named the `virtual-malloc` row (line 82) as
+>   established too.** That row comes from a DIFFERENT image, 6fbbd27ef45c7ac8 (results/2026-10-11-virtual-request-bounds,
+>   another compiler build), which has not been traced. The trace below is of 7c8bfc885ea3914a, the vp2-malloc row's own
+>   image. The virtual-malloc row has the same symbol and offset (sqlite3OpenTable+648), so it is a CANDIDATE only.
+> - **The vp2-malloc row is established by QEMU on the same image bytes.** The board records carry no fault address.
 > - **Method:** an LDC trace (capstone-qemu cap-window-counter 043e0dbf23, `CAPSTONE_TRACE_LDC`, kit qkit7-trace = nf2's
 >   files) of the old image 7c8bfc885ea3914a, read by the board lane.
 > - **The trace:** in sqlite3PrimaryKeyIndex the stale Table capability loads TAGGED (va 0x55034, with 1 MiB bounds, not the
@@ -24,8 +28,9 @@ in this corpus.
 >   came from what the freed memory happened to hold.
 > - The image rebuilt without `+movc-keeps-integer-source` has the same instructions and different frame sizes. It reads
 >   MISSED on QEMU and on silicon (2026-10-20), and its trace shows no load in sqlite3PrimaryKeyIndex.
-> - **Not affected:**
->   - the headline matrix, whose spatial row already scores case 24 not-detected;
+> - **Not affected by case 24 (THIS case only):**
+>   - the headline matrix, whose spatial row already scores case 24 not-detected. The census below can affect the
+>     headline matrix through 02, 05 and 19;
 >   - the nested-pools row (cause 25, revocation).
 > - **Not assessed:** matrix.tsv's sublet detection of case 24, a kernel-pc halt with cause 24 under an allocator that
 >   does revoke.
