@@ -32,6 +32,9 @@ void initializeCapstoneCodeGenPreparePass(PassRegistry &);
 // Synthesizes a per-module `__capstone_cap_init` that materializes capability
 // globals in place at runtime (constructor-codegen). See CapstoneCapGlobalInit.cpp.
 ModulePass *createCapstoneCapGlobalInitPass();
+/// Global attribute set by CapstoneCapGlobalInit on a holder that was constant
+/// in the source; the pass clears the flag because it writes the holder.
+inline constexpr char CapstoneCapInitConstHolder[] = "capstone-cap-init-const";
 void initializeCapstoneCapGlobalInitPass(PassRegistry &);
 
 // Merges private read-only string constants into one cap-table slot. Needed because

@@ -211,7 +211,10 @@ bool collectStaticCapReducedObject(const GlobalVariable &GV,
   SmallVector<std::pair<uint32_t, Constant *>, 8> Fields;
 
   if (auto *ST = dyn_cast<StructType>(HolderTy)) {
-    if (!GV.isConstant() || ST->getNumElements() != 1)
+    // Constant in the source: CapstoneCapGlobalInit clears the flag of the
+    // holders it writes and records it as this attribute.
+    if ((!GV.isConstant() && !GV.hasAttribute(CapstoneCapInitConstHolder)) ||
+        ST->getNumElements() != 1)
       return false;
     Type *FieldTy = ST->getElementType(0);
     if (!FieldTy->isPointerTy() || FieldTy->getPointerAddressSpace() != 200)
