@@ -23,6 +23,11 @@ LIMITS, stated because they bound every number this prints:
     read is not modelled, so a hit is a CANDIDATE and a miss is not a proof.
   * `unknown-def` means the definer was not found within the window (an incoming
     argument, or a def further back). Those are NOT counted as candidates.
+  * It MISSES a loop-carried integer: the silicon-demonstrated C-32 site in cpython
+    20bcfdd1, `movc s2, a3; jalr a3` at 0x331c0c (2026-10-20), whose a3 arrives over the
+    loop's entry jump while the last definer in LINEAR order is a movc. c32-cfg-scan.py
+    follows the control flow and finds it; use that one as a gate.
+  * Input it cannot parse exits 2 with COULD NOT PARSE, never a zero count.
 """
 import re, sys, collections
 
@@ -75,12 +80,16 @@ def parse(path):
 def defreg(mnem, ops):
     if mnem in NO_DEF:
         return None
+    if mnem in ('jalr', 'jr') and len(regs(ops)) == 1:
+        return None      # `jalr rs` writes ra and READS rs; it never defines rs
     r = regs(ops)
     return r[0] if r else None
 
 
 def usereg(mnem, ops):
     r = regs(ops)
+    if mnem in ('jalr', 'jr') and len(r) == 1:
+        return r         # the single operand is the jump target, a read
     return r if mnem in NO_DEF else r[1:]
 
 
@@ -130,8 +139,15 @@ def scan(insns, window=400):
 
 if __name__ == '__main__':
     verbose = '--quiet' not in sys.argv
+    unread = []
     for path in [a for a in sys.argv[1:] if not a.startswith('--')]:
         insns = parse(path)
+        if not insns:
+            # A disassembly this parser cannot read (objdump --no-show-raw-insn, another tool's format) must not
+            # print the zeros of a clean image: that is how a scan "passes" without ever having looked.
+            print(f"file: {path}\n  COULD NOT PARSE: no instruction matched (it needs objdump -d with raw bytes)")
+            unread.append(path)
+            continue
         hits = scan(insns)
         by = collections.Counter(h[5] for h in hits)
         cands = [h for h in hits if h[5] == 'INT-DEF']
@@ -149,3 +165,4 @@ if __name__ == '__main__':
             if len(cands) > 40:
                 print(f"      ... {len(cands)-40} more")
         print()
+    sys.exit(2 if unread else 0)
