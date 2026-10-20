@@ -238,6 +238,32 @@ resurrecting instruction traps first (the check at `commit_stage.sv:389` fires a
 clear) or the adopt re-arms independently of the flush. Removing it is still right -- it is logic that can
 only ever wrongly set valid -- but it has no arm.
 
+**RETRACTED 2026-10-20, within the hour, before any fix was written.** The paragraph below claimed a
+bigger hole: that the adopt re-arms a revoked PCC after any trap round trip. **It does not.** `pc_metadata`
+is "only updated by capability control-flow changes" (`core/frontend/frontend.sv:454`), with
+`npc_metadata_d = npc_metadata_q` as the default and exactly four updaters — a domain switch (`:470`), a
+capability branch (`:477-478`, CJALR always and CBNZ when taken), CAPENTER (`:481-482`) and the R-43 replay
+(`:486-487`). **A trap is not among them**, so across an ecall or an interrupt the PCC's revnode_id is
+UNCHANGED, the adopt's third term never fires, the tracker's clear PERSISTS, and cause 25 fires at the next
+commit — the correct behaviour. Half of the reasoning was right (a plain trap re-checks nothing) and the
+load-bearing half was wrong (it also changes nothing, which is why re-checking is unnecessary).
+Consequences: the stash/restore fix the semantics owner was costing is NOT needed for the trap case; the
+QEMU-vs-silicon divergence does not arise, since QEMU's per-block check is merely stricter than a silicon
+path that has no hole; and the pre-registered arm would read the OPPOSITE of its pre-registration — it
+traps. It is still worth running as a POSITIVE CONTROL that the PC tracker works, which is a reading this
+tracker has never had, but it measures no defect.
+**What this says about the process, since it is the day's second retraction:** the claim came from reading
+the two lines that CONSUME an id change without reading the four lines that PRODUCE one. The CPMP result in
+the section above is unaffected because it rests on a two-sided measurement; this claim was never measured,
+which is exactly why it should not have been written up as a hole.
+**One narrower candidate survives and is explicitly NOT a finding:** the adopt does fire on a capability
+control-flow change, justified as "DYN unit already checked". CALL and RETURN are supported by the query
+site's own comment ("fronts LCC, SPLIT, REVOKE, TIGHTEN, CALL, RETURN, LDC and STC"); CJALR is absent from
+it and does not appear in `capstone_dyn_unit.anvil` at all, so whether a CJALR's target node is checked
+anywhere is OPEN. It is recorded as a question to settle in source, not as a defect.
+
+**THE RETRACTED PARAGRAPH, kept so the trail is readable:**
+
 **A BIGGER HOLE IS OPEN AND NOT YET MEASURED, found while trying to build that arm.** The adopt at
 `commit_stage.sv:400-405` sets valid on ANY change of the PCC's id, justified as "On domain change
 (CALL/RETURN/CAPENTER), assume valid -- DYN unit already checked". A plain trap to M and back is none of
