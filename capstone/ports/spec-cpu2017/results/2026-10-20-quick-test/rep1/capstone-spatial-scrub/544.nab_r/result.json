@@ -1,0 +1,44 @@
+{
+  "benchmark": "544.nab_r",
+  "size": "test",
+  "label": "capstone-spatial-scrub",
+  "verdict": "PASS",
+  "reported_seconds": 120.132073,
+  "qemu_cpu_seconds": null,
+  "qemu_vmhwm_kb": null,
+  "vm_stats": [
+    {
+      "file": "hkrdenq.err",
+      "arenas": 52,
+      "pages": 1065,
+      "peak": 1069,
+      "nodes": 504,
+      "steps": 23613,
+      "faults": 446,
+      "collections": 0,
+      "reclaimed": 0,
+      "rounds": 34,
+      "bytes_in": 690,
+      "bytes_out": 105285,
+      "node_bytes": 28672,
+      "node_capacity": 1024,
+      "node_growths": 0,
+      "launch_ns": 136092900,
+      "elapsed_ns": 119633093900
+    }
+  ],
+  "reasons": [],
+  "start": "2026-10-19T16:54:57Z",
+  "end": "2026-10-19T16:57:08Z",
+  "routes": {
+    "guest": 1,
+    "host-spec-tool": 1
+  },
+  "guest_invocations": 1,
+  "spec_reports": [
+    "CPU2017.012.fprate.test.rsf",
+    "CPU2017.012.fprate.test.txt",
+    "CPU2017.012.log"
+  ],
+  "perl_pack_stub": []
+}

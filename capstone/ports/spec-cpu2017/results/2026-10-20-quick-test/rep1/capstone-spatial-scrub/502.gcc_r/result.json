@@ -1,0 +1,44 @@
+{
+  "benchmark": "502.gcc_r",
+  "size": "test",
+  "label": "capstone-spatial-scrub",
+  "verdict": "PASS",
+  "reported_seconds": 6.823296,
+  "qemu_cpu_seconds": null,
+  "qemu_vmhwm_kb": null,
+  "vm_stats": [
+    {
+      "file": "t1.opts-O3_-finline-limit_50000.err",
+      "arenas": 146,
+      "pages": 5628,
+      "peak": 5664,
+      "nodes": 1202,
+      "steps": 3289,
+      "faults": 2052,
+      "collections": 0,
+      "reclaimed": 0,
+      "rounds": 32,
+      "bytes_in": 501,
+      "bytes_out": 1189,
+      "node_bytes": 94208,
+      "node_capacity": 5120,
+      "node_growths": 1,
+      "launch_ns": 1083004000,
+      "elapsed_ns": 5592058200
+    }
+  ],
+  "reasons": [],
+  "start": "2026-10-19T16:54:57Z",
+  "end": "2026-10-19T16:55:19Z",
+  "routes": {
+    "guest": 1,
+    "host-spec-tool": 1
+  },
+  "guest_invocations": 1,
+  "spec_reports": [
+    "CPU2017.010.intrate.test.rsf",
+    "CPU2017.010.intrate.test.txt",
+    "CPU2017.010.log"
+  ],
+  "perl_pack_stub": []
+}

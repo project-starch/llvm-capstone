@@ -1,6 +1,6 @@
 # test: capstone-virtual, capstone-spatial-scrub, capstone-spatial; 1 repetition(s); host load bound 20.0
 
-| benchmark | arm | reported s per repetition | median | ratio to capstone-spatial | QEMU CPU s (median) | nodes / collections / faults (sum over invocations, rep 1) | flagged repetitions |
+| benchmark | arm | reported s per repetition | median | ratio to capstone-spatial | QEMU CPU s (median) | nodes / collections / faults (sum over invocations, first passing repetition) | flagged repetitions |
 |---|---|---|---|---|---|---|---|
 | 502.gcc_r | capstone-virtual | **7** | 7 | 1.024 | -- | 5987/0/2051 | none |
 | 502.gcc_r | capstone-spatial-scrub | **7** | 7 | 1.038 | -- | 1202/0/2052 | none |
@@ -15,4 +15,4 @@
 | 519.lbm_r | capstone-spatial-scrub | **101** | 101 | 1.006 | -- | 34/0/104713 | none |
 | 519.lbm_r | capstone-spatial | **101** | 101 | 1.000 | -- | 34/0/104713 | none |
 
-Reported seconds are runcpu's for the benchmark's own invocations; QEMU CPU seconds are the guest process's user+system time over the whole run, boot included. Counters come from the launcher's CAPSTONE_VM_STATS lines in the run directory's .err files.
+Reported seconds are runcpu's for the benchmark's own invocations (n/a: the benchmark reports none); QEMU CPU seconds are the guest process's user+system time over the whole run, boot included. Counters come from the launcher's CAPSTONE_VM_STATS lines in the run directory's .err files.

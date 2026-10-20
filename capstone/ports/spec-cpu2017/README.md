@@ -20,7 +20,7 @@ The measurement plan, with the pre-registered readings of its controls, is
 | Input | Pin | Built by |
 |---|---|---|
 | SPEC CPU2017 1.0.2 | archive sha256; every file against SPEC's MANIFEST | `tools/spec-extract.py` |
-| Source changes | 3 src.alt packages, sha256 each (`packages/`, explained in `srcalt/*/README`) | `tools/make-srcalt.sh` |
+| Source changes | 3 src.alt packages, sha256 each (`packages/`, explained in `srcalt-notes/*.md`) | `tools/make-srcalt.sh` |
 | Toolchain (clang, lld, musl, virtual SDK) | llvm-capstone commit + tree; source archive sha256; musl 1.2.5 sha256 | `recipes/toolchain.sh` |
 | Its integration of open PRs | public base commit + PR head commits, merge order, tree | `recipes/integration.sh` |
 | QEMU | capstone-qemu commit, archive sha256, configure options, binary sha256 | `recipes/qemu.sh` |
@@ -35,8 +35,8 @@ the manifest names every file in it by hash.
 
 | Benchmark | Change | Why |
 |---|---|---|
-| 500.perlbench_r | 13 files (src.alt) | pointer provenance and alignment on 128-bit pointers, musl differences; `srcalt/500.perlbench_r/README` |
-| 502.gcc_r | 9 files (src.alt) | 7 for 128-bit pointers (qsort swap unit, page-group, obstack, pool and bitmap alignment, splay-tree keys), 2 out-of-bounds reads in GCC 4.5 itself that later GCC releases fixed; `srcalt/502.gcc_r/README` |
+| 500.perlbench_r | 13 files (src.alt) | pointer provenance and alignment on 128-bit pointers, musl differences; `srcalt-notes/500.perlbench_r.md` |
+| 502.gcc_r | 9 files (src.alt) | 7 for 128-bit pointers (qsort swap unit, page-group, obstack, pool and bitmap alignment, splay-tree keys), 2 out-of-bounds reads in GCC 4.5 itself that later GCC releases fixed; `srcalt-notes/502.gcc_r.md` |
 | 505.mcf_r | 1 file (src.alt) | spec_qsort swaps `long` words and drops pointer tags |
 | 500.perlbench_r test input | 4 of pack.t's checks stubbed, in the run directory only | each rebuilds a pointer from bytes, which carries no tag; `tools/perl-pack-stub.py`, applied and recorded by `tools/capstone-run.sh` |
 | 525.x264_r input generator | ldecod runs on the host | it reads past its own table; it only produces x264's input. x264 runs on Capstone |
@@ -46,6 +46,8 @@ The installed SPEC sources and inputs are never changed; `tools/build.sh` checks
 SPEC's MANIFEST after the build.
 
 ## From the archive to results
+
+The compare driver needs bash 5.1 or later (`wait -n -p`).
 
 ```bash
 K=<llvm-capstone>/capstone/ports/spec-cpu2017 W=<work directory>
@@ -98,7 +100,7 @@ Of the previous toolchain (manifest `toolchain_previous`, 193d4495): run q4 on t
 platform as pinned, guest memory 8 GiB, share model mapped-xattr): **QUALIFIED**. A fresh
 extraction of the archive, one build, both negative controls, then all 20 runs in parallel,
 each in its own guest on its own host core. Records in `qualification/` (`qualification.json`
-holds every run's `result.json`; home-directory paths rewritten to `~`, originals in p12 `~/spec-cap/kit2/q4`).
+holds every run's `result.json`; home-directory paths rewritten to `~`, originals on the build host under `~/spec-cap/kit2/q4`).
 
 | Benchmark | test | train | executable sha256 |
 |---|---|---|---|
@@ -118,7 +120,7 @@ Negative controls: a wrapper that appends one line to every guest output makes r
 
 The executables are byte-identical to those of run q3 (fresh tree, same kit sources, toolchain
 built in another directory from compiler-identical sources). Minutes are wall time under QEMU
-and are not performance figures: for the first ~3 hours other load on p12 slowed the guests
+and are not performance figures: for the first ~3 hours other load on the build host slowed the guests
 about 2.3x (mcf test took 53 min here, 23 min in q3).
 
 ## Limits

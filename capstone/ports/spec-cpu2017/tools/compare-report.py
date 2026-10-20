@@ -49,7 +49,12 @@ for b in bench:
             if r["verdict"] != "PASS": flagged.append(f"{i}:{r['verdict']}")
             ml = max_load_between(r["start"], r["end"])
             if ml is not None and ml > plan["max_load"]: flagged.append(f"{i}:load {ml:.0f}")
-        cells = " ".join(("**%.0f**" % s if s == med else "%.0f" % s) if s is not None else "FAIL" for s in secs)
+        def cell(r):  # a PASS without seconds (specrand writes no rsf) is n/a, not a failure
+            if not r: return "missing"
+            if r["verdict"] != "PASS": return r["verdict"]
+            if r["reported_seconds"] is None: return "n/a"
+            return ("**%.0f**" if r["reported_seconds"] == med else "%.0f") % r["reported_seconds"]
+        cells = " ".join(cell(r) for r in rs)
         print(f"| {b} | {lab} | {cells} | {med:.0f} | {ratio} | {cpu_med} | {counters} | {', '.join(flagged) or 'none'} |" if med else
               f"| {b} | {lab} | {cells} | -- | -- | {cpu_med} | {counters} | {', '.join(flagged) or 'none'} |")
-print("\nReported seconds are runcpu's for the benchmark's own invocations; QEMU CPU seconds are the guest process's user+system time over the whole run, boot included. Counters come from the launcher's CAPSTONE_VM_STATS lines in the run directory's .err files.")
+print("\nReported seconds are runcpu's for the benchmark's own invocations (n/a: the benchmark reports none); QEMU CPU seconds are the guest process's user+system time over the whole run, boot included. Counters come from the launcher's CAPSTONE_VM_STATS lines in the run directory's .err files.")

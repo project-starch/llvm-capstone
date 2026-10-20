@@ -1,0 +1,63 @@
+{
+  "benchmark": "538.imagick_r",
+  "size": "test",
+  "label": "capstone-virtual",
+  "verdict": "PASS",
+  "reported_seconds": 3.271212,
+  "qemu_cpu_seconds": null,
+  "qemu_vmhwm_kb": null,
+  "vm_stats": [
+    {
+      "file": "test_convert.err",
+      "arenas": 20,
+      "pages": 1493,
+      "peak": 2119,
+      "nodes": 1039,
+      "steps": 1549,
+      "faults": 814,
+      "collections": 0,
+      "reclaimed": 0,
+      "rounds": 157,
+      "bytes_in": 864082,
+      "bytes_out": 19212,
+      "node_bytes": 94208,
+      "node_capacity": 5120,
+      "node_growths": 1,
+      "launch_ns": 250428800,
+      "elapsed_ns": 2652562300
+    },
+    {
+      "file": "test_validate.err",
+      "arenas": 68,
+      "pages": 1190,
+      "peak": 1193,
+      "nodes": 1189,
+      "steps": 1401,
+      "faults": 729,
+      "collections": 0,
+      "reclaimed": 0,
+      "rounds": 253,
+      "bytes_in": 1014,
+      "bytes_out": 1745692,
+      "node_bytes": 94208,
+      "node_capacity": 5120,
+      "node_growths": 1,
+      "launch_ns": 44042900,
+      "elapsed_ns": 1971201100
+    }
+  ],
+  "reasons": [],
+  "start": "2026-10-19T16:54:57Z",
+  "end": "2026-10-19T16:55:16Z",
+  "routes": {
+    "guest": 2,
+    "host-spec-tool": 1
+  },
+  "guest_invocations": 2,
+  "spec_reports": [
+    "CPU2017.008.fprate.test.rsf",
+    "CPU2017.008.fprate.test.txt",
+    "CPU2017.008.log"
+  ],
+  "perl_pack_stub": []
+}

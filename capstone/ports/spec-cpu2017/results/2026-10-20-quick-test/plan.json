@@ -1,0 +1,53 @@
+{
+ "size": "test",
+ "repetitions": 1,
+ "max_load": 20.0,
+ "labels": [
+  "capstone-virtual",
+  "capstone-spatial-scrub",
+  "capstone-spatial"
+ ],
+ "benchmarks": [
+  "502.gcc_r",
+  "544.nab_r",
+  "538.imagick_r",
+  "519.lbm_r"
+ ],
+ "cpus": [
+  "20",
+  "21",
+  "22",
+  "23",
+  "24",
+  "25",
+  "27",
+  "28",
+  "30",
+  "31",
+  "32",
+  "33"
+ ],
+ "groups": [
+  [
+   "20",
+   "21",
+   "22"
+  ],
+  [
+   "23",
+   "24",
+   "25"
+  ],
+  [
+   "27",
+   "28",
+   "30"
+  ],
+  [
+   "31",
+   "32",
+   "33"
+  ]
+ ],
+ "rule": "benchmarks start longest first, each on the first free group of CPUs, its arms together; within the group the arm order rotates by the repetition number; a benchmark's group in a repetition is recorded in assignment when it starts"
+}
