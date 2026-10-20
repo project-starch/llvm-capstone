@@ -195,7 +195,15 @@
     "build": {
       "recipe": "recipes/toolchain.sh",
       "source_note": "the build host's toolchain-v4 (2026-10-20, the quick test and the train campaign) was built from the archive of commit 954b77c12813252a0d9fa7f197db1c585aba6ac4 (tree fcb729ac892a3ded7ea60da1affb5505a76bc36b), which differs from this tree in capstone/runtime/virtual/hosted-contract.c only: the first keep-both resolution had been computed under merge.conflictStyle=diff3 and kept a ||||||| marker with the base text. That file is a test source and no input of the compiler, the libc or the SDK; the rebuild from this archive on a second host is recorded below.",
-      "status": "PENDING: build hashes"
+      "status": "BUILT on two hosts",
+      "host": "build host (p12): Linux 6.12.111 amd64 container, gcc 15.2.0, cmake 4.2.3, ninja 1.13.2; toolchain-v4, 2026-10-20",
+      "clang_sha256": "e758d31d0bedb4447489a7ba820e5b53f582f6a9addf45b83d10042fd142a84c",
+      "libc_sha256": "f93ffe3c1e094f41de4417ae706199aa059b8ae7405fabf4fdc815da720e275e",
+      "sdk_inventory_sha256": "f9cca82d9b53505e127ede7b42e182962a83201c7295bebc55a88da82b37eb05",
+      "sdk_runtime_archive_sha256": "583ecda0567ce9366c2e4dc32f898a92952bdd4049cbed7eb795a8114696b78a",
+      "sdk_builtins_archive_sha256": "0bdbff0c3d38b703f4dc48e50c3ea0be1b67e2979ea9ec4f8de9e6eebecf40f1",
+      "second_host": "p13, 2026-10-20, built from THIS manifest's archive (the corrected tree): libc, runtime archive and builtins archive byte-identical to the build host's (same three hashes); clang ee5526b6a9db24604efe8ad917c8be5f75baf670083edeeb5faf8250a7ef738e differs by its embedded source path only, as between every two build directories; the sdk inventory differs in sdk.json's absolute paths only",
+      "clang_sha256_note": "depends on the build directory: the assertions build embeds its source paths"
     },
     "merge_policy": "recipes/integration.sh: merge-tree in this order; a documentation-only conflict takes the base side; the one code conflict takes the recorded resolution commit"
   },
