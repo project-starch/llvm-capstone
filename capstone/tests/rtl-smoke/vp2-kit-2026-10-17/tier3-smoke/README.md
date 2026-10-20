@@ -4314,3 +4314,23 @@ module checked; the pair HOLDing on FAIL.
   - The bundle is `sqlite/engine-repros/results/2026-10-20-vp2c-treeB/vp2-nested-pools-q15f`, beside that directory's
     a-c bundles.
   - The merged a-c bundle stays as filed. Combining is the fold's decision.
+
+### pb10's srz-nop pair, result (2026-10-20 08:35-09:00, board 2, tree B): the post-CSRUNV write ITSELF removes pb10's refused fetches
+
+`records/pb10-nop.result-lines.txt` and the two board records. UNGATED.
+- **The variant's Tier 1 (t1-nop):** PASS, with the four rungs as t1-old's and the banner srevroot-nopf-1. DRT1 1
+  (803833B6), the data face, which srz's zeroing removes and this build lacks. No prediction was registered for it.
+- **pb10-srzc** (the srz control 607164b9): FRTY 0, DRT1 0, no Oops, 4 of 4 cells. It repeats pb10-srz.
+- **pb10-nop** (2a8f85f7): FRTY 2, at 00F13DDC, which decodes against its own .ko to vm_ioctl+0xa98, the unique CSRUNV
+  successor, which is the nop itself. DRT1 0, no Oops, 4 of 4 cells.
+  - The face is back, at its original site.
+- **The reading:** the two builds have the same instruction count and layout and differ in 3 words only, so timing and
+  allocation are the same. The fetch retries come back exactly when the post-CSRUNV `csrw 0x5c1, x0` becomes a nop. So
+  that write removes them, which the compiler lane's prediction "FRTY 2 if the post-CSRUNV write removed the retries"
+  states.
+- **What it does not separate, as registered:** the zeroed srevroot value from the pipeline flush that any CSR write
+  causes at commit. A third arm, a flushing write that leaves srevroot unchanged, would split them. The compiler lane
+  offered to build it.
+- **No recorded mechanism predicts either branch yet.** The open anomaly is narrowed to "the write at CSRUNV+4", not
+  explained.
+- **Bundles:** ffmpeg/pool-repros results/2026-10-20-vp2c-treeB/vp2-nested-pools-{srzc,nop}.
