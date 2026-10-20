@@ -9876,6 +9876,58 @@ from `CreateGlobalString`'s default, which on Capstone is address space 200, so 
 integer where the runtime expects a capability, so this was already broken, differently. Nothing
 under `capstone/` builds with `--coverage`, `-fprofile-arcs` or `-fsanitize=dataflow`.
 
+### C-84 — a zero-byte dynamic alloca narrows its result to an empty range, and SHRINK traps on it (cause 29) `FIXED 2026-10-16 on compiler/dynamic-alloca-zero-size — COMPILER; found 2026-10-16 running SPEC CPU2017 502.gcc_r's train inputs`
+
+**What happens.** With `-capstone-shrink-stack` (on by default), `lowerDYNAMIC_STACKALLOC` narrows the
+pointer a dynamic alloca returns to `[cursor, cursor + size)` with SHRINK. For a size of 0 that range
+is empty, and SHRINK raises Illegal operand value for `base >= end` (capstone-qemu
+`helper_csshrink`). So `alloca(0)`, a count of 0 for an `alloca`-backed array, or a constant
+zero-byte alloca outside the entry block kills the domain with cause 29 and `tval` 0. GCC 4.5 does
+it in `expand_call`: `args = XALLOCAVEC (struct arg_data, num_actuals)`, and `num_actuals` is 0 for
+a call without arguments. Both of 502.gcc_r's long train inputs, 200.c and scilab.c, stopped at the
+same instruction (`expand_call+0xcc0`, the SHRINK).
+
+Fixed frame objects are not affected: `narrowToFrameObjectBounds` returns early for a size of 0,
+and global and TLS narrowing skip size 0 as well. Only the dynamic path lacked the guard.
+
+**Fix.** When the result is narrowed, the size is raised to one stack-alignment granule,
+`umax(size, 16)`, before sp moves. `SelectionDAGBuilder::visitAlloca` has already rounded the size
+up to the stack alignment, so only 0 changes. A zero-byte alloca then takes 16 bytes of its own
+below the old sp, and its capability covers exactly those. Two alternatives were rejected. Skipping
+SHRINK when the size is 0 hands out a capability for the whole stack. Narrowing to 16 bytes without
+moving sp gives a range that covers the object below.
+
+**Evidence.**
+- `cap-shrink-dynalloca.ll` gains a runtime-size case and a constant-zero case. The dev compiler
+  emits `shrink a0, a2, a2` for the constant case. The new test fails on dev and passes with the
+  fix. Across the Capstone lit suites (160 tests, dev and fix over the same test sources), that is
+  the only change.
+- `hosted-contract.c` gains `zero_size_allocas`: two `alloca(0)` must be tagged and distinct on
+  Capstone, and an `alloca(1)` after them, kept alive through a volatile, must be tagged and
+  usable. Built with the dev SDK, the image faults with cause 29 at
+  `zero_size_allocas+0x84` after its earlier checks pass, which is the positive control.
+  `run-hosted.py` requires the new checks by name.
+  With the fix it passes 53 of 53; with the dev SDK 49 of 51 (the virtual arm's exit and the new
+  checks are missing).
+- musl: 7 of 1361 objects differ between the dev and fix SDKs, all of them functions with a
+  runtime-sized array (`execl`, `execle`, `execlp`, `execvp`, `getcwd`, `res_msend`,
+  `dcngettext`).
+- Runtime gates with the fix's SDK (memcached, SQLite, mruby and Perl ports): runtime, nodes,
+  malloc and hosted pass. memcached fails only `fx24_prediction` (104 pass), as it does without
+  this change.
+- 502.gcc_r rebuilt with dev plus the open compiler PRs and this fix: train01 still matches its
+  reference, and 200.c runs past `expand_call` (a later stop is a separate out-of-bounds read in
+  GCC 4.5's own source).
+
+**Residuals.**
+- Inline stack probing for dynamic allocas is broken independently of this fix. At `-O0`,
+  `-verify-machineinstrs` rejects `SD $x0, $x2, 0` ("Illegal physical register"), on dev too. The
+  probe loop also moves sp with integer `sub`/`mv`. The application SDK does not enable stack
+  probing.
+- A zero-size FIXED frame object keeps the un-narrowed stack capability, because
+  `narrowToFrameObjectBounds` returns early. This does not fault, but the object gets whole-stack
+  bounds.
+
 ### C-78 — a 16-aligned copy whose size is not a multiple of 16 strips the tags of the capabilities in its whole granules `FIXED 2026-10-13 on compiler/memcpy-capability-granules — COMPILER; found 2026-10-13 by the hosted-application probe (runtime/virtual/hosted-contract.c) when the SDK stopped passing -fno-builtin`
 
 **What happens.** `CapstoneTargetLowering::findOptimalMemOpLowering` copied with capability units
