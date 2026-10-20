@@ -1,0 +1,13 @@
+{
+  "case": 98,
+  "upstream_fix": "none",
+  "title": "PLANTED: a primary-key violation, the DIAG-BTU hint's must-fire control (not a corpus case)",
+  "consumer": "diag_dup",
+  "class": "control",
+  "allocator_layer": "none",
+  "trigger": "trigger.sql",
+  "live_in_pin": true,
+  "live_proof": "planted",
+  "fidelity": "planted",
+  "arms": {}
+}

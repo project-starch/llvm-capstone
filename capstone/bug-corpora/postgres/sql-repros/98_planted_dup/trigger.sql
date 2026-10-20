@@ -1,0 +1,3 @@
+CREATE TABLE diag_dup (a int PRIMARY KEY);
+INSERT INTO diag_dup VALUES (1);
+INSERT INTO diag_dup VALUES (1);

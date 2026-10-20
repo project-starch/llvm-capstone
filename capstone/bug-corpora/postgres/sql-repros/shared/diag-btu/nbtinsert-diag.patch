@@ -1,0 +1,40 @@
+18a19
+> #include "lib/stringinfo.h"
+641a643,652
+> 					 * CAPSTONE DIAG (sql0 case 03, silicon only): capture the existing index tuple that compared
+> 					 * equal, before the buffers are released, so the error can say what silicon compared.
+> 					 */
+> 					BlockNumber diag_blk = BufferGetBlockNumber(nbuf != InvalidBuffer ? nbuf : insertstate->buf);
+> 					Size		diag_len = IndexTupleSize(curitup);
+> 					IndexTuple	diag_cur = (IndexTuple) palloc(diag_len);
+> 
+> 					memcpy(diag_cur, curitup, diag_len);
+> 
+> 					/*
+665a677,700
+> 						StringInfoData diag;
+> 						Datum		cvalues[INDEX_MAX_KEYS];
+> 						bool		cisnull[INDEX_MAX_KEYS];
+> 						char	   *cur_desc;
+> 
+> 						index_deform_tuple(diag_cur, RelationGetDescr(rel), cvalues, cisnull);
+> 						cur_desc = BuildIndexValueDescription(rel, cvalues, cisnull);
+> 						initStringInfo(&diag);
+> 						ItemPointer diag_etid = BTreeTupleIsPosting(diag_cur) ? BTreeTupleGetPostingN(diag_cur, curposti)
+> 																		 : &diag_cur->t_tid;
+> 
+> 						appendStringInfo(&diag, "DIAG-BTU existing %s tid (%u,%u) blk %u off %u posting %d/%d len %zu checked (%u,%u) raw",
+> 										 cur_desc ? cur_desc : "(null)",
+> 										 ItemPointerGetBlockNumberNoCheck(diag_etid), ItemPointerGetOffsetNumberNoCheck(diag_etid),
+> 										 diag_blk, offset, (int) inposting, curposti, diag_len,
+> 										 ItemPointerGetBlockNumberNoCheck(&htid), ItemPointerGetOffsetNumberNoCheck(&htid));
+> 						for (Size i = 0; i < diag_len && i < 64; ++i)
+> 							appendStringInfo(&diag, "%02x", ((unsigned char *) diag_cur)[i]);
+> 						appendStringInfo(&diag, " | new tid (%u,%u) len %zu raw",
+> 										 ItemPointerGetBlockNumberNoCheck(&itup->t_tid), ItemPointerGetOffsetNumberNoCheck(&itup->t_tid),
+> 										 (Size) IndexTupleSize(itup));
+> 						for (Size i = 0; i < IndexTupleSize(itup) && i < 64; ++i)
+> 							appendStringInfo(&diag, "%02x", ((unsigned char *) itup)[i]);
+> 
+671a707
+> 								 errhint("%s", diag.data),
