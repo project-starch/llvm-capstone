@@ -110,6 +110,63 @@ class TransportTests(unittest.TestCase):
                     args, _ = start.call_args.args
                     self.assertEqual(args.exact_bounds, bool(recorded))
 
+    def test_restart_preserves_share_model_and_only_when_set(self):
+        for recorded in ("mapped-xattr", None):
+            with tempfile.TemporaryDirectory() as directory:
+                state = Path(directory)
+                identity = {"files": {k: {"path": "/tmp/" + k, "sha256": "old"}
+                            for k in ("qemu", "kernel", "firmware", "rootfs", "launcher", "module")},
+                            "share": "/tmp/share", "memory": "2G", "cma_mib": 768,
+                            "process_cache_mib": 384, "environment": {}, "profile": "virtual"}
+                if recorded:
+                    identity["share_model"] = recorded
+                (state / "config.json").write_text(json.dumps({"identity": identity}))
+                with patch.object(cli, "running", return_value=False), patch.object(cli, "start", return_value=0) as start:
+                    self.assertEqual(cli.main(["--state", directory, "restart"]), 0)
+                    args, _ = start.call_args.args
+                    self.assertEqual(args.share_model, recorded or "none")
+
+    def test_share_model_reaches_qemu_and_the_identity(self):
+        for model in ("none", "mapped-xattr"):
+            with tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for name in ("qemu", "kernel", "firmware", "rootfs"):
+                    (root / name).write_text("x")
+                (root / "share").mkdir()
+                state = root / "s"
+                state.mkdir(mode=0o700)
+                real_popen = subprocess.Popen
+
+                def popen(command, *args, **kwargs):
+                    # Only QEMU's start is stopped; ssh-keygen runs for real.
+                    if command[0] == str(root / "qemu"):
+                        raise RuntimeError("stop")
+                    return real_popen(command, *args, **kwargs)
+                with patch.dict(os.environ, {"CAPSTONE_QEMU_LOCK": str(root / "lock")}), \
+                     patch.object(cli.subprocess, "Popen", side_effect=popen):
+                    with self.assertRaisesRegex(RuntimeError, "stop"):
+                        cli.start(cli.argparse.Namespace(
+                            qemu=root / "qemu", kernel=root / "kernel", firmware=root / "firmware",
+                            rootfs=root / "rootfs", share=root / "share", profile="physical",
+                            share_model=model, memory="2G", cma_mib=512, process_cache_mib=384,
+                            port=0, boot_timeout=1), state)
+                config = json.loads((state / "config.json").read_text())
+                virtfs = [config["command"][i + 1] for i, word in enumerate(config["command"]) if word == "-virtfs"]
+                self.assertIn(f"mount_tag=hostshare,security_model={model},", virtfs[0])
+                self.assertIn("mount_tag=control,security_model=none,", virtfs[1])
+                self.assertEqual(config["identity"].get("share_model"), None if model == "none" else model)
+
+    def test_unknown_share_model_is_refused(self):
+        with tempfile.TemporaryDirectory() as directory:
+            for name in ("qemu", "kernel", "firmware", "rootfs"):
+                Path(directory, name).write_text("x")
+            with self.assertRaisesRegex(cli.VMError, "Share model"):
+                cli.start(cli.argparse.Namespace(
+                    qemu=Path(directory, "qemu"), kernel=Path(directory, "kernel"),
+                    firmware=Path(directory, "firmware"), rootfs=Path(directory, "rootfs"),
+                    share=Path(directory), profile="physical", share_model="passthrough", memory="2G",
+                    cma_mib=512, process_cache_mib=384, port=0, boot_timeout=1), Path(directory))
+
     def test_exact_bounds_is_refused_on_the_physical_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             for name in ("qemu", "kernel", "firmware", "rootfs"):
