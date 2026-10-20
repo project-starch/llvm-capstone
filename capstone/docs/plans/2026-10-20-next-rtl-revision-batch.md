@@ -177,13 +177,36 @@ tracker (`valid-fell 1`) and still denies (faults 1). Without that arm, `-s`'s z
    `vp7-wt/.sup/{s23,s23b,s23c,s23d}`, all reading identically, agreeing with the arm header's
    independently-written expectation. Those four directories have no PROVENANCE file, so the RTL behind them
    is not pinned.
-2. **UNEXPLAINED, and it is in a diagnostic variant rather than a graded reading**: at the same pc (`0x20c4`,
-   `0x20c8`) the `-i` arm reads `s3` and `s4` as `0x80007000` where `-s` and `-sc` both read `0x80009000`.
-   The pcs being identical rules out a code-layout shift, and the `FS_IDX` block writes only `t2`, so the
-   obvious clobber explanation is wrong. It does not touch the graded readings -- `-i`'s pre-registered job is
-   the four indices, which are exact -- but `-i` must NOT be described as byte-identical to `-s`.
+2. **RETRACTED and now EXPLAINED (an independent audit of item 1, 2026-10-20, caught what this lane had in
+   front of it).** This disclosure first reported as "unexplained" that at the same pc (`0x20c4`, `0x20c8`) the
+   `-i` arm reads `s3`/`s4` as `0x80007000` where `-s` and `-sc` read `0x80009000`. The cause is that
+   **`va-fetchsplit-i` is built `-DFS_IDX` ONLY** (`testlist_sup.yaml`), with no `-DFS_SAMETBL`, so it is the
+   DEFAULT pair: `0x80007000` is `tbl` and `0x80009000` is `tbl3`. Two different configurations, not an
+   anomaly. The testlist's own comment calling `-i` "the same firing arm" is wrong and is being corrected
+   along with the entry.
+   **What this RETRACTS from the record above:** `-i` does not certify that the `-s` PAIR is one-variable. Its
+   four indices (3, 3, 10, 7) are real and exactly as pre-registered, but they are the DEFAULT arm's
+   allocation. Reading 3's verdict is unaffected and rests on its own evidence -- `-s` reads faults 0 with the
+   four children at 0x100, reading-for-reading identical to `-sc` at every pc, with the suppressed-clear
+   witness firing on `-s` and silent on `-sc`.
 3. Reading 4 (pb10 without the srevroot-zero module) is the board lane's and remains UNMEASURED; reading 5's
    generation case is covered by `r12-recl-cpmp` above.
+
+**A SECOND DEFECT, found by that same audit, means item 1 is not finished and its arms will be re-run.**
+`pmp_data_if.sv` carried, since vp2 item A step 2, `if (revnode_ns_flush_i) begin cpmp_tracked_revnode_id_d[i]
+= '0; cpmp_revnode_valid_d[i] = 1'b1; end` -- every CPMP entry re-armed VALID on any change of `vctx_rev_q` or
+`srevroot`, i.e. at every context entry and escape. Before item 1 that re-arm is what HEALED S-23's false
+denies. With item 1 there are no false denies left to heal, and the clause's only remaining effect is to UNDO
+a real revocation: a physical node the monitor revoked, tracked by a CPMP entry, would be trusted again after
+the next context switch. Ruled by the semantics owner (isa.md): in this bitstream the CPMP trackers IGNORE the
+namespace flush, and a tracked id and its validity change only by adopt and by a physical broadcast. The
+clause is removed on the lane branch, and item 1's six arms plus a new two-sided resurrection arm re-run on
+the result -- so the table above is item 1's acceptance for the namespace bit, not for the item as a whole.
+The same clause exists in the PC tracker (`commit_stage.sv:417-420`), where `:389-391` raises cause 25 when
+`!pc_revnode_valid_d`, and the flush fires on any `srevroot` write with no switch and no re-check; that is
+referred to the semantics owner rather than fixed on this lane's reading. The LSU revocation cache is SAFE by
+contrast and is the pattern the CPMP should have followed: it EMPTIES on a flush, "never permissive", and
+gates the ALLOW-setting resolve on `!revnode_ns_flush_i`.
 
 **One defect of this lane's own making, recorded because the check that catches it is one grep.** The first
 attempt produced no reading at all: the namespace bit was added as an `ex_stage` OUTPUT PORT, which left
