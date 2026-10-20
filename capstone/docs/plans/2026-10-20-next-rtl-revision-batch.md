@@ -256,6 +256,80 @@ the remaining sequencing is just **the corpus and kit images rebuilt from dev be
 W1's reading changing from PASSES to FAILS as intended. An image built before that commit still carries the
 hoisted-cursor pattern and would fail the acceptance boots for a reason that is not a defect.
 
+**WRITTEN 2026-10-20: the op set is THREE and RULED, the predicate's site is the PACK, and its validity there is
+MEASURED rather than assumed.**
+
+*The op set, enumerated from source and then ruled* (semantics owner, in `design/virtual-capstone/isa.md` on dev at
+`ffe4b088c279`, on this lane's enumeration). Exactly three ops write an arbitrary cursor onto a tagged capability,
+and all three funnel through one call, `create_capability(metadata, new_cursor)`: CINCOFFSET
+(`capstone_flu_unit.anvil:46`, `rs1.cursor + rs2.cursor`), CINCOFFSETIMM (`:82`, `rs1.cursor + imm`) and SCC
+(`:122`, `rs2.cursor`, an ABSOLUTE set, so the one that can leave the window in a single instruction from any
+starting point). The earlier wording named CINCOFFSET and SCC; the immediate form is the same instruction's
+immediate encoding and the one the compiler emits by preference, so excluding it would have left the defect
+reachable through the cheaper opcode. The other five callers of `create_capability` -- INIT `:201`, SHRINK
+`:276`/`:282`, CAPBOUND `:448`, CCSRRW `:567` -- are in-window by construction and do NOT get the check, so the
+predicate must not go into the shared helper. QEMU's compact profile covers the same three.
+
+*The site.* Nothing in the FLU compresses: `create_capability` (`capstone_unit.anvilh:464-466`) is a bare struct
+constructor and the FLU carries fat 64-bit bounds throughout. The predicate needs the COMPRESSED word, so it
+belongs at the pack, `compress_cap` (`core/include/ariane_pkg.sv:861-886`), the first point holding the fat bounds
+and the cursor together. A cost precedent in the same module, already routed: `ex_stage.sv:917` instantiates
+exactly this round trip, `decompress_bounds(compress_bounds(dyn_child_q, 5'd0, 1'b0), dyn_child_q.start)`. The
+synthesis lane's trial reading of the FLU capture nets (CINCOFFSETIMM at -4.192 ns / 70 levels) is therefore
+probably NOT measuring where this lands, and both forms share one instance of the new cone rather than adding to
+each path separately.
+
+*Why the pack form is valid, measured.* The pack must recompress, so `decompress(compress(fat), cursor) != fat` is
+a correct test only if `compress(decompress(B, c)) == B`. Against capstone-ariane's own
+`verif/tests/custom/capstone/bounds-model.py`, 200,000 random regions, E 0..24, a random in-bounds read cursor
+each: idempotence failures **0**, fires with the cursor UNCHANGED **0**, disagreements with the two-cursor form
+(`decompress(B, new) != decompress(B, old)`, which `isa.md` now gives as the DEFINITION) **0** across the 106,115
+cases where that form fires. The reason is structural rather than statistical: a register's fat bounds are
+themselves a decode, hence exact on the `iE == 0` branch (lengths below 4 KiB) and granule-aligned on the other,
+and on granule-aligned input the R-54 renormalisation step cannot fire because both residues are zero -- the
+argument `repr_exact_mask`'s own docstring makes.
+
+*Two CHEAPER forms were tried and REFUTED, so the round trip is the predicate and has to be priced rather than
+designed around.* The synthesis lane's trial reading puts that round trip at **73 logic levels and 31 CARRY4,
+register to register** (+0.441 ns on tree B, into `dyn_child_repr_q`) -- nearly a full cycle, so a
+shift-and-compare would have been worth a great deal. Neither candidate survives a check against the definition,
+over 300,000 regions:
+- comparing the cursor bits the decode reads, `(c_old >> (E+11)) != (c_new >> (E+11))`: **142,472 disagreements**,
+  every one of them OVER-firing. The cursor's low bits enter `decompress` only through the threshold `A3 >= R`,
+  not bit-exactly, so a move that changes `A3` without crossing `R` leaves the decode identical;
+- adding that threshold, `(c_old >> (E+14)) != (c_new >> (E+14)) || (A3_old >= R) != (A3_new >= R)`: still
+  **24,797 disagreements**, again all over-firing, because a change in the window bits can be exactly
+  compensated by the span correction the decode itself applies -- which is the whole point of the wrap-around
+  reconstruction.
+Controls fired for both (dropping either term, or shifting by E+12 or E+10 instead, disagrees in 126,040 /
+29,105 / 91,587 / 151,917 cases). Both failures are in the TAG-CLEARING direction, so neither is a safe
+approximation: they would untag correct in-window moves. A cheap form, if one is wanted later, has to be DERIVED
+from the representable region's edges and validated against the definition the same way, not guessed.
+
+*The hazard, which must be written AT the predicate in the RTL and not only here* (the semantics owner asked for
+the sentence to sit where the next person to touch the line will read it). The predicate is safe ONLY because the
+register holds DECODED bounds. Evaluated against EXACT requested bounds the same test clears the tag on
+**191,953 of 200,000** capabilities -- every inexact one -- because `compress_bounds` rounds the base down
+(`ariane_pkg.sv:840`) and the top up (`:842-843`). Correct at the pack, catastrophic one step upstream: a later
+"simplification" to the requested bounds would silently untag every inexact capability in the field. That control
+is also what makes the three zeros above readable. The FIRST control tried instead varied the renormalisation
+flag, which is provably inert on granule-aligned input and so read 0 for a reason with nothing to do with the
+subject; the control that replaced it perturbs the decoded bounds one byte off the granule and changes the word
+100,000 of 100,000 times.
+
+*Acceptance readings 5-7, added on the semantics owner's request, all three pre-registered TOGETHER so one arm
+cannot pass by trading one behaviour for another:*
+5. an out-of-window move **CLEARS**: the next load through the result faults **24** (untagged operand), not a
+   bounds cause;
+6. a move back into the window does **NOT** restore the tag -- the self-heal is gone, which is reading 2 above
+   seen from the register side;
+7. an in-window move **KEEPS** the tag and the bounds.
+8. **CINCOFFSETIMM explicitly, not only CINCOFFSET**, and at the edge rather than far outside: a NEGATIVE
+   immediate that leaves the window by ONE GRANULE below the lower edge must clear, and one landing EXACTLY on
+   the edge must keep its tag. This is the pair the measurement says is the dangerous direction -- a fix that
+   passes 1-4 and fails here has traded a missed trap for a cleared tag on correct code, which is worse than the
+   defect.
+
 ## (5) Q-04 (b): MOVC must KEEP an untagged source
 
 **Ruled already, and not by this lane**: the project lead decided Q-04 on 2026-10-14, option 1 -- MOVC keeps an
