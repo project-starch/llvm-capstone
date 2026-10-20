@@ -4234,3 +4234,26 @@ UNSTUBBED call to the runner, meant to show that the real checks pass.
 - **No transcript and no result exist**, and nothing was flashed. The run directory was in the scratchpad and was deleted.
 - **The cause:** a dry run must stub EVERY invocation. A "just the checks" call on the real path is a real launch.
 - The arm is pre-registered below, before its real boot.
+
+### sql0-nf2A, the first SCORED sql0 arm on silicon, pre-registered (2026-10-20 08:2x, before its boot): board 1, tree A
+
+- **The runner:** `tier3-sql-arm-rev2q.sh` 0fe9fffc0e15f273. It is sql0-drt2 (rev2j) with these changes:
+  - dev's runner 7ce203f9, from the dev-pinned wt-q15, with its QEMU PASS line (t3-sql-nf2-r2/CHECK, compiler lane
+    sql0-nf2-reference 03b1ecfcd33b);
+  - kits bkit7-rev2xDN2 / bkit7-rev2xmDN2 (module 54d8a3af, Tier 1 PASS on both trees);
+  - the prediction t3-sql-nf2-r1/bundle (QEMU qkit7-nf2, the twin a1fa252f; equal to its repeat r2 and to the old
+    1f099612 record, cell by cell; fixture 956173e054762e91, image 64010720f1a6b3bc).
+  - The rest is rev2j's: the measure-only bake under the 26,000,000 B cap, the narrowed must-fire (no directory-open
+    FATAL, positive control answered), and score-arm into sql-repros results/2026-10-20-vp2c-treeA/vp2-malloc-nf2.
+  - New readings: FRTY, the banner, and the release lines (unique, against 21, with any succeeded < attempted).
+- **Its stubbed dry run** passed every check and stopped at the stub's missing inputs (SQL VOID), as it should. The
+  unstubbed call of the incident above is not a dry run and is not counted.
+
+**The prediction (the compiler lane's):**
+- the 9 cells as the QEMU reference: CAUGHT 2 (02 and 03, cause 28 in memcpy) and MISSED 7 (01, 04-09);
+- 21 of 21 sessions, with the must-fire held;
+- FRTY 0 and DRT1 0, as on sql0-nf2-treeB;
+- 21 release lines, each with succeeded = attempted.
+- A cell in an R-60 aliasing band would read MISSED where QEMU catches it. Neither CAUGHT cell is a far overrun, so none
+  is expected.
+- A cell that differs is a reading against this single record, possibly variance, until a repeat.
