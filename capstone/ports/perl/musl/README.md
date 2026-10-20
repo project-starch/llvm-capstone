@@ -179,6 +179,7 @@ in regex state with pointer-typed fields; both are unconditional.
 | 0008 | `util.c` | Route backticks and piped opens through libc's delegated `popen`/`pclose`, preserving the child's wait status without cloning the domain. Shell-launched images additionally require the guest binfmt_misc handler |
 | 0009 | `toke.c` | Pass a local copy of the constant `no_code`, not the constant itself, by value. A const global aggregate holding pointers, passed by value, faults in the virtual profile's code generation (compiler issue C-77, `docs/ref/ISSUES.md`): every bareword starting with `::` (`::is`, `::ok` throughout Perl's tests) faulted in `memcpy` at compile time. Behaviour unchanged |
 | 0010 | `builtin.c` | Each `builtin::` call checker gets its descriptor as an index into `builtins[]`, not as `newSVuv(PTR2UV(builtin))` turned back with `NUM2PTR`: through an integer the capability loses its tag, so every `builtin::` call and every program loading `overload.pm` faulted, on this port and on CheriBSD purecap alike (measured 2026-10-11). An upstream pattern, harmless where a pointer is an integer |
+| 0012 | `util.c` | `Perl_repeatcpy` copied the first items of the list form of `x` byte by byte. Those items are SV pointers, and a byte copy drops a capability's tag: `map { $_ } (1) x 100000` faulted (cause 24 in `pp_mapwhile`). Each item is now copied with `memcpy`, as the doubling copies after it already were. An upstream pattern, harmless where a pointer is an integer |
 
 ## Open, in the order they matter
 
