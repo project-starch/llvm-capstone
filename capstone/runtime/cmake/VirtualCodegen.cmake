@@ -24,8 +24,28 @@ if(CAPSTONE_VIRTUAL_MOVC_KEEP)
 else()
   set(CAPSTONE_VIRTUAL_MOVC_FEATURE -movc-keeps-integer-source)
 endif()
+# CAPSTONE_VIRTUAL_PAD_GLOBALS (cache or environment, default OFF) = ON adds
+# -mllvm -capstone-pad-globals: every defined global of 4 KiB or more is aligned
+# and tail-padded to exactly representable bounds, and every module narrows a
+# global to that length (isa.md, SHRINK's result on the compact profile, rule
+# (2)). It must be uniform across an image, so it lives here, where the runtime,
+# the builtins, sdk.json (capstone-cc, every application) and musl's build all
+# read it: a module built with it narrows a global it only declares to the
+# padded length, which covers the next object if the definer was built without.
+if(NOT DEFINED CAPSTONE_VIRTUAL_PAD_GLOBALS)
+  if(DEFINED ENV{CAPSTONE_VIRTUAL_PAD_GLOBALS})
+    set(CAPSTONE_VIRTUAL_PAD_GLOBALS "$ENV{CAPSTONE_VIRTUAL_PAD_GLOBALS}")
+  else()
+    set(CAPSTONE_VIRTUAL_PAD_GLOBALS OFF)
+  endif()
+endif()
+set(CAPSTONE_VIRTUAL_PAD_GLOBALS_FLAGS)
+if(CAPSTONE_VIRTUAL_PAD_GLOBALS)
+  set(CAPSTONE_VIRTUAL_PAD_GLOBALS_FLAGS -mllvm -capstone-pad-globals)
+endif()
 set(CAPSTONE_VIRTUAL_CODEGEN
   -mllvm -capstone-gp-free -mllvm -capstone-image-gp
   -Xclang -target-feature -Xclang +f -Xclang -target-feature -Xclang +d
   -Xclang -target-abi -Xclang lp64
-  -Xclang -target-feature -Xclang ${CAPSTONE_VIRTUAL_MOVC_FEATURE})
+  -Xclang -target-feature -Xclang ${CAPSTONE_VIRTUAL_MOVC_FEATURE}
+  ${CAPSTONE_VIRTUAL_PAD_GLOBALS_FLAGS})
