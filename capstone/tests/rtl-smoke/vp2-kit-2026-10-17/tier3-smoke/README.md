@@ -4464,3 +4464,35 @@ vm_ioctl's CSRUNV:
 - **No recorded mechanism yet says WHY a value change at CSRUNV+4 matters for the fetch at CSRUNV+4.** The anomaly is
   narrowed to "the forget pulse or the flag", not explained. N=1 per arm, all on tree B.
 - **Bundle:** ffmpeg/pool-repros results/2026-10-20-vp2c-treeB/vp2-nested-pools-rc.
+
+### sql0-nf2A, result (2026-10-20 08:19-09:37, board 1, tree A): the first SCORED postgres arm on vp2 silicon, 7 of 9 cells as QEMU; 03 and 07 fail in CREATE EXTENSION, board-only
+
+`records/sql0-nf2A.board.txt` and `records/sql0-nf2A.result-lines.txt`. UNGATED.
+- **The boot:** completed, with the inputs as recorded (fixture 956173e054762e91, image 64010720f1a6b3bc).
+- **The must-fire held:** no directory-open FATAL in any session, and the positive control answered. All 21 sessions ran.
+- **S-23:** FRTY 0, DRT1 0, DRTX 0, no Oops. The banner node-floor-2 appears once. 21 release lines, every CSRETIRE
+  succeeded.
+- **The cells against the QEMU reference** (t3-sql-nf2-r1): 7 of 9 the same.
+  - 01 and 04-09: MISSED, as QEMU.
+  - 02: CAUGHT, cause 28 at memcpy+200, as QEMU.
+  - **03 (ltree) and 07 (pg_trgm) are NO-READING:out-of-denominator,** because their triggers were not reached.
+- **Why 03 and 07 were not reached, from the transcript:**
+  - 03: `CREATE EXTENSION ltree` fails with `duplicate key value violates unique constraint
+    "pg_operator_oprname_l_r_n_index"`, key `(>=, 12777, 12777, 2200) already exists`, in the case and in its control.
+    The trigger statement then fails with `type "lquery" does not exist`.
+  - 07: `CREATE EXTENSION IF NOT EXISTS pg_trgm` errors with `operator does not exist: text % text`, and the session
+    then dies with `domain fault cause=12 pc=0x0 address=0x0 … last=0x43`. That is cpython's board-only pc=0 shape, in a
+    second port.
+- **These are deterministic and board-only:**
+  - sql0-drt2 (tree A, module 39d8492d, runner 8826a2ca) carries the identical errors: 3 duplicate-key, 2 missing
+    operator, 1 pc=0, at the same key.
+  - QEMU's r1 serial.log, which records the session output (21 backends, its one expected ERROR, 4 domain faults), has
+    none of them.
+  - So these cells are a silicon divergence in catalog maintenance during CREATE EXTENSION, not variance: a false
+    duplicate key in a btree unique index, and a just-created operator not found.
+- **Not attributed.** Suspects, none read:
+  - an R-60 alias (an out-of-window read giving a wrong btree comparison);
+  - the same cause as cpython's pc=0.
+  - The window-counter QEMU replay of these two cases is the cheapest first check (the compiler lane's instrument).
+- **The bundle:** postgres/sql-repros results/2026-10-20-vp2c-treeA/vp2-malloc-nf2. 03 and 07 are recorded as this
+  board divergence, not as model errors.
