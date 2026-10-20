@@ -125,8 +125,9 @@ char *strchrnul(const char *, int) __attribute__((weak, alias("__strchrnul")));
  * 16-aligned slot, which is what the compiler emits for a pointer-typed access
  * and what this code asks for by copying through `void **`.
  *
- * So: aligned 16-byte slots move as capabilities, the unaligned head and tail
- * as bytes. A tagged value that is not 16-aligned in both source and target
+ * So: aligned 16-byte slots move as capabilities, and everything else as
+ * aligned 8- or 4-byte words where source and target agree in that alignment,
+ * bytes otherwise (copy_forward below says why that is the same). A tagged value that is not 16-aligned in both source and target
  * cannot be preserved by any copy, which is also CHERI's rule, and the bytes
  * of it are still copied correctly, only untagged.
  *
@@ -175,18 +176,53 @@ static inline __attribute__((always_inline)) void granule_copy(unsigned char *d,
 #define GRANULE_COPY(d, s) (*(cap_t *)(d) = *(const cap_t *)(s))
 #endif
 
-void *memcpy(void *restrict dst, const void *restrict src, size_t n)
+/* Words for what holds no capability. Every scalar store clears the tag of
+ * each 16-byte granule it touches, whatever its width, so where the copy
+ * cannot preserve a tag (no whole source granule lands on a whole destination
+ * granule) aligned words copy the same bytes and clear the same tags as bytes
+ * do. Source and destination that agree mod 8 (or mod 4) become aligned
+ * together after the same byte head; every word lies wholly inside both
+ * ranges, and the pointers stay derived from dst and src. In 538.imagick_r,
+ * 47% of the memcpy calls had addresses that differ mod 16 and copied byte by
+ * byte, 43M of memcpy's 66M instructions. */
+typedef unsigned long __attribute__((__may_alias__, __aligned__(8))) word8_t;
+typedef unsigned int __attribute__((__may_alias__, __aligned__(4))) word4_t;
+#define WORD_COPY(T, d, s) (*(T *)(d) = *(const T *)(s))
+
+/* Forward copy. Also correct for overlapping ranges with d below s: a word or
+ * granule is read before it is written, and the distance between d and s is
+ * a multiple of its size whenever it is used. No restrict, so memmove can use
+ * it for those. */
+static inline __attribute__((always_inline))
+void copy_forward(unsigned char *d, const unsigned char *s, size_t n)
 {
-	unsigned char *d = dst;
-	const unsigned char *s = src;
-	if (((__UINTPTR_TYPE__)d & 15) == ((__UINTPTR_TYPE__)s & 15)) {
-		while (n && !CAP_ALIGNED(d)) { *d++ = *s++; n--; }
-		while (n >= 16) {
-			GRANULE_COPY(d, s);
-			d += 16; s += 16; n -= 16;
+	__UINTPTR_TYPE__ x = (__UINTPTR_TYPE__)d ^ (__UINTPTR_TYPE__)s;
+	if (!(x & 15)) {
+		while (n && ((__UINTPTR_TYPE__)d & 7)) { *d++ = *s++; n--; }
+		if (n >= 8 && !CAP_ALIGNED(d)) {
+			/* the upper half of a granule cannot hold a capability */
+			WORD_COPY(word8_t, d, s);
+			d += 8; s += 8; n -= 8;
 		}
+		for (; n >= 16; d += 16, s += 16, n -= 16) GRANULE_COPY(d, s);
+		if (n >= 8) {
+			/* half a granule: it holds no whole capability either */
+			WORD_COPY(word8_t, d, s);
+			d += 8; s += 8; n -= 8;
+		}
+	} else if (!(x & 7)) {
+		while (n && ((__UINTPTR_TYPE__)d & 7)) { *d++ = *s++; n--; }
+		for (; n >= 8; d += 8, s += 8, n -= 8) WORD_COPY(word8_t, d, s);
+	} else if (!(x & 3)) {
+		while (n && ((__UINTPTR_TYPE__)d & 3)) { *d++ = *s++; n--; }
+		for (; n >= 4; d += 4, s += 4, n -= 4) WORD_COPY(word4_t, d, s);
 	}
 	while (n--) *d++ = *s++;
+}
+
+void *memcpy(void *restrict dst, const void *restrict src, size_t n)
+{
+	copy_forward(dst, src, n);
 	return dst;
 }
 
@@ -194,18 +230,36 @@ void *memmove(void *dst, const void *src, size_t n)
 {
 	unsigned char *d = dst;
 	const unsigned char *s = src;
-	if (d == s || n == 0) return dst;
-	if ((__UINTPTR_TYPE__)d < (__UINTPTR_TYPE__)s ||
-	    (__UINTPTR_TYPE__)d >= (__UINTPTR_TYPE__)s + n)
-		return memcpy(dst, src, n); /* no overlap, or forward copy is safe */
-	/* Overlapping with d after s: copy backwards, capabilities where aligned. */
+	__UINTPTR_TYPE__ da = (__UINTPTR_TYPE__)d, sa = (__UINTPTR_TYPE__)s;
+	if (da == sa || n == 0) return dst;
+	if (da < sa || da - sa >= n) {
+		/* d below s, or no overlap: forward is safe */
+		copy_forward(d, s, n);
+		return dst;
+	}
+	/* d above s and overlapping: backwards, the mirror of copy_forward. */
+	__UINTPTR_TYPE__ x = da ^ sa;
 	d += n; s += n;
-	if (((__UINTPTR_TYPE__)d & 15) == ((__UINTPTR_TYPE__)s & 15)) {
-		while (n && !CAP_ALIGNED(d)) { *--d = *--s; n--; }
+	if (!(x & 15)) {
+		while (n && ((__UINTPTR_TYPE__)d & 7)) { *--d = *--s; n--; }
+		if (n >= 8 && !CAP_ALIGNED(d)) {
+			d -= 8; s -= 8; n -= 8;
+			WORD_COPY(word8_t, d, s);
+		}
 		while (n >= 16) {
 			d -= 16; s -= 16; n -= 16;
 			GRANULE_COPY(d, s);
 		}
+		if (n >= 8) {
+			d -= 8; s -= 8; n -= 8;
+			WORD_COPY(word8_t, d, s);
+		}
+	} else if (!(x & 7)) {
+		while (n && ((__UINTPTR_TYPE__)d & 7)) { *--d = *--s; n--; }
+		while (n >= 8) { d -= 8; s -= 8; n -= 8; WORD_COPY(word8_t, d, s); }
+	} else if (!(x & 3)) {
+		while (n && ((__UINTPTR_TYPE__)d & 3)) { *--d = *--s; n--; }
+		while (n >= 4) { d -= 4; s -= 4; n -= 4; WORD_COPY(word4_t, d, s); }
 	}
 	while (n--) *--d = *--s;
 	return dst;
