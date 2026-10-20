@@ -4933,3 +4933,36 @@ configuration.
   so they are graded in verdict, with the cause difference reported.
 - **sq1q15 checked against Q-31 before its result:** on the old images q15's compare-pilot, which grades every field,
   differed from run C only in case 31 (R-60). So q15 has no Q-31 cell, and its pre-registered 32 of 33 stands unchanged.
+
+### The corpus pass: wm0 pre-registered (2026-10-20 16:2x), board 1 after its sq1q15; wm1 not run; sq0 case 24 attributed to the flag, mechanism open
+
+- **sq0 case 24 moved with the MOVC flag; its mechanism is OPEN** (the compiler lane, QEMU, plain qkit7-nf2, runner
+  4400e4c1, --only 24, N=1 per arm):
+  - Three images on the same kit: the old flagged 7c8bfc88 reads CAUGHT (cause 24, sqlite3OpenTable+648), as the old
+    reference did. The new 0d2223aa (flag off, plus 232d13b2) reads MISSED, and so does 490bfaf4 (flag off, WITHOUT
+    232d13b2). So the flag is the variable, not 232d13b2, the kit or the module, and silicon agrees with MISSED.
+  - **Facts:**
+    - The fault is `lw a3, 0xb0(a3)` with a3 the untagged return value of sqlite3PrimaryKeyIndex, which walks
+      pTab->pIndex.
+    - Both functions have IDENTICAL instruction sequences in the two images. Every frame in the rebuild is 16 bytes
+      larger (stack offsets shifted).
+    - So no check stopped firing on this path.
+  - **Hypothesis, not established:** the old CAUGHT is layout-dependent, i.e. what the freed table's memory held at reuse.
+    A QEMU trace of both images at sqlite3PrimaryKeyIndex's loads (address, freed or not, the loaded value's tag) would
+    settle it, after pass 1.
+  - **Classified for the census as a verdict move with its mechanism open,** not as a lost check in the compiled code.
+    An earlier wording in this lane's report to the lead, "a bug the rebuilt image no longer catches", is withdrawn.
+
+**wm0** (wireshark wmem-repros, virtual-malloc), ONE boot on board 1 (tree A):
+- The reference is `ref-tB-mimic/wm0` (runner run-defects.py 780a0975142e2221, appvm-arm 2852f21b, wt-gate
+  a7948988df2c dirty 0, the kit as sq0's).
+- MISSED 23, unchanged 23 of 23 against the old reference t3-pred-wm0, with no moves.
+- **Runner:** `tier3-pass-one.sh` defd4aeeb9236a67: tier3-pass-appvm.sh's gates, booking and readings, as one boot with the runner
+  path as an argument. It is a new file, because the running sq1q15 chains execute tier3-pass-appvm.sh and a running
+  bash script must not be edited.
+- It is chained by `chain-after.sh` a7a934219e13c167 on board 1's "PASS q15p DONE". Dry runs: `dryrun-pass-one.txt`.
+- **Predictions:** 23 of 23 in every field, all MISSED, as on tree A on 2026-10-19 (wm0 23 of 23). No Q-31 cell, since
+  there are no faults; no pc=0; DRT1 0, FRTY 0, no Oops.
+
+**wm1** (virtual-nested-pools) is NOT run. Its reference is 23 of 23 NO-READING:control-failed (read rc 75), unchanged
+from the old reference, so a boot would buy no cell.
