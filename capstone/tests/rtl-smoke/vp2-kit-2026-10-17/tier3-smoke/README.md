@@ -4613,3 +4613,52 @@ On vp2, MOVC nulls an untagged integer source, while the corpus SDK compiles wit
     expected. The compiler lane maps it to the call site.
 - **The runtime lane's prediction holds:** 232d13b2 (the out-of-window intermediate fix) does not touch MOVC, and the stop
   is C-32's movc-then-jalr (ISSUES C-32, dev 3f606b097841), so it persists.
+
+### The compiler lane's C-32 readings, recorded (2026-10-20, QEMU; claims from the lane, quoted, not re-run here)
+
+- **cpython lt0 re-predicted with the MOVC switch only** (CAPSTONE_MOVC_NULL_SCALAR=1): QEMU reproduces the board's
+  cpy-lt0 cells in 31 of 32 cases, every silicon-only failure included. **Case 14 is the one difference**, CAUGHT on QEMU
+  and MISSED on the board. It is unattributed; one candidate is the smaller bounds-rounding gap. A one-variable check is
+  the compiler lane's.
+- **cpyp-DFp's site:** in image p (7e5ba3b9), 0x331bf4 is `movc s2, a3` and 0x331bf8 is `jalr a3`, the same pair
+  as cpyp-DF's, 0x18 lower after the relink (cpyp-DFp's x1 is 0x321bfc, the return address after the jalr).
+- **The bytes gate:** c32-cfg-scan.py (lane c32-scan-cfg e13bd687a994), a control-flow-aware census of MOVC-then-call
+  integer sites. It reads 12 on the old cpython image, including the known site, so it can fire. The committed linear
+  scanner misses that site and printed zeros with exit 0 on unparsable input; the lane fixed it to exit 2. On postgres
+  the census is not a usable gate (163 candidates rebuilt, 285 old; path-insensitive inside large functions), so the
+  gates cited for postgres are the executed ones below.
+
+### The rebuilt (unflagged) images (compiler lane, 2026-10-20 11:32-11:45)
+
+Recipe build-port-abi6.sh: the frozen compiler a5be1a4d, -fno-builtin, lifetimes 0, runtime 8f132305 (5b3e6b79, the
+revision of the earlier images, + 232d13b2's heap.c + a CAPSTONE_VIRTUAL_MOVC_KEEP switch in VirtualCodegen.cmake and
+musl's build, built OFF). Manifests: runtime_dirty false. Checked here:
+- **postgres lt0 d9787ac28e495969** (22,019,184 B; not a --discard-locals relink). Both sdk.json files list
+  `-Xclang -target-feature -Xclang -movc-keeps-integer-source`; the board image 64010720's had `+movc-keeps-integer-source`.
+- **cpython lt0 f796f03bfe751b81**, the same sdk.json reading.
+- **QEMU record r1** (t3-sql-nomovc-r1, runner 7ce203f9, kit qkit7-nf2, the trimmed fixture 956173e0): SDK-BUILTINS OK,
+  21/21 sessions, all four extensions created, CAUGHT 2 (02, 03 at memcpy, cause 28), MISSED 7, the cells of the old
+  image's record. The repeat r2 and the silicon-mimic run (-mn) are running.
+
+### sql0-nmA pre-registration (2026-10-20, board 1, tree A): the rebuilt postgres image, scored
+
+**What changes:** only the image. sql0-nf2A (rev2q) with postgres lt0 d9787ac2 in place of 64010720, scored against
+t3-sql-nomovc-r1. The kits, dev's module 54d8a3af, the runner 7ce203f9, the fixture and the tree A bitstream are
+sql0-nf2A's.
+- **The runner:** `tier3-sql-arm-rev2t.sh` 181f40681bf4a3a0, rev2q with the image, its sdk.json gate (the flag must be
+  disabled, never `+`), the prediction bundle, the VOID hash and the result directory (vp2-malloc-nomovc) changed.
+- **Its stubbed dry run** (`dryrun-sql-arm-rev2t.txt`) went through every branch: DONE with 9 of 9 cells against r1's own
+  bundle, a measured firmware over the cap (STOP), a wrong image (VOID), a planted directory FATAL (MUST-FIRE FAIL), a
+  STOP trigger (HOLD), and a busy board (STOP). The sdk.json gate PASSes on d9787ac2 and STOPs on 64010720.
+- **It starts on SQL_NM_GO,** written only after r2 and -mn have been compared cell by cell with r1, and both
+  comparisons' planted-flip controls exit 1.
+
+**Predictions** (assuming -mn reads as r1, which is the decisive check; if it does not, the predictions are revised here
+before the GO):
+- The measure-only bake's firmware is under 26,000,000 B. The image is 351,920 B larger than DIAG-BTU's, which measured
+  25,856,520. If it is over, the arm STOPs with no boot, and a --discard-locals relink is requested.
+- 21/21 sessions, all four extensions created. **03's ltree and 07's pg_trgm no longer fail in CREATE EXTENSION:** no
+  duplicate key in pg_operator, no `operator does not exist: text % text`, no pc=0.
+- **9 of 9 cells as r1:** 02 and 03 CAUGHT (cause 28 in memcpy), the other seven MISSED. sql0 is not deterministic on
+  QEMU, so a mismatch in a cell where r1 and r2 differ is read as possibly variance.
+- Not changed by the image: FRTY 0, DRT1 0, 21 release lines with every CSRETIRE succeeding. The must-fire holds.
