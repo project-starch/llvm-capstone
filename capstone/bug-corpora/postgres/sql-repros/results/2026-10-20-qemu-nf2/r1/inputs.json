@@ -1,0 +1,71 @@
+{
+  "arm": "virtual-malloc",
+  "cases": 9,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/sql-repros",
+  "extensions": {
+    "available": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ],
+    "wanted": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ]
+  },
+  "fixture": {
+    "builder_image_sha256": "420657a831c56cbfff4ef3307cca391afb1e2a586f4647e8624b34a6b29016be",
+    "cluster_stable_tree_sha256": "aa2c220289aeb8e9800c60c8194fb50d4fdcfa7e6024aeed145b3f1e36ab1381",
+    "cluster_tree_sha256": "956173e054762e9144e066b182fe47a92d72dcfe078b18dda019fe24fc1841a2",
+    "preinstalled": [],
+    "provenance": {
+      "builder_image_sha256": "420657a831c56cbfff4ef3307cca391afb1e2a586f4647e8624b34a6b29016be",
+      "drop_sql_sha256": "3b0714b6ceb7f0bb2fa491a23beaf8d6a5580cad3e3b8c47b972a3c73f4cbf33",
+      "gzip9_bytes": {
+        "source": 4152746,
+        "trimmed": 984900
+      },
+      "kind": "trimmed copy of the native16 fixture, for the vp2 board's 26,000,000-byte DECLARED-bake cap",
+      "pg_resetwal_sha256": "a41106bea0e611a0de08529a62941ab1f1fc4e7a20d7dcec193a53dd9d208618",
+      "schema": 1,
+      "smoke": "native postgres --single SELECT count(*) FROM pg_class = 415, cluster state shut down, maximum data alignment 16",
+      "source_cluster_tree_sha256_run_arm": "173aa5b35c1b57b901cf3a0915ba45e1befd3161118d45f0bae24181e3d41156",
+      "source_fixture": "/mnt/hdd/<user>/capstone/t3-new6/tmp/pgfixture/cluster",
+      "source_manifest": "/mnt/hdd/<user>/capstone/t3-new6/tmp/pgfixture/manifest.json",
+      "source_manifest_sha256": "c4d3601a4a2ccddda9ce98b0dd8a2728b515e6a622dd98c279479cdf424f9fe5",
+      "steps": [
+        "cp -a source cluster",
+        "native postgres --single (the source manifest's build) -D cluster postgres < drop.sql: UPDATE pg_database SET datistemplate=false WHERE datname IN ('template0','template1'); DROP DATABASE template0; DROP DATABASE template1",
+        "native pg_resetwal --wal-segsize=1 -D cluster"
+      ],
+      "why": "no case or the runner opens a template database (run-arm uses postgres --single on database postgres; no CREATE DATABASE in the corpus); the WAL segment was 16 MiB of mostly zeros"
+    },
+    "provenance_from": "/mnt/hdd/<user>/capstone/t3-new6/tmp/pgfixture-trim/cluster.provenance.json"
+  },
+  "image": {
+    "heap": "virtual-mallocng",
+    "nested": "none",
+    "sha256": "64010720f1a6b3bcf5c62e832eb17bcaaa5fb6287a914e34d2ef16dc37354bcc"
+  },
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "a405840dce789345422ab901bb44df0a1d166677b564c68303f24ae286b847f0",
+    "module": "a1fa252f527e5a4338f784814f0981db9c6e36857e1e8cfc2d424d3858852268",
+    "profile": "virtual",
+    "qemu": "7c65ff2fee9655e4ec39fba927a651a9b6522e19b7154fa12b0afcf75eea6728",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "7ce203f9fd6a3ccee109f3453f6bccbdc10fea149237898551f74a689d7477f0"
+  },
+  "tally": {
+    "CAUGHT": 2,
+    "MISSED": 7
+  }
+}

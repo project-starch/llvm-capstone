@@ -1,0 +1,2 @@
+PASS 7ce203f9fd6a3cce
+# 2026-10-20 08:13:34: t3-sql-nf2-r2 vs t3-sql-nf2-r1, runner 7ce203f9fd6a3cce (dev 794d7c5815f5), kit qkit7-nf2 (module a1fa252f527e5a43 = QEMU twin of board 54d8a3af1158c3f4, launcher a405840dce789345, QEMU 7a4f3a64776f0c88): sql-cell-compare 9 vs 9, 0 differ (rc 0); compare-pilot 9 of 9 the same (rc 0); 21/21 sessions in each run; both comparators rc 1 on a planted verdict flip (case 02 CAUGHT->MISSED); and r1 equals the 1f099612 record t3-sql-trim-vm-r2 cell by cell (sql-cell-compare 0 differ)
