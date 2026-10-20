@@ -51,6 +51,7 @@ clang/lib/CodeGen/CodeGenTypes.cpp | +8 -0 | // Capstone: an __intcap is a capab
 clang/lib/CodeGen/ItaniumCXXABI.cpp | +2 -0 | case BuiltinType::IntCap:   // Capstone: no runtime typeinfo for these
 clang/lib/CodeGen/TargetInfo.h | +4 -0 | createCapstoneTargetCodeGenInfo(CodeGenModule &CGM, unsigned XLen,
 clang/lib/Driver/ToolChains/CommonArgs.cpp | +4 -0 | case llvm::Triple::capstone32:
+clang/lib/Driver/ToolChains/Gnu.h | +12 -0 | // A bare Capstone target (no OS) is the Capstone application platform, whose
 clang/lib/Driver/ToolChains/Linux.cpp | +12 -0 | case llvm::Triple::capstone32:
 clang/lib/Frontend/InitPreprocessor.cpp | +11 -0 | if (TI.SupportsCapabilities()) {
 clang/lib/Index/USRGeneration.cpp | +4 -0 | case BuiltinType::UIntCap:
@@ -98,7 +99,7 @@ llvm/lib/CodeGen/MachineCSE.cpp | +8 -0 | // capability increment above that tes
 llvm/lib/CodeGen/MachineLICM.cpp | +16 -1 | MachineLoop *SpeculationLoop = nullptr;
 llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +31 -15 | static bool isIntegerTruncate(SDValue N) {
 llvm/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp | +7 -7 | DAG.getConstantPool(LLVMC, TLI.getConstantPoolPtrTy(DAG.getDataLayout()));
-llvm/lib/CodeGen/SelectionDAG/LegalizeFloatTypes.cpp | +8 -2 | // space 0, a capability target passes it as an integer (C-82, see
+llvm/lib/CodeGen/SelectionDAG/LegalizeFloatTypes.cpp | +8 -2 | // space 0, a capability target passes it as an integer (C-86, see
 llvm/lib/CodeGen/SelectionDAG/SelectionDAG.cpp | +128 -17 | return Type.isInteger() || Type.isCheriCapability();
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGAddressAnalysis.cpp | +24 -5 | // bits cannot be represented here at all. Targets with capability (wider than
 llvm/lib/CodeGen/SelectionDAG/SelectionDAGBuilder.cpp | +111 -23 | (ValueVT.isInteger() || ValueVT.isCheriCapability()) &&

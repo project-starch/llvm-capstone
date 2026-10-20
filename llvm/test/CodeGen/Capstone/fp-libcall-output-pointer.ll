@@ -1,4 +1,4 @@
-; C-82: a floating-point libcall's output pointer (modf, modff, frexp) is
+; C-86: a floating-point libcall's output pointer (modf, modff, frexp) is
 ; passed as a capability.
 ;
 ; SelectionDAG expands llvm.modf and llvm.frexp into a call that writes one

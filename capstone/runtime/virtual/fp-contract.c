@@ -239,7 +239,7 @@ static void signals(void)
 /* modf and frexp return one result through a pointer. The compiler expands
  * modf (and frexp, when it sees the intrinsic) into a call that writes a stack
  * temporary; that pointer used to be passed as an integer, and modf faulted
- * storing the integral part (C-82). Last, so a fault leaves the rest reported.
+ * storing the integral part (C-86). Last, so a fault leaves the rest reported.
  * FENV_ACCESS is off here: under it clang keeps modf a plain call, which passes
  * the caller's pointer through and never reaches that expansion. */
 #pragma STDC FENV_ACCESS OFF
