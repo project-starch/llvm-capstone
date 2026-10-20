@@ -324,6 +324,36 @@ before**; that run also becomes this lane's baseline, committed in place of the 
 hash in its name and the run's date in its header. Read the cycle count beside every verdict: the testharness
 prints SUCCESS at the cycle limit.
 
+## A PRECONDITION on every image booted on this bitstream
+
+**Every image booted on the batch bitstream -- Tier 1, the corpus kits, and the pb10 FRTY acceptance image --
+must carry a runtime containing `232d13b220cc`.** Item (4) puts R-60's clear-tag rule in silicon, and the
+compiler lane reports that under it an image built on a runtime WITHOUT that commit faults at its FIRST
+allocation: cause 24 at `__capstone_malloc_group_map+0x210`, on the pre-fix `bind_slots`'s
+`group + start - base` intermediate, which the clear untags and the code then uses. **Without this line, a
+fault at the first allocation reads like a bitstream regression**, which is the most expensive misreading
+available on a freshly flashed bitstream.
+
+The commit is verified here: `232d13b220cc`, 2026-10-20, "virtual runtime (v6): form slot offsets in integers
+before adding them to a capability", `capstone/runtime/virtual/heap.c` +8/-2.
+
+**How to check it, and NOT by the kit name.** The manifest `build.py` writes (`ports/common/application/build.py:172-189`)
+carries the three fields this needs:
+- `runtime_dirty` **must be false FIRST.** It is `bool(git status --porcelain)`, and if the build tree was
+  dirty then `runtime_revision` says nothing about what was actually compiled. Check this before the ancestry,
+  because a dirty build can pass the ancestry test and still lack the hunk.
+- `merge-base --is-ancestor 232d13b220cc <runtime_revision>`, where `runtime_revision` is
+  `git -C REPO rev-parse HEAD` at build time -- so it is a commit in this repo and the ancestry test is valid.
+  Note what ancestry does NOT exclude: a later revert of the hunk. That is not the case today, and the next
+  field is what makes it moot.
+- `runtime_archive_sha256`, the sha256 of the built `libapplication-runtime.a`. **This is the stronger check
+  and is revision-independent**: images that must share a runtime must share this hash. Prefer it when
+  comparing two images, and use the ancestry test when judging one image on its own.
+
+**The pb10 FRTY acceptance image is included in this**, so it needs rebuilding on a post-`232d13b2` runtime
+before that boot; its own acceptance line says nothing about the runtime and would otherwise be read against an
+image that dies before it reaches the measurement.
+
 ## Gates before the hash is handed to synthesis
 
 Unchanged from every previous build, and none of them is evidence of synthesizability:
