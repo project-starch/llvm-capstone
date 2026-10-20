@@ -14,8 +14,8 @@
       "oracle": "completes; the defect is witnessed by PostgreSQL's own check or by the differential -- REACHED-SILENT (2026-10-04, probe run). Plain purecap rc=0, no fault. The cassert build's own MEMORY_CONTEXT_CHECKING fires: detected write past chunk end; bad chunk size; bad block offset; req size > alloc size; found inconsistent memory block. The overflow stays inside the palloc chunk, so CHERI is correct to stay silent -- but the defect provably executed.",
       "verdict": "MISSED",
       "evidence": "ran to the prompt with no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
+      "run": "run 2026-10-18 by shared/run-cheribsd.sh against the deployed purecap tree, with the paired control run recorded in results/2026-10-18-review/cheribsd-control",
+      "verdict_from": "results/2026-10-18-review/cheribsd-revocation/matrix.tsv cheribsd-revocation: silent"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",

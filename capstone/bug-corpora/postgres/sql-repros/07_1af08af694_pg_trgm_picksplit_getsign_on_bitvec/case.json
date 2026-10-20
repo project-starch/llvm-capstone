@@ -14,8 +14,8 @@
       "oracle": "the mechanism reports, or the case completes and it did not",
       "verdict": "MISSED",
       "evidence": "ran to the prompt with no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
+      "run": "run 2026-10-18 by shared/run-cheribsd.sh against the deployed purecap tree, with the paired control run recorded in results/2026-10-18-review/cheribsd-control",
+      "verdict_from": "results/2026-10-18-review/cheribsd-revocation/matrix.tsv cheribsd-revocation: silent"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
@@ -33,6 +33,7 @@
   "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle. The physical spatial/sublet pair measured 2026-10-06 to 2026-10-10 stays in results/",
   "nested": true,
   "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it.",
+  "note": "OPEN: this cell's attribution is the weakest in the corpus, and the 2026-10-20 review asked for it to be re-measured rather than re-argued. SCHEMA.md permits a fault_sites list justified from the source, and this one is -- the chain above has no branch. But on this case the list is also the ONLY thing that attributes the fault: shared/run-arm.py:355 runs control.sql only `if o.fault and o.reached and not o.attribution`, so once pg_popcount_optimized matched the pc, the paired control never ran, and the CAUGHT rests on a hand-written list instead of on a measurement. What settles it is one run of this arm with fault_sites absent, which makes the same fault unattributed and sends the runner to control.sql -- the same index build over sparse rows only. That run is NOT in this PR. It needs the virtual kit's QEMU, and a run through it takes ~/.capstone-locks/qemu.lock, which on this host is held for the lifetime of a persistent pinned VM; the attempt on 2026-10-20 blocked on the lock and was stood down rather than take that VM away from another lane's live run. The declaration is therefore left exactly as the committed bundle measured it, so the record and its evidence still agree, and the question stays open and visible here instead of being closed by argument. Everything the re-run needs is still on disk and hash-identical to the bundle: image /tmp/capstone/pgsrv-pools/image/postgres.dom (sha256 8b2c61fa..., as results/2026-10-18-review/virtual-pg-pools/inputs.json records), fixture /tmp/capstone/pgfix16b/cluster (cluster_tree_sha256 99998880...) and kit /tmp/capstone/kit-pinned (platform.qemu ff8eb824...).",
   "fault_sites": [
     "gtrgm_picksplit",
     "pg_popcount_optimized"
