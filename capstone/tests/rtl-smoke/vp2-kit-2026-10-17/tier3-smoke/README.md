@@ -4511,3 +4511,19 @@ vm_ioctl's CSRUNV:
 - FRTY 0, DRT1 0, and 21 release lines, each fully succeeded.
 - **03 or 07 reaching its trigger on tree B** would make the failures bitstream-dependent. That is information about
   S-29's flush, which is the only RTL difference between the trees.
+
+### fault-regs-1's own Tier 1 boot, pre-registered (2026-10-20 10:1x, before the boot): board 2 after sql0-nf2B
+
+The compiler lane's fault-regs-1 (lane module-fault-regs a486a9666fd9; board module 0d92d06a2abc6298): node-floor-2
+(54d8a3af, the module of sql0-nf2A and sql0-nf2B) plus the FREG fatal-fault dump, so it is one variable against them.
+Its QEMU Tier 1 equals nf2's (PASS 30/45, FREG 8 = the 8 exit-139 tests).
+- **The chain:** `tier3-smoke/chain-fr1-b2.sh` 585b2dad3e7fc579 → `board-tier12/srz/run-tier1-fr1-b2.sh`
+  0569cf9bd51656a7.
+- **The image and firmware:** image-rev7-fr1 a886326e314636bd (`fr1-prep.sh` ca3657683a719587, the
+  module checked in rootfs.cpio) and firmware e24b525b6937a5ac.
+- **The gate:** the rungs equal t1-old's.
+- **Also read:** the banner fault-regs-1; the release lines (this base has them); the FREG blocks, at least one at
+  vm-contract's stale fault, with x0's low word = the fault pc, as the silicon positive control.
+- **On PASS** it writes CHAIN_FR1_GO for the sql0 dump arm. That arm is pre-registered separately, when the compiler
+  lane's `_bt_check_unique` diag image arrives.
+- **Its dry run,** stubbed: PASS, FAIL, and a start on sql0-nf2B's VOID too.
