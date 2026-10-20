@@ -4437,3 +4437,30 @@ The compiler lane's follow-up.
 23 and 23-control, each with a FREG block as in cpyp-DF.
 - **If p clears pc=0 on silicon,** the prediction is wrong, and R-60's alias-on-access is the next suspect.
 - Either way, cells 03/17/23 and FRTY/DRT1 are read beside it.
+
+### pb10's srz-rc arm, result (2026-10-20 09:21-09:37, board 2, tree B): the flush alone does NOT heal; the VALUE change does
+
+`records/pb10-rc.result-lines.txt` and its board record. UNGATED.
+- **The rc module's Tier 1 (t1-rc):** PASS, with the four rungs as t1-old's, the banner srevroot-rcf-1, and DRT1 0, DRTX
+  0, no Oops.
+- **pb10-rc** (c8c8a6f2): FRTY 2 at 00F13DDC, which decodes against its own .ko to vm_ioctl+0xa98, the CSRUNV successor:
+  `csrc 0x5c1, s3`, the arm's own non-value-changing write. DRT1 0, no Oops, 4 of 4 cells.
+
+**The three-way on pb10,** each on the same kit with only the .ko changed, and pb10's site the instruction after
+vm_ioctl's CSRUNV:
+
+| arm | the instruction at CSRUNV+4 | write | flush | srevroot value change | FRTY |
+|---|---|---|---|---|---|
+| pb10-nop | nop | no | no | no | 2 |
+| pb10-rc | csrrc x0, 0x5c1, rA | yes | yes | no | 2 |
+| pb10-srzc | csrw 0x5c1, x0 | yes | yes | yes | 0 |
+
+- **So what heals pb10's refused fetches is the VALUE change of srevroot.** On the compiler lane's RTL reading, that
+  is the value-keyed tracker forget pulse (`revnode_ns_flush_o`, ex_stage.sv:1417/1420) or the namespace flag
+  (vctx_table_o), not the CSR write's commit flush.
+- **The arm's stated caveat** (whether the switcher's walk can overlap the next CSR, so csrrc reads a stale value) would,
+  if it bit, make csrrc write a CHANGED value and heal, like srz. It did not heal, so the caveat does not produce this
+  reading.
+- **No recorded mechanism yet says WHY a value change at CSRUNV+4 matters for the fetch at CSRUNV+4.** The anomaly is
+  narrowed to "the forget pulse or the flag", not explained. N=1 per arm, all on tree B.
+- **Bundle:** ffmpeg/pool-repros results/2026-10-20-vp2c-treeB/vp2-nested-pools-rc.
