@@ -3,7 +3,8 @@
 
 PASS needs all of: runcpu exited 0; SPEC's log reports "Success: 1x<bench>" and no error for it;
 the invocation records exist and none was refused; the benchmark's own executable ran in the
-guest (route "guest") and every guest invocation exited 0 without a domain fault.
+guest (route "guest") and every guest invocation exited 0 without a domain fault; at least one SPEC
+tool (specdiff) ran on the host and every host tool exited 0.
 usage: verdict.py OUT BENCH SIZE RUNCPU_RC START END [LABEL]
 Also records, without judging them: SPEC's reported seconds, the launcher's CAPSTONE_VM_STATS counters
 of every guest invocation (from the run directory's .err files) and the QEMU process's usage."""
@@ -46,6 +47,14 @@ for r in guest:
     g = (r.get("detail") or {}).get("guest") or {}
     if r["status"] != 0 or g.get("kind") != "exit" or g.get("value") != 0 or g.get("fault"):
         reasons.append(f"guest invocation {os.path.basename(r['exe'])} ended {g or r['status']}")
+# SPEC's own validation ran (specdiff, or imagevalidate, through the wrapper's host route) and every
+# host tool exited 0; the success banner alone is not taken as evidence.
+tools = [r for r in records if r["route"] in ("host-spec-tool", "host-ldecod")]
+if not any(r["route"] == "host-spec-tool" for r in records):
+    reasons.append("no SPEC tool ran on the host: nothing was validated")
+for r in tools:
+    if r["status"] != 0:
+        reasons.append(f"host tool {os.path.basename(r['exe'])} exited {r['status']}")
 stub = os.path.join(out, "perl-pack-stub.jsonl")
 # Measurements, recorded as read.
 reported = None

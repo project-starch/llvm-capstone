@@ -20,6 +20,7 @@ mapfile -t BENCH < <(python3 -c "import json,sys;print('\n'.join(json.load(open(
 if [ -n "${BENCHMARKS:-}" ]; then read -r -a BENCH <<< "$BENCHMARKS"; fi   # a subset, as for build.sh
 mapfile -t LABELS < <(python3 -c "import json,sys;print('\n'.join(json.load(open(sys.argv[1]))))" "$BREC/arms.json")
 IFS=, read -r -a CPU <<< "$CPUS"
+[ "$(printf '%s\n' "${CPU[@]}" | sort -u | wc -l)" = "${#CPU[@]}" ] || { echo "compare: the CPU list repeats a CPU" >&2; exit 2; }
 A=${#LABELS[@]}
 [ $(( ${#CPU[@]} % A )) = 0 ] && [ ${#CPU[@]} -ge $A ] || { echo "compare: the CPU list must hold whole groups of $A (one CPU per arm), ${#CPU[@]} given" >&2; exit 2; }
 GROUPS_N=$(( ${#CPU[@]} / A ))
@@ -38,12 +39,14 @@ plan = {"size": size, "repetitions": reps, "max_load": max_load, "labels": label
 json.dump(plan, open(out, 'w'), indent=1)
 PY
 log "plan: $A arms (${LABELS[*]}), ${#SORTED[@]} benchmarks, $REPS repetitions, size $SIZE, $GROUPS_N groups of $A CPUs, max load $MAX_LOAD"
-# Load sampler, until the runs are done.
+# Load sampler, until the runs are done. A guest's QEMU carries its state directory (tools/run.sh puts
+# it under CAPSTONE_SPEC_VM_STATES) and this platform's binary on its command line.
+STATES=$(readlink -f "${CAPSTONE_SPEC_VM_STATES:-$HOME/.capstone-spec-vm}" 2>/dev/null || echo "${CAPSTONE_SPEC_VM_STATES:-$HOME/.capstone-spec-vm}")
 ( while [ ! -f "$OUT/RUNS_DONE" ]; do
     printf '%s\t%s\t' "$(date -u +%FT%TZ)" "$(cut -d' ' -f1-3 /proc/loadavg)"
     for p in /proc/[0-9]*; do
       [ -r "$p/cmdline" ] || continue
-      case "$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null)" in "$PL/qemu-system-riscv64 "*"$OUT/"*) printf '%s:%s ' "${p#/proc/}" "$(awk '{print $14+$15}' "$p/stat" 2>/dev/null)";; esac
+      case "$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null)" in *"qemu-system-riscv64 "*"$STATES/"*) printf '%s:%s ' "${p#/proc/}" "$(awk '{print $14+$15}' "$p/stat" 2>/dev/null)";; esac
     done; echo
     sleep 60
   done ) > "$OUT/load.tsv" 2>/dev/null &
@@ -67,14 +70,23 @@ for rep in $(seq 1 "$REPS"); do
   free=(); for g in $(seq 0 $((GROUPS_N - 1))); do free+=("$g"); done
   for b in "${SORTED[@]}"; do
     while [ ${#free[@]} = 0 ]; do
-      wait -n -p done_pid "${!busy[@]}" || true
-      [ -n "${done_pid:-}" ] && { free+=("${busy[$done_pid]}"); unset "busy[$done_pid]"; }
+      # One finished benchmark frees its group. `wait -n` names it; when it returns without a pid
+      # (127: a child it no longer knows), the busy pids are checked one by one instead.
+      done_pid=
+      wait -n -p done_pid "${!busy[@]}" 2>/dev/null || true
+      if [ -z "$done_pid" ]; then
+        for pid in "${!busy[@]}"; do
+          if ! kill -0 "$pid" 2>/dev/null; then wait "$pid" 2>/dev/null || true; done_pid=$pid; break; fi
+        done
+        [ -n "$done_pid" ] || sleep 30
+      fi
+      if [ -n "$done_pid" ] && [ -n "${busy[$done_pid]:-}" ]; then free+=("${busy[$done_pid]}"); unset "busy[$done_pid]"; fi
     done
     g=${free[0]}; free=("${free[@]:1}")
     triple "$rep" "$b" "$g" & busy[$!]=$g
     log "rep $rep $b started on group $g (CPUs ${CPU[*]:$((g * A)):$A})"
   done
-  [ ${#busy[@]} = 0 ] || wait "${!busy[@]}"
+  for pid in "${!busy[@]}"; do wait "$pid" 2>/dev/null || true; done
   for b in "${SORTED[@]}"; do for lab in "${LABELS[@]}"; do
     log "rep $rep $lab $b $(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(d['verdict'],d.get('reported_seconds'),'s qemu',d.get('qemu_cpu_seconds'),'s |',';'.join(d['reasons']))" "$OUT/rep$rep/$lab/$b/result.json" 2>&1)"
   done; done

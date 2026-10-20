@@ -33,6 +33,11 @@
     "502.gcc_r": "packages/502.gcc_r.capstone.cpu2017.v1.0.tar.xz",
     "505.mcf_r": "packages/505.mcf_r.capstone.cpu2017.v1.0.tar.xz"
   },
+  "srcalt_sha256": {
+    "500.perlbench_r": "02d434e4140bbf6699a14e4806f1831761afc00579e42207c4fb8da1d91b3ee8",
+    "502.gcc_r": "7df4c247746b252226e3f53d2603db2134493a1f52d9093a27b04b8a426b334a",
+    "505.mcf_r": "0affe861fa0db7baeb829598c0b4179d8cfa3faa3c629990a037aeb8c0eac4fd"
+  },
   "toolchain": {
     "repository": "https://github.com/project-starch/llvm-capstone",
     "base": "77983c438fcbea46a13466616faaf994ee19c8f4",
@@ -171,17 +176,17 @@
         "what": "PR #279 virtual heap switches CAPSTONE_HEAP_LIFETIMES / CAPSTONE_HEAP_SCRUB_FREE"
       }
     ],
-    "commit": "954b77c12813252a0d9fa7f197db1c585aba6ac4",
-    "tree": "fcb729ac892a3ded7ea60da1affb5505a76bc36b",
+    "commit": "f4f58b023ed34a97a5d1e616d359208a81ebd68e",
+    "tree": "bb1daf2d450b46848f47fb353cbac5641e559faf",
     "archive": {
-      "file": "llvm-capstone-954b77c12813252a0d9fa7f197db1c585aba6ac4.tar.zst",
-      "sha256": "bfbdeaf4830ee4a4f801c877976143f9dd755f17c3e629b3f4249e69c68a86a6",
+      "file": "llvm-capstone-f4f58b023ed34a97a5d1e616d359208a81ebd68e.tar.zst",
+      "sha256": "979e5bb366009aa3b030594eeb7e4a3885ce14a0d73b6e7783976b0fa09fc2ef",
       "made_by": "git archive --format=tar --prefix=llvm-capstone/ COMMIT | zstd -T0"
     },
     "bundle": {
       "file": "integration-pr-commits-3.bundle",
-      "sha256": "dc5c965d2579c01c1d62164ba711cae0c3cc63861fabe50f0fccb7c52d29df0e",
-      "note": "the 23 PR heads and the integration head (its ancestors include the resolution merge); needs the public dev commits"
+      "sha256": "9edf0b157b60e4ae1f8ccf9d2b542a6aae6e8c7662798397ae0b2f18b045d0a1",
+      "note": "optional: the 23 PR heads and the integration head as of 2026-10-20, for the day a head moves"
     },
     "musl": {
       "file": "musl-1.2.5.tar.gz",
@@ -189,10 +194,10 @@
     },
     "build": {
       "recipe": "recipes/toolchain.sh",
-      "status": "PENDING: the p12 build of this commit fills host, clang_sha256, libc_sha256 and sdk_inventory_sha256"
+      "source_note": "the build host's toolchain-v4 (2026-10-20, the quick test and the train campaign) was built from the archive of commit 954b77c12813252a0d9fa7f197db1c585aba6ac4 (tree fcb729ac892a3ded7ea60da1affb5505a76bc36b), which differs from this tree in capstone/runtime/virtual/hosted-contract.c only: the first keep-both resolution had been computed under merge.conflictStyle=diff3 and kept a ||||||| marker with the base text. That file is a test source and no input of the compiler, the libc or the SDK; the rebuild from this archive on a second host is recorded below.",
+      "status": "PENDING: build hashes"
     },
-    "merge_policy": "recipes/integration.sh: merge-tree in this order; a documentation-only conflict takes the base side; the one code conflict takes the recorded resolution commit",
-    "bundle_note": "optional: artifacts/sources/integration-pr-commits-3.bundle (sha256 dc5c965d2579c01c1d62164ba711cae0c3cc63861fabe50f0fccb7c52d29df0e) holds the 23 PR heads as of 2026-10-20 for the day a head moves; recipes/integration.sh fetches the public pull refs otherwise"
+    "merge_policy": "recipes/integration.sh: merge-tree in this order; a documentation-only conflict takes the base side; the one code conflict takes the recorded resolution commit"
   },
   "platform": {
     "qemu": {
@@ -246,8 +251,8 @@
   },
   "runtime": {
     "note": "the SDKs are built from the toolchain tree itself: PR #279 (the heap switches) is one of its merges, so no patch is applied",
-    "commit": "954b77c12813252a0d9fa7f197db1c585aba6ac4",
-    "tree": "fcb729ac892a3ded7ea60da1affb5505a76bc36b",
+    "commit": "f4f58b023ed34a97a5d1e616d359208a81ebd68e",
+    "tree": "bb1daf2d450b46848f47fb353cbac5641e559faf",
     "files": {}
   },
   "toolchain_previous": {

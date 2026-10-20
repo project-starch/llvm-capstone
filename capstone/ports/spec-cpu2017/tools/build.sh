@@ -48,13 +48,14 @@ note "kit $(git -C "$KIT" rev-parse HEAD 2>/dev/null || echo unknown) $(git -C "
 # src.alt packages, exactly the manifest's. They are SPEC-derived and live outside this public
 # directory: CAPSTONE_SPEC_PACKAGES names the private kit that holds packages/ (default: this kit).
 PKG=${CAPSTONE_SPEC_PACKAGES:-$KIT}
-while read -r b p; do
+while read -r b p want; do
   [ -f "$PKG/$p" ] || fail "package $p is missing under $PKG (set CAPSTONE_SPEC_PACKAGES to the private kit)"
-  (cd "$(dirname "$PKG/$p")" && sha256sum -c --quiet "$(basename "$p").sha256") || fail "$p does not match its .sha256"
+  got=$(sha256sum "$PKG/$p" | cut -c1-64)
+  [ "$got" = "$want" ] || fail "$p is $got, the manifest says $want"
   specxz -dc "$PKG/$p" | spectar -xf -
   [ -d "benchspec/CPU/$b/src/src.alt/capstone" ] || fail "$p did not install benchspec/CPU/$b/src/src.alt/capstone"
-  note "srcalt $b $(cut -c1-64 "$KIT/$p.sha256") $(basename "$p")"
-done < <(python3 -c "import json,sys;[print(b,p) for b,p in json.load(open(sys.argv[1]))['srcalt'].items()]" "$M")
+  note "srcalt $b $got $(basename "$p")"
+done < <(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));[print(b,p,d['srcalt_sha256'][b]) for b,p in d['srcalt'].items()]" "$M")
 # SDKs and the compiler (one compiler for all arms).
 for label in "${LABELS[@]}"; do
   sdk=${SDK[$label]}
@@ -99,7 +100,7 @@ echo "${arms_json%, }}" | python3 -m json.tool > "$REC/arms.json"
 if [ ${#LABELS[@]} -gt 1 ]; then
   for label in "${LABELS[@]}"; do
     for b in "${BENCH[@]}"; do
-      d=$(ls -d "benchspec/CPU/$b/build/build_base_${label}."[0-9][0-9][0-9][0-9] 2>/dev/null | tail -1)
+      d=$({ ls -d "benchspec/CPU/$b/build/build_base_${label}."[0-9][0-9][0-9][0-9] 2>/dev/null || true; } | tail -1)
       [ -n "$d" ] || fail "no build directory for $b $label"
       ( cd "$d" && find . -name '*.o' -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sed "s|^|$b |" )
     done > "$REC/objects-$label.txt"
@@ -108,7 +109,7 @@ if [ ${#LABELS[@]} -gt 1 ]; then
   done
   for label in "${LABELS[@]:1}"; do
     if ! cmp -s "$REC/objects-${LABELS[0]}.txt" "$REC/objects-$label.txt"; then
-      diff "$REC/objects-${LABELS[0]}.txt" "$REC/objects-$label.txt" | head -20 >&2
+      { diff "$REC/objects-${LABELS[0]}.txt" "$REC/objects-$label.txt" || true; } | head -20 >&2
       fail "objects differ between ${LABELS[0]} and $label (above): the arms do not differ by their SDK alone"
     fi
   done

@@ -72,7 +72,7 @@ for label in "${LABELS[@]}"; do
   for other in "$first" toolchain; do
     [ "$dir" = "$other" ] && continue
     # (diff exits 1 when the archives differ and grep exits 1 when they do not; under pipefail neither may end the recipe)
-    differ=$({ diff "$W/members-$other.txt" "$W/members-$dir.txt" || true; } | { grep '^>' || true; } | awk '{print $3}' | tr '\n' ' ')
+    differ=$({ diff "$W/members-$other.txt" "$W/members-$dir.txt" || true; } | { grep -E '^[<>]' || true; } | awk '{print $3}' | sort -u | tr '\n' ' ')
     note "members $dir vs $other: ${differ:-none}"
     [ "$differ" = "./heap.c.obj " ] || [ -z "$differ" ] || fail "$dir differs from $other in more than heap.c.obj: $differ"
   done

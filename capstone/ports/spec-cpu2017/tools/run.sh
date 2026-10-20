@@ -25,8 +25,9 @@ export CAPSTONE_QEMU_LOCK=$OUT/qemu.lock
 # The guest's state directory must be short: capstone_vm puts an SSH socket in it, and a Unix socket
 # path is limited to 107 bytes (a run under rep1/capstone-spatial-scrub/538.imagick_r/ overflowed).
 # OUT/vm is a symlink to a short directory named by a hash of OUT, which capstone_vm resolves.
-VMSTATE=${CAPSTONE_SPEC_VM_STATES:-$HOME/.capstone-spec-vm}/$(printf '%s' "$OUT" | sha256sum | cut -c1-12)
-mkdir -p "$(dirname "$VMSTATE")"; mkdir -m 700 "$VMSTATE"; ln -s "$VMSTATE" "$OUT/vm"   # capstone_vm insists on 0700
+STATES=$(mkdir -p "${CAPSTONE_SPEC_VM_STATES:-$HOME/.capstone-spec-vm}" && cd "${CAPSTONE_SPEC_VM_STATES:-$HOME/.capstone-spec-vm}" && pwd -P)
+VMSTATE=$STATES/$(printf '%s' "$OUT" | sha256sum | cut -c1-12)
+mkdir -m 700 "$VMSTATE"; ln -s "$VMSTATE" "$OUT/vm"   # capstone_vm insists on 0700; the path is canonical (QEMU's argv carries it)
 vm() { env PYTHONPATH="$VMHOST" python3 -m capstone_vm --state "$OUT/vm" "$@"; }
 mem=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['platform']['vm']['memory'])" "$M")
 share=$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['platform']['vm']['share_model'])" "$M")

@@ -26,7 +26,7 @@ def max_load_between(start, end):
     vals = [l for t, l in load if start <= t <= end]
     return max(vals) if vals else None
 print(f"# {plan['size']}: {', '.join(labels)}; {reps} repetition(s); host load bound {plan['max_load']}\n")
-print("| benchmark | arm | reported s per repetition | median | ratio to " + base + " | QEMU CPU s (median) | nodes / collections / faults (sum over invocations, rep 1) | flagged repetitions |")
+print("| benchmark | arm | reported s per repetition | median | ratio to " + base + " | QEMU CPU s (median) | nodes / collections / faults (sum over invocations, first passing repetition) | flagged repetitions |")
 print("|---|---|---|---|---|---|---|---|")
 for b in bench:
     base_ok = [r["reported_seconds"] for r in results(base, b) if r and r["verdict"] == "PASS" and r["reported_seconds"] is not None]
@@ -37,10 +37,12 @@ for b in bench:
         ok = [s for s in secs if s is not None]
         med = statistics.median(ok) if ok else None
         ratio = f"{med / base_median:.3f}" if med and base_median else "--"
-        cpu = [r["qemu_cpu_seconds"] for r in rs if r and r.get("qemu_cpu_seconds") is not None]
+        passed = [r for r in rs if r and r["verdict"] == "PASS"]
+        cpu = [r["qemu_cpu_seconds"] for r in passed if r.get("qemu_cpu_seconds") is not None]
         cpu_med = f"{statistics.median(cpu):.0f}" if cpu else "--"
-        st = rs[0]["vm_stats"] if rs and rs[0] else []
+        st = passed[0]["vm_stats"] if passed else []
         counters = "/".join(str(sum(s.get(k, 0) for s in st if isinstance(s.get(k, 0), int))) for k in ("nodes", "collections", "faults")) if st else "--"
+        first_pass = next((i for i, r in enumerate(rs, 1) if r and r["verdict"] == "PASS"), None)
         flagged = []
         for i, r in enumerate(rs, 1):  # noqa: the run's own start/end bracket the load samples
             if not r: flagged.append(f"{i}:missing"); continue

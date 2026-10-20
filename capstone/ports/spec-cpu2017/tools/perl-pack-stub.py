@@ -10,17 +10,19 @@ by a pass() that says why. Those 4 of pack.t's checks do not run; perlbench's
 test.out reports per test file ("t/op/pack ... ok"), so the file still counts.
 
 Fails closed: the file must be SPEC 1.0.2's pack.t or this script's output of
-it; anything else is refused. The file is replaced, not edited in place, so a
+it (both pinned by hash, as are the four lines); anything else is refused. The file is replaced, not edited in place, so a
 hard link to SPEC's data/ copy is never written through. Prints one JSON line.
 usage: perl-pack-stub.py RUNDIR/t/op/pack.t"""
 import hashlib, json, os, sys
 
 PRISTINE = "b3e0961f7898f5bd40d0b2e22e54e522a1769fdba670b6e1be212a5a7f17a9f5"
 STUBBED = "e32d7f517eb98a9d4757b9ef411c84654cff4f0c9af6c55384c590927cfb3830"
-CHECKS = ['is(unpack("p>",pack("p>","foo")), "foo");',
-          'is(unpack("p>",pack("p>",239)), 239);',
-          'is(unpack("p", $up), "abc\\xa5", "unpack p upgraded");',
-          'is(unpack("P7", $up),   "abc\\xa5\\x00\\xfed", "unpack P upgraded");']
+# The four checks, named by the sha256 of their text (the text itself is SPEC's perlbench source and
+# stays out of this public kit); each is one whole statement on its own line of pack.t.
+CHECK_HASHES = ["3b00d69b8dfc37b2dbb5dbdb9e44ecf27bd2e278d24dc695f78c67c85a935968",
+                "c5165209f24b54b5e102de6fed7b6eba49a62299400365bd7acf1d8aa9ec623f",
+                "a96919cd0cc9be6fb8306aaa832cdf15a34f7ee200fa3a0c8422c9d0cd344c34",
+                "10535f2bef073e4f6ad7135e7eb421967f13f03092c46dd74fa4de2fab441467"]
 STUB = 'pass("skipped: a pointer rebuilt byte by byte carries no capability tag");'
 
 path = sys.argv[1]
@@ -32,12 +34,18 @@ if before == STUBBED:
 elif before != PRISTINE:
     sys.exit(f"perl-pack-stub: {path} is neither the pristine nor the stubbed pack.t ({before})")
 else:
-    s = data.decode("latin-1")
-    for check in CHECKS:
-        if s.count(check) != 1:
-            sys.exit(f"perl-pack-stub: expected exactly one {check!r}")
-        s = s.replace(check, STUB)
-    out = s.encode("latin-1")
+    lines = data.decode("latin-1").split("\n")
+    found = {}
+    for i, line in enumerate(lines):
+        h = hashlib.sha256(line.strip().encode("latin-1")).hexdigest()
+        if h in CHECK_HASHES:
+            found.setdefault(h, []).append(i)
+    if sorted(found) != sorted(CHECK_HASHES) or any(len(v) != 1 for v in found.values()):
+        sys.exit(f"perl-pack-stub: expected each of the four checks exactly once, found {dict((k[:8], len(v)) for k, v in found.items())}")
+    for i in (v[0] for v in found.values()):
+        indent = lines[i][:len(lines[i]) - len(lines[i].lstrip())]
+        lines[i] = indent + STUB
+    out = "\n".join(lines).encode("latin-1")
     after = hashlib.sha256(out).hexdigest()
     if after != STUBBED:
         sys.exit(f"perl-pack-stub: output {after} is not the pinned {STUBBED}")

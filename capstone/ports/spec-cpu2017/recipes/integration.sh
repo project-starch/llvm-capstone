@@ -19,7 +19,8 @@ done
 python3 - "$M" "$G" <<'PY'
 import json, os, re, subprocess, sys, tempfile
 m = json.load(open(sys.argv[1]))['toolchain']; g = sys.argv[2]
-git = lambda *a, **kw: subprocess.run(['git', '-C', g, *a], capture_output=True, text=True, **kw)
+# merge-tree writes the conflict markers the keep-both rule parses: the plain style, whatever the host's config.
+git = lambda *a, **kw: subprocess.run(['git', '-C', g, '-c', 'merge.conflictStyle=merge', *a], capture_output=True, text=True, **kw)
 def keep_both(conflicted_tree, paths):
     """The one resolution rule: in each named file, every conflict hunk keeps both sides, ours then theirs."""
     env = dict(os.environ, GIT_INDEX_FILE=tempfile.mktemp(prefix='kit-index-'))
@@ -34,6 +35,10 @@ def keep_both(conflicted_tree, paths):
     os.unlink(env['GIT_INDEX_FILE']); return tree
 head = m['base']
 for step in m['merges']:
+    if 'pr' in step:
+        ref = git('rev-parse', '--verify', '-q', f"refs/kit-pr/{step['pr']}").stdout.strip()
+        if ref and ref != step['commit']:
+            print(f"note: PR #{step['pr']}'s head is now {ref[:12]}; the manifest pins {step['commit'][:12]} and that is what is merged")
     if git('cat-file', '-e', step['commit'] + '^{commit}').returncode:
         sys.exit(f"commit {step['commit']} of PR #{step.get('pr', '?')} is not available: fetch failed, or the PR's head moved and no bundle holds it")
     r = git('merge-tree', '--write-tree', '--name-only', head, step['commit'])
