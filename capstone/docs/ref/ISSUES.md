@@ -3929,6 +3929,10 @@ RETURN" rule applied to privilege rather than to control flow.
 >   silicon-mimic QEMU, but the qkit7-* wrappers and the Tier 3 drivers never set it (checked: no MOVC_NULL in the
 >   qkit7-rev2, -nf2 or -fr1 wrappers). So every vp2 kit prediction assumed a kept integer source, which silicon does not
 >   keep. A board cell that differs from its kit prediction should be checked against this first.
+> - **THE LEAD'S DECISION (2026-10-20): remedy (b).** Until Q-04 (b) is on a bitstream, board-bound corpus images are
+>   rebuilt WITHOUT `+movc-keeps-integer-source`, and their QEMU references are re-recorded. The silicon-mimic kits
+>   (`qkit7-*-mn`, with the switch set; the compiler lane) stay as a cross-check: on a rebuilt image they and the plain
+>   kits should agree.
 > - **Remedies:**
 >   - (a) set the switch in the kits and re-predict, which is a kit change and a re-pin;
 >   - (b) build board images without `+movc-keeps-integer-source`, so the compiler's CapstoneLiveSourceCopy rewrites
