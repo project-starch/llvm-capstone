@@ -4703,3 +4703,16 @@ evidence, so both trees read the remedy at once.
 - **It starts on SQL_NMB_GO,** written together with SQL_NM_GO.
 - **Predictions:** sql0-nmA's, on tree B. sql0-nf2B read as sql0-nf2A in every cell, so a tree difference here would
   be new.
+
+### sql0-nmA/nmB GO evidence (2026-10-20 12:58, QEMU, read here)
+
+- **r2** (t3-sql-nomovc-r2, the repeat): compare-pilot r1 vs r2 reads 9 of 9 cells the same, rc 0. A planted flip
+  (one MISSED made CAUGHT in a copy of r2) reads 8 of 9, rc 1.
+- **-mn** (t3-sql-nomovc-mn, kit qkit7-nf2-mn, the silicon MOVC rule): 21/21 sessions, **ltree and pg_trgm created**,
+  CAUGHT 2 (02, 03 at memcpy) and MISSED 7. compare-pilot r1 vs -mn reads 9 of 9, rc 0.
+- **The two-sided check:** the old image 64010720 under the same -mn kit (t3-sql-nf2mn-r1) reads 03 and 07 as
+  "this image cannot create ltree / pg_trgm", exactly the board's failure. The rebuilt image under it does not.
+- **The MOVC-NULL one-shot count is NOT an image gate.** Both -mn runs, old and rebuilt, print the same single line:
+  `pc=0x80021d80 rd=x10 rs1=x9 val=0x1 priv=3`, a firmware pc in M-mode. It is one-shot per QEMU process, so it is spent
+  before the image runs. The cell pair above is the gate.
+- So SQL_NM_GO and SQL_NMB_GO are written. The predictions stand as pre-registered.
