@@ -247,6 +247,50 @@ the remaining sequencing is just **the corpus and kit images rebuilt from dev be
 W1's reading changing from PASSES to FAILS as intended. An image built before that commit still carries the
 hoisted-cursor pattern and would fail the acceptance boots for a reason that is not a defect.
 
+## (5) Q-04 (b): MOVC must KEEP an untagged source
+
+**Ruled already, and not by this lane**: the project lead decided Q-04 on 2026-10-14, option 1 -- MOVC keeps an
+untagged source and consumes every tagged non-NONLIN one. `ref/ISSUES.md` Q-04 records the decision and that
+**"RTL change Q-04 (b) NOT YET APPLIED"**, and `plans/2026-10-14-movc-untagged-source.md` holds the exact diff,
+the directed tests, the regression, and the synthesis and board predictions. **This item does not restate any of
+that.** It is here because the change touches `core/` and so rides this batch, and because two synthesis
+questions the plan leaves open are answered below.
+
+**The defect, confirmed at source** (`capstone_flu_unit.anvil:6-27`, read on `c7e6f604f`). `func MOVC` has three
+paths: `rs1 == rd` preserves; `cap_type == CAP_TYPE_NONLIN` keeps (`rs1` unchanged, `rd` = the source); and the
+`else` sends `create_cnull()` as the new `rs1`. **NOT_CAP falls into that `else`**, so every live-source integer
+MOVC with `rd != rs1` nulls its source. The diff is the plan's: add `|| (cap_type == NOT_CAP)` to the preserve
+condition at `:14`, each comparison parenthesised on its own because this language binds `||` tighter than `==`.
+
+**Why it matters more than its size suggests.** The compiler lane attributes the corpus's whole silicon-only
+`pc = 0` class to it -- cpython's three stops (`movc s2, a3; jalr a3` with `a3 = 0` in
+`_PyCfg_OptimizedCfgToInstructionSequence`) and sql0's cells 03 and 07 -- and reports that QEMU with
+`CAPSTONE_MOVC_NULL_SCALAR=1` reproduces all five at the same sites and registers with the predictions written
+first, while passing all five without the switch. **That attribution is theirs and is recorded as theirs**;
+this lane has not re-run it. The virtual SDK has compiled with `+movc-keeps-integer-source` since the ruling,
+which is why the divergence bites on vp2 and not under emulation.
+
+**The two synthesis answers, which are this item's own contribution:**
+- **No standing combinational loop touches the FLU.** None of the gate's 40 `UNOPTFLAT` stems names
+  `flu`/`movc` (checked against the lint output, not assumed), so the rule about feeding a new signal into a
+  loop cone does not bite here.
+- **The FLU's result endpoint IS the same shape as the DYN unit's** (`41331b04`'s finding): `_ep_res_0` is ONE
+  unregistered assign of 910 bits selected by a **58-way ternary chain** over its send sites. **But this edit
+  does not touch it**: it widens an existing branch's CONDITION and adds no send site, so the chain's width is
+  unchanged and the whole delta is one 3-bit compare and an OR feeding a condition the branch already
+  evaluates. That is the cheapest shape an FLU edit can have, and it is why the plan's "timing and area
+  essentially unchanged" prediction is credible rather than hopeful.
+
+**Acceptance.** The plan's step 2 list is the directed-test set and it is RICHER than a four-case arm: NOT_CAP
+zero and non-zero with `rd != rs1`; NOT_CAP with `rd == rs1`; LIN, REVOKE, UNINIT, SEALED, SEALEDRET and EXIT
+each consumed; NONLIN kept; `rd = x0` and `rs1 = x0` with each source kind; and the next instruction reading
+`rs1` then `rd`, which is the forwarding and dual-writeback case. Build to that list, not to a subset. Add the
+plan's step 3 regression (`tests/rtl-smoke/live-source-copy/`), and **a NEGATIVE arm on `c7e6f604f`**, which
+must read `rs1 = null` for the untagged source -- the field's bug, measured rather than asserted, which is what
+makes the fixed reading a pair. The plan's board numbers stand as given there (`movcprobe_kernel.h` 7 -> 49,
+the SQLite stage-50 probe 55, the Sublet -O2 image's lookaside slots 0 -> non-zero against the emulator's
+25,010); they are the plan's predictions and are not re-derived here.
+
 ---
 
 ## What the 95-test sweep does and does not certify for item (2)
