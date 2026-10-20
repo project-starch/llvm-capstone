@@ -4601,3 +4601,15 @@ On vp2, MOVC nulls an untagged integer source, while the corpus SDK compiles wit
   Q-04 (b) is in a bitstream. The compiler's CapstoneLiveSourceCopy then rewrites live-source copies, so silicon and QEMU
   agree whatever the RTL does.
 - The QEMU references are re-recorded for the rebuilt images.
+
+### cpyp-DFp, result (2026-10-20 10:28-11:14, board 1, tree A): pc=0 PERSISTS on the fixed-runtime image, as predicted (C-32)
+
+`records/cpyp-dfp.result-lines.txt`. UNGATED.
+- 10 of 10 steps ran. FRTY 0, DRT1 0, no Oops. The cells are as cpyp-DF: MISSED 2, NO-READING:unattributed 1.
+- **pc=0** appears once each in 17-control, 23 and 23-control, each with one FREG block:
+  - `kind=4 cause=12 pc=0`, x0's slot 0;
+  - **x1 = 3ff5321bfc ('*')**, image offset 0x321bfc, the same in all three.
+  - That is 0x18 below cpyp-DF's 0x321c14. The image differs (the runtime archive changed), so the offset moving is
+    expected. The compiler lane maps it to the call site.
+- **The runtime lane's prediction holds:** 232d13b2 (the out-of-window intermediate fix) does not touch MOVC, and the stop
+  is C-32's movc-then-jalr (ISSUES C-32, dev 3f606b097841), so it persists.
