@@ -597,6 +597,23 @@ things are missing:
   generation >= 1 exceeds 65536**, so a recycled node could never be retired; its record check compares no
   generation either. CSRETIRE of a stale `{g, i}` must answer 1 and change nothing.
 
+*TWO MORE GATES, found by reading the retire HANDLER and absent from the ruling's list* (written
+2026-10-20 with the RTL, capstone-ariane `4406a6702`). Both would have made a recycled id unretirable, and
+the first of them silently:
+- `capstone_rev_node.anvil`, the retire handler compared `rid >= *dry_limit` -- **the whole id against the
+  header's next-unused INDEX**. A recycled id carrying a generation >= 1 is numerically above any 16-bit
+  next-unused, so EVERY retire of a recycled node would be refused with status 1, which reads exactly like
+  a legitimate out-of-range refusal. Now `#{14'd0, rid[0+:16]} >= *dry_limit`;
+- the same handler's validity check was `node_in.valid == 1'd0` alone, with no generation term, so
+  CSRETIRE of a stale `{g, i}` would have retired the slot's NEW owner. Now both terms, as `:347` requires
+  and as the ruling demands ("CSRETIRE of a stale {g, i} must answer 1 and change nothing").
+
+**These two are a QEMU-PARITY obligation, not just an RTL fix.** Rule 5 requires QEMU's virtual profile to
+implement (1)-(3) identically, and `cap_rev_retire` has the same two decisions to make: bound the id by its
+INDEX against next-unused, and compare the record's generation before retiring. A kit built without them
+would predict REFUSE where the new RTL accepts, and ACCEPT a stale retire the new RTL refuses -- in both
+directions a divergence that reads as an RTL defect on the arm.
+
 *Lookup consumers that must see all 30 bits (rule 3).* The LSU revocation cache
 (`load_store_unit.sv:1301`, `:1416`, `:1437`, with `revnode_fill_id_i` 30 bits wide at `:211`) and the PC
 tracker (`commit_stage.sv:408-412`). Both already carry 30-bit ids; what makes them correct is the two
