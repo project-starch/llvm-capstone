@@ -4550,3 +4550,30 @@ Its QEMU Tier 1 equals nf2's (PASS 30/45, FREG 8 = the 8 exit-139 tests).
   - Not (b), since x1 is not 0, and not (c), since the slots carry '*' and entry_pcc's low word is non-zero.
 - **One deviation from the pre-registered wording:** the dump reports kind=4, not the kind-2 terminal escape the
   pre-registration names. That is the compiler lane's to read.
+
+### sql0-dumpB, pre-registered (2026-10-20 10:4x, before its boot): board 2 after fault-regs-1's Tier 1; two observation-only changes against sql0-nf2B
+
+- **The module:** fault-regs-1 0d92d06a2abc6298 (node-floor-2 plus the FREG dump). The kits are bkit7-rev2xBDF1 /
+  bkit7-rev2xmBDF1 (`make-fr1-kits.sh` a7f166941e9d6df2), sql0-nf2B's kits with only the .ko changed.
+- **The image:** DIAG-BTU a2bf0a6ed7c6784b (compiler lane pgdiag-btu dc9e65694a96, t3-cw/postgres-diag), the recorded
+  postgres build with only nbtinsert.o changed.
+  - The unmodified object reproduces the record. The duplicate-key ereport gains a HINT printing the existing equal index
+    tuple, the heap tid checked, and the new tuple, each with its raw bytes. The manifest names the patch (diag_patch).
+  - SDK-BUILTINS OK on postgres.dom.
+- **QEMU positive control** (the compiler lane, qkit7-nf2): a planted primary-key violation prints the line once. Case 03
+  prints none, since on QEMU it is CAUGHT at memcpy as usual.
+- **The runner:** `tier3-sql-arm-rev2s.sh` c5c33fde203dc07d, rev2r with the module, kits, image and trigger
+  changed, and READINGS in place of scoring, because a different image voids a cell comparison with the QEMU record.
+  - It reports the cells as information, every DIAG-BTU hint with its step, and every FREG block with its step.
+  - Its stubbed dry run reached SQL DONE with both kinds of reading and an empty cell list read as NO DATA.
+- **It starts on CHAIN_FR1_GO,** fault-regs-1's Tier 1 PASS.
+
+**The expectations:**
+- 03 and 07 fail as on sql0-nf2A/nf2B, if nf2B reads as nf2A.
+- 03's duplicate-key error now carries a DIAG-BTU hint: the two tuples silicon compared, with raw bytes. That is the
+  wrong VALUE that can be compared with QEMU's at the same point.
+- 07's pc=0 now carries a FREG block naming the jump's call site (x1).
+- **The compiler lane's candidate,** MOVC nulling an untagged integer source on vp2 (C-32/Q-04 (b); read from cpyp-DF's
+  dump: `movc s2, a3` left a3 = 0 before `jalr a3`), predicts 07's x1 at a call through a MOVC-copied integer. It
+  predicts no specific key for 03. The reading may show whether a zeroed integer fed the comparison.
+- **Not predicted:** S-23 (FRTY 0, DRT1 0 expected as nf2B), and 21 release lines.
