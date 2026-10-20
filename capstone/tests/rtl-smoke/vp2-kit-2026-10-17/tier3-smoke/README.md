@@ -5089,3 +5089,101 @@ repair.
   - wm1q15's images were built from dev d0f0f4b41ae6 (which holds the repair d75137deed6e) on the nomovc-cw SDK.
   - Its reference reads CAUGHT 22, NO-READING 1 on both kits, the shape of d75137deed6e's own tree-B reading.
   - Its runner and arm script are dev's, not wt-gate's, so it is pre-registered separately, after these sequences.
+
+### Board 1's pass sequence, result (2026-10-20 16:48-19:04, tree A): 11 arms, every cell the same in every field; a FALSE stop after pgm0
+
+`records/pass-seq-b1.result-lines.txt`. UNGATED.
+- **Every graded cell equals its reference in every field:**
+  - fph 25/25, fpt 13/13, fca 13/13, fcs 13/13, fso 9/9;
+  - mph 9/9, mpt 3/3, wph 12/12, wpt 10/10;
+  - pgc 5/5, pgm0 5/5.
+  - That is 117 of 117 cells. Every boot reads pc=0 0, DRT1 0, FRTY 0, no Oops, the banner, and INJS 0 / INJL 0.
+- **No Q-31 or R-60 shape** appeared in these arms.
+- **The sequence STOPPED after pgm0 on "the boot did not complete", and that was false.**
+  - pgm0's transcript ends with `RESULT vbatch retval=0` and `### RUNG 3 vbatch END rc=0 ###`, and its cells read 5 of 5.
+  - The completion test grepped the runner's log for "virtual boot: completed", which run-defects.py (pgm) never prints.
+  - The dry run could not catch it: its stub printed that phrase for every runner kind, which is the assumption under
+    test, so the check was never fed the real pgm output.
+  - The rule was already written ("a gate needs a known-good input too": dry-run on the passing transcript). This lane did
+    not apply it to each runner kind.
+  - pgm1, pym0 and pym1 did not run.
+
+**Pre-registered here, before their boots: pgm1, pym0, pym1 on board 1 (tree A), through `tier3-pass-seq2.sh` .**
+- tier3-pass-seq.sh with ONE change: completion is read from the driver's own transcript (`### RUNG <n> vbatch END rc=0 ###`).
+  - That line is present in every completed pass boot of each kind (cases, pgc, pgm, appvm, sql0).
+  - It is absent from a panicked boot (sql0-treeA) and a wedged one (wm0 on 2026-10-18), which end at b0-hello.
+  - It is a new file because board 2's chain is executing tier3-pass-seq.sh. Its three arms (run-virtual-cases) print the
+    phrase the old test expects, as fph-pgc did here.
+- Spec board1b : the three lines of board1.spec, unchanged (`records/pass-spec-board1b.txt`).
+- Its dry run (`dryrun-pass-seq2.txt`) used a stub that writes the driver's real transcript form and NO completion phrase,
+  through DONE and a wedged arm.
+- **Predictions as pre-registered for these arms:** pgm1 CAUGHT 5, pym0 MISSED 20, pym1 CAUGHT 20, each equal to its
+  reference in every field; INJS/INJL 0; pc=0, DRT1 and FRTY 0.
+
+### The rest of the afternoon's records (from the lanes, read here where stated)
+
+- **sq0 case 24 moved with the MOVC flag; its mechanism is OPEN** (the compiler lane, QEMU, plain qkit7-nf2, runner
+  4400e4c1, --only 24, N=1 per arm):
+  - Three images on the same kit: the old flagged 7c8bfc88 reads CAUGHT (cause 24, sqlite3OpenTable+648), as the old
+    reference did. The new 0d2223aa (flag off, plus 232d13b2) reads MISSED, and so does 490bfaf4 (flag off, WITHOUT
+    232d13b2). So the flag is the variable, not 232d13b2, the kit or the module, and silicon agrees with MISSED.
+  - **Facts:**
+    - The fault is `lw a3, 0xb0(a3)` with a3 the untagged return value of sqlite3PrimaryKeyIndex, which walks
+      pTab->pIndex.
+    - Both functions have IDENTICAL instruction sequences in the two images. Every frame in the rebuild is 16 bytes
+      larger (stack offsets shifted).
+    - So no check stopped firing on this path.
+  - **Hypothesis, not established:** the old CAUGHT is layout-dependent, i.e. what the freed table's memory held at reuse.
+    A QEMU trace of both images at sqlite3PrimaryKeyIndex's loads (address, freed or not, the loaded value's tag) would
+    settle it, after pass 1.
+  - **Classified for the census as a verdict move with its mechanism open,** not as a lost check in the compiled code.
+    An earlier wording in this lane's report to the lead, "a bug the rebuilt image no longer catches", is withdrawn.
+- **After the pass: caplifive-sbi #4 (SBI RFENCE for the one hart), the runtime lane's review:** LAND-AFTER-board-boot.
+  The runtime lane holds the merge until this lane's pair reads.
+  - The pair: firmware built from the PR head fab38bbfe6c3, and a control on the current monitor, each running the same
+    short corpus arm.
+  - Pre-registered: the launch cost, the SBI v0.1-fallback fence-warning count (non-zero on the control, zero with #4),
+    and the arm's cells.
+  - The S-29 bare arms are NOT part of it: they run no Linux, so RFENCE cannot reach them (this lane's own slip, corrected
+    to the runtime lane).
+  - The pass is unaffected: every pass kit builds the monitor from the clean pinned worktree at f13dbc5
+    (board-run.sh:62-64).
+  - The arm: pb10 (four cases, escape-heavy; the runtime lane suggested sql0 or pb10).
+- **The Q-15 repair gate** (the compiler lane, lane q15-placement-cw e2b26ea2c1e4, pre-registered at e02dd7f9908f):
+  - **pb13q15** replaces pb13: 8 of 9 identical to the exact-bounds record. 08 reads NO-READING:control-failed,
+    pre-registered as pad-masked (the scan stops in the 16-byte tail pad).
+  - **pgm1q15:** 5 of 5 identical to t3-pgm1 on every kit.
+  - **pg-pools (sql lt1) does NOT transfer** to the current bitstreams: 03 and 07 move against exact bounds on both QEMU
+    kits, whose consoles carry `collect skipped: collection is not available`. The same image collects on the old
+    compact kit and reads 9 of 9. So it waits on collection, the batch bitstream's generations item, as cpython lt1 does.
+  - wm1q15, pb13q15 (and pgm1q15, which reads as pgm1) go to the boards as a "repaired arms" group after the sequences,
+    with their dev / q15-placement runners pinned by hash.
+- **sq0 case 24's mechanism, established** (the compiler lane, an LDC trace: capstone-qemu cap-window-counter 043e0dbf23,
+  CAPSTONE_TRACE_LDC, kit qkit7-trace; the flagged image against the flag-only rebuild):
+  - The stale Table capability loads TAGGED in both images. This arm (memsys5) does not revoke, so the use-after-free
+    itself is undetected in both.
+  - In the flagged image, sqlite3PrimaryKeyIndex reads pTab->pIndex from the freed memory as an UNTAGGED 0, and the NULL
+    pPk faults at sqlite3OpenTable+648 (`lw 0xb0(a3)`, cause 24).
+  - In the rebuild, the freed flags read differently: the HasRowid branch is taken and nothing is dereferenced.
+    sqlite3PrimaryKeyIndex logs no LDC, while sqlite3OpenTable logs 196 in the same run (the trace's own control).
+  - **So the old CAUGHT was an incidental NULL dereference decided by the freed memory's contents, not a capability
+    detection.** The rebuild changed layout, not a check.
+  - **This corrects the old sq0 records' case 24** (results 2026-10-18-vp2*, vp2-malloc and sq0e), which counted it CAUGHT
+    (attribution function, cause 24). Their sqlite memsys5 tally overstates the detections by one.
+- **The QEMU kits' firmware fw_jump.elf 6f2b082cb677f026, its sources named** (for the runtime lane's provenance
+  question):
+  - Its build tree /tmp/capstone/deleg-gate2/opensbi-T survives, and its own fw_jump.elf hashes to 6f2b082c (built
+    2026-10-01 10:18).
+  - The outer OpenSBI equals cf344cf3884f exactly (0 differing entries both ways, outside build/, the generated .c.S, the
+    objects and the capstone-sbi subtree). The capstone-sbi subtree equals 4674ab6a exactly.
+  - **It is the PLAIN build:** objects.mk has no -DCAPSTONE_S_TRAP_INJECT, and sbi_capstone_init.o has no `_inject_s_trap`.
+  - Still unnamed: the capstone-c revision and defines behind the two generated .c.S, which a rebuild with
+    build-kit-qemu-fw.sh can be compared against after the pass.
+- **The S-trap injection path is not reached by any pass arm so far.** The reference kits boot the PLAIN firmware
+  6f2b082c, which lacks the injection, so an arm reaching it would read differently on QEMU and on silicon.
+  - Silicon's monitor tags every injection INJS, or INJL (sbi_capstone.c:47-49). Both read 0 in all 19 pass boots so far.
+  - The count can fire: INJS appears in earlier, pre-S-23-fix transcripts (sql0-treeA, sql0-fix, sql0-rf, cpyp-A, the
+    first pb10).
+  - Every remaining arm's result records its INJS/INJL count, taken from its transcript, because the running sequence
+    script cannot be edited. A non-zero one flags its reference as needing the injection build.
+  - Tier 1/2 are graded against their own silicon expectations, not these references.

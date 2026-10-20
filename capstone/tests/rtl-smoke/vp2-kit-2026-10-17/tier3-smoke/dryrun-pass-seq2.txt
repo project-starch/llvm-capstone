@@ -1,0 +1,28 @@
+# tier3-pass-seq2.sh stubbed dry run (2026-10-20 19:06) on the remaining spec. SEQ_RUN writes the reference bundle and a board.txt in
+# the driver's real form (rung END lines; for the wedge branch, nothing after b0-hello) and NO 'virtual boot: completed', as run-defects.py.
+== branch all
+SEQ START 19:06:19 board 1 spec 0d9be72a84150842 (3 arms)
+PASS pgm1 BEGIN 19:06:19 board 1 kind pgm booking 99
+PASS pgm1 END 19:06:19 rc=0 ::  :: --- stub pgm
+PASS pgm1 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm1 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pym0 BEGIN 19:06:19 board 1 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py booking 99
+PASS pym0 END 19:06:19 rc=0 ::  :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+PASS pym0 COMPARE vs reference rc=0 :: 20 of 20 cells the same
+PASS pym0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pym1 BEGIN 19:06:19 board 1 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py booking 99
+PASS pym1 END 19:06:19 rc=0 ::  :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+PASS pym1 COMPARE vs reference rc=0 :: 20 of 20 cells the same
+PASS pym1 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS seq2-1 DONE 19:06:19
+== branch wedge
+SEQ START 19:06:19 board 1 spec 0d9be72a84150842 (3 arms)
+PASS pgm1 BEGIN 19:06:19 board 1 kind pgm booking 99
+PASS pgm1 END 19:06:19 rc=0 ::  :: --- stub pgm
+PASS pgm1 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm1 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pym0 BEGIN 19:06:19 board 1 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py booking 99
+PASS pym0 END 19:06:19 rc=0 ::  :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+PASS pym0 COMPARE vs reference rc=0 :: 20 of 20 cells the same
+PASS pym0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS STOP after pym0: the boot did not complete (no vbatch END rc=0 in its transcript)
