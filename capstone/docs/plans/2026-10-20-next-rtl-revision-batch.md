@@ -433,6 +433,93 @@ the SQLite stage-50 probe 55, the Sublet -O2 image's lookaside slots 0 -> non-ze
 
 ---
 
+## (6) Generations in virtual node ids — the lead's item, co-designed with item 1
+
+**The spec is the semantics owner's ruling**, `design/virtual-capstone/isa.md` ("Generations in virtual node
+ids", revised 2026-10-20 to HARDWARE recycling): a virtual id becomes `{generation[29:16], index[15:0]}`, the
+packing a physical id already uses; a record stores its generation in word 1 bits `[59:46]`, the 14-bit hole
+between VALID and the 16-bit parent, which that ruling assigns; recycling mirrors the physical path (the kill
+and a retire push the record onto the TABLE's free list, the virtual pop hands out `{generation + 1, index}`,
+a record at 16383 is not pushed, the fresh path hands out generation 0); LOOKUPS compare the FULL id while
+INVALIDATIONS may stay index-only; and the record layout is a module/model contract, not an image ABI, so no
+domain image is rebuilt. Why it is wanted: a virtual table never recycles today, so it exhausts, and cpython
+lt1 is the first corpus arm that needs recycling.
+
+**EVERY SITE BELOW WAS READ AT THE LANE TIP `7784b37ab`, not taken from the ruling's prose.** The ruling's
+own list is a starting point and one of its three named instances does not say what the source says.
+
+*Store the generation (1 site).* `ex_stage.sv:1673-1675`, `vp_update_b`'s third arm, packs word 1 as
+`{1'b0, free, linear, valid, 14'd0, parent[15:0], 13'd0, depth[16:0]}` — widths 1+1+1+1+14+16+13+17 = 64, so
+VALID lands at `[60]` (which the read side already reads) and the hole is exactly `[59:46]`. That `14'd0`
+becomes `node_wr_req[122:109]`, the record's generation, per the layout comment at `:1666-1667`.
+
+*Resolve the generation (1 site).* `ex_stage.sv:1773-1774`:
+`revnode_rdfill_id = vctx_rev_q ? {14'd0, rev_rd_idx_q} : {data_ruser[28:15], rev_rd_idx_q}`. The PHYSICAL arm
+already reads a generation out of the record; the VIRTUAL arm hardwires zero. It becomes
+`data_ruser[59:46]`, the field the writer above now stores. **Left as it is, this is the ruling's predicted
+failure**: the LSU's 30-bit probe resolution would deny every recycled node permanently.
+
+*CORRECTION to the ruling's site list, worth recording so it is not re-derived.* isa.md names "the virtual
+record-read tap composes `{14'd0, index}` (ex_stage.sv:1729)". The line at that position is
+`revnode_fill_id = {node_wr_req[122:109], node_wr_req[15:0]}` — the WRITE-side tap, which already composes the
+full id from the payload, identically at `c7e6f604f` and at the lane tip (it was made payload-composed by
+`079dc720a`, R-35). The zero-generation site is the READ-side fill's virtual arm above. Same defect, different
+line; the ruling's consequence ("deny every recycled node for good") is correct as stated.
+
+*Recycle (2 sites), and it is SMALLER than the ruling implies, because the virtual free list is already
+wired.* `vp_alloc_slot`'s `*vp_free_head != 30'd0` branch (`capstone_rev_node.anvil:247-259`) already pops
+from the TABLE's free list, already validates the popped record (`fn.valid == 0 && fn.free == 1`, with a
+corruption dprint), already maintains `vp_free_head`/`vp_free_cnt` and already calls `vp_write_hdr1()`. Two
+things are missing:
+- **the PUSH under the flag.** It is gated off deliberately in two places — the revoke walk at `:77`,
+  `if((*vctx_q == 1'b0) && (*revoke_index > 30'd2) && (node_in.generation != 14'd16383))`, and the kill at
+  `:528`, the same shape on `kc[30+:16]`. Note the saturation guard the ruling asks for is ALREADY in both
+  conditions; only the `*vctx_q == 1'b0` term has to go, and the push must target the table's slot 1 rather
+  than the physical header;
+- **the generation at the POP.** `:253` is `set node_id := *pop_idx` — a bare index. The record `fn` is
+  already in hand one line earlier, so `fn.generation` is available without a second read: compose
+  `#{fn.generation + 14'd1, 16'd0} + *pop_idx` and write the record back with the bumped generation, exactly
+  as the physical pop does at `:289-303`. The fresh path keeps `#{14'd0, *head}` (`:315`).
+
+*Admission and composition gates (2 sites), i.e. the ruling's (3a).*
+- `capstone_rev_node.anvil:602` and `:604` — CSNODE's create writes BOTH new records with
+  `generation = 14'd0` instead of the generation of the id the pop returned.
+- `capstone_dyn_unit.anvil:618` — CSRETIRE refuses `(id >= 64'd65536) || (id < 64'd2)`, and **every id of
+  generation >= 1 exceeds 65536**, so a recycled node could never be retired; its record check compares no
+  generation either. CSRETIRE of a stale `{g, i}` must answer 1 and change nothing.
+
+*Lookup consumers that must see all 30 bits (rule 3).* The LSU revocation cache
+(`load_store_unit.sv:1301`, `:1416`, `:1437`, with `revnode_fill_id_i` 30 bits wide at `:211`) and the PC
+tracker (`commit_stage.sv:408-412`). Both already carry 30-bit ids; what makes them correct is the two
+generation sites above, not a change here. **No compare is widened anywhere**, and `pmp_data_if.sv:107` stays
+index-only for the reason its own comment records — under item 1 the CPMP trackers act only on physical
+broadcasts and are out of this question entirely.
+
+*Explicitly OUT of scope, because `#{14'd0, ...}` looks uniform and is not.* The broadcast mask
+(`capstone_rev_node.anvil:6`) stays index-only, which rule 3 permits and item 1's namespace bit already
+qualifies. The memory ADDRESS composition (`:180`, "address = index only") must stay generation-free or it
+addresses the wrong record. The walk's `next`/`prev` link compositions are table indices whose staleness the
+record's own generation check catches.
+
+**Acceptance, pre-registered.** The arms are a stale copy REFUSED and a fresh one PASSING, with three
+controls:
+1. a capability on a recycled index: after kill, push, re-pop and re-node, a load through the STALE copy is
+   refused while a load through the NEW capability at the same index passes. This is the item;
+2. control, NO REVOKE: the same sequence without the kill must pass on both, so the refusal is attributable
+   to the recycle and not to the sequence;
+3. control, PHYSICAL: the existing physical recycle arms (`r12-recl-*`) must read exactly what they read
+   today — `r12-recl-cpmp`'s seven deltas `0 1 1 0 1 0 1` and count 4 are already measured on this tip under
+   item 1, so any change there is item 6's regression;
+4. control, SATURATION: a record at generation 16383 is not pushed, so its index is retired from the pool
+   rather than wrapping to 0 and aliasing a live id;
+5. CSRETIRE of a stale `{g, i}` answers 1 and changes nothing (the gate at `capstone_dyn_unit.anvil:618`
+   must no longer refuse it for being above 65536).
+
+**Order of work**, because the consumers are what make this safe: read every generation-reading gate first
+(`capstone_rev_node.anvil:77`, `:327`, `:347`, `:353`, `:374`, `:421`, `:472` — four of which already compare a
+generation taken from a LINK field, so some links are already expected to carry one), then the two generation
+sites, then the recycle, then the two admission gates.
+
 ## What the 95-test sweep does and does not certify for item (2)
 
 **The sweep is a BUILD and REGRESSION check for item (2), not a behavioural one, and the behavioural evidence
