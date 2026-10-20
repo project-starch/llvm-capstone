@@ -23,6 +23,8 @@ using namespace llvm;
 
 #define DEBUG_TYPE "capstone-merge-base-offset"
 #define Capstone_MERGE_BASE_OFFSET_NAME "Capstone Merge Base Offset"
+bool capstoneImageGpAbiActive(); // CapstoneISelDAGToDAG.cpp
+
 namespace {
 
 class CapstoneMergeBaseOffsetOpt : public MachineFunctionPass {
@@ -43,6 +45,7 @@ public:
                          MachineInstr &TailShXAdd, Register GSReg);
 
   bool foldIntoMemoryOps(MachineInstr &Hi, MachineInstr &Lo);
+  bool foldThroughGlobalBase(MachineInstr &Hi, MachineInstr &Lo);
 
   CapstoneMergeBaseOffsetOpt() : MachineFunctionPass(ID) {}
 
@@ -555,6 +558,85 @@ bool CapstoneMergeBaseOffsetOpt::foldIntoMemoryOps(MachineInstr &Hi,
   return true;
 }
 
+// A constant-pool entry reached through a gp-derived capability:
+//
+// Hi:   1:auipc vreg1, %pcrel_hi(.LCPI)        1:auipc vreg1, %pcrel_hi(.LCPI+8)
+// Lo:   addi  vreg2, vreg1, %pcrel_lo(1b) ---> (deleted)
+// Base: vcap = PseudoCapGlobalBase vreg2       vcap = PseudoCapGlobalBase vreg1
+// Tail: fld f, 8(vcap)                         fld f, %pcrel_lo(1b)(vcap)
+//
+// PseudoCapGlobalBase only moves gp's cursor (scc/cincoffset gp), so the
+// capability now has its cursor at the auipc result instead of at the entry,
+// and the access adds the low part. Only the access is checked against gp's
+// bounds: the cursor in between may lie anywhere. That is why every use of the
+// capability must be a load at one common offset: anything that reads or
+// narrows the capability itself (SHRINK, a copy, a store of it, a cursor read)
+// would see the unfinished cursor. Constant-pool entries are never narrowed to
+// an object's bounds, which is why only they are folded.
+bool CapstoneMergeBaseOffsetOpt::foldThroughGlobalBase(MachineInstr &Hi,
+                                                       MachineInstr &Lo) {
+  // Only under the image-gp ABI (exact bounds): there gp's cursor is simply
+  // set, and only the access is checked. Elsewhere the unfinished cursor would
+  // have to stay representable, which nothing here establishes.
+  if (!capstoneImageGpAbiActive())
+    return false;
+  if (Hi.getOpcode() != Capstone::AUIPC || !Hi.getOperand(1).isCPI() ||
+      &Lo == &Hi)
+    return false;
+  Register LoReg = Lo.getOperand(0).getReg();
+  if (!MRI->hasOneUse(LoReg))
+    return false;
+  MachineInstr &Base = *MRI->use_instr_begin(LoReg);
+  if (Base.getOpcode() != Capstone::PseudoCapGlobalBase ||
+      Base.getOperand(1).getReg() != LoReg)
+    return false;
+  Register CapReg = Base.getOperand(0).getReg();
+  if (!CapReg.isVirtual() || MRI->use_nodbg_empty(CapReg))
+    return false;
+
+  std::optional<int64_t> CommonOffset;
+  for (const MachineOperand &MO : MRI->use_operands(CapReg)) {
+    const MachineInstr &UseMI = *MO.getParent();
+    if (UseMI.isDebugInstr())
+      return false;
+    switch (UseMI.getOpcode()) {
+    default:
+      return false;
+    case Capstone::LB:
+    case Capstone::LH:
+    case Capstone::LW:
+    case Capstone::LBU:
+    case Capstone::LHU:
+    case Capstone::LWU:
+    case Capstone::LD:
+    case Capstone::FLH:
+    case Capstone::FLW:
+    case Capstone::FLD:
+      break;
+    }
+    if (UseMI.getOperandNo(&MO) != 1 || !UseMI.getOperand(2).isImm())
+      return false;
+    int64_t Offset = UseMI.getOperand(2).getImm();
+    if (CommonOffset && Offset != *CommonOffset)
+      return false;
+    CommonOffset = Offset;
+  }
+
+  int64_t NewOffset = Hi.getOperand(1).getOffset() + *CommonOffset;
+  if (!isInt<32>(NewOffset))
+    return false;
+  Hi.getOperand(1).setOffset(NewOffset);
+  MachineOperand ImmOp = Lo.getOperand(2);
+  for (MachineInstr &UseMI :
+       llvm::make_early_inc_range(MRI->use_instructions(CapReg))) {
+    UseMI.removeOperand(2);
+    UseMI.addOperand(ImmOp);
+  }
+  Base.getOperand(1).setReg(Hi.getOperand(0).getReg());
+  Lo.eraseFromParent();
+  return true;
+}
+
 bool CapstoneMergeBaseOffsetOpt::runOnMachineFunction(MachineFunction &Fn) {
   if (skipFunction(Fn.getFunction()))
     return false;
@@ -570,7 +652,10 @@ bool CapstoneMergeBaseOffsetOpt::runOnMachineFunction(MachineFunction &Fn) {
       if (!detectFoldable(Hi, Lo))
         continue;
       MadeChange |= detectAndFoldOffset(Hi, *Lo);
-      MadeChange |= foldIntoMemoryOps(Hi, *Lo);
+      if (foldIntoMemoryOps(Hi, *Lo))
+        MadeChange = true;
+      else
+        MadeChange |= foldThroughGlobalBase(Hi, *Lo);
     }
   }
 
