@@ -4334,3 +4334,40 @@ module checked; the pair HOLDing on FAIL.
 - **No recorded mechanism predicts either branch yet.** The open anomaly is narrowed to "the write at CSRUNV+4", not
   explained.
 - **Bundles:** ffmpeg/pool-repros results/2026-10-20-vp2c-treeB/vp2-nested-pools-{srzc,nop}.
+
+### pb10's srz-rc arm (the third arm), pre-registered (2026-10-20 09:2x, before its boots): board 2
+
+The compiler lane's third arm (lane srz-rc-arm b976f64ed5aa), splitting pb10's "the write matters" into value versus
+flush. Module c8c8a6f28548637b (banner srevroot-rcf-1).
+- **The change:** the srz source with each post-CSRUNV `csrw 0x5c1, zero` replaced by `csrrc x0, 0x5c1, rA`, where rA
+  is that CSRUNV's own action register. The .text differs from 607164b9 in 3 words (0x1590, 0x3ddc, 0x41a4), with the
+  same layout.
+- **The compiler lane's RTL reading** in both trees:
+  - csrrc with rs1 != 0 writes (decoder.sv:444-448);
+  - any srevroot write flushes (csr_regfile.sv 2014 / 2020);
+  - CSR_CLEAR writes old & ~rA, so the page-aligned value is unchanged;
+  - the trackers' forget pulse (`revnode_ns_flush_o`, ex_stage.sv:1417 / 1420) and vctx_table_o fire on a VALUE
+    change.
+- **So pb10 gets a clean three-way:**
+  - nop: no write (FRTY 2, read);
+  - rc: write plus flush, with no value change;
+  - srzc: write, flush and value change (FRTY 0, read).
+- **Its stated caveat:** the RTL lane leaves open whether the switcher's walk can overlap the next CSR instruction. If it
+  can, csrrc's read of the old value is not guaranteed.
+
+**1. Its own Tier 1 boot:** `tier3-smoke/chain-rc-b2.sh` 1766d380e5b7dc35 →
+`board-tier12/srz/run-tier1-rc-b2.sh` 711d7a51ab591223.
+- image-rev7-rc aead9fdf5a2075c9, from `rc-prep.sh` 9166dfcd3b49547b, with the module checked in
+  rootfs.cpio;
+- firmware fc178ea5e3ad5994, dom_stack PASS.
+- **The gate:** the rungs equal t1-old's. This base has no release line, as for t1-nop.
+
+**2. pb10-rc:** `tier3-smoke/tier3-pb10-rc-b2.sh` 0d7fb361a144c46d, one cold boot on bkit7-pb10BR
+(`make-pb10rc-kit.sh` 628a801b3e2d7d63: BZ with only the .ko changed), scored against t3-pb10/bundle.
+
+**Predictions (the compiler lane's):**
+- FRTY 0 under rc: the flush alone heals;
+- FRTY 2 at vm_ioctl's CSRUNV successor: the value change (the forget pulse or the namespace flag) is what heals;
+- the cells are 4 of 4 either way.
+
+**The dry runs,** with every call stubbed: the chain's PASS and FAIL, and the arm, which HOLDs on FAIL.
