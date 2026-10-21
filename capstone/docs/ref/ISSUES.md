@@ -9729,6 +9729,42 @@ the C we build.
   need a tag in a byte-reordered pointer (C-81) replaced by `pass()` in a staged copy, passes all
   14708 tests; unmodified it still dies on the first of those four.
 
+### C-85 — a 16-byte common global (a `-fcommon` tentative definition of a pointer or an `__int128`) aborts code generation with "Unknown section kind" `FIXED 2026-10-17 on compiler/common-capability-globals — COMPILER; found 2026-10-17 building SPEC CPU2017 525.x264_r's ldecod with an assertions build`
+
+**What happens.** `CapstoneAsmPrinter::emitGlobalVariable` emits every defined 16-byte global
+itself (to write a 128-bit value as two 64-bit words). It asks `getKindForGlobal` for the
+global's kind and `SectionForGlobal` for its section. A common symbol, a C tentative definition
+built with `-fcommon` such as `int *p;`, has kind `Common`, which has no section:
+`getSectionPrefixForGlobal` reaches `llvm_unreachable("Unknown section kind")`. With assertions
+clang aborts; without them the unreachable is undefined behaviour. Every non-TLS common global of
+16 bytes reaches it: a capability pointer, an `__int128`, a 16-byte struct. A common global of
+another size takes the generic path and is fine, which is why `int x;` never showed it.
+
+**Why it was not seen before.** Clang defaults to `-fno-common`, and the ports do not set
+`-fcommon`. SPEC CPU2017's 525.x264_r needs it (its sources define the same globals in several
+files), and its ldecod has common pointers (`p_Dec`, `PicPos`). The x264 builds before this one
+used other compiler builds; whether those had assertions is not recorded.
+
+**Fix.** The 16-byte path skips common symbols, as it already skips declarations; the generic
+path emits them as `.comm name,16,ALIGN` with the global's alignment, the same form every other
+common global has, and an object `.type`. The value is zero, so no 128-bit initializer is needed;
+the gp cap-table and small-data code classify globals independently of this emitter.
+
+**Not changed here** (both older than this fix, found in its review): the 16-byte path emits no
+`.type` for a defined 16-byte global, so a pointer global is `STT_NOTYPE` in the object; and a
+common global named in `llvm.used` gets no `SHF_GNU_RETAIN` (the generic path returns before
+section selection), so `--gc-sections` can drop it if nothing references it. The second applies to
+common globals of every size.
+
+**Evidence** (assertions-on Release builds of clang/llc/lld on p12; before = the SPEC integration
+toolchain, dev 073d3b9f85d0 with open PRs #245-#250 merged; after = the same tree with this fix):
+- `llvm/test/CodeGen/Capstone/cap-common-globals.ll`: before, `llc` aborts with "Unknown section
+  kind" in both RUN lines; after, PASS.
+- `llvm/test/CodeGen/Capstone`: before 127 of 128 pass, after 128 of 129; the one failure on both
+  is `shared-patches-present.test`, which needs the whole repository.
+- 525.x264_r's `ldecod_src/ldecod.c` with the SDK's flags: before, clang aborts; after, it
+  compiles and `p_Dec` and `PicPos` are common symbols of 16 bytes.
+
 ### C-80 — with F/D enabled, every FP constant that is not an immediate gets an address-space-0 constant-pool address, which Capstone's lowering cannot honour `FIXED 2026-10-14 on compiler/select-fp-constants-capability — COMPILER; found 2026-10-14 building SPEC CPU2017 544.nab_r with +f,+d`
 
 **What happens.** Generic SelectionDAG code that puts a constant into the constant pool types the
