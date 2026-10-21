@@ -643,6 +643,70 @@ the cycle. It is the branch balance on the header load at the three walk entries
 moving the load into the virtual branch, because the record read's value does not live past the cycle
 boundary the load crosses.
 
+**ITEM 6'S ACCEPTANCE IS COMPLETE AND MEASURED** (2026-10-21, capstone-ariane `d5f6c5cf7`; arms
+`va-alloc-recycle`, `va-alloc-subtree`, `va-alloc-stale`, registered in `testlist_sup.yaml` so the sweep's
+`testlist_capstone.yaml` hash is untouched). Every value in all three arms read exactly as pre-registered,
+and each arm carries its own VOID condition.
+
+*THE MECHANISM — `va-alloc-recycle`.* The witness is a generation of **2**, which no software free list and
+no bump can produce: the table's own setup writes record 5 as `FREE << 60` (generation 0) with its link in
+`prev`, the field the virtual pop reads, so the first derive pops 5 at generation 1, the CREVOKE pushes it
+back preserving that generation, and the second derive pops it again at **2**. Read: `REC_GEN(5)` = 2,
+next-unused still 6 (nothing bump-allocated), the free header `{count 1, head 4}`, allocations 2 (the
+pushes correctly not counting).
+
+*BOTH PUSH SITES IN ONE ARM — `va-alloc-subtree`.* A CREVOKE of a child that has a grandchild, which is the
+shape lt1's pymalloc and pg-pools actually free. Read: the header `{count 2, head 4}` — the kill pushed the
+operand, then the walk pushed the junior run — with both records FREE, parent and depth zeroed, and both
+generations preserved at 1. The leak signature is ABSENT, and it was stated in advance: record 4 reading
+`0 0 0` with the header at `{count 1, head 5}` would be the operand push without the walk push.
+
+*THE AUTHORITY PROPERTY — `va-alloc-stale`, a matched pair inside ONE TREE and ONE RUN.* CREVOKE never
+touches the register file, so after it `s4` still holds the first pop's `{1, 5}` while the second pop puts
+`{2, 5}` in `s5`. Both name record 5, which the second pop re-validated. Read: the **stale** probe 0
+(refused), the **fresh** probe on the SAME record 1 (accepted), a load through the fresh owner not
+faulting, `csupcause` 2 (no fault anywhere in the stub), and record 5 reading VALID with generation 2 at
+that moment.
+**The `valid == 0` confound is excluded by construction, not by argument.** The record is VALID and the
+monitor reads it, so the stale refusal cannot be a dead-node refusal — which is exactly the confound
+`r12-recl-stale`'s header says makes an unmodified tree useless as a control ("a dead node is refused
+there too, for valid==0, and the log is identical on every stale arm"). With the fresh probe accepted on
+the same record in the same run, the single remaining difference between the two probes is the GENERATION
+carried in the id. The probe is non-faulting — `LCC` selector x0 is the validity query, routing through the
+one `query_req` site that compares `node_in.valid && node_in.generation == g` — so both fit in one domain
+entry with no escape and no resume machinery.
+
+*CONTROLS.* The physical approval suite is 8 of 8 on this tree: `r12-recl-stale` reads its documented
+witness exactly (re-minted ids 65539 and 65542, once each, with no bare-index 3 or 6) and its final
+`LCC a2 = 1 | traps = 8`, so item 6 did not disturb the physical generation split it shares gates with.
+`va-alloc` and `va-alloc-corrupt` are byte-identical across every run of this work, so the shared-file
+edits changed no existing arm.
+Two instrument corrections were needed to get there, both recorded because each nearly produced a wrong
+verdict: `r12-recl-freelist-n16386` read FAILED at exactly the 4,000,013-cycle `time_out` this lane's
+runner passes, while the arm's own header says it needs ~10M (it completes at 6,035,116), so the FAILED
+was the instrument; and the re-minted-id witness is NOT in the cursor column that
+`capprint-readings.py` reports — a CAPPRINT on a TAGGED register writes `Revnode_id` into the `.iss` log,
+so the first grading of a passing arm looked VOID.
+
+*A CONTROL BUILD THAT ANSWERED A DIFFERENT QUESTION, kept and cited rather than discarded.* A one-line
+gen-blind tree was built first (`1291f95e1` on branch `item6-genblind-control`, never to land) reverting
+`vp_read_res`'s generation to `14'd0`, pre-registered to read IDENTICALLY on the ground that "the field is
+written and simply not consulted". **That prediction was REFUTED** and the refutation is recorded on the
+branch at `d78c90494`: the field IS consulted, by the kill's own validity check
+(`capstone_rev_node.anvil:609`, `cnode.generation != kc[46+:14]`), so reverting the READ makes the id and
+the record DISAGREE, the legitimate CREVOKE is refused, and the domain faults with cause 25 before any
+stale probe can run — hence allocations 1 instead of 2 and no push. What it does establish is worth
+keeping: the `vp_read_res` fix is LOAD-BEARING rather than a checking refinement, item 6's three generation
+sites cannot land apart, and a mismatched id fails CLOSED. It is not the pair for the authority claim, and
+the one-tree pair above removed the need for the delicate compare-reverted tree it would have taken.
+
+*STILL UNMEASURED, and labelled as such rather than covered by the pass above.* The remaining consuming
+sites `r12-recl-stale` exercises on the physical path — LDC, MREV, SPLIT, DELIN, a CREVOKE of the stale
+child, and a CSRETIRE of a stale id answering 1 with the fresh owner unharmed — each FAULT rather than
+returning a value, so each needs its own variant with the refusing probe last. `va-alloc-stale` establishes
+the property at the validity query, which is the site that fronts most of them, and step 3's retire-operand
+push still has no arm of its own.
+
 *UNMEASURED.* Step 3 (the retire operand) has no arm in the registered set, because no registered arm issues
 a CSRETIRE inside a virtual context. Its acceptance, and the recycle and subtree cases, need the new arm:
 derive / crevoke / derive again with the stale reference refused, child plus grandchild with both records
