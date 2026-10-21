@@ -6219,3 +6219,42 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
     reading.
   - On tree A the cw 4 ms image stalled in 8 of 9 processes today, so a t4 run that completes here would be more
     surprising than on tree B.
+
+### The SIGALRM-storm matched pair, result (2026-10-21/22, both boards): MRB_TICK_UNIT 100 completes 6 of 6, MRB_TICK_UNIT 4 storms 4 of 4
+
+- **Read** (`records/trace-pair-b1.result-lines.txt`, `records/trace-pair-b2.result-lines.txt`; pre-registered
+  459326296d2b for board 2 and 91defa9689c6 for board 1). Every step ran on both boards, and all six board counters
+  read 0.
+  - **t100 (1ab24a92), 3 of 3 on each tree:** SMOKE_DONE and exit 0 in about 4-4.5 minutes, with 45-48 SIGDONE and
+    95-101 rt_sigprocmask per run.
+  - **t4 (f8594e11), 2 of 2 on each tree:** each ran to the 600 s bound, with 23,803-23,879 SIGDONE and
+    47,609-47,761 rt_sigprocmask. That is the procmask, procmask, SIGDONE period at ~40 deliveries a second. The
+    first bound's capture is the same event-3 alternation as every earlier stall.
+- **Against the pre-registration: every reading holds.** All t100 runs complete, at most ~10 SIGDONE a second (it is
+  ~0.2), with sigprocmask ≈ 2 x SIGDONE. At least one t4 run storms: all four do. No t100 run stormed.
+- **So the root cause of mruby's silicon stall is confirmed:**
+  - mruby-task's POSIX HAL arms a 4 ms ITIMER_REAL SIGALRM (task_hal.c:106-113, MRB_TICK_UNIT 4).
+  - Each delivery costs three delegated rounds in the virtual runtime, about 25 ms on silicon, so a new SIGALRM is
+    always pending and the program barely runs.
+  - The only difference between the pair's images is that constant: the sources are identical, and only task_hal.o
+    and task.o differ.
+  - It is not a capability or bitstream defect, and QEMU does not show it, because there a round fits in the tick.
+- **What it changes:**
+  - Every mruby board cell from today on the 4 ms images (8c7cd276, f8594e11) is a storm VOID, not a reading of the
+    case.
+  - The board's mruby arms need the tick-100 images: the compiler lane's corpus-mp-r60t, with QEMU references
+    re-run on them.
+  - The runtime lane has a fix of its own planned: fold the three rounds into one. It does not reach a 4 ms tick, so
+    the image change stays.
+- **The batch Tier 1 image, rebaked on the tick-100 mruby:**
+  - `batch-prep.sh` with images contract 65f9f1f179852246, mruby 1ab24a9215078a53 and sqlite3 e63733dd1a4a7452
+    (runtime 98bfe0d9ab76, gate PASS). The compiler lane's Tier 1 recipe plus the define reproduced 1ab24a92 byte for
+    byte (batch-t1-r60t/BUILD).
+  - Gates re-run here: delin-census 0; qemu-only-csr-census 0, the batch module included; vp2-silicon-gate 0
+    refused.
+  - The silicon gate took one new attribution row, `boot3/silicon-gate-attributions.tsv` for 1ab24a92 at 0x1b6f38:
+    the same libc_exit_fini site, moved 8 bytes. It was re-derived on the image: `.fini_array` is 0 bytes at
+    0x23e160, and libc_exit_fini+0x68 = 0x1b6f0c is `bgeu a3, a4, 0x1b6f44`, past the loop.
+  - The compiler lane's split census: VAR-CONST 0 (positive control: 3 on 8c7cd276).
+  - **Image 64ec46d1f8d9461b, firmware 6423545a567b2f3c (19,565,064 B), FRTC present.** It supersedes
+    74edf44a / d9026250, whose mruby was the 4 ms build.

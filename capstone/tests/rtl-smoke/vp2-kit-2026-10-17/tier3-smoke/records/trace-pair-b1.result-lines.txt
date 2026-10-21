@@ -1,0 +1,15 @@
+trace-pair-b1 (2026-10-21/22 22:56-00:21, board 1, tree A caplifive_vp2c_8522d72fe, kit bkit7-rev2xDN2; pre-registered 91defa9689c6)
+images: t100 = r60 1ab24a9215078a53 (MRB_TICK_UNIT 100), t4 = r60 f8594e1167b60307 (MRB_TICK_UNIT 4); only task_hal.o and task.o differ among 124 objects; launcher b27afefc, CAPSTONE_VM_TRACE=1
+STEP run-1-t100 {'kind': 'exit', 'value': 0} SMOKE_DONE
+STEP run-2-t100 {'kind': 'exit', 'value': 0} SMOKE_DONE
+STEP run-3-t100 {'kind': 'exit', 'value': 0} SMOKE_DONE
+STEP run-4-t4 {'kind': 'none'} 
+STEP run-5-t4 {'kind': 'none'} 
+1 sum TRACE lines 45178 service 339 sigdone 48 sigprocmask 101
+2 sum TRACE lines 45161 service 333 sigdone 47 sigprocmask 99
+3 sum TRACE lines 45130 service 321 sigdone 45 sigprocmask 95
+4 sum TRACE lines 215620 service 71540 sigdone 23844 sigprocmask 47691
+5 sum TRACE lines 215252 service 71417 sigdone 23803 sigprocmask 47609
+counters: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0; banner node-floor-2 x1
+the first t4 bound's capture: 16 escapes, event 3 kind 0x3 cause 0xb at code+0xb0 / code+0xbc, as in every earlier storm
+booking 93 unbooked; completed=True steps=10
