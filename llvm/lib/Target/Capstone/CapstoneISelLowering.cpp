@@ -128,7 +128,8 @@ static cl::opt<bool>
 static cl::opt<bool> CapstoneMemOpsViaLibcall(
     DEBUG_TYPE "-memops-via-libcall", cl::Hidden,
     cl::desc("S-06 workaround: never expand memcpy/memmove/memset inline, so they call the "
-             "library implementations, which carry the untagged-ldc/stc high-half fix"),
+             "library implementations, which carry the untagged-ldc/stc high-half fix "
+             "(llvm.memcpy.inline/llvm.memset.inline still expand: they cannot become calls)"),
     cl::init(false));
 
 // Defined in CapstoneSelectionDAGInfo.cpp, where the emission lives.
@@ -24411,10 +24412,25 @@ SDValue CapstoneTargetLowering::LowerCall(CallLoweringInfo &CLI,
         FI, getPointerTy(ByValDL, ByValDL.getAllocaAddrSpace()));
     SDValue SizeNode = DAG.getConstant(Size, DL, XLenVT);
 
+    // C-77. The pointer infos say which address space each operand lives in,
+    // and a copy lowered to a `memcpy` call types its arguments from them
+    // (SelectionDAG::getMemcpy). Default-constructed infos say address space 0,
+    // an integer here, so the call passed both capabilities through `mv` and
+    // `memcpy` faulted on its untagged source. The destination is the frame
+    // object; the source is the IR argument, a capability pointer.
+    MachinePointerInfo SrcInfo(ByValDL.getAllocaAddrSpace());
+    if (Outs[i].OrigArgIndex < CLI.Args.size()) {
+      const TargetLowering::ArgListEntry &OrigArg =
+          CLI.Args[Outs[i].OrigArgIndex];
+      if (OrigArg.Val)
+        SrcInfo = MachinePointerInfo(OrigArg.Val);
+      else if (auto *PT = dyn_cast<PointerType>(OrigArg.Ty))
+        SrcInfo = MachinePointerInfo(PT->getAddressSpace());
+    }
     Chain = DAG.getMemcpy(Chain, DL, FIPtr, Arg, SizeNode, Alignment,
                           /*IsVolatile=*/false,
                           /*AlwaysInline=*/false, /*CI*/ nullptr, IsTailCall,
-                          MachinePointerInfo(), MachinePointerInfo());
+                          MachinePointerInfo::getFixedStack(MF, FI), SrcInfo);
     ByValArgs.push_back(FIPtr);
   }
 
@@ -25788,14 +25804,21 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
     return false;
 
   // S-06 workaround. Returning false means "cannot lower inline", which makes the caller emit a
-  // libcall -- so every memcpy/memmove/memset lands on the library implementation, which carries
-  // the untagged-ldc/stc high-half fix. See the flag's definition near the top of this file.
+  // libcall -- so every memcpy/memmove/memset that may become a call lands on the library
+  // implementation, which carries the untagged-ldc/stc high-half fix. See the flag's definition
+  // near the top of this file. A forced-inline operation is not declined (below).
   //
   // It has to be HERE rather than via MaxStoresPerMemcpy: the capability-aligned case below
   // returns early WITHOUT consulting `Limit`, so zeroing that limit changes nothing at all. That
   // was measured, not assumed -- the first attempt set the limits and the emitted code was
   // byte-identical.
-  if (CapstoneMemOpsViaLibcall)
+  // `Limit` is ~0U only when the operation must be inlined
+  // (`llvm.memcpy.inline` or `llvm.memset.inline`: SelectionDAG's AlwaysInline
+  // retry). Declining such a copy leaves getMemcpy with no lowering at all, an
+  // empty DAG root (see the S-06 note above), so the libcall flag declines only
+  // copies that may become calls.
+  const bool MustInline = Limit == ~0U;
+  if (CapstoneMemOpsViaLibcall && !MustInline)
     return false;
 
   // Capability-aligned copies (16-byte aligned on both ends) may carry in-place
@@ -25808,10 +25831,18 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
   // silently loses `y`. That is the same "upper 8 bytes dropped" symptom the misaligned case
   // below already works around, but from the hardware rather than from legalization, so it
   // cannot be fixed by choosing a different unit here without also losing tags.
+  //
+  // A copy that must be inlined cannot fall back to `memcpy`, so a
+  // capability-aligned one is copied as capabilities however long it is; the
+  // 32-granule budget applies to ordinary copies only. Not under the S-06
+  // fixup: its hook covers 32 granules, and a longer bare `ldc`/`stc` sequence
+  // would lose the high halves that experiment exists to keep.
+  const uint64_t GranuleBudget =
+      MustInline && !CapstoneMemcpyHighHalfFixup ? UINT64_MAX : 32;
   if (Op.isMemcpy() && Op.size() != 0 && (Op.size() % 16) == 0 &&
       Op.isAligned(Align(16))) {
     uint64_t NumChunks = Op.size() / 16; // 64-bit: a narrowed count passes the budget
-    if (NumChunks <= 32) {
+    if (NumChunks <= GranuleBudget) {
       // Capability-grained copy chunks are capabilities.
       MemOps.assign(NumChunks, MVT::c128);
       return true;
@@ -25832,7 +25863,7 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
   if (Op.isMemcpy() && Op.size() > 16 && (Op.size() % 16) != 0 &&
       Op.isAligned(Align(16)) && !CapstoneMemcpyHighHalfFixup) {
     uint64_t NumChunks = Op.size() / 16; // 64-bit: a narrowed count passes the budget
-    if (NumChunks <= 32) {
+    if (NumChunks <= GranuleBudget) {
       MemOps.assign(NumChunks, MVT::c128);
       uint64_t Remaining = Op.size() % 16;
       for (uint64_t Unit = 8; Remaining != 0; Unit /= 2)
@@ -25840,6 +25871,37 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
           MemOps.push_back(MVT::getIntegerVT(Unit * 8));
       return true;
     }
+  }
+
+  // C-81. A copy of a granule or more whose 16-byte alignment is not known may
+  // still carry capabilities: `align 1` says the alignment is unknown, not that
+  // the bytes hold no pointer. `memcpy(char *, char *, 16)` over two aligned
+  // buffers is how Perl's pack 'p' stores a pointer, and the scalar path below
+  // copied it with byte loads and stores, which strip the tag. Call `memcpy`
+  // instead: musl's checks the run-time alignment of both cursors and copies
+  // the whole granules as capabilities when it matches (string_bounds_safe.c).
+  // memmove is included, `isMemcpy()` is only `!IsMemset`.
+  //
+  // Left to the scalar path: copies shorter than a granule (they cannot hold a
+  // whole capability) and copies from constant data (`isMemcpyStrSrc()`: an
+  // initializer SelectionDAG could read as plain bytes, so it holds no tagged
+  // capability; a symbolic pointer cannot be read that way).
+  //
+  // A copy that must be inlined cannot become a call, and a scalar copy would
+  // drop its tags without a word, so it is refused with an error. Copying it
+  // correctly needs a run-time alignment test in the expansion; until that
+  // exists, align the operands (or use `memcpy`).
+  if (Op.isMemcpy() && Op.size() >= 16 && !Op.isAligned(Align(16)) &&
+      !Op.isMemcpyStrSrc()) {
+    if (!MustInline)
+      return false;
+    Context.emitError("Capstone: cannot inline a copy of " +
+                      Twine(Op.size()) +
+                      " bytes whose 16-byte alignment is unknown without "
+                      "dropping capability tags; align both operands to 16 "
+                      "or call memcpy");
+    // Fall through: the module is rejected, the expansion below only keeps
+    // the DAG well formed until the error is reported.
   }
 
   // Any other memcpy is *sub-capability*: not 16-byte aligned on both ends, or

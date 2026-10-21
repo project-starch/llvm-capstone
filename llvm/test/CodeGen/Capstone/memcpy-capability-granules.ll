@@ -12,8 +12,8 @@
 ;
 ; MUTATION: without the C-78 block in CapstoneTargetLowering::
 ; findOptimalMemOpLowering, @copy24_align16 is `ld/sd` at 16, 8 and 0 and the
-; four positive functions fail their `ldc` lines; the three controls pass either
-; way (performed 2026-10-13 with the unfixed llc of the same source).
+; four positive functions fail their `ldc` lines; the short-copy control passes
+; either way (performed 2026-10-13 with the unfixed llc of the same source).
 ;
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs < %s | FileCheck %s
 ; RUN: llc -mtriple=capstone64 -mattr=+m -verify-machineinstrs \
@@ -106,16 +106,27 @@ entry:
   ret void
 }
 
-; Controls: without 16-byte alignment on BOTH ends no granule can hold a
-; capability in place, so the copy stays scalar.
+; Without 16-byte alignment known on BOTH ends the granules cannot be copied
+; as capabilities inline, and a scalar copy would strip any tag they hold at
+; run time, so these call memcpy (C-81; they were scalar `ld`/`sd` until
+; 2026-10-16, see memcpy-unknown-alignment-tags.ll).
 ; CHECK-LABEL: copy24_align8:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:  ld [[T:[a-z0-9]+]], 16(a1)
-; CHECK-NEXT:  sd [[T]], 16(a0)
-; CHECK-NEXT:  ld [[T:[a-z0-9]+]], 8(a1)
-; CHECK-NEXT:  sd [[T]], 8(a0)
-; CHECK-NEXT:  ld [[T:[a-z0-9]+]], 0(a1)
-; CHECK-NEXT:  sd [[T]], 0(a0)
+; CHECK-NEXT:  cincoffsetimm sp, sp, -16
+; CHECK-NEXT:  .cfi_def_cfa_offset 16
+; CHECK-NEXT:  stc ra, 0(sp)
+; CHECK-NEXT:  .cfi_offset ra, -16
+; CHECK-NEXT:  .Lpcrel_hi{{[0-9]+}}:
+; CHECK-NEXT:  auipc a2, %pcrel_hi(memcpy)
+; CHECK-NEXT:  addi a2, a2, %pcrel_lo(.Lpcrel_hi{{[0-9]+}})
+; CHECK-NEXT:  cincoffset a3, gp, a2
+; CHECK-NEXT:  delin a3
+; CHECK-NEXT:  li a2, 24
+; CHECK-NEXT:  cjalr ra, 0(a3)
+; CHECK-NEXT:  ldc ra, 0(sp)
+; CHECK-NEXT:  .cfi_restore ra
+; CHECK-NEXT:  cincoffsetimm sp, sp, 16
+; CHECK-NEXT:  .cfi_def_cfa_offset 0
 ; CHECK-NEXT:  cjalr zero, 0(ra)
 define void @copy24_align8(ptr addrspace(200) %dst, ptr addrspace(200) %src) {
 entry:
@@ -127,12 +138,21 @@ entry:
 
 ; CHECK-LABEL: copy24_dst16_src8:
 ; CHECK:       # %bb.0:
-; CHECK-NEXT:  ld [[T:[a-z0-9]+]], 16(a1)
-; CHECK-NEXT:  sd [[T]], 16(a0)
-; CHECK-NEXT:  ld [[T:[a-z0-9]+]], 8(a1)
-; CHECK-NEXT:  sd [[T]], 8(a0)
-; CHECK-NEXT:  ld [[T:[a-z0-9]+]], 0(a1)
-; CHECK-NEXT:  sd [[T]], 0(a0)
+; CHECK-NEXT:  cincoffsetimm sp, sp, -16
+; CHECK-NEXT:  .cfi_def_cfa_offset 16
+; CHECK-NEXT:  stc ra, 0(sp)
+; CHECK-NEXT:  .cfi_offset ra, -16
+; CHECK-NEXT:  .Lpcrel_hi{{[0-9]+}}:
+; CHECK-NEXT:  auipc a2, %pcrel_hi(memcpy)
+; CHECK-NEXT:  addi a2, a2, %pcrel_lo(.Lpcrel_hi{{[0-9]+}})
+; CHECK-NEXT:  cincoffset a3, gp, a2
+; CHECK-NEXT:  delin a3
+; CHECK-NEXT:  li a2, 24
+; CHECK-NEXT:  cjalr ra, 0(a3)
+; CHECK-NEXT:  ldc ra, 0(sp)
+; CHECK-NEXT:  .cfi_restore ra
+; CHECK-NEXT:  cincoffsetimm sp, sp, 16
+; CHECK-NEXT:  .cfi_def_cfa_offset 0
 ; CHECK-NEXT:  cjalr zero, 0(ra)
 define void @copy24_dst16_src8(ptr addrspace(200) %dst, ptr addrspace(200) %src) {
 entry:
