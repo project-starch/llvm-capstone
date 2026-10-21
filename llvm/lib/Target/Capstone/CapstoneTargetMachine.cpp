@@ -116,6 +116,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstonePostLegalizerCombinerPass(*PR);
   initializeKCFIPass(*PR);
   initializeCapstoneDeadRegisterDefinitionsPass(*PR);
+  initializeCapstoneCursorReadFoldPass(*PR);
   initializeCapstoneLateBranchOptPass(*PR);
   initializeCapstoneMakeCompressibleOptPass(*PR);
   initializeCapstoneGatherScatterLoweringPass(*PR);
@@ -656,6 +657,11 @@ void CapstonePassConfig::addMachineSSAOptimization() {
   if (TM->getTargetTriple().isCapstone64()) {
     addPass(createCapstoneOptWInstrsPass());
   }
+
+  // Last of the machine SSA optimisations: the combiner's reassociation, the
+  // peepholes and the W-instruction rewrites are done, so the pass judges
+  // readers in the shape the register allocator will see.
+  addPass(createCapstoneCursorReadFoldPass());
 }
 
 void CapstonePassConfig::addPreRegAlloc() {
