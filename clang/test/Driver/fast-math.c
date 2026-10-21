@@ -87,6 +87,22 @@
 // RUN:   | FileCheck --check-prefixes=CHECK,NO-ERRNO %s
 // RUN: %clang -### --target=x86_64-linux-musl -c %s 2>&1 \
 // RUN:   | FileCheck --check-prefixes=CHECK,NO-ERRNO %s
+// A bare Capstone target is the musl application platform: no math errno, and
+// -fno-fast-math keeps that default. A Capstone Linux GNU target keeps errno.
+// RUN: %clang -### --target=capstone64-unknown-elf -c %s 2>&1 \
+// RUN:   | FileCheck --check-prefixes=CHECK,NO-ERRNO %s
+// RUN: %clang -### --target=capstone32-unknown-elf -c %s 2>&1 \
+// RUN:   | FileCheck --check-prefixes=CHECK,NO-ERRNO %s
+// RUN: %clang -### --target=capstone64-unknown-elf -ffast-math -fno-fast-math -c %s 2>&1 \
+// RUN:   | FileCheck --check-prefixes=CHECK,NO-ERRNO %s
+// RUN: %clang -### --target=capstone64-unknown-elf -fmath-errno -c %s 2>&1 \
+// RUN:   | FileCheck --check-prefixes=CHECK,ERRNO %s
+// RUN: %clang -### --target=capstone64-unknown-elf -fno-math-errno -fmath-errno -c %s 2>&1 \
+// RUN:   | FileCheck --check-prefixes=CHECK,ERRNO %s
+// RUN: %clang -### --target=capstone64-unknown-linux-gnu -c %s 2>&1 \
+// RUN:   | FileCheck --check-prefixes=CHECK,ERRNO %s
+// RUN: %clang -### --target=riscv64-unknown-elf -c %s 2>&1 \
+// RUN:   | FileCheck --check-prefixes=CHECK,ERRNO %s
 // RUN: %clang -### --target=amdgcn-amd-amdhsa -nogpuinc -nogpulib -c %s 2>&1 \
 // RUN:   | FileCheck --check-prefixes=CHECK,NO-ERRNO %s
 // RUN: %clang -### --target=amdgcn-amd-amdpal -c %s 2>&1 \
