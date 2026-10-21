@@ -26,8 +26,8 @@
     "virtual-pg-pools": {
       "oracle": "virtual profile with the memory-context port's patch 0003: every palloc chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=28 pc=0x3fbc001a84 in __stpcpy; by function: __stpcpy is a declared fault site",
-      "verdict_from": "results/2026-10-18-review/virtual-pg-pools"
+      "verdict_note": "cause=28 pc=0x3fb5001a84 in __stpcpy; by function: __stpcpy is a declared fault site",
+      "verdict_from": "results/2026-10-21-review/virtual-pg-pools"
     }
   },
   "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle. The physical spatial/sublet pair measured 2026-10-06 to 2026-10-10 stays in results/",
