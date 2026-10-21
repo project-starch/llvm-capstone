@@ -1,6 +1,6 @@
 #!/bin/bash
 # The RTL lane's s23-cpmp-rearm as a bare JTAG boot on one board (2026-10-21; pre-registered in README.md before the boot):
-# the image from dev 0c215bf0983f (capstone/tests/rtl-smoke/s23-bare-2026-10-21/, sha256 bcefd969e128113f..., board_rec
+# the image from dev 7ae1d8491466 (the corrected PREREG; the image is byte-identical to 0c215bf0983f's) (capstone/tests/rtl-smoke/s23-bare-2026-10-21/, sha256 bcefd969e128113f..., board_rec
 # 0x80004040), run by sup-bare-2026-10-03-ladder/run_sup_bare.py from the kit's own driver tree (BOARD_DRIVER_DIR) with
 # the kit's board, URL file and resident bitstream, then graded by s23-grade.py (PREREG.md's rule). No monitor, no Linux.
 # Usage: tier3-s23-bare.sh <board 1|2> <out log> [pre|batch]. S23_RUN / S23_BUSY / S23_BOOK / S23_ROOT stub the dry run.
@@ -22,9 +22,9 @@ main() {
   [ "$fb" = "$BRD" ] && [ -n "$bs" ] && [ -f "$drv/sup-bare-2026-10-03-ladder/run_sup_bare.py" ] && [ -s "$url" ] || { echo "S23 STOP: board.env (board $fb, bitstream ${bs:-none}, driver $drv)" >> "$O"; return 1; }
   [ -e "$R" ] && { echo "S23 STOP: $R exists" >> "$O"; return 1; }
   mkdir -p $R
-  git -C /tmp/capstone/wt-gate show 0c215bf0983f:capstone/tests/rtl-smoke/s23-bare-2026-10-21/images/s23-cpmp-rearm.bin > $R/s23-cpmp-rearm.bin
+  git -C /tmp/capstone/wt-gate show 7ae1d8491466:capstone/tests/rtl-smoke/s23-bare-2026-10-21/images/s23-cpmp-rearm.bin > $R/s23-cpmp-rearm.bin
   [ "$(sha256sum $R/s23-cpmp-rearm.bin | cut -d' ' -f1)" = $IMGSHA ] || { echo "S23 STOP: image sha256" >> "$O"; return 1; }
-  [ "$(git -C /tmp/capstone/wt-gate show 0c215bf0983f:capstone/tests/rtl-smoke/s23-bare-2026-10-21/images/s23-cpmp-rearm.rec | tr -d '[:space:]')" = 80004040 ] || { echo "S23 STOP: board_rec" >> "$O"; return 1; }
+  [ "$(git -C /tmp/capstone/wt-gate show 7ae1d8491466:capstone/tests/rtl-smoke/s23-bare-2026-10-21/images/s23-cpmp-rearm.rec | tr -d '[:space:]')" = 80004040 ] || { echo "S23 STOP: board_rec" >> "$O"; return 1; }
   ${S23_BUSY:-$BUSY} > /dev/null || { echo "S23 STOP: board $BRD is busy" >> "$O"; return 1; }
   bid=$(${S23_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} book $BRD 20 "vp2-tier12 s23-cpmp-rearm bare (board $BRD)"); rc=$?
   [ $rc = 3 ] && { echo "S23 STOP: the hub refused the booking (409): $bid" >> "$O"; return 1; }

@@ -6127,3 +6127,83 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   pages), so that the batch's first boot has one unknown left, the six flips.
   - A re-arm probe reading 1 on a pre-batch tree contradicts the simulation, and it is surfaced as a finding.
   - VOID leaves the batch's s23 reading without its control.
+
+### The trace names mruby's loop: a SIGALRM storm (2026-10-21 21:43-22:3x, board 1, tree A; and board 2's capture, tree B)
+
+- **Trace run 1** (`records/trace-smoke-b1-run1.result-lines.txt`; pre-registered 82cfee2c3a06):
+  - The run stalled at startup, before M1, and was bounded at 600 s. The capture again read event 3 at
+    thread_self / delegate_transport.
+  - Of 70,940 delegated calls, 47,291 were rt_sigprocmask (135) and 23,644 SIGDONE (3235774470), all with result 0
+    and all on tid 0. The trace's tail repeats the period sigprocmask, sigprocmask, SIGDONE.
+  - Once each: SIGPOLL, SIGACTION, setitimer (103) and clock_gettime (113).
+- **Trace run 2** stalled too (2 of 2 on tree A in this boot). Its summary is read when it ends.
+- **Board 2's capture boot** (`records/mp-mruby-stock-b2-capture.result-lines.txt`):
+  - The smoke completed. Cases 01-04 equal the tB-mimic QEMU reference in exit, cause and site, read from the
+    transcript by hand.
+  - Case 05 stalled. Its capture is the same event-3 alternation on tree B.
+  - Board 2 was then stopped (22:26), so 06-23 did not run.
+- **The mechanism** (the runtime lane's reading, checked here against the sources and the image):
+  - hal-posix-task/src/task_hal.c:106-113 installs sigalrm_handler and arms `setitimer(ITIMER_REAL)` with
+    it_value = it_interval = MRB_TICK_UNIT * 1000 us. MRB_TICK_UNIT is 4 (mruby-task/include/task.h:83).
+  - The board image carries sigalrm_handler and mrb_hal_task_init.
+  - In the runtime, one delivery costs three delegated rounds: procmask to the handler mask, then procmask to
+    restore, then SIGDONE. That is the traced period. 23,644 deliveries in ~600 s is ~25 ms each against a 4 ms
+    tick, so a new SIGALRM is always pending, and the program rarely runs.
+  - QEMU's rounds are fast enough that this never stalls there. Intermittency comes from where the first tick lands.
+- **Status:** the reading fits every capture and the trace. **It is not yet confirmed.** The confirming arm is the
+  matched pair below.
+- **Against the trace pre-registration:**
+  - "At least one stalls" held (2 of 2).
+  - "A single repeating nr" held in substance: one repeating period of two nrs.
+  - getdents64 was the M11-M12 candidate, and this run stalled at startup instead.
+- **Amendment (22:3x):** the trace boot is stopped after sum-2. Runs 3-4 would have taken ~1.5 h more for a reading
+  already consistent twice, and board 1 is needed for s23's tree-A baseline.
+- **For the batch boot:** the batch Tier 1 image's mruby is f8594e11, the 4 ms build, so its Tier 1 mruby rung
+  carries this storm.
+
+### s23-cpmp-rearm on board 2 (tree B), result (2026-10-21 22:26-22:27): all 25 values equal the corrected pre-batch vector
+
+- **Read** (`records/s23-bare-b2.result-lines.txt`): SR 25 and SV
+  `0x80800000 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x5 0x8 0x55`.
+  Q1 is 0, all eight true denies 1, all six re-arm probes 0, total 8.
+- **a0:**
+  - My pre-registration (48405d2abdd5) quoted the RTL lane's vector, whose a0 was 0x0. That one value did not hold.
+  - The RTL lane traced it to its own tool: capprint-readings.py reports a CAPPRINT operand as the last INTEGER write
+    to the register. a0 is written by CAPENTER, so the tool showed a stale value. The simulation's own print_cap
+    reads Cursor 0x80800000 on all four trees.
+  - PREREG.md is corrected at 7ae1d8491466, and a0 is graded from there on.
+- **My grader's error, in both directions:**
+  - First it VOIDed this run on a0, a check PREREG did not ask for.
+  - Corrected to PREREG's rule, it read AS EXPECTED.
+  - It now grades a0 = 0x80800000 per 7ae1d8491466. It re-reads this run as AS EXPECTED, and a planted a0 of 0 now
+    VOIDs.
+- **What this gives the batch boot:** the instrument's silicon control on tree B (the wrapper, board_rec, the M trap
+  counter, the probe pages), so the batch boot's s23 has the six flips as its only unknown.
+- **Amendment to the tree-A run (board 1, chained after its trace boot):** it uses the image from 7ae1d8491466
+  (byte-identical) and the a0-graded grader. Predicted: the same 25 values as tree B.
+
+### The SIGALRM-storm matched pair on board 2 (tree B), pre-registered (2026-10-21 22:4x, before the boot)
+
+- **What runs:** `tier3-trace-pair.sh 2 <out>` → `trace-pair.py`, one cold boot. mruby's smoke with the service trace,
+  each run bounded at 600 s, in this order:
+  - 1ab24a92 three times: r60, MRB_TICK_UNIT 100, the compiler lane's corpus-mp-r60t;
+  - then f8594e11 twice: r60, MRB_TICK_UNIT 4, corpus-mp-r60, the batch Tier 1's mruby.
+- **One variable:** the two builds' sources are identical, and of 124 objects only `hal-posix-task/src/task_hal.o`
+  and `mruby-task/src/task.o` differ (checked here). The compiler lane read tv_usec 100000 from task_hal.o's
+  disassembly, against 4000 in r60.
+- **Each summary** prints the whole-trace SIGDONE and rt_sigprocmask counts, the tail first, then a histogram over the
+  last 30,000 lines only. (A full sort of a stalled trace took 30 minutes in sum-1.)
+- **Dry run** (`dryrun-trace-pair.txt`):
+  - the wrapper with the boot stubbed exits NO DATA on a stepless transcript and generates 5 bounded runs;
+  - the guest script under busybox with a fake launcher that storms (135, 135, SIGDONE) in run 4 reads that run's
+    counts as sigdone 164, sigprocmask 328 against 1 and 0 in a completing run.
+- **Predictions:**
+  - **All three t100 runs complete with SMOKE_DONE and exit 0.** SIGDONE stays at most ~10 per second of run time,
+    with sigprocmask ≈ 2 x SIGDONE.
+  - **At least one of the two t4 runs stalls** at the bound, with the period sigprocmask, sigprocmask, SIGDONE, at
+    ~40 SIGDONE a second.
+  - **A t100 run that stalls refutes the storm reading,** or shows it is not the whole story.
+  - A boot where neither t4 run stalls under-determines. Every stall today was the cw 4 ms image 8c7cd276, in 10 of 16
+    processes: tree A 5 of 6 at 17:41, the 13:34 tree-B smoke, the 20:48 tree-A smoke, tree B 1 of 6 at 20:48, and
+    trace runs 1-2. f8594e11 (r60, 4 ms) has not run on silicon, so its stall rate is not known.
+  - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.

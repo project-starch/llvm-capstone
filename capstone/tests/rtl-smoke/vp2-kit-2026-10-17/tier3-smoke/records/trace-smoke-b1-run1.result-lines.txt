@@ -1,0 +1,12 @@
+trace-smoke-b1 run 1 (2026-10-21 21:43-22:21, board 1, tree A caplifive_vp2c_8522d72fe, kit bkit7-rev2xDN2; pre-registered 82cfee2c3a06)
+image mruby-8c7cd27614353067.dom (cw, MRB_TICK_UNIT 4), launcher b27afefc with CAPSTONE_VM_TRACE=1, tools e6c68a531557
+smoke-1: END 137 at its 600 s bound; stdout empty (no M marker: a startup stall); release retires attempted=41
+@@STALL: launcher state R, utime 15697 -> 15968, stime 43945 -> 44718; resume_sfences 209 -> 209; satp refreshes 140641 -> 142842
+escape trace 16 of 16: event 3 kind 0x3 cause 0xb, alternating code+0xbc (delegate_transport) and code+0xb0 (thread_self)
+sum-1: TRACE lines 213820, SERVICE 70940
+  NR 135 (rt_sigprocmask) result 0: 47291
+  NR 3235774470 (SIGDONE) result 0: 23644
+  once each: 3235774471 (SIGPOLL) 0, 3235774469 (SIGACTION) 0, 3235774465 0, 113 (clock_gettime) 0, 103 (setitimer) 0
+  BOUNDARY kind=11 70941, kind=10 70940, kind=12 784, kind=6 120, kind=1 42, kind=2 6
+  tail: the period sigprocmask 0, sigprocmask 0, SIGDONE 0, all tid 0, repeated
+smoke-2: END 137 at its bound (escapes budget already spent)
