@@ -1184,9 +1184,30 @@ ariane_pkg=3fbdd222399fd050, time_out=6000000.
 | `ldc-perm-check` | rc 0 | no CAPPRINT sites; the exit code is the whole reading |
 
 So items 1, 2, 3, 5 and 6 each have graded two-sided readings on a known tree, and item 4 has its readings plus
-the committed proof. Step 6 — the same arms on the restructured predicate at c721c1a2a, arming the two `$fatal`
-checks on real traffic — and the 95-test sweep on c721c1a2a (diffed by name against
-`.sup/sweepbase-c7e6f604f/`, 26 parked tests excluded) are recorded when they land.
+the committed proof.
+
+**Step 6, landed (vp8-wt/.sup/step6/, rtl c721c1a2a, the RESTRUCTURED predicate; PROVENANCE
+ex_stage=3100490350c64cf2, ariane_pkg=4430842f033f6364, the five Anvil units hash-identical to Fix 2's):**
+every one of the eleven arms reads IDENTICAL to the old predicate's — reading 4's eight values, item 6's
+seventeen, both r59 arms, the INIT pair, cap-cursor-window's 39, sup-guards' 80, r51-return-pcc, the MOVC
+rows — and NEITHER `$fatal` check fired on any of them: the closed form agreed with the round trip at every
+gated pack on real traffic, and no unmoved rs1 slot was ever out of its own window. The one-instance collapse's
+structural argument held its first live test. Trial C 1d3abc5b3 was handed to synth with this, the lint pair
+and the proof; launching the synthesis-only size gate is the lead's decision.
+
+**The 95-test sweep, landed (vp9-wt/.sup/sweeptip/, rtl c721c1a2a, time_out 2000000, the committed sweep
+script at the same sha as the baseline's, every unit ANVIL-PROLOGUE-OK):** compared BY TEST NAME against
+`.sup/sweepbase-c7e6f604f/` on verdict, tohost, cycle count and the full `Reg[` print sequence —
+**66 identical, 26 parked on both sides (2,000,013 cycles, not a reading), 3 absent from the baseline (`rand`,
+`perf_tcache_random`, `perf_riscv_random`, the NOBUILD/random arms), 0 differences.** The acceptance was the
+`SWEEP-RAN 95 TESTS` marker AND 101 log files, after a first sweep that printed the marker and wrote nothing.
+One comparator artefact worth recording so it is not re-chased: the harness's SUCCESS line can interleave into
+a print_cap line and carries the ELF path, whose directory is DATED, so a raw-line diff flags a false
+difference (`r33-cincoffset-widen`, all four prints identical in every field); the comparator strips from
+`/workdir/` on.
+
+So the batch at c721c1a2a — items 1, 2, 3, 4 (restructured), 5 and 6 — sweeps identical to the c7e6f604f
+baseline on every test that produces a reading, with every arm's own acceptance measured on a stamped tree.
 
 ### 4. Three absence claims retracted in one day, one shape
 
