@@ -1,7 +1,8 @@
 # s23-cpmp-rearm as a bare JTAG arm: the must-read arm of the batch bitstream's first boot (pre-registered 2026-10-21, before any board run)
 
 The batch bitstream is cut from capstone-ariane `c721c1a2a` (items 1, 2, 3, 4-restructured, 5 and 6). Its first boot
-needs one arm that reads DIFFERENTLY on it than on the resident `caplifive_vp2_bf3db3175.bit`, in a direction that no
+needs one arm that reads DIFFERENTLY on it than on every pre-batch bitstream — the boards hold tree A `8522d72fe` and
+tree B `8de3c48cf` (the board lane's correction, 2026-10-21; `current-state.md`'s "resident bf3db3175" is stale) — in a direction that no
 other change in the batch can produce, so that "the new bitstream is running" and "item 1 is in it" are the same
 reading. That arm is S-23's data face, `s23-cpmp-rearm` (18 probes, 20 recorded deltas), whose six re-arm probes flip
 ALLOWED -> DENIED on item 1's namespace-aware invalidation and on nothing else.
@@ -23,7 +24,7 @@ one load from S through one CPMP entry with the counter read across it, recorded
 Print order: `a0` (CAPENTER's grant), the marker `0x5a23`, the twenty probe deltas Q1 .. Q13d in source order, the
 last trap cause, the total trap count, the end marker `0x55`.
 
-| probe | what it does | resident `bf3db3175` (the arm overlaid; rtl_dirty=yes for that reason) | batch `c721c1a2a` | reading |
+| probe | what it does | PRE-BATCH: `bf3db3175`, tree A `8522d72fe`, tree B `8de3c48cf` — all three IDENTICAL (same rev-node unit hash 6d0f9699a247d012; the arm overlaid, rtl_dirty=yes for that reason) | batch `c721c1a2a` | reading |
 |---|---|---|---|---|
 | Q1 | slot 0 installed, probe | 0 ALLOWED | 0 ALLOWED | INSTRUMENT CONTROL: DENIED here voids the whole run |
 | Q2 | the FRTY sweep, probe slot 0 | 0 | 0 | the handler alone is harmless |
@@ -46,16 +47,19 @@ last trap cause, the total trap count, the end marker `0x55`.
 
 Full vectors, SV in order:
 
-- resident `bf3db3175`: `0x0 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x5 0x8 0x55`
-  (SUCCESS after 17,745 cycles; vp9-wt/.sup/s23-resident-bf3db3175/)
+- pre-batch, ONE vector for all three: `0x0 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x5 0x8 0x55`
+  (SUCCESS after 17,745 cycles on each; vp9-wt/.sup/s23-resident-bf3db3175/, vp9-wt/.sup/s23-treeA-8522d72fe/,
+  vp8-wt/.sup/s23-treeB-8de3c48cf/ — byte-identical vectors, identical cycle counts, identical rev-node unit)
 - batch `c721c1a2a`: `0x0 0x5a23 0x0 0x0 0x1 0x1 0x1 0x0 0x1 0x1 0x1 0x1 0x0 0x0 0x1 0x1 0x1 0x1 0x0 0x1 0x1 0x1 0x5 0xe 0x55`
   (SUCCESS after 17,770 cycles; vp8-wt/.sup/s23-batch/; byte-identical to item 1's acceptance run of 2026-10-21, with
   the `SUP ns-flush RISE` line present 7 times, so Q8's setup is proven live on the batch tree)
 
 **How to grade a boot.** SR must be 25 and Q1 must read 0, or the instrument did not work and nothing else is evidence.
 Then the six flip probes and the total: 14 with Q5/Q8/Q10/Q12a/Q12b/Q13d all DENIED is the batch bitstream with item 1
-in it; 8 with them all ALLOWED is the resident bitstream (or a batch bitstream without item 1, which the lane would
-have to explain). Any mix is a finding, not a pass. The eight true-deny probes and the six controls must read the same
+in it; 8 with them all ALLOWED is a pre-batch bitstream — tree A, tree B or bf3db3175 read the same — or a batch
+bitstream without item 1, which the lane would have to explain. A tree A run BEFORE the batch is the silicon-side
+instrument control: SR 25, Q1 0 and total 8 there prove the wrapper, board_rec, the trap counter and the probe pages
+work on silicon, leaving the batch's first boot one unknown, the flips. Any mix is a finding, not a pass. The eight true-deny probes and the six controls must read the same
 on both, or the instrument has moved and the flips are not evidence either.
 
 **What this arm cannot distinguish.** It reads the CPMP validity bit through item 1's gate only; items 2-6 do not
