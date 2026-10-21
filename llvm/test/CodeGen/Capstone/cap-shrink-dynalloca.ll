@@ -74,3 +74,52 @@ define i8 @dynalloca_memsize(ptr addrspace(200) %np) addrspace(200) {
   %v = load volatile i8, ptr addrspace(200) %p
   ret i8 %v
 }
+
+; A zero-byte dynamic alloca (alloca(0); a count of 0 for an XALLOCAVEC).
+; SHRINK refuses an empty range (base >= end raises Illegal operand value), so
+; with narrowing on, the size is raised to one stack-alignment granule before
+; sp moves: the result is a fresh, non-empty region below the old sp, never an
+; empty one and never one that covers the object below it. Without narrowing
+; nothing changes.
+declare void @use(ptr addrspace(200)) addrspace(200)
+
+; A runtime size: after rounding to 16, a size below 16 (that is, 0) becomes 16,
+; and that clamped size both moves sp and ends the narrowed range.
+; CHECK-LABEL: dynalloca_maybe_zero:
+; SHRINK: andi [[SZ:a[0-9]+]], {{a[0-9]+}}, -16
+; SHRINK-NEXT: li [[MIN:a[0-9]+]], 16
+; SHRINK-NEXT: bltu [[MIN]], [[SZ]],
+; SHRINK: li [[SZ]], 16
+; SHRINK: neg [[NEG:a[0-9]+]], [[SZ]]
+; SHRINK-NEXT: cincoffset [[BASE:a[0-9]+]], sp, [[NEG]]
+; SHRINK-NEXT: mv [[ADDR:a[0-9]+]], [[BASE]]
+; SHRINK-NEXT: add [[END:a[0-9]+]], [[ADDR]], [[SZ]]
+; SHRINK: shrink {{a[0-9]+}}, [[ADDR]], [[END]]
+; NOSHRINK-NOT: bltu
+; NOSHRINK-NOT: shrink
+; CHECK: cjalr ra
+define void @dynalloca_maybe_zero(i64 %n) addrspace(200) {
+  %p = alloca i8, i64 %n, align 16, addrspace(200)
+  call addrspace(200) void @use(ptr addrspace(200) %p)
+  ret void
+}
+
+; A constant zero size outside the entry block stays dynamic. Before the fix
+; this was `shrink rd, rX, rX`, an empty range, which traps.
+; CHECK-LABEL: dynalloca_const_zero:
+; SHRINK: cincoffsetimm [[BASE:a[0-9]+]], sp, -16
+; SHRINK-NEXT: mv [[ADDR:a[0-9]+]], [[BASE]]
+; SHRINK-NEXT: addi [[END:a[0-9]+]], [[ADDR]], 16
+; SHRINK: shrink {{a[0-9]+}}, [[ADDR]], [[END]]
+; SHRINK: movc sp, [[BASE]]
+; NOSHRINK: cincoffsetimm {{a[0-9]+}}, sp, 0
+; NOSHRINK-NOT: shrink
+; CHECK: cjalr ra
+define void @dynalloca_const_zero() addrspace(200) {
+entry:
+  br label %body
+body:
+  %p = alloca i8, i64 0, align 16, addrspace(200)
+  call addrspace(200) void @use(ptr addrspace(200) %p)
+  ret void
+}

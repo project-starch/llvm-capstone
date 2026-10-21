@@ -14,7 +14,8 @@
     "cheribsd-revocation",
     "virtual-malloc",
     "virtual-nested-pools",
-    "silicon-sqlite-stock"
+    "silicon-sqlite-stock",
+    "vp2-malloc"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -44,11 +45,13 @@
   "arm_configurations": {
     "virtual-malloc": "virtual-sqlite-memsys5",
     "virtual-nested-pools": "virtual-sqlite-memsys5-pools",
-    "silicon-sqlite-stock": "silicon-sqlite-memsys5"
+    "silicon-sqlite-stock": "silicon-sqlite-memsys5",
+    "vp2-malloc": "virtual-sqlite-memsys5"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-11-virtual-request-bounds/virtual-malloc",
     "virtual-nested-pools": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools",
-    "silicon-sqlite-stock": "results/2026-10-16-silicon/silicon-sqlite-stock"
+    "silicon-sqlite-stock": "results/2026-10-16-silicon/silicon-sqlite-stock",
+    "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
   }
 }

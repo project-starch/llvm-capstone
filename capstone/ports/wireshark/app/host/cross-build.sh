@@ -41,7 +41,7 @@ source "$APP/deps/env.sh"
 SUBLET=${TSAPP_SUBLET:-0} SUBLETF=
 case $SUBLET in 0|1) ;; *) echo "TSAPP_SUBLET must be 0 or 1" >&2; exit 2 ;; esac
 if [[ $SUBLET == 1 ]]; then
-  [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]] \
+  [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]] \
     || { echo "TSAPP_SUBLET=1 needs CAPSTONE_APPLICATION_PROFILE=virtual" >&2; exit 2; }
   SUBLETF=" -I$CAPSTONE_REPO_ROOT/capstone/runtime/include"
 fi

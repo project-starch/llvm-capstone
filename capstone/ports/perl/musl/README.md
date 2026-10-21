@@ -46,26 +46,29 @@ domain has no signals for.
 
 ## Build and run
 
+The recipe builds for the virtual C runtime by default: the image carries the
+`.capstone_virtual` marker, Linux virtual-address mappings and the virtual
+allocator (musl mallocng), and keeps Perl's capability-width fixes and
+delegated syscall ABI.
+
 ```sh
 source capstone/tests/capstone-test-env.sh
 CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
+PERLD_OPT=-O1 PERLD_VIRTUAL_BLOCKS=65536 \
   bash capstone/ports/perl/musl/build-perl-domain.sh
-# Copy the resulting interpreter into the existing VM's host share.
-capstone-vm --state "$CAPSTONE_TMP_ROOT/dev-vm" run /mnt/host/perl.dom -e 'print 1'
+capstone-vexec /mnt/host/perl.dom -e 'print "virtual perl\\n"'
 ```
 
-### Virtual Linux profile
+### Physical profile
 
-The same Perl source can be rebuilt for the virtual C runtime. This keeps Perl's
-capability-width fixes and delegated syscall ABI, but gives the image the
-`.capstone_virtual` marker, Linux virtual-address mappings and the virtual
-allocator. The physical profile remains the default.
+`PERLD_PROFILE=physical` builds the physical profile's image instead: level0
+heap, run by the physical launcher.
 
 ```sh
 CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
-PERLD_PROFILE=virtual PERLD_OPT=-O1 PERLD_VIRTUAL_BLOCKS=65536 \
-  bash capstone/ports/perl/musl/build-perl-domain.sh
-capstone-vexec /mnt/host/perl.dom -e 'print "virtual perl\\n"'
+PERLD_PROFILE=physical bash capstone/ports/perl/musl/build-perl-domain.sh
+# Copy the resulting interpreter into the share of a VM started with --profile physical.
+capstone-vm --state "$CAPSTONE_TMP_ROOT/physical-vm" run /mnt/host/perl.dom -e 'print 1'
 ```
 
 The virtual build uses private anonymous mappings and one-hart execution. Perl's
@@ -77,7 +80,8 @@ working set (`CAPSTONE_APPLICATION_VIRTUAL_BLOCKS=65536`).
 
 The build recipe retains the pinned upstream sources, cross configuration,
 patches and native reference. CMake now builds the [shared application SDK](../../../runtime/applications.md)
-under `$PERLD_ROOT/runtime`; its `capstone-cc` supplies the CRT and linker rules.
+under `$PERLD_ROOT/runtime-virtual/sdk` (`$PERLD_ROOT/runtime` on the physical
+profile); its `capstone-cc` supplies the CRT and linker rules.
 There is no Perl-specific entry adapter, argument file, compiler wrapper or VM
 runner. The old `run-perl-domain.sh` interface has been removed. Use ordinary
 argv, `run --cwd DIR -e NAME=value`, or `capstone-exec` in the Linux guest shell.
@@ -179,6 +183,7 @@ in regex state with pointer-typed fields; both are unconditional.
 | 0008 | `util.c` | Route backticks and piped opens through libc's delegated `popen`/`pclose`, preserving the child's wait status without cloning the domain. Shell-launched images additionally require the guest binfmt_misc handler |
 | 0009 | `toke.c` | Pass a local copy of the constant `no_code`, not the constant itself, by value. A const global aggregate holding pointers, passed by value, faults in the virtual profile's code generation (compiler issue C-77, `docs/ref/ISSUES.md`): every bareword starting with `::` (`::is`, `::ok` throughout Perl's tests) faulted in `memcpy` at compile time. Behaviour unchanged |
 | 0010 | `builtin.c` | Each `builtin::` call checker gets its descriptor as an index into `builtins[]`, not as `newSVuv(PTR2UV(builtin))` turned back with `NUM2PTR`: through an integer the capability loses its tag, so every `builtin::` call and every program loading `overload.pm` faulted, on this port and on CheriBSD purecap alike (measured 2026-10-11). An upstream pattern, harmless where a pointer is an integer |
+| 0012 | `util.c` | `Perl_repeatcpy` copied the first items of the list form of `x` byte by byte. Those items are SV pointers, and a byte copy drops a capability's tag: `map { $_ } (1) x 100000` faulted (cause 24 in `pp_mapwhile`). Each item is now copied with `memcpy`, as the doubling copies after it already were. An upstream pattern, harmless where a pointer is an integer |
 
 ## Open, in the order they matter
 

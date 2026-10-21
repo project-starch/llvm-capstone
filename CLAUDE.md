@@ -375,7 +375,12 @@ The incident log these were drawn from is in `docs/`; it is evidence, not rules.
 Cheap habits that catch all of the above:
 
 * **Give every detector a positive control.** A gate that has never blocked anything is not a
-  passing gate, it is an unproven one. Negative-test it the day you write it.
+  passing gate, it is an unproven one. Negative-test it the day you write it. **A detector whose
+  condition is a CONJUNCTION needs a control for each operand separately:** proving one term fires
+  says nothing about whether the other is even visible where the check sits. On 2026-10-19 four
+  arms' silence was read off a must-fire (`flush` AND `request owed`) that had a control for the
+  owed term only; the flush-side control, added afterwards, fired ten times per run — had it been
+  silent, every one of those readings was void.
 * **Ask what the instrument cannot distinguish — before the claim goes out, not after.** A
   positive control proves a check *can* fire; it does not prove it separates the hypotheses on
   the table. Both retractions on 2026-08-19 were available to that question in advance: a
@@ -394,8 +399,11 @@ Cheap habits that catch all of the above:
 * **Prefer `python3` to `grep`** for anything that must be counted or must return zero meaningfully.
 * **Make "no data" an ERROR, not a zero.** A tool that finds nothing should exit non-zero and say
   where it looked, never print an empty result that renders like a finding.
-* **`pgrep -f <pattern>` matches your own shell.** Match on a verified PID or a distinctive
-  substring that cannot appear in your own command line.
+* **`pgrep -f <pattern>` matches your own shell.** Signal only process groups you RECORDED at launch,
+  never ones selected by an args substring: on 2026-10-21 one pattern stopped the shell running it, and
+  another killed a peer lane's run that wrote into the same directory tree. List a group's members with
+  `ps -eo pid,pgid,args` filtered on the pgid column -- `ps -g` selects by SESSION, so a liveness test
+  written with it reads "gone" at once and its stop never fires (same day).
 * **A POSITIVE finding from a narrowed view is the mirror of a clean zero, and needs the same
   suspicion.** Confirm it against the UNFILTERED artifact — whether the filter is a grep you wrote
   or a bit-range you assumed — because a view narrowed by the query will show you exactly the thing
@@ -551,7 +559,11 @@ ladder looks conclusive and is also exactly what you see when every arm reports 
 failure. A single matched pair localises more reliably than a long ladder, because the difference
 between the two arms *is* the variable. When arms differ in more than one respect — link address,
 return value, path taken on the way out — the ladder measures whichever difference you did not
-intend.
+intend. **Pre-register every arm's value, the ones expected NOT to move included.** A fix that works
+for the wrong reason reads as a partial success — some arms move, the rest look untouched — and what
+makes it a contradiction instead is having written down beforehand what the unchanged arms must say.
+On 2026-10-18 a TLB-flush fix moved one arm of four and left its twin, instruction-identical up to
+the change, reading the pre-fix value; the prediction named all four, so one run caught it.
 
 **8. Reduce until the bug fits a DIRECTED TEST, then LEAVE THE BOARD.** The board gives ~one bit
 per boot; simulation gives a full instruction+memory trace in 14 s but cannot run a 1.6 MB
@@ -642,9 +654,24 @@ no tooling is needed to add one. Two things to know:
 Delegation is **opt-in and at the main session's discretion** — not automatic.
 The main (Opus) session owns planning, synthesis, reviewing subagent output, and
 all final decisions. Subagents start cold, so any that could write or run tests
-**inherit this file's hard constraints** (no real-person names; serialize QEMU
-suites — the shared `rootfs.ext2` write-lock means never two in parallel;
-`ninja -j90` never `-j112`; never commit unless asked). Subagents do not recurse.
+**inherit this file's hard constraints** (no real-person names; QEMU through the lock rule
+below; `ninja -j90` never `-j112`; never commit unless asked). Subagents do not recurse.
+
+**QEMU runs: two at a time for the snapshot class, alone for everything else** (dev 751073d40374,
+controls in `tests/qemu-lock-domains/RESULT-2026-10-21.md`). The global `qemu.lock` is a
+reader-writer lock with a turnstile.
+- **Snapshot class** — `run-staged.py`, `run.py` and everything behind `virtualvm.Batch` — attaches
+  the rootfs with `-snapshot` and writes only its own work dir, so two may run at once, one per
+  domain: `capstone_with_qemu_domain A|B <cmd>` (A = CPUs 28-29,60-61, B = 30-31,62-63; keep builds
+  and simulations off them).
+- **Exclusive class** runs alone: `utils/run-qemu.sh` (above all with `CAPSTONE_ROOTFS_WRITABLE=1`),
+  `run-domain-smoke.py` and `run-authority-suite.py` (they share one 9p dir), `capstone_vm/cli.py`
+  persistent VMs, and ANY caller not yet migrated. Use `capstone_with_exclusive_qemu <cmd>`.
+- A writable shared image is the hazard: with QEMU's image locking bypassed, two writers LOST an
+  update while `e2fsck` read clean. Never add `file.locking=off` or a writable shared drive to a
+  snapshot-class run.
+- Never put an outer `timeout` around a run that waits for the lock: it expires in the queue and
+  voids the run. Bound the guest, not the wait.
 
 **Submodule source SHOULD be committed.** The old rule that it "stays uncommitted" is
 withdrawn (2026-08-05). It cost real work: the live OpenSBI monitor — the file carrying the
@@ -706,11 +733,22 @@ it, and treat a conclusion with no quoted evidence as unverified.
 Full roster, rationale, and prompt patterns: **`docs/ref/SUBAGENTS.md`**.
 
 **FPGA/board sessions may be run by EITHER Opus lane (A or B)** — B is explicitly
-**not** prohibited from the board (permanent rule). The board is a single shared
-physical resource (secret token, human-in-the-loop, can't be parallelized), so board
-sessions are **serialized across lanes**: never two at once — coordinate timing and
-hand off sequentially. (Built-in **subagents** still never touch the board; the
-corpus-runner is board-free.)
+**not** prohibited from the board (permanent rule). There are **two boards** since 2026-10-19 (#1, and #2 on its
+own console). Each is a single shared physical resource (secret token, human-in-the-loop), so board sessions are
+**serialized per board**: never two on the same board at once. Coordinate timing and hand off sequentially.
+- **Name the board** in every run with `FPGA_BOARD=1|2`; unset means board 1, and the console prints `[fpga-board] N`
+  either way. It selects the console-URL secret (`~/.claude-kisp/secrets/fpga-console-url`, or `...-board2`) and that
+  board's host lock (`/tmp/capstone/.board.lock`, `/tmp/capstone/.board2.lock`). `fpga_console` refuses a URL that is
+  not the named board's.
+- "Is the board free" is `capstone/tests/rtl-smoke/board-busy.py <board>` (or `board-free-wait.sh <s> <board>`), never
+  a bare `pgrep`.
+- **Board #2 flashes NV only, then a power cycle:** a volatile flash does not bring up its debug TAP.
+- **Linux-side bakes stay serialized across BOTH boards.** They share one buildroot tree, and every bake holds
+  `/tmp/capstone/.buildroot-bake.lock` for its whole length. Only bare-image runs (the canary, vector arms) run on both
+  boards at once.
+- **A result records its board.** Compare results across boards only after the same canary or control firmware has
+  agreed on both.
+- Built-in **subagents** still never touch the board; the corpus-runner is board-free.
 
 Peer **lane B** (a separate Opus session on `capstone-bootstrap-b`) is a different
 thing from subagents — see `capstone/docs/ref/SUBAGENTS.md` (the peer-lane

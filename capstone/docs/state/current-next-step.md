@@ -1,3 +1,109 @@
+**2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
+Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams
+cannot run (cpython lt1 and postgres pg-pools, both "needs collection", which item 6's hardware recycling provides).
+The critical path is the RTL lane; everything else is arranged so that nothing waits on it unnecessarily.
+
+| # | Step | Owner | Depends on | State |
+|---|---|---|---|---|
+| 1 | Item 1 (namespace bit; CPMP AND PC trackers ignore the ns flush) | rtl | - | PASSED two-sided (s23-cpmp-rearm: six re-arm paths ALLOWED -> DENIED); audited |
+| 2 | Item 2 (R-58: caller srevroot restored at the escape) | rtl | - | written, sim-validated, sweep-identical |
+| 3 | Item 6 (generations: virtual push to the TABLE's free list, pop {g+1, i}, the nine sites and two retire gates) | rtl | 1 | RTL written, push gates reverted (c96aafa9c: they pushed onto the PHYSICAL list); rework |
+| 4 | Item 4 (R-60: CINCOFFSET/CINCOFFSETIMM/SCC clear the tag; zero metadata word) | rtl | 3 | not started |
+| 5 | Trial synthesis B (base + item 4), judged by the new cursor-to-metadata paths, slack >= -2.414 | synth | 4 | run A sealed (f08906b78, WNS -17.936); host held free |
+| 6 | Items 3 (R-59) and 5 (Q-04 b): drafts on batch-item3-r59 / batch-item5-q04b, reviewed sound | rtl | 3, 4 | to rebase, lint, run |
+| 7 | Lint re-baseline, the batch's 95-test sweep vs the c7e6f604f baseline, the audit of every item | rtl, runtime | 6 | - |
+| 8 | Batch synthesis (2.5-3.5 h) | synth | 7 | - |
+| 9 | The batch's QEMU prediction kit: R-59/R-60 lane csrunv-root-r59-v7 + compact rounding + the generations model (with the two retire gates) | compiler | 3 (contract) | R-59/R-60/rounding done on lanes; generations model next |
+| 10 | The module for the batch (retire accounting by free_count, lane runtime/module-gen-push 13c3e7684ae1), QEMU-gated on 9 | runtime | 9 | written, compile-checked |
+| 11 | The batch firmware: bounded fetch retry (no-progress cap), csupctl.table bracket grep, s23-cpmp-rearm board package | board, rtl | 7 | specified |
+| 12 | REFLASH, then Tier 1 per tree, s23-cpmp-rearm must-read, pb10 FRTY 0 without srz, then the corpus on the batch bitstream including lt1 and pg-pools | board | 8, 9, 10, 11, the lead's word | - |
+
+Off the critical path, in parallel: the board's caplifive-sbi #4 RFENCE pair and the QEMU-kit firmware provenance
+rebuild (capstone-sbi 4674ab6a); the compiler lane's musl PR suites (#269/#270/#272/#245), R-60 edge tests and the
+padding residues (stack frame rule); the open runtime PRs (#250, #258, #264, #279, #271/#273/#274), reviewed on GitHub
+and waiting on their author. The ten compiler PRs are on dev (b3cc8cb4be5a); #275 (LSR) and #267 (frame pointer,
+C-70) are held with reviews posted.
+
+**2026-10-21 05:0x, the vp2 BOARD lane, at its quiet point for the account switch (both boards idle, no hub bookings).**
+The corpus pass on the rebuilt images (the lead's C-32 remedy (b): no `+movc-keeps-integer-source`; dev's module
+54d8a3af; both current bitstreams) is COMPLETE.
+- 25 arms (first written 24; corrected 2026-10-21) and 346 cells, each graded against the compiler lane's silicon-mimic
+  QEMU reference: 345 equal in verdict and 341 in every field.
+- The five differences are ISSUES entries: Q-31 x4 (fault-cause order) and R-60 x1 (sq1q15 case 31).
+- Every arm reads identically on tree A and tree B, and no boot has a pc=0. (First written before the three repaired
+  arms had a tree-A reading; they read 37/37 on tree A on 2026-10-21, equal to tree B, so it now holds.)
+- Record: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README.md`, the "CORPUS PASS ... summary" table
+  and "Quiet point" sections (dev 7333cee38464, 268d5ac8807d).
+- Corrections landed the same night in `bug-corpora/sqlite/engine-repros/results/README.md`: sqlite 02/05/19/24's
+  memsys5 CAUGHT cells are incidental NULL/-1 dereferences, not capability detections (606c8f218a6e, retraction
+  7b4285a9d444). The headline matrix's spatial row (base Capstone's 6 temporal detections) waits on the compiler lane's
+  physical-harness traces, and its framing is the lead's.
+- Open items, with their owners: that README's "Quiet point" list.
+
+2026-10-19 (the RTL lane's night: S-29 found, fixed and landed; tree A's vectors; tree B not yet gated): **The
+virtual-context switcher installs and restores `satp` with NO TLB flush, in both directions, demonstrated in
+simulation and fixed.** S-29 is on dev (`ca39b3b859ab`, extended at `75aab3df524d`) and the fix is on
+capstone-ariane `virtual-profile-2-c` `d427e7391`, an UNQUALIFIED flush-all carried from the CSR file through the
+EX stage, the LSU and the MMU to the instruction and data TLBs. The arm is `va-satpstale` with ten builds; the
+decisive readings are a pair differing by exactly one retired `sfence.vma` whose fifth reading differs with it,
+and a no-access control that attributes the stale entry to the context's own access. QEMU is the stricter side and
+is the reference (the semantics owner's ruling); there is **no corpus consequence today**, because every CSRUNV the
+module issues runs with the caller's live satp equal to the context's, and the one outside that guarantee, the
+teardown discard, installs nothing (`commit_stage.sv:599-602`, three state bits at `csr_regfile.sv:2142-2144`).
+**The instruction TLB carries the window too**, read by the `-DFETCH_FACE` builds: the caller's first fetch after an
+escape resolves to the CONTEXT's physical page. Bounds, all written into the arm's header: the data-side window is
+an ABI RULE in both directions, not something software cannot work around, since the escape always returns to
+CSRUNV+4 and one fence there covers it — the first framing claimed otherwise and was refuted by this arm's own
+control. Two further claims were WITHDRAWN after an audit: "the only mechanism" for the entry-side coupling (an
+in-flight page-table walk is not excluded, and that alternative bears on the fix's sufficiency), and that a stale
+translation could not reach S-23's signature at all (**a caller at U hitting a context-installed U page passes the
+page-permission check and is then refused by the instruction-side capability check with a PHYSICAL address, which
+is S-23's exact signature**; `pmp_data_if.sv:241`). A `-DCALLER_U` build with a narrowed region is owed.
+**Q-31's missing reading is in:** a plain load with an UNTAGGED base inside a virtual context is REFUSED with cause
+24, and the escape kind is 2, the terminal kind, so such a refusal ends the context rather than pausing it.
+**A candidate for S-23's data face, which the runtime lane identified as R-44's class rather than new:** the CPMP
+allow term has six conditions, the sixth being the entry's revocation-node validity, and invalidation compares the
+node INDEX only, ignoring the generation (`pmp_data_if.sv:96-108`, `:143-151`), so freeing a node can permanently
+invalidate an unrelated live entry sharing the index. The discriminator is a simulation arm, owed, and it should
+cross the namespace as the board lane asks. R-44's own entry (`ISSUES.md:1111`) and the plan at
+`docs/plans/r44-cpmp-evidence-tracker.md` already hold the fix design, waiting on the lead.
+**Tree A (`8522d72fe`) is routed and sealed-pending:** WNS −19.025 pre-seal against vp2's −19.072, inside the band,
+WHS +0.054, no congestion failure, routed in ~38 min. **Its area prediction is REFUTED:** TOP 180,838 LUT against a
+predicted ~178,560, +2,432 where the per-change list summed to about +154, with FF +46 against ~+137 predicted. The
+synth lane's reading is that stems cannot attribute it on this design, and I withdrew my own discriminator with it;
+the one traceable piece is `stc_lsu_ex_q` at +224 LUT, R-57's, over its 150 bound. No attribution builds were spent,
+by agreement, since routing decided the question that mattered. **Tree A's 25 bare-arm vectors are all IDENTICAL to
+their published bf3db3175 vectors** (`7ba0a7afc87a`), with the extractor controlled per arm by reproducing all 25
+on the base tree; note that identical vectors mean these arms do NOT exercise S-27, not that it works.
+**Tree B is NOT gated.** It is flush-only at `d427e7391`. Lint passes with all eleven counters at baseline AND the
+UNOPTFLAT membership identical BY NAME to the base, 40 each way, positive-controlled — a gap the plan had carried.
+But the sweep and the supervised list were VOIDED by my own error: run concurrently in one worktree, they share
+`verif/sim/trace_rvfi_hart_00.dasm`, which is the file every reading is extracted from. Re-run serially, **the
+95-test sweep is GREEN: 92 identical in exceptions, readings and retired counts, 0 differing, 0 missing, with the
+three random generators excused by name because they are absent on both sides, and the comparator's own self-test
+fired first (status 0 clean, 1 on a one-sided absence, 1 when nothing is excused).** Use the IN-TREE comparator,
+`verif/sim/sweep-compare.py` with its committed `sweep-expected-missing.txt`; the older copy under `sup-runs` has
+no excuse list and returns status 1 on exactly that clean result. **The 152-test supervised list is GREEN too:
+152 of 152 identical, 0 differing, 0 missing. So TREE B IS FULLY GATED at `8de3c48cf`** (its `core/` byte-identical
+to `d427e7391`). Its pre-registration, with the predictions written against the measured LUT floor rather than
+tighter than it and an endpoint discriminator rather than a stem one, is in
+`docs/plans/capstone-sublet-rtl.md`. **Its build is LAUNCHED**, and the hold I had placed on it is
+withdrawn. I had failed the third sufficiency question by testing it against the wrong reading, whether S-23's
+fetch panics would stop, which is a weak inference from three panics. The semantics owner pointed out the reading
+I had missed: the arms that found the defect are bare M/S-mode arms of the kind the board already runs, so they
+become board images with predicted vectors on both bitstreams. **They are built, simulated on both and landed at
+`8e1df1e05a3c`** as `capstone/tests/rtl-smoke/satpstale-bare-2026-10-19/`, seven images, two-sided on every face
+against the RESIDENT bitstream, with two controls identical across both. The fetch arm reads S-23's signature on
+tree A, cause 1 with a physical address, and its discriminator needs no address table: **on tree A the last two
+recorded values differ, on tree B they are equal.** So S-29 and S-23's fetch face are silicon readings on the
+resident bitstream, independent of tree B, and tree B's own bitstream is informative by the same arms. Its flash
+stays the lead's word. **Still owed, in order:** the cross-namespace arm for the index-only-compare candidate
+(needs a physical node at generation >= 1, so it depends on the node pool's allocation order), the consuming
+resume (ruled, no RTL yet), R-57's register sharing as an area lever rather than a fix, and a quantum-expiry or
+page-fault escape arm, since every escape reading so far is for the ecall kind. **R-57's two saved-exception registers are SHARED-SAFE** (structural: one functional unit, one issue port,
+a single-threaded DYN dispatch loop), with the caveat that the area saving is in the capture mux and the read-side
+priority chain rather than the flops; a candidate for the batch after tree B.
+
 2026-10-18 (boot 3's ruling, the census): **Boot 3-T1 on vp2: C-27's fix holds, then every virtual application faults at its
 first malloc, `csrr a0, 0xcc0` (Q-21's urevavail, which the application runtime polled and only QEMU answered). Ruled as
 before: QEMU's default stops implementing 0xcc0 and 0x5c0 (capstone-qemu virtual-capstone-v7 3b8040d5ff6e909ab30c0ecc32fc76

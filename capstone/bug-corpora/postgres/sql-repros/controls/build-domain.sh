@@ -84,13 +84,14 @@ CF=(-target capstone64-unknown-elf -Xclang -target-feature -Xclang +m
     -ffunction-sections -fdata-sections -O1 -w -Wno-int-conversion "${INC[@]}")
 RF=("${CF[@]}" -std=c99 -D_XOPEN_SOURCE=700
     -I"$MUSL/src/include" -I"$MUSL/src/internal" -I"$MUSL/obj/src/internal")
-if [[ ${CAPSTONE_APPLICATION_PROFILE:-physical} == virtual ]]; then
+if [[ ${CAPSTONE_APPLICATION_PROFILE:-virtual} == virtual ]]; then  # the default the SDK and musl builders it calls now follow (#241)
   CF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
   RF+=(-mllvm -capstone-gp-free -mllvm -capstone-image-gp)
 fi
 O=$ROOT/runtime
 if stage runtime; then
-  bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
+  # A corpus image: the SDK builder appends and verifies -fno-builtin (C-81; build-sdk.sh's corpus gate).
+  CAPSTONE_SDK_CORPUS=1 bash "$RT/capstone/ports/common/application/build-sdk.sh" "$O" "$MUSL" "$ARCHIVE" \
     -DCAPSTONE_APPLICATION_ARENA_BYTES="$ARENA"
 fi
 export CAPSTONE_SDK=$O

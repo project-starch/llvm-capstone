@@ -470,3 +470,245 @@ or the scoreboard; the routed check_timing at seal is the grade.
 - The scratch arm runner reports RC=1 for a test absent from its list exactly like a failure; "identical" across
   two trees from such arms is void. The sweep's list is the instrument for the bounds-regression tests.
 - A sim-only check that fires after an ENCODING change: print its inputs on the old tree first.
+
+## Tree B, pre-registered 2026-10-19 BEFORE any handoff: the satp flush alone, and why its own bitstream may not be worth a cycle yet
+
+**The hash.** capstone-ariane `virtual-profile-2-c` `8de3c48cf`, whose `core/` is byte-identical to `d427e7391`'s;
+everything after that commit is arm source and testlist only. Against tree A (`8522d72fe`) the whole RTL diff is
+**36 insertions and 3 deletions across six files**: a new output and its default in `csr_regfile.sv`, a one-bit port
+carried through `ex_stage.sv`, `load_store_unit.sv` and `cva6_mmu.sv`, an unqualified valid-clear in `cva6_tlb.sv`,
+and one OR term at the shared TLB's instantiation. `run.tcl` untouched.
+
+**Gates, all green and each with its control fired first.**
+- Lint PASS, all eleven counters at baseline: 52 / 3 / 0 / 0 / 40 / 0 / 2 / 25 / 1395 / 2 / 100. **UNOPTFLAT
+  membership identical BY NAME** to the base, 40 names each way, the comparison positive-controlled by an invented
+  name. This closes the gap the earlier plan carried, that the count had held while the names were never diffed.
+- 95-test sweep against the base: **92 identical, 0 differ, 0 missing**, three random generators excused by name
+  because they produce no log on either side. Status 0 from the in-tree comparator, whose self-test fires in all
+  three directions.
+- 152-test supervised list against the base: **152 identical, 0 differ, 0 missing.** Status 0.
+- The fix's own validation: four arms read the pre-registered set exactly, with the negative control unchanged in
+  every reading, its retired count and its cycle count.
+
+**Predictions, stated against the measured floor rather than tighter than it.**
+- Routed WNS inside the standing band, and within the noise of tree A's −18.985. No tighter claim: a null change on
+  this design has moved WNS by several nanoseconds.
+- **Area: no prediction above the floor, deliberately.** Source-identical modules on this design redistribute by
+  about ±1,000 LUT each (measured on tree A: `dom_switcher` +1,006, `dyn_unit` +1,001, `IRO` −918, `scoreboard`
+  −913, `lsu` +317, `rev_node` +154, all with no source change). A 36-line change cannot be predicted above that,
+  and tree A's refuted +154 is what claiming otherwise looks like. Expected TOP: within ±1,500 LUT of 180,838.
+- LUTLP-1 0.
+- Loop membership: **no prediction that it is unchanged**, which was tree A's miss. Instead: no member inside the
+  MMU or either TLB, because the new signal reaches only the valid flops' clear term, which is a flop input and not
+  a combinational path into the lookup.
+- **The discriminator, an endpoint question rather than a stem one:** will a failing endpoint appear inside the
+  MMU's TLB cone? Predicted NO, for the reason above. A failing endpoint there would mean the flush term reached
+  the lookup path, which is the one way this change could cost timing.
+
+**The three sufficiency questions, and the third one does not pass.**
+1. *Is it enough?* As RTL, yes for S-29: the window is closed in both directions and both TLBs, validated in
+   simulation.
+2. *Can the instrument fail silently?* **Yes, on silicon.** There is no readback of the flush. If it did not fire on
+   hardware, nothing in a board run would say so; the proof that it fires is the simulation pair.
+3. *What will it READ on silicon if the best hypothesis is true?* S-23's fetch panics stop. But with N = 3 panics
+   that is weak evidence, and the board lane's own reading of its one capture favours the DATA face, which this
+   change does not touch. So a boot that stops panicking cannot be told apart from one that was never going to,
+   and a boot that keeps panicking cannot be told apart from a flush that did not fire. **That reading is
+   uninformative, so by the standing rule this change does not justify a bitstream cycle on its own.**
+
+**Recommendation: BATCH it.** The RTL is ready and gated and should be carried forward, but its own silicon reading
+is too weak to buy a cycle. The candidates to batch with it are the consuming resume (ruled, not yet written),
+R-57's shared saved-exception register (audited SHARED-SAFE, and the area it saves is in the capture mux and the
+read-side priority chain rather than the flops), and an R-38-class fix if the index-only-compare arm confirms that
+candidate. The decision is the lead's; this entry exists so that the alternative was weighed rather than defaulted
+into a build.
+
+### Tree B GRADED against the pre-registration above, 2026-10-19, on the sealed reports
+
+Sealed by the synthesis lane: exit 0, `write_bitstream completed successfully`, HEAD `8de3c48cf207`, flow 3h05m14s,
+route 1:14:27, bitstream 11,443,722 B sha256 `0098aa5a99c3bae24b1f64ef676f888182a54286b65e8b69b3aa34145ad56485`,
+the archived copy matching. Four of the five predictions hold and the fifth is a miss by my own band.
+
+| prediction | sealed reading | |
+|---|---|---|
+| routed WNS inside the band, within the noise of tree A's −18.985 | **−16.449**, i.e. +2.536 ns, inside the S2 band of 3.74 | HOLDS |
+| LUTLP-1 = 0 | **0** (CFGBVS-1 ×2) | HOLDS |
+| no loop member inside the MMU or either TLB | routed `check_timing` loops 1, TIMING-23 count 1, the arc `ex_stage_i/lsu_i/lsu_bypass_i/cap_clear_addr_q[55]_i_2` I1→O — in the LSU bypass, **not** the MMU or a TLB. Synthesis stage: 0 MMU/TLB/PTW member lines, control 35 on `store_buffer.sv` | HOLDS |
+| the discriminator: no FAILING ENDPOINT in the MMU's TLB cone | **0 of the worst 20** inside `gen_mmu.i_cva6_mmu`, control returns 1 on a path forced into the MMU. Worst path into the 32 TLB valid flops **+17.094** (6 levels, itlb `tags_q[9].valid`), positive and far from critical; worst into any MMU flop −6.718 (`i_ptw state_q[2]`), ~9.7 ns from critical | HOLDS |
+| area: TOP within ±1,500 LUT of 180,838 | TOP **179,181**, i.e. **−1,657** | **MISS by 157** |
+
+**The area miss is the band's, not the build's, and it is the second time I have made this error.** The
+pre-registration states the floor as "about ±1,000 LUT each", which my own later measurement corrected to **at
+least ±2,500 per module and ±2,000 at TOP**: on this very pair `csr_buffer`, whose source this change does not
+touch, moved **−2,120**, and on the tree A pair it moved about −2,200. Against that floor:
+
+| module | ΔLUT | |
+|---|---|---|
+| `csr_buffer` | −2,120 | source-identical: floor |
+| IRO | +448 | floor |
+| `scoreboard` | +389 | floor |
+| `dom_switcher` | −219 | floor |
+| MMU | −214 | floor, and MMU FF unchanged at 3,497 |
+
+**No module moved above the floor, including every module the change touches**, so TOP's −1,657 is a sum of floor
+movements and the change's own area cost is unmeasurable at this floor. What can be said is the useful half: the
+flush term cost nothing detectable, and nothing in the MMU grew. The band was tighter than the floor I was
+warning other lanes about in the same week, which is exactly the error tree A's refuted "+154 at TOP" was.
+
+**The two arms were graded on their own instruments, as the pre-registration required** — membership on the routed
+loop count and the TIMING-23 arc, timing on the routed worst-path endpoints with a forced-path control — and not
+merged into one. The loop set's churn is itself consistent with the standing floor: tree A's arc was
+`ldc_store_ok_q_i_2` and `d93a8d66b`'s was this same `cap_clear_addr_q` arc, all three in `lsu_bypass`, with no
+source cause in that module on any of the three trees.
+
+**Not flashable on the synthesis machine's rules (WNS negative), and the flash is the lead's word to the board
+lane.** The sufficiency verdict in the pre-registration is unchanged by the seal: the RTL is ready and gated, and
+its own silicon reading remains too weak to buy a cycle alone, so it is a batch candidate rather than a build.
+The seven bare board arms committed under `capstone/tests/rtl-smoke/satpstale-bare-2026-10-19/` are what make a
+tree B flash informative when it happens: four of them must change and two must not, pre-registered before tree
+A's own session read them 7 of 7.
+
+## The escape-kind arm: first item of the batch after tree B, designed 2026-10-19 from the kind table
+
+**Why it is first.** Two things rest on "every escape returns to CSRUNV+4 whatever its kind", and both are
+currently design-static plus one observed kind: S-29's conclusion that the data-side window is an ABI rule a
+single fence at CSRUNV+4 closes, and the consuming resume's design. One arm closes both.
+
+**The kind table, from `commit_stage.sv:264-268`, which determines the whole construction:**
+
+| kind | cause | condition |
+|---|---|---|
+| 1 | preempt | the quantum or an interrupt |
+| 3 | 11 | an ecall, and **only if the frame's options bit 0 is set** |
+| 4 | 12, 13 or 15 | a page fault, and **only if options bit 1 is set** |
+| 5 | insufficient system resources | node pressure |
+| 2 | anything else | terminal |
+
+**This corrects how the existing arms' readings were described.** `va-satpstale`'s frame sets options = 1, so bit 1
+is clear, and that is why its page-fault and refused-load escapes read **kind 2, terminal**: the terminality comes
+from the OPTIONS WORD, not from the nature of the fault. With options = 3 the same page fault is kind 4 and
+resumable. The readings stand; the explanation in their headers should say "terminal because options bit 1 is
+clear" rather than implying a fault is terminal in itself.
+
+**The construction**, one source with three sub-arms, frame options = 3 throughout so the ecall and page-fault
+escapes are both resumable kinds:
+- **kind 1** by setting `CSUPQUANTUM` small. **CORRECTED: the quantum is a per-CYCLE budget, not an instruction
+  count.** `csr_regfile.sv:2145`'s condition has **no retirement term** and the block at `:2089` is evaluated every
+  cycle; what the comment restricts is WHEN it counts (while the domain runs, never during the switcher's walks),
+  not what it counts. I wrote "retired instructions" here and said it twice to the semantics owner, inferring it
+  from the condition without noticing the absent term.
+
+**AND A FINDING THAT CAME OUT OF GETTING THAT WRONG.** With the budget at 400 or 1,000 cycles the context retires
+**nothing at all**: the instruction after the CSRUNV in the trace is the caller's own marker at CSRUNV+4. At 4,000
+it completes its whole loop. So more than a thousand cycles are charged to the context between the switcher's walk
+ending and the context's first retirement. Two of my hypotheses are refuted: the caller's pre-entry instructions
+are not charged (the counter loads at the entry, `:2097-2101` and `:2110-2114`), and it is not the cold page-table
+walk after a TLB flush (the same 1,000-cycle quantum without the pre-entry fence also retires nothing). I have not
+offered a third. **Why it matters:** a context armed below that cost retires nothing, so a scheduler re-entering it
+burns the budget and makes no progress, which is the livelock the exclusion's own comment exists to prevent, and
+the kit's armed quantum must exceed it.
+
+**RESULT LINES AND SOURCE, so this stops being prose.** Every quantum value's readings are in
+`docs/history/19-10-2026_15-30-00_quantum-zero-budget-s26-rtl-half.md`, and the arm source with all its builds is
+`capstone-ariane` branch `virtual-profile-2-c` commit **`9b272ff2d`** (a submodule, which is why a search of this
+repository alone does not find it). The startup cost is **between 1,500 and 2,000 cycles**: at 1,500 the context
+retires nothing, at 2,000 its loop completes while the budget still expires before its own exit. A **zero** budget
+is bit-identical to every sub-threshold value, which is S-26's RTL half.
+- **kind 3** by the context's ecall, as today.
+- **kind 4** by a load from an address the context's chain does not map, with options bit 1 set.
+- kind 5 is left out: node pressure needs the allocator's reserve and is a different arm.
+- **a fourth sub-arm, a cause-24 CAPABILITY refusal under options = 3, predicted kind 2.** The semantics owner
+  asked for it so the capability case is a reading rather than either lane's inference, and the prediction is what
+  distinguishes "the options word re-kinds only page faults" from "it re-kinds any resumable-looking fault". The
+  table re-kinds to 4 only for causes 12, 13 and 15 (`commit_stage.sv:266`), and 24 is not among them, so it
+  should fall through to 2 whatever the options say. A reading of kind 4 would mean the table is wrong about its
+  own cause set, which would reopen Q-31.
+
+**A correction that belongs with this design.** I first wrote that the options word makes a cause-24 refusal
+resumable. It does not: the re-kinding is restricted to that three-cause set. The correction applies only to the
+PAGE-FAULT reading of the S-29 arm, where kind 2 is a consequence of options bit 1 being clear. The arm's header
+carried the overclaim briefly and now carries the cause-set reason instead.
+
+**What each sub-arm must read**, so one arm serves both claims:
+1. the escape's kind and cause, from the frame's event words, as today;
+2. **the saved return pc**, which no existing arm reads: the frame's id-0 slot at +64, whose cursor is the parked
+   pc. The claim under test is that it equals CSRUNV+4 for every kind;
+3. the caller's first data access after the escape, both unfenced and with one `sfence.vma` at CSRUNV+4, which is
+   S-29's ABI-rule claim tested per kind rather than for the ecall kind alone.
+
+**Pre-registered expectation:** the saved pc equals CSRUNV+4 for kinds 1, 3 and 4; the unfenced reading is the
+CONTEXT's value and the fenced reading the caller's own, for each of the three. A saved pc that differs for any
+kind refutes the ABI rule as stated and makes the escape direction a hardware problem again rather than a
+software one, which is exactly why this arm comes before the consuming resume.
+
+## The data face's transient candidate: the three source answers the arm needs, 2026-10-19
+
+The persistent form of the index-only candidate is **refuted**, by the board lane's localisation rather than by
+argument: both refused addresses are in CPU 0's per-CPU unit, and `_raw_spin_lock_irqsave` reads `__mmiowb_state`
+in that page on every acquire, so the page was read successfully throughout the boot. A persistent deny of the
+slot or the page is excluded. The TRANSIENT form survives, and these are the three things it rests on.
+
+**1. The broadcast is the walk's own traffic, so it can be late.** `ex_stage.sv:1615-1616`:
+`revnode_invalidation_valid_o = mem_rev_wr_req_valid && !node_wr_req[31] && !vp_hdr_wr`, id `node_wr_req[29:0]`,
+where `mem_rev_wr_req_valid` is the rev-node unit's `_mem_ch_write_req_valid` (`:1533`). So the broadcast tracks
+the WALK's memory writes, not the retirement of the instruction that started it. R-27's drain
+(`~(|rev_drain_q)` in `capstone_dyn_ready_o`) exists because such traffic outlives a flush, and a switch flushes.
+A clear after the CSRUNV escape has retired is therefore structurally possible.
+
+**2. The compare is index-only.** `pmp_data_if.sv:96-108`: the broadcast carries the full 30-bit id but the test is
+`revnode_invalidation_id_i[15:0] == cpmp_tracked_revnode_id_d[i][15:0]`, deliberately, because a 30-bit compare
+would stop firing once generations advance. So a context-namespace node at generation 0 and index N matches a
+kernel entry tracking (g, N) for any g.
+
+**3. WITHDRAWN AND CORRECTED. I claimed `ns_flush` has only a software driver and that is WRONG.** I had grepped
+`ns_flush_strobe_d` in `csr_regfile.sv`, found one assignment, and called it the only driver without tracing the
+signal that actually arrives at the tracker. The signal is `revnode_ns_flush_o`, and `ex_stage.sv:1388` computes it
+from **three** terms:
+`(vctx_rev_q != vctx_rev_qq) || (srevroot_rev_q != srevroot_rev_qq) || ns_flush_strobe_i`,
+where the first two are edge detectors on `vctx_table_i` and `srevroot_i` (`:1379-1385`). **So a namespace change
+fires the flush automatically**, re-arming every tracker as assumed-live (`pmp_data_if.sv:109-114`), and the
+software strobe is only the third way in.
+
+**What decides whether an ESCAPE fires it, which is now the live question.** `csr_regfile.sv:2865-2867`:
+`vctx_table_o` is true when a supervised or virtual context is active, OR at S outside one with
+`srevroot_q != 0`, OR at M with `csupctl.table`. Across an escape `sup_active_q` goes 1 to 0, so:
+- if the kernel at S has **`srevroot_q != 0`** the flag stays true, there is **no edge, no flush**, and a cleared
+  validity bit **persists** across the escape;
+- if **`srevroot_q == 0`** at S the flag falls, the flush fires, and every tracker is re-armed at the escape.
+
+So `srevroot_q` and `sup_active_q` at the fault are the discriminator, and the arm must CONTROL `srevroot` across
+the escape rather than inherit whatever the kernel had. The adopt path at `pmp_data_if.sv:89-94` is still a second
+re-arm route, on a rewrite with a **different** id, and still does not fire when the same capability is written
+back; it is just not the only one.
+
+So the transient shape is: a late broadcast clears the slot, the kernel's next access in that window is refused,
+and the next swap putting a different region there re-adopts it. That matches "read successfully all boot, refused
+once, in interrupt" with no software strobe involved.
+
+**The matched pair, which is the semantics owner's design and better than reproducing the failure.** The two arms
+must differ in **exactly the index**: the failing arm retires a context node whose 16-bit index EQUALS the index
+the caller's CPMP slot tracks, the control retires one whose index DIFFERS, and everything else is identical, the
+same walk length, the same quantum, the same caller access. The index-only mechanism then predicts a cause-5
+refusal on the first and a clean read on the second, while ANY other mechanism, including a generic switch
+hazard, predicts the same reading on both. That is what makes the arm discriminate rather than merely reproduce:
+a refusal on both arms would confirm a window and refute this explanation of it.
+
+**Three accesses after the refusal, not one** (the semantics owner's design, once persistence reopened): the
+first with no intervening rewrite of the slot, where a persistent deny refuses again; the second after the slot is
+rewritten with a different region and back, where the adopt re-arms it and the read is clean. Predicted for the
+index-only mechanism on the equal-index arm: **refused, refused, clean**; and clean throughout on the
+different-index control. Both arms must run with `srevroot` CONTROLLED across the escape, for the reason in point
+3 above: with `srevroot != 0` at S the escape fires no namespace flush and a cleared bit persists, while with
+`srevroot == 0` it re-arms at the escape and the second access would read clean for a reason that has nothing to
+do with the index.
+
+**If the pair is clean on both**, record the walk's last memory write cycle relative to the escape's retirement.
+That distinguishes a window that exists and was missed from one that does not exist, and it is the reading that
+tells the next person whether to try a longer walk or to stop.
+
+**What the arm must pin, and what this note does NOT establish.** The timing claim: whether a context's retire
+walk can still be writing when a kind-1 quantum escape returns the caller. Structural possibility is not
+occurrence. And what the kernel's slot 7 is tracking at that moment, which is a monitor question. The arm comes
+after the escape-kind arm and after the localisation fork the semantics owner set: if the refused pages are the
+module's pinned arena pages or their struct pages, the face is a page-lifetime question and this candidate is not
+the one to build.

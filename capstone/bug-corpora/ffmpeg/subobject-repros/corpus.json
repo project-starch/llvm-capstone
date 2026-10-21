@@ -21,7 +21,8 @@
     "virtual-malloc",
     "silicon-level0",
     "silicon-lifetimes",
-    "silicon-subobject"
+    "silicon-subobject",
+    "vp2-malloc"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -52,12 +53,14 @@
     "virtual-malloc": "virtual-mallocng",
     "silicon-level0": "silicon-level0",
     "silicon-lifetimes": "silicon-level0-lifetimes",
-    "silicon-subobject": "silicon-level0-subobject"
+    "silicon-subobject": "silicon-level0-subobject",
+    "vp2-malloc": "virtual-mallocng"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
     "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
     "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
-    "silicon-subobject": "results/2026-10-16-silicon/silicon-subobject"
+    "silicon-subobject": "results/2026-10-16-silicon/silicon-subobject",
+    "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
   }
 }

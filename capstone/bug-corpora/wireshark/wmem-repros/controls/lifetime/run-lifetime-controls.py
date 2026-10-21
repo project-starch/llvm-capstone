@@ -35,6 +35,7 @@ import sys
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import verdicts as v  # noqa: E402
 
 KIT_FILES = {"qemu": "qemu-system-riscv64", "kernel": "images/Image", "firmware": "images/fw_jump.elf",
@@ -188,6 +189,7 @@ def main():
     p.add_argument("--revision", type=Path, required=True, help="JSON: the snapshot's revision record")
     p.add_argument("--timeout", type=int, default=1800)
     a = p.parse_args()
+    sdk_builtins.gate([a.build], who="wireshark:run-lifetime-controls.py")
     cache = (a.build / "CMakeCache.txt").read_text()
     sublet = re.search(r"^WM_SUBLET:BOOL=(\S+)", cache, re.M)
     sdk = re.search(r"^CAPSTONE_SDK:PATH=(\S+)", cache, re.M)

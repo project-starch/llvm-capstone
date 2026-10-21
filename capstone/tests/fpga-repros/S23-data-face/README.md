@@ -35,12 +35,37 @@ The captures:
   between. On bf3db3175 it comes 18 lines before, with only the next context's image grants (CAPSTONE_VM_ADD_OK) in
   between.
   - On tree A both FRTY pcs are `vm_ioctl+0xab0`, the instruction after the module's CSRUNV; the module base differs
-    per boot, the offset does not.
+    per boot, the offset does not. (These two are the CSRUNV+4 site. Other boots show a CSRETIRE+4 site inside
+    `retire()`, 21 per boot; see the correction below.)
   - This ordering is an observation. Its relation to the refusal is not established.
 
-**Every FRTY is the instruction after the module's CSRUNV in `vm_ioctl`.** The page offset of each pc is matched to
-the instruction after a CSRUNV (funct7 0x24) or CSRETIRE (funct7 0x53) in that run's module .text, and named by the
-enclosing symbol. Exactly one candidate matched in each module:
+**WORKED AROUND IN THE MODULE (2026-10-20, board 2, tree B, sql0, one variable, N=1 per arm): the node floor
+takes FRTY from 21 to 0 and DRT1 to 0.** dev's srz module 90bf036f reads FRTY 21, all at retire+0x220 against its
+own .ko; module a4aa5668, the same base plus only the floor commit, reads 0. N=1 each side, but the baseline it
+displaces reproduced on six boots. A third arm with a release line per context read `attempted=24 succeeded=24
+first_id=1024` on 21 of 21 teardowns, so the retires still happen: the floor works by changing WHICH index the
+window's CSRETIRE broadcasts, not whether it broadcasts. **The collision itself is still INFERRED** -- no boot
+has printed the refusing slot's tracked index or the broadcast index.
+
+**THE COVERING SLOT IS IDENTIFIED (2026-10-20, sql0-frs): slot 3, region 14, the kernel's main RAM
+[0x80100000, 0xAC000000), LCC type LINEAR, on all 21 refusals.** So the colliding index is the fresh PHYSICAL
+node the monitor's LINEAR carving gave that region at boot — not CAPCREATE's static node 2, which an earlier
+hypothesis in the message traffic proposed and which this reading refutes. Bounded from source at the low tens:
+the physical pool's head starts at 3 and only bumps. A floor on the context tables' first allocatable index
+therefore covers it with margin.
+
+**CORRECTED 2026-10-20: this heading used to read "Every FRTY is the instruction after the module's CSRUNV in
+`vm_ioctl`", and that is OVER-GENERAL — true of the four instances tabulated below, false of the 21-per-boot site
+seen on six other boots.** Those are at the instruction after the **CSRETIRE inside `retire()`** (retire+0x220 in
+module 39d8492d, retire+0x22c in 607164b9, both the first instruction of the inlined `restore_root`), which is the
+site that SURVIVES the srevroot-zero module. This entry's own issue-registry Reading block had already recorded a
+CSRETIRE+4 site (boot r6, "both at retire+0xdc, the instruction after a CSRETIRE"), and the committed tier-12
+captures carry seven distinct FRTY pcs, so a single-site claim was never supportable. See ISSUES.md's S-23, which
+now records two sites. **The four instances below are the CSRUNV+4 site and are unchanged as readings**; what was
+wrong was the generalisation over them.
+
+The page offset of each pc is matched to the instruction after a CSRUNV (funct7 0x24) or CSRETIRE (funct7 0x53) in
+that run's module .text, and named by the enclosing symbol. Exactly one candidate matched in each module:
 
 | instance | module | FRTY pc | function |
 |---|---|---|---|

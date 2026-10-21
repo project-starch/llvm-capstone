@@ -2723,6 +2723,14 @@ def DELIN : RVInstR<0b0000011, 0b001, OPC_CAP_OP, (outs GPCR:$rd),
 //     delin      $rd               // the derived capability is LINEAR; make it
 //                                  // NONLIN so it may be copied
 //
+// ... with two ABI-dependent substitutions, both in expandCapGlobalBase: under
+// the gp-free ABI the base op is SCC rather than CIncOffset (an image-bounded gp
+// with cursor 0 is unrepresentable, so the cursor is set absolutely), and under
+// the image-gp ABI the DELIN is NOT emitted at all, because that ABI asserts a
+// NONLIN gp and `delin` of a non-LINEAR capability raises cause 26 on the RTL
+// (C-27; it cost vp2's boot 2). `Size = 8` therefore overestimates by one
+// instruction in that configuration, which is the safe direction.
+//
 // This has to be ONE instruction, not two. The capability that cincoffset
 // produces is LINEAR, and the ISA CONSUMES a non-NONLIN source on copy: `movc
 // rd, rs1` nulls rs1 (task-005 finding C3). DELIN is a tied in-place op, so

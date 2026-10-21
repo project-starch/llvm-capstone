@@ -93,7 +93,13 @@ qualification separately checks behavior, lifetimes and the service boundary.
 ## VM remapping
 
 Large realloc follows upstream's mremap branch. Heap mappings use their
-page-rounded requested length, without the old power-of-two padding.
+page-rounded requested length, without the old power-of-two padding. One
+mapping holds at most `CV_MAX_REGION_BYTES` (2 GiB) and a process's mappings
+`CV_MAX_BYTES` (4 GiB), from `vm-abi.h`. A malloc needs `IB + UNIT` bytes above
+its payload, so the largest payload is a little under 2 GiB. Pages are backed and
+pinned as they are first touched, so only what a program touches counts against
+guest RAM; `free` clears the whole payload and so touches every page of it. QEMU's exact-bounds metadata for a page that has held a capability
+also costs host memory, about 6 KiB per 4 KiB page.
 The native launcher invokes Linux `mremap(MREMAP_MAYMOVE)`; it does not run
 mallocng. The module's BEGIN/END transaction:
 
@@ -113,7 +119,7 @@ swap/migration and multi-hart execution are not added by this allocator port.
 
 ## Processor storage contract
 
-ABI v5 requires QEMU's explicit `x-capstone-exact-bounds=true` profile. The
+ABI v6 runs on QEMU's default profile (option iii). The
 launcher checks its advertised bit before starting the image. Version 2/3
 images remain accepted; the withdrawn native-heap version 4 is rejected.
 

@@ -34,14 +34,15 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
 TIMEOUT = 120  # seconds per case; the old in-guest watchdog was 45 s of a native-speed guest
 
 
-def run(state, image, script_guest, raw):
-    text, result = appvm.run_app(state, image, [script_guest], raw, timeout=TIMEOUT)
+def run(state, image, script_guest, raw, *script_args):
+    text, result = appvm.run_app(state, image, [script_guest, *script_args], raw, timeout=TIMEOUT)
     return text, result
 
 
@@ -67,22 +68,25 @@ def main():
     p.add_argument("--capi-dir", type=Path, required=True,
                    help="probe/build-capi.sh's output for this arm's mruby build")
     p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--raw", type=Path, help="where each run's raw output goes (default <output>/raw); tier3-appvm-arm.sh passes one per phase")
     p.add_argument("--smoke", type=Path, default=REPO / "capstone/ports/mruby/app/scripts/smoke.rb")
     a = p.parse_args()
+    sdk_builtins.gate([a.image, a.capi_dir], who="mruby:run-virtual.py")
     if appvm.profile(a.state) != "virtual":
         p.error(f"{a.state} is not a virtual-profile VM")
     share = Path(json.loads((a.state / "config.json").read_text())["share"])
     stage = share / "mruby-cases"
     stage.mkdir(exist_ok=True)
-    (share / "files").mkdir(exist_ok=True)          # smoke.rb writes /mnt/host/files/out.txt
-    (share / "files").chmod(0o777)
-    raw = a.output / "raw"
+    raw = a.raw or a.output / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     symbols = v.Symbols(a.llvm_bin, a.image)
     image_sha = v.sha256(a.image)
 
     shutil.copy(a.smoke, stage / "smoke.rb")
-    text, result = run(a.state, a.image, "/mnt/host/mruby-cases/smoke.rb", raw / "control-smoke")
+    # smoke.rb writes and reads back <ARGV[0]>/out.txt (default /mnt/host/files). A batch session's /mnt/host is the
+    # stage, read-only in a QEMU kit (Errno::EROFS) and writable on the board, so the control writes to /tmp, which
+    # is writable on both.
+    text, result = run(a.state, a.image, "/mnt/host/mruby-cases/smoke.rb", raw / "control-smoke", "/tmp")
     smoke = outcome(text, result, symbols)
     smoke_ok = smoke[0] == "completed" and "SMOKE_DONE" in text
     print(f"  control smoke {smoke[0]} {'SMOKE_DONE' if 'SMOKE_DONE' in text else 'no SMOKE_DONE'}", flush=True)

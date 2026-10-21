@@ -425,7 +425,7 @@ action 2 only), not to the fixed one, so the kit's predictions see what silicon 
 
 **Not demonstrated.** Source reading only.
 
-## S-23 — silicon only: the S caller's first instruction fetch after a CSRUNV or CSRETIRE returns is refused (instruction access fault, mtval physical) although a loaded RWX CPMP entry covers it when M reads the CSRs; the kernel panics `OPEN — found 2026-10-18 by the board lane on vp2 (caplifive_vp2_bf3db3175), N = 3 panics; WORKED AROUND in the monitor (capstone-sbi vp2/fetch-retry 007d81d, CAPSTONE_VP2_FETCH_RETRY), which every virtual-application claim on vp2 must cite; the root cause and the RTL fix for the next bitstream are the RTL lane's`
+## S-23 — silicon only: the S caller's first instruction fetch after a CSRUNV or CSRETIRE returns is refused (instruction access fault, mtval physical) although a loaded RWX CPMP entry covers it when M reads the CSRs; the kernel panics `PARTLY ROOT-CAUSED 2026-10-20, TWO SITES, after an adversarial audit REFUTED this entry's own first attribution (every FRTY at the instruction after the CSRUNV) and the plan sentence distilled from it. (1) DATA face: a CPMP tracker cleared by the INDEX-ONLY broadcast compare (`pmp_data_if.sv:107`) stays cleared because R-58 leaves the caller's srevroot holding the context's table, so the module's select_root/restore_root pair writes one value and raises no `revnode_ns_flush` edge (`ex_stage.sv:1417`); the next access through the slot is refused with cause 5 and a physical tval (`pmp_data_if.sv:305-313`), and the trap to M re-arms every entry (`:111-114`), which is why no M-side read can ever see the denying state. REMOVED ON SILICON by the srevroot-zero module: pb10 on tree B is a one-variable pair (module 39d8492d -> 607164b9, same bitstream, monitor, images and 4-of-4 cells both sides; the kernel hash moves with the module by construction, since the bake cpio's it into the Image) reading DRT1 1 -> 0; sql0 reads DRT1 16 -> 0 against a five-boot baseline band of 14-17 on two bitstreams. DISCLOSURES: sql0's positive control FAILED and its cells were VOID in every compared boot, so only the monitor counters compare; the srevroot readings at the refusals (0x82B00000 tree B, 0x81E00000 tree A, csupctl.table clear) come from two OTHER boots on two bitstreams; the sql0 baseline's module and monitor are INFERRED from a unique page-offset match, not printed; and the collision itself -- the refusing slot's tracked index -- has never been printed on any boot. (2) FETCH face, the one that SURVIVES the module: on six boots across both bitstreams and both modules, all 21 FRTY per boot are at the instruction after the CSRETIRE inside `retire()` (retire+0x220 in 39d8492d, retire+0x22c in 607164b9, both the first instruction of the inlined `restore_root`), i.e. INSIDE the select_root window and 4 bytes after the clearing broadcast -- so no software write can precede it, and **R-58 is NOT required for it**: inside the window select_root deliberately puts the context's table in srevroot, so the namespace flag is 1 at S regardless. **RETRACTED 2026-10-20, after an adversarial audit of the cross-namespace arm: "the cause is the index-only compare" is the wrong name for this defect.** The operative defect is that **ids carry no NAMESPACE identity**: `capstone_rev_node.anvil:3-6` masks every broadcast to `#{14'd0, index[0+:16]}`, and the physical bump mints `#{14'd0, head}` (`:314`), so a virtual (0,i) and a physical (0,i) are one tag to the tracker and **a full 30-bit compare would fire identically**. The index-only slice at `pmp_data_if.sv:107` is an ADDITIONAL collapse -- it folds a tracked generation >= 1 onto the same tag -- and nothing has shown the field exercises it: that needs a tracked id from the free-list POP path (`capstone_rev_node.anvil:289`, `node_id := #{g1, 16'd0} + pop_idx`), not the bump, and no boot has printed the refusing slot's generation. The cross-namespace arm cannot see the slice at all, both of its ids being generation 0, so it must not be cited for it; the arm that can is the batch plan's acceptance reading 4, which revokes at a recycled index. **The R-58 RTL fix is not predicted to remove the CSRETIRE+4 site** (inside the window `select_root` puts the context's table in srevroot, so the restore writes the value srevroot already holds and no flush edge fires) -- but it IS now predicted, and in simulation measured, to remove the CSRUNV+4 site, where the restore changes srevroot and the flush re-arms every tracker. Was: "The cause is the index-only compare ALONE (R-38's residual, which wants its own entry)". That a cleared tracker refuses the NEXT FETCH is MEASURED against a one-operand control (capstone-ariane 3c2cdf3f2, cap-fetchdeny: 1 cause-1 fault at the following instruction with mtval the fetch address, against 0 when a different index is broadcast), in the PHYSICAL namespace. **The CROSS-namespace step is now measured too, end to end in one arm** (capstone-ariane c7e6f604f, va-fetchsplit, three variants in simulation, N=1 per arm on a deterministic simulator): a kill broadcast issued INSIDE a virtual context, in the context's own table at srevroot, cleared a CPMP tracker holding an index minted from the M-mode PHYSICAL pool, and the caller's first instruction fetch after the escape was refused with cause 1 (`pmp_data_if.sv:246`, tval `:248`) -- faults 1, mtval = mepc = 0x80001020 = s_code+0x20, the four children at 0x100 -- against a control differing in ONE CAPNODE operand that reads faults 0 with the same four children. **The arm carries its own before/after**, which is stronger than the pair: the eight S-mode fetches at 0x80001000..0x8000101c passed through the SAME CPMP0 entry, four of them after the window's only CSR write, and the ninth at +0x20 was denied with no retired instruction and no CCSRRW in between -- and `cpmp_revnode_valid_d` has exactly three writers (adopt :88-94, the broadcast compare :100-107, the namespace flush :109-114), so a matching broadcast arrived inside that window. The coverage is split so only the caller's own code sits under the tracked entry; an earlier arm (be040f067) had one grant over the whole image, so the collision denied the CONTEXT's fetches, which is the third, previously unobserved face, now OBSERVED in simulation. **The indices are READ in simulation**: physical child 1 Revnode_id 3, the code capability 3 after the re-node, physical child 8 Revnode_id 10, and the context table's next-unused 7 after four allocations, so the context handed out virtual 3, 4, 5, 6. Two instrument limits to carry with the reading: `mtval` does NOT discriminate the CPMP site from the PMA/integer-PMP site (`:224` reports the virtual address, `:248` the physical, and the arm is identity-mapped), so the discrimination comes from the control and the in-arm before/after and nothing else; and on SILICON neither side of the collision has been printed, so what simulation settles is the MECHANISM, not the field's allocation. (3) OPEN ANOMALY: pb10's CSRUNV+4 refusals (2 on three boots, and the original panics at vm_ioctl+0xb60/+0xba4) go to 0 under the srevroot-zero module, which the mechanism does NOT predict, since that module's write IS the instruction at CSRUNV+4. Candidates: a timing or alignment perturbation from the inserted instruction, a region/index-allocation difference between the two module builds, or run-to-run variation (argued against by the baseline 2 reproducing on three boots). On tree B this site is not discriminated from an S-29 residual. **The CSRETIRE+4 site is WORKED AROUND IN THE MODULE by the node floor (2026-10-20, board 2, tree B, sql0, one variable, N=1 per arm; board lanes 57bc5147bdb0 and c1d7423a7022): dev's srz module 90bf036f reads FRTY 21, all at retire+0x220 decoded against its own .ko, and the node-floor module a4aa5668 -- the same base plus only the floor commit -- reads FRTY 0 and DRT1 0.** N=1 on each side, but the baseline it displaces is not a single reading: FRTY 21 reproduced on six boots across both bitstreams and both modules, and DRT1 sat in a 14-17 band over five, so a zero is far outside every observed value. A third arm (node-floor-2, a release line per context) read `attempted=24 succeeded=24 first_id=1024` on 21 of 21 teardowns, which REFUTES the board auditor's alternative that the floor works by silently rejecting the CSRETIRE: the retires still happen, and the floor works by changing WHICH INDEX the window's CSRETIRE broadcasts, not whether it broadcasts. Its Tier 1 passed. The floor LANDED on dev at 794d7c5815f5 (the compiler lane's squash of 770daec2 and c2b843ad with its gate records, the module source equal to node-floor-2's, and board build 54d8a3af with its own Tier 1); the artifacts read in the pair above are the module hashes. **On silicon the collision itself stays INFERRED, not read**: no boot has printed the refusing slot's tracked index, its generation, or the broadcast index, so "slot 3's region-14 physical node equalled a context's virtual index" remains the explanation that fits every reading rather than one that has been observed there. Simulation has now read both sides of an equivalent collision (va-fetchsplit, above), which is why the mechanism is no longer the uncertain part; what is uncertain is the field's allocation, and in particular whether the refusing slot's tracked id was bump-minted (generation 0, so namespace identity is the whole defect) or free-list popped (generation >= 1, which would additionally implicate the index-only compare). The DATA face is worked around by the srevroot-zero module, as above, and **the root cause of both sites is one thing, renamed by the 2026-10-20 audit: ids carry NO NAMESPACE IDENTITY**, so a virtual index and a physical index of the same value are one tag. The RTL fix is the semantics owner's ruling of 2026-10-20: the broadcast carries a namespace bit and **the CPMP trackers act only on PHYSICAL broadcasts**, with no namespace recorded per entry (an adopt-time namespace is fragile around a switch, where the escape's restore walk rewrites the caller's entries while the flag may still read virtual). The LSU revocation cache and the PC tracker keep consuming both namespaces, because they do track a context's virtual capabilities. R-58's fix is still wanted for the persistence it removes. The monitor workaround stands (capstone-sbi vp2/fetch-retry 007d81d, CAPSTONE_VP2_FETCH_RETRY) and every virtual-application claim on vp2 must still cite it. A SOFTWARE FIX for both collisions is on the module's lane (runtime/vp2-node-floor 770daec2dbd6): raise every context table's first allocatable index above the physical pool's high-water, so no virtual index can equal a physical one at all -- which is the right premise for the floor under either compare, and is why the audit's renaming does not disturb it. Nothing in the RTL assumes the old floor of 2, the gap is inert (a zero record has depth 0, which terminates a walk), and CSNODE cannot allocate below next -- but NOTHING ON vp2 EXPORTS THE PHYSICAL HIGH-WATER (0xcc0 is not implemented, Q-21), so the floor must be asserted monitor-side rather than against hardware. Siblings R-58, R-59, R-38; S-29 is a separate, real, fixed cause, REFUTED for the CSRETIRE+4 site because the CSRETIRE 4 bytes earlier executed through the same translation and page with no satp write between. Was: OPEN from 2026-10-18`
 
 Siblings: S-21 and S-22 (the same CSRUNV ENTRY/ESCAPE walks, a different consequence), Q-30.
 
@@ -445,7 +445,63 @@ Siblings: S-21 and S-22 (the same CSRUNV ENTRY/ESCAPE walks, a different consequ
 - **Boot r6** (0cc4760d21fde17a, the retry monitor): the monitor retried twice, both at retire+0xdc, the instruction
   after a CSRETIRE, before the first grant. After that, none of the hundreds of CSRUNV returns faulted.
 
-**The candidate mechanism** (an rtl-oracle reading of bf3db3175, not yet demonstrated):
+**The mechanism, both sites** (2026-10-20, after the audit).
+
+- **The clear** is that the broadcast and the tracker share no namespace identity. Every broadcast is masked
+  to a bare, generation-0 index (`capstone_rev_node.anvil:3-6`, `#{14'd0, node_id[0+:16]}`) and the physical
+  bump mints the same shape (`:314`, `#{14'd0, head}`), so a virtual (0,i) and a physical (0,i) are ONE TAG and
+  a full 30-bit compare at `pmp_data_if.sv:107` would fire identically. **The index-only slice is a SECOND,
+  separate collapse** — it folds a tracked generation >= 1 onto the same tag, which is deliberate and
+  load-bearing, the comment at `:96-100` recording that a 30-bit compare "would never fire and invalidation
+  would silently stop working at generation >= 1". Only an id from the free-list POP path carries a generation
+  (`capstone_rev_node.anvil:289`); the bump path never does, and no boot has printed the refusing slot's
+  generation, so which of the two collapses the FIELD's collision used is open. Either way the RTL fix is a
+  BROADCAST-FORMAT change (carry the namespace; the virtual record's generation is hardwired `14'd0` in the
+  decode at `ex_stage.sv:1476-1478`), not a comparator tweak, which is why the module-side floor is cheaper.
+- **The fetch half** reads the same `cpmp_revnode_valid_q` array as the data half (`pmp_data_if.sv:170` on the
+  cached path, `:185` on the scan, with revocation named as invalidation condition (b)), and a fetch deny raises
+  cause 1 with a physical tval at `:240-248`, exempting M so the handler stays fetchable.
+- **Why the CSRETIRE+4 site survives every software fix at that position**: the refused instruction IS the first
+  instruction of the window's own end-of-window srevroot write, so the write cannot precede its own fetch. The
+  same shape holds at CSRUNV+4, where the srz module's `csrw 0x5c1, zero` sits in the same asm statement as the
+  CSRUNV (`capstone_vm.c`'s `run`/`run_x0`) and is therefore literally the instruction being refused.
+- **An M handler cannot repair a CPMP entry while a context is live**: `csr_regfile.sv:3018-3021` makes a CCSRRW
+  to any of 0x010..0x01F a privilege violation while `sup_active_q` is 1, and `CCSR_CPMP(n) = 0x10 | n` is that
+  range. Found by an arm that wedged on its own repair (capstone-ariane `be040f067`), and the reason its two runs
+  produced byte-identical counts.
+- **A THIRD, unobserved face follows and is recorded here so it is not re-derived**: a caller CPMP grant covering
+  the whole image also covers a context's code, so a context's own kill broadcast can clear the entry the
+  CONTEXT is fetching through. In the field that would present as a context unable to make progress, not as a
+  caller fault. Unobserved; the module-side floor would prevent it for any id the floor covers.
+- **Placement** (an earlier module returning fault-free on two boots) is CONTINGENT under this mechanism rather
+  than unexplained: whether any virtual index collides with a tracked physical one is an allocation coincidence.
+- **UNRESOLVED, and it bears on whether "one defect" is the right framing**: on sql0 the CSRUNV+4 site appears
+  only in the three boots whose monitor lacks the data retry, and never in the six retry boots; either those
+  boots ended at the panic before `retire()` ran, or the monitor build changes which indices collide.
+- **THE COLLIDING INDEX IS IDENTIFIED IN THE FIELD (2026-10-20, board 2, sql0-frs, lane 2027abf7e590), and it
+  is NOT CAPCREATE's node 2.** All 21 refused fetches at retire+0x22c have exactly one covering slot, the same
+  every time: **slot 3 holding region 14, the kernel's main RAM [0x80100000, 0xAC000000), LCC type LINEAR**
+  (validity 1, uninformative because the trap re-arms). So the index that collides is the **fresh PHYSICAL node
+  p** the monitor's LINEAR carving gave region 14 at boot, and the mechanism holds with p in place of 2. The
+  count fits: each session's fresh table starts at the same next and makes the same allocation sequence, so the
+  arena whose ancestor is virtual index p retires once per session — 21 sessions, 21 refusals.
+  **p is bounded from source at the low tens, not thousands**: the physical pool's head starts at 3
+  (`INIT_STAGE` sets `head := 16'd3`) and only ever bumps, recycling can lower an index but never raise it, and
+  the allocations preceding region 14's carve are the genesis regions plus the four boot carves of `cap_env_init`
+  plus the regions created before it — tens. **Consequence for the module-side floor: a floor of 1024 covers p
+  with a wide margin, so a SURVIVING FRTY after the floor cannot be explained as p >= 1024** and would be a
+  different mechanism. That makes the floor arm a clean test rather than an ambiguous one.
+- **The next RTL revision's batch, with every acceptance reading pre-registered**, is
+  `capstone/docs/plans/2026-10-20-next-rtl-revision-batch.md`: the namespace-aware broadcast (the real fix for
+  both sites), R-58's id-67 restore, R-59's precheck/mask mismatch and R-60's out-of-window rule, in ONE
+  bitstream. Nothing in S-23 is blocked on it.
+- **An instrument warning for anyone re-deriving these counts**: `raw/guest/board-raw.txt` ACCUMULATES the
+  previous arm's console tail (one boot's file carries another boot's 21 FRTY lines), so any count taken from it
+  must be cut at that boot's OpenSBI banner. The scoped `board.txt` is the source.
+
+**The earlier candidate mechanism, SUPERSEDED** (an rtl-oracle reading of bf3db3175, never demonstrated; it is
+not needed to explain any reading below, and the entry's own `flush_commit_o = flush_commit | dom_switch_busy_i`
+objection plus the Placement reading lean against it, though nothing settled it):
 - ENTRY's init strobe zeroes the one real CPMP bank (`csr_regfile.sv:2059-2066`, reg_id 69: `cpmp_d = '0;
   cpmp_tag_d = '0`). This is harmless while the context runs at M, since the checks skip M (`pmp_data_if.sv:241`, `:306`).
 - The ESCAPE's RESTORE walk writes id 0, the pc, first (`capstone_dom_switcher.anvil:508`). The frontend takes it at
@@ -495,7 +551,7 @@ access fault` at `mod_node_page_state+0x40` (cause 5, badaddr = mtval) and panic
     - **The namespace flush re-arms rather than re-queries.** On `revnode_ns_flush_i` every tracked id is zeroed and
       `cpmp_revnode_valid_d[i]` set to 1, "re-adopted next cycle as on an entry write, assumed valid" (`:109-114`). That
       is the same assumed-live posture as the adopt (R-44's direction).
-    - So a namespace crossing can create a false deny (through the index-only compare) or clear one (through the flush),
+    - So a namespace crossing can create a false deny (through the missing namespace identity) or clear one (through the flush),
       depending on order. The strobe is csupctl bit 2 (`csr_regfile.sv:2002`; `:150`, "the revocation trackers
       forget"), a software-written CSR, so the crossing is reachable in a directed test.
     - **The discriminator** is an RTL simulation arm, owed by the RTL lane: an entry tracking a physical node of
@@ -527,6 +583,45 @@ access fault` at `mod_node_page_state+0x40` (cause 5, badaddr = mtval) and panic
 **Fix:** the RTL lane's, pre-registered for the next bitstream beside S-21/S-22's. The likely shape is to restore the
 caller's CPMPs before the pc reaches the frontend, or to hold the fetch until the walk ends.
 
+
+**A second data-face instance (2026-10-19, tree A caplifive_vp2c_8522d72fe, Tier 1 step 4, module 39d8492d, firmware
+7a53759a4773c81b, rev7's stage; N=1, UNGATED; audited by a claim-auditor; lane vp2-tier12, README "Tree A step 4").**
+- **The sequence:** in sparse-churn the monitor first retried an S fetch at `vm_ioctl+0xab0`, the instruction after the
+  module's CSRUNV (`FRTY:01113D98`; the module base is inferred from two FRTY pcs). It then printed the region and CPMP
+  dump, with slot 7 = region 21 [0xAC100000, 0xC0000000) RWX and CPHT 7. Then `MTVL:BC2B9440 CPMX:00000002
+  INJS:00000002`, where both 2s are the constant CAPSTONE_NO_CPMP_REGION.
+- **The kernel:** Linux took `Oops - load access fault` (cause 5) at `_raw_spin_lock_irqsave+0x56` from
+  `__wake_up_common_lock+0x4e`, in interrupt, and panicked.
+- **The refused load** is `lhu` of CPU 0's `__mmiowb_state`, from the Oops's code bytes, which equal the running
+  Image. Its address maps through the linear map to PA 0xBC2B9440. CPU 0's per-CPU unit is [0xBC2B8000, 0xBC2C7000) in
+  this kernel.
+- **Against pb10:** the physical address and kernel caller differ from pb10's (0xBC2C0825, `mod_node_page_state`; pb10
+  ran on bf3db3175 with a different Image, so whether its address is per-CPU is not shown).
+- **The same PA was read again through slot 7 by die()'s `spin_lock_irqsave`** before the Oops line, with no second
+  refusal. So the refusal did not survive the monitor's handling.
+  - Whether that handling re-armed the CPMP revnode trackers is open: a namespace flush fires on an edge of
+    vctx_table or srevroot (`ex_stage.sv:1379-1388`), and vctx_table across S/M depends on srevroot_q at the fault. So
+    this does not yet refute a persistent deny; srevroot_q at the fault is the discriminator.
+- **The wedge:** sparse-churn did not wedge before the panic, about 15 s after VM_BEGIN; on bf3db3175 it wedged with
+  S-25's face. How far it ran is not measured.
+- **Per-CPU locality favours no account,** since interrupt entry and lock acquisition touch per-CPU data first.
+- **Retracted the same day on the lane** (b1625be347fe): "reads before the refusal refute a persistent deny", "the
+  wedge is gone / went further", and pb10's per-CPU base.
+- **The fetch face from a stale translation alone is now on silicon too:** the RTL lane's sv-fetch arm on tree A read
+  cause 1 with a physical last value (0x80016000) different from the faulting virtual address, beside its control's
+  cause 12 (records/sv-treeA.result-lines.txt on lane vp2-tier12, a51896b135a4).
+
+**A third instance at 0xBC2C0825, and every instance in one place (2026-10-19).**
+- sql0-treeA's FIRST postgres session (tree A, module 39d8492d) panicked with pb10's exact signature: MTVL BC2C0825,
+  `mod_node_page_state+0x40` from `unpin_user_page+0x2a`, a3 ffffffd83c2c0825. That is a different Image and program.
+  The postgres SQL arm is therefore blocked on silicon by this face.
+- All four instances (pb10, pb10-fix6b, tree A step 4, sql0-treeA) are tabulated by script in
+  `capstone/tests/fpga-repros/S23-data-face/`. Every one is preceded, in the same step, by a monitor fetch retry at
+  the instruction after the module's CSRUNV in `vm_ioctl` (+0xa2c, +0xac4 and +0xab0 in the three modules).
+- **The candidates.** The runtime lane's first is the FRTY handler's read-null-write-back of every CPMP entry. The RTL
+  lane's sharper one: a revocation broadcast clears slot 7's validity, the same-id write-back cannot re-arm it, and
+  the handler only hands execution back to the access that is then refused. Tree B (no FRTY) is predicted to show
+  whether the face survives without the fetch-retry path.
 ## S-24 — silicon only: the virtual `vm` step's store after `mprotect(RW)` faults with cause 15 on a pinned page again and again; the module's resolve() pins the same page and nothing changes until its 64-repeat bound ends the step `EXPLAINED AND FIXED ON SILICON 2026-10-18 (vp2 boot r13, module a56fc415ad7133aa): the PTE at the loop reads D = 0 with V R W A set, as the runtime lane's account predicted (the RTL needs W and D for a store and never sets D; GUP marks the struct page dirty, not the PTE); with the module's resolve_dirty (fault the page in through the kernel's write path before the pin) `vm` reads QEMU's status, 1 at execute through mapping PCC. The fix lands in the module queue's revision (compiler lane)`
 
 Siblings: S-25 (the other virtual-path silicon failure, a different mechanism), S-23, Q-30.
@@ -602,7 +697,7 @@ and cannot show this.
 - **The Tier 2 record stays boot 4c.**
 - **Tier 3 runs with the pin off.** A wedge there with this signature is read as S-25.
 
-## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `OPEN — read on silicon 2026-10-18 in five Tier 3 smoke boots: three without a classic domain run before the first virtual context spun in every context, two with b0-hello first returned in every context; mechanism unknown (state that the first classic domain call sets up, on the monitor's or the RTL's side); the workaround, a classic domain run before the first virtual context, is in every Tier 1/2 boot and in the Tier 3 recipe`
+## S-26 — silicon only (vp2 bf3db3175): the first virtual context after a cold boot does not return unless a classic domain has run first; every context then spins after the image's grants, with no S-23 retry and the switcher resting at an ESCAPE `MECHANISM SUPPORTED ON SILICON 2026-10-19 (tree A, N=1 per arm, UNGATED; five cold boots): with no process-ABI STEP since a cold boot, csupquantum (0x7C3) is still 0 and a first virtual context loops in escapes of kind 1, cause 0 (diag_escapes, 16 of 16) without progress; writing 2,000,000 or 1,000 at boot removes the spin with no STEP. On silicon the no-progress threshold lies below 1,000 cycles, where the RTL simulation retires nothing up to 1,500. Workaround: any process-ABI STEP first (b0-hello), as every recipe does. Proposed fix: a boot-time 0x7C3 write in the monitor (the var firmware's, caplifive-opensbi s26-boot-quantum aab63d5)`
 
 Siblings: S-23 (the same virtual entry path), S-25.
 
@@ -624,7 +719,76 @@ launcher b27afefc and module ce3a542d in every boot; b0-stats runs `capstone-exe
 - **The next question,** for the monitor and RTL lanes: what the first classic domain call sets up that the virtual
   entry path relies on.
 
-## S-27 — silicon only (vp2 bf3db3175): in -O0 virtual programs of four ports the register a5 (x15) holds the integer 2 at the faulting instruction where QEMU, on the same images, holds the intended value; the allocators' `sd a4,0x10(a5)` faults 6 at 0x12 and SQLite's sites fault 24 with tval 2 `OPEN in silicon (the RTL fix is on the accumulating list); MECHANISM CONFIRMED IN SOURCE AND SIMULATION: every acknowledged RESUME (modes 3 and 4) with rd != x0 writes an untagged 2 into register 25 + rd, i.e. the context's x(rd), after the context's x1..x31 are loaded (commit_stage.sv:606-624, set_ra :614, ra_data :615; capstone_dom_switcher.anvil:584 and :588; checked here at bf3db3175; the RTL lane's arm va-rdclob fb3f87b6c and its seeded rd-vs-rs2 control d23a37344), and module 3005ed52's resuming CSRUNV has rd = x15; SOFTWARE WORKAROUND TWO-SIDED ON SILICON 2026-10-18, one boot per side: pym0's 21 images (staged .dom files sha256-identical) fault 21/21 with cause 6 at 0x12 on module 3005ed52e860c7af (its 19 production images in 7 of 7 boots on that module) and reach the QEMU verdict on module d71f207a3af5546b (control complete, MISSED 20, 20 of 20 cells the same, every per-case decision digest equal to QEMU's); d71f207a's resume site differs in four ways (rd x15 -> x0, the kind read from frame +16, a ~0 sentinel stored there, an unconditional fence that 3005ed52 had as a parameter, off), the FENCE IS RULED OUT on silicon: 3005ed52 with fence_before_entry=1 (read back Y) faults 21/21 at 0x12 on the same images, 20 of 20 cells equal to its unfenced boot (2026-10-18, pre-registered 55f8ecba6536); rd = x0 is not separated on silicon from the ~0 sentinel and the +16 kind read, and the simulation arm va-rdclob, which has neither, carries that; UNGATED boots (PREFLIGHT=0; image identity by sha256 is the substitute); fix: the RTL exempts modes 3 and 4 in finish(); workaround: module d71f207a3af5546b (the compiler lane's e5775346cc8e)`
+
+**The silicon pair (2026-10-19, tree A caplifive_vp2c_8522d72fe, board 1, module 39d8492d; N=1 per arm, UNGATED;
+lane vp2-tier12, `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README.md`, "S-26's silicon pair").**
+- **The candidate** (the compiler lane's read, audited by the runtime lane's claim-auditor): 0x7C3 resets to 0, and its
+  only writer is the monitor's `supervised_invoke` (`sbi_capstone.c:1002`). On this firmware that is reached by a
+  process-ABI STEP (`context_step`), RESUME_SHARE or a managed domain's region share; never by a classic DOM_CALL (only
+  under CAPSTONE_SUPERVISE_CLASSIC_TEST). So the variable is "a process-ABI STEP before the first CSRUNV", not "a
+  classic domain". b0-hello is a process-ABI launch, and b0-stats only reads 0xFC4.
+- **cur** (today's monitor; b0-stats, vm-contract; cold):
+  - With no STEP, 0x7C3 reads 0 at boot (QNT0). The compiled firmware has no other 0x7C3 writer reachable without a
+    managed context.
+  - The vm-contract context was re-entered about 850 times a second (resume_satp_refreshes 22,621, 73,763 and 124,857
+    at t30, t90 and t150), with no resolved fault (resume_sfences 0), no runtime grant past slot 4 and no fetch retry.
+    It was killed at 150 s.
+  - The escape kind was NOT recorded, so "kind 1" is inference; a repeat with diag_escapes=1 would read it. The 150 s
+    shape matches 2026-10-18's diagnostic boot on an earlier module. The first readings' "escaped and never resumed"
+    is wrong for this shape: the context is re-entered continuously.
+- **var** (identical but for a boot-time `csrw 0x7c3` in cap_env_init; the byte diff is confined there): QNT0 001E8480.
+  The same vm-contract completed with the identity branch (steps=511, faults=426), with no STEP.
+- **mir** (a census-written 0x7C3 = 1,000 after b0-hello's STEP; b0-stats, b0-hello, b0-stats2, vm-contract):
+  - It was predicted to spin, and completed (steps=42,151, faults=426, 62.5 s). The prediction FAILS.
+  - Because the context followed a STEP, this does not separate the quantum from state the STEP leaves behind, and its
+    difference from the RTL lane's simulation (on bf3db3175, budgets 40-1,500 retiring nothing) is "the quantum and/or
+    prior STEP", not established as silicon against simulation.
+  - The separating arm (1,000 written at boot, cold, no b0-hello) has not run.
+- **QEMU cannot show this:** it arms a constant 5 ms of virtual time at every entry, so a quantum-0 livelock is a model
+  divergence.
+- **A retraction on the lane** (505f702de812) withdrew four over-reaches of the first results write-up: "b0-hello's STEP
+  ran at 1,000", "80 times as often", "cur's console replayed var's QNT0", and an unqualified "1,000 does not livelock".
+
+**The firming arms (2026-10-19, the same board and module; lane vp2-tier12 README, "S-26's firming arms, results").**
+- **cur-esc** (cur plus `diag_escapes=1`): QNT0 0; VM_SPIN, with resume_satp_refreshes 22,182 → 73,398 → 124,590.
+  Every printed escape is `frame kind 0x1 cause 0x0` (16 of 16, the budget). The escape kind is now observed.
+- **var1k** (var's boot write at 1,000; cold; b0-stats then vm-contract; no STEP): QNT0 000003E8. It COMPLETED
+  (steps=41805, faults=426), against the RTL lane's prediction, from its tree-A bracket, that it would spin.
+  - Its step count matches mir's (42,151, after b0-hello's STEP), so mir's return was the quantum, not STEP state.
+  - The RTL lane's first suspect for the difference is the testbench's fixed 12-cycle delay on each of the entry
+    walk's ~70 register transactions.
+- **The fix stands as proposed:** a boot-time 0x7C3 write in the monitor, batched with S-30's region end.
+## S-28 — a second instruction retiring beside a CSRUNV is re-executed when the caller resumes, because the gate that would hold the second port tests a flag a CSRUNV deliberately leaves clear `REAL IN SOURCE, NOT EXERCISED (bf3db3175); FIXED on virtual-profile-2-c 8522d72fe as a defensive term, recorded as R-50's unexercised trigger was; found 2026-10-18 by the semantics owner's auditor, confirmed from the sources by the RTL lane`
+
+**The chain.** A CSRUNV's result pack sets `dom_switch_en = 1'b0` and `runv_en = 1'b1`, and the header says so outright:
+"dom_switch_en stays 0, commit dispatches the switcher itself" (`capstone_unit.anvilh`, above `create_result_pack_runv`
+in `capstone_dyn_unit.anvil`). The commit stage's second-port condition (`commit_stage.sv:890-900`) tests
+`!commit_instr_i[0].cap_result.dom_switch_en` and nothing about `runv_en`, so it does not hold port 1 for a CSRUNV. The
+switcher request's `pc_next` is the CSRUNV's `pc + 4` (`:609`), which is the second instruction's own pc, so an
+instruction that retires beside a CSRUNV runs once before the entry and again when the caller resumes: its register
+write lands twice, and a store would land twice.
+
+**Why it has never been seen.** Every caller uses the CSRUNV's result immediately, which creates a dependency that
+prevents the pairing: the kit's module assigns `t->event = run(...)`, and the directed arms all follow the instruction
+with a `mv` of its destination. So the condition needs a caller that places an INDEPENDENT instruction there.
+
+**The arm, and why its reading is VOID** (va-rdclob's `-DDUAL` build, pre-registered at lane `5dbb8908c` before the run,
+result recorded in the arm's header). It places `addi t5, t5, 1`, independent of the CSRUNV, immediately after the entry,
+so nothing but the gate could stop the pairing, and prints t5 after the escape: 2 if the condition fires, 1 if the
+pairing is excluded, and VOID unless the trace shows a `port=1` commit in the same cycle as the CSRUNV's `port=0`. Both
+trees read t5 = 1 with ZERO such commits, so the pairing never happened and the reading says nothing about the gate. Not
+established either way: the scoreboard presents its second entry unconditionally (`scoreboard.sv:149-150`), so the
+pairing is not structurally excluded, and the likely reason is the second instruction's completion timing against the
+switcher's ack rather than a rule. Further arm time was judged not worth it (the semantics owner, 2026-10-18).
+
+**Incidental, and worth keeping:** that same run confirms S-27 once more, reading 2 on the resident tree and 0 on the
+fixed one.
+
+**The fix** (`8522d72fe`): one term, `&& !(CVA6Cfg.CAPSTONE_EXT && commit_instr_i[0].cap_result.runv_en)`, added to that
+condition beside its neighbours. It ships with its trigger unexercised, and the bitstream built from tree A therefore
+carries NO reading for it; claiming one would be the vacuous-gate mistake this registry has recorded before.
+
+## S-27 — silicon only (vp2 bf3db3175): in -O0 virtual programs of four ports the register a5 (x15) holds the integer 2 at the faulting instruction where QEMU, on the same images, holds the intended value; the allocators' `sd a4,0x10(a5)` faults 6 at 0x12 and SQLite's sites fault 24 with tval 2 `RTL FIX TWO-SIDED ON SILICON 2026-10-19 (tree A 8522d72fe: pym0's images on module 3005ed52 read 20 of 20 at the QEMU verdict, against 0 of 20 on bf3db3175 twice; N=1 on tree A, UNGATED); MECHANISM CONFIRMED IN SOURCE AND SIMULATION: every acknowledged RESUME (modes 3 and 4) with rd != x0 writes an untagged 2 into register 25 + rd, i.e. the context's x(rd), after the context's x1..x31 are loaded (commit_stage.sv:606-624, set_ra :614, ra_data :615; capstone_dom_switcher.anvil:584 and :588; checked here at bf3db3175; the RTL lane's arm va-rdclob fb3f87b6c and its seeded rd-vs-rs2 control d23a37344), and module 3005ed52's resuming CSRUNV has rd = x15; SOFTWARE WORKAROUND TWO-SIDED ON SILICON 2026-10-18, one boot per side: pym0's 21 images (staged .dom files sha256-identical) fault 21/21 with cause 6 at 0x12 on module 3005ed52e860c7af (its 19 production images in 7 of 7 boots on that module) and reach the QEMU verdict on module d71f207a3af5546b (control complete, MISSED 20, 20 of 20 cells the same, every per-case decision digest equal to QEMU's); d71f207a's resume site differs in four ways (rd x15 -> x0, the kind read from frame +16, a ~0 sentinel stored there, an unconditional fence that 3005ed52 had as a parameter, off), the FENCE IS RULED OUT on silicon: 3005ed52 with fence_before_entry=1 (read back Y) faults 21/21 at 0x12 on the same images, 20 of 20 cells equal to its unfenced boot (2026-10-18, pre-registered 55f8ecba6536); rd = x0 is not separated on silicon from the ~0 sentinel and the +16 kind read, and the simulation arm va-rdclob, which has neither, carries that; UNGATED boots (PREFLIGHT=0; image identity by sha256 is the substitute); fix: the RTL exempts modes 3 and 4 in finish(); workaround: module d71f207a3af5546b (the compiler lane's e5775346cc8e)`
 
 Siblings: S-25 and R-57 (excluded below), S-23 (the same Tier 3 boots), Tier 2 boot 4 (cause 24 with a destination cursor
 of 2 in every context, from the Q-26 wait rewrite; vp2 kit README), R-29 (its fix 776d9d859 is in bf3db3175).
@@ -675,6 +839,231 @@ The RTL fix the lane names is to exempt modes 3 and 4 in finish(), or to give th
 - Of the probes: E3 moved `b` out of a5. The fault moved to the next use of a5, which read below the 8 written into it
   (a bounds fault at &used), and the stack slot was right. So the clobber is in the register. E3 does not fix the value
   (lane retraction 798310157901). E4 read 0x12, not 0x11, at the discriminating store.
+
+**The RTL fix on silicon (2026-10-19, tree A caplifive_vp2c_8522d72fe, board 1).** pym0 on kit bkit7A (module 3005ed52,
+whose resuming CSRUNV has rd = x15; the same 21 images by sha256 as on bf3db3175) read `vp2-malloc (virtual-pymalloc):
+{'MISSED': 20}`, 20 of 20 cells the same as the QEMU prediction. On bf3db3175 the same images on the same module read 0 of
+20 twice: pym0, and pym0-fence with fence_before_entry=1, every program faulting at 0x12. Only the bitstream differs.
+Bundle: `cpython/pymalloc-repros/results/2026-10-19-vp2c-treeA/vp2-malloc`; record `records/pym0-treeA.board.txt` on
+lane vp2-tier12.
+## S-29 — the virtual-context switcher installs and restores `satp` with no TLB flush, so a context can be served the caller's translation of a virtual address and the caller, after an escape, the context's `DEMONSTRATED IN SIMULATION 2026-10-18 on bf3db3175 by the RTL lane (va-satpstale, four arms, no exceptions) and CONFIRMED ON SILICON 2026-10-19 on tree A 8522d72fe, 7 of 7 bare arms reading their pre-registered vectors, graded by image hash; FIXED on virtual-profile-2-c d427e7391 (an unqualified flush-all on the switcher's satp write), lint at baseline on all eleven counters with the UNOPTFLAT membership identical BY NAME to the base; QEMU is the STRICTER side and is the reference (it flushes on every entry, escape and resume whose translation state differs, and keeps a context's translations in an index no other context reads), ruled by the semantics owner; NO CORPUS CONSEQUENCE today, because every CSRUNV the module issues runs with the caller's live satp equal to the context's; for the caller's DATA accesses the window is an ABI RULE IN BOTH DIRECTIONS, not something software cannot work around; the surface a fence cannot cover is the caller's first instruction FETCH after an escape, which is S-23's shape and is NOT observed here`
+
+**Siblings:** S-23 (the fetch face, where this window is the strongest candidate and NOT the demonstrated
+mechanism — the board lane showed pb10's refused address is physical and covered by a loaded region, so a stale
+translation alone cannot produce that capture), R-57 and S-25 (unrelated, the store-exception path), S-21/S-22
+(the frame's contents, also the RTL lane's for the next bitstream).
+
+**What the RTL does.** The switcher writes `satp` through its register port, reg id 66, on both of its walks, and
+nothing on that path flushes a TLB. `grep -c flush_tlb core/csr_regfile.sv` is 0 at bf3db3175. There is exactly one
+driver of `flush_tlb_o` in the whole core, `controller.sv:176`, and it is gated on `sfence_vma_i`, whose only source
+is a retired `SFENCE_VMA` at `commit_stage.sv:691-694`. The switcher's own pipeline flush (`controller.sv:215-226`)
+sets the five pipeline flushes and not the TLB flush. The architectural `csrw satp` path is no different; what
+distinguishes the switcher is that the caller cannot follow its write with an `sfence.vma` of its own.
+
+**Readings** (`va-satpstale`, capstone-ariane, simulation on bf3db3175; the arms differ only in two defines, the
+values are CAPPRINT readings in order, every arm no exceptions and harness SUCCESS):
+
+| arm | fences | readings | retired |
+|---|---|---|---|
+| `va-satpstale` | none | 0xaaaa, **0xaaaa**, 3, 11, **0xaaaa**, 0x55 | 28983 |
+| `va-satpstale-f` | after the escape | 0xaaaa, **0xaaaa**, 3, 11, 0xaaaa, 0x55 | 28984 |
+| `va-satpstale-b` | before the entry | 0xaaaa, **0xbbbb**, 3, 11, **0xbbbb**, 0x55 | 28984 |
+| `va-satpstale-bf` | both | 0xaaaa, **0xbbbb**, 3, 11, **0xaaaa**, 0x55 | 28985 |
+
+The second reading is the context's own read of a virtual address its chain maps to one physical page and the
+caller's chain maps to another; the fifth is the caller's first access after the escape returns. Two chains are
+built explicitly by one macro run twice, identical but for that one leaf.
+
+- **The entry direction:** with no fence the context reads the CALLER's page. One `sfence.vma` before the entry
+  flips it, which proves in the same change that the chain is built correctly, that `sfence.vma` flushes, and that
+  the frame's `satp` word takes effect. The first run's own trace also shows the live `satp` at the escape walk's
+  reg-66 transaction as the context's root, so the context demonstrably ran under its own chain and was served the
+  caller's.
+- **The escape direction:** `-b` against `-bf` is a matched pair differing by exactly ONE retired instruction, the
+  caller's `sfence.vma` after the escape, confirmed by a full retired-sequence diff and not by the count alone, and
+  the fifth reading differs with it. Both runs are cycle-identical through the load.
+- **ASID is 0 on both chains**, read back from the switcher's own transactions, so nothing makes the stale entries
+  non-matching. The switcher's walks run with translation forced off (`cva6.sv:838`), so its frame accesses are
+  physical and cannot have installed the entry; only the context's own access can have.
+
+**CONFIRMED ON SILICON 2026-10-19 — tree A `8522d72fe`, board 1, N = 1 per arm, 7 of 7 as pre-registered.**
+Seven bare M-mode arms built from one source
+(`capstone/tests/rtl-smoke/satpstale-bare-2026-10-19/`, dev `8e1df1e05a3c`) were simulated on each RTL FIRST and
+their vectors committed before the board session; the board lane then ran them on the resident bitstream and every
+arm read its tree A vector exactly, by count and by value. Graded independently by this lane against the folder's
+own `images/SHA256SUMS`: every image sha256, every `board_rec` (0x80017000), every count and every value matched,
+and the comparator was negative-tested first by perturbing one value and one hash, both of which it rejected.
+Record: repo `llvm-capstone`, branch `vp2-tier12`, commit `a51896b135a4`, file
+`capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/sv-treeA.result-lines.txt`.
+
+| arm | silicon reading | what it establishes |
+|---|---|---|
+| `sv-stale`, `sv-stale-f` | `6 \| 0xaaaa 0xaaaa 3 0xb 0xaaaa 0x55` | the ENTRY direction: the context reads the CALLER's page where its own table maps 0xbbbb |
+| `sv-stale-b` | `6 \| 0xaaaa 0xbbbb 3 0xb 0xbbbb 0x55` | the ESCAPE direction: the caller's first access after the escape is served the CONTEXT's page |
+| `sv-stale-bf` | `6 \| 0xaaaa 0xbbbb 3 0xb 0xaaaa 0x55` | the NEGATIVE CONTROL: one `sfence.vma` apart from `-b`, and it reads its own page |
+| `sv-stale-bn` | `6 \| 0xaaaa 0xcccc 3 0xb 0xaaaa 0x55` | the ORIGIN: with the context never touching the address, nothing installs an entry |
+| `sv-fetch` | `5 \| 0xaaaa 1 0x80006000 0x80016000 0x55` | cause 1 with a PHYSICAL `mtval` differing from the faulting virtual address |
+| `sv-fetch-c` | `5 \| 0xaaaa 0xc 0x80006000 0x80006000 0x55` | its control: one fence earlier, cause 12 with the two values EQUAL |
+
+A reader needs no address table to separate the last two: on the resident bitstream the final two values DIFFER,
+and on a bitstream carrying the flush they are EQUAL.
+
+**What the fetch pair does and does not settle.** It reproduces S-23's fetch SIGNATURE on silicon from a stale
+translation alone — a refused fetch reporting a physical address. It does NOT establish S-23's mechanism: a
+matching shape is not a matching mechanism, and the board lane's own pb10 capture has a refused address that is
+covered by a loaded region, which a stale translation alone does not explain. S-23's data face stays open.
+
+**Tree B `8de3c48cf` is predicted to change four of the seven** — `sv-stale`, `sv-stale-f`, `sv-stale-b` and
+`sv-fetch` — while `sv-stale-bf` and `sv-stale-bn`, which already fence on both sides or never touch the address,
+must read exactly what they read here. Those predictions are committed in the folder's README, so a post-flash
+re-run of the same seven images is a graded test of the fix rather than a fresh measurement.
+
+**Bounds, written down because the shapes are close enough to confuse.** It is a stale DATA translation. S-23 is a
+FETCH refused with a physical address, and this arm's caller text page is mapped identically under both chains, so
+the instruction TLB is never observed. A context's fetches DO translate under its own `satp`
+(`cva6.sv:1910` and `:1912` OR `vctx_eff` into both translation enables), so the fetch face is real and unmeasured;
+the arm that would measure it points the caller's code virtual address at a different physical page under the
+context's chain, and is owed. Containment is also untested: both reachable physical pages lie inside the single
+capability region the arm installs, so what is shown is translation crossing the boundary, not the regions failing
+to contain it.
+
+**The origin of the stale entry, and the plain-load reading, both settled the same evening** (run `satpctl` on
+bf3db3175, two further arms of the same file, both exactly as pre-registered, no exceptions, harness SUCCESS):
+
+| arm | readings | retired |
+|---|---|---|
+| `va-satpstale-bn` (the context never touches the probe address) | 0xaaaa, 0xcccc, 3, 11, **0xaaaa**, 0x55 | 28985 |
+| `va-satpstale-bp` (a plain load with an UNTAGGED base in the context) | 0xaaaa, 0, **2**, **24**, 0xaaaa, 0x55 | 28983 |
+
+The first closes what this row previously listed as owed. Against `va-satpstale-b` on the same tree, which reads
+the context's page fifth, the two differ in exactly one thing, whether the context accessed that address, and the
+fifth reading differs with it — so the caller read an entry the CONTEXT's own access installed, and the
+escape-direction reading no longer rests on the pair alone. The second is the reading Q-31's ordering answer was
+missing: `lla` yields an untagged integer, the same form the caller uses at S where such a load succeeds, and in a
+context it is REFUSED with **cause 24**, which confirms both halves at once (no tag from `lla` in capmode, and the
+check does reach a context, because a context runs at M). The escape kind is **2**, the terminal kind, so such a
+refusal ends the context rather than pausing it; and the second reading of 0 confirms, independently of the cause
+word, that the refusal landed before the context stored anything.
+
+**A WITHDRAWN claim, kept because it was sent to two lanes.** The first framing said the escape direction was a
+defect software cannot work around, "an escape is asynchronous, so the caller resumes with no instruction of its own
+in which to have fenced". That is refuted by this arm's own control: the escape returns to CSRUNV+4 whatever its
+kind, since the escape walk restores ids 0..66 with no kind-dependent branch and the saved id 0 is the request's
+`pc_next`, so one `sfence.vma` there covers every escape. Static by design and observed for the ecall kind only.
+
+**The fix, and a hazard for anyone re-implementing it.** The first implementation (withdrawn, `8f1bcd4cc`) raised a
+pulse on the satp write and OR'd it into the MMU's `flush_tlb_i`. That input is not a flush-all: `cva6_tlb` qualifies
+it by `asid_to_be_flushed_i` and `vaddr_to_be_flushed_i`, and those two latch the EX stage's rs1/rs2 forwarding on
+EVERY cycle, so they are meaningful only for an actual `sfence.vma`; the instruction and data TLBs therefore flushed
+one arbitrary entry. The shared TLB is unqualified and did clear, which made the failure partial. It was caught
+because three of the four arms read exactly their pre-fix values while only the fenceless one changed, which is
+impossible, the fenceless arm and the post-escape-fence arm being instruction-identical up to the entry. `d427e7391`
+carries an unqualified flush-all from the CSR file through the EX stage, the LSU and the MMU to both TLBs, and all
+four arms then read the pre-registered set with the negative control unchanged to the cycle.
+
+## S-30 — Linux's genesis region grants S read/write/execute over the shadow-tag array and the revocation-node pool, and nothing in the data path blocks a plain store there `OPEN — DEMONSTRATED on the board for user-mode reads (2026-10-19, tree A, N=1); the fix (caplifive-opensbi 9bee361, a held linear carve) refuses those reads in a matched pair, NOT YET LANDED; writes untested; found 2026-10-19 by the RTL lane's arithmetic on the board lane's S-23 dumps, triaged by the board lane`
+
+Siblings: S-23 (whose dumps showed the region), R-55 (the exact-regions carve that set the region's top).
+
+**What the region is.** Every vp2 dump in S-23's folder (`capstone/tests/fpga-repros/S23-data-face/`) loads region 21 in
+CPMP slot 7: [0xAC100000, 0xC0000000), RDPM 7 and CPPM 7, i.e. RWX for S. `cap_env_init` ends Linux's genesis region at
+`CAPSTONE_DRAM_TOP` = 0xc0000000 (capstone-sbi `capstone_target.h:34-37`, the R-55 exact-regions carve). The header's
+reason, "nothing S-mode uses lies above 0xc0000000", is false for this layout.
+
+**What it covers** (capstone-ariane 8522d72fe and bf3db3175, `ariane_pkg.sv:612-616`):
+- `CAP_TAG_MEM_BASE = MEMORY_TOP = 0xBC2D2D2D` and `CAP_REVNODE_MEM_BASE = 0xBFF00000`. Linux's RAM ends at 0xBC2D1FFF
+  (the boot log's DMA32 range).
+- So [0xBC2D2D2D, 0xC0000000) inside region 21 is the whole shadow-tag array and the whole node pool.
+
+**Nothing in the data path refuses it.** `wt_axi_adapter.sv:142-143` sets `in_data_region` only for paddr below
+`DATA_MEM_TOP` (= `MEMORY_TOP`). Above it a dcache access gets no tag operation (`needs_tag` 0) and goes to AXI as plain
+data. The checks at `:1017-1026` are elaboration and simulation assertions on TAG writes, not a gate on data accesses.
+
+**S can reach it.** The linear map stops at RAM's end, but the board kernel (6.4.14) has `CONFIG_DEVMEM=y` with
+`CONFIG_STRICT_DEVMEM` unset, so root can mmap `/dev/mem` at any physical address. It also has `CONFIG_MODULES=y`, so
+any module can `ioremap`. Either gives a plain S-mode load or store through region 21's RWX grant into tag bytes or
+node records.
+
+**The consequence depends on the trust model in force:**
+- **Inside the virtual profile's trusted-S model** (`docs/design/virtual-capstone/isa.md`: "trusted S", and "trusted S
+  performs no capability memory access") it is a hardening gap.
+- **The same firmware and region are in force while classic process-ABI domains run** (b0-hello in every recipe).
+  Their isolation from Linux is the untrusted-S property, so there it is an escalation path: a plain S store forging a
+  tag (turning data S controls into a capability) or a node record.
+
+**The fix,** for the monitor's queue: one line. Linux's genesis region ends at the tagged region's base, 0xBC2D2D2D, or
+at RAM's end, 0xBC2D2000; and the header comment is corrected. To be batched into ONE monitor revision with S-26's
+boot-time quantum write (caplifive-opensbi s26-boot-quantum aab63d5) and, if the RTL lane's simulation grades it,
+S-23's csupctl bit-2 strobe at the end of `fetch_retry_covered`, so the three cost one QEMU gate and one Tier 1 boot.
+
+**The demonstration, to be pre-registered:** one Linux boot on board 1 that READS `/dev/mem` at 0xBFF00000 (a node
+record) and at the tag byte of a granule known to hold a capability, using the adapter's formula `CAP_TAG_MEM_BASE +
+((paddr - MEMORY_BASE) >> 4)`. Predicted no fault, and a tag byte of 1 (the positive control that the read reaches tag
+memory). No write test without the lead's word.
+
+**The board, 2026-10-19 (lane vp2-tier12 b667eaa35c0b, tier3-smoke README "S-30's matched pair"; audited).** Two
+cold boots on tree A, firmwares differing only in the wrapper (monitor 5b5e86b, same image and defines).
+- **Old wrapper aab63d5, firmware 4104ef2029145164.** User-mode busybox devmem through /dev/mem read the node pool's
+  first record (0xBFF00000: 0x0, 0x40000000). It also read 257 words at dom_stack's shadow-tag addresses from
+  0xBC2DAD60, getting a sparse 00/01 pattern: 23 nonzero, one recorded as 0x0000010001000100. Not yet matched against
+  the firmware's capability layout.
+- **Fix wrapper 9bee361, firmware f187c4d4f3ade200.** The held carve is nominally [0xBC2D2000, 0xC0000000), decoded
+  [0xBC2D0000, 0xC0000000) (S30H).
+  - Both reads were refused at their first address through the no-region path (MTVL:BFF00000 and MTVL:BC2DAD60, each
+    with CPMX:00000002; INJS:00000002 is the injection code, not mcause). devmem died of SIGSEGV.
+  - Linux's top slot was exact at [0xBC200000, 0xBC2D2000), and the canary rungs passed, vm-contract included.
+- **Why the fix is a held carve and not a moved boundary:** swap_cpmp loads ANY live, not-yet-loaded slot covering an
+  S fault, with no owner or permission filter. A remainder left in the table would therefore stay reachable by faulting
+  into it.
+- **Residual:** the unloaded held piece and Linux's top region, both LINEAR, overlap in decoded bounds by two pages,
+  [0xBC2D0000, 0xBC2D2000). Exclusivity there holds by the monitor never loading or handing out the held piece. Any
+  future use of it must first re-carve it to an exactly representable base at or above 0xBC2D2000.
+- **Open:** writes; N>1; landing 9bee361 onto the monitor line; the header comment in capstone_target.h.
+
+## S-31 — `pop_region` after a revoke of a REV-holding slot leaves the REVOKE RESULT loaded in the CPMP over pages the release frees `CANDIDATE — containment; from a source trace (monitor capstone-sbi 5b5e86b, module capstone.c), not yet shown on the board; filed 2026-10-19 by the board lane`
+
+Siblings: S-32 (wrong-region pop), S-33 (an emptied slot the bookkeeping still calls loaded), S-23 (whose guard reports this shape).
+
+- **The path.** The module's release (`capstone.c` `ioctl_release_region`, :409-458) calls REVOKE on the region, then
+  POP(1), then `dma_free_pages`. `revoke_region` (sbi_capstone.c :3013-3018, re-read):
+  `rev = read_cpmp(..); if (cap_type(rev) != CAP_TYPE_REV) return 2; r = __revoke(rev); write_cpmp(.., r);`.
+  So for a loaded slot holding a REV (a region shared REV_DEFAULT or REV_BORROWED, or a share_child parent), the
+  revoke's RESULT is written back into the slot. `pop_region` (:3032) then clears `cpmp_region`, `region_cpmp` and
+  `region_live`, and never touches the slot.
+- **Why it matters.** The result is a live capability, LINEAR or UNINIT with the perms kept, per the trace of the RTL
+  REVOKE. It stays in the CPMP over pages the kernel has just been given back, until `swap_cpmp` reuses the slot.
+  `read_cpmp` is a swap (`C_READ_CCSR` is `ccsrrw(rd, ccsr, x0)`, :20), so the paths that read before retiring
+  (split_out_cap's exact fit, REV_TRANSFERRED) are safe. This path writes back.
+- **What would settle it.** A release of a BORROWED region whose slot is loaded, followed by a fetch retry on the S-23a
+  monitor (5b5e86b or later). That should print FRGU for that slot with region 0xffff: a capability in a slot the
+  monitor holds empty.
+
+## S-32 — `pop_region` pops by count, so a stale module mirror of `region_n` pops an unrelated, never-revoked region `CANDIDATE — containment; source trace only, UNVERIFIED by this lane; filed 2026-10-19 by the board lane`
+
+Siblings: S-31, S-33.
+
+- POP takes a count, not an id (`region_i = region_n - i - 1`), and the monitor does no id check of its own. The module
+  requires `region_id == region_n - 1` in its OWN count (`capstone.c:444`).
+- The trace reports that mirror as refreshed only at `capstone.c:365`, `:589` and `process.c:233`. It is not refreshed
+  after DOM_CREATE's middle-carve append (sbi_capstone.c :1870-1872, `region_append`), SHARE_CHILD (head/tail
+  :2900-2917) or `dpi_share_region` (:3956).
+- After any of those, a release would revoke region X and pop some other top entry Y. Y may be loaded and was never
+  revoked, while X stays live over pages returned to the kernel.
+- **What would settle it.** A process-ABI sequence of DOM_CREATE with a middle carve, then REGION_CREATE and its
+  release, with the region table dumped before and after. It should show which index was popped.
+
+## S-33 — `revoke_region` on a loaded slot that holds no REV empties the slot and drops the capability, while `region_cpmp` still says loaded `CANDIDATE — availability; from source (sbi_capstone.c :3013-3015, re-read); filed 2026-10-19 by the board lane`
+
+Siblings: S-31, S-32.
+
+- `rev = read_cpmp(..)` swaps zero into the slot. On a non-REV type the function returns 2 with no write-back, so the
+  capability is dropped. The bookkeeping still maps the region to that slot, and `swap_cpmp` skips loaded regions
+  (:3670).
+- S's next access to the region's own pages is then refused (CPMX, injected). This is reachable through the plain
+  REVOKE ioctl, never-shared regions included.
+- **What would settle it.** REVOKE of a never-shared region S has already touched, then a kernel access to it. That
+  should print CPMX and then INJS.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
@@ -1686,8 +2075,22 @@ q == 1022 with sr + lr > g). 4a21b485b01f is not an ancestor of the pin. So the 
 such a region about half its length short while silicon decodes it whole; a differential reads a divergence on every
 such region. The 2026-10-16 plain corpora agreed only because every object was exact below 4 KiB; the carved corpus
 needed ce1be0c642 with `CAPSTONE_CDERIVE_ROUND=1`, and Q-15's box records 43,591 misses on d35af47b163c, every one an
-R-54 shape. Under the virtual profile with exact bounds (scapctl bit 8) the encoder is bypassed for the stored bounds,
-so this divergence is a physical-profile one. Fix: land the renormalisation on the QEMU shared branch and bump the pin
+R-54 shape. ~~Under the virtual profile with exact bounds (scapctl bit 8) the encoder is bypassed for the stored bounds,
+so this divergence is a physical-profile one.~~ **CORRECTED 2026-10-20 (the compiler lane, checked by the board lane):
+the scope is wider.**
+- The vp2 Tier 3 prediction kits run the COMPACT virtual profile: their QEMU wrapper removes
+  `x-capstone-exact-bounds=true` (qkit7-rev2/qemu-system-riscv64:3,9). So cap_compress is live in every escape save
+  (virtual_store_reg), every Q-15 CDERIVE representability decision (cause 29), and the window predicates.
+- The kits' QEMU (capstone-qemu b290f5656600, virtual-capstone-v7) also lacks 4a21b485b01f:
+  `git merge-base --is-ancestor 4a21b485b01f b290f5656600` is false, and the diff in cap_compress.c is the same +20-line
+  block.
+- **Consequence:** for an R-54-shaped region, the kits' compact QEMU decodes about half the span after any compress
+  round trip, while silicon decodes it whole. QEMU can therefore fault, or refuse with 29, where silicon does not. The
+  reverse cannot happen, so this is no candidate for a silicon-only failure, such as the cpython and postgres pc=0 stops.
+- The fix (the renormalisation block on the kits' QEMU line) is planned as its own commit with a two-sided gate (the
+  compiler lane), and is needed for R-60's tag predicate to match the RTL encoder.
+
+Fix: land the renormalisation on the QEMU shared branch and bump the pin
 (helper lane); until then every physical-profile differential cites which encoder it ran against.
 ## Q-17 — CDERIVE's check order: silicon tested the size window (29) BEFORE the parent's liveness (25), QEMU the reverse `FIXED on virtual-profile 4b958dc3f (2026-10-16): the liveness query precedes the window test; q17-order.S reads 25 on the fixed tree and 29 on capstone-sublet b7e3287e4 in simulation (the positive control), the window-inside case 25 on both; carried by bitstream 1 of the virtual profile, not yet on silicon`
 
@@ -1981,6 +2384,33 @@ the census row (`docs/plans/2026-10-18-vp2-silicon-census.tsv`, plain JALR) carr
 - **No verdict flip is possible:** there is no path by which an aligned, canonical, mapped integer address loads on
   silicon, because the capability check fires whenever nothing else has.
   - A prediction that compares causes needs the order modelled. One that compares caught versus missed does not.
+
+## Q-32 — a module told more supervisor slots than the platform has lets an unprivileged domain halt the guest: capstone_vm's `supervisor_slots` is not checked against capstone-qemu's `x-capstone-supervisor-slots` `OPEN — kit-gate rule in force, filed 2026-10-18 by the compiler lane`
+
+**What happened.** The module revision's frame negative tests (lane `module-resume-rd-x0`, 2026-10-18) loaded capstone_vm
+with `supervisor_slots=2` on the QEMU prediction kit (capstone-qemu b290f5656600, binary 7a4f3a64776f0c88), whose -cpu
+string never set `x-capstone-supervisor-slots`. Every test that created a child thread and let the launcher enter it
+halted the guest: `[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x8002522a, tval = 0x0` (a store through a
+null capability, `rs1 = x7`, value 0, in the firmware's range), badaddr the region base + 0x10. Boots on the old and the
+fixed module, and with and without a preceding `twice`, all halt the same way. A boot with no child entry does not.
+
+**Why.** The module parameter only TELLS the module how many saved-context slots exist (`capstone_vm.c:299-300`, default
+1, 0444). capstone-qemu's slot count is the CPU property `x-capstone-supervisor-slots` (`target/riscv/cpu.c:1897`, default
+1; `supervisor_slot_count()` clamps it, `capstone_supervisor.c:32-36`). With the module at 2 and QEMU at 1, the module admits
+a second live context the platform cannot hold. Entering it reaches the firmware path that faults. The mechanism inside the
+firmware is not established. vp2 runs 1 and 1, so the board was never exposed.
+
+**The rule (the semantics owner, 2026-10-18).** Before any boot, the kit gate asserts that the -cpu string's
+`x-capstone-supervisor-slots` equals the module's `supervisor_slots`. A mismatch is a refused boot. The board kit asserts
+1 = 1. The tool is `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/slot-match-gate.py`:
+- `--kit KIT` before the boot (what the kit wrapper appends);
+- `--applied-log KIT/applied.log` after it (the -cpu string actually used);
+- `--board` for vp2.
+Negative-tested: module 2 / QEMU 1 refused (tonight's halting configuration, on the real `qkit7-rev2/applied.log`); module
+1 / QEMU 2 refused; 2 / 2 and 1 / 1 pass; an empty log or a missing wrapper is NO-DATA (exit 2), never a pass.
+
+**Open.** What the firmware does at 0x8002522a when a second context is entered on a one-slot QEMU. A guest halt reachable
+from an unprivileged domain is a finding even behind a configuration error, and it belongs to the QEMU/firmware owner.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
@@ -2903,6 +3333,66 @@ everything inside delegated domains, are unaffected.
 > - flash back to 0568f93a9 (cursorless, without the FP fixes);
 > - build the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back).
 
+### R-58 — the supervised-call switcher never saves or restores the CALLER's `srevroot`: after any virtual-context entry (and again after every resume) the caller runs in the CONTEXT's lifetime-table namespace until it writes 0x5C1 itself · `OPEN, source-derived 2026-10-19 by the RTL lane on tree A (8522d72fe; the flashed image is caplifive_vp2c_8522d72fe.bit, sha256 ba1339bcd1f6...), independently re-read by the semantics owner and then adversarially audited. The register map was extended for item D with ids 67 (srevroot) and 68 (the options word) but the SAVE/RESTORE/exchange WINDOW was not: every walk and the exchange cover 0..66 (plus 75..107 for a CSRUNV walk) and `walk_advance` leaves 66 for 75 or ends (capstone_dom_switcher.anvil:527-538); the exchange's bound is 7'd66 or 7'd7 (:670-680). Id 67 is written in exactly three places, all context-side: the ENTRY load from dom_base+8 (:170-173), the ESCAPE save to dom_base+936 (:481) and the RESUME restore from dom_base+936 (:315). By contrast the caller's `satp` (id 66) has BOTH halves, in the walk and in a context copy at +0/+928, which is what makes this an oversight of the window rather than a design choice. The only other writer of srevroot_d is the CSR instruction (csr_regfile.sv:2014; the switcher's is :2051), there is no caller-side shadow analogous to runv_caller_priv_q, and a REFUSED CSRUNV cannot move it (the precheck runs before the SAVE and the refuse path writes ids 74 and 0 only), so the defect is confined to successful entries and their resumes. The context cannot choose the value: a supervised context is denied any plain CSR op on an address with [9:8] != 0 (:3018-3024), and 0x5C1 has [9:8] = 01, so what the caller inherits is the frame word 4 KiB-masked. CONSEQUENCE, which is the reason it matters beyond hygiene: `vctx_table_o` is PRIVILEGE-dependent (:2876-2878, term 2 gated on S with srevroot != 0, term 3 on M with csupctl.table), so a caller left with a nonzero srevroot toggles the namespace flag on every S<->M transition, and each toggle raises `revnode_ns_flush_o` (ex_stage.sv:1396-1417), which re-arms all sixteen CPMP trackers (pmp_data_if.sv:109-114). That is AT MOST one pulse per transition and NONE if the rev-node unit is busy across it (the !rev_busy sample gate), and the pulse itself is a pre-existing property of the privilege terms that this defect lets an un-opted caller reach -- not a consequence of the defect. It is the candidate clock for S-23's transient false deny. MEASURED 2026-10-19 (capstone-ariane virtual-profile-2-c e98e2dcb1, arm `va-srevroot`, derived from va-runv.S by six asserted edits and run beside it): the caller wrote 0x5C1 = tbl (0x80006000) and read back **tbl2 (0x80007000), the CONTEXT's table**, with va-runv's first thirteen and last two readings byte-identical, so the arm is that arm plus one variable. With A = 0 the read-back is tbl2 again, i.e. the caller inherits the frame's word verbatim. The CONSEQUENCE is measured too: the same CSNODE reads mcause 2 (illegal at decode) BEFORE the entry and SUCCEEDS with a node id after the escape, so the caller is inside the table namespace without having opted in. One failed assumption on the way, recorded because the arm named it in advance: the first cut left the context's table page all zeros, so the context's load through its node-2 capability raised cause 25 instead of reaching its ecall and four frame readings moved -- the srevroot readings never depended on the context completing, but the control did. Before this, NO reading bore on it in either direction: every arm with a CSRUNV puts its caller-side csrr and lifetime ops inside the context, and the arms put the SAME table in the frame as the caller uses, which would have masked it. ACCEPTANCE READINGS, named 2026-10-20 before the fix exists and REVISED the same day by S-23's audit: `va-srevroot` must read the caller's OWN value back (currently 0x80006000 written, 0x80007000 read) with its baseline readings unchanged, and on silicon the DATA face must go to zero with the OLD module on a fixed bitstream (sql0 DRT1 0 against its 14-17 baseline band, pb10 DRT1 0). **NOT an acceptance reading for this fix: the surviving CSRETIRE+4 FRTY site.** An earlier draft listed it; the audit showed R-58 is not required for that site, since inside the window select_root deliberately puts the context's table in srevroot, so the namespace flag is 1 at S regardless of whether the escape restored it. FIX (RTL lane's, for the next switcher revision, not yet pre-registered): id 67 in the caller's snapshot, i.e. the is_runv branch at :527 reaching 67, which extends SAVE and RESTORE together and places it at snapshot offset +944 by the 8-byte stride; the reference model and any software definition of the snapshot size must move with it, and the classic path is left alone (per the CSR denial above, no domain can write srevroot anyway)`
+
+### R-59 — a CSRUNV frame whose `srevroot` word is between 1 and 4095 passes the switcher's non-zero precheck and then installs ZERO, so the context is admitted and runs OUTSIDE the lifetime-table namespace · `OPEN, source-derived 2026-10-19 by the RTL lane's auditor on tree A (8522d72fe), filed separately from R-58 deliberately (one issue, one folder) although both are in the same walk. `runv_precheck_step` accepts any non-zero word at dom_base+8 (capstone_dom_switcher.anvil:381-387) while the id-67 write masks the low 12 bits (csr_regfile.sv:2051), so a word in 1..4095 satisfies "srevroot non-zero" and the CSR ends up 0 -- and `vctx_table_o`'s term 2 then reads false for that context (:2876-2878). No reading yet; a one-arm test is a frame with +8 = 0x800 plus a context-side CSNODE, which should be illegal at decode where the same arm with +8 = a real 4 KiB-aligned table admits it. The fix is to make the two agree: either the precheck rejects a word with low bits set, or it tests the masked value`
+
+
+### R-60 — a load or store through a capability whose cursor lies OUTSIDE its representable window is bounds-checked against the compressed bounds decoded AT THAT CURSOR, which are the true bounds shifted by whole window spans; when that shifted decode contains the cursor the access passes and touches memory one or more spans away, without a trap · `CHARACTERISED on silicon 2026-10-20 (tree A, board 1; N=1 per arm; the bitstream identity is the run's label, not a hash). Mechanism read in RTL and audited. QEMU traps (cause 28) in every arm. Stores MEASURED. Corpus witness case 31 on BOTH bitstreams. LDC/STC by source only`
+
+**What happens** (capstone-ariane 8522d72fe, read by the compiler lane's rtl-oracle and re-read by a claim-auditor):
+- The register file holds capabilities compressed. CINCOFFSET checks only the capability type: it neither clears the tag
+  nor checks representability (`capstone_flu_unit.anvil:29-60`; at writeback `compress_cap`, `ex_stage.sv:1739,1753`).
+  The only representability check found is CDERIVE's (`capstone_dyn_unit.anvil:830`).
+- The LSU decodes `lsu_cap_a = decompress_cap_tagged(lsu_ctrl.cursor_a, lsu_ctrl.cap_metadata_a)` from rs1's LIVE cursor
+  (`load_store_unit.sv:338`), for loads and stores alike (`lsu_ctrl.fu inside {LOAD, STORE}`, `:1320`). It raises cause 28
+  when `lsu_ea_full < bound_start || lsu_ea_full + size > bound_end` against THAT decode (`:1353-1356`).
+- LCC reads the same decode on the same inputs (`ex_stage.sv:887`; `capstone_dyn_unit.anvil:405-406`).
+- Contexts run at M, so this path applies to every virtual-context access (the gate `ld_st_priv_lvl_i == PRIV_LVL_M`).
+
+**The exact condition** (byte-width model of `ariane_pkg.sv:673-720` at 64 bits; the auditor's, cross-checked by the
+compiler lane at 241,984 positions with 0 mismatches):
+- With S = 2^(E+14), a cursor in window k decodes to [base + kS, end + kS).
+- A size-n access at an out-of-window cursor therefore PASSES iff (cursor − base) mod S ≤ len − n. Otherwise it still
+  traps 28.
+- So "any overrun past one span aliases" is wrong. For a 20,160-byte E=2 object, overruns up to 45,376 bytes past the
+  end trap, and beyond that about len/S ≈ 31% of positions alias.
+
+**Measured on silicon** (board lane vp2-tier12; compiler lane alias-load 0e647b3ce4cf and 6c8f59560766, diag31
+5876e58b6a1e):
+- **alias-load** (image 4aa36d96, a 20,160-byte child): the arms at +0x10100 and +0x16000 decode the SAME shifted bounds
+  (child+0x10000).
+  - At +0x10100 the cursor lies inside them, and the `lbu` reads the aliased marker (165).
+  - At +0x16000 it lies outside, and the load traps 28 at the cursor.
+  - In-window +100 loads, and +0x4ed0 (16 bytes past the end) traps.
+- **alias-store** (image b68b3d25): the same arms with one `sb`. At +0x10100 the store lands and overwrites the marker
+  64 KiB away, with no trap. +0x16000 and +0x4ed0 trap 28.
+- **QEMU** (qkit7-rev2) keeps exact bounds in registers between escapes and traps 28 in every out-of-bounds arm.
+
+**Corpus witness, sqlite/engine-repros case 31 (fz10, statDecodePage):**
+- The access is `lbu a1, 0(a0)` right after `cincoffset a0, a0, a1`, with iOff taken from the fuzzed page. Its cursor is
+  50,976 bytes past the end of a 20,160-byte page buffer, 71,136 past the base.
+- The diag31 boot reads LCC bounds shifted by exactly +0x10000, containing the cursor. The load passes and the case
+  completes.
+- It is MISSED on three boots (two on image 7bce22b0, one on the diag image 349e5418), against CAUGHT 28 on QEMU in three
+  runs.
+- q15's other 32 cells match QEMU. The bundles are under sqlite/engine-repros/results/2026-10-20-vp2c-tree{A,B}/.
+
+**What this amends:** the Q-30 silicon note (docs/history/19-10-2026_22-30-00_q30-...) says silicon "self-heals" a
+cursor excursion and bites only on instructions that DERIVE bounds (SHRINK, TIGHTEN, CDERIVE). Plain loads and stores
+made DURING an excursion bite too. That note's simulation arm has no access at an out-of-window cursor.
+
+**Not measured:**
+- LDC/STC, which take the same decode by source (`capstone_dyn_unit.anvil:666-670, 733-736`);
+- tree B 8de3c48cf with the directed arms. Its decode path is identical by source, and case 31 reads MISSED there too
+  (q15 subset f on tree B, 2026-10-20, board 2: 30 CAUGHT, 31 MISSED, 32 CAUGHT, as both tree-A boots);
+- a chain of excursions. A CINCOFFSET from an already out-of-window cursor re-encodes the shifted decode, which may make
+  the wrong bounds permanent. That is the compiler lane's inference from source.
+
+**Consequence for corpus verdicts:** on vp2 a spatial overrun of more than the in-window slack can be MISSED by silicon
+where QEMU catches it. A board-only MISSED on a far, data-dependent offset should be checked against this condition
+before being read as a cell difference. A store that aliases is a silent write to another object.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
@@ -2957,6 +3447,24 @@ the same merged path. R-49 remains the other producer of a ghost count, fixed on
 
 **Software rule on bf3db3175** (S-25, isa.md, the semantics owner): no capability store may be the first access to a page
 under the virtual profile; the module pins a whole arena at its first kind-4 fault; the kit's sparse steps are not available.
+
+> **Residual found by the synthesis audit (2026-10-18), parity rather than regression:** the saved store-side exception
+> is a SINGLE-ENTRY hold, so a second faulting capability store arriving before the first is consumed overwrites the
+> pending one (`ex_stage.sv:1346`). The load side has the identical shape (`:1320-1321`), so this matches the merge it
+> mirrors, but it rests on an unverified assumption that two cannot be in flight; the comment at `:1352` asserts only
+> that a load and a store cannot complete on the capability writeback port in the same cycle, which is a different
+> claim. No arm exercises two faulting capability stores in flight.
+>
+> **CLOSED the same day, structurally, so no arm was built.** The capability unit cannot have two operations in flight.
+> Its top-level loop is sequential: `loop ep.flush { send ep.rtr(1'd1) >> let msg = recv ep.req >> match msg.operation
+> { ... fu_op::STC => call STC(msg) ... } >> cycle 1 }` (`capstone_dyn_unit.anvil`, the `proc capstone_dyn_unit` body).
+> It announces readiness, receives ONE request, runs that handler to completion, and only then loops to announce
+> readiness again; the STC handler's final act is `send ep.res(result_pack)`, which is the very event
+> (`capstone_dyn_res_valid_o` with the matching trans_id) that consumes the saved exception. So a second capability
+> store cannot be ACCEPTED by the unit until the first one's result has been emitted, and the hold is cleared at that
+> emission, which makes the overwrite at `ex_stage.sv:1346` unreachable rather than merely unobserved. A plain store
+> cannot reach the hold either, since its exception takes the normal path and raises `forward_normal_store_valid`,
+> which the hold's condition excludes. The same reasoning closes the load side's identical shape.
 
 ### R-56 — a page fault raised at a capability LOAD's translation was dropped on the way to writeback, because an LDC's result is routed through the DYN unit whose result packet carries only the capability cause `LATENT ON EVERY BITSTREAM, UNREACHABLE THERE (capability loads were never translated); FIXED on virtual-profile 16345658f (ex_stage.sv carries the LSU's exception beside the DYN result for that trans_id; cva6.sv lets it replace the capability port's exception record)`
 
@@ -3391,6 +3899,56 @@ handler, so only that invocation dies and the rest of the run still returns data
 RETURN" rule applied to privilege rather than to control flow.
 
 ### C-32 — `OPEN — LIVE ON SILICON until Q-04 (b) lands in the RTL: the lead decided Q-04 option 1 on 2026-10-14 (plan 2026-10-14-movc-untagged-source.md); capstone-qemu #27 fixes the virtual profile; no RTL commit exists yet (audit 2026-10-16). History: the SQLite Sublet port at -O1/-O2 loses its lookaside to it (2026-09-15), so every optimised-image board number of that port is a lookaside-OFF run; DESIGN A merged 2026-09-15 (46c53b7b6ae2) and measured not to fix this site; reproducer in capstone/tests/c32-sinkfold-repro/`
+
+> **2026-10-20: C-32 IS THE CAUSE OF THE vp2 TIER 3 SILICON-ONLY STOPS, and the 2026-10-14 "resolved for the virtual
+> profile" below holds on QEMU only, not on vp2 silicon.**
+> - Every corpus image is built with `+movc-keeps-integer-source` (sdk.json; checked in t3-freeze-nb, the cpython and
+>   the postgres image SDKs), which QEMU honours (#27).
+> - The resident bitstreams null an untagged MOVC source: capstone_flu_unit.anvil func MOVC, lines 6-26, byte-identical
+>   in 8522d72fe and 8de3c48cf. With rd != rs1 only a CAP_TYPE_NONLIN source is kept, and otherwise rs1 becomes cnull
+>   while rd receives the value. There is no Q-04 (b) commit in capstone-ariane.
+> - **cpython:** the pc=0 in steps 17-control, 23 and 23-control is one site, `movc s2, a3; jalr a3` at VA
+>   0x331c0c/0x331c10 in _PyCfg_OptimizedCfgToInstructionSequence. The board's FREG dump (cpyp-DF, board lane
+>   a3bd6485b755) reads a3 = 0, s2 = PyMem_Calloc's address (VA 0x157e90, untagged), a0 = 1, a1 = 0x70, and
+>   x1 = VA 0x331c14 in all three.
+> - **postgres sql0:** cells 03 and 07 are the same class.
+>   - 03: `CREATE EXTENSION ltree` gives a duplicate key in pg_operator_oprname_l_r_n_index, (>=, 12777, 12777, 2200).
+>   - 07: `CREATE EXTENSION pg_trgm` gives `operator does not exist: text % text`, then pc=0.
+>   - Identical in sql0-drt2 and sql0-nf2A on tree A.
+> - **QEMU reproduces them** with `CAPSTONE_MOVC_NULL_SCALAR=1`, the kits' own switch that makes MOVC follow the RTL
+>   (compiler lane, cpy-fr1-mn and sql-diag-mn; checked here: the switch's one-shot line once per run).
+>   - cpython: 3 pc=0 with x1 at image offset 0x321c14, the board's.
+>   - postgres: 3 duplicate-key and 2 missing-operator lines, as on the board. QEMU shows 2 pc=0 lines where the board
+>     showed 1, a difference recorded, not explained.
+>   - The DIAG-BTU hint shows the existing tuple really is equal (an earlier genuine insert), so CREATE EXTENSION's logic
+>     ran twice; it is not a miscompare.
+>   - Without the switch, every QEMU run passes these points.
+> - **Audit:** a claim-auditor (the compiler lane's) found no other RTL path that keeps an integer MOVC source. The
+>   generated capstone_flu_unit SystemVerilog was not read.
+> - **Kit-fidelity gap:** the 2026-10-15 corpus-on-FPGA plan prescribes `CAPSTONE_MOVC_NULL_SCALAR=1` for the
+>   silicon-mimic QEMU, but the qkit7-* wrappers and the Tier 3 drivers never set it (checked: no MOVC_NULL in the
+>   qkit7-rev2, -nf2 or -fr1 wrappers). So every vp2 kit prediction assumed a kept integer source, which silicon does not
+>   keep. A board cell that differs from its kit prediction should be checked against this first.
+> - **THE LEAD'S DECISION (2026-10-20): remedy (b).** Until Q-04 (b) is on a bitstream, board-bound corpus images are
+>   rebuilt WITHOUT `+movc-keeps-integer-source`, and their QEMU references are re-recorded. The silicon-mimic kits
+>   (`qkit7-*-mn`, with the switch set; the compiler lane) stay as a cross-check: on a rebuilt image they and the plain
+>   kits should agree.
+> - **REMEDY (b) HOLDS ON SILICON for postgres sql0 (2026-10-20 13:00-15:13, both trees; board lane 90eb95dc712f).**
+>   - The image d9787ac28e495969 was rebuilt without the flag (runtime 8f132305; sdk.json `-movc-keeps-integer-source`).
+>   - It reads 9 of 9 cells equal to its QEMU reference on tree A AND tree B (sql0-nmA/nmB, module 54d8a3af). All four
+>     extensions are created, and neither transcript has a duplicate-key, missing-operator or pc=0 line.
+>   - On QEMU the same image reads the same 9 cells with and without `CAPSTONE_MOVC_NULL_SCALAR=1`. The old image fails
+>     03/07 under that same switch, which is the two-sided check.
+>   - **Cell 07's site** (sql0-dumpB, board 2, FREG): ProcessUtilitySlow `mv s2, a1; movc s3, s2; jalr s2`, with s2 = 0
+>     and s3 = list_delete_first. The rebuilt image copies through memory (`stc s2; ldc s3`). Cell 03's site is not
+>     named; its duplicate key is a genuine second insertion.
+>   - The rest of the corpus is being rebuilt the same way, and the earlier vp2 board records all ran flagged images.
+> - **Remedies:**
+>   - (a) set the switch in the kits and re-predict, which is a kit change and a re-pin;
+>   - (b) build board images without `+movc-keeps-integer-source`, so the compiler's CapstoneLiveSourceCopy rewrites
+>     live-source copies and silicon and QEMU agree whatever the RTL does. That touches the lead's Q-04 option-1
+>     decision;
+>   - (c) Q-04 (b) in the RTL.
 
 > **2026-10-14: RESOLVED FOR THE VIRTUAL PROFILE by the Q-04 decision; still open for the physical
 > profile until Q-04 (b) is on a bitstream.** The virtual-profile SDK now compiles every application,
@@ -9068,6 +9626,145 @@ and passes against the patched one, and libc-test's `pthread_cond` passes
 libc; objects compiled against the old headers that embed a `pthread_cond_t` must be recompiled
 (perl and mruby embed none).
 
+### C-81 — a copy of 16 bytes or more whose 16-byte alignment the compiler cannot prove is inlined as scalar loads and stores, which strip the tags of the capabilities it carries `FIXED 2026-10-16 on compiler/memcpy-unknown-alignment — COMPILER; found 2026-10-15 by SPEC CPU2017 500.perlbench_r (op/pack.t, pack 'p')`
+
+**What happens.** `CapstoneTargetLowering::findOptimalMemOpLowering` sent every memcpy and memmove
+that was not 16-aligned on both ends to its scalar path, sized to the alignment it could prove:
+`memcpy(char *, char *, 16)` became sixteen `lbu`/`sb` pairs. `align 1` means the alignment is
+unknown, not that the bytes hold no pointer, and a scalar store never carries a tag. Perl's
+pack 'p' stores a pointer with `Copy(&aptr, cur, 16, char)` and unpack 'p' reads it back with
+`Copy(s, &aptr, 16, char)`; both buffers are 16-aligned at run time, the round trip returned an
+untagged pointer, and `newSVpv` faulted in `strlen` (cause 24). C-78 had left these copies
+unchanged on purpose; its entry said so.
+
+**Fix.** A memcpy or memmove of 16 bytes or more whose 16-byte alignment is not proven calls
+`memcpy`/`memmove`. musl's implementation checks the run-time alignment of both cursors and copies
+whole granules as capabilities when they match (`string_bounds_safe.c`). Kept inline: copies
+shorter than a granule, and copies from constant data SelectionDAG can read as plain bytes
+(`isMemcpyStrSrc()`), which hold no tagged capability. `llvm.memcpy.inline`
+(`__builtin_memcpy_inline`) cannot become a call: such a copy without proven alignment is now an
+error ("cannot inline a copy of N bytes whose 16-byte alignment is unknown without dropping
+capability tags"), where it used to drop the tags silently; a 16-aligned one is copied as
+capabilities whatever its length (the C-78 residual below), except under the S-06 fixup flag,
+whose hook covers only 32 granules. The libcall flag (`-capstone-lower-memops-via-libcall`) no
+longer declines a forced-inline copy into an empty lowering. Copying a forced-inline copy of
+unknown alignment correctly needs a run-time alignment test in the expansion; not done.
+
+**Measured (2026-10-16, assertions-ON build of this branch on dev 46fcc2b27e5a, p12).**
+- Lit: `llvm/test/CodeGen/Capstone` 124 pass, 1 unsupported, and `shared-patches-present.test`,
+  which needs a git checkout and passes in one; the Capstone tests in `clang/test/CodeGen`,
+  `llvm/test/MC/Capstone` and `llvm/test/Transforms` (32) pass. New tests
+  `memcpy-unknown-alignment-tags.ll`, `memcpy-inline-unknown-alignment.ll`; updated
+  `aggregate-memcpy-align.ll` and `memcpy-capability-granules.ll`, whose under-aligned controls
+  had asserted the scalar copy. Each part of the fix, reverted alone, fails its own tests (recorded
+  in the test headers).
+- `runtime/virtual/hosted-contract.c` gains four copies through external `noinline` wrappers that
+  take `char *` (16 bytes, 24 with a plain tail, 48 with the capability in the middle granule, an
+  overlapping 32-byte memmove). Virtual SDK built from this tree, dev platform (QEMU 2b6fbe3eaf):
+  with this compiler 60 of 60 checks pass; with the previous one (the same memcpy lowering as dev)
+  the four new checks fail.
+- Gates with the new SDK: runtime, nodes, malloc pass; memcached passes 104 and fails
+  `fx24_trigger`, as the kits of #242 and #238 do on their own compilers.
+- perlbench rebuilt with this compiler: `unpack("p", pack("p", $s))` returns the string, through a
+  variable, a copy and `p<`; with the previous compiler every one of those faults. Two shapes still
+  fault and cannot work on any capability machine: `p>` (the pointer is stored byte-reversed) and
+  unpack 'p' of a UTF-8-upgraded string (the pointer is rebuilt byte by byte). op/pack.t uses both,
+  with constant arguments that are folded at compile time, so the whole file still dies before its
+  first test. With those four checks replaced by `pass()` in a staged copy it runs 479 tests and
+  then faults in musl's `modf`, a different compiler defect (C-86).
+- Cost: in perlbench, 208 memcpy call sites become 216 (pp_pack.c +3, regcomp.c +2, re_comp.c +2,
+  MD5.c +1); memmove stays at 78. In musl, references to memcpy/memmove go from 134 to 160: the
+  `double complex` results of the complex functions (16 bytes, 8-aligned) and `sigset_t` copies.
+  musl's own `memcpy.o` and `memmove.o` are byte-identical to the previous build and have no
+  relocations, so neither calls itself. Run time not measured. A per-copy "holds no capability"
+  marker from clang (CHERI's `no_preserve_cheri_tags` is the model) would let typed copies such as
+  `double complex` inline again.
+
+### C-86 — `modf`, `modff`, `modfl` and `frexp` expanded from their intrinsics pass the output pointer as an integer, so the callee faults storing through it `FIXED 2026-10-16 on compiler/modf-capability-pointer — COMPILER; found 2026-10-16 by SPEC CPU2017 500.perlbench_r (op/pack.t's unpack checksums call modf)`
+
+**What happens.** clang turns `modf` into `llvm.modf`, and SelectionDAG expands that (and
+`llvm.frexp`) back into a library call that writes one result through a pointer to a stack
+temporary: `SelectionDAG::expandMultipleResultFPLibCall`, and for softened types (`long double`
+is binary128, and `double` without D) `DAGTypeLegalizer::SoftenFloatRes_UnaryWithTwoFPResults`
+and `SoftenFloatRes_FFREXP`. All three typed that pointer `PointerType::getUnqual`, address space
+0, which is a 64-bit integer on this target, so the call moved the frame capability into `a1`
+with `mv`. musl's `modf` then faulted at `fsd fa5, 0(a1)` (cause 24, "Cap mem access requires
+capability", `value_hi = 0`). It hits even when the caller passes its own pointer, because the
+expansion always writes a temporary and copies the result out. perlbench's op/pack.t reaches it
+through `unpack`'s `%` checksums. Same class as C-18 (the `memcpy` libcall's arguments).
+
+**Fix.** Each output pointer is typed in the address space it lives in: the alloca address
+space for a stack temporary, the store's own for a folded store (always 0: only address-space-0
+stores are folded). A target whose allocas are in address space 0 is unchanged. Two more
+stack-temporary libcall arguments are typed the same old way, the remainder pointer of a combined
+divrem libcall (`ExpandDivRemLibCall`) and the overflow flag of `__mulo[dt]i4`
+(`ExpandIntRes_XMULO`); neither is reached here: Capstone's runtime-libcall table
+(`RuntimeLibcalls.td`, `CapstoneSystemLibrary`) has no combined divrem and leaves out the
+compiler-rt-only `__mulodi4`/`__muloti4`, and capstone64 indeed emits `__divdi3`/`__moddi3` and an
+inline 128-bit overflow multiply. They are left as they are. `getMemcmp` takes `getUnqual` too,
+but only PowerPC calls it.
+
+**Still open, same class, not reached from C (found by the Codex review):** the element-wise
+atomic memcpy/memmove/memset libcalls (`getAtomicMemcpy` and its siblings) type their pointers as
+`getIntPtrType`, an integer; and the `llvm.get.fpenv`/`llvm.set.fpenv` stack-temporary fallback
+types its pointer from the value type, `i128` for a capability. Neither intrinsic is emitted for
+the C we build.
+
+**Measured (2026-10-16, assertions-ON build of this branch on dev e78797da4371, p12).**
+- Lit: `fp-libcall-output-pointer.ll` checks after instruction selection that the calls take the
+  pointer in `$c11` (`$c12` for binary128), in the virtual, gp-captable and default profiles. With
+  `getUnqual` restored in `expandMultipleResultFPLibCall` the four `double`/`float` functions take
+  `$x11` and fail; restored in the two soft-float sites the two binary128 functions fail. The
+  Capstone tests in `llvm/test/CodeGen/Capstone`, `clang/test/CodeGen`, `llvm/test/MC/Capstone`
+  and `llvm/test/Transforms` pass (`shared-patches-present.test` needs a git checkout and passes
+  in one); the shared-patch manifest is re-baselined for the two files.
+- `runtime/virtual/fp-contract.c` gains `split_results_through_pointers` (modf, modff, modfl,
+  frexp, frexpl). It sits outside the file's `FENV_ACCESS ON`: under it clang keeps `modf` a plain
+  call and the expansion is never reached, and the first version of the check passed with both
+  compilers for that reason. Virtual SDKs from this tree, dev platform: with the previous compiler
+  the program faults in that check (cause 24); with this one the FP gate passes.
+- Gates with the new SDK and the four ports rebuilt by it: hosted (48 of 48), runtime, nodes and
+  malloc pass; memcached passes 104 and fails fixture 24, the known flaky one.
+- perlbench rebuilt with this fix and C-81 (#246) together: op/pack.t, with the four checks that
+  need a tag in a byte-reordered pointer (C-81) replaced by `pass()` in a staged copy, passes all
+  14708 tests; unmodified it still dies on the first of those four.
+
+### C-85 — a 16-byte common global (a `-fcommon` tentative definition of a pointer or an `__int128`) aborts code generation with "Unknown section kind" `FIXED 2026-10-17 on compiler/common-capability-globals — COMPILER; found 2026-10-17 building SPEC CPU2017 525.x264_r's ldecod with an assertions build`
+
+**What happens.** `CapstoneAsmPrinter::emitGlobalVariable` emits every defined 16-byte global
+itself (to write a 128-bit value as two 64-bit words). It asks `getKindForGlobal` for the
+global's kind and `SectionForGlobal` for its section. A common symbol, a C tentative definition
+built with `-fcommon` such as `int *p;`, has kind `Common`, which has no section:
+`getSectionPrefixForGlobal` reaches `llvm_unreachable("Unknown section kind")`. With assertions
+clang aborts; without them the unreachable is undefined behaviour. Every non-TLS common global of
+16 bytes reaches it: a capability pointer, an `__int128`, a 16-byte struct. A common global of
+another size takes the generic path and is fine, which is why `int x;` never showed it.
+
+**Why it was not seen before.** Clang defaults to `-fno-common`, and the ports do not set
+`-fcommon`. SPEC CPU2017's 525.x264_r needs it (its sources define the same globals in several
+files), and its ldecod has common pointers (`p_Dec`, `PicPos`). The x264 builds before this one
+used other compiler builds; whether those had assertions is not recorded.
+
+**Fix.** The 16-byte path skips common symbols, as it already skips declarations; the generic
+path emits them as `.comm name,16,ALIGN` with the global's alignment, the same form every other
+common global has, and an object `.type`. The value is zero, so no 128-bit initializer is needed;
+the gp cap-table and small-data code classify globals independently of this emitter.
+
+**Not changed here** (both older than this fix, found in its review): the 16-byte path emits no
+`.type` for a defined 16-byte global, so a pointer global is `STT_NOTYPE` in the object; and a
+common global named in `llvm.used` gets no `SHF_GNU_RETAIN` (the generic path returns before
+section selection), so `--gc-sections` can drop it if nothing references it. The second applies to
+common globals of every size.
+
+**Evidence** (assertions-on Release builds of clang/llc/lld on p12; before = the SPEC integration
+toolchain, dev 073d3b9f85d0 with open PRs #245-#250 merged; after = the same tree with this fix):
+- `llvm/test/CodeGen/Capstone/cap-common-globals.ll`: before, `llc` aborts with "Unknown section
+  kind" in both RUN lines; after, PASS.
+- `llvm/test/CodeGen/Capstone`: before 127 of 128 pass, after 128 of 129; the one failure on both
+  is `shared-patches-present.test`, which needs the whole repository.
+- 525.x264_r's `ldecod_src/ldecod.c` with the SDK's flags: before, clang aborts; after, it
+  compiles and `p_Dec` and `PicPos` are common symbols of 16 bytes.
+
 ### C-80 — with F/D enabled, every FP constant that is not an immediate gets an address-space-0 constant-pool address, which Capstone's lowering cannot honour `FIXED 2026-10-14 on compiler/select-fp-constants-capability — COMPILER; found 2026-10-14 building SPEC CPU2017 544.nab_r with +f,+d`
 
 **What happens.** Generic SelectionDAG code that puts a constant into the constant pool types the
@@ -9132,6 +9829,80 @@ the branch at the review, `7b1ff902` rebased on dev `a4a41f19`; after = this fix
   the vector `BUILD_VECTOR` and fudge-table producers, which `+f,+d` alone does not reach on
   Capstone.
 
+### C-83 — `__builtin_return_address` is used as a 64-bit pointer where `void *` is a capability, and the frame walk at depth 1 or more is RISC-V's `FIXED 2026-10-16 on compiler/returnaddress-capability — COMPILER; found 2026-10-15 porting SPEC CPU2017 502.gcc_r`
+
+**What happens.** `llvm.returnaddress` is not overloaded on the pointer type: it yields an
+address-space-0 pointer, which on Capstone is a 64-bit integer, and clang returned that value as
+the C `void *` unchanged (`CGBuiltin.cpp`, `BI__builtin_return_address`, `BI_ReturnAddress`).
+- Passed as an argument (`r(__builtin_return_address(0))`, gcc's `ggc` statistics), clang adds an
+  `addrspacecast` to address space 200. `CapstoneTargetMachine::isNoopAddrSpaceCast` answers true
+  for every pair, so the 64-bit value went into a capability argument and `getCopyToParts`
+  asserted ("Unknown mismatch!").
+- Returned from a function, clang stored the 8-byte value into the 16-byte return slot and loaded
+  it back as a capability: the upper half was whatever the slot held.
+- At depth 1 or more both builtins asserted: `lowerFRAMEADDR` stepped the frame pointer with an
+  integer `ADD` on the capability (`VT.isInteger()`), and `lowerRETURNADDR` handed its own
+  integer type to it ("Couldn't find the register class").
+- A function that reads its return address and also spills `ra` failed `-verify-machineinstrs`
+  ("Using an undefined physical register", dev included): the read makes `X1` a live-in, the
+  prologue spills the capability `C1`, and the spill's kill flag looked only at `C1`.
+
+**Fix.**
+- clang makes the C value from the address on Capstone (`ptrtoint`, `inttoptr`): an untagged
+  pointer that carries the return address and grants nothing. Other targets are unchanged.
+  CHERI LLVM instead overloads `llvm.returnaddress` and returns the `ra` capability; here `ra`
+  holds an integer in the virtual and cap-table profiles (calls are `jalr`), so there is no
+  capability to return, and the address is what return-address consumers use (musl's `dlsym`, which
+  takes the caller's `ra` from its own stub, only does `addr2dso((size_t)ra)`).
+- The frame walk follows the frame record, two capability-sized slots below the frame pointer:
+  the saved frame pointer (a capability) at `fp - 32`, loaded with `ldc` and stepped with
+  `PTRADD`, and the return address at `fp - 16`, read with `ld` (where calls are capability jumps
+  `ra` is spilled with `stc`, and the low half is its cursor). The record is laid out this way for
+  ordinary C functions in all three profiles (measured with varargs, many callee-saved registers,
+  `alloca`, over-alignment and a 5000-byte frame, at `-O0` and `-O1`). Other calling conventions
+  (GHC, PreserveMost, interrupt handlers) and save/restore libcalls place it differently and are
+  not covered; a walk also needs every caller to keep a frame pointer, as on any target.
+- Depth 0 reads `ra` through `PseudoTRUNC_CAP`, an integer write that stays an `addi` until MC
+  lowering, so the value is never the capability `cjalr` left in `ra`, even when register
+  allocation reuses `ra`'s register (a later `PseudoBRIDGE_CAP` there is dropped on the premise
+  that its source was last written as an integer).
+- The prologue spill does not kill a callee-saved register any of whose sub-registers is a
+  live-in.
+
+**Not changed, same family (from the review).** `isNoopAddrSpaceCast` still answers true for
+address spaces 0 and 200: the memory-libcall fallback depends on it (`SelectionDAG.cpp`,
+`getMemcpy`/`getMemmove`/`getMemset`), and an `addrspacecast` 200 → 0 → 200 folds to the
+identity, so a lossy cast needs its own design. `__builtin_dwarf_cfa` returns `llvm.eh.dwarf.cfa`'s
+address-space-0 pointer the same way, and the thread pointer is lowered from `X4` as an address-
+space-0 value; both need stack or TLS authority rather than an address and are left open.
+
+**Measured (2026-10-16, assertions-ON Release builds on p12; before = dev 638493a31981, after =
+this branch, the same build tree with the three source files swapped).**
+- Before, `clang -O1` of `void *f(void *p){ r(__builtin_return_address(0)); return p; }` and the
+  hosted contract both abort with "Unknown mismatch!"; `__builtin_frame_address(1)` aborts in
+  `getNode`. After, the reproducers compile in all three profiles at `-O0`, `-O1` and `-O2` with
+  `-verify-machineinstrs`.
+- `llvm/test/CodeGen/Capstone/frame-return-address.ll` (depths 0-2 of both intrinsics, the
+  call-argument shape; virtual and cap-table at `-O2`, virtual and physical at `-O0`, physical at
+  `-O2`, and an MIR check of `PseudoTRUNC_CAP`) and `clang/test/CodeGen/capstone-return-address.c`
+  (returned, passed, stored, frame-address control, riscv64 control) fail before and pass after.
+- Mutations, each rebuilt: clang without the conversion fails the clang test; the frame step at
+  one slot, the return-address slot at 8 bytes, depth 0 without `PseudoTRUNC_CAP`, and the old
+  spill kill flag each fail `frame-return-address.ll`.
+- lit over CodeGen/Capstone, MC/Capstone and clang's Capstone CodeGen/Sema tests, 162 tests: the
+  two new tests go from FAIL to PASS and nothing else changes; `shared-patches-present.test` needs
+  a git checkout, and the drift check passes in the worktree (118 files).
+- musl built by both compilers: all 1361 objects of `libc-capstone.a` byte-identical (musl uses
+  neither builtin).
+- `hosted-contract.c` `frame_addresses()`: virtual 27/27 and native 21/21, the gate 59/59. The
+  call-site order check fired before it was right: without a barrier both compilers merge the two
+  calls of the helper, and it failed on both arms. With the dev compiler the file does not build.
+- Gates with this compiler's SDK and ports (memcached, SQLite, mruby, Perl): runtime 43/43, nodes
+  and malloc pass; memcached passes 104 and fails `fx24_prediction`, the flake seen on the C-81 and
+  C-86 runs. SQLite's hosted build does not prepare on dev 638493a31981 (its sorter rewrite is now
+  applied twice, by `adapt-sqlite-322.sh` and by `prepare-sources.sh`); the run used a copy of
+  `prepare-sources.sh` that skips an applied rewrite. That is a separate change.
+
 ### C-79 — library calls the simplifier emits take and return address-space-0 pointers, so with builtins on a folded `strchr` returns a plain integer `FIXED 2026-10-13 on compiler/libcall-capability-pointers — COMPILER; found 2026-10-13 building SPEC CPU2017 hosted (500.perlbench_r crashed clang, 525.x264_r failed instruction selection)`
 
 **What happens.** `BuildLibCalls.cpp` declares every library function the simplifier emits with
@@ -9190,6 +9961,58 @@ from `CreateGlobalString`'s default, which on Capstone is address space 200, so 
 integer where the runtime expects a capability, so this was already broken, differently. Nothing
 under `capstone/` builds with `--coverage`, `-fprofile-arcs` or `-fsanitize=dataflow`.
 
+### C-84 — a zero-byte dynamic alloca narrows its result to an empty range, and SHRINK traps on it (cause 29) `FIXED 2026-10-16 on compiler/dynamic-alloca-zero-size — COMPILER; found 2026-10-16 running SPEC CPU2017 502.gcc_r's train inputs`
+
+**What happens.** With `-capstone-shrink-stack` (on by default), `lowerDYNAMIC_STACKALLOC` narrows the
+pointer a dynamic alloca returns to `[cursor, cursor + size)` with SHRINK. For a size of 0 that range
+is empty, and SHRINK raises Illegal operand value for `base >= end` (capstone-qemu
+`helper_csshrink`). So `alloca(0)`, a count of 0 for an `alloca`-backed array, or a constant
+zero-byte alloca outside the entry block kills the domain with cause 29 and `tval` 0. GCC 4.5 does
+it in `expand_call`: `args = XALLOCAVEC (struct arg_data, num_actuals)`, and `num_actuals` is 0 for
+a call without arguments. Both of 502.gcc_r's long train inputs, 200.c and scilab.c, stopped at the
+same instruction (`expand_call+0xcc0`, the SHRINK).
+
+Fixed frame objects are not affected: `narrowToFrameObjectBounds` returns early for a size of 0,
+and global and TLS narrowing skip size 0 as well. Only the dynamic path lacked the guard.
+
+**Fix.** When the result is narrowed, the size is raised to one stack-alignment granule,
+`umax(size, 16)`, before sp moves. `SelectionDAGBuilder::visitAlloca` has already rounded the size
+up to the stack alignment, so only 0 changes. A zero-byte alloca then takes 16 bytes of its own
+below the old sp, and its capability covers exactly those. Two alternatives were rejected. Skipping
+SHRINK when the size is 0 hands out a capability for the whole stack. Narrowing to 16 bytes without
+moving sp gives a range that covers the object below.
+
+**Evidence.**
+- `cap-shrink-dynalloca.ll` gains a runtime-size case and a constant-zero case. The dev compiler
+  emits `shrink a0, a2, a2` for the constant case. The new test fails on dev and passes with the
+  fix. Across the Capstone lit suites (160 tests, dev and fix over the same test sources), that is
+  the only change.
+- `hosted-contract.c` gains `zero_size_allocas`: two `alloca(0)` must be tagged and distinct on
+  Capstone, and an `alloca(1)` after them, kept alive through a volatile, must be tagged and
+  usable. Built with the dev SDK, the image faults with cause 29 at
+  `zero_size_allocas+0x84` after its earlier checks pass, which is the positive control.
+  `run-hosted.py` requires the new checks by name.
+  With the fix it passes 53 of 53; with the dev SDK 49 of 51 (the virtual arm's exit and the new
+  checks are missing).
+- musl: 7 of 1361 objects differ between the dev and fix SDKs, all of them functions with a
+  runtime-sized array (`execl`, `execle`, `execlp`, `execvp`, `getcwd`, `res_msend`,
+  `dcngettext`).
+- Runtime gates with the fix's SDK (memcached, SQLite, mruby and Perl ports): runtime, nodes,
+  malloc and hosted pass. memcached fails only `fx24_prediction` (104 pass), as it does without
+  this change.
+- 502.gcc_r rebuilt with dev plus the open compiler PRs and this fix: train01 still matches its
+  reference, and 200.c runs past `expand_call` (a later stop is a separate out-of-bounds read in
+  GCC 4.5's own source).
+
+**Residuals.**
+- Inline stack probing for dynamic allocas is broken independently of this fix. At `-O0`,
+  `-verify-machineinstrs` rejects `SD $x0, $x2, 0` ("Illegal physical register"), on dev too. The
+  probe loop also moves sp with integer `sub`/`mv`. The application SDK does not enable stack
+  probing.
+- A zero-size FIXED frame object keeps the un-narrowed stack capability, because
+  `narrowToFrameObjectBounds` returns early. This does not fault, but the object gets whole-stack
+  bounds.
+
 ### C-78 — a 16-aligned copy whose size is not a multiple of 16 strips the tags of the capabilities in its whole granules `FIXED 2026-10-13 on compiler/memcpy-capability-granules — COMPILER; found 2026-10-13 by the hosted-application probe (runtime/virtual/hosted-contract.c) when the SDK stopped passing -fno-builtin`
 
 **What happens.** `CapstoneTargetLowering::findOptimalMemOpLowering` copied with capability units
@@ -9228,8 +10051,9 @@ the 16-multiple one before it) narrowed the granule count `Op.size() / 16` to 32
 as a 17-byte copy (2^36 + 16 as one capability). The count is now 64-bit;
 `memcpy-capability-granules.ll` gains both sizes, which the narrowed count inlines and the fix sends
 to `memcpy`. **Still open:** a copy forced inline (`llvm.memcpy.inline`) past the budget falls to
-the scalar path and loses its tags.
-### C-77 — a const global aggregate that holds pointers, passed BY VALUE, faults in the virtual profile: the argument copy's memcpy gets its operands through integer moves `OPEN — COMPILER; found 2026-10-11 by the Perl port on the virtual profile (the lexer's "::" bareword path), reduced to a 20-line C program; worked around in the port (ports/perl/musl/patches/5.36.3/0009)`
+the scalar path and loses its tags. *Fixed 2026-10-16 with C-81:* a forced-inline 16-aligned copy
+is copied as capabilities whatever its length (except under the S-06 fixup).
+### C-77 — a const global aggregate that holds pointers, passed BY VALUE, faults in the virtual profile: the argument copy's memcpy gets its operands through integer moves `FIXED 2026-10-16 on compiler/memcpy-unknown-alignment — COMPILER; found 2026-10-11 by the Perl port on the virtual profile (the lexer's "::" bareword path), reduced to a 20-line C program; worked around in the port (ports/perl/musl/patches/5.36.3/0009), which can now go`
 
 **What happens.** Built with a virtual-profile SDK (`-capstone-gp-free -capstone-image-gp`,
 compiler cda7e335ff9f, the p13 kit's) and run on the Sublet-lifetime QEMU, a call that passes a
@@ -9267,6 +10091,17 @@ virtual SDK can carry the same shape.
 **Not done.** The fix belongs in caller-side byval lowering (the C-50 neighbourhood,
 `CapstoneISelLowering.cpp`): the copy's operands must stay in capability registers. Not
 reproduced against a compiler built from a later revision; no lit test yet.
+
+**Fixed (2026-10-16).** The byval copy in `LowerCall` passed default-constructed
+`MachinePointerInfo`s, address space 0, and `SelectionDAG::getMemcpy` types a memcpy call's
+pointer arguments from them (the C-18 fix), so both capabilities went through `mv`. It now passes
+the frame object's info and the IR argument's. Since C-81 a byval copy whose 16-byte alignment is
+not proven (a struct of `long`s) is a memcpy call as well, so this mattered more. Lit:
+`byval-copy-capability-args.ll` checks after instruction selection that the call takes `$c10` and
+`$c11`; with the old pointer infos it takes `$x10` and `$x11` (in the emitted code `mv a0, s0` and
+`mv a1, a4`, as above). At run time `hosted-contract.c` passes the zero constant and one holding
+five pointers by value: both pass with this compiler; with the previous one the first faults and
+the process exits 139. Perl's patch 0009 is no longer needed; it is not removed here.
 
 ### C-74 — an 8-bit compare-exchange on a lone one-byte global faults at -O0 in an SDK build `OPEN — COMPILER, observed 2026-09-30 when runtime-qemu's subword-atomics probe first ran as a delegated application; mechanism read out of the code 2026-09-30`
 
@@ -9979,7 +10814,120 @@ override from its absence". Neither printed exit 75.
 - Both lines are artefacts of an empty guest log.
 - Before reading one as a result, check the per-probe `run-*.log` for any `LT-RESULT` line.
 
+### I-15 — `cap-tag-cache.S` has been VOID from its test 3 onward since it was written, and the 95-test sweep cannot see it `FIXED 2026-10-19 by the RTL lane (rewritten with checked expectations and a negative control); the readings below are from its own last run before the rewrite`
+
+Two defects, each enough on its own:
+
+1. **Its payload capability was LINEAR.** `a6` was created `CAP_TYPE_LIN`, and an `stc` of a LINEAR capability
+   MOVES it, so the file's first `stc` consumed it and every later `stc` stored `cnull`.
+2. **Every expectation was a COMMENT.** "should show valid capability" is not a check. The only way the file could
+   fail was to stop reaching `RVTEST_PASS`, so the sweep has reported it passing for as long as it has existed.
+
+**Read from its own run on bf3db3175** (`verif/sim/out_2026-10-18`, `capprint-readings.py`, 1331 retired, 18
+readings). Test 1 reads the payload's cursor `0x80003000`; from there on the readings are about `cnull`:
+
+| arm | reading | should have been |
+|---|---|---|
+| test 1, `stc` then `ldc` | `0x80003000` | a capability — correct, and the only sound arm |
+| test 2, both words plain-written | `0xdeadbeef0badc0de` | untagged — correct, because test 1's `DELIN` + re-`stc` had restored a NONLIN capability first |
+| test 3, `stc`, evict, `ldc` | **`0x0`** | the payload's cursor; the slot held `cnull` |
+| test 4, `stc`, both words written, `ldc` | `0xcafecafecafecafe` | untagged, but of a granule that never held a capability |
+| test 5, four granules | **`0x0` x4** | four capabilities |
+| test 6, store-to-load forwarding | **`0x0`** | a capability |
+
+**What it cost.** Test 3 is the only place in the suite where "a capability's tag survives an eviction and refill"
+was supposed to be measured, and it never was. That question was first answered on 2026-10-19 by
+`tag-half-store.S`, written for a different purpose (whether ONE 8-byte store clears a granule's tag). Its
+eviction control reads type 1 after a capacity-forced sweep, which is the reading test 3 was meant to produce.
+Its sweep also shows a second flaw in the old arm: 300 reads at a 128-byte stride touch only every eighth set of
+a 256-set cache and can miss the granule's set entirely, so even with a live payload the arm could have read a
+hit and called it a refill.
+
+**The fix, and its own control.** The payload is re-minted before every arm and is NONLIN, so an `stc` copies it;
+a LINEAR payload now appears in exactly one arm, where the move is the thing measured. Every expectation is a
+`bne` to `RVTEST_FAIL` with its own TESTNUM, the type read through the total type query (`lcc` zimm 1, which
+answers 7 for a non-capability instead of raising). The eviction arm carries a positive control that it really
+evicted — `mcycle` around a hot `ldc` and around the swept one, failing if the swept load is not at least 8
+cycles slower — so a sweep that silently misses the set now fails instead of reading like a surviving tag. A
+core returning 0 from `mcycle` fails that control too, which is the right direction. `-DNEGCTL` builds
+`cap-tag-cache-neg`, whose first expectation is deliberately wrong: a check that has never rejected anything is
+not a passing check. It reads `*** FAILED *** (tohost = 11) after 1423 cycles` on bf3db3175, stopping on T1 --
+11 being the TESTNUM, since `RVTEST_FAIL` writes `(11 << 1) | 1 = 23` and the harness prints the number with the
+done bit shifted off. The rewrite itself passes with every arm reading a real value: T1 `(0x80003000, 1)`, T2
+`(0x80003000, 0)` then `(0, 7)`, T3 `(0xdeadbeef0badc0de, 7)`, T4 a 9-cycle hot `ldc` against an 88-cycle swept
+one and then `(0x80003000, 1)`, T5 four times `(0x80003000, 1)`, T6 `(0x80003000, 1)`.
+
+**The class, not just this file.** A test whose expectations are comments reports PASS while measuring nothing,
+and a suite of such tests reports a clean sweep. This one sat in the sweep for months. Any arm whose "expected"
+values live only in comments should be read as unmeasured until its checks are in the instruction stream.
+
 ## Compiler / toolchain (ours)
+
+### C-27 — `delin` of a NONLIN gp-derived global base traps on silicon (cause 26) `FIXED 2026-10-18 under -capstone-image-gp (the vp2 virtual SDK's ABI), on dev with the backend fix; the default capability ABI keeps the DELIN by design. Reopened the same day: the FIXED 2026-09-05 claim in ISSUES-ARCHIVE.md was WRONG and cost vp2's Tier 1/2 boot 2`
+
+> **CLOSED 2026-10-18 — the lead's word, given in the compiler lane's session: drop the DELIN under
+> the asserted NONLIN-gp contract.** `expandCapGlobalBase` emits no `delin` when
+> `capstoneImageGpAbiActive()` holds; the contract (gp is NONLIN at entry) is a stated precondition of
+> `-capstone-image-gp`, in its `cl::desc` and above the option. Validation:
+> - lit: `gp-table-linear-delin.ll` pins three ABIs two-sidedly with `--implicit-check-not=delin`
+>   (CAP default 2 delins, CT captable 0, IG image-gp 0); the IG arm negative-tested by splicing one
+>   `delin` back in.
+> - census on the rebuilt images: gp-derived delins 0, totals 530→5 (contract.dom), 5,988→5 (sqlite3),
+>   9,863→4 (mruby), falling by exactly the old gp-derived counts, so the delins are gone and not moved
+>   out of the window. The residuals are `ldc`-fed allocator-glue sites (`RESULT-delin-residuals.md`).
+> - run.py 41/41 with zero false tests on the rebuilt images (the old pin, as the control).
+> - silicon: on vp2 boot 3-T1 every virtual run of the rebuilt contract.dom (`f2017064`) passes
+>   `__capstone_cap_init` for the first time and stops later, at malloc's `csrr 0xcc0` (Q-21)
+>   (`tests/rtl-smoke/vp2-kit-2026-10-17/README.md`, `board-vp2-tier12-3t1.result-lines.txt`).
+>
+> **RETRACTION of "FIXED 2026-09-05 — the DELIN is dropped under the NONLIN-gp contract".**
+> That archive entry (kept verbatim in `ISSUES-ARCHIVE.md`, with a pointer here) says "Fixed by not
+> emitting the DELIN under the NONLIN-gp contract (the gp-captable ABI never needed it)". Only the
+> parenthetical was ever true. The default and image-gp ABIs were never fixed, and the tree refutes
+> the claim four ways — each of these was checkable on 2026-09-05:
+>
+> 1. `CapstoneExpandPseudoInsts.cpp` `expandCapGlobalBase` emitted
+>    `BuildMI(..., Capstone::DELIN, DstReg).addReg(DstReg)` **unconditionally**, with no ABI gating
+>    of any kind, immediately after the SCC/CIncOffset.
+> 2. **The pin the entry cites asserts the opposite.** `gp-table-linear-delin.ll` reads "under the
+>    default global ABI every gp-derived base is `delin`ed once ... Under `-capstone-gp-captable`
+>    ... there is NO delin anywhere", and says in terms that it "pins today's emission so the Tier 4
+>    DELIN decision (drop the delin under the NONLIN-gp contract ...) has a red test to flip". It is
+>    a pin that the delin is STILL EMITTED.
+> 3. **There was no NONLIN-gp contract in the backend to be gated on.** No `nonlin-gp`, `NonlinGp`
+>    or `CapstoneGpNonlin` option existed; the only gp predicates were `capstoneGpFreeAbiActive()`
+>    and `capstoneImageGpAbiActive()`, neither consulted at the DELIN site.
+> 4. `CapstoneISASemantics.md` continued to list C-27 as live — "the default global ABI (`delin` of
+>    a NONLIN gp-derived base) is QEMU-only by construction ... the DELIN decision is the project
+>    lead's" — i.e. the decision the archive recorded as made was still open in the same tree.
+>
+> **What the false FIXED cost.** vp2's Tier 1/2 boot 2 (2026-10-18). Every virtual step faulted with
+> cause 26 at `delin a0` immediately after `scc a0, gp, a0` in `__capstone_cap_init`, and the board
+> lane's census showed it is not one glue site but the global-address materialisation itself:
+> **525 of contract.dom's 530 delins are gp-derived, 5,983 of 5,988 in sqlite3.dom, 9,859 of 9,863
+> in mruby.** A boot was spent rediscovering a filed defect because this file said it was fixed.
+> (QEMU's own `op_helper.c:782` comment already counted 9,688 of 9,690 for mruby.)
+>
+> **Mechanism, for the record.** SCC and CIncOffset INHERIT gp's type, so the materialised base is
+> LINEAR iff gp is. `delin` of a non-LINEAR capability is UNEXPECTED_CAP_TYPE per the spec and
+> raises cause 26 on the RTL (`capstone_dyn_unit.anvil:476-477`), while QEMU's `helper_csdelin`
+> returned early on a NONLIN operand and hid it. The trusted adapter grants every launch slot
+> NONLIN (`reg=3, linear=0`), so under image-gp the base is always NONLIN and the DELIN was a no-op
+> on QEMU and fatal on silicon — QEMU-only by construction.
+>
+> **Why the DELIN existed, and why removing it is conditional.** Two consumers need the base NONLIN:
+> it is COPIED (one base serves several accesses, and `movc rd, rs1` nulls a tagged non-NONLIN
+> source), and `selectLGA`'s SHRINK path READS IT TWICE (the cursor, then SHRINK), which a LINEAR
+> value does not permit. So the removal is sound **only** as a consequence of the NONLIN-gp
+> guarantee, which is why it is keyed to `capstoneImageGpAbiActive()` and is now documented as a
+> precondition of `-capstone-image-gp` rather than left as an incidental property of today's
+> adapter. A gp-free build whose gp is not the image grant keeps the DELIN, as does the default
+> capability ABI.
+>
+> **The lesson, which is the reusable part.** A FIXED status is a claim about the tree, and this one
+> was refutable from the pin named in its own entry. Before trusting a FIXED status, check the
+> cited pin asserts what the fix claims — a pin written to be *flipped later* reads exactly like a
+> pin that the fix is in place.
 
 ### C-50 — an integer-valued pointer in an aggregate passed BY VALUE (union or struct) is copied through an address formed with integer `addi` on the frame pointer, which faults `OPEN — COMPILER, caller side (byval copy, CapstoneISelLowering.cpp:24316); found 2026-09-23 by the FFmpeg app port on QEMU, reduced to 12 lines, proven from disassembly and -debug-only=isel; worked around in the port; audited and CORRECTED the same day, see the box`
 

@@ -12,8 +12,8 @@
 |---|---|---:|---|
 | third-party defects, as cases | `capstone/bug-corpora/` | 297 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
-| our own silicon defects | `capstone/tests/fpga-repros/` | 30 | one self-contained report per defect, the folder is the report |
-| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 119 open, 77 resolved | the registry, not reproduced cases |
+| our own silicon defects | `capstone/tests/fpga-repros/` | 31 | one self-contained report per defect, the folder is the report |
+| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 151 open, 77 resolved | the registry, not reproduced cases |
 
 Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 4 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `whisper/ggml-context`.
 
@@ -116,7 +116,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 
 ## Our own silicon defects
 
-30 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 16 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
+31 folders under `capstone/tests/fpga-repros/`, plus `ARCHIVED/`. 16 carry a `SHA256SUMS`, which is what lets a board result be cited by image hash rather than by label.
 
 - `R01-lsu-hazard` -- no heading in 00-README.md
 - `R02-delin` -- no heading in 00-README.md
@@ -148,4 +148,5 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `S13-o1-dyn-rev-node-hang` -- S-13 — at `-O1` the domain HANGS in the DYN/rev-node path, with no exception
 - `S16-supervised-switch-never-finishes` -- S-16 — a domain switch that starts while the store buffer's commit queue is FULL never finishes on silicon (and loses a committed store)
 - `S17-ldc-after-supervised-switch-lsu-stuck` -- S-17 — on silicon, an LDC right behind the post-CALL `ccsrrw sp <- cscratch` does not complete, and the LSU stays not-ready
+- `S23-data-face` -- no heading in 00-README.md
 

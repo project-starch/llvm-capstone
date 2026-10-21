@@ -53,6 +53,10 @@ locale, GMT and System V DSM. The fresh root and cluster remain under
 `$CAPSTONE_TMP_ROOT`; its manifest records the archive, patch, binaries and
 cluster-tree hashes. Copy the untouched cluster for each application attempt.
 An ordinary 8-byte-MAXALIGN native cluster cannot be used by either domain.
+For a size-capped board payload, `--drop-templates` and `--wal-segsize-mb N` trim the cluster
+with its own build (`--trim-from ROOT` trims a copy of an existing root instead of building).
+PostgreSQL stamps the time into three files, so compare a rebuilt trimmed fixture by the
+manifest's `cluster_stable_tree_sha256`, not by a whole-tree hash; the script's docstring says why.
 
 ## Running and checking
 

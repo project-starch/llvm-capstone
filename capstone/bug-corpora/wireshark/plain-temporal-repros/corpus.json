@@ -16,7 +16,8 @@
     "native-fix-differential",
     "virtual-malloc",
     "silicon-lifetimes",
-    "silicon-level0"
+    "silicon-level0",
+    "vp2-malloc"
   ],
   "arm_keys": {},
   "status": "measured",
@@ -42,11 +43,13 @@
   "arm_configurations": {
     "virtual-malloc": "virtual-mallocng",
     "silicon-lifetimes": "silicon-level0-lifetimes",
-    "silicon-level0": "silicon-level0"
+    "silicon-level0": "silicon-level0",
+    "vp2-malloc": "virtual-mallocng"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
     "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
-    "silicon-level0": "results/2026-10-16-silicon/silicon-level0"
+    "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
+    "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
   }
 }

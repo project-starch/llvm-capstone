@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from qemu_lock import qemu_lock
 
 HERE = Path(__file__).resolve().parent
 
@@ -21,9 +22,28 @@ def digest(path):
         for b in iter(lambda: f.read(1048576), b''): h.update(b)
     return h.hexdigest()
 
+PARALLEL_BLOCK = (
+    './capstone-vexec contract.dom ok argument > /tmp/one.out 2>&1 & one=$!\n'
+    './capstone-vexec contract.dom ok argument > /tmp/two.out 2>&1 & two=$!\n'
+    'wait "$one"; echo VM_EXIT:parallel_one:$?\n'
+    'wait "$two"; echo VM_EXIT:parallel_two:$?\n'
+    'cat /tmp/one.out /tmp/two.out\n'
+)
+
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
-insmod capstone_vm.ko || exit 1
+insmod capstone_vm.ko __MODULE_ARGS__ || exit 1
+# The module's own lines, read from the kernel RING BUFFER rather than relied on reaching the
+# console. The console level does not filter the buffer. run.py itself never lowers that level --
+# but six sibling runners do (`dmesg -n 1` in run-malloc/-hosted/-ports/-safety/-fp/-pthreads), and
+# on the board the baked driver sets it to 1 before its first rung, which is what voided two boots'
+# diagnostics. A reading that depends on the console staying open is one edit away from being void,
+# so this reads the same way the board records do.
+# The banner is this read's OWN control: absent, the route is broken and every module-line absence
+# in this run is void rather than a reading -- which is why it reports instead of printing nothing.
+dmesg | grep 'capstone_vm:' | sed 's/^/KMSG:/'
+dmesg | grep -q 'capstone_vm: loaded, diag' \
+  || echo 'KMSG_CONTROL_FAILED: no load banner in the ring buffer -- module-line absences in this run are VOID'
 export CAPSTONE_VM_CONTRACT=environment CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
 ./capstone-vexec contract.dom ok argument > /tmp/ok.out 2>&1
 echo VM_EXIT:normal:$?
@@ -35,6 +55,12 @@ for mode in vm nested nested-stale heap-threads sparse-churn stale bounds retire
   ./capstone-vexec contract.dom "$mode" 2>&1
   echo VM_EXIT:$mode:$?
 done
+# Without a CAPSTONE_VM_STATS record: the page and node checks below read the
+# records by position.
+(unset CAPSTONE_VM_STATS; ./capstone-vexec contract.dom vm-large 2>&1)
+echo VM_EXIT:vm-large:$?
+(unset CAPSTONE_VM_STATS; ./capstone-vexec contract.dom vm-mappings 2>&1)
+echo VM_EXIT:vm-mappings:$?
 ./capstone-vexec contract.dom spin > /tmp/spin.out 2>&1 & spin=$!
 # QEMU startup includes Linux image loading and the first delegated rounds;
 # allow the child to publish its readiness before testing signal termination.
@@ -68,6 +94,9 @@ if [ -f perl.dom ]; then
     cat /tmp/perl-smoke.out
   fi
 fi
+# Second read, before the module goes away: everything it printed during the run, in one place,
+# independent of whatever the console level was doing.
+dmesg | grep 'capstone_vm:' | sed 's/^/KMSG:/'
 rmmod capstone_vm
 echo VM_EXIT:cleanup:$?
 if [ -f legacy.dom ]; then
@@ -90,9 +119,26 @@ def main():
     p.add_argument('--perl-smoke', type=Path)
     p.add_argument('--legacy-application', type=Path)
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
+    # Module parameters at insmod, so a two-sided module experiment is one run rather than a
+    # rebuild. Empty by default and the substitution then leaves the insmod line exactly as it
+    # was, so an unused option cannot change a recorded run.
+    p.add_argument('--module-args', default='',
+                   help="Parameters appended to insmod (e.g. 'resolve_pte=1 fault_repeat_max=1')")
+    p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
+                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept "
+                        'so the suite can be run both ways as a two-sided control.')
     p.add_argument('--record', type=Path, required=True)
     p.add_argument('--timeout', type=int, default=300)
     p.add_argument('--omit-application', action='store_true')
+    # Q-26 / one supervisor slot: with x-capstone-supervisor-slots defaulting to 1, the second
+    # CSRUNV of the parallel pair traps 29, which on the board took the kernel with it and ended
+    # the boot before every later step. Moving the pair to the END therefore changes WHICH steps a
+    # one-slot machine still reports, so a QEMU record is comparable with such a board run only if
+    # it uses the same order. An OPTION and not a reorder: every existing caller's guest script
+    # stays byte-identical, because this runner's argv is pinned by other suites' tests.
+    p.add_argument('--parallel-last', action='store_true',
+                   help='Run the parallel pair immediately before rmmod, not mid-suite '
+                        '(one-slot machines: the pair can end the guest)')
     a = p.parse_args()
     work = Path(tempfile.mkdtemp(prefix='virtual-app.', dir=os.environ['CAPSTONE_TMP_ROOT']))
     stage = work/'stage'; stage.mkdir()
@@ -113,9 +159,26 @@ def main():
     if a.perl: shutil.copyfile(a.perl, stage/'perl.dom')
     if a.perl_smoke: shutil.copyfile(a.perl_smoke, stage/'perl-smoke.pl')
     if a.legacy_application: shutil.copyfile(a.legacy_application, stage/'legacy.dom')
-    script = SCRIPT
+    # Empty args leave the line byte-identical to the pre-option script: ' __MODULE_ARGS__'
+    # collapses with its leading space, so no trailing whitespace is introduced either.
+    script = SCRIPT.replace(' __MODULE_ARGS__',
+                            (' ' + a.module_args.strip()) if a.module_args.strip() else '')
     if a.skip_recycling:
         script = script.replace(' sparse-churn', '').replace(' sparse-stale', '')
+    if a.parallel_last:
+        # Move, do not duplicate, and assert BOTH halves: a non-matching replace would silently
+        # leave the original order while the record claimed the new one.
+        block = (PARALLEL_BLOCK)
+        assert script.count(block) == 1, 'parallel block not found verbatim'
+        script = script.replace(block, '', 1)
+        assert script.count(block) == 0, 'parallel block not removed'
+        anchor = 'rmmod capstone_vm\n'
+        assert script.count(anchor) == 1, 'rmmod anchor is not unique'
+        # Immediately BEFORE rmmod -- after mruby and the perl block, while the module is still
+        # loaded. After rmmod (before VIRTUAL_RUNTIME_DONE) the pair would launch with NO module on
+        # a machine where rmmod succeeds, and would test nothing about the slot at all.
+        script = script.replace(anchor, block + anchor, 1)
+        assert script.count(block) == 1, 'parallel block not reinserted'
     (stage/'gate.sh').write_text(script)
     disk = work/'stage.ext4'
     with disk.open('wb') as f: f.truncate(64 << 20)
@@ -127,9 +190,18 @@ def main():
            '-device', 'virtio-blk-device,drive=hd0',
            '-drive', f'file={disk},format=raw,id=gate,readonly=on',
            '-device', 'virtio-blk-device,drive=gate', '-cpu',
-           'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true']
-    with open(os.environ['CAPSTONE_QEMU_LOCK'], 'a+b') as lock, (work/'serial.log').open('wb') as log:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+           'rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true'
+           + (',x-capstone-exact-bounds=true' if a.exact_bounds else '')]
+    # Same knob as run-staged.py, for the same reason: a reference pin differing only in a CPU
+    # property must not need a wrapper script, because virtualvm.platform() and this runner's own
+    # inputs record hash the qemu PATH, so a wrapper is what the record would name instead of the
+    # real binary. Empty by default, so an unset variable cannot change a recorded run; the
+    # resolved string is printed because the record stores paths and hashes, never the argv.
+    cpu_extra = os.environ.get('CAPSTONE_QEMU_CPU_EXTRA', '').strip()
+    if cpu_extra:
+        cmd[-1] += ',' + cpu_extra.lstrip(',')
+    print(f'run.py: -cpu {cmd[-1]}', flush=True)
+    with qemu_lock(), (work/'serial.log').open('wb') as log:
         guest = subprocess.Popen(cmd, env=dict(os.environ, TMPDIR=str(work)), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
         out = b''; login = sent = False
@@ -155,7 +227,7 @@ def main():
             except subprocess.TimeoutExpired: guest.kill(); guest.wait()
     lines = [s.strip() for s in out.decode(errors='replace').splitlines()]
     tests = {}
-    for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('nested', 0), ('nested-stale', 139), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
+    for name, code in [('normal', 0), ('threads', 0), ('vm', 0), ('vm-large', 0), ('vm-mappings', 0), ('nested', 0), ('nested-stale', 139), ('heap-threads', 0), ('vm-ro-write', 139), ('vm-none-read', 139), ('vm-guard', 139), ('vm-padding', 139), ('sparse-churn', 0), ('sparse-stale', 139), ('stale', 139), ('bounds', 139), ('retired', 139),
                        ('preempt', 143), ('parallel_one', 0), ('parallel_two', 0),
                        ('sqlite_write', 0), ('sqlite_read', 0), ('mruby', 0), ('cleanup', 0)]:
         if a.skip_recycling and name in ('sparse-churn', 'sparse-stale'): continue
@@ -200,6 +272,8 @@ def main():
         pc - entry == symbols.get('cap_vm_fault_' + name, -1) - symbols['domain_main']
         for name, (pc, entry) in zip(names, fault_sites[4:]))
     tests['vm_contract'] = lines.count('VIRTUAL_VM_OK protections guards requested_length unused_pages execute rollback') == 1
+    tests['vm_large_contract'] = lines.count('VIRTUAL_VM_LARGE_OK region aggregate realloc release') == 1
+    tests['vm_mappings_contract'] = lines.count('VIRTUAL_VM_MAPPINGS_OK 1200') == 1
     tests['heap_threads'] = lines.count('VIRTUAL_HEAP_THREADS_OK shared_ownership metadata_growth arena_growth') == 1
     tests['vm_denial_operations'] = all(lines.count('VIRTUAL_VM_ACCESS:' + op) == 1
                                       for op in ('write_ro', 'read_none', 'guard', 'padding') + (() if a.skip_recycling else ('collected',)))

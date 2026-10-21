@@ -128,7 +128,8 @@ static cl::opt<bool>
 static cl::opt<bool> CapstoneMemOpsViaLibcall(
     DEBUG_TYPE "-memops-via-libcall", cl::Hidden,
     cl::desc("S-06 workaround: never expand memcpy/memmove/memset inline, so they call the "
-             "library implementations, which carry the untagged-ldc/stc high-half fix"),
+             "library implementations, which carry the untagged-ldc/stc high-half fix "
+             "(llvm.memcpy.inline/llvm.memset.inline still expand: they cannot become calls)"),
     cl::init(false));
 
 // Defined in CapstoneSelectionDAGInfo.cpp, where the emission lives.
@@ -10676,6 +10677,26 @@ SDValue CapstoneTargetLowering::lowerVACOPY(SDValue Op, SelectionDAG &DAG) const
                       MachinePointerInfo(DestSV));
 }
 
+// A frame record is two capability-sized slots below the frame pointer: the
+// return address in the upper one (fp - 16; an integer, or the spilled ra
+// capability where calls are capability jumps) and the caller's frame pointer,
+// a capability, in the lower one (fp - 32). The walk therefore steps with
+// capability arithmetic and loads capabilities; RISC-V's XLen-sized slots and
+// integer ADD do not apply.
+static SDValue getFrameAddress(SelectionDAG &DAG, const SDLoc &DL, EVT VT,
+                               unsigned Depth, Register FrameReg,
+                               int CapInBytes) {
+  SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), DL, FrameReg, VT);
+  while (Depth--) {
+    SDValue Ptr = DAG.getMemBasePlusOffset(
+        FrameAddr, TypeSize::getFixed(-2 * CapInBytes), DL);
+    FrameAddr =
+        DAG.getLoad(VT, DL, DAG.getEntryNode(), Ptr,
+                    MachinePointerInfo::getUnknownStack(DAG.getMachineFunction()));
+  }
+  return FrameAddr;
+}
+
 SDValue CapstoneTargetLowering::lowerFRAMEADDR(SDValue Op,
                                             SelectionDAG &DAG) const {
   const CapstoneRegisterInfo &RI = *Subtarget.getRegisterInfo();
@@ -10683,21 +10704,10 @@ SDValue CapstoneTargetLowering::lowerFRAMEADDR(SDValue Op,
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MFI.setFrameAddressIsTaken(true);
   Register FrameReg = RI.getFrameRegister(MF);
-  int XLenInBytes = Subtarget.getXLen() / 8;
+  int CapInBytes = 2 * Subtarget.getXLen() / 8;
 
-  EVT VT = Op.getValueType();
-  SDLoc DL(Op);
-  SDValue FrameAddr = DAG.getCopyFromReg(DAG.getEntryNode(), DL, FrameReg, VT);
-  unsigned Depth = Op.getConstantOperandVal(0);
-  while (Depth--) {
-    int Offset = -(XLenInBytes * 2);
-    SDValue Ptr = DAG.getNode(
-        ISD::ADD, DL, VT, FrameAddr,
-        DAG.getSignedConstant(Offset, DL, getPointerTy(DAG.getDataLayout())));
-    FrameAddr =
-        DAG.getLoad(VT, DL, DAG.getEntryNode(), Ptr, MachinePointerInfo());
-  }
-  return FrameAddr;
+  return getFrameAddress(DAG, SDLoc(Op), Op.getValueType(),
+                         Op.getConstantOperandVal(0), FrameReg, CapInBytes);
 }
 
 SDValue CapstoneTargetLowering::lowerRETURNADDR(SDValue Op,
@@ -10707,24 +10717,38 @@ SDValue CapstoneTargetLowering::lowerRETURNADDR(SDValue Op,
   MachineFrameInfo &MFI = MF.getFrameInfo();
   MFI.setReturnAddressIsTaken(true);
   MVT XLenVT = Subtarget.getXLenVT();
-  int XLenInBytes = Subtarget.getXLen() / 8;
+  int CapInBytes = 2 * Subtarget.getXLen() / 8;
 
+  // llvm.returnaddress yields an address-space-0 pointer: the return address
+  // as an integer. clang turns it into an untagged C pointer.
   EVT VT = Op.getValueType();
   SDLoc DL(Op);
   unsigned Depth = Op.getConstantOperandVal(0);
   if (Depth) {
-    int Off = -XLenInBytes;
-    SDValue FrameAddr = lowerFRAMEADDR(Op, DAG);
-    SDValue Offset = DAG.getSignedConstant(Off, DL, VT);
-    return DAG.getLoad(VT, DL, DAG.getEntryNode(),
-                       DAG.getNode(ISD::ADD, DL, VT, FrameAddr, Offset),
-                       MachinePointerInfo());
+    // The frame record of the frame Depth levels up, reached through
+    // capability frame pointers; its return-address slot is read as an XLen
+    // integer, which for a spilled capability is its cursor (the low half).
+    MFI.setFrameAddressIsTaken(true);
+    EVT CapPtrVT = getPointerTy(DAG.getDataLayout(),
+                                DAG.getDataLayout().getAllocaAddrSpace());
+    SDValue FrameAddr = getFrameAddress(
+        DAG, DL, CapPtrVT, Depth, RI.getFrameRegister(MF), CapInBytes);
+    SDValue Ptr = DAG.getMemBasePlusOffset(
+        FrameAddr, TypeSize::getFixed(-CapInBytes), DL);
+    return DAG.getLoad(VT, DL, DAG.getEntryNode(), Ptr,
+                       MachinePointerInfo::getUnknownStack(MF));
   }
 
   // Return the value of the return address register, marking it an implicit
-  // live-in.
+  // live-in. Where calls are capability jumps, cjalr left a capability in ra,
+  // so the read must be an integer write: PseudoTRUNC_CAP stays an ADDI that
+  // clears the tag even when register allocation gives it ra's own register.
+  // A plain copy would not: a later PseudoBRIDGE_CAP into the same register is
+  // dropped on the premise that its source was last written as an integer.
   Register Reg = MF.addLiveIn(RI.getRARegister(), getRegClassFor(XLenVT));
-  return DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, XLenVT);
+  SDValue RA = DAG.getCopyFromReg(DAG.getEntryNode(), DL, Reg, XLenVT);
+  return SDValue(DAG.getMachineNode(Capstone::PseudoTRUNC_CAP, DL, XLenVT, RA),
+                 0);
 }
 
 SDValue CapstoneTargetLowering::lowerShiftLeftParts(SDValue Op,
@@ -21227,6 +21251,112 @@ static SDValue recoverCapabilityFromAddressArith(SDNode *N, SelectionDAG &DAG,
   return DAG.getNode(CapstoneISD::CIncOffset, DL, MVT::c128, Cap, Offset);
 }
 
+// Reassociate a cursor add whose offset carries a constant the memory operand
+// could hold:
+//
+//   (cincoffset X, (add Y, C))            -> (cincoffset (cincoffset X, Y), C)
+//   (cincoffset X, (shl (add Y, C), S))   -> (cincoffset (cincoffset X, (shl Y, S)), C << S)
+//
+// when C (or C << S) fits a load/store simm12 and every use of the result is a
+// memory operand's address. SelectAddrRegImm then folds the constant into the
+// access and the shared inner cursor serves the whole group: x[3k], x[3k+1],
+// x[3k+2] become one `cincoffset` and three loads at 0, 8 and 16, where the
+// generic combiner left one `add`/`shl` chain and one `cincoffset` per element
+// (DAGCombiner::visitPTRADD only folds a nested pointer add with a constant
+// inner offset, and this target has no reassociation of its own). The
+// reassociation creates an intermediate cursor X+Y that the source never
+// held, and under R-60 (ruled 2026-10-20) a `cincoffset` whose result leaves
+// the source's representable window writes it UNTAGGED. It stays in the window
+// whenever the access is in bounds: X+Y lies within 2048 bytes of the access
+// (C is simm12), and the window reaches at least 2048 bytes below the base and
+// past the end. That slack was enumerated against QEMU's R-60 predicate
+// (capstone_cursor_representable, capstone-qemu 02f03540d7, by
+// capstone/tests/r60-window-slack/run.sh): 103,045 random
+// exact regions of 16 B..8 GiB, every cursor from base-2048 to end+2048 kept
+// its tag; a 64 KiB demand fails 6,841 of 6,842, so the check can fire. It is
+// a sample of QEMU's model, not of the RTL. What does change is an
+// OUT-of-bounds access (a defect) whose address is still inside the window
+// while X+Y is not: it now faults as an untagged access (cause 24) where it
+// faulted on bounds (cause 28). The offsets stay plain integers of the width
+// they had, so C-31 (an integer operand is an integer write) is untouched, and
+// a constant base is left alone because C-40 lowers a null-based address as
+// an integer in selectCIncOffset.
+// Measured on 544.nab_r's mme34 (SPEC test input): the three-vector accesses
+// cost two extra `addi`, two `slli` and two `cincoffset` per pair, ~120M
+// instruction attempts.
+// A target opcode reaches PerformDAGCombine without a setTargetDAGCombine
+// registration (that bitmap indexes builtin opcodes only).
+static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
+  SDLoc DL(N);
+  EVT VT = N->getValueType(0);
+  SDValue Base = N->getOperand(0);
+  SDValue Off = N->getOperand(1);
+  EVT OffVT = Off.getValueType();
+
+  if (isa<ConstantSDNode>(Base) || Base.isUndef())
+    return SDValue();
+
+  // Every use of the result must be the address of a load or store.
+  for (SDUse &U : N->uses()) {
+    SDNode *User = U.getUser();
+    if (auto *LD = dyn_cast<LoadSDNode>(User)) {
+      if (LD->getBasePtr() != SDValue(N, 0))
+        return SDValue();
+    } else if (auto *ST = dyn_cast<StoreSDNode>(User)) {
+      if (ST->getBasePtr() != SDValue(N, 0) || ST->getValue() == SDValue(N, 0))
+        return SDValue();
+    } else {
+      return SDValue();
+    }
+  }
+
+  SDValue Y;
+  int64_t C;
+  if (Off.getOpcode() == ISD::ADD) {
+    auto *CN = dyn_cast<ConstantSDNode>(Off.getOperand(1));
+    if (!CN)
+      return SDValue();
+    C = CN->getSExtValue();
+    Y = Off.getOperand(0);
+  } else if (Off.getOpcode() == ISD::SHL &&
+             Off.getOperand(0).getOpcode() == ISD::ADD) {
+    auto *SN = dyn_cast<ConstantSDNode>(Off.getOperand(1));
+    auto *CN = dyn_cast<ConstantSDNode>(Off.getOperand(0).getOperand(1));
+    if (!SN || !CN || SN->getZExtValue() >= OffVT.getScalarSizeInBits())
+      return SDValue();
+    unsigned S = SN->getZExtValue();
+    APInt Shifted = CN->getAPIntValue().shl(S);
+    if (Shifted.ashr(S) != CN->getAPIntValue())
+      return SDValue();
+    C = Shifted.getSExtValue();
+    Y = DAG.getNode(ISD::SHL, DL, OffVT, Off.getOperand(0).getOperand(0),
+                    Off.getOperand(1));
+  } else {
+    return SDValue();
+  }
+  if (C == 0 || !isInt<12>(C))
+    return SDValue();
+
+  // The offset may be shared, but only by other cursor adds: each of those is
+  // a candidate for the same rewrite (one that fails the address test above
+  // keeps the old chain, a profitability gap, not a correctness one); any
+  // other reader would certainly keep the old chain alive beside the new.
+  if (!Off.hasOneUse()) {
+    for (SDUse &U : Off->uses()) {
+      SDNode *User = U.getUser();
+      if (User == N)
+        continue;
+      if (User->getOpcode() != CapstoneISD::CIncOffset ||
+          U.getOperandNo() != 1)
+        return SDValue();
+    }
+  }
+
+  SDValue Inner = DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Base, Y);
+  return DAG.getNode(CapstoneISD::CIncOffset, DL, VT, Inner,
+                     DAG.getSignedConstant(C, DL, OffVT));
+}
+
 SDValue CapstoneTargetLowering::PerformDAGCombine(SDNode *N,
                                                DAGCombinerInfo &DCI) const {
   SelectionDAG &DAG = DCI.DAG;
@@ -21254,6 +21384,8 @@ SDValue CapstoneTargetLowering::PerformDAGCombine(SDNode *N,
   switch (N->getOpcode()) {
   default:
     break;
+  case CapstoneISD::CIncOffset:
+    return performCIncOffsetCombine(N, DAG);
   case ISD::ConstantFP: {
     // An fp128 constant is otherwise softened (during type legalization) into
     // an arbitrary 128-bit integer constant, which cannot be materialized as a
@@ -24411,10 +24543,25 @@ SDValue CapstoneTargetLowering::LowerCall(CallLoweringInfo &CLI,
         FI, getPointerTy(ByValDL, ByValDL.getAllocaAddrSpace()));
     SDValue SizeNode = DAG.getConstant(Size, DL, XLenVT);
 
+    // C-77. The pointer infos say which address space each operand lives in,
+    // and a copy lowered to a `memcpy` call types its arguments from them
+    // (SelectionDAG::getMemcpy). Default-constructed infos say address space 0,
+    // an integer here, so the call passed both capabilities through `mv` and
+    // `memcpy` faulted on its untagged source. The destination is the frame
+    // object; the source is the IR argument, a capability pointer.
+    MachinePointerInfo SrcInfo(ByValDL.getAllocaAddrSpace());
+    if (Outs[i].OrigArgIndex < CLI.Args.size()) {
+      const TargetLowering::ArgListEntry &OrigArg =
+          CLI.Args[Outs[i].OrigArgIndex];
+      if (OrigArg.Val)
+        SrcInfo = MachinePointerInfo(OrigArg.Val);
+      else if (auto *PT = dyn_cast<PointerType>(OrigArg.Ty))
+        SrcInfo = MachinePointerInfo(PT->getAddressSpace());
+    }
     Chain = DAG.getMemcpy(Chain, DL, FIPtr, Arg, SizeNode, Alignment,
                           /*IsVolatile=*/false,
                           /*AlwaysInline=*/false, /*CI*/ nullptr, IsTailCall,
-                          MachinePointerInfo(), MachinePointerInfo());
+                          MachinePointerInfo::getFixedStack(MF, FI), SrcInfo);
     ByValArgs.push_back(FIPtr);
   }
 
@@ -25788,14 +25935,21 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
     return false;
 
   // S-06 workaround. Returning false means "cannot lower inline", which makes the caller emit a
-  // libcall -- so every memcpy/memmove/memset lands on the library implementation, which carries
-  // the untagged-ldc/stc high-half fix. See the flag's definition near the top of this file.
+  // libcall -- so every memcpy/memmove/memset that may become a call lands on the library
+  // implementation, which carries the untagged-ldc/stc high-half fix. See the flag's definition
+  // near the top of this file. A forced-inline operation is not declined (below).
   //
   // It has to be HERE rather than via MaxStoresPerMemcpy: the capability-aligned case below
   // returns early WITHOUT consulting `Limit`, so zeroing that limit changes nothing at all. That
   // was measured, not assumed -- the first attempt set the limits and the emitted code was
   // byte-identical.
-  if (CapstoneMemOpsViaLibcall)
+  // `Limit` is ~0U only when the operation must be inlined
+  // (`llvm.memcpy.inline` or `llvm.memset.inline`: SelectionDAG's AlwaysInline
+  // retry). Declining such a copy leaves getMemcpy with no lowering at all, an
+  // empty DAG root (see the S-06 note above), so the libcall flag declines only
+  // copies that may become calls.
+  const bool MustInline = Limit == ~0U;
+  if (CapstoneMemOpsViaLibcall && !MustInline)
     return false;
 
   // Capability-aligned copies (16-byte aligned on both ends) may carry in-place
@@ -25808,10 +25962,18 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
   // silently loses `y`. That is the same "upper 8 bytes dropped" symptom the misaligned case
   // below already works around, but from the hardware rather than from legalization, so it
   // cannot be fixed by choosing a different unit here without also losing tags.
+  //
+  // A copy that must be inlined cannot fall back to `memcpy`, so a
+  // capability-aligned one is copied as capabilities however long it is; the
+  // 32-granule budget applies to ordinary copies only. Not under the S-06
+  // fixup: its hook covers 32 granules, and a longer bare `ldc`/`stc` sequence
+  // would lose the high halves that experiment exists to keep.
+  const uint64_t GranuleBudget =
+      MustInline && !CapstoneMemcpyHighHalfFixup ? UINT64_MAX : 32;
   if (Op.isMemcpy() && Op.size() != 0 && (Op.size() % 16) == 0 &&
       Op.isAligned(Align(16))) {
     uint64_t NumChunks = Op.size() / 16; // 64-bit: a narrowed count passes the budget
-    if (NumChunks <= 32) {
+    if (NumChunks <= GranuleBudget) {
       // Capability-grained copy chunks are capabilities.
       MemOps.assign(NumChunks, MVT::c128);
       return true;
@@ -25832,7 +25994,7 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
   if (Op.isMemcpy() && Op.size() > 16 && (Op.size() % 16) != 0 &&
       Op.isAligned(Align(16)) && !CapstoneMemcpyHighHalfFixup) {
     uint64_t NumChunks = Op.size() / 16; // 64-bit: a narrowed count passes the budget
-    if (NumChunks <= 32) {
+    if (NumChunks <= GranuleBudget) {
       MemOps.assign(NumChunks, MVT::c128);
       uint64_t Remaining = Op.size() % 16;
       for (uint64_t Unit = 8; Remaining != 0; Unit /= 2)
@@ -25840,6 +26002,37 @@ bool CapstoneTargetLowering::findOptimalMemOpLowering(
           MemOps.push_back(MVT::getIntegerVT(Unit * 8));
       return true;
     }
+  }
+
+  // C-81. A copy of a granule or more whose 16-byte alignment is not known may
+  // still carry capabilities: `align 1` says the alignment is unknown, not that
+  // the bytes hold no pointer. `memcpy(char *, char *, 16)` over two aligned
+  // buffers is how Perl's pack 'p' stores a pointer, and the scalar path below
+  // copied it with byte loads and stores, which strip the tag. Call `memcpy`
+  // instead: musl's checks the run-time alignment of both cursors and copies
+  // the whole granules as capabilities when it matches (string_bounds_safe.c).
+  // memmove is included, `isMemcpy()` is only `!IsMemset`.
+  //
+  // Left to the scalar path: copies shorter than a granule (they cannot hold a
+  // whole capability) and copies from constant data (`isMemcpyStrSrc()`: an
+  // initializer SelectionDAG could read as plain bytes, so it holds no tagged
+  // capability; a symbolic pointer cannot be read that way).
+  //
+  // A copy that must be inlined cannot become a call, and a scalar copy would
+  // drop its tags without a word, so it is refused with an error. Copying it
+  // correctly needs a run-time alignment test in the expansion; until that
+  // exists, align the operands (or use `memcpy`).
+  if (Op.isMemcpy() && Op.size() >= 16 && !Op.isAligned(Align(16)) &&
+      !Op.isMemcpyStrSrc()) {
+    if (!MustInline)
+      return false;
+    Context.emitError("Capstone: cannot inline a copy of " +
+                      Twine(Op.size()) +
+                      " bytes whose 16-byte alignment is unknown without "
+                      "dropping capability tags; align both operands to 16 "
+                      "or call memcpy");
+    // Fall through: the module is rejected, the expansion below only keeps
+    // the DAG well formed until the error is reported.
   }
 
   // Any other memcpy is *sub-capability*: not 16-byte aligned on both ends, or
@@ -26564,6 +26757,15 @@ SDValue CapstoneTargetLowering::lowerDYNAMIC_STACKALLOC(SDValue Op,
     if (!SizeXLen)
       reportFatalUsageError(
           "Unsupported dynamic alloca size expression in Capstone PureCap");
+    // A zero-byte alloca (alloca(0), a VLA of length 0) still gets a region of
+    // its own when the result is narrowed: SHRINK refuses an empty range
+    // (base >= end is Illegal operand value, cause 29), and a one-granule
+    // range at an unmoved sp would cover the object below it. The size is
+    // already rounded to the stack alignment, so only the zero case changes.
+    if (CapstoneShrinkStack)
+      SizeXLen = DAG.getNode(
+          ISD::UMAX, dl, XLenVT, SizeXLen,
+          DAG.getConstant(TFL->getStackAlign().value(), dl, XLenVT));
     SDValue OffsetXLen = SizeXLen;
     if (TFL->getStackGrowthDirection() == TargetFrameLowering::StackGrowsDown)
       OffsetXLen = DAG.getNode(ISD::SUB, dl, XLenVT,

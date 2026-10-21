@@ -26,7 +26,7 @@ its virtual profile. An ELF marker prevents the loader from accepting an image
 built for the physical calling convention. VM-service version 5 runs musl mallocng locally and adds its Linux mremap
 slow path. The launcher accepts version-2/3 images and rejects version-1,
 withdrawn native-heap version-4 and physical images. Rebuild the SDK and
-application together. ABI v5 requires the opt-in exact-bounds QEMU profile.
+application together. ABI v6 runs on the default QEMU profile; v5 images are refused.
 
 ## Execution and memory
 
@@ -175,8 +175,10 @@ mapping growth, release and remapping. There is no per-object heap service or
 fixed block-record array. The capability port changes metadata representation,
 not allocation policy. `malloc_trim` is a compatibility no-op.
 
-The profile requires `x-capstone-exact-bounds=true`: QEMU preserves exact object
-bounds in physical shadow metadata, including context-frame restoration.
+The profile needs no `x-capstone-exact-bounds=true` (option iii). Bounds are
+representable by construction: the allocator's slot geometry keeps every outward-
+rounded bound inside its own slot, short of the neighbouring slot's in-band header.
+The option remains available, and the suites are run both ways as a two-sided control.
 This prototype contract is not an RTL or one-bit-tag qualification. Public
 anonymous mmap, page-range mprotect and whole-mapping munmap retain their prior
 scope. The internal mallocng remap path invokes real Linux mremap while the
@@ -477,8 +479,8 @@ negative-control results. Existing physical applications remain a regression
 gate; this adapter does not replace their monitor or CALL/RETURN path.
 
 This is the first QEMU application profile: one hart, private anonymous
-mappings, 256 MiB per registered region, 1 GiB
-aggregate registered VA, 512 mappings, and a recyclable node table bounded by
+mappings, 2 GiB per registered region, 4 GiB
+registered VA per process, 8192 mappings, and a recyclable node table bounded by
 RAM, an optional module quota and the 30-bit ID field. mallocng's object
 records grow through its metadata allocator; they have no fixed object-count limit.
 Fork, shared tagged mappings, file-backed
@@ -496,8 +498,10 @@ Pages stay pinned after first touch. A page that Linux populated without an
 application fault is pinned by the next retirement or collection, so a
 teardown does not clear its tags itself; Linux clears them with ordinary
 stores when it zeroes the page for reuse. The initial ELF image has the
-existing combined code/data layout. The required exact-bounds profile preserves
-requested malloc object bounds through spill and restore. Recycling requires the
+existing combined code/data layout. Under option (iii) no exact-bounds profile is
+required: a malloc object's bounds survive spill and restore because they are
+REPRESENTABLE, placed by the allocator on a granule-aligned base with a
+granule-multiple length, so compressing and decompressing them is lossless. Recycling requires the
 registered-page and saved-context sweep; a namespace full of live or pinned
 identities reports resource exhaustion when growth is unavailable.
 Compact-bounds conformance of every existing compiler/helper path

@@ -34,6 +34,7 @@ import time
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import verdicts as v  # noqa: E402
 
 MODES = ("parent", "sibling", "successor", "stale")
@@ -112,6 +113,7 @@ def main():
         p.add_argument("--" + name, type=Path, required=True)
     p.add_argument("--timeout", type=int, default=900)
     a = p.parse_args()
+    sdk_builtins.gate([a.image], who="mruby:run.py")
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / "stage"
     stage.mkdir()

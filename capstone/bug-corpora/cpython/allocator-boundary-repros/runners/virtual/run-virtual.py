@@ -40,6 +40,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[2]
 REPO = HERE.parents[6]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -65,7 +66,17 @@ except BaseException as e:
 os.write(1, b"ABR RETURNED\\n")
 '''
 WORKLOAD = ('import json,gc; a=[{"n":n} for n in range(1000)]; '
-            'assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")')
+            'assert json.loads(json.dumps(a))==a; del a; gc.collect(); print("CPYTHON-OK 1000")\n'
+            # The guest's own reading of the pins a nondeterminism control depends on, in the same process (so the
+            # session's step count is unchanged): the kernel command line (norandmaps), the hash-randomisation flag,
+            # the seed it sees, and hash("abc"), which is the same in every run only when the seed is fixed. A board
+            # record and its QEMU record must agree on these; the bundle's inputs.json carries them as `guest`.
+            'import os,sys\n'
+            'try: c=open("/proc/cmdline").read().strip()\n'
+            'except Exception as e: c="UNREADABLE "+type(e).__name__\n'
+            'print("ABR-ENV "+json.dumps({"kernel_cmdline":c,"hash_randomization":sys.flags.hash_randomization,'
+            '"pythonhashseed":os.environ.get("PYTHONHASHSEED"),"hash_abc":hash("abc")}))')
+ENV_LINE = re.compile(r"^ABR-ENV (\{.*\})\s*$", re.M)
 CAPACITY = re.compile(r"MemoryError|cannot allocate|out of memory")
 # The interpreter itself failing: a C function returned an error without setting one. It is not the
 # program running to its end, and the physical runner already read it as a failed run.
@@ -73,15 +84,19 @@ BROKEN = re.compile(r"SystemError|returned NULL without setting an exception|"
                     r"error return without exception set")
 
 
-def stage_stdlib(build, share, closure=None):
+def stage_stdlib(build, share, closure=None, sourceless=False):
     """PYTHONHOME for the guest: the release's Lib, compiled by the build's own native 3.13.7. With CLOSURE (a file
     from tools/board/stdlib-closure.py, paths relative to Lib), only those files: the vp2 board's payload cannot carry
-    the whole Lib. A trimmed run counts only after a QEMU A/B shows every reading equal to the full Lib's."""
+    the whole Lib. A trimmed run counts only after a QEMU A/B shows every reading equal to the full Lib's.
+    SOURCELESS (--stdlib-sourceless, for the vp2 firmware cap): the bytecode is compiled beside each module (compileall
+    -b, the legacy layout CPython's sourceless loader reads) and the .py removed wherever its .pyc exists, so the guest
+    imports the same bytecode without a compile; files that do not compile keep their source. Not heap-neutral by
+    construction (a different loader path, no source stat or read), so a sourceless stage is judged as a stage change."""
     lib = build / "source/src/Python-3.13.7/Lib"
     native = build / "source/build-python/python"
     home = share / "cpy"
     stamp = home / ".staged-from"
-    origin = str(lib) + (f" closure {closure} {v.sha256(closure)}" if closure else "")
+    origin = str(lib) + (f" closure {closure} {v.sha256(closure)}" if closure else "") + (" sourceless" if sourceless else "")
     if stamp.is_file() and stamp.read_text() == origin and \
             (home / "lib/python3.13/_sysconfigdata__linux_.py").is_file():
         return
@@ -96,9 +111,20 @@ def stage_stdlib(build, share, closure=None):
     pybuild = build / "source/build" / (build / "source/build/pybuilddir.txt").read_text().strip()
     shutil.copy(pybuild / "_sysconfigdata__linux_.py", home / "lib/python3.13")
     # Some test files are deliberately invalid Python, so compileall's status is not checked.
-    subprocess.run([str(native), "-m", "compileall", "-q", "-f", "-d", "/mnt/host/cpy/lib/python3.13",
+    subprocess.run([str(native), "-m", "compileall", "-q", "-f", *(["-b"] if sourceless else []),
+                    "-d", "/mnt/host/cpy/lib/python3.13",
                     str(home / "lib/python3.13")], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if sourceless:
+        for source in (home / "lib/python3.13").rglob("*.py"):
+            if source.with_suffix(".pyc").is_file():
+                source.unlink()
     stamp.write_text(origin)
+
+
+def guest_env(a):
+    """-e pairs for every --guest-env KEY=VALUE: the variables a nondeterminism control pins in the guest (for example
+    PYTHONHASHSEED=0). Empty by default, so a run without them is the invocation it always was."""
+    return [w for kv in (a.guest_env or []) for w in ("-e", kv)]
 
 
 def run_script(a, share, image, directory, script, tag):
@@ -109,7 +135,7 @@ def run_script(a, share, image, directory, script, tag):
     for f in directory.glob("*.py"):
         shutil.copy(f, stage / f.name)
     (stage / "launch.py").write_text(LAUNCH)
-    env = ["-e", "PYTHONHOME=/mnt/host/cpy", "-e", "PYTHONDONTWRITEBYTECODE=1"]
+    env = ["-e", "PYTHONHOME=/mnt/host/cpy", "-e", "PYTHONDONTWRITEBYTECODE=1", *guest_env(a)]
     return appvm.run_app(a.state, image, ["launch.py", script], a.raw / tag,
                          run_args=("--cwd", f"/mnt/host/abr/{tag}", *env), timeout=a.timeout)
 
@@ -192,9 +218,15 @@ def main():
     p.add_argument("--raw", type=Path, required=True)
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--timeout", type=int, default=300)
+    p.add_argument("--guest-env", action="append", metavar="KEY=VALUE",
+                   help="an extra environment variable for every guest run (repeatable), e.g. PYTHONHASHSEED=0")
     p.add_argument("--stdlib-closure", type=Path, help="stage only these Lib files (tools/board/stdlib-closure.py); "
                    "for the vp2 board's payload, valid only after a QEMU A/B against the full Lib")
+    p.add_argument("--stdlib-sourceless", action="store_true",
+                   help="stage compiled bytecode beside each module and drop the .py (the vp2 firmware cap); a stage "
+                   "change, judged against the record before it is used")
     a = p.parse_args()
+    sdk_builtins.gate([a.build], who="cpython:run-virtual.py")
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
     import boardvm
@@ -210,14 +242,21 @@ def main():
         return 75
     share = Path(json.loads((a.state / "config.json").read_text())["share"])
     a.raw.mkdir(parents=True, exist_ok=True)
-    stage_stdlib(a.build, share, a.stdlib_closure)
+    stage_stdlib(a.build, share, a.stdlib_closure, a.stdlib_sourceless)
     symbols = v.Symbols(a.llvm_bin, image)
 
     # The interpreter must work before anything it does means something.
     (share / "abr").mkdir(exist_ok=True)
     text, result = appvm.run_app(a.state, image, ["-S", "-c", WORKLOAD], a.raw / "workload",
-                                 run_args=("-e", "PYTHONHOME=/mnt/host/cpy"), timeout=a.timeout)
-    qualified = "CPYTHON-OK 1000" in text
+                                 run_args=("-e", "PYTHONHOME=/mnt/host/cpy", *guest_env(a)), timeout=a.timeout)
+    # In an appvm session's collect pass nothing runs: run_app returns its sentinel and no
+    # result. Treating that as a failed workload stopped the collect after one call, so the
+    # boot ran only the workload and the read pass asked for steps it never recorded.
+    collecting = text.startswith("[runner] SESSION COLLECT")
+    qualified = "CPYTHON-OK 1000" in text or collecting
+    m = ENV_LINE.search(text)
+    # "unread" rather than an absent field: a record that cannot show its pins must say so.
+    guest = {"guest_env": list(a.guest_env or []), **(json.loads(m.group(1)) if m else {"reading": "unread"})}
     print(f"  workload {'ok' if qualified else 'FAILED'}", flush=True)
     if not qualified:
         print(f"CONTROL-FAILED the interpreter did not run the workload; see {a.raw / 'workload.out'}",
@@ -246,7 +285,16 @@ def main():
         claims = json.loads((d / "case.json").read_text())
         text, result = run_script(a, share, image, d, claims["trigger"], d.name)
         o = observe(text, result, symbols, set(claims.get("fault_sites", [])))
-        if o.fault and o.reached and not o.attribution and (d / "negative_control.py").is_file():
+        if collecting:
+            # A session's collect pass has no results, so it cannot know which cases the read pass
+            # will attribute by control. Record each case's probe and negative control
+            # unconditionally, under the names attribute_by_control asks for; the read pass uses
+            # only the ones it needs.
+            if claims.get("control_probe"):
+                run_script(a, share, image, d, claims["control_probe"], d.name + "-probe")
+            if (d / "negative_control.py").is_file():
+                run_script(a, share, image, d, "negative_control.py", d.name + "-control")
+        elif o.fault and o.reached and not o.attribution and (d / "negative_control.py").is_file():
             attribute_by_control(a, share, image, d, o, symbols, claims.get("control_probe"))
         o.image_sha256 = v.sha256(image)
         o.case, o.arm, o.controls = d.name, rec, list(controls)
@@ -258,7 +306,7 @@ def main():
         "configuration": config, "predicted": PREDICTED[a.arm],
         "build": {k: manifest.get(k) for k in ("application", "profile", "nested", "image_sha256",
                                                "runtime_revision", "runtime_dirty", "stack_bytes")},
-        "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
+        "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE), "guest": guest})
     print(f"--- {rec} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 

@@ -33,6 +33,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 CONTROLS = HERE.parents[1]
 REPO = HERE.parents[7]
+sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 TOOLS = REPO / "capstone/bug-corpora/tools"
 sys.path.insert(0, str(TOOLS))
 import virtualvm  # noqa: E402
@@ -283,6 +285,8 @@ def main():
     c.add_argument("--out", required=True)
     c.add_argument("boots", nargs="+")
     a = p.parse_args()
+    if a.cmd == "boot":
+        sdk_builtins.gate([a.build, a.sdk], who="ffmpeg:run-controls.py")
     return boot(a) if a.cmd == "boot" else combine(a)
 
 

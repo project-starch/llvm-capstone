@@ -35,6 +35,7 @@ import virtualvm
 from verdicts import sha256
 
 BATCH = "vbatch"
+STEP_MULT = 20     # a board step's bound: its runner's limit times this, unless board.env sets BOARD_STEP_MULT
 RUNG = "vbatch"
 FILES = ("board.env", "board-run.sh", "adapter/capstone-vexec", "adapter/module/capstone_vm.ko")
 HEARTBEAT_S = 30
@@ -119,6 +120,29 @@ def rung_segment(transcript, rung=RUNG):
     return (rest[:nxt.start()] if nxt else rest), False
 
 
+# the module's .text base, printed once after insmod (script())
+MODTEXT_LINE = 'echo "@@MODTEXT $(cat /sys/module/capstone_vm/sections/.text 2>/dev/null || echo ABSENT)"'
+
+# What a step looks like at its bound, taken BEFORE the kill (script()): a killed step otherwise reads as one bit. For the
+# step's process and every descendant, twice, 5 s apart: /proc stat state, utime and stime (spinning or sleeping, and on
+# which side), wchan and the syscall number; the module's resume counters; and, between the two samples, the module's
+# own escape trace switched on for 5 s (diag_escapes: kind, cause, pc and tval of each escape, read from dmesg after
+# END). Its print budget (16) is per module load, so only a boot's FIRST bounded step gets escape lines. Written to
+# /tmp/stall.out, removed before every bounded step, and printed after END as @@STALL, outside every step's text.
+STALL_FN = (
+    "stall() { S=/sys/module/capstone_vm/parameters; pids=$1; "
+    "for r in 1 2 3 4; do for f in /proc/[0-9]*/stat; do read -r l < $f 2>/dev/null || continue; "
+    "p=${f#/proc/}; p=${p%/stat}; set -- ${l##*) }; case \" $pids \" in *\" $p \"*) ;; "
+    "*) case \" $pids \" in *\" $2 \"*) pids=\"$pids $p\";; esac;; esac; done; done; "
+    "for k in 1 2; do for p in $pids; do read -r l < /proc/$p/stat 2>/dev/null || continue; set -- ${l##*) }; "
+    "echo \"proc $k $p $(cat /proc/$p/comm 2>/dev/null) state=$1 ppid=$2 utime=${12} stime=${13} "
+    "wchan=$(cat /proc/$p/wchan 2>/dev/null) syscall=$(cut -d' ' -f1 /proc/$p/syscall 2>/dev/null)\"; done; "
+    "echo \"mod $k sfences=$(cat $S/resume_sfences 2>/dev/null) satp=$(cat $S/resume_satp_refreshes 2>/dev/null)/"
+    "$(cat $S/resume_satp_changed 2>/dev/null) busy=$(cat $S/busy_frame_refusals 2>/dev/null)\"; "
+    "if [ $k = 1 ]; then [ -w $S/diag_escapes ] && echo 1 > $S/diag_escapes && echo 'escapes on' || echo 'escapes UNSET'; "
+    "sleep 5; [ -w $S/diag_escapes ] && echo 0 > $S/diag_escapes; fi; done; }")
+
+
 class BoardBatch(virtualvm.Batch):
     """put() and step() as virtualvm.Batch; put() returns the guest path under /test-domains/<BATCH>/.
     other_ctl is the controller every rung other than the batch's goes to: the board controls' b0run.sh by default,
@@ -137,16 +161,45 @@ class BoardBatch(virtualvm.Batch):
         - It runs in /test-domains/<BATCH>.
         - insmod is guarded by /proc/modules, because an earlier rung may have loaded the module and the board kernel
           cannot unload it.
+        - The module's .text base is printed once (`@@MODTEXT <addr>`, ABSENT if unreadable): .text is page-aligned, so
+          a monitor line carrying a module pc (FRTY, DRT1) decodes exactly as pc minus this base, instead of by its page
+          offset alone (S-23's fetch face, 2026-10-20).
         - A heartbeat that no observe() reads keeps the driver's idle limit from cutting a long silent step.
         - The final rmmod fails on the board, harmlessly, after the last step."""
+        mult = getattr(self, "step_mult", STEP_MULT)
         lines = ["#!/bin/sh", f"cd /test-domains/{BATCH} || exit 1", "dmesg -n 1",
                  'grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }',
                  "chmod 666 /dev/capstone-vm",
+                 MODTEXT_LINE, STALL_FN,
                  "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + virtualvm.param_lines(self.params) + [
-                 f"( i=0; while [ $i -lt 2000 ]; do sleep {HEARTBEAT_S}; i=$((i+1)); echo \"@@HB $i\"; done ) & hb=$!"]
+                 # The heartbeat carries the running step's output size, bytes and lines: a step's output is printed only
+                 # when it ends, so without it a step that runs for hours shows nothing of where it is (mruby's smoke,
+                 # 2026-10-21, 153 min). Sizes only, never the text, so no observe() can count a line twice.
+                 f"( i=0; while [ $i -lt 2000 ]; do sleep {HEARTBEAT_S}; i=$((i+1)); "
+                 "echo \"@@HB $i out=$(wc -c < /tmp/step.out 2>/dev/null)B/$(wc -l < /tmp/step.out 2>/dev/null)L\"; "
+                 "done ) & hb=$!"]
         for name, command in self.steps:
-            lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
-                      "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\""]
+            bound = self.bounds.get(name)
+            if bound:
+                # A bounded step: the board image's busybox has no timeout applet, so a watcher kills the step at its
+                # bound and says so (@@STEP-BOUND, which split() reads as a timeout). The step runs in the background,
+                # so its stdin is /dev/null.
+                b = int(bound * mult)
+                lines += ["rm -f /tmp/stall.out", f"echo '{virtualvm.BEGIN}{name}'",
+                          f"( {command} ) > /tmp/step.out 2>&1 & sp=$!",
+                          f"( sleep {b}; stall $sp > /tmp/stall.out 2>&1; "
+                          f"kill -9 $sp 2>/dev/null && echo '{virtualvm.BOUND}{name} {b}' ) & wp=$!",
+                          "wait $sp; rc=$?", "kill $wp 2>/dev/null",
+                          "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\"",
+                          # After a kill at the bound: what the step looked like before the kill (STALL_FN), then the
+                          # module's last kernel lines (KERN_INFO, hidden on the board console at printk 1: "collect
+                          # skipped ... available 511" is one, and the escape trace another). Printed after END, so
+                          # they are outside every step's text.
+                          f"[ $rc = 137 ] && {{ sed 's/^/@@STALL {name} /' /tmp/stall.out 2>/dev/null; "
+                          f"dmesg | grep -a capstone_vm | tail -n 30 | sed 's/^/@@DMESG {name} /'; }}"]
+            else:
+                lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
+                          "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\""]
         lines += ["kill $hb 2>/dev/null", "rmmod capstone_vm 2>/dev/null", "echo VIRTUAL_STAGED_DONE", ""]
         return "\n".join(lines)
 
@@ -172,6 +225,7 @@ class BoardBatch(virtualvm.Batch):
         (self.stage / "capstone-vexec").chmod(0o755)
         shutil.copy2(kit / "adapter/module/capstone_vm.ko", self.stage / "capstone_vm.ko")
         self.params = virtualvm.module_params(kit)
+        self.step_mult = float(read_env(kit / "board.env").get("BOARD_STEP_MULT", STEP_MULT))
         (self.stage / "gate.sh").write_text(self.script())
         (self.stage / "ctl.sh").write_text(self.controller())
         (self.stage / "ctl.sh").chmod(0o755)

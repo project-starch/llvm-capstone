@@ -69,7 +69,7 @@ def main():
     p.add_argument('--app', choices=['perl', 'mruby', 'cpython', 'postgres', 'sqlite', 'ffmpeg', 'tshark'], required=True)
     p.add_argument('--root', type=Path, required=True)
     p.add_argument('--toolchain', type=Path, required=True)
-    p.add_argument('--profile', choices=['physical', 'virtual'], default='physical')
+    p.add_argument('--profile', choices=['physical', 'virtual'], default='virtual')
     p.add_argument('--arena', type=int, default=64*1024*1024)
     p.add_argument('--stack-bytes', type=int, default=1 << 20, help='The main thread\'s stack')
     p.add_argument('--out', type=Path, required=True)
@@ -106,6 +106,9 @@ def main():
     libc_root = args.libc_root.resolve() if args.libc_root else root
     musl = libc_root / 'musl-src/musl-1.2.5'
     libc = libc_root / 'musl-build/libc-capstone.a'
+    if args.app == 'perl' and args.profile == 'virtual':
+        # build-perl-domain.sh's virtual layout: runtime/virtual/build-sdk.sh's archive.
+        libc = libc_root / 'runtime-virtual/libc/libc-capstone-virtual.a'
     if args.app == 'cpython':
         libc = root / 'libc-and-builtins.a'
     if args.musl: musl = args.musl.resolve()

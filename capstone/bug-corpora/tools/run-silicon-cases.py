@@ -66,6 +66,9 @@ arm, and 98 (a re-carved region's old alias) on the Sublet carve. They gate the 
 The judge is classify() from run-capstone-domain.py and the rules of tools/verdicts.py: a fault is CAUGHT only at the
 labelled probe or a fault site the case declared; a buggy row counts only when the same image's fixed run printed
 VERDICT FIXED and exited 0; no row counts unless the boot's own controls behaved as the arm declares.
+
+`build` exits 78 before compiling anything when a job's effective setting is not -fno-builtin (C-81): B0's own flags,
+read back through B0_PRINT_CFLAGS, followed by the job's flags, the last of -fbuiltin / -fno-builtin winning.
 """
 import argparse
 import concurrent.futures
@@ -344,6 +347,27 @@ def build_one(job):
     return name, rc, img if rc == 0 and img.is_file() else None
 
 
+def builtins_refusals(jobs):
+    """C-81: every job's EFFECTIVE setting must be -fno-builtin. A B0 compile is build-b0-hello.sh's own flags (with the
+    job's defs as B0_CFLAGS_EXTRA, read back through B0_PRINT_CFLAGS) followed by the job's cflags, and clang lets the
+    last of -fbuiltin / -fno-builtin win. A job whose B0 flags cannot be read is refused: no data is not a pass."""
+    base, out = {}, []
+    for name, _srcs, cflags, defs, *_ in jobs:
+        if defs not in base:
+            r = subprocess.run(["bash", str(REPO / "capstone/runtime/silicon/build-b0-hello.sh")], capture_output=True,
+                               text=True, env=dict(os.environ, B0_PRINT_CFLAGS="1", B0_CFLAGS_EXTRA=defs))
+            base[defs] = r.stdout.split("\n") if r.returncode == 0 and r.stdout.strip() else None
+            if base[defs] is None:
+                out.append(f"{name}: build-b0-hello.sh B0_PRINT_CFLAGS exit {r.returncode}: {r.stderr.strip()[:160]}")
+                continue
+        if base[defs] is None:
+            continue
+        last = [w for w in base[defs] + cflags.split() if w in ("-fbuiltin", "-fno-builtin")]
+        if not last or last[-1] != "-fno-builtin":
+            out.append(f"{name}: effective setting is {last[-1] if last else 'neither flag'} (cflags {cflags!r})")
+    return out
+
+
 def cmd_build(a):
     arm = ARMS[a.arm]
     out = a.out / a.arm
@@ -472,6 +496,11 @@ def cmd_build(a):
                 cases[name] = dict(corpus=str(corpus.relative_to(REPO)), case=f"shared/{src}", kind="carve-control", n=n)
                 jobs.append((name, [str(shared / src), str(driver), *a.extra_src],
                              " ".join(flags), arm["defs"], out, a.data, a.arena))
+    refused = builtins_refusals(jobs)
+    if refused:
+        for r in refused:
+            print(f"SDK-BUILTINS REFUSED {r}", file=sys.stderr)
+        sys.exit(78)
     built = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=a.jobs) as ex:
         for name, rc, img in ex.map(build_one, jobs):

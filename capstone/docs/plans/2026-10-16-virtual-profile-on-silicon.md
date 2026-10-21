@@ -897,3 +897,130 @@ lint numbers and its directed arm; the sweep and the supervised list run once on
 
 Go/no-go for the build, per CLAUDE.md: every item above has its arm reading on the combined tree, the sweep identical, the
 lint gate at baseline by name, and the predicted LUT/FF/WNS written here before the handoff.
+
+## Tree A's sufficiency list, written before the handoff (the RTL lane, 2026-10-18)
+
+Tree A is `capstone-ariane virtual-profile-2-c` at **8522d72fe**, carrying four fixes, each verified an ancestor of that
+HEAD: R-57 `2114e11bd`, Q-24 `3244170b0`, S-27 `445e3a48b`, S-28 `8522d72fe`. The whole diff against the resident RTL
+(bf3db3175) touches four files in `core/`: `commit_stage.sv` +17/-2, `csr_regfile.sv` +13/-1, `cva6.sv` +2/-1 (a comment)
+and `ex_stage.sv` +33/-2. Lint gate on that HEAD: PASS with every counter at the committed baseline, 52 / 3 / 0 / 40 /
+1395.
+
+**Every question this bitstream must answer, with the reading each way.** The rule this section exists for is that a
+cycle spent confirming what the evidence already implies is a different trade from one spent discovering something, so
+each row names what a WRONG fix looks like as well as a right one.
+
+| fix | the question | reading if the fix is right | reading if it is wrong |
+|---|---|---|---|
+| S-27 | does a resume leave the resumed context's registers alone? | the corpus images reach their QEMU verdicts on the OLD module recipe, i.e. with a non-zero destination at the resume site and no software workaround; the board's E3 arm reads an 8-byte window and no cause 28 at `&used` | the family returns: cause 6 at address 0x12 in the allocators, cause 28 at `&used` in E3, cause 24 at address 0x2 in SQLite. **E3 measures only that the register became SMALLER than 8** (a window too short for its 8-byte load, faulting at the window's base); the exact value 2 is measured by the allocators' 0x12 alone, where tval is 2 + 0x10, and by va-rdclob in simulation. The board lane retracted the stronger wording and so do I, having repeated it |
+| R-57 | does a capability store whose translation faults deliver its fault instead of losing it? | the sparse steps and any first-touch capability store complete; the resting read of the store buffer's commit count is 0 with matching valid bits | the wedge returns with its recorded signature, a count of 1 or 4 with fewer valid bits than the count and no store request |
+| Q-24 | can firmware delegate the capability causes 24..30 to S? | the monitor's `medeleg` write reads back with those bits and an S-origin capability fault reaches S without the monitor's software injection; va-osinject's readings unchanged | the write reads back without them, i.e. the mask still drops the bits, and the injection path stays load-bearing |
+| S-28 | **none.** Its condition is real in source and its directed arm could not make the pairing happen, on either tree, with zero port-1 commits beside the instruction. It ships as a defensive term with its trigger unexercised, recorded as R-50's was, and **this bitstream carries no reading for it**; claiming one would be the vacuous-gate mistake. | | |
+
+**Per-change area and WNS prediction**, against the resident vp2 at 178,406 LUT and WNS −19.019, given per change so a
+congestion failure or a growth is attributable rather than batched (the synth lane's request; an earlier +1-line change
+at 178,757 LUT failed `route_design` on congestion after 6h40m with 242 unrouted signals):
+
+| change | flops | LUTs | timing exposure |
+|---|---|---|---|
+| R-57, `ex_stage.sv` | ~134: one `exception_t`, a valid bit and a `trans_id` | ~150: a 4-way mux over the exception's width plus two trans_id compares | the only one with any. It adds at most one LUT level to the capability writeback's exception path, which already muxes for the load side. **The discriminator for a timing move is a failing endpoint inside `ex_stage`'s capability writeback cone**; an endpoint anywhere in `commit_stage` belongs to S-27 or S-28 instead |
+| Q-24, `csr_regfile.sv` | 0, `medeleg` already exists in full | a handful on an existing mask | none |
+| S-27, `commit_stage.sv` | 0 | ~5, one ternary on a 5-bit field | none |
+| S-28, `commit_stage.sv` | 0 | ~1, one AND term on an existing condition | none |
+
+So the prediction is **+0.09 % area, about 178,560 LUT**, WNS inside the standing noise band around −19.019 (a null RTL
+change has moved WNS by 3.7 ns on this design, so a few ns either way is not a signal).
+
+**Corrected, after the synthesis audit of the combined diff (2026-10-18), because my own first version of this paragraph
+was too comfortable.** The auditor measured `exception_t` at 203 bits with about 129 live in this configuration, so
+R-57 duplicates the resident load-side group at roughly **130 flops** and widens a 2:1 mux to 4:1 for **+0 to 150 LUT**.
+That is about HALF the +351 LUT delta that failed `route_design` on congestion at 178,757, so R-57 alone sits **in the
+same regime as that failure rather than clearly under it**, and a congestion failure is a live outcome of this build
+rather than something I predict against. What I do predict: if it fails to route, the unrouted nets' cones name the
+cause, and the per-change table above is what attributes it. Routability is the thing this build tests that no check
+here can.
+
+**Q-24 deserves a line the audit added and I had not written.** It is the one change that UN-PRUNES logic in a cone that
+already carries a combinational loop: `csr_regfile.sv:2250` reads `medeleg_q[ex_i.cause[5:0]]` into `trap_to_priv_lvl`,
+which is UNOPTFLAT #28, and bits 24..30 were constant zero before, so synthesis folded them away. It adds **no input** to
+that cone, since `medeleg_q[63:0]` was already the dynamic mux's input, but it makes seven bits real: about 7 flops and
+7 un-folded mux inputs, also reaching `csr_rdata` and the switcher's register response. No width hazard, the mask being
+64-bit with cause 30 the largest shift.
+
+**The audit's other findings, recorded so the build is not re-audited:** no new UNOPTFLAT member, verified by NAME and
+not by count (40 on both sides, none new, none gone, checked against three earlier listings); the five signals R-57's
+logic reads are already in the documented ring, so the change adds fanout rather than a new edge, and its mirror is in
+the resident routed bitstream; the three new registers are assigned in exactly one `always_ff` and no LATCH, MULTIDRIVEN
+or BLKSEQ line falls in the four changed files; the switcher request struct has 15 named fields, all driven, with S-27
+changing one value; and the escape and the refusal both still write their register, the refusal being mode-1-only so
+S-27's condition is the exact complement of the mode it must not touch. The residual the audit could not close, and
+nothing here can: a cycle routed entirely through a net Verilator already chose as a loop break would be absorbed with
+no new name and no count change. Synthesis settles that.
+
+**What this bitstream does NOT answer, so nothing waits on it:** S-23, the caller's first fetch after a return, whose
+mechanism is open after two refuted candidates and whose monitor fetch-retry workaround must stay enabled; S-26, the
+cold-boot warm-up, for which there is no mechanism; the generation item, where the virtual allocator hands out a bare
+index so a reused record would revive stale capabilities, which keeps the module's `-ENOMEM` stopgap as the behaviour of
+record and makes the collecting arms honest "no reading on bf3db3175" rows; S-21/S-22, whose fix is a design choice about
+where the caller's snapshot lives; and the switcher's `satp` write without a flush, whose cost has to be measured rather
+than guessed. Those are tree B.
+
+## S-21/S-22: where the caller's snapshot should live, the options (the RTL lane, 2026-10-18, for the semantics owner to rule)
+
+**The defect, restated from the sources.** A virtual ENTRY saves the trusted caller's ids 0..66 at `save_base = base_addr
++ 1024` (`commit_stage.sv:617`) and every ESCAPE restores them from `restore_base = sup_runv_frame_i + 1024` (`:856`),
+with the caller's FP state a further 1024 above that; the restore path has no check of any kind
+(`capstone_dom_switcher.anvil`, `restore_io` and the walk). A child thread's frame is a page the DOMAIN holds a
+capability to, so a context can read the kernel's saved registers and write what the kernel will resume on. The second
+consequence, from the same reading: a resume does not CONSUME the slots it loads, so the frame keeps tagged copies of
+x1..x31 after every resume, LINEAR ones included.
+
+**What the frame is actually used for below the snapshot.** The hardware writes and reads the register slots at
+`+64 + 16i`, the event words at `+16..+40`, the raw a0 at `+48`, the a0..a7 views at `+576..+632`, the collection list
+pointers at `+640` and `+648`, mstatus at `+920`, the hidden satp/srevroot/options at `+928..+944`, and the FP area at
+`+656..+912`. The reference model never checks beyond `+656` (`capstone_supervisor.c:844`, and `VIRTUAL_FRAME_SIZE` is
+576 at `:709`). **Everything the ABI needs is below +1024, which is exactly where the snapshot begins.**
+
+### Option A, software only, no RTL and no model change: narrow the capability the domain receives
+
+The domain does not need the whole page. If the module and the adapter hand it a capability bounded to
+`[frame, frame + 1024)` instead of the page, the snapshot at `+1024..+2312` is outside its bounds and unreachable, while
+every ABI-visible word stays in range. 1024 is a power of two and the frame is page-aligned, so the bound is exactly
+representable and no rounding applies.
+
+- **The module would have to:** derive the thread's frame capability with those bounds before handing it over
+  (`thread.c` builds the frame today and grants the page), and keep granting the page to nothing else.
+- **The adapter would have to:** the same, for the kit's own frames.
+- **Cost:** none in hardware, none in the model, and it fixes both consequences at once, since a domain that cannot
+  reach `+1024..` also cannot read the stale LINEAR copies left in the slots below it — no, it CAN still read those,
+  the slots being below 1024. See the second question.
+
+### Option B, one CSR: a kernel-only save base
+
+Give the switcher a save base of its own instead of `frame + 1024`: a 64-bit CSR the trusted side writes before entry,
+used as `save_base` and `restore_base`. The snapshot then lives wherever the kernel chooses, in a page no domain ever
+sees.
+
+- **RTL cost:** about 64 flops plus a mux on two fields of the request; the switcher is otherwise unchanged.
+- **The module and the adapter:** allocate a kernel-only page per thread and write the CSR at entry.
+- **The model:** a new CSR and the same relocation, so a kit prediction and a silicon run keep agreeing.
+- **When it is worth it:** only if the ABI ever needs the domain to see above `+1024`, or if relying on every caller to
+  narrow its grant is judged too fragile. It is the robust fix; Option A is the cheap one.
+
+### Option C, the snapshot in flops: rejected with its number
+
+67 ids at 129 live bits is about **8,600 flops** for one slot, on a design already marginal on routability at 178k LUT.
+Not viable, stated so it is visibly rejected rather than silently dropped.
+
+### The second question, the consuming resume
+
+- **Hardware:** the resume walk gains a zero pass over the 31 slots and their tags, like ENTRY's. Cost is 31 extra
+  memory writes on EVERY resume, which is measurable and not free: va-runv2's resumes are the baseline to measure
+  against before this is chosen.
+- **Software:** the trusted side zeroes the slots after each escape it handles. Free in hardware, a per-escape duty that
+  can be forgotten, and it is the same class of promise as the narrowed grant in Option A.
+
+**My recommendation, for the owner to accept or overrule:** Option A plus the software clear, both of which land today
+with no bitstream, and Option B kept as the robust fix for whenever the ABI outgrows the 1024-byte boundary. If the
+owner would rather not rest a security boundary on every caller getting its grant right, Option B with the hardware
+clear is the pair to build, and then it belongs in tree B with its own arm rather than in the batch now in synthesis.

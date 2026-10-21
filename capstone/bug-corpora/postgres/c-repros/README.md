@@ -48,6 +48,13 @@ declared: `results/20261011-034640-qemu/sublet`.
 
 ## Building and running
 
+**The SDK is a corpus SDK (C-81).** Build it with `CAPSTONE_SDK_CORPUS=1` exported
+(`CAPSTONE_SDK_CORPUS=1 bash capstone/runtime/virtual/build-sdk.sh <out> <musl>`, or the port's
+builder): `build-sdk.sh` then appends `-fno-builtin` and refuses an SDK whose effective setting is
+otherwise, because with `malloc` as a library builtin LLVM may elide an allocation a case observes.
+`tools/check-sdk-builtins.py <SDK or build>` checks one already built; every corpus runner
+(`tools/sdk_builtins.py`, called before anything starts) refuses anything else with exit 78.
+
     # once per arm: an application SDK of the arm's profile (physical: level0)
     bash shared/build-domain.sh <SDK> <OUT>          # cases, controls.dom, build.json (the SDK's heap)
     python3 shared/run-arm.py --arm spatial --state <capstone-vm state> --bindir <OUT> \

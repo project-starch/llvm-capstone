@@ -24,6 +24,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#include <capstone/representable.h>
 extern char **environ;
 struct mapping {
     void *address;
@@ -129,8 +130,13 @@ static size_t rounded(size_t n)
 static void *private_pages(void *p, size_t bytes)
 {
     /* Demand resolution accounts for one base page at a time. The module
-     * requires this VMA policy on kernels that can instantiate huge pages. */
-    if (madvise(p, bytes, MADV_NOHUGEPAGE) && errno != EINVAL) {
+     * requires this VMA policy on kernels that can instantiate huge pages.
+     * A kernel built without them answers EINVAL; it does every time, so it
+     * is asked only once. */
+    static int no_huge_pages;
+    if (no_huge_pages) return p;
+    if (madvise(p, bytes, MADV_NOHUGEPAGE)) {
+        if (errno == EINVAL) { no_huge_pages = 1; return p; }
         int error = errno; munmap(p, bytes); errno = error; return NULL;
     }
     return p;
@@ -154,14 +160,70 @@ static void *reserve(size_t bytes)
     if (tail) munmap((void *)(base + bytes), tail);
     return private_pages((void *)base, bytes);
 }
+static void *reserve_aligned(size_t bytes, size_t alignment)
+{
+    /* mmap() promises page alignment only. Over-map by the worst-case distance to the next
+     * alignment boundary -- the raw base is already page-aligned, so that is alignment - 4096
+     * -- then trim both ends, leaving EXACTLY `bytes` mapped. Mapping exactly `bytes` is the
+     * point: remap_mapping() below matches a heap on m->bytes == m->visible, so a padded heap
+     * can never grow. At alignment == 4096 the slack is zero and this reduces to a plain
+     * mmap() of `bytes`, which is what the heap path used to do. */
+    size_t slack = alignment - 4096;
+    char *raw = mmap(NULL, bytes + slack, PROT_READ | PROT_WRITE,
+                     MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (raw == MAP_FAILED) return NULL;
+    uintptr_t base = ((uintptr_t)raw + alignment - 1) & ~(uintptr_t)(alignment - 1);
+    if (base != (uintptr_t)raw) munmap(raw, base - (uintptr_t)raw);
+    size_t tail = (uintptr_t)raw + bytes + slack - (base + bytes);
+    if (tail) munmap((void *)(base + bytes), tail);
+    return private_pages((void *)base, bytes);
+}
 static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
                  uintptr_t cursor, int linear, uint64_t thread)
 {
     unsigned i;
     for (i = 0; i < CV_MAX_ARENAS && maps[i].address; ++i) {}
     if (i == CV_MAX_ARENAS) { errno = ENOSPC; return -1; }
+    /* Option (iii): refuse to mint an arena whose bounds the encoder cannot represent, rather
+     * than hand the domain a capability silently widened below its base or above its end.
+     *
+     * CORRECTION (2026-10-17): an earlier version of this comment claimed the check "cannot
+     * fire today", on the grounds that every size reaching a grant is a power of two. That was
+     * wrong in the case that matters most. The local-malloc heap grants `visible` bytes, which
+     * is page-rounded and granule-rounded but NOT a power of two -- a 6 MiB heap grants
+     * 6291456 -- so this check is load-bearing for exactly the path option (iii) changed, and
+     * it is COUPLED to the alignment heap.c requests: it passes only because acquire_mapping()
+     * now aligns that mapping to the granule. The two must land together.
+     *
+     * It is also not true that every arena passes through this function: remap_mapping() grows
+     * a heap through CV_REMAP_BEGIN/END and never calls grant(), which is why that function
+     * carries its own alignment guarantee. Negative-tested in
+     * tests/exact-bounds-iii/grant-repr-test.c. */
+    if (!capstone_repr_ok((uintptr_t)base, bytes)) { errno = ERANGE; return -1; }
     struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0};
-    if (ioctl(device, CV_ADD, &r)) return -1;
+    if (ioctl(device, CV_ADD, &r)) {
+        /* Evaluate add()'s two disjuncts on the REAL values the module saw. The domain cannot do
+         * this: cap_vm_acquire clears its slot on failure, so the base never reaches it, and a
+         * power-of-two size refused with EINVAL is then indistinguishable from a misaligned one. */
+        /* NOT gated on `trace`. A refusal is rare, so this cannot flood anything, and gating
+         * it is what made its absence unprovable: four of this suite's own invocations
+         * (population, churn, remap-align, the denial loop) run without CAPSTONE_VM_TRACE, so an
+         * "ADD_REFUSED absent" check over them was an unproven zero. Turning the trace on
+         * globally is not the fix -- churn alone performs 70,000 allocations and would bury the
+         * serial in boundary lines. A diagnostic on an error path does not need a verbosity flag. */
+        int err = errno;
+        fprintf(stderr, "CAPSTONE_VM_ADD_REFUSED base=0x%lx bytes=%zu errno=%d"
+                        " pow2=%d naturally_aligned=%d\n",
+                (unsigned long)r.address, bytes, err,
+                (bytes & (bytes - 1)) == 0, (r.address & (bytes - 1)) == 0);
+        errno = err;
+        return -1;
+    }
+    /* Every ADMITTED grant, in order, so two modules' grant sequences can be diffed. The
+     * refusal side is already printed; without the success side a diff cannot say WHICH grant
+     * first differs, only that something did. */
+    fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%u base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
+            i, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
     maps[i] = (struct mapping){.address = base, .bytes = bytes, .visible = bytes,
                                .id = r.id, .heap = linear,
                                .kind = linear ? CV_MAP_HEAP : -1};
@@ -218,17 +280,22 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         (kind == CV_MAP_APPLICATION && rights != 7)) return -EINVAL;
     if (bytes < alignment) bytes = alignment;
     void *p;
-    if (local_malloc && kind == CV_MAP_HEAP && alignment == 4096) {
+    if (local_malloc && kind == CV_MAP_HEAP) {
+        /* Keyed on the HEAP, not on the alignment value. What requires bytes == visible is the
+         * heap's growth contract -- remap_mapping() matches on m->bytes == m->visible == old --
+         * and the old `alignment == 4096` spelling conflated that with the alignment mmap()
+         * happens to provide for free. Option (iii) asks for the bounds granule, which exceeds
+         * a page above 4 MiB, so every heap of 4 MiB or more silently left this path, got
+         * padded to a power of two by reserve(), and could no longer grow at all. */
         bytes = visible;
-        p = mmap(NULL, bytes, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
-        if (p == MAP_FAILED) return -errno;
-        p = private_pages(p, bytes);
+        p = reserve_aligned(bytes, alignment);
     } else p = reserve(bytes);
     if (!p) return -errno;
     /* Padding remains inaccessible, including after later mprotect calls.
-     * No capability reply exists until registration has succeeded. */
+     * No capability reply exists until registration has succeeded. The range
+     * is mapped readable and writable, so that protection needs no call. */
     if ((visible < bytes && mprotect((char *)p + visible, bytes - visible, PROT_NONE)) ||
-        mprotect(p, visible, prot) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid)) {
+        (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid)) {
         int error = errno;
         munmap(p, bytes);
         return -error;
@@ -244,18 +311,62 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
 {
     uintptr_t base = step->args[0];
     size_t old = step->args[1], bytes = step->args[2];
+    /* Unconditional, for the same reason the CV_ADD refusal is: heap growth has never been
+     * observed to COMPLETE in any arm of any profile -- CAPSTONE_VM_REMAP_OK reads 0 everywhere,
+     * including with exact bounds on -- and remap_begin's own gate is not shown to fire. So the
+     * question is which of these refusals happens, and a trace-gated print cannot answer it in the
+     * stages that run without the trace. */
     if (!local_malloc || !bytes || bytes > CV_MAX_REGION_BYTES ||
-        ((base | old | bytes) & 4095)) return -EINVAL;
+        ((base | old | bytes) & 4095)) {
+        fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=args local_malloc=%d base=0x%lx"
+                        " old=%zu bytes=%zu page_ok=%d\n",
+                (int)local_malloc, (unsigned long)base, old, bytes,
+                ((base | old | bytes) & 4095) == 0);
+        return -EINVAL;
+    }
     for (unsigned i=0; i<CV_MAX_ARENAS; ++i) {
         struct mapping *m = &maps[i];
         if ((uintptr_t)m->address != base || m->visible != old || m->bytes != old ||
             !m->heap || m->kind != CV_MAP_HEAP) continue;
+        /* Option (iii): the GROWN mapping's base must still be a granule multiple, and mremap()
+         * promises only page alignment. Above 4 MiB the granule exceeds a page, so even an
+         * in-place growth can leave the base unrepresentable (2 MiB -> 4 MiB keeps the base and
+         * moves the granule from 4096 to 8192).
+         *
+         * This has to be guaranteed HERE and not refused in the domain. The domain's
+         * __capstone_malloc_group_remap() checks representability only after this ioctl pair
+         * has already moved the memory and re-registered it, so refusing there is a
+         * use-after-move, not a fallback -- realloc's malloc-plus-copy path would read from an
+         * address that no longer maps. A nonzero __capstone_malloc_remap_unaligned therefore
+         * means a bug in this function, not a measurement.
+         *
+         * Everything that can fail is done BEFORE the source is touched: mremap() fails
+         * atomically, so an error leaves the old mapping intact and only the reservation to
+         * release. */
+        size_t align = capstone_repr_granule(bytes);
+        if (align < 4096) align = 4096;
+        if (bytes % align) {
+            fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=granule bytes=%zu align=%zu\n",
+                    bytes, align);
+            return -ERANGE;
+        }
+        void *dest = NULL;
+        if (align > 4096) {
+            dest = reserve_aligned(bytes, align);
+            if (!dest) return -errno;
+        }
         struct cv_remap r = {tid, m->id, bytes, 0};
-        if (ioctl(device, CV_REMAP_BEGIN, &r)) return -errno;
-        void *p = mremap(m->address, old, bytes, MREMAP_MAYMOVE);
+        if (ioctl(device, CV_REMAP_BEGIN, &r)) {
+            int e = errno;
+            if (dest) munmap(dest, bytes);
+            return -e;
+        }
+        void *p = dest ? mremap(m->address, old, bytes, MREMAP_MAYMOVE | MREMAP_FIXED, dest)
+                       : mremap(m->address, old, bytes, MREMAP_MAYMOVE);
         if (p == MAP_FAILED) {
             int e = errno;
             if (ioctl(device, CV_REMAP_END, &r)) abort();
+            if (dest) munmap(dest, bytes);
             return -e;
         }
         r.address = (uintptr_t)p;
@@ -263,6 +374,17 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
         m->address = p; m->bytes = m->visible = bytes;
         if (trace) fprintf(stderr, "CAPSTONE_VM_REMAP_OK old=%zu bytes=%zu\n", old, bytes);
         return 0;
+    }
+    /* No arena matched. Report what the candidates looked like, because the match is on four
+     * fields at once and "no match" alone cannot say which one differed. */
+    fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=nomatch base=0x%lx old=%zu bytes=%zu\n",
+            (unsigned long)base, old, bytes);
+    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
+        struct mapping *m = &maps[i];
+        if (!m->address) continue;
+        if ((uintptr_t)m->address != base) continue;   /* only the arena at this base matters */
+        fprintf(stderr, "CAPSTONE_VM_REMAP_CAND base=0x%lx visible=%zu bytes=%zu heap=%d kind=%d\n",
+                (unsigned long)(uintptr_t)m->address, m->visible, m->bytes, m->heap, m->kind);
     }
     return -EINVAL;
 }
@@ -305,6 +427,10 @@ static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *s
             memcpy(v, raw + sh[i].sh_offset, 8);
             virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V2 || v[0] == CV_IMAGE_MAGIC_V3;
             local_malloc = v[0] == CV_IMAGE_MAGIC;
+            /* v5 is refused rather than run: its mallocng hands out exact object bounds, which
+             * this profile's encoder rounds outward, so its slots would reach the neighbouring
+             * slot's in-band header. Rebuilding is the only fix. */
+            if (v[0] == CV_IMAGE_MAGIC_V5) virtual = 0;
         }
         if (!strcmp(names + sh[i].sh_name, ".capstone_domreq") && sh[i].sh_size == 24) {
             memcpy(v, raw + sh[i].sh_offset, 24);
@@ -693,10 +819,9 @@ int main(int argc, char **argv)
     host.private_fds[host.private_count++] = fd;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) { munmap(image, image_bytes); return die("open"); }
-    uint64_t profile = 0;
-    if (local_malloc && (ioctl(device, CV_PROFILE, &profile) || !(profile & 0x100))) {
-        munmap(image, image_bytes); errno = ENOTSUP; return die("exact-bounds CPU profile required");
-    }
+    /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
+     * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
+     * so the launcher runs on the default profile. The bit may still be set; it is not read. */
     if (grant(image, image_bytes, 3, 7, entry, 0, 0)) { munmap(image, image_bytes); return die("image grant"); }
     void *stack = reserve(stack_bytes);
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);

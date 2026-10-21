@@ -31,6 +31,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import verdicts as v  # noqa: E402
 import virtualvm  # noqa: E402
 
@@ -162,6 +163,7 @@ def main():
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--repeat", type=int, default=1)
     a = p.parse_args()
+    sdk_builtins.gate([a.image], who="postgres:run-controls.py")
 
     manifest = json.loads((a.image.parent / "manifest.json").read_text())
     if manifest.get("nested") != NESTED[a.arm] or manifest.get("profile") != "virtual":

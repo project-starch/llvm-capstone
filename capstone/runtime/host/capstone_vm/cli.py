@@ -40,6 +40,7 @@ CAPSTONE_STOREWATCH_HI CAPSTONE_STOREWATCH_LO CAPSTONE_STOREWATCH_LOW
 CAPSTONE_TAGWATCH CAPSTONE_TAGWATCH_GRANULE CAPSTONE_TAGWATCH_HI
 CAPSTONE_TAGWATCH_LO CAPSTONE_TAGWATCH_MAX CAPSTONE_TAGWATCH_VICTIM
 """.split())
+SHARE_MODELS = ("none", "mapped-xattr")
 
 
 # Keep the escape sequences literal: binfmt_misc decodes them itself. Letting
@@ -313,14 +314,21 @@ def start(args: argparse.Namespace, state: Path) -> int:
                 files[key] = require_file(getattr(args, key))
         if "launcher" in files and "job_helper" not in files:
             files["job_helper"] = require_file(files["launcher"].with_name("capstone-job"))
-        profile = getattr(args, "profile", "physical")
+        profile = getattr(args, "profile", "virtual")
         if profile == "virtual" and not {"launcher", "module"} <= files.keys():
-            raise VMError("Virtual profile requires its launcher and module")
-        # The local-mallocng virtual ABI needs QEMU's exact-bounds profile (runtime/virtual/README.md);
-        # run-staged.py turns it on for the qualified gates, and a persistent VM must be able to as well.
+            raise VMError("Virtual profile requires its launcher and module "
+                          "(--launcher, --module; --profile physical for the physical profile)")
+        # Option (iii): the local-mallocng virtual ABI runs on the default profile. The flag stays
+        # so a suite can be run both ways as a two-sided control (runtime/virtual/README.md).
         exact_bounds = bool(getattr(args, "exact_bounds", False))
         if exact_bounds and profile != "virtual":
             raise VMError("--exact-bounds is a virtual-profile QEMU option")
+        # QEMU's 9p security model for the share. With "none" the guest sees the host's owners
+        # and modes, so a file the guest's root creates belongs to the host user; "mapped-xattr"
+        # records the guest's owners and modes in host xattrs, so it is root's, as on a guest disk.
+        share_model = getattr(args, "share_model", "none")
+        if share_model not in SHARE_MODELS:
+            raise VMError(f"Share model must be one of {', '.join(SHARE_MODELS)}")
         share = args.share.resolve(strict=True)
         if not share.is_dir() or "," in str(share):
             raise VMError("Share must be a directory whose path contains no comma")
@@ -345,6 +353,9 @@ def start(args: argparse.Namespace, state: Path) -> int:
         if exact_bounds:
             # Recorded only when set, so the identity of every VM started without it is unchanged.
             identity_config["exact_bounds"] = True
+        if share_model != "none":
+            # Likewise recorded only when it differs from the default.
+            identity_config["share_model"] = share_model
         if running(state):
             old = json.loads((state / "config.json").read_text())
             if old.get("identity") != identity_config or args.port not in (0, old["port"]):
@@ -433,7 +444,7 @@ insmod /mnt/control/module
             "-append", f"root=/dev/vda rw cma={args.cma_mib}M", "-snapshot",
             "-drive", f"file={files['rootfs']},format=raw,id=hd0,if=none",
             "-device", "virtio-blk-device,drive=hd0",
-            "-virtfs", f"local,path={share},mount_tag=hostshare,security_model=none,id=hostshare",
+            "-virtfs", f"local,path={share},mount_tag=hostshare,security_model={share_model},id=hostshare",
             "-virtfs", f"local,path={assets},mount_tag=control,security_model=none,id=control",
             "-chardev", f"socket,id=console,path={state / 'console.sock'},server=on,wait=on,logfile={state / 'console.log'}",
             "-serial", "chardev:console", "-qmp", f"unix:{state / 'qmp.sock'},server=on,wait=off",
@@ -500,11 +511,18 @@ def main(argv: list[str] | None = None) -> int:
     up = sub.add_parser("up", help="Boot and provision one persistent guest")
     for option in ("qemu", "kernel", "firmware", "rootfs", "share"):
         up.add_argument("--" + option, type=Path, required=True)
-    up.add_argument("--profile", choices=("physical", "virtual"), default="physical")
+    up.add_argument("--profile", choices=("physical", "virtual"), default="virtual")
     up.add_argument("--exact-bounds", action="store_true",
-                    help="Virtual profile: QEMU's exact-bounds mode, which the local-mallocng ABI needs")
+                    help="Virtual profile: QEMU's exact-bounds mode. Not required; a two-sided control.")
     for option in ("launcher", "ssh-server", "module", "job-helper"):
         up.add_argument("--" + option, type=Path, help="Override the installed guest component")
+    up.add_argument("--share-model", choices=SHARE_MODELS, default="none",
+                    help="9p security model of the share. none: the guest sees and changes the "
+                         "host's owners and modes, so a file the guest's root creates belongs to "
+                         "the host user. mapped-xattr: the guest's owners, modes and special "
+                         "files live in host xattrs (needs a host filesystem with user xattrs), "
+                         "so the guest's root owns what it creates; on the host such files are "
+                         "the QEMU user's with mode 0600 (directories 0700)")
     up.add_argument("--port", type=int, default=0)
     up.add_argument("--memory", default="8G")
     up.add_argument("--cma-mib", type=int, default=512,
@@ -540,11 +558,13 @@ def main(argv: list[str] | None = None) -> int:
                         raise VMError("VM did not stop after QMP quit")
                     time.sleep(0.05)
             settings = {key: Path(value["path"]) for key, value in config["files"].items()}
+            # A record without "profile" predates the field: those VMs were all physical.
             settings.update(share=Path(config["share"]), memory=config["memory"],
                             cma_mib=config.get("cma_mib", 512),
                             process_cache_mib=config.get("process_cache_mib", 384),
                             environment=config["environment"], profile=config.get("profile", "physical"),
-                            exact_bounds=config.get("exact_bounds", False), port=0, boot_timeout=120)
+                            exact_bounds=config.get("exact_bounds", False),
+                            share_model=config.get("share_model", "none"), port=0, boot_timeout=120)
             return start(argparse.Namespace(**settings), state)
         if args.action == "status":
             active = running(state)

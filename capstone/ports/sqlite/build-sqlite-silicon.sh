@@ -2781,6 +2781,13 @@ COMMON=("${SUBLET_INC[@]}" -target capstone64-unknown-elf -Xclang -target-featur
         -ffreestanding -fno-builtin
         -include "$ADAPTED/capstone_sqlite_libc.h"
         -I"$ADAPTED/stubinc" -I"$ADAPTED" -I"$SCRIPT_DIR" -I"$VFS_DIR" -I"$OBJ_DIR"
+        # capstone/runtime/include UNCONDITIONALLY, not only on the Sublet path. SUBLET_INC above
+        # carries it, but only when SQLITE_SUBLET_PATCH is set, and repro322_common.h now does
+        # `#include <capstone/representable.h>` in EVERY configuration -- added by 99aa4350bcfb
+        # (this lane) without the matching -I, which broke build-corpus-images.sh with
+        # "'capstone/representable.h' file not found". The duplicate when SUBLET_INC is non-empty
+        # is harmless.
+        -I"$REPO_ROOT/capstone/runtime/include"
         -I"$(dirname "$PATCHED")" -I"$BUILTINS")
 
 echo "== compiling the single silicon TU (this is the first time SQLite sees the silicon ABI)"

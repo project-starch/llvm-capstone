@@ -18,6 +18,13 @@ revokes the block's child when it takes the block back (`CREVOKE`,
 
 ## Build
 
+**The SDK is a corpus SDK (C-81).** Build it with `CAPSTONE_SDK_CORPUS=1` exported
+(`CAPSTONE_SDK_CORPUS=1 bash capstone/runtime/virtual/build-sdk.sh <out> <musl>`, or the port's
+builder): `build-sdk.sh` then appends `-fno-builtin` and refuses an SDK whose effective setting is
+otherwise, because with `malloc` as a library builtin LLVM may elide an allocation a case observes.
+`tools/check-sdk-builtins.py <SDK or build>` checks one already built; every corpus runner
+(`tools/sdk_builtins.py`, called before anything starts) refuses anything else with exit 78.
+
     export CAPSTONE_SDK=<virtual application SDK>
     shared/build-cases.sh capstone-application OUT-OFF -DPYMALLOC_SUBLET=OFF
     shared/build-cases.sh capstone-application OUT-ON  -DPYMALLOC_SUBLET=ON

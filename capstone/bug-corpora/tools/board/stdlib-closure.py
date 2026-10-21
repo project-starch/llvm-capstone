@@ -7,6 +7,11 @@ modulefinder runs under NATIVE, the same CPython release as the image, over ever
 startup modules. The result is the set of LIB files they reach, written relative to LIB, one per line. It is an
 over-approximation of static imports and misses dynamic ones, so a run on a trimmed stdlib is valid only after a QEMU
 A/B shows every reading equal to the full stdlib's.
+
+DYNAMIC packages are added whole. The A/B caught the first one (2026-10-19): codecs are imported by NAME at lookup
+time (codecs.lookup -> encodings.search_function -> __import__("encodings." + name)), which modulefinder cannot see,
+so allocator-boundary case 17's trigger raised `LookupError: unknown encoding: hz` on the trimmed Lib and never reached
+its defect. A missing DYNAMIC package is an error, not an empty addition.
 """
 import argparse
 import subprocess
@@ -17,9 +22,11 @@ STARTUP = ["site", "encodings", "encodings.utf_8", "encodings.aliases", "encodin
            "codecs", "io", "abc", "os", "stat", "posixpath", "genericpath", "_collections_abc", "_sitebuiltins",
            "runpy", "importlib", "importlib.util", "importlib.machinery", "sysconfig", "traceback", "linecache"]
 
+DYNAMIC = ["encodings"]
+
 FINDER = r'''
 import sys, os, modulefinder
-lib, out, startup, scripts = sys.argv[1], sys.argv[2], sys.argv[3].split(","), sys.argv[4:]
+lib, out, startup, dynamic, scripts = sys.argv[1], sys.argv[2], sys.argv[3].split(","), sys.argv[4].split(","), sys.argv[5:]
 need, errors = set(), 0
 def add(mf):
     for m in mf.modules.values():
@@ -40,8 +47,17 @@ for mod in startup:
     except ImportError:
         pass
     add(mf)
+static = len(need)
+for pkg in dynamic:
+    root = os.path.join(lib, pkg)
+    if not os.path.isdir(root):
+        errors += 1
+        print(f"ERROR dynamic package {pkg} not found under {lib}", file=sys.stderr)
+        continue
+    for dirpath, _, files in os.walk(root):
+        need.update(os.path.relpath(os.path.join(dirpath, f), lib) for f in files if f.endswith(".py"))
 open(out, "w").write("\n".join(sorted(need)) + "\n")
-print(f"{len(scripts)} scripts, {errors} errors, {len(need)} files")
+print(f"{len(scripts)} scripts, {errors} errors, {len(need)} files ({static} static, +{len(need) - static} from dynamic packages {dynamic})")
 sys.exit(2 if errors or not need else 0)
 '''
 
@@ -54,7 +70,7 @@ def main():
     p.add_argument("scripts", nargs="+", type=Path)
     a = p.parse_args()
     lib = a.lib.resolve()
-    r = subprocess.run([str(a.python), "-c", FINDER, str(lib), str(a.out.resolve()), ",".join(STARTUP),
+    r = subprocess.run([str(a.python), "-c", FINDER, str(lib), str(a.out.resolve()), ",".join(STARTUP), ",".join(DYNAMIC),
                         *[str(s.resolve()) for s in a.scripts]], cwd=str(a.python.parent),
                        env={"PYTHONPATH": str(lib), "PATH": "/usr/bin:/bin"})
     return r.returncode

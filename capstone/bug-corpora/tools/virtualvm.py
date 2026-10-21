@@ -27,6 +27,8 @@ STAGED = REPO / "capstone/runtime/virtual/run-staged.py"
 FILES = ("qemu-system-riscv64", "images/Image", "images/fw_jump.elf", "images/rootfs.ext2",
          "adapter/capstone-vexec", "adapter/module/capstone_vm.ko")
 BEGIN, END = "@@STEP-BEGIN ", "@@STEP-END "
+BOUND = "@@STEP-BOUND "   # a board step killed at its bound (boardvm): it reads as a timeout, never as a signal
+NSIG = 64   # Linux _NSIG: the highest signal number a step's 128+N status can carry
 PARAMS = "adapter/module/params"
 SYSFS = "/sys/module/capstone_vm/parameters"
 
@@ -97,6 +99,9 @@ class Batch:
         self.stage.mkdir(parents=True)
         self.steps = []
         self.params = []
+        # {step: the runner's own per-run limit, s}. A QEMU batch does not enforce it (its script is unchanged); a board
+        # batch bounds each step at this times its kit's BOARD_STEP_MULT (boardvm).
+        self.bounds = {}
 
     def put(self, dest, source=None, text=None):
         """Stage a file, a directory tree, or text at /mnt/vm/<dest>."""
@@ -154,18 +159,25 @@ class Batch:
 
 def split(serial):
     """{step: (text, result)} for every step that BEGAN. A step that began and never ended (the
-    boot timed out or the guest died) gets kind 'none', which no observe() reads as a run."""
+    boot timed out or the guest died) gets kind 'none', which no observe() reads as a run.
+    The END marker is matched wherever it starts on its line: the script echoes it straight after `cat /tmp/step.out`,
+    so a step whose output lacks a final newline puts it mid-line ("(unknown):0: @@STEP-END ..."). Anchored at the line
+    start, such a step never closed, ran to the end of the transcript, and swallowed every later step."""
     steps = {}
-    for m in re.finditer(rf"^{re.escape(BEGIN)}(\S+)\n(.*?)(?:^{re.escape(END)}\1 (\d+)$|\Z)",
+    for m in re.finditer(rf"^{re.escape(BEGIN)}(\S+)\n(.*?)(?:{re.escape(END)}\1 (\d+)$|\Z)",
                          serial, re.S | re.M):
         name, text, rc = m.group(1), m.group(2), m.group(3)
         fault = next((l.strip() for l in text.splitlines() if "domain fault cause=" in l), None)
-        if rc is None:
+        if rc is None or f"{BOUND}{name} " in text:
             result = {"kind": "none"}
             text += "\n[runner] TIMEOUT\n"
         else:
             rc = int(rc)
-            result = {"kind": "signal", "value": rc - 128} if rc > 128 else {"kind": "exit", "value": rc}
+            # $? is 128+N for a child killed by signal N, but also a plain exit status above 128: perl's panic exits
+            # 255 and read as "signal 127", which no signal is. Only 129..128+NSIG (Linux: 64) can be a signal; above
+            # that it is an exit. 129..192 stays ambiguous here (capstone-job's WIFSIGNALED, the persistent-VM path,
+            # is not in a batch): a program exiting with such a status reads as a signal.
+            result = {"kind": "signal", "value": rc - 128} if 128 < rc <= 128 + NSIG else {"kind": "exit", "value": rc}
         if fault:
             result["fault"] = fault
         steps[name] = (text, result)

@@ -94,6 +94,7 @@ def boot(a):
         env = " ".join(shlex.quote(e) for e in c["env"])
         batch.step(step, f"cd {shlex.quote(c['cwd'])} && exec env {env} {root}/capstone-vexec "
                          f"{root}/images/{c['image']} " + " ".join(shlex.quote(x) for x in c["args"]))
+        batch.bounds[step] = int(c["timeout"])   # the runner's own limit; a board batch bounds the step at a multiple
     timeout = a.timeout or 300 + sum(min(int(c["timeout"]), 600) for c in calls.values())
     runs, transcript, completed = batch.execute(kit, s / "guest", timeout=timeout)
     share_ok = "SESSION-SHARE-OK" in runs.get("session-share", ("", {}))[0]

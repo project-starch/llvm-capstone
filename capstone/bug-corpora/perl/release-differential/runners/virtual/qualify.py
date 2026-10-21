@@ -25,6 +25,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[6]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -68,6 +69,7 @@ def main():
     p.add_argument("--timeout", type=int, default=900)
     p.add_argument("tests", nargs="+")
     a = p.parse_args()
+    sdk_builtins.gate([a.perl], who="perl:qualify.py")
     image = a.perl / "src/perl-5.36.3/perl"
     share = Path(json.loads((a.state / "config.json").read_text())["share"])
     stage(a.perl, share)

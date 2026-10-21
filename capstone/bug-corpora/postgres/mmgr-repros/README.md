@@ -86,6 +86,13 @@ with `capstone_vm --profile virtual`. Two builds per arm, both with the
 ([controls/README.md](controls/README.md)); `virtual-pg-pools` adds
 `-DPG_SUBLET=ON` to both:
 
+**The SDK is a corpus SDK (C-81).** Build it with `CAPSTONE_SDK_CORPUS=1` exported
+(`CAPSTONE_SDK_CORPUS=1 bash capstone/runtime/virtual/build-sdk.sh <out> <musl>`, or the port's
+builder): `build-sdk.sh` then appends `-fno-builtin` and refuses an SDK whose effective setting is
+otherwise, because with `malloc` as a library builtin LLVM may elide an allocation a case observes.
+`tools/check-sdk-builtins.py <SDK or build>` checks one already built; every corpus runner
+(`tools/sdk_builtins.py`, called before anything starts) refuses anything else with exit 78.
+
     python3 shared/run-defects.py OUT --state VM_STATE --arm virtual-pg-pools \
       --hosted-build BUILD --controls-hosted-build BUILD_CONTROLS \
       --llvm-bin <toolchain>/bin --raw LOGS

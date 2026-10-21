@@ -259,7 +259,7 @@ def main():
                    *(['-DREPRO322_VIRTUAL_MEMSYS5'] if a.memsys5 else []),
                    *(['-DREPRO322_VIRTUAL_SUBLET'] if a.sublet else []),
                    *(['-DREPRO322_NO_LOOKASIDE'] if a.no_lookaside else []),
-                   *sublet_includes,
+                   f'-I{REPO}/capstone/runtime/include',
                    *CONFIG, *flags[group], *extra,
                    *extra_inc, f'-I{REPRO}', f'-I{a.amalgamation}',
                    *sources, str(engine[group]), '-lm', '-o', str(image)]

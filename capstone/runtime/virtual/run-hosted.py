@@ -25,6 +25,9 @@ def main():
     for name in ('adapter', 'application', 'noreturn', 'native', 'qemu', 'images', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=600)
+    p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
+                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
+                        "it is kept so a suite can be run both ways as a two-sided control.")
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
@@ -55,8 +58,8 @@ echo VIRTUAL_STAGED_DONE
 ''')
     subprocess.run([sys.executable, str(HERE / 'run-staged.py'), '--qemu', str(a.qemu.resolve()),
                     '--images', str(a.images.resolve()), '--stage', str(stage.resolve()),
-                    '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout),
-                    '--exact-bounds'])
+                    '--work', str((a.work / 'guest').resolve()), '--timeout', str(a.timeout)
+                    ] + (['--exact-bounds'] if a.exact_bounds else ['--no-exact-bounds']))
     serial = a.work / 'guest/serial.log'
     log = serial.read_text(errors='replace').replace('\r', '') if serial.exists() else ''
     arms, arm = {'native': {}, 'virtual': {}}, None
@@ -72,11 +75,24 @@ echo VIRTUAL_STAGED_DONE
     tests['noreturn:exit_zero'] = exits.get('noreturn') == '0'
     tests['noreturn:ran'] = 'HOSTED_NORETURN:41' in log
     tests['module_unloaded'] = 'HOSTED_CLEANUP:0' in log
+    # The zero-size alloca checks, by name: an image built before them would
+    # otherwise pass on the remaining checks.
+    tests['virtual_alloca_checks_parsed'] = {
+        'alloca_zero_survives', 'alloca_zero_distinct_tagged'} <= set(arms['virtual'])
+    tests['native_alloca_checks_parsed'] = 'alloca_zero_survives' in arms['native']
     tests['virtual_tag_control_fired'] = arms['virtual'].get('control_byte_copy_drops_tag') is True
     tests['virtual_pipe_control_fired'] = arms['virtual'].get('control_pipe_read_returns_available') is True
+    # The frame- and return-address checks, by name: an image built before them
+    # would otherwise pass on the remaining checks.
+    portable = {'return_address_returned', 'return_address_argument',
+                'return_address_call_site_order'}
+    tests['virtual_frame_checks_parsed'] = portable | {
+        'return_address_untagged', 'return_address_depth_1',
+        'frame_address_depth_1'} <= set(arms['virtual'])
+    tests['native_frame_checks_parsed'] = portable <= set(arms['native'])
     # No checks parsed is a failed run, never an empty pass.
-    tests['virtual_checks_parsed'] = len(arms['virtual']) >= 21
-    tests['native_checks_parsed'] = len(arms['native']) >= 18
+    tests['virtual_checks_parsed'] = len(arms['virtual']) >= 27
+    tests['native_checks_parsed'] = len(arms['native']) >= 24
     result = dict(status='PASS' if all(tests.values()) else 'FAIL',
                   passed=sum(tests.values()), total=len(tests), tests=tests,
                   exits=exits, sha256={k: sha(v) for k, v in inputs.items()})

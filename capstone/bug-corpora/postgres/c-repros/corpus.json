@@ -13,7 +13,8 @@
     "cheribsd-revocation",
     "virtual-malloc",
     "silicon-level0",
-    "silicon-lifetimes"
+    "silicon-lifetimes",
+    "vp2-malloc"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -47,12 +48,14 @@
     "spatial": "app-level0",
     "virtual-malloc": "virtual-mallocng",
     "silicon-level0": "silicon-level0",
-    "silicon-lifetimes": "silicon-level0-lifetimes"
+    "silicon-lifetimes": "silicon-level0-lifetimes",
+    "vp2-malloc": "virtual-mallocng"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
     "spatial": "results/20261010-150616-qemu/spatial",
     "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
-    "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes"
+    "silicon-lifetimes": "results/2026-10-16-silicon/silicon-lifetimes",
+    "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
   }
 }

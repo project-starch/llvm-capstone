@@ -100,6 +100,18 @@ A fault counts as the defect's only at the labelled read or write probe, resolve
 image's own symbols; a silence counts as MISSED only when the arm's controls
 ([`controls/`](controls/README.md)) behaved in the same invocation.
 
+**Q-15, the compact bounds format (2026-10-19).** On vp2 and on capstone-qemu without exact bounds, CDERIVE refuses
+(cause 29) a child it cannot hold exactly. `virtual-nested-pools` therefore read NO-READING:control-failed 23 there: the
+uaf-jumbo control's own jumbo derive was refused. Patch 0001 now makes every derive exact (tail pad only). The arm reads
+on the compact profile cell for cell as with exact bounds ([`results/2026-10-19-q15-repair/`](results/2026-10-19-q15-repair/RESULT.md)).
+The pad report is unmeasured in this arm: `Q15_PAD` prints only after a completed case, every nested-pools case faults
+first, and the pad-masked count (0) stands on the verdicts.
+
+case 22 reads NO-READING:unattributed in Debug builds where capstone_cap_revoke_child is emitted out of line; its
+callers include wmem_sublet_block_renew, so pc attribution cannot reach the declared free (caller census 4d30d15a50df,
+[`results/2026-10-19-q15-repair/case22-caller-census.txt`](results/2026-10-19-q15-repair/case22-caller-census.txt)); the
+2026-10-11 CAUGHT came from an older build.
+
 ## History: the Capstone domain arms, 2026-09-21 to 2026-10-09
 
 The `spatial`, `sublet`, `sublet-chunks` and `sublet-malloc` arms ran the cases as freestanding
@@ -200,6 +212,13 @@ trade, the missing primitive, and what a per-chunk port would cost.
 
 The port builds the cases; case material does not live inside a port. Pass the
 corpus root and the port builds one program per case:
+
+**The SDK is a corpus SDK (C-81).** Build it with `CAPSTONE_SDK_CORPUS=1` exported
+(`CAPSTONE_SDK_CORPUS=1 bash capstone/runtime/virtual/build-sdk.sh <out> <musl>`, or the port's
+builder): `build-sdk.sh` then appends `-fno-builtin` and refuses an SDK whose effective setting is
+otherwise, because with `malloc` as a library builtin LLVM may elide an allocation a case observes.
+`tools/check-sdk-builtins.py <SDK or build>` checks one already built; every corpus runner
+(`tools/sdk_builtins.py`, called before anything starts) refuses anything else with exit 78.
 
     cmake --preset capstone-application -S <repo>/capstone/ports/wireshark/wmem -B <out> \
         -DCAPSTONE_SDK=<virtual SDK> -DWM_CORPUS_DIR=<repo>/capstone/bug-corpora/wireshark/wmem-repros \

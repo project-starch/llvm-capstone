@@ -236,6 +236,31 @@ static void signals(void)
     report("signal_handler_leaves_environment", before);
 }
 
+/* modf and frexp return one result through a pointer. The compiler expands
+ * modf (and frexp, when it sees the intrinsic) into a call that writes a stack
+ * temporary; that pointer used to be passed as an integer, and modf faulted
+ * storing the integral part (C-86). Last, so a fault leaves the rest reported.
+ * FENV_ACCESS is off here: under it clang keeps modf a plain call, which passes
+ * the caller's pointer through and never reaches that expansion. */
+#pragma STDC FENV_ACCESS OFF
+static void split(void)
+{
+    int before = failures;
+    volatile double x = 3.75 * one;
+    double ip = 0, *ipp = &ip;
+    CHECK(modf(x, &ip) == 0.75 && ip == 3.0);
+    CHECK(modf(-x, ipp) == -0.75 && ip == -3.0);
+    float fip = 0;
+    CHECK(modff((float)x, &fip) == 0.75f && fip == 3.0f);
+    long double lip = 0;
+    CHECK(modfl((long double)x, &lip) == 0.75L && lip == 3.0L);
+    int e = 0;
+    CHECK(frexp(x, &e) == 0.9375 && e == 2);
+    CHECK(frexpl((long double)x, &e) == 0.9375L && e == 2);
+    report("split_results_through_pointers", before);
+}
+#pragma STDC FENV_ACCESS ON
+
 int main(void)
 {
     hardware();
@@ -244,6 +269,7 @@ int main(void)
     libm();
     threads();
     signals();
+    split();
     printf("VIRTUAL_FP_DONE failures=%d\n", failures);
     return failures != 0;
 }

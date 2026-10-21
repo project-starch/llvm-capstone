@@ -1,0 +1,1371 @@
+{
+ "configuration": "trimmed-Lib (cpython-closure2: stdlib-closure 95b12f2e80a5, 445 files)",
+ "images": {
+  "lt0": {
+   "arm": "virtual-malloc",
+   "cases": {
+    "01_gh-139071_heap-overflow-in-set-dealloc-setobject": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 264,
+       "symbol": "set_dealloc",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "02_gh-140471_fix-buffer-overflow-in-ast-node": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 1",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "03_gh-140492_heap-buffer-overflow-in-ast-copy": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 1",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 1",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "05_gh-140497_cpython-crash-heap-buffer-overflow-python": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "control",
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 140,
+       "symbol": "_PyObject_Malloc",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": null,
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 140,
+       "symbol": "_PyObject_Malloc",
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT",
+      "NO-READING"
+     ]
+    },
+    "06_gh-140551_crash-in-dict-if-hash-eq": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 1",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "07_gh-140594_fix-an-out-of-bounds-read": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 688,
+       "symbol": "PyOS_StdioReadline",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": "infra",
+       "notes": "fault in memset before the trigger began",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT",
+      "NO-READING"
+     ]
+    },
+    "08_gh-140607_heap-buffer-overflow-in-io-rawiobase": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 184,
+       "symbol": "memcpy",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "09_gh-140802_heap-buffer-overflow-in-pycore-interpframe": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "control",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 180,
+       "symbol": "__capstone_mallocng_free",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": "control",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 324,
+       "symbol": "dict_traverse",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "10_gh-142554_avoid-divmod-crashes-due-to-bad": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 1056,
+       "symbol": "l_divmod",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "11_gh-143005_heap-buffer-overflow-in-ctypes-array": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger stopped on ModuleNotFoundError before its case",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "12_gh-143377_heap-buffer-overflow-in-format-tracebackexception": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 3636,
+       "symbol": "_PyXI_excinfo_InitFromException",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "13_gh-144169_fix-three-crashes-in-ast-objects": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": "infra",
+       "notes": "capacity: MemoryError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "14_gh-144475_heap-buffer-overflow-in-functools-partial": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "15_gh-148973_fix-segfault-on-mismatch-between-consts": {
+     "added_by": "runs/modswap-lt0 (module twin a5dec6a3): its negative control faulted in __capstone_mallocng_free, so NO-READING",
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "control",
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 0,
+       "symbol": "visit_decref",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": null,
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 0,
+       "symbol": "visit_decref",
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT",
+      "NO-READING"
+     ]
+    },
+    "16_gh-156075_heap-buffer-overflow": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 44,
+       "symbol": "memset",
+       "verdict": "NO-READING"
+      },
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with RAISED RuntimeError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "MISSED",
+      "NO-READING"
+     ]
+    },
+    "17_gh-157325_fix-an-oob-read-in-the": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 0",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "18_gh-157335_fix-out-of-bounds-write-in": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 1",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "19_gh-142664_fix-uaf-in-memoryview-hash-via": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "control",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 104,
+       "symbol": "fnv",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": null,
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 104,
+       "symbol": "fnv",
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT",
+      "NO-READING"
+     ]
+    },
+    "20_gh-143308_use-after-free-in-save-picklebuffer": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 184,
+       "symbol": "memcpy",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "21_gh-146169_segfault-ub-from-expat-when-re": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 72,
+       "symbol": "little2_toUtf8",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "22_gh-139210_iterparse-event-name": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with RAISED ValueError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "23_gh-142560_bytearray-search-realloc": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 1",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "24_gh-142783_zoneinfo-eager-decref": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 0,
+       "symbol": "PyObject_GetAttrString",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "25_gh-142829_hamt-eq-interior-cursor": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 0",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "26_gh-142831_json-encoder-list-item": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "27_gh-143004_counter-update-borrowed-value": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "control",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 180,
+       "symbol": "__capstone_mallocng_free",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": "control",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 44,
+       "symbol": "memset",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 0",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT",
+      "MISSED"
+     ]
+    },
+    "28_gh-143543_groupby-reentrant-eq": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 100,
+       "symbol": "_PyEval_Vector",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "29_gh-146011_decimal-signaldict-outlives-context": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "30_gh-146613_grouper-parent-key": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "control",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 44,
+       "symbol": "memset",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 792,
+       "symbol": "PyObject_RichCompare",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "31_gh-148660_odict-copy-stale-link": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "control",
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 2320,
+       "symbol": "PyUnicode_FromFormatV",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": null,
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 2320,
+       "symbol": "PyUnicode_FromFormatV",
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT",
+      "NO-READING"
+     ]
+    },
+    "32_gh-149449_unicodedata-capi-cached": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": 12,
+       "infra": null,
+       "notes": "",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    }
+   },
+   "caveat_full_lib": {
+    "cells_with_a_trimmed_reading_outside_the_full_set": [
+     "05",
+     "07",
+     "09",
+     "16",
+     "19",
+     "27",
+     "30",
+     "31"
+    ],
+    "full_runs": [
+     "lt0-full-1",
+     "lt0-full-2",
+     "lt0-full-3"
+    ]
+   },
+   "image_sha256": "0d322044b91187136b59070ba1b3bfe3371b7fca79b482488888c8d1d70f0555",
+   "runs": [
+    "lt0-trim-1",
+    "lt0-trim-2",
+    "lt0-trim-3",
+    "lt0-trim-4",
+    "lt0-trim-5"
+   ],
+   "stable_cells": 23,
+   "varying_cells": 9
+  },
+  "lt1": {
+   "arm": "virtual-nested-pools",
+   "board": "NOT for the board until collection exists: on a non-collecting module the nested pools exhaust the 65,536-record flat table (runs/modswap-lt1)",
+   "cases": {
+    "01_gh-139071_heap-overflow-in-set-dealloc-setobject": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 224,
+       "symbol": "set_dealloc",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "02_gh-140471_fix-buffer-overflow-in-ast-node": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": 30,
+       "infra": null,
+       "notes": "",
+       "offset": 260,
+       "symbol": "_PyObject_Calloc",
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "03_gh-140492_heap-buffer-overflow-in-ast-copy": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "control",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 184,
+       "symbol": "memcpy",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": null,
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 180,
+       "symbol": "__capstone_mallocng_free",
+       "verdict": "NO-READING"
+      },
+      {
+       "attribution": null,
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 184,
+       "symbol": "memcpy",
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT",
+      "NO-READING"
+     ]
+    },
+    "04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 1",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "05_gh-140497_cpython-crash-heap-buffer-overflow-python": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 1420,
+       "symbol": "_PyEval_EvalFrameDefault",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "06_gh-140551_crash-in-dict-if-hash-eq": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 1",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "MISSED"
+     ]
+    },
+    "07_gh-140594_fix-an-out-of-bounds-read": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 688,
+       "symbol": "PyOS_StdioReadline",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "08_gh-140607_heap-buffer-overflow-in-io-rawiobase": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 184,
+       "symbol": "memcpy",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "09_gh-140802_heap-buffer-overflow-in-pycore-interpframe": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 232,
+       "symbol": "_PyEvalFramePushAndInit",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "10_gh-142554_avoid-divmod-crashes-due-to-bad": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 44,
+       "symbol": "memset",
+       "verdict": "NO-READING"
+      },
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": "infra",
+       "notes": "capacity: MemoryError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "11_gh-143005_heap-buffer-overflow-in-ctypes-array": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger stopped on ModuleNotFoundError before its case",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "12_gh-143377_heap-buffer-overflow-in-format-tracebackexception": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 3636,
+       "symbol": "_PyXI_excinfo_InitFromException",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "13_gh-144169_fix-three-crashes-in-ast-objects": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": 30,
+       "infra": null,
+       "notes": "",
+       "offset": 260,
+       "symbol": "_PyObject_Calloc",
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "14_gh-144475_heap-buffer-overflow-in-functools-partial": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 376,
+       "symbol": "partial_repr",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "15_gh-148973_fix-segfault-on-mismatch-between-consts": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 6380,
+       "symbol": "_PyCfg_OptimizeCodeUnit",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "16_gh-156075_heap-buffer-overflow": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 540,
+       "symbol": "advance_with_locations",
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "17_gh-157325_fix-an-oob-read-in-the": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "control",
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 44,
+       "symbol": "memset",
+       "verdict": "CAUGHT"
+      },
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": null,
+       "notes": "the trigger ended with EXIT 0",
+       "offset": null,
+       "symbol": null,
+       "verdict": "MISSED"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "CAUGHT",
+      "MISSED"
+     ]
+    },
+    "18_gh-157335_fix-out-of-bounds-write-in": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": 28,
+       "infra": null,
+       "notes": "",
+       "offset": 180,
+       "symbol": "__capstone_mallocng_free",
+       "verdict": "NO-READING"
+      },
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": "infra",
+       "notes": "capacity: MemoryError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": false,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "19_gh-142664_fix-uaf-in-memoryview-hash-via": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": "infra",
+       "notes": "interpreter failure: SystemError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "20_gh-143308_use-after-free-in-save-picklebuffer": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 184,
+       "symbol": "memcpy",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "21_gh-146169_segfault-ub-from-expat-when-re": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 24,
+       "infra": null,
+       "notes": "",
+       "offset": 72,
+       "symbol": "little2_toUtf8",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "22_gh-139210_iterparse-event-name": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 0,
+       "symbol": "strlen",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "23_gh-142560_bytearray-search-realloc": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": "infra",
+       "notes": "capacity: MemoryError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "24_gh-142783_zoneinfo-eager-decref": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 0,
+       "symbol": "PyObject_GetAttrString",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "25_gh-142829_hamt-eq-interior-cursor": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 132,
+       "symbol": "hamt_iterator_next",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "26_gh-142831_json-encoder-list-item": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 164,
+       "symbol": "encoder_listencode_obj",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "27_gh-143004_counter-update-borrowed-value": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": 30,
+       "infra": null,
+       "notes": "",
+       "offset": 260,
+       "symbol": "_PyObject_Calloc",
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "28_gh-143543_groupby-reentrant-eq": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": "infra",
+       "notes": "capacity: MemoryError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "29_gh-146011_decimal-signaldict-outlives-context": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 188,
+       "symbol": "signaldict_repr",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    },
+    "30_gh-146613_grouper-parent-key": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": "infra",
+       "notes": "capacity: MemoryError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "31_gh-148660_odict-copy-stale-link": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": null,
+       "cause": null,
+       "infra": "infra",
+       "notes": "capacity: MemoryError",
+       "offset": null,
+       "symbol": null,
+       "verdict": "NO-READING"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "NO-READING"
+     ]
+    },
+    "32_gh-149449_unicodedata-capi-cached": {
+     "n": 5,
+     "signatures": [
+      {
+       "attribution": "function",
+       "cause": 25,
+       "infra": null,
+       "notes": "",
+       "offset": 568,
+       "symbol": "PyCodec_NameReplaceErrors",
+       "verdict": "CAUGHT"
+      }
+     ],
+     "stable": true,
+     "verdicts": [
+      "CAUGHT"
+     ]
+    }
+   },
+   "caveat_full_lib": {
+    "cells_with_a_trimmed_reading_outside_the_full_set": [
+     "03",
+     "10",
+     "17",
+     "18",
+     "28",
+     "30"
+    ],
+    "full_runs": [
+     "lt1-full-1",
+     "lt1-full-2",
+     "lt1-full-3"
+    ]
+   },
+   "image_sha256": "1034e6d3715e5355be17655bb5810dc8d80c48dfee5437838d50b36b633f92d3",
+   "runs": [
+    "lt1-trim-1",
+    "lt1-trim-2",
+    "lt1-trim-3",
+    "lt1-trim-4",
+    "lt1-trim-5"
+   ],
+   "stable_cells": 28,
+   "varying_cells": 4
+  }
+ },
+ "kit": "qkit7-norand (qkit7: capstone-qemu b290f5656600, module 5bfc38f808e1effd, svadu=false; + norandmaps)",
+ "pin": {
+  "guest_env": "PYTHONHASHSEED=0",
+  "kernel_cmdline": "norandmaps"
+ },
+ "runner": "e309263adc94"
+}

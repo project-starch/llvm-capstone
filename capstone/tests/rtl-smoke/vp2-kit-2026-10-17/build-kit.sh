@@ -46,7 +46,8 @@ main() {
   log "compiler: $($CAPSTONE_CLANG --version | head -1)"
   local musl; musl=$(bash $S/capstone/ports/musl-capstone/prepare-musl-capstone.sh 2> $O/musl.log | tail -1)
   [ -d "$musl" ] || { log "FAIL-MUSL (musl.log)"; return 1; }
-  nice -n 10 bash $S/capstone/runtime/virtual/build-sdk.sh $O/out "$musl" > $O/sdk.log 2>&1 || { log "FAIL-SDK (sdk.log)"; return 1; }
+  # A kit SDK: build-sdk.sh's corpus gate appends and verifies -fno-builtin (C-81).
+  CAPSTONE_SDK_CORPUS=1 nice -n 10 bash $S/capstone/runtime/virtual/build-sdk.sh $O/out "$musl" > $O/sdk.log 2>&1 || { log "FAIL-SDK (sdk.log)"; return 1; }
   log "SDK-DONE"
   local FLAT=""
   case "${KIT_FLAT:-}" in 1) FLAT=-DCAPSTONE_VM_FLAT_TABLE=1 ;; "") ;; *) log "FAIL KIT_FLAT must be 1 or unset"; return 1 ;; esac

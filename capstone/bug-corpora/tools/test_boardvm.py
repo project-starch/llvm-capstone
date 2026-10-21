@@ -4,6 +4,7 @@ the stub mode reads ONLY the batch rung's own segment: a replayed previous boot'
 another rung's output never reach split(), and a rung without its END marker reads as not completed. A kit's module
 parameters are set, read back from that segment and recorded, and a run without their read-back is refused."""
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -12,6 +13,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import boardvm  # noqa: E402
+import virtualvm  # noqa: E402
 
 
 def kit(root):
@@ -105,6 +107,60 @@ def params_checks(root, body):
     return checks
 
 
+def bound_checks(root):
+    """A bounded step under busybox ash (the board's shell): killed at its bound, read as a timeout; the steps around it
+    read as before; the heartbeat carries the step's output size. The module lines are cut, as no module loads here."""
+    ash = shutil.which("busybox")
+    if not ash:
+        return [("bounded steps: NO DATA, no busybox on this host (never a pass)", False)]
+    b = boardvm.BoardBatch(Path(root) / "bstage")
+    # Exits 137 without reaching its bound (as an OOM kill would): the planted stale capture must not print for it.
+    b.step("selfkill", "sh -c 'kill -9 $$'")
+    b.step("fast", "echo hi; exit 3")
+    # /bin/sleep, a separate process: busybox runs its own sleep inside the subshell, and the capture must walk to
+    # the step's descendants (the board's launcher is one).
+    b.step("slow", "echo started; /bin/sleep 15; echo never")
+    b.step("after", "echo after")
+    b.bounds = {"slow": 1, "fast": 30, "selfkill": 30}
+    b.params, b.step_mult = [], 1
+    script = b.script()
+    body = "\n".join(l for l in script.splitlines()
+                     if not l.startswith(("cd /test-domains", "dmesg", "grep -q", "chmod", "echo \"@@MODTEXT", "rmmod")))
+    body = body.replace("sleep 30;", "sleep 1;")
+    # A stale capture from an earlier step or run must never print (negative control for the rm before each step).
+    Path("/tmp/stall.out").write_text("STALE capture\n")
+    out = subprocess.run([ash, "sh", "-c", body], capture_output=True, text=True, timeout=60, cwd=root).stdout
+    steps = virtualvm.split(out)
+    plain = boardvm.BoardBatch(Path(root) / "pstage")
+    plain.step("x", "true")
+    plain.params = []
+    return [("bounded steps: the bounded step runs in the background under its watcher",
+             "& sp=$!" in script and "kill -9 $sp" in script),
+            ("an unbounded step keeps the foreground form", "( true ) > /tmp/step.out 2>&1\nrc=$?" in plain.script()),
+            ("bounded: a step that ends before its bound reads its exit", steps.get("fast", ("", {}))[1] == {"kind": "exit", "value": 3}),
+            ("bounded: a step past its bound reads as a timeout, not signal 9",
+             steps.get("slow", ("", {}))[1] == {"kind": "none"} and "[runner] TIMEOUT" in steps["slow"][0]
+             and "@@STEP-BOUND slow 1" in out and "never" not in steps["slow"][0]),
+            ("bounded: the step after it reads", steps.get("after", ("", {}))[1] == {"kind": "exit", "value": 0}),
+            ("the heartbeat carries the step's output size", "@@HB 1 out=" in out and "B/" in out),
+            ("after a kill at the bound the kernel-log lines are asked for, after END (outside the step's text)",
+             "dmesg | grep -a capstone_vm" in script
+             and script.index("@@STEP-END slow") < script.index("@@DMESG slow")
+             and "@@DMESG" not in steps.get("slow", ("", {}))[0]),
+            ("at the bound the step's process tree is sampled twice before the kill, printed after END as @@STALL",
+             re.search(r"^@@STALL slow proc 1 \d+ sleep state=S ppid=\d+ utime=\d+ stime=\d+ wchan=\S+ ", out, re.M) is not None
+             and "can't create" not in out
+             and re.search(r"^@@STALL slow proc 2 \d+ sleep ", out, re.M) is not None
+             and "@@STALL slow mod 2 " in out
+             and out.index("@@STEP-END slow") < out.index("@@STALL slow")
+             and "@@STALL" not in steps.get("slow", ("", {}))[0]),
+            ("a capture whose escape switch cannot be set says so (no module on this host)",
+             "@@STALL slow escapes UNSET" in out),
+            ("no @@STALL for a step that ended before its bound, and a stale capture never prints",
+             "@@STALL fast" not in out and "@@STALL after" not in out and "STALE" not in out
+             and "@@STEP-END selfkill 137" in out)]
+
+
 def main():
     global kit_dir
     bad = 0
@@ -122,6 +178,13 @@ def main():
                   ("the controller parses as sh",
                    subprocess.run(["sh", "-n"], input=b.controller(), text=True).returncode == 0),
                   ("the gate cds into /test-domains/vbatch", "cd /test-domains/vbatch || exit 1" in b.script()),
+                  ("the module's .text base is printed once, after insmod",
+                   b.script().count(boardvm.MODTEXT_LINE) == 1
+                   and b.script().index("insmod capstone_vm.ko") < b.script().index(boardvm.MODTEXT_LINE)),
+                  ("the base line prints ABSENT where the module is not loaded (this host)",
+                   "capstone_vm" in open("/proc/modules").read()
+                   or subprocess.run(["sh", "-c", boardvm.MODTEXT_LINE], capture_output=True, text=True).stdout
+                   == "@@MODTEXT ABSENT\n"),
                   ("put() returns the board path", b.put("x", text="y") == "/test-domains/vbatch/x"),
                   ("the replayed boot's markers are NOT read -- two start markers make the segment unreadable",
                    steps == {} and done is False)]
@@ -139,6 +202,28 @@ def main():
         checks += [("a rung without END is not completed", done is False),
                    ("the step that began and never ended reads kind none",
                     steps.get("01_case-buggy", ("", {}))[1].get("kind") == "none")]
+        # A step whose output has no final newline: the END echo follows `cat /tmp/step.out` on the same line (mruby's
+        # smoke printing "(unknown):0: " and dying, 2026-10-21). The step must close there, and the next step must read.
+        midline = body.replace("CONTROL clean RETURNED\n@@STEP-END", "(unknown):0: @@STEP-END").replace(
+            "@@STEP-END control-clean 0", "@@STEP-END control-clean 1")
+        _, (steps, _, done) = run(seg(1, 2, "b0-stats", "RESULT b0-stats retval=0") + seg(2, 2, "vbatch", midline), root)
+        checks += [("an END marker mid-line closes its step (output with no final newline)",
+                    steps.get("control-clean", ("", {}))[1] == {"kind": "exit", "value": 1}),
+                   ("and the step after it still reads",
+                    steps.get("01_case-buggy", ("", {}))[1].get("kind") == "signal"
+                    and "cause=25" in steps["01_case-buggy"][1].get("fault", "")),
+                   ("and the earlier step's text does not carry the later step's fault",
+                    "cause=25" not in steps.get("control-clean", ("", {}))[0])]
+        # An exit status above 128+NSIG is an exit, not a signal: perl's panic exits 255 (2026-10-21).
+        exit255 = body.replace("@@STEP-END control-clean 0", "@@STEP-END control-clean 255")
+        _, (steps, _, done) = run(seg(1, 2, "b0-stats", "RESULT b0-stats retval=0") + seg(2, 2, "vbatch", exit255), root)
+        checks += [("rc 255 reads exit 255, not signal 127",
+                    steps.get("control-clean", ("", {}))[1] == {"kind": "exit", "value": 255}),
+                   ("rc 139 still reads signal 11",
+                    steps.get("01_case-buggy", ("", {}))[1] == {"kind": "signal", "value": 11,
+                                                                 "fault": steps["01_case-buggy"][1].get("fault")}
+                    and steps["01_case-buggy"][1].get("fault"))]
+        checks += bound_checks(root)
         p = boardvm.platform(kit_dir, None, Path(__file__))
         checks += [("the qemu key names the board", p["qemu"] == "board:caplifive_vp2_bf3db3175"),
                    ("the monitor is recorded", p["monitor"] == "007d81d")]

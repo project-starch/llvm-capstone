@@ -23,7 +23,9 @@
     "virtual-nested-pools",
     "silicon-level0",
     "silicon-carve-bounds",
-    "silicon-carve-sublet"
+    "silicon-carve-sublet",
+    "vp2-malloc",
+    "vp2-nested-pools"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -64,13 +66,17 @@
     "virtual-nested-pools": "virtual-ffmpeg-carve",
     "silicon-level0": "silicon-ffmpeg-carve-level0",
     "silicon-carve-bounds": "silicon-ffmpeg-carve-bounds",
-    "silicon-carve-sublet": "silicon-ffmpeg-carve-sublet"
+    "silicon-carve-sublet": "silicon-ffmpeg-carve-sublet",
+    "vp2-malloc": "virtual-mallocng",
+    "vp2-nested-pools": "virtual-ffmpeg-carve"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-10-virtual/virtual-malloc",
     "virtual-nested-pools": "results/2026-10-10-virtual/virtual-nested-pools",
     "silicon-level0": "results/2026-10-16-silicon/silicon-level0",
     "silicon-carve-bounds": "results/2026-10-16-silicon/silicon-carve-bounds",
-    "silicon-carve-sublet": "results/2026-10-16-silicon/silicon-carve-sublet"
+    "silicon-carve-sublet": "results/2026-10-16-silicon/silicon-carve-sublet",
+    "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+    "vp2-nested-pools": "results/2026-10-18-vp2-rdx0/vp2-nested-pools"
   }
 }

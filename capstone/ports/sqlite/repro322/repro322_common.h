@@ -64,7 +64,18 @@ static int run_case(void);
 #define SQLITE_HEAP_SIZE (1024U * 1024U)
 #endif
 #ifdef REPRO322_VIRTUAL_MEMSYS5
-static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+/* The granule macros below are the freestanding branch's too, which includes this header at its
+ * own top; this branch needs it as well, and build-virtual.py passes the runtime include for both
+ * arms. Without it the first use expands to an undeclared call and the case does not compile. */
+#include <capstone/representable.h>
+/* Option (iii): memsys5 derives mem5.pHeap and mem5.zPool over the WHOLE arena, so the arena's
+ * own base must be a multiple of its bounds granule -- 2048 for 1 MiB, 512 for 256 KiB -- or the
+ * compressed encoder truncates it downward and the pool gains authority below itself. aligned(16)
+ * was enough when QEMU kept exact shadow bounds; it is not under the compact profile. */
+CAPSTONE_REPR_ASSERT_POW2(SQLITE_HEAP_SIZE, "SQLITE_HEAP_SIZE");
+static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]
+    __attribute__((aligned(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
+                           ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE))));
 #endif
 
 static int repro_init(void) {
@@ -115,6 +126,19 @@ static int repro_init(void) {
   return 0;
 }
 
+/* Q-15 (option iii) on the Sublet arm: the patch rounds each child's length up to its bounds granule (tail
+ * pad only) and counts it. The line follows a completed case only; a case that faults never prints it. */
+#ifdef REPRO322_VIRTUAL_SUBLET
+void sqlite3CapstoneQ15Pad(unsigned long *aOut);
+#define REPRO322_Q15_REPORT() do { unsigned long q15_[4];                         \
+    sqlite3CapstoneQ15Pad(q15_);                                                    \
+    printf("Q15_PAD items=%lu padded=%lu pad_bytes_total=%lu pad_bytes_max=%lu\n", \
+           q15_[0], q15_[1], q15_[2], q15_[3]); } while (0)
+#else
+/* Empty, not do {} while (0): at -O0 that emits branches, and the other arms' images must not change. */
+#define REPRO322_Q15_REPORT()
+#endif
+
 /* The tag on the command line is the fixture check the contract asks for: a
  * program told to run another case refuses instead of running this one and
  * reporting under the wrong name. BEGIN is printed before anything else, so
@@ -131,6 +155,7 @@ static int repro_init(void) {
     }                                                                    \
     printf("%s BEGIN\n", (TAG));                                         \
     (void)run_case();                                                    \
+    REPRO322_Q15_REPORT();                                               \
     printf("%s RETURNED\n", (TAG));                                      \
     return 0;                                                            \
   }
@@ -143,12 +168,20 @@ static int repro_init(void) {
 #include "sqlite3.h"
 #include "sqlite_hostcall.h"
 
+#include <capstone/representable.h>
 #define CAPSTONE_DPI_REGION_SHARE 1U
 
 #ifndef SQLITE_HEAP_SIZE
 #define SQLITE_HEAP_SIZE (1024U * 1024U)
 #endif
-static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+/* Option (iii): memsys5 derives mem5.pHeap and mem5.zPool over the WHOLE arena, so the arena's
+ * own base must be a multiple of its bounds granule -- 2048 for 1 MiB, 512 for 256 KiB -- or the
+ * compressed encoder truncates it downward and the pool gains authority below itself. aligned(16)
+ * was enough when QEMU kept exact shadow bounds; it is not under the compact profile. */
+CAPSTONE_REPR_ASSERT_POW2(SQLITE_HEAP_SIZE, "SQLITE_HEAP_SIZE");
+static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]
+    __attribute__((aligned(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
+                           ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE))));
 
 
 static volatile struct sqlite_hostcall_v0 *hostcall_metadata;

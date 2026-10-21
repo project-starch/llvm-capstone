@@ -49,6 +49,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
@@ -128,8 +129,13 @@ def session(args, sql_text_or_path, name, raw):
         staged = args.batch.put(f"sql/{name}.sql", sql)
         # The root is /mnt/vm on QEMU and /test-domains/vbatch on the board. The board bake recreates the cluster's
         # directories 0775, and postgres refuses a data directory with group or other write access, hence the chmod.
+        # The board bake stages FILES only, so the cluster's empty directories (pg_notify, pg_serial, pg_snapshots, ...)
+        # never reach the board, and postgres stops at startup: "could not open directory "pg_notify"" in all 21
+        # sessions of sql0-drt (2026-10-19). Each session recreates them after its copy; on QEMU, whose mount carries
+        # them, the mkdir -p is a no-op.
         root = posixpath.dirname(args.cluster_guest)
-        args.batch.step(name, f"rm -rf /tmp/pgd && cp -a {args.cluster_guest} /tmp/pgd && chown -R nobody /tmp/pgd && chmod 700 /tmp/pgd "
+        mk = "".join(f" && mkdir -p /tmp/pgd/{d}" for d in getattr(args, "cluster_empty_dirs", []))
+        args.batch.step(name, f"rm -rf /tmp/pgd && cp -a {args.cluster_guest} /tmp/pgd{mk} && chown -R nobody /tmp/pgd && chmod 700 /tmp/pgd "
                         f"&& su nobody -s /bin/sh -c 'cd {root}; ./capstone-vexec ./bin/postgres "
                         f"{PG_ARGS.format(data='/tmp/pgd')} < {staged}'; rc=$?; rm -rf /tmp/pgd; exit $rc")
         return "", {"kind": "none"}
@@ -399,6 +405,7 @@ def main():
     parser.add_argument("--raw", type=Path, help="console logs, SQL and the virtual stage; never inside the bundle")
     parser.add_argument("--only", help="comma-separated case numbers")
     args = parser.parse_args()
+    sdk_builtins.gate([args.image], who="postgres:run-arm.py")
     args.batch, args.replay, args.runs = None, False, {}
 
     decl = json.loads((CORPUS / "corpus.json").read_text())
@@ -435,6 +442,8 @@ def main():
             for source in sorted(args.extensions.iterdir()):
                 args.batch.put(f"share/extension/{source.name}", source)
         args.cluster_guest = args.batch.put("pgcluster", args.fixture)   # the guest path each session copies
+        args.cluster_empty_dirs = sorted(p.relative_to(args.fixture).as_posix() for p in args.fixture.rglob("*")
+                                         if p.is_dir() and not any(p.iterdir()))
         measure(args, spec, raw, preinstalled, symbols)            # plan every session
         args.runs, serial, completed = args.batch.execute(
             kit, raw / "guest", timeout=600 + 300 * len(args.batch.steps))
@@ -469,7 +478,8 @@ def fixture_record(fixture, preinstalled):
     writes that beside the fixture as <fixture>.provenance.json, so it is carried here when it
     exists and its absence is recorded rather than passed over.
     """
-    record = {"cluster_tree_sha256": tree_sha(fixture), "preinstalled": sorted(preinstalled)}
+    record = {"cluster_tree_sha256": tree_sha(fixture), "cluster_stable_tree_sha256": stable_tree_sha(fixture),
+              "preinstalled": sorted(preinstalled)}
     # make-fixture.py writes <fixture>.provenance.json. A fixture built before it did leaves only
     # its run record, <fixture>.json, which carries the builder image's sha256 under image_sha256
     # -- the same fact under another name. Either is taken, and the record says which file it came
@@ -496,6 +506,30 @@ def fixture_record(fixture, preinstalled):
                                  "run record, so which image created its extensions is not "
                                  "recorded in this run")
     return record
+
+
+# The files PostgreSQL stamps with the time (pg_control, pgstat.stat, the WAL checkpoint record): two otherwise identical
+# clusters differ in them, so a REBUILT fixture never matches cluster_tree_sha256. The stable hash leaves them out and is
+# computed exactly as ports/postgres/app/build-native16-fixture.py's cluster_stable_tree_sha256, so a bundle's value can be
+# compared with the builder manifest's directly.
+TIME_BEARING = ("global/pg_control", "pg_stat/", "pg_wal/0")
+
+
+def stable_tree_sha(root):
+    import hashlib
+    h = hashlib.sha256()
+    root = Path(root)
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if path.is_file() and relative.startswith(TIME_BEARING):
+            continue
+        if path.is_dir():
+            h.update(b"d\0" + relative.encode() + b"\0")
+        elif path.is_file() and not path.is_symlink():
+            h.update(b"f\0" + relative.encode() + b"\0" + hashlib.sha256(path.read_bytes()).hexdigest().encode() + b"\0")
+        else:
+            raise ValueError(f"nonregular cluster entry: {path}")
+    return h.hexdigest()
 
 
 def tree_sha(root):
