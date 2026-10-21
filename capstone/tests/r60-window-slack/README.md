@@ -17,6 +17,10 @@ Recorded on capstone-qemu 02f03540d7 (csrunv-root-r59-r60), 2026-10-20:
   fire, and the windows are finite, as expected. run.sh exits 2 if the control does not fire.
 
 **What it does not measure.** This is QEMU's model of the window, not the RTL's. That the board agrees rests on QEMU
-and the RTL decoding compressed bounds identically, which this harness does not test. A window or decode difference
-on silicon would need its own QEMU-vs-RTL enumeration at the window edges before this result could be carried over.
+and the RTL decoding compressed bounds identically, which this harness does not test. That enumeration exists
+separately: capstone-qemu's `tests/capstone-codec/run-r60.sh` (3aab7fa7dd, on its R-60 lane branches, not yet on
+`virtual-capstone`) runs QEMU's `capstone_cursor_representable()` against capstone-ariane's
+`verif/tests/custom/capstone/bounds-model.py` at both edges of the decode window over a range of exponents, and exits
+0 only with both outcomes present and no mismatch. It is the check to run against the bitstream tree before carrying
+this result over.
 It is also a random sample, not an exhaustive enumeration.
