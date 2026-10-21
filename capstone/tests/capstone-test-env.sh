@@ -92,6 +92,42 @@ capstone_with_qemu_lock() {
   fi
 }
 
+# QEMU lock DOMAINS (2026-10-21): the global lock above is a reader-writer lock. A SNAPSHOT-class session -- run-staged.py
+# or run.py in capstone/runtime/virtual, and everything behind bug-corpora/tools/virtualvm.Batch: rootfs under -snapshot,
+# a private read-only stage disk, no network -- may run in a domain: it takes the global lock SHARED and the domain's
+# lock EXCLUSIVE (runtime/virtual/qemu_lock.py), so the two domains run in parallel on their own CPUs. Everything else
+# keeps taking the global lock EXCLUSIVE, exactly as before, and so waits for, and excludes, every domain session:
+# utils/run-qemu.sh (above all with CAPSTONE_ROOTFS_WRITABLE=1), the runtime-qemu smoke and authority suites (one shared
+# 9p directory), capstone_vm persistent VMs, and any caller not written for domains.
+#   capstone_qemu_domain A|B      export the domain's lock and CPU set (CAPSTONE_QEMU_DOMAIN_LOCK, _CPUS)
+#   capstone_with_qemu_domain A|B cmd...   run cmd in that domain, pinned to its CPUs
+# The CPU sets are small and dedicated (a TCG guest is one hart): keep builds and simulations off them, so a timing check
+# in the guest is not measuring a compile. A TURNSTILE ($CAPSTONE_QEMU_LOCK.turnstile) stops an exclusive caller from
+# starving behind back-to-back domain sessions (Linux flock has no writer preference): both kinds pass it on the way in,
+# and an exclusive caller waits for the global lock WHILE holding it, so no new domain session starts meanwhile.
+#   capstone_with_exclusive_qemu cmd...    the exclusive sequence, for the shell-level exclusive classes above
+# capstone_vm/cli.py takes the global lock exclusive WITHOUT the turnstile: still correct, not starvation-proof.
+capstone_qemu_domain() {
+  case "${1:-}" in
+    A) CAPSTONE_QEMU_DOMAIN_CPUS=28-29,60-61 ;;
+    B) CAPSTONE_QEMU_DOMAIN_CPUS=30-31,62-63 ;;
+    *) echo "capstone_qemu_domain: A or B, not '${1:-}'" >&2; return 2 ;;
+  esac
+  export CAPSTONE_QEMU_DOMAIN_LOCK="$(dirname -- "$CAPSTONE_QEMU_LOCK")/qemu-domain-$1.lock" CAPSTONE_QEMU_DOMAIN_CPUS
+}
+capstone_with_exclusive_qemu() {
+  if [ "${CAPSTONE_QEMU_LOCK_HELD:-0}" = 1 ]; then "$@"; return; fi
+  ( exec 8>>"$CAPSTONE_QEMU_LOCK.turnstile" 9>>"$CAPSTONE_QEMU_LOCK"
+    flock -x -w "${CAPSTONE_QEMU_LOCK_WAIT:-3600}" 8 || exit 75
+    flock -x -w "${CAPSTONE_QEMU_LOCK_WAIT:-3600}" 9 || exit 75
+    flock -u 8; exec 8>&-
+    CAPSTONE_QEMU_LOCK_HELD=1 exec "$@" )
+}
+capstone_with_qemu_domain() {
+  local d="${1:-}"; shift || true
+  ( capstone_qemu_domain "$d" || exit 2; exec taskset -c "$CAPSTONE_QEMU_DOMAIN_CPUS" "$@" )
+}
+
 # Is the toolchain BINARY as new as the compiler SOURCE? Once per process tree (the export
 # stops nested scripts repeating the 0.5 s ninja dry run). A stale build dir is a WARNING here,
 # not a failure -- sourcing must keep working -- but every producer script inherits the warning

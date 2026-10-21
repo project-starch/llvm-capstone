@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 import time
+from qemu_lock import qemu_lock
 
 HERE = Path(__file__).resolve().parent
 
@@ -200,8 +201,7 @@ def main():
     if cpu_extra:
         cmd[-1] += ',' + cpu_extra.lstrip(',')
     print(f'run.py: -cpu {cmd[-1]}', flush=True)
-    with open(os.environ['CAPSTONE_QEMU_LOCK'], 'a+b') as lock, (work/'serial.log').open('wb') as log:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with qemu_lock(), (work/'serial.log').open('wb') as log:
         guest = subprocess.Popen(cmd, env=dict(os.environ, TMPDIR=str(work)), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
         out = b''; login = sent = False

@@ -7,6 +7,7 @@ from pathlib import Path
 import select
 import subprocess
 import time
+from qemu_lock import qemu_lock
 
 
 def main():
@@ -55,8 +56,7 @@ def main():
     print(f"run-staged: -cpu {cmd[-1]}", flush=True)
     completed = login = sent = False
     out = b''
-    with open(os.environ['CAPSTONE_QEMU_LOCK'], 'a+b') as lock, (a.work/'serial.log').open('wb') as log:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    with qemu_lock(), (a.work/'serial.log').open('wb') as log:
         guest_env = dict(os.environ, TMPDIR=str(a.work.resolve()))
         guest = subprocess.Popen(cmd, env=guest_env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                  stderr=subprocess.STDOUT, bufsize=0)
