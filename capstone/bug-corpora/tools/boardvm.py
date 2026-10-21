@@ -123,6 +123,25 @@ def rung_segment(transcript, rung=RUNG):
 # the module's .text base, printed once after insmod (script())
 MODTEXT_LINE = 'echo "@@MODTEXT $(cat /sys/module/capstone_vm/sections/.text 2>/dev/null || echo ABSENT)"'
 
+# What a step looks like at its bound, taken BEFORE the kill (script()): a killed step otherwise reads as one bit. For the
+# step's process and every descendant, twice, 5 s apart: /proc stat state, utime and stime (spinning or sleeping, and on
+# which side), wchan and the syscall number; the module's resume counters; and, between the two samples, the module's
+# own escape trace switched on for 5 s (diag_escapes: kind, cause, pc and tval of each escape, read from dmesg after
+# END). Its print budget (16) is per module load, so only a boot's FIRST bounded step gets escape lines. Written to
+# /tmp/stall.out, removed before every bounded step, and printed after END as @@STALL, outside every step's text.
+STALL_FN = (
+    "stall() { S=/sys/module/capstone_vm/parameters; pids=$1; "
+    "for r in 1 2 3 4; do for f in /proc/[0-9]*/stat; do read -r l < $f 2>/dev/null || continue; "
+    "p=${f#/proc/}; p=${p%/stat}; set -- ${l##*) }; case \" $pids \" in *\" $p \"*) ;; "
+    "*) case \" $pids \" in *\" $2 \"*) pids=\"$pids $p\";; esac;; esac; done; done; "
+    "for k in 1 2; do for p in $pids; do read -r l < /proc/$p/stat 2>/dev/null || continue; set -- ${l##*) }; "
+    "echo \"proc $k $p $(cat /proc/$p/comm 2>/dev/null) state=$1 ppid=$2 utime=${12} stime=${13} "
+    "wchan=$(cat /proc/$p/wchan 2>/dev/null) syscall=$(cut -d' ' -f1 /proc/$p/syscall 2>/dev/null)\"; done; "
+    "echo \"mod $k sfences=$(cat $S/resume_sfences 2>/dev/null) satp=$(cat $S/resume_satp_refreshes 2>/dev/null)/"
+    "$(cat $S/resume_satp_changed 2>/dev/null) busy=$(cat $S/busy_frame_refusals 2>/dev/null)\"; "
+    "if [ $k = 1 ]; then [ -w $S/diag_escapes ] && echo 1 > $S/diag_escapes && echo 'escapes on' || echo 'escapes UNSET'; "
+    "sleep 5; [ -w $S/diag_escapes ] && echo 0 > $S/diag_escapes; fi; done; }")
+
 
 class BoardBatch(virtualvm.Batch):
     """put() and step() as virtualvm.Batch; put() returns the guest path under /test-domains/<BATCH>/.
@@ -151,7 +170,7 @@ class BoardBatch(virtualvm.Batch):
         lines = ["#!/bin/sh", f"cd /test-domains/{BATCH} || exit 1", "dmesg -n 1",
                  'grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }',
                  "chmod 666 /dev/capstone-vm",
-                 MODTEXT_LINE,
+                 MODTEXT_LINE, STALL_FN,
                  "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + virtualvm.param_lines(self.params) + [
                  # The heartbeat carries the running step's output size, bytes and lines: a step's output is printed only
                  # when it ends, so without it a step that runs for hours shows nothing of where it is (mruby's smoke,
@@ -166,14 +185,18 @@ class BoardBatch(virtualvm.Batch):
                 # bound and says so (@@STEP-BOUND, which split() reads as a timeout). The step runs in the background,
                 # so its stdin is /dev/null.
                 b = int(bound * mult)
-                lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1 & sp=$!",
-                          f"( sleep {b}; kill -9 $sp 2>/dev/null && echo '{virtualvm.BOUND}{name} {b}' ) & wp=$!",
+                lines += ["rm -f /tmp/stall.out", f"echo '{virtualvm.BEGIN}{name}'",
+                          f"( {command} ) > /tmp/step.out 2>&1 & sp=$!",
+                          f"( sleep {b}; stall $sp > /tmp/stall.out 2>&1; "
+                          f"kill -9 $sp 2>/dev/null && echo '{virtualvm.BOUND}{name} {b}' ) & wp=$!",
                           "wait $sp; rc=$?", "kill $wp 2>/dev/null",
                           "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\"",
-                          # After a kill at the bound, the module's last kernel lines (KERN_INFO, hidden on the board
-                          # console at printk 1: "collect skipped ... available 511" is one). Printed after END, so
+                          # After a kill at the bound: what the step looked like before the kill (STALL_FN), then the
+                          # module's last kernel lines (KERN_INFO, hidden on the board console at printk 1: "collect
+                          # skipped ... available 511" is one, and the escape trace another). Printed after END, so
                           # they are outside every step's text.
-                          f"[ $rc = 137 ] && dmesg | grep -a capstone_vm | tail -n 12 | sed 's/^/@@DMESG {name} /'"]
+                          f"[ $rc = 137 ] && {{ sed 's/^/@@STALL {name} /' /tmp/stall.out 2>/dev/null; "
+                          f"dmesg | grep -a capstone_vm | tail -n 30 | sed 's/^/@@DMESG {name} /'; }}"]
             else:
                 lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
                           "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\""]

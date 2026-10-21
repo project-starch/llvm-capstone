@@ -4,6 +4,7 @@ the stub mode reads ONLY the batch rung's own segment: a replayed previous boot'
 another rung's output never reach split(), and a rung without its END marker reads as not completed. A kit's module
 parameters are set, read back from that segment and recorded, and a run without their read-back is refused."""
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -113,15 +114,21 @@ def bound_checks(root):
     if not ash:
         return [("bounded steps: NO DATA, no busybox on this host (never a pass)", False)]
     b = boardvm.BoardBatch(Path(root) / "bstage")
+    # Exits 137 without reaching its bound (as an OOM kill would): the planted stale capture must not print for it.
+    b.step("selfkill", "sh -c 'kill -9 $$'")
     b.step("fast", "echo hi; exit 3")
-    b.step("slow", "echo started; sleep 6; echo never")
+    # /bin/sleep, a separate process: busybox runs its own sleep inside the subshell, and the capture must walk to
+    # the step's descendants (the board's launcher is one).
+    b.step("slow", "echo started; /bin/sleep 15; echo never")
     b.step("after", "echo after")
-    b.bounds = {"slow": 1, "fast": 30}
+    b.bounds = {"slow": 1, "fast": 30, "selfkill": 30}
     b.params, b.step_mult = [], 1
     script = b.script()
     body = "\n".join(l for l in script.splitlines()
                      if not l.startswith(("cd /test-domains", "dmesg", "grep -q", "chmod", "echo \"@@MODTEXT", "rmmod")))
     body = body.replace("sleep 30;", "sleep 1;")
+    # A stale capture from an earlier step or run must never print (negative control for the rm before each step).
+    Path("/tmp/stall.out").write_text("STALE capture\n")
     out = subprocess.run([ash, "sh", "-c", body], capture_output=True, text=True, timeout=60, cwd=root).stdout
     steps = virtualvm.split(out)
     plain = boardvm.BoardBatch(Path(root) / "pstage")
@@ -139,7 +146,19 @@ def bound_checks(root):
             ("after a kill at the bound the kernel-log lines are asked for, after END (outside the step's text)",
              "dmesg | grep -a capstone_vm" in script
              and script.index("@@STEP-END slow") < script.index("@@DMESG slow")
-             and "@@DMESG" not in steps.get("slow", ("", {}))[0])]
+             and "@@DMESG" not in steps.get("slow", ("", {}))[0]),
+            ("at the bound the step's process tree is sampled twice before the kill, printed after END as @@STALL",
+             re.search(r"^@@STALL slow proc 1 \d+ sleep state=S ppid=\d+ utime=\d+ stime=\d+ wchan=\S+ ", out, re.M) is not None
+             and "can't create" not in out
+             and re.search(r"^@@STALL slow proc 2 \d+ sleep ", out, re.M) is not None
+             and "@@STALL slow mod 2 " in out
+             and out.index("@@STEP-END slow") < out.index("@@STALL slow")
+             and "@@STALL" not in steps.get("slow", ("", {}))[0]),
+            ("a capture whose escape switch cannot be set says so (no module on this host)",
+             "@@STALL slow escapes UNSET" in out),
+            ("no @@STALL for a step that ended before its bound, and a stale capture never prints",
+             "@@STALL fast" not in out and "@@STALL after" not in out and "STALE" not in out
+             and "@@STEP-END selfkill 137" in out)]
 
 
 def main():
