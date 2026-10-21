@@ -73,7 +73,8 @@ def main():
     measured = sorted({n for n, w in origin.items() if w.startswith("measured")})
     (a.out.parent / (a.out.name + ".json")).write_text(json.dumps({
         "closure_sha256": hashlib.sha256(a.out.read_bytes()).hexdigest(), "files": len(files), "raw_bytes": raw,
-        "gzip_bytes_per_file_sum": gz, "requires": [str(r) for r in a.requires], "tool": hashlib.sha256(
+        "gzip_bytes_per_file_sum": gz, "requires": [{"path": re.sub(r"^/mnt/hdd/[^/]+/", "<mnt-hdd>/", str(r.resolve())),
+                      "sha256": hashlib.sha256(r.read_bytes()).hexdigest()} for r in a.requires], "tool": hashlib.sha256(
             HERE.read_bytes()).hexdigest(), "origin": origin, "dropped": dropped, "measured_first": measured},
         indent=1) + "\n")
     print(f"closure {len(files)} files, {raw} B raw, ~{gz} B gzipped; {len(measured)} first seen by measurement; "
