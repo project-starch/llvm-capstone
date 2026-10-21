@@ -1,0 +1,6 @@
+s23-bare-b1 (2026-10-21 22:54-22:55, board 1, tree A caplifive_vp2c_8522d72fe; pre-registered 48405d2abdd5, amended 459326296d2b; image sha256 bcefd969e128113f... from 7ae1d8491466, board_rec 0x80004040)
+runner: wt-gate sup-bare-2026-10-03-ladder/run_sup_bare.py; booking 92 unbooked
+UART: SUPTEST BEGIN, SB1, SR 0x19 (25), SUPTEST END
+SV: 0x80800000 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x5 0x8 0x55
+equal to tree B's reading and to PREREG 7ae1d8491466's pre-batch vector in all 25 values
+s23-grade.py: AS EXPECTED (pre), re-arm all 0, total 8

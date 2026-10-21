@@ -6105,6 +6105,29 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
     traces without it.
   - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
 
+### The RTL lane's s23-cpmp-rearm as a bare boot on both trees, the baseline before the batch, pre-registered (2026-10-21 21:5x, before either boot)
+
+- **What runs:** `tier3-s23-bare.sh <board> <out> pre`, a bare M-mode JTAG boot (no monitor, no Linux) of the RTL
+  lane's image `images/s23-cpmp-rearm.bin` at dev 0c215bf0983f (capstone/tests/rtl-smoke/s23-bare-2026-10-21/).
+  - The image is cited by sha256 bcefd969e128113f0c58e18571023f1269efce816d0587a85e987577b9e3c0fe; board_rec 0x80004040.
+  - The runner is `sup-bare-2026-10-03-ladder/run_sup_bare.py` from each kit's own driver tree, with the kit's
+    board, URL file and resident bitstream.
+  - Board 2 (tree B 8de3c48cf) goes first, when its mruby boot ends; then board 1 (tree A 8522d72fe), after its
+    trace boot. Each is graded by `s23-grade.py`, the rule of PREREG.md at 0c215bf0983f.
+- **Dry run** (`dryrun-s23-bare.txt`):
+  - with booking, busy and the runner stubbed, both boards' wrappers read their kit's board, bitstream and driver;
+  - the grader reads the expected vector as AS EXPECTED; a batch vector on a pre-batch board, and a single flip, as
+    FINDING; Q1 = 1, a moved true-deny, SR 24 and an empty or missing UART as VOID or NO DATA;
+  - a real board UART of another bare arm parses and is VOIDed.
+- **Predictions** (the RTL lane's simulation of each tree, identical to bf3db3175's):
+  - SR 25, and the SV values `0x0 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1
+    0x1 0x0 0x5 0x8 0x55` on BOTH trees;
+  - the eight true denies DENIED, the six re-arm probes (Q5, Q8, Q10, Q12a, Q12b, Q13d) ALLOWED, total 8.
+- **What it buys:** the silicon-side control of the instrument (the wrapper, board_rec, the M trap counter, the probe
+  pages), so that the batch's first boot has one unknown left, the six flips.
+  - A re-arm probe reading 1 on a pre-batch tree contradicts the simulation, and it is surfaced as a finding.
+  - VOID leaves the batch's s23 reading without its control.
+
 ### The trace names mruby's loop: a SIGALRM storm (2026-10-21 21:43-22:3x, board 1, tree A; and board 2's capture, tree B)
 
 - **Trace run 1** (`records/trace-smoke-b1-run1.result-lines.txt`; pre-registered 82cfee2c3a06):
@@ -6138,6 +6161,27 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
 - **For the batch boot:** the batch Tier 1 image's mruby is f8594e11, the 4 ms build, so its Tier 1 mruby rung
   carries this storm.
 
+### s23-cpmp-rearm on board 2 (tree B), result (2026-10-21 22:26-22:27): all 25 values equal the corrected pre-batch vector
+
+- **Read** (`records/s23-bare-b2.result-lines.txt`): SR 25 and SV
+  `0x80800000 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x5 0x8 0x55`.
+  Q1 is 0, all eight true denies 1, all six re-arm probes 0, total 8.
+- **a0:**
+  - My pre-registration (48405d2abdd5) quoted the RTL lane's vector, whose a0 was 0x0. That one value did not hold.
+  - The RTL lane traced it to its own tool: capprint-readings.py reports a CAPPRINT operand as the last INTEGER write
+    to the register. a0 is written by CAPENTER, so the tool showed a stale value. The simulation's own print_cap
+    reads Cursor 0x80800000 on all four trees.
+  - PREREG.md is corrected at 7ae1d8491466, and a0 is graded from there on.
+- **My grader's error, in both directions:**
+  - First it VOIDed this run on a0, a check PREREG did not ask for.
+  - Corrected to PREREG's rule, it read AS EXPECTED.
+  - It now grades a0 = 0x80800000 per 7ae1d8491466. It re-reads this run as AS EXPECTED, and a planted a0 of 0 now
+    VOIDs.
+- **What this gives the batch boot:** the instrument's silicon control on tree B (the wrapper, board_rec, the M trap
+  counter, the probe pages), so the batch boot's s23 has the six flips as its only unknown.
+- **Amendment to the tree-A run (board 1, chained after its trace boot):** it uses the image from 7ae1d8491466
+  (byte-identical) and the a0-graded grader. Predicted: the same 25 values as tree B.
+
 ### The SIGALRM-storm matched pair on board 2 (tree B), pre-registered (2026-10-21 22:4x, before the boot)
 
 - **What runs:** `tier3-trace-pair.sh 2 <out>` → `trace-pair.py`, one cold boot. mruby's smoke with the service trace,
@@ -6163,6 +6207,18 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
     processes: tree A 5 of 6 at 17:41, the 13:34 tree-B smoke, the 20:48 tree-A smoke, tree B 1 of 6 at 20:48, and
     trace runs 1-2. f8594e11 (r60, 4 ms) has not run on silicon, so its stall rate is not known.
   - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
+
+### s23-cpmp-rearm on board 1 (tree A), result (2026-10-21 22:54-22:55), and the tick pair on board 1, pre-registered (22:5x, before its boot)
+
+- **s23 on tree A** (`records/s23-bare-b1.result-lines.txt`): SR 25. All 25 SV values equal tree B's and PREREG
+  7ae1d8491466's pre-batch vector, a0 = 0x80800000 included. AS EXPECTED, as amended. So the instrument has its
+  silicon control on both pre-batch trees, and the batch boot's s23 has the six flips as its one unknown.
+- **The tick pair on tree A:** `tier3-trace-pair.sh 1 <out>`, the same script, images and order as board 2's
+  pre-registration above (459326296d2b), on kit bkit7-rev2xDN2. It makes the pair two-sided across both trees.
+  - Predictions as board 2's: every t100 run completes, at least one t4 run storms, and a storming t100 refutes the
+    reading.
+  - On tree A the cw 4 ms image stalled in 8 of 9 processes today, so a t4 run that completes here would be more
+    surprising than on tree B.
 
 ### The SIGALRM-storm matched pair, result (2026-10-21/22, both boards): MRB_TICK_UNIT 100 completes 6 of 6, MRB_TICK_UNIT 4 storms 4 of 4
 
