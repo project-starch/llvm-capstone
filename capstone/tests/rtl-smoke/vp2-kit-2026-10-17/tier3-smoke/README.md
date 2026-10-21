@@ -5568,3 +5568,18 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   takes about 18 times its QEMU time, and juliet-timeout's 10 s covers the whole launch. If any step times out, the
   full board run needs a larger --limit-ms, a variable against the QEMU judging, and this subset is re-run with it
   first.
+
+### The Juliet board path's first run, result (2026-10-21 13:19-13:28, board 1, tree A): every pre-registered reading holds
+
+`records/juliet-sub4.result-lines.txt`. UNGATED.
+- The batch completed, its steps began in the planned order, and stats returned.
+- ok-0 and ok-1 exit 0.
+- The four control runs fault: bounds-malloc at 28, uaf-malloc at 25, both times.
+- The four good images print Finished good() and exit 0, with no fault.
+- The four bad images fault at cause 25, the record's cause.
+- No step timed out. pc=0, DRT1, FRTY, Oops, INJS and INJL are 0.
+- **Step time on silicon** (the open question): about 6 s a step. Five steps fall between consecutive 30 s heartbeats,
+  against the 10 s limit. So the full run keeps the record's 10 s. A step that times out reads as NO-READING:timeout
+  (judge.py), visibly, and its batch is then re-run at a larger limit as a named variable.
+- Firmware 19,565,064 B for a 4.48 MB raw bake. A full 32-pair batch, about 20 MB raw, should land at or under
+  25,856,520 (cpython's 23.6 MB raw did). board-run.sh refuses a bake over BOARD_FW_CAP before it boots.
