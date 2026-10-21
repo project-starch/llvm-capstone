@@ -5624,6 +5624,112 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
 - **Timeouts:** a silicon step takes ~6 s against the 10 s limit. A NO-READING on one tree only is read as timing margin
   first, and is named that way, not as a tree difference, until a re-run of that batch says otherwise.
 
+### The batch firmware, built and gated without the board (2026-10-21 15:xx)
+
+- **Monitor:** capstone-sbi vp2/batch d9da397. It is f13dbc5, then 579ef1c (the fetch-retry no-progress cap,
+  CAPSTONE_FETCH_RETRY_CAP), then the SBI RFENCE commit (caplifive-sbi #4, fab38bb, picked from e1db99e, clean, its
+  author kept). Wrapper aab63d5.
+- **Builds** (`batch/build3.sh`): three firmwares on one saved Image, the board kits' current define set.
+  - **A**, e1db99e, the RFENCE pair's monitor.
+  - **B**, the batch monitor with the cap off. It is byte-identical to A: generated sbi_capstone_dom.c.S 4cf7bea4bd73f70c,
+    int handler 55500a31efe852b7, fw_payload 167ae86dba91174b, 25,856,520 B. The cap changes nothing when off.
+  - **C**, the batch monitor with -DCAPSTONE_FETCH_RETRY_CAP. The FRTC tag is in the generated monitor, the dom_stack
+    gate passes, and C is under the 26,000,000 B cap (fw_payload 0e604d59edbf519c on that Image).
+- **csupctl.table bracket, re-run on d9da397 + aab63d5:** unchanged.
+  - Bit 3 is set only at capstone_csmint.S:279 and cleared at :281 and at :310, the first instruction of
+    csm_window_trap. CSM_CSNODE is the only instruction between them.
+  - The other writers of 0x7C4 only moved: sbi_capstone.c:1025, the slot_paused write, and :3797, the bit-2 strobe.
+  - `git diff f13dbc5 d9da397` touches no line naming 0x7c4, csupctl, mstatus or MIE.
+  - The wrapper's only MIE set is still dom.c:191, under CAPSTONE_TARGET_QEMU.
+- **The cap's logic, on the host** (`batch/test-retry-streak.py <monitor worktree>`). fetch_retry_covered is cut from
+  the monitor's own sbi_capstone.c, compiled against stubs, and driven:
+  - two pcs alternating with no progress read R R (I+FRTC), repeating: at most two retries in a row, one FRTC per three
+    refusals;
+  - one pc twice is caught by the per-pc guard, with no FRTC;
+  - with progress (5000 instructions) between refusals, every refusal is retried;
+  - a pc with no covering slot is injected;
+  - **negative control:** the same harness without the define retries every alternating refusal;
+  - **planted defects:** no increment, a cap of 3, and no reset on progress each FAIL. A monitor without the block
+    (f13dbc5) exits NO DATA.
+  - It proves the C, not capstone-c's output.
+- **Not provable on QEMU:** fetch_retry_covered is compiled only under CAPSTONE_TARGET_FPGA && CAPSTONE_VP2_FETCH_RETRY,
+  and no QEMU kit refuses a covered fetch, so a QEMU run of the cap cannot reach it. The silicon positive control is the
+  alternating two-pc arm on the batch bitstream's first boot:
+  - an s23-cpmp-rearm-style persistent covered deny, with the S handler in a second denied range;
+  - placed LAST, because if the cap failed it would retry forever;
+  - pre-registered with that boot.
+
+### The batch bitstream's Tier 1 image and firmware, prepared before the bitstream (2026-10-21 16:24-16:26)
+
+- `../board-tier12/batch/batch-prep.sh`, dry run in `dryrun-batch-prep.txt` beside it:
+  - the bake and the firmware build are stubbed; everything else is real;
+  - a firmware without FRTC stops, an existing root stops, and a planted record mismatch stops.
+- **Stage:** a private copy of rev7's Tier 1 stage, checked file by file against s26/stage-rev7.SHA256SUMS, with ONLY
+  vm/capstone_vm.ko replaced by the batch module 21fbfc397e7c7a42.
+  - That module is the runtime lane's module-gen-push 64747600ecec, the source of a05c198b, built for the board:
+    rv64g, 0 compressed instructions against 1,143 on the kernel's efivarfs.ko as the counter's control, vermagic
+    "6.4.14 SMP riscv".
+  - It is kept with run.py d5f0f399c6d304d2 (= `git show 64747600ecec:capstone/runtime/virtual/run.py`) in
+    t3-smoke/bkit8-batch-parts.
+- **Image:** 32f277aeecab9742 (dtb 6c6e8bce4e324fd7), from the kits' manifest bake under the buildroot lock. All 14
+  files are present in the cpio, /capstone.ko is replaced, and the shared image was restored with all 14 absent.
+- **Firmware:** 8ca238ac25874c97, 19,565,064 B, from capstone-sbi vp2/batch d9da397 and wrapper aab63d5, with the kits'
+  defines plus -DCAPSTONE_FETCH_RETRY_CAP. The dom_stack gate passes, and the FRTC tag is in the generated monitor.
+- **Not yet:**
+  - the bitstream's name and the reflash, which is the lead's word;
+  - the Tier 1 reference, which is the compiler lane's qkit7-batch Tier 1 failing set (gen-probe/tier1-qkit7-batch);
+  - the boot's pre-registration.
+
+### CORRECTION (2026-10-21 17:1x): the batch Tier 1 image prepared at 16:24 cannot boot the batch bitstream; batch-prep now takes gated images
+
+- **The image is withdrawn.** Image 32f277aeecab9742 and firmware 8ca238ac25874c97 (the section above) carry rev7's
+  three Tier 1 images: contract.dom 125705371837ea92, mruby.dom a902e740fc5d3b0f and sqlite3.dom a5942a1add489597.
+  - These are the v9 kit's build, on runtime f6dfd19d9396.
+  - That runtime's heap.c lacks 232d13b2's integers-first slot offsets: `r60-runtime-gate.py --rev f6dfd19d9396`
+    gives REFUSE [False, False], re-run here.
+  - Such a runtime faults at its first allocation on an R-60 bitstream, and the batch bitstream carries R-60.
+  - v9's SDK also compiled with +movc-keeps-integer-source, which C-32 excludes from board images.
+- **Found by** the compiler lane, not by this lane's prep. The prep checked the stage against rev7's record, which is
+  exactly what carried the old images in. The R-60 gate, which this lane wrote for the corpus images, was never run
+  on the Tier 1 stage.
+- **batch-prep.sh now takes the images from outside the record:** `batch-prep.sh <log> <image dir> <runtime rev>
+  <three sha256/16>`.
+  - Only the six non-image files are checked against rev7's record.
+  - The runtime revision must PASS r60-runtime-gate, and the three images must hash as given.
+  - Dry run `dryrun-batch-prep2.txt`: the v9 runtime is refused, wrong hashes stop, a planted record mismatch stops,
+    and a passing revision (98bfe0d9ab76) goes through.
+  - **Limit:** the revision is the builder's declaration; the script does not read it from the images.
+- **Next:** the compiler lane is rebuilding the three images by v9's recipe, with only the SDK root and toolchain
+  swapped. The new SDK is t3-freeze-nb-nomovc-cw-r60: no MOVC flag, 232d13b2's heap.c, the GEP-split fix. The lane will
+  run boot3/stage-boot3r.sh's gates on them, and the prep re-runs on their hashes.
+
+### The batch Tier 1 image, rebuilt on R-60-safe images (2026-10-21 17:24-17:27)
+
+- **Images:** the compiler lane rebuilt them by v9's recipe (v9-kit.sh app lines 87-91, sources at f6dfd19d9396), with
+  only the SDK and toolchain swapped.
+  - SDK t3-freeze-nb-nomovc-cw-r60: runtime 98bfe0d9ab76, no +movc-keeps-integer-source, -fno-builtin.
+  - Toolchain t3-freeze-r60: the GEP-split fix, libLLVMInstCombine 3e0b0dd6.
+  - Result: contract.dom 65f9f1f179852246, mruby.dom f8594e1167b60307, sqlite3.dom e63733dd1a4a7452
+    (<mnt-hdd>/capstone/batch-t1-r60/vm).
+- **Gates re-run here:**
+  - r60-runtime-gate --rev 98bfe0d9ab76 PASS;
+  - delin-census 0;
+  - qemu-only-csr-census 0, the batch module included;
+  - vp2-silicon-gate 0 refused.
+- **Three attribution rows added to boot3/silicon-gate-attributions.tsv.** Without them each image refuses one site, the
+  known libc_exit_fini LDC through a `mv`-derived base (Q-23): contract 0x26ee4, sqlite3 0x153dd4, mruby 0x1b6f30.
+  - The rows rest on fini_array_size=0, which the gate re-checks against each image.
+  - Read here on contract.dom: .fini_array is 0 bytes at 0x38100. libc_exit_fini+0x68 is `bgeu a3, a4`, where both
+    are derived from 0x38100, so the loop holding 0x26ee4 is skipped.
+  - The rows are the compiler lane's (batch-t1-r60/attribution-rows.tsv).
+- **The two-step census:** 0 VAR-CONST chains in each image, against 3 in the v9 images.
+- **Prep** (`batch-prep.sh`, as corrected):
+  - image 74edf44a51195b1a: all 14 files are in the cpio by hash, and the shared image was restored;
+  - firmware d9026250107eb729, 19,565,064 B, from vp2/batch d9da397 + the cap. The dom_stack gate passes, and FRTC is
+    present.
+  - This is the batch first boot's Tier 1 image. It still needs the bitstream's name, the reflash (the lead's word),
+    the qkit7-batch Tier 1 failing set as its reference, and its pre-registration.
+
 ### The Juliet temporal set on board 1 (tree A), result (2026-10-21 13:34-17:35): every case behaves as on QEMU; two of my predictions could not hold, because I did not read the judge's attribution rule
 
 - **Read** (`records/juliet-temporal-b1.result-lines.txt`):
