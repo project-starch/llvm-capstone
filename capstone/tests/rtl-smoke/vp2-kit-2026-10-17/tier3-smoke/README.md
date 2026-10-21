@@ -5529,3 +5529,13 @@ bkit7-rev2xDN2, the same pinned worktrees, both clean).
   pre-commit scan, which governs only what this lane writes (the lead's ruling on third-party work), beside the
   fetch-retry cap (579ef1c). Optional for that first boot: a satp-writing arm run from S with Linux's fences live (the
   va-satpstale family), which would close the RFENCE pair's one limit, S-29 masking.
+
+### The repaired arms on tree A, result (2026-10-21 12:31-13:01, board 1): 37 of 37, equal to tree B in every cell
+
+`records/pass-rep-b1.result-lines.txt`. UNGATED.
+- pb13q15 reads 9/9, pgm1q15 5/5 and wm1q15 23/23 against their references, and each equals its tree-B reading cell for
+  cell (compare-pilot rc 0).
+- cause=29 0; pc=0, DRT1, FRTY, INJS and INJL 0; the vbatch END line in each.
+- **So the two-tree claim now holds for every arm:** all **25** arms of the pass read identically on tree A and tree B.
+  The claim was premature when chapter 8 wrote it (the repaired arms had read on tree B only), and the arm count there
+  was wrong (24 for 25). Both are corrected on dev with this result.
