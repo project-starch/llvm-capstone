@@ -6281,3 +6281,22 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - pc=0, DRT1, FRTY, Oops, INJS and INJL 0.
   - **No step reaches its bound.** If one does, the stall capture names the loop, and the reading is recorded as that
     arm's own finding, not as mruby's storm.
+
+### mruby-stock on the tick-100 image, both boards, pre-registered (2026-10-22 00:3x, before either boot)
+
+- **What runs:** `tier3-mp-arm-t100.sh <board> <out> mruby-stock` with MP_ARM = `tier3-appvm-arm-tools2.sh`.
+  - The variant is tier3-mp-arm.sh with two lines changed: the corpus root (corpus-mp-r60t) and the reference
+    directory (refs/tB-mimic-t100). Its perl recipes are not used.
+  - The image is r60 1ab24a92 (MRB_TICK_UNIT 100), capi-11 dee93c7d.
+  - The reference is the compiler lane's tB-mimic-t100 bundle: control smoke ok, 20 fault, 3 completed. Stamp: runner
+    9db9f5f7cf60fcda, wt-ref 6764d96229f6, wt-gate c20f21c9a244, qemu 7e5fe043.
+  - Each board runs it after its perl boot, with MP_ROOT t3-run-tree<A|B>/mp-t100.
+- **Dry run** (`dryrun-mp-t100.txt`): the reference's own serial as the rung reads 23 of 23. All 24 steps are bounded
+  at 2400 s, and the staged image is mruby-1ab24a9215078a53.
+- **Predictions, on both trees:**
+  - The smoke completes: control smoke ok, so the run is not VOID.
+  - **COMPARE 23 of 23** against tB-mimic-t100: 20 fault, 3 completed.
+  - No step reaches its bound. A storm here would refute the pair's conclusion that the tick was the whole cause.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0, and vbatch END.
+  - Against the OLD 4 ms reference, case 23's function is expected to move (mrb_obj_alloc to ary_new_capa, cause 28
+    unchanged). The compiler lane recorded that as the r60 image's one move. The grade is against t100.
