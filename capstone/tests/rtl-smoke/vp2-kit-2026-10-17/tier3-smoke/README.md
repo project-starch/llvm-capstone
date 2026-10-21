@@ -6007,3 +6007,43 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
 - **Lesson:** that is the narrowed-view error. A summary of what the main run did must be read from the main run's
   observations, not from a judge column that scores something else. `records/juliet-temporal-b1.result-lines.txt`
   carries the corrected line below the wrong one.
+
+### The Juliet temporal set on board 2 (tree B), result (2026-10-21 16:16-20:48): tree B = tree A in every case cell; two of 24 uaf controls read a page fault, which voids two batches under the judge
+
+- **Read** (`records/juliet-temporal-b2.result-lines.txt`):
+  - 12 + 1 batches completed, the probe exited 0, and all 14 boot transcripts read 0 on pc=0, DRT1, FRTY, Oops, INJS
+    and INJL.
+  - Every good image exits 0, 366 of 366.
+  - 355 bad images fault at cause 25 at the 2026-10-19 QEMU record's site, and 11 `_12` bads take the good branch.
+- **Against tree A, cell by cell:** the main run is 732 of 735 cells equal, and the seeded run 56 of 56.
+  - Two differing cells are the rand-driven draws: struct_12 (CWE415) took the bad branch on B only, faulting at the
+    record's site checked+0x14, and wchar_t_12 (CWE416) took it on A only.
+  - The third is the uaf control at the END of batch000 and of batch010 (ctl-uaf-1). It reads **cause 13, a load
+    page fault, at control_read_probe+0x38**. That is the instruction where the other 22 tree-B and all 24 tree-A uaf
+    runs read cause 25.
+- **Under the judge:**
+  - The uaf control must read cause 25 in control_read_probe, so batch000 and batch010 are void, and 10 of 12 census
+    batches count.
+  - That voids 64 good verdicts and 62 bad. The other 2 bads in those batches are `_12` cases, which are scored from
+    the seeded build.
+  - Counting batches: bad 291 unattributed (STRICT needs QEMU's revoked line) and 13 seeded; good 302 CORRECT.
+- **Against the pre-registration (09bb6536e2ee):**
+  - HELD: every batch completes, the probe, the readings.
+  - NOT HELD:
+    - "every batch counts": 10 of 12 do.
+    - "no NO-READING": 64 cases are batch-void.
+    - "366 CAUGHT / MISSED 0": this could not hold on silicon (see the tree-A result).
+  - The two-tree claim "every verdict equals tree A's" does not hold under the judge, because of the two void
+    batches. It holds for every case cell; the difference is in two control cells only.
+- **The cause-13 control, read but not explained.**
+  - The control mallocs 32 bytes, writes them, frees them, prints its mark (a launcher service, so the context escapes
+    and resumes), and then reads the freed byte.
+  - Cause 13 means the load's translation faulted, and the module could not resolve it.
+  - 2 of 24 on tree B against 0 of 24 on tree A does not separate the trees statistically (Fisher p ~ 0.49).
+  - One hypothesis is consistent with what separates the bitstreams, and is NOT tested:
+    - the switcher's satp write flushes the TLBs on tree B (capstone-ariane 8f1bcd4cc, d427e7391) and not on tree A;
+    - so on tree A a read whose page was released after the free could hit a stale translation and reach the
+      revocation check (25), where tree B walks, finds no page and faults (13).
+    - That needs the free to release the page in some runs and not in others, which nothing here shows.
+  - The test is a QEMU or board run of the uaf control many times with the launcher's grant/retire trace, asking whether
+    a retire falls between the free and the read in exactly the runs that fault 13.
