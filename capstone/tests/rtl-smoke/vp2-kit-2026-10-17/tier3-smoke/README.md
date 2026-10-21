@@ -5755,3 +5755,42 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
 - **Held until boardvm's per-step bound and progress heartbeat** (virtualvm-end-marker 0a12aeb3f636) are on the
   session tool's tree, so one slow step cannot hold a board for its whole budget. That tree is held still until the
   compiler lane's batch references end.
+
+### Recorded from the lanes (2026-10-21 16:3x): mruby Sublet is not a recycling case; the stock smoke's record budget
+
+- **The compiler lane withdrew its own hypothesis** that mruby Sublet's smoke dies of lifetime-table exhaustion, which
+  record recycling would cure.
+  - On the generations kit (gen-mg) the smoke still dies at M6. It allocated 84,344 records against a 64,001 ceiling,
+    so recycling worked and the table still ran out: M6 holds 20,000 x [Array, String, Hash] live at once.
+  - So mruby Sublet will not read on the batch bitstream either. It leaves the waiting list beside cpython lt1 and
+    pg-pools. What would make it read is the runtime lane's design call. Readings: corpus-mp-q15/refs/REFS.
+- **From the same triple:** the STOCK smoke takes 44,017 records on QEMU, one per virtual malloc, against the vp2 flat
+  table's 64,001 without recycling. On QEMU it takes about 30 s, read from the reference's kernel timestamps 3.77 s →
+  33.73 s.
+  - The board's 153 minutes is therefore about 300x. Reaching the table's 511 reserve, whose "collect skipped" line is
+    KERN_INFO and hidden on the board console, is the first thing the next board run reads.
+  - That run uses dev 93ebde2f53b9: a per-step bound, @@DMESG after a kill, and the heartbeat's output size.
+- **On dev:** d86451120232 (split reads a mid-line END and an exit above 128+NSIG correctly; of the 734 transcripts
+  with steps, only the repaired mruby-sublet one moves) and 93ebde2f53b9 (the board step bound). This lane's
+  wt-gate tools stay at their pass state until the compiler lane's batch references end.
+
+### The batch bitstream's Tier 1 image and firmware, prepared before the bitstream (2026-10-21 16:24-16:26)
+
+- `../board-tier12/batch/batch-prep.sh`, dry run in `dryrun-batch-prep.txt` beside it:
+  - the bake and the firmware build are stubbed; everything else is real;
+  - a firmware without FRTC stops, an existing root stops, and a planted record mismatch stops.
+- **Stage:** a private copy of rev7's Tier 1 stage, checked file by file against s26/stage-rev7.SHA256SUMS, with ONLY
+  vm/capstone_vm.ko replaced by the batch module 21fbfc397e7c7a42.
+  - That module is the runtime lane's module-gen-push 64747600ecec, the source of a05c198b, built for the board:
+    rv64g, 0 compressed instructions against 1,143 on the kernel's efivarfs.ko as the counter's control, vermagic
+    "6.4.14 SMP riscv".
+  - It is kept with run.py d5f0f399c6d304d2 (= `git show 64747600ecec:capstone/runtime/virtual/run.py`) in
+    t3-smoke/bkit8-batch-parts.
+- **Image:** 32f277aeecab9742 (dtb 6c6e8bce4e324fd7), from the kits' manifest bake under the buildroot lock. All 14
+  files are present in the cpio, /capstone.ko is replaced, and the shared image was restored with all 14 absent.
+- **Firmware:** 8ca238ac25874c97, 19,565,064 B, from capstone-sbi vp2/batch d9da397 and wrapper aab63d5, with the kits'
+  defines plus -DCAPSTONE_FETCH_RETRY_CAP. The dom_stack gate passes, and the FRTC tag is in the generated monitor.
+- **Not yet:**
+  - the bitstream's name and the reflash, which is the lead's word;
+  - the Tier 1 reference, which is the compiler lane's qkit7-batch Tier 1 failing set (gen-probe/tier1-qkit7-batch);
+  - the boot's pre-registration.

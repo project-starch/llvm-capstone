@@ -1,0 +1,20 @@
+# batch-prep.sh dry runs, 2026-10-21 16:24: the bake and the firmware build stubbed; everything else real (the stage copy and its check against rev7's record)
+## good
+rc=0
+BP STAGE rev7's record with capstone_vm.ko 21fbfc397e7c7a42 (9 files)
+BP BAKE 16:24:10: 14 files
+BP IMAGE 6fb6d3835a3563bf dtb c3ce3e5f31000e5c
+BP FW 541b3e9daa09b20b 1000 B on image 6fb6d3835a3563bf; FRTC present
+BP DONE 16:24:10
+## nofrtc
+rc=1
+BP STAGE rev7's record with capstone_vm.ko 21fbfc397e7c7a42 (9 files)
+BP BAKE 16:24:10: 14 files
+BP IMAGE 6fb6d3835a3563bf dtb c3ce3e5f31000e5c
+BP STOP: no FRTC tag in the generated monitor
+## again
+rc=1
+BP STOP: <scratch>/bp/x-good exists
+## planted record mismatch (vmrun.sh's hash altered in a copy of the record)
+rc=1
+BP STOP: the private stage is not rev7's record
