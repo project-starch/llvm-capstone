@@ -22,7 +22,7 @@ prediction.
 ## Step 1 -- exact bounds (qkit7-eb), the matched pair
 
 There are two arms on qkit7-eb: the unrepaired cw Sublet image, then the repaired one. Both are compared, cell by cell
-on (outcome, cause, function), with `results/2026-10-11-virtual/virtual-nested-pools/matrix.tsv`, and with each other.
+on (outcome, cause, function), with `results/2026-10-11-virtual-capi/virtual-nested-pools/matrix.tsv` (the C-API record: the runner runs case 11 through `capi-11.dom`, as that record does; the plain `2026-10-11-virtual` record runs case 11 from `trigger.rb`, which reads cause 12 and differs on that case by construction), and with each other.
 
 - Unrepaired: smoke ok, read rc 0, and 23/23 cells equal the record.
 - Repaired: smoke ok, read rc 0, and 23/23 cells equal the record and the unrepaired arm.
