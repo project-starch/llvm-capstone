@@ -5539,3 +5539,32 @@ bkit7-rev2xDN2, the same pinned worktrees, both clean).
 - **So the two-tree claim now holds for every arm:** all **25** arms of the pass read identically on tree A and tree B.
   The claim was premature when chapter 8 wrote it (the repaired arms had read on tree B only), and the arm count there
   was wrong (24 for 25). Both are corrected on dev with this result.
+
+### The Juliet board path's first run, pre-registered (2026-10-21 13:2x, before the boot): board 1, four cases, one batch
+
+The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is taking its QEMU judging on the cw build
+(366 cases, 734 census + 55 seeded images), with run.py and probe.py from branch juliet-board (a772f0112ae3, which adds
+`--board-kit`). Before a full board run (about 12 census batches per tree), the board path gets one small batch.
+- **What runs:** `tier3-juliet-sub.sh` (board 1, kit bkit7-rev2xDN2, tree A):
+  - run.py 4b663651d0638eef from worktree wt-jb at a772f0112ae3, `--pairs 4`, `--limit-ms 10000` (the record's);
+  - helper juliet-timeout bb65b77ac802a9f3;
+  - a subset build.json 741cd6b3bf55fb93: the cw census build's own record (3c973076cf93aad6) cut to
+    CWE415_Double_Free__malloc_free_char_01, CWE415 _long_01, CWE416_Use_After_Free__malloc_free_char_01 and
+    CWE416 _long_10, with the images read through a link to the build's img/;
+  - the images carry ABI CPONVVM6, as the pass's images do.
+- **Dry run** (`dryrun-juliet-sub.txt`, every call stubbed, the boot through BOARDVM_STUB_TRANSCRIPT on a real pass
+  transcript): the script reaches its last line. The busy, 409, existing-root and build-pin branches each stop, and
+  a planted DRT1 and INJS line are each counted.
+- **Predictions** (from the 2026-10-19 QEMU record, results/2026-10-19-virtual: all 366 temporal cases CAUGHT at
+  cause 25 with the good image CORRECT):
+  - the batch completes, its steps begin in exactly the planned order, and the stats step returns;
+  - ok-0 and ok-1 exit 0;
+  - all four control runs (bounds-malloc and uaf-malloc, twice) fault;
+  - each good image prints Finished good() and exits 0, with no fault;
+  - each bad image faults at cause 25;
+  - no step reaches the 10 s limit;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0.
+- **The open question** this run answers, not predicted: the steps' wall time on silicon. board.env says a vp2 step
+  takes about 18 times its QEMU time, and juliet-timeout's 10 s covers the whole launch. If any step times out, the
+  full board run needs a larger --limit-ms, a variable against the QEMU judging, and this subset is re-run with it
+  first.
