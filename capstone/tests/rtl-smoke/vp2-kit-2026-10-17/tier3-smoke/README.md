@@ -5844,3 +5844,39 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
     present.
   - This is the batch first boot's Tier 1 image. It still needs the bitstream's name, the reflash (the lead's word),
     the qkit7-batch Tier 1 failing set as its reference, and its pre-registration.
+
+### The Juliet temporal set on board 1 (tree A), result (2026-10-21 13:34-17:35): every case behaves as on QEMU; two of my predictions could not hold, because I did not read the judge's attribution rule
+
+- **Read** (`records/juliet-temporal-b1.result-lines.txt`):
+  - the board runs are clean: 12 + 1 batches completed, 0 failed, and the probe exited 0;
+  - all 14 boot transcripts read 0 on pc=0, DRT1, FRTY, Oops, INJS and INJL; every bake was under the cap;
+  - every good image is CORRECT, 366 of 366;
+  - **353 bad images fault at cause 25 at exactly the 2026-10-19 QEMU record's site** (symbol + offset), case by case:
+    checked+0x14 222, memchr+0x1c 36, printStructLine+0x58 19, wmemchr+0x1c 19, the rest in their own *_bad;
+  - the other 13 are the `_12` (rand_flow) cases. In the main run each bad took its good branch on the board and
+    finished, while the record's QEMU run took the bad branch. In the seeded build each faults at cause 25 under seed
+    s11, both draws bad, and return_freed_ptr_12 also under s10. No seeded draw that takes the bad path finishes.
+- **The judge prints** 353 NO-READING:unattributed(STRICT-FAIL:no-revoked-line) and 13
+  NO-READING:seeded(MISSED, unattributed): 0 CAUGHT, 13 MISSED, TWINS-NEEDED.
+- **Against the pre-registration:**
+  - HELD: batches, probe, readings, bakes, every good CORRECT.
+  - **NOT HELD: "366 CAUGHT at cause 25", "MISSED 0", "no NO-READING".**
+- **Why, and it is my error, not the board's:**
+  - judge.py's CAUGHT needs its STRICT check. STRICT ties the fault to the defective object through QEMU's own line,
+    "Cap mem access on revoked capability … cursor, bounds" (judge.py:27, :65, :158).
+  - Silicon prints no such line, so CAUGHT is unreachable on any board run, whatever the hardware does.
+  - I wrote the prediction from the QEMU record and the four-case subset. The subset was read by this lane's own
+    reader, which checks cause and site, not by judge.py. I never read the judge's attribution rule.
+  - "MISSED 0" assumed the record's random draws. The `_12` cases' main-run path depends on rand(), and the seeded
+    build exists precisely for that.
+- **What the board does establish:** every Juliet temporal bad image faults with cause 25 (revoked capability). For
+  353 that is at the same instruction where QEMU attributed the fault to the freed object; for the 13 it is under the
+  draw that takes the bad path. No good image faults.
+- **What it does not establish:** the object attribution itself on silicon. The only route is through QEMU's line for
+  the same image at the same site. The compiler lane's tB-mimic QEMU judging of this exact build (juliet-vp2/judge.sh,
+  waiting on gen-probe/.tier1-done) is the cell-by-cell comparison that would carry it.
+- **Board 2's pre-registration (09bb6536e2ee) repeats the same three predictions,** so they cannot hold there either,
+  for the same reason. Its comparison with tree A cell by cell (cause, site, good, seeded draws) is the reading that
+  can.
+- **Lesson:** this is the "printed flag is not a measurement" class again. A verdict name taken from the judge's output
+  vocabulary was predicted without reading what the judge needs to print it.

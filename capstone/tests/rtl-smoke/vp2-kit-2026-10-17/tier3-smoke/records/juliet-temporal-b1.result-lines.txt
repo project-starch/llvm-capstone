@@ -1,0 +1,10 @@
+juliet-temporal-b1 (2026-10-21 13:34-17:35, board 1, tree A caplifive_vp2c_8522d72fe, kit bkit7-rev2xDN2; pre-registered c8c871d7ec59)
+run: 12 batches completed, 0 not, 12318.7 s; run-seeded: 1 batch completed, 1291.6 s; probe rc=0 (sizeof ptr 16, int64 8)
+readings: 14 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+judge.py: bad NO-READING:unattributed(STRICT-FAIL:no-revoked-line) 353, NO-READING:seeded(MISSED,unattributed) 13; good CORRECT 366
+judge.py's STRICT reads QEMU's own "Cap mem access on revoked capability ... bounds" line (judge.py:27,65,158); silicon prints none, so CAUGHT is unreachable on a board
+against the 2026-10-19 QEMU record (all 366 CAUGHT at 25): 353 cases equal in cause (25), faulting site (symbol+offset) and good (CORRECT)
+the 13 others are the _12 cases (rand_flow): main run took the good branch on the board (Finished bad(), no fault), the record's run took the bad one
+seeded build: each _12 case faults at cause 25 under seed s11 (both draws bad); return_freed_ptr_12 also under s10; s00/s01/s10 finish
+sites: checked+0x14 222, memchr+0x1c 36, printStructLine+0x58 19, wmemchr+0x1c 19, per-case *_bad+off for the rest
+firmware per boot:       1 10d83374de7c31ed       1 13014cb2e5062936       1 203c364276d6b931       1 23db5de87b64f652       1 2f2f44d01b6643be       1 5827205c682e5a24       1 6218504c4c69e3a0       1 6b2591147cf4c7ff       1 773d53bbd0d2a40c       1 c31615cc332331ef       1 d5d57d112a45da3f       1 d763cb5421f05db3       1 f271569529e76c09       1 f93630789f226fc2 
