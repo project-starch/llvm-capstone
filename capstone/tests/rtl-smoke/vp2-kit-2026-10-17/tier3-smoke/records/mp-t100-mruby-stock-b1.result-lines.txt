@@ -1,0 +1,6 @@
+mp-t100-mruby-stock-b1 (2026-10-22 01:1x-01:4x, board 1, tree A caplifive_vp2c_8522d72fe, kit bkit7-rev2xDN2; pre-registered bfa584113e1c)
+tools: tier3-mp-arm-t100.sh + tier3-appvm-arm-tools2.sh (session tool e6c68a531557); image r60 1ab24a9215078a53 (MRB_TICK_UNIT 100), capi-11 dee93c7d71172676; reference corpus-mp-r60t/refs/tB-mimic-t100/mruby-stock
+MP mruby-stock BEGIN 01:17:31 board 1 runner 9db9f5f7cf60fcda appvm-arm 11967b378bda73c8 wt-ref 6764d96229f6 booking 97
+MP mruby-stock END 01:48:37 rc=0 :: --- virtual-malloc: control smoke ok; {'fault': 20, 'completed': 3}
+MP mruby-stock COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MP mruby-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1

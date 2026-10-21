@@ -6324,3 +6324,13 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - perl-stock on tree A: COMPARE 10 of 11, case 02 by construction, so 11 of 11 against the re-read reference.
   - Both: controls True, every board counter 0, no step at its bound.
 - **So each perl arm reads on both trees,** like the corpus pass's arms.
+
+### mruby-stock on the tick-100 image, result (2026-10-22 01:14-01:48, both boards): 23 of 23 on both trees
+
+- **Read** (`records/mp-t100-mruby-stock-b{1,2}.result-lines.txt`; pre-registered bfa584113e1c): on tree A and tree
+  B alike, the control smoke is ok; COMPARE 23 of 23 against tB-mimic-t100 (20 fault, 3 completed); no step at its
+  bound; every board counter 0. Each boot took about 31 minutes.
+- **Every pre-registered reading holds.** No storm on the tick-100 image completes the pair's conclusion: the tick was
+  the whole cause of the stall.
+- **So mruby's release-differential arm reads on silicon cell for cell as its silicon-mimic QEMU reference, on both
+  trees.** It is the first full mruby reading on the board; every earlier mruby board cell was a storm VOID.
