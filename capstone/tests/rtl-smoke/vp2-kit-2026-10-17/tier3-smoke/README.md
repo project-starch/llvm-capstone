@@ -6258,3 +6258,26 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - The compiler lane's split census: VAR-CONST 0 (positive control: 3 on 8c7cd276).
   - **Image 64ec46d1f8d9461b, firmware 6423545a567b2f3c (19,565,064 B), FRTC present.** It supersedes
     74edf44a / d9026250, whose mruby was the 4 ms build.
+
+### perl's release-differential arms on both boards, pre-registered (2026-10-22 00:3x, before either boot)
+
+- **Why now:** perl waited on mruby's stall, because a stall in the shared board path would void it too. The stall is
+  mruby-task's 4 ms SIGALRM. Perl's runner arms no timer, and no perl case calls alarm or setitimer, checked in the
+  case sources.
+- **What runs:** `tier3-mp-arm.sh <board> <out> <tag>` with MP_ARM = `tier3-appvm-arm-tools2.sh` (session tool
+  e6c68a531557), pinned to the trimmed tB-mimic references (refs/tB-mimic/<tag>-trim: runner aabfa66858b2c35e,
+  wt-ref2 15ced322c824, --lib-closure).
+  - perl-stock goes on board 2 (tree B), and perl-sublet on board 1 (tree A).
+  - Each step is bounded at 12,000 s (600 s x 20).
+- **Dry run** (`dryrun-mp-perl.txt`, each reference's own serial as the stub rung):
+  - perl-stock reads 10 of 11: case 02 reads exit255 under the current split, and the reference's matrix says
+    signal127;
+  - perl-sublet reads 11 of 11.
+- **Predictions:**
+  - Both boots complete with vbatch END.
+  - **perl-stock:** controls eval and shim True; COMPARE 10 of 11. The one difference is case 02 (exit255 against the
+    reference's signal127, by construction). Otherwise fault 6 and completed 4.
+  - **perl-sublet:** controls True; COMPARE 11 of 11, fault 8 and completed 3.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0.
+  - **No step reaches its bound.** If one does, the stall capture names the loop, and the reading is recorded as that
+    arm's own finding, not as mruby's storm.
