@@ -575,6 +575,96 @@ full id from the payload, identically at `c7e6f604f` and at the lane tip (it was
 `079dc720a`, R-35). The zero-generation site is the READ-side fill's virtual arm above. Same defect, different
 line; the ruling's consequence ("deny every recycled node for good") is correct as stated.
 
+**ITEM 6 IS IMPLEMENTED AND THE RECYCLE IS MEASURED WORKING** (2026-10-21, capstone-ariane `537eeda83`
+read path, `1f5aafc6d` + `d84e78664` + `8243351e1` push). The ruling it rests on was REWRITTEN first,
+because this lane's reading of the record layout -- which the ruling had taken from the hardware's
+packing -- was contradicted by the ABI shared with the trusted OS adapter. See "What the ruling had to
+change" below.
+
+*Three generation sites, not two.* The store (`vp_update_b`'s word-1 hole) was already correct; the ruled
+flat layout matches the RTL's existing packing exactly. Two reads had to change, and they are DIFFERENT
+CONSUMERS of the same stored field: `revnode_rdfill_id`, the tracker fill feeding the LSU's 30-bit probe
+resolution, and `vp_read_res`'s record arm, the decode feeding the unit's own `get_rev_node` and therefore
+every generation-aware gate in `capstone_rev_node` (`:327`, `:347`, `:353`, `:374`, `:421`, `:472`) and the
+pop's `fn.generation + 1`. The second hardwired `14'd0`, so without it the item is INERT -- every gate
+compares against zero and a recycled id can never satisfy one. An earlier commit fixed the first and
+reported "the store and resolve pair" as done.
+
+*Three push sites, mapping one-to-one onto the ruling with no special cases.* CREVOKE pushes its operand
+(the kill handler) and its junior run (the walk); REVOKE pushes the run and never its operand, which falls
+out because `rev_req` never writes its operand's record; CSRETIRE pushes its operand (`RETIRE_COMMIT`) and
+its run. The run matters most: lt1's pymalloc and pg-pools free with CREVOKE on a SUBTREE, so the volume is
+in the descendants, and pushing only the operand would have recycled one record per free.
+
+*What made the first attempt wrong, and what the suite could not see.* The physical free list lives in
+REGISTERS with its links in each record's `next`; a context's list lives in the TABLE at slot 1 with its
+links in `prev`. Deleting the `vctx_q == 0` term instead of adding a separate arm put a virtual index on the
+physical pool THROUGH THE WRONG FIELD. **Seven arms were byte-identical across that broken change** while
+the generated rev_node SV grew by 15 KB, because the corruption is latent in registers nothing in the set
+allocates from afterwards. Two further constraints came from reading rather than running: slot 1 is the
+free-list header ONLY in a RECYCLE table (an ordinary record otherwise, so the push and the publish are
+gated on that bit), and `vp_free_head`/`vp_free_cnt` have NO namespace-change reset, so a push that does not
+load THIS table's header first splices a foreign table's index into this free list, across contexts.
+
+*Measured, every value pre-registered before the run.*
+
+| reading | pre-registered | read |
+|---|---|---|
+| `va-alloc` root+16 | `{head 6, count 1}` | `0x100000006` |
+| `va-alloc` record 6 word 1 | FREE set, parent 0, depth 0 | `0x4`, `0`, `0` |
+| `va-alloc` root+24 (allocations) | **3** | **3** |
+| `va-fetchsplit-i` tbl3 next-unused | **4** (was 7) | **4** |
+| `va-alloc-corrupt` | refused, 29 | `0x1d` |
+| `r12-recl-cpmp`, `va-alloc-off`, `va-flat`, `va-alloc-exhaust`, `va-fetchsplit-s` | byte-identical | byte-identical |
+
+The next-unused reading is the one that shows recycling rather than merely a written free bit: the context
+reuses index 3 instead of bumping through 4, 5, 6. It also explains an instrument change first recorded as
+unexplained -- `va-fetchsplit`'s index-3 broadcast count going 1 to 7 with its graded readings and its 13,705
+commits unchanged. A first hypothesis for that (header-write broadcasts) was WRONG: the count is 0 on both
+sides, because `!vp_hdr_wr` suppresses them.
+
+*A pre-registered value caught a defect in the same change, which is why it was written down.* `va-alloc`
+read root+24 = 4 where its header pre-registers 3: ex_stage's slot-1 write arm synthesises word 1 as
+`vp_alloc_q + 1` unconditionally, so the push's header publish counted as an ALLOCATION. QEMU increments
+that word only inside `table_alloc` (`cap_rev_table.c:206`), never on a push, so it was a parity divergence
+as well as a wrong counter. `vp_write_hdr1` now takes a no-count flag. Enumerated rather than assumed after
+getting it wrong once: there were THREE call sites of it, not two.
+
+*The cost, attributable.* The physical path pays ONE CYCLE per revocation operation --
+`r12-recl-cpmp` 4268 to 4269, `va-alloc-off` 26483 to 26484, with arms performing no revocation unchanged to
+the cycle. It is the branch balance on the header load at the three walk entries, and it is not avoidable by
+moving the load into the virtual branch, because the record read's value does not live past the cycle
+boundary the load crosses.
+
+*UNMEASURED.* Step 3 (the retire operand) has no arm in the registered set, because no registered arm issues
+a CSRETIRE inside a virtual context. Its acceptance, and the recycle and subtree cases, need the new arm:
+derive / crevoke / derive again with the stale reference refused, child plus grandchild with both records
+FREE, and a CSRETIRE of a CSNODE ancestor with both records of the pair FREE. The physical approval test for
+the same mechanism exists unregistered as `r12-recl-stale.S`, and its own header states the VOID condition
+that the virtual version inherits: if the re-minted ids print fresh bump ids rather than the recycled index
+at generation 1, the pop never fired and the run proves nothing.
+
+## What the ruling had to change
+
+The ruling assigned the generation to word 1 bits `[59:46]`, "the 14-bit hole between VALID and the 16-bit
+parent, which this ruling assigns (no earlier text did)". Earlier text does assign it. `cap_rev_table_abi.h`,
+headed "Shared with the trusted OS adapter", says "depth[29:0], parent[59:30]", with
+`CAP_REV_TABLE_FIELD_MASK 0x3fffffff` and `CAP_REV_TABLE_PARENT_SHIFT 30`, and the code does it --
+`cap_rev_table.c:156` unpacks `parent = (w1 >> 30) & 0x3fffffff`. So `[59:46]` is **parent[29:16]**. The
+appearance of a hole came from the RTL's fields being NARROWER than the ABI's: 16-bit parent, 17-bit depth.
+It is benign while every table stays under 65,536 records, and it bites for any third party reading our
+records and in any larger table.
+Second, a FREE record could not carry a generation on either side: QEMU writes a freed record's word 1 as
+exactly `FREE << 60` (`:277`) and validates by equality (`:100`), and `vp_rec_free_exact` mirrored that
+exactly -- while the pop must read the generation OUT of the free record to hand out `{g + 1, index}`.
+Both were ruled 2026-10-21: the FLAT format's word 1 becomes
+`{reserved[63], FREE/LINEAR/VALID[62:60], generation[59:46], parent[45:30], depth[29:0]}`, capped at 65,536
+records, which is a limit the 16-bit index and CSRETIRE's gate already impose; the PAGED format is unchanged;
+and a FREE record is "FREE set, the generation preserved, every other field zero" on both sides. The
+relaxation in the RTL is exactly the generation field -- every other bit of word 1 must still match the old
+exact value -- so a generation-0 free record masks back to it and `va-alloc-corrupt` still reads corrupt,
+its word 1 setting bit 0 inside `depth[29:0]`.
+
 *Recycle: the PUSH was implemented wrongly on 2026-10-20, REVERTED the same day, and is NOT in the tree*
 (capstone-ariane `4406a6702` then `c96aafa9c`). Removing the `*vctx_q == 1'b0` term is only half of what the
 paragraph below says -- it says "and the push must target the table's slot 1 rather than the physical
