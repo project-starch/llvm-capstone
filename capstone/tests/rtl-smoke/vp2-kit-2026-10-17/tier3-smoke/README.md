@@ -5583,3 +5583,57 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   (judge.py), visibly, and its batch is then re-run at a larger limit as a named variable.
 - Firmware 19,565,064 B for a 4.48 MB raw bake. A full 32-pair batch, about 20 MB raw, should land at or under
   25,856,520 (cpython's 23.6 MB raw did). board-run.sh refuses a bake over BOARD_FW_CAP before it boots.
+
+### The Juliet temporal set on board 1 (tree A), pre-registered (2026-10-21 13:3x, before the first boot)
+
+- **What runs:** `tier3-juliet-full.sh 1`. From wt-jb at juliet-board a772f0112ae3 (run.py 4b663651d0638eef;
+  judge/build/select/common byte-identical to the compiler lane's QEMU judging tree):
+  - run.py --board-kit on the cw census build (build.json 3c973076cf93aad6, 366 cases, 732 images, 12 batches of 32
+    pairs) and on the seeded build (c6a8b650f7923845, 1 batch);
+  - probe.py --board-kit;
+  - judge.py over manifest-temporal.json 95ceac7daa991165;
+  - helper bb65b77ac802a9f3, the record's 10 s limit, kit bkit7-rev2xDN2, every boot cold.
+- **Dry run** (`dryrun-juliet-full.txt`), with only the boot stubbed (the subset's real transcript):
+  - run.py, probe.py and judge.py ran end to end, and judge voided every batch on the sequence check, which shows that
+    check fires;
+  - a planted MISSED row prints TWINS-NEEDED;
+  - the busy, 409 and existing-root branches stop;
+  - per-boot readings count a planted DRT1 and INJS in every transcript, and 0 on the clean one.
+- **Predictions** (the 2026-10-19 QEMU record and the subset):
+  - every batch completes and counts, and the probe completes with exit 0;
+  - **366 CAUGHT at cause 25, every good image CORRECT**, MISSED 0, so no twins are needed;
+  - no NO-READING of any kind, including timeouts;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0 in every boot transcript;
+  - every bake under BOARD_FW_CAP (board-run.sh refuses otherwise, before booting).
+- **Compared** cell by cell with the compiler lane's tB-mimic QEMU judging of the same build when it lands. Until then
+  the comparison is with the 2026-10-19 record, which ran an older kit and helper (5b1d9a71).
+
+### mruby release-differential, virtual-malloc, on board 2 (tree B), pre-registered (2026-10-21 13:3x, before the boot)
+
+- **What runs:** `tier3-mp-arm.sh 2 <out> mruby-stock`, one cold boot through tier3-appvm-arm.sh on kit
+  bkit7-rev2xBDN2. It is pinned to the reference's stamp (corpus-mp/refs/tB-mimic/mruby-stock.stamp):
+  - runner 9db9f5f7cf60fcda, appvm-arm 11967b378bda73c8, tree wt-mp at the stamp's wt-ref 6764d96229f6, clean;
+  - the images from the reference's session/collect/images (EXPECT_IMAGES);
+  - image 8c7cd27614353067, capi-11 a6d22b0dd2627d55, the cw build, without +movc-keeps-integer-source (C-32);
+  - the SDK links recorded in corpus-mp/LINKS.txt.
+- **Dry run** (`dryrun-mp-arm.txt`, every call stubbed, the arm writing the reference's own matrix and a real pass
+  transcript):
+  - the known-good input reads 23 of 23;
+  - a planted cell flip reads 22 of 23, naming the cell;
+  - the refusal (78), missing-reference, busy and 409 branches stop;
+  - matrix-compare.py with no board matrix exits 2.
+- **Predictions:**
+  - every cell equals the tB-mimic reference in outcome, cause, function and in_fault_sites: 23 of 23, 20 fault and
+    3 completed;
+  - the smoke control prints SMOKE_DONE;
+  - the vbatch END line; pc=0, DRT1, FRTY, Oops, INJS and INJL 0.
+- **Q-31 cannot apply:** every cause-24 cell's access, disassembled at its pc, is aligned and canonical:
+  - 02 `lbu` at 0x4;
+  - 07 `lbu` at 0x10;
+  - 18-21 `lw` at 0x0;
+  - 22 `ld` at 0x7d8050.
+  The pass's aligned NULL dereferences read 24 on silicon.
+- **R-60** (bounds decoded at an out-of-window cursor) is the one named shape that could move a cause-28 cell
+  (12-16, 23). It would be named R-60, not a new finding.
+- **Budget:** the QEMU session ran 24 steps in about 4 minutes. At ~18x that is about an hour on silicon, inside the
+  board's 3,180 s x 4 batch budget.
