@@ -39,8 +39,12 @@ pid=$!
 exec 8> /tmp/release
 n=0; while ! grep -q EXEC_CONTRACT_HOLDING o3 && [ $n -lt 30 ]; do sleep 1; n=$((n+1)); done
 if ! grep -q EXEC_CONTRACT_HOLDING o3; then echo "@@WRITE_WHILE_RUNNING not-ready"
-elif (echo x >> /tmp/e.dom) 2>/dev/null; then echo "@@WRITE_WHILE_RUNNING allowed"
-else echo "@@WRITE_WHILE_RUNNING denied"; fi
+elif (echo x >> /tmp/e.dom) 2>o3w; then echo "@@WRITE_WHILE_RUNNING allowed"
+else echo "@@WRITE_WHILE_RUNNING denied $(tr '\n' ' ' < o3w)"; fi
+# A write that fails for another reason must not read as the denial: the error text
+# is what tells them apart (ETXTBSY against EACCES, EROFS, ENOSPC).
+if (echo x >> /proc/version) 2>o3c; then echo "@@CONTROL_WRITE allowed"
+else echo "@@CONTROL_WRITE denied $(tr '\n' ' ' < o3c)"; fi
 exec 8>&-
 wait $pid; echo "@@HOLD rc=$? $(tr '\n' ' ' < o3)"
 if (echo x >> /tmp/e.dom) 2>/dev/null; then echo "@@WRITE_AFTER_EXIT allowed"; else echo "@@WRITE_AFTER_EXIT denied"; fi
@@ -61,8 +65,8 @@ pid=$!
 exec 5> /tmp/release4
 n=0; while ! grep -q EXEC_CONTRACT_HOLDING o4 && [ $n -lt 30 ]; do sleep 1; n=$((n+1)); done
 if ! grep -q EXEC_CONTRACT_HOLDING o4; then echo "@@EXT4_WRITE not-ready"
-elif (echo x >> /mnt/e4/e.dom) 2>/dev/null; then echo "@@EXT4_WRITE allowed"
-else echo "@@EXT4_WRITE denied"; fi
+elif (echo x >> /mnt/e4/e.dom) 2>o4w; then echo "@@EXT4_WRITE allowed"
+else echo "@@EXT4_WRITE denied $(tr '\n' ' ' < o4w)"; fi
 if (echo x >> /mnt/e4/link.dom) 2>o4l; then echo "@@EXT4_LINK_WRITE allowed"; else echo "@@EXT4_LINK_WRITE denied $(tr '\n' ' ' < o4l)"; fi
 exec 5>&-
 wait $pid; echo "@@EXT4_HOLD rc=$? $(tr '\n' ' ' < o4)"
@@ -101,6 +105,12 @@ echo VIRTUAL_STAGED_DONE
 CHILD = 'EXEC_CONTRACT_CHILD'
 BUSY = 'Text file busy'
 ENOEXEC, ENOSYS = 8, 38
+
+
+def busy_denial(t):
+    """A refused write whose error is ETXTBSY. Any other failure (EACCES, EROFS, ENOSPC) is
+    not the denial this gate is about."""
+    return t.startswith('denied') and BUSY in t
 
 
 def main():
@@ -154,7 +164,17 @@ def main():
         # A native program cannot replace a filtered task: ENOSYS (applications.md).
         'exec_native_returns_enosys': rc('REFUSED_NATIVE') == 0 and
             f'EXEC_CONTRACT_REFUSED rc=-1 errno={ENOSYS} ' in text('REFUSED_NATIVE') + ' ',
-        'running_image_not_writable': text('WRITE_WHILE_RUNNING') == 'denied',
+        'running_image_not_writable': busy_denial(text('WRITE_WHILE_RUNNING')),
+        # Negative control for the check above: a refused write that is not ETXTBSY (here a
+        # write to /proc/version) reads as denied with a message, and busy_denial() rejects it,
+        # and rejects the other errnos a failing write can carry.
+        'denial_check_rejects_other_errors':
+            text('CONTROL_WRITE').startswith('denied ') and BUSY not in text('CONTROL_WRITE') and
+            len(text('CONTROL_WRITE')) > len('denied ') and
+            not busy_denial(text('CONTROL_WRITE')) and
+            not busy_denial("denied sh: can't create /x: No space left on device") and
+            not busy_denial("denied sh: can't create /x: Read-only file system") and
+            busy_denial("denied sh: can't create /x: Text file busy"),
         'holder_unaffected': rc('HOLD') == 0 and 'EXEC_CONTRACT_HELD' in text('HOLD'),
         'writable_after_exit': text('WRITE_AFTER_EXIT') == 'allowed',
         'open_writer_refused': rc('OPEN_WRITER') == 126 and BUSY in text('OPEN_WRITER') and
@@ -164,9 +184,8 @@ def main():
         # tmpfs arms above never exercise. A hard link names the same inode,
         # so a writer through it is counted and refused with ETXTBSY.
         'ext4_mounted': text('EXT4_FS') == 'ext4',
-        'ext4_running_image_not_writable': text('EXT4_WRITE') == 'denied',
-        'ext4_hard_link_writer_refused': text('EXT4_LINK_WRITE').startswith('denied') and
-            BUSY in text('EXT4_LINK_WRITE'),
+        'ext4_running_image_not_writable': busy_denial(text('EXT4_WRITE')),
+        'ext4_hard_link_writer_refused': busy_denial(text('EXT4_LINK_WRITE')),
         'ext4_holder_unaffected': rc('EXT4_HOLD') == 0 and 'EXEC_CONTRACT_HELD' in text('EXT4_HOLD'),
         'ext4_link_writable_after_exit': text('EXT4_LINK_AFTER') == 'allowed',
         # A shared writable mapping made before the launch keeps the file open

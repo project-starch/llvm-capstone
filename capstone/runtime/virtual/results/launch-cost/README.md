@@ -29,6 +29,14 @@ share (26.18M to 25.98M) and more than its repetition spread of 0.02M; exec and
 grants are unchanged, and run's 0.21M difference lies inside dev's own spread
 of 0.81M.
 
+**Which commit this measured.** The table was taken on 2026-10-18 at this branch's
+first commit (`68d794e3`) against dev `b456c1b4`. It predates the module-side
+filesystem decision (the second commit), the one-mapping `load()` (the third), the
+vp2 module on dev, and the mapping registry of #250, so its load and grants windows
+are not this head's `load()` or module. It has not been re-measured at this head.
+The QEMU, module, launcher and plugin it ran on are the ones whose hashes the JSON
+lists.
+
 Arms (p12, one hart, 2026-10-18):
 
 - **dev**: launcher and module from dev `b456c1b4`, built with the window marks

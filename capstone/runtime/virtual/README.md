@@ -427,6 +427,14 @@ python3 capstone/runtime/virtual/run-exec.py ... --application "$out/exec.dom" \
   --helper <memfd-launch>
 ```
 
+`load()` reads the program and section headers again from the page-cache mapping after the
+validation, so a change below the VFS (the residual above) could make them garbage. It reads each
+field once into a local and checks it against the file size and the reservation before use.
+`test-load-bounds.sh` is a host test of that: it stubs the validation out and gives `load()` twelve
+images that are each wrong in one header field; every one must be refused with `ENOEXEC`, and an
+unmodified image must load. Run it with another `exec.c` as its argument to see the cases fail on
+an older `load()`.
+
 ## Qualification and limits
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)

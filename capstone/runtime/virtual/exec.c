@@ -435,6 +435,13 @@ static int die(const char *what)
     fprintf(stderr, "capstone-vexec: %s: %s\n", what, strerror(errno));
     cleanup(); return 125;
 }
+/* Whether the NUL-terminated section name at `at` in a string table of `len` bytes is `want`,
+ * without reading past the table. */
+static int section_named(const char *names, uint64_t len, uint64_t at, const char *want)
+{
+    size_t n = strlen(want) + 1;
+    return at <= len && n <= len - at && !memcmp(names + at, want, n);
+}
 /* Map the image, validate the mapping and load from it. One mapping, so the
  * headers and spans checked are the ones indexed below; a second mapping would
  * trust a check made on other pages. The denial (CV_IMAGE) keeps every writer
@@ -453,22 +460,42 @@ static int load(int fd, struct capstone_application_descriptor_v2 *desc,
         int error = errno;
         munmap(raw, st.st_size); errno = error; return -1;
     }
+    /* Everything below is read from the mapping again after the validation. A change below
+     * the VFS in between (the residual named above) may make these bytes garbage; it must not
+     * make them an out-of-bounds read or write in this process. So each header field is read
+     * ONCE into a local, checked against the file size before it is used as an offset, count
+     * or length, and the checked local is what every later step uses. */
+    const uint64_t size = st.st_size;
     const Elf64_Ehdr *h = (void *)raw;
-    const Elf64_Phdr *ph = (void *)(raw + h->e_phoff);
-    const Elf64_Shdr *sh = (void *)(raw + h->e_shoff);
-    const char *names = (void *)(raw + sh[h->e_shstrndx].sh_offset);
+    const uint64_t phoff = h->e_phoff, shoff = h->e_shoff, entry_va = h->e_entry;
+    const unsigned phnum = h->e_phnum, shnum = h->e_shnum, shstr = h->e_shstrndx;
+    if (phoff > size || phnum > (size - phoff) / sizeof(Elf64_Phdr) ||
+        shoff > size || shnum > (size - shoff) / sizeof(Elf64_Shdr) || shstr >= shnum) {
+        munmap(raw, st.st_size); errno = ENOEXEC; return -1;
+    }
+    const Elf64_Phdr *ph = (void *)(raw + phoff);
+    const Elf64_Shdr *sh = (void *)(raw + shoff);
+    const uint64_t names_at = sh[shstr].sh_offset, names_len = sh[shstr].sh_size;
+    if (names_at > size || names_len > size - names_at) {
+        munmap(raw, st.st_size); errno = ENOEXEC; return -1;
+    }
+    const char *names = (void *)(raw + names_at);
     uint64_t low = UINT64_MAX, high = 0;
     int virtual = 0;
     *stack = 1u << 20;
-    for (unsigned i = 0; i < h->e_phnum; ++i) if (ph[i].p_type == PT_LOAD) {
-        if (ph[i].p_vaddr < low) low = ph[i].p_vaddr;
-        if (ph[i].p_vaddr + ph[i].p_memsz > high) high = ph[i].p_vaddr + ph[i].p_memsz;
+    for (unsigned i = 0; i < phnum; ++i) {
+        const Elf64_Phdr p = ph[i];
+        if (p.p_type != PT_LOAD) continue;
+        if (p.p_vaddr < low) low = p.p_vaddr;
+        if (p.p_vaddr + p.p_memsz > high) high = p.p_vaddr + p.p_memsz;
     }
-    for (unsigned i = 0; i < h->e_shnum; ++i) {
+    for (unsigned i = 0; i < shnum; ++i) {
         uint64_t v[3];
-        if (sh[i].sh_type != SHT_PROGBITS) continue;
-        if (!strcmp(names + sh[i].sh_name, ".capstone_virtual") && sh[i].sh_size == 8) {
-            memcpy(v, raw + sh[i].sh_offset, 8);
+        const Elf64_Shdr s = sh[i];
+        if (s.sh_type != SHT_PROGBITS) continue;
+        if (section_named(names, names_len, s.sh_name, ".capstone_virtual") && s.sh_size == 8 &&
+            s.sh_offset <= size && 8 <= size - s.sh_offset) {
+            memcpy(v, raw + s.sh_offset, 8);
             virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V2 || v[0] == CV_IMAGE_MAGIC_V3;
             local_malloc = v[0] == CV_IMAGE_MAGIC;
             /* v5 is refused rather than run: its mallocng hands out exact object bounds, which
@@ -476,8 +503,9 @@ static int load(int fd, struct capstone_application_descriptor_v2 *desc,
              * slot's in-band header. Rebuilding is the only fix. */
             if (v[0] == CV_IMAGE_MAGIC_V5) virtual = 0;
         }
-        if (!strcmp(names + sh[i].sh_name, ".capstone_domreq") && sh[i].sh_size == 24) {
-            memcpy(v, raw + sh[i].sh_offset, 24);
+        if (section_named(names, names_len, s.sh_name, ".capstone_domreq") && s.sh_size == 24 &&
+            s.sh_offset <= size && 24 <= size - s.sh_offset) {
+            memcpy(v, raw + s.sh_offset, 24);
             *stack = rounded(v[2]);
         }
     }
@@ -486,9 +514,22 @@ static int load(int fd, struct capstone_application_descriptor_v2 *desc,
     }
     *image = reserve(*bytes);
     if (!*image) { munmap(raw, st.st_size); return -1; }
-    for (unsigned i = 0; i < h->e_phnum; ++i) if (ph[i].p_type == PT_LOAD)
-        memcpy((char *)*image + ph[i].p_vaddr - low, raw + ph[i].p_offset, ph[i].p_filesz);
-    *entry = (uintptr_t)*image + h->e_entry - low;
+    /* Each segment is bounded by what was reserved and by what was mapped before it is copied,
+     * and the entry point by the reservation, all on the locals read above. */
+    if (entry_va < low || entry_va - low >= *bytes) {
+        munmap(*image, *bytes); munmap(raw, st.st_size); errno = ENOEXEC; return -1;
+    }
+    for (unsigned i = 0; i < phnum; ++i) {
+        const Elf64_Phdr p = ph[i];
+        if (p.p_type != PT_LOAD) continue;
+        uint64_t at = p.p_vaddr - low;
+        if (p.p_vaddr < low || at > *bytes || p.p_filesz > *bytes - at ||
+            p.p_offset > size || p.p_filesz > size - p.p_offset) {
+            munmap(*image, *bytes); munmap(raw, st.st_size); errno = ENOEXEC; return -1;
+        }
+        memcpy((char *)*image + at, raw + p.p_offset, p.p_filesz);
+    }
+    *entry = (uintptr_t)*image + entry_va - low;
     munmap(raw, st.st_size);
     if (mprotect(*image, *bytes, PROT_READ | PROT_WRITE | PROT_EXEC)) {
         munmap(*image, *bytes); return -1;
