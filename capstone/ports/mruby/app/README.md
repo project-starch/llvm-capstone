@@ -217,7 +217,14 @@ trigger the port can see: a counter in the Sublet derive hook that forces a GC
 step every K derives, or a tighter `interval_ratio` under
 `MRB_CAPSTONE_SUBLET`. Measure it by the same high_water against the plain
 build. M6 at its default 20,000 needs more than 65,536 records either way
-(qkit7 with the cap removed: high_water 65,024, failing at the same step).
+(qkit7 with the cap removed: high_water 65,024, failing at the same step; a
+paged table reads 123,391).
+
+Until then, `scripts/smoke-fit.rb` is the control a Sublet arm can complete on
+that table: smoke.rb with M6 at 6,000, the largest N measured at or under 75% of
+64,001. Pass it to the release corpus as `run-virtual.py --smoke`. On
+qkit7-batch2 with the tick-100 Sublet image it completes where smoke.rb's control
+fails, and the 23 cells do not move.
 
 ## Build and run
 
