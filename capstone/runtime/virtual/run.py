@@ -300,11 +300,19 @@ def main():
         # allocated and no more than the old 1-MiB metadata budget. Retired
         # nodes in the unfinished final collection epoch need not be reclaimed.
         capacity = sparse.get('node_capacity', sparse.get('node_bytes', 0) // 16)
+        # Reuse comes from one of two places. A paged table is collected in software: collections and
+        # reclaimed must explain every allocation beyond capacity. A flat table is never collected (the
+        # module's collect() refuses it, Q-27); generations recycle it in hardware through the free list,
+        # with collections and reclaimed both 0. There `nodes` (the header's allocation count, pops
+        # included) can pass capacity only by popping freed records -- without generations the arm
+        # stops at about capacity minus the node floor (64,001 on qkit7-v7b-mg) -- so more than two
+        # tablefuls is itself the evidence of reuse.
+        software = sparse.get('collections', 0) > 0 and sparse.get('reclaimed', 0) >= sparse.get('nodes', 0) - capacity
+        hardware = sparse.get('collections', -1) == 0 and sparse.get('reclaimed', -1) == 0
         tests['sparse_recycling'] = (lines.count('VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags') == 1
-                                 and capacity > 0 and sparse['collections'] > 0
-                                 and sparse['nodes'] > 2 * capacity
-                                 and sparse['reclaimed'] >= sparse['nodes'] - capacity
-                                 and sparse['node_bytes'] <= 1048576 and sparse['peak'] < 2048)
+                                 and capacity > 0 and (software or hardware)
+                                 and sparse.get('nodes', 0) > 2 * capacity
+                                 and sparse.get('node_bytes', 1 << 30) <= 1048576 and sparse.get('peak', 1 << 30) < 2048)
     tests['sqlite_results'] = lines.count('SQLITE_SUM=5050') == 1 and lines.count('SQLITE_PERSIST=100') == 1
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1
