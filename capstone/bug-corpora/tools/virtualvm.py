@@ -154,9 +154,12 @@ class Batch:
 
 def split(serial):
     """{step: (text, result)} for every step that BEGAN. A step that began and never ended (the
-    boot timed out or the guest died) gets kind 'none', which no observe() reads as a run."""
+    boot timed out or the guest died) gets kind 'none', which no observe() reads as a run.
+    The END marker is matched wherever it starts on its line: the script echoes it straight after `cat /tmp/step.out`,
+    so a step whose output lacks a final newline puts it mid-line ("(unknown):0: @@STEP-END ..."). Anchored at the line
+    start, such a step never closed, ran to the end of the transcript, and swallowed every later step."""
     steps = {}
-    for m in re.finditer(rf"^{re.escape(BEGIN)}(\S+)\n(.*?)(?:^{re.escape(END)}\1 (\d+)$|\Z)",
+    for m in re.finditer(rf"^{re.escape(BEGIN)}(\S+)\n(.*?)(?:{re.escape(END)}\1 (\d+)$|\Z)",
                          serial, re.S | re.M):
         name, text, rc = m.group(1), m.group(2), m.group(3)
         fault = next((l.strip() for l in text.splitlines() if "domain fault cause=" in l), None)
