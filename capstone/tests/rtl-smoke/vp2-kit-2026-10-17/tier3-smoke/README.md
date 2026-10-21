@@ -6207,3 +6207,15 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
     processes: tree A 5 of 6 at 17:41, the 13:34 tree-B smoke, the 20:48 tree-A smoke, tree B 1 of 6 at 20:48, and
     trace runs 1-2. f8594e11 (r60, 4 ms) has not run on silicon, so its stall rate is not known.
   - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
+
+### s23-cpmp-rearm on board 1 (tree A), result (2026-10-21 22:54-22:55), and the tick pair on board 1, pre-registered (22:5x, before its boot)
+
+- **s23 on tree A** (`records/s23-bare-b1.result-lines.txt`): SR 25. All 25 SV values equal tree B's and PREREG
+  7ae1d8491466's pre-batch vector, a0 = 0x80800000 included. AS EXPECTED, as amended. So the instrument has its
+  silicon control on both pre-batch trees, and the batch boot's s23 has the six flips as its one unknown.
+- **The tick pair on tree A:** `tier3-trace-pair.sh 1 <out>`, the same script, images and order as board 2's
+  pre-registration above (459326296d2b), on kit bkit7-rev2xDN2. It makes the pair two-sided across both trees.
+  - Predictions as board 2's: every t100 run completes, at least one t4 run storms, and a storming t100 refutes the
+    reading.
+  - On tree A the cw 4 ms image stalled in 8 of 9 processes today, so a t4 run that completes here would be more
+    surprising than on tree B.
