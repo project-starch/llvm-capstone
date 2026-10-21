@@ -146,6 +146,27 @@ def main():
         checks += [("a rung without END is not completed", done is False),
                    ("the step that began and never ended reads kind none",
                     steps.get("01_case-buggy", ("", {}))[1].get("kind") == "none")]
+        # A step whose output has no final newline: the END echo follows `cat /tmp/step.out` on the same line (mruby's
+        # smoke printing "(unknown):0: " and dying, 2026-10-21). The step must close there, and the next step must read.
+        midline = body.replace("CONTROL clean RETURNED\n@@STEP-END", "(unknown):0: @@STEP-END").replace(
+            "@@STEP-END control-clean 0", "@@STEP-END control-clean 1")
+        _, (steps, _, done) = run(seg(1, 2, "b0-stats", "RESULT b0-stats retval=0") + seg(2, 2, "vbatch", midline), root)
+        checks += [("an END marker mid-line closes its step (output with no final newline)",
+                    steps.get("control-clean", ("", {}))[1] == {"kind": "exit", "value": 1}),
+                   ("and the step after it still reads",
+                    steps.get("01_case-buggy", ("", {}))[1].get("kind") == "signal"
+                    and "cause=25" in steps["01_case-buggy"][1].get("fault", "")),
+                   ("and the earlier step's text does not carry the later step's fault",
+                    "cause=25" not in steps.get("control-clean", ("", {}))[0])]
+        # An exit status above 128+NSIG is an exit, not a signal: perl's panic exits 255 (2026-10-21).
+        exit255 = body.replace("@@STEP-END control-clean 0", "@@STEP-END control-clean 255")
+        _, (steps, _, done) = run(seg(1, 2, "b0-stats", "RESULT b0-stats retval=0") + seg(2, 2, "vbatch", exit255), root)
+        checks += [("rc 255 reads exit 255, not signal 127",
+                    steps.get("control-clean", ("", {}))[1] == {"kind": "exit", "value": 255}),
+                   ("rc 139 still reads signal 11",
+                    steps.get("01_case-buggy", ("", {}))[1] == {"kind": "signal", "value": 11,
+                                                                 "fault": steps["01_case-buggy"][1].get("fault")}
+                    and steps["01_case-buggy"][1].get("fault"))]
         p = boardvm.platform(kit_dir, None, Path(__file__))
         checks += [("the qemu key names the board", p["qemu"] == "board:caplifive_vp2_bf3db3175"),
                    ("the monitor is recorded", p["monitor"] == "007d81d")]
