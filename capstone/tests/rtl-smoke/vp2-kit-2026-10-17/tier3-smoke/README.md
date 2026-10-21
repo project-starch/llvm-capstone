@@ -5509,3 +5509,23 @@ finds RFENCE at its boot probe and sends its remote fences to the monitor instea
   satp, not to this pair.
 - **For the runtime lane:** PR #4 can merge into capstone-bootstrap. Carrying RFENCE on the boards is a separate
   cherry-pick onto the vp2 monitor line, folded into the batch firmware with its own Tier 1, as agreed.
+
+### The repaired arms on tree A, pre-registered (2026-10-21 12:4x): board 1, to make the two-tree claim true
+
+**Two claims in the pass summary are wrong, and are corrected here** (and on dev with these results):
+- the summary's arm count is 24, but its rows add up to **25** arms (the 346 cells are right);
+- "every arm of the pass now reads identically on both bitstreams" (chapter 8, dev 268d5ac8807d, and the handoff note
+  1e48ff20774c) was premature: the three repaired arms (pb13q15, pgm1q15, wm1q15) had read only on tree B.
+
+So they run on tree A now, with the runner as pre-registered (`tier3-pass-rep.sh` 1086fbe9aad236be, board 1, kit
+bkit7-rev2xDN2, the same pinned worktrees, both clean).
+- **Predictions:** each cell equals its reference and its tree-B reading in every field. pb13q15 9/9 (CAUGHT 7,
+  NO-READING 2), pgm1q15 5/5, wm1q15 23/23. cause=29 0; pc=0, DRT1, FRTY, INJS and INJL 0.
+
+### Recorded from the lanes (2026-10-21)
+
+- **For the batch firmware (2026-10-21):** caplifive-sbi #4 is merged into capstone-bootstrap (eace4d9affa4). The board's vp2
+  monitor line gets it as a cherry-pick of fab38bb. It keeps the collaborator's authorship and is pushed WITHOUT the
+  pre-commit scan, which governs only what this lane writes (the lead's ruling on third-party work), beside the
+  fetch-retry cap (579ef1c). Optional for that first boot: a satp-writing arm run from S with Linux's fences live (the
+  va-satpstale family), which would close the RFENCE pair's one limit, S-29 masking.
