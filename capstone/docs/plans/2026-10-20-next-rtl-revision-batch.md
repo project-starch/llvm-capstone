@@ -630,6 +630,13 @@ that word only inside `table_alloc` (`cap_rev_table.c:206`), never on a push, so
 as well as a wrong counter. `vp_write_hdr1` now takes a no-count flag. Enumerated rather than assumed after
 getting it wrong once: there were THREE call sites of it, not two.
 
+*The cost, ACCEPTED as a known cost of the batch* (semantics owner, 2026-10-21): **+1 cycle per physical
+kill, revoke or retire; 0 everywhere else.** Measured: `r12-recl-cpmp` 4268 -> 4269, `va-alloc-off` 26483 ->
+26484, `va-flat` 118711 -> 118711, `va-fetchsplit-s` 134625 -> 134625. The alternative -- duplicating the
+record read inside the virtual branch so the physical path pays nothing -- adds an arm to the rev-node READ
+selector, which is inside the cone the synthesis lane is tracking for this batch, so it would trade a
+measured cycle for unmeasured timing risk. Rejected on those grounds rather than on cost.
+
 *The cost, attributable.* The physical path pays ONE CYCLE per revocation operation --
 `r12-recl-cpmp` 4268 to 4269, `va-alloc-off` 26483 to 26484, with arms performing no revocation unchanged to
 the cycle. It is the branch balance on the header load at the three walk entries, and it is not avoidable by
