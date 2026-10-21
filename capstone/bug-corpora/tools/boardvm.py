@@ -35,6 +35,7 @@ import virtualvm
 from verdicts import sha256
 
 BATCH = "vbatch"
+STEP_MULT = 20     # a board step's bound: its runner's limit times this, unless board.env sets BOARD_STEP_MULT
 RUNG = "vbatch"
 FILES = ("board.env", "board-run.sh", "adapter/capstone-vexec", "adapter/module/capstone_vm.ko")
 HEARTBEAT_S = 30
@@ -146,15 +147,36 @@ class BoardBatch(virtualvm.Batch):
           offset alone (S-23's fetch face, 2026-10-20).
         - A heartbeat that no observe() reads keeps the driver's idle limit from cutting a long silent step.
         - The final rmmod fails on the board, harmlessly, after the last step."""
+        mult = getattr(self, "step_mult", STEP_MULT)
         lines = ["#!/bin/sh", f"cd /test-domains/{BATCH} || exit 1", "dmesg -n 1",
                  'grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }',
                  "chmod 666 /dev/capstone-vm",
                  MODTEXT_LINE,
                  "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + virtualvm.param_lines(self.params) + [
-                 f"( i=0; while [ $i -lt 2000 ]; do sleep {HEARTBEAT_S}; i=$((i+1)); echo \"@@HB $i\"; done ) & hb=$!"]
+                 # The heartbeat carries the running step's output size, bytes and lines: a step's output is printed only
+                 # when it ends, so without it a step that runs for hours shows nothing of where it is (mruby's smoke,
+                 # 2026-10-21, 153 min). Sizes only, never the text, so no observe() can count a line twice.
+                 f"( i=0; while [ $i -lt 2000 ]; do sleep {HEARTBEAT_S}; i=$((i+1)); "
+                 "echo \"@@HB $i out=$(wc -c < /tmp/step.out 2>/dev/null)B/$(wc -l < /tmp/step.out 2>/dev/null)L\"; "
+                 "done ) & hb=$!"]
         for name, command in self.steps:
-            lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
-                      "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\""]
+            bound = self.bounds.get(name)
+            if bound:
+                # A bounded step: the board image's busybox has no timeout applet, so a watcher kills the step at its
+                # bound and says so (@@STEP-BOUND, which split() reads as a timeout). The step runs in the background,
+                # so its stdin is /dev/null.
+                b = int(bound * mult)
+                lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1 & sp=$!",
+                          f"( sleep {b}; kill -9 $sp 2>/dev/null && echo '{virtualvm.BOUND}{name} {b}' ) & wp=$!",
+                          "wait $sp; rc=$?", "kill $wp 2>/dev/null",
+                          "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\"",
+                          # After a kill at the bound, the module's last kernel lines (KERN_INFO, hidden on the board
+                          # console at printk 1: "collect skipped ... available 511" is one). Printed after END, so
+                          # they are outside every step's text.
+                          f"[ $rc = 137 ] && dmesg | grep -a capstone_vm | tail -n 12 | sed 's/^/@@DMESG {name} /'"]
+            else:
+                lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
+                          "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\""]
         lines += ["kill $hb 2>/dev/null", "rmmod capstone_vm 2>/dev/null", "echo VIRTUAL_STAGED_DONE", ""]
         return "\n".join(lines)
 
@@ -180,6 +202,7 @@ class BoardBatch(virtualvm.Batch):
         (self.stage / "capstone-vexec").chmod(0o755)
         shutil.copy2(kit / "adapter/module/capstone_vm.ko", self.stage / "capstone_vm.ko")
         self.params = virtualvm.module_params(kit)
+        self.step_mult = float(read_env(kit / "board.env").get("BOARD_STEP_MULT", STEP_MULT))
         (self.stage / "gate.sh").write_text(self.script())
         (self.stage / "ctl.sh").write_text(self.controller())
         (self.stage / "ctl.sh").chmod(0o755)
