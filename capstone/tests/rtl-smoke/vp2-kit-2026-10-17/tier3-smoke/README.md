@@ -5703,3 +5703,55 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - an s23-cpmp-rearm-style persistent covered deny, with the S handler in a second denied range;
   - placed LAST, because if the cap failed it would retry forever;
   - pre-registered with that boot.
+
+### mruby virtual-malloc on board 2 (tree B), result (2026-10-21 13:34-16:16): the smoke control did not end in 153 minutes; stopped, no reading
+
+- **Read:**
+  - The boot and both controls are clean: b0-stats 0, b0-hello 0, session-share 0.
+  - The images equal the reference's. Firmware 09203ab6af4339a3, 19,565,064 B.
+  - The batch's first step, the smoke control, BEGAN and never ENDed in 153 minutes, while the guest's heartbeat
+    kept printing every 30 s (307 beats).
+  - In the batch rung: no domain fault, pc=0 0, FRTY 0, DRT1 0, Oops 0, INJS 0, INJL 0.
+  - No case step ran. `records/mp-mruby-stock-b2.result-lines.txt`.
+- **Against the pre-registration:**
+  - SMOKE_DONE and 23 of 23 did NOT hold. No cell is a reading, so nothing about the 23 cells is claimed either way.
+  - The vbatch END prediction did not hold either, because the boot was stopped.
+- **Why stopped:** the bound was set at 16:15, two and a half hours into the step, against three references:
+  - the reference session runs all 24 steps in about 4 minutes on QEMU;
+  - the step's own QEMU limit is 120 s;
+  - this smoke ran in 65.85 s on this board under the B5 runtime (fpga-silicon-measurements-for-paper.md, b5-mruby-smoke).
+  - Even the pass's ~18x silicon factor puts it under 40 minutes.
+  - Left alone, the boot would have held board 2 until its 3.5 h batch budget ran out and read nothing more. A step's
+    output is printed only when the step ends.
+- **What this cannot tell apart:**
+  - a step that is merely very slow on silicon. The paper doc records that level0's first-fit allocator once made
+    mruby's GC test take minutes, and smoke's M6 allocates 60,000 objects;
+  - a live-lock, with no fault and no monitor line.
+- **What the next boot needs:**
+  - a heartbeat that carries the running step's progress: the size of its output and its last line, so the smoke's
+    M1..M13 markers show where it is;
+  - a per-step bound on the board, so one step cannot hold the whole batch.
+  - Both are boardvm changes, and they go on dev before mruby returns to a board.
+- **Board 2 then started Juliet tree B,** as pre-registered (09bb6536e2ee).
+
+### tier3-mp-arm.sh gains perl and a clean-reference gate (2026-10-21 16:2x)
+
+- **Perl recipes:**
+  - perl-stock and perl-sublet are pinned to the TRIMMED references, refs/tB-mimic/<tag>-trim (--lib-closure, the
+    board's staging), and to their tree wt-ref2 15ced322c824 (runner aabfa66858b2c35e, appvm-arm 11967b378bda73c8).
+  - Full = trimmed, 11 of 11 for each arm, is that staging's gate (corpus-mp/refs/REFS).
+  - The argument line is the reference script's own (run-refs-perl2.sh:42).
+- **The gate:** a reference whose read line is not `APPVM read rc=0` with its controls passing is refused.
+  - mruby: "control smoke ok". perl: "controls {'eval': True, 'shim': True}".
+  - It refuses as-built mruby-sublet and passes the other three references.
+- **Dry run** (`dryrun-mp-arm2.txt`, every call stubbed, the arm writing the reference's own matrix and a real pass
+  transcript):
+  - good runs read 23/23 for mruby-stock and 11/11 for each perl arm;
+  - a planted cause change reads 10 of 11;
+  - the Sublet refusal, the 78 refusal, busy, 409 and an unknown tag all stop.
+- **Perl reading:** perl-stock case 02 reads signal127 in the reference and will read so on the board, at the pinned
+  tree. It is perl's own panic, exit 255 (virtualvm's rc decoding, fixed on dev's lane virtualvm-end-marker).
+  It is recorded as exit 255 by the 2026-10-11 record.
+- **Held until boardvm's per-step bound and progress heartbeat** (virtualvm-end-marker 0a12aeb3f636) are on the
+  session tool's tree, so one slow step cannot hold a board for its whole budget. That tree is held still until the
+  compiler lane's batch references end.
