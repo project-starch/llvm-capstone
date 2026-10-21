@@ -5449,3 +5449,63 @@ so every arm of the pass has a reading on both bitstreams.
     reading is attributed to the design.
   - The RTL lane will send s23-cpmp-rearm as an S-29-style folder (bare M-mode images from the batch source, vectors
     simulated on both RTLs, images/SHA256SUMS, board_rec). Its fix reads two-sided in simulation (dev 45e8b7f18de8).
+
+### The caplifive-sbi #4 (SBI RFENCE) board pair, pre-registered (2026-10-21 12:1x): pb10 on board 1, control then variant
+
+The runtime lane's review of PR #4 is LAND-AFTER-board-boot. Linux on the board is SMP (CONFIG_SMP=y), so with #4 it
+finds RFENCE at its boot probe and sends its remote fences to the monitor instead of taking the SBI v0.1 fallback.
+- **One variable:** the PR is one commit, fab38bb (sbi_capstone.c +50/-2), on dafe4f2 (the capstone-bootstrap line). The
+  boards run the vp2 monitor line, f13dbc5, whose CSMINT emulation and retries the corpus arms need. So the variant is
+  f13dbc5 + `git cherry-pick fab38bb` (clean), local commit e1db99e, tree 8bc1c53d62d7.
+  - The tree is re-derived from the public commits in a scratch worktree, giving the same 8bc1c53d62d7.
+  - It is NOT pushed: the commit carries the PR author's identity, which the pre-commit scan refuses, and the PR itself is
+    the public record.
+  - Under the board's defines, the variant monitor compiles with capstone-c (rc 0).
+- **Kits:**
+  - control bkit7-rev2xDN2 (monitor f13dbc5, as every pass boot);
+  - variant bkit7-rev2xDN2rf, identical but for BOARD_FW_MON=/tmp/capstone/csbi-rfence and BOARD_MONITOR_COMMIT=e1db99e
+    (diff of board.env: those two lines, plus the kit's own manifest path).
+- **Runner:** `tier3-rfence-pair.sh` 43cdefe50e91359b.
+  - Board 1 (tree A), cold boots, control first. pb10 through run-virtual-cases.py 9b5e409c (its reference's stamp), scored
+    against ref-tB-mimic/pb10.
+  - The kernel's readings come from THIS boot's console, after its own load_image, via `console-readings.py` 09227f1211d1f499, so the
+    replayed previous boot is not counted.
+  - Controls on three real pass boots: 620, 617 and 620 warnings after load_image, 0 before it.
+  - Dry run: `dryrun-rfence-pair.txt`.
+- **Predictions:**
+  - **control:**
+    - "remote fence extension is not available in SBI v1.0" about 617-620 times; "SBI RFENCE extension detected" 0;
+    - pb10 4 of 4; FRTY 0, DRT1 0, pc=0 0, INJS 0;
+    - b0-stats ticks inside the pass's tree-A band, 1,645,852 .. 1,829,872 (30 boots, 11% spread).
+  - **variant:**
+    - "SBI RFENCE extension detected" exactly 1 (the probe found it; the check that #4 is live at all);
+    - remote-fence warnings **0**;
+    - pb10 4 of 4 in every field, the same cells as the control; FRTY 0, DRT1 0, pc=0 0, INJS 0;
+    - b0-stats ticks inside that band or below it, since full flushes cost little beside 620 printed warnings. Its board-run
+      wall time is reported, not graded (bake and upload dominate it).
+  - A variant that boots but reads RFENCE detected 0 means #4 is not live: that is no reading on #4, not a pass.
+
+### The caplifive-sbi #4 (SBI RFENCE) pair, result (2026-10-21 12:11-12:27, board 1, tree A): every pre-registered reading holds
+
+`records/rfence-pair.result-lines.txt`. UNGATED.
+
+| reading | control (f13dbc5) | variant (f13dbc5 + fab38bb) | predicted |
+|---|---|---|---|
+| "SBI RFENCE extension detected" | 0 | **1** | 0 / exactly 1 |
+| "remote fence extension is not available in SBI v1.0" | 620 | **0** | ~617-620 / 0 |
+| pb10 against ref-tB-mimic/pb10 | 4 of 4 | 4 of 4 | 4 of 4 both |
+| variant against control | | 4 of 4 cells the same | the same cells |
+| b0-stats ticks | 1,771,005 | 1,712,985 | in 1,645,852..1,829,872 / in it or below |
+| FRTY, DRT1, pc=0, INJS, INJL | 0 | 0 | 0 |
+| board-run wall (reported, not graded) | 12:11:03-12:19:38 (8 m 35 s) | 12:19:39-12:27:40 (8 m 01 s) | |
+| last kernel timestamp (reported) | 198.63 s | 164.58 s | |
+
+- **#4 is live and harmless on this arm.** Linux found RFENCE at its boot probe, sent its remote fences to the monitor
+  instead of the SBI v0.1 fallback, and pb10's cells did not move.
+- The kernel timeline is 34 s shorter, consistent with 620 console warnings no longer printed at 57600 baud. That was
+  not pre-registered and is only a reading.
+- **What it does NOT settle:** whether the extra full flushes mask an S-29-class staleness reading. pb10 has no such
+  reading, and S-29 is unreachable by every corpus arm by construction. That question belongs to an arm that writes
+  satp, not to this pair.
+- **For the runtime lane:** PR #4 can merge into capstone-bootstrap. Carrying RFENCE on the boards is a separate
+  cherry-pick onto the vp2 monitor line, folded into the batch firmware with its own Tier 1, as agreed.

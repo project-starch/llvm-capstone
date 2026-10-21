@@ -1,0 +1,22 @@
+# tier3-rfence-pair.sh stubbed dry run (2026-10-21 12:10). RFP_RUN writes pb10's reference bundle, the 2026-10-20 pass boot's real board.txt, SEQ and driver.log
+# (for the variant, a copy with the warning text replaced where unsplit and a 'SBI RFENCE extension detected' line added: 93 split warnings survived the
+# replace and console-readings.py counted them, which is the reassembly working), RFP_BUSY, RFP_ROOT and RFP_BOOK stubbed. The busy branch follows.
+RFP ctl BEGIN 12:10:19 kit bkit7-rev2xDN2 monitor f13dbc5 booking 99
+RFP ctl END 12:10:19 rc=0 :: --- stub ctl
+RFP ctl COMPARE vs reference rc=0 :: 4 of 4 cells the same
+RFP ctl console: load_image at log line 53; uart chars before 34002 after 68390
+RFP ctl console: remote-fence warnings 620; RFENCE detected 0; Runtime SBI Version ['1.0']; last kernel ts 198.432324
+RFP ctl console: (before load_image, i.e. the replay: remote-fence warnings 0)
+RFP ctl readings: b0-stats ticks=1799676 pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+RFP ctl wall: BOARD_RUN_START 20:38:03 bitstream DRIVER rc=0 20:46:37 
+RFP var BEGIN 12:10:19 kit bkit7-rev2xDN2rf monitor e1db99e booking 99
+RFP var END 12:10:19 rc=0 :: --- stub var
+RFP var COMPARE vs reference rc=0 :: 4 of 4 cells the same
+RFP var console: load_image at log line 53; uart chars before 34002 after 41558
+RFP var console: remote-fence warnings 93; RFENCE detected 1; Runtime SBI Version ['1.0']; last kernel ts 198.432324
+RFP var console: (before load_image, i.e. the replay: remote-fence warnings 0)
+RFP var readings: b0-stats ticks=1799676 pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+RFP var wall: BOARD_RUN_START 20:38:03 bitstream DRIVER rc=0 20:46:37 
+RFP DONE 12:10:19
+== busy branch
+RFP STOP: board 1 is busy
