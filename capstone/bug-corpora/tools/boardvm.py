@@ -169,7 +169,11 @@ class BoardBatch(virtualvm.Batch):
                 lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1 & sp=$!",
                           f"( sleep {b}; kill -9 $sp 2>/dev/null && echo '{virtualvm.BOUND}{name} {b}' ) & wp=$!",
                           "wait $sp; rc=$?", "kill $wp 2>/dev/null",
-                          "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\""]
+                          "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\"",
+                          # After a kill at the bound, the module's last kernel lines (KERN_INFO, hidden on the board
+                          # console at printk 1: "collect skipped ... available 511" is one). Printed after END, so
+                          # they are outside every step's text.
+                          f"[ $rc = 137 ] && dmesg | grep -a capstone_vm | tail -n 12 | sed 's/^/@@DMESG {name} /'"]
             else:
                 lines += [f"echo '{virtualvm.BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
                           "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\""]

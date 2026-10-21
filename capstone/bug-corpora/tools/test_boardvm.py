@@ -135,7 +135,11 @@ def bound_checks(root):
              steps.get("slow", ("", {}))[1] == {"kind": "none"} and "[runner] TIMEOUT" in steps["slow"][0]
              and "@@STEP-BOUND slow 1" in out and "never" not in steps["slow"][0]),
             ("bounded: the step after it reads", steps.get("after", ("", {}))[1] == {"kind": "exit", "value": 0}),
-            ("the heartbeat carries the step's output size", "@@HB 1 out=" in out and "B/" in out)]
+            ("the heartbeat carries the step's output size", "@@HB 1 out=" in out and "B/" in out),
+            ("after a kill at the bound the kernel-log lines are asked for, after END (outside the step's text)",
+             "dmesg | grep -a capstone_vm" in script
+             and script.index("@@STEP-END slow") < script.index("@@DMESG slow")
+             and "@@DMESG" not in steps.get("slow", ("", {}))[0])]
 
 
 def main():
