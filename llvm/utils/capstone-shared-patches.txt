@@ -115,6 +115,7 @@ llvm/lib/Support/CMakeLists.txt | +3 -0 | CapstoneAttributes.cpp
 llvm/lib/TargetParser/CMakeLists.txt | +2 -0 | CapstoneISAInfo.cpp
 llvm/lib/TargetParser/TargetDataLayout.cpp | +46 -0 | static std::string computeCapstoneDataLayout(const Triple &TT,
 llvm/lib/TargetParser/Triple.cpp | +21 -1 | case capstone32:     return "capstone32";
+llvm/lib/Transforms/InstCombine/InstructionCombining.cpp | +11 -1 | // Not for a non-integral (Capstone capability) pointer. Both rewrites below
 llvm/lib/Transforms/Scalar/SROA.cpp | +145 -0 | /// Capstone: does a value of type \p Ty hold a pointer wider than its index --
 llvm/lib/Transforms/Utils/BuildLibCalls.cpp | +56 -33 | // targets. On Capstone every C pointer is a capability in the address space the
 llvm/lib/Transforms/Utils/SimplifyLibCalls.cpp | +1 -1 | Src = B.CreateGlobalString(SrcStr, "str", /*AddressSpace=*/std::nullopt,
