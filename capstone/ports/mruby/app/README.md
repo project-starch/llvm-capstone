@@ -191,6 +191,34 @@ old patch 0008, design `docs/design/mruby-gc-sublet-port-plan.md`). Their
 mrbtest runs and corpus readings stay in `results/2026-09-26` and the corpus's
 `results/20261006`.
 
+### Open: the GC must also run on record pressure (2026-10-22)
+
+On vp2's flat lifetime table a process has 64,001 usable records (65,536 for a
+16-bit node index, less the first id and the reserve). Every Sublet child and
+every malloc'd body holds one until the sweep retires it, and a dead object
+keeps its record until the GC runs. With recycling (generations), the table
+bounds the live set. The smoke's M6 (`objs << [i, "s#{i}", {i => i}]`, N
+entries) reads on QEMU's generations kit:
+
+| N | GC as is: high_water | `GC.start` every 1,000 entries |
+|---|---|---|
+| 0 (M6 off) | 10,357 | -- |
+| 2,000 | 15,794 | -- |
+| 5,000 | 37,174 | 32,448 |
+| 10,000 | fails at 64,001 | completes, 58,043 |
+
+With the GC forced, the cost is near-linear, about 4.4-4.8 records per entry.
+That is the live demand: three Sublet objects per entry, plus about 1.5,
+probably per-object malloc storage (not separated). The plain build's growth is
+superlinear (2.7 per entry to 2,000, 7.1 from 2,000 to 5,000), because its GC
+runs on the heap-growth heuristic, which does not know the table exists. A
+domain cannot read the table's free count, so the open design item is a
+trigger the port can see: a counter in the Sublet derive hook that forces a GC
+step every K derives, or a tighter `interval_ratio` under
+`MRB_CAPSTONE_SUBLET`. Measure it by the same high_water against the plain
+build. M6 at its default 20,000 needs more than 65,536 records either way
+(qkit7 with the cap removed: high_water 65,024, failing at the same step).
+
 ## Build and run
 
     CAPSTONE_LLVM_BUILD_DIR=<llvm build> RUNTIME_REPO=<llvm-capstone tree> \
