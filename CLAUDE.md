@@ -399,8 +399,11 @@ Cheap habits that catch all of the above:
 * **Prefer `python3` to `grep`** for anything that must be counted or must return zero meaningfully.
 * **Make "no data" an ERROR, not a zero.** A tool that finds nothing should exit non-zero and say
   where it looked, never print an empty result that renders like a finding.
-* **`pgrep -f <pattern>` matches your own shell.** Match on a verified PID or a distinctive
-  substring that cannot appear in your own command line.
+* **`pgrep -f <pattern>` matches your own shell.** Signal only process groups you RECORDED at launch,
+  never ones selected by an args substring: on 2026-10-21 one pattern stopped the shell running it, and
+  another killed a peer lane's run that wrote into the same directory tree. List a group's members with
+  `ps -eo pid,pgid,args` filtered on the pgid column -- `ps -g` selects by SESSION, so a liveness test
+  written with it reads "gone" at once and its stop never fires (same day).
 * **A POSITIVE finding from a narrowed view is the mirror of a clean zero, and needs the same
   suspicion.** Confirm it against the UNFILTERED artifact — whether the filter is a grep you wrote
   or a bit-range you assumed — because a view narrowed by the query will show you exactly the thing
