@@ -6343,3 +6343,44 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   11 of 11 against tree A's perl-sublet.
 - Every board counter 0, no step at its bound.
 - **So each perl arm reads on both trees exactly as its silicon-mimic QEMU reference.**
+
+### The Juliet SPATIAL stratified sample on both boards, pre-registered (2026-10-22 03:3x, before either boot)
+
+- **The sample** (the compiler lane's; juliet-sp):
+  - 755 cases: every one of the 261 functional variants, with flow roles 01 (baseline), 54 (five translation units)
+    and 67 (struct-carried). Per CWE: 121 325, 122 181, 124 93, 126 63, 127 93.
+  - No rand() flow, so no seeded build. Manifest 03f048a19f5ea0f5.
+  - Census build on the cw r60 SDK (runtime ce4b1025, sdk.json f5145cbb, -fno-builtin, no MOVC flag): build.json
+    806cc24afbc10194, image-set digest 83fddeb7deb79e77, reproduced here.
+  - 24 batches.
+- **What runs:** `tier3-juliet-spatial.sh <board> <out>` on BOTH boards in parallel (tree A on board 1, tree B on
+  board 2). It runs run.py --board-kit and probe.py --board-kit from wt-jb a772f0112ae3, then judge.py 93aa5ad9 from
+  wt-corpus b3cc8cb4be5a, exactly as the compiler lane's tB-mimic judging.
+- **Dry run** (`dryrun-juliet-spatial.txt`, only the boot stubbed):
+  - end to end, every pin checked;
+  - with a temporal transcript as the stub, 23 of 24 batches counted, because batch validity compares step names.
+    So a dry run's verdicts are never data, and the script now says so.
+- **The grade is the CELL comparison, not the judge's verdict.**
+  - judge.py's CAUGHT needs QEMU's own "Cap mem access OOB" line (STRICT, judge.py:162-163), which silicon never
+    prints, so on a board every catch reads NO-READING:unattributed(STRICT-FAIL:no-oob-line).
+  - This is the temporal set's lesson (the tree-A result above), applied before the boot this time.
+  - The cells are compared by the new `juliet-obs-compare.py`: per image, exit kind and value, fault cause, fault
+    site (symbol+offset) and timeout, against the compiler lane's tB-mimic run of the SAME build
+    (juliet-sp/tB-mimic/run/observations.json).
+  - Controls: the run against itself reads 1513 of 1513 and exits 0; a planted cause change reads 1 different and
+    exits 1; a missing file reads NO DATA and exits 2. On the temporal set, tree A against tree B gives the 3 known
+    differences.
+- **Predictions, on each tree:**
+  - 24 batches complete and count (the uaf control reads cause 25), and the probe exits 0 with sizeof ptr 16.
+  - **juliet-obs-compare against tB-mimic: every cell the same,** with three value-dependent cases tolerated (CWE126
+    CWE170_char_memcpy_01, CWE170_char_strncpy_01, CWE170_wchar_t_loop_01). Their reading depends on whether a NUL
+    follows, and they already moved between the exact-bounds record and tB-mimic.
+  - Compact bounds are exact below 4 KiB (cap_compress.c:49, the compiler lane's reading), and every Juliet spatial
+    buffer is far below that. So silicon should equal tB-mimic exactly, and this sample tests spatial detection on
+    silicon, not rounding.
+  - judge.py on the board: the 716 tB-mimic CAUGHT rows read NO-READING:unattributed(STRICT-FAIL:no-oob-line), give or
+    take the tolerated 3. MISSED 22, NOT-TRIGGERED:sizeof-ptr 9, the 8 intra-object rows NO-READING, and every good
+    CORRECT, 755.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0 in every transcript.
+  - A cause-13 uaf control (tree B's 2 of 24 in the temporal set) would void its batch. It is a known reading, not a
+    finding.
