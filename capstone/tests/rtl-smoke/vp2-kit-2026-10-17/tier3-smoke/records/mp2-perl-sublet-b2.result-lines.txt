@@ -1,0 +1,7 @@
+mp2-perl-sublet-b2 (2026-10-22 01:4x-02:3x, board 2, tree B caplifive_vp2c_8de3c48cf, kit bkit7-rev2xBDN2; pre-registered 87d684e76f15)
+tools: tier3-appvm-arm-tools2.sh, session tool dev e6c68a531557; runner aabfa66858b2c35e, wt-ref2 15ced322c824, reference refs/tB-mimic/perl-sublet-trim
+MP perl-sublet END 02:35:32 rc=0 :: --- virtual-nested-pools: controls {'eval': True, 'shim': True}; {'fault': 8, 'completed': 3}
+MP perl-sublet COMPARE vs reference rc=0 :: 11 of 11 cells the same
+MP perl-sublet readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1
+11 of 11 cells the same
+against tree A's perl-sublet (mp-perl-sublet-b1): 11 of 11

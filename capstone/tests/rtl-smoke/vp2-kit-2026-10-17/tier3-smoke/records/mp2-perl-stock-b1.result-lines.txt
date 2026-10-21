@@ -1,0 +1,8 @@
+mp2-perl-stock-b1 (2026-10-22 01:4x-02:3x, board 1, tree A caplifive_vp2c_8522d72fe, kit bkit7-rev2xDN2; pre-registered 87d684e76f15)
+tools: tier3-appvm-arm-tools2.sh, session tool dev e6c68a531557; runner aabfa66858b2c35e, wt-ref2 15ced322c824, reference refs/tB-mimic/perl-stock-trim
+MP perl-stock END 02:32:46 rc=0 :: --- virtual-malloc: controls {'eval': True, 'shim': True}; {'fault': 6, 'exit255': 1, 'completed': 4}
+MP perl-stock COMPARE vs reference rc=1 :: 10 of 11 cells the same
+MP perl-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1
+  02_d2cddbe1df_caller-args-freed-sv: reference ('signal127', '', '', '') board ('exit255', '', '', '')
+10 of 11 cells the same
+against the re-read reference: 11 of 11; against tree B's perl-stock (mp-perl-stock-b2): 11 of 11

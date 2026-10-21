@@ -6334,3 +6334,12 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   the whole cause of the stall.
 - **So mruby's release-differential arm reads on silicon cell for cell as its silicon-mimic QEMU reference, on both
   trees.** It is the first full mruby reading on the board; every earlier mruby board cell was a storm VOID.
+
+### perl's arms on the other tree, result (2026-10-22 01:46-02:35): both read as predicted, and each equals its first tree cell for cell
+
+- **perl-stock, board 1, tree A** (`records/mp2-perl-stock-b1.result-lines.txt`): controls True; COMPARE 10 of 11, case 02
+  by construction; 11 of 11 against the re-read reference and against tree B's perl-stock.
+- **perl-sublet, board 2, tree B** (`records/mp2-perl-sublet-b2.result-lines.txt`): controls True; COMPARE 11 of 11, and
+  11 of 11 against tree A's perl-sublet.
+- Every board counter 0, no step at its bound.
+- **So each perl arm reads on both trees exactly as its silicon-mimic QEMU reference.**
