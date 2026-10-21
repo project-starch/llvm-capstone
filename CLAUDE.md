@@ -654,9 +654,24 @@ no tooling is needed to add one. Two things to know:
 Delegation is **opt-in and at the main session's discretion** — not automatic.
 The main (Opus) session owns planning, synthesis, reviewing subagent output, and
 all final decisions. Subagents start cold, so any that could write or run tests
-**inherit this file's hard constraints** (no real-person names; serialize QEMU
-suites — the shared `rootfs.ext2` write-lock means never two in parallel;
-`ninja -j90` never `-j112`; never commit unless asked). Subagents do not recurse.
+**inherit this file's hard constraints** (no real-person names; QEMU through the lock rule
+below; `ninja -j90` never `-j112`; never commit unless asked). Subagents do not recurse.
+
+**QEMU runs: two at a time for the snapshot class, alone for everything else** (dev 751073d40374,
+controls in `tests/qemu-lock-domains/RESULT-2026-10-21.md`). The global `qemu.lock` is a
+reader-writer lock with a turnstile.
+- **Snapshot class** — `run-staged.py`, `run.py` and everything behind `virtualvm.Batch` — attaches
+  the rootfs with `-snapshot` and writes only its own work dir, so two may run at once, one per
+  domain: `capstone_with_qemu_domain A|B <cmd>` (A = CPUs 28-29,60-61, B = 30-31,62-63; keep builds
+  and simulations off them).
+- **Exclusive class** runs alone: `utils/run-qemu.sh` (above all with `CAPSTONE_ROOTFS_WRITABLE=1`),
+  `run-domain-smoke.py` and `run-authority-suite.py` (they share one 9p dir), `capstone_vm/cli.py`
+  persistent VMs, and ANY caller not yet migrated. Use `capstone_with_exclusive_qemu <cmd>`.
+- A writable shared image is the hazard: with QEMU's image locking bypassed, two writers LOST an
+  update while `e2fsck` read clean. Never add `file.locking=off` or a writable shared drive to a
+  snapshot-class run.
+- Never put an outer `timeout` around a run that waits for the lock: it expires in the queue and
+  voids the run. Bound the guest, not the wait.
 
 **Submodule source SHOULD be committed.** The old rule that it "stays uncommitted" is
 withdrawn (2026-08-05). It cost real work: the live OpenSBI monitor — the file carrying the
