@@ -496,6 +496,65 @@ cannot pass by trading one behaviour for another:*
    passes 1-4 and fails here has traded a missed trap for a cleared tag on correct code, which is worse than the
    defect.
 
+**ITEM 4 IS WRITTEN, LINT-CLEAN BY MEASUREMENT, AND THREE OF ITS ACCEPTANCE READINGS ARE CONFIRMED**
+(2026-10-21, capstone-ariane `86fc0475c`). The predicate lives in `ariane_pkg` beside the encoder it is
+built from; the op enable and the two per-slot fires are at the FLU pack in `ex_stage`.
+
+*LINT, measured rather than argued.* The gate was run WITH and WITHOUT the change on the same tree, and
+every counter is identical both ways -- LATCH 52, MULTIDRIVEN 3, ALWCOMBORDER 0, COMBDLY 0, UNOPTFLAT 40,
+BLKSEQ 2, UNDRIVEN 25, UNUSEDSIGNAL 1420, CASEOVERLAP 2, SELRANGE 100, ANVIL_UNOPTFLAT 0. So item 4 adds
+no latch, no multi-driven signal, no comb-order violation, no new UNOPTFLAT and not one unused signal,
+despite instantiating a compress+decompress round trip. The gate nevertheless FAILS on UNUSEDSIGNAL
+1395 -> 1420, a regression that PREDATES item 4; two are named (`revnode_ns_flush_i`, the port kept for the
+SUP_TRACE witness) and the rest is not attributed. It must not be re-baselined until it is: the REF holds
+counters only, and the gate lints the generated `.sv` as it stands without regenerating it, so a
+name-level attribution needs the gate on two trees each with its own Anvil regenerated.
+
+*Three acceptance readings CONFIRMED on `cap-cursor-window`*, the arm that records the pre-fix values. Its
+39 readings were mapped to the arm's own print order taken FROM SOURCE rather than from its prose -- its
+nine CAPPRINT sites sit inside a `READW` macro that prints a cursor/base/top triple, so the sequence is two
+singles, twelve triples and four singles.
+- **Reading 2, the self-heal is GONE.** The ladder's "all the way back" step no longer restores
+  base 0x3fbbabe000 / top 0x3fbbabf000; it reads cursor = base = top = 0x3fbbabf000. This is the reading
+  the plan says no other change in the batch can produce.
+- **Reading 5, with the ruled code.** The trap cause reads **24**, checked against the source and not from
+  memory: cause = 23 + ex_code and ex_code 1 is `UNEXPECTED_OPERAND`, "mcause 24" in
+  `capstone_unit.anvilh`. That is "an out-of-window move CLEARS: the next load through the result faults 24
+  (untagged operand)".
+- **Reading 7**, in-window keeps the tag: every in-window control still reads EXACT -- the ladder at base
+  and at +0x800, and W1's and W2's first reads.
+- **The W1 COMPATIBILITY reading behaves as predicted**, and it must be read with the prediction or it
+  looks like a regression: the arm takes 26 traps before W3 where it expected 0, because its ladder keeps
+  operating on a capability that no longer carries a tag. The plan's own words: "W1's allocator transit
+  must then FAIL where it passes today ... This is a COMPATIBILITY reading, not a regression." The arm was
+  written for a world where a capability survives an excursion and needs updating for item 4; its current
+  output is neither a pass nor a failure but the pre-fix arm meeting the post-fix RTL.
+*Still to measure for item 4:* reading 1 needs a TYPE query (`LCC` zimm 1) that this arm does not make --
+it reads cursor/base/top with selectors x2/x3/x4 -- and reading 4, the new alias-store arm, is unwritten.
+
+**STEP 3 AND THE RETIRE GENERATION GATE ARE NOW MEASURED** by `va-alloc-csret` (capstone-ariane
+`a70684c8f`), the arm the semantics owner asked for before the hash. It runs in the monitor at M with the
+table namespace set, before any context is entered, and **every one of its 17 values was DERIVED from the
+allocator's own order before the run and read back exact**:
+
+| reading | derived | read |
+|---|---|---|
+| CSNODE #1's ancestor id | `0x10004` = {generation 1, index 4} | `0x10004` |
+| CSRETIRE of it | 0, accepted | `0` |
+| CSNODE #2's ancestor id | `0x20004` = {generation 2, index 4} | `0x20004` |
+| the STALE CSRETIRE of `0x10004` | **1, refused** | **`1`** |
+| a load through the re-noded fresh owner | no fault | no fault |
+| free header / allocations | empty / 4 | `0` / `4` |
+| record 4 (ancestor) | VALID+LINEAR, parent 0, depth 0, generation 2 | `3 0 0`, `2` |
+| record 5 (child) | VALID+LINEAR, parent 4, depth 1, generation 2 | `3 4 1`, `2` |
+
+Two things follow that nothing else in the suite measures. **Step 3's retire-OPERAND push works**: CSNODE #2
+could only pop both indices back because the retire pushed the operand (4) as well as its junior run (5),
+and the ancestor id `0x20004` -- generation 2 at index 4 -- can arise only from a push followed by a pop.
+**And the retire handler's generation gate refuses a stale id** while leaving the slot's live new owner
+intact, which is the failure direction that matters: without it a stale CSRETIRE would kill the live owner,
+an authority failure rather than a missing check.
+
 ## (5) Q-04 (b): MOVC must KEEP an untagged source
 
 **Ruled already, and not by this lane**: the project lead decided Q-04 on 2026-10-14, option 1 -- MOVC keeps an
