@@ -12,6 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import boardvm  # noqa: E402
+import virtualvm  # noqa: E402
 
 
 def kit(root):
@@ -105,6 +106,38 @@ def params_checks(root, body):
     return checks
 
 
+def bound_checks(root):
+    """A bounded step under busybox ash (the board's shell): killed at its bound, read as a timeout; the steps around it
+    read as before; the heartbeat carries the step's output size. The module lines are cut, as no module loads here."""
+    ash = shutil.which("busybox")
+    if not ash:
+        return [("bounded steps: NO DATA, no busybox on this host (never a pass)", False)]
+    b = boardvm.BoardBatch(Path(root) / "bstage")
+    b.step("fast", "echo hi; exit 3")
+    b.step("slow", "echo started; sleep 6; echo never")
+    b.step("after", "echo after")
+    b.bounds = {"slow": 1, "fast": 30}
+    b.params, b.step_mult = [], 1
+    script = b.script()
+    body = "\n".join(l for l in script.splitlines()
+                     if not l.startswith(("cd /test-domains", "dmesg", "grep -q", "chmod", "echo \"@@MODTEXT", "rmmod")))
+    body = body.replace("sleep 30;", "sleep 1;")
+    out = subprocess.run([ash, "sh", "-c", body], capture_output=True, text=True, timeout=60, cwd=root).stdout
+    steps = virtualvm.split(out)
+    plain = boardvm.BoardBatch(Path(root) / "pstage")
+    plain.step("x", "true")
+    plain.params = []
+    return [("bounded steps: the bounded step runs in the background under its watcher",
+             "& sp=$!" in script and "kill -9 $sp" in script),
+            ("an unbounded step keeps the foreground form", "( true ) > /tmp/step.out 2>&1\nrc=$?" in plain.script()),
+            ("bounded: a step that ends before its bound reads its exit", steps.get("fast", ("", {}))[1] == {"kind": "exit", "value": 3}),
+            ("bounded: a step past its bound reads as a timeout, not signal 9",
+             steps.get("slow", ("", {}))[1] == {"kind": "none"} and "[runner] TIMEOUT" in steps["slow"][0]
+             and "@@STEP-BOUND slow 1" in out and "never" not in steps["slow"][0]),
+            ("bounded: the step after it reads", steps.get("after", ("", {}))[1] == {"kind": "exit", "value": 0}),
+            ("the heartbeat carries the step's output size", "@@HB 1 out=" in out and "B/" in out)]
+
+
 def main():
     global kit_dir
     bad = 0
@@ -167,6 +200,7 @@ def main():
                     steps.get("01_case-buggy", ("", {}))[1] == {"kind": "signal", "value": 11,
                                                                  "fault": steps["01_case-buggy"][1].get("fault")}
                     and steps["01_case-buggy"][1].get("fault"))]
+        checks += bound_checks(root)
         p = boardvm.platform(kit_dir, None, Path(__file__))
         checks += [("the qemu key names the board", p["qemu"] == "board:caplifive_vp2_bf3db3175"),
                    ("the monitor is recorded", p["monitor"] == "007d81d")]
