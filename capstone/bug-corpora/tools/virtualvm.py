@@ -27,6 +27,7 @@ STAGED = REPO / "capstone/runtime/virtual/run-staged.py"
 FILES = ("qemu-system-riscv64", "images/Image", "images/fw_jump.elf", "images/rootfs.ext2",
          "adapter/capstone-vexec", "adapter/module/capstone_vm.ko")
 BEGIN, END = "@@STEP-BEGIN ", "@@STEP-END "
+NSIG = 64   # Linux _NSIG: the highest signal number a step's 128+N status can carry
 PARAMS = "adapter/module/params"
 SYSFS = "/sys/module/capstone_vm/parameters"
 
@@ -168,7 +169,11 @@ def split(serial):
             text += "\n[runner] TIMEOUT\n"
         else:
             rc = int(rc)
-            result = {"kind": "signal", "value": rc - 128} if rc > 128 else {"kind": "exit", "value": rc}
+            # $? is 128+N for a child killed by signal N, but also a plain exit status above 128: perl's panic exits
+            # 255 and read as "signal 127", which no signal is. Only 129..128+NSIG (Linux: 64) can be a signal; above
+            # that it is an exit. 129..192 stays ambiguous here (capstone-job's WIFSIGNALED, the persistent-VM path,
+            # is not in a batch): a program exiting with such a status reads as a signal.
+            result = {"kind": "signal", "value": rc - 128} if 128 < rc <= 128 + NSIG else {"kind": "exit", "value": rc}
         if fault:
             result["fault"] = fault
         steps[name] = (text, result)
