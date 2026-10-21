@@ -2,12 +2,14 @@
 """Run the eleven cases on one virtual arm, and record what each run showed.
 
     run-virtual.py OUT --state VM --arm {virtual-malloc,virtual-nested-pools} \
-        --perl PERLD_ROOT --llvm-bin BIN [--only NN,NN] [--timeout S]
+        --perl PERLD_ROOT --llvm-bin BIN [--only NN,NN] [--timeout S] [--lib-closure FILE]
 
 PERLD_ROOT is a virtual-profile build of ports/perl/musl/build-perl-domain.sh: stock for
 virtual-malloc, PERLD_SUBLET=1 (SV heads as Sublet lifetimes) for virtual-nested-pools. Its
 src/perl-5.36.3/lib is staged in the VM's share as PERL5LIB with the corpus harness, and each
-trigger runs as `perl NN.pl` under capstone-vexec, one process per case.
+trigger runs as `perl NN.pl` under capstone-vexec, one process per case. With --lib-closure, only the lib files that
+FILE lists (tools/board/perl-lib-closure.py) are staged, for a board payload that cannot carry the whole lib; the
+bundle then records the closure's sha256, and a reading on it stands only beside a QEMU A/B against the full lib.
 
 This runner REPORTS. Per case it writes one row: the outcome (completed, exitN, fault,
 timeout), the fault's cause and the function its pc lies in, from the image's own symbols,
@@ -53,15 +55,24 @@ def outcome(text, result, symbols):
     return f"{result.get('kind', 'none')}{result.get('value', '')}", "", "", harness
 
 
-def stage_library(perl_root, share):
-    """The build's library and the corpus harness, under the share, once per library."""
+def stage_library(perl_root, share, closure=None):
+    """The build's library (the whole of it, or only the files CLOSURE lists) and the corpus harness, under the share,
+    once per library and closure."""
     lib = perl_root / "src/perl-5.36.3/lib"
     home = share / "perl-lib"
     stamp = home / ".staged-from"
-    if not (stamp.is_file() and stamp.read_text() == str(lib)):
+    tag = str(lib) if closure is None else f"{lib} closure {hashlib.sha256(closure.read_bytes()).hexdigest()}"
+    if not (stamp.is_file() and stamp.read_text() == tag):
         shutil.rmtree(home, ignore_errors=True)
-        shutil.copytree(lib, home, ignore=shutil.ignore_patterns("*.o", "*.a"))
-        stamp.write_text(str(lib))
+        if closure is None:
+            shutil.copytree(lib, home, ignore=shutil.ignore_patterns("*.o", "*.a"))
+        else:
+            for rel in closure.read_text().split():
+                if not (lib / rel).is_file():
+                    sys.exit(f"--lib-closure {closure}: {rel} is not a file under {lib}")
+                (home / rel).parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(lib / rel, home / rel)
+        stamp.write_text(tag)
     harness = share / "perl-harness"
     harness.mkdir(exist_ok=True)
     shutil.copy(CORPUS / "harness/shim.pl", harness / "shim.pl")
@@ -77,13 +88,14 @@ def main():
     p.add_argument("--raw", type=Path, help="where each run's raw output goes (default <output>/raw); tier3-appvm-arm.sh passes one per phase")
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--timeout", type=int, default=600, help="seconds per case")
+    p.add_argument("--lib-closure", type=Path, help="stage only the lib files this list names (a board payload)")
     a = p.parse_args()
     sdk_builtins.gate([a.perl], who="perl:run-virtual.py")
     if appvm.profile(a.state) != "virtual":
         p.error(f"{a.state} is not a virtual-profile VM")
     image = a.perl / "src/perl-5.36.3/perl"
     share = Path(json.loads((a.state / "config.json").read_text())["share"])
-    stage_library(a.perl, share)
+    stage_library(a.perl, share, a.lib_closure)
     cases_dir = share / "perl-cases"
     cases_dir.mkdir(exist_ok=True)
     env = ("-e", "PERL5LIB=/mnt/host/perl-lib:/mnt/host/perl-harness", "--cwd", "/mnt/host/perl-cases")
@@ -128,6 +140,7 @@ def main():
         "controls": controls, "timeout_s": a.timeout,
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE),
         "triggers": {r["case"]: r["trigger_sha256"] for r in rows},
+        **({"lib_closure_sha256": hashlib.sha256(a.lib_closure.read_bytes()).hexdigest()} if a.lib_closure else {}),
     }, indent=2) + "\n")
     tally = {}
     for r in rows:
