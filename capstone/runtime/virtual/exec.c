@@ -663,9 +663,11 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         if (separate) pthread_mutex_unlock(&service_lock);
         capstone_delegate_serve(h, request);
         if (separate) pthread_mutex_lock(&service_lock);
-        if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE tid=%llu nr=%llu result=%lld\n",
+        if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE tid=%llu nr=%llu result=%lld status=%llu pending=%llu a0=%#llx a1=%#llx a2=%#llx\n",
                            (unsigned long long)tid, (unsigned long long)request->nr,
-                           (long long)request->result);
+                           (long long)request->result, (unsigned long long)request->status,
+                           (unsigned long long)request->pending, (unsigned long long)request->args[0],
+                           (unsigned long long)request->args[1], (unsigned long long)request->args[2]);
         if (h->exec_requested) request->result = tid ? -ENOSYS : exec_in_place();
         if (h->exiting) {
             struct cv_stats stats;
