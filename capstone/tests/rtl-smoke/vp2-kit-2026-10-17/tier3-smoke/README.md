@@ -6047,3 +6047,60 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
     - That needs the free to release the page in some runs and not in others, which nothing here shows.
   - The test is a QEMU or board run of the uaf control many times with the launcher's grant/retire trace, asking whether
     a retire falls between the free and the read in exactly the runs that fault 13.
+
+### mruby with the stall capture on board 1 (tree A), result (2026-10-21 20:48-21:38): the stalled context loops on a delegated system call, not on quantum escapes
+
+- **Read** (`records/mp-mruby-stock-b1-capture.result-lines.txt`):
+  - The monitor's boot quantum reads QNT0 = 2,000,000, so this is not S-26's quantum-0 livelock.
+  - The smoke was bounded at 2400 s (VOID). This time it got through M1..M11 and stopped before M12, which is
+    `Dir.entries(dir)`. The earlier runs stopped during startup, so the stop point moves.
+  - The launcher was in state R, burning user and kernel time. Over the 5 s window, utime grew 161 and stime 753 ticks,
+    the module resumed the context about 3,600 times (satp refreshes), and it resolved no fault (sfences flat).
+  - **All 16 escape lines are event 3 (a service request), kind 0x3, cause 0xb, at two pcs in turn:**
+    - code+0xb0, the ecall of `__capstone_vm_thread_self` (service 0xb);
+    - code+0xbc, the ecall of `__capstone_vm_delegate_transport` (service 0xa), a0 0x3f9011c000.
+  - So the context is in a loop of thread_self followed by one delegated system call, about 40 pairs a second. Which
+    call it is, the capture cannot see.
+- **Against the pre-registration (444ebaf621b8):**
+  - The bound, VOID, the counters and "escapes on" held.
+  - **The best hypothesis did not hold.** It predicted escapes of event 1 (the quantum), and syscall 29 on the
+    launcher. The escapes are service requests, and the launcher was "running".
+  - The output stopped at 281 lines, not 47 or 49.
+  - Of the listed alternatives, neither a host-side wait nor a fault-resolve churn fits. It is a third shape: a
+    delegated-call loop.
+- **Positive control for the instrument** (QEMU, the reference's kit and image): the same sysfs switch printed escape
+  lines into dmesg (event 1, kind 0x1, pcs in mruby's code), and the switch read N before it was set.
+- **Board 2's capture boot, amended (21:4x):**
+  - Its smoke completed (SMOKE_DONE, END 0), so the stop rule, keyed to the smoke's capture, never fired.
+  - Case 03 then sat at 47 lines, the startup stall shape, with the boot's escape budget unused.
+  - Its stop watcher is moved to case 03's capture (tested on the 17:41 run's log: it fires for the smoke and 01 and
+    not for 03). Board 2 therefore stops after 03 and before cases 04-23.
+  - Cells 01..03 are read; the rest are not.
+
+### mruby's smoke x4 with the launcher's service trace, board 1 (tree A), pre-registered (2026-10-21 21:4x, before the boot)
+
+- **What runs:** `tier3-trace-smoke.sh 1 <out>` → `trace-smoke.py`, one cold boot through boardvm (tools dev
+  e6c68a531557) on kit bkit7-rev2xDN2. It runs the reference's image mruby-8c7cd27614353067.dom and its smoke.rb.
+  - Four times: smoke-k with `CAPSTONE_VM_TRACE=1`, stderr to /tmp/tr<k>.txt, bounded at 600 s (30 s x 20).
+  - Each is followed by sum-k, which prints:
+    - the trace's line count and its SERVICE count;
+    - the 25 most frequent (nr, result) pairs and the other line kinds;
+    - the trace's last 40 lines.
+  - The launcher binary (b27afefc, both kits) carries the trace strings.
+  - The first bound in the boot fires the stall capture.
+- **Dry run** (`dryrun-trace-smoke.txt`):
+  - (a) the wrapper with booking, busy and boot stubbed generates all four smokes bounded at 600 s;
+  - (b) the guest script under busybox with a fake launcher: a completed run's summary lists its calls; a stalled run
+    (a loop of one delegated call) is bounded, captured, and summed to that one nr;
+  - a transcript without the steps now exits NO DATA, not completed.
+- **Predictions:**
+  - b0-stats and b0-hello 0. At least one of the four traced smokes stalls: 2 of 2 tree-A smokes stalled today, and
+    1 of 2 on tree B.
+  - In a stalled run, the trace's tail is a repeating `BOUNDARY kind=11`, `BOUNDARY kind=10`,
+    `SERVICE nr=N result=R` with a single N, and the escape trace again reads event 3 at code+0xb0 and code+0xbc.
+    - N is not predicted. For a stop between M11 and M12, getdents64 (61) is the a priori candidate. For a startup
+      stop, no candidate is named.
+  - A run that completes prints SMOKE_DONE, and its histogram shows no runaway single nr.
+  - **If no run stalls,** the trace (extra stderr writes) masks the stall. That is a reading too, and the next boot
+    traces without it.
+  - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
