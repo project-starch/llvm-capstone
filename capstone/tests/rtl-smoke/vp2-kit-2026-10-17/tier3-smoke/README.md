@@ -6313,3 +6313,14 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
 - **Both:** vbatch END, every board counter 0, and no step at its bound. The boots took 45 and 48 minutes.
 - **So perl's two arms read on silicon exactly as on the silicon-mimic QEMU references,** one tree each. The other
   tree of each is not run yet.
+
+### perl's arms crossed to the other tree, pre-registered (2026-10-22 01:4x, before either boot)
+
+- **What runs:** perl-sublet on board 2 (tree B) now, and perl-stock on board 1 (tree A) after that board's tick-100
+  mruby boot. The script, tools, pins and references are the ones of the 8894b7edeb18 pre-registration. MP_ROOT is
+  t3-run-tree<A|B>/mp2, because tree A's perl-sublet and tree B's perl-stock roots already exist.
+- **Predictions, from the first tree's readings and the dry run:**
+  - perl-sublet on tree B: COMPARE 11 of 11, fault 8 and completed 3.
+  - perl-stock on tree A: COMPARE 10 of 11, case 02 by construction, so 11 of 11 against the re-read reference.
+  - Both: controls True, every board counter 0, no step at its bound.
+- **So each perl arm reads on both trees,** like the corpus pass's arms.
