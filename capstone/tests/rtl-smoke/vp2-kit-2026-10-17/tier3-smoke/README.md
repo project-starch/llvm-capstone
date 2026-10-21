@@ -5484,3 +5484,28 @@ finds RFENCE at its boot probe and sends its remote fences to the monitor instea
     - b0-stats ticks inside that band or below it, since full flushes cost little beside 620 printed warnings. Its board-run
       wall time is reported, not graded (bake and upload dominate it).
   - A variant that boots but reads RFENCE detected 0 means #4 is not live: that is no reading on #4, not a pass.
+
+### The caplifive-sbi #4 (SBI RFENCE) pair, result (2026-10-21 12:11-12:27, board 1, tree A): every pre-registered reading holds
+
+`records/rfence-pair.result-lines.txt`. UNGATED.
+
+| reading | control (f13dbc5) | variant (f13dbc5 + fab38bb) | predicted |
+|---|---|---|---|
+| "SBI RFENCE extension detected" | 0 | **1** | 0 / exactly 1 |
+| "remote fence extension is not available in SBI v1.0" | 620 | **0** | ~617-620 / 0 |
+| pb10 against ref-tB-mimic/pb10 | 4 of 4 | 4 of 4 | 4 of 4 both |
+| variant against control | | 4 of 4 cells the same | the same cells |
+| b0-stats ticks | 1,771,005 | 1,712,985 | in 1,645,852..1,829,872 / in it or below |
+| FRTY, DRT1, pc=0, INJS, INJL | 0 | 0 | 0 |
+| board-run wall (reported, not graded) | 12:11:03-12:19:38 (8 m 35 s) | 12:19:39-12:27:40 (8 m 01 s) | |
+| last kernel timestamp (reported) | 198.63 s | 164.58 s | |
+
+- **#4 is live and harmless on this arm.** Linux found RFENCE at its boot probe, sent its remote fences to the monitor
+  instead of the SBI v0.1 fallback, and pb10's cells did not move.
+- The kernel timeline is 34 s shorter, consistent with 620 console warnings no longer printed at 57600 baud. That was
+  not pre-registered and is only a reading.
+- **What it does NOT settle:** whether the extra full flushes mask an S-29-class staleness reading. pb10 has no such
+  reading, and S-29 is unreachable by every corpus arm by construction. That question belongs to an arm that writes
+  satp, not to this pair.
+- **For the runtime lane:** PR #4 can merge into capstone-bootstrap. Carrying RFENCE on the boards is a separate
+  cherry-pick onto the vp2 monitor line, folded into the batch firmware with its own Tier 1, as agreed.
