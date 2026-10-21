@@ -529,8 +529,43 @@ singles, twelve triples and four singles.
   must then FAIL where it passes today ... This is a COMPATIBILITY reading, not a regression." The arm was
   written for a world where a capability survives an excursion and needs updating for item 4; its current
   output is neither a pass nor a failure but the pre-fix arm meeting the post-fix RTL.
-*Still to measure for item 4:* reading 1 needs a TYPE query (`LCC` zimm 1) that this arm does not make --
-it reads cursor/base/top with selectors x2/x3/x4 -- and reading 4, the new alias-store arm, is unwritten.
+**READING 1 IS NOW CONFIRMED, AND WITH IT THE INIT HOLE IS CLOSED AND MEASURED** (2026-10-21,
+`r30-fill-init` against `r30-fill-init-r60`, capstone-ariane `b6aad2e18`). The pair is two variants of ONE
+arm differing in a SINGLE IMMEDIATE, built on that arm's existing proven UNINIT fill (a 64-byte region,
+four 16-byte STCs), whose own comment states the convention the test depends on: "INIT's rs2 is an OFFSET,
+not an address: new_cursor = rs2 + start".
+
+| reading | in-window (offset 0) | out-of-window (offset 0x4000) |
+|---|---|---|
+| cursor after INIT | `0x80003000` (= base) | `0x80007000` (= base + 0x4000) |
+| **LCC type query** | **`0`, LINEAR -- tag kept** | **`7`, NOT_CAP -- tag CLEARED** |
+| base / end / cursor afterwards | region, region_end, region -- all correct | untagged, so the queries trap |
+
+`0x4000` is the window span for this geometry (2^(E+14) with E = 0), so +0x4000 always leaves the containing
+block while offset 0 sits at the base. And 7 is NOT_CAP through that query because LCC's type selector
+returns type - 1 in three bits -- the arm's own comment, "LINEAR is type 1, and LCC returns type-1" --
+which also RECONCILES this plan's "type 7 (NOT_CAP)" with NOT_CAP being `3'b000` in the enum.
+
+*The default arm's FAILED verdict is NOT a regression, and the distinction took work to establish.* It
+reads `tohost = 2147483647` after exactly 4,000,013 cycles -- the harness's cycle-limit marker -- but all
+NINE of its readings printed and the last three (base, end, cursor) are all correct, so no check failed.
+The last 2,000 committed pcs are a single repeating address with no traps and no `wfi`: the arm completes
+and PARKS. That is an endemic class here rather than a fault -- this lane's own superseded sweep baseline
+records that the committed sweep script passes `time_out=2,000,000` and that 23 tests reach the limit
+there. What this run does NOT settle is whether it parked identically BEFORE item 4; the batch sweep runs
+both sides and will.
+
+*Two arms before these were VOID BY CONSTRUCTION and are retracted* (`7d798c783`, withdrawn in
+`b6aad2e18`). Neither was an RTL finding: one filled an UNINIT capability with CINCOFFSET, which REFUSES
+`CAP_TYPE_UNINIT` (`capstone_flu_unit.anvil:38`), so the fill raised and the readings were stale register
+contents; the other tried to mint a SEALEDRET with CAPTYPE, which does not produce one. The SEALEDRET
+negative therefore remains UNMEASURED -- a SEALEDRET comes from the CALL/return machinery, and the arms
+that have one are `r51-return-pcc`, `sup-guards` and `ldc-perm-check`. The exclusion rests on the source
+argument (its register form carries no bounds decode) plus the fact that SEALED is refused by all four ops
+anyway, so the residual is specifically a SEALEDRET reaching one of them.
+
+*Still to measure for item 4:* reading 4, the new alias-store arm, is unwritten, and the SEALEDRET
+negative above.
 
 **STEP 3 AND THE RETIRE GENERATION GATE ARE NOW MEASURED** by `va-alloc-csret` (capstone-ariane
 `a70684c8f`), the arm the semantics owner asked for before the hash. It runs in the monitor at M with the
