@@ -1064,6 +1064,37 @@ Siblings: S-31, S-32.
 - **What would settle it.** REVOKE of a never-shared region S has already touched, then a kernel access to it. That
   should print CPMX and then INJS.
 
+## S-34 — silicon only: a program with a short interval timer livelocks in signal delivery, because one delivery costs three delegated rounds (~25 ms on vp2) and a new signal is pending before the last one is acknowledged `ROOT-CAUSED 2026-10-21 by a matched pair on both trees (board lane vp2-tier12 c20f21c9a244); WORKED AROUND in the corpus images (mruby MRB_TICK_UNIT=100); the runtime's cost per delivery is OPEN (the runtime lane's)`
+
+Not a delivery defect: native Linux livelocks the same way when handling a signal costs more than its interval. What is
+silicon-specific is the cost of a delegated round.
+
+- **The trigger.** mruby-task's POSIX HAL, in every gembox of the port since 2026-09-30, arms
+  `setitimer(ITIMER_REAL)` at `MRB_TICK_UNIT` = 4 ms from VM start (`hal-posix-task/src/task_hal.c:106-113`,
+  `mruby-task/include/task.h:83`).
+- **The cost.** One delivery in the runtime is three delegated rounds (`ports/musl-capstone/runtime/signals.c`,
+  `run_event`): `rt_sigprocmask` to the handler mask, the handler (in-domain), `rt_sigprocmask` to restore, then
+  `acknowledge` → SIGDONE. On vp2 silicon that measured ~25 ms per delivery (23,644 SIGDONE over a 600 s bound,
+  ~39 a second). Linux coalesces the pending SIGALRM, so every acknowledgement's round brings the next one back and
+  the deliver loop never returns to the program. The trace's period is exactly that: `rt_sigprocmask` 0,
+  `rt_sigprocmask` 0, SIGDONE 0, all tid 0 (47,291 / 47,291 / 23,644 of 70,940 calls; one SIGACTION, one setitimer).
+- **The pair** (both trees, image differing only in `task_hal.o` and `task.o` among 124 objects): `MRB_TICK_UNIT` 100
+  (1ab24a92) completes 6 of 6 smokes, 45-48 SIGDONE each, ~4-4.5 min; `MRB_TICK_UNIT` 4 (f8594e11) storms 4 of 4 to the
+  600 s bound, ~23,800 SIGDONE and ~47,700 `rt_sigprocmask` each. Every board counter reads 0 on both sides.
+- **Why QEMU never showed it.** A delegated round there is fast enough for a delivery to fit inside 4 ms.
+- **How it presented.** "mruby-stock stalls" on both trees, at varying points (startup grant boundaries, before M12);
+  one run advanced once after 25 minutes, a gap in the storm. An alternating `thread_self` / `delegate_transport` pair
+  in the escape log is one whole delegated CALL (`delegate.c` `dl_call` takes the wire once per call), not a retry
+  inside one, which is what pointed above the transport.
+- **Workaround, in place.** The corpus mruby images are built with `-DMRB_TICK_UNIT=100` (both definitions are
+  `#ifndef`), the value read from the object (`tv_usec` 100000 against the control's 4000). It moves no corpus cell:
+  on qkit7-batch2, 100 ms against 4 ms reads 23 of 23 cells with MOVE 0 on both mruby-stock (1ab24a92) and
+  mruby-sublet (0f9bca66), the comparator firing MOVE 1 on the same images against tB-mimic.
+- **Open (runtime).** Fold the delivery into at most one round: the launcher applies the handler mask when it
+  publishes the event, and the restore travels with SIGDONE. That cuts the cost about 3x and still does not fit a 4 ms
+  tick on vp2, so the workaround stands regardless. Any other program with a periodic timer faster than ~25 ms will
+  storm the same way on silicon.
+
 ## Q-04 — QEMU's MOVC does not null a NOT_CAP source; the RTL does, and whether a scalar source MUST be consumed is an open spec question (the 2026-09-10 ruling that the spec settles it was RETRACTED the same day) `DECIDED 2026-10-14 (the lead adopted option 1: MOVC keeps an untagged source, consumes every tagged non-NONLIN source); recorded in llvm/lib/Target/Capstone/CapstoneISASemantics.md (the academic-spec text is not updated), QEMU follows it on the virtual profile and keeps the RTL's MOVC on the physical profile until Q-04 (b) (x0 deviation fixed), virtual SDK drops the C-32 rewrite; RTL change Q-04 (b) NOT YET APPLIED — see plans/2026-10-14-movc-untagged-source.md. Was: OPEN — QEMU/RTL divergence, filed 2026-09-05; the spec question is the lead's; 2026-09-15: masks C-32 on every emulator pass; 2026-09-24: CAPSTONE_MOVC_NULL_SCALAR=1 makes the emulator null it as the RTL does, opt-in`
 
 > **DECIDED 2026-10-14 by the project lead: option 1, "wie vorgeschlagen, vorsichtig sein".**
