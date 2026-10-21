@@ -5794,3 +5794,26 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - the bitstream's name and the reflash, which is the lead's word;
   - the Tier 1 reference, which is the compiler lane's qkit7-batch Tier 1 failing set (gen-probe/tier1-qkit7-batch);
   - the boot's pre-registration.
+
+### CORRECTION (2026-10-21 17:1x): the batch Tier 1 image prepared at 16:24 cannot boot the batch bitstream; batch-prep now takes gated images
+
+- **The image is withdrawn.** Image 32f277aeecab9742 and firmware 8ca238ac25874c97 (the section above) carry rev7's
+  three Tier 1 images: contract.dom 125705371837ea92, mruby.dom a902e740fc5d3b0f and sqlite3.dom a5942a1add489597.
+  - These are the v9 kit's build, on runtime f6dfd19d9396.
+  - That runtime's heap.c lacks 232d13b2's integers-first slot offsets: `r60-runtime-gate.py --rev f6dfd19d9396`
+    gives REFUSE [False, False], re-run here.
+  - Such a runtime faults at its first allocation on an R-60 bitstream, and the batch bitstream carries R-60.
+  - v9's SDK also compiled with +movc-keeps-integer-source, which C-32 excludes from board images.
+- **Found by** the compiler lane, not by this lane's prep. The prep checked the stage against rev7's record, which is
+  exactly what carried the old images in. The R-60 gate, which this lane wrote for the corpus images, was never run
+  on the Tier 1 stage.
+- **batch-prep.sh now takes the images from outside the record:** `batch-prep.sh <log> <image dir> <runtime rev>
+  <three sha256/16>`.
+  - Only the six non-image files are checked against rev7's record.
+  - The runtime revision must PASS r60-runtime-gate, and the three images must hash as given.
+  - Dry run `dryrun-batch-prep2.txt`: the v9 runtime is refused, wrong hashes stop, a planted record mismatch stops,
+    and a passing revision (98bfe0d9ab76) goes through.
+  - **Limit:** the revision is the builder's declaration; the script does not read it from the images.
+- **Next:** the compiler lane is rebuilding the three images by v9's recipe, with only the SDK root and toolchain
+  swapped. The new SDK is t3-freeze-nb-nomovc-cw-r60: no MOVC flag, 232d13b2's heap.c, the GEP-split fix. The lane will
+  run boot3/stage-boot3r.sh's gates on them, and the prep re-runs on their hashes.

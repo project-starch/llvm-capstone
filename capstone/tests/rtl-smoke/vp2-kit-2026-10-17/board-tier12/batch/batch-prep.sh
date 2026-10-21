@@ -1,8 +1,12 @@
 #!/bin/bash
 # The batch bitstream's Tier 1 image and firmware, prepared before the bitstream (2026-10-21). Nothing here touches a board.
-#  1. stage: a PRIVATE copy of rev7's Tier 1 stage (s26/stage-rev7.SHA256SUMS: the live stage's binaries and images, and
-#     rev7's vm-contract.sh / vm-suite-inner.sh from stage-attic/rev8-1019-1626), checked file by file against that
-#     record, with ONLY vm/capstone_vm.ko replaced by the batch module 21fbfc397e7c7a42 (the runtime lane's
+#  1. stage: a PRIVATE copy of rev7's Tier 1 stage (s26/stage-rev7.SHA256SUMS: the live stage's launcher, job runner and
+#     vmrun.sh, and rev7's vm-contract.sh / vm-suite-inner.sh from stage-attic/rev8-1019-1626), those six files checked
+#     against that record. The three images (contract.dom, mruby.dom, sqlite3.dom) come from <image dir>, NOT from
+#     rev7: rev7's are the v9 kit's, built on runtime f6dfd19d9396, whose heap.c lacks 232d13b2's integers-first slot
+#     offsets, so they fault at their first allocation on an R-60 bitstream (r60-runtime-gate.py REFUSE; found by the
+#     compiler lane after the first prep, 2026-10-21). <runtime rev> must PASS that gate. vm/capstone_vm.ko is the
+#     batch module 21fbfc397e7c7a42 (the runtime lane's
 #     module-gen-push 64747600ecec, board build: rv64g, 0 compressed instructions, vermagic 6.4.14 SMP riscv);
 #  2. image: the kits' manifest bake (bake-manifest.sh: the buildroot bake lock, by-hash initramfs check, the shared
 #     buildroot restored) of base.manifest (the board controls) plus the stage under test-domains/, /capstone.ko
@@ -10,10 +14,10 @@
 #  3. firmware: capstone-sbi vp2/batch d9da397 (f13dbc5 + the fetch-retry cap + RFENCE), wrapper aab63d5, the kits'
 #     defines plus -DCAPSTONE_FETCH_RETRY_CAP; the dom_stack gate and the 26,000,000 B cap; the FRTC tag in the
 #     generated monitor.
-# Usage: batch-prep.sh <log>. Ends by itself. BP_BAKE / BP_FW stub the two external steps for the dry run; BP_X the root.
+# Usage: batch-prep.sh <log> <image dir> <runtime rev> <sha256/16 of contract.dom,mruby.dom,sqlite3.dom>. Ends by itself. BP_BAKE / BP_FW stub the two external steps for the dry run; BP_X the root.
 main() {
   set -u
-  local O=${1:?log} X=${BP_X:-/mnt/hdd/$USER/capstone/batch-t1}
+  local O=${1:?log} IMG=${2:?image dir} REV=${3:?runtime rev} WANT=${4:?three image hashes} X=${BP_X:-/mnt/hdd/$USER/capstone/batch-t1}
   local T=/tmp/capstone/tier1 A=/tmp/capstone/tier1/stage-attic/rev8-1019-1626 REC=/tmp/capstone/s26/stage-rev7.SHA256SUMS
   local K=/mnt/hdd/$USER/capstone/t3-smoke/bkit7-rev2xBDN2 P=/mnt/hdd/$USER/capstone/t3-smoke/bkit8-batch-parts
   local M=$P/capstone_vm.ko MON=/tmp/capstone/csbi-batch WRAP=/tmp/capstone/wt-wrap-s26
@@ -23,18 +27,23 @@ main() {
   [ "$(sha256sum $M | cut -c1-16)" = 21fbfc397e7c7a42 ] || { echo "BP STOP: the module is not 21fbfc39" >> "$O"; return 1; }
   [ "$(git -C $MON rev-parse --short=7 HEAD)" = d9da397 ] && [ -z "$(git -C $MON status --porcelain)" ] \
     && [ "$(git -C $WRAP rev-parse --short=7 HEAD)" = aab63d5 ] || { echo "BP STOP: monitor or wrapper not at d9da397 / aab63d5" >> "$O"; return 1; }
+  local G=/tmp/capstone/wt-gate/capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/r60-runtime-gate.py
+  python3 $G --rev "$REV" >> "$O" 2>&1 || { echo "BP STOP: runtime $REV does not pass r60-runtime-gate" >> "$O"; return 1; }
+  local got; got=$(for f in contract.dom mruby.dom sqlite3.dom; do sha256sum $IMG/$f 2>/dev/null | cut -c1-16; done | paste -sd, -)
+  [ "$got" = "$WANT" ] || { echo "BP STOP: the images are $got, not $WANT" >> "$O"; return 1; }
   [ -e $X ] && { echo "BP STOP: $X exists" >> "$O"; return 1; }
   mkdir -p $X/stage/vm
   local f
-  for f in vmrun.sh vm/capstone-job vm/capstone-vexec vm/contract.dom vm/mruby.dom vm/sqlite3.dom; do cp -p $T/stage/$f $X/stage/$f; done
+  for f in vmrun.sh vm/capstone-job vm/capstone-vexec vm/capstone_vm.ko; do cp -p $T/stage/$f $X/stage/$f; done
   cp -p $A/vm/vm-contract.sh $A/vm/vm-suite-inner.sh $X/stage/vm/
-  cp -p $T/stage/vm/capstone_vm.ko $X/stage/vm/capstone_vm.ko
-  ( cd $X/stage && sha256sum -c --quiet $REC ) && [ -z "$(cd $X/stage && find . -type f | sed 's|^\./||' | sort | comm -3 - <(awk '{print $2}' $REC | sort))" ] \
-    || { echo "BP STOP: the private stage is not rev7's record" >> "$O"; return 1; }
+  # the six non-image files must be rev7's record, line for line
+  ( cd $X/stage && grep -v -E ' vm/(contract|mruby|sqlite3)\.dom$' $REC | sha256sum -c --quiet - ) \
+    && [ "$(cd $X/stage && find . -type f | wc -l)" -eq 6 ] || { echo "BP STOP: the private stage's six files are not rev7's record" >> "$O"; return 1; }
+  for f in contract.dom mruby.dom sqlite3.dom; do cp $IMG/$f $X/stage/vm/$f; done
   chmod u+w $X/stage/vm/capstone_vm.ko; cp $M $X/stage/vm/capstone_vm.ko
   [ "$(sha256sum $X/stage/vm/capstone_vm.ko | cut -c1-16)" = 21fbfc397e7c7a42 ] || { echo "BP STOP: the staged module is not the batch one" >> "$O"; return 1; }
   ( cd $X/stage && sha256sum $(find . -type f | sed 's|^\./||' | sort) ) > $X/stage.SHA256SUMS
-  echo "BP STAGE rev7's record with capstone_vm.ko 21fbfc397e7c7a42 ($(wc -l < $X/stage.SHA256SUMS) files)" >> "$O"
+  echo "BP STAGE rev7's six files, images $WANT (runtime $REV, gate PASS), capstone_vm.ko 21fbfc397e7c7a42 ($(wc -l < $X/stage.SHA256SUMS) files)" >> "$O"
   cp $K/base.manifest $X/manifest.txt
   ( cd $X/stage && find . -type f | sed 's|^\./||' | sort ) | while read -r f; do
     case $f in *.sh|vm/capstone-job|vm/capstone-vexec) echo "$X/stage/$f|test-domains/$f|0755";; *) echo "$X/stage/$f|test-domains/$f|0644";; esac
