@@ -529,7 +529,8 @@ singles, twelve triples and four singles.
   must then FAIL where it passes today ... This is a COMPATIBILITY reading, not a regression." The arm was
   written for a world where a capability survives an excursion and needs updating for item 4; its current
   output is neither a pass nor a failure but the pre-fix arm meeting the post-fix RTL.
-**READING 1 IS NOW CONFIRMED, AND WITH IT THE INIT HOLE IS CLOSED AND MEASURED** (2026-10-21,
+**READING 1 IS CONFIRMED, AND WITH IT THE INIT HOLE IS CLOSED AND MEASURED** (2026-10-21, measured BEFORE the
+stale-Anvil window described in the 2026-10-21 audit section below, so its tree was sound;
 `r30-fill-init` against `r30-fill-init-r60`, capstone-ariane `b6aad2e18`). The pair is two variants of ONE
 arm differing in a SINGLE IMMEDIATE, built on that arm's existing proven UNINIT fill (a 64-byte region,
 four 16-byte STCs), whose own comment states the convention the test depends on: "INIT's rs2 is an OFFSET,
@@ -1093,3 +1094,105 @@ Unchanged from every previous build, and none of them is evidence of synthesizab
 - The **CSRUNV+4 open anomaly** (pb10's 2 → 0 under the srevroot-zero module, which no mechanism predicts). It
   needs a reading, not a fix, and the reading is a one-variable pair isolating the inserted instruction from the
   srevroot value — simulation work, not a bitstream item.
+
+## 2026-10-21 audit: item 4's synthesis blowup, a stale-Anvil contamination, and what survives it
+
+*RTL lane. The lead's instruction was "audit carefully and fix everything". Three things broke in one afternoon
+and two of them had one cause. Everything below is tied to a provenance line where one exists.*
+
+### 1. Item 4 as first written is not synthesizable, and lint could not have said so
+
+The synth lane's trial B (f08906b78 + item 4 only) grew one Vivado process from ~17 GB to 94 GB in five minutes
+during technology mapping and held there for 1.5 h; run A, the same design without it, finished that step at
+5.4 GB. No netlist, no WNS, no area. The corrected hash 654c25b5e carried the same chain and was withdrawn
+unbuilt. Its lint had read IDENTICAL to the base on all eleven counters, paired on the same regenerated
+footing — accurate, and uninformative about the thing that broke. The cost was
+`decompress_bounds(compress_bounds(fat), cursor) != fat`: a 64-bit priority encode, the R-54 renormalisation,
+barrel shifts by E, the correction adders and a 128-bit compare, instantiated twice on the FLU egress.
+
+**The restructure (capstone-ariane 1b6f9c446; proof 0d842cec9; trial C 1d3abc5b3 = f08906b78 + it alone).**
+The ruling is decode-equality, and that has a closed form: from `decompress_bounds`' own A3/R correction the
+cursors that decode to the same bounds form one contiguous window `[w_lo, w_lo + 2^(E+14))` with
+`w_lo = (start & ~(2^(E+11) − 1)) − 2^(E+11)` mod 2^64 — the decoded base rounded down to an eighth of a span,
+minus one eighth. E is six bits off the SOURCE operand's compressed register word, so nothing is re-encoded:
+two one-hot decodes, a thermometer mask, one 64-bit subtract, one 64-bit compare. `E + 14 ≥ 64` is forced to 0
+(the hardware's shifts are zero there and the decode no longer depends on the cursor). ONE instance, on the
+result slot; `r60_fire_rs1 = (rd == rs1) && r60_fire_result`, on the semantics owner's structural ruling (every
+register read decodes the stored word at its own cursor, so a register never holds a cursor outside the window
+of its own decode; the FLU source puts the unmoved source, cnull, or the rd==rs1 copy in that slot:
+`capstone_flu_unit.anvil` :61/:99/:137, :56/:93/:132/:215, :52/:88/:128/:210). The round-trip form survives under
+`ifndef SYNTHESIS` as the oracle for two `$fatal` checks: closed form ≠ round trip on a gated pack, or an unmoved
+rs1 slot out of its own window.
+
+**Proof, committed: `verif/tests/custom/capstone/r60-window-equality.py`** — ALL POPULATIONS PASS, 0
+disagreements on 2.26 million cases: random decoded regions over E 0..49 at both window edges, one byte outside
+each, random and small-offset cursors (1,193,904 / 490,644 reference fires); the inexact sources (583,312 /
+435,666); B3 = 0 (239,646 / 119,014); starts within a span of 2^64 (239,888 / 115,988); E+14 ≥ 64 (3,512, 0
+fires either form); edges inside fire 0 of 298,476, one byte outside fire 298,474 of 298,474; re-encoding a
+decoded fat changed E or iE in 0 of 149,238. Reproduced independently by the semantics owner from the archive
+with identical counts. The "200,000 regions / 10,640 cases" cited in `ariane_pkg.sv` were never a committed
+script; this one is the reference.
+
+**Lint, paired on a regenerated footing (every pin ANVIL-PROLOGUE-OK):** item 4's WHOLE lint cost, trial C
+1d3abc5b3 vs f08906b78, is `UNUSEDSIGNAL 1401 vs 1399` and nothing else; the restructure vs its parent is
+`1426 vs 1424`; every other counter identical on both pairs; UNOPTFLAT 40 on all four pins with the loop NAMES
+identical across the restructure. The two: `'r60_src_meta'[63:27]` (the struct's id/perm/type, never read) and
+`'src_word'[25:17,13:3]` (the mantissa fields inside the predicate, which uses only E). Passing just the six E
+bits would remove both — owed, not done, since each RTL touch re-costs an hour of lint and re-cuts trial C.
+
+**The size gate before any trial is SYNTHESIS-ONLY, not elaboration** (the synth lane's correction):
+elaboration never reaches technology mapping and counts no LUTs. `synth_design` with no implementation, ~1 h,
+under a 40 GB guard — a repeat blowup dies in minutes and is itself a reading — with `report_utilization
+-hierarchical` for `ex_stage_i` from the synthesised checkpoint. The full trial goes only inside the ±2,500 floor.
+Launching is the lead's decision. Trial C is handed over only with the lint pair and the step-6 readings below.
+
+### 2. Every simulation in vp8-wt after 16:09 ran on a mixed tree — and what that voids
+
+`cva6.py` never runs anvilc: `core/*.anvil.sv` is produced only by `make build-anvil`, which nothing in the
+sim flow calls. The trial-B lint regenerated the units at f08906b78 and left them on disk; every later run
+compiled the lane's `ex_stage.sv` against them, and Verilator's `--skip-identical` rebuilt a consistent-looking
+binary from the mixed tree with no warning. Established from `Variane_testharness__verFiles.dat` and mtimes.
+Consequences: the batch build, the bisect and the no-drafts control of that afternoon are VOID; drafts 3 and 5
+were never in any model that ran (their arms ran on f08906b78's units); `va-alloc-csret` did NOT regress —
+`0x10004` = {generation 1, index 4} is the correct reading on item 6's unit, `0x4` is f08906b78's generation-blind
+one. The pre-contamination readings (the INIT pair, every item-1 and item-6 acceptance run) stand.
+
+**The instrument (capstone-ariane 0d842cec9, fixed in c721c1a2a):** `verif/sim/anvil-prologue.sh` regenerates,
+then PROVES every unit present, non-empty, ending in `endmodule` and not older than its source, then RECORDS a
+`PROVENANCE` (sha256 of the five units, ex_stage, ariane_pkg; commit; dirtiness) in every run directory.
+Positive-controlled on all three assertions (stale, partial, empty — each refused with rc 9; the stale control
+caught a REAL stale unit). `run-arm.sh`/`run-arms-host.sh` route every arm through it. One defect found and
+fixed: `set -u` aborted the wrapper silently at `source install-verilator.sh` with the message discarded —
+three launches lost before a raw-logged `bash -x` run showed the last line executed.
+
+### 3. Readings re-established on a stamped tree (vp9-wt/.sup/fix2/, rtl 0d842cec9, old predicate, both drafts in)
+
+PROVENANCE: anvil_flu_unit=550ec8aef1d95964 (draft 5 IN; the lint base hashed 5c43354e3562ba8d),
+anvil_dom_switcher=b96c0c3772703dab, anvil_rev_node=99e92df7f3b4c900, ex_stage=47ec33ba2d99c1c1,
+ariane_pkg=3fbdd222399fd050, time_out=6000000.
+
+| arm | reading | grade |
+|---|---|---|
+| `cap-alias-store` (reading 4) | `0x5a5a 0x1234 0x0 0x1 0x18 0x5a5a 0x7 0x58` | EXACT to the pre-registration: sentinel intact, store trapped, cause 24, tag cleared |
+| `va-alloc-csret` (item 6) | `0x0 0x10004 0x0 0x20004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0` | EXACT to the pre-contamination seventeen — **drafts 3 and 5 do not move item 6** |
+| `va-runv-r59`, `-r59-low` (item 3, first real run) | `0x2 0x2 0x1234 0x2 0x1d -16 0x0 0x0 -16 0x0 0x0 0x5 0x1d 0x0 0x9` | both refuse at entry: +24 = 0x1d, data[8] = 0, mcause 9 — as the header pre-registered; the contaminated run's 0xb/0x19 was the admitted path |
+| `movc-untagged-source` (item 5, first real run) | SUCCESS after 2,599 cycles; 16 `Reg[` lines | every typed row as the header predicts: D six consumed/typed pairs (the LIN row is the instrument control), E NONLIN survives, F LIN consumed / NONLIN kept, x0 short |
+| its NEGATIVE on c7e6f604f (anvil_flu_unit=5c43354e3562ba8d) | FAILED, tohost 1 = TESTNUM 1 (s2 nulled) | the 16 typed lines byte-identical to the positive; only the untagged-source check differs — **item 5 two-sided** |
+| `r30-fill-init-r60` / `r30-fill-init` | type 7 / type 0 | EXACT (the INIT pair) |
+| `r51-return-pcc` | `0x0 0x1c 0x1c` | EXACT |
+| `cap-cursor-window`, `sup-guards` | 39 / 80 readings | IDENTICAL to their records |
+| `ldc-perm-check` | rc 0 | no CAPPRINT sites; the exit code is the whole reading |
+
+So items 1, 2, 3, 5 and 6 each have graded two-sided readings on a known tree, and item 4 has its readings plus
+the committed proof. Step 6 — the same arms on the restructured predicate at c721c1a2a, arming the two `$fatal`
+checks on real traffic — and the 95-test sweep on c721c1a2a (diffed by name against
+`.sup/sweepbase-c7e6f604f/`, 26 parked tests excluded) are recorded when they land.
+
+### 4. Three absence claims retracted in one day, one shape
+
+"QEMU has no such precheck" (it does: capstone-qemu 42ff7bf087, `capstone_supervisor.c:957`, on an unmerged
+branch, variable named plain `root`); "no usable sweep baseline exists" (`.sup/sweepbase-c7e6f604f/` is a
+DIRECTORY of logs with a machine-written PROVENANCE; a `*.txt` glob could not see it); and the earlier
+r12-recl testlist. Each named a vocabulary and a location without asking what the pattern could not match.
+Recorded in the lane's memory under that shape; CLAUDE.md's synthesis section now carries the third
+lint-blind instance and the synthesis-only rule.
