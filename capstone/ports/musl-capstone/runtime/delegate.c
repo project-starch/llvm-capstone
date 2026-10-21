@@ -19,6 +19,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/prctl.h>
+#include <sys/select.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
@@ -1333,7 +1334,30 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     const struct { const sigset_t *ss; size_t len; } *sig = (const void *)f;
     if (sig && sig->ss && sig->len != 8) return -EINVAL;
     raw[5] = sig && sig->ss ? (syscall_arg_t)sig->ss : 0;
-    return dl_call(CAPSTONE_SYS_pselect6, raw);
+    /* The kernel reads and writes only the longs nfds covers; the wire moves
+       whole FD_SETSIZE-bit sets. A caller may pass a shorter set (perl sizes
+       its own to the highest fd), so each set travels through a full local
+       one: the covered bytes are checked and copied in, the rest is zero, and
+       only the covered bytes go back. Above FD_SETSIZE the sets go as they are. */
+    long nfds = (long)a;
+    if (nfds < 0 || nfds > FD_SETSIZE)
+      return dl_call(CAPSTONE_SYS_pselect6, raw);
+    size_t bytes = ((size_t)nfds + 63) / 64 * 8;
+    fd_set local[3];
+    void *user[3] = {(void *)b, (void *)c, (void *)d};
+    for (int i = 0; i < 3; ++i)
+      if (user[i]) {
+        if (bytes && !dl_buffer_ok(user[i], bytes, 6))
+          return -EFAULT;
+        memset(&local[i], 0, sizeof local[i]);
+        dl_bytes(&local[i], user[i], bytes);
+        raw[1 + i] = (syscall_arg_t)&local[i];
+      }
+    long r = dl_call(CAPSTONE_SYS_pselect6, raw);
+    if (r >= 0)
+      for (int i = 0; i < 3; ++i)
+        if (user[i]) dl_bytes(user[i], &local[i], bytes);
+    return r;
   }
   case SYS_read: case SYS_write: case SYS_pread64: case SYS_pwrite64:
     return dl_transfer((uint64_t)n, raw);
