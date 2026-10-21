@@ -5304,7 +5304,7 @@ null plus compact rounding, both identical on the two trees).
 | pb9 pb12 pb10 | 1 / A | 17 | 17 | 17 | none (pb10: FRTY 0 on tree A) |
 | cpython lt0 | 2 / B | 32 | 32 | 31 | Q-31: 01 (cause 4, address -1) |
 | pb13q15 pgm1q15 wm1q15 (repaired) | 2 / B | 37 | 37 | 37 | none |
-| **total, 24 arms** | | **346** | **345** | **341** | **all of them already in ISSUES (Q-31 x4, R-60 x1)** |
+| **total, 25 arms** (first written 24; corrected 2026-10-21) | | **346** | **345** | **341** | **all of them already in ISSUES (Q-31 x4, R-60 x1)** |
 
 - **No pc=0 in any boot.** On the flagged images, C-32 stopped sql0's 03/07 and cpython in 21 places.
 - In every boot: DRT1 0, FRTY 0 (S-23 removed by the module on both trees), no Oops, INJS/INJL 0, and the node-floor-2
@@ -5402,7 +5402,7 @@ so every arm of the pass has a reading on both bitstreams.
 - All 18 arms equal their silicon-mimic references in every field: 202 of 202.
 - Each arm's tree-B bundle equals its tree-A bundle cell for cell (compare-pilot rc 0 on all 18).
 - All 18 boots read pc=0 0, DRT1 0, FRTY 0, no Oops, the banner, INJS/INJL 0, and the vbatch END line.
-- With sql0 and cpython lt0 (both read on both trees), 20 of the pass's 24 arms are now read on both bitstreams, and the
+- With sql0 and cpython lt0 (both read on both trees), 20 of the pass's 25 arms (first written 24) were then read on both bitstreams, and the
   two trees have not differed in a single cell.
 - The sqlite groups' other-tree runs, pre-registered at 02:5x, complete the remaining two (sq0, sq1q15). The two
   repaired-only arms on tree B are pb13q15/pgm1q15/wm1q15; pgm1q15 is pgm1's rebuild.
