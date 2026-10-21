@@ -40,6 +40,16 @@
 // it). Large mergeable constants ARE padded: the pad turns them into a struct,
 // so they leave the mergeable-string section, which costs only merging.
 //
+// STACK OBJECTS (the frame rule, under the same flag): a static alloca of 4096
+// bytes or more becomes [length(size) x i8] at the representable alignment (lifetime
+// markers name only the pointer here). The frame object's SHRINK
+// (CapstoneISelDAGToDAG.cpp, narrowToFrameObjectBounds) reads the frame object's
+// size, so it then narrows to exactly representable bounds; an alignment above
+// the stack's 16 bytes realigns the frame (andi + scc sp), as any over-aligned
+// alloca does. Not covered: dynamic allocas (a run-time size has no static pad);
+// spill slots, which hold no object a capability names. The rule is local to the
+// function, so unlike globals a mixed build cannot widen a stack object.
+//
 //===----------------------------------------------------------------------===//
 
 #include "Capstone.h"
@@ -48,6 +58,7 @@
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalVariable.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/Pass.h"
@@ -139,6 +150,43 @@ bool CapstonePadGlobalsPass::runOnModule(Module &M) {
                       << Size << " -> " << Length << " align "
                       << std::max(Have, Need).value() << "\n");
     Changed = true;
+  }
+
+  // The frame rule: static allocas of 4096 bytes or more.
+  for (Function &F : M) {
+    if (F.isDeclaration())
+      continue;
+    SmallVector<AllocaInst *, 8> Allocas;
+    for (Instruction &I : F.getEntryBlock())
+      if (auto *AI = dyn_cast<AllocaInst>(&I))
+        if (AI->isStaticAlloca())
+          if (std::optional<TypeSize> TS = AI->getAllocationSize(DL))
+            if (!TS->isScalable() && TS->getFixedValue() >= 4096)
+              Allocas.push_back(AI);
+    for (AllocaInst *AI : Allocas) {
+      uint64_t Size = AI->getAllocationSize(DL)->getFixedValue();
+      uint64_t Length = CapstoneRepresentable::length(Size);
+      Align Need(CapstoneRepresentable::alignment(Size));
+      Align Have = AI->getAlign();
+      if (Length == Size) {
+        if (Have < Need) {
+          AI->setAlignment(Need);
+          Changed = true;
+        }
+        continue;
+      }
+      auto *New = new AllocaInst(
+          ArrayType::get(Type::getInt8Ty(M.getContext()), Length),
+          AI->getAddressSpace(), nullptr, std::max(Have, Need), "", AI->getIterator());
+      New->takeName(AI);
+      New->setDebugLoc(AI->getDebugLoc());
+      AI->replaceAllUsesWith(New);
+      AI->eraseFromParent();
+      LLVM_DEBUG(dbgs() << "capstone-pad-globals: alloca " << New->getName() << " in "
+                        << F.getName() << " " << Size << " -> " << Length << " align "
+                        << std::max(Have, Need).value() << "\n");
+      Changed = true;
+    }
   }
   return Changed;
 }
