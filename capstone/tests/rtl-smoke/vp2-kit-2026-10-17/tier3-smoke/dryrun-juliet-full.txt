@@ -1,0 +1,40 @@
+# tier3-juliet-full.sh dry runs, 2026-10-21 13:32-13:35. (1) only the boot stubbed (BOARDVM_STUB_TRANSCRIPT = the subset's real Juliet transcript): run.py, probe.py and judge.py run for real; judge voids every batch, since the stub's sequence is not each batch's plan. (2) a planted verdicts file with one MISSED row. (3) the busy, 409 and existing-root stops. (4) per-boot readings on a transcript with a DRT1 and an INJS line appended, and on the clean one.
+## jf-dry2
+JF run BEGIN 13:33:08 board 1 booking 999
+unbooked 999
+JF run END rc=0 13:33:08 :: 12 batches completed, 0 not :: 12 batches in 0.4 s -> <mnt-hdd>/capstone/scratch-jfdry/run/observations.json
+JF run-seeded BEGIN 13:33:08 board 1 booking 999
+unbooked 999
+JF run-seeded END rc=0 13:33:09 :: 1 batches completed, 0 not :: 1 batches in 0.0 s -> <mnt-hdd>/capstone/scratch-jfdry/run-seeded/observations.json
+JF probe BEGIN 13:33:09 board 1 booking 999
+unbooked 999
+JF probe END rc=75 13:33:09 :: 0 batches completed, 0 not :: {}
+JF judge rc=75 :: CWE-416: caught 0 missed 0; bad {'NO-READING:batch-void': 131, 'NO-READING:seeded-incomplete': 7}; good {'NO-READING:batch-void': 138}; strict {} runs: {'census': (0, 12), 'seeded': (0, 1)} 
+JF verdicts: 366 {('NO-READING:batch-void', 'NO-READING:batch-void', ''): 353, ('NO-READING:seeded-incomplete', 'NO-READING:batch-void', ''): 13}
+JF MISSED rows: 0
+JF readings: 14 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JF board1 DONE 13:33:09
+## jf-miss
+JF run BEGIN 13:32:43 board 2 booking 999
+unbooked 999
+JF run END rc=0 13:32:43 :: 0 batches completed, 0 not :: stub
+JF run-seeded BEGIN 13:32:43 board 2 booking 999
+unbooked 999
+JF run-seeded END rc=0 13:32:43 :: 0 batches completed, 0 not :: stub
+JF probe BEGIN 13:32:43 board 2 booking 999
+unbooked 999
+JF probe END rc=0 13:32:43 :: 0 batches completed, 0 not :: stub
+JF judge rc=0 :: planted-judge 
+JF verdicts: 2 {('MISSED', 'CORRECT', ''): 1, ('CAUGHT', 'CORRECT', '25'): 1}
+JF MISSED rows: 1 TWINS-NEEDED CWE416_x
+JF board2 DONE 13:32:43
+## jf-busy
+JF STOP: board 1 is busy before run
+## jf-409
+JF STOP: the hub refused the booking (409) before run: 409 held
+## jf-ex
+JF STOP: <mnt-hdd>/capstone/scratch-jfdry exists
+## planted readings (first lines)
+JF readings probe/work/board.txt: pc=0 0 DRT1 1 FRTY 0 Oops 0 INJS 1 INJL 0
+JF readings run/batch000/work/board.txt: pc=0 0 DRT1 1 FRTY 0 Oops 0 INJS 1 INJL 0
+JF readings: 14 boot transcripts, 14 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count

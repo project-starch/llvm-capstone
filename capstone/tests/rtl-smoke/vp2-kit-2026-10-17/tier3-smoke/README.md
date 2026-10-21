@@ -5539,3 +5539,180 @@ bkit7-rev2xDN2, the same pinned worktrees, both clean).
 - **So the two-tree claim now holds for every arm:** all **25** arms of the pass read identically on tree A and tree B.
   The claim was premature when chapter 8 wrote it (the repaired arms had read on tree B only), and the arm count there
   was wrong (24 for 25). Both are corrected on dev with this result.
+
+### The Juliet board path's first run, pre-registered (2026-10-21 13:2x, before the boot): board 1, four cases, one batch
+
+The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is taking its QEMU judging on the cw build
+(366 cases, 734 census + 55 seeded images), with run.py and probe.py from branch juliet-board (a772f0112ae3, which adds
+`--board-kit`). Before a full board run (about 12 census batches per tree), the board path gets one small batch.
+- **What runs:** `tier3-juliet-sub.sh` (board 1, kit bkit7-rev2xDN2, tree A):
+  - run.py 4b663651d0638eef from worktree wt-jb at a772f0112ae3, `--pairs 4`, `--limit-ms 10000` (the record's);
+  - helper juliet-timeout bb65b77ac802a9f3;
+  - a subset build.json 741cd6b3bf55fb93: the cw census build's own record (3c973076cf93aad6) cut to
+    CWE415_Double_Free__malloc_free_char_01, CWE415 _long_01, CWE416_Use_After_Free__malloc_free_char_01 and
+    CWE416 _long_10, with the images read through a link to the build's img/;
+  - the images carry ABI CPONVVM6, as the pass's images do.
+- **Dry run** (`dryrun-juliet-sub.txt`, every call stubbed, the boot through BOARDVM_STUB_TRANSCRIPT on a real pass
+  transcript): the script reaches its last line. The busy, 409, existing-root and build-pin branches each stop, and
+  a planted DRT1 and INJS line are each counted.
+- **Predictions** (from the 2026-10-19 QEMU record, results/2026-10-19-virtual: all 366 temporal cases CAUGHT at
+  cause 25 with the good image CORRECT):
+  - the batch completes, its steps begin in exactly the planned order, and the stats step returns;
+  - ok-0 and ok-1 exit 0;
+  - all four control runs (bounds-malloc and uaf-malloc, twice) fault;
+  - each good image prints Finished good() and exits 0, with no fault;
+  - each bad image faults at cause 25;
+  - no step reaches the 10 s limit;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0.
+- **The open question** this run answers, not predicted: the steps' wall time on silicon. board.env says a vp2 step
+  takes about 18 times its QEMU time, and juliet-timeout's 10 s covers the whole launch. If any step times out, the
+  full board run needs a larger --limit-ms, a variable against the QEMU judging, and this subset is re-run with it
+  first.
+
+### The Juliet board path's first run, result (2026-10-21 13:19-13:28, board 1, tree A): every pre-registered reading holds
+
+`records/juliet-sub4.result-lines.txt`. UNGATED.
+- The batch completed, its steps began in the planned order, and stats returned.
+- ok-0 and ok-1 exit 0.
+- The four control runs fault: bounds-malloc at 28, uaf-malloc at 25, both times.
+- The four good images print Finished good() and exit 0, with no fault.
+- The four bad images fault at cause 25, the record's cause.
+- No step timed out. pc=0, DRT1, FRTY, Oops, INJS and INJL are 0.
+- **Step time on silicon** (the open question): about 6 s a step. Five steps fall between consecutive 30 s heartbeats,
+  against the 10 s limit. So the full run keeps the record's 10 s. A step that times out reads as NO-READING:timeout
+  (judge.py), visibly, and its batch is then re-run at a larger limit as a named variable.
+- Firmware 19,565,064 B for a 4.48 MB raw bake. A full 32-pair batch, about 20 MB raw, should land at or under
+  25,856,520 (cpython's 23.6 MB raw did). board-run.sh refuses a bake over BOARD_FW_CAP before it boots.
+
+### The Juliet temporal set on board 1 (tree A), pre-registered (2026-10-21 13:3x, before the first boot)
+
+- **What runs:** `tier3-juliet-full.sh 1`. From wt-jb at juliet-board a772f0112ae3 (run.py 4b663651d0638eef;
+  judge/build/select/common byte-identical to the compiler lane's QEMU judging tree):
+  - run.py --board-kit on the cw census build (build.json 3c973076cf93aad6, 366 cases, 732 images, 12 batches of 32
+    pairs) and on the seeded build (c6a8b650f7923845, 1 batch);
+  - probe.py --board-kit;
+  - judge.py over manifest-temporal.json 95ceac7daa991165;
+  - helper bb65b77ac802a9f3, the record's 10 s limit, kit bkit7-rev2xDN2, every boot cold.
+- **Dry run** (`dryrun-juliet-full.txt`), with only the boot stubbed (the subset's real transcript):
+  - run.py, probe.py and judge.py ran end to end, and judge voided every batch on the sequence check, which shows that
+    check fires;
+  - a planted MISSED row prints TWINS-NEEDED;
+  - the busy, 409 and existing-root branches stop;
+  - per-boot readings count a planted DRT1 and INJS in every transcript, and 0 on the clean one.
+- **Predictions** (the 2026-10-19 QEMU record and the subset):
+  - every batch completes and counts, and the probe completes with exit 0;
+  - **366 CAUGHT at cause 25, every good image CORRECT**, MISSED 0, so no twins are needed;
+  - no NO-READING of any kind, including timeouts;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0 in every boot transcript;
+  - every bake under BOARD_FW_CAP (board-run.sh refuses otherwise, before booting).
+- **Compared** cell by cell with the compiler lane's tB-mimic QEMU judging of the same build when it lands. Until then
+  the comparison is with the 2026-10-19 record, which ran an older kit and helper (5b1d9a71).
+
+### The Juliet temporal set on board 2 (tree B), pre-registered (2026-10-21 14:4x, before the first boot)
+
+- **What runs:** `tier3-juliet-full.sh 2`, the script, pins and dry run of the board-1 pre-registration above, on kit
+  bkit7-rev2xBDN2 (caplifive_vp2c_8de3c48cf). Output root t3-run-treeB/juliet-temporal. It launches when the mruby-stock
+  boot frees board 2, so the two trees' runs overlap in time.
+- **Predictions:** the board-1 predictions, unchanged:
+  - every batch completes and counts, and the probe exits 0;
+  - 366 CAUGHT at cause 25, every good image CORRECT, MISSED 0;
+  - no NO-READING;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0 in every boot transcript;
+  - every bake under the cap.
+- **Two-tree claim:** every verdict equals tree A's, cell by cell. The 25-arm pass found no tree difference, and nothing
+  in Juliet's temporal cases touches what separates the two bitstreams.
+- **Timeouts:** a silicon step takes ~6 s against the 10 s limit. A NO-READING on one tree only is read as timing margin
+  first, and is named that way, not as a tree difference, until a re-run of that batch says otherwise.
+
+### The Juliet temporal set on board 1 (tree A), result (2026-10-21 13:34-17:35): every case behaves as on QEMU; two of my predictions could not hold, because I did not read the judge's attribution rule
+
+- **Read** (`records/juliet-temporal-b1.result-lines.txt`):
+  - the board runs are clean: 12 + 1 batches completed, 0 failed, and the probe exited 0;
+  - all 14 boot transcripts read 0 on pc=0, DRT1, FRTY, Oops, INJS and INJL; every bake was under the cap;
+  - every good image is CORRECT, 366 of 366;
+  - **353 bad images fault at cause 25 at exactly the 2026-10-19 QEMU record's site** (symbol + offset), case by case:
+    checked+0x14 222, memchr+0x1c 36, printStructLine+0x58 19, wmemchr+0x1c 19, the rest in their own *_bad;
+  - the other 13 are the `_12` (rand_flow) cases. In the main run each bad took its good branch on the board and
+    finished, while the record's QEMU run took the bad branch. In the seeded build each faults at cause 25 under seed
+    s11, both draws bad, and return_freed_ptr_12 also under s10. No seeded draw that takes the bad path finishes.
+- **The judge prints** 353 NO-READING:unattributed(STRICT-FAIL:no-revoked-line) and 13
+  NO-READING:seeded(MISSED, unattributed): 0 CAUGHT, 13 MISSED, TWINS-NEEDED.
+- **Against the pre-registration:**
+  - HELD: batches, probe, readings, bakes, every good CORRECT.
+  - **NOT HELD: "366 CAUGHT at cause 25", "MISSED 0", "no NO-READING".**
+- **Why, and it is my error, not the board's:**
+  - judge.py's CAUGHT needs its STRICT check. STRICT ties the fault to the defective object through QEMU's own line,
+    "Cap mem access on revoked capability … cursor, bounds" (judge.py:27, :65, :158).
+  - Silicon prints no such line, so CAUGHT is unreachable on any board run, whatever the hardware does.
+  - I wrote the prediction from the QEMU record and the four-case subset. The subset was read by this lane's own
+    reader, which checks cause and site, not by judge.py. I never read the judge's attribution rule.
+  - "MISSED 0" assumed the record's random draws. The `_12` cases' main-run path depends on rand(), and the seeded
+    build exists precisely for that.
+- **What the board does establish:** every Juliet temporal bad image faults with cause 25 (revoked capability). For
+  353 that is at the same instruction where QEMU attributed the fault to the freed object; for the 13 it is under the
+  draw that takes the bad path. No good image faults.
+- **What it does not establish:** the object attribution itself on silicon. The only route is through QEMU's line for
+  the same image at the same site. The compiler lane's tB-mimic QEMU judging of this exact build (juliet-vp2/judge.sh,
+  waiting on gen-probe/.tier1-done) is the cell-by-cell comparison that would carry it.
+- **Board 2's pre-registration (09bb6536e2ee) repeats the same three predictions,** so they cannot hold there either,
+  for the same reason. Its comparison with tree A cell by cell (cause, site, good, seeded draws) is the reading that
+  can.
+- **Lesson:** this is the "printed flag is not a measurement" class again. A verdict name taken from the judge's output
+  vocabulary was predicted without reading what the judge needs to print it.
+
+### CORRECTION (2026-10-21 21:0x): two of Juliet tree A's 13 `_12` cases took the bad branch in the main run
+
+- **The Juliet tree A result above says** "the other 13 are the `_12` (rand_flow) cases. In the main run each bad took
+  its good branch on the board and finished". **That is wrong for 2 of the 13:**
+  - CWE416 malloc_free_wchar_t_12 (batch010 s039) took the bad branch and faulted at cause 25 at wmemchr+0x1c;
+  - CWE416 return_freed_ptr_12 (batch011 s015) took it and faulted at cause 25 at memchr+0x1c.
+  - Both are the 2026-10-19 QEMU record's own cause and site. The other 11 finished.
+- **Corrected count:** 355 of the 366 bad images fault at cause 25 at the record's site (the 353 non-`_12` cases and
+  these 2), and 11 `_12` bads took the good branch. The judge's line is unchanged: it scores all 13 from the seeded
+  build (seeded MISSED), whatever the main-run draw did.
+- **How it was found:** comparing tree B's run with tree A's cell by cell. The two trees differ on exactly these
+  rand-driven cells. The claim had been written from the judge's per-case verdict, which for a `_12` case reports the
+  seeded build and no main-run site, never from the main run's own observations.
+- **Lesson:** that is the narrowed-view error. A summary of what the main run did must be read from the main run's
+  observations, not from a judge column that scores something else. `records/juliet-temporal-b1.result-lines.txt`
+  carries the corrected line below the wrong one.
+
+### The Juliet temporal set on board 2 (tree B), result (2026-10-21 16:16-20:48): tree B = tree A in every case cell; two of 24 uaf controls read a page fault, which voids two batches under the judge
+
+- **Read** (`records/juliet-temporal-b2.result-lines.txt`):
+  - 12 + 1 batches completed, the probe exited 0, and all 14 boot transcripts read 0 on pc=0, DRT1, FRTY, Oops, INJS
+    and INJL.
+  - Every good image exits 0, 366 of 366.
+  - 355 bad images fault at cause 25 at the 2026-10-19 QEMU record's site, and 11 `_12` bads take the good branch.
+- **Against tree A, cell by cell:** the main run is 732 of 735 cells equal, and the seeded run 56 of 56.
+  - Two differing cells are the rand-driven draws: struct_12 (CWE415) took the bad branch on B only, faulting at the
+    record's site checked+0x14, and wchar_t_12 (CWE416) took it on A only.
+  - The third is the uaf control at the END of batch000 and of batch010 (ctl-uaf-1). It reads **cause 13, a load
+    page fault, at control_read_probe+0x38**. That is the instruction where the other 22 tree-B and all 24 tree-A uaf
+    runs read cause 25.
+- **Under the judge:**
+  - The uaf control must read cause 25 in control_read_probe, so batch000 and batch010 are void, and 10 of 12 census
+    batches count.
+  - That voids 64 good verdicts and 62 bad. The other 2 bads in those batches are `_12` cases, which are scored from
+    the seeded build.
+  - Counting batches: bad 291 unattributed (STRICT needs QEMU's revoked line) and 13 seeded; good 302 CORRECT.
+- **Against the pre-registration (09bb6536e2ee):**
+  - HELD: every batch completes, the probe, the readings.
+  - NOT HELD:
+    - "every batch counts": 10 of 12 do.
+    - "no NO-READING": 64 cases are batch-void.
+    - "366 CAUGHT / MISSED 0": this could not hold on silicon (see the tree-A result).
+  - The two-tree claim "every verdict equals tree A's" does not hold under the judge, because of the two void
+    batches. It holds for every case cell; the difference is in two control cells only.
+- **The cause-13 control, read but not explained.**
+  - The control mallocs 32 bytes, writes them, frees them, prints its mark (a launcher service, so the context escapes
+    and resumes), and then reads the freed byte.
+  - Cause 13 means the load's translation faulted, and the module could not resolve it.
+  - 2 of 24 on tree B against 0 of 24 on tree A does not separate the trees statistically (Fisher p ~ 0.49).
+  - One hypothesis is consistent with what separates the bitstreams, and is NOT tested:
+    - the switcher's satp write flushes the TLBs on tree B (capstone-ariane 8f1bcd4cc, d427e7391) and not on tree A;
+    - so on tree A a read whose page was released after the free could hit a stale translation and reach the
+      revocation check (25), where tree B walks, finds no page and faults (13).
+    - That needs the free to release the page in some runs and not in others, which nothing here shows.
+  - The test is a QEMU or board run of the uaf control many times with the launcher's grant/retire trace, asking whether
+    a retire falls between the free and the read in exactly the runs that fault 13.
