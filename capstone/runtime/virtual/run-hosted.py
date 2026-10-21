@@ -77,6 +77,14 @@ echo VIRTUAL_STAGED_DONE
     tests['module_unloaded'] = 'HOSTED_CLEANUP:0' in log
     tests['virtual_tag_control_fired'] = arms['virtual'].get('control_byte_copy_drops_tag') is True
     tests['virtual_pipe_control_fired'] = arms['virtual'].get('control_pipe_read_returns_available') is True
+    # The frame- and return-address checks, by name: an image built before them
+    # would otherwise pass on the remaining checks.
+    portable = {'return_address_returned', 'return_address_argument',
+                'return_address_call_site_order'}
+    tests['virtual_frame_checks_parsed'] = portable | {
+        'return_address_untagged', 'return_address_depth_1',
+        'frame_address_depth_1'} <= set(arms['virtual'])
+    tests['native_frame_checks_parsed'] = portable <= set(arms['native'])
     # No checks parsed is a failed run, never an empty pass.
     tests['virtual_checks_parsed'] = len(arms['virtual']) >= 27
     tests['native_checks_parsed'] = len(arms['native']) >= 24
