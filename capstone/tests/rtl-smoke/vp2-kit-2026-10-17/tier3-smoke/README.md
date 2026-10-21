@@ -5979,3 +5979,14 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   reference's own serial reads case 02 as exit255 under the current split (dev d86451120232), where the reference's
   matrix, read before that fix, says signal127. So a perl board compare expects 10 of 11, and that one cell differs by
   construction.
+- **Amendment (20:5x, before the relaunch): board 1's first launch was stopped by my own watcher, mid-JTAG-load.**
+  - Launched 20:43:51 under booking 86; stopped 20:46:29, with no step run (VOID, unbooked).
+  - The watcher (private, stop-after-capture.sh) sends the stop rule's SIGINT once "@@DMESG control-smoke" is in the
+    driver's UART. On connect, the console replays the PREVIOUS boot's output, and that boot printed exactly this
+    line. The board-run skill says to scope a log scan to the run's own load_image, and the watcher did not.
+  - It now reads only the UART after this boot's `monitor load_image`. Tested both ways: it fires on the 17:41 run's
+    driver.log, where the line follows that boot's own load, and stays quiet on the aborted run's, where it appears only
+    in the replay.
+  - The driver it signals is found by walking up from each driver process to THIS run's board-run.sh. Tested against
+    board 2's live Juliet driver: it matches when given that run's board-run.sh, and not when given board 1's.
+  - Relaunch under MP_ROOT t3-run-treeA/mp3, everything else as registered above.
