@@ -7,15 +7,29 @@
 # EXPECT_IMAGES=<list>: after the collect, the collected images must equal that sha256 list (the prediction's), or the
 # script stops before the boot.
 # Before anything is created or booted, every build the runner arguments name (--build, --hosted-build, --controls-build,
-# --controls-hosted-build, --prebuilt, --prebuilt-controls, --sdk) must have been made with an effective -fno-builtin, or
-# with a recorded builtins_allowed (C-81, bug-corpora/tools/check-sdk-builtins.py); otherwise, or when no build is named,
-# it stops with exit 78.
+# --controls-hosted-build, --prebuilt, --prebuilt-controls, --sdk; perl's --perl build root; mruby's --image and --capi-dir,
+# whose SDK is the nearest ancestor holding one, up to eight levels, since mruby's image sits five levels below its build
+# root's sdk/) must have been made with an effective -fno-builtin, or with a recorded builtins_allowed (C-81,
+# bug-corpora/tools/check-sdk-builtins.py); otherwise, or when no build is named, it stops with exit 78.
+sdk_up() {   # the nearest of <path>'s directory and its ancestors, up to eight levels, that holds an SDK (mruby's layout)
+  local d=$1 i c
+  [ -d "$d" ] || d=$(dirname "$d")
+  for i in 0 1 2 3 4 5 6 7 8; do
+    for c in sdk/sdk.json sdk.json image/sdk/sdk.json source/runtime/sdk.json runtime/sdk.json runtime-virtual/sdk/sdk.json; do
+      [ -f "$d/$c" ] && { echo "$d/$(dirname "$c")"; return 0; }
+    done
+    [ "$d" = / ] && break; d=$(dirname "$d")
+  done
+  return 1
+}
 sdk_gate() {
-  local chk targets=() extra=() prev=
+  local chk targets=() extra=() prev= t
   chk="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)/bug-corpora/tools/check-sdk-builtins.py"
   for w in "$@"; do
     case $prev in
-      --build|--hosted-build|--controls-build|--controls-hosted-build|--prebuilt|--prebuilt-controls|--sdk) targets+=("$w");;
+      --build|--hosted-build|--controls-build|--controls-hosted-build|--prebuilt|--prebuilt-controls|--sdk|--perl) targets+=("$w");;
+      --image|--capi-dir) t=$(sdk_up "$w") || { echo "STOP: SDK-BUILTINS no SDK above $prev $w (no data is a refusal)"; return 78; }
+                          targets+=("$t");;
       --cc-arg) extra+=(--extra "$w");;
     esac
     prev=$w
