@@ -5909,3 +5909,73 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
     graded.
 - **If instead the smoke prints SMOKE_DONE:** the tree-B stall is tree-specific or intermittent. The cells are then
   graded 23 of 23 against the reference.
+
+### mruby virtual-malloc on board 1 (tree A), with the step bound, result (2026-10-21 17:41-20:40): VOID as predicted; the smoke stops before M1, not in M1..M13
+
+- **Read** (`records/mp-mruby-stock-b1.result-lines.txt`):
+  - The boot and both controls are clean, and the images are the reference's.
+  - The smoke hit its 2400 s bound, END 137, and the kernel stayed alive.
+  - Its heartbeat read out=3934B/49L from the first beat to the kill. That is 49 region-grant lines, the last
+    `slot=42 bytes=16384`, and no M marker: on QEMU, M1 prints at line 72 of the same output.
+  - Of the cases that ran, 01, 02 and 04 also hit the bound:
+    - 01 and 04 stop at 3771B/47L, and the smoke and 02 at 49L. On QEMU, line 48 is the 512 KB grant (slot 41) and
+      line 50 the next 16 KB grant (slot 43).
+    - 02 moved once, from 49L to 51L (two more 16 KB grants), after about 25 minutes, then stopped again until the kill.
+  - 03 got past startup and faulted at the reference's cause and site (cause 25, code+0x15c48c, mrb_str_format).
+  - 05 sat at 47L when the boot was stopped at 20:38. I stopped it there by SIGINT to the driver: every further step
+    costs 40 minutes and grades nothing, and the next boot needs the stall capture (dev e6c68a531557).
+  - The @@DMESG tails hold only the module's load banner and release lines. FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
+- **Against the pre-registration:**
+  - The bound and VOID held.
+  - No "collect skipped" held. The counters at 0 held.
+  - **"The output size freezes at a line count in M1..M13" did not hold.** It froze before M1, during mruby's startup,
+    at a grant boundary. And in 02 it moved once after 25 minutes, so it is a near-stop with rare progress, not a hard
+    stop. M6 was the wrong candidate.
+- **What this excludes:**
+  - **The current monitor's fetch-retry livelock** (two pcs refusing in turn, which the batch firmware caps). This
+    monitor prints FRTY on every retry it makes (sbi_capstone.c's fetch_retry_covered, at f13dbc5), and FRTY read 0.
+  - **Record exhaustion:** no "collect skipped" line.
+  - **S-24's fault-repeat bound:** no ELOOP line.
+- **What it cannot tell apart:** a context spinning (preempted at every quantum) against a host-side wait. A killed
+  step read as one bit. Hence the stall capture below.
+
+### mruby virtual-malloc with the stall capture, boards 1 and 2, pre-registered (2026-10-21 20:5x, before either boot)
+
+- **What runs:** `tier3-mp-arm.sh <board> <out> mruby-stock` with MP_ARM = `tier3-appvm-arm-tools2.sh`.
+  - That script is tier3-appvm-arm-tools.sh with the tree /tmp/capstone/wt-tools2, a clean detached worktree of dev
+    e6c68a531557: the step bound and the stall capture. The checker is the same 5abdb9ad.
+  - MP_ROOT: t3-run-treeA/mp2 on board 1, and t3-run-treeB/mp2 on board 2. The other pins are as before.
+  - Board 1 goes first, now. Board 2 follows when Juliet tree B's probe ends.
+- **The capture** (boardvm STALL_FN): at the bound and before the kill, for the launcher and its descendants, twice and
+  5 s apart:
+  - /proc state, utime, stime, wchan and syscall number;
+  - the module's resume counters;
+  - between the samples, 5 s of the module's escape trace (diag_escapes: event, kind, cause, pc and tval per escape),
+    from dmesg after END. Its print budget is 16 per module load, so it covers the smoke only.
+- **Dry run** (`dryrun-mp-tools2.txt`; busy, booking and boot stubbed):
+  - the reference's own serial reads 23 of 23;
+  - a planted bound reads VOID;
+  - a planted bound with @@STALL lines after END reads VOID with every cell still equal;
+  - the generated script has stall() once and `sleep 2400; stall` and `rm -f /tmp/stall.out` before all 24 steps.
+- **Predictions:**
+  - Both boots: the smoke is bounded at 2400 s and VOID. Its output stops at 47L or 49L, before M1.
+  - **The best hypothesis is that the context spins, and it reads as follows:**
+    - the launcher is in state R, with syscall 29 (ioctl, CV_STEP);
+    - its stime grows by most of the 5 s window between the two samples;
+    - the satp refresh count grows between the two `mod` lines (one refresh per resume);
+    - 1 to 16 escape lines, event 1 (the quantum), at pcs inside the image's code range.
+    - Then the pcs locate the loop in mruby's image.
+  - The alternatives, and what follows from each:
+    - state S with no time growth and no escape lines: a host-side wait, which the wchan names.
+    - escape lines of event 4 at one or a few alternating addresses: a fault-resolve churn that fault_repeat_max
+      cannot catch, because the address changes.
+  - "escapes on" prints. If an R launcher in ioctl shows no escape line, the instrument did not fire, and the reading
+    of the window is void.
+  - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
+- **Stop rule:** each boot is stopped by SIGINT to its driver once the smoke's @@DMESG lines are on the console. The
+  steps after it are not graded.
+- **perl stays off the boards** until this stall is understood: its steps run on the same launcher and module, and its
+  bound is 12,000 s (600 s x 20), which would hold a whole batch budget. Its dry run is in the same file. The trimmed
+  reference's own serial reads case 02 as exit255 under the current split (dev d86451120232), where the reference's
+  matrix, read before that fix, says signal127. So a perl board compare expects 10 of 11, and that one cell differs by
+  construction.

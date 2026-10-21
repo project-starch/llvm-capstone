@@ -1,0 +1,14 @@
+mp-mruby-stock-b1 (2026-10-21 17:41-20:40, board 1, tree A caplifive_vp2c_8522d72fe, kit bkit7-rev2xDN2; pre-registered 09116331f478)
+tools: tier3-appvm-arm-tools.sh, session tool dev 93ebde2f53b9 (step bound 2400 s = 120 s x 20); runner 9db9f5f7cf60fcda, wt-ref 6764d96229f6, images = the reference's (2)
+firmware fw_payload 19,565,064 B; module 54d8a3af1158c3f4 (banner node-floor-2, supervisor_slots=1); @@MODTEXT 0xffffffff01110000
+boot: b0-stats 0, b0-hello 0, probe 0, session-share 0; transcript read from the driver's UART chunks (the boot was interrupted at 20:38, so no guest board.txt)
+control-smoke: @@STEP-BOUND 2400, END 137; heartbeat out=3934B/49L from HB 1 to HB 74 (no change); 49 grant lines, the last "slot=42 bytes=16384"; no M marker (QEMU prints M1 at line 72, after slot 43..)
+01: END 137 at its bound; out=3771B/47L from its first heartbeat to the kill
+02: END 137 at its bound; out=3934B/49L for 49 beats (~25 min), then 4096B/51L (two more grants, slot 43 and 44, 16384 B each) until the kill
+03: END 139, domain fault cause=25 at code+0x15c48c, the reference's cause and site (mrb_str_format); 106 lines
+04: END 137 at its bound; out=3771B/47L from its first heartbeat to the kill
+05: out=3771B/47L from its first heartbeat; the boot was stopped at 20:38 (SIGINT to the driver) with 05 running
+the QEMU smoke's lines 47-51: slot=40 8192, slot=41 524288 (perms 7), slot=42 16384, slot=43 16384, slot=44 16384
+@@DMESG after each kill (capstone_vm lines): only the load banner and "release retires attempted=41..45 succeeded=same first_id=1024"; no "collect skipped", no ELOOP line
+UART counts: FRTY 0 (the monitor prints one per fetch retry), DRT1 0, INJS 0, INJL 0, Oops 0, pc=0x0 0
+session read: control smoke FAILED; {'none': 23}; tier3-mp-arm: VOID, booking 83 unbooked
