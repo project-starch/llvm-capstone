@@ -2602,16 +2602,25 @@ bool SelectionDAG::expandMultipleResultFPLibCall(
     Args.emplace_back(Op, ArgTy);
   }
 
-  // Pass the output pointers.
+  // Pass the output pointers, each typed in the address space it lives in: a
+  // folded store's own (always 0, see above), the alloca address space for a
+  // stack temporary. On a target whose pointers are capabilities in a distinct
+  // address space (Capstone: allocas in AS 200), an address-space-0 type lowers
+  // the stack temporary's address as a plain integer, so the call passed it
+  // with `mv`, stripping the capability, and `modf` faulted storing its
+  // integral part. Same reasoning as the memcpy libcall's argument types in
+  // getMemcpy. For a target whose allocas live in address space 0 nothing
+  // changes.
   SmallVector<SDValue, 2> ResultPtrs(NumResults);
-  Type *PointerTy = PointerType::getUnqual(Ctx);
   for (auto [ResNo, ST] : llvm::enumerate(ResultStores)) {
     if (ResNo == CallRetResNo)
       continue;
     EVT ResVT = Node->getValueType(ResNo);
     SDValue ResultPtr = ST ? ST->getBasePtr() : CreateStackTemporary(ResVT);
     ResultPtrs[ResNo] = ResultPtr;
-    Args.emplace_back(ResultPtr, PointerTy);
+    unsigned PtrAS =
+        ST ? ST->getAddressSpace() : getDataLayout().getAllocaAddrSpace();
+    Args.emplace_back(ResultPtr, PointerType::get(Ctx, PtrAS));
   }
 
   SDLoc DL(Node);
