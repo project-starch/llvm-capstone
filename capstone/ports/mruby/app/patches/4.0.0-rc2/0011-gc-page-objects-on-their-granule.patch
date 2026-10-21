@@ -1,0 +1,102 @@
+gc.c: Q-15 placement for patch 0008's page lifetime: objects[] on its bounds granule, so the CDERIVE is exact (MRB_CAPSTONE_SUBLET).
+
+0008 derives each heap page's lifetime over page->objects. On a compact-bounds platform (vp2; capstone-qemu
+without exact bounds) CDERIVE refuses a child whose bounds are not exactly representable, with cause 29, so the
+virtual-nested-pools image faulted in mrb_gc_init before running anything. objects[] is 1024 * sizeof(RVALUE) =
+81920 bytes (granule 128, a multiple) but sat at offset 16464 in the page (16464 mod 128 = 80), so its base could
+never be on the granule.
+
+Under MRB_CAPSTONE_SUBLET, objects[] is aligned to the granule of its own length (capstone/representable.h's rule
+as a constant expression; at least 16), so it lands at offset 16512 and the page is 98432 bytes, a granule
+multiple; add_heap allocates the page with posix_memalign at that alignment (free() releases it as before) and
+mrb_gc_add_region aligns region pages the same way. init_heap_page checks capstone_repr_ok on objects[] before the
+derive and aborts with a message rather than letting the derive refuse at an unrelated-looking pc. The padding is
+inside the page, between the header and objects[]; no object moves outside its page.
+
+Without the define the preprocessed file is unchanged.
+
+--- a/src/gc.c
++++ b/src/gc.c
+@@ -170,6 +170,18 @@
+ #include <capstone/capability.h>
+ #endif
+ 
++#ifdef MRB_CAPSTONE_SUBLET
++#include <stdio.h>
++#include <stdlib.h>
++#include <capstone/representable.h>
++/* The bounds granule of objects[]: 2^(msb(len) - 9) for len >= 4 KiB (capstone/representable.h,
++   capstone_repr_granule, as a constant expression), and at least a capability's 16 bytes. */
++#define MRB_CAPSTONE_PAGE_OBJ_LEN (sizeof(RVALUE) * MRB_HEAP_PAGE_SIZE)
++#define MRB_CAPSTONE_PAGE_ALIGN \
++  (MRB_CAPSTONE_PAGE_OBJ_LEN < 4096UL ? 16UL : \
++   ((1UL << (63 - __builtin_clzl(MRB_CAPSTONE_PAGE_OBJ_LEN) - 9)) < 16UL ? 16UL : \
++    (1UL << (63 - __builtin_clzl(MRB_CAPSTONE_PAGE_OBJ_LEN) - 9))))
++#endif
+ typedef struct mrb_heap_page {
+   RVALUE *freelist;
+   struct mrb_heap_page *next;
+@@ -181,9 +193,20 @@
+      the child each live object was handed out as; NULL for a free slot. */
+   void *life;
+   struct RBasic *issued[MRB_HEAP_PAGE_SIZE];
+-#endif
++  /* Q-15 placement: the page's lifetime is CDERIVEd over objects[], and a compact-bounds platform (vp2, and
++     capstone-qemu without exact bounds) refuses a child whose bounds are not exactly representable (cause 29).
++     The length, MRB_HEAP_PAGE_SIZE slots, is a multiple of its granule; the BASE must be too, so objects[] is
++     aligned to that granule inside the page, and the page itself is allocated at it (add_heap, and region pages
++     in mrb_gc_add_region). The padding lies between the header and objects[], inside the page. */
++  RVALUE objects[MRB_HEAP_PAGE_SIZE] __attribute__((aligned(MRB_CAPSTONE_PAGE_ALIGN)));
++#else
+   RVALUE objects[MRB_HEAP_PAGE_SIZE];
++#endif
+ } mrb_heap_page;
++#ifdef MRB_CAPSTONE_SUBLET
++_Static_assert(sizeof(((mrb_heap_page*)0)->objects) % MRB_CAPSTONE_PAGE_ALIGN == 0,
++               "the page lifetime's length must be a multiple of its granule");
++#endif
+ 
+ typedef struct mrb_heap_region {
+   struct mrb_heap_region *next;
+@@ -414,6 +437,13 @@
+   }
+   page->freelist = prev;
+ #ifdef MRB_CAPSTONE_SUBLET
++  /* The placement must hold at run time too: a page from an allocator that ignored the alignment would make the
++     derive below refuse with 29 at an unrelated-looking pc; say so here instead. */
++  if (!capstone_repr_ok(__builtin_capstone_cap_get_cursor(page->objects), sizeof(page->objects))) {
++    fprintf(stderr, "mruby: heap page objects at %#lx are not on their %lu-byte bounds granule\n",
++            (unsigned long)__builtin_capstone_cap_get_cursor(page->objects), (unsigned long)MRB_CAPSTONE_PAGE_ALIGN);
++    abort();
++  }
+   page->life = capstone_cap_derive(page,
+       __builtin_capstone_cap_get_cursor(page->objects) - __builtin_capstone_cap_get_base(page),
+       sizeof(page->objects));
+@@ -423,7 +453,14 @@
+ static void
+ add_heap(mrb_state *mrb, mrb_gc *gc)
+ {
++#ifdef MRB_CAPSTONE_SUBLET
++  /* at objects[]'s granule (Q-15 placement); mrb_free's free() releases it as any malloc'd page */
++  mrb_heap_page *page = NULL;
++  if (posix_memalign((void**)&page, MRB_CAPSTONE_PAGE_ALIGN, sizeof(mrb_heap_page)) != 0) mrb_raise_nomemory(mrb);
++  memset(page, 0, sizeof(mrb_heap_page));
++#else
+   mrb_heap_page *page = (mrb_heap_page*)mrb_calloc(mrb, 1, sizeof(mrb_heap_page));
++#endif
+   init_heap_page(page);
+   link_heap_page(gc, page);
+ }
+@@ -444,7 +481,12 @@
+ #else
+   typedef uintptr_t gc_uptr;
+ #endif
++#ifdef MRB_CAPSTONE_SUBLET
++  size_t align = MRB_CAPSTONE_PAGE_ALIGN;   /* region pages too: objects[] on its granule (Q-15) */
++  if (size < align) return 0;
++#else
+   size_t align = sizeof(void*);
++#endif
+   gc_uptr offset = ((gc_uptr)base + align - 1) & ~(gc_uptr)(align - 1);
+   size -= (size_t)((size_t)offset - (size_t)(gc_uptr)base);
+   base = (uint8_t*)offset;
