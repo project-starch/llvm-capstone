@@ -1,0 +1,8 @@
+mp-perl-stock-b2 (2026-10-22 00:29-01:1x, board 2, tree B caplifive_vp2c_8de3c48cf, kit bkit7-rev2xBDN2; pre-registered 8894b7edeb18)
+tools: tier3-appvm-arm-tools2.sh, session tool dev e6c68a531557; runner aabfa66858b2c35e, wt-ref2 15ced322c824, reference refs/tB-mimic/perl-stock-trim (--lib-closure)
+MP perl-stock END 01:14:16 rc=0 :: --- virtual-malloc: controls {'eval': True, 'shim': True}; {'fault': 6, 'exit255': 1, 'completed': 4}
+MP perl-stock COMPARE vs reference rc=1 :: 10 of 11 cells the same
+MP perl-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1
+  02_d2cddbe1df_caller-args-freed-sv: reference ('signal127', '', '', '') board ('exit255', '', '', '')
+10 of 11 cells the same
+against the reference re-read through the current parser (dryrun-mp-perl.txt's own matrix): 11 of 11 cells the same

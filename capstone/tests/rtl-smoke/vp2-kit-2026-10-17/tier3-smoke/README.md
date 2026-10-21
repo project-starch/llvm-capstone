@@ -6258,3 +6258,88 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - The compiler lane's split census: VAR-CONST 0 (positive control: 3 on 8c7cd276).
   - **Image 64ec46d1f8d9461b, firmware 6423545a567b2f3c (19,565,064 B), FRTC present.** It supersedes
     74edf44a / d9026250, whose mruby was the 4 ms build.
+
+### perl's release-differential arms on both boards, pre-registered (2026-10-22 00:3x, before either boot)
+
+- **Why now:** perl waited on mruby's stall, because a stall in the shared board path would void it too. The stall is
+  mruby-task's 4 ms SIGALRM. Perl's runner arms no timer, and no perl case calls alarm or setitimer, checked in the
+  case sources.
+- **What runs:** `tier3-mp-arm.sh <board> <out> <tag>` with MP_ARM = `tier3-appvm-arm-tools2.sh` (session tool
+  e6c68a531557), pinned to the trimmed tB-mimic references (refs/tB-mimic/<tag>-trim: runner aabfa66858b2c35e,
+  wt-ref2 15ced322c824, --lib-closure).
+  - perl-stock goes on board 2 (tree B), and perl-sublet on board 1 (tree A).
+  - Each step is bounded at 12,000 s (600 s x 20).
+- **Dry run** (`dryrun-mp-perl.txt`, each reference's own serial as the stub rung):
+  - perl-stock reads 10 of 11: case 02 reads exit255 under the current split, and the reference's matrix says
+    signal127;
+  - perl-sublet reads 11 of 11.
+- **Predictions:**
+  - Both boots complete with vbatch END.
+  - **perl-stock:** controls eval and shim True; COMPARE 10 of 11. The one difference is case 02 (exit255 against the
+    reference's signal127, by construction). Otherwise fault 6 and completed 4.
+  - **perl-sublet:** controls True; COMPARE 11 of 11, fault 8 and completed 3.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0.
+  - **No step reaches its bound.** If one does, the stall capture names the loop, and the reading is recorded as that
+    arm's own finding, not as mruby's storm.
+
+### mruby-stock on the tick-100 image, both boards, pre-registered (2026-10-22 00:3x, before either boot)
+
+- **What runs:** `tier3-mp-arm-t100.sh <board> <out> mruby-stock` with MP_ARM = `tier3-appvm-arm-tools2.sh`.
+  - The variant is tier3-mp-arm.sh with two lines changed: the corpus root (corpus-mp-r60t) and the reference
+    directory (refs/tB-mimic-t100). Its perl recipes are not used.
+  - The image is r60 1ab24a92 (MRB_TICK_UNIT 100), capi-11 dee93c7d.
+  - The reference is the compiler lane's tB-mimic-t100 bundle: control smoke ok, 20 fault, 3 completed. Stamp: runner
+    9db9f5f7cf60fcda, wt-ref 6764d96229f6, wt-gate c20f21c9a244, qemu 7e5fe043.
+  - Each board runs it after its perl boot, with MP_ROOT t3-run-tree<A|B>/mp-t100.
+- **Dry run** (`dryrun-mp-t100.txt`): the reference's own serial as the rung reads 23 of 23. All 24 steps are bounded
+  at 2400 s, and the staged image is mruby-1ab24a9215078a53.
+- **Predictions, on both trees:**
+  - The smoke completes: control smoke ok, so the run is not VOID.
+  - **COMPARE 23 of 23** against tB-mimic-t100: 20 fault, 3 completed.
+  - No step reaches its bound. A storm here would refute the pair's conclusion that the tick was the whole cause.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0, and vbatch END.
+  - Against the OLD 4 ms reference, case 23's function is expected to move (mrb_obj_alloc to ary_new_capa, cause 28
+    unchanged). The compiler lane recorded that as the r60 image's one move. The grade is against t100.
+
+### perl's release-differential arms, result (2026-10-22 00:29-01:17, both boards): every pre-registered reading holds
+
+- **perl-stock, board 2, tree B** (`records/mp-perl-stock-b2.result-lines.txt`):
+  - controls eval and shim True; fault 6, exit255 1, completed 4;
+  - COMPARE 10 of 11 against the reference. The one cell is case 02, exit255 on the board against the reference's
+    signal127, as predicted by construction;
+  - against the reference re-read through the current parser (the dry run's own matrix), 11 of 11.
+- **perl-sublet, board 1, tree A** (`records/mp-perl-sublet-b1.result-lines.txt`): controls True; fault 8, completed 3;
+  COMPARE 11 of 11.
+- **Both:** vbatch END, every board counter 0, and no step at its bound. The boots took 45 and 48 minutes.
+- **So perl's two arms read on silicon exactly as on the silicon-mimic QEMU references,** one tree each. The other
+  tree of each is not run yet.
+
+### perl's arms crossed to the other tree, pre-registered (2026-10-22 01:4x, before either boot)
+
+- **What runs:** perl-sublet on board 2 (tree B) now, and perl-stock on board 1 (tree A) after that board's tick-100
+  mruby boot. The script, tools, pins and references are the ones of the 8894b7edeb18 pre-registration. MP_ROOT is
+  t3-run-tree<A|B>/mp2, because tree A's perl-sublet and tree B's perl-stock roots already exist.
+- **Predictions, from the first tree's readings and the dry run:**
+  - perl-sublet on tree B: COMPARE 11 of 11, fault 8 and completed 3.
+  - perl-stock on tree A: COMPARE 10 of 11, case 02 by construction, so 11 of 11 against the re-read reference.
+  - Both: controls True, every board counter 0, no step at its bound.
+- **So each perl arm reads on both trees,** like the corpus pass's arms.
+
+### mruby-stock on the tick-100 image, result (2026-10-22 01:14-01:48, both boards): 23 of 23 on both trees
+
+- **Read** (`records/mp-t100-mruby-stock-b{1,2}.result-lines.txt`; pre-registered bfa584113e1c): on tree A and tree
+  B alike, the control smoke is ok; COMPARE 23 of 23 against tB-mimic-t100 (20 fault, 3 completed); no step at its
+  bound; every board counter 0. Each boot took about 31 minutes.
+- **Every pre-registered reading holds.** No storm on the tick-100 image completes the pair's conclusion: the tick was
+  the whole cause of the stall.
+- **So mruby's release-differential arm reads on silicon cell for cell as its silicon-mimic QEMU reference, on both
+  trees.** It is the first full mruby reading on the board; every earlier mruby board cell was a storm VOID.
+
+### perl's arms on the other tree, result (2026-10-22 01:46-02:35): both read as predicted, and each equals its first tree cell for cell
+
+- **perl-stock, board 1, tree A** (`records/mp2-perl-stock-b1.result-lines.txt`): controls True; COMPARE 10 of 11, case 02
+  by construction; 11 of 11 against the re-read reference and against tree B's perl-stock.
+- **perl-sublet, board 2, tree B** (`records/mp2-perl-sublet-b2.result-lines.txt`): controls True; COMPARE 11 of 11, and
+  11 of 11 against tree A's perl-sublet.
+- Every board counter 0, no step at its bound.
+- **So each perl arm reads on both trees exactly as its silicon-mimic QEMU reference.**
