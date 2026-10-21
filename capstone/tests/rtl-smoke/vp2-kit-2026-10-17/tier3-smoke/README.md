@@ -6300,3 +6300,16 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - pc=0, DRT1, FRTY, Oops, INJS and INJL 0, and vbatch END.
   - Against the OLD 4 ms reference, case 23's function is expected to move (mrb_obj_alloc to ary_new_capa, cause 28
     unchanged). The compiler lane recorded that as the r60 image's one move. The grade is against t100.
+
+### perl's release-differential arms, result (2026-10-22 00:29-01:17, both boards): every pre-registered reading holds
+
+- **perl-stock, board 2, tree B** (`records/mp-perl-stock-b2.result-lines.txt`):
+  - controls eval and shim True; fault 6, exit255 1, completed 4;
+  - COMPARE 10 of 11 against the reference. The one cell is case 02, exit255 on the board against the reference's
+    signal127, as predicted by construction;
+  - against the reference re-read through the current parser (the dry run's own matrix), 11 of 11.
+- **perl-sublet, board 1, tree A** (`records/mp-perl-sublet-b1.result-lines.txt`): controls True; fault 8, completed 3;
+  COMPARE 11 of 11.
+- **Both:** vbatch END, every board counter 0, and no step at its bound. The boots took 45 and 48 minutes.
+- **So perl's two arms read on silicon exactly as on the silicon-mimic QEMU references,** one tree each. The other
+  tree of each is not run yet.
