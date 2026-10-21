@@ -120,6 +120,7 @@ def main():
         print(f"  {d.name[:44]:44} {kind:9} {cause:>3} {func[:28]:28} {in_sites:3} {harness[:50]}", flush=True)
 
     cols = ("case", "arm", "outcome", "cause", "function", "in_fault_sites", "harness")
+    a.output.mkdir(parents=True, exist_ok=True)     # nothing else creates it when --raw points elsewhere
     (a.output / "matrix.tsv").write_text(
         "\t".join(cols) + "\n" + "".join("\t".join(r[c] for c in cols) + "\n" for r in rows))
     (a.output / "inputs.json").write_text(json.dumps({
