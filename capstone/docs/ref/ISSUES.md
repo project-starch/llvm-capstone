@@ -2301,6 +2301,30 @@ stack swap is undone; `fault_return_from_domain` refuses to run without an activ
 emulation's register restore is exact on both exits (`sbi_capstone.S:14-45` save, `:163-200` restore, `capstone_csmint.S:13-16`)
 and is not involved.
 
+> **2026-10-22, the same shape on the QEMU-target monitor (the compiler lane's paged-sizing run, filed by the board
+> lane; low priority).**
+> - **Trigger.** Kit qkit7-batch2 with only the module swapped for its PAGED build: ed8565728d0fdabd, module
+>   13c3e7684ae1 without `-DCAPSTONE_VM_FLAT_TABLE`, on QEMU ecaf50bb with fw_jump.elf 6f2b082c. The first
+>   `capstone-vexec --stats` after insmod halts the machine in M-mode: `Cap mem access requires capability: pc =
+>   8002522a, rs1 = x7, value = 0`, cause 24.
+> - **Control.** The same kit with `x-capstone-test-csrs=true` completes the same workload (mruby M6 = 20,000,
+>   SMOKE_DONE, no halt). The paged build reads 0xcc0 and 0x5c0 at context creation (`capstone_vm.c:1983`, `:1999`),
+>   and the flat build reads neither. Since Q-21's ruling, both are illegal instructions on QEMU unless the test
+>   property is set (`csr.c:4134-4146`), as on silicon.
+> - **Where it lands:** pc 0x8002522a is `_return_from_domain.1+0xa`, `sd s0, 0(t2)` with t2 = *(*(gp+0xc0)) from the
+>   globals carved off dom_stack. That pointer is null. It is M-9's faulting instruction.
+> - **Inferred, not traced:** the S-mode illegal-instruction trap reaches the monitor, which takes its domain-return
+>   path with no domain entered. So this software rule above ("`fault_return_from_domain` refuses to run without an
+>   active domain") does not hold on this monitor build. The expected behaviour is a trap Linux handles, at worst an
+>   Oops.
+> - **Why low priority:** no shipped or planned build combines the paged module with a vp2-faithful CSR file; the flat
+>   define exists to avoid exactly that. But an S-mode instruction halts the M-mode monitor, and the same module build
+>   would do the same on silicon.
+> - **Evidence:** `<mnt-hdd>/capstone/paged-sizing/RESULT` (READING 01:09:47, SYMBOLIZED 01:14:47, the control at
+>   01:19:25). The halted run's serial was overwritten; the compiler lane can reproduce it in one boot.
+> - **Next:** trace the cause-2 routing in fw_jump 6f2b082c (medeleg, then `handle_exception`'s default arm), and
+>   check whether this rule's guard was ever implemented on the QEMU target.
+
 ## Q-25 — DELIN of a NON-LINEAR capability: the RTL refuses with 26, QEMU treated it as a no-op `RULED 2026-10-18 by the semantics owner after vp2's boot 2 (the RTL is the reference: a delin of a non-linear capability is a programming error); QEMU fixed on virtual-capstone-v7 852c5bc7677440b95736b5fc22bc158cce3f6479; the runtime glue's delin of a NONLIN gp is the compiler lane's to remove`
 
 vp2's boot 2 (board lane, vp2-tier12 279d993e273d): every virtual step faulted with cause 26 at contract.dom's `delin a0`
