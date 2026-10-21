@@ -5880,3 +5880,32 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   can.
 - **Lesson:** this is the "printed flag is not a measurement" class again. A verdict name taken from the judge's output
   vocabulary was predicted without reading what the judge needs to print it.
+
+### mruby virtual-malloc on board 1 (tree A), with the step bound, pre-registered (2026-10-21 17:4x, before the boot)
+
+- **What runs:** `tier3-mp-arm.sh 1 <out> mruby-stock` with MP_ARM = `tier3-appvm-arm-tools.sh`.
+  - That script is tier3-appvm-arm.sh 11967b378bda73c8 with two lines changed: the session tool and the SDK checker
+    come from /tmp/capstone/wt-tools, a clean detached worktree of dev 93ebde2f53b9, instead of wt-gate.
+  - wt-gate is held still for the compiler lane's batch references. The checker is byte-identical in all three
+    trees (5abdb9ad).
+  - The session tools differ from wt-gate's by the three dev changes: split's END and NSIG reading, the step bound,
+    and the heartbeat. Plus MODTEXT, which prints before any step.
+  - Pins as the board-2 run: runner 9db9f5f7cf60fcda, wt-ref 6764d96229f6, the reference's images, kit bkit7-rev2xDN2.
+  - Each step is bounded at its runner's limit x 20: 2400 s for mruby.
+- **tier3-mp-arm.sh now also VOIDs a board run whose own controls fail.** A bounded smoke reads "control smoke FAILED",
+  and its cells can still compare equal. The test is the same one the reference must pass.
+- **Dry run** (`dryrun-mp-tools.txt`; busy, booking and boot stubbed, the rest real):
+  - the reference's own serial as the rung reads 23 of 23;
+  - a planted bound on the smoke reads VOID;
+  - the guest script bounds all 24 steps at 2400 s and prints @@DMESG after each.
+- **Predictions:**
+  - **The smoke is bounded at 2400 s on tree A as well: VOID, no cell a reading.** Every pass arm read the same on
+    both trees, and tree B ran 153 minutes with no END.
+  - The heartbeat's output size FREEZES (a stop, not a slowdown), at a line count somewhere in M1..M13. Which marker is
+    not predicted; M6, the allocation-heavy step, is the a priori candidate.
+  - No "collect skipped" in @@DMESG: the stock smoke takes 44,017 of 64,001 records on QEMU.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0. The tree-B boot read 0 throughout its 153 minutes.
+  - The 23 case steps run after the bound inside the batch budget (12,720 s), and their cells are recorded but not
+    graded.
+- **If instead the smoke prints SMOKE_DONE:** the tree-B stall is tree-specific or intermittent. The cells are then
+  graded 23 of 23 against the reference.

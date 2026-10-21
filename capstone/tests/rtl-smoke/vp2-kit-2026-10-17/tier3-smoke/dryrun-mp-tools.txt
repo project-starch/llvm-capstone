@@ -1,0 +1,18 @@
+# tier3-mp-arm.sh + tier3-appvm-arm-tools.sh dry runs, 2026-10-21 17:41: busy, booking and the boot stubbed (BOARDVM_STUB_TRANSCRIPT); collect, the guest script, split and read run for real
+## good: the QEMU reference's own serial, wrapped as the vbatch rung
+MP mruby-stock BEGIN 17:41:04 board 1 runner 9db9f5f7cf60fcda appvm-arm 11967b378bda73c8 wt-ref 6764d96229f6 booking 999
+unbooked 999
+MP mruby-stock END 17:41:05 rc=0 :: APPVM read rc=0 17:41:05 :: --- virtual-malloc: control smoke ok; {'fault': 20, 'completed': 3}
+MP mruby-stock COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MP mruby-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP board1 DONE 17:41:05
+## bounded smoke: @@STEP-BOUND, END 137 and an @@DMESG line planted in the control step
+MP mruby-stock BEGIN 17:41:03 board 1 runner 9db9f5f7cf60fcda appvm-arm 11967b378bda73c8 wt-ref 6764d96229f6 booking 999
+unbooked 999
+MP mruby-stock END 17:41:04 rc=0 :: APPVM read rc=75 17:41:04 :: --- virtual-malloc: control smoke FAILED; {'fault': 20, 'completed': 3}
+MP mruby-stock VOID: the board run's own controls did not pass (needs APPVM read rc=0 with "control smoke ok"): no cell is a reading :: APPVM read rc=75 17:41:04 :: --- virtual-malloc: control smoke FAILED; {'fault': 20, 'completed': 3}
+MP mruby-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP board1 DONE 17:41:04
+## the generated guest script: bounded steps and @@DMESG lines
+     24 sleep 2400; kill -9
+@@DMESG lines: 24

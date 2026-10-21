@@ -56,7 +56,13 @@ main() {
     [ -n "$bid" ] && ${MP_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} unbook $bid >> "$O" 2>&1
     echo "MP $tag END $(date +%T) rc=$rc :: $(tail -1 $d.run.log | cut -c1-160)" >> "$O"
     case $rc in 78|2) echo "MP STOP: the arm script refused $tag (rc=$rc)" >> "$O"; return 1;; esac
-    python3 $S/matrix-compare.py $ref/out $d/out > $d.cmp.txt 2>&1; echo "MP $tag COMPARE vs reference rc=$? :: $(tail -1 $d.cmp.txt)" >> "$O"
+    # The board run's own controls must pass too, by the same test as the reference's: otherwise no row is a reading,
+    # whatever the compare prints (a bounded smoke reads FAILED and its cells can still match).
+    if grep -qF "$ok" <(grep "^APPVM read rc=0 " $d.run.log); then
+      python3 $S/matrix-compare.py $ref/out $d/out > $d.cmp.txt 2>&1; echo "MP $tag COMPARE vs reference rc=$? :: $(tail -1 $d.cmp.txt)" >> "$O"
+    else
+      echo "MP $tag VOID: the board run's own controls did not pass (needs APPVM read rc=0 with \"$ok\"): no cell is a reading :: $(grep '^APPVM read' $d.run.log | tail -1 | cut -c1-140)" >> "$O"
+    fi
     B=$(find $d -name board.txt -path '*guest*' 2>/dev/null | head -1)
     if [ -n "$B" ] && [ -s "$B" ]; then
       echo "MP $tag readings: pc=0 $(grep -a -c 'pc=0x0\b\|pc=0 ' $B) DRT1 $(grep -a -c '^DRT1:' $B) FRTY $(grep -a -c 'FRTY:' $B) Oops $(grep -a -c Oops $B) INJS $(grep -a -c INJS $B) INJL $(grep -a -c INJL $B) banner node-floor-2 x$(grep -a -c node-floor-2 $B)" >> "$O"
