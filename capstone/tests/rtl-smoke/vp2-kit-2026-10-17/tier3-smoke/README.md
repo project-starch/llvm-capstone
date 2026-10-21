@@ -5608,6 +5608,51 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
 - **Compared** cell by cell with the compiler lane's tB-mimic QEMU judging of the same build when it lands. Until then
   the comparison is with the 2026-10-19 record, which ran an older kit and helper (5b1d9a71).
 
+### mruby release-differential, virtual-malloc, on board 2 (tree B), pre-registered (2026-10-21 13:3x, before the boot)
+
+- **What runs:** `tier3-mp-arm.sh 2 <out> mruby-stock`, one cold boot through tier3-appvm-arm.sh on kit
+  bkit7-rev2xBDN2. It is pinned to the reference's stamp (corpus-mp/refs/tB-mimic/mruby-stock.stamp):
+  - runner 9db9f5f7cf60fcda, appvm-arm 11967b378bda73c8, tree wt-mp at the stamp's wt-ref 6764d96229f6, clean;
+  - the images from the reference's session/collect/images (EXPECT_IMAGES);
+  - image 8c7cd27614353067, capi-11 a6d22b0dd2627d55, the cw build, without +movc-keeps-integer-source (C-32);
+  - the SDK links recorded in corpus-mp/LINKS.txt.
+- **Dry run** (`dryrun-mp-arm.txt`, every call stubbed, the arm writing the reference's own matrix and a real pass
+  transcript):
+  - the known-good input reads 23 of 23;
+  - a planted cell flip reads 22 of 23, naming the cell;
+  - the refusal (78), missing-reference, busy and 409 branches stop;
+  - matrix-compare.py with no board matrix exits 2.
+- **Predictions:**
+  - every cell equals the tB-mimic reference in outcome, cause, function and in_fault_sites: 23 of 23, 20 fault and
+    3 completed;
+  - the smoke control prints SMOKE_DONE;
+  - the vbatch END line; pc=0, DRT1, FRTY, Oops, INJS and INJL 0.
+- **Q-31 cannot apply:** every cause-24 cell's access, disassembled at its pc, is aligned and canonical:
+  - 02 `lbu` at 0x4;
+  - 07 `lbu` at 0x10;
+  - 18-21 `lw` at 0x0;
+  - 22 `ld` at 0x7d8050.
+  The pass's aligned NULL dereferences read 24 on silicon.
+- **R-60** (bounds decoded at an out-of-window cursor) is the one named shape that could move a cause-28 cell
+  (12-16, 23). It would be named R-60, not a new finding.
+- **Budget:** the QEMU session ran 24 steps in about 4 minutes. At ~18x that is about an hour on silicon, inside the
+  board's 3,180 s x 4 batch budget.
+
+### Recorded from the lanes (2026-10-21 14:4x): mruby's Sublet arm does not start on a compact-bounds platform
+
+- **Reading:** the compiler lane's tB-mimic reference of mruby-sublet (image 25e86274, virtual-nested-pools) ends `APPVM
+  read rc=75 … control smoke FAILED; {'fault': 23}`.
+- **Re-read here:** the first fault in its serial.log is `cause=29 pc=…5154c`. llvm-objdump on the image puts 0x6154c
+  inside mrb_gc_init (0x613dc, size 0x1f0), and the word there is `db 95 d3 a2`. The source, in ports/mruby patch 0008,
+  is `page->life = capstone_cap_derive(page, cursor(page->objects) - base(page), sizeof(page->objects))`.
+- **The lane's reading, not re-derived here:** page->objects is not on its granule, so the child's bounds are inexact,
+  and compact bounds refuse an inexact derive with 29. The 2026-10-11 record ran with exact bounds.
+- **For the board:** the as-built Sublet image is not pinned. The compiler lane is applying Q-15's placement rule to
+  patch 0008, and mruby-sublet goes to a board only on the repaired image's reference.
+- **A gap in tier3-mp-arm.sh:** it does not check that the reference's own control passed. A board run of the broken
+  image would fault 23 of 23 and match the broken reference cell for cell. The gate, `APPVM read rc=0 … control smoke ok`
+  in the reference's log, goes in when the running mruby-stock boot ends; this script is not edited while it runs.
+
 ### The Juliet temporal set on board 2 (tree B), pre-registered (2026-10-21 14:4x, before the first boot)
 
 - **What runs:** `tier3-juliet-full.sh 2`, the script, pins and dry run of the board-1 pre-registration above, on kit
@@ -5658,6 +5703,76 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - an s23-cpmp-rearm-style persistent covered deny, with the S handler in a second denied range;
   - placed LAST, because if the cap failed it would retry forever;
   - pre-registered with that boot.
+
+### mruby virtual-malloc on board 2 (tree B), result (2026-10-21 13:34-16:16): the smoke control did not end in 153 minutes; stopped, no reading
+
+- **Read:**
+  - The boot and both controls are clean: b0-stats 0, b0-hello 0, session-share 0.
+  - The images equal the reference's. Firmware 09203ab6af4339a3, 19,565,064 B.
+  - The batch's first step, the smoke control, BEGAN and never ENDed in 153 minutes, while the guest's heartbeat
+    kept printing every 30 s (307 beats).
+  - In the batch rung: no domain fault, pc=0 0, FRTY 0, DRT1 0, Oops 0, INJS 0, INJL 0.
+  - No case step ran. `records/mp-mruby-stock-b2.result-lines.txt`.
+- **Against the pre-registration:**
+  - SMOKE_DONE and 23 of 23 did NOT hold. No cell is a reading, so nothing about the 23 cells is claimed either way.
+  - The vbatch END prediction did not hold either, because the boot was stopped.
+- **Why stopped:** the bound was set at 16:15, two and a half hours into the step, against three references:
+  - the reference session runs all 24 steps in about 4 minutes on QEMU;
+  - the step's own QEMU limit is 120 s;
+  - this smoke ran in 65.85 s on this board under the B5 runtime (fpga-silicon-measurements-for-paper.md, b5-mruby-smoke).
+  - Even the pass's ~18x silicon factor puts it under 40 minutes.
+  - Left alone, the boot would have held board 2 until its 3.5 h batch budget ran out and read nothing more. A step's
+    output is printed only when the step ends.
+- **What this cannot tell apart:**
+  - a step that is merely very slow on silicon. The paper doc records that level0's first-fit allocator once made
+    mruby's GC test take minutes, and smoke's M6 allocates 60,000 objects;
+  - a live-lock, with no fault and no monitor line.
+- **What the next boot needs:**
+  - a heartbeat that carries the running step's progress: the size of its output and its last line, so the smoke's
+    M1..M13 markers show where it is;
+  - a per-step bound on the board, so one step cannot hold the whole batch.
+  - Both are boardvm changes, and they go on dev before mruby returns to a board.
+- **Board 2 then started Juliet tree B,** as pre-registered (09bb6536e2ee).
+
+### tier3-mp-arm.sh gains perl and a clean-reference gate (2026-10-21 16:2x)
+
+- **Perl recipes:**
+  - perl-stock and perl-sublet are pinned to the TRIMMED references, refs/tB-mimic/<tag>-trim (--lib-closure, the
+    board's staging), and to their tree wt-ref2 15ced322c824 (runner aabfa66858b2c35e, appvm-arm 11967b378bda73c8).
+  - Full = trimmed, 11 of 11 for each arm, is that staging's gate (corpus-mp/refs/REFS).
+  - The argument line is the reference script's own (run-refs-perl2.sh:42).
+- **The gate:** a reference whose read line is not `APPVM read rc=0` with its controls passing is refused.
+  - mruby: "control smoke ok". perl: "controls {'eval': True, 'shim': True}".
+  - It refuses as-built mruby-sublet and passes the other three references.
+- **Dry run** (`dryrun-mp-arm2.txt`, every call stubbed, the arm writing the reference's own matrix and a real pass
+  transcript):
+  - good runs read 23/23 for mruby-stock and 11/11 for each perl arm;
+  - a planted cause change reads 10 of 11;
+  - the Sublet refusal, the 78 refusal, busy, 409 and an unknown tag all stop.
+- **Perl reading:** perl-stock case 02 reads signal127 in the reference and will read so on the board, at the pinned
+  tree. It is perl's own panic, exit 255 (virtualvm's rc decoding, fixed on dev's lane virtualvm-end-marker).
+  It is recorded as exit 255 by the 2026-10-11 record.
+- **Held until boardvm's per-step bound and progress heartbeat** (virtualvm-end-marker 0a12aeb3f636) are on the
+  session tool's tree, so one slow step cannot hold a board for its whole budget. That tree is held still until the
+  compiler lane's batch references end.
+
+### Recorded from the lanes (2026-10-21 16:3x): mruby Sublet is not a recycling case; the stock smoke's record budget
+
+- **The compiler lane withdrew its own hypothesis** that mruby Sublet's smoke dies of lifetime-table exhaustion, which
+  record recycling would cure.
+  - On the generations kit (gen-mg) the smoke still dies at M6. It allocated 84,344 records against a 64,001 ceiling,
+    so recycling worked and the table still ran out: M6 holds 20,000 x [Array, String, Hash] live at once.
+  - So mruby Sublet will not read on the batch bitstream either. It leaves the waiting list beside cpython lt1 and
+    pg-pools. What would make it read is the runtime lane's design call. Readings: corpus-mp-q15/refs/REFS.
+- **From the same triple:** the STOCK smoke takes 44,017 records on QEMU, one per virtual malloc, against the vp2 flat
+  table's 64,001 without recycling. On QEMU it takes about 30 s, read from the reference's kernel timestamps 3.77 s →
+  33.73 s.
+  - The board's 153 minutes is therefore about 300x. Reaching the table's 511 reserve, whose "collect skipped" line is
+    KERN_INFO and hidden on the board console, is the first thing the next board run reads.
+  - That run uses dev 93ebde2f53b9: a per-step bound, @@DMESG after a kill, and the heartbeat's output size.
+- **On dev:** d86451120232 (split reads a mid-line END and an exit above 128+NSIG correctly; of the 734 transcripts
+  with steps, only the repaired mruby-sublet one moves) and 93ebde2f53b9 (the board step bound). This lane's
+  wt-gate tools stay at their pass state until the compiler lane's batch references end.
 
 ### The batch bitstream's Tier 1 image and firmware, prepared before the bitstream (2026-10-21 16:24-16:26)
 
@@ -5766,6 +5881,116 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
 - **Lesson:** this is the "printed flag is not a measurement" class again. A verdict name taken from the judge's output
   vocabulary was predicted without reading what the judge needs to print it.
 
+### mruby virtual-malloc on board 1 (tree A), with the step bound, pre-registered (2026-10-21 17:4x, before the boot)
+
+- **What runs:** `tier3-mp-arm.sh 1 <out> mruby-stock` with MP_ARM = `tier3-appvm-arm-tools.sh`.
+  - That script is tier3-appvm-arm.sh 11967b378bda73c8 with two lines changed: the session tool and the SDK checker
+    come from /tmp/capstone/wt-tools, a clean detached worktree of dev 93ebde2f53b9, instead of wt-gate.
+  - wt-gate is held still for the compiler lane's batch references. The checker is byte-identical in all three
+    trees (5abdb9ad).
+  - The session tools differ from wt-gate's by the three dev changes: split's END and NSIG reading, the step bound,
+    and the heartbeat. Plus MODTEXT, which prints before any step.
+  - Pins as the board-2 run: runner 9db9f5f7cf60fcda, wt-ref 6764d96229f6, the reference's images, kit bkit7-rev2xDN2.
+  - Each step is bounded at its runner's limit x 20: 2400 s for mruby.
+- **tier3-mp-arm.sh now also VOIDs a board run whose own controls fail.** A bounded smoke reads "control smoke FAILED",
+  and its cells can still compare equal. The test is the same one the reference must pass.
+- **Dry run** (`dryrun-mp-tools.txt`; busy, booking and boot stubbed, the rest real):
+  - the reference's own serial as the rung reads 23 of 23;
+  - a planted bound on the smoke reads VOID;
+  - the guest script bounds all 24 steps at 2400 s and prints @@DMESG after each.
+- **Predictions:**
+  - **The smoke is bounded at 2400 s on tree A as well: VOID, no cell a reading.** Every pass arm read the same on
+    both trees, and tree B ran 153 minutes with no END.
+  - The heartbeat's output size FREEZES (a stop, not a slowdown), at a line count somewhere in M1..M13. Which marker is
+    not predicted; M6, the allocation-heavy step, is the a priori candidate.
+  - No "collect skipped" in @@DMESG: the stock smoke takes 44,017 of 64,001 records on QEMU.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0. The tree-B boot read 0 throughout its 153 minutes.
+  - The 23 case steps run after the bound inside the batch budget (12,720 s), and their cells are recorded but not
+    graded.
+- **If instead the smoke prints SMOKE_DONE:** the tree-B stall is tree-specific or intermittent. The cells are then
+  graded 23 of 23 against the reference.
+
+### mruby virtual-malloc on board 1 (tree A), with the step bound, result (2026-10-21 17:41-20:40): VOID as predicted; the smoke stops before M1, not in M1..M13
+
+- **Read** (`records/mp-mruby-stock-b1.result-lines.txt`):
+  - The boot and both controls are clean, and the images are the reference's.
+  - The smoke hit its 2400 s bound, END 137, and the kernel stayed alive.
+  - Its heartbeat read out=3934B/49L from the first beat to the kill. That is 49 region-grant lines, the last
+    `slot=42 bytes=16384`, and no M marker: on QEMU, M1 prints at line 72 of the same output.
+  - Of the cases that ran, 01, 02 and 04 also hit the bound:
+    - 01 and 04 stop at 3771B/47L, and the smoke and 02 at 49L. On QEMU, line 48 is the 512 KB grant (slot 41) and
+      line 50 the next 16 KB grant (slot 43).
+    - 02 moved once, from 49L to 51L (two more 16 KB grants), after about 25 minutes, then stopped again until the kill.
+  - 03 got past startup and faulted at the reference's cause and site (cause 25, code+0x15c48c, mrb_str_format).
+  - 05 sat at 47L when the boot was stopped at 20:38. I stopped it there by SIGINT to the driver: every further step
+    costs 40 minutes and grades nothing, and the next boot needs the stall capture (dev e6c68a531557).
+  - The @@DMESG tails hold only the module's load banner and release lines. FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
+- **Against the pre-registration:**
+  - The bound and VOID held.
+  - No "collect skipped" held. The counters at 0 held.
+  - **"The output size freezes at a line count in M1..M13" did not hold.** It froze before M1, during mruby's startup,
+    at a grant boundary. And in 02 it moved once after 25 minutes, so it is a near-stop with rare progress, not a hard
+    stop. M6 was the wrong candidate.
+- **What this excludes:**
+  - **The current monitor's fetch-retry livelock** (two pcs refusing in turn, which the batch firmware caps). This
+    monitor prints FRTY on every retry it makes (sbi_capstone.c's fetch_retry_covered, at f13dbc5), and FRTY read 0.
+  - **Record exhaustion:** no "collect skipped" line.
+  - **S-24's fault-repeat bound:** no ELOOP line.
+- **What it cannot tell apart:** a context spinning (preempted at every quantum) against a host-side wait. A killed
+  step read as one bit. Hence the stall capture below.
+
+### mruby virtual-malloc with the stall capture, boards 1 and 2, pre-registered (2026-10-21 20:5x, before either boot)
+
+- **What runs:** `tier3-mp-arm.sh <board> <out> mruby-stock` with MP_ARM = `tier3-appvm-arm-tools2.sh`.
+  - That script is tier3-appvm-arm-tools.sh with the tree /tmp/capstone/wt-tools2, a clean detached worktree of dev
+    e6c68a531557: the step bound and the stall capture. The checker is the same 5abdb9ad.
+  - MP_ROOT: t3-run-treeA/mp2 on board 1, and t3-run-treeB/mp2 on board 2. The other pins are as before.
+  - Board 1 goes first, now. Board 2 follows when Juliet tree B's probe ends.
+- **The capture** (boardvm STALL_FN): at the bound and before the kill, for the launcher and its descendants, twice and
+  5 s apart:
+  - /proc state, utime, stime, wchan and syscall number;
+  - the module's resume counters;
+  - between the samples, 5 s of the module's escape trace (diag_escapes: event, kind, cause, pc and tval per escape),
+    from dmesg after END. Its print budget is 16 per module load, so it covers the smoke only.
+- **Dry run** (`dryrun-mp-tools2.txt`; busy, booking and boot stubbed):
+  - the reference's own serial reads 23 of 23;
+  - a planted bound reads VOID;
+  - a planted bound with @@STALL lines after END reads VOID with every cell still equal;
+  - the generated script has stall() once and `sleep 2400; stall` and `rm -f /tmp/stall.out` before all 24 steps.
+- **Predictions:**
+  - Both boots: the smoke is bounded at 2400 s and VOID. Its output stops at 47L or 49L, before M1.
+  - **The best hypothesis is that the context spins, and it reads as follows:**
+    - the launcher is in state R, with syscall 29 (ioctl, CV_STEP);
+    - its stime grows by most of the 5 s window between the two samples;
+    - the satp refresh count grows between the two `mod` lines (one refresh per resume);
+    - 1 to 16 escape lines, event 1 (the quantum), at pcs inside the image's code range.
+    - Then the pcs locate the loop in mruby's image.
+  - The alternatives, and what follows from each:
+    - state S with no time growth and no escape lines: a host-side wait, which the wchan names.
+    - escape lines of event 4 at one or a few alternating addresses: a fault-resolve churn that fault_repeat_max
+      cannot catch, because the address changes.
+  - "escapes on" prints. If an R launcher in ioctl shows no escape line, the instrument did not fire, and the reading
+    of the window is void.
+  - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
+- **Stop rule:** each boot is stopped by SIGINT to its driver once the smoke's @@DMESG lines are on the console. The
+  steps after it are not graded.
+- **perl stays off the boards** until this stall is understood: its steps run on the same launcher and module, and its
+  bound is 12,000 s (600 s x 20), which would hold a whole batch budget. Its dry run is in the same file. The trimmed
+  reference's own serial reads case 02 as exit255 under the current split (dev d86451120232), where the reference's
+  matrix, read before that fix, says signal127. So a perl board compare expects 10 of 11, and that one cell differs by
+  construction.
+- **Amendment (20:5x, before the relaunch): board 1's first launch was stopped by my own watcher, mid-JTAG-load.**
+  - Launched 20:43:51 under booking 86; stopped 20:46:29, with no step run (VOID, unbooked).
+  - The watcher (private, stop-after-capture.sh) sends the stop rule's SIGINT once "@@DMESG control-smoke" is in the
+    driver's UART. On connect, the console replays the PREVIOUS boot's output, and that boot printed exactly this
+    line. The board-run skill says to scope a log scan to the run's own load_image, and the watcher did not.
+  - It now reads only the UART after this boot's `monitor load_image`. Tested both ways: it fires on the 17:41 run's
+    driver.log, where the line follows that boot's own load, and stays quiet on the aborted run's, where it appears only
+    in the replay.
+  - The driver it signals is found by walking up from each driver process to THIS run's board-run.sh. Tested against
+    board 2's live Juliet driver: it matches when given that run's board-run.sh, and not when given board 1's.
+  - Relaunch under MP_ROOT t3-run-treeA/mp3, everything else as registered above.
+
 ### CORRECTION (2026-10-21 21:0x): two of Juliet tree A's 13 `_12` cases took the bad branch in the main run
 
 - **The Juliet tree A result above says** "the other 13 are the `_12` (rand_flow) cases. In the main run each bad took
@@ -5822,3 +6047,158 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
     - That needs the free to release the page in some runs and not in others, which nothing here shows.
   - The test is a QEMU or board run of the uaf control many times with the launcher's grant/retire trace, asking whether
     a retire falls between the free and the read in exactly the runs that fault 13.
+
+### mruby with the stall capture on board 1 (tree A), result (2026-10-21 20:48-21:38): the stalled context loops on a delegated system call, not on quantum escapes
+
+- **Read** (`records/mp-mruby-stock-b1-capture.result-lines.txt`):
+  - The monitor's boot quantum reads QNT0 = 2,000,000, so this is not S-26's quantum-0 livelock.
+  - The smoke was bounded at 2400 s (VOID). This time it got through M1..M11 and stopped before M12, which is
+    `Dir.entries(dir)`. The earlier runs stopped during startup, so the stop point moves.
+  - The launcher was in state R, burning user and kernel time. Over the 5 s window, utime grew 161 and stime 753 ticks,
+    the module resumed the context about 3,600 times (satp refreshes), and it resolved no fault (sfences flat).
+  - **All 16 escape lines are event 3 (a service request), kind 0x3, cause 0xb, at two pcs in turn:**
+    - code+0xb0, the ecall of `__capstone_vm_thread_self` (service 0xb);
+    - code+0xbc, the ecall of `__capstone_vm_delegate_transport` (service 0xa), a0 0x3f9011c000.
+  - So the context is in a loop of thread_self followed by one delegated system call, about 40 pairs a second. Which
+    call it is, the capture cannot see.
+- **Against the pre-registration (444ebaf621b8):**
+  - The bound, VOID, the counters and "escapes on" held.
+  - **The best hypothesis did not hold.** It predicted escapes of event 1 (the quantum), and syscall 29 on the
+    launcher. The escapes are service requests, and the launcher was "running".
+  - The output stopped at 281 lines, not 47 or 49.
+  - Of the listed alternatives, neither a host-side wait nor a fault-resolve churn fits. It is a third shape: a
+    delegated-call loop.
+- **Positive control for the instrument** (QEMU, the reference's kit and image): the same sysfs switch printed escape
+  lines into dmesg (event 1, kind 0x1, pcs in mruby's code), and the switch read N before it was set.
+- **Board 2's capture boot, amended (21:4x):**
+  - Its smoke completed (SMOKE_DONE, END 0), so the stop rule, keyed to the smoke's capture, never fired.
+  - Case 03 then sat at 47 lines, the startup stall shape, with the boot's escape budget unused.
+  - Its stop watcher is moved to case 03's capture (tested on the 17:41 run's log: it fires for the smoke and 01 and
+    not for 03). Board 2 therefore stops after 03 and before cases 04-23.
+  - Cells 01..03 are read; the rest are not.
+
+### mruby's smoke x4 with the launcher's service trace, board 1 (tree A), pre-registered (2026-10-21 21:4x, before the boot)
+
+- **What runs:** `tier3-trace-smoke.sh 1 <out>` → `trace-smoke.py`, one cold boot through boardvm (tools dev
+  e6c68a531557) on kit bkit7-rev2xDN2. It runs the reference's image mruby-8c7cd27614353067.dom and its smoke.rb.
+  - Four times: smoke-k with `CAPSTONE_VM_TRACE=1`, stderr to /tmp/tr<k>.txt, bounded at 600 s (30 s x 20).
+  - Each is followed by sum-k, which prints:
+    - the trace's line count and its SERVICE count;
+    - the 25 most frequent (nr, result) pairs and the other line kinds;
+    - the trace's last 40 lines.
+  - The launcher binary (b27afefc, both kits) carries the trace strings.
+  - The first bound in the boot fires the stall capture.
+- **Dry run** (`dryrun-trace-smoke.txt`):
+  - (a) the wrapper with booking, busy and boot stubbed generates all four smokes bounded at 600 s;
+  - (b) the guest script under busybox with a fake launcher: a completed run's summary lists its calls; a stalled run
+    (a loop of one delegated call) is bounded, captured, and summed to that one nr;
+  - a transcript without the steps now exits NO DATA, not completed.
+- **Predictions:**
+  - b0-stats and b0-hello 0. At least one of the four traced smokes stalls: 2 of 2 tree-A smokes stalled today, and
+    1 of 2 on tree B.
+  - In a stalled run, the trace's tail is a repeating `BOUNDARY kind=11`, `BOUNDARY kind=10`,
+    `SERVICE nr=N result=R` with a single N, and the escape trace again reads event 3 at code+0xb0 and code+0xbc.
+    - N is not predicted. For a stop between M11 and M12, getdents64 (61) is the a priori candidate. For a startup
+      stop, no candidate is named.
+  - A run that completes prints SMOKE_DONE, and its histogram shows no runaway single nr.
+  - **If no run stalls,** the trace (extra stderr writes) masks the stall. That is a reading too, and the next boot
+    traces without it.
+  - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
+
+### The trace names mruby's loop: a SIGALRM storm (2026-10-21 21:43-22:3x, board 1, tree A; and board 2's capture, tree B)
+
+- **Trace run 1** (`records/trace-smoke-b1-run1.result-lines.txt`; pre-registered 82cfee2c3a06):
+  - The run stalled at startup, before M1, and was bounded at 600 s. The capture again read event 3 at
+    thread_self / delegate_transport.
+  - Of 70,940 delegated calls, 47,291 were rt_sigprocmask (135) and 23,644 SIGDONE (3235774470), all with result 0
+    and all on tid 0. The trace's tail repeats the period sigprocmask, sigprocmask, SIGDONE.
+  - Once each: SIGPOLL, SIGACTION, setitimer (103) and clock_gettime (113).
+- **Trace run 2** stalled too (2 of 2 on tree A in this boot). Its summary is read when it ends.
+- **Board 2's capture boot** (`records/mp-mruby-stock-b2-capture.result-lines.txt`):
+  - The smoke completed. Cases 01-04 equal the tB-mimic QEMU reference in exit, cause and site, read from the
+    transcript by hand.
+  - Case 05 stalled. Its capture is the same event-3 alternation on tree B.
+  - Board 2 was then stopped (22:26), so 06-23 did not run.
+- **The mechanism** (the runtime lane's reading, checked here against the sources and the image):
+  - hal-posix-task/src/task_hal.c:106-113 installs sigalrm_handler and arms `setitimer(ITIMER_REAL)` with
+    it_value = it_interval = MRB_TICK_UNIT * 1000 us. MRB_TICK_UNIT is 4 (mruby-task/include/task.h:83).
+  - The board image carries sigalrm_handler and mrb_hal_task_init.
+  - In the runtime, one delivery costs three delegated rounds: procmask to the handler mask, then procmask to
+    restore, then SIGDONE. That is the traced period. 23,644 deliveries in ~600 s is ~25 ms each against a 4 ms
+    tick, so a new SIGALRM is always pending, and the program rarely runs.
+  - QEMU's rounds are fast enough that this never stalls there. Intermittency comes from where the first tick lands.
+- **Status:** the reading fits every capture and the trace. **It is not yet confirmed.** The confirming arm is the
+  matched pair below.
+- **Against the trace pre-registration:**
+  - "At least one stalls" held (2 of 2).
+  - "A single repeating nr" held in substance: one repeating period of two nrs.
+  - getdents64 was the M11-M12 candidate, and this run stalled at startup instead.
+- **Amendment (22:3x):** the trace boot is stopped after sum-2. Runs 3-4 would have taken ~1.5 h more for a reading
+  already consistent twice, and board 1 is needed for s23's tree-A baseline.
+- **For the batch boot:** the batch Tier 1 image's mruby is f8594e11, the 4 ms build, so its Tier 1 mruby rung
+  carries this storm.
+
+### The SIGALRM-storm matched pair on board 2 (tree B), pre-registered (2026-10-21 22:4x, before the boot)
+
+- **What runs:** `tier3-trace-pair.sh 2 <out>` → `trace-pair.py`, one cold boot. mruby's smoke with the service trace,
+  each run bounded at 600 s, in this order:
+  - 1ab24a92 three times: r60, MRB_TICK_UNIT 100, the compiler lane's corpus-mp-r60t;
+  - then f8594e11 twice: r60, MRB_TICK_UNIT 4, corpus-mp-r60, the batch Tier 1's mruby.
+- **One variable:** the two builds' sources are identical, and of 124 objects only `hal-posix-task/src/task_hal.o`
+  and `mruby-task/src/task.o` differ (checked here). The compiler lane read tv_usec 100000 from task_hal.o's
+  disassembly, against 4000 in r60.
+- **Each summary** prints the whole-trace SIGDONE and rt_sigprocmask counts, the tail first, then a histogram over the
+  last 30,000 lines only. (A full sort of a stalled trace took 30 minutes in sum-1.)
+- **Dry run** (`dryrun-trace-pair.txt`):
+  - the wrapper with the boot stubbed exits NO DATA on a stepless transcript and generates 5 bounded runs;
+  - the guest script under busybox with a fake launcher that storms (135, 135, SIGDONE) in run 4 reads that run's
+    counts as sigdone 164, sigprocmask 328 against 1 and 0 in a completing run.
+- **Predictions:**
+  - **All three t100 runs complete with SMOKE_DONE and exit 0.** SIGDONE stays at most ~10 per second of run time,
+    with sigprocmask ≈ 2 x SIGDONE.
+  - **At least one of the two t4 runs stalls** at the bound, with the period sigprocmask, sigprocmask, SIGDONE, at
+    ~40 SIGDONE a second.
+  - **A t100 run that stalls refutes the storm reading,** or shows it is not the whole story.
+  - A boot where neither t4 run stalls under-determines. Every stall today was the cw 4 ms image 8c7cd276, in 10 of 16
+    processes: tree A 5 of 6 at 17:41, the 13:34 tree-B smoke, the 20:48 tree-A smoke, tree B 1 of 6 at 20:48, and
+    trace runs 1-2. f8594e11 (r60, 4 ms) has not run on silicon, so its stall rate is not known.
+  - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
+
+### The SIGALRM-storm matched pair, result (2026-10-21/22, both boards): MRB_TICK_UNIT 100 completes 6 of 6, MRB_TICK_UNIT 4 storms 4 of 4
+
+- **Read** (`records/trace-pair-b1.result-lines.txt`, `records/trace-pair-b2.result-lines.txt`; pre-registered
+  459326296d2b for board 2 and 91defa9689c6 for board 1). Every step ran on both boards, and all six board counters
+  read 0.
+  - **t100 (1ab24a92), 3 of 3 on each tree:** SMOKE_DONE and exit 0 in about 4-4.5 minutes, with 45-48 SIGDONE and
+    95-101 rt_sigprocmask per run.
+  - **t4 (f8594e11), 2 of 2 on each tree:** each ran to the 600 s bound, with 23,803-23,879 SIGDONE and
+    47,609-47,761 rt_sigprocmask. That is the procmask, procmask, SIGDONE period at ~40 deliveries a second. The
+    first bound's capture is the same event-3 alternation as every earlier stall.
+- **Against the pre-registration: every reading holds.** All t100 runs complete, at most ~10 SIGDONE a second (it is
+  ~0.2), with sigprocmask ≈ 2 x SIGDONE. At least one t4 run storms: all four do. No t100 run stormed.
+- **So the root cause of mruby's silicon stall is confirmed:**
+  - mruby-task's POSIX HAL arms a 4 ms ITIMER_REAL SIGALRM (task_hal.c:106-113, MRB_TICK_UNIT 4).
+  - Each delivery costs three delegated rounds in the virtual runtime, about 25 ms on silicon, so a new SIGALRM is
+    always pending and the program barely runs.
+  - The only difference between the pair's images is that constant: the sources are identical, and only task_hal.o
+    and task.o differ.
+  - It is not a capability or bitstream defect, and QEMU does not show it, because there a round fits in the tick.
+- **What it changes:**
+  - Every mruby board cell from today on the 4 ms images (8c7cd276, f8594e11) is a storm VOID, not a reading of the
+    case.
+  - The board's mruby arms need the tick-100 images: the compiler lane's corpus-mp-r60t, with QEMU references
+    re-run on them.
+  - The runtime lane has a fix of its own planned: fold the three rounds into one. It does not reach a 4 ms tick, so
+    the image change stays.
+- **The batch Tier 1 image, rebaked on the tick-100 mruby:**
+  - `batch-prep.sh` with images contract 65f9f1f179852246, mruby 1ab24a9215078a53 and sqlite3 e63733dd1a4a7452
+    (runtime 98bfe0d9ab76, gate PASS). The compiler lane's Tier 1 recipe plus the define reproduced 1ab24a92 byte for
+    byte (batch-t1-r60t/BUILD).
+  - Gates re-run here: delin-census 0; qemu-only-csr-census 0, the batch module included; vp2-silicon-gate 0
+    refused.
+  - The silicon gate took one new attribution row, `boot3/silicon-gate-attributions.tsv` for 1ab24a92 at 0x1b6f38:
+    the same libc_exit_fini site, moved 8 bytes. It was re-derived on the image: `.fini_array` is 0 bytes at
+    0x23e160, and libc_exit_fini+0x68 = 0x1b6f0c is `bgeu a3, a4, 0x1b6f44`, past the loop.
+  - The compiler lane's split census: VAR-CONST 0 (positive control: 3 on 8c7cd276).
+  - **Image 64ec46d1f8d9461b, firmware 6423545a567b2f3c (19,565,064 B), FRTC present.** It supersedes
+    74edf44a / d9026250, whose mruby was the 4 ms build.
