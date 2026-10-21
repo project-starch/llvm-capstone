@@ -1217,3 +1217,64 @@ DIRECTORY of logs with a machine-written PROVENANCE; a `*.txt` glob could not se
 r12-recl testlist. Each named a vocabulary and a location without asking what the pattern could not match.
 Recorded in the lane's memory under that shape; CLAUDE.md's synthesis section now carries the third
 lint-blind instance and the synthesis-only rule.
+
+## 2026-10-22: the size gate on trial C PASSED, the batch is in synthesis, and the instrument has its silicon control
+
+**The synthesis-only size gate on trial C (1d3abc5b3 = f08906b78's tree + the restructured item 4, two files,
+`ex_stage.sv` and `ariane_pkg.sv`; its commit PARENT is 654c25b5e, three above f08906b78, the tree is still one
+variable by content), run by the synth lane 18:40Z, `synth_design` only, 40 GB guard, an independent 30 GB RSS
+watchdog, against run A's archived synthesis checkpoint with the same query:**
+
+| | run A (f08906b78) | trial C (1d3abc5b3) | trial B (654c25b5e's predicate) |
+|---|---|---|---|
+| technology mapping peak | 5,387.8 MB, 48:21 | 5,406.8 MB, 51:27 | 94–96 GB, never finished |
+| whole-run peak | 22.76 GB | 23.53 GB | 96.01 GB |
+| i_cva6 LUT / FF | 154,677 / 74,653 | 154,832 / 74,426 | — |
+| ex_stage_i + issue_stage_i LUT / FF | 88,127 / 28,017 | 87,747 / 27,760 | — |
+
+So the restructure answered the question the gate existed for: the compress → decompress round trip's mapping
+class is gone, and the core moved +155 LUT / −227 FF.
+
+**The gate as first written FAILED on its literal clause, and the clause was wrong, twice.** It was written as
+"ex_stage_i within ±2,500 LUT"; ex_stage_i read −5,550 and issue_stage_i +5,170. A second clause written on the
+leaf-level reading, "no other leaf moves above 500", failed on csr_buffer (−2,479: 5,069 → 2,590, the SAME
+bistable pair recorded between two source-identical builds on 2026-10-18 at 5,192 → 2,941), dyn_unit/_spawn_0
+(−1,109), i_multiplier (−1,008, with DSP 16 → 16 and FF 178 → 178, so pure re-homing) and lsu_bypass (−709).
+Both clauses sat below this flow's recorded per-module redistribution floor, so neither failure could
+discriminate; both were withdrawn the same evening. The lesson is already in the lane's memory and is restated
+here because it binds every future gate: **a per-module own-cell count measures the flow's hierarchy choice,
+not the logic. Grade a change on (a) its OWN footprint, the cells carrying its identifiers, with a band sized
+to the circuit, (b) the stem summed over hierarchies, and (c) the design total. Never on one module.**
+
+**Graded on those keys, item 4 passes with room:**
+- own footprint (synth's exclusive backward cone from the 69 surviving `r60_*`/`cursor_outside_window*` nets, 20
+  iterations, matcher 0 on A): **274 LUT + 40 CARRY4, 0 FF, 0 MUXF**, all 314 cells homed under
+  `issue_stage_i/i_issue_read_operands` — the band was "< 1,500, low hundreds expected"; the uncounted remainder
+  (an E decode shared elsewhere, the gating folded into the pack's 65-bit select) is bounded by the +155 core
+  delta;
+- stem attribution of every IRO+scoreboard LUT by the external hierarchies reached within 4 levels, both builds:
+  IRO+SB 46,680 → 52,428, the growth spread across EVERY FU result stem (dom_switcher +2,750, csr_buffer +2,315,
+  lsu +2,114, mult +2,002, dyn_unit +1,957, branch_unit 0 → 1,504, **flu_unit +1,359**, csr_regfile +1,046,
+  perf_counters +1,028) — the signature of the FU writeback cones re-homed into the scoreboard's result flops,
+  each re-homed LUT reading several FU results, not an item-4 addition; the FLU share is under the ~1,500 bound.
+
+**The batch c721c1a2a launched 20:54Z**, full flow, 40 GB guard, 34 GB RSS watchdog, phase/loop watchdog
+against run A (8 synthesis-stage loops; the raw 8-326 line count is read as DISTINCT normalised cuts, never
+raw lines), collection as a separate capped step because run A's collector alone peaked at 40.72 GB. ETA about
+3.5–4 h on A's timeline. What travels with the bitstream: WNS, the ex+issue and core rows above, the sha256.
+
+**The instrument's silicon control is in hand on both resident trees** (board lane, 2026-10-21 22:26 tree B /
+board 2 and 22:54 tree A / board 1, records on their branch at 91defa9689c6 under
+`vp2-kit-2026-10-17/tier3-smoke/records/`): `s23-cpmp-rearm` reads ALL 25 values of the pre-batch vector in
+`s23-bare-2026-10-21/PREREG.md` (7ae1d8491466), a0 = 0x80800000 included. The first boot of the batch bitstream
+is graded by that PREREG: VOID unless SR 25, a0 0x80800000 and Q1 0; the one unknown is the six re-arm flips
+(Q5/Q8/Q10/Q12a/Q12b/Q13d), total 8 → 14. The reflash is the lead's word.
+
+**Two smaller records, so they are not re-derived:**
+- the lint re-baseline on the lane at 05d209acb (REF-only, not in the batch tree): UNUSEDSIGNAL 1395 → 1426,
+  all 31 attributed by file and item, every other counter identical; the two item-4 names
+  (`r60_src_meta`[63:27] and `src_word`[25:17,13:3]) go away with the six-E-bit narrowing on the next
+  bitstream's list;
+- the sweep's one timing shift, `r31-revoke-cursor` +1 cycle at 4 of 7 prints with every value identical and
+  parked on both sides, is item 6's accepted cost (the generation push on the REVOKE path), confirmed at the
+  REVOKE commit (pc 0x6e, commit #35) — not a regression.
