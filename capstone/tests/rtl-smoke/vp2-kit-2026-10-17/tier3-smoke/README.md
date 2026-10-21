@@ -5668,3 +5668,38 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   in Juliet's temporal cases touches what separates the two bitstreams.
 - **Timeouts:** a silicon step takes ~6 s against the 10 s limit. A NO-READING on one tree only is read as timing margin
   first, and is named that way, not as a tree difference, until a re-run of that batch says otherwise.
+
+### The batch firmware, built and gated without the board (2026-10-21 15:xx)
+
+- **Monitor:** capstone-sbi vp2/batch d9da397. It is f13dbc5, then 579ef1c (the fetch-retry no-progress cap,
+  CAPSTONE_FETCH_RETRY_CAP), then the SBI RFENCE commit (caplifive-sbi #4, fab38bb, picked from e1db99e, clean, its
+  author kept). Wrapper aab63d5.
+- **Builds** (`batch/build3.sh`): three firmwares on one saved Image, the board kits' current define set.
+  - **A**, e1db99e, the RFENCE pair's monitor.
+  - **B**, the batch monitor with the cap off. It is byte-identical to A: generated sbi_capstone_dom.c.S 4cf7bea4bd73f70c,
+    int handler 55500a31efe852b7, fw_payload 167ae86dba91174b, 25,856,520 B. The cap changes nothing when off.
+  - **C**, the batch monitor with -DCAPSTONE_FETCH_RETRY_CAP. The FRTC tag is in the generated monitor, the dom_stack
+    gate passes, and C is under the 26,000,000 B cap (fw_payload 0e604d59edbf519c on that Image).
+- **csupctl.table bracket, re-run on d9da397 + aab63d5:** unchanged.
+  - Bit 3 is set only at capstone_csmint.S:279 and cleared at :281 and at :310, the first instruction of
+    csm_window_trap. CSM_CSNODE is the only instruction between them.
+  - The other writers of 0x7C4 only moved: sbi_capstone.c:1025, the slot_paused write, and :3797, the bit-2 strobe.
+  - `git diff f13dbc5 d9da397` touches no line naming 0x7c4, csupctl, mstatus or MIE.
+  - The wrapper's only MIE set is still dom.c:191, under CAPSTONE_TARGET_QEMU.
+- **The cap's logic, on the host** (`batch/test-retry-streak.py <monitor worktree>`). fetch_retry_covered is cut from
+  the monitor's own sbi_capstone.c, compiled against stubs, and driven:
+  - two pcs alternating with no progress read R R (I+FRTC), repeating: at most two retries in a row, one FRTC per three
+    refusals;
+  - one pc twice is caught by the per-pc guard, with no FRTC;
+  - with progress (5000 instructions) between refusals, every refusal is retried;
+  - a pc with no covering slot is injected;
+  - **negative control:** the same harness without the define retries every alternating refusal;
+  - **planted defects:** no increment, a cap of 3, and no reset on progress each FAIL. A monitor without the block
+    (f13dbc5) exits NO DATA.
+  - It proves the C, not capstone-c's output.
+- **Not provable on QEMU:** fetch_retry_covered is compiled only under CAPSTONE_TARGET_FPGA && CAPSTONE_VP2_FETCH_RETRY,
+  and no QEMU kit refuses a covered fetch, so a QEMU run of the cap cannot reach it. The silicon positive control is the
+  alternating two-pc arm on the batch bitstream's first boot:
+  - an s23-cpmp-rearm-style persistent covered deny, with the S handler in a second denied range;
+  - placed LAST, because if the cap failed it would retry forever;
+  - pre-registered with that boot.
