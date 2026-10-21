@@ -1,0 +1,1 @@
+sdev: tree-dev6 = origin/dev 4985df88 (exec.c/capstone_vm.c/wire.h hashes equal); sreg: tree-reg6 = #250 head 2104f2fc8f2a (tree == 4d96d938; exec.c/capstone_vm.c/wire.h/contract.c hashes equal); kit-reg6b; QEMU b290f565 svadu=false x-capstone-supervisor-slots=32; harness run-pthreads.py (same in both trees)

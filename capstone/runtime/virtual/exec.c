@@ -32,7 +32,11 @@ struct mapping {
     uint64_t id;
     int heap, kind;
 };
-static struct mapping maps[CV_MAX_ARENAS];
+/* Registered mappings sorted by address, grown on demand. Registrations never
+ * overlap, so the last mapping starting at or below an address is the only one
+ * that can contain it. A pointer into maps does not survive map_insert. */
+static struct mapping *maps;
+static size_t map_count, map_capacity;
 static bool local_malloc;
 static void *reuse_address;
 static size_t reuse_bytes;
@@ -178,12 +182,49 @@ static void *reserve_aligned(size_t bytes, size_t alignment)
     if (tail) munmap((void *)(base + bytes), tail);
     return private_pages((void *)base, bytes);
 }
+/* The last mapping starting at or below p, or NULL. */
+static struct mapping *map_floor(uintptr_t p)
+{
+    size_t low = 0, high = map_count;
+    while (low < high) {
+        size_t middle = low + (high - low) / 2;
+        if ((uintptr_t)maps[middle].address <= p) low = middle + 1;
+        else high = middle;
+    }
+    return low ? &maps[low - 1] : NULL;
+}
+static struct mapping *map_find(uintptr_t base)
+{
+    struct mapping *m = map_floor(base);
+    return m && (uintptr_t)m->address == base ? m : NULL;
+}
+/* Room for one more mapping, made before the kernel mints its grant. */
+static int map_reserve(void)
+{
+    if (map_count < map_capacity) return 0;
+    size_t capacity = map_capacity ? map_capacity * 2 : 64;
+    struct mapping *grown = realloc(maps, capacity * sizeof(*maps));
+    if (!grown) { errno = ENOMEM; return -1; }
+    maps = grown; map_capacity = capacity;
+    return 0;
+}
+static void map_insert(struct mapping m)
+{
+    struct mapping *below = map_floor((uintptr_t)m.address);
+    size_t at = below ? (size_t)(below - maps) + 1 : 0;
+    memmove(&maps[at + 1], &maps[at], (map_count - at) * sizeof(*maps));
+    maps[at] = m; ++map_count;
+}
+static void map_remove(struct mapping *m)
+{
+    size_t at = (size_t)(m - maps);
+    memmove(&maps[at], &maps[at + 1], (map_count - at - 1) * sizeof(*maps));
+    --map_count;
+}
 static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
                  uintptr_t cursor, int linear, uint64_t thread)
 {
-    unsigned i;
-    for (i = 0; i < CV_MAX_ARENAS && maps[i].address; ++i) {}
-    if (i == CV_MAX_ARENAS) { errno = ENOSPC; return -1; }
+    if (map_reserve()) return -1;
     /* Option (iii): refuse to mint an arena whose bounds the encoder cannot represent, rather
      * than hand the domain a capability silently widened below its base or above its end.
      *
@@ -222,48 +263,42 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
     /* Every ADMITTED grant, in order, so two modules' grant sequences can be diffed. The
      * refusal side is already printed; without the success side a diff cannot say WHICH grant
      * first differs, only that something did. */
-    fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%u base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
-            i, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
-    maps[i] = (struct mapping){.address = base, .bytes = bytes, .visible = bytes,
-                               .id = r.id, .heap = linear,
-                               .kind = linear ? CV_MAP_HEAP : -1};
+    /* slot= is the number of mappings registered before this one: the old array slot until the
+     * first unmap, so the image's grant still reads slot=0 for the board lane's parsers. */
+    fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
+            map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
+    map_insert((struct mapping){.address = base, .bytes = bytes, .visible = bytes,
+                                .id = r.id, .heap = linear,
+                                .kind = linear ? CV_MAP_HEAP : -1});
     return 0;
 }
 static long unmap_arena(uintptr_t base, size_t bytes)
 {
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
-        if ((uintptr_t)maps[i].address != base || maps[i].visible != bytes || !maps[i].heap || maps[i].kind == CV_MAP_METADATA)
-            continue;
-        if (ioctl(device, CV_RETIRE, &maps[i].id)) return -errno;
-        if (munmap(maps[i].address, maps[i].bytes)) return -errno;
-        reuse_address = maps[i].address; reuse_bytes = maps[i].bytes;
-        memset(&maps[i], 0, sizeof(maps[i]));
-        return 0;
-    }
-    return -EINVAL;
+    struct mapping *m = map_find(base);
+    if (!m || m->visible != bytes || !m->heap || m->kind == CV_MAP_METADATA)
+        return -EINVAL;
+    if (ioctl(device, CV_RETIRE, &m->id)) return -errno;
+    if (munmap(m->address, m->bytes)) return -errno;
+    reuse_address = m->address; reuse_bytes = m->bytes;
+    map_remove(m);
+    return 0;
 }
 static long protect_range(uintptr_t base, size_t bytes, int prot)
 {
     if (!bytes || (base & 4095) || (bytes & 4095) ||
         (prot & ~(PROT_READ | PROT_WRITE | PROT_EXEC))) return -EINVAL;
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
-        struct mapping *m = &maps[i];
-        uintptr_t at = (uintptr_t)m->address;
-        if (!m->address || !m->heap || m->kind == CV_MAP_METADATA || base < at ||
-            base - at > m->visible || bytes > m->visible - (base - at)) continue;
-        return mprotect((void *)base, bytes, prot) ? -errno : 0;
-    }
-    return -EINVAL;
+    struct mapping *m = map_floor(base);
+    uintptr_t at = m ? (uintptr_t)m->address : 0;
+    if (!m || !m->heap || m->kind == CV_MAP_METADATA ||
+        base - at > m->visible || bytes > m->visible - (base - at)) return -EINVAL;
+    return mprotect((void *)base, bytes, prot) ? -errno : 0;
 }
 
 static int registered_span(uintptr_t p, size_t bytes)
 {
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
-        uintptr_t base = (uintptr_t)maps[i].address;
-        if (maps[i].address && p >= base && p - base <= maps[i].visible &&
-            maps[i].visible - (p - base) >= bytes) return 1;
-    }
-    return 0;
+    struct mapping *m = map_floor(p);
+    uintptr_t base = m ? (uintptr_t)m->address : 0;
+    return m && p - base <= m->visible && m->visible - (p - base) >= bytes;
 }
 static int registered_word(uintptr_t p)
 { return !(p & 3) && registered_span(p, sizeof(int)); }
@@ -300,11 +335,11 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         munmap(p, bytes);
         return -error;
     }
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
-        if (maps[i].address == p) {
-            maps[i].visible = visible; maps[i].kind = kind;
-            break;
-        }
+    /* grant() registered p under this address; a miss is a registry defect,
+     * and the launcher has nothing to answer with. */
+    struct mapping *m = map_find((uintptr_t)p);
+    if (!m) abort();
+    m->visible = visible; m->kind = kind;
     return 0;
 }
 static long remap_mapping(uint64_t tid, struct cv_step *step)
@@ -324,10 +359,8 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
                 ((base | old | bytes) & 4095) == 0);
         return -EINVAL;
     }
-    for (unsigned i=0; i<CV_MAX_ARENAS; ++i) {
-        struct mapping *m = &maps[i];
-        if ((uintptr_t)m->address != base || m->visible != old || m->bytes != old ||
-            !m->heap || m->kind != CV_MAP_HEAP) continue;
+    struct mapping *m = map_find(base);
+    if (m && m->visible == old && m->bytes == old && m->heap && m->kind == CV_MAP_HEAP) {
         /* Option (iii): the GROWN mapping's base must still be a granule multiple, and mremap()
          * promises only page alignment. Above 4 MiB the granule exceeds a page, so even an
          * in-place growth can leave the base unrepresentable (2 MiB -> 4 MiB keeps the base and
@@ -371,7 +404,10 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
         }
         r.address = (uintptr_t)p;
         if (ioctl(device, CV_REMAP_END, &r)) abort();
-        m->address = p; m->bytes = m->visible = bytes;
+        /* A moved mapping is re-sorted; removing it first leaves room. */
+        struct mapping moved = *m;
+        moved.address = p; moved.bytes = moved.visible = bytes;
+        map_remove(m); map_insert(moved);
         if (trace) fprintf(stderr, "CAPSTONE_VM_REMAP_OK old=%zu bytes=%zu\n", old, bytes);
         return 0;
     }
@@ -379,10 +415,7 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
      * fields at once and "no match" alone cannot say which one differed. */
     fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=nomatch base=0x%lx old=%zu bytes=%zu\n",
             (unsigned long)base, old, bytes);
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
-        struct mapping *m = &maps[i];
-        if (!m->address) continue;
-        if ((uintptr_t)m->address != base) continue;   /* only the arena at this base matters */
+    if (m) {   /* only the arena at this base matters */
         fprintf(stderr, "CAPSTONE_VM_REMAP_CAND base=0x%lx visible=%zu bytes=%zu heap=%d kind=%d\n",
                 (unsigned long)(uintptr_t)m->address, m->visible, m->bytes, m->heap, m->kind);
     }
@@ -391,8 +424,8 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
 static void cleanup(void)
 {
     if (device >= 0) { close(device); device = -1; }
-    for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
-        if (maps[i].address) munmap(maps[i].address, maps[i].bytes);
+    for (size_t i = 0; i < map_count; ++i)
+        munmap(maps[i].address, maps[i].bytes);
     if (image_fd >= 0) { close(image_fd); image_fd = -1; }
     capstone_spawner_stop(&spawner);
     capstone_delegate_host_free(&host);
