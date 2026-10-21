@@ -5990,3 +5990,20 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - The driver it signals is found by walking up from each driver process to THIS run's board-run.sh. Tested against
     board 2's live Juliet driver: it matches when given that run's board-run.sh, and not when given board 1's.
   - Relaunch under MP_ROOT t3-run-treeA/mp3, everything else as registered above.
+
+### CORRECTION (2026-10-21 21:0x): two of Juliet tree A's 13 `_12` cases took the bad branch in the main run
+
+- **The Juliet tree A result above says** "the other 13 are the `_12` (rand_flow) cases. In the main run each bad took
+  its good branch on the board and finished". **That is wrong for 2 of the 13:**
+  - CWE416 malloc_free_wchar_t_12 (batch010 s039) took the bad branch and faulted at cause 25 at wmemchr+0x1c;
+  - CWE416 return_freed_ptr_12 (batch011 s015) took it and faulted at cause 25 at memchr+0x1c.
+  - Both are the 2026-10-19 QEMU record's own cause and site. The other 11 finished.
+- **Corrected count:** 355 of the 366 bad images fault at cause 25 at the record's site (the 353 non-`_12` cases and
+  these 2), and 11 `_12` bads took the good branch. The judge's line is unchanged: it scores all 13 from the seeded
+  build (seeded MISSED), whatever the main-run draw did.
+- **How it was found:** comparing tree B's run with tree A's cell by cell. The two trees differ on exactly these
+  rand-driven cells. The claim had been written from the judge's per-case verdict, which for a `_12` case reports the
+  seeded build and no main-run site, never from the main run's own observations.
+- **Lesson:** that is the narrowed-view error. A summary of what the main run did must be read from the main run's
+  observations, not from a judge column that scores something else. `records/juliet-temporal-b1.result-lines.txt`
+  carries the corrected line below the wrong one.
