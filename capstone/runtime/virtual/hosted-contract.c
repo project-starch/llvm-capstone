@@ -282,6 +282,115 @@ static void memset_ranges(void)
     check(bounded, "memset_bounded_objects");
 }
 
+/* The library memcpy and memmove at every source and destination offset mod 16
+ * (memmove: 0-31, overlapping in both directions) and every length up to 80,
+ * through pointers the compiler cannot inline, with both ranges exactly
+ * bounded: the bytes copied are the source's, nothing else changes, and a
+ * destination granule keeps the tag of its source granule when the whole
+ * granule is copied and both agree mod 16, loses its tag when the range
+ * touches it otherwise, and keeps its own when untouched. */
+static void *(*volatile memcpy_call)(void *, const void *, size_t) = memcpy;
+static void *(*volatile memmove_call)(void *, const void *, size_t) = memmove;
+static int *copy_src[16], *copy_dst[16], *move_buf[16];
+
+static void fill_tagged(int **v, int shift)
+{
+    for (int i = 0; i < 16; ++i)
+        v[i] = &cells[(i + shift) % N];
+}
+
+#ifdef __CAPSTONE_PURECAP__
+static unsigned char *bounded(void *p, size_t off, size_t len)
+{
+    unsigned char *q = (unsigned char *)p + off;
+    return len ? __builtin_capstone_cap_shrink(q, (unsigned long)q, (unsigned long)q + len) : q;
+}
+#else
+static unsigned char *bounded(void *p, size_t off, size_t len) { (void)len; return (unsigned char *)p + off; }
+#endif
+
+#ifdef __CAPSTONE_PURECAP__
+/* Expected tag of granule g of a destination after copying len bytes from
+ * source offset so to destination offset doff, given the tags before. */
+static int expect_tag(size_t g, size_t so, size_t doff, size_t len, const int *src_tag, const int *dst_tag)
+{
+    size_t lo = g * 16, hi = lo + 16;
+    if (!len || hi <= doff || lo >= doff + len)
+        return dst_tag[g];
+    if (lo >= doff && hi <= doff + len && (so - doff) % 16 == 0)
+        return src_tag[(lo - doff + so) / 16];
+    return 0;
+}
+#endif
+
+static void copy_ranges(void)
+{
+    unsigned char sb[sizeof copy_src], db[sizeof copy_dst], mb[sizeof move_buf];
+    int stag[16], dtag[16], bytes = 1, returns = 1;
+#ifdef __CAPSTONE_PURECAP__
+    int tags = 1;
+#endif
+    for (size_t so = 0; so < 16; ++so)
+        for (size_t doff = 0; doff < 16; ++doff)
+            for (size_t len = 0; len <= 80; ++len) {
+                fill_tagged(copy_src, 1);
+                fill_tagged(copy_dst, 9);
+                memcpy(sb, copy_src, sizeof sb);
+                memcpy(db, copy_dst, sizeof db);
+                for (int g = 0; g < 16; ++g) {
+                    stag[g] = (int)TAG(copy_src[g]);
+                    dtag[g] = (int)TAG(copy_dst[g]);
+                }
+                unsigned char *d = bounded(copy_dst, doff, len);
+                returns &= memcpy_call(d, bounded(copy_src, so, len), len) == d;
+                BARRIER();
+                unsigned char *dn = (unsigned char *)copy_dst, *sn = (unsigned char *)copy_src;
+                for (size_t i = 0; i < sizeof db; ++i) {
+                    bytes &= dn[i] == (i >= doff && i < doff + len ? sb[i - doff + so] : db[i]);
+                    bytes &= sn[i] == sb[i];
+                }
+#ifdef __CAPSTONE_PURECAP__
+                for (size_t g = 0; g < 16; ++g)
+                    tags &= (int)TAG(copy_dst[g]) == expect_tag(g, so, doff, len, stag, dtag);
+#endif
+            }
+    check(bytes, "memcpy_ranges_bytes");
+    check(returns, "memcpy_ranges_returns_destination");
+#ifdef __CAPSTONE_PURECAP__
+    check(tags, "memcpy_ranges_tags");
+#endif
+    bytes = 1; returns = 1;
+#ifdef __CAPSTONE_PURECAP__
+    tags = 1;
+#endif
+    for (size_t so = 0; so < 32; ++so)
+        for (size_t doff = 0; doff < 32; ++doff)
+            for (size_t len = 0; len <= 80 && so + len <= sizeof mb && doff + len <= sizeof mb; ++len) {
+                fill_tagged(move_buf, 3);
+                memcpy(mb, move_buf, sizeof mb);
+                for (int g = 0; g < 16; ++g)
+                    stag[g] = dtag[g] = (int)TAG(move_buf[g]);
+                unsigned char *d = bounded(move_buf, doff, len);
+                returns &= memmove_call(d, bounded(move_buf, so, len), len) == d;
+                BARRIER();
+                unsigned char *b = (unsigned char *)move_buf;
+                for (size_t i = 0; i < sizeof mb; ++i)
+                    bytes &= b[i] == (i >= doff && i < doff + len ? mb[i - doff + so] : mb[i]);
+#ifdef __CAPSTONE_PURECAP__
+                /* memmove onto itself writes nothing, so no tag changes */
+                for (size_t g = 0; g < 16; ++g)
+                    tags &= (int)TAG(move_buf[g]) ==
+                            (so == doff ? dtag[g] : expect_tag(g, so, doff, len, stag, dtag));
+#endif
+            }
+    (void)stag; (void)dtag;
+    check(bytes, "memmove_ranges_bytes");
+    check(returns, "memmove_ranges_returns_destination");
+#ifdef __CAPSTONE_PURECAP__
+    check(tags, "memmove_ranges_tags");
+#endif
+}
+
 int main(void)
 {
     for (int i = 0; i < N; ++i) {
@@ -417,6 +526,7 @@ int main(void)
     transfers();
     zero_size_allocas();
     memset_ranges();
+    copy_ranges();
 
     /* Last: before C-77 was fixed the first one faulted. */
     check(hosted_byval_zero(byval_zero), "byval_const_zero_aggregate");
