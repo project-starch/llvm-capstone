@@ -1,3 +1,29 @@
+**2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
+Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams
+cannot run (cpython lt1 and postgres pg-pools, both "needs collection", which item 6's hardware recycling provides).
+The critical path is the RTL lane; everything else is arranged so that nothing waits on it unnecessarily.
+
+| # | Step | Owner | Depends on | State |
+|---|---|---|---|---|
+| 1 | Item 1 (namespace bit; CPMP AND PC trackers ignore the ns flush) | rtl | - | PASSED two-sided (s23-cpmp-rearm: six re-arm paths ALLOWED -> DENIED); audited |
+| 2 | Item 2 (R-58: caller srevroot restored at the escape) | rtl | - | written, sim-validated, sweep-identical |
+| 3 | Item 6 (generations: virtual push to the TABLE's free list, pop {g+1, i}, the nine sites and two retire gates) | rtl | 1 | RTL written, push gates reverted (c96aafa9c: they pushed onto the PHYSICAL list); rework |
+| 4 | Item 4 (R-60: CINCOFFSET/CINCOFFSETIMM/SCC clear the tag; zero metadata word) | rtl | 3 | not started |
+| 5 | Trial synthesis B (base + item 4), judged by the new cursor-to-metadata paths, slack >= -2.414 | synth | 4 | run A sealed (f08906b78, WNS -17.936); host held free |
+| 6 | Items 3 (R-59) and 5 (Q-04 b): drafts on batch-item3-r59 / batch-item5-q04b, reviewed sound | rtl | 3, 4 | to rebase, lint, run |
+| 7 | Lint re-baseline, the batch's 95-test sweep vs the c7e6f604f baseline, the audit of every item | rtl, runtime | 6 | - |
+| 8 | Batch synthesis (2.5-3.5 h) | synth | 7 | - |
+| 9 | The batch's QEMU prediction kit: R-59/R-60 lane csrunv-root-r59-v7 + compact rounding + the generations model (with the two retire gates) | compiler | 3 (contract) | R-59/R-60/rounding done on lanes; generations model next |
+| 10 | The module for the batch (retire accounting by free_count, lane runtime/module-gen-push 13c3e7684ae1), QEMU-gated on 9 | runtime | 9 | written, compile-checked |
+| 11 | The batch firmware: bounded fetch retry (no-progress cap), csupctl.table bracket grep, s23-cpmp-rearm board package | board, rtl | 7 | specified |
+| 12 | REFLASH, then Tier 1 per tree, s23-cpmp-rearm must-read, pb10 FRTY 0 without srz, then the corpus on the batch bitstream including lt1 and pg-pools | board | 8, 9, 10, 11, the lead's word | - |
+
+Off the critical path, in parallel: the board's caplifive-sbi #4 RFENCE pair and the QEMU-kit firmware provenance
+rebuild (capstone-sbi 4674ab6a); the compiler lane's musl PR suites (#269/#270/#272/#245), R-60 edge tests and the
+padding residues (stack frame rule); the open runtime PRs (#250, #258, #264, #279, #271/#273/#274), reviewed on GitHub
+and waiting on their author. The ten compiler PRs are on dev (b3cc8cb4be5a); #275 (LSR) and #267 (frame pointer,
+C-70) are held with reviews posted.
+
 **2026-10-21 05:0x, the vp2 BOARD lane, at its quiet point for the account switch (both boards idle, no hub bookings).**
 The corpus pass on the rebuilt images (the lead's C-32 remedy (b): no `+movc-keeps-integer-source`; dev's module
 54d8a3af; both current bitstreams) is COMPLETE.
