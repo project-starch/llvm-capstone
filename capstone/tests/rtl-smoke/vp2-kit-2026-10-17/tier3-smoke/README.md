@@ -6104,3 +6104,26 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - **If no run stalls,** the trace (extra stderr writes) masks the stall. That is a reading too, and the next boot
     traces without it.
   - FRTY, DRT1, INJS, INJL, Oops and pc=0 read 0.
+
+### The RTL lane's s23-cpmp-rearm as a bare boot on both trees, the baseline before the batch, pre-registered (2026-10-21 21:5x, before either boot)
+
+- **What runs:** `tier3-s23-bare.sh <board> <out> pre`, a bare M-mode JTAG boot (no monitor, no Linux) of the RTL
+  lane's image `images/s23-cpmp-rearm.bin` at dev 0c215bf0983f (capstone/tests/rtl-smoke/s23-bare-2026-10-21/).
+  - The image is cited by sha256 bcefd969e128113f0c58e18571023f1269efce816d0587a85e987577b9e3c0fe; board_rec 0x80004040.
+  - The runner is `sup-bare-2026-10-03-ladder/run_sup_bare.py` from each kit's own driver tree, with the kit's
+    board, URL file and resident bitstream.
+  - Board 2 (tree B 8de3c48cf) goes first, when its mruby boot ends; then board 1 (tree A 8522d72fe), after its
+    trace boot. Each is graded by `s23-grade.py`, the rule of PREREG.md at 0c215bf0983f.
+- **Dry run** (`dryrun-s23-bare.txt`):
+  - with booking, busy and the runner stubbed, both boards' wrappers read their kit's board, bitstream and driver;
+  - the grader reads the expected vector as AS EXPECTED; a batch vector on a pre-batch board, and a single flip, as
+    FINDING; Q1 = 1, a moved true-deny, SR 24 and an empty or missing UART as VOID or NO DATA;
+  - a real board UART of another bare arm parses and is VOIDed.
+- **Predictions** (the RTL lane's simulation of each tree, identical to bf3db3175's):
+  - SR 25, and the SV values `0x0 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1
+    0x1 0x0 0x5 0x8 0x55` on BOTH trees;
+  - the eight true denies DENIED, the six re-arm probes (Q5, Q8, Q10, Q12a, Q12b, Q13d) ALLOWED, total 8.
+- **What it buys:** the silicon-side control of the instrument (the wrapper, board_rec, the M trap counter, the probe
+  pages), so that the batch's first boot has one unknown left, the six flips.
+  - A re-arm probe reading 1 on a pre-batch tree contradicts the simulation, and it is surfaced as a finding.
+  - VOID leaves the batch's s23 reading without its control.
