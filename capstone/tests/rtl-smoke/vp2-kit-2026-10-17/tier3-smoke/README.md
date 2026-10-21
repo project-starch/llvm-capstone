@@ -5817,3 +5817,30 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
 - **Next:** the compiler lane is rebuilding the three images by v9's recipe, with only the SDK root and toolchain
   swapped. The new SDK is t3-freeze-nb-nomovc-cw-r60: no MOVC flag, 232d13b2's heap.c, the GEP-split fix. The lane will
   run boot3/stage-boot3r.sh's gates on them, and the prep re-runs on their hashes.
+
+### The batch Tier 1 image, rebuilt on R-60-safe images (2026-10-21 17:24-17:27)
+
+- **Images:** the compiler lane rebuilt them by v9's recipe (v9-kit.sh app lines 87-91, sources at f6dfd19d9396), with
+  only the SDK and toolchain swapped.
+  - SDK t3-freeze-nb-nomovc-cw-r60: runtime 98bfe0d9ab76, no +movc-keeps-integer-source, -fno-builtin.
+  - Toolchain t3-freeze-r60: the GEP-split fix, libLLVMInstCombine 3e0b0dd6.
+  - Result: contract.dom 65f9f1f179852246, mruby.dom f8594e1167b60307, sqlite3.dom e63733dd1a4a7452
+    (<mnt-hdd>/capstone/batch-t1-r60/vm).
+- **Gates re-run here:**
+  - r60-runtime-gate --rev 98bfe0d9ab76 PASS;
+  - delin-census 0;
+  - qemu-only-csr-census 0, the batch module included;
+  - vp2-silicon-gate 0 refused.
+- **Three attribution rows added to boot3/silicon-gate-attributions.tsv.** Without them each image refuses one site, the
+  known libc_exit_fini LDC through a `mv`-derived base (Q-23): contract 0x26ee4, sqlite3 0x153dd4, mruby 0x1b6f30.
+  - The rows rest on fini_array_size=0, which the gate re-checks against each image.
+  - Read here on contract.dom: .fini_array is 0 bytes at 0x38100. libc_exit_fini+0x68 is `bgeu a3, a4`, where both
+    are derived from 0x38100, so the loop holding 0x26ee4 is skipped.
+  - The rows are the compiler lane's (batch-t1-r60/attribution-rows.tsv).
+- **The two-step census:** 0 VAR-CONST chains in each image, against 3 in the v9 images.
+- **Prep** (`batch-prep.sh`, as corrected):
+  - image 74edf44a51195b1a: all 14 files are in the cpio by hash, and the shared image was restored;
+  - firmware d9026250107eb729, 19,565,064 B, from vp2/batch d9da397 + the cap. The dom_stack gate passes, and FRTC is
+    present.
+  - This is the batch first boot's Tier 1 image. It still needs the bitstream's name, the reflash (the lead's word),
+    the qkit7-batch Tier 1 failing set as its reference, and its pre-registration.
