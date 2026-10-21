@@ -5637,3 +5637,34 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   (12-16, 23). It would be named R-60, not a new finding.
 - **Budget:** the QEMU session ran 24 steps in about 4 minutes. At ~18x that is about an hour on silicon, inside the
   board's 3,180 s x 4 batch budget.
+
+### Recorded from the lanes (2026-10-21 14:4x): mruby's Sublet arm does not start on a compact-bounds platform
+
+- **Reading:** the compiler lane's tB-mimic reference of mruby-sublet (image 25e86274, virtual-nested-pools) ends `APPVM
+  read rc=75 … control smoke FAILED; {'fault': 23}`.
+- **Re-read here:** the first fault in its serial.log is `cause=29 pc=…5154c`. llvm-objdump on the image puts 0x6154c
+  inside mrb_gc_init (0x613dc, size 0x1f0), and the word there is `db 95 d3 a2`. The source, in ports/mruby patch 0008,
+  is `page->life = capstone_cap_derive(page, cursor(page->objects) - base(page), sizeof(page->objects))`.
+- **The lane's reading, not re-derived here:** page->objects is not on its granule, so the child's bounds are inexact,
+  and compact bounds refuse an inexact derive with 29. The 2026-10-11 record ran with exact bounds.
+- **For the board:** the as-built Sublet image is not pinned. The compiler lane is applying Q-15's placement rule to
+  patch 0008, and mruby-sublet goes to a board only on the repaired image's reference.
+- **A gap in tier3-mp-arm.sh:** it does not check that the reference's own control passed. A board run of the broken
+  image would fault 23 of 23 and match the broken reference cell for cell. The gate, `APPVM read rc=0 … control smoke ok`
+  in the reference's log, goes in when the running mruby-stock boot ends; this script is not edited while it runs.
+
+### The Juliet temporal set on board 2 (tree B), pre-registered (2026-10-21 14:4x, before the first boot)
+
+- **What runs:** `tier3-juliet-full.sh 2`, the script, pins and dry run of the board-1 pre-registration above, on kit
+  bkit7-rev2xBDN2 (caplifive_vp2c_8de3c48cf). Output root t3-run-treeB/juliet-temporal. It launches when the mruby-stock
+  boot frees board 2, so the two trees' runs overlap in time.
+- **Predictions:** the board-1 predictions, unchanged:
+  - every batch completes and counts, and the probe exits 0;
+  - 366 CAUGHT at cause 25, every good image CORRECT, MISSED 0;
+  - no NO-READING;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL 0 in every boot transcript;
+  - every bake under the cap.
+- **Two-tree claim:** every verdict equals tree A's, cell by cell. The 25-arm pass found no tree difference, and nothing
+  in Juliet's temporal cases touches what separates the two bitstreams.
+- **Timeouts:** a silicon step takes ~6 s against the 10 s limit. A NO-READING on one tree only is read as timing margin
+  first, and is named that way, not as a tree difference, until a re-run of that batch says otherwise.
