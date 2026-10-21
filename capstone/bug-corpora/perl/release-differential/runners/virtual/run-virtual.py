@@ -74,6 +74,7 @@ def main():
     p.add_argument("--arm", required=True, choices=("virtual-malloc", "virtual-nested-pools"))
     p.add_argument("--perl", type=Path, required=True, help="the build's PERLD_ROOT")
     p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--raw", type=Path, help="where each run's raw output goes (default <output>/raw); tier3-appvm-arm.sh passes one per phase")
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--timeout", type=int, default=600, help="seconds per case")
     a = p.parse_args()
@@ -86,7 +87,7 @@ def main():
     cases_dir = share / "perl-cases"
     cases_dir.mkdir(exist_ok=True)
     env = ("-e", "PERL5LIB=/mnt/host/perl-lib:/mnt/host/perl-harness", "--cwd", "/mnt/host/perl-cases")
-    raw = a.output / "raw"
+    raw = a.raw or a.output / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     symbols = v.Symbols(a.llvm_bin, image)
 

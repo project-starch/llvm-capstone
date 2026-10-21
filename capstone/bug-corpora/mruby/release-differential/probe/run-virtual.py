@@ -68,6 +68,7 @@ def main():
     p.add_argument("--capi-dir", type=Path, required=True,
                    help="probe/build-capi.sh's output for this arm's mruby build")
     p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--raw", type=Path, help="where each run's raw output goes (default <output>/raw); tier3-appvm-arm.sh passes one per phase")
     p.add_argument("--smoke", type=Path, default=REPO / "capstone/ports/mruby/app/scripts/smoke.rb")
     a = p.parse_args()
     sdk_builtins.gate([a.image, a.capi_dir], who="mruby:run-virtual.py")
@@ -78,7 +79,7 @@ def main():
     stage.mkdir(exist_ok=True)
     (share / "files").mkdir(exist_ok=True)          # smoke.rb writes /mnt/host/files/out.txt
     (share / "files").chmod(0o777)
-    raw = a.output / "raw"
+    raw = a.raw or a.output / "raw"
     raw.mkdir(parents=True, exist_ok=True)
     symbols = v.Symbols(a.llvm_bin, a.image)
     image_sha = v.sha256(a.image)
