@@ -67,9 +67,13 @@ CheriBSD runs each case **twice**: the plain purecap build gives the verdict, an
 `Assert()` and its `MEMORY_CONTEXT_CHECKING` chunk sentinel. Its runner is not yet on the shared
 judge.
 
-## Measured 2026-10-18, case by case
+## Measured 2026-10-18 and 2026-10-21, case by case
 
-Bundles in `results/2026-10-18-review`, on the emulator this repo pins
+Bundles in `results/2026-10-18-review/virtual-malloc` and
+`results/2026-10-21-review/virtual-pg-pools` -- `verdict_bundles` names one per arm, and the
+pools arm was re-measured on 2026-10-21 to settle case 07's attribution (below). Every
+verdict is identical across the two pools runs; only 07's attribution route changed. On the
+emulator this repo pins
 (`capstone/capstone-qemu d35af47b163c`) with a compiler carrying the C-80 fix, against a
 cluster from `ports/postgres/app/build-native16-fixture.py`. Every control as declared,
 including the four the pools arm runs through both `malloc` and `palloc`:
@@ -138,18 +142,24 @@ static and inlined, so `case.json` declares the two symbols that can carry the p
 `control.sql` builds the same index with sparse rows only, so no signature goes all-true
 and the branch holding the defect is never entered.
 
-**But that `control.sql` has not yet done the attributing, and this cell is the one open
-item in this corpus.** `shared/run-arm.py:355` runs the control only
-`if o.fault and o.reached and not o.attribution`. The declared site matched the pc first, so
-the control never ran, and 07's pools `CAUGHT` rests on a site list read off the source
-rather than on the paired run -- a list whose own `fault_sites_why` opens "Derived from the
-source, not from a run". `SCHEMA.md` allows such a list, and the chain above is branch-free,
-so the reading is very probably right; "probably right" is not what a declared site is for.
-One run settles it: this arm with `fault_sites` absent, which leaves the fault unattributed
-and sends the runner to `control.sql`. It is not in this PR, and the cell is left exactly as
-the committed bundle measured it so that the record and its evidence still agree. The
-case's `note` records what the re-run needs and that every input for it is still on disk and
-hash-identical to the bundle.
+**And on 2026-10-21 that `control.sql` did the attributing, which is what closes this
+cell.** `shared/run-arm.py:355` runs the control only
+`if o.fault and o.reached and not o.attribution`, so while the site list stood the declared
+symbol matched the pc first and the control never ran: the `CAUGHT` rested on a list read
+off the source -- a list whose own `fault_sites_why` opened "Derived from the source, not
+from a run" -- rather than on the paired measurement. The arm was therefore re-run with
+`fault_sites` ABSENT. The fault is then unattributed by site, the runner falls through to
+`control.sql`, and the control **completed** on the same image, so the cell is now
+attributed by control: `cause=28` in `pg_popcount_optimized`, by `control.sql`.
+
+The declaration turned out to be right, and the run says so rather than assuming it: the
+fault lands in exactly the symbol the branch-free chain above predicts, and its pc differs
+from the 2026-10-18 run only in load base (`0x3f92b39538` against `0x3fbcb39538`). The site
+list was not wrong; it was doing a job a control should do. It is not restored, because the
+control is the stronger evidence and a declared site would silence it again on the next run.
+Nothing else moved: all nine verdicts are identical to `results/2026-10-18-review`, the arm
+tally is unchanged at CAUGHT 7 / MISSED 1 / NO-READING 1, and 07 is the only case whose
+attribution route changed, from `function` to `control`.
 
 **05 and 09 are the two the pools arm does not catch, for different reasons.** 05's
 over-read leaves the request and stays inside `MAXALIGN(5) = 16`; the exact-request bounds

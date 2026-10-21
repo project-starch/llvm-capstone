@@ -1100,7 +1100,7 @@
       },
       "verdict_bundles": {
         "virtual-malloc": "results/2026-10-18-review/virtual-malloc",
-        "virtual-pg-pools": "results/2026-10-18-review/virtual-pg-pools"
+        "virtual-pg-pools": "results/2026-10-21-review/virtual-pg-pools"
       },
       "where": "capstone/bug-corpora/postgres/sql-repros"
     },
