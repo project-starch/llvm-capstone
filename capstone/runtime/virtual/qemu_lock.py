@@ -9,12 +9,17 @@ lock still excludes all of them and waits for them.
 
 A TURNSTILE (<global>.turnstile) keeps a writer from starving behind back-to-back readers: Linux flock gives no writer
 preference, so without it an exclusive caller could wait until both domains happened to be idle at once.
-  reader:    turnstile EX -> global SH -> release turnstile -> domain EX
+  reader:    domain EX -> turnstile EX -> global SH -> release turnstile
   exclusive: turnstile EX -> global EX (waits HERE, holding the turnstile) -> release turnstile
 A waiting exclusive holds the turnstile, so no new reader passes it, and it is granted as soon as the readers already
-inside finish. A caller that takes the global lock EXCLUSIVE without the turnstile (capstone_vm/cli.py, un-migrated
-scripts) is still correct, only not protected from starvation. flock(2) throughout: lockf/fcntl record locks do not
-interoperate with it. Prints the mode and the time the lock was granted, so a run's wait can be read from its log."""
+inside -- at most one RUNNING session per domain -- finish. A reader takes its domain lock FIRST, so a session queued
+for a busy domain holds nothing global: in the first version (reader: turnstile, global SH, then domain) every queued
+session held the global lock shared while it waited, and an exclusive caller waited for the whole queue to run
+(tests/qemu-lock-domains/order.py, which that order fails). A caller that takes the global lock EXCLUSIVE without the
+turnstile (capstone_vm/cli.py, un-migrated scripts) is still correct, only not protected from starvation. flock(2)
+throughout: lockf/fcntl record locks do not interoperate with it. Prints the mode and the time the lock was granted,
+so a run's wait can be read from its log."""
+import contextlib
 import fcntl
 import os
 import time
@@ -26,17 +31,19 @@ def qemu_lock():
     asked = time.time()
     path = os.environ['CAPSTONE_QEMU_LOCK']
     domain = os.environ.get('CAPSTONE_QEMU_DOMAIN_LOCK', '').strip()
-    with open(path, 'a+b') as g:
+    with contextlib.ExitStack() as held:
+        if domain:
+            # the domain first: a session queued behind a busy domain must not hold the global lock while it waits
+            d = held.enter_context(open(domain, 'a+b'))
+            fcntl.flock(d, fcntl.LOCK_EX)
+        g = held.enter_context(open(path, 'a+b'))
         with open(path + '.turnstile', 'a+b') as t:
             fcntl.flock(t, fcntl.LOCK_EX)
             fcntl.flock(g, fcntl.LOCK_SH if domain else fcntl.LOCK_EX)
         # the turnstile is released here, with the global lock held
         if not domain:
             print(f'qemu-lock: global exclusive granted {time.time():.1f} (waited {time.time() - asked:.1f} s)', flush=True)
-            yield
-            return
-        with open(domain, 'a+b') as d:
-            fcntl.flock(d, fcntl.LOCK_EX)
+        else:
             print(f'qemu-lock: global shared + domain {os.path.basename(domain)} exclusive granted {time.time():.1f} '
                   f'(waited {time.time() - asked:.1f} s)', flush=True)
-            yield
+        yield
