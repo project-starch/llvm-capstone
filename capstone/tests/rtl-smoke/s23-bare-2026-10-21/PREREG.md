@@ -21,7 +21,9 @@ one load from S through one CPMP entry with the counter read across it, recorded
 
 ## The two vectors, simulated through the Anvil prologue (each run directory carries its PROVENANCE)
 
-Print order: `a0` (CAPENTER's grant), the marker `0x5a23`, the twenty probe deltas Q1 .. Q13d in source order, the
+Print order: `a0` (CAPENTER's grant: its CURSOR, `0x80800000`, the base of the [0x80800000, 0x82000000) grant the arm
+runs in — the simulation's own print_cap line reads `Reg[10]: Cursor: 0000000080800000` on all three pre-batch trees and
+on the batch, and silicon reads the same), the marker `0x5a23`, the twenty probe deltas Q1 .. Q13d in source order, the
 last trap cause, the total trap count, the end marker `0x55`.
 
 | probe | what it does | PRE-BATCH: `bf3db3175`, tree A `8522d72fe`, tree B `8de3c48cf` — all three IDENTICAL (same rev-node unit hash 6d0f9699a247d012; the arm overlaid, rtl_dirty=yes for that reason) | batch `c721c1a2a` | reading |
@@ -47,14 +49,25 @@ last trap cause, the total trap count, the end marker `0x55`.
 
 Full vectors, SV in order:
 
-- pre-batch, ONE vector for all three: `0x0 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x5 0x8 0x55`
+- pre-batch, ONE vector for all three: `0x80800000 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x5 0x8 0x55`
   (SUCCESS after 17,745 cycles on each; vp9-wt/.sup/s23-resident-bf3db3175/, vp9-wt/.sup/s23-treeA-8522d72fe/,
   vp8-wt/.sup/s23-treeB-8de3c48cf/ — byte-identical vectors, identical cycle counts, identical rev-node unit)
-- batch `c721c1a2a`: `0x0 0x5a23 0x0 0x0 0x1 0x1 0x1 0x0 0x1 0x1 0x1 0x1 0x0 0x0 0x1 0x1 0x1 0x1 0x0 0x1 0x1 0x1 0x5 0xe 0x55`
+- batch `c721c1a2a`: `0x80800000 0x5a23 0x0 0x0 0x1 0x1 0x1 0x0 0x1 0x1 0x1 0x1 0x0 0x0 0x1 0x1 0x1 0x1 0x0 0x1 0x1 0x1 0x5 0xe 0x55`
   (SUCCESS after 17,770 cycles; vp8-wt/.sup/s23-batch/; byte-identical to item 1's acceptance run of 2026-10-21, with
   the `SUP ns-flush RISE` line present 7 times, so Q8's setup is proven live on the batch tree)
 
-**How to grade a boot.** SR must be 25 and Q1 must read 0, or the instrument did not work and nothing else is evidence.
+**How to grade a boot.** SR must be 25, the first value must be `0x80800000` (the grant's cursor; anything else is a
+different grant geometry or a different image, and the probe pages are then not where the arm thinks) and Q1 must read
+0, or the instrument did not work and nothing else is evidence.
+
+**CORRECTION 2026-10-21 22:40, before the tree A run and the batch boot.** The first version of this file gave the
+first value as `0x0` in both vectors. That was an artefact of `capprint-readings.py`, which reports a CAPPRINT operand
+as "the last value written" to that register in the INTEGER trace; `a0` is written by CAPENTER, a capability write the
+integer trace never shows, so the tool reported the register's stale integer view. The simulation's own `print_cap`
+line for that CAPPRINT reads `Cursor: 0000000080800000` on every tree, which is what `board_rec` stores. Board 2 (tree
+B) read `0x80800000` there and matched every other value, which is how the artefact was caught — the board lane's
+grader had added an `a0` check this file did not ask for, and it was right to. Every other value in both vectors is an
+integer register (trap-count deltas, the cause, the count, the markers) and is unaffected.
 Then the six flip probes and the total: 14 with Q5/Q8/Q10/Q12a/Q12b/Q13d all DENIED is the batch bitstream with item 1
 in it; 8 with them all ALLOWED is a pre-batch bitstream — tree A, tree B or bf3db3175 read the same — or a batch
 bitstream without item 1, which the lane would have to explain. A tree A run BEFORE the batch is the silicon-side
