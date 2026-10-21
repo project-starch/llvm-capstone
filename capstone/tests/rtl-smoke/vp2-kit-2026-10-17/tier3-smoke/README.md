@@ -5304,7 +5304,7 @@ null plus compact rounding, both identical on the two trees).
 | pb9 pb12 pb10 | 1 / A | 17 | 17 | 17 | none (pb10: FRTY 0 on tree A) |
 | cpython lt0 | 2 / B | 32 | 32 | 31 | Q-31: 01 (cause 4, address -1) |
 | pb13q15 pgm1q15 wm1q15 (repaired) | 2 / B | 37 | 37 | 37 | none |
-| **total, 24 arms** | | **346** | **345** | **341** | **all of them already in ISSUES (Q-31 x4, R-60 x1)** |
+| **total, 25 arms** (first written 24; corrected 2026-10-21) | | **346** | **345** | **341** | **all of them already in ISSUES (Q-31 x4, R-60 x1)** |
 
 - **No pc=0 in any boot.** On the flagged images, C-32 stopped sql0's 03/07 and cpython in 21 places.
 - In every boot: DRT1 0, FRTY 0 (S-23 removed by the module on both trees), no Oops, INJS/INJL 0, and the node-floor-2
@@ -5402,7 +5402,7 @@ so every arm of the pass has a reading on both bitstreams.
 - All 18 arms equal their silicon-mimic references in every field: 202 of 202.
 - Each arm's tree-B bundle equals its tree-A bundle cell for cell (compare-pilot rc 0 on all 18).
 - All 18 boots read pc=0 0, DRT1 0, FRTY 0, no Oops, the banner, INJS/INJL 0, and the vbatch END line.
-- With sql0 and cpython lt0 (both read on both trees), 20 of the pass's 24 arms are now read on both bitstreams, and the
+- With sql0 and cpython lt0 (both read on both trees), 20 of the pass's 25 arms (first written 24) were then read on both bitstreams, and the
   two trees have not differed in a single cell.
 - The sqlite groups' other-tree runs, pre-registered at 02:5x, complete the remaining two (sq0, sq1q15). The two
   repaired-only arms on tree B are pb13q15/pgm1q15/wm1q15; pgm1q15 is pgm1's rebuild.
@@ -5509,3 +5509,33 @@ finds RFENCE at its boot probe and sends its remote fences to the monitor instea
   satp, not to this pair.
 - **For the runtime lane:** PR #4 can merge into capstone-bootstrap. Carrying RFENCE on the boards is a separate
   cherry-pick onto the vp2 monitor line, folded into the batch firmware with its own Tier 1, as agreed.
+
+### The repaired arms on tree A, pre-registered (2026-10-21 12:4x): board 1, to make the two-tree claim true
+
+**Two claims in the pass summary are wrong, and are corrected here** (and on dev with these results):
+- the summary's arm count is 24, but its rows add up to **25** arms (the 346 cells are right);
+- "every arm of the pass now reads identically on both bitstreams" (chapter 8, dev 268d5ac8807d, and the handoff note
+  1e48ff20774c) was premature: the three repaired arms (pb13q15, pgm1q15, wm1q15) had read only on tree B.
+
+So they run on tree A now, with the runner as pre-registered (`tier3-pass-rep.sh` 1086fbe9aad236be, board 1, kit
+bkit7-rev2xDN2, the same pinned worktrees, both clean).
+- **Predictions:** each cell equals its reference and its tree-B reading in every field. pb13q15 9/9 (CAUGHT 7,
+  NO-READING 2), pgm1q15 5/5, wm1q15 23/23. cause=29 0; pc=0, DRT1, FRTY, INJS and INJL 0.
+
+### Recorded from the lanes (2026-10-21)
+
+- **For the batch firmware (2026-10-21):** caplifive-sbi #4 is merged into capstone-bootstrap (eace4d9affa4). The board's vp2
+  monitor line gets it as a cherry-pick of fab38bb. It keeps the collaborator's authorship and is pushed WITHOUT the
+  pre-commit scan, which governs only what this lane writes (the lead's ruling on third-party work), beside the
+  fetch-retry cap (579ef1c). Optional for that first boot: a satp-writing arm run from S with Linux's fences live (the
+  va-satpstale family), which would close the RFENCE pair's one limit, S-29 masking.
+
+### The repaired arms on tree A, result (2026-10-21 12:31-13:01, board 1): 37 of 37, equal to tree B in every cell
+
+`records/pass-rep-b1.result-lines.txt`. UNGATED.
+- pb13q15 reads 9/9, pgm1q15 5/5 and wm1q15 23/23 against their references, and each equals its tree-B reading cell for
+  cell (compare-pilot rc 0).
+- cause=29 0; pc=0, DRT1, FRTY, INJS and INJL 0; the vbatch END line in each.
+- **So the two-tree claim now holds for every arm:** all **25** arms of the pass read identically on tree A and tree B.
+  The claim was premature when chapter 8 wrote it (the repaired arms had read on tree B only), and the arm count there
+  was wrong (24 for 25). Both are corrected on dev with this result.
