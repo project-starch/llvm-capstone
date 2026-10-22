@@ -1,0 +1,32 @@
+{
+  "arm": "cheribsd-revocation",
+  "kernel": "15.0-CURRENT",
+  "revocation_default": "1",
+  "revocation_every_free_default": "0",
+  "pg_bin": "/usr/local/pgsql/bin",
+  "base_cluster": "/home/pg/data",
+  "started_utc": "20261018-083540",
+  "extensions_wanted": "fuzzystrmatch ltree pgcorpus_reach pg_trgm ",
+  "extensions_available": "fuzzystrmatch ltree pgcorpus_reach pg_trgm",
+  "mechanism_gate": {
+    "case": "02",
+    "verdict": "not-applicable-in-a-control-run",
+    "passed": true,
+    "applied": false,
+    "kind": "a corpus case required to be detected, which is weaker than a purpose-built control: it says the mechanism reported on something in this configuration, not that it would have reported on each silent case",
+    "not_applied_because": "this is a control run: nothing in it should fault, so a gate that requires a detection cannot be read. passed is true by that exemption and is NOT evidence that the mechanism reported in this run"
+  },
+  "ran": "control.sql",
+  "ran_sha256": {
+    "01_12a6206864a0_to_char_tz_overflow": "3356c885af38f9866c8470dcf45b58894907aefbc502c7b0cfc89426891cc999",
+    "02_3ed3dbbf44_ts_headline_int16_overflow": "b8d2c27b9ddee501dcf555d0d41ee2b42a808ce644fd1705f9857afeb1b62cd3",
+    "03_8c34261109_ltree_lquery_uint16_overflow": "23b563736cf5f6378df31b2364b98bfd6bb9d3067ef64b7b043d3b23c086d0fe",
+    "04_3d160401b65e_oidvector_oob_read": "7291988347a3b6a5c43605f9d4b1b96ad27e8924069f8e8d9fa0c0c4d62655d9",
+    "06_e91dcfccaa_regexp_conv_buf_overrun": "91bd087c1fa56f4930adfc989258d78bfb7b872638aaffe06b8a4a248be964fa",
+    "07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec": "c110befa286da21b61d81c428f132dc491fdda4bdfdce1af60568d73b0927039",
+    "08_c4d51b6274_levenshtein_stop_column_oob_write": "89c0080a1ea6c6f15c219a7b6414721b1e5d7c8af04840eb6e8c8768e5751932"
+  },
+  "only": "all",
+  "cases": 9,
+  "scored": 7
+}

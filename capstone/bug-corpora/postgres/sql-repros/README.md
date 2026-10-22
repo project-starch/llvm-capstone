@@ -67,26 +67,133 @@ CheriBSD runs each case **twice**: the plain purecap build gives the verdict, an
 `Assert()` and its `MEMORY_CONTEXT_CHECKING` chunk sentinel. Its runner is not yet on the shared
 judge.
 
-## Measured 2026-10-11
+## Measured 2026-10-18 and 2026-10-21, case by case
 
-On the Sublet platform (QEMU `af37cc32`, module `a1c6cb6b`, launcher `3975314a`), the
-servers built from c775cdf0, bundles in `results/2026-10-11-virtual`, every control as
-declared:
+Bundles in `results/2026-10-18-review/virtual-malloc` and
+`results/2026-10-21-review/virtual-pg-pools` -- `verdict_bundles` names one per arm, and the
+pools arm was re-measured on 2026-10-21 to settle case 07's attribution (below). Every
+verdict is identical across the two pools runs; only 07's attribution route changed. On the
+emulator this repo pins
+(`capstone/capstone-qemu d35af47b163c`) with a compiler carrying the C-80 fix, against a
+cluster from `ports/postgres/app/build-native16-fixture.py`. Every control as declared,
+including the four the pools arm runs through both `malloc` and `palloc`:
 
 | arm | CAUGHT | MISSED | NO-READING |
 |---|---|---|---|
-| `virtual-malloc` | 02, 03 | 01, 04-09 | -- |
-| `virtual-pg-pools` (patch 0003) | 01, 02, 03, 04, 06 | 05, 08 | 07, 09 (unattributed) |
+| `virtual-malloc` | 02, 03, **08** | 01, 04, 05, 06, 07, 09 | -- |
+| `virtual-pg-pools` (patch 0003) | 01, 02, 03, 04, 06, **07**, **08** | 05 | 09 (unattributed) |
+| `cheribsd-revocation` | 02, 03, **08** | 01, 04, 05, 06, 07, 09 | -- |
 
-07 faults in `pg_popcount_optimized` during the CREATE INDEX whose picksplit the defect
-reads past a signature in, and 09 in `memcpy` in the pgcrypto session-key path; neither
-case has a control or a declared fault site, so the judge does not count them, and
-naming a site after the run would fit the instrument to the reading. The exact-request
-bounds of 93971f29 (`results/2026-10-11-exact`) also faulted 05, and faulted 07 in
-`nsphash_lookup`: PostgreSQL's word-at-a-time string hash reading the aligned word that
-holds a terminator, a false positive that `MAXALIGN` bounds removed.
+**Two of those cells are false positives and the four-cell tables withdraw them**: 08 on
+`virtual-malloc` and on `cheribsd-revocation`. 08 is this corpus's only out-of-bounds
+WRITE, and a write leaves damage behind. The pools arm faults on the store itself
+(`cause=28` in `varstr_levenshtein_less_equal`); the other two let it succeed and fault
+later, in `AllocSetReset`, on allocator bookkeeping the store had cleared the tag of --
+`cause=24` on the virtual arm and, on CheriBSD, `code=PROT_CHERI_TAG`.
+**That CheriBSD signal code is not in this corpus.** What the bundle holds for the cell is
+the exit status `shared/run-cheribsd.sh` scores -- 162, which its rule at `:203` reads as
+`SIGPROT(34)` -- plus the trigger log and the paired control; the log carries no `si_code`,
+and the `ktrace -t s` trace the code was read from is not committed under `results/`. The
+withdrawal of the cell therefore rests on a reading a reader cannot recheck from this tree.
+What IS checkable here is weaker and points the same way: the revocation log ends on the
+trigger's last answer with none of the shutdown-checkpoint lines the control's log reaches,
+so the backend died after the statements completed rather than at the defective store.
+Counting them the arms read 3 / 9, 7 / 9 and 3 / 9; withdrawn, 2 / 9, 7 / 9 and 2 / 9.
+`tools/verdicts.py` would score the first automatically if `virtual-mallocng` declared
+`catch_causes` as SQLite's configurations do, but that configuration is shared by eleven
+corpora across four lanes, so it is left to them.
+
+### What the 2026-10-18 review changed
+
+**08 was not reaching its defect.** Its two cost triples overflow and return a negative
+distance, which is upstream's "nonsensical results", but `levenshtein.c:159` takes
+`if (max_d >= max_theo_d) max_d = -1`, which leaves `stop_column` at its default `m + 1`
+(`:138`), and the store at `:240` is guarded by `stop_column < m` with `m` already
+incremented. The three MISSED verdicts it carried measured nothing. The trigger now
+carries two rungs solved from that arithmetic, `stop_column = -1` and `-16`, and a
+`control.sql` that reaches the same store at a valid index.
+
+A ladder across the chunk boundary settles what the arm sees. `prev` is
+`palloc(2 * (m+1) * sizeof(int))` and the chunk capability covers
+`[data - 32, data + MAXALIGN(request))`, so the store is inside the bound until
+`stop_column <= -9`. Probed on both virtual arms, eight rungs: the pools arm completes at
+-1, -4 and -8 and faults at -9, -12, -16, -32 and -64, every one at the same instruction;
+`virtual-malloc` completes at every rung but -16. -32 completes and -36 faults, so the
+boundary is measured rather than assumed, and base missing the store at every rung is
+what makes the pools arm's catches chunk-level rather than block-level.
+
+**None of those rungs is committed, so the paragraph above is a report and not evidence.**
+A rung is not a case: it is the case's statement with one parameter changed, and the way the
+corpus documents running one -- `shared/make-threshold-probe.py` writing a `.sql` that
+`run-arm.py --only <case> --sql <file>` then runs, as that script's header describes for case
+03 -- cannot be followed, because `run-arm.py` has no `--sql` option; its arguments are at
+`shared/run-arm.py:371-396`. The generator is also case 03's lquery arithmetic specifically,
+not a ladder for this one. Committing this ladder therefore needs a probe path that exists,
+and until there is one the two claims that depend only on it -- that the chunk boundary sits
+between -8 and -9, and that `virtual-malloc` faults at -16 alone -- stay unverifiable here.
+The cells in the bundle do not depend on them: 08's two rungs are in `trigger.sql`, solved
+from the source, and each arm's verdict for them is in its own `verdicts.jsonl`.
+
+**07 was faulting at its defect all along and could not be attributed.** The chain has no
+branch: `sizebitvec(GETSIGN(cache[j].sign), siglen)` at `:900` and `:913` inside
+`gtrgm_picksplit`, `:651` returns `pg_popcount`, `pg_bitutils.h:360` returns
+`pg_popcount_optimized`, which performs the loads; `sizebitvec` and `hemdistsign` are
+static and inlined, so `case.json` declares the two symbols that can carry the pc. Its new
+`control.sql` builds the same index with sparse rows only, so no signature goes all-true
+and the branch holding the defect is never entered.
+
+**And on 2026-10-21 that `control.sql` did the attributing, which is what closes this
+cell.** `shared/run-arm.py:355` runs the control only
+`if o.fault and o.reached and not o.attribution`, so while the site list stood the declared
+symbol matched the pc first and the control never ran: the `CAUGHT` rested on a list read
+off the source -- a list whose own `fault_sites_why` opened "Derived from the source, not
+from a run" -- rather than on the paired measurement. The arm was therefore re-run with
+`fault_sites` ABSENT. The fault is then unattributed by site, the runner falls through to
+`control.sql`, and the control **completed** on the same image, so the cell is now
+attributed by control: `cause=28` in `pg_popcount_optimized`, by `control.sql`.
+
+The declaration turned out to be right, and the run says so rather than assuming it: the
+fault lands in exactly the symbol the branch-free chain above predicts, and its pc differs
+from the 2026-10-18 run only in load base (`0x3f92b39538` against `0x3fbcb39538`). The site
+list was not wrong; it was doing a job a control should do. It is not restored, because the
+control is the stronger evidence and a declared site would silence it again on the next run.
+Nothing else moved: all nine verdicts are identical to `results/2026-10-18-review`, the arm
+tally is unchanged at CAUGHT 7 / MISSED 1 / NO-READING 1, and 07 is the only case whose
+attribution route changed, from `function` to `control`.
+
+**05 and 09 are the two the pools arm does not catch, for different reasons.** 05's
+over-read leaves the request and stays inside `MAXALIGN(5) = 16`; the exact-request bounds
+of 93971f29 (`results/2026-10-11-exact`) faulted it in `ascii`, and also faulted 07 in
+`nsphash_lookup` -- PostgreSQL's word-at-a-time string hash reading the aligned word that
+holds a terminator, a false positive `MAXALIGN` bounds removed. That trade-off is a
+configuration choice with a measured cost on both sides. 09's `memcpy` overruns
+`sess_key[32]`, a member of the 184-byte `PGP_Context`, into the next member: the chunk
+bound is the struct and is correct, `palloc` never saw `sess_key`, and the case faults in
+the same place on both bound settings, so bound width is irrelevant to it.
 
 ## What these results do not say
+
+**Five vp2 bundles beside this corpus ran case 08's OLD trigger, and their 08 cell is not a
+measurement.** `results/2026-10-19-vp2c-treeA/vp2-malloc`,
+`results/2026-10-20-vp2c-treeA/vp2-malloc-nf2`, `.../vp2-malloc-nomovc`,
+`results/2026-10-20-vp2c-treeB/vp2-malloc-nf2` and `.../vp2-malloc-nomovc` each record 08
+`MISSED`, "reached ... and completed with no fault" (line 8 of each `verdicts.jsonl`). They
+ran the parameters this review replaced, and `08/trigger.sql`'s own header sets out why those
+never reached the defective store: `levenshtein.c:159` takes `max_d = -1`, `stop_column`
+stays at `m + 1`, and the guard at `:240` is never true. A silence from a trigger that cannot
+arrive is not a reading about any mechanism, on the board or anywhere else. The fixed trigger
+faults the same case on the same configuration -- `results/2026-10-18-review/virtual-malloc`
+line 8, `cause=24 in AllocSetReset`, attributed by `control.sql` -- and is the one the
+CheriBSD bundle also ran, by sha256: `inputs.json`'s `ran_sha256` for 08 is
+`28586f0c...`, this tree's `trigger.sql`. Those five bundles are left exactly as recorded;
+a bundle is only ever written by a runner, so correcting them means re-running them, and
+whether the board arm is re-run is not this corpus's call. Read their 08 row as void.
+
+**Both bundles here were measured with exact bounds on.** `inputs.json` records
+`platform.exact_bounds: true` for `virtual-malloc` and for `virtual-pg-pools`, on the same
+emulator (`platform.qemu` `ff8eb824...`). A chunk-level catch on the pools arm is therefore a
+statement about a bound the hardware applied as requested, not about a rounded one; nothing
+here measures the compact-bounds behaviour the vp2 bundles exercise.
 
 `results/matrix.tsv` and the `results/*-20261006-*`, `-20261008-*` and `-control-20261010-*`
 directories are the runs scored by the runner of their day, which counted any fault after the setup

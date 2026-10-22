@@ -14,24 +14,24 @@
       "oracle": "the mechanism reports, or the case completes and it did not",
       "verdict": "MISSED",
       "evidence": "ran to the prompt with no fault",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/",
-      "verdict_from": "results/matrix.tsv cheribsd-revocation: silent"
+      "run": "run 2026-10-18 by shared/run-cheribsd.sh against the deployed purecap tree, with the paired control run recorded in results/2026-10-18-review/cheribsd-control",
+      "verdict_from": "results/2026-10-18-review/cheribsd-revocation/matrix.tsv cheribsd-revocation: silent"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it",
       "verdict": "MISSED",
-      "verdict_note": "reached (the trigger statement ran (32 prompts, 1 setup line(s))) and completed with no fault",
-      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
+      "verdict_note": "reached (the trigger statement ran (7 prompts, 1 setup line(s))) and completed with no fault",
+      "verdict_from": "results/2026-10-18-review/virtual-malloc"
     },
     "virtual-pg-pools": {
       "oracle": "virtual profile with the memory-context port's patch 0003: every palloc chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc",
-      "verdict": "NO-READING",
-      "verdict_note": "cause=28 pc=0x3fa6ba16a8 in pg_popcount_optimized; in pg_popcount_optimized; declared sites none",
-      "verdict_from": "results/2026-10-11-virtual/virtual-pg-pools",
-      "verdict_reason": "unattributed"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f92b39538 in pg_popcount_optimized; by control: control.sql (the statement below the threshold) completed on this image",
+      "verdict_from": "results/2026-10-21-review/virtual-pg-pools"
     }
   },
   "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle. The physical spatial/sublet pair measured 2026-10-06 to 2026-10-10 stays in results/",
   "nested": true,
-  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it."
+  "nested_why": "The object is a palloc chunk, which AllocSet carves out of a block it took from malloc, so the defect is nested by the allocator that served it.",
+  "note": "Re-measured 2026-10-21 with fault_sites ABSENT, which is what settles this cell. The list was [\"gtrgm_picksplit\", \"pg_popcount_optimized\"] and its own fault_sites_why began \"Derived from the source, not from a run\". shared/run-arm.py:355 runs control.sql only `if o.fault and o.reached and not o.attribution`, so while the list stood the declared site matched the pc first and the paired control never ran: the CAUGHT rested on a hand-written list rather than on a measurement. With the list gone the fault is unattributed by site, the runner falls through to control.sql, and the control -- the same GiST trigram index build over sparse rows only, so no signature goes all-true and the defective branch is never entered -- COMPLETED on this image. The verdict is unchanged and is now a measurement: cause=28 in pg_popcount_optimized, attributed by control. The source chain the list was read off is confirmed rather than contradicted -- the fault lands in exactly the symbol the chain predicts, and the pc differs from the 2026-10-18 run only in load base (0x3f92b39538 against 0x3fbcb39538) -- so the declaration was correct; it was simply doing a job that a control should do. No other cell moved: all nine verdicts are identical to results/2026-10-18-review, and 07 is the only case whose attribution route changed (function -> control)."
 }
