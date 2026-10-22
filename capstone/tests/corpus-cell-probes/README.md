@@ -582,3 +582,10 @@ the batch platform.
 - **The control equals ref-batch/lt0 cell for cell** (verdict, reason, cause, symbol). Its only difference from
   ref-batch is the arm wrapper, so any cell that differs belongs to the wrapper, and is listed.
 - **The variant equals the control in every cell but 13,** which moves from NO-READING:infra to MISSED.
+
+**Result** (2026-10-22 23:45 to 2026-10-23 00:49, QEMU domains A and B): **both readings hold.**
+- **Control (undeclared) vs ref-batch/lt0:** all 32 cells equal, so dev's arm wrapper moves nothing.
+- **Variant (declared) vs control:** one cell differs, 13 (gh-144169), NO-READING:infra → MISSED. Every other cell is
+  equal.
+- **Bundles:** cpython/allocator-boundary-repros/results/2026-10-22-batch-undeclared and -declared, recorded beside
+  2026-10-10-sublet-isa. `verdict_bundles` is unchanged.
