@@ -7060,3 +7060,44 @@ Record: `records/uaf-repeat-mapped-b2.result-lines.txt`.
   - the vm-suite is graded per test against the QEMU 33/45.
   - Board 2's reading is then the second tree's, and the two first-boot readings should agree. The bitstream and
     the kit are the same, and only the board differs.
+
+### The batch bitstream c721c1a2a on board 1, result (2026-10-22 14:17-14:44): flashed, s23 reads the batch vector, and sparse-churn completes
+
+Record: `records/batch-c721c1a2a-first-b1.result-lines.txt`. The output directory is
+`<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/`, and the kit is the new t3-smoke/bkit8-batch-b1. No earlier record
+was touched.
+
+- **Flash:**
+  - store-has.py's control read a nonexistent name as missing; tree A's caplifive_vp2c_8522d72fe.bit is registered
+    (the fallback);
+  - the local sha256 matched the sealed hash; the upload returned HTTP 201;
+  - **the read-back after the power cycle is `caplifive_vp2c_c721c1a2a.bit`**.
+  - The keep-retired arm's guard passed (no SILENT).
+- **s23-cpmp-rearm bare (image bcefd969, board_rec 0x80004040): AS EXPECTED (batch).**
+  - SR 25, a0 0x80800000, Q1 0, every true-deny and control probe as the vector.
+  - **Re-arm Q5, Q8, Q10, Q12a, Q12b and Q13d all 1, total 14**; the last cause 5.
+  - The RTL lane graded the 25 values against its PREREG (7ae1d8491466) by value: all 25 equal the batch vector.
+  - **Item 1 (the namespace-aware CPMP/PC trackers) behaves on silicon as simulated.**
+- **Tier 1 (image 64ec46d1f8d9461b, firmware 6423545a567b2f3c, batch module 21fbfc39), one cold boot, watchdog alive
+  (94 lines):**
+  - b0-stats 0, b0-hello 0, vm-contract 0 (normal 0, stale 139 with cause 25).
+  - **sparse-churn: VM_EXIT 0 and `VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags`**, under
+    node_flat_records=4096: nodes=600041 through a 4,096-record table, collections 0, resume_satp_changed 0,
+    busy_frame_refusals 0.
+    - Every earlier vp2 boot wedged in this rung (rev7, and r8-r11).
+    - The QEMU reference on qkit7-batch2 reads the same nodes=600041 (steps 200092 there, 200065 here; its
+      node_capacity was 65536).
+    - The release lines read `pushed=10/11`: the generations push of item 6.
+  - The vm-suite retval 1 is its count of VM_EXIT lines, one.
+  - FRTY 0, FRTC 0, DRT1 0, INJS 0, INJL 0, Oops 0, pc=0 0. CPMX-DIAG has no region dump to read (NO DATA, as
+    expected without a refusal).
+- **Against the pre-registration (c8f2e85ea9b8): every reading holds.**
+  - The flash read-back, the s23 batch vector, b0-stats/b0-hello/vm-contract 0, sparse-churn completing, and the
+    readings 0.
+  - The vm-suite on this image is the rev7 suite (sparse-churn only). So "per test against the QEMU 33/45" grades
+    the three tests it runs, normal, stale and sparse-churn, each passing on QEMU and here.
+- **For the RTL lane's batch rows:**
+  - S-25/R-57, "the rungs that wedged on the trees complete": sparse-churn completes.
+  - The S-23 fetch-face refusal is absent: DRT1 0 and FRTY 0 in this boot.
+  - va-alloc's generation readings wait for its bare image (the RTL lane is building it).
+- Board 2 flashes after its retire_verify arm, by flash-and-first-b2.sh.
