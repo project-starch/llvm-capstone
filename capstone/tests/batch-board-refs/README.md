@@ -35,3 +35,31 @@ as a difference of the fixture, not averaged away.
     before this record.
 
 Every pre-registered reading holds.
+
+## perl-stock and perl-sublet with TRIMMED staging (pre-registered 2026-10-23, before the runs)
+
+**Why:** the board runs perl with trimmed staging (`--lib-closure`) because of the payload cap, and the batch perl
+references (batch-refs-r60/batch/perl-{stock,sublet}) ran FULL. So the board compares a different staging against
+its own.
+
+**The runs:** the batch references' own invocation (batch-refs/run-mp-r60.sh), with `--lib-closure` added:
+- runner `perl/release-differential/runners/virtual/run-virtual.py` aabfa66858b2c35e, from wt-ref2 at 15ced322c824
+  (clean);
+- the closure `board/lib-closure.txt` 2a472e21452045e1, the one corpus-mp/run-refs-perl2.sh's tB-mimic trimmed
+  references used;
+- kit qkit7-batch2 and the r60 images: perl-stock 76f1141df548fd9a, perl-sublet bec05c860fb7e808 (runtime
+  4a5e480c1680c87d), as the full references' stamps record.
+- Each arm's trimmed matrix is compared cell by cell with its full one, on outcome, cause, function and
+  in_fault_sites. The harness column carries addresses and is not compared.
+
+**Predicted:** both arms read 11/11 equal, differ 0, as the same gate read on tB-mimic (corpus-mp/refs/REFS: perl-stock
+and perl-sublet full vs trimmed, 11/11, differ 0). The full matrices hold perl-stock fault 6, completed 4, exit255 1,
+and perl-sublet fault 8, completed 3.
+
+**Result** (2026-10-23 03:50-03:59, QEMU domain B; batch-refs-r60/run-perl-trim.sh): **as predicted.**
+- **perl-stock, trimmed vs full:** 11/11 equal, differ 0 (fault 6, completed 4, exit255 1).
+- **perl-sublet, trimmed vs full:** 11/11 equal, differ 0 (fault 8, completed 3).
+- Both arms' controls (eval, shim) behave.
+- The stamps show runner aabfa668, tree 15ced322c824 clean, qemu ecaf50bb, module a05c198b, vexec a405840d,
+  closure 2a472e21, and the images as above.
+- The trimmed references are batch-refs-r60/batch/perl-{stock,sublet}-trim/out, for the board's trimmed staging.
