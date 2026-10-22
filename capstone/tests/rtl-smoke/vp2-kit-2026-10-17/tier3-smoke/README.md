@@ -7235,3 +7235,32 @@ Record: `records/batch-va-alloc-bare-b1.result-lines.txt`.
     PRE-BATCH, the old 20-value report VOID, one changed value FINDING at its position.
   - **Predicted: PASS**, the corrected batch vector.
   - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/va-alloc-bare`.
+
+### The retire checked by the module, result (2026-10-22 13:53-15:26, board 2, tree B, module 9d0ac297): 4,400 accepted retires, none left the record live
+
+Record: `records/uaf-repeat-rv-b2.result-lines.txt`.
+
+- **Read:**
+  - retire_verify read back 1, then 2.
+  - **The counters after 400 runs: checks 4,400 (11 accepted retires per run), pre_dead 0, post_live 0, reissued 0,
+    fixed 0.**
+  - Every uaf run's counters were read (no unread run).
+  - pre_dead 0 means the record read VALID before every one of the 4,400 retires: the instrument's own positive
+    control held on every call.
+  - Cause 13 in 4 of 200 at level 1 and 6 of 200 at level 2. Every one has two arena refusals at its own address
+    and **post_live +0 in its own run**.
+  - The bounds run reads 28. Readings 0.
+- **Against the pre-registration (94000e799f82): the reading is "post_live = 0 alongside continued 13s".** By the
+  pre-registered rule, that rules out a retire that failed to take effect: in every cause-13 run the module saw the
+  ancestor's record dead after its retire. The level-2 re-issue never fired, so it is neither a workaround nor
+  needed.
+- **Where the cause-13 question now stands, all silicon readings on the current bitstreams:**
+  - at the fault there is no arena and no PTE (refuse_pte);
+  - the retire took effect (this arm);
+  - with the retired region kept mapped there is no 13 and no completed read in 200 (keep-retired);
+  - a freed object on a live page is refused in 200 of 200 (mapped).
+  - The RTL lane's simulation finds no route to a 13 through a dead record.
+  - Left: what the munmap path carries that the keep-retired arm removes (the kernel's TLB maintenance and timing,
+    and address reuse) and that the simulation's munmap variants do not reproduce. That is open, and it comes with
+    no completed read.
+- **Rate:** cause 13 in 10 of 400 control runs here. Over the whole day, tree A 16 of 720 and tree B 26 of 1120.
