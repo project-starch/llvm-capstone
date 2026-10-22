@@ -7,6 +7,7 @@ The evidence behind section (a) of `docs/plans/2026-10-22-next-bitstream-whole-c
   `measure/live-peak` prints.
 - `check-control.py`: the control's verdict, against the bands pre-registered in that branch's ea7bcd757e.
 - `control.txt`: the control boot's checks (QEMU bb96f69552135b93, module ed8565728d0fdabd); every one holds.
+- `flat-discriminator.txt`: the same counters on the FLAT batch kit, cells 02 and 13 (pre-registered at dfc80198307c).
 - `summarize.py` and `cells.tsv`: one row per call of the eleven cell boots. The module's exact allocation count lies inside
   the host bracket in every row (`in_bracket` True).
 

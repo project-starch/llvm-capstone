@@ -104,9 +104,14 @@ Audited before sending (claim-auditor, 2026-10-22). Its corrections are folded i
 - **On a flat table with generations, occupancy = the VALID count + at most lifetime/2^g last-generation slots.**
   - That is from the source. Every invalidating write pushes the record: `cap_rev_tree.c:262-265` and `:343-346`.
     Every allocation is followed at once by a VALID put, and the module never writes a record.
-  - A flat-kit reading has not yet confirmed it. The discriminator below is pre-registered.
-- **Usable records, not index space.** The module keeps a 1,024-record floor and a 511-record reserve, which is why the
-  flat table holds 64,001 of 65,536.
+  - **Confirmed on the flat kit** (discriminator below). At the cause-30 refusal, the counter's live records equal the
+    module's own count of issued records: 64,256 and 64,256, with no collection.
+- **Usable records, not index space.** The module keeps a 1,024-record floor and holds back a reserve. Measured on the
+  flat kit, the table stops at two counts, depending on the path:
+  - a cell that derives directly (the pools' `_PyObject_Calloc`) faults with cause 30 when 256 records are left: 64,256;
+  - the malloc path refuses at 511 left (64,001), as mruby's smoke did on 2026-10-21. That one surfaces as NULL. It is
+    presumably how the `MemoryError` cells stop, but their flat-kit counts were not read.
+  The figures below use the larger overhead, 1,535.
   - 17-bit index: 131,072 − 1,535 = 129,537 usable. That is 1.22x over 106,272, with a leak of at most 43 slots at 13
     generation bits.
   - 18-bit index: 262,144 − 1,535 = 260,609 usable. That is 2.45x, with a leak of at most 85 at 12 bits.
@@ -118,7 +123,7 @@ Audited before sending (claim-auditor, 2026-10-22). Its corrections are folded i
   - sq0 23 prints `out of memory` and is read as completed. It is presumed to be memsys5's fixed 1 MB heap, not
     records, but that is not measured.
 
-### Pre-registered: the flat-kit discriminator (before its boot)
+### The flat-kit discriminator (pre-registered at dfc80198307c, before its boot)
 
 - **Run:** the same counter build on the FLAT batch kit (qkit7-batch2-lp: module a05c198b, QEMU bb96f695), cells
   lt1 02 and 13, one boot each.
@@ -129,6 +134,25 @@ Audited before sending (claim-auditor, 2026-10-22). Its corrections are folded i
     137,600 allocations.
 - **If the peak reads below 63,000:** the flat table holds more than 1,000 records beyond the VALID count. The sizing
   above must then add that excess, and the "occupancy = VALID" line is withdrawn.
+
+**Result** (QEMU bb96f69552135b93, module a05c198bfcc5f55c):
+
+| cell (lt1) | call | result | live peak (counter) | module high_water | lifetime allocations (module) |
+|---|---|---|---:|---:|---:|
+| 02 | case | cause 30 in `_PyObject_Calloc` | 64,256 (exact, closed by a RESET) | 64,256 | 137,902 |
+| 02 | control | cause 30 in `_PyObject_Calloc` | 64,256–64,511 | 64,256 | 126,359 (from the running total) |
+| 13 | case | cause 30 in `_PyObject_Calloc` | 64,256–64,511 | 64,256 | 137,904 |
+
+- **HELD:**
+  - cause 30 in `_PyObject_Calloc` on every case;
+  - lifetime allocations in [130,000, 145,000]: 137,902 and 137,904, where the paged trajectory predicted about
+    137,600.
+  - The discriminating reading holds too: live equals the module's issued count exactly, with collections 0, so the
+    flat table holds nothing beyond the VALID records.
+- **NOT HELD: the band's upper edge (≤ 64,001).** The peak is 64,256.
+  - The band had used the malloc path's limit; this path faults at 256 records left.
+  - That is a wrong constant in the prediction, not a sign of excess occupancy. An excess would push the peak BELOW the
+    band.
 
 ## (b) Every other cell the batch references do not read
 
