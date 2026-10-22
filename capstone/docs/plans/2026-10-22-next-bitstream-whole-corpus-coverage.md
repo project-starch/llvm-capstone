@@ -93,23 +93,42 @@ with 164,800 lifetime allocations. Its records are unswept garbage, which mruby'
 
 ### What it means for the index width
 
-- **This is the demand of the flat-with-generations design itself.**
-  - On a flat table, every write that invalidates a record also pushes it onto the free list: `cap_rev_tree.c:262-265`
-    for a revoked run, and `:343-346` for a retire. Those are the only two invalidating writers.
-  - So the table's occupancy is these live peaks, plus the records retired for good at the last generation.
-- **The largest corpus demand is 106,495 records (cells 02 and 13), not 139,780-143,877.**
-  - Those higher figures were the paged table's EXTENT, retired-but-uncollected records included.
-  - A 17-bit index (131,072) covers every corpus cell with 1.23x headroom over the largest.
-  - An 18-bit index (262,144) covers them with 2.46x.
-  - The mruby smoke at M6=20000 (122,879) fits 17 bits with 1.07x headroom.
-- **Leak:** a record retires for good on its last push, so the slots lost are at most lifetime / 2^generation-bits,
-  whatever the reuse pattern. The largest lifetime here is 348,197:
-  - 18-bit index, 12 generation bits: ≤ 85 slots;
-  - 17-bit index, 13 generation bits: ≤ 43.
-- **Caveats:**
-  - N=1 per cell, on QEMU (norandmaps sessions).
-  - The paged module and the flat module share their source apart from the table.
-  - Silicon allocates the same records, but this is not measured on silicon.
+Audited before sending (claim-auditor, 2026-10-22). Its corrections are folded in below.
+
+- **The largest corpus demand is exactly 106,272 records (lt1 13), then 106,198 (lt1 02).**
+  - Both are pinned by the last MINT line plus the module's exact count. For 13: live was 72,019 at 278,528 allocations,
+    with 2,988 to go, so it cannot pass the printed peak afterwards.
+  - The 139,780-143,877 figures were the paged table's EXTENT.
+  - The lifetime counts reproduce exactly across two boots on two binaries (paged-sizing and this run): 280,614,
+    281,516, 267,453 and 278,149 for 02, 13, 23 and 27. The peak itself is one boot per cell.
+- **On a flat table with generations, occupancy = the VALID count + at most lifetime/2^g last-generation slots.**
+  - That is from the source. Every invalidating write pushes the record: `cap_rev_tree.c:262-265` and `:343-346`.
+    Every allocation is followed at once by a VALID put, and the module never writes a record.
+  - A flat-kit reading has not yet confirmed it. The discriminator below is pre-registered.
+- **Usable records, not index space.** The module keeps a 1,024-record floor and a 511-record reserve, which is why the
+  flat table holds 64,001 of 65,536.
+  - 17-bit index: 131,072 − 1,535 = 129,537 usable. That is 1.22x over 106,272, with a leak of at most 43 slots at 13
+    generation bits.
+  - 18-bit index: 262,144 − 1,535 = 260,609 usable. That is 2.45x, with a leak of at most 85 at 12 bits.
+  - The mruby M6=20000 reference smoke (122,879) fits 17 bits at 1.05x.
+- **Scope.** This covers every cell the batch kit read (each peaks at or below 64,001, or it would have stopped there),
+  plus these nine.
+  - No demand reading exists for cells that stopped before their body: lt1 18, lt0/lt1 11, pb13q15 05 and 08, sq0 06.
+  - Nor for the corpora with no arm, in (c).
+  - sq0 23 prints `out of memory` and is read as completed. It is presumed to be memsys5's fixed 1 MB heap, not
+    records, but that is not measured.
+
+### Pre-registered: the flat-kit discriminator (before its boot)
+
+- **Run:** the same counter build on the FLAT batch kit (qkit7-batch2-lp: module a05c198b, QEMU bb96f695), cells
+  lt1 02 and 13, one boot each.
+- **Prediction for each case:**
+  - it faults with cause 30 in `_PyObject_Calloc`, as on the batch reference;
+  - its peak bracket lies inside [63,000, 64,001];
+  - its lifetime allocations at the fault are in [130,000, 145,000]. The paged trajectory crosses 64,001 live at about
+    137,600 allocations.
+- **If the peak reads below 63,000:** the flat table holds more than 1,000 records beyond the VALID count. The sizing
+  above must then add that excess, and the "occupancy = VALID" line is withdrawn.
 
 ## (b) Every other cell the batch references do not read
 
