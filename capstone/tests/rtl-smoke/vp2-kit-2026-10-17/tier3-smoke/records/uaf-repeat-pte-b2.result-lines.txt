@@ -1,0 +1,27 @@
+# uaf-control repeat on module d0d5f758 with refuse_pte=1 (kit bkit7-*-pte; d706a50d5c9d), board 2 / tree B, 2026-10-22. Result lines only.
+UR BEGIN 11:56:04 board 2 booking 109 N=200 args --no-trace --dmesg --refuse-pte kit bkit7-rev2xBDN2-pte
+UNBOOK 109: 200
+UR END rc=0 12:38:19
+REFUSE-PTE RPTE Y
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f8a610c24 address=0x3f8a701050 entry=0x3f8a600868 code=0x3f8a600000-0x3f8a680000 last=0x42 preparing=0x42 
+TALLY plain cause 13: 5
+TALLY plain cause 25: 195
+completed=True steps=203 of 203 transcript=<mnt-hdd>/capstone/t3-run-treeB/uaf-repeat-pte/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 12:38:19
+DMESG-ALL OLDEST [ 1993.662537] remote fence extension is not available in SBI v1.0 | REFUSED 0
+RUN uaf-48-plain cause 13 address 0x3f9c2a6040
+  DM [  599.690817] capstone_vm: resolve refused at arena: addr 0x3f9c2a6040 cause 13 need 0x1 pc 0x3f9c190c70 prev(addr 0x3f9c2a6008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+  DM [  599.754342] capstone_vm: resolve refused at arena: addr 0x3f9c2a6040 cause 13 need 0x1 pc 0x3f9c190c70 prev(addr 0x3f9c2a6008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+RUN uaf-70-plain cause 13 address 0x3fa2879040
+  DM [  825.869475] capstone_vm: resolve refused at arena: addr 0x3fa2879040 cause 13 need 0x1 pc 0x3fa2790c70 prev(addr 0x3fa2879008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+  DM [  825.924692] capstone_vm: resolve refused at arena: addr 0x3fa2879040 cause 13 need 0x1 pc 0x3fa2790c70 prev(addr 0x3fa2879008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+RUN uaf-72-plain cause 13 address 0x3fbf4bd040
+  DM [  852.018572] capstone_vm: resolve refused at arena: addr 0x3fbf4bd040 cause 13 need 0x1 pc 0x3fbf410c70 prev(addr 0x3fbf4bd008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+  DM [  852.062433] capstone_vm: resolve refused at arena: addr 0x3fbf4bd040 cause 13 need 0x1 pc 0x3fbf410c70 prev(addr 0x3fbf4bd008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+RUN uaf-74-plain cause 13 address 0x3f9374c040
+  DM [  876.609453] capstone_vm: resolve refused at arena: addr 0x3f9374c040 cause 13 need 0x1 pc 0x3f93690c70 prev(addr 0x3f9374c008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+  DM [  876.670229] capstone_vm: resolve refused at arena: addr 0x3f9374c040 cause 13 need 0x1 pc 0x3f93690c70 prev(addr 0x3f9374c008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+RUN uaf-149-plain cause 13 address 0x3f9fc89040
+  DM [ 1621.169214] capstone_vm: resolve refused at arena: addr 0x3f9fc89040 cause 13 need 0x1 pc 0x3f9fb90c70 prev(addr 0x3f9fc89008 cause 13 rep 1) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+  DM [ 1621.227108] capstone_vm: resolve refused at arena: addr 0x3f9fc89040 cause 13 need 0x1 pc 0x3f9fb90c70 prev(addr 0x3f9fc89008 cause 13 rep 1) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0

@@ -6857,3 +6857,30 @@ The reflash of c721c1a2a waits on the lead's own word. These scripts make the fi
 - **The flash chain:** `flash-and-first-b1.sh`'s busy check is now a wait, up to 4 h
   (`board-tier12/batch/dryrun-flash-and-first-b1-wait.txt`). If it is launched while this arm runs, it flashes only
   after the arm ends.
+
+### The PTE at the uaf control's cause-13 refusal, result (2026-10-22 11:56-12:38, both boards, module d0d5f758 refuse_pte=1): no arena, no PTE
+
+Records: `records/uaf-repeat-pte-b1.result-lines.txt` and `records/uaf-repeat-pte-b2.result-lines.txt`.
+
+- **The boot's own controls read as on 54d8a3af, so the reading stands** (it qualifies d0d5f758 for nothing else):
+  - refuse_pte read back Y;
+  - the bounds run reads 28;
+  - every one of the 400 uaf runs printed one fault line at code+0x10c70;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL are 0.
+- **Read:**
+  - Tree A: cause 13 in 2 of 200 (45, 157). Tree B: cause 13 in 5 of 200 (48, 70, 72, 74, 149).
+  - **Every one of the 7 has two refusal lines at its own fault address, both `resolve refused at arena: ... arena
+    -1 lazy -1 pte rc=-22 val=0x0 present=-1`.** At the fault no arena covered the address, and follow_pte found no
+    PTE.
+- **Against the pre-registration (d706a50d5c9d):** every reading holds, including the predicted `arena -1` with `pte
+  rc!=0`. No PTE survived.
+- **The ring count:** both boards' final step now reads VOID by itself (oldest ring line at 1979 s and 1993 s). The
+  wrap check fires on a real boot as it did on its stub.
+- **Over every repeat so far:** cause 13 in tree A 8 of 520 and tree B 11 of 520. Each one examined (12 runs across
+  the two ring-reading boots) is a fault on an unmapped, retired address.
+- **What it settles and what it does not:**
+  - The page-table half of the shape is confirmed: in a cause-13 run the load walked to a missing PTE and the page
+    fault was delivered instead of the revocation verdict.
+  - Whether the revocation check ALLOWED in those runs (the runtime lane's reading) or was merely outranked for a
+    cycle (the compiler lane's) is the question for the two stale-read arms now running: a retired region kept
+    mapped on board 1, and a freed object on a live page on board 2.
