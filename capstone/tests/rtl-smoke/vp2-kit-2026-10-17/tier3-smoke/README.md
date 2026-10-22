@@ -7790,3 +7790,12 @@ Record: `records/hold-batch-b1.result-lines.txt`.
   - **perl-sublet: 11 of 11 the same** (fault 8, completed 3);
   - both arms' eval and shim controls pass;
   - FRTY, DRT1, Oops, INJS, INJL and pc=0 read 0, and each boot completes.
+
+### mruby stock on the batch bitstream, result (2026-10-23 03:51-04:18, board 1): 23 of 23 cells as the tick reference
+
+Record: `records/batch-mp-mruby-stock-b1.result-lines.txt`.
+- APPVM read rc=0, control smoke ok, fault 20, completed 3.
+- **matrix-compare against batch-refs-r60/tick/mruby-stock: 23 of 23 the same.**
+- FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0. The gen-push banner is present, and the boot
+  completed.
+- **Against the pre-registration (ae150eeba11b): every reading holds.**

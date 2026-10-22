@@ -1,0 +1,8 @@
+# mruby stock (tick images) on the batch bitstream c721c1a2a, board 1: result lines only.
+MB BEGIN 03:51:07 board 1 kit bkit8-batch-b1 booking 167
+MB END 04:18:52 rc=0 :: APPVM read rc=0 04:18:52 :: --- virtual-malloc: control smoke ok; {'fault': 20, 'completed': 3}
+MB COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x1
+MB board1 DONE 04:18:52
+## matrix-compare
+23 of 23 cells the same
