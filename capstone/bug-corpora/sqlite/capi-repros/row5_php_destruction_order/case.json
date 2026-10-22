@@ -14,7 +14,10 @@
       "observed": "heap-use-after-free (shutdown destruction order)"
     },
     "virtual-malloc": {
-      "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)"
+      "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f97e11d1c in main; by function: main is the row's declared site (host ASan's frame #0)",
+      "verdict_from": "results/2026-10-22-virtual/virtual-malloc"
     },
     "vp2-malloc": {
       "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)",

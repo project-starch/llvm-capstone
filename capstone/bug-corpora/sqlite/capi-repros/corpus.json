@@ -41,5 +41,8 @@
   "arm_configurations": {
     "virtual-malloc": "virtual-mallocng",
     "vp2-malloc": "virtual-mallocng"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-22-virtual/virtual-malloc"
   }
 }

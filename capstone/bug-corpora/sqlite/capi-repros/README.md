@@ -114,3 +114,30 @@ The runner's build was run on its own, with no boot, before this was written:
 - Controls: bounds-malloc fault, uaf-malloc fault.
 - The tally: CAUGHT 12, NO-READING:out-of-denominator 7.
 - A row reading otherwise is reported as read, not re-sited.
+
+### Result, run 1 (2026-10-22 18:30-18:31, qkit7-batch2 on QEMU domain A, at 9ec12779a18f): 18 of 19 rows as predicted
+
+The bundle is `results/2026-10-22-virtual/virtual-malloc`, and the verdicts below are derived from it.
+- **Controls:** both fault.
+- **As predicted:**
+  - 11 heap-use-after-free rows CAUGHT at their declared site with cause 25 (`main`; `read_context`, `stale_udf`,
+    `authorize`);
+  - null-deref rows 12 and 14 cause 24 in `main`, row 13 cause 12 at an unsymbolized pc;
+  - none rows 17-19 correct, with no false alarm; row 15 has no program.
+- **NOT as predicted: row 11** reads NO-READING:unattributed. The cause, 2, is as predicted, and so is the pc: the
+  first instruction of `cap_malloc_invalid_free`. The miss is the symbol name.
+  - `cap_malloc_invalid_free` is a zero-size global label inside the static function `invalid_free`
+    (runtime/virtual/heap.c:350-352, whose whole body is the label and an `unimp`).
+  - tools/verdicts.py's `Symbols` attributes a pc to the enclosing sized function, so this pc is named
+    `invalid_free`. The exploratory run's symbolizer took the nearest label instead.
+  - So the declared site was the right instruction under a name this judge never reports.
+
+### The site alias for row 11, and run 2 (pre-registered 2026-10-22, after run 1, before run 2)
+
+- **The change, made after run 1 read it and said so here:** row 11's `fault_sites` gains `invalid_free`, the name the
+  judge gives the same instruction. No other row changes, and neither the runner nor the build does.
+- **Run 2:** the same invocation, kit and SDK.
+- **Prediction:** every row reads as in run 1, except row 11, which reads CAUGHT (cause 2 in `invalid_free`, by
+  function).
+- **Run 1's bundle stays as the record of the pre-registered reading.** `verdict_bundles` moves to run 2's only if run
+  2 reads as predicted.

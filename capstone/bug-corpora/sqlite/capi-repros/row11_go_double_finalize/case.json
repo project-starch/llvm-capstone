@@ -14,7 +14,11 @@
       "observed": "double-free (double sqlite3_finalize)"
     },
     "virtual-malloc": {
-      "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)"
+      "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)",
+      "verdict": "NO-READING",
+      "verdict_note": "cause=2 pc=0x3f9aa11c00 in invalid_free; in invalid_free; declared ['cap_malloc_invalid_free']",
+      "verdict_from": "results/2026-10-22-virtual/virtual-malloc",
+      "verdict_reason": "unattributed"
     },
     "vp2-malloc": {
       "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)",
@@ -29,7 +33,8 @@
   },
   "status": "host ASan arm recorded, oracle 'bad-free'; NOTE.md records why it is not reproduced",
   "fault_sites": [
-    "cap_malloc_invalid_free"
+    "cap_malloc_invalid_free",
+    "invalid_free"
   ],
-  "fault_sites_why": "bad-free: host ASan reports the second free in free() under sqlite3MemFree; on the virtual profile the allocator refuses it in cap_malloc_invalid_free, which the project lead ruled a catch on 2026-10-22"
+  "fault_sites_why": "bad-free: host ASan reports the second free in free() under sqlite3MemFree; on the virtual profile the allocator refuses it in cap_malloc_invalid_free, which the project lead ruled a catch on 2026-10-22; invalid_free is the static function (runtime/virtual/heap.c:350) whose body is that label and its unimp, the name tools/verdicts.py's Symbols gives the same pc. Added after run 1 read the row unattributed on the name alone (README, 2026-10-22)"
 }

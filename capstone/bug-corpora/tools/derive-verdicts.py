@@ -96,7 +96,10 @@ def derive(corpus):
 def apply(corpus, by_case, write):
     """Bring each case.json in line with by_case. Returns the paths that differ."""
     differ = []
-    dirs = {d.name: d for d in corpus.glob("[0-9][0-9]_*") if (d / "case.json").is_file()}
+    # The case directories as check-corpus.py's case_dirs finds them: a sqlite-row corpus names them row<N>_*.
+    decl = json.loads((corpus / "corpus.json").read_text())
+    default = "row[0-9]*" if decl.get("case_schema") == "sqlite-row" else "[0-9][0-9]_*"
+    dirs = {d.name: d for d in corpus.glob(decl.get("case_glob", default)) if (d / "case.json").is_file()}
     for name in sorted(set(by_case) - set(dirs)):
         differ.append(f"{name}: in a bundle but not a case directory")
     for name, d in sorted(dirs.items()):
