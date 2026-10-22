@@ -73,3 +73,7 @@ parent bits [47:46] = 0). Every other value, the flags, parents, depths, statuse
 count, is identical. Grading rule on bitstream 2: VOID unless SR = 17 and position 0 = 0; PASS when all 17 equal the
 bitstream-2 vector; the batch vector means the bitstream in service is still the batch; the tree-A vector means a
 pre-batch tree; any other vector is a finding, graded value by value.
+
+The same vector holds for the tracer-less candidate `68d0ffaf8` (`vp3-notracer`; `core/` = `5d365d9a6` plus the debug
+tracer removed in `cva6.sv`): the kit's source re-read it value for value on that RTL (vp8 `.sup/ntrkit`, rtl 68d0ffaf8
+dirty=no, SUCCESS). The tracer has no architectural effect and no print passes through it.
