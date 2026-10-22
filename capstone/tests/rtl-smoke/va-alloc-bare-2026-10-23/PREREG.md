@@ -15,34 +15,40 @@ node 2 and allocate nothing, so the recorder does not move the allocator and the
 
 | image | sha256 | board_rec | SR |
 |---|---|---|---|
-| `images/va-alloc-csret.bin` | `9491707dfa1613e300d3c52bf21f4468babcb81dd61a0e4ceae75fe78849ed18` | 0x8000a800 | 20 |
+| `images/va-alloc-csret.bin` | `9491707dfa1613e300d3c52bf21f4468babcb81dd61a0e4ceae75fe78849ed18` | 0x8000a800 | 17 |
 
 ## The two vectors, simulated through the Anvil prologue (each run directory carries its PROVENANCE)
 
+**Correction after the first board run (2026-10-23 15:15, VOID by the first rule):** the simulation TRACE prints a CAPPRINT
+that sits within a few instructions after a lifetime op TWICE (the op's commit flush re-issues the younger print, and the
+trace records both retirements), while the recorder counts the architectural execution once: the board printed SR 17 for
+this arm where the raw trace showed 20. The three doubled prints are the status print after each of the two CSRETIREs
+and the load print after the second. The vectors below are the 17-value architectural ones (the trace vectors with those
+three doubles removed); the first version of this file published the raw 20-value trace and was wrong by exactly those.
+
 Print order (the test's own comments name each): srevroot read-back minus the table (0); the CSNODE ancestor id; the
-first CSRETIRE's status; the second CSNODE's ancestor id; the STALE retire's status; the load through the re-noded fresh
-owner; the free-list head and the allocation count; then the record reads REC_READ(4), REC_GEN(4), REC_READ(5),
-REC_GEN(5) (flags, parent, depth; generation) and the domain arms' readings; mcause last.
+first CSRETIRE's status; the second CSNODE's ancestor id; the stale retire's status; the load through the re-noded fresh
+owner; the free-list word; the allocation count; REC_READ(4) (flags, parent, depth); REC_GEN(4); REC_READ(5); REC_GEN(5);
+mcause last. SR = 17.
 
-| tree | vector (SV, in order) |
+| tree | vector (SV, in order, 17 values) |
 |---|---|
-| **BATCH c721c1a2a** (date=2026-10-22T07:10:23Z rtl_commit=c721c1a2a anvil_rev_node=99e92df7f3b4c900 ) | `0x0 0x10004 0x0 0x0 0x20004 0x1 0x1 0x0 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0` |
-| PRE-BATCH tree A 8522d72fe, the test transplanted (date=2026-10-22T06:55:27Z rtl_commit=8522d72fe anvil_rev_node=6d0f9699a247d012 ) | `0x0 0x4 0x0 0x0 0x7 0x1 0x1 0x0 0x0 0x0 0x4 0x2 0x0 0x0 0x0 0x2 0x4 0x1 0x0 0x0` |
+| **BATCH c721c1a2a** | `0x0 0x10004 0x0 0x20004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0` |
+| PRE-BATCH tree A 8522d72fe (the test transplanted) | `0x0 0x4 0x0 0x7 0x1 0x0 0x0 0x4 0x2 0x0 0x0 0x0 0x2 0x4 0x1 0x0 0x0` |
 
-The two vectors differ at exactly these positions (0-based), computed from the two simulations; the meaning of each
-position is the test's own comment at that print, not restated here:
+The two vectors differ at exactly these positions (0-based):
 
 | position | batch | pre-batch tree A |
 |---|---|---|
 | 1 | `0x10004` | `0x4` |
-| 4 | `0x20004` | `0x7` |
-| 11 | `0x3` | `0x2` |
-| 14 | `0x2` | `0x0` |
-| 15 | `0x3` | `0x2` |
-| 18 | `0x2` | `0x0` |
+| 3 | `0x20004` | `0x7` |
+| 8 | `0x3` | `0x2` |
+| 11 | `0x2` | `0x0` |
+| 12 | `0x3` | `0x2` |
+| 15 | `0x2` | `0x0` |
 
-Positions 1 and 4 are the CSNODE ancestor ids (generation-carrying on the batch, bare on the pre-batch unit); 14 and 18
-are the REC_GEN reads (2 on the batch, 0 where the pre-batch unit never writes the field); 11 and 15 are the record flag
-reads of the same two records. Grading rule: VOID unless SR = 20 and position 0 = 0; PASS when all 20 equal the batch
-vector; a pre-batch reading (all 20 equal the tree-A vector) says the bitstream in service is not the batch; any other
-vector is a finding, graded value by value against the test's comments.
+Positions 1 and 3 are the CSNODE ancestor ids (generation-carrying on the batch, bare on the pre-batch unit); 11 and 15
+are the REC_GEN reads (2 on the batch, 0 where the pre-batch unit never writes the field); 8 and 12 are the record flag
+reads of the same two records. Grading rule: VOID unless SR = 17 and position 0 = 0; PASS when all 17 equal the batch
+vector; the tree-A vector means the bitstream in service is not the batch; any other vector is a finding, graded value by
+value against the test's comments.
