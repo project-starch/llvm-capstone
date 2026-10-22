@@ -7150,3 +7150,22 @@ was touched.
   - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/va-alloc-bare`, a new directory.
 - **Predicted: PASS**, `0x0 0x10004 0x0 0x0 0x20004 0x1 0x1 0x0 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0`:
   generation-carrying ancestor ids 0x10004 and 0x20004, and REC_GEN 2. The 20 values go to the RTL lane as read.
+
+### mruby Sublet with smoke-fit on the batch bitstream, result (2026-10-22 14:47-15:14, board 1): 23 of 23 cells as QEMU
+
+Record: `records/batch-mp-mruby-sublet-smokefit-b1.result-lines.txt`. Output:
+`<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/mp-mruby-sublet-smokefit`.
+
+- **Read:**
+  - the board run's controls: `APPVM read rc=0 :: virtual-nested-pools: control smoke ok; {'fault': 23}`;
+  - **matrix-compare against the smoke-fit/sublet QEMU reference (qkit7-batch2): 23 of 23 cells the same**;
+  - the boot completed;
+  - pc=0, DRT1, FRTY, FRTC, Oops, INJS, INJL and collect-skipped 0; the `diag gen-push` banner x1.
+  - The release lines read `pushed=` equal to `attempted=` (e.g. 46/46): the generations push recycling the
+    nested pools' records.
+- **Against the pre-registration (a1108a2a3cad): every reading holds.**
+- **What it adds:**
+  - mruby's Sublet arm is a bundle the trees could not run: its GC exhausted vp2's flat table. It now reads on vp2
+    silicon cell for cell as its batch QEMU reference, on the batch kit's own firmware recipe.
+  - It is the first of the three bundles the batch unblocks.
+  - The tree-era mruby columns stand as recorded. This is a new column, for the batch bitstream.
