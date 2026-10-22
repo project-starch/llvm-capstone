@@ -6893,3 +6893,11 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
   - A dedicated repeat of 120 runs per tree in one boot read **2 of 120 on tree A and 5 of 120 on tree B**. The reading
     is on both trees, not one, and the launcher trace is identical for both causes.
   - In both causes the use-after-free read is stopped.
+  - **Where the 13 comes from** (a further 200 runs per tree, reading the module's own refusal line from the kernel
+    ring): tree A 4 of 200 and tree B 1 of 200, and every one is `resolve refused at arena` at its own fault address.
+    - So the freed region was already retired and unmapped at the read. That is unconditional, because musl frees
+      the 32-byte group's own 4 KiB mapping.
+    - In those runs the load took the page fault instead of the revocation verdict. Over all repeats it is 6 of 320
+      per tree.
+    - Which RTL path lets the page fault win is open. The candidate is a one-cycle window on a DTLB miss, unmeasured,
+      and an RTL simulation sweeping the cache's response delay would settle it.

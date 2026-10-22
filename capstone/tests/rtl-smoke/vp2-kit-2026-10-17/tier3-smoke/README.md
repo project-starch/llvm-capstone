@@ -6546,3 +6546,135 @@ Records: `records/uaf-repeat-b1.result-lines.txt` and `records/uaf-repeat-b2.res
     whether the load reaches the revocation check (25) or faults earlier on its translation (13).
 - **Next reading:** the module's own view of a cause-13 fault (its page-fault resolution, dmesg), which this
   instrument does not print. That question is for the runtime lane, which owns the module.
+
+### The uaf control's cause 13: the module's own refusal line, read from the ring buffer, pre-registered (2026-10-22 11:0x, before either boot)
+
+- **Why this reading:**
+  - A cause-13 fault that the module returns unresolved passes through resolve() (capstone_vm.c, dev). Its refusal
+    line is `capstone_vm: resolve refused at <site>: addr .. cause 13 need .. pc .. prev(..) <detail>`
+    (CV_RESOLVE_FAIL).
+  - That line is unbudgeted and prints at pr_warn unless diag_emerg is set, so on the board (console level 1) it
+    reaches the ring buffer and never the UART. The first repeat never read the ring.
+  - The site names the mechanism:
+    - `arena`: no lazy arena covers the address, so the module had nothing to do;
+    - `vma`, `pin`, `anon` or `remap`: the mapping changed, and the detail gives vm_flags, pfn and refs.
+  - The runtime lane (owner of the module) confirmed the line, its level and the read, and expects two lines per
+    unresolved fault: the in-step resolve, then the launcher's CV_RESOLVE.
+- **What runs:**
+  - `tier3-uaf-repeat.sh <board> <out> 200` with `UR_TAG=-dm UR_ARGS="--no-trace --dmesg"`, one cold boot per board,
+    on the same kits.
+  - 200 uaf runs, all untraced as in Juliet. Every cause-13 run and every tenth run also prints the module's last 12
+    ring lines.
+  - A final step prints the boot's total count of refusal lines and their last 40.
+  - Reading the ring changes nothing about the runs.
+  - The options are new in uaf-repeat.py and tier3-uaf-repeat.sh. With neither set, the generated gate script is
+    byte-identical to the first repeat's (checked by diff).
+- **Dry run** (`dryrun-uaf-repeat-dmesg.txt`): a planted refusal is reported against its run and in the total; a
+  transcript without the final step reads NO DATA.
+- **Predictions:**
+  - Must-fire: every printed run shows at least one ring line (the module's own pr_emerg "release retires" of the
+    previous run), and the final step prints a REFUSED count.
+  - Every cause-13 run has at least one refusal line at its own fault address, cause 13 (two expected).
+  - No printed cause-25 run has a refusal line at its address.
+  - The boot's REFUSED total is about twice the number of cause-13 runs. Nothing else in these boots takes a 12/13/15
+    fault (the bounds control is cause 28).
+  - The site is the reading, with no prediction between the sites.
+    - If `arena`: the page was pinned and present when the region was added, and the walker still faulted. The
+      runtime lane's untested hypothesis is the accessed bit: vp2's walker faults on a clear A and never sets it, and
+      GUP pins without pte_mkyoung. A PTE read at that refusal is being added on their lane.
+    - Any other site: the mapping changed under the context.
+  - The rate is a few percent per run on either tree, so a few cause-13 runs are expected per board. A board with none
+    gives no reading, not a negative one.
+
+### Amendment to the ring-buffer pre-registration (2026-10-22 11:08, while the boots run, before any of their results is read)
+
+The runtime lane corrected two parts of the reading it gave, and I verified the first in source.
+
+- **Slot 10 is a LAZY arena, so the `arena` reading above was wrong.**
+  - add() writes `lazy = r->linear` (capstone_vm.c, the arena struct literal's last field, around :952-953 on dev),
+    and the freed allocation's region reads `linear=1`.
+  - So a cause-13 fault at a live slot-10 address enters resolve()'s pin path. It cannot reach the `arena` site.
+  - **`arena` now means that no registered arena covered the address at the fault**: the region was already retired.
+  - **Withdrawn** (it was the runtime lane's hypothesis, recorded above as untested): "`arena` = the accessed bit".
+- **One more terminal line.** If resolve() keeps succeeding without changing anything, the run ends on the repeat
+  bound (-ELOOP). It prints `capstone_vm: fault at 0x.. cause 13 resolved N times with no change ...`.
+  - That line contains no "resolve refused", so the boot's final REFUSED count misses it.
+  - It is budgeted to the first 4 per module load (CV_EMIT_FIRST).
+  - Its PTE fields need resolve_pte=1, which this run does not set, so they read unfilled.
+  - The per-run ring lines (`dmesg | grep capstone_vm`, last 12) do include it, within that budget.
+- **The decision tree for one cause-13 run**, read from its own ring lines:
+  - `resolve refused at vma`, `pin`, `anon` or `remap`: the mapping changed under the context;
+  - `resolve refused at arena`: the region was already retired at the fault;
+  - `fault at ... resolved N times`: the module re-pinned a present page and the walker faulted again. This is the
+    only branch where the accessed bit remains a candidate, and this run cannot read the PTE;
+  - none of these lines: the fault never reached resolve().
+- **The count prediction is restated:** the boot's REFUSED total plus its `fault at` lines is about twice the number
+  of cause-13 runs. The other predictions are unchanged.
+
+### The compiler lane's prediction for the ring-buffer boots (received 11:10, recorded before any result is read)
+
+- **Prediction: every cause-13 run reads `resolve refused at arena`.**
+- **The reasoning, from dev source** (not checked against module 54d8a3af's exact source):
+  - musl mallocng's free of the control's 32-byte object frees its whole group, which is slot 10's own 4 KiB mmap,
+    and munmaps it.
+  - That munmap reaches the launcher as service UNMAP (2, the boundary kind 2 seen before the mark in every traced
+    run).
+  - The launcher's unmap_arena then issues CV_RETIRE and munmap.
+  - The module's retire() revokes the arena's node, which gives the 25, unpins, and zeroes the arena.
+  - So at the read no arena covers the address.
+- **What it implies:**
+  - The release is unconditional, so the variable between runs is on the read side.
+  - A cause-25 read means the load took no translation fault, through either a TLB entry left stale after munmap's
+    flush, or revocation winning the LSU's exception merge over the page fault.
+  - QEMU cannot separate these, because it checks revocation before translating.
+- **What would contradict it:** a `vma`, `pin` or `anon` site.
+
+### The module's refusal line for the uaf control's cause 13, result (2026-10-22 11:03-11:46, both boards): every cause-13 run is `resolve refused at arena`
+
+Records: `records/uaf-repeat-dm-b1.result-lines.txt` and `records/uaf-repeat-dm-b2.result-lines.txt`.
+
+- **Read:**
+  - Tree A: cause 13 in 4 of 200 runs (99, 104, 112, 134), cause 25 in 196.
+  - Tree B: cause 13 in 1 of 200 (189), cause 25 in 199.
+  - All untraced. The bounds run reads 28. pc=0, DRT1, FRTY, Oops, INJS and INJL are 0.
+  - **Every one of the 5 cause-13 runs has `capstone_vm: resolve refused at arena: addr <its own fault address> cause
+    13 ... no lazy arena covers this address`**: twice in four runs and once in run 112 of tree A.
+    - Each line's prev() names an earlier cause-13 fault at +0x8 of the same page, with rep 0. That is the lazy
+      page's first touch at malloc, which the module resolved.
+  - No run has a `fault at ... resolved N times` line.
+  - None of the 40 printed cause-25 runs has a refusal at its own address. Every printed run has ring lines, which
+    is the must-fire.
+- **Against the pre-registration (c22a6e1c7ef7, amended fabccd6c8478 before any result was read):**
+  - HELD:
+    - the must-fire;
+    - a refusal at each cause-13 run's own address;
+    - none for cause 25;
+    - the readings.
+  - **The compiler lane's prediction (recorded at 5a66e4fe627f, before any result; its README section says
+    "received 11:10", but the commit is stamped 11:09) HOLDS: every cause-13 run is `arena`.** No `vma`, `pin`,
+    `anon` or `remap` site occurred.
+  - **The whole-boot count is VOID on tree A and agrees on tree B.**
+    - Tree A's final step read `REFUSED 0`, beside 7 refusal lines its own per-run reads had printed.
+    - The board kernel's ring is 128 KiB (CONFIG_LOG_BUF_SHIFT=17), and tree A's last refusal came about 66 runs
+      before the end. That is consistent with the ring wrapping. The volume of non-module lines per run was not read,
+      so the wrap is not verified.
+    - Tree B's single event came 11 runs from the end, and its final count reads 2, both lines.
+    - So a whole-boot ring read over a long run is not an instrument here, and the per-run reads are the reading.
+- **What it means, by the amended decision tree:**
+  - At the read, no arena covers the address: the freed region had already been retired and unmapped. The compiler
+    lane traced this from source as unconditional on every run (mallocng frees the 32-byte group's own 4 KiB mmap;
+    UNMAP → CV_RETIRE → retire()).
+  - So in the cause-13 runs the load walked to a missing PTE and took a load page fault, where in the cause-25 runs
+    the revocation verdict was delivered.
+  - Which side varies is now an RTL question, not a mapping one. The compiler lane's reading of the vp2 RTL (via
+    rtl-oracle, partly re-read by that lane, unmeasured):
+    - the LSU orders cap exceptions (24-28) above the page fault;
+    - a one-cycle hole is the probable source: on a DTLB miss, the ABORT cycle drops the request and with it the
+      registered cap exception (cva6_mmu.sv:527), so a PTW error pulse landing then is delivered as 13.
+    - This needs the DTLB to have missed, so it says nothing against the munmap flush.
+  - The settling test is an RTL simulation: a load through a revoked tagged capability to an unmapped page, sweeping
+    the dcache grant delay. Predicted: 13 at some delays if the hole is real, 25 at every delay if not.
+  - Rate over all the repeats: tree A 6 of 320 and tree B 6 of 320. Nothing separates the trees.
+  - **Severity, as far as the board reads:** both causes stop the use-after-free read (signal 11 at the read). The
+    cause-13 runs are not a missed detection; what differs is the cause reported. In the Juliet runner that costs a
+    batch void (judge.py's control requires 25), not a verdict.
