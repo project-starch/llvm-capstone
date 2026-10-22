@@ -7169,3 +7169,22 @@ Record: `records/batch-mp-mruby-sublet-smokefit-b1.result-lines.txt`. Output:
     silicon cell for cell as its batch QEMU reference, on the batch kit's own firmware recipe.
   - It is the first of the three bundles the batch unblocks.
   - The tree-era mruby columns stand as recorded. This is a new column, for the batch bitstream.
+
+### va-alloc-csret bare on the batch bitstream, result (2026-10-22 15:15, board 1): VOID, the image prints 17 values where the PREREG has 20
+
+Record: `records/batch-va-alloc-bare-b1.result-lines.txt`.
+
+- **Read:**
+  - image 9491707dfa1613e3 (sha256 checked against dev 68679d2982ad), board_rec 0x8000a800;
+  - `SR 0x11` (17) and 17 SV values: `0x0 0x10004 0x0 0x20004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0`.
+- **Graded by the PREREG's rule: VOID** (it requires one SR = 20 and 20 values).
+  - The 17 values equal, value for value, the 17-value csret list the RTL lane sent before writing PREREG.md. The
+    PREREG's vector has 20 entries.
+  - So the instrument and its pre-registration disagree on the report's length. That is an instrument mismatch,
+    and it is not regraded after the fact.
+  - The values include the generation-carrying ancestor ids 0x10004 and 0x20004. That is noted, and it is not a
+    grade.
+- Returned to the RTL lane to reconcile: which build prints 20, or a corrected PREREG for the 17-value report. A
+  re-run follows on its push.
+- Process: the BEGIN line's "expect pre" is a label inherited from tier3-s23-bare.sh's unused third argument, not the
+  grade's expectation. The grader is va-alloc-grade.py.
