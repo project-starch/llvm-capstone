@@ -12,10 +12,24 @@
     "host-asan": {
       "oracle": "heap-use-after-free",
       "observed": "use-after-free (stmt reuse after close)"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f85e11d1c in main; by function: main is the row's declared site (host ASan's frame #0)",
+      "verdict_from": "results/2026-10-22-virtual-run2/virtual-malloc"
+    },
+    "vp2-malloc": {
+      "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)",
+      "status": "not written"
     }
   },
   "capstone_column": {
     "ledger_status": "family (H)"
   },
-  "status": "host ASan arm recorded, oracle 'heap-use-after-free'; NOTE.md records why it is not reproduced"
+  "status": "host ASan arm recorded, oracle 'heap-use-after-free'; NOTE.md records why it is not reproduced",
+  "fault_sites": [
+    "main"
+  ],
+  "fault_sites_why": "host ASan's frame #0 for this row's before.c (heap-use-after-free, SQLite 3.53.3 -O1, before.c -O0; run-host-asan-repros.sh, 2026-10-22); the stale access is in the row's own main"
 }
