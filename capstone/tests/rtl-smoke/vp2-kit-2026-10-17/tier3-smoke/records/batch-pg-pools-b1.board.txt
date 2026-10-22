@@ -1,0 +1,32 @@
+# Tier 3 board reading, arm batch-pg-pools-b1: runner 7ce203f9fd6a3cce (dev; QEMU PASS t3-sql-nf2-r2); image dc2a1356dce735e0 (postgres lt1, pg-pools); scored against pgp-trim/bundle (QEMU qkit7-batch2, module a05c198b, movc_null_scalar OFF, the trimmed fixture); kit bkit8-batch-b1 (batch bitstream caplifive_vp2c_c721c1a2a, module 21fbfc397e7c7a42, monitor capstone-sbi d9da397 + FETCH_RETRY_CAP) on board 1, SDK t3-freeze-nb. Result lines only.
+# board 1 (from the run log's [fpga-board] line)
+# arm vp2-pg-pools configuration virtual-mallocng-pg-pools platform board:caplifive_vp2c_c721c1a2a cells 9 tally {"CAUGHT": 5, "MISSED": 2, "NO-READING:unattributed": 2}
+# controls [["bounds-malloc", "fault"], ["bounds-palloc", "fault"], ["uaf-malloc", "fault"], ["uaf-palloc", "fault"]]
+01_12a6206864a0_to_char_tz_overflow image dc2a1356dce735e0 CAUGHT cause 28 at __stpcpy+44 reached True completed False attribution "function"
+02_3ed3dbbf44_ts_headline_int16_overflow image dc2a1356dce735e0 CAUGHT cause 28 at memcpy+220 reached True completed False attribution "control"
+03_8c34261109_ltree_lquery_uint16_overflow image dc2a1356dce735e0 CAUGHT cause 28 at memcpy+220 reached True completed False attribution "control"
+04_3d160401b65e_oidvector_oob_read image dc2a1356dce735e0 CAUGHT cause 28 at oidvectorout+56 reached True completed False attribution "function"
+05_849da8210539_ascii_multibyte_oob_read image dc2a1356dce735e0 MISSED cause None at None reached True completed True attribution null
+06_e91dcfccaa_regexp_conv_buf_overrun image dc2a1356dce735e0 CAUGHT cause 28 at pg_wchar2utf_with_len+140 reached True completed False attribution "function"
+07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec image dc2a1356dce735e0 NO-READING:unattributed cause 28 at pg_popcount_optimized+292 reached True completed False attribution null
+08_c4d51b6274_levenshtein_stop_column_oob_write image dc2a1356dce735e0 MISSED cause None at None reached True completed True attribution null
+09_7a7d9693c7_pgp_sesskey_overflow image dc2a1356dce735e0 NO-READING:unattributed cause 28 at memcpy+220 reached True completed False attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 01_12a6206864a0_to_char_tz_overflow: verdict CAUGHT cause 28 pc __stpcpy+44
+  SAME 02_3ed3dbbf44_ts_headline_int16_overflow: verdict CAUGHT cause 28 pc memcpy+220
+  SAME 03_8c34261109_ltree_lquery_uint16_overflow: verdict CAUGHT cause 28 pc memcpy+220
+  SAME 04_3d160401b65e_oidvector_oob_read: verdict CAUGHT cause 28 pc oidvectorout+56
+  SAME 05_849da8210539_ascii_multibyte_oob_read: verdict MISSED cause None pc None
+  SAME 06_e91dcfccaa_regexp_conv_buf_overrun: verdict CAUGHT cause 28 pc pg_wchar2utf_with_len+140
+  SAME 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec: verdict NO-READING cause 28 pc pg_popcount_optimized+292
+  SAME 08_c4d51b6274_levenshtein_stop_column_oob_write: verdict MISSED cause None pc None
+  SAME 09_7a7d9693c7_pgp_sesskey_overflow: verdict NO-READING cause 28 pc memcpy+220
+  9 of 9 cells the same
+## the boot
+  T3PG batch-pg-pools-b1 BEGIN 20:27:05
+  T3PG batch-pg-pools-b1 END 22:32:42 rc=0 :: --- vp2-pg-pools (virtual-mallocng-pg-pools): {'CAUGHT': 5, 'MISSED': 2, 'NO-READING:unattributed': 2}
+  BOARD_RUN_START 20:27:05 bitstream caplifive_vp2c_c721c1a2a monitor d9da397
+  manifest 1074 files, stage 34511751 bytes
+  firmware a490510ee7757e92 25856520 B
+  DRIVER rc=0 22:32:42
+  BOARD_RUN_DONE 22:32:42

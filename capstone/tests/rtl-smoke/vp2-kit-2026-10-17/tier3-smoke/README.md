@@ -7517,3 +7517,45 @@ Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
   - **plane virtual-nested-pools:** MISSED the same way. Controls: bounds-malloc fault, uaf-malloc fault, plane-live
     complete, plane-bound fault, plane-free fault.
   - compare-pilot reads 1 of 1 for each plane arm.
+
+### cpython lt1 on the batch bitstream, result (2026-10-22 15:19-20:25, board 1): 32 of 32 cells as the batch QEMU reference
+
+Record: `records/batch-cpy-lt1-b1.result-lines.txt`.
+- **verdicts-compare against ref-batch/lt1: 32 of 32 cells the same.** The tally is CAUGHT 17, MISSED 3, NO-READING infra 4,
+  not-reached 1 and unattributed 7.
+- The controls passed (APPVM read rc=0), and norandmaps is in the command line.
+- FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0.
+- **Against the pre-registration: every reading holds.**
+- **RETRACTION, made the same evening, of a mid-run report to two lanes and the lead.**
+  - At 18:4x this lane reported that step 21 (gh-146169, expat) had stalled on the board and would time out as infra.
+    The basis was about 8 minutes of flat @@HB output size, at 458 lines against QEMU's 464.
+  - The step was slow, not stalled. About 14 minutes in, it printed its last lines and faulted exactly as the reference
+    does: cause 25 at pc 0x3ff66f096c, little2_toUtf8, END 139.
+  - Silence bounds only "not yet". A stall is called against the step's bound, never from silence alone.
+
+### cpython lt0 on the batch bitstream, result (2026-10-22 15:57-21:53, board 2): 31 of 32 by the five fields, 32 of 32 in verdict
+
+Record: `records/batch-cpy-lt0-b2.result-lines.txt`.
+- **verdicts-compare against ref-batch/lt0: 31 of 32.**
+- The one difference is case 01 (gh-139071). It is CAUGHT at the same pc on both sides, set_dealloc+284 (0x3ff615c998),
+  with the same address, 0xffffffffffffffff. Its cause is **4** on silicon and **24** in QEMU.
+  - The address is misaligned for the load. **This is Q-31's ruled ordering divergence:** the RTL takes the
+    misaligned trap before the tag check, and QEMU the capability trap. The ruling is dev 70c43b2cee8b, "no verdict
+    consequence".
+  - The mechanism predicts this value: cause 4 for a misaligned load address.
+- The controls passed, norandmaps is in the command line, and the readings are 0.
+- **Against the pre-registration:** the 32 of 32 prediction misses by one field in one cell. That cell is a known,
+  ruled divergence, not a new reading. Case 13 (gh-144169) reads NO-READING infra on both sides. The lead reclassified it
+  as MISSED in the corpus (dev a062e6cee926), which the runner's text rule does not change.
+
+### postgres pg-pools on the batch bitstream, result (2026-10-22 20:27-22:32, board 1): 9 of 9 cells as the reference
+
+Record: `records/batch-pg-pools-b1.board.txt`. The bundle is filed under
+`bug-corpora/postgres/sql-repros/results/2026-10-22-batch-c721c1a2a-b1/vp2-pg-pools`.
+- The measure-only bake read 25,856,520 B, under the 26,000,000 B cap.
+- The bundle records fixture 956173e054762e91 and image dc2a1356.
+- Must-fire: no directory-open FATAL, and the positive control answered.
+- **compare-pilot against pgp-trim/bundle: 9 of 9 cells the same**: CAUGHT 5, MISSED 2, NO-READING unattributed 2.
+- FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0. The gen-push banner is present (x1).
+- **Against the pre-registration: every reading holds.** This is the first board reading of pg-pools at all. On the trees,
+  its nested contexts exhausted the flat table. The batch's recycling (item 6) is what lets it run.

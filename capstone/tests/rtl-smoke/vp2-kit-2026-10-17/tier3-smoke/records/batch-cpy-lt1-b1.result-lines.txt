@@ -1,0 +1,41 @@
+# cpython lt1 on the batch bitstream c721c1a2a, board 1 (kit bkit8-batch-nb1): result lines only.
+CB lt1 BEGIN 15:19:09 board 1 kit bkit8-batch-nb1 booking 118
+CB lt1 ARM END rc=0 20:25:45 :: APPVM read rc=0 20:25:45 :: --- vp2-nested-pools (virtual-cpython-pools): {'CAUGHT': 17, 'MISSED': 3, 'NO-READING:infra': 4, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 7}
+CB lt1 COMPARE vs reference rc=0 :: 32 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 20:25:45
+## verdicts-compare against batch-refs-r60/ref-batch/lt1/out
+32 of 32 cells the same
+## the board's cells
+01_gh-139071_heap-overflow-in-set-dealloc-setobject image 916e14f9b3f622c9 CAUGHT cause 28 at set_dealloc+240 attribution function
+02_gh-140471_fix-buffer-overflow-in-ast-node image 916e14f9b3f622c9 NO-READING:unattributed cause 30 at _PyObject_Calloc+260 attribution None
+03_gh-140492_heap-buffer-overflow-in-ast-copy image 916e14f9b3f622c9 CAUGHT cause 28 at memcpy+204 attribution control
+04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer image 916e14f9b3f622c9 MISSED cause None at None+None attribution None
+05_gh-140497_cpython-crash-heap-buffer-overflow-python image 916e14f9b3f622c9 CAUGHT cause 28 at _PyEval_EvalFrameDefault+1456 attribution function
+06_gh-140551_crash-in-dict-if-hash-eq image 916e14f9b3f622c9 MISSED cause None at None+None attribution None
+07_gh-140594_fix-an-out-of-bounds-read image 916e14f9b3f622c9 CAUGHT cause 28 at PyOS_StdioReadline+728 attribution function
+08_gh-140607_heap-buffer-overflow-in-io-rawiobase image 916e14f9b3f622c9 CAUGHT cause 28 at memcpy+204 attribution function
+09_gh-140802_heap-buffer-overflow-in-pycore-interpframe image 916e14f9b3f622c9 CAUGHT cause 28 at _PyEvalFramePushAndInit+244 attribution function
+10_gh-142554_avoid-divmod-crashes-due-to-bad image 916e14f9b3f622c9 NO-READING:infra cause None at None+None attribution None
+11_gh-143005_heap-buffer-overflow-in-ctypes-array image 916e14f9b3f622c9 NO-READING:not-reached cause None at None+None attribution None
+12_gh-143377_heap-buffer-overflow-in-format-tracebackexception image 916e14f9b3f622c9 CAUGHT cause 28 at _PyXI_excinfo_InitFromException+3836 attribution function
+13_gh-144169_fix-three-crashes-in-ast-objects image 916e14f9b3f622c9 NO-READING:unattributed cause 30 at _PyObject_Calloc+260 attribution None
+14_gh-144475_heap-buffer-overflow-in-functools-partial image 916e14f9b3f622c9 CAUGHT cause 28 at partial_repr+384 attribution function
+15_gh-148973_fix-segfault-on-mismatch-between-consts image 916e14f9b3f622c9 CAUGHT cause 28 at _PyCfg_OptimizeCodeUnit+6480 attribution function
+16_gh-156075_heap-buffer-overflow image 916e14f9b3f622c9 NO-READING:unattributed cause 28 at advance_with_locations+544 attribution None
+17_gh-157325_fix-an-oob-read-in-the image 916e14f9b3f622c9 MISSED cause None at None+None attribution None
+18_gh-157335_fix-out-of-bounds-write-in image 916e14f9b3f622c9 NO-READING:infra cause None at None+None attribution None
+19_gh-142664_fix-uaf-in-memoryview-hash-via image 916e14f9b3f622c9 NO-READING:infra cause None at None+None attribution None
+20_gh-143308_use-after-free-in-save-picklebuffer image 916e14f9b3f622c9 CAUGHT cause 25 at memcpy+204 attribution function
+21_gh-146169_segfault-ub-from-expat-when-re image 916e14f9b3f622c9 CAUGHT cause 25 at little2_toUtf8+72 attribution function
+22_gh-139210_iterparse-event-name image 916e14f9b3f622c9 CAUGHT cause 25 at strlen+20 attribution function
+23_gh-142560_bytearray-search-realloc image 916e14f9b3f622c9 NO-READING:unattributed cause 30 at _PyObject_Calloc+260 attribution None
+24_gh-142783_zoneinfo-eager-decref image 916e14f9b3f622c9 CAUGHT cause 25 at PyObject_GetAttrString+32 attribution function
+25_gh-142829_hamt-eq-interior-cursor image 916e14f9b3f622c9 CAUGHT cause 25 at hamt_iterator_next+136 attribution function
+26_gh-142831_json-encoder-list-item image 916e14f9b3f622c9 CAUGHT cause 25 at encoder_listencode_obj+168 attribution function
+27_gh-143004_counter-update-borrowed-value image 916e14f9b3f622c9 NO-READING:unattributed cause 30 at _PyObject_Calloc+260 attribution None
+28_gh-143543_groupby-reentrant-eq image 916e14f9b3f622c9 NO-READING:unattributed cause 30 at _PyObject_Calloc+260 attribution None
+29_gh-146011_decimal-signaldict-outlives-context image 916e14f9b3f622c9 CAUGHT cause 25 at signaldict_repr+192 attribution function
+30_gh-146613_grouper-parent-key image 916e14f9b3f622c9 NO-READING:unattributed cause 30 at _PyObject_Calloc+260 attribution None
+31_gh-148660_odict-copy-stale-link image 916e14f9b3f622c9 NO-READING:infra cause None at None+None attribution None
+32_gh-149449_unicodedata-capi-cached image 916e14f9b3f622c9 CAUGHT cause 25 at PyCodec_NameReplaceErrors+596 attribution function
