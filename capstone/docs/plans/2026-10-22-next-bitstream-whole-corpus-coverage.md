@@ -29,9 +29,15 @@ measurement: the live-record peak and lifetime allocation count of every cell th
 
 ## (a) Record capacity: live records above 64,001
 
-**Nine CPython cells**, all from lt1 (the pymalloc-pools arm), are stopped by the flat table on the batch kit:
+**Ten CPython cells**, all from lt1 (the pymalloc-pools arm), are stopped by the flat table on the batch kit:
 - six with cause 30 in `_PyObject_Calloc`: 02, 13, 23, 27, 28 and 30;
-- three that surface the refusal as a Python `MemoryError` (they read NO-READING:infra): 10, 19 and 31.
+- three that surface the refusal as a Python `MemoryError` (they read NO-READING:infra): 10, 19 and 31;
+- one that surfaces it as `SystemError: error return without exception set`, during an import (NO-READING:infra): 18.
+
+(Corrected 2026-10-22: the first version said nine. lt1 18 was classed by its error text, as an import failure. The
+module's high_water at that failure, 64,023 against capacity 65,536, places it at the limit. The 16-/18-bit twin pair
+and the paged kit confirm it: capstone/tests/corpus-cell-probes/README.md, pre-registered at ab3ea2c6a4d3. A capacity
+census must classify by the table's reading at the failure, not by the error a program prints.)
 
 The three `MemoryError` cells were classified by the measurement below. On a table without the cap the `MemoryError`
 disappears, and each case reaches a capability fault in its own code, with a peak above 64,001.
@@ -84,6 +90,7 @@ disappears, and each case reaches a capability fault in its own code, with a pea
 | 19 | control | exit 0 | 64,690–65,535 | 177,214 |
 | 31 | case | cause 25 in odict_copy (MemoryError on the flat kit) | 74,613–74,751 | 233,845 |
 | 31 | control | exit 0 | 82,364–82,943 | 348,197 |
+| 18 | case | `OSError: [Errno 38]` at `mmap.resize`, before the defect (SystemError on the flat kit) | 67,875–68,607 (a lower bound: see (b)) | (module 200,377 on the 18-bit twin) |
 
 Reference row: mruby Sublet's control smoke at M6=20000 (not a corpus cell) peaks at 122,868–122,879 live records,
 with 164,800 lifetime allocations. Its records are unswept garbage, which mruby's GC frees only on its own heap pressure.
@@ -117,11 +124,14 @@ Audited before sending (claim-auditor, 2026-10-22). Its corrections are folded i
   - 18-bit index: 262,144 − 1,535 = 260,609 usable. That is 2.45x, with a leak of at most 85 at 12 bits.
   - The mruby M6=20000 reference smoke (122,879) fits 17 bits at 1.05x.
 - **Scope.** This covers every cell the batch kit read (each peaks at or below 64,001, or it would have stopped there),
-  plus these nine.
-  - No demand reading exists for cells that stopped before their body: lt1 18, lt0/lt1 11, pb13q15 05 and 08, sq0 06.
+  plus these ten.
+  - No demand reading exists for cells that stopped before their body: lt0/lt1 11, lt0 18, pb13q15 05 and 08. lt1
+    18's reading is a lower bound, because it stops at the mremap blocker.
   - Nor for the corpora with no arm, in (c).
-  - sq0 23 prints `out of memory` and is read as completed. It is presumed to be memsys5's fixed 1 MB heap, not
-    records, but that is not measured.
+  - sq0 23 is a genuine MISSED, not a capacity stop. It prints `VERDICT len_changed=0 sum_changed=1
+    first4_changed=1` and then `NOTRAP`: the stale text was read and no trap fired. The `out of memory` comes after
+    that, from the integrity check on the corrupted table. (Corrected 2026-10-22: the first version presumed it was
+    memsys5's 1 MB heap.)
 
 ### The flat-kit discriminator (pre-registered at dfc80198307c, before its boot)
 
@@ -163,10 +173,12 @@ The causes below are what the records show. "Not investigated" means exactly tha
 | arm | case | reading | cause, as recorded |
 |---|---|---|---|
 | lt0, lt1 | 11 gh-143005 (ctypes array) | NO-READING:not-reached | `ModuleNotFoundError: No module named '_ctypes'`. The CPython port is built without `_ctypes`, so the trigger stops before its case. A port gap, not a platform one. |
-| lt1 | 18 gh-157335 | NO-READING:infra | `SystemError: error return without exception set`. Not investigated. On lt0 the same case stops on `OSError: [Errno 38] Function not implemented` and reads MISSED. |
+| lt1 | 18 gh-157335 | NO-READING:infra | `SystemError: error return without exception set`, raised by `import select` at subprocess.py:125, while upstream_test.py imports test.support.script_helper. RECORD CAPACITY, the tenth cell in (a): the module's high_water reads 64,023 at the failure, and the error is gone on the 18-bit twin and on the paged kit. Beyond it the case needs application mremap, as lt0 18 does. |
+| lt0 | 18 gh-157335 | MISSED, but NOT REACHED | The judge reads MISSED, yet the defect never runs. In the test's `self.m.resize(new_size)`, `mmap.resize` raises `OSError: [Errno 38] Function not implemented`, and the trigger exits 1. Public application `mremap` is unsupported on the virtual profile (runtime/virtual/README.md: "Address hints/fixed mappings and public application `mremap` remain unsupported"), and CPython resizes an anonymous map only through mremap. So the case needs that runtime feature before either arm can read it. With the runtime lane's mremap (runtime/app-mremap c26b60a61f5b) relinked into the lt0 image, it reads CAUGHT: cause 28 in `mmap_ass_subscript`, a declared site (capstone/tests/corpus-cell-probes/README.md). |
 | lt0 | 13 gh-144169 | NO-READING:infra | `MemoryError` in the upstream test's `ast.Name(**{object(): 'y'})`. NOT record capacity: on the uncapped table it persists at a live peak of 7,753–8,191 and 20,810 allocations, with no refusal printed. On lt1, with per-object pool bounds, the same case faults with cause 28 in unicode_fromformat_write_str. The likely reading, NOT measured: on lt0's single-capability pymalloc arena the defect reads a non-str key as a str and requests an oversized buffer. |
-| pb13q15 | 05 2d61f18, 08 e8364b5 | NO-READING:control-failed | The case's FIXED twin did not finish clean: 05's fixed run faults with cause 24, and 08 reads CONTROL-FAILED 785. Not investigated. |
-| sq0 | 06 0c8c9a64b3 | NO-READING:inconclusive | Reached, then neither completed nor faulted. Not investigated. |
+| pb13q15 | 05 2d61f18 | NO-READING:control-failed | The FIXED run faults with cause 24 (address 0) in `capstone_cap_revoke_child` (image offset 0x24588), at a free. The case's canary does it: `memset((unsigned char *)next, 0x5a, 1)` writes byte 0 of the NEXT item. Under patch 0006 that byte is the item's `sublet_parent` capability, the first field of `struct _stritem`. The patch's own text says "Overwriting the slot clears its tag and the next free faults." pb12 (virtual-malloc, no slot) runs the fixed twin clean. The arm is right and the case is wrong for it: a canary that reads the byte instead of writing it would not clobber the slot. That fix belongs to the corpus owner. The buggy run's catch is correct: cause 28 at the chunk's end. |
+| pb13q15 | 08 e8364b5 | NO-READING:control-failed | The BUGGY run's own precondition `CHECK(ptr > rcurr + rbytes, 785)` fails. On the q15 arm (`Q15_PAD padded=2 pad_bytes_max=16`) the space scan stops at the first pad byte past rbuf, which is not a space. So the overrun this case needs never leaves the padded object, and the reduction refuses to give a verdict. pb12 CATCHES the same case. An arm property, not a defect. A variant that fills the allocation's usable extent with spaces is the corpus owner's call. |
+| sq0 | 06 0c8c9a64b3 | NO-READING:inconclusive | Reached, and the defect ran undetected. `expertrem destroyed; calling rem() over freed ctx` is followed by `Assertion failed: iSlot<=p->nSlot` in idxRemFunc and abort 134. So the stale read went through. On this memsys5 arm (27 MISSED; its uaf-mem5 and bounds-mem5 controls complete rather than fault) that is a miss, and only the judge's "completed" rule leaves it unread. |
 
 ### Unattributed: a fault was read, but not at a declared site
 
@@ -191,7 +203,7 @@ The causes below are what the records show. "Not investigated" means exactly tha
 
 | corpus | cases | why there is no batch arm |
 |---|---:|---|
-| ffmpeg/plane-repros | 1 | No virtual arm. FFmpeg's corpora ran on the classic line on 2026-10-16. |
+| ffmpeg/plane-repros | 1 | No virtual arm on dev: `bug-corpora/tools/run-virtual-cases.py:66` lists four FFmpeg corpora and not this one. A virtual run exists on the unlanded branch `plane-virtual-carve` (b03dc5ebd1eb pre-registration, 0512bd175160 result): both arms MISSED as predicted, and the carve's bound and revocation controls fired in the same boot. The read lands inside upstream's own plane extent. (Corrected 2026-10-22: the first version said FFmpeg's corpora ran on the classic line, yet five of them have vp2 virtual results.) |
 | httpd/apr-pool-repros | 1 | PAUSED in the 2026-10-16 board campaign plan: it needs a new physical-profile kind, and APR's lend API was never moved to CDERIVE/CREVOKE. |
 | httpd/bucket-repros | 8 | PAUSED, with apr-pool. |
 | sqlite/capi-repros | 19 | Needs a port. Its only required arm is host ASan. |
