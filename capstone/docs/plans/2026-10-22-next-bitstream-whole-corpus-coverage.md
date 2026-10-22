@@ -90,7 +90,7 @@ disappears, and each case reaches a capability fault in its own code, with a pea
 | 19 | control | exit 0 | 64,690–65,535 | 177,214 |
 | 31 | case | cause 25 in odict_copy (MemoryError on the flat kit) | 74,613–74,751 | 233,845 |
 | 31 | control | exit 0 | 82,364–82,943 | 348,197 |
-| 18 | case | `OSError: [Errno 38]` at `mmap.resize`, before the defect (SystemError on the flat kit) | 67,875–68,607 (a lower bound: see (b)) | (module 200,377 on the 18-bit twin) |
+| 18 | case, with application mremap relinked in | cause 28 in mmap_ass_subscript (SystemError on the flat kit) | 66,682–67,583 | (module high_water 66,724 on the 18-bit twin) |
 
 Reference row: mruby Sublet's control smoke at M6=20000 (not a corpus cell) peaks at 122,868–122,879 live records,
 with 164,800 lifetime allocations. Its records are unswept garbage, which mruby's GC frees only on its own heap pressure.
@@ -125,8 +125,10 @@ Audited before sending (claim-auditor, 2026-10-22). Its corrections are folded i
   - The mruby M6=20000 reference smoke (122,879) fits 17 bits at 1.05x.
 - **Scope.** This covers every cell the batch kit read (each peaks at or below 64,001, or it would have stopped there),
   plus these ten.
-  - No demand reading exists for cells that stopped before their body: lt0/lt1 11, lt0 18, pb13q15 05 and 08. lt1
-    18's reading is a lower bound, because it stops at the mremap blocker.
+  - No demand reading exists for cells that stopped before their body: lt0/lt1 11, lt0 18, pb13q15 05 and 08.
+  - lt1 18 is read with application mremap relinked in. RETRACTED: the earlier version called its stopped run's peak
+    (67,875–68,607, batch image) "a lower bound". It is not one. That run's peak is CPython's error path after the
+    failed resize, which allocates more than the defect path, which peaks at 66,682–67,583.
   - Nor for the corpora with no arm, in (c).
   - sq0 23 is a genuine MISSED, not a capacity stop. It prints `VERDICT len_changed=0 sum_changed=1
     first4_changed=1` and then `NOTRAP`: the stale text was read and no trap fired. The `out of memory` comes after
