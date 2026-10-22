@@ -73,3 +73,14 @@ prediction is the virtual run's reading, row for row.
 - **Bundles:** `xlang/repro/results/2026-10-22-virtual/virtual-malloc` and
   `xlang/lua-cdp/results/2026-10-22-virtual/virtual-malloc`, with local paths written as `/mnt/hdd/<user>/`.
 - An xlang-row corpus has no case.json, so no `verdict_bundles` are declared. The bundles are the record.
+
+## Path-independent images, and run 2 (pre-registered 2026-10-22, before run 2)
+
+- **The defect:** run 1 built with `-g` and no prefix map, which is the same defect as sqlite/capi-repros' runs 1 and
+  2. Its images recorded the raw directory and the cwd, so a board rebuild could never hash-equal them.
+- **The fix:** `-ffile-prefix-map` for the raw directory (`/xlang-build`) and the checkout (`/repo`), and cwd = the
+  build directory for every compile.
+  - Checked: rlua_userdata_uaf's image hashes identically from two raw directories, one of them with a cwd of /tmp.
+- **Run 2:**
+  - Predicted: every row reads as in run 1, with only the image hashes changed.
+  - If it holds, run 2's bundles replace run 1's as the reference.

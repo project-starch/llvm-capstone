@@ -85,9 +85,16 @@ def rewrite_block():
     return block
 
 
+def prefix_maps(bindir):
+    """Path-independent images: the build directory and the checkout are mapped to fixed names, so the board's build
+    of a row hashes equal to the QEMU reference's (without this, -g records both paths)."""
+    return [f"-ffile-prefix-map={bindir}=/capi-build", f"-ffile-prefix-map={REPO}=/repo"]
+
+
 def build(a, bindir):
     """(images by row name, build errors by row name, the build record). Everything into bindir."""
     cc = a.sdk / "capstone-cc"
+    pm = prefix_maps(bindir)
     src = Path(subprocess.run(["bash", str(FETCH)], capture_output=True, text=True, check=True).stdout.split()[-1])
     if f'#define SQLITE_VERSION        "{SQLITE_VERSION}"' not in (src / "sqlite3.h").read_text():
         raise SystemExit(f"CONTROL-FAILED {src} is not SQLite {SQLITE_VERSION}")
@@ -100,13 +107,13 @@ def build(a, bindir):
     if r.returncode:
         raise SystemExit(f"CONTROL-FAILED the 3.53.3 rewrite pass failed: {r.stderr[:300]}")
     obj = bindir / "sqlite3.o"
-    r = subprocess.run([str(cc), "-c", *SQLITE_FLAGS, f"-I{sq}", str(sq / "sqlite3.c"), "-o", str(obj)],
-                       capture_output=True, text=True)
+    r = subprocess.run([str(cc), "-c", *SQLITE_FLAGS, *pm, f"-I{sq}", str(sq / "sqlite3.c"), "-o", str(obj)],
+                       capture_output=True, text=True, cwd=bindir)
     if r.returncode:
         raise SystemExit(f"CONTROL-FAILED sqlite3.c on {a.sdk}: {r.stderr[-400:]}")
     wrap = bindir / "virtual-main.o"
-    r = subprocess.run([str(cc), "-c", *ROW_FLAGS, str(HERE.with_name("virtual-main.c")), "-o", str(wrap)],
-                       capture_output=True, text=True)
+    r = subprocess.run([str(cc), "-c", *ROW_FLAGS, *pm, str(HERE.with_name("virtual-main.c")), "-o", str(wrap)],
+                       capture_output=True, text=True, cwd=bindir)
     if r.returncode:
         raise SystemExit(f"CONTROL-FAILED virtual-main.c: {r.stderr[-300:]}")
     images, errors = {}, {}
@@ -114,15 +121,15 @@ def build(a, bindir):
         if not (d / "before.c").is_file():
             continue
         img = bindir / f"{d.name}.dom"
-        r = subprocess.run([str(cc), *ROW_FLAGS, f"-I{sq}", str(d / "before.c"), str(wrap), str(obj),
-                            "-Wl,--wrap=main", "-o", str(img)], capture_output=True, text=True)
+        r = subprocess.run([str(cc), *ROW_FLAGS, *pm, f"-I{sq}", str(d / "before.c"), str(wrap), str(obj),
+                            "-Wl,--wrap=main", "-o", str(img)], capture_output=True, text=True, cwd=bindir)
         if r.returncode:
             errors[d.name] = r.stderr[-300:]
         else:
             images[d.name] = img
     record = {"sqlite": SQLITE_VERSION, "amalgamation_sha256": v.sha256(src / "sqlite3.c"),
               "rewritten_sha256": v.sha256(sq / "sqlite3.c"), "rewrite_pass": str(PORT_SCRIPT.relative_to(REPO)),
-              "rewrite_pass_sha256": v.sha256(PORT_SCRIPT), "sqlite_flags": SQLITE_FLAGS, "row_flags": ROW_FLAGS,
+              "rewrite_pass_sha256": v.sha256(PORT_SCRIPT), "sqlite_flags": SQLITE_FLAGS, "row_flags": ROW_FLAGS, "prefix_maps": ["<bindir>=/capi-build", "<repo>=/repo"],
               "sqlite3_o_sha256": v.sha256(obj), "link": ["-Wl,--wrap=main", "shared/virtual-main.c"],
               "sdk_identity": list(appvm.sdk_identity(a.sdk)), "sdk_json_sha256": v.sha256(a.sdk / "sdk.json")}
     return images, errors, record
@@ -229,8 +236,8 @@ def main():
 
     images, errors, build_record = build(a, bindir)
     controls_img = bindir / "controls.dom"
-    b = subprocess.run([str(a.sdk / "capstone-cc"), "-O0", str(CONTROLS_C), "-o", str(controls_img)],
-                       capture_output=True, text=True)
+    b = subprocess.run([str(a.sdk / "capstone-cc"), "-O0", *prefix_maps(bindir), str(CONTROLS_C), "-o", str(controls_img)],
+                       capture_output=True, text=True, cwd=bindir)
     if b.returncode:
         print(f"CONTROL-FAILED controls build: {b.stderr[:300]}", file=sys.stderr)
         return 75

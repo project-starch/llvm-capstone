@@ -169,9 +169,11 @@ def main():
     bindir.mkdir(parents=True, exist_ok=False)
     cc = a.sdk / "capstone-cc"
     declared = sites()
+    # Path-independent images (as sqlite/capi-repros): -g would record the build directory and the checkout.
+    pm = [f"-ffile-prefix-map={bindir}=/xlang-build", f"-ffile-prefix-map={REPO}=/repo"]
 
     wrap = bindir / "virtual-main.o"
-    b = subprocess.run([str(cc), "-c", *FLAGS, str(HERE.with_name("virtual-main.c")), "-o", str(wrap)], capture_output=True, text=True)
+    b = subprocess.run([str(cc), "-c", *FLAGS, *pm, str(HERE.with_name("virtual-main.c")), "-o", str(wrap)], capture_output=True, text=True, cwd=bindir)
     if b.returncode:
         print(f"CONTROL-FAILED virtual-main.c: {b.stderr[-300:]}", file=sys.stderr)
         return 75
@@ -181,14 +183,14 @@ def main():
             continue
         d = SETS[st]
         img = bindir / f"{st}--{shim}.dom"
-        b = subprocess.run([str(cc), *FLAGS, *[f"-I{i}" for i in d["inc"]], str(d["src"] / f"{shim}.c"), str(d["mock"]),
-                            str(wrap), "-Wl,--wrap=main", "-o", str(img)], capture_output=True, text=True)
+        b = subprocess.run([str(cc), *FLAGS, *pm, *[f"-I{i}" for i in d["inc"]], str(d["src"] / f"{shim}.c"), str(d["mock"]),
+                            str(wrap), "-Wl,--wrap=main", "-o", str(img)], capture_output=True, text=True, cwd=bindir)
         if b.returncode:
             errors[(st, name)] = b.stderr[-300:]
         else:
             images[(st, name)] = img
     controls_img = bindir / "controls.dom"
-    b = subprocess.run([str(cc), "-O0", str(CONTROLS_C), "-o", str(controls_img)], capture_output=True, text=True)
+    b = subprocess.run([str(cc), "-O0", *pm, str(CONTROLS_C), "-o", str(controls_img)], capture_output=True, text=True, cwd=bindir)
     if b.returncode:
         print(f"CONTROL-FAILED controls build: {b.stderr[:300]}", file=sys.stderr)
         return 75
@@ -239,7 +241,7 @@ def main():
             "configuration": config, "predicted": PREDICTED[a.arm],
             "decisions": "the project lead, relayed by the runtime lane, 2026-10-22: (a) malloc controls plus per-row "
                          "declared sites, no no-revoke runtime; (b) the mruby shim rows dropped",
-            "build": {"flags": FLAGS, "mock": str(SETS[st]["mock"].relative_to(REPO)), "link": ["-Wl,--wrap=main", "xlang/virtual/virtual-main.c"],
+            "build": {"flags": FLAGS, "prefix_maps": ["<bindir>=/xlang-build", "<repo>=/repo"], "mock": str(SETS[st]["mock"].relative_to(REPO)), "link": ["-Wl,--wrap=main", "xlang/virtual/virtual-main.c"],
                       "sites": "xlang/virtual/sites.tsv", "sites_sha256": v.sha256(HERE.with_name("sites.tsv")),
                       "sdk_identity": [heap, profile], "sdk_json_sha256": v.sha256(a.sdk / "sdk.json")},
             "platform": platform})
