@@ -30,6 +30,24 @@ the batch image as the same-boot control.
   So the verdict is CAUGHT; never OSError 38, and never completion.
 - **Both controls fault.**
 
+**Result** (2026-10-22 15:14, qkit7-batch2, QEMU domain A, one boot):
+
+| call | image | reading |
+|---|---|---|
+| control-uaf-block | batch 23a2f0cb | `CONTROL uaf-block RETURNED`, exit 0 |
+| control-bounds-block | batch 23a2f0cb | `CONTROL bounds-block RETURNED`, exit 0 |
+| 18 | mremap 7b871db7 | domain fault cause 28 in `mmap_ass_subscript`, address 0x3f802f5fff: offset 8191 into a page-aligned one-page mapping |
+| 18 | batch 23a2f0cb | `OSError: [Errno 38] Function not implemented`, ABR EXIT 1 |
+
+- **HELD:**
+  - with application mremap, the resize succeeds and the defect's write faults at a declared site (`mmap_ass_subscript`);
+  - it is the cause-28 branch: the write goes through the new mapping's capability, one page short of index 8191;
+  - the same-boot batch image raises OSError 38.
+  - So lt0 18 reads CAUGHT once mremap is in the image, and its batch MISSED is a not-reached.
+- **NOT HELD: "both controls fault."** That line was my error. The lt0 arm's pymalloc-block controls COMPLETE by design
+  (the virtual-malloc arm keeps pymalloc's arenas). The batch reference's lt0 verdict rows record both controls as
+  `observed: complete`, and the judge accepts it. They read the same here. The case reading does not depend on them.
+
 ## lt1 18 (gh-157335) is record capacity (pre-registered 2026-10-22, before its runs)
 
 **The reading that prompted this:** on qkit7-batch2, standalone probes import everything the case imports, from the
