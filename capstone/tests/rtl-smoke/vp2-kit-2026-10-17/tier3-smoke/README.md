@@ -6585,3 +6585,28 @@ Records: `records/uaf-repeat-b1.result-lines.txt` and `records/uaf-repeat-b2.res
     - Any other site: the mapping changed under the context.
   - The rate is a few percent per run on either tree, so a few cause-13 runs are expected per board. A board with none
     gives no reading, not a negative one.
+
+### Amendment to the ring-buffer pre-registration (2026-10-22 11:08, while the boots run, before any of their results is read)
+
+The runtime lane corrected two parts of the reading it gave, and I verified the first in source.
+
+- **Slot 10 is a LAZY arena, so the `arena` reading above was wrong.**
+  - add() writes `lazy = r->linear` (capstone_vm.c, the arena struct literal's last field, around :952-953 on dev),
+    and the freed allocation's region reads `linear=1`.
+  - So a cause-13 fault at a live slot-10 address enters resolve()'s pin path. It cannot reach the `arena` site.
+  - **`arena` now means that no registered arena covered the address at the fault**: the region was already retired.
+  - **Withdrawn** (it was the runtime lane's hypothesis, recorded above as untested): "`arena` = the accessed bit".
+- **One more terminal line.** If resolve() keeps succeeding without changing anything, the run ends on the repeat
+  bound (-ELOOP). It prints `capstone_vm: fault at 0x.. cause 13 resolved N times with no change ...`.
+  - That line contains no "resolve refused", so the boot's final REFUSED count misses it.
+  - It is budgeted to the first 4 per module load (CV_EMIT_FIRST).
+  - Its PTE fields need resolve_pte=1, which this run does not set, so they read unfilled.
+  - The per-run ring lines (`dmesg | grep capstone_vm`, last 12) do include it, within that budget.
+- **The decision tree for one cause-13 run**, read from its own ring lines:
+  - `resolve refused at vma`, `pin`, `anon` or `remap`: the mapping changed under the context;
+  - `resolve refused at arena`: the region was already retired at the fault;
+  - `fault at ... resolved N times`: the module re-pinned a present page and the walker faulted again. This is the
+    only branch where the accessed bit remains a candidate, and this run cannot read the PTE;
+  - none of these lines: the fault never reached resolve().
+- **The count prediction is restated:** the boot's REFUSED total plus its `fault at` lines is about twice the number
+  of cause-13 runs. The other predictions are unchanged.
