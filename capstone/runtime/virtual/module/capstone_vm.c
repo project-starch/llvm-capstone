@@ -1321,6 +1321,19 @@ module_param(busy_frame_refusals, ulong, 0444);
 static bool resolve_pte;
 module_param(resolve_pte, bool, 0644);
 
+/* refuse_pte adds the faulting PTE, and the arena that covers the address whatever its laziness, to
+ * the `arena` refusal line -- the fault no lazy arena covers. Asked for by the vp2 board lane
+ * (2026-10-22): the Juliet uaf control's read of a freed allocation, in a 4 KiB linear region,
+ * faults cause 13 in a few runs of 120 and cause 25 in the rest, with identical launcher traces.
+ * A linear region is a LAZY arena (add(): lazy = r->linear), so this site means no registered
+ * arena covered the address when it faulted -- for that control, the region was already retired.
+ * The line then says what the walker found: no PTE (rc != 0), or a PTE and its bits, including
+ * young (vp2's walker faults on a clear A and never sets it, cva6_ptw.sv). It changes the text of
+ * that one line only when set, and adds no line: the refusal is already printed once per terminal
+ * resolve, unbudgeted. Default off. */
+static bool refuse_pte;
+module_param(refuse_pte, bool, 0644);
+
 /* The bound as a PARAMETER, so the -ELOOP path can be made to FIRE before a board boot is spent
  * on it. On QEMU `vm`'s store passes, so at the production bound of 64 this path never executes
  * and the PTE read above would reach silicon unvalidated -- which is the shape this project has
@@ -1534,6 +1547,35 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         ++c->stats.pinned_pages;
         c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
         return 0;
+    }
+    if (refuse_pte) {
+        unsigned long pv = 0;
+        int prc, slot = -1, lazy = -1;
+        pte_t *ptep;
+        spinlock_t *ptl;
+        for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
+            struct arena *a = &c->arenas[i];
+            if (a->bytes && address >= a->address && address - a->address < a->bytes) {
+                slot = i; lazy = a->lazy;
+                break;
+            }
+        }
+        mmap_read_lock(c->mm);
+        prc = follow_pte(c->mm, address, &ptep, &ptl);
+        if (!prc) {
+            pv = pte_val(*ptep);
+            pte_unmap_unlock(ptep, ptl);
+        }
+        mmap_read_unlock(c->mm);
+        CV_RESOLVE_FAIL("arena", "no lazy arena covers this address; arena %d lazy %d pte rc=%d "
+                        "val=0x%lx present=%d write=%d young=%d dirty=%d pfn=0x%lx",
+                        slot, lazy, prc, pv,
+                        prc ? -1 : !!pte_present(__pte(pv)),
+                        prc ? -1 : !!pte_write(__pte(pv)),
+                        prc ? -1 : !!pte_young(__pte(pv)),
+                        prc ? -1 : !!pte_dirty(__pte(pv)),
+                        prc ? 0UL : (unsigned long)pte_pfn(__pte(pv)));
+        return -EFAULT;
     }
     CV_RESOLVE_FAIL("arena", "no lazy arena covers this address");
     return -EFAULT;
