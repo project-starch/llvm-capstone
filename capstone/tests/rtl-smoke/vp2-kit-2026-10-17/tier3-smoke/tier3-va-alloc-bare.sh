@@ -38,7 +38,7 @@ main() {
       SUP_OUT=$R SUP_TIMEOUT=120 timeout 900 ${S23_RUN:-python3 sup-bare-2026-10-03-ladder/run_sup_bare.py} ) > $R/runner.log 2>&1; rc=$?
   [ -n "$bid" ] && ${S23_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} unbook $bid >> "$O" 2>&1
   echo "VA END rc=$rc $(date +%T) :: $(grep -a 'UART:' $R/runner.log | tail -1 | cut -c1-160)" >> "$O"
-  python3 $S/va-alloc-grade.py $R/uart.txt >> "$O" 2>&1; echo "VA GRADE rc=$?" >> "$O"
+  python3 $S/va-alloc-grade.py $R/uart.txt $([ "$EXP" = b2 ] && echo --expect b2) >> "$O" 2>&1; echo "VA GRADE rc=$?" >> "$O"
   echo "VA board$BRD DONE $(date +%T)" >> "$O"
 }
 main "$@"; exit $?

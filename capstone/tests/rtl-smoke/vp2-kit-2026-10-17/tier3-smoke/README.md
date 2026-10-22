@@ -7596,3 +7596,53 @@ three cells.**
   all Q-31.
 - sql0 (9 cells) is running on board 2. The new arms (xlang, plane and capi) follow on board 1.
 - The standing 346-cell pass on the two tree bitstreams stays the record. These cells sit beside it.
+
+### Bitstream 2 (18-bit index) on BOARD 2: reflash and first boots, pre-registered (2026-10-23 02:1x, before the seal and the flash)
+
+- **The lead's word, in this session, 2026-10-23:**
+  - verbatim: "reflash board 2 after bitstream 2 synthesis finish";
+  - the earlier answer the same night: board 2, after its queue.
+  - The bitstream is the RTL lane's candidate 68d0ffaf8 (vp3-notracer: bitstream 2's 18-bit index plus the tracer
+    dropped). Its full build launched at 17:50 UTC. The first try, 5d365d9a6, failed routing.
+  - The flash goes only after board 2's sql0 run ends. The batch bitstream c721c1a2a stays registered as the fallback,
+    and the script requires it in the store before flashing. Board 1 stays on the batch bitstream.
+- **What runs:** `board-tier12/batch/flash-and-first-bs2-b2.sh <log> <name> <local .bit> <sha256>`, launched with the
+  name and sha256 the RTL lane reports at the seal. Each step gates the next:
+  1. wait for sql0's end, then for the board to be free;
+  2. check the console store, with store-has.py's own control first; the batch bitstream must be listed;
+  3. check the local file's sha256;
+  4. book the hub, then run flash-bitstream.py (upload, flash, power-cycle, read back);
+  5. run `make-b2-kit.sh 2 <name>`, which must end "MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE";
+  6. run `run-b2-first.sh 2 <name> <mnt-hdd>/capstone/t3-run-b2-<suffix>-b2`, a new directory.
+- **The first boots** (`run-b2-first.sh`, run-batch-first.sh with these changes):
+  - **s23-cpmp-rearm bare, `--expect batch`.** The RTL lane: the vector is unchanged on bitstream 2, because no id is
+    printed.
+  - **va-alloc-bare, `--expect b2`.** The RTL lane's PREREG (dev cd30ce0e0876, carried to 68d0ffaf8 at 816fd44f5849):
+    - SR 17, vector `0x0 0x40004 0x0 0x80004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x8 0x3 0x4 0x1 0x8 0x0`;
+    - it differs from the batch's at positions 1, 3, 11 and 15;
+    - va-alloc-grade.py now carries this vector, and reads BATCH-RESIDENT when the batch vector comes back.
+    - **Anything but PASS stops the chain before Linux,** as s23 does.
+  - **Tier 1:** firmware 0c24496f80ef40d5 on image b052598d70aba6f9 (`b2-prep.sh`, real run in the dry-run record).
+    - It is the batch Tier 1 stage with ONLY `vm/capstone_vm.ko` changed to 215a09be. The stage sums differ in that
+      one line, and the bake's by-hash cpio check found all 14 files.
+    - Every CAPSTONE_VM_STATS line and the sparse-churn OK line are printed.
+- **Dry run** (`board-tier12/batch/dryrun-bs2-b2.txt`):
+  - the full chain;
+  - the flash script stops on a bad name, a short sha256, a wrong local hash, a missing fallback, and a failed flash;
+  - the first boots stop before Tier 1 when va-alloc reads the batch vector.
+- **Predictions:**
+  1. The flash reads back the new name.
+  2. **The monitor prints** (SHA*, the S23 lines, the Tier 1 monitor counters). This is the positive control that
+     `csrw 0x800` still retires on a tracer-less core, the RTL lane's condition.
+  3. s23: AS EXPECTED (batch), SR 25, re-arm all 1, total 14.
+  4. **va-alloc-bare: PASS, the bitstream-2 vector.** This is the first silicon reading of the 18-bit id format.
+  5. **Tier 1 IDENTICAL to the batch's** (the runtime lane's prediction, corrected before the boot):
+     - b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1 (stale 139), sparse-churn 0;
+     - sparse-churn `nodes=600041 steps=200065 collections=0 node_capacity=4096 node_growths=0`;
+     - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 read 0.
+     - node_capacity is the MODULE's `node_flat_records`, which rev7's Tier 1 harness sets to 4096. So Tier 1 cannot
+       show the 18-bit capacity. That runtime-lane prediction (262144) was withdrawn on that read.
+  6. The silicon discriminator for the larger index is a context at the default capacity with more than 65,535 live
+     records. It is a corpus boot, pre-registered separately: the compiler lane's hold.c, or cpython lt1's capacity
+     cells 02 and 13.
+- **Aperture note for this bitstream:** 225's bit 7 (trace_buf_empty) reads a constant 1.
