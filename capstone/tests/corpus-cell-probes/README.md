@@ -179,3 +179,70 @@ counters). Each boot runs case 18 on the new image, then case 18 on the batch im
     which allocates more than the defect path does. Its 67,886..68,607 is that path's peak, not a part of the cell's.
   - That claim reached dev at edcc82c79912 and is retracted there.
 - **lt1 18's demand is 66,682..67,583 live records.** The maximum stays lt1 13's 106,272, so the sizing is unchanged.
+
+## Bitstream 2 predictions: the capacity cells on the RTL-pinned twin (pre-registered 2026-10-22, before the runs)
+
+**What it predicts:** what the corpus's ten record-capacity cells (all lt1) and lt0 18 will read on bitstream 2
+(capstone-ariane `vp3-index18` 5d365d9a6, an 18-bit index on a flat table).
+
+**The kit:** qkit7-b2twin2-q8.
+- QEMU 708bbff5663f0e86: capstone-qemu `virtual/flat-index-18` 46b69c03a4, pinned to the RTL at d44c9441b.
+- Module 3325473537072a3a: capacity 262,144.
+- Everything else is qkit7-batch2's.
+
+**The images:** the batch recipe plus application mremap, and nothing else.
+- lt1 uses 8bcc40cf13731e12 and lt0 uses 7b871db70b7ec373, both relinked above.
+- The recipe is not a build from dev. Dev carries mremap (b439b7a267c3) but not the board recipe:
+  - `CAPSTONE_VIRTUAL_MOVC_KEEP=OFF` (8f132305eea1);
+  - the integers-first slot offsets (5620badda510);
+  - `CAPSTONE_SDK_EXTRA_CODEGEN` (5b3e6b7939af).
+  Dev's runtime has also moved past the batch runtime: a 2 GiB region limit, 8,192 arenas and the madvise change.
+- So the relink is the batch image with one change.
+
+**The runs:**
+- Every call of each cell (the case and its control or probe) gets its own boot, from the batch-refs-r60 session with
+  the image swapped. That is 20 boots on QEMU domains A and B.
+- Module stats accumulate over a boot, so one call per boot gives each call its own high_water and allocated_total.
+- Runner: `b2-pred/run-pred.sh`. Its parser was tested before any boot:
+  - it reads the gate's lt1 13 output correctly;
+  - it reports NO DATA, exit 2, on a two-call output and on a missing file.
+
+**The prediction, per call.** The reference is the paged kit's row in `capstone/tests/live-peak-sizing/cells.tsv`.
+- **Result class and fault site:** the same as the reference, with no cause 30 and no MemoryError in serial.
+  capacity reads 262,144.
+- **high_water:** inside the reference's live-peak bracket, widened by 300 either side. The gate read 106,271 and
+  106,197, one below the brackets' lower ends.
+- **allocated_total:** EXACTLY the reference's module count. The gate reproduced 281,516 and 280,614 on the batch image.
+  A difference means the call reaches the new mremap or the relinked layout matters; that cell's allocations are then
+  read again, and the result class still decides.
+- **lt1 18:** cause 28 in `mmap_ass_subscript`, high_water 66,424..67,024 (66,724 on the first twin, ±300). No
+  SystemError, and no exact allocation count is predicted.
+- **lt0 18:** cause 28 in `mmap_ass_subscript`, as on the batch kit; lt0 is not capacity-bound, so high_water stays
+  below 65,536.
+
+| call | result and site | high_water band | allocated_total |
+|---|---|---:|---:|
+| lt1 02 case | cause 28 `memcpy` | 105,898..106,795 | 280,614 |
+| lt1 02 control | exit 0 | 74,466..76,075 | 281,183 |
+| lt1 10 case | cause 28 `l_divmod` | 79,783..81,195 | 219,402 |
+| lt1 10 control | exit 0 | 79,790..81,195 | 220,865 |
+| lt1 13 case | cause 28 `unicode_fromformat_write_str` | 105,972..106,795 | 281,516 |
+| lt1 18 case | cause 28 `mmap_ass_subscript` | 66,424..67,024 | n/a |
+| lt1 19 case | cause 25 `fnv` | 64,877..65,835 | 174,939 |
+| lt1 19 probe | cause 25 `fnv` | 64,303..65,835 | 173,796 |
+| lt1 19 control | exit 0 | 64,390..65,835 | 177,214 |
+| lt1 23 case | cause 25 `memchr` | 74,672..76,075 | 267,453 |
+| lt1 23 control | exit 0 | 72,569..74,027 | 264,737 |
+| lt1 27 case | cause 25 `slot_nb_add` | 71,393..73,003 | 278,149 |
+| lt1 27 control | exit 0 | 71,465..73,003 | 281,162 |
+| lt1 28 case | cause 25 `_PyEval_Vector` | 76,206..77,099 | 313,843 |
+| lt1 28 control | exit 0 | 76,262..77,099 | 316,941 |
+| lt1 30 case | cause 25 `PyObject_RichCompare` | 76,229..77,099 | 314,758 |
+| lt1 30 control | exit 0 | 76,232..77,099 | 316,373 |
+| lt1 31 case | cause 25 `odict_copy` | 74,313..75,051 | 233,845 |
+| lt1 31 control | exit 0 | 82,064..83,243 | 348,197 |
+| lt0 18 case | cause 28 `mmap_ass_subscript` | below 65,536 | n/a |
+
+**What the board will add.** QEMU is the twin, not the silicon. On bitstream 2 a row predicts the board when the
+recipe's other gates hold, and the board batch carries the same images. A board row that differs from its twin row is a
+twin defect or a silicon defect, not a capacity reading.
