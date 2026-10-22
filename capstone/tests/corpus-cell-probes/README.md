@@ -303,3 +303,19 @@ arguments), for the prebuilt and for the edited copy.
 - **Caveat for the corpus owner:** on arms without a Sublet slot, a read canary can be 0 already, so the buggy run's NUL
   write would not show as `damage`. The corpus fix needs a nonzero sentinel that is not the slot, or a separate guard
   byte. This test does not settle that, only the slot clobber.
+
+### Bitstream 2 predictions: two exact counts missed, and the pair that separates the causes (pre-registered before its boots)
+
+Two of the 19 exact allocated_total predictions missed, both on control calls that complete:
+- lt1 30 control read 316,375 against 316,373 (+2);
+- lt1 31 control read 348,190 against 348,197 (−7).
+The paged kit read each of these calls in one boot only, so its count has never been repeated.
+
+**The pair:** each of the two control calls, on domain B (b2twin2-q8), two boots on the batch image 916e14f9 and two on
+the mremap image 8bcc40cf, interleaved.
+
+**The reading:**
+- The batch image reads the paged counts in both boots, and the mremap image reads today's counts in both: the relink
+  moves these calls' allocations.
+- Either image disagrees with itself across boots: the count is boot-nondeterministic for these calls, and the exact
+  prediction was wrong to assume otherwise.
