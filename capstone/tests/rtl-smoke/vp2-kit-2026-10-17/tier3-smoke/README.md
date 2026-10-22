@@ -7039,3 +7039,24 @@ Record: `records/uaf-repeat-mapped-b2.result-lines.txt`.
     object-revoked on tree B): every one refused with cause 25. None completed.**
   - Beside them, in the same two boots, the unchanged control read cause 13 in 13 of 400. Every 13 examined is a
     fault on an unmapped, retired address.
+
+### The batch bitstream c721c1a2a on BOARD 2 as well: reflash and first boots, pre-registered (2026-10-22 14:2x, before the flash)
+
+- **Authorisation:** the lead's own word in this session, 2026-10-22 14:1x: "a yes in this session for flashing board
+  2 too, after its retire check ends around 15:20. - yes, confirm" (and "the permission for the reflash launch - yes,
+  confirm").
+- **Order:** board 2's retire_verify arm (94000e799f82) finishes first, on tree B's bitstream, where its reading
+  belongs.
+- **The chain:** `board-tier12/batch/flash-and-first-b2.sh`. It is flash-and-first-b1.sh with board-2 substitutions
+  only (the diff is the board number, the URL file, the busy check, the wait file and the fallback name), dry-run in
+  `dryrun-flash-and-first-b2.txt`. It exports FPGA_BOARD=2 and board 2's URL file, which FpgaConsole cross-checks.
+  - Fallback: the console store must list `caplifive_vp2c_8de3c48cf.bit`, after store-has.py's own control.
+  - Kit: `make-batch-kit.sh 2`, which writes the new folder t3-smoke/bkit8-batch-b2.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/`, a new directory.
+- **Predictions: the same as board 1's** (the section above for board 1):
+  - the flash read-back names `caplifive_vp2c_c721c1a2a.bit`;
+  - s23-cpmp-rearm reads the batch vector (re-arm 1, total 14);
+  - Tier 1: b0-stats, b0-hello and vm-contract 0, sparse-churn completes, and the readings are 0;
+  - the vm-suite is graded per test against the QEMU 33/45.
+  - Board 2's reading is then the second tree's, and the two first-boot readings should agree. The bitstream and
+    the kit are the same, and only the board differs.
