@@ -1,0 +1,40 @@
+# tier3-pg-batch-arm.sh 109e90550c81c517 dry run, 2026-10-22 17:5x: the runner, its QEMU check, busy and the scoring stubbed (PG_SCORE: nothing filed); BUNDLE is the bundle the stub returns, SZ the measured firmware.
+== sql0-b1 rc=0
+PG MEASURE: firmware 25000000 B against 26000000
+T3PG dry-sql0-b1 BEGIN 17:56:54
+T3PG dry-sql0-b1 END 17:56:54 rc=0 :: --- stub: arm virtual-malloc image postgres-lt0
+PG inputs as recorded: fixture 956173e054762e91, image cf61cb4333d35cb6
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x0
+SCORE-STUB dry-sql0-b1 <mnt-hdd>/capstone/batch-refs-r60/ref-batch/sql0/bundle <scratch>/pgarm/r-sql0-b1 <scratch>/pgarm/sql0-b1.out
+PG DONE 17:56:54
+== pgpools-b1 rc=0
+PG MEASURE: firmware 25000000 B against 26000000
+T3PG dry-pgpools-b1 BEGIN 17:57:07
+T3PG dry-pgpools-b1 END 17:57:07 rc=0 :: --- stub: arm virtual-pg-pools image postgres-lt1
+PG inputs as recorded: fixture 956173e054762e91, image dc2a1356dce735e0
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x0
+SCORE-STUB dry-pgpools-b1 <mnt-hdd>/capstone/pgp-trim/bundle <scratch>/pgarm/r-pgpools-b1 <scratch>/pgarm/pgpools-b1.out
+PG DONE 17:57:07
+== badtag rc=2
+PG STOP: tag lt9
+== sql0-b2x rc=0
+PG MEASURE: firmware 25000000 B against 26000000
+T3PG dry-sql0-b2x BEGIN 17:57:39
+T3PG dry-sql0-b2x END 17:57:39 rc=0 :: --- stub: arm virtual-malloc image postgres-lt0
+PG inputs as recorded: fixture 956173e054762e91, image cf61cb4333d35cb6
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x0
+SCORE-STUB dry-sql0-b2x <mnt-hdd>/capstone/batch-refs-r60/ref-batch/sql0/bundle <scratch>/pgarm/r-sql0-b2x <scratch>/pgarm/sql0-b2x.out
+PG DONE 17:57:39
+== sql0-overx rc=1
+PG MEASURE: firmware 26500000 B against 26000000
+PG STOP: the measured firmware is not under the cap; no boot
+== wrongbundlex rc=1
+PG MEASURE: firmware 25000000 B against 26000000
+T3PG dry-wrongbundlex BEGIN 17:57:39
+T3PG dry-wrongbundlex END 17:57:39 rc=0 :: --- stub: arm virtual-malloc image postgres-lt0
+PG VOID: fixture record 956173e054762e91 (want 956173e054762e91), image dc2a1356dce735e0 (want cf61cb4333d35cb6)
+== busyx rc=1
+PG STOP: board 2 is busy

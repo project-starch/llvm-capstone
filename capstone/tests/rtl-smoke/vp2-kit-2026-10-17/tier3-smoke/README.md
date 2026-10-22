@@ -7397,3 +7397,32 @@ Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
     completes (vbatch END rc=0).
 - **What a miss would mean:** a differing cell on matched images is a silicon reading against the batch QEMU model. It
   is recorded beside its standing cell and not explained away. A differing IMAGE makes the cell VOID, not a reading.
+
+### postgres sql0 (lt0) on the batch bitstream, board 2 after its re-read: pre-registered (2026-10-22 18:0x, before the boot)
+
+- **Why:** the corpus pass's 25th arm. It needs the postgres sql path, not the re-read runner.
+- **What runs:** `tier3-pg-batch-arm.sh 2 <log> sql0`.
+  - It is tier3-pg-batch.sh generalised to an arm tag, in a new file because pg-pools runs from the original. The
+    pg-pools tag runs that file's checks unchanged.
+  - For sql0: `--arm virtual-malloc`, image t3-nomovc-r60/postgres-lt0 (cf61cb4333d35cb6), the trimmed fixture
+    (956173e054762e91) and share, and dev's runner 7ce203f9 with its QEMU PASS.
+  - The measure-only bake goes first, on board 2's new measure-only batch kit `bkit8-batch-mb2` (make-batch-kit.sh
+    MK_M=1, the same three changes on bkit7-rev2xmBDN2). There is no boot unless the firmware is under 26,000,000 B.
+  - The reference is the compiler lane's `batch-refs-r60/ref-batch/sql0/bundle`, on qkit7-batch2. Its stamp reads
+    runner 7ce203f9 and image cf61cb43, with SWITCHES movc_null_scalar=OFF ... generations=ON. It read CAUGHT 2 and
+    MISSED 7, MOVE 0 against both the tB-mimic reference and r1.
+  - Scored by score-arm.sh (compare-pilot) into a NEW results directory,
+    `results/2026-10-22-batch-c721c1a2a-b2/vp2-malloc-nomovc`, and records/batch-sql0-b2.board.txt.
+  - It starts when board 2's re-read sequence ends (RR seq-2 DONE, STOP or HOLD).
+- **Dry run** (`dryrun-pg-batch-arm.txt`):
+  - sql0 boots and scores on both boards, and pg-pools still does on board 1;
+  - over the cap it stops before any boot;
+  - a bundle with another image is VOID;
+  - a busy board and an unknown tag refuse.
+- **Predictions:**
+  - the firmware is under the cap;
+  - the bundle records fixture 956173e054762e91 and image cf61cb43;
+  - no directory-open FATAL, and the positive control answered;
+  - **compare-pilot against ref-batch/sql0/bundle: 9 of 9 cells the same (CAUGHT 2, MISSED 7)**;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped 0.
+  - With lt0 and the 23 re-read arms, this completes the 25 arms, 346 cells, on c721c1a2a.
