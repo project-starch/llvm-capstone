@@ -90,3 +90,42 @@ the RTL cost is two bits per site.
 **One decision for the lead:** A at 18 bits + the three owed items is the small bitstream (two days of RTL, one synthesis
 pair). Adding S-21/S-22 makes it the large one (a switcher revision, a week, its own QEMU twin). The first boot's readings
 (s23 vector, r8..r11, the 2 % cause) come before either is cut, because each can add or remove a row above.
+
+## 2026-10-23: bitstream 2 cut and handed to synthesis (the lead's go, relayed by the semantics owner; S-21/S-22 out)
+
+**Hash:** capstone-ariane `vp3-index18` at `5d365d9a6`, base `c721c1a2a` (the batch). The synthesizable content is
+`d44c9441b`; the tip adds comments and an `ifdef SUP_TRACE` block. **Content:** option A at 18 bits -- ids are
+{generation[29:18], index[17:0]} in BOTH namespaces (the semantics owner's ruling: one format, the physical pool's
+generation shrinking to 12 bits and retiring at 4,095, no second struct), the record ABI word 1 = parent [47:30],
+generation [59:48], record size unchanged, the header views saturating at 262,144, every index-only compare at 18 bits
+(LSU cache, PC tracker, CPMP trackers, the unit's masks, the probe channel, the DYN CSRETIRE bound), the pool record's
+own encoding re-sliced; plus item 4's predicate narrowed to its six exponent bits (the two UNUSEDSIGNAL names gone).
+
+**Gates, in the order the process names:**
+- lint on `5d365d9a6`: PASS, every counter at the batch's baseline, UNUSEDSIGNAL 1426 → 1424, the 40 loop names identical;
+- the 95-test sweep on `d44c9441b` (prologue-stamped, clean): 92 identical on exceptions, readings and retired count
+  against the batch tip's own sweep and against the c7e6f604f baseline, 0 differ, 3 missing on both sides (the random
+  arms);
+- the claim-auditor: every pack re-derived bit by bit against the regenerated unit and the read decode (table and pool),
+  no missed site in `core/`, no signal into any of the 40 loop cones, the QEMU twin's ABI constants agreeing
+  (capstone-qemu `virtual/flat-index-18`, GEN_SHIFT 48, GEN_MASK 0xfff, PARENT_SHIFT 30, FLAT_PARENT_MASK 0x3ffff,
+  ID_GEN_SHIFT 18); its findings closed: the physical pool's shared generation (ruled), the stale layout comments (fixed);
+- acceptance in simulation (`vp3-idx18.S`, three arms on a 4 MiB table): an allocation past 65,535 round-trips (ancestor
+  id 0x10001, a record whose 18-bit parent field reads 0x10001, CSRETIRE accepted with the run pushed, free list
+  {65536, 2}, next-unused 0x10002); a record at generation 4,094 pops as 4,095 and its CREVOKE retires it (dead, not
+  FREE, the next derive bumps); stale ids refused above 2^16 ({0,70000} against a record at 1) and accepted with the
+  current generation, the same pair at 300; the R-12 recycle witnesses, three of them registered for the first time, read
+  262147/262150, 524291/524294 and 6/262147/7; `r12-recl-cpmp` reads 262147 with its seven CPMP deltas and count 4
+  unchanged; item 4's readings on the narrowed predicate are identical to the batch tip's by the same extraction;
+  the SEALEDRET negative (`r60-sealedret.S`, a CALLed domain's parked return capability moved 1 MiB) stays silent while
+  its LINEAR control fires once and packs a nulled result (a sim-only `SUP r60 FIRE` trace line records every fire).
+
+**Pre-registered for the synthesis-only size gate** (the synth lane's method, with a control that re-finds item 4's
+275 LUT + 40 CARRY4 on the base): mapping in the batch's class; the change's own exclusive cone within a few hundred LUT
+of the base's either way; the ex+issue stem (base 87,162 LUT) and the core (base 154,409) inside ±2,500 / ±2,000;
+the 40 synthesis-stage loops unchanged by distinct cut; routed WNS inside the null band of −18.529.
+
+**Owed and NOT in this hash:** the "stale fault-site variants" named in the owed list have no specification anywhere in
+the docs or the plans beyond that phrase; they were not invented, and they wait for the lead or the semantics owner to
+name them. The silicon vectors that print ids move with the split and get bitstream-2 pre-registrations by the
+recorder's count once the hash is built (`va-alloc-bare`'s 0x10004/0x20004 become 0x40004/0x80004).
