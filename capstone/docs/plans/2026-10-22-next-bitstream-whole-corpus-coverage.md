@@ -205,12 +205,12 @@ The causes below are what the records show. "Not investigated" means exactly tha
 
 | corpus | cases | why there is no batch arm |
 |---|---:|---|
-| ffmpeg/plane-repros | 1 | (2026-10-22: batch-kit QEMU references for both vp2 arms on `compiler/plane-virtual` 32f334d52471, libavutil rebuilt on the batch recipe; both MISSED with every control as pre-registered at 878fcf649efe.) No virtual arm on dev: `bug-corpora/tools/run-virtual-cases.py:66` lists four FFmpeg corpora and not this one. A virtual run exists on the unlanded branch `plane-virtual-carve` (b03dc5ebd1eb pre-registration, 0512bd175160 result): both arms MISSED as predicted, and the carve's bound and revocation controls fired in the same boot. The read lands inside upstream's own plane extent. (Corrected 2026-10-22: the first version said FFmpeg's corpora ran on the classic line, yet five of them have vp2 virtual results.) |
+| ffmpeg/plane-repros | 1 | (2026-10-22: landed on dev at fd8c28583642, with the batch-kit QEMU references for both vp2 arms (lane `compiler/plane-virtual` 32f334d52471), libavutil rebuilt on the batch recipe; both MISSED with every control as pre-registered at 878fcf649efe.) No virtual arm on dev: `bug-corpora/tools/run-virtual-cases.py:66` lists four FFmpeg corpora and not this one. A virtual run exists on the unlanded branch `plane-virtual-carve` (b03dc5ebd1eb pre-registration, 0512bd175160 result): both arms MISSED as predicted, and the carve's bound and revocation controls fired in the same boot. The read lands inside upstream's own plane extent. (Corrected 2026-10-22: the first version said FFmpeg's corpora ran on the classic line, yet five of them have vp2 virtual results.) |
 | httpd/apr-pool-repros | 1 | PAUSED in the 2026-10-16 board campaign plan: it needs a new physical-profile kind, and APR's lend API was never moved to CDERIVE/CREVOKE. |
 | httpd/bucket-repros | 8 | PAUSED, with apr-pool. |
-| sqlite/capi-repros | 19 | Needs a port. Its only required arm is host ASan. |
-| xlang/repro | 15 | Needs a port: shim domains on the old domain interface. |
-| xlang/lua-cdp | 13 | The same. |
+| sqlite/capi-repros | 19 | (2026-10-22: a virtual-malloc arm on dev 75e077151800, path-independent images at 76054751cd4c; reference run 3 reads CAUGHT 12 and 7 out-of-denominator by the lead's decisions below; vp2-malloc queued on the board.) Before that it needed a port; its only required arm was host ASan. |
+| xlang/repro | 15 | (2026-10-22: a virtual-malloc arm on dev da4cb338b37f / 76054751cd4c: CAUGHT 3, MISSED 1 (the stack use-after-return), the 11 mruby rows out of the denominator by the lead's decision; vp2-malloc queued.) Before that it needed a port: shim domains on the old domain interface. |
+| xlang/lua-cdp | 13 | (2026-10-22: the same arm, CAUGHT 13.) Before that, the same. |
 | xlang/reuse-not-free | 2 | No Capstone column is defined. |
 | mruby/gc-slot-repros, xlang/toctou-double-fetch | 0 | Nothing to run. |
 | Juliet spatial, beyond the 755-case sample | the rest of the census | Only the stratified sample (every functional variant of CWE 121/122/124/126/127, at three flow roles) ran on silicon. |
