@@ -178,3 +178,81 @@ are type-gated at 26 on a non-linear stale child, and their stale halves are `r1
 
 **`va-alloc-bare`'s bitstream-2 vector is pre-registered** in its `PREREG.md`, cut from the kit's own frozen source on
 the bitstream-2 RTL by the recorder's count: it differs from the batch vector at positions 1, 3, 11 and 15 only.
+
+## 2026-10-24: the full build FAILED in routing; attributed to the csr_regfile/tracer window; candidate 68d0ffaf8 drops the tracer
+
+**The failure.** `route_design` on `5d365d9a6` stopped at initial routing after 8 minutes: "Design is not routable",
+global congestion level 6 against the batch's 5 (max by direction North 86.9 → 100.0 %, South 86.0 → 118.2 %, East
+85.8 → 95.4 %, West 85.7 → 107.5 %; congested regions 8×8–16×16 → 16×16–32×32). Exit 2 after 1 h 41 m, peak 22.29 GB.
+Not memory, not a loop, not a DRC. No bitstream and **no WNS**: the pre-route estimate (−18.003) is not a result. Placed
+utilization was NOT larger than the batch's: LUT 178,543 against 178,606, FF 96,511 against 96,614, slices 50,142
+(98.41 %) against 50,869 (99.84 %). This is the second routing failure at this size with flat utilization (attribution
+build A, 2026-10-18, was the first; a hierarchy re-homing alone tipped it). The gate keys stand: they are synthesis-stage
+readings. **What this pre-registration lacked and the next one carries:** the failure branch (if routing fails, the graded
+readings are the placed area, the gate keys and the congestion census; WNS is none).
+
+**The attribution** (synth lane, read-only on both PLACED checkpoints, the batch's as control, 0 ERROR; the retry
+question settled first: no observed placement variation from identical inputs on that host, and the flow is designed to
+reproduce, so an unchanged re-run is a repeat, not a sample):
+
+| reading | batch | 5d365d9a6 |
+|---|---|---|
+| `report_design_analysis -congestion` | no window above level 5 | North Global level 5 at 103 %, CLBLM X46–77 Y276–310: `csr_regfile_i` 43 %, `i_tracer` 25 %, `i_tracer/i_uart_byte_tx` 10 % |
+| hot window INT X32–63 / Y222–349, cells / LUT / pins | 48,894 / 26,363 / 282,179 | 51,323 / 29,898 / 299,876 |
+| largest in-window gains (cells) | — | `csr_regfile_i` +3,227 (pins 75k → 95k), scoreboard +1,915, `pmp_data_if` +942 (234 → 1,176), `dyn_unit` +323 |
+| largest in-window losses | — | FP regfile −2,610, `uart_byte_tx` −743, `i_tracer` −629, `dom_switcher` −512 |
+| `cpmp_tracked_revnode_id*` cells, window / design | 322 / 853 | 730 / 829 (moved in, not grown) |
+| `rvc_*` cells, window / design | 0 / 3,189 | 0 / 3,426 |
+| `revnode_*_id` cells, window / design | 0 / 203 | 0 / 205 |
+| `r60_*`, `cursor_outside_window*` | 0 / 0 (do not survive synthesis) | 0 / 0 |
+| POS control `fu_data_q*` in window; NEG control | 6,654; 0 | 5,488; 0 |
+| `revnode_invalidation_id` loads in window | 96 | 288 (= 16 CPMP entries × 18 bits: all of `pmp_data_if`'s compare inputs) |
+| `csr_regfile_i` combinational cells (synth checkpoints) | 33,928 | 35,704; the `stc_lsu_ex*` cone +1,628 in csr / −431 in ex_stage, a re-homing the diff never touches |
+
+So **the index cells and item 4 are not in the congestion**. The local densification is `csr_regfile_i` plus `pmp_data_if`'s
+CPMP invalidation compares pulled wholesale into the csr/tracer window; the RTL reason is that the compare reads the
+post-adopt id (R-38 Stage 0, `pmp_data_if.sv:120`), a mux fed straight from `csr_regfile`'s `cpmp_q`, so its cells want to
+sit beside `cpmp_q`, and widening it from 16 to 18 bits reads 32 more `cpmp_q` bits. On the RTL side the three rev-node id
+buses are 30-bit nets at their source on both trees (the split changed which bits 26 compare sites read), `csr_regfile.sv`
+is unchanged and instantiates nothing, and `pmp_data_if` is under `load_store_unit`.
+
+**The lever, and why it is the tracer.** `i_tracer` (`core/tracer.sv`, instantiated unconditionally at `cva6.sv:998`)
+is 9,319 LUT and 32,849 FF, 6 % of the core's LUTs and **44 % of its flip-flops**: its 256 × 128-bit ring is built from
+registers (written inside the async-reset block, read combinationally with a byte select), with an 8,790-LUT read-out mux
+in `i_uart_byte_tx`. It is 35 % of the congested sub-window. The board lane read its drivers and 158 vp2-era driver logs:
+no tracer function has been used since vp2 (no dump; the drivers forbid `trace_dump` on a wedged core; the switches are
+parked at 0 because sw[0] takes the console TX and sw[1] arms the dump), and every graded reading, the trap log, the mepc
+bank, the wedge apertures, the commit-pc taps and every monitor line, goes through the LED aperture mux or the 16550. Its
+two conditions hold at the source: CSR 0x800 (the monitor's C_PRINT, executed on every `capstone_report`) stays a legal
+write, accepted in `csr_regfile.sv:3154-3159` with nothing consuming the strobe; and `uart_debug_tx_o` is driven by the
+debug printer alone. The alternative of registering the CPMP compare one cycle later is a semantics change (an
+integer-mode access authorised by a CPMP entry has no other revocation gate); the semantics owner ruled it acceptable only
+with a per-op commit-ordering proof and directed arms, and at ~1k cells against the tracer's tens of thousands it is
+second-order and deferred.
+
+**Candidate `68d0ffaf8`** (lane branch `vp3-notracer`, from the bitstream-2 branch): `core/` equals `5d365d9a6` plus one
+file, `cva6.sv` +19 lines: the tracer instance under `` `ifdef CAPSTONE_TRACER `` (off by default), `tracer_uart_tx` tied
+to 1 (idle), `trace_buf_empty` tied to 1 (the board drivers DO read that bit: wedge aperture 225 = bank 3'b111 reg
+5'b00001, bit 7; on a tracer-less bitstream it reads a constant 1 and carries no information, and the board lane annotates
+its label at the flash; its first boot adds a monitor report site printing as the positive control that `csrw 0x800`
+still retires without a trap), the console mux reduced to the debug
+printer; the watchpoint compare that fed only the tracer is left for synthesis to prune. Gates on that hash, every run
+through the Anvil prologue with `rtl_dirty=no`:
+
+- lint: PASS; every counter at the batch's baseline except UNUSEDSIGNAL 1424 → 1431 (seven named wires in `cva6.sv`, all
+  consumed only by the tracer) and LATCH 52 → 44 (eight inferred latches, all inside `tracer.sv`); the baseline is re-based
+  to 1431 and tightened to 44; UNOPTFLAT 40 with identical names;
+- the 95-test sweep: 92 identical, 0 differ, 3 absent on both sides, against the batch tip's sweep and against
+  `c7e6f604f`'s, the same result `5d365d9a6` gave;
+- the three acceptance arms, the SEALEDRET pair (control fires once, arm never), `va-alloc-csret` and the frozen kit's
+  source: every value identical to the pre-registered readings, so `va-alloc-bare`'s bitstream-2 vector above transfers
+  to this hash unchanged;
+- the simulated model proven tracer-less by artifact (82 of 86 objects rebuilt after the edit; the generated root carries
+  no `cva6__DOT__i_tracer__DOT__*` and no `trace_buf`, while the testbench's `i_rvfi_tracer__DOT__*` state is present as
+  the control that an instantiated stateful module does appear).
+
+**Pre-registered for its build:** `report_design_analysis -congestion` with no window above level 5 (the batch's reading);
+placed FF down by ~32,000 and LUT by ~9,000 against `5d365d9a6`'s placed checkpoint; routed WNS inside the null band of
+−18.529; the one TIMING-23 arc unchanged. **If routing fails:** the graded readings are the placed area, the gate keys and
+the window census against `5d365d9a6`'s placed checkpoint; WNS is none. Dropping the tracer is a design decision: the hash
+goes to synthesis on the lead's word, and the flow's settings stay as they are.
