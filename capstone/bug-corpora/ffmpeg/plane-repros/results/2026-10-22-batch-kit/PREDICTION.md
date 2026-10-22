@@ -29,3 +29,17 @@ PostgreSQL images.
   - The carve's bound and revocation both fire in their controls, so the miss is the case's row staying inside the
     alpha plane's allocated extent, as on 2026-10-13.
 - **Any difference names the recipe change:** library, SDK, kit or runner.
+
+## Result (2026-10-22 18:01-18:05, qkit7-batch2, QEMU domain B): every pre-registered reading holds
+
+Stamp: runner 1de34fdf0c1cafa7 at 878fcf649efe (clean), QEMU ecaf50bbd5ec44aa, module a05c198bfcc5f55c, libavutil.a
+b52edba5f06c1936, sdk.json f5145cbb88dde6b5.
+
+| arm | verdict | reading | controls |
+|---|---|---|---|
+| virtual-malloc | MISSED | reached (VERDICT DEFECT-REPRODUCED), completed with no fault | bounds-malloc fault, uaf-malloc fault |
+| virtual-nested-pools | MISSED | reached (VERDICT DEFECT-REPRODUCED), completed with no fault | bounds-malloc fault, uaf-malloc fault, plane-live complete, plane-bound fault, plane-free fault |
+
+The bundles are in `virtual-malloc/` and `virtual-nested-pools/` here, with local paths written as `/mnt/hdd/<user>/`.
+They are the references the vp2 arms' board runs are graded against. `corpus.json`'s verdict_bundles still name the
+2026-10-13 runs as the arms' evidence. The two readings agree cell for cell.
