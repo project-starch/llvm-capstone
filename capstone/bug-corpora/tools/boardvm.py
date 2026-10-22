@@ -39,6 +39,23 @@ STEP_MULT = 20     # a board step's bound: its runner's limit times this, unless
 RUNG = "vbatch"
 FILES = ("board.env", "board-run.sh", "adapter/capstone-vexec", "adapter/module/capstone_vm.ko")
 HEARTBEAT_S = 30
+TAIL_B = 240       # the running step's last bytes each heartbeat carries, base64 (decoded into a step with no END)
+BOOT_MARGIN_S = 300  # the boot timeout minus this is the script's own budget: a step's bound never outlives the boot
+CLAMP_MARGIN_S = 60  # a clamped bound ends this long before the budget, so the step's output and END still print
+CLAMP_MIN_S = 30     # and never falls below this, so a late step still gets a run
+
+
+def last_tail(text):
+    """The decoded output tail of the LAST heartbeat in a step's text, or None if no heartbeat carried one."""
+    import base64
+    import re
+    tails = re.findall(r"^@@HB \d+ out=\S* tail=([A-Za-z0-9+/=]*)\s*$", text, re.M)
+    if not tails or not tails[-1]:
+        return None
+    try:
+        return base64.b64decode(tails[-1]).decode("utf-8", "replace")
+    except ValueError:
+        return None
 
 
 def platform(kit, compiler, runner):
@@ -171,12 +188,16 @@ class BoardBatch(virtualvm.Batch):
                  'grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }',
                  "chmod 666 /dev/capstone-vm",
                  MODTEXT_LINE, STALL_FN,
-                 "export CAPSTONE_EXEC_DIAGNOSTICS=1"] + virtualvm.param_lines(self.params) + [
+                 "export CAPSTONE_EXEC_DIAGNOSTICS=1", "t0=$(date +%s)"] + virtualvm.param_lines(self.params) + [
                  # The heartbeat carries the running step's output size, bytes and lines: a step's output is printed only
                  # when it ends, so without it a step that runs for hours shows nothing of where it is (mruby's smoke,
-                 # 2026-10-21, 153 min). Sizes only, never the text, so no observe() can count a line twice.
+                 # 2026-10-21, 153 min). Sizes, plus the output's last TAIL_B bytes in base64: base64 so no observe() can
+                 # match or count a line of it twice, and the tail so a step the boot ends before its END still shows
+                 # where it was (cpython lt1 step 21, 2026-10-22: 458 lines never reached the transcript). execute()
+                 # decodes the last one into such a step's text.
                  f"( i=0; while [ $i -lt 2000 ]; do sleep {HEARTBEAT_S}; i=$((i+1)); "
-                 "echo \"@@HB $i out=$(wc -c < /tmp/step.out 2>/dev/null)B/$(wc -l < /tmp/step.out 2>/dev/null)L\"; "
+                 "echo \"@@HB $i out=$(wc -c < /tmp/step.out 2>/dev/null)B/$(wc -l < /tmp/step.out 2>/dev/null)L "
+                 f"tail=$(tail -c {TAIL_B} /tmp/step.out 2>/dev/null | base64 | tr -d '\\n')\"; "
                  "done ) & hb=$!"]
         for name, command in self.steps:
             bound = self.bounds.get(name)
@@ -185,10 +206,16 @@ class BoardBatch(virtualvm.Batch):
                 # bound and says so (@@STEP-BOUND, which split() reads as a timeout). The step runs in the background,
                 # so its stdin is /dev/null.
                 b = int(bound * mult)
-                lines += ["rm -f /tmp/stall.out", f"echo '{virtualvm.BEGIN}{name}'",
+                # The bound never outlives the boot: a step still running when the boot times out never prints its
+                # output (cat runs after the kill), so the bound is clamped to what is left of the script's budget
+                # (the boot timeout minus BOOT_MARGIN_S, counted from the script's start), never below 30 s.
+                budget = getattr(self, "budget", None)
+                clamp = ([f"b=$(( {budget} - ($(date +%s) - t0) - {CLAMP_MARGIN_S} ))", f"[ $b -gt {b} ] && b={b}",
+                          f"[ $b -lt {CLAMP_MIN_S} ] && b={CLAMP_MIN_S}"] if budget else [f"b={b}"])
+                lines += ["rm -f /tmp/stall.out"] + clamp + [f"echo '{virtualvm.BEGIN}{name}'",
                           f"( {command} ) > /tmp/step.out 2>&1 & sp=$!",
-                          f"( sleep {b}; stall $sp > /tmp/stall.out 2>&1; "
-                          f"kill -9 $sp 2>/dev/null && echo '{virtualvm.BOUND}{name} {b}' ) & wp=$!",
+                          f"( sleep $b; stall $sp > /tmp/stall.out 2>&1; "
+                          f"kill -9 $sp 2>/dev/null && echo \"{virtualvm.BOUND}{name} $b\" ) & wp=$!",
                           "wait $sp; rc=$?", "kill $wp 2>/dev/null",
                           "cat /tmp/step.out", f"echo \"{virtualvm.END}{name} $rc\"",
                           # After a kill at the bound: what the step looked like before the kill (STALL_FN), then the
@@ -226,6 +253,7 @@ class BoardBatch(virtualvm.Batch):
         shutil.copy2(kit / "adapter/module/capstone_vm.ko", self.stage / "capstone_vm.ko")
         self.params = virtualvm.module_params(kit)
         self.step_mult = float(read_env(kit / "board.env").get("BOARD_STEP_MULT", STEP_MULT))
+        self.budget = int(timeout) - BOOT_MARGIN_S if timeout and int(timeout) > BOOT_MARGIN_S + 60 else None
         (self.stage / "gate.sh").write_text(self.script())
         (self.stage / "ctl.sh").write_text(self.controller())
         (self.stage / "ctl.sh").chmod(0o755)
@@ -246,4 +274,10 @@ class BoardBatch(virtualvm.Batch):
             return {}, transcript, False
         virtualvm.check_params(self.params, seg.replace("\r\n", "\n"))
         steps = virtualvm.split(seg.replace("\r\n", "\n"))
+        for name, (text, result) in list(steps.items()):
+            if result.get("kind") == "none":
+                tail = last_tail(text)
+                if tail is not None:
+                    steps[name] = (text + "[runner] LAST-HEARTBEAT-TAIL (the step's last output, decoded):\n" + tail
+                                   + ("" if tail.endswith("\n") else "\n"), result)
         return steps, transcript, ran and ended and "VIRTUAL_STAGED_DONE" in seg

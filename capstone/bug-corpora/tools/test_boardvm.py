@@ -154,11 +154,66 @@ def bound_checks(root):
              and "@@STALL slow mod 2 " in out
              and out.index("@@STEP-END slow") < out.index("@@STALL slow")
              and "@@STALL" not in steps.get("slow", ("", {}))[0]),
+            ("the heartbeat carries the running step's output tail, base64, decodable from the step's text",
+             "tail=" in out and "started" in (boardvm.last_tail(steps.get("slow", ("", {}))[0]) or "")),
+            ("the heartbeat's tail is base64 only: no step output line appears on an @@HB line",
+             not any(l.startswith("@@HB") and ("started" in l or "hi" in l.split("tail=")[0]) for l in out.splitlines())),
             ("a capture whose escape switch cannot be set says so (no module on this host)",
              "@@STALL slow escapes UNSET" in out),
             ("no @@STALL for a step that ended before its bound, and a stale capture never prints",
              "@@STALL fast" not in out and "@@STALL after" not in out and "STALE" not in out
              and "@@STEP-END selfkill 137" in out)]
+
+
+def clamp_checks(root):
+    """The bound never outlives the boot: with a budget, a step's bound is clamped to what is left of it (ash, live).
+    Negative control: the same step without a budget runs to its own bound."""
+    ash = shutil.which("busybox")
+    if not ash:
+        return [("clamped bounds: NO DATA, no busybox on this host (never a pass)", False)]
+    saved = boardvm.CLAMP_MARGIN_S, boardvm.CLAMP_MIN_S
+    boardvm.CLAMP_MARGIN_S, boardvm.CLAMP_MIN_S = 0, 1
+    try:
+        outs = {}
+        for label, budget in (("clamped", 4), ("unclamped", None)):
+            b = boardvm.BoardBatch(Path(root) / f"cstage-{label}")
+            b.step("early", "echo early")
+            b.step("late", "echo late-started; /bin/sleep 20; echo never")
+            b.bounds = {"early": 30, "late": 8}
+            b.params, b.step_mult, b.budget = [], 1, budget
+            body = "\n".join(l for l in b.script().splitlines()
+                             if not l.startswith(("cd /test-domains", "dmesg", "grep -q", "chmod", "echo \"@@MODTEXT", "rmmod")))
+            t = __import__("time").time()
+            out = subprocess.run([ash, "sh", "-c", body.replace("sleep 30;", "sleep 1;")], capture_output=True,
+                                 text=True, timeout=60, cwd=root).stdout
+            outs[label] = (out, __import__("time").time() - t, virtualvm.split(out))
+    finally:
+        boardvm.CLAMP_MARGIN_S, boardvm.CLAMP_MIN_S = saved
+    c_out, c_t, c_steps = outs["clamped"]
+    u_out, u_t, u_steps = outs["unclamped"]
+    m = re.search(r"@@STEP-BOUND late (\d+)", c_out)
+    return [("clamped: the late step is killed at what is left of the budget, not its own bound",
+             m is not None and int(m.group(1)) <= 4 and c_steps.get("late", ("", {}))[1] == {"kind": "none"}
+             and "late-started" in c_steps["late"][0]),
+            ("clamped: the step before it still reads", c_steps.get("early", ("", {}))[1] == {"kind": "exit", "value": 0}),
+            ("unclamped control: without a budget the same step runs to its own bound (8)",
+             "@@STEP-BOUND late 8" in u_out and u_t > c_t + 2)]
+
+
+def tail_checks(root):
+    """A step the boot ended before its END gets its last heartbeat's tail decoded into its text; an ended step does
+    not. Through execute() on a stub transcript."""
+    import base64
+    tail = base64.b64encode(b"region add slot 285\npartial").decode()
+    body = ("@@STEP-BEGIN control-clean\nok\n@@STEP-END control-clean 0\n"
+            "@@STEP-BEGIN 01_case-buggy\nline 1\n@@HB 1 out=10B/1L tail=\n"
+            f"@@HB 2 out=40B/2L tail={tail}\n")
+    _, (steps, _, _) = run(seg(1, 1, "vbatch", body), root)
+    t = steps.get("01_case-buggy", ("", {}))[0]
+    return [("a step with no END gets its last heartbeat's tail, decoded",
+             "[runner] LAST-HEARTBEAT-TAIL" in t and "region add slot 285\npartial" in t),
+            ("an ended step gets no tail", "LAST-HEARTBEAT-TAIL" not in steps.get("control-clean", ("", {}))[0]),
+            ("an empty tail decodes to nothing (the earlier heartbeat)", boardvm.last_tail("@@HB 1 out=0B/0L tail=\n") is None)]
 
 
 def main():
@@ -224,6 +279,8 @@ def main():
                                                                  "fault": steps["01_case-buggy"][1].get("fault")}
                     and steps["01_case-buggy"][1].get("fault"))]
         checks += bound_checks(root)
+        checks += clamp_checks(root)
+        checks += tail_checks(root)
         p = boardvm.platform(kit_dir, None, Path(__file__))
         checks += [("the qemu key names the board", p["qemu"] == "board:caplifive_vp2_bf3db3175"),
                    ("the monitor is recorded", p["monitor"] == "007d81d")]
