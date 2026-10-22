@@ -82,5 +82,41 @@ whether the SystemError is the record limit surfacing as an allocation that fail
 **Every pre-registered reading holds.** lt1 18 is a record-capacity cell, the tenth: the 64,001-record flat table
 refuses an allocation during the test's imports, and CPython reports it as `SystemError: error return without
 exception set`, not as MemoryError. Its live peak up to the mremap blocker is 67,875..68,607. With mremap in the
-image, the defect runs further, so that is a lower bound on the cell's demand. It is far below lt1 13's 106,272, so
+image, the defect runs further, so that is a lower bound on the cell's demand. (RETRACTED in the next section: it
+is not a lower bound. The full run peaks lower, at 66,682..67,583.) It is far below lt1 13's 106,272, so
 the index sizing is unchanged.
+
+## lt1 18's full demand, with application mremap (pre-registered 2026-10-22, before its runs)
+
+**The image:** cpython-lt1 relinked as lt0 was (t3-mremap/relink.sh, ARM=lt1), with `mapping.c.obj` 4340ce84 (the
+mremap now on dev at b439b7a267c3). The control relink with the original archive reproduces 74f5c610bee6f468 and
+916e14f9b3f622c9 byte for byte. New images: base c3891354cf7fafc9, `-dl` 8bcc40cf13731e12.
+
+**The runs:** one boot each on qkit7-b2twin-q8 (the 18-bit table) and qkit7-batch2-paged-lp (uncapped, live-peak
+counters). Each boot runs case 18 on the new image, then case 18 on the batch image as the same-boot control.
+
+**The prediction:**
+- **Batch image:** `OSError: [Errno 38]` at the resize, as in 588cfd615ff6.
+- **New image:** the resize succeeds, and the defect's write faults in `mmap_ass_subscript` or `safe_byte_copy`,
+  with cause 28 (as lt0 read) or 25.
+  - On q8, high_water is at least 64,016 and no SystemError appears.
+  - On paged-lp, the live peak is between 67,875 and 70,000: the work after the resize is one item assignment.
+- **The sizing maximum stays lt1 13's 106,272.**
+
+**Result** (2026-10-22 15:37, one boot per kit):
+
+| kit | image | reading | module high_water | QEMU live peak |
+|---|---|---|---:|---:|
+| b2twin-q8 | mremap 8bcc40cf | cause 28 in `mmap_ass_subscript` | 66,724 | n/a |
+| b2twin-q8 | batch 916e14f9 | `OSError: [Errno 38]`, exit 1 | 67,926 | n/a |
+| batch2-paged-lp | mremap 8bcc40cf | cause 28 in `mmap_ass_subscript` | (paged count) | 66,682..67,583 |
+| batch2-paged-lp | batch 916e14f9 | `OSError: [Errno 38]`, exit 1 | (paged count) | 67,886..68,607 |
+
+- **HELD:** with mremap the defect runs and faults at a declared site with cause 28, on both kits. The batch image
+  raises OSError 38. There is no SystemError on the 18-bit table.
+- **NOT HELD: the peak band [67,875, 70,000].** The full run peaks at 66,682..67,583, below it.
+  - The band rested on my claim that the stopped run's peak was a LOWER bound on the cell's demand. It is not. The
+    batch image's failed resize takes CPython's error path (the exception, its traceback, unittest's error report),
+    which allocates more than the defect path does. Its 67,886..68,607 is that path's peak, not a part of the cell's.
+  - That claim reached dev at edcc82c79912 and is retracted there.
+- **lt1 18's demand is 66,682..67,583 live records.** The maximum stays lt1 13's 106,272, so the sizing is unchanged.
