@@ -1278,3 +1278,40 @@ is graded by that PREREG: VOID unless SR 25, a0 0x80800000 and Q1 0; the one unk
 - the sweep's one timing shift, `r31-revoke-cursor` +1 cycle at 4 of 7 prints with every value identical and
   parked on both sides, is item 6's accepted cost (the generation push on the REVOKE path), confirmed at the
   REVOKE commit (pc 0x6e, commit #35) — not a regression.
+
+## 2026-10-23: the batch bitstream SEALED and its first boot PASSED the pre-registered instrument
+
+**Sealed by the synth lane (c721c1a2a, exit 0, 2h27m, flow peak 21.87 GB):** `caplifive_vp2c_c721c1a2a.bit`, sha256
+8f4a486f2c9650412016e66d711af1ca8e0b003d2ac9a202a00f0d075b85ed6e, 11,443,722 B; collection tarball
+synth-c721c1a2a-exit0.tar.gz sha256 3b25d900ee590f3ee34279c82b79200db54dd5ece0f6efe34afdb35f4635ab8e.
+
+| | run A (f08906b78) | batch (c721c1a2a) | resident vp2 (bf3db3175) |
+|---|---|---|---|
+| routed WNS | −17.936 | −18.529 | −19.019 |
+| TNS / failing endpoints | −1,120,284 / 101,762 of 259,975 | −1,081,903.6 / 102,171 of 259,555 | — |
+| WHS | +0.050 | +0.046, 0 failing | — |
+| LUTLP-1 / TIMING-23 | 0 / one arc (lsu_bypass cap_clear_addr_q[55]) | 0 / the same arc | — |
+| post-route TOP LUT / FF | 179,179 / 96,876 | 178,625 / 96,614 | — |
+| i_cva6 | 154,128 / 74,652 | 153,597 / 74,390 | — |
+| ex_stage + issue_stage | — | −1,053 LUT / −150 FF against A | — |
+
+Every bitstream flashed on this design sealed with negative WNS at this constraint; the batch is 0.49 ns BETTER than the
+one in service and 0.59 ns worse than run A, inside the one-sample null (S2, 3.74 ns). The pre-registered handles, each
+recomputed in the batch netlist with POS 1 / NEG 0: (a) rev_wr −13.630 at 108 levels (A −11.930, Δ −1.700), (b) data_req
+−5.819 at 85 (Δ −0.825), (c) worst through an alloc_st first-level cell −18.211 at 125 (Δ −0.275; 112 cells against 132),
+(d) worst from cur_idx_q −18.134 at 119 (Δ −0.198) -- all inside the 6.5 ns per-path null, nothing attributed. The worst
+20 all start at csr_regfile's cpmp_q (a file the batch does not touch; in A that family sat 0.06 ns behind A's worst, so the
+two swapped order); end families fu_data_q.{cap_metadata_a, cap_metadata_b, rd_metadata} 6/7/7 against A's 6/8/6.
+**Item 4 on the routed netlist:** 315 cells (275 LUT + 40 CARRY4) re-derived from the same seed nets, on 0 of the worst
+500 paths (the membership test counts the worst path's own cell as 1), and the worst path through any of them MEETS
+timing at +1.710 ns, 63 levels. The generation push has no net of its own: it is a field rewritten in the node memory,
+inside handle (a).
+
+**The first boot (board lane, board 1, 2026-10-23 14:20):** the flash read back the sha256 above; `s23-cpmp-rearm` ran
+bare first (image bcefd969e128113f…, board_rec 0x80004040). The 25 values, graded here by value against
+`s23-bare-2026-10-21/PREREG.md` at 7ae1d8491466: **ALL 25 EQUAL THE PRE-REGISTERED BATCH VECTOR** -- SR 25, a0
+0x80800000, Q1 0, the six re-arm probes Q5/Q8/Q10/Q12a/Q12b/Q13d flipped exactly as predicted, total 8 → 14, last cause 5.
+The instrument had read the pre-batch vector, all 25 values, on both resident trees the night before, so this is a
+two-sided silicon reading of item 1's re-arm. Tier 1 and the vp2 rungs follow on the board lane; the rows that decide the
+batch's other items are r8..r11 (S-25/R-57, must complete), the S-23 fetch-face refusal (must be absent) and va-alloc's
+generation readings (item 6).
