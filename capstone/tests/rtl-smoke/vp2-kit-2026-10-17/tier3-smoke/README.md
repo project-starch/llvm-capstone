@@ -7318,3 +7318,24 @@ Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
     reads 2, and the record flags are as simulated.
   - **Item 6 (generations in virtual node ids) behaves on vp2 silicon as on the RTL.**
 - Board 1's earlier boot of the same image read the same 17 values. It stays VOID by the rule written before it.
+
+### cpython lt0 on the batch bitstream, board 2: pre-registered (2026-10-22 15:5x, before the boot)
+
+- **Why:** the corpus arms re-read on the batch bitstream beside their standing columns. lt0 has a batch QEMU
+  reference from the same runner, tree and arm script as lt1's.
+- **What runs:** `tier3-cpy-batch-arm.sh 2 <log> lt0`.
+  - It is tier3-cpy-batch.sh generalised to an arm tag, in a new file because lt1 is running from the original.
+  - For lt0: image t3-nomovc-r60/cpython-lt0-dl (23a2f0cb), `--arm virtual-malloc`, reference batch-refs-r60/ref-batch/lt0
+    (qkit7-batch2-nr; stamp runner dc606bd1, tree d0f0f4b41ae6, appvm-arm 666d920e; SWITCHES norandmaps=ON
+    movc_null_scalar=OFF ... generations=ON; read CAUGHT 15, MISSED 14, ...).
+  - Kit: board 2's norandmaps batch kit `bkit8-batch-nb2` (made now, the same three changes on bkit7-rev2xnBDN2).
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/cpy-lt0`, a new directory.
+  - Dry run (`dryrun-cpy-batch-arm.txt`): each tag against its own reference reads 32 of 32; an unknown tag refuses.
+- **Predictions:**
+  - **verdicts-compare against the reference: 32 of 32 cells the same**;
+  - controls pass (APPVM read rc=0);
+  - norandmaps in the kernel command line;
+  - the readings 0.
+  - Case 09 reads as the reference: image 23a2f0cb CAUGHT by control at an unlabelled site, per the 2026-10-22 note.
+    Case 18 reads as the reference: no mremap in this image.
+  - The standing tree-era lt0 column (4641b94c on 54d8a3af) is not compared against. That image differs.
