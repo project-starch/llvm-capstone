@@ -140,7 +140,7 @@ def run_script(a, share, image, directory, script, tag):
                          run_args=("--cwd", f"/mnt/host/abr/{tag}", *env), timeout=a.timeout)
 
 
-def observe(text, result, symbols, sites):
+def observe(text, result, symbols, sites, memory_error_is_the_defect=None):
     o = v.Observation(case="", arm="", image_sha256=result.get("image_sha256"))
     if "[runner] TIMEOUT" in text:
         o.infra, o.notes = "infra", "runner timeout"
@@ -163,6 +163,12 @@ def observe(text, result, symbols, sites):
             o.attribution_evidence = f"{fault.symbol} is where host ASan reported the access"
         else:
             o.attribution_evidence = f"in {fault.symbol or 'no known function'}; ASan sites {sorted(sites) or 'none recorded'}"
+        return o
+    if memory_error_is_the_defect and re.search(r"\bMemoryError\b", text):
+        # The case declares (case.json memory_error_is_the_defect, with its reason) that a MemoryError here is the
+        # defect's own uncaught access, not the table refusing: the trigger ran its defect and ended unseen.
+        o.completed = True
+        o.notes = f"MemoryError, declared the defect's own uncaught read: {memory_error_is_the_defect}"
         return o
     for pattern, what in ((CAPACITY, "capacity"), (BROKEN, "interpreter failure")):
         if pattern.search(text):
@@ -284,7 +290,8 @@ def main():
     for d in cases:
         claims = json.loads((d / "case.json").read_text())
         text, result = run_script(a, share, image, d, claims["trigger"], d.name)
-        o = observe(text, result, symbols, set(claims.get("fault_sites", [])))
+        o = observe(text, result, symbols, set(claims.get("fault_sites", [])),
+                    claims.get("memory_error_is_the_defect_why") if claims.get("memory_error_is_the_defect") else None)
         if collecting:
             # A session's collect pass has no results, so it cannot know which cases the read pass
             # will attribute by control. Record each case's probe and negative control

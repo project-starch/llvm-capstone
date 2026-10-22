@@ -88,7 +88,8 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
 `allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
-`fault_sites_why`, `duplicate_of`, `control_probe`, `control_probe_why`. Optional means
+`fault_sites_why`, `duplicate_of`, `control_probe`, `control_probe_why`, `memory_error_is_the_defect`,
+`memory_error_is_the_defect_why`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -135,6 +136,13 @@ stale access has no labelled probe -- a double free faults inside the manager, a
 inside `memcpy`. It needs `fault_sites_why`, and the reason must come from the source or from an
 earlier independent run, never from the fault it is about to admit: a site chosen after seeing where
 a run faulted would turn every crash into a catch.
+
+`memory_error_is_the_defect` (`true`, with `memory_error_is_the_defect_why`) declares that a `MemoryError` the case's
+trigger raises is the defect's own access running uncaught -- a length read past an object, say, that the arm's
+allocator does not bound -- and not the table refusing an allocation. A runner that reads any MemoryError as capacity
+(the cpython runner's `CAPACITY` rule, by text) then records the run as completed, so the arm reads MISSED rather
+than NO-READING:infra. As with `fault_sites`, the reason must come from a measurement independent of the run it
+classifies, never from that run's error text.
 
 `control_probe` names an existing file inside the case directory. It isolates the
 defect when the full trigger also exercises other defects, so a runner can pair

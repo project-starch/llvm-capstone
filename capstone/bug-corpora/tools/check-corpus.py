@@ -71,7 +71,8 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
                  "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of",
-                 "control_probe", "control_probe_why"}
+                 "control_probe", "control_probe_why",
+                 "memory_error_is_the_defect", "memory_error_is_the_defect_why"}
 # `duplicate_of` names a sibling case directory that records the SAME upstream defect -- e.g. a
 # release-branch backport of the fix another case already carries (`git patch-id` equal). The case
 # stays in the corpus, so its numbering and every record that cites it stay valid, and
@@ -334,6 +335,13 @@ def check_cases(corpus, decl, dirs, problems):
                 problems.append(f"{where}: fault_sites without fault_sites_why")
         elif "fault_sites_why" in case:
             problems.append(f"{where}: fault_sites_why without fault_sites")
+        if "memory_error_is_the_defect" in case:
+            if case["memory_error_is_the_defect"] is not True:
+                problems.append(f"{where}: memory_error_is_the_defect must be true when present")
+            if not str(case.get("memory_error_is_the_defect_why", "")).strip():
+                problems.append(f"{where}: memory_error_is_the_defect without memory_error_is_the_defect_why")
+        elif "memory_error_is_the_defect_why" in case:
+            problems.append(f"{where}: memory_error_is_the_defect_why without memory_error_is_the_defect")
 
         if "control_probe" in case:
             probe = case["control_probe"]

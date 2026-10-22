@@ -530,3 +530,38 @@ class VirtualHosted(unittest.TestCase):
     def test_stem_matches_the_ports_program_name(self):
         self.assertEqual(self.rv.stem(Path("13_0261fd7da6_http_range_cursor_past_chunk")),
                          "13-http-range-cursor-past-chunk")
+
+
+class CpythonMemoryError(unittest.TestCase):
+    """allocator-boundary-repros' MemoryError rule, on lt0 13's own output (b2twin2-q8, 2026-10-22, as the guest
+    printed it): undeclared, a MemoryError is capacity; declared by the case, it is the defect running unseen."""
+    rv = load(CORPORA / "cpython/allocator-boundary-repros/runners/virtual/run-virtual.py", "cpy_run_virtual")
+    TEXT = ("ABR BEGIN\nERROR\n\nERROR: test_non_str_kwarg (__main__.ASTConstructorTests.test_non_str_kwarg)\n"
+            "Traceback (most recent call last):\n  File \"upstream_test.py\", line 3150, in test_non_str_kwarg\n"
+            "    ast.Name(**{object(): 'y'})\nMemoryError\n\nRan 1 test in 1.093s\n\nFAILED (errors=1)\nABR EXIT 1\n")
+    RESULT = {"kind": "exit", "value": 1}
+    CONTROLS = [v.Control("bounds-malloc", "fault"), v.Control("uaf-malloc", "fault")]
+
+    def judged(self, o):
+        o.controls = list(self.CONTROLS)
+        return v.judge(o, {"controls": {"bounds-malloc": "fault", "uaf-malloc": "fault"},
+                           "controls_for_missed": ["bounds-malloc", "uaf-malloc"]})
+
+    def test_undeclared_memory_error_is_capacity(self):
+        o = self.rv.observe(self.TEXT, self.RESULT, FakeSymbols("main"), set())
+        self.assertEqual((o.infra, o.notes), ("infra", "capacity: MemoryError"))
+        self.assertEqual(self.judged(o)[:2], (v.NO_READING, "infra"))
+
+    def test_declared_memory_error_is_the_defect_unseen(self):
+        o = self.rv.observe(self.TEXT, self.RESULT, FakeSymbols("main"), set(), "the measured reason")
+        self.assertIsNone(o.infra)
+        self.assertTrue(o.reached and o.completed)
+        self.assertIn("the measured reason", o.notes)
+        self.assertEqual(self.judged(o)[:2], (v.MISSED, None))
+
+    def test_declaration_does_not_mask_a_fault(self):
+        result = dict(self.RESULT, fault="capstone-exec: domain fault cause=28 pc=0x3f00001000 address=0x0 "
+                                         "entry=0x3f00000868 code=0x3f00000000-0x3f00080000")
+        o = self.rv.observe(self.TEXT, result, FakeSymbols("unicode_fromformat_write_str"),
+                            {"unicode_fromformat_write_str"}, "the measured reason")
+        self.assertEqual(self.judged(o)[0], v.CAUGHT)

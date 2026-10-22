@@ -34,5 +34,7 @@
     "PyUnicode_GET_LENGTH",
     "unicode_fromformat_write_str"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at PyUnicode_GET_LENGTH Include/cpython/unicodeobject.h:280 | unicode_fromformat_write_str Objects/unicodeobject.c:2561. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 8) at PyUnicode_GET_LENGTH Include/cpython/unicodeobject.h:280 | unicode_fromformat_write_str Objects/unicodeobject.c:2561. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "memory_error_is_the_defect": true,
+  "memory_error_is_the_defect_why": "ast_type_init formats a non-str key with %U, and unicode_fromformat_write_str reads PyUnicode_GET_LENGTH 16 bytes past a 16-byte object(); inside a pymalloc arena the read is uncaught and the garbage length raises MemoryError (at 7,753 live records, far below the table). With per-object bounds the same read faults with cause 28 at that function (capstone/tests/corpus-cell-probes/README.md, the arena-cap pair, dev 9072ab86efdc). The project lead reclassified the cell MISSED on 2026-10-22, relayed by the runtime lane, which owns the runner contract."
 }
