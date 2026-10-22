@@ -62,9 +62,41 @@ int mprotect(void *p, size_t n, int prot)
 }
 /* musl's pthread stack setup calls the hidden symbol directly. */
 int __mprotect(void *p, size_t n, int prot) { return mprotect(p, n, prot); }
-/* Sharing and file-backed mappings have no tag-lifecycle contract yet. */
+/* Public mremap, the MREMAP_MAYMOVE form only, as map-copy-unmap (2026-10-22: cpython's
+ * mmap.resize, which corpus cell lt0 18 needs before its bug runs). The old mapping is unmapped
+ * through the ordinary service, so it is RETIRED: every capability to it is revoked and a stale
+ * pointer faults, which is the lifetime contract a moved mapping must keep. The bytes, and any
+ * capability tags among them, move with memcpy. Limits, each explicit:
+ *   - without MREMAP_MAYMOVE (in-place resizing, which musl's pthread_getattr_np uses to probe the
+ *     main stack and stops on any error but ENOMEM), and with MREMAP_FIXED or DONTUNMAP, the
+ *     answer stays ENOSYS, as before;
+ *   - the new mapping is PROT_READ|PROT_WRITE whatever the old one's protection was, and the old
+ *     one must be readable for the copy;
+ *   - `old` must name a whole registered mapping (the unmap service refuses anything else, and
+ *     then nothing has changed: the new mapping is released and the error returned).
+ * A same-page-count resize returns p unchanged, as Linux does. */
+#ifndef MREMAP_MAYMOVE
+#define MREMAP_MAYMOVE 1   /* Linux's value; <sys/mman.h> declares it only under _GNU_SOURCE */
+#endif
 void *mremap(void *p, size_t old, size_t n, int flags, ...)
-{ (void)p; (void)old; (void)n; (void)flags; errno = ENOSYS; return MAP_FAILED; }
+{
+    unsigned long old_bytes, new_bytes, address = __builtin_capstone_cap_get_cursor(p);
+    if (flags != MREMAP_MAYMOVE) { errno = ENOSYS; return MAP_FAILED; }
+    if ((address & 4095) || mapping_length(old, &old_bytes) || mapping_length(n, &new_bytes)) {
+        errno = EINVAL; return MAP_FAILED;
+    }
+    if (new_bytes == old_bytes) return p;
+    void *q = mmap(NULL, n, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (q == MAP_FAILED) return MAP_FAILED;
+    memcpy(q, p, old_bytes < new_bytes ? old_bytes : new_bytes);
+    if (munmap(p, old)) {
+        int error = errno;
+        munmap(q, n);
+        errno = error;
+        return MAP_FAILED;
+    }
+    return q;
+}
 
 #define L0_PAGE 4096UL
 #define L0_MAX_SEGS 16
