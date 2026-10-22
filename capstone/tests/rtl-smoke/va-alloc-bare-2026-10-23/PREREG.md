@@ -52,3 +52,24 @@ are the REC_GEN reads (2 on the batch, 0 where the pre-batch unit never writes t
 reads of the same two records. Grading rule: VOID unless SR = 17 and position 0 = 0; PASS when all 17 equal the batch
 vector; the tree-A vector means the bitstream in service is not the batch; any other vector is a finding, graded value by
 value against the test's comments.
+
+## Bitstream 2 (5d365d9a6, the 18-bit index): the SAME frozen image, pre-registered 2026-10-24 before its build sealed
+
+The image is unchanged (sha256 `9491707d…ed18`, board_rec 0x8000a800, SR 17): it carries the batch-era decodes
+(`REC_GEN` = word 1 `>> 46 & 0x3fff`, `REC_READ`'s parent mask 0xffff), so on bitstream 2's layout (generation at
+[59:48], parent at [47:30]) its generation read is `(gen << 2) | parent[47:46]`, and the ids carry {gen[29:18], idx[17:0]}.
+Simulated from the kit's own source (`tests/va-alloc.S`, sha256 `49ad4968…6dae`, equal to `c721c1a2a`'s) on the
+bitstream-2 RTL through the Anvil prologue (vp8 `.sup/kitb2`: rtl 0f94f2cff dirty=no, whose `core/` is 5d365d9a6's;
+rev_node unit f532caf0220b7003, ex_stage c86402d729260989); the raw trace has the same 20 prints with the same three
+same-register doubles (cycles 96976/96982, 97053/97165, 97621/97756), removed by the rule above.
+
+| tree | vector (SV, in order, 17 values) |
+|---|---|
+| **BITSTREAM 2 5d365d9a6** | `0x0 0x40004 0x0 0x80004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x8 0x3 0x4 0x1 0x8 0x0` |
+
+Against the batch vector it differs at exactly four positions: 1 (`0x40004`: generation 1, index 4 in the new id
+format), 3 (`0x80004`: generation 2), 11 and 15 (`0x8`: generation 2 at [59:48] read through the old decode, with
+parent bits [47:46] = 0). Every other value, the flags, parents, depths, statuses, the load, the free-list word and the
+count, is identical. Grading rule on bitstream 2: VOID unless SR = 17 and position 0 = 0; PASS when all 17 equal the
+bitstream-2 vector; the batch vector means the bitstream in service is still the batch; the tree-A vector means a
+pre-batch tree; any other vector is a finding, graded value by value.

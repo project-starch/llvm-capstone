@@ -129,3 +129,52 @@ the 40 synthesis-stage loops unchanged by distinct cut; routed WNS inside the nu
 the docs or the plans beyond that phrase; they were not invented, and they wait for the lead or the semantics owner to
 name them. The silicon vectors that print ids move with the split and get bitstream-2 pre-registrations by the
 recorder's count once the hash is built (`va-alloc-bare`'s 0x10004/0x20004 become 0x40004/0x80004).
+
+## 2026-10-24: the size gate PASSED on all four keys; the full build launched 11:20 UTC
+
+The synth lane ran the synthesis-only gate on `5d365d9a6` in a fresh worktree with the batch's submodules (guard 40 GB,
+watchdog 30 GB), and stopped it after `synth_design` as planned (whole-run peak 22.44 GB; trial C's was 23.53; the synth
+checkpoint's sha256 begins `bd5fbd28c4e3d1c3`). Graded here against the pre-registration above:
+
+| key | pre-registered | read | grade |
+|---|---|---|---|
+| technology mapping | the batch's class (~5.4 GB) | 5,166.3 MB vs the batch's 5,164.3 at the same marker | PASS |
+| own exclusive cone, with control | a few hundred LUT either way of 275 LUT + 40 CARRY4 | 272 LUT + 40 CARRY4 (control re-found 275 + 40 on the base), all homed in `issue_read_operands` | PASS |
+| ex+issue stem | 87,162 ± 2,500 | 86,408 (−754) | PASS |
+| core | 154,409 ± 2,000 | 154,284 (−125) | PASS |
+| loops | "the 40 synthesis-stage loops unchanged by distinct cut" | see below | PASS, on the corrected reading |
+
+**The loop key was mis-stated and is corrected here, not moved after the fact.** The 40 is the lint `UNOPTFLAT` count
+(identical on tip and base); the synthesis quantity is the "Found timing loop" header count, 7 on the batch and 7 on
+bitstream 2, with the member-stem union 15 against the batch's 17 (0 entered, 2 left: `gen_register.d_o`, a
+register-slice pass-through name, and `state_q_reg[n]`, the batch's own CARRY cut name). The synth lane first flagged
+the Synth 8-326 cut targets as changed (4 distinct on the batch, 11 here), then retracted it on its own null control:
+across twelve builds it holds logs for, all within the LUT floor of each other, the 8-326 total swings 4 / 8 / 17 / 17 /
+18 / 40 / 50 / 101 ×4 / 73 and the cut families come and go, so a cut target names where Vivado broke a loop in that
+build, not whether the loops changed. The confirming reading is the netlist: `check_timing` on both synth checkpoints
+reports exactly one loop still unbroken on each side (19 cells on the base, 18 here), the batch's own TIMING-23 ring
+(`lsu_bypass cap_clear_addr_q[55]` → `load_unit` → a CARRY4 compare and five `store_buffer` LUTs → `rd_req_q` → the
+D-cache arbiter and read-port controller → `ldc_store_ok_q` → back), with ten cells identical by exact name and only
+the synthesis-numbered middle renamed. Every member lives in `lsu_bypass`, `load_unit`, `store_buffer` or `wt_dcache`,
+none of which is in the diff; on the RTL side the load-store unit's change is width-only (23 id compares and the probe
+id widened to 18 bits) and drives the revocation fault, not that ring.
+
+Ungraded readings, recorded for the routed reading: `csr_regfile_i` 29,307 LUT against the batch's 27,639 (+1,668; the
+only change under it is `pmp_data_if.sv`'s two compares widened by two bits on each of the 16 CPMP entries, 32 compare
+bits in all, and the module's own trajectory with its source unchanged was A 27,073 → C 27,278 → batch 27,639); the
+synth lane tags `cpmp_tracked_revnode_id` and `pmp_data_if` nets in the routed-checkpoint query beside the batch's four
+handles, with the same positive and negative controls. `r60_src_E` does not survive synthesis (0 nets, as the base's
+`r60_src_meta`): the narrowing folds into the item-4 cone, and the −3 LUT is its whole effect.
+
+**The full build** runs on the same worktree (guard 40 GB, watchdog 34 GB with a 64 GB host floor, loop watchdog against
+the batch's member union, collection as its own capped step; the batch took 2 h 27 m). Pre-registered: routed WNS inside
+the null band of −18.529; the sha256 and the post-route stem rows travel with the hash.
+
+**The stale fault-site variants are closed**, correcting the paragraph above: the semantics owner specified them on
+2026-10-23 and they are on the lane branch at `0f94f2cff` as tests only (`r12-stale-sites.S`, six builds on the table
+skeleton with index 70,000 recycled as generation 1: LDC 25, SPLIT 25, CREVOKE 25, CSRETIRE status 1; MREV and DELIN
+are type-gated at 26 on a non-linear stale child, and their stale halves are `r12-recl-stale`'s U5/U8 at 25 with ids
+262147/262150). `core/` is unchanged since `5d365d9a6`, the hash under synthesis.
+
+**`va-alloc-bare`'s bitstream-2 vector is pre-registered** in its `PREREG.md`, cut from the kit's own frozen source on
+the bitstream-2 RTL by the recorder's count: it differs from the batch vector at positions 1, 3, 11 and 15 only.
