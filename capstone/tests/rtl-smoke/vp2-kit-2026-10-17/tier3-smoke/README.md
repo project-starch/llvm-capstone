@@ -7217,3 +7217,21 @@ Record: `records/batch-va-alloc-bare-b1.result-lines.txt`.
     the compiler lane's plan doc, a record ceiling, not a defect read;
   - case 18, NO-READING:infra (the compiler lane: an import-state failure, under bisection).
   - Equal to QEMU is the grade for them too.
+
+### va-alloc-csret: the PREREG corrected by the RTL lane AFTER board 1's VOID boot; a fresh pre-registered boot on board 2 (2026-10-22 15:2x)
+
+- **The correction** (dev 46e03aa0fff8, the RTL lane):
+  - The 20-value vector was the simulation TRACE, which records twice a CAPPRINT that follows a lifetime op: the op's
+    commit flush re-issues the younger print. The board's recorder counts the architectural execution once.
+  - The rule now reads SR = 17. Batch: `0x0 0x10004 0x0 0x20004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0`.
+    Tree A differs at positions 1, 3, 8, 11, 12 and 15 (checked here).
+  - The image is unchanged (9491707d).
+- **Board 1's boot stays VOID.** It was graded by the rule written before it. Its 17 values equal the corrected batch
+  vector value for value. That agreement is recorded, and it is post hoc, not a grade: a pre-registration fixed after
+  its reading cannot turn that reading into a pass.
+- **So the grade comes from a fresh boot:**
+  - board 2, after its own batch flash and first boots, with S23_KIT=bkit8-batch-b2;
+  - `va-alloc-grade.py` now encodes the corrected rule. Dry run (`dryrun-va-alloc-bare-17.txt`): batch PASS, tree A
+    PRE-BATCH, the old 20-value report VOID, one changed value FINDING at its position.
+  - **Predicted: PASS**, the corrected batch vector.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/va-alloc-bare`.
