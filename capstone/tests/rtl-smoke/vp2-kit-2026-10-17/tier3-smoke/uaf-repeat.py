@@ -34,6 +34,7 @@ def main():
     p.add_argument("--n", type=int, required=True)
     p.add_argument("--no-trace", action="store_true", help="every uaf run untraced")
     p.add_argument("--mapped", type=Path, help="controls-mapped.dom: after each uaf run, one uaf-mapped run (the freed page kept mapped)")
+    p.add_argument("--retire-verify", help="module 9d0ac297: comma list of retire_verify levels, N uaf runs at each, the counters read after every run")
     p.add_argument("--keep-retired", action="store_true", help="after each uaf run, one with CAPSTONE_VM_TEST_KEEP_RETIRED=1 (a launcher whose hook keeps a retired region mapped)")
     kits.add_argument("--qemu-kit", type=Path, help="run the same steps in one QEMU boot of this virtual kit instead of a board")
     p.add_argument("--refuse-pte", action="store_true", help="set the module's refuse_pte=1 (0644) before the runs and read it back")
@@ -66,13 +67,22 @@ def main():
         # whose read-back is not Y did not run that configuration.
         b.step("refuse-pte", "P=/sys/module/capstone_vm/parameters/refuse_pte; echo 1 > $P; echo \"RPTE $(cat $P 2>/dev/null || echo ABSENT)\"")
     b.step("bounds-0", "./juliet-timeout bounds-0 10000 -- ./capstone-vexec ./images/controls.dom bounds-malloc")
-    for k in range(1, a.n + 1):
+    RV = "/sys/module/capstone_vm/parameters"
+    rvc = (f"; echo \"RV checks=$(cat {RV}/retire_checks) pre_dead=$(cat {RV}/retire_pre_dead) post_live=$(cat {RV}/retire_post_live) "
+           f"reissued=$(cat {RV}/retire_reissued) fixed=$(cat {RV}/retire_fixed)\"") if a.retire_verify else ""
+    levels = [int(x) for x in a.retire_verify.split(",")] if a.retire_verify else [None]
+    total = a.n * len(levels)
+    for k in range(1, total + 1):
+        lv = levels[(k - 1) // a.n]
+        if lv is not None and (k - 1) % a.n == 0:
+            # the level is set through sysfs and read back before its block of runs
+            b.step(f"rv-set-{lv}", f"echo {lv} > {RV}/retire_verify; echo \"RVSET $(cat {RV}/retire_verify)\"{rvc}")
         env = "CAPSTONE_VM_TRACE=1 " if k % 2 == 0 and not a.no_trace else ""
         dm = "; dmesg | grep -a capstone_vm | tail -n 12 | sed 's/^/DM /'" if a.dmesg else ""
         name = f"uaf-{k}-{'traced' if env else 'plain'}"
         b.step(name, f"( {env}./juliet-timeout {name} 10000 -- ./capstone-vexec ./images/controls.dom uaf-malloc ) "
                      f"> /tmp/u.txt 2>&1; rc=$?; grep -a 'domain fault' /tmp/u.txt | sed 's/^/FL /'; "
-                     f"if grep -q 'cause=13 ' /tmp/u.txt || [ {k % 10} = 0 ]; then tail -n 300 /tmp/u.txt | sed 's/^/TR /'{dm}; fi; "
+                     f"if grep -q 'cause=13 ' /tmp/u.txt || [ {k % 10} = 0 ]; then tail -n 300 /tmp/u.txt | sed 's/^/TR /'{dm}; fi{rvc}; "
                      f"exit $rc")
         if a.mapped:
             # every tenth mapped run is traced, to record which operation the free issued (an object revoke, or a region
@@ -105,6 +115,7 @@ def main():
     (a.out / "steps.json").write_text(json.dumps({"completed": completed, "transcript": str(transcript),
                                                    "n": a.n, "steps": rows}, indent=1))
     tally = collections.Counter()
+    rvprev = []
     for n, (t, r) in steps.items():
         if n == "refuse-pte":
             print(f"REFUSE-PTE {t.strip()[:80]}" + ("" if re.search(r"^RPTE Y$", t, re.M) else " VOID: refuse_pte did not read back Y"))
@@ -119,6 +130,13 @@ def main():
             if not m or float(m.group(1)) > 60:
                 print(f"DMESG-ALL VOID: the ring's oldest line is {'unread' if not m else m.group(1) + ' s'} into the boot, "
                       f"so it has wrapped and REFUSED undercounts; the per-run reads are the reading")
+            continue
+        if n.startswith("rv-set-"):
+            ok = re.search(r"^RVSET (\d+)$", t, re.M)
+            print(f"RV-SET {n} {t.strip()[:160]}" + ("" if ok and ok.group(1) == n.split("-")[-1] else " VOID: retire_verify did not read back"))
+            m = re.search(r"^RV checks=(\d+) pre_dead=(\d+) post_live=(\d+) reissued=(\d+) fixed=(\d+)$", t, re.M)
+            if m:
+                rvprev[:] = [int(x_) for x_ in m.groups()]
             continue
         if n.startswith("keep-"):
             causes = re.findall(r"^FL .*domain fault cause=(\d+) ", t, re.M)
@@ -150,6 +168,19 @@ def main():
             continue
         causes = re.findall(r"^FL .*domain fault cause=(\d+) ", t, re.M)
         arm = n.rsplit("-", 1)[1]
+        if a.retire_verify:
+            kk = int(n.split("-")[1])
+            arm = f"rv{levels[(kk - 1) // a.n]}"
+            m = re.search(r"^RV checks=(\d+) pre_dead=(\d+) post_live=(\d+) reissued=(\d+) fixed=(\d+)$", t, re.M)
+            if m:
+                cur = tuple(int(x) for x in m.groups())
+                d = tuple(x - y for x, y in zip(cur, rvprev)) if rvprev else None
+                rvprev[:] = cur
+                if d and any(d[1:]):
+                    print(f"RV-DELTA {n} cause={causes[0] if causes else None} pre_dead+{d[1]} post_live+{d[2]} reissued+{d[3]} fixed+{d[4]}")
+                tally[(arm, f"cause{causes[0] if causes else None}-post_live+{(d or (0,0,0))[2] > 0}")] += 1
+            else:
+                tally[(arm, "RV-COUNTERS-UNREAD")] += 1
         kind = "none" if not causes else causes[0] if causes[0] in ("13", "25") else "other"
         if len(causes) > 1:
             kind += "+more"
@@ -166,7 +197,7 @@ def main():
                 print(f"  {l[:300]}")
     for (arm, kind), c in sorted(tally.items()):
         print(f"TALLY {arm} cause {kind}: {c}")
-    want = a.n * (1 + (1 if a.mapped else 0) + (1 if a.keep_retired else 0)) + 1 + (1 if a.dmesg else 0) + (1 if a.refuse_pte else 0)
+    want = (a.n * len(levels) if a.retire_verify else a.n) * (1 + (1 if a.mapped else 0) + (1 if a.keep_retired else 0)) + 1 + (len(levels) if a.retire_verify else 0) + (1 if a.dmesg else 0) + (1 if a.refuse_pte else 0)
     print(f"completed={completed} steps={len(steps)} of {want} transcript={transcript}")
     if len(steps) != want:
         print(f"NO DATA: {len(steps)} of {want} steps in the transcript")

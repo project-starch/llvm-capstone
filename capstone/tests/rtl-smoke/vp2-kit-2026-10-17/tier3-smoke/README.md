@@ -6935,3 +6935,56 @@ S-23's flush_all plumbing.
   - "rvc_den_v_q CLEAR on a 13 run" is a prediction from the trace, to be confirmed on a silicon 13 run.
 - **The settled part stands:** on the revoke path (record dead) no 13 occurs at any gap, store count or residency.
   In this RTL a 13 means the capability check allowed the load.
+
+### RETRACTED by the RTL lane: its simulation's "shape 2" (received 13:1x, before any stale-read result)
+
+- The two sections above that report and amend the RTL lane's simulation carry "shape 2": a monitor-side CSRETIRE
+  answered as accepted, after which the record reads VALID. **The RTL lane retracts it as a harness error, not an RTL
+  behaviour.**
+  - The DYN unit's CSRETIRE takes the node id as a SCALAR in rs1 (capstone_dyn_unit.anvil:613 reads rs1.cursor; the
+    module passes the ancestor id). That arm passed the child CAPABILITY, whose cursor is the page address, so every
+    retire was refused out of range before reaching the rev-node unit.
+  - Its write trace shows zero unit writes and result=1. The "accepted (0)" print was a stale register, so those
+    arms were the 13 control in disguise: child live, page unmapped.
+- **What stands:**
+  - On the revoke path (record dead) no 13 occurs at any gap, store count or residency: 26 arms.
+  - In this RTL a 13 on a load means the capability check did not fire for that load.
+- **What it no longer has:** a simulated shape that gives an allowed load after a successful retire. The arms with the
+  correct id are running.
+- **Its prediction for board 1's keep-retired arm is revised** to "0 or a small rate; the simulation gives no number".
+  Any SILENT read there remains an allowed load after a retire the module saw succeed.
+
+### The retire itself, checked by the module (module 9d0ac297, retire_verify 1 then 2) on board 2: pre-registered (2026-10-22 13:1x, before the boot)
+
+- **Why:**
+  - The RTL lane's simulation reads a 13 as a load the capability check did not deny. Whether the module's retire
+    on silicon leaves the record VALID was first suggested by a simulated shape the RTL lane has since retracted
+    (above). It is now an open question that this module answers directly, on silicon.
+  - The module's retire() is csrw srevroot, CSRETIRE, csrw srevroot.
+  - The runtime lane's module 9d0ac29747a00dad checks the RECORD rather than the status, so the reading does not
+    depend on load timing. Source: runtime/retire-verify a8916be04e23, dev 1f114d20d049 plus 81 lines, which I read.
+    0 RVC; the base reproduces 54d8a3af (the lane's claim).
+- **What the module does:**
+  - retire_verify=1: the ancestor's flat-table record is read before each CSRETIRE, where it must be VALID. That is
+    the check's own positive control on every call: retire_pre_dead must stay 0, or the run is VOID. After an
+    accepted retire the record is read again, and retire_post_live counts records still VALID.
+  - retire_verify=2: as 1, and also re-issues the CSRETIRE while the record stays VALID, at most 8 times.
+    retire_reissued and retire_fixed count those. This is a workaround CANDIDATE, unvalidated.
+  - The lane's QEMU gate: all counters 0 when off; at level 1, checks 31, pre_dead 0, post_live 0. A test build that
+    skips one CSRETIRE reads post_live 1 at level 1, and reissued 1, fixed 1 at level 2.
+- **What runs:**
+  - board 2 (tree B) after the mapped arm ends, one cold boot;
+  - kit `bkit7-rev2xBDN2-rv`, which differs from bkit7-rev2xBDN2 only in the module (9d0ac297);
+  - `--retire-verify 1,2`: retire_verify is set through sysfs and read back, then 200 uaf runs at level 1, then 200 at
+    level 2. The five counters are read after every run and attributed to that run by difference.
+  - `UR_KITSFX=-rv UR_MODSHA=9d0ac29747a00dad UR_TAG=-rv UR_BOOKMIN=120 UR_ARGS="--no-trace --dmesg --retire-verify 1,2"`,
+    N=200.
+  - Dry run: `dryrun-uaf-repeat-rv.txt`. With no options, the generated gate is still the first repeat's.
+- **This boot qualifies 9d0ac297 for no record.** It gets no Tier 1. The reading is valid only if the bounds run reads
+  28, every uaf run faults at code+0x10c70, both levels read back, retire_pre_dead stays 0, and the readings are 0.
+- **Predictions, all three lanes' readings combined:**
+  - **If the retire on silicon sometimes leaves the record live, at level 1:** post_live increments in about the 13 rate of
+    runs, and those runs are the cause-13 runs. Every cause-13 run shows post_live+1, and no cause-25 run does.
+  - **At level 2:** the 13s are gone, every run reads 25, and retire_fixed equals retire_post_live.
+  - **post_live 0 with cause-13 runs continuing** refutes the retire shape. The 13s would then come from something
+    else.
