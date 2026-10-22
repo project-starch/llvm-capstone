@@ -7188,3 +7188,32 @@ Record: `records/batch-va-alloc-bare-b1.result-lines.txt`.
   re-run follows on its push.
 - Process: the BEGIN line's "expect pre" is a label inherited from tier3-s23-bare.sh's unused third argument, not the
   grade's expectation. The grader is va-alloc-grade.py.
+
+### cpython lt1 (nested pools) on the batch bitstream, board 1: pre-registered (2026-10-22 15:2x, before the boot)
+
+- **Why:** lt1 is the second bundle the batch unblocks. On the trees its nested pools exhausted the flat table.
+- **What runs:** `tier3-cpy-batch.sh 1 <log>`. It is tier3-cpy-nm.sh's shape with:
+  - the NORANDMAPS batch kit `bkit8-batch-nb1`, made by make-batch-kit.sh MK_N=1 on bkit7-rev2xnDN2. Its board.env
+    diff is the same three changes;
+  - the compiler lane's lt1 image t3-nomovc-r60/cpython-lt1-dl (916e14f9) with `--arm virtual-nested-pools`;
+  - the runner and arm script from wt-cpy-pass (clean d0f0f4b41ae6; dc606bd1, 666d920e) and the lt0 board path's
+    closure b4154562, --stdlib-sourceless and PYTHONHASHSEED=0, all as the reference ran;
+  - output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/cpy-lt1`, a new directory.
+- **The reference:** batch-refs-r60/ref-batch/lt1 on qkit7-batch2-nr, module a05c198b (the same source as the board's
+  21fbfc39).
+  - Its stamp and SWITCHES are checked by the script (norandmaps=ON movc_null_scalar=OFF ... generations=ON).
+  - It reads CAUGHT 17, MISSED 3, NO-READING 12.
+  - **Graded by the new `verdicts-compare.py`**, cell by cell on (verdict, attribution, cause, symbol, offset): the
+    fields of the compiler lane's own batch compare.
+  - Dry run (`dryrun-cpy-batch.txt`): a copy of the reference reads 32 of 32; one flipped verdict reads 31 of 32 and
+    names it; no data reads 2.
+- **Predictions:**
+  - The board run reads `APPVM read rc=0` with its controls passing.
+  - **verdicts-compare against the reference: 32 of 32 cells the same.**
+  - The kernel command line carries norandmaps (must-fire). pc=0, DRT1, FRTY, FRTC, Oops, INJS, INJL and
+    collect-skipped 0.
+- **Read as recorded, not as detections:**
+  - the capacity cells (02, 13, 23, 27, 28 and 30 at cause 30 in _PyObject_Calloc; 10, 19 and 31 as MemoryError):
+    the compiler lane's plan doc, a record ceiling, not a defect read;
+  - case 18, NO-READING:infra (the compiler lane: an import-state failure, under bisection).
+  - Equal to QEMU is the grade for them too.

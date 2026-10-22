@@ -6,12 +6,15 @@
 #   and BOARD_FW_DEFINES + -DCAPSTONE_FETCH_RETRY_CAP (batch-prep.sh's recipe);
 #   adapter/module/capstone_vm.ko = the batch module 21fbfc397e7c7a42 (runtime lane module-gen-push 64747600ecec).
 # SHA256SUMS regenerated and checked. Usage: make-batch-kit.sh <board 1|2> <bitstream name, no .bit> <log>. MK_X stubs the root.
+# MK_N=1 bases the copy on the board's NORANDMAPS kit (bkit7-rev2xnDN2 / bkit7-rev2xnBDN2: BOARD_DTB_BOOTARGS norandmaps and the
+# board-run.sh that applies it), writing bkit8-batch-nb<board>; the three changes are the same.
 main() {
   set -u
   local BRD=${1:?board} BS=${2:?bitstream name} O=${3:?log} H=/mnt/hdd/$USER/capstone S D
   local M=/mnt/hdd/$USER/capstone/t3-smoke/bkit8-batch-parts/capstone_vm.ko MON=/tmp/capstone/csbi-batch
-  case $BRD in 1) S=$H/t3-smoke/bkit7-rev2xDN2;; 2) S=$H/t3-smoke/bkit7-rev2xBDN2;; *) echo "MK STOP: board $BRD" >> "$O"; return 2;; esac
-  D=${MK_X:-$H/t3-smoke}/bkit8-batch-b$BRD
+  local n=""; [ "${MK_N:-0}" = 1 ] && n=n
+  case $BRD in 1) S=$H/t3-smoke/bkit7-rev2x${n}DN2;; 2) S=$H/t3-smoke/bkit7-rev2x${n}BDN2;; *) echo "MK STOP: board $BRD" >> "$O"; return 2;; esac
+  D=${MK_X:-$H/t3-smoke}/bkit8-batch-${n}b$BRD
   case $BS in caplifive_*) ;; *) echo "MK STOP: bitstream name $BS" >> "$O"; return 1;; esac
   ( cd $S && sha256sum -c --quiet SHA256SUMS ) || { echo "MK STOP: base kit $S" >> "$O"; return 1; }
   [ "$(sha256sum $M | cut -c1-16)" = 21fbfc397e7c7a42 ] || { echo "MK STOP: the batch module is not 21fbfc39" >> "$O"; return 1; }
