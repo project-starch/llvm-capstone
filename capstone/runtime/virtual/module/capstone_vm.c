@@ -122,7 +122,25 @@ MODULE_PARM_DESC(node_max_records,
  * stop is legitimately repeated by the launcher's idempotent CV_RESOLVE; a hardware fault the
  * module cannot clear repeats without bound, which is the case this catches. */
 #define CV_FAULT_REPEAT_MAX 64U
-#define CV_FLAT_RECORDS_MAX 65536UL
+/* The flat table's index width, which is the BITSTREAM's (isa.md: a virtual id is
+ * {generation, index} inside 30 bits). 16 for vp2 and the batch bitstream c721c1a2a; 18 for the
+ * bitstream after it (the RTL lane's option A, docs/plans/2026-10-23-next-bitstream-scope.md:
+ * {generation[29:18], index[17:0]}, 262,144 records, a 4 MiB order-10 table per context). A BUILD
+ * define, not a parameter: a module whose width disagrees with the silicon's either refuses ids the
+ * hardware hands out or publishes a capacity the hardware saturates below, so the kit picks it
+ * with the bitstream. The 16-bit build compiles to the same object as before this define existed;
+ * any other width exposes it read-only as index_bits, so a kit can be checked by reading it. */
+#ifndef CAPSTONE_VM_INDEX_BITS
+#define CAPSTONE_VM_INDEX_BITS 16
+#endif
+#if CAPSTONE_VM_INDEX_BITS != 16 && CAPSTONE_VM_INDEX_BITS != 18
+#error "CAPSTONE_VM_INDEX_BITS: 16 (vp2, batch) or 18 (option A)"
+#endif
+#define CV_FLAT_RECORDS_MAX (1UL << CAPSTONE_VM_INDEX_BITS)
+#if CAPSTONE_VM_INDEX_BITS != 16
+static unsigned long index_bits = CAPSTONE_VM_INDEX_BITS;
+module_param(index_bits, ulong, 0444);
+#endif
 #ifdef CAPSTONE_VM_FLAT_TABLE
 /* The flat table's record count. The ruling's 65,536 is the MAXIMUM, not merely a default:
  * silicon saturates capacity and next-unused there, so a larger value is refused -- at INSMOD,
@@ -137,8 +155,13 @@ MODULE_PARM_DESC(node_max_records,
  * stats.node_capacity), never from the invocation. */
 static unsigned long node_flat_records = CV_FLAT_RECORDS_MAX;
 module_param(node_flat_records, ulong, 0444);
+#if CAPSTONE_VM_INDEX_BITS == 16
 MODULE_PARM_DESC(node_flat_records,
     "vp2 flat table records (default and maximum 65536; a larger value is refused at insmod)");
+#else
+MODULE_PARM_DESC(node_flat_records,
+    "flat table records (default and maximum 2^index_bits; a larger value is refused at insmod)");
+#endif
 #define CV_FLAT_RECORDS node_flat_records
 #else
 /* No such parameter in the paged build: it never allocates a flat table, so the knob would be a
