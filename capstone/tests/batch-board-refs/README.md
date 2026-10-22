@@ -63,3 +63,46 @@ and perl-sublet fault 8, completed 3.
 - The stamps show runner aabfa668, tree 15ced322c824 clean, qemu ecaf50bb, module a05c198b, vexec a405840d,
   closure 2a472e21, and the images as above.
 - The trimmed references are batch-refs-r60/batch/perl-{stock,sublet}-trim/out, for the board's trimmed staging.
+
+## Juliet temporal on the batch kit (pre-registered 2026-10-23, before the build and runs)
+
+**Why:** every other corpus arm has a batch-bitstream board reading. Juliet's references exist only for the tree
+kits, built with the older cw SDK (juliet-vp2/judge-{tB-mimic,nf2}, sdk.json 64bc9086).
+
+**The build:** juliet-vp2/build2.sh's recipe and selection, with only the SDK changed.
+- Recipe tree wt-corpus b3cc8cb4be5a (clean); `select.py` manifest 95ceac7daa991165, 366 cases.
+- `build.py`, census and `--seeded`, on a writable copy of the r60 SDK t3-freeze-nb-nomovc-cw-r60 (sdk.json f5145cbb).
+
+**The judging:** juliet-vp2/judge.sh's recipe with kit qkit7-batch2.
+- `run.py` 4b663651 and `probe.py` d6200b39 from wt-juliet a772f0112ae3 (clean).
+- `judge.py` 93aa5ad9 from wt-corpus, and the same juliet-timeout helper bb65b77a.
+
+**Predicted:** 366 CAUGHT (228 CWE-415, 138 CWE-416), every good run CORRECT, no MISSED row. Every case equals
+judge-tB-mimic's temporal-verdicts.tsv on verdict, good, cause, site and strict. A case that differs is listed with
+both readings.
+
+## Juliet spatial sample on the batch kit (pre-registered 2026-10-23, before its runs)
+
+**The build:** the sample's existing census build, already made with the r60 SDK (juliet-sp/build-census, sdk.json
+f5145cbb; manifest-spatial-sample.json, 755 cases). It is not rebuilt.
+
+**The judging:** juliet-sp/run-judge.sh's recipe with kit qkit7-batch2 in place of qkit7-tB-mimic: `run.py`,
+`probe.py` (wt-juliet a772f0112ae3), `judge.py` (wt-corpus b3cc8cb4be5a). There is no seeded build; the sample has no
+rand() flow.
+
+**Predicted:** every case equals juliet-sp/tB-mimic's spatial-verdicts.tsv on verdict, good, cause, site and strict
+(716 CAUGHT, 22 MISSED, 9 NOT-TRIGGERED:sizeof-ptr, 8 intra-object NO-READING). The exception allowed in advance is
+the CWE-126 CWE-170 family: whether its over-read runs on depends on whether a NUL follows the copy. Three of its rows
+moved in both directions between the 2026-10-19 record and tB-mimic (juliet-sp/RESULT), so a move there is reported
+as value-dependent, not as a platform difference. Any other moved case is listed and counts against the prediction.
+
+**Results, both as predicted** (2026-10-23, qkit7-batch2: QEMU ecaf50bb, module a05c198b, vexec a405840d; QEMU domain A):
+- **Temporal** (04:20-04:28; juliet-r60/RESULT):
+  - built census 734 and seeded 55 images, as on the old SDK;
+  - 366 CAUGHT (228 CWE-415, 138 CWE-416), every good run CORRECT;
+  - 366/366 equal to judge-tB-mimic on verdict, good, cause, site and strict, differ 0.
+  - Reference: juliet-r60/judge-batch2/results.
+- **Spatial sample** (04:28-04:42; juliet-sp/RESULT-batch2):
+  - 24 batches in 793.6 s;
+  - 755/755 equal to juliet-sp/tB-mimic, differ 0, including the value-dependent CWE-170 rows.
+  - Reference: juliet-sp/batch2/results.
