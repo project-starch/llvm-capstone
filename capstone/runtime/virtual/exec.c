@@ -224,12 +224,25 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
                                .kind = linear ? CV_MAP_HEAP : -1};
     return 0;
 }
+/* TEST ONLY (2026-10-22, the uaf stale-ALLOW question). With CAPSTONE_VM_TEST_KEEP_RETIRED set, an
+ * unmapped heap region is RETIRED (CV_RETIRE: its capabilities revoked, its pages unpinned) but NOT
+ * munmapped, and its address is not offered for reuse: the PTEs stay present, so a load through a
+ * revoked capability into it can no longer page-fault -- it either traps on the revocation check or
+ * reads the retired page. Unset, this does nothing. */
+static int keep_retired = -1;
 static long unmap_arena(uintptr_t base, size_t bytes)
 {
+    if (keep_retired < 0) keep_retired = getenv("CAPSTONE_VM_TEST_KEEP_RETIRED") != NULL;
     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {
         if ((uintptr_t)maps[i].address != base || maps[i].visible != bytes || !maps[i].heap || maps[i].kind == CV_MAP_METADATA)
             continue;
         if (ioctl(device, CV_RETIRE, &maps[i].id)) return -errno;
+        if (keep_retired) {
+            fprintf(stderr, "CAPSTONE_VM_TEST_KEEP_RETIRED base=0x%lx bytes=%zu\n",
+                    (unsigned long)base, (size_t)maps[i].bytes);
+            memset(&maps[i], 0, sizeof(maps[i]));
+            return 0;
+        }
         if (munmap(maps[i].address, maps[i].bytes)) return -errno;
         reuse_address = maps[i].address; reuse_bytes = maps[i].bytes;
         memset(&maps[i], 0, sizeof(maps[i]));
