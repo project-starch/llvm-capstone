@@ -7189,6 +7189,35 @@ Record: `records/batch-va-alloc-bare-b1.result-lines.txt`.
 - Process: the BEGIN line's "expect pre" is a label inherited from tier3-s23-bare.sh's unused third argument, not the
   grade's expectation. The grader is va-alloc-grade.py.
 
+### cpython lt1 (nested pools) on the batch bitstream, board 1: pre-registered (2026-10-22 15:2x, before the boot)
+
+- **Why:** lt1 is the second bundle the batch unblocks. On the trees its nested pools exhausted the flat table.
+- **What runs:** `tier3-cpy-batch.sh 1 <log>`. It is tier3-cpy-nm.sh's shape with:
+  - the NORANDMAPS batch kit `bkit8-batch-nb1`, made by make-batch-kit.sh MK_N=1 on bkit7-rev2xnDN2. Its board.env
+    diff is the same three changes;
+  - the compiler lane's lt1 image t3-nomovc-r60/cpython-lt1-dl (916e14f9) with `--arm virtual-nested-pools`;
+  - the runner and arm script from wt-cpy-pass (clean d0f0f4b41ae6; dc606bd1, 666d920e) and the lt0 board path's
+    closure b4154562, --stdlib-sourceless and PYTHONHASHSEED=0, all as the reference ran;
+  - output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/cpy-lt1`, a new directory.
+- **The reference:** batch-refs-r60/ref-batch/lt1 on qkit7-batch2-nr, module a05c198b (the same source as the board's
+  21fbfc39).
+  - Its stamp and SWITCHES are checked by the script (norandmaps=ON movc_null_scalar=OFF ... generations=ON).
+  - It reads CAUGHT 17, MISSED 3, NO-READING 12.
+  - **Graded by the new `verdicts-compare.py`**, cell by cell on (verdict, attribution, cause, symbol, offset): the
+    fields of the compiler lane's own batch compare.
+  - Dry run (`dryrun-cpy-batch.txt`): a copy of the reference reads 32 of 32; one flipped verdict reads 31 of 32 and
+    names it; no data reads 2.
+- **Predictions:**
+  - The board run reads `APPVM read rc=0` with its controls passing.
+  - **verdicts-compare against the reference: 32 of 32 cells the same.**
+  - The kernel command line carries norandmaps (must-fire). pc=0, DRT1, FRTY, FRTC, Oops, INJS, INJL and
+    collect-skipped 0.
+- **Read as recorded, not as detections:**
+  - the capacity cells (02, 13, 23, 27, 28 and 30 at cause 30 in _PyObject_Calloc; 10, 19 and 31 as MemoryError):
+    the compiler lane's plan doc, a record ceiling, not a defect read;
+  - case 18, NO-READING:infra (the compiler lane: an import-state failure, under bisection).
+  - Equal to QEMU is the grade for them too.
+
 ### va-alloc-csret: the PREREG corrected by the RTL lane AFTER board 1's VOID boot; a fresh pre-registered boot on board 2 (2026-10-22 15:2x)
 
 - **The correction** (dev 46e03aa0fff8, the RTL lane):
@@ -7236,6 +7265,32 @@ Record: `records/uaf-repeat-rv-b2.result-lines.txt`.
     no completed read.
 - **Rate:** cause 13 in 10 of 400 control runs here. Over the whole day, tree A 16 of 720 and tree B 26 of 1120.
 
+### postgres pg-pools on the batch bitstream, board 1 after lt1: pre-registered (2026-10-22 15:3x, before the boot)
+
+- **Why:** the third bundle the batch unblocks. On the trees pg-pools' nested memory contexts exhausted the flat table.
+- **What runs:** `tier3-pg-batch.sh 1 <log>`, after cpython lt1 ends on board 1. It is the sql0 board path
+  (tier3-sql-arm-rev2u.sh) with:
+  - the batch kits `bkit8-batch-b1` and its measure-only twin `bkit8-batch-mb1` (make-batch-kit.sh MK_M=1, the same
+    three changes on bkit7-rev2xmDN2);
+  - `--arm virtual-pg-pools` and image t3-images-r60/q15/postgres-lt1 (dc2a1356);
+  - the trimmed fixture and share, and dev's runner 7ce203f9 with its QEMU PASS.
+  - First the measure-only bake: no boot unless the batch firmware with this payload is under 26,000,000 B.
+  - Scored by score-arm.sh into a NEW results directory, `bug-corpora/postgres/sql-repros/results/2026-10-22-batch-c721c1a2a-b1/vp2-pg-pools`,
+    and records/batch-pg-pools-b1.board.txt.
+- **The reference** (the compiler lane's, dev 95191599cfaa): pgp-trim/bundle on qkit7-batch2, module a05c198b.
+  - The trimmed fixture's record is 956173e054762e91. Its 9 cells equal the untrimmed batch reference's (MOVE 0), and
+    its 4 controls fault.
+  - Its stamp reads runner 7ce203f9, image dc2a1356, SWITCHES movc_null_scalar=OFF (the batch mimic). The script
+    checks all of this.
+- **Dry run** (`dryrun-pg-batch.txt`): under the cap it boots and scores (scoring stubbed, nothing filed); over the cap
+  it stops before any boot.
+- **Predictions:**
+  - the measured firmware is under the cap;
+  - the bundle records fixture 956173e054762e91 and image dc2a1356;
+  - no directory-open FATAL, and the positive control answered;
+  - **compare-pilot against pgp-trim/bundle: 9 of 9 cells the same**;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped 0, and the gen-push banner present.
+
 ### The batch bitstream c721c1a2a on board 2, result (2026-10-22 15:26-15:54): the same as board 1
 
 Record: `records/batch-c721c1a2a-first-b2.result-lines.txt`. Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/`, kit
@@ -7263,3 +7318,216 @@ Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
     reads 2, and the record flags are as simulated.
   - **Item 6 (generations in virtual node ids) behaves on vp2 silicon as on the RTL.**
 - Board 1's earlier boot of the same image read the same 17 values. It stays VOID by the rule written before it.
+
+### cpython lt0 on the batch bitstream, board 2: pre-registered (2026-10-22 15:5x, before the boot)
+
+- **Why:** the corpus arms re-read on the batch bitstream beside their standing columns. lt0 has a batch QEMU
+  reference from the same runner, tree and arm script as lt1's.
+- **What runs:** `tier3-cpy-batch-arm.sh 2 <log> lt0`.
+  - It is tier3-cpy-batch.sh generalised to an arm tag, in a new file because lt1 is running from the original.
+  - For lt0: image t3-nomovc-r60/cpython-lt0-dl (23a2f0cb), `--arm virtual-malloc`, reference batch-refs-r60/ref-batch/lt0
+    (qkit7-batch2-nr; stamp runner dc606bd1, tree d0f0f4b41ae6, appvm-arm 666d920e; SWITCHES norandmaps=ON
+    movc_null_scalar=OFF ... generations=ON; read CAUGHT 15, MISSED 14, ...).
+  - Kit: board 2's norandmaps batch kit `bkit8-batch-nb2` (made now, the same three changes on bkit7-rev2xnBDN2).
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/cpy-lt0`, a new directory.
+  - Dry run (`dryrun-cpy-batch-arm.txt`): each tag against its own reference reads 32 of 32; an unknown tag refuses.
+- **Predictions:**
+  - **verdicts-compare against the reference: 32 of 32 cells the same**;
+  - controls pass (APPVM read rc=0);
+  - norandmaps in the kernel command line;
+  - the readings 0.
+  - Case 09 reads as the reference: image 23a2f0cb CAUGHT by control at an unlabelled site, per the 2026-10-22 note.
+    Case 18 reads as the reference: no mremap in this image.
+  - The standing tree-era lt0 column (4641b94c on 54d8a3af) is not compared against. That image differs.
+
+### The corpus re-read on the batch bitstream: 23 arms on both boards, pre-registered (2026-10-22 17:5x, before any boot)
+
+- **Why:** the lead's order for the batch is the three unblocked bundles, then the rest of the corpus arms read again on
+  c721c1a2a. Each arm's batch column sits BESIDE its standing column; the standing 346-cell pass stays the record.
+  cpython lt0 is already running on board 2, and sql0 gets its own runner later. That leaves 23 arms, 305 cells.
+- **The references** are the compiler lane's `<mnt-hdd>/capstone/batch-refs-r60/ref-batch/<tag>`, made by
+  `<mnt-hdd>/capstone/batch-refs/run-pass-r60.sh` (ebd2406b3351c381; logs PASS-A and PASS-B):
+  - kit qkit7-batch2 (QEMU ecaf50bb, module a05c198b); SWITCHES movc_null_scalar=OFF, generations=ON; no norandmaps;
+  - the r60 rebuilds, `t3-images-r60` (ARMS.spec f34f1a26bf455ef8), SDK `t3-freeze-nb-nomovc-cw-r60` (sdk.json
+    f5145cbb88dde6b5).
+  - **Every one of the 346 reference cells carries a different image hash from the standing pass's `images.tsv`.**
+    The re-read therefore runs the references' images, not the standing ones. A cell is compared image against image.
+  - The stamps name wt-gate at bfa584113e1c, 0b58b55128e4, 87d684e76f15, 8894b7edeb18 or c9a18237d110. There are no
+    commits from 0b58b55128e4 to today's HEAD under capstone/bug-corpora or capstone/runtime (`git log` 0 lines;
+    control: HEAD~200 shows 450 files). The script checks each runner's sha256/16 against its own stamp.
+  - The other trees are at their stamped commits and clean: wt-q15cw e2b26ea2c1e4 (pb13q15, pgm1q15), wt-cpyrec
+    d0f0f4b41ae6 (wm1q15).
+- **What runs:** `tier3-reread-batch.sh <board> <after> <after ERE> <spec> <log>`. It is tier3-pass-seq2.sh with these
+  changes:
+  - kit `bkit8-batch-b<board>` (c721c1a2a, module 21fbfc39, monitor d9da397 + FETCH_RETRY_CAP, no norandmaps);
+  - the reference invocation with `--virtual-kit` replaced by `--board-kit`;
+  - the sqlite arms in --only boots of six cases plus both controls (tier3-pass-appvm.sh's split, the payload cap),
+    each scored against the reference cut to its cases;
+  - a spec field for the runner's tree and for CAPSTONE_TMP_ROOT, set as the reference had them.
+  - Each arm is scored by **compare-pilot.py**, the standing pass's tool: image, verdict, reason, reached, completed,
+    cause, symbol+offset, attribution, controls. **verdicts-compare.py**, the reference's own five-field compare, is
+    printed beside it.
+  - Output goes to NEW directories, `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b<board>/rr-<tag>`. A boot that does not
+    complete stops its board's sequence. A cell that differs does not.
+  - Specs: `records/reread-spec-b1.txt` and `records/reread-spec-b2.txt` (sanitized copies, with their sha256/16).
+- **The split.**
+  - Board 1 runs after pg-pools ends (any PG DONE/STOP/VOID/MUST-FIRE line): fph, fpt, fca, fcs, fso, mph, mpt, wph,
+    wpt, pgc, pgm0, pgm1, then sq0 a-f. That is 155 cells in 18 boots.
+  - Board 2 runs after cpython lt0 ends (CB lt0 DONE or STOP): pym0, pym1, pb9, pb12, pb10, wm0, pb13q15, pgm1q15,
+    wm1q15, then sq1q15 a-f. That is 150 cells in 15 boots.
+  - The sqlite arms go last, because they have the most boots.
+- **Dry run** (`dryrun-reread-batch.txt`, stubbed):
+  - both full sequences end DONE: board 1 18 of 18, board 2 15 of 15, every compare as its reference;
+  - a planted changed verdict is read by both compares, in a whole arm (2 of 3) and in a sqlite group (5 of 6);
+  - it refuses on: a busy board, a hub 409, the arm script's refusal (78), an incomplete boot, an existing output
+    directory, a tag with no reference, a runner that is not its stamp's (mpt from wt-q15cw), and board 3;
+  - a failed booking continues unbooked;
+  - the argv of every kind is printed: cases, pgc, pgm, appvm, the appvm6 group with --only, and the other trees with
+    their TMP root.
+- **Predictions (per arm, compare-pilot against its batch reference, every cell the same):**
+  - board 1: fph 25 (CAUGHT 25), fpt 13 (CAUGHT 13), fca 13 (MISSED 13), fcs 13 (CAUGHT 13), fso 9 (MISSED 9),
+    mph 9 (CAUGHT 9), mpt 3 (CAUGHT 3), wph 12 (CAUGHT 12), wpt 10 (CAUGHT 10), pgc 5 (CAUGHT 5), pgm0 5 (MISSED 5),
+    pgm1 5 (CAUGHT 5), sq0 33 (CAUGHT 4, MISSED 27, NO-READING 2);
+  - board 2: pym0 20 (MISSED 20), pym1 20 (CAUGHT 20), pb9 4 (MISSED 4), pb12 9 (CAUGHT 1, MISSED 8), pb10 4
+    (CAUGHT 4), wm0 23 (MISSED 23), pb13q15 9 (CAUGHT 7, NO-READING control-failed 2), pgm1q15 5 (CAUGHT 5), wm1q15 23
+    (CAUGHT 22, NO-READING 1), sq1q15 33 (CAUGHT 27, MISSED 6);
+  - **sq1q15's 29 and 31 read as the batch reference (cause 24)**, not as the standing column (cause 28). These are the
+    batch reference's two moves from the old reference.
+  - In every boot: FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0, collect-skipped and cause=29 read 0, and the boot
+    completes (vbatch END rc=0).
+- **What a miss would mean:** a differing cell on matched images is a silicon reading against the batch QEMU model. It
+  is recorded beside its standing cell and not explained away. A differing IMAGE makes the cell VOID, not a reading.
+
+### postgres sql0 (lt0) on the batch bitstream, board 2 after its re-read: pre-registered (2026-10-22 18:0x, before the boot)
+
+- **Why:** the corpus pass's 25th arm. It needs the postgres sql path, not the re-read runner.
+- **What runs:** `tier3-pg-batch-arm.sh 2 <log> sql0`.
+  - It is tier3-pg-batch.sh generalised to an arm tag, in a new file because pg-pools runs from the original. The
+    pg-pools tag runs that file's checks unchanged.
+  - For sql0: `--arm virtual-malloc`, image t3-nomovc-r60/postgres-lt0 (cf61cb4333d35cb6), the trimmed fixture
+    (956173e054762e91) and share, and dev's runner 7ce203f9 with its QEMU PASS.
+  - The measure-only bake goes first, on board 2's new measure-only batch kit `bkit8-batch-mb2` (make-batch-kit.sh
+    MK_M=1, the same three changes on bkit7-rev2xmBDN2). There is no boot unless the firmware is under 26,000,000 B.
+  - The reference is the compiler lane's `batch-refs-r60/ref-batch/sql0/bundle`, on qkit7-batch2. Its stamp reads
+    runner 7ce203f9 and image cf61cb43, with SWITCHES movc_null_scalar=OFF ... generations=ON. It read CAUGHT 2 and
+    MISSED 7, MOVE 0 against both the tB-mimic reference and r1.
+  - Scored by score-arm.sh (compare-pilot) into a NEW results directory,
+    `results/2026-10-22-batch-c721c1a2a-b2/vp2-malloc-nomovc`, and records/batch-sql0-b2.board.txt.
+  - It starts when board 2's re-read sequence ends (RR seq-2 DONE, STOP or HOLD).
+- **Dry run** (`dryrun-pg-batch-arm.txt`):
+  - sql0 boots and scores on both boards, and pg-pools still does on board 1;
+  - over the cap it stops before any boot;
+  - a bundle with another image is VOID;
+  - a busy board and an unknown tag refuse.
+- **Predictions:**
+  - the firmware is under the cap;
+  - the bundle records fixture 956173e054762e91 and image cf61cb43;
+  - no directory-open FATAL, and the positive control answered;
+  - **compare-pilot against ref-batch/sql0/bundle: 9 of 9 cells the same (CAUGHT 2, MISSED 7)**;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped 0.
+  - With lt0 and the 23 re-read arms, this completes the 25 arms, 346 cells, on c721c1a2a.
+
+### cpython lt1 on the batch bitstream, result (2026-10-22 15:19-20:25, board 1): 32 of 32 cells as the batch QEMU reference
+
+Record: `records/batch-cpy-lt1-b1.result-lines.txt`.
+- **verdicts-compare against ref-batch/lt1: 32 of 32 cells the same.** The tally is CAUGHT 17, MISSED 3, NO-READING infra 4,
+  not-reached 1 and unattributed 7.
+- The controls passed (APPVM read rc=0), and norandmaps is in the command line.
+- FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0.
+- **Against the pre-registration: every reading holds.**
+- **RETRACTION, made the same evening, of a mid-run report to two lanes and the lead.**
+  - At 18:4x this lane reported that step 21 (gh-146169, expat) had stalled on the board and would time out as infra.
+    The basis was about 8 minutes of flat @@HB output size, at 458 lines against QEMU's 464.
+  - The step was slow, not stalled. About 14 minutes in, it printed its last lines and faulted exactly as the reference
+    does: cause 25 at pc 0x3ff66f096c, little2_toUtf8, END 139.
+  - Silence bounds only "not yet". A stall is called against the step's bound, never from silence alone.
+
+### cpython lt0 on the batch bitstream, result (2026-10-22 15:57-21:53, board 2): 31 of 32 by the five fields, 32 of 32 in verdict
+
+Record: `records/batch-cpy-lt0-b2.result-lines.txt`.
+- **verdicts-compare against ref-batch/lt0: 31 of 32.**
+- The one difference is case 01 (gh-139071). It is CAUGHT at the same pc on both sides, set_dealloc+284 (0x3ff615c998),
+  with the same address, 0xffffffffffffffff. Its cause is **4** on silicon and **24** in QEMU.
+  - The address is misaligned for the load. **This is Q-31's ruled ordering divergence:** the RTL takes the
+    misaligned trap before the tag check, and QEMU the capability trap. The ruling is dev 70c43b2cee8b, "no verdict
+    consequence".
+  - The mechanism predicts this value: cause 4 for a misaligned load address.
+- The controls passed, norandmaps is in the command line, and the readings are 0.
+- **Against the pre-registration:** the 32 of 32 prediction misses by one field in one cell. That cell is a known,
+  ruled divergence, not a new reading. Case 13 (gh-144169) reads NO-READING infra on both sides. The lead reclassified it
+  as MISSED in the corpus (dev a062e6cee926), which the runner's text rule does not change.
+
+### postgres pg-pools on the batch bitstream, result (2026-10-22 20:27-22:32, board 1): 9 of 9 cells as the reference
+
+Record: `records/batch-pg-pools-b1.board.txt`. The bundle is filed under
+`bug-corpora/postgres/sql-repros/results/2026-10-22-batch-c721c1a2a-b1/vp2-pg-pools`.
+- The measure-only bake read 25,856,520 B, under the 26,000,000 B cap.
+- The bundle records fixture 956173e054762e91 and image dc2a1356.
+- Must-fire: no directory-open FATAL, and the positive control answered.
+- **compare-pilot against pgp-trim/bundle: 9 of 9 cells the same**: CAUGHT 5, MISSED 2, NO-READING unattributed 2.
+- FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0. The gen-push banner is present (x1).
+- **Against the pre-registration: every reading holds.** This is the first board reading of pg-pools at all. On the trees,
+  its nested contexts exhausted the flat table. The batch's recycling (item 6) is what lets it run.
+
+### The corpus re-read on the batch bitstream, result (2026-10-22 21:54 to 2026-10-23 01:57, both boards): 305 of 305 cells in verdict, 302 in every field
+
+Records: `records/batch-reread-b1.result-lines.txt` and `records/batch-reread-b2.result-lines.txt`. Output:
+`<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b{1,2}/rr-*`.
+
+**Board 2** (10 arms, 15 boots, 150 cells): **150 of 150 the same** by compare-pilot and by verdicts-compare.
+- The arms are pym0, pym1, pb9, pb12, pb10, wm0, pb13q15, pgm1q15, wm1q15 and sq1q15 a-f.
+- **sq1q15's 29 and 31 read cause 24 as the batch reference**, as predicted. Before the batch, the standing column read
+  cause 28.
+
+**Board 1** (13 arms, 18 boots, 155 cells): **152 of 155 the same in every field, and 155 of 155 in verdict.**
+- The arms are fph, fpt, fca, fcs, fso, mph, mpt, wph, wpt, pgc, pgm0, pgm1 and sq0 a-f. Every group but sq0d reads
+  all its cells the same.
+- **sq0d differs in the fault cause alone, in three cells**, all at the same symbol+offset as QEMU:
+  - 19 (rtree cursor): cause 4 against QEMU's 24, nodeRelease+144;
+  - 20 (rtree inode0): cause 4 against 24, nodeRelease+144;
+  - 22 (spellfix): cause 13 against 24, editDist3FindLang+244.
+- **This is Q-31,** the ruled ordering divergence: silicon takes the address trap (4 misaligned, 13 non-canonical)
+  before the tag check. The ruling is dev 70c43b2cee8b, "no verdict consequence". These are the **same three cells,
+  causes and offsets** that sq0d read on 2026-10-18 (dev 15d5177ef2cd).
+
+**In every one of the 33 boots** FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0, collect-skipped and cause=29 read 0, and
+every boot completed.
+
+**Against the pre-registration (bbae366998e0): the prediction "every cell as its batch reference" missed by one field in
+three cells.**
+- Those three were predictable. They are the recorded Q-31 cells of sq0d, and the pre-registration should have listed
+  them, as it should have listed lt0's case 01. The rule to read every open ISSUES row against the images a run reuses
+  covers exactly this, and it was not applied to Q-31.
+- No reading is new, and no verdict moved.
+
+**The corpus on c721c1a2a so far:** 23 re-read arms plus cpython lt0 and lt1 plus pg-pools.
+- 305 + 32 + 32 + 9 = 378 cells. All 378 match in verdict, and 374 match in every field. The four field differences are
+  all Q-31.
+- sql0 (9 cells) is running on board 2. The new arms (xlang, plane and capi) follow on board 1.
+- The standing 346-cell pass on the two tree bitstreams stays the record. These cells sit beside it.
+
+### postgres sql0 on the batch bitstream, result (2026-10-23 01:24-03:26, board 2): 9 of 9 cells as the batch reference, which completes the 25 arms
+
+Record: `records/batch-sql0-b2.board.txt`. The bundle is filed under
+`bug-corpora/postgres/sql-repros/results/2026-10-22-batch-c721c1a2a-b2/vp2-malloc-nomovc`.
+- The measure-only bake read 25,856,520 B, under the cap.
+- The bundle records fixture 956173e054762e91 and image cf61cb43.
+- Must-fire: no directory-open FATAL, and the positive control answered.
+- **compare-pilot against ref-batch/sql0/bundle: 9 of 9 the same** (CAUGHT 2, MISSED 7).
+- FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0. The gen-push banner is present.
+- **Against the pre-registration (5801699f89dc): every reading holds.**
+
+**The 25 arms on c721c1a2a, complete:**
+
+| what | arms | cells | the same in every field | in verdict |
+|---|---|---|---|---|
+| the re-read | 23 | 305 | 302 | 305 |
+| cpython lt0 | 1 | 32 | 31 | 32 |
+| sql0 | 1 | 9 | 9 | 9 |
+| **the pass's 25 arms** | 25 | **346** | **342** | **346** |
+| beside them: cpython lt1, pg-pools, mruby Sublet with smoke-fit | 3 | 64 | 64 | 64 |
+
+- The four field differences are all Q-31's ruled ordering divergence: lt0 01, and sq0d 19, 20 and 22. Silicon raises
+  4 or 13 where QEMU raises 24, at the same pc.
+- Every boot completed, with the monitor readings 0.
+- The standing 346-cell pass on the tree bitstreams stays the record. This column sits beside it.

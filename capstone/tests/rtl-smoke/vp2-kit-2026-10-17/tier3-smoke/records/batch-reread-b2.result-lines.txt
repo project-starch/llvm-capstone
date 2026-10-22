@@ -1,0 +1,78 @@
+# The corpus re-read on the batch bitstream c721c1a2a, board 2 (kit bkit8-batch-b2): result lines only (tier3-reread-batch.sh, spec records/reread-spec-b2.txt).
+RR START 21:54:30 board 2 spec f58053f1c2d877fb (10 arms)
+RR pym0 BEGIN 21:54:31 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py tree 4a5be7e838c3 booking 124
+RR pym0 END 22:44:56 rc=0 :: APPVM read rc=0 22:44:56 :: --- vp2-malloc (virtual-pymalloc): {'MISSED': 20}
+RR pym0 COMPARE vs batch reference rc=0 :: 20 of 20 cells the same
+RR pym0 VCOMPARE rc=0 :: 20 of 20 cells the same
+RR pym0 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR pym1 BEGIN 22:44:56 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py tree 4a5be7e838c3 booking 127
+RR pym1 END 22:57:46 rc=0 :: APPVM read rc=0 22:57:46 :: --- vp2-nested-pools (virtual-pymalloc-pools): {'CAUGHT': 20}
+RR pym1 COMPARE vs batch reference rc=0 :: 20 of 20 cells the same
+RR pym1 VCOMPARE rc=0 :: 20 of 20 cells the same
+RR pym1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR pb9 BEGIN 22:57:46 board 2 kind cases tree 4a5be7e838c3 booking 129
+RR pb9 END 23:06:09 rc=0 :: --- vp2-malloc (virtual-ffmpeg-pool-stock): {'MISSED': 4}
+RR pb9 COMPARE vs batch reference rc=0 :: 4 of 4 cells the same
+RR pb9 VCOMPARE rc=0 :: 4 of 4 cells the same
+RR pb9 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR pb12 BEGIN 23:06:09 board 2 kind cases tree 4a5be7e838c3 booking 131
+RR pb12 END 23:16:01 rc=0 :: --- vp2-malloc (virtual-memcached-stock): {'CAUGHT': 1, 'MISSED': 8}
+RR pb12 COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR pb12 VCOMPARE rc=0 :: 9 of 9 cells the same
+RR pb12 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR pb10 BEGIN 23:16:01 board 2 kind cases tree 4a5be7e838c3 booking 133
+RR pb10 END 23:24:32 rc=0 :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 4}
+RR pb10 COMPARE vs batch reference rc=0 :: 4 of 4 cells the same
+RR pb10 VCOMPARE rc=0 :: 4 of 4 cells the same
+RR pb10 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR wm0 BEGIN 23:24:33 board 2 kind appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py tree 4a5be7e838c3 booking 134
+RR wm0 END 23:34:56 rc=0 :: APPVM read rc=0 23:34:56 :: --- vp2-malloc (virtual-wmem): {'MISSED': 23}
+RR wm0 COMPARE vs batch reference rc=0 :: 23 of 23 cells the same
+RR wm0 VCOMPARE rc=0 :: 23 of 23 cells the same
+RR wm0 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR pb13q15 BEGIN 23:34:56 board 2 kind cases tree e2b26ea2c1e4 booking 135
+RR pb13q15 END 23:44:41 rc=0 :: --- vp2-nested-pools (virtual-memcached-sublet): {'CAUGHT': 7, 'NO-READING:control-failed': 2}
+RR pb13q15 COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR pb13q15 VCOMPARE rc=0 :: 9 of 9 cells the same
+RR pb13q15 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR pgm1q15 BEGIN 23:44:42 board 2 kind pgm tree e2b26ea2c1e4 booking 136
+RR pgm1q15 END 23:53:38 rc=0 :: --- vp2-pg-pools (virtual-mallocng-replay-pools): {'CAUGHT': 5}
+RR pgm1q15 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm1q15 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR pgm1q15 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR wm1q15 BEGIN 23:53:38 board 2 kind appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py tree d0f0f4b41ae6 booking 138
+RR wm1q15 END 00:05:22 rc=0 :: APPVM read rc=0 00:05:22 :: --- vp2-nested-pools (virtual-wmem-pools): {'CAUGHT': 22, 'NO-READING:unattributed': 1}
+RR wm1q15 COMPARE vs batch reference rc=0 :: 23 of 23 cells the same
+RR wm1q15 VCOMPARE rc=0 :: 23 of 23 cells the same
+RR wm1q15 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15a BEGIN 00:05:23 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 7b4a95471449 only 00,01,02,03,04,05 booking 140
+RR sq1q15a END 00:17:57 rc=0 :: APPVM read rc=0 00:17:57 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 4, 'MISSED': 2}
+RR sq1q15a COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15a VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15a readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15b BEGIN 00:17:57 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 7b4a95471449 only 06,07,08,09,10,11 booking 142
+RR sq1q15b END 00:31:10 rc=0 :: APPVM read rc=0 00:31:10 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 3, 'MISSED': 3}
+RR sq1q15b COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15b VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15b readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15c BEGIN 00:31:10 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 7b4a95471449 only 12,13,14,15,16,17 booking 145
+RR sq1q15c END 00:44:26 rc=0 :: APPVM read rc=0 00:44:26 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 5, 'MISSED': 1}
+RR sq1q15c COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15c VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15c readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15d BEGIN 00:44:26 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 7b4a95471449 only 18,19,20,21,22,23 booking 148
+RR sq1q15d END 00:58:18 rc=0 :: APPVM read rc=0 00:58:18 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 6}
+RR sq1q15d COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15d VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15d readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15e BEGIN 00:58:18 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 7b4a95471449 only 24,25,26,27,28,29 booking 150
+RR sq1q15e END 01:11:51 rc=0 :: APPVM read rc=0 01:11:51 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 6}
+RR sq1q15e COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15e VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15e readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15f BEGIN 01:11:51 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 7b4a95471449 only 30,31,32 booking 152
+RR sq1q15f END 01:22:46 rc=0 :: APPVM read rc=0 01:22:46 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 3}
+RR sq1q15f COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR sq1q15f VCOMPARE rc=0 :: 3 of 3 cells the same
+RR sq1q15f readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR seq-2 DONE 01:22:46

@@ -2500,7 +2500,7 @@ from an unprivileged domain is a finding even behind a configuration error, and 
   - (a) a physical id printed after recycling (a refusal id, a CPHT/CPID print with generation ≥ 1);
   - (b) a physical record's retire at the generation limit;
   - (c) physical pool exhaustion where silicon would recycle by push;
-  - (d) any physical index ≥ 65,536.
+  - (d) any physical index ≥ 65,535 (narrowed by the RTL lane's answer (2) below).
 - **What it does not touch:** the corpus arms. They run in contexts on flat virtual tables, whose generations QEMU
   models, and their physical ids are minted once at generation 0 below 65,536.
 - **RULE:** kit predictions stay off physical recycling until QEMU models it.
@@ -2510,8 +2510,20 @@ from an unprivileged domain is a finding even behind a configuration error, and 
   - a push at kill/retire and a pop at generation+1;
   - resolve/compose with the bitstream's split;
   - the retire.
-  - It needs the RTL lane's answers first: does physical kill/retire push in hardware on bitstream 2, and what is the
-    physical pool's capacity?
+  - **The RTL lane's answers** (capstone-ariane vp3-index18 d44c9441b, the 18-bit RTL bitstream 2 is cut from; the
+    compiler lane re-read them, and the board lane re-read :100-108, :217-227 and :378-383):
+    - **(1) Physical push: YES**, as on the virtual path.
+      - A physical KILL walk pushes each dead record onto the physical free list (capstone_rev_node.anvil:102-107:
+        `vctx_q == 0`, revoke_index > 2, generation != 4095). A physical CREVOKE pushes its operand (:619-623).
+      - The POP hands out generation+1 (:370-383, `node_id := #{g1, 18'd0} + pop_idx`).
+      - Two asymmetries: a record at generation 4,095 is retired, never pushed; and CSRETIRE's operand is written dead
+        WITHOUT a push on the physical path (RETIRE_COMMIT's else branch, :224-226). Its push is virtual-only (:217-223).
+    - **(2) Physical capacity:** a 16-bit bump head, unchanged by bitstream 2 (REVNODE_HEAD_BITS 16, sentinel 65,535;
+      capstone_unit.anvilh:624-640; the bump at :397-398 from head 3).
+      - That is 65,532 records by bump (indices 3..65,534), plus whatever the free list recycles. Physical ids always
+        have bits 17:16 clear.
+      - So QEMU's 65,536-id pool is close in SIZE; the divergence is generations, push and retire.
+      - Prediction kind (d) narrows to "an index ≥ 65,535", which the RTL cannot reach.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 

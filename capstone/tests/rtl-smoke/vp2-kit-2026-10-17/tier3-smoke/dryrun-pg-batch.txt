@@ -1,0 +1,23 @@
+# tier3-pg-batch.sh dry run, 2026-10-22 15:28, board 1; the runner, its QEMU check, busy and the scoring stubbed (PG_SCORE: nothing filed).
+# under: a measured firmware of 25,000,000 B boots (the stub copies the reference bundle); over: 26,500,000 B must stop before any boot.
+== under
+PG MEASURE: firmware 25000000 B against 26000000
+T3PG dry BEGIN 15:28:57
+T3PG dry END 15:28:57 rc=0 :: --- stub: 9 cells
+PG inputs as recorded: fixture 956173e054762e91, image dc2a1356dce735e0
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x0
+SCORE-STUB dry <mnt-hdd>/capstone/pgp-trim/bundle <scratch>/pg/r-under <scratch>/pg/under.out
+PG DONE 15:28:57
+== over
+PG MEASURE: firmware 26500000 B against 26000000
+PG STOP: the measured firmware is not under the cap; no boot
+== make-batch-kit.sh MK_M=1 (the real board 1 measure-only batch kit)
+MK kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-mb1: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit7-rev2xmDN2:
+< BOARD_BITSTREAM=caplifive_vp2c_8522d72fe
+> BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+< BOARD_FW_MON=/tmp/capstone/csbi-drt
+< BOARD_MONITOR_COMMIT=f13dbc5
+> BOARD_FW_MON=/tmp/capstone/csbi-batch
+> BOARD_MONITOR_COMMIT=d9da397
+MK module 21fbfc397e7c7a42 DONE
