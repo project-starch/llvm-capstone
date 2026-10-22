@@ -6786,6 +6786,9 @@ Records: `records/uaf-repeat-dm-b1.result-lines.txt` and `records/uaf-repeat-dm-
     Readings 0.
   - This boot does not qualify launcher 518a66b9 for any record. It gets no Tier 1, and the reading is valid only if
     the boot's unset controls and bounds run read as on b27afefc.
+- **The flash chain:** `flash-and-first-b1.sh`'s busy check is now a wait, up to 4 h
+  (`board-tier12/batch/dryrun-flash-and-first-b1-wait.txt`). If it is launched while this arm runs, it flashes only
+  after the arm ends.
 
 ### The PTE at the uaf control's cause-13 refusal, result (2026-10-22 11:56-12:38, both boards, module d0d5f758 refuse_pte=1): no arena, no PTE
 
@@ -6883,6 +6886,41 @@ S-23's flush_all plumbing.
 - **Its prediction for board 1's keep-retired arm is revised** to "0 or a small rate; the simulation gives no number".
   Any SILENT read there remains an allowed load after a retire the module saw succeed.
 
+### The retire itself, checked by the module (module 9d0ac297, retire_verify 1 then 2) on board 2: pre-registered (2026-10-22 13:1x, before the boot)
+
+- **Why:**
+  - The RTL lane's simulation reads a 13 as a load the capability check did not deny. Whether the module's retire
+    on silicon leaves the record VALID was first suggested by a simulated shape the RTL lane has since retracted
+    (above). It is now an open question that this module answers directly, on silicon.
+  - The module's retire() is csrw srevroot, CSRETIRE, csrw srevroot.
+  - The runtime lane's module 9d0ac29747a00dad checks the RECORD rather than the status, so the reading does not
+    depend on load timing. Source: runtime/retire-verify a8916be04e23, dev 1f114d20d049 plus 81 lines, which I read.
+    0 RVC; the base reproduces 54d8a3af (the lane's claim).
+- **What the module does:**
+  - retire_verify=1: the ancestor's flat-table record is read before each CSRETIRE, where it must be VALID. That is
+    the check's own positive control on every call: retire_pre_dead must stay 0, or the run is VOID. After an
+    accepted retire the record is read again, and retire_post_live counts records still VALID.
+  - retire_verify=2: as 1, and also re-issues the CSRETIRE while the record stays VALID, at most 8 times.
+    retire_reissued and retire_fixed count those. This is a workaround CANDIDATE, unvalidated.
+  - The lane's QEMU gate: all counters 0 when off; at level 1, checks 31, pre_dead 0, post_live 0. A test build that
+    skips one CSRETIRE reads post_live 1 at level 1, and reissued 1, fixed 1 at level 2.
+- **What runs:**
+  - board 2 (tree B) after the mapped arm ends, one cold boot;
+  - kit `bkit7-rev2xBDN2-rv`, which differs from bkit7-rev2xBDN2 only in the module (9d0ac297);
+  - `--retire-verify 1,2`: retire_verify is set through sysfs and read back, then 200 uaf runs at level 1, then 200 at
+    level 2. The five counters are read after every run and attributed to that run by difference.
+  - `UR_KITSFX=-rv UR_MODSHA=9d0ac29747a00dad UR_TAG=-rv UR_BOOKMIN=120 UR_ARGS="--no-trace --dmesg --retire-verify 1,2"`,
+    N=200.
+  - Dry run: `dryrun-uaf-repeat-rv.txt`. With no options, the generated gate is still the first repeat's.
+- **This boot qualifies 9d0ac297 for no record.** It gets no Tier 1. The reading is valid only if the bounds run reads
+  28, every uaf run faults at code+0x10c70, both levels read back, retire_pre_dead stays 0, and the readings are 0.
+- **Predictions, all three lanes' readings combined:**
+  - **If the retire on silicon sometimes leaves the record live, at level 1:** post_live increments in about the 13 rate of
+    runs, and those runs are the cause-13 runs. Every cause-13 run shows post_live+1, and no cause-25 run does.
+  - **At level 2:** the 13s are gone, every run reads 25, and retire_fixed equals retire_post_live.
+  - **post_live 0 with cause-13 runs continuing** refutes the retire shape. The 13s would then come from something
+    else.
+
 ### A retired region kept mapped, result (2026-10-22 12:37-13:51, board 1, tree A): 0 silent reads in 200, and no cause 13 either
 
 Record: `records/uaf-repeat-keep-b1.result-lines.txt`.
@@ -6933,3 +6971,32 @@ Record: `records/uaf-repeat-mapped-b2.result-lines.txt`.
     object-revoked on tree B): every one refused with cause 25. None completed.**
   - Beside them, in the same two boots, the unchanged control read cause 13 in 13 of 400. Every 13 examined is a
     fault on an unmapped, retired address.
+
+### The retire checked by the module, result (2026-10-22 13:53-15:26, board 2, tree B, module 9d0ac297): 4,400 accepted retires, none left the record live
+
+Record: `records/uaf-repeat-rv-b2.result-lines.txt`.
+
+- **Read:**
+  - retire_verify read back 1, then 2.
+  - **The counters after 400 runs: checks 4,400 (11 accepted retires per run), pre_dead 0, post_live 0, reissued 0,
+    fixed 0.**
+  - Every uaf run's counters were read (no unread run).
+  - pre_dead 0 means the record read VALID before every one of the 4,400 retires: the instrument's own positive
+    control held on every call.
+  - Cause 13 in 4 of 200 at level 1 and 6 of 200 at level 2. Every one has two arena refusals at its own address
+    and **post_live +0 in its own run**.
+  - The bounds run reads 28. Readings 0.
+- **Against the pre-registration (94000e799f82): the reading is "post_live = 0 alongside continued 13s".** By the
+  pre-registered rule, that rules out a retire that failed to take effect: in every cause-13 run the module saw the
+  ancestor's record dead after its retire. The level-2 re-issue never fired, so it is neither a workaround nor
+  needed.
+- **Where the cause-13 question now stands, all silicon readings on the current bitstreams:**
+  - at the fault there is no arena and no PTE (refuse_pte);
+  - the retire took effect (this arm);
+  - with the retired region kept mapped there is no 13 and no completed read in 200 (keep-retired);
+  - a freed object on a live page is refused in 200 of 200 (mapped).
+  - The RTL lane's simulation finds no route to a 13 through a dead record.
+  - Left: what the munmap path carries that the keep-retired arm removes (the kernel's TLB maintenance and timing,
+    and address reuse) and that the simulation's munmap variants do not reproduce. That is open, and it comes with
+    no completed read.
+- **Rate:** cause 13 in 10 of 400 control runs here. Over the whole day, tree A 16 of 720 and tree B 26 of 1120.

@@ -1,0 +1,18 @@
+# uaf-repeat.py --retire-verify 1,2 stub dry run, 2026-10-22 13:1x, N=3 per level. Planted: uaf-2 a cause 13 with post_live+1 at level 1;
+# uaf-5 a cause 25 with post_live+1, reissued+1 and fixed+1 at level 2. With no options, the generated gate is still the first repeat's.
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f7f690c24'} capstone-exec: domain fault cause=28 pc=0x3f7f690c24
+RV-SET rv-set-1 RVSET 1
+RV checks=0 pre_dead=0 post_live=0 reissued=0 fixed=0
+RV-DELTA uaf-2-plain cause=13 pre_dead+0 post_live+1 reissued+0 fixed+0
+RUN uaf-2-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f7f690c70 address=0x3f7f755040 entry=0x3f7f680868 code=0x3f7f680000-0x3f7f700000'} causes=['13']
+RV-SET rv-set-2 RVSET 2
+RV checks=3 pre_dead=0 post_live=1 reissued=0 fixed=0
+RV-DELTA uaf-5-plain cause=25 pre_dead+0 post_live+1 reissued+1 fixed+1
+TALLY rv1 cause 13: 1
+TALLY rv1 cause 25: 2
+TALLY rv1 cause cause13-post_live+True: 1
+TALLY rv1 cause cause25-post_live+False: 2
+TALLY rv2 cause 25: 3
+TALLY rv2 cause cause25-post_live+False: 2
+TALLY rv2 cause cause25-post_live+True: 1
+completed=True steps=10 of 10 transcript=<scratch>/urv/work/board.txt

@@ -6911,3 +6911,7 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
   - So in these runs the 13s need the munmap (its TLB maintenance, timing and address reuse), and they do not come
     with completed reads. At the fault, the module reads no arena and no PTE (`arena -1 ... pte rc=-22`, all 7
     examined with that module).
+  - **The retire itself was checked too** (the runtime lane's module 9d0ac297, tree B, 400 runs):
+    - the ancestor's record read VALID before each of 4,400 accepted retires, and dead after every one;
+    - this includes the 10 runs that read cause 13 in that boot;
+    - so a retire that fails to take effect is ruled out as the 13's source.

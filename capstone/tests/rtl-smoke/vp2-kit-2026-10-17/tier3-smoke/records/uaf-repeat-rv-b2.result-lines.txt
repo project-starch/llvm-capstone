@@ -1,0 +1,29 @@
+# retire_verify arm, module 9d0ac297 (kit bkit7-rev2xBDN2-rv; 94000e799f82), board 2 / tree B, 2026-10-22. Result lines only.
+UR BEGIN 13:53:09 board 2 booking 112 N=200 args --no-trace --dmesg --retire-verify 1,2 kit bkit7-rev2xBDN2-rv
+UNBOOK 112: 200
+UR END rc=0 15:26:33
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f92090c24 address=0x3f9219a050 entry=0x3f92080868 code=0x3f92080000-0x3f92100000 last=0x42 preparing=0x42 
+TALLY rv1 cause 13: 4
+TALLY rv1 cause 25: 196
+TALLY rv1 cause cause13-post_live+False: 4
+TALLY rv1 cause cause25-post_live+False: 196
+TALLY rv2 cause 13: 6
+TALLY rv2 cause 25: 194
+TALLY rv2 cause cause13-post_live+False: 6
+TALLY rv2 cause cause25-post_live+False: 194
+completed=True steps=404 of 404 transcript=<mnt-hdd>/capstone/t3-run-treeB/uaf-repeat-rv/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 15:26:33
+RV-SET-1 RVSET 1 | RV checks=0 pre_dead=0 post_live=0 reissued=0 fixed=0
+RV-SET-2 RVSET 2 | RV checks=2200 pre_dead=0 post_live=0 reissued=0 fixed=0
+FINAL COUNTERS after uaf-400-plain :: RV checks=4400 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-101-plain cause 13 address 0x3f97fbc040; own arena refusals 2; RV checks=1111 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-116-plain cause 13 address 0x3f94309040; own arena refusals 2; RV checks=1276 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-134-plain cause 13 address 0x3fbc5e4040; own arena refusals 2; RV checks=1474 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-197-plain cause 13 address 0x3f97d98040; own arena refusals 2; RV checks=2167 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-222-plain cause 13 address 0x3fb734f040; own arena refusals 2; RV checks=2442 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-255-plain cause 13 address 0x3f93de8040; own arena refusals 2; RV checks=2805 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-286-plain cause 13 address 0x3f97d79040; own arena refusals 2; RV checks=3146 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-291-plain cause 13 address 0x3f9b773040; own arena refusals 2; RV checks=3201 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-364-plain cause 13 address 0x3f8f6df040; own arena refusals 2; RV checks=4004 pre_dead=0 post_live=0 reissued=0 fixed=0
+RUN uaf-395-plain cause 13 address 0x3fb793b040; own arena refusals 2; RV checks=4345 pre_dead=0 post_live=0 reissued=0 fixed=0
