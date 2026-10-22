@@ -306,13 +306,14 @@ def main():
         # with collections and reclaimed both 0. There `nodes` (the header's allocation count, pops
         # included) can pass capacity only by popping freed records -- without generations the arm
         # stops at about capacity minus the node floor (64,001 on qkit7-v7b-mg) -- so more than two
-        # tablefuls is itself the evidence of reuse.
+        # tablefuls is itself the evidence of reuse. A flat table's size is fixed at 16 bytes a record, so its
+        # metadata bound is its own extent (1 MiB at 16 bits, 4 MiB at 18); the 1 MiB budget binds the paged one.
         software = sparse.get('collections', 0) > 0 and sparse.get('reclaimed', 0) >= sparse.get('nodes', 0) - capacity
         hardware = sparse.get('collections', -1) == 0 and sparse.get('reclaimed', -1) == 0
         tests['sparse_recycling'] = (lines.count('VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags') == 1
                                  and capacity > 0 and (software or hardware)
                                  and sparse.get('nodes', 0) > 2 * capacity
-                                 and sparse.get('node_bytes', 1 << 30) <= 1048576 and sparse.get('peak', 1 << 30) < 2048)
+                                 and sparse.get('node_bytes', 1 << 30) <= (16 * capacity if hardware else 1048576) and sparse.get('peak', 1 << 30) < 2048)
     tests['sqlite_results'] = lines.count('SQLITE_SUM=5050') == 1 and lines.count('SQLITE_PERSIST=100') == 1
     tests['mruby_results'] = lines.count('MRUBY_SUM=5050') == 1 and lines.count('MRUBY_FILE=virtual') == 1
     tests['completed'] = lines.count('VIRTUAL_RUNTIME_DONE') == 1
