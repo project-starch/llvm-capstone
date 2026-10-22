@@ -7731,3 +7731,37 @@ Record: `records/batch-newarms-b1.result-lines.txt`. Output: `<mnt-hdd>/capstone
   - pc=0 reads 1 in the rows 13-16 boot. That line is row 13's own predicted fault, `cause=12 pc=0x0 address=0x0` (a
     null call), not an anomaly.
 - **Against the pre-registration (revision 2, 45341683a39e): every reading holds.**
+
+### live-peak `hold 100000`, board 1 batch control, result (2026-10-23 03:39-03:48): every value as predicted
+
+Record: `records/hold-batch-b1.result-lines.txt`.
+- The read is `HOLD-NULL at 60590`, exit 71, no fault.
+- `--stats` after the run reads nodes_high_water **64,001**, nodes_allocated_total 64,001, node_capacity **65,536**;
+  before the run, 0, 0 and 65,536.
+- FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 read 0.
+- **Against the pre-registration (c0e7ff264da0): every reading holds, and the HOLD-NULL count is exact.** It matches
+  QEMU's 60,590, so the baseline held before the loop is the same on silicon.
+- This is the batch side of the pair. The bitstream-2 side runs on board 2 after its first boots.
+
+### mruby stock (virtual-malloc) on the batch bitstream, board 1: pre-registered (2026-10-23 03:5x, before the boot)
+
+- **Why:** the corpus arms beyond the pass. mruby Sublet ran with smoke-fit on 2026-10-22. Stock mruby has no reading on
+  the batch bitstream. Perl waits for trimmed batch references, which the payload cap needs and the compiler lane has
+  been asked for.
+- **What runs:** `tier3-mp-stock-batch.sh 1 <log>`. It is tier3-mp-batch.sh with the stock arm's inputs:
+  - the compiler lane's TICK reference, `batch-refs-r60/tick/mruby-stock`, on qkit7-batch2. Its images are built with
+    MRB_TICK_UNIT=100 (corpus-mp-r60t), the S-34 workaround.
+    - The MPT stamp reads image 1ab24a92, capi-11 dee93c7d, runner 9db9f5f7, appvm-arm 11967b37 and tree
+      6764d96229f6, and the read is "control smoke ok", fault 20 and completed 3.
+    - It reads MOVE 0 against the r60 4 ms reference.
+  - `--arm virtual-malloc` and the stock smoke;
+  - kit bkit8-batch-b1, with EXPECT_IMAGES taken from the reference's collected images.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/mp-mruby-stock-tick`.
+- **Dry run** (`dryrun-mp-stock-batch.txt`):
+  - a good run reads 23 of 23, and a planted cause change reads 22 of 23;
+  - a failed smoke reads VOID;
+  - it stops on the arm script's refusal, an incomplete boot, and a busy board.
+- **Predictions:**
+  - **matrix-compare against the tick reference: 23 of 23 cells the same**, with fault 20 and completed 3;
+  - control smoke ok;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0, and the boot completes.
