@@ -7130,3 +7130,23 @@ was touched.
   - the module's `diag gen-push` banner present (must-fire).
   - **This is the first application run built by the batch kit's own firmware recipe.** A firmware failure would be
     a kit finding, not a cell.
+
+### va-alloc-csret bare on the batch bitstream (item 6, generations), board 1: pre-registered (2026-10-22 15:1x, before the boot)
+
+- **The arm:** the RTL lane's kit `capstone/tests/rtl-smoke/va-alloc-bare-2026-10-23/` (dev 68679d2982ad).
+  - Image images/va-alloc-csret.bin, sha256 9491707dfa1613e3..., board_rec 0x8000a800. One bare JTAG boot, no
+    firmware, runner run_sup_bare.py as for s23.
+  - Its PREREG.md carries both simulated 20-value vectors, batch and tree A, differing at positions 1, 4, 11, 14, 15
+    and 18.
+- **What runs:** `tier3-va-alloc-bare.sh 1 <log>` with S23_KIT=bkit8-batch-b1, after the mruby arm ends on board 1.
+  - It is tier3-s23-bare.sh with the image, its board_rec, the grader and the output names changed.
+  - Grader `va-alloc-grade.py`, encoding the PREREG's rule:
+    - VOID unless one SR = 20, 20 values and position 0 = 0;
+    - PASS when all 20 equal the batch vector;
+    - PRE-BATCH when all 20 equal tree A's;
+    - otherwise a FINDING, printed position by position.
+  - Dry run (`dryrun-va-alloc-bare.txt`): batch reads PASS, tree A reads PRE-BATCH, 19 values read VOID, and one
+    changed value reads FINDING at its position.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/va-alloc-bare`, a new directory.
+- **Predicted: PASS**, `0x0 0x10004 0x0 0x0 0x20004 0x1 0x1 0x0 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0`:
+  generation-carrying ancestor ids 0x10004 and 0x20004, and REC_GEN 2. The 20 values go to the RTL lane as read.
