@@ -751,6 +751,58 @@ static void clear_page_tags(struct page *page)
         WRITE_ONCE(p[j], READ_ONCE(p[j]));
 }
 
+/* retire_verify (2026-10-22): CHECK THE RECORD, NOT THE STATUS. The RTL lane's directed sim
+ * (capstone-ariane rvk-unmap-cause 8456df2bb) found a CSRETIRE that answers 0 (accepted) and writes
+ * nothing, when it follows a context exit with a namespace-switching CSR write beside it -- the
+ * shape of this function -- and vp2's uaf control reads cause 13 instead of 25 in ~2 % of runs,
+ * which the RTL reads as a load through a region capability the retire did not revoke. So, in a
+ * FLAT table, the ancestor's record (id N at table word 2N; word 1 carries VALID at bit 60) is read
+ * BEFORE the CSRETIRE, where it must be VALID -- the instrument's own positive control, every
+ * call -- and AFTER an accepted one, where it must not be.
+ *   0  off (default: the production path is unchanged)
+ *   1  check and count; the first CV_RETIRE_BUDGET anomalies print at KERN_WARNING
+ *   2  as 1, and re-issue the CSRETIRE while the record stays VALID, at most CV_RETIRE_RETRIES
+ *      times -- a software workaround candidate for the current bitstreams, NOT validated as one.
+ * Counters, read-only in /sys/module/capstone_vm/parameters/: retire_checks (accepted retires
+ * checked), retire_pre_dead (the record was NOT valid before: the check is mis-addressed, so every
+ * other count is void), retire_post_live (accepted and still VALID), retire_reissued, retire_fixed
+ * (VALID cleared by a re-issue). Paged tables are not checked. */
+static unsigned long retire_verify;
+module_param(retire_verify, ulong, 0644);
+static unsigned long retire_checks, retire_pre_dead, retire_post_live, retire_reissued, retire_fixed;
+module_param(retire_checks, ulong, 0444);
+module_param(retire_pre_dead, ulong, 0444);
+module_param(retire_post_live, ulong, 0444);
+module_param(retire_reissued, ulong, 0444);
+module_param(retire_fixed, ulong, 0444);
+#define CV_RETIRE_BUDGET 16U
+#define CV_RETIRE_RETRIES 8U
+static unsigned retire_prints;
+#ifdef CV_TEST_HOOKS
+/* Test build only: the first test_retire_skip accepted retires are NOT issued (status reads 0), so
+ * the post-check must find the record VALID and, at retire_verify=2, the re-issue must clear it. */
+static unsigned long test_retire_skip;
+module_param(test_retire_skip, ulong, 0444);
+#endif
+static bool record_valid(const struct context *c, unsigned long id, bool *ok)
+{
+    unsigned long index = id & 0xffffUL;
+    *ok = node_table_flat && index >= 2 && index < CV_FLAT_RECORDS;
+    if (!*ok) return false;
+    asm volatile("fence rw,rw" ::: "memory");
+    return (READ_ONCE(c->table[2 * index + 1]) >> 60) & 1UL;
+}
+static unsigned long retire_op(struct context *c, unsigned long id)
+{
+    unsigned long flags, old, status;
+    preempt_disable(); local_irq_save(flags);
+    old = select_root(c);
+    asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
+                 : "=&r"(status) : "r"(id) : "memory");
+    restore_root(old);
+    local_irq_restore(flags); preempt_enable();
+    return status;
+}
 static int retire(struct context *c, struct arena *a, bool destroying)
 {
     unsigned long flags, old, status;
@@ -771,12 +823,41 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     if (a->ancestor_retired) {
         status = 0;
     } else {
+        bool checked = false, pre = false;
+        if (retire_verify) {
+            pre = record_valid(c, a->ancestor, &checked);
+            if (checked && !pre) ++retire_pre_dead;
+        }
+#ifdef CV_TEST_HOOKS
+        if (test_retire_skip) { --test_retire_skip; status = 0; } else
+#endif
+        {
         preempt_disable(); local_irq_save(flags);
         old = select_root(c);
         asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
                      : "=&r"(status) : "r"(a->ancestor) : "memory");
         restore_root(old);
         local_irq_restore(flags); preempt_enable();
+        }
+        if (retire_verify && checked && pre && !status) {
+            unsigned tries = 0;
+            ++retire_checks;
+            if (record_valid(c, a->ancestor, &checked)) {
+                ++retire_post_live;
+                while (retire_verify >= 2 && tries < CV_RETIRE_RETRIES &&
+                       record_valid(c, a->ancestor, &checked)) {
+                    ++tries; ++retire_reissued;
+                    (void)retire_op(c, a->ancestor);
+                }
+                if (tries && !record_valid(c, a->ancestor, &checked)) ++retire_fixed;
+                if (retire_prints < CV_RETIRE_BUDGET) {
+                    ++retire_prints;
+                    pr_warn("capstone_vm: retire accepted but record live: id 0x%lx destroying %d "
+                            "reissued %u now %s\n", a->ancestor, destroying, tries,
+                            record_valid(c, a->ancestor, &checked) ? "LIVE" : "dead");
+                }
+            }
+        }
         if (status && !destroying) return -EIO;
         if (!status) ++c->retired_flat;   /* read only in flat mode; inert for the paged path */
     }
