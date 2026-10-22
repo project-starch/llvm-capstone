@@ -1315,3 +1315,29 @@ The instrument had read the pre-batch vector, all 25 values, on both resident tr
 two-sided silicon reading of item 1's re-arm. Tier 1 and the vp2 rungs follow on the board lane; the rows that decide the
 batch's other items are r8..r11 (S-25/R-57, must complete), the S-23 fetch-face refusal (must be absent) and va-alloc's
 generation readings (item 6).
+
+## 2026-10-23: the batch bitstream's silicon acceptance, both boards
+
+Both boards run `caplifive_vp2c_c721c1a2a.bit` (board 1 flashed 14:20, board 2 15:29, each read back by sha256). Read on
+each, graded here by value against the pre-registrations:
+
+| arm | what it decides | board 1 | board 2 |
+|---|---|---|---|
+| `s23-cpmp-rearm` bare (s23-bare-2026-10-21, 7ae1d8491466) | item 1's data face: the six re-arm probes flip, total 8 → 14 | all 25 values = the batch vector | all 25 values = the batch vector |
+| Tier 1's fetch-face counters (the board lane's tier3-smoke) | item 1's fetch face: the S-23 refusal ABSENT | DRT1/FRTY/FRTC/INJS/INJL/Oops/pc=0 all 0 | the same |
+| Tier 1 `sparse-churn` (vp2 kit) | item 5 / S-25 / R-57: the rung COMPLETES where every earlier tree wedged | VM_EXIT 0, VIRTUAL_SPARSE_CHURN_OK at 200,000 allocations | identical, nodes=600041 steps=200065 |
+| `va-alloc-csret` bare (va-alloc-bare-2026-10-23, 46e03aa0fff8) | item 6: generation-carrying ids and the stale retire refused | SR 17, all 17 = the batch vector (post hoc: the boot was VOID under the first rule, see below) | SR 17, all 17 = the batch vector, PASS under the rule pre-registered before the boot |
+
+Items 2 (R-58, the caller's srevroot), 3 (R-59, the root precheck) and 4 (R-60, the window predicate) have **no board
+arm of their own in this round**: their acceptance is the simulation pair on the stamped tree (sections 3 and 5 above)
+and the s23 boot's precondition rows. That is stated here so it is not read as a silicon result.
+
+**One void boot and its lesson.** The va-alloc kit's first PREREG said SR 20, taken from the simulation TRACE; the
+board printed 17. The simulation's retirement trace prints a CAPPRINT that sits within a few instructions after a
+lifetime op TWICE (the op's commit flush re-issues the younger print and the trace records both retirements), while
+the recorder counts the one architectural execution. The three doubled prints were the status print after each of the
+two CSRETIREs and the load print after the second. The PREREG was corrected to the 17 architectural values before
+board 2's boot (46e03aa0fff8); board 1's boot stays VOID by the rule written before it, its 17 values recorded as equal
+to the corrected vector post hoc; board 2's boot is the pre-registered grade. Rule for every later kit: take a vector's
+COUNT from the test's print sites or the recorder's semantics, never from the raw trace. (The same doubling had produced
+a false "CSRETIRE executed twice" reading in the cause-13 investigation the same day, retracted on the same evidence.)
