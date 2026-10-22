@@ -52,3 +52,65 @@ cases and does not use the exit-75 convention.
 
 `live_in_pin` is `null` on every row, with the reason in each `case.json`: the defect is in the
 binding, this corpus pins no binding release, and the host arm builds the 3.53.3 amalgamation.
+
+## The virtual-malloc arm (and vp2-malloc on the board)
+
+**The project lead's decisions, relayed by the runtime lane on 2026-10-22** ("capi и xlang как рекомендовано"):
+- **(a) Version:** SQLite 3.53.3, the host arm's amalgamation, through ports/sqlite's six rewrites plus
+  `-DHAVE_MALLOC_H=1 -DHAVE_MALLOC_USABLE_SIZE=1`.
+- **(b) Controls:** the generic malloc controls suffice, with no per-row FIXED twin.
+- **(c) Verdicts by oracle:**
+  - heap-use-after-free, cause 25: CAUGHT;
+  - bad-free, refused by the allocator (cause 2 in `cap_malloc_invalid_free`): CAUGHT;
+  - null-deref (cause 24 or 12): its own class, never counted as a temporal catch;
+  - none, exit 0: correct, no false alarm.
+
+**How it runs** (`shared/run-virtual.py`, whose docstring is the contract):
+- **The build:** the runner builds everything into its raw directory.
+  - SQLite: `fetch-sqlite.sh`'s 3.53.3 amalgamation through the rewrite block of `build-sqlite-capstone.sh`. The block
+    is read out of that script at run time, and a script without its six rewrites and six asserts stops the build.
+    Compiled `-O1 -g -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION` (the host arm's flags) plus the two
+    usable-size defines.
+  - Each row: `before.c` at `-O0 -g`, linked with `shared/virtual-main.c` through `-Wl,--wrap=main`.
+- **The marker:** the wrapper prints `CAPI BEGIN` at main's entry and `CAPI RETURNED <rc>`.
+  - BEGIN is entry, not the access.
+  - A row that exits non-zero without a fault reads inconclusive, never MISSED.
+- **The sites:** a row's `fault_sites` is host ASan's frame #0 for its before.c, read from
+  `run-host-asan-repros.sh` on 2026-10-22 (18/18 oracles matched):
+  - `main` for rows 1, 3-5 and 7-10;
+  - `read_context` for row 2, `stale_udf` for row 6, `authorize` for row 16;
+  - `cap_malloc_invalid_free` for the bad-free row 11, by decision (c).
+  For the rows whose site is `main`, a fault anywhere in main is attributed. Main is the row's own short program, and
+  this is the coarsest attribution in the corpus.
+- **Not scored as temporal catches:** null-deref and none rows are recorded as NO-READING:out-of-denominator. The
+  reading is in `notes` and in inputs.json's `classes`, where a fault on a none row is written FALSE ALARM. Row 15 has
+  no program.
+- **Lookaside** stays at SQLite's default, as on the host arm. A stale pointer into a lookaside slot sits inside a live
+  malloc block, which this arm cannot see. The arm does not claim those.
+
+### Pre-registration (2026-10-22, before its first run): qkit7-batch2, the batch SDK t3-freeze-nb-nomovc-cw-r60
+
+The runner's build was run on its own, with no boot, before this was written:
+- 18 row images build;
+- the rewritten amalgamation equals, byte for byte (3b2007721ca3...), the one the exploratory run used
+  (capstone/tests/corpus-cell-probes/README.md);
+- the rewrite-block guard refuses a script with one rewrite removed;
+- the observation logic was exercised on synthetic runs: catch at a site, catch elsewhere (unattributed), completed
+  (MISSED), exit 1 (inconclusive), no BEGIN (setup-fault), the null-deref class, a clean none row, and a none-row false
+  alarm.
+
+**Predicted:**
+
+| row | oracle | verdict | reading |
+|---|---|---|---|
+| 1, 3, 4, 5, 7, 8, 9, 10 | heap-use-after-free | CAUGHT | cause 25 in `main` |
+| 2 / 6 / 16 | heap-use-after-free | CAUGHT | cause 25 in `read_context` / `stale_udf` / `authorize` |
+| 11 | bad-free | CAUGHT | cause 2 in `cap_malloc_invalid_free` |
+| 12, 14 | null-deref | out-of-denominator, class null-deref | cause 24 in `main` |
+| 13 | null-deref | out-of-denominator, class null-deref | cause 12 at an unsymbolized pc (a call through a null function pointer; ASan's pc 0) |
+| 17, 18, 19 | none | out-of-denominator, class none | correct, no false alarm |
+| 15 | none | out-of-denominator | no program |
+
+- Controls: bounds-malloc fault, uaf-malloc fault.
+- The tally: CAUGHT 12, NO-READING:out-of-denominator 7.
+- A row reading otherwise is reported as read, not re-sited.

@@ -12,6 +12,13 @@
     "host-asan": {
       "oracle": "none",
       "observed": "crash in Node/napi glue, memory-safe w.r.t. SQLite (SQLITE_RANGE)"
+    },
+    "virtual-malloc": {
+      "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)"
+    },
+    "vp2-malloc": {
+      "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)",
+      "status": "not written"
     }
   },
   "capstone_column": {

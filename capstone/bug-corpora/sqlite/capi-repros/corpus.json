@@ -10,7 +10,9 @@
   "case_schema": "sqlite-row",
   "case_number_base": 1,
   "required_arms": [
-    "host-asan"
+    "host-asan",
+    "virtual-malloc",
+    "vp2-malloc"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -19,6 +21,7 @@
   },
   "runners": [
     "capstone/bug-corpora/sqlite/capi-repros/run-host-asan-repros.sh",
+    "capstone/bug-corpora/sqlite/capi-repros/shared/run-virtual.py",
     "capstone/ports/sqlite/run-sqlite-row2.sh",
     "capstone/ports/sqlite/run-sqlite-row3.sh",
     "capstone/ports/sqlite/run-sqlite-row3-b2.sh",
@@ -34,5 +37,9 @@
     "RUSTSEC-2021-0128 = CVE-2021-45713 = GHSA-q89g-4vhh-mvvm",
     "RUSTSEC-2021-0037"
   ],
-  "note": "The defects are in the bindings, not in the engine. SQLite's own engine-internal CVEs are recorded as out of scope in row12's PROVENANCE.md. The Capstone column is measured on 7 of the 19 rows."
+  "note": "The defects are in the bindings, not in the engine. SQLite's own engine-internal CVEs are recorded as out of scope in row12's PROVENANCE.md. The Capstone column is measured on 7 of the 19 rows. The virtual-malloc arm (and vp2-malloc on the board) runs each before.c on the virtual profile against the same 3.53.3 amalgamation through ports/sqlite's rewrite pass, with SQLite calling malloc directly (HAVE_MALLOC_USABLE_SIZE); its scoring follows the project lead's decisions of 2026-10-22, recorded in README.md.",
+  "arm_configurations": {
+    "virtual-malloc": "virtual-mallocng",
+    "vp2-malloc": "virtual-mallocng"
+  }
 }
