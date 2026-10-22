@@ -62,3 +62,14 @@ less the wrapper):
 
 **For the board (vp2-malloc):** the same invocation with `--board-kit <kit>` in place of `--virtual-kit`. Its
 prediction is the virtual run's reading, row for row.
+
+## Result (2026-10-22 18:38, qkit7-batch2 on QEMU domain A, at d4d26ea376ac): as predicted, every row
+
+- **Controls:** both fault.
+- **repro:** rows 1, 3 and 7 are CAUGHT with cause 25 in `memcpy`. Row 2 (stack use-after-return) is MISSED: it
+  completes with exit 0. The 11 mruby rows are out of the denominator.
+- **lua-cdp:** all 13 are CAUGHT with cause 25: lua-openssl-141 in `openssl_cipher_ctx_free`, the other 12 in `main`.
+- **Tallies:** repro CAUGHT 3, MISSED 1, NO-READING:out-of-denominator 11; lua-cdp CAUGHT 13.
+- **Bundles:** `xlang/repro/results/2026-10-22-virtual/virtual-malloc` and
+  `xlang/lua-cdp/results/2026-10-22-virtual/virtual-malloc`, with local paths written as `/mnt/hdd/<user>/`.
+- An xlang-row corpus has no case.json, so no `verdict_bundles` are declared. The bundles are the record.
