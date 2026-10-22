@@ -7559,3 +7559,40 @@ Record: `records/batch-pg-pools-b1.board.txt`. The bundle is filed under
 - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0. The gen-push banner is present (x1).
 - **Against the pre-registration: every reading holds.** This is the first board reading of pg-pools at all. On the trees,
   its nested contexts exhausted the flat table. The batch's recycling (item 6) is what lets it run.
+
+### The corpus re-read on the batch bitstream, result (2026-10-22 21:54 to 2026-10-23 01:57, both boards): 305 of 305 cells in verdict, 302 in every field
+
+Records: `records/batch-reread-b1.result-lines.txt` and `records/batch-reread-b2.result-lines.txt`. Output:
+`<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b{1,2}/rr-*`.
+
+**Board 2** (10 arms, 15 boots, 150 cells): **150 of 150 the same** by compare-pilot and by verdicts-compare.
+- The arms are pym0, pym1, pb9, pb12, pb10, wm0, pb13q15, pgm1q15, wm1q15 and sq1q15 a-f.
+- **sq1q15's 29 and 31 read cause 24 as the batch reference**, as predicted. Before the batch, the standing column read
+  cause 28.
+
+**Board 1** (13 arms, 18 boots, 155 cells): **152 of 155 the same in every field, and 155 of 155 in verdict.**
+- The arms are fph, fpt, fca, fcs, fso, mph, mpt, wph, wpt, pgc, pgm0, pgm1 and sq0 a-f. Every group but sq0d reads
+  all its cells the same.
+- **sq0d differs in the fault cause alone, in three cells**, all at the same symbol+offset as QEMU:
+  - 19 (rtree cursor): cause 4 against QEMU's 24, nodeRelease+144;
+  - 20 (rtree inode0): cause 4 against 24, nodeRelease+144;
+  - 22 (spellfix): cause 13 against 24, editDist3FindLang+244.
+- **This is Q-31,** the ruled ordering divergence: silicon takes the address trap (4 misaligned, 13 non-canonical)
+  before the tag check. The ruling is dev 70c43b2cee8b, "no verdict consequence". These are the **same three cells,
+  causes and offsets** that sq0d read on 2026-10-18 (dev 15d5177ef2cd).
+
+**In every one of the 33 boots** FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0, collect-skipped and cause=29 read 0, and
+every boot completed.
+
+**Against the pre-registration (bbae366998e0): the prediction "every cell as its batch reference" missed by one field in
+three cells.**
+- Those three were predictable. They are the recorded Q-31 cells of sq0d, and the pre-registration should have listed
+  them, as it should have listed lt0's case 01. The rule to read every open ISSUES row against the images a run reuses
+  covers exactly this, and it was not applied to Q-31.
+- No reading is new, and no verdict moved.
+
+**The corpus on c721c1a2a so far:** 23 re-read arms plus cpython lt0 and lt1 plus pg-pools.
+- 305 + 32 + 32 + 9 = 378 cells. All 378 match in verdict, and 374 match in every field. The four field differences are
+  all Q-31.
+- sql0 (9 cells) is running on board 2. The new arms (xlang, plane and capi) follow on board 1.
+- The standing 346-cell pass on the two tree bitstreams stays the record. These cells sit beside it.
