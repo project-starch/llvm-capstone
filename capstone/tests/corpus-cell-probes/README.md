@@ -365,6 +365,24 @@ and with PYTHONMALLOC=malloc, b2twin2-q8, the same image.
   instrument is an image whose runtime has the larger mapping cap. That is a second variable, and it would be named
   as one.
 
+**Result** (2026-10-22 18:23, b2twin2-q8, domain A, one boot each):
+
+| call | reading | high_water | allocated_total |
+|---|---|---:|---:|
+| minimal, pymalloc | `MIN BEGIN`, `MIN IMPORTED`, `MIN RAISED TypeError`; exit 0, no fault | 3,394 | 5,897 |
+| minimal, PYTHONMALLOC=malloc | `MIN BEGIN`, then MemoryError inside `import ast` (no `MIN IMPORTED`); exit 1, no fault | 21,327 | 35,130 |
+
+- **pymalloc: HELD, on its TypeError branch.** The statement runs, and the garbage length read past the object was
+  small this time (the run 1 host check saw TypeError once in five). The outcome follows the neighbouring bytes,
+  as on the host build.
+- **malloc: the startup branch.** The interpreter dies importing `ast`, so per-object malloc fails before any test
+  code, whatever runs it.
+- **The startup cap is not the record table** (21,327 of 262,144). The candidate, `CV_MAX_ARENAS` 512, sits in two kit
+  components: the launcher (`exec.c`, built into capstone-vexec) and the module (`capstone_vm.c`).
+  - Testing it means a vexec and a module rebuilt with dev's 8,192, which is two kit components owned by the runtime
+    lane. That is not done here.
+  - **lt0 13 stays not measured on the guest.** Its mechanism comes from the source and the host build.
+
 ## pb13q15 05: the canary, rebuilt to read instead of write (pre-registered 2026-10-22, before its runs)
 
 **The hypothesis (the coverage file's row):** the case's own `memset(next, 0x5a, 1)` writes byte 0 of the NEXT item.
