@@ -7826,3 +7826,35 @@ Record: `records/batch-mp-mruby-stock-b1.result-lines.txt`.
   - **the compare against judge-batch2: 366 of 366, differ 0**;
   - every batch completed, 12 census and 1 seeded;
   - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0 in every boot transcript.
+
+### perl stock and Sublet on the batch bitstream, result (2026-10-23 04:01-05:21, board 2): 11 of 11 per arm
+
+Record: `records/batch-mp-perl-b2.result-lines.txt`.
+- **perl-stock: 11 of 11 the same** as the trimmed batch reference (fault 6, exit255 1, completed 4). Its eval and shim
+  controls pass.
+- **perl-sublet: 11 of 11 the same** (fault 8, completed 3). Its controls pass.
+- pc=0, DRT1, FRTY, Oops, INJS and INJL read 0, and both boots completed.
+- **Against the pre-registration (e880a9a3a0e8): every reading holds.**
+- With mruby stock and Sublet already read, every release-differential arm now has a batch-bitstream board reading.
+
+### The Juliet spatial sample on the batch bitstream, board 2: pre-registered (2026-10-23 05:2x, before the first boot)
+
+- **The reference:** the compiler lane's `juliet-sp/batch2`, on qkit7-batch2 (dev cc95944a056e, pre-registered at lane
+  7a94506856f0).
+  - It uses the same r60 census build as the tree runs: build.json 806cc24a, manifest 03f048a1, 755 cases.
+  - The judging runs run.py 4b663651, probe.py d6200b39 and judge.py 93aa5ad9.
+  - It reads 755 of 755 equal to tB-mimic: CAUGHT 716, MISSED 22, NOT-TRIGGERED:sizeof-ptr 9, and INTRA-OBJECT
+    NO-READING 8. Every good twin is CORRECT.
+- **What runs:** `tier3-juliet-spatial-batch.sh 2 <log>`. It is tier3-juliet-spatial.sh with:
+  - the batch kit bkit8-batch-b2;
+  - a check of the reference's RESULT-batch2 stamp;
+  - the five-field compare against `batch2/results/spatial-verdicts.tsv`.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/juliet-spatial`.
+  - The run phase is booked 480 minutes, the hub's cap. The tree runs took 6.6 hours.
+- **Dry run** (`dryrun-juliet-spatial-batch.txt`): the phases get the build and SDK and the batch kit; a planted MISSED
+  reads "differ 1"; a busy board refuses.
+- **Predictions:**
+  - **the compare against batch2: 755 of 755, differ 0**, including the value-dependent CWE-170 rows;
+  - the tally as the reference's;
+  - all 24 batches completed;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0 in every transcript.
