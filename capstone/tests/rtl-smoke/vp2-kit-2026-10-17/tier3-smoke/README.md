@@ -6821,3 +6821,39 @@ The reflash of c721c1a2a waits on the lead's own word. These scripts make the fi
 - **Limit, written before the result:** a zero here clears the object-revoke path only. It says nothing about the
   region-retire path the 13s came from, and a read of a retired region's still-mapped page would need a module test
   hook (the runtime lane is looking).
+
+### A RETIRED REGION kept mapped (the cause-13 runs' own shape) on board 1: pre-registered (2026-10-22 12:2x, before the boot)
+
+- **Why:**
+  - The mapped arm on board 2 (above) tests the object-revoke path only. The cause-13 runs came from a REGION retire:
+    the freed 32-byte object's group is its own 4 KiB linear region, which the free retires (CV_RETIRE) and munmaps.
+  - The runtime lane's test launcher 518a66b97f2bd9e2 (runtime/vexec-keep-retired 0738f494c199: c14933904de4 plus 13
+    lines in exec.c unmap_arena(), which I read) keeps that shape and drops only the munmap when
+    CAPSTONE_VM_TEST_KEEP_RETIRED=1. The region is still retired (revoked, unpinned), but its PTEs stay, so the read
+    cannot page-fault. It prints `CAPSTONE_VM_TEST_KEEP_RETIRED base= bytes=`. Unset, it does nothing (the lane's
+    claim, and its unmodified tree reproduces b27afefc).
+  - The RTL lane closed the "check gated off" route from source (MPRV is never set in a context), per the runtime
+    lane. A silent read would therefore be the revocation cache's ALLOW.
+- **What runs:**
+  - board 1 (tree A), one cold boot, after the d0d5f758 arm ends;
+  - kit `bkit7-rev2xDN2-keep`, which differs from bkit7-rev2xDN2 only in adapter/capstone-vexec (518a66b9);
+  - the unchanged controls.dom b1decb06 and module 54d8a3af;
+  - 200 pairs: the uaf control unset, then `keep-k` with the variable set, every tenth traced;
+  - `UR_KITSFX=-keep UR_VEXSHA=518a66b97f2bd9e2 UR_TAG=-keep UR_BOOKMIN=110 UR_ARGS="--no-trace --dmesg --keep-retired"`.
+- **The gate** (`uaf-mapped/keep-retired-gate.txt`):
+  - QEMU (qkit7-tB-mimic with only the launcher swapped), 10 pairs: keep reads 25 in 10 of 10 with the hook fired and
+    the fault inside the kept region in all 10; the unset control reads 25 in 10 of 10.
+  - Board-path stub: a planted silent return reads SILENT; a run whose hook did not fire is counted apart.
+- **Readings and predictions:**
+  - **25 is the check denying. SILENT (the read returned, `CONTROL uaf-malloc RETURNED`, exit 0) is a load through
+    a revoked capability that read retired memory: the hazard, confirmed.**
+  - A cause 13 on a keep run would refute the reading, since the PTE is present.
+  - **Under the runtime lane's hypothesis (the cache sometimes ALLOWs): SILENT at about the 13 rate, a few in 200.**
+  - **Under the compiler lane's (an ordering hole that needs a PTW error): 0 SILENT, and every keep run reads 25.**
+  - The unset control reads as before (25, or 13 at a few percent, at `arena`). The hook fires on every keep run.
+    Readings 0.
+  - This boot does not qualify launcher 518a66b9 for any record. It gets no Tier 1, and the reading is valid only if
+    the boot's unset controls and bounds run read as on b27afefc.
+- **The flash chain:** `flash-and-first-b1.sh`'s busy check is now a wait, up to 4 h
+  (`board-tier12/batch/dryrun-flash-and-first-b1-wait.txt`). If it is launched while this arm runs, it flashes only
+  after the arm ends.

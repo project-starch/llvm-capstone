@@ -34,6 +34,7 @@ def main():
     p.add_argument("--n", type=int, required=True)
     p.add_argument("--no-trace", action="store_true", help="every uaf run untraced")
     p.add_argument("--mapped", type=Path, help="controls-mapped.dom: after each uaf run, one uaf-mapped run (the freed page kept mapped)")
+    p.add_argument("--keep-retired", action="store_true", help="after each uaf run, one with CAPSTONE_VM_TEST_KEEP_RETIRED=1 (a launcher whose hook keeps a retired region mapped)")
     kits.add_argument("--qemu-kit", type=Path, help="run the same steps in one QEMU boot of this virtual kit instead of a board")
     p.add_argument("--refuse-pte", action="store_true", help="set the module's refuse_pte=1 (0644) before the runs and read it back")
     p.add_argument("--dmesg", action="store_true", help="print the module's last 12 dmesg lines with each printed run")
@@ -82,6 +83,15 @@ def main():
                           f"> /tmp/u.txt 2>&1; rc=$?; grep -a -E 'domain fault|STALE_READ_SURVIVED|CONTROL uaf-mapped' /tmp/u.txt | sed 's/^/FL /'; "
                           f"if grep -q -E 'cause=13 |STALE_READ_SURVIVED' /tmp/u.txt || [ {k % 10} = 0 ]; then tail -n 300 /tmp/u.txt | sed 's/^/TR /'{dm}; fi; "
                           f"exit $rc")
+        if a.keep_retired:
+            # The runtime lane's launcher 518a66b9 (runtime/vexec-keep-retired 0738f494c199): with the variable set, the
+            # free's unmap still retires the region (revokes, unpins) but does not munmap it, so the read cannot page-fault.
+            kname = f"keep-{k}" + ("-traced" if k % 10 == 0 else "")
+            kenv = "CAPSTONE_VM_TEST_KEEP_RETIRED=1 " + ("CAPSTONE_VM_TRACE=1 " if k % 10 == 0 else "")
+            b.step(kname, f"( {kenv}./juliet-timeout {kname} 10000 -- ./capstone-vexec ./images/controls.dom uaf-malloc ) "
+                          f"> /tmp/u.txt 2>&1; rc=$?; grep -a -E 'domain fault|CONTROL uaf-malloc|CAPSTONE_VM_TEST_KEEP_RETIRED' /tmp/u.txt | sed 's/^/FL /'; "
+                          f"if grep -q -E 'cause=13 |RETURNED' /tmp/u.txt || [ {k % 10} = 0 ]; then tail -n 300 /tmp/u.txt | sed 's/^/TR /'{dm}; fi; "
+                          f"exit $rc")
     if a.dmesg:
         # The whole boot's refusals, read once at the end (the runtime lane's form): each unresolved fault is expected
         # to print twice (the module's in-step resolve, then the launcher's CV_RESOLVE).
@@ -90,7 +100,7 @@ def main():
         b.step("dmesg-all", "echo OLDEST $(dmesg | head -n 1); "
                             "echo REFUSED $(dmesg | grep -a -c 'capstone_vm: resolve refused'); "
                             "dmesg | grep -a 'capstone_vm: resolve refused' | tail -n 40 | sed 's/^/DA /'")
-    steps, transcript, completed = b.execute(a.qemu_kit or a.board_kit, a.out / "work", 3600 + 30 * a.n * (2 if a.mapped else 1))
+    steps, transcript, completed = b.execute(a.qemu_kit or a.board_kit, a.out / "work", 3600 + 30 * a.n * (1 + (1 if a.mapped else 0) + (1 if a.keep_retired else 0)))
     rows = {n: {"result": r, "text": t} for n, (t, r) in steps.items()}
     (a.out / "steps.json").write_text(json.dumps({"completed": completed, "transcript": str(transcript),
                                                    "n": a.n, "steps": rows}, indent=1))
@@ -109,6 +119,22 @@ def main():
             if not m or float(m.group(1)) > 60:
                 print(f"DMESG-ALL VOID: the ring's oldest line is {'unread' if not m else m.group(1) + ' s'} into the boot, "
                       f"so it has wrapped and REFUSED undercounts; the per-run reads are the reading")
+            continue
+        if n.startswith("keep-"):
+            causes = re.findall(r"^FL .*domain fault cause=(\d+) ", t, re.M)
+            ret = re.search(r"^FL CONTROL uaf-malloc RETURNED", t, re.M)
+            mark = re.search(r"^FL CONTROL uaf-malloc mark", t, re.M)
+            hook = re.findall(r"^FL CAPSTONE_VM_TEST_KEEP_RETIRED base=0x([0-9a-f]+) bytes=(\d+)", t, re.M)
+            ad = re.search(r"^FL .*domain fault cause=\d+ pc=0x[0-9a-f]+ address=0x([0-9a-f]+)", t, re.M)
+            inkept = bool(ad and any(int(b_, 16) <= int(ad.group(1), 16) < int(b_, 16) + int(n_) for b_, n_ in hook))
+            kind = "SILENT" if ret else ("none" if not causes else causes[0] if causes[0] in ("13", "25") else "other")
+            tally[("keep-traced" if n.endswith("-traced") else "keep", kind)] += 1
+            tally[("keep-hook", "fired" if hook else "NOT-FIRED")] += 1
+            tally[("keep-reached-read", "mark" if mark else "no-mark")] += 1
+            if causes:
+                tally[("keep-fault-in-kept-region", inkept)] += 1
+            if kind != "25":
+                print(f"KEEP {n} rc={r} kind={kind} causes={causes} hook={hook}")
             continue
         if n.startswith("map-"):
             causes = re.findall(r"^FL .*domain fault cause=(\d+) ", t, re.M)
@@ -140,7 +166,7 @@ def main():
                 print(f"  {l[:300]}")
     for (arm, kind), c in sorted(tally.items()):
         print(f"TALLY {arm} cause {kind}: {c}")
-    want = a.n * (2 if a.mapped else 1) + 1 + (1 if a.dmesg else 0) + (1 if a.refuse_pte else 0)
+    want = a.n * (1 + (1 if a.mapped else 0) + (1 if a.keep_retired else 0)) + 1 + (1 if a.dmesg else 0) + (1 if a.refuse_pte else 0)
     print(f"completed={completed} steps={len(steps)} of {want} transcript={transcript}")
     if len(steps) != want:
         print(f"NO DATA: {len(steps)} of {want} steps in the transcript")

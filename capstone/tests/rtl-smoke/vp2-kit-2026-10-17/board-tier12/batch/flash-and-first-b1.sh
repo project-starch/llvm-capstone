@@ -18,7 +18,13 @@ main() {
     sleep ${FB_SLEEP:-20}
   done
   echo "FB arm ended $(date +%T)" >> $O
-  ${FB_BUSY:-python3 /tmp/capstone/wt-gate/capstone/tests/rtl-smoke/board-busy.py 1} > /dev/null || { echo "FB STOP: board 1 busy" >> $O; return 1; }
+  # Board 1 may be running another pre-registered arm by then: wait for it to be free (up to FB_BUSYMAX s), never interrupt it.
+  t0=$(date +%s)
+  until ${FB_BUSY:-python3 /tmp/capstone/wt-gate/capstone/tests/rtl-smoke/board-busy.py 1} > /dev/null; do
+    [ $(( $(date +%s) - t0 )) -gt ${FB_BUSYMAX:-14400} ] && { echo "FB STOP: board 1 stayed busy" >> $O; return 1; }
+    sleep ${FB_SLEEP:-60}
+  done
+  echo "FB board 1 free $(date +%T)" >> $O
   ${FB_STORE:-python3 $S/store-has.py} no-such-bitstream-$$.bit >> $O 2>&1; rc=$?
   [ $rc = 1 ] || { echo "FB STOP: store-has control read rc=$rc, not 1" >> $O; return 1; }
   ${FB_STORE:-python3 $S/store-has.py} caplifive_vp2c_8522d72fe.bit >> $O 2>&1 || { echo "FB STOP: the fallback is not registered" >> $O; return 1; }
