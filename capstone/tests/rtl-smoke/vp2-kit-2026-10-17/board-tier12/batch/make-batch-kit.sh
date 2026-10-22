@@ -7,12 +7,13 @@
 #   adapter/module/capstone_vm.ko = the batch module 21fbfc397e7c7a42 (runtime lane module-gen-push 64747600ecec).
 # SHA256SUMS regenerated and checked. Usage: make-batch-kit.sh <board 1|2> <bitstream name, no .bit> <log>. MK_X stubs the root.
 # MK_N=1 bases the copy on the board's NORANDMAPS kit (bkit7-rev2xnDN2 / bkit7-rev2xnBDN2: BOARD_DTB_BOOTARGS norandmaps and the
-# board-run.sh that applies it), writing bkit8-batch-nb<board>; the three changes are the same.
+# board-run.sh that applies it), writing bkit8-batch-nb<board>; the three changes are the same. MK_M=1 bases it on the board's
+# MEASURE-ONLY kit (bkit7-rev2xmDN2 / bkit7-rev2xmBDN2: bake, firmware build and cap check, no boot), writing bkit8-batch-mb<board>.
 main() {
   set -u
   local BRD=${1:?board} BS=${2:?bitstream name} O=${3:?log} H=/mnt/hdd/$USER/capstone S D
   local M=/mnt/hdd/$USER/capstone/t3-smoke/bkit8-batch-parts/capstone_vm.ko MON=/tmp/capstone/csbi-batch
-  local n=""; [ "${MK_N:-0}" = 1 ] && n=n
+  local n=""; [ "${MK_N:-0}" = 1 ] && n=n; [ "${MK_M:-0}" = 1 ] && n=m
   case $BRD in 1) S=$H/t3-smoke/bkit7-rev2x${n}DN2;; 2) S=$H/t3-smoke/bkit7-rev2x${n}BDN2;; *) echo "MK STOP: board $BRD" >> "$O"; return 2;; esac
   D=${MK_X:-$H/t3-smoke}/bkit8-batch-${n}b$BRD
   case $BS in caplifive_*) ;; *) echo "MK STOP: bitstream name $BS" >> "$O"; return 1;; esac

@@ -7264,3 +7264,29 @@ Record: `records/uaf-repeat-rv-b2.result-lines.txt`.
     and address reuse) and that the simulation's munmap variants do not reproduce. That is open, and it comes with
     no completed read.
 - **Rate:** cause 13 in 10 of 400 control runs here. Over the whole day, tree A 16 of 720 and tree B 26 of 1120.
+
+### postgres pg-pools on the batch bitstream, board 1 after lt1: pre-registered (2026-10-22 15:3x, before the boot)
+
+- **Why:** the third bundle the batch unblocks. On the trees pg-pools' nested memory contexts exhausted the flat table.
+- **What runs:** `tier3-pg-batch.sh 1 <log>`, after cpython lt1 ends on board 1. It is the sql0 board path
+  (tier3-sql-arm-rev2u.sh) with:
+  - the batch kits `bkit8-batch-b1` and its measure-only twin `bkit8-batch-mb1` (make-batch-kit.sh MK_M=1, the same
+    three changes on bkit7-rev2xmDN2);
+  - `--arm virtual-pg-pools` and image t3-images-r60/q15/postgres-lt1 (dc2a1356);
+  - the trimmed fixture and share, and dev's runner 7ce203f9 with its QEMU PASS.
+  - First the measure-only bake: no boot unless the batch firmware with this payload is under 26,000,000 B.
+  - Scored by score-arm.sh into a NEW results directory, `bug-corpora/postgres/sql-repros/results/2026-10-22-batch-c721c1a2a-b1/vp2-pg-pools`,
+    and records/batch-pg-pools-b1.board.txt.
+- **The reference** (the compiler lane's, dev 95191599cfaa): pgp-trim/bundle on qkit7-batch2, module a05c198b.
+  - The trimmed fixture's record is 956173e054762e91. Its 9 cells equal the untrimmed batch reference's (MOVE 0), and
+    its 4 controls fault.
+  - Its stamp reads runner 7ce203f9, image dc2a1356, SWITCHES movc_null_scalar=OFF (the batch mimic). The script
+    checks all of this.
+- **Dry run** (`dryrun-pg-batch.txt`): under the cap it boots and scores (scoring stubbed, nothing filed); over the cap
+  it stops before any boot.
+- **Predictions:**
+  - the measured firmware is under the cap;
+  - the bundle records fixture 956173e054762e91 and image dc2a1356;
+  - no directory-open FATAL, and the positive control answered;
+  - **compare-pilot against pgp-trim/bundle: 9 of 9 cells the same**;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped 0, and the gen-push banner present.
