@@ -6412,3 +6412,43 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - The three value-dependent CWE170 cases happened to read as tB-mimic did too.
   - Census of the 1654 steps, identical on both sides: exit 0 834, cause 28 768, cause 25 48, cause 24 4.
   - Control on this run's own file: one control cell's cause 28 rewritten to 25 reads 1512 of 1513 and exits 1.
+
+### The uaf control's cause 13 on tree B, repeated in one boot per board, pre-registered (2026-10-22 10:2x, before either boot)
+
+- **What it follows up:**
+  - Tree B's Juliet uaf control (`controls.dom uaf-malloc`, b1decb06) read cause 13, a load page fault, at
+    control_read_probe+0x38:
+    - in the temporal set, 2 of 24 runs (ctl-uaf-1 of batch000 and batch010);
+    - in the spatial set, 3 of 48 (ctl-uaf-0 of batch000, batch017 and batch023).
+  - Every other run, and all 74 of tree A's, read cause 25 at that instruction.
+  - Pooled, 5 of 74 against 0 of 74 gives a one-sided Fisher p of about 0.03. The temporal set alone did not separate
+    the trees (p ~ 0.49, above).
+  - Each such run voids its batch under judge.py. In the spatial set those are tree B's batches 000, 017 and 023.
+- **What runs:**
+  - `tier3-uaf-repeat.sh <board> <out>` runs `uaf-repeat.py` with N=120 on the same kits as the Juliet run, in one cold
+    boot per board: tree A on board 1, tree B on board 2.
+  - First a bounds-control run, so run 1 sits where ctl-uaf-0 sat.
+  - Then 120 uaf runs, each the Juliet gate's own command (`./juliet-timeout <name> 10000 -- ./capstone-vexec
+    ./images/controls.dom uaf-malloc`), with the same controls.dom, juliet-timeout bb65b77a and launcher b27afefc.
+  - Odd runs are untraced, as in Juliet. Even runs set CAPSTONE_VM_TRACE=1.
+  - The full output is printed for every cause-13 run and every tenth run.
+  - Pinned: wt-tools2 e6c68a531557, both kits by SHA256SUMS, module 54d8a3af.
+- **Dry run** (`dryrun-uaf-repeat.txt`, stubbed):
+  - it reaches the last line on both boards;
+  - a planted cause-13 run and a run with no fault line are each reported and tallied apart;
+  - a transcript one step short reads NO DATA (exit 2);
+  - an existing root and a busy board each refuse.
+- **Predictions:**
+  - Every uaf run prints one fault line, cause 25 or 13, at code+0x10c70 (control_read_probe+0x38). The bounds run
+    reads cause 28. pc=0, DRT1, FRTY, Oops, INJS and INJL are 0.
+  - **Tree B reads cause 13 in at least 1 of 120.** At the Juliet rate (5 of 74), about 8 are expected, and 0 has
+    probability ~0.0002.
+    - If B reads 0, the cause-13 reading is not a steady-state rate inside one boot. Its conditions are then something
+      a Juliet batch has and this boot lacks (a different program mix before it, the boot's age), and the next arm
+      has to vary those.
+  - **Tree A reads cause 13 in 0 of 120.**
+    - If A reads any, the two trees are not separated by this reading, and the satp-flush hypothesis (the
+      temporal-set result above) loses its only support.
+  - The traced and plain arms carry no rate prediction, because the trace changes timing.
+  - The traces carry no prediction. They are read for anything (a service, a boundary or a retire) that falls between
+    the free's mark and the read in the cause-13 runs and is absent in the tenth-run cause-25 traces.

@@ -1,0 +1,46 @@
+# tier3-uaf-repeat.sh / uaf-repeat.py dry run, 2026-10-22 10:24, N=12, stubbed (UR_BUSY/UR_BOOK/UR_ROOT; uaf-repeat.py on BOARDVM_STUB_TRANSCRIPT).
+# The stub is board 2's Juliet batch000 transcript with its steps replaced: bounds-0 cause 28, run 4 cause 13 (with TR lines),
+# run 7 no fault line, the rest cause 25. stub-short drops run 12 and must read NO DATA (exit 2). exists and busy must refuse.
+# Verdicts in a dry run are never data.
+== b1
+UR BEGIN 10:24:53 board 1 booking 999 # book 1 75 vp2-tier12 uaf-control repeat (board 1) N=12
+999 # unbook 999 # book 1 75 vp2-tier12 uaf-control repeat (board 1)
+UR END rc=0 10:24:53
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f7f690c3c'} capstone-exec: domain fault cause=28 pc=0x3f7f690c3c
+RUN uaf-4-traced rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f7f690c70 address=0x3f7f755040 entry=0x3f7f680868 code=0x3f7f680000-0x3f7f700000'} causes=['13']
+RUN uaf-7-plain rc={'kind': 'signal', 'value': 11} causes=[]
+TALLY plain cause 25: 5
+TALLY plain cause none: 1
+TALLY traced cause 13: 1
+TALLY traced cause 25: 5
+completed=True steps=13 of 13 transcript=<scratch>/urd/r1/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board1 DONE 10:24:53
+== b2
+UR BEGIN 10:24:53 board 2 booking 999 # book 2 75 vp2-tier12 uaf-control repeat (board 2) N=12
+999 # unbook 999 # book 2 75 vp2-tier12 uaf-control repeat (board 2)
+UR END rc=0 10:24:53
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f7f690c3c'} capstone-exec: domain fault cause=28 pc=0x3f7f690c3c
+RUN uaf-4-traced rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f7f690c70 address=0x3f7f755040 entry=0x3f7f680868 code=0x3f7f680000-0x3f7f700000'} causes=['13']
+RUN uaf-7-plain rc={'kind': 'signal', 'value': 11} causes=[]
+TALLY plain cause 25: 5
+TALLY plain cause none: 1
+TALLY traced cause 13: 1
+TALLY traced cause 25: 5
+completed=True steps=13 of 13 transcript=<scratch>/urd/r2/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 10:24:53
+== ex
+UR STOP: <scratch>/urd/exists exists
+== busy
+UR STOP: board 2 is busy
+== uaf-repeat.py on stub-short
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f7f690c3c'} capstone-exec: domain fault cause=28 pc=0x3f7f690c3c
+RUN uaf-4-traced rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f7f690c70 address=0x3f7f755040 entry=0x3f7f680868 code=0x3f7f680000-0x3f7f700000'} causes=['13']
+RUN uaf-7-plain rc={'kind': 'signal', 'value': 11} causes=[]
+TALLY plain cause 25: 5
+TALLY plain cause none: 1
+TALLY traced cause 13: 1
+TALLY traced cause 25: 4
+completed=True steps=12 of 13 transcript=<scratch>/udr/stub-short/work/board.txt
+NO DATA: 12 of 13 steps in the transcript
