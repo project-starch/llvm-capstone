@@ -434,3 +434,36 @@ arguments), for the prebuilt and for the edited copy.
 
   The caveat stands: a read canary may already be 0, so on arms without a slot the NUL write would not
   show as damage. The corpus fix needs a sentinel that is not the slot.
+
+### lt0 13: the launcher's mapping cap as the one variable (pre-registered 2026-10-22, before its boots)
+
+**The pair,** built by the runtime lane:
+- **Variant:** capstone-vexec `fad465ce4dea7121`, branch `runtime/vexec-arenas-8192` 32e18699a0a1. It is c14933904de4
+  plus one line (`CV_MAX_ARENAS 512` → `8192`); the source diff was read here and is that one line.
+- **Control:** `b27afefc09c6cae6`, the same build command on the unmodified tree, reproduced byte for byte.
+- The module, 3325473537072a3a, already has 8,192, so the cap that bites is the launcher's.
+
+**The kits:**
+- qkit7-b2twin2-q8-vxb27 and -vxfad: qkit7-b2twin2-q8 (QEMU 708bbff5, module 33254735) with only
+  `adapter/capstone-vexec` replaced.
+- The kit's own launcher is a405840d, a third binary. So the control also shows whether the launcher swap alone moves
+  anything.
+
+**Already in hand, from the 18:23 minimal-trigger boot on the kit's own launcher:**
+- the PYTHONMALLOC=malloc run's highest `CAPSTONE_VM_ADD_OK slot=` is **511**, the 512th slot, over 672 ADD_OK lines;
+- the pymalloc run registers 355.
+
+**The runs:** four boots on domain A, each launcher with both malloc instruments: the recorded call with
+PYTHONMALLOC=malloc (`lt0-13-malloc`) and the minimal trigger (`lt0-13-min-malloc`). The highest ADD_OK slot and the
+last ADD_OK or refusal line are read from each serial.
+
+**Predicted:**
+- **Control b27afefc:** both die at startup with MemoryError, as on a405840d. The highest slot is 511, and high_water
+  is about 21k.
+- **Variant fad465ce, if the cap is the cause:**
+  - the minimal trigger reaches `MIN IMPORTED` and faults with cause 28 in `unicode_fromformat_write_str`;
+  - the recorded call reaches `test_non_str_kwarg` and faults the same way;
+  - the highest slot is above 511.
+- **If the variant still dies at startup,** the cap is not the cause, and the last ADD_OK or refusal line is reported.
+- **If the variant faults elsewhere first** (per-object bounds catching some other access in CPython's startup or
+  unittest), that is read as it is, not as this defect.
