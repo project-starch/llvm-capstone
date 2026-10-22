@@ -32,3 +32,15 @@ the 18-bit index. These are its QEMU references.
     records held before the loop.
   - **qkit7-b2twin3-q8:** `HOLD-PEAK 100000`, `HOLD-OK 100000` and exit 0. high_water is inside 105,269..105,869, the
     paged kit's 105,569 ± 300; allocated_total is about 105,569.
+
+**Result** (2026-10-23, one boot per kit, r60-fmtfp/replay-stats2.py; steps `capstone-vexec --stats`, the call,
+`capstone-vexec --stats`): **both readings hold.**
+
+| kit | output | exit | fault | high_water | allocated_total | capacity |
+|---|---|---:|---|---:|---:|---:|
+| qkit7-batch2 (16-bit) | `HOLD-NULL at 60590` | 71 | none | 64,001 | 64,001 | 65,536 |
+| qkit7-b2twin3-q8 (18-bit) | `HOLD-PEAK 100000`, `HOLD-OK 100000` | 0 | none | 105,569 | 105,569 | 262,144 |
+
+- On the 16-bit table the malloc path refuses at 64,001 records and returns NULL: no fault, and so no cause 30.
+  3,411 records were held before the loop (64,001 − 60,590).
+- On bitstream 2's twin the program completes. Its count equals the paged kit's 105,569 exactly.
