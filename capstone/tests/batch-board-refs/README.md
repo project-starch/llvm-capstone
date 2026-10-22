@@ -63,3 +63,20 @@ and perl-sublet fault 8, completed 3.
 - The stamps show runner aabfa668, tree 15ced322c824 clean, qemu ecaf50bb, module a05c198b, vexec a405840d,
   closure 2a472e21, and the images as above.
 - The trimmed references are batch-refs-r60/batch/perl-{stock,sublet}-trim/out, for the board's trimmed staging.
+
+## Juliet temporal on the batch kit (pre-registered 2026-10-23, before the build and runs)
+
+**Why:** every other corpus arm has a batch-bitstream board reading. Juliet's references exist only for the tree
+kits, built with the older cw SDK (juliet-vp2/judge-{tB-mimic,nf2}, sdk.json 64bc9086).
+
+**The build:** juliet-vp2/build2.sh's recipe and selection, with only the SDK changed.
+- Recipe tree wt-corpus b3cc8cb4be5a (clean); `select.py` manifest 95ceac7daa991165, 366 cases.
+- `build.py`, census and `--seeded`, on a writable copy of the r60 SDK t3-freeze-nb-nomovc-cw-r60 (sdk.json f5145cbb).
+
+**The judging:** juliet-vp2/judge.sh's recipe with kit qkit7-batch2.
+- `run.py` 4b663651 and `probe.py` d6200b39 from wt-juliet a772f0112ae3 (clean).
+- `judge.py` 93aa5ad9 from wt-corpus, and the same juliet-timeout helper bb65b77a.
+
+**Predicted:** 366 CAUGHT (228 CWE-415, 138 CWE-416), every good run CORRECT, no MISSED row. Every case equals
+judge-tB-mimic's temporal-verdicts.tsv on verdict, good, cause, site and strict. A case that differs is listed with
+both readings.
