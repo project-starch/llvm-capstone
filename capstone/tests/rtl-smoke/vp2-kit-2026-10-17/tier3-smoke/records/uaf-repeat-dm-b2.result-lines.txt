@@ -1,0 +1,16 @@
+# uaf-control repeat with the module's ring lines (uaf-repeat.py --no-trace --dmesg, N=200, c22a6e1c7ef7; amended fabccd6c8478), board 2 / tree B, 2026-10-22. Result lines only.
+UR BEGIN 11:03:45 board 2 booking 107 N=200 args --no-trace --dmesg
+UNBOOK 107: 200
+UR END rc=0 11:46:43
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f87410c24 address=0x3f874d7050 entry=0x3f87400868 code=0x3f87400000-0x3f87480000 last=0x42 preparing=0x42 
+TALLY plain cause 13: 1
+TALLY plain cause 25: 199
+completed=True steps=202 of 202 transcript=<mnt-hdd>/capstone/t3-run-treeB/uaf-repeat-dm/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 11:46:43
+RUN uaf-189-plain cause 13 address 0x3f8d0bf040
+  DM [ 1998.420393] capstone_vm: resolve refused at arena: addr 0x3f8d0bf040 cause 13 need 0x1 pc 0x3f8d010c70 prev(addr 0x3f8d0bf008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1998.463360] capstone_vm: resolve refused at arena: addr 0x3f8d0bf040 cause 13 need 0x1 pc 0x3f8d010c70 prev(addr 0x3f8d0bf008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL REFUSED 2
+DMESG-ALL DA [ 1998.420393] capstone_vm: resolve refused at arena: addr 0x3f8d0bf040 cause 13 need 0x1 pc 0x3f8d010c70 prev(addr 0x3f8d0bf008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1998.463360] capstone_vm: resolve refused at arena: addr 0x3f8d0bf040 cause 13 need 0x1 pc 0x3f8d010c70 prev(addr 0x3f8d0bf008 cause 13 rep 0) no lazy arena covers this address
