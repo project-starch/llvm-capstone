@@ -70,3 +70,17 @@ whether the SystemError is the record limit surfacing as an allocation that fail
   - On q8, high_water is above 64,023.
   - paged-lp gives the case's live peak as a bracket. Only "above 64,001" is predicted.
 - **If q8 still reads SystemError,** the record limit is not the cause, and this item is withdrawn.
+
+**Result** (2026-10-22 15:14-15:24, one boot per kit):
+
+| kit (module, capacity) | reading | module high_water | QEMU live peak |
+|---|---|---|---:|
+| b2twin-q6 (69d48252, 65,536) | `SystemError` (2 lines), exit 1 | 64,016 | n/a |
+| b2twin-q8 (33254735, 262,144) | no SystemError; `OSError: [Errno 38]` at the resize, exit 1 | 67,935 | n/a |
+| batch2-paged-lp (ed856572, paged) | no SystemError; `OSError: [Errno 38]`, exit 1 | (paged count) | 67,875..68,607 |
+
+**Every pre-registered reading holds.** lt1 18 is a record-capacity cell, the tenth: the 64,001-record flat table
+refuses an allocation during the test's imports, and CPython reports it as `SystemError: error return without
+exception set`, not as MemoryError. Its live peak up to the mremap blocker is 67,875..68,607. With mremap in the
+image, the defect runs further, so that is a lower bound on the cell's demand. It is far below lt1 13's 106,272, so
+the index sizing is unchanged.
