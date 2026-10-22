@@ -484,5 +484,8 @@ last ADD_OK or refusal line are read from each serial.
   So the lt0 arm's recorded MemoryError is that same read, running uncaught inside a pymalloc arena's capability.
 - **The cell's verdict is not changed here.** As configured (pymalloc), the arm ran the defect and did not catch it,
   which supports reading it MISSED rather than NO-READING:infra. That reclassification is the judge's and the lead's.
+- **Reclassified MISSED by the project lead (relayed by the runtime lane, 2026-10-22),** on this pair. The runner's
+  bundles keep NO-READING:infra until they are produced under a rule that tells this MemoryError (high_water 7,753 of
+  65,536) from a capacity stop (64,0xx); the rule is the cpython runner's `CAPACITY` text match, which cannot.
 - **Not a sizing reading:** 113,423 records is the recorded call under PYTHONMALLOC=malloc, an instrument
   configuration rather than any corpus arm's. The corpus maximum stays lt1 13's 106,274.
