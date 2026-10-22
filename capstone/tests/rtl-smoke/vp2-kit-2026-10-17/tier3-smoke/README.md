@@ -7708,3 +7708,26 @@ Record: `records/batch-sql0-b2.board.txt`. The bundle is filed under
   4 or 13 where QEMU raises 24, at the same pc.
 - Every boot completed, with the monitor readings 0.
 - The standing 346-cell pass on the tree bitstreams stays the record. This column sits beside it.
+
+### The new arms on the batch bitstream, result (2026-10-23 01:57-03:38, board 1): xlang, plane and capi every cell as their QEMU references
+
+Record: `records/batch-newarms-b1.result-lines.txt`. Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/na-*`.
+- **The image gate passed before every boot** (9 of 9). Every unit's measure-only bake built all of its reference's
+  images, and every firmware was under the cap: xlang 19,565,064 B, plane 17,467,912 B each, capi 25,856,520 B each.
+- **xlang:**
+  - repro: verdicts-compare 15 of 15. compare-pilot 4 of 15, with the 11 mruby rows NOT RUN, as pre-registered.
+    Rows 1, 3 and 7 CAUGHT cause 25 in memcpy; row 2 MISSED.
+  - lua-cdp: 13 of 13 CAUGHT by both compares.
+- **ffmpeg plane-repros:** virtual-malloc MISSED and virtual-nested-pools MISSED, 1 of 1 each by both compares. The
+  controls are as declared.
+- **sqlite capi-repros, six boots:** verdicts-compare 19 of 19.
+  - CAUGHT 12 (rows 1-11 and 16), with row 11 cause 2 at invalid_free.
+  - 7 out of the denominator: rows 12 and 14 cause 24, row 13 cause 12, rows 17-19 exit 0, and row 15 has no program.
+  - compare-pilot is SAME on every imaged row, and NOT RUN on row 15 only.
+  - The rows 17-19 boot exits 75 ("nothing could be judged"), because all three of its rows are out of the
+    denominator. Its compare reads 3 of 3.
+- **Readings:**
+  - Every boot completed. FRTY, FRTC, DRT1, INJS, INJL, Oops, collect-skipped and cause=29 read 0.
+  - pc=0 reads 1 in the rows 13-16 boot. That line is row 13's own predicted fault, `cause=12 pc=0x0 address=0x0` (a
+    null call), not an anomaly.
+- **Against the pre-registration (revision 2, 45341683a39e): every reading holds.**
