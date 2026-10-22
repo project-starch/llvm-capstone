@@ -7018,3 +7018,24 @@ Record: `records/uaf-repeat-keep-b1.result-lines.txt`.
     silicon-only, and their mechanism is still open. What this arm adds is that they did not come with completed
     reads.
 - The object-path arm (board 2) and the retire check (board 2, next) are still to read.
+
+### A freed object on a mapped page, result (2026-10-22 12:38-13:53, board 2, tree B): 0 of 200 survive
+
+Record: `records/uaf-repeat-mapped-b2.result-lines.txt`.
+
+- **Read:**
+  - mapped runs (controls-mapped fb30eab5): **cause 25 in 200 of 200**, the 20 traced ones included, every one at
+    code+0x10c70 with the address at offset 0x70 (p). All 200 reached the read, and p shared a page with both live
+    neighbours in all 200. **STALE_READ_SURVIVED 0.**
+  - The unchanged control, interleaved in the same boot: cause 13 in 5 of 200 (37, 113, 140, 155, 160), each with
+    its own arena refusal. Cause 25 in 195.
+  - The bounds run reads 28. Readings 0. The boot-wide ring count voided itself (oldest ring line at 3977 s).
+- **Against the pre-registration (2ff69ca88172): every reading holds as the 0-SILENT branch.** The object-revoke path
+  on a live page denied every read.
+  - The limit written before the result stands: this clears the object path only. Board 1's keep-retired arm, above,
+    is the region path, and it read 0 too.
+- **The two arms together, on silicon:**
+  - **400 reads of freed memory through a revoked capability on a mapped page (200 region-retired on tree A, 200
+    object-revoked on tree B): every one refused with cause 25. None completed.**
+  - Beside them, in the same two boots, the unchanged control read cause 13 in 13 of 400. Every 13 examined is a
+    fault on an unmapped, retired address.
