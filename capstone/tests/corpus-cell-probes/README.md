@@ -86,6 +86,65 @@ image, the defect runs further, so that is a lower bound on the cell's demand. (
 is not a lower bound. The full run peaks lower, at 66,682..67,583.) It is far below lt1 13's 106,272, so
 the index sizing is unchanged.
 
+## sqlite/capi-repros on the virtual profile: exploratory (2026-10-22; no verdict rests on it)
+
+This sizes the port before the lead's capi decisions. It is not an arm: there is no pre-registration, no
+attribution to declared sites and no judge. The SDK is the batch SDK, t3-freeze-nb-nomovc-cw-r60/sdk
+(capstone-cc 7f3077ae), and the kit is qkit7-batch2. Each row's `before.c` is built `-O0 -g` against SQLite
+**3.53.3**, the host ASan arm's amalgamation, compiled `-O1 -g -DSQLITE_THREADSAFE=0 -DSQLITE_OMIT_LOAD_EXTENSION`,
+the host arm's flags. The postgres c-repros malloc controls run beside the rows.
+
+1. **The amalgamation as shipped does not run.** 17 of 18 rows fault with cause 6, a misaligned capability store, at
+   openDatabase's `db->aDb = db->aDbStatic` (sqlite3.c:190805, `stc a1, 0x40(s2)`).
+   - sqlite3MemMalloc prepends an 8-byte size header unless SQLITE_MALLOCSIZE is available. So every SQLite object
+     is only 8-aligned.
+   - row14 faults first, in its own `main`, with cause 24.
+2. **With ports/sqlite/build-sqlite-capstone.sh's six 3.53.3 rewrites** (the 16-byte saveBuf and SZ_VDBECURSOR
+   alignment among them) **plus `-DHAVE_MALLOC_H=1 -DHAVE_MALLOC_USABLE_SIZE=1`**, SQLite calls malloc directly with
+   no header. The runtime exports malloc_usable_size. Every row then runs:
+
+| oracle (host ASan) | rows | virtual profile, qkit7-batch2 |
+|---|---|---|
+| heap-use-after-free | 1-10, 16 | all 11 fault with cause 25 (revoked): in `main` 1, 3-5, 7-10; in `read_context` 2; in `stale_udf` 6; in `authorize` 16 |
+| bad-free | 11 | cause 2 in `cap_malloc_invalid_free`, the allocator refusing the free |
+| null-deref | 12, 13, 14 | cause 24 in `main` for 12 and 14; cause 12 at an unsymbolized pc for 13, a fetch from a non-code address |
+| none | 17, 18, 19 | exit 0 |
+| (no before.c) | 15 | not built |
+
+Controls: bounds-malloc faults with cause 28 and uaf-malloc with cause 25.
+
+What it settles for the lead's decisions:
+- (a) the version: 3.53.3 runs with the existing rewrite pass plus the usable-size defines, so the host arm's version
+  can be kept;
+- (b) the controls: the generic malloc controls behave;
+- (c) the oracles: each one has a distinct fault shape on this profile.
+
+What it does not settle:
+- whether each fault is at the row's declared stale access;
+- how lookaside (on by default here) changes which rows read 25;
+- what a FIXED-twin control would be.
+
+## xlang/repro and xlang/lua-cdp on the virtual profile: exploratory (2026-10-22; no verdict rests on it)
+
+The shims are the CHERI column's hosted programs. Each one is built unchanged, `capstone-cc -O0 -g` on the batch SDK
+(t3-freeze-nb-nomovc-cw-r60/sdk): shim plus `cheri/mock-mruby/mock_mruby.c` (repro), or shim plus
+`lua-cdp/cheri/mock_report.c` (lua-cdp). The row lists come from each rows.tsv. All 28 build, and they ran in one
+boot on qkit7-batch2 with the postgres c-repros malloc controls (bounds 28, uaf 25: both behave).
+
+| set | rows | virtual profile | the classic Capstone column's revoke build (RESULTS.md, expected-results.tsv) |
+|---|---|---|---|
+| repro, temporal UAF | 12 (libpulse, rlua userdata, secp256k1, nine mruby) | all fault with cause 25 | 12 FAULT by revocation |
+| repro, spatial | mruby_bytecode_overflow, mruby_upvar_overflow | cause 28 | FAULT by bounds (both) |
+| repro, stack use-after-return | rlua_escaped_handle_uar | exit 0 | MISS (no allocator involved) |
+| lua-cdp | 13 | all fault with cause 25 | 13 FAULT by revocation |
+
+Each of the 28 rows reads the classic revoke column's outcome class.
+
+What it does not give:
+- the classic column's attribution control. The "control" build is the same program minus the one REVOKE, and
+  virtual mallocng has no such switch. That is the lead's decision (a) in the plan;
+- site attribution per row.
+
 ## lt1 18's full demand, with application mremap (pre-registered 2026-10-22, before its runs)
 
 **The image:** cpython-lt1 relinked as lt0 was (t3-mremap/relink.sh, ARM=lt1), with `mapping.c.obj` 4340ce84 (the
