@@ -7474,3 +7474,46 @@ Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
     3 capi rows plus the controls are smaller.
   - In every boot: FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0, collect-skipped and cause=29 read 0, and the boot
     completes.
+
+### The new arms, revision 2 (2026-10-22 19:0x, before any boot): HELD at 51cb7de6fdde, re-pinned, plane added, an image gate before every boot
+
+- **Held before any boot.** The compiler lane found that the runners pinned at 51cb7de6fdde (dev da4cb338b37f) build -g
+  images that record the build directory. No board build could equal the references' hashes, so every cell would have been
+  VOID by compare-pilot's image rule. The queued chain was stopped while it was still waiting; no na-* directory exists. The
+  revision-1 section above stands as written and is superseded here.
+- **Re-pinned** to the lane's path-independent runners and re-run references:
+  - capi: runner 6981dee6da37a29b, reference `results/2026-10-22-virtual-run3`;
+  - xlang: runner 6fcf3b750b8a1d9c, references `xlang/{repro,lua-cdp}/results/2026-10-22-virtual-run2`.
+  - Each run reads the same cells as revision 1's references: 19 of 19, 15 of 15 and 13 of 13 the same by
+    verdicts-compare. Only the image hashes moved.
+  - **Added: ffmpeg/plane-repros** (dev fd8c28583642), both arms, from `results/2026-10-22-batch-kit`. The runner is
+    run-virtual-cases.py 1de34fdf0c1cafa7 with each arm's recorded cc-args.
+  - The worktree is `/tmp/capstone/wt-newarms` at **bcf5f1724110**. That is fd8c28583642 plus the runtime lane's boardvm
+    step-tail fix: every @@HB line carries the step's last 240 B, and a step's bound is clamped inside the boot. The three
+    runners are byte-identical at both commits, and test_boardvm.py passes there.
+  - The re-read keeps wt-gate's run-virtual-cases.py 50f10fa5, the hash its references' stamps name. Dev's file is now
+    1de34fdf, because of the plane additions.
+- **New: an image gate before every boot.** Each unit first runs its own invocation as a measure-only bake on
+  `bkit8-batch-mb1`, which is no board. It boots only if:
+  - the firmware is under 26,000,000 B; and
+  - `images-gate.py` finds every reference image_sha256 for the boot's cases among the images the bake built.
+
+  The gate's controls are in `dryrun-newarms-batch.txt`:
+  - the held runner, capi rows 1 and 11 against its own reference: **0 of 2, refused**;
+  - the re-read's mpt against ref-batch/mpt: **3 of 3, passes**;
+  - a bake that built nothing: NO DATA, refused.
+- **Measured before this pre-registration**, real bakes with the fixed runners:
+  - capi in groups of three rows: each group's firmware is 25,856,520 B (a 143,480 B margin), and 3 of 3 images
+    are the reference's in every group (13-16 counted on its 3 imaged rows);
+  - xlang: 19,565,064 B, 17 of 17 images;
+  - plane: 17,467,912 B per arm, 1 of 1 image each.
+- **Order on board 1, after its re-read:** xlang, plane virtual-malloc, plane virtual-nested-pools, then capi rows 1-3,
+  4-6, 7-9, 10-12, 13-16, 17-19. That is 9 boots.
+- **Dry run** (`dryrun-newarms-batch.txt`, revision 2): revision 1's variants, plus a planted change in plane, the gate
+  refusing (stubbed and real), and the cap.
+- **Predictions:** revision 1's, unchanged, plus plane:
+  - **plane virtual-malloc:** MISSED, reached (DEFECT-REPRODUCED) and completed with no fault; the controls
+    bounds-malloc and uaf-malloc fault.
+  - **plane virtual-nested-pools:** MISSED the same way. Controls: bounds-malloc fault, uaf-malloc fault, plane-live
+    complete, plane-bound fault, plane-free fault.
+  - compare-pilot reads 1 of 1 for each plane arm.
