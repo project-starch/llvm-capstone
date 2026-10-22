@@ -1,0 +1,21 @@
+cell	call	result	peak_lb	peak_ub	minted_lb	minted_ub	module_alloc	in_bracket	MemoryError	instances
+cell-lt0-13	13_gh-144169_fix-three-crashes-in-ast-objects	exit 1	7753	8191	20480	24575	20810	True	1	1
+cell-lt1-02	02_gh-140471_fix-buffer-overflow-in-ast-node	signal 11 fault 28 memcpy	106198	106495	278528	282623	280614	True	0	1
+cell-lt1-02	02_gh-140471_fix-buffer-overflow-in-ast-node-control	exit 0	74766	75775	278528	282623	281183	True	0	1
+cell-lt1-10	10_gh-142554_avoid-divmod-crashes-due-to-bad	signal 11 fault 28 l_divmod	80083	80895	219065	223160	219402	True	0	1
+cell-lt1-10	10_gh-142554_avoid-divmod-crashes-due-to-bad-control	exit 0	80090	80895	219333	223428	220865	True	0	1
+cell-lt1-13	13_gh-144169_fix-three-crashes-in-ast-objects	signal 11 fault 28 unicode_fromformat_write_str	106272	106495	278528	282623	281516	True	0	1
+cell-lt1-19	19_gh-142664_fix-uaf-in-memoryview-hash-via	signal 11 fault 25 fnv	65177	65535	173411	177506	174939	True	0	1
+cell-lt1-19	19_gh-142664_fix-uaf-in-memoryview-hash-via-probe	signal 11 fault 25 fnv	64603	65535	172032	176127	173796	True	0	1
+cell-lt1-19	19_gh-142664_fix-uaf-in-memoryview-hash-via-control	exit 0	64690	65535	176128	180223	177214	True	0	1
+cell-lt1-23	23_gh-142560_bytearray-search-realloc	signal 11 fault 25 memchr	74972	75775	266540	270635	267453	True	0	1
+cell-lt1-23	23_gh-142560_bytearray-search-realloc-control	exit 0	72869	73727	263222	267317	264737	True	0	1
+cell-lt1-27	27_gh-143004_counter-update-borrowed-value	signal 11 fault 25 slot_nb_add	71693	72703	277687	281782	278149	True	0	1
+cell-lt1-27	27_gh-143004_counter-update-borrowed-value-control	exit 0	71765	72703	279424	283519	281162	True	0	1
+cell-lt1-28	28_gh-143543_groupby-reentrant-eq	signal 11 fault 25 _PyEval_Vector	76506	76799	313585	317680	313843	True	0	1
+cell-lt1-28	28_gh-143543_groupby-reentrant-eq-control	exit 0	76562	76799	315392	319487	316941	True	0	1
+cell-lt1-30	30_gh-146613_grouper-parent-key	signal 11 fault 25 PyObject_RichCompare	76529	76799	314495	318590	314758	True	0	1
+cell-lt1-30	30_gh-146613_grouper-parent-key-control	exit 0	76532	76799	315392	319487	316373	True	0	1
+cell-lt1-31	31_gh-148660_odict-copy-stale-link	signal 11 fault 25 odict_copy	74613	74751	233472	237567	233845	True	0	1
+cell-lt1-31	31_gh-148660_odict-copy-stale-link-control	exit 0	82364	82943	348160	352255	348197	True	0	1
+cell-mruby-20000	M6 smoke	smoke_done True	122868	122879	164255	168350	164800	True	None	1
