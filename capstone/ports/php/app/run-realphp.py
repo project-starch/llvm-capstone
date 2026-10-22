@@ -127,17 +127,57 @@ ASAN_FRAME = re.compile(
     r"#\d+ 0x[0-9a-f]+ in (\S+) [^ ]*?((?:Zend|main|ext|sapi|TSRM|regex)/[\w./]+):(\d+)")
 
 
-def population(corpus):
-    """The 31, recomputed from the corpus's own definition of ASAN-blind."""
+def oracle_crashes(spec):
+    """Did NATIVE PHP die on a SIGNAL for this case?
+
+    This is the premise behind `out-of-denominator`, and it is NOT the same question as
+    "did the oracle exit zero". PHP exits 255 on its OWN fatal error -- a parse error, an
+    uncaught exception, a failed include -- having printed a deterministic diagnostic and
+    shut down cleanly. Such a case has a perfectly good oracle and IS scoreable; only a
+    case the program cannot survive has no pair to read.
+
+    The old test was `pristine_outcome != "OK"`, which conflated the two. It happened never
+    to misfire on the ASAN-blind 31, where the only non-OK outcomes are two SIGNAL:11 -- a
+    condition satisfied by its input rather than by its logic, which is the shape this
+    project has been burned by before. It DOES misfire on the temporal cases ASAN already
+    sees: CRASH-062 and CRASH-070 are EXIT:255 from a PHP fatal error, and the old test
+    would have thrown both out of the denominator as "native PHP crashes on it".
+    """
+    return spec["pristine_outcome"].startswith("SIGNAL:")
+
+
+# Which cases to measure. Both are DERIVED from the corpus, never listed here: a list of
+# case ids living in our repo would drift from the corpus and the drift would be invisible.
+POPULATIONS = ("asan-blind", "temporal-asan-visible")
+
+
+def population(corpus, kind="asan-blind"):
+    """The measured set, recomputed from the corpus's own files.
+
+    asan-blind              detected with PHP's allocator PATCHED, missed with it as shipped.
+    temporal-asan-visible   CWE-416 that ASAN finds unaided -- the complement, on the temporal
+                            axis. These are not blind BECAUSE `efree` reaches `free()`, which
+                            is the same fact that makes them the interesting control: a
+                            detector that interposes at `free` should get them.
+    """
     default = json.loads((corpus / "results-asan-default.json").read_text())["results"]
     stock = json.loads((corpus / "results-asan-stockalloc.json").read_text())["results"]
     pristine = json.loads((corpus / "results-pristine-default.json").read_text())["results"]
     stock_outcome = {e["id"]: e.get("outcome", "") for e in stock}
     pris = {e["id"]: e for e in pristine}
     cases = {}
+    meta = {m["id"]: m for m in
+            json.loads((corpus / "metadata" / "corpus.json").read_text())}
     for e in default:
-        if e.get("outcome") == "OK" or stock_outcome.get(e["id"]) != "OK":
-            continue
+        blind = e.get("outcome") != "OK" and stock_outcome.get(e["id"]) == "OK"
+        if kind == "asan-blind":
+            if not blind:
+                continue
+        elif kind == "temporal-asan-visible":
+            if blind or meta.get(e["id"], {}).get("cwe") != "CWE-416":
+                continue
+        else:
+            sys.exit(f"unknown population {kind!r}; choose from {POPULATIONS}")
         frames = ASAN_FRAME.findall(e.get("stderr", ""))
         if not frames:
             sys.exit(f"{e['id']}: ASAN's stderr has no PHP source frame; the oracle cannot "
@@ -150,9 +190,21 @@ def population(corpus):
             "cwe": e.get("cwe", ""), "requires": e.get("requires", ""),
             "asan_func": fn, "asan_file": path, "asan_line": int(line),
             "pristine_stdout": p.get("stdout", ""), "pristine_outcome": p.get("outcome", ""),
+            "pristine_rc": p.get("rc", 0),
         }
-    if len(cases) != 31:
-        print(f"NOTE: the ASAN-blind population is {len(cases)} today, not the 31 the plan "
+        # TWO INDEPENDENT SOURCES FOR THE SAME FACT, MADE TO AGREE. The corpus publishes
+        # `crashes_on_pristine_build` per case AND a recorded pristine run; this runner reads
+        # the run. If they ever disagree the premise behind `out-of-denominator` is unsound,
+        # and that must stop the measurement rather than be silently resolved in our favour.
+        flag = str(meta.get(e["id"], {}).get("crashes_on_pristine_build", ""))
+        crashed = cases[e["id"]]["pristine_outcome"].startswith("SIGNAL:")
+        if flag.startswith(("True", "False")) and (flag.startswith("True") != crashed):
+            sys.exit(f"{e['id']}: the corpus says crashes_on_pristine_build={flag!r} but its "
+                     f"recorded pristine run is {cases[e['id']]['pristine_outcome']!r}. The "
+                     f"premise behind out-of-denominator cannot be checked -- refusing to run.")
+    recorded = {"asan-blind": 31, "temporal-asan-visible": 29}.get(kind)
+    if recorded is not None and len(cases) != recorded:
+        print(f"NOTE: the {kind} population is {len(cases)} today, not the {recorded} the plan "
               f"records. That is a change in the corpus, not in this runner.", file=sys.stderr)
     if not cases:
         sys.exit("the population came out EMPTY -- refusing to report a denominator of zero")
@@ -289,10 +341,10 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # native PHP also has, and CRASH-100 is silent and so reads `not-reached`, which is a claim
     # about our run rather than about the oracle. Both are NO-READING either way, so this moves
     # no case into or out of CAUGHT; it makes the reason true.
-    if spec["pristine_outcome"] != "OK":
+    if oracle_crashes(spec):
         obs.infra = "out-of-denominator"
         obs.notes = (f"the corpus's pristine record for this case is "
-                     f"{spec['pristine_outcome']!r}, not OK: native PHP does not complete it, "
+                     f"{spec['pristine_outcome']!r}: native PHP dies on a signal, "
                      f"so there is no pair to read")
         return obs
     # NO DATA IS AN ERROR, NOT A ZERO. Both of these say the harness never got a reading, and
@@ -494,6 +546,8 @@ def main():
     p.add_argument("--image", type=Path, required=True, help="php-real-seam.dom")
     p.add_argument("--probe", type=Path, required=True, help="probe-seam.dom, for the bound control")
     p.add_argument("--corpus", type=Path, required=True, help="the php-5.0.0-bug-corpus root")
+    p.add_argument("--population", default="asan-blind", choices=POPULATIONS,
+                   help="which set to measure (default: the ASAN-blind cases)")
     p.add_argument("--out", type=Path, required=True)
     p.add_argument("--scratch", type=Path, help="where case files are staged (default: --out/stage)")
     p.add_argument("--llvm-bin", type=Path, default=REPO / "llvm/cmake-build-debug/bin")
@@ -514,7 +568,7 @@ def main():
         if arm not in arms:
             sys.exit(f"arms.json has no entry for {arm}")
 
-    cases = population(args.corpus)
+    cases = population(args.corpus, args.population)
     if args.case:
         cases = {c: cases[c] for c in args.case if c in cases}
         if not cases:
@@ -585,11 +639,16 @@ def main():
     for case, spec in cases.items():
         text = texts[STOCK].get(case, "")
         said = strip_seam_noise(text)
-        ran = (per_arm[STOCK]["rec"]["exits"].get(case) == 0
+        # The control must reproduce the ORACLE'S end, which is exit 0 for a case that
+        # completes and 255 for one PHP ends with its own fatal error. For every case whose
+        # oracle is "OK" this is exactly the old `== 0`, so the published ASAN-blind
+        # measurement is untouched by the generalisation.
+        want_rc = 0 if spec["pristine_outcome"] == "OK" else spec["pristine_rc"]
+        ran = (per_arm[STOCK]["rec"]["exits"].get(case) == want_rc
                and verdicts.domain_fault(text, None) is None)
         # The oracle must itself say this is a case that completes. CRASH-057 is recorded as
         # SIGNAL:11 on the pristine build, so there is no silence to interpret for it.
-        oracle_ok = spec["pristine_outcome"] == "OK"
+        oracle_ok = not oracle_crashes(spec)
         stock_reached[case] = ran and oracle_ok
         if not oracle_ok:
             print(f"    {case}: the corpus's pristine record is "
@@ -623,7 +682,7 @@ def main():
         # caught: CRASH-057's pristine record is SIGNAL:11, so native PHP crashes on it with no
         # capability platform anywhere near, and a fault of ours is not evidence of a catch
         # whatever line it lands on. The oracle's premise is kept as a separate conjunct.
-        site_licensed[case] = hit and spec["pristine_outcome"] == "OK"
+        site_licensed[case] = hit and not oracle_crashes(spec)
         precondition_met[case] = hit if spec["requires"] else True
         if spec["requires"]:
             print(f"    {case}: precondition {spec['requires']!r} "

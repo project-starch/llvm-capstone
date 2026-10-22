@@ -197,6 +197,17 @@ def observation_cases():
                     controls(probe=None), False, "/x", "/y", True, False)
     check("and so is a silent one", verdicts.judge(obs, arms["php-real-stock"])[1],
           "out-of-denominator")
+    # ...but a case PHP ENDS ITSELF, with a diagnostic and exit 255, is not that. It has an
+    # oracle, so it is scoreable, and calling it out-of-denominator would discard a reading.
+    fatal = dict(SPEC, pristine_outcome="EXIT:255", pristine_rc=255)
+    check("a PHP fatal error is not a crash, for denominator purposes",
+          R.oracle_crashes(fatal), False)
+    check("a signal is", R.oracle_crashes(dict(SPEC, pristine_outcome="SIGNAL:11")), True)
+    obs = R.observe("CRASH-062", fatal, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y", True, False)
+    v, reason, _ = verdicts.judge(obs, exact)
+    check("so it is judged on its merits, not thrown out",
+          reason != "out-of-denominator", True)
 
     # The per-run watchdog fired. A killed run is the harness giving up, never a statement
     # about the program -- and in particular never the `not-reached` it would decay to if the
@@ -285,9 +296,26 @@ def fake_corpus(root, ids=("CRASH-086", "CRASH-110")):
                     "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
     stock.append({"id": "CRASH-999", "outcome": "ASAN:heap-use-after-free"})
     pristine.append({"id": "CRASH-999", "outcome": "OK", "stdout": ""})
+    # A case PHP ends with its OWN fatal error: exit 255, a deterministic diagnostic, no
+    # crash. It has a perfectly good oracle and MUST stay in the denominator. The old test
+    # `pristine_outcome != "OK"` threw cases like this out as "native PHP crashes on it".
+    (root / "corpus" / "CRASH-062.php").write_text("<?php echo \"done\\n\";\n")
+    default.append({"id": "CRASH-062", "cwe": "CWE-416", "requires": "",
+                    "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
+    stock.append({"id": "CRASH-062", "outcome": "OK"})
+    pristine.append({"id": "CRASH-062", "outcome": "EXIT:255", "rc": 255,
+                     "stdout": "\nFatal error: Class declarations may not be nested\n"})
+    for e in pristine:
+        e.setdefault("rc", -11 if e["outcome"].startswith("SIGNAL:") else 0)
     (root / "results-asan-default.json").write_text(json.dumps({"results": default}))
     (root / "results-asan-stockalloc.json").write_text(json.dumps({"results": stock}))
     (root / "results-pristine-default.json").write_text(json.dumps({"results": pristine}))
+    # The corpus's OWN view of the same fact, which population() gates against the runs.
+    (root / "metadata").mkdir(exist_ok=True)
+    (root / "metadata" / "corpus.json").write_text(json.dumps(
+        [{"id": e["id"], "cwe": "CWE-416",
+          "crashes_on_pristine_build": "True" if e["outcome"].startswith("SIGNAL:") else "False"}
+         for e in pristine]))
 
 
 def population_cases():
@@ -297,11 +325,32 @@ def population_cases():
         fake_corpus(root)
         pop = R.population(root)
         check("only the ASAN-blind cases are in the denominator",
-              sorted(pop), ["CRASH-057", "CRASH-086", "CRASH-092", "CRASH-110"])
+              sorted(pop), ["CRASH-057", "CRASH-062", "CRASH-086", "CRASH-092", "CRASH-110"])
         check("the expected site comes from ASAN's own frame",
               (pop["CRASH-086"]["asan_file"], pop["CRASH-086"]["asan_line"]),
               ("ext/standard/basic_functions.c", 2135))
         check("the pristine oracle is carried", pop["CRASH-086"]["pristine_stdout"], "done\n")
+        check("a case PHP ends with its own fatal error stays in the denominator",
+              "CRASH-062" in pop, True)
+        # The complement population: CWE-416 that ASAN finds unaided. CRASH-999 is the fixture's
+        # not-blind case, so it is the one and only member here -- and must NOT appear above.
+        tpop = R.population(root, "temporal-asan-visible")
+        check("the temporal-asan-visible population is the complement",
+              sorted(tpop), ["CRASH-999"])
+        check("and it does not overlap the ASAN-blind one",
+              sorted(set(tpop) & set(pop)), [])
+        # THE GATE MUST BE ABLE TO FIRE. Make the corpus's own field disagree with its own run.
+        meta = json.loads((root / "metadata" / "corpus.json").read_text())
+        for m in meta:
+            if m["id"] == "CRASH-086":
+                m["crashes_on_pristine_build"] = "True"       # but its run says OK
+        (root / "metadata" / "corpus.json").write_text(json.dumps(meta))
+        try:
+            R.population(root)
+            check("a corpus whose crash flag contradicts its own run is refused", "ran", "refused")
+        except SystemExit as e:
+            check("a corpus whose crash flag contradicts its own run is refused",
+                  "crashes_on_pristine_build" in str(e), True)
 
 
 def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=True,
@@ -388,7 +437,7 @@ def main_path_cases():
         b = tmp / "out" / "bundle-php-real-exact" / "verdicts.jsonl"
         check("the bundle is written", b.is_file(), True)
         rows = [json.loads(l) for l in b.read_text().splitlines()]
-        check("every case is judged", len(rows), 4)
+        check("every case is judged", len(rows), 5)
         by_case = {r["observation"]["case"]: r for r in rows}
         check("the fault arm caught the two with a premise",
               sorted(by_case[c]["verdict"] for c in ("CRASH-086", "CRASH-110")),
