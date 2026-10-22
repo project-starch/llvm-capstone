@@ -7306,3 +7306,15 @@ t3-smoke/bkit8-batch-b2 (new).
   - resume_satp_changed 0, busy_frame_refusals 0;
   - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 0.
 - **Against the pre-registration (10ff4e43bd21): every reading holds, and the two boards agree in every reading.**
+
+### va-alloc-csret bare on the batch bitstream, board 2, result (2026-10-22 15:54-15:55): PASS, item 6 as simulated
+
+Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
+
+- **Read:** SR 0x11 (17) and 17 values `0x0 0x10004 0x0 0x20004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0`.
+- **Against the pre-registration (fea991af10cc, the RTL lane's corrected PREREG 46e03aa0fff8): PASS.**
+  - All 17 equal the batch vector, with tree A's vector as the two-sided control at positions 1, 3, 8, 11, 12 and 15.
+  - The CSNODE ancestor ids carry generations (0x10004 = generation 1 at index 4, 0x20004 = generation 2), REC_GEN
+    reads 2, and the record flags are as simulated.
+  - **Item 6 (generations in virtual node ids) behaves on vp2 silicon as on the RTL.**
+- Board 1's earlier boot of the same image read the same 17 values. It stays VOID by the rule written before it.
