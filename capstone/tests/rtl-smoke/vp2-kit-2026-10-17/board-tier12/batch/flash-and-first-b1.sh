@@ -25,6 +25,14 @@ main() {
     sleep ${FB_SLEEP:-60}
   done
   echo "FB board 1 free $(date +%T)" >> $O
+  # A SILENT read on the keep-retired arm (a load through a revoked capability that read retired memory) belongs to the
+  # resident bitstream, the only place it can be re-read: never flash over it. The arm must also have ended with a tally.
+  local K=${FB_KEEPF:-/tmp/capstone/treeA-session/pass/urkeep-b1.out}
+  if [ -e $K ]; then
+    grep -q "^UR board1 DONE\|^UR STOP" $K || { echo "FB STOP: the keep-retired arm has not ended" >> $O; return 1; }
+    grep -q "SILENT" $K && { echo "FB STOP: the keep-retired arm read SILENT; the resident bitstream is kept for re-reading" >> $O; return 1; }
+    echo "FB keep-retired arm: no SILENT read ($(grep -c '^TALLY keep' $K) keep tally lines)" >> $O
+  fi
   ${FB_STORE:-python3 $S/store-has.py} no-such-bitstream-$$.bit >> $O 2>&1; rc=$?
   [ $rc = 1 ] || { echo "FB STOP: store-has control read rc=$rc, not 1" >> $O; return 1; }
   ${FB_STORE:-python3 $S/store-has.py} caplifive_vp2c_8522d72fe.bit >> $O 2>&1 || { echo "FB STOP: the fallback is not registered" >> $O; return 1; }
