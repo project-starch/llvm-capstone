@@ -80,3 +80,18 @@ kits, built with the older cw SDK (juliet-vp2/judge-{tB-mimic,nf2}, sdk.json 64b
 **Predicted:** 366 CAUGHT (228 CWE-415, 138 CWE-416), every good run CORRECT, no MISSED row. Every case equals
 judge-tB-mimic's temporal-verdicts.tsv on verdict, good, cause, site and strict. A case that differs is listed with
 both readings.
+
+## Juliet spatial sample on the batch kit (pre-registered 2026-10-23, before its runs)
+
+**The build:** the sample's existing census build, already made with the r60 SDK (juliet-sp/build-census, sdk.json
+f5145cbb; manifest-spatial-sample.json, 755 cases). It is not rebuilt.
+
+**The judging:** juliet-sp/run-judge.sh's recipe with kit qkit7-batch2 in place of qkit7-tB-mimic: `run.py`,
+`probe.py` (wt-juliet a772f0112ae3), `judge.py` (wt-corpus b3cc8cb4be5a). There is no seeded build; the sample has no
+rand() flow.
+
+**Predicted:** every case equals juliet-sp/tB-mimic's spatial-verdicts.tsv on verdict, good, cause, site and strict
+(716 CAUGHT, 22 MISSED, 9 NOT-TRIGGERED:sizeof-ptr, 8 intra-object NO-READING). The exception allowed in advance is
+the CWE-126 CWE-170 family: whether its over-read runs on depends on whether a NUL follows the copy. Three of its rows
+moved in both directions between the 2026-10-19 record and tB-mimic (juliet-sp/RESULT), so a move there is reported
+as value-dependent, not as a platform difference. Any other moved case is listed and counts against the prediction.
