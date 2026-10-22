@@ -4,7 +4,7 @@
 # (bb65b77a) of the Juliet spatial run. Usage: tier3-uaf-repeat.sh <board 1|2> <out log> [N, default 120].
 # UR_RUN / UR_BUSY / UR_BOOK / UR_ROOT stub the dry run. UR_TAG suffixes the run root (uaf-repeat<tag>) and UR_ARGS adds
 # uaf-repeat.py options (--no-trace, --dmesg); both empty by default, which is the first run's configuration.
-# UR_KITSFX picks a kit copy (bkit7-...<sfx>) and UR_MODSHA its module's sha256 prefix (default 54d8a3af1158c3f4).
+# UR_BOOKMIN sets the booking's minutes (default 75). UR_KITSFX picks a kit copy (bkit7-...<sfx>) and UR_MODSHA its module's sha256 prefix (default 54d8a3af1158c3f4).
 main() {
   set -u
   local BRD=${1:?board} O=${2:?out log} N=${3:-120}
@@ -24,7 +24,7 @@ main() {
     && { [ $BRD = 2 ] && grep -qx "FPGA_BOARD=2" $K/board.env || { [ $BRD = 1 ] && ! grep -q "^FPGA_BOARD=2" $K/board.env; }; } || { echo "UR STOP: kit $K" >> "$O"; return 1; }
   [ -e "$R" ] && { echo "UR STOP: $R exists" >> "$O"; return 1; }
   ${UR_BUSY:-$BUSY} > /dev/null || { echo "UR STOP: board $BRD is busy" >> "$O"; return 1; }
-  bid=$(${UR_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} book $BRD 75 "vp2-tier12 uaf-control repeat (board $BRD)"); rc=$?
+  bid=$(${UR_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} book $BRD ${UR_BOOKMIN:-75} "vp2-tier12 uaf-control repeat (board $BRD)"); rc=$?
   [ $rc = 3 ] && { echo "UR STOP: the hub refused the booking (409): $bid" >> "$O"; return 1; }
   [ $rc = 0 ] || { echo "UR NOTE: booking failed rc=$rc ($bid); continuing unbooked" >> "$O"; bid=; }
   echo "UR BEGIN $(date +%T) board $BRD booking ${bid:-none} N=$N args ${UR_ARGS:-none} kit ${K##*/}" >> "$O"
@@ -33,7 +33,7 @@ main() {
     --n $N ${UR_ARGS:-} --out $R > $R.log 2>&1; rc=$?
   [ -n "$bid" ] && ${UR_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} unbook $bid >> "$O" 2>&1
   echo "UR END rc=$rc $(date +%T)" >> "$O"
-  grep -a "^REFUSE-PTE\|^BOUNDS-0\|^RUN \|^TALLY\|^completed=\|^NO DATA\|^DMESG\|^  DM " $R.log | cut -c1-240 >> "$O"
+  grep -a "^MAPPED-IMAGE\|^MAP \|^REFUSE-PTE\|^BOUNDS-0\|^RUN \|^TALLY\|^completed=\|^NO DATA\|^DMESG\|^  DM " $R.log | cut -c1-240 >> "$O"
   local tb=$R/work/board.txt c
   c="pc=0 $(grep -a -c 'pc=0x0\b\|pc=0 ' $tb 2>/dev/null) DRT1 $(grep -a -c '^DRT1:' $tb 2>/dev/null) FRTY $(grep -a -c 'FRTY:' $tb 2>/dev/null) Oops $(grep -a -c Oops $tb 2>/dev/null) INJS $(grep -a -c INJS $tb 2>/dev/null) INJL $(grep -a -c INJL $tb 2>/dev/null)"
   echo "UR readings: $c" >> "$O"

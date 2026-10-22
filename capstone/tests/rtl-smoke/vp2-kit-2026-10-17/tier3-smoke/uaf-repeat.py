@@ -26,12 +26,15 @@ from pathlib import Path
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--board-kit", type=Path, required=True)
+    kits = p.add_mutually_exclusive_group(required=True)
+    kits.add_argument("--board-kit", type=Path)
     p.add_argument("--tools", type=Path, required=True, help="bug-corpora/tools of a clean worktree")
     p.add_argument("--controls", type=Path, required=True)
     p.add_argument("--helper", type=Path, required=True)
     p.add_argument("--n", type=int, required=True)
     p.add_argument("--no-trace", action="store_true", help="every uaf run untraced")
+    p.add_argument("--mapped", type=Path, help="controls-mapped.dom: after each uaf run, one uaf-mapped run (the freed page kept mapped)")
+    kits.add_argument("--qemu-kit", type=Path, help="run the same steps in one QEMU boot of this virtual kit instead of a board")
     p.add_argument("--refuse-pte", action="store_true", help="set the module's refuse_pte=1 (0644) before the runs and read it back")
     p.add_argument("--dmesg", action="store_true", help="print the module's last 12 dmesg lines with each printed run")
     p.add_argument("--out", type=Path, required=True)
@@ -41,7 +44,15 @@ def main():
     if a.out.exists():
         sys.exit(f"{a.out} exists; a run goes into a fresh directory")
     a.out.mkdir(parents=True)
-    b = boardvm.BoardBatch(a.out / "stage")
+    if a.qemu_kit:
+        import virtualvm  # noqa: E402
+        b = virtualvm.Batch(a.out / "stage")
+    else:
+        b = boardvm.BoardBatch(a.out / "stage")
+    if a.mapped:
+        b.put("images/controls-mapped.dom", a.mapped)
+        import hashlib
+        print(f"MAPPED-IMAGE sha256 {hashlib.sha256(a.mapped.read_bytes()).hexdigest()[:16]}")
     b.put("images/controls.dom", a.controls)
     b.put("juliet-timeout", a.helper)
     (a.out / "stage" / "juliet-timeout").chmod(0o755)
@@ -62,6 +73,15 @@ def main():
                      f"> /tmp/u.txt 2>&1; rc=$?; grep -a 'domain fault' /tmp/u.txt | sed 's/^/FL /'; "
                      f"if grep -q 'cause=13 ' /tmp/u.txt || [ {k % 10} = 0 ]; then tail -n 300 /tmp/u.txt | sed 's/^/TR /'{dm}; fi; "
                      f"exit $rc")
+        if a.mapped:
+            # every tenth mapped run is traced, to record which operation the free issued (an object revoke, or a region
+            # UNMAP/retire as the original control's group free does); tallied apart, since the trace changes timing
+            mname = f"map-{k}" + ("-traced" if k % 10 == 0 else "")
+            menv = "CAPSTONE_VM_TRACE=1 " if k % 10 == 0 else ""
+            b.step(mname, f"( {menv}./juliet-timeout {mname} 10000 -- ./capstone-vexec ./images/controls-mapped.dom uaf-mapped ) "
+                          f"> /tmp/u.txt 2>&1; rc=$?; grep -a -E 'domain fault|STALE_READ_SURVIVED|CONTROL uaf-mapped' /tmp/u.txt | sed 's/^/FL /'; "
+                          f"if grep -q -E 'cause=13 |STALE_READ_SURVIVED' /tmp/u.txt || [ {k % 10} = 0 ]; then tail -n 300 /tmp/u.txt | sed 's/^/TR /'{dm}; fi; "
+                          f"exit $rc")
     if a.dmesg:
         # The whole boot's refusals, read once at the end (the runtime lane's form): each unresolved fault is expected
         # to print twice (the module's in-step resolve, then the launcher's CV_RESOLVE).
@@ -70,7 +90,7 @@ def main():
         b.step("dmesg-all", "echo OLDEST $(dmesg | head -n 1); "
                             "echo REFUSED $(dmesg | grep -a -c 'capstone_vm: resolve refused'); "
                             "dmesg | grep -a 'capstone_vm: resolve refused' | tail -n 40 | sed 's/^/DA /'")
-    steps, transcript, completed = b.execute(a.board_kit, a.out / "work", 3600 + 30 * a.n)
+    steps, transcript, completed = b.execute(a.qemu_kit or a.board_kit, a.out / "work", 3600 + 30 * a.n * (2 if a.mapped else 1))
     rows = {n: {"result": r, "text": t} for n, (t, r) in steps.items()}
     (a.out / "steps.json").write_text(json.dumps({"completed": completed, "transcript": str(transcript),
                                                    "n": a.n, "steps": rows}, indent=1))
@@ -90,6 +110,18 @@ def main():
                 print(f"DMESG-ALL VOID: the ring's oldest line is {'unread' if not m else m.group(1) + ' s'} into the boot, "
                       f"so it has wrapped and REFUSED undercounts; the per-run reads are the reading")
             continue
+        if n.startswith("map-"):
+            causes = re.findall(r"^FL .*domain fault cause=(\d+) ", t, re.M)
+            surv = re.findall(r"^FL STALE_READ_SURVIVED value=(\d+)", t, re.M)
+            mark = re.findall(r"^FL CONTROL uaf-mapped mark same_page_keep=(\d) same_page_keep2=(\d)", t, re.M)
+            kind = "SURVIVED" if surv else ("none" if not causes else causes[0] if causes[0] in ("13", "25") else "other")
+            tally[("mapped-traced" if n.endswith("-traced") else "mapped", kind)] += 1
+            tally[("mapped-reached-read", "mark" if mark else "no-mark")] += 1
+            if mark:
+                tally[("mapped-same-page", "keep=%s keep2=%s" % mark[0])] += 1
+            if kind != "25":
+                print(f"MAP {n} rc={r} kind={kind} surv={surv} causes={causes}")
+            continue
         causes = re.findall(r"^FL .*domain fault cause=(\d+) ", t, re.M)
         arm = n.rsplit("-", 1)[1]
         kind = "none" if not causes else causes[0] if causes[0] in ("13", "25") else "other"
@@ -108,7 +140,7 @@ def main():
                 print(f"  {l[:300]}")
     for (arm, kind), c in sorted(tally.items()):
         print(f"TALLY {arm} cause {kind}: {c}")
-    want = a.n + 1 + (1 if a.dmesg else 0) + (1 if a.refuse_pte else 0)
+    want = a.n * (2 if a.mapped else 1) + 1 + (1 if a.dmesg else 0) + (1 if a.refuse_pte else 0)
     print(f"completed={completed} steps={len(steps)} of {want} transcript={transcript}")
     if len(steps) != want:
         print(f"NO DATA: {len(steps)} of {want} steps in the transcript")

@@ -6781,3 +6781,43 @@ The reflash of c721c1a2a waits on the lead's own word. These scripts make the fi
      - FRTY, FRTC and INJS are recorded, with no prediction.
 - **After that, not before:** the corpus on the batch bitstream (pg-pools and cpython lt1 first), each arm with its
   own pre-registration and a result folder named for the bitstream.
+
+### A freed object whose page stays MAPPED, read through its revoked capability on board 2: pre-registered (2026-10-22 12:3x, before the boot)
+
+- **The question** (the runtime lane's, with the vp2 RTL read at bf3db3175, a claim):
+  - On the RTL, the capability check is evaluated before translation and is independent of it
+    (load_store_unit.sv:1312-1394, merged at :1113), and a registered cap exception suppresses every page-fault path
+    (cva6_mmu.sv:555).
+  - Then each cause-13 run is a run in which the check did NOT deny a load through a revoked capability: the
+    revocation cache said ALLOW, or the check was gated off.
+  - Had the page still been mapped, such a load would have read freed memory.
+  - The compiler lane's competing reading (a one-cycle ABORT-cycle hole on a DTLB miss that drops the registered cap
+    exception) predicts that a mapped page is never read: there is no PTW error to deliver, and the cap exception is
+    re-registered the next cycle.
+- **The variant:** `uaf-mapped/controls-mapped.c` is controls.c plus one mode. It mallocs keep, p and keep2 (32 B
+  each), frees p, prints the mark (with same-page flags), reads p, and prints `STALE_READ_SURVIVED value=` if the read
+  returns.
+  - Built with the census SDK's compiler: fb30eab5a2fe4c20. The same command reproduces controls.dom b1decb06 byte
+    for byte (`uaf-mapped/BUILD.md`).
+- **The QEMU gate** (`uaf-mapped/qemu-gate.txt`, qkit7-tB-mimic, two boots of 20 pairs):
+  - the mapped run reads cause 25 in 40 of 40, all reached the read, and p shares a page with both live neighbours
+    in all 40;
+  - the unchanged control reads 25 in 40 of 40.
+  - **The traced mapped run's free issues no region UNMAP** (boundary kinds 12, 12, 11, 10 before the mark, where the
+    original control's free issues kind 2). So this variant tests the OBJECT revoke path, not the region retire that
+    produced the 13s (the runtime lane's limit).
+- **What runs:**
+  - board 2 (tree B, kit bkit7-rev2xBDN2, module 54d8a3af) after the d0d5f758 arm ends, one cold boot;
+  - 200 pairs: the unchanged uaf control, then the mapped run, the same gap (the mark, then the read) in both. Every
+    tenth mapped run is traced and tallied apart.
+  - `UR_TAG=-mapped UR_BOOKMIN=110 UR_ARGS="--no-trace --dmesg --mapped <mnt-hdd>/capstone/uaf-mapped/controls-mapped.dom"`,
+    N=200.
+- **Predictions:**
+  - The control reads as before: cause 25, or cause 13 in a few percent (`arena`).
+  - **Mapped: cause 25 in every untraced run (0 of about 180 survive)** if the 13s are an ordering hole. That is the
+    compiler lane's reading, and the QEMU gate agrees.
+  - **About 1-2 % `STALE_READ_SURVIVED`** if the revocation check sometimes allows (the runtime lane's).
+  - Either way the tally gives the denominator, the runs that reached the read (the mark), and the same-page flags.
+- **Limit, written before the result:** a zero here clears the object-revoke path only. It says nothing about the
+  region-retire path the 13s came from, and a read of a retired region's still-mapped page would need a module test
+  hook (the runtime lane is looking).
