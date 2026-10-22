@@ -1,0 +1,34 @@
+# flash-and-first-b1.sh dry run, 2026-10-22 12:05; every external step stubbed (FB_*). ok: the whole chain; broken: a store check
+# that says yes to a name that cannot exist must stop; flash-fail: a flash that does not read back must stop before the kit.
+== ok
+FB arm ended 12:05:18
+STORE stub: missing no-such-bitstream-3534608.bit
+STORE stub: has caplifive_vp2c_8522d72fe.bit
+FB FLASH BEGIN 12:05:18 booking 997 # book 1 30 vp2 batch c721c1a2a REFLASH (board 1, the lead's word)
+FLASH-STUB caplifive_vp2c_c721c1a2a.bit <mnt-hdd>/capstone/bitstreams/caplifive_vp2c_c721c1a2a.bit 8f4a486f2c9650412016e66d711af1ca8e0b003d2ac9a202a00f0d075b85ed6e
+997 # unbook 997 # book 1 30 vp2 batch c721c1a2a REFLASH (board 1, the lead's word)
+FB FLASH END rc=0 12:05:18
+MK kit <scratch>/fb/kits-ok/bkit8-batch-b1: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit7-rev2xDN2:
+< BOARD_BITSTREAM=caplifive_vp2c_8522d72fe
+> BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+< BOARD_FW_MON=/tmp/capstone/csbi-drt
+< BOARD_MONITOR_COMMIT=f13dbc5
+< BOARD_FW_DEFINES="-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY -DCAPSTONE_QUANTUM_PRINT -DCAPSTONE_BOOT_QUANTUM=2000000 -DCAPSTONE_S23_REFUSAL_READ -DCAPSTONE_S23_DATA_RETRY"
+> BOARD_FW_MON=/tmp/capstone/csbi-batch
+> BOARD_MONITOR_COMMIT=d9da397
+> BOARD_FW_DEFINES="-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY -DCAPSTONE_QUANTUM_PRINT -DCAPSTONE_BOOT_QUANTUM=2000000 -DCAPSTONE_S23_REFUSAL_READ -DCAPSTONE_S23_DATA_RETRY -DCAPSTONE_FETCH_RETRY_CAP"
+MK module 21fbfc397e7c7a42 DONE
+FB FIRST rc=0 12:05:18; SEQ:
+FB DONE 12:05:18
+== broken
+FB arm ended 12:05:08
+STORE stub: says yes to everything
+FB STOP: store-has control read rc=0, not 1
+== flfail
+FB arm ended 12:05:18
+STORE stub: missing no-such-bitstream-3534647.bit
+STORE stub: has caplifive_vp2c_8522d72fe.bit
+FB FLASH BEGIN 12:05:18 booking 997 # book 1 30 vp2 batch c721c1a2a REFLASH (board 1, the lead's word)
+997 # unbook 997 # book 1 30 vp2 batch c721c1a2a REFLASH (board 1, the lead's word)
+FB FLASH END rc=1 12:05:18
+FB STOP: the flash did not read back caplifive_vp2c_c721c1a2a.bit
