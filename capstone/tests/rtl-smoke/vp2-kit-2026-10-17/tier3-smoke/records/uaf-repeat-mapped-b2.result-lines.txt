@@ -1,0 +1,21 @@
+# mapped (object-revoke) arm, controls-mapped.dom fb30eab5 on kit bkit7-rev2xBDN2 (2ff69ca88172), board 2 / tree B, 2026-10-22. Result lines only.
+UR BEGIN 12:38:19 board 2 booking 111 N=200 args --no-trace --dmesg --mapped <mnt-hdd>/capstone/uaf-mapped/controls-mapped.dom kit bkit7-rev2xBDN2
+UNBOOK 111: 200
+UR END rc=0 13:53:05
+MAPPED-IMAGE sha256 fb30eab5a2fe4c20
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f80f90c24 address=0x3f81031050 entry=0x3f80f80868 code=0x3f80f80000-0x3f81000000 last=0x42 preparing=0x42 
+TALLY mapped cause 25: 180
+TALLY mapped-reached-read cause mark: 200
+TALLY mapped-same-page cause keep=1 keep2=1: 200
+TALLY mapped-traced cause 25: 20
+TALLY plain cause 13: 5
+TALLY plain cause 25: 195
+completed=True steps=402 of 402 transcript=<mnt-hdd>/capstone/t3-run-treeB/uaf-repeat-mapped/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 13:53:05
+DMESG-ALL OLDEST [ 3977.349723] remote fence extension is not available in SBI v1.0 | REFUSED 0
+RUN uaf-37-plain (control) cause 13 address 0x3fa6a61040; own refusals 1: refused at arena: addr 0x3fa6a61040 caus
+RUN uaf-113-plain (control) cause 13 address 0x3fb2938040; own refusals 2: refused at arena: addr 0x3fb2938040 caus
+RUN uaf-140-plain (control) cause 13 address 0x3fb9e92040; own refusals 2: refused at arena: addr 0x3fb9e92040 caus
+RUN uaf-155-plain (control) cause 13 address 0x3fbca10040; own refusals 2: refused at arena: addr 0x3fbca10040 caus
+RUN uaf-160-plain (control) cause 13 address 0x3f80ffe040; own refusals 2: refused at arena: addr 0x3f80ffe040 caus

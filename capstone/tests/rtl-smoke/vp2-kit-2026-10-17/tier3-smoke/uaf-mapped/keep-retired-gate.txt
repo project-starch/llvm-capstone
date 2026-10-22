@@ -1,0 +1,28 @@
+# keep-retired arm: the QEMU gate (2026-10-22 12:2x, qkit7-tB-mimic-keep = qkit7-tB-mimic with adapter/capstone-vexec 518a66b9, N=10 pairs)
+<scratch>/um/k1/work/serial.log
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f8eb10c24 address=0x3f8ebbd050 entry=0x3f8eb00868 code=0x3f8eb00000-0x3f8eb80000 last=0x42 preparing=0x42 sha256=b1decb0612856
+TALLY keep cause 25: 9
+TALLY keep-fault-in-kept-region cause True: 10
+TALLY keep-hook cause fired: 10
+TALLY keep-reached-read cause mark: 10
+TALLY keep-traced cause 25: 1
+TALLY plain cause 25: 10
+completed=True steps=22 of 22 transcript=<scratch>/um/k1/work/serial.log
+# and the board-path stub dry run (N=3): keep-1 a planted silent return (exit 0, RETURNED), keep-2 a hooked cause 25, keep-3 a run whose hook did not fire
+UR BEGIN 12:23:33 board 1 booking 999 # book 1 75 vp2-tier12 uaf-control repeat (board 1) N=3 args --no-trace --dmesg --keep-retired kit bkit7-rev2xDN2-keep
+UR END rc=0 12:23:33
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f7f690c24'} capstone-exec: domain fault cause=28 pc=0x3f7f690c24
+KEEP keep-1 rc={'kind': 'exit', 'value': 0} kind=SILENT causes=[] hook=[('3f7f755000', '4096')]
+DMESG-ALL OLDEST [ 0.000000] Booting Linux
+DMESG-ALL REFUSED 0
+TALLY keep cause 25: 2
+TALLY keep cause SILENT: 1
+TALLY keep-fault-in-kept-region cause False: 1
+TALLY keep-fault-in-kept-region cause True: 1
+TALLY keep-hook cause NOT-FIRED: 1
+TALLY keep-hook cause fired: 2
+TALLY keep-reached-read cause mark: 3
+TALLY plain cause 25: 3
+completed=True steps=8 of 8 transcript=<scratch>/urk/r1/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board1 DONE 12:23:33

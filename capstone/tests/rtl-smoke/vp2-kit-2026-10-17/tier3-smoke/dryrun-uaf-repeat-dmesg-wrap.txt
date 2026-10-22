@@ -1,0 +1,15 @@
+# uaf-repeat.py dmesg-all wrap check, dry run 2026-10-22 ~12:00, N=12, --no-trace --dmesg, stubbed (BOARDVM_STUB_TRANSCRIPT).
+# wrapped: the ring's oldest line at 1104.2 s must read VOID; fresh: oldest at 0.000000 must not.
+== wrapped
+DMESG-ALL OLDEST [ 1104.2] Booting Linux
+DMESG-ALL REFUSED 2
+DMESG-ALL DA [  1.0] capstone_vm: resolve refused at arena: addr 0x3f7f755040 cause 13
+DMESG-ALL DA [  1.1] capstone_vm: resolve refused at arena: addr 0x3f7f755040 cause 13
+DMESG-ALL VOID: the ring's oldest line is 1104.2 s into the boot, so it has wrapped and REFUSED undercounts; the per-run reads are the reading
+completed=True steps=14 of 14 transcript=<scratch>/udr-wrapped/work/board.txt
+== fresh
+DMESG-ALL OLDEST [ 0.000000] Booting Linux
+DMESG-ALL REFUSED 2
+DMESG-ALL DA [  1.0] capstone_vm: resolve refused at arena: addr 0x3f7f755040 cause 13
+DMESG-ALL DA [  1.1] capstone_vm: resolve refused at arena: addr 0x3f7f755040 cause 13
+completed=True steps=14 of 14 transcript=<scratch>/udr-fresh/work/board.txt

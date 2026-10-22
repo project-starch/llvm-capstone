@@ -6678,3 +6678,258 @@ Records: `records/uaf-repeat-dm-b1.result-lines.txt` and `records/uaf-repeat-dm-
   - **Severity, as far as the board reads:** both causes stop the use-after-free read (signal 11 at the read). The
     cause-13 runs are not a missed detection; what differs is the cause reported. In the Juliet runner that costs a
     batch void (judge.py's control requires 25), not a verdict.
+
+### The uaf control's cause 13 with the PTE printed at the refusal (module d0d5f758, refuse_pte=1), pre-registered (2026-10-22 11:5x, before either boot)
+
+- **The question:** every cause-13 run so far is `resolve refused at arena`, so no arena covered the address at the
+  fault. What did the walker find, no PTE or a PTE that was still present? The runtime lane's module d0d5f758 adds the
+  PTE (rc, present, write, young, dirty, pfn) and the covering arena to exactly that line when refuse_pte=1.
+  - Its source is runtime/arena-refusal-pte 3feb24ac2c61: dev 3ceba9bad107 plus one 42-line, param-gated hunk in
+    capstone_vm.c, default off. I read the diff.
+  - It is QEMU-gated on that lane, and the unmodified tree's build reproduces 54d8a3af byte for byte (their claims).
+- **What runs:**
+  - The same repeat as above (200 untraced runs, --dmesg) on kit copies `bkit7-rev2xDN2-pte` and
+    `bkit7-rev2xBDN2-pte`. They differ from their originals ONLY in adapter/module/capstone_vm.ko (d0d5f758),
+    SHA256SUMS regenerated.
+  - A first step sets refuse_pte=1 through sysfs and reads it back.
+  - `UR_KITSFX=-pte UR_MODSHA=d0d5f758ef175205 UR_TAG=-pte UR_ARGS="--no-trace --dmesg --refuse-pte"`, one cold boot
+    per board.
+- **This boot does NOT qualify d0d5f758 for any record.** It has had no Tier 1 boot. Its only output is the refusal
+  line's fields.
+  - The reading is valid only if the boot's own controls read as they did on 54d8a3af: the bounds run cause 28;
+    every uaf run one fault line at code+0x10c70, cause 25 or 13; the readings 0.
+  - A module that broke contexts would fail those, and the boot would then be a finding about d0d5f758, not a
+    reading.
+- **Dry run** (`dryrun-uaf-repeat-pte.txt`):
+  - a read-back of Y passes and N reads VOID;
+  - the -pte kit with the default module hash refuses;
+  - with no UR_* set, the generated gate is still the first repeat's, byte for byte.
+- **Predictions:**
+  - refuse_pte reads back Y. The controls read as above. pc=0, DRT1, FRTY, Oops, INJS and INJL are 0.
+  - Every cause-13 run's own refusal line is `arena`, with **`arena -1` (no arena covers the address) and `pte
+    rc!=0`, present=-1: the PTE is gone.** The compiler lane's source chain predicts this, since munmap follows the
+    retire.
+  - **A `pte rc=0 ... present=1` reading would be a finding:** a retired, unmapped region whose PTE survived. That is
+    a stale mapping, a different and narrower question.
+  - A covering arena (`arena >= 0`) would contradict the earlier reading.
+  - The rate is a few percent per tree. A board with no cause-13 run gives no reading.
+
+### A freed object whose page stays MAPPED, read through its revoked capability on board 2: pre-registered (2026-10-22 12:3x, before the boot)
+
+- **The question** (the runtime lane's, with the vp2 RTL read at bf3db3175, a claim):
+  - On the RTL, the capability check is evaluated before translation and is independent of it
+    (load_store_unit.sv:1312-1394, merged at :1113), and a registered cap exception suppresses every page-fault path
+    (cva6_mmu.sv:555).
+  - Then each cause-13 run is a run in which the check did NOT deny a load through a revoked capability: the
+    revocation cache said ALLOW, or the check was gated off.
+  - Had the page still been mapped, such a load would have read freed memory.
+  - The compiler lane's competing reading (a one-cycle ABORT-cycle hole on a DTLB miss that drops the registered cap
+    exception) predicts that a mapped page is never read: there is no PTW error to deliver, and the cap exception is
+    re-registered the next cycle.
+- **The variant:** `uaf-mapped/controls-mapped.c` is controls.c plus one mode. It mallocs keep, p and keep2 (32 B
+  each), frees p, prints the mark (with same-page flags), reads p, and prints `STALE_READ_SURVIVED value=` if the read
+  returns.
+  - Built with the census SDK's compiler: fb30eab5a2fe4c20. The same command reproduces controls.dom b1decb06 byte
+    for byte (`uaf-mapped/BUILD.md`).
+- **The QEMU gate** (`uaf-mapped/qemu-gate.txt`, qkit7-tB-mimic, two boots of 20 pairs):
+  - the mapped run reads cause 25 in 40 of 40, all reached the read, and p shares a page with both live neighbours
+    in all 40;
+  - the unchanged control reads 25 in 40 of 40.
+  - **The traced mapped run's free issues no region UNMAP** (boundary kinds 12, 12, 11, 10 before the mark, where the
+    original control's free issues kind 2). So this variant tests the OBJECT revoke path, not the region retire that
+    produced the 13s (the runtime lane's limit).
+- **What runs:**
+  - board 2 (tree B, kit bkit7-rev2xBDN2, module 54d8a3af) after the d0d5f758 arm ends, one cold boot;
+  - 200 pairs: the unchanged uaf control, then the mapped run, the same gap (the mark, then the read) in both. Every
+    tenth mapped run is traced and tallied apart.
+  - `UR_TAG=-mapped UR_BOOKMIN=110 UR_ARGS="--no-trace --dmesg --mapped <mnt-hdd>/capstone/uaf-mapped/controls-mapped.dom"`,
+    N=200.
+- **Predictions:**
+  - The control reads as before: cause 25, or cause 13 in a few percent (`arena`).
+  - **Mapped: cause 25 in every untraced run (0 of about 180 survive)** if the 13s are an ordering hole. That is the
+    compiler lane's reading, and the QEMU gate agrees.
+  - **About 1-2 % `STALE_READ_SURVIVED`** if the revocation check sometimes allows (the runtime lane's).
+  - Either way the tally gives the denominator, the runs that reached the read (the mark), and the same-page flags.
+- **Limit, written before the result:** a zero here clears the object-revoke path only. It says nothing about the
+  region-retire path the 13s came from, and a read of a retired region's still-mapped page would need a module test
+  hook (the runtime lane is looking).
+
+### A RETIRED REGION kept mapped (the cause-13 runs' own shape) on board 1: pre-registered (2026-10-22 12:2x, before the boot)
+
+- **Why:**
+  - The mapped arm on board 2 (above) tests the object-revoke path only. The cause-13 runs came from a REGION retire:
+    the freed 32-byte object's group is its own 4 KiB linear region, which the free retires (CV_RETIRE) and munmaps.
+  - The runtime lane's test launcher 518a66b97f2bd9e2 (runtime/vexec-keep-retired 0738f494c199: c14933904de4 plus 13
+    lines in exec.c unmap_arena(), which I read) keeps that shape and drops only the munmap when
+    CAPSTONE_VM_TEST_KEEP_RETIRED=1. The region is still retired (revoked, unpinned), but its PTEs stay, so the read
+    cannot page-fault. It prints `CAPSTONE_VM_TEST_KEEP_RETIRED base= bytes=`. Unset, it does nothing (the lane's
+    claim, and its unmodified tree reproduces b27afefc).
+  - The RTL lane closed the "check gated off" route from source (MPRV is never set in a context), per the runtime
+    lane. A silent read would therefore be the revocation cache's ALLOW.
+- **What runs:**
+  - board 1 (tree A), one cold boot, after the d0d5f758 arm ends;
+  - kit `bkit7-rev2xDN2-keep`, which differs from bkit7-rev2xDN2 only in adapter/capstone-vexec (518a66b9);
+  - the unchanged controls.dom b1decb06 and module 54d8a3af;
+  - 200 pairs: the uaf control unset, then `keep-k` with the variable set, every tenth traced;
+  - `UR_KITSFX=-keep UR_VEXSHA=518a66b97f2bd9e2 UR_TAG=-keep UR_BOOKMIN=110 UR_ARGS="--no-trace --dmesg --keep-retired"`.
+- **The gate** (`uaf-mapped/keep-retired-gate.txt`):
+  - QEMU (qkit7-tB-mimic with only the launcher swapped), 10 pairs: keep reads 25 in 10 of 10 with the hook fired and
+    the fault inside the kept region in all 10; the unset control reads 25 in 10 of 10.
+  - Board-path stub: a planted silent return reads SILENT; a run whose hook did not fire is counted apart.
+- **Readings and predictions:**
+  - **25 is the check denying. SILENT (the read returned, `CONTROL uaf-malloc RETURNED`, exit 0) is a load through
+    a revoked capability that read retired memory: the hazard, confirmed.**
+  - A cause 13 on a keep run would refute the reading, since the PTE is present.
+  - **Under the runtime lane's hypothesis (the cache sometimes ALLOWs): SILENT at about the 13 rate, a few in 200.**
+  - **Under the compiler lane's (an ordering hole that needs a PTW error): 0 SILENT, and every keep run reads 25.**
+  - The unset control reads as before (25, or 13 at a few percent, at `arena`). The hook fires on every keep run.
+    Readings 0.
+  - This boot does not qualify launcher 518a66b9 for any record. It gets no Tier 1, and the reading is valid only if
+    the boot's unset controls and bounds run read as on b27afefc.
+
+### The PTE at the uaf control's cause-13 refusal, result (2026-10-22 11:56-12:38, both boards, module d0d5f758 refuse_pte=1): no arena, no PTE
+
+Records: `records/uaf-repeat-pte-b1.result-lines.txt` and `records/uaf-repeat-pte-b2.result-lines.txt`.
+
+- **The boot's own controls read as on 54d8a3af, so the reading stands** (it qualifies d0d5f758 for nothing else):
+  - refuse_pte read back Y;
+  - the bounds run reads 28;
+  - every one of the 400 uaf runs printed one fault line at code+0x10c70;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL are 0.
+- **Read:**
+  - Tree A: cause 13 in 2 of 200 (45, 157). Tree B: cause 13 in 5 of 200 (48, 70, 72, 74, 149).
+  - **Every one of the 7 has two refusal lines at its own fault address, both `resolve refused at arena: ... arena
+    -1 lazy -1 pte rc=-22 val=0x0 present=-1`.** At the fault no arena covered the address, and follow_pte found no
+    PTE.
+- **Against the pre-registration (d706a50d5c9d):** every reading holds, including the predicted `arena -1` with `pte
+  rc!=0`. No PTE survived.
+- **The ring count:** both boards' final step now reads VOID by itself (oldest ring line at 1979 s and 1993 s). The
+  wrap check fires on a real boot as it did on its stub.
+- **Over every repeat so far:** cause 13 in tree A 8 of 520 and tree B 11 of 520. Each one examined (12 runs across
+  the two ring-reading boots) is a fault on an unmapped, retired address.
+- **What it settles and what it does not:**
+  - The page-table half of the shape is confirmed: in a cause-13 run the load walked to a missing PTE and the page
+    fault was delivered instead of the revocation verdict.
+  - Whether the revocation check ALLOWED in those runs (the runtime lane's reading) or was merely outranked for a
+    cycle (the compiler lane's) is the question for the two stale-read arms now running: a retired region kept
+    mapped on board 1, and a freed object on a live page on board 2.
+
+### The RTL lane's simulation of the cause-13 shape, recorded before either stale-read arm's result (2026-10-22 ~12:5x)
+
+The RTL lane reports this result (a claim, not re-read here). capstone-ariane branch rvk-unmap-cause 8456df2bb, test
+verif/tests/custom/capstone/rvk-unmap-cause.S, run on 05d209acb, whose LSU/MMU/PTW files equal bf3db3175's apart from
+S-23's flush_all plumbing.
+
+- **No ordering hole on the revoke path.** A load through a revoked capability to an unmapped page reads cause 25 at
+  every point of 24 arms, varying:
+  - the gap between retire and load (0-256 nops);
+  - the stores before the load (0-16);
+  - whether the id is resident in the LSU revocation cache;
+  - whether the revoke happened in a previous context entry.
+  - Why: the cap exception is registered in the request's own cycle and delivered the next, so misaligned_ex_q reads 1
+    in the first WAIT_TRANSLATION cycle. The PTW error never reaches the load unit.
+  - Control: with the child LIVE and the page unmapped, the load reads 13 with one PTW error and no cap exception.
+  - **So the compiler lane's ABORT-cycle hole is refuted in simulation.**
+- **The one shape that reads 13:**
+  - the monitor retires the child with CSRETIRE (csupctl bit 3, the table namespace) right after the context's exit;
+  - the CSRETIRE answers 0 = ACCEPTED; executed again, it answers 1;
+  - a bare read of the table then shows the record still VALID, generation 0, with an empty free list. **The accepted
+    retire wrote nothing.**
+  - The next entry's load through the child is ALLOWED: 13 if the page is gone, and with the page mapped it COMPLETES
+    and reads the data.
+  - Its readout's positive control: a CREVOKE inside the context reads VALID 0, free list {3, count 1}, and the load
+    reads 25.
+- **What it predicts here:**
+  - In simulation a 13 always means the check ALLOWED.
+  - If the module's retire on silicon reaches that shape, **board 1's keep-retired arm reads SILENT at about the 13
+    rate** (the runtime lane's prediction, now with a mechanism).
+  - Board 2's mapped arm (an object revoke, not a CSRETIRE) is predicted 0 SILENT.
+  - rvc_den_v_q would be CLEAR on a 13 run and SET on a 25 run, not the reverse as earlier suggested.
+- **Whether the module's retire reaches that shape on silicon is the runtime lane's question.** One reading the RTL
+  lane offers: the retired record's VALID bit in the context's table after the retire returns, on a 13 run against a
+  25 run.
+
+### Amendment: the RTL lane's corrections to its simulation report (received ~13:0x, before either stale-read arm reads)
+
+- **The simulation's rate in shape 2 is 100 %, not "about the 13 rate".** Every build of that shape reads the retire
+  as accepted but ineffective, and the next load completes. So the RTL lane's three outcomes for board 1's
+  keep-retired arm:
+  - about 2 % SILENT: a 13 is an allowed load, but the simulation's deterministic shape is not the silicon trigger;
+  - about 0 % SILENT: shape 2 is not what the board does, and the 13s are something else;
+  - about 100 %: shape 2 itself.
+  - **The RTL lane expects the first. For board 2's object revoke: 0 SILENT.**
+- **Two statements narrowed to what was read.** My section above carries both and is corrected here:
+  - "The accepted retire wrote nothing" was a mechanism, not a reading. What was read: the record reads VALID
+    afterwards and the free list is empty. A trace of every rev-node write is running.
+  - "rvc_den_v_q CLEAR on a 13 run" is a prediction from the trace, to be confirmed on a silicon 13 run.
+- **The settled part stands:** on the revoke path (record dead) no 13 occurs at any gap, store count or residency.
+  In this RTL a 13 means the capability check allowed the load.
+
+### RETRACTED by the RTL lane: its simulation's "shape 2" (received 13:1x, before any stale-read result)
+
+- The two sections above that report and amend the RTL lane's simulation carry "shape 2": a monitor-side CSRETIRE
+  answered as accepted, after which the record reads VALID. **The RTL lane retracts it as a harness error, not an RTL
+  behaviour.**
+  - The DYN unit's CSRETIRE takes the node id as a SCALAR in rs1 (capstone_dyn_unit.anvil:613 reads rs1.cursor; the
+    module passes the ancestor id). That arm passed the child CAPABILITY, whose cursor is the page address, so every
+    retire was refused out of range before reaching the rev-node unit.
+  - Its write trace shows zero unit writes and result=1. The "accepted (0)" print was a stale register, so those
+    arms were the 13 control in disguise: child live, page unmapped.
+- **What stands:**
+  - On the revoke path (record dead) no 13 occurs at any gap, store count or residency: 26 arms.
+  - In this RTL a 13 on a load means the capability check did not fire for that load.
+- **What it no longer has:** a simulated shape that gives an allowed load after a successful retire. The arms with the
+  correct id are running.
+- **Its prediction for board 1's keep-retired arm is revised** to "0 or a small rate; the simulation gives no number".
+  Any SILENT read there remains an allowed load after a retire the module saw succeed.
+
+### A retired region kept mapped, result (2026-10-22 12:37-13:51, board 1, tree A): 0 silent reads in 200, and no cause 13 either
+
+Record: `records/uaf-repeat-keep-b1.result-lines.txt`.
+
+- **Read:**
+  - **keep runs (variable set): cause 25 in 200 of 200**, the 20 traced ones included. The hook fired in 200 of 200;
+    every run reached the read (the mark); every fault was inside the kept region. **SILENT 0. Cause 13 0.**
+  - **The unset control, interleaved in the same boot: cause 13 in 8 of 200** (11, 69, 88, 110, 128, 138, 186,
+    190), each with its own `resolve refused at arena` (two lines in six runs, one in two). Cause 25 in 192.
+  - The bounds run reads 28. pc=0, DRT1, FRTY, Oops, INJS and INJL are 0. The boot-wide ring count voided itself (the
+    ring's oldest line was at 4003 s).
+- **Against the pre-registration (c7fdf77bca9d):**
+  - HELD: the controls; the hook on every keep run; no cause 13 on a keep run (whose occurrence would have refuted
+    the reading).
+  - **The runtime lane's prediction (SILENT at about the 13 rate) did not hold. The compiler lane's (0 SILENT) and
+    the RTL lane's revised one ("0 or a small rate") did.**
+  - Numbers: 0 of 200 against the control's 8 of 200 in the same boot, one-sided Fisher p = 0.0036. At the control's
+    4 % rate, P(0 of 200) = 0.0003. The 95 % upper bound on a silent-read rate is 1.5 % per run.
+- **What it says, and what it does not:**
+  - With the retired region's pages kept, no read of the freed object got past the check in 200 tries. The
+    temporal-safety hazard the runtime lane asked about did not appear.
+  - In the same boot, the same program with the munmap left in place reads 13 at 4 %. So in this sample the
+    13s need what the hook removes.
+  - The hook removes more than the PTE: it removes the munmap call itself (its timing, and the kernel's TLB
+    maintenance) and the address's reuse. This arm does not say which of those the 13 needs.
+  - It contradicts no RTL reading. The RTL lane's simulation has no route to a 13 at all, so the silicon 13s remain
+    silicon-only, and their mechanism is still open. What this arm adds is that they did not come with completed
+    reads.
+- The object-path arm (board 2) and the retire check (board 2, next) are still to read.
+
+### A freed object on a mapped page, result (2026-10-22 12:38-13:53, board 2, tree B): 0 of 200 survive
+
+Record: `records/uaf-repeat-mapped-b2.result-lines.txt`.
+
+- **Read:**
+  - mapped runs (controls-mapped fb30eab5): **cause 25 in 200 of 200**, the 20 traced ones included, every one at
+    code+0x10c70 with the address at offset 0x70 (p). All 200 reached the read, and p shared a page with both live
+    neighbours in all 200. **STALE_READ_SURVIVED 0.**
+  - The unchanged control, interleaved in the same boot: cause 13 in 5 of 200 (37, 113, 140, 155, 160), each with
+    its own arena refusal. Cause 25 in 195.
+  - The bounds run reads 28. Readings 0. The boot-wide ring count voided itself (oldest ring line at 3977 s).
+- **Against the pre-registration (2ff69ca88172): every reading holds as the 0-SILENT branch.** The object-revoke path
+  on a live page denied every read.
+  - The limit written before the result stands: this clears the object path only. Board 1's keep-retired arm, above,
+    is the region path, and it read 0 too.
+- **The two arms together, on silicon:**
+  - **400 reads of freed memory through a revoked capability on a mapped page (200 region-retired on tree A, 200
+    object-revoked on tree B): every one refused with cause 25. None completed.**
+  - Beside them, in the same two boots, the unchanged control read cause 13 in 13 of 400. Every 13 examined is a
+    fault on an unmapped, retired address.

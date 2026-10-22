@@ -1,0 +1,24 @@
+# keep-retired arm (launcher 518a66b9, kit bkit7-rev2xDN2-keep; c7fdf77bca9d), board 1 / tree A, 2026-10-22. Result lines only.
+UR BEGIN 12:37:13 board 1 booking 110 N=200 args --no-trace --dmesg --keep-retired kit bkit7-rev2xDN2-keep
+UNBOOK 110: 200
+UR END rc=0 13:51:55
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f9aa10c24 address=0x3f9aae1050 entry=0x3f9aa00868 code=0x3f9aa00000-0x3f9aa80000 last=0x42 preparing=0x42 
+TALLY keep cause 25: 180
+TALLY keep-fault-in-kept-region cause True: 200
+TALLY keep-hook cause fired: 200
+TALLY keep-reached-read cause mark: 200
+TALLY keep-traced cause 25: 20
+TALLY plain cause 13: 8
+TALLY plain cause 25: 192
+completed=True steps=402 of 402 transcript=<mnt-hdd>/capstone/t3-run-treeA/uaf-repeat-keep/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board1 DONE 13:51:55
+DMESG-ALL OLDEST [ 4003.706071] remote fence extension is not available in SBI v1.0 | REFUSED 0
+RUN uaf-11-plain (unset control) cause 13 address 0x3fb964e040; own refusals 2: refused at arena: addr 0x3fb964e040 cause 13 need 0x1 pc 0x3
+RUN uaf-69-plain (unset control) cause 13 address 0x3fb3ca2040; own refusals 2: refused at arena: addr 0x3fb3ca2040 cause 13 need 0x1 pc 0x3
+RUN uaf-88-plain (unset control) cause 13 address 0x3fbd3df040; own refusals 2: refused at arena: addr 0x3fbd3df040 cause 13 need 0x1 pc 0x3
+RUN uaf-110-plain (unset control) cause 13 address 0x3f80711040; own refusals 2: refused at arena: addr 0x3f80711040 cause 13 need 0x1 pc 0x3
+RUN uaf-128-plain (unset control) cause 13 address 0x3f9d1ab040; own refusals 2: refused at arena: addr 0x3f9d1ab040 cause 13 need 0x1 pc 0x3
+RUN uaf-138-plain (unset control) cause 13 address 0x3f899fd040; own refusals 1: refused at arena: addr 0x3f899fd040 cause 13 need 0x1 pc 0x3
+RUN uaf-186-plain (unset control) cause 13 address 0x3fae93c040; own refusals 1: refused at arena: addr 0x3fae93c040 cause 13 need 0x1 pc 0x3
+RUN uaf-190-plain (unset control) cause 13 address 0x3fb70dc040; own refusals 2: refused at arena: addr 0x3fb70dc040 cause 13 need 0x1 pc 0x3

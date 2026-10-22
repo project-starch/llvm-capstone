@@ -6899,5 +6899,15 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
       the 32-byte group's own 4 KiB mapping.
     - In those runs the load took the page fault instead of the revocation verdict. Over all repeats it is 6 of 320
       per tree.
-    - Which RTL path lets the page fault win is open. The candidate is a one-cycle window on a DTLB miss, unmeasured,
-      and an RTL simulation sweeping the cache's response delay would settle it.
+    - Which path lets the page fault win is open. The RTL lane's directed simulation (26 revoke-path arms plus the
+      monitor-retire arms) finds NO route to a 13 through a revoked or retired capability, so the 13s are
+      silicon-only.
+  - **Does a revoked read ever COMPLETE on silicon? Not in 400 tries.** Two arms kept the freed memory MAPPED:
+    - a retired region kept mapped by a test launcher, the 13s' own shape, on tree A;
+    - a freed object on a page held by live neighbours, on tree B.
+    Each arm refused 200 of 200 reads with cause 25, and none completed. The unchanged control in the same two boots
+    read 13 in 13 of 400. On the region arm, 0 of 200 against the control's 8 of 200 gives one-sided Fisher p =
+    0.0036, and a 95 % bound of 1.5 % per run on a silent read.
+  - So in these runs the 13s need the munmap (its TLB maintenance, timing and address reuse), and they do not come
+    with completed reads. At the fault, the module reads no arena and no PTE (`arena -1 ... pte rc=-22`, all 7
+    examined with that module).
