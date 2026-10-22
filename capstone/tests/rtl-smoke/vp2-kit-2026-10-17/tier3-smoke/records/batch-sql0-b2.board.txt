@@ -1,0 +1,32 @@
+# Tier 3 board reading, arm batch-sql0-b2: runner 7ce203f9fd6a3cce (dev; QEMU PASS t3-sql-nf2-r2); image cf61cb4333d35cb6 (postgres, virtual-malloc); scored against batch-refs-r60/ref-batch/sql0/bundle (QEMU qkit7-batch2, module a05c198b, movc_null_scalar OFF, the trimmed fixture); kit bkit8-batch-b2 (batch bitstream caplifive_vp2c_c721c1a2a, module 21fbfc397e7c7a42, monitor capstone-sbi d9da397 + FETCH_RETRY_CAP) on board 2, SDK t3-freeze-nb. Result lines only.
+# board 2 (from the run log's [fpga-board] line)
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2c_c721c1a2a cells 9 tally {"CAUGHT": 2, "MISSED": 7}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+01_12a6206864a0_to_char_tz_overflow image cf61cb4333d35cb6 MISSED cause None at None reached True completed True attribution null
+02_3ed3dbbf44_ts_headline_int16_overflow image cf61cb4333d35cb6 CAUGHT cause 28 at memcpy+220 reached True completed False attribution "control"
+03_8c34261109_ltree_lquery_uint16_overflow image cf61cb4333d35cb6 CAUGHT cause 28 at memcpy+220 reached True completed False attribution "control"
+04_3d160401b65e_oidvector_oob_read image cf61cb4333d35cb6 MISSED cause None at None reached True completed True attribution null
+05_849da8210539_ascii_multibyte_oob_read image cf61cb4333d35cb6 MISSED cause None at None reached True completed True attribution null
+06_e91dcfccaa_regexp_conv_buf_overrun image cf61cb4333d35cb6 MISSED cause None at None reached True completed True attribution null
+07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec image cf61cb4333d35cb6 MISSED cause None at None reached True completed True attribution null
+08_c4d51b6274_levenshtein_stop_column_oob_write image cf61cb4333d35cb6 MISSED cause None at None reached True completed True attribution null
+09_7a7d9693c7_pgp_sesskey_overflow image cf61cb4333d35cb6 MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 01_12a6206864a0_to_char_tz_overflow: verdict MISSED cause None pc None
+  SAME 02_3ed3dbbf44_ts_headline_int16_overflow: verdict CAUGHT cause 28 pc memcpy+220
+  SAME 03_8c34261109_ltree_lquery_uint16_overflow: verdict CAUGHT cause 28 pc memcpy+220
+  SAME 04_3d160401b65e_oidvector_oob_read: verdict MISSED cause None pc None
+  SAME 05_849da8210539_ascii_multibyte_oob_read: verdict MISSED cause None pc None
+  SAME 06_e91dcfccaa_regexp_conv_buf_overrun: verdict MISSED cause None pc None
+  SAME 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec: verdict MISSED cause None pc None
+  SAME 08_c4d51b6274_levenshtein_stop_column_oob_write: verdict MISSED cause None pc None
+  SAME 09_7a7d9693c7_pgp_sesskey_overflow: verdict MISSED cause None pc None
+  9 of 9 cells the same
+## the boot
+  T3PG batch-sql0-b2 BEGIN 01:24:19
+  T3PG batch-sql0-b2 END 03:26:55 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 2, 'MISSED': 7}
+  BOARD_RUN_START 01:24:20 bitstream caplifive_vp2c_c721c1a2a monitor d9da397
+  manifest 1072 files, stage 34479391 bytes
+  firmware f72eb6a2b4959f9c 25856520 B
+  DRIVER rc=0 03:26:54
+  BOARD_RUN_DONE 03:26:54

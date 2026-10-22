@@ -7682,3 +7682,29 @@ three cells.**
     - a refusal at 64,001 on board 2 would mean the 16-bit table is still in force;
     - a fault, or a wedge in the hold step, is a finding against the new RTL. It is read no further than its first
       failure.
+
+### postgres sql0 on the batch bitstream, result (2026-10-23 01:24-03:26, board 2): 9 of 9 cells as the batch reference, which completes the 25 arms
+
+Record: `records/batch-sql0-b2.board.txt`. The bundle is filed under
+`bug-corpora/postgres/sql-repros/results/2026-10-22-batch-c721c1a2a-b2/vp2-malloc-nomovc`.
+- The measure-only bake read 25,856,520 B, under the cap.
+- The bundle records fixture 956173e054762e91 and image cf61cb43.
+- Must-fire: no directory-open FATAL, and the positive control answered.
+- **compare-pilot against ref-batch/sql0/bundle: 9 of 9 the same** (CAUGHT 2, MISSED 7).
+- FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0. The gen-push banner is present.
+- **Against the pre-registration (5801699f89dc): every reading holds.**
+
+**The 25 arms on c721c1a2a, complete:**
+
+| what | arms | cells | the same in every field | in verdict |
+|---|---|---|---|---|
+| the re-read | 23 | 305 | 302 | 305 |
+| cpython lt0 | 1 | 32 | 31 | 32 |
+| sql0 | 1 | 9 | 9 | 9 |
+| **the pass's 25 arms** | 25 | **346** | **342** | **346** |
+| beside them: cpython lt1, pg-pools, mruby Sublet with smoke-fit | 3 | 64 | 64 | 64 |
+
+- The four field differences are all Q-31's ruled ordering divergence: lt0 01, and sq0d 19, 20 and 22. Silicon raises
+  4 or 13 where QEMU raises 24, at the same pc.
+- Every boot completed, with the monitor readings 0.
+- The standing 346-cell pass on the tree bitstreams stays the record. This column sits beside it.
