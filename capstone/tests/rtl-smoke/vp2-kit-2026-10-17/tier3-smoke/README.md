@@ -6713,3 +6713,27 @@ Records: `records/uaf-repeat-dm-b1.result-lines.txt` and `records/uaf-repeat-dm-
     a stale mapping, a different and narrower question.
   - A covering arena (`arena >= 0`) would contradict the earlier reading.
   - The rate is a few percent per tree. A board with no cause-13 run gives no reading.
+
+### The batch bitstream's first boots: the package is ready, NOT pre-registered (2026-10-22 12:0x)
+
+The reflash of c721c1a2a waits on the lead's own word. These scripts make the first boots follow that word directly.
+**A run still needs its own pre-registration pushed first**, naming the board and the flashed file's name.
+
+- **`board-tier12/batch/make-batch-kit.sh <board> <bitstream name> <log>`:** the flashed board's current kit with
+  exactly three changes, printed as a board.env diff:
+  - BOARD_BITSTREAM;
+  - the batch monitor line, capstone-sbi vp2/batch d9da397 with -DCAPSTONE_FETCH_RETRY_CAP (batch-prep.sh's
+    recipe);
+  - the batch module 21fbfc397e7c7a42.
+- **`board-tier12/batch/run-batch-first.sh <board> <bitstream name> <out dir>`:**
+  1. s23-cpmp-rearm bare, graded `--expect batch`. Anything but AS EXPECTED stops the chain before Linux.
+  2. Tier 1 on image 64ec46d1f8d9461b / firmware 6423545a567b2f3c: b0-stats, b0-hello, vm-contract and vm-suite, with
+     the watchdog. It prints the rung values (rev7's oracles beside them, for reference only), VM exits, the S-23
+     counters, FRTY/FRTC, INJS/INJL and CPMX-DIAG.
+  - The grade is per test against the compiler lane's QEMU Tier 1 on the batch kits: 33/45 with the 12 known
+    failures, sparse-churn predicted to complete (`/tmp/capstone/pass-manifest/README.md`, "Batch first boot").
+- `tier3-s23-bare.sh` takes S23_KIT for the batch kit; its default is unchanged.
+- **Dry run** (`board-tier12/batch/dryrun-batch-first.txt`, a placeholder bitstream name):
+  - the kit maker's diff is exactly the three changes;
+  - the batch vector proceeds to a stubbed Tier 1;
+  - the pre-batch vector stops with "Tier 1 not booted".
