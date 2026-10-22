@@ -14,16 +14,15 @@
   "arms": {
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
-      "verdict": "NO-READING",
-      "verdict_note": "cause=24 pc=0x3f89357314 in visit_decref; in visit_decref; ASan sites ['_PyCfg_OptimizeCodeUnit', 'remove_unused_consts']",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc",
-      "verdict_reason": "unattributed"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=24 pc=0x3f9c33d138 in visit_decref; by control: negative_control.py (the same traffic, the offending access made valid) ran to its end on this image without a fault",
+      "verdict_from": "results/2026-10-20-review-t1800/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=28 pc=0x3fb734f2dc in _PyCfg_OptimizeCodeUnit; by function: _PyCfg_OptimizeCodeUnit is where host ASan reported the access",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools"
+      "verdict_note": "cause=28 pc=0x3f84334d2c in _PyCfg_OptimizeCodeUnit; by function: _PyCfg_OptimizeCodeUnit is where host ASan reported the access",
+      "verdict_from": "results/2026-10-20-review-t1800/virtual-nested-pools"
     },
     "cheribsd-revocation": {
       "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."
@@ -34,5 +33,8 @@
     "remove_unused_consts",
     "_PyCfg_OptimizeCodeUnit"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (WRITE 8) at remove_unused_consts Python/flowgraph.c:2048 | _PyCfg_OptimizeCodeUnit Python/flowgraph.c:2481. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (WRITE 8) at remove_unused_consts Python/flowgraph.c:2048 | _PyCfg_OptimizeCodeUnit Python/flowgraph.c:2481. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "WITHDRAWN on (1) by the 2026-10-19 review. SPATIAL defect, and the defective access is a WRITE: host ASan records heap-buffer-overflow WRITE 8 at remove_unused_consts (Python/flowgraph.c:2048), the NULL stores of `frame->localsplus[i] = NULL` style running past the object because the loop bound and the allocation disagree. (2) is the detection: cause=28 on `sd a7, 0x0(t0)`, the defective STORE itself, inside the declared fault site _PyCfg_OptimizeCodeUnit. (1) is withdrawn: the store was ALLOWED -- the object is a pymalloc block and stock pymalloc gives it the arena's capability -- so it silently overwrote a neighbour's field, and the fault comes later, at `ldc a1, 0x10(a0)` with address=0x12, a load of that corrupted field followed by a dereference of what it returned. An earlier revision of this note called that 'a dereference of what was read', which mis-stated the defect: nothing was read out of bounds here, something was written out of bounds and read back later. The fault is also in visit_decref, the garbage collector -- a different subsystem from remove_unused_consts, the bytecode compiler -- which is why it had to be attributed by negative_control.py rather than by function name. (3) CheriBSD is silent on this case.",
+  "nested": true,
+  "nested_why": "the object is a pymalloc block, so the allocator below bounds the arena it came from, not the block"
 }
