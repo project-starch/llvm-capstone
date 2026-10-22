@@ -29,3 +29,26 @@ the batch image as the same-boot control.
   - cause 25 if it goes through a pointer to the retired 2-page mapping.
   So the verdict is CAUGHT; never OSError 38, and never completion.
 - **Both controls fault.**
+
+## lt1 18 (gh-157335) is record capacity (pre-registered 2026-10-22, before its runs)
+
+**The reading that prompted this:** on qkit7-batch2, standalone probes import everything the case imports, from the
+case's own directory, and succeed: `select`, `subprocess`, `test.support.script_helper`. Their module high_water
+peaks at 59,646. In the same boot, case 18 raises `SystemError` at `import select` with high_water **64,023** against
+capacity 65,536, which is the flat table's stop. The probes' run is /mnt/hdd/<user>/capstone/sel18,
+readings.json per call. The case also compiles the large test_mmap module before those imports. So this run tests
+whether the SystemError is the record limit surfacing as an allocation that fails without setting an exception.
+
+**The runs:** case 18 on each of three kits, through run-gate.sh (capstone-qemu 98b34967b6's runner):
+- qkit7-b2twin-q6, the 16-bit table;
+- qkit7-b2twin-q8, the 18-bit table;
+- qkit7-batch2-paged-lp, uncapped, with the live-peak counters.
+
+**The prediction:**
+- **q6:** `SystemError: error return without exception set` at subprocess.py:125, with high_water within 300 of
+  64,023, as on the batch kit.
+- **q8 and paged-lp:** no SystemError. `import select` succeeds and the test reaches `self.m.resize(new_size)`,
+  where this image (no application mremap) raises `OSError: [Errno 38]`. Exit 1.
+  - On q8, high_water is above 64,023.
+  - paged-lp gives the case's live peak as a bracket. Only "above 64,001" is predicted.
+- **If q8 still reads SystemError,** the record limit is not the cause, and this item is withdrawn.
