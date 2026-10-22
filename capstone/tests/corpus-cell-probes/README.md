@@ -192,12 +192,16 @@ counters). Each boot runs case 18 on the new image, then case 18 on the batch im
 
 **The images:** the batch recipe plus application mremap, and nothing else.
 - lt1 uses 8bcc40cf13731e12 and lt0 uses 7b871db70b7ec373, both relinked above.
-- The recipe is not a build from dev. Dev carries mremap (b439b7a267c3) but not the board recipe:
-  - `CAPSTONE_VIRTUAL_MOVC_KEEP=OFF` (8f132305eea1);
-  - the integers-first slot offsets (5620badda510);
-  - `CAPSTONE_SDK_EXTRA_CODEGEN` (5b3e6b7939af).
-  Dev's runtime has also moved past the batch runtime: a 2 GiB region limit, 8,192 arenas and the madvise change.
+- The recipe is not a build from dev. Dev carries mremap (b439b7a267c3), but it cannot build the board images: it has
+  no `CAPSTONE_VIRTUAL_MOVC_KEEP` switch (8f132305eea1, not on dev; dev's VirtualCodegen.cmake hard-codes
+  `+movc-keeps-integer-source`, which the lead's C-32 decision keeps out of board images). Dev's runtime has also moved
+  past the batch runtime: a 2 GiB region limit, 8,192 arenas and the madvise change.
 - So the relink is the batch image with one change.
+- **RETRACTED (2026-10-22): this list first also said dev lacks the integers-first slot offsets (5620badda510) and
+  `CAPSTONE_SDK_EXTRA_CODEGEN` (5b3e6b7939af).** Both are on dev, as 232d13b220cc (the same heap.c change) and
+  c66e04925d0e (the same builder change, with a corpus-SDK `-fno-builtin` gate on top). The check was commit
+  ancestry, not content. The conclusion does not move, because the MOVC switch alone keeps dev from building the
+  board images.
 
 **The runs:**
 - Every call of each cell (the case and its control or probe) gets its own boot, from the batch-refs-r60 session with
