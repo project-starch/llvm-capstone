@@ -246,3 +246,60 @@ counters). Each boot runs case 18 on the new image, then case 18 on the batch im
 **What the board will add.** QEMU is the twin, not the silicon. On bitstream 2 a row predicts the board when the
 recipe's other gates hold, and the board batch carries the same images. A board row that differs from its twin row is a
 twin defect or a silicon defect, not a capacity reading.
+
+## lt0 13 (gh-144169): the MemoryError is the defect's own read, inside a pymalloc arena (pre-registered 2026-10-22, before the guest pair)
+
+**What the coverage file says now:** lt0 13 is NOT capacity; the likely reading was not measured.
+
+**The defect, from the source (CPython 3.13.7):**
+- `ast_type_init` (Python/Python-ast.c:5160) formats a non-str key with `%U`.
+- `unicode_fromformat_write_str` (Objects/unicodeobject.c:2561) then reads `PyUnicode_GET_LENGTH(str)` at offset 16 of an
+  `object()`, which is a 16-byte object. That read lands in the next 16-byte block, and its value becomes the length.
+- On lt1 every object has its own bounds, so the read faults at once: cause 28 in `unicode_fromformat_write_str`.
+
+**Host check, already run:** the 3.13.7 native build that the guest build bootstraps from (`build-python/python`), on
+the case's statement, five times per allocator. The outcome follows the bytes past the object:
+- PYTHONMALLOC=pymalloc: MemoryError 4 times out of 5, and TypeError once, after a warning naming `''`;
+- PYTHONMALLOC=malloc: 5 TypeErrors; 4 of the 5 warnings print neighbouring heap bytes as the key;
+- the debug allocators: the process dumps core.
+So under pymalloc the garbage length is most often huge, and the write of that length raises MemoryError. This is the
+defect's out-of-bounds read running uncaught, not an infrastructure stop.
+
+**Guest pair, one boot each on qkit7-b2twin2-q8 (the lt0 batch image 23a2f0cbd80ddfbe, the reference's call):**
+- **As recorded:** MemoryError (`ABR EXIT 1`), no domain fault, high_water well below 65,536.
+- **With PYTHONMALLOC=malloc added, the one change:** every `object()` is a virtual-malloc allocation with its own
+  capability. The read past it then faults with a bounds cause (28) in `unicode_fromformat_write_str`, as lt1 does,
+  with no MemoryError.
+  - If it does not fault, virtual-malloc's bounds for a 16-byte request cover bytes 16..23. That names the bound width,
+    not the defect, as the variable.
+  - The run is on the 18-bit table because per-object allocation multiplies records. high_water is recorded and no
+    band is predicted.
+- **Verdict if both hold:** lt0 13 is a MISSED by the arm's design. lt0 keeps pymalloc's arenas, so a 16-byte read past
+  a 16-byte object stays inside the arena's capability. It is not a NO-READING:infra.
+
+## pb13q15 05: the canary, rebuilt to read instead of write (pre-registered 2026-10-22, before its runs)
+
+**The hypothesis (the coverage file's row):** the case's own `memset(next, 0x5a, 1)` writes byte 0 of the NEXT item.
+Under patch 0006 that byte is the item's `sublet_parent` capability, so the next `slabs_free` faults: cause 24 in
+`capstone_cap_revoke_child`. That is the FIXED run's failure.
+
+**The binaries:**
+- Built with the b13 q15 prebuilt's recorded recipe: capstone-cc from t3-freeze-nb-nomovc-cw-r60, the case flags from
+  build-cases.sh's capstone-application branch, linked against b13's own `libmemcached-allocators.a` and driver-virtual.c.
+- **Control:** the unmodified case.c rebuilt this way equals the prebuilt `defect-05` in .text, .rodata and .data. The
+  edited build differs in all three.
+- **Edited:** `before` is read from `next` rather than planted, and `damage` compares against it. The source diff is
+  three lines; the binary is `defect-05` bd4ec31316baa611 in a hardlinked copy of the b13 prebuilt
+  (`pb05-canary/pre-readcanary`).
+
+**The runs:** one boot each, wt-q15cw's run-virtual-cases.py with --only 05, on qkit7-batch2 (the reference's kit and
+arguments), for the prebuilt and for the edited copy.
+
+**The prediction:**
+- **Prebuilt:** as the reference, NO-READING:control-failed: the FIXED run faults with cause 24 in
+  `capstone_cap_revoke_child`, and the buggy run reads cause 28 at the chunk's end.
+- **Edited:** the FIXED run prints VERDICT FIXED and exits 0, and the buggy run still faults with cause 28 at the chunk's
+  end. The cell reads CAUGHT.
+- **Caveat for the corpus owner:** on arms without a Sublet slot, a read canary can be 0 already, so the buggy run's NUL
+  write would not show as `damage`. The corpus fix needs a nonzero sentinel that is not the slot, or a separate guard
+  byte. This test does not settle that, only the slot clobber.
