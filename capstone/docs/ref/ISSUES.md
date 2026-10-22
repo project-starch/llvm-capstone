@@ -2310,7 +2310,7 @@ and is not involved.
 > - **Control.** The same kit with `x-capstone-test-csrs=true` completes the same workload (mruby M6 = 20,000,
 >   SMOKE_DONE, no halt). The paged build reads 0xcc0 and 0x5c0 at context creation (`capstone_vm.c:1983`, `:1999`),
 >   and the flat build reads neither. Since Q-21's ruling, both are illegal instructions on QEMU unless the test
->   property is set (`csr.c:4134-4146`), as on silicon.
+>   property is set (capstone-qemu a36498f352 `target/riscv/csr.c` capstone_vm_test_csrs(), :4140), as on silicon.
 > - **Where it lands:** pc 0x8002522a is `_return_from_domain.1+0xa`, `sd s0, 0(t2)` with t2 = *(*(gp+0xc0)) from the
 >   globals carved off dom_stack. That pointer is null. It is M-9's faulting instruction.
 > - **Inferred, not traced:** the S-mode illegal-instruction trap reaches the monitor, which takes its domain-return
@@ -2321,7 +2321,9 @@ and is not involved.
 >   define exists to avoid exactly that. But an S-mode instruction halts the M-mode monitor, and the same module build
 >   would do the same on silicon.
 > - **Evidence:** `<mnt-hdd>/capstone/paged-sizing/RESULT` (READING 01:09:47, SYMBOLIZED 01:14:47, the control at
->   01:19:25). The halted run's serial was overwritten; the compiler lane can reproduce it in one boot.
+>   01:19:25). The halted run's serial was overwritten, and the compiler lane reproduced it in one boot on
+>   qkit7-batch2-paged-notc: `<mnt-hdd>/capstone/paged-sizing/halt/N0/guest/serial.log`, sha256 20ccca235e85c67a, with
+>   exactly one `Cap mem access requires capability` line (re-read 2026-10-22).
 > - **Next:** trace the cause-2 routing in fw_jump 6f2b082c (medeleg, then `handle_exception`'s default arm), and
 >   check whether this rule's guard was ever implemented on the QEMU target.
 
@@ -2466,6 +2468,50 @@ Negative-tested: module 2 / QEMU 1 refused (tonight's halting configuration, on 
 
 **Open.** What the firmware does at 0x8002522a when a second context is entered on a one-slot QEMU. A guest halt reachable
 from an unprivileged domain is a finding even behind a configuration error, and it belongs to the QEMU/firmware owner.
+
+## Q-33 — QEMU's PHYSICAL node ids are bare indices: no generation, no hardware push, no retire, and a 65,536-node pool, where the RTL recycles physical records by push with a generation `OPEN — kit rule in force, filed 2026-10-22 by the board lane from the compiler lane's derivation on the runtime lane's ruling ("not now; file it"); call sites re-read here at capstone-qemu a36498f352; predates bitstream 2`
+
+- **QEMU** (capstone-qemu batch-v7-r60sw a36498f352, and the 18-bit twin virtual/flat-index-18 1f38eb1794):
+  - **The physical-namespace lifetime ops open the store with `lifetime_op = false`:** REVOKE, CDERIVE, CREVOKE,
+    MREV, SPLIT, TIGHTEN and DELIN, at op_helper.c:1139, 1268, 1318, 1345, 1520, 1564 and 1607 (each line read here).
+  - capstone_store_open (capstone_table.c:112-129) takes the guest table only when capstone_uses_guest_table
+    (:98-110) holds. It does not in M outside a context, nor in S with srevroot 0, so these ops land on the legacy host
+    tree (`cap_rev_tree_store(&env->cr_tree)`, :126).
+  - Its ops (cap_rev_tree.c:433 host_ops) have no resolve, compose or release hook, so a physical id IS its index.
+  - A killed or retired physical record is not pushed. It returns to the free list only through the supervisor's
+    collector (capstone_supervisor.c:665 cap_rev_tree_release), with the same bare id.
+  - The pool is CAP_REV_TREE_SIZE 65,536 (cap_rev_tree.h:9; CAPSTONE_REV_NODES overrides it).
+  - The `lifetime_op = true` opens (capstone_table.c:205, 212, 318: urevavail, CSRETIRE, CSMINT; and CSRUNV's collect)
+    are the context ops on srevroot's table. The generation split (CAP_REV_ID_GEN_SHIFT, GEN_MAX) applies only to flat
+    virtual tables there.
+- **The RTL** (capstone-ariane virtual-profile-2-c, `core/anvil_build/capstone_rev_node.anvil:102` and `:619`; the
+  compiler lane's reading, not re-read here):
+  - The physical path (`vctx_q == 0`) pushes a revoked record when its index is above 2 and its generation is not
+    16383, so a physical record recycles with generation+1 and retires at 16,383.
+  - On bitstream 2, `rev_node_t`'s generation is shared by both namespaces (the RTL lane's audit, relayed). Physical
+    ids become {gen[29:18], idx[17:0]}, retiring at 4,095.
+- **Positive control** (a host build of the twin's own cap_rev_tree.c): root, derive child 4, kill it, release index 4
+  as the collector does, derive again.
+  - Reads: `first=4 reissued=4 stale-first-live=1 resolve-hook=0 compose-hook=0`.
+  - Bitstream 2's RTL would reissue 262148 (gen 1, index 4), and vp2/batch 65540, with the stale id dead.
+  - **Its limit:** it exercises the host tree directly. That physical ids reach that tree rests on the call sites
+    above, not on the control.
+- **What it voids:** a QEMU prediction of
+  - (a) a physical id printed after recycling (a refusal id, a CPHT/CPID print with generation ≥ 1);
+  - (b) a physical record's retire at the generation limit;
+  - (c) physical pool exhaustion where silicon would recycle by push;
+  - (d) any physical index ≥ 65,536.
+- **What it does not touch:** the corpus arms. They run in contexts on flat virtual tables, whose generations QEMU
+  models, and their physical ids are minted once at generation 0 below 65,536.
+- **RULE:** kit predictions stay off physical recycling until QEMU models it.
+- **The fix, when an arm needs it:** physical generations in the host tree, as its own change, gated two-sided like
+  table-checks:
+  - a per-node generation;
+  - a push at kill/retire and a pop at generation+1;
+  - resolve/compose with the bitstream's split;
+  - the retire.
+  - It needs the RTL lane's answers first: does physical kill/retire push in hardware on bitstream 2, and what is the
+    physical pool's capacity?
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
