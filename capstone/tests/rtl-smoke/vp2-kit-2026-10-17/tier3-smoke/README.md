@@ -6737,3 +6737,47 @@ The reflash of c721c1a2a waits on the lead's own word. These scripts make the fi
   - the kit maker's diff is exactly the three changes;
   - the batch vector proceeds to a stubbed Tier 1;
   - the pre-batch vector stops with "Tier 1 not booted".
+
+### The batch bitstream c721c1a2a on BOARD 1: reflash and first boots, pre-registered (2026-10-22 12:1x, before the flash)
+
+- **Authorisation:** the lead's own word in this session, 2026-10-22 ("1, 2. -yes", answering "board 1 or 2" and
+  "first boots straight after").
+  - Board 1 is flashed now. Board 2 stays on caplifive_vp2c_8de3c48cf until the lead confirms it too, which would come
+    only after board 1's first boots read.
+  - The flash follows the runtime lane's d0d5f758 arm, whose reading is valid only on the current bitstream.
+- **The bitstream:**
+  - capstone-ariane c721c1a2a, which has both trees (8522d72fe, 8de3c48cf) and d427e7391 as ancestors.
+  - `caplifive_vp2c_c721c1a2a.bit`, sha256 8f4a486f2c9650412016e66d711af1ca8e0b003d2ac9a202a00f0d075b85ed6e,
+    11,443,722 B. Copied from the synth host and the hash re-checked here.
+  - Routed WNS -18.529 (the resident vp2 lineage sealed at -19.019), LUTLP-1 0, and TIMING-23 the same single arc.
+    The synth lane found no new failing class.
+  - The memory map is unchanged: CAP_REVNODE_MEM_BASE 0xBFF0_0000 and CAP_TAG_MEM_BASE 0xBC2D_2D2D in ariane_pkg.sv
+    at both 8522d72fe and c721c1a2a, so the DTS stands.
+- **Flash:** `drivers/flash-bitstream.py caplifive_vp2c_c721c1a2a.bit <local .bit> <sha256>`, which uploads if the
+  name is unregistered, flashes, power-cycles and reads back.
+  - Before it: the console's store must still list `caplifive_vp2c_8522d72fe.bit`, the fallback for every tree-A
+    record.
+  - **Predicted:** the read-back nv_bitstream_name is `caplifive_vp2c_c721c1a2a.bit`, exit 0.
+- **Kit and output:**
+  - `make-batch-kit.sh 1 caplifive_vp2c_c721c1a2a`, which writes the new folder t3-smoke/bkit8-batch-b1. Its diff
+    against bkit7-rev2xDN2 is exactly the bitstream, the batch monitor line and the batch module 21fbfc39.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/`, a new directory. No existing record is touched, and
+    every later batch reading is reported beside the standing pass, never in place of it.
+- **First boots** (`run-batch-first.sh 1 caplifive_vp2c_c721c1a2a <out>`, dry-run at 3963e7a8d4ff):
+  1. **s23-cpmp-rearm bare** (the RTL lane's PREREG at 7ae1d8491466):
+     - VOID unless SR 25, a0 0x80800000, Q1 0, and the true-deny and control probes as the vector.
+     - **Predicted: the batch vector.** Re-arm probes Q5, Q8, Q10, Q12a, Q12b and Q13d all 1, total 14.
+     - The pre-batch vector (all 0, total 8) or any mix is a FINDING, and the chain stops before Linux.
+  2. **Tier 1** on image 64ec46d1f8d9461b / firmware 6423545a567b2f3c (batch module 21fbfc39, tick-100 mruby).
+     **Predicted:**
+     - b0-stats, b0-hello and vm-contract retval 0;
+     - every VM_BEGIN has its VM_EXIT;
+     - **sparse-churn COMPLETES (VM_EXIT:sparse-churn:0)**, where rev7 wedged in it;
+     - pc=0, DRT1, INJL and Oops 0.
+     - The vm-suite tests are graded by name against the compiler lane's QEMU Tier 1 on the batch kits (33/45, the
+       12 failing: fault_causes heap-threads heap_threads shared_heap_pages_released threads threads_output vm
+       vm-large vm-mappings vm_contract vm_large_contract vm_mappings_contract). Thread checks are expected refused
+       (supervisor_slots=1), and vm-large/vm-mappings are not predicted on silicon.
+     - FRTY, FRTC and INJS are recorded, with no prediction.
+- **After that, not before:** the corpus on the batch bitstream (pg-pools and cpython lt1 first), each arm with its
+  own pre-registration and a result folder named for the bitstream.
