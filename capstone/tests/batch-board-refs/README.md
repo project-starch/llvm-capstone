@@ -55,3 +55,11 @@ its own.
 **Predicted:** both arms read 11/11 equal, differ 0, as the same gate read on tB-mimic (corpus-mp/refs/REFS: perl-stock
 and perl-sublet full vs trimmed, 11/11, differ 0). The full matrices hold perl-stock fault 6, completed 4, exit255 1,
 and perl-sublet fault 8, completed 3.
+
+**Result** (2026-10-23 03:50-03:59, QEMU domain B; batch-refs-r60/run-perl-trim.sh): **as predicted.**
+- **perl-stock, trimmed vs full:** 11/11 equal, differ 0 (fault 6, completed 4, exit255 1).
+- **perl-sublet, trimmed vs full:** 11/11 equal, differ 0 (fault 8, completed 3).
+- Both arms' controls (eval, shim) behave.
+- The stamps show runner aabfa668, tree 15ced322c824 clean, qemu ecaf50bb, module a05c198b, vexec a405840d,
+  closure 2a472e21, and the images as above.
+- The trimmed references are batch-refs-r60/batch/perl-{stock,sublet}-trim/out, for the board's trimmed staging.
