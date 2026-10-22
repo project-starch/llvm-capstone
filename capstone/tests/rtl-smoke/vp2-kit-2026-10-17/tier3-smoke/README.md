@@ -7799,3 +7799,30 @@ Record: `records/batch-mp-mruby-stock-b1.result-lines.txt`.
 - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0. The gen-push banner is present, and the boot
   completed.
 - **Against the pre-registration (ae150eeba11b): every reading holds.**
+
+### The Juliet temporal set on the batch bitstream, board 1: pre-registered (2026-10-23 04:4x, before the first boot)
+
+- **Why:** Juliet was the last corpus set without a batch-bitstream reading. The compiler lane's batch-kit QEMU
+  references now exist: dev cc95944a056e, pre-registered at lane fd93b0d8ab47.
+- **The reference:** `juliet-r60/judge-batch2`, on qkit7-batch2.
+  - It is built on the r60 SDK (sdk.json f5145cbb) from manifest 95ceac7d: build-census has 734 images (build.json
+    53c221ca), and build-seeded has 55 (c346e5c6).
+  - The judging runs run.py 4b663651, probe.py d6200b39 and judge.py 93aa5ad9.
+  - It reads 366 CAUGHT (228 CWE-415, 138 CWE-416), and every good twin is CORRECT. That is 366 of 366 equal to
+    judge-tB-mimic on verdict, good, cause, site and strict.
+- **What runs:** `tier3-juliet-batch.sh 1 <log>`. It is tier3-juliet-full.sh with:
+  - the batch kit bkit8-batch-b1;
+  - the r60 builds and SDK;
+  - the same runners from wt-jb a772f0112ae3, each pinned by the reference's hashes and its RESULT stamp;
+  - the reference's own five-field compare added after judge.py.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/juliet-temporal`.
+  - Three phases (run, run-seeded, probe), each booked on the hub. Every boot is a cold board boot.
+- **Dry run** (`dryrun-juliet-batch.txt`):
+  - each phase gets the r60 build and SDK and the batch kit;
+  - a planted MISSED row reads "differ 1" and TWINS-NEEDED;
+  - a busy board and a hub 409 refuse.
+- **Predictions:**
+  - judge: **366 CAUGHT**, CWE-415 228 and CWE-416 138, every good twin CORRECT;
+  - **the compare against judge-batch2: 366 of 366, differ 0**;
+  - every batch completed, 12 census and 1 seeded;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0 in every boot transcript.
