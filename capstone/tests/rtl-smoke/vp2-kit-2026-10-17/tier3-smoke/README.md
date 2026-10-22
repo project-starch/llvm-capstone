@@ -6678,3 +6678,38 @@ Records: `records/uaf-repeat-dm-b1.result-lines.txt` and `records/uaf-repeat-dm-
   - **Severity, as far as the board reads:** both causes stop the use-after-free read (signal 11 at the read). The
     cause-13 runs are not a missed detection; what differs is the cause reported. In the Juliet runner that costs a
     batch void (judge.py's control requires 25), not a verdict.
+
+### The uaf control's cause 13 with the PTE printed at the refusal (module d0d5f758, refuse_pte=1), pre-registered (2026-10-22 11:5x, before either boot)
+
+- **The question:** every cause-13 run so far is `resolve refused at arena`, so no arena covered the address at the
+  fault. What did the walker find, no PTE or a PTE that was still present? The runtime lane's module d0d5f758 adds the
+  PTE (rc, present, write, young, dirty, pfn) and the covering arena to exactly that line when refuse_pte=1.
+  - Its source is runtime/arena-refusal-pte 3feb24ac2c61: dev 3ceba9bad107 plus one 42-line, param-gated hunk in
+    capstone_vm.c, default off. I read the diff.
+  - It is QEMU-gated on that lane, and the unmodified tree's build reproduces 54d8a3af byte for byte (their claims).
+- **What runs:**
+  - The same repeat as above (200 untraced runs, --dmesg) on kit copies `bkit7-rev2xDN2-pte` and
+    `bkit7-rev2xBDN2-pte`. They differ from their originals ONLY in adapter/module/capstone_vm.ko (d0d5f758),
+    SHA256SUMS regenerated.
+  - A first step sets refuse_pte=1 through sysfs and reads it back.
+  - `UR_KITSFX=-pte UR_MODSHA=d0d5f758ef175205 UR_TAG=-pte UR_ARGS="--no-trace --dmesg --refuse-pte"`, one cold boot
+    per board.
+- **This boot does NOT qualify d0d5f758 for any record.** It has had no Tier 1 boot. Its only output is the refusal
+  line's fields.
+  - The reading is valid only if the boot's own controls read as they did on 54d8a3af: the bounds run cause 28;
+    every uaf run one fault line at code+0x10c70, cause 25 or 13; the readings 0.
+  - A module that broke contexts would fail those, and the boot would then be a finding about d0d5f758, not a
+    reading.
+- **Dry run** (`dryrun-uaf-repeat-pte.txt`):
+  - a read-back of Y passes and N reads VOID;
+  - the -pte kit with the default module hash refuses;
+  - with no UR_* set, the generated gate is still the first repeat's, byte for byte.
+- **Predictions:**
+  - refuse_pte reads back Y. The controls read as above. pc=0, DRT1, FRTY, Oops, INJS and INJL are 0.
+  - Every cause-13 run's own refusal line is `arena`, with **`arena -1` (no arena covers the address) and `pte
+    rc!=0`, present=-1: the PTE is gone.** The compiler lane's source chain predicts this, since munmap follows the
+    retire.
+  - **A `pte rc=0 ... present=1` reading would be a finding:** a retired, unmapped region whose PTE survived. That is
+    a stale mapping, a different and narrower question.
+  - A covering arena (`arena >= 0`) would contradict the earlier reading.
+  - The rate is a few percent per tree. A board with no cause-13 run gives no reading.

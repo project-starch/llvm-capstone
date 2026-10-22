@@ -32,6 +32,7 @@ def main():
     p.add_argument("--helper", type=Path, required=True)
     p.add_argument("--n", type=int, required=True)
     p.add_argument("--no-trace", action="store_true", help="every uaf run untraced")
+    p.add_argument("--refuse-pte", action="store_true", help="set the module's refuse_pte=1 (0644) before the runs and read it back")
     p.add_argument("--dmesg", action="store_true", help="print the module's last 12 dmesg lines with each printed run")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args()
@@ -47,6 +48,11 @@ def main():
     b.bounds = {}
     # As in every Juliet batch, the bounds control runs first, so run 1 sits where ctl-uaf-0 sat (the second program
     # after the module loads), the position of the spatial set's three cause-13 readings.
+    if a.refuse_pte:
+        # Module d0d5f758 (runtime lane, runtime/arena-refusal-pte 3feb24ac2c61): refuse_pte adds the faulting PTE and the
+        # covering arena to the `arena` refusal line. Set through sysfs after the batch's insmod, and read back: a run
+        # whose read-back is not Y did not run that configuration.
+        b.step("refuse-pte", "P=/sys/module/capstone_vm/parameters/refuse_pte; echo 1 > $P; echo \"RPTE $(cat $P 2>/dev/null || echo ABSENT)\"")
     b.step("bounds-0", "./juliet-timeout bounds-0 10000 -- ./capstone-vexec ./images/controls.dom bounds-malloc")
     for k in range(1, a.n + 1):
         env = "CAPSTONE_VM_TRACE=1 " if k % 2 == 0 and not a.no_trace else ""
@@ -70,6 +76,9 @@ def main():
                                                    "n": a.n, "steps": rows}, indent=1))
     tally = collections.Counter()
     for n, (t, r) in steps.items():
+        if n == "refuse-pte":
+            print(f"REFUSE-PTE {t.strip()[:80]}" + ("" if re.search(r"^RPTE Y$", t, re.M) else " VOID: refuse_pte did not read back Y"))
+            continue
         if n == "bounds-0":
             print(f"BOUNDS-0 {r} {t.strip()[:200]}")
             continue
@@ -99,7 +108,7 @@ def main():
                 print(f"  {l[:300]}")
     for (arm, kind), c in sorted(tally.items()):
         print(f"TALLY {arm} cause {kind}: {c}")
-    want = a.n + 1 + (1 if a.dmesg else 0)
+    want = a.n + 1 + (1 if a.dmesg else 0) + (1 if a.refuse_pte else 0)
     print(f"completed={completed} steps={len(steps)} of {want} transcript={transcript}")
     if len(steps) != want:
         print(f"NO DATA: {len(steps)} of {want} steps in the transcript")
