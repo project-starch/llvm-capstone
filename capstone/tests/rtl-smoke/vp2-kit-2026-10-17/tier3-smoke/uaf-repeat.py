@@ -59,7 +59,10 @@ def main():
     if a.dmesg:
         # The whole boot's refusals, read once at the end (the runtime lane's form): each unresolved fault is expected
         # to print twice (the module's in-step resolve, then the launcher's CV_RESOLVE).
-        b.step("dmesg-all", "echo REFUSED $(dmesg | grep -a -c 'capstone_vm: resolve refused'); "
+        # The ring is 128 KiB and a long boot wraps it (2026-10-22, tree A: REFUSED 0 beside 7 per-run lines), so the
+        # step also prints the ring's OLDEST line: a count is valid only if that line is from the boot's first seconds.
+        b.step("dmesg-all", "echo OLDEST $(dmesg | head -n 1); "
+                            "echo REFUSED $(dmesg | grep -a -c 'capstone_vm: resolve refused'); "
                             "dmesg | grep -a 'capstone_vm: resolve refused' | tail -n 40 | sed 's/^/DA /'")
     steps, transcript, completed = b.execute(a.board_kit, a.out / "work", 3600 + 30 * a.n)
     rows = {n: {"result": r, "text": t} for n, (t, r) in steps.items()}
@@ -73,6 +76,10 @@ def main():
         if n == "dmesg-all":
             for l in t.strip().splitlines():
                 print(f"DMESG-ALL {l[:300]}")
+            m = re.search(r"^OLDEST \[\s*([0-9.]+)\]", t, re.M)
+            if not m or float(m.group(1)) > 60:
+                print(f"DMESG-ALL VOID: the ring's oldest line is {'unread' if not m else m.group(1) + ' s'} into the boot, "
+                      f"so it has wrapped and REFUSED undercounts; the per-run reads are the reading")
             continue
         causes = re.findall(r"^FL .*domain fault cause=(\d+) ", t, re.M)
         arm = n.rsplit("-", 1)[1]
