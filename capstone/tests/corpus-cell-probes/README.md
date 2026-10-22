@@ -122,3 +122,24 @@ What it does not settle:
 - whether each fault is at the row's declared stale access;
 - how lookaside (on by default here) changes which rows read 25;
 - what a FIXED-twin control would be.
+
+## xlang/repro and xlang/lua-cdp on the virtual profile: exploratory (2026-10-22; no verdict rests on it)
+
+The shims are the CHERI column's hosted programs. Each one is built unchanged, `capstone-cc -O0 -g` on the batch SDK
+(t3-freeze-nb-nomovc-cw-r60/sdk): shim plus `cheri/mock-mruby/mock_mruby.c` (repro), or shim plus
+`lua-cdp/cheri/mock_report.c` (lua-cdp). The row lists come from each rows.tsv. All 28 build, and they ran in one
+boot on qkit7-batch2 with the postgres c-repros malloc controls (bounds 28, uaf 25: both behave).
+
+| set | rows | virtual profile | the classic Capstone column's revoke build (RESULTS.md, expected-results.tsv) |
+|---|---|---|---|
+| repro, temporal UAF | 12 (libpulse, rlua userdata, secp256k1, nine mruby) | all fault with cause 25 | 12 FAULT by revocation |
+| repro, spatial | mruby_bytecode_overflow, mruby_upvar_overflow | cause 28 | FAULT by bounds (both) |
+| repro, stack use-after-return | rlua_escaped_handle_uar | exit 0 | MISS (no allocator involved) |
+| lua-cdp | 13 | all fault with cause 25 | 13 FAULT by revocation |
+
+Each of the 28 rows reads the classic revoke column's outcome class.
+
+What it does not give:
+- the classic column's attribution control. The "control" build is the same program minus the one REVOKE, and
+  virtual mallocng has no such switch. That is the lead's decision (a) in the plan;
+- site attribution per row.
