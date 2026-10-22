@@ -1,0 +1,59 @@
+# The batch bitstream c721c1a2a on board 2 (tree B's board): flash, s23-cpmp-rearm bare, Tier 1 (2026-10-22). Result lines only.
+# Pre-registered at 10ff4e43bd21; chain flash-and-first-b2.sh.
+FB arm ended 15:26:46
+FB board 2 free 15:26:46
+STORE 2 names; wanted ['no-such-bitstream-3719870.bit']; missing ['no-such-bitstream-3719870.bit']
+STORE 2 names; wanted ['caplifive_vp2c_8de3c48cf.bit']; missing []
+FB FLASH BEGIN 15:26:47 booking 119
+[flash 15:26:47] local sha256 matches the synth lane's sealed hash
+[flash 15:26:47] resident before: 'caplifive_vp2c_8de3c48cf.bit'
+[flash 15:26:47] not in the server store -- uploading via API
+[flash 15:26:51] upload HTTP 201
+[flash 15:26:51] present in the server store
+[flash 15:27:06] flashing caplifive_vp2c_c721c1a2a.bit (~90 s)
+[flash 15:28:45] MANDATORY power cycle: off 8 s, on 15 s
+[flash 15:29:08] resident AFTER power cycle: 'caplifive_vp2c_c721c1a2a.bit'
+[flash 15:29:08] powered off
+[flash 15:29:08] unlocked
+FB FLASH END rc=0 15:29:08
+MK kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit7-rev2xBDN2:
+MK module 21fbfc397e7c7a42 DONE
+FB FIRST rc=0 15:54:16; SEQ:
+FB DONE 15:54:16
+BF START 15:29:08 board 2 bitstream caplifive_vp2c_c721c1a2a kit bkit8-batch-b2 fw 6423545a
+S23 BEGIN 15:29:08 board 2 bitstream caplifive_vp2c_c721c1a2a image bcefd969e128113f driver /tmp/capstone/wt-b2/capstone/tests/rtl-smoke booking 120 expect batch
+UNBOOK 120: 200
+S23 END rc=0 15:30:03 :: [sup 15:30:00] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+S23 AS EXPECTED (batch): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14
+S23 GRADE rc=0
+S23 board2 DONE 15:30:03
+BF TIER1 BEGIN 15:30:03 booking 121
+UNBOOK 121: 200
+BF TIER1 DRIVER rc=0 15:54:16; watchdog lines 96
+RUNG b0-stats retval=0 (rev7 oracle 0, reference only)
+RUNG b0-hello retval=0 (rev7 oracle 0, reference only)
+RUNG vm-contract retval=0 (rev7 oracle 0, reference only)
+RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:0 
+VM_BEGIN without VM_EXIT: 
+FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+BF board2 DONE 15:54:16
+# s23 values as read:
+SR 0000000000000019 SV 0000000080800000 SV 0000000000005A23 SV 0000000000000000 SV 0000000000000000 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000000 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000000 SV 0000000000000000 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000000 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000005 SV 000000000000000E SV 0000000000000055 
+# Tier 1 vm-suite (sparse-churn) lines:
+@@PARAM resume_satp_changed=0:before-contract
+@@PARAM busy_frame_refusals=0:before-contract
+@@PARAM resume_satp_changed=0:after-contract
+@@PARAM busy_frame_refusals=0:after-contract
+@@PARAM resume_satp_changed=0:before-churn
+@@PARAM busy_frame_refusals=0:before-churn
+VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags
+CAPSTONE_VM_STATS arenas=10 pages=489 peak=491 nodes=600041 steps=200065 faults=24 collections=0 reclaimed=0 rounds=8 bytes_in=367 bytes_out=64 node_bytes=65536 node_capacity=4096 node_growths=0 launch_ns=1516050240 elapsed_ns=1069660897760
+@@PARAM resume_satp_changed=0:after-churn
+@@PARAM busy_frame_refusals=0:after-churn
+KMSG-AFTER-CHURN: [  118.054361] capstone_vm: loaded, diag gen-push-1, supervisor_slots=1, diag_emerg=1
+KMSG-AFTER-CHURN: [  129.180473] capstone_vm: release retires attempted=11 succeeded=11 pushed=11 first_id=1024
+KMSG-AFTER-CHURN: [  134.125052] capstone_vm: release retires attempted=11 succeeded=11 pushed=11 first_id=1024
+KMSG-AFTER-CHURN: [ 1214.880507] capstone_vm: release retires attempted=10 succeeded=10 pushed=10 first_id=1024
+KMSG-AFTER-CHURN-END lines=104

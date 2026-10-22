@@ -7290,3 +7290,19 @@ Record: `records/uaf-repeat-rv-b2.result-lines.txt`.
   - no directory-open FATAL, and the positive control answered;
   - **compare-pilot against pgp-trim/bundle: 9 of 9 cells the same**;
   - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped 0, and the gen-push banner present.
+
+### The batch bitstream c721c1a2a on board 2, result (2026-10-22 15:26-15:54): the same as board 1
+
+Record: `records/batch-c721c1a2a-first-b2.result-lines.txt`. Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/`, kit
+t3-smoke/bkit8-batch-b2 (new).
+
+- **Flash:** the store control fired; tree B's caplifive_vp2c_8de3c48cf.bit is registered; upload HTTP 201; **the
+  read-back is `caplifive_vp2c_c721c1a2a.bit`** (15:29:08).
+- **s23-cpmp-rearm bare: AS EXPECTED (batch).** Its 25 values equal board 1's, value for value.
+- **Tier 1:**
+  - b0-stats 0, b0-hello 0, vm-contract 0 (stale 139);
+  - **sparse-churn VM_EXIT 0, `VIRTUAL_SPARSE_CHURN_OK allocations=200000`, nodes=600041 and steps=200065, both
+    identical to board 1's**;
+  - resume_satp_changed 0, busy_frame_refusals 0;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 0.
+- **Against the pre-registration (10ff4e43bd21): every reading holds, and the two boards agree in every reading.**
