@@ -556,3 +556,10 @@ the launcher changes.
   - `sparse_recycling` passes on both. The flat 18-bit table recycles in hardware (collections 0), its churn makes
     about 600,041 allocations against 2 × 262,144, and its 4 MiB extent is 16 × capacity;
   - the other twelve failures are as with d5f0f399. Any other difference belongs to the run.py change and is listed.
+
+**Result** (2026-10-22 20:13-20:39, run.py db4e70efe0645bb1): **every pre-registered reading holds.**
+- The pair reads IDENTICAL: 33/45 on both kits.
+- `sparse_recycling` passes on both.
+- The twelve failures are the batch kit's own (gen-probe/TIER1-r60), with nothing else changed.
+- So bitstream 2's kit reads exactly as the batch kit's Tier 1 under dev's run.py. The d5f0f399 record above stays as
+  read, and its one extra failure was that run.py's.
