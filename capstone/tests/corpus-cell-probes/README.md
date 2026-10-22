@@ -528,3 +528,18 @@ the launcher changes.
   - lt1 31's control in 348,160..348,210 (its boot-to-boot spread was 348,169..348,197);
   - lt1 18 at 196,527 and lt0 18 at 16,326 exact, each read once before;
   - every call's highest mapping slot at or below 402 + 10.
+
+**Result** (2026-10-22 19:28-20:11):
+- **Tier 1: HELD.** The pair reads IDENTICAL: 32/45 on both kits, the same 13 failures.
+  - Against the batch kit's 33/45, the one extra failure is `sparse_recycling`, on both kits, so it belongs to the
+    18-bit table and not the launcher. The batch Tier 1 note already records that this check is keyed to software
+    collections, which the flat build never makes.
+- **The 20 calls on qkit7-b2twin3-q8 (launcher fad465ce): HELD on every count but one.**
+  - Every result class and fault site equals qkit7-b2twin2-q8's, and every high_water is inside its band.
+  - Every predicted exact allocated_total equals its earlier reading, lt1 30's control at 316,375 included.
+  - Every call registered at most 412 mappings.
+  - **NOT HELD:** lt1 31's control read 348,212, two above its pre-registered band of 348,160..348,210. Its seven
+    readings now span 348,169..348,212. The band was set too narrow from five boots of a boot-nondeterministic count,
+    so this is not a launcher effect: the mapping count stays far from either cap.
+- **So qkit7-b2twin3-q8 is bitstream 2's prediction kit,** on the same launcher as the board. Every earlier
+  bitstream-2 reading carries over to it.
