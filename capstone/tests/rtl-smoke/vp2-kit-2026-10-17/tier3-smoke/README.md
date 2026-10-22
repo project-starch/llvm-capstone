@@ -6546,3 +6546,42 @@ Records: `records/uaf-repeat-b1.result-lines.txt` and `records/uaf-repeat-b2.res
     whether the load reaches the revocation check (25) or faults earlier on its translation (13).
 - **Next reading:** the module's own view of a cause-13 fault (its page-fault resolution, dmesg), which this
   instrument does not print. That question is for the runtime lane, which owns the module.
+
+### The uaf control's cause 13: the module's own refusal line, read from the ring buffer, pre-registered (2026-10-22 11:0x, before either boot)
+
+- **Why this reading:**
+  - A cause-13 fault that the module returns unresolved passes through resolve() (capstone_vm.c, dev). Its refusal
+    line is `capstone_vm: resolve refused at <site>: addr .. cause 13 need .. pc .. prev(..) <detail>`
+    (CV_RESOLVE_FAIL).
+  - That line is unbudgeted and prints at pr_warn unless diag_emerg is set, so on the board (console level 1) it
+    reaches the ring buffer and never the UART. The first repeat never read the ring.
+  - The site names the mechanism:
+    - `arena`: no lazy arena covers the address, so the module had nothing to do;
+    - `vma`, `pin`, `anon` or `remap`: the mapping changed, and the detail gives vm_flags, pfn and refs.
+  - The runtime lane (owner of the module) confirmed the line, its level and the read, and expects two lines per
+    unresolved fault: the in-step resolve, then the launcher's CV_RESOLVE.
+- **What runs:**
+  - `tier3-uaf-repeat.sh <board> <out> 200` with `UR_TAG=-dm UR_ARGS="--no-trace --dmesg"`, one cold boot per board,
+    on the same kits.
+  - 200 uaf runs, all untraced as in Juliet. Every cause-13 run and every tenth run also prints the module's last 12
+    ring lines.
+  - A final step prints the boot's total count of refusal lines and their last 40.
+  - Reading the ring changes nothing about the runs.
+  - The options are new in uaf-repeat.py and tier3-uaf-repeat.sh. With neither set, the generated gate script is
+    byte-identical to the first repeat's (checked by diff).
+- **Dry run** (`dryrun-uaf-repeat-dmesg.txt`): a planted refusal is reported against its run and in the total; a
+  transcript without the final step reads NO DATA.
+- **Predictions:**
+  - Must-fire: every printed run shows at least one ring line (the module's own pr_emerg "release retires" of the
+    previous run), and the final step prints a REFUSED count.
+  - Every cause-13 run has at least one refusal line at its own fault address, cause 13 (two expected).
+  - No printed cause-25 run has a refusal line at its address.
+  - The boot's REFUSED total is about twice the number of cause-13 runs. Nothing else in these boots takes a 12/13/15
+    fault (the bounds control is cause 28).
+  - The site is the reading, with no prediction between the sites.
+    - If `arena`: the page was pinned and present when the region was added, and the walker still faulted. The
+      runtime lane's untested hypothesis is the accessed bit: vp2's walker faults on a clear A and never sets it, and
+      GUP pins without pte_mkyoung. A PTE read at that refusal is being added on their lane.
+    - Any other site: the mapping changed under the context.
+  - The rate is a few percent per run on either tree, so a few cause-13 runs are expected per board. A board with none
+    gives no reading, not a negative one.

@@ -10,6 +10,10 @@ Juliet); even runs set CAPSTONE_VM_TRACE=1, so a cause-13 run has the launcher's
 A bounds-control run comes first, as in every Juliet batch. Every uaf step prints its fault line(s) (FL ...); the
 whole output (TR ...) is printed for every cause-13 run and every tenth run, the tenth runs being the cause-25 traces
 to compare against.
+--no-trace runs every uaf run untraced (as in Juliet). --dmesg also prints, for those same runs, the module's last 12
+kernel lines (`dmesg | grep capstone_vm`, DM ...): a cause-13 fault the module returns unresolved passes through
+resolve(), whose refusal line ("resolve refused at <site>", capstone_vm.c CV_RESOLVE_FAIL) is pr_warn unless
+diag_emerg, so it is in the ring buffer but never on the console. Reading the ring changes nothing about the run.
 Judges nothing; writes <out>/steps.json and prints the tally: per arm (plain, traced) the count of runs with
 cause 25, cause 13, other, and no fault line. Exits 2 unless every step is in the transcript."""
 import argparse
@@ -27,6 +31,8 @@ def main():
     p.add_argument("--controls", type=Path, required=True)
     p.add_argument("--helper", type=Path, required=True)
     p.add_argument("--n", type=int, required=True)
+    p.add_argument("--no-trace", action="store_true", help="every uaf run untraced")
+    p.add_argument("--dmesg", action="store_true", help="print the module's last 12 dmesg lines with each printed run")
     p.add_argument("--out", type=Path, required=True)
     a = p.parse_args()
     sys.path.insert(0, str(a.tools))
@@ -43,12 +49,18 @@ def main():
     # after the module loads), the position of the spatial set's three cause-13 readings.
     b.step("bounds-0", "./juliet-timeout bounds-0 10000 -- ./capstone-vexec ./images/controls.dom bounds-malloc")
     for k in range(1, a.n + 1):
-        env = "CAPSTONE_VM_TRACE=1 " if k % 2 == 0 else ""
+        env = "CAPSTONE_VM_TRACE=1 " if k % 2 == 0 and not a.no_trace else ""
+        dm = "; dmesg | grep -a capstone_vm | tail -n 12 | sed 's/^/DM /'" if a.dmesg else ""
         name = f"uaf-{k}-{'traced' if env else 'plain'}"
         b.step(name, f"( {env}./juliet-timeout {name} 10000 -- ./capstone-vexec ./images/controls.dom uaf-malloc ) "
                      f"> /tmp/u.txt 2>&1; rc=$?; grep -a 'domain fault' /tmp/u.txt | sed 's/^/FL /'; "
-                     f"if grep -q 'cause=13 ' /tmp/u.txt || [ {k % 10} = 0 ]; then tail -n 300 /tmp/u.txt | sed 's/^/TR /'; fi; "
+                     f"if grep -q 'cause=13 ' /tmp/u.txt || [ {k % 10} = 0 ]; then tail -n 300 /tmp/u.txt | sed 's/^/TR /'{dm}; fi; "
                      f"exit $rc")
+    if a.dmesg:
+        # The whole boot's refusals, read once at the end (the runtime lane's form): each unresolved fault is expected
+        # to print twice (the module's in-step resolve, then the launcher's CV_RESOLVE).
+        b.step("dmesg-all", "echo REFUSED $(dmesg | grep -a -c 'capstone_vm: resolve refused'); "
+                            "dmesg | grep -a 'capstone_vm: resolve refused' | tail -n 40 | sed 's/^/DA /'")
     steps, transcript, completed = b.execute(a.board_kit, a.out / "work", 3600 + 30 * a.n)
     rows = {n: {"result": r, "text": t} for n, (t, r) in steps.items()}
     (a.out / "steps.json").write_text(json.dumps({"completed": completed, "transcript": str(transcript),
@@ -58,6 +70,10 @@ def main():
         if n == "bounds-0":
             print(f"BOUNDS-0 {r} {t.strip()[:200]}")
             continue
+        if n == "dmesg-all":
+            for l in t.strip().splitlines():
+                print(f"DMESG-ALL {l[:300]}")
+            continue
         causes = re.findall(r"^FL .*domain fault cause=(\d+) ", t, re.M)
         arm = n.rsplit("-", 1)[1]
         kind = "none" if not causes else causes[0] if causes[0] in ("13", "25") else "other"
@@ -66,11 +82,20 @@ def main():
         tally[(arm, kind)] += 1
         if kind != "25":
             print(f"RUN {n} rc={r} causes={causes}")
+        if a.dmesg and ("cause=13 " in t or int(n.split("-")[1]) % 10 == 0):
+            dm = re.findall(r"^DM .*$", t, re.M)
+            ref = [l for l in dm if "resolve refused" in l]
+            # must-fire: every printed run's ring holds at least the module's own lines (the pr_emerg "release retires"
+            # of the previous run, or the load banner), so 0 DM lines means the read did not run, not "no refusal"
+            print(f"DMESG {n} cause={causes[0] if causes else None} dm_lines={len(dm)} refused={len(ref)}")
+            for l in ref:
+                print(f"  {l[:300]}")
     for (arm, kind), c in sorted(tally.items()):
         print(f"TALLY {arm} cause {kind}: {c}")
-    print(f"completed={completed} steps={len(steps)} of {a.n + 1} transcript={transcript}")
-    if len(steps) != a.n + 1:
-        print(f"NO DATA: {len(steps)} of {a.n + 1} steps in the transcript")
+    want = a.n + 1 + (1 if a.dmesg else 0)
+    print(f"completed={completed} steps={len(steps)} of {want} transcript={transcript}")
+    if len(steps) != want:
+        print(f"NO DATA: {len(steps)} of {want} steps in the transcript")
         sys.exit(2)
 
 

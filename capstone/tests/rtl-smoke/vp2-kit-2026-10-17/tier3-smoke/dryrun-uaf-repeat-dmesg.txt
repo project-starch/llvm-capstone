@@ -1,0 +1,39 @@
+# tier3-uaf-repeat.sh with UR_ARGS='--no-trace --dmesg', dry run 2026-10-22 11:02, N=12, stubbed (UR_BUSY/UR_BOOK/UR_ROOT; BOARDVM_STUB_TRANSCRIPT).
+# dm: run 4 cause 13 with one planted refusal line, run 7 no fault line, a dmesg-all step with REFUSED 2. short: the same without dmesg-all, must read NO DATA.
+# Defaults (no UR_ARGS) produce a gate.sh identical to the first run's dry run (checked with diff). Verdicts in a dry run are never data.
+== dm
+UR BEGIN 11:02:46 board 2 booking 999 # book 2 75 vp2-tier12 uaf-control repeat (board 2) N=12 args --no-trace --dmesg
+999 # unbook 999 # book 2 75 vp2-tier12 uaf-control repeat (board 2)
+UR END rc=0 11:02:46
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f7f690c3c'} capstone-exec: domain fault cause=28 pc=0x3f7f690c3c
+RUN uaf-4-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f7f690c70 address=0x3f7f755040 entry=0x3f7f680868 code=0x3f7f680000-0x3f7f700000'} causes=['13']
+DMESG uaf-4-plain cause=13 dm_lines=1 refused=1
+  DM [  1.0] capstone_vm: resolve refused at arena: addr 0x3f7f755040 cause 13 need 0x1 pc 0x3f7f690c70 prev(addr 0x0 cause 0 rep 0) no lazy arena covers this address
+RUN uaf-7-plain rc={'kind': 'signal', 'value': 11} causes=[]
+DMESG uaf-10-plain cause=25 dm_lines=0 refused=0
+DMESG-ALL REFUSED 2
+DMESG-ALL DA [  1.0] capstone_vm: resolve refused at arena: addr 0x3f7f755040 cause 13
+DMESG-ALL DA [  1.1] capstone_vm: resolve refused at arena: addr 0x3f7f755040 cause 13
+TALLY plain cause 13: 1
+TALLY plain cause 25: 10
+TALLY plain cause none: 1
+completed=True steps=14 of 14 transcript=<scratch>/urd3/r-dm/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 11:02:46
+== short
+UR BEGIN 11:02:46 board 2 booking 999 # book 2 75 vp2-tier12 uaf-control repeat (board 2) N=12 args --no-trace --dmesg
+999 # unbook 999 # book 2 75 vp2-tier12 uaf-control repeat (board 2)
+UR END rc=2 11:02:46
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f7f690c3c'} capstone-exec: domain fault cause=28 pc=0x3f7f690c3c
+RUN uaf-4-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f7f690c70 address=0x3f7f755040 entry=0x3f7f680868 code=0x3f7f680000-0x3f7f700000'} causes=['13']
+DMESG uaf-4-plain cause=13 dm_lines=1 refused=1
+  DM [  1.0] capstone_vm: resolve refused at arena: addr 0x3f7f755040 cause 13 need 0x1 pc 0x3f7f690c70 prev(addr 0x0 cause 0 rep 0) no lazy arena covers this address
+RUN uaf-7-plain rc={'kind': 'signal', 'value': 11} causes=[]
+DMESG uaf-10-plain cause=25 dm_lines=0 refused=0
+TALLY plain cause 13: 1
+TALLY plain cause 25: 10
+TALLY plain cause none: 1
+completed=True steps=13 of 14 transcript=<scratch>/urd3/r-short/work/board.txt
+NO DATA: 13 of 14 steps in the transcript
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 11:02:46
