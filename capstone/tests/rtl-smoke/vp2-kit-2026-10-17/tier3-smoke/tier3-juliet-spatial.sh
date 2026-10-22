@@ -32,7 +32,8 @@ main() {
   local ph rc bid mins
   for ph in run probe; do
     ${JS_BUSY:-$BUSY} > /dev/null || { echo "JS STOP: board $BRD is busy before $ph" >> "$O"; return 1; }
-    case $ph in run) mins=560;; probe) mins=20;; esac
+    # The hub's cap is 8 h ("a booking is 15 min to 8 h"); 560 was refused on 2026-10-22, and both run phases took 6.6 h.
+    case $ph in run) mins=480;; probe) mins=20;; esac
     bid=$(${JS_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} book $BRD $mins "vp2-tier12 juliet spatial $ph (board $BRD)"); rc=$?
     [ $rc = 3 ] && { echo "JS STOP: the hub refused the booking (409) before $ph: $bid" >> "$O"; return 1; }
     [ $rc = 0 ] || { echo "JS NOTE: booking failed rc=$rc ($bid); continuing unbooked" >> "$O"; bid=; }

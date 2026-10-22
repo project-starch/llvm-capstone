@@ -6452,3 +6452,97 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - The traced and plain arms carry no rate prediction, because the trace changes timing.
   - The traces carry no prediction. They are read for anything (a service, a boundary or a retire) that falls between
     the free's mark and the read in the cause-13 runs and is absent in the tenth-run cause-25 traces.
+
+### The Juliet SPATIAL stratified sample, result (2026-10-22 03:29-10:30, both boards): every image cell equals QEMU on both trees
+
+Records: `records/juliet-spatial-b1.result-lines.txt` (tree A) and `records/juliet-spatial-b2.result-lines.txt` (tree B).
+The run is 49b04ff8ef6c; the probe, judge and readings come from the resume, dcf0ed0965de.
+
+- **The grade: juliet-obs-compare.py against tB-mimic, cell by cell:**
+  - **Tree A: 1513 of 1513 cells the same, exit 0.** The three tolerated CWE170 cases read as tB-mimic did too.
+  - **Tree B: 1512 of 1513, exit 1.** The one differing cell is the uaf CONTROL, not an image. It read cause 13 (a
+    load page fault) at control_read_probe+0x38 in 3 of its 48 runs (ctl-uaf-0 of batch000, batch017 and batch023),
+    where tB-mimic reads cause 25 in 48 of 48.
+  - **Every one of the 755 cases' bad and good image cells equals tB-mimic on both trees**, so tree A equals tree B in
+    every image cell.
+  - The comparator's control: one planted cause change on tree A's own file reads 1512 of 1513 and exits 1.
+- **The rest of the pre-registration (49b04ff8ef6c):**
+  - HELD on both trees:
+    - 24 of 24 batches complete;
+    - the probe exits 0 with sizeof ptr 16;
+    - MISSED 22, the same 22 cases as tB-mimic;
+    - NOT-TRIGGERED:sizeof-ptr 9;
+    - the 8 intra-object rows read NO-READING;
+    - pc=0, DRT1, FRTY, Oops, INJS and INJL are 0 in all 25 transcripts on each tree.
+  - HELD on tree A:
+    - all 24 batches count;
+    - the 716 tB-mimic CAUGHT rows read NO-READING:unattributed(STRICT-FAIL:no-oob-line);
+    - 755 goods CORRECT.
+    The only verdict rows that differ from tB-mimic are those 716 and the intra-object reason text (size-32 →
+    no-oob-line, 4).
+  - On tree B, the voids are the reading the pre-registration named in advance ("a cause-13 uaf control would void
+    its batch"):
+    - 21 of 24 batches count (judge.py exit 75);
+    - 83 cases read NO-READING:batch-void, which leaves 633 NO-READING:unattributed and 672 goods CORRECT;
+    - against tree A, only those 83 batch-void rows differ.
+- **What it shows:**
+  - Spatial detection on vp2 silicon, over all 261 functional variants of CWE 121/122/124/126/127 with flow roles
+    01, 54 and 67, faults or exits exactly as the QEMU silicon-mimic reference does, image by image, on both trees.
+  - The 716 detections fault at cause 28 at the reference's own sites.
+  - judge.py's NO-READING is its STRICT rule (QEMU's OOB line), not a silicon difference.
+  - The 22 MISSED are the same cases that miss on QEMU, so they are not a silicon difference:
+    - six wchar_t snprintf variants (CWE121 x4, CWE122 x2) at all three flow roles, 18;
+    - four CWE126 CWE170 cases at role 01 (char and wchar_t memcpy and strncpy), 4.
+- **Process:**
+  - The script's 560-minute run booking was over the hub's 8 h cap. The run went unbooked, and was booked by hand.
+  - That hand booking then made the hub refuse the script's own probe booking (409), which stopped both runs before
+    the probe.
+  - The resume ran the unchanged commands. `tier3-juliet-spatial.sh` now books 480 minutes.
+- **Tree B's cause-13 control** is now 5 of 74 Juliet runs against tree A's 0 of 74 (temporal and spatial pooled,
+  one-sided Fisher p ~ 0.03). The one-boot repeat pre-registered above is its next reading.
+
+### The uaf control repeated in one boot per board, result (2026-10-22 10:25-10:57): cause 13 on BOTH trees; the tree-B-only reading is withdrawn
+
+Records: `records/uaf-repeat-b1.result-lines.txt` and `records/uaf-repeat-b2.result-lines.txt`.
+
+- **Read:**
+  - Every one of the 240 uaf runs printed exactly one fault line, at code+0x10c70 (control_read_probe+0x38). The
+    address is offset 0x40 into the freed allocation's 4 KiB region.
+  - The bounds run read cause 28.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL are 0 on both boards.
+  - **Tree A (board 1): cause 13 in 2 of 120** (runs 53 and 55, both plain; traced 0 of 60), cause 25 in 118.
+  - **Tree B (board 2): cause 13 in 5 of 120** (runs 62, 72, 97, 98 and 107; plain 2 of 60, traced 3 of 60), cause 25
+    in 115.
+- **Against the pre-registration (a80fa4ae05c3):**
+  - HELD: every run faults at the one instruction; the bounds run reads cause 28; the readings are 0; tree B reads
+    cause 13 at least once.
+  - **NOT HELD: "tree A reads cause 13 in 0 of 120."** It read 2.
+  - Per the pre-registration, this reading therefore does not separate the trees, and the satp-flush hypothesis (the
+    temporal-set result) loses its only support.
+  - **Withdrawn:** the framing of the pre-registration's lead paragraph and of a80fa4ae05c3's message, "tree B 5 of 74
+    against tree A 0 of 74, p ~ 0.03", read as a tree-B property. It was a property of the sample.
+  - For the record only, not as a test: pooled over the Juliet runs and this repeat, tree A reads 2 of 194 and tree B
+    10 of 194. That pooling was chosen after a failed prediction, so it carries no weight here.
+  - The reading is also not bound to a position in the boot. The cause-13 runs fall from run 53 to run 107 of one
+    boot, not only near its start.
+- **The traces:**
+  - Tree B's traced cause-13 runs (62, 72, 98) are line for line the same as its traced cause-25 runs:
+    - the region adds (slot 10 the freed allocation's 4 KiB linear region);
+    - boundary kinds 2, 11 and 10;
+    - `CONTROL uaf-malloc mark`;
+    - one writev (nr 66, result 24);
+    - the fault.
+  - So the launcher's service trace cannot distinguish the two causes, and nothing at that level falls between the
+    free and the read.
+  - Checked mechanically: with addresses and the cause masked, all 15 printed traced runs on tree B (3 cause 13, 12
+    cause 25) have one and the same 36-line trace.
+  - The region layout varies run to run on both causes. In the 14 printed runs of tree A, no layout feature separates
+    them.
+- **What it means for the Juliet record:**
+  - Under judge.py the uaf control must read cause 25, so a cause-13 run voids its batch. At this rate (a few percent
+    per run, two uaf runs per batch), any long run on either tree loses some batches.
+  - Every image cell is unaffected: those batches' image cells equal tB-mimic.
+  - The fault itself still stops the use-after-free read on both causes (signal 11 at the read). What differs is
+    whether the load reaches the revocation check (25) or faults earlier on its translation (13).
+- **Next reading:** the module's own view of a cause-13 fault (its page-fault resolution, dmesg), which this
+  instrument does not print. That question is for the runtime lane, which owns the module.
