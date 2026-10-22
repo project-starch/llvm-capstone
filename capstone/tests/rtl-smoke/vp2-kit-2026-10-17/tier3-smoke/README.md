@@ -6988,3 +6988,33 @@ S-23's flush_all plumbing.
   - **At level 2:** the 13s are gone, every run reads 25, and retire_fixed equals retire_post_live.
   - **post_live 0 with cause-13 runs continuing** refutes the retire shape. The 13s would then come from something
     else.
+
+### A retired region kept mapped, result (2026-10-22 12:37-13:51, board 1, tree A): 0 silent reads in 200, and no cause 13 either
+
+Record: `records/uaf-repeat-keep-b1.result-lines.txt`.
+
+- **Read:**
+  - **keep runs (variable set): cause 25 in 200 of 200**, the 20 traced ones included. The hook fired in 200 of 200;
+    every run reached the read (the mark); every fault was inside the kept region. **SILENT 0. Cause 13 0.**
+  - **The unset control, interleaved in the same boot: cause 13 in 8 of 200** (11, 69, 88, 110, 128, 138, 186,
+    190), each with its own `resolve refused at arena` (two lines in six runs, one in two). Cause 25 in 192.
+  - The bounds run reads 28. pc=0, DRT1, FRTY, Oops, INJS and INJL are 0. The boot-wide ring count voided itself (the
+    ring's oldest line was at 4003 s).
+- **Against the pre-registration (c7fdf77bca9d):**
+  - HELD: the controls; the hook on every keep run; no cause 13 on a keep run (whose occurrence would have refuted
+    the reading).
+  - **The runtime lane's prediction (SILENT at about the 13 rate) did not hold. The compiler lane's (0 SILENT) and
+    the RTL lane's revised one ("0 or a small rate") did.**
+  - Numbers: 0 of 200 against the control's 8 of 200 in the same boot, one-sided Fisher p = 0.0036. At the control's
+    4 % rate, P(0 of 200) = 0.0003. The 95 % upper bound on a silent-read rate is 1.5 % per run.
+- **What it says, and what it does not:**
+  - With the retired region's pages kept, no read of the freed object got past the check in 200 tries. The
+    temporal-safety hazard the runtime lane asked about did not appear.
+  - In the same boot, the same program with the munmap left in place reads 13 at 4 %. So in this sample the
+    13s need what the hook removes.
+  - The hook removes more than the PTE: it removes the munmap call itself (its timing, and the kernel's TLB
+    maintenance) and the address's reuse. This arm does not say which of those the 13 needs.
+  - It contradicts no RTL reading. The RTL lane's simulation has no route to a 13 at all, so the silicon 13s remain
+    silicon-only, and their mechanism is still open. What this arm adds is that they did not come with completed
+    reads.
+- The object-path arm (board 2) and the retire check (board 2, next) are still to read.
