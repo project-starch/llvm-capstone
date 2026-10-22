@@ -7339,3 +7339,61 @@ Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
   - Case 09 reads as the reference: image 23a2f0cb CAUGHT by control at an unlabelled site, per the 2026-10-22 note.
     Case 18 reads as the reference: no mremap in this image.
   - The standing tree-era lt0 column (4641b94c on 54d8a3af) is not compared against. That image differs.
+
+### The corpus re-read on the batch bitstream: 23 arms on both boards, pre-registered (2026-10-22 17:5x, before any boot)
+
+- **Why:** the lead's order for the batch is the three unblocked bundles, then the rest of the corpus arms read again on
+  c721c1a2a. Each arm's batch column sits BESIDE its standing column; the standing 346-cell pass stays the record.
+  cpython lt0 is already running on board 2, and sql0 gets its own runner later. That leaves 23 arms, 305 cells.
+- **The references** are the compiler lane's `<mnt-hdd>/capstone/batch-refs-r60/ref-batch/<tag>`, made by
+  `<mnt-hdd>/capstone/batch-refs/run-pass-r60.sh` (ebd2406b3351c381; logs PASS-A and PASS-B):
+  - kit qkit7-batch2 (QEMU ecaf50bb, module a05c198b); SWITCHES movc_null_scalar=OFF, generations=ON; no norandmaps;
+  - the r60 rebuilds, `t3-images-r60` (ARMS.spec f34f1a26bf455ef8), SDK `t3-freeze-nb-nomovc-cw-r60` (sdk.json
+    f5145cbb88dde6b5).
+  - **Every one of the 346 reference cells carries a different image hash from the standing pass's `images.tsv`.**
+    The re-read therefore runs the references' images, not the standing ones. A cell is compared image against image.
+  - The stamps name wt-gate at bfa584113e1c, 0b58b55128e4, 87d684e76f15, 8894b7edeb18 or c9a18237d110. There are no
+    commits from 0b58b55128e4 to today's HEAD under capstone/bug-corpora or capstone/runtime (`git log` 0 lines;
+    control: HEAD~200 shows 450 files). The script checks each runner's sha256/16 against its own stamp.
+  - The other trees are at their stamped commits and clean: wt-q15cw e2b26ea2c1e4 (pb13q15, pgm1q15), wt-cpyrec
+    d0f0f4b41ae6 (wm1q15).
+- **What runs:** `tier3-reread-batch.sh <board> <after> <after ERE> <spec> <log>`. It is tier3-pass-seq2.sh with these
+  changes:
+  - kit `bkit8-batch-b<board>` (c721c1a2a, module 21fbfc39, monitor d9da397 + FETCH_RETRY_CAP, no norandmaps);
+  - the reference invocation with `--virtual-kit` replaced by `--board-kit`;
+  - the sqlite arms in --only boots of six cases plus both controls (tier3-pass-appvm.sh's split, the payload cap),
+    each scored against the reference cut to its cases;
+  - a spec field for the runner's tree and for CAPSTONE_TMP_ROOT, set as the reference had them.
+  - Each arm is scored by **compare-pilot.py**, the standing pass's tool: image, verdict, reason, reached, completed,
+    cause, symbol+offset, attribution, controls. **verdicts-compare.py**, the reference's own five-field compare, is
+    printed beside it.
+  - Output goes to NEW directories, `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b<board>/rr-<tag>`. A boot that does not
+    complete stops its board's sequence. A cell that differs does not.
+  - Specs: `records/reread-spec-b1.txt` and `records/reread-spec-b2.txt` (sanitized copies, with their sha256/16).
+- **The split.**
+  - Board 1 runs after pg-pools ends (any PG DONE/STOP/VOID/MUST-FIRE line): fph, fpt, fca, fcs, fso, mph, mpt, wph,
+    wpt, pgc, pgm0, pgm1, then sq0 a-f. That is 155 cells in 18 boots.
+  - Board 2 runs after cpython lt0 ends (CB lt0 DONE or STOP): pym0, pym1, pb9, pb12, pb10, wm0, pb13q15, pgm1q15,
+    wm1q15, then sq1q15 a-f. That is 150 cells in 15 boots.
+  - The sqlite arms go last, because they have the most boots.
+- **Dry run** (`dryrun-reread-batch.txt`, stubbed):
+  - both full sequences end DONE: board 1 18 of 18, board 2 15 of 15, every compare as its reference;
+  - a planted changed verdict is read by both compares, in a whole arm (2 of 3) and in a sqlite group (5 of 6);
+  - it refuses on: a busy board, a hub 409, the arm script's refusal (78), an incomplete boot, an existing output
+    directory, a tag with no reference, a runner that is not its stamp's (mpt from wt-q15cw), and board 3;
+  - a failed booking continues unbooked;
+  - the argv of every kind is printed: cases, pgc, pgm, appvm, the appvm6 group with --only, and the other trees with
+    their TMP root.
+- **Predictions (per arm, compare-pilot against its batch reference, every cell the same):**
+  - board 1: fph 25 (CAUGHT 25), fpt 13 (CAUGHT 13), fca 13 (MISSED 13), fcs 13 (CAUGHT 13), fso 9 (MISSED 9),
+    mph 9 (CAUGHT 9), mpt 3 (CAUGHT 3), wph 12 (CAUGHT 12), wpt 10 (CAUGHT 10), pgc 5 (CAUGHT 5), pgm0 5 (MISSED 5),
+    pgm1 5 (CAUGHT 5), sq0 33 (CAUGHT 4, MISSED 27, NO-READING 2);
+  - board 2: pym0 20 (MISSED 20), pym1 20 (CAUGHT 20), pb9 4 (MISSED 4), pb12 9 (CAUGHT 1, MISSED 8), pb10 4
+    (CAUGHT 4), wm0 23 (MISSED 23), pb13q15 9 (CAUGHT 7, NO-READING control-failed 2), pgm1q15 5 (CAUGHT 5), wm1q15 23
+    (CAUGHT 22, NO-READING 1), sq1q15 33 (CAUGHT 27, MISSED 6);
+  - **sq1q15's 29 and 31 read as the batch reference (cause 24)**, not as the standing column (cause 28). These are the
+    batch reference's two moves from the old reference.
+  - In every boot: FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0, collect-skipped and cause=29 read 0, and the boot
+    completes (vbatch END rc=0).
+- **What a miss would mean:** a differing cell on matched images is a silicon reading against the batch QEMU model. It
+  is recorded beside its standing cell and not explained away. A differing IMAGE makes the cell VOID, not a reading.
