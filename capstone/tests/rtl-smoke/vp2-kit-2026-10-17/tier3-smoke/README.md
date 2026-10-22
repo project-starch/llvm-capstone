@@ -7426,3 +7426,51 @@ Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
   - **compare-pilot against ref-batch/sql0/bundle: 9 of 9 cells the same (CAUGHT 2, MISSED 7)**;
   - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped 0.
   - With lt0 and the 23 re-read arms, this completes the 25 arms, 346 cells, on c721c1a2a.
+
+### Two new corpus arms on the batch bitstream: xlang and sqlite capi-repros, board 1 after its re-read, pre-registered (2026-10-22 18:5x, before any boot)
+
+- **Why:** the next benchmark from the bug corpus. Both arms landed on dev with the lead's approval, as relayed by the
+  runtime lane and the compiler lane: xlang (repro + lua-cdp) at da4cb338b37f, and sqlite/capi-repros at 75e077151800.
+  Both runners are one-boot verdicts-v1 runners with the kit group, so the board run replaces `--virtual-kit` with
+  `--board-kit`.
+- **What runs:** `tier3-newarms-batch.sh 1 <after> <ERE> <log>`, from a clean dev worktree `/tmp/capstone/wt-newarms`
+  (da4cb338b37f, which carries both commits).
+  - Kit `bkit8-batch-b1`; SDK t3-freeze-nb-nomovc-cw-r60 (sdk.json f5145cbb).
+  - Each runner is pinned to the sha256/16 its reference records as platform.runner: xlang 7d42d207e4e8fc29, capi
+    09c9fec1ac33653d. Each reference also records SDK f5145cbb and module a05c198b (qkit7-batch2).
+  - **xlang:** one boot, 3.6 MB of images. Its two bundles are scored against
+    `xlang/{repro,lua-cdp}/results/2026-10-22-virtual/virtual-malloc`.
+  - **capi:** six `--only` boots: rows 1-3, 4-6, 7-9, 10-12, 13-16 (row 15 has no program) and 17-19, with the two
+    generic controls in every boot. The row images are 5.7 MB each, built -g and left unstripped, so their hashes stay
+    the reference's. A whole-arm boot would be about 98 MB, which the compiler lane measured; that is why the arm is
+    split.
+    - Each boot is preceded by a measure-only bake on `bkit8-batch-mb1`. The boot runs only if the firmware is under
+      26,000,000 B.
+    - Each boot is scored against `results/2026-10-22-virtual-run2/virtual-malloc` cut to its rows.
+  - Scored by compare-pilot.py and verdicts-compare.py. Output goes to NEW directories
+    `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/na-<tag>`. An incomplete boot stops the sequence.
+  - It starts when board 1's re-read ends (RR seq-1 DONE, STOP or HOLD).
+- **How to read compare-pilot here:** for a cell with no image on either side, it prints NOT RUN and does not count
+  it the same. That covers xlang repro's 11 mruby rows (lead decision (b)) and capi row 15. So its matching readings
+  are **4 of 15** for repro and **3 of 4** for capi rows 13-16, with exactly those NOT RUN lines. verdicts-compare
+  counts every cell. The dry run shows both on the reference against itself.
+- **Dry run** (`dryrun-newarms-batch.txt`):
+  - both boards run the full sequence;
+  - a planted change is read by both compares, in lua-cdp and in a capi group;
+  - it stops on: over the cap before any boot, a C-81 refusal (78), an incomplete boot, a busy board, a hub 409, an
+    existing directory, and board 3.
+- **Predictions (every imaged cell as the QEMU reference):**
+  - **xlang repro:** rows 1, 3 and 7 CAUGHT (cause 25, memcpy), row 2 MISSED (the stack use-after-return, exits 0),
+    and 11 rows out of the denominator. compare-pilot 4 of 15 with 11 NOT RUN; verdicts-compare 15 of 15.
+  - **xlang lua-cdp:** 13 of 13 CAUGHT, cause 25 (lua-openssl-141 in openssl_cipher_ctx_free, the rest in main).
+  - **capi, over the six boots:**
+    - CAUGHT 12: rows 1-11 and 16, cause 25 at main, read_context, stale_udf or authorize, and row 11 cause 2 at
+      invalid_free;
+    - out of the denominator 7: rows 12 and 14 (cause 24 in main), row 13 (cause 12), rows 17-19 (exit 0), and row 15
+      (no program).
+    - compare-pilot SAME on every imaged row, NOT RUN only on row 15. verdicts-compare 19 of 19 in total.
+  - The controls fault in every boot.
+  - Each capi firmware is under the cap. The standing sq0 groups' 8 images staged 23.1 MB into a 23.8 MB firmware, and
+    3 capi rows plus the controls are smaller.
+  - In every boot: FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0, collect-skipped and cause=29 read 0, and the boot
+    completes.
