@@ -95,3 +95,14 @@ rand() flow.
 the CWE-126 CWE-170 family: whether its over-read runs on depends on whether a NUL follows the copy. Three of its rows
 moved in both directions between the 2026-10-19 record and tB-mimic (juliet-sp/RESULT), so a move there is reported
 as value-dependent, not as a platform difference. Any other moved case is listed and counts against the prediction.
+
+**Results, both as predicted** (2026-10-23, qkit7-batch2: QEMU ecaf50bb, module a05c198b, vexec a405840d; QEMU domain A):
+- **Temporal** (04:20-04:28; juliet-r60/RESULT):
+  - built census 734 and seeded 55 images, as on the old SDK;
+  - 366 CAUGHT (228 CWE-415, 138 CWE-416), every good run CORRECT;
+  - 366/366 equal to judge-tB-mimic on verdict, good, cause, site and strict, differ 0.
+  - Reference: juliet-r60/judge-batch2/results.
+- **Spatial sample** (04:28-04:42; juliet-sp/RESULT-batch2):
+  - 24 batches in 793.6 s;
+  - 755/755 equal to juliet-sp/tB-mimic, differ 0, including the value-dependent CWE-170 rows.
+  - Reference: juliet-sp/batch2/results.
