@@ -173,3 +173,5 @@ records `vp2-malloc` under the same configuration. Its prediction is run 2's rea
 - The hashes are reproducible: rows 1 and 11 equal the independent builds from two other raw directories and a second
   repo root (1328034ed2872e67, c027fedd724705fe).
 - `verdict_bundles` now names `results/2026-10-22-virtual-run3/virtual-malloc`, the board's reference.
+
+**What the reference image hashes still depend on:** the SDK's own include and resource directories are not prefix-mapped, so a board rebuild hash-equals the reference only from the same SDK path, `/mnt/hdd/<user>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk` (sdk.json f5145cbb), with the same toolchain. The same checkout or raw directory is not required.

@@ -90,3 +90,5 @@ prediction is the virtual run's reading, row for row.
 - rlua_userdata_uaf's image equals the independent build from two other raw directories (c71042a12c4c6d72).
 - The references are now `xlang/{repro,lua-cdp}/results/2026-10-22-virtual-run2/virtual-malloc`. Run 1's bundles stay
   beside them.
+
+**What the reference image hashes still depend on:** the SDK's own include and resource directories are not prefix-mapped, so a board rebuild hash-equals the reference only from the same SDK path, `/mnt/hdd/<user>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk` (sdk.json f5145cbb), with the same toolchain. The same checkout or raw directory is not required.
