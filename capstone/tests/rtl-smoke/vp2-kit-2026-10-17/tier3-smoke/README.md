@@ -6384,3 +6384,31 @@ The next benchmark is the bug corpus's Juliet temporal set. The compiler lane is
   - pc=0, DRT1, FRTY, Oops, INJS and INJL 0 in every transcript.
   - A cause-13 uaf control (tree B's 2 of 24 in the temporal set) would void its batch. It is a known reading, not a
     finding.
+
+### The spatial sample's probe phase, resumed (2026-10-22 10:1x, pre-registered before its boot), and tree A's cells
+
+- **What stopped:**
+  - Board 1's run phase completed 24 of 24 batches (03:29-10:06, 23,859 s, no batch void).
+  - The script then stopped before probe: `JS STOP: the hub refused the booking (409) before probe ... overlaps the
+    booking of board-lane`.
+  - The 409 was this lane's own manual run booking (id 100). The script's 560-minute run booking had been refused as
+    over the hub's 8 h cap, so I booked 480 minutes by hand, and that booking was still live when probe asked.
+  - So the probe, judge.py, the verdict tally and the per-transcript readings never ran.
+  - Board 2 runs the same script and meets the same refusal.
+  - The fix to the original script (run booking ≤ 480 min) waits until no board is running it.
+- **`tier3-juliet-spatial-resume.sh`** is the original script with exactly three changes:
+  - it requires a completed run phase (24 completed=True, 0 completed=False, the "24 batches in" line) instead of a
+    fresh root;
+  - it refuses an existing probe/ or results/;
+  - its phase loop is probe only.
+  Its probe, judge, verdict and readings commands are the original's, byte for byte.
+- **Dry run** (`dryrun-juliet-spatial-resume.txt`, stubbed):
+  - on a copy of board 1's completed run, it reaches its last line;
+  - a root with no run, a root with probe/ present, and a run.log cut to 20 of 24 batch lines each refuse.
+- **Predictions:** the pre-registration above, unchanged. probe exits 0 and reads sizeof ptr 16; judge.py's tallies
+  are as predicted there; pc=0, DRT1, FRTY, Oops, INJS and INJL are 0 in every transcript.
+- **Tree A's cells, read before the probe boot (10:07):**
+  - `juliet-obs-compare.py` against tB-mimic reads **1513 of 1513 cells the same, 0 different, 0 tolerated, exit 0**.
+  - The three value-dependent CWE170 cases happened to read as tB-mimic did too.
+  - Census of the 1654 steps, identical on both sides: exit 0 834, cause 28 768, cause 25 48, cause 24 4.
+  - Control on this run's own file: one control cell's cause 28 rewritten to 25 reads 1512 of 1513 and exits 1.
