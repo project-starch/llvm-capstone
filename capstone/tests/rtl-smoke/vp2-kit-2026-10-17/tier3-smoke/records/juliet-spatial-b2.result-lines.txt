@@ -1,0 +1,21 @@
+# Juliet spatial sample, board 2 / tree B (bkit7-rev2xBDN2, caplifive_vp2c_8de3c48cf), 2026-10-22. Result lines only.
+# run: tier3-juliet-spatial.sh (49b04ff8ef6c); probe/judge/readings: tier3-juliet-spatial-resume.sh (dcf0ed0965de).
+JS NOTE: booking failed rc=2 (BOOK FAILED 400: {"error":"a booking is 15 min to 8 h"}); continuing unbooked
+JS run BEGIN 03:29:09 board 2 booking none
+JS run END rc=0 10:21:28 :: 24 batches completed, 0 not :: 24 batches in 24739.0 s -> <mnt-hdd>/capstone/t3-run-treeB/juliet-spatial/run/observations.json
+JS STOP: the hub refused the booking (409) before probe: BOOK FAILED 409: {"error":"overlaps the booking of board-lane"}
+JS probe BEGIN 10:22:00 board 2 booking 103
+UNBOOK 103: 200
+JS probe END rc=0 10:29:51 :: 0 batches completed, 0 not :: {"sizeof-ptr": {"double*": "16", "double": "8", "int64_t*": "16", "int64_t": "8", "struct*": "16", "struct": "8"}}
+JS judge rc=75 :: CWE-127: caught 0 missed 0; bad {'NO-READING:unattributed(STRICT-FAIL:no-oob-line)': 74, 'NO-READING:batch-void': 19}; good {'CORRECT': 74, 'NO-READING:batch-void': 19}; strict {} runs: {'census': (21, 24)} 
+JS verdicts: 755 {('NO-READING:batch-void', 'NO-READING:batch-void', ''): 83, ('NO-READING:unattributed(STRICT-FAIL:no-oob-line)', 'CORRECT', '28'): 633, ('MISSED', 'CORRECT', ''): 22, ('INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:no-oob-line)', 'CORRECT', '28'): 4, ('INTRA-OBJECT:NO-READING:unexpected-cause', 'CORRECT', '24'): 4, ('NOT-TRIGGERED:sizeof-ptr', 'CORRECT', ''): 9}
+JS MISSED rows: 22 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_01
+JS readings: 25 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board2 DONE 10:29:58
+# juliet-obs-compare.py against juliet-sp/tB-mimic/run/observations.json, --tolerate the three CWE170 cases (exit 1):
+1512 of 1513 cells the same, 1 different, 0 tolerated
+DIFF controls:ctl-uaf: board reads cause 13 (a load page fault) at control_read_probe+0x38 in 3 of 48 runs (ctl-uaf-0 of batch000, batch017, batch023) where the reference reads cause 25 in 48 of 48
+# against tree A's observations (no tolerance, exit 1): the same single cell
+1512 of 1513 cells the same, 1 different, 0 tolerated
+# verdict rows against tB-mimic's spatial-verdicts.tsv: 755 and 755; the same 22 MISSED; differing rows: CAUGHT -> NO-READING:unattributed(STRICT-FAIL:no-oob-line) 633, CAUGHT -> NO-READING:batch-void 83, intra-object reason text size-32 -> no-oob-line 4
+# against tree A's rows: only the 83 batch-void rows differ

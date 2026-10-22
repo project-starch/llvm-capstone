@@ -6852,3 +6852,44 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
     canary's two passes did. Two runs cannot rule out a rarer nondeterminism.
   - This is the bare profile. vp2 under Linux in the virtual profile (Tier 1/2 and the corpus bundles of Tier 3)
     waits on the flat-table module and the pinned kit.
+
+## Juliet SPATIAL on vp2 silicon: every image of a 755-case stratified sample faults or exits exactly as the QEMU silicon-mimic reference, on both trees (caplifive_vp2c_8522d72fe and caplifive_vp2c_8de3c48cf, 2026-10-22)
+
+- **What ran:**
+  - The compiler lane's stratified spatial sample: 755 Juliet cases, every one of the 261 functional variants of CWE
+    121, 122, 124, 126 and 127, at flow roles 01, 54 and 67.
+  - Census build: build.json 806cc24afbc10194, image-set digest 83fddeb7deb79e77, on the cw r60 SDK.
+  - Run on both vp2 trees in parallel: board 1 (tree A, caplifive_vp2c_8522d72fe) and board 2 (tree B,
+    caplifive_vp2c_8de3c48cf). 24 cold-boot batches per tree, module 54d8a3af, launcher b27afefc.
+  - The folder is `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/`. The result lines are
+    `records/juliet-spatial-b{1,2}.result-lines.txt`; the pre-registration is lane commit 49b04ff8ef6c.
+- **The grade is cell by cell against the same build on QEMU** (the compiler lane's tB-mimic run). For each image it
+  compares the exit, the fault cause, the fault site (symbol + offset) and whether it timed out. The tool is
+  `juliet-obs-compare.py`, whose planted-change control fires.
+
+| | tree A | tree B |
+|---|---|---|
+| image cells equal to QEMU | all | all |
+| all cells, with controls | 1513 / 1513 | 1512 / 1513 (the uaf control, below) |
+| bad images faulting at QEMU's site, cause 28 | 716 | 716 |
+| MISSED (the same 22 cases as on QEMU) | 22 | 22 |
+| NOT-TRIGGERED, pointer-size dependent | 9 | 9 |
+| good images CORRECT | 755 / 755 | 755 / 755 in their cells (672 counted, 83 in void batches) |
+| pc=0, DRT1, FRTY, Oops, INJS, INJL over 25 transcripts | 0 | 0 |
+
+- **What it supports:** on vp2 silicon, spatial detection over this sample behaves image for image as the QEMU
+  silicon-mimic reference. Compact bounds are exact below 4 KiB (cap_compress.c:49), and every Juliet spatial buffer
+  is below that (the compiler lane's reading), so this sample tests detection, not rounding.
+- **What it does not:**
+  - judge.py's CAUGHT verdict needs QEMU's own "Cap mem access OOB" line, which silicon never prints. On a board every
+    catch therefore reads NO-READING:unattributed. The attribution of a fault to the overflowed object exists on QEMU
+    only.
+  - The 22 MISSED are not silicon readings. They miss identically on QEMU: six wchar_t snprintf variants at all three
+    roles, and four CWE126/CWE170 cases.
+- **The uaf control's cause 13:**
+  - The runner's use-after-free control normally faults with cause 25, at the revocation check. In some runs it
+    faults instead with cause 13, a load page fault, at the same instruction and the same address.
+  - Juliet readings: tree B 3 of 48 runs, tree A 0 of 48. judge.py requires 25, so those 3 batches on tree B are void.
+  - A dedicated repeat of 120 runs per tree in one boot read **2 of 120 on tree A and 5 of 120 on tree B**. The reading
+    is on both trees, not one, and the launcher trace is identical for both causes.
+  - In both causes the use-after-free read is stopped.
