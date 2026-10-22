@@ -69,6 +69,12 @@ struct context {
      * faults, so counting the zeros here is the same quantity the paged word held, not an estimate.
      * Reset by the collection that reclaims the retired records. */
     unsigned long retired_flat;
+    /* Batch item 6 (generations in virtual ids, isa.md 2026-10-20): on a bitstream that recycles under
+     * the virtual flag, a successful CSRETIRE also PUSHES the record onto the table's free list, so it
+     * is counted in free_count at once and must not also count as retired-awaiting-collection. Counted
+     * per retire from free_count before and after, so one module reads correctly on both bitstreams:
+     * on one without the item free_count never moves and pushed_flat stays 0. */
+    unsigned long pushed_flat;
     wait_queue_head_t remap_wait;
     struct arena *remapping;
     struct page **remap_pages;
@@ -149,9 +155,10 @@ MODULE_PARM_DESC(node_flat_records,
 #endif
 #define CV_FLAT_BYTES (CV_FLAT_RECORDS * CAP_REV_TABLE_RECORD)
 /* S-23 (2026-10-20): the first id a context's table allocates. On vp2 a CPMP entry tracks its
- * capability's revnode by INDEX only (pmp_data_if.sv: the 16-bit compare is deliberate, so a
- * (generation, index) split keeps invalidating), and a context's table is a SEPARATE namespace
- * whose indices the same compare cannot tell from the caller's physical ones. A CSRETIRE in
+ * capability's revnode id, and a node id carries no NAMESPACE identity: a context's table is a
+ * separate namespace whose ids (generation 0 in both) cannot be told from the caller's physical
+ * ones, so a broadcast from one clears a tracker of the other (the operative defect, corrected at
+ * dev 735205b29f79; the CPMP's index-only compare is a second, separate collapse). A CSRETIRE in
  * retire()'s window broadcasts the retiring ancestor's VIRTUAL index; when that index equals the
  * PHYSICAL node of a caller entry -- on sql0, slot 3's region 14, the kernel's RAM, a LINEAR piece
  * the monitor carved at boot from a pool whose ids start at 3 (board lane sql0-frs, 2026-10-20) --
@@ -216,12 +223,15 @@ module_param(pin_ahead_pages, ulong, 0444);
 #define CV_DESC_NONLIN 0x100UL
 
 static unsigned long node_retired(const struct context *c)
-{ return node_table_flat ? c->retired_flat : c->table[5]; }
+{ return node_table_flat ? c->retired_flat - c->pushed_flat : c->table[5]; }
 
 static unsigned long node_capacity(const struct context *c)
 { return c->table[0] & ~CAP_REV_TABLE_FLAGS; }
+/* Slot 1 word 0 is {2'b0, next[29:0], 2'b0, prev[29:0]} = {free_count, free_head}. */
+static unsigned long node_free_count(const struct context *c)
+{ return READ_ONCE(c->table[2]) >> 32; }
 static unsigned long node_available(const struct context *c)
-{ return node_capacity(c) - c->table[1] + (c->table[2] >> 32); }
+{ return node_capacity(c) - c->table[1] + node_free_count(c); }
 
 /* The flat table is one physically contiguous allocation: select_root() publishes
  * virt_to_phys(c->table) into CSR 0x5c1, and QEMU's flat preflight requires the whole
@@ -622,7 +632,7 @@ static int ensure_nodes(struct context *c, unsigned long required)
     if (owner && node_retired(c) >= max(required - available, collect_min)) {
         error = collect(c, owner);
         if (error) return error;
-        c->retired_flat = 0;
+        c->retired_flat = c->pushed_flat = 0;
         collected = true;
         if (node_available(c) >= required) return 0;
     }
@@ -771,6 +781,7 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     if (a->ancestor_retired) {
         status = 0;
     } else {
+        unsigned long free_before = node_free_count(c);
         preempt_disable(); local_irq_save(flags);
         old = select_root(c);
         asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
@@ -778,7 +789,10 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         restore_root(old);
         local_irq_restore(flags); preempt_enable();
         if (status && !destroying) return -EIO;
-        if (!status) ++c->retired_flat;   /* read only in flat mode; inert for the paged path */
+        if (!status) {                    /* read only in flat mode; inert for the paged path */
+            ++c->retired_flat;
+            if (node_free_count(c) > free_before) ++c->pushed_flat;
+        }
     }
     /* Clear every tag before returning frames to Linux. Later collection can
      * reuse dead IDs only after sweeping all remaining namespace storage. */
@@ -1243,7 +1257,7 @@ module_param(diag_escapes, bool, 0644);
 static unsigned escape_prints;
 #define CV_ESCAPE_BUDGET 16U
 
-#define CV_DIAG_TAG "node-floor-2"
+#define CV_DIAG_TAG "gen-push-1"
 
 /* WHICH LEVEL a diagnostic prints at is now a runtime choice, because the two readers disagree
  * and the disagreement is settleable by measurement rather than by argument. During board rungs
@@ -1688,7 +1702,9 @@ retry:
         {
             struct arena *fa = find_arena(c, r.frame, PAGE_SIZE);
             unsigned long st, old_root;
+            unsigned long free_before;
             if (!fa) { rc = -EINVAL; goto thread_unwind; }
+            free_before = node_free_count(c);
             preempt_disable(); local_irq_save(flags);
             old_root = select_root(c);
             asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
@@ -1702,7 +1718,10 @@ retry:
                 rc = -EACCES;
                 goto thread_unwind;
             }
-            if (!st) ++c->retired_flat;
+            if (!st) {
+                ++c->retired_flat;
+                if (node_free_count(c) > free_before) ++c->pushed_flat;
+            }
             fa->ancestor_retired = true;
         }
         INIT_LIST_HEAD(&t->link);
@@ -2029,7 +2048,7 @@ static int vm_release(struct inode *inode, struct file *f)
          * retired_flat), so a teardown whose retires were all rejected would look exactly like one
          * whose broadcasts no longer collide. This line makes the difference readable: one per
          * context, always KERN_EMERG because a verdict reads it. */
-        unsigned long attempted = 0, before = c->retired_flat;
+        unsigned long attempted = 0, before = c->retired_flat, pushed_before = c->pushed_flat;
         for (unsigned i = 0; i < CV_MAX_ARENAS; ++i)
             if (c->arenas[i].pages || c->arenas[i].address) {
                 if (!c->arenas[i].ancestor_retired) ++attempted;
@@ -2039,8 +2058,9 @@ static int vm_release(struct inode *inode, struct file *f)
                 retire(c, &c->arenas[i], true);
             }
         if (node_table_flat)
-            pr_emerg("capstone_vm: release retires attempted=%lu succeeded=%lu first_id=%lu\n",
-                     attempted, c->retired_flat - before, (unsigned long)CV_NODE_FIRST);
+            pr_emerg("capstone_vm: release retires attempted=%lu succeeded=%lu pushed=%lu first_id=%lu\n",
+                     attempted, c->retired_flat - before, c->pushed_flat - pushed_before,
+                     (unsigned long)CV_NODE_FIRST);
     }
     list_for_each_entry_safe(t, tmp, &c->threads, link) {
         list_del(&t->link);
