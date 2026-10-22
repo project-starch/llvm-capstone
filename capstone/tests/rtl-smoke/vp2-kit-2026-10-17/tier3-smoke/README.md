@@ -6884,3 +6884,38 @@ Records: `records/uaf-repeat-pte-b1.result-lines.txt` and `records/uaf-repeat-pt
   - Whether the revocation check ALLOWED in those runs (the runtime lane's reading) or was merely outranked for a
     cycle (the compiler lane's) is the question for the two stale-read arms now running: a retired region kept
     mapped on board 1, and a freed object on a live page on board 2.
+
+### The RTL lane's simulation of the cause-13 shape, recorded before either stale-read arm's result (2026-10-22 ~12:5x)
+
+The RTL lane reports this result (a claim, not re-read here). capstone-ariane branch rvk-unmap-cause 8456df2bb, test
+verif/tests/custom/capstone/rvk-unmap-cause.S, run on 05d209acb, whose LSU/MMU/PTW files equal bf3db3175's apart from
+S-23's flush_all plumbing.
+
+- **No ordering hole on the revoke path.** A load through a revoked capability to an unmapped page reads cause 25 at
+  every point of 24 arms, varying:
+  - the gap between retire and load (0-256 nops);
+  - the stores before the load (0-16);
+  - whether the id is resident in the LSU revocation cache;
+  - whether the revoke happened in a previous context entry.
+  - Why: the cap exception is registered in the request's own cycle and delivered the next, so misaligned_ex_q reads 1
+    in the first WAIT_TRANSLATION cycle. The PTW error never reaches the load unit.
+  - Control: with the child LIVE and the page unmapped, the load reads 13 with one PTW error and no cap exception.
+  - **So the compiler lane's ABORT-cycle hole is refuted in simulation.**
+- **The one shape that reads 13:**
+  - the monitor retires the child with CSRETIRE (csupctl bit 3, the table namespace) right after the context's exit;
+  - the CSRETIRE answers 0 = ACCEPTED; executed again, it answers 1;
+  - a bare read of the table then shows the record still VALID, generation 0, with an empty free list. **The accepted
+    retire wrote nothing.**
+  - The next entry's load through the child is ALLOWED: 13 if the page is gone, and with the page mapped it COMPLETES
+    and reads the data.
+  - Its readout's positive control: a CREVOKE inside the context reads VALID 0, free list {3, count 1}, and the load
+    reads 25.
+- **What it predicts here:**
+  - In simulation a 13 always means the check ALLOWED.
+  - If the module's retire on silicon reaches that shape, **board 1's keep-retired arm reads SILENT at about the 13
+    rate** (the runtime lane's prediction, now with a mechanism).
+  - Board 2's mapped arm (an object revoke, not a CSRETIRE) is predicted 0 SILENT.
+  - rvc_den_v_q would be CLEAR on a 13 run and SET on a 25 run, not the reverse as earlier suggested.
+- **Whether the module's retire reaches that shape on silicon is the runtime lane's question.** One reading the RTL
+  lane offers: the retired record's VALID bit in the context's table after the retire returns, on a 13 run against a
+  25 run.
