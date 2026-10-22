@@ -141,3 +141,12 @@ The bundle is `results/2026-10-22-virtual/virtual-malloc`, and the verdicts belo
   function).
 - **Run 1's bundle stays as the record of the pre-registered reading.** `verdict_bundles` moves to run 2's only if run
   2 reads as predicted.
+
+**Result, run 2** (2026-10-22 18:33-18:34, at b8f4f78fa9c7): **as predicted.** Every row reads as in run 1, except row
+11, which now reads CAUGHT (cause 2 at `invalid_free`, by function).
+- The tally: CAUGHT 12, NO-READING:out-of-denominator 7.
+- Classes: null-deref 3 (rows 12, 14 cause 24 in `main`; row 13 cause 12), none 3 correct and 1 without a program.
+- `verdict_bundles` now names `results/2026-10-22-virtual-run2/virtual-malloc`. Run 1's bundle stays beside it.
+
+**For the board (vp2-malloc):** the same invocation with `--board-kit <kit>` in place of `--virtual-kit`. The bundle
+records `vp2-malloc` under the same configuration. Its prediction is run 2's reading, row for row.

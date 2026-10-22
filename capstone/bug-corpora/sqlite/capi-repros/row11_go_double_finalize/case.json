@@ -15,10 +15,9 @@
     },
     "virtual-malloc": {
       "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)",
-      "verdict": "NO-READING",
-      "verdict_note": "cause=2 pc=0x3f9aa11c00 in invalid_free; in invalid_free; declared ['cap_malloc_invalid_free']",
-      "verdict_from": "results/2026-10-22-virtual/virtual-malloc",
-      "verdict_reason": "unattributed"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=2 pc=0x3f85211c00 in invalid_free; by function: invalid_free is the row's declared site (the allocator refusing the free)",
+      "verdict_from": "results/2026-10-22-virtual-run2/virtual-malloc"
     },
     "vp2-malloc": {
       "oracle": "virtual profile, SQLite 3.53.3 on virtual mallocng (tools/arms.json virtual-mallocng; shared/run-virtual.py): a heap-use-after-free or bad-free row is CAUGHT by a fault in its declared fault_sites after main began, MISSED when it completes; a null-deref row is its own class and a none row is correct at exit 0, neither scored as a temporal catch (the project lead's decision, 2026-10-22)",
