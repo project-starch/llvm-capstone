@@ -467,3 +467,22 @@ last ADD_OK or refusal line are read from each serial.
 - **If the variant still dies at startup,** the cap is not the cause, and the last ADD_OK or refusal line is reported.
 - **If the variant faults elsewhere first** (per-object bounds catching some other access in CPython's startup or
   unittest), that is read as it is, not as this defect.
+
+**Result** (2026-10-22 18:56-18:58, domain A, one boot each): **every pre-registered reading holds.**
+
+| launcher | call | reading | highest ADD_OK slot (lines) | high_water | allocated_total |
+|---|---|---|---:|---:|---:|
+| b27afefc (512) | recorded, malloc | `ABR RAISED MemoryError` at startup, exit 1 | 511 (695) | 20,829 | 36,244 |
+| b27afefc (512) | minimal, malloc | `MIN BEGIN`, then MemoryError before `MIN IMPORTED` | 511 (672) | 21,332 | 35,107 |
+| fad465ce (8192) | recorded, malloc | reaches `test_non_str_kwarg`, then cause 28 in `unicode_fromformat_write_str` | 1,765 (3,264) | 113,423 | 295,593 |
+| fad465ce (8192) | minimal, malloc | `MIN IMPORTED`, then cause 28 in `unicode_fromformat_write_str` | 754 (992) | 31,677 | 55,411 |
+
+- **The cap is the startup blocker, by the one variable.** The control stops at the 512th mapping on both
+  instruments, as the kit's own launcher did. With 8,192 the interpreter starts and registers past 511.
+- **lt0 13's mechanism is now measured on the guest.** Once each object carries its own bounds, the defect's read past
+  the 16-byte `object()` faults with cause 28 at the declared site, in `unicode_fromformat_write_str`, as lt1 reads it.
+  So the lt0 arm's recorded MemoryError is that same read, running uncaught inside a pymalloc arena's capability.
+- **The cell's verdict is not changed here.** As configured (pymalloc), the arm ran the defect and did not catch it,
+  which supports reading it MISSED rather than NO-READING:infra. That reclassification is the judge's and the lead's.
+- **Not a sizing reading:** 113,423 records is the recorded call under PYTHONMALLOC=malloc, an instrument
+  configuration rather than any corpus arm's. The corpus maximum stays lt1 13's 106,274.
