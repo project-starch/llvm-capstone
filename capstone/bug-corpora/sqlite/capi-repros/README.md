@@ -167,3 +167,9 @@ records `vp2-malloc` under the same configuration. Its prediction is run 2's rea
   - Predicted: every row reads as in run 2. Only the image hashes change, and from now on they are the same for any
     checkout and raw directory.
   - If run 3 holds, `verdict_bundles` moves to it, and it is the reference the board's image check uses.
+
+**Result, run 3** (2026-10-22 18:45-18:46, at fd732cc48611): **as predicted.**
+- Every row's verdict, reason, cause and symbol equals run 2's; all 18 image hashes changed.
+- The hashes are reproducible: rows 1 and 11 equal the independent builds from two other raw directories and a second
+  repo root (1328034ed2872e67, c027fedd724705fe).
+- `verdict_bundles` now names `results/2026-10-22-virtual-run3/virtual-malloc`, the board's reference.

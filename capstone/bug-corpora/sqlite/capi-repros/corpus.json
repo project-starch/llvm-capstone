@@ -43,6 +43,6 @@
     "vp2-malloc": "virtual-mallocng"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-22-virtual-run2/virtual-malloc"
+    "virtual-malloc": "results/2026-10-22-virtual-run3/virtual-malloc"
   }
 }

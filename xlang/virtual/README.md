@@ -84,3 +84,9 @@ prediction is the virtual run's reading, row for row.
 - **Run 2:**
   - Predicted: every row reads as in run 1, with only the image hashes changed.
   - If it holds, run 2's bundles replace run 1's as the reference.
+
+**Result, run 2** (2026-10-22 18:46, at fd732cc48611): **as predicted.**
+- Every row's verdict, reason, cause and symbol equals run 1's in both corpora; all 17 image hashes changed.
+- rlua_userdata_uaf's image equals the independent build from two other raw directories (c71042a12c4c6d72).
+- The references are now `xlang/{repro,lua-cdp}/results/2026-10-22-virtual-run2/virtual-malloc`. Run 1's bundles stay
+  beside them.
