@@ -751,11 +751,12 @@ static void clear_page_tags(struct page *page)
         WRITE_ONCE(p[j], READ_ONCE(p[j]));
 }
 
-/* retire_verify (2026-10-22): CHECK THE RECORD, NOT THE STATUS. The RTL lane's directed sim
- * (capstone-ariane rvk-unmap-cause 8456df2bb) found a CSRETIRE that answers 0 (accepted) and writes
- * nothing, when it follows a context exit with a namespace-switching CSR write beside it -- the
- * shape of this function -- and vp2's uaf control reads cause 13 instead of 25 in ~2 % of runs,
- * which the RTL reads as a load through a region capability the retire did not revoke. So, in a
+/* retire_verify (2026-10-22): CHECK THE RECORD, NOT THE STATUS. vp2's uaf control reads cause 13
+ * instead of 25 in ~2 % of runs, which the RTL reads as a load the capability check did not deny
+ * (rvk-unmap-cause: a 13 on a revoked capability needs the check to ALLOW). One way that could happen
+ * is a retire that answers 0 and does not take effect. The RTL lane first reported exactly that from
+ * a directed sim and RETRACTED it the same day (the arm passed a capability, not the id, so every
+ * retire was refused): NO mechanism is shown. This reads the retire's effect directly. So, in a
  * FLAT table, the ancestor's record (id N at table word 2N; word 1 carries VALID at bit 60) is read
  * BEFORE the CSRETIRE, where it must be VALID -- the instrument's own positive control, every
  * call -- and AFTER an accepted one, where it must not be.
