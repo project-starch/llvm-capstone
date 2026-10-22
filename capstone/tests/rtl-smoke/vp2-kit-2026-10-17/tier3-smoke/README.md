@@ -7765,3 +7765,28 @@ Record: `records/hold-batch-b1.result-lines.txt`.
   - **matrix-compare against the tick reference: 23 of 23 cells the same**, with fault 20 and completed 3;
   - control smoke ok;
   - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0, and the boot completes.
+
+### perl stock and Sublet on the batch bitstream, board 2: pre-registered (2026-10-23 04:0x, before the boots)
+
+- **Why:** the corpus arms beyond the pass. Bitstream 2 has no netlist, because its second build was killed in
+  synthesis, so board 2 is free and stays on the batch bitstream.
+- **What runs:** `tier3-mp-perl-batch.sh 2 <log> perl-stock perl-sublet`. It is tier3-mp-arm.sh's perl path with what the
+  batch changes:
+  - kit bkit8-batch-b2;
+  - the compiler lane's TRIMMED batch references, `batch-refs-r60/batch/perl-{stock,sublet}-trim` (dev 120360c608dc,
+    pre-registered at lane f83b8ffde608). They run on qkit7-batch2 (qemu ecaf50bb, module a05c198b) with --lib-closure
+    2a472e21, the board's staging, and read full = trimmed 11 of 11 per arm;
+  - the r60 images, corpus-mp-r60/cw: perl-stock 76f1141d and perl-sublet bec05c86, runtime 4a5e480c;
+  - wt-ref2 at the stamp's tree, 15ced322c824, with the runner aabfa668 and the arm script 11967b37 pinned by the
+    stamp. EXPECT_IMAGES comes from the reference's collected images.
+  - The stamp must name this kit's qemu and module, this image and this closure.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/mp-perl-*`.
+- **Dry run** (`dryrun-mp-perl-batch.txt`):
+  - 11 of 11 per arm; a planted cause change reads 10 of 11;
+  - failed controls read VOID;
+  - it stops on the arm script's refusal (78), a non-perl tag, an incomplete boot, and a busy board.
+- **Predictions:**
+  - **perl-stock: 11 of 11 the same** (fault 6, completed 4, exit255 1);
+  - **perl-sublet: 11 of 11 the same** (fault 8, completed 3);
+  - both arms' eval and shim controls pass;
+  - FRTY, DRT1, Oops, INJS, INJL and pc=0 read 0, and each boot completes.
