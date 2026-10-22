@@ -7646,3 +7646,39 @@ three cells.**
      records. It is a corpus boot, pre-registered separately: the compiler lane's hold.c, or cpython lt1's capacity
      cells 02 and 13.
 - **Aperture note for this bitstream:** 225's bit 7 (trace_buf_empty) reads a constant 1.
+
+### live-peak `hold 100000`: the 18-bit index on silicon, a matched pair (board 1 batch control, board 2 bitstream 2), pre-registered (2026-10-23 02:1x)
+
+- **Why:**
+  - Tier 1 cannot show bitstream 2's larger index: its harness sets node_flat_records=4096.
+  - The discriminator is a context at the module's DEFAULT capacity that holds more than 65,535 live records. The
+    runtime lane named it; the compiler lane supplied the program, on dev at 29c47723586f and pre-registered at lane
+    2624d2261578.
+- **The program:** image `<mnt-hdd>/capstone/live-peak/hold.dom`, sha256/16 433f9f1cdcd0db9f.
+  - It rebuilds byte for byte from dev's hold.c with the batch SDK's capstone-cc -O2.
+  - One process: `hold 100000`, cwd /tmp.
+- **What runs:**
+  - `tier3-hold-batch.sh <board> <kit> <after> <ERE> <log>` → `tier3-hold-board.py`. It is one boardvm boot (wt-newarms
+    at bcf5f1724110) of the compiler lane's QEMU steps: `capstone-vexec --stats`, the hold, then `--stats` again.
+  - The kit must carry no module parameters, and must be the board's batch kit (module 21fbfc39) or its bitstream-2 kit
+    (module 215a09be).
+  - Board 1, the batch control: bkit8-batch-b1, after its new arms end (NA seq-1 DONE, STOP or HOLD).
+  - Board 2, bitstream 2: bkit9-b2-b2, launched after its first boots read as pre-registered.
+  - Output goes to `<mnt-hdd>/capstone/t3-run-hold-<bitstream>-b<board>`.
+- **Dry run** (`dryrun-hold-batch.txt`): boardvm stub transcripts for a completed hold, a refusal and a wedge; a wrong
+  kit and a busy board refuse.
+- **Predictions:**
+  - **Board 1, batch** (QEMU qkit7-batch2, module a05c198b, the same source as 21fbfc39):
+    - `HOLD-NULL at` about 60,590, exit 71, no fault;
+    - high_water 64,001, allocated_total 64,001, node_capacity 65,536.
+    - malloc refuses with 511 records left. The HOLD-NULL count depends on the baseline the process holds before its
+      loop (3,411 on QEMU), so the count is read with that tolerance, and high_water 64,001 is the exact reading.
+  - **Board 2, bitstream 2** (the 18-bit twin qkit7-b2twin3-q8, module 33254735, launcher fad465ce):
+    - `HOLD-PEAK 100000`, `HOLD-OK 100000`, exit 0, no fault;
+    - high_water 105,569, allocated_total 105,569, node_capacity 262,144.
+  - Both boards: FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 read 0.
+  - **What would decide it:**
+    - board 2 completing with high_water above 65,535 is the 18-bit index working on silicon;
+    - a refusal at 64,001 on board 2 would mean the 16-bit table is still in force;
+    - a fault, or a wedge in the hold step, is a finding against the new RTL. It is read no further than its first
+      failure.
