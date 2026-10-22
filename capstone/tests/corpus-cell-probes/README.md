@@ -179,3 +179,258 @@ counters). Each boot runs case 18 on the new image, then case 18 on the batch im
     which allocates more than the defect path does. Its 67,886..68,607 is that path's peak, not a part of the cell's.
   - That claim reached dev at edcc82c79912 and is retracted there.
 - **lt1 18's demand is 66,682..67,583 live records.** The maximum stays lt1 13's 106,272, so the sizing is unchanged.
+
+## Bitstream 2 predictions: the capacity cells on the RTL-pinned twin (pre-registered 2026-10-22, before the runs)
+
+**What it predicts:** what the corpus's ten record-capacity cells (all lt1) and lt0 18 will read on bitstream 2
+(capstone-ariane `vp3-index18` 5d365d9a6, an 18-bit index on a flat table).
+
+**The kit:** qkit7-b2twin2-q8.
+- QEMU 708bbff5663f0e86: capstone-qemu `virtual/flat-index-18` 46b69c03a4, pinned to the RTL at d44c9441b.
+- Module 3325473537072a3a: capacity 262,144.
+- Everything else is qkit7-batch2's.
+
+**The images:** the batch recipe plus application mremap, and nothing else.
+- lt1 uses 8bcc40cf13731e12 and lt0 uses 7b871db70b7ec373, both relinked above.
+- The recipe is not a build from dev. Dev carries mremap (b439b7a267c3) but not the board recipe:
+  - `CAPSTONE_VIRTUAL_MOVC_KEEP=OFF` (8f132305eea1);
+  - the integers-first slot offsets (5620badda510);
+  - `CAPSTONE_SDK_EXTRA_CODEGEN` (5b3e6b7939af).
+  Dev's runtime has also moved past the batch runtime: a 2 GiB region limit, 8,192 arenas and the madvise change.
+- So the relink is the batch image with one change.
+
+**The runs:**
+- Every call of each cell (the case and its control or probe) gets its own boot, from the batch-refs-r60 session with
+  the image swapped. That is 20 boots on QEMU domains A and B.
+- Module stats accumulate over a boot, so one call per boot gives each call its own high_water and allocated_total.
+- Runner: `b2-pred/run-pred.sh`. Its parser was tested before any boot:
+  - it reads the gate's lt1 13 output correctly;
+  - it reports NO DATA, exit 2, on a two-call output and on a missing file.
+
+**The prediction, per call.** The reference is the paged kit's row in `capstone/tests/live-peak-sizing/cells.tsv`.
+- **Result class and fault site:** the same as the reference, with no cause 30 and no MemoryError in serial.
+  capacity reads 262,144.
+- **high_water:** inside the reference's live-peak bracket, widened by 300 either side. The gate read 106,271 and
+  106,197, one below the brackets' lower ends.
+- **allocated_total:** EXACTLY the reference's module count. The gate reproduced 281,516 and 280,614 on the batch image.
+  A difference means the call reaches the new mremap or the relinked layout matters; that cell's allocations are then
+  read again, and the result class still decides.
+- **lt1 18:** cause 28 in `mmap_ass_subscript`, high_water 66,424..67,024 (66,724 on the first twin, ±300). No
+  SystemError, and no exact allocation count is predicted.
+- **lt0 18:** cause 28 in `mmap_ass_subscript`, as on the batch kit; lt0 is not capacity-bound, so high_water stays
+  below 65,536.
+
+| call | result and site | high_water band | allocated_total |
+|---|---|---:|---:|
+| lt1 02 case | cause 28 `memcpy` | 105,898..106,795 | 280,614 |
+| lt1 02 control | exit 0 | 74,466..76,075 | 281,183 |
+| lt1 10 case | cause 28 `l_divmod` | 79,783..81,195 | 219,402 |
+| lt1 10 control | exit 0 | 79,790..81,195 | 220,865 |
+| lt1 13 case | cause 28 `unicode_fromformat_write_str` | 105,972..106,795 | 281,516 |
+| lt1 18 case | cause 28 `mmap_ass_subscript` | 66,424..67,024 | n/a |
+| lt1 19 case | cause 25 `fnv` | 64,877..65,835 | 174,939 |
+| lt1 19 probe | cause 25 `fnv` | 64,303..65,835 | 173,796 |
+| lt1 19 control | exit 0 | 64,390..65,835 | 177,214 |
+| lt1 23 case | cause 25 `memchr` | 74,672..76,075 | 267,453 |
+| lt1 23 control | exit 0 | 72,569..74,027 | 264,737 |
+| lt1 27 case | cause 25 `slot_nb_add` | 71,393..73,003 | 278,149 |
+| lt1 27 control | exit 0 | 71,465..73,003 | 281,162 |
+| lt1 28 case | cause 25 `_PyEval_Vector` | 76,206..77,099 | 313,843 |
+| lt1 28 control | exit 0 | 76,262..77,099 | 316,941 |
+| lt1 30 case | cause 25 `PyObject_RichCompare` | 76,229..77,099 | 314,758 |
+| lt1 30 control | exit 0 | 76,232..77,099 | 316,373 |
+| lt1 31 case | cause 25 `odict_copy` | 74,313..75,051 | 233,845 |
+| lt1 31 control | exit 0 | 82,064..83,243 | 348,197 |
+| lt0 18 case | cause 28 `mmap_ass_subscript` | below 65,536 | n/a |
+
+**What the board will add.** QEMU is the twin, not the silicon. On bitstream 2 a row predicts the board when the
+recipe's other gates hold, and the board batch carries the same images. A board row that differs from its twin row is a
+twin defect or a silicon defect, not a capacity reading.
+
+**Result** (2026-10-22 17:41-18:00, QEMU 708bbff5663f0e86, module 3325473537072a3a, one call per boot):
+
+| call | result and site | high_water | allocated_total |
+|---|---|---:|---:|
+| lt1 02 case | cause 28 `memcpy` | 106,197 | 280,614 |
+| lt1 02 control | exit 0 | 74,766 | 281,183 |
+| lt1 10 case | cause 28 `l_divmod` | 80,115 | 219,402 |
+| lt1 10 control | exit 0 | 80,104 | 220,865 |
+| lt1 13 case | cause 28 `unicode_fromformat_write_str` | 106,274 | 281,516 |
+| lt1 18 case | cause 28 `mmap_ass_subscript` | 66,716 | 196,527 |
+| lt1 19 case | cause 25 `fnv` | 65,191 | 174,939 |
+| lt1 19 probe | cause 25 `fnv` | 64,633 | 173,796 |
+| lt1 19 control | exit 0 | 64,692 | 177,214 |
+| lt1 23 case | cause 25 `memchr` | 75,000 | 267,453 |
+| lt1 23 control | exit 0 | 72,893 | 264,737 |
+| lt1 27 case | cause 25 `slot_nb_add` | 71,748 | 278,149 |
+| lt1 27 control | exit 0 | 71,792 | 281,162 |
+| lt1 28 case | cause 25 `_PyEval_Vector` | 76,490 | 313,843 |
+| lt1 28 control | exit 0 | 76,575 | 316,941 |
+| lt1 30 case | cause 25 `PyObject_RichCompare` | 76,523 | 314,758 |
+| lt1 30 control | exit 0 | 76,539 | **316,375** (predicted 316,373) |
+| lt1 31 case | cause 25 `odict_copy` | 74,605 | 233,845 |
+| lt1 31 control | exit 0 | 82,356 | **348,190** (predicted 348,197) |
+| lt0 18 case | cause 28 `mmap_ass_subscript` | 6,095 | 16,326 |
+
+- **HELD:** every call's result class and fault site, capacity 262,144, no cause 30, no MemoryError, no SystemError,
+  and every high_water inside its band. lt1 13 at 106,274 stays the largest demand.
+- **HELD for 17 of the 19 exact counts. NOT HELD for two:** lt1 30 control (+2) and lt1 31 control (−7), both calls
+  that complete. The pair below separates them.
+
+### Bitstream 2 predictions: two exact counts missed, and the pair that separates the causes (pre-registered before its boots)
+
+Two of the 19 exact allocated_total predictions missed, both on control calls that complete:
+- lt1 30 control read 316,375 against 316,373 (+2);
+- lt1 31 control read 348,190 against 348,197 (−7).
+The paged kit read each of these calls in one boot only, so its count has never been repeated.
+
+**The pair:** each of the two control calls, on domain B (b2twin2-q8), two boots on the batch image 916e14f9 and two on
+the mremap image 8bcc40cf, interleaved.
+
+**The reading:**
+- The batch image reads the paged counts in both boots, and the mremap image reads today's counts in both: the relink
+  moves these calls' allocations.
+- Either image disagrees with itself across boots: the count is boot-nondeterministic for these calls, and the exact
+  prediction was wrong to assume otherwise.
+
+**Result** (2026-10-22 18:06-18:20, domain B, b2twin2-q8, eight boots interleaved):
+
+| call | batch image 916e14f9 | mremap image 8bcc40cf (incl. the first reading) |
+|---|---|---|
+| lt1 30 control | 316,373; 316,373 | 316,375; 316,375; 316,375 |
+| lt1 31 control | 348,187; 348,169 | 348,190; 348,180; 348,197 |
+
+- **lt1 30: the relink.** Each image repeats its own count, and the batch image's is the paged kit's 316,373 exactly.
+  The mremap relink moves this call by +2 allocations, deterministically.
+- **lt1 31: boot nondeterminism.** Neither image repeats itself (a spread of 18 on the batch image, 17 on the mremap
+  image). The exact prediction assumed a repeatable count that one paged boot never established.
+- **For later pre-registrations:** a call that completes gets a band, not an exact count, until two boots agree. The
+  17 exact matches stand, and they include every faulting case.
+
+## lt0 13 (gh-144169): the MemoryError is the defect's own read, inside a pymalloc arena (pre-registered 2026-10-22, before the guest pair)
+
+**What the coverage file says now:** lt0 13 is NOT capacity; the likely reading was not measured.
+
+**The defect, from the source (CPython 3.13.7):**
+- `ast_type_init` (Python/Python-ast.c:5160) formats a non-str key with `%U`.
+- `unicode_fromformat_write_str` (Objects/unicodeobject.c:2561) then reads `PyUnicode_GET_LENGTH(str)` at offset 16 of an
+  `object()`, which is a 16-byte object. That read lands in the next 16-byte block, and its value becomes the length.
+- On lt1 every object has its own bounds, so the read faults at once: cause 28 in `unicode_fromformat_write_str`.
+
+**Host check, already run:** the 3.13.7 native build that the guest build bootstraps from (`build-python/python`), on
+the case's statement, five times per allocator. The outcome follows the bytes past the object:
+- PYTHONMALLOC=pymalloc: MemoryError 4 times out of 5, and TypeError once, after a warning naming `''`;
+- PYTHONMALLOC=malloc: 5 TypeErrors; 4 of the 5 warnings print neighbouring heap bytes as the key;
+- the debug allocators: the process dumps core.
+So under pymalloc the garbage length is most often huge, and the write of that length raises MemoryError. This is the
+defect's out-of-bounds read running uncaught, not an infrastructure stop.
+
+**Guest pair, one boot each on qkit7-b2twin2-q8 (the lt0 batch image 23a2f0cbd80ddfbe, the reference's call):**
+- **As recorded:** MemoryError (`ABR EXIT 1`), no domain fault, high_water well below 65,536.
+- **With PYTHONMALLOC=malloc added, the one change:** every `object()` is a virtual-malloc allocation with its own
+  capability. The read past it then faults with a bounds cause (28) in `unicode_fromformat_write_str`, as lt1 does,
+  with no MemoryError.
+  - If it does not fault, virtual-malloc's bounds for a 16-byte request cover bytes 16..23. That names the bound width,
+    not the defect, as the variable.
+  - The run is on the 18-bit table because per-object allocation multiplies records. high_water is recorded and no
+    band is predicted.
+- **Verdict if both hold:** lt0 13 is a MISSED by the arm's design. lt0 keeps pymalloc's arenas, so a 16-byte read past
+  a 16-byte object stays inside the arena's capability. It is not a NO-READING:infra.
+
+**Result** (2026-10-22 18:01-18:02, b2twin2-q8, domain A, one boot each):
+
+| call | reading | high_water | allocated_total |
+|---|---|---:|---:|
+| as recorded (pymalloc) | `ERROR: test_non_str_kwarg` ... `MemoryError`, exit 1, no fault | 7,753 | 20,810 |
+| PYTHONMALLOC=malloc | `ABR RAISED MemoryError` at startup, in `import pkgutil` (`_compile_bytecode`), exit 1, no fault | 20,829 | 36,233 |
+
+- **As recorded: HELD.** It reproduces the reference, and allocated_total equals the paged kit's 20,810.
+- **PYTHONMALLOC=malloc: NOT HELD, and VOID as a test of the defect.** The interpreter fails during runpy's import of
+  pkgutil, before the test runs: no `test_non_str_kwarg` line appears. The pre-registration had no not-reached branch.
+  It should have had one.
+- **The leading hypothesis for the startup failure, not tested:** the batch runtime caps registered mappings per
+  process at `CV_MAX_ARENAS` 512 (wire.h at 8f132305eea1; exec.c returns ENOSPC at the cap). Per-object malloc
+  multiplies mallocng groups, each one a mapping. Dev raised the cap to 8,192 for exactly this case. The table is not
+  the limit: 20,829 of 262,144 records.
+- **So lt0 13 stays as the coverage file has it:** not capacity, mechanism from the source and the host build, not
+  measured on the guest. It is not upgraded to "MISSED by design" on host evidence alone.
+
+**Next instrument (pre-registered here, before its boots): a minimal trigger.** A one-statement script
+(`trigger-min.py`: print `MIN BEGIN`, `import ast`, print `MIN IMPORTED`, then `ast.Name(**{object(): 'y'})` with
+`MIN RAISED <type>` or `MIN RETURNED`) run directly, without runpy, unittest or test.support. One boot each, as recorded
+and with PYTHONMALLOC=malloc, b2twin2-q8, the same image.
+- **pymalloc:** `MIN RAISED MemoryError` (or TypeError, when the neighbouring bytes read as length 0), no fault.
+- **malloc, if it reaches `MIN IMPORTED`:** cause 28 in `unicode_fromformat_write_str`.
+- **malloc, if it dies before `MIN IMPORTED`:** the startup blocker is not the test's import chain, and the next
+  instrument is an image whose runtime has the larger mapping cap. That is a second variable, and it would be named
+  as one.
+
+**Result** (2026-10-22 18:23, b2twin2-q8, domain A, one boot each):
+
+| call | reading | high_water | allocated_total |
+|---|---|---:|---:|
+| minimal, pymalloc | `MIN BEGIN`, `MIN IMPORTED`, `MIN RAISED TypeError`; exit 0, no fault | 3,394 | 5,897 |
+| minimal, PYTHONMALLOC=malloc | `MIN BEGIN`, then MemoryError inside `import ast` (no `MIN IMPORTED`); exit 1, no fault | 21,327 | 35,130 |
+
+- **pymalloc: HELD, on its TypeError branch.** The statement runs, and the garbage length read past the object was
+  small this time (the run 1 host check saw TypeError once in five). The outcome follows the neighbouring bytes,
+  as on the host build.
+- **malloc: the startup branch.** The interpreter dies importing `ast`, so per-object malloc fails before any test
+  code, whatever runs it.
+- **The startup cap is not the record table** (21,327 of 262,144). The candidate, `CV_MAX_ARENAS` 512, sits in two kit
+  components: the launcher (`exec.c`, built into capstone-vexec) and the module (`capstone_vm.c`).
+  - Testing it means a vexec and a module rebuilt with dev's 8,192, which is two kit components owned by the runtime
+    lane. That is not done here.
+  - **lt0 13 stays not measured on the guest.** Its mechanism comes from the source and the host build.
+
+## pb13q15 05: the canary, rebuilt to read instead of write (pre-registered 2026-10-22, before its runs)
+
+**The hypothesis (the coverage file's row):** the case's own `memset(next, 0x5a, 1)` writes byte 0 of the NEXT item.
+Under patch 0006 that byte is the item's `sublet_parent` capability, so the next `slabs_free` faults: cause 24 in
+`capstone_cap_revoke_child`. That is the FIXED run's failure.
+
+**The binaries:**
+- Built with the b13 q15 prebuilt's recorded recipe: capstone-cc from t3-freeze-nb-nomovc-cw-r60, the case flags from
+  build-cases.sh's capstone-application branch, linked against b13's own `libmemcached-allocators.a` and driver-virtual.c.
+- **Control:** the unmodified case.c rebuilt this way equals the prebuilt `defect-05` in .text, .rodata and .data. The
+  edited build differs in all three.
+- **Edited:** `before` is read from `next` rather than planted, and `damage` compares against it. The source diff is
+  three lines; the binary is `defect-05` bd4ec31316baa611 in a hardlinked copy of the b13 prebuilt
+  (`pb05-canary/pre-readcanary`).
+
+**The runs:** one boot each, wt-q15cw's run-virtual-cases.py with --only 05, on qkit7-batch2 (the reference's kit and
+arguments), for the prebuilt and for the edited copy.
+
+**The prediction:**
+- **Prebuilt:** as the reference, NO-READING:control-failed: the FIXED run faults with cause 24 in
+  `capstone_cap_revoke_child`, and the buggy run reads cause 28 at the chunk's end.
+- **Edited:** the FIXED run prints VERDICT FIXED and exits 0, and the buggy run still faults with cause 28 at the chunk's
+  end. The cell reads CAUGHT.
+- **Caveat for the corpus owner:** on arms without a Sublet slot, a read canary can be 0 already, so the buggy run's NUL
+  write would not show as `damage`. The corpus fix needs a nonzero sentinel that is not the slot, or a separate guard
+  byte. This test does not settle that, only the slot clobber.
+
+**Result** (2026-10-22 18:00, qkit7-batch2, wt-q15cw's runner 9b5e409c92e1fe66 at e2b26ea2c1e4, `--only 05`):
+
+| build | defect-05 | verdict | reading |
+|---|---|---|---|
+| prebuilt | 287e4f41484a8572 | NO-READING:control-failed | FIXED run: cause 24 in `capstone_cap_revoke_child`, address 0 |
+| read canary | bd4ec31316baa611 | **CAUGHT** | cause 28 at the labelled probe `write_probe`; FIXED run VERDICT FIXED, exit 0; all three controls fault |
+
+- **HELD both ways.** The planted canary is what clobbers the next item's `sublet_parent`. With the byte only read,
+  the fixed run is clean and the buggy run's one-byte overflow faults at the chunk's end.
+- The edited case is not committed to the corpus: the row belongs to the corpus owner, and this diff
+  is the handoff:
+
+  ```diff
+  -  memset((unsigned char *)next, 0x5a, 1);
+  +  /* Read, not planted: under patch 0006 the next item's first bytes are its sublet_parent slot. */
+     unsigned char before = *(volatile unsigned char *)next;
+  -  CHECK(before == 0x5a, 756);
+  ...
+  -  o->damage = *(volatile unsigned char *)next != 0x5a;
+  +  o->damage = *(volatile unsigned char *)next != before;
+  ```
+
+  The caveat stands: a read canary may already be 0, so on arms without a slot the NUL write would not
+  show as damage. The corpus fix needs a sentinel that is not the slot.

@@ -178,7 +178,7 @@ The causes below are what the records show. "Not investigated" means exactly tha
 | lt1 | 18 gh-157335 | NO-READING:infra | `SystemError: error return without exception set`, raised by `import select` at subprocess.py:125, while upstream_test.py imports test.support.script_helper. RECORD CAPACITY, the tenth cell in (a): the module's high_water reads 64,023 at the failure, and the error is gone on the 18-bit twin and on the paged kit. Beyond it the case needs application mremap, as lt0 18 does. |
 | lt0 | 18 gh-157335 | MISSED, but NOT REACHED | The judge reads MISSED, yet the defect never runs. In the test's `self.m.resize(new_size)`, `mmap.resize` raises `OSError: [Errno 38] Function not implemented`, and the trigger exits 1. Public application `mremap` is unsupported on the virtual profile (runtime/virtual/README.md: "Address hints/fixed mappings and public application `mremap` remain unsupported"), and CPython resizes an anonymous map only through mremap. So the case needs that runtime feature before either arm can read it. With the runtime lane's mremap (runtime/app-mremap c26b60a61f5b) relinked into the lt0 image, it reads CAUGHT: cause 28 in `mmap_ass_subscript`, a declared site (capstone/tests/corpus-cell-probes/README.md). |
 | lt0 | 13 gh-144169 | NO-READING:infra | `MemoryError` in the upstream test's `ast.Name(**{object(): 'y'})`. NOT record capacity: on the uncapped table it persists at a live peak of 7,753–8,191 and 20,810 allocations, with no refusal printed. On lt1, with per-object pool bounds, the same case faults with cause 28 in unicode_fromformat_write_str. The likely reading, NOT measured: on lt0's single-capability pymalloc arena the defect reads a non-str key as a str and requests an oversized buffer. |
-| pb13q15 | 05 2d61f18 | NO-READING:control-failed | The FIXED run faults with cause 24 (address 0) in `capstone_cap_revoke_child` (image offset 0x24588), at a free. The case's canary does it: `memset((unsigned char *)next, 0x5a, 1)` writes byte 0 of the NEXT item. Under patch 0006 that byte is the item's `sublet_parent` capability, the first field of `struct _stritem`. The patch's own text says "Overwriting the slot clears its tag and the next free faults." pb12 (virtual-malloc, no slot) runs the fixed twin clean. The arm is right and the case is wrong for it: a canary that reads the byte instead of writing it would not clobber the slot. That fix belongs to the corpus owner. The buggy run's catch is correct: cause 28 at the chunk's end. |
+| pb13q15 | 05 2d61f18 | NO-READING:control-failed | The FIXED run faults with cause 24 (address 0) in `capstone_cap_revoke_child` (image offset 0x24588), at a free. The case's canary does it: `memset((unsigned char *)next, 0x5a, 1)` writes byte 0 of the NEXT item. Under patch 0006 that byte is the item's `sublet_parent` capability, the first field of `struct _stritem`. The patch's own text says "Overwriting the slot clears its tag and the next free faults." pb12 (virtual-malloc, no slot) runs the fixed twin clean. The arm is right and the case is wrong for it: a canary that reads the byte instead of writing it would not clobber the slot. That fix belongs to the corpus owner. The buggy run's catch is correct: cause 28 at the chunk's end. MEASURED 2026-10-22: the case rebuilt with the canary read instead of written reads CAUGHT (cause 28 at `write_probe`, FIXED run clean), while the prebuilt re-reads this row (capstone/tests/corpus-cell-probes/README.md). |
 | pb13q15 | 08 e8364b5 | NO-READING:control-failed | The BUGGY run's own precondition `CHECK(ptr > rcurr + rbytes, 785)` fails. On the q15 arm (`Q15_PAD padded=2 pad_bytes_max=16`) the space scan stops at the first pad byte past rbuf, which is not a space. So the overrun this case needs never leaves the padded object, and the reduction refuses to give a verdict. pb12 CATCHES the same case. An arm property, not a defect. A variant that fills the allocation's usable extent with spaces is the corpus owner's call. |
 | sq0 | 06 0c8c9a64b3 | NO-READING:inconclusive | Reached, and the defect ran undetected. `expertrem destroyed; calling rem() over freed ctx` is followed by `Assertion failed: iSlot<=p->nSlot` in idxRemFunc and abort 134. So the stale read went through. On this memsys5 arm (27 MISSED; its uaf-mem5 and bounds-mem5 controls complete rather than fault) that is a miss, and only the judge's "completed" rule leaves it unread. |
 
@@ -205,12 +205,33 @@ The causes below are what the records show. "Not investigated" means exactly tha
 
 | corpus | cases | why there is no batch arm |
 |---|---:|---|
-| ffmpeg/plane-repros | 1 | No virtual arm on dev: `bug-corpora/tools/run-virtual-cases.py:66` lists four FFmpeg corpora and not this one. A virtual run exists on the unlanded branch `plane-virtual-carve` (b03dc5ebd1eb pre-registration, 0512bd175160 result): both arms MISSED as predicted, and the carve's bound and revocation controls fired in the same boot. The read lands inside upstream's own plane extent. (Corrected 2026-10-22: the first version said FFmpeg's corpora ran on the classic line, yet five of them have vp2 virtual results.) |
+| ffmpeg/plane-repros | 1 | (2026-10-22: landed on dev at fd8c28583642, with the batch-kit QEMU references for both vp2 arms (lane `compiler/plane-virtual` 32f334d52471), libavutil rebuilt on the batch recipe; both MISSED with every control as pre-registered at 878fcf649efe.) No virtual arm on dev: `bug-corpora/tools/run-virtual-cases.py:66` lists four FFmpeg corpora and not this one. A virtual run exists on the unlanded branch `plane-virtual-carve` (b03dc5ebd1eb pre-registration, 0512bd175160 result): both arms MISSED as predicted, and the carve's bound and revocation controls fired in the same boot. The read lands inside upstream's own plane extent. (Corrected 2026-10-22: the first version said FFmpeg's corpora ran on the classic line, yet five of them have vp2 virtual results.) |
 | httpd/apr-pool-repros | 1 | PAUSED in the 2026-10-16 board campaign plan: it needs a new physical-profile kind, and APR's lend API was never moved to CDERIVE/CREVOKE. |
 | httpd/bucket-repros | 8 | PAUSED, with apr-pool. |
-| sqlite/capi-repros | 19 | Needs a port. Its only required arm is host ASan. |
-| xlang/repro | 15 | Needs a port: shim domains on the old domain interface. |
-| xlang/lua-cdp | 13 | The same. |
+| sqlite/capi-repros | 19 | (2026-10-22: a virtual-malloc arm on dev 75e077151800, path-independent images at 76054751cd4c; reference run 3 reads CAUGHT 12 and 7 out-of-denominator by the lead's decisions below; vp2-malloc queued on the board.) Before that it needed a port; its only required arm was host ASan. |
+| xlang/repro | 15 | (2026-10-22: a virtual-malloc arm on dev da4cb338b37f / 76054751cd4c: CAUGHT 3, MISSED 1 (the stack use-after-return), the 11 mruby rows out of the denominator by the lead's decision; vp2-malloc queued.) Before that it needed a port: shim domains on the old domain interface. |
+| xlang/lua-cdp | 13 | (2026-10-22: the same arm, CAUGHT 13.) Before that, the same. |
 | xlang/reuse-not-free | 2 | No Capstone column is defined. |
 | mruby/gc-slot-repros, xlang/toctou-double-fetch | 0 | Nothing to run. |
 | Juliet spatial, beyond the 755-case sample | the rest of the census | Only the stratified sample (every functional variant of CWE 121/122/124/126/127, at three flow roles) ran on silicon. |
+
+### Decisions for capi and xlang (the project lead, relayed by the runtime lane, 2026-10-22)
+
+The lead's words: "capi и xlang как рекомендовано" ("capi and xlang as recommended"). Concretely:
+
+**sqlite/capi-repros:**
+- **(a) Version:** SQLite 3.53.3, through ports/sqlite's six rewrites plus
+  `-DHAVE_MALLOC_H=1 -DHAVE_MALLOC_USABLE_SIZE=1`.
+- **(b) Controls:** the generic malloc controls suffice. There is no per-row FIXED twin.
+- **(c) Verdicts by oracle:**
+  - a heap-use-after-free row that reads cause 25 is CAUGHT;
+  - the bad-free row, refused by the allocator (cause 2 in `cap_malloc_invalid_free`), is CAUGHT;
+  - a null-deref row (cause 24 or 12) is its own null-deref class, not counted as a temporal catch;
+  - a none row that exits 0 is correct: no false alarm.
+
+**xlang:**
+- **(a) Attribution:** the malloc controls plus per-row fault-site attribution, with no test-only no-revoke runtime.
+- **(b) Rows:** the 12 mruby shim rows are dropped, because the real-interpreter arms cover mruby.
+
+The arms (sites, a verdicts-v1 runner, arms.json and corpus.json entries) are being built by the compiler lane, for
+handoff to the board lane.
