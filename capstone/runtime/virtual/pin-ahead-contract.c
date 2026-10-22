@@ -12,6 +12,8 @@
  *   rowrite as vma, then write page 9: still a fault (the domain dies), so a
  *           FOLL_FORCE pin never makes read-only memory writable;
  *   retire  write page 0, then munmap: every pin of the window is released.
+ *   stale   as retire, then read page 0 through the stale pointer: the domain dies. The
+ *           module's refuse_pte must-fire (a fault no lazy arena covers), not a pin check.
  * run-step-hooks.py also uses:
  *   walk     write every page in order (one fault per page with window 1);
  *   syscalls 64 delegated umask() calls, each checking the previous reply. */
@@ -73,6 +75,12 @@ int main(int argc, char **argv)
     } else if (!strcmp(mode, "retire")) {
         a[0] = 1;
         require(!munmap((void *)a, PAGES * PAGE), "munmap");
+    } else if (!strcmp(mode, "stale")) {
+        a[0] = 1;
+        require(!munmap((void *)a, PAGES * PAGE), "munmap");
+        printf("PIN_STALE_READ\n");
+        fflush(stdout);
+        require(a[0] == 1 && 0, "stale read survived");
     } else {
         require(!strcmp(mode, "base"), "mode");
     }

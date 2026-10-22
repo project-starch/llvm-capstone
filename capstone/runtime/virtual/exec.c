@@ -711,6 +711,25 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
     return 0;
 }
 
+/* TEST ONLY (QEMU must-fire for the module's refuse_pte, 2026-10-22). With
+ * CAPSTONE_VM_TEST_ZAP_CODE=dontneed or =none, the first service request
+ * takes the PTE away from the page holding the context's pc -- an EAGER code
+ * arena page, so the next fetch is a fault no lazy arena covers: resolve()'s
+ * `arena` site. dontneed zaps the PTE (follow_pte fails), none leaves a
+ * PROT_NONE PTE (follow_pte succeeds). Unset, this does nothing. */
+static void test_zap_code(const struct cv_step *step)
+{
+    static int done;
+    const char *how = getenv("CAPSTONE_VM_TEST_ZAP_CODE");
+    if (!how || done) return;
+    done = 1;
+    void *page = (void *)(uintptr_t)(step->pc & ~4095UL);
+    int rc = !strcmp(how, "none") ? mprotect(page, 4096, PROT_NONE)
+                                  : madvise(page, 4096, MADV_DONTNEED);
+    fprintf(stderr, "CAPSTONE_VM_TEST_ZAP %s pc=0x%llx page=%p rc=%d\n", how,
+            (unsigned long long)step->pc, page, rc);
+}
+
 static int virtual_service_loop(uint64_t tid)
 {
     struct cv_step step = {.thread = tid};
@@ -724,6 +743,8 @@ static int virtual_service_loop(uint64_t tid)
             sched_yield();
             continue;
         }
+        if (step.kind == 3)
+            test_zap_code(&step);
         if (step.kind == 4) {
             struct cv_thread_control control = {.thread = step.thread};
             if (!ioctl(device, CV_RESOLVE, &control)) continue;
