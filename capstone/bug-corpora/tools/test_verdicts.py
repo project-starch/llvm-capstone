@@ -82,6 +82,46 @@ class Judge(unittest.TestCase):
         self.assertEqual((verdict, reason), (v.MISSED, None))
 
 
+class CatchCauses(unittest.TestCase):
+    """`catch_causes` is optional per configuration: which fault causes that arm's MECHANISM can
+    report. It exists because a fault anywhere in a declared function cannot tell a rejected
+    access from a crash two frames later on a value the program was allowed to read."""
+
+    SPEC = {**SPEC, "catch_causes": [25, 28]}
+
+    def fault(self, cause):
+        return v.Fault(cause=cause, pc=0xc02020f0, symbol="pqGetnchar", offset=0x10)
+
+    def test_a_mechanism_cause_is_still_a_catch(self):
+        for cause in (25, 28):
+            verdict, reason, evidence = v.judge(
+                obs(fault=self.fault(cause), reached=True, attribution="probe"), self.SPEC)
+            self.assertEqual((verdict, reason), (v.CAUGHT, None), cause)
+            self.assertIn(f"cause={cause}", evidence)
+
+    def test_a_consequence_cause_is_a_miss_not_a_catch(self):
+        verdict, reason, evidence = v.judge(
+            obs(fault=self.fault(24), reached=True, attribution="probe"), self.SPEC)
+        self.assertEqual((verdict, reason), (v.MISSED, None))
+        self.assertIn("cause=24", evidence)
+        self.assertIn("[25, 28]", evidence)
+        self.assertIn("consequence", evidence)
+
+    def test_a_consequence_needs_the_controls_to_score_missed(self):
+        # A MISSED needs the configuration's controls_for_missed behaving in the same
+        # invocation, exactly as an ordinary MISSED does.
+        verdict, reason, evidence = v.judge(
+            obs(fault=self.fault(24), reached=True, attribution="probe",
+                controls=[v.Control("bounds-malloc", "fault")]), self.SPEC)
+        self.assertEqual((verdict, reason), (v.NO_READING, "control-failed"))
+        self.assertIn("uaf-malloc", evidence)
+
+    def test_a_configuration_without_the_key_behaves_as_before(self):
+        verdict, reason, _ = v.judge(
+            obs(fault=self.fault(24), reached=True, attribution="probe"), SPEC)
+        self.assertEqual((verdict, reason), (v.CAUGHT, None))
+
+
 class Registry(unittest.TestCase):
     def test_every_configuration_is_well_formed(self):
         self.assertTrue(ARMS)

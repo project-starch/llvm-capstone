@@ -71,6 +71,44 @@ DRIVER = REPO / 'capstone/ports/sqlite/repro322/corpus322.sh'
 # ports/sqlite/app/build-domain.sh.
 CONFIG = ['-DHAVE_MALLOC_H=1', '-DHAVE_MALLOC_USABLE_SIZE=1']
 
+# THE ARENA MUST BE THE SAME SIZE ON EVERY ARM, and until 2026-10-17 it was not.
+# memsys5 is configured over `static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]`
+# (repro322_common.h), and on the two arena-granular arms -- base Capstone and
+# CheriBSD purecap -- that array IS the bound. An over-read is therefore visible
+# to them exactly when it leaves the array, so the arena's size decides the
+# spatial result, and comparing arms that do not share it compares the arenas
+# rather than the mechanisms.
+#
+# corpus322.sh and build-corpus-cheri.sh both pass 262144. This builder did not:
+# group_flags() lifts corpus322.sh's per-group table, but that driver sets the
+# heap size in DOMAIN_EXTRA_FLAGS, which is outside the table. So these images
+# fell through to the header default of 1 MiB -- four times the other arms --
+# and cases 29 and 31 over-read past the end of a 256 KiB arena while landing
+# comfortably inside a 1 MiB one. That is the whole of the "two base builds
+# disagree" note in those two cases' PROVENANCE.md.
+# The fallback is this builder's HISTORICAL value, and it is deliberately NOT the
+# 262144 the other two pass: every recorded virtual reading was taken at 1 MiB, and
+# lowering it silently changes them -- at 262144 the four fts spatial cases cannot
+# even run (cases 26/27/28 exhaust memsys5 and 3.22.0's pcache1AllocPage dereferences
+# the NULL it gets back; measured 2026-10-17). The arms are made to agree per CASE,
+# through arena_bytes, not by one global constant.
+HEAP_BYTES_DEFAULT = 1048576
+
+
+def case_arena(case_dir, fallback):
+    """The arena this case declares, or the default.
+
+    `arena_bytes` is a property of the CASE (bug-corpora SCHEMA.md): every arm must build it
+    with the same value, because on an arena-granular arm the arena IS the bound. Reading it
+    here rather than keeping a list in this builder is what stops the three builders drifting
+    apart again.
+    """
+    manifest = case_dir / 'case.json'
+    if not manifest.is_file():
+        return fallback
+    declared = json.loads(manifest.read_text()).get('arena_bytes')
+    return int(declared) if declared else fallback
+
 
 def group_flags():
     """{group: [flags]} read out of corpus322.sh's own group table."""
@@ -144,6 +182,11 @@ def main():
                    help='An instrument, not a case: built against the same '
                         'engine object and the same arm as the cases, with the '
                         'core group flags, and reported separately')
+    p.add_argument('--heap-size', type=int, default=HEAP_BYTES_DEFAULT,
+                   help='fallback memsys5 arena for a case that declares no '
+                        'arena_bytes; MUST match corpus322.sh and '
+                        'build-corpus-cheri.sh or the arena-granular arms are '
+                        'not comparable (see HEAP_BYTES_DEFAULT)')
     p.add_argument('--opt', default='-O0')
     a = p.parse_args()
 
@@ -256,6 +299,7 @@ def main():
                          for o in options]
         image = a.out / f'{case.name}.dom'
         command = [str(cc), a.opt, '-DREPRO322_VIRTUAL',
+                   f'-DSQLITE_HEAP_SIZE={case_arena(case, a.heap_size)}',
                    *(['-DREPRO322_VIRTUAL_MEMSYS5'] if a.memsys5 else []),
                    *(['-DREPRO322_VIRTUAL_SUBLET'] if a.sublet else []),
                    *(['-DREPRO322_NO_LOOKASIDE'] if a.no_lookaside else []),
@@ -285,6 +329,7 @@ def main():
             continue
         image = a.out / f'{source.stem}.dom'
         command = [str(cc), a.opt, '-DREPRO322_VIRTUAL',
+                   f'-DSQLITE_HEAP_SIZE={a.heap_size}',
                    *(['-DREPRO322_VIRTUAL_MEMSYS5'] if a.memsys5 else []),
                    *(['-DREPRO322_VIRTUAL_SUBLET'] if a.sublet else []),
                    *sublet_includes,
