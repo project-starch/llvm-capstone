@@ -150,3 +150,26 @@ The bundle is `results/2026-10-22-virtual/virtual-malloc`, and the verdicts belo
 
 **For the board (vp2-malloc):** the same invocation with `--board-kit <kit>` in place of `--virtual-kit`. The bundle
 records `vp2-malloc` under the same configuration. Its prediction is run 2's reading, row for row.
+
+### Path-independent images, and run 3 (pre-registered 2026-10-22, before run 3)
+
+- **The defect, found before the board ran anything:** run 1 and run 2 built each row with `-g` and no prefix map.
+  - So an image recorded its raw directory and the compile's cwd. The same row built in two raw directories hashed
+    a3ded783… and f865b93f….
+  - The board rebuilds the rows in its own directories, so its images could never hash-equal the reference's. An
+    image check against runs 1 and 2 cannot pass.
+- **The fix:**
+  - every compile, controls included, takes `-ffile-prefix-map=<raw>/bin=/capi-build` and `-ffile-prefix-map=<repo>=/repo`;
+  - every compile runs with the build directory as its cwd.
+  - Checked before this was written: rows 1 and 11, `sqlite3.o` and `controls.dom` hash identically across two raw
+    directories, a cwd of /tmp, and a second repo root.
+- **Run 3:** the same invocation as runs 1 and 2.
+  - Predicted: every row reads as in run 2. Only the image hashes change, and from now on they are the same for any
+    checkout and raw directory.
+  - If run 3 holds, `verdict_bundles` moves to it, and it is the reference the board's image check uses.
+
+**Result, run 3** (2026-10-22 18:45-18:46, at fd732cc48611): **as predicted.**
+- Every row's verdict, reason, cause and symbol equals run 2's; all 18 image hashes changed.
+- The hashes are reproducible: rows 1 and 11 equal the independent builds from two other raw directories and a second
+  repo root (1328034ed2872e67, c027fedd724705fe).
+- `verdict_bundles` now names `results/2026-10-22-virtual-run3/virtual-malloc`, the board's reference.
