@@ -4,14 +4,15 @@
 # 0x80004040), run by sup-bare-2026-10-03-ladder/run_sup_bare.py from the kit's own driver tree (BOARD_DRIVER_DIR) with
 # the kit's board, URL file and resident bitstream, then graded by s23-grade.py (PREREG.md's rule). No monitor, no Linux.
 # Usage: tier3-s23-bare.sh <board 1|2> <out log> [pre|batch]. S23_RUN / S23_BUSY / S23_BOOK / S23_ROOT stub the dry run.
+# S23_KIT names another kit for the board (the batch bitstream's, whose board.env names the flashed bitstream).
 main() {
   set -u
   local BRD=${1:?board} O=${2:?out log} EXP=${3:-pre}
   local S; S=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
   local H=/mnt/hdd/$USER/capstone K R BUSY rc bid IMGSHA=bcefd969e128113f0c58e18571023f1269efce816d0587a85e987577b9e3c0fe
   case $BRD in
-    1) K=$H/t3-smoke/bkit7-rev2xDN2; R=${S23_ROOT:-$H/t3-run-treeA/s23-bare}; BUSY="python3 /tmp/capstone/wt-gate/capstone/tests/rtl-smoke/board-busy.py 1";;
-    2) K=$H/t3-smoke/bkit7-rev2xBDN2; R=${S23_ROOT:-$H/t3-run-treeB/s23-bare}; BUSY="python3 /tmp/capstone/wt-b2/capstone/tests/rtl-smoke/board-busy.py 2";;
+    1) K=${S23_KIT:-$H/t3-smoke/bkit7-rev2xDN2}; R=${S23_ROOT:-$H/t3-run-treeA/s23-bare}; BUSY="python3 /tmp/capstone/wt-gate/capstone/tests/rtl-smoke/board-busy.py 1";;
+    2) K=${S23_KIT:-$H/t3-smoke/bkit7-rev2xBDN2}; R=${S23_ROOT:-$H/t3-run-treeB/s23-bare}; BUSY="python3 /tmp/capstone/wt-b2/capstone/tests/rtl-smoke/board-busy.py 2";;
     *) echo "S23 STOP: board $BRD" >> "$O"; return 2;;
   esac
   ( cd $K && sha256sum -c --quiet SHA256SUMS ) || { echo "S23 STOP: kit $K" >> "$O"; return 1; }

@@ -6915,3 +6915,29 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
     - the ancestor's record read VALID before each of 4,400 accepted retires, and dead after every one;
     - this includes the 10 runs that read cause 13 in that boot;
     - so a retire that fails to take effect is ruled out as the 13's source.
+
+## The batch bitstream on silicon, both boards: item 1 re-arms, item 5 completes sparse-churn, item 6 recycles with generations, and mruby Sublet reads as QEMU (caplifive_vp2c_c721c1a2a, 2026-10-22)
+
+- **The bitstream:**
+  - `caplifive_vp2c_c721c1a2a.bit`, sha256 8f4a486f2c96…, routed WNS -18.529; the resident vp2 lineage sealed at
+    -19.019.
+  - Flashed on the lead's word to board 1 (14:20) and board 2 (15:29). Each read back the new name, and each tree's
+    previous bitstream stays registered as the fallback.
+  - Folder: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/`, kits bkit8-batch-*, outputs t3-run-batch-c721c1a2a-b*. No
+    earlier record was overwritten. Every run was pre-registered.
+
+| reading | board 1 | board 2 |
+|---|---|---|
+| s23-cpmp-rearm bare (item 1, namespace-aware CPMP/PC trackers): six re-arm probes ALLOWED → DENIED, total 8 → 14 | batch vector, 25 of 25 | batch vector, equal to board 1's |
+| Tier 1: b0-stats, b0-hello, vm-contract | 0, 0, 0 | 0, 0, 0 |
+| sparse-churn (S-25/R-57, item 5): every earlier vp2 boot wedged here | completes: 200,000 allocations, 600,041 nodes through a 4,096-record table, 0 collections | the same, identical counts |
+| va-alloc-csret bare (item 6, generations in virtual node ids) | VOID (the PREREG counted 20 trace prints; the image prints 17) | PASS: ids 0x10004 and 0x20004 (generations 1 and 2), REC_GEN 2 |
+| mruby Sublet + smoke-fit (blocked on the trees by the flat table) | 23 of 23 cells as its batch QEMU reference | — |
+| FRTY / FRTC / DRT1 / INJS / INJL / Oops / pc=0 | 0 | 0 |
+
+- **The RTL lane graded s23 and va-alloc against its own pre-registrations by value.** The rows above are as it graded
+  them.
+- **va-alloc on board 1 is VOID, not a pass**, though its 17 values equal the corrected vector: the vector was
+  corrected after that boot. Board 2's boot under the corrected rule is the reading.
+- **Still running at this entry:** cpython lt1 and postgres pg-pools (board 1) and cpython lt0 (board 2), each against
+  its batch QEMU reference.

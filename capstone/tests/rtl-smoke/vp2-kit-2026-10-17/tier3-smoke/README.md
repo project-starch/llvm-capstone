@@ -6714,6 +6714,74 @@ Records: `records/uaf-repeat-dm-b1.result-lines.txt` and `records/uaf-repeat-dm-
   - A covering arena (`arena >= 0`) would contradict the earlier reading.
   - The rate is a few percent per tree. A board with no cause-13 run gives no reading.
 
+### The batch bitstream's first boots: the package is ready, NOT pre-registered (2026-10-22 12:0x)
+
+The reflash of c721c1a2a waits on the lead's own word. These scripts make the first boots follow that word directly.
+**A run still needs its own pre-registration pushed first**, naming the board and the flashed file's name.
+
+- **`board-tier12/batch/make-batch-kit.sh <board> <bitstream name> <log>`:** the flashed board's current kit with
+  exactly three changes, printed as a board.env diff:
+  - BOARD_BITSTREAM;
+  - the batch monitor line, capstone-sbi vp2/batch d9da397 with -DCAPSTONE_FETCH_RETRY_CAP (batch-prep.sh's
+    recipe);
+  - the batch module 21fbfc397e7c7a42.
+- **`board-tier12/batch/run-batch-first.sh <board> <bitstream name> <out dir>`:**
+  1. s23-cpmp-rearm bare, graded `--expect batch`. Anything but AS EXPECTED stops the chain before Linux.
+  2. Tier 1 on image 64ec46d1f8d9461b / firmware 6423545a567b2f3c: b0-stats, b0-hello, vm-contract and vm-suite, with
+     the watchdog. It prints the rung values (rev7's oracles beside them, for reference only), VM exits, the S-23
+     counters, FRTY/FRTC, INJS/INJL and CPMX-DIAG.
+  - The grade is per test against the compiler lane's QEMU Tier 1 on the batch kits: 33/45 with the 12 known
+    failures, sparse-churn predicted to complete (`/tmp/capstone/pass-manifest/README.md`, "Batch first boot").
+- `tier3-s23-bare.sh` takes S23_KIT for the batch kit; its default is unchanged.
+- **Dry run** (`board-tier12/batch/dryrun-batch-first.txt`, a placeholder bitstream name):
+  - the kit maker's diff is exactly the three changes;
+  - the batch vector proceeds to a stubbed Tier 1;
+  - the pre-batch vector stops with "Tier 1 not booted".
+
+### The batch bitstream c721c1a2a on BOARD 1: reflash and first boots, pre-registered (2026-10-22 12:1x, before the flash)
+
+- **Authorisation:** the lead's own word in this session, 2026-10-22 ("1, 2. -yes", answering "board 1 or 2" and
+  "first boots straight after").
+  - Board 1 is flashed now. Board 2 stays on caplifive_vp2c_8de3c48cf until the lead confirms it too, which would come
+    only after board 1's first boots read.
+  - The flash follows the runtime lane's d0d5f758 arm, whose reading is valid only on the current bitstream.
+- **The bitstream:**
+  - capstone-ariane c721c1a2a, which has both trees (8522d72fe, 8de3c48cf) and d427e7391 as ancestors.
+  - `caplifive_vp2c_c721c1a2a.bit`, sha256 8f4a486f2c9650412016e66d711af1ca8e0b003d2ac9a202a00f0d075b85ed6e,
+    11,443,722 B. Copied from the synth host and the hash re-checked here.
+  - Routed WNS -18.529 (the resident vp2 lineage sealed at -19.019), LUTLP-1 0, and TIMING-23 the same single arc.
+    The synth lane found no new failing class.
+  - The memory map is unchanged: CAP_REVNODE_MEM_BASE 0xBFF0_0000 and CAP_TAG_MEM_BASE 0xBC2D_2D2D in ariane_pkg.sv
+    at both 8522d72fe and c721c1a2a, so the DTS stands.
+- **Flash:** `drivers/flash-bitstream.py caplifive_vp2c_c721c1a2a.bit <local .bit> <sha256>`, which uploads if the
+  name is unregistered, flashes, power-cycles and reads back.
+  - Before it: the console's store must still list `caplifive_vp2c_8522d72fe.bit`, the fallback for every tree-A
+    record.
+  - **Predicted:** the read-back nv_bitstream_name is `caplifive_vp2c_c721c1a2a.bit`, exit 0.
+- **Kit and output:**
+  - `make-batch-kit.sh 1 caplifive_vp2c_c721c1a2a`, which writes the new folder t3-smoke/bkit8-batch-b1. Its diff
+    against bkit7-rev2xDN2 is exactly the bitstream, the batch monitor line and the batch module 21fbfc39.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/`, a new directory. No existing record is touched, and
+    every later batch reading is reported beside the standing pass, never in place of it.
+- **First boots** (`run-batch-first.sh 1 caplifive_vp2c_c721c1a2a <out>`, dry-run at 3963e7a8d4ff):
+  1. **s23-cpmp-rearm bare** (the RTL lane's PREREG at 7ae1d8491466):
+     - VOID unless SR 25, a0 0x80800000, Q1 0, and the true-deny and control probes as the vector.
+     - **Predicted: the batch vector.** Re-arm probes Q5, Q8, Q10, Q12a, Q12b and Q13d all 1, total 14.
+     - The pre-batch vector (all 0, total 8) or any mix is a FINDING, and the chain stops before Linux.
+  2. **Tier 1** on image 64ec46d1f8d9461b / firmware 6423545a567b2f3c (batch module 21fbfc39, tick-100 mruby).
+     **Predicted:**
+     - b0-stats, b0-hello and vm-contract retval 0;
+     - every VM_BEGIN has its VM_EXIT;
+     - **sparse-churn COMPLETES (VM_EXIT:sparse-churn:0)**, where rev7 wedged in it;
+     - pc=0, DRT1, INJL and Oops 0.
+     - The vm-suite tests are graded by name against the compiler lane's QEMU Tier 1 on the batch kits (33/45, the
+       12 failing: fault_causes heap-threads heap_threads shared_heap_pages_released threads threads_output vm
+       vm-large vm-mappings vm_contract vm_large_contract vm_mappings_contract). Thread checks are expected refused
+       (supervisor_slots=1), and vm-large/vm-mappings are not predicted on silicon.
+     - FRTY, FRTC and INJS are recorded, with no prediction.
+- **After that, not before:** the corpus on the batch bitstream (pg-pools and cpython lt1 first), each arm with its
+  own pre-registration and a result folder named for the bitstream.
+
 ### A freed object whose page stays MAPPED, read through its revoked capability on board 2: pre-registered (2026-10-22 12:3x, before the boot)
 
 - **The question** (the runtime lane's, with the vp2 RTL read at bf3db3175, a claim):
@@ -6972,6 +7040,173 @@ Record: `records/uaf-repeat-mapped-b2.result-lines.txt`.
   - Beside them, in the same two boots, the unchanged control read cause 13 in 13 of 400. Every 13 examined is a
     fault on an unmapped, retired address.
 
+### The batch bitstream c721c1a2a on BOARD 2 as well: reflash and first boots, pre-registered (2026-10-22 14:2x, before the flash)
+
+- **Authorisation:** the lead's own word in this session, 2026-10-22 14:1x: "a yes in this session for flashing board
+  2 too, after its retire check ends around 15:20. - yes, confirm" (and "the permission for the reflash launch - yes,
+  confirm").
+- **Order:** board 2's retire_verify arm (94000e799f82) finishes first, on tree B's bitstream, where its reading
+  belongs.
+- **The chain:** `board-tier12/batch/flash-and-first-b2.sh`. It is flash-and-first-b1.sh with board-2 substitutions
+  only (the diff is the board number, the URL file, the busy check, the wait file and the fallback name), dry-run in
+  `dryrun-flash-and-first-b2.txt`. It exports FPGA_BOARD=2 and board 2's URL file, which FpgaConsole cross-checks.
+  - Fallback: the console store must list `caplifive_vp2c_8de3c48cf.bit`, after store-has.py's own control.
+  - Kit: `make-batch-kit.sh 2`, which writes the new folder t3-smoke/bkit8-batch-b2.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/`, a new directory.
+- **Predictions: the same as board 1's** (the section above for board 1):
+  - the flash read-back names `caplifive_vp2c_c721c1a2a.bit`;
+  - s23-cpmp-rearm reads the batch vector (re-arm 1, total 14);
+  - Tier 1: b0-stats, b0-hello and vm-contract 0, sparse-churn completes, and the readings are 0;
+  - the vm-suite is graded per test against the QEMU 33/45.
+  - Board 2's reading is then the second tree's, and the two first-boot readings should agree. The bitstream and
+    the kit are the same, and only the board differs.
+
+### The batch bitstream c721c1a2a on board 1, result (2026-10-22 14:17-14:44): flashed, s23 reads the batch vector, and sparse-churn completes
+
+Record: `records/batch-c721c1a2a-first-b1.result-lines.txt`. The output directory is
+`<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/`, and the kit is the new t3-smoke/bkit8-batch-b1. No earlier record
+was touched.
+
+- **Flash:**
+  - store-has.py's control read a nonexistent name as missing; tree A's caplifive_vp2c_8522d72fe.bit is registered
+    (the fallback);
+  - the local sha256 matched the sealed hash; the upload returned HTTP 201;
+  - **the read-back after the power cycle is `caplifive_vp2c_c721c1a2a.bit`**.
+  - The keep-retired arm's guard passed (no SILENT).
+- **s23-cpmp-rearm bare (image bcefd969, board_rec 0x80004040): AS EXPECTED (batch).**
+  - SR 25, a0 0x80800000, Q1 0, every true-deny and control probe as the vector.
+  - **Re-arm Q5, Q8, Q10, Q12a, Q12b and Q13d all 1, total 14**; the last cause 5.
+  - The RTL lane graded the 25 values against its PREREG (7ae1d8491466) by value: all 25 equal the batch vector.
+  - **Item 1 (the namespace-aware CPMP/PC trackers) behaves on silicon as simulated.**
+- **Tier 1 (image 64ec46d1f8d9461b, firmware 6423545a567b2f3c, batch module 21fbfc39), one cold boot, watchdog alive
+  (94 lines):**
+  - b0-stats 0, b0-hello 0, vm-contract 0 (normal 0, stale 139 with cause 25).
+  - **sparse-churn: VM_EXIT 0 and `VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags`**, under
+    node_flat_records=4096: nodes=600041 through a 4,096-record table, collections 0, resume_satp_changed 0,
+    busy_frame_refusals 0.
+    - Every earlier vp2 boot wedged in this rung (rev7, and r8-r11).
+    - The QEMU reference on qkit7-batch2 reads the same nodes=600041 (steps 200092 there, 200065 here; its
+      node_capacity was 65536).
+    - The release lines read `pushed=10/11`: the generations push of item 6.
+  - The vm-suite retval 1 is its count of VM_EXIT lines, one.
+  - FRTY 0, FRTC 0, DRT1 0, INJS 0, INJL 0, Oops 0, pc=0 0. CPMX-DIAG has no region dump to read (NO DATA, as
+    expected without a refusal).
+- **Against the pre-registration (c8f2e85ea9b8): every reading holds.**
+  - The flash read-back, the s23 batch vector, b0-stats/b0-hello/vm-contract 0, sparse-churn completing, and the
+    readings 0.
+  - The vm-suite on this image is the rev7 suite (sparse-churn only). So "per test against the QEMU 33/45" grades
+    the three tests it runs, normal, stale and sparse-churn, each passing on QEMU and here.
+- **For the RTL lane's batch rows:**
+  - S-25/R-57, "the rungs that wedged on the trees complete": sparse-churn completes.
+  - The S-23 fetch-face refusal is absent: DRT1 0 and FRTY 0 in this boot.
+  - va-alloc's generation readings wait for its bare image (the RTL lane is building it).
+- Board 2 flashes after its retire_verify arm, by flash-and-first-b2.sh.
+
+### mruby Sublet with smoke-fit on the batch bitstream, board 1: pre-registered (2026-10-22 14:4x, before the boot)
+
+- **Why first:**
+  - Of the three arms the batch unblocks, this one's reference and images are complete.
+  - On the trees, mruby Sublet's GC exhausts vp2's flat table. smoke-fit.rb was written to fit, and the generations
+    recycle on the batch.
+- **What runs:** `tier3-mp-batch.sh 1 <log>`. It is tier3-mp-arm-t100.sh's mruby-sublet leg, with:
+  - the batch kit bkit8-batch-b1 (c721c1a2a, module 21fbfc39, monitor d9da397 + FETCH_RETRY_CAP);
+  - `--smoke smoke-fit.rb` (5b588c1c);
+  - the tick-100 image 0f9bca66 and its capi;
+  - the runner and arm script from wt-ref (clean 6764d96229f6), pinned by the reference stamp's hashes (9db9f5f7,
+    11967b37).
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/mp-mruby-sublet-smokefit`, a new directory.
+- **The reference** (the compiler lane's): `smoke-fit/sublet` on qkit7-batch2, module a05c198b (from source, the
+  same as the board's 21fbfc39, built for QEMU).
+  - Its stamp's SWITCHES read `movc_null_scalar=OFF compact_rounding=ON ... generations=ON`. OFF is the silicon mimic
+    on c721c1a2a, because MOVC keeps an untagged source there (batch item 5).
+  - It read "control smoke ok", and its 23 cells equal the smoke.rb reference.
+- **Dry run** (`dryrun-mp-batch.txt`): a stub copying the reference reads 23 of 23, exit 0; one perturbed cause reads
+  22 of 23, exit 1.
+- **Predictions:**
+  - the board run's controls read "control smoke ok";
+  - **matrix-compare against the reference: 23 of 23 cells the same**;
+  - the boot completes (vbatch END rc=0);
+  - pc=0, DRT1, FRTY, FRTC, Oops, INJS, INJL and collect-skipped 0;
+  - the module's `diag gen-push` banner present (must-fire).
+  - **This is the first application run built by the batch kit's own firmware recipe.** A firmware failure would be
+    a kit finding, not a cell.
+
+### va-alloc-csret bare on the batch bitstream (item 6, generations), board 1: pre-registered (2026-10-22 15:1x, before the boot)
+
+- **The arm:** the RTL lane's kit `capstone/tests/rtl-smoke/va-alloc-bare-2026-10-23/` (dev 68679d2982ad).
+  - Image images/va-alloc-csret.bin, sha256 9491707dfa1613e3..., board_rec 0x8000a800. One bare JTAG boot, no
+    firmware, runner run_sup_bare.py as for s23.
+  - Its PREREG.md carries both simulated 20-value vectors, batch and tree A, differing at positions 1, 4, 11, 14, 15
+    and 18.
+- **What runs:** `tier3-va-alloc-bare.sh 1 <log>` with S23_KIT=bkit8-batch-b1, after the mruby arm ends on board 1.
+  - It is tier3-s23-bare.sh with the image, its board_rec, the grader and the output names changed.
+  - Grader `va-alloc-grade.py`, encoding the PREREG's rule:
+    - VOID unless one SR = 20, 20 values and position 0 = 0;
+    - PASS when all 20 equal the batch vector;
+    - PRE-BATCH when all 20 equal tree A's;
+    - otherwise a FINDING, printed position by position.
+  - Dry run (`dryrun-va-alloc-bare.txt`): batch reads PASS, tree A reads PRE-BATCH, 19 values read VOID, and one
+    changed value reads FINDING at its position.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/va-alloc-bare`, a new directory.
+- **Predicted: PASS**, `0x0 0x10004 0x0 0x0 0x20004 0x1 0x1 0x0 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0`:
+  generation-carrying ancestor ids 0x10004 and 0x20004, and REC_GEN 2. The 20 values go to the RTL lane as read.
+
+### mruby Sublet with smoke-fit on the batch bitstream, result (2026-10-22 14:47-15:14, board 1): 23 of 23 cells as QEMU
+
+Record: `records/batch-mp-mruby-sublet-smokefit-b1.result-lines.txt`. Output:
+`<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/mp-mruby-sublet-smokefit`.
+
+- **Read:**
+  - the board run's controls: `APPVM read rc=0 :: virtual-nested-pools: control smoke ok; {'fault': 23}`;
+  - **matrix-compare against the smoke-fit/sublet QEMU reference (qkit7-batch2): 23 of 23 cells the same**;
+  - the boot completed;
+  - pc=0, DRT1, FRTY, FRTC, Oops, INJS, INJL and collect-skipped 0; the `diag gen-push` banner x1.
+  - The release lines read `pushed=` equal to `attempted=` (e.g. 46/46): the generations push recycling the
+    nested pools' records.
+- **Against the pre-registration (a1108a2a3cad): every reading holds.**
+- **What it adds:**
+  - mruby's Sublet arm is a bundle the trees could not run: its GC exhausted vp2's flat table. It now reads on vp2
+    silicon cell for cell as its batch QEMU reference, on the batch kit's own firmware recipe.
+  - It is the first of the three bundles the batch unblocks.
+  - The tree-era mruby columns stand as recorded. This is a new column, for the batch bitstream.
+
+### va-alloc-csret bare on the batch bitstream, result (2026-10-22 15:15, board 1): VOID, the image prints 17 values where the PREREG has 20
+
+Record: `records/batch-va-alloc-bare-b1.result-lines.txt`.
+
+- **Read:**
+  - image 9491707dfa1613e3 (sha256 checked against dev 68679d2982ad), board_rec 0x8000a800;
+  - `SR 0x11` (17) and 17 SV values: `0x0 0x10004 0x0 0x20004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0`.
+- **Graded by the PREREG's rule: VOID** (it requires one SR = 20 and 20 values).
+  - The 17 values equal, value for value, the 17-value csret list the RTL lane sent before writing PREREG.md. The
+    PREREG's vector has 20 entries.
+  - So the instrument and its pre-registration disagree on the report's length. That is an instrument mismatch,
+    and it is not regraded after the fact.
+  - The values include the generation-carrying ancestor ids 0x10004 and 0x20004. That is noted, and it is not a
+    grade.
+- Returned to the RTL lane to reconcile: which build prints 20, or a corrected PREREG for the 17-value report. A
+  re-run follows on its push.
+- Process: the BEGIN line's "expect pre" is a label inherited from tier3-s23-bare.sh's unused third argument, not the
+  grade's expectation. The grader is va-alloc-grade.py.
+
+### va-alloc-csret: the PREREG corrected by the RTL lane AFTER board 1's VOID boot; a fresh pre-registered boot on board 2 (2026-10-22 15:2x)
+
+- **The correction** (dev 46e03aa0fff8, the RTL lane):
+  - The 20-value vector was the simulation TRACE, which records twice a CAPPRINT that follows a lifetime op: the op's
+    commit flush re-issues the younger print. The board's recorder counts the architectural execution once.
+  - The rule now reads SR = 17. Batch: `0x0 0x10004 0x0 0x20004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0`.
+    Tree A differs at positions 1, 3, 8, 11, 12 and 15 (checked here).
+  - The image is unchanged (9491707d).
+- **Board 1's boot stays VOID.** It was graded by the rule written before it. Its 17 values equal the corrected batch
+  vector value for value. That agreement is recorded, and it is post hoc, not a grade: a pre-registration fixed after
+  its reading cannot turn that reading into a pass.
+- **So the grade comes from a fresh boot:**
+  - board 2, after its own batch flash and first boots, with S23_KIT=bkit8-batch-b2;
+  - `va-alloc-grade.py` now encodes the corrected rule. Dry run (`dryrun-va-alloc-bare-17.txt`): batch PASS, tree A
+    PRE-BATCH, the old 20-value report VOID, one changed value FINDING at its position.
+  - **Predicted: PASS**, the corrected batch vector.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/va-alloc-bare`.
+
 ### The retire checked by the module, result (2026-10-22 13:53-15:26, board 2, tree B, module 9d0ac297): 4,400 accepted retires, none left the record live
 
 Record: `records/uaf-repeat-rv-b2.result-lines.txt`.
@@ -7000,3 +7235,31 @@ Record: `records/uaf-repeat-rv-b2.result-lines.txt`.
     and address reuse) and that the simulation's munmap variants do not reproduce. That is open, and it comes with
     no completed read.
 - **Rate:** cause 13 in 10 of 400 control runs here. Over the whole day, tree A 16 of 720 and tree B 26 of 1120.
+
+### The batch bitstream c721c1a2a on board 2, result (2026-10-22 15:26-15:54): the same as board 1
+
+Record: `records/batch-c721c1a2a-first-b2.result-lines.txt`. Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/`, kit
+t3-smoke/bkit8-batch-b2 (new).
+
+- **Flash:** the store control fired; tree B's caplifive_vp2c_8de3c48cf.bit is registered; upload HTTP 201; **the
+  read-back is `caplifive_vp2c_c721c1a2a.bit`** (15:29:08).
+- **s23-cpmp-rearm bare: AS EXPECTED (batch).** Its 25 values equal board 1's, value for value.
+- **Tier 1:**
+  - b0-stats 0, b0-hello 0, vm-contract 0 (stale 139);
+  - **sparse-churn VM_EXIT 0, `VIRTUAL_SPARSE_CHURN_OK allocations=200000`, nodes=600041 and steps=200065, both
+    identical to board 1's**;
+  - resume_satp_changed 0, busy_frame_refusals 0;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 0.
+- **Against the pre-registration (10ff4e43bd21): every reading holds, and the two boards agree in every reading.**
+
+### va-alloc-csret bare on the batch bitstream, board 2, result (2026-10-22 15:54-15:55): PASS, item 6 as simulated
+
+Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
+
+- **Read:** SR 0x11 (17) and 17 values `0x0 0x10004 0x0 0x20004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0`.
+- **Against the pre-registration (fea991af10cc, the RTL lane's corrected PREREG 46e03aa0fff8): PASS.**
+  - All 17 equal the batch vector, with tree A's vector as the two-sided control at positions 1, 3, 8, 11, 12 and 15.
+  - The CSNODE ancestor ids carry generations (0x10004 = generation 1 at index 4, 0x20004 = generation 2), REC_GEN
+    reads 2, and the record flags are as simulated.
+  - **Item 6 (generations in virtual node ids) behaves on vp2 silicon as on the RTL.**
+- Board 1's earlier boot of the same image read the same 17 values. It stays VOID by the rule written before it.

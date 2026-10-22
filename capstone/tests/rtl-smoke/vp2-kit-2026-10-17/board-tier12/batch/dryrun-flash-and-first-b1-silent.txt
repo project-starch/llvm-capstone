@@ -1,0 +1,18 @@
+# flash-and-first-b1.sh's SILENT guard, dry run 2026-10-22 13:45 (all external steps stubbed): a keep-retired tally with SILENT must stop
+# before the flash; a clean tally proceeds; an arm with no DONE line stops.
+== silent
+FB arm ended 13:45:51
+FB board 1 free 13:45:51
+FB STOP: the keep-retired arm read SILENT; the resident bitstream is kept for re-reading
+== clean
+FB arm ended 13:45:51
+FB board 1 free 13:45:51
+FB keep-retired arm: no SILENT read (1 keep tally lines)
+FB FLASH BEGIN 13:45:51 booking 997 # book 1 30 vp2 batch c721c1a2a REFLASH (board 1, the lead's word)
+FB FLASH END rc=0 13:45:51
+FB FIRST rc=0 13:45:51; SEQ:
+FB DONE 13:45:51
+== running
+FB arm ended 13:45:51
+FB board 1 free 13:45:51
+FB STOP: the keep-retired arm has not ended
