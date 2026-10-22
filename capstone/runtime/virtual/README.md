@@ -486,8 +486,11 @@ records grow through its metadata allocator; they have no fixed object-count lim
 Fork, shared tagged mappings, file-backed
 mmap, partial unmapping, swap, migration, application register editing by
 signals need further contracts. The qualified pthread subset is described
-above. Address hints/fixed mappings and public application `mremap` remain
-unsupported; mallocng uses the private remap slow path described in
+above. Address hints/fixed mappings remain unsupported. Public application
+`mremap` is provided in its `MREMAP_MAYMOVE` form only, as map-copy-unmap: the old
+mapping is retired, so stale pointers into it fault, and the new one is read-write;
+in-place resizing and `MREMAP_FIXED` stay `ENOSYS` (`mremap-contract.c`).
+mallocng uses the private remap slow path described in
 [the allocator contract](mallocng.md). Partial unmap
 requires a separate lifetime contract: a live wide capability must not acquire
 a replacement mapping placed into its former hole. Anonymous
