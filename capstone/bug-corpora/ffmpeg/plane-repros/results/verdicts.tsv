@@ -1,3 +1,5 @@
 case	arm	configuration	verdict	reason	evidence	bundle
 00_b7946098b1_alphablend_row_past_plane	silicon-carve-bounds	silicon-ffmpeg-plane-bounds	CAUGHT		cause=28 pc=0xac102a7c in ffp_read_probe; by probe: the fault is at the labelled probe ffp_read_probe	results/2026-10-16-silicon/silicon-carve-bounds
 00_b7946098b1_alphablend_row_past_plane	silicon-level0	silicon-ffmpeg-plane-level0	MISSED		reached (case=0 arm=buggy) and completed with no fault; silicon; buggy run end kind=exit value=0	results/2026-10-16-silicon/silicon-level0
+00_b7946098b1_alphablend_row_past_plane	virtual-malloc	virtual-mallocng	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-13-virtual/virtual-malloc
+00_b7946098b1_alphablend_row_past_plane	virtual-nested-pools	virtual-ffmpeg-plane-carve	MISSED		reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault	results/2026-10-13-virtual/virtual-nested-pools
