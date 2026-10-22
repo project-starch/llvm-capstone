@@ -563,3 +563,22 @@ the launcher changes.
 - The twelve failures are the batch kit's own (gen-probe/TIER1-r60), with nothing else changed.
 - So bitstream 2's kit reads exactly as the batch kit's Tier 1 under dev's run.py. The d5f0f399 record above stays as
   read, and its one extra failure was that run.py's.
+
+## lt0 under dev's runner, with and without lt0 13's MemoryError declaration (pre-registered 2026-10-22, before its runs)
+
+**Why a pair:** the 2026-10-10-sublet-isa bundle's own platform is not on this host. Its image f497ecd3 and its QEMU
+af37cc32 match none of 320 images and 116 QEMU binaries hashed here. So the declaration's one-variable test runs on
+the batch platform.
+- **The kit and image:** qkit7-batch2-nr and the lt0 image 23a2f0cb, the batch reference's.
+- **The invocation:** ref-batch's (run-pass-r60.sh), with dev's runner and arm wrapper:
+  - **control:** dev dbd4f5b22240, whose runner (dc606bd178c10780) is byte-identical to the one ref-batch used;
+  - **variant:** dev 3e28a2ff3d8e, the runner with the declaration (e0976db1c3e801eb).
+  - The arm wrapper is dev's (11967b37) on both sides, where ref-batch used wt-cpyrec's (666d920e).
+  - Both are git worktrees at those commits, on QEMU domains A and B.
+- Both bundles are recorded beside the 2026-10-10 one. `verdict_bundles` is not repointed: that moves 11 cells and is
+  the lead's call.
+
+**Predicted:**
+- **The control equals ref-batch/lt0 cell for cell** (verdict, reason, cause, symbol). Its only difference from
+  ref-batch is the arm wrapper, so any cell that differs belongs to the wrapper, and is listed.
+- **The variant equals the control in every cell but 13,** which moves from NO-READING:infra to MISSED.
