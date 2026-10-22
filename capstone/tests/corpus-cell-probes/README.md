@@ -489,3 +489,38 @@ last ADD_OK or refusal line are read from each serial.
   65,536) from a capacity stop (64,0xx); the rule is the cpython runner's `CAPACITY` text match, which cannot.
 - **Not a sizing reading:** 113,423 records is the recorded call under PYTHONMALLOC=malloc, an instrument
   configuration rather than any corpus arm's. The corpus maximum stays lt1 13's 106,274.
+
+## Bitstream 2's QEMU kit carries the 8,192-mapping launcher: its regression (pre-registered 2026-10-22, before the runs)
+
+**The decision:** the project lead approved it (relayed by the runtime lane): bitstream 2's board kit carries capstone-vexec
+fad465ce4dea7121 (`runtime/vexec-arenas-8192` 32e18699a0a1) in place of the 512-cap launcher. The prediction kit
+follows it, so predictions and board share the launcher.
+
+**The kit, qkit7-b2twin3-q8:** qkit7-b2twin2-q8 with only `adapter/capstone-vexec` replaced (a405840d → fad465ce).
+- A file-by-file sha256 diff of the two kits shows that one file and nothing else.
+- QEMU is 708bbff5663f0e86, module 3325473537072a3a, firmware 6f2b082c, rootfs 9903242c.
+- The runner's stamp (`b2-pred/run-pred.sh`) now prints the launcher's hash as well.
+
+**The basis for "nothing moves":** the 20 bitstream-2 calls registered at most 402 mappings (the highest
+`CAPSTONE_VM_ADD_OK slot=` across all their serials, lt1 13), against the old cap's 512. No call came near the cap
+the launcher changes.
+
+**The runs:**
+1. **Tier 1, as a pair:** gen-probe/tier1-r60b.sh's recipe, `run.py` d5f0f399 from wt-mgp 64747600ecec and the batch
+   Tier 1 images (contract 65f9f1f1, sqlite3 e63733dd, mruby f8594e11). It runs on qkit7-b2twin2-q8 and on
+   qkit7-b2twin3-q8, and the launcher is the only difference. The summary parser was tested on the batch kit's real
+   result.json: it reads 33/45, says NO DATA for a missing result, and reports DIFFER on an edited copy.
+2. **The 20 calls** (the ten capacity cells, every call, and lt0 18) on qkit7-b2twin3-q8, one per boot, as at
+   75b73a8c8862.
+
+**Predicted:**
+- **Tier 1:** the pair reads IDENTICAL test sets. Against the batch kit's 33/45 (12 failures listed in
+  gen-probe/TIER1-r60), any difference belongs to the 18-bit table, not to the launcher.
+- **The 20 calls,** as on qkit7-b2twin2-q8 call for call:
+  - every result class, fault site and high_water band as before;
+  - allocated_total exact for every call that faults, and for the lt1 02, 10, 19, 23, 27 and 28 controls, which
+    matched exactly before;
+  - lt1 30's control exact at 316,375 (it repeats on this image);
+  - lt1 31's control in 348,160..348,210 (its boot-to-boot spread was 348,169..348,197);
+  - lt1 18 at 196,527 and lt0 18 at 16,326 exact, each read once before;
+  - every call's highest mapping slot at or below 402 + 10.
