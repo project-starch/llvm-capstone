@@ -543,3 +543,16 @@ the launcher changes.
     so this is not a launcher effect: the mapping count stays far from either cap.
 - **So qkit7-b2twin3-q8 is bitstream 2's prediction kit,** on the same launcher as the board. Every earlier
   bitstream-2 reading carries over to it.
+- **lt1 31's control's band is its seven-reading span from now on, 348,169..348,212** (the runtime lane's ruling as
+  the runner contract's owner, 2026-10-22).
+
+**Tier 1 again with dev's run.py (pre-registered 2026-10-22, before its runs).**
+- The pair above used run.py d5f0f399 (wt-mgp 64747600ecec). That predates dev 719ce1d7017f, whose `sparse_recycling`
+  bounds a flat table by its own extent (16 × capacity) and accepts hardware recycling with zero collections.
+- **The re-run:** the same pair, kits and images, with run.py db4e70efe0645bb1 from dev c1f4c821256b (a `git archive`
+  of runtime/virtual, runtime/include, runtime/host and the test env, so a moving checkout cannot change it mid-run).
+- **Predicted:**
+  - the pair reads IDENTICAL;
+  - `sparse_recycling` passes on both. The flat 18-bit table recycles in hardware (collections 0), its churn makes
+    about 600,041 allocations against 2 × 262,144, and its 4 MiB extent is 16 × capacity;
+  - the other twelve failures are as with d5f0f399. Any other difference belongs to the run.py change and is listed.
