@@ -7101,3 +7101,32 @@ was touched.
   - The S-23 fetch-face refusal is absent: DRT1 0 and FRTY 0 in this boot.
   - va-alloc's generation readings wait for its bare image (the RTL lane is building it).
 - Board 2 flashes after its retire_verify arm, by flash-and-first-b2.sh.
+
+### mruby Sublet with smoke-fit on the batch bitstream, board 1: pre-registered (2026-10-22 14:4x, before the boot)
+
+- **Why first:**
+  - Of the three arms the batch unblocks, this one's reference and images are complete.
+  - On the trees, mruby Sublet's GC exhausts vp2's flat table. smoke-fit.rb was written to fit, and the generations
+    recycle on the batch.
+- **What runs:** `tier3-mp-batch.sh 1 <log>`. It is tier3-mp-arm-t100.sh's mruby-sublet leg, with:
+  - the batch kit bkit8-batch-b1 (c721c1a2a, module 21fbfc39, monitor d9da397 + FETCH_RETRY_CAP);
+  - `--smoke smoke-fit.rb` (5b588c1c);
+  - the tick-100 image 0f9bca66 and its capi;
+  - the runner and arm script from wt-ref (clean 6764d96229f6), pinned by the reference stamp's hashes (9db9f5f7,
+    11967b37).
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/mp-mruby-sublet-smokefit`, a new directory.
+- **The reference** (the compiler lane's): `smoke-fit/sublet` on qkit7-batch2, module a05c198b (from source, the
+  same as the board's 21fbfc39, built for QEMU).
+  - Its stamp's SWITCHES read `movc_null_scalar=OFF compact_rounding=ON ... generations=ON`. OFF is the silicon mimic
+    on c721c1a2a, because MOVC keeps an untagged source there (batch item 5).
+  - It read "control smoke ok", and its 23 cells equal the smoke.rb reference.
+- **Dry run** (`dryrun-mp-batch.txt`): a stub copying the reference reads 23 of 23, exit 0; one perturbed cause reads
+  22 of 23, exit 1.
+- **Predictions:**
+  - the board run's controls read "control smoke ok";
+  - **matrix-compare against the reference: 23 of 23 cells the same**;
+  - the boot completes (vbatch END rc=0);
+  - pc=0, DRT1, FRTY, FRTC, Oops, INJS, INJL and collect-skipped 0;
+  - the module's `diag gen-push` banner present (must-fire).
+  - **This is the first application run built by the batch kit's own firmware recipe.** A firmware failure would be
+    a kit finding, not a cell.

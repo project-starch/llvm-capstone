@@ -1,0 +1,15 @@
+# tier3-mp-batch.sh dry run, 2026-10-22 14:47, board 1, MB_ARM stubbed (copies the reference's out/matrix.tsv; 'perturb' changes one cause).
+== clean
+MB BEGIN 14:47:12 board 1 kit bkit8-batch-b1 booking 996 # book 1 240 vp2 batch mruby-sublet smoke-fit (board 1)
+996 # unbook 996 # book 1 240 vp2 batch mruby-sublet smoke-fit (board 1)
+MB END 14:47:12 rc=0 :: APPVM read rc=0 99:99:99 :: --- virtual-nested-pools: control smoke ok; {'fault': 23}
+MB COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB board1 DONE 14:47:12
+== perturb
+MB BEGIN 14:47:12 board 1 kit bkit8-batch-b1 booking 996 # book 1 240 vp2 batch mruby-sublet smoke-fit (board 1)
+996 # unbook 996 # book 1 240 vp2 batch mruby-sublet smoke-fit (board 1)
+MB END 14:47:12 rc=0 :: APPVM read rc=0 99:99:99 :: --- virtual-nested-pools: control smoke ok; {'fault': 23}
+MB COMPARE vs reference rc=1 :: 22 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB board1 DONE 14:47:12
