@@ -143,3 +143,20 @@ What it does not give:
 - the classic column's attribution control. The "control" build is the same program minus the one REVOKE, and
   virtual mallocng has no such switch. That is the lead's decision (a) in the plan;
 - site attribution per row.
+
+## lt1 18's full demand, with application mremap (pre-registered 2026-10-22, before its runs)
+
+**The image:** cpython-lt1 relinked as lt0 was (t3-mremap/relink.sh, ARM=lt1), with `mapping.c.obj` 4340ce84 (the
+mremap now on dev at b439b7a267c3). The control relink with the original archive reproduces 74f5c610bee6f468 and
+916e14f9b3f622c9 byte for byte. New images: base c3891354cf7fafc9, `-dl` 8bcc40cf13731e12.
+
+**The runs:** one boot each on qkit7-b2twin-q8 (the 18-bit table) and qkit7-batch2-paged-lp (uncapped, live-peak
+counters). Each boot runs case 18 on the new image, then case 18 on the batch image as the same-boot control.
+
+**The prediction:**
+- **Batch image:** `OSError: [Errno 38]` at the resize, as in 588cfd615ff6.
+- **New image:** the resize succeeds, and the defect's write faults in `mmap_ass_subscript` or `safe_byte_copy`,
+  with cause 28 (as lt0 read) or 25.
+  - On q8, high_water is at least 64,016 and no SystemError appears.
+  - On paged-lp, the live peak is between 67,875 and 70,000: the work after the resize is one item assignment.
+- **The sizing maximum stays lt1 13's 106,272.**
