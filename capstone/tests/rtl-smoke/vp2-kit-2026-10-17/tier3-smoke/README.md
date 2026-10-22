@@ -6610,3 +6610,21 @@ The runtime lane corrected two parts of the reading it gave, and I verified the 
   - none of these lines: the fault never reached resolve().
 - **The count prediction is restated:** the boot's REFUSED total plus its `fault at` lines is about twice the number
   of cause-13 runs. The other predictions are unchanged.
+
+### The compiler lane's prediction for the ring-buffer boots (received 11:10, recorded before any result is read)
+
+- **Prediction: every cause-13 run reads `resolve refused at arena`.**
+- **The reasoning, from dev source** (not checked against module 54d8a3af's exact source):
+  - musl mallocng's free of the control's 32-byte object frees its whole group, which is slot 10's own 4 KiB mmap,
+    and munmaps it.
+  - That munmap reaches the launcher as service UNMAP (2, the boundary kind 2 seen before the mark in every traced
+    run).
+  - The launcher's unmap_arena then issues CV_RETIRE and munmap.
+  - The module's retire() revokes the arena's node, which gives the 25, unpins, and zeroes the arena.
+  - So at the read no arena covers the address.
+- **What it implies:**
+  - The release is unconditional, so the variable between runs is on the read side.
+  - A cause-25 read means the load took no translation fault, through either a TLB entry left stale after munmap's
+    flush, or revocation winning the LSU's exception merge over the page fault.
+  - QEMU cannot separate these, because it checks revocation before translating.
+- **What would contradict it:** a `vma`, `pin` or `anon` site.
