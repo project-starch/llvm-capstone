@@ -1,0 +1,23 @@
+# Declared fault sites for the xlang virtual-malloc arm (xlang/virtual/run-virtual.py), written BEFORE its first run.
+# Source: host ASan on each shim as the virtual arm builds it (cc -O0 -g -fsanitize=address, the shim plus its mock), 2026-10-22:
+# frame #0's function; plus memcpy where ASan's reported source line is an explicit memcpy() call: ASan names the caller
+# there, while the virtual profile's memcpy is a separate runtime function the same copy would fault inside. No site for the
+# stack use-after-return row: ASan reports a null SEGV there (stack-use-after-return detection is off), not the defect.
+set	row	shim	fault_sites	asan_report	asan_line
+repro	1	rlua_userdata_uaf	main,memcpy	heap-use-after-free	cheri/shims/rlua_userdata_uaf.c:54
+repro	2	rlua_escaped_handle_uar		SEGV	cheri/shims/rlua_escaped_handle_uar.c:59
+repro	3	libpulse_iterator_uaf	pa_proplist_iterate,memcpy	heap-use-after-free	cheri/shims/libpulse_iterator_uaf.c:54
+repro	7	secp256k1_preallocated_uaf	ecmult_gen,memcpy	heap-use-after-free	cheri/shims/secp256k1_preallocated_uaf.c:71
+lua-cdp	lua-openssl-141	luac_openssl_ctx_uaf	openssl_cipher_ctx_free	heap-use-after-free	lua-cdp/shims/luac_openssl_ctx_uaf.c:56
+lua-cdp	ldbus-20	luac_ldbus_message_uaf	main	heap-use-after-free	lua-cdp/shims/luac_ldbus_message_uaf.c:39
+lua-cdp	cffi-lua-57	luac_ffi_closure_uaf	main	heap-use-after-free	lua-cdp/shims/luac_ffi_closure_uaf.c:39
+lua-cdp	lua-sdl2-75	luac_sdl_window_uaf	main	heap-use-after-free	lua-cdp/shims/luac_sdl_window_uaf.c:33
+lua-cdp	wireshark-16807	luac_tvbuff_uaf	main	heap-use-after-free	lua-cdp/shims/luac_tvbuff_uaf.c:38
+lua-cdp	luv-696	luac_uv_fs_uaf	main	heap-use-after-free	lua-cdp/shims/luac_uv_fs_uaf.c:33
+lua-cdp	lgi-122	luac_lgi_cairo_region_uaf	main	heap-use-after-free	lua-cdp/shims/luac_lgi_cairo_region_uaf.c:35
+lua-cdp	lgi-65	luac_lgi_garray_uaf	main	heap-use-after-free	lua-cdp/shims/luac_lgi_garray_uaf.c:34
+lua-cdp	luaossl-124	luac_x509_store_dblfree	main	heap-use-after-free	lua-cdp/shims/luac_x509_store_dblfree.c:35
+lua-cdp	luadbi-35	luac_pgconn_uaf	main	heap-use-after-free	lua-cdp/shims/luac_pgconn_uaf.c:35
+lua-cdp	luv-503	luac_luv_costate_uar	main	heap-use-after-free	lua-cdp/shims/luac_luv_costate_uar.c:39
+lua-cdp	lua-curl-80	luac_curl_multi_backptr_uaf	main	heap-use-after-free	lua-cdp/shims/luac_curl_multi_backptr_uaf.c:39
+lua-cdp	lmdb-value-after-txn	luac_lmdb_value_uaf	main	heap-use-after-free	lua-cdp/shims/luac_lmdb_value_uaf.c:40

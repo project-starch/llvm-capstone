@@ -20,5 +20,16 @@
   "related": [
     "capstone/bug-corpora"
   ],
-  "note": "7 of the 13 are GC-frees, which is the structural sub-case. Blocked specimens (C++/STL, LuaJIT) sit beside the rows and are not cases."
+  "note": "7 of the 13 are GC-frees, which is the structural sub-case. Blocked specimens (C++/STL, LuaJIT) sit beside the rows and are not cases.",
+  "required_arms": [
+    "virtual-malloc",
+    "vp2-malloc"
+  ],
+  "arm_configurations": {
+    "virtual-malloc": "virtual-mallocng",
+    "vp2-malloc": "virtual-mallocng"
+  },
+  "runners": [
+    "xlang/virtual/run-virtual.py"
+  ]
 }
