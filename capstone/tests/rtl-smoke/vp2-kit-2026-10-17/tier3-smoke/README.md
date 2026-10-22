@@ -6919,3 +6919,19 @@ S-23's flush_all plumbing.
 - **Whether the module's retire reaches that shape on silicon is the runtime lane's question.** One reading the RTL
   lane offers: the retired record's VALID bit in the context's table after the retire returns, on a 13 run against a
   25 run.
+
+### Amendment: the RTL lane's corrections to its simulation report (received ~13:0x, before either stale-read arm reads)
+
+- **The simulation's rate in shape 2 is 100 %, not "about the 13 rate".** Every build of that shape reads the retire
+  as accepted but ineffective, and the next load completes. So the RTL lane's three outcomes for board 1's
+  keep-retired arm:
+  - about 2 % SILENT: a 13 is an allowed load, but the simulation's deterministic shape is not the silicon trigger;
+  - about 0 % SILENT: shape 2 is not what the board does, and the 13s are something else;
+  - about 100 %: shape 2 itself.
+  - **The RTL lane expects the first. For board 2's object revoke: 0 SILENT.**
+- **Two statements narrowed to what was read.** My section above carries both and is corrected here:
+  - "The accepted retire wrote nothing" was a mechanism, not a reading. What was read: the record reads VALID
+    afterwards and the free list is empty. A trace of every rev-node write is running.
+  - "rvc_den_v_q CLEAR on a 13 run" is a prediction from the trace, to be confirmed on a silicon 13 run.
+- **The settled part stands:** on the revoke path (record dead) no 13 occurs at any gap, store count or residency.
+  In this RTL a 13 means the capability check allowed the load.
