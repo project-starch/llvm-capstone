@@ -32,5 +32,16 @@
     "capstone/bug-corpora",
     "capstone/bug-corpora/mruby/gc-slot-repros"
   ],
-  "note": "Rows 8 and 13 are one upstream defect, so 15 rows are 14 distinct fixes. The advisory list is the front-page table's; rows 8, 12, 13 and 14 carry their CVE id in that table but not yet in their own target.md."
+  "note": "Rows 8 and 13 are one upstream defect, so 15 rows are 14 distinct fixes. The advisory list is the front-page table's; rows 8, 12, 13 and 14 carry their CVE id in that table but not yet in their own target.md.",
+  "required_arms": [
+    "virtual-malloc",
+    "vp2-malloc"
+  ],
+  "arm_configurations": {
+    "virtual-malloc": "virtual-mallocng",
+    "vp2-malloc": "virtual-mallocng"
+  },
+  "runners": [
+    "xlang/virtual/run-virtual.py"
+  ]
 }
