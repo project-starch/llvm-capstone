@@ -8194,3 +8194,57 @@ Records: `records/bs2-dcc6daf6e-first-b2.result-lines.txt` and `records/bs2-dcc6
   the ring cut is what removes R-61 on silicon, image for image.
 - Every boot completed, with the readings 0.
 - **Against the pre-registrations (df030c9d575a, amended at 15cddf2693a8; c0e7ff264da0): every reading holds.**
+
+### Bitstream 2's capacity cells on board 2: the compiler lane's 20 calls, pre-registered (2026-10-24 17:4x, before the first boot)
+
+- **Why:** on the batch bitstream, ten lt1 cells are stopped by the 16-bit flat table at 64,001 records. The compiler
+  lane's 18-bit twin reads each of them reaching its declared site. Its predictions are on dev in
+  capstone/tests/corpus-cell-probes/README.md, in two sections: "Bitstream 2 predictions: the capacity cells on the
+  RTL-pinned twin" and "Bitstream 2's QEMU kit carries the 8,192-mapping launcher".
+- **What runs:** `tier3-capcells-b2.sh <log>`, the queue `b2-pred/queue.tsv` in order: 20 calls, one per cold boot.
+  - The images are the mremap relinks, lt1 8bcc40cf and lt0 7b871db7.
+  - Each call is replayed by tier3-replay-board.py on bitstream 2's plain kit bkit9-b2-b2. The twin ran without
+    norandmaps: its code base is randomized.
+  - Each session is the batch session hardlinked, and it holds both 916e14f9 and the relink. The call runs from a
+    hardlinked copy holding ONLY the row's image, checked by name and hash.
+  - The first call is measured on the measure-only kit bkit9-b2-mb2 first, and the run stops unless that firmware is
+    under 26,000,000 B. An incomplete boot also stops it.
+  - Each call is compared with the twin `qkit7-b2twin3-q8`'s readings.json: module 33254735, which is 215a09be's QEMU
+    twin, and launcher fad465ce.
+- **Dry run** (`dryrun-capcells-b2.txt`):
+  - all 20 calls reach their compare, each staging only its row's image;
+  - a planted cause-30 call reads DIFF;
+  - it stops on over the cap, an incomplete boot, a busy board, and an unknown tag.
+- **Predictions: every call's verdict (exit, fault cause, function, capacity 262,144) as the twin.** No cause 30, no
+  MemoryError, no SystemError. The twin's readings:
+
+  | call | exit | cause | function | high_water | allocated_total |
+  |---|---|---|---|---:|---:|
+  | lt1-02-0 | signal 11 | 28 | memcpy | 106,206 | 280,614 |
+  | lt1-02-1 | exit 0 | - | - | 74,768 | 281,183 |
+  | lt1-10-0 | signal 11 | 28 | l_divmod | 80,134 | 219,402 |
+  | lt1-10-1 | exit 0 | - | - | 80,099 | 220,865 |
+  | lt1-13-0 | signal 11 | 28 | unicode_fromformat_write_str | 106,275 | 281,516 |
+  | lt1-18-0 | signal 11 | 28 | mmap_ass_subscript | 66,702 | 196,527 |
+  | lt1-19-0 | signal 11 | 25 | fnv | 65,194 | 174,939 |
+  | lt1-19-1 | signal 11 | 25 | fnv | 64,631 | 173,796 |
+  | lt1-19-2 | exit 0 | - | - | 64,694 | 177,214 |
+  | lt1-23-0 | signal 11 | 25 | memchr | 75,016 | 267,453 |
+  | lt1-23-1 | exit 0 | - | - | 72,897 | 264,737 |
+  | lt1-27-0 | signal 11 | 25 | slot_nb_add | 71,753 | 278,149 |
+  | lt1-27-1 | exit 0 | - | - | 71,798 | 281,162 |
+  | lt1-28-0 | signal 11 | 25 | _PyEval_Vector | 76,498 | 313,843 |
+  | lt1-28-1 | exit 0 | - | - | 76,571 | 316,941 |
+  | lt1-30-0 | signal 11 | 25 | PyObject_RichCompare | 76,539 | 314,758 |
+  | lt1-30-1 | exit 0 | - | - | 76,540 | 316,375 |
+  | lt1-31-0 | signal 11 | 25 | odict_copy | 74,603 | 233,845 |
+  | lt1-31-1 | exit 0 | - | - | 82,346 | 348,212 |
+  | lt0-18-0 | signal 11 | 28 | mmap_ass_subscript | 6,095 | 16,326 |
+
+  - The counts are reported beside the twin's. On the board they can move by a few records, as on the batch's case-18
+    pair, and more for completing controls: the lane gives bands, such as lt1 31's control at 348,169..348,212.
+  - A count difference with the verdict holding is a platform difference, not a finding.
+  - **The decisive readings are the faulting calls' high_water above 65,535:** lt1 02 at about 106,206, 13 at
+    106,275, and 10, 19, 23, 27, 28, 30 and 31 between 64,631 and 106,275. Each faults at its own site with the table
+    still below capacity.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0.

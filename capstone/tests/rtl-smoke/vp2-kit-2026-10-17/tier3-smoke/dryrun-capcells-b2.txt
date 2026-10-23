@@ -1,0 +1,118 @@
+# tier3-capcells-b2.sh 5a0a08ef78f5e98b dry run, 2026-10-24 17:33: tier3-replay-board.py stubbed (it writes the twin's own
+# readings.json, FLIPTAG=<tag> planting a cause-30 fault in that call; a measure-only kit gets a SEQ line of SZ bytes; VB= the
+# transcript's vbatch END rc), busy and the hub stubbed. The hardlinked session copies are real: each staged ONLY its row's image.
+
+## all
+CC MEASURE lt1-02-0 firmware 24000000 B against 26000000
+CC lt1-02-0 BEGIN 17:33:35 image 8bcc40cf13731e12 booking 22
+CC lt1-02-0 END rc=0 17:33:35 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-02-0 VERDICT SAME :: board ('signal', 11) cause 28 memcpy high_water 106206 allocated 280614 capacity 262144 :: counts vs twin equal
+CC lt1-02-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-02-1 BEGIN 17:33:35 image 8bcc40cf13731e12 booking 22
+CC lt1-02-1 END rc=0 17:33:35 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-02-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 74768 allocated 281183 capacity 262144 :: counts vs twin equal
+CC lt1-02-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-10-0 BEGIN 17:33:35 image 8bcc40cf13731e12 booking 22
+CC lt1-10-0 END rc=0 17:33:35 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-10-0 VERDICT SAME :: board ('signal', 11) cause 28 l_divmod high_water 80134 allocated 219402 capacity 262144 :: counts vs twin equal
+CC lt1-10-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-10-1 BEGIN 17:33:35 image 8bcc40cf13731e12 booking 22
+CC lt1-10-1 END rc=0 17:33:35 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-10-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 80099 allocated 220865 capacity 262144 :: counts vs twin equal
+CC lt1-10-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-13-0 BEGIN 17:33:35 image 8bcc40cf13731e12 booking 22
+CC lt1-13-0 END rc=0 17:33:36 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-13-0 VERDICT SAME :: board ('signal', 11) cause 28 unicode_fromformat_write_str high_water 106275 allocated 281516 capacity 262144 :: counts vs twin equal
+CC lt1-13-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-18-0 BEGIN 17:33:36 image 8bcc40cf13731e12 booking 22
+CC lt1-18-0 END rc=0 17:33:36 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-18-0 VERDICT SAME :: board ('signal', 11) cause 28 mmap_ass_subscript high_water 66702 allocated 196527 capacity 262144 :: counts vs twin equal
+CC lt1-18-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-19-0 BEGIN 17:33:36 image 8bcc40cf13731e12 booking 22
+CC lt1-19-0 END rc=0 17:33:36 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-19-0 VERDICT SAME :: board ('signal', 11) cause 25 fnv high_water 65194 allocated 174939 capacity 262144 :: counts vs twin equal
+CC lt1-19-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-19-1 BEGIN 17:33:36 image 8bcc40cf13731e12 booking 22
+CC lt1-19-1 END rc=0 17:33:36 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-19-1 VERDICT SAME :: board ('signal', 11) cause 25 fnv high_water 64631 allocated 173796 capacity 262144 :: counts vs twin equal
+CC lt1-19-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-19-2 BEGIN 17:33:36 image 8bcc40cf13731e12 booking 22
+CC lt1-19-2 END rc=0 17:33:36 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-19-2 VERDICT SAME :: board ('exit', 0) cause None None high_water 64694 allocated 177214 capacity 262144 :: counts vs twin equal
+CC lt1-19-2 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-23-0 BEGIN 17:33:36 image 8bcc40cf13731e12 booking 22
+CC lt1-23-0 END rc=0 17:33:36 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-23-0 VERDICT SAME :: board ('signal', 11) cause 25 memchr high_water 75016 allocated 267453 capacity 262144 :: counts vs twin equal
+CC lt1-23-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-23-1 BEGIN 17:33:36 image 8bcc40cf13731e12 booking 22
+CC lt1-23-1 END rc=0 17:33:36 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-23-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 72897 allocated 264737 capacity 262144 :: counts vs twin equal
+CC lt1-23-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-27-0 BEGIN 17:33:37 image 8bcc40cf13731e12 booking 22
+CC lt1-27-0 END rc=0 17:33:37 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-27-0 VERDICT SAME :: board ('signal', 11) cause 25 slot_nb_add high_water 71753 allocated 278149 capacity 262144 :: counts vs twin equal
+CC lt1-27-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-27-1 BEGIN 17:33:37 image 8bcc40cf13731e12 booking 22
+CC lt1-27-1 END rc=0 17:33:37 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-27-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 71798 allocated 281162 capacity 262144 :: counts vs twin equal
+CC lt1-27-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-28-0 BEGIN 17:33:37 image 8bcc40cf13731e12 booking 22
+CC lt1-28-0 END rc=0 17:33:37 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-28-0 VERDICT SAME :: board ('signal', 11) cause 25 _PyEval_Vector high_water 76498 allocated 313843 capacity 262144 :: counts vs twin equal
+CC lt1-28-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-28-1 BEGIN 17:33:38 image 8bcc40cf13731e12 booking 22
+CC lt1-28-1 END rc=0 17:33:38 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-28-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 76571 allocated 316941 capacity 262144 :: counts vs twin equal
+CC lt1-28-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-30-0 BEGIN 17:33:39 image 8bcc40cf13731e12 booking 22
+CC lt1-30-0 END rc=0 17:33:39 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-30-0 VERDICT SAME :: board ('signal', 11) cause 25 PyObject_RichCompare high_water 76539 allocated 314758 capacity 262144 :: counts vs twin equal
+CC lt1-30-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-30-1 BEGIN 17:33:39 image 8bcc40cf13731e12 booking 22
+CC lt1-30-1 END rc=0 17:33:39 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-30-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 76540 allocated 316375 capacity 262144 :: counts vs twin equal
+CC lt1-30-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-31-0 BEGIN 17:33:39 image 8bcc40cf13731e12 booking 22
+CC lt1-31-0 END rc=0 17:33:39 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-31-0 VERDICT SAME :: board ('signal', 11) cause 25 odict_copy high_water 74603 allocated 233845 capacity 262144 :: counts vs twin equal
+CC lt1-31-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-31-1 BEGIN 17:33:39 image 8bcc40cf13731e12 booking 22
+CC lt1-31-1 END rc=0 17:33:39 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-31-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 82346 allocated 348212 capacity 262144 :: counts vs twin equal
+CC lt1-31-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt0-18-0 BEGIN 17:33:39 image 7b871db70b7ec373 booking 22
+CC lt0-18-0 END rc=0 17:33:39 :: calls 1 ran 1 completed True (stub; staged cpython-7b871db70b7ec373.dom)
+CC lt0-18-0 VERDICT SAME :: board ('signal', 11) cause 28 mmap_ass_subscript high_water 6095 allocated 16326 capacity 262144 :: counts vs twin equal
+CC lt0-18-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC board2 DONE 17:33:39
+
+## flip
+CC MEASURE lt1-13-0 firmware 24000000 B against 26000000
+CC lt1-13-0 BEGIN 17:33:39 image 8bcc40cf13731e12 booking 22
+CC lt1-13-0 END rc=0 17:33:39 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-13-0 VERDICT SAME :: board ('signal', 11) cause 28 unicode_fromformat_write_str high_water 106275 allocated 281516 capacity 262144 :: counts vs twin equal
+CC lt1-13-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt0-18-0 BEGIN 17:33:39 image 7b871db70b7ec373 booking 22
+CC lt0-18-0 END rc=0 17:33:39 :: calls 1 ran 1 completed True (stub; staged cpython-7b871db70b7ec373.dom)
+CC lt0-18-0 VERDICT DIFF ['cause', 'function'] :: board ('signal', 11) cause 30 _PyObject_Calloc high_water 6095 allocated 16326 capacity 262144 :: counts vs twin equal
+CC lt0-18-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC board2 DONE 17:33:39
+
+## over
+CC MEASURE lt1-02-0 firmware 26500000 B against 26000000
+CC STOP: the measured firmware is not under the cap; no boot
+
+## inc
+CC MEASURE lt1-02-0 firmware 24000000 B against 26000000
+CC lt1-02-0 BEGIN 17:33:39 image 8bcc40cf13731e12 booking 22
+CC lt1-02-0 END rc=0 17:33:39 :: calls 1 ran 1 completed True (stub; staged cpython-8bcc40cf13731e12.dom)
+CC lt1-02-0 VERDICT SAME :: board ('signal', 11) cause 28 memcpy high_water 106206 allocated 280614 capacity 262144 :: counts vs twin equal
+CC lt1-02-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC STOP after lt1-02-0: the boot did not complete
+
+## busy
+CC MEASURE lt1-02-0 firmware 24000000 B against 26000000
+CC STOP: board 2 is busy before lt1-02-0
+
+## badtag
+CC STOP: lt9-99-0: no queue row, session or completed twin reading
