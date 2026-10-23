@@ -7597,6 +7597,56 @@ three cells.**
 - sql0 (9 cells) is running on board 2. The new arms (xlang, plane and capi) follow on board 1.
 - The standing 346-cell pass on the two tree bitstreams stays the record. These cells sit beside it.
 
+### Bitstream 2 (18-bit index) on BOARD 2: reflash and first boots, pre-registered (2026-10-23 02:1x, before the seal and the flash)
+
+- **The lead's word, in this session, 2026-10-23:**
+  - verbatim: "reflash board 2 after bitstream 2 synthesis finish";
+  - the earlier answer the same night: board 2, after its queue.
+  - The bitstream is the RTL lane's candidate 68d0ffaf8 (vp3-notracer: bitstream 2's 18-bit index plus the tracer
+    dropped). Its full build launched at 17:50 UTC. The first try, 5d365d9a6, failed routing.
+  - The flash goes only after board 2's sql0 run ends. The batch bitstream c721c1a2a stays registered as the fallback,
+    and the script requires it in the store before flashing. Board 1 stays on the batch bitstream.
+- **What runs:** `board-tier12/batch/flash-and-first-bs2-b2.sh <log> <name> <local .bit> <sha256>`, launched with the
+  name and sha256 the RTL lane reports at the seal. Each step gates the next:
+  1. wait for sql0's end, then for the board to be free;
+  2. check the console store, with store-has.py's own control first; the batch bitstream must be listed;
+  3. check the local file's sha256;
+  4. book the hub, then run flash-bitstream.py (upload, flash, power-cycle, read back);
+  5. run `make-b2-kit.sh 2 <name>`, which must end "MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE";
+  6. run `run-b2-first.sh 2 <name> <mnt-hdd>/capstone/t3-run-b2-<suffix>-b2`, a new directory.
+- **The first boots** (`run-b2-first.sh`, run-batch-first.sh with these changes):
+  - **s23-cpmp-rearm bare, `--expect batch`.** The RTL lane: the vector is unchanged on bitstream 2, because no id is
+    printed.
+  - **va-alloc-bare, `--expect b2`.** The RTL lane's PREREG (dev cd30ce0e0876, carried to 68d0ffaf8 at 816fd44f5849):
+    - SR 17, vector `0x0 0x40004 0x0 0x80004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x8 0x3 0x4 0x1 0x8 0x0`;
+    - it differs from the batch's at positions 1, 3, 11 and 15;
+    - va-alloc-grade.py now carries this vector, and reads BATCH-RESIDENT when the batch vector comes back.
+    - **Anything but PASS stops the chain before Linux,** as s23 does.
+  - **Tier 1:** firmware 0c24496f80ef40d5 on image b052598d70aba6f9 (`b2-prep.sh`, real run in the dry-run record).
+    - It is the batch Tier 1 stage with ONLY `vm/capstone_vm.ko` changed to 215a09be. The stage sums differ in that
+      one line, and the bake's by-hash cpio check found all 14 files.
+    - Every CAPSTONE_VM_STATS line and the sparse-churn OK line are printed.
+- **Dry run** (`board-tier12/batch/dryrun-bs2-b2.txt`):
+  - the full chain;
+  - the flash script stops on a bad name, a short sha256, a wrong local hash, a missing fallback, and a failed flash;
+  - the first boots stop before Tier 1 when va-alloc reads the batch vector.
+- **Predictions:**
+  1. The flash reads back the new name.
+  2. **The monitor prints** (SHA*, the S23 lines, the Tier 1 monitor counters). This is the positive control that
+     `csrw 0x800` still retires on a tracer-less core, the RTL lane's condition.
+  3. s23: AS EXPECTED (batch), SR 25, re-arm all 1, total 14.
+  4. **va-alloc-bare: PASS, the bitstream-2 vector.** This is the first silicon reading of the 18-bit id format.
+  5. **Tier 1 IDENTICAL to the batch's** (the runtime lane's prediction, corrected before the boot):
+     - b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1 (stale 139), sparse-churn 0;
+     - sparse-churn `nodes=600041 steps=200065 collections=0 node_capacity=4096 node_growths=0`;
+     - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 read 0.
+     - node_capacity is the MODULE's `node_flat_records`, which rev7's Tier 1 harness sets to 4096. So Tier 1 cannot
+       show the 18-bit capacity. That runtime-lane prediction (262144) was withdrawn on that read.
+  6. The silicon discriminator for the larger index is a context at the default capacity with more than 65,535 live
+     records. It is a corpus boot, pre-registered separately: the compiler lane's hold.c, or cpython lt1's capacity
+     cells 02 and 13.
+- **Aperture note for this bitstream:** 225's bit 7 (trace_buf_empty) reads a constant 1.
+
 ### live-peak `hold 100000`: the 18-bit index on silicon, a matched pair (board 1 batch control, board 2 bitstream 2), pre-registered (2026-10-23 02:1x)
 
 - **Why:**
@@ -8064,3 +8114,201 @@ Record: `records/r61a-bare-batch.result-lines.txt`.
 - **Against the pre-registration (1bd5dc7c980c): every reading holds.**
 - **R-61's arming on silicon is wider than "a refused consuming ldc":** a non-consuming ldc arms it as well, both from
   a read-only page and from a writable page with D clear, exactly as the RTL lane simulated.
+
+### Bitstream 2 on board 2, AMENDMENT at the seal (2026-10-24 16:3x, before the flash): the sealed build, its grade, and the runs that follow the first boots
+
+- **The bitstream:** `caplifive_vp2c_dcc6daf6e.bit`,
+  sha256 `fcaec59323eb2c9d6fcb56a6e6709ac797d06c24e4b4a5d5fd6080ba2d21906e`, sealed by synth from capstone-ariane
+  dcc6daf6e (vp3-ringcut). It is copied to `<mnt-hdd>/capstone/bitstreams/caplifive_vp2c_dcc6daf6e.bit`, and its hash
+  equals synth's file, read on the host at that HEAD.
+  - The RTL lane's grade of the seal: loops PASS (0 combinational loops; TIMING-23 0, while the same matcher finds
+    2 on the batch's); congestion PASS
+    (no window above level 5; the router's initial estimate has 2 level-5 windows against the batch's 9); **routed WNS
+    -9.790 ns, against -18.529 (batch) and -19.019 (resident): 8.7 ns BETTER, outside the null band by the letter of the
+    key, on the good side.** The worst paths are the batch's families (cpmp_q / cur_idx_q -> fu_data_q) at about the same
+    logic depth, with less delay per level. Two changes fit: about 33,000 FFs dropped with the tracer, and the store
+    buffer's page-offset compare (the ring segment cut) is on none of the worst 500 paths (500 on the batch).
+    Post-route area matches the predictions (-9,564 LUT against -9,311; -32,966 FF against -32,849), and every
+    simulation arm is value-identical. The WNS miss went to the lead before any flash, as agreed, and **the lead's
+    answer in this session (16:3x) is "Flash now"**.
+  - The pre-registered keys: a congestion window ≤ level 5, the TIMING-23 ring absent in routed check_timing, and WNS
+    inside the −18.529 null band. A missed key goes to the lead before any flash.
+  - The lead's word stands: "reflash board 2 after bitstream 2 synthesis finish".
+- **Its contents, on top of c721c1a2a (the RTL lane's list):**
+  1. the 18-bit virtual index, ids {gen[29:18], idx[17:0]};
+  2. item 4's predicate on the source's six exponent bits, with no architectural change;
+  3. the debug tracer DROPPED: aperture 225 bit 7 reads a constant 1, and sw[0..2] do nothing. CSRs 0x800, 0x810 and
+     0x811 remain legal writes;
+  4. the load unit's ring cut, which is R-61's fix.
+  - This supersedes the 2026-10-23 section's "68d0ffaf8". The first-boot vectors are confirmed on dcc6daf6e by
+    simulating the images themselves: s23 is the batch's 25 values, and va-alloc is the bitstream-2 vector already in
+    va-alloc-grade.py.
+- **The first boots are unchanged:** flash-and-first-bs2-b2.sh → run-b2-first.sh. Predictions as in the 2026-10-23
+  section.
+- **Then, each only after the first boots read as predicted (s23 AS EXPECTED, va-alloc PASS, Tier 1 identical to the
+  batch's):**
+  1. **hold 100000** (`tier3-hold-batch.sh 2 bkit9-b2-b2 ...`): HOLD-PEAK and HOLD-OK 100000, exit 0, high_water
+     105,569 of capacity 262,144. This is the 18-bit index on silicon. Its batch side read HOLD-NULL at 60590 and
+     64,001 of 65,536.
+  2. **R-61** (`tier3-r61-bare.sh 2 <log> 61faf96f5863` with R61_KIT=bkit9-b2-b2 and r61-grade.py `--expect fixed`):
+     the control exact; **r61-stale2 FIXED**, positions 18-21 = 0x2, 0x18, 0x420590db, 0x1234 (the RETURN, the word
+     copied); r61-stale FIXED, position 18 = 0xd.
+  3. **R-61 arming** (`tier3-r61a-bare.sh`, the same way): the control and stale0 exact; **r61a-stale3 and r61a-stale4
+     FIXED**, positions 17-20 = 0x2, 0x18, 0x420590db, 0x1234.
+  4. Then the compiler lane's 20 capacity-cell calls, pre-registered separately before they run.
+
+### Bitstream 2 on board 2, result (2026-10-24 16:43-17:31): flashed; every first-boot reading holds; the 18-bit index holds 100,000 live records on silicon; R-61 reads fixed
+
+Records: `records/bs2-dcc6daf6e-first-b2.result-lines.txt` and `records/bs2-dcc6daf6e-after-b2.result-lines.txt`.
+
+- **The flash** (16:43-16:46, on the lead's "Flash now"):
+  - the store control fired, and the batch bitstream is registered as the fallback;
+  - the local sha256 is the sealed one, and the upload was HTTP 201;
+  - **the read-back after the power cycle is `caplifive_vp2c_dcc6daf6e.bit`.**
+  - The kit is bkit9-b2-b2: exactly the BOARD_BITSTREAM line changed, module 215a09be, launcher fad465ce.
+- **First boots:**
+  - **s23-cpmp-rearm: AS EXPECTED (batch).** SR 25, every value as the vector, re-arm all 1, total 14.
+  - **va-alloc-bare: PASS on the bitstream-2 vector,** `0x0 0x40004 0x0 0x80004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x8 0x3
+    0x4 0x1 0x8 0x0`, SR 17. This is the first silicon reading of the {gen[29:18], idx[17:0]} id format.
+  - **Tier 1: identical to the batch's.**
+    - b0-stats, b0-hello and vm-contract read 0, and vm-suite reads 1.
+    - The VM exits are normal 0, stale 139 and sparse-churn 0. sparse-churn reads nodes=600041, steps=200065,
+      collections 0 and node_capacity 4096, which is rev7's insmod, as the runtime lane predicted.
+    - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 read 0.
+  - **The monitor-print positive control:** the SHA-tag lines are 18 on bitstream 2 and 18 on the batch, with RGID 3 and
+    RCLM 3. Every report executes csrw 0x800 before its UART write, so 0x800 retires on the tracer-less core.
+- **hold 100000 (the 18-bit discriminator):** `HOLD-PEAK 100000`, `HOLD-OK 100000`, exit 0, no fault.
+  - **nodes_high_water 105,569, allocated_total 105,569, node_capacity 262,144.** That is exactly the 18-bit QEMU
+    twin's reading.
+  - The batch side of the pair, on board 1, read HOLD-NULL at 60590 and 64,001 of 65,536.
+  - **A context at the module's default capacity holds more than 65,535 live records on silicon.**
+- **R-61, the RTL lane's kit 61faf96f5863, graded --expect fixed:**
+  - the control is exact;
+  - **r61-stale2 is the fixed tree's vector:** positions 18-21 read 0x2, 0x18, 0x420590db and 0x1234, so the RETURN
+    completes and the word is copied;
+  - **r61-stale is the fixed tree's vector:** position 18 reads 0xd, the page fault.
+- **R-61 arming, kit 6910f80d4903, --expect fixed:**
+  - the control and stale0 are exact;
+  - **r61a-stale3 and r61a-stale4 are the fixed tree's vector:** positions 17-20 read 0x2, 0x18, 0x420590db and 0x1234.
+- **The same images read the c721c1a2a vectors on the batch bitstream** (both boards, 2026-10-24 13:27 and 14:31). So
+  the ring cut is what removes R-61 on silicon, image for image.
+- Every boot completed, with the readings 0.
+- **Against the pre-registrations (df030c9d575a, amended at 15cddf2693a8; c0e7ff264da0): every reading holds.**
+
+### Bitstream 2's capacity cells on board 2: the compiler lane's 20 calls, pre-registered (2026-10-24 17:4x, before the first boot)
+
+- **Why:** on the batch bitstream, ten lt1 cells are stopped by the 16-bit flat table at 64,001 records. The compiler
+  lane's 18-bit twin reads each of them reaching its declared site. Its predictions are on dev in
+  capstone/tests/corpus-cell-probes/README.md, in two sections: "Bitstream 2 predictions: the capacity cells on the
+  RTL-pinned twin" and "Bitstream 2's QEMU kit carries the 8,192-mapping launcher".
+- **What runs:** `tier3-capcells-b2.sh <log>`, the queue `b2-pred/queue.tsv` in order: 20 calls, one per cold boot.
+  - The images are the mremap relinks, lt1 8bcc40cf and lt0 7b871db7.
+  - Each call is replayed by tier3-replay-board.py on bitstream 2's plain kit bkit9-b2-b2. The twin ran without
+    norandmaps: its code base is randomized.
+  - Each session is the batch session hardlinked, and it holds both 916e14f9 and the relink. The call runs from a
+    hardlinked copy holding ONLY the row's image, checked by name and hash.
+  - The first call is measured on the measure-only kit bkit9-b2-mb2 first, and the run stops unless that firmware is
+    under 26,000,000 B. An incomplete boot also stops it.
+  - Each call is compared with the twin `qkit7-b2twin3-q8`'s readings.json: module 33254735, which is 215a09be's QEMU
+    twin, and launcher fad465ce.
+- **Dry run** (`dryrun-capcells-b2.txt`):
+  - all 20 calls reach their compare, each staging only its row's image;
+  - a planted cause-30 call reads DIFF;
+  - it stops on over the cap, an incomplete boot, a busy board, and an unknown tag.
+- **Predictions: every call's verdict (exit, fault cause, function, capacity 262,144) as the twin.** No cause 30, no
+  MemoryError, no SystemError. The twin's readings:
+
+  | call | exit | cause | function | high_water | allocated_total |
+  |---|---|---|---|---:|---:|
+  | lt1-02-0 | signal 11 | 28 | memcpy | 106,206 | 280,614 |
+  | lt1-02-1 | exit 0 | - | - | 74,768 | 281,183 |
+  | lt1-10-0 | signal 11 | 28 | l_divmod | 80,134 | 219,402 |
+  | lt1-10-1 | exit 0 | - | - | 80,099 | 220,865 |
+  | lt1-13-0 | signal 11 | 28 | unicode_fromformat_write_str | 106,275 | 281,516 |
+  | lt1-18-0 | signal 11 | 28 | mmap_ass_subscript | 66,702 | 196,527 |
+  | lt1-19-0 | signal 11 | 25 | fnv | 65,194 | 174,939 |
+  | lt1-19-1 | signal 11 | 25 | fnv | 64,631 | 173,796 |
+  | lt1-19-2 | exit 0 | - | - | 64,694 | 177,214 |
+  | lt1-23-0 | signal 11 | 25 | memchr | 75,016 | 267,453 |
+  | lt1-23-1 | exit 0 | - | - | 72,897 | 264,737 |
+  | lt1-27-0 | signal 11 | 25 | slot_nb_add | 71,753 | 278,149 |
+  | lt1-27-1 | exit 0 | - | - | 71,798 | 281,162 |
+  | lt1-28-0 | signal 11 | 25 | _PyEval_Vector | 76,498 | 313,843 |
+  | lt1-28-1 | exit 0 | - | - | 76,571 | 316,941 |
+  | lt1-30-0 | signal 11 | 25 | PyObject_RichCompare | 76,539 | 314,758 |
+  | lt1-30-1 | exit 0 | - | - | 76,540 | 316,375 |
+  | lt1-31-0 | signal 11 | 25 | odict_copy | 74,603 | 233,845 |
+  | lt1-31-1 | exit 0 | - | - | 82,346 | 348,212 |
+  | lt0-18-0 | signal 11 | 28 | mmap_ass_subscript | 6,095 | 16,326 |
+
+  - The counts are reported beside the twin's. On the board they can move by a few records, as on the batch's case-18
+    pair, and more for completing controls: the lane gives bands, such as lt1 31's control at 348,169..348,212.
+  - A count difference with the verdict holding is a platform difference, not a finding.
+  - **The decisive readings are the faulting calls' high_water above 65,535:** lt1 02 at about 106,206, 13 at
+    106,275, and 10, 19, 23, 27, 28, 30 and 31 between 64,631 and 106,275. Each faults at its own site with the table
+    still below capacity.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0.
+
+### Bitstream 2 on BOARD 1 as well: reflash, first boots, and the same runs as board 2, pre-registered (2026-10-24 17:4x, before the flash)
+
+- **The lead's word, in this session:** "flash board 1 - confirm", then "and go. Use both boards". The batch bitstream
+  c721c1a2a stays registered as the fallback, and the script requires it in the store.
+- **What runs, in order, each gating the next:**
+  1. `board-tier12/batch/flash-and-first-bs2-b1.sh`, which is flash-and-first-bs2-b2.sh by board-1 substitutions.
+     - It pins FPGA_BOARD=1 explicitly. The dry run runs it under an inherited FPGA_BOARD=2 and shows the flash
+       handed board 1.
+     - It flashes `caplifive_vp2c_dcc6daf6e.bit` (fcaec593...), makes the kit bkit9-b2-b1 and runs the first boots.
+  2. hold 100000 on bkit9-b2-b1.
+  3. R-61, then R-61 arming, both with --expect fixed.
+  4. The 20 capacity-cell calls, board 1's copy of tier3-capcells-b2.sh with the board as its only change. That makes
+     the bitstream-2 capacity cells N=2 alongside board 2's run.
+- **Predictions:** board 2's, reading for reading:
+  - s23 AS EXPECTED;
+  - va-alloc PASS on the 18-bit vector;
+  - Tier 1 identical to the batch;
+  - the monitor's reports print;
+  - hold HOLD-OK, high_water 105,569 of 262,144;
+  - every R-61 image its fixed-tree vector;
+  - every capacity-cell verdict as the twin.
+  - **Boards 1 and 2 agree value for value on the bare-boot vectors.**
+
+### Bitstream 2 on board 1, and the capacity cells on both boards, result (2026-10-24 17:38 to 2026-10-25 00:51): N=2, every pre-registered verdict holds
+
+Records:
+- board 1: `records/bs2-dcc6daf6e-first-b1.result-lines.txt`, `records/bs2-dcc6daf6e-after-b1.result-lines.txt` and
+  `records/bs2-capcells-b1.result-lines.txt`;
+- board 2: `records/bs2-capcells-b2.result-lines.txt`.
+
+- **Board 1's flash** (17:40-17:43, on the lead's word): the read-back after the power cycle is
+  `caplifive_vp2c_dcc6daf6e.bit`, and the kit is bkit9-b2-b1.
+- **Board 1's first boots: as board 2's, value for value.**
+  - s23 is AS EXPECTED, and va-alloc PASSes on the 18-bit vector. Their SR/SV lines are byte-identical to board 2's.
+  - Tier 1 is identical to the batch: sparse-churn 600041 and 200065, node_capacity 4096. The readings are 0.
+  - The monitor's reports print: SHA-tag lines 18, RGID 3, RCLM 3.
+- **Board 1's hold 100000:** HOLD-OK, exit 0, high_water **105,569** of 262,144, as board 2 and the twin.
+- **Board 1's R-61 and R-61 arming, --expect fixed: every image FIXED.** All seven SR/SV vectors are identical to
+  board 2's.
+- **The capacity cells: 20 of 20 verdicts as the 18-bit twin on BOTH boards, and the two boards agree in every
+  verdict.**
+  - There is no cause 30, no MemoryError and no SystemError, and node_capacity reads 262,144 in every call.
+  - Every faulting lt1 call reaches its declared site with high_water above 64,001, the 16-bit ceiling:
+    - lt1 02: 106,196 on board 2, cause 28 in memcpy;
+    - lt1 13: 106,284, cause 28 in unicode_fromformat_write_str;
+    - lt1 18: 66,703, cause 28 in mmap_ass_subscript;
+    - 10, 19, 23, 27, 28, 30 and 31 at their own sites, 64,619 to 80,121.
+  - On the batch bitstream the same cells are stopped by the 16-bit table: lt1 18 at 64,011 of 65,536 (board 2,
+    2026-10-24).
+  - **The counts.** high_water is within −21..+11 of the twin. allocated_total is lower than the twin's by up to 936
+    (0.43%) in every lt1 call.
+    - Board 1 and board 2 agree far more closely: high_water within −8..+23, allocated within −66..+4.
+    - So the board-vs-QEMU offset is a platform property, as the batch's case-18 pair already showed. One disclosed
+      source is the launcher.
+    - **One count sits outside a band the compiler lane gave:** lt1 31's control read allocated 347,449 on board 2
+      against 348,169..348,212. That is 720 under, while its verdict (exit 0) holds. It is recorded as the platform
+      offset, not as a finding.
+- **Against the pre-registrations (3417d6ac9c36 and ea2776a143c0): every verdict holds,** and the counts are as
+  disclosed above.
+- **Bitstream 2's purpose, read on silicon on both boards:**
+  - the 18-bit index holds more than 65,535 live records at the module's default capacity;
+  - the ten lt1 cells the batch's table stopped now reach their sites;
+  - R-61 is fixed.

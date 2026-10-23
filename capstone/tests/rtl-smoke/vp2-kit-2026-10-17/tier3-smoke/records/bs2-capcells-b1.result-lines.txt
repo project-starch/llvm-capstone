@@ -1,0 +1,83 @@
+# Bitstream 2's capacity cells on board 1 (tier3-capcells-b1.sh): result lines only.
+CC MEASURE lt1-02-0 firmware 25856520 B against 26000000
+CC lt1-02-0 BEGIN 18:25:40 image 8bcc40cf13731e12 booking 219
+CC lt1-02-0 END rc=0 18:45:39 :: calls 1 ran 1 completed True
+CC lt1-02-0 VERDICT SAME :: board ('signal', 11) cause 28 memcpy high_water 106201 allocated 279910 capacity 262144 :: counts vs twin {'high_water': (106206, 106201), 'allocated_total': (280614, 279910)}
+CC lt1-02-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-02-1 BEGIN 18:45:39 image 8bcc40cf13731e12 booking 221
+CC lt1-02-1 END rc=0 19:04:31 :: calls 1 ran 1 completed True
+CC lt1-02-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 74768 allocated 280476 capacity 262144 :: counts vs twin {'allocated_total': (281183, 280476)}
+CC lt1-02-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-10-0 BEGIN 19:04:32 image 8bcc40cf13731e12 booking 223
+CC lt1-10-0 END rc=0 19:23:11 :: calls 1 ran 1 completed True
+CC lt1-10-0 VERDICT SAME :: board ('signal', 11) cause 28 l_divmod high_water 80120 allocated 218466 capacity 262144 :: counts vs twin {'high_water': (80134, 80120), 'allocated_total': (219402, 218466)}
+CC lt1-10-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-10-1 BEGIN 19:23:11 image 8bcc40cf13731e12 booking 225
+CC lt1-10-1 END rc=0 19:40:51 :: calls 1 ran 1 completed True
+CC lt1-10-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 80097 allocated 219937 capacity 262144 :: counts vs twin {'high_water': (80099, 80097), 'allocated_total': (220865, 219937)}
+CC lt1-10-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-13-0 BEGIN 19:40:52 image 8bcc40cf13731e12 booking 227
+CC lt1-13-0 END rc=0 20:00:52 :: calls 1 ran 1 completed True
+CC lt1-13-0 VERDICT SAME :: board ('signal', 11) cause 28 unicode_fromformat_write_str high_water 106278 allocated 280811 capacity 262144 :: counts vs twin {'high_water': (106275, 106278), 'allocated_total': (281516, 280811)}
+CC lt1-13-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-18-0 BEGIN 20:00:52 image 8bcc40cf13731e12 booking 229
+CC lt1-18-0 END rc=0 20:18:27 :: calls 1 ran 1 completed True
+CC lt1-18-0 VERDICT SAME :: board ('signal', 11) cause 28 mmap_ass_subscript high_water 66708 allocated 195844 capacity 262144 :: counts vs twin {'high_water': (66702, 66708), 'allocated_total': (196527, 195844)}
+CC lt1-18-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-19-0 BEGIN 20:18:27 image 8bcc40cf13731e12 booking 231
+CC lt1-19-0 END rc=0 20:35:32 :: calls 1 ran 1 completed True
+CC lt1-19-0 VERDICT SAME :: board ('signal', 11) cause 25 fnv high_water 65203 allocated 174286 capacity 262144 :: counts vs twin {'high_water': (65194, 65203), 'allocated_total': (174939, 174286)}
+CC lt1-19-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-19-1 BEGIN 20:35:32 image 8bcc40cf13731e12 booking 233
+CC lt1-19-1 END rc=0 20:52:33 :: calls 1 ran 1 completed True
+CC lt1-19-1 VERDICT SAME :: board ('signal', 11) cause 25 fnv high_water 64618 allocated 173145 capacity 262144 :: counts vs twin {'high_water': (64631, 64618), 'allocated_total': (173796, 173145)}
+CC lt1-19-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-19-2 BEGIN 20:52:33 image 8bcc40cf13731e12 booking 235
+CC lt1-19-2 END rc=0 21:08:33 :: calls 1 ran 1 completed True
+CC lt1-19-2 VERDICT SAME :: board ('exit', 0) cause None None high_water 64687 allocated 176572 capacity 262144 :: counts vs twin {'high_water': (64694, 64687), 'allocated_total': (177214, 176572)}
+CC lt1-19-2 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-23-0 BEGIN 21:08:33 image 8bcc40cf13731e12 booking 237
+CC lt1-23-0 END rc=0 21:28:10 :: calls 1 ran 1 completed True
+CC lt1-23-0 VERDICT SAME :: board ('signal', 11) cause 25 memchr high_water 75011 allocated 266711 capacity 262144 :: counts vs twin {'high_water': (75016, 75011), 'allocated_total': (267453, 266711)}
+CC lt1-23-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-23-1 BEGIN 21:28:10 image 8bcc40cf13731e12 booking 239
+CC lt1-23-1 END rc=0 21:46:35 :: calls 1 ran 1 completed True
+CC lt1-23-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 72885 allocated 264031 capacity 262144 :: counts vs twin {'high_water': (72897, 72885), 'allocated_total': (264737, 264031)}
+CC lt1-23-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-27-0 BEGIN 21:46:35 image 8bcc40cf13731e12 booking 241
+CC lt1-27-0 END rc=0 22:06:26 :: calls 1 ran 1 completed True
+CC lt1-27-0 VERDICT SAME :: board ('signal', 11) cause 25 slot_nb_add high_water 71750 allocated 277365 capacity 262144 :: counts vs twin {'high_water': (71753, 71750), 'allocated_total': (278149, 277365)}
+CC lt1-27-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-27-1 BEGIN 22:06:26 image 8bcc40cf13731e12 booking 243
+CC lt1-27-1 END rc=0 22:25:14 :: calls 1 ran 1 completed True
+CC lt1-27-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 71795 allocated 280441 capacity 262144 :: counts vs twin {'high_water': (71798, 71795), 'allocated_total': (281162, 280441)}
+CC lt1-27-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-28-0 BEGIN 22:25:15 image 8bcc40cf13731e12 booking 244
+CC lt1-28-0 END rc=0 22:46:27 :: calls 1 ran 1 completed True
+CC lt1-28-0 VERDICT SAME :: board ('signal', 11) cause 25 _PyEval_Vector high_water 76504 allocated 313036 capacity 262144 :: counts vs twin {'high_water': (76498, 76504), 'allocated_total': (313843, 313036)}
+CC lt1-28-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-28-1 BEGIN 22:46:28 image 8bcc40cf13731e12 booking 246
+CC lt1-28-1 END rc=0 23:06:40 :: calls 1 ran 1 completed True
+CC lt1-28-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 76563 allocated 316175 capacity 262144 :: counts vs twin {'high_water': (76571, 76563), 'allocated_total': (316941, 316175)}
+CC lt1-28-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-30-0 BEGIN 23:06:40 image 8bcc40cf13731e12 booking 248
+CC lt1-30-0 END rc=0 23:27:59 :: calls 1 ran 1 completed True
+CC lt1-30-0 VERDICT SAME :: board ('signal', 11) cause 25 PyObject_RichCompare high_water 76542 allocated 313931 capacity 262144 :: counts vs twin {'high_water': (76539, 76542), 'allocated_total': (314758, 313931)}
+CC lt1-30-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-30-1 BEGIN 23:27:59 image 8bcc40cf13731e12 booking 250
+CC lt1-30-1 END rc=0 23:48:12 :: calls 1 ran 1 completed True
+CC lt1-30-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 76532 allocated 315563 capacity 262144 :: counts vs twin {'high_water': (76540, 76532), 'allocated_total': (316375, 315563)}
+CC lt1-30-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-31-0 BEGIN 23:48:12 image 8bcc40cf13731e12 booking 252
+CC lt1-31-0 END rc=0 00:08:12 :: calls 1 ran 1 completed True
+CC lt1-31-0 VERDICT SAME :: board ('signal', 11) cause 25 odict_copy high_water 74611 allocated 233093 capacity 262144 :: counts vs twin {'high_water': (74603, 74611), 'allocated_total': (233845, 233093)}
+CC lt1-31-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt1-31-1 BEGIN 00:08:13 image 8bcc40cf13731e12 booking 254
+CC lt1-31-1 END rc=0 00:34:17 :: calls 1 ran 1 completed True
+CC lt1-31-1 VERDICT SAME :: board ('exit', 0) cause None None high_water 82363 allocated 347453 capacity 262144 :: counts vs twin {'high_water': (82346, 82363), 'allocated_total': (348212, 347453)}
+CC lt1-31-1 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC lt0-18-0 BEGIN 00:34:17 image 7b871db70b7ec373 booking 255
+CC lt0-18-0 END rc=0 00:51:43 :: calls 1 ran 1 completed True
+CC lt0-18-0 VERDICT SAME :: board ('signal', 11) cause 28 mmap_ass_subscript high_water 6095 allocated 16329 capacity 262144 :: counts vs twin {'allocated_total': (16326, 16329)}
+CC lt0-18-0 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CC board1 DONE 00:51:43

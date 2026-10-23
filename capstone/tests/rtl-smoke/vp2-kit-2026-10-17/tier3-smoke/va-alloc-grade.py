@@ -4,16 +4,21 @@
 the 20 of 68679d2982ad counted a simulation trace's doubled retirements, and board 1's first boot read VOID by it).
 VOID unless there is one SR = 17, 17 SV values, and position 0 = 0. PASS when all 17 equal the batch vector (c721c1a2a).
 PRE-BATCH when all 17 equal tree A's vector (the bitstream in service is not the batch). Any other vector is a FINDING,
-printed position by position against both. Exit 0 = PASS, 1 = PRE-BATCH or FINDING, 2 = VOID or NO DATA."""
+printed position by position against both. Exit 0 = PASS, 1 = PRE-BATCH or FINDING, 2 = VOID or NO DATA.
+`--expect b2` (2026-10-23) grades against bitstream 2's vector instead (the RTL lane's PREREG at dev cd30ce0e0876, carried
+to 68d0ffaf8 unchanged at dev 816fd44f5849): ids 0x40004 / 0x80004 in the {gen[29:18], idx[17:0]} format and the two
+REC_GEN reads 0x8 (the frozen image's batch-era decode); PASS on all 17 equal to it, BATCH-RESIDENT when they equal the
+batch vector (the batch bitstream is still in service), PRE-BATCH on tree A's."""
 import re
 import sys
 
 BATCH = [0x0, 0x10004, 0x0, 0x20004, 0x1, 0x0, 0x0, 0x4, 0x3, 0x0, 0x0, 0x2, 0x3, 0x4, 0x1, 0x2, 0x0]
+B2 = [0x0, 0x40004, 0x0, 0x80004, 0x1, 0x0, 0x0, 0x4, 0x3, 0x0, 0x0, 0x8, 0x3, 0x4, 0x1, 0x8, 0x0]
 PRE = [0x0, 0x4, 0x0, 0x7, 0x1, 0x0, 0x0, 0x4, 0x2, 0x0, 0x0, 0x0, 0x2, 0x4, 0x1, 0x0, 0x0]
 N = 17
 
 
-def grade(text):
+def grade(text, expect="batch"):
     sr = re.findall(r"SR ([0-9A-Fa-f]{16})", text)
     sv = [int(v, 16) for v in re.findall(r"SV ([0-9A-Fa-f]{16})", text)]
     if len(sr) != 1 or int(sr[0], 16) != N or len(sv) != N:
@@ -21,6 +26,15 @@ def grade(text):
     if sv[0] != 0:
         return 2, f"VOID: position 0 reads {sv[0]:#x} (want 0)"
     vals = " ".join(f"{v:#x}" for v in sv)
+    if expect == "b2":
+        if sv == B2:
+            return 0, f"PASS (bitstream-2 vector): {vals}"
+        if sv == BATCH:
+            return 1, f"BATCH-RESIDENT (the batch vector: the bitstream in service is not bitstream 2): {vals}"
+        if sv == PRE:
+            return 1, f"PRE-BATCH (tree A's vector): {vals}"
+        diff = [f"{i}: read {v:#x} b2 {b:#x} batch {c:#x}" for i, (v, b, c) in enumerate(zip(sv, B2, BATCH)) if v != b]
+        return 1, f"FINDING: {vals} :: differs from bitstream 2's vector at " + "; ".join(diff)
     if sv == BATCH:
         return 0, f"PASS (batch vector): {vals}"
     if sv == PRE:
@@ -30,11 +44,17 @@ def grade(text):
 
 
 def main():
+    args = sys.argv[1:]
+    expect = "batch"
+    if "--expect" in args:
+        i = args.index("--expect"); expect = args[i + 1]; del args[i:i + 2]
+    if expect not in ("batch", "b2"):
+        print(f"NO DATA: unknown --expect {expect}"); sys.exit(2)
     try:
-        text = open(sys.argv[1], errors="replace").read()
+        text = open(args[0], errors="replace").read()
     except (IndexError, FileNotFoundError):
         print("NO DATA: no uart.txt"); sys.exit(2)
-    rc, msg = grade(text)
+    rc, msg = grade(text, expect)
     print("VA-ALLOC", msg)
     sys.exit(rc)
 
