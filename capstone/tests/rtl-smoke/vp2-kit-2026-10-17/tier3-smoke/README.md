@@ -7961,3 +7961,30 @@ Record: `records/juliet-spatial-batch-b2.result-lines.txt`.
   - lt1, pg-pools, mruby (stock and Sublet) and perl (stock and Sublet);
   - xlang, plane and capi;
   - Juliet temporal and spatial.
+
+### cpython lt0 18 and lt1 18 with application mremap on the batch bitstream, both boards: pre-registered (2026-10-24 12:2x, before the boots)
+
+- **Why:** the runtime lane's ask while R-61's image is prepared. Case 18 needs mremap.
+  - The compiler lane relinked the batch images with application mremap only: lt0 7b871db7 and lt1 8bcc40cf
+    (t3-mremap/relink.sh). The control relink reproduces the batch images byte for byte.
+  - It also produced batch-kit QEMU readings: dev 60cf79496ee3, pre-registered at lane 40739a9d9389.
+- **What runs:** `tier3-c18-batch.sh <board> <lt0|lt1> <log>`, lt0 on board 1 and lt1 on board 2 at the same time.
+  - Each is one call in one cold boot. The session is `b2-pred/sessions/<tag>-18-board`; its collect/images holds only
+    the row's image, 13 MB.
+  - The kit is the board's norandmaps batch kit, bkit8-batch-nb<board>.
+  - The replay is `tier3-replay-board.py`: the lane's replay-stats2.py (02fe2756) ported to a board kit through
+    boardvm.BoardBatch from wt-newarms bcf5f1724110. The steps are --stats, the call, then --stats.
+  - It is compared on exit, fault cause and function, nodes_high_water, nodes_allocated_total and node_capacity against
+    `b2-pred/out/batch2-nr-<tag>-18-board/readings.json`.
+  - One platform difference is disclosed by the compiler lane: the board's 512-mapping launcher b27afefc is a different
+    binary from QEMU's a405840d.
+- **Dry run** (`dryrun-c18-batch.txt`): an equal transcript reads "differing none", a moved high_water reads
+  ['high_water'], a wrong arm reads every field, and a busy board and a bad tag refuse.
+- **Predictions:**
+  - **lt0 18: CAUGHT, a domain fault with cause 28 in mmap_ass_subscript.** high_water 6,095, allocated_total 16,326
+    and capacity 65,536, as the reference. The runtime lane predicts the same CAUGHT.
+  - **lt1 18: still stopped by the 16-bit table:** `SystemError: error return without exception set` from the import
+    of select, exit 1, no fault. high_water 64,014 of 65,536 and allocated_total 189,444.
+  - The exit, cause and function are the primary reading, and the counts are predicted equal. A count that differs
+    while the verdict holds is recorded as a platform difference, not a finding.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0.
