@@ -7911,3 +7911,107 @@ Record: `records/juliet-spatial-batch-b2.result-lines.txt`.
   - lt1, pg-pools, mruby (stock and Sublet) and perl (stock and Sublet);
   - xlang, plane and capi;
   - Juliet temporal and spatial.
+
+### cpython lt0 18 and lt1 18 with application mremap on the batch bitstream, both boards: pre-registered (2026-10-24 12:2x, before the boots)
+
+- **Why:** the runtime lane's ask while R-61's image is prepared. Case 18 needs mremap.
+  - The compiler lane relinked the batch images with application mremap only: lt0 7b871db7 and lt1 8bcc40cf
+    (t3-mremap/relink.sh). The control relink reproduces the batch images byte for byte.
+  - It also produced batch-kit QEMU readings: dev 60cf79496ee3, pre-registered at lane 40739a9d9389.
+- **What runs:** `tier3-c18-batch.sh <board> <lt0|lt1> <log>`, lt0 on board 1 and lt1 on board 2 at the same time.
+  - Each is one call in one cold boot. The session is `b2-pred/sessions/<tag>-18-board`; its collect/images holds only
+    the row's image, 13 MB.
+  - The kit is the board's norandmaps batch kit, bkit8-batch-nb<board>.
+  - The replay is `tier3-replay-board.py`: the lane's replay-stats2.py (02fe2756) ported to a board kit through
+    boardvm.BoardBatch from wt-newarms bcf5f1724110. The steps are --stats, the call, then --stats.
+  - It is compared on exit, fault cause and function, nodes_high_water, nodes_allocated_total and node_capacity against
+    `b2-pred/out/batch2-nr-<tag>-18-board/readings.json`.
+  - One platform difference is disclosed by the compiler lane: the board's 512-mapping launcher b27afefc is a different
+    binary from QEMU's a405840d.
+- **Dry run** (`dryrun-c18-batch.txt`): an equal transcript reads "differing none", a moved high_water reads
+  ['high_water'], a wrong arm reads every field, and a busy board and a bad tag refuse.
+- **Predictions:**
+  - **lt0 18: CAUGHT, a domain fault with cause 28 in mmap_ass_subscript.** high_water 6,095, allocated_total 16,326
+    and capacity 65,536, as the reference. The runtime lane predicts the same CAUGHT.
+  - **lt1 18: still stopped by the 16-bit table:** `SystemError: error return without exception set` from the import
+    of select, exit 1, no fault. high_water 64,014 of 65,536 and allocated_total 189,444.
+  - The exit, cause and function are the primary reading, and the counts are predicted equal. A count that differs
+    while the verdict holds is recorded as a platform difference, not a finding.
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0.
+
+### cpython lt0 18 and lt1 18 with application mremap on the batch bitstream, result (2026-10-24 12:19-12:37, both boards): both verdicts as QEMU
+
+Record: `records/batch-c18-mremap.result-lines.txt`.
+- **lt0 18 (board 1, image 7b871db7): CAUGHT, a domain fault with cause 28 in mmap_ass_subscript, at QEMU's pc
+  (0x3ff659edf0).**
+  - high_water 6,095, as QEMU's.
+  - allocated_total 16,329, against QEMU's 16,326.
+  - The fault address is 0x3ff5f4dfff, against QEMU's 0x3ff5f7afff: the mremap'd mapping lands at another address on
+    the board.
+- **lt1 18 (board 2, image 8bcc40cf): `SystemError: error return without exception set` from the import of select,
+  exit 1, no fault: still stopped by the 16-bit table.**
+  - high_water 64,011 of 65,536, against QEMU's 64,014.
+  - allocated_total 188,809, against 189,444.
+- pc=0, DRT1, FRTY, Oops, INJS and INJL read 0, and both boots completed.
+- **Against the pre-registration (6f3d3c7d3df9): the primary reading holds on both** (exit, cause and function).
+  - The counts differ by a few records (+3, and -3 / -635). The pre-registration counts that as a platform difference,
+    not a finding.
+  - One disclosed source of it is the board's launcher, b27afefc, against QEMU's a405840d.
+- **lt0 18 read MISSED on the batch image 23a2f0cb, which has no mremap: it completed, exit 1, no fault (board 2's lt0
+  cell). With the mremap relink it is CAUGHT on silicon.**
+
+### R-61, a stale LDC-refusal flag, on the batch bitstream: bare boots on BOTH boards, pre-registered (2026-10-24 13:3x, before the boots)
+
+- **Why:** R-61 (dev e63ff602f3fb).
+  - After a refused consuming LDC in a virtual context, the load unit's cause mux stays armed.
+  - A later legal load whose revocation-cache lookup misses then escapes as a spurious STORE_PAGE_FAULT, cause 15.
+  - The corpus shows no cause 15 in about 1,200 cells, so only a directed arm can show it on silicon. The runtime lane
+    asked for it before any bitstream-2 flash.
+- **The kit:** the RTL lane's `capstone/tests/rtl-smoke/r61-stale-bare-2026-10-24/`, at llvm-capstone land/rtl-r61-kit
+  61faf96f5863, with its PREREG.md and images/SHA256SUMS.
+  - Its images are VB_TABLE builds, loaded at 0x80000000. The hashes and board_rec values were read from that commit:
+
+    | image | sha256 | board_rec | SR |
+    |---|---|---|---|
+    | r61-control | c710e0d5 | 0x80013000 | 36 |
+    | r61-stale2 | 993876a9 | 0x80014000 | 23 |
+    | r61-stale | f4d9ea5b | 0x80014000 | 22 |
+
+- **What runs:** `tier3-r61-bare.sh <board> <log> 61faf96f5863` on both boards, N=2.
+  - Three cold bare boots per board, in the PREREG's order: control, then stale2, then stale.
+  - Each uses run_sup_bare.py from the kit's driver tree, as va-alloc-bare does, with the board's batch kit.
+  - Graded by `r61-grade.py`, whose five vectors were checked equal to the PREREG's.
+  - A control that is not exact makes the session VOID and stops it.
+  - Dry run: `dryrun-r61-bare.txt`. It covers the c721c1a2a vectors, the fixed tree's vectors (NOT-REPRODUCED), a void
+    control, one changed value (a FINDING, named by position), a short uart (VOID), a busy board, and a commit
+    without the kit.
+- **Predictions (the PREREG's, from simulating these images on c721c1a2a's RTL):**
+  - **r61-control: SR 36,** with every value as the vector, which is identical on both trees;
+  - **r61-stale2: R-61 CONFIRMED.** The vector is the c721c1a2a one, with positions 18-21 = 0xf, 0x4, 0x80006008, 0x0:
+    - csupcause 15, a spurious store page fault, where the fixed tree reads 2;
+    - csupepc − stub7 = 4, which is the load;
+    - csuptval = the load's own address;
+    - the copied word 0, where the fixed tree copies 0x1234.
+  - **r61-stale: the c721c1a2a vector,** with position 18 = 0xf, where the fixed tree reads 0xd;
+  - **both boards read identical vectors,** since the flag's mechanism is deterministic.
+- **What would read otherwise:**
+  - the fixed tree's vector on stale2 is NOT-REPRODUCED: a finding, sent to the RTL lane before any claim;
+  - any other vector is a finding, graded position by position.
+
+### R-61 on the batch bitstream, result (2026-10-24 13:27-13:30, both boards): CONFIRMED ON SILICON, N=2, the boards byte-identical
+
+Record: `records/r61-bare-batch.result-lines.txt`.
+- **r61-control: PASS on both boards.** SR 36, with every value as the PREREG's vector.
+- **r61-stale2: CONFIRMED on both boards.** The c721c1a2a vector is exact:
+  - positions 18-21 read csupcause **0xf (15, the spurious STORE_PAGE_FAULT)**;
+  - csupepc − stub7 = **4**, which is the legal load itself;
+  - csuptval = **0x80006008**, the load's own address;
+  - the copied word is **0**: the value 0x1234 was never copied.
+  - The refused ldc before it (positions 14-16) reads 5, 0xf and 0, as simulated.
+- **r61-stale: its c721c1a2a vector on both boards.** Position 18 is 0xf, where the fixed tree takes 0xd (the page
+  fault).
+- **The two boards' uart.txt files are byte-identical for all three images.**
+- **Against the pre-registration (16a109d76e85): every reading holds.**
+- **R-61 is a silicon defect of the deployed batch bitstream.** After a refused consuming LDC, a later legal load in
+  the same context escapes as cause 15 with its own address. The fix (the ring cut, the RTL lane's) is predicted to read
+  a normal exit and 0x1234.
