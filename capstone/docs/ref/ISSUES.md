@@ -3506,7 +3506,7 @@ made DURING an excursion bite too. That note's simulation arm has no access at a
 where QEMU catches it. A board-only MISSED on a far, data-dependent offset should be checked against this condition
 before being read as a cell difference. A store that aliases is a silent write to another object.
 
-### R-61 — inside a virtual context, any LDC from a page without W && D (a REFUSED consuming one, or a completed NON-consuming one) leaves the load unit's store-permission flag at 0, and every later exception the load unit reports is relabelled STORE_PAGE_FAULT, including the silent R-43 replay of a LEGAL first-touch load, which then faults with cause 15 · `CONFIRMED ON SILICON on c721c1a2a (board lane, dev 1f351b6be31c; both boards, N=2, byte-identical transcripts, kit r61-stale-bare-2026-10-24 at 61faf96f5863); MEASURED in simulation 2026-10-24 by the RTL lane (matched pair on one tree, claim-audited); on every bitstream since capstone-ariane ea88d8e5d (2026-10-16); fixed on the bitstream-2 candidate vp3-ringcut`
+### R-61 — inside a virtual context, any LDC from a page without W && D (a REFUSED consuming one, or a completed NON-consuming one) leaves the load unit's store-permission flag at 0, and every later exception the load unit reports is relabelled STORE_PAGE_FAULT, including the silent R-43 replay of a LEGAL first-touch load, which then faults with cause 15 · `FIXED ON SILICON 2026-10-24 on bitstream 2 (caplifive_vp2c_dcc6daf6e, sha256 fcaec593...906e; board 2; both kits read their fixed-tree vectors, board lane's vp2-tier12 bf4970a934c6); CONFIRMED ON SILICON on c721c1a2a (board lane, dev 1f351b6be31c; both boards, N=2, byte-identical transcripts, kit r61-stale-bare-2026-10-24 at 61faf96f5863); MEASURED in simulation 2026-10-24 by the RTL lane (matched pair on one tree, claim-audited); on every bitstream since capstone-ariane ea88d8e5d (2026-10-16); fixed on the bitstream-2 candidate vp3-ringcut`
 
 Siblings: Q-19 (the ruling this gate implements), R-43 (the replay this relabels), S-24 (a different silicon cause-15
 loop, explained and fixed by the PTE's D bit; not this mechanism).
@@ -3547,6 +3547,13 @@ eight vectors and image hashes checked here against the kit): the capture does n
 flag from a read-only page (`r61a-stale3`) and from a WRITABLE page whose D bit is still clear (`r61a-stale4`); stub7's
 legal first-touch load in the next entry then reads 15 at its own address with the word never copied, while the same load
 with no LDC before it exits normally (`r61a-stale0`, the control that makes the 15 attributable to the LDC).
+
+**Fixed on silicon (2026-10-24, the board lane, board 2 on bitstream 2 `caplifive_vp2c_dcc6daf6e.bit`, sha256
+fcaec59323eb2c9d6fcb56a6e6709ac797d06c24e4b4a5d5fd6080ba2d21906e, read back resident; result lines at vp2-tier12
+bf4970a934c6, `vp2-kit-2026-10-17/tier3-smoke/records/bs2-dcc6daf6e-after-b2.result-lines.txt`):** both kits graded
+`--expect fixed`, and all seven vectors and image hashes checked here against the committed PREREGs. The controls are
+exact, r61a-stale0 exits normally, and `r61-stale2`, `r61a-stale3` and `r61a-stale4` read the fixed tree's normal exit
+with 0x1234 copied; `r61-stale` reads the page fault's 13.
 
 **The exposure window is bounded by re-capture** (simulation, `vb-trans-stale5-vp2`, capstone-ariane 49125a4e4, on
 68d0ffaf8 + tests and on the fixed tree): every LDC writes the flag in its capture state, so after the arming

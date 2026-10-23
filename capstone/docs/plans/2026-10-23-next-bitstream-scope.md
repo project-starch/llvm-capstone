@@ -332,3 +332,20 @@ post-route area matches the tracer's share (-9,564 / -32,966 against -9,311 / -3
 reads the batch vector; va-alloc-csret the bitstream-2 vector (`va-alloc-bare-2026-10-23/PREREG.md`); the two R-61 kits
 their fixed-tree vectors. The flash is the lead's word in the board lane's session; the board lane holds it pending the
 lead's answer on the WNS key.
+
+## 2026-10-24: bitstream 2 on board 2, every pre-registered first-boot reading holds
+
+The lead's "Flash now", given in the board lane's session with this record's WNS grade in front of them (−9.790 against
+the batch's −18.529, the key missed by its letter on the good side). `caplifive_vp2c_dcc6daf6e.bit` read back resident on
+board 2 at 16:46 after the power cycle, its local sha256 equal to the synth lane's seal. The board lane's result lines are
+at vp2-tier12 bf4970a934c6 (`vp2-kit-2026-10-17/tier3-smoke/records/bs2-dcc6daf6e-{first,after}-b2.result-lines.txt`):
+
+- **va-alloc-csret:** SR 17 and the bitstream-2 vector, checked here against `va-alloc-bare-2026-10-23/PREREG.md`
+  value by value: the 18-bit node-id format {generation[29:18], index[17:0]} on silicon (0x40004, 0x80004).
+- **s23-cpmp-rearm:** the batch vector, SR 25, the six re-arm probes 1, total 14. Graded by the board lane's s23 grader;
+  the result line carries the grade, not the 25 raw values, so this record cites the grade and does not re-check it.
+- **Tier 1:** identical to the batch (sparse-churn nodes 600,041, steps 200,065; FRTY, FRTC, DRT1, INJS, INJL, Oops and
+  pc=0 all 0); the monitor's reports print as on the batch (18 SHA-tag lines of 18, RGID 3, RCLM 3), the positive control
+  that `csrw 0x800` retires on the tracer-less core.
+- **Hold:** HOLD-OK at 100,000 steps, node high-water 105,569 of capacity 262,144, past the old flat table's 64,001.
+- **R-61:** both kits read their fixed-tree vectors (`docs/ref/ISSUES.md`, R-61, now fixed on silicon).
