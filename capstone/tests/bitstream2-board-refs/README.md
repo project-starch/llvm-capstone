@@ -135,3 +135,16 @@ moved the site.
 
 **My expectation, stated as such:** it follows the image. The relink is the change that moves memory contents; the
 index width does not alter what an object's neighbouring bytes hold.
+
+**Result** (2026-10-24 03:56-04:02, one boot per image per kit): **it follows the image, as expected.**
+
+| image | qkit7-batch2-nr | qkit7-b2twin3-q8-nr |
+|---|---|---|
+| batch 23a2f0cb | cause 24 in `_PyObject_GetMethod` | cause 24 in `_PyObject_GetMethod` |
+| mremap 7b871db7 | cause 24 in `dict_traverse` | cause 24 in `dict_traverse` |
+
+- The control completes (exit 0) in all four.
+- The relink moves 09's fault site, and the 18-bit kit moves nothing.
+- 09 reads CAUGHT either way, so on bitstream 2 the board's 09 should read `dict_traverse`, as ref-b2/lt0 does.
+- (run-pred.sh's own parser printed NO DATA for these two-call sessions, as its one-call guard intends. The readings
+  above are read from each run's readings.json.)
