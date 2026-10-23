@@ -8312,3 +8312,22 @@ Records:
   - the 18-bit index holds more than 65,535 live records at the module's default capacity;
   - the ten lt1 cells the batch's table stopped now reach their sites;
   - R-61 is fixed.
+
+### The uaf control's cause 13 on bitstream 2: 200 runs with dmesg on each board, pre-registered (2026-10-25 00:5x, before the boots)
+
+- **Why:** the runtime lane asks whether the silicon-only cause 13 survives bitstream 2's ring cut and tracer removal,
+  while the bitstream-2 corpus references are produced.
+- **What runs:** `tier3-uaf-repeat-b2.sh <board> <log> 200` on both boards in parallel, with UR_ARGS `--no-trace
+  --dmesg` and UR_TAG `-dm`.
+  - It is the batch version on the bitstream-2 kits bkit9-b2-b<board>: module 215a09be and launcher fad465ce. The
+    controls.dom and juliet-timeout are the batch run's.
+  - Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/uaf-repeat-dm`.
+  - Dry run: `dryrun-uaf-repeat-b2.txt`.
+- **Predictions:**
+  - cause 13 in **0 to 12 of 200 on each board** (the batch read 6 of 200, the trees about 2.2%), and cause 25
+    otherwise;
+  - no SILENT read;
+  - each cause 13 with its "resolve refused at arena" lines;
+  - the readings 0.
+- **What would mean something:** 0 of 400 would suggest the change removed it, at a p of about 0.0002 against 2.2%.
+  A rate inside the band means it is independent of the ring cut and the tracer.
