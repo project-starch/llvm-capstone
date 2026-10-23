@@ -46,6 +46,13 @@ def grade(img, text):
 
 
 def main():
+    # --expect fixed (2026-10-24, for a bitstream that carries the R-61 fix): the fixed tree's vector is the PASS and the
+    # c721c1a2a vector the FINDING; the controls are graded as before.
+    expect = "bug"
+    if "--expect" in sys.argv:
+        i = sys.argv.index("--expect"); expect = sys.argv[i + 1]; del sys.argv[i:i + 2]
+    if expect not in ("bug", "fixed"):
+        print(f"NO DATA: unknown --expect {expect}"); sys.exit(2)
     if len(sys.argv) != 3 or sys.argv[1] not in ("r61-control", *VEC):
         print(__doc__); sys.exit(2)
     try:
@@ -53,6 +60,10 @@ def main():
     except FileNotFoundError:
         print(f"R61 {sys.argv[1]} NO DATA: no uart.txt"); sys.exit(2)
     rc, msg = grade(sys.argv[1], text)
+    if expect == "fixed" and msg.startswith("CONFIRMED"):
+        rc, msg = 1, "FINDING (expected the fix): R-61 still present: " + msg
+    elif expect == "fixed" and msg.startswith("NOT-REPRODUCED"):
+        rc, msg = 0, "FIXED (the fixed tree's vector): " + msg.split(": ", 1)[1]
     print(f"R61 {sys.argv[1]} {msg}")
     sys.exit(rc)
 
