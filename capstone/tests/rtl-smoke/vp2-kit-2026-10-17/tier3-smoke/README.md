@@ -7927,3 +7927,16 @@ Record: `records/juliet-temporal-batch-b1.result-lines.txt`.
   - a rate inside the trees' band: the batch bitstream does not change this behaviour;
   - a rate of 0 of 200: suggestive, not conclusive (p is about 0.01 at 2.2%);
   - a much higher rate is a finding for the RTL lane.
+
+### The uaf control's cause 13 on the batch bitstream, result (2026-10-23 08:14-08:50, board 1): 6 of 200, each with its arena refusal
+
+Record: `records/uaf-repeat-dm-batch-b1.result-lines.txt`.
+- **TALLY: cause 13 in 6 of 200, cause 25 in 194.** There is no SILENT read, and all 202 steps completed. The bounds-0
+  step read cause 28 as always.
+- **Every cause 13 has its attribution:** two `resolve refused at arena ... cause 13 need 0x1 ... no lazy arena covers
+  this address` lines each. That makes 12 refusals for 6 thirteens (REFUSED 12 over the whole boot), as on the trees.
+- The six land at runs 42, 89, 117, 160, 182 and 194. All six fault at the same pc offset in the image, code+0x10c70
+  (control_read_probe).
+- pc=0, DRT1, FRTY, Oops, INJS and INJL read 0.
+- **Against the pre-registration (97e9991ef595): every reading holds.** The rate, 3.0%, is inside 0 to 12 of 200, and
+  beside the trees' about 2.2%. The batch bitstream does not change this behaviour.
