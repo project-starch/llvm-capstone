@@ -350,3 +350,7 @@ at vp2-tier12 bf4970a934c6 (`vp2-kit-2026-10-17/tier3-smoke/records/bs2-dcc6daf6
   that `csrw 0x800` retires on the tracer-less core.
 - **Hold:** HOLD-OK at 100,000 steps, node high-water 105,569 of capacity 262,144, past the old flat table's 64,001.
 - **R-61:** both kits read their fixed-tree vectors (`docs/ref/ISSUES.md`, R-61, now fixed on silicon).
+
+**N=2 (2026-10-24):** board 1 was flashed on the lead's word and reads as board 2 in everything (dev b9d3857be06f): s23,
+va-alloc and all seven R-61 vectors byte-identical across the boards (board 1's R-61 vectors and image hashes checked here
+against the PREREGs), the hold at 105,569 of 262,144, and the compiler lane's 20 capacity cells 20/20 as the twin on both.
