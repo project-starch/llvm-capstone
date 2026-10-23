@@ -209,6 +209,39 @@ def observation_cases():
     check("so it is judged on its merits, not thrown out",
           reason != "out-of-denominator", True)
 
+    # AND IT MUST BE ABLE TO READ AS A PLAIN MISS. `completed` once hardcoded exit 0, so a case
+    # whose oracle is EXIT:255 could not be completed on ANY arm and every cell decayed to
+    # `inconclusive` -- including the control's, which takes the case's whole column with it.
+    # This is the regression test for that: ending exactly as the oracle ended is completing.
+    done = "ZEND_CAP_MODE 0 exact=0 revoke=0\ndone\n"
+    obs = R.observe("CRASH-062", fatal, "php-real-stock", SHA, done, 255,
+                    controls(probe=None), True, "/x", "/y")
+    check("ending as the oracle ended counts as completing", obs.completed, True)
+    check("so a fatal-error case can read as a plain MISSED",
+          verdicts.judge(obs, arms["php-real-stock"])[0], verdicts.MISSED)
+    # The converse: exit 0 where the oracle said 255 is NOT completing.
+    obs = R.observe("CRASH-062", fatal, "php-real-stock", SHA, done, 0,
+                    controls(probe=None), True, "/x", "/y")
+    check("but exiting 0 where the oracle exited 255 is not", obs.completed, False)
+
+    # THE SCRIPT PATH IS NOT A DIVERGENCE. PHP prints the script's absolute path inside its own
+    # warnings and fatal errors; the corpus recorded a host path and the guest runs /mnt/vm. A
+    # literal comparison reports a divergence on every such case, differing only in that path.
+    pathy = dict(SPEC, pristine_stdout="Fatal error: nested in /corpus/CRASH-062.php on line 3")
+    obs = R.observe("CRASH-062", pathy, "php-real-stock", SHA,
+                    "ZEND_CAP_MODE 0 exact=0 revoke=0\n"
+                    "Fatal error: nested in /mnt/vm/CRASH-062.php on line 3\n",
+                    0, controls(probe=None), True, "/x", "/y")
+    check("a differing script path is not an output divergence",
+          "differs" in (obs.notes or ""), False)
+    # ...but a real difference in what PHP said still is.
+    obs = R.observe("CRASH-062", pathy, "php-real-stock", SHA,
+                    "ZEND_CAP_MODE 0 exact=0 revoke=0\n"
+                    "Fatal error: something else in /mnt/vm/CRASH-062.php on line 3\n",
+                    0, controls(probe=None), True, "/x", "/y")
+    check("a real difference in PHP's own words still is",
+          "differs" in (obs.notes or ""), True)
+
     # The per-run watchdog fired. A killed run is the harness giving up, never a statement
     # about the program -- and in particular never the `not-reached` it would decay to if the
     # marker were ignored, because a killed run is silent and un-reached by construction.

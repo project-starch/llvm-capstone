@@ -81,3 +81,54 @@ faulting as declared, and the benign workload completing with revocation on.
 The **identical image** as the ASAN-blind measurement — `php-real-seam.dom`, sha256
 `b36d053690136b03f92dcb8ebb67bde2759168fd3167d17c6f3fdaeebebf8836` — on the merged QEMU at
 submodule `1a6dd20732`, so the two tables are comparable without a second build to argue about.
+
+## Amendment, after the first run and before the second
+
+The first run of this population voided a whole column and the reason was the instrument, not
+the port. Recorded here, before the re-run, so the result cites the amendment rather than
+explaining itself afterwards.
+
+**`--run-timeout` was 40 s, and the exact arm's `revocation-sanity` crossed it.** The arm-level
+control therefore read `did-not-complete`, and the judge correctly refused all nine of that
+arm's scoreable cells as `control-failed`. Measured afterwards with a 240 s ceiling, the same
+control on the same image completes in **14.5 s** (stock 11.7, block 12.6, object 14.1), so 40 s
+was never a deterministic shortfall -- that boot ran 3x its nominal cost and crossed a ceiling
+sitting just above it. The same 40 s also killed two `object` cells outright (CRASH-083 and
+CRASH-155, `infra`, watchdog). The re-run uses `--run-timeout 240`, roughly 16x nominal.
+
+Nothing about the predictions changes. The arms, the image, the population and the ten
+scoreable cases are exactly as registered above; the image sha stays
+`b36d053690136b03f92dcb8ebb67bde2759168fd3167d17c6f3fdaeebebf8836`, byte-identical to the
+published 31-case run, because an arena rebuild would cost that comparability.
+
+**Two judge defects the run exposed, both fixed before the re-run, both inert for the published
+31.** Each one silently cost a reading that the population's own cases are the first to need:
+
+1. `observe()` set `completed = (exit_code == 0 and fault is None)`. For a case whose pristine
+   record is an EXIT rather than a signal -- PHP ending itself with a diagnostic and status 255
+   -- that can never hold, so every arm decayed to `inconclusive`, the control arm included,
+   which takes the case's whole column with it. `completed` now compares against the oracle's
+   own rc, which is the generalisation already applied to `ran`. CRASH-062 and CRASH-070.
+2. The per-case oracle comparison compared stdout literally, while the stock-arm comparison
+   normalised the script path. PHP prints the script's absolute path inside its own warnings and
+   fatal errors, and the corpus's host path and the guest's `/mnt/vm` are both correct, so the
+   literal form reported a divergence on every such case -- "2 lines vs 2", differing only in
+   the path. Both sites now normalise.
+
+**One prediction above is already falsified and is not revised here.** CRASH-078 was predicted
+MISSED on stock; stock caught it, `cause=24` at `ext/standard/array.c:162`, ASAN's own site,
+with `exact=0 revoke=0` and `retires=0 revokes=0` confirming no revocation took place. The
+mechanism is PHP's own `AG(cache)`: `_efree` parks the block, `_emalloc` hands the same payload
+capability back, the new tenant overwrites what was a pointer field, and the stale read loads an
+untagged value. That is a tag-clobber catch needing no revocation at all -- the mechanism named
+above as the source of `block`'s catches, which turns out to be live in `stock` too. The stock
+column is therefore not a capability-free baseline, and the re-run is not expected to change
+this cell.
+
+**Three cases are expected to stay NO-READING for reasons the timeout does not touch**, and
+raising the ceiling must not be read as expected to recover them: CRASH-081 faults inside the
+seam's own source (`zend-alloc/sublet/zend-cap-blocks.c:425`) on every arm, a port artefact;
+CRASH-068 faults at an unsymbolised pc before the case's marker on every arm; and CRASH-075
+exhausts the seam's block provider (`code=1 the heap would not lend a block`, at ~8,000 live
+blocks) on every arm, an instrument capacity limit that needs a larger arena and therefore a
+rebuild this run declines to make.

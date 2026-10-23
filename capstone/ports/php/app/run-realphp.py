@@ -378,7 +378,16 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         note(obs, f"nodes allocated {pressure[0]}, table capacity {pressure[1]} "
                   f"(cumulative, not a high-water: reported, not gated)")
     said = strip_seam_noise(text)
-    obs.completed = (exit_code == 0 and fault is None)
+    # COMPLETED MEANS "ENDED THE WAY THE ORACLE DID", NOT "EXITED ZERO". Hardcoding 0 is wrong
+    # for any case whose pristine record is an EXIT, and PHP 5.0.0 has four of them: its own
+    # fatal errors leave status 255 after printing a diagnostic, which is the case behaving
+    # exactly as the corpus recorded it. With 0 hardcoded such a case can never be `completed`,
+    # so it falls through to `inconclusive` on every arm -- the control arm included, which then
+    # takes the whole column of that case down with it. This is the SAME generalisation already
+    # applied to `ran` below; applying it there and not here is what made CRASH-062 and
+    # CRASH-070 unreadable. Inert for an OK oracle, so the published 31 are unaffected.
+    want_rc = 0 if spec["pristine_outcome"] == "OK" else spec["pristine_rc"]
+    obs.completed = (exit_code == want_rc and fault is None)
     # TWO ROUTES TO `reached`, AND THE SECOND IS NOT A CONCESSION -- IT IS THE RULE THE FIRST
     # ONE IS A PROXY FOR. The question is only ever "did the trigger run", and the control arm
     # completing with the oracle's output is evidence for that, not the definition of it.
@@ -443,7 +452,12 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                                         f"{spec['asan_file']}:{spec['asan_line']}")
         return obs
 
-    if said.strip() and not same_as_oracle(said, spec["pristine_stdout"]):
+    # normalise_paths, for the SAME reason the stock-arm comparison below applies it: PHP prints
+    # the script's absolute path inside its own warnings and fatal errors, and the corpus's host
+    # path and the guest's /mnt/vm path are both correct. Comparing them literally reports a
+    # divergence on every such case -- "2 lines vs 2", differing only in the path.
+    if said.strip() and not same_as_oracle(normalise_paths(said, case),
+                                           normalise_paths(spec["pristine_stdout"], case)):
         note(obs, f"completed but its output differs from the corpus's pristine record "
                   f"({len(said.splitlines())} lines vs "
                   f"{len(spec['pristine_stdout'].splitlines())})")
