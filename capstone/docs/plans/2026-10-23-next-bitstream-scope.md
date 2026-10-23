@@ -342,8 +342,9 @@ at vp2-tier12 bf4970a934c6 (`vp2-kit-2026-10-17/tier3-smoke/records/bs2-dcc6daf6
 
 - **va-alloc-csret:** SR 17 and the bitstream-2 vector, checked here against `va-alloc-bare-2026-10-23/PREREG.md`
   value by value: the 18-bit node-id format {generation[29:18], index[17:0]} on silicon (0x40004, 0x80004).
-- **s23-cpmp-rearm:** the batch vector, SR 25, the six re-arm probes 1, total 14. Graded by the board lane's s23 grader;
-  the result line carries the grade, not the 25 raw values, so this record cites the grade and does not re-check it.
+- **s23-cpmp-rearm:** the batch vector, SR 25, the six re-arm probes 1, total 14: all 25 raw values checked here against
+  `s23-bare-2026-10-21/PREREG.md`, from the board lane's extract at vp2-tier12 5c2055576441
+  (`records/bs2-dcc6daf6e-s23-vector-b2.txt`).
 - **Tier 1:** identical to the batch (sparse-churn nodes 600,041, steps 200,065; FRTY, FRTC, DRT1, INJS, INJL, Oops and
   pc=0 all 0); the monitor's reports print as on the batch (18 SHA-tag lines of 18, RGID 3, RCLM 3), the positive control
   that `csrw 0x800` retires on the tracer-less core.
