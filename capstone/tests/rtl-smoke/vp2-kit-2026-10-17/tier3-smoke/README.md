@@ -8271,3 +8271,44 @@ Records: `records/bs2-dcc6daf6e-first-b2.result-lines.txt` and `records/bs2-dcc6
   - every R-61 image its fixed-tree vector;
   - every capacity-cell verdict as the twin.
   - **Boards 1 and 2 agree value for value on the bare-boot vectors.**
+
+### Bitstream 2 on board 1, and the capacity cells on both boards, result (2026-10-24 17:38 to 2026-10-25 00:51): N=2, every pre-registered verdict holds
+
+Records:
+- board 1: `records/bs2-dcc6daf6e-first-b1.result-lines.txt`, `records/bs2-dcc6daf6e-after-b1.result-lines.txt` and
+  `records/bs2-capcells-b1.result-lines.txt`;
+- board 2: `records/bs2-capcells-b2.result-lines.txt`.
+
+- **Board 1's flash** (17:40-17:43, on the lead's word): the read-back after the power cycle is
+  `caplifive_vp2c_dcc6daf6e.bit`, and the kit is bkit9-b2-b1.
+- **Board 1's first boots: as board 2's, value for value.**
+  - s23 is AS EXPECTED, and va-alloc PASSes on the 18-bit vector. Their SR/SV lines are byte-identical to board 2's.
+  - Tier 1 is identical to the batch: sparse-churn 600041 and 200065, node_capacity 4096. The readings are 0.
+  - The monitor's reports print: SHA-tag lines 18, RGID 3, RCLM 3.
+- **Board 1's hold 100000:** HOLD-OK, exit 0, high_water **105,569** of 262,144, as board 2 and the twin.
+- **Board 1's R-61 and R-61 arming, --expect fixed: every image FIXED.** All seven SR/SV vectors are identical to
+  board 2's.
+- **The capacity cells: 20 of 20 verdicts as the 18-bit twin on BOTH boards, and the two boards agree in every
+  verdict.**
+  - There is no cause 30, no MemoryError and no SystemError, and node_capacity reads 262,144 in every call.
+  - Every faulting lt1 call reaches its declared site with high_water above 64,001, the 16-bit ceiling:
+    - lt1 02: 106,196 on board 2, cause 28 in memcpy;
+    - lt1 13: 106,284, cause 28 in unicode_fromformat_write_str;
+    - lt1 18: 66,703, cause 28 in mmap_ass_subscript;
+    - 10, 19, 23, 27, 28, 30 and 31 at their own sites, 64,619 to 80,121.
+  - On the batch bitstream the same cells are stopped by the 16-bit table: lt1 18 at 64,011 of 65,536 (board 2,
+    2026-10-24).
+  - **The counts.** high_water is within −21..+11 of the twin. allocated_total is lower than the twin's by up to 936
+    (0.43%) in every lt1 call.
+    - Board 1 and board 2 agree far more closely: high_water within −8..+23, allocated within −66..+4.
+    - So the board-vs-QEMU offset is a platform property, as the batch's case-18 pair already showed. One disclosed
+      source is the launcher.
+    - **One count sits outside a band the compiler lane gave:** lt1 31's control read allocated 347,449 on board 2
+      against 348,169..348,212. That is 720 under, while its verdict (exit 0) holds. It is recorded as the platform
+      offset, not as a finding.
+- **Against the pre-registrations (3417d6ac9c36 and ea2776a143c0): every verdict holds,** and the counts are as
+  disclosed above.
+- **Bitstream 2's purpose, read on silicon on both boards:**
+  - the 18-bit index holds more than 65,535 live records at the module's default capacity;
+  - the ten lt1 cells the batch's table stopped now reach their sites;
+  - R-61 is fixed.
