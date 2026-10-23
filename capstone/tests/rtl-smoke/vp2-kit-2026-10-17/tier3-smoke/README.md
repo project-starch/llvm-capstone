@@ -8401,3 +8401,22 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
   board's 09 reads _PyObject_GetMethod instead, that is reported as a site difference with the verdict unchanged. Either
   way it is evidence for the lane's 2x2, not a reading about R-61 or the index.
 - **Case 01:** may still read cause 4 against QEMU's 24 (Q-31).
+
+### The corpus on bitstream 2: the 23-arm re-read on both boards, pre-registered (2026-10-25 04:1x, before the boots)
+
+- **Why:** the pass's re-read arms on bitstream 2. The compiler lane's references for all 23 tags have landed in
+  `batch-refs-b2/ref-b2/<tag>`, each equal to its batch reference (MOVE 0 on every one).
+- **What runs:** `tier3-reread-b2.sh <board> - x <spec> <log>`. It is tier3-reread-batch.sh on bkit9-b2-b<board>,
+  against ref-b2, with the batch run's two specs unchanged (rr-b1 27beeb2c, rr-b2 f58053f1):
+  - board 1: fph fpt fca fcs fso mph mpt wph wpt pgc pgm0 pgm1 sq0, after its pg-pools;
+  - board 2: pym0 pym1 pb9 pb12 pb10 wm0 pb13q15 pgm1q15 wm1q15 sq1q15, after its cpython lt0.
+  - Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/rr-<tag>`. Graded by compare-pilot.py and
+    verdicts-compare.py.
+  - Dry run: `dryrun-reread-b2.txt`, against the real ref-b2 trees. Every tag's reference resolves: 18 and 15 compare
+    lines, rc 0.
+- **Predictions:** every cell's verdict equals ref-b2, and every field equals it, except the three Q-31 cells the batch
+  read in sq0d:
+  - 19 and 20: cause 4 at nodeRelease+144 where QEMU reads 24;
+  - 22: cause 13 at editDist3FindLang+244 where QEMU reads 24.
+  So sq0d reads "3 of 6" under verdicts-compare, with compare-pilot's DIFF lines naming only the cause.
+  Any other difference is a finding. Readings 0 everywhere.
