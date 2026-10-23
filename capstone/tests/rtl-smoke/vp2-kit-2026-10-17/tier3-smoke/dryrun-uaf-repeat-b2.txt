@@ -1,0 +1,15 @@
+# tier3-uaf-repeat-b2.sh 569b558457580309 dry run, 2026-10-25: uaf-repeat.py stubbed, both boards' bitstream-2 kits.
+## board 1
+UR BEGIN 00:54:57 board 1 booking 81 N=200 args --no-trace --dmesg kit bkit9-b2-b1
+UR END rc=0 00:54:57
+TALLY plain cause 25: 198
+TALLY plain cause 13: 2
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board1 DONE 00:54:57
+## board 2
+UR BEGIN 00:54:57 board 2 booking 82 N=200 args --no-trace --dmesg kit bkit9-b2-b2
+UR END rc=0 00:54:57
+TALLY plain cause 25: 198
+TALLY plain cause 13: 2
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 00:54:57

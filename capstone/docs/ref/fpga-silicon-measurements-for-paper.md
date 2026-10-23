@@ -6941,3 +6941,42 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
   corrected after that boot. Board 2's boot under the corrected rule is the reading.
 - **Still running at this entry:** cpython lt1 and postgres pg-pools (board 1) and cpython lt0 (board 2), each against
   its batch QEMU reference.
+
+## The corpus on the batch bitstream, R-61 on silicon, and bitstream 2 on both boards (caplifive_vp2c_c721c1a2a and caplifive_vp2c_dcc6daf6e, 2026-10-22 to 2026-10-25)
+
+Folder: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/` (README sections and `records/`). Every run was
+pre-registered before its boot, and no earlier record was overwritten. Every cell is compared with a QEMU reference
+built the same way: the compiler lane's batch-kit references, and for bitstream 2 its 18-bit twin.
+
+**The batch bitstream c721c1a2a, every corpus arm** (dev 7de7f9cd4b00, efa8286b4723, 1f351b6be31c):
+
+| reading | result |
+|---|---|
+| the pass's 25 arms, 346 cells | 346 of 346 in verdict, 342 in every field; the four are Q-31's ruled ordering (silicon 4/13 where QEMU 24, the same pc) |
+| cpython lt1, pg-pools, mruby (stock, Sublet with smoke-fit), perl (stock, Sublet) | every cell as its reference (32, 9, 23, 23, 11, 11) |
+| xlang (repro 15, lua-cdp 13), ffmpeg plane (2 arms), sqlite capi (19) | every cell as its reference |
+| Juliet temporal (366) and spatial (755) | every non-rand image cell as QEMU (judge.py cannot read CAUGHT on silicon; graded by juliet-obs-compare: spatial 1513/1513, temporal 729/735 with the 5 rand draws equal under seed) |
+| the uaf control's cause 13 | 6 of 200 (trees about 2.2 %): unchanged by the batch |
+| cpython lt0 18 with application mremap | CAUGHT, cause 28 in mmap_ass_subscript (MISSED without mremap) |
+
+**R-61 on c721c1a2a, both boards, byte-identical:**
+- after a refused consuming LDC, and also after a NON-consuming one (from a read-only page, and from a writable page
+  with D clear), the next legal load faults with cause 15 at its own address, and the word is not copied
+  (dev 1f351b6be31c, 40a35b997697).
+
+**Bitstream 2, dcc6daf6e, on both boards** (dev b9d3857be06f):
+- **Its contents:** the 18-bit index, the tracer dropped, and the ring cut, which is R-61's fix.
+- **The flash:** routed WNS -9.790, against the batch's -18.529. It was flashed on the lead's word.
+
+| reading | board 1 | board 2 |
+|---|---|---|
+| s23 / va-alloc (the 18-bit id format: 0x40004, 0x80004) | AS EXPECTED / PASS | identical |
+| Tier 1 | identical to the batch | identical |
+| hold 100000 at default capacity | HOLD-OK, high_water 105,569 of 262,144 | identical (batch: HOLD-NULL, 64,001 of 65,536) |
+| R-61 kits (7 images) | every image its fixed-tree vector | identical |
+| the 20 capacity-cell calls (the ten lt1 cells the 16-bit table stopped) | 20/20 verdicts as the twin, high_water up to 106,284 | 20/20, the same verdicts |
+
+- The capacity cells' allocation totals sit 0.25-0.43 % under QEMU's, while the two boards agree within a few records.
+  That is a platform offset, and the board's launcher is a different binary.
+- The uaf control's silicon-only cause 13 is unchanged by bitstream 2: 2 and 8 of 200 on the two boards (2.5 %). The
+  batch read 6 of 200 and the trees about 2.2 %.

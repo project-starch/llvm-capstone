@@ -1,0 +1,46 @@
+# uaf control x200 with dmesg on bitstream 2 (caplifive_vp2c_dcc6daf6e), board 1 (tier3-uaf-repeat-b2.sh): result lines only (the kernel banner omitted).
+UR BEGIN 00:55:28 board 1 booking 256 N=200 args --no-trace --dmesg kit bkit9-b2-b1
+UR END rc=0 01:32:15
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3faf010c24 address=0x3faf0fc050 entry=0x3faf000868 code=0x3faf000000-0x3faf080000 last=0x42 preparing=0x42 sha256=b1decb0612856121de37383cbe4e812e1
+DMESG uaf-10-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-20-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-30-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-40-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-50-plain cause=25 dm_lines=12 refused=0
+RUN uaf-52-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f94e90c70 address=0x3f94f8a040 entry=0x3f94e80868 code=0x3f94e80000-0x3f94f00000 last=0x42 preparing=0x42 sha256=b1decb0612856121de3
+DMESG uaf-52-plain cause=13 dm_lines=12 refused=2
+  DM [  569.458764] capstone_vm: resolve refused at arena: addr 0x3f94f8a040 cause 13 need 0x1 pc 0x3f94e90c70 prev(addr 0x3f94f8a008 cause 13 rep 0) no lazy arena covers this address
+  DM [  569.504606] capstone_vm: resolve refused at arena: addr 0x3f94f8a040 cause 13 need 0x1 pc 0x3f94e90c70 prev(addr 0x3f94f8a008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-60-plain cause=25 dm_lines=12 refused=2
+  DM [  569.458764] capstone_vm: resolve refused at arena: addr 0x3f94f8a040 cause 13 need 0x1 pc 0x3f94e90c70 prev(addr 0x3f94f8a008 cause 13 rep 0) no lazy arena covers this address
+  DM [  569.504606] capstone_vm: resolve refused at arena: addr 0x3f94f8a040 cause 13 need 0x1 pc 0x3f94e90c70 prev(addr 0x3f94f8a008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-70-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-80-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-90-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-100-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-110-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-120-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-130-plain cause=25 dm_lines=12 refused=0
+RUN uaf-135-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3fbf510c70 address=0x3fbf5ff040 entry=0x3fbf500868 code=0x3fbf500000-0x3fbf580000 last=0x42 preparing=0x42 sha256=b1decb0612856121de
+DMESG uaf-135-plain cause=13 dm_lines=12 refused=2
+  DM [ 1300.759228] capstone_vm: resolve refused at arena: addr 0x3fbf5ff040 cause 13 need 0x1 pc 0x3fbf510c70 prev(addr 0x3fbf5ff008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1300.806655] capstone_vm: resolve refused at arena: addr 0x3fbf5ff040 cause 13 need 0x1 pc 0x3fbf510c70 prev(addr 0x3fbf5ff008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-140-plain cause=25 dm_lines=12 refused=2
+  DM [ 1300.759228] capstone_vm: resolve refused at arena: addr 0x3fbf5ff040 cause 13 need 0x1 pc 0x3fbf510c70 prev(addr 0x3fbf5ff008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1300.806655] capstone_vm: resolve refused at arena: addr 0x3fbf5ff040 cause 13 need 0x1 pc 0x3fbf510c70 prev(addr 0x3fbf5ff008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-150-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-160-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-170-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-180-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-190-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-200-plain cause=25 dm_lines=12 refused=0
+DMESG-ALL REFUSED 4
+DMESG-ALL DA [  569.458764] capstone_vm: resolve refused at arena: addr 0x3f94f8a040 cause 13 need 0x1 pc 0x3f94e90c70 prev(addr 0x3f94f8a008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [  569.504606] capstone_vm: resolve refused at arena: addr 0x3f94f8a040 cause 13 need 0x1 pc 0x3f94e90c70 prev(addr 0x3f94f8a008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1300.759228] capstone_vm: resolve refused at arena: addr 0x3fbf5ff040 cause 13 need 0x1 pc 0x3fbf510c70 prev(addr 0x3fbf5ff008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1300.806655] capstone_vm: resolve refused at arena: addr 0x3fbf5ff040 cause 13 need 0x1 pc 0x3fbf510c70 prev(addr 0x3fbf5ff008 cause 13 rep 0) no lazy arena covers this address
+TALLY plain cause 13: 2
+TALLY plain cause 25: 198
+completed=True steps=202 of 202 transcript=<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/uaf-repeat-dm/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board1 DONE 01:32:15
