@@ -69,6 +69,13 @@ if not a or not b: print(f"JF COMPARE NO DATA {len(a)}/{len(b)}"); sys.exit(2)
 d = [k for k in sorted(set(a) | set(b)) if a.get(k) != b.get(k)]
 print(f"JF COMPARE batch QEMU -> board: cases {len(a)}/{len(b)} differ {len(d)}" + "".join(f"\n  {k}: {a.get(k)} -> {b.get(k)}" for k in d[:40]))
 PY
+  # THE GRADE on a board (2026-10-23, after this runner's first run graded by the judge, which cannot read CAUGHT on
+  # silicon): juliet-obs-compare.py against the reference's own observations, census then seeded.
+  local S; S=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  python3 $S/juliet-obs-compare.py $JR/judge-batch2/run/observations.json $R/run/observations.json $JR/r60/build-census $H/t3-freeze/llvm/bin > $R/obs-census.cmp 2>&1
+  echo "JF OBS-COMPARE census rc=$? :: $(tail -1 $R/obs-census.cmp)" >> "$O"
+  python3 $S/juliet-obs-compare.py $JR/judge-batch2/run-seeded/observations.json $R/run-seeded/observations.json $JR/r60/build-seeded $H/t3-freeze/llvm/bin > $R/obs-seeded.cmp 2>&1
+  echo "JF OBS-COMPARE seeded rc=$? :: $(tail -1 $R/obs-seeded.cmp)" >> "$O"
   local tb n=0 bad=0
   for tb in $(find $R -path '*/work/board.txt' | sort); do
     n=$((n+1))

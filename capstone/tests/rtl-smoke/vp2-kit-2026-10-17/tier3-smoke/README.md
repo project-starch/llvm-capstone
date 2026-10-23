@@ -7858,3 +7858,47 @@ Record: `records/batch-mp-perl-b2.result-lines.txt`.
   - the tally as the reference's;
   - all 24 batches completed;
   - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0 in every transcript.
+
+### The Juliet temporal set on the batch bitstream, result (2026-10-23 04:44-08:09, board 1): every case image as QEMU apart from the `_12` draws; the pre-registered grade was the wrong instrument
+
+Record: `records/juliet-temporal-batch-b1.result-lines.txt`.
+- **The runs:**
+  - 12 census and 1 seeded batch completed, and the probe exited 0;
+  - all 14 boot transcripts read 0 on pc=0, DRT1, FRTY, Oops, INJS and INJL.
+- **The pre-registration's grade could not hold, and that is my error, made for the second time.**
+  - It predicted judge.py's "366 CAUGHT" and a compare on the judge's fields. judge.py's CAUGHT needs QEMU's own
+    "Cap mem access on revoked capability" line (STRICT), which silicon never prints.
+  - So every case reads NO-READING:unattributed(STRICT-FAIL:no-revoked-line), and the judge-field compare reads
+    "differ 366".
+  - This lane recorded exactly that trap on 2026-10-21, in the tree-A temporal result. It built juliet-obs-compare.py
+    for the spatial sample because of it. I derived this runner from tier3-juliet-full.sh, which grades by the judge,
+    and did not carry the lesson over.
+- **The grade that applies,** as for the tree spatial runs: `juliet-obs-compare.py` (exit, fault cause, fault site and
+  timeout per image, plus the controls) against judge-batch2's own observations of the same build.
+  - **census: 729 of 735 cells the same.** Of the 6 differences:
+    - **5 are `_12` (rand_flow) cases.** Their main-run branch depends on rand(): 1 bad took the bad branch in QEMU
+      and the good branch on the board, and 4 the other way. Where they fault, they fault at cause 25 at the
+      reference's site. These cases are scored from the seeded build, as in the tree runs.
+    - **1 is the uaf control:** 1 of its 24 runs (index 14) read **cause 13** at control_read_probe+0x38, where QEMU
+      reads cause 25. This is the silicon-only cause 13 seen on both trees: 2 of 24 on tree B's temporal run, and 3
+      of 48 on its spatial run. Its mechanism is open (the uaf-repeat entries). The batch bitstream does not remove it.
+  - **seeded: 56 of 56 the same,** including every `_12` case under its seed.
+  - So **every non-rand bad image faults at cause 25 at QEMU's site, and every good image behaves as QEMU's,** on the
+    batch bitstream.
+- **The open Juliet spatial run on board 2 was pre-registered with the same wrong grade.** It is corrected below,
+  before that run ends. tier3-juliet-batch.sh now runs juliet-obs-compare.py itself.
+- Memory note written: *a Juliet board grade is juliet-obs-compare.py, never judge.py*.
+
+### CORRECTION to the Juliet spatial batch pre-registration (2026-10-23 08:2x, while it runs on board 2, before it ends)
+
+- **Superseded:** the prediction "compare against batch2: 755 of 755, differ 0" (9113973962fe). That compare is on
+  judge.py's fields, and on a board it reads every CAUGHT row as NO-READING:unattributed(STRICT-FAIL:no-oob-line).
+  So the script's own "JS COMPARE" line will report about 716 differences, and that is not a reading.
+- **The grade:** juliet-obs-compare.py against `juliet-sp/batch2/run/observations.json` (the same build), with the three
+  value-dependent CWE170 cases tolerated, exactly as the tree spatial runs were graded:
+  CWE170_char_memcpy_01, CWE170_char_strncpy_01 and CWE170_wchar_t_loop_01.
+- **Predictions:**
+  - **every bad and good image cell the same as batch2's;**
+  - the uaf control may read cause 13 in some of its 48 runs, as on tree B (3 of 48). If it does, that is reported as
+    the open cause-13 behaviour, not as an image difference.
+  - 24 of 24 batches complete, the probe exits 0, and the readings are 0.

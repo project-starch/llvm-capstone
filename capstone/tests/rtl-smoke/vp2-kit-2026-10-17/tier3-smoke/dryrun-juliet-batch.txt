@@ -36,3 +36,7 @@ JF STOP: board 1 is busy before run
 
 ## h409
 JF STOP: the hub refused the booking (409) before run: 61
+## obs-compare section of the dry run
+JF OBS-COMPARE census rc=2 :: NO DATA: <scratch>/jb/r-ok2/run/observations.json does not exist
+JF OBS-COMPARE seeded rc=2 :: NO DATA: <scratch>/jb/r-ok2/run-seeded/observations.json does not exist
+# (the stub writes no observations.json, so both compares must read NO DATA: the added step runs and does not pass on nothing)
