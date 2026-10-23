@@ -1,0 +1,410 @@
+# tier3-newarms-batch.sh 6cb7d0b171b79134 (revision 2): stubbed dry runs, 2026-10-22 18:5x.
+# NA_RUN = a stub returning the QEMU reference's verdicts (capi cut to --only's rows) and a completed transcript; a
+# measure-only kit gets a SEQ line of SZ bytes. NA_GATE=true/false stubs the image gate; 'realgate' runs the real
+# images-gate.py on the stub's empty bake and must refuse. FLIP=<case> plants one changed verdict, RC= the runner's exit,
+# VB= the transcript's vbatch END rc, BOOKRC= the booking's exit. compare-pilot's NOT RUN on no-image cells: xlang repro
+# reads 4 of 15 and capi 13-16 reads 3 of 4 on the reference against itself (verdicts-compare 15 of 15, 4 of 4).
+
+## full1
+NA START 18:57:48 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA xlang BEGIN 18:57:48 board 1 booking 71
+NA xlang END 18:57:49 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batc
+NA xlang repro COMPARE vs reference rc=1 :: 4 of 15 cells the same
+NA xlang repro VCOMPARE rc=0 :: 15 of 15 cells the same
+NA xlang lua-cdp COMPARE vs reference rc=0 :: 13 of 13 cells the same
+NA xlang lua-cdp VCOMPARE rc=0 :: 13 of 13 cells the same
+NA plane-malloc MEASURE firmware 22000000 B against 26000000
+NA plane-malloc IMAGE GATE rc=0 :: 
+NA plane-malloc BEGIN 18:57:49 board 1 booking 71
+NA plane-malloc END 18:57:49 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-malloc plane-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-malloc plane-malloc VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-nested MEASURE firmware 22000000 B against 26000000
+NA plane-nested IMAGE GATE rc=0 :: 
+NA plane-nested BEGIN 18:57:49 board 1 booking 71
+NA plane-nested END 18:57:49 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-nested plane-nested COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-nested plane-nested VCOMPARE rc=0 :: 1 of 1 cells the same
+NA capi-1-2-3 MEASURE rows 1,2,3 firmware 22000000 B against 26000000
+NA capi-1-2-3 IMAGE GATE rc=0 :: 
+NA capi-1-2-3 BEGIN 18:57:49 board 1 rows 1,2,3 booking 71
+NA capi-1-2-3 END 18:57:49 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 1,2,3 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-1-2-3 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 MEASURE rows 4,5,6 firmware 22000000 B against 26000000
+NA capi-4-5-6 IMAGE GATE rc=0 :: 
+NA capi-4-5-6 BEGIN 18:57:49 board 1 rows 4,5,6 booking 71
+NA capi-4-5-6 END 18:57:49 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 4,5,6 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-4-5-6 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 MEASURE rows 7,8,9 firmware 22000000 B against 26000000
+NA capi-7-8-9 IMAGE GATE rc=0 :: 
+NA capi-7-8-9 BEGIN 18:57:49 board 1 rows 7,8,9 booking 71
+NA capi-7-8-9 END 18:57:49 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 7,8,9 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-7-8-9 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 MEASURE rows 10,11,12 firmware 22000000 B against 26000000
+NA capi-10-11-12 IMAGE GATE rc=0 :: 
+NA capi-10-11-12 BEGIN 18:57:49 board 1 rows 10,11,12 booking 71
+NA capi-10-11-12 END 18:57:49 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 10,11,12 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-10-11-12 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-13-14-15-16 MEASURE rows 13,14,15,16 firmware 22000000 B against 26000000
+NA capi-13-14-15-16 IMAGE GATE rc=0 :: 
+NA capi-13-14-15-16 BEGIN 18:57:49 board 1 rows 13,14,15,16 booking 71
+NA capi-13-14-15-16 END 18:57:49 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 13,14,15,16 --board-kit <mnt-hdd>/capstone/
+NA capi-13-14-15-16 capi COMPARE vs reference rc=1 :: 3 of 4 cells the same
+NA capi-13-14-15-16 capi VCOMPARE rc=0 :: 4 of 4 cells the same
+NA capi-17-18-19 MEASURE rows 17,18,19 firmware 22000000 B against 26000000
+NA capi-17-18-19 IMAGE GATE rc=0 :: 
+NA capi-17-18-19 BEGIN 18:57:49 board 1 rows 17,18,19 booking 71
+NA capi-17-18-19 END 18:57:49 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 17,18,19 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-17-18-19 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA seq-1 DONE 18:57:49
+
+## full2
+NA START 18:57:49 board 2 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA xlang BEGIN 18:57:50 board 2 booking 72
+NA xlang END 18:57:50 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batc
+NA xlang repro COMPARE vs reference rc=1 :: 4 of 15 cells the same
+NA xlang repro VCOMPARE rc=0 :: 15 of 15 cells the same
+NA xlang lua-cdp COMPARE vs reference rc=0 :: 13 of 13 cells the same
+NA xlang lua-cdp VCOMPARE rc=0 :: 13 of 13 cells the same
+NA plane-malloc MEASURE firmware 22000000 B against 26000000
+NA plane-malloc IMAGE GATE rc=0 :: 
+NA plane-malloc BEGIN 18:57:50 board 2 booking 72
+NA plane-malloc END 18:57:50 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-malloc plane-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-malloc plane-malloc VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-nested MEASURE firmware 22000000 B against 26000000
+NA plane-nested IMAGE GATE rc=0 :: 
+NA plane-nested BEGIN 18:57:50 board 2 booking 72
+NA plane-nested END 18:57:50 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-nested plane-nested COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-nested plane-nested VCOMPARE rc=0 :: 1 of 1 cells the same
+NA capi-1-2-3 MEASURE rows 1,2,3 firmware 22000000 B against 26000000
+NA capi-1-2-3 IMAGE GATE rc=0 :: 
+NA capi-1-2-3 BEGIN 18:57:50 board 2 rows 1,2,3 booking 72
+NA capi-1-2-3 END 18:57:50 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 1,2,3 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-1-2-3 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 MEASURE rows 4,5,6 firmware 22000000 B against 26000000
+NA capi-4-5-6 IMAGE GATE rc=0 :: 
+NA capi-4-5-6 BEGIN 18:57:50 board 2 rows 4,5,6 booking 72
+NA capi-4-5-6 END 18:57:50 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 4,5,6 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-4-5-6 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 MEASURE rows 7,8,9 firmware 22000000 B against 26000000
+NA capi-7-8-9 IMAGE GATE rc=0 :: 
+NA capi-7-8-9 BEGIN 18:57:50 board 2 rows 7,8,9 booking 72
+NA capi-7-8-9 END 18:57:50 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 7,8,9 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-7-8-9 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 MEASURE rows 10,11,12 firmware 22000000 B against 26000000
+NA capi-10-11-12 IMAGE GATE rc=0 :: 
+NA capi-10-11-12 BEGIN 18:57:50 board 2 rows 10,11,12 booking 72
+NA capi-10-11-12 END 18:57:50 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 10,11,12 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-10-11-12 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-13-14-15-16 MEASURE rows 13,14,15,16 firmware 22000000 B against 26000000
+NA capi-13-14-15-16 IMAGE GATE rc=0 :: 
+NA capi-13-14-15-16 BEGIN 18:57:50 board 2 rows 13,14,15,16 booking 72
+NA capi-13-14-15-16 END 18:57:50 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 13,14,15,16 --board-kit <mnt-hdd>/capstone/
+NA capi-13-14-15-16 capi COMPARE vs reference rc=1 :: 3 of 4 cells the same
+NA capi-13-14-15-16 capi VCOMPARE rc=0 :: 4 of 4 cells the same
+NA capi-17-18-19 MEASURE rows 17,18,19 firmware 22000000 B against 26000000
+NA capi-17-18-19 IMAGE GATE rc=0 :: 
+NA capi-17-18-19 BEGIN 18:57:50 board 2 rows 17,18,19 booking 72
+NA capi-17-18-19 END 18:57:50 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 17,18,19 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-17-18-19 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA seq-2 DONE 18:57:50
+
+## over
+NA START 18:57:51 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 26500000 B against 26000000
+NA STOP: xlang's measured firmware is not under the cap; no boot
+
+## gatefail
+NA START 18:57:51 board 2 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=1 :: 
+NA STOP: xlang's built images are not the reference's; no boot
+
+## realgate
+NA START 18:57:55 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=2 :: NO DATA: 17 reference images, 0 built images in <scratch>/na-dry3/realgate/na-xlang-measure/raw/bin
+NA STOP: xlang's built images are not the reference's; no boot
+
+## flipx
+NA START 18:57:51 board 2 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA xlang BEGIN 18:57:51 board 2 booking 72
+NA xlang END 18:57:51 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batc
+NA xlang repro COMPARE vs reference rc=1 :: 4 of 15 cells the same
+NA xlang repro VCOMPARE rc=0 :: 15 of 15 cells the same
+NA xlang lua-cdp COMPARE vs reference rc=1 :: 12 of 13 cells the same
+NA xlang lua-cdp VCOMPARE rc=1 :: 12 of 13 cells the same
+NA plane-malloc MEASURE firmware 22000000 B against 26000000
+NA plane-malloc IMAGE GATE rc=0 :: 
+NA plane-malloc BEGIN 18:57:51 board 2 booking 72
+NA plane-malloc END 18:57:51 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-malloc plane-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-malloc plane-malloc VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-nested MEASURE firmware 22000000 B against 26000000
+NA plane-nested IMAGE GATE rc=0 :: 
+NA plane-nested BEGIN 18:57:51 board 2 booking 72
+NA plane-nested END 18:57:51 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-nested plane-nested COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-nested plane-nested VCOMPARE rc=0 :: 1 of 1 cells the same
+NA capi-1-2-3 MEASURE rows 1,2,3 firmware 22000000 B against 26000000
+NA capi-1-2-3 IMAGE GATE rc=0 :: 
+NA capi-1-2-3 BEGIN 18:57:51 board 2 rows 1,2,3 booking 72
+NA capi-1-2-3 END 18:57:51 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 1,2,3 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-1-2-3 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 MEASURE rows 4,5,6 firmware 22000000 B against 26000000
+NA capi-4-5-6 IMAGE GATE rc=0 :: 
+NA capi-4-5-6 BEGIN 18:57:51 board 2 rows 4,5,6 booking 72
+NA capi-4-5-6 END 18:57:51 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 4,5,6 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-4-5-6 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 MEASURE rows 7,8,9 firmware 22000000 B against 26000000
+NA capi-7-8-9 IMAGE GATE rc=0 :: 
+NA capi-7-8-9 BEGIN 18:57:51 board 2 rows 7,8,9 booking 72
+NA capi-7-8-9 END 18:57:51 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 7,8,9 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-7-8-9 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 MEASURE rows 10,11,12 firmware 22000000 B against 26000000
+NA capi-10-11-12 IMAGE GATE rc=0 :: 
+NA capi-10-11-12 BEGIN 18:57:51 board 2 rows 10,11,12 booking 72
+NA capi-10-11-12 END 18:57:51 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 10,11,12 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-10-11-12 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-13-14-15-16 MEASURE rows 13,14,15,16 firmware 22000000 B against 26000000
+NA capi-13-14-15-16 IMAGE GATE rc=0 :: 
+NA capi-13-14-15-16 BEGIN 18:57:52 board 2 rows 13,14,15,16 booking 72
+NA capi-13-14-15-16 END 18:57:52 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 13,14,15,16 --board-kit <mnt-hdd>/capstone/
+NA capi-13-14-15-16 capi COMPARE vs reference rc=1 :: 3 of 4 cells the same
+NA capi-13-14-15-16 capi VCOMPARE rc=0 :: 4 of 4 cells the same
+NA capi-17-18-19 MEASURE rows 17,18,19 firmware 22000000 B against 26000000
+NA capi-17-18-19 IMAGE GATE rc=0 :: 
+NA capi-17-18-19 BEGIN 18:57:52 board 2 rows 17,18,19 booking 72
+NA capi-17-18-19 END 18:57:52 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 17,18,19 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-17-18-19 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA seq-2 DONE 18:57:52
+
+## flipc
+NA START 18:57:52 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA xlang BEGIN 18:57:52 board 1 booking 71
+NA xlang END 18:57:52 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batc
+NA xlang repro COMPARE vs reference rc=1 :: 4 of 15 cells the same
+NA xlang repro VCOMPARE rc=0 :: 15 of 15 cells the same
+NA xlang lua-cdp COMPARE vs reference rc=0 :: 13 of 13 cells the same
+NA xlang lua-cdp VCOMPARE rc=0 :: 13 of 13 cells the same
+NA plane-malloc MEASURE firmware 22000000 B against 26000000
+NA plane-malloc IMAGE GATE rc=0 :: 
+NA plane-malloc BEGIN 18:57:52 board 1 booking 71
+NA plane-malloc END 18:57:52 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-malloc plane-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-malloc plane-malloc VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-nested MEASURE firmware 22000000 B against 26000000
+NA plane-nested IMAGE GATE rc=0 :: 
+NA plane-nested BEGIN 18:57:52 board 1 booking 71
+NA plane-nested END 18:57:52 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-nested plane-nested COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-nested plane-nested VCOMPARE rc=0 :: 1 of 1 cells the same
+NA capi-1-2-3 MEASURE rows 1,2,3 firmware 22000000 B against 26000000
+NA capi-1-2-3 IMAGE GATE rc=0 :: 
+NA capi-1-2-3 BEGIN 18:57:52 board 1 rows 1,2,3 booking 71
+NA capi-1-2-3 END 18:57:52 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 1,2,3 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-1-2-3 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 MEASURE rows 4,5,6 firmware 22000000 B against 26000000
+NA capi-4-5-6 IMAGE GATE rc=0 :: 
+NA capi-4-5-6 BEGIN 18:57:52 board 1 rows 4,5,6 booking 71
+NA capi-4-5-6 END 18:57:52 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 4,5,6 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-4-5-6 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 MEASURE rows 7,8,9 firmware 22000000 B against 26000000
+NA capi-7-8-9 IMAGE GATE rc=0 :: 
+NA capi-7-8-9 BEGIN 18:57:52 board 1 rows 7,8,9 booking 71
+NA capi-7-8-9 END 18:57:52 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 7,8,9 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-7-8-9 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 MEASURE rows 10,11,12 firmware 22000000 B against 26000000
+NA capi-10-11-12 IMAGE GATE rc=0 :: 
+NA capi-10-11-12 BEGIN 18:57:52 board 1 rows 10,11,12 booking 71
+NA capi-10-11-12 END 18:57:52 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 10,11,12 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-10-11-12 capi COMPARE vs reference rc=1 :: 2 of 3 cells the same
+NA capi-10-11-12 capi VCOMPARE rc=1 :: 2 of 3 cells the same
+NA capi-13-14-15-16 MEASURE rows 13,14,15,16 firmware 22000000 B against 26000000
+NA capi-13-14-15-16 IMAGE GATE rc=0 :: 
+NA capi-13-14-15-16 BEGIN 18:57:53 board 1 rows 13,14,15,16 booking 71
+NA capi-13-14-15-16 END 18:57:53 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 13,14,15,16 --board-kit <mnt-hdd>/capstone/
+NA capi-13-14-15-16 capi COMPARE vs reference rc=1 :: 3 of 4 cells the same
+NA capi-13-14-15-16 capi VCOMPARE rc=0 :: 4 of 4 cells the same
+NA capi-17-18-19 MEASURE rows 17,18,19 firmware 22000000 B against 26000000
+NA capi-17-18-19 IMAGE GATE rc=0 :: 
+NA capi-17-18-19 BEGIN 18:57:53 board 1 rows 17,18,19 booking 71
+NA capi-17-18-19 END 18:57:53 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 17,18,19 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-17-18-19 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA seq-1 DONE 18:57:53
+
+## flipp
+NA START 18:57:53 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA xlang BEGIN 18:57:53 board 1 booking 71
+NA xlang END 18:57:53 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batc
+NA xlang repro COMPARE vs reference rc=1 :: 4 of 15 cells the same
+NA xlang repro VCOMPARE rc=0 :: 15 of 15 cells the same
+NA xlang lua-cdp COMPARE vs reference rc=0 :: 13 of 13 cells the same
+NA xlang lua-cdp VCOMPARE rc=0 :: 13 of 13 cells the same
+NA plane-malloc MEASURE firmware 22000000 B against 26000000
+NA plane-malloc IMAGE GATE rc=0 :: 
+NA plane-malloc BEGIN 18:57:53 board 1 booking 71
+NA plane-malloc END 18:57:53 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-malloc plane-malloc COMPARE vs reference rc=1 :: 0 of 1 cells the same
+NA plane-malloc plane-malloc VCOMPARE rc=1 :: 0 of 1 cells the same
+NA plane-nested MEASURE firmware 22000000 B against 26000000
+NA plane-nested IMAGE GATE rc=0 :: 
+NA plane-nested BEGIN 18:57:53 board 1 booking 71
+NA plane-nested END 18:57:53 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-nested plane-nested COMPARE vs reference rc=1 :: 0 of 1 cells the same
+NA plane-nested plane-nested VCOMPARE rc=1 :: 0 of 1 cells the same
+NA capi-1-2-3 MEASURE rows 1,2,3 firmware 22000000 B against 26000000
+NA capi-1-2-3 IMAGE GATE rc=0 :: 
+NA capi-1-2-3 BEGIN 18:57:53 board 1 rows 1,2,3 booking 71
+NA capi-1-2-3 END 18:57:53 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 1,2,3 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-1-2-3 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 MEASURE rows 4,5,6 firmware 22000000 B against 26000000
+NA capi-4-5-6 IMAGE GATE rc=0 :: 
+NA capi-4-5-6 BEGIN 18:57:53 board 1 rows 4,5,6 booking 71
+NA capi-4-5-6 END 18:57:53 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 4,5,6 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-4-5-6 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 MEASURE rows 7,8,9 firmware 22000000 B against 26000000
+NA capi-7-8-9 IMAGE GATE rc=0 :: 
+NA capi-7-8-9 BEGIN 18:57:53 board 1 rows 7,8,9 booking 71
+NA capi-7-8-9 END 18:57:53 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 7,8,9 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-7-8-9 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 MEASURE rows 10,11,12 firmware 22000000 B against 26000000
+NA capi-10-11-12 IMAGE GATE rc=0 :: 
+NA capi-10-11-12 BEGIN 18:57:53 board 1 rows 10,11,12 booking 71
+NA capi-10-11-12 END 18:57:53 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 10,11,12 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-10-11-12 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-13-14-15-16 MEASURE rows 13,14,15,16 firmware 22000000 B against 26000000
+NA capi-13-14-15-16 IMAGE GATE rc=0 :: 
+NA capi-13-14-15-16 BEGIN 18:57:54 board 1 rows 13,14,15,16 booking 71
+NA capi-13-14-15-16 END 18:57:54 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 13,14,15,16 --board-kit <mnt-hdd>/capstone/
+NA capi-13-14-15-16 capi COMPARE vs reference rc=1 :: 3 of 4 cells the same
+NA capi-13-14-15-16 capi VCOMPARE rc=0 :: 4 of 4 cells the same
+NA capi-17-18-19 MEASURE rows 17,18,19 firmware 22000000 B against 26000000
+NA capi-17-18-19 IMAGE GATE rc=0 :: 
+NA capi-17-18-19 BEGIN 18:57:54 board 1 rows 17,18,19 booking 71
+NA capi-17-18-19 END 18:57:54 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 17,18,19 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-17-18-19 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA seq-1 DONE 18:57:54
+
+## c81
+NA START 18:57:54 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA xlang BEGIN 18:57:54 board 1 booking 71
+NA xlang END 18:57:54 rc=78 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batc
+NA STOP: the C-81 gate refused the SDK
+
+## inc
+NA START 18:57:54 board 2 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA xlang BEGIN 18:57:54 board 2 booking 72
+NA xlang END 18:57:54 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batc
+NA xlang repro COMPARE vs reference rc=1 :: 4 of 15 cells the same
+NA xlang repro VCOMPARE rc=0 :: 15 of 15 cells the same
+NA xlang lua-cdp COMPARE vs reference rc=0 :: 13 of 13 cells the same
+NA xlang lua-cdp VCOMPARE rc=0 :: 13 of 13 cells the same
+NA STOP after xlang: the boot did not complete (no vbatch END rc=0 in its transcript)
+
+## busy
+NA START 18:57:54 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA STOP: board 1 is busy
+
+## h409
+NA START 18:57:54 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA STOP: the hub refused the booking (409, someone holds board 1): 71
+
+## exists
+NA START 18:57:55 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA STOP: <scratch>/na-dry3/full1/na-xlang exists
+
+## b3
+NA STOP: board 3
+
+# The real bakes behind the pre-registration (measure-only kit bkit8-batch-mb1, no board; images-gate.py on each bake's raw/bin):
+## positive control: the HELD runner (dev da4cb338b37f, capi 09c9fec1) rows 1,11 against its own reference run2: must refuse
+runner rc=75
+row1_cpython_progress_uaf                    heap-use-after-free  NO-READING:infra  the boot ended before this row ran
+row11_go_double_finalize                     bad-free             NO-READING:infra  the boot ended before this row ran
+--- vp2-malloc (virtual-mallocng): {'NO-READING:infra': 2}  classes {}
+BOARD_RUN_START 18:46:12 bitstream caplifive_vp2c_c721c1a2a monitor d9da397
+manifest 12 files, stage 12481270 bytes
+firmware 3294878a9df9693f 21662216 B
+MEASURE-ONLY: firmware 21662216 B, cap 26000000 B, margin 4337784 B; no boot
+controls.dom
+row11_go_double_finalize.dom
+row1_cpython_progress_uaf.dom
+sqlite
+sqlite3.o
+virtual-main.o
+MISSING capi-repros row1_cpython_progress_uaf: reference image d9a2ab966eb4af13 not built
+MISSING capi-repros row11_go_double_finalize: reference image a239618a52ced796 not built
+0 of 2 reference images built
+gate=1
+## known-good: the re-read's mpt (wt-gate run-virtual-cases.py 50f10fa5) against ref-batch/mpt: must pass
+runner rc=75
+BOARD_RUN_START 18:46:14 bitstream caplifive_vp2c_c721c1a2a monitor d9da397
+manifest 13 files, stage 1690165 bytes
+firmware 6271f5fb00bda686 17467912 B
+MEASURE-ONLY: firmware 17467912 B, cap 26000000 B, margin 8532088 B; no boot
+3 of 3 reference images built
+gate=0
+## the fixed runners (dev 76054751cd4c): capi rows 1,2,3 and xlang
+capi rc=75
+MEASURE-ONLY: firmware 25856520 B, cap 26000000 B, margin 143480 B; no boot
+manifest 13 files, stage 18178730 bytes
+3 of 3 reference images built
+capi gate=0
+xlang rc=75
+manifest 27 files, stage 4598471 bytes
+MEASURE-ONLY: firmware 19565064 B, cap 26000000 B, margin 6434936 B; no boot
+17 of 17 reference images built
+xlang gate=0
+## the other capi groups and both plane arms (fd8c28583642)
+capi 4,5,6: MEASURE-ONLY: firmware 25856520 B :: 3 of 3 reference images built
+capi 7,8,9: MEASURE-ONLY: firmware 25856520 B :: 3 of 3 reference images built
+capi 10,11,12: MEASURE-ONLY: firmware 25856520 B :: 3 of 3 reference images built
+capi 13,14,15,16: MEASURE-ONLY: firmware 25856520 B :: 3 of 3 reference images built
+capi 17,18,19: MEASURE-ONLY: firmware 25856520 B :: 3 of 3 reference images built
+plane virtual-malloc rc=75: MEASURE-ONLY: firmware 17467912 B :: 1 of 1 reference images built :: bin 00_b7946098b1_alphablend_row_past_plane.dom controls.dom 
+plane virtual-nested-pools rc=75: MEASURE-ONLY: firmware 17467912 B :: 1 of 1 reference images built :: bin 00_b7946098b1_alphablend_row_past_plane.dom controls.dom plane-bound-control.dom plane-free-control.dom 

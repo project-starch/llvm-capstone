@@ -1,0 +1,31 @@
+# tier3-juliet-spatial-batch.sh ecbaecdc58eb7c7b dry run, 2026-10-23 05:22, board 2: run.py/probe.py stubbed (each prints
+# what it was handed), judge.py stubbed (it writes the batch QEMU reference's own spatial-verdicts.tsv; FLIP=<row> turns one row
+# MISSED). A DRY RUN'S VERDICTS ARE NEVER DATA.
+
+## ok
+JS run BEGIN 05:22:01 board 2 booking 62
+JS run END rc=0 05:22:01 :: 1 batches completed, 0 not :: args: --build <mnt-hdd>/capstone/juliet-sp/build-census --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2 
+JS probe BEGIN 05:22:01 board 2 booking 62
+JS probe END rc=0 05:22:01 :: 1 batches completed, 0 not :: args: --sdk <mnt-hdd>/capstone/juliet-sp/sdk --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2 
+JS judge rc=0 :: judge stub: --manifest <mnt-hdd>/capstone/juliet-sp/manifest-spatial-sample.json --build <mnt-hdd>/capstone/juliet-sp/build-census --llvm-bin <mnt-hdd>/capstone/t3-freeze-r60/llvm/bin  
+JS verdicts: 755 {('CAUGHT', 'CORRECT', '28'): 716, ('MISSED', 'CORRECT', ''): 22, ('INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)', 'CORRECT', '28'): 4, ('INTRA-OBJECT:NO-READING:unexpected-cause', 'CORRECT', '24'): 4, ('NOT-TRIGGERED:sizeof-ptr', 'CORRECT', ''): 9}
+JS MISSED rows: 22 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_01
+JS COMPARE batch QEMU -> board: cases 755/755 differ 0
+JS readings: 2 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board2 DONE 05:22:02
+
+## flip
+JS run BEGIN 05:22:02 board 2 booking 62
+JS run END rc=0 05:22:02 :: 1 batches completed, 0 not :: args: --build <mnt-hdd>/capstone/juliet-sp/build-census --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2 
+JS probe BEGIN 05:22:02 board 2 booking 62
+JS probe END rc=0 05:22:02 :: 1 batches completed, 0 not :: args: --sdk <mnt-hdd>/capstone/juliet-sp/sdk --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2 
+JS judge rc=0 :: judge stub: --manifest <mnt-hdd>/capstone/juliet-sp/manifest-spatial-sample.json --build <mnt-hdd>/capstone/juliet-sp/build-census --llvm-bin <mnt-hdd>/capstone/t3-freeze-r60/llvm/bin  
+JS verdicts: 755 {('CAUGHT', 'CORRECT', '28'): 715, ('MISSED', 'CORRECT', '28'): 1, ('MISSED', 'CORRECT', ''): 22, ('INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)', 'CORRECT', '28'): 4, ('INTRA-OBJECT:NO-READING:unexpected-cause', 'CORRECT', '24'): 4, ('NOT-TRIGGERED:sizeof-ptr', 'CORRECT', ''): 9}
+JS MISSED rows: 23 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE805_char_declare_memmove_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_67
+JS COMPARE batch QEMU -> board: cases 755/755 differ 1
+  CWE121_Stack_Based_Buffer_Overflow__CWE805_char_declare_memmove_54: ('CAUGHT', 'CORRECT', '28', 'memmove+0x164', 'STRICT:unique') -> ('MISSED', 'CORRECT', '28', 'memmove+0x164', 'STRICT:unique')
+JS readings: 2 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board2 DONE 05:22:02
+
+## busy
+JS STOP: board 2 is busy before run

@@ -7427,6 +7427,97 @@ Record: `records/batch-va-alloc-bare-b2.result-lines.txt`.
   - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped 0.
   - With lt0 and the 23 re-read arms, this completes the 25 arms, 346 cells, on c721c1a2a.
 
+### Two new corpus arms on the batch bitstream: xlang and sqlite capi-repros, board 1 after its re-read, pre-registered (2026-10-22 18:5x, before any boot)
+
+- **Why:** the next benchmark from the bug corpus. Both arms landed on dev with the lead's approval, as relayed by the
+  runtime lane and the compiler lane: xlang (repro + lua-cdp) at da4cb338b37f, and sqlite/capi-repros at 75e077151800.
+  Both runners are one-boot verdicts-v1 runners with the kit group, so the board run replaces `--virtual-kit` with
+  `--board-kit`.
+- **What runs:** `tier3-newarms-batch.sh 1 <after> <ERE> <log>`, from a clean dev worktree `/tmp/capstone/wt-newarms`
+  (da4cb338b37f, which carries both commits).
+  - Kit `bkit8-batch-b1`; SDK t3-freeze-nb-nomovc-cw-r60 (sdk.json f5145cbb).
+  - Each runner is pinned to the sha256/16 its reference records as platform.runner: xlang 7d42d207e4e8fc29, capi
+    09c9fec1ac33653d. Each reference also records SDK f5145cbb and module a05c198b (qkit7-batch2).
+  - **xlang:** one boot, 3.6 MB of images. Its two bundles are scored against
+    `xlang/{repro,lua-cdp}/results/2026-10-22-virtual/virtual-malloc`.
+  - **capi:** six `--only` boots: rows 1-3, 4-6, 7-9, 10-12, 13-16 (row 15 has no program) and 17-19, with the two
+    generic controls in every boot. The row images are 5.7 MB each, built -g and left unstripped, so their hashes stay
+    the reference's. A whole-arm boot would be about 98 MB, which the compiler lane measured; that is why the arm is
+    split.
+    - Each boot is preceded by a measure-only bake on `bkit8-batch-mb1`. The boot runs only if the firmware is under
+      26,000,000 B.
+    - Each boot is scored against `results/2026-10-22-virtual-run2/virtual-malloc` cut to its rows.
+  - Scored by compare-pilot.py and verdicts-compare.py. Output goes to NEW directories
+    `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/na-<tag>`. An incomplete boot stops the sequence.
+  - It starts when board 1's re-read ends (RR seq-1 DONE, STOP or HOLD).
+- **How to read compare-pilot here:** for a cell with no image on either side, it prints NOT RUN and does not count
+  it the same. That covers xlang repro's 11 mruby rows (lead decision (b)) and capi row 15. So its matching readings
+  are **4 of 15** for repro and **3 of 4** for capi rows 13-16, with exactly those NOT RUN lines. verdicts-compare
+  counts every cell. The dry run shows both on the reference against itself.
+- **Dry run** (`dryrun-newarms-batch.txt`):
+  - both boards run the full sequence;
+  - a planted change is read by both compares, in lua-cdp and in a capi group;
+  - it stops on: over the cap before any boot, a C-81 refusal (78), an incomplete boot, a busy board, a hub 409, an
+    existing directory, and board 3.
+- **Predictions (every imaged cell as the QEMU reference):**
+  - **xlang repro:** rows 1, 3 and 7 CAUGHT (cause 25, memcpy), row 2 MISSED (the stack use-after-return, exits 0),
+    and 11 rows out of the denominator. compare-pilot 4 of 15 with 11 NOT RUN; verdicts-compare 15 of 15.
+  - **xlang lua-cdp:** 13 of 13 CAUGHT, cause 25 (lua-openssl-141 in openssl_cipher_ctx_free, the rest in main).
+  - **capi, over the six boots:**
+    - CAUGHT 12: rows 1-11 and 16, cause 25 at main, read_context, stale_udf or authorize, and row 11 cause 2 at
+      invalid_free;
+    - out of the denominator 7: rows 12 and 14 (cause 24 in main), row 13 (cause 12), rows 17-19 (exit 0), and row 15
+      (no program).
+    - compare-pilot SAME on every imaged row, NOT RUN only on row 15. verdicts-compare 19 of 19 in total.
+  - The controls fault in every boot.
+  - Each capi firmware is under the cap. The standing sq0 groups' 8 images staged 23.1 MB into a 23.8 MB firmware, and
+    3 capi rows plus the controls are smaller.
+  - In every boot: FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0, collect-skipped and cause=29 read 0, and the boot
+    completes.
+
+### The new arms, revision 2 (2026-10-22 19:0x, before any boot): HELD at 51cb7de6fdde, re-pinned, plane added, an image gate before every boot
+
+- **Held before any boot.** The compiler lane found that the runners pinned at 51cb7de6fdde (dev da4cb338b37f) build -g
+  images that record the build directory. No board build could equal the references' hashes, so every cell would have been
+  VOID by compare-pilot's image rule. The queued chain was stopped while it was still waiting; no na-* directory exists. The
+  revision-1 section above stands as written and is superseded here.
+- **Re-pinned** to the lane's path-independent runners and re-run references:
+  - capi: runner 6981dee6da37a29b, reference `results/2026-10-22-virtual-run3`;
+  - xlang: runner 6fcf3b750b8a1d9c, references `xlang/{repro,lua-cdp}/results/2026-10-22-virtual-run2`.
+  - Each run reads the same cells as revision 1's references: 19 of 19, 15 of 15 and 13 of 13 the same by
+    verdicts-compare. Only the image hashes moved.
+  - **Added: ffmpeg/plane-repros** (dev fd8c28583642), both arms, from `results/2026-10-22-batch-kit`. The runner is
+    run-virtual-cases.py 1de34fdf0c1cafa7 with each arm's recorded cc-args.
+  - The worktree is `/tmp/capstone/wt-newarms` at **bcf5f1724110**. That is fd8c28583642 plus the runtime lane's boardvm
+    step-tail fix: every @@HB line carries the step's last 240 B, and a step's bound is clamped inside the boot. The three
+    runners are byte-identical at both commits, and test_boardvm.py passes there.
+  - The re-read keeps wt-gate's run-virtual-cases.py 50f10fa5, the hash its references' stamps name. Dev's file is now
+    1de34fdf, because of the plane additions.
+- **New: an image gate before every boot.** Each unit first runs its own invocation as a measure-only bake on
+  `bkit8-batch-mb1`, which is no board. It boots only if:
+  - the firmware is under 26,000,000 B; and
+  - `images-gate.py` finds every reference image_sha256 for the boot's cases among the images the bake built.
+
+  The gate's controls are in `dryrun-newarms-batch.txt`:
+  - the held runner, capi rows 1 and 11 against its own reference: **0 of 2, refused**;
+  - the re-read's mpt against ref-batch/mpt: **3 of 3, passes**;
+  - a bake that built nothing: NO DATA, refused.
+- **Measured before this pre-registration**, real bakes with the fixed runners:
+  - capi in groups of three rows: each group's firmware is 25,856,520 B (a 143,480 B margin), and 3 of 3 images
+    are the reference's in every group (13-16 counted on its 3 imaged rows);
+  - xlang: 19,565,064 B, 17 of 17 images;
+  - plane: 17,467,912 B per arm, 1 of 1 image each.
+- **Order on board 1, after its re-read:** xlang, plane virtual-malloc, plane virtual-nested-pools, then capi rows 1-3,
+  4-6, 7-9, 10-12, 13-16, 17-19. That is 9 boots.
+- **Dry run** (`dryrun-newarms-batch.txt`, revision 2): revision 1's variants, plus a planted change in plane, the gate
+  refusing (stubbed and real), and the cap.
+- **Predictions:** revision 1's, unchanged, plus plane:
+  - **plane virtual-malloc:** MISSED, reached (DEFECT-REPRODUCED) and completed with no fault; the controls
+    bounds-malloc and uaf-malloc fault.
+  - **plane virtual-nested-pools:** MISSED the same way. Controls: bounds-malloc fault, uaf-malloc fault, plane-live
+    complete, plane-bound fault, plane-free fault.
+  - compare-pilot reads 1 of 1 for each plane arm.
+
 ### cpython lt1 on the batch bitstream, result (2026-10-22 15:19-20:25, board 1): 32 of 32 cells as the batch QEMU reference
 
 Record: `records/batch-cpy-lt1-b1.result-lines.txt`.
@@ -7506,6 +7597,42 @@ three cells.**
 - sql0 (9 cells) is running on board 2. The new arms (xlang, plane and capi) follow on board 1.
 - The standing 346-cell pass on the two tree bitstreams stays the record. These cells sit beside it.
 
+### live-peak `hold 100000`: the 18-bit index on silicon, a matched pair (board 1 batch control, board 2 bitstream 2), pre-registered (2026-10-23 02:1x)
+
+- **Why:**
+  - Tier 1 cannot show bitstream 2's larger index: its harness sets node_flat_records=4096.
+  - The discriminator is a context at the module's DEFAULT capacity that holds more than 65,535 live records. The
+    runtime lane named it; the compiler lane supplied the program, on dev at 29c47723586f and pre-registered at lane
+    2624d2261578.
+- **The program:** image `<mnt-hdd>/capstone/live-peak/hold.dom`, sha256/16 433f9f1cdcd0db9f.
+  - It rebuilds byte for byte from dev's hold.c with the batch SDK's capstone-cc -O2.
+  - One process: `hold 100000`, cwd /tmp.
+- **What runs:**
+  - `tier3-hold-batch.sh <board> <kit> <after> <ERE> <log>` → `tier3-hold-board.py`. It is one boardvm boot (wt-newarms
+    at bcf5f1724110) of the compiler lane's QEMU steps: `capstone-vexec --stats`, the hold, then `--stats` again.
+  - The kit must carry no module parameters, and must be the board's batch kit (module 21fbfc39) or its bitstream-2 kit
+    (module 215a09be).
+  - Board 1, the batch control: bkit8-batch-b1, after its new arms end (NA seq-1 DONE, STOP or HOLD).
+  - Board 2, bitstream 2: bkit9-b2-b2, launched after its first boots read as pre-registered.
+  - Output goes to `<mnt-hdd>/capstone/t3-run-hold-<bitstream>-b<board>`.
+- **Dry run** (`dryrun-hold-batch.txt`): boardvm stub transcripts for a completed hold, a refusal and a wedge; a wrong
+  kit and a busy board refuse.
+- **Predictions:**
+  - **Board 1, batch** (QEMU qkit7-batch2, module a05c198b, the same source as 21fbfc39):
+    - `HOLD-NULL at` about 60,590, exit 71, no fault;
+    - high_water 64,001, allocated_total 64,001, node_capacity 65,536.
+    - malloc refuses with 511 records left. The HOLD-NULL count depends on the baseline the process holds before its
+      loop (3,411 on QEMU), so the count is read with that tolerance, and high_water 64,001 is the exact reading.
+  - **Board 2, bitstream 2** (the 18-bit twin qkit7-b2twin3-q8, module 33254735, launcher fad465ce):
+    - `HOLD-PEAK 100000`, `HOLD-OK 100000`, exit 0, no fault;
+    - high_water 105,569, allocated_total 105,569, node_capacity 262,144.
+  - Both boards: FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 read 0.
+  - **What would decide it:**
+    - board 2 completing with high_water above 65,535 is the 18-bit index working on silicon;
+    - a refusal at 64,001 on board 2 would mean the 16-bit table is still in force;
+    - a fault, or a wedge in the hold step, is a finding against the new RTL. It is read no further than its first
+      failure.
+
 ### postgres sql0 on the batch bitstream, result (2026-10-23 01:24-03:26, board 2): 9 of 9 cells as the batch reference, which completes the 25 arms
 
 Record: `records/batch-sql0-b2.board.txt`. The bundle is filed under
@@ -7531,3 +7658,256 @@ Record: `records/batch-sql0-b2.board.txt`. The bundle is filed under
   4 or 13 where QEMU raises 24, at the same pc.
 - Every boot completed, with the monitor readings 0.
 - The standing 346-cell pass on the tree bitstreams stays the record. This column sits beside it.
+
+### The new arms on the batch bitstream, result (2026-10-23 01:57-03:38, board 1): xlang, plane and capi every cell as their QEMU references
+
+Record: `records/batch-newarms-b1.result-lines.txt`. Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/na-*`.
+- **The image gate passed before every boot** (9 of 9). Every unit's measure-only bake built all of its reference's
+  images, and every firmware was under the cap: xlang 19,565,064 B, plane 17,467,912 B each, capi 25,856,520 B each.
+- **xlang:**
+  - repro: verdicts-compare 15 of 15. compare-pilot 4 of 15, with the 11 mruby rows NOT RUN, as pre-registered.
+    Rows 1, 3 and 7 CAUGHT cause 25 in memcpy; row 2 MISSED.
+  - lua-cdp: 13 of 13 CAUGHT by both compares.
+- **ffmpeg plane-repros:** virtual-malloc MISSED and virtual-nested-pools MISSED, 1 of 1 each by both compares. The
+  controls are as declared.
+- **sqlite capi-repros, six boots:** verdicts-compare 19 of 19.
+  - CAUGHT 12 (rows 1-11 and 16), with row 11 cause 2 at invalid_free.
+  - 7 out of the denominator: rows 12 and 14 cause 24, row 13 cause 12, rows 17-19 exit 0, and row 15 has no program.
+  - compare-pilot is SAME on every imaged row, and NOT RUN on row 15 only.
+  - The rows 17-19 boot exits 75 ("nothing could be judged"), because all three of its rows are out of the
+    denominator. Its compare reads 3 of 3.
+- **Readings:**
+  - Every boot completed. FRTY, FRTC, DRT1, INJS, INJL, Oops, collect-skipped and cause=29 read 0.
+  - pc=0 reads 1 in the rows 13-16 boot. That line is row 13's own predicted fault, `cause=12 pc=0x0 address=0x0` (a
+    null call), not an anomaly.
+- **Against the pre-registration (revision 2, 45341683a39e): every reading holds.**
+
+### live-peak `hold 100000`, board 1 batch control, result (2026-10-23 03:39-03:48): every value as predicted
+
+Record: `records/hold-batch-b1.result-lines.txt`.
+- The read is `HOLD-NULL at 60590`, exit 71, no fault.
+- `--stats` after the run reads nodes_high_water **64,001**, nodes_allocated_total 64,001, node_capacity **65,536**;
+  before the run, 0, 0 and 65,536.
+- FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 read 0.
+- **Against the pre-registration (c0e7ff264da0): every reading holds, and the HOLD-NULL count is exact.** It matches
+  QEMU's 60,590, so the baseline held before the loop is the same on silicon.
+- This is the batch side of the pair. The bitstream-2 side runs on board 2 after its first boots.
+
+### mruby stock (virtual-malloc) on the batch bitstream, board 1: pre-registered (2026-10-23 03:5x, before the boot)
+
+- **Why:** the corpus arms beyond the pass. mruby Sublet ran with smoke-fit on 2026-10-22. Stock mruby has no reading on
+  the batch bitstream. Perl waits for trimmed batch references, which the payload cap needs and the compiler lane has
+  been asked for.
+- **What runs:** `tier3-mp-stock-batch.sh 1 <log>`. It is tier3-mp-batch.sh with the stock arm's inputs:
+  - the compiler lane's TICK reference, `batch-refs-r60/tick/mruby-stock`, on qkit7-batch2. Its images are built with
+    MRB_TICK_UNIT=100 (corpus-mp-r60t), the S-34 workaround.
+    - The MPT stamp reads image 1ab24a92, capi-11 dee93c7d, runner 9db9f5f7, appvm-arm 11967b37 and tree
+      6764d96229f6, and the read is "control smoke ok", fault 20 and completed 3.
+    - It reads MOVE 0 against the r60 4 ms reference.
+  - `--arm virtual-malloc` and the stock smoke;
+  - kit bkit8-batch-b1, with EXPECT_IMAGES taken from the reference's collected images.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/mp-mruby-stock-tick`.
+- **Dry run** (`dryrun-mp-stock-batch.txt`):
+  - a good run reads 23 of 23, and a planted cause change reads 22 of 23;
+  - a failed smoke reads VOID;
+  - it stops on the arm script's refusal, an incomplete boot, and a busy board.
+- **Predictions:**
+  - **matrix-compare against the tick reference: 23 of 23 cells the same**, with fault 20 and completed 3;
+  - control smoke ok;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0, and the boot completes.
+
+### perl stock and Sublet on the batch bitstream, board 2: pre-registered (2026-10-23 04:0x, before the boots)
+
+- **Why:** the corpus arms beyond the pass. Bitstream 2 has no netlist, because its second build was killed in
+  synthesis, so board 2 is free and stays on the batch bitstream.
+- **What runs:** `tier3-mp-perl-batch.sh 2 <log> perl-stock perl-sublet`. It is tier3-mp-arm.sh's perl path with what the
+  batch changes:
+  - kit bkit8-batch-b2;
+  - the compiler lane's TRIMMED batch references, `batch-refs-r60/batch/perl-{stock,sublet}-trim` (dev 120360c608dc,
+    pre-registered at lane f83b8ffde608). They run on qkit7-batch2 (qemu ecaf50bb, module a05c198b) with --lib-closure
+    2a472e21, the board's staging, and read full = trimmed 11 of 11 per arm;
+  - the r60 images, corpus-mp-r60/cw: perl-stock 76f1141d and perl-sublet bec05c86, runtime 4a5e480c;
+  - wt-ref2 at the stamp's tree, 15ced322c824, with the runner aabfa668 and the arm script 11967b37 pinned by the
+    stamp. EXPECT_IMAGES comes from the reference's collected images.
+  - The stamp must name this kit's qemu and module, this image and this closure.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/mp-perl-*`.
+- **Dry run** (`dryrun-mp-perl-batch.txt`):
+  - 11 of 11 per arm; a planted cause change reads 10 of 11;
+  - failed controls read VOID;
+  - it stops on the arm script's refusal (78), a non-perl tag, an incomplete boot, and a busy board.
+- **Predictions:**
+  - **perl-stock: 11 of 11 the same** (fault 6, completed 4, exit255 1);
+  - **perl-sublet: 11 of 11 the same** (fault 8, completed 3);
+  - both arms' eval and shim controls pass;
+  - FRTY, DRT1, Oops, INJS, INJL and pc=0 read 0, and each boot completes.
+
+### mruby stock on the batch bitstream, result (2026-10-23 03:51-04:18, board 1): 23 of 23 cells as the tick reference
+
+Record: `records/batch-mp-mruby-stock-b1.result-lines.txt`.
+- APPVM read rc=0, control smoke ok, fault 20, completed 3.
+- **matrix-compare against batch-refs-r60/tick/mruby-stock: 23 of 23 the same.**
+- FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped read 0. The gen-push banner is present, and the boot
+  completed.
+- **Against the pre-registration (ae150eeba11b): every reading holds.**
+
+### The Juliet temporal set on the batch bitstream, board 1: pre-registered (2026-10-23 04:4x, before the first boot)
+
+- **Why:** Juliet was the last corpus set without a batch-bitstream reading. The compiler lane's batch-kit QEMU
+  references now exist: dev cc95944a056e, pre-registered at lane fd93b0d8ab47.
+- **The reference:** `juliet-r60/judge-batch2`, on qkit7-batch2.
+  - It is built on the r60 SDK (sdk.json f5145cbb) from manifest 95ceac7d: build-census has 734 images (build.json
+    53c221ca), and build-seeded has 55 (c346e5c6).
+  - The judging runs run.py 4b663651, probe.py d6200b39 and judge.py 93aa5ad9.
+  - It reads 366 CAUGHT (228 CWE-415, 138 CWE-416), and every good twin is CORRECT. That is 366 of 366 equal to
+    judge-tB-mimic on verdict, good, cause, site and strict.
+- **What runs:** `tier3-juliet-batch.sh 1 <log>`. It is tier3-juliet-full.sh with:
+  - the batch kit bkit8-batch-b1;
+  - the r60 builds and SDK;
+  - the same runners from wt-jb a772f0112ae3, each pinned by the reference's hashes and its RESULT stamp;
+  - the reference's own five-field compare added after judge.py.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/juliet-temporal`.
+  - Three phases (run, run-seeded, probe), each booked on the hub. Every boot is a cold board boot.
+- **Dry run** (`dryrun-juliet-batch.txt`):
+  - each phase gets the r60 build and SDK and the batch kit;
+  - a planted MISSED row reads "differ 1" and TWINS-NEEDED;
+  - a busy board and a hub 409 refuse.
+- **Predictions:**
+  - judge: **366 CAUGHT**, CWE-415 228 and CWE-416 138, every good twin CORRECT;
+  - **the compare against judge-batch2: 366 of 366, differ 0**;
+  - every batch completed, 12 census and 1 seeded;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0 in every boot transcript.
+
+### perl stock and Sublet on the batch bitstream, result (2026-10-23 04:01-05:21, board 2): 11 of 11 per arm
+
+Record: `records/batch-mp-perl-b2.result-lines.txt`.
+- **perl-stock: 11 of 11 the same** as the trimmed batch reference (fault 6, exit255 1, completed 4). Its eval and shim
+  controls pass.
+- **perl-sublet: 11 of 11 the same** (fault 8, completed 3). Its controls pass.
+- pc=0, DRT1, FRTY, Oops, INJS and INJL read 0, and both boots completed.
+- **Against the pre-registration (e880a9a3a0e8): every reading holds.**
+- With mruby stock and Sublet already read, every release-differential arm now has a batch-bitstream board reading.
+
+### The Juliet spatial sample on the batch bitstream, board 2: pre-registered (2026-10-23 05:2x, before the first boot)
+
+- **The reference:** the compiler lane's `juliet-sp/batch2`, on qkit7-batch2 (dev cc95944a056e, pre-registered at lane
+  7a94506856f0).
+  - It uses the same r60 census build as the tree runs: build.json 806cc24a, manifest 03f048a1, 755 cases.
+  - The judging runs run.py 4b663651, probe.py d6200b39 and judge.py 93aa5ad9.
+  - It reads 755 of 755 equal to tB-mimic: CAUGHT 716, MISSED 22, NOT-TRIGGERED:sizeof-ptr 9, and INTRA-OBJECT
+    NO-READING 8. Every good twin is CORRECT.
+- **What runs:** `tier3-juliet-spatial-batch.sh 2 <log>`. It is tier3-juliet-spatial.sh with:
+  - the batch kit bkit8-batch-b2;
+  - a check of the reference's RESULT-batch2 stamp;
+  - the five-field compare against `batch2/results/spatial-verdicts.tsv`.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/juliet-spatial`.
+  - The run phase is booked 480 minutes, the hub's cap. The tree runs took 6.6 hours.
+- **Dry run** (`dryrun-juliet-spatial-batch.txt`): the phases get the build and SDK and the batch kit; a planted MISSED
+  reads "differ 1"; a busy board refuses.
+- **Predictions:**
+  - **the compare against batch2: 755 of 755, differ 0**, including the value-dependent CWE-170 rows;
+  - the tally as the reference's;
+  - all 24 batches completed;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0 in every transcript.
+
+### The Juliet temporal set on the batch bitstream, result (2026-10-23 04:44-08:09, board 1): every case image as QEMU apart from the `_12` draws; the pre-registered grade was the wrong instrument
+
+Record: `records/juliet-temporal-batch-b1.result-lines.txt`.
+- **The runs:**
+  - 12 census and 1 seeded batch completed, and the probe exited 0;
+  - all 14 boot transcripts read 0 on pc=0, DRT1, FRTY, Oops, INJS and INJL.
+- **The pre-registration's grade could not hold, and that is my error, made for the second time.**
+  - It predicted judge.py's "366 CAUGHT" and a compare on the judge's fields. judge.py's CAUGHT needs QEMU's own
+    "Cap mem access on revoked capability" line (STRICT), which silicon never prints.
+  - So every case reads NO-READING:unattributed(STRICT-FAIL:no-revoked-line), and the judge-field compare reads
+    "differ 366".
+  - This lane recorded exactly that trap on 2026-10-21, in the tree-A temporal result. It built juliet-obs-compare.py
+    for the spatial sample because of it. I derived this runner from tier3-juliet-full.sh, which grades by the judge,
+    and did not carry the lesson over.
+- **The grade that applies,** as for the tree spatial runs: `juliet-obs-compare.py` (exit, fault cause, fault site and
+  timeout per image, plus the controls) against judge-batch2's own observations of the same build.
+  - **census: 729 of 735 cells the same.** Of the 6 differences:
+    - **5 are `_12` (rand_flow) cases.** Their main-run branch depends on rand(): 1 bad took the bad branch in QEMU
+      and the good branch on the board, and 4 the other way. Where they fault, they fault at cause 25 at the
+      reference's site. These cases are scored from the seeded build, as in the tree runs.
+    - **1 is the uaf control:** 1 of its 24 runs (index 14) read **cause 13** at control_read_probe+0x38, where QEMU
+      reads cause 25. This is the silicon-only cause 13 seen on both trees: 2 of 24 on tree B's temporal run, and 3
+      of 48 on its spatial run. Its mechanism is open (the uaf-repeat entries). The batch bitstream does not remove it.
+  - **seeded: 56 of 56 the same,** including every `_12` case under its seed.
+  - So **every non-rand bad image faults at cause 25 at QEMU's site, and every good image behaves as QEMU's,** on the
+    batch bitstream.
+- **The open Juliet spatial run on board 2 was pre-registered with the same wrong grade.** It is corrected below,
+  before that run ends. tier3-juliet-batch.sh now runs juliet-obs-compare.py itself.
+- Memory note written: *a Juliet board grade is juliet-obs-compare.py, never judge.py*.
+
+### CORRECTION to the Juliet spatial batch pre-registration (2026-10-23 08:2x, while it runs on board 2, before it ends)
+
+- **Superseded:** the prediction "compare against batch2: 755 of 755, differ 0" (9113973962fe). That compare is on
+  judge.py's fields, and on a board it reads every CAUGHT row as NO-READING:unattributed(STRICT-FAIL:no-oob-line).
+  So the script's own "JS COMPARE" line will report about 716 differences, and that is not a reading.
+- **The grade:** juliet-obs-compare.py against `juliet-sp/batch2/run/observations.json` (the same build), with the three
+  value-dependent CWE170 cases tolerated, exactly as the tree spatial runs were graded:
+  CWE170_char_memcpy_01, CWE170_char_strncpy_01 and CWE170_wchar_t_loop_01.
+- **Predictions:**
+  - **every bad and good image cell the same as batch2's;**
+  - the uaf control may read cause 13 in some of its 48 runs, as on tree B (3 of 48). If it does, that is reported as
+    the open cause-13 behaviour, not as an image difference.
+  - 24 of 24 batches complete, the probe exits 0, and the readings are 0.
+
+### The uaf control's cause 13 on the batch bitstream: a 200-run repeat with dmesg, board 1, pre-registered (2026-10-23 08:2x, before the boot)
+
+- **Why:** the batch Juliet temporal run read cause 13 in 1 of its 24 uaf-control runs. The batch changes (items 1, 5
+  and 6) were not aimed at it. This measures its rate on c721c1a2a beside the trees' rates, and keeps the kernel
+  lines that attribute each cause 13.
+- **What runs:** `tier3-uaf-repeat-batch.sh 1 <log> 200` with UR_ARGS `--no-trace --dmesg` and UR_TAG `-dm`.
+  - It is tier3-uaf-repeat.sh on bkit8-batch-b1: module 21fbfc39, launcher b27afefc, controls.dom b1decb06, and the
+    wt-tools2 e6c68a531557 tools.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/uaf-repeat-dm`.
+  - Dry run: `dryrun-uaf-repeat-batch.txt`.
+- **The trees' readings with the same arguments:**
+  - tree A (board 1): 4 of 200;
+  - tree B (board 2): 1 of 200, with 2 "resolve refused at arena ... no lazy arena covers" lines.
+  - Across all tree control runs, about 2.2% (tree A 16/720, tree B 26/1120).
+- **Predictions:**
+  - cause 13 in **0 to 12 of 200** (about 2%; 12 is the upper end of a binomial at that rate). Every other run reads
+    cause 25.
+  - No SILENT read (a completed revoked read).
+  - Every cause 13 is accompanied by a "resolve refused at arena" kernel line, as on the trees.
+  - The readings are 0.
+- **What a reading would mean:**
+  - a rate inside the trees' band: the batch bitstream does not change this behaviour;
+  - a rate of 0 of 200: suggestive, not conclusive (p is about 0.01 at 2.2%);
+  - a much higher rate is a finding for the RTL lane.
+
+### The uaf control's cause 13 on the batch bitstream, result (2026-10-23 08:14-08:50, board 1): 6 of 200, each with its arena refusal
+
+Record: `records/uaf-repeat-dm-batch-b1.result-lines.txt`.
+- **TALLY: cause 13 in 6 of 200, cause 25 in 194.** There is no SILENT read, and all 202 steps completed. The bounds-0
+  step read cause 28 as always.
+- **Every cause 13 has its attribution:** two `resolve refused at arena ... cause 13 need 0x1 ... no lazy arena covers
+  this address` lines each. That makes 12 refusals for 6 thirteens (REFUSED 12 over the whole boot), as on the trees.
+- The six land at runs 42, 89, 117, 160, 182 and 194. All six fault at the same pc offset in the image, code+0x10c70
+  (control_read_probe).
+- pc=0, DRT1, FRTY, Oops, INJS and INJL read 0.
+- **Against the pre-registration (97e9991ef595): every reading holds.** The rate, 3.0%, is inside 0 to 12 of 200, and
+  beside the trees' about 2.2%. The batch bitstream does not change this behaviour.
+
+### The Juliet spatial sample on the batch bitstream, result (2026-10-23 05:22-11:48, board 2): 1513 of 1513 cells as QEMU
+
+Record: `records/juliet-spatial-batch-b2.result-lines.txt`.
+- **The runs:**
+  - 24 of 24 batches completed, and the probe exited 0 with sizeof ptr 16;
+  - all 25 transcripts read 0 on pc=0, DRT1, FRTY, Oops, INJS and INJL.
+- **The grade (the 08:2x correction): juliet-obs-compare.py against juliet-sp/batch2's observations: 1513 of 1513
+  cells the same, 0 different, exit 0.**
+  - All three tolerated CWE170 cases also read as QEMU.
+  - The comparator's control: one planted cause change in the board's own file reads 1512 of 1513, exit 1.
+- **Every one of the 755 cases' bad and good image cells, and every control, equals the batch QEMU reference.**
+  - The uaf control read cause 25 in all 48 of its runs here.
+  - As predicted, the judge's own lines read the 716 CAUGHT rows as NO-READING:unattributed(STRICT-FAIL:no-oob-line).
+    The MISSED 22, NOT-TRIGGERED 9 and intra-object 8 rows are the reference's.
+- **Against the corrected pre-registration: every reading holds.**
+- **With this, every arm in the compiler lane's coverage enumeration has a board reading on the batch bitstream:**
+  - the 25 pass arms;
+  - lt1, pg-pools, mruby (stock and Sublet) and perl (stock and Sublet);
+  - xlang, plane and capi;
+  - Juliet temporal and spatial.

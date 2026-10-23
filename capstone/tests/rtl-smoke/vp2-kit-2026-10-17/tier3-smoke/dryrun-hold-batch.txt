@@ -1,0 +1,48 @@
+# tier3-hold-batch.sh 0c312e59df7a714b + tier3-hold-board.py ee60f78faf60dc50: dry run, 2026-10-23 02:0x.
+# The board step is boardvm's own stub mode (BOARDVM_STUB_TRANSCRIPT): hand-written transcripts for a completed hold (the twin's
+# readings), a HOLD-NULL refusal (the batch control's QEMU readings) and a wedge in the hold step. Their numbers are inputs, not data.
+
+## b2ok
+HB BEGIN 02:08:43 board 2 bitstream caplifive_vp2c_DRYRUN0000 kit bkit9-b2-b2 module 215a09be5a89360c booking 32
+UNBOOK 32: 200 (stub)
+HB END rc=0 02:08:43
+HOLD boot completed; transcript <scratch>/hold-dry/hb-b2ok/guest/board.txt; steps ['hold', 'stats0', 'stats1']
+READ hold lines: HOLD-PEAK 100000 | HOLD-OK 100000
+READ hold result: {"kind": "exit", "value": 0}
+READ hold fault: none
+READ stats0: nodes_high_water 0 nodes_allocated_total 105569 node_capacity 262144 nodes_live 0
+READ stats1: nodes_high_water 105569 nodes_allocated_total 105569 node_capacity 262144 nodes_live 0
+HB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0
+HB board2 DONE 02:08:43
+
+## b1null
+HB BEGIN 02:08:48 board 1 bitstream caplifive_vp2c_c721c1a2a kit bkit8-batch-b1 module 21fbfc397e7c7a42 booking 31
+UNBOOK 31: 200 (stub)
+HB END rc=0 02:08:48
+HOLD boot completed; transcript <scratch>/hold-dry/hb-b1null/guest/board.txt; steps ['hold', 'stats0', 'stats1']
+READ hold lines: HOLD-NULL at 60590
+READ hold result: {"kind": "exit", "value": 71}
+READ hold fault: none
+READ stats0: nodes_high_water 105569 nodes_allocated_total 105569 node_capacity 262144 nodes_live 0
+READ stats1: nodes_high_water 64001 nodes_allocated_total 64001 node_capacity 262144 nodes_live 0
+HB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0
+HB board1 DONE 02:08:48
+
+## wedge
+HB BEGIN 02:08:53 board 2 bitstream caplifive_vp2c_DRYRUN0000 kit bkit9-b2-b2 module 215a09be5a89360c booking 32
+UNBOOK 32: 200 (stub)
+HB END rc=2 02:08:53
+HOLD boot DID NOT COMPLETE; transcript <scratch>/hold-dry/hb-wedge/guest/board.txt; steps ['hold', 'stats0']
+READ hold lines: NONE
+READ hold result: {"kind": "none"}
+READ hold fault: none
+READ stats0: nodes_high_water 105569 nodes_allocated_total 105569 node_capacity 262144 nodes_live 0
+READ stats1: NO DATA
+HB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0
+HB board2 DONE 02:08:53
+
+## wrongkit
+HB STOP: <scratch>/mk2/x/bkit9-b2-b2 is not board 1's batch or bitstream-2 kit (module 215a09be5a89360c)
+
+## busy
+HB STOP: board 2 is busy
