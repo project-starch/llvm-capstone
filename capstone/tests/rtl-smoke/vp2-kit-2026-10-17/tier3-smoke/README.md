@@ -8387,3 +8387,17 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
   - **sql0: 9 of 9 as ref-b2/sql0** (CAUGHT 2, MISSED 7, equal to the batch);
   - **pg-pools: 9 of 9 as the trimmed bitstream-2 reference** (predicted equal to pgp-trim/bundle);
   - the measured firmware under the cap; the must-fire lines; the readings 0.
+
+### Addendum to the lt0 pre-registration, before its boot (2026-10-25 03:1x): case 09's site moved in the reference
+
+- **What landed:** the compiler lane's ref-b2/lt0 reads CAUGHT 16, MISSED 13, infra 1 (13), not-reached 1 and
+  unattributed 1. Against the batch reference, two cells moved:
+  - 18 became CAUGHT, cause 28 in mmap_ass_subscript, as predicted;
+  - 09 (gh-140802), NOT predicted: CAUGHT with cause 24 on both sides, by control, but its function moved from
+    _PyObject_GetMethod to dict_traverse.
+- **Status:** the lane is separating the two variables (the 18-bit kit and the mremap relink) with a 2x2. Until that
+  reads, 09's site is unexplained.
+- **Prediction for the board, unchanged:** every cell equal to ref-b2/lt0, so 09 reads CAUGHT at dict_traverse. If the
+  board's 09 reads _PyObject_GetMethod instead, that is reported as a site difference with the verdict unchanged. Either
+  way it is evidence for the lane's 2x2, not a reading about R-61 or the index.
+- **Case 01:** may still read cause 4 against QEMU's 24 (Q-31).
