@@ -7988,3 +7988,24 @@ Record: `records/juliet-spatial-batch-b2.result-lines.txt`.
   - The exit, cause and function are the primary reading, and the counts are predicted equal. A count that differs
     while the verdict holds is recorded as a platform difference, not a finding.
   - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0.
+
+### cpython lt0 18 and lt1 18 with application mremap on the batch bitstream, result (2026-10-24 12:19-12:37, both boards): both verdicts as QEMU
+
+Record: `records/batch-c18-mremap.result-lines.txt`.
+- **lt0 18 (board 1, image 7b871db7): CAUGHT, a domain fault with cause 28 in mmap_ass_subscript, at QEMU's pc
+  (0x3ff659edf0).**
+  - high_water 6,095, as QEMU's.
+  - allocated_total 16,329, against QEMU's 16,326.
+  - The fault address is 0x3ff5f4dfff, against QEMU's 0x3ff5f7afff: the mremap'd mapping lands at another address on
+    the board.
+- **lt1 18 (board 2, image 8bcc40cf): `SystemError: error return without exception set` from the import of select,
+  exit 1, no fault: still stopped by the 16-bit table.**
+  - high_water 64,011 of 65,536, against QEMU's 64,014.
+  - allocated_total 188,809, against 189,444.
+- pc=0, DRT1, FRTY, Oops, INJS and INJL read 0, and both boots completed.
+- **Against the pre-registration (6f3d3c7d3df9): the primary reading holds on both** (exit, cause and function).
+  - The counts differ by a few records (+3, and -3 / -635). The pre-registration counts that as a platform difference,
+    not a finding.
+  - One disclosed source of it is the board's launcher, b27afefc, against QEMU's a405840d.
+- **lt0 18 read MISSED on the batch image 23a2f0cb, which has no mremap: it completed, exit 1, no fault (board 2's lt0
+  cell). With the mremap relink it is CAUGHT on silicon.**
