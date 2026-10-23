@@ -111,3 +111,27 @@ did.
   - fixture pgfixture-trim/cluster and share pgfixture/install/share/postgresql.
 - **Predicted:** 9/9 equal to pgp-trim/bundle on verdict, reason, cause and function, with fixture record
   956173e054762e91.
+
+## lt0 09's site move: kit or image? (pre-registered 2026-10-24, before its runs)
+
+lt0 on bitstream 2's twin read 30 cells as the batch reference and 2 moved:
+- 18, as pre-registered;
+- 09 (gh-140802), not predicted. It is CAUGHT on both sides, with cause 24, attributed by its control, but the
+  fault's function moved from `_PyObject_GetMethod` to `dict_traverse`.
+
+The run changed two things: the kit (18-bit) and the image (the mremap relink). One kit/image pair cannot say which
+moved the site.
+
+**The 2×2:**
+- 09's case and control, one boot each (b2-pred/run-pred.sh);
+- image: the batch image 23a2f0cb (session `lt0-09-batch`) or the mremap relink 7b871db7 (`lt0-09-mremap`);
+- kit: qkit7-batch2-nr or qkit7-b2twin3-q8-nr.
+
+**What decides it:** the case call's fault function in each of the four cells.
+- If it follows the image (dict_traverse with 7b871db7 on both kits, _PyObject_GetMethod with 23a2f0cb on both),
+  the relink moved it: the relink shifts code and data placement, and the defect reads garbage past an object.
+- If it follows the kit, the 18-bit table did.
+- Any other pattern (for example single-call boots differing from the session boots) is reported as read.
+
+**My expectation, stated as such:** it follows the image. The relink is the change that moves memory contents; the
+index width does not alter what an object's neighbouring bytes hold.
