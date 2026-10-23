@@ -8100,3 +8100,17 @@ Record: `records/r61-bare-batch.result-lines.txt`.
   - **Both boards are identical.**
 - **What would read otherwise:** the fixed tree's vector on c721c1a2a is a finding, sent to the RTL lane first; any
   other vector is a finding by position.
+
+### R-61's arming conditions on the batch bitstream, result (2026-10-24 14:31-14:34, both boards): a NON-consuming ldc arms the flag on silicon, from both page kinds
+
+Record: `records/r61a-bare-batch.result-lines.txt`.
+- **r61a-control: exact on both boards.**
+- **r61a-stale0: the normal exit on both boards** (SR 19, the word 0x1234 copied). So the arming question is not void.
+- **r61a-stale3 (non-consuming ldc, read-only page) and r61a-stale4 (writable page, D clear): CONFIRMED on both
+  boards.**
+  - The ldc completes normally (positions 13-14: 5, 2).
+  - The legal load after it faults with cause 15 (epc offset 4, tval 0x80006008), and the word is not copied.
+- **The two boards' uart.txt files are byte-identical for all four images.**
+- **Against the pre-registration (1bd5dc7c980c): every reading holds.**
+- **R-61's arming on silicon is wider than "a refused consuming ldc":** a non-consuming ldc arms it as well, both from
+  a read-only page and from a writable page with D clear, exactly as the RTL lane simulated.
