@@ -8331,3 +8331,18 @@ Records:
   - the readings 0.
 - **What would mean something:** 0 of 400 would suggest the change removed it, at a p of about 0.0002 against 2.2%.
   A rate inside the band means it is independent of the ring cut and the tracer.
+
+### The uaf control's cause 13 on bitstream 2, result (2026-10-25 00:55-01:33, both boards): 2 and 8 of 200, each with its arena refusal
+
+Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repeat-dm-b2bs-b2.result-lines.txt`.
+- **Board 1: cause 13 in 2 of 200; board 2: 8 of 200.** That is 10 of 400 (2.5%); every other run reads cause 25.
+  There is no SILENT read.
+- **Every cause 13 carries two "resolve refused at arena" lines:** REFUSED 4 on board 1 and 16 on board 2, which is two
+  per 13. Every 13 is at the same image offset, code+0x10c70 (control_read_probe), as on the batch and both trees.
+- The readings are 0, and all 202 steps completed on each board.
+- **Against the pre-registration (ea7815a9c280): every reading holds.** Both boards are inside 0..12.
+- **The cause 13 survives bitstream 2's ring cut and tracer removal,** at the trees' and the batch's rate:
+  - trees about 2.2%;
+  - batch 6 of 200;
+  - bitstream 2: 10 of 400.
+  It remains a silicon-side behaviour on the module's lazy-arena path, independent of these RTL changes.
