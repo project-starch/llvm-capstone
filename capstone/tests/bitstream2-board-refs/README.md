@@ -172,7 +172,7 @@ Every arm exited rc 0, and every stamp names QEMU 708bbff5, module 33254735 and 
 - **Also held:** pg-pools on the trimmed fixture, 9/9 equal to pgp-trim (batch-refs-b2/pgp-trim, fixture
   956173e054762e91).
 
-## Result: the remaining arms (2026-10-24 04:08-05:0x; batch-refs-b2/REST-A, REST-B)
+## Result: the remaining arms (2026-10-24 04:08-04:42; batch-refs-b2/REST-A, REST-B)
 
 | arm | compared with | cells | differ |
 |---|---|---:|---:|
