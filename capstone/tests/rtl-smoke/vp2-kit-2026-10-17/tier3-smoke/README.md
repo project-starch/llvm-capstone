@@ -7902,3 +7902,28 @@ Record: `records/juliet-temporal-batch-b1.result-lines.txt`.
   - the uaf control may read cause 13 in some of its 48 runs, as on tree B (3 of 48). If it does, that is reported as
     the open cause-13 behaviour, not as an image difference.
   - 24 of 24 batches complete, the probe exits 0, and the readings are 0.
+
+### The uaf control's cause 13 on the batch bitstream: a 200-run repeat with dmesg, board 1, pre-registered (2026-10-23 08:2x, before the boot)
+
+- **Why:** the batch Juliet temporal run read cause 13 in 1 of its 24 uaf-control runs. The batch changes (items 1, 5
+  and 6) were not aimed at it. This measures its rate on c721c1a2a beside the trees' rates, and keeps the kernel
+  lines that attribute each cause 13.
+- **What runs:** `tier3-uaf-repeat-batch.sh 1 <log> 200` with UR_ARGS `--no-trace --dmesg` and UR_TAG `-dm`.
+  - It is tier3-uaf-repeat.sh on bkit8-batch-b1: module 21fbfc39, launcher b27afefc, controls.dom b1decb06, and the
+    wt-tools2 e6c68a531557 tools.
+  - Output: `<mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/uaf-repeat-dm`.
+  - Dry run: `dryrun-uaf-repeat-batch.txt`.
+- **The trees' readings with the same arguments:**
+  - tree A (board 1): 4 of 200;
+  - tree B (board 2): 1 of 200, with 2 "resolve refused at arena ... no lazy arena covers" lines.
+  - Across all tree control runs, about 2.2% (tree A 16/720, tree B 26/1120).
+- **Predictions:**
+  - cause 13 in **0 to 12 of 200** (about 2%; 12 is the upper end of a binomial at that rate). Every other run reads
+    cause 25.
+  - No SILENT read (a completed revoked read).
+  - Every cause 13 is accompanied by a "resolve refused at arena" kernel line, as on the trees.
+  - The readings are 0.
+- **What a reading would mean:**
+  - a rate inside the trees' band: the batch bitstream does not change this behaviour;
+  - a rate of 0 of 200: suggestive, not conclusive (p is about 0.01 at 2.2%);
+  - a much higher rate is a finding for the RTL lane.
