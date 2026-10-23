@@ -8346,3 +8346,27 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
   - batch 6 of 200;
   - bitstream 2: 10 of 400.
   It remains a silicon-side behaviour on the module's lazy-arena path, independent of these RTL changes.
+
+### The corpus on bitstream 2, first arms: cpython lt1 (board 1) and lt0 (board 2) on the mremap relinks, pre-registered (2026-10-25 02:3x, before the boots)
+
+- **Why:** the whole-corpus read on bitstream 2, beside the batch column. The compiler lane is producing the bitstream-2
+  references arm by arm (`batch-refs-b2/run-pass-b2.sh`, lane dd1f66a78455): run-pass-r60.sh with only the kits
+  swapped to the 18-bit twin qkit7-b2twin3-q8 / -nr, and lt0/lt1 on the application-mremap relinks.
+- **What runs:** `tier3-cpy-b2-arm.sh <board> <log> <lt1|lt0>`. It is tier3-cpy-batch-arm.sh on the board's norandmaps
+  bitstream-2 kit bkit9-b2-nb<board>, with:
+  - the build dirs t3-mremap/cpython-<tag>-mremap-build, images lt1 8bcc40cf and lt0 7b871db7;
+  - the reference ref-b2/<tag>, whose stamp must name the twin's qemu 708bbff5 and module 33254735, the image, runner
+    dc606bd1 and appvm-arm 666d920e, and whose SWITCHES must read norandmaps=ON ... generations=ON ... index=18;
+  - verdicts-compare.py as the grade;
+  - output `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/cpy-<tag>`.
+  - Dry run: `dryrun-cpy-b2-arm.txt`. lt0 refuses until its reference lands.
+- **Predictions:**
+  - **lt1 (board 1): verdicts-compare 32 of 32 against ref-b2/lt1**, which reads CAUGHT 27, MISSED 3, not-reached 1
+    and unattributed 1. Against the batch, exactly the ten capacity cells moved, each now CAUGHT at its declared site:
+    02 memcpy, 10 l_divmod, 13 unicode_fromformat_write_str, 18 mmap_ass_subscript, 19 fnv, 23 memchr, 27
+    slot_nb_add, 28 _PyEval_Vector, 30 PyObject_RichCompare and 31 odict_copy.
+  - **lt0 (board 2): verdicts-compare equal to ref-b2/lt0** once it lands. The lane predicts it equals the batch
+    reference except lt0 18, now cause 28 in mmap_ass_subscript. Case 01 may read cause 4 on silicon where QEMU reads
+    24 (Q-31, as on the batch), and is reported as such.
+  - norandmaps is in the command line; the readings are 0.
+  - These are session runs: module high_water is the session maximum, so they are graded on verdicts only.
