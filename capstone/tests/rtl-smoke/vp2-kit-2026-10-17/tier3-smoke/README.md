@@ -8420,3 +8420,31 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
   - 22: cause 13 at editDist3FindLang+244 where QEMU reads 24.
   So sq0d reads "3 of 6" under verdicts-compare, with compare-pilot's DIFF lines naming only the cause.
   Any other difference is a finding. Readings 0 everywhere.
+
+### The corpus on bitstream 2: mruby, perl, capi, xlang and plane, pre-registered (2026-10-25 04:3x, before the boots)
+
+- **Why:** the arms beyond the pass, on bitstream 2. The compiler lane's REST-A references in `batch-refs-b2/rest` have
+  all landed, each equal to its batch reference: mruby stock and Sublet 23/23, perl stock and Sublet trimmed 11/11,
+  capi 19/19, xlang 15/15 and 13/13, plane 1/1 on each arm. Every image hash equals the batch reference's.
+- **Runners**, each its batch version on the bitstream-2 kits with the reference swapped:
+  - `tier3-mp-stock-b2.sh`, `tier3-mp-sublet-b2.sh` and `tier3-mp-perl-b2.sh`. The batch stamp still pins the
+    inputs. REST-A must name the twin (qemu 708bbff5, module 33254735), the arm's STAMP with the same runner and
+    image, a clean read and "differ 0", and the reference's collected images must equal the batch reference's.
+  - `tier3-newarms-b2.sh`. Each reference must record the same runner and module 33254735, and images-gate.py
+    checks against those references.
+  - Dry runs: `dryrun-mp-b2.txt` and `dryrun-newarms-b2.txt`, against the real references. A planted cell fires the
+    comparator, a failed control reads VOID, the real image gate refuses an empty bake, and an over-cap measure
+    refuses.
+- **Order:**
+  - board 1, after its re-read: mruby stock, mruby Sublet, then perl stock and Sublet;
+  - board 2, after its re-read: the new arms (xlang, plane-malloc, plane-nested, then capi in groups of 3), each
+    preceded by its measure-only bake under the 26,000,000 B cap.
+  - Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/`.
+- **Predictions:**
+  - mruby stock and Sublet: 23 of 23 each against the bitstream-2 reference, the control "smoke ok";
+  - perl stock and Sublet: 11 of 11 each, controls eval and shim True;
+  - xlang: verdicts-compare 15/15 and 13/13. compare-pilot reads repro 4 of 15 on its no-image cells, as on the batch.
+  - plane: 1/1 on each arm;
+  - capi: verdicts-compare equal in every group. compare-pilot reads 13-16 as 3 of 4, as on the batch.
+  - Every measured firmware under the cap; readings 0.
+  - The batch read every one of these cells as QEMU, so any difference is a finding.
