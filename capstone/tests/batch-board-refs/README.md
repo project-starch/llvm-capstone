@@ -106,3 +106,24 @@ as value-dependent, not as a platform difference. Any other moved case is listed
   - 24 batches in 793.6 s;
   - 755/755 equal to juliet-sp/tB-mimic, differ 0, including the value-dependent CWE-170 rows.
   - Reference: juliet-sp/batch2/results.
+
+## Case 18 with the mremap relinks on the batch kit (pre-registered 2026-10-23, before the runs)
+
+**Why:** the runtime lane wants lt0 18 and lt1 18 with application mremap on the batch bitstream (c721c1a2a). Their
+QEMU readings so far are on the 18-bit twin.
+
+**The runs:** qkit7-batch2-nr (the batch kit with norandmaps, as ref-batch lt0/lt1), one call per boot,
+`b2-pred/run-pred.sh`.
+- Sessions `b2-pred/sessions/lt0-18-board` and `lt1-18-board`: the batch-refs-r60 sessions cut to case 18, the only
+  row either arm has for it.
+- Each `collect/images` holds only its row's image: lt0 7b871db70b7ec373 and lt1 8bcc40cf13731e12, 13 MB each.
+
+**Predicted:**
+- **lt0 18:** cause 28 in `mmap_ass_subscript`, as on qkit7-batch2 (this README's sibling, corpus-cell-probes). No
+  OSError 38, high_water 6,095 ± 300.
+- **lt1 18:** still stopped by the 16-bit table before the resize:
+  - `SystemError: error return without exception set` at `import select` (subprocess.py:125), exit 1, no fault,
+    high_water within 300 of 64,023;
+  - mremap changes nothing before the resize, where this stop comes, as the q6 twin read it in a single-call boot.
+- **Launcher:** neither call needs the 8,192-mapping launcher. lt0 18 was caught on the 512-mapping a405840d, and
+  lt1 18's stop is the record table's.
