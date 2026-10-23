@@ -148,3 +148,26 @@ index width does not alter what an object's neighbouring bytes hold.
 - 09 reads CAUGHT either way, so on bitstream 2 the board's 09 should read `dict_traverse`, as ref-b2/lt0 does.
 - (run-pred.sh's own parser printed NO DATA for these two-call sessions, as its one-call guard intends. The readings
   above are read from each run's readings.json.)
+
+## Result: the pass (2026-10-24 00:59-04:07; batch-refs-b2/PASS-A, PASS-B)
+
+Every arm exited rc 0, and every stamp names QEMU 708bbff5, module 33254735 and launcher fad465ce.
+
+| arm | cells | moved against the batch reference |
+|---|---:|---|
+| pg-pools (untrimmed), sql0 | 9, 9 | 0, 0 |
+| sq0, sq1q15 | 33, 33 | 0, 0 |
+| wm0, wm1q15 | 23, 23 | 0, 0 |
+| wph, wpt | 12, 10 | 0, 0 |
+| fph, fcs, fpt, fca, fso | 25, 13, 13, 13, 9 | 0 each |
+| pym0, pym1 | 20, 20 | 0, 0 |
+| pgm0, pgm1, pgm1q15, pgc | 5, 5, 5, 5 | 0 each |
+| mph, mpt | 9, 3 | 0, 0 |
+| pb9, pb10, pb12, pb13q15 | 4, 4, 9, 9 | 0 each |
+| lt1 | 32 | 10: exactly the ten pre-registered capacity cells, each at its predicted site, now CAUGHT |
+| lt0 | 32 | 2: 18 as pre-registered (cause 28 in mmap_ass_subscript, CAUGHT); 09's site, explained above by the image |
+
+- **Held:** every pre-registered reading.
+- **Not predicted:** one site move, lt0 09. It was traced to the mremap relink by a 2×2. Its verdict is unchanged.
+- **Also held:** pg-pools on the trimmed fixture, 9/9 equal to pgp-trim (batch-refs-b2/pgp-trim, fixture
+  956173e054762e91).
