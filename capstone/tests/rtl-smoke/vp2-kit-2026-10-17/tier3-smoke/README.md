@@ -8114,3 +8114,45 @@ Record: `records/r61a-bare-batch.result-lines.txt`.
 - **Against the pre-registration (1bd5dc7c980c): every reading holds.**
 - **R-61's arming on silicon is wider than "a refused consuming ldc":** a non-consuming ldc arms it as well, both from
   a read-only page and from a writable page with D clear, exactly as the RTL lane simulated.
+
+### Bitstream 2 on board 2, AMENDMENT at the seal (2026-10-24 16:3x, before the flash): the sealed build, its grade, and the runs that follow the first boots
+
+- **The bitstream:** `caplifive_vp2c_dcc6daf6e.bit`,
+  sha256 `fcaec59323eb2c9d6fcb56a6e6709ac797d06c24e4b4a5d5fd6080ba2d21906e`, sealed by synth from capstone-ariane
+  dcc6daf6e (vp3-ringcut). It is copied to `<mnt-hdd>/capstone/bitstreams/caplifive_vp2c_dcc6daf6e.bit`, and its hash
+  equals synth's file, read on the host at that HEAD.
+  - The RTL lane's grade of the seal: loops PASS (0 combinational loops; TIMING-23 0, while the same matcher finds
+    2 on the batch's); congestion PASS
+    (no window above level 5; the router's initial estimate has 2 level-5 windows against the batch's 9); **routed WNS
+    -9.790 ns, against -18.529 (batch) and -19.019 (resident): 8.7 ns BETTER, outside the null band by the letter of the
+    key, on the good side.** The worst paths are the batch's families (cpmp_q / cur_idx_q -> fu_data_q) at about the same
+    logic depth, with less delay per level. Two changes fit: about 33,000 FFs dropped with the tracer, and the store
+    buffer's page-offset compare (the ring segment cut) is on none of the worst 500 paths (500 on the batch).
+    Post-route area matches the predictions (-9,564 LUT against -9,311; -32,966 FF against -32,849), and every
+    simulation arm is value-identical. The WNS miss went to the lead before any flash, as agreed, and **the lead's
+    answer in this session (16:3x) is "Flash now"**.
+  - The pre-registered keys: a congestion window ≤ level 5, the TIMING-23 ring absent in routed check_timing, and WNS
+    inside the −18.529 null band. A missed key goes to the lead before any flash.
+  - The lead's word stands: "reflash board 2 after bitstream 2 synthesis finish".
+- **Its contents, on top of c721c1a2a (the RTL lane's list):**
+  1. the 18-bit virtual index, ids {gen[29:18], idx[17:0]};
+  2. item 4's predicate on the source's six exponent bits, with no architectural change;
+  3. the debug tracer DROPPED: aperture 225 bit 7 reads a constant 1, and sw[0..2] do nothing. CSRs 0x800, 0x810 and
+     0x811 remain legal writes;
+  4. the load unit's ring cut, which is R-61's fix.
+  - This supersedes the 2026-10-23 section's "68d0ffaf8". The first-boot vectors are confirmed on dcc6daf6e by
+    simulating the images themselves: s23 is the batch's 25 values, and va-alloc is the bitstream-2 vector already in
+    va-alloc-grade.py.
+- **The first boots are unchanged:** flash-and-first-bs2-b2.sh → run-b2-first.sh. Predictions as in the 2026-10-23
+  section.
+- **Then, each only after the first boots read as predicted (s23 AS EXPECTED, va-alloc PASS, Tier 1 identical to the
+  batch's):**
+  1. **hold 100000** (`tier3-hold-batch.sh 2 bkit9-b2-b2 ...`): HOLD-PEAK and HOLD-OK 100000, exit 0, high_water
+     105,569 of capacity 262,144. This is the 18-bit index on silicon. Its batch side read HOLD-NULL at 60590 and
+     64,001 of 65,536.
+  2. **R-61** (`tier3-r61-bare.sh 2 <log> 61faf96f5863` with R61_KIT=bkit9-b2-b2 and r61-grade.py `--expect fixed`):
+     the control exact; **r61-stale2 FIXED**, positions 18-21 = 0x2, 0x18, 0x420590db, 0x1234 (the RETURN, the word
+     copied); r61-stale FIXED, position 18 = 0xd.
+  3. **R-61 arming** (`tier3-r61a-bare.sh`, the same way): the control and stale0 exact; **r61a-stale3 and r61a-stale4
+     FIXED**, positions 17-20 = 0x2, 0x18, 0x420590db, 0x1234.
+  4. Then the compiler lane's 20 capacity-cell calls, pre-registered separately before they run.
