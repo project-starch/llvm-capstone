@@ -8467,3 +8467,17 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
   - **seeded: 56 of 56;**
   - readings 0.
   - Any other different cell is a finding.
+
+### The corpus on bitstream 2: the Juliet spatial sample, pre-registered (2026-10-25 04:4x, before its boots)
+
+- **The reference:** the compiler lane's REST-B reference `batch-refs-b2/rest/juliet-spatial` reads 755/755 equal to
+  juliet-sp/batch2 (build.json 806cc24a, manifest 03f048a1).
+- **What runs:** `tier3-juliet-spatial-b2.sh <board> <log>`, which is tier3-juliet-spatial-batch.sh on bkit9-b2-b<board>.
+  - REST-B must name the twin, the same runners and "755/755 differ 0".
+  - **The grade, now built into the runner, is juliet-obs-compare.py** against the reference's run/observations.json,
+    with the three value-dependent CWE170 cases tolerated, as every spatial board run was graded. The judge-field
+    compare is kept and is not a reading.
+  - Dry run: `dryrun-juliet-spatial-b2.txt`. Against itself the reference reads 1513/1513, and a planted step fires.
+- **Order:** board 2, after its new arms. Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b2/juliet-spatial`.
+- **Prediction:** 1513 of 1513 cells the same, as the batch read, with the tolerated CWE170 cases reported; readings 0.
+  Any different cell is a finding.
