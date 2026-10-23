@@ -1,0 +1,36 @@
+# tier3-juliet-b2.sh 9648a486d58374e8 dry run, 2026-10-25 04:30, against the REAL bitstream-2 reference: run.py/probe.py stubbed
+# (each writes the bitstream-2 reference's own observations.json / probe.json; FLIP=<step> turns that census step into a clean exit),
+# judge.py stubbed (it writes the reference's temporal-verdicts.tsv); busy and the hub stubbed. obs-compare runs for real: the
+# reference against itself reads 735/735 and 56/56, and one planted step reads 1 different.
+
+## ok
+JF run BEGIN 04:30:09 board 1 booking 51
+JF run END rc=0 04:30:09 :: 1 batches completed, 0 not :: batch000 completed=True
+JF run-seeded BEGIN 04:30:09 board 1 booking 51
+JF run-seeded END rc=0 04:30:09 :: 1 batches completed, 0 not :: batch000 completed=True
+JF probe BEGIN 04:30:09 board 1 booking 51
+JF probe END rc=0 04:30:09 :: 1 batches completed, 0 not :: batch000 completed=True
+JF judge rc=0 :: judge stub 
+JF verdicts: 366 {('CAUGHT', 'CORRECT', '25'): 366}
+JF MISSED rows: 0
+JF COMPARE batch QEMU -> board: cases 366/366 differ 0
+JF OBS-COMPARE census rc=0 :: 735 of 735 cells the same, 0 different, 0 tolerated
+JF OBS-COMPARE seeded rc=0 :: 56 of 56 cells the same, 0 different, 0 tolerated
+JF readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JF board1 DONE 04:30:12
+
+## flip
+JF run BEGIN 04:30:12 board 2 booking 52
+JF run END rc=0 04:30:13 :: 1 batches completed, 0 not :: batch000 completed=True
+JF run-seeded BEGIN 04:30:13 board 2 booking 52
+JF run-seeded END rc=0 04:30:13 :: 1 batches completed, 0 not :: batch000 completed=True
+JF probe BEGIN 04:30:13 board 2 booking 52
+JF probe END rc=0 04:30:13 :: 1 batches completed, 0 not :: batch000 completed=True
+JF judge rc=0 :: judge stub 
+JF verdicts: 366 {('CAUGHT', 'CORRECT', '25'): 366}
+JF MISSED rows: 0
+JF COMPARE batch QEMU -> board: cases 366/366 differ 0
+JF OBS-COMPARE census rc=1 :: 734 of 735 cells the same, 1 different, 0 tolerated
+JF OBS-COMPARE seeded rc=0 :: 56 of 56 cells the same, 0 different, 0 tolerated
+JF readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JF board2 DONE 04:30:16

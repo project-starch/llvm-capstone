@@ -8448,3 +8448,22 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
   - capi: verdicts-compare equal in every group. compare-pilot reads 13-16 as 3 of 4, as on the batch.
   - Every measured firmware under the cap; readings 0.
   - The batch read every one of these cells as QEMU, so any difference is a finding.
+
+### The corpus on bitstream 2: Juliet temporal, pre-registered (2026-10-25 04:3x, before its boots)
+
+- **The reference:** the compiler lane's REST-B reference `batch-refs-b2/rest/juliet-temporal` reads 366/366 equal to
+  juliet-r60/judge-batch2 on verdict, good, cause, site and strict. It uses the same r60 builds (census 734, seeded 55)
+  and the same run.py 4b663651, probe.py d6200b39 and judge.py 93aa5ad9.
+- **What runs:** `tier3-juliet-b2.sh <board> <log>`, which is tier3-juliet-batch.sh on bkit9-b2-b<board>.
+  - The batch RESULT still pins the runners. REST-B must name the twin, the same runners and "366/366 differ 0".
+  - **The grade is juliet-obs-compare.py** against the bitstream-2 reference's own run/ and run-seeded/ observations.
+    judge.py's fields cannot read CAUGHT on silicon.
+  - Dry run: `dryrun-juliet-b2.txt`, with obs-compare on the real reference: 735/735 and 56/56 against itself, and a
+    planted step fires.
+- **Order:** board 1, after its mruby and perl arms. Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/juliet-temporal`.
+- **Predictions, from the batch read (729 of 735, 56 of 56):**
+  - census: every cell the same except the rand-driven `_12` draws, which the seeded set scores, and the uaf
+    control's silicon-only cause 13 (0 to 2 of the 12 ctl-uaf steps at 2.5%; the batch had 1);
+  - **seeded: 56 of 56;**
+  - readings 0.
+  - Any other different cell is a finding.
