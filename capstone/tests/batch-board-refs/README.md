@@ -127,3 +127,11 @@ QEMU readings so far are on the 18-bit twin.
   - mremap changes nothing before the resize, where this stop comes, as the q6 twin read it in a single-call boot.
 - **Launcher:** neither call needs the 8,192-mapping launcher. lt0 18 was caught on the 512-mapping a405840d, and
   lt1 18's stop is the record table's.
+
+**Result** (2026-10-23 12:15, qkit7-batch2-nr: QEMU ecaf50bb, module a05c198b, vexec a405840d; domains A and B):
+**both readings hold.**
+
+| call | image | reading | high_water | allocated_total |
+|---|---|---|---:|---:|
+| lt0 18 | 7b871db7 | domain fault cause 28 in `mmap_ass_subscript` | 6,095 | 16,326 |
+| lt1 18 | 8bcc40cf | `SystemError` at subprocess.py:125 (`import select`), exit 1, no fault | 64,014 | 189,444 |
