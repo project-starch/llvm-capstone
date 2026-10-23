@@ -77,3 +77,8 @@ pre-batch tree; any other vector is a finding, graded value by value.
 The same vector holds for the tracer-less candidate `68d0ffaf8` (`vp3-notracer`; `core/` = `5d365d9a6` plus the debug
 tracer removed in `cva6.sv`): the kit's source re-read it value for value on that RTL (vp8 `.sup/ntrkit`, rtl 68d0ffaf8
 dirty=no, SUCCESS). The tracer has no architectural effect and no print passes through it.
+
+It holds for the ring-cut hash `dcc6daf6e` too, the one bitstream 2 is built from (`core/` = `68d0ffaf8` plus the load
+unit's clear from flops): THIS image simulated on that RTL through the Anvil prologue (vp8 `.sup/b2first`, rtl dcc6daf6e
+dirty=no, `+time_out=3000000`) reads the recorder count 17 and the bitstream-2 vector above value for value, read straight
+from the recorder area, so the 17 is measured on the image rather than derived from the trace.

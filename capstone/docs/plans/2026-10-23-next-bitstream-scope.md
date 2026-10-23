@@ -256,3 +256,79 @@ placed FF down by ~32,000 and LUT by ~9,000 against `5d365d9a6`'s placed checkpo
 −18.529; the one TIMING-23 arc unchanged. **If routing fails:** the graded readings are the placed area, the gate keys and
 the window census against `5d365d9a6`'s placed checkpoint; WNS is none. Dropping the tracer is a design decision: the hash
 goes to synthesis on the lead's word, and the flow's settings stay as they are.
+
+**Ruling (the project lead, 2026-10-24, given in the runtime lane's session and relayed from there): the tracer is
+removed.** Bitstream 2 is `68d0ffaf8`. It goes straight to the full flow, not through a fresh synthesis-only gate: the
+change removes one instance and adds no logic, the gate's keys on this RTL already passed on `5d365d9a6`, a separate gate
+would read only what the tracer's own utilization figures already give (core LUT ≈ 154,284 − 9,319, FF ≈ 74,290 − 32,849),
+and the failure to be tested is routing, which only the full flow exercises; the synthesis-stage rows are read from the
+full flow's own reports and graded in passing (core LUT −9,319 ± 500, FF −32,849 ± 200, ex+issue within ±2,500 of 86,408,
+loop headers 7 with the member union unchanged), with the placed figures (LUT ≈ 169,000, FF ≈ 63,700) and the routing
+pre-registration above. The CPMP-compare option stays closed unless this hash fails to route. The launch is the synth
+lane's user's approval in that session; the flash is the lead's own word in the board lane's session.
+
+## 2026-10-24: 68d0ffaf8 blew up in technology mapping; both blowups are one base-logic ring; the ring is cut in RTL and bitstream 2 SEALS from dcc6daf6e
+
+**The second failure.** 68d0ffaf8 went straight to the full flow on the argument that a removal adds no logic and the
+gate's keys had passed on its parent. The synth lane's independent watchdog killed it in Technology Mapping at 34 GB
+(one synth_design task_worker 10.8 -> 18.3 GB in 20 s; the main process at 5 GB), trial B's phase and shape. **That
+argument is refuted**: a change that removes logic or ties nets to constants is not exempt from a synthesis reading (it
+cost nothing here only because a synthesis-only gate dies at the same phase).
+
+**The partition reading** (synth lane, read-only, from each worker's job files): both blowups, trial B (4fce4d744) and
+68d0ffaf8, are the SAME genome, `ariane_xilinx_GT3__1`, the flattened cva6-top partition, breaking the load-unit side of
+the LSU <-> D-cache clear/handshake ring one arc at a time (9 `set_disable_timing` exceptions on load_unit cells on both;
+none on any completed build). The ring is base logic, the one TIMING-23 arc every bitstream of this line carried; which
+build trips on it depends on how the partitioner cuts the top, so the tracer only re-rolled the cut. It closed through
+the load unit's same-cycle clear: SEND_TAG_LDC and WAIT_LDC_RESP raised `clear_o` in the result's cycle with
+`clear_addr_o = cap_clear_addr_d` and the Q-19 refusal on `ldc_store_ok_d`, into the store unit's clear mux, the store
+buffer's page-offset compare and `page_offset_matches`, and back into the load-unit FSM. vp1's own record had named the
+remedy (2026-10-16-virtual-profile-on-silicon.md:492-493).
+
+**The cut** (capstone-ariane vp3-ringcut b8104c7f5, on 68d0ffaf8; ruled by the semantics owner with two conditions, and
+given the lead's go in the runtime lane's session): every consuming LDC clears from LDC_CLEAR_WAIT, the state that
+already served every clear whose store buffer was busy, so `clear_o`, `clear_addr_o` (`cap_clear_addr_q`) and the
+refusal (`ldc_store_ok_q`, scoped to that state) read flops only; one cycle per consuming LDC. Condition (a), no
+retirement before the clear, holds in source (valid_o for a consuming LDC is raised only in LDC_CLEAR_WAIT with the
+clear); condition (b), refusal, cause, tval and clear address bit-identical, holds on every arm (vb-trans with its
+refusal, r29-ldctrl, va-alloc-csret, the acceptance arms, all value-identical to 68d0ffaf8, one cycle moved), with one
+DELIBERATE change: the scoping closes R-61 (a stale refusal relabelling later load-unit exceptions STORE_PAGE_FAULT;
+`docs/ref/ISSUES.md`, confirmed on silicon on the batch, both boards, by two pre-registered bare kits). A younger plain
+load of the cleared source reads 0 (`vb-trans-plainld-vp2`). Lint PASS with UNOPTFLAT 40 -> 39, the name that left
+being `page_offset_matches` ("Circular combinational logic"), the ring itself; the 95-sweep 92 / 0 / 3 against both
+baselines.
+
+**The gate on dcc6daf6e** (`core/` = b8104c7f5's; tests and lint baselines above), synthesis-only, every key passed:
+
+| key | pre-registered | read |
+|---|---|---|
+| technology mapping | the batch's class, near 5.2-5.7 GB | 5,004.5 MB (an undershoot of the band's lower edge, recorded); Timing Optimization 22 min against the tracer-less build's 80 |
+| loop-breaking on load_unit | none | Synth 8-326 0 in total (4-101 on every earlier build by the same grep) |
+| loops | headers <= 7, the clear ring out of the member union | headers 0, union 0; `check_timing` on the checkpoint: "0 combinational loops in the design" (1 on vp3's by the same query); the D-cache handshake loops went with the ring |
+| core vs 5d365d9a6 | LUT -9,319 +/- 1,000, FF -32,849 +/- 300 | -9,651 / -32,866 |
+| load_unit / ex+issue | +/- 500 / +/- 2,500 | +246 / +244 |
+| item 4's cone | 272 LUT + 40 CARRY4 | the same |
+
+**The seal** (full flow, exit 0, 1 h 47 m, peak 21.33 GB): `caplifive_vp2c_dcc6daf6e.bit`, 11,443,722 B, sha256
+`fcaec59323eb2c9d6fcb56a6e6709ac797d06c24e4b4a5d5fd6080ba2d21906e` (the board lane's copy equal by hash). Placed 169,076 LUT
+(predicted ~169,000) and 63,648 FF (~63,700); slices 94.91 % against 98.41 %. Graded against the pre-registration:
+
+| key | read | grade |
+|---|---|---|
+| loops | `check_timing` 0 combinational loops; TIMING-23 0 (2 on the batch's report by the same matcher); LUTLP-1 0; 0 routing errors | PASS |
+| congestion | placer final: no window above level 5 (as the batch); router initial: 2 short level-5 windows at csr_regfile against the batch's 9, three of them level 6 | PASS |
+| WNS | **-9.790** (TNS -51,580, 12,477 of 188,703 failing, WHS +0.055) against the batch's -18.529 and the resident vp2's -19.019 | **NOT MET by its letter** ("inside the null band of -18.529"): 8.74 ns outside, on the GOOD side. Not moved; put to the lead before any flash |
+
+The gain is explained in kind and not in cause: the worst paths are the batch's families (csr_regfile `cpmp_q` and the
+dom switcher's `cur_idx_q` into issue_read_operands' `fu_data_q`), each improved by about the same amount at about the
+same depth (`cpmp_q`: -18.529 at 126 levels -> -9.613 at 124; `cur_idx_q`: -18.134 at 119 -> -9.790 at 121), so it is delay
+per level, consistent both with ~33,000 fewer flops in the placement and with the store buffer's page-offset segment
+leaving every one of the worst 500 paths (500 -> 0); one build cannot separate them. Nothing points to lost logic:
+post-route area matches the tracer's share (-9,564 / -32,966 against -9,311 / -32,849), item 4 is on none of the worst
+500 and its own worst path is +7.918, and every simulation arm is value-identical. Not a reading: the `cpmp_tracked` tag
+(its positive control found 0).
+
+**First boot** (pre-registered, the images simulated on dcc6daf6e's RTL and read from their recorder areas): s23-cpmp-rearm
+reads the batch vector; va-alloc-csret the bitstream-2 vector (`va-alloc-bare-2026-10-23/PREREG.md`); the two R-61 kits
+their fixed-tree vectors. The flash is the lead's word in the board lane's session; the board lane holds it pending the
+lead's answer on the WNS key.
