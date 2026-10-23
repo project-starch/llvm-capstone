@@ -99,3 +99,15 @@ stock vs Sublet differ 4, capi run 1 vs run 3 differ 1), and a missing side read
   - The launcher's mapping count moves no recorded reading.
 - **Image hashes** for capi, xlang and plane equal the references', because the builds are path-independent.
 - **Any moved cell** is listed with its cause.
+
+## pg-pools on the trimmed fixture (pre-registered 2026-10-24, before its run)
+
+The board runs pg-pools with the trimmed fixture and share, and was graded on the batch bitstream against pgp-trim/bundle
+(capstone/tests/batch-board-refs/README.md). ref-b2/pg-pools ran the untrimmed fixture, as batch-refs-r60's pg-pools
+did.
+- **This run:** pgp-trim/run.sh's recipe with the kit swapped to qkit7-b2twin3-q8, in batch-refs-b2/pgp-trim.
+  - runner run-arm.py 7ce203f9 from wt-sdkgate 03b1ecfcd33b (clean), the same hash pgp-trim's own tree carried;
+  - image dc2a1356;
+  - fixture pgfixture-trim/cluster and share pgfixture/install/share/postgresql.
+- **Predicted:** 9/9 equal to pgp-trim/bundle on verdict, reason, cause and function, with fixture record
+  956173e054762e91.
