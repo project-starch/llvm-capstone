@@ -8370,3 +8370,20 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
     24 (Q-31, as on the batch), and is reported as such.
   - norandmaps is in the command line; the readings are 0.
   - These are session runs: module high_water is the session maximum, so they are graded on verdicts only.
+
+### The corpus on bitstream 2: postgres sql0 (board 2, before lt0) and pg-pools (when its trimmed reference lands), pre-registered (2026-10-25 02:4x)
+
+- **What runs:** `tier3-pg-b2-arm.sh <board> <log> <sql0|pg-pools>`. It is tier3-pg-batch-arm.sh on the bitstream-2
+  kits bkit9-b2-b<board> and -mb<board> (the measure-only bake first, under the 26,000,000 B cap), with:
+  - sql0 against `batch-refs-b2/ref-b2/sql0/bundle`: the twin; trimmed fixture 956173e0; image cf61cb43; runner
+    7ce203f9;
+  - pg-pools against the TRIMMED `batch-refs-b2/pgp-trim/bundle` (lane ffd69573f751). The untrimmed ref-b2/pg-pools
+    is not the board's staging.
+  - Each stamp must name the twin's qemu and module, and SWITCHES with index=18.
+  - Results are filed under `results/2026-10-25-b2-dcc6daf6e-b<board>`. Dry run: `dryrun-pg-b2-arm.txt`.
+- **The order on board 2:** sql0 now. cpython lt0 follows once both sql0 has ended and lt0's reference has landed.
+  (The waiter that started lt0 on its reference alone was stopped before anything ran, so the two cannot collide.)
+- **Predictions:**
+  - **sql0: 9 of 9 as ref-b2/sql0** (CAUGHT 2, MISSED 7, equal to the batch);
+  - **pg-pools: 9 of 9 as the trimmed bitstream-2 reference** (predicted equal to pgp-trim/bundle);
+  - the measured firmware under the cap; the must-fire lines; the readings 0.
