@@ -3506,7 +3506,7 @@ made DURING an excursion bite too. That note's simulation arm has no access at a
 where QEMU catches it. A board-only MISSED on a far, data-dependent offset should be checked against this condition
 before being read as a cell difference. A store that aliases is a silent write to another object.
 
-### R-61 — inside a virtual context, one REFUSED consuming LDC leaves the load unit's store-permission flag at 0, and every later exception the load unit reports is relabelled STORE_PAGE_FAULT, including the silent R-43 replay of a LEGAL first-touch load, which then faults with cause 15 · `CONFIRMED ON SILICON on c721c1a2a (board lane, dev 1f351b6be31c; both boards, N=2, byte-identical transcripts, kit r61-stale-bare-2026-10-24 at 61faf96f5863); MEASURED in simulation 2026-10-24 by the RTL lane (matched pair on one tree, claim-audited); on every bitstream since capstone-ariane ea88d8e5d (2026-10-16); fixed on the bitstream-2 candidate vp3-ringcut`
+### R-61 — inside a virtual context, any LDC from a page without W && D (a REFUSED consuming one, or a completed NON-consuming one) leaves the load unit's store-permission flag at 0, and every later exception the load unit reports is relabelled STORE_PAGE_FAULT, including the silent R-43 replay of a LEGAL first-touch load, which then faults with cause 15 · `CONFIRMED ON SILICON on c721c1a2a (board lane, dev 1f351b6be31c; both boards, N=2, byte-identical transcripts, kit r61-stale-bare-2026-10-24 at 61faf96f5863); MEASURED in simulation 2026-10-24 by the RTL lane (matched pair on one tree, claim-audited); on every bitstream since capstone-ariane ea88d8e5d (2026-10-16); fixed on the bitstream-2 candidate vp3-ringcut`
 
 Siblings: Q-19 (the ruling this gate implements), R-43 (the replay this relabels), S-24 (a different silicon cause-15
 loop, explained and fixed by the PTE's D bit; not this mechanism).
@@ -3539,9 +3539,28 @@ CALL's context load takes the dom-switch path. **Recorded on the way:** a first 
 whose first access is a STORE; it read correct on both trees and was void, since the store unit's path never reaches
 the load unit's mux and the later loads hit the cache the store had filled.
 
-**Arming conditions derived from code and NOT yet tested:** the capture does not check consumption, so a NON-consuming
-LDC from a read-only page also arms the flag (vb-trans arm 6's shape); and `store_ok = w && d` (cva6_mmu.sv:144), so an
-LDC from a WRITABLE page whose D bit is still clear arms it too.
+**Arming conditions, CONFIRMED ON SILICON 2026-10-24** (board lane, both boards on c721c1a2a, byte-identical transcripts;
+result lines at dev 40a35b997697, `vp2-kit-2026-10-17/tier3-smoke/records/r61a-bare-batch.result-lines.txt`; graded
+against `tests/rtl-smoke/r61-arming-bare-2026-10-24/PREREG.md`, pre-registered at land/rtl-r61-arming 6910f80d4903; all
+eight vectors and image hashes checked here against the kit): the capture does not test consumption and
+`store_ok = w && d` (cva6_mmu.sv:144), so a refusal is not needed. A NON-consuming LDC that completes normally arms the
+flag from a read-only page (`r61a-stale3`) and from a WRITABLE page whose D bit is still clear (`r61a-stale4`); stub7's
+legal first-touch load in the next entry then reads 15 at its own address with the word never copied, while the same load
+with no LDC before it exits normally (`r61a-stale0`, the control that makes the 15 attributable to the LDC).
+
+**The exposure window is bounded by re-capture** (simulation, `vb-trans-stale5-vp2`, capstone-ariane 49125a4e4, on
+68d0ffaf8 + tests and on the fixed tree): every LDC writes the flag in its capture state, so after the arming
+non-consuming ldc, an entry whose first instruction is an ldc from a WRITABLE DIRTY page and whose second is the same legal
+first-touch load exits normally (5, 2, the RETURN, 0x1234 copied) on 68d0ffaf8, where `vb-trans-stale3-vp2` beside it reads
+15. So the window runs from an LDC on a page without W && D to the next LDC on a page with both.
+
+**Why no corpus verdict carries the 15** has two candidate explanations, neither yet a reading: (a) the window above is
+short in real code, since most LDCs read pages the program has written (heap, stack, any page holding a stored
+capability); (b) every capstone_vm pin uses FOLL_WRITE (the runtime lane's read of dev's capstone_vm.c: eager add :934,
+lazy resolve :1451, pin-ahead :1226/:1232), so a page the module materialises in a writable region is write-faulted in
+and comes out dirty, leaving read-only mappings and already-present clean pages as the remaining arming sites. The
+deciding reading for (b), a PTE print at pin time, is OWED by the runtime lane (a module diagnostic, QEMU first, queued
+behind bitstream 2).
 
 **Silicon (2026-10-24, the board lane, both boards on the batch bitstream, labelled caplifive_vp2c_c721c1a2a; result
 lines at dev 1f351b6be31c, `vp2-kit-2026-10-17/tier3-smoke/records/r61-bare-batch.result-lines.txt`; graded against
