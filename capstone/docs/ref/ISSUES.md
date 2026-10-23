@@ -3506,7 +3506,7 @@ made DURING an excursion bite too. That note's simulation arm has no access at a
 where QEMU catches it. A board-only MISSED on a far, data-dependent offset should be checked against this condition
 before being read as a cell difference. A store that aliases is a silent write to another object.
 
-### R-61 — inside a virtual context, one REFUSED consuming LDC leaves the load unit's store-permission flag at 0, and every later exception the load unit reports is relabelled STORE_PAGE_FAULT, including the silent R-43 replay of a LEGAL first-touch load, which then faults with cause 15 · `MEASURED in simulation 2026-10-24 by the RTL lane (matched pair on one tree, claim-audited); on every bitstream since capstone-ariane ea88d8e5d (2026-10-16), the batch c721c1a2a on both boards included; fixed on the bitstream-2 candidate vp3-ringcut; no silicon reading yet`
+### R-61 — inside a virtual context, one REFUSED consuming LDC leaves the load unit's store-permission flag at 0, and every later exception the load unit reports is relabelled STORE_PAGE_FAULT, including the silent R-43 replay of a LEGAL first-touch load, which then faults with cause 15 · `CONFIRMED ON SILICON on c721c1a2a (board lane, dev 1f351b6be31c; both boards, N=2, byte-identical transcripts, kit r61-stale-bare-2026-10-24 at 61faf96f5863); MEASURED in simulation 2026-10-24 by the RTL lane (matched pair on one tree, claim-audited); on every bitstream since capstone-ariane ea88d8e5d (2026-10-16); fixed on the bitstream-2 candidate vp3-ringcut`
 
 Siblings: Q-19 (the ruling this gate implements), R-43 (the replay this relabels), S-24 (a different silicon cause-15
 loop, explained and fixed by the PTE's D bit; not this mechanism).
@@ -3541,7 +3541,15 @@ the load unit's mux and the later loads hit the cache the store had filled.
 
 **Arming conditions derived from code and NOT yet tested:** the capture does not check consumption, so a NON-consuming
 LDC from a read-only page also arms the flag (vb-trans arm 6's shape); and `store_ok = w && d` (cva6_mmu.sv:144), so an
-LDC from a WRITABLE page whose D bit is still clear arms it too. **Silicon:** no reading of this sequence. Not observed in
+LDC from a WRITABLE page whose D bit is still clear arms it too.
+
+**Silicon (2026-10-24, the board lane, both boards on the batch bitstream, labelled caplifive_vp2c_c721c1a2a; result
+lines at dev 1f351b6be31c, `vp2-kit-2026-10-17/tier3-smoke/records/r61-bare-batch.result-lines.txt`; graded against
+`tests/rtl-smoke/r61-stale-bare-2026-10-24/PREREG.md`, pre-registered at 61faf96f5863):** every reading as predicted, the
+image hashes matching the kit's SHA256SUMS. The control read SR 36 exact. `r61-stale2` read the c721c1a2a vector exactly:
+positions 18-21 = 0xf, 0x4, 0x80006008, 0x0, i.e. csupcause 15 at the LEGAL load, csupepc - stub7 = 4, tval the load's
+own address, and the word never copied. `r61-stale` read 15 where the fixed tree reads the page fault's 13. The two
+boards' transcripts are byte-identical. Before that reading, the corpus count below was the only silicon evidence. Not observed in
 corpus readings either: the runtime lane counted fault causes over the raw-read verdicts of about 1,200 board corpus
 cells (t3-run-batch-c721c1a2a-b1/b2, t3-run-tree{A,B}) and found cause 15 in none, with the same pass counting 25 (326),
 28 (155), 24 (53), 12 (36), 30 (11), 4 (11), 13 (3) and 29 (1). That is not "absent on silicon": only cells with a
