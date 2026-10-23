@@ -8065,3 +8065,38 @@ Record: `records/r61-bare-batch.result-lines.txt`.
 - **R-61 is a silicon defect of the deployed batch bitstream.** After a refused consuming LDC, a later legal load in
   the same context escapes as cause 15 with its own address. The fix (the ring cut, the RTL lane's) is predicted to read
   a normal exit and 0x1234.
+
+### R-61's arming conditions on the batch bitstream: bare boots on both boards, pre-registered (2026-10-24 14:3x, before the boots)
+
+- **Why:** the RTL lane's second R-61 kit asks whether a refusal is needed at all. In simulation, a NON-consuming LDC
+  arms the stale flag too: both from a read-only page and from a writable page with D clear.
+- **The kit:** `capstone/tests/rtl-smoke/r61-arming-bare-2026-10-24/` at llvm-capstone land/rtl-r61-arming
+  6910f80d4903, with its PREREG.md and images/SHA256SUMS. Each image is loaded at 0x80000000. The hashes and
+  board_rec values were read from that commit:
+
+  | image | sha256 | board_rec | SR |
+  |---|---|---|---|
+  | r61a-control | d6becdd7 | 0x80013000 | 36 |
+  | r61a-stale0 | 30e1d23c | 0x80014000 | 19 |
+  | r61a-stale3 | 231b16cd | 0x80014000 | 22 |
+  | r61a-stale4 | 9be0fc79 | 0x80014000 | 22 |
+
+- **What runs:** `tier3-r61a-bare.sh <board> <log> 6910f80d4903` on both boards.
+  - It is tier3-r61-bare.sh with this kit's four images in the PREREG's order.
+  - Graded by `r61a-grade.py`, whose four vectors were checked equal to the PREREG's.
+  - A control that is not exact voids the session. A stale0 that is not its normal exit voids the arming question.
+    Either one stops the session.
+  - Dry run: `dryrun-r61a-bare.txt`.
+- **Predictions (the PREREG's, from simulating these images):**
+  - **r61a-control: exact, SR 36.** It is the same vector r61-control read on silicon.
+  - **r61a-stale0: the normal exit on both trees, SR 19.** There is no LDC before the legal load, and the load copies
+    0x1234.
+  - **r61a-stale3 (read-only page) and r61a-stale4 (writable page, D clear): each CONFIRMED,** reading the c721c1a2a
+    vector.
+    - Positions 13-14 read 5 and 2: the non-consuming ldc completes normally.
+    - Positions 17-20 read 0xf, 0x4, 0x80006008 and 0x0: cause 15 at the legal load, epc offset 4, tval its own
+      address, and the word not copied.
+    - The fixed tree reads 0x2, 0x18, 0x420590db and 0x1234 there.
+  - **Both boards are identical.**
+- **What would read otherwise:** the fixed tree's vector on c721c1a2a is a finding, sent to the RTL lane first; any
+  other vector is a finding by position.
