@@ -68,3 +68,34 @@ stamped commits and clean.
 
 The remaining arms follow, each pre-registered here before it runs: mruby stock and Sublet (smoke-fit), perl stock
 and Sublet (full and trimmed), xlang, capi, plane, and Juliet temporal and spatial.
+
+**The first launch was void** (2026-10-24 00:58, outputs kept in batch-refs-b2/failed-launch-1). The batch pass's
+script took `CAPSTONE_QEMU_LOCK` from its launching shell. Launched without it, the domain lock became
+`/qemu-domain-<SET>.lock`, which is not writable, and every boot failed at once (NO-READING:infra). The script now
+sets the variable itself. The relaunch was at 00:59:41; the stamps above are from it.
+
+## Pre-registration: the remaining arms (2026-10-24, before their runs)
+
+**The script:** `batch-refs-b2/run-rest-b2.sh`, chained behind the pass. Each arm is its batch reference's own
+invocation with the kit swapped to qkit7-b2twin3-q8, then `batch-refs-b2/cmp-any.py` against that batch reference.
+The compare was tested before any boot: identical inputs read differ 0, real pairs read their differences (mruby
+stock vs Sublet differ 4, capi run 1 vs run 3 differ 1), and a missing side reads NO DATA with exit 2.
+
+| arm | batch reference compared | runner |
+|---|---|---|
+| mruby stock | batch-refs-r60/tick/mruby-stock | wt-ref 9db9f5f7 |
+| mruby Sublet (smoke-fit) | smoke-fit/sublet | wt-ref 9db9f5f7 |
+| perl stock and Sublet, trimmed | batch-refs-r60/batch/perl-{stock,sublet}-trim | wt-ref2 aabfa668 |
+| capi | capi-repros results/2026-10-22-virtual-run3 | 6981dee6 |
+| xlang repro and lua-cdp | xlang/{repro,lua-cdp}/results/2026-10-22-virtual-run2 | 6fcf3b75 |
+| plane, both arms | plane-vp2/batch2-<arm> | wt-plane 1de34fdf |
+| Juliet temporal | juliet-r60/judge-batch2 | wt-juliet run.py 4b663651 |
+| Juliet spatial sample | juliet-sp/batch2 | wt-juliet run.py 4b663651 |
+
+**Predicted:**
+- **Every cell equals its batch reference.**
+  - None of these arms had a record-capacity stop on the batch kit; mruby Sublet runs smoke-fit, which fits either
+    table.
+  - The launcher's mapping count moves no recorded reading.
+- **Image hashes** for capi, xlang and plane equal the references', because the builds are path-independent.
+- **Any moved cell** is listed with its cause.
