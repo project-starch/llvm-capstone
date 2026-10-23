@@ -8248,3 +8248,26 @@ Records: `records/bs2-dcc6daf6e-first-b2.result-lines.txt` and `records/bs2-dcc6
     106,275, and 10, 19, 23, 27, 28, 30 and 31 between 64,631 and 106,275. Each faults at its own site with the table
     still below capacity.
   - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0.
+
+### Bitstream 2 on BOARD 1 as well: reflash, first boots, and the same runs as board 2, pre-registered (2026-10-24 17:4x, before the flash)
+
+- **The lead's word, in this session:** "flash board 1 - confirm", then "and go. Use both boards". The batch bitstream
+  c721c1a2a stays registered as the fallback, and the script requires it in the store.
+- **What runs, in order, each gating the next:**
+  1. `board-tier12/batch/flash-and-first-bs2-b1.sh`, which is flash-and-first-bs2-b2.sh by board-1 substitutions.
+     - It pins FPGA_BOARD=1 explicitly. The dry run runs it under an inherited FPGA_BOARD=2 and shows the flash
+       handed board 1.
+     - It flashes `caplifive_vp2c_dcc6daf6e.bit` (fcaec593...), makes the kit bkit9-b2-b1 and runs the first boots.
+  2. hold 100000 on bkit9-b2-b1.
+  3. R-61, then R-61 arming, both with --expect fixed.
+  4. The 20 capacity-cell calls, board 1's copy of tier3-capcells-b2.sh with the board as its only change. That makes
+     the bitstream-2 capacity cells N=2 alongside board 2's run.
+- **Predictions:** board 2's, reading for reading:
+  - s23 AS EXPECTED;
+  - va-alloc PASS on the 18-bit vector;
+  - Tier 1 identical to the batch;
+  - the monitor's reports print;
+  - hold HOLD-OK, high_water 105,569 of 262,144;
+  - every R-61 image its fixed-tree vector;
+  - every capacity-cell verdict as the twin.
+  - **Boards 1 and 2 agree value for value on the bare-boot vectors.**

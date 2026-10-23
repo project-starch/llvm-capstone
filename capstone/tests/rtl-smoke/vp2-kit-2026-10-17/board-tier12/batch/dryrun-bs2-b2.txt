@@ -119,3 +119,41 @@ BP DONE 02:00:11
 02:00:10 shared image restored; BAKE_DONE
 ## the first prep attempt (refused by its own gate: batch-t1-r60/vm's mruby.dom is not the batch Tier 1's)
 BP STOP: the images are 65f9f1f179852246,f8594e1167b60307,e63733dd1a4a7452, not 65f9f1f179852246,1ab24a9215078a53,e63733dd1a4a7452
+
+# flash-and-first-bs2-b1.sh 276fb07a4cb642c7 dry run, 2026-10-24 17:4x, board 1: the same stubs; make-b2-kit.sh 1 ran for real into a
+# scratch root. 'b1env' runs it under an inherited FPGA_BOARD=2 and a board-2 URL file: the flash stub must be handed board 1.
+## flash board 1: b1full
+FB board 1 free 17:39:53
+STORE stub: FPGA_BOARD= url_file= wanted no-such-bitstream-3312502.bit
+STORE stub: FPGA_BOARD= url_file= wanted caplifive_vp2c_c721c1a2a.bit
+FB FLASH BEGIN 17:39:53 booking 41
+FLASH-STUB board= url= args caplifive_vp2c_dcc6daf6e.bit caplifive_vp2c_dcc6daf6e.bit fcaec59323eb2c9d
+UNBOOK 41: 200 (stub)
+FB FLASH END rc=0 17:39:53
+MK kit <scratch>/b2flash/kits/b1full/bkit9-b2-b1: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1:
+< BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+> BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE
+FB FIRST rc=0 17:39:53; SEQ:
+  FIRST-STUB board 1 name caplifive_vp2c_dcc6daf6e out out-b1full
+FB DONE 17:39:53
+## flash board 1: b1nofb
+FB board 1 free 17:39:53
+STORE stub: FPGA_BOARD= url_file= wanted no-such-bitstream-3312561.bit
+STORE stub: FPGA_BOARD= url_file= wanted caplifive_vp2c_c721c1a2a.bit
+FB STOP: the fallback (the batch bitstream) is not registered
+## flash board 1: b1env
+FB board 1 free 17:40:07
+STORE stub: FPGA_BOARD=1 url_file= wanted no-such-bitstream-3312849.bit
+STORE stub: FPGA_BOARD=1 url_file= wanted caplifive_vp2c_c721c1a2a.bit
+FB FLASH BEGIN 17:40:07 booking 41
+FLASH-STUB board=1 url= args caplifive_vp2c_dcc6daf6e.bit caplifive_vp2c_dcc6daf6e.bit fcaec59323eb2c9d
+UNBOOK 41: 200 (stub)
+FB FLASH END rc=0 17:40:07
+MK kit <scratch>/b2flash/kits/b1env/bkit9-b2-b1: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1:
+< BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+> BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE
+FB FIRST rc=0 17:40:07; SEQ:
+  FIRST-STUB board 1 name caplifive_vp2c_dcc6daf6e out out-b1env
+FB DONE 17:40:07
