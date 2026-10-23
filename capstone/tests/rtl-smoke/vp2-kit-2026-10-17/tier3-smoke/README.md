@@ -8009,3 +8009,41 @@ Record: `records/batch-c18-mremap.result-lines.txt`.
   - One disclosed source of it is the board's launcher, b27afefc, against QEMU's a405840d.
 - **lt0 18 read MISSED on the batch image 23a2f0cb, which has no mremap: it completed, exit 1, no fault (board 2's lt0
   cell). With the mremap relink it is CAUGHT on silicon.**
+
+### R-61, a stale LDC-refusal flag, on the batch bitstream: bare boots on BOTH boards, pre-registered (2026-10-24 13:3x, before the boots)
+
+- **Why:** R-61 (dev e63ff602f3fb).
+  - After a refused consuming LDC in a virtual context, the load unit's cause mux stays armed.
+  - A later legal load whose revocation-cache lookup misses then escapes as a spurious STORE_PAGE_FAULT, cause 15.
+  - The corpus shows no cause 15 in about 1,200 cells, so only a directed arm can show it on silicon. The runtime lane
+    asked for it before any bitstream-2 flash.
+- **The kit:** the RTL lane's `capstone/tests/rtl-smoke/r61-stale-bare-2026-10-24/`, at llvm-capstone land/rtl-r61-kit
+  61faf96f5863, with its PREREG.md and images/SHA256SUMS.
+  - Its images are VB_TABLE builds, loaded at 0x80000000. The hashes and board_rec values were read from that commit:
+
+    | image | sha256 | board_rec | SR |
+    |---|---|---|---|
+    | r61-control | c710e0d5 | 0x80013000 | 36 |
+    | r61-stale2 | 993876a9 | 0x80014000 | 23 |
+    | r61-stale | f4d9ea5b | 0x80014000 | 22 |
+
+- **What runs:** `tier3-r61-bare.sh <board> <log> 61faf96f5863` on both boards, N=2.
+  - Three cold bare boots per board, in the PREREG's order: control, then stale2, then stale.
+  - Each uses run_sup_bare.py from the kit's driver tree, as va-alloc-bare does, with the board's batch kit.
+  - Graded by `r61-grade.py`, whose five vectors were checked equal to the PREREG's.
+  - A control that is not exact makes the session VOID and stops it.
+  - Dry run: `dryrun-r61-bare.txt`. It covers the c721c1a2a vectors, the fixed tree's vectors (NOT-REPRODUCED), a void
+    control, one changed value (a FINDING, named by position), a short uart (VOID), a busy board, and a commit
+    without the kit.
+- **Predictions (the PREREG's, from simulating these images on c721c1a2a's RTL):**
+  - **r61-control: SR 36,** with every value as the vector, which is identical on both trees;
+  - **r61-stale2: R-61 CONFIRMED.** The vector is the c721c1a2a one, with positions 18-21 = 0xf, 0x4, 0x80006008, 0x0:
+    - csupcause 15, a spurious store page fault, where the fixed tree reads 2;
+    - csupepc − stub7 = 4, which is the load;
+    - csuptval = the load's own address;
+    - the copied word 0, where the fixed tree copies 0x1234.
+  - **r61-stale: the c721c1a2a vector,** with position 18 = 0xf, where the fixed tree reads 0xd;
+  - **both boards read identical vectors,** since the flag's mechanism is deterministic.
+- **What would read otherwise:**
+  - the fixed tree's vector on stale2 is NOT-REPRODUCED: a finding, sent to the RTL lane before any claim;
+  - any other vector is a finding, graded position by position.
