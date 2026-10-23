@@ -8047,3 +8047,21 @@ Record: `records/batch-c18-mremap.result-lines.txt`.
 - **What would read otherwise:**
   - the fixed tree's vector on stale2 is NOT-REPRODUCED: a finding, sent to the RTL lane before any claim;
   - any other vector is a finding, graded position by position.
+
+### R-61 on the batch bitstream, result (2026-10-24 13:27-13:30, both boards): CONFIRMED ON SILICON, N=2, the boards byte-identical
+
+Record: `records/r61-bare-batch.result-lines.txt`.
+- **r61-control: PASS on both boards.** SR 36, with every value as the PREREG's vector.
+- **r61-stale2: CONFIRMED on both boards.** The c721c1a2a vector is exact:
+  - positions 18-21 read csupcause **0xf (15, the spurious STORE_PAGE_FAULT)**;
+  - csupepc − stub7 = **4**, which is the legal load itself;
+  - csuptval = **0x80006008**, the load's own address;
+  - the copied word is **0**: the value 0x1234 was never copied.
+  - The refused ldc before it (positions 14-16) reads 5, 0xf and 0, as simulated.
+- **r61-stale: its c721c1a2a vector on both boards.** Position 18 is 0xf, where the fixed tree takes 0xd (the page
+  fault).
+- **The two boards' uart.txt files are byte-identical for all three images.**
+- **Against the pre-registration (16a109d76e85): every reading holds.**
+- **R-61 is a silicon defect of the deployed batch bitstream.** After a refused consuming LDC, a later legal load in
+  the same context escapes as cause 15 with its own address. The fix (the ring cut, the RTL lane's) is predicted to read
+  a normal exit and 0x1234.
