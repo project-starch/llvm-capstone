@@ -8156,3 +8156,41 @@ Record: `records/r61a-bare-batch.result-lines.txt`.
   3. **R-61 arming** (`tier3-r61a-bare.sh`, the same way): the control and stale0 exact; **r61a-stale3 and r61a-stale4
      FIXED**, positions 17-20 = 0x2, 0x18, 0x420590db, 0x1234.
   4. Then the compiler lane's 20 capacity-cell calls, pre-registered separately before they run.
+
+### Bitstream 2 on board 2, result (2026-10-24 16:43-17:31): flashed; every first-boot reading holds; the 18-bit index holds 100,000 live records on silicon; R-61 reads fixed
+
+Records: `records/bs2-dcc6daf6e-first-b2.result-lines.txt` and `records/bs2-dcc6daf6e-after-b2.result-lines.txt`.
+
+- **The flash** (16:43-16:46, on the lead's "Flash now"):
+  - the store control fired, and the batch bitstream is registered as the fallback;
+  - the local sha256 is the sealed one, and the upload was HTTP 201;
+  - **the read-back after the power cycle is `caplifive_vp2c_dcc6daf6e.bit`.**
+  - The kit is bkit9-b2-b2: exactly the BOARD_BITSTREAM line changed, module 215a09be, launcher fad465ce.
+- **First boots:**
+  - **s23-cpmp-rearm: AS EXPECTED (batch).** SR 25, every value as the vector, re-arm all 1, total 14.
+  - **va-alloc-bare: PASS on the bitstream-2 vector,** `0x0 0x40004 0x0 0x80004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x8 0x3
+    0x4 0x1 0x8 0x0`, SR 17. This is the first silicon reading of the {gen[29:18], idx[17:0]} id format.
+  - **Tier 1: identical to the batch's.**
+    - b0-stats, b0-hello and vm-contract read 0, and vm-suite reads 1.
+    - The VM exits are normal 0, stale 139 and sparse-churn 0. sparse-churn reads nodes=600041, steps=200065,
+      collections 0 and node_capacity 4096, which is rev7's insmod, as the runtime lane predicted.
+    - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 read 0.
+  - **The monitor-print positive control:** the SHA-tag lines are 18 on bitstream 2 and 18 on the batch, with RGID 3 and
+    RCLM 3. Every report executes csrw 0x800 before its UART write, so 0x800 retires on the tracer-less core.
+- **hold 100000 (the 18-bit discriminator):** `HOLD-PEAK 100000`, `HOLD-OK 100000`, exit 0, no fault.
+  - **nodes_high_water 105,569, allocated_total 105,569, node_capacity 262,144.** That is exactly the 18-bit QEMU
+    twin's reading.
+  - The batch side of the pair, on board 1, read HOLD-NULL at 60590 and 64,001 of 65,536.
+  - **A context at the module's default capacity holds more than 65,535 live records on silicon.**
+- **R-61, the RTL lane's kit 61faf96f5863, graded --expect fixed:**
+  - the control is exact;
+  - **r61-stale2 is the fixed tree's vector:** positions 18-21 read 0x2, 0x18, 0x420590db and 0x1234, so the RETURN
+    completes and the word is copied;
+  - **r61-stale is the fixed tree's vector:** position 18 reads 0xd, the page fault.
+- **R-61 arming, kit 6910f80d4903, --expect fixed:**
+  - the control and stale0 are exact;
+  - **r61a-stale3 and r61a-stale4 are the fixed tree's vector:** positions 17-20 read 0x2, 0x18, 0x420590db and 0x1234.
+- **The same images read the c721c1a2a vectors on the batch bitstream** (both boards, 2026-10-24 13:27 and 14:31). So
+  the ring cut is what removes R-61 on silicon, image for image.
+- Every boot completed, with the readings 0.
+- **Against the pre-registrations (df030c9d575a, amended at 15cddf2693a8; c0e7ff264da0): every reading holds.**
