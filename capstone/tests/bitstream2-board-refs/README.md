@@ -171,3 +171,26 @@ Every arm exited rc 0, and every stamp names QEMU 708bbff5, module 33254735 and 
 - **Not predicted:** one site move, lt0 09. It was traced to the mremap relink by a 2×2. Its verdict is unchanged.
 - **Also held:** pg-pools on the trimmed fixture, 9/9 equal to pgp-trim (batch-refs-b2/pgp-trim, fixture
   956173e054762e91).
+
+## Result: the remaining arms (2026-10-24 04:08-05:0x; batch-refs-b2/REST-A, REST-B)
+
+| arm | compared with | cells | differ |
+|---|---|---:|---:|
+| mruby stock | batch-refs-r60/tick/mruby-stock | 23 | 0 |
+| mruby Sublet (smoke-fit) | smoke-fit/sublet | 23 | 0 |
+| perl stock, trimmed | batch-refs-r60/batch/perl-stock-trim | 11 | 0 |
+| perl Sublet, trimmed | batch-refs-r60/batch/perl-sublet-trim | 11 | 0 |
+| capi | results/2026-10-22-virtual-run3 | 19 | 0 |
+| xlang repro / lua-cdp | results/2026-10-22-virtual-run2 | 15 / 13 | 0 / 0 |
+| plane malloc / nested | plane-vp2/batch2-<arm> | 1 / 1 | 0 / 0 |
+| Juliet temporal | juliet-r60/judge-batch2 | 366 | 0 |
+| Juliet spatial sample | juliet-sp/batch2 | 755 | 0 |
+
+- **Held:** every pre-registered reading.
+- **Image hashes** for capi (18 images), xlang (17) and plane (2) equal their references', so the board's image gate
+  carries over unchanged.
+
+**So, against the batch references,** bitstream 2's QEMU twin changes only what the 18-bit index was cut for:
+- lt1's ten capacity cells now reach their sites;
+- lt0 18 reaches its defect through mremap;
+- lt0 09's site moved with the mremap relink, not with the bitstream.
