@@ -3506,6 +3506,54 @@ made DURING an excursion bite too. That note's simulation arm has no access at a
 where QEMU catches it. A board-only MISSED on a far, data-dependent offset should be checked against this condition
 before being read as a cell difference. A store that aliases is a silent write to another object.
 
+### R-61 — inside a virtual context, one REFUSED consuming LDC leaves the load unit's store-permission flag at 0, and every later exception the load unit reports is relabelled STORE_PAGE_FAULT, including the silent R-43 replay of a LEGAL first-touch load, which then faults with cause 15 · `MEASURED in simulation 2026-10-24 by the RTL lane (matched pair on one tree, claim-audited); on every bitstream since capstone-ariane ea88d8e5d (2026-10-16), the batch c721c1a2a on both boards included; fixed on the bitstream-2 candidate vp3-ringcut; no silicon reading yet`
+
+Siblings: Q-19 (the ruling this gate implements), R-43 (the replay this relabels), S-24 (a different silicon cause-15
+loop, explained and fixed by the PTE's D bit; not this mechanism).
+
+**Mechanism** (core/load_unit.sv at 68d0ffaf8; the same lines at ea88d8e5d, bf3db3175 and c721c1a2a; ea88d8e5d~1 has
+neither signal):
+- `ldc_clear_refuse = CVA6Cfg.CAPSTONE_EXT && vctx_i && !ldc_store_ok_d` (:186), and the exception port muxes on it:
+  `ex_o.cause = ldc_clear_refuse ? riscv::STORE_PAGE_FAULT : ex_i.cause` and the same for tval (:366-367).
+- `ldc_store_ok_d` defaults to `ldc_store_ok_q` (:412) and is captured only at the two LDC capture sites (:511 in
+  SEND_TAG_LDC, :565 under `!sel_dom_switch`). The flop resets only on `rst_ni` (:810); no flush or switch touches it.
+- So after an LDC captured with store permission 0 (the Q-19 refusal of a consuming LDC from a page without W and D),
+  the flag stays 0 until the NEXT LDC, across context exits and entries, and while `vctx_i` is high the mux rewrites
+  the cause of whatever the load unit's `ex_i` carries: the LSU's capability exceptions merge into it
+  (load_store_unit.sv:1121-1122, registered at :607), so causes 4, 5, 13, 24-28 and the R-43 replay marker.
+
+**Readings** (vb-trans.S, `-DVB_TABLE` plus the arm's define, every run through the Anvil prologue with
+`rtl_dirty=no`; one run per arm, the simulation cycle-identical across trees up to the divergence):
+
+| arm | sequence | 68d0ffaf8 (+ tests only) | fixed tree | control on 68d0ffaf8 |
+|---|---|---|---|---|
+| `vb-trans-stale2-vp2` | refused consuming ldc (arm 4, unresolved), then a fresh entry whose only access is a LEGAL load through x26, the entry's first touch of that node | **5, 15, epc offset 4 (the load), tval 0x80004008 (its address), the value never copied (0)** | 5, 2 (the RETURN refused, as on vp2), 0x18, the RETURN's encoding, 0x1234 copied | — |
+| `vb-trans-stale-vp2` | refused consuming ldc, then arm 2's load from an unmapped page | 5, 15, 0, tval 0 | 5, 13, 0, tval 0 | arm 2 with no refusal before it (`vb-trans-vp2`): 5, 13 |
+
+The audited trace (claim-auditor, 2026-10-24) shows what the 15 replaces in the second row: the FIRST attempt's
+exception, 3 cycles after the DTLB miss and so not a walk, is the R-43 replay marker of a revocation-cache miss; on
+the control and the fixed tree that attempt flushes and re-issues, on 68d0ffaf8 it escapes at once, and the page fault
+never executes. The first row is that consequence on an access with no fault at all. Nothing between the two entries
+re-captures the flag: the run enters SEND_TAG_LDC exactly once (fault4's ldc), the monitor's macros issue no LDC, and a
+CALL's context load takes the dom-switch path. **Recorded on the way:** a first cut of the legal-access arm ran arm 0,
+whose first access is a STORE; it read correct on both trees and was void, since the store unit's path never reaches
+the load unit's mux and the later loads hit the cache the store had filled.
+
+**Arming conditions derived from code and NOT yet tested:** the capture does not check consumption, so a NON-consuming
+LDC from a read-only page also arms the flag (vb-trans arm 6's shape); and `store_ok = w && d` (cva6_mmu.sv:144), so an
+LDC from a WRITABLE page whose D bit is still clear arms it too. **Silicon:** no reading of this sequence. Not observed in
+corpus readings either: the runtime lane counted fault causes over the raw-read verdicts of about 1,200 board corpus
+cells (t3-run-batch-c721c1a2a-b1/b2, t3-run-tree{A,B}) and found cause 15 in none, with the same pass counting 25 (326),
+28 (155), 24 (53), 12 (36), 30 (11), 4 (11), 13 (3) and 29 (1). That is not "absent on silicon": only cells with a
+raw-read JSON are counted, a corpus context rarely loads a capability from a read-only or still-clean page, and an armed
+flag that never meets a later load-unit exception leaves no trace. A pre-registered board arm is the stale2 sequence as a
+bare kit (the prediction on c721c1a2a: 15 at the legal load).
+
+**Fix** (capstone-ariane vp3-ringcut, b8104c7f5; part of bitstream 2's ring cut, ruled by the semantics owner on
+2026-10-24): the refusal reads `ldc_store_ok_q` and is scoped to `state_q == LDC_CLEAR_WAIT`, the only state that issues
+a clear, so it can no longer reach an unrelated exception. That commit also moves every consuming LDC's clear into
+LDC_CLEAR_WAIT, so the fixed tree's readings support the fix without isolating the scoping alone.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
