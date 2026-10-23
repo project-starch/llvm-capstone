@@ -7940,3 +7940,24 @@ Record: `records/uaf-repeat-dm-batch-b1.result-lines.txt`.
 - pc=0, DRT1, FRTY, Oops, INJS and INJL read 0.
 - **Against the pre-registration (97e9991ef595): every reading holds.** The rate, 3.0%, is inside 0 to 12 of 200, and
   beside the trees' about 2.2%. The batch bitstream does not change this behaviour.
+
+### The Juliet spatial sample on the batch bitstream, result (2026-10-23 05:22-11:48, board 2): 1513 of 1513 cells as QEMU
+
+Record: `records/juliet-spatial-batch-b2.result-lines.txt`.
+- **The runs:**
+  - 24 of 24 batches completed, and the probe exited 0 with sizeof ptr 16;
+  - all 25 transcripts read 0 on pc=0, DRT1, FRTY, Oops, INJS and INJL.
+- **The grade (the 08:2x correction): juliet-obs-compare.py against juliet-sp/batch2's observations: 1513 of 1513
+  cells the same, 0 different, exit 0.**
+  - All three tolerated CWE170 cases also read as QEMU.
+  - The comparator's control: one planted cause change in the board's own file reads 1512 of 1513, exit 1.
+- **Every one of the 755 cases' bad and good image cells, and every control, equals the batch QEMU reference.**
+  - The uaf control read cause 25 in all 48 of its runs here.
+  - As predicted, the judge's own lines read the 716 CAUGHT rows as NO-READING:unattributed(STRICT-FAIL:no-oob-line).
+    The MISSED 22, NOT-TRIGGERED 9 and intra-object 8 rows are the reference's.
+- **Against the corrected pre-registration: every reading holds.**
+- **With this, every arm in the compiler lane's coverage enumeration has a board reading on the batch bitstream:**
+  - the 25 pass arms;
+  - lt1, pg-pools, mruby (stock and Sublet) and perl (stock and Sublet);
+  - xlang, plane and capi;
+  - Juliet temporal and spatial.
