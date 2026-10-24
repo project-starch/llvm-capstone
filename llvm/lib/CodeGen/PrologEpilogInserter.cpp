@@ -1152,7 +1152,13 @@ void PEIImpl::calculateFrameObjectOffsets(MachineFunction &MF) {
         LLVM_DEBUG(llvm::dbgs()
                        << "Adjusting offset of emergency spill slot #" << SFI
                        << " from " << MFI.getObjectOffset(SFI););
-        MFI.setObjectOffset(SFI, MFI.getObjectOffset(SFI) - Delta);
+        // Moving the slot by less than its alignment would leave it misaligned
+        // against the final, aligned stack pointer (a 16-byte slot moved by
+        // an 8-byte padding sits 8 bytes off a 16-byte boundary), so move it
+        // by a multiple of its alignment only.
+        int64_t SlotDelta =
+            alignDown(uint64_t(Delta), MFI.getObjectAlign(SFI).value());
+        MFI.setObjectOffset(SFI, MFI.getObjectOffset(SFI) - SlotDelta);
         LLVM_DEBUG(llvm::dbgs() << " to " << MFI.getObjectOffset(SFI) << "\n";);
       }
     }
