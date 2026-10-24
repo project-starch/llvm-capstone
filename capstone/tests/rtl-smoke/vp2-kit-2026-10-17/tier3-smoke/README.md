@@ -8624,3 +8624,28 @@ Record: `records/b2bs-juliet-spatial-b2.result-lines.txt`.
   format, 38 rows and 1,625 cells), only two rows differ from the batch bitstream's:
   - cpython lt1: CAUGHT 17 → 27, the ten capacity cells;
   - cpython lt0: CAUGHT 15 → 16, case 18 on the mremap relink.
+
+### Bitstream 2 N=2, board 1 result: lt1, pymalloc, the memcached allocator, wmem and sql0 all identical to their first readings (2026-10-25 20:01-06:07)
+
+Record: `records/b2n2-b1.result-lines.txt`.
+- **lt1:** 32 of 32 as ref-b2/lt1, and n2-grade **32 of 32** against the first (salvage) reading. CAUGHT 27, and all
+  ten capacity cells are CAUGHT at the same sites. The run took 6 h 18 min, as the QEMU time ratio predicted, inside the
+  new 12 h budget.
+- **Read on board 1, first read on board 2, n2-grade 0 different on each:** pym0 20, pym1 20, pb12 9, pb13q15 9, wm0 23
+  and wm1q15 23. Each also matches its QEMU reference.
+- **sql0, on board 1 (first on board 2):** 9 of 9 against the first reading and against the reference.
+- No ALLOWED cell occurred, and no exception was needed. Readings 0.
+- **Against the pre-registrations (1b71c48328b4, 60709f69bfc2): every reading holds.** On silicon these arms repeat
+  cell for cell, across boards.
+
+### Bitstream 2 N=2 phase 2, board 1: the plain pass arms, mruby and perl, pre-registered (2026-10-25 06:1x)
+
+- **The runs:**
+  - the re-read of fph, fpt, fca, fcs, fso, mph, mpt, wph and wpt (spec `records/reread-n2b-spec-b1.txt`). These were
+    first read on board 1, so this is a same-board repeat.
+  - then mruby stock, mruby Sublet and perl stock and Sublet.
+  - Roots: `t3-run-b2-dcc6daf6e-b1/n2/`.
+- **The grade:** n2-grade.py against the first reading, and matrix-compare.py for the release-differential matrices.
+  As controls, matrix-compare reads a matrix against itself as 11 of 11 and perl stock against perl Sublet as 7 of 11.
+- **Prediction:** every cell the same as the first reading. No exception is named, since none of these arms has a Q-31
+  cell. Readings 0.
