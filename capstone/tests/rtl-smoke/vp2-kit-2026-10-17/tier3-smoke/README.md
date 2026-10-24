@@ -8582,3 +8582,32 @@ Records: `records/b2bs-reread-b2.result-lines.txt` and `b2bs-newarms-b2.result-l
   with the wrapper budget now 43200 s (c4a8637e4dd9).
 - **Prediction:** verdicts-compare 32 of 32 against ref-b2/lt1, the ten capacity cells CAUGHT at the same sites as the
   first run; readings 0.
+
+### Bitstream 2, N=2: the headline arms read a second time, graded against the FIRST board reading, pre-registered (2026-10-25 20:3x)
+
+- **Why:** every corpus cell has so far run once per arm per bitstream, and every published result states that limit.
+  The runtime lane asks for a second pass on bitstream 2, starting with the arms that carry the headline. httpd,
+  ctypes and the Juliet remainder wait on the lead's decisions.
+- **The grade, `n2-grade.py`:** the second reading against the first, cell by cell on verdicts-compare's fields.
+  - A case named with `--cause-only` may differ in its cause alone, and only within the Q-31 causes {4, 13, 24}. It is
+    reported as ALLOWED, never silently.
+  - Controls (`records/n2-grade-controls.txt`): a reading against itself is 32 of 32. The batch lt1 against bitstream
+    2's lt1 is 10 different. The sq0d QEMU reference against the board is 3 allowed with the right prefixes, and 3
+    different without them or with the wrong one.
+- **The runs.** The same runners, each with an override root under `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/`
+  (`cpy-lt1-n2`, `cpy-lt0-n2`, `n2/rr-<tag>`, `n2/sql0`, `n2/pg-pools`). Most arms run on the OTHER board from their
+  first reading, so N=2 is also a board-to-board check.
+  - **board 1:** the lt1 repeat (running since 20:1x, pre-registered at 1b71c48328b4). Then the re-read of pym0, pym1,
+    pb12, pb13q15, wm0 and wm1q15 (spec `records/reread-n2-spec-b1.txt`; first read on board 2). Then sql0 (first read
+    on board 2).
+  - **board 2, after Juliet spatial:** the lt0 repeat. Then the re-read of sq0, pgc, pgm0 and pgm1 (first read on
+    board 1) and of sq1q15 and pgm1q15 (spec `reread-n2-spec-b2.txt`). Then pg-pools (first read on board 1).
+  - Each run is also compared with its QEMU reference by its own runner, as before.
+- **Predictions:**
+  - **every cell the same as the first reading;**
+  - the named exceptions, which may differ in cause alone: lt0 01 and sq0d 19, 20 and 22 (Q-31);
+  - **no `_12` exception applies:** no Juliet arm is in this set;
+  - a uaf-block or ctl-uaf control reading cause 13 (the silicon-only control behaviour, about 2.5% per control) changes
+    no verdict cell, and is reported where it appears;
+  - readings 0.
+  - **Any other difference is a finding about repeatability on silicon.**

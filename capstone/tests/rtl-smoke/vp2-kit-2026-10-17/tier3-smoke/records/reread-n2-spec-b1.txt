@@ -1,0 +1,8 @@
+# sanitized copy of the N=2 re-read spec rr-n2-b1 (sha256/16 0bb454bb06439ff5)
+# bitstream 2 N=2 re-read, board 1 (after the lt1 repeat): the board-2 first-reading arms pym, pb12/pb13q15, wm
+pym0|appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py|-|-|--arm virtual-malloc --build <mnt-hdd>/capstone/t3-images-r60/pym/cases-OFF --controls-build <mnt-hdd>/capstone/t3-images-r60/pym/controls-OFF
+pym1|appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py|-|-|--arm virtual-nested-pools --build <mnt-hdd>/capstone/t3-images-r60/pym/cases-ON --controls-build <mnt-hdd>/capstone/t3-images-r60/pym/controls-ON
+pb12|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/memcached/allocator-repros --arm virtual-malloc --prebuilt <mnt-hdd>/capstone/t3-images-r60/prebuilt/b12/cases --prebuilt-controls <mnt-hdd>/capstone/t3-images-r60/prebuilt/b12/controls
+wm0|appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py|-|-|--arm virtual-malloc --hosted-build <mnt-hdd>/capstone/t3-images-r60/wmem/cases-OFF --controls-hosted-build <mnt-hdd>/capstone/t3-images-r60/wmem/controls-OFF
+pb13q15|cases|<mnt-hdd>/capstone/wt-q15cw|/tmp/capstone/r322-1016/tmp|--corpus <mnt-hdd>/capstone/wt-q15cw/capstone/bug-corpora/memcached/allocator-repros --arm virtual-nested-pools --prebuilt <mnt-hdd>/capstone/t3-images-r60/q15/prebuilt/b13/cases --prebuilt-controls <mnt-hdd>/capstone/t3-images-r60/q15/prebuilt/b13/controls
+wm1q15|appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py|<mnt-hdd>/capstone/wt-cpyrec|-|--arm virtual-nested-pools --hosted-build <mnt-hdd>/capstone/t3-images-r60/wmem-q15/cases-ON --controls-hosted-build <mnt-hdd>/capstone/t3-images-r60/wmem-q15/controls-ON
