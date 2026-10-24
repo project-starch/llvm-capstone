@@ -8505,3 +8505,17 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
   that, with the cells read up to its last step.
 - **The same applies to lt0 if its wrapper times out at 10:43.**
 - **Rerunning:** any re-run of either arm gets `timeout 43200`.
+
+### Bitstream 2, results: postgres sql0 9 of 9, and cpython lt0 31 of 32, the one difference the pre-registered Q-31 cell (board 2, 2026-10-25)
+
+Records: `records/b2bs-sql0-b2.result-lines.txt` and `records/b2bs-cpy-lt0-b2.result-lines.txt`.
+- **sql0** (02:39-04:42, firmware 25,856,520 B): 9 of 9 cells as ref-b2/sql0, CAUGHT 2 and MISSED 7. Must-fire OK; readings 0.
+- **lt0** (04:43-10:40): CAUGHT 16, MISSED 13, infra 1 (13), not-reached 1, unattributed 1.
+  - **31 of 32 against ref-b2/lt0.** The one difference is case 01, CAUGHT at set_dealloc+284 with cause 4 where QEMU
+    reads 24. That is Q-31, as on the batch and as pre-registered.
+  - Case 18 is CAUGHT as predicted.
+  - **Case 09 reads dict_traverse**, the site the mremap image moves it to, as the addendum predicted. That is
+    consistent with the compiler lane's 2x2 (lane 2aa3682d8879).
+  - norandmaps is in the command line; readings 0.
+  - The arm finished 3 minutes inside its 6-hour wrapper budget, so no salvage was needed.
+- **Against the pre-registrations (0ff98de9789a, 5e06c7dec5e0, e73e4f84297e): every reading holds.**

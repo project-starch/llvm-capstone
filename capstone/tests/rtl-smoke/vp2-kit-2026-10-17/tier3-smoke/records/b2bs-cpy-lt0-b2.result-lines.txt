@@ -1,0 +1,8 @@
+# cpython lt0 (mremap relink 7b871db7) on bitstream 2, board 2 (tier3-cpy-b2-arm.sh): result lines, then verdicts-compare's non-SAME lines.
+CB lt0 BEGIN 04:43:00 board 2 kit bkit9-b2-nb2 booking 259
+CB lt0 ARM END rc=0 10:40:43 :: APPVM read rc=0 10:40:42 :: --- vp2-malloc (virtual-cpython): {'CAUGHT': 16, 'MISSED': 13, 'NO-READING:infra': 1, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 1}
+CB lt0 COMPARE vs reference rc=1 :: 31 of 32 cells the same
+CB lt0 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt0 DONE 10:40:43
+DIFF 01_gh-139071_heap-overflow-in-set-dealloc-setobject: reference ('CAUGHT', 'function', 24, 'set_dealloc', 284) board ('CAUGHT', 'function', 4, 'set_dealloc', 284)
+31 of 32 cells the same
