@@ -72,6 +72,7 @@ def parse(stdout, exit_status):
         # FAILRC and the cases' own stage reports: `<stage> rc=N`; N != 0 means a step failed.
         'rc_lines': [l.strip() for l in stdout.splitlines() if re.search(r'\brc=[1-9]', l)][:20],
         'tail': stdout.strip().splitlines()[-3:] if stdout.strip() else [],
+        'stdout': stdout[-16000:],
     }
 
 
