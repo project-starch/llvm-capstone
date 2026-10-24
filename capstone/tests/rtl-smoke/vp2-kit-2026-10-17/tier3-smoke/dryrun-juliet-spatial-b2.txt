@@ -1,0 +1,30 @@
+# tier3-juliet-spatial-b2.sh bd0d5c46b9751da9 dry run, 2026-10-25 04:44, against the REAL bitstream-2 reference: run.py/probe.py
+# stubbed (each writes the reference's own observations.json / probe.json; FLIP=s001 turns that census step into a clean exit),
+# judge.py stubbed; busy and the hub stubbed. obs-compare runs for real: 1513/1513 on the reference against itself, and the planted
+# step reads 1 different. The judge-field line is not a reading on a board.
+
+## ok
+JS run BEGIN 04:43:47 board 2 booking 52
+JS run END rc=0 04:43:47 :: 1 batches completed, 0 not :: batch000 completed=True
+JS probe BEGIN 04:43:47 board 2 booking 52
+JS probe END rc=0 04:43:47 :: 1 batches completed, 0 not :: batch000 completed=True
+JS judge rc=0 :: judge stub 
+JS verdicts: 755 {('CAUGHT', 'CORRECT', '28'): 716, ('MISSED', 'CORRECT', ''): 22, ('INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)', 'CORRECT', '28'): 4, ('INTRA-OBJECT:NO-READING:unexpected-cause', 'CORRECT', '24'): 4, ('NOT-TRIGGERED:sizeof-ptr', 'CORRECT', ''): 9}
+JS MISSED rows: 22 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_01
+JS COMPARE batch QEMU -> board: cases 755/755 differ 0
+JS OBS-COMPARE rc=0 :: 1513 of 1513 cells the same, 0 different, 0 tolerated
+JS readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board2 DONE 04:43:54
+
+## flip
+JS run BEGIN 04:43:54 board 1 booking 51
+JS run END rc=0 04:43:54 :: 1 batches completed, 0 not :: batch000 completed=True
+JS probe BEGIN 04:43:54 board 1 booking 51
+JS probe END rc=0 04:43:54 :: 1 batches completed, 0 not :: batch000 completed=True
+JS judge rc=0 :: judge stub 
+JS verdicts: 755 {('CAUGHT', 'CORRECT', '28'): 716, ('MISSED', 'CORRECT', ''): 22, ('INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)', 'CORRECT', '28'): 4, ('INTRA-OBJECT:NO-READING:unexpected-cause', 'CORRECT', '24'): 4, ('NOT-TRIGGERED:sizeof-ptr', 'CORRECT', ''): 9}
+JS MISSED rows: 22 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_01
+JS COMPARE batch QEMU -> board: cases 755/755 differ 0
+JS OBS-COMPARE rc=1 :: 1512 of 1513 cells the same, 1 different, 0 tolerated
+JS readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board1 DONE 04:44:00

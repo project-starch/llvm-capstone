@@ -6980,3 +6980,34 @@ built the same way: the compiler lane's batch-kit references, and for bitstream 
   That is a platform offset, and the board's launcher is a different binary.
 - The uaf control's silicon-only cause 13 is unchanged by bitstream 2: 2 and 8 of 200 on the two boards (2.5 %). The
   batch read 6 of 200 and the trees about 2.2 %.
+
+## The whole corpus on bitstream 2, both boards: every cell as the 18-bit QEMU twin, and the ten capacity cells now CAUGHT on silicon (caplifive_vp2c_dcc6daf6e, 2026-10-25)
+
+Folder: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/`, the README sections "The corpus on bitstream 2" and
+`records/b2bs-*.result-lines.txt`. Every arm was pre-registered before its boot, against the compiler lane's
+bitstream-2 references (the 18-bit twin qkit7-b2twin3-q8). Every one of those references equals its batch reference,
+except the lt0 and lt1 cells named below.
+
+| arm | board | result against its bitstream-2 reference |
+|---|---|---|
+| cpython lt1 (mremap relink) | 1 | 32 of 32: CAUGHT 27, against the batch bitstream's 17. All ten capacity cells are CAUGHT at the twin's sites |
+| cpython lt0 (mremap relink) | 2 | 31 of 32. Case 18 is CAUGHT (cause 28, mmap_ass_subscript). The one difference is Q-31 case 01 |
+| postgres sql0, pg-pools (trimmed) | 2, 1 | 9 of 9 each |
+| the 23-arm pass re-read | both | every field equal, except sq0d's three Q-31 cells (19, 20 and 22), as on the batch |
+| mruby stock / Sublet, perl stock / Sublet | 1 | 23/23, 23/23, 11/11, 11/11 |
+| xlang, plane (2 arms), sqlite capi | 2 | every cell as its reference |
+| Juliet temporal / spatial (juliet-obs-compare) | 1 / 2 | 726/735 with seeded 56/56 (the 9 are all rand-driven `_12` draws) / 1513/1513 |
+
+- **What bitstream 2 changes on silicon:** in the runtime lane's silicon tally (38 rows, 1,625 cells), exactly two
+  rows differ from the batch bitstream's.
+  - **cpython lt1:** CAUGHT 17 → 27, the ten cells the 16-bit table stopped.
+  - **cpython lt0:** CAUGHT 15 → 16, case 18, which the mremap relink lets reach its site.
+  - Every other row is identical in every count.
+- **lt1 was read from the boot's own transcript.** The boot completed (54 steps, `vbatch END rc=0`), but the runner's
+  6-hour wrapper budget expired during it. `tier3-appvm-salvage.sh` replays the driver's transcript through the
+  session tool's own parse, without touching the board. On a completed session it reproduces that session's read, 32
+  of 32.
+- **Q-31 (silicon raises cause 4 or 13 where QEMU raises 24, at the same site):** lt0 01 and sq0 19, 20 and 22. The
+  verdicts and sites are equal.
+- **Each arm is N=1 on this bitstream.** A second pass, graded cell for cell against these readings, is pre-registered
+  and running.

@@ -8346,3 +8346,243 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
   - batch 6 of 200;
   - bitstream 2: 10 of 400.
   It remains a silicon-side behaviour on the module's lazy-arena path, independent of these RTL changes.
+
+### The corpus on bitstream 2, first arms: cpython lt1 (board 1) and lt0 (board 2) on the mremap relinks, pre-registered (2026-10-25 02:3x, before the boots)
+
+- **Why:** the whole-corpus read on bitstream 2, beside the batch column. The compiler lane is producing the bitstream-2
+  references arm by arm (`batch-refs-b2/run-pass-b2.sh`, lane dd1f66a78455): run-pass-r60.sh with only the kits
+  swapped to the 18-bit twin qkit7-b2twin3-q8 / -nr, and lt0/lt1 on the application-mremap relinks.
+- **What runs:** `tier3-cpy-b2-arm.sh <board> <log> <lt1|lt0>`. It is tier3-cpy-batch-arm.sh on the board's norandmaps
+  bitstream-2 kit bkit9-b2-nb<board>, with:
+  - the build dirs t3-mremap/cpython-<tag>-mremap-build, images lt1 8bcc40cf and lt0 7b871db7;
+  - the reference ref-b2/<tag>, whose stamp must name the twin's qemu 708bbff5 and module 33254735, the image, runner
+    dc606bd1 and appvm-arm 666d920e, and whose SWITCHES must read norandmaps=ON ... generations=ON ... index=18;
+  - verdicts-compare.py as the grade;
+  - output `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/cpy-<tag>`.
+  - Dry run: `dryrun-cpy-b2-arm.txt`. lt0 refuses until its reference lands.
+- **Predictions:**
+  - **lt1 (board 1): verdicts-compare 32 of 32 against ref-b2/lt1**, which reads CAUGHT 27, MISSED 3, not-reached 1
+    and unattributed 1. Against the batch, exactly the ten capacity cells moved, each now CAUGHT at its declared site:
+    02 memcpy, 10 l_divmod, 13 unicode_fromformat_write_str, 18 mmap_ass_subscript, 19 fnv, 23 memchr, 27
+    slot_nb_add, 28 _PyEval_Vector, 30 PyObject_RichCompare and 31 odict_copy.
+  - **lt0 (board 2): verdicts-compare equal to ref-b2/lt0** once it lands. The lane predicts it equals the batch
+    reference except lt0 18, now cause 28 in mmap_ass_subscript. Case 01 may read cause 4 on silicon where QEMU reads
+    24 (Q-31, as on the batch), and is reported as such.
+  - norandmaps is in the command line; the readings are 0.
+  - These are session runs: module high_water is the session maximum, so they are graded on verdicts only.
+
+### The corpus on bitstream 2: postgres sql0 (board 2, before lt0) and pg-pools (when its trimmed reference lands), pre-registered (2026-10-25 02:4x)
+
+- **What runs:** `tier3-pg-b2-arm.sh <board> <log> <sql0|pg-pools>`. It is tier3-pg-batch-arm.sh on the bitstream-2
+  kits bkit9-b2-b<board> and -mb<board> (the measure-only bake first, under the 26,000,000 B cap), with:
+  - sql0 against `batch-refs-b2/ref-b2/sql0/bundle`: the twin; trimmed fixture 956173e0; image cf61cb43; runner
+    7ce203f9;
+  - pg-pools against the TRIMMED `batch-refs-b2/pgp-trim/bundle` (lane ffd69573f751). The untrimmed ref-b2/pg-pools
+    is not the board's staging.
+  - Each stamp must name the twin's qemu and module, and SWITCHES with index=18.
+  - Results are filed under `results/2026-10-25-b2-dcc6daf6e-b<board>`. Dry run: `dryrun-pg-b2-arm.txt`.
+- **The order on board 2:** sql0 now. cpython lt0 follows once both sql0 has ended and lt0's reference has landed.
+  (The waiter that started lt0 on its reference alone was stopped before anything ran, so the two cannot collide.)
+- **Predictions:**
+  - **sql0: 9 of 9 as ref-b2/sql0** (CAUGHT 2, MISSED 7, equal to the batch);
+  - **pg-pools: 9 of 9 as the trimmed bitstream-2 reference** (predicted equal to pgp-trim/bundle);
+  - the measured firmware under the cap; the must-fire lines; the readings 0.
+
+### Addendum to the lt0 pre-registration, before its boot (2026-10-25 03:1x): case 09's site moved in the reference
+
+- **What landed:** the compiler lane's ref-b2/lt0 reads CAUGHT 16, MISSED 13, infra 1 (13), not-reached 1 and
+  unattributed 1. Against the batch reference, two cells moved:
+  - 18 became CAUGHT, cause 28 in mmap_ass_subscript, as predicted;
+  - 09 (gh-140802), NOT predicted: CAUGHT with cause 24 on both sides, by control, but its function moved from
+    _PyObject_GetMethod to dict_traverse.
+- **Status:** the lane is separating the two variables (the 18-bit kit and the mremap relink) with a 2x2. Until that
+  reads, 09's site is unexplained.
+- **Prediction for the board, unchanged:** every cell equal to ref-b2/lt0, so 09 reads CAUGHT at dict_traverse. If the
+  board's 09 reads _PyObject_GetMethod instead, that is reported as a site difference with the verdict unchanged. Either
+  way it is evidence for the lane's 2x2, not a reading about R-61 or the index.
+- **Case 01:** may still read cause 4 against QEMU's 24 (Q-31).
+
+### The corpus on bitstream 2: the 23-arm re-read on both boards, pre-registered (2026-10-25 04:1x, before the boots)
+
+- **Why:** the pass's re-read arms on bitstream 2. The compiler lane's references for all 23 tags have landed in
+  `batch-refs-b2/ref-b2/<tag>`, each equal to its batch reference (MOVE 0 on every one).
+- **What runs:** `tier3-reread-b2.sh <board> - x <spec> <log>`. It is tier3-reread-batch.sh on bkit9-b2-b<board>,
+  against ref-b2, with the batch run's two specs unchanged (rr-b1 27beeb2c, rr-b2 f58053f1):
+  - board 1: fph fpt fca fcs fso mph mpt wph wpt pgc pgm0 pgm1 sq0, after its pg-pools;
+  - board 2: pym0 pym1 pb9 pb12 pb10 wm0 pb13q15 pgm1q15 wm1q15 sq1q15, after its cpython lt0.
+  - Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/rr-<tag>`. Graded by compare-pilot.py and
+    verdicts-compare.py.
+  - Dry run: `dryrun-reread-b2.txt`, against the real ref-b2 trees. Every tag's reference resolves: 18 and 15 compare
+    lines, rc 0.
+- **Predictions:** every cell's verdict equals ref-b2, and every field equals it, except the three Q-31 cells the batch
+  read in sq0d:
+  - 19 and 20: cause 4 at nodeRelease+144 where QEMU reads 24;
+  - 22: cause 13 at editDist3FindLang+244 where QEMU reads 24.
+  So sq0d reads "3 of 6" under verdicts-compare, with compare-pilot's DIFF lines naming only the cause.
+  Any other difference is a finding. Readings 0 everywhere.
+
+### The corpus on bitstream 2: mruby, perl, capi, xlang and plane, pre-registered (2026-10-25 04:3x, before the boots)
+
+- **Why:** the arms beyond the pass, on bitstream 2. The compiler lane's REST-A references in `batch-refs-b2/rest` have
+  all landed, each equal to its batch reference: mruby stock and Sublet 23/23, perl stock and Sublet trimmed 11/11,
+  capi 19/19, xlang 15/15 and 13/13, plane 1/1 on each arm. Every image hash equals the batch reference's.
+- **Runners**, each its batch version on the bitstream-2 kits with the reference swapped:
+  - `tier3-mp-stock-b2.sh`, `tier3-mp-sublet-b2.sh` and `tier3-mp-perl-b2.sh`. The batch stamp still pins the
+    inputs. REST-A must name the twin (qemu 708bbff5, module 33254735), the arm's STAMP with the same runner and
+    image, a clean read and "differ 0", and the reference's collected images must equal the batch reference's.
+  - `tier3-newarms-b2.sh`. Each reference must record the same runner and module 33254735, and images-gate.py
+    checks against those references.
+  - Dry runs: `dryrun-mp-b2.txt` and `dryrun-newarms-b2.txt`, against the real references. A planted cell fires the
+    comparator, a failed control reads VOID, the real image gate refuses an empty bake, and an over-cap measure
+    refuses.
+- **Order:**
+  - board 1, after its re-read: mruby stock, mruby Sublet, then perl stock and Sublet;
+  - board 2, after its re-read: the new arms (xlang, plane-malloc, plane-nested, then capi in groups of 3), each
+    preceded by its measure-only bake under the 26,000,000 B cap.
+  - Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/`.
+- **Predictions:**
+  - mruby stock and Sublet: 23 of 23 each against the bitstream-2 reference, the control "smoke ok";
+  - perl stock and Sublet: 11 of 11 each, controls eval and shim True;
+  - xlang: verdicts-compare 15/15 and 13/13. compare-pilot reads repro 4 of 15 on its no-image cells, as on the batch.
+  - plane: 1/1 on each arm;
+  - capi: verdicts-compare equal in every group. compare-pilot reads 13-16 as 3 of 4, as on the batch.
+  - Every measured firmware under the cap; readings 0.
+  - The batch read every one of these cells as QEMU, so any difference is a finding.
+
+### The corpus on bitstream 2: Juliet temporal, pre-registered (2026-10-25 04:3x, before its boots)
+
+- **The reference:** the compiler lane's REST-B reference `batch-refs-b2/rest/juliet-temporal` reads 366/366 equal to
+  juliet-r60/judge-batch2 on verdict, good, cause, site and strict. It uses the same r60 builds (census 734, seeded 55)
+  and the same run.py 4b663651, probe.py d6200b39 and judge.py 93aa5ad9.
+- **What runs:** `tier3-juliet-b2.sh <board> <log>`, which is tier3-juliet-batch.sh on bkit9-b2-b<board>.
+  - The batch RESULT still pins the runners. REST-B must name the twin, the same runners and "366/366 differ 0".
+  - **The grade is juliet-obs-compare.py** against the bitstream-2 reference's own run/ and run-seeded/ observations.
+    judge.py's fields cannot read CAUGHT on silicon.
+  - Dry run: `dryrun-juliet-b2.txt`, with obs-compare on the real reference: 735/735 and 56/56 against itself, and a
+    planted step fires.
+- **Order:** board 1, after its mruby and perl arms. Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/juliet-temporal`.
+- **Predictions, from the batch read (729 of 735, 56 of 56):**
+  - census: every cell the same except the rand-driven `_12` draws, which the seeded set scores, and the uaf
+    control's silicon-only cause 13 (0 to 2 of the 12 ctl-uaf steps at 2.5%; the batch had 1);
+  - **seeded: 56 of 56;**
+  - readings 0.
+  - Any other different cell is a finding.
+
+### The corpus on bitstream 2: the Juliet spatial sample, pre-registered (2026-10-25 04:4x, before its boots)
+
+- **The reference:** the compiler lane's REST-B reference `batch-refs-b2/rest/juliet-spatial` reads 755/755 equal to
+  juliet-sp/batch2 (build.json 806cc24a, manifest 03f048a1).
+- **What runs:** `tier3-juliet-spatial-b2.sh <board> <log>`, which is tier3-juliet-spatial-batch.sh on bkit9-b2-b<board>.
+  - REST-B must name the twin, the same runners and "755/755 differ 0".
+  - **The grade, now built into the runner, is juliet-obs-compare.py** against the reference's run/observations.json,
+    with the three value-dependent CWE170 cases tolerated, as every spatial board run was graded. The judge-field
+    compare is kept and is not a reading.
+  - Dry run: `dryrun-juliet-spatial-b2.txt`. Against itself the reference reads 1513/1513, and a planted step fires.
+- **Order:** board 2, after its new arms. Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b2/juliet-spatial`.
+- **Prediction:** 1513 of 1513 cells the same, as the batch read, with the tolerated CWE170 cases reported; readings 0.
+  Any different cell is a finding.
+
+### Bitstream-2 cpython lt1: the wrapper's 6-hour budget killed the read, not the boot; a salvage read, pre-registered (2026-10-25 08:4x)
+
+- **What happened:** board 1's lt1 arm (tier3-cpy-b2-arm.sh, from 02:36) ended at 08:36 with `ARM END rc=124` and "NO
+  DATA: board 0 cells". Its `timeout 21600` killed tier3-appvm-arm.sh during the boot. The board driver runs in its own
+  process group and ran on; at 08:40 it had passed step 31 of 32 and was still writing its transcript.
+  - The chained pg-pools and re-read then refused with "board 1 is busy", before any directory or boot. The later
+    chained arms on both boards were stopped before they ran.
+- **Why the budget was short:** the budget was sized on the batch board run (5 h 07 min). On bitstream 2 the ten
+  capacity cells run further. The twin's own QEMU reference took 63 min against the batch reference's 51, which
+  predicts about 6 h 18 min on the board. The budget lesson is already recorded; this runner did not apply it.
+  - lt0 (board 2, from 04:43) has the same budget against a batch run of 5 h 56 min.
+- **The salvage**, `tier3-appvm-salvage.sh`, touches no board. Once the driver has exited:
+  - it copies the session without stage/ and guest/;
+  - it reruns appvm-session.py's own boot parse with BOARDVM_STUB_TRANSCRIPT set to the driver's board.txt;
+  - it fills the firmware record from guest/firmware.txt;
+  - the runner then reads the copy into out-salvage.
+- **Positive control:** the completed batch lt1 session, salvaged the same way, reads 32 of 32 cells the same as its own
+  read (`records/salvage-control-lt1.txt`).
+- **The grade, unchanged from the lt1 pre-registration:** verdicts-compare 32 of 32 against ref-b2/lt1, with the ten
+  capacity cells CAUGHT at their declared sites. A salvage that finds the boot incomplete (no vbatch END) is reported as
+  that, with the cells read up to its last step.
+- **The same applies to lt0 if its wrapper times out at 10:43.**
+- **Rerunning:** any re-run of either arm gets `timeout 43200`.
+
+### Bitstream 2, results: postgres sql0 9 of 9, and cpython lt0 31 of 32, the one difference the pre-registered Q-31 cell (board 2, 2026-10-25)
+
+Records: `records/b2bs-sql0-b2.result-lines.txt` and `records/b2bs-cpy-lt0-b2.result-lines.txt`.
+- **sql0** (02:39-04:42, firmware 25,856,520 B): 9 of 9 cells as ref-b2/sql0, CAUGHT 2 and MISSED 7. Must-fire OK; readings 0.
+- **lt0** (04:43-10:40): CAUGHT 16, MISSED 13, infra 1 (13), not-reached 1, unattributed 1.
+  - **31 of 32 against ref-b2/lt0.** The one difference is case 01, CAUGHT at set_dealloc+284 with cause 4 where QEMU
+    reads 24. That is Q-31, as on the batch and as pre-registered.
+  - Case 18 is CAUGHT as predicted.
+  - **Case 09 reads dict_traverse**, the site the mremap image moves it to, as the addendum predicted. That is
+    consistent with the compiler lane's 2x2 (lane 2aa3682d8879).
+  - norandmaps is in the command line; readings 0.
+  - The arm finished 3 minutes inside its 6-hour wrapper budget, so no salvage was needed.
+- **Against the pre-registrations (0ff98de9789a, 5e06c7dec5e0, e73e4f84297e): every reading holds.**
+
+### Bitstream 2, result: cpython lt1 32 of 32 by the salvage read, and the ten capacity cells are CAUGHT on silicon (board 1, 2026-10-25)
+
+Record: `records/b2bs-cpy-lt1-b1.result-lines.txt`.
+- **The boot:** the driver exited at 08:54. Its transcript holds all 54 steps and `vbatch END rc=0`; the boot completed.
+  The salvage (pre-registered at 460edecc2e58, positive control 32 of 32) parsed and read it.
+- **The tally** is CAUGHT 27, MISSED 3, not-reached 1, unattributed 1, as ref-b2/lt1. The batch bitstream's board read
+  CAUGHT 17 and infra 4.
+- **Against the reference: verdicts-compare 32 of 32 cells the same.** Every capacity cell is CAUGHT at its declared site:
+  - 02 memcpy and 19 fnv, both by control;
+  - 10 l_divmod, 13 unicode_fromformat_write_str and 18 mmap_ass_subscript, cause 28;
+  - 23 memchr, 27 slot_nb_add, 28 _PyEval_Vector, 30 PyObject_RichCompare and 31 odict_copy, cause 25.
+  The batch bitstream's 16-bit table had stopped these ten cells.
+- norandmaps is in the command line; readings 0.
+- **Against the pre-registration (5e06c7dec5e0): every reading holds.** The only process failure was the wrapper budget.
+
+### Bitstream 2, results on board 1: pg-pools, the 13-arm re-read, mruby, perl and Juliet temporal, every reading as pre-registered (2026-10-25 08:55-19:59)
+
+Records: `records/b2bs-pg-pools-b1.result-lines.txt`, `b2bs-reread-b1.result-lines.txt`, `b2bs-mp-b1.result-lines.txt`
+and `b2bs-juliet-temporal-b1.result-lines.txt`.
+- **pg-pools (trimmed):** 9 of 9 as the bitstream-2 trimmed reference: CAUGHT 5, MISSED 2, unattributed 2. Fixture
+  956173e0, image dc2a1356, must-fire OK, readings 0.
+- **The re-read, 13 arms:** every arm is equal in every field, except sq0d's three pre-registered Q-31 cells:
+  - fph 25, fpt 13, fca 13, fcs 13, fso 9, mph 9, mpt 3, wph 12, wpt 10, pgc 5, pgm0 5 and pgm1 5;
+  - sq0a-c and sq0e at 6 each, sq0f 3;
+  - sq0d 3 of 6. Cells 19 and 20 read cause 4 at nodeRelease+144 and cell 22 reads cause 13 at
+    editDist3FindLang+244, where QEMU reads 24. The verdicts and sites are equal, exactly as on the batch.
+  - Readings 0 throughout.
+- **mruby stock:** 23 of 23 (fault 20, completed 3). **mruby Sublet:** 23 of 23 (fault 23). Both read "control smoke ok".
+- **perl stock:** 11 of 11. **perl Sublet:** 11 of 11. Controls eval and shim True on both.
+- **Juliet temporal**, graded by juliet-obs-compare:
+  - census **726 of 735**. The 9 differences are all rand-driven `_12` draws, both ways (5 on the batch). None is the
+    uaf control: its cause 13 did not occur in these 12 steps.
+  - **seeded 56 of 56**, which scores the `_12` draws;
+  - 14 boot transcripts, readings 0.
+  - The judge-field line (366 "differ") is judge.py's no-revoked-line on silicon and is not a reading.
+- **Against the pre-registrations (0ff98de9789a, bdbc8cd093f5, b0d039c0f986, 1bf8e9723822): every reading holds.**
+
+### Bitstream 2, results on board 2: the 10-arm re-read and the new arms, every reading as pre-registered (2026-10-25 10:41-15:57)
+
+Records: `records/b2bs-reread-b2.result-lines.txt` and `b2bs-newarms-b2.result-lines.txt`.
+- **The re-read, 10 arms, every cell equal in every field:**
+  - pym0 20, pym1 20, pb9 4, pb12 9, pb10 4, wm0 23, pb13q15 9, pgm1q15 5 and wm1q15 23;
+  - sq1q15a-f: 6, 6, 6, 6, 6 and 3.
+  - Readings 0.
+- **New arms:**
+  - **xlang:** verdicts-compare 15 of 15 (repro) and 13 of 13 (lua-cdp). compare-pilot reads repro 4 of 15 on its
+    no-image cells, as on the batch.
+  - **plane:** 1 of 1 on each arm.
+  - **capi:** verdicts-compare equal in all six groups. compare-pilot reads 13-16 as 3 of 4, as on the batch.
+  - Every measured firmware is under the cap: xlang 19,565,064 B, plane 17,467,912 B, capi 25,856,520 B.
+  - The rows 13-16 boot's pc=0 count of 1 is row 13's own predicted `cause=12 pc=0x0` on
+    row13_cpython_deleted_rowfactory, as on the batch. Other readings are 0.
+- **Against the pre-registrations (bdbc8cd093f5, b0d039c0f986): every reading holds.**
+
+### Bitstream 2, result: the Juliet spatial sample 1513 of 1513 (board 2, 2026-10-25 15:57-22:31)
+
+Record: `records/b2bs-juliet-spatial-b2.result-lines.txt`.
+- **juliet-obs-compare against the bitstream-2 reference: 1513 of 1513 cells the same, 0 different.** The three
+  tolerated CWE170 cases also read as QEMU.
+- All 24 batches completed; 25 boot transcripts, readings 0.
+- The judge-field line (720 "differ") is judge.py's no-oob-line on silicon and is not a reading.
+- **Against the pre-registration (989c9463fd95): the reading holds.**
+- **With this, every arm of the corpus has a bitstream-2 silicon reading.** In the silicon tally (the runtime lane's
+  format, 38 rows and 1,625 cells), only two rows differ from the batch bitstream's:
+  - cpython lt1: CAUGHT 17 → 27, the ten capacity cells;
+  - cpython lt0: CAUGHT 15 → 16, case 18 on the mremap relink.

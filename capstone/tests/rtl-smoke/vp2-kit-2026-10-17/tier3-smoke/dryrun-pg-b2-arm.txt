@@ -1,0 +1,13 @@
+# tier3-pg-b2-arm.sh cedae15eee267e0c dry run, 2026-10-25 02:38: the runner, its QEMU check, busy and scoring stubbed; BUNDLE the bundle the stub returns.
+## sql0
+PG MEASURE: firmware 25000000 B against 26000000
+T3PG dry-sql0 BEGIN 02:38:19
+T3PG dry-sql0 END 02:38:19 rc=0 :: --- stub: arm virtual-malloc image postgres-lt0
+PG inputs as recorded: fixture 956173e054762e91, image cf61cb4333d35cb6
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x0
+SCORE-STUB dry-sql0 <mnt-hdd>/capstone/batch-refs-b2/ref-b2/sql0/bundle <scratch>/pgarm/b2-r-sql0 <scratch>/pgarm/b2-sql0.out
+PG DONE 02:38:19
+## pgp
+PG STOP: the reference's stamp, switches or bundle
+# (pg-pools refuses: its trimmed bitstream-2 reference had not landed)
