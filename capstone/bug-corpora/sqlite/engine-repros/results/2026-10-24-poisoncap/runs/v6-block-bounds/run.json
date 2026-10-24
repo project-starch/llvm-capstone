@@ -1,0 +1,23 @@
+{
+ "arm": "block-bounds",
+ "what": "build-virtual.py --sublet --block-bounds: the same port with memsys5's stock power-of-two rounding (ports/sqlite/sublet/sublet-block-bounds.py); every Sublet lifetime kept",
+ "images_sha256_of_sha256sums": "034e347d09d667e81e24d1b9f89c4a0679295e0f759c1b5142f5ba28bca203b3",
+ "runner": "ports/sqlite/repro322/run-virtual-staged.py (one run-staged.py boot, snapshot class, one QEMU domain per arm)",
+ "platform_sha256": {
+  "qemu-system-riscv64": "28b9ae0fb42adb9f97477ef9d1267dfcb411b7bf6d5753173444da09f894f42c",
+  "fw_jump.elf": "4dd4a2ade361a8bdb9cc45aeca02c6b7309b60d1e8701c2a4ed91c117a495f16",
+  "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "capstone-vexec": "55cd79761ccf368b501f1d2b90b719bfd978fd8b2a85e698379ae8cc6cc7d7ea",
+  "capstone_vm.ko": "b41ad02ded00ec73b7dd696c3e46d4df15380d6c925de484d053f1f0af124901"
+ },
+ "cpu": "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,svadu=false,x-capstone-supervisor-slots=32",
+ "compiler_sha256": "ee5526b6a9db24604efe8ad917c8be5f75baf670083edeeb5faf8250a7ef738e",
+ "runtime_sha256": "e667813a135d8e7fb12220b440b51dee6d8d1b1cefdfa5373e5ad2ec1b0ce694",
+ "libc_sha256": "1fc697575cc7cd005579698245b699b11cffbc56780934b74f211165810a8e53",
+ "musl_headers": "the dev-v6 control SDK's sdk.json names a musl tree that no longer exists; the build used the compiler kit's musl-1.2.5 tree instead, whose include/ and obj/include/ are identical to two other surviving copies (diff -r empty); only arch/capstone64/malloc_capstone.h, a mallocng-internal header, differs between copies",
+ "amalgamation_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+ "cases": "the 25 cases whose matrix axis is temporal (00-24), after the two controls",
+ "finished_local": "2026-10-24T18:58+08:00",
+ "superseded_boot": "a first boot of each arm (same images) recorded no fault lines: the launcher writes its fault record only to a terminal or to CAPSTONE_FAULT_RECORD (runtime/linux/exec.c), and the runner redirected stderr; the runner now sets CAPSTONE_FAULT_RECORD and fails on a nonzero exit without a record. That boot's exit codes equal this one's in every row."
+}
