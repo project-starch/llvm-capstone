@@ -8481,3 +8481,27 @@ Records: `records/uaf-repeat-dm-b2bs-b1.result-lines.txt` and `records/uaf-repea
 - **Order:** board 2, after its new arms. Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b2/juliet-spatial`.
 - **Prediction:** 1513 of 1513 cells the same, as the batch read, with the tolerated CWE170 cases reported; readings 0.
   Any different cell is a finding.
+
+### Bitstream-2 cpython lt1: the wrapper's 6-hour budget killed the read, not the boot; a salvage read, pre-registered (2026-10-25 08:4x)
+
+- **What happened:** board 1's lt1 arm (tier3-cpy-b2-arm.sh, from 02:36) ended at 08:36 with `ARM END rc=124` and "NO
+  DATA: board 0 cells". Its `timeout 21600` killed tier3-appvm-arm.sh during the boot. The board driver runs in its own
+  process group and ran on; at 08:40 it had passed step 31 of 32 and was still writing its transcript.
+  - The chained pg-pools and re-read then refused with "board 1 is busy", before any directory or boot. The later
+    chained arms on both boards were stopped before they ran.
+- **Why the budget was short:** the budget was sized on the batch board run (5 h 07 min). On bitstream 2 the ten
+  capacity cells run further. The twin's own QEMU reference took 63 min against the batch reference's 51, which
+  predicts about 6 h 18 min on the board. The budget lesson is already recorded; this runner did not apply it.
+  - lt0 (board 2, from 04:43) has the same budget against a batch run of 5 h 56 min.
+- **The salvage**, `tier3-appvm-salvage.sh`, touches no board. Once the driver has exited:
+  - it copies the session without stage/ and guest/;
+  - it reruns appvm-session.py's own boot parse with BOARDVM_STUB_TRANSCRIPT set to the driver's board.txt;
+  - it fills the firmware record from guest/firmware.txt;
+  - the runner then reads the copy into out-salvage.
+- **Positive control:** the completed batch lt1 session, salvaged the same way, reads 32 of 32 cells the same as its own
+  read (`records/salvage-control-lt1.txt`).
+- **The grade, unchanged from the lt1 pre-registration:** verdicts-compare 32 of 32 against ref-b2/lt1, with the ten
+  capacity cells CAUGHT at their declared sites. A salvage that finds the boot incomplete (no vbatch END) is reported as
+  that, with the cells read up to its last step.
+- **The same applies to lt0 if its wrapper times out at 10:43.**
+- **Rerunning:** any re-run of either arm gets `timeout 43200`.

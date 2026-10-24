@@ -1,0 +1,5 @@
+# tier3-appvm-salvage.sh da38371851c5f81a positive control, 2026-10-25 08:40: the COMPLETED batch lt1 board session
+# (t3-run-batch-c721c1a2a-b1/cpy-lt1) copied with its phase reset to collect, salvaged, and its salvage read compared with that run's own read.
+session <mnt-hdd>/capstone/salvage-ctl-lt1/session-salvage: 54/54 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/salvage-ctl-lt1/session-salvage/guest/board.txt; phase read
+--- vp2-nested-pools (virtual-cpython-pools): {'CAUGHT': 17, 'MISSED': 3, 'NO-READING:infra': 4, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 7}
+verdicts-compare.py <batch lt1>/out <control>/out-salvage: 32 of 32 cells the same
