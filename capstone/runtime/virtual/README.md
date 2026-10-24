@@ -397,6 +397,44 @@ reschedule, a signal, an expired budget or `SIGKILL` at four points of
 follows an injection, that pins and fault counts match uninjected runs, that GUP is
 never asked for more than 16 pages, and that every `FOLL_PIN` pin is released.
 
+The launcher validates and loads an image without copying the file first. It
+opens the image read-only and asks the module (`CV_IMAGE`) to deny writers to
+it, as Linux does for a running executable: a launch while the image is open
+for writing fails with `ETXTBSY`, and so does opening a running image for
+writing, the application's own delegated `open` included, until the process
+ends. This holds where Linux keeps one inode per file (tmpfs, ext2/3/4,
+btrfs, xfs, erofs, squashfs). A memfd must be sealed against writing, growing
+and shrinking, because its own writable descriptor is not counted. On any
+other filesystem (9p, NFS, FUSE, overlayfs), and for exec in place, the image
+is a sealed memfd copy; the board's initramfs root is `rootfs`, not on the
+list, so an image under `/` on the board runs from the copy too. The launcher
+maps the file once, validates that mapping and loads from it, so the bytes
+checked are the bytes loaded. What the denial does not stop is a writer below
+the VFS: a raw write to the block device, a loop device whose backing file is
+written, a writeback error followed by eviction. Linux's protection of its own
+executables stops none of those either. Module and launcher are one revision:
+with a module that has no `CV_IMAGE`, every launch fails and says so; there is
+no fallback to the copy. `run-exec.py` checks the denial from the guest, with
+`exec-contract.c` built like `node.dom` and `memfd-launch.c` built static for
+the guest: on tmpfs, on ext4 over a loop device (a writer through a hard link
+and a shared writable mapping older than the launch are both refused, and a
+second `CV_IMAGE` on the same context answers `EBUSY`), in memfds in three
+seal states, and on ramfs and 9p, where the sealed copy is proven to be what
+runs:
+
+```sh
+python3 capstone/runtime/virtual/run-exec.py ... --application "$out/exec.dom" \
+  --helper <memfd-launch>
+```
+
+`load()` reads the program and section headers again from the page-cache mapping after the
+validation, so a change below the VFS (the residual above) could make them garbage. It reads each
+field once into a local and checks it against the file size and the reservation before use.
+`test-load-bounds.sh` is a host test of that: it stubs the validation out and gives `load()` twelve
+images that are each wrong in one header field; every one must be refused with `ENOEXEC`, and an
+unmodified image must load. Run it with another `exec.c` as its argument to see the cases fail on
+an older `load()`.
+
 ## Qualification and limits
 
 The growing-table [qualification manifest](results/node-growth/qualification.json)

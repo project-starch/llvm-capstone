@@ -435,29 +435,67 @@ static int die(const char *what)
     fprintf(stderr, "capstone-vexec: %s: %s\n", what, strerror(errno));
     cleanup(); return 125;
 }
-static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *stack)
+/* Whether the NUL-terminated section name at `at` in a string table of `len` bytes is `want`,
+ * without reading past the table. */
+static int section_named(const char *names, uint64_t len, uint64_t at, const char *want)
+{
+    size_t n = strlen(want) + 1;
+    return at <= len && n <= len - at && !memcmp(names + at, want, n);
+}
+/* Map the image, validate the mapping and load from it. One mapping, so the
+ * headers and spans checked are the ones indexed below; a second mapping would
+ * trust a check made on other pages. The denial (CV_IMAGE) keeps every writer
+ * Linux counts out from before this until the process ends; a writer below
+ * the VFS (a raw block device, a loop device's backing file) is not stopped. */
+static int load(int fd, struct capstone_application_descriptor_v2 *desc,
+                void **image, size_t *bytes, uintptr_t *entry, size_t *stack)
 {
     struct stat st;
     if (fstat(fd, &st)) return -1;
+    if (!S_ISREG(st.st_mode) || st.st_size < (off_t)sizeof(Elf64_Ehdr) ||
+        st.st_size > 512 * 1024 * 1024) { errno = ENOEXEC; return -1; }
     unsigned char *raw = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
     if (raw == MAP_FAILED) return -1;
-    /* The shared image inspector has validated every header and file span. */
+    if (capstone_application_validate(raw, st.st_size, desc)) {
+        int error = errno;
+        munmap(raw, st.st_size); errno = error; return -1;
+    }
+    /* Everything below is read from the mapping again after the validation. A change below
+     * the VFS in between (the residual named above) may make these bytes garbage; it must not
+     * make them an out-of-bounds read or write in this process. So each header field is read
+     * ONCE into a local, checked against the file size before it is used as an offset, count
+     * or length, and the checked local is what every later step uses. */
+    const uint64_t size = st.st_size;
     const Elf64_Ehdr *h = (void *)raw;
-    const Elf64_Phdr *ph = (void *)(raw + h->e_phoff);
-    const Elf64_Shdr *sh = (void *)(raw + h->e_shoff);
-    const char *names = (void *)(raw + sh[h->e_shstrndx].sh_offset);
+    const uint64_t phoff = h->e_phoff, shoff = h->e_shoff, entry_va = h->e_entry;
+    const unsigned phnum = h->e_phnum, shnum = h->e_shnum, shstr = h->e_shstrndx;
+    if (phoff > size || phnum > (size - phoff) / sizeof(Elf64_Phdr) ||
+        shoff > size || shnum > (size - shoff) / sizeof(Elf64_Shdr) || shstr >= shnum) {
+        munmap(raw, st.st_size); errno = ENOEXEC; return -1;
+    }
+    const Elf64_Phdr *ph = (void *)(raw + phoff);
+    const Elf64_Shdr *sh = (void *)(raw + shoff);
+    const uint64_t names_at = sh[shstr].sh_offset, names_len = sh[shstr].sh_size;
+    if (names_at > size || names_len > size - names_at) {
+        munmap(raw, st.st_size); errno = ENOEXEC; return -1;
+    }
+    const char *names = (void *)(raw + names_at);
     uint64_t low = UINT64_MAX, high = 0;
     int virtual = 0;
     *stack = 1u << 20;
-    for (unsigned i = 0; i < h->e_phnum; ++i) if (ph[i].p_type == PT_LOAD) {
-        if (ph[i].p_vaddr < low) low = ph[i].p_vaddr;
-        if (ph[i].p_vaddr + ph[i].p_memsz > high) high = ph[i].p_vaddr + ph[i].p_memsz;
+    for (unsigned i = 0; i < phnum; ++i) {
+        const Elf64_Phdr p = ph[i];
+        if (p.p_type != PT_LOAD) continue;
+        if (p.p_vaddr < low) low = p.p_vaddr;
+        if (p.p_vaddr + p.p_memsz > high) high = p.p_vaddr + p.p_memsz;
     }
-    for (unsigned i = 0; i < h->e_shnum; ++i) {
+    for (unsigned i = 0; i < shnum; ++i) {
         uint64_t v[3];
-        if (sh[i].sh_type != SHT_PROGBITS) continue;
-        if (!strcmp(names + sh[i].sh_name, ".capstone_virtual") && sh[i].sh_size == 8) {
-            memcpy(v, raw + sh[i].sh_offset, 8);
+        const Elf64_Shdr s = sh[i];
+        if (s.sh_type != SHT_PROGBITS) continue;
+        if (section_named(names, names_len, s.sh_name, ".capstone_virtual") && s.sh_size == 8 &&
+            s.sh_offset <= size && 8 <= size - s.sh_offset) {
+            memcpy(v, raw + s.sh_offset, 8);
             virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V2 || v[0] == CV_IMAGE_MAGIC_V3;
             local_malloc = v[0] == CV_IMAGE_MAGIC;
             /* v5 is refused rather than run: its mallocng hands out exact object bounds, which
@@ -465,8 +503,9 @@ static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *s
              * slot's in-band header. Rebuilding is the only fix. */
             if (v[0] == CV_IMAGE_MAGIC_V5) virtual = 0;
         }
-        if (!strcmp(names + sh[i].sh_name, ".capstone_domreq") && sh[i].sh_size == 24) {
-            memcpy(v, raw + sh[i].sh_offset, 24);
+        if (section_named(names, names_len, s.sh_name, ".capstone_domreq") && s.sh_size == 24 &&
+            s.sh_offset <= size && 24 <= size - s.sh_offset) {
+            memcpy(v, raw + s.sh_offset, 24);
             *stack = rounded(v[2]);
         }
     }
@@ -475,9 +514,22 @@ static int load(int fd, void **image, size_t *bytes, uintptr_t *entry, size_t *s
     }
     *image = reserve(*bytes);
     if (!*image) { munmap(raw, st.st_size); return -1; }
-    for (unsigned i = 0; i < h->e_phnum; ++i) if (ph[i].p_type == PT_LOAD)
-        memcpy((char *)*image + ph[i].p_vaddr - low, raw + ph[i].p_offset, ph[i].p_filesz);
-    *entry = (uintptr_t)*image + h->e_entry - low;
+    /* Each segment is bounded by what was reserved and by what was mapped before it is copied,
+     * and the entry point by the reservation, all on the locals read above. */
+    if (entry_va < low || entry_va - low >= *bytes) {
+        munmap(*image, *bytes); munmap(raw, st.st_size); errno = ENOEXEC; return -1;
+    }
+    for (unsigned i = 0; i < phnum; ++i) {
+        const Elf64_Phdr p = ph[i];
+        if (p.p_type != PT_LOAD) continue;
+        uint64_t at = p.p_vaddr - low;
+        if (p.p_vaddr < low || at > *bytes || p.p_filesz > *bytes - at ||
+            p.p_offset > size || p.p_filesz > size - p.p_offset) {
+            munmap(*image, *bytes); munmap(raw, st.st_size); errno = ENOEXEC; return -1;
+        }
+        memcpy((char *)*image + at, raw + p.p_offset, p.p_filesz);
+    }
+    *entry = (uintptr_t)*image + entry_va - low;
     munmap(raw, st.st_size);
     if (mprotect(*image, *bytes, PROT_READ | PROT_WRITE | PROT_EXEC)) {
         munmap(*image, *bytes); return -1;
@@ -493,6 +545,43 @@ struct exec_state {
   pid_t children[CAPSTONE_DELEGATE_CHILDREN];
 };
 #define EXEC_STATE_MAGIC UINT64_C(0x4350455845433031)
+
+/* Deny writers to the image held by *fd (CV_IMAGE). Where the module cannot
+ * (EOPNOTSUPP: a filesystem that does not keep one inode per file, such as
+ * 9p), *fd becomes a sealed copy read from that same open file, reopened
+ * read-only, and writers to the copy are denied instead. */
+static int image_denied(int *fd, struct capstone_application_descriptor_v2 *desc)
+{
+    char path[64];
+    if (capstone_application_fixed(*fd))
+        return -1;
+    if (!ioctl(device, CV_IMAGE, fd))
+        return 0;
+    if (errno == ENOTTY || errno == EINVAL) {
+        /* An ioctl the module does not know: a module from before CV_IMAGE.
+         * Module and launcher are one revision; there is no older path. */
+        fprintf(stderr, "capstone-vexec: the capstone_vm module does not implement CV_IMAGE: "
+                        "it is from another revision than this launcher\n");
+        errno = ENOSYS;
+        return -1;
+    }
+    if (errno != EOPNOTSUPP)
+        return -1;
+    int copy = capstone_application_copy(*fd, desc);
+    if (copy < 0)
+        return -1;
+    snprintf(path, sizeof path, "/proc/self/fd/%d", copy);
+    int sealed = capstone_application_open(path);
+    int error = errno;
+    close(copy);
+    if (sealed < 0) {
+        errno = error;
+        return -1;
+    }
+    close(*fd);
+    *fd = image_fd = sealed;
+    return capstone_application_fixed(sealed) || ioctl(device, CV_IMAGE, fd) ? -1 : 0;
+}
 
 static int above_stdio(int fd) {
   if (fd < 0 || fd >= 3) return fd;
@@ -513,6 +602,10 @@ static long exec_in_place(void) {
                             CAPSTONE_SPAWN_STRINGS + 1, envp, CAPSTONE_SPAWN_STRINGS + 1, paths,
                             CAPSTONE_SPAWN_ACTIONS, &view))
     return -EINVAL;
+  /* The new image is copied into a sealed memfd and checked here, while the
+   * caller still exists to receive any error. The copy, not the file, is what
+   * crosses the exec: nothing can change it between this check and the new
+   * launcher's, and the module's denial of writers ends with this process. */
   int checked = above_stdio(capstone_application_image(view.path, &descriptor));
   if (checked < 0) return -errno;
   if (!view.argc) { close(checked); return -EINVAL; }
@@ -838,7 +931,14 @@ int main(int argc, char **argv)
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];
     if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);
-    int fd = capstone_application_image(resumed.magic ? resumed_path : image_path, &desc);
+    /* No copy of the image on a local filesystem: the module denies writers
+     * to the file (CV_IMAGE) before it is validated, and holds that until
+     * this process ends, as Linux does for a running executable. load()
+     * validates the one mapping it loads from, so the bytes validated are
+     * the bytes loaded, and the domain cannot write its own image while it
+     * runs. After exec in place, and on 9p, NFS or FUSE, the image is a
+     * sealed copy, which the denial accepts as fixed. */
+    int fd = capstone_application_open(resumed.magic ? resumed_path : image_path);
     int image_error = errno;
     if (resumed.magic) close(resumed.image);
     errno = image_error;
@@ -847,11 +947,14 @@ int main(int argc, char **argv)
     if (spawner.socket < 0) { int error = capstone_spawner_start(&spawner);
         if (error) { errno = error; return die("spawner"); } }
     host.spawner = &spawner;
-    void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
-    if (load(fd, &image, &image_bytes, &entry, &stack_bytes)) { close(fd); perror("capstone-vexec: virtual ABI"); return 126; }
-    host.private_fds[host.private_count++] = fd;
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
-    if (device < 0) { munmap(image, image_bytes); return die("open"); }
+    if (device < 0) return die("open");
+    if (image_denied(&fd, &desc)) { perror("capstone-vexec: image"); cleanup(); return 126; }
+    void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
+    if (load(fd, &desc, &image, &image_bytes, &entry, &stack_bytes)) {
+        perror("capstone-vexec: image"); cleanup(); return 126;
+    }
+    host.private_fds[host.private_count++] = fd;
     /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
      * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
      * so the launcher runs on the default profile. The bit may still be set; it is not read. */

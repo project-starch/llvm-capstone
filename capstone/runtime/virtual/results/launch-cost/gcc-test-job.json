@@ -1,0 +1,497 @@
+{
+ "schema": 1,
+ "workload": "SPEC CPU2017 502.gcc_r test (t1.c -O3 -finline-limit=50000), one job: fork, exec through capstone-vexec, the program, exit; every privilege level; output validated by SPEC's own comparison",
+ "unit": "dynamic instruction attempts counted by the capprof QEMU TCG plugin, per window marked by the launcher; not time, not cycles",
+ "host": "p12, one hart, 2026-10-18",
+ "windows": [
+  "exec",
+  "snapshot",
+  "load",
+  "grants",
+  "run",
+  "teardown"
+ ],
+ "arms": {
+  "dev": {
+   "inputs_sha256": {
+    "cpugcc_r_base.capstone-virtual": "b8c7aa0b258f20fb55e6bdc288cd565052673e1792d4d8302355d08504b662ff",
+    "libcapprof.so": "3ee08aece9701793ecf3a5ad5fc0ea59118d2680937a58e13a0fda6016c7e8df",
+    "platform-dc/qemu-system-riscv64": "80e147d12339a245614f0c4ac78e71ed31a026e7f7e6ff3b2f5a23ce967baab0",
+    "adapter/capstone-vexec": "912d1a26e95699d98e3a63ade31bce8bc4d3640ad21b46251e12921565391b7b",
+    "module/capstone_vm.ko": "093b470e7b20b22c4047600671e5a35946662bfc8d3d3bb33fe99adea2203e19",
+    "images/fw_jump.elf": "7b5a7d7a00c76dbc18a2e96eca573934b9a6060ae4d1a094c923e744b487691c"
+   },
+   "repetitions": [
+    {
+     "rep": 1,
+     "spec_validation": "VALID",
+     "total_attempts": 246870324,
+     "windows": [
+      {
+       "phase": "exec",
+       "total_attempts": 586286,
+       "classes": {
+        "kernel": 568459,
+        "launcher": 15432,
+        "profrun": 1363,
+        "firmware": 1032
+       }
+      },
+      {
+       "phase": "snapshot",
+       "total_attempts": 55259336,
+       "classes": {
+        "kernel": 55210289,
+        "launcher": 30218,
+        "firmware": 18576,
+        "other": 253
+       }
+      },
+      {
+       "phase": "load",
+       "total_attempts": 33176556,
+       "classes": {
+        "kernel": 26175701,
+        "launcher": 6361238,
+        "firmware": 639614,
+        "other": 3
+       }
+      },
+      {
+       "phase": "grants",
+       "total_attempts": 42582610,
+       "classes": {
+        "module": 33823347,
+        "kernel": 7815051,
+        "launcher": 863092,
+        "firmware": 80937,
+        "other": 183
+       }
+      },
+      {
+       "phase": "run",
+       "total_attempts": 69365152,
+       "classes": {
+        "kernel": 32647306,
+        "program": 28990547,
+        "module": 6366399,
+        "launcher": 1013964,
+        "firmware": 346936
+       }
+      },
+      {
+       "phase": "teardown",
+       "total_attempts": 45900384,
+       "classes": {
+        "kernel": 34121069,
+        "module": 11724883,
+        "firmware": 40339,
+        "launcher": 11413,
+        "other": 2668,
+        "profrun": 12
+       }
+      }
+     ]
+    },
+    {
+     "rep": 2,
+     "spec_validation": "VALID",
+     "total_attempts": 247157016,
+     "windows": [
+      {
+       "phase": "exec",
+       "total_attempts": 586866,
+       "classes": {
+        "kernel": 569039,
+        "launcher": 15432,
+        "profrun": 1363,
+        "firmware": 1032
+       }
+      },
+      {
+       "phase": "snapshot",
+       "total_attempts": 55267806,
+       "classes": {
+        "kernel": 55218759,
+        "launcher": 30218,
+        "firmware": 18576,
+        "other": 253
+       }
+      },
+      {
+       "phase": "load",
+       "total_attempts": 33184146,
+       "classes": {
+        "kernel": 26183291,
+        "launcher": 6361238,
+        "firmware": 639614,
+        "other": 3
+       }
+      },
+      {
+       "phase": "grants",
+       "total_attempts": 42529793,
+       "classes": {
+        "module": 33823349,
+        "kernel": 7762597,
+        "launcher": 863071,
+        "firmware": 80593,
+        "other": 183
+       }
+      },
+      {
+       "phase": "run",
+       "total_attempts": 69472903,
+       "classes": {
+        "kernel": 32783825,
+        "program": 28976691,
+        "module": 6360918,
+        "launcher": 1010725,
+        "firmware": 340744
+       }
+      },
+      {
+       "phase": "teardown",
+       "total_attempts": 46115502,
+       "classes": {
+        "kernel": 34334123,
+        "module": 11724883,
+        "firmware": 42403,
+        "launcher": 11413,
+        "other": 2668,
+        "profrun": 12
+       }
+      }
+     ]
+    },
+    {
+     "rep": 3,
+     "spec_validation": "VALID",
+     "total_attempts": 246172751,
+     "windows": [
+      {
+       "phase": "exec",
+       "total_attempts": 586377,
+       "classes": {
+        "kernel": 568550,
+        "launcher": 15432,
+        "profrun": 1363,
+        "firmware": 1032
+       }
+      },
+      {
+       "phase": "snapshot",
+       "total_attempts": 55243000,
+       "classes": {
+        "kernel": 55194641,
+        "launcher": 30218,
+        "firmware": 17888,
+        "other": 253
+       }
+      },
+      {
+       "phase": "load",
+       "total_attempts": 33198403,
+       "classes": {
+        "kernel": 26197204,
+        "launcher": 6361238,
+        "firmware": 639958,
+        "other": 3
+       }
+      },
+      {
+       "phase": "grants",
+       "total_attempts": 42563531,
+       "classes": {
+        "module": 33823349,
+        "kernel": 7796274,
+        "launcher": 863071,
+        "firmware": 80654,
+        "other": 183
+       }
+      },
+      {
+       "phase": "run",
+       "total_attempts": 68664250,
+       "classes": {
+        "kernel": 31948204,
+        "program": 28989450,
+        "module": 6371583,
+        "launcher": 1014047,
+        "firmware": 340966
+       }
+      },
+      {
+       "phase": "teardown",
+       "total_attempts": 45917190,
+       "classes": {
+        "kernel": 34137799,
+        "module": 11724883,
+        "firmware": 40400,
+        "launcher": 11428,
+        "other": 2668,
+        "profrun": 12
+       }
+      }
+     ]
+    }
+   ],
+   "median_total_attempts": 246870324,
+   "median_window_attempts": {
+    "exec": 586377,
+    "snapshot": 55259336,
+    "load": 33184146,
+    "grants": 42563531,
+    "run": 69365152,
+    "teardown": 45917190
+   },
+   "revision": "launcher and module from dev b456c1b4, built with the window marks and the profiling hooks the plugin reads; monitor with the SBI RFENCE extension (caplifive-sbi #4)"
+  },
+  "dev+write-denial": {
+   "inputs_sha256": {
+    "cpugcc_r_base.capstone-virtual": "b8c7aa0b258f20fb55e6bdc288cd565052673e1792d4d8302355d08504b662ff",
+    "libcapprof.so": "3ee08aece9701793ecf3a5ad5fc0ea59118d2680937a58e13a0fda6016c7e8df",
+    "platform-dw/qemu-system-riscv64": "80e147d12339a245614f0c4ac78e71ed31a026e7f7e6ff3b2f5a23ce967baab0",
+    "adapter/capstone-vexec": "54c1d443c4220025ac50a435b373dc28128dd39d15fa6ee81c950b74cbd0959e",
+    "module/capstone_vm.ko": "0d3ccff7a62f02cb773523456b0dc79dda18f4e5d236d9a72ca25179af0553b6",
+    "images/fw_jump.elf": "7b5a7d7a00c76dbc18a2e96eca573934b9a6060ae4d1a094c923e744b487691c"
+   },
+   "repetitions": [
+    {
+     "rep": 1,
+     "spec_validation": "VALID",
+     "total_attempts": 174941956,
+     "windows": [
+      {
+       "phase": "exec",
+       "total_attempts": 575328,
+       "classes": {
+        "kernel": 557846,
+        "launcher": 15431,
+        "profrun": 1363,
+        "firmware": 688
+       }
+      },
+      {
+       "phase": "snapshot",
+       "total_attempts": 605815,
+       "classes": {
+        "kernel": 576805,
+        "launcher": 26748,
+        "firmware": 1376,
+        "module": 824,
+        "other": 62
+       }
+      },
+      {
+       "phase": "load",
+       "total_attempts": 32957335,
+       "classes": {
+        "kernel": 25976591,
+        "launcher": 6340936,
+        "firmware": 639614,
+        "other": 194
+       }
+      },
+      {
+       "phase": "grants",
+       "total_attempts": 42556092,
+       "classes": {
+        "module": 33822655,
+        "kernel": 7789955,
+        "launcher": 863050,
+        "firmware": 80249,
+        "other": 183
+       }
+      },
+      {
+       "phase": "run",
+       "total_attempts": 69256235,
+       "classes": {
+        "kernel": 32542914,
+        "program": 28989907,
+        "module": 6368881,
+        "launcher": 1016258,
+        "firmware": 338275
+       }
+      },
+      {
+       "phase": "teardown",
+       "total_attempts": 28991151,
+       "classes": {
+        "kernel": 17217265,
+        "module": 11724897,
+        "firmware": 34896,
+        "launcher": 11413,
+        "other": 2668,
+        "profrun": 12
+       }
+      }
+     ]
+    },
+    {
+     "rep": 2,
+     "spec_validation": "VALID",
+     "total_attempts": 174882680,
+     "windows": [
+      {
+       "phase": "exec",
+       "total_attempts": 582106,
+       "classes": {
+        "kernel": 564624,
+        "launcher": 15431,
+        "profrun": 1363,
+        "firmware": 688
+       }
+      },
+      {
+       "phase": "snapshot",
+       "total_attempts": 615027,
+       "classes": {
+        "kernel": 587407,
+        "launcher": 25358,
+        "firmware": 1376,
+        "module": 824,
+        "other": 62
+       }
+      },
+      {
+       "phase": "load",
+       "total_attempts": 32960756,
+       "classes": {
+        "kernel": 25978966,
+        "launcher": 6342326,
+        "firmware": 639270,
+        "other": 194
+       }
+      },
+      {
+       "phase": "grants",
+       "total_attempts": 42557412,
+       "classes": {
+        "module": 33822654,
+        "kernel": 7791269,
+        "launcher": 863057,
+        "firmware": 80249,
+        "other": 183
+       }
+      },
+      {
+       "phase": "run",
+       "total_attempts": 69156630,
+       "classes": {
+        "kernel": 32426090,
+        "program": 28989811,
+        "module": 6374275,
+        "launcher": 1016827,
+        "firmware": 349627
+       }
+      },
+      {
+       "phase": "teardown",
+       "total_attempts": 29010749,
+       "classes": {
+        "kernel": 17237376,
+        "module": 11724897,
+        "firmware": 34383,
+        "launcher": 11413,
+        "other": 2668,
+        "profrun": 12
+       }
+      }
+     ]
+    },
+    {
+     "rep": 3,
+     "spec_validation": "VALID",
+     "total_attempts": 174703458,
+     "windows": [
+      {
+       "phase": "exec",
+       "total_attempts": 586230,
+       "classes": {
+        "kernel": 568404,
+        "launcher": 15431,
+        "profrun": 1363,
+        "firmware": 1032
+       }
+      },
+      {
+       "phase": "snapshot",
+       "total_attempts": 632642,
+       "classes": {
+        "kernel": 604474,
+        "launcher": 25371,
+        "firmware": 1720,
+        "module": 824,
+        "other": 253
+       }
+      },
+      {
+       "phase": "load",
+       "total_attempts": 32951914,
+       "classes": {
+        "kernel": 25970326,
+        "launcher": 6342315,
+        "firmware": 639270,
+        "other": 3
+       }
+      },
+      {
+       "phase": "grants",
+       "total_attempts": 42570801,
+       "classes": {
+        "module": 33822654,
+        "kernel": 7804314,
+        "launcher": 863057,
+        "firmware": 80593,
+        "other": 183
+       }
+      },
+      {
+       "phase": "run",
+       "total_attempts": 69131185,
+       "classes": {
+        "kernel": 32392630,
+        "program": 28990398,
+        "module": 6386970,
+        "launcher": 1017060,
+        "firmware": 344127
+       }
+      },
+      {
+       "phase": "teardown",
+       "total_attempts": 28830686,
+       "classes": {
+        "kernel": 17053185,
+        "module": 11724897,
+        "firmware": 38511,
+        "launcher": 11413,
+        "other": 2668,
+        "profrun": 12
+       }
+      }
+     ]
+    }
+   ],
+   "median_total_attempts": 174882680,
+   "median_window_attempts": {
+    "exec": 582106,
+    "snapshot": 615027,
+    "load": 32957335,
+    "grants": 42557412,
+    "run": 69156630,
+    "teardown": 28991151
+   },
+   "revision": "dev b456c1b4 plus runtime/image-write-denial at 68d794e3 (its first commit: the launcher chose denial or copy from fstatfs; on tmpfs, where the image ran, the module-side decision of 0f4ad10a takes the same path), same marks, hooks and monitor"
+  }
+ },
+ "identical_across_arms": [
+  "program (cpugcc_r_base.capstone-virtual)",
+  "libcapprof.so",
+  "qemu-system-riscv64",
+  "fw_jump.elf",
+  "Image e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "rootfs.ext2 62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+ ]
+}

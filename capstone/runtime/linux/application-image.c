@@ -100,19 +100,81 @@ static int inspect(const unsigned char *data, size_t size,
   return 0;
 }
 
-int capstone_application_image(const char *path,
-                               struct capstone_application_descriptor_v2 *out) {
-  int source = open(path, O_RDONLY | O_CLOEXEC);
-  if (source < 0)
+int capstone_application_open(const char *path) {
+  int fd = open(path, O_RDONLY | O_CLOEXEC);
+  if (fd < 0)
     return -1;
+  struct stat st;
+  int error = fstat(fd, &st) ? errno : S_ISREG(st.st_mode) ? 0 : ENOEXEC;
+  if (error) {
+    close(fd);
+    errno = error;
+    return -1;
+  }
+  return fd;
+}
+
+int capstone_application_fixed(int fd) {
+  /* A file with a name (tmpfs, ext4) was opened for writing through
+   * that name, and Linux counted every such writer: the denial excludes
+   * them all. A memfd is created unlinked (__shmem_file_setup clears its
+   * link count) and its creating descriptor is not counted in i_writecount,
+   * so an unlinked, sealable file must be sealed. That also refuses an
+   * unsealed tmpfs file that was unlinked (or made with O_TMPFILE), whose
+   * writers are counted: the link count cannot tell it from a memfd, and
+   * refusing is the safe side. An ordinary tmpfs file answers F_GET_SEALS
+   * too (F_SEAL_SEAL), so the seals alone cannot tell either. */
+  struct stat st;
+  if (fstat(fd, &st))
+    return -1;
+  if (st.st_nlink)
+    return 0;
+  int seals = fcntl(fd, F_GET_SEALS);
+  int needed = F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK;
+  if (seals >= 0 && (seals & needed) != needed) {
+    errno = ETXTBSY;
+    return -1;
+  }
+  return 0;
+}
+
+int capstone_application_inspect(int fd, struct capstone_application_descriptor_v2 *out) {
+  struct stat st;
+  if (fstat(fd, &st))
+    return -1;
+  if (!S_ISREG(st.st_mode) || st.st_size < (off_t)sizeof(Elf64_Ehdr) ||
+      st.st_size > 512 * 1024 * 1024) {
+    errno = ENOEXEC;
+    return -1;
+  }
+  void *data = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (data == MAP_FAILED)
+    return -1;
+  int rc = capstone_application_validate(data, (size_t)st.st_size, out);
+  int error = errno;
+  munmap(data, (size_t)st.st_size);
+  errno = error;
+  return rc;
+}
+
+int capstone_application_validate(const void *data, size_t size,
+                                  struct capstone_application_descriptor_v2 *out) {
+  int error = inspect(data, size, out);
+  if (error) {
+    errno = error;
+    return -1;
+  }
+  return 0;
+}
+
+int capstone_application_copy(int source, struct capstone_application_descriptor_v2 *out) {
   int image = -1, error = 0;
   struct stat st;
   if (fstat(source, &st)) {
     error = errno;
     goto done;
   }
-  if (!S_ISREG(st.st_mode) || st.st_size < (off_t)sizeof(Elf64_Ehdr) ||
-      st.st_size > 512 * 1024 * 1024) {
+  if (st.st_size < (off_t)sizeof(Elf64_Ehdr) || st.st_size > 512 * 1024 * 1024) {
     error = ENOEXEC;
     goto done;
   }
@@ -121,11 +183,13 @@ int capstone_application_image(const char *path,
     error = errno;
     goto done;
   }
+  /* pread from the start: the copy is of this open file, whatever its offset,
+   * never of whatever its path names by now. */
   char buf[65536];
-  off_t remaining = st.st_size;
-  while (remaining) {
-    size_t wanted = remaining < (off_t)sizeof buf ? (size_t)remaining : sizeof buf;
-    ssize_t n = read(source, buf, wanted);
+  off_t at = 0;
+  while (at < st.st_size) {
+    size_t wanted = st.st_size - at < (off_t)sizeof buf ? (size_t)(st.st_size - at) : sizeof buf;
+    ssize_t n = pread(source, buf, wanted, at);
     if (n < 0 && errno == EINTR)
       continue;
     if (n <= 0) {
@@ -143,26 +207,32 @@ int capstone_application_image(const char *path,
       }
       written += (size_t)k;
     }
-    remaining -= n;
+    at += n;
   }
   if (fcntl(image, F_ADD_SEALS, F_SEAL_WRITE | F_SEAL_GROW | F_SEAL_SHRINK | F_SEAL_SEAL)) {
     error = errno;
     goto done;
   }
-  void *data = mmap(NULL, (size_t)st.st_size, PROT_READ, MAP_PRIVATE, image, 0);
-  if (data == MAP_FAILED) {
+  if (capstone_application_inspect(image, out))
     error = errno;
-    goto done;
-  }
-  error = inspect(data, (size_t)st.st_size, out);
-  munmap(data, (size_t)st.st_size);
 done:
-  close(source);
   if (error) {
     if (image >= 0)
       close(image);
     errno = error;
     return -1;
   }
+  return image;
+}
+
+int capstone_application_image(const char *path,
+                               struct capstone_application_descriptor_v2 *out) {
+  int source = capstone_application_open(path);
+  if (source < 0)
+    return -1;
+  int image = capstone_application_copy(source, out);
+  int error = errno;
+  close(source);
+  errno = error;
   return image;
 }
