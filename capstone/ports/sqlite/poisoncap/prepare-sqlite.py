@@ -77,13 +77,30 @@ def extract_sqlite(archive, dest):
     return count
 
 
+# configure carries CFLAGS/CPPFLAGS feature macros into the parser and keyword generators, and
+# OPTS into both, so an inherited environment could change the generated sqlite3.c. Run with a
+# fixed, minimal one, and record the tools it used.
+CLEAN_ENV = {'PATH': '/usr/bin:/bin', 'LC_ALL': 'C', 'HOME': '/nonexistent'}
+
+
+def tool_versions():
+    out = {}
+    for name, argv in (('cc', ['cc', '--version']), ('make', ['make', '--version'])):
+        done = subprocess.run(argv, env=CLEAN_ENV, capture_output=True, text=True)
+        out[name] = done.stdout.splitlines()[0] if done.returncode == 0 else f'unavailable ({done.returncode})'
+    done = subprocess.run(['tclsh'], input='puts [info patchlevel]', env=CLEAN_ENV,
+                          capture_output=True, text=True)
+    out['tclsh'] = done.stdout.strip() or 'unavailable'
+    return out
+
+
 def amalgamate(src, build, out):
     if build.exists():
         shutil.rmtree(build)
     build.mkdir(parents=True)
     for argv in ([str(src / 'configure'), '--disable-tcl', '--disable-readline'],
                  ['make', 'sqlite3.c']):
-        done = subprocess.run(argv, cwd=build, capture_output=True, text=True)
+        done = subprocess.run(argv, cwd=build, env=CLEAN_ENV, capture_output=True, text=True)
         if done.returncode:
             sys.exit(f'{" ".join(argv)} failed in {build}:\n{done.stdout[-2000:]}{done.stderr[-2000:]}')
     out.mkdir(parents=True, exist_ok=True)
@@ -129,6 +146,8 @@ def main():
     record = {
         'artifact': {**pin, 'archive_sha256_local': sha256(archive)},
         'sqlite_files': files,
+        'environment': CLEAN_ENV,
+        'tools': tool_versions(),
         'mem5_sha256': MEM5_SHA256,
         'amalgamations': {
             arm: {name: sha256(work / f'amalgamation-{arm}' / name)
