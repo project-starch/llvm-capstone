@@ -8573,3 +8573,12 @@ Records: `records/b2bs-reread-b2.result-lines.txt` and `b2bs-newarms-b2.result-l
   - The rows 13-16 boot's pc=0 count of 1 is row 13's own predicted `cause=12 pc=0x0` on
     row13_cpython_deleted_rowfactory, as on the batch. Other readings are 0.
 - **Against the pre-registrations (bdbc8cd093f5, b0d039c0f986): every reading holds.**
+
+### Bitstream 2: cpython lt1 again, on board 1 while it would otherwise be idle, pre-registered (2026-10-25 20:1x)
+
+- **Why:** lt1 is the arm bitstream 2 changes most (ten cells now CAUGHT), and its session read is N=1 so far. The
+  capacity-cell calls already have N=2 (`bs2-capcells-b1/b2`). This repeats the whole 54-step session.
+- **What runs:** `tier3-cpy-b2-arm.sh 1 <log> lt1` with CB_ROOT `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/cpy-lt1-n2`,
+  with the wrapper budget now 43200 s (c4a8637e4dd9).
+- **Prediction:** verdicts-compare 32 of 32 against ref-b2/lt1, the ten capacity cells CAUGHT at the same sites as the
+  first run; readings 0.
