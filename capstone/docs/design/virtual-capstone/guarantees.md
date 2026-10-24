@@ -55,9 +55,10 @@ See [isa.md](isa.md) for the allocator invariant on MANAGE.
 
 The node-growth extension replaces the fixed 65,536-slot / 1-MiB table with
 base-page-backed tables bounded by RAM, an optional quota and the 30-bit ID
-field. It retains the separate limits of 32 supervisor slots on the hart, at most
-8192 registered mappings, 2 GiB per registered region and 4 GiB registered VA
-per process (`wire.h`, `vm-abi.h`; 512, 256 MiB and 1 GiB until 2026-10-15). A region the module
+field. It retains the separate limits of 32 supervisor slots on the hart, 2 GiB
+per registered region and 4 GiB registered VA per process (`vm-abi.h`; 256 MiB
+and 1 GiB until 2026-10-15). The number of registered mappings has no limit of
+its own (earlier 512, then 8192). A region the module
 pins in full at registration, the image, its data and stacks, stays within
 256 MiB. Local mallocng removes the fixed allocator block/arena arrays;
 its metadata grows through musl mappings and remains subject to the adapter
