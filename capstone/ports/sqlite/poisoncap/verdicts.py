@@ -16,6 +16,12 @@ Per case, the plan's tiers (docs/plans/2026-10-24-sqlite-poisoncap-corpus.md, ru
   attributable      only with --spatial: fault at site on published and none on spatial (the arms
                     differ only in NESTED_TEMPORAL)
 NO-READING: no BEGIN printed, a CONTROL-FAILED line, a timeout, or a non-signal error exit.
+RETURNED-WITH-ERROR: the process returned, but printed a failing `... rc=N` line (N != 0) first;
+REPRO322_MAIN ignores run_case()'s result, so a case that stopped early (heap exhausted, say) would
+otherwise read as a clean return. Reported as its own outcome, never as a miss or a catch.
+A fault's function is the sized symbol (llvm-nm --print-size) that contains the PC; a PC outside
+every sized symbol, or an object that cannot be read, is "unresolved", never at a site. Signed
+requires SIGPROT as well as code 3.
 """
 import argparse
 import json
@@ -33,22 +39,25 @@ def load(run):
 
 
 def symbols(nm, binary):
-    out = subprocess.run([nm, '-n', '--defined-only', str(binary)], capture_output=True, text=True, check=True)
+    out = subprocess.run([nm, '-n', '--defined-only', '--print-size', str(binary)],
+                         capture_output=True, text=True)
+    if out.returncode:
+        return None
     syms = []
     for line in out.stdout.splitlines():
         parts = line.split()
-        if len(parts) == 3 and parts[1] in 'tTwW':
-            syms.append((int(parts[0], 16), parts[2]))
+        if len(parts) == 4 and parts[2] in 'tTwW':
+            syms.append((int(parts[0], 16), int(parts[1], 16), parts[3]))
     return syms
 
 
 def function_at(syms, pc):
-    best = None
-    for address, name in syms:
-        if address > pc:
-            break
-        best = name
-    return best
+    if syms is None:
+        return None
+    for address, size, name in syms:
+        if address <= pc < address + size:
+            return name
+    return None
 
 
 def outcome(row):
@@ -61,7 +70,8 @@ def outcome(row):
     if row['signal']:
         return 'fault'
     if row['exit'] == 0 and row['returned']:
-        return 'returned'
+        failing = [l for l in row.get('rc_lines', []) if not l.startswith('repro ')]
+        return 'returned-with-error' if failing else 'returned'
     return 'no-reading'
 
 
@@ -73,10 +83,16 @@ def score(row, build, nm, sites, rootfs):
         # The PC is an offset into the object dladdr named: the case binary, or a library of the
         # guest (libc's memcpy, say), which is read from the platform's rootfs.
         obj = row['fault']['obj']
-        image = build / row['name'] if obj.endswith('/' + row['name']) else rootfs / obj.lstrip('/')
         rec['object'] = obj
-        rec['function'] = function_at(symbols(nm, image), int(row['fault']['pc_off'], 16))
-        rec['at_site'] = rec['function'] in sites
+        if obj.endswith('/' + row['name']) or obj == row['name']:
+            image = build / row['name']
+        elif obj.startswith('/'):
+            image = rootfs / obj.lstrip('/')
+        else:
+            image = None
+        rec['function'] = function_at(symbols(nm, image), int(row['fault']['pc_off'], 16)) if image else None
+        rec['signal'] = row['signal']
+        rec['at_site'] = rec['function'] is not None and rec['function'] in sites
         rec['poison_console'] = bool(row['console_poison'])
     elif o == 'fault':
         rec['at_site'] = False
@@ -109,9 +125,12 @@ def main():
         p_rec = score(pub.get(case), pub_build, a.nm, sites, a.rootfs)
         s_rec = score(spa.get(case), spa_build, a.nm, sites, a.rootfs) if a.spatial else None
         row = {'case': case, 'qualified': bool(sites), 'fault_sites': sites, 'published': p_rec, 'spatial': s_rec}
-        row['mechanism_signed'] = (row['qualified'] and p_rec['at_site'] and p_rec.get('code') == '3'
-                                   and p_rec.get('poison_console', False))
-        row['attributable'] = (row['qualified'] and p_rec['at_site'] and not s_rec['at_site']) if s_rec else None
+        row['mechanism_signed'] = (row['qualified'] and p_rec['at_site'] and p_rec.get('signal') == 'SIGPROT'
+                                   and p_rec.get('code') == '3' and p_rec.get('poison_console', False))
+        # A control that did not read (no-reading, unresolved, not run) cannot support attribution.
+        usable = s_rec is not None and s_rec['outcome'] in ('returned', 'fault') and \
+            not (s_rec['outcome'] == 'fault' and s_rec.get('function') is None)
+        row['attributable'] = (row['qualified'] and p_rec['at_site'] and usable and not s_rec['at_site']) if s_rec else None
         table.append(row)
         if row['qualified']:
             counts['qualified'] += 1
