@@ -8519,3 +8519,18 @@ Records: `records/b2bs-sql0-b2.result-lines.txt` and `records/b2bs-cpy-lt0-b2.re
   - norandmaps is in the command line; readings 0.
   - The arm finished 3 minutes inside its 6-hour wrapper budget, so no salvage was needed.
 - **Against the pre-registrations (0ff98de9789a, 5e06c7dec5e0, e73e4f84297e): every reading holds.**
+
+### Bitstream 2, result: cpython lt1 32 of 32 by the salvage read, and the ten capacity cells are CAUGHT on silicon (board 1, 2026-10-25)
+
+Record: `records/b2bs-cpy-lt1-b1.result-lines.txt`.
+- **The boot:** the driver exited at 08:54. Its transcript holds all 54 steps and `vbatch END rc=0`; the boot completed.
+  The salvage (pre-registered at 460edecc2e58, positive control 32 of 32) parsed and read it.
+- **The tally** is CAUGHT 27, MISSED 3, not-reached 1, unattributed 1, as ref-b2/lt1. The batch bitstream's board read
+  CAUGHT 17 and infra 4.
+- **Against the reference: verdicts-compare 32 of 32 cells the same.** Every capacity cell is CAUGHT at its declared site:
+  - 02 memcpy and 19 fnv, both by control;
+  - 10 l_divmod, 13 unicode_fromformat_write_str and 18 mmap_ass_subscript, cause 28;
+  - 23 memchr, 27 slot_nb_add, 28 _PyEval_Vector, 30 PyObject_RichCompare and 31 odict_copy, cause 25.
+  The batch bitstream's 16-bit table had stopped these ten cells.
+- norandmaps is in the command line; readings 0.
+- **Against the pre-registration (5e06c7dec5e0): every reading holds.** The only process failure was the wrapper budget.
