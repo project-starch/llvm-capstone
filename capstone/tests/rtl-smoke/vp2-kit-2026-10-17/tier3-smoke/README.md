@@ -8611,3 +8611,16 @@ Records: `records/b2bs-reread-b2.result-lines.txt` and `b2bs-newarms-b2.result-l
     no verdict cell, and is reported where it appears;
   - readings 0.
   - **Any other difference is a finding about repeatability on silicon.**
+
+### Bitstream 2, result: the Juliet spatial sample 1513 of 1513 (board 2, 2026-10-25 15:57-22:31)
+
+Record: `records/b2bs-juliet-spatial-b2.result-lines.txt`.
+- **juliet-obs-compare against the bitstream-2 reference: 1513 of 1513 cells the same, 0 different.** The three
+  tolerated CWE170 cases also read as QEMU.
+- All 24 batches completed; 25 boot transcripts, readings 0.
+- The judge-field line (720 "differ") is judge.py's no-oob-line on silicon and is not a reading.
+- **Against the pre-registration (989c9463fd95): the reading holds.**
+- **With this, every arm of the corpus has a bitstream-2 silicon reading.** In the silicon tally (the runtime lane's
+  format, 38 rows and 1,625 cells), only two rows differ from the batch bitstream's:
+  - cpython lt1: CAUGHT 17 → 27, the ten capacity cells;
+  - cpython lt0: CAUGHT 15 → 16, case 18 on the mremap relink.
