@@ -32,9 +32,12 @@ struct mapping {
     uint64_t id;
     int heap, kind;
 };
-/* Registered mappings sorted by address, grown on demand. Registrations never
- * overlap, so the last mapping starting at or below an address is the only one
- * that can contain it. A pointer into maps does not survive map_insert. */
+/* Registered mappings sorted by address, highest first, grown on demand.
+ * Registrations never overlap, so the highest mapping starting at or below an
+ * address is the only one that can contain it. Linux places new mappings below
+ * the existing ones (top-down mmap), so a new registration is appended and a
+ * recent one is removed from near the end, without moving the rest. A pointer
+ * into maps does not survive map_insert or map_remove. */
 static struct mapping *maps;
 static size_t map_count, map_capacity;
 static bool local_malloc;
@@ -182,16 +185,16 @@ static void *reserve_aligned(size_t bytes, size_t alignment)
     if (tail) munmap((void *)(base + bytes), tail);
     return private_pages((void *)base, bytes);
 }
-/* The last mapping starting at or below p, or NULL. */
+/* The highest mapping starting at or below p, or NULL. */
 static struct mapping *map_floor(uintptr_t p)
 {
     size_t low = 0, high = map_count;
     while (low < high) {
         size_t middle = low + (high - low) / 2;
-        if ((uintptr_t)maps[middle].address <= p) low = middle + 1;
+        if ((uintptr_t)maps[middle].address > p) low = middle + 1;
         else high = middle;
     }
-    return low ? &maps[low - 1] : NULL;
+    return low < map_count ? &maps[low] : NULL;
 }
 static struct mapping *map_find(uintptr_t base)
 {
@@ -211,7 +214,7 @@ static int map_reserve(void)
 static void map_insert(struct mapping m)
 {
     struct mapping *below = map_floor((uintptr_t)m.address);
-    size_t at = below ? (size_t)(below - maps) + 1 : 0;
+    size_t at = below ? (size_t)(below - maps) : map_count;
     memmove(&maps[at + 1], &maps[at], (map_count - at) * sizeof(*maps));
     maps[at] = m; ++map_count;
 }
