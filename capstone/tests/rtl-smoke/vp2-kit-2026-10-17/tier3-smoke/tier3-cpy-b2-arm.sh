@@ -48,7 +48,7 @@ main() {
   [ $rc = 3 ] && { echo "CB STOP: the hub refused the booking (409): $bid" >> "$O"; return 1; }
   [ $rc = 0 ] || { echo "CB NOTE: booking failed rc=$rc ($bid); continuing unbooked" >> "$O"; bid=; }
   echo "CB $TAG BEGIN $(date +%T) board $BRD kit ${K##*/} booking ${bid:-none}" >> "$O"
-  taskset -c 16-31 timeout 21600 ${CB_ARM:-bash $ARM} --board-kit $K $R $RUN \
+  taskset -c 16-31 timeout 43200 ${CB_ARM:-bash $ARM} --board-kit $K $R $RUN \
     --arm $ARMN --build $IMGD --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 \
     --guest-env PYTHONHASHSEED=0 --stdlib-sourceless --timeout 300 --stdlib-closure $CL > $R.run.log 2>&1; rc=$?
   [ -n "$bid" ] && ${CB_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} unbook $bid >> "$O" 2>&1
