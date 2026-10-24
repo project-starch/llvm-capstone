@@ -170,6 +170,10 @@ function(capstone_configure_application target)
   target_link_libraries(${target} PRIVATE Capstone::Runtime
     "${CAPSTONE_MUSL_ARCHIVE}" capstone-application-builtins)
   set(script "${capstone}/my_first_domain/link.ld")
+  if(CAPSTONE_APPLICATION_VIRTUAL)
+    # Two load segments, text mapped from the image file.
+    set(script "${capstone}/runtime/virtual/link.ld")
+  endif()
   target_link_options(${target} PRIVATE --gc-sections -T "${script}")
   get_target_property(kind ${target} TYPE)
   if(kind STREQUAL "EXECUTABLE")

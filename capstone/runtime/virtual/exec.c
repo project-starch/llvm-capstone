@@ -37,7 +37,6 @@ struct mapping {
  * that can contain it. A pointer into maps does not survive map_insert. */
 static struct mapping *maps;
 static size_t map_count, map_capacity;
-static bool local_malloc;
 static void *reuse_address;
 static size_t reuse_bytes;
 static int device = -1, image_fd = -1;
@@ -222,7 +221,7 @@ static void map_remove(struct mapping *m)
     --map_count;
 }
 static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
-                 uintptr_t cursor, int linear, uint64_t thread)
+                 uintptr_t cursor, int linear, uint64_t thread, size_t rx_bytes)
 {
     if (map_reserve()) return -1;
     /* Option (iii): refuse to mint an arena whose bounds the encoder cannot represent, rather
@@ -241,7 +240,7 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
      * carries its own alignment guarantee. Negative-tested in
      * tests/exact-bounds-iii/grant-repr-test.c. */
     if (!capstone_repr_ok((uintptr_t)base, bytes)) { errno = ERANGE; return -1; }
-    struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0};
+    struct cv_map r = {thread, (uintptr_t)base, bytes, perms, reg, cursor, linear, 0, rx_bytes};
     if (ioctl(device, CV_ADD, &r)) {
         /* Evaluate add()'s two disjuncts on the REAL values the module saw. The domain cannot do
          * this: cap_vm_acquire clears its slot on failure, so the base never reaches it, and a
@@ -315,7 +314,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
         (kind == CV_MAP_APPLICATION && rights != 7)) return -EINVAL;
     if (bytes < alignment) bytes = alignment;
     void *p;
-    if (local_malloc && kind == CV_MAP_HEAP) {
+    if (kind == CV_MAP_HEAP) {
         /* Keyed on the HEAP, not on the alignment value. What requires bytes == visible is the
          * heap's growth contract -- remap_mapping() matches on m->bytes == m->visible == old --
          * and the old `alignment == 4096` spelling conflated that with the alignment mmap()
@@ -330,7 +329,7 @@ static long acquire_mapping(uint64_t tid, struct cv_step *step)
      * No capability reply exists until registration has succeeded. The range
      * is mapped readable and writable, so that protection needs no call. */
     if ((visible < bytes && mprotect((char *)p + visible, bytes - visible, PROT_NONE)) ||
-        (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid)) {
+        (prot != (PROT_READ | PROT_WRITE) && mprotect(p, visible, prot)) || grant(p, bytes, 10, rights, (uintptr_t)p, 1, tid, 0)) {
         int error = errno;
         munmap(p, bytes);
         return -error;
@@ -351,11 +350,11 @@ static long remap_mapping(uint64_t tid, struct cv_step *step)
      * including with exact bounds on -- and remap_begin's own gate is not shown to fire. So the
      * question is which of these refusals happens, and a trace-gated print cannot answer it in the
      * stages that run without the trace. */
-    if (!local_malloc || !bytes || bytes > CV_MAX_REGION_BYTES ||
+    if (!bytes || bytes > CV_MAX_REGION_BYTES ||
         ((base | old | bytes) & 4095)) {
-        fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=args local_malloc=%d base=0x%lx"
+        fprintf(stderr, "CAPSTONE_VM_REMAP_REFUSED stage=args base=0x%lx"
                         " old=%zu bytes=%zu page_ok=%d\n",
-                (int)local_malloc, (unsigned long)base, old, bytes,
+                (unsigned long)base, old, bytes,
                 ((base | old | bytes) & 4095) == 0);
         return -EINVAL;
     }
@@ -442,13 +441,88 @@ static int section_named(const char *names, uint64_t len, uint64_t at, const cha
     size_t n = strlen(want) + 1;
     return at <= len && n <= len - at && !memcmp(names + at, want, n);
 }
-/* Map the image, validate the mapping and load from it. One mapping, so the
- * headers and spans checked are the ones indexed below; a second mapping would
- * trust a check made on other pages. The denial (CV_IMAGE) keeps every writer
- * Linux counts out from before this until the process ends; a writer below
- * the VFS (a raw block device, a loop device's backing file) is not stopped. */
-static int load(int fd, struct capstone_application_descriptor_v2 *desc,
-                void **image, size_t *bytes, uintptr_t *entry, size_t *stack)
+/* The image as virtual/link.ld lays it out, checked against the sealed file:
+ * exactly two load segments, read+execute text from the image's first page
+ * and read+write data starting on the page right after it. The text segment
+ * is whole pages of the file (p_filesz == p_memsz), so mapping it maps nothing
+ * but image bytes; the data segment's file part may end inside a page. */
+struct image_layout {
+    uint64_t low, text_offset, text_bytes, data_offset, data_file, data_bytes, entry;
+    size_t stack;
+};
+static int image_layout(const unsigned char *raw, size_t size, struct image_layout *l)
+{
+    /* image_fd_layout validated this mapping before asking. A change below the VFS in between
+     * (the residual named there) may still make these bytes garbage; it must not make them an
+     * out-of-bounds read in this process. So each header field is read ONCE into a local,
+     * checked against the file size before it is used as an offset, count or length, and the
+     * checked local is what every later step uses. */
+    const Elf64_Ehdr *h = (const void *)raw;
+    const uint64_t phoff = h->e_phoff, shoff = h->e_shoff, entry_va = h->e_entry;
+    const unsigned phnum = h->e_phnum, shnum = h->e_shnum, shstr = h->e_shstrndx;
+    if (phoff > size || phnum > (size - phoff) / sizeof(Elf64_Phdr) ||
+        shoff > size || shnum > (size - shoff) / sizeof(Elf64_Shdr) || shstr >= shnum)
+        return -1;
+    const Elf64_Phdr *ph = (const void *)(raw + phoff);
+    const Elf64_Shdr *sh = (const void *)(raw + shoff);
+    const uint64_t names_at = sh[shstr].sh_offset, names_len = sh[shstr].sh_size;
+    if (names_at > size || names_len > size - names_at) return -1;
+    const char *names = (const void *)(raw + names_at);
+    Elf64_Phdr seg[2];
+    unsigned loads = 0;
+    int virtual = 0;
+    for (unsigned i = 0; i < phnum; ++i) {
+        const Elf64_Phdr p = ph[i];
+        if (p.p_type != PT_LOAD) continue;
+        if (loads == 2) return -1;
+        seg[loads++] = p;
+    }
+    if (loads != 2) return -1;
+    const Elf64_Phdr *t = &seg[0], *d = &seg[1];
+    if (t->p_flags != (PF_R | PF_X) || d->p_flags != (PF_R | PF_W) ||
+        (t->p_vaddr | t->p_offset | t->p_filesz | d->p_vaddr | d->p_offset) & 4095 ||
+        !t->p_filesz || t->p_filesz != t->p_memsz ||
+        d->p_vaddr != t->p_vaddr + t->p_memsz || d->p_filesz > d->p_memsz || !d->p_memsz ||
+        entry_va < t->p_vaddr || entry_va - t->p_vaddr >= t->p_filesz)
+        return -1;
+    /* Each segment's sizes are bounded, so no sum below can wrap, and its file part lies in
+     * the file. */
+    if (t->p_memsz > CV_MAX_REGION_BYTES || d->p_memsz > CV_MAX_REGION_BYTES ||
+        t->p_offset > size || t->p_filesz > size - t->p_offset ||
+        d->p_offset > size || d->p_filesz > size - d->p_offset)
+        return -1;
+    l->stack = 1u << 20;
+    for (unsigned i = 0; i < shnum; ++i) {
+        uint64_t v[3];
+        const Elf64_Shdr s = sh[i];
+        if (s.sh_type != SHT_PROGBITS) continue;
+        if (section_named(names, names_len, s.sh_name, ".capstone_virtual") && s.sh_size == 8 &&
+            s.sh_offset <= size && 8 <= size - s.sh_offset) {
+            memcpy(v, raw + s.sh_offset, 8);
+            virtual = v[0] == CV_IMAGE_MAGIC;
+        }
+        if (section_named(names, names_len, s.sh_name, ".capstone_domreq") && s.sh_size == 24 &&
+            s.sh_offset <= size && 24 <= size - s.sh_offset) {
+            memcpy(v, raw + s.sh_offset, 24);
+            l->stack = rounded(v[2]);
+        }
+    }
+    if (!virtual || !l->stack) return -1;
+    l->low = t->p_vaddr;
+    l->text_offset = t->p_offset; l->text_bytes = t->p_memsz;
+    l->data_offset = d->p_offset; l->data_file = d->p_filesz;
+    l->data_bytes = (d->p_memsz + 4095) & ~(uint64_t)4095;
+    l->entry = entry_va;
+    return 0;
+}
+/* Map the image, validate the mapping and read the layout from it. One mapping, so the
+ * headers and spans checked are the ones indexed; a second mapping would trust a check
+ * made on other pages. The denial (CV_IMAGE) keeps every writer Linux counts out from
+ * before this until the process ends; a writer below the VFS (a raw block device, a loop
+ * device's backing file) is not stopped. Both the loader and exec in place (before it
+ * replaces this process) ask. */
+static int image_fd_layout(int fd, struct capstone_application_descriptor_v2 *desc,
+                           struct image_layout *l)
 {
     struct stat st;
     if (fstat(fd, &st)) return -1;
@@ -460,81 +534,51 @@ static int load(int fd, struct capstone_application_descriptor_v2 *desc,
         int error = errno;
         munmap(raw, st.st_size); errno = error; return -1;
     }
-    /* Everything below is read from the mapping again after the validation. A change below
-     * the VFS in between (the residual named above) may make these bytes garbage; it must not
-     * make them an out-of-bounds read or write in this process. So each header field is read
-     * ONCE into a local, checked against the file size before it is used as an offset, count
-     * or length, and the checked local is what every later step uses. */
-    const uint64_t size = st.st_size;
-    const Elf64_Ehdr *h = (void *)raw;
-    const uint64_t phoff = h->e_phoff, shoff = h->e_shoff, entry_va = h->e_entry;
-    const unsigned phnum = h->e_phnum, shnum = h->e_shnum, shstr = h->e_shstrndx;
-    if (phoff > size || phnum > (size - phoff) / sizeof(Elf64_Phdr) ||
-        shoff > size || shnum > (size - shoff) / sizeof(Elf64_Shdr) || shstr >= shnum) {
-        munmap(raw, st.st_size); errno = ENOEXEC; return -1;
-    }
-    const Elf64_Phdr *ph = (void *)(raw + phoff);
-    const Elf64_Shdr *sh = (void *)(raw + shoff);
-    const uint64_t names_at = sh[shstr].sh_offset, names_len = sh[shstr].sh_size;
-    if (names_at > size || names_len > size - names_at) {
-        munmap(raw, st.st_size); errno = ENOEXEC; return -1;
-    }
-    const char *names = (void *)(raw + names_at);
-    uint64_t low = UINT64_MAX, high = 0;
-    int virtual = 0;
-    *stack = 1u << 20;
-    for (unsigned i = 0; i < phnum; ++i) {
-        const Elf64_Phdr p = ph[i];
-        if (p.p_type != PT_LOAD) continue;
-        if (p.p_vaddr < low) low = p.p_vaddr;
-        if (p.p_vaddr + p.p_memsz > high) high = p.p_vaddr + p.p_memsz;
-    }
-    for (unsigned i = 0; i < shnum; ++i) {
-        uint64_t v[3];
-        const Elf64_Shdr s = sh[i];
-        if (s.sh_type != SHT_PROGBITS) continue;
-        if (section_named(names, names_len, s.sh_name, ".capstone_virtual") && s.sh_size == 8 &&
-            s.sh_offset <= size && 8 <= size - s.sh_offset) {
-            memcpy(v, raw + s.sh_offset, 8);
-            virtual = v[0] == CV_IMAGE_MAGIC || v[0] == CV_IMAGE_MAGIC_V2 || v[0] == CV_IMAGE_MAGIC_V3;
-            local_malloc = v[0] == CV_IMAGE_MAGIC;
-            /* v5 is refused rather than run: its mallocng hands out exact object bounds, which
-             * this profile's encoder rounds outward, so its slots would reach the neighbouring
-             * slot's in-band header. Rebuilding is the only fix. */
-            if (v[0] == CV_IMAGE_MAGIC_V5) virtual = 0;
-        }
-        if (section_named(names, names_len, s.sh_name, ".capstone_domreq") && s.sh_size == 24 &&
-            s.sh_offset <= size && 24 <= size - s.sh_offset) {
-            memcpy(v, raw + s.sh_offset, 24);
-            *stack = rounded(v[2]);
-        }
-    }
-    if (!virtual || !*stack || !(*bytes = rounded(high - low))) {
-        munmap(raw, st.st_size); errno = ENOEXEC; return -1;
-    }
-    *image = reserve(*bytes);
-    if (!*image) { munmap(raw, st.st_size); return -1; }
-    /* Each segment is bounded by what was reserved and by what was mapped before it is copied,
-     * and the entry point by the reservation, all on the locals read above. */
-    if (entry_va < low || entry_va - low >= *bytes) {
-        munmap(*image, *bytes); munmap(raw, st.st_size); errno = ENOEXEC; return -1;
-    }
-    for (unsigned i = 0; i < phnum; ++i) {
-        const Elf64_Phdr p = ph[i];
-        if (p.p_type != PT_LOAD) continue;
-        uint64_t at = p.p_vaddr - low;
-        if (p.p_vaddr < low || at > *bytes || p.p_filesz > *bytes - at ||
-            p.p_offset > size || p.p_filesz > size - p.p_offset) {
-            munmap(*image, *bytes); munmap(raw, st.st_size); errno = ENOEXEC; return -1;
-        }
-        memcpy((char *)*image + at, raw + p.p_offset, p.p_filesz);
-    }
-    *entry = (uintptr_t)*image + entry_va - low;
+    int rc = image_layout(raw, st.st_size, l);
     munmap(raw, st.st_size);
-    if (mprotect(*image, *bytes, PROT_READ | PROT_WRITE | PROT_EXEC)) {
-        munmap(*image, *bytes); return -1;
+    if (rc) errno = ENOEXEC;
+    return rc;
+}
+/* Map the image instead of copying it. Text is a private, read+execute
+ * mapping of the sealed file: no store reaches it, so it holds no tag and
+ * the module neither pins nor sweeps it, and Linux faults it in from the page
+ * cache as it is executed. Data is a private writable mapping of the file
+ * (the module's pins break copy-on-write, so the domain owns its pages), the
+ * page where the file part ends is built in anonymous memory, and the rest of
+ * .bss stays anonymous. Linux synchronises the instruction cache when it maps
+ * an executable page; the launcher writes none. */
+/* As private_pages: kernels without transparent huge pages refuse the advice. */
+static int no_huge_pages(void *p, size_t bytes)
+{
+    return madvise(p, bytes, MADV_NOHUGEPAGE) && errno != EINVAL ? -1 : 0;
+}
+static int load(int fd, struct capstone_application_descriptor_v2 *desc, void **image,
+                size_t *bytes, size_t *rx_bytes, uintptr_t *entry, size_t *stack)
+{
+    struct image_layout l;
+    if (image_fd_layout(fd, desc, &l)) return -1;
+    /* The grant's size, rounded as every grant is. The tail past the data's own pages stays
+     * anonymous and zero, like bss. */
+    *bytes = rounded(l.text_bytes + l.data_bytes);
+    *rx_bytes = l.text_bytes;
+    *stack = l.stack;
+    if (!*bytes || *bytes > CV_MAX_EAGER_BYTES) { errno = ENOEXEC; return -1; }
+    char *base = reserve(*bytes);
+    if (!base) return -1;
+    char *data = base + l.text_bytes;
+    size_t whole = l.data_file & ~(uint64_t)4095, part = l.data_file - whole;
+    if (mmap(base, l.text_bytes, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_FIXED, fd,
+             l.text_offset) == MAP_FAILED ||
+        no_huge_pages(base, l.text_bytes) ||
+        (whole && (mmap(data, whole, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_FIXED, fd,
+                        l.data_offset) == MAP_FAILED ||
+                   no_huge_pages(data, whole))) ||
+        (part && pread(fd, data + whole, part, l.data_offset + whole) != (ssize_t)part)) {
+        int error = errno ? errno : EIO;
+        munmap(base, *bytes); errno = error; return -1;
     }
-    __builtin___clear_cache(*image, (char *)*image + *bytes);
+    *image = base;
+    *entry = (uintptr_t)base + l.entry - l.low;
     return 0;
 }
 struct exec_state {
@@ -609,6 +653,10 @@ static long exec_in_place(void) {
   int checked = above_stdio(capstone_application_image(view.path, &descriptor));
   if (checked < 0) return -errno;
   if (!view.argc) { close(checked); return -EINVAL; }
+  /* An image this launcher cannot load fails here, while the caller still
+   * exists to receive the error, not after the exec. */
+  struct image_layout layout;
+  if (image_fd_layout(checked, &descriptor, &layout)) { close(checked); return -ENOEXEC; }
   struct exec_state state = {.magic = EXEC_STATE_MAGIC, .spawner = spawner,
                             .child_count = host.child_count, .image = checked};
   memcpy(state.children, host.children, sizeof state.children);
@@ -950,15 +998,15 @@ int main(int argc, char **argv)
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) return die("open");
     if (image_denied(&fd, &desc)) { perror("capstone-vexec: image"); cleanup(); return 126; }
-    void *image; size_t image_bytes, stack_bytes; uintptr_t entry;
-    if (load(fd, &desc, &image, &image_bytes, &entry, &stack_bytes)) {
+    void *image; size_t image_bytes, image_rx, stack_bytes; uintptr_t entry;
+    if (load(fd, &desc, &image, &image_bytes, &image_rx, &entry, &stack_bytes)) {
         perror("capstone-vexec: image"); cleanup(); return 126;
     }
     host.private_fds[host.private_count++] = fd;
     /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
      * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
      * so the launcher runs on the default profile. The bit may still be set; it is not read. */
-    if (grant(image, image_bytes, 3, 7, entry, 0, 0)) { munmap(image, image_bytes); return die("image grant"); }
+    if (grant(image, image_bytes, 3, 7, entry, 0, 0, image_rx)) { munmap(image, image_bytes); return die("image grant"); }
     void *stack = reserve(stack_bytes);
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);
     size_t exchange_bytes = rounded(desc.exchange_bytes);
@@ -976,14 +1024,14 @@ int main(int argc, char **argv)
         argc - (app_args ? 4 : binfmt ? 2 : 1), argv + (app_args ? 4 : binfmt ? 2 : 1), environ, cwd, stdio_mask, &task) : ENOMEM;
     free(cwd);
     if (error) { errno = error; return die("startup"); }
-    if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0, 0) ||
-        grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0, 0) ||
-        grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0, 0) ||
-        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0)) return die("grant");
+    if (grant(stack, stack_bytes, 2, 6, (uintptr_t)stack + stack_bytes, 0, 0, 0) ||
+        grant(meta, CAPSTONE_DELEGATE_META_BYTES, 10, 6, (uintptr_t)meta, 0, 0, 0) ||
+        grant(exchange, exchange_bytes, 11, 6, (uintptr_t)exchange, 0, 0, 0) ||
+        grant(startup, CAPSTONE_LAUNCH_BYTES, 12, 4, (uintptr_t)startup, 0, 0, 0)) return die("grant");
     if (desc.v1.heap_bytes) {
         size_t bytes = rounded(desc.v1.heap_bytes);
         void *region = bytes ? reserve(bytes) : NULL;
-        if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1, 0))
+        if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1, 0, 0))
             return die("nested allocator grant");
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;

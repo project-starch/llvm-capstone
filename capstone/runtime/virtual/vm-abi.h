@@ -1,16 +1,13 @@
 #ifndef CAPSTONE_VIRTUAL_VM_ABI_H
 #define CAPSTONE_VIRTUAL_VM_ABI_H
-/* Version 6 compiles mallocng inside Capstone and adds only a VM-remap
- * service. It runs on the DEFAULT QEMU profile: bounds are representable and
- * allocator-enforced, so no exact-bounds option is needed (option iii). Versions
- * 2/3 remain accepted by the launcher. The withdrawn native-heap v4 is rejected,
- * and so is v5: its mallocng exposes exact object bounds, which the compressed
- * encoder rounds outward, so a v5 image's slots would reach their neighbours'
- * in-band headers. A v5 image must be rebuilt, not re-run. */
-#define CV_IMAGE_MAGIC_V2 0x324d56564e4f5043
-#define CV_IMAGE_MAGIC_V3 0x334d56564e4f5043
-#define CV_IMAGE_MAGIC_V5 0x354d56564e4f5043
-#define CV_IMAGE_MAGIC 0x364d56564e4f5043
+/* Version 7: the image is two load segments (virtual/link.ld), text mapped
+ * from the image file without write permission and data after it, with
+ * mallocng compiled inside Capstone. Like version 6 it runs on the DEFAULT
+ * QEMU profile: bounds are representable and allocator-enforced, so no
+ * exact-bounds option is needed (option iii). The launcher accepts this
+ * version only; an image of any earlier version, whose layout or allocator
+ * differs, must be rebuilt, not re-run. */
+#define CV_IMAGE_MAGIC 0x374d56564e4f5043
 #define CV_SERVICE_DELEGATE 0
 #define CV_SERVICE_MAP 1
 #define CV_SERVICE_UNMAP 2
