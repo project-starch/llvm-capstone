@@ -1,0 +1,26 @@
+spec_root ~/spec-cap/kit2/q4/tree/SPEC17 version 1.0.2
+kit ddf3d0b61446ae7e4623d96269d84fd4cb7c1bc9 clean
+srcalt 500.perlbench_r 02d434e4140bbf6699a14e4806f1831761afc00579e42207c4fb8da1d91b3ee8 500.perlbench_r.capstone.cpu2017.v1.0.tar.xz
+srcalt 502.gcc_r 7df4c247746b252226e3f53d2603db2134493a1f52d9093a27b04b8a426b334a 502.gcc_r.capstone.cpu2017.v1.0.tar.xz
+srcalt 505.mcf_r 0affe861fa0db7baeb829598c0b4179d8cfa3faa3c629990a037aeb8c0eac4fd 505.mcf_r.capstone.cpu2017.v1.0.tar.xz
+sdk ~/spec-cap/kit2/toolchain-v3/sdk profile virtual
+sdk-inventory fcbe31a94d866c2659a1d7b39b893a5a3210ca62bff9185f6c99440388d6108f (103 files)
+clang a5d528223c8687b14ef84dc43f36f55575323dbc818f3a8ef0df886f38b7fbfe clang version 22.0.0git
+ldecod-host 9e4ccab2f2986e88a693926a3016c122bf9284cec99bf13e60135f96602f49a0 cc cc (Ubuntu 15.2.0-16ubuntu1) 15.2.0
+config 1fa58652bad9e5051db05d06561cabc557cca8a4a5b6017686a1c386bb71b20d config/capstone-virtual.cfg
+runcpu build rc=0
+exe abc7fe2ed9b13041ccf5c4ccb3314db4877bce3568502e7f010ee991b7f2e398 benchspec/CPU/500.perlbench_r/exe/perlbench_r_base.capstone-virtual
+exe 61ddd59ce3711f57b8b9c23c9ebe6994fab16188df63ddabfc2823074b9c0415 benchspec/CPU/502.gcc_r/exe/cpugcc_r_base.capstone-virtual
+exe 6f887e52a6e364758b607d92cfa61d382ed50a3973c327c36627f9220192f85b benchspec/CPU/505.mcf_r/exe/mcf_r_base.capstone-virtual
+exe 481a0491e71e743937f29a4461fdb7836f0c504a9bf04cefad5696ea151591bd benchspec/CPU/519.lbm_r/exe/lbm_r_base.capstone-virtual
+exe a881d9ba8de8883c25b7b5fc903978bb6e4ca382f24cbc4fd51c9bffdd321c8d benchspec/CPU/525.x264_r/exe/imagevalidate_525_base.capstone-virtual
+exe 8d61142308d6861415ebd288d6d07ac0a7682d6166d1b18ed976fe9a82351486 benchspec/CPU/525.x264_r/exe/ldecod_r_base.capstone-virtual
+exe ea31d45e77a3b03f821bf848b6f33fae99254cfe5b5850b02b7ffc250ee895a2 benchspec/CPU/525.x264_r/exe/x264_r_base.capstone-virtual
+exe a881d9ba8de8883c25b7b5fc903978bb6e4ca382f24cbc4fd51c9bffdd321c8d benchspec/CPU/538.imagick_r/exe/imagevalidate_538_base.capstone-virtual
+exe 9e7f0ed93ee3c4ae43eb01b30ea4756475cdbfce298c6f2925eba8bf16bcce3b benchspec/CPU/538.imagick_r/exe/imagick_r_base.capstone-virtual
+exe c848ea9cc291655be021bd1343fd6b73503e715c943045fefc9d811a59c5a985 benchspec/CPU/544.nab_r/exe/nab_r_base.capstone-virtual
+exe 9f2b387cd3c9374893a29bb04b9b08f36af9069dfe9551209dc73ec0640f68c6 benchspec/CPU/557.xz_r/exe/xz_r_base.capstone-virtual
+exe 717c60b9ec0ec94c2542e0abbb68df554009993cb3cd6bd0b5231bcea4a4a598 benchspec/CPU/997.specrand_fr/exe/specrand_fr_base.capstone-virtual
+exe 717c60b9ec0ec94c2542e0abbb68df554009993cb3cd6bd0b5231bcea4a4a598 benchspec/CPU/999.specrand_ir/exe/specrand_ir_base.capstone-virtual
+verify-after-build spec-extract: bench_ok=18467 other_ok=1554 bench_missing=0 other_missing=10297 mismatch=0 (ALL)
+BUILD_DONE

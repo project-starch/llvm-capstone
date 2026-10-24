@@ -1,0 +1,2 @@
+tampered output: rejected as expected (FAIL | runcpu exited 1;SPEC reports no success)
+foreign executable: refused as expected (exit 125, route refused)
