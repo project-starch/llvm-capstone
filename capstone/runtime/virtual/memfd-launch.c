@@ -11,6 +11,13 @@
  * (CV_IMAGE), ask again (EBUSY), open IMAGE for writing while denied (ETXTBSY)
  * and after the device is closed (allowed); prints one IMAGE_TWICE line and
  * exits 0 only when every answer is the expected one.
+ * memfd-launch text-source IMAGE OTHER: the module serves image text only from the
+ * image file whose writers CV_IMAGE denied. Three CV_ADD requests for an image grant
+ * whose first page is a private read+execute mapping of a file, each on a fresh device
+ * handle: with IMAGE registered and the text mapped from IMAGE (admitted), with IMAGE
+ * registered and the text mapped from OTHER, a different file (refused, EACCES), and
+ * with no image registered (refused, EACCES). Prints one TEXT_SOURCE line; exits 0 only
+ * when every answer is the expected one.
  * A native helper for run-exec.py; the launch modes exit with the launcher's
  * status. */
 #define _GNU_SOURCE
@@ -38,7 +45,41 @@ static int launch(const char *launcher, const char *image)
 
 static const char *name(int rc, int error)
 {
-    return rc >= 0 ? "ok" : error == EBUSY ? "EBUSY" : error == ETXTBSY ? "ETXTBSY" : strerror(error);
+    return rc >= 0 ? "ok" : error == EBUSY ? "EBUSY" : error == ETXTBSY ? "ETXTBSY" :
+           error == EACCES ? "EACCES" : strerror(error);
+}
+
+/* One CV_ADD for a 64 KiB image grant (reg 3): its first page a private read+execute mapping of
+ * TEXT, the other fifteen private anonymous read+write. IMAGE, when not NULL, is registered with
+ * CV_IMAGE first. Returns the ioctl's result; *error is its errno. */
+static int add_image_grant(const char *image, const char *text, int *error)
+{
+    const unsigned long size = 0x10000, page = 0x1000;
+    int device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC), tfd = open(text, O_RDONLY);
+    if (device < 0 || tfd < 0) { perror("memfd-launch: open"); *error = errno; return -2; }
+    int fd = -1;
+    if (image) {
+        fd = open(image, O_RDONLY);
+        if (fd < 0 || ioctl(device, CV_IMAGE, &fd)) { perror("memfd-launch: CV_IMAGE"); *error = errno; return -2; }
+    }
+    char *raw = mmap(NULL, 2 * size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (raw == MAP_FAILED) { perror("memfd-launch: mmap"); *error = errno; return -2; }
+    char *base = (char *)(((unsigned long)raw + size - 1) & ~(size - 1));
+    if (mmap(base, page, PROT_READ | PROT_EXEC, MAP_PRIVATE | MAP_FIXED, tfd, 0) == MAP_FAILED ||
+        mmap(base + page, size - page, PROT_READ | PROT_WRITE,
+             MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED, -1, 0) == MAP_FAILED) {
+        perror("memfd-launch: mmap"); *error = errno; return -2;
+    }
+    madvise(base, size, MADV_NOHUGEPAGE);   /* the module requires it where huge pages exist */
+    struct cv_map r = { .address = (unsigned long)base, .bytes = size, .permissions = 7, .reg = 3,
+                        .cursor = (unsigned long)base, .rx_bytes = page };
+    int rc = ioctl(device, CV_ADD, &r);
+    *error = errno;
+    close(device);
+    close(tfd);
+    if (fd >= 0) close(fd);
+    munmap(raw, 2 * size);
+    return rc;
 }
 
 int main(int argc, char **argv)
@@ -58,8 +99,16 @@ int main(int argc, char **argv)
         return first == 0 && second < 0 && second_error == EBUSY &&
                held < 0 && held_error == ETXTBSY && released >= 0 ? 0 : 3;
     }
+    if (argc == 4 && !strcmp(argv[1], "text-source")) {
+        int e1, e2, e3;
+        int same = add_image_grant(argv[2], argv[2], &e1);
+        int other = add_image_grant(argv[2], argv[3], &e2);
+        int none = add_image_grant(NULL, argv[2], &e3);
+        printf("TEXT_SOURCE image=%s other=%s noimage=%s\n", name(same, e1), name(other, e2), name(none, e3));
+        return same == 0 && other < 0 && e2 == EACCES && none < 0 && e3 == EACCES ? 0 : 3;
+    }
     if (argc != 4) {
-        fprintf(stderr, "usage: memfd-launch open|write|sealed|mapped LAUNCHER IMAGE | image-twice IMAGE\n");
+        fprintf(stderr, "usage: memfd-launch open|write|sealed|mapped LAUNCHER IMAGE | image-twice IMAGE | text-source IMAGE OTHER\n");
         return 2;
     }
     if (!strcmp(argv[1], "mapped")) {

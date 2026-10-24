@@ -982,9 +982,11 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
             mmap_read_unlock(c->mm); return -EACCES;
         }
         if (rx)
-            /* Image text: a private file mapping, readable and executable,
-             * never writable. The trusted launcher keeps it that way. */
-            bad = !v->vm_file || (v->vm_flags & VM_WRITE) ||
+            /* Image text: a private mapping of the image file whose writers
+             * CV_IMAGE denied, readable and executable, never writable, so its
+             * bytes stay the bytes validated. */
+            bad = !v->vm_file || !c->image ||
+                  file_inode(v->vm_file) != file_inode(c->image) || (v->vm_flags & VM_WRITE) ||
                   (v->vm_flags & (VM_READ | VM_EXEC)) != (VM_READ | VM_EXEC);
         else if (r->rx_bytes)
             /* Image data: private and writable, never executable. A file
@@ -1533,7 +1535,8 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         if (cause == 15) return -EACCES;
         mmap_read_lock(c->mm);
         v = find_vma(c->mm, address);
-        if (!v || v->vm_start > address || !v->vm_file ||
+        if (!v || v->vm_start > address || !v->vm_file || !c->image ||
+            file_inode(v->vm_file) != file_inode(c->image) ||
             (v->vm_flags & (VM_WRITE | VM_SHARED)) ||
             !(v->vm_flags & (cause == 12 ? VM_EXEC : VM_READ))) {
             mmap_read_unlock(c->mm); return -EACCES;
