@@ -192,6 +192,16 @@ public:
               LoopStandardAnalysisResults &AR);
 };
 
+/// Whether stepping a capability-typed induction variable by \p Step keeps a
+/// value derived from it, one step before its first address, inside the window
+/// of representable cursors around the object it came from (see IVUsers.cpp).
+/// A value read after the increment is expressed on the normalized IV, whose
+/// start is the original start less one step, so every place that normalizes a
+/// capability use to post-increment form must ask this first. \p Step is the
+/// step recurrence of the loop's add-recurrence; null (no add-recurrence for
+/// the loop) has nothing to normalize and is in the window.
+bool isCapabilityStepInWindow(const SCEV *Step);
+
 }
 
 #endif

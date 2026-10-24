@@ -2646,6 +2646,17 @@ LSRInstance::OptimizeLoopTermCond() {
     if (!DT.dominates(ExitingBlock, LatchBlock))
       continue;
 
+    // A comparison of a capability against a bound would be expressed on the
+    // normalized IV, whose start is the original start less one step. Where
+    // the step takes that start out of the window around the object, the
+    // capability has lost its tag where the program's own had not (see
+    // isCapabilityStepInWindow): keep the pre-increment value, as IVUsers does
+    // for a capability handed on out of the loop.
+    if (L->getHeader()->getDataLayout().isNonIntegralPointerType(
+            CondUse->getOperandValToReplace()->getType()) &&
+        !isCapabilityStepInWindow(IU.getStride(*CondUse, L)))
+      continue;
+
     // Conservatively avoid trying to use the post-inc value in non-latch
     // exits if there may be pre-inc users in intervening blocks.
     if (LatchBlock != ExitingBlock)
@@ -6174,6 +6185,12 @@ LSRInstance::LSRInstance(Loop *L, IVUsers &IU, ScalarEvolution &SE,
 #endif
   Rewriter.disableCanonicalMode();
   Rewriter.enableLSRMode();
+  // An induction variable over a capability (a non-integral pointer) is
+  // admitted by IVUsers on the strength of the loop running its address
+  // arithmetic itself; its start and any invariant address the formulas need
+  // must therefore stay within this loop's preheader, not rise through the
+  // enclosing loops above a check that skips this one.
+  Rewriter.setNonIntegralHoistLimit(L);
 
   // First, perform some low-level loop optimizations.
   OptimizeShadowIV();
@@ -7031,6 +7048,7 @@ static bool ReduceLoopStrength(Loop *L, IVUsers &IU, ScalarEvolution &SE,
 #if LLVM_ENABLE_ABI_BREAKING_CHECKS
     Rewriter.setDebugType(DEBUG_TYPE);
 #endif
+    Rewriter.setNonIntegralHoistLimit(L);
     unsigned numFolded = Rewriter.replaceCongruentIVs(L, &DT, DeadInsts, &TTI);
     Rewriter.clear();
     if (numFolded) {
@@ -7049,6 +7067,7 @@ static bool ReduceLoopStrength(Loop *L, IVUsers &IU, ScalarEvolution &SE,
     SmallVector<WeakTrackingVH, 16> DeadInsts;
     const DataLayout &DL = L->getHeader()->getDataLayout();
     SCEVExpander Rewriter(SE, DL, "lsr", true);
+    Rewriter.setNonIntegralHoistLimit(L);
     int Rewrites = rewriteLoopExitValues(L, &LI, &TLI, &SE, &TTI, Rewriter, &DT,
                                          UnusedIndVarInLoop, DeadInsts);
     Rewriter.clear();

@@ -120,6 +120,11 @@ canFoldTermCondOfLoop(Loop *L, ScalarEvolution &SE, DominatorTree &DT,
   const SCEV *BECount = SE.getBackedgeTakenCount(L);
   const DataLayout &DL = L->getHeader()->getDataLayout();
   SCEVExpander Expander(SE, DL, "lsr_fold_term_cond");
+  // The terminating value of a capability induction variable is address
+  // arithmetic on its base, which may fault: like LSR, which formed that
+  // variable, keep it within this loop's preheader (see
+  // SCEVExpander::NonIntegralHoistLimit).
+  Expander.setNonIntegralHoistLimit(L);
 
   PHINode *ToHelpFold = nullptr;
   const SCEV *TermValueS = nullptr;
@@ -262,6 +267,7 @@ static bool RunTermFold(Loop *L, ScalarEvolution &SE, DominatorTree &DT,
   // SCEVExpander for both use in preheader and latch
   const DataLayout &DL = L->getHeader()->getDataLayout();
   SCEVExpander Expander(SE, DL, "lsr_fold_term_cond");
+  Expander.setNonIntegralHoistLimit(L);
 
   assert(Expander.isSafeToExpand(TermValueS) &&
          "Terminating value was checked safe in canFoldTerminatingCondition");

@@ -130,6 +130,61 @@ static bool IVUseShouldUsePostIncValue(Instruction *User, Value *Operand,
   return true;
 }
 
+/// The largest distance, in bytes, a capability may be moved outside the
+/// object it came from and still be sure to keep its tag. Compressed bounds
+/// have a representable window around [base, end): its lower edge is at least
+/// 2^(E+11) >= 2 KiB below the base (decompress_bounds, ariane_pkg.sv), and
+/// its upper edge at least about 4 KiB above the end. A cursor moved outside
+/// the window loses its tag (R-60), and a capability that is live out of the
+/// loop must not have been through one.
+static const uint64_t CapabilityWindowSlack = 2048;
+
+bool llvm::isCapabilityStepInWindow(const SCEV *Step) {
+  if (!Step)
+    return true;
+  const auto *C = dyn_cast<SCEVConstant>(Step);
+  return C && C->getAPInt().abs().ule(CapabilityWindowSlack);
+}
+
+/// A use of a capability-typed IV that reads the value after the increment
+/// (a value live out of the loop) is expressed on the normalized IV, whose
+/// start is the original start less one step: LSR then forms that start in
+/// the preheader and hands on the stepped capability. The start is the
+/// original address minus the step, and no access of the loop need lie there.
+/// With a step of a few bytes it stays in the window around the object, with
+/// a 4 KiB or a variable step it need not, and the capability handed on has
+/// lost its tag where the original value had not.
+static bool postIncStartInWindow(Instruction *User, Value *Operand,
+                                 const SCEV *ISE, DominatorTree *DT,
+                                 ScalarEvolution &SE) {
+  return !SCEVExprContains(ISE, [&](const SCEV *S) {
+    const auto *AR = dyn_cast<SCEVAddRecExpr>(S);
+    if (!AR || !IVUseShouldUsePostIncValue(User, Operand, AR->getLoop(), DT))
+      return false;
+    return !isCapabilityStepInWindow(AR->getStepRecurrence(SE));
+  });
+}
+
+/// A GEP that the loop is guaranteed to execute on every iteration may be
+/// strength-reduced even where it is not speculatable. LSR places the
+/// induction variable's start in the preheader, which falls through into the
+/// header, and its step in the latch, which only an iteration that ran the
+/// header reaches; the GEP sits in the header behind instructions that all
+/// transfer execution to their successor, so every iteration -- the first
+/// included -- runs the original address computation on the same base before
+/// anything could leave. Whatever the reduced form can fault on, the original
+/// faults on in the same iteration. This matters on a capability target, where
+/// address arithmetic traps on a base that holds no capability -- a sealed or
+/// an uninitialised one; NULL too until 2026-10-14 -- so C-19 keeps a GEP from
+/// being speculatable unless its base is known non-null, the line that rule
+/// draws: the hazard it guards against -- arithmetic hoisted above the check
+/// that would have skipped it -- needs the GEP to be skippable, which this one
+/// is not.
+static bool gepRunsOnEveryIteration(const Instruction *I, const Loop *L) {
+  return isa<GetElementPtrInst>(I) &&
+         isGuaranteedToExecuteForEveryIteration(I, L);
+}
+
 /// Inspect the specified instruction.  If it is a reducible SCEV, recursively
 /// add its users to the IVUsesByStride set and return true.  Otherwise, return
 /// false.
@@ -147,7 +202,18 @@ bool IVUsers::AddUsersIfInteresting(Instruction *I) {
   // IVUsers is used by LSR which assumes that all SCEV expressions are safe to
   // pass to SCEVExpander. Expressions are not safe to expand if they represent
   // operations that are not safe to speculate, namely integer division.
-  if (!isa<PHINode>(I) && !isSafeToSpeculativelyExecute(I))
+  // On a capability target address arithmetic traps on a base that holds no
+  // capability (a sealed or an uninitialised one; NULL too until 2026-10-14),
+  // and C-19 keeps a GEP from being speculatable unless its base is known
+  // non-null on its own -- an alloca, a global, a nonnull parameter. Asked
+  // here without a context, as it must be: a null check dominating the loop
+  // would prove non-nullness, not that the base is a capability, and a GEP
+  // the original skips (a conditional access) must not be stepped on its
+  // behalf. A GEP the loop runs on every iteration anyway needs no such proof
+  // (see above); every other capability-based address stays a plain use, and
+  // LSR recomputes it from the integer index on every iteration.
+  if (!isa<PHINode>(I) && !isSafeToSpeculativelyExecute(I) &&
+      !gepRunsOnEveryIteration(I, L))
     return false;
 
   // LSR is not APInt clean, do not touch integers bigger than 64-bits.
@@ -164,6 +230,21 @@ bool IVUsers::AddUsersIfInteresting(Instruction *I) {
 
   // Get the symbolic expression for this instruction.
   const SCEV *ISE = SE->getSCEV(I);
+
+  // A capability-typed address whose recurrence starts from a recurrence of
+  // an enclosing loop (a row that moves with the outer loop) stays a plain
+  // use. Reducing it would carry that outer recurrence either in an
+  // induction variable of the enclosing loop, formed outside the checks the
+  // loop runs under, or in a value the expander picks by SCEV identity --
+  // which is blind to poison: a phi of the program with the same SCEV may be
+  // poison where the program's own row value is not. The program's own value
+  // is the only safe start, and LSR has no way to ask for it.
+  if (DL.isNonIntegralPointerType(I->getType()) &&
+      SCEVExprContains(ISE, [this](const SCEV *S) {
+        const auto *AR = dyn_cast<SCEVAddRecExpr>(S);
+        return AR && AR->getLoop() != L;
+      }))
+    return false;
 
   // If we've come to an uninteresting expression, stop the traversal and
   // call this a user.
@@ -201,6 +282,13 @@ bool IVUsers::AddUsersIfInteresting(Instruction *I) {
     }
 
     if (AddUserToIVUsers) {
+      // A capability handed on after the loop stays computed by the program
+      // unless the start of its normalized IV stays in the window (see
+      // postIncStartInWindow); the loop's own accesses are reduced as before.
+      if (DL.isNonIntegralPointerType(I->getType()) &&
+          !postIncStartInWindow(User, I, ISE, DT, *SE))
+        continue;
+
       // Okay, we found a user that we cannot reduce.
       IVStrideUse &NewUse = AddUser(User, I);
       // Autodetect the post-inc loop set, populating NewUse.PostIncLoops.
