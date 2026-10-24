@@ -45,6 +45,16 @@
  *                      every block goes out as a child lifetime of the pool,
  *                      bounded to the block, and every sqlite3_free revokes it.
  *
+ *   REPRO322_POISONCAP (with REPRO322_VIRTUAL_MEMSYS5)
+ *                      the same cases as a CheriBSD process on PoisonCap's
+ *                      published platform (ports/sqlite/poisoncap). Two things
+ *                      differ, both below and nothing else: SQLite is handed
+ *                      the static heap without CHERI_PERM_POISON, the one
+ *                      permission their libc malloc strips (a capability with it
+ *                      passes every poison check, cheri-helper-utils.h:391 in
+ *                      their QEMU), and a fault handler reports the signal,
+ *                      its code and the faulting PC before re-raising it.
+ *
  * The three are the measurement: the same defect and the same binary modulo
  * one configure call, with the nested allocator absent, present, and present
  * and protected. Requires
@@ -73,9 +83,59 @@ static int run_case(void);
  * compressed encoder truncates it downward and the pool gains authority below itself. aligned(16)
  * was enough when QEMU kept exact shadow bounds; it is not under the compact profile. */
 CAPSTONE_REPR_ASSERT_POW2(SQLITE_HEAP_SIZE, "SQLITE_HEAP_SIZE");
+#ifndef REPRO322_POISONCAP
 static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]
     __attribute__((aligned(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
                            ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE))));
+#else
+#include <cheri/cheric.h>
+#include <machine/cherireg.h>
+#include <dlfcn.h>
+#include <signal.h>
+#include <ucontext.h>
+#include <unistd.h>
+static unsigned char sqlite_heap_storage[SQLITE_HEAP_SIZE]
+    __attribute__((aligned(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
+                           ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE))));
+typedef unsigned char repro_heap_t[SQLITE_HEAP_SIZE];
+/* The array as SQLite receives it: same bounds, CHERI_PERM_POISON removed. Every use of the name
+ * goes through this, cases 07 and 22 included, which configure the heap themselves; sizeof still
+ * reads the array's size. */
+static repro_heap_t *repro_heap_view(void) {
+  return (repro_heap_t *)cheri_andperm(&sqlite_heap_storage, ~(size_t)CHERI_PERM_POISON);
+}
+#define sqlite_heap (*repro_heap_view())
+/* The faulting PC, as an offset into the object that holds it, for the host to name the function;
+ * then the signal again with its default action, so the exit status is the one an unhandled fault
+ * gives. Not async-signal-safe in general; the process is about to die in any case. */
+static void repro_fault(int sig, siginfo_t *si, void *context) {
+  ucontext_t *uc = context;
+  void *pc = (void *)uc->uc_mcontext.mc_capregs.cp_sepcc;
+  Dl_info info;
+  unsigned long offset = 0;
+  const char *object = "?";
+  if (dladdr(pc, &info) && info.dli_fbase) {
+    offset = (unsigned long)((ptraddr_t)pc - (ptraddr_t)info.dli_fbase);
+    object = info.dli_fname;
+  }
+  char line[320];
+  int n = snprintf(line, sizeof line, "REPRO_FAULT sig=%d code=%d addr=%#lx pc_off=%#lx obj=%s\n",
+                   sig, si->si_code, (unsigned long)(ptraddr_t)si->si_addr, offset, object);
+  if (n > 0) (void)write(1, line, (size_t)n < sizeof line ? (size_t)n : sizeof line - 1);
+  signal(sig, SIG_DFL);
+  raise(sig);
+}
+__attribute__((constructor)) static void repro_fault_install(void) {
+  struct sigaction sa;
+  memset(&sa, 0, sizeof sa);
+  sa.sa_sigaction = repro_fault;
+  sa.sa_flags = SA_SIGINFO;
+  sigemptyset(&sa.sa_mask);
+  sigaction(SIGPROT, &sa, NULL);
+  sigaction(SIGSEGV, &sa, NULL);
+  sigaction(SIGBUS, &sa, NULL);
+}
+#endif
 #endif
 
 static int repro_init(void) {
@@ -108,6 +168,11 @@ static int repro_init(void) {
     out_text(" (build the amalgamation with SQLITE_ENABLE_MEMSYS5)\n");
     return rc;
   }
+#ifdef REPRO322_POISONCAP
+  out_text("repro heap_perm_poison=");
+  out_uint((cheri_getperm(sqlite_heap) & CHERI_PERM_POISON) != 0);
+  out_text("\n");
+#endif
 #ifdef REPRO322_VIRTUAL_SUBLET
   out_text("repro allocator=memsys5-sublet heap_bytes=");
 #else

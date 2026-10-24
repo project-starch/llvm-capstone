@@ -12,6 +12,15 @@ paper ports the same allocator in the same release (arXiv 2605.13210, §4.5 and 
 security test through it: its Juliet and MSET results use the system allocator. Which of the cases
 does their memsys5 catch, by the same rule our arms are scored by?
 
+## Scope as run (decided 2026-10-24, before the corpus run)
+
+Temporal cases only, PoisonCap's published arm only, lookaside on and off: two boots. Our side is
+the recorded Sublet arm, not re-run. No spatial arm: a poison report (SIGPROT code 3 with the poison
+line on their console) can only come from their mechanism, as cause 25 can only come from ours, so
+each side is scored as "fault at site" and "mechanism-signed at site" without a control arm. The
+`spatial` build and the attributable tier below remain available but are not part of this run.
+Predictions: `bug-corpora/sqlite/engine-repros/results/2026-10-24-poisoncap/PREDICTIONS.md`.
+
 ## What the corpus can and cannot measure (read before any number)
 
 - **27 qualified cases, not 33.** Cases 01, 04, 08, 09, 11 and 13 declare no `fault_sites`: host
