@@ -1,0 +1,50 @@
+{
+ "booted": true,
+ "uname": {
+  "cmd": "uname -a",
+  "rc": 0,
+  "stdout": "FreeBSD  15.0-CURRENT FreeBSD 15.0-CURRENT #0 214a1a2d9-dirty: Sat Oct 24 07:14:31 UTC 2026     (build container):$POISONCAP_PLATFORM/work/build/cheribsd-riscv64-purecap-build$POISONCAP_PLATFORM/work/source/cheribsd/riscv.riscv64c/sys/CHERI-PURECAP-QEMU-POISON riscv\n",
+  "stderr": ""
+ },
+ "sysctl": {
+  "cmd": "sysctl security.cheri kern.features.cheri_revoke 2>&1",
+  "rc": 0,
+  "stdout": "security.cheri.ptrace_caps: 0\nsecurity.cheri.cloadtags_stride: 4\nsecurity.cheri.sealcap: 0x0 [,0x0-0x200]\nsecurity.cheri.runtime_revocation_async: 1\nsecurity.cheri.runtime_revocation_every_free_default: 0\nsecurity.cheri.runtime_revocation_default: 0\nsecurity.cheri.check_perm_syscall: 0\nsecurity.cheri.bound_legacy_capabilities: 0\nsecurity.cheri.abort_on_memcpy_tag_loss: 0\nsecurity.cheri.stats.untagged_ptrace_caps: 0\nsecurity.cheri.stats.forged_ptrace_caps: 0\nsecurity.cheri.capability_size: 16\nkern.features.cheri_revoke: 1\n",
+  "stderr": ""
+ },
+ "poison_tests": {
+  "binary": "cheribsdtest-purecap",
+  "names": [
+   "cheri_poison_mmap",
+   "cheri_poison_fault_read",
+   "cheri_poison_revoke",
+   "cheri_poison_revoke_bounds"
+  ]
+ },
+ "runs": [
+  {
+   "cmd": "cheribsdtest-purecap cheri_poison_mmap",
+   "rc": 0,
+   "stdout": "TEST: cheri_poison_mmap: check that mmap returns a capability that permits poisoning\nPASS: cheri_poison_mmap\n",
+   "stderr": ""
+  },
+  {
+   "cmd": "cheribsdtest-purecap cheri_poison_fault_read",
+   "rc": 0,
+   "stdout": "TEST: cheri_poison_fault_read: check that reading a poisoned region causes a fault\nPASS: cheri_poison_fault_read\n",
+   "stderr": ""
+  },
+  {
+   "cmd": "cheribsdtest-purecap cheri_poison_revoke",
+   "rc": 0,
+   "stdout": "TEST: cheri_poison_revoke: check revocation of poisoned allocation\nPASS: cheri_poison_revoke\n",
+   "stderr": ""
+  },
+  {
+   "cmd": "cheribsdtest-purecap cheri_poison_revoke_bounds",
+   "rc": 0,
+   "stdout": "TEST: cheri_poison_revoke_bounds: check revocation of poisoned allocation with poison bounds\nPASS: cheri_poison_revoke_bounds\n",
+   "stderr": ""
+  }
+ ]
+}
