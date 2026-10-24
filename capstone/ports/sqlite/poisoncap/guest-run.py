@@ -69,6 +69,8 @@ def parse(stdout, exit_status):
         'heap_perm_poison': (re.search(r'^repro heap_perm_poison=(\d)', stdout, re.M) or [None, None])[1],
         'lookaside_off': bool(re.search(r'^repro lookaside=off rc=0', stdout, re.M)),
         'control_failed': bool(re.search(r'CONTROL-FAILED', stdout)),
+        # FAILRC and the cases' own stage reports: `<stage> rc=N`; N != 0 means a step failed.
+        'rc_lines': [l.strip() for l in stdout.splitlines() if re.search(r'\brc=[1-9]', l)][:20],
         'tail': stdout.strip().splitlines()[-3:] if stdout.strip() else [],
     }
 
