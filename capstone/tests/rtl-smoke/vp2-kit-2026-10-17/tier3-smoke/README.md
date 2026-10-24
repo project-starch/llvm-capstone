@@ -8534,3 +8534,25 @@ Record: `records/b2bs-cpy-lt1-b1.result-lines.txt`.
   The batch bitstream's 16-bit table had stopped these ten cells.
 - norandmaps is in the command line; readings 0.
 - **Against the pre-registration (5e06c7dec5e0): every reading holds.** The only process failure was the wrapper budget.
+
+### Bitstream 2, results on board 1: pg-pools, the 13-arm re-read, mruby, perl and Juliet temporal, every reading as pre-registered (2026-10-25 08:55-19:59)
+
+Records: `records/b2bs-pg-pools-b1.result-lines.txt`, `b2bs-reread-b1.result-lines.txt`, `b2bs-mp-b1.result-lines.txt`
+and `b2bs-juliet-temporal-b1.result-lines.txt`.
+- **pg-pools (trimmed):** 9 of 9 as the bitstream-2 trimmed reference: CAUGHT 5, MISSED 2, unattributed 2. Fixture
+  956173e0, image dc2a1356, must-fire OK, readings 0.
+- **The re-read, 13 arms:** every arm is equal in every field, except sq0d's three pre-registered Q-31 cells:
+  - fph 25, fpt 13, fca 13, fcs 13, fso 9, mph 9, mpt 3, wph 12, wpt 10, pgc 5, pgm0 5 and pgm1 5;
+  - sq0a-c and sq0e at 6 each, sq0f 3;
+  - sq0d 3 of 6. Cells 19 and 20 read cause 4 at nodeRelease+144 and cell 22 reads cause 13 at
+    editDist3FindLang+244, where QEMU reads 24. The verdicts and sites are equal, exactly as on the batch.
+  - Readings 0 throughout.
+- **mruby stock:** 23 of 23 (fault 20, completed 3). **mruby Sublet:** 23 of 23 (fault 23). Both read "control smoke ok".
+- **perl stock:** 11 of 11. **perl Sublet:** 11 of 11. Controls eval and shim True on both.
+- **Juliet temporal**, graded by juliet-obs-compare:
+  - census **726 of 735**. The 9 differences are all rand-driven `_12` draws, both ways (5 on the batch). None is the
+    uaf control: its cause 13 did not occur in these 12 steps.
+  - **seeded 56 of 56**, which scores the `_12` draws;
+  - 14 boot transcripts, readings 0.
+  - The judge-field line (366 "differ") is judge.py's no-revoked-line on silicon and is not a reading.
+- **Against the pre-registrations (0ff98de9789a, bdbc8cd093f5, b0d039c0f986, 1bf8e9723822): every reading holds.**
