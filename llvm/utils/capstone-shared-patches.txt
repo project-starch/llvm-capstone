@@ -71,6 +71,7 @@ clang/lib/Sema/SemaType.cpp | +11 -0 | // Capstone: an integer held in a capabil
 clang/lib/Serialization/ASTCommon.cpp | +6 -0 | case BuiltinType::UIntCap:
 clang/lib/Serialization/ASTReader.cpp | +6 -0 | case PREDEF_TYPE_UINTCAP_ID:
 clang/lib/Support/CMakeLists.txt | +1 -0 | CapstoneVIntrinsicUtils.cpp
+llvm/include/llvm/Analysis/IVUsers.h | +10 -0 | /// Whether stepping a capability-typed induction variable by \p Step keeps a
 llvm/include/llvm/BinaryFormat/Dwarf.def | +2 -0 | HANDLE_DW_CC(0xd1, LLVM_CapstoneVectorCall)
 llvm/include/llvm/BinaryFormat/ELF.h | +32 -1 | EM_CAPSTONE = 259,      // Capstone
 llvm/include/llvm/BinaryFormat/ELFRelocs/Capstone_nonstandard.def | +32 -0 | #ifndef ELF_Capstone_NONSTANDARD_RELOC
@@ -87,6 +88,8 @@ llvm/include/llvm/IR/RuntimeLibcalls.td | +20 -0 | def CAPSTONE_FLUSH_ICACHE : R
 llvm/include/llvm/Object/ELFObjectFile.h | +27 -0 | Expected<SubtargetFeatures> getCapstoneFeatures() const;
 llvm/include/llvm/TargetParser/CMakeLists.txt | +3 -0 | set(LLVM_TARGET_DEFINITIONS ${PROJECT_SOURCE_DIR}/lib/Target/Capstone/Capstone.td)
 llvm/include/llvm/TargetParser/Triple.h | +15 -0 | capstone32,  // Capstone: capstone32
+llvm/include/llvm/Transforms/Utils/ScalarEvolutionExpander.h | +20 -0 | const Loop *NonIntegralHoistLimit = nullptr;
+llvm/lib/Analysis/IVUsers.cpp | +89 -1 | static bool gepRunsOnEveryIteration(const Instruction *I, const Loop *L) {
 llvm/lib/Analysis/ValueTracking.cpp | +33 -0 | // On a target whose pointers are CAPABILITIES, address arithmetic is not a
 llvm/lib/CodeGen/AsmPrinter/AsmPrinter.cpp | +50 -2 | // Some targets, including Capstone with addrspace(200) capability
 llvm/lib/CodeGen/AssignmentTrackingAnalysis.cpp | +4 -1 | // Capstone: stripAndAccumulate... wants the INDEX width, which is not the
@@ -116,8 +119,11 @@ llvm/lib/TargetParser/CMakeLists.txt | +2 -0 | CapstoneISAInfo.cpp
 llvm/lib/TargetParser/TargetDataLayout.cpp | +46 -0 | static std::string computeCapstoneDataLayout(const Triple &TT,
 llvm/lib/TargetParser/Triple.cpp | +21 -1 | case capstone32:     return "capstone32";
 llvm/lib/Transforms/InstCombine/InstructionCombining.cpp | +11 -1 | // Not for a non-integral (Capstone capability) pointer. Both rewrites below
+llvm/lib/Transforms/Scalar/LoopStrengthReduce.cpp | +19 -0 | Rewriter.setNonIntegralHoistLimit(L);
+llvm/lib/Transforms/Scalar/LoopTermFold.cpp | +6 -0 | Expander.setNonIntegralHoistLimit(L);
 llvm/lib/Transforms/Scalar/SROA.cpp | +145 -0 | /// Capstone: does a value of type \p Ty hold a pointer wider than its index --
 llvm/lib/Transforms/Utils/BuildLibCalls.cpp | +56 -33 | // targets. On Capstone every C pointer is a capability in the address space the
+llvm/lib/Transforms/Utils/ScalarEvolutionExpander.cpp | +14 -1 | bool SCEVExpander::hoistStopsAt(const Loop *L, Type *Ty) const {
 llvm/lib/Transforms/Utils/SimplifyLibCalls.cpp | +1 -1 | Src = B.CreateGlobalString(SrcStr, "str", /*AddressSpace=*/std::nullopt,
 llvm/utils/TableGen/Basic/CMakeLists.txt | +1 -0 | CapstoneTargetDefEmitter.cpp
 llvm/utils/TableGen/Basic/VTEmitter.cpp | +19 -3 | if (IsCapstoneVecTuple) {

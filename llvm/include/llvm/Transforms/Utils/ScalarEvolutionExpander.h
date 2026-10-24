@@ -127,6 +127,18 @@ class SCEVExpander : public SCEVVisitor<SCEVExpander, Value *> {
   /// "expanded" form.
   bool LSRMode;
 
+  /// When non-null, an expression of a pointer type in a non-integral address
+  /// space is never hoisted above this loop's preheader. On a capability
+  /// target the arithmetic such an expression expands to can fault when its
+  /// base holds no capability, so it may only be formed where its admission
+  /// holds: IVUsers admits a GEP whose base is known non-null without a
+  /// context (C-19's line, an admission policy, not a proof the base holds a
+  /// capability) or one the loop runs on every iteration (the preheader then
+  /// only does what the loop's first iteration would); either way nothing
+  /// outside the loop was admitted. Set by LSR for the loop it reduces and
+  /// by LoopTermFold for the loop it folds; other clients hoist as before.
+  const Loop *NonIntegralHoistLimit = nullptr;
+
   /// When true, rewrite any divisors of UDiv expressions that may be 0 to
   /// umax(Divisor, 1) to avoid introducing UB. If the divisor may be poison,
   /// freeze it first.
@@ -381,6 +393,14 @@ public:
   void disableCanonicalMode() { CanonicalMode = false; }
 
   void enableLSRMode() { LSRMode = true; }
+
+  /// Never hoist a non-integral pointer expression above L's preheader.
+  void setNonIntegralHoistLimit(const Loop *L) { NonIntegralHoistLimit = L; }
+
+  /// True if an expression of type Ty must not be hoisted out of loop L: L
+  /// is outside the non-integral hoist limit, and Ty is a pointer into a
+  /// non-integral address space.
+  bool hoistStopsAt(const Loop *L, Type *Ty) const;
 
   /// Set the current insertion point. This is useful if multiple calls to
   /// expandCodeFor() are going to be made with the same insert point and the

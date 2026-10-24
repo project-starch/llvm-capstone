@@ -223,6 +223,11 @@ SCEVExpander::GetOptimalInsertionPointForCastOf(Value *V) const {
       .getFirstInsertionPt();
 }
 
+bool SCEVExpander::hoistStopsAt(const Loop *L, Type *Ty) const {
+  return NonIntegralHoistLimit && Ty->isPointerTy() &&
+         DL.isNonIntegralPointerType(Ty) && !NonIntegralHoistLimit->contains(L);
+}
+
 /// InsertNoopCastOfTo - Insert a cast of V to the specified type,
 /// which must be possible with a noop cast, doing what we can to share
 /// the casts.
@@ -414,9 +419,12 @@ Value *SCEVExpander::expandAddToGEP(const SCEV *Offset, Value *V,
   // Save the original insertion point so we can restore it when we're done.
   SCEVInsertPointGuard Guard(Builder, this);
 
-  // Move the insertion point out of as many loops as we can.
+  // Move the insertion point out of as many loops as we can -- but not past
+  // the non-integral hoist limit: the GEP may fault, and must only be formed
+  // where the limited loop's own code would have formed it.
   while (const Loop *L = SE.LI.getLoopFor(Builder.GetInsertBlock())) {
     if (!L->isLoopInvariant(V) || !L->isLoopInvariant(Idx)) break;
+    if (hoistStopsAt(L, V->getType())) break;
     BasicBlock *Preheader = L->getLoopPreheader();
     if (!Preheader) break;
 
@@ -1592,6 +1600,11 @@ Value *SCEVExpander::expand(const SCEV *S) {
   if (SafeToHoist(S)) {
     for (Loop *L = SE.LI.getLoopFor(Builder.GetInsertBlock());;
          L = L->getParentLoop()) {
+      // A non-integral pointer expression stays within its hoist limit: once
+      // L lies outside the limited loop, the insertion point found so far --
+      // at most that loop's preheader -- is final.
+      if (hoistStopsAt(L, S->getType()))
+        break;
       if (SE.isLoopInvariant(S, L)) {
         if (!L) break;
         if (BasicBlock *Preheader = L->getLoopPreheader()) {
