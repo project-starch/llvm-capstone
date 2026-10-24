@@ -57,6 +57,9 @@ def main():
     p.add_argument('--no-lookaside', action='store_true')
     p.add_argument('--opt', default='-O0')
     p.add_argument('--only', help='comma-separated case number prefixes')
+    p.add_argument('--heap-bytes', type=int,
+                   help='SENSITIVITY ONLY: every case\'s memsys5 heap at this size (a power of two), '
+                        'overriding the corpus\'s sizes; never for the main row')
     a = p.parse_args()
     work = a.platform.resolve() / 'work'
     cc = work / 'sdk/bin/clang'
@@ -85,7 +88,8 @@ def main():
                 sys.exit(f'{script} failed: {done.stdout}{done.stderr}')
 
     engine = {}
-    for group in sorted({g for _, g, _ in cases.values()}):
+    # core always: the controls link against it, whatever --only selects.
+    for group in sorted({g for _, g, _ in cases.values()} | {'core'}):
         obj = a.out / 'obj' / f'sqlite3-{group}.o'
         command = [str(cc), *target, a.opt, *CONFIG, *flags[group], '-DSQLITE_ENABLE_MEMSYS5',
                    f'-I{a.amalgamation}', '-c', str(source), '-o', str(obj)]
@@ -110,6 +114,8 @@ def main():
             sources.append(str(a.ext_src / 'ext' / relative))
             extra_inc = [o if not o.startswith('-I') else f'-I{a.ext_src}/ext/{o[2:]}' for o in options]
         binary = a.out / case.name
+        if a.heap_bytes:
+            extra = [e for e in extra if not e.startswith('-DSQLITE_HEAP_SIZE=')] + [f'-DSQLITE_HEAP_SIZE={a.heap_bytes}']
         command = [str(cc), *target, a.opt, '-DREPRO322_VIRTUAL', '-DREPRO322_VIRTUAL_MEMSYS5',
                    '-DREPRO322_POISONCAP', *(['-DREPRO322_NO_LOOKASIDE'] if a.no_lookaside else []),
                    f'-I{REPO}/capstone/runtime/include', *CONFIG, *flags[group], *extra, *extra_inc,
@@ -134,7 +140,7 @@ def main():
         (controls if ok else failed).append(control.stem)
         print(f'  control {control.stem:<44} {"OK" if ok else "FAIL"}')
     (a.out / 'build.json').write_text(json.dumps(dict(
-        compiler=str(cc), target=target, amalgamation=str(a.amalgamation), opt=a.opt,
+        compiler=str(cc), target=target, amalgamation=str(a.amalgamation), opt=a.opt, heap_bytes=a.heap_bytes,
         no_lookaside=a.no_lookaside, groups={g: flags[g] for g in sorted(engine)},
         cases={c.name: dict(tag=t, group=g, extra=e) for c, (t, g, e) in cases.items()},
         built=built, controls=controls, failed=failed), indent=2) + '\n')

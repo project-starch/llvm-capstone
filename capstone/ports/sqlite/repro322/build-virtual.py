@@ -132,6 +132,10 @@ def main():
                         "own Sublet port: a page's data is a child lifetime of the pin, revoked "
                         "when the last reference goes away. The page is neither freed nor "
                         "reassigned there, so no malloc-level mechanism can see that end")
+    p.add_argument('--block-bounds', action='store_true',
+                   help="With --sublet: a COMPARISON arm with memsys5's stock rounding -- each child bounded "
+                        "to its whole power-of-two block, sizes reported as blocks -- applied by "
+                        "sublet/sublet-block-bounds.py after the patch. Every Sublet lifetime is kept.")
     p.add_argument('--no-lookaside', action='store_true',
                    help="With --sublet: turn SQLite's SECOND nested allocator off, so "
                         "the small allocations it would take go to memsys5, which this "
@@ -165,6 +169,10 @@ def main():
         a.memsys5 = True
     arm = ('memsys5-sublet-pagecache' if a.pagecache else
            'memsys5-sublet' if a.sublet else 'memsys5' if a.memsys5 else 'platform')
+    if a.block_bounds:
+        if not a.sublet:
+            sys.exit('--block-bounds needs --sublet')
+        arm += '-block-bounds'
     if a.no_lookaside:
         arm += '-no-lookaside'
     a.out.mkdir(parents=True, exist_ok=True)
@@ -204,6 +212,12 @@ def main():
             if done.returncode:
                 sys.exit(f'{patch.name} did not apply: {done.stdout}{done.stderr}')
             print(f'  patched {source.name} with {patch.name}')
+        if a.block_bounds:
+            done = subprocess.run([sys.executable, str(REPO / 'capstone/ports/sqlite/sublet/sublet-block-bounds.py'),
+                                   str(source)], capture_output=True, text=True)
+            if done.returncode:
+                sys.exit(f'sublet-block-bounds.py failed: {done.stdout}{done.stderr}')
+            print('  ' + done.stdout.strip())
         sublet_includes = [f'-I{REPO}/capstone/runtime/include']
     engine = {}
     for group in sorted({g for _, g, _ in cases.values()}):

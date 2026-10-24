@@ -1,0 +1,20 @@
+{
+ "build": "builds/heap8-la",
+ "expect": "published",
+ "cases": [
+  "07_129371553c_fts3_destroy_oom_stale_table",
+  "12_fb8ca7de0c_fts5_inplace_stale_leaf",
+  "15_2639ddc474_fts5_vocab_eof_stale_poslist",
+  "21_eab0e10304_rtree_static_bind_stale_text",
+  "23_eab0e10304_fts3_static_bind_stale_text"
+ ],
+ "started_utc": "2026-10-24T09:29:03Z",
+ "unpacked": "9",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "gate": {
+  "heap_perm_poison=0 in every control": true,
+  "reuse_clean returns": true,
+  "uaf_read faults with SIGPROT code 3 and a poison console line": true
+ },
+ "finished_utc": "2026-10-24T09:31:21Z"
+}

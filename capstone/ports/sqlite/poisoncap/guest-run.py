@@ -45,7 +45,7 @@ for name, seconds in (('CHERI_GUEST_BOOT_SECONDS', 1200), ('CHERI_GUEST_CMD_SECO
 SIGNALS = {34: 'SIGPROT', 11: 'SIGSEGV', 10: 'SIGBUS', 6: 'SIGABRT'}
 CONTROLS = (('reuse_clean', 'ctlreuse'), ('uaf_read', 'ctluaf'))
 # Recorded after the gate, never gating: what the heap's poison permission does (controls/uaf_keepperm.c).
-EVIDENCE = (('uaf_keepperm', 'ctlkeepperm'),)
+EVIDENCE = (('uaf_keepperm', 'ctlkeepperm'), ('uaf_interior', 'ctlinterior'), ('uaf_read_before_free', 'ctlrbf'), ('uaf_offsets', 'ctloffsets'))
 
 
 def temporal_cases():
@@ -72,7 +72,7 @@ def parse(stdout, exit_status):
         # FAILRC and the cases' own stage reports: `<stage> rc=N`; N != 0 means a step failed.
         'rc_lines': [l.strip() for l in stdout.splitlines() if re.search(r'\brc=[1-9]', l)][:20],
         'tail': stdout.strip().splitlines()[-3:] if stdout.strip() else [],
-        'stdout': stdout[-16000:],
+        'stdout': stdout[-4000000:],
     }
 
 
