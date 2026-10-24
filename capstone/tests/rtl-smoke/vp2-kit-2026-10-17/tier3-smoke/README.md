@@ -8556,3 +8556,20 @@ and `b2bs-juliet-temporal-b1.result-lines.txt`.
   - 14 boot transcripts, readings 0.
   - The judge-field line (366 "differ") is judge.py's no-revoked-line on silicon and is not a reading.
 - **Against the pre-registrations (0ff98de9789a, bdbc8cd093f5, b0d039c0f986, 1bf8e9723822): every reading holds.**
+
+### Bitstream 2, results on board 2: the 10-arm re-read and the new arms, every reading as pre-registered (2026-10-25 10:41-15:57)
+
+Records: `records/b2bs-reread-b2.result-lines.txt` and `b2bs-newarms-b2.result-lines.txt`.
+- **The re-read, 10 arms, every cell equal in every field:**
+  - pym0 20, pym1 20, pb9 4, pb12 9, pb10 4, wm0 23, pb13q15 9, pgm1q15 5 and wm1q15 23;
+  - sq1q15a-f: 6, 6, 6, 6, 6 and 3.
+  - Readings 0.
+- **New arms:**
+  - **xlang:** verdicts-compare 15 of 15 (repro) and 13 of 13 (lua-cdp). compare-pilot reads repro 4 of 15 on its
+    no-image cells, as on the batch.
+  - **plane:** 1 of 1 on each arm.
+  - **capi:** verdicts-compare equal in all six groups. compare-pilot reads 13-16 as 3 of 4, as on the batch.
+  - Every measured firmware is under the cap: xlang 19,565,064 B, plane 17,467,912 B, capi 25,856,520 B.
+  - The rows 13-16 boot's pc=0 count of 1 is row 13's own predicted `cause=12 pc=0x0` on
+    row13_cpython_deleted_rowfactory, as on the batch. Other readings are 0.
+- **Against the pre-registrations (bdbc8cd093f5, b0d039c0f986): every reading holds.**

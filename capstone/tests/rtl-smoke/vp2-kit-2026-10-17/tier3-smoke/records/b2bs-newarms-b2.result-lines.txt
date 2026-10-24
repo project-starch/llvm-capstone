@@ -1,0 +1,69 @@
+# the new arms on bitstream 2, board 2 (tier3-newarms-b2.sh): result lines. The rows 13-16 boot's pc=0 count of 1 is row 13's own
+# predicted fault (cause=12 pc=0x0 address=0x0 on row13_cpython_deleted_rowfactory), as on the batch.
+NA START 14:11:51 board 2 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 19565064 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 17 of 17 reference images built
+NA xlang BEGIN 14:12:28 board 2 booking 293
+NA xlang END 14:22:16 rc=0 :: --- xlang/lua-cdp vp2-malloc (virtual-mallocng): {'CAUGHT': 13}
+NA xlang repro COMPARE vs reference rc=1 :: 4 of 15 cells the same
+NA xlang repro VCOMPARE rc=0 :: 15 of 15 cells the same
+NA xlang lua-cdp COMPARE vs reference rc=0 :: 13 of 13 cells the same
+NA xlang lua-cdp VCOMPARE rc=0 :: 13 of 13 cells the same
+NA xlang readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA plane-malloc MEASURE firmware 17467912 B against 26000000
+NA plane-malloc IMAGE GATE rc=0 :: 1 of 1 reference images built
+NA plane-malloc BEGIN 14:22:49 board 2 booking 295
+NA plane-malloc END 14:30:38 rc=0 :: --- vp2-malloc (virtual-mallocng): {'MISSED': 1}
+NA plane-malloc plane-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-malloc plane-malloc VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-malloc readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA plane-nested MEASURE firmware 17467912 B against 26000000
+NA plane-nested IMAGE GATE rc=0 :: 1 of 1 reference images built
+NA plane-nested BEGIN 14:31:12 board 2 booking 296
+NA plane-nested END 14:39:26 rc=0 :: --- vp2-nested-pools (virtual-ffmpeg-plane-carve): {'MISSED': 1}
+NA plane-nested plane-nested COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-nested plane-nested VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-nested readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-1-2-3 MEASURE rows 1,2,3 firmware 25856520 B against 26000000
+NA capi-1-2-3 IMAGE GATE rc=0 :: 3 of 3 reference images built
+NA capi-1-2-3 BEGIN 14:40:22 board 2 rows 1,2,3 booking 297
+NA capi-1-2-3 END 14:52:52 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 3}  classes {}
+NA capi-1-2-3 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-4-5-6 MEASURE rows 4,5,6 firmware 25856520 B against 26000000
+NA capi-4-5-6 IMAGE GATE rc=0 :: 3 of 3 reference images built
+NA capi-4-5-6 BEGIN 14:53:48 board 2 rows 4,5,6 booking 299
+NA capi-4-5-6 END 15:06:15 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 3}  classes {}
+NA capi-4-5-6 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-7-8-9 MEASURE rows 7,8,9 firmware 25856520 B against 26000000
+NA capi-7-8-9 IMAGE GATE rc=0 :: 3 of 3 reference images built
+NA capi-7-8-9 BEGIN 15:07:10 board 2 rows 7,8,9 booking 300
+NA capi-7-8-9 END 15:19:36 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 3}  classes {}
+NA capi-7-8-9 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-10-11-12 MEASURE rows 10,11,12 firmware 25856520 B against 26000000
+NA capi-10-11-12 IMAGE GATE rc=0 :: 3 of 3 reference images built
+NA capi-10-11-12 BEGIN 15:20:31 board 2 rows 10,11,12 booking 302
+NA capi-10-11-12 END 15:32:58 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 2, 'NO-READING:out-of-denominator': 1}  classes {"null-deref": {"row12_expo_unfinalized_close": "fault cause=24 in main"}}
+NA capi-10-11-12 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-13-14-15-16 MEASURE rows 13,14,15,16 firmware 25856520 B against 26000000
+NA capi-13-14-15-16 IMAGE GATE rc=0 :: 3 of 3 reference images built
+NA capi-13-14-15-16 BEGIN 15:33:52 board 2 rows 13,14,15,16 booking 303
+NA capi-13-14-15-16 END 15:46:18 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 1, 'NO-READING:out-of-denominator': 3}  classes {"null-deref": {"row13_cpython_deleted_rowfactory": "fault cause=12 in an unsymbolized pc", "row14_cpython
+NA capi-13-14-15-16 capi COMPARE vs reference rc=1 :: 3 of 4 cells the same
+NA capi-13-14-15-16 capi VCOMPARE rc=0 :: 4 of 4 cells the same
+NA capi-13-14-15-16 readings: pc=0 1 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-17-18-19 MEASURE rows 17,18,19 firmware 25856520 B against 26000000
+NA capi-17-18-19 IMAGE GATE rc=0 :: 3 of 3 reference images built
+NA capi-17-18-19 BEGIN 15:47:12 board 2 rows 17,18,19 booking 304
+NA capi-17-18-19 END 15:57:44 rc=75 :: --- vp2-malloc (virtual-mallocng): {'NO-READING:out-of-denominator': 3}  classes {"none": {"row17_node_bind_typecast_abort": "correct, no false alarm", "row18_php_columntype_after_reset": "correct, no
+NA capi-17-18-19 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA seq-2 DONE 15:57:44
