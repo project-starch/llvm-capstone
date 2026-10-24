@@ -12,7 +12,7 @@ CTSRD-CHERI/sqlite 3.22.0-cheri plus PoisonCap's memsys5 (src/mem5.c) and driver
 
 Output, under WORK:
   sqlite-src/                 the artifact's sqlite/ tree, as published
-  amalgamation-published/     sqlite3.c and sqlite3.h generated from it (mem5.c as
+  amalgamation-published/     sqlite3.c and sqlite3.h generated from it, and sqlite3ext.h (mem5.c as
                               published: NESTED_TEMPORAL defined, i.e. poison on free,
                               quarantine and revocation)
   amalgamation-spatial/       the same with mem5.c's one `#define NESTED_TEMPORAL 1`
@@ -106,6 +106,8 @@ def amalgamate(src, build, out):
     out.mkdir(parents=True, exist_ok=True)
     for name in ('sqlite3.c', 'sqlite3.h'):
         shutil.copyfile(build / name, out / name)
+    # The official amalgamation ships the extension header beside them (spellfix.c needs it).
+    shutil.copyfile(src / 'src/sqlite3ext.h', out / 'sqlite3ext.h')
 
 
 def main():
@@ -151,7 +153,7 @@ def main():
         'mem5_sha256': MEM5_SHA256,
         'amalgamations': {
             arm: {name: sha256(work / f'amalgamation-{arm}' / name)
-                  for name in ('sqlite3.c', 'sqlite3.h')}
+                  for name in ('sqlite3.c', 'sqlite3.h', 'sqlite3ext.h')}
             for arm in ('published', 'spatial')
         },
     }
