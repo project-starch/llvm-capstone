@@ -81,7 +81,7 @@ for p in sys.argv[1:]:
         if l.startswith("DIFF "):
             k = l.split(":", 1)[0][5:]
             kind = ("uaf-control" if k == "controls:ctl-uaf" else "rand-driven _12 draw" if "_12." in k
-                    else "CWE170 (value-dependent candidate)" if k.startswith("CWE170") else "OTHER")
+                    else "CWE170 (value-dependent class)" if "CWE170" in k else "OTHER")
             print(f"JR DIFF [{kind}] {p.rsplit('/', 1)[1]} {l.rstrip()[5:230]}")
 PY
   local tb n=0 bad=0

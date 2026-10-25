@@ -9012,3 +9012,23 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
 - Until the lead rules, the pb13q15 row keeps 08 = NO-READING control-failed 785. The fill reading is recorded as its
   own row (pb13q15-08fill in the silicon tally), not counted.
 - The readings themselves are unchanged.
+
+### Addendum to the Juliet remainder pre-registration (19fadd9ec614), before part10's boot (2026-10-26 05:4x): the CWE170 class is a name SUBSTRING
+
+- **The gap:** the runner classed a difference as "CWE170" only when the case name STARTED with CWE170_. Juliet puts the
+  base CWE first and the flaw variant after the double underscore (CWE126_Buffer_Overread__CWE170_char_memcpy_02).
+  The rule would therefore have classed every one of the class's cases OTHER.
+- **The class:** the compiler lane defines it by a name substring: a case is in the class when its name contains `CWE170`.
+  Juliet calls that variant "improper null termination". The string read that follows a copy left without a NUL runs
+  until it meets a NUL or a bound, so its reading depends on the bytes that follow.
+  - The lane's lists: `juliet-rem/part10-cwe170-class.txt` (102 names, sha256/16 6d11432c43ecdd7b) and
+    `juliet-rem/cwe170-class.tsv` (507e42429a22b57f).
+  - Checked here against the 12 manifests: the substring occurs in 102 cases, all in part10, and every one is
+    `__CWE170_`. Parts 01-09, 11 and 12 hold none.
+- **The change:** the runner now classes a difference "CWE170 (value-dependent class)" when `"CWE170" in` the case name.
+  This is the lane's own classify-moves.py rule. Parts 01 and 02, already running, contain no such case, so nothing they
+  read changes.
+- **Prediction for part10, added:** its QEMU reference reads 632 CAUGHT and 67 MISSED, the CWE170 class 35 CAUGHT and
+  67 MISSED. On silicon the class may differ from QEMU in either direction, because whether memchr meets a NUL depends on
+  memory contents. Those differences are reported as the class, by name and by direction. **Any difference outside the
+  102 is still a finding.**
