@@ -79,6 +79,28 @@ capstone_configure_application(${CAPSTONE_APPLICATION_NAME}
   CONTEXT_BYTES ${CAPSTONE_APPLICATION_CONTEXT_BYTES})
 if(CAPSTONE_APPLICATION_SDK)
   get_filename_component(capstone "${CMAKE_CURRENT_LIST_DIR}/../.." ABSOLUTE)
+  # The SDK carries everything but its compiler: the four musl header
+  # directories capstone-cc compiles against, the link script and the C library
+  # are copied into it at build time, and sdk.json names the copies. Deleting or
+  # moving what it was built from (a musl tree, a kit's libc, this checkout)
+  # then leaves a built SDK working.
+  set(sdk_musl "${CMAKE_CURRENT_BINARY_DIR}/musl")
+  set(sdk_script "${CMAKE_CURRENT_BINARY_DIR}/link.ld")
+  set(sdk_libc "${CMAKE_CURRENT_BINARY_DIR}/libc-capstone.a")
+  set(copy_musl)
+  foreach(dir arch/capstone64 arch/generic obj/include include)
+    if(NOT IS_DIRECTORY "${PORT_MUSL_ROOT}/${dir}")
+      message(FATAL_ERROR "PORT_MUSL_ROOT '${PORT_MUSL_ROOT}' has no ${dir}: name a configured musl tree")
+    endif()
+    list(APPEND copy_musl COMMAND "${CMAKE_COMMAND}" -E copy_directory
+         "${PORT_MUSL_ROOT}/${dir}" "${sdk_musl}/${dir}")
+  endforeach()
+  add_custom_target(sdk-inputs ALL
+    COMMAND "${CMAKE_COMMAND}" -E rm -rf "${sdk_musl}"
+    ${copy_musl}
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${capstone}/my_first_domain/link.ld" "${sdk_script}"
+    COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CAPSTONE_MUSL_ARCHIVE}" "${sdk_libc}"
+    VERBATIM)
   file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/sdk.json" CONTENT
 "{
   \"version\": 1,
@@ -88,10 +110,10 @@ if(CAPSTONE_APPLICATION_SDK)
   \"codegen\": ${sdk_codegen},
   \"cc\": \"${CMAKE_C_COMPILER}\",
   \"ld\": \"${CMAKE_LINKER}\",
-  \"musl\": \"${PORT_MUSL_ROOT}\",
-  \"script\": \"${capstone}/my_first_domain/link.ld\",
+  \"musl\": \"${sdk_musl}\",
+  \"script\": \"${sdk_script}\",
   \"runtime\": \"$<TARGET_FILE:application-runtime>\",
-  \"libc\": \"${CAPSTONE_MUSL_ARCHIVE}\",
+  \"libc\": \"${sdk_libc}\",
   \"builtins\": \"$<TARGET_FILE:capstone-application-builtins>\"
 }
 ")

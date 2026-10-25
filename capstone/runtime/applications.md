@@ -97,7 +97,11 @@ export CC="$CAPSTONE_TMP_ROOT/application-sdk/capstone-cc"
 ```
 
 `sdk.json` records the compiler, headers, linker script, runtime, libc and
-compiler builtins. The driver preserves source/library order and normal
+compiler builtins. Everything except the compiler and linker lives inside the
+SDK directory: the build copies the four musl header directories, the linker
+script and the C library there, so a built SDK keeps working after the musl
+tree, the libc archive or the checkout it came from is moved or deleted. The
+driver preserves source/library order and normal
 compile/preprocessor modes; unknown options and unresolved symbols fail.
 Configuration checks the compiler's direct-call capability codegen and refuses
 the old C-46 backend; for the virtual profile, whose code generation includes
