@@ -1,0 +1,29 @@
+## native (GNU ld, upstream 3.22 memsys5)
+ALL PASS
+## native negative control (bin edges off by one)
+oracle seeded with 2 events of sqlite3_initialize
+FAIL alloc-done bins: wrapper [2693, 1069, 1053, 870, 717, 516, 344, 166, 97, 75, 47, 32, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] oracle [1712, 1590, 1315, 1001, 757, 529, 355, 167, 99, 75, 47, 32, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+FAILED
+## PoisonCap, test programs with a static heap (reuse-qual2)
+  FAIL output identical without the wrapper (every address): 0 vs 17498 lines
+  FAILED
+FAIL [poisoncap] test programs: check-reuse-wrap.py ALL PASS: ['FAILED']
+  [poisoncap] pilot: attempts=1180 reuses=0 distinct=1180 failed=0 live=0 moved=189 bins=[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+FAILED
+## PoisonCap, test programs with the heap from malloc (reuse-qual3): all four end at the same output line
+test-wrapped exit 162 lines 5281 last ['F 1']
+test-traced exit 162 lines 5281 last ['F 1']
+test-plain exit 162 lines 5281 last ['F 1']
+test-plain-b exit 162 lines 5281 last ['F 1']
+## Sublet/Capstone arm block-bounds (qual-3 pilots + tests-1)
+  [block-bounds] pilot: attempts=1180 reuses=988 distinct=192 failed=0 live=0 moved=189 bins=[212, 156, 209, 184, 90, 47, 42, 17, 3, 28, 0, 0, 0, 0, 0, 0]
+ALL PASS
+## Sublet/Capstone arm sublet (qual-3 pilots + tests-1)
+  [sublet] pilot: attempts=1306 reuses=1106 distinct=200 failed=0 live=0 moved=310 bins=[213, 217, 240, 214, 83, 48, 45, 19, 4, 23, 0, 0, 0, 0, 0, 0]
+ALL PASS
+## Sublet/Capstone arm stock (qual-3 pilots + tests-1)
+  [stock] pilot: attempts=1180 reuses=982 distinct=198 failed=0 live=0 moved=189 bins=[217, 161, 197, 188, 80, 46, 44, 17, 4, 28, 0, 0, 0, 0, 0, 0]
+ALL PASS
+## Sublet spatial-only arm (qual-spatial)
+  [spatial] pilot: attempts=1180 reuses=988 distinct=192 failed=0 live=0 moved=189 bins=[212, 156, 209, 184, 90, 47, 42, 17, 3, 28, 0, 0, 0, 0, 0, 0]
+ALL PASS
