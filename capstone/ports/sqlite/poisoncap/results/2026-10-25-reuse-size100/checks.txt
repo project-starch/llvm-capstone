@@ -4,9 +4,13 @@ ADMISSIBLE poisoncap set3 off (p12, aad6a979, qualified binary): issues=52146 re
 ADMISSIBLE poisoncap set3 on  (p12, 97b02659, qualified binary): issues=52146 reuses=35316 failed=0 total=20379.637s
 ADMISSIBLE poisoncap set1 off (p13, 93c95687, NOT a qualified binary): issues=52146 reuses=51499 failed=0 total=16655.972s
 ADMISSIBLE poisoncap set1 on  (p13, 09d52ff2, NOT a qualified binary): issues=52146 reuses=35316 failed=0 total=16871.488s
+ADMISSIBLE sublet set2 off (p12, 9836684d, qualified binary): issues=52146 reuses=51499 failed=0 total=36247.391s
+ADMISSIBLE sublet set2 on  (p12, 6bfe4d1b, qualified binary): issues=52146 reuses=51499 failed=0 total=35465.379s
 ADMISSIBLE sublet set1 off (p13, 9836684d, qualified binary): issues=52146 reuses=51499 failed=0 total=31783.209s
 ADMISSIBLE sublet set1 on  (p13, 6bfe4d1b, qualified binary): issues=52146 reuses=51499 failed=0 total=31960.128s
 IDENTICAL repetitions poisoncap off: sets [2, 3, 1]
 IDENTICAL repetitions poisoncap on: sets [2, 3, 1]
+IDENTICAL repetitions sublet off: sets [2, 1]
+IDENTICAL repetitions sublet on: sets [2, 1]
 PLOT PoisonCap: set 2, xmax 131,071: plots/poisoncap-size100: control 51499/52146 reuses, protected 35316/52146; max diff 97.51 pp
 PLOT Sublet: set 1, xmax 131,071: plots/sublet-size100: control 51499/52146 reuses, protected 51499/52146; max diff 0.00 pp
