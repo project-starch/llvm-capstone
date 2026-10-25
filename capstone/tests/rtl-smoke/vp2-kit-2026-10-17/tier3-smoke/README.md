@@ -8879,3 +8879,27 @@ Record: `records/b2bs-census-b1.result-lines.txt`. Counters are cumulative, page
   - every cell as the reference in verdicts-compare's fields, and N=2 0 different;
   - the uaf-malloc control may read the silicon-only cause 13, which is a control, not a cell;
   - readings 0.
+
+### pb13q15 case 08, the usable-extent FILL variant and its UNFLAGGED control, on bitstream 2, pre-registered (2026-10-26 04:1x, before the boots)
+
+- **Why:** the compiler lane's variant (dev 66e305edaa66, pre-registered at its lane 8cd19dfb30ee): MC_FILL_USABLE_EXTENT_ON
+  lets the q15 arm read case 08. QEMU on qkit7-b2twin3-q8 reads:
+  - **fill:** CAUGHT, cause 28 in mc_case_body (the declared scan site);
+  - **unflagged:** NO-READING, control-failed 785, as in the tally.
+  If the fill reads CAUGHT on silicon, the runtime lane will take it as the case's reading, under the lead's earlier
+  "do" on this variant.
+- **What runs:** `tier3-pb08-b2.sh 1 <log>`, the lane's pair recipe (pb08/run-pair.sh) with --board-kit.
+  - It runs from a clean worktree at 8cd19dfb30ee (runner 9b5e409c, as the pair ran), `--only 08 --arm
+    virtual-nested-pools`.
+  - The prebuilt images must equal the pair's STAMP lines: fill defect-08 b1f8b637, unflagged 4722c4af, ctl 76dc9b51.
+  - Unflagged runs first, then fill, one boot each, on board 1 after httpd.
+  - The grade is verdicts-compare against the lane's QEMU bundles pb08/run-<v>/bundle.
+  - Dry run: `dryrun-pb08-b2.txt`.
+- **Predictions:**
+  - unflagged NO-READING control-failed 785;
+  - **fill CAUGHT, cause 28 in mc_case_body;**
+  - the controls (bounds-malloc, uaf-malloc, chunk-free-90) fault on both;
+  - 1 of 1 the same on each; readings 0.
+- **The remainder parts on board 1 wait behind these.** Board 1's scheduler was stopped before it claimed anything (no
+  claim existed). It restarts after pb08, so it cannot take board 1 between httpd's boots. Board 2's scheduler is
+  unchanged.
