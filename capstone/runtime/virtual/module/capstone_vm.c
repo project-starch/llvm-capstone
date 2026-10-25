@@ -1366,6 +1366,20 @@ module_param(resolve_sfence, bool, 0644);
 static unsigned long resume_sfences;
 module_param(resume_sfences, ulong, 0444);
 
+/* resume_flush_all (TEST ONLY, default off): the bitstream-3 scope note's walk arm for the uaf
+ * control's silicon-only cause 13 (dev 7cded32d20e8). The 13 comes with the freed page unmapped, so
+ * the stale read takes a page-table walk that FAILS; with the page kept mapped, 400 of 400 stale
+ * reads were refused, but their translation was most likely still in the DTLB, so no walk was taken.
+ * With this set, every resume flushes the whole local TLB (`sfence.vma zero, zero`, all addresses and
+ * ASIDs; a software sfence carries its own qualifiers, rs1 = rs2 = x0) just before the CSRUNV, so the
+ * first access of each page after any escape walks -- and on a kept-mapped page the walk SUCCEEDS.
+ * A verdict lost on the walk path then shows as a completed stale read. resume_flush_alls counts the
+ * flushes. */
+static bool resume_flush_all;
+module_param(resume_flush_all, bool, 0644);
+static unsigned long resume_flush_alls;
+module_param(resume_flush_alls, ulong, 0444);
+
 /* The resume boundary's satp refresh for bf3db3175 (the RTL lane, 2026-10-18): the ENTRY reads satp
  * from frame[0] (switcher anvil:168-169), the ESCAPE saves the context's live satp to +928 (:479) and
  * the RESUME restores it from +928 (:313). CVA6's ASID_WIDTH is 16 on this build
@@ -1906,6 +1920,10 @@ thread_unwind:
                 asm volatile("sfence.vma %0, zero" : : "r"(t->last_fault_addr) : "memory");
                 t->sfence_pending = false;
                 ++resume_sfences;
+            }
+            if (resume_flush_all) {
+                asm volatile("sfence.vma zero, zero" : : : "memory");
+                ++resume_flush_alls;
             }
             if (t->started) {
                 /* run_event's fence orders this store before the CSRUNV, with the sentinel's. */
