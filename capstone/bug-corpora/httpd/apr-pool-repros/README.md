@@ -57,6 +57,19 @@ say FAIL before a PASS is believed. The [CheriBSD manual](runners/cheribsd/READM
 runs the same case against the platform's own `malloc` with libc revocation on
 or off, beside a control that shows the revocation can fire at the same shape.
 
+## The virtual profile
+
+`shared/build-cases.sh capstone-application` builds the case on the pools port's `capstone-application` preset, and
+`tools/run-virtual-cases.py --prebuilt` runs it.
+- **`virtual-malloc`** (`APRP_SUBLET=OFF`): the stock adapters over virtual mallocng.
+- **`virtual-nested-pools`** (`APRP_SUBLET=ON`): `src/virtual/`. A node is a CDERIVE child of its memory, and each pool
+  gets a fresh child of it, revoked at the node's release.
+
+Measured 2026-10-26 on the bitstream-2 twin (`results/2026-10-26-virtual/`):
+- `virtual-malloc` reads case 0 MISSED, and its port control `node-released-90` completes. APR files the destroyed
+  pool's node and never calls free(), so the heap has no event.
+- `virtual-nested-pools` reads case 0 CAUGHT at `read_probe`, cause 25, and the control faults.
+
 ## Where this corpus deviates from the contract, and why
 
 [`../../tools/check-corpus.py`](../../tools/check-corpus.py) enforces

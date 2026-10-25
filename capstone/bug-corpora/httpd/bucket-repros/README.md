@@ -83,6 +83,13 @@ This section is the 2026-09-22 record; its two PoisonCap rows are history.
 | `poisoncap-spatial` | exact bounds, nothing invalidated | 8 / 8 complete |
 | `poisoncap-protected` | poison and sweep of a node when APR files it, of a bucket piece at its individual free | **8 / 8 SIGPROT** at `apr_defect_read`, paired |
 
+The virtual profile, measured 2026-10-26 under QEMU on the bitstream-2 twin (qkit7-b2twin3-q8, r60 SDK; `results/2026-10-26-virtual/`), each arm in one boot with its controls firing as `tools/arms.json` declares:
+
+| arm | what acts | result |
+|---|---|---|
+| `virtual-malloc` | virtual mallocng under the stock adapters: every node one heap object, filed on APR's free list and never freed | 8 / 8 MISSED; the port control `piece-filed-90` completes |
+| `virtual-nested-pools` | the pools port's `src/virtual/` adapters: a node's issued child revoked (CREVOKE) at its release, a bucket piece at its file | **8 / 8 CAUGHT** at `read_probe`, cause 25; `piece-filed-90` faults |
+
 Which event each case ends at, and therefore which mechanism catches it:
 
 | cases | the lifetime ends at | under Sublet |

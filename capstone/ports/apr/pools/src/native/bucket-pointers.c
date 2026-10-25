@@ -67,6 +67,12 @@ static struct list *list_for(const void *list) {
   l->head = -1;
   return l;
 }
+/* A piece's pointer, from its block's: the same address, with the block's
+ * provenance. The integer cast this replaced worked natively and on purecap
+ * CheriBSD, where uintptr_t is a capability; on Capstone it is untagged. */
+static void *piece_pointer(const struct piece *p) {
+  return (char *)blocks[p->block].header + (p->address - blocks[p->block].address);
+}
 void *aprb_block_lend(void *block) {
   ensure();
   if (nblocks == APRB_BLOCKS)
@@ -99,7 +105,7 @@ void *aprb_carve(void *block, size_t size) {
   header->first_avail = (char *)b->header + (b->cursor - b->address);
   p->live = 1;
   ++carved;
-  return (void *)p->address;
+  return piece_pointer(p);
 }
 void aprb_file(void *list, void *node) {
   struct piece *p = piece_for(node);
@@ -121,7 +127,7 @@ void *aprb_reissue(void *list, apr_memnode_t **memnode) {
   p->filed = 0;
   *memnode = blocks[p->block].header;
   ++reissues;
-  return (void *)p->address;
+  return piece_pointer(p);
 }
 void aprb_blocks_returning(void *chain) {
   for (apr_memnode_t *header = chain; header; header = header->next) {

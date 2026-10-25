@@ -14,7 +14,9 @@
     "sublet",
     "cheribsd-revocation",
     "native-detect",
-    "native-fix-differential"
+    "native-fix-differential",
+    "virtual-malloc",
+    "virtual-nested-pools"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -34,5 +36,13 @@
     "capstone/bug-corpora/httpd/apr-pool-repros/results/20260922-poisoncap"
   ],
   "advisories": [],
-  "shape_table": true
+  "shape_table": true,
+  "arm_configurations": {
+    "virtual-malloc": "virtual-aprpool-stock",
+    "virtual-nested-pools": "virtual-aprpool-sublet"
+  },
+  "verdict_bundles": {
+    "virtual-malloc": "results/2026-10-26-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-26-virtual/virtual-nested-pools"
+  }
 }

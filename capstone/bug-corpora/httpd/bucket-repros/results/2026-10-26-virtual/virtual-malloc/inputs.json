@@ -1,0 +1,47 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "argv": {
+      "buggy": [
+        "buggy",
+        "N"
+      ],
+      "fixed": [
+        "fixed",
+        "N"
+      ]
+    },
+    "cache": {
+      "APRP_SUBLET": "OFF",
+      "CMAKE_BUILD_TYPE": "Debug",
+      "CMAKE_C_FLAGS": "-isystem \"/mnt/hdd/<user>/capstone/t3-freeze-r60/llvm/lib/clang/22/include\""
+    },
+    "controls": {
+      "piece-filed-90": "e0f9649489ee2966102c0fac7f2ce784f3e942f5c6537edcf6decce793b32cf5"
+    },
+    "prebuilt": "/mnt/hdd/<user>/capstone/httpd-v/build/bucket-repros/virtual-malloc",
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 8,
+  "configuration": "virtual-aprbucket-stock",
+  "contract": "verdicts-v1",
+  "corpus": "httpd/bucket-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "fad465ce4dea71218016182dba80784d1b9f105910dd09655f4037401a6027af",
+    "module": "3325473537072a3a7b5484ab9ef770158898358ac47c013287058bdd7f71be2c",
+    "profile": "virtual",
+    "qemu": "e5fa4bcb6f5c450baa3297b89d0fee908f0514a2437ea29dac885a7f16b7b410",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "e464b106e1eb5c8e9594f958545961db20a6c577245ddbe86bb1b9ad9aa0514a"
+  },
+  "tally": {
+    "MISSED": 8
+  }
+}

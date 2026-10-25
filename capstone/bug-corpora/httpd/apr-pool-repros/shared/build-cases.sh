@@ -12,11 +12,19 @@
 #       the platform's ABI probe, the revocation control and the supervisor
 #       that observes each program from outside. CHERI_SDK and CHERI_SYSROOT
 #       must name a matching pair.
+#   shared/build-cases.sh capstone-application OUT [cmake options]
+#       the virtual profile: one port build on the SDK named by CAPSTONE_SDK
+#       (preset capstone-application), then each case linked as the native arms
+#       are, with the SDK's capstone-cc: OUT/bin/defect-NN, run as
+#       `defect-NN buggy|fixed NN`. -DAPRP_SUBLET=ON is the nested arm
+#       (src/virtual/ adapters; the cases' driver selects mode 1); OFF, the stock
+#       adapters over virtual mallocng. APRP_CASES names another case root, the
+#       controls under controls/virtual.
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 CORPUS=$(cd -- "$HERE/.." && pwd)
 REPO=$(git -C "$HERE" rev-parse --show-toplevel)
-TARGET=${1:?usage: build-cases.sh native|capstone-domain|cheribsd OUT [cmake options]}
+TARGET=${1:?usage: build-cases.sh native|capstone-domain|cheribsd|capstone-application OUT [cmake options]}
 OUT=${2:?select an output directory}
 shift 2
 PORT="$REPO/capstone/ports/apr/pools"
@@ -46,6 +54,26 @@ capstone-domain)
       -DAPRP_CORPUS_SRC="$dir/case.c" "$@" >"$OUT/work/$number.log" 2>&1
     cmake --build "$work" >>"$OUT/work/$number.log" 2>&1
     cp "$work/bin/defects.dom" "$OUT/bin/defect-$number.dom"
+    built=$((built + 1))
+  done
+  ;;
+capstone-application)
+  : "${CAPSTONE_SDK:?set CAPSTONE_SDK to a virtual Capstone application SDK}"
+  work="$OUT/work/port"
+  cmake --preset capstone-application -S "$PORT" -B "$work" "$@" >"$OUT/work/port.log" 2>&1
+  cmake --build "$work" >>"$OUT/work/port.log" 2>&1
+  SRC=$(ls -d "$work"/source/apr-1.*)
+  mode=()
+  if grep -q '^APRP_SUBLET:BOOL=ON$' "$work/CMakeCache.txt"; then
+    mode=(-DAPRP_DRIVER_MODE=1)
+  fi
+  for dir in "${APRP_CASES:-$CORPUS}"/[0-9][0-9]_*/; do
+    number=$(basename "$dir" | cut -c1-2)
+    "$CAPSTONE_SDK/capstone-cc" -std=c11 -O1 -g -Wall -Wextra -DAPR_ALIGN_DEFAULT_BOUNDARY=16 "${mode[@]}" \
+      -I"$CORPUS/shared" -I"$PORT/src/shared" -I"$SRC/include" -I"$PORT/../adapted" \
+      -I"$REPO/capstone/runtime/include" \
+      -o "$OUT/bin/defect-$number" "$dir/case.c" "$CORPUS/shared/driver.c" \
+      "$work/libapr-pools.a"
     built=$((built + 1))
   done
   ;;

@@ -1,0 +1,9 @@
+{
+  "case": 90,
+  "title": "CONTROL: a destroyed pool's node goes on APR's own free list, so the system allocator never sees it end; the nested adapter revokes it at the release",
+  "control_for": "the virtual-malloc and virtual-nested-pools arms of httpd/apr-pool-repros",
+  "arms": {
+    "virtual-malloc": {"oracle": "complete: apr_pool_destroy files the node on the allocator's free list; virtual mallocng sees no free"},
+    "virtual-nested-pools": {"oracle": "fault at read_probe: aprp_node_release revoked the node's issued child (CREVOKE)"}
+  }
+}

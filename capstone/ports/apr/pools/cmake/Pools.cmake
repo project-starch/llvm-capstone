@@ -30,6 +30,10 @@ add_dependencies(apr-pools apr-source)
 # aprp_replay, so the corpus stays outside the port and the port keeps one way
 # in. Both the Capstone domain build and the hosted build read it.
 set(APRP_CORPUS_SRC "" CACHE FILEPATH "Corpus-supplied program that defines aprp_replay")
+option(APRP_SUBLET "capstone-application: nodes and bucket pieces as CDERIVE children (src/virtual/)" OFF)
+if(APRP_SUBLET AND NOT PORT_PLATFORM STREQUAL "capstone-application")
+  message(FATAL_ERROR "APRP_SUBLET needs the capstone-application toolchain")
+endif()
 if(PORT_HOSTED)
   if(PORT_PLATFORM STREQUAL "cheribsd")
     # Stock CheriBSD: nodes from the platform's own malloc, so its revocation
@@ -44,6 +48,24 @@ if(PORT_HOSTED)
     add_executable(revocation-control security-tests/cheribsd/revocation-control.c)
     # The probes use GNU inline asm with a "C" operand, as cheric.h does.
     set_target_properties(revocation-control PROPERTIES C_EXTENSIONS ON)
+  elseif(PORT_PLATFORM STREQUAL "capstone-application")
+    # The virtual profile. Nodes come from the platform's malloc (virtual
+    # mallocng) in both arms. Off: the stock adapters, APR as shipped over it.
+    # On: nodes and bucket pieces become CDERIVE children, revoked by CREVOKE at
+    # the free-list transitions (src/virtual/), and the cases' driver selects
+    # mode 1, which only this adapter accepts.
+    target_compile_definitions(pools-options INTERFACE APRP_NODES_FROM_MALLOC)
+    if(APRP_SUBLET)
+      target_sources(apr-pools PRIVATE src/virtual/node-derive.c)
+      if(APRP_BUCKETS)
+        target_sources(apr-pools PRIVATE src/virtual/bucket-derive.c)
+      endif()
+    else()
+      target_sources(apr-pools PRIVATE src/cheribsd/node-malloc.c)
+      if(APRP_BUCKETS)
+        target_sources(apr-pools PRIVATE src/native/bucket-pointers.c)
+      endif()
+    endif()
   else()
     target_sources(apr-pools PRIVATE src/native/node-pointers.c)
     if(APRP_BUCKETS)
