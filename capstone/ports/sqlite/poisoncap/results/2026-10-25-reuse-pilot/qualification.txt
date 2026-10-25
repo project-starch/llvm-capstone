@@ -62,3 +62,23 @@ ALL PASS
 ## Sublet arm spatial, paged virtual platform (qual-paged)
   [spatial] pilot: attempts=1180 reuses=988 distinct=192 failed=0 live=0 moved=189 bins=[212, 156, 209, 184, 90, 47, 42, 17, 3, 28, 0, 0, 0, 0, 0, 0]
 ALL PASS
+
+# After the second review (32 bins required; pilots need >= 100 reuses unless REUSE_EXPECT_QUARANTINE=1, no failed allocation, all 20 tests)
+## native negative control: one-bin exit histogram (all reuses in one bin, wrapped and traced reports edited alike)
+## the previous checker: ALL PASS
+FAIL exit reports 32 bins: 1
+FAILED
+## native, 20000 steps
+ALL PASS
+## native, 4000 steps
+ALL PASS
+## PoisonCap as published, REUSE_EXPECT_QUARANTINE=1
+ALL PASS
+## PoisonCap as published WITHOUT quarantine mode (must fail: it reuses nothing)
+FAIL [poisoncap] test programs: check-reuse-wrap.py ALL PASS: ['FAILED']
+FAIL [poisoncap] pilot: the observer saw the workload (>= 1000 allocations issued, none failed, >= 100 reuses): {'attempts': 1180, 'issues': 1180, 'releases': 1180, 'reuses': 0, 'distinct': 1180, 'failed': 0, 'live': 0}
+FAILED
+## Sublet arm block-bounds, paged
+ALL PASS
+## Sublet arm spatial, paged
+ALL PASS

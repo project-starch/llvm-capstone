@@ -12,6 +12,7 @@ Names: test-wrapped, test-traced, test-plain, st-wrapped-size1 (or st-size1), st
 Prints PASS/FAIL per check; exit 0 only if all pass.
 """
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -83,14 +84,16 @@ def main():
     w, p = runs['st-wrapped-size1'], runs['st-plain-size1']
     check('pilot: both exit 0', w['rc'] == 0 and p['rc'] == 0, (w['rc'], p['rc']))
     tw, tp = TEST.findall(w['stdout']), TEST.findall(p['stdout'])
-    check('pilot: same tests completed', tw == tp and len(tw) > 0, (tw, tp))
+    check('pilot: same 20 tests completed', tw == tp and len(tw) == 20, (len(tw), len(tp)))
     rep = report(w['stderr'])
     check('pilot: wrapper report at exit', rep is not None)
     if rep:
         n = {k: int(rep[k]) for k in ('attempts', 'issues', 'releases', 'reuses', 'distinct', 'failed', 'live')}
         check('pilot: installed=1 error=0', rep['installed'] == '1' and rep['error'] == '0', rep.get('first_error'))
-        check('pilot: the observer saw the workload (>= 1000 allocations, >= 100 reuses or a quarantining allocator)',
-              n['attempts'] >= 1000 and n['distinct'] > 0, n)
+        quarantine = os.environ.get('REUSE_EXPECT_QUARANTINE') == '1'
+        check('pilot: the observer saw the workload (>= 1000 allocations issued, none failed, '
+              + ('a quarantining allocator: no reuse required)' if quarantine else '>= 100 reuses)'),
+              n['issues'] >= 1000 and n['failed'] == 0 and (quarantine or n['reuses'] >= 100), n)
         check('pilot: attempts == issues + failed', n['attempts'] == n['issues'] + n['failed'])
         check('pilot: issues == distinct + reuses', n['issues'] == n['distinct'] + n['reuses'])
         check('pilot: sum(bins) == reuses', sum(rep['bins']) == n['reuses'])
