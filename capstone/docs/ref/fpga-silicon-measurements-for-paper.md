@@ -7059,6 +7059,8 @@ Each of those three refusals was shown to fire on a mutated tally.
 | SQLite | 45 | 16 / 27 / 2 | 39 / 6 / 0 |
 | Lua and mruby shims | 17 | 16 / 1 / 0 | 16 / 1 / 0 |
 | **all seven** | **264** | **128 / 131 / 5 (48.5 %)** | **235 / 22 / 7 (89.0 %)** |
+| httpd (APR pools 1, apr-util buckets 8; added 2026-10-26) | 9 | 0 / 9 / 0 | 9 / 0 / 0 |
+| **all eight** | **273** | **128 / 140 / 5 (46.9 %)** | **244 / 22 / 7 (89.4 %)** |
 
 - **Against the batch bitstream** (`records/batch-silicon-tally.tsv`, the same script): 127 and 225 of 264. The
   difference is the two CPython rows of the previous entry.
@@ -7067,4 +7069,7 @@ Each of those three refusals was shown to fire on a mutated tally.
   equality (the previous two entries).
 - **FFmpeg's 9 inside-one-struct cases and its frame-pool plane** read missed in both columns: one allocation, so object
   bounds cannot separate them.
-- **Every cell is N=2** (the previous entry).
+- **Every cell of the seven is N=2** (the previous entry). httpd is N=1 so far: board 1, every cell as the
+  compiler lane's QEMU reference (dev 6d9e397df3ca's results); its second reading is queued on board 2.
+- **The batch tally has no httpd rows;** the script says so and reports the seven, and fails if a tally carries some
+  of a program's arms but not all.

@@ -1,10 +1,10 @@
 # Silicon readings on bitstream 2 dcc6daf6e: what b2-silicon-tally.tsv holds (board lane, 2026-10-25)
 
-Same generator, same columns and same out-of-denominator rules as batch-silicon-tally.tsv: 38 rows, 1,625 cells.
+Same generator, same columns and same out-of-denominator rules as batch-silicon-tally.tsv: 40 rows, 1,643 cells (38 rows and 1,625 cells before httpd).
 
 ## What changed from the batch bitstream (c721c1a2a)
 
-Exactly two rows differ from batch-silicon-tally.tsv; the other 36 are identical in every count column.
+Of the 38 rows both files share, exactly two differ; the other 36 are identical in every count column. (The httpd rows are new.)
 
 - **cpython-lt1:** CAUGHT 17 → 27, and NO-READING 12 → 2 (infra 4 and unattributed 7 → unattributed 1).
   - These are the ten cells the 16-bit table stopped. On bitstream 2's 18-bit table each is CAUGHT at the 18-bit QEMU
@@ -54,8 +54,16 @@ Exactly two rows differ from batch-silicon-tally.tsv; the other 36 are identical
   bitstream-2 QEMU reference cell for cell.
 - mruby Sublet ran with smoke-fit.
 
+## httpd (added 2026-10-26)
+
+- Two rows, httpd-malloc and httpd-nested, each summing apr-pool-repros (1 case) and bucket-repros (8 cases). The
+  source is board 1's reading on bitstream 2 (lane records/b2bs-httpd-b1.result-lines.txt).
+- Every cell matches the compiler lane's 18-bit-twin reference (dev 6d9e397df3ca): malloc 9 MISSED, nested pools
+  9 CAUGHT (cause 25, read_probe).
+- These rows are N=1. Their N=2 reading on board 2 is pending.
+
 ## Repeatability
 
-- Every row is ONE board reading of its arm on this bitstream (N=1).
-- A second pass (N=2), graded cell for cell against these readings, is running on both boards. It is pre-registered at
-  lane 60709f69bfc2.
+- Every row except httpd has TWO board readings on this bitstream, mostly on opposite boards, equal cell for cell.
+  The only exceptions are Juliet temporal's rand-driven `_12` draws and one Juliet spatial uaf-control step at cause 13
+  (dev 09b044205d0e, n2-grade.py).

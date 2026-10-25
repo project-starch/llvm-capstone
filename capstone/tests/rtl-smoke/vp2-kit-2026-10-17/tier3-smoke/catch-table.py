@@ -10,7 +10,7 @@ A corpus with no inner allocator on its path counts the same in both columns.
 Every bar is out of all the program's bugs. A NO-READING cell (the run stopped before its bug) is neither caught nor
 missed and stays in the denominator, EXCEPT the rows the lead put out of the denominator, listed in OUT with their
 count; each OUT count is checked against the tally, so a changed row cannot slip through silently.
-Juliet is reported on its own lines, not in the seven-program total. The mruby and perl release-differential rows
+Juliet is reported on its own lines, not in the programs' total. The mruby and perl release-differential rows
 carry no catch counts and are not used.
 
 Exit status: 0 and the table on stdout; 1 if any arm is missing or duplicated, or any count disagrees.
@@ -28,7 +28,11 @@ PROGRAMS = [
     ("PostgreSQL", ["pgc", "pgm0", "sql0"], ["pgc", "pgm1q15", "pg-pools"]),
     ("SQLite", ["sq0", "capi"], ["sq1q15", "capi"]),
     ("Lua, mruby shims", ["xlang-repro", "xlang-lua-cdp"], ["xlang-repro", "xlang-lua-cdp"]),
+    ("httpd", ["httpd-malloc"], ["httpd-nested"]),
 ]
+# Programs added after the batch bitstream's tally: skipped, and SAID so, only when NONE of their arms is in the tally
+# (a tally carrying some of their arms but not all still fails).
+LATER = {"httpd"}
 # Out of the denominator by the lead's decisions: arm -> NO-READING cells removed.
 OUT = {
     "capi": 7,          # SQLite capi: null dereferences and rows with nothing to catch
@@ -74,7 +78,12 @@ def main(path):
     print(f"source: {path}")
     print(f"{'program':18} {'bugs':>4}  {'malloc c/m/n':>14}  {'ported c/m/n':>14}")
     tot = [[0, 0, 0], [0, 0, 0]]
+    used = 0
     for name, mal, por in PROGRAMS:
+        if name in LATER and not any(t in rows for t in mal + por):
+            print(f"{name:18} not in this tally (added after it)")
+            continue
+        used += 1
         cols = []
         for i, arms in enumerate((mal, por)):
             s = [0, 0, 0]
@@ -86,7 +95,7 @@ def main(path):
             die(f"{name}: malloc column has {sum(cols[0])} bugs, ported {sum(cols[1])}")
         print(f"{name:18} {sum(cols[0]):4}  {'%d/%d/%d' % tuple(cols[0]):>14}  {'%d/%d/%d' % tuple(cols[1]):>14}")
     total = sum(tot[0])
-    print(f"{'All seven':18} {total:4}  {'%d/%d/%d' % tuple(tot[0]):>14}  {'%d/%d/%d' % tuple(tot[1]):>14}")
+    print(f"{'All %d' % used:18} {total:4}  {'%d/%d/%d' % tuple(tot[0]):>14}  {'%d/%d/%d' % tuple(tot[1]):>14}")
     print(f"caught: malloc {tot[0][0]}/{total} ({100 * tot[0][0] / total:.1f} %), "
           f"ported {tot[1][0]}/{total} ({100 * tot[1][0] / total:.1f} %)")
     for t in JULIET:
