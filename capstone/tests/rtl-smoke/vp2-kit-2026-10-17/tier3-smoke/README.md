@@ -8692,3 +8692,29 @@ Record: `records/b2n2b-b1.result-lines.txt`.
 - **The grade:** juliet-obs-compare between the first reading's observations (board 2) and the second's, with the
   three value-dependent CWE170 cases tolerated.
 - **Prediction:** 1513 of 1513 the same, with the tolerated cases reported; readings 0.
+
+### Bitstream 2 N=2 phase 2, board 2 result: xlang, plane, capi 1-9 and Juliet temporal as their first readings; capi 10-19 lost to a console outage (2026-10-25 09:3x-14:12)
+
+Record: `records/b2n2b-b2.result-lines.txt`.
+- **n2-grade, 0 different on each:** xlang repro 15 and lua-cdp 13; plane malloc and nested 1 each; capi groups 1-3, 4-6
+  and 7-9 at 3 each.
+- **capi 10-12: NO READING, infrastructure.** Its driver's lease request to the board console timed out
+  (`ConnectTimeoutError`), so there was no boot. n2-grade's "3 different" is the runner's NO-READING:infra rows, not a
+  reading.
+  - The runner then stopped, as designed, before 13-16 and 17-19.
+  - The console was back at 10:38: Juliet temporal booted and completed on the same board.
+- **Juliet temporal** (cross-board):
+  - census against the first reading: 730 of 735. All 5 differences are rand-driven `_12` draws, 0 OTHER;
+  - **seeded 56 of 56;**
+  - against the reference: 727 of 735, 8 `_12` draws;
+  - no uaf-control cause 13; readings 0.
+- **Against the pre-registration (e2f061fa69a9):** every reading taken holds. capi 10-19 are unread, not failed.
+
+### Bitstream 2 N=2: capi 10-19 re-run on board 2, pre-registered (2026-10-25 14:2x)
+
+- **The change:** tier3-newarms-b2.sh gains `NA_UNITS`, which runs only the named units. The default list is unchanged.
+  In the dry run it gives 10 compare lines without NA_UNITS and the three capi groups with it.
+- **What runs:** NA_UNITS `capi-10-11-12:10,11,12 capi-13-14-15-16:13,14,15,16 capi-17-18-19:17,18,19`, with NA_ROOT
+  `t3-run-b2-dcc6daf6e-b2/n2r/na`.
+- **Prediction:** n2-grade 0 different on each group against the first reading. Row 13's own predicted `cause=12 pc=0x0`
+  shows as the pc=0 count of 1 in the 13-16 boot, as twice before.

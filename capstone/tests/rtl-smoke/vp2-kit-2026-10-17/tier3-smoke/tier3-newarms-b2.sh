@@ -63,7 +63,10 @@ main() {
   done
   echo "NA START $(date +%T) board $BRD tree $(git -C $T rev-parse --short=12 HEAD) capi groups $CAPI_GROUPS" >> "$O"
   local u t d rc bid rows sz B g; local -a argv margv cc
-  for u in xlang plane-malloc plane-nested $(for g in $CAPI_GROUPS; do echo capi-${g//,/-}:$g; done); do
+  # NA_UNITS (2026-10-25): run only these units (the default list's spelling, e.g. "capi-10-11-12:10,11,12"), for a re-run of
+  # units an infrastructure failure left unread.
+  local units; units="xlang plane-malloc plane-nested $(for g in $CAPI_GROUPS; do echo capi-${g//,/-}:$g; done)"
+  for u in ${NA_UNITS:-$units}; do
     rows=; case $u in capi-*) rows=${u#*:}; u=${u%%:*};; esac; t=$u; d=$RR-$t
     [ -e "$d" ] && { echo "NA STOP: $d exists" >> "$O"; return 1; }
     case $t in
