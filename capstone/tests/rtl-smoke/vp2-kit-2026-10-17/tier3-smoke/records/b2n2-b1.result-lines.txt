@@ -1,0 +1,41 @@
+# bitstream 2 N=2, board 1: the lt1 repeat, the 6-arm N=2 re-read and sql0, each graded by n2-grade.py against the FIRST bitstream-2 board reading (chain output, result lines).
+CB lt1 BEGIN 20:01:54 board 1 kit bkit9-b2-nb1 booking 310
+CB lt1 ARM END rc=0 02:19:40 :: APPVM read rc=0 02:19:40 :: --- vp2-nested-pools (virtual-cpython-pools): {'CAUGHT': 27, 'MISSED': 3, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 1}
+CB lt1 COMPARE vs reference rc=0 :: 32 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 02:19:40
+N2 lt1 rc=0 :: 32 of 32 cells the same, 0 allowed, 0 different
+rr rc=0
+RR pym0 COMPARE vs batch reference rc=0 :: 20 of 20 cells the same
+RR pym0 VCOMPARE rc=0 :: 20 of 20 cells the same
+RR pym1 COMPARE vs batch reference rc=0 :: 20 of 20 cells the same
+RR pym1 VCOMPARE rc=0 :: 20 of 20 cells the same
+RR pb12 COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR pb12 VCOMPARE rc=0 :: 9 of 9 cells the same
+RR wm0 COMPARE vs batch reference rc=0 :: 23 of 23 cells the same
+RR wm0 VCOMPARE rc=0 :: 23 of 23 cells the same
+RR pb13q15 COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR pb13q15 VCOMPARE rc=0 :: 9 of 9 cells the same
+RR wm1q15 COMPARE vs batch reference rc=0 :: 23 of 23 cells the same
+RR wm1q15 VCOMPARE rc=0 :: 23 of 23 cells the same
+RR seq-1 DONE 04:03:40
+N2 pym0 rc=0 :: 20 of 20 cells the same, 0 allowed, 0 different
+N2 pym1 rc=0 :: 20 of 20 cells the same, 0 allowed, 0 different
+N2 pb12 rc=0 :: 9 of 9 cells the same, 0 allowed, 0 different
+N2 pb13q15 rc=0 :: 9 of 9 cells the same, 0 allowed, 0 different
+N2 wm0 rc=0 :: 23 of 23 cells the same, 0 allowed, 0 different
+N2 wm1q15 rc=0 :: 23 of 23 cells the same, 0 allowed, 0 different
+sql0 rc=0
+PG MEASURE: firmware 25856520 B against 26000000
+T3PG b2n2-sql0-b1 BEGIN 04:04:34
+T3PG b2n2-sql0-b1 END 06:06:59 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 2, 'MISSED': 7}
+PG inputs as recorded: fixture 956173e054762e91, image cf61cb4333d35cb6
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x1
+b2n2-sql0-b1: bundle -> wt-gate/capstone/bug-corpora/postgres/sql-repros/results/2026-10-25-b2-dcc6daf6e-b1/vp2-malloc-nomovc
+b2n2-sql0-b1: 9 of 9 cells the same (rc 0)
+PG DONE 06:06:59
+N2 sql0 rc=0 :: 9 of 9 cells the same, 0 allowed, 0 different
+CHAIN-N2-B1 DONE 06:06:59
+
+[exited with code 0]

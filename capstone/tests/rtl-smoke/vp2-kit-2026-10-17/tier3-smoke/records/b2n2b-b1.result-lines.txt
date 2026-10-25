@@ -1,0 +1,107 @@
+# bitstream 2 N=2 phase 2, board 1: the 9 plain pass arms, mruby x2 and perl x2, graded against the FIRST bitstream-2 board reading (chain output and re-read lines).
+rr rc=0
+RR fph COMPARE vs batch reference rc=0 :: 25 of 25 cells the same
+RR fph VCOMPARE rc=0 :: 25 of 25 cells the same
+RR fpt COMPARE vs batch reference rc=0 :: 13 of 13 cells the same
+RR fpt VCOMPARE rc=0 :: 13 of 13 cells the same
+RR fca COMPARE vs batch reference rc=0 :: 13 of 13 cells the same
+RR fca VCOMPARE rc=0 :: 13 of 13 cells the same
+RR fcs COMPARE vs batch reference rc=0 :: 13 of 13 cells the same
+RR fcs VCOMPARE rc=0 :: 13 of 13 cells the same
+RR fso COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR fso VCOMPARE rc=0 :: 9 of 9 cells the same
+RR mph COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR mph VCOMPARE rc=0 :: 9 of 9 cells the same
+RR mpt COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR mpt VCOMPARE rc=0 :: 3 of 3 cells the same
+RR wph COMPARE vs batch reference rc=0 :: 12 of 12 cells the same
+RR wph VCOMPARE rc=0 :: 12 of 12 cells the same
+RR wpt COMPARE vs batch reference rc=0 :: 10 of 10 cells the same
+RR wpt VCOMPARE rc=0 :: 10 of 10 cells the same
+RR seq-1 DONE 08:05:34
+N2 fph rc=0 :: 25 of 25 cells the same, 0 allowed, 0 different
+N2 fpt rc=0 :: 13 of 13 cells the same, 0 allowed, 0 different
+N2 fca rc=0 :: 13 of 13 cells the same, 0 allowed, 0 different
+N2 fcs rc=0 :: 13 of 13 cells the same, 0 allowed, 0 different
+N2 fso rc=0 :: 9 of 9 cells the same, 0 allowed, 0 different
+N2 mph rc=0 :: 9 of 9 cells the same, 0 allowed, 0 different
+N2 mpt rc=0 :: 3 of 3 cells the same, 0 allowed, 0 different
+N2 wph rc=0 :: 12 of 12 cells the same, 0 allowed, 0 different
+N2 wpt rc=0 :: 10 of 10 cells the same, 0 allowed, 0 different
+stock rc=0
+MB BEGIN 08:05:34 board 1 kit bkit9-b2-b1 booking 344
+MB END 08:33:35 rc=0 :: APPVM read rc=0 08:33:35 :: --- virtual-malloc: control smoke ok; {'fault': 20, 'completed': 3}
+MB COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x1
+MB board1 DONE 08:33:35
+N2 mruby-stock rc=0 :: 23 of 23 cells the same
+sublet rc=0
+MB BEGIN 08:33:36 board 1 kit bkit9-b2-b1 booking 345
+MB END 09:00:50 rc=0 :: APPVM read rc=0 09:00:50 :: --- virtual-nested-pools: control smoke ok; {'fault': 23}
+MB COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x1
+MB board1 DONE 09:00:50
+N2 mruby-sublet rc=0 :: 23 of 23 cells the same
+perl rc=0
+MP perl-stock BEGIN 09:00:50 board 1 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 346
+MP perl-stock END 09:38:01 rc=0 :: APPVM read rc=0 09:38:01 :: --- virtual-malloc: controls {'eval': True, 'shim': True}; {'fault': 6, 'exit255': 1, 'completed': 4}
+MP perl-stock COMPARE vs reference rc=0 :: 11 of 11 cells the same
+MP perl-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP perl-sublet BEGIN 09:38:01 board 1 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 348
+MP perl-sublet END 10:19:33 rc=0 :: APPVM read rc=0 10:19:33 :: --- virtual-nested-pools: controls {'eval': True, 'shim': True}; {'fault': 8, 'completed': 3}
+MP perl-sublet COMPARE vs reference rc=0 :: 11 of 11 cells the same
+MP perl-sublet readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP board1 DONE 10:19:33
+N2 perl-stock rc=0 :: 11 of 11 cells the same
+N2 perl-sublet rc=0 :: 11 of 11 cells the same
+CHAIN-N2B-B1 DONE 10:19:33
+
+[exited with code 0]
+## the re-read's own lines
+RR START 06:08:14 board 1 spec 64ec1ac231364ed5 (9 arms)
+RR fph BEGIN 06:08:15 board 1 kind cases tree aabf9b0bca0d booking 329
+RR fph END 06:19:59 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 25}
+RR fph COMPARE vs batch reference rc=0 :: 25 of 25 cells the same
+RR fph VCOMPARE rc=0 :: 25 of 25 cells the same
+RR fph readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR fpt BEGIN 06:19:59 board 1 kind cases tree aabf9b0bca0d booking 331
+RR fpt END 06:29:43 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 13}
+RR fpt COMPARE vs batch reference rc=0 :: 13 of 13 cells the same
+RR fpt VCOMPARE rc=0 :: 13 of 13 cells the same
+RR fpt readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR fca BEGIN 06:29:43 board 1 kind cases tree aabf9b0bca0d booking 333
+RR fca END 06:39:11 rc=0 :: --- vp2-malloc (virtual-mallocng): {'MISSED': 13}
+RR fca COMPARE vs batch reference rc=0 :: 13 of 13 cells the same
+RR fca VCOMPARE rc=0 :: 13 of 13 cells the same
+RR fca readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR fcs BEGIN 06:39:12 board 1 kind cases tree aabf9b0bca0d booking 335
+RR fcs END 06:49:07 rc=0 :: --- vp2-nested-pools (virtual-ffmpeg-carve): {'CAUGHT': 13}
+RR fcs COMPARE vs batch reference rc=0 :: 13 of 13 cells the same
+RR fcs VCOMPARE rc=0 :: 13 of 13 cells the same
+RR fcs readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR fso BEGIN 06:49:07 board 1 kind cases tree aabf9b0bca0d booking 336
+RR fso END 07:29:22 rc=0 :: --- vp2-malloc (virtual-mallocng): {'MISSED': 9}
+RR fso COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR fso VCOMPARE rc=0 :: 9 of 9 cells the same
+RR fso readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR mph BEGIN 07:29:22 board 1 kind cases tree aabf9b0bca0d booking 340
+RR mph END 07:38:59 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 9}
+RR mph COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR mph VCOMPARE rc=0 :: 9 of 9 cells the same
+RR mph readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR mpt BEGIN 07:39:00 board 1 kind cases tree aabf9b0bca0d booking 341
+RR mpt END 07:46:46 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 3}
+RR mpt COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR mpt VCOMPARE rc=0 :: 3 of 3 cells the same
+RR mpt readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR wph BEGIN 07:46:46 board 1 kind cases tree aabf9b0bca0d booking 342
+RR wph END 07:56:18 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 12}
+RR wph COMPARE vs batch reference rc=0 :: 12 of 12 cells the same
+RR wph VCOMPARE rc=0 :: 12 of 12 cells the same
+RR wph readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR wpt BEGIN 07:56:18 board 1 kind cases tree aabf9b0bca0d booking 343
+RR wpt END 08:05:34 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 10}
+RR wpt COMPARE vs batch reference rc=0 :: 10 of 10 cells the same
+RR wpt VCOMPARE rc=0 :: 10 of 10 cells the same
+RR wpt readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR seq-1 DONE 08:05:34

@@ -7011,3 +7011,25 @@ except the lt0 and lt1 cells named below.
   verdicts and sites are equal.
 - **Each arm is N=1 on this bitstream.** A second pass, graded cell for cell against these readings, is pre-registered
   and running.
+
+## Bitstream 2, N=2: every corpus cell repeats on silicon, mostly cross-board (caplifive_vp2c_dcc6daf6e, 2026-10-24 to 2026-10-25)
+
+Folder: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/`, the README sections "Bitstream 2 N=2" and
+`records/b2n2*.result-lines.txt`.
+- **Scope:** every arm of the corpus was read a second time on bitstream 2, each pre-registered. Most arms ran on the
+  board opposite their first reading.
+- **The grade:** each second reading against the FIRST board reading, cell by cell.
+  - `n2-grade.py` uses verdicts-compare's fields. It lets only named Q-31 cells differ, and only in cause; its controls
+    fire both ways.
+  - matrix-compare.py grades the mruby and perl matrices; juliet-obs-compare grades Juliet.
+- **Result:** every case cell of every arm is the same.
+  - Cross-board arms: cpython lt0 32/32 and lt1 32/32, pymalloc 20+20, the memcached allocator 9+9, wmem 23+23, sqlite
+    33+33, the postgres arms (pgc, pgm0, pgm1 and pgm1q15 at 5 each; sql0 9, pg-pools 9), and Juliet temporal and spatial.
+  - Same-board arms: the nine plain ffmpeg, memcached and wireshark arms, mruby 23+23, perl 11+11, xlang 15+13, plane
+    1+1 and capi 19.
+- **The Q-31 cells reproduce exactly.** lt0 01 and sq0d 19, 20 and 22 read the same cause 4/13 again, sq0d on the other
+  board, so the named exception was never used.
+- **The only differences** are those that are not deterministic by construction:
+  - Juliet temporal's rand-driven `_12` draws: 5 of 735 census cells, with the seeded build 56/56;
+  - one Juliet spatial uaf-control step of 48 at the silicon-only cause 13 (the rate measured at 10/400).
+- **One boot was lost to infrastructure.** A console lease timeout lost capi 10-12; the re-run of 10-19 is identical.

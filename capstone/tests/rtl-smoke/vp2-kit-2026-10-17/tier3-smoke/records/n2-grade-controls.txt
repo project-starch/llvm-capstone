@@ -1,0 +1,19 @@
+# n2-grade.py 7ce87173331bfc41 controls, 2026-10-25 20:2x
+## (a) bitstream-2 lt1 against itself
+32 of 32 cells the same, 0 allowed, 0 different
+rc=0
+## (b) the batch bitstream's lt1 board read against bitstream 2's (must DIFF: the ten capacity cells, among others)
+22 of 32 cells the same, 0 allowed, 10 different
+rc=1
+## (c) sq0d: the bitstream-2 QEMU reference (cause 24) against the board (4/4/13), with --cause-only 19_ 20_ 22_
+ALLOWED 19_c8c9cdd9dd_rtree_cursor_stale_node: cause first 24 second 4 (pre-registered Q-31 cell)
+ALLOWED 20_d21bd37c7c_rtree_inode0_stale_node: cause first 24 second 4 (pre-registered Q-31 cell)
+ALLOWED 22_fix-2026-07-26_spellfix_oom_stale_vtab: cause first 24 second 13 (pre-registered Q-31 cell)
+3 of 6 cells the same, 3 allowed, 0 different
+rc=0
+## (d) the same without --cause-only (must DIFF 3)
+3 of 6 cells the same, 0 allowed, 3 different
+rc=1
+## (e) --cause-only on the wrong case (must not excuse 19/20/22)
+3 of 6 cells the same, 0 allowed, 3 different
+rc=1

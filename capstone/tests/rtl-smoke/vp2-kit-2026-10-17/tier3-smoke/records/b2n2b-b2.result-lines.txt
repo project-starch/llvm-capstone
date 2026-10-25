@@ -1,0 +1,69 @@
+# bitstream 2 N=2 phase 2, board 2: the new arms and Juliet temporal, graded against the FIRST board reading (chain output; the judge-field per-case lines omitted).
+na rc=1
+NA xlang MEASURE firmware 19565064 B against 26000000
+NA xlang repro COMPARE vs reference rc=1 :: 4 of 15 cells the same
+NA xlang repro VCOMPARE rc=0 :: 15 of 15 cells the same
+NA xlang lua-cdp COMPARE vs reference rc=0 :: 13 of 13 cells the same
+NA xlang lua-cdp VCOMPARE rc=0 :: 13 of 13 cells the same
+NA xlang readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA plane-malloc MEASURE firmware 17467912 B against 26000000
+NA plane-malloc plane-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-malloc plane-malloc VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-malloc readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA plane-nested MEASURE firmware 17467912 B against 26000000
+NA plane-nested plane-nested COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-nested plane-nested VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-nested readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-1-2-3 MEASURE rows 1,2,3 firmware 25856520 B against 26000000
+NA capi-1-2-3 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-4-5-6 MEASURE rows 4,5,6 firmware 25856520 B against 26000000
+NA capi-4-5-6 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-7-8-9 MEASURE rows 7,8,9 firmware 25856520 B against 26000000
+NA capi-7-8-9 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-10-11-12 MEASURE rows 10,11,12 firmware 25856520 B against 26000000
+NA capi-10-11-12 capi COMPARE vs reference rc=1 :: 0 of 3 cells the same
+NA capi-10-11-12 capi VCOMPARE rc=1 :: 0 of 3 cells the same
+NA capi-10-11-12 readings: NO DATA, no guest board.txt
+NA STOP after capi-10-11-12: the boot did not complete (no vbatch END rc=0 in its transcript)
+N2 xlang-repro rc=0 :: 15 of 15 cells the same, 0 allowed, 0 different
+N2 xlang-lua-cdp rc=0 :: 13 of 13 cells the same, 0 allowed, 0 different
+N2 plane-malloc rc=0 :: 1 of 1 cells the same, 0 allowed, 0 different
+N2 plane-nested rc=0 :: 1 of 1 cells the same, 0 allowed, 0 different
+N2 capi-1-2-3 rc=0 :: 3 of 3 cells the same, 0 allowed, 0 different
+N2 capi-4-5-6 rc=0 :: 3 of 3 cells the same, 0 allowed, 0 different
+N2 capi-7-8-9 rc=0 :: 3 of 3 cells the same, 0 allowed, 0 different
+N2 capi-10-11-12 rc=1 :: 0 of 3 cells the same, 0 allowed, 3 different
+DIFF row10_ruby_stmt_reuse_after_close: first ('CAUGHT', 'function', 25, 'main', 280) second ('NO-READING', None, None, None, None)
+DIFF row11_go_double_finalize: first ('CAUGHT', 'function', 2, 'invalid_free', 20) second ('NO-READING', None, None, None, None)
+DIFF row12_expo_unfinalized_close: first ('NO-READING', None, 24, 'main', 348) second ('NO-READING', None, None, None, None)
+N2 capi-13-14-15-16 rc=1 :: 
+N2 capi-17-18-19 rc=1 :: 
+jt rc=0
+JF run BEGIN 10:38:33 board 2 booking 356
+JF run END rc=0 13:50:22 :: 12 batches completed, 0 not :: 12 batches in 11508.8 s -> <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b2/n2/juliet-temporal/run/observations.json
+JF run-seeded BEGIN 13:50:22 board 2 booking 357
+JF run-seeded END rc=0 14:04:40 :: 1 batches completed, 0 not :: 1 batches in 858.4 s -> <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b2/n2/juliet-temporal/run-seeded/observations.json
+JF probe BEGIN 14:04:41 board 2 booking 358
+JF probe END rc=0 14:12:16 :: 0 batches completed, 0 not :: {"sizeof-ptr": {"double*": "16", "double": "8", "int64_t*": "16", "int64_t": "8", "struct*": "16", "struct": "8"}}
+JF judge rc=0 :: CWE-416: caught 0 missed 0; bad {'NO-READING:unattributed(STRICT-FAIL:no-revoked-line)': 131, 'NO-READING:seeded(MISSED,NO-READING:unattributed(STRICT-FAIL:no-revoked-line))': 7}; goo
+JF verdicts: 366 {('NO-READING:unattributed(STRICT-FAIL:no-revoked-line)', 'CORRECT', '25'): 353, ('NO-READING:seeded(MISSED,NO-READING:unattributed(STRICT-FAIL:no-revoked-line))', 'CORRECT', ''): 13}
+JF MISSED rows: 13 TWINS-NEEDED CWE415_Double_Free__malloc_free_char_12 CWE415_Double_Free__malloc_free_int64_t_12 CWE415_Double_Free__malloc_free_int_12 CWE415_Double_Free__malloc_free_long_12 CWE415
+JF COMPARE batch QEMU -> board: cases 366/366 differ 366
+JF OBS-COMPARE census rc=1 :: 727 of 735 cells the same, 8 different, 0 tolerated
+JF OBS-COMPARE seeded rc=0 :: 56 of 56 cells the same, 0 different, 0 tolerated
+JF readings: 14 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JF board2 DONE 14:12:24
+N2 juliet-temporal census rc=1 :: 730 of 735 cells the same, 5 different, 0 tolerated
+N2 juliet-temporal census: 5 different, 5 of them rand-driven _12 draws, 0 OTHER
+N2 juliet-temporal seeded rc=0 :: 56 of 56 cells the same, 0 different, 0 tolerated
+CHAIN-N2B-B2 DONE 14:12:27
+
+[exited with code 0]
+## the capi 10-12 boot's driver: its last lines (the board console's lease request timed out; no boot)
+RuntimeError: [fpga-lease] lease request failed: HTTPConnectionPool(host='<FPGA-CONSOLE-HOST>', port=5000): Max retries exceeded with url: /<REDACTED>/api/lease (Caused by ConnectTimeoutError(<urllib3.connection.HTTPConnection object at 0x7246f48c93d0>, 'Conne

@@ -8574,6 +8574,44 @@ Records: `records/b2bs-reread-b2.result-lines.txt` and `b2bs-newarms-b2.result-l
     row13_cpython_deleted_rowfactory, as on the batch. Other readings are 0.
 - **Against the pre-registrations (bdbc8cd093f5, b0d039c0f986): every reading holds.**
 
+### Bitstream 2: cpython lt1 again, on board 1 while it would otherwise be idle, pre-registered (2026-10-25 20:1x)
+
+- **Why:** lt1 is the arm bitstream 2 changes most (ten cells now CAUGHT), and its session read is N=1 so far. The
+  capacity-cell calls already have N=2 (`bs2-capcells-b1/b2`). This repeats the whole 54-step session.
+- **What runs:** `tier3-cpy-b2-arm.sh 1 <log> lt1` with CB_ROOT `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/cpy-lt1-n2`,
+  with the wrapper budget now 43200 s (c4a8637e4dd9).
+- **Prediction:** verdicts-compare 32 of 32 against ref-b2/lt1, the ten capacity cells CAUGHT at the same sites as the
+  first run; readings 0.
+
+### Bitstream 2, N=2: the headline arms read a second time, graded against the FIRST board reading, pre-registered (2026-10-25 20:3x)
+
+- **Why:** every corpus cell has so far run once per arm per bitstream, and every published result states that limit.
+  The runtime lane asks for a second pass on bitstream 2, starting with the arms that carry the headline. httpd,
+  ctypes and the Juliet remainder wait on the lead's decisions.
+- **The grade, `n2-grade.py`:** the second reading against the first, cell by cell on verdicts-compare's fields.
+  - A case named with `--cause-only` may differ in its cause alone, and only within the Q-31 causes {4, 13, 24}. It is
+    reported as ALLOWED, never silently.
+  - Controls (`records/n2-grade-controls.txt`): a reading against itself is 32 of 32. The batch lt1 against bitstream
+    2's lt1 is 10 different. The sq0d QEMU reference against the board is 3 allowed with the right prefixes, and 3
+    different without them or with the wrong one.
+- **The runs.** The same runners, each with an override root under `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/`
+  (`cpy-lt1-n2`, `cpy-lt0-n2`, `n2/rr-<tag>`, `n2/sql0`, `n2/pg-pools`). Most arms run on the OTHER board from their
+  first reading, so N=2 is also a board-to-board check.
+  - **board 1:** the lt1 repeat (running since 20:1x, pre-registered at 1b71c48328b4). Then the re-read of pym0, pym1,
+    pb12, pb13q15, wm0 and wm1q15 (spec `records/reread-n2-spec-b1.txt`; first read on board 2). Then sql0 (first read
+    on board 2).
+  - **board 2, after Juliet spatial:** the lt0 repeat. Then the re-read of sq0, pgc, pgm0 and pgm1 (first read on
+    board 1) and of sq1q15 and pgm1q15 (spec `reread-n2-spec-b2.txt`). Then pg-pools (first read on board 1).
+  - Each run is also compared with its QEMU reference by its own runner, as before.
+- **Predictions:**
+  - **every cell the same as the first reading;**
+  - the named exceptions, which may differ in cause alone: lt0 01 and sq0d 19, 20 and 22 (Q-31);
+  - **no `_12` exception applies:** no Juliet arm is in this set;
+  - a uaf-block or ctl-uaf control reading cause 13 (the silicon-only control behaviour, about 2.5% per control) changes
+    no verdict cell, and is reported where it appears;
+  - readings 0.
+  - **Any other difference is a finding about repeatability on silicon.**
+
 ### Bitstream 2, result: the Juliet spatial sample 1513 of 1513 (board 2, 2026-10-25 15:57-22:31)
 
 Record: `records/b2bs-juliet-spatial-b2.result-lines.txt`.
@@ -8586,3 +8624,125 @@ Record: `records/b2bs-juliet-spatial-b2.result-lines.txt`.
   format, 38 rows and 1,625 cells), only two rows differ from the batch bitstream's:
   - cpython lt1: CAUGHT 17 → 27, the ten capacity cells;
   - cpython lt0: CAUGHT 15 → 16, case 18 on the mremap relink.
+
+### Bitstream 2 N=2, board 1 result: lt1, pymalloc, the memcached allocator, wmem and sql0 all identical to their first readings (2026-10-25 20:01-06:07)
+
+Record: `records/b2n2-b1.result-lines.txt`.
+- **lt1:** 32 of 32 as ref-b2/lt1, and n2-grade **32 of 32** against the first (salvage) reading. CAUGHT 27, and all
+  ten capacity cells are CAUGHT at the same sites. The run took 6 h 18 min, as the QEMU time ratio predicted, inside the
+  new 12 h budget.
+- **Read on board 1, first read on board 2, n2-grade 0 different on each:** pym0 20, pym1 20, pb12 9, pb13q15 9, wm0 23
+  and wm1q15 23. Each also matches its QEMU reference.
+- **sql0, on board 1 (first on board 2):** 9 of 9 against the first reading and against the reference.
+- No ALLOWED cell occurred, and no exception was needed. Readings 0.
+- **Against the pre-registrations (1b71c48328b4, 60709f69bfc2): every reading holds.** On silicon these arms repeat
+  cell for cell, across boards.
+
+### Bitstream 2 N=2 phase 2, board 1: the plain pass arms, mruby and perl, pre-registered (2026-10-25 06:1x)
+
+- **The runs:**
+  - the re-read of fph, fpt, fca, fcs, fso, mph, mpt, wph and wpt (spec `records/reread-n2b-spec-b1.txt`). These were
+    first read on board 1, so this is a same-board repeat.
+  - then mruby stock, mruby Sublet and perl stock and Sublet.
+  - Roots: `t3-run-b2-dcc6daf6e-b1/n2/`.
+- **The grade:** n2-grade.py against the first reading, and matrix-compare.py for the release-differential matrices.
+  As controls, matrix-compare reads a matrix against itself as 11 of 11 and perl stock against perl Sublet as 7 of 11.
+- **Prediction:** every cell the same as the first reading. No exception is named, since none of these arms has a Q-31
+  cell. Readings 0.
+
+### Bitstream 2 N=2, board 2 result: lt0, sqlite and the postgres arms identical to their first readings, the Q-31 cells included (2026-10-24 22:31 to 2026-10-25 09:26)
+
+Record: `records/b2n2-b2.result-lines.txt`.
+- **lt0:** n2-grade **32 of 32, 0 allowed.** Case 01 reads cause 4 at set_dealloc+284 again, so the Q-31 cell repeats
+  exactly. Against the QEMU reference it is 31 of 32, as before.
+- **Read on board 2, first read on board 1, n2-grade 0 different on each:** sq0a-f (sq0d 6 of 6, 0 allowed: cells 19
+  and 20 read cause 4 again and 22 reads cause 13 again), pgc 5, pgm0 5 and pgm1 5.
+- **Same board:** sq1q15a-f and pgm1q15, every cell the same.
+- **pg-pools on board 2 (first on board 1):** 9 of 9 against the first reading and the reference.
+- Readings 0. **Against the pre-registration (60709f69bfc2): every reading holds.**
+- **The Q-31 exceptions were never needed.** Silicon's cause 4/13 at those sites is deterministic, across boards.
+
+### Bitstream 2 N=2 phase 2, board 2: the new arms, then Juliet temporal, pre-registered (2026-10-25 09:3x)
+
+- **The runs:**
+  - the new arms with NA_ROOT `t3-run-b2-dcc6daf6e-b2/n2/na`, on the same board as their first reading;
+  - then Juliet temporal with JF_ROOT `.../b2/n2/juliet-temporal`, first read on board 1 (cross-board).
+- **The grade:**
+  - n2-grade.py on xlang (both), plane (both) and the six capi groups;
+  - for Juliet, juliet-obs-compare between the FIRST board reading's observations and the second's, census then seeded.
+    A filter splits the census differences into rand-driven `_12` draws and OTHER. On the first run's compare it reads 9
+    `_12` and 0 OTHER; on a planted non-`_12` line it reads 1 OTHER.
+- **Predictions:**
+  - every new-arm cell the same as the first reading;
+  - Juliet census: differences only in `_12` draws (0 OTHER), and seeded 56 of 56;
+  - a uaf-control cause 13 shows as a ctl step difference, and is reported as such if it appears;
+  - readings 0.
+
+### Bitstream 2 N=2 phase 2, board 1 result: the 9 plain pass arms, mruby and perl identical to their first readings (2026-10-25 06:1x-10:19)
+
+Record: `records/b2n2b-b1.result-lines.txt`.
+- **n2-grade, 0 different on each:** fph 25, fpt 13, fca 13, fcs 13, fso 9, mph 9, mpt 3, wph 12 and wpt 10.
+- **matrix-compare against the first reading:** mruby stock 23 of 23, mruby Sublet 23 of 23, perl stock 11 of 11 and
+  perl Sublet 11 of 11. Each is also equal to its reference.
+- Readings 0. **Against the pre-registration (aabf9b0bca0d): every reading holds.**
+
+### Bitstream 2 N=2, board 1: the Juliet spatial sample (first read on board 2), pre-registered (2026-10-25 10:2x)
+
+- **What runs:** `tier3-juliet-spatial-b2.sh 1` with JS_ROOT `t3-run-b2-dcc6daf6e-b1/n2/juliet-spatial`, which is cross-board.
+- **The grade:** juliet-obs-compare between the first reading's observations (board 2) and the second's, with the
+  three value-dependent CWE170 cases tolerated.
+- **Prediction:** 1513 of 1513 the same, with the tolerated cases reported; readings 0.
+
+### Bitstream 2 N=2 phase 2, board 2 result: xlang, plane, capi 1-9 and Juliet temporal as their first readings; capi 10-19 lost to a console outage (2026-10-25 09:3x-14:12)
+
+Record: `records/b2n2b-b2.result-lines.txt`.
+- **n2-grade, 0 different on each:** xlang repro 15 and lua-cdp 13; plane malloc and nested 1 each; capi groups 1-3, 4-6
+  and 7-9 at 3 each.
+- **capi 10-12: NO READING, infrastructure.** Its driver's lease request to the board console timed out
+  (`ConnectTimeoutError`), so there was no boot. n2-grade's "3 different" is the runner's NO-READING:infra rows, not a
+  reading.
+  - The runner then stopped, as designed, before 13-16 and 17-19.
+  - The console was back at 10:38: Juliet temporal booted and completed on the same board.
+- **Juliet temporal** (cross-board):
+  - census against the first reading: 730 of 735. All 5 differences are rand-driven `_12` draws, 0 OTHER;
+  - **seeded 56 of 56;**
+  - against the reference: 727 of 735, 8 `_12` draws;
+  - no uaf-control cause 13; readings 0.
+- **Against the pre-registration (e2f061fa69a9):** every reading taken holds. capi 10-19 are unread, not failed.
+
+### Bitstream 2 N=2: capi 10-19 re-run on board 2, pre-registered (2026-10-25 14:2x)
+
+- **The change:** tier3-newarms-b2.sh gains `NA_UNITS`, which runs only the named units. The default list is unchanged.
+  In the dry run it gives 10 compare lines without NA_UNITS and the three capi groups with it.
+- **What runs:** NA_UNITS `capi-10-11-12:10,11,12 capi-13-14-15-16:13,14,15,16 capi-17-18-19:17,18,19`, with NA_ROOT
+  `t3-run-b2-dcc6daf6e-b2/n2r/na`.
+- **Prediction:** n2-grade 0 different on each group against the first reading. Row 13's own predicted `cause=12 pc=0x0`
+  shows as the pc=0 count of 1 in the 13-16 boot, as twice before.
+
+### Bitstream 2 N=2 result: capi 10-19 re-run, identical to the first reading (board 2, 2026-10-25 14:2x-14:52)
+
+Record: `records/b2n2r-capi-b2.result-lines.txt`.
+- **n2-grade 0 different on each group:** 10-12 at 3 cells, 13-16 at 4 and 17-19 at 3. Each also matches the reference
+  (verdicts-compare).
+- The 13-16 boot's pc=0 count of 1 is row 13's `cause=12 pc=0x0`, as predicted. Other readings are 0.
+- **Against the pre-registration (18ccde319e99): every reading holds.** With this, every non-Juliet arm of the corpus
+  has two bitstream-2 readings, equal cell for cell.
+
+### Bitstream 2 N=2 result: Juliet spatial, every case cell the same; one uaf-control step at the known silicon-only cause 13 (board 1, 2026-10-25 10:20-16:41)
+
+Record: `records/b2n2-juliet-spatial-b1.result-lines.txt`.
+- **juliet-obs-compare against the first reading (board 2): 1512 of 1513, 1 different.** The difference is not a case
+  cell.
+  - It is the aggregate `controls:ctl-uaf` cell: 48 uaf-control steps, all cause 25 at control_read_probe+0x38 in the
+    first reading.
+  - In this reading, 47 are cause 25 and one (batch011 ctl-uaf-0) is **cause 13 at the same site**. That is the
+    silicon-only uaf-control behaviour measured at 6/200 on the batch and 10/400 on bitstream 2. One of 48 is inside
+    that rate.
+  - judge.py voids that batch for its control (census 23 of 24); judge.py is not the grade.
+- **Every case cell of the 755 is the same, the three tolerated CWE170 cases included.** 25 boot transcripts, readings 0.
+- **Against the pre-registration (f86be8d6e89c):** the prediction "1513 of 1513" did not name the uaf-control
+  exception. Board 2's phase-2 pre-registration did name it, for Juliet temporal, and this one should have. **Read
+  strictly, the reading misses its prediction by that one control cell**, and the miss is the documented control
+  behaviour, not a case difference. It is recorded as such.
+- **N=2 on bitstream 2 is complete:** every arm of the corpus has two board readings, mostly on opposite boards. They are
+  equal cell for cell, except the rand-driven Juliet `_12` draws and this one control step.

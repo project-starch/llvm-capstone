@@ -1,0 +1,8 @@
+# sanitized copy of the N=2 re-read spec rr-n2-b2 (sha256/16 0211d077fe17b506)
+# bitstream 2 N=2 re-read, board 2 (after the lt0 repeat): sqlite and the postgres pass arms
+pgc|pgc|-|-|--arm virtual-malloc --bindir <mnt-hdd>/capstone/t3-images-r60/pg/pgc-bin
+pgm0|pgm|-|-|--arm virtual-malloc --hosted-build <mnt-hdd>/capstone/t3-images-r60/pg/mmgr-cases-OFF --controls-hosted-build <mnt-hdd>/capstone/t3-images-r60/pg/mmgr-controls-OFF
+pgm1|pgm|-|-|--arm virtual-pg-pools --hosted-build <mnt-hdd>/capstone/t3-images-r60/pg/mmgr-cases-ON --controls-hosted-build <mnt-hdd>/capstone/t3-images-r60/pg/mmgr-controls-ON
+sq0|appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py|-|-|--arm virtual-malloc --build <mnt-hdd>/capstone/t3-images-r60/sqlite/build-virtual-malloc
+pgm1q15|pgm|<mnt-hdd>/capstone/wt-q15cw|/tmp/capstone/r322-1016/tmp|--arm virtual-pg-pools --hosted-build <mnt-hdd>/capstone/t3-images-r60/q15/pg/mmgr-cases-ON --controls-hosted-build <mnt-hdd>/capstone/t3-images-r60/q15/pg/mmgr-controls-ON
+sq1q15|appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py|-|-|--arm virtual-nested-pools --build <mnt-hdd>/capstone/t3-images-r60/sqlite/build-virtual-nested-pools-q15

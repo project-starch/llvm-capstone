@@ -1,0 +1,155 @@
+# bitstream 2 N=2, board 2: the lt0 repeat, the 6-arm N=2 re-read and pg-pools, each graded by n2-grade.py against the FIRST bitstream-2 board reading (chain output and re-read lines).
+lt0 rc=0
+CB lt0 BEGIN 22:31:20 board 2 kit bkit9-b2-nb2 booking 312
+CB lt0 ARM END rc=0 04:27:50 :: APPVM read rc=0 04:27:50 :: --- vp2-malloc (virtual-cpython): {'CAUGHT': 16, 'MISSED': 13, 'NO-READING:infra': 1, 'NO-READING:not-reached': 1, 'NO-READING:unattributed'
+CB lt0 COMPARE vs reference rc=1 :: 31 of 32 cells the same
+CB lt0 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt0 DONE 04:27:50
+N2 lt0 rc=0 :: 32 of 32 cells the same, 0 allowed, 0 different
+rr rc=0
+RR pgc COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgc VCOMPARE rc=0 :: 5 of 5 cells the same
+RR pgm0 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm0 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR pgm1 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm1 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR sq0a COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0a VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0b COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0b VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0c COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0c VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0d COMPARE vs batch reference rc=1 :: 3 of 6 cells the same
+RR sq0d VCOMPARE rc=1 :: 3 of 6 cells the same
+RR sq0e COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0e VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0f COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR sq0f VCOMPARE rc=0 :: 3 of 3 cells the same
+RR pgm1q15 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm1q15 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR sq1q15a COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15a VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15b COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15b VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15c COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15c VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15d COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15d VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15e COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15e VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15f COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR sq1q15f VCOMPARE rc=0 :: 3 of 3 cells the same
+RR seq-2 DONE 07:29:05
+N2 sq0a rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq0b rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq0c rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq0e rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq0f rc=0 :: 3 of 3 cells the same, 0 allowed, 0 different
+N2 pgc rc=0 :: 5 of 5 cells the same, 0 allowed, 0 different
+N2 pgm0 rc=0 :: 5 of 5 cells the same, 0 allowed, 0 different
+N2 pgm1 rc=0 :: 5 of 5 cells the same, 0 allowed, 0 different
+N2 sq0d rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq1q15a rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq1q15b rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq1q15c rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq1q15d rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq1q15e rc=0 :: 6 of 6 cells the same, 0 allowed, 0 different
+N2 sq1q15f rc=0 :: 3 of 3 cells the same, 0 allowed, 0 different
+N2 pgm1q15 rc=0 :: 5 of 5 cells the same, 0 allowed, 0 different
+pg-pools rc=0
+PG MEASURE: firmware 25856520 B against 26000000
+T3PG b2n2-pg-pools-b2 BEGIN 07:29:59
+T3PG b2n2-pg-pools-b2 END 09:26:34 rc=0 :: --- vp2-pg-pools (virtual-mallocng-pg-pools): {'CAUGHT': 5, 'MISSED': 2, 'NO-READING:unattributed': 2}
+PG inputs as recorded: fixture 956173e054762e91, image dc2a1356dce735e0
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x1
+b2n2-pg-pools-b2: bundle -> wt-gate/capstone/bug-corpora/postgres/sql-repros/results/2026-10-25-b2-dcc6daf6e-b2/vp2-pg-pools
+b2n2-pg-pools-b2: 9 of 9 cells the same (rc 0)
+PG DONE 09:26:35
+N2 pg-pools rc=0 :: 9 of 9 cells the same, 0 allowed, 0 different
+CHAIN-N2-B2 DONE 09:26:35
+
+[exited with code 0]
+## the re-read's own lines
+RR START 04:27:50 board 2 spec 0211d077fe17b506 (6 arms)
+RR pgc BEGIN 04:27:50 board 2 kind pgc tree b48fd62a9352 booking 319
+RR pgc END 04:36:41 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 5}
+RR pgc COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgc VCOMPARE rc=0 :: 5 of 5 cells the same
+RR pgc readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR pgm0 BEGIN 04:36:41 board 2 kind pgm tree b48fd62a9352 booking 320
+RR pgm0 END 04:45:26 rc=0 :: --- vp2-malloc (virtual-mallocng-replay): {'MISSED': 5}
+RR pgm0 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm0 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR pgm0 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR pgm1 BEGIN 04:45:26 board 2 kind pgm tree b48fd62a9352 booking 321
+RR pgm1 END 04:54:30 rc=0 :: --- vp2-pg-pools (virtual-mallocng-replay-pools): {'CAUGHT': 5}
+RR pgm1 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm1 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR pgm1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq0a BEGIN 04:54:30 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree b48fd62a9352 only 00,01,02,03,04,05 booking 322
+RR sq0a END 05:05:54 rc=0 :: APPVM read rc=0 05:05:54 :: --- vp2-malloc (virtual-sqlite-memsys5): {'CAUGHT': 2, 'MISSED': 4}
+RR sq0a COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0a VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0a readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq0b BEGIN 05:05:54 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree b48fd62a9352 only 06,07,08,09,10,11 booking 323
+RR sq0b END 05:18:34 rc=0 :: APPVM read rc=0 05:18:34 :: --- vp2-malloc (virtual-sqlite-memsys5): {'MISSED': 5, 'NO-READING:inconclusive': 1}
+RR sq0b COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0b VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0b readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq0c BEGIN 05:18:34 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree b48fd62a9352 only 12,13,14,15,16,17 booking 324
+RR sq0c END 05:29:37 rc=0 :: APPVM read rc=0 05:29:37 :: --- vp2-malloc (virtual-sqlite-memsys5): {'MISSED': 6}
+RR sq0c COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0c VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0c readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq0d BEGIN 05:29:37 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree b48fd62a9352 only 18,19,20,21,22,23 booking 325
+RR sq0d END 05:41:44 rc=0 :: APPVM read rc=0 05:41:44 :: --- vp2-malloc (virtual-sqlite-memsys5): {'CAUGHT': 2, 'MISSED': 3, 'NO-READING:unattributed': 1}
+RR sq0d COMPARE vs batch reference rc=1 :: 3 of 6 cells the same
+RR sq0d VCOMPARE rc=1 :: 3 of 6 cells the same
+RR sq0d readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq0e BEGIN 05:41:44 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree b48fd62a9352 only 24,25,26,27,28,29 booking 326
+RR sq0e END 05:52:58 rc=0 :: APPVM read rc=0 05:52:58 :: --- vp2-malloc (virtual-sqlite-memsys5): {'MISSED': 6}
+RR sq0e COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0e VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0e readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq0f BEGIN 05:52:59 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree b48fd62a9352 only 30,31,32 booking 327
+RR sq0f END 06:02:29 rc=0 :: APPVM read rc=0 06:02:29 :: --- vp2-malloc (virtual-sqlite-memsys5): {'MISSED': 3}
+RR sq0f COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR sq0f VCOMPARE rc=0 :: 3 of 3 cells the same
+RR sq0f readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR pgm1q15 BEGIN 06:02:30 board 2 kind pgm tree e2b26ea2c1e4 booking 328
+RR pgm1q15 END 06:11:32 rc=0 :: --- vp2-pg-pools (virtual-mallocng-replay-pools): {'CAUGHT': 5}
+RR pgm1q15 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm1q15 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR pgm1q15 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15a BEGIN 06:11:32 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree aabf9b0bca0d only 00,01,02,03,04,05 booking 330
+RR sq1q15a END 06:24:12 rc=0 :: APPVM read rc=0 06:24:12 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 4, 'MISSED': 2}
+RR sq1q15a COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15a VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15a readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15b BEGIN 06:24:12 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree aabf9b0bca0d only 06,07,08,09,10,11 booking 332
+RR sq1q15b END 06:37:27 rc=0 :: APPVM read rc=0 06:37:27 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 3, 'MISSED': 3}
+RR sq1q15b COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15b VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15b readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15c BEGIN 06:37:27 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree aabf9b0bca0d only 12,13,14,15,16,17 booking 334
+RR sq1q15c END 06:50:46 rc=0 :: APPVM read rc=0 06:50:46 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 5, 'MISSED': 1}
+RR sq1q15c COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15c VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15c readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15d BEGIN 06:50:46 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree aabf9b0bca0d only 18,19,20,21,22,23 booking 337
+RR sq1q15d END 07:04:26 rc=0 :: APPVM read rc=0 07:04:26 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 6}
+RR sq1q15d COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15d VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15d readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15e BEGIN 07:04:26 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree aabf9b0bca0d only 24,25,26,27,28,29 booking 338
+RR sq1q15e END 07:18:06 rc=0 :: APPVM read rc=0 07:18:06 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 6}
+RR sq1q15e COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15e VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15e readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR sq1q15f BEGIN 07:18:06 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree aabf9b0bca0d only 30,31,32 booking 339
+RR sq1q15f END 07:29:05 rc=0 :: APPVM read rc=0 07:29:05 :: --- vp2-nested-pools (virtual-sqlite-memsys5-pools): {'CAUGHT': 3}
+RR sq1q15f COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR sq1q15f VCOMPARE rc=0 :: 3 of 3 cells the same
+RR sq1q15f readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+RR seq-2 DONE 07:29:05

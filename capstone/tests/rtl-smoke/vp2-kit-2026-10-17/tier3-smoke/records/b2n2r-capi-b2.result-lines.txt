@@ -1,0 +1,21 @@
+# bitstream 2 N=2: capi 10-19 re-run on board 2 (NA_UNITS), graded against the FIRST reading. The 13-16 boot's pc=0 line is row 13's own:
+capstone-exec: domain fault cause=12 pc=0x0 address=0x0 entry=0x3fb7200868 code=0x3fb72000
+na rc=0
+NA capi-10-11-12 MEASURE rows 10,11,12 firmware 25856520 B against 26000000
+NA capi-10-11-12 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-13-14-15-16 MEASURE rows 13,14,15,16 firmware 25856520 B against 26000000
+NA capi-13-14-15-16 capi COMPARE vs reference rc=1 :: 3 of 4 cells the same
+NA capi-13-14-15-16 capi VCOMPARE rc=0 :: 4 of 4 cells the same
+NA capi-13-14-15-16 readings: pc=0 1 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-17-18-19 MEASURE rows 17,18,19 firmware 25856520 B against 26000000
+NA capi-17-18-19 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA seq-2 DONE 14:52:17
+N2 capi-10-11-12 rc=0 :: 3 of 3 cells the same, 0 allowed, 0 different
+N2 capi-13-14-15-16 rc=0 :: 4 of 4 cells the same, 0 allowed, 0 different
+N2 capi-17-18-19 rc=0 :: 3 of 3 cells the same, 0 allowed, 0 different
+
+[exited with code 0]
