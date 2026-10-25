@@ -1,0 +1,36 @@
+diff --git a/capstone/runtime/virtual/module/capstone_vm.c b/capstone/runtime/virtual/module/capstone_vm.c
+index 2e700ac92383..98388e465c09 100644
+--- a/capstone/runtime/virtual/module/capstone_vm.c
++++ b/capstone/runtime/virtual/module/capstone_vm.c
+@@ -1722,31 +1722,6 @@ retry:
+          * Note this is unreachable on vp2 today -- with supervisor_slots = 1 the create is already
+          * refused above -- so it is the ABI's property for a multi-slot bitstream, not a fix for
+          * the current board. */
+-        {
+-            struct arena *fa = find_arena(c, r.frame, PAGE_SIZE);
+-            unsigned long st, old_root;
+-            unsigned long free_before;
+-            if (!fa) { rc = -EINVAL; goto thread_unwind; }
+-            free_before = node_free_count(c);
+-            preempt_disable(); local_irq_save(flags);
+-            old_root = select_root(c);
+-            asm volatile(".insn r 0x5b, 1, 0x53, %0, %1, zero"
+-                         : "=&r"(st) : "r"(fa->ancestor) : "memory");
+-            restore_root(old_root);
+-            local_irq_restore(flags); preempt_enable();
+-            if (st) {
+-                CV_EMIT_FIRST(childframe_prints,
+-                              "capstone_vm: child frame grant not retired (status %lu); "
+-                              "refusing the thread\n", st);
+-                rc = -EACCES;
+-                goto thread_unwind;
+-            }
+-            if (!st) {
+-                ++c->retired_flat;
+-                if (node_free_count(c) > free_before) ++c->pushed_flat;
+-            }
+-            fa->ancestor_retired = true;
+-        }
+         INIT_LIST_HEAD(&t->link);
+         list_add_tail(&t->link, &c->threads);
+         r.thread = t->id;

@@ -2,6 +2,10 @@
  *   multipage  a frame inside a 2-page heap arena            -> create must fail -EINVAL (find_arena exact match)
  *   twice      the same frame created twice                  -> the 2nd create's retire fails -> -EACCES + must-fire line
  *   copy       a well-formed frame, then read our own copy   -> create succeeds, the read faults cause 25
+ *   write1024  a well-formed frame, then WRITE our own copy at frame+1024.. (the S caller's snapshot that
+ *              every escape restores on the RTL, S-21) before the child runs: with fix (a) the write
+ *              faults cause 25; without it the write lands and the child still reaches its exit ECALL
+ *              (QEMU keeps the caller internally, so the overwrite itself has no effect there)
  * The frame is filled exactly as runtime/virtual/thread.c fills it. Prints FRAME_TEST lines; a survived read exits 1. */
 #include <capstone/capability.h>
 #include <capstone/virtual.h>
@@ -69,6 +73,23 @@ int main(int argc, char **argv)
         volatile uint64_t v = ((volatile uint64_t *)f)[7];
         printf("FRAME_TEST:copy SURVIVED read=%lu\n", (unsigned long)v);
         return 1;
+    }
+    if (!strcmp(argv[1], "write1024")) {
+        unsigned char *f = acquire(4096);
+        if (!f) { puts("FRAME_TEST:write1024 acquire-failed"); return 3; }
+        fill_entry(f, child_flag);
+        long a = __capstone_vm_thread_create_frame(f);
+        printf("FRAME_TEST:write1024 created=%ld (expect >0); writing our copy at frame+1024 next\n", a);
+        fflush(stdout);
+        /* +1024 is the snapshot's base; +1120 and +1408 are the two readings of its sp slot (ISSUES S-21). */
+        ((volatile uint64_t *)(f + 1024))[0] = 0x5321000000001024UL;
+        ((volatile uint64_t *)(f + 1120))[0] = 0x5321000000001120UL;
+        ((volatile uint64_t *)(f + 1408))[0] = 0x5321000000001408UL;
+        printf("FRAME_TEST:write1024 WROTE frame+1024, +1120, +1408\n");
+        fflush(stdout);
+        for (unsigned long i = 0; i < 400000000UL && !child_ran; ++i) __asm__ volatile("" ::: "memory");
+        printf("FRAME_TEST:write1024 child_ran=%d (the child ran to its exit ECALL)\n", child_ran);
+        return 0;
     }
     return 2;
 }
