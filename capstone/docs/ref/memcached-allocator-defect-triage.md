@@ -118,6 +118,78 @@ The older caution still applies and is worth keeping: a defect ASan already repo
 evidence for the mechanism this project claims. These two are controls, and are written as such. What
 they add is that the nested rows' silence is now attributable.
 
+## RECONSTRUCTED 2026-10-11: the page-mover group, now that patch 0006 covers the mover
+
+The README's "page mover (7)" was recorded as a count; only `d67d187` was named. Patch 0006
+(`ports/memcached/app`) now hooks the mover too, so the group was rebuilt from a full-history clone
+(2,900 commits, pin `1.6.45` = `2d51e3647`), read rather than filtered by wording:
+
+- **Population.** Every commit up to the pin whose diff touches the mover's code (`slab_rebal*`,
+  `slabs_reassign`, `slab_automove`, `slabs_mover.c`, the `ITEM_SLABBED|ITEM_FETCHED` marker) in
+  `slabs.c`, `items.c`, `slabs_mover.c`, `slab_automove*.c`, `memcached.c`, `thread.c`: **64**. Recall
+  pass: every commit whose message mentions mover/rebal/reassign/automove/page move (95), minus the
+  64. That pass added 44, mostly tests, extstore and documentation; four were read (`c0e5a99`,
+  `dc272ba`, `b43ecd6`, `2b97c38`).
+- **Which 7 the README meant is not recoverable.** The table below is the population read, not a
+  match to that count.
+
+**Lifetime defects -- the mover reclaims storage that is still referenced:**
+
+| commit | shipped in | at the pin | under patch 0006 (predicted, not run) |
+|---|---|---|---|
+| `a836eab` (2015) | 1.4.23-1.4.24 | **one-line reversal**: drop the `MOVE_BUSY_FLOATING` branch (`slabs_mover.c`, `_slabs_locked_cb`), so an item allocated but not yet linked (upload in progress) is treated as cleared and its page is wiped and reissued while the uploader still holds it | the page move revokes the generation, so the uploader's later write through its chunk faults (temporal); stock memcached writes into another class's chunk |
+| `c0e5a99` (2020) | 1.5.20-1.5.21 | **one-line reversal**: `if (!ch && (it->it_flags & ITEM_CHUNKED) == 0)` back to `if (!ch)` (`slabs_mover.c:466`), so an expired chunked item's header is freed in place and its chunks keep `head` pointing at it | the header page's move revokes its generation; a later move that meets an orphan chunk follows the dead `ch->head` and faults (temporal); stock reads the reused header. Needs two page moves and an expired, unreaped chunked item |
+| `186509c` (2015) | 1.4.23-1.4.24 | **not reversible in place**: the "cleared for move" marker was `slabs_clsid = 255`, which the new NOEXP LRU (`4de89c8`, 1.4.23) also produces for class 63, so the mover wiped live items. The pin's marker is `ITEM_SLABBED|ITEM_FETCHED`; rebuilding needs the old marker and 63 slab classes | a live item wiped by a page move dies with the generation, so a later access faults; reconstruction is a redesign, not a reversal |
+| `62415f1` (2015) | 1.4.11-1.4.22 | **not reversible in place**: the mover's freeness test (`refcount_incr == 1`) could take a freshly allocated item for free; the fix is the restructure (+64/-42) the pin's mover is built on | same class as `a836eab`, which is its reversible representative |
+
+**Not a lifetime defect, or out of scope:**
+
+- `d67d187` (2017): deletes busy items deliberately through `do_item_unlink`, which drops only the
+  hash table's reference; holders keep valid references and the item is freed at refcount 0. A
+  policy, not a defect -- the README's "frees busy items" overstated it.
+- `324975c` (2012): a stale free-list `prev` through which the mover writes into a live item. It is
+  the allocator corrupting its own metadata through its own pointer, not a consumer using a freed
+  object, and it never shipped (fixed in 1.4.11-beta1, the mover's first pre-release).
+- spatial: `f600354` (memset length), `0240dde` (class index), `b43ecd6` (stack overwrite);
+  NULL dereference or hang: `221c521`; locks and deadlocks: `6266733`, `3b2dc73`, `dc272ba`,
+  `2918d09`, `f75fefa`; data, not memory: `2b97c38` (CAS); input validation: `6ab74b5`;
+  extstore, compiled out: `c65a2fb`, `4c3fb82` and the automove-extstore tuning commits; the rest are
+  features, performance, statistics and tests.
+- Chunked items and the mover's support for them shipped together (1.4.29), so no release had a
+  mover that mishandled chunks before `c0e5a99`'s window.
+
+**MEASURED 2026-10-11: `a836eab` as app safety fixtures 22 (reversed) and 23 (as shipped)**,
+pre-registered in `beebd18cd642`, fixture setup corrected in `8e87eddbc651` after a first run created
+no condition (a sat in the page's top chunk, beyond the dst class's last chunk; both arms 0xE0016).
+On p13, Sublet-lifetime QEMU `af37cc32`, the real server and its page-mover thread:
+
+| fixture | virtual (plain) | lifetimes (patch 0006) |
+|---|---|---|
+| 22 | RETURN `16001ee` -- the held item's write landed in a live class-32 item | FAULT temporal, cause 25, at the printed target |
+| 23 | RETURN `1700007` -- the mover waited, page not moved | RETURN `1700007` |
+
+All as registered. Both gates still fail only fixture 18 (its target-offset defect).
+
+**FINDING 2026-10-11: `c0e5a99` as fixtures 24/25 did NOT catch on the lifetimes arm, against the
+pre-registered prediction.** After four setup corrections (header's physical class is `orig_clsid`
+not the accounting `slabs_clsid`; fillers must be sized to land in the header class; each
+`slabs_reassign` must be retried while the shared mover thread reports RUNNING), the triggering
+condition is fully built: the chunked item's header page moves with `c0e5a99` reversed, then its
+data chunk's page moves. On BOTH arms the second page move completed with no fault (mark
+`1800021`), where the prediction was FAULT temporal on the lifetimes arm. The prediction stands as
+pushed (`bf11e06ca556`); this is the recorded finding. So the orphan data chunk's `head` -- a copy
+of the header capability, which patch 0006 should revoke when the header page's generation is
+revoked -- was NOT read as revoked during the chunk page's move. Candidate explanations, none yet
+confirmed by reading: the header page's generation revoke may not reach a capability copy stored in
+another page's chunk; or the mover may not read `ch->head` for this chunk on the move path taken; or
+the orphan chunk's header reference was overwritten before the second move. Unlike `a836eab`
+(fixtures 22/23, caught as predicted), this defect is NOT demonstrated protected. Next step is
+reading, not more board cycles: instrument whether `head` is tagged after the first move.
+
+**Buildable now: two** (`a836eab`, `c0e5a99`). Both are mover-driven, so they need the server (items,
+LRU, hash table, the mover thread), not the allocators component: in-process fixtures like 12-16,
+with the reversal behind its own define and predictions registered before the first boot.
+
 ## Counts
 
 | | |

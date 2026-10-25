@@ -1,0 +1,19 @@
+# the repaired arms on tree A (board 1), 2026-10-21 12:31-13:01, tier3-pass-rep.sh: result lines, and each arm against its tree-B reading. UNGATED.
+REP START 12:31:44 board 1
+PASS pb13q15 BEGIN 12:31:44 board 1 booking 74
+PASS pb13q15 END 12:41:33 rc=0 :: --- vp2-nested-pools (virtual-memcached-sublet): {'CAUGHT': 7, 'NO-READING:control-failed': 2}
+PASS pb13q15 COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS pb13q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS pgm1q15 BEGIN 12:41:33 board 1 booking 75
+PASS pgm1q15 END 12:50:24 rc=0 :: --- vp2-pg-pools (virtual-mallocng-replay-pools): {'CAUGHT': 5}
+PASS pgm1q15 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm1q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS wm1q15 BEGIN 12:50:24 board 1 booking 76
+PASS wm1q15 END 13:01:53 rc=0 :: 
+PASS wm1q15 COMPARE vs reference rc=0 :: 23 of 23 cells the same
+PASS wm1q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS rep1 DONE 13:01:53
+## tree A against tree B
+pb13q15 9 of 9 cells the same
+pgm1q15 5 of 5 cells the same
+wm1q15 23 of 23 cells the same

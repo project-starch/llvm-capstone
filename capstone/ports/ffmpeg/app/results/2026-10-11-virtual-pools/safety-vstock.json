@@ -1,0 +1,53 @@
+{
+  "status": "PASS",
+  "port": "ffmpeg",
+  "arm": "vstock",
+  "completed": true,
+  "results": [
+    {
+      "fixture": 11,
+      "passed": true,
+      "detail": "b00001",
+      "image_sha256": "0f8adfb1d019e17d2bd0dc30eb22f0e6076b749f86f3b19b014b7f7e5bd0197a"
+    },
+    {
+      "fixture": 12,
+      "passed": true,
+      "detail": "c000a0",
+      "image_sha256": "b8fcd6603838fec1484bf41e5b1496d319d93a09459a164b23f7faf212f36168"
+    },
+    {
+      "fixture": 13,
+      "passed": true,
+      "detail": "d0015b",
+      "image_sha256": "21187e9aa36e90b6288893a361bc38158a4496905b9684fe419f2596ffaa417a"
+    },
+    {
+      "fixture": 14,
+      "passed": true,
+      "detail": "oob",
+      "image_sha256": "354e2dd68f90c9634e44111b5fc842ca608e0c8a97ea2ad628be09ae8eb79d4e"
+    },
+    {
+      "fixture": 15,
+      "passed": true,
+      "detail": "f000a0",
+      "image_sha256": "25a1f5120454da5c09b5a9ce2a8c64d24cb81a9879610f74ef0a5d0dad209014"
+    }
+  ],
+  "selected_fixtures": [
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "predictions_sha256": "969b8932832b9a9f5b623a0093e801829560293624d3a9e5b07b2840452da7e4",
+  "gate_sha256": "db11bb76a8c2d678d4de53b48a6d3495a6f52b330e7c35460053ceffc24e72d3",
+  "platform_sha256": {
+    "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+    "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+    "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  }
+}

@@ -35,11 +35,14 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
+import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
-HEAP = {"app-level0": "level0", "virtual-mallocng": "virtual-mallocng"}
+HEAP = {"app-level0": "level0",
+        "virtual-mallocng": "virtual-mallocng"}
 
 
 def observe(number, text, result, symbols=None, sites=()):
@@ -77,6 +80,23 @@ def observe(number, text, result, symbols=None, sites=()):
     return o
 
 
+def case_control(number, text, result, symbols=None):
+    """Read a case's own negative control: ('held'|'broken'|'none', evidence).
+
+    It runs below the threshold the defect needs, so it must COMPLETE. A fault in it cannot be
+    that defect, which means the case's fault was not attributed by it and the row has to say so.
+    """
+    if f"case {number} BEGIN" not in text:
+        return "none", "the control image did not run"
+    fault = v.domain_fault(result.get("fault") or "", symbols) or v.domain_fault(text, symbols)
+    if fault:
+        return "broken", (f"it faults too, at cause {fault.cause} in "
+                          f"{fault.symbol or 'no known function'}")
+    if f"case {number} RETURNED" in text:
+        return "held", "it completed on this image, in this boot"
+    return "none", "it neither completed nor faulted"
+
+
 def observe_control(name, text, result):
     """'fault' when the control faulted after its mark, 'complete' when it returned, else 'none'."""
     if f"CONTROL {name} mark" not in text:
@@ -98,14 +118,17 @@ def main():
     where.add_argument("--state", type=Path, help="a persistent capstone-vm (physical profile)")
     where.add_argument("--virtual-kit", type=Path, help="the virtual platform kit (tools/virtualvm.py); "
                        "every control and case then runs in ONE boot")
+    where.add_argument("--board-kit", type=Path, help="a vp2 board kit (tools/boardvm.py): the same boot on the "
+                       "board; the bundle records arm vp2-<arm>")
     p.add_argument("--bindir", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--out", type=Path)
     p.add_argument("--only", help="comma-separated case numbers")
     p.add_argument("--raw", type=Path, help="where console logs and the virtual stage go; never inside "
                    "the bundle, since results are summaries (SCHEMA.md rule 6). Default "
                    "/tmp/capstone/c-repros-raw/<stamp>-<arm>")
     a = p.parse_args()
+    sdk_builtins.gate([a.bindir], who="postgres:run-arm.py")
 
     decl = json.loads((CORPUS / "corpus.json").read_text())
     config = decl["arm_configurations"].get(a.arm)
@@ -113,13 +136,14 @@ def main():
         sys.exit(f"arm {a.arm!r} is not a Capstone domain arm of this corpus: {decl['arm_configurations']}")
     spec = v.load_arms()[config]
     build = json.loads((a.bindir / "build.json").read_text())
-    if build_identity(build) != HEAP[config] or (spec["target"] == "capstone-virtual") != bool(a.virtual_kit or appvm.profile(a.state) == "virtual"):
+    if build_identity(build) != HEAP[config] or (spec["target"] == "capstone-virtual") != bool(a.virtual_kit or a.board_kit or appvm.profile(a.state) == "virtual"):
         print(f"CONTROL-FAILED {a.bindir} was built as {build_identity(build)!r} and the run is on "
-              f"{'the virtual kit' if a.virtual_kit else 'a physical VM'}; arm {a.arm} is {config}, "
+              f"{'the virtual kit' if a.virtual_kit else 'the board kit' if a.board_kit else 'a physical VM'}; arm {a.arm} is {config}, "
               f"which needs {HEAP[config]!r} on {spec['target']}", file=sys.stderr)
         return 75
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = a.out or (CORPUS / "results" / f"{stamp}-qemu" / a.arm)
+    rec = boardvm.record_arm(a.arm, a.board_kit)
+    out = a.out or (CORPUS / "results" / f"{stamp}-{'vp2' if a.board_kit else 'qemu'}" / rec)
     raw = a.raw or Path("/tmp/capstone/c-repros-raw") / f"{stamp}-{a.arm}"
     raw.mkdir(parents=True, exist_ok=True)
 
@@ -132,15 +156,22 @@ def main():
     plan = [(f"control-{n}", controls_image, [n]) for n in spec["controls"] if controls_image.is_file()]
     plan += [(d.name, a.bindir / f"{d.name}.dom", [str(int(d.name[:2]))])
              for d in found if (a.bindir / f"{d.name}.dom").is_file()]
+    # Each case's OWN control, in the same boot and from the same build: the same program with
+    # one value on the safe side of the boundary the defect crosses (-DPGCLIENT_NEGATIVE_CONTROL).
+    # controls.dom above asks whether this configuration reports at all; this asks whether THIS
+    # fault depends on THIS defect, which is the judge's attribution by `control`.
+    plan += [(f"{d.name}-control", a.bindir / f"{d.name}-control.dom", [str(int(d.name[:2]))])
+             for d in found if (a.bindir / f"{d.name}-control.dom").is_file()]
 
-    if a.virtual_kit:
-        batch = virtualvm.Batch(raw / "stage")
+    if a.virtual_kit or a.board_kit:
+        Batch, kit = boardvm.select(a.virtual_kit, a.board_kit)
+        batch = Batch(raw / "stage")
         for name, image, argv in plan:
             batch.put(f"images/{image.name}", image)
             batch.step(name, f"./capstone-vexec ./images/{image.name} {' '.join(argv)}")
-        runs, serial, completed = batch.execute(a.virtual_kit, raw / "guest", timeout=300 + 120 * len(plan))
+        runs, serial, completed = batch.execute(kit, raw / "guest", timeout=300 + 120 * len(plan))
         print(f"  virtual boot: {'completed' if completed else 'DID NOT COMPLETE'}; serial {serial}", flush=True)
-        platform = virtualvm.platform(a.virtual_kit, a.llvm_bin / "clang", HERE)
+        platform = boardvm.run_platform(a.virtual_kit, a.board_kit, a.llvm_bin / "clang", HERE, raw / "guest")
     else:
         appvm.require_up(a.state)
         share = Path(json.loads((a.state / "config.json").read_text())["share"])
@@ -164,21 +195,45 @@ def main():
         claims = json.loads((d / "case.json").read_text())
         image = a.bindir / f"{d.name}.dom"
         if not image.is_file():
-            o = v.Observation(case=d.name, arm=a.arm, infra="build-failed", notes=f"no image at {image}")
+            o = v.Observation(case=d.name, arm=rec, infra="build-failed", notes=f"no image at {image}")
         elif d.name not in runs:
-            o = v.Observation(case=d.name, arm=a.arm, infra="infra", notes="the boot ended before this case ran")
+            o = v.Observation(case=d.name, arm=rec, infra="infra", notes="the boot ended before this case ran")
         else:
             text, result = runs[d.name]
             o = observe(number, text, result, v.Symbols(a.llvm_bin, image), claims.get("fault_sites", ()))
-            o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(image)
+            o.case, o.arm, o.image_sha256 = d.name, rec, v.sha256(image)
+            # The case's own negative control is read for EVERY case that faulted, not only for
+            # one the declared function did not already place. The two answer different
+            # questions -- where the fault is, and whether the arm would fault anyway -- and
+            # SCHEMA rule 5 wants the second one on record beside every verdict. It costs
+            # nothing extra: the control ran in this same boot.
+            if o.fault:
+                ctl = a.bindir / f"{d.name}-control.dom"
+                if f"{d.name}-control" in runs and ctl.is_file():
+                    ctext, cresult = runs[f"{d.name}-control"]
+                    seen, why = case_control(number, ctext, cresult, v.Symbols(a.llvm_bin, ctl))
+                    o.notes = (o.notes + f" negative control: {seen} -- {why}.").strip()
+                    if seen == "held" and not o.attribution:
+                        o.attribution = "control"
+                        o.attribution_evidence = ("its own negative control, the same program below "
+                                                  "the threshold, completed: " + why)
+                    elif seen == "broken":
+                        o.attribution_evidence += (
+                            "; and its negative control FAULTS too, so this fault does not depend "
+                            "on the defect")
+                        o.attribution = None
+                    elif not o.attribution:
+                        o.attribution_evidence += f"; its negative control gives no attribution -- {why}"
+                else:
+                    o.notes = (o.notes + " negative control: none in this build.").strip()
         o.controls = list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
         print(f"{d.name:<56} {verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:90]}", flush=True)
 
-    record = v.write_bundle(out, "postgres/c-repros", a.arm, rows, {
+    record = v.write_bundle(out, "postgres/c-repros", rec, rows, {
         "configuration": config, "build": build, "platform": platform})
-    print(f"--- {a.arm} ({config}): {record['tally']}\nresults: {out}")
+    print(f"--- {rec} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 

@@ -1,0 +1,129 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3918 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL uaf RETURNED observed=0xaa reissued=1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3908 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-subobject-00",
+   "case": "00_8864fd0aec_cbs_h265_pic_timing_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101a0c address=0xafccc8b0 in ff2_case_run+0x138 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "fd5f7983cdd3ed9173f50a4583666eccf9caf3593ffa7c8098e7811b30588b3f",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-01",
+   "case": "01_68845e26f7_vulkan_hevc_refpicset_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101a60 address=0xafccc408 in ff2_case_run+0x18c (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "4f3c37393501e18d4c8e130201c66c7898c632e3a5eec77fa27c7f6f3194f9bf",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-02",
+   "case": "02_e058af88ab_vulkan_hevc_dpb_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101a94 address=0xafccc508 in ff2_case_run+0x1c0 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "55bf7cf3a997bbdab912e4eff8e35641a24e8118738d27cb87aef0faff503423",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-03",
+   "case": "03_89de2f0de1_aac_arith_last_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101ac4 address=0xafccc600 in ff2_case_run+0x1f0 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "d814ba99f3bf34eaff382896019b525cc77d9237fdf6bdadaf651645215bb9e9",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-04",
+   "case": "04_1a00ea51cb_rtsp_control_url_underflow",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED strlen(control_url)-1 wrapped to SIZE_MAX and the read landed one byte before control_url, on interleaved_max, inside one allocation",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "f750b66d6d00095ad91959e5abb9f1c16b0905ec69cb8ac74f1d31c440abd6a9",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-05",
+   "case": "05_d29ff88422_vulkan_av1_tile_sizes",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101900 address=0xafccc800 in write_probe+0x2c (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "afa87fe39e36000b0346978abdd055822ca4ac3a39ed60a6f1437658bd7e1293",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-06",
+   "case": "06_a809a784ec_vvc_entry_point_start_ctu",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED j was bounded by nothing, so the writes walked 8 words off the end of entry_point_start_ctu and overwrote the next member, inside one allocation",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "075ad71d71b322e995dd938436e333ce8cf44825144836eb243343216ddec89c",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-07",
+   "case": "07_275e217b10_hlsenc_key_uri_strlcpy_size",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac10be10 address=0xafccc480 in memcpy+0x4c (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "377de54e02821c1918614b0053f9e3dcf38cdcd874ff2821ec03513327ecf288",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-08",
+   "case": "08_fb862976df_cbs_h266_col_width_val",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101900 address=0xafccc428 in write_probe+0x2c (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "58d98715a8964480ac439795cacfc722eef54ffc8712b191e9838df04964c068",
+   "as_predicted": true
+  }
+ ]
+}

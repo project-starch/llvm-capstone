@@ -11,18 +11,10 @@
 int __real_main(int, char **);
 ssize_t __real_write(int, const void *, size_t);
 
-#ifdef EXP_SUBLET
-size_t __capstone_sublet_live_bytes(void);
-size_t __capstone_sublet_peak_bytes(void);
-size_t __capstone_sublet_pool_bytes(void);
-size_t __capstone_sublet_table_bytes(void);
-void __capstone_sublet_heap_stats(unsigned long [9]);
-#else
 size_t __capstone_level0_in_use(void);
 size_t __capstone_level0_peak_in_use(void);
 size_t __capstone_level0_peak_end(void);
 size_t __capstone_level0_arena_bytes(void);
-#endif
 
 #ifdef EXP_ALLOCATIONS
 void exp_alloc_start(void);
@@ -34,31 +26,11 @@ void mrb_capstone_gc_sublet_stats(unsigned long out[7]);
 #ifdef EXP_MRB_GC_GAPS
 void mrb_gc_study_report(const char *phase);
 #endif
-#ifdef EXP_PG_CONTEXT_SUBLET
-#include "pg_subpool.h"
-void *__capstone_region(unsigned);
-#endif
 #ifdef EXP_PG_REUSE_GAP
 void pg_reuse_gap_report(void);
 #endif
 
 static void report(const char *phase) {
-#ifdef EXP_PG_CONTEXT_SUBLET
-  const struct sublet_stats *primitives = pg_subpool_primitives();
-  char inner[512];
-  int inner_n = snprintf(inner, sizeof inner,
-      "EXP-INNER phase=%s contexts=%lu resets=%lu destroyed=%lu "
-      "blocks=%lu peak_blocks=%lu entries=%lu peak_entries=%lu "
-      "pools=%lu peak_pools=%lu split=%lu mrev=%lu revoke=%lu init=%lu\n",
-      phase, pg_subpool_counts.created, pg_subpool_counts.resets,
-      pg_subpool_counts.destroyed, pg_subpool_counts.blocks_live,
-      pg_subpool_counts.blocks_peak, pg_subpool_counts.entries_live,
-      pg_subpool_counts.entries_peak, pg_subpool_counts.pools_live,
-      pg_subpool_counts.pools_peak, primitives->split, primitives->mrev,
-      primitives->revoke, primitives->init);
-  if (inner_n > 0 && (size_t)inner_n < sizeof inner)
-    __real_write(2, inner, (size_t)inner_n);
-#endif
 #ifdef EXP_MRB_GC_GAPS
   mrb_gc_study_report(phase);
 #endif
@@ -80,27 +52,10 @@ static void report(const char *phase) {
   exp_alloc_report(phase);
 #endif
   char line[640];
-#ifdef EXP_SUBLET
-  unsigned long c[9];
-  __capstone_sublet_heap_stats(c);
-  int n = snprintf(line, sizeof line, "EXP-MEM phase=%s", phase);
-#define FIELD(name, value) do { \
-  n += snprintf(line+n, sizeof line-(size_t)n, " " name "=%lu", (unsigned long)(value)); \
-} while (0)
-  FIELD("live", __capstone_sublet_live_bytes());
-  FIELD("peak", __capstone_sublet_peak_bytes());
-  FIELD("pool", __capstone_sublet_pool_bytes());
-  FIELD("tables", __capstone_sublet_table_bytes());
-  FIELD("allocs", c[0]); FIELD("frees", c[1]); FIELD("merges", c[2]);
-  FIELD("split", c[4]); FIELD("mrev", c[5]); FIELD("revoke", c[7]); FIELD("init", c[8]);
-  line[n++] = '\n';
-#undef FIELD
-#else
   int n = snprintf(line, sizeof line,
       "EXP-MEM phase=%s live=%zu peak=%zu end=%zu pool=%zu\n", phase,
       __capstone_level0_in_use(), __capstone_level0_peak_in_use(),
       __capstone_level0_peak_end(), __capstone_level0_arena_bytes());
-#endif
   if (n > 0 && (size_t)n < sizeof line)
     __real_write(2, line, (size_t)n);
 }
@@ -124,13 +79,6 @@ static void at_exit(void) {
 #endif
 }
 int __wrap_main(int argc, char **argv) {
-#ifdef EXP_PG_CONTEXT_SUBLET
-  if (pg_subpool_arena(__capstone_region(1), 64UL << 20) != 0) return 126;
-#endif
-#ifdef EXP_PYMALLOC
-  extern int cpy_sublet_init(void);
-  if (cpy_sublet_init() < 0) return 124;
-#endif
   if (atexit(at_exit)) return 125;
 #ifdef EXP_ALLOCATIONS
   exp_alloc_start();

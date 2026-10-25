@@ -1,0 +1,174 @@
+--- a/src/backend/utils/mmgr/mcxt.c
++++ b/src/backend/utils/mmgr/mcxt.c
+@@ -245,6 +245,10 @@
+ 	return header;
+ }
+ 
++#ifdef EXP_REUSE_GAP
++#include "exp-reuse-gap.h"
++#endif
++
+ /*
+  * MemoryContextTraverseNext
+  *		Helper function to traverse all descendants of a memory context
+@@ -432,6 +436,9 @@
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+         pg_spatial_gap_reset((uintptr_t) context);
+ #endif
++#ifdef EXP_REUSE_GAP
++		exp_gap_reset((uintptr_t) context);
++#endif
+ 		context->methods->reset(context);
+ 		context->isReset = true;
+ 		VALGRIND_DESTROY_MEMPOOL(context);
+@@ -543,6 +550,9 @@
+ 
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     pg_spatial_gap_reset((uintptr_t) context);
++#endif
++#ifdef EXP_REUSE_GAP
++	exp_gap_reset((uintptr_t) context);
+ #endif
+ 	context->methods->delete_context(context);
+ 
+@@ -1216,6 +1226,9 @@
+ 	 * function instead.
+ 	 */
+ 	ret = context->methods->alloc(context, size, 0);
++#ifdef EXP_REUSE_GAP
++	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+@@ -1243,6 +1256,9 @@
+ 	context->isReset = false;
+ 
+ 	ret = context->methods->alloc(context, size, 0);
++#ifdef EXP_REUSE_GAP
++	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+@@ -1273,6 +1289,9 @@
+ 	context->isReset = false;
+ 
+ 	ret = context->methods->alloc(context, size, flags);
++#ifdef EXP_REUSE_GAP
++	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+@@ -1363,6 +1382,9 @@
+ 	 * function instead.
+ 	 */
+ 	ret = context->methods->alloc(context, size, 0);
++#ifdef EXP_REUSE_GAP
++	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+@@ -1386,6 +1408,9 @@
+ 	context->isReset = false;
+ 
+ 	ret = context->methods->alloc(context, size, 0);
++#ifdef EXP_REUSE_GAP
++	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+@@ -1410,6 +1435,9 @@
+ 	context->isReset = false;
+ 
+ 	ret = context->methods->alloc(context, size, flags);
++#ifdef EXP_REUSE_GAP
++	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif
+@@ -1565,7 +1593,16 @@
+     uintptr_t pg_old_base = pg_gap_base(pointer);
+     MemoryContextMethodID pg_old_method = GetMemoryChunkMethodID(pointer);
+ #endif
++#ifdef EXP_REUSE_GAP
++	uintptr_t	exp_gap_old_base = exp_gap_base(pointer);
++	MemoryContextMethodID exp_gap_old_method = GetMemoryChunkMethodID(pointer);
++#endif
+ 	MCXT_METHOD(pointer, free_p) (pointer);
++#ifdef EXP_REUSE_GAP
++	if (exp_gap_old_method != MCTX_BUMP_ID &&
++		exp_gap_old_method != MCTX_ALIGNED_REDIRECT_ID)
++		exp_gap_release(exp_gap_old_base);
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     if (pg_old_method != MCTX_BUMP_ID &&
+         pg_old_method != MCTX_ALIGNED_REDIRECT_ID)
+@@ -1613,7 +1650,26 @@
+     MemoryContext pg_old_context = GetMemoryChunkContext(pointer);
+     MemoryContextMethodID pg_old_method = GetMemoryChunkMethodID(pointer);
+ #endif
++#ifdef EXP_REUSE_GAP
++	uintptr_t	exp_gap_old_base = exp_gap_base(pointer);
++	MemoryContext exp_gap_old_context = GetMemoryChunkContext(pointer);
++	MemoryContextMethodID exp_gap_old_method = GetMemoryChunkMethodID(pointer);
++#endif
+ 	ret = MCXT_METHOD(pointer, realloc) (pointer, size, 0);
++#ifdef EXP_REUSE_GAP
++	if (ret != NULL && exp_gap_old_method != MCTX_ALIGNED_REDIRECT_ID)
++	{
++		uintptr_t	exp_gap_new_base = exp_gap_base(ret);
++
++		if (exp_gap_new_base == exp_gap_old_base)
++			exp_gap_resize(exp_gap_old_base, size);
++		else
++		{
++			exp_gap_release(exp_gap_old_base);
++			exp_gap_issue((uintptr_t) exp_gap_old_context, exp_gap_new_base, size);
++		}
++	}
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     if (ret != NULL && pg_old_method != MCTX_ALIGNED_REDIRECT_ID) {
+         uintptr_t pg_new_base = pg_gap_base(ret);
+@@ -1667,7 +1723,26 @@
+     MemoryContext pg_old_context = GetMemoryChunkContext(pointer);
+     MemoryContextMethodID pg_old_method = GetMemoryChunkMethodID(pointer);
+ #endif
++#ifdef EXP_REUSE_GAP
++	uintptr_t	exp_gap_old_base = exp_gap_base(pointer);
++	MemoryContext exp_gap_old_context = GetMemoryChunkContext(pointer);
++	MemoryContextMethodID exp_gap_old_method = GetMemoryChunkMethodID(pointer);
++#endif
+ 	ret = MCXT_METHOD(pointer, realloc) (pointer, size, flags);
++#ifdef EXP_REUSE_GAP
++	if (ret != NULL && exp_gap_old_method != MCTX_ALIGNED_REDIRECT_ID)
++	{
++		uintptr_t	exp_gap_new_base = exp_gap_base(ret);
++
++		if (exp_gap_new_base == exp_gap_old_base)
++			exp_gap_resize(exp_gap_old_base, size);
++		else
++		{
++			exp_gap_release(exp_gap_old_base);
++			exp_gap_issue((uintptr_t) exp_gap_old_context, exp_gap_new_base, size);
++		}
++	}
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     if (ret != NULL && pg_old_method != MCTX_ALIGNED_REDIRECT_ID) {
+         uintptr_t pg_new_base = pg_gap_base(ret);
+@@ -1734,6 +1809,9 @@
+ 	 * function instead.
+ 	 */
+ 	ret = context->methods->alloc(context, size, MCXT_ALLOC_HUGE);
++#ifdef EXP_REUSE_GAP
++	exp_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
++#endif
+ #ifdef PG_SPATIAL_GAP_OBSERVER
+     pg_spatial_gap_issue((uintptr_t) context, (uintptr_t) ret, size);
+ #endif

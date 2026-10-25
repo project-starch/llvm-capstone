@@ -1,0 +1,16 @@
+CONTROL 12:22:23 kit qemu bb96f69552135b93 module ed8565728d0fdabd hold.dom 433f9f1cdcd0db9f
+control boot rc=0 12:32:28
+parse rc=0
+  HOLDS hold-100000 marker: HOLD-OK 100000
+  HOLDS hold-100000 peak bracket inside [100000, 110000]: peak [105569, 105569] (inst 1, 1 instance(s))
+  HOLDS hold-100000 module allocations >= 100000: module delta 105569
+  HOLDS hold-100000 module allocations inside the host minted bracket: module 105569, host [105569, 105569]
+  HOLDS churn-200000 marker: CHURN-OK 200000
+  HOLDS churn-200000 peak bracket inside [0, 2047]: peak [31, 1023] (inst 2, 1 instance(s))
+  HOLDS churn-200000 module allocations >= 200000: module delta 806147
+  HOLDS churn-200000 module allocations inside the host minted bracket: module 806147, host [802816, 806911]
+  HOLDS hold-150000 marker: HOLD-OK 150000
+  HOLDS hold-150000 peak bracket inside [150000, 165000]: peak [158303, 158719] (inst 3, 1 instance(s))
+  HOLDS hold-150000 module allocations >= 150000: module delta 158303
+  HOLDS hold-150000 module allocations inside the host minted bracket: module 158303, host [158303, 162398]
+CONTROL VERDICT rc=0

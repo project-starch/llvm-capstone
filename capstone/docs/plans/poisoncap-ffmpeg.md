@@ -1,5 +1,7 @@
 # PoisonCap FFmpeg allocator integration
 
+> **Removed 2026-10-10.** CheriBSD PoisonCap (our adapter, its backends and runners) is gone from the tree; PostgreSQL's arm goes with its rewrite. This plan is history, and the results it produced stay where they were recorded.
+
 Base: `ports/8-cheribsd-allocators`, commit `46d380be9c6a`.
 Work branch: `ports/9-poisoncap-ffmpeg`.
 

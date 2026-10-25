@@ -1,0 +1,17 @@
+# uaf-control repeat (uaf-repeat.py, N=120, a80fa4ae05c3), board 2 / tree B, 2026-10-22. Result lines only.
+UR BEGIN 10:30:15 board 2 booking 105 N=120
+UNBOOK 105: 200
+UR END rc=0 10:57:04
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f9ca10c24 address=0x3f9cacd050 entry=0x3f9ca00868 code=0x3f9ca00000-0x3f9ca80000 last=0x42 preparing=0x42 sha256=b1decb0612856121de37383cbe4e812e1
+RUN uaf-62-traced rc={'kind': 'signal', 'value': 11, 'fault': 'cause=13 pc=0x3fbe310c70 address=0x3fbe426040
+RUN uaf-72-traced rc={'kind': 'signal', 'value': 11, 'fault': 'cause=13 pc=0x3f8a290c70 address=0x3f8a334040
+RUN uaf-97-plain rc={'kind': 'signal', 'value': 11, 'fault': 'cause=13 pc=0x3faab10c70 address=0x3faabf6040
+RUN uaf-98-traced rc={'kind': 'signal', 'value': 11, 'fault': 'cause=13 pc=0x3fb3410c70 address=0x3fb34c5040
+RUN uaf-107-plain rc={'kind': 'signal', 'value': 11, 'fault': 'cause=13 pc=0x3f96e10c70 address=0x3f96f08040
+TALLY plain cause 13: 2
+TALLY plain cause 25: 58
+TALLY traced cause 13: 3
+TALLY traced cause 25: 57
+completed=True steps=121 of 121 transcript=<mnt-hdd>/capstone/t3-run-treeB/uaf-repeat/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 10:57:04

@@ -50,8 +50,9 @@
  *  12 wmem_neighbour  fixture 2 inside one BLOCK allocator: writes through the first wmem
  *                     allocation at the second's first byte.
  *  13 wmem_chunk_free one allocation of a BLOCK allocator freed with wmem_free while its block
- *                     lives on, then read. Added with the chunks arm, where that free is a revoke;
- *                     elsewhere the free changes nothing the old pointer can see, except that
+ *                     lives on, then read. Added with the chunks arm (removed 2026-10-11), where
+ *                     that free was a revoke; elsewhere the free changes nothing the old pointer
+ *                     can see, except that
  *                     upstream writes its free-list links into the chunk's first bytes.
  *  14 zigbee_touchlink CVE-2026-95391, live at our v4.6.8 pin: a global container keeps a record
  *                     across the release that frees it, AND holds a key pointing INSIDE that same
@@ -63,10 +64,10 @@
  *                     still passes and the next use reads freed storage. Differs from 14 in the
  *                     LIFETIME-ENDER: a refcount, not an explicit free.
  * 14 and 15 are the two upstream defects this port carries that are confirmed live at the pin by
- * the cherry-pick probe; both are HEAP class, so `chunks` is predicted to behave as `sublet`.
+ * the cherry-pick probe; both are HEAP class.
  * On every heap arm of this port, 10-12 are predicted to return: a wmem block is one g_malloc,
  * and every allocation carved from it carries the whole block's bounds. That is the gap the
- * wmem hooks (ports/wireshark/wmem) are for; it is measured here, not assumed.
+ * wmem port's patch 0001 (ports/wireshark/wmem) closes; it is measured here, not assumed.
  *
  * NO FIXTURE ROUTES INTO A DISSECTOR, and none may: the handles that whitelisted code looks up
  * but this build never registers (ipx and ccsds, packet-ieee8023.c:122,124; http2,

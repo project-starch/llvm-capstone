@@ -1,0 +1,17 @@
+# Boot 5's prediction (2026-10-18), derived by script from the compiler lane's QEMU record of run.py under arena_pin=1:
+# <mnt-hdd>/capstone/ap-on (capstone-qemu binary 7a4f3a64776f0c88 = b290f5656600, -cpu ...,svadu=false; module 5bfc38f808e1effd,
+# the QEMU-kernel build of 3005ed52's source, insmod arena_pin=1). Its images equal the board stage's by sha256: contract.dom
+# 125705371837ea92, sqlite3.dom a5942a1add489597, mruby.dom a902e740fc5d3b0f (the launcher is the board build, b27afefc, as
+# in every Tier 2 boot).
+#
+# control: board-check3.py over the uncut serial reads the record: 33 of 41 true, false
+#   threads, vm, heap-threads, threads_output, vm_contract, heap_threads, linux_demand_faults, shared_heap_pages_released
+# boot 5's suite: derive-b5-prediction.py cuts the sparse pair (305 lines; 1 VM_STATS line; 1 fault line, cause 24), scored
+# with no expected-false set, so the list is the false tests:
+#   26 of 41 true; 15 off the pre-registration ['threads', 'vm', 'heap-threads', 'sparse-churn', 'sparse-stale', 'threads_output', 'fault_causes', 'vm_denial_sites', 'vm_contract', 'heap_threads', 'vm_denial_operations', 'linux_pages_released', 'linux_demand_faults', 'shared_heap_pages_released', 'sparse_recycling']
+# on the board, cleanup also reads false (the board kernel cannot unload the module; 1 there, 0 on QEMU): 25 of 41 true.
+# The 20 exits, in order: normal 0, threads 1, vm 1, nested 0, nested-stale 139, heap-threads 1, stale 139, bounds 139,
+# retired 139, vm-ro-write 139, vm-none-read 139, vm-guard 139, vm-padding 139, preempt 143, parallel_one 0, parallel_two 0,
+# sqlite_write 0, sqlite_read 0, mruby 0, cleanup 1 (board). The 17 returning exits are boot 4c's.
+# The kit lines: SQLITE_SUM=5050, SQLITE_PERSIST=100, MRUBY_SUM=5050, MRUBY_FILE=virtual.
+# Run through the runner's dry run, this transcript (cleanup set to 1) scores "25 of 41 true; 0 off the pre-registration".

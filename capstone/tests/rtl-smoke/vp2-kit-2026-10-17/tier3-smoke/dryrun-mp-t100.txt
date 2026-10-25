@@ -1,0 +1,9 @@
+# tier3-mp-arm-t100.sh + tier3-appvm-arm-tools2.sh, mruby-stock tick-100 dry run 2026-10-22 00:31: busy, booking and boot stubbed (BOARDVM_STUB_TRANSCRIPT = the tB-mimic-t100 reference's own serial as the vbatch rung); collect, the guest script, split and read run for real
+MP mruby-stock BEGIN 00:31:15 board 1 runner 9db9f5f7cf60fcda appvm-arm 11967b378bda73c8 wt-ref 6764d96229f6 booking 999
+unbooked 999
+MP mruby-stock END 00:31:15 rc=0 :: APPVM read rc=0 00:31:15 :: --- virtual-malloc: control smoke ok; {'fault': 20, 'completed': 3}
+MP mruby-stock COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MP mruby-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP board1 DONE 00:31:16
+bounds:      24 sleep 2400; stall
+staged image: images/mruby-1ab24a9215078a53

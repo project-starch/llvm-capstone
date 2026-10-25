@@ -1,0 +1,42 @@
+# Tier 3 board reading, arm sql0-nf2A: runner 7ce203f9fd6a3cce (dev; QEMU PASS t3-sql-nf2-r2); scored against t3-sql-nf2-r1 (equal to its repeat r2); kit bkit7-rev2xDN2 (module 54d8a3af1158c3f4, dev's node-floor-2; batch budget x4; staged execute bits kept; monitor capstone-sbi f13dbc5, S-23a guarded strobe, the refusal read and S-23b step 1, wrapper aab63d5 with the boot quantum), tree A caplifive_vp2c_8522d72fe, pin off, SDK t3-freeze-nb. Result lines only.
+# board 1 (from the run log's [fpga-board] line)
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2c_8522d72fe cells 9 tally {"CAUGHT": 1, "MISSED": 6, "NO-READING:out-of-denominator": 2}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+01_12a6206864a0_to_char_tz_overflow image 64010720f1a6b3bc MISSED cause None at None reached True completed True attribution null
+02_3ed3dbbf44_ts_headline_int16_overflow image 64010720f1a6b3bc CAUGHT cause 28 at memcpy+200 reached True completed False attribution "control"
+03_8c34261109_ltree_lquery_uint16_overflow image 64010720f1a6b3bc NO-READING:out-of-denominator cause None at None reached False completed False attribution null
+04_3d160401b65e_oidvector_oob_read image 64010720f1a6b3bc MISSED cause None at None reached True completed True attribution null
+05_849da8210539_ascii_multibyte_oob_read image 64010720f1a6b3bc MISSED cause None at None reached True completed True attribution null
+06_e91dcfccaa_regexp_conv_buf_overrun image 64010720f1a6b3bc MISSED cause None at None reached True completed True attribution null
+07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec image 64010720f1a6b3bc NO-READING:out-of-denominator cause None at None reached False completed False attribution null
+08_c4d51b6274_levenshtein_stop_column_oob_write image 64010720f1a6b3bc MISSED cause None at None reached True completed True attribution null
+09_7a7d9693c7_pgp_sesskey_overflow image 64010720f1a6b3bc MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 01_12a6206864a0_to_char_tz_overflow: verdict MISSED cause None pc None
+  SAME 02_3ed3dbbf44_ts_headline_int16_overflow: verdict CAUGHT cause 28 pc memcpy+200
+  DIFF 03_8c34261109_ltree_lquery_uint16_overflow: verdict NO-READING cause None pc None
+      verdict: qemu CAUGHT board NO-READING
+      reason: qemu None board out-of-denominator
+      reached: qemu True board False
+      cause: qemu 28 board None
+      pc_off: qemu memcpy+200 board None
+      attribution: qemu "control" board null
+  SAME 04_3d160401b65e_oidvector_oob_read: verdict MISSED cause None pc None
+  SAME 05_849da8210539_ascii_multibyte_oob_read: verdict MISSED cause None pc None
+  SAME 06_e91dcfccaa_regexp_conv_buf_overrun: verdict MISSED cause None pc None
+  DIFF 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board out-of-denominator
+      reached: qemu True board False
+      completed: qemu True board False
+  SAME 08_c4d51b6274_levenshtein_stop_column_oob_write: verdict MISSED cause None pc None
+  SAME 09_7a7d9693c7_pgp_sesskey_overflow: verdict MISSED cause None pc None
+  7 of 9 cells the same
+## the boot
+  T3PG sql0-nf2A BEGIN 08:19:44 (trigger: SQL_NF2A_GO 08:18:56 board 1 free; pre-registration 0b8e5d5b6da2 pushed)
+  T3PG sql0-nf2A END 09:37:22 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 1, 'MISSED': 6, 'NO-READING:out-of-denominator': 2}
+  BOARD_RUN_START 08:19:44 bitstream caplifive_vp2c_8522d72fe monitor f13dbc5
+  manifest 1072 files, stage 28822623 bytes
+  firmware 8db7c8b834a7111d 25856520 B
+  DRIVER rc=0 09:37:22
+  BOARD_RUN_DONE 09:37:22

@@ -211,7 +211,10 @@ bool collectStaticCapReducedObject(const GlobalVariable &GV,
   SmallVector<std::pair<uint32_t, Constant *>, 8> Fields;
 
   if (auto *ST = dyn_cast<StructType>(HolderTy)) {
-    if (!GV.isConstant() || ST->getNumElements() != 1)
+    // Constant in the source: CapstoneCapGlobalInit clears the flag of the
+    // holders it writes and records it as this attribute.
+    if ((!GV.isConstant() && !GV.hasAttribute(CapstoneCapInitConstHolder)) ||
+        ST->getNumElements() != 1)
       return false;
     Type *FieldTy = ST->getElementType(0);
     if (!FieldTy->isPointerTy() || FieldTy->getPointerAddressSpace() != 200)
@@ -1481,8 +1484,10 @@ void CapstoneAsmPrinter::emitGlobalVariable(const GlobalVariable *GV) {
 
   // Check if this is a 128-bit sized type that needs special handling.
   // Skip declarations (extern without definition): getKindForGlobal asserts
-  // on them because it is only valid for definitions.
-  if (!GV->isDeclarationForLinker() &&
+  // on them because it is only valid for definitions. Skip common symbols
+  // (-fcommon tentative definitions): they have no section, and the generic
+  // path emits them as .comm with their size and alignment.
+  if (!GV->isDeclarationForLinker() && !GV->hasCommonLinkage() &&
       GV->getValueType()->isSized() &&
       getDataLayout().getTypeAllocSize(GV->getValueType()) == 16) {
 

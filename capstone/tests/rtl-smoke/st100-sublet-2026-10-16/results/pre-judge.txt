@@ -1,0 +1,20 @@
+arms read: 3
+  3 arms                               ok
+  k800 returned 4                      ok
+  native returned                      ok
+  native oracle hash                   ok
+  native SPEEDTEST1-CYCLES ... DROPPED 0 RC 0 ok
+  native BASELINE-WARM                 ok
+  domain returned                      ok
+  domain oracle hash                   ok
+  domain arena 128 MiB                 ok
+  domain HEAP 128 MiB DROPPED 0 RC 0   ok
+  domain no share-trap / NOMEM         ok
+  native_cycles        2199168382
+  native_warm_cycles   2199229441
+  native_instrs        582103843
+  native_total_s       87.844
+  domain_cycles        2674009545
+  domain_total_s       106.780
+  ratio 1.2159 (predicted ~1.18, band 1.14-1.24: INSIDE)
+  native 2.20 G cycles vs ~337.2 G predicted; domain 2.67 G vs ~398.6 G

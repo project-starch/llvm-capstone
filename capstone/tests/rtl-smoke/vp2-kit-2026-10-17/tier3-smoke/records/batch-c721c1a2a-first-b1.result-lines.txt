@@ -1,0 +1,61 @@
+# The batch bitstream c721c1a2a on board 1 (tree A's board): flash, s23-cpmp-rearm bare, Tier 1 (2026-10-22). Result lines only.
+# Pre-registered at c8f2e85ea9b8; chain flash-and-first-b1.sh 8fdc201f486f.
+FB arm ended 14:17:58
+FB board 1 free 14:17:58
+FB keep-retired arm: no SILENT read (5 keep tally lines)
+STORE 44 names; wanted ['no-such-bitstream-3709888.bit']; missing ['no-such-bitstream-3709888.bit']
+STORE 44 names; wanted ['caplifive_vp2c_8522d72fe.bit']; missing []
+FB FLASH BEGIN 14:17:59 booking 113
+[flash 14:17:59] local sha256 matches the synth lane's sealed hash
+[flash 14:18:00] resident before: 'caplifive_vp2c_8522d72fe.bit'
+[flash 14:18:00] not in the server store -- uploading via API
+[flash 14:18:04] upload HTTP 201
+[flash 14:18:04] present in the server store
+[flash 14:18:19] flashing caplifive_vp2c_c721c1a2a.bit (~90 s)
+[flash 14:19:50] MANDATORY power cycle: off 8 s, on 15 s
+[flash 14:20:13] resident AFTER power cycle: 'caplifive_vp2c_c721c1a2a.bit'
+[flash 14:20:13] powered off
+[flash 14:20:13] unlocked
+FB FLASH END rc=0 14:20:13
+MK kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit7-rev2xDN2:
+MK module 21fbfc397e7c7a42 DONE
+FB FIRST rc=0 14:44:36; SEQ:
+FB DONE 14:44:36
+BF START 14:20:13 board 1 bitstream caplifive_vp2c_c721c1a2a kit bkit8-batch-b1 fw 6423545a
+S23 BEGIN 14:20:13 board 1 bitstream caplifive_vp2c_c721c1a2a image bcefd969e128113f driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 114 expect batch
+UNBOOK 114: 200
+S23 END rc=0 14:20:56 :: [sup 14:20:55] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+S23 AS EXPECTED (batch): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14
+S23 GRADE rc=0
+S23 board1 DONE 14:20:56
+BF TIER1 BEGIN 14:20:56 booking 115
+UNBOOK 115: 200
+BF TIER1 DRIVER rc=0 14:44:36; watchdog lines 94
+RUNG b0-stats retval=0 (rev7 oracle 0, reference only)
+RUNG b0-hello retval=0 (rev7 oracle 0, reference only)
+RUNG vm-contract retval=0 (rev7 oracle 0, reference only)
+RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:0 
+VM_BEGIN without VM_EXIT: 
+FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+BF board1 DONE 14:44:36
+# s23 values as read (uart.txt):
+SR 0000000000000019 SV 0000000080800000 SV 0000000000005A23 SV 0000000000000000 SV 0000000000000000 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000000 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000000 SV 0000000000000000 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000000 SV 0000000000000001 SV 0000000000000001 SV 0000000000000001 SV 0000000000000005 SV 000000000000000E SV 0000000000000055 
+# Tier 1 vm-suite (sparse-churn) lines:
+@@PARAM resume_satp_changed=0:before-contract
+@@PARAM busy_frame_refusals=0:before-contract
+@@PARAM resume_satp_changed=0:after-contract
+@@PARAM busy_frame_refusals=0:after-contract
+@@PARAM resume_satp_changed=0:before-churn
+@@PARAM busy_frame_refusals=0:before-churn
+VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags
+CAPSTONE_VM_STATS arenas=10 pages=489 peak=491 nodes=600041 steps=200065 faults=24 collections=0 reclaimed=0 rounds=8 bytes_in=367 bytes_out=64 node_bytes=65536 node_capacity=4096 node_growths=0 launch_ns=1531266880 elapsed_ns=1067649085120
+@@PARAM resume_satp_changed=0:after-churn
+@@PARAM busy_frame_refusals=0:after-churn
+KMSG-AFTER-CHURN: [  118.088715] capstone_vm: loaded, diag gen-push-1, supervisor_slots=1, diag_emerg=1
+KMSG-AFTER-CHURN: [  129.160376] capstone_vm: release retires attempted=11 succeeded=11 pushed=11 first_id=1024
+KMSG-AFTER-CHURN: [  134.122249] capstone_vm: release retires attempted=11 succeeded=11 pushed=11 first_id=1024
+KMSG-AFTER-CHURN: [ 1213.083998] capstone_vm: release retires attempted=10 succeeded=10 pushed=10 first_id=1024
+KMSG-AFTER-CHURN-END lines=104
+# QEMU reference (gen-probe/tier1r60-qkit7-batch2/result.json): normal=1 stale=1 sparse-churn=1; its sparse-churn stats nodes=600041 steps=200092 node_capacity=65536

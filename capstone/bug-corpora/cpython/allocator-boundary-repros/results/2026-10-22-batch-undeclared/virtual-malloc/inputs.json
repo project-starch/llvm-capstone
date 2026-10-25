@@ -1,0 +1,45 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "application": "cpython",
+    "image_sha256": "23a2f0cbd80ddfbe6ac0541688925e547aefe81c66bf7734e1a7239b326c28d2",
+    "nested": "none",
+    "profile": "virtual",
+    "runtime_dirty": false,
+    "runtime_revision": "8f132305eea1928c5332c307d18354e67d2706af",
+    "stack_bytes": 8388608
+  },
+  "cases": 32,
+  "configuration": "virtual-cpython",
+  "contract": "verdicts-v1",
+  "corpus": "cpython/allocator-boundary-repros",
+  "guest": {
+    "guest_env": [
+      "PYTHONHASHSEED=0"
+    ],
+    "hash_abc": 1453079729188098211,
+    "hash_randomization": 0,
+    "kernel_cmdline": "root=/dev/vda ro norandmaps",
+    "pythonhashseed": "0"
+  },
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "a405840dce789345422ab901bb44df0a1d166677b564c68303f24ae286b847f0",
+    "module": "a05c198bfcc5f55ce6887923901013704f4c078901e8efcfb3cc531b8bed2c8e",
+    "profile": "virtual",
+    "qemu": "5140a50ab413d991a985499999d037b4a3122c5116482cea7357b8078629909a",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "dc606bd178c1078069de3482aa70af805abc41c176daffadb581154f7a2b320b"
+  },
+  "predicted": "MISSED",
+  "tally": {
+    "CAUGHT": 15,
+    "MISSED": 14,
+    "NO-READING:infra": 1,
+    "NO-READING:not-reached": 1,
+    "NO-READING:unattributed": 1
+  }
+}

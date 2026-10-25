@@ -1,0 +1,51 @@
+# Tier 3 board reading, arm pym1-fix6: kit bkit7-fix6 (module d71f207a3af5546b, the S-27 workaround: resume rd = x0), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-nested-pools configuration virtual-pymalloc-pools platform board:caplifive_vp2_bf3db3175 cells 20 tally {"CAUGHT": 20}
+# controls [["uaf-block", "fault"]]
+00_gh-143543_groupby_reentrant_eq image 8f2700f319d148d1 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+01_gh-146613_grouper_parent_key image 7bc2c0aab08ed53a CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+02_gh-142829_hamt_eq_interior_cursor image 92e53f349d59c600 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+03_gh-142831_json_encoder_list_item image e2853f861bd72274 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+04_gh-145244_json_encoder_dict_key image e1b9263768ec74e1 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+05_gh-148660_odict_copy_stale_link image 35e42b66e55c91f9 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+06_gh-151295_bytes_join_reentrant_buffer image 09e58c3274ee0b06 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+07_gh-148395_decompressor_next_in image 5c37a77ca0fe3b30 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+08_gh-112127_atexit_unregister_borrowed_tuple image 4948dc87d4d13f53 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+09_gh-139210_iterparse_event_name image 83adf48172cf644a CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+10_gh-142560_bytearray_search_realloc image 058bd61c83b20f98 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+11_gh-142783_zoneinfo_eager_decref image 7645d1abe4e4e3a5 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+12_gh-143004_counter_update_borrowed_value image 0a0f4826e9b5a93c CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+13_gh-144833_ssl_decref_self_then_read image 25f235ffdda27c6d CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+14_gh-146011_decimal_signaldict_outlives_context image cd2f4ec0e4137077 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+15_gh-149449_unicodedata_capi_cached image 1d23af4d38057e9a CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+16_gh-151403_fork_exec_fspath image 8d6a12935cb29b3c CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+17_gh-151416_spawnv_fspath image 433c2e79f4df9570 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+18_gh-151695_curses_screen_encoding_global image a5c4f9819c0c2b50 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+19_gh-153539_textio_tell_reentrant_decoder image cae0d28288a75d65 CAUGHT cause 25 at read_probe+56 reached True completed False attribution "probe"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_gh-143543_groupby_reentrant_eq: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 01_gh-146613_grouper_parent_key: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 02_gh-142829_hamt_eq_interior_cursor: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 03_gh-142831_json_encoder_list_item: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 04_gh-145244_json_encoder_dict_key: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 05_gh-148660_odict_copy_stale_link: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 06_gh-151295_bytes_join_reentrant_buffer: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 07_gh-148395_decompressor_next_in: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 08_gh-112127_atexit_unregister_borrowed_tuple: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 09_gh-139210_iterparse_event_name: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 10_gh-142560_bytearray_search_realloc: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 11_gh-142783_zoneinfo_eager_decref: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 12_gh-143004_counter_update_borrowed_value: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 13_gh-144833_ssl_decref_self_then_read: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 14_gh-146011_decimal_signaldict_outlives_context: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 15_gh-149449_unicodedata_capi_cached: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 16_gh-151403_fork_exec_fspath: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 17_gh-151416_spawnv_fspath: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 18_gh-151695_curses_screen_encoding_global: verdict CAUGHT cause 25 pc read_probe+56
+  SAME 19_gh-153539_textio_tell_reentrant_decoder: verdict CAUGHT cause 25 pc read_probe+56
+  20 of 20 cells the same
+## the boot
+  BOARD_RUN_START 20:45:28 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 51 files, stage 6660515 bytes
+  firmware b30809be571ef7fc 19565064 B
+  DRIVER rc=0 20:58:30
+  BOARD_RUN_DONE 20:58:30

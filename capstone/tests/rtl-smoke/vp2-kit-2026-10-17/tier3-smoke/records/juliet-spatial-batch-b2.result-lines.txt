@@ -1,0 +1,16 @@
+# The Juliet spatial sample on the batch bitstream c721c1a2a, board 2 (tier3-juliet-spatial-batch.sh): result lines only.
+JS run BEGIN 05:22:46 board 2 booking 171
+JS run END rc=0 11:40:46 :: 24 batches completed, 0 not :: 24 batches in 22679.8 s -> <mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b2/juliet-spatial/run/observations.json
+JS probe BEGIN 11:40:46 board 2 booking 175
+JS probe END rc=0 11:48:21 :: 0 batches completed, 0 not :: {"sizeof-ptr": {"double*": "16", "double": "8", "int64_t*": "16", "int64_t": "8", "struct*": "16", "struct": "8"}}
+JS judge rc=0 :: CWE-127: caught 0 missed 0; bad {'NO-READING:unattributed(STRICT-FAIL:no-oob-line)': 93}; good {'CORRECT': 93}; strict {} runs: {'census': (24, 24)} 
+JS verdicts: 755 {('NO-READING:unattributed(STRICT-FAIL:no-oob-line)', 'CORRECT', '28'): 716, ('MISSED', 'CORRECT', ''): 22, ('INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:no-oob-line)', 'CORRECT', '28'): 4, ('INTRA-
+JS MISSED rows: 22 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar
+JS COMPARE batch QEMU -> board: cases 755/755 differ 720
+JS readings: 25 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board2 DONE 11:48:32
+  [the judge-field compare's per-case lines are omitted: it cannot read CAUGHT on a board (the 08:2x correction)]
+## THE GRADE: juliet-obs-compare.py against juliet-sp/batch2/run/observations.json, the three CWE170 cases tolerated
+1513 of 1513 cells the same, 0 different, 0 tolerated
+## the comparator's control: one planted cause change (28 -> 27) in the board's own file
+1512 of 1513 cells the same, 1 different, 0 tolerated

@@ -1,0 +1,28 @@
+# uaf-repeat.py --mapped --qemu-kit, the QEMU gate for the mapped arm (2026-10-22 12:1x-12:3x), qkit7-tB-mimic, N=20 pairs, one QEMU boot each.
+# q1: before tenth-run tracing; q2: the final script (tenth mapped run traced, --dmesg).
+== q1
+<scratch>/um/q1/work/serial.log
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3fa7390c24 address=0x3fa748f050 entry=0x3fa7380868 code=0x3fa7380000-0x3fa7400000 last=0x42 preparing=0x42 sha256=b1decb0612856
+TALLY mapped cause 25: 20
+TALLY mapped-reached-read cause mark: 20
+TALLY mapped-same-page cause keep=1 keep2=1: 20
+TALLY plain cause 25: 20
+completed=True steps=41 of 41 transcript=<scratch>/um/q1/work/serial.log
+== q2
+<scratch>/um/q2/work/serial.log
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3fb6e10c24 address=0x3fb6f20050 entry=0x3fb6e00868 code=0x3fb6e00000-0x3fb6e80000 last=0x42 preparing=0x42 sha256=b1decb0612856
+TALLY mapped cause 25: 18
+TALLY mapped-reached-read cause mark: 20
+TALLY mapped-same-page cause keep=1 keep2=1: 20
+TALLY mapped-traced cause 25: 2
+TALLY plain cause 25: 20
+completed=True steps=42 of 42 transcript=<scratch>/um/q2/work/serial.log
+== q2 map-10-traced, the trace before the mark (no boundary kind 2: no region UNMAP)
+TR CAPSTONE_VM_BOUNDARY kind=12
+TR CAPSTONE_VM_BOUNDARY kind=12
+TR CAPSTONE_VM_BOUNDARY kind=11
+TR CAPSTONE_VM_BOUNDARY kind=10
+TR CONTROL uaf-mapped mark same_page_keep=1 same_page_keep2=1
+TR CAPSTONE_VM_SERVICE tid=0 nr=66 result=59
+TR capstone-exec: domain fault cause=25 pc=0x3f9ff10c70 address=0x3f9ffb5070 entry=0x3f9ff00868 code=0x3f9ff00000-0x3f9ff80000 last=0x42 preparing=0x4
+TR [runner] WAIT step=map-10-traced signal=11 core=0

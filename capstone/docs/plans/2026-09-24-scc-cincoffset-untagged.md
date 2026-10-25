@@ -1,5 +1,17 @@
 # SCC and CINCOFFSET on an untagged value: trap, or compute like CHERI?
 
+**ADOPTED 2026-10-14 by the project lead, for QEMU's virtual profile and the compiler.** QEMU: on the
+virtual profile (`x-capstone-u-mode`), CINCOFFSET, CINCOFFSETIMM and SCC on an untagged x[rs1] write
+the untagged result (capstone-qemu `isa/untagged-cap-arith`). The physical profile keeps raising 24,
+as the RTL does, until the RTL adopts the rule (capstone-qemu 27940820734d,
+`tests/capstone-untagged-arith`); the diagnostic `CAPSTONE_CINC_UNTAGGED_SURVIVE` is gone, and CINCOFFSET
+with a tagged x[rs2] raises 24 as listed below. Compiler: no code generation changes. CIncOffset(Imm)
+and SCC still raise 26 on an uninitialised or sealed capability, so the machine-level `canTrap` set
+(C-58, C-66) and C-19's IR rule against speculating a GEP on a possibly-null base both stay; their
+comments and tests now give that reason. `runtime-qemu/untagged-cap-arith` expects the results from
+the capstone-qemu pin that carries the rule (a separate pin-bump change). The spec text and the RTL
+(`capstone_flu_unit.anvil`) are not changed yet.
+
 *2026-09-24. A decision for the project lead, with the spec's owners and the hardware side, and meant
 to be taken **together with Q-04** (`2026-09-24-q04-movc-integer-source.md`). Both are RTL changes
 of the same kind ("an untagged value is data"), and taken together they ride one synthesis cycle.*

@@ -1,5 +1,5 @@
 #include "corpus.h"
-/* The plane control of the sublet-carve arm (FFP_SUBLET_CARVE): the same YUVA420P 16x5 frame as the
+/* The plane control of the virtual carve arm (FFP_VIRTUAL_CARVE, shared/virtual-frame.c): the same YUVA420P 16x5 frame as the
  * case, and one read one byte past the alpha plane's ALLOCATED extent (its padded_height rows) --
  * past what the port issued for the plane. It must fault at the probe: the port's bound exists. The
  * fixed arm reads the extent's last byte and must complete. */

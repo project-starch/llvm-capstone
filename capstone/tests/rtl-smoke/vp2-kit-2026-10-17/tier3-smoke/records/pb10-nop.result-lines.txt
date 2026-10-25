@@ -1,0 +1,42 @@
+CHAIN_NOP BEGIN 08:35:33
+CHAIN_NOP t1-nop END rc=0 08:42:23
+CHAIN_NOP T1 GATE PASS: four rungs read as t1-old's
+CHAIN_PBNOP_GO 08:42:23
+CHAIN_NOP DONE 08:42:23
+TIER1_SRZ_START t1-nop 08:35:33 fw 5090454288ce529f bitstream caplifive_vp2c_8de3c48cf board 2
+DRIVER rc=0 08:42:23; watchdog lines 27
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=1 oracle=1 AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+FRTY retries 1 at       1 FRTY:01113DDC 
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:1 
+VM_BEGIN without VM_EXIT: 
+JUDGE rc=2 :: JUDGE NO DATA
+  OK   @@PARAM diag_emerg read back ['Y'] (want ['Y'])
+  OK   @@PARAM node_flat_records read back ['4096'] (want ['4096'])
+  OK   @@PARAM supervisor_slots read back ['1'] (want ['1'])
+  NO DATA: 1 CAPSTONE_VM_STATS lines inside vm-contract (want 2: ok, stale)
+  OK   VM_EXIT:sparse-churn ['1'] (want ['1'])
+  OK   VM_CONTRACT_FAIL:recycling allocation present
+  OK   must-fire 'collect skipped' on the console 1 (want >= 1)
+  OK   banner [('1', '1')] (want one, slots 1, diag_emerg 1); refusal lines 0 (want 0)
+  JUDGE NO DATA
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+S-23: DRT1 1 DRTX 0 Oops 0; banner srevroot-nopf-1 2
+RELEASE lines 0 against 3 contexts (CAPSTONE_VM_ADD_OK slot=0); succeeded < attempted in 0; first_id []; attempted []
+RELEASE SHORTFALL: fewer release lines than contexts (a shortfall, never a pass)
+TIER1_SRZ_DONE t1-nop 08:42:23
+PB10 pb10-srzc BEGIN 08:42:33 kit bkit7-pb10BZ monitor f13dbc5
+PB10 pb10-srzc SEQ END rc=0 08:51:35
+PB10 pb10-srzc S-23: staged module 607164b9c1407c7c (want 607164b9c1407c7c); banner srevroot-zero-1 x1; FRTY 0 DRT1 0 DRTX 0 Oops 0
+pb10-srzc: bundle -> wt-gate/capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-20-vp2c-treeB/vp2-nested-pools-srzc
+pb10-srzc: 4 of 4 cells the same (rc 0)
+PB10 pb10-nop BEGIN 08:51:35 kit bkit7-pb10BN monitor f13dbc5
+PB10 pb10-nop SEQ END rc=0 09:00:37
+PB10 pb10-nop S-23: staged module 2a8f85f70d8efcdd (want 2a8f85f70d8efcdd); banner srevroot-nopf-1 x1; FRTY 2 DRT1 0 DRTX 0 Oops 0
+pb10-nop: bundle -> wt-gate/capstone/bug-corpora/ffmpeg/pool-repros/results/2026-10-20-vp2c-treeB/vp2-nested-pools-nop
+pb10-nop: 4 of 4 cells the same (rc 0)
+PB10 DONE 09:00:37
+      2 FRTY:00F13DDC

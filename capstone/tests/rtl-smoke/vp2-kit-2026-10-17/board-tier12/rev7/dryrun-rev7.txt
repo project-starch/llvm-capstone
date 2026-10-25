@@ -1,0 +1,11 @@
+# rev7 dry runs (2026-10-19 00:20-00:31):
+# - rev7-judge.py on five synthetic transcripts: pass -> JUDGE PASS; resume_sfences delta off by one -> FAIL ("delta 299
+#   == sum(faults) 300"); no "collect skipped" -> FAIL; sparse-churn exit 0 -> FAIL; a counter reading ABSENT -> JUDGE
+#   NO DATA (exit 2).
+# - run-tier12-rev7.sh with the driver stubbed (the stub copies a transcript to BAKED_OUT), on the real staged module and
+#   the built firmware 7a53759a4773c81b: the pass transcript (wa1's real rungs with its banner removed, plus the
+#   synthetic rev7 lines) -> four rungs AS-ORACLE (vm-suite 1), the identity branch, JUDGE PASS; the same without the
+#   collect-skipped line -> JUDGE FAIL (1).
+# - A first pass of the runner dry run read FAIL on the banner: the synthetic transcript carried wa1's own banner
+#   (diag_emerg=0) beside the synthetic one. The real per-rung transcript holds one banner (wa1's did); the dry run was
+#   rebuilt without the old one.

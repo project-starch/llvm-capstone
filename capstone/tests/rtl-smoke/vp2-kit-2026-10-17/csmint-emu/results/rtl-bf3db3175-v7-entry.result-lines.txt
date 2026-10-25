@@ -1,0 +1,37 @@
+# va-csmint-entry, descriptor v7, on capstone-ariane bf3db3175's RTL (the RTL lane, 2026-10-18), with the monitor's trap
+# entry and routine from capstone-sbi vp2/tier1-monitor fba7812: sbi_capstone.S 7b23b6a67540fd45...,
+# capstone_csmint.S 4600d04680158edf..., sbi_capstone.h 2c6f6bcab4ce180e... (checked by the RTL lane before the run).
+# Source: ../va-csmint-entry.S, sha256 602a0bf1e99d869f..., the bytes the run compiled. The RTL lane's run script copies
+# its scratch file into the worktree immediately before the ladder; that file's sha256 is this one, and its mtime
+# (23:45:30) precedes the run and has not changed since. Also consistent with the executed trace: row descriptor offsets
+# 64..640 at a 64-byte stride, and reports 1-16, 21, 17, 22, 18, 99 in that order.
+# Read by the board lane from the run's retirement trace (vp7-wt/.sup/entry7/), replaying the register writes to each
+# CAPPRINT's operand. va-csmint-mon (capstone-ariane virtual-profile-2-c 7b8c0d979, the same pin) read the same way from
+# vp8-wt/.sup/mon8/.
+# Each line is one row: rd, scause or -1, stval or -1.
+row  1  0x4 -1 -1
+row  2  -1 0x4 0x80009004
+row  3  -1 0x6 0x8000a018
+row  4  -1 0x1d 0x0
+row  5  -1 0x1d 0x0
+row  6  -1 0x1d 0x0
+row  7  -1 0xf 0x8000b000
+row  8  -1 0xd 0x8000d000
+row  9  -1 0x2 0xa0b1165b
+row 10  0x6 -1 -1
+row 11  0x8 -1 -1
+row 12  0xa -1 -1
+row 13  -1 0x1d 0x0
+row 14  -1 0x1d 0x0
+row 15  -1 0x6 0x8000ac18
+row 16  -1 0x1d 0x0
+row 17  -1 0x1e 0x0
+row 18  -1 0x1d 0x0
+readback  0x0 0x8000c200 0x8000c300 0x8000c200 0x4 0x0 0x0 0x0 0x1 0x8000c400 0x8000c500 0x8000c410 0x6 0x1 0x8000c600 0x8000c700 0x8000c600 0x6 0x1 0x8000c600 0x8000c700 0x8000c600 0x6 0x1 0x1 0x3f 0x100000000
+pass      SUCCESS after 215,008 cycles (tohost 0); ELF sha256 11b73ddc88f92788... (the RTL lane)
+
+against va-csmint-mon on the same pin (81 values, SUCCESS after 211,099 cycles):
+- 64 values identical: every status, cause, rd, type, perms and table word.
+- 17 values differ, all address-valued and each exactly 0x1000 below mon's (this arm's layout, nm by the RTL
+  lane: desc 0x80009000, slotA 0x8000a000, slotB 0x8000a010, slotC 0x8000a410, slotD 0x8000a810, slotE 0x8000ac10,
+  slotnod 0x8000b000, dbuf 0x8000c000, descnoa 0x8000d000). Indices (0-based): 5, 8, 20, 23, 44, 55, 56, 57, 63, 64, 65, 68, 69, 70, 73, 74, 75.

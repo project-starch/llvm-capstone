@@ -1,0 +1,22 @@
+{
+  "case": 96,
+  "title": "CONTROL (successor): A freed, cache_alloc until A's address returns as C; C usable; the old A reference read at read_probe in a separate run",
+  "variants": {
+    "through-c": "C's address equals A's; write and read through C",
+    "stale": "the same, then one read through the old A reference at read_probe"
+  },
+  "arms": {
+    "virtual-malloc": {
+      "oracle": "through-c: complete; stale: complete, reads C's data"
+    },
+    "virtual-nested-pools": {
+      "oracle": "through-c: complete; stale: fault at read_probe",
+      "cause": 25
+    }
+  },
+  "fault_sites": [
+    "read_probe"
+  ],
+  "control_for": "the lifetime patch 0006's cache.c half (virtual-nested-pools) leaves permitted accesses alone; pre-registered in capstone/docs/plans/2026-10-12-nested-lifetime-controls-extended.md",
+  "run": "ctl-96 96 VARIANT, built by controls/lifetime-cache/build-controls.sh, run by controls/lifetime-cache/run-controls.py"
+}

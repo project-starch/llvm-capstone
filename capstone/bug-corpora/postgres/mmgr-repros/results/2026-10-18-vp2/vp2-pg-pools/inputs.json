@@ -1,0 +1,26 @@
+{
+  "arm": "vp2-pg-pools",
+  "cases": 5,
+  "configuration": "virtual-mallocng-replay-pools",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/mmgr-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6994b2ccd7bfb20832171ce1d9289c71aaf8f79016f3feb5e469b9771ed659e8",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "4926658116a5244cb576a746a23efffeda4d1bce25b7e5f08c64345fd2bc21db",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "3005ed52e860c7af5da2b7fdf30ca1790de5da63c79983abe59937a13a4cba0a",
+    "monitor": "007d81d",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2_bf3db3175",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "543fc02a119c44598d749b453c3d875c336d2172c246706abfe514ac284bef4a"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "CAUGHT": 5
+  }
+}

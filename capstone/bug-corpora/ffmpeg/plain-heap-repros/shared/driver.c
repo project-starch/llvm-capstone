@@ -5,6 +5,13 @@
  */
 #include "corpus.h"
 
+#ifdef CORPUS_GEOMETRY
+#include "corpus-geometry.h"
+#else
+#define CORPUS_GEOM(probe, p) ((void)0)
+#endif
+
+
 _Noreturn void ffh_fail(unsigned code) {
   fprintf(stderr, "CONTROL-FAILED %u\n", code);
   exit(75); /* an infrastructure failure is never a verdict */
@@ -14,14 +21,17 @@ _Noreturn void ffh_fail(unsigned code) {
  * image and a fault can be required to land at it. corpus.h explains why this is
  * not `static` in the header the way the sibling corpora have it. */
 __attribute__((noinline, used)) float ffh_read_probe(const volatile float *p) {
+  CORPUS_GEOM("ffh_read_probe", p);
   return *p;
 }
 __attribute__((noinline, used)) unsigned
 ffh_read_probe_u8(const volatile unsigned char *p) {
+  CORPUS_GEOM("ffh_read_probe_u8", p);
   return *p;
 }
 __attribute__((noinline, used)) void
 ffh_write_probe_u8(volatile unsigned char *p, unsigned char v) {
+  CORPUS_GEOM("ffh_write_probe_u8", p);
   *p = v;
 }
 

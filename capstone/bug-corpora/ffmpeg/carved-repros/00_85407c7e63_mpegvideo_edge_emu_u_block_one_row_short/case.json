@@ -61,24 +61,6 @@
       "verdict": "CAUGHT",
       "platform": "stock CheriBSD purecap, kernel CHERI-PURECAP-QEMU, revocation on, the cases built with -DFFC_CARVE_BOUNDS (booted on the second host)"
     },
-    "poisoncap-spatial": {
-      "status": "measured",
-      "mode": 0,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED U's edge emulation wrote 9 + field_based rows into a 9-row block, so its tenth row was V's fir). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY; carve-control-buggy: exit 0; carve-control-fixed: exit 0). Predicted before the run (2852edcdd747).",
-      "prediction": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- the crossing stays inside the one allocation (the driver exits 75 otherwise), and this arm's bound is the allocation's.",
-      "verdict": "NOT CAUGHT",
-      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
-    },
-    "poisoncap-protected": {
-      "status": "measured",
-      "mode": 1,
-      "signal": null,
-      "si_code": null,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **NOT CAUGHT; the defect reproduced**: the buggy run completed (VERDICT DEFECT-REPRODUCED U's edge emulation wrote 9 + field_based rows into a 9-row block, so its tenth row was V's fir). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY; carve-control-buggy: exit 0; carve-control-fixed: exit 0). Predicted before the run (2852edcdd747).",
-      "prediction": "PREDICTED (pre-registration in the commit that adds this corpus): COMPLETES -- mode 1 adds poison-on-free and revocation, and nothing is freed before the access.",
-      "verdict": "NOT CAUGHT",
-      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
-    },
     "native-detect": {
       "status": "measured",
       "oracle": "MEASURED 2026-10-09, results/2026-10-09-native-asan/: **NO ASan REPORT** on the buggy arm, which printed VERDICT DEFECT-REPRODUCED, so the crossing ran and ASan did not see it: its redzones sit around an allocation, and the crossing never leaves this one. The fixed arm exits 0 with VERDICT FIXED and no report. Positive controls in the same run: asan-control past 34816 -> heap-buffer-overflow; asan-control past 132 -> heap-buffer-overflow; asan-control uaf 34816 -> heap-use-after-free. Built cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0; -fsanitize=address -fno-omit-frame-pointer -g -O0.",
@@ -112,9 +94,39 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=28 pc=0x3fbac91324 in ffc_write_probe_u8; by probe: the fault is at the labelled probe ffc_write_probe_u8",
       "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
+    },
+    "silicon-carve-bounds": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), -DFFC_CARVE_BOUNDS over level0, every carve SHRINK-narrowed to its region (tools/arms.json silicon-ffmpeg-carve-bounds). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls, carve control 99 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane e4f15d4b7a32, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac101270 in ffc_write_probe_u8; by probe: the fault is at the labelled probe ffc_write_probe_u8",
+      "verdict_from": "results/2026-10-16-silicon/silicon-carve-bounds"
+    },
+    "silicon-carve-sublet": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), -DFFC_SUBLET_CARVE over the silicon-level0-lifetimes heap, every carve a CDERIVE child of a group derived over its block (rounded outward by the RTL, not guaranteed exact), CREVOKEd on re-carve (tools/arms.json silicon-ffmpeg-carve-sublet). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls, carve control 99 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane e4f15d4b7a32, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac101274 in ffc_write_probe_u8; by probe: the fault is at the labelled probe ffc_write_probe_u8",
+      "verdict_from": "results/2026-10-16-silicon/silicon-carve-sublet"
+    },
+    "silicon-level0": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), level0 as it ships with no carve narrowing (tools/arms.json silicon-ffmpeg-carve-level0). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's controls, carve control 99 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane e4f15d4b7a32, before the boot): MISSED.",
+      "verdict": "MISSED",
+      "verdict_note": "reached (case=0 arm=buggy carve=pointer) and completed with no fault; silicon; buggy run end kind=exit value=0",
+      "verdict_from": "results/2026-10-16-silicon/silicon-level0"
+    },
+    "vp2-malloc": {
+      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the case printed VERDICT DEFECT-REPRODUCED) and completed with no fault",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc"
+    },
+    "vp2-nested-pools": {
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f9ad10c3c in ffc_write_probe_u8; by probe: the fault is at the labelled probe ffc_write_probe_u8",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-nested-pools",
+      "oracle": "virtual profile with the carve on Sublet (-DFFC_SUBLET_CARVE; tools/arms.json virtual-ffmpeg-carve; tools/run-virtual-cases.py): a fault at the case's labelled probe, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
     }
   },
-  "status": "built 2026-10-09 and measured the same day on every arm, each against its pre-registration (see arms and results/). spatial measured 2026-10-09 (results/2026-10-09-capstone-spatial/): NOT CAUGHT. sublet measured 2026-10-09 (results/2026-10-09-capstone-sublet/): NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-capstone-carve-bounds/): CAUGHT. Native differential and ASan recorded 2026-10-09 (results/2026-10-09-native-*/): two-sided; ASan NOT CAUGHT. cheribsd-revocation measured 2026-10-09 (results/2026-10-09-cheribsd-revocation/): NOT CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): NOT CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): NOT CAUGHT.",
+  "status": "built 2026-10-09 and measured the same day on every arm, each against its pre-registration (see arms and results/). spatial measured 2026-10-09 (results/2026-10-09-capstone-spatial/): NOT CAUGHT. sublet measured 2026-10-09 (results/2026-10-09-capstone-sublet/): NOT CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-capstone-subobject/): NOT CAUGHT. capstone-carve-bounds measured 2026-10-09 (results/2026-10-09-capstone-capstone-carve-bounds/): CAUGHT. Native differential and ASan recorded 2026-10-09 (results/2026-10-09-native-*/): two-sided; ASan NOT CAUGHT. cheribsd-revocation measured 2026-10-09 (results/2026-10-09-cheribsd-revocation/): NOT CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): NOT CAUGHT. cheribsd-carve-bounds measured 2026-10-09 (results/2026-10-09-cheribsd-carve-bounds/): CAUGHT.",
   "live_in_pin": false,
   "live_proof": "read from the PINNED source, two-sided, never from ancestry: n9.0.1:libavcodec/mpegvideo_motion.c contains `vbuf = ubuf + 10 * s->uvlinesize` twice and the pre-fix `vbuf = ubuf + 9 * s->uvlinesize` 0 times; the same pair reads 2/0 at the fix and 0/2 at its parent, so the probe separates the two. A fix-reversal: the pre-fix carve or consumer is reconstructed, the convention at ../../memcached/allocator-repros/README.md:132-135."
 }

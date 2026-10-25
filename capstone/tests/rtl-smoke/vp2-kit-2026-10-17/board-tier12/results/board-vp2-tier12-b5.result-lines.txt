@@ -1,0 +1,82 @@
+# vp2 Tier 2 boot 5 (the arena pin), 2026-10-18 12:31-12:44: caplifive_vp2_bf3db3175 (resident), fw_payload 606c8673c897d4c0
+# (monitor 007d81d), module 3005ed52e860c7af (arena-pin-1), suite vm-suite-inner-b5.sh 2338355a1e1029eb (arena_pin=1 for the
+# suite), runner bb39833361f6bbfa. Pre-registered at lane vp2-tier12 ef24d082c2ea. Result lines only, from run3b5/board.txt
+# (the driver's scoped transcript) and SEQ.
+
+DRIVER rc=1 12:44:27; watchdog lines 50
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=NONE oracle=20 NOT-AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+VM-SUITE board-check rc=1 :: 19 of 41 true; 6 off the pre-registration ['sqlite_write', 'sqlite_read', 'mruby', 'sqlite_results', 'mruby_results', 'completed']
+FRTY retries 4 at       4 FRTY:011110E8 
+DIAG fault repeats: 
+ELOOP lines: 
+BANNER (console, pr_emerg; KMSG copies excluded):       1 capstone_vm: loaded, diag arena-pin-1, supervisor_slots=1;
+RESOLVE_DIRTY read-back: RESOLVE_DIRTY:N:default RESOLVE_DIRTY:Y:before-vm RESOLVE_DIRTY:N:after-vm 
+ARENA_PIN read-back: ARENA_PIN:Y:suite 
+NOT RUN (S-25): 
+BEGUN (kit applications): VM_BEGIN:sqlite_write 
+KIT results: 
+KMSG window VM: 3 lines, END 1; thread-refused (must-fire) 2; bound lines 0; refusal sites 
+KMSG window RETURNING: 9 lines, END 1; thread-refused (must-fire) 3; bound lines 0; refusal sites       6 resolve refused at vma 
+KMSG window APPS: 0 lines, END 0; thread-refused (must-fire) 0; bound lines 0; refusal sites 
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:normal:0 VM_EXIT:threads:1 VM_EXIT:vm:1 VM_EXIT:nested:0 VM_EXIT:nested-stale:139 VM_EXIT:heap-threads:1 VM_EXIT:stale:139 VM_EXIT:bounds:139 VM_EXIT:retired:139 VM_EXIT:vm-ro-write:139 VM_EXIT:vm-none-read:139 VM_EXIT:vm-guard:139 VM_EXIT:vm-padding:139 VM_EXIT:preempt:143 VM_EXIT:parallel_one:0 VM_EXIT:parallel_two:0 
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+## scored by boot3/score-b5.py against the prediction and boot 4c
+  exits: 16 read, 20 predicted
+    ok   normal         predicted   0  read 0
+    ok   threads        predicted   1  read 1
+    ok   vm             predicted   1  read 1
+    ok   nested         predicted   0  read 0
+    ok   nested-stale   predicted 139  read 139
+    ok   heap-threads   predicted   1  read 1
+    ok   stale          predicted 139  read 139
+    ok   bounds         predicted 139  read 139
+    ok   retired        predicted 139  read 139
+    ok   vm-ro-write    predicted 139  read 139
+    ok   vm-none-read   predicted 139  read 139
+    ok   vm-guard       predicted 139  read 139
+    ok   vm-padding     predicted 139  read 139
+    ok   preempt        predicted 143  read 143
+    ok   parallel_one   predicted   0  read 0
+    ok   parallel_two   predicted   0  read 0
+    DIFF sqlite_write   predicted   0  read None
+    DIFF sqlite_read    predicted   0  read None
+    DIFF mruby          predicted   0  read None
+    DIFF cleanup        predicted   1  read None
+  returning steps' fault lines against 4c (cause, pc-code, entry-code; addr-code printed only):
+    ok   nested-stale   b5 [(25, '0x135a8', '0x94c')]  4c [(25, '0x135a8', '0x94c')]  addr b5 ['0xf1570']
+    ok   stale          b5 [(25, '0x140f0', '0x94c')]  4c [(25, '0x140f0', '0x94c')]  addr b5 ['0xd1060']
+    ok   bounds         b5 [(28, '0x1401c', '0x94c')]  4c [(28, '0x1401c', '0x94c')]  addr b5 ['0x135160']
+    ok   retired        b5 [(25, '0x141c0', '0x94c')]  4c [(25, '0x141c0', '0x94c')]  addr b5 ['0xb6000']
+    ok   vm-ro-write    b5 [(15, '0x13254', '0x94c')]  4c [(15, '0x13254', '0x94c')]  addr b5 ['0xb8000']
+    ok   vm-none-read   b5 [(13, '0x134d0', '0x94c')]  4c [(13, '0x134d0', '0x94c')]  addr b5 ['0xbc000']
+    ok   vm-guard       b5 [(13, '0x137bc', '0x94c')]  4c [(13, '0x137bc', '0x94c')]  addr b5 ['0xb1000']
+    ok   vm-padding     b5 [(28, '0x13880', '0x94c')]  4c [(28, '0x13880', '0x94c')]  addr b5 ['0x8f000']
+    DIFF SQLITE_SUM=5050 x0
+    DIFF SQLITE_PERSIST=100 x0
+    DIFF MRUBY_SUM=5050 x0
+    DIFF MRUBY_FILE=virtual x0
+    ok   ARENA_PIN ['ARENA_PIN:Y:suite']
+    ok   RESOLVE_DIRTY ['RESOLVE_DIRTY:N:default', 'RESOLVE_DIRTY:Y:before-vm', 'RESOLVE_DIRTY:N:after-vm']
+  BEGUN: ['sqlite_write']
+  8 DIFFERENT
+## the wedge apertures (sqlite_write), against r10's sqlite_write and r11's mruby wedges
+  All 15 switch apertures equal r10's and r11's, compared by script:
+  192 0x01, 193 0x04, 194 0x00, 195 0x00, 219 0x00, 220 0x40, 221 0x00, 222 0x00, 224 0x1d, 225 0x80, 226 0x00, 227 0x03,
+  228 0xb8, 229 0x00, 255 0x88.
+  So: store-buffer commit count 4 with no commit-queue valid bit (R-57's kit-application face), privM, LSU idle.
+  trap-log mepc 0x35a88 and tval 0x73, as in r10 and r11. rev_node_debug_ex, head and serving index equal r10's.
+  The commit pc (0x3f88e62638) differs from r10's (0x3f90e62638) in its mapping base only. It is stale slot-0 residue, so
+  no site is claimed from it.
+## read against the pre-registration
+  Refuted for the kit applications. sqlite_write wedges under arena_pin=1 with r10's exact signature, so S-25's
+  kit-application wedge is not a first touch the pin reaches. sqlite_read and mruby did not run (after the wedge).
+  Everything else held:
+  - Tier 1 identity, and both read-backs (ARENA_PIN:Y; RESOLVE_DIRTY N/Y/N);
+  - the 16 returning exits, in order;
+  - the 8 returning fault lines, equal to 4c in cause, code offset and entry, so the pin moves no returning step on
+    silicon either;
+  - the six tests off the pre-registration are exactly those the wedge cuts off.

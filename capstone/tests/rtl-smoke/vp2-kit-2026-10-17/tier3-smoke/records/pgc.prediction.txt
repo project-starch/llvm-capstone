@@ -1,0 +1,22 @@
+# Tier 3 prediction, arm pgc: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 11 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-mallocng platform qkit7-wrapper cells 5 tally {"CAUGHT": 5}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_CVE-2026-6477_pqfn_unbounded_result_copy image 32f800c0a5e8a846 CAUGHT cause 28 at memcpy+156 reached True completed False attribution "function"
+01_CVE-2026-19385_pgdump_transform_list_overread image 08287c363fd0a44c CAUGHT cause 28 at pgclient_case_run+352 reached True completed False attribution "function"
+02_CVE-2026-16241_ecpg_bytea_negative_length image 8cb785772ca139d2 CAUGHT cause 28 at ecpg_hex_decode+700 reached True completed False attribution "function"
+03_5d61bdd114_saslprep_truncated_utf8_overread image d724e24bb0978fb3 CAUGHT cause 28 at pg_utf8_islegal+376 reached True completed False attribution "function"
+04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer image 0d645b005d28510d CAUGHT cause 28 at pgclient_consume_content+228 reached True completed False attribution "function"
+# image cdb39163fc299d0d  00_CVE-2026-6477_pqfn_unbounded_result_copy-control.dom
+# image 32f800c0a5e8a846  00_CVE-2026-6477_pqfn_unbounded_result_copy.dom
+# image 9ec98221e07cd8f4  01_CVE-2026-19385_pgdump_transform_list_overread-control.dom
+# image 08287c363fd0a44c  01_CVE-2026-19385_pgdump_transform_list_overread.dom
+# image 64bc31cb969aa22a  02_CVE-2026-16241_ecpg_bytea_negative_length-control.dom
+# image 8cb785772ca139d2  02_CVE-2026-16241_ecpg_bytea_negative_length.dom
+# image b8b75f932c3dda90  03_5d61bdd114_saslprep_truncated_utf8_overread-control.dom
+# image d724e24bb0978fb3  03_5d61bdd114_saslprep_truncated_utf8_overread.dom
+# image 6aebac5099785641  04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer-control.dom
+# image 0d645b005d28510d  04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer.dom
+# image 491655742d378fcd  controls.dom

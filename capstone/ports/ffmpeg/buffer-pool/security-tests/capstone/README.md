@@ -74,8 +74,6 @@ unaffected and new authority remains usable. It is functional evidence about
 authority and reuse, not a cycle measurement, memory-overhead estimate, proof
 over all storage locations, or isolation of a hostile manager in another domain.
 
-PoisonCap is not measured by this matrix. In particular, alias
-scattering alone must not be described as a missing PoisonCap property.
 A cross-system hierarchy claim needs matched adapters and equivalent parent,
 child and reuse semantics.
 

@@ -1,0 +1,20 @@
+# Tier 3 board reading, arm mpt-fix6b: kit bkit7-fix6t (module d71f207a3af5546b, the S-27 workaround; batch budget 300 s per step), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2_bf3db3175 cells 3 tally {"CAUGHT": 3}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_0d4901071c74_restart_line_freed_at_entry_but_not_cleared image f76b089115a659f4 CAUGHT cause 25 at mct_read_probe+56 reached True completed False attribution "probe"
+01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll image c6c3b4490abef1c9 CAUGHT cause 25 at mct_write_probe+88 reached True completed False attribution "probe"
+02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher image 2126edc5837f79fc CAUGHT cause 25 at mct_read_probe+56 reached True completed False attribution "probe"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_0d4901071c74_restart_line_freed_at_entry_but_not_cleared: verdict CAUGHT cause 25 pc mct_read_probe+56
+  SAME 01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll: verdict CAUGHT cause 25 pc mct_write_probe+88
+  SAME 02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher: verdict CAUGHT cause 25 pc mct_read_probe+56
+  3 of 3 cells the same
+## the boot
+  T3SEQ mpt-fix6b BEGIN 23:51:51 memcached/plain-temporal-repros virtual-malloc 
+  T3SEQ mpt-fix6b END 00:00:12 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 3}
+  T3SEQ mpt-fix6b PAYLOAD stage 1675520 B, 690226 B gzip; firmware 17467912 B
+  BOARD_RUN_START 23:51:58 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 13 files, stage 1675520 bytes
+  firmware 722ce21542ebd65d 17467912 B
+  DRIVER rc=0 00:00:12
+  BOARD_RUN_DONE 00:00:12

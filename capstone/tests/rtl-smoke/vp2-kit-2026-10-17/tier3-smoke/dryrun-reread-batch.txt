@@ -1,0 +1,335 @@
+# tier3-reread-batch.sh edf833dba7a3988d: stubbed dry runs, 2026-10-22 17:4x-17:5x.
+# RR_RUN = a stub that copies the batch reference's verdicts (cut to the group for appvm6) and writes a completed
+# transcript; RR_BUSY / RR_BOOK stubbed. Variants: FLIP=<case> plants one changed verdict, RC= the runner's exit,
+# VB= the transcript's vbatch END rc, BOOKRC= the booking's exit. The argv runs put a printing taskset first in PATH.
+
+## o1
+RR START 17:48:48 board 2 spec f58053f1c2d877fb (10 arms)
+RR pym0 BEGIN 17:48:49 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py tree 0ddd100001e6 booking 92
+RR pym0 END 17:48:49 rc=0 :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+RR pym0 COMPARE vs batch reference rc=0 :: 20 of 20 cells the same
+RR pym0 VCOMPARE rc=0 :: 20 of 20 cells the same
+RR pym1 BEGIN 17:48:49 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py tree 0ddd100001e6 booking 92
+RR pym1 END 17:48:49 rc=0 :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+RR pym1 COMPARE vs batch reference rc=0 :: 20 of 20 cells the same
+RR pym1 VCOMPARE rc=0 :: 20 of 20 cells the same
+RR pb9 BEGIN 17:48:49 board 2 kind cases tree 0ddd100001e6 booking 92
+RR pb9 END 17:48:50 rc=0 :: --- stub cases
+RR pb9 COMPARE vs batch reference rc=0 :: 4 of 4 cells the same
+RR pb9 VCOMPARE rc=0 :: 4 of 4 cells the same
+RR pb12 BEGIN 17:48:50 board 2 kind cases tree 0ddd100001e6 booking 92
+RR pb12 END 17:48:55 rc=0 :: --- stub cases
+RR pb12 COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR pb12 VCOMPARE rc=0 :: 9 of 9 cells the same
+RR pb10 BEGIN 17:48:55 board 2 kind cases tree 0ddd100001e6 booking 92
+RR pb10 END 17:48:56 rc=0 :: --- stub cases
+RR pb10 COMPARE vs batch reference rc=0 :: 4 of 4 cells the same
+RR pb10 VCOMPARE rc=0 :: 4 of 4 cells the same
+RR wm0 BEGIN 17:48:56 board 2 kind appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py tree 0ddd100001e6 booking 92
+RR wm0 END 17:48:56 rc=0 :: --- stub appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py
+RR wm0 COMPARE vs batch reference rc=0 :: 23 of 23 cells the same
+RR wm0 VCOMPARE rc=0 :: 23 of 23 cells the same
+RR pb13q15 BEGIN 17:48:56 board 2 kind cases tree e2b26ea2c1e4 booking 92
+RR pb13q15 END 17:48:56 rc=0 :: --- stub cases
+RR pb13q15 COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR pb13q15 VCOMPARE rc=0 :: 9 of 9 cells the same
+RR pgm1q15 BEGIN 17:48:57 board 2 kind pgm tree e2b26ea2c1e4 booking 92
+RR pgm1q15 END 17:48:58 rc=0 :: --- stub pgm
+RR pgm1q15 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm1q15 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR wm1q15 BEGIN 17:48:59 board 2 kind appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py tree d0f0f4b41ae6 booking 92
+RR wm1q15 END 17:49:02 rc=0 :: --- stub appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py
+RR wm1q15 COMPARE vs batch reference rc=0 :: 23 of 23 cells the same
+RR wm1q15 VCOMPARE rc=0 :: 23 of 23 cells the same
+RR sq1q15a BEGIN 17:49:02 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 00,01,02,03,04,05 booking 92
+RR sq1q15a END 17:49:02 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq1q15a COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15a VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15b BEGIN 17:49:02 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 06,07,08,09,10,11 booking 92
+RR sq1q15b END 17:49:02 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq1q15b COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15b VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15c BEGIN 17:49:02 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 12,13,14,15,16,17 booking 92
+RR sq1q15c END 17:49:02 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq1q15c COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15c VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15d BEGIN 17:49:02 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 18,19,20,21,22,23 booking 92
+RR sq1q15d END 17:49:02 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq1q15d COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15d VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15e BEGIN 17:49:02 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 24,25,26,27,28,29 booking 92
+RR sq1q15e END 17:49:02 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq1q15e COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq1q15e VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq1q15f BEGIN 17:49:02 board 2 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 30,31,32 booking 92
+RR sq1q15f END 17:49:02 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq1q15f COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR sq1q15f VCOMPARE rc=0 :: 3 of 3 cells the same
+RR seq-2 DONE 17:49:02
+
+## full1
+RR START 17:51:39 board 1 spec 27beeb2ce188edaa (13 arms)
+RR fph BEGIN 17:51:39 board 1 kind cases tree 0ddd100001e6 booking 91
+RR fph END 17:51:39 rc=0 :: --- stub cases
+RR fph COMPARE vs batch reference rc=0 :: 25 of 25 cells the same
+RR fph VCOMPARE rc=0 :: 25 of 25 cells the same
+RR fpt BEGIN 17:51:39 board 1 kind cases tree 0ddd100001e6 booking 91
+RR fpt END 17:51:39 rc=0 :: --- stub cases
+RR fpt COMPARE vs batch reference rc=0 :: 13 of 13 cells the same
+RR fpt VCOMPARE rc=0 :: 13 of 13 cells the same
+RR fca BEGIN 17:51:39 board 1 kind cases tree 0ddd100001e6 booking 91
+RR fca END 17:51:41 rc=0 :: --- stub cases
+RR fca COMPARE vs batch reference rc=0 :: 13 of 13 cells the same
+RR fca VCOMPARE rc=0 :: 13 of 13 cells the same
+RR fcs BEGIN 17:51:41 board 1 kind cases tree 0ddd100001e6 booking 91
+RR fcs END 17:51:41 rc=0 :: --- stub cases
+RR fcs COMPARE vs batch reference rc=0 :: 13 of 13 cells the same
+RR fcs VCOMPARE rc=0 :: 13 of 13 cells the same
+RR fso BEGIN 17:51:41 board 1 kind cases tree 0ddd100001e6 booking 91
+RR fso END 17:51:41 rc=0 :: --- stub cases
+RR fso COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR fso VCOMPARE rc=0 :: 9 of 9 cells the same
+RR mph BEGIN 17:51:41 board 1 kind cases tree 0ddd100001e6 booking 91
+RR mph END 17:51:41 rc=0 :: --- stub cases
+RR mph COMPARE vs batch reference rc=0 :: 9 of 9 cells the same
+RR mph VCOMPARE rc=0 :: 9 of 9 cells the same
+RR mpt BEGIN 17:51:41 board 1 kind cases tree 0ddd100001e6 booking 91
+RR mpt END 17:51:41 rc=0 :: --- stub cases
+RR mpt COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR mpt VCOMPARE rc=0 :: 3 of 3 cells the same
+RR wph BEGIN 17:51:41 board 1 kind cases tree 0ddd100001e6 booking 91
+RR wph END 17:51:42 rc=0 :: --- stub cases
+RR wph COMPARE vs batch reference rc=0 :: 12 of 12 cells the same
+RR wph VCOMPARE rc=0 :: 12 of 12 cells the same
+RR wpt BEGIN 17:51:42 board 1 kind cases tree 0ddd100001e6 booking 91
+RR wpt END 17:51:42 rc=0 :: --- stub cases
+RR wpt COMPARE vs batch reference rc=0 :: 10 of 10 cells the same
+RR wpt VCOMPARE rc=0 :: 10 of 10 cells the same
+RR pgc BEGIN 17:51:42 board 1 kind pgc tree 0ddd100001e6 booking 91
+RR pgc END 17:51:42 rc=0 :: --- stub pgc
+RR pgc COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgc VCOMPARE rc=0 :: 5 of 5 cells the same
+RR pgm0 BEGIN 17:51:42 board 1 kind pgm tree 0ddd100001e6 booking 91
+RR pgm0 END 17:51:42 rc=0 :: --- stub pgm
+RR pgm0 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm0 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR pgm1 BEGIN 17:51:42 board 1 kind pgm tree 0ddd100001e6 booking 91
+RR pgm1 END 17:51:42 rc=0 :: --- stub pgm
+RR pgm1 COMPARE vs batch reference rc=0 :: 5 of 5 cells the same
+RR pgm1 VCOMPARE rc=0 :: 5 of 5 cells the same
+RR sq0a BEGIN 17:51:48 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 00,01,02,03,04,05 booking 91
+RR sq0a END 17:51:50 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0a COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0a VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0b BEGIN 17:51:50 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 06,07,08,09,10,11 booking 91
+RR sq0b END 17:51:50 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0b COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0b VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0c BEGIN 17:51:50 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 12,13,14,15,16,17 booking 91
+RR sq0c END 17:51:50 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0c COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0c VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0d BEGIN 17:51:50 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 18,19,20,21,22,23 booking 91
+RR sq0d END 17:51:50 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0d COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0d VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0e BEGIN 17:51:50 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 24,25,26,27,28,29 booking 91
+RR sq0e END 17:51:50 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0e COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0e VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0f BEGIN 17:51:50 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 30,31,32 booking 91
+RR sq0f END 17:51:50 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0f COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR sq0f VCOMPARE rc=0 :: 3 of 3 cells the same
+RR seq-1 DONE 17:51:50
+RR START 17:52:09 board 1 spec ad30f4ea99c75fc9 (2 arms)
+RR STOP: <scratch>/rr-dry/full1/rr-mpt exists
+
+## flip2
+RR START 17:52:17 board 2 spec ad30f4ea99c75fc9 (2 arms)
+RR mpt BEGIN 17:52:17 board 2 kind cases tree 0ddd100001e6 booking 92
+RR mpt END 17:52:17 rc=0 :: --- stub cases
+RR mpt COMPARE vs batch reference rc=1 :: 2 of 3 cells the same
+RR mpt VCOMPARE rc=1 :: 2 of 3 cells the same
+RR pym1 BEGIN 17:52:17 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py tree 0ddd100001e6 booking 92
+RR pym1 END 17:52:17 rc=0 :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+RR pym1 COMPARE vs batch reference rc=0 :: 20 of 20 cells the same
+RR pym1 VCOMPARE rc=0 :: 20 of 20 cells the same
+RR seq-2 DONE 17:52:17
+
+## flipsq2
+RR START 17:52:17 board 1 spec b2b6db89c1b2aa2b (1 arms)
+RR sq0a BEGIN 17:52:17 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 00,01,02,03,04,05 booking 91
+RR sq0a END 17:52:17 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0a COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0a VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0b BEGIN 17:52:18 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 06,07,08,09,10,11 booking 91
+RR sq0b END 17:52:18 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0b COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0b VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0c BEGIN 17:52:18 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 12,13,14,15,16,17 booking 91
+RR sq0c END 17:52:18 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0c COMPARE vs batch reference rc=1 :: 5 of 6 cells the same
+RR sq0c VCOMPARE rc=1 :: 5 of 6 cells the same
+RR sq0d BEGIN 17:52:18 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 18,19,20,21,22,23 booking 91
+RR sq0d END 17:52:18 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0d COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0d VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0e BEGIN 17:52:18 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 24,25,26,27,28,29 booking 91
+RR sq0e END 17:52:18 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0e COMPARE vs batch reference rc=0 :: 6 of 6 cells the same
+RR sq0e VCOMPARE rc=0 :: 6 of 6 cells the same
+RR sq0f BEGIN 17:52:18 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 30,31,32 booking 91
+RR sq0f END 17:52:18 rc=0 :: --- stub appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py
+RR sq0f COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR sq0f VCOMPARE rc=0 :: 3 of 3 cells the same
+RR seq-1 DONE 17:52:18
+
+## busy
+RR START 17:52:08 board 2 spec ad30f4ea99c75fc9 (2 arms)
+RR STOP: board 2 is busy
+
+## h409
+RR START 17:52:08 board 2 spec ad30f4ea99c75fc9 (2 arms)
+RR STOP: the hub refused the booking (409, someone holds board 2): 92
+
+## bookfail
+RR START 17:52:08 board 2 spec ad30f4ea99c75fc9 (2 arms)
+RR NOTE: booking failed rc=5 (92); continuing unbooked
+RR mpt BEGIN 17:52:08 board 2 kind cases tree 0ddd100001e6 booking none
+RR mpt END 17:52:08 rc=0 :: --- stub cases
+RR mpt COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR mpt VCOMPARE rc=0 :: 3 of 3 cells the same
+RR NOTE: booking failed rc=5 (92); continuing unbooked
+RR pym1 BEGIN 17:52:08 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py tree 0ddd100001e6 booking none
+RR pym1 END 17:52:09 rc=0 :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+RR pym1 COMPARE vs batch reference rc=0 :: 20 of 20 cells the same
+RR pym1 VCOMPARE rc=0 :: 20 of 20 cells the same
+RR seq-2 DONE 17:52:09
+
+## refuse
+RR START 17:52:09 board 2 spec ad30f4ea99c75fc9 (2 arms)
+RR mpt BEGIN 17:52:09 board 2 kind cases tree 0ddd100001e6 booking 92
+RR mpt END 17:52:09 rc=78 :: --- stub cases
+RR mpt COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR mpt VCOMPARE rc=0 :: 3 of 3 cells the same
+RR pym1 BEGIN 17:52:09 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py tree 0ddd100001e6 booking 92
+RR pym1 END 17:52:09 rc=78 :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+RR STOP: the arm script refused pym1 (rc=78)
+
+## incomplete
+RR START 17:52:09 board 2 spec ad30f4ea99c75fc9 (2 arms)
+RR mpt BEGIN 17:52:09 board 2 kind cases tree 0ddd100001e6 booking 92
+RR mpt END 17:52:09 rc=0 :: --- stub cases
+RR mpt COMPARE vs batch reference rc=0 :: 3 of 3 cells the same
+RR mpt VCOMPARE rc=0 :: 3 of 3 cells the same
+RR STOP after mpt: the boot did not complete (no vbatch END rc=0 in its transcript)
+
+## noref
+RR START 17:52:09 board 2 spec c9b16cfe3477d1d0 (1 arms)
+RR STOP: zz has no batch reference verdicts
+
+## othertree
+RR START 17:52:09 board 2 spec 5646cadc370ea96d (1 arms)
+RR STOP: mpt runner capstone/bug-corpora/tools/run-virtual-cases.py is not its stamp's
+
+## wrongkit
+RR STOP: board 3
+
+## argv1-fso (argv)
+RR START 17:52:32 board 1 spec a6c3e29b01406984 (1 arms)
+RR fso BEGIN 17:52:32 board 1 kind cases tree 0ddd100001e6 booking 91
+RR fso END 17:52:32 rc=0 :: 
+RR fso COMPARE vs batch reference rc=1 :: NO DATA: <scratch>/rr-dry/argv1-fso/rr-fso/out/verdicts.jsonl missing
+RR fso VCOMPARE rc=2 :: NO DATA: reference 9 cells, board 0 cells
+RR STOP after fso: the boot did not complete (no vbatch END rc=0 in its transcript)
+PWD /tmp/capstone/wt-gate
+ENV CAPSTONE_TMP_ROOT=/tmp/capstone EXPECT_IMAGES=unset
+ARGV [-c] [16-31] [timeout] [10800] [python3] [/tmp/capstone/wt-gate/capstone/bug-corpora/tools/run-virtual-cases.py] [--board-kit] [<mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1] [--sdk] [<mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk] [--llvm-bin] [/tmp/capstone/vp2-prep/llvm-bin-v6] [--corpus] [/tmp/capstone/wt-gate/capstone/bug-corpora/ffmpeg/subobject-repros] [--arm] [virtual-malloc] [--cc-arg=-std=c11] [--cc-arg=-Daligned_alloc(a,n)=malloc(n)] [--cc-arg=-isystem] [--cc-arg=<mnt-hdd>/capstone/t3-freeze/llvm/lib/clang/22/include] [--cc-arg=-I/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/shared] [--cc-arg=-I/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported] [--cc-arg=-I/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/cmake/replay-config] [--cc-arg=-I/tmp/capstone/wt-gate/capstone/runtime/include] [--cc-arg=/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported/libavutil/buffer.c] [--cc-arg=/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported/libavutil/refstruct.c] [--cc-arg=/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/shared/observe-pool-events.c] [--cc-arg=/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/shared/pool-allocator.c] [--cc-arg=/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c] [--cc-arg=/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/native/replay/payload-pointers.c] [--out] [<scratch>/rr-dry/argv1-fso/rr-fso/out] [--raw] [<scratch>/rr-dry/argv1-fso/rr-fso/raw]
+
+## argv1-mpt (argv)
+RR START 17:52:31 board 1 spec 2060559b29d67042 (1 arms)
+RR mpt BEGIN 17:52:31 board 1 kind cases tree 0ddd100001e6 booking 91
+RR mpt END 17:52:31 rc=0 :: 
+RR mpt COMPARE vs batch reference rc=1 :: NO DATA: <scratch>/rr-dry/argv1-mpt/rr-mpt/out/verdicts.jsonl missing
+RR mpt VCOMPARE rc=2 :: NO DATA: reference 3 cells, board 0 cells
+RR STOP after mpt: the boot did not complete (no vbatch END rc=0 in its transcript)
+PWD /tmp/capstone/wt-gate
+ENV CAPSTONE_TMP_ROOT=/tmp/capstone EXPECT_IMAGES=unset
+ARGV [-c] [16-31] [timeout] [10800] [python3] [/tmp/capstone/wt-gate/capstone/bug-corpora/tools/run-virtual-cases.py] [--board-kit] [<mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1] [--sdk] [<mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk] [--llvm-bin] [/tmp/capstone/vp2-prep/llvm-bin-v6] [--corpus] [/tmp/capstone/wt-gate/capstone/bug-corpora/memcached/plain-temporal-repros] [--arm] [virtual-malloc] [--out] [<scratch>/rr-dry/argv1-mpt/rr-mpt/out] [--raw] [<scratch>/rr-dry/argv1-mpt/rr-mpt/raw]
+
+## argv1-pgc (argv)
+RR START 17:52:32 board 1 spec c3777bdce3fd2509 (1 arms)
+RR pgc BEGIN 17:52:32 board 1 kind pgc tree 0ddd100001e6 booking 91
+RR pgc END 17:52:32 rc=0 :: 
+RR pgc COMPARE vs batch reference rc=1 :: NO DATA: <scratch>/rr-dry/argv1-pgc/rr-pgc/out/verdicts.jsonl missing
+RR pgc VCOMPARE rc=2 :: NO DATA: reference 5 cells, board 0 cells
+RR STOP after pgc: the boot did not complete (no vbatch END rc=0 in its transcript)
+PWD /tmp/capstone/wt-gate
+ENV CAPSTONE_TMP_ROOT=/tmp/capstone EXPECT_IMAGES=unset
+ARGV [-c] [16-31] [timeout] [10800] [python3] [/tmp/capstone/wt-gate/capstone/bug-corpora/postgres/c-repros/shared/run-arm.py] [--board-kit] [<mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1] [--llvm-bin] [/tmp/capstone/vp2-prep/llvm-bin-v6] [--arm] [virtual-malloc] [--bindir] [<mnt-hdd>/capstone/t3-images-r60/pg/pgc-bin] [--out] [<scratch>/rr-dry/argv1-pgc/rr-pgc/out] [--raw] [<scratch>/rr-dry/argv1-pgc/rr-pgc/raw]
+
+## argv1-pgm0 (argv)
+RR START 17:52:32 board 1 spec d56f20f9ef0e80ea (1 arms)
+RR pgm0 BEGIN 17:52:32 board 1 kind pgm tree 0ddd100001e6 booking 91
+RR pgm0 END 17:52:32 rc=0 :: 
+RR pgm0 COMPARE vs batch reference rc=1 :: NO DATA: <scratch>/rr-dry/argv1-pgm0/rr-pgm0/out/verdicts.jsonl missing
+RR pgm0 VCOMPARE rc=2 :: NO DATA: reference 5 cells, board 0 cells
+RR STOP after pgm0: the boot did not complete (no vbatch END rc=0 in its transcript)
+PWD /tmp/capstone/wt-gate
+ENV CAPSTONE_TMP_ROOT=/tmp/capstone EXPECT_IMAGES=unset
+ARGV [-c] [16-31] [timeout] [10800] [python3] [/tmp/capstone/wt-gate/capstone/bug-corpora/postgres/mmgr-repros/shared/run-defects.py] [<scratch>/rr-dry/argv1-pgm0/rr-pgm0/out] [--board-kit] [<mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1] [--llvm-bin] [/tmp/capstone/vp2-prep/llvm-bin-v6] [--arm] [virtual-malloc] [--hosted-build] [<mnt-hdd>/capstone/t3-images-r60/pg/mmgr-cases-OFF] [--controls-hosted-build] [<mnt-hdd>/capstone/t3-images-r60/pg/mmgr-controls-OFF] [--raw] [<scratch>/rr-dry/argv1-pgm0/rr-pgm0/raw]
+
+## argv1-sq0 (argv)
+RR START 17:52:32 board 1 spec b2b6db89c1b2aa2b (1 arms)
+RR sq0a BEGIN 17:52:32 board 1 kind appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py tree 0ddd100001e6 only 00,01,02,03,04,05 booking 91
+RR sq0a END 17:52:32 rc=0 :: 
+RR sq0a COMPARE NO DATA :: NO DATA: <scratch>/rr-dry/argv1-sq0/rr-sq0a/out/verdicts.jsonl missing
+RR STOP after sq0a: the boot did not complete (no vbatch END rc=0 in its transcript)
+PWD /tmp/capstone/wt-gate
+ENV CAPSTONE_TMP_ROOT=/tmp/capstone EXPECT_IMAGES=<scratch>/rr-dry/argv1-sq0/rr-sq0a.images.SHA256SUMS
+ARGV [-c] [16-31] [timeout] [10800] [bash] [/tmp/capstone/wt-gate/capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/tier3-appvm-arm.sh] [--board-kit] [<mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1] [<scratch>/rr-dry/argv1-sq0/rr-sq0a] [/tmp/capstone/wt-gate/capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py] [--arm] [virtual-malloc] [--build] [<mnt-hdd>/capstone/t3-images-r60/sqlite/build-virtual-malloc] [--only] [00,01,02,03,04,05] [--llvm-bin] [/tmp/capstone/vp2-prep/llvm-bin-v6]
+
+## argv2-pb13q15 (argv)
+RR START 17:52:32 board 2 spec 8c283f7734798450 (1 arms)
+RR pb13q15 BEGIN 17:52:32 board 2 kind cases tree e2b26ea2c1e4 booking 92
+RR pb13q15 END 17:52:32 rc=0 :: 
+RR pb13q15 COMPARE vs batch reference rc=1 :: NO DATA: <scratch>/rr-dry/argv2-pb13q15/rr-pb13q15/out/verdicts.jsonl missing
+RR pb13q15 VCOMPARE rc=2 :: NO DATA: reference 9 cells, board 0 cells
+RR STOP after pb13q15: the boot did not complete (no vbatch END rc=0 in its transcript)
+PWD <mnt-hdd>/capstone/wt-q15cw
+ENV CAPSTONE_TMP_ROOT=/tmp/capstone/r322-1016/tmp EXPECT_IMAGES=unset
+ARGV [-c] [16-31] [timeout] [10800] [python3] [<mnt-hdd>/capstone/wt-q15cw/capstone/bug-corpora/tools/run-virtual-cases.py] [--board-kit] [<mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2] [--sdk] [<mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk] [--llvm-bin] [/tmp/capstone/vp2-prep/llvm-bin-v6] [--corpus] [<mnt-hdd>/capstone/wt-q15cw/capstone/bug-corpora/memcached/allocator-repros] [--arm] [virtual-nested-pools] [--prebuilt] [<mnt-hdd>/capstone/t3-images-r60/q15/prebuilt/b13/cases] [--prebuilt-controls] [<mnt-hdd>/capstone/t3-images-r60/q15/prebuilt/b13/controls] [--out] [<scratch>/rr-dry/argv2-pb13q15/rr-pb13q15/out] [--raw] [<scratch>/rr-dry/argv2-pb13q15/rr-pb13q15/raw]
+
+## argv2-pgm1q15 (argv)
+RR START 17:52:32 board 2 spec 9cc9a56f1cb7ec7a (1 arms)
+RR pgm1q15 BEGIN 17:52:32 board 2 kind pgm tree e2b26ea2c1e4 booking 92
+RR pgm1q15 END 17:52:32 rc=0 :: 
+RR pgm1q15 COMPARE vs batch reference rc=1 :: NO DATA: <scratch>/rr-dry/argv2-pgm1q15/rr-pgm1q15/out/verdicts.jsonl missing
+RR pgm1q15 VCOMPARE rc=2 :: NO DATA: reference 5 cells, board 0 cells
+RR STOP after pgm1q15: the boot did not complete (no vbatch END rc=0 in its transcript)
+PWD <mnt-hdd>/capstone/wt-q15cw
+ENV CAPSTONE_TMP_ROOT=/tmp/capstone/r322-1016/tmp EXPECT_IMAGES=unset
+ARGV [-c] [16-31] [timeout] [10800] [python3] [<mnt-hdd>/capstone/wt-q15cw/capstone/bug-corpora/postgres/mmgr-repros/shared/run-defects.py] [<scratch>/rr-dry/argv2-pgm1q15/rr-pgm1q15/out] [--board-kit] [<mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2] [--llvm-bin] [/tmp/capstone/vp2-prep/llvm-bin-v6] [--arm] [virtual-pg-pools] [--hosted-build] [<mnt-hdd>/capstone/t3-images-r60/q15/pg/mmgr-cases-ON] [--controls-hosted-build] [<mnt-hdd>/capstone/t3-images-r60/q15/pg/mmgr-controls-ON] [--raw] [<scratch>/rr-dry/argv2-pgm1q15/rr-pgm1q15/raw]
+
+## argv2-pym1 (argv)
+RR START 17:52:32 board 2 spec fdadfd27c21988cb (1 arms)
+RR pym1 BEGIN 17:52:32 board 2 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py tree 0ddd100001e6 booking 92
+RR pym1 END 17:52:32 rc=0 :: 
+RR pym1 COMPARE vs batch reference rc=1 :: NO DATA: <scratch>/rr-dry/argv2-pym1/rr-pym1/out/verdicts.jsonl missing
+RR pym1 VCOMPARE rc=2 :: NO DATA: reference 20 cells, board 0 cells
+RR STOP after pym1: the boot did not complete (no vbatch END rc=0 in its transcript)
+PWD /tmp/capstone/wt-gate
+ENV CAPSTONE_TMP_ROOT=/tmp/capstone EXPECT_IMAGES=<scratch>/rr-dry/argv2-pym1/rr-pym1.images.SHA256SUMS
+ARGV [-c] [16-31] [timeout] [10800] [bash] [/tmp/capstone/wt-gate/capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/tier3-appvm-arm.sh] [--board-kit] [<mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2] [<scratch>/rr-dry/argv2-pym1/rr-pym1] [/tmp/capstone/wt-gate/capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py] [--arm] [virtual-nested-pools] [--build] [<mnt-hdd>/capstone/t3-images-r60/pym/cases-ON] [--controls-build] [<mnt-hdd>/capstone/t3-images-r60/pym/controls-ON] [--llvm-bin] [/tmp/capstone/vp2-prep/llvm-bin-v6]
+
+## argv2-wm1q15 (argv)
+RR START 17:52:32 board 2 spec a64da7e6754747cd (1 arms)
+RR wm1q15 BEGIN 17:52:56 board 2 kind appvm:capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py tree d0f0f4b41ae6 booking 92
+RR wm1q15 END 17:52:56 rc=0 :: 
+RR wm1q15 COMPARE vs batch reference rc=1 :: NO DATA: <scratch>/rr-dry/argv2-wm1q15/rr-wm1q15/out/verdicts.jsonl missing
+RR wm1q15 VCOMPARE rc=2 :: NO DATA: reference 23 cells, board 0 cells
+RR STOP after wm1q15: the boot did not complete (no vbatch END rc=0 in its transcript)
+PWD <mnt-hdd>/capstone/wt-cpyrec
+ENV CAPSTONE_TMP_ROOT=/tmp/capstone EXPECT_IMAGES=<scratch>/rr-dry/argv2-wm1q15/rr-wm1q15.images.SHA256SUMS
+ARGV [-c] [16-31] [timeout] [10800] [bash] [<mnt-hdd>/capstone/wt-cpyrec/capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/tier3-appvm-arm.sh] [--board-kit] [<mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2] [<scratch>/rr-dry/argv2-wm1q15/rr-wm1q15] [<mnt-hdd>/capstone/wt-cpyrec/capstone/bug-corpora/wireshark/wmem-repros/shared/run-defects.py] [--arm] [virtual-nested-pools] [--hosted-build] [<mnt-hdd>/capstone/t3-images-r60/wmem-q15/cases-ON] [--controls-hosted-build] [<mnt-hdd>/capstone/t3-images-r60/wmem-q15/controls-ON] [--llvm-bin] [/tmp/capstone/vp2-prep/llvm-bin-v6]

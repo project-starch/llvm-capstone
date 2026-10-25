@@ -45,10 +45,10 @@ static void *hc_exchange;
 static unsigned hc_shared_region_count;
 
 /* Regions the launcher shares AFTER its three belong to the program: parked here
-   as they arrive and handed over once each by __capstone_region. The first use is a heap the
-   launcher transfers LINEAR (REV_TRANSFERRED), which the Sublet heap (sublet_heap.c) carves and
-   revokes; without this they would be counted and dropped. A linear capability moves when it
-   is loaded on hardware that enforces linearity, so the slot is read once and cleared. */
+   as they arrive and handed over once each by __capstone_region: the grant a nested allocator's
+   port takes (ports/common/application/regions.c); without this they would be counted and
+   dropped. A linear capability moves when it is loaded on hardware that enforces linearity, so
+   the slot is read once and cleared. */
 #define HC_PROGRAM_REGIONS 2
 static void *hc_program_region[HC_PROGRAM_REGIONS];
 

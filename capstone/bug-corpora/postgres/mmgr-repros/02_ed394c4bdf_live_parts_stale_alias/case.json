@@ -12,35 +12,13 @@
   "allocator_layer": "aset",
   "fidelity": "model-consumer, real allocator",
   "arms": {
-    "spatial": {
-      "oracle": "complete",
-      "verdict": "MISSED",
-      "verdict_note": "reached (pg_mark() marker) and completed with no fault; run=02-live-parts-stale-alias-spatial-ysniqxnc",
-      "verdict_from": "results/2026-10-10-qemu/spatial"
-    },
-    "sublet": {
-      "oracle": "fault at the labelled read probe",
-      "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x101a1280c in pg_probe; by probe: pc equals the labelled probe 0x101a1280c",
-      "verdict_from": "results/2026-10-10-qemu/sublet"
-    },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "complete"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "oracle": "SIGPROT at the labelled read probe",
-      "signal": 34,
-      "si_code": 2
-    },
     "native-detect": {
       "oracle": "stale-read-returns-other-object",
       "note": "ASan cannot fire here and its silence is not a finding; the discriminating arm is Valgrind, reported SKIPPED when it cannot run"
     },
     "cheribsd-revocation": {
       "oracle": "completes with no capability fault; the case's own PG_DEFECT probe prints twice, so the defective sequence provably executed -- REACHED-SILENT (2026-10-05, plain purecap, revocation=1 every_free=0). A use-after-free between two palloc chunks never crosses a malloc boundary, so there is nothing for a malloc-granular revoker to reclaim.",
-      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts with PG_POISONCAP off",
+      "run": "2026-10-05, CheriBSD riscv64-purecap, built via PG_CORPUS_DIR through ports/postgres/memory-contexts",
       "verdict": "MISSED",
       "verdict_from": "results/20261008-cheribsd/result-lines.txt mmgr-02: PG_DEFECT case=2 ready, then mode=0 completed; quarantine.tsv row 2"
     },
@@ -48,16 +26,40 @@
       "oracle": "virtual profile, the replay's managers stock on virtual mallocng (tools/arms.json virtual-mallocng-replay): a fault in pg_probe (case 0: its declared function), or the case completes and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the hosted driver's ready mark) and completed with no fault",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+      "verdict_from": "results/2026-10-11-virtual/virtual-malloc"
     },
     "virtual-pg-pools": {
-      "oracle": "virtual profile, the managers on the Sublet context pools with the arena lent linear (tools/arms.json virtual-mallocng-replay-pools): as virtual-malloc",
+      "oracle": "virtual profile, the managers with the port's patch 0003: every chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-replay-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3fa1e10b5c in pg_probe; by probe: the pc lies in pg_probe, the labelled read",
-      "verdict_from": "results/2026-10-10-virtual/virtual-pg-pools"
+      "verdict_note": "cause=25 pc=0x3f8b390fb8 in pg_probe; by probe: the pc lies in pg_probe, the labelled read",
+      "verdict_from": "results/2026-10-11-virtual/virtual-pg-pools"
+    },
+    "silicon-pg-stock": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), set 8: PostgreSQL 17.0's memory-context managers as the port's spatial variant (patches 0001 + 0002), over the lifetimes heap (tools/arms.json silicon-postgres-mmgr-stock). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. The case's -DPG_NEGATIVE_CONTROL image must print `PG_DEFECT case=N mode=0 completed` and exit 0. Then a fault after `PG_DEFECT case=N ready` at pg_probe / pg_write_probe or a declared fault site is CAUGHT; completing is MISSED, provided the boot's controls, corpus control 00 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane a13fe2ed2cbd, before the boot): MISSED.",
+      "verdict": "MISSED",
+      "verdict_note": "reached (PG_DEFECT case=2 ready) and completed with no fault; silicon; case run end kind=exit value=0; negative control completed",
+      "verdict_from": "results/2026-10-16-silicon/silicon-pg-stock"
+    },
+    "silicon-pg-sublet": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), set 8: the same managers with patch 0003, every chunk a CDERIVE child of its block, CREVOKEd at pfree and when its context dies (tools/arms.json silicon-postgres-mmgr-sublet). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. The case's -DPG_NEGATIVE_CONTROL image must print `PG_DEFECT case=N mode=0 completed` and exit 0. Then a fault after `PG_DEFECT case=N ready` at pg_probe / pg_write_probe or a declared fault site is CAUGHT; completing is MISSED, provided the boot's controls, corpus control 00 included, behaved as tools/arms.json declares. Pre-registered by the board lane (lane a13fe2ed2cbd, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0xac105044 in pg_probe; by probe: the fault is in pg_probe, the labelled probe",
+      "verdict_from": "results/2026-10-16-silicon/silicon-pg-sublet"
+    },
+    "vp2-malloc": {
+      "oracle": "virtual profile, the replay's managers stock on virtual mallocng (tools/arms.json virtual-mallocng-replay): a fault in pg_probe (case 0: its declared function), or the case completes and this arm did not see it",
+      "verdict": "MISSED",
+      "verdict_note": "reached (the hosted driver's ready mark) and completed with no fault",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc"
+    },
+    "vp2-pg-pools": {
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3fb01912d4 in pg_probe; by probe: the pc lies in pg_probe, the labelled read",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-pg-pools",
+      "oracle": "virtual profile, the managers with the port's patch 0003: every chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-replay-pools): as virtual-malloc"
     }
   },
-  "status": "poisoncap-spatial and poisoncap-protected run 2026-09-20 under QEMU against the mmap-backed adapter; mode 0 completed and mode 1 faulted at the labelled probe, address matched. The Capstone spatial/sublet arms have NOT been run since the corpus was split into one program per case.",
+  "status": "measured on virtual Capstone (virtual-malloc, virtual-pg-pools) and stock CheriBSD (cheribsd-revocation); each arm's verdict_from names its bundle",
   "nested": true,
   "nested_why": "The object comes from PostgreSQL's own memory manager -- a chunk aset.c or slab.c carved out of a block it took from malloc -- so the defect is nested by the allocator that served it."
 }

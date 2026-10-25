@@ -397,7 +397,10 @@ the after-audit, synthesis, silicon.
   the seal and the save area between escapes, so every walk read misses behind the previous walk's 64 tag writes.
   Simulation (`sup-stcsb.S` on `sup-call`, with a 64 KiB sweep per iteration evicting both, quanta 20000/5000/2000,
   and detectors for a TAG_WAIT stall and a starved switcher request): about 700 resumes with the walks missing L1,
-  no hang, no detector line -- the in-order fixed-latency AXI memory of the test harness does not reproduce it; the
+  no hang: steady exactly-once progress up to the simulator's cycle limit, RETURN not reached (the runs ended at the
+  limit, which the testharness prints as SUCCESS; the load-unit stuck detector postdates them and fires as threshold
+  crossings in the 2026-10-10 re-runs, the board lane's reading) -- the in-order fixed-latency AXI memory of the test
+  harness does not reproduce it; the
   DDR path's B-response behaviour is the variable it lacks. On the way, S-07 reproduced in this three-instruction
   window in simulation (the LDC two instructions after the STC reads the stale tag). Next: the board lane's sweep arm
   (the same loop with a 64 KiB sweep, quantum ~100k, the addi control), and a discriminator for the mechanism -- a

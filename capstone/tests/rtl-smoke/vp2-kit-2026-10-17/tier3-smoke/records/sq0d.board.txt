@@ -1,0 +1,40 @@
+# Tier 3 board reading, arm sq0d: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-sqlite-memsys5 platform board:caplifive_vp2_bf3db3175 cells 6 tally {"CAUGHT": 2, "MISSED": 1, "NO-READING:unattributed": 3}
+# controls [["bounds-mem5", "complete"], ["uaf-mem5", "complete"]]
+18_mem5-design_memsys5_inband_freelist_overwrite image e3dc081aebb066e8 MISSED cause None at None reached True completed True attribution null
+19_c8c9cdd9dd_rtree_cursor_stale_node image 0a7a279444bdc8cb NO-READING:unattributed cause 29 at yy_reduce+34136 reached True completed False attribution null
+20_d21bd37c7c_rtree_inode0_stale_node image 998e7bf1039a1ba0 NO-READING:unattributed cause 24 at memcpy+200 reached True completed False attribution null
+21_eab0e10304_rtree_static_bind_stale_text image 7d9ca7abbaf0be67 CAUGHT cause 24 at memcpy+200 reached True completed False attribution "function"
+22_fix-2026-07-26_spellfix_oom_stale_vtab image 951357ff10648ce8 CAUGHT cause 13 at editDist3FindLang+244 reached True completed False attribution "function"
+23_eab0e10304_fts3_static_bind_stale_text image d32e7cbe2788f3a3 NO-READING:unattributed cause 29 at memsys5Unlink+156 reached True completed False attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 18_mem5-design_memsys5_inband_freelist_overwrite: verdict MISSED cause None pc None
+  DIFF 19_c8c9cdd9dd_rtree_cursor_stale_node: verdict NO-READING cause 29 pc yy_reduce+34136
+      verdict: qemu CAUGHT board NO-READING
+      reason: qemu None board unattributed
+      cause: qemu 24 board 29
+      pc_off: qemu nodeRelease+144 board yy_reduce+34136
+      attribution: qemu "function" board null
+  DIFF 20_d21bd37c7c_rtree_inode0_stale_node: verdict NO-READING cause 24 pc memcpy+200
+      pc_off: qemu nodeRelease+144 board memcpy+200
+  DIFF 21_eab0e10304_rtree_static_bind_stale_text: verdict CAUGHT cause 24 pc memcpy+200
+      verdict: qemu MISSED board CAUGHT
+      completed: qemu True board False
+      cause: qemu None board 24
+      pc_off: qemu None board memcpy+200
+      attribution: qemu null board "function"
+  DIFF 22_fix-2026-07-26_spellfix_oom_stale_vtab: verdict CAUGHT cause 13 pc editDist3FindLang+244
+      cause: qemu 24 board 13
+  DIFF 23_eab0e10304_fts3_static_bind_stale_text: verdict NO-READING cause 29 pc memsys5Unlink+156
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board unattributed
+      completed: qemu True board False
+      cause: qemu None board 29
+      pc_off: qemu None board memsys5Unlink+156
+  1 of 6 cells the same
+## the boot
+  BOARD_RUN_START 17:29:35 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 18 files, stage 23382427 bytes
+  firmware eeefc8e4d55684a3 23759368 B
+  DRIVER rc=0 17:42:28
+  BOARD_RUN_DONE 17:42:28

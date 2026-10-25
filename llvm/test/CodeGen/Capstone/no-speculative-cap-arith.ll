@@ -1,7 +1,8 @@
 ; C-58: capability arithmetic must not be hoisted out of a block that does not
-; run on every iteration. CIncOffset on an untagged value -- NULL -- traps, so
-; forming &p->items above the test that p is non-null turns a correct program
-; into one that faults. MachineLICM only held loads to that rule; CPython's
+; run on every iteration. CIncOffset of an uninitialised or sealed capability
+; traps, so forming &p->items above a test that excludes such a p turns a
+; correct program into one that faults. (Until the CHERI rule of 2026-10-14 a
+; NULL p trapped too; the CPython case below was that one.) MachineLICM only held loads to that rule; CPython's
 ; argument parser had &kwnames->ob_item moved above `if (kwnames)` and every
 ; call without keywords trapped. The shape here is that one: the address is
 ; invariant, formed in the guarded preheader of an inner loop, and early

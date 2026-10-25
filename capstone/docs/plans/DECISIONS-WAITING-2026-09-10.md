@@ -411,6 +411,9 @@ already in force. It is the least urgent of the three RTL items.
 
 ## 4. Q-04 — are scalars exempt from the MOVC consumption rule?
 
+> **DECIDED 2026-10-14: yes.** The lead adopted option 1. An untagged source is copied, and every tagged
+> non-NONLIN source is still consumed. See `2026-10-14-movc-untagged-source.md`.
+
 > **2026-09-24: a recommendation, (b) scalars exempt, with the evidence and a measurement of what
 > today's silicon does differently: `plans/2026-09-24-q04-movc-integer-source.md`.**
 

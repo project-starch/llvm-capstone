@@ -1,7 +1,8 @@
 #include "corpus.h"
-/* The free control of the sublet-carve arm (FFP_SUBLET_CARVE): a plane read through the frame's own
- * pointer AFTER the frame is freed. Freeing the frame is the Sublet heap's revoke of the block, so the
- * stale read must fault at the probe (a revoked alias). The fixed arm reads before the free. */
+/* The free control of the virtual carve arm (FFP_VIRTUAL_CARVE, shared/virtual-frame.c): a plane read
+ * through the frame's own pointer AFTER the frame is freed. Freeing the frame frees its buffer, which
+ * ends the frame's lifetime and every plane's, so the stale read must fault at the probe. The fixed
+ * arm reads before the free. */
 FFP_CASE(98) {
   AVFrame *f = av_frame_alloc();
   CHECK(f, 980);

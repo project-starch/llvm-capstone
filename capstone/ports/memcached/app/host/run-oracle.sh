@@ -9,15 +9,16 @@
 #   workers   --marker only (M3): the images of host/build-marker.sh, which print "MC-WORKER <i> conn"
 #             per connection a worker sets up; per-worker counts equal native's, every worker present,
 #             the stderr otherwise compared as above, and a control that the gate fails on no markers.
-#   run-oracle.sh <results-dir> [--stop TERM|USR1] [--arm level0|shrink|sublet] [--runs N] [--marker]
+#   run-oracle.sh <results-dir> [--stop TERM|USR1] [--arm level0|shrink] [--runs N] [--marker]
 #             [--alternate STOCK-EXEC FIXED-EXEC] [--image DOM] [--server-opts "OPTS"] [--env NAME=VALUE]...
 #             (N domain runs, one boot)
 #   --image runs that domain image in place of the arm's; --server-opts appends OPTS to the server's
 #   flags, native and domain alike (a later -m overrides the default); --env sets NAME=VALUE for the
-#   server, native and domain alike (the slabsublet arm's MC_SLAB_SUBLET_MODE).
+#   server, native and domain alike.
 #   --alternate runs odd-numbered runs under STOCK-EXEC and even-numbered ones under FIXED-EXEC (two
 #   capstone-exec binaries copied to the share), so a launcher pair is compared within one boot.
-# Env: MC_WORK (build-native.sh, build-domain.sh outputs), CAPSTONE_VM_UP_ARGS (capstone-vm up platform
+# Env: MC_WORK (build-native.sh, build-domain.sh outputs of the physical profile: the level0 and shrink
+# arms; the guest boots with --profile physical), CAPSTONE_VM_UP_ARGS (capstone-vm up platform
 # arguments), capstone-vm on PATH, CAPSTONE_BUILDROOT_DIR (the guest cross compiler).
 # Port 21299, not memcached's 11211: on a shared host 11211 may belong to someone else's server.
 set -uo pipefail
@@ -95,7 +96,7 @@ trap 'capstone-vm --state "$VM" down > /dev/null 2>&1' EXIT
 for attempt in $(seq 1 2400); do
   rm -rf "$VM"
   # shellcheck disable=SC2086
-  capstone-vm --state "$VM" up $CAPSTONE_VM_UP_ARGS --share "$R/share" --boot-timeout 600 > "$R/up.log" 2>&1 && break
+  capstone-vm --state "$VM" up $CAPSTONE_VM_UP_ARGS --profile physical --share "$R/share" --boot-timeout 600 > "$R/up.log" 2>&1 && break
   grep -q "Another Capstone VM owns" "$R/up.log" || { tail -3 "$R/up.log"; exit 4; }
   sleep 3
 done

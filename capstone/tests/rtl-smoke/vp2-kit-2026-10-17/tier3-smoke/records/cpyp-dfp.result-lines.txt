@@ -1,0 +1,50 @@
+CPP cpyp-DFp BEGIN 10:28:29 kit bkit7-rev2xnDF monitor f13dbc5
+APPVM collect rc=75 calls=9 10:28:30
+APPVM boot rc=0 11:14:40 :: session <mnt-hdd>/capstone/t3-run-treeA/cpyp-DFp/session: 9/9 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeA/cpyp-DFp/session/guest/board.txt; phase read
+APPVM read rc=0 11:14:41 :: --- vp2-malloc (virtual-cpython): {'MISSED': 2, 'NO-READING:unattributed': 1}
+CPP cpyp-DFp ARM END rc=0 11:14:41
+CPP cpyp-DFp steps: 10 begun, 10 ended; DRT1 0 DRTX 0 FRTY 0 Oops 0; banner x1; FREG blocks 3
+CPP cpyp-DFp pc=0 by step:       1 17_gh-157325_fix-an-oob-read-in-the-control       1 23_gh-142560_bytearray-search-realloc       1 23_gh-142560_bytearray-search-realloc-control 
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG thread=0 rc=-14 kind=4 cause=12 pc=0 addr=0 entries=8487 entry_pcc=3ff5000110:9d4005004
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG x0 0:9d4005004* 3ff5321bfc:0* 3ff77feae0:1194006003* 3ff5000000:9d4005004
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG x4 3ff7ff1000:4794a40020 3ff67f60f0:56c790fc1ff0* 3ff67f5ff0:56c790fc1ff0* 5:0*
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG x8 3ff77fecb0:1194006003* 430:0* 1:0* 70:0*
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG x12 3ff578c630:9d2980630* 0:0* 2:0* 19:0*
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG x16 4:0* 34:0* 3ff5147e78:0* 3ff65d8190:494b97fe4ff8*
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG x20 ffffffffffffffff:0* 3ff65d5240:494b97fe4ff8* 3:0* 10:0*
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG x24 61:0* 3ff67f46c0:56b392400500* 3ff65d51d0:494b97fe4ff8* 3ff578c630:9d4005004*
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG x28 66:0* ffffffffffffff5b:0* 3ff578ca60:0 3ff578c630:9d2980630
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG args 1 70 3ff578c630 0 2 19 4 34
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG sp+0x0 3ff578c630 1 1 0
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG sp+0x20 3ff51440ac 0 3ff77fecc0 11934c2cc0
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG sp+0x40 3ff65c66f0 0 3ff65d8190 494b97fe4ff8
+CPP FREG 17_gh-157325_fix-an-oob-read-in-the-control :: FREG sp+0x60 3ff77fecb8 11932f2cb8 3ff53171a8 0
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG thread=0 rc=-14 kind=4 cause=12 pc=0 addr=0 entries=16439 entry_pcc=3ff5000110:9d4005004
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG x0 0:9d4005004* 3ff5321bfc:0* 3ff77fbd50:1194006003* 3ff5000000:9d4005004
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG x4 3ff7ff1000:4794a40020 3ff7873bb0:760393dc3b70* 3ff7873b70:760393dc3b70* 2:0*
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG x8 3ff77fbf20:1194006003* 430:0* 1:0* 70:0*
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG x12 3ff578c630:9d2980630* 0:0* 2:0* 19:0*
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG x16 3:0* ffffffffffffffff:0* 3ff5147e78:0* 3ff64ec790:57eb97fa7fe8*
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG x20 ffffffffffffffff:0* 3ff64aa2e0:57eb97fa7fe8* 3:0* 10:0*
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG x24 61:0* 3ff78b1c90:75f393d41b50* 3ff64aa200:57eb97fa7fe8* 3ff578c630:9d4005004*
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG x28 66:0* ffffffffffffff5b:0* 3ff578ca60:0 3ff578c630:9d2980630
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG args 1 70 3ff578c630 0 2 19 3 ffffffffffffffff
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG sp+0x0 3ff578c630 2 0 0
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG sp+0x20 3ff578c630 9d4005004 3ff77fbf30 1193e83f30
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG sp+0x40 3ff65ca450 33 3ff64ec790 57eb97fa7fe8
+CPP FREG 23_gh-142560_bytearray-search-realloc :: FREG sp+0x60 3ff77fbf28 1193cb3f28 3ff77fbf2c 1193cc3f2c
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG thread=0 rc=-14 kind=4 cause=12 pc=0 addr=0 entries=8486 entry_pcc=3ff5000110:9d4005004
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG x0 0:9d4005004* 3ff5321bfc:0* 3ff77feae0:1194006003* 3ff5000000:9d4005004
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG x4 3ff7ff1000:4794a40020 3ff67f60f0:56c790fc1ff0* 3ff67f5ff0:56c790fc1ff0* 5:0*
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG x8 3ff77fecb0:1194006003* 430:0* 1:0* 70:0*
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG x12 3ff578c630:9d2980630* 0:0* 2:0* 19:0*
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG x16 4:0* 34:0* 3ff5147e78:0* 3ff65d8190:494b97fe4ff8*
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG x20 ffffffffffffffff:0* 3ff65d5160:494b97fe4ff8* 3:0* 10:0*
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG x24 61:0* 3ff67f46c0:56b392400500* 3ff65d50f0:494b97fe4ff8* 3ff578c630:9d4005004*
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG x28 66:0* ffffffffffffff5b:0* 3ff578ca60:0 3ff578c630:9d2980630
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG args 1 70 3ff578c630 0 2 19 4 34
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG sp+0x0 3ff578c630 1 1 0
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG sp+0x20 3ff51440ac 0 3ff77fecc0 11934c2cc0
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG sp+0x40 3ff65c6610 0 3ff65d8190 494b97fe4ff8
+CPP FREG 23_gh-142560_bytearray-search-realloc-control :: FREG sp+0x60 3ff77fecb8 11932f2cb8 3ff53171a8 0
+CPP DONE 11:14:41

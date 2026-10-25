@@ -90,9 +90,19 @@ cl::opt<bool> CapstoneGpFree(
 
 // Virtual application startup supplies a readable, image-wide gp. Unlike a
 // per-global cap table it can address anonymous constants in that image.
+// THE GP TYPE IS PART OF THIS OPTION'S CONTRACT (C-27). Enabling it asserts that
+// the supplied image gp is NONLIN -- which the trusted adapter guarantees, since
+// it grants every launch slot reg=3 with linear=0 and never a LINEAR gp. Global
+// bases are therefore already NONLIN, and PseudoCapGlobalBase omits the DELIN it
+// emits under every other ABI (CapstoneExpandPseudoInsts.cpp expandCapGlobalBase
+// carries the full reasoning and the two consumers that depend on NONLIN). A
+// configuration that enabled this option with a LINEAR gp would reintroduce the
+// copy and SHRINK-double-read miscompiles, so the guarantee is a precondition of
+// the option and not an incidental property of today's adapter.
 static cl::opt<bool> CapstoneImageGp(
     "capstone-image-gp", cl::Hidden,
-    cl::desc("Use the gp-free ABI with a readable image-wide gp authority"),
+    cl::desc("Use the gp-free ABI with a readable image-wide gp authority; "
+             "asserts the image gp is NONLIN, so no global base is delin'd"),
     cl::init(false));
 
 // gp-captable: the silicon-correct global-addressing half of the gp-free domain

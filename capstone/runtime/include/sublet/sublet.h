@@ -16,9 +16,24 @@ struct sublet_stats {
 };
 static struct sublet_stats sublet_stats;
 
+/* A slot's cursor is its region's NOMINAL base. SPLIT gives the upper piece cursor = mid, which keeps that. It gives
+ * the LOWER piece its parent's DECODED start, and under a full-scheme bounds encoder a long parent's decoded start
+ * rounds below the parent's nominal base (ISSUES R-55). sublet_carve then handed out a piece that pointed into the
+ * piece before it. On caplifive_fpb_afcd19bea, P1 cell 6's memsys5 aliased two allocations and wedged at a revoke
+ * (mcause 26).
+ *
+ * So the lower piece is SHRUNK to [nominal, mid). That puts its cursor back, and its bounds become exact whenever
+ * the piece is representable: always below 4 KiB, and a 2^(E+3)-aligned block above. An exact piece keeps the rest
+ * of the discipline right as well: a revoke and an init both return the cursor to the decoded base, and a reclaim
+ * fill writes from there. Under exact bounds (capstone-qemu, the cursorless scheme) the cursor already equals the
+ * base and the SHRINK changes nothing. The guard leaves a slot whose cursor is not a base inside the piece as SPLIT
+ * left it. */
 static inline void sublet_split(capstone_cap_slot *lo, unsigned long mid,
                                 capstone_cap_slot *hi) {
+  unsigned long nominal = capstone_cap_cursor(lo);
   capstone_cap_split(lo, mid, hi);
+  if (nominal >= capstone_cap_base(lo) && nominal < mid)
+    capstone_cap_shrink(lo, nominal, mid);
   sublet_stats.split++;
 }
 
@@ -42,12 +57,13 @@ static inline void *sublet_take(capstone_cap_slot *slot) {
 }
 
 /* [slot] keeps the handle, [out] receives the linear region. Read its scalar
- * base before moving it. The slots must be distinct. */
+ * base before moving it: its NOMINAL base, the cursor (see sublet_split; the
+ * decoded base can lie below it, R-55). The slots must be distinct. */
 static inline unsigned long sublet_take_linear(capstone_cap_slot *slot,
                                                capstone_cap_slot *out) {
   capstone_cap_slot handle;
   capstone_cap_make_handle(slot, &handle);
-  unsigned long base = capstone_cap_base(slot);
+  unsigned long base = capstone_cap_cursor(slot);
   capstone_cap_move(slot, out);
   capstone_cap_move(&handle, slot);
   sublet_stats.mrev++;

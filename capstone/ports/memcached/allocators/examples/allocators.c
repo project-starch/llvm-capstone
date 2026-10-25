@@ -9,23 +9,14 @@
 #include "cache.h"
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef MCP_POISONCAP
-#include "poisoncap.h"
-#endif
 _Noreturn void mcp_fail(unsigned code) {
   fprintf(stderr, "example failed=%u\n", code);
   exit(1);
 }
 int main(int argc, char **argv) {
-  /* On PoisonCap the protected arm is what the platform is here for, so it is
-   * the default and the registered example runs it; everywhere else mode 1
-   * either does not exist or is the domain's, and the default is the spatial
-   * arm. An explicit argument overrides either way. */
-#ifdef MCP_POISONCAP
-  unsigned mode = 1;
-#else
+  /* Mode 1 either does not exist or is the domain's, so the default is the
+   * spatial arm. An explicit argument overrides it. */
   unsigned mode = 0;
-#endif
   if (argc == 2) {
     char *end;
     unsigned long selected = strtoul(argv[1], &end, 10);
@@ -91,11 +82,6 @@ int main(int argc, char **argv) {
          same_chunk, same_object, (unsigned long long)h.pages,
          (unsigned long long)h.chunk_reuses, (unsigned long long)h.chunk_releases,
          (unsigned long long)h.object_reuses, (unsigned long long)h.object_releases);
-#ifdef MCP_POISONCAP
-  /* Mode 0 must report no sweeps at all. An example that swept in both arms
-   * would be one protected arm printed twice. */
-  mcp_poisoncap_report();
-#endif
   /* The reissues are the allocators' own behaviour and the reason the corpus
    * exists; an example that did not see them would be measuring the wrong
    * allocators. */

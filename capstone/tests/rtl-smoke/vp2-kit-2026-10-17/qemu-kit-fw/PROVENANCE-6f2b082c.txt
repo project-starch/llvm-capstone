@@ -1,0 +1,18 @@
+# The QEMU prediction kits' firmware fw_jump.elf 6f2b082cb677f026 (every qkit7-* kit's images/fw_jump.elf): its sources and
+# compiler, named and reproduced 2026-10-21 by the board lane (the runtime lane's provenance question). Result lines only.
+build tree        <tmp>/capstone/deleg-gate2/opensbi-T (not a git checkout); its own fw_jump.elf is 6f2b082cb677f026, built 2026-10-01 10:18
+outer OpenSBI     cf344cf3884f exactly: git archive of caplifive-buildroot components/opensbi, 0 differing entries both ways
+                  (excluding build/, the generated *.c.S, *.o and the capstone-sbi subtree)
+capstone-sbi      4674ab6a exactly ("Context slots: 16 descriptors per application"), 0 differing entries
+build mode        PLAIN: platform/generic/objects.mk carries -DCAPSTONE_TARGET_QEMU -DCAPSTONE_DEBUG_ENABLE only (no
+                  -DCAPSTONE_S_TRAP_INJECT), and sbi_capstone_init.o has no _inject_s_trap symbol
+capstone-c        tree 8cda52c (clean), binary fff6d9984c99d935 (built 2026-09-15 13:19, before the firmware), with
+                  --abi capstone -D__riscv_xlen=64 -DCAPSTONE_TARGET_QEMU -DCAPSTONE_DEBUG_ENABLE -DCAPSTONE_SUPERVISED_CALL:
+  sbi_capstone_dom.c.S       25b3c1f02776ebb4  byte-identical to the tree's
+  capstone_int_handler.c.S   19fe1e3a6f65a2e5  byte-identical to the tree's
+  control: without -DCAPSTONE_SUPERVISED_CALL sbi_capstone_dom.c.S differs in 4,342 lines
+full rebuild      at the ORIGINAL path (the original tree moved aside and restored by an EXIT trap; restored hash 6f2b082c),
+                  make PLATFORM=generic with caplifive-buildroot's riscv64-buildroot-linux-gnu- cross toolchain:
+  ELF             97fe32e28f3e4c46 (differs: non-loaded metadata only)
+  loaded bytes    objcopy -O binary: 56cd37bf6bfac89d, 631,864 B, IDENTICAL to 6f2b082c's
+  .text .rodata .data  afed5194587b / 8360f1787b5c / a692febe0a7c, each identical; the section table is identical

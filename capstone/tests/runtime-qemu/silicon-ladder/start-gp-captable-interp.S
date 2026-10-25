@@ -78,6 +78,7 @@
 #define scc(rd, rs1, rs2) .insn r 0x5b, 0x1, 0x5, rd, rs1, rs2
 #define split(rd, rs1, rs2) .insn r 0x5b, 0x1, 0x6, rd, rs1, rs2
 #define delin(rd) .insn r 0x5b, 0x1, 0x3, rd, x0, x0
+#define shrink(rd, lo, hi) .insn r 0x5b, 0x1, 0x1, rd, lo, hi   /* rd narrowed IN PLACE to [lo, hi); keeps rd's node */
 #define cscratch 0x004
 #endif
 
@@ -333,6 +334,37 @@
   li    t6, 0
 .endm
 #endif
+/* CAPSTONE_GLUE_POOL_CARVE (2026-10-14; docs/plans/b0-silicon-delegated-runtime.md, check-repr.py carve_pool).
+   POOL_GRAN: g = max(16, the full scheme's granule for a length n) -- 1 below 4 KiB, else 2^(hb(n) - 9).
+   POOL_PIECE: n = n rounded up to that granule; t = (t - n) aligned down to it. Clobbers g, a, b. */
+.macro POOL_GRAN n, g, a, b
+  li    \g, 16
+  li    \a, 4096
+  bltu  \n, \a, 89f
+  mv    \a, \n
+  li    \b, -1
+88:
+  addi  \b, \b, 1
+  srli  \a, \a, 1
+  bnez  \a, 88b                       /* b = hb(n) */
+  addi  \b, \b, -9                    /* the granule's exponent, E + 3 = hb - 12 + 3 */
+  li    \g, 1
+  sll   \g, \g, \b
+  li    \a, 16
+  bgeu  \g, \a, 89f
+  mv    \g, \a
+89:
+.endm
+.macro POOL_PIECE n, t, g, a, b
+  POOL_GRAN \n, \g, \a, \b
+  addi  \a, \g, -1
+  add   \n, \n, \a
+  not   \a, \a
+  and   \n, \n, \a                    /* n = align_up(n, g) */
+  sub   \t, \t, \n
+  and   \t, \t, \a                    /* t = align_down(t - n, g) */
+.endm
+
 .macro BUILD_GP_CAPTABLE_INTERP first_entry=1
 #if defined(INTERP_FAKE_COUNT) && INTERP_DIAG_STAGE < 2
   /* Diagnostic build: no descriptor is read, so no blob view is needed -- which also
@@ -492,6 +524,50 @@
 #endif
   beqz  s4, 99f                      /* no globals: nothing to build                   */
 
+#if defined(CAPSTONE_GLUE_POOL_CARVE) && !defined(INTERP_FAKE_COUNT)
+  /* THE POOL CARVE. Under the full bounds scheme a SPLIT off the stack remainder rounds the remainder's top up into the
+     piece just carved, so every split-carved global's capability reaches into its neighbour by up to the remainder's
+     granule (check-repr.py OVERLAP: 64 B for k800 to 32 KiB for memcached). Here the stack is split from ONE pool,
+     once, at a point aligned to the stack remainder's granule; the table and every global are derived from a copy of
+     the pool with SHRINK, each aligned to its OWN granule. Each capability then depends on its own length and
+     alignment only: check-repr reads OVERLAP 0 for every image under the full scheme, and no revocation node is
+     spent per global (all share the pool's).
+     Pass 1 walks the descriptor for the pool's base without touching a capability. */
+  lcc(t1, sp, 4)                     /* t1 = END                                       */
+  slli  t3, s4, 4                    /* the table: count * 16                          */
+  POOL_PIECE t3, t1, a4, a5, a6
+  cincoffsetimm(t0, s1, 32)          /* t0 = &record[0]                                */
+  li    s3, 0
+76:
+  ld    t3, 0(t0)                    /* size                                           */
+  addi  t3, t3, 15
+  andi  t3, t3, -16
+  bnez  t3, 77f
+  li    t3, 16
+77:
+  POOL_PIECE t3, t1, a4, a5, a6
+  cincoffsetimm(t0, t0, 24)
+  addi  s3, s3, 1
+  blt   s3, s4, 76b
+  lcc(t3, sp, 3)                     /* t3 = sp.base; t1 = the pieces' lowest base     */
+  sub   t4, t1, t3
+  POOL_GRAN t4, a4, a5, a6
+  addi  a5, a4, -1
+  not   a5, a5
+  and   s6, t1, a5                   /* s6 = P_lo: aligned to the stack remainder's granule */
+  split(s7, sp, s6)                  /* sp = [base, P_lo); s7 = the pool [P_lo, END)   */
+#if INTERP_SP_LINEAR
+  delin(s7)
+#endif
+  lcc(t1, s7, 4)                     /* t1 = END again, from the pool                  */
+  slli  t3, s4, 4
+  POOL_PIECE t3, t1, a4, a5, a6      /* t1 = the table's base, t3 its padded length    */
+  sub   t4, t1, s6
+  cincoffset(gp, s7, t4)             /* a copy of the pool, cursor at the table's base */
+  add   t4, t1, t3
+  shrink(gp, t1, t4)                 /* gp = [base, base + padded length)              */
+  cincoffset(s2, gp, x0)             /* s2 = moving table pointer                      */
+#else
   lcc(t1, sp, 4)                     /* t1 = sp.END                                    */
 #if defined(CAPSTONE_GLUE_CARVE_ALIGN)
   /* CAPSTONE_GLUE_CARVE_ALIGN (ISSUES R-11, first hit on silicon 2026-10-05 by B2's memcached): SPLIT writes both
@@ -532,6 +608,7 @@
   delin(gp)                          /* only needed when sp was still LIN (see C-13)   */
 #endif
   cincoffset(s2, gp, x0)             /* s2 = moving table pointer                      */
+#endif
 
 /* INTERP_BUILD_LIMIT -- build only the first N entries while the TABLE stays full size.
    Clamped here, AFTER the table split, precisely so the cap-table geometry is identical
@@ -572,6 +649,13 @@
   bnez  t4, 11f
   li    t4, 16
 11:
+#if defined(CAPSTONE_GLUE_POOL_CARVE) && !defined(INTERP_FAKE_COUNT)
+  POOL_PIECE t4, t1, a4, a5, a6      /* t4 = storage padded to its granule; t1 = its base */
+  sub   t2, t1, s6
+  cincoffset(t2, s7, t2)             /* a copy of the pool, cursor at the base         */
+  add   a4, t1, t4
+  shrink(t2, t1, a4)                 /* t2 = storage cap [base, base + t4)             */
+#else
 #if defined(CAPSTONE_GLUE_CARVE_ALIGN)
   add   t4, t4, s6
   not   t2, s6
@@ -649,6 +733,7 @@
   split(t2, sp, t1)                  /* t2 = storage cap                               */
 #if INTERP_SP_LINEAR
   delin(t2)                          /* only needed when sp was still LIN (see C-13)   */
+#endif
 #endif
 
   /* dst walker; t6 counts bytes still to write into storage. */
@@ -755,7 +840,12 @@
   addi  s3, s3, 1
   blt   s3, s4, 10b
 
+#if defined(CAPSTONE_GLUE_POOL_CARVE) && !defined(INTERP_FAKE_COUNT)
+  scc(sp, sp, s6)                    /* sp.cursor = P_lo, the top of the stack         */
+  li    s7, 0                        /* drop the pool: the application starts without it */
+#else
   scc(sp, sp, t1)                    /* sp.cursor = top of the remaining stack         */
+#endif
 
   /* C-13 ROOT CAUSE: delin sp EXACTLY ONCE.
      The RTL's DELIN (capstone-ariane core/anvil_build/capstone_dyn_unit.anvil) raises

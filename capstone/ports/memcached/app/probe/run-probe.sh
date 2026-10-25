@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # M0 threads probe: build the domain probe and the native guest client, boot one capstone-vm, run
 # the probe in the background, drive it with the client, end it with SIGTERM, report.
-#   CAPSTONE_SDK=<sdk dir with capstone-cc>  CAPSTONE_VM_UP_ARGS="--qemu ... --firmware ... --module ...
+#   CAPSTONE_SDK=<physical-profile sdk dir with capstone-cc>  CAPSTONE_VM_UP_ARGS="--qemu ... --firmware ... --module ...
 #     --launcher ... --job-helper ... --kernel ... --rootfs ... --ssh-server ..."  run-probe.sh <out-dir>
 # Predictions P1-P4: docs/plans/2026-10-01-memcached-full-app-port.md.
 set -uo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 OUT=${1:?out dir}; mkdir -p "$OUT/share"
 : "${CAPSTONE_SDK:?}" "${CAPSTONE_VM_UP_ARGS:?}"
+# The probe runs under the physical launcher in a physical VM; a virtual SDK's image cannot.
+python3 -c 'import json, sys; sys.exit(json.load(open(sys.argv[1])).get("profile") != "physical")' \
+  "$CAPSTONE_SDK/sdk.json" || { echo "run-probe.sh: CAPSTONE_SDK must be a physical-profile SDK" >&2; exit 2; }
 XCC=${GUEST_CC:-${CAPSTONE_BUILDROOT_DIR:?}/build/host/bin/riscv64-buildroot-linux-gnu-gcc}
 "$CAPSTONE_SDK/capstone-cc" -O1 -o "$OUT/share/mc-threads-probe.dom" "$HERE/mc-threads-probe.c" -lpthread \
   || { echo "probe build FAILED"; exit 2; }
@@ -18,7 +21,7 @@ trap 'capstone-vm --state "$VM" down > /dev/null 2>&1' EXIT
 for attempt in $(seq 1 2400); do
   rm -rf "$VM"
   # shellcheck disable=SC2086
-  capstone-vm --state "$VM" up $CAPSTONE_VM_UP_ARGS --share "$OUT/share" --boot-timeout 600 > "$OUT/up.log" 2>&1 && break
+  capstone-vm --state "$VM" up $CAPSTONE_VM_UP_ARGS --profile physical --share "$OUT/share" --boot-timeout 600 > "$OUT/up.log" 2>&1 && break
   grep -q "Another Capstone VM owns" "$OUT/up.log" || { tail -3 "$OUT/up.log"; exit 3; }
   sleep 3
 done

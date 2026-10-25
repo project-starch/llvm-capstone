@@ -1,0 +1,109 @@
+{
+  "amalgamation_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "arm": "vp2-nested-pools",
+  "build": {
+    "arm": "memsys5-sublet",
+    "groups": {
+      "core": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_PREUPDATE_HOOK",
+        "-DSQLITE_COUNTOFVIEW_OPTIMIZATION"
+      ],
+      "coreT": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-USQLITE_OMIT_TEMPDB"
+      ],
+      "ext": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "fts3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "fts3P": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4",
+        "-DSQLITE_ENABLE_FTS3_PARENTHESIS"
+      ],
+      "fts5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "json": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_JSON1"
+      ],
+      "memfs3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "memfs5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "memfsdb": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_DBSTAT_VTAB"
+      ],
+      "memfsp": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "rtree": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_RTREE",
+        "-DSQLITE_RTREE_INT_ONLY",
+        "-USQLITE_OMIT_SHARED_CACHE"
+      ]
+    },
+    "opt": "-O0",
+    "sdk": "<mnt-hdd>/capstone/t3-freeze-nb/sdk"
+  },
+  "cases": 18,
+  "configuration": "virtual-sqlite-memsys5-pools",
+  "contract": "verdicts-v1",
+  "corpus": "sqlite/engine-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "per-subset",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "per-subset",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "39d8492d5c18216b6271a136e51a56e60e8f711f1dd0be3ce2d2e60712c81fb8",
+    "monitor": "f13dbc5",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY -DCAPSTONE_QUANTUM_PRINT -DCAPSTONE_BOOT_QUANTUM=2000000 -DCAPSTONE_S23_REFUSAL_READ -DCAPSTONE_S23_DATA_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2c_8de3c48cf",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "b3f1aa0ea60442f82193ef57e978f70f2ec377a99c57bcfa41276e95d8464546"
+  },
+  "predicted": "CAUGHT",
+  "subsets": {
+    "q15a": {
+      "firmware": "3a97cf08dfa2aa17380747ee6fbfa78d46886180a3d381c6ccd58b8358987468",
+      "images_sha256": "c356286d74c8d136019d191f118623352ecd7b9ddeddbba82bf3b79f44db7979",
+      "kernel": "b5d23b774f2b5958d01f2326e0ac77885fcc19ec9a2e3ee99e2018fba1b7a54b",
+      "record": "tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/q15a.board.txt"
+    },
+    "q15b": {
+      "firmware": "7928bd367a9c375781128894c38e16b73ce31166b32d7f9bfc554aa711cbe919",
+      "images_sha256": "7c721ee2f211e780320528ba43ff488a68366236f2754a662768cb0b44f4d1b6",
+      "kernel": "c77f92d22b523eb17039184da7b2b6d98a31ecc20b44c158504a91fe0eee691b",
+      "record": "tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/q15b.board.txt"
+    },
+    "q15c": {
+      "firmware": "0493a159c80f902c73963348096a3c02a25a340b4798239f10789d38c2081bd4",
+      "images_sha256": "b84e6b1be2567c0f14a85dacefb2a042b0f1fd9672a12cfa947d016b792ea46d",
+      "kernel": "ede6ef86cb46ccb2ef313c574ea6e85224e5cdebfb5cf4697df9f70e18800f07",
+      "record": "tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/q15c.board.txt"
+    }
+  },
+  "subsets_note": "platform.firmware and platform.kernel are per subset: each subset boot bakes its own stage into the initramfs. For the pym0 pair a claim-auditor showed the kernel to be a relink of the same text with a different initramfs, and the firmware equal outside its embedded Image (2026-10-18).",
+  "tally": {
+    "CAUGHT": 12,
+    "MISSED": 6
+  }
+}

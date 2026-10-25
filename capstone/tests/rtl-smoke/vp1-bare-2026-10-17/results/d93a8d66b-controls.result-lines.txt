@@ -1,0 +1,20 @@
+# vp1-bare's positive controls on caplifive_sublet_d93a8d66b.bit, 2026-10-17 02:53-02:55, run_sup_bare.py, one power cycle each;
+# images checked against images/SHA256SUMS; vectors compared with PREREG.md's d93a8d66b control rows by the board lane's comparator
+vb-trans-off: SR=[13] SV=13 values; matches vp1=True d93a8d66b=True
+VERDICT vb-trans-off: AS PRE-REGISTERED for d93a8d66b
+vb-trans: SR=[36] SV=36 values; matches vp1=False d93a8d66b=False
+   vs vp1: first differences at [10, 11, 13, 14, 15, 16] (got ['0x0', '0x5a5a', '0x1'], want ['0x5a5a', '0x0', '0x5']); lengths 36/36
+   vs d93a8d66b: first differences at [16, 23, 27] (got ['0xffffffff7fff8000', '0xffffffff7fff706f', '0x14'], want ['0xffffffff7fff9000', '0xffffffff7fff806f', '0x18']); lengths 36/36
+VERDICT vb-trans: NOT d93a8d66b
+q17-order: SR=[3] SV=3 values; matches vp1=False d93a8d66b=True
+VERDICT q17-order: AS PRE-REGISTERED for d93a8d66b
+# vb-trans's positions 16, 23, 27 differ from the simulation's control vector by the image's link layout (the RTL lane's derivation, PREREG.md amendment): 36/36 against the board image
+## vb-trans-off: SUPTEST BEGIN=True END=True SR [13]
+SV 0x0 0x1 0x0 0x28 0x0 0x77 0x1234 0x0 0x1 0x0 0x0 0x5a5a 0x0
+post-run gdb: the core could not be halted (dmstatus 0x00030c82), so no register was read; the vector above is the UART's
+## vb-trans: SUPTEST BEGIN=True END=True SR [36]
+SV 0x0 0x1 0x0 0x28 0x0 0x77 0x1234 0x0 0x1 0x0 0x0 0x5a5a 0x0 0x1 0x0 0x14 0xffffffff7fff8000 0x5 0x99 0x0 0x3 0x8000000000000010 0x4 0xffffffff7fff706f 0x0 0x1 0x0 0x14 0x5 0x0 0x5 0x1c 0x0 0x0 0x1 0x0
+post-run gdb: the core could not be halted (dmstatus 0x00030c82), so no register was read; the vector above is the UART's
+## q17-order: SUPTEST BEGIN=True END=True SR [3]
+SV 0x1d 0x19 0x2
+post-run gdb: the core could not be halted (dmstatus 0x00030c82), so no register was read; the vector above is the UART's

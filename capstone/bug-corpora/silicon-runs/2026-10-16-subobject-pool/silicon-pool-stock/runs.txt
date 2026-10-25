@@ -1,0 +1,14 @@
+silicon-pool-stock:control-clean controls.dom clean
+silicon-pool-stock:control-oob controls.dom oob
+silicon-pool-stock:control-uaf controls.dom uaf
+silicon-pool-stock:control-subobj controls.dom subobj
+silicon-pool-stock:ffmpeg-pool-00-fixed ffmpeg-pool-00.dom fixed 0
+silicon-pool-stock:ffmpeg-pool-00-buggy ffmpeg-pool-00.dom buggy 0
+silicon-pool-stock:ffmpeg-pool-01-fixed ffmpeg-pool-01.dom fixed 1
+silicon-pool-stock:ffmpeg-pool-01-buggy ffmpeg-pool-01.dom buggy 1
+silicon-pool-stock:ffmpeg-pool-02-fixed ffmpeg-pool-02.dom fixed 2
+silicon-pool-stock:ffmpeg-pool-02-buggy ffmpeg-pool-02.dom buggy 2
+silicon-pool-stock:ffmpeg-pool-03-fixed ffmpeg-pool-03.dom fixed 3
+silicon-pool-stock:ffmpeg-pool-03-buggy ffmpeg-pool-03.dom buggy 3
+silicon-pool-stock:ffmpeg-pool-controls-virtual-90-fixed ffmpeg-pool-controls-virtual-90.dom fixed 90
+silicon-pool-stock:ffmpeg-pool-controls-virtual-90-buggy ffmpeg-pool-controls-virtual-90.dom buggy 90

@@ -1,0 +1,55 @@
+{
+  "arm": "sublet",
+  "cases": 9,
+  "configuration": "app-level0-pg-nested-sublet",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/sql-repros",
+  "extensions": {
+    "available": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ],
+    "wanted": [
+      "fuzzystrmatch",
+      "ltree",
+      "pg_trgm",
+      "pgcorpus_reach"
+    ]
+  },
+  "fixture": {
+    "builder_image_sha256": "03d00865499444ba7818600c11a331b90ac19c84f1b819ba6678de20bb185dfc",
+    "cluster_tree_sha256": "f071a41ad5b69ae11581f2e293ff03ee4226853c6c582e6635192c025d151956",
+    "preinstalled": [
+      "ltree"
+    ],
+    "provenance": {
+      "image_sha256": "03d00865499444ba7818600c11a331b90ac19c84f1b819ba6678de20bb185dfc",
+      "kind": "exit",
+      "value": 0,
+      "version": 1
+    },
+    "provenance_from": "/home/zephyr/arms/postgres/capstone/build/fixture-ltree.json"
+  },
+  "image": {
+    "heap": "level0",
+    "nested": "sublet",
+    "sha256": "bb55ac337ea8661817acffd30fde9eac61093c574830d7f21d4fab0884fa7b2f"
+  },
+  "platform": {
+    "compiler": "a951a180589d096b5cfbc0f8d49864244f808644b4740c3877d041070fa0a6e7",
+    "exact_bounds": false,
+    "firmware": "b2cd0c0da50ae1f084d895b76b9d8b41a419ead4461c4bb672201c5860525033",
+    "judge": "c5e5872372b392de5325a2951e0ef57798cb9295d753b2b77db7223732c7a25f",
+    "kernel": "457f3e2db2e5cebcc2ac041e6f7705f930a1c5f2e56311caa373af7d412ac821",
+    "profile": "physical",
+    "qemu": "0d6506b7e99c6fa28ade61dd006c2b9eda8e897931308b88eaaa4587963aafd4",
+    "rootfs": "d584da23ad6de66a621fadbbd71dd01604612887640c1b57a70c31a006d52c5f",
+    "runner": "f42df7145d3991bd58fa57f33b5f32c198bbdedcbc27ae7802aef7d31bc79772"
+  },
+  "tally": {
+    "CAUGHT": 5,
+    "MISSED": 4
+  }
+}

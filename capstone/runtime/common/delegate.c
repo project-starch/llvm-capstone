@@ -262,6 +262,10 @@ const struct capstone_delegate_shape *capstone_delegate_shape(uint64_t nr) {
   return NULL;
 }
 
+const struct capstone_delegate_shape *capstone_delegate_shape_at(size_t i) {
+  return i < sizeof shapes / sizeof shapes[0] ? &shapes[i] : NULL;
+}
+
 enum capstone_delegate_group capstone_delegate_group_of(uint64_t nr) {
   const struct capstone_delegate_shape *s = capstone_delegate_shape(nr);
   return s ? (enum capstone_delegate_group)s->group : CAPSTONE_GROUP_UNKNOWN;

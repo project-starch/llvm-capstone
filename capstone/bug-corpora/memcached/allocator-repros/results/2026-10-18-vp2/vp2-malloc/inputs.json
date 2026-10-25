@@ -1,0 +1,51 @@
+{
+  "arm": "vp2-malloc",
+  "build": {
+    "argv": {
+      "buggy": [
+        "buggy",
+        "N"
+      ],
+      "fixed": [
+        "fixed",
+        "N"
+      ]
+    },
+    "cache": {
+      "CMAKE_BUILD_TYPE": "Debug",
+      "CMAKE_C_FLAGS": "-isystem <mnt-hdd>/capstone/t3-freeze/llvm/lib/clang/22/include",
+      "MCP_STOCK_MALLOC": "ON",
+      "MCP_SUBLET": "OFF"
+    },
+    "controls": {
+      "chunk-free-90": "ea9921d67d92410538413e200355b0206b2c337636beaae46f9694347cb8b5e0"
+    },
+    "prebuilt": "<mnt-hdd>/capstone/t3-images-nb/prebuilt/b12/cases",
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 9,
+  "configuration": "virtual-memcached-stock",
+  "contract": "verdicts-v1",
+  "corpus": "memcached/allocator-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "b1b3daaaa0bc70d0d89b66e7c6d62887d4a5cbdb49e298e36baa36ac7c0e32cc",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "1a62da9cd0ec86c9139f4410487aeec84ba134a9dddcf396d7b54c3ed238e88c",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "3005ed52e860c7af5da2b7fdf30ca1790de5da63c79983abe59937a13a4cba0a",
+    "monitor": "007d81d",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2_bf3db3175",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "9b5e409c92e1fe664882c544a788df56ace6b86b50893af6a3050751bb09dac7"
+  },
+  "tally": {
+    "NO-READING:control-failed": 9
+  }
+}

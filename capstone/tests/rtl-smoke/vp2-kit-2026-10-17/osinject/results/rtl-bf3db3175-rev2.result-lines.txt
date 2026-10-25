@@ -1,0 +1,22 @@
+# va-osinject revision 2 on capstone-ariane bf3db3175's RTL (the RTL lane, 2026-10-17), with the monitor's trap entry from
+# capstone-sbi vp2/tier1-monitor fba7812 (sbi_capstone.S 7b23b6a67540fd45..., capstone_csmint.S 4600d04680158edf...,
+# sbi_capstone.h 2c6f6bcab4ce180e..., checked by the RTL lane before the run). Pre-registered at lane 0adf83ed02f3
+# (../README.md, "Revision 2").
+# Addresses from nm on the built ELF (the RTL lane): slotA 0x8000a000, ldc_s 0x8000103c, ldc_u 0x80002008,
+# csmint_u 0x80002020, slotB 0x8000b000, descB 0x8000b040, s_trap 0x800010e0, _cap_trap_entry 0x800030c4,
+# _inject_s_trap 0x80003228.
+# Read by the board lane from the run's retirement trace (vp7-wt/.sup/osinj2/), replaying the register writes to each
+# CAPPRINT's operand. Columns: scause, stval, SPP, sepc, t2, s5, s6 (and for row 3 slotB's two words, loaded from
+# 0x8000b000 and 0x8000b008).
+# Build identities: each run's own disassembly, va-osinject.dasm sha256 33584c6236188d2a98bd57096d0d40858dac2cb21c287be4ba3bed3215626fc1, the control's e9c3e06bc2a9d18d3bea887364540599fd84204d4b1f0f877e20e3f8998b8796.
+
+row 1, S origin   0x18 0x8000a000 0x1 0x8000103c 0x7777 0x5555 0x6666   AS PREDICTED
+row 2, U origin   0x18 0x8000a000 0x0 0x80002008 0x7777 0x5555 0x6666   AS PREDICTED
+row 3, U CSMINT   0x2 0xa0b5165b 0x0 0x80002020 0x7777 0x5555 0x6666 0x0 0x0   AS PREDICTED
+pass marker        SUCCESS after 73,570 cycles (tohost 0)                                              AS PREDICTED
+control (-DOSINJECT_CONTROL)  0 CAPPRINTs and no pass marker; handle_exception's stub returns -1 1,392 times, the ldc at
+                   ldc_s traps 1,393 times, and s_trap is never reached; FAILED at the cycle limit (4,000,013 cycles)  AS PREDICTED
+
+# Trap lines in the main run: exactly three. The ldc at ldc_s and at ldc_u (0x000532db), and ILLEGAL_INSTR at csmint_u
+# (0xa0b5165b). Row 3 reads scause 2 with SPP 0 and nothing minted. The ungated routine would have read 29 with SPP 1,
+# so capstone_csmint.S's MPP gate declines a CSMINT from U, and the entry injects it into S as an illegal instruction.

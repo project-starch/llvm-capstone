@@ -1,0 +1,40 @@
+# Tier 3 board reading, arm fcs-fix6b: kit bkit7-fix6t (module d71f207a3af5546b, the S-27 workaround; batch budget 300 s per step), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-nested-pools configuration virtual-ffmpeg-carve platform board:caplifive_vp2_bf3db3175 cells 13 tally {"CAUGHT": 13}
+# controls [["bounds-malloc", "fault"], ["live-carve", "complete"], ["uaf-carve", "fault"], ["uaf-malloc", "fault"]]
+00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short image a1064fdcaea8192d CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+01_699341d647_apedec_array_0000_writes_64_into_channel_1 image a5cb9ba467e5e0cc CAUGHT cause 28 at ffc_write_probe_u32+88 reached True completed False attribution "probe"
+02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel image fb69f48cd8f437fe CAUGHT cause 28 at ffc_read_probe_u32+56 reached True completed False attribution "probe"
+03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix image 621b6cce8091932b CAUGHT cause 28 at ffc_read_probe_u32+56 reached True completed False attribution "probe"
+04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel image e0664df1b97d55e1 CAUGHT cause 28 at ffc_write_probe_u32+88 reached True completed False attribution "probe"
+05_9d3032b960_alsdec_opt_order_past_max_order image 200a35d61b092026 CAUGHT cause 28 at ffc_write_probe_u32+88 reached True completed False attribution "probe"
+06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420 image 945a5767da89582c CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+07_2563a33856_vp9_intra_pred_carved_for_old_bpp image aa0480091dfe5aa9 CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+08_b5ff61695f_swscale_v_line_at_pre_doubling_stride image 12c8a6503847ed32 CAUGHT cause 28 at ffc_write_probe_u32+88 reached True completed False attribution "probe"
+09_043bcdcdb0_svq1enc_inter_block_runs_into_source image 82244527822ccb59 CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+10_d2213b6493_rv34_b_block_carved_at_old_linesize image 392e9bb494e3c7c3 CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+11_68226ed9ec_vorbis_type1_residue_end_spans_channels image d5c085d7bd38db7c CAUGHT cause 28 at ffc_read_probe_u32+56 reached True completed False attribution "probe"
+12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice image 568886562ba75544 CAUGHT cause 28 at ffc_read_probe_u32+56 reached True completed False attribution "probe"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short: verdict CAUGHT cause 28 pc ffc_write_probe_u8+88
+  SAME 01_699341d647_apedec_array_0000_writes_64_into_channel_1: verdict CAUGHT cause 28 pc ffc_write_probe_u32+88
+  SAME 02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel: verdict CAUGHT cause 28 pc ffc_read_probe_u32+56
+  SAME 03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix: verdict CAUGHT cause 28 pc ffc_read_probe_u32+56
+  SAME 04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel: verdict CAUGHT cause 28 pc ffc_write_probe_u32+88
+  SAME 05_9d3032b960_alsdec_opt_order_past_max_order: verdict CAUGHT cause 28 pc ffc_write_probe_u32+88
+  SAME 06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420: verdict CAUGHT cause 28 pc ffc_write_probe_u8+88
+  SAME 07_2563a33856_vp9_intra_pred_carved_for_old_bpp: verdict CAUGHT cause 28 pc ffc_write_probe_u8+88
+  SAME 08_b5ff61695f_swscale_v_line_at_pre_doubling_stride: verdict CAUGHT cause 28 pc ffc_write_probe_u32+88
+  SAME 09_043bcdcdb0_svq1enc_inter_block_runs_into_source: verdict CAUGHT cause 28 pc ffc_write_probe_u8+88
+  SAME 10_d2213b6493_rv34_b_block_carved_at_old_linesize: verdict CAUGHT cause 28 pc ffc_write_probe_u8+88
+  SAME 11_68226ed9ec_vorbis_type1_residue_end_spans_channels: verdict CAUGHT cause 28 pc ffc_read_probe_u32+56
+  SAME 12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice: verdict CAUGHT cause 28 pc ffc_read_probe_u32+56
+  13 of 13 cells the same
+## the boot
+  T3SEQ fcs-fix6b BEGIN 01:20:14 ffmpeg/carved-repros virtual-nested-pools (2 extra args)
+  T3SEQ fcs-fix6b END 01:30:30 rc=0 :: virtual boot: completed :: --- vp2-nested-pools (virtual-ffmpeg-carve): {'CAUGHT': 13}
+  T3SEQ fcs-fix6b PAYLOAD stage 3988974 B, 1583877 B gzip; firmware 19565064 B
+  BOARD_RUN_START 01:20:17 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 24 files, stage 3988974 bytes
+  firmware 17fe24b7e5dbc5d1 19565064 B
+  DRIVER rc=0 01:30:30
+  BOARD_RUN_DONE 01:30:30

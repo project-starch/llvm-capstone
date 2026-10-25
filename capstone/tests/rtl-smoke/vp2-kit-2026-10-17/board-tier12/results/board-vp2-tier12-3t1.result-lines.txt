@@ -1,0 +1,35 @@
+# vp2 Tier 1 boot 3-T1, 2026-10-18 03:17-03:23: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload 2df129f4643a64fe,
+# module ed24f827b5beb373, the C-27-fixed images (contract.dom f2017064bea77dd2). Pre-registered at lane vp2-tier12 2d8559e63ed0.
+# Result lines only, from run3t1/board.txt and run3t1/SEQ; the raw capture is not committed.
+
+DRIVER rc=1 03:22:57; watchdog lines 22
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=922 oracle=0 NOT-AS-ORACLE
+VM-CONTRACT BRANCH other: ok-line=False exits=['VM_EXIT:normal:139', 'VM_EXIT:stale:139'] causes=['cause=2', 'cause=2'] monitor=[]
+
+## vm-contract (the reading)
+  CAPSTONE_VM_ADD_OK slot=0 base=0x3f92200000 bytes=524288 reg=3 perms=7 linear=0
+  CAPSTONE_VM_ADD_OK slot=1 base=0x3f92000000 bytes=1048576 reg=2 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=2 base=0x3f9232c000 bytes=16384 reg=10 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=3 base=0x3f922c0000 bytes=262144 reg=11 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=4 base=0x3f92310000 bytes=65536 reg=12 perms=4 linear=0
+  capstone-exec: domain fault cause=2 pc=0x3f92210ccc address=0xcc002573 entry=unknown last=0x0 preparing=0x0 sha256=f2017064... image=contract.dom
+    -> cause 2 at map 0 base + 0x10ccc, address cc002573 (the instruction itself)
+  VM_EXIT:normal:139
+  CAPSTONE_VM_ADD_OK slot=0 base=0x3fb8380000 bytes=524288 reg=3 perms=7 linear=0
+  CAPSTONE_VM_ADD_OK slot=1 base=0x3fb8200000 bytes=1048576 reg=2 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=2 base=0x3fb8440000 bytes=16384 reg=10 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=3 base=0x3fb8300000 bytes=262144 reg=11 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=4 base=0x3fb8420000 bytes=65536 reg=12 perms=4 linear=0
+  capstone-exec: domain fault cause=2 pc=0x3fb8390ccc address=0xcc002573 entry=unknown last=0x0 preparing=0x0 sha256=f2017064... image=contract.dom
+    -> cause 2 at map 0 base + 0x10ccc, address cc002573 (the instruction itself)
+  VM_EXIT:stale:139
+  RESULT vm-contract retval=922
+  monitor tags in the segment: none
+
+## located (from the image, the RTL record and Q-21)
+  contract.dom f2017064 VA 0x20ccc (map 0 base + 0x10ccc, the image at VA 0x10000) is `csrr a0, 0xcc0` in malloc;
+  0xcc002573 is that instruction's own encoding. CSR 0xcc0 (urevavail) is absent on the RTL (ISSUES Q-21): a read is
+  an illegal instruction. QEMU implements it, so every QEMU record passed.
+  qemu-only-csr-census.py: contract.dom, sqlite3.dom, mruby.dom 2 each (malloc, realloc); capstone_vm.ko ed24f827 0.

@@ -7,8 +7,6 @@
 #   cheribsd-subobject    the same, cases built with -Xclang -cheri-bounds=subobject-safe
 #   cheribsd-carve-bounds the same, cases built with -DFFC_CARVE_BOUNDS: ffc_carve() narrows each
 #                         carved region with cheri_bounds_set, the remedy at the carving code
-#   poisoncap-spatial     the PoisonCap image (CHERI_* pointing at it), revocation off (mode 0)
-#   poisoncap-protected   the PoisonCap image, revocation on (mode 1)
 #
 # -O0, as every CheriBSD runner here: clang folds a constant out-of-bounds access gcc keeps.
 # A fault is read from outside the process by supervise, one build per probe symbol. The platform
@@ -29,8 +27,6 @@ case "$ARM" in
   cheribsd-revocation)   EXTRA= ;                                       REV=on;  EXPECT=complete ;;
   cheribsd-subobject)    EXTRA="-Xclang -cheri-bounds=subobject-safe";  REV=on;  EXPECT=complete ;;
   cheribsd-carve-bounds) EXTRA=-DFFC_CARVE_BOUNDS;                      REV=on;  EXPECT=fault ;;
-  poisoncap-spatial)     EXTRA= ;                                       REV=off; EXPECT=complete ;;
-  poisoncap-protected)   EXTRA= ;                                       REV=on;  EXPECT=complete ;;
   *) echo "CONTROL-FAILED unknown arm $ARM" >&2; exit 75 ;;
 esac
 for p in "$SDK/bin/clang" "$SYSROOT" "$IMAGE"; do

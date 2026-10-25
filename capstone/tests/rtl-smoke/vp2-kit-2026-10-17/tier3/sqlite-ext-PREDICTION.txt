@@ -1,0 +1,9 @@
+Written 2026-10-17 13:27:20 before tier3-sqlite-ext.sh produced any reading (its build was still running).
+Source of the record: /tmp/capstone/vp2-prep/tier3/manifest.json (sha256 fc72389461c41e11, = tier3/MANIFEST.SHA256).
+virtual-malloc 06 expert:    NO-READING inconclusive, reached (the record)
+virtual-malloc 22 spellfix:  CAUGHT 24 in editDist3FindLang (the record)
+virtual-nested-pools 06/22 without exact bounds: cause 29 in capstone_cap_derive, unattributed -- the (iii) Q-15 cost,
+  as the other 30 cells read at 10:56 (record would be CAUGHT 25)
+virtual-nested-pools -exact 06: CAUGHT 25 in idxRemFunc; 22: CAUGHT 25 in editDist3FindLang (the record)
+The 31 other cells: exactly the 10:46-11:02 rerun's readings (virtual-malloc CAUGHT 3 MISSED 27 unattributed 1;
+nested-pools CAUGHT 1 unattributed 30; nested-pools exact CAUGHT 25 MISSED 6).

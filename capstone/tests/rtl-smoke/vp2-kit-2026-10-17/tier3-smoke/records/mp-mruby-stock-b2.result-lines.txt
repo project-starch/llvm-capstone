@@ -1,0 +1,7 @@
+mp-mruby-stock-b2 (2026-10-21 13:34-16:16, board 2, tree B caplifive_vp2c_8de3c48cf, kit bkit7-rev2xBDN2; pre-registered c8c871d7ec59)
+images equal the reference's collected images (2); firmware 09203ab6af4339a3 19,565,064 B; monitor f13dbc5
+rungs: b0-stats retval=0, b0-hello retval=0; vbatch: session-share END 0; control-smoke BEGIN, no END
+control-smoke ran >= 153 min (307 heartbeats at 30 s) with no END; the kernel heartbeat never stopped
+batch-rung readings: pc=0x0 0, DRT1 0, FRTY 0, Oops 0, INJS 0, INJL 0, domain fault 0, node-floor-2 banner 1
+STOPPED by the operator at 16:16 (bound set at 16:15); UNBOOK 79: 200; no case step ran; no cell is a reading
+reference: tB-mimic QEMU, the same images, control smoke ok, the whole 24-step session about 4 min; the step's QEMU limit is 120 s

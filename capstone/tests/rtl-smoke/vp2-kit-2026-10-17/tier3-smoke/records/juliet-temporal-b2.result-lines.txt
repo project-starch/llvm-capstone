@@ -1,0 +1,9 @@
+juliet-temporal-b2 (2026-10-21 16:16-20:48, board 2, tree B caplifive_vp2c_8de3c48cf, kit bkit7-rev2xBDN2; pre-registered 09bb6536e2ee)
+run: 12 batches completed, 0 not, 14344.0 s; run-seeded: 1 batch completed, 1075.7 s; probe rc=0 (sizeof ptr 16, int64 8)
+readings: 14 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+raw cells (main run): every good image exits 0, 366 of 366; 355 bad images fault at cause 25 at the 2026-10-19 QEMU record's site; 11 _12 bads finish (good branch)
+against tree A cell by cell: main run 732 of 735 cells equal; seeded 56 of 56 equal
+  differ: CWE415 malloc_free_struct_12 (s007) bad branch on B only, cause 25 checked+0x14 = the record's site; CWE416 malloc_free_wchar_t_12 (s039) bad branch on A only
+  differ: ctl-uaf-1 in batch000 and batch010 reads cause 13 (load page fault) at control_read_probe+0x38, the instruction where the other 22 tree-B and all 24 tree-A uaf runs read cause 25
+judge.py (rc 75): census batches valid 10 of 12 (batch000, batch010 void: the uaf control must read cause 25 in control_read_probe); NO-READING:batch-void: 64 good verdicts and 62 bad (the 2 other bads in those batches are _12, scored from the seeded build)
+judge.py, counting batches: bad NO-READING:unattributed(STRICT-FAIL:no-revoked-line) 291, seeded(MISSED,...) 13; good CORRECT 302 (291 + 13 + 62 = 366 bad, 302 + 64 = 366 good)

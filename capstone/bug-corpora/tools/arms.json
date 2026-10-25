@@ -1,31 +1,9 @@
 {
   "about": "What each measured CONFIGURATION is, and the controls a run of it must show in the same invocation before a silence counts as MISSED (tools/verdicts.py). An arm NAME in a case.json is a label; a corpus maps each of its arm names to one configuration here (corpus.json `arm_configurations`), so two corpora whose `spatial` means different things cannot be added up as if it did not. A control's expectation is part of the configuration's identity: a use-after-free control that COMPLETES is what shows an arm does not revoke, just as one that faults shows it does.",
   "arms": {
-    "replay-arena": {
-      "target": "capstone-domain",
-      "summary": "the memory-contexts replay study's level 0 (ports/postgres/memory-contexts, backing-allocator.c): every chunk is an offset inside one arena capability; nothing is revoked",
-      "mechanism": "none below the arena",
-      "controls": {
-        "uaf-chunk": "complete"
-      },
-      "controls_for_missed": [
-        "uaf-chunk"
-      ]
-    },
-    "replay-sublet": {
-      "target": "capstone-domain",
-      "summary": "the replay study with PostgreSQL's managers patched onto Sublet context pools: every chunk is its own capability, revoked when the manager takes it back",
-      "mechanism": "per-chunk bounds and revocation in the nested allocator",
-      "controls": {
-        "uaf-chunk": "fault"
-      },
-      "controls_for_missed": [
-        "uaf-chunk"
-      ]
-    },
     "app-level0": {
       "target": "capstone-domain",
-      "summary": "an application domain whose SDK heap is level0 (CAPSTONE_APPLICATION_HEAP=level0): malloc bounds each object to its request; free revokes nothing; a nested allocator's chunks are unbounded inside the block it took",
+      "summary": "an application domain on a physical-profile SDK, whose heap is level0: malloc bounds each object to its request; free revokes nothing; a nested allocator's chunks are unbounded inside the block it took",
       "mechanism": "per-object bounds in malloc",
       "controls": {
         "bounds-malloc": "fault",
@@ -34,23 +12,6 @@
       "controls_for_missed": [
         "bounds-malloc",
         "uaf-malloc"
-      ]
-    },
-    "app-level0-pg-nested-sublet": {
-      "target": "capstone-domain",
-      "summary": "app-level0 plus PostgreSQL's memory contexts on Sublet context pools (ports/postgres/app/build-domain.sh, PGSU_NESTED=sublet): palloc chunks bounded and revoked; plain malloc as in app-level0",
-      "mechanism": "per-object bounds in malloc; per-chunk bounds and revocation in palloc",
-      "controls": {
-        "bounds-malloc": "fault",
-        "uaf-malloc": "complete",
-        "bounds-palloc": "fault",
-        "uaf-palloc": "fault"
-      },
-      "controls_for_missed": [
-        "bounds-malloc",
-        "uaf-malloc",
-        "bounds-palloc",
-        "uaf-palloc"
       ]
     },
     "cheribsd-default": {
@@ -79,7 +40,7 @@
     },
     "virtual-mallocng-pg-pools": {
       "target": "capstone-virtual",
-      "summary": "virtual-mallocng plus PostgreSQL's memory contexts on the Sublet context pools, built for the virtual profile (ports/common/application/build-virtual.sh postgres with PGSU_NESTED=sublet): palloc chunks bounded and retired per chunk",
+      "summary": "virtual-mallocng plus the memory-context port's patch 0003 in the server, built for the virtual profile (ports/common/application/build-virtual.sh postgres with PGSU_NESTED=sublet): every palloc chunk a child lifetime of its block (CDERIVE), bounded to the request and revoked by pfree and repalloc (CREVOKE)",
       "mechanism": "as virtual-mallocng; per-chunk bounds and revocation in palloc",
       "controls": {
         "bounds-malloc": "fault",
@@ -96,7 +57,7 @@
     },
     "virtual-mallocng-replay": {
       "target": "capstone-virtual",
-      "summary": "the memory-contexts replay built as a Capstone application (capstone-application toolchain, virtual SDK) and run as a process under capstone-vexec: PostgreSQL's aset/slab stock on virtual mallocng, which bounds and retires each block it hands the manager but not the chunks carved from it",
+      "summary": "the memory-contexts replay built as a Capstone application (capstone-application toolchain, virtual SDK) and run as a process under capstone-vexec: PostgreSQL's managers with the capability-layout patches on virtual mallocng, which bounds and retires each block it hands the manager but not the chunks carved from it",
       "mechanism": "exact bounds and lifetime retirement of malloc blocks; none per chunk",
       "controls": {
         "uaf-chunk": "complete"
@@ -107,8 +68,8 @@
     },
     "virtual-mallocng-replay-pools": {
       "target": "capstone-virtual",
-      "summary": "the same replay with PG_SUBLET: PostgreSQL's managers on the Sublet context pools, their arena lent by the virtual heap as one linear capability (__capstone_sublet_malloc_linear), so every chunk is its own capability, retired when the manager takes it back",
-      "mechanism": "as virtual-mallocng-replay; per-chunk bounds and revocation in the nested allocator",
+      "summary": "the same replay with PG_SUBLET, which applies the port's patch 0003: every chunk a child lifetime of its block (CDERIVE), bounded to the request and revoked by pfree and repalloc (CREVOKE)",
+      "mechanism": "as virtual-mallocng-replay; per-chunk bounds and revocation in the memory contexts",
       "controls": {
         "uaf-chunk": "fault"
       },
@@ -131,8 +92,8 @@
     },
     "virtual-sqlite-memsys5-pools": {
       "target": "capstone-virtual",
-      "summary": "the same with memsys5 on its Sublet port (build-virtual.py --sublet, ports/sqlite/sublet/sublet-3220000-memsys5.patch): the pool is lent by the virtual heap as one linear capability, carved into one capability per block, each retired on sqlite3_free",
-      "mechanism": "per-block bounds and revocation in memsys5",
+      "summary": "the same static arena with memsys5 on its Sublet port (build-virtual.py --sublet, ports/sqlite/sublet/sublet-3220000-memsys5.patch): every block goes out as a child lifetime of the pool (CDERIVE), bounded to its request rounded to 8 bytes, and sqlite3_free revokes it (CREVOKE); the lookaside's slots the same, revoked by sqlite3DbFree. The page cache is not covered",
+      "mechanism": "per-block bounds and revocation in memsys5 (CDERIVE/CREVOKE)",
       "controls": {
         "uaf-mem5": "fault",
         "bounds-mem5": "fault"
@@ -155,8 +116,8 @@
     },
     "virtual-pymalloc-pools": {
       "target": "capstone-virtual",
-      "summary": "the same replay with PYMALLOC_SUBLET in mode 1: the lifetime adapter owns an arena the virtual heap lends as one linear capability (__capstone_sublet_malloc_linear, aligned by borrow-aligned-block.h), hands out one bounded capability per pymalloc block and retires it on free",
-      "mechanism": "per-block bounds and revocation in pymalloc",
+      "summary": "the same replay built with PYMALLOC_SUBLET, which applies the port's patch 0003: obmalloc hands out every block as a child lifetime of its arena, bounded to the request (CDERIVE), and revokes it on free (CREVOKE)",
+      "mechanism": "as virtual-pymalloc; per-block bounds and revocation inside obmalloc",
       "controls": {
         "uaf-block": "fault"
       },
@@ -166,49 +127,19 @@
     },
     "virtual-ffmpeg-carve": {
       "target": "capstone-virtual",
-      "summary": "FFmpeg's carved corpus on the virtual profile with its carve on Sublet (-DFFC_SUBLET_CARVE): the block is lent LINEAR by virtual mallocng (__capstone_sublet_malloc_linear) and split into one region per carve, each issued as a bounded alias; a re-carve revokes the old aliases",
+      "summary": "FFmpeg's carved corpus on virtual mallocng (-DFFC_SUBLET_CARVE): each disjoint region is a bounded CDERIVE child of the block; CREVOKE ends a region and free ends every descendant",
       "mechanism": "per-region bounds and revocation in the carve port, over virtual mallocng",
       "controls": {
         "bounds-malloc": "fault",
-        "uaf-malloc": "fault"
-      },
-      "controls_for_missed": [
-        "bounds-malloc",
-        "uaf-malloc"
-      ]
-    },
-    "virtual-wmem-libc": {
-      "target": "capstone-virtual",
-      "summary": "wireshark/wmem-repros on the virtual profile with wmem STOCK on virtual mallocng: the wmem port's hosted build (preset capstone-application, -DWM_LIBC_SYSTEM=ON -DWM_CHUNKS=OFF), so g_malloc/g_free are the virtual heap's malloc/free at the requested size -- the build the CheriBSD libc arm ran. A packet-pool block, an epan BLOCK block and a jumbo are each one object to the heap; the chunks wmem carves inside a block are not",
-      "mechanism": "exact bounds and lifetime retirement of every block wmem takes from the system; none per chunk",
-      "controls": {
-        "bounds-malloc": "fault",
         "uaf-malloc": "fault",
-        "jumbo-reset-90": "fault",
-        "chunk-free-91": "complete"
+        "live-carve": "complete",
+        "uaf-carve": "fault"
       },
       "controls_for_missed": [
         "bounds-malloc",
         "uaf-malloc",
-        "jumbo-reset-90",
-        "chunk-free-91"
-      ]
-    },
-    "virtual-wmem-chunks": {
-      "target": "capstone-virtual",
-      "summary": "the same corpus with the wmem port's Sublet region and chunk layers in the process (-DWM_SUBLET=ON -DWM_CHUNKS=ON, shared/driver-virtual.c): the payload is lent by the virtual heap as one linear capability (__capstone_sublet_malloc_linear), every block a region inside it and every chunk of the block allocator a region of its own; run in mode 1, a packet-pool reset and a chunk free revoke",
-      "mechanism": "per-chunk bounds and revocation in wmem, over a payload the virtual heap lends",
-      "controls": {
-        "bounds-malloc": "fault",
-        "uaf-malloc": "fault",
-        "jumbo-reset-90": "fault",
-        "chunk-free-91": "fault"
-      },
-      "controls_for_missed": [
-        "bounds-malloc",
-        "uaf-malloc",
-        "jumbo-reset-90",
-        "chunk-free-91"
+        "live-carve",
+        "uaf-carve"
       ]
     },
     "virtual-memcached-stock": {
@@ -228,7 +159,7 @@
     },
     "virtual-memcached-ledger": {
       "target": "capstone-virtual",
-      "summary": "the same corpus on the port's shared ledger over the Sublet authority in the process (-DMCP_SUBLET=ON, shared/driver-virtual.c): the payload is lent by the virtual heap as one linear capability (capstone_borrow_aligned_block), every chunk and object a lease bounded to itself, revoked when slabs.c or cache.c takes it back (mode 1); with the carve remedy (MC_CARVE_BOUNDS) for 06 and 07, as the physical column 3 reads sublet-carve for them",
+      "summary": "the same corpus on the port's shared ledger over the Sublet authority in the process (-DMCP_SUBLET=ON, shared/driver-virtual.c): the payload is lent by the virtual heap as one linear capability (capstone_borrow_aligned_block), every chunk and object a lease bounded to itself, revoked when slabs.c or cache.c takes it back (mode 1); with the carve remedy (MC_CARVE_BOUNDS) for 06 and 07, as the physical column 3 reads sublet-carve for them. SUPERSEDED 2026-10-11 by virtual-memcached-sublet: the ledger's Sublet authority and the lent payload were removed with the lend API; kept to judge the 2026-10-10 bundle",
       "mechanism": "per-chunk and per-object bounds and revocation in the allocators, over a payload the virtual heap lends; for 06 and 07 also the item's key/suffix carve",
       "controls": {
         "bounds-malloc": "fault",
@@ -239,6 +170,448 @@
         "bounds-malloc",
         "uaf-malloc",
         "chunk-free-90"
+      ]
+    },
+    "virtual-memcached-sublet": {
+      "target": "capstone-virtual",
+      "summary": "the same corpus with the application's Sublet patch 0006 in slabs.c and cache.c (the allocators port's -DMCP_SUBLET=ON, shared/driver-virtual.c, `fixed|buggy N`): no hooks and no ledger; pages and objects come from virtual mallocng as upstream's come from malloc, every chunk and object is a CDERIVE child of its page's generation or of the object's lifetime, bounded to the chunk or object, and slabs_free/cache_free revoke it (CREVOKE); with the carve remedy (MC_CARVE_BOUNDS) for 06 and 07, as the physical column 3 read sublet-carve for them",
+      "mechanism": "per-chunk and per-object bounds and revocation by the allocators' own two lifetime instructions; for 06 and 07 also the item's key/suffix carve",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "chunk-free-90": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "chunk-free-90"
+      ]
+    },
+    "virtual-wmem": {
+      "target": "capstone-virtual",
+      "summary": "Wireshark's wmem (core and its four allocators, 4.6.8) with the corpus driver's scope model, built as a Capstone application (ports/wireshark/wmem, capstone-application preset, virtual SDK) and run as a process under capstone-vexec: wmem as released, its g_malloc virtual mallocng, which bounds and retires each block and jumbo it hands wmem but not the objects block and block_fast carve from a block",
+      "mechanism": "exact bounds and lifetime retirement of malloc blocks; none per wmem object",
+      "controls": {
+        "uaf-chunk": "complete",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "complete"
+      },
+      "controls_for_missed": [
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
+      ]
+    },
+    "virtual-wmem-pools": {
+      "target": "capstone-virtual",
+      "summary": "the same with WM_SUBLET, which applies the port's patch 0001: every object of the block and block_fast allocators a child lifetime of its block (CDERIVE), bounded to the request, revoked by free, realloc and the reset that ends its pool (CREVOKE)",
+      "mechanism": "as virtual-wmem; per-object bounds and revocation inside block and block_fast",
+      "controls": {
+        "uaf-chunk": "fault",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "fault"
+      },
+      "controls_for_missed": [
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
+      ]
+    },
+    "virtual-cpython": {
+      "target": "capstone-virtual",
+      "summary": "the CPython 3.13.7 interpreter for the virtual profile (ports/common/application/build-virtual.sh cpython, CPY_TEST_CAPI=1) run as a process under capstone-vexec: its one heap is musl mallocng, which bounds and retires every object it hands out -- PyMem_Raw allocations, objects over 512 bytes, and the arenas pymalloc takes -- while pymalloc stock (patch 0009) carves its blocks inside those arenas unbounded",
+      "mechanism": "exact bounds and lifetime retirement of malloc objects; none per pymalloc block",
+      "controls": {
+        "uaf-block": "complete",
+        "bounds-block": "complete"
+      },
+      "controls_for_missed": [
+        "uaf-block",
+        "bounds-block"
+      ]
+    },
+    "virtual-cpython-pools": {
+      "target": "capstone-virtual",
+      "summary": "the same interpreter built with CPY_SUBLET=1: patch 0014 makes obmalloc hand out every block as a child lifetime of its arena, bounded to the request (CDERIVE), and revoke it on free (CREVOKE); the arena's own child dies with the arena when mallocng frees it; requests over 512 bytes go to mallocng, as in the stock arm",
+      "mechanism": "as virtual-cpython; per-block bounds and revocation inside obmalloc",
+      "controls": {
+        "uaf-block": "fault",
+        "bounds-block": "fault"
+      },
+      "controls_for_missed": [
+        "uaf-block",
+        "bounds-block"
+      ]
+    },
+    "virtual-ffmpeg-pool-stock": {
+      "target": "capstone-virtual",
+      "summary": "ffmpeg/pool-repros on the virtual profile with AVBufferPool and AVRefStructPool STOCK: the buffer-pool port's capstone-application library (patch 0001 only), its av_malloc the process's malloc, built by the corpus's shared/build-cases.sh, so every pool entry is one virtual-mallocng object, bounded and never freed while the pool lives; a buffer returned to the pool is retired by nothing",
+      "mechanism": "exact bounds and lifetime retirement of every entry and object the pools take from the system; none on a return to the pool",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "pool-return-90": "complete"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "pool-return-90"
+      ]
+    },
+    "virtual-ffmpeg-pool-sublet": {
+      "target": "capstone-virtual",
+      "summary": "the same corpus with -DFFPOOL_SUBLET=ON, which applies the port's patch 0003: every buffer or refstruct object a pool hands out is a child lifetime of its entry (CDERIVE), bounded to it and revoked when it returns to the pool (CREVOKE)",
+      "mechanism": "per-hand-out bounds and revocation in AVBufferPool and AVRefStructPool",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "pool-return-90": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "pool-return-90"
+      ]
+    },
+    "silicon-level0-lifetimes": {
+      "target": "capstone-silicon",
+      "summary": "the case built for the silicon ABI (runtime/silicon/build-b0-hello.sh: gp-captable, full LTO, soft float, the pool carve) and run on the FPGA as a delegated application through capstone-exec, its heap level0 built with CAPSTONE_LEVEL0_LIFETIMES: every object is a CDERIVE child of one MANAGE group over the arena, at exactly its request size on a 16-byte placement, and free CREVOKEs it, so a stale capability's next use traps 25; inexact requests keep plain bounds and no lifetime. Since dev 06f0b29f0463 (set 4) a request of 4 KiB or more is placed on the granule of its padded size and derived at that size, so its child is exact with base == cursor; only a block that cannot be placed so (realloc in place) keeps plain narrowing. Sets 1-3 ran the earlier placement. First measured on caplifive_sublet_d93a8d66b (silicon-runs/2026-10-16-plain); since dev 2c53d5641b72 free finds the block by address and revokes the child recorded in its header (the plain corpora's 2026-10-16 bundles ran the earlier free, and read the same on QEMU after it)",
+      "mechanism": "per-object exact bounds and a CDERIVE/CREVOKE lifetime per object in level0, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf"
+      ]
+    },
+    "silicon-level0": {
+      "target": "capstone-silicon",
+      "summary": "the same silicon-ABI build and board run as silicon-level0-lifetimes with level0 as it ships: malloc bounds each object to its request (SHRINK) and free only marks the block free, so a temporal case completes by construction; the bounds-only control arm",
+      "mechanism": "per-object bounds in level0, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "complete",
+        "subobj": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf"
+      ]
+    },
+    "silicon-level0-subobject": {
+      "target": "capstone-silicon",
+      "summary": "silicon-level0 with every case, driver and pool source and the controls compiled with -Xclang -fcapstone-subobject-bounds: a pointer to a struct member is bounded to that member, so a crossing that stays inside one allocation can fault; level0 revokes nothing",
+      "mechanism": "struct-field bounds from the compiler over level0's per-object bounds, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "complete",
+        "subobj": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "subobj"
+      ]
+    },
+    "silicon-ffmpeg-pool-stock": {
+      "target": "capstone-silicon",
+      "summary": "FFmpeg's pool-repros on silicon over the silicon-level0-lifetimes heap, its AVBufferPool stock with the port's event tracing (patch 0001): a buffer returned to the pool stays reachable through a stale pointer, so pool control 90 completes",
+      "mechanism": "per-object lifetimes in malloc; the nested pool stock",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "pool-return-90": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "pool-return-90"
+      ]
+    },
+    "silicon-ffmpeg-pool-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the same over the silicon-level0-lifetimes heap with the protected pools (patch 0003): every pooled buffer is a CDERIVE child of its pool entry, CREVOKEd when it returns to the pool, so pool control 90 faults with cause 25 at read_probe",
+      "mechanism": "per-object lifetimes in malloc and a lifetime per pooled buffer",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "pool-return-90": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "pool-return-90"
+      ]
+    },
+    "silicon-ffmpeg-carve-level0": {
+      "target": "capstone-silicon",
+      "summary": "FFmpeg's carved-repros on silicon over level0 as it ships, with no carve narrowing: a crossing that stays inside the carved block is invisible to the block's own bound. The carve control (shared/carve-control.c, case 99: one byte past a 16-byte carve inside its 64-byte block) completes",
+      "mechanism": "per-object bounds in level0; carves unbounded inside their block, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "subobj": "complete",
+        "uaf": "complete",
+        "carve-99": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "carve-99"
+      ]
+    },
+    "silicon-ffmpeg-carve-bounds": {
+      "target": "capstone-silicon",
+      "summary": "the carved corpus built with -DFFC_CARVE_BOUNDS over level0: every carve is a capability narrowed to its region with SHRINK (__builtin_capstone_cap_shrink), so a crossing out of the region faults; bounds only, no lifetimes. The carve control faults",
+      "mechanism": "SHRINK-narrowed carves over level0, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "subobj": "complete",
+        "uaf": "complete",
+        "carve-99": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "carve-99"
+      ]
+    },
+    "silicon-ffmpeg-carve-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the carved corpus built with -DFFC_SUBLET_CARVE over the silicon-level0-lifetimes heap: the driver CDERIVEs a group over each block and every carve is a CDERIVE child of that group, CREVOKEd on re-carve. The RTL rounds a CDERIVE child outward rather than refusing it, so a carve is not guaranteed exact. In this corpus every region is at most 2,048 B, below the 4 KiB where bounds become inexact; case 00's group over its 35,840 B block is inexact, and its regions sit 48 B below the case's arithmetic on silicon as on the silicon-mimic QEMU (docs/ref/fpga-silicon-measurements-for-paper.md, the carved corpus). The carve control faults. The re-carve control (shared/carve-recarve-control.c, case 98) completes when the region is used live (live-carve) and faults when used after its re-carve (uaf-carve)",
+      "mechanism": "a CDERIVE child per carve with CREVOKE on re-carve, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "subobj": "complete",
+        "uaf": "fault",
+        "carve-99": "fault",
+        "live-carve": "complete",
+        "uaf-carve": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "carve-99",
+        "live-carve",
+        "uaf-carve"
+      ]
+    },
+    "silicon-memcached-stock": {
+      "target": "capstone-silicon",
+      "summary": "memcached's allocator-repros on silicon with slabs.c and cache.c stock (patches 0001 + 0002) on the stock-malloc ledger (MCP_ADAPTER_BACKING, src/cheribsd/malloc-leases.c), shared/driver.c, at -O1 with -fno-inline, over the silicon-level0-lifetimes heap as set 4 builds it (a request of 4 KiB or more placed on the granule of its padded size and derived at that size, so its child is exact with base == cursor): a chunk freed to its slab is reissued with nothing to stop a stale reader, so chunk control 90 (controls/virtual/90) completes. Each 16 KiB read buffer is its own malloc",
+      "mechanism": "per-object bounds and lifetimes on every malloc; none per chunk or cache object, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "chunk-free-90": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "chunk-free-90"
+      ]
+    },
+    "silicon-memcached-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the same corpus with the application's patch 0006 in slabs.c and cache.c (-DMC_CARVE_BOUNDS -DMC_CAPSTONE_SUBLET, shared/driver-virtual.c), over the same heap: every chunk and cache object is a CDERIVE child that slabs_free / cache_free CREVOKEs, and 06/07's key and suffix regions are narrowed. Chunk control 90 faults. A cache.c child of 16,400 B is inexact at its 32-byte granule and rounds up 16 B (case 08)",
+      "mechanism": "per-chunk and per-object CDERIVE children with CREVOKE in the allocators, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "chunk-free-90": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "chunk-free-90"
+      ]
+    },
+    "silicon-ffmpeg-plane-level0": {
+      "target": "capstone-silicon",
+      "summary": "FFmpeg's plane-repros on silicon over level0 as it ships (bounds only), the case linked with 14 units of FFmpeg 9.0.1's libavutil (frame, buffer, mem, imgutils and ten more; silicon-runs/2026-10-16-nested lists them) at -O0: av_frame_get_buffer carves every plane out of one buffer, so a read one row past a plane stays inside it",
+      "mechanism": "per-object bounds in level0; planes unbounded inside their buffer, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "complete",
+        "subobj": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf"
+      ]
+    },
+    "silicon-ffmpeg-plane-bounds": {
+      "target": "capstone-silicon",
+      "summary": "the same with -DFFP_CARVE_BOUNDS: the case hands the consumer each plane narrowed with SHRINK to its own rows (linesize x height), what frame.c would do if it narrowed at the carve; bounds only, no lifetimes",
+      "mechanism": "SHRINK-narrowed planes over level0, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "complete",
+        "subobj": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf"
+      ]
+    },
+    "silicon-wmem-stock": {
+      "target": "capstone-silicon",
+      "summary": "wireshark's wmem-repros on silicon with wmem as released (the port's reference source from cmake/prepare-source.py, the six wmem units plus system.c, compat.c and scopes.c, at the port's Release flags -O3 -DNDEBUG), over the silicon-level0-lifetimes heap as set 4 builds it (a block of 4 KiB or more placed on its granule, so wmem's 2 MiB blocks and its jumbo get a lifetime). The buggy run is the fix differential `0 N buggy`, whose temporal cases assert that the stale chunk was reoccupied before the read; the fixed run is `0 N fixed`. The packet pool keeps its block across the reset, so wmem controls 00 (uaf-chunk) and 02 (bounds-chunk) complete, and 01 (uaf-jumbo, a block wmem hands to g_free) faults",
+      "mechanism": "per-object bounds and lifetimes on every malloc; none per wmem object, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "uaf-chunk": "complete",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
+      ]
+    },
+    "silicon-wmem-sublet": {
+      "target": "capstone-silicon",
+      "summary": "the same corpus with the port's patch 0001 source at the same flags: every block and block_fast object is a CDERIVE child of its block, bounded to the request and CREVOKEd at free, at realloc and at the reset that ends its pool, which revokes the block's generation and derives a new one. The buggy run is `0 N`, the fixed run `0 N fixed`. All three wmem controls fault",
+      "mechanism": "per-object CDERIVE children with CREVOKE inside wmem's block and block_fast allocators, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "uaf-chunk": "fault",
+        "uaf-jumbo": "fault",
+        "bounds-chunk": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "uaf-chunk",
+        "uaf-jumbo",
+        "bounds-chunk"
+      ]
+    },
+    "silicon-postgres-mmgr-stock": {
+      "target": "capstone-silicon",
+      "summary": "PostgreSQL's mmgr-repros on silicon: case.c + shared/driver.c against PostgreSQL 17.0's own memory-context managers (aset, mcxt, generation, slab, bump, alignedalloc, memdebug), built as the port's cmake/Replay.cmake, -O0, over the silicon-level0-lifetimes heap. Each case runs `0 N`; its -DPG_NEGATIVE_CONTROL image must print `PG_DEFECT case=N mode=0 completed` and exit 0, and gates the case. The managers are the port's `spatial` variant (patches 0001 + 0002): a chunk pfree'd and reused stays reachable through a stale pointer, so corpus control 00 completes",
+      "mechanism": "per-object lifetimes on every malloc; none per memory-context chunk, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "mmgr-ctl-00": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "mmgr-ctl-00"
+      ]
+    },
+    "silicon-postgres-mmgr-sublet": {
+      "target": "capstone-silicon",
+      "summary": "PostgreSQL's mmgr-repros on silicon: case.c + shared/driver.c against PostgreSQL 17.0's own memory-context managers (aset, mcxt, generation, slab, bump, alignedalloc, memdebug), built as the port's cmake/Replay.cmake, -O0, over the silicon-level0-lifetimes heap. Each case runs `0 N`; its -DPG_NEGATIVE_CONTROL image must print `PG_DEFECT case=N mode=0 completed` and exit 0, and gates the case. The managers carry patch 0003: every chunk is a CDERIVE child of its block, CREVOKEd at pfree and when its context dies, so corpus control 00 faults at pg_probe",
+      "mechanism": "per-chunk CDERIVE children with CREVOKE in PostgreSQL's memory contexts, over per-object lifetimes, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "mmgr-ctl-00": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "mmgr-ctl-00"
+      ]
+    },
+    "silicon-sqlite-memsys5": {
+      "target": "capstone-silicon",
+      "summary": "SQLite 3.22.0 on silicon, classic line: one translation unit per case, the engine-repros case.c through ports/sqlite/build-sqlite-silicon.sh (gp-captable, interp glue, -O0) from the virtual arms' adapted input 7fc92e19..., with the corpus group defines, run in a domain by sqlite_host.user. memsys5 stock over its static arena (SQLITE_HEAP_SIZE 262144) and lookaside 0,0, both measured in the images: every SQLite allocation is an offset inside that arena. It differs from virtual-sqlite-memsys5 in lookaside (on there) and in the build (build-virtual.py, with its FTS source patches). The controls are cells of the same set, on the same bitstream, input and flags, and may run in another boot of it",
+      "mechanism": "none below the arena, on silicon",
+      "controls": {
+        "uaf-mem5": "complete",
+        "bounds-mem5": "complete"
+      },
+      "controls_for_missed": [
+        "uaf-mem5",
+        "bounds-mem5"
+      ]
+    },
+    "silicon-pymalloc-stock": {
+      "target": "capstone-silicon",
+      "summary": "CPython 3.13.7's pymalloc corpus on silicon: the port's hosted replay (ports/cpython/pymalloc/src/native/main.c) around each case's PYC_CASE body, over CPython's own Objects/obmalloc.c and the port's src/shared/backing.c, built as the port's cmake/Replay.cmake `defects` target through the B0 pipeline (gnu11, -O0), over the silicon-level0-lifetimes heap, with runners/silicon/aligned-alloc.c because level0 has no aligned_alloc. One 128 MiB region: 104 MiB of data over a 100 MiB level0 arena, the replay's 64 MiB pymalloc backing one block of it. Each case runs `<fixture> /tmp/pym-report.bin` once; its stale access is the labelled read_probe. obmalloc.c is the port's `ported` variant (patches 0001 + 0002), pymalloc as released: a block taken back by pymalloc stays reachable through a stale pointer, so corpus control 00 completes",
+      "mechanism": "per-object lifetimes on every malloc; none per pymalloc block, on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "pym-ctl-00": "complete"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "pym-ctl-00"
+      ]
+    },
+    "silicon-pymalloc-sublet": {
+      "target": "capstone-silicon",
+      "summary": "CPython 3.13.7's pymalloc corpus on silicon: the port's hosted replay (ports/cpython/pymalloc/src/native/main.c) around each case's PYC_CASE body, over CPython's own Objects/obmalloc.c and the port's src/shared/backing.c, built as the port's cmake/Replay.cmake `defects` target through the B0 pipeline (gnu11, -O0), over the silicon-level0-lifetimes heap, with runners/silicon/aligned-alloc.c because level0 has no aligned_alloc. One 128 MiB region: 104 MiB of data over a 100 MiB level0 arena, the replay's 64 MiB pymalloc backing one block of it. Each case runs `<fixture> /tmp/pym-report.bin` once; its stale access is the labelled read_probe. obmalloc.c is the port's `protected` variant, + patch 0003: every pymalloc block a CDERIVE child of its arena, CREVOKEd when pymalloc takes it back, so corpus control 00 faults at read_probe",
+      "mechanism": "per-object lifetimes on every malloc, and a lifetime per pymalloc block (patch 0003), on silicon",
+      "controls": {
+        "clean": "complete",
+        "oob": "fault",
+        "uaf": "fault",
+        "subobj": "complete",
+        "pym-ctl-00": "fault"
+      },
+      "controls_for_missed": [
+        "oob",
+        "uaf",
+        "pym-ctl-00"
+      ]
+    },
+    "virtual-ffmpeg-plane-carve": {
+      "target": "capstone-virtual",
+      "summary": "FFmpeg's plane corpus on virtual mallocng with the frame carve on managed lifetimes (-DFFP_VIRTUAL_CARVE, shared/virtual-frame.c, -Wl,--wrap=av_frame_get_buffer): the frame's buffer is one malloc'd block, the frame a CDERIVE child of it, each plane a child of the frame bounded to its allocated extent (av_image_fill_plane_sizes at FFALIGN(height, 32)); freeing the frame frees the block and ends every plane",
+      "mechanism": "per-plane bounds and revocation in the frame carve, over virtual mallocng",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "plane-live": "complete",
+        "plane-bound": "fault",
+        "plane-free": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "plane-live",
+        "plane-bound",
+        "plane-free"
       ]
     },
     "php-virtual-zend-rounded": {

@@ -1,0 +1,14 @@
+silicon-level0:control-clean controls.dom clean
+silicon-level0:control-oob controls.dom oob
+silicon-level0:control-uaf controls.dom uaf
+silicon-level0:control-subobj controls.dom subobj
+silicon-level0:postgres-c-00-case postgres-c-00.dom 0
+silicon-level0:postgres-c-00-ctl-control postgres-c-00-ctl.dom 0
+silicon-level0:postgres-c-01-case postgres-c-01.dom 1
+silicon-level0:postgres-c-01-ctl-control postgres-c-01-ctl.dom 1
+silicon-level0:postgres-c-02-case postgres-c-02.dom 2
+silicon-level0:postgres-c-02-ctl-control postgres-c-02-ctl.dom 2
+silicon-level0:postgres-c-03-case postgres-c-03.dom 3
+silicon-level0:postgres-c-03-ctl-control postgres-c-03-ctl.dom 3
+silicon-level0:postgres-c-04-case postgres-c-04.dom 4
+silicon-level0:postgres-c-04-ctl-control postgres-c-04-ctl.dom 4

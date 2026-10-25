@@ -1,0 +1,31 @@
+# tier3-sql-arm-rev2t.sh stubbed dry run (2026-10-20 12:23). Every call stubbed: SQL_RUN, SQL_TAG, SQL_BUSY, SQL_RUNNER
+# (a stub that writes the measure line, or r1's own bundle as the board's), SQL_RUNNER_SHA, SQL_QCHECK; the scripts ran
+# from a scratch copy, so score-arm.sh's record and bundle copy could not reach the tree. One branch per run.
+== branch ok
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 1 bytes)
+T3PG dry2t-ok BEGIN 12:23:48 (trigger: SQL_NM_GO)
+T3PG dry2t-ok END 12:23:48 rc=0 :: virtual boot: completed :: --- virtual-malloc (virtual-mallocng): {'CAUGHT': 2, 'MISSED': 7}
+SQL inputs as recorded: fixture 956173e054762e91, image d9787ac28e495969
+SQL MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+SQL S-23: FRTY 0 DRT1 0 DRTX 0 Oops 0; banner node-floor-2 x1; release lines 0, with succeeded < attempted 0
+dry2t-ok: 9 of 9 cells the same (rc 0)
+SQL DONE 12:23:48
+== branch big
+SQL MEASURE: firmware 26100000 B against 26000000 (manifest 1072 files, stage 1 bytes)
+SQL STOP: the measured firmware is not under the cap; no boot
+== branch void
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 1 bytes)
+T3PG dry2t-void BEGIN 12:23:48 (trigger: SQL_NM_GO)
+T3PG dry2t-void END 12:23:48 rc=0 :: virtual boot: completed :: --- virtual-malloc (virtual-mallocng): {'CAUGHT': 2, 'MISSED': 7}
+SQL VOID: fixture record 956173e054762e91 (want 956173e054762e91), image 64010720f1a6b3bc (want d9787ac28e495969)
+== branch fatal
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 1 bytes)
+T3PG dry2t-fatal BEGIN 12:23:48 (trigger: SQL_NM_GO)
+T3PG dry2t-fatal END 12:23:48 rc=0 :: virtual boot: completed :: --- virtual-malloc (virtual-mallocng): {'CAUGHT': 2, 'MISSED': 7}
+SQL inputs as recorded: fixture 956173e054762e91, image d9787ac28e495969
+SQL MUST-FIRE FAIL: directory-open FATAL x1, positive control 0 failure line(s)
+== branch hold
+SQL HOLD: no SQL_NM_GO (STOP)
+== branch busy
+SQL STOP: board 1 is busy
+== the sdk.json gate, by itself: the rebuilt image's sdk.json PASS, the old 64010720 image's STOP

@@ -1,0 +1,28 @@
+# tier3-cpy-batch.sh + verdicts-compare.py dry run, 2026-10-22 15:18, board 1, CB_ARM stubbed (copies the reference's verdicts.jsonl; perturb flips one verdict).
+# verdicts-compare.py alone: reference vs itself 32 of 32 rc 0; one offset moved 31 of 32 rc 1; an empty side NO DATA rc 2.
+== clean
+CB lt1 BEGIN 15:18:28 board 1 kit bkit8-batch-nb1 booking 994 # book 1 300 vp2 batch cpython lt1 (board 1)
+994 # unbook 994 # book 1 300 vp2 batch cpython lt1 (board 1)
+CB lt1 ARM END rc=0 15:18:28 :: APPVM read rc=0 00:00:00 :: stub
+CB lt1 COMPARE vs reference rc=0 :: 32 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 15:18:28
+== perturb
+CB lt1 BEGIN 15:18:28 board 1 kit bkit8-batch-nb1 booking 994 # book 1 300 vp2 batch cpython lt1 (board 1)
+994 # unbook 994 # book 1 300 vp2 batch cpython lt1 (board 1)
+CB lt1 ARM END rc=0 15:18:28 :: APPVM read rc=0 00:00:00 :: stub
+CB lt1 COMPARE vs reference rc=1 :: 31 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 15:18:28
+== perturb's diff
+DIFF 02_gh-140471_fix-buffer-overflow-in-ast-node: reference ('NO-READING', None, 30, '_PyObject_Calloc', 260) board ('CAUGHT', None, 30, '_PyObject_Calloc', 260)
+31 of 32 cells the same
+== make-batch-kit.sh MK_N=1 (the real board 1 norandmaps batch kit)
+MK kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-nb1: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit7-rev2xnDN2:
+< BOARD_BITSTREAM=caplifive_vp2c_8522d72fe
+> BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+< BOARD_FW_MON=/tmp/capstone/csbi-drt
+< BOARD_MONITOR_COMMIT=f13dbc5
+> BOARD_FW_MON=/tmp/capstone/csbi-batch
+> BOARD_MONITOR_COMMIT=d9da397
+MK module 21fbfc397e7c7a42 DONE

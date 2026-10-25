@@ -1,0 +1,6 @@
+plain runs 171 twin runs 171 (load-carrying, >= 16 B stored, ldc/stc and control flow break)
+  __floatdidf+0x1c  24B unit=8 (4 insns)
+      sd a1, 0x0(a0); sd a1, 0x0(a2); sd a1, 0x0(a2); ld a0, 0x0(a0)
+  cacheEntryClear+0xf4  20B unit=1 (12 insns)
+      lw a1, 0x0(a1); lbu a2, 0x3d(a2); lw a2, 0x10(a0); sw a2, 0x10(a1); lw a2, 0xc(a0); sw a2, 0xc(a1); lw a2, 0x8(a0); sw a2, 0x8(a1); lw a2, 0x4(a0); sw a2, 0x4(a1); lw a0, 0x0(a0); sw a0, 0x0(a1)
+plain-only load-carrying runs: 2

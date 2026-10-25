@@ -1,0 +1,84 @@
+# tier3-pass-seq.sh stubbed dry run (2026-10-20 16:47) on the real board-1 spec. Every call stubbed: SEQ_RUN (writes the
+# arm's reference bundle; for the flip, fph's first CAUGHT made MISSED; for the wedge, fpt does not complete), SEQ_BUSY, SEQ_ROOT,
+# SEQ_BOOK. A first attempt aimed the flip at fca, whose reference holds no CAUGHT, so it could not fire; it was re-aimed at fph.
+== branch all
+SEQ START 16:47:13 board 1 spec 841d24cbae171832 (14 arms)
+PASS fph BEGIN 16:47:13 board 1 kind cases booking 99
+PASS fph END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS fph COMPARE vs reference rc=1 :: 24 of 25 cells the same
+PASS fph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fpt BEGIN 16:47:13 board 1 kind cases booking 99
+PASS fpt END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS fpt COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fca BEGIN 16:47:13 board 1 kind cases booking 99
+PASS fca END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS fca COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fca readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fcs BEGIN 16:47:13 board 1 kind cases booking 99
+PASS fcs END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS fcs COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fcs readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fso BEGIN 16:47:13 board 1 kind cases booking 99
+PASS fso END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS fso COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS fso readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS mph BEGIN 16:47:13 board 1 kind cases booking 99
+PASS mph END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS mph COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS mph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS mpt BEGIN 16:47:13 board 1 kind cases booking 99
+PASS mpt END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS mpt COMPARE vs reference rc=0 :: 3 of 3 cells the same
+PASS mpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wph BEGIN 16:47:13 board 1 kind cases booking 99
+PASS wph END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS wph COMPARE vs reference rc=0 :: 12 of 12 cells the same
+PASS wph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wpt BEGIN 16:47:13 board 1 kind cases booking 99
+PASS wpt END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS wpt COMPARE vs reference rc=0 :: 10 of 10 cells the same
+PASS wpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgc BEGIN 16:47:13 board 1 kind pgc booking 99
+PASS pgc END 16:47:13 rc=0 :: virtual boot: completed :: --- stub pgc
+PASS pgc COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgc readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgm0 BEGIN 16:47:13 board 1 kind pgm booking 99
+PASS pgm0 END 16:47:13 rc=0 :: virtual boot: completed :: --- stub pgm
+PASS pgm0 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgm1 BEGIN 16:47:13 board 1 kind pgm booking 99
+PASS pgm1 END 16:47:13 rc=0 :: virtual boot: completed :: --- stub pgm
+PASS pgm1 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm1 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pym0 BEGIN 16:47:13 board 1 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py booking 99
+PASS pym0 END 16:47:13 rc=0 :: virtual boot: completed :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+PASS pym0 COMPARE vs reference rc=0 :: 20 of 20 cells the same
+PASS pym0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pym1 BEGIN 16:47:13 board 1 kind appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py booking 99
+PASS pym1 END 16:47:13 rc=0 :: virtual boot: completed :: --- stub appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py
+PASS pym1 COMPARE vs reference rc=0 :: 20 of 20 cells the same
+PASS pym1 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS seq1 DONE 16:47:13
+== branch wedge
+SEQ START 16:47:13 board 1 spec 841d24cbae171832 (14 arms)
+PASS fph BEGIN 16:47:13 board 1 kind cases booking 99
+PASS fph END 16:47:13 rc=0 :: virtual boot: completed :: --- stub cases
+PASS fph COMPARE vs reference rc=0 :: 25 of 25 cells the same
+PASS fph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fpt BEGIN 16:47:13 board 1 kind cases booking 99
+PASS fpt END 16:47:13 rc=1 :: virtual boot: DID NOT COMPLETE :: 
+PASS fpt COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS STOP after fpt: the boot did not complete
+== branch hold
+SEQ HOLD: wm0p did not end DONE (PASS STOP: x)
+== branch busy
+SEQ START 16:47:13 board 1 spec 841d24cbae171832 (14 arms)
+SEQ STOP: board 1 is busy
+== branch 409
+SEQ START 16:47:13 board 1 spec 841d24cbae171832 (14 arms)
+SEQ STOP: the hub refused the booking (409, someone holds board 1): BOOK FAILED 409
+== branch badrunner
+SEQ START 16:47:14 board 1 spec 5b1e8b8f0251f1bc (1 arms)
+SEQ STOP: fph runner capstone/bug-corpora/postgres/c-repros/shared/run-arm.py is not its stamp's

@@ -1,0 +1,24 @@
+# the Juliet board path's first run (board 1, tree A), 2026-10-21 13:19-13:28, tier3-juliet-sub.sh: result lines. UNGATED.
+JSUB BEGIN 13:19:27 run.py 4b663651d0638eef build 741cd6b3bf55fb93 booking 77
+UNBOOK 77: 200
+JSUB END rc=0 13:28:44 :: 1 batches in 557.1 s -> <mnt-hdd>/capstone/t3-run-treeA/juliet-sub4/observations.json
+BATCH batch000 completed=True sequence-as-planned=True wall_s=557.1 heartbeats(30s)=3 stats=yes readings={'pc=0': 0, 'DRT1': 0, 'FRTY': 0, 'Oops': 0, 'INJS': 0, 'INJL': 0, 'node-floor-2': 1}
+  ok-0          ok                                                   exit=['exit', 0] cause=- timeout=False events=OK-PROGRAMdone
+  ctl-bounds-0  controls                                             exit=['signal', 11] cause=28 timeout=False events=CONTROLboun,domainfaul
+  ctl-uaf-0     controls                                             exit=['signal', 11] cause=25 timeout=False events=CONTROLuaf-,domainfaul
+  s000          CWE415_Double_Free__malloc_free_char_01.good         exit=['exit', 0] cause=- timeout=False events=Callinggood,Finishedgood
+  s001          CWE415_Double_Free__malloc_free_char_01.bad          exit=['signal', 11] cause=25 timeout=False events=Callingbad(,domainfaul
+  s002          CWE415_Double_Free__malloc_free_long_01.good         exit=['exit', 0] cause=- timeout=False events=Callinggood,Finishedgood
+  s003          CWE415_Double_Free__malloc_free_long_01.bad          exit=['signal', 11] cause=25 timeout=False events=Callingbad(,domainfaul
+  s004          CWE416_Use_After_Free__malloc_free_char_01.good      exit=['exit', 0] cause=- timeout=False events=Callinggood,Finishedgood
+  s005          CWE416_Use_After_Free__malloc_free_char_01.bad       exit=['signal', 11] cause=25 timeout=False events=Callingbad(,domainfaul
+  s006          CWE416_Use_After_Free__malloc_free_long_10.good      exit=['exit', 0] cause=- timeout=False events=Callinggood,Finishedgood
+  s007          CWE416_Use_After_Free__malloc_free_long_10.bad       exit=['signal', 11] cause=25 timeout=False events=Callingbad(,domainfaul
+  ctl-bounds-1  controls                                             exit=['signal', 11] cause=28 timeout=False events=CONTROLboun,domainfaul
+  ctl-uaf-1     controls                                             exit=['signal', 11] cause=25 timeout=False events=CONTROLuaf-,domainfaul
+  ok-1          ok                                                   exit=['exit', 0] cause=- timeout=False events=OK-PROGRAMdone
+STEPS 14 limit_ms 10000 runner 4b663651d0638eef helper bb65b77ac802a9f3
+JSUB READ rc=0
+JSUB DONE 13:28:44
+## heartbeats among the steps (30 s each): HB1 after s001, HB2 after s005, HB3 after ok-1; five steps per heartbeat
+## firmware 19,565,064 B from a 4,477,494 B raw bake

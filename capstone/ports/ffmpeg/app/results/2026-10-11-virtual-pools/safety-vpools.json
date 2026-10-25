@@ -1,0 +1,53 @@
+{
+  "status": "PASS",
+  "port": "ffmpeg",
+  "arm": "vpools",
+  "completed": true,
+  "results": [
+    {
+      "fixture": 11,
+      "passed": true,
+      "detail": "b00001",
+      "image_sha256": "4385b0af7d9631e25a4e7ea623921dbe826a69e2f6cb6648d1da59a6e055babd"
+    },
+    {
+      "fixture": 12,
+      "passed": true,
+      "detail": "temporal",
+      "image_sha256": "a4cb5e1dbf0329711bba0d88da9cd829aafd9fb7fd62d25cba0ddcd1c566f6b2"
+    },
+    {
+      "fixture": 13,
+      "passed": true,
+      "detail": "temporal",
+      "image_sha256": "bb25cf0d3a02e2daf49353d6a0ccad34d734b90d63925eff8583ee753b38b074"
+    },
+    {
+      "fixture": 14,
+      "passed": true,
+      "detail": "oob",
+      "image_sha256": "89e8a0dd12a502383b404a66e5796cbe66bf3601b82b3e1d7706e09b59818347"
+    },
+    {
+      "fixture": 15,
+      "passed": true,
+      "detail": "temporal",
+      "image_sha256": "9b1c77a996b3ab04d8d0b46b6135671bb5493da123f102d54342e9688870ff77"
+    }
+  ],
+  "selected_fixtures": [
+    11,
+    12,
+    13,
+    14,
+    15
+  ],
+  "predictions_sha256": "969b8932832b9a9f5b623a0093e801829560293624d3a9e5b07b2840452da7e4",
+  "gate_sha256": "db11bb76a8c2d678d4de53b48a6d3495a6f52b330e7c35460053ceffc24e72d3",
+  "platform_sha256": {
+    "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+    "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+    "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+    "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b"
+  }
+}

@@ -1,0 +1,2 @@
+# Boot 4b runner dry run (2026-10-18), driver stubbed: the three resolve_dirty read-backs (default, before-vm,
+# after-vm), the five VM_NOT_RUN markers and every VM_EXIT extracted. Boot 4's oracle directory (17 exits) applies.

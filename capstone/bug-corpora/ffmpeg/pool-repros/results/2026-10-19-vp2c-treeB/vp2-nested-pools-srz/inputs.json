@@ -1,0 +1,50 @@
+{
+  "arm": "vp2-nested-pools",
+  "build": {
+    "argv": {
+      "buggy": [
+        "buggy",
+        "N"
+      ],
+      "fixed": [
+        "fixed",
+        "N"
+      ]
+    },
+    "cache": {
+      "CMAKE_BUILD_TYPE": "Debug",
+      "CMAKE_C_FLAGS": "-isystem <mnt-hdd>/capstone/t3-freeze/llvm/lib/clang/22/include",
+      "FFPOOL_SUBLET": "ON"
+    },
+    "controls": {
+      "pool-return-90": "f7ffffa49e2e53fe4bdd29aa11be74d88757a0ded245c830257f04ac7f530a29"
+    },
+    "prebuilt": "<mnt-hdd>/capstone/t3-images-nb/prebuilt/b10/cases",
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 4,
+  "configuration": "virtual-ffmpeg-pool-sublet",
+  "contract": "verdicts-v1",
+  "corpus": "ffmpeg/pool-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "ca2d761778230fe637b35a7f2d955e412c7bf303a0d51681d32b2bfeb881007d",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "3398273bd635590bdfa024d5894f45ecf9c398e229140a5afb27c7edc0eed11a",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "607164b9c1407c7c15665ae53b91e7a0b1c7fedda24a8aa2dae649d23bff9e30",
+    "monitor": "f13dbc5",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY -DCAPSTONE_QUANTUM_PRINT -DCAPSTONE_BOOT_QUANTUM=2000000 -DCAPSTONE_S23_REFUSAL_READ -DCAPSTONE_S23_DATA_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2c_8de3c48cf",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "9b5e409c92e1fe664882c544a788df56ace6b86b50893af6a3050751bb09dac7"
+  },
+  "tally": {
+    "CAUGHT": 4
+  }
+}

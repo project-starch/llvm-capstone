@@ -1,0 +1,22 @@
+# tier3-cpy-b2-arm.sh 149dd9ce0e9d79e1 dry run, 2026-10-25 02:3x: the arm script stubbed (it writes the bitstream-2 reference's own
+# verdicts; FLIP=<case prefix> changes one). lt0's reference had not landed: the runner refuses, as it must.
+
+## lt1b1
+CB lt1 BEGIN 02:36:09 board 1 kit bkit9-b2-nb1 booking 31
+CB lt1 ARM END rc=0 02:36:09 :: APPVM read rc=0 00:00:00 :: --- stub --board-kit <mnt-hdd>/capstone/t3-smoke/bkit9-b2-nb1 --build <mnt-hdd>/capstone/t3-mremap/cpython-lt1-mremap-build 
+CB lt1 COMPARE vs reference rc=0 :: 32 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 02:36:09
+
+## lt1flip
+CB lt1 BEGIN 02:36:10 board 2 kit bkit9-b2-nb2 booking 32
+CB lt1 ARM END rc=0 02:36:10 :: APPVM read rc=0 00:00:00 :: --- stub --board-kit <mnt-hdd>/capstone/t3-smoke/bkit9-b2-nb2 --build <mnt-hdd>/capstone/t3-mremap/cpython-lt1-mremap-build 
+CB lt1 COMPARE vs reference rc=1 :: 31 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 02:36:10
+
+## lt0b2
+CB STOP: the lt0 reference's stamp, switches or read
+
+## busy
+CB STOP: board 1 is busy

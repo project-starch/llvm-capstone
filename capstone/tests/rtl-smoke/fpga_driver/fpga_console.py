@@ -85,6 +85,48 @@ def _redact(msg: str, url: str) -> str:
     return out
 
 
+# Boards (2026-10-19, board #2 approved for the board lane, phase 1). A run names its board with FPGA_BOARD (1 or 2;
+# unset means 1, so every script written before board #2 keeps meaning board #1). The board selects the console-URL
+# secret file and the host-side lock. The constructor checks that the URL it was given IS that board's secret, so a
+# wrapper that read the wrong file cannot drive the other board. Neither the URL nor the file content is ever printed.
+BOARD_SECRETS = {"1": "~/.claude-kisp/secrets/fpga-console-url", "2": "~/.claude-kisp/secrets/fpga-console-url-board2"}
+BOARD_LOCKS = {"1": "/tmp/capstone/.board.lock", "2": "/tmp/capstone/.board2.lock"}
+
+# SERVER-SIDE LEASES (2026-10-19; the console's board-lease, first mode LEASE_ENFORCE=log). A lease is taken where the
+# local board lock is taken and released where the console is closed; the local flock stays as the backstop. While held,
+# every HTTP call carries X-Lease-Token and every Socket.IO (re)connect emits lease_bind. A thread renews it every
+# LEASE_RENEW_S (agent leases last 10 min). A renew answered 409 "yield" (a person joined the queue) or "reserved" (a
+# booking) sets lease_yield: the current cycle finishes, and power-ON is refused from then on, so no new cycle starts.
+# A renew answered "not_holder" or "no_lease" means the lease is GONE (a console restart, which also cut power; a
+# force-release; an expiry): lease_lost is set, power-ON is refused, the take is never retried in the same run, and the
+# run is INFRA ("[fpga-lease] LOST"), not a reading. A yield before the run's first power-on is "yielded before start".
+# A console without /api/lease (404) means leases are not available there: the run proceeds under the local lock only.
+# FPGA_LEASE=off skips leases entirely; FPGA_LEASE_PURPOSE names the run (default: the driver and its pid).
+LEASE_HOLDER = "board-lane"
+LEASE_RENEW_S = 240.0
+
+
+class LeaseYield(RuntimeError):
+    """A person is waiting for the board (or a booking starts): no new cycle may start."""
+
+
+class LeaseLost(RuntimeError):
+    """The server no longer holds this run's lease: the run is INFRA, and nothing more may be started."""
+
+
+def board_id() -> str:
+    b = os.environ.get("FPGA_BOARD", "1").strip() or "1"
+    if b not in BOARD_SECRETS:
+        raise ValueError(f"FPGA_BOARD={b!r}: the boards are {sorted(BOARD_SECRETS)}")
+    return b
+
+
+def board_url(board: str) -> str:
+    """The console URL of `board`, read from its secret file (mode 600). Never print it."""
+    with open(os.path.expanduser(BOARD_SECRETS[board])) as fh:
+        return fh.read().strip()
+
+
 class FpgaConsole:
     def __init__(
         self,
@@ -100,6 +142,23 @@ class FpgaConsole:
         self.url = url
         self.token = token
         self._log = logger or (lambda m: None)
+        # The board check (see BOARD_SECRETS). Mock and test consoles (allow_unverified, or a client injected) skip it.
+        self.board = board_id()
+        if not allow_unverified and client is None:
+            if url.strip() != board_url(self.board):
+                raise ValueError(f"FPGA_BOARD={self.board}: the console URL given is not board {self.board}'s "
+                                 f"({BOARD_SECRETS[self.board]}); refusing to drive another board")
+            print(f"[fpga-board] {self.board}", file=sys.stderr, flush=True)
+        # THE SHARED-BOARD WATCH (2026-10-19). Board 2's console is shared with a human colleague, and nothing in the
+        # console reserves it. On board 2 every console records the connected-client count (the most it saw is flagged
+        # as possible human interference when above 1, this client), and a power or NV-bitstream transition that this
+        # client did not make stops the run at once: the board is left exactly as found (no power-off, no release),
+        # since a human may be mid-session, and the stop prints [fpga-foreign] so no wrapper retries over it.
+        self._watch = (self.board == "2" and not allow_unverified and client is None)
+        self._own_until = 0.0
+        self._users = {"start": None, "max": None, "last": None, "flagged": False, "samples": []}
+        self._last_power = None
+        self._last_nv = None
 
         if C.PROTOCOL_SOURCE != "verified" and not allow_unverified:
             raise ProtocolNotVerified(
@@ -155,6 +214,15 @@ class FpgaConsole:
         self._server_restarted = False
         self._uart_gap_chunks = 0
 
+        # Server-side lease (see LEASE_HOLDER): None until taken; "none" when the console has no lease API.
+        self._lease_token: Optional[str] = None
+        self._lease_state = "untaken"
+        self.lease_yield = False
+        self.lease_lost = False
+        self._powered_on_once = False
+        self._lease_stop = threading.Event()
+        self._lease_thread: Optional[threading.Thread] = None
+
         self._install_handlers()
 
     # -- connection ---------------------------------------------------------
@@ -180,7 +248,7 @@ class FpgaConsole:
         the next one."""
         import fcntl  # local: only board sessions need it
 
-        path = os.environ.get("BOARD_LOCK") or "/tmp/capstone/.board.lock"
+        path = os.environ.get("BOARD_LOCK") or BOARD_LOCKS[getattr(self, "board", None) or board_id()]
         os.makedirs(os.path.dirname(path), exist_ok=True)
         # Kept on the instance so the fd -- and therefore the lock -- lives as long as the
         # console does. A local would be garbage-collected and silently release it.
@@ -203,6 +271,11 @@ class FpgaConsole:
 
     def connect(self, timeout: float = 20.0) -> None:
         self._acquire_board_lock()
+        try:
+            self.lease_take()
+        except Exception:
+            self._board_lock_fd.close()   # refused: give the local lock back too
+            raise
         auth = None
         if C.CONNECT.auth_key and self.token:
             auth = {C.CONNECT.auth_key: self.token}
@@ -256,6 +329,8 @@ class FpgaConsole:
         self._log("connected")
 
     def close(self) -> None:
+        self.users_report()
+        self.lease_release()
         try:
             self.sio.disconnect()
         except Exception:  # pragma: no cover - best effort
@@ -289,6 +364,10 @@ class FpgaConsole:
         # boot log (this is exactly what stalled the first hardware recon).
         def on_connect() -> None:
             try:
+                self._lease_bind()
+            except Exception:  # pragma: no cover - best effort; log mode refuses nothing
+                pass
+            try:
                 self._resync_history()
             except Exception:  # pragma: no cover - best effort
                 pass
@@ -306,11 +385,67 @@ class FpgaConsole:
             last = self._last_uart_seq
         self._emit("request_history", last_seq=last)
 
+    def users_report(self) -> None:
+        """The client counts this console saw (board 2's watch): printed at close, so every run log carries them."""
+        u = getattr(self, "_users", None)
+        if getattr(self, "_watch", False) and u is not None:
+            t0 = u["samples"][0][0] if u["samples"] else 0.0
+            smp = " ".join(f"{n}@{t - t0:.0f}s" for t, n in u["samples"][-40:])
+            print(f"[fpga-users] board {self.board} start {u['start']} max {u['max']} end {u['last']}"
+                  f"{' FLAGGED' if u['flagged'] else ''}; samples (count@seconds): {smp}", file=sys.stderr, flush=True)
+
+    def _foreign(self, what: str) -> None:
+        """Stop the run: a change on a shared board that this client did not make. Board left as found."""
+        print(f"[fpga-foreign] board {self.board}: {what}, not made by this run; stopping as INFRA, board left as found "
+              f"(no power-off, no release); do not retry over a human session", file=sys.stderr, flush=True)
+        os._exit(75)
+
+    def _watch_event(self, now: float, event: str, data: Any) -> None:
+        if event == C.USER_COUNT_EVENT and isinstance(data, dict):
+            n = data.get(C.USER_COUNT_KEY)
+            if isinstance(n, int):
+                u = self._users
+                if u["start"] is None:
+                    u["start"] = n
+                    print(f"[fpga-users] board {self.board} start {n}", file=sys.stderr, flush=True)
+                u["last"] = n; u["max"] = n if u["max"] is None else max(u["max"], n)
+                prev = u["samples"][-1] if u["samples"] else None
+                u["samples"].append((now, n))
+                # The baseline is the lane's own client count during a run. FPGA_USERS_BASELINE when measured; otherwise
+                # the count this console first saw, so a client JOINING mid-run is still caught. Each board's health
+                # check opens a 1-2 s Socket.IO connection every ~30 s (the board-host session, 2026-10-19), which is
+                # board 1's 2/3 flicker, so a single sample one above the baseline is NOT a flag: two consecutive
+                # samples above it more than 5 s apart are, and so is any sample above baseline + 1.
+                base = os.environ.get("FPGA_USERS_BASELINE", "").strip()
+                base = int(base) if base.isdigit() else u["start"]
+                hit = n > base + 1 or (n > base and prev is not None and prev[1] > base and now - prev[0] > 5.0)
+                if hit and not u["flagged"]:
+                    u["flagged"] = True
+                    print(f"[fpga-users] board {self.board}: {n} connected clients, above the baseline {base}: POSSIBLE "
+                          f"HUMAN INTERFERENCE (another client, perhaps a human or an open browser tab, could act on the "
+                          f"board); this run is not a clean reading", file=sys.stderr, flush=True)
+        elif event == C.POWER_STATE_EVENT and isinstance(data, dict):
+            st = data.get("state")
+            if self._last_power is not None and st is not None and st != self._last_power and now > self._own_until:
+                self._foreign(f"power_state {self._last_power} -> {st}")
+            if st is not None:
+                self._last_power = st
+        elif event == C.LISTEN.get("flash_state") and isinstance(data, dict):
+            nv = data.get("nv_bitstream_name")
+            if self._last_nv is not None and nv is not None and nv != self._last_nv and now > self._own_until:
+                self._foreign(f"nv_bitstream_name {self._last_nv} -> {nv}")
+            if data.get("state") not in (None, "done", "idle") and now > self._own_until:
+                self._foreign(f"flash_state {data.get('state')}")
+            if nv is not None:
+                self._last_nv = nv
+
     def _record(self, event: str, data: Any) -> None:
         now = time.monotonic()
         with self._cond:
             self._events.append((now, event, data))
             self._state[event] = data
+            if getattr(self, "_watch", False):
+                self._watch_event(now, event, data)
             # SERVER RESTART DETECTION. The server stamps every Socket.IO event with a
             # server_epoch minted at process start. A restart forces the board OFF
             # (init_gpio claims the power pin with initial value 0), so a run that spans one
@@ -706,16 +841,130 @@ class FpgaConsole:
                 )
         return data
 
+    # -- server-side lease ---------------------------------------------------
+    def _lease_url(self, sub: str = "") -> str:
+        return f"{self._api_base}/lease{sub}"
+
+    def _lease_say(self, msg: str) -> None:
+        print(f"[fpga-lease] board {self.board}: {msg}", file=sys.stderr, flush=True)
+
+    def lease_info(self, timeout: float = 10.0) -> Optional[Dict[str, Any]]:
+        """GET /api/lease (open): holder, until, queue, offer, reservations, enforce. None without a lease API."""
+        r = self._http.get(self._lease_url(), timeout=timeout)
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        return r.json()
+
+    def lease_take(self, purpose: Optional[str] = None, timeout: float = 15.0) -> None:
+        """Take the board's lease, or refuse to proceed when someone else holds, is offered or has booked it."""
+        if os.environ.get("FPGA_LEASE", "").strip().lower() == "off":
+            self._lease_state = "off"
+            self._lease_say("FPGA_LEASE=off: no lease; local lock only")
+            return
+        purpose = purpose or os.environ.get("FPGA_LEASE_PURPOSE") or f"{os.path.basename(sys.argv[0])} pid {os.getpid()}"
+        try:
+            r = self._http.post(self._lease_url(), json={"holder": LEASE_HOLDER, "purpose": purpose, "kind": "agent"},
+                                timeout=timeout)
+        except Exception as e:
+            raise RuntimeError("[fpga-lease] lease request failed: " + _redact(str(e), self.url)) from None
+        if r.status_code == 404:
+            self._lease_state = "none"
+            self._lease_say("no lease API (404): leases not available; local lock only")
+            return
+        try:
+            d = r.json()
+        except ValueError:
+            d = {}
+        if r.status_code == 409:
+            raise RuntimeError(f"[fpga-lease] board {self.board} is not free: {d.get('code')} by {d.get('holder')!r} "
+                               f"until {d.get('until')}; not starting")
+        if not r.ok or not d.get("token"):
+            raise RuntimeError(f"[fpga-lease] lease take -> HTTP {r.status_code}: {d.get('error', r.text[:200])!r}")
+        self._lease_token = d["token"]
+        self._lease_state = "held"
+        self._http.headers["X-Lease-Token"] = self._lease_token
+        self._lease_say(f"held, until {d.get('until')}, purpose {purpose!r}")
+        self._lease_stop.clear()
+        self._lease_thread = threading.Thread(target=self._lease_renew_loop, name="lease-renew", daemon=True)
+        self._lease_thread.start()
+
+    def _lease_bind(self) -> None:
+        if self._lease_token:
+            self.sio.emit("lease_bind", {"lease_token": self._lease_token}, namespace=C.CONNECT.namespace)
+
+    def lease_renew(self, timeout: float = 15.0) -> Optional[str]:
+        """Renew once. Returns None on success, else the 409 code (yield/reserved set lease_yield) or an error text."""
+        if not self._lease_token:
+            return None
+        try:
+            r = self._http.post(self._lease_url("/renew"), timeout=timeout)
+        except Exception as e:
+            self._lease_say("renew failed (kept): " + _redact(str(e), self.url))
+            return "error"
+        try:
+            d = r.json()
+        except ValueError:
+            d = {}
+        if r.ok:
+            return None
+        code = d.get("code") or f"http {r.status_code}"
+        if r.status_code == 409 and code in ("yield", "reserved"):
+            if not self.lease_yield:
+                self._lease_say(f"YIELD ({code}, waiting {d.get('waiting')}): finishing the current cycle; "
+                                f"no new cycle will start")
+            self.lease_yield = True
+        elif code in ("not_holder", "no_lease"):
+            if not self.lease_lost:
+                self._lease_say(f"LOST ({code}): the lease is gone (console restart, force-release or expiry); "
+                                f"INFRA, not a reading; no new power-on, no re-take in this run")
+            self.lease_lost = True
+            self._lease_token = None
+            self._http.headers.pop("X-Lease-Token", None)
+            self._lease_stop.set()
+        else:
+            self._lease_say(f"renew refused: {code}")
+        return code
+
+    def _lease_renew_loop(self) -> None:
+        while not self._lease_stop.wait(LEASE_RENEW_S):
+            self.lease_renew()
+
+    def lease_release(self, timeout: float = 15.0) -> None:
+        """DELETE /api/lease with the token. Best effort: an unreleased lease expires on the server."""
+        self._lease_stop.set()
+        tok, self._lease_token = self._lease_token, None
+        if not tok:
+            return
+        try:
+            r = self._http.delete(self._lease_url(), headers={"X-Lease-Token": tok}, timeout=timeout)
+            self._lease_say(f"released (HTTP {r.status_code})")
+        except Exception as e:
+            self._lease_say("release failed (the lease expires on the server): " + _redact(str(e), self.url))
+        self._http.headers.pop("X-Lease-Token", None)
+        self._lease_state = "released"
+
     # -- the five actions ---------------------------------------------------
     def power(self, on: bool = True, timeout: float = 30.0) -> None:
         """Ensure board power is on/off. power_toggle is a *toggle*, so read the
         current power_state first and only toggle when it differs."""
         want = "on" if on else "off"
+        if on and self.lease_lost:
+            raise LeaseLost("[fpga-lease] LOST: the server no longer holds this run's lease; INFRA, not a reading")
+        if on and self.lease_yield:
+            if not self._powered_on_once:
+                raise LeaseYield("[fpga-lease] yielded before start: a person is waiting for the board (or a booking "
+                                 "starts); released at once, neither a failure nor a reading")
+            raise LeaseYield("[fpga-lease] a person is waiting for the board (or a booking starts): "
+                             "no new cycle may start; finish and release")
         cur = self._current_state(C.POWER_STATE_EVENT, timeout=5.0)
         if cur == want:
             self._log(f"power already {want}")
             return
         mark = self.now()
+        if on:
+            self._powered_on_once = True
+        self._own_until = mark + timeout + 30.0   # this client's own power transition (the shared-board watch)
         self._emit("power_toggle")
         self.wait_state(C.POWER_STATE_EVENT, want, timeout, since=mark)
 
@@ -727,6 +976,7 @@ class FpgaConsole:
     def flash_bitstream(self, name: str) -> Any:
         """Flash a stored bitstream to the FPGA (PERSISTENT non-volatile write --
         reprograms the shared board). Blocks until flash_state=done."""
+        self._own_until = self.now() + 900.0      # this client's own flash (the shared-board watch)
         return self._post("flash_bitstream", filename=name)
 
     def load_boot_image(self, name: str, *, attempts: int = 3,

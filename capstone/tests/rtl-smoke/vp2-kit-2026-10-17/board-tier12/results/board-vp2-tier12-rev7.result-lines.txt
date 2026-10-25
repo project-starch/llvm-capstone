@@ -1,0 +1,66 @@
+# vp2 Tier 1 boot of module 39d8492d5c18216b (rev7), 2026-10-19 00:31-00:42, caplifive_vp2_bf3db3175, fw_payload 7a53759a4773c81b.
+# Pre-registered at lane vp2-tier12 ce9b66f712c2. Result lines only, from run3rev7/board.txt and SEQ.
+
+DRIVER rc=1 00:42:47; watchdog lines 44
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=NONE oracle=1 NOT-AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+FRTY retries 1 at       1 FRTY:011113AC 
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 
+VM_BEGIN without VM_EXIT: sparse-churn 
+JUDGE rc=2 :: JUDGE NO DATA
+  OK   @@PARAM diag_emerg read back ['Y'] (want ['Y'])
+  OK   @@PARAM node_flat_records read back ['4096'] (want ['4096'])
+  OK   @@PARAM supervisor_slots read back ['1'] (want ['1'])
+  NO DATA counter resume_sfences:after-churn read []
+  NO DATA counter resume_satp_refreshes:after-churn read []
+  NO DATA counter resume_satp_changed:after-churn read []
+  NO DATA counter busy_frame_refusals:after-churn read []
+  NO DATA: 1 CAPSTONE_VM_STATS lines inside vm-contract (want 2: ok, stale)
+  FAIL VM_EXIT:sparse-churn [] (want ['1'])
+  FAIL VM_CONTRACT_FAIL:recycling allocation present
+  FAIL must-fire 'collect skipped' on the console 0 (want >= 1)
+  OK   banner [('1', '1')] (want one, slots 1, diag_emerg 1); refusal lines 0 (want 0)
+  JUDGE NO DATA
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+## readings from board.txt
+[  130.412408] capstone_vm: loaded, diag arena-pin-1, supervisor_slots=1, diag_emerg=1
+@@PARAM diag_emerg=Y
+@@PARAM node_flat_records=4096
+@@PARAM supervisor_slots=1
+@@PARAM resume_sfences=0:before-contract
+@@PARAM resume_satp_refreshes=0:before-contract
+@@PARAM resume_satp_changed=0:before-contract
+@@PARAM busy_frame_refusals=0:before-contract
+CAPSTONE_VM_STATS arenas=11 pages=496 peak=892 nodes=76 steps=511 faults=426 collections=0 reclaimed=0 rounds=12 bytes_in=214 bytes_out=143 node_bytes=65536 node_capacity=4096 node_growths=0 launch_ns=2649342560 elapsed_ns=6577734480
+VM_EXIT:normal:0
+VM_EXIT:stale:139
+@@PARAM resume_sfences=447:after-contract
+@@PARAM resume_satp_refreshes=550:after-contract
+@@PARAM resume_satp_changed=0:after-contract
+@@PARAM busy_frame_refusals=0:after-contract
+@@PARAM resume_sfences=447:before-churn
+@@PARAM resume_satp_refreshes=550:before-churn
+@@PARAM resume_satp_changed=0:before-churn
+@@PARAM busy_frame_refusals=0:before-churn
+VM_BEGIN:sparse-churn
+sw=255 TRAP LOG {seen,mcause[6:0]} 0x88 10001000
+sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x25 00100101
+sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0xc4 11000100
+sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x03 00000011
+sw=228 {1,dom_switch_idx[6:0]} 0xb8 10111000
+sw=229 {load_state[3:0],0000} 0x00 00000000
+sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+sw=193 {00000,store_buf_commit_cnt} 0x01 00000001
+sw=194 {000000,store_state} 0x03 00000011
+sw=195 {0000,load_state} 0x00 00000000
+sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0x26 00100110
+sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x82 10000010
+sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0x00 00000000
+sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+commit pc (scoreboard slot 0; stale after a flush) 0x0000003fa4710e98
+trap-log mepc 0x0000000000035a88
+trap-log tval 0x0000000000000073

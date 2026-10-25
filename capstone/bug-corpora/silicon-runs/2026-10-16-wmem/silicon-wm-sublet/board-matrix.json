@@ -1,0 +1,342 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3998 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac080f88 address=0xac0e3980 in ctl_read_probe+0x20 (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "wireshark-wmem-00",
+   "case": "00_3c8be14c82_rpcrdma_write_offsets_global",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac1014f0 address=0xae0dd050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "71b0f8ddc72f2c90229f2502b4393d498eb3c53d0ff5e66e73c78e91d86dab94",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-01",
+   "case": "01_c14d731e45_cms_oid_global",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac1015d8 address=0xae0dd050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "29a85ecc1d6412e4608fb8af794ba40fc52c1e19137000da56a3c52847cd470f",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-02",
+   "case": "02_99da8c2cdc_mdb_address_column",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101600 address=0xae0dd050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "6438339b493d065c1bddb540e58e72893ea0e301d25c92ff87882c32348a628b",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-03",
+   "case": "03_6eab9f83ab_cola_info_column",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101628 address=0xae0dd050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "5c9f5f2f7ff75adacfa97f8d8dd0b0143673835ceb4bcafa615c8441a74bce54",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-04",
+   "case": "04_b48759e4a4_qnet6_col_set_str",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac10174c address=0xae0dd050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "af2813b25deb0fa565a8cae994f3f317f4c406420b76cd27315246411ebc1125",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-05",
+   "case": "05_5a109265a6_usbll_address_struct",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101528 address=0xae0dd050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "e9689ddc31a59ba52f65fa4f5d39a0017001e2adae169daea15fe12b7bee35b1",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-06",
+   "case": "06_a8b16d74e1_x509if_last_dn_static",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101560 address=0xae0dd050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "a12d2e3bc1247a0c8d7b295b321993b87cb95e911bef1e43c70e857eb052bedb",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-07",
+   "case": "07_fb504bc76c_mysql_auth_method",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101694 address=0xae8e1050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "5e77e5f49db90dcff4b25c28b9d166ef986f855fbb9d27aa4b5857ae7269f72b",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-08",
+   "case": "08_31ab1a0a17_sip_cseq_method",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101798 address=0xae8e1050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "ad24903e7ea96cef0e56894f823334c4843a6cbb6f0726d72503eb97125808f5",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-09",
+   "case": "09_693dc40936_geonw_proto_data_tvb",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac1016d4 address=0xae8e1050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "6715e8d236466cf6252431b29c4d7ea50bc99a583db2ad96239b16944e0b9111",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-10",
+   "case": "10_6fd3af5e99_t38_reassembly_buffer",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101574 address=0xae8e1050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "7ce0bb3647cbb9ac72e38be2be37c591d7789894abe86d0956ae5ce47f8ed081",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-11",
+   "case": "11_3a5f82dfb5_http_header_map",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101560 address=0xae8e1050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "51e47c4627aaf2fd8c46eec7d040e8a88fb5a4163d301844132d7ce44ff503da",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-12",
+   "case": "12_90bb3a5c9e_xml_root_name_recycled",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101648 address=0xae0e0050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "9f7f97bcc4e3d2854b0267a86358d5490c011bc7abdfa7ee7ba81acbe5c3bd5b",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-13",
+   "case": "13_0261fd7da6_http_range_cursor_past_chunk",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1015a8 address=0xae0e0058 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "36570fa9973561b94c389ece3fcc1328b3b23d507a94847356720c38f6c0e9d0",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-14",
+   "case": "14_1d8acb21ab_solaredge_payload_six_past",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1014ec address=0xae0dd085 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "9c44982771546b329437750acf46d38ea667f58459aab9f2848bcc4c01608394",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-15",
+   "case": "15_d24613c461_opcua_padding_below_chunk",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1014b4 address=0xae0dd097 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "f7ba4b2b237b3e86c5d2475da902f769bd8911a4760f44c918c6feb65abd9414",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-16",
+   "case": "16_e8ef9df09d_dcp_etsi_rs_parity_write",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1014b0 address=0xae0dd11f in wm_write_probe+0x18 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "f422e6a9ff5b1577c62ffb8ba47efa7e69f30f5f6fd65b0dd13f0d5a80ad4c3b",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-17",
+   "case": "17_5a560f3f6a_dns_one_byte_write",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac10149c address=0xae0dd070 in wm_write_probe+0x18 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "ef09465e0bd7fa3117cf97cbb7d0949c8c953bfedb0c871dd7e1fa8737f8528f",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-18",
+   "case": "18_716a200295_rtps_batch_sample_info_unguarded",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1014a0 address=0xae0dd0a0 in wm_write_probe+0x18 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "55d3dc7c4699a9ba46fd22089b116f067a29e3737c476ca34a1aeeb1907d0133",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-19",
+   "case": "19_4a4871a831_ntlmssp_blob_length_before_check",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101500 address=0xae0e0070 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "2d68420d06b61036b9e7e3ccf4a97c67d86edef629dc9941ce28afc8caa303e5",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-20",
+   "case": "20_ed20250c13_proto_undecoded_bitmap_unbounded",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac10149c address=0xae0dd05a in wm_write_probe+0x18 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "f3aed3f943063d2898b6cc7808ab9854ed7da216ca00f08ed6fff462d3865f58",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-21",
+   "case": "21_69dac89280_tcp_flags_str_sixteen_bytes",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101494 address=0xae0dd060 in wm_write_probe+0x18 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "cb70ddad678ffcf34f391158630dbeeded45da7d972f0a3550e3f5770b46abff",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-22",
+   "case": "22_c702b44a01_usbhid_output_usages_freed_twice",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros",
+   "kind": "wmem",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac1027b8 address=0xae0e0000 in wmem_block_sublet_free+0x60 (NOT the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "82980204af1e55ed9257a00f7c51b1b4dc202a6858f8ca9619f284cfdb64bcc5",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-controls-00",
+   "case": "00_control_uaf_chunk",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls",
+   "kind": "wmem-control",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101468 address=0xae0dd050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "b2046a9022fcb76add679e37daa92973cc27e4cdc6b9a70a8121b62be5dfaa66",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-controls-01",
+   "case": "01_control_uaf_jumbo",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls",
+   "kind": "wmem-control",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101470 address=0xae0dd050 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "f0a14fedfab6645af72cbf343d87c32bc3d902e82594354e8c8fea0aefdeb627",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "wireshark-wmem-controls-02",
+   "case": "02_control_bounds_chunk",
+   "corpus": "capstone/bug-corpora/wireshark/wmem-repros/controls",
+   "kind": "wmem-control",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101418 address=0xae0dd068 in wm_probe+0x14 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "3e7de0609978362765bcccf317711273716a2ac0a14fc83a771d439686e6f321",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  }
+ ]
+}

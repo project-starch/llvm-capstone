@@ -1,0 +1,11 @@
+# live-peak hold 100000 on the batch bitstream c721c1a2a, board 1 (kit bkit8-batch-b1, module 21fbfc39): result lines only.
+HB BEGIN 03:39:00 board 1 bitstream caplifive_vp2c_c721c1a2a kit bkit8-batch-b1 module 21fbfc397e7c7a42 booking 166
+HB END rc=0 03:48:26
+HOLD boot completed; transcript <mnt-hdd>/capstone/t3-run-hold-c721c1a2a-b1/guest/board.txt; steps ['hold', 'stats0', 'stats1']
+READ hold lines: HOLD-NULL at 60590
+READ hold result: {"kind": "exit", "value": 71}
+READ hold fault: none
+READ stats0: nodes_high_water 0 nodes_allocated_total 0 node_capacity 65536 nodes_live 0
+READ stats1: nodes_high_water 64001 nodes_allocated_total 64001 node_capacity 65536 nodes_live 0
+HB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0
+HB board1 DONE 03:48:26

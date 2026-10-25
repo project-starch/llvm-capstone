@@ -1,0 +1,26 @@
+# Tier 3 prediction, arm pb12: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 11 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-memcached-stock platform qkit7-wrapper cells 9 tally {"CAUGHT": 1, "MISSED": 8}
+# controls [["bounds-malloc", "fault"], ["chunk-free-90", "complete"], ["uaf-malloc", "fault"]]
+00_7af02b0c87_rbuf_copied_after_cache_free image 85f0d8e8c662f3ec MISSED cause None at None reached True completed True attribution null
+01_0ad4de66ae_io_walk_reads_freed_link image 55dad5ff346f52a0 MISSED cause None at None reached True completed True attribution null
+02_59bd02ce29_tail_repair_frees_referenced_item image cb27adc59a4c5c69 MISSED cause None at None reached True completed True attribution null
+03_a8c4a82787_refcount_overflow_frees_linked_item image 9863d6c5101d1529 MISSED cause None at None reached True completed True attribution null
+04_152ddb68f7_unlocked_refcount_drift image 2b1676c6e8eb7f9a MISSED cause None at None reached True completed True attribution null
+05_2d61f18_item_data_one_past image e35ef3180e8fc043 MISSED cause None at None reached True completed True attribution null
+06_78eb770_suffix_write_no_space image bf756b13f2adbad6 MISSED cause None at None reached True completed True attribution null
+07_ecdb011_unterminated_key_read image d8b054148f51a48c MISSED cause None at None reached True completed True attribution null
+08_e8364b5_ascii_all_spaces_scan_past_rbuf image 4ee0176bda1164ee CAUGHT cause 28 at mc_case_body+396 reached True completed False attribution "function"
+# image 491655742d378fcd  controls.dom
+# image 85f0d8e8c662f3ec  defect-00
+# image 55dad5ff346f52a0  defect-01
+# image cb27adc59a4c5c69  defect-02
+# image 9863d6c5101d1529  defect-03
+# image 2b1676c6e8eb7f9a  defect-04
+# image e35ef3180e8fc043  defect-05
+# image bf756b13f2adbad6  defect-06
+# image d8b054148f51a48c  defect-07
+# image 4ee0176bda1164ee  defect-08
+# image ea9921d67d924105  defect-90

@@ -1,0 +1,10 @@
+# va-alloc-csret bare on the batch bitstream c721c1a2a, board 2, under the CORRECTED PREREG (dev 46e03aa0fff8, SR 17; pre-registered here at fea991af10cc), 2026-10-22. Result lines only.
+VA BEGIN 15:54:41 board 2 bitstream caplifive_vp2c_c721c1a2a image 9491707dfa1613e3 driver /tmp/capstone/wt-b2/capstone/tests/rtl-smoke booking 122 expect pre
+UNBOOK 122: 200
+VA END rc=0 15:55:33 :: [sup 15:55:33] UART: begin=True SB1=True SR=['0000000000000011'] SV lines=17
+VA-ALLOC PASS (batch vector): 0x0 0x10004 0x0 0x20004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0
+VA GRADE rc=0
+VA board2 DONE 15:55:33
+# ('expect pre' is the label inherited from tier3-s23-bare.sh's unused third argument; the grader is va-alloc-grade.py at the corrected rule)
+# the values as read (uart.txt):
+SR 0000000000000011 SV 0000000000000000 SV 0000000000010004 SV 0000000000000000 SV 0000000000020004 SV 0000000000000001 SV 0000000000000000 SV 0000000000000000 SV 0000000000000004 SV 0000000000000003 SV 0000000000000000 SV 0000000000000000 SV 0000000000000002 SV 0000000000000003 SV 0000000000000004 SV 0000000000000001 SV 0000000000000002 SV 0000000000000000 

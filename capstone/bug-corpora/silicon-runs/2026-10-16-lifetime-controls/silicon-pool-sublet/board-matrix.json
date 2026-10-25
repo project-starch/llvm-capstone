@@ -1,0 +1,78 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3998 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac080f88 address=0xac0e3980 in ctl_read_probe+0x20 (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-pool-controls-nested-lifetime-91-run",
+   "case": "91_ctl_parent_entry_reference",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `CTL-RESULT completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "2f3802f821196d4f4925594911d68a855c76825eda9fd246453507ff524a3f4a",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "ffmpeg-pool-controls-nested-lifetime-92-run",
+   "case": "92_ctl_sibling_entry",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `CTL-RESULT completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "308f8100bdf572609d8d152617bf7c148cb6ca009bf49adbf2f961a35b7b7012",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "ffmpeg-pool-controls-nested-lifetime-93-run",
+   "case": "93_ctl_successor_entry",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime",
+   "kind": "lifetime-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `CTL-RESULT completed`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "e6afd2c03b0c7d898dd60e2ab5c2218ca29e63bb7ecbb82b35be4387240d11f2",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "ffmpeg-pool-controls-nested-lifetime-93-stale",
+   "case": "93_ctl_successor_entry",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime",
+   "kind": "lifetime-control",
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac101a40 address=0xac4e2d30 in stale_read_probe+0x24 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "e6afd2c03b0c7d898dd60e2ab5c2218ca29e63bb7ecbb82b35be4387240d11f2",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  }
+ ]
+}

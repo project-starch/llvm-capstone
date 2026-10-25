@@ -1,0 +1,5 @@
+# sanitized copy of the pass spec board1b (sha256/16 0d9be72a84150842)
+# board 1 (tree A), the three arms after pgm0's false stop: pgm1, pym0, pym1 (lines of board1.spec, unchanged)
+pgm1|pgm|--arm virtual-pg-pools --hosted-build <mnt-hdd>/capstone/t3-images-cw/pg/mmgr-cases-ON --controls-hosted-build <mnt-hdd>/capstone/t3-images-cw/pg/mmgr-controls-ON
+pym0|appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py|--arm virtual-malloc --build <mnt-hdd>/capstone/t3-images-cw/pym/cases-OFF --controls-build <mnt-hdd>/capstone/t3-images-cw/pym/controls-OFF
+pym1|appvm:capstone/bug-corpora/cpython/pymalloc-repros/runners/virtual/run-virtual.py|--arm virtual-nested-pools --build <mnt-hdd>/capstone/t3-images-cw/pym/cases-ON --controls-build <mnt-hdd>/capstone/t3-images-cw/pym/controls-ON

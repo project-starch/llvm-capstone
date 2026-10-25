@@ -1,0 +1,29 @@
+# tier3-va-alloc-bare.sh + va-alloc-grade.py dry run, 2026-10-22 15:13, board 1 with the batch kit, S23_RUN stubbed (writes SR/SV lines).
+== batch
+VA BEGIN 15:13:48 board 1 bitstream caplifive_vp2c_c721c1a2a image 9491707dfa1613e3 driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 995 # book 1 20 vp2-tier12 va-alloc-csret bare (board 1) expect pre
+995 # unbook 995 # book 1 20 vp2-tier12 va-alloc-csret bare (board 1)
+VA END rc=0 15:13:48 :: UART: stub batch SUP_REC_ADDR=0x8000a800
+VA-ALLOC PASS (batch vector): 0x0 0x10004 0x0 0x0 0x20004 0x1 0x1 0x0 0x0 0x0 0x4 0x3 0x0 0x0 0x2 0x3 0x4 0x1 0x2 0x0
+VA GRADE rc=0
+VA board1 DONE 15:13:48
+== pre
+VA BEGIN 15:13:48 board 1 bitstream caplifive_vp2c_c721c1a2a image 9491707dfa1613e3 driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 995 # book 1 20 vp2-tier12 va-alloc-csret bare (board 1) expect pre
+995 # unbook 995 # book 1 20 vp2-tier12 va-alloc-csret bare (board 1)
+VA END rc=0 15:13:48 :: UART: stub pre SUP_REC_ADDR=0x8000a800
+VA-ALLOC PRE-BATCH (tree A's vector: the bitstream in service is not the batch): 0x0 0x4 0x0 0x0 0x7 0x1 0x1 0x0 0x0 0x0 0x4 0x2 0x0 0x0 0x0 0x2 0x4 0x1 0x0 0x0
+VA GRADE rc=1
+VA board1 DONE 15:13:48
+== short
+VA BEGIN 15:13:48 board 1 bitstream caplifive_vp2c_c721c1a2a image 9491707dfa1613e3 driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 995 # book 1 20 vp2-tier12 va-alloc-csret bare (board 1) expect pre
+995 # unbook 995 # book 1 20 vp2-tier12 va-alloc-csret bare (board 1)
+VA END rc=0 15:13:48 :: UART: stub short SUP_REC_ADDR=0x8000a800
+VA-ALLOC VOID: SR ['0000000000000014'], 19 SV values (want one SR = 20 and 20 values)
+VA GRADE rc=2
+VA board1 DONE 15:13:48
+== mix
+VA BEGIN 15:13:48 board 1 bitstream caplifive_vp2c_c721c1a2a image 9491707dfa1613e3 driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 995 # book 1 20 vp2-tier12 va-alloc-csret bare (board 1) expect pre
+995 # unbook 995 # book 1 20 vp2-tier12 va-alloc-csret bare (board 1)
+VA END rc=0 15:13:48 :: UART: stub mix SUP_REC_ADDR=0x8000a800
+VA-ALLOC FINDING: 0x0 0x10004 0x0 0x0 0x20004 0x1 0x1 0x0 0x0 0x0 0x4 0x3 0x0 0x0 0x0 0x3 0x4 0x1 0x2 0x0 :: differs from the batch at 14: read 0x0 batch 0x2 pre 0x0
+VA GRADE rc=1
+VA board1 DONE 15:13:48

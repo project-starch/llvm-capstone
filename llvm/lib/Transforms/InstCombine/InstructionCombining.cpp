@@ -3421,7 +3421,17 @@ Instruction *InstCombinerImpl::visitGetElementPtrInst(GetElementPtrInst &GEP) {
 
   // These rewrites are trying to preserve inbounds/nuw attributes. So we want
   // to do this after having tried to derive "nuw" above.
-  if (GEP.getNumIndices() == 1) {
+  //
+  // Not for a non-integral (Capstone capability) pointer. Both rewrites below
+  // move part of the offset into a second GEP, so the first produces a pointer
+  // the source never held. A capability's cursor is only representable within
+  // a window around its bounds, and R-60 clears the tag of an offset whose
+  // result leaves it: musl's fmt_fp (`r + 1 + (q - LDBL_MAX_EXP)`) became
+  // (r + 4*q) - 0xfffc, about 64 KiB past a 7 KiB array, and faulted with
+  // cause 24 at every rounded %f. The offset must stay whole and be applied
+  // once.
+  if (GEP.getNumIndices() == 1 &&
+      !DL.isNonIntegralPointerType(GEP.getPointerOperandType())) {
     // Given (gep p, x+y) we want to determine the common nowrap flags for both
     // geps if transforming into (gep (gep p, x), y).
     auto GetPreservedNoWrapFlags = [&](bool AddIsNUW) {

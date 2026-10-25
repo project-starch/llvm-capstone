@@ -1,0 +1,226 @@
+gc.c: every GC object slot a Sublet child lifetime of its heap page, under MRB_CAPSTONE_SUBLET (4.0.0-rc2).
+
+Two instructions do the work. CDERIVE makes a child capability of a
+non-linear parent, bounded to a sub-range; CREVOKE(parent, child) ends a
+direct child and everything below it.
+
+Each heap page keeps a lifetime over its slots (life, a CDERIVE of the page)
+and, per slot, the child it handed out. mrb_obj_alloc hands out the object
+as a child of life bounded to its slot, and registers that child, not the
+GC's own pointer, in the GC arena. The sweep, and free_heap at mrb_close,
+revoke the child once obj_free has freed the object, so every stale copy of
+the object's pointer is dead before the slot is reused. Freeing a page frees
+its malloc'd object, below which every child lies.
+
+The GC works on its own pointers, derived from the page. Where it is asked
+about a pointer that may be dead -- mrb_object_dead_p, and obj_free's walk
+of a dying fiber's frames, whose envs may have been swept earlier in the same
+sweep -- it finds the slot by address and reads it through its own pointer.
+gc_each_objects hands each live object to its callback as the object's child.
+
+Without the define the preprocessed file is unchanged. Needs
+capstone/runtime/include on the include path (capstone/capability.h) and the
+virtual profile.
+
+--- a/src/gc.c
++++ b/src/gc.c
+@@ -166,12 +166,22 @@
+ #define MRB_HEAP_PAGE_SIZE 1024
+ #endif
+ 
++#ifdef MRB_CAPSTONE_SUBLET
++#include <capstone/capability.h>
++#endif
++
+ typedef struct mrb_heap_page {
+   RVALUE *freelist;
+   struct mrb_heap_page *next;
+   struct mrb_heap_page *free_next;
+   mrb_bool old:1;
+   mrb_bool region:1;             /* from contiguous region, not malloc */
++#ifdef MRB_CAPSTONE_SUBLET
++  /* Sublet: the page's lifetime over its slots (CDERIVE of the page), and
++     the child each live object was handed out as; NULL for a free slot. */
++  void *life;
++  struct RBasic *issued[MRB_HEAP_PAGE_SIZE];
++#endif
+   RVALUE objects[MRB_HEAP_PAGE_SIZE];
+ } mrb_heap_page;
+ 
+@@ -321,11 +331,64 @@
+   return FALSE;
+ }
+ 
++#ifdef MRB_CAPSTONE_SUBLET
++/* Sublet lifetimes. Every object is handed out as a child of its page's
++   lifetime, bounded to its slot (CDERIVE), and the sweep revokes that child
++   when it frees the object (CREVOKE), so every copy of the object's pointer
++   dies with it. The GC itself works on its own pointers, derived from the
++   page. A pointer the GC is asked about may be dead, so it is never read
++   through: the slot is found by address. */
++static mrb_heap_page*
++gc_page_of(mrb_gc *gc, const RVALUE *p)
++{
++  mrb_heap_page *page;
++
++  for (page = gc->heaps; page; page = page->next) {
++    if ((uintptr_t)p - (uintptr_t)page->objects <= (MRB_HEAP_PAGE_SIZE - 1) * sizeof(RVALUE))
++      return page;
++  }
++  return NULL;
++}
++
++/* The GC's own pointer to the slot holding object, or NULL. */
++static struct RBasic*
++gc_inside(mrb_gc *gc, const struct RBasic *object)
++{
++  mrb_heap_page *page = gc_page_of(gc, (const RVALUE*)object);
++
++  if (!page) return NULL;
++  return &page->objects[((uintptr_t)object - (uintptr_t)page->objects) / sizeof(RVALUE)].as.basic;
++}
++
++static struct RBasic*
++gc_issue(mrb_heap_page *page, RVALUE *p)
++{
++  size_t i = p - page->objects;
++
++  page->issued[i] = (struct RBasic*)capstone_cap_derive(page->life, i * sizeof(RVALUE), sizeof(RVALUE));
++  return page->issued[i];
++}
++
++static void
++gc_retire(mrb_heap_page *page, RVALUE *p)
++{
++  size_t i = p - page->objects;
++
++  capstone_cap_revoke_child(page->life, page->issued[i]);
++  page->issued[i] = NULL;
++}
++#endif
++
+ MRB_API mrb_bool
+ mrb_object_dead_p(mrb_state *mrb, struct RBasic *object)
+ {
+   mrb_gc *gc = &mrb->gc;
++#ifdef MRB_CAPSTONE_SUBLET
++  object = gc_inside(gc, object);
++  if (!object) return TRUE;
++#else
+   if (!heap_p(gc, object)) return TRUE;
++#endif
+   return is_dead(gc, object);
+ }
+ 
+@@ -350,6 +413,11 @@
+     prev = p;
+   }
+   page->freelist = prev;
++#ifdef MRB_CAPSTONE_SUBLET
++  page->life = capstone_cap_derive(page,
++      __builtin_capstone_cap_get_cursor(page->objects) - __builtin_capstone_cap_get_base(page),
++      sizeof(page->objects));
++#endif
+ }
+ 
+ static void
+@@ -444,8 +512,12 @@
+     tmp = page;
+     page = page->next;
+     for (p = tmp->objects, e=p+MRB_HEAP_PAGE_SIZE; p<e; p++) {
+-      if (p->as.free.tt != MRB_TT_FREE)
++      if (p->as.free.tt != MRB_TT_FREE) {
+         obj_free(mrb, &p->as.basic, TRUE);
++#ifdef MRB_CAPSTONE_SUBLET
++        gc_retire(tmp, p);
++#endif
++      }
+     }
+     if (!tmp->region) {
+       mrb_free(mrb, tmp);
+@@ -601,6 +673,9 @@
+     add_heap(mrb, gc);
+   }
+ 
++#ifdef MRB_CAPSTONE_SUBLET
++  mrb_heap_page *page = gc->free_heaps;
++#endif
+   RVALUE *p = gc->free_heaps->freelist;
+   gc->free_heaps->freelist = p->as.free.next;
+   if (gc->free_heaps->freelist == NULL) {
+@@ -608,6 +683,19 @@
+   }
+ 
+   gc->live++;
++#ifdef MRB_CAPSTONE_SUBLET
++  /* The arena and the caller get the object's child, never the GC's pointer. */
++  *p = RVALUE_zero;
++  struct RBasic *obj = gc_issue(page, p);
++  gc_protect(mrb, gc, obj);
++  obj->tt = ttype;
++  obj->c = cls;
++  if (ttype == MRB_TT_OBJECT) {
++    obj->flags |= MRB_FL_OBJ_SHAPED;
++  }
++  paint_partial_white(gc, obj);
++  return obj;
++#else
+   gc_protect(mrb, gc, &p->as.basic);
+   *p = RVALUE_zero;
+   p->as.basic.tt = ttype;
+@@ -617,6 +705,7 @@
+   }
+   paint_partial_white(gc, &p->as.basic);
+   return &p->as.basic;
++#endif
+ }
+ 
+ static inline void
+@@ -901,10 +990,20 @@
+ 
+           while (ce <= ci) {
+             struct REnv *e = ci->u.env;
++#ifdef MRB_CAPSTONE_SUBLET
++            /* e may have been swept, and revoked, earlier in this sweep: read
++               its slot through the GC's own pointer. */
++            struct REnv *s = e ? (struct REnv*)gc_inside(&mrb->gc, (struct RBasic*)e) : NULL;
++            if (s && !is_dead(&mrb->gc, (struct RBasic*)s) &&
++                s->tt == MRB_TT_ENV && MRB_ENV_ONSTACK_P(s)) {
++              mrb_env_unshare(mrb, e, TRUE);
++            }
++#else
+             if (e && heap_p(&mrb->gc, (struct RBasic*)e) && !is_dead(&mrb->gc, (struct RBasic*)e) &&
+                 e->tt == MRB_TT_ENV && MRB_ENV_ONSTACK_P(e)) {
+               mrb_env_unshare(mrb, e, TRUE);
+             }
++#endif
+             ci--;
+           }
+         }
+@@ -1193,6 +1292,9 @@
+         if (p->as.basic.tt != MRB_TT_FREE) {
+           obj_free(mrb, &p->as.basic, FALSE);
+           if (p->as.basic.tt == MRB_TT_FREE) {
++#ifdef MRB_CAPSTONE_SUBLET
++            gc_retire(page, p);
++#endif
+             p->as.free.next = page->freelist;
+             page->freelist = p;
+             freed++;
+@@ -1645,8 +1747,16 @@
+ 
+     p = page->objects;
+     for (int i=0; i < MRB_HEAP_PAGE_SIZE; i++) {
++#ifdef MRB_CAPSTONE_SUBLET
++      /* A live object goes out as its child; a free slot, which callbacks
++         skip, as the GC's pointer. */
++      struct RBasic *obj = page->issued[i] ? page->issued[i] : &p[i].as.basic;
++      if ((*callback)(mrb, obj, data) == MRB_EACH_OBJ_BREAK)
++        return;
++#else
+       if ((*callback)(mrb, &p[i].as.basic, data) == MRB_EACH_OBJ_BREAK)
+         return;
++#endif
+     }
+     page = page->next;
+   }

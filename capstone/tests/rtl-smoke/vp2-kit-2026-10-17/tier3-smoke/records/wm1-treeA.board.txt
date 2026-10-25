@@ -1,0 +1,57 @@
+# Tier 3 board reading, arm wm1-treeA: kit bkit7-rev2sA (module 39d8492d5c18216b; batch budget x4), tree A caplifive_vp2c_8522d72fe, pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-nested-pools configuration virtual-wmem-pools platform board:caplifive_vp2c_8522d72fe cells 23 tally {"NO-READING:control-failed": 23}
+# controls [["bounds-chunk", "fault"], ["uaf-chunk", "fault"], ["uaf-jumbo", "none"]]
+00_3c8be14c82_rpcrdma_write_offsets_global image 16219b5bebb1203c NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+01_c14d731e45_cms_oid_global image 16fdcc091f0c2285 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+02_99da8c2cdc_mdb_address_column image 842e18adcd061ce4 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+03_6eab9f83ab_cola_info_column image fdef3a357b5edd55 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+04_b48759e4a4_qnet6_col_set_str image b13b6054ee584fec NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+05_5a109265a6_usbll_address_struct image bc6e3b697ff3f744 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+06_a8b16d74e1_x509if_last_dn_static image 7bd7154404fb7826 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+07_fb504bc76c_mysql_auth_method image a9e1a0b6b7e1f080 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+08_31ab1a0a17_sip_cseq_method image 61f2dba5a512f150 NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+09_693dc40936_geonw_proto_data_tvb image 5b292a67288f36ee NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+10_6fd3af5e99_t38_reassembly_buffer image 86ad0bd252a3fb8a NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+11_3a5f82dfb5_http_header_map image 85bd2880f8936bbd NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+12_90bb3a5c9e_xml_root_name_recycled image 35263cca20f9cd8f NO-READING:control-failed cause 25 at wm_probe+56 reached True completed False attribution "probe"
+13_0261fd7da6_http_range_cursor_past_chunk image af6751a07b07b31a NO-READING:control-failed cause 28 at wm_probe+56 reached True completed False attribution "probe"
+14_1d8acb21ab_solaredge_payload_six_past image c2f324a352aa136e NO-READING:control-failed cause 28 at wm_probe+56 reached True completed False attribution "probe"
+15_d24613c461_opcua_padding_below_chunk image bbfe3c4c8205a386 NO-READING:control-failed cause 28 at wm_probe+56 reached True completed False attribution "probe"
+16_e8ef9df09d_dcp_etsi_rs_parity_write image acb572875b3cafb6 NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+17_5a560f3f6a_dns_one_byte_write image 7ef413235caadaae NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+18_716a200295_rtps_batch_sample_info_unguarded image cdf6ab2192e7d86d NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+19_4a4871a831_ntlmssp_blob_length_before_check image 8d9a816614bd9757 NO-READING:control-failed cause 28 at wm_probe+56 reached True completed False attribution "probe"
+20_ed20250c13_proto_undecoded_bitmap_unbounded image ed9d0e7ae2295c7f NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+21_69dac89280_tcp_flags_str_sixteen_bytes image 404cbfe7afb9bc2a NO-READING:control-failed cause 28 at wm_write_probe+60 reached True completed False attribution "probe"
+22_c702b44a01_usbhid_output_usages_freed_twice image 9d18f9646799ec2b NO-READING:control-failed cause 25 at capstone_cap_revoke_child+88 reached True completed False attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_3c8be14c82_rpcrdma_write_offsets_global: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 01_c14d731e45_cms_oid_global: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 02_99da8c2cdc_mdb_address_column: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 03_6eab9f83ab_cola_info_column: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 04_b48759e4a4_qnet6_col_set_str: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 05_5a109265a6_usbll_address_struct: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 06_a8b16d74e1_x509if_last_dn_static: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 07_fb504bc76c_mysql_auth_method: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 08_31ab1a0a17_sip_cseq_method: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 09_693dc40936_geonw_proto_data_tvb: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 10_6fd3af5e99_t38_reassembly_buffer: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 11_3a5f82dfb5_http_header_map: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 12_90bb3a5c9e_xml_root_name_recycled: verdict NO-READING cause 25 pc wm_probe+56
+  SAME 13_0261fd7da6_http_range_cursor_past_chunk: verdict NO-READING cause 28 pc wm_probe+56
+  SAME 14_1d8acb21ab_solaredge_payload_six_past: verdict NO-READING cause 28 pc wm_probe+56
+  SAME 15_d24613c461_opcua_padding_below_chunk: verdict NO-READING cause 28 pc wm_probe+56
+  SAME 16_e8ef9df09d_dcp_etsi_rs_parity_write: verdict NO-READING cause 28 pc wm_write_probe+60
+  SAME 17_5a560f3f6a_dns_one_byte_write: verdict NO-READING cause 28 pc wm_write_probe+60
+  SAME 18_716a200295_rtps_batch_sample_info_unguarded: verdict NO-READING cause 28 pc wm_write_probe+60
+  SAME 19_4a4871a831_ntlmssp_blob_length_before_check: verdict NO-READING cause 28 pc wm_probe+56
+  SAME 20_ed20250c13_proto_undecoded_bitmap_unbounded: verdict NO-READING cause 28 pc wm_write_probe+60
+  SAME 21_69dac89280_tcp_flags_str_sixteen_bytes: verdict NO-READING cause 28 pc wm_write_probe+60
+  SAME 22_c702b44a01_usbhid_output_usages_freed_twice: verdict NO-READING cause 25 pc capstone_cap_revoke_child+88
+  23 of 23 cells the same
+## the boot
+  BOARD_RUN_START 15:20:31 bitstream caplifive_vp2c_8522d72fe monitor 007d81d
+  manifest 36 files, stage 9117117 bytes
+  firmware 9e1a9a1fdcac7de2 21662216 B
+  DRIVER rc=0 15:31:49
+  BOARD_RUN_DONE 15:31:49

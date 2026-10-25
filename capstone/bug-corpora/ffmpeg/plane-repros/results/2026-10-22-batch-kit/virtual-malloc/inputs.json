@@ -1,0 +1,39 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "cc_args": [
+      "-isystem",
+      "/mnt/hdd/<user>/capstone/t3-freeze-r60/llvm/lib/clang/22/include",
+      "-I/mnt/hdd/<user>/capstone/t3-nomovc-r60/ffmpeg-lt0/source/src-9.0.1-f7e8b586f7b4",
+      "-I/mnt/hdd/<user>/capstone/t3-nomovc-r60/ffmpeg-lt0/source/domain/ffmpeg-build",
+      "/mnt/hdd/<user>/capstone/t3-nomovc-r60/ffmpeg-lt0/source/domain/ffmpeg-build/libavutil/libavutil.a"
+    ],
+    "flags": [
+      "-O0",
+      "-DCORPUS_VIRTUAL"
+    ],
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 1,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "ffmpeg/plane-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "a405840dce789345422ab901bb44df0a1d166677b564c68303f24ae286b847f0",
+    "module": "a05c198bfcc5f55ce6887923901013704f4c078901e8efcfb3cc531b8bed2c8e",
+    "profile": "virtual",
+    "qemu": "f750b8fb164745bb9d54381221ddc0ae9d85e6254465e05b2ed46a97fa4983b4",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "1de34fdf0c1cafa745640cb39e6777438547e3fca93642395aa63f2cc3e93dc2"
+  },
+  "tally": {
+    "MISSED": 1
+  }
+}

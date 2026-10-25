@@ -1,0 +1,290 @@
+{
+ "schema": 1,
+ "date": "2026-10-11",
+ "program": "PostgreSQL 17.5",
+ "workload": "work.sql, postgres --single",
+ "preregistration": {
+  "file": "capstone/docs/plans/2026-10-11-protected-same-answers.md",
+  "commit": "9bc6f9adf1c9"
+ },
+ "prediction": "protected (PGSU_NESTED=sublet, memory-contexts 0003) gives the same 22 result rows and final count as stock virtual and native 17.5",
+ "row_extraction": "run-ports.py pg_rows (regex \\t(?: \\d+: [^\\n]+|----)); second check: ports/postgres/app/work-compare.py",
+ "verdict": {
+  "stock_equals_native": true,
+  "protected_equals_native": true,
+  "protected_equals_stock": true,
+  "positive_control_detects_alterations": true,
+  "prediction_holds": true
+ },
+ "source": {
+  "snapshot_of": "9bc6f9adf1c9",
+  "snapshot_commit": "adc27e25d667a5c5702f8ed62c05d9a4ce4908b0",
+  "note": "p13 snapshot commit made from git archive of 9bc6f9adf1c9 capstone/ plus llvm-capstone compiler-rt/lib/builtins at 9bc6f9adf1c9; it lacks the submodule gitlinks and one CPython results .tsv differs only by CRLF normalisation; compiler-rt/lib/builtins tree 283d17fc identical"
+ },
+ "images": {
+  "stock": {
+   "sha256": "f03bcc1fc5a912f63a1df0326c2234a67e0f3fb1ba80f1c82e1a443ec5e4f4ba",
+   "nested": "none",
+   "runtime_revision": "adc27e25d667a5c5702f8ed62c05d9a4ce4908b0",
+   "recipe_revision": "adc27e25d667a5c5702f8ed62c05d9a4ce4908b0",
+   "runtime_dirty": false
+  },
+  "protected": {
+   "sha256": "9c2098f09cc6d6affc3e391158769cc49e2087afc5305626bebffde3d5bf73a5",
+   "nested": "postgres",
+   "runtime_revision": "adc27e25d667a5c5702f8ed62c05d9a4ce4908b0",
+   "recipe_revision": "adc27e25d667a5c5702f8ed62c05d9a4ce4908b0",
+   "runtime_dirty": false
+  },
+  "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "runtime_archive_sha256": "e5693f5cca2103dcd3fb722e68dfad967cdbebcb818f459044385414ccd2e545",
+  "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e",
+  "postgresql_archive_sha256": "fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8",
+  "sublet_patch_0003_sha256": "8b36b57652eca195772f22faf38367109b9855c56269d34546e84f42f67d6db5"
+ },
+ "platform": {
+  "qemu_sha256": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "launcher_capstone_vexec_sha256": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "module_capstone_vm_ko_sha256": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "Image_sha256": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "fw_jump_elf_sha256": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "rootfs_ext2_sha256": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "machine": "virt-capstone, -smp 1, -m 2G, x-capstone-u-mode=true, x-capstone-exact-bounds=true (run-staged.py defaults)"
+ },
+ "inputs": {
+  "work_sql_sha256": "f4310b7544287f8b1b400fac0820cf3162fe137048bcb940ff92cd158055346c",
+  "pristine_cluster_tree_sha256_builder": "ac378cd83c86129c8e843d7759bcc70bfd6ba1e893af5759dea3eb8c43fb9170",
+  "pristine_cluster_tree_sha256_run_ports": "0353a5b9770f056e91d0bc2b4d47a1795e0716b6b0b91a79eabbc28bddaa6aa2",
+  "share_tree_sha256_run_ports": "9daf98e47cbd295c2467fa2c4a89899777e887b5af0bb606eb536565998d7ac1",
+  "gate_sh_sha256": "a6ad0de03b9cc3ff093d9f0cbdab55a9129edaffb92eaa489c3d9d698e18da71",
+  "run_staged_py_sha256": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c",
+  "work_compare_py_sha256": "6b874fce22602ed9e97c17243fb5d4d5f008ed43f71fa54cfa83c4e3b140ae81"
+ },
+ "native_reference": {
+  "existing": "native-work.stdout from the 2026-09-28 build-native16-fixture.py root (manifest: archive fcb7ab38, builder 9229ef45, postgres sha256 3391b933, cluster tree ac378cd8); same sha256 as pg_reference in the committed run-ports results",
+  "in_session": "build-native16-fixture.py (builder 9229ef45, unchanged) rebuilt on p13 (x86_64, gcc 15.2.0, -O1, MAXALIGN 16; postgres sha256 3e43659f); work.sql run with the same -c settings on a copy of the kit cluster and on a copy of its own fresh initdb cluster"
+ },
+ "wall_seconds": {
+  "build_stock": 123,
+  "build_protected": 122,
+  "build_native16": 61,
+  "rebuild_stock_clean": 125,
+  "rebuild_protected_clean": 125,
+  "boot_both_arms": 89,
+  "guest_elapsed_stock": 29.0,
+  "guest_elapsed_protected": 31.2,
+  "native_work_sql": 0.14
+ },
+ "n": 1,
+ "native": {
+  "in_session_rows": 22,
+  "in_session_rows_sha256": "280000084d6bc8493f3c91444aed0fc7d3d09d0c38e05030deb4ec809d25789c",
+  "existing_rows": 22,
+  "existing_rows_sha256": "280000084d6bc8493f3c91444aed0fc7d3d09d0c38e05030deb4ec809d25789c",
+  "in_session_equals_existing": true,
+  "final_count_row": "1: count = \"1500\"\t(typeid = 20, len = 8, typmod = -1, byval = t)",
+  "in_session_stdout_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+  "existing_stdout_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329",
+  "per_row_sha256": [
+   "c39aa73ba29ad1a014b359205040a2cf047f0660ce46716d4c764c5294b00897",
+   "1041f31cfdac0d34f342a1854d171e54e79ba4725bf1d6cd773908f5335d0494",
+   "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+   "d2ceebdca177221116dffa4a2b7b3c86e0924dd45a876861cb36a3453238bd54",
+   "c07ce9a786d80e77eba8904175753cb4604608a8639adc33f1b82ccd0b5aa540",
+   "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+   "c2f72c58ec9bb6545640544cb8f095820ca1667535e8a5be614d9e96da8191bc",
+   "6e95d3a2236b6eff9d6109ab34c6c3de002e6b2a33fcbc15fce1abbc63bc3d69",
+   "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+   "74ef63a51f3d5c8f5d475c63ff7080d32df236244ada658e8cc978f4a72fc462",
+   "b685a76261512f0dd51bc60fd5c6ea1e634441adaa224e74c623756cdfb742fb",
+   "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+   "e27765f9351367a8310a61d28dc2905f87cb71d7fd15df80293b55b5e5e2b389",
+   "27b460b0529103f44387a79b3d4da3f14b3d3296e8b8b4f66ccd9daab21405ba",
+   "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+   "37e0d21b37389692ffa0c08fa6fddb51e04b89cb94cd2d18306e22b22896b9cf",
+   "f59e7f8b30ce3cb1d20e8f09086a85dea8a06df0463e36a3d28e477ae59d51e2",
+   "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+   "c39aa73ba29ad1a014b359205040a2cf047f0660ce46716d4c764c5294b00897",
+   "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+   "462f55c04088b896262879a32ab29629a82f68c3034c1b322d71b6f7646fe2d0",
+   "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d"
+  ],
+  "in_session_owncluster_stdout_sha256": "fee37cc7adaf0c2c4e221ad07d150e5ed7f727b6d76903ee3285776f4e0f5329"
+ },
+ "arms": {
+  "stock": {
+   "exit": 0,
+   "rows": 22,
+   "rows_sha256": "280000084d6bc8493f3c91444aed0fc7d3d09d0c38e05030deb4ec809d25789c",
+   "per_row_sha256": [
+    "c39aa73ba29ad1a014b359205040a2cf047f0660ce46716d4c764c5294b00897",
+    "1041f31cfdac0d34f342a1854d171e54e79ba4725bf1d6cd773908f5335d0494",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "d2ceebdca177221116dffa4a2b7b3c86e0924dd45a876861cb36a3453238bd54",
+    "c07ce9a786d80e77eba8904175753cb4604608a8639adc33f1b82ccd0b5aa540",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "c2f72c58ec9bb6545640544cb8f095820ca1667535e8a5be614d9e96da8191bc",
+    "6e95d3a2236b6eff9d6109ab34c6c3de002e6b2a33fcbc15fce1abbc63bc3d69",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "74ef63a51f3d5c8f5d475c63ff7080d32df236244ada658e8cc978f4a72fc462",
+    "b685a76261512f0dd51bc60fd5c6ea1e634441adaa224e74c623756cdfb742fb",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "e27765f9351367a8310a61d28dc2905f87cb71d7fd15df80293b55b5e5e2b389",
+    "27b460b0529103f44387a79b3d4da3f14b3d3296e8b8b4f66ccd9daab21405ba",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "37e0d21b37389692ffa0c08fa6fddb51e04b89cb94cd2d18306e22b22896b9cf",
+    "f59e7f8b30ce3cb1d20e8f09086a85dea8a06df0463e36a3d28e477ae59d51e2",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "c39aa73ba29ad1a014b359205040a2cf047f0660ce46716d4c764c5294b00897",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "462f55c04088b896262879a32ab29629a82f68c3034c1b322d71b6f7646fe2d0",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d"
+   ],
+   "final_count_row": "1: count = \"1500\"\t(typeid = 20, len = 8, typmod = -1, byval = t)",
+   "equal_native": true,
+   "equal_existing_native": true,
+   "work_compare_exit": 0,
+   "work_compare": "IDENTICAL: 22 result rows; last: 1: count = \"1500\"\t(typeid = 20, len = 8, typmod = -1, byval = t)",
+   "domain_faults": 0,
+   "per_row_equal_native": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ]
+  },
+  "protected": {
+   "exit": 0,
+   "rows": 22,
+   "rows_sha256": "280000084d6bc8493f3c91444aed0fc7d3d09d0c38e05030deb4ec809d25789c",
+   "per_row_sha256": [
+    "c39aa73ba29ad1a014b359205040a2cf047f0660ce46716d4c764c5294b00897",
+    "1041f31cfdac0d34f342a1854d171e54e79ba4725bf1d6cd773908f5335d0494",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "d2ceebdca177221116dffa4a2b7b3c86e0924dd45a876861cb36a3453238bd54",
+    "c07ce9a786d80e77eba8904175753cb4604608a8639adc33f1b82ccd0b5aa540",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "c2f72c58ec9bb6545640544cb8f095820ca1667535e8a5be614d9e96da8191bc",
+    "6e95d3a2236b6eff9d6109ab34c6c3de002e6b2a33fcbc15fce1abbc63bc3d69",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "74ef63a51f3d5c8f5d475c63ff7080d32df236244ada658e8cc978f4a72fc462",
+    "b685a76261512f0dd51bc60fd5c6ea1e634441adaa224e74c623756cdfb742fb",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "e27765f9351367a8310a61d28dc2905f87cb71d7fd15df80293b55b5e5e2b389",
+    "27b460b0529103f44387a79b3d4da3f14b3d3296e8b8b4f66ccd9daab21405ba",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "37e0d21b37389692ffa0c08fa6fddb51e04b89cb94cd2d18306e22b22896b9cf",
+    "f59e7f8b30ce3cb1d20e8f09086a85dea8a06df0463e36a3d28e477ae59d51e2",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "c39aa73ba29ad1a014b359205040a2cf047f0660ce46716d4c764c5294b00897",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d",
+    "462f55c04088b896262879a32ab29629a82f68c3034c1b322d71b6f7646fe2d0",
+    "49d74445803b6eb9c2ad2c91c3f415c2dc175d1922f7a37944bf97643ccc5d1d"
+   ],
+   "final_count_row": "1: count = \"1500\"\t(typeid = 20, len = 8, typmod = -1, byval = t)",
+   "equal_native": true,
+   "equal_existing_native": true,
+   "work_compare_exit": 0,
+   "work_compare": "IDENTICAL: 22 result rows; last: 1: count = \"1500\"\t(typeid = 20, len = 8, typmod = -1, byval = t)",
+   "domain_faults": 0,
+   "per_row_equal_native": [
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true,
+    true
+   ]
+  }
+ },
+ "controls": {
+  "final_count_1500_to_1501": {
+   "stock": {
+    "equal_altered": false,
+    "work_compare_exit": 1
+   },
+   "protected": {
+    "equal_altered": false,
+    "work_compare_exit": 1
+   }
+  },
+  "join_row_name-3_to_name-4": {
+   "stock": {
+    "equal_altered": false,
+    "work_compare_exit": 1
+   },
+   "protected": {
+    "equal_altered": false,
+    "work_compare_exit": 1
+   }
+  },
+  "last_row_dropped": {
+   "stock": {
+    "equal_altered": false,
+    "work_compare_exit": 1
+   },
+   "protected": {
+    "equal_altered": false,
+    "work_compare_exit": 1
+   }
+  }
+ },
+ "cleanup": {
+  "exit": 0,
+  "resources_released": true,
+  "stats": {
+   "version": 1,
+   "live_domains": 0,
+   "live_regions": 0,
+   "live_bytes": 0,
+   "cached_bytes": 0,
+   "poisoned_blocks": 0,
+   "nodes_high_water": 17150,
+   "nodes_live": 0,
+   "nodes_retired": 0,
+   "nodes_allocated_total": 71436,
+   "tag_pages": 0,
+   "node_capacity": 1024,
+   "node_bytes": 28672,
+   "collections": 5,
+   "nodes_reclaimed": 53787
+  }
+ },
+ "protected_equals_stock": true,
+ "faults_in_log": 0,
+ "completed": true
+}

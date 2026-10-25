@@ -1,0 +1,37 @@
+{
+ "native_frames": 30,
+ "native_flip_frames": 30,
+ "checks": {
+  "vstock-input": {
+   "exit": 0,
+   "frames": 30,
+   "equal_native": true
+  },
+  "vstock-input.flip": {
+   "exit": 0,
+   "frames": 30,
+   "equal_native": true
+  },
+  "vstock-sensitivity": 10,
+  "vpools-input": {
+   "exit": 0,
+   "frames": 30,
+   "equal_native": true
+  },
+  "vpools-input.flip": {
+   "exit": 0,
+   "frames": 30,
+   "equal_native": true
+  },
+  "vpools-sensitivity": 10
+ },
+ "sha256": {
+  "ffmpeg-vstock.dom": "385f958631d81b528f255b95549ce80a4940b945898761ddbd21b23998c20351",
+  "ffmpeg-vpools.dom": "6993865e22c4907a4f4d2f36677501b67088af47f2ed394aae3ddb0236427110",
+  "input.mkv": "7c0964440ad178a0c9a00dba72060322e68bea340715bb247e05d6a815844362",
+  "input.flip.mkv": "27e4bed2f7121a5970f1cbda6551969175ac5f3b6ad035ba7bbcf079124b0aa3",
+  "native.out": "3eebf311c9fae322ef74b8a9bad371eda975852299d620bbf3b3bd7ef466f43a",
+  "native.flip.out": "a7854e605fb87221563c7b2adca2d769a97a50e0bedea70226f662521c89b293"
+ },
+ "cleanup": true
+}

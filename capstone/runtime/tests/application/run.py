@@ -20,7 +20,6 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--state", type=Path, required=True)
     parser.add_argument("--repeat", type=int, default=1, help="Mixed lifecycle repetitions after warmup (200 gives 1,000 launches)")
-    parser.add_argument("--sublet-image", help="Also test transferred heap, in-process node reuse and genuine exhaustion")
     parser.add_argument("--report", type=Path, help="Write the checked resource counters and platform hashes")
     args = parser.parse_args()
     env = dict(os.environ, PYTHONPATH=str(Path(__file__).resolve().parents[2] / "host"))
@@ -118,27 +117,6 @@ def main():
                 assert "cause=" in record["fault"] and "pc=0x" in record["fault"], record
         print("SSH preserves exit 139 versus actual SIGSEGV, with the fault record: PASS")
 
-    allocation_progress = {}
-    if args.sublet_image:
-        result = call("exec", "/tmp/application-supervisor", "/usr/bin/capstone-exec", args.sublet_image)
-        assert "application sequence: PASS" in result.stdout
-        for mode in ("churn", "fault-reused", "fault-stale", "fault-exhaust", "healthy"):
-            before_mode = json.loads(call("exec", "capstone-exec", "--stats").stdout)
-            result = call("exec", "/tmp/application-supervisor", "/usr/bin/capstone-exec",
-                          args.sublet_image, "--mode", mode, timeout=150)
-            assert "PASS" in result.stdout
-            after_mode = json.loads(call("exec", "capstone-exec", "--stats").stdout)
-            allocated = after_mode["nodes_allocated_total"] - before_mode["nodes_allocated_total"]
-            # A signal at an earlier broken setup instruction must not satisfy
-            # either of the post-reuse or genuine-exhaustion checks.
-            if mode in ("churn", "fault-reused"):
-                assert allocated >= 200000, (mode, allocated)
-            if mode == "fault-exhaust":
-                assert allocated >= before_mode["node_capacity"] - before_mode["nodes_live"] - 512
-            assert after_mode["live_domains"] == after_mode["live_regions"] == after_mode["live_bytes"] == 0
-            allocation_progress[mode] = allocated
-            print(result.stdout, end="")
-
     before = json.loads(call("exec", "capstone-exec", "--stats").stdout)
     result = call("exec", "/tmp/application-supervisor", "/usr/bin/capstone-exec",
                   "/mnt/host/application-contract.dom", str(args.repeat),
@@ -155,8 +133,7 @@ def main():
     if args.report:
         identity = json.loads((args.state / "config.json").read_text())["identity"]
         report = {"platform": "QEMU supervised CALL, one hart", "boot_id": boot_id.strip(),
-                  "mixed_starts": args.repeat * 5 + 8, "sublet": bool(args.sublet_image),
-                  "allocation_progress": allocation_progress,
+                  "mixed_starts": args.repeat * 5 + 8,
                   "before": before, "after": after,
                   "binaries": {k: v["sha256"] for k, v in identity["files"].items()},
                   "environment": identity["environment"]}

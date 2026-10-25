@@ -1,0 +1,59 @@
+# board 1 (tree A) pass sequence (2026-10-20 16:48-19:04): result lines from tier3-pass-seq.sh's out, plus INJS/INJL per boot. UNGATED.
+SEQ START 16:48:21 board 1 spec 841d24cbae171832 (14 arms)
+PASS fph BEGIN 16:48:21 board 1 kind cases booking 19
+PASS fph END 17:00:35 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 25}
+PASS fph COMPARE vs reference rc=0 :: 25 of 25 cells the same
+PASS fph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fpt BEGIN 17:00:35 board 1 kind cases booking 20
+PASS fpt END 17:10:36 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 13}
+PASS fpt COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fca BEGIN 17:10:37 board 1 kind cases booking 21
+PASS fca END 17:20:21 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'MISSED': 13}
+PASS fca COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fca readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fcs BEGIN 17:20:21 board 1 kind cases booking 22
+PASS fcs END 17:30:36 rc=0 :: virtual boot: completed :: --- vp2-nested-pools (virtual-ffmpeg-carve): {'CAUGHT': 13}
+PASS fcs COMPARE vs reference rc=0 :: 13 of 13 cells the same
+PASS fcs readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS fso BEGIN 17:30:36 board 1 kind cases booking 23
+PASS fso END 18:10:47 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'MISSED': 9}
+PASS fso COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS fso readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS mph BEGIN 18:10:47 board 1 kind cases booking 24
+PASS mph END 18:20:06 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 9}
+PASS mph COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS mph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS mpt BEGIN 18:20:06 board 1 kind cases booking 25
+PASS mpt END 18:28:06 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 3}
+PASS mpt COMPARE vs reference rc=0 :: 3 of 3 cells the same
+PASS mpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wph BEGIN 18:28:06 board 1 kind cases booking 26
+PASS wph END 18:37:56 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 12}
+PASS wph COMPARE vs reference rc=0 :: 12 of 12 cells the same
+PASS wph readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS wpt BEGIN 18:37:56 board 1 kind cases booking 27
+PASS wpt END 18:47:29 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 10}
+PASS wpt COMPARE vs reference rc=0 :: 10 of 10 cells the same
+PASS wpt readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgc BEGIN 18:47:29 board 1 kind pgc booking 28
+PASS pgc END 18:56:10 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 5}
+PASS pgc COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgc readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pgm0 BEGIN 18:56:11 board 1 kind pgm booking 29
+PASS pgm0 END 19:04:43 rc=0 ::  :: --- vp2-malloc (virtual-mallocng-replay): {'MISSED': 5}
+PASS pgm0 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm0 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS STOP after pgm0: the boot did not complete
+## INJS / INJL per boot (the S-trap injection the reference firmware lacks; must be 0)
+fph INJS 0 INJL 0 vbatch-END 1
+fpt INJS 0 INJL 0 vbatch-END 1
+fca INJS 0 INJL 0 vbatch-END 1
+fcs INJS 0 INJL 0 vbatch-END 1
+fso INJS 0 INJL 0 vbatch-END 1
+mph INJS 0 INJL 0 vbatch-END 1
+mpt INJS 0 INJL 0 vbatch-END 1
+wph INJS 0 INJL 0 vbatch-END 1
+wpt INJS 0 INJL 0 vbatch-END 1
+pgc INJS 0 INJL 0 vbatch-END 1
+pgm0 INJS 0 INJL 0 vbatch-END 1

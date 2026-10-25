@@ -20,7 +20,9 @@ def main():
     for name in ('adapter', 'application', 'qemu', 'images', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
     p.add_argument('--timeout', type=int, default=180)
-    p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
+                   help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
+                        "it is kept so a suite can be run both ways as a two-sided control.")
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work/'stage'

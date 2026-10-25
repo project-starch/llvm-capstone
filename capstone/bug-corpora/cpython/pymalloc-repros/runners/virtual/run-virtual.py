@@ -15,9 +15,9 @@ src/native/main.c around the case's PYC_CASE body), run as a process on a persis
   attribution `probe` when the pc lies in read_probe, the function that carries pyc_defect_read
 
 WHAT THE ARM IS: virtual-malloc builds the replay with pymalloc stock (its arena one block from
-virtual mallocng); virtual-nested-pools with PYMALLOC_SUBLET, the lifetime adapter owning an arena
-the virtual heap lends linear, run in mode 1 (retire on free). The build's CMakeCache says which, and
-the VM must be a virtual-profile one; a mismatch is refused.
+virtual mallocng); virtual-nested-pools with PYMALLOC_SUBLET, which applies the port's patch 0003:
+every pymalloc block a child lifetime of its arena (CDERIVE), revoked on free (CREVOKE). The
+build's CMakeCache says which, and the VM must be a virtual-profile one; a mismatch is refused.
 """
 import argparse
 import json
@@ -30,6 +30,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[2]
 REPO = HERE.parents[6]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -76,11 +77,14 @@ def main():
     p.add_argument("--arm", required=True, choices=sorted(SUBLET))
     p.add_argument("--build", type=Path, required=True)
     p.add_argument("--controls-build", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--raw", type=Path, required=True)
     a = p.parse_args()
+    sdk_builtins.gate([a.build, a.controls_build], who="cpython:run-virtual.py")
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
+    import boardvm
+    rec = boardvm.record_arm(a.arm, appvm.on_board(a.state))  # vp2-<arm> for a board session
     spec = v.load_arms()[config]
     for build in (a.build, a.controls_build):
         cache = (build / "work/00/CMakeCache.txt").read_text()
@@ -93,12 +97,11 @@ def main():
             return 75
     share = Path(json.loads((a.state / "config.json").read_text())["share"])
     a.raw.mkdir(parents=True, exist_ok=True)
-    mode = ["1"] if a.arm == "virtual-nested-pools" else []
 
     def run(image, number, tag):
         name = f"pym-fixture-{number:02d}.bin"
         (share / name).write_bytes(fixture(number))
-        return appvm.run_app(a.state, image, [f"/mnt/host/{name}", "/tmp/pym-report.bin", *mode],
+        return appvm.run_app(a.state, image, [f"/mnt/host/{name}", "/tmp/pym-report.bin"],
                              a.raw / tag, timeout=300)
 
     controls = []
@@ -116,20 +119,20 @@ def main():
         number = int(d.name[:2])
         image = a.build / "bin" / f"defect-{number:02d}"
         if not image.is_file():
-            o = v.Observation(case=d.name, arm=a.arm, infra="build-failed", notes=f"no {image.name}")
+            o = v.Observation(case=d.name, arm=rec, infra="build-failed", notes=f"no {image.name}")
         else:
             text, result = run(image, number, d.name)
             o = observe(text, result, v.Symbols(a.llvm_bin, image))
             o.image_sha256 = v.sha256(image)
-        o.case, o.arm, o.controls = d.name, a.arm, list(controls)
+        o.case, o.arm, o.controls = d.name, rec, list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
         print(f"{'ok  ' if verdict[0] == PREDICTED[a.arm] else 'DIFF'} {d.name[:50]:<50} "
               f"{verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:80]}", flush=True)
-    record = v.write_bundle(a.output, "cpython/pymalloc-repros", a.arm, rows, {
-        "configuration": config, "predicted": PREDICTED[a.arm], "mode": mode[0] if mode else "stock",
+    record = v.write_bundle(a.output, "cpython/pymalloc-repros", rec, rows, {
+        "configuration": config, "predicted": PREDICTED[a.arm],
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
-    print(f"--- {a.arm} ({config}): {record['tally']}")
+    print(f"--- {rec} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 

@@ -1,0 +1,14 @@
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 28812314 bytes)
+T3PG sql0-frs-treeB BEGIN 03:53:04 (trigger: CHAIN_FRS_SQL_GO 03:52:15 board 2 idle after t1-srzdev; pre-registration e0701e6c52a5 pushed)
+T3PG sql0-frs-treeB END 04:35:35 rc=1 :: virtual boot: completed :: 
+SQL CELLS VOID (declared before the boot: the empty-directory staging defect); not scored
+SQL MUST-FIRE: staged module 607164b9c1407c7c (want 607164b9c1407c7c); banner 'diag srevroot-zero-1' x1
+SQL S-23: FRTY 21 DRT1 0 DRTX 0 Oops 0 (sql0-treeB: FRTY 21, DRT1 16)
+SQL FRS: FRTY 21; FRSL lines 21; (FRSL slot<<16|region, FRT2, FRVD) tuples:
+SQL FRS:   0003000E 00000000 00000001 x21
+SQL DONE 04:35:35
+     21 FRSL:0003000E
+     21 FRT2:00000000
+     21 FRTM:829F83B8
+     21 FRTY:017113B8
+     21 FRVD:00000001

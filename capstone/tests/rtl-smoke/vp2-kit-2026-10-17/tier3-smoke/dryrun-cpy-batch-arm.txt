@@ -1,0 +1,26 @@
+# tier3-cpy-batch-arm.sh dry run, 2026-10-22 15:56, board 2 (CB_ARM stubbed: copies the tag's own batch reference); an unknown tag must refuse.
+== lt0
+CB lt0 BEGIN 15:56:54 board 2 kit bkit8-batch-nb2 booking 992 # book 2 300 vp2 batch cpython lt0 (board 2)
+992 # unbook 992 # book 2 300 vp2 batch cpython lt0 (board 2)
+CB lt0 ARM END rc=0 15:56:54 :: APPVM read rc=0 00:00:00 :: stub lt0
+CB lt0 COMPARE vs reference rc=0 :: 32 of 32 cells the same
+CB lt0 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt0 DONE 15:56:54
+== lt1
+CB lt1 BEGIN 15:56:54 board 2 kit bkit8-batch-nb2 booking 992 # book 2 300 vp2 batch cpython lt1 (board 2)
+992 # unbook 992 # book 2 300 vp2 batch cpython lt1 (board 2)
+CB lt1 ARM END rc=0 15:56:54 :: APPVM read rc=0 00:00:00 :: stub lt1
+CB lt1 COMPARE vs reference rc=0 :: 32 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 15:56:55
+== bad
+CB STOP: tag lt9
+== make-batch-kit.sh MK_N=1 board 2 (real)
+MK kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-nb2: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit7-rev2xnBDN2:
+< BOARD_BITSTREAM=caplifive_vp2c_8de3c48cf
+> BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+< BOARD_FW_MON=/tmp/capstone/csbi-drt
+< BOARD_MONITOR_COMMIT=f13dbc5
+> BOARD_FW_MON=/tmp/capstone/csbi-batch
+> BOARD_MONITOR_COMMIT=d9da397
+MK module 21fbfc397e7c7a42 DONE

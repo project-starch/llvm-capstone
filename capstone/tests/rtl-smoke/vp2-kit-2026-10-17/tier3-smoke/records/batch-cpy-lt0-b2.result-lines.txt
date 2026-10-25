@@ -1,0 +1,45 @@
+# cpython lt0 on the batch bitstream c721c1a2a, board 2 (kit bkit8-batch-nb2): result lines only.
+CB lt0 BEGIN 15:57:33 board 2 kit bkit8-batch-nb2 booking 123
+CB lt0 ARM END rc=0 21:53:59 :: APPVM read rc=0 21:53:59 :: --- vp2-malloc (virtual-cpython): {'CAUGHT': 15, 'MISSED': 14, 'NO-READING:infra': 1, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 1}
+CB lt0 COMPARE vs reference rc=1 :: 31 of 32 cells the same
+CB lt0 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt0 DONE 21:53:59
+## verdicts-compare against batch-refs-r60/ref-batch/lt0/out
+DIFF 01_gh-139071_heap-overflow-in-set-dealloc-setobject: reference ('CAUGHT', 'function', 24, 'set_dealloc', 284) board ('CAUGHT', 'function', 4, 'set_dealloc', 284)
+31 of 32 cells the same
+## the board's cells
+01_gh-139071_heap-overflow-in-set-dealloc-setobject image 23a2f0cbd80ddfbe CAUGHT cause 4 at set_dealloc+284 attribution function
+02_gh-140471_fix-buffer-overflow-in-ast-node image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+03_gh-140492_heap-buffer-overflow-in-ast-copy image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+05_gh-140497_cpython-crash-heap-buffer-overflow-python image 23a2f0cbd80ddfbe CAUGHT cause 28 at _PyDict_FromItems+148 attribution control
+06_gh-140551_crash-in-dict-if-hash-eq image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+07_gh-140594_fix-an-out-of-bounds-read image 23a2f0cbd80ddfbe CAUGHT cause 28 at PyOS_StdioReadline+728 attribution function
+08_gh-140607_heap-buffer-overflow-in-io-rawiobase image 23a2f0cbd80ddfbe CAUGHT cause 28 at memcpy+204 attribution function
+09_gh-140802_heap-buffer-overflow-in-pycore-interpframe image 23a2f0cbd80ddfbe CAUGHT cause 24 at _PyObject_GetMethod+68 attribution control
+10_gh-142554_avoid-divmod-crashes-due-to-bad image 23a2f0cbd80ddfbe CAUGHT cause 24 at l_divmod+1092 attribution function
+11_gh-143005_heap-buffer-overflow-in-ctypes-array image 23a2f0cbd80ddfbe NO-READING:not-reached cause None at None+None attribution None
+12_gh-143377_heap-buffer-overflow-in-format-tracebackexception image 23a2f0cbd80ddfbe CAUGHT cause 28 at _PyXI_excinfo_InitFromException+3836 attribution function
+13_gh-144169_fix-three-crashes-in-ast-objects image 23a2f0cbd80ddfbe NO-READING:infra cause None at None+None attribution None
+14_gh-144475_heap-buffer-overflow-in-functools-partial image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+15_gh-148973_fix-segfault-on-mismatch-between-consts image 23a2f0cbd80ddfbe CAUGHT cause 24 at visit_decref+24 attribution control
+16_gh-156075_heap-buffer-overflow image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+17_gh-157325_fix-an-oob-read-in-the image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+18_gh-157335_fix-out-of-bounds-write-in image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+19_gh-142664_fix-uaf-in-memoryview-hash-via image 23a2f0cbd80ddfbe CAUGHT cause 25 at fnv+104 attribution control
+20_gh-143308_use-after-free-in-save-picklebuffer image 23a2f0cbd80ddfbe CAUGHT cause 25 at memcpy+204 attribution function
+21_gh-146169_segfault-ub-from-expat-when-re image 23a2f0cbd80ddfbe CAUGHT cause 25 at little2_toUtf8+72 attribution function
+22_gh-139210_iterparse-event-name image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+23_gh-142560_bytearray-search-realloc image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+24_gh-142783_zoneinfo-eager-decref image 23a2f0cbd80ddfbe CAUGHT cause 25 at PyObject_GetAttrString+32 attribution function
+25_gh-142829_hamt-eq-interior-cursor image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+26_gh-142831_json-encoder-list-item image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+27_gh-143004_counter-update-borrowed-value image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+28_gh-143543_groupby-reentrant-eq image 23a2f0cbd80ddfbe CAUGHT cause 25 at _PyEval_Vector+100 attribution function
+29_gh-146011_decimal-signaldict-outlives-context image 23a2f0cbd80ddfbe MISSED cause None at None+None attribution None
+30_gh-146613_grouper-parent-key image 23a2f0cbd80ddfbe CAUGHT cause 25 at PyObject_RichCompare+856 attribution function
+31_gh-148660_odict-copy-stale-link image 23a2f0cbd80ddfbe CAUGHT cause 24 at mro_implementation_unlocked+328 attribution control
+32_gh-149449_unicodedata-capi-cached image 23a2f0cbd80ddfbe NO-READING:unattributed cause 12 at None+None attribution None
+## case 01's fault line
+board (raw-read):          capstone-exec: domain fault cause=4 pc=0x3ff615c998 address=0xffffffffffffffff
+QEMU reference (raw-read): capstone-exec: domain fault cause=24 pc=0x3ff615c998 address=0xffffffffffffffff

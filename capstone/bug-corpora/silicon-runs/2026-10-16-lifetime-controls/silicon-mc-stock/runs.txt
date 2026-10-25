@@ -1,0 +1,12 @@
+silicon-mc-stock:control-clean controls.dom clean
+silicon-mc-stock:control-oob controls.dom oob
+silicon-mc-stock:control-uaf controls.dom uaf
+silicon-mc-stock:control-subobj controls.dom subobj
+silicon-mc-stock:memcached-allocator-controls-lifetime-91-page memcached-allocator-controls-lifetime-91.dom 91 page
+silicon-mc-stock:memcached-allocator-controls-lifetime-92-sibling memcached-allocator-controls-lifetime-92.dom 92 sibling
+silicon-mc-stock:memcached-allocator-controls-lifetime-93-through-c memcached-allocator-controls-lifetime-93.dom 93 through-c
+silicon-mc-stock:memcached-allocator-controls-lifetime-93-stale memcached-allocator-controls-lifetime-93.dom 93 stale
+silicon-mc-stock:memcached-allocator-controls-lifetime-cache-94-list-head memcached-allocator-controls-lifetime-cache-94.dom 94 list-head
+silicon-mc-stock:memcached-allocator-controls-lifetime-cache-95-sibling memcached-allocator-controls-lifetime-cache-95.dom 95 sibling
+silicon-mc-stock:memcached-allocator-controls-lifetime-cache-96-through-c memcached-allocator-controls-lifetime-cache-96.dom 96 through-c
+silicon-mc-stock:memcached-allocator-controls-lifetime-cache-96-stale memcached-allocator-controls-lifetime-cache-96.dom 96 stale

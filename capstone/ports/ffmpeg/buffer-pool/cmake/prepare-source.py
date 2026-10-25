@@ -14,7 +14,7 @@ parser.add_argument("archive", type=pathlib.Path)
 parser.add_argument("sha256")
 parser.add_argument("version")
 parser.add_argument("destination", type=pathlib.Path)
-parser.add_argument("variant", choices=("stock", "traced", "ported"))
+parser.add_argument("variant", choices=("stock", "traced", "ported", "protected"))
 parser.add_argument("--patch-tool", default="patch")
 args = parser.parse_args()
 port = pathlib.Path(__file__).resolve().parent.parent
@@ -42,6 +42,8 @@ with tempfile.TemporaryDirectory(dir=args.destination.parent) as temporary:
         patches = ["0001-libavutil-pool-event-instrumentation"]
         if args.variant == "ported":
             patches.append("0002-libavutil-pool-payload-lifetime-hooks")
+        if args.variant == "protected":
+            patches.append("0003-libavutil-pools-as-sublet-lifetimes")
         for name in patches:
             patch = port / "patches" / f"ffmpeg-{args.version}-{name}.patch"
             subprocess.run(

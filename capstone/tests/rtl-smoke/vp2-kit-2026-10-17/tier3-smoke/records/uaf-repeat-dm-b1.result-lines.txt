@@ -1,0 +1,22 @@
+# uaf-control repeat with the module's ring lines (uaf-repeat.py --no-trace --dmesg, N=200, c22a6e1c7ef7; amended fabccd6c8478), board 1 / tree A, 2026-10-22. Result lines only.
+UR BEGIN 11:03:45 board 1 booking 106 N=200 args --no-trace --dmesg
+UNBOOK 106: 200
+UR END rc=0 11:44:52
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f8b010c24 address=0x3f8b119050 entry=0x3f8b000868 code=0x3f8b000000-0x3f8b080000 last=0x42 preparing=0x42 
+TALLY plain cause 13: 4
+TALLY plain cause 25: 196
+completed=True steps=202 of 202 transcript=<mnt-hdd>/capstone/t3-run-treeA/uaf-repeat-dm/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board1 DONE 11:44:52
+RUN uaf-99-plain cause 13 address 0x3fabaa2040
+  DM [ 1104.222506] capstone_vm: resolve refused at arena: addr 0x3fabaa2040 cause 13 need 0x1 pc 0x3fab990c70 prev(addr 0x3fabaa2008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1104.248960] capstone_vm: resolve refused at arena: addr 0x3fabaa2040 cause 13 need 0x1 pc 0x3fab990c70 prev(addr 0x3fabaa2008 cause 13 rep 0) no lazy arena covers this address
+RUN uaf-104-plain cause 13 address 0x3f9b4de040
+  DM [ 1164.497952] capstone_vm: resolve refused at arena: addr 0x3f9b4de040 cause 13 need 0x1 pc 0x3f9b410c70 prev(addr 0x3f9b4de008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1164.521831] capstone_vm: resolve refused at arena: addr 0x3f9b4de040 cause 13 need 0x1 pc 0x3f9b410c70 prev(addr 0x3f9b4de008 cause 13 rep 0) no lazy arena covers this address
+RUN uaf-112-plain cause 13 address 0x3fbe174040
+  DM [ 1252.477698] capstone_vm: resolve refused at arena: addr 0x3fbe174040 cause 13 need 0x1 pc 0x3fbe090c70 prev(addr 0x3fbe174008 cause 13 rep 0) no lazy arena covers this address
+RUN uaf-134-plain cause 13 address 0x3f91131040
+  DM [ 1475.749618] capstone_vm: resolve refused at arena: addr 0x3f91131040 cause 13 need 0x1 pc 0x3f91090c70 prev(addr 0x3f91131008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1475.791326] capstone_vm: resolve refused at arena: addr 0x3f91131040 cause 13 need 0x1 pc 0x3f91090c70 prev(addr 0x3f91131008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL REFUSED 0

@@ -1,0 +1,54 @@
+# Tier 3 board reading, arm fso-fix6: kit bkit7-fix6 (module d71f207a3af5546b, the S-27 workaround: resume rd = x0), pin off; BUDGET VOID after 6 of 9 cases (the batch rung's 1500 s wait), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2_bf3db3175 cells 9 tally {"MISSED": 6, "NO-READING:infra": 3}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_8864fd0aec_cbs_h265_pic_timing_member image a0f57569427f6892 MISSED cause None at None reached True completed True attribution null
+01_68845e26f7_vulkan_hevc_refpicset_member image a1dcc9a1404caa98 MISSED cause None at None reached True completed True attribution null
+02_e058af88ab_vulkan_hevc_dpb_member image 8030f85dcd793f4b MISSED cause None at None reached True completed True attribution null
+03_89de2f0de1_aac_arith_last_member image aaa867ae4fc894f2 MISSED cause None at None reached True completed True attribution null
+04_1a00ea51cb_rtsp_control_url_underflow image f0c0f3c2cf5aed80 MISSED cause None at None reached True completed True attribution null
+05_d29ff88422_vulkan_av1_tile_sizes image f4e9b603d669aed0 MISSED cause None at None reached True completed True attribution null
+06_a809a784ec_vvc_entry_point_start_ctu image None NO-READING:infra cause None at None reached False completed False attribution null
+07_275e217b10_hlsenc_key_uri_strlcpy_size image None NO-READING:infra cause None at None reached False completed False attribution null
+08_fb862976df_cbs_h266_col_width_val image None NO-READING:infra cause None at None reached False completed False attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_8864fd0aec_cbs_h265_pic_timing_member: verdict MISSED cause None pc None
+  SAME 01_68845e26f7_vulkan_hevc_refpicset_member: verdict MISSED cause None pc None
+  SAME 02_e058af88ab_vulkan_hevc_dpb_member: verdict MISSED cause None pc None
+  SAME 03_89de2f0de1_aac_arith_last_member: verdict MISSED cause None pc None
+  SAME 04_1a00ea51cb_rtsp_control_url_underflow: verdict MISSED cause None pc None
+  SAME 05_d29ff88422_vulkan_av1_tile_sizes: verdict MISSED cause None pc None
+  NOT RUN 06_a809a784ec_vvc_entry_point_start_ctu: no image on the board side (NO-READING, infra)
+  NOT RUN 07_275e217b10_hlsenc_key_uri_strlcpy_size: no image on the board side (NO-READING, infra)
+  NOT RUN 08_fb862976df_cbs_h266_col_width_val: no image on the board side (NO-READING, infra)
+  6 of 9 cells the same
+## the boot
+  T3SEQ fso-fix6 BEGIN 20:12:44 ffmpeg/subobject-repros virtual-malloc (14 extra args)
+  T3SEQ fso-fix6 END 20:45:25 rc=0 :: virtual boot: DID NOT COMPLETE :: --- vp2-malloc (virtual-mallocng): {'MISSED': 6, 'NO-READING:infra': 3}
+  T3SEQ fso-fix6 PAYLOAD stage 3437846 B, 1306579 B gzip; firmware 19565064 B
+  BOARD_RUN_START 20:12:51 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 19 files, stage 3437846 bytes
+  firmware f4419b25d95d6c35 19565064 B
+  DRIVER rc=1 20:45:25
+  BOARD_RUN_DONE 20:45:25
+## the wedge apertures
+  sw=255 TRAP LOG {seen,mcause[6:0]} 0x8f 10001111
+  sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0xff 11111111
+  sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0xdd 11011101
+  sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0xff 11111111
+  sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0xff 11111111
+  sw=228 {1,dom_switch_idx[6:0]} 0xff 11111111
+  sw=229 {load_state[3:0],0000} 0x00 00000000
+  sw=192 {0000000,commit_instr[0].valid} 0x01 00000001
+  sw=193 {00000,store_buf_commit_cnt} 0x07 00000111
+  sw=194 {000000,store_state} 0x03 00000011
+  sw=195 {0000,load_state} 0x00 00000000
+  sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0xff 11111111
+  sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0xcf 11001111
+  sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0xfe 11111110
+  sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x6e 01101110
+  commit pc (scoreboard slot 0; stale after a flush) 0xffffffff813ffffe
+  trap-log mepc 0xffffffffb7fffffe
+  trap-log tval 0x0000000046bfbff3
+  rev_node_debug_ex 0x0000002000000000
+  rev_node_head_ex 0x006d
+  rev_node_serving_idx_ex 0x00000000

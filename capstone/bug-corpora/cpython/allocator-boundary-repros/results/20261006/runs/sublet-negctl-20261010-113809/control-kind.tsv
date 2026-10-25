@@ -1,0 +1,16 @@
+01_gh-139071_heap-overflow-in-set-dealloc-setobject	variant
+02_gh-140471_fix-buffer-overflow-in-ast-node	variant
+03_gh-140492_heap-buffer-overflow-in-ast-copy	variant
+04_gh-140492_heap-buffer-overflow-in-ast-copy-large-buffer	variant
+05_gh-140497_cpython-crash-heap-buffer-overflow-python	variant
+09_gh-140802_heap-buffer-overflow-in-pycore-interpframe	variant
+10_gh-142554_avoid-divmod-crashes-due-to-bad	variant
+14_gh-144475_heap-buffer-overflow-in-functools-partial	variant
+17_gh-157325_fix-an-oob-read-in-the	variant
+19_gh-142664_fix-uaf-in-memoryview-hash-via	variant
+24_gh-142783_zoneinfo-eager-decref	variant
+25_gh-142829_hamt-eq-interior-cursor	variant
+27_gh-143004_counter-update-borrowed-value	variant
+28_gh-143543_groupby-reentrant-eq	variant
+30_gh-146613_grouper-parent-key	variant
+31_gh-148660_odict-copy-stale-link	variant

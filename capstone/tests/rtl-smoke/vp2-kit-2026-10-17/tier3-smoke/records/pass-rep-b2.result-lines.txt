@@ -1,0 +1,18 @@
+# repaired arms on board 2 (tree B), 2026-10-20 22:48-23:19, tier3-pass-rep.sh: result lines. UNGATED.
+REP START 22:48:12 board 2
+PASS pb13q15 BEGIN 22:48:12 board 2 booking 38
+PASS pb13q15 END 22:58:33 rc=0 :: --- vp2-nested-pools (virtual-memcached-sublet): {'CAUGHT': 7, 'NO-READING:control-failed': 2}
+PASS pb13q15 COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS pb13q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS pgm1q15 BEGIN 22:58:33 board 2 booking 40
+PASS pgm1q15 END 23:07:55 rc=0 :: --- vp2-pg-pools (virtual-mallocng-replay-pools): {'CAUGHT': 5}
+PASS pgm1q15 COMPARE vs reference rc=0 :: 5 of 5 cells the same
+PASS pgm1q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS wm1q15 BEGIN 23:07:55 board 2 booking 41
+PASS wm1q15 END 23:19:50 rc=0 :: 
+PASS wm1q15 COMPARE vs reference rc=0 :: 23 of 23 cells the same
+PASS wm1q15 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 cause=29 0 banner node-floor-2 x1
+PASS rep2 DONE 23:19:50
+pb13q15 vbatch-END 1
+pgm1q15 vbatch-END 1
+wm1q15 vbatch-END 1

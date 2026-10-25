@@ -1,0 +1,116 @@
+--- a/slabs.c
++++ b/slabs.c
+@@ -17,6 +17,15 @@
+ #include <string.h>
+ #include <assert.h>
+ #include <pthread.h>
++#ifdef EXP_REUSE_GAP
++/* Reuse-distance observer at the slab boundary (experiments/study/reuse-hooks/memcached). Every
++ * call below runs under slabs_lock. Chunks that split_slab_page_into_freelist files on a free list
++ * were never handed out, so their do_slabs_free is not a release. */
++#include "mc-reuse-gap.h"
++static struct mc_rg mc_rg_slabs = {"slabs", NULL};
++static int mc_rg_splitting;
++static void mc_rg_report(void) { mc_rg_print(&mc_rg_slabs); }
++#endif
+ 
+ //#define DEBUG_SLAB_MOVER
+ /* powers-of-N allocation structures */
+@@ -424,7 +433,13 @@
+     // wiping memory as it's being pulled out of the global pool instead of
+     // blocking startup all at once.
+     memset(ptr, 0, (size_t)len);
++#ifdef EXP_REUSE_GAP
++    mc_rg_splitting = 1;
++#endif
+     split_slab_page_into_freelist(ptr, id);
++#ifdef EXP_REUSE_GAP
++    mc_rg_splitting = 0;
++#endif
+ 
+     p->slab_list[p->slabs++] = ptr;
+     MEMCACHED_SLABS_SLABCLASS_ALLOCATE(id);
+@@ -473,6 +488,9 @@
+     }
+ 
+     if (ret) {
++#ifdef EXP_REUSE_GAP
++        mc_rg_issue(&mc_rg_slabs, ret, p->size);
++#endif
+         MEMCACHED_SLABS_ALLOCATE(id, p->size, ret);
+     } else {
+         MEMCACHED_SLABS_ALLOCATE_FAILED(id);
+@@ -517,6 +535,9 @@
+         assert(chunk->it_flags == ITEM_CHUNK);
+         chunk->it_flags = ITEM_SLABBED;
+         p = &slabclass[chunk->slabs_clsid];
++#ifdef EXP_REUSE_GAP
++        mc_rg_release(&mc_rg_slabs, chunk);
++#endif
+         next_chunk = chunk->next;
+ 
+         chunk->prev = 0;
+@@ -543,6 +564,10 @@
+     p = &slabclass[id];
+ 
+     it = (item *)ptr;
++#ifdef EXP_REUSE_GAP
++    if (!mc_rg_splitting)
++        mc_rg_release(&mc_rg_slabs, it);
++#endif
+     if ((it->it_flags & ITEM_CHUNKED) == 0) {
+         it->it_flags = ITEM_SLABBED;
+         it->slabs_clsid = id;
+@@ -818,7 +843,13 @@
+     /* Don't need to split the page into chunks if we're just storing it */
+     if (did > SLAB_GLOBAL_PAGE_POOL) {
+         memset(page, 0, (size_t)settings.slab_page_size);
++#ifdef EXP_REUSE_GAP
++        mc_rg_splitting = 1;
++#endif
+         split_slab_page_into_freelist(page, did);
++#ifdef EXP_REUSE_GAP
++        mc_rg_splitting = 0;
++#endif
+     } else if (did == SLAB_GLOBAL_PAGE_POOL) {
+         /* memset just enough to signal restart handler to skip */
+         memset(page, 0, sizeof(item));
+--- a/cache.c
++++ b/cache.c
+@@ -9,6 +9,15 @@
+ #endif
+ 
+ #include "cache.h"
++#ifdef EXP_REUSE_GAP
++/* Reuse-distance observer at the cache.c boundary (experiments/study/reuse-hooks/memcached): one
++ * observer for every cache_t, the unit is the buffer the cache keeps (under NDEBUG, in front of
++ * any reserved slot), serialised by its own lock since workers call do_cache_* unlocked. */
++#include "mc-reuse-gap.h"
++static pthread_mutex_t mc_rg_cache_lock = PTHREAD_MUTEX_INITIALIZER;
++static struct mc_rg mc_rg_cache = {"cache", &mc_rg_cache_lock};
++static void mc_rg_report(void) { mc_rg_print(&mc_rg_cache); }
++#endif
+ #ifdef MC_CAPSTONE_SUBLET
+ #include <capstone/capability.h>
+ #ifndef NDEBUG
+@@ -126,6 +135,10 @@
+     }
+ #endif
+ 
++#ifdef EXP_REUSE_GAP
++    if (object != NULL)
++        mc_rg_issue(&mc_rg_cache, ret, cache->bufsize);
++#endif
+     return object;
+ }
+ 
+@@ -160,6 +173,9 @@
+     }
+     ptr = pre;
+ #endif
++#ifdef EXP_REUSE_GAP
++    mc_rg_release(&mc_rg_cache, ptr);
++#endif
+     if (cache->limit != 0 && cache->limit < cache->total) {
+         free(ptr);
+         cache->total--;

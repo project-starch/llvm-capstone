@@ -13,6 +13,7 @@ HERE = Path(__file__).resolve().parent
 SCRIPT = r'''#!/bin/sh
 cd /mnt/vm || exit 1
 export CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1
+export CAPSTONE_NODE_COUNT=__NODE_COUNT__
 insmod capstone_vm.ko node_initial_pages=4 node_batch_pages=16 || exit 1
 for mode in growth stale; do
   ./capstone-vexec node.dom "$mode" > /tmp/node.out 2>&1
@@ -42,6 +43,12 @@ def main():
     p.add_argument('--application', type=Path, required=True)
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--timeout', type=int, default=600)
+    # vp2 caps the flat lifetime table at 65536 records (a 16-bit node index), so 70000 cannot be
+    # the count everywhere. Default unchanged for QEMU; silicon and its QEMU prediction run 60000.
+    # The value is substituted into the gate script AND recorded, and the live-population check
+    # below is built from it -- a hardcoded 70000 there would silently pass or fail on a different
+    # count rather than comparing like with like.
+    p.add_argument('--node-count', type=int, default=70000)
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'; stage.mkdir()
@@ -54,7 +61,9 @@ def main():
                       (inputs['launcher'], 'capstone-vexec'),
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
-    (stage/'gate.sh').write_text(SCRIPT)
+    gate_text = SCRIPT.replace('__NODE_COUNT__', str(a.node_count))
+    assert '__NODE_COUNT__' not in gate_text, 'node count not substituted'
+    (stage/'gate.sh').write_text(gate_text)
     run = subprocess.run([os.environ.get('PYTHON', 'python3'),
         str(HERE/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images),
         '--stage', str(stage), '--work', str(a.work/'guest'), '--disk-mib', '64',
@@ -74,7 +83,11 @@ def main():
         r'address=0x[0-9a-f]+ entry=(0x[0-9a-f]+)', log, re.M)
     checks = {'completed': run.returncode == 0,
               'growth': 'NODE_EXIT:growth:0' in log and 'NODE_GROWTH_OK' in log,
-              'two_live_populations': log.count('NODE_LIVE:0:70000') == 2 and log.count('NODE_LIVE:1:70000') == 2,
+              'two_live_populations': (log.count('NODE_LIVE:0:%d' % a.node_count) == 2 and
+                                       log.count('NODE_LIVE:1:%d' % a.node_count) == 2),
+              # the domain prints the count it used; if that line is missing the run is not
+              # comparable with any other, so its absence is a failure and not a zero
+              'node_count_reported': log.count('NODE_COUNT_USED %d' % a.node_count) >= 1,
               'stale': 'NODE_EXIT:stale:139' in log and 'NODE_STALE_ACCESS' in log,
               'stale_site': len(stale_sites) == 1 and
                   'cap_node_stale' in symbols and 'domain_main' in symbols and
@@ -107,7 +120,8 @@ def main():
               'source_sha256': {str(p.relative_to(HERE)): hashlib.sha256(p.read_bytes()).hexdigest()
                                 for p in [Path(__file__), HERE/'node-contract.c',
                                           HERE/'run-staged.py']},
-              'gate_sha256': hashlib.sha256(SCRIPT.encode()).hexdigest(),
+              'gate_sha256': hashlib.sha256(gate_text.encode()).hexdigest(),
+              'node_count': a.node_count,
               'scope': 'one hart, trusted Linux, process-local paged node store'}
     (a.work/'result.json').write_text(json.dumps(result, indent=2) + '\n')
     for name, ok in checks.items(): print(('PASS ' if ok else 'FAIL ') + name)

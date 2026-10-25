@@ -1,0 +1,1366 @@
+{
+ "schema": 1,
+ "date": "2026-10-11",
+ "program": "PostgreSQL 17.5",
+ "preregistration": {
+  "file": "capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
+  "commit": "53325bba0d5c"
+ },
+ "nested_allocator": "memory-context chunks (palloc/pfree) of a dedicated AllocSet, AllocSetContextCreate(CurrentMemoryContext, 'lifetime-control', 0, 8192, 8192); every request 64 bytes; release operation pfree (patch 0003 revokes in pfree via SubletRelease)",
+ "arms": {
+  "protected": "PGSU_NESTED=sublet, memory-contexts patch 0003 (manifest nested=postgres)",
+  "release": "PGSU_NESTED unset, same source without patch 0003 (manifest nested=none)"
+ },
+ "source": {
+  "llvm_capstone_head": "53325bba0d5c",
+  "uncommitted": "capstone/bug-corpora/postgres/sql-repros/controls/ (this session's files, not committed); nothing else",
+  "snapshot": "git archive of 53325bba capstone/ + compiler-rt/lib/builtins, committed on p12 in a scratch repository as 347afd2de162 so build.py can rev-parse it; the controls directory was copied in untracked, so both manifests record runtime_dirty=true",
+  "controls_files_sha256": {
+   "module/Makefile": "6edc96058f0e0e1f45fdb7b5d2f8ea3686e72e1ffb31b8954a960e7f6cc28464",
+   "module/pgcorpus_lifetime--1.0.sql": "74e37561e7c525d7b3b96da39134ae975db15e3d361a2c82a097bbafcbf0ae53",
+   "module/pgcorpus_lifetime.c": "4350cf8f520e07b9cbedada6a74266a40bcdae1372ba3642bd0198953b28d4b1",
+   "module/pgcorpus_lifetime.control": "7f4bbd8a2ba95ead6019ff23d8ec4d8b335b3cfe23cfa4bb4ff561f0d69ee521",
+   "build-domain.sh": "80770f36c56195a9038c26b93177d5c6c8fd29ae9ded5e7ae0406c969bd94dae",
+   "build-image.sh": "9eef47b93fdedbcd85c46d636d438b7119dda4f88af41cc6d4c4e37357548ff2",
+   "run-controls.py": "d7e1fe2071ec7713ee5fe0a2fa51ba59b206488a2209b98ab43800713f8edfc8"
+  },
+  "sublet_patch_0003_sha256": "8b36b57652eca195772f22faf38367109b9855c56269d34546e84f42f67d6db5",
+  "postgresql_archive_sha256": "fcb7ab38e23b264d1902cb25e6adafb4525a6ebcbd015434aeef9eda80f528d8"
+ },
+ "platform": {
+  "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "compiler": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "runner": "d7e1fe2071ec7713ee5fe0a2fa51ba59b206488a2209b98ab43800713f8edfc8",
+  "judge": "c5e5872372b392de5325a2951e0ef57798cb9295d753b2b77db7223732c7a25f",
+  "profile": "virtual",
+  "machine": "virt-capstone, one hart, 2 GiB, U-mode, exact bounds (run-staged.py defaults)",
+  "run_staged_py_sha256": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c"
+ },
+ "inputs": {
+  "fixture_cluster_tree_sha256": "0353a5b9770f056e91d0bc2b4d47a1795e0716b6b0b91a79eabbc28bddaa6aa2",
+  "pg_share_tree_sha256": "a4bb87d5d8bf24645778ea226616c3ce9ab67d7a46403a5563cf7229084fa08b"
+ },
+ "probes": {
+  "lc_probe_parent_read": {
+   "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:148",
+   "link_address": "0x54ce8"
+  },
+  "lc_probe_parent_read_header": {
+   "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:132",
+   "link_address": "0x54c80"
+  },
+  "lc_probe_parent_read_link": {
+   "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:126",
+   "link_address": "0x54c58"
+  },
+  "lc_probe_parent_write": {
+   "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:139",
+   "link_address": "0x54ca8"
+  },
+  "lc_probe_sibling_read": {
+   "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+   "link_address": "0x54d38"
+  },
+  "lc_probe_sibling_write": {
+   "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:166",
+   "link_address": "0x54d8c"
+  },
+  "lc_probe_stale_read": {
+   "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:189",
+   "link_address": "0x54e68"
+  },
+  "lc_probe_successor_read": {
+   "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+   "link_address": "0x54e0c"
+  },
+  "lc_probe_successor_write": {
+   "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+   "link_address": "0x54dcc"
+  }
+ },
+ "results": {
+  "release": {
+   "image": {
+    "sha256": "a4329a433eb6130e8304dcaf919162dd2ed189d9c5e8d6bc59732b3080386b6a",
+    "manifest": {
+     "application": "postgres",
+     "profile": "virtual",
+     "heap": "virtual",
+     "nested": "none",
+     "recipe_revision": "347afd2de16268df546cd760bbe54d7a3a1663a6",
+     "runtime_revision": "347afd2de16268df546cd760bbe54d7a3a1663a6",
+     "runtime_dirty": true,
+     "stack_bytes": 1048576,
+     "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+     "runtime_archive_sha256": "e5693f5cca2103dcd3fb722e68dfad967cdbebcb818f459044385414ccd2e545",
+     "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e",
+     "image_sha256": "a4329a433eb6130e8304dcaf919162dd2ed189d9c5e8d6bc59732b3080386b6a"
+    }
+   },
+   "boot": {
+    "completed": true,
+    "sessions_planned": 14,
+    "sessions_ran": 14,
+    "wall_seconds": 673.3
+   },
+   "identity": {
+    "preflight": true,
+    "uaf_palloc": {
+     "observed": "complete",
+     "expected": "complete",
+     "fault": null
+    }
+   },
+   "sessions": [
+    {
+     "session": "parent-1",
+     "control": "parent",
+     "repetition": 1,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, link_ok, header_ok, readback_ok, allocator_intact",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f8a76cd40",
+      "D": "0x3f8a76ccf0",
+      "block": "0x3f8a76cc90",
+      "block_end": "0x3f8a76eb30",
+      "context": "0x3f8a76cb30",
+      "chunk_header_bytes": "16",
+      "A_offset_in_block": "176"
+     },
+     "accesses": [
+      {
+       "access": "read-link",
+       "probe": "lc_probe_parent_read_link",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:126",
+       "probe_link_address": "0x54c58"
+      },
+      {
+       "access": "read-header",
+       "probe": "lc_probe_parent_read_header",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:132",
+       "probe_link_address": "0x54c80"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_parent_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:139",
+       "probe_link_address": "0x54ca8"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_parent_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:148",
+       "probe_link_address": "0x54ce8"
+      }
+     ],
+     "lines": [
+      "LIFETIME parent context=0x3f8a76cb30 block=0x3f8a76cc90 block_end=0x3f8a76eb30 chunk_header_bytes=16 A=0x3f8a76cd40 D=0x3f8a76ccf0 A_offset_in_block=176",
+      "LIFETIME parent A-live addr=0x3f8a76cd40 base=0x3f8a76cb30 end=0x3f8a76eb30 tag=1",
+      "LIFETIME parent block-ref addr=0x3f8a76cc90 base=0x3f8a76cb30 end=0x3f8a76eb30 tag=1",
+      "LIFETIME parent mark access=read-link via=block+176",
+      "LIFETIME parent read-link=0x3f8a76cce0 expected D-chunk=0x3f8a76cce0",
+      "LIFETIME parent mark access=read-header via=block+168",
+      "LIFETIME parent read-header=0x28000000043 before-free=0x28000000043",
+      "LIFETIME parent mark access=write via=block+192 bytes=48",
+      "LIFETIME parent mark access=read via=block+192 bytes=48",
+      "LIFETIME parent read-back mismatches=0",
+      "LIFETIME parent next-palloc=0x3f8a76cd40 (A=0x3f8a76cd40)",
+      "LIFETIME-RETURNED parent parent link_ok=1 header_ok=1 readback_ok=1 allocator_intact=1"
+     ]
+    },
+    {
+     "session": "sibling-1",
+     "control": "sibling",
+     "repetition": 1,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, intact, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fb5994cf0",
+      "B": "0x3fb5994d40",
+      "block": "0x3fb5994c90",
+      "block_end": "0x3fb5996b30",
+      "context": "0x3fb5994b30",
+      "chunk_header_bytes": "16"
+     },
+     "accesses": [
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_sibling_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:166",
+       "probe_link_address": "0x54d8c"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      }
+     ],
+     "lines": [
+      "LIFETIME sibling context=0x3fb5994b30 block=0x3fb5994c90 block_end=0x3fb5996b30 chunk_header_bytes=16 A=0x3fb5994cf0 B=0x3fb5994d40",
+      "LIFETIME sibling A-live addr=0x3fb5994cf0 base=0x3fb5994b30 end=0x3fb5996b30 tag=1",
+      "LIFETIME sibling B-live addr=0x3fb5994d40 base=0x3fb5994b30 end=0x3fb5996b30 tag=1",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling contents-after-free-of-A mismatches=0",
+      "LIFETIME sibling mark access=write via=B",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling read-back mismatches=0",
+      "LIFETIME-RETURNED sibling sibling intact=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-1",
+     "control": "successor",
+     "repetition": 1,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, same_address, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f8f80ccf0",
+      "C": "0x3f8f80ccf0",
+      "context": "0x3f8f80cb30",
+      "chunk_header_bytes": "16",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor A-live addr=0x3f8f80ccf0 base=0x3f8f80cb30 end=0x3f8f80eb30 tag=1",
+      "LIFETIME successor context=0x3f8f80cb30 chunk_header_bytes=16 A=0x3f8f80ccf0 C=0x3f8f80ccf0 pallocs=1 equal=1",
+      "LIFETIME successor C-live addr=0x3f8f80ccf0 base=0x3f8f80cb30 end=0x3f8f80eb30 tag=1",
+      "LIFETIME successor mark access=write via=C",
+      "LIFETIME successor mark access=read via=C",
+      "LIFETIME successor read-back mismatches=0",
+      "LIFETIME-RETURNED successor successor same_address=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-stale-1",
+     "control": "successor-stale",
+     "repetition": 1,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, same_address, readback_ok, stale_read_completed, stale_equals_C",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fba93dcf0",
+      "C": "0x3fba93dcf0",
+      "context": "0x3fba93db30",
+      "chunk_header_bytes": "16",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      },
+      {
+       "access": "stale-read",
+       "probe": "lc_probe_stale_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:189",
+       "probe_link_address": "0x54e68"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor-stale A-live addr=0x3fba93dcf0 base=0x3fba93db30 end=0x3fba93fb30 tag=1",
+      "LIFETIME successor-stale context=0x3fba93db30 chunk_header_bytes=16 A=0x3fba93dcf0 C=0x3fba93dcf0 pallocs=1 equal=1",
+      "LIFETIME successor-stale C-live addr=0x3fba93dcf0 base=0x3fba93db30 end=0x3fba93fb30 tag=1",
+      "LIFETIME successor-stale mark access=write via=C",
+      "LIFETIME successor-stale mark access=read via=C",
+      "LIFETIME successor-stale read-back mismatches=0",
+      "LIFETIME successor-stale mark access=stale-read via=A C-data=0xc2c3c0c1c6c7c4c5",
+      "LIFETIME successor-stale stale-read=0xc2c3c0c1c6c7c4c5 C-data=0xc2c3c0c1c6c7c4c5 equal=1",
+      "LIFETIME-RETURNED successor-stale successor-stale same_address=1 readback_ok=1 stale_read_completed=1 stale_equals_C=1"
+     ]
+    },
+    {
+     "session": "parent-2",
+     "control": "parent",
+     "repetition": 2,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, link_ok, header_ok, readback_ok, allocator_intact",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fb09f7d40",
+      "D": "0x3fb09f7cf0",
+      "block": "0x3fb09f7c90",
+      "block_end": "0x3fb09f9b30",
+      "context": "0x3fb09f7b30",
+      "chunk_header_bytes": "16",
+      "A_offset_in_block": "176"
+     },
+     "accesses": [
+      {
+       "access": "read-link",
+       "probe": "lc_probe_parent_read_link",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:126",
+       "probe_link_address": "0x54c58"
+      },
+      {
+       "access": "read-header",
+       "probe": "lc_probe_parent_read_header",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:132",
+       "probe_link_address": "0x54c80"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_parent_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:139",
+       "probe_link_address": "0x54ca8"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_parent_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:148",
+       "probe_link_address": "0x54ce8"
+      }
+     ],
+     "lines": [
+      "LIFETIME parent context=0x3fb09f7b30 block=0x3fb09f7c90 block_end=0x3fb09f9b30 chunk_header_bytes=16 A=0x3fb09f7d40 D=0x3fb09f7cf0 A_offset_in_block=176",
+      "LIFETIME parent A-live addr=0x3fb09f7d40 base=0x3fb09f7b30 end=0x3fb09f9b30 tag=1",
+      "LIFETIME parent block-ref addr=0x3fb09f7c90 base=0x3fb09f7b30 end=0x3fb09f9b30 tag=1",
+      "LIFETIME parent mark access=read-link via=block+176",
+      "LIFETIME parent read-link=0x3fb09f7ce0 expected D-chunk=0x3fb09f7ce0",
+      "LIFETIME parent mark access=read-header via=block+168",
+      "LIFETIME parent read-header=0x28000000043 before-free=0x28000000043",
+      "LIFETIME parent mark access=write via=block+192 bytes=48",
+      "LIFETIME parent mark access=read via=block+192 bytes=48",
+      "LIFETIME parent read-back mismatches=0",
+      "LIFETIME parent next-palloc=0x3fb09f7d40 (A=0x3fb09f7d40)",
+      "LIFETIME-RETURNED parent parent link_ok=1 header_ok=1 readback_ok=1 allocator_intact=1"
+     ]
+    },
+    {
+     "session": "sibling-2",
+     "control": "sibling",
+     "repetition": 2,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, intact, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f8093acf0",
+      "B": "0x3f8093ad40",
+      "block": "0x3f8093ac90",
+      "block_end": "0x3f8093cb30",
+      "context": "0x3f8093ab30",
+      "chunk_header_bytes": "16"
+     },
+     "accesses": [
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_sibling_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:166",
+       "probe_link_address": "0x54d8c"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      }
+     ],
+     "lines": [
+      "LIFETIME sibling context=0x3f8093ab30 block=0x3f8093ac90 block_end=0x3f8093cb30 chunk_header_bytes=16 A=0x3f8093acf0 B=0x3f8093ad40",
+      "LIFETIME sibling A-live addr=0x3f8093acf0 base=0x3f8093ab30 end=0x3f8093cb30 tag=1",
+      "LIFETIME sibling B-live addr=0x3f8093ad40 base=0x3f8093ab30 end=0x3f8093cb30 tag=1",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling contents-after-free-of-A mismatches=0",
+      "LIFETIME sibling mark access=write via=B",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling read-back mismatches=0",
+      "LIFETIME-RETURNED sibling sibling intact=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-2",
+     "control": "successor",
+     "repetition": 2,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, same_address, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fac8facf0",
+      "C": "0x3fac8facf0",
+      "context": "0x3fac8fab30",
+      "chunk_header_bytes": "16",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor A-live addr=0x3fac8facf0 base=0x3fac8fab30 end=0x3fac8fcb30 tag=1",
+      "LIFETIME successor context=0x3fac8fab30 chunk_header_bytes=16 A=0x3fac8facf0 C=0x3fac8facf0 pallocs=1 equal=1",
+      "LIFETIME successor C-live addr=0x3fac8facf0 base=0x3fac8fab30 end=0x3fac8fcb30 tag=1",
+      "LIFETIME successor mark access=write via=C",
+      "LIFETIME successor mark access=read via=C",
+      "LIFETIME successor read-back mismatches=0",
+      "LIFETIME-RETURNED successor successor same_address=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-stale-2",
+     "control": "successor-stale",
+     "repetition": 2,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, same_address, readback_ok, stale_read_completed, stale_equals_C",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fb3708cf0",
+      "C": "0x3fb3708cf0",
+      "context": "0x3fb3708b30",
+      "chunk_header_bytes": "16",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      },
+      {
+       "access": "stale-read",
+       "probe": "lc_probe_stale_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:189",
+       "probe_link_address": "0x54e68"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor-stale A-live addr=0x3fb3708cf0 base=0x3fb3708b30 end=0x3fb370ab30 tag=1",
+      "LIFETIME successor-stale context=0x3fb3708b30 chunk_header_bytes=16 A=0x3fb3708cf0 C=0x3fb3708cf0 pallocs=1 equal=1",
+      "LIFETIME successor-stale C-live addr=0x3fb3708cf0 base=0x3fb3708b30 end=0x3fb370ab30 tag=1",
+      "LIFETIME successor-stale mark access=write via=C",
+      "LIFETIME successor-stale mark access=read via=C",
+      "LIFETIME successor-stale read-back mismatches=0",
+      "LIFETIME successor-stale mark access=stale-read via=A C-data=0xc2c3c0c1c6c7c4c5",
+      "LIFETIME successor-stale stale-read=0xc2c3c0c1c6c7c4c5 C-data=0xc2c3c0c1c6c7c4c5 equal=1",
+      "LIFETIME-RETURNED successor-stale successor-stale same_address=1 readback_ok=1 stale_read_completed=1 stale_equals_C=1"
+     ]
+    },
+    {
+     "session": "parent-3",
+     "control": "parent",
+     "repetition": 3,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, link_ok, header_ok, readback_ok, allocator_intact",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f933b2d40",
+      "D": "0x3f933b2cf0",
+      "block": "0x3f933b2c90",
+      "block_end": "0x3f933b4b30",
+      "context": "0x3f933b2b30",
+      "chunk_header_bytes": "16",
+      "A_offset_in_block": "176"
+     },
+     "accesses": [
+      {
+       "access": "read-link",
+       "probe": "lc_probe_parent_read_link",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:126",
+       "probe_link_address": "0x54c58"
+      },
+      {
+       "access": "read-header",
+       "probe": "lc_probe_parent_read_header",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:132",
+       "probe_link_address": "0x54c80"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_parent_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:139",
+       "probe_link_address": "0x54ca8"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_parent_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:148",
+       "probe_link_address": "0x54ce8"
+      }
+     ],
+     "lines": [
+      "LIFETIME parent context=0x3f933b2b30 block=0x3f933b2c90 block_end=0x3f933b4b30 chunk_header_bytes=16 A=0x3f933b2d40 D=0x3f933b2cf0 A_offset_in_block=176",
+      "LIFETIME parent A-live addr=0x3f933b2d40 base=0x3f933b2b30 end=0x3f933b4b30 tag=1",
+      "LIFETIME parent block-ref addr=0x3f933b2c90 base=0x3f933b2b30 end=0x3f933b4b30 tag=1",
+      "LIFETIME parent mark access=read-link via=block+176",
+      "LIFETIME parent read-link=0x3f933b2ce0 expected D-chunk=0x3f933b2ce0",
+      "LIFETIME parent mark access=read-header via=block+168",
+      "LIFETIME parent read-header=0x28000000043 before-free=0x28000000043",
+      "LIFETIME parent mark access=write via=block+192 bytes=48",
+      "LIFETIME parent mark access=read via=block+192 bytes=48",
+      "LIFETIME parent read-back mismatches=0",
+      "LIFETIME parent next-palloc=0x3f933b2d40 (A=0x3f933b2d40)",
+      "LIFETIME-RETURNED parent parent link_ok=1 header_ok=1 readback_ok=1 allocator_intact=1"
+     ]
+    },
+    {
+     "session": "sibling-3",
+     "control": "sibling",
+     "repetition": 3,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, intact, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f92e74cf0",
+      "B": "0x3f92e74d40",
+      "block": "0x3f92e74c90",
+      "block_end": "0x3f92e76b30",
+      "context": "0x3f92e74b30",
+      "chunk_header_bytes": "16"
+     },
+     "accesses": [
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_sibling_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:166",
+       "probe_link_address": "0x54d8c"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      }
+     ],
+     "lines": [
+      "LIFETIME sibling context=0x3f92e74b30 block=0x3f92e74c90 block_end=0x3f92e76b30 chunk_header_bytes=16 A=0x3f92e74cf0 B=0x3f92e74d40",
+      "LIFETIME sibling A-live addr=0x3f92e74cf0 base=0x3f92e74b30 end=0x3f92e76b30 tag=1",
+      "LIFETIME sibling B-live addr=0x3f92e74d40 base=0x3f92e74b30 end=0x3f92e76b30 tag=1",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling contents-after-free-of-A mismatches=0",
+      "LIFETIME sibling mark access=write via=B",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling read-back mismatches=0",
+      "LIFETIME-RETURNED sibling sibling intact=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-3",
+     "control": "successor",
+     "repetition": 3,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, same_address, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fac718cf0",
+      "C": "0x3fac718cf0",
+      "context": "0x3fac718b30",
+      "chunk_header_bytes": "16",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor A-live addr=0x3fac718cf0 base=0x3fac718b30 end=0x3fac71ab30 tag=1",
+      "LIFETIME successor context=0x3fac718b30 chunk_header_bytes=16 A=0x3fac718cf0 C=0x3fac718cf0 pallocs=1 equal=1",
+      "LIFETIME successor C-live addr=0x3fac718cf0 base=0x3fac718b30 end=0x3fac71ab30 tag=1",
+      "LIFETIME successor mark access=write via=C",
+      "LIFETIME successor mark access=read via=C",
+      "LIFETIME successor read-back mismatches=0",
+      "LIFETIME-RETURNED successor successor same_address=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-stale-3",
+     "control": "successor-stale",
+     "repetition": 3,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, same_address, readback_ok, stale_read_completed, stale_equals_C",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f90ac2cf0",
+      "C": "0x3f90ac2cf0",
+      "context": "0x3f90ac2b30",
+      "chunk_header_bytes": "16",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      },
+      {
+       "access": "stale-read",
+       "probe": "lc_probe_stale_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:189",
+       "probe_link_address": "0x54e68"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor-stale A-live addr=0x3f90ac2cf0 base=0x3f90ac2b30 end=0x3f90ac4b30 tag=1",
+      "LIFETIME successor-stale context=0x3f90ac2b30 chunk_header_bytes=16 A=0x3f90ac2cf0 C=0x3f90ac2cf0 pallocs=1 equal=1",
+      "LIFETIME successor-stale C-live addr=0x3f90ac2cf0 base=0x3f90ac2b30 end=0x3f90ac4b30 tag=1",
+      "LIFETIME successor-stale mark access=write via=C",
+      "LIFETIME successor-stale mark access=read via=C",
+      "LIFETIME successor-stale read-back mismatches=0",
+      "LIFETIME successor-stale mark access=stale-read via=A C-data=0xc2c3c0c1c6c7c4c5",
+      "LIFETIME successor-stale stale-read=0xc2c3c0c1c6c7c4c5 C-data=0xc2c3c0c1c6c7c4c5 equal=1",
+      "LIFETIME-RETURNED successor-stale successor-stale same_address=1 readback_ok=1 stale_read_completed=1 stale_equals_C=1"
+     ]
+    }
+   ]
+  },
+  "protected": {
+   "image": {
+    "sha256": "3197202a6d4798b262255a883a9a5a9396abce7c7589c94c2f6f0c029872e173",
+    "manifest": {
+     "application": "postgres",
+     "profile": "virtual",
+     "heap": "virtual",
+     "nested": "postgres",
+     "recipe_revision": "347afd2de16268df546cd760bbe54d7a3a1663a6",
+     "runtime_revision": "347afd2de16268df546cd760bbe54d7a3a1663a6",
+     "runtime_dirty": true,
+     "stack_bytes": 1048576,
+     "compiler_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+     "runtime_archive_sha256": "e5693f5cca2103dcd3fb722e68dfad967cdbebcb818f459044385414ccd2e545",
+     "builtins_archive_sha256": "a72ed0bf31407f08bb058ae85e7dbb83a6d789d2ba95f8b2a6ee244b775bf56e",
+     "image_sha256": "3197202a6d4798b262255a883a9a5a9396abce7c7589c94c2f6f0c029872e173"
+    }
+   },
+   "boot": {
+    "completed": true,
+    "sessions_planned": 14,
+    "sessions_ran": 14,
+    "wall_seconds": 632.2
+   },
+   "identity": {
+    "preflight": true,
+    "uaf_palloc": {
+     "observed": "fault",
+     "expected": "fault",
+     "fault": {
+      "cause": 25,
+      "pc": "0x3f9d045d7c",
+      "function": "corpus_control_read"
+     }
+    }
+   },
+   "sessions": [
+    {
+     "session": "parent-1",
+     "control": "parent",
+     "repetition": 1,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, link_ok, header_ok, readback_ok, allocator_intact",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fb8a65e00",
+      "D": "0x3fb8a65da0",
+      "block": "0x3fb8a65d10",
+      "block_end": "0x3fb8a67bb0",
+      "context": "0x3fb8a65bb0",
+      "chunk_header_bytes": "32",
+      "A_offset_in_block": "240"
+     },
+     "accesses": [
+      {
+       "access": "read-link",
+       "probe": "lc_probe_parent_read_link",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:126",
+       "probe_link_address": "0x54c58"
+      },
+      {
+       "access": "read-header",
+       "probe": "lc_probe_parent_read_header",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:132",
+       "probe_link_address": "0x54c80"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_parent_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:139",
+       "probe_link_address": "0x54ca8"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_parent_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:148",
+       "probe_link_address": "0x54ce8"
+      }
+     ],
+     "lines": [
+      "LIFETIME parent context=0x3fb8a65bb0 block=0x3fb8a65d10 block_end=0x3fb8a67bb0 chunk_header_bytes=32 A=0x3fb8a65e00 D=0x3fb8a65da0 A_offset_in_block=240",
+      "LIFETIME parent A-live addr=0x3fb8a65e00 base=0x3fb8a65de0 end=0x3fb8a65e40 tag=1",
+      "LIFETIME parent block-ref addr=0x3fb8a65d10 base=0x3fb8a65bb0 end=0x3fb8a67bb0 tag=1",
+      "LIFETIME parent mark access=read-link via=block+240",
+      "LIFETIME parent read-link=0x3fb8a65d80 expected D-chunk=0x3fb8a65d80",
+      "LIFETIME parent mark access=read-header via=block+232",
+      "LIFETIME parent read-header=0x34000000043 before-free=0x34000000043",
+      "LIFETIME parent mark access=write via=block+256 bytes=48",
+      "LIFETIME parent mark access=read via=block+256 bytes=48",
+      "LIFETIME parent read-back mismatches=0",
+      "LIFETIME parent next-palloc=0x3fb8a65e00 (A=0x3fb8a65e00)",
+      "LIFETIME-RETURNED parent parent link_ok=1 header_ok=1 readback_ok=1 allocator_intact=1"
+     ]
+    },
+    {
+     "session": "sibling-1",
+     "control": "sibling",
+     "repetition": 1,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, intact, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fb7feada0",
+      "B": "0x3fb7feae00",
+      "block": "0x3fb7fead10",
+      "block_end": "0x3fb7fecbb0",
+      "context": "0x3fb7feabb0",
+      "chunk_header_bytes": "32"
+     },
+     "accesses": [
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_sibling_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:166",
+       "probe_link_address": "0x54d8c"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      }
+     ],
+     "lines": [
+      "LIFETIME sibling context=0x3fb7feabb0 block=0x3fb7fead10 block_end=0x3fb7fecbb0 chunk_header_bytes=32 A=0x3fb7feada0 B=0x3fb7feae00",
+      "LIFETIME sibling A-live addr=0x3fb7feada0 base=0x3fb7fead80 end=0x3fb7feade0 tag=1",
+      "LIFETIME sibling B-live addr=0x3fb7feae00 base=0x3fb7feade0 end=0x3fb7feae40 tag=1",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling contents-after-free-of-A mismatches=0",
+      "LIFETIME sibling mark access=write via=B",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling read-back mismatches=0",
+      "LIFETIME-RETURNED sibling sibling intact=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-1",
+     "control": "successor",
+     "repetition": 1,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, same_address, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f9d574da0",
+      "C": "0x3f9d574da0",
+      "context": "0x3f9d574bb0",
+      "chunk_header_bytes": "32",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor A-live addr=0x3f9d574da0 base=0x3f9d574d80 end=0x3f9d574de0 tag=1",
+      "LIFETIME successor context=0x3f9d574bb0 chunk_header_bytes=32 A=0x3f9d574da0 C=0x3f9d574da0 pallocs=1 equal=1",
+      "LIFETIME successor C-live addr=0x3f9d574da0 base=0x3f9d574d80 end=0x3f9d574de0 tag=1",
+      "LIFETIME successor mark access=write via=C",
+      "LIFETIME successor mark access=read via=C",
+      "LIFETIME successor read-back mismatches=0",
+      "LIFETIME-RETURNED successor successor same_address=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-stale-1",
+     "control": "successor-stale",
+     "repetition": 1,
+     "outcome": "fault",
+     "verdict": "ok",
+     "verdict_reason": "fault cause 25 at the probe",
+     "fault": {
+      "cause": 25,
+      "pc": "0x3f99044e7c",
+      "function": "lc_probe_stale_read",
+      "offset": 20,
+      "line": "capstone-exec: domain fault cause=25 pc=0x3f99044e7c address=0x3f9aa21da0 entry=0x3f990009a0 code=0x3f99000000-0x3f9a000000 last=0x40 preparing=0x40 sha256=3197202a6d4798b262255a883a9a5a9396abce7c7589c94c2f6f0c029872e173 image=./bin/postgres"
+     },
+     "exit": "signal 11",
+     "addresses": {
+      "A": "0x3f9aa21da0",
+      "C": "0x3f9aa21da0",
+      "context": "0x3f9aa21bb0",
+      "chunk_header_bytes": "32",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      },
+      {
+       "access": "stale-read",
+       "probe": "lc_probe_stale_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:189",
+       "probe_link_address": "0x54e68"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor-stale A-live addr=0x3f9aa21da0 base=0x3f9aa21d80 end=0x3f9aa21de0 tag=1",
+      "LIFETIME successor-stale context=0x3f9aa21bb0 chunk_header_bytes=32 A=0x3f9aa21da0 C=0x3f9aa21da0 pallocs=1 equal=1",
+      "LIFETIME successor-stale C-live addr=0x3f9aa21da0 base=0x3f9aa21d80 end=0x3f9aa21de0 tag=1",
+      "LIFETIME successor-stale mark access=write via=C",
+      "LIFETIME successor-stale mark access=read via=C",
+      "LIFETIME successor-stale read-back mismatches=0",
+      "LIFETIME successor-stale mark access=stale-read via=A C-data=0xc2c3c0c1c6c7c4c5"
+     ]
+    },
+    {
+     "session": "parent-2",
+     "control": "parent",
+     "repetition": 2,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, link_ok, header_ok, readback_ok, allocator_intact",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f8f2f4e00",
+      "D": "0x3f8f2f4da0",
+      "block": "0x3f8f2f4d10",
+      "block_end": "0x3f8f2f6bb0",
+      "context": "0x3f8f2f4bb0",
+      "chunk_header_bytes": "32",
+      "A_offset_in_block": "240"
+     },
+     "accesses": [
+      {
+       "access": "read-link",
+       "probe": "lc_probe_parent_read_link",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:126",
+       "probe_link_address": "0x54c58"
+      },
+      {
+       "access": "read-header",
+       "probe": "lc_probe_parent_read_header",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:132",
+       "probe_link_address": "0x54c80"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_parent_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:139",
+       "probe_link_address": "0x54ca8"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_parent_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:148",
+       "probe_link_address": "0x54ce8"
+      }
+     ],
+     "lines": [
+      "LIFETIME parent context=0x3f8f2f4bb0 block=0x3f8f2f4d10 block_end=0x3f8f2f6bb0 chunk_header_bytes=32 A=0x3f8f2f4e00 D=0x3f8f2f4da0 A_offset_in_block=240",
+      "LIFETIME parent A-live addr=0x3f8f2f4e00 base=0x3f8f2f4de0 end=0x3f8f2f4e40 tag=1",
+      "LIFETIME parent block-ref addr=0x3f8f2f4d10 base=0x3f8f2f4bb0 end=0x3f8f2f6bb0 tag=1",
+      "LIFETIME parent mark access=read-link via=block+240",
+      "LIFETIME parent read-link=0x3f8f2f4d80 expected D-chunk=0x3f8f2f4d80",
+      "LIFETIME parent mark access=read-header via=block+232",
+      "LIFETIME parent read-header=0x34000000043 before-free=0x34000000043",
+      "LIFETIME parent mark access=write via=block+256 bytes=48",
+      "LIFETIME parent mark access=read via=block+256 bytes=48",
+      "LIFETIME parent read-back mismatches=0",
+      "LIFETIME parent next-palloc=0x3f8f2f4e00 (A=0x3f8f2f4e00)",
+      "LIFETIME-RETURNED parent parent link_ok=1 header_ok=1 readback_ok=1 allocator_intact=1"
+     ]
+    },
+    {
+     "session": "sibling-2",
+     "control": "sibling",
+     "repetition": 2,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, intact, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fbad34da0",
+      "B": "0x3fbad34e00",
+      "block": "0x3fbad34d10",
+      "block_end": "0x3fbad36bb0",
+      "context": "0x3fbad34bb0",
+      "chunk_header_bytes": "32"
+     },
+     "accesses": [
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_sibling_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:166",
+       "probe_link_address": "0x54d8c"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      }
+     ],
+     "lines": [
+      "LIFETIME sibling context=0x3fbad34bb0 block=0x3fbad34d10 block_end=0x3fbad36bb0 chunk_header_bytes=32 A=0x3fbad34da0 B=0x3fbad34e00",
+      "LIFETIME sibling A-live addr=0x3fbad34da0 base=0x3fbad34d80 end=0x3fbad34de0 tag=1",
+      "LIFETIME sibling B-live addr=0x3fbad34e00 base=0x3fbad34de0 end=0x3fbad34e40 tag=1",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling contents-after-free-of-A mismatches=0",
+      "LIFETIME sibling mark access=write via=B",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling read-back mismatches=0",
+      "LIFETIME-RETURNED sibling sibling intact=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-2",
+     "control": "successor",
+     "repetition": 2,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, same_address, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f9b29dda0",
+      "C": "0x3f9b29dda0",
+      "context": "0x3f9b29dbb0",
+      "chunk_header_bytes": "32",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor A-live addr=0x3f9b29dda0 base=0x3f9b29dd80 end=0x3f9b29dde0 tag=1",
+      "LIFETIME successor context=0x3f9b29dbb0 chunk_header_bytes=32 A=0x3f9b29dda0 C=0x3f9b29dda0 pallocs=1 equal=1",
+      "LIFETIME successor C-live addr=0x3f9b29dda0 base=0x3f9b29dd80 end=0x3f9b29dde0 tag=1",
+      "LIFETIME successor mark access=write via=C",
+      "LIFETIME successor mark access=read via=C",
+      "LIFETIME successor read-back mismatches=0",
+      "LIFETIME-RETURNED successor successor same_address=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-stale-2",
+     "control": "successor-stale",
+     "repetition": 2,
+     "outcome": "fault",
+     "verdict": "ok",
+     "verdict_reason": "fault cause 25 at the probe",
+     "fault": {
+      "cause": 25,
+      "pc": "0x3fa9044e7c",
+      "function": "lc_probe_stale_read",
+      "offset": 20,
+      "line": "capstone-exec: domain fault cause=25 pc=0x3fa9044e7c address=0x3faab59da0 entry=0x3fa90009a0 code=0x3fa9000000-0x3faa000000 last=0x40 preparing=0x40 sha256=3197202a6d4798b262255a883a9a5a9396abce7c7589c94c2f6f0c029872e173 image=./bin/postgres"
+     },
+     "exit": "signal 11",
+     "addresses": {
+      "A": "0x3faab59da0",
+      "C": "0x3faab59da0",
+      "context": "0x3faab59bb0",
+      "chunk_header_bytes": "32",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      },
+      {
+       "access": "stale-read",
+       "probe": "lc_probe_stale_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:189",
+       "probe_link_address": "0x54e68"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor-stale A-live addr=0x3faab59da0 base=0x3faab59d80 end=0x3faab59de0 tag=1",
+      "LIFETIME successor-stale context=0x3faab59bb0 chunk_header_bytes=32 A=0x3faab59da0 C=0x3faab59da0 pallocs=1 equal=1",
+      "LIFETIME successor-stale C-live addr=0x3faab59da0 base=0x3faab59d80 end=0x3faab59de0 tag=1",
+      "LIFETIME successor-stale mark access=write via=C",
+      "LIFETIME successor-stale mark access=read via=C",
+      "LIFETIME successor-stale read-back mismatches=0",
+      "LIFETIME successor-stale mark access=stale-read via=A C-data=0xc2c3c0c1c6c7c4c5"
+     ]
+    },
+    {
+     "session": "parent-3",
+     "control": "parent",
+     "repetition": 3,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, link_ok, header_ok, readback_ok, allocator_intact",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fadeb4e00",
+      "D": "0x3fadeb4da0",
+      "block": "0x3fadeb4d10",
+      "block_end": "0x3fadeb6bb0",
+      "context": "0x3fadeb4bb0",
+      "chunk_header_bytes": "32",
+      "A_offset_in_block": "240"
+     },
+     "accesses": [
+      {
+       "access": "read-link",
+       "probe": "lc_probe_parent_read_link",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:126",
+       "probe_link_address": "0x54c58"
+      },
+      {
+       "access": "read-header",
+       "probe": "lc_probe_parent_read_header",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:132",
+       "probe_link_address": "0x54c80"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_parent_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:139",
+       "probe_link_address": "0x54ca8"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_parent_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:148",
+       "probe_link_address": "0x54ce8"
+      }
+     ],
+     "lines": [
+      "LIFETIME parent context=0x3fadeb4bb0 block=0x3fadeb4d10 block_end=0x3fadeb6bb0 chunk_header_bytes=32 A=0x3fadeb4e00 D=0x3fadeb4da0 A_offset_in_block=240",
+      "LIFETIME parent A-live addr=0x3fadeb4e00 base=0x3fadeb4de0 end=0x3fadeb4e40 tag=1",
+      "LIFETIME parent block-ref addr=0x3fadeb4d10 base=0x3fadeb4bb0 end=0x3fadeb6bb0 tag=1",
+      "LIFETIME parent mark access=read-link via=block+240",
+      "LIFETIME parent read-link=0x3fadeb4d80 expected D-chunk=0x3fadeb4d80",
+      "LIFETIME parent mark access=read-header via=block+232",
+      "LIFETIME parent read-header=0x34000000043 before-free=0x34000000043",
+      "LIFETIME parent mark access=write via=block+256 bytes=48",
+      "LIFETIME parent mark access=read via=block+256 bytes=48",
+      "LIFETIME parent read-back mismatches=0",
+      "LIFETIME parent next-palloc=0x3fadeb4e00 (A=0x3fadeb4e00)",
+      "LIFETIME-RETURNED parent parent link_ok=1 header_ok=1 readback_ok=1 allocator_intact=1"
+     ]
+    },
+    {
+     "session": "sibling-3",
+     "control": "sibling",
+     "repetition": 3,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, intact, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3fab130da0",
+      "B": "0x3fab130e00",
+      "block": "0x3fab130d10",
+      "block_end": "0x3fab132bb0",
+      "context": "0x3fab130bb0",
+      "chunk_header_bytes": "32"
+     },
+     "accesses": [
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      },
+      {
+       "access": "write",
+       "probe": "lc_probe_sibling_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:166",
+       "probe_link_address": "0x54d8c"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_sibling_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:158",
+       "probe_link_address": "0x54d38"
+      }
+     ],
+     "lines": [
+      "LIFETIME sibling context=0x3fab130bb0 block=0x3fab130d10 block_end=0x3fab132bb0 chunk_header_bytes=32 A=0x3fab130da0 B=0x3fab130e00",
+      "LIFETIME sibling A-live addr=0x3fab130da0 base=0x3fab130d80 end=0x3fab130de0 tag=1",
+      "LIFETIME sibling B-live addr=0x3fab130e00 base=0x3fab130de0 end=0x3fab130e40 tag=1",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling contents-after-free-of-A mismatches=0",
+      "LIFETIME sibling mark access=write via=B",
+      "LIFETIME sibling mark access=read via=B",
+      "LIFETIME sibling read-back mismatches=0",
+      "LIFETIME-RETURNED sibling sibling intact=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-3",
+     "control": "successor",
+     "repetition": 3,
+     "outcome": "completed",
+     "verdict": "ok",
+     "verdict_reason": "completed, same_address, readback_ok",
+     "fault": null,
+     "exit": "exit 0",
+     "addresses": {
+      "A": "0x3f8f05dda0",
+      "C": "0x3f8f05dda0",
+      "context": "0x3f8f05dbb0",
+      "chunk_header_bytes": "32",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor A-live addr=0x3f8f05dda0 base=0x3f8f05dd80 end=0x3f8f05dde0 tag=1",
+      "LIFETIME successor context=0x3f8f05dbb0 chunk_header_bytes=32 A=0x3f8f05dda0 C=0x3f8f05dda0 pallocs=1 equal=1",
+      "LIFETIME successor C-live addr=0x3f8f05dda0 base=0x3f8f05dd80 end=0x3f8f05dde0 tag=1",
+      "LIFETIME successor mark access=write via=C",
+      "LIFETIME successor mark access=read via=C",
+      "LIFETIME successor read-back mismatches=0",
+      "LIFETIME-RETURNED successor successor same_address=1 readback_ok=1"
+     ]
+    },
+    {
+     "session": "successor-stale-3",
+     "control": "successor-stale",
+     "repetition": 3,
+     "outcome": "fault",
+     "verdict": "ok",
+     "verdict_reason": "fault cause 25 at the probe",
+     "fault": {
+      "cause": 25,
+      "pc": "0x3fa3044e7c",
+      "function": "lc_probe_stale_read",
+      "offset": 20,
+      "line": "capstone-exec: domain fault cause=25 pc=0x3fa3044e7c address=0x3fa4df6da0 entry=0x3fa30009a0 code=0x3fa3000000-0x3fa4000000 last=0x40 preparing=0x40 sha256=3197202a6d4798b262255a883a9a5a9396abce7c7589c94c2f6f0c029872e173 image=./bin/postgres"
+     },
+     "exit": "signal 11",
+     "addresses": {
+      "A": "0x3fa4df6da0",
+      "C": "0x3fa4df6da0",
+      "context": "0x3fa4df6bb0",
+      "chunk_header_bytes": "32",
+      "pallocs": "1"
+     },
+     "accesses": [
+      {
+       "access": "write",
+       "probe": "lc_probe_successor_write",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:173",
+       "probe_link_address": "0x54dcc"
+      },
+      {
+       "access": "read",
+       "probe": "lc_probe_successor_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:182",
+       "probe_link_address": "0x54e0c"
+      },
+      {
+       "access": "stale-read",
+       "probe": "lc_probe_stale_read",
+       "file_line": "capstone/bug-corpora/postgres/sql-repros/controls/module/pgcorpus_lifetime.c:189",
+       "probe_link_address": "0x54e68"
+      }
+     ],
+     "lines": [
+      "LIFETIME successor-stale A-live addr=0x3fa4df6da0 base=0x3fa4df6d80 end=0x3fa4df6de0 tag=1",
+      "LIFETIME successor-stale context=0x3fa4df6bb0 chunk_header_bytes=32 A=0x3fa4df6da0 C=0x3fa4df6da0 pallocs=1 equal=1",
+      "LIFETIME successor-stale C-live addr=0x3fa4df6da0 base=0x3fa4df6d80 end=0x3fa4df6de0 tag=1",
+      "LIFETIME successor-stale mark access=write via=C",
+      "LIFETIME successor-stale mark access=read via=C",
+      "LIFETIME successor-stale read-back mismatches=0",
+      "LIFETIME successor-stale mark access=stale-read via=A C-data=0xc2c3c0c1c6c7c4c5"
+     ]
+    }
+   ]
+  }
+ },
+ "verdict": {
+  "parent": "held on both arms (3/3 each)",
+  "sibling": "held on both arms (3/3 each)",
+  "successor": "held on both arms (3/3 each)",
+  "successor_stale_protected": "held: cause 25 in lc_probe_stale_read+20 (the ld), 3/3",
+  "successor_stale_release": "held: completed and read C's data, 3/3",
+  "positive_control": "held",
+  "prediction_holds": true
+ },
+ "wall_seconds": {
+  "build_release": 183,
+  "build_protected": 192,
+  "boot_release_14_sessions": 673.3,
+  "boot_protected_14_sessions": 632.2
+ },
+ "n": "3 repetitions per control per arm, each its own backend session on a fresh cluster copy, in one boot per arm"
+}

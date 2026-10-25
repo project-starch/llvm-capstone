@@ -1,11 +1,32 @@
-# CPython 3.13.7 interpreter in a Capstone domain
+# CPython 3.13.7 interpreter on Capstone
 
-**Status.** The complete interpreter runs. `run-cpython-domain.sh` starts it in a domain on the
-musl-capstone libc with the standard library as a zip; the four-arm inner-reuse campaign
-qualified it on the `objects.py 8 3 0` JSON/GC workload, 12 of 12 processes oracle-checked
-(`capstone/experiments/study/results/cpython-reuse-four-arm-20260928/`). `cheribsd/` cross-builds
-the same release for CheriBSD purecap, with ordinary pymalloc or the PoisonCap component.
-Fourteen patches carry the pointer-layout changes, and `port.json` states the pin and the role.
+**Status.** The complete interpreter runs as a Capstone application on the virtual profile
+(`capstone/runtime/virtual`), started by `capstone-vexec` with the standard library under
+`PYTHONHOME`. **Its one heap is musl's mallocng compiled for Capstone**
+(`runtime/virtual/heap.c`): exact bounds per object, lifetime retired on free. The physical
+domain's heaps -- the first-fit `level0.c` and the Sublet heap -- are no longer built for CPython:
+`prepare-cpython-capstone.sh` refuses any other profile, and the `CPYD_HEAP` switch between them
+is gone. `cheribsd/` cross-builds the same release for CheriBSD purecap, with ordinary pymalloc.
+Fourteen patches carry the pointer-layout changes (0014, the protection, only with `CPY_SUBLET=1`), and `port.json`
+states the pin and the role.
+
+## Build and run
+
+    ports/common/application/build-virtual.sh cpython OUT              # pymalloc stock
+    CPY_SUBLET=1 ports/common/application/build-virtual.sh cpython OUT # pymalloc protected
+
+The second also applies patch 0014, on top of 0009. It is the whole Sublet protection: obmalloc
+hands out each block as a child lifetime of its arena, bounded to the request (`CDERIVE`), and
+revokes it on free (`CREVOKE`), through the wrappers in `capstone/runtime/include/capstone/capability.h`.
+There is no adapter, no run-time mode and no grant. `runtime/virtual/run-ports.py` runs the
+image on a virtual VM:
+
+    PYTHONHOME=/mnt/vm/cpy ./capstone-vexec ./cpython.dom -S -c '...'
+
+**The records below were measured on the physical application domain with the first-fit heap**,
+before this port moved to the virtual profile. They are kept as history: the compile survey, the
+link census, the thread, signal, socket and subprocess gates. Nothing in them was re-measured on
+mallocng.
 
 **Everything below is the compile survey of 2026-09-23**, which is how this port started. It is
 kept because it is the list of what did not compile and why, and because three of those causes

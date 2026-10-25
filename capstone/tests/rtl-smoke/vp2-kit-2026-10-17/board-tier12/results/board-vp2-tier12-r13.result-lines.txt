@@ -1,0 +1,74 @@
+# vp2 boot r13 (S-24 two-sided diagnostic, not a Tier 2 record), 2026-10-18 09:34-09:42: caplifive_vp2_bf3db3175
+# (resident), fw_payload 3df8df7da5c9ea30 (monitor 007d81d), module a56fc415ad7133aa (resolve-sites-10), suite
+# vm-suite-inner-r13.sh. Pre-registered at lane vp2-tier12 ad7ef6004ffc. Result lines only, from run3r13/board.txt and SEQ.
+
+DRIVER rc=1 09:42:31; watchdog lines 31
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=19 oracle=22 NOT-AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+VM-SUITE board-check rc=1 :: 19 of 41 true; 14 off the pre-registration ['sparse-churn', 'sparse-stale', 'sqlite_write', 'sqlite_read', 'mruby', 'fault_causes', 'nested_denial_site', 'vm_denial_sites', 'vm_denial_operations', 'linux_pages_released', 'linux_demand_faults', 'sparse_recycling', 'sqlite_results', 'mruby_results']
+FRTY retries 4 at       4 FRTY:011110E0 
+BANNER (console, pr_emerg; KMSG copies excluded):       1 capstone_vm: loaded, diag resolve-sites-10, supervisor_slots=1;
+PARAM read-backs: RESOLVE_PTE:Y:before-vm-dirty0 RESOLVE_DIRTY:N:before-vm-dirty0 RESOLVE_DIRTY:Y:before-threads2 
+PTE at the bound (VM0):       2 pte rc=0 val=0x20331857 present=1 write=1 young=1 dirty=0 pfn=0x80cc6;
+VM exits: VM_EXIT:normal:0 VM_EXIT:normal:0 VM_EXIT:threads:1 VM_EXIT:vm-dirty0:139 VM_EXIT:threads2:1 VM_EXIT:vm-dirty1:1 
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_R13_DONE 09:42:31
+(The runner's per-window KMSG counts are cumulative: dmesg is not cleared, so a later window repeats earlier lines.
+The new lines per window below are taken by timestamp.)
+
+## vm-suite exits, in order
+  VM_EXIT:normal:0
+  VM_EXIT:threads:1
+  VM_CONTRACT_FAIL:thread create
+  RESOLVE_PTE:Y:before-vm-dirty0
+  RESOLVE_DIRTY:N:before-vm-dirty0
+  VM_EXIT:vm-dirty0:139
+  RESOLVE_DIRTY:Y:before-threads2
+  VM_EXIT:threads2:1
+  VM_CONTRACT_FAIL:execute through mapping PCC
+  VM_EXIT:vm-dirty1:1
+  VM_EXIT:nested:0
+  VM_EXIT:nested-stale:139
+  VM_CONTRACT_FAIL:heap thread create
+  VM_EXIT:heap-threads:1
+  VM_EXIT:stale:139
+  VM_EXIT:bounds:139
+  VM_EXIT:retired:139
+  VM_EXIT:vm-ro-write:139
+  VM_EXIT:vm-none-read:139
+  VM_EXIT:vm-guard:139
+  VM_EXIT:vm-padding:139
+  VM_EXIT:preempt:143
+  VM_EXIT:parallel_one:0
+  VM_EXIT:parallel_two:0
+  VM_EXIT:cleanup:1
+## the module's lines, new in each window (by timestamp)
+  VM0:
+    [  130.210544] capstone_vm: loaded, diag resolve-sites-10, supervisor_slots=1, diag_emerg=0
+    [  160.598872] capstone_vm: thread create refused, 1 supervisor slot in use
+    [  166.364662] capstone_vm: fault at 0x3fa4006000 cause 15 resolved 65 times with no change; the page is pinned and the PTE is untouched by this module; pte rc=0 val=0x20331857 present=1 write=1 young=1 dirty=0 pfn=0x80cc6
+    [  166.369115] capstone_vm: fault at 0x3fa4006000 cause 15 resolved 66 times with no change; the page is pinned and the PTE is untouched by this module; pte rc=0 val=0x20331857 present=1 write=1 young=1 dirty=0 pfn=0x80cc6
+  VM1:
+    [  176.571437] capstone_vm: thread create refused, 1 supervisor slot in use
+    [  180.713254] capstone_vm: thread create refused, 1 supervisor slot in use
+  RETURNING:
+    [  198.439556] capstone_vm: thread create refused, 1 supervisor slot in use
+    [  218.511805] capstone_vm: resolve refused at vma: addr 0x3f98644000 cause 15 need 0x2 pc 0x3f98593254 prev(addr 0x3f98644000 cause 15 rep 0) found 1 flags 0x100071 file 0
+    [  218.514804] capstone_vm: resolve refused at vma: addr 0x3f98644000 cause 15 need 0x2 pc 0x3f98593254 prev(addr 0x3f98644000 cause 15 rep 0) found 1 flags 0x100071 file 0
+    [  223.879099] capstone_vm: resolve refused at vma: addr 0x3facd34000 cause 13 need 0x1 pc 0x3facc934d0 prev(addr 0x3facd34000 cause 15 rep 0) found 1 flags 0x100070 file 0
+    [  223.882131] capstone_vm: resolve refused at vma: addr 0x3facd34000 cause 13 need 0x1 pc 0x3facc934d0 prev(addr 0x3facd34000 cause 15 rep 0) found 1 flags 0x100070 file 0
+    [  229.243405] capstone_vm: resolve refused at vma: addr 0x3f89bb1000 cause 13 need 0x1 pc 0x3f89b137bc prev(addr 0x3f89bb0000 cause 15 rep 0) found 1 flags 0x100070 file 0
+    [  229.248861] capstone_vm: resolve refused at vma: addr 0x3f89bb1000 cause 13 need 0x1 pc 0x3f89b137bc prev(addr 0x3f89bb0000 cause 15 rep 0) found 1 flags 0x100070 file 0
+## scored against the pre-registration (every comparison by script)
+  Tier 1 identity (the eighth boot); the console banner once, resolve-sites-10.
+  `vm`, resolve_dirty=N: exit 139. The bound line sits at the launcher's fault address with `pte val=0x20331857
+  present=1 write=1 young=1 dirty=0`; the low byte 0x57 decodes to V R W U A set and D clear. This is the runtime lane's
+  S-24 account read on silicon: the RTL needs D for a store, and GUP marks the page dirty, not the PTE.
+  `vm`, resolve_dirty=Y: exit 1 with `VM_CONTRACT_FAIL:execute through mapping PCC`, QEMU's own status and failure
+  point. No new bound line; threads2's must-fire is in the window.
+  The other returning steps equal r12's in exits and in the cause and code offset of every fault line. The three
+  `vma` refusals keep need 0x2 against flags without VM_WRITE and need 0x1 against flags without VM_READ.
+  No wedge (no sparse steps, no kit apps).

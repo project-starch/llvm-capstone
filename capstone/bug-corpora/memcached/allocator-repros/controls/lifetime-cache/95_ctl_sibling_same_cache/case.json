@@ -1,0 +1,17 @@
+{
+  "case": 95,
+  "title": "CONTROL (sibling): A and B from the same cache's free list; A released with cache_free; B read, written and freed afterwards",
+  "variants": {
+    "sibling": "B used after A's cache_free"
+  },
+  "arms": {
+    "virtual-malloc": {
+      "oracle": "complete"
+    },
+    "virtual-nested-pools": {
+      "oracle": "complete"
+    }
+  },
+  "control_for": "the lifetime patch 0006's cache.c half (virtual-nested-pools) leaves permitted accesses alone; pre-registered in capstone/docs/plans/2026-10-12-nested-lifetime-controls-extended.md",
+  "run": "ctl-95 95 VARIANT, built by controls/lifetime-cache/build-controls.sh, run by controls/lifetime-cache/run-controls.py"
+}

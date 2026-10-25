@@ -1,0 +1,180 @@
+Reuse-distance hooks at wmem's block and block_fast allocators (pre-registration 16d2171a3edc,
+capstone/docs/plans/2026-10-11-nested-reuse-distance.md). Everything added is behind
+EXP_REUSE_GAP; wmem-reuse-gap.h (beside this patch) holds the observer helpers and the report.
+
+The hooks sit in upstream's consumer functions, which wmem patch 0001 keeps and calls from its
+wrappers with the allocator's own pointer, so this one patch serves both arms: it applies at
+fuzz 0 to the released tree (stock) and, with line offsets only, on top of patch 0001
+(protected), with the same lines at the same places.
+  hand-out  wmem_block_alloc, wmem_block_alloc_jumbo, wmem_block_fast_alloc (both returns):
+            attempt + issue(start, size) just before the user's pointer is returned
+  release   wmem_block_free (jumbo and normal), before the chunk is merged or the jumbo freed;
+            free_all of both allocators, before anything is reinitialised: every live start
+            inside each block, and each jumbo object. block_fast's free is a no-op upstream, so
+            its objects are released only by the reset that lets the allocator reuse them.
+  resize    wmem_block_realloc's in-place grow and shrink: resize, no new start
+  moved     jumbo realloc (both allocators, through the system allocator): resize if the start
+            is unchanged, else release the old start and issue the new one. A block realloc
+            that moves goes through wmem_block_alloc and wmem_block_free, hooked there; a
+            block_fast grow goes through wmem_block_fast_alloc and leaves the old object live.
+
+--- a/wsutil/wmem/wmem_allocator_block.c
++++ b/wsutil/wmem/wmem_allocator_block.c
+@@ -18,6 +18,12 @@
+ #include "wmem_allocator.h"
+ #include "wmem_allocator_block.h"
+ 
++#ifdef EXP_REUSE_GAP
++#include "wmem-reuse-gap.h"
++static struct wmem_rg wmem_rg_block = { .name = "wmem-block" };
++static void wmem_rg_report(void) { wmem_rg_print(&wmem_rg_block); }
++#endif
++
+ /* This has turned into a very interesting exercise in algorithms and data
+  * structures.
+  *
+@@ -794,6 +800,9 @@
+     chunk->len   = 0;
+     chunk->prev  = 0;
+ 
++#ifdef EXP_REUSE_GAP
++    wmem_rg_issue(&wmem_rg_block, WMEM_CHUNK_TO_DATA(chunk), size);
++#endif
+     /* and return the data pointer */
+     return WMEM_CHUNK_TO_DATA(chunk);
+ }
+@@ -837,6 +846,10 @@
+         allocator->block_list = block;
+     }
+ 
++#ifdef EXP_REUSE_GAP
++    wmem_rg_moved(&wmem_rg_block, WMEM_CHUNK_TO_DATA(chunk),
++            WMEM_CHUNK_TO_DATA(WMEM_BLOCK_TO_CHUNK(block)), size);
++#endif
+     return WMEM_CHUNK_TO_DATA(WMEM_BLOCK_TO_CHUNK(block));
+ }
+ 
+@@ -885,6 +898,9 @@
+     /* mark it as used */
+     chunk->used = true;
+ 
++#ifdef EXP_REUSE_GAP
++    wmem_rg_issue(&wmem_rg_block, WMEM_CHUNK_TO_DATA(chunk), size);
++#endif
+     /* and return the user's pointer */
+     return WMEM_CHUNK_TO_DATA(chunk);
+ }
+@@ -897,6 +913,9 @@
+ 
+     chunk = WMEM_DATA_TO_CHUNK(ptr);
+ 
++#ifdef EXP_REUSE_GAP
++    wmem_rg_release(&wmem_rg_block, ptr);
++#endif
+     if (chunk->jumbo) {
+         wmem_block_free_jumbo(allocator, chunk);
+         return;
+@@ -969,6 +988,9 @@
+             /* Now cycle the recycler */
+             wmem_block_cycle_recycler(allocator);
+ 
++#ifdef EXP_REUSE_GAP
++            wmem_rg_resize(&wmem_rg_block, ptr, size);
++#endif
+             /* And return the same old pointer */
+             return ptr;
+         }
+@@ -993,6 +1015,9 @@
+         /* Now cycle the recycler */
+         wmem_block_cycle_recycler(allocator);
+ 
++#ifdef EXP_REUSE_GAP
++        wmem_rg_resize(&wmem_rg_block, ptr, size);
++#endif
+         return ptr;
+     }
+ 
+@@ -1007,6 +1032,19 @@
+     wmem_block_hdr_t       *cur;
+     wmem_block_chunk_t     *chunk;
+ 
++#ifdef EXP_REUSE_GAP
++    /* every object of every block ends here, the jumbo objects included */
++    for (cur = allocator->block_list; cur; cur = cur->next) {
++        chunk = WMEM_BLOCK_TO_CHUNK(cur);
++        if (chunk->jumbo) {
++            wmem_rg_release(&wmem_rg_block, WMEM_CHUNK_TO_DATA(chunk));
++        }
++        else {
++            wmem_rg_release_range(&wmem_rg_block, cur, WMEM_BLOCK_SIZE);
++        }
++    }
++#endif
++
+     /* the existing free lists are entirely irrelevant */
+     allocator->master_head   = NULL;
+     allocator->recycler_head = NULL;
+--- a/wsutil/wmem/wmem_allocator_block_fast.c
++++ b/wsutil/wmem/wmem_allocator_block_fast.c
+@@ -19,6 +19,12 @@
+ #include "wmem_allocator.h"
+ #include "wmem_allocator_block_fast.h"
+ 
++#ifdef EXP_REUSE_GAP
++#include "wmem-reuse-gap.h"
++static struct wmem_rg wmem_rg_fast = { .name = "wmem-block-fast" };
++static void wmem_rg_report(void) { wmem_rg_print(&wmem_rg_fast); }
++#endif
++
+ /* https://mail.gnome.org/archives/gtk-devel-list/2004-December/msg00091.html
+  * The 2*sizeof(size_t) alignment here is borrowed from GNU libc, so it should
+  * be good most everywhere. It is more conservative than is needed on some
+@@ -106,6 +112,9 @@
+         chunk = ((wmem_block_fast_chunk_t*)((uint8_t*)(block) + WMEM_JUMBO_HEADER_SIZE));
+         chunk->len = JUMBO_MAGIC;
+ 
++#ifdef EXP_REUSE_GAP
++        wmem_rg_issue(&wmem_rg_fast, WMEM_CHUNK_TO_DATA(chunk), size);
++#endif
+         return WMEM_CHUNK_TO_DATA(chunk);
+     }
+ 
+@@ -123,6 +132,9 @@
+ 
+     allocator->block_list->pos += real_size;
+ 
++#ifdef EXP_REUSE_GAP
++    wmem_rg_issue(&wmem_rg_fast, WMEM_CHUNK_TO_DATA(chunk), size);
++#endif
+     /* and return the user's pointer */
+     return WMEM_CHUNK_TO_DATA(chunk);
+ }
+@@ -156,6 +168,10 @@
+         if (block->next) {
+             block->next->prev = block;
+         }
++#ifdef EXP_REUSE_GAP
++        wmem_rg_moved(&wmem_rg_fast, ptr,
++                (uint8_t*)(block) + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE, size);
++#endif
+         return ((void*)((uint8_t*)(block) + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE));
+     }
+     else if (chunk->len < size) {
+@@ -180,6 +196,17 @@
+     wmem_block_fast_hdr_t       *cur, *nxt;
+     wmem_block_fast_jumbo_t     *cur_jum, *nxt_jum;
+ 
++#ifdef EXP_REUSE_GAP
++    /* every object of every block ends here, and every jumbo object */
++    for (cur = allocator->block_list; cur; cur = cur->next) {
++        wmem_rg_release_range(&wmem_rg_fast, cur, WMEM_BLOCK_SIZE);
++    }
++    for (cur_jum = allocator->jumbo_list; cur_jum; cur_jum = cur_jum->next) {
++        wmem_rg_release(&wmem_rg_fast,
++                (uint8_t*)(cur_jum) + WMEM_JUMBO_HEADER_SIZE + WMEM_CHUNK_HEADER_SIZE);
++    }
++#endif
++
+     /* iterate through the blocks, freeing all but the first and reinitializing
+      * that one */
+     cur = allocator->block_list;

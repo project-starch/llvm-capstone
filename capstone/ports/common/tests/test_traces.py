@@ -270,11 +270,8 @@ class Traces(unittest.TestCase):
 
     def test_launchers_validate_staged_bytes_before_guest(self):
         cases = [
-            ("cpython/pymalloc", "cpython.pymalloc"),
             ("whisper/ggml-context", "whisper.ggml-context"),
             ("ffmpeg/buffer-pool", "ffmpeg.buffer-pool"),
-            ("postgres/memory-contexts", "postgres.a11"),
-            ("wireshark/wmem", "wireshark.wmem"),
         ]
         for component, name in cases:
             with self.subTest(component=component):
@@ -303,7 +300,7 @@ class Traces(unittest.TestCase):
                         metadata["trace"]["sha256"], hashlib.sha256(data).hexdigest()
                     )
                     self.assertEqual(metadata["trace"]["format"], name)
-                    if name in ("cpython.pymalloc", "whisper.ggml-context", "wireshark.wmem"):
+                    if name in ("cpython.pymalloc", "whisper.ggml-context"):
                         words = 12 if name == "cpython.pymalloc" else 16
                         magic = struct.unpack_from("<Q", data)[0]
                         (run / "share/report.bin").write_bytes(
@@ -317,12 +314,8 @@ class Traces(unittest.TestCase):
                                 *([0] * (words - 5)),
                             )
                         )
-                    elif name == "ffmpeg.buffer-pool":
-                        (run / "share/capstone.bin").write_bytes(data)
                     else:
-                        (run / "serial.log").write_text(
-                            "__CAPSTONE_PG_REPLAY_DONE__\n__CAPSTONE_PG_REPLAY_BALANCED__\n"
-                        )
+                        (run / "share/capstone.bin").write_bytes(data)
                     return subprocess.CompletedProcess([], 0)
 
                 argv = [

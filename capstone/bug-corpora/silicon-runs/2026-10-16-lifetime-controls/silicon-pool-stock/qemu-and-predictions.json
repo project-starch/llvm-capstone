@@ -1,0 +1,94 @@
+{
+ "arm": "silicon-pool-stock",
+ "build": {
+  "defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+  "app_cflags": "",
+  "carve": {},
+  "corpus_defs": {},
+  "driver": "driver.c",
+  "extra_cflags": "-fno-inline -std=gnu11 -DFF2_SYSTEM_MEMORY -I/tmp/capstone/wt-b0/capstone/ports/ffmpeg/buffer-pool/src/shared -I/tmp/capstone/ffmpeg-sublet/ffmpeg-traced -I/tmp/capstone/wt-b0/capstone/ports/ffmpeg/buffer-pool/cmake/replay-config -I/tmp/capstone/wt-b0/capstone/runtime/include",
+  "extra_src": [
+   "buffer.c",
+   "refstruct.c",
+   "observe-pool-events.c",
+   "system-memory.c",
+   "level0-memalign.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "CAUGHT",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-pool-controls-nested-lifetime-91-run",
+   "case": "91_ctl_parent_entry_reference",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "1694c29015d0378dd407f841a0cfa749cd0d5e10ef3849ddc503dc59d56d4059",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-pool-controls-nested-lifetime-92-run",
+   "case": "92_ctl_sibling_entry",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "b3777d053e2c4ed63eb32feffb21bdb81e0ba06f4dd91b8a16fd5bed2bcb33b4",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-pool-controls-nested-lifetime-93-run",
+   "case": "93_ctl_successor_entry",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "012e60d85946479b4014f3489386d3dc79531a6de97530ca6dd1e07d23af0f4e",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-pool-controls-nested-lifetime-93-stale",
+   "case": "93_ctl_successor_entry",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/nested-lifetime",
+   "kind": "lifetime-control",
+   "image_sha256": "012e60d85946479b4014f3489386d3dc79531a6de97530ca6dd1e07d23af0f4e",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  }
+ ]
+}

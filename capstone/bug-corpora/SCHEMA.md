@@ -88,7 +88,8 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
 `allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
-`fault_sites_why`, `duplicate_of`. Optional means
+`fault_sites_why`, `duplicate_of`, `control_probe`, `control_probe_why`, `memory_error_is_the_defect`,
+`memory_error_is_the_defect_why`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -136,6 +137,19 @@ inside `memcpy`. It needs `fault_sites_why`, and the reason must come from the s
 earlier independent run, never from the fault it is about to admit: a site chosen after seeing where
 a run faulted would turn every crash into a catch.
 
+`memory_error_is_the_defect` (`true`, with `memory_error_is_the_defect_why`) declares that a `MemoryError` the case's
+trigger raises is the defect's own access running uncaught -- a length read past an object, say, that the arm's
+allocator does not bound -- and not the table refusing an allocation. A runner that reads any MemoryError as capacity
+(the cpython runner's `CAPACITY` rule, by text) then records the run as completed, so the arm reads MISSED rather
+than NO-READING:infra. As with `fault_sites`, the reason must come from a measurement independent of the run it
+classifies, never from that run's error text.
+
+`control_probe` names an existing file inside the case directory. It isolates the
+defect when the full trigger also exercises other defects, so a runner can pair
+that probe with the safe control. `control_probe_why` is required and explains
+why the full trigger cannot provide that pairing. A control probe does not by
+itself declare a fault site or change a recorded verdict.
+
 ## Arms
 
 Each arm declares an **oracle**, never an outcome. Outcomes live in `status`
@@ -152,38 +166,75 @@ in whoever ran it. The checker does not yet enforce this: an unwritten arm
 short-circuits before its keys are examined, so a misspelt `not_run_reason`
 passes silently.
 
+A **retired** arm (the table says so) is accepted only as a record -- a
+`verdict` or `status: measured` -- and the checker refuses one declared as a
+run to come.
+
 | arm | target | oracle |
 |---|---|---|
 | `spatial` | Capstone domain | the sequence completes |
-| `sublet` | Capstone domain | fault at the labelled read probe, with `cause` |
-| `poisoncap-spatial` | CheriBSD purecap, mode 0 | the sequence completes |
-| `poisoncap-protected` | CheriBSD purecap, mode 1 | `SIGPROT` at the labelled read probe, with `signal` and `si_code` |
+| `sublet` | Capstone domain | fault at the labelled read probe, with `cause`. Outside the APR corpora it named a configuration on the physical Sublet heap and was retired with the heap on 2026-10-11, its recorded verdicts kept; the APR corpora's `sublet` is the pools port's mode 1 |
 | `native-detect` | host | ASan, built `-O0`, run fixed then buggy by `tools/run-native-asan.py`. A silence is a reading only when the buggy arm printed `VERDICT DEFECT-REPRODUCED` and the same run's positive controls -- a read past, and a read after free of, a heap block the size of the corpus's arena or block -- were reported. Until 2026-10-09 this arm was 'declared, not written' as tautological; it is measured now, because an argument is not a reading |
 | `sysalloc-none` | Capstone domain | the whole-program run completes; the first-fit heap is built with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, so only tag integrity and the arena's bounds are left |
 | `sysalloc-bounds` | Capstone domain | the same, with the heap as applications get it since PR #170: each allocation bounded, no revocation. **The baseline a catch is measured against** |
-| `sysalloc-sublet` | Capstone domain | the Sublet heap: per-object bounds and a revoke on every free |
-| `sublet-gc` | Capstone domain | `sysalloc-sublet` plus the program's own Sublet port, so its nested allocator's objects are issued and revoked too |
-| `sublet-chunks` | Capstone domain | tshark's chunk allocator linked over the Sublet heap (`HEAP_LOG 24`, 40 MiB arena): the configuration the tshark application runs in |
+| `sysalloc-sublet` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. The Sublet heap: per-object bounds and a revoke on every free |
+| `sublet-chunks` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. tshark's chunk allocator linked over the Sublet heap (`HEAP_LOG 24`, 40 MiB arena): the configuration the tshark application runs in |
 | `capstone-subobject` | Capstone domain | the `spatial` arm with `-Xclang -fcapstone-subobject-bounds`: an ARRAY-typed field that is not the last member is narrowed to the field. The tool's `subobj` control must be CAUGHT in the same boot |
 | `cheribsd-subobject` | CheriBSD purecap | stock CheriBSD with `-Xclang -cheri-bounds=subobject-safe`: a pointer taken to a member is narrowed to it (size-0/1 trailing arrays excepted). The shared field-crossing control must die by `SIGPROT` in the same boot |
 | `capstone-carve-bounds` | Capstone domain | the carved corpus only: `-DFFC_CARVE_BOUNDS` makes `ffc_carve()` narrow each carved region to its own extent -- the remedy at the carving code. Fixed arms run under the same narrowing |
 | `cheribsd-carve-bounds` | CheriBSD purecap | the same with `cheri_bounds_set`; the run prints each carve's granted length, and a carve control must fault in the same boot |
-| `sublet-malloc` | Capstone domain | the nested corpora: Sublet ONLY as the system allocator, the program's nested allocator stock -- wmem as released (`WM_VARIANT=reference`, every `g_malloc` a region, every `g_free` a revoke; positive control `wmem-repros/controls/sublet-malloc`), memcached's ledger in mode 2 (a chunk carries its page's bound, nothing revoked until a page or object is given back), FFmpeg's pools unported on the Sublet heap (`poolstock`). Column 2 of the per-bug table |
-| `sublet-full` | Capstone domain | a plain case built in the program's whole Sublet configuration: the Sublet heap plus the program's nested-allocator port linked and initialised (tshark's is `sublet-chunks`). The bug's path never enters the nested allocator, so this equals `sublet` by construction; the run confirms no interaction. Column 3 for plain cases |
-| `sublet-carve` | Capstone domain | the carved corpus: `-DFFC_SUBLET_CARVE` takes the block LINEAR from the Sublet heap and splits it into one region per carve, each issued as a bounded alias (a re-carve revokes the old aliases); a temporal carve control must fault in the same boot. Column 3 for carved cases |
-| `sublet-svheads` | Capstone domain | the same for Perl: `sysalloc-sublet` plus Perl's SV head arena |
-| `sublet-pymalloc` | Capstone domain | the same for CPython: `sysalloc-sublet` plus pymalloc's pools and arenas, via patch 0014. The difference between this arm and `sysalloc-sublet` is what sublets the nested allocator rather than only the allocation under it, which is the whole comparison a nested/non-nested corpus exists to make |
+| `sublet-malloc` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. The nested corpora: Sublet ONLY as the system allocator, the program's nested allocator stock -- memcached's ledger in mode 2 (a chunk carries its page's bound, nothing revoked until a page or object is given back), FFmpeg's pools unported on the Sublet heap (`poolstock`). Column 2 of the per-bug table |
+| `sublet-full` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. A plain case built in the program's whole Sublet configuration: the Sublet heap plus the program's nested-allocator port linked and initialised (tshark's is `sublet-chunks`). The bug's path never enters the nested allocator, so this equals `sublet` by construction; the run confirms no interaction. Column 3 for plain cases |
+| `sublet-carve` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. The carved corpus: `-DFFC_SUBLET_CARVE` takes the block LINEAR from the Sublet heap and splits it into one region per carve, each issued as a bounded alias (a re-carve revokes the old aliases); a temporal carve control must fault in the same boot. Column 3 for carved cases |
+| `sublet-svheads` | Capstone domain | **Retired 2026-10-11** with the Sublet heap: recorded verdicts kept, no new runs. `sysalloc-sublet` plus Perl's SV head arena through its Sublet port |
 | `virtual-malloc` | virtual Capstone (`capstone/runtime/virtual`) | the case on the virtual profile, its nested allocator stock: the application runs under `capstone-vexec` with musl mallocng compiled for Capstone and run locally, which bounds each object exactly and retires its lifetime on free. Configuration `virtual-mallocng` in `tools/arms.json`; not the physical Sublet heap |
-| `virtual-pg-pools` | virtual Capstone | `virtual-malloc` with PostgreSQL's memory contexts on the Sublet context pools, built for the virtual profile (`build-virtual.sh postgres`, `PGSU_NESTED=sublet`). Configuration `virtual-mallocng-pg-pools` |
-| `virtual-nested-pools` | virtual Capstone | `virtual-malloc` with the program's nested allocator on its own pool port (SQLite: memsys5 on `sublet-3220000-memsys5.patch`, its pool lent linear by the virtual heap). The configuration in `tools/arms.json` names which |
+| `virtual-pg-pools` | virtual Capstone | `virtual-malloc` with PostgreSQL's memory contexts protected by the memory-context port's patch 0003: every chunk a child lifetime of its block (`CDERIVE`), revoked by `pfree`/`repalloc` (`CREVOKE`). The server is built with `build-virtual.sh postgres`, `PGSU_NESTED=sublet` (configuration `virtual-mallocng-pg-pools`); the replay with `PG_SUBLET=ON` (`virtual-mallocng-replay-pools`) |
+| `virtual-nested-pools` | virtual Capstone | `virtual-malloc` with the program's nested allocator on its own pool port (SQLite: memsys5 on `sublet-3220000-memsys5.patch`, every block a child lifetime of the pool over the same static arena, revoked by `sqlite3_free`, and the lookaside's slots likewise; wmem: the wmem port's patch 0001, every `block` and `block_fast` object a child lifetime of its block). The configuration in `tools/arms.json` names which |
+| `vp2-malloc` | silicon (FPGA), the virtual profile | `virtual-malloc`'s configuration run on the board: the same image, by sha256, booted on `caplifive_vp2_<hash>` under Linux with `capstone_vm.ko` and `capstone-vexec` (`run-virtual-cases.py --board-kit`, the board backend of `tools/virtualvm.py`), read from the batch rung's own segment of the driver's `board.txt`. The arm name differs from the virtual arm's so both bundles stay current; the configuration (`arm_configurations`) is the virtual one, because the configuration is what is measured and the platform is what differs. `inputs.json` names the bitstream (the `qemu` key is written `board:<bitstream>`), the firmware, Image, module and launcher hashes and the monitor; every claim cites the bitstream's S-entries (S-23's fetch-retry workaround, S-25's first-touch rule, S-26's warm-up rung) |
+| `vp2-pg-pools` | silicon (FPGA), the virtual profile | `virtual-pg-pools`'s configuration on the board, as `vp2-malloc` |
+| `vp2-nested-pools` | silicon (FPGA), the virtual profile | `virtual-nested-pools`'s configuration on the board, as `vp2-malloc`; the three (iii) nested arms (memcached 0006, wmem 0001, memsys5) read their placement repairs' state |
+| `silicon-lifetimes` | silicon (FPGA) | the case built for the silicon ABI (`runtime/silicon/build-b0-hello.sh`: gp-captable, full LTO, soft float) and run on the board as a delegated application through `capstone-exec`. Its heap is level0 built with `CAPSTONE_LEVEL0_LIFETIMES`: every object whose bounds are exact at its placement (every one below 4 KiB, at a 16-byte placement) is a `CDERIVE` child of one group over the arena at its request size, and `free` `CREVOKE`s it. A request that is not exact keeps plain narrowing and no lifetime. Since dev `06f0b29f0463` (set 4) a request of 4 KiB or more is placed on the granule of its padded size and derived at that size, so it gets a child too; sets 1-3 ran the earlier placement. Configuration `silicon-level0-lifetimes`; its controls are clean, oob, uaf and subobj in the same boot. Bundles come from the board transcript through `tools/silicon-verdicts.py` |
+| `silicon-level0` | silicon (FPGA) | the same build and board run with level0 as it ships: per-object bounds, and `free` revokes nothing, so a temporal case completes. The bounds-only control arm (configuration `silicon-level0`; on FFmpeg's plane corpus, `silicon-ffmpeg-plane-level0`, the case linked with libavutil) |
+| `silicon-subobject` | silicon (FPGA) | `silicon-level0` with the case, driver and pool sources and the controls compiled with `-Xclang -fcapstone-subobject-bounds`: a member pointer is bounded to its member. The sub-object corpus's struct-field arm on silicon (configuration `silicon-level0-subobject`) |
+| `silicon-pool-stock` | silicon (FPGA) | FFmpeg pool-repros over the `silicon-lifetimes` heap, with AVBufferPool stock plus the port's event tracing (patch 0001). Pool control 90 completes (configuration `silicon-ffmpeg-pool-stock`) |
+| `silicon-pool-sublet` | silicon (FPGA) | the same with the protected pools (patch 0003): a CDERIVE child per pooled buffer, CREVOKEd on return. Pool control 90 faults (configuration `silicon-ffmpeg-pool-sublet`) |
+| `silicon-carve-bounds` | silicon (FPGA) | FFmpeg's carved corpus built with `-DFFC_CARVE_BOUNDS` over level0: every carve is narrowed to its region with SHRINK, bounds only. Carve control 99 faults (configuration `silicon-ffmpeg-carve-bounds`). On the carved corpus, `silicon-level0` is configuration `silicon-ffmpeg-carve-level0`, where control 99 completes. On FFmpeg's plane corpus this arm is `-DFFP_CARVE_BOUNDS`, each plane narrowed with SHRINK to its own rows (configuration `silicon-ffmpeg-plane-bounds`) |
+| `silicon-carve-sublet` | silicon (FPGA) | the carved corpus built with `-DFFC_SUBLET_CARVE` over the `silicon-lifetimes` heap: every carve is a CDERIVE child of a group the driver derives over its block, CREVOKEd on re-carve; the RTL rounds a child outward, so a carve is not guaranteed exact. Controls 99 and 98 run as on virtual (configuration `silicon-ffmpeg-carve-sublet`) |
+| `silicon-mc-stock` | silicon (FPGA) | memcached's allocator-repros with slabs.c and cache.c stock (patches 0001 + 0002) on the stock-malloc ledger, over the `silicon-lifetimes` heap as set 4 builds it. Chunk control 90 completes (configuration `silicon-memcached-stock`) |
+| `silicon-mc-sublet` | silicon (FPGA) | the same with the application's patch 0006: every chunk and cache object a CDERIVE child CREVOKEd at `slabs_free` / `cache_free`, and 06/07's key and suffix regions narrowed (`MC_CARVE_BOUNDS`). Chunk control 90 faults (configuration `silicon-memcached-sublet`) |
+| `silicon-wm-stock` | silicon (FPGA) | wireshark's wmem-repros with wmem as released (the port's reference source, -O3 -DNDEBUG) over the `silicon-lifetimes` heap as set 4 builds it; the buggy run is the fix differential `0 N buggy`. Controls uaf-chunk and bounds-chunk complete, uaf-jumbo faults (configuration `silicon-wmem-stock`) |
+| `silicon-wm-sublet` | silicon (FPGA) | the same with the port's patch 0001: every block and block_fast object a CDERIVE child of its block, CREVOKEd at free, realloc and the pool reset; the buggy run is `0 N`. All three wmem controls fault (configuration `silicon-wmem-sublet`) |
+| `silicon-pg-stock` | silicon (FPGA) | PostgreSQL's mmgr-repros against its own memory-context managers as the port's `spatial` variant (patches 0001 + 0002), over the `silicon-lifetimes` heap. Each case has a `-DPG_NEGATIVE_CONTROL` image that must complete; corpus control 00 completes (configuration `silicon-postgres-mmgr-stock`) |
+| `silicon-pg-sublet` | silicon (FPGA) | the same with patch 0003: every chunk a CDERIVE child of its block, CREVOKEd at pfree and when its context dies. Corpus control 00 faults (configuration `silicon-postgres-mmgr-sublet`). On PostgreSQL's c-repros, `silicon-level0` and `silicon-lifetimes` are their configurations of those names, each case with a `-DPGCLIENT_NEGATIVE_CONTROL` image that must complete |
+| `silicon-sqlite-stock` | silicon (FPGA) | SQLite's engine-repros, memsys5 stock, on the classic line: each case one domain image built by `build-sqlite-silicon.sh` from the corpus case.c, lookaside 0,0. Controls uaf-mem5 and bounds-mem5 complete (configuration `silicon-sqlite-memsys5`). Run for the eight cases of the 2026-10-01 batch; the other cases declare it `not written` |
+| `silicon-pym-stock` | silicon (FPGA) | CPython's pymalloc-repros: the port's replay around each case over pymalloc as released (patches 0001 + 0002), over the `silicon-lifetimes` heap; one run per case, a fault counting only at read_probe. Corpus control 00 completes (configuration `silicon-pymalloc-stock`) |
+| `silicon-pym-sublet` | silicon (FPGA) | the same with patch 0003: every pymalloc block a CDERIVE child of its arena, CREVOKEd when pymalloc takes it back. Corpus control 00 faults at read_probe (configuration `silicon-pymalloc-sublet`) |
+| `silicon-mruby-bounds` | silicon (FPGA) | mruby's release-differential: B5's mruby.dom (4.0.0-rc2, silicon delegated ABI) over its size-class allocator, every object narrowed to its request, nothing revoked; one run per case on its trigger.rb. A spatial row is CAUGHT on a capability fault; a temporal row is MISSED as a detection whatever it reads (the reading is in the note); `both` is CAUGHT only with cause 28; other classes use the corpus's own rule and count in neither total. Gate: smoke.rb's SMOKE_DONE and the tool's four controls (not on verdicts-v1: matrix.tsv, written by probe/fold-silicon.py) |
 | `cheribsd-revocation` | stock CheriBSD purecap | the case under CheriBSD's malloc with heap revocation on (the platform default, or forced per process where the corpus says so), a revocation control faulting at its labelled load in the same boot. `NOT-REISSUED` is the plain-temporal reading for a freed chunk HELD in quarantine (the stale pointer followed, the chunk never reissued); column 1 of `tools/catch-tables.py --board` counts it as caught and shows it apart |
 | `native-fix-differential` | host | the buggy and the fixed build of the same reduction, run plainly: `TWO-SIDED` means the buggy run reproduces the defect and the fixed run does not. It shows the reduction is about the fix; it is not a protection mechanism and no table counts it as one |
 | `backing` | Capstone domain | FFmpeg pool corpora: revocation only at the pool's BACKING allocation (mode 1), so a buffer the pool never frees is never revoked. `n/a` where there is no block distinct from the object |
-| `sublet-port` | Capstone domain | FFmpeg pool corpora: `case.c` unchanged against the Sublet port of FFmpeg's own pools (app port, `FFAPP_POOL=sublet`); a fault counts only at an instruction the case's line table puts on a line that dereferences the stale pointer. Column 3 for pooled cases |
 | `host-asan` | host | the upstream function built with ASan at the pin: the oracle is the report (kind, access, region) it must produce. Liveness evidence and the row corpora's only arm, not a protection column |
 
-The four above are the glossary's system-allocator arms
-(`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the
+
+**Virtual arms on the vp2 board (Tier 3, `tools/boardvm.py`).** A `capstone-virtual` configuration can also run on the
+board. `run-virtual-cases.py --board-kit` runs the same gate script in one board boot instead of one QEMU boot. The
+bundle's `inputs.json` names the machine:
+- `platform.qemu` is `board:<bitstream>` and `platform.machine` is `board`;
+- `firmware` and `kernel` are the hashes the board recipe built;
+- `monitor` and `monitor_defines` name the firmware's monitor, including whether the S-23 fetch-retry workaround was
+  in it.
+
+Two comparability facts belong to that machine:
+- **A fault taken before the domain's HELLO is unresolvable.** The launcher prints `entry=... code=lo-hi` only after
+  HELLO (`runtime/linux/delegate-service.c:977-984`), else `entry=unknown`. `verdicts.FAULT_LINE` requires `code=`, so
+  such a fault has no symbol or attribution on QEMU and on the board alike. A NO-READING from it is the launcher's limit,
+  not the board's.
+- **A wedge takes the rest of the boot.** QEMU loses one process to a fault, and the board can lose every later step.
+  Those steps read kind `none`, which `observe()` makes `infra`. The boot plan therefore puts the positive control
+  first and at most one wedge risk last.
+
+`sysalloc-none`, `sysalloc-bounds` and the retired `sysalloc-sublet` are the glossary's
+system-allocator arms (`docs/ref/runtime-terms-glossary.md` section 6). They are one image each of the
 same source and differ only in the heap the image links, so a difference between
 them is the heap's protection and nothing else -- which is the whole reason the
 unprotected one exists. It is not a C baseline: tag integrity is in the hardware
@@ -191,7 +242,7 @@ and cannot be switched off, so a defect that reads a pointer out of overwritten
 memory faults there too. The nearest C baseline is a host run, recorded per case
 in `live_proof`.
 
-The two protected arms name an instruction, not merely a fault. That is the
+The protected arms name an instruction, not merely a fault. That is the
 point: the process status alone cannot tell this corpus reproducing from an
 arbitrary crash, a bounds fault, a permission fault, a fault elsewhere, or the
 allocator refusing the request.
@@ -239,7 +290,10 @@ its results under one contract, implemented in `tools/verdicts.py` and tested in
   onto it, so two corpora whose `spatial` differ cannot be summed as one.
 * **The bundle is the only original.** `results/<stamp>/<arm>/` holds `verdicts.jsonl` (each
   Observation with its verdict) and `inputs.json` (configuration, and the compiler, QEMU, firmware,
-  kernel and runner hashes, each said or said to be `unrecorded`). `verdict_bundles` names the
+  kernel and runner hashes, each said or said to be `unrecorded`). **`platform.compiler` is the sha256 of
+  `<--llvm-bin>/clang`, the toolchain the runner symbolises faults with** (`tools/virtualvm.py`, `tools/appvm.py`).
+  It is the build compiler only when the build used that same directory, so a rebuild takes its compiler from the
+  build's own record (`build.sdk`, a build log), never from this field. `verdict_bundles` names the
   current bundle per arm; `tools/derive-verdicts.py` writes each `case.json` arm's `verdict`,
   `verdict_reason`, `verdict_note`, `verdict_from` and `results/verdicts.tsv` from them, and
   `check-corpus.py` fails when either differs from what it would write -- re-judging every stored
@@ -258,7 +312,7 @@ checkable from outside, and it is the only input to the generated index.
 | `case_schema` | `case-json` (a reduction with `case.c`), `script-trigger` (a defect whose trigger is an interpreter script rather than a C reduction; each case names its own file in `trigger`), `sqlite-row` (a binding row carrying the provenance ledger's columns), or `xlang-row` (a shim row, declaration-level only) |
 | `case_macro`, `case_glob`, `case_exclude`, `case_number_base`, `case_doc` | how cases are named and found, where the defaults do not fit. Case numbers are dense from `case_number_base` (0, or 1 for the SQLite rows) |
 | `case_table`, `case_dir_column` | for `xlang-row`: the row table that is the corpus's authority, and the column naming each case directory |
-| `required_arms`, `arm_keys` | the arms every case must declare, and any arm whose oracle carries more than `oracle` (the pymalloc corpus records a `cause` on `sublet`). **Order is not significant and is not checked** — `wmem-repros` lists `cheribsd-revocation` third, to mirror the paper's column order, while `allocator-repros` and `pool-repros` list it after the two PoisonCap arms. Both are valid; noted here because the difference otherwise reads as a defect, and reordering a corpus to match another would churn every case file for nothing |
+| `required_arms`, `arm_keys` | the arms every case must declare, and any arm whose oracle carries more than `oracle` (the pymalloc corpus records a `cause` on `sublet`). **Order is not significant and is not checked**: reordering a corpus to match another would churn every case file for nothing |
 | `status` | `planned`, `built`, `measured` or `triaged`. A corpus with no cases may only be `planned` or `triaged` |
 | `live_in_pin_recorded` | whether the cases record liveness at all. If false, a `live_in_pin_note` must say why, and no case may carry the field |
 | `expect_live_in_pin` | the expected `{true, false, not_asserted}` split. The checker recomputes it from the cases and refuses a mismatch, so this number cannot drift |

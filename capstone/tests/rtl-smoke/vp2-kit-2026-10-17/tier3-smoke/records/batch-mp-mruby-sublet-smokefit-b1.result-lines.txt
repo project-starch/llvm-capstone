@@ -1,0 +1,38 @@
+# mruby Sublet (nested pools) with smoke-fit.rb on the batch bitstream c721c1a2a, board 1, kit bkit8-batch-b1 (a1108a2a3cad), 2026-10-22. Result lines only.
+MB BEGIN 14:47:52 board 1 kit bkit8-batch-b1 booking 116
+UNBOOK 116: 200
+MB END 15:14:54 rc=0 :: APPVM read rc=0 15:14:54 :: --- virtual-nested-pools: control smoke ok; {'fault': 23}
+MB COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x1
+MB board1 DONE 15:14:54
+APPVM collect rc=75 calls=24 14:47:53
+APPVM images equal <mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/mp-mruby-sublet-smokefit.images.SHA256SUMS (2)
+APPVM boot rc=0 15:14:54 :: session <mnt-hdd>/capstone/t3-run-batch-c721c1a2a-b1/mp-mruby-sublet-smokefit/session: 24/24 steps ran; share linked; boot completed; transcript <mnt-hdd>/capst
+APPVM read rc=0 15:14:54 :: --- virtual-nested-pools: control smoke ok; {'fault': 23}
+# matrix-compare against <mnt-hdd>/capstone/smoke-fit/sublet/out (qkit7-batch2):
+23 of 23 cells the same
+# the board cells:
+case	arm	outcome	cause	function	reached	in_fault_sites	harness
+01_13e017c2f_opgetidx0-stale-regs	virtual-nested-pools	fault	25	mrb_vm_exec			[  258.440504] capstone_vm: release retires attempted=46 succeeded=46 pushed=46 first_id=1024
+02_39aecc143_openter-block-collected	virtual-nested-pools	fault	25	mrb_gc_protect			[  307.410566] capstone_vm: release retires attempted=49 succeeded=49 pushed=49 first_id=1024
+03_59552ecb8_sprintf-format-mutated	virtual-nested-pools	fault	25	mrb_str_format			[  353.432675] capstone_vm: release retires attempted=46 succeeded=46 pushed=46 first_id=1024
+04_606d9a6b2_merge-pair-collected	virtual-nested-pools	fault	25	mrb_field_write_barrier			[  399.126370] capstone_vm: release retires attempted=48 succeeded=48 pushed=48 first_id=1024
+05_628ccec60_task-values-unmarked	virtual-nested-pools	fault	25	mrb_vm_exec			[  445.229811] capstone_vm: release retires attempted=47 succeeded=47 pushed=47 first_id=1024
+06_84cc5aa60_khash-freed-buckets	virtual-nested-pools	fault	25	kh_get_set_val			[  490.225546] capstone_vm: release retires attempted=47 succeeded=47 pushed=47 first_id=1024
+07_eb7693857_vacated-slot-read	virtual-nested-pools	fault	24	mrb_vformat			[  537.827170] capstone_vm: release retires attempted=49 succeeded=49 pushed=49 first_id=1024
+08_fb4974528_hash-ext-walk-carries	virtual-nested-pools	fault	25	mrb_vm_exec			[  587.006652] capstone_vm: release retires attempted=48 succeeded=48 pushed=48 first_id=1024
+09_0cf969a2b_shaped-iv-reshaped	virtual-nested-pools	fault	25	mrb_iv_foreach			[  633.852563] capstone_vm: release retires attempted=48 succeeded=48 pushed=48 first_id=1024
+10_7c5915799_struct-member-storage	virtual-nested-pools	fault	25	mrb_struct_equal			[  681.128300] capstone_vm: release retires attempted=53 succeeded=53 pushed=53 first_id=1024
+11_cb51fce92_task-stack-envs	virtual-nested-pools	fault	25	gc_mark_children	yes	yes	CASE11 ready
+12_4663fef45_eql-delete-past-entries	virtual-nested-pools	fault	28	ar_get			[  768.596768] capstone_vm: release retires attempted=48 succeeded=48 pushed=48 first_id=1024
+13_4a386f80e_pack-uu-signed-overflow	virtual-nested-pools	fault	28	mrb_pack_pack			[  812.862283] capstone_vm: release retires attempted=46 succeeded=46 pushed=46 first_id=1024
+14_93eb74a59_case-splat-stale-count	virtual-nested-pools	fault	28	mrb_obj_ceqq			[  860.368724] capstone_vm: release retires attempted=49 succeeded=49 pushed=49 first_id=1024
+15_af6f23ddb_prepend-self-reference	virtual-nested-pools	fault	28	memcpy			[  904.999742] capstone_vm: release retires attempted=46 succeeded=46 pushed=46 first_id=1024
+16_ec89364c4_ary-fill-int-overflow	virtual-nested-pools	fault	28	ary_fill_exec			[  949.511849] capstone_vm: release retires attempted=46 succeeded=46 pushed=46 first_id=1024
+17_bef45e223_pat-values-stale-ptr-and-len	virtual-nested-pools	fault	25	mrb_hash_pat_values			[  998.462788] capstone_vm: release retires attempted=50 succeeded=50 pushed=50 first_id=1024
+18_03f242d09_mod-visibility-null-mt	virtual-nested-pools	fault	24	mrb_mod_visibility			[ 1044.911490] capstone_vm: release retires attempted=48 succeeded=48 pushed=48 first_id=1024
+19_77d1d928f_method-defined-null-mt	virtual-nested-pools	fault	24	mrb_mod_visibility			[ 1093.070504] capstone_vm: release retires attempted=48 succeeded=48 pushed=48 first_id=1024
+20_94993eede_visibility-unprepared-mt	virtual-nested-pools	fault	24	mrb_mod_visibility			[ 1139.152095] capstone_vm: release retires attempted=47 succeeded=47 pushed=47 first_id=1024
+21_ff047f5fe_method-defined-inherit-null-mt	virtual-nested-pools	fault	24	mrb_mod_visibility			[ 1186.720449] capstone_vm: release retires attempted=48 succeeded=48 pushed=48 first_id=1024
+22_d8911416c_alias-mid-as-irep	virtual-nested-pools	fault	24	mrb_proc_parameters			[ 1233.867039] capstone_vm: release retires attempted=49 succeeded=49 pushed=49 first_id=1024
+23_1737589f0_file-join-recursive-array	virtual-nested-pools	fault	28	ary_new_capa			[ 1285.292137] capstone_vm: release retires attempted=56 succeeded=56 pushed=56 first_id=1024

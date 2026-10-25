@@ -137,7 +137,7 @@ def main() -> int:
 
     # Everything expected to RETURN first: a lost boot then costs the least.
     def faulting(n: int) -> int:
-        return int(any(kind in ('FAULT', 'POOLFAIL') for kind, _ in rows[n]))
+        return int(any(kind == 'FAULT' for kind, _ in rows[n]))
     order = sorted(a.fixtures, key=lambda n: (faulting(n), n))
 
     # The canonical module first: a bare */capstone.ko also matches stray copies that

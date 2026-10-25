@@ -14,10 +14,13 @@
 ; encodings.
 
 ; The address is masked; the capability is moved, never ANDed.
+; The address is read by `andi` and `sub` only, both integer writes, so no
+; separate integer read of it precedes them (CapstoneCursorReadFold); the
+; cincoffset's offset is the `sub` result, an integer write (C-31).
 ; CHECK-LABEL: align_down16:
-; CHECK:      mv [[ADDR:a[0-9]+]], a0
-; CHECK-NEXT: andi [[NEW:a[0-9]+]], [[ADDR]], -16
-; CHECK-NEXT: sub [[DELTA:a[0-9]+]], [[NEW]], [[ADDR]]
+; CHECK-NOT:  mv
+; CHECK:      andi [[NEW:a[0-9]+]], a0, -16
+; CHECK-NEXT: sub [[DELTA:a[0-9]+]], [[NEW]], a0
 ; CHECK-NEXT: cincoffset a0, a0, [[DELTA]]
 define ptr addrspace(200) @align_down16(ptr addrspace(200) %p) addrspace(200) {
   %r = call ptr addrspace(200) @llvm.ptrmask.p200.i64(ptr addrspace(200) %p, i64 -16)

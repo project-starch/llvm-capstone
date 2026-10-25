@@ -1,0 +1,49 @@
+# vp2 Tier 1 boot 3-T1's repeat, 2026-10-18 03:49-03:55: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload
+# ed7c599a132508f5, module ed24f827b5beb373, the Q-21-fixed images (contract.dom 125705371837ea92, sqlite3.dom
+# a5942a1add489597, mruby a902e740fc5d3b0f). Pre-registered at lane vp2-tier12 21c74c5132b8.
+# Result lines only, from run3r/board.txt and run3r/SEQ; the raw capture is not committed.
+
+DRIVER rc=1 03:54:46; watchdog lines 22
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=922 oracle=0 NOT-AS-ORACLE
+VM-CONTRACT BRANCH other: ok-line=False exits=['VM_EXIT:normal:139', 'VM_EXIT:stale:139'] causes=['cause=24', 'cause=24'] monitor=[]
+
+## vm-contract (the reading)
+  CAPSTONE_VM_ADD_OK slot=0 base=0x3fa0600000 bytes=524288 reg=3 perms=7 linear=0
+  CAPSTONE_VM_ADD_OK slot=1 base=0x3fa0400000 bytes=1048576 reg=2 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=2 base=0x3fa0718000 bytes=16384 reg=10 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=3 base=0x3fa06c0000 bytes=262144 reg=11 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=4 base=0x3fa06a0000 bytes=65536 reg=12 perms=4 linear=0
+  CAPSTONE_VM_ADD_REFUSED base=0x3fa071c000 bytes=8192 errno=14 pow2=1 naturally_aligned=1
+  capstone-exec: domain fault cause=24 pc=0x3fa060207c address=0xfffffffffffffedc entry=unknown last=0x0 preparing=0x0 sha256=125705371837ea92... image=contract.dom
+    -> cause 24 at map 0 base + 0x207c (VA 0x1207c), address 0 - 0x124
+  VM_EXIT:normal:139
+  CAPSTONE_VM_ADD_OK slot=0 base=0x3f8e180000 bytes=524288 reg=3 perms=7 linear=0
+  CAPSTONE_VM_ADD_OK slot=1 base=0x3f8e000000 bytes=1048576 reg=2 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=2 base=0x3f8e258000 bytes=16384 reg=10 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=3 base=0x3f8e100000 bytes=262144 reg=11 perms=6 linear=0
+  CAPSTONE_VM_ADD_OK slot=4 base=0x3f8e240000 bytes=65536 reg=12 perms=4 linear=0
+  CAPSTONE_VM_ADD_REFUSED base=0x3f8e25c000 bytes=8192 errno=14 pow2=1 naturally_aligned=1
+  capstone-exec: domain fault cause=24 pc=0x3f8e18207c address=0xfffffffffffffedc entry=unknown last=0x0 preparing=0x0 sha256=125705371837ea92... image=contract.dom
+    -> the same
+  VM_EXIT:stale:139
+  RESULT vm-contract retval=922
+  monitor tags in the segment: none
+
+## the reference at the same point (QEMU virtual-capstone-v7 3b8040d5ff6e, record cbfa22b4c957, csr-pair/fixed serial)
+  slots 0-4 as above (bases differ), then
+  CAPSTONE_VM_ADD_OK slot=5 base=0x3fbe47c000 bytes=8192 reg=10 perms=7 linear=1
+  and the run continues through slot 11 and beyond to VIRTUAL_APPLICATION_OK (adapter-flat c4440adde0d02347: the same
+  source as ed24f827, built for the QEMU kernel).
+
+## located (from the image and the module source beside ed24f827)
+  The refused grant is the first one made while the domain is paused at a service ECALL (kind 3): reg 10, LINEAR,
+  8192 bytes. Every earlier grant is made before the first CSRUNV.
+  contract.dom 125705371837ea92 VA 0x1207c is `sw s1, 0x0(a0)` in mmap's error path, right after the call to
+  __errno_location (VA 0x24c04: `movc a0, tp; cincoffsetimm a0, a0, -0x124`). The faulting address 0 - 0x124 says tp's
+  cursor was 0 and untagged: the errno store of a FAILED mmap, so the 24 is downstream of the refusal.
+  In capstone_vm.c (ed24f827's source) a LINEAR add pins no pages (n = 0), so its only -EFAULT returns are the copy
+  to and from user space and `if (slot[0] || slot[1]) goto unpin;` for slot = t->frame + 8 + reg*2, the frame's x10
+  slot at +224 for reg 10. remap_end() carries the same check on that slot (`slot = t->frame + 28`); flat mode never
+  reaches it (exact_bounds false, so remap_begin refuses first).

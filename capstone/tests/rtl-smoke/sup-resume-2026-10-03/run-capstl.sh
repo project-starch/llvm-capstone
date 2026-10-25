@@ -28,6 +28,8 @@ main() {
     for n in s16st-esc-n8-r1 s16st-esc-n32-r1 s16st-esc-n64-r1; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = s10b ]; then   # S-10b's primed route on the R-29/S-10b fix (PREREG.md "s10b")
     jobs+=("s10b-primed|$F/images/s10b-primed.bin|$(cat $F/images/s10b-primed.rec)")
+  elif [ "$CAPSTL_SET" = s1gap ]; then   # the REVOKE timed pair, close then far (../s1-revoke-gap-2026-10-14/PREREG.md)
+    for n in s1gap-close s1gap-far; do jobs+=("$n|$F/../s1-revoke-gap-2026-10-14/images/$n.bin|$(cat $F/../s1-revoke-gap-2026-10-14/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = r51 ]; then   # R-51: the PC capability before and after a RETURN-based yield (PREREG.md "r51")
     for n in r51-before r51-after; do jobs+=("$n|$F/images/$n.bin|$(cat $F/images/$n.rec)"); done
   elif [ "$CAPSTL_SET" = s17rep ]; then   # S-17's matched pair again (repeats on 715bdd1fe)
@@ -82,7 +84,7 @@ main() {
     IFS='|' read -r tag img rec <<< "$j"
     echo "$tag START $(date +%H:%M:%S) $(sha256sum $img | cut -c1-16)" >> $OUT/SEQ
     SUP_IMG=$img SUP_OUT=$OUT/runs/$tag SUP_REC_ADDR=$rec SUP_TIMEOUT=${CAPSTL_TIMEOUT:-90} \
-      taskset -c 0-7,32-39 nice -n 10 python3 ${SUP_RUNNER:-$L/run_sup_bare.py} > $OUT/runs-$tag.log 2>&1
+      nice -n 10 python3 ${SUP_RUNNER:-$L/run_sup_bare.py} > $OUT/runs-$tag.log 2>&1
     echo "$tag END rc=$? $(date +%H:%M:%S)" >> $OUT/SEQ
     sleep 8
   done

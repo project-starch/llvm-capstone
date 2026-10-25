@@ -1,0 +1,3 @@
+# Boot 4 runner dry run (2026-10-18), driver stubbed, on a synthetic transcript: the console banner, the resolve_dirty
+# read-back, the five VM_NOT_RUN markers, both KMSG windows with the must-fire count, every VM_EXIT. Its own oracle
+# directory (oracles-b4) expects 17 exits: normal, threads, the 11 modes, preempt, the parallel pair, cleanup.

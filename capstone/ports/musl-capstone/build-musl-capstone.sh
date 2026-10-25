@@ -25,15 +25,14 @@ mkdir -p "$OBJ_DIR"
 # partial archive is the point. Only a harness error (2) is fatal.
 set +e
 # MUSL_SURVEY_JOBS controls shared-host parallelism.
-PROFILE_FLAGS=()
-case "${CAPSTONE_APPLICATION_PROFILE:-physical}" in
-  physical) ;;
-  virtual) PROFILE_FLAGS=(--virtual) ;;
+PROFILE=${CAPSTONE_APPLICATION_PROFILE:-virtual}
+case "$PROFILE" in
+  physical|virtual) ;;
   *) echo "invalid CAPSTONE_APPLICATION_PROFILE" >&2; exit 2 ;;
 esac
 python3 "$SCRIPT_DIR/survey-musl-capstone.py" "$MUSL_SRC_DIR" \
         ${MUSL_SURVEY_JOBS:+--jobs "$MUSL_SURVEY_JOBS"} \
-        "${PROFILE_FLAGS[@]}" --objects "$OBJ_DIR" > "$OUT_DIR/survey.txt"
+        --profile "$PROFILE" --objects "$OBJ_DIR" > "$OUT_DIR/survey.txt"
 survey_status=$?
 set -e
 if [[ $survey_status -ge 2 ]]; then

@@ -1,0 +1,31 @@
+# tier3-mp-arm.sh dry runs, 2026-10-21 13:28, every call stubbed (the arm: a stub writing the reference's own matrix.tsv and a real pass transcript; busy; booking).
+## good
+MP mruby-stock BEGIN 13:28:20 board 1 runner 9db9f5f7cf60fcda appvm-arm 11967b378bda73c8 wt-ref 6764d96229f6 booking 999
+unbooked 999
+MP mruby-stock END 13:28:20 rc=0 :: APPVM read rc=0 :: --- stub
+MP mruby-stock COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MP mruby-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1
+MP board1 DONE 13:28:20
+## flip
+MP mruby-stock BEGIN 13:28:31 board 1 runner 9db9f5f7cf60fcda appvm-arm 11967b378bda73c8 wt-ref 6764d96229f6 booking 999
+unbooked 999
+MP mruby-stock END 13:28:31 rc=0 :: APPVM read rc=0 :: --- stub
+MP mruby-stock COMPARE vs reference rc=1 :: 22 of 23 cells the same
+MP mruby-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1
+MP board1 DONE 13:28:31
+## refuse
+MP mruby-stock BEGIN 13:28:21 board 1 runner 9db9f5f7cf60fcda appvm-arm 11967b378bda73c8 wt-ref 6764d96229f6 booking 999
+unbooked 999
+MP mruby-stock END 13:28:21 rc=78 :: APPVM read rc=0 :: --- stub
+MP STOP: the arm script refused mruby-stock (rc=78)
+## noref
+MP STOP: mruby-sublet has no reference bundle or collected images
+## busy
+MP STOP: board 1 is busy
+## 409
+MP STOP: the hub refused the booking (409): 409 held
+## the flip's compare (one cell planted 25 -> 24)
+  01_13e017c2f_opgetidx0-stale-regs: reference ('fault', '25', 'mrb_vm_exec', '') board ('fault', '24', 'mrb_vm_exec', '')
+22 of 23 cells the same
+## matrix-compare.py with no board matrix
+NO DATA: reference 23 rows, board 0 rows (exit 2)

@@ -1,0 +1,10 @@
+# tier3-treeA-linux.sh dry run (2026-10-19 13:43), the Tier 1 runner, the arm script and the scorer stubbed, the kits
+# and predictions real:
+# - [1] steps 1-3 done and all three Tier 1 rungs AS-ORACLE: step 4 gets firmware 7a53759a4773c81b; wm0 and wm1 run
+#   on bkit7-rev2sA and pym0 on bkit7A with their earlier runner arguments and image lists; each is scored against
+#   t3-pred-<arm>/out with RESULTS_DIR=2026-10-19-vp2c-treeA; TAL DONE.
+# - [2] steps 1-3 ended CHAIN_TREEA_STOPPED_CANARY: "TAL HOLD: steps 1-3 did not finish".
+# - [3] vm-contract NOT-AS-ORACLE: "TAL STOP: step 4's Tier 1 rungs did not read their oracles; steps 5-6 do not run".
+# - [4] the default driver guard beside a live board driver: "TAL STOP: a driver is running".
+# A first [1] passed the stub as "bash <path>"; the script ran nothing (rc 127) and STOPPED on the rung gate, so a failed
+# step 4 cannot read as a pass. It was re-run with the path.

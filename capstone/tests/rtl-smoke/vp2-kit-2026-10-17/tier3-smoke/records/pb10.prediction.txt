@@ -1,0 +1,16 @@
+# Tier 3 prediction, arm pb10: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 6 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-nested-pools configuration virtual-ffmpeg-pool-sublet platform qkit7-wrapper cells 4 tally {"CAUGHT": 4}
+# controls [["bounds-malloc", "fault"], ["pool-return-90", "fault"], ["uaf-malloc", "fault"]]
+00_461fb22053_af_join_dedup_bound image df5eea02db56843a CAUGHT cause 25 at ff2_case_run+1464 reached True completed False attribution "function"
+01_1886c3269d_h264_refs_partial_clear image 0f1bfd544ecc559d CAUGHT cause 25 at ff2_case_run+664 reached True completed False attribution "function"
+02_316531e61c_vidstab_parked_plane_pointer image 84fbc193c1709b0a CAUGHT cause 25 at ff2_case_run+384 reached True completed False attribution "function"
+03_5c66a3ab51_vvc_nonref_output_releases_tabs image d6666b4618df1d6e CAUGHT cause 25 at ff2_case_run+816 reached True completed False attribution "function"
+# image 491655742d378fcd  controls.dom
+# image df5eea02db56843a  defect-00
+# image 0f1bfd544ecc559d  defect-01
+# image 84fbc193c1709b0a  defect-02
+# image d6666b4618df1d6e  defect-03
+# image f7ffffa49e2e53fe  defect-90

@@ -1,0 +1,26 @@
+{
+  "arm": "vp2-nested-pools",
+  "cases": 20,
+  "configuration": "virtual-pymalloc-pools",
+  "contract": "verdicts-v1",
+  "corpus": "cpython/pymalloc-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "b6d799544a0bf71bbb7304725e4fb3f8ad08b85e1f1e4b1ad8e4e2ee09fc5ae5",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "5f9457d0aa154a8294445302bb6b28069555f968b0b4bb75184cedbcaab4a05c",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "3005ed52e860c7af5da2b7fdf30ca1790de5da63c79983abe59937a13a4cba0a",
+    "monitor": "007d81d",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2_bf3db3175",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "fdc271ee3c1079514d39d324368c65beaa6faeaa929e11eb7623c4d90cfd3ce9"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "NO-READING:control-failed": 20
+  }
+}

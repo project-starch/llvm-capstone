@@ -1,0 +1,18 @@
+# uaf-control repeat on module d0d5f758 with refuse_pte=1 (kit bkit7-*-pte; d706a50d5c9d), board 1 / tree A, 2026-10-22. Result lines only.
+UR BEGIN 11:56:04 board 1 booking 108 N=200 args --no-trace --dmesg --refuse-pte kit bkit7-rev2xDN2-pte
+UNBOOK 108: 200
+UR END rc=0 12:37:01
+REFUSE-PTE RPTE Y
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3f96b10c24 address=0x3f96bc7050 entry=0x3f96b00868 code=0x3f96b00000-0x3f96b80000 last=0x42 preparing=0x42 
+TALLY plain cause 13: 2
+TALLY plain cause 25: 198
+completed=True steps=203 of 203 transcript=<mnt-hdd>/capstone/t3-run-treeA/uaf-repeat-pte/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board1 DONE 12:37:01
+DMESG-ALL OLDEST [ 1979.604345] remote fence extension is not available in SBI v1.0 | REFUSED 0
+RUN uaf-45-plain cause 13 address 0x3f8f0ec040
+  DM [  570.953360] capstone_vm: resolve refused at arena: addr 0x3f8f0ec040 cause 13 need 0x1 pc 0x3f8f010c70 prev(addr 0x3f8f0ec008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+  DM [  570.998346] capstone_vm: resolve refused at arena: addr 0x3f8f0ec040 cause 13 need 0x1 pc 0x3f8f010c70 prev(addr 0x3f8f0ec008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+RUN uaf-157-plain cause 13 address 0x3fb1f7e040
+  DM [ 1687.183053] capstone_vm: resolve refused at arena: addr 0x3fb1f7e040 cause 13 need 0x1 pc 0x3fb1e90c70 prev(addr 0x3fb1f7e008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+  DM [ 1687.241473] capstone_vm: resolve refused at arena: addr 0x3fb1f7e040 cause 13 need 0x1 pc 0x3fb1e90c70 prev(addr 0x3fb1f7e008 cause 13 rep 0) no lazy arena covers this address; arena -1 lazy -1 pte rc=-22 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0

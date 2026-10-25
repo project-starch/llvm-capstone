@@ -1,0 +1,15 @@
+# boot r322-b1s16, 2026-10-16 17:11-17:35, caplifive_sublet_d93a8d66b.bit, REFUSAL_RECORD=1
+# fw_payload 5db66334e5404751 (monitor 93440d5, buildroot d04bd83), host sqlite_host.user 2c9e82d101b48160; one boot banner
+control: RESULT k800 retval=4                                        (k800.dom b2d60e525f807ea4)
+base322      a958958b0d8d5101 @0x410000:  returned; rows alpha 11 / beta 22 / gamma 33, EXTENDED_PASSED, MEMORY_PASSED
+wschema      ea36f5293be2343c @0x810000:  returned; insert rc=11 (database disk image is malformed), wschema NOTRAP done
+blobwrite    7bb39642429c275d @0xc10000:  returned; write rc=0, blobwrite NOTRAP done
+mem5design   38c3fe7b7013c706 @0x1010000: returned; before=2779054080 after=4294967295, mem5design NOTRAP done
+blobclose    bd12d56dcf97f01e @0x1410000: returned; blobclose NOTRAP done (the legacy domain, not corpus case 03)
+jsonstatic   0508d144b3796880 @0x1810000: returned; cross_rows=6, max=[3,4,5], rows=1, jsoneachstatic NOTRAP done
+jsonroot     33e71cce67e5ea0c @0x1c10000: returned; cross_rows=6, max={"bb":[3,4,5]}, rows=1, jsoneachroot NOTRAP done
+backupattach 8fe5a153c1229ac3 @0x2010000: WEDGED, as pre-registered
+    trap log 0x98 -> mcause 24
+    trap mepc 0x84806c64, domain base 0x84800000 -> offset 0x6c64 -> VA 0x2016c64 = sqlite3BtreeUpdateMeta+0x48
+    (ldc a1, 0x80(a1)), the emulator's fault instruction exactly; trap tval 0x0 (emulator: 0x80);
+    refusal record EMPTY [204:02 205-208:00]

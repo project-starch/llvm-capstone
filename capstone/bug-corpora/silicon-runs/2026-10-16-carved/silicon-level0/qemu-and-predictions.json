@@ -1,0 +1,276 @@
+{
+ "arm": "silicon-level0",
+ "build": {
+  "defs": "",
+  "app_cflags": "",
+  "carve": {},
+  "corpus_defs": {},
+  "driver": "driver.c",
+  "extra_cflags": "",
+  "extra_src": []
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "RETURNED",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-carved-00",
+   "case": "00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "ea1a4851a61d80b56bc03e4d073431d7c738750108ecedf1a146ac7322d80df8",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-01",
+   "case": "01_699341d647_apedec_array_0000_writes_64_into_channel_1",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "43b760c955e1d375797591a4c397337cba02a9a087c409c5614f35bd0708b771",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-02",
+   "case": "02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "35d7a3ffbca2dbd0c30afaa84270528acae98e55c005e423d5b3b01d02d34f40",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-03",
+   "case": "03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "ce5555a2d2204a167708c6811c9420ddafb6bd89cbb456e412a6dc1832dd266f",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-04",
+   "case": "04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "3a1d1aff011aafe3766e0764d8468d7faa06d3f1c4e97af269d49aac3368d288",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-05",
+   "case": "05_9d3032b960_alsdec_opt_order_past_max_order",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "f77469038ff0c284584096e47c09f68a3da53b02b77190ac5000dced1a9dbb04",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-06",
+   "case": "06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "8face9eb8126cae1d26e48c24ef884f3f39499bd97cb9fdf044af99d20c1049a",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-07",
+   "case": "07_2563a33856_vp9_intra_pred_carved_for_old_bpp",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "834de9a34db6d369b65210116b53ea08d2157b3f26b77a8e87c5f20cce4cb024",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-08",
+   "case": "08_b5ff61695f_swscale_v_line_at_pre_doubling_stride",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "56cf8a4ef7517ee50bbdfdd865c3983de4b7701d6d0e0e8cf44dbe779defd88c",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-09",
+   "case": "09_043bcdcdb0_svq1enc_inter_block_runs_into_source",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "51ac9ab33b161b51057d116899ce113d19b70403c84e42d741ae2beb0924e5ad",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-10",
+   "case": "10_d2213b6493_rv34_b_block_carved_at_old_linesize",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "135be5df45aff4d6ade95528af269efefff3ba0f632460d99e43466598e0fd82",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-11",
+   "case": "11_68226ed9ec_vorbis_type1_residue_end_spans_channels",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "1aea1efec66079d4c0c4b98c23f0cab2312cf826205ebae59a8de4edb6ba9e4a",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-12",
+   "case": "12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carved",
+   "image_sha256": "78608d8bba8e459841b76143f6e4dbcb2dba2c1fbe310b1afe6ad44e7e46e970",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-carved-c99",
+   "case": "shared/carve-control.c",
+   "corpus": "capstone/bug-corpora/ffmpeg/carved-repros",
+   "kind": "carve-control",
+   "image_sha256": "65804444b9c0862c4f3b78e13532a2fae0ae7e4f643a6fbb4cce780628dac2d5",
+   "qemu": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "DEFECT-REPRODUCED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "ffmpeg-plane-00",
+   "case": null,
+   "corpus": null,
+   "kind": null,
+   "image_sha256": null,
+   "qemu": {
+    "outcome": "BUILD-FAILED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "BUILD-FAILED",
+    "cause": null,
+    "site": null
+   },
+   "qemu_differs_from_tool_prediction": null
+  }
+ ]
+}

@@ -1,5 +1,7 @@
 # Full-application nested-memory campaign
 
+> **Removed 2026-10-10.** CheriBSD PoisonCap (our adapter, its backends and runners) is gone from the tree; PostgreSQL's arm goes with its rewrite. This plan's PoisonCap arms are history; the results they produced stay where they were recorded.
+
 This is the common experiment contract for a paper comparison of Capstone +
 Sublet and PoisonCap at an application's **internal allocator**. It replaces
 one-off allocator traces or favorable application-specific plots with the same

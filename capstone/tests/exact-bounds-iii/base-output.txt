@@ -1,0 +1,162 @@
+================================================================================================
+INPUTS   UNIT=16  IB=4  MMAP_THRESHOLD=131052  48 size classes, max 8191 units = 131056 bytes
+         granule: 1 below 4096, else 2^(ilog2(L)-9);  lengths needing a 2nd rounding pass: 0
+================================================================================================
+
+### SMALL PATH (n < MMAP_THRESHOLD): does repr_round(n) stay inside the slot?
+
+sc     units   stride     n_max gran@nmax fits off=0 fits worst
+24       146     2336      2332         1       yes       yes
+25       170     2720      2716         1       yes       yes
+26       204     3264      3260         1       yes       yes
+27       255     4080      4076         1       yes       yes
+28       292     4672      4668         8        NO        NO
+29       340     5440      5436         8        NO        NO
+30       409     6544      6540         8        NO        NO
+31       511     8176      8172         8        NO        NO
+32       584     9344      9340        16        NO        NO
+33       682    10912     10908        16        NO        NO
+34       818    13088     13084        16        NO        NO
+35      1023    16368     16364        16        NO        NO
+36      1169    18704     18700        32        NO        NO
+37      1364    21824     21820        32        NO        NO
+38      1637    26192     26188        32        NO        NO
+39      2047    32752     32748        32        NO        NO
+40      2340    37440     37436        64        NO        NO
+41      2730    43680     43676        64        NO        NO
+42      3276    52416     52412        64        NO        NO
+43      4095    65520     65516        64        NO        NO
+44      4680    74880     74876       128        NO        NO
+45      5460    87360     87356       128        NO        NO
+46      6552   104832    104828       128        NO        NO
+47      8191   131056    131051       128        NO        NO
+
+classes where repr_round(n_max) leaves the slot:  off=0 -> 20 of 48,  worst off -> 20 of 48
+first affected class (worst off): sc=28
+individual n in 1..131051 affected:  off=0 -> 735 (max overshoot 68 B),  worst off -> 115695 (max 116 B)
+
+### FIX (a): classify on repr_round(n) instead of n
+
+n values promoted to a larger class: 628 of 131051 (0.48%)
+extra bytes: total 8090432 over the swept range, max 26224 for one allocation
+worst single-allocation overhead: 25.1% at n=13073
+n values still not fitting after (a), at the worst slot offset: 0
+n values pushed off the size-class table onto the mmap path by rounding: 107
+
+### FIX (b): keep classification, pin off=0 for classes with stride >= 4096
+
+n values still not fitting under (b): 735
+classes that would lose offset cycling (the double-free trap): 20 of 48
+
+### BIG PATH (n >= MMAP_THRESHOLD): individually mmapped
+
+           n  maplen     stride   repr_rnd     gran  room_best   room_wst fits best/worst
+      131052      32     131056     131072      128     131052     131052  NO/NO
+      131053      33     135152     131072      128     135148     131068  yes/NO
+      262144      65     266224     262144      512     266220     262156  yes/yes
+     1048575     257    1052656    1048576     1024    1052652    1048588  yes/yes
+     1048576     257    1052656    1048576     2048    1052652    1048588  yes/yes
+     4194304    1025    4198384    4194304     8192    4198380    4194316  yes/yes
+     4198400    1026    4202480    4202496     8192    4202476    4198412  NO/NO
+     4198400    1026    4202480    4202496     8192    4202476    4198412  NO/NO
+    16777216    4097   16781296   16777216    32768   16781292   16777228  yes/yes
+
+sampled every 4096 B from 131052 to 64 MiB (16353 points):
+  rounded bound exceeds the MAPPING: 13312 points, max overshoot 61440 B
+  fix: size the mapping from repr_round(n). extra pages needed, by count: {1: 3041, 2: 2048, 3: 1536, 4: 1536, 5: 1024, 6: 1024, 7: 1024, 8: 1024, 9: 512, 10: 512, 11: 512, 12: 512, 13: 512, 14: 512, 15: 512, 16: 512}
+
+mallocng.md:96 says mappings are a 'page-rounded requested length'.
+  smallest page-rounded length that is NOT representable: 1025 pages = 4198400 bytes
+  of the first 16383 page counts, 13312 are not representable (81.3%)
+============================================================================================
+Is the length alone enough? -- what the cost doc assumed
+============================================================================================
+size-class STRIDES that are not a granule multiple of their own length: 7
+   sc=36  stride=18704   granule=32    remainder=16
+   sc=38  stride=26192   granule=32    remainder=16
+   sc=39  stride=32752   granule=32    remainder=16
+   sc=41  stride=43680   granule=64    remainder=32
+   sc=43  stride=65520   granule=64    remainder=48
+   sc=45  stride=87360   granule=128   remainder=64
+   sc=47  stride=131056  granule=128   remainder=112
+
+============================================================================================
+The BASE requirement -- what the cost doc missed
+============================================================================================
+group_base is page-aligned, so the base is representable iff
+    (16 + i*stride + UNIT*off) mod granule == 0
+
+sc      stride  L=rnd(n) granule 16 + i*stride mod g, i=0..3 
+28        4672      4672       8 [0, 0, 0, 0]                 
+29        5440      5440       8 [0, 0, 0, 0]                 
+30        6544      6544       8 [0, 0, 0, 0]                 
+31        8176      8176       8 [0, 0, 0, 0]                 
+32        9344      9344      16 [0, 0, 0, 0]                 
+33       10912     10912      16 [0, 0, 0, 0]                 
+34       13088     13088      16 [0, 0, 0, 0]                 
+35       16368     16368      16 [0, 0, 0, 0]                 
+36       18704     18720      32 [16, 0, 16, 0]               <- slot 0 base NOT aligned
+37       21824     21824      32 [16, 16, 16, 16]             <- slot 0 base NOT aligned
+38       26192     26208      32 [16, 0, 16, 0]               <- slot 0 base NOT aligned
+39       32752     32768      64 [16, 0, 48, 32]              <- slot 0 base NOT aligned
+40       37440     37440      64 [16, 16, 16, 16]             <- slot 0 base NOT aligned
+41       43680     43712      64 [16, 48, 16, 48]             <- slot 0 base NOT aligned
+42       52416     52416      64 [16, 16, 16, 16]             <- slot 0 base NOT aligned
+43       65520     65536     128 [16, 0, 112, 96]             <- slot 0 base NOT aligned
+44       74880     74880     128 [16, 16, 16, 16]             <- slot 0 base NOT aligned
+45       87360     87424     128 [16, 80, 16, 80]             <- slot 0 base NOT aligned
+46      104832    104832     128 [16, 16, 16, 16]             <- slot 0 base NOT aligned
+47      131056    131072     256 [16, 0, 240, 224]            <- slot 0 base NOT aligned
+
+classes whose FIRST slot already has an unrepresentable base: 12 of 20 classes with stride >= 4096
+
+============================================================================================
+How much of the offset cycling survives?
+============================================================================================
+sc      stride granule  off mult usable offs
+28        4672       8         1       all
+29        5440       8         1       all
+30        6544       8         1       all
+31        8176       8         1       all
+32        9344      16         1       all
+33       10912      16         1       all
+34       13088      16         1       all
+35       16368      16         1       all
+36       18704      32         2    1 in 2
+37       21824      32         2    1 in 2
+38       26192      32         2    1 in 2
+39       32752      64         4    1 in 4
+40       37440      64         4    1 in 4
+41       43680      64         4    1 in 4
+42       52416      64         4    1 in 4
+43       65520     128         8    1 in 8
+44       74880     128         8    1 in 8
+45       87360     128         8    1 in 8
+46      104832     128         8    1 in 8
+47      131056     256        16   1 in 16
+
+============================================================================================
+Does the cheap fix still work? Round the length UP and the base DOWN to the granule.
+============================================================================================
+sc=28  stride=4672    granule=8     base rounded back by up to 0      -> length 4672     fits the slot
+sc=29  stride=5440    granule=8     base rounded back by up to 0      -> length 5440     fits the slot
+sc=30  stride=6544    granule=8     base rounded back by up to 0      -> length 6544     fits the slot
+sc=31  stride=8176    granule=8     base rounded back by up to 0      -> length 8176     fits the slot
+sc=32  stride=9344    granule=16    base rounded back by up to 0      -> length 9344     fits the slot
+sc=33  stride=10912   granule=16    base rounded back by up to 0      -> length 10912    fits the slot
+sc=34  stride=13088   granule=16    base rounded back by up to 0      -> length 13088    fits the slot
+sc=35  stride=16368   granule=16    base rounded back by up to 0      -> length 16368    fits the slot
+sc=36  stride=18704   granule=32    base rounded back by up to 16     -> length 18720    DOES NOT FIT
+sc=37  stride=21824   granule=32    base rounded back by up to 16     -> length 21856    DOES NOT FIT
+sc=38  stride=26192   granule=32    base rounded back by up to 16     -> length 26208    DOES NOT FIT
+sc=39  stride=32752   granule=64    base rounded back by up to 48     -> length 32832    DOES NOT FIT
+sc=40  stride=37440   granule=64    base rounded back by up to 48     -> length 37504    DOES NOT FIT
+sc=41  stride=43680   granule=64    base rounded back by up to 48     -> length 43776    DOES NOT FIT
+sc=42  stride=52416   granule=64    base rounded back by up to 48     -> length 52480    DOES NOT FIT
+sc=43  stride=65520   granule=128   base rounded back by up to 112    -> length 65664    DOES NOT FIT
+sc=44  stride=74880   granule=128   base rounded back by up to 112    -> length 75008    DOES NOT FIT
+sc=45  stride=87360   granule=128   base rounded back by up to 112    -> length 87552    DOES NOT FIT
+sc=46  stride=104832  granule=128   base rounded back by up to 112    -> length 104960   DOES NOT FIT
+sc=47  stride=131056  granule=256   base rounded back by up to 240    -> length 131328   DOES NOT FIT
+
+classes where rounding the base down still fits the slot: 8 of 20

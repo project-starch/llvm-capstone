@@ -1,0 +1,32 @@
+# board-m1s16f-3-b1: k800 lines 1
+RESULT k800 retval=4 cycles=4447 ran=53406 instret=1089
+R1 m1 start arm=drop C=65532 target=655320 fixture_nodes=31 budget=900000 maxret=43296 leaf=64 touch=64 pool=1024 resident=1024 snap_every=4096
+R1 m1 end arm=drop stop=target alloc=655320 minted=655351 revoked=655320 retained=0 released=0
+R1 m1 start arm=ring C=65532 target=655320 fixture_nodes=31 budget=900000 maxret=43296 leaf=64 touch=64 pool=1024 resident=1024 snap_every=4096
+R1 m1 end arm=ring stop=target alloc=655320 minted=655351 revoked=655320 retained=16 released=0
+R1 m1 probe go arm=ring op=1 live=1 age=0 k=0 slot=0 reuses_since=1
+R1 m1 probe read ok live=1 byte=208 live_byte=208 is_live_data=1
+R1 m1 start arm=pressure C=65532 target=655320 fixture_nodes=31 budget=900000 maxret=43296 leaf=64 touch=64 pool=1024 resident=1024 snap_every=4096
+R1 m1 end arm=pressure stop=buffer alloc=43297 minted=43328 revoked=43297 retained=43296 released=0
+R1 m1 probe go arm=pressure op=1 live=1 age=0 k=0 slot=0 reuses_since=2706
+R1 m1 probe read ok live=1 byte=16 live_byte=16 is_live_data=1
+R1 m1 start arm=pressure C=65532 target=655320 fixture_nodes=31 budget=900000 maxret=43296 leaf=64 touch=64 pool=1024 resident=1024 snap_every=4096
+R1 m1 end arm=pressure stop=buffer alloc=43297 minted=43328 revoked=43297 retained=43296 released=0
+R1 m1 probe go arm=pressure op=2 live=1 age=2 k=43295 slot=15 reuses_since=0
+R1 m1 probe write ok live=1 via_live_alias=165 wrote=165
+R1 m1 start arm=pressure C=65532 target=655320 fixture_nodes=31 budget=900000 maxret=43296 leaf=64 touch=64 pool=1024 resident=1024 snap_every=4096
+R1 m1 end arm=pressure stop=buffer alloc=43297 minted=43328 revoked=43297 retained=43296 released=0
+R1 m1 probe go arm=pressure op=1 live=1 age=2 k=43295 slot=15 reuses_since=0
+R1 m1 probe read ok live=1 byte=31 live_byte=31 is_live_data=1
+R1 m1 start arm=release C=4329 target=43290 fixture_nodes=31 budget=900000 maxret=43296 leaf=64 touch=64 pool=1024 resident=1024 snap_every=271
+R1 m1 released arm=release alloc=43290 minted=43321
+R1 m1 end arm=release stop=target alloc=51948 minted=51979 revoked=51948 retained=0 released=1
+# R1 m1 snapshot lines: 539
+# wedge: trap log 0x99 -> seen=1 mcause=25
+# wedge: mepc 0x82a0499c, DBAS 0x82a00000 -> image+0x499c
+# wedge: tval 0xace00000
+# wedge: rev_node_head[15:0] = 258
+# wedge: rev_node_serving_idx[29:0] = 242 (generation 0, index 242)
+# wedge: tval[9:0] = 0x000 (the probed slot's offset in the pool: slot 15 of 64-byte leaves is 0x3c0)
+[refusal] wedge (single running sample per aperture; VOID if contaminated): LATCHED -- arm = probe resolved DEAD, revnode id = 0x065800e7 (106430695), parity ok (an even number of flips in one half would pass)  [204:11 205:e7 206:00 207:58 208:86]
+# refusal id 0x065800e7: generation 1624, index 231 (record byte 204 = 0x11)

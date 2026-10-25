@@ -17,4 +17,13 @@
 #error "memcached builds with -DNDEBUG (Makefile.am:92); pass it here too"
 #endif
 #define assert(x) ((void)0)
+
+#ifdef MC_CAPSTONE_SUBLET
+/* No hook patch in the Sublet build: cache.c's four allocation calls are
+ * upstream's, on the system allocator. */
+void *malloc(size_t);
+void *calloc(size_t, size_t);
+void free(void *);
+char *strdup(const char *);
+#endif
 #endif

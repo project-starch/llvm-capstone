@@ -24,8 +24,7 @@ capability, as on any CheriBSD build of memcached. There is no payload region
 and no adapter authority. libc revocation is therefore asked the question at
 the level where it lives — and neither allocator calls `free()` on the path
 where a freed unit is reused: slabs pushes the chunk on its class's list,
-cache.c pushes the object on its `STAILQ`. Mode 1 is refused. There is no
-PoisonCap build of these allocators.
+cache.c pushes the object on its `STAILQ`. Mode 1 is refused.
 
 `bin/revocation-control` is the positive control that makes a completing stock
 arm mean something: it frees a block, sweeps, and reads through the old pointer

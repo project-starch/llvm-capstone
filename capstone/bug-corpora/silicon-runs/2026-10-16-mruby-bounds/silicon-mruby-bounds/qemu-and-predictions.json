@@ -1,0 +1,378 @@
+{
+ "arm": "silicon-mruby-bounds",
+ "build": {
+  "defs": "",
+  "app_cflags": "",
+  "carve": {},
+  "corpus_defs": {},
+  "driver": "driver.c",
+  "extra_cflags": "",
+  "extra_src": []
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "RETURNED",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "mruby-smoke-control",
+   "case": "ports/mruby/app/scripts/smoke.rb",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-control",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "mruby-release-differential-01-case",
+   "case": "01_13e017c2f_opgetidx0-stale-regs",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_vformat"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_vformat"
+   }
+  },
+  {
+   "name": "mruby-release-differential-02-case",
+   "case": "02_39aecc143_openter-block-collected",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_vm_exec"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_vm_exec"
+   }
+  },
+  {
+   "name": "mruby-release-differential-03-case",
+   "case": "03_59552ecb8_sprintf-format-mutated",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "WRONG-ANSWER",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "WRONG-ANSWER",
+    "cause": null,
+    "site": null
+   },
+   "qemu_differs_from_tool_prediction": "COMPLETED"
+  },
+  {
+   "name": "mruby-release-differential-04-case",
+   "case": "04_606d9a6b2_merge-pair-collected",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "WRONG-ANSWER",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "WRONG-ANSWER",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "mruby-release-differential-06-case",
+   "case": "06_84cc5aa60_khash-freed-buckets",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "kh_get_set_val"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "kh_get_set_val"
+   }
+  },
+  {
+   "name": "mruby-release-differential-07-case",
+   "case": "07_eb7693857_vacated-slot-read",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_vformat"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_vformat"
+   }
+  },
+  {
+   "name": "mruby-release-differential-08-case",
+   "case": "08_fb4974528_hash-ext-walk-carries",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "WRONG-ANSWER",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "WRONG-ANSWER",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "mruby-release-differential-09-case",
+   "case": "09_0cf969a2b_shaped-iv-reshaped",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "COMPLETED",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "mruby-release-differential-10-case",
+   "case": "10_7c5915799_struct-member-storage",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "WRONG-ANSWER",
+    "cause": null,
+    "site": null
+   },
+   "predicted_board": {
+    "outcome": "WRONG-ANSWER",
+    "cause": null,
+    "site": null
+   }
+  },
+  {
+   "name": "mruby-release-differential-12-case",
+   "case": "12_4663fef45_eql-delete-past-entries",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "ar_get"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "ar_get"
+   }
+  },
+  {
+   "name": "mruby-release-differential-13-case",
+   "case": "13_4a386f80e_pack-uu-signed-overflow",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "mrb_pack_pack"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "mrb_pack_pack"
+   }
+  },
+  {
+   "name": "mruby-release-differential-14-case",
+   "case": "14_93eb74a59_case-splat-stale-count",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 5,
+    "site": "mrb_obj_ceqq"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "mrb_obj_ceqq"
+   }
+  },
+  {
+   "name": "mruby-release-differential-15-case",
+   "case": "15_af6f23ddb_prepend-self-reference",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "str_prepend"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "str_prepend"
+   }
+  },
+  {
+   "name": "mruby-release-differential-16-case",
+   "case": "16_ec89364c4_ary-fill-int-overflow",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 7,
+    "site": "ary_fill_exec"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 28,
+    "site": "ary_fill_exec"
+   }
+  },
+  {
+   "name": "mruby-release-differential-17-case",
+   "case": "17_bef45e223_pat-values-stale-ptr-and-len",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_func_basic_p"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_func_basic_p"
+   }
+  },
+  {
+   "name": "mruby-release-differential-18-case",
+   "case": "18_03f242d09_mod-visibility-null-mt",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mt_put"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mt_put"
+   }
+  },
+  {
+   "name": "mruby-release-differential-19-case",
+   "case": "19_77d1d928f_method-defined-null-mt",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mt_put"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mt_put"
+   }
+  },
+  {
+   "name": "mruby-release-differential-20-case",
+   "case": "20_94993eede_visibility-unprepared-mt",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mt_put"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mt_put"
+   }
+  },
+  {
+   "name": "mruby-release-differential-21-case",
+   "case": "21_ff047f5fe_method-defined-inherit-null-mt",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mt_put"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mt_put"
+   }
+  },
+  {
+   "name": "mruby-release-differential-22-case",
+   "case": "22_d8911416c_alias-mid-as-irep",
+   "corpus": "capstone/bug-corpora/mruby/release-differential",
+   "kind": "mruby-rb",
+   "image_sha256": "a7ac283d7050a5d83390a3087b05c40647b5a38a7955dfae27779669aa674be1",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_proc_parameters"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "mrb_proc_parameters"
+   }
+  }
+ ]
+}

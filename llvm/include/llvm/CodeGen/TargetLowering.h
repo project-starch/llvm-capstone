@@ -400,6 +400,14 @@ public:
     return getPointerTy(DL, DL.getProgramAddressSpace());
   }
 
+  /// Return the type of a constant-pool address: the pointer type of the
+  /// address space the target machine gives constant-pool memory
+  /// (getAddressSpaceForPseudoSourceKind), the same one its MachinePointerInfo
+  /// records. Address space 0 unless a target says otherwise; on a fat-pointer
+  /// target such as Capstone (C-80) it is a capability type, not the AS0
+  /// integer that getPointerTy(DL) names.
+  MVT getConstantPoolPtrTy(const DataLayout &DL) const;
+
   /// Return the type for operands of fence.
   /// TODO: Let fence operands be of i32 type and remove this.
   virtual MVT getFenceOperandTy(const DataLayout &DL) const {

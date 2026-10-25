@@ -1,3 +1,279 @@
+**2026-10-21, the cross-lane plan to the next bitstream (runtime/semantics lane, coordinating on the lead's word).**
+Goal: the six-item batch bitstream, then the WHOLE corpus on vp2, including the two arms the current bitstreams
+cannot run (cpython lt1 and postgres pg-pools, both "needs collection", which item 6's hardware recycling provides).
+The critical path is the RTL lane; everything else is arranged so that nothing waits on it unnecessarily.
+
+| # | Step | Owner | Depends on | State |
+|---|---|---|---|---|
+| 1 | Item 1 (namespace bit; CPMP AND PC trackers ignore the ns flush) | rtl | - | PASSED two-sided (s23-cpmp-rearm: six re-arm paths ALLOWED -> DENIED); audited |
+| 2 | Item 2 (R-58: caller srevroot restored at the escape) | rtl | - | written, sim-validated, sweep-identical |
+| 3 | Item 6 (generations: virtual push to the TABLE's free list, pop {g+1, i}, the nine sites and two retire gates) | rtl | 1 | RTL written, push gates reverted (c96aafa9c: they pushed onto the PHYSICAL list); rework |
+| 4 | Item 4 (R-60: CINCOFFSET/CINCOFFSETIMM/SCC clear the tag; zero metadata word) | rtl | 3 | not started |
+| 5 | Trial synthesis B (base + item 4), judged by the new cursor-to-metadata paths, slack >= -2.414 | synth | 4 | run A sealed (f08906b78, WNS -17.936); host held free |
+| 6 | Items 3 (R-59) and 5 (Q-04 b): drafts on batch-item3-r59 / batch-item5-q04b, reviewed sound | rtl | 3, 4 | to rebase, lint, run |
+| 7 | Lint re-baseline, the batch's 95-test sweep vs the c7e6f604f baseline, the audit of every item | rtl, runtime | 6 | - |
+| 8 | Batch synthesis (2.5-3.5 h) | synth | 7 | - |
+| 9 | The batch's QEMU prediction kit: R-59/R-60 lane csrunv-root-r59-v7 + compact rounding + the generations model (with the two retire gates) | compiler | 3 (contract) | R-59/R-60/rounding done on lanes; generations model next |
+| 10 | The module for the batch (retire accounting by free_count, lane runtime/module-gen-push 13c3e7684ae1), QEMU-gated on 9 | runtime | 9 | written, compile-checked |
+| 11 | The batch firmware: bounded fetch retry (no-progress cap), csupctl.table bracket grep, s23-cpmp-rearm board package | board, rtl | 7 | specified |
+| 12 | REFLASH, then Tier 1 per tree, s23-cpmp-rearm must-read, pb10 FRTY 0 without srz, then the corpus on the batch bitstream including lt1 and pg-pools | board | 8, 9, 10, 11, the lead's word | - |
+
+Off the critical path, in parallel: the board's caplifive-sbi #4 RFENCE pair and the QEMU-kit firmware provenance
+rebuild (capstone-sbi 4674ab6a); the compiler lane's musl PR suites (#269/#270/#272/#245), R-60 edge tests and the
+padding residues (stack frame rule); the open runtime PRs (#250, #258, #264, #279, #271/#273/#274), reviewed on GitHub
+and waiting on their author. The ten compiler PRs are on dev (b3cc8cb4be5a); #275 (LSR) and #267 (frame pointer,
+C-70) are held with reviews posted.
+
+**2026-10-21 05:0x, the vp2 BOARD lane, at its quiet point for the account switch (both boards idle, no hub bookings).**
+The corpus pass on the rebuilt images (the lead's C-32 remedy (b): no `+movc-keeps-integer-source`; dev's module
+54d8a3af; both current bitstreams) is COMPLETE.
+- 25 arms (first written 24; corrected 2026-10-21) and 346 cells, each graded against the compiler lane's silicon-mimic
+  QEMU reference: 345 equal in verdict and 341 in every field.
+- The five differences are ISSUES entries: Q-31 x4 (fault-cause order) and R-60 x1 (sq1q15 case 31).
+- Every arm reads identically on tree A and tree B, and no boot has a pc=0. (First written before the three repaired
+  arms had a tree-A reading; they read 37/37 on tree A on 2026-10-21, equal to tree B, so it now holds.)
+- Record: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/README.md`, the "CORPUS PASS ... summary" table
+  and "Quiet point" sections (dev 7333cee38464, 268d5ac8807d).
+- Corrections landed the same night in `bug-corpora/sqlite/engine-repros/results/README.md`: sqlite 02/05/19/24's
+  memsys5 CAUGHT cells are incidental NULL/-1 dereferences, not capability detections (606c8f218a6e, retraction
+  7b4285a9d444). The headline matrix's spatial row (base Capstone's 6 temporal detections) waits on the compiler lane's
+  physical-harness traces, and its framing is the lead's.
+- Open items, with their owners: that README's "Quiet point" list.
+
+2026-10-19 (the RTL lane's night: S-29 found, fixed and landed; tree A's vectors; tree B not yet gated): **The
+virtual-context switcher installs and restores `satp` with NO TLB flush, in both directions, demonstrated in
+simulation and fixed.** S-29 is on dev (`ca39b3b859ab`, extended at `75aab3df524d`) and the fix is on
+capstone-ariane `virtual-profile-2-c` `d427e7391`, an UNQUALIFIED flush-all carried from the CSR file through the
+EX stage, the LSU and the MMU to the instruction and data TLBs. The arm is `va-satpstale` with ten builds; the
+decisive readings are a pair differing by exactly one retired `sfence.vma` whose fifth reading differs with it,
+and a no-access control that attributes the stale entry to the context's own access. QEMU is the stricter side and
+is the reference (the semantics owner's ruling); there is **no corpus consequence today**, because every CSRUNV the
+module issues runs with the caller's live satp equal to the context's, and the one outside that guarantee, the
+teardown discard, installs nothing (`commit_stage.sv:599-602`, three state bits at `csr_regfile.sv:2142-2144`).
+**The instruction TLB carries the window too**, read by the `-DFETCH_FACE` builds: the caller's first fetch after an
+escape resolves to the CONTEXT's physical page. Bounds, all written into the arm's header: the data-side window is
+an ABI RULE in both directions, not something software cannot work around, since the escape always returns to
+CSRUNV+4 and one fence there covers it — the first framing claimed otherwise and was refuted by this arm's own
+control. Two further claims were WITHDRAWN after an audit: "the only mechanism" for the entry-side coupling (an
+in-flight page-table walk is not excluded, and that alternative bears on the fix's sufficiency), and that a stale
+translation could not reach S-23's signature at all (**a caller at U hitting a context-installed U page passes the
+page-permission check and is then refused by the instruction-side capability check with a PHYSICAL address, which
+is S-23's exact signature**; `pmp_data_if.sv:241`). A `-DCALLER_U` build with a narrowed region is owed.
+**Q-31's missing reading is in:** a plain load with an UNTAGGED base inside a virtual context is REFUSED with cause
+24, and the escape kind is 2, the terminal kind, so such a refusal ends the context rather than pausing it.
+**A candidate for S-23's data face, which the runtime lane identified as R-44's class rather than new:** the CPMP
+allow term has six conditions, the sixth being the entry's revocation-node validity, and invalidation compares the
+node INDEX only, ignoring the generation (`pmp_data_if.sv:96-108`, `:143-151`), so freeing a node can permanently
+invalidate an unrelated live entry sharing the index. The discriminator is a simulation arm, owed, and it should
+cross the namespace as the board lane asks. R-44's own entry (`ISSUES.md:1111`) and the plan at
+`docs/plans/r44-cpmp-evidence-tracker.md` already hold the fix design, waiting on the lead.
+**Tree A (`8522d72fe`) is routed and sealed-pending:** WNS −19.025 pre-seal against vp2's −19.072, inside the band,
+WHS +0.054, no congestion failure, routed in ~38 min. **Its area prediction is REFUTED:** TOP 180,838 LUT against a
+predicted ~178,560, +2,432 where the per-change list summed to about +154, with FF +46 against ~+137 predicted. The
+synth lane's reading is that stems cannot attribute it on this design, and I withdrew my own discriminator with it;
+the one traceable piece is `stc_lsu_ex_q` at +224 LUT, R-57's, over its 150 bound. No attribution builds were spent,
+by agreement, since routing decided the question that mattered. **Tree A's 25 bare-arm vectors are all IDENTICAL to
+their published bf3db3175 vectors** (`7ba0a7afc87a`), with the extractor controlled per arm by reproducing all 25
+on the base tree; note that identical vectors mean these arms do NOT exercise S-27, not that it works.
+**Tree B is NOT gated.** It is flush-only at `d427e7391`. Lint passes with all eleven counters at baseline AND the
+UNOPTFLAT membership identical BY NAME to the base, 40 each way, positive-controlled — a gap the plan had carried.
+But the sweep and the supervised list were VOIDED by my own error: run concurrently in one worktree, they share
+`verif/sim/trace_rvfi_hart_00.dasm`, which is the file every reading is extracted from. Re-run serially, **the
+95-test sweep is GREEN: 92 identical in exceptions, readings and retired counts, 0 differing, 0 missing, with the
+three random generators excused by name because they are absent on both sides, and the comparator's own self-test
+fired first (status 0 clean, 1 on a one-sided absence, 1 when nothing is excused).** Use the IN-TREE comparator,
+`verif/sim/sweep-compare.py` with its committed `sweep-expected-missing.txt`; the older copy under `sup-runs` has
+no excuse list and returns status 1 on exactly that clean result. **The 152-test supervised list is GREEN too:
+152 of 152 identical, 0 differing, 0 missing. So TREE B IS FULLY GATED at `8de3c48cf`** (its `core/` byte-identical
+to `d427e7391`). Its pre-registration, with the predictions written against the measured LUT floor rather than
+tighter than it and an endpoint discriminator rather than a stem one, is in
+`docs/plans/capstone-sublet-rtl.md`. **Its build is LAUNCHED**, and the hold I had placed on it is
+withdrawn. I had failed the third sufficiency question by testing it against the wrong reading, whether S-23's
+fetch panics would stop, which is a weak inference from three panics. The semantics owner pointed out the reading
+I had missed: the arms that found the defect are bare M/S-mode arms of the kind the board already runs, so they
+become board images with predicted vectors on both bitstreams. **They are built, simulated on both and landed at
+`8e1df1e05a3c`** as `capstone/tests/rtl-smoke/satpstale-bare-2026-10-19/`, seven images, two-sided on every face
+against the RESIDENT bitstream, with two controls identical across both. The fetch arm reads S-23's signature on
+tree A, cause 1 with a physical address, and its discriminator needs no address table: **on tree A the last two
+recorded values differ, on tree B they are equal.** So S-29 and S-23's fetch face are silicon readings on the
+resident bitstream, independent of tree B, and tree B's own bitstream is informative by the same arms. Its flash
+stays the lead's word. **Still owed, in order:** the cross-namespace arm for the index-only-compare candidate
+(needs a physical node at generation >= 1, so it depends on the node pool's allocation order), the consuming
+resume (ruled, no RTL yet), R-57's register sharing as an area lever rather than a fix, and a quantum-expiry or
+page-fault escape arm, since every escape reading so far is for the ecall kind. **R-57's two saved-exception registers are SHARED-SAFE** (structural: one functional unit, one issue port,
+a single-threaded DYN dispatch loop), with the caveat that the area saving is in the capture mux and the read-side
+priority chain rather than the flops; a candidate for the batch after tree B.
+
+2026-10-18 (boot 3's ruling, the census): **Boot 3-T1 on vp2: C-27's fix holds, then every virtual application faults at its
+first malloc, `csrr a0, 0xcc0` (Q-21's urevavail, which the application runtime polled and only QEMU answered). Ruled as
+before: QEMU's default stops implementing 0xcc0 and 0x5c0 (capstone-qemu virtual-capstone-v7 3b8040d5ff6e909ab30c0ecc32fc76
+58ea07eb0d, the test-only property x-capstone-test-csrs for the three bootstrap suites that select protected U through scapctl:
+m1 74/74, movc 67/67, trusted-linux-u-access 71/71 with it, 6/74, 52/67 and 16/71 without; the five other suites unchanged);
+the runtime loses the reads (compiler lane); the RTL is unchanged.** The silicon census the runtime lane asked for is at
+`docs/plans/2026-10-18-vp2-silicon-census.tsv`: 53 rows read from decoder.sv, csr_regfile.sv, riscv_pkg.sv and the Anvil
+units, every custom-2 and custom-3 arm by privilege and context with its static refusal and operand rule, every Capstone
+CSR with its accessible privilege, and the trap-delivery, table-namespace and one-slot rules, each with its file:lines; the
+three classes that cost boots (an integer-based LDC/STC, a DELIN of a NONLIN, a read of 0xcc0 or 0x5c0) are its first
+positive controls. Also on dev: the N-context costing (not scheduled; zero Tier 3 bundles need a second live context) with
+its WNS premise from vp2's checkpoint (+20.712 ns on the compare's accept path).
+
+2026-10-18 (boot 2's rulings): **vp2's boot 2 (board lane vp2-tier12 279d993e273d) proved the S-trap injection on silicon and
+exposed two more reference-model gaps, both ruled "the RTL is the reference" and fixed in QEMU: capstone-qemu
+virtual-capstone-v7 852c5bc7677440b95736b5fc22bc158cce3f6479 raises 26 for a DELIN of any non-LINEAR capability (24 for an
+untagged one; Q-25: the glue's delin of a NONLIN gp faulted every virtual step on silicon where QEMU's no-op passed them)
+and holds ONE saved context by default (x-capstone-supervisor-slots, Q-26: QEMU's 32 slots let run.py's parallel steps pass
+where silicon's one slot refuses the second CSRUNV with a cause-29 trap).** Tier 0 at the defaults: m1 74/74 (with the
+DELIN positive control), movc 67/67, sublet-lifetimes 119/119, trusted-linux-u-access 71/71, runtime 69/69, index8 PASS,
+exact-bounds 4/4, fp.sh 60/60 (its three two-application isolation cases set 32 slots for themselves; nothing else does).
+Also answered from the RTL: a refused CSRUNV TRAPS with mcause 29 on both sides (the plan's "refused actions read 29" is
+reworded; the only non-trap 29 is the bad-frame terminal event), discard-and-re-enter is not a resume (the switcher's ENTRY
+zeroes FP state and the CSRs and cannot advance the pc after a service escape; sent to the compiler lane for the module's
+serialization), and action 3 diverges (RTL illegal 2, QEMU 29-or-collect: Q-27, low priority). The board lane's record of
+the three v7 arms is at vp2-tier12 f077f70d1e57 (its trace replay matched every value; the entry source hash matched).
+Open for the RTL lane: the 1 MiB table cross-check arm when the module's dump arrives.
+
+2026-10-18 (v7 arms green): **All three CSMINT emulation arms are green at descriptor v7 on the resident RTL bf3db3175 with
+the gated monitor capstone-sbi vp2/tier1-monitor fba7812 (the v7 routine + the MPP gate the board lane's auditor required +
+the OS-trap injection entry).** va-csmint-mon 81 of 81 as pre-registered on the 729a340 routine, then 0 of 81 differing on
+fba7812 (capstone-ariane virtual-profile-2-c 2639bd078, 7b8c0d979); va-csmint-entry at v7 through the shipped _cap_trap_entry
+81 of 81, identical to mon except the 17 address-valued readings (layout); va-osinject revision 2 23 of 23, with the
+U-origin CSMINT declined by the gate and injected as an illegal instruction (SPP 0, nothing minted). No RTL change. The
+entry arm's v7 source goes back to the board lane's kit. Open for the RTL lane: the 1 MiB table cross-check arm when the
+module's dump arrives.
+
+2026-10-18 (v7 pinned): **QEMU v7 is capstone-qemu `virtual-capstone-v7` f2f15f8fc70c402c9798d2191439785ebd0c33e3, one commit
+on d35af47b163c: helper_csmint reads six words with the routine's refusal order of record and writes both slots with one
+node; the scalar-S LDC and STC refuse with 24 (tval = the base register) unless the test-only property
+x-capstone-test-s-ldc is set, which four suites' runners set (m1, movc, trusted-linux-u-access, and virtual-capstone-runtime's
+run.sh and index8.sh for two scaffolding sites found by the control run); eleven descriptor writers at six words; four new
+table cases.** Tier 0 on it: m1 73/73, movc 67/67, sublet-lifetimes 119/119, trusted-linux-u-access 71/71, runtime 69/69,
+index8 PASS, fp 60/60, exact-bounds 4/4. Two corrections surfaced on the way, both in the record: QEMU HAS a scalar-S STC
+branch (Q-23's first wording said neither side had one; retracted in the entry), and the dependence count by raw encoding
+missed a suite that uses the LDC macro (a memory). The board lane's OS-trap-injection monitor (capstone-sbi
+vp2/os-trap-inject db23ffd) was reviewed against the RTL and its arm va-osinject read all 14 values as predicted on
+bf3db3175 (scause 24, stval = the base, SPP 1 then 0, sepc at each ldc, the clobbered registers restored; the control runs
+to the cycle limit). vp2c's Q-24 change is committed on capstone-ariane `virtual-profile-2-c` 3244170b0, lint at baseline by
+name. Next: va-csmint-mon/emu/entry re-pre-registered for v7 on the 729a340 routine; the 1 MiB table cross-check arm.
+
+2026-10-18 (Q-23 ruled): **Q-23 is CLOSED with the RTL as it is: trusted S performs no capability memory access, QEMU is
+tightened to the RTL, the module takes the CSMINT descriptor v7 route (type, cursor, a second slot for one NONLIN mint),
+whose emulation sequence the RTL supports today (CSNODE takes any tagged rs1; SCC is register-only; slot 0 at frame+64
+is the hardware's PC capability slot). vp2 PROCEEDS WITHOUT A BITSTREAM.** The drafted LDC edits are discarded. vp2c is
+pre-registered with Q-24 alone (the medeleg mask, lane branch virtual-profile-2-c, lint running) for whatever bitstream
+follows; the plan's section carries its arms, gates and prediction. RTL lane's next work: QEMU virtual-capstone for v7
+(helper_csmint six words, both slots, one node; the scalar-S LDC branch removed; trusted-linux-u-access rewritten or
+retired; the Tier 0 descriptor suites moved to six words and re-measured), one commit with a pinned hash; then the
+emulation arms re-pre-registered for v7 and re-run on the board lane's updated routine; the 1 MiB table cross-check arm.
+
+2026-10-18 (vp2 boot 1): **vp2's first virtual boot wedged at the module's `ldc t0, 0(a5)`: NOT silicon. Two RTL/QEMU
+divergences (Q-23: the RTL refuses an integer-based LDC from trusted S with 24, QEMU loads it; Q-24: the RTL's medeleg
+mask cannot delegate causes 24-30, QEMU's can) and the monitor's EXCX path (fault_return_from_domain taken for a kernel
+trap with no domain active, the stack swap never undone, so the next trap's CINCOFFSETIMM at _cap_trap_entry+4 raises 24
+on S's integer sp).** Answer of record sent to the runtime and board lanes with file:line on all three sources; the
+CSMINT emulation's restore is exact and not involved. The semantics owner's provisional ruling: QEMU's trusted-S scalar
+LDC is the reference, STC stays refused on both. vp2c (Q-23 + Q-24, nothing else) is to be pre-registered on a branch so
+synthesis starts the moment the compiler lane says add() cannot drop the load; the monitor's injection path is the board
+lane's fix for the wedge regardless.
+
+2026-10-18 (A failed): **Attribution build A (D3 off) FAILED TO ROUTE after ~5 h: 242 signals unrouted for congestion, 171
+node overlaps, no bitstream, no routed WNS** (the log's -14.662 is an intermediate figure on an illegal route and is not
+recorded). Its area grade stands (post-phys_opt counts). Finding for every bitstream that follows: routability at ~178k LUT
+is marginal and netlist-dependent; vp2 at 178,406 routed in 22 min, A at 178,757 did not, with the only difference the
+hierarchy home of the DYN result cones. vp2 is resident; nothing waited on A.
+
+2026-10-18 (A's area, pre-seal): **A (D3 off) reads issue_read_operands own cells 21,977, vp1's level, and the pre-registered
+key would name D3; the design total refutes it: TOP 178,757 (vp2 178,406), with the same mem_q write-back cones homed under
+dyn_unit/_spawn_0 (14,366 cells against vp2's 870).** D3 moves the logic's hierarchy home; it is not the logic. The key is
+refuted as an instrument (a per-module own-cell count measures the flow's hierarchy choice): every per-module area key now
+carries the design total and the stem summed over all hierarchies as its control. Both builds agree with the source
+diagnosis (the DYN result chain). A is past the host's 3 h 30 m rule without a bitstream, still routing (567 overlaps at
+285 min); its WNS and seal, if they come, are recorded against the pre-registration.
+
+2026-10-18 (attribution concluded): **vp2's issue_read_operands growth is named: the DYN unit's unregistered result mux.**
+The synth lane's netlist queries (stems by cell name, D-pin and replication checks, flop counts) show 96% of the growth is
+the input cones of the scoreboard's cap_result flops, deepened per bit with no replication and no relocation; the source is
+the generated result endpoint of the DYN unit, one combinational priority chain over every send site, 90 ternaries on vp1 and
+105 on vp2 (item D's six new sends), feeding the scoreboard with no register between. Real logic, not a defect. Two fix
+shapes costed in the plan (register the result pack, or collapse the sends onto one register, the cycle-neutral one); no vp2b
+build is named; the pre-registered "neither" redesign stays withdrawn. A's seal still decides D3's share. One retraction on
+the way: a "second write-back source in cva6.sv" claim sent to the synth lane was withdrawn within minutes (the assembly is
+identical on both trees); the memory rule is that a difference claim needs both trees quoted.
+
+2026-10-18 (B sealed): **Attribution build B (Q-15's cone pruned) is sealed and graded: Q-15 is NOT issue_read_operands' ten
+thousand.** B's own cells there read 28,457 against vp2's 27,845 and vp1's 17,505; the cone was ex_stage's (2,410 -> 337,
+2,073 LUT); routed WNS -17.537 recovers 1.482 of the 3.404 ns gap, inside the one-sample band, so not attributable; LUTLP-1 0.
+The grade is in the plan doc under the attribution section. "D3" and "neither" stay open on A's seal (993043c97, still
+routing in a second-pass excursion). The vp2b Q-15 variant is therefore not the fix; its mask-form judge stays validated on the
+lane branch (947ebb48c, 11,092,561 children, 0 mismatches) as an ex_stage reduction that can ride the build A's reading names.
+Two RTL/QEMU divergences filed from the module's CSR questions: Q-21 (0xcc0 urevavail absent on the RTL, illegal; the module
+computes availability from the header) and Q-22 (0x5c0 scapctl absent; the RTL is PU = 0 permanently; the module must not
+write it on silicon).
+
+2026-10-18 (later still): **vp2b, the timing fix for vp2, is pre-registered before the A/B seals** (the plan doc's "vp2b, the
+timing fix for vp2"): the lead's standing instruction (via the runtime lane) is everything needed for a working vp2 and the
+corpus on it without further asks, so if vp2's canary fails the change the seals name starts at once (B names Q-15: the mask
+test replaces the registered round trip, validated against bounds-model.py first; A names D3: a narrow registered FP port for
+the switcher; neither: the two-level id decode, costed first) and the synth lane builds it overnight; the arms, gates and
+predictions per variant are in that section. Pre-seal: attr-b routed at WNS -17.583 (1.489 of the 3.400 ns gap, inside the
+band); attr-a still routing; the own-cell area at seal decides. The Tier 3 table rule for the corpus kits (flat RECYCLE,
+capacity at most 65,536, next-unused never past it; three silicon-only readings pre-registered as kit mismatches) was sent to
+the runtime lane for 2026-10-17-vp2-corpus-on-silicon.md.
+
+2026-10-18 (later): **The two attribution builds for vp2's issue_read_operands growth are in synthesis since 07:55 UTC on the
+lead's direct go to the synth lane ("Go with everything"): attr-a 993043c97 (D3's FP port steal held off) and attr-b a8c873ac3
+(Q-15's judge held at 1), graded at seal against the pre-registration on dev (93bee16ee3f7), vp2's seal as the baseline. A null
+duplicate of vp2 was not launched (Vivado is deterministic for identical inputs; a null duplicate needs a named perturbation and
+none was handed off). Standing change from the lead (2026-10-18, in the synth lane's session): the synth lane launches every
+VERIFIED RTL-lane handoff without a per-build go, after checking the commit, parent, scope, Anvil sources and run.tcl and
+recording the pre-registration; it builds nothing that was not handed off. The flash of a bitstream still needs the lead's own
+word to the board lane. vp2's board staging is pre-registered on dev (4be3dfe15509, the board lane): 23 images plus q17-order
+and vb-trans-off, each with its vector simulated on bf3db3175 as built; three tests-only fixes found on the way sit on
+virtual-profile-2-d above bf3db3175 (c55e3ff31, 1bcef8712, fc679dc68; the RTL unchanged).**
+
+2026-10-18: **BOTH VIRTUAL-PROFILE BITSTREAMS ARE SEALED AND GRADED; the flashes wait on the lead's own word to the board lane,
+vp1 first.** vp1 `caplifive_vp1_9ed9a2594.bit` sha256 01072623f8f24b2081556c193113ca906d68316fdc1de15a55ae8267ddf82905,
+routed WNS -15.615 (0.241 inside the resident d93a8d66b's -15.856), LUTLP-1 0; vp2 `caplifive_vp2_bf3db3175.bit` sha256
+776cdd8c40d985708a09d4d43ab1c5106414ae1347cc4436a711381d2c197475, routed WNS -19.019 (3.404 behind vp1), LUTLP-1 0. Grades
+against the pre-registrations are in the plan doc (dev 6a2062ff338d): both WNS predictions hold on the endpoint rule (the
+worst paths are the resident's capability-metadata forwarding family), both loop-membership predictions are refuted without
+consequence (the router-left loop breaks through R-56's clear-refusal gate on both; vp2 adds a re-cut of the D-cache handshake
+ring), vp1's module-level area rows and vp2's area ranking are refuted: issue_read_operands' own cells grew 10,340 LUT from vp1
+to vp2, the module holding the critical cone, content not shown. The lead can buy the attribution (vp2 minus D3, vp2 minus Q-15;
+one cycle each). The builds ran in parallel from 03:23 UTC on the lead's direct go ("go both"). vp1 = capstone-ariane `virtual-profile` 9ed9a2594 (item B translation, Q-17, R-56, Q-19), handed off 2026-10-17
+with its gates and pre-registration (`caplifive_vp1_9ed9a2594.bit`). vp2 = `virtual-profile-2-d` at bf3db3175 (the tip
+b339f9b0b adds tests and tools only): item A's flat per-context lifetime table, item D's CSRUNV with the frame as the one
+saved context's storage, kinds 1-5 and FP state per context, CSRETIRE in hardware and CSNODE for the monitor's CSMINT
+emulation, items E and H, Q-15 (the registered round trip), Q-18, and two fixes found by the board lane's emulation arm (an
+unknown custom encoding is illegal at decode, so mtval carries the bits; a csupctl or srevroot write flushes the pipeline).
+Gates on bf3db3175: lint at baseline by name, the 95-test sweep 92 / 0 / 3, the sup list 150 of 152 identical with two
+quantum-timed tests moved by the flush's cycles (attributed by a matched pair); every virtual-profile arm as pre-registered;
+the board lane's monitor-path arms (the shipped `_cap_trap_entry` around `capstone_csmint.S`) read all 46 values. The
+pre-registration is on dev (e2f230533063, the plan doc's "Synthesis of virtual-profile-2-d bf3db3175"); the synth lane
+has recorded it and grades vp1 against its amended pre-registration and vp2 against the dev section, with vp1's reading
+as vp2's band once vp1 seals. **The flash of each waits on the board lane's controls and the lead's own word to the board
+lane.** The RTL lane's next work
+is reading both synthesis reports against their pre-registrations; the deferred follow-ups (the paged table, 32 contexts)
+start only if acceptance needs them. The Q-entries for the recorded divergences (the table barrier, the emulation window's
+rules, CSRETIRE's answers without a read, the 256-id reserve per context allocation, the item-E refusal of a domain's
+RETURN) are the runtime lane's.
+
+2026-10-17 (board lane): **the board campaign's classic-line items are done except ST100, and vp2's monitor and Tier 3
+inputs are prepared.**
+- **Board, on caplifive_sublet_d93a8d66b:**
+  - R1 warm and cold, landed b58e60fe19c7: 17.97 cycles/node warm shared, and the cold constant 27.62 at nd = 16,384.
+  - M1's five rows, landed df8dbd0f030e: all four conditions as on R-43 v2.
+  - Boot BL, landed 26fd95e2861c: the flag-on CSMINT monitor repeats boot P on every reading.
+  - ST100's pre-boot and its 8.5 h pair run now.
+- **The CSMINT emulation is landed on caplifive-sbi capstone-bootstrap c3293b3, flag off by default.** It is validated
+  in RTL simulation (va-csmint-emu, -mon, -entry, -ft) and on silicon (BL). The flag-on build is vp2-only.
+- **vp2 Tier 3 on the compiler lane's fixed v6 revision:** 20 of 26 bundles run (`tests/rtl-smoke/vp2-kit-2026-10-17/tier3/`,
+  `status.py`). The open items:
+  - `-fno-builtin` in the SDK, for the FFmpeg pool tag loss;
+  - option (iii)'s recorded placement repairs in memcached 0006, wmem 0001 and SQLite memsys5;
+  - the per-port SDK build for cpython and postgres sql.
+  All three are with the compiler lane.
+- **The lead's own word is still needed** for the vp1 flash on 9ed9a2594. The earlier answer named 4b958dc3f.
+
 2026-10-15 — **Phase B: real PHP builds, links and runs on virtual Capstone — 145 translation
 units, nothing dropped, and the whole PHP-side change is one compiler flag and two configure
 answers.**
@@ -56,6 +332,141 @@ Next, in order: push the Phase B pre-registration to the lane branch, then the s
 CRASH-092 and CRASH-100 (a second process in the guest); `PHP_VIRTUAL_SHRINK_STACK=1` measured
 as its own variable; and the 24 Phase A cases re-measured on real PHP, which is what makes the
 two columns comparable rather than merely adjacent.
+
+2026-10-14: **TWO BITSTREAMS IN SYNTHESIS, both pre-registered on dev before the handoff.** The synth lane needed
+the lead's word in ITS session (a go relayed from another lane does not count); it came, and the FP build started
+03:36 UTC, the elaboration-only pass of the Sublet tip ran clean in parallel, and the Sublet build followed (second
+attempt 06:12 UTC after the guard's 240 s window aborted the first during the 461 s dyn-unit Anvil compile).
+- `caplifive_fpb_4a4261bb4.bit` (fp-fixes: R-53, the R-52 residual, R-54's renormalisation, the encoder without the
+  cursorless scheme): pre-registration cd8c12bc2627; the board's acceptance amendment on lane b0-silicon-runtime.
+- `caplifive_sublet_d93a8d66b.bit` (capstone-sublet: the 27-bit-bounds / 4-bit-perm word, CDERIVE / CREVOKE, the
+  node parent link, MREV deepening, CREVOKE in R-45's flush): pre-registration f26d8baf949b; gate tree 4be92a85a
+  (verif/sim/Makefile only above the RTL). Gates: lint at baseline by name, the 95-test sweep readings-identical
+  to 0568f93a9 under the fixed harness (91 identical, 1 explained, 3 random generators without logs), 36 ported
+  QEMU cases, the supervised arm. Flash only after the FP acceptance boots complete and the lockstep list is green
+  (QEMU decode gate 9739f6e415, check-repr / B0_CAP_FORMAT full, the OVERLAP interim, C-13).
+- Found on the way, both fixed on the branch: the testharness printed SUCCESS at its cycle limit (ac2968e10), and
+  the fixed harness then left no retirement trace for a failed run (4be92a85a); 26 of the sweep's 95 arms are
+  readings-only and end at the limit on every tree, so every earlier "sweep identical" by exit code compared nothing
+  for them (retraction 6549f8cc5c1d; the readings-level comparison now stands in its place).
+- Step 6 moves 8 cycles from MREV to the next timed REVOKE in the r12-s1 ladder (the program's total time unchanged
+  to the cycle). The timed pair `capstone/tests/rtl-smoke/s1-revoke-gap-2026-10-14/` (capstone-sublet 5d2a5b988,
+  tests only) runs the same binary on both bitstreams for the board's R1 release-cost numbers; in simulation step 5
+  and step 6 read identical on both arms (outcome A: R1's 76 / 22.7 predicted to hold), and the FP tree pays the
+  MREV's drain at a revoke issued right behind it (381 against 230 cycles), which the Sublet trees absorb inside MREV.
+- **FP sealed 2026-10-14, graded in the plan doc: WNS -15.360, OUT of the -13.335..-5.855 band by 2 ns**, loops and
+  LUTLP as predicted, area +1,739 LUT (prediction refuted: issue_read_operands +2,446). The path names R-54's
+  renormalisation adder in compress_bounds on the scoreboard/issue forwarding path (the worst endpoint is 8.4 ns
+  better on 0568f93a9; the rs3 fix is cleared). The Sublet tip, same adder, routed -15.898 pre-seal. sha256
+  a63cbd815fe96957a979fc94c6c1bf29060428db9523d43485d392aeca10ff65.
+- **Sublet sealed 2026-10-14, graded in the plan doc: WNS -15.856, OUT of band by 2.5 ns**, the same cause (the
+  renormalisation adder on the forwarding path, 31-43 carry cells on 19 of the worst 20), loops the same set with a
+  different arc left for the router, dyn_unit +4,879 LUT, the cursorless decode's removal -15,000 LUT in the issue
+  stage and csr_regfile. sha256 89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430.
+- **The respin is ready: fp-fixes afcd19bea** (R-54's renormalisation condition in residue form, the same decision,
+  equivalence checked over 8.3 million regions; lint and the 95-test sweep identical, the bounds arms unchanged),
+  pre-registered in the plan doc as caplifive_fpb_afcd19bea.bit. Its build needs the lead's word to the synth lane.
+- **The first respin sealed 2026-10-14: WNS -15.310 (+0.05), TNS 13% better; REFUTED.** The worst path moved to the
+  domain-switch return-address compress instance at the same slack: the cost is the decision stage in series before
+  the field shifters on every compress path, not the arithmetic's form. sha256
+  d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8. The second respin (fp-renorm-dual 2859dfb67,
+  both encodings formed in parallel) is gated and pre-registered; its build needs the lead's word to the synth lane.
+- **2026-10-15, 01:31: the first respin `caplifive_fpb_afcd19bea.bit` is FLASHED on the lead's word (sha256
+  d8d2b641...); the S-16 bare set, R-51 and s10b read identical to 0568f93a9, so the bitstream runs at WNS -15.310.
+  Linux does NOT boot on it** (every boot stops right after the sched_clock line; the pinned firmware that booted on
+  0568f93a9 hangs 3/3; the board lane, lane b0-silicon-runtime a26c9f01935e). Candidate cause, confirmed in RTL and
+  QEMU source and not timing: SPLIT gives the lower piece its DECODED base as cursor (the same rule in
+  capstone_dyn_unit.anvil and op_helper.c), and under the full-scheme encoder of 4a4261bb4 (option (b)) that base
+  is rounded below an unaligned carve point, so the monitor's boot-time mtime carve (split_out_cap at 0x200bff8)
+  ends with a cursor at 0x2000000 and rdtime reads msip; three more boot carves are displaced the same way. The
+  cursorless scheme kept those bases exact, which is what option (a) and 0568f93a9 have. RETRACTION-CLASS: the RTL
+  lane recommended (b) without enumerating the consumers of "the lower piece's cursor lands on the carve point";
+  the monitor is one. QEMU's virtual profile cannot show it (exact bases). The board lane is testing the software
+  fix (boot M: the carve sets mtime's cursor explicitly); the robust rule is that every carve sets its cursor, which
+  makes the same monitor correct on the Sublet bitstream and the physical QEMU profile.
+- **Confirmed by a matched pair (the board lane's boot M, R-55 on dev 631c9630b0ff):** a private firmware that
+  differs from the pinned one by one line, setting mtime's cursor after the carve, boots Linux to login on the flashed
+  respin (k800 4, s06agg 64); the pinned firmware hangs 3/3. Of cap_env_init's four displaced cursors only mtime's is dereferenced (this silicon never reads
+  CIH; the stacks reset their cursors), but R-55 is wider than the boot carve (the board lane's auditor, dev
+  a0234f57dc6d): create_domain's globals copy (`dom_data[ci] = dom_code[gpoff_c + ci]` after the seal split; SQLite,
+  memcached and the B-series take it, boot M's rungs were under the 256 B threshold), share_child_region's body and
+  shared_region_annotated's region all use a SPLIT's lower piece at its decoded-start cursor. Under the full scheme
+  the lower piece's top also rounds UP past the carve point, so an explicit cursor repairs the dereferences and only
+  a granule-aligned carve point (or a SHRINK to the representable interior) separates the pieces. The Sublet
+  bitstream uses the full scheme on every capability, so these fixes are needed for any Sublet domain regardless of
+  the FP decision; option (a) 2a3a87dfc (cursorless kept) avoids them for the FP acceptance only. **A second consequence of the full scheme, found in the
+  region table cap_env_init leaves:** the S-mode region covering Linux decodes as [0x80000000, 2^40) instead of
+  [0x8008a780, 2^40), because a region that long has a 1 GiB granule and its base rounds down to the monitor's own
+  text. The CPMP (pmp_data_if.sv) is a pure allow-list over the DECODED bounds of the 16 entries for S/U-mode
+  accesses, with no deny entries and an M-mode bypass, so that table GRANTS Linux the monitor's memory; the grant is
+  MASKED for the monitor's range, on the data and the fetch side alike, because the legacy PMP is checked first and
+  the CPMP only when it raised no fault (an AND), and OpenSBI's PMP regions 03/04 give S/U nothing in
+  [0x80000000, 0x800A0000) (the board lane's correction, 2026-10-15; "a real isolation hole" was over-read). What
+  the rounded table still breaks is the region bookkeeping and runtime domain isolation: a region carved for a
+  domain out of Linux's region stays covered by Linux's rounded region (check-repr's create_domain OVERLAP class).
+  The fix is in the carve, not the RTL: a chain of regions each base-aligned to its own granule (for example
+  [0x8008a800, 0x84000000), [0x84000000, 0xC0000000), [0xC0000000, 2^40)), verified by monitor-boot-carve.py or
+  check-repr under --format full --renorm before any flash. The same monitor is what the Sublet bitstream needs.
+- **2026-10-15: the FP respin's acceptance with the R-55 monitor fixes is DONE (the board lane, lane
+  b0-silicon-runtime 93bf8665c654). The FP fixes hold on silicon, every reading as pre-registered:** B3j A-D 0 of
+  40,000 wrong with the checker control passing, B3i all I except k's fs5, B3f all 0 except v7 = 1, b3-clock
+  arithmetic 0 of 200k and now() in the hundreds of seconds, r54-bounds 64 on all four arms, R-51 / R-43 a6 / R-29
+  unchanged, the ladder's instret identical 17/17. No row failed in a way the out-of-band WNS explains: a
+  bitstream at -15.310 runs. The fix took three monitor layers (explicit MMIO cursors in cap_env_init; explicit
+  cursors in create_domain's copy, create_region and share_child_region; split_out_cap SHRINKing its piece to
+  [base, base + len), without which a CMA REGION_CREATE decoded from 0x80000000 and libcapstone refused it); on
+  caplifive-opensbi df0e9a8 / d7489e3 and capstone-sbi 6dad416 / fc5e3c6, FPGA-only, QEMU byte-identical. Run with
+  the carve overlap accepted (the lead's decision); OVERLAP 0 is the acceptance gate of the next monitor change.
+  Two rows still fail in the R-55 family and are software: R-43 a2 (split_out_cap's head/tail tests read decoded
+  bounds and fill the region table at invocation 8 of 12) and P1 cell 6 (the runtime's sublet_carve hands out a
+  SPLIT's lower piece at its decoded start; mcause 26 at revoke in sqlite3DbNNFreeNN). The s1gap pair's FP readings
+  are in its PREREG; the simulation's close-arm "drain" does not appear on silicon.
+- **2026-10-15: a benchmark on the resident respin (B5/B5n, the board lane; dev 45efea21c167, 7049b13d969e,
+  cfb9820fa191).** Virtual-profile images cannot run on this RTL, so mruby 4.0.0-rc2, a virtual-profile application,
+  was ported to the silicon ABI.
+  - Two pre-registered boots, every reading as predicted. `-e`, stdin, smoke.rb and five benchmarks are byte-identical
+    to native.
+  - Domain against native mruby on the same board at the same -O1: 1.18-1.37x per benchmark, 1.24x in total; against
+    native -O2, 1.49x. These are upper bounds: the domain is also soft-float, clang/musl and delegated.
+  - Launch is the outlier: 45.5 s against under 4 s, not attributed.
+  - Found and fixed on the way:
+    - `setjmp.S` called its helpers at gp + address under the gp-captable ABI, so longjmp faulted on any silicon
+      image;
+    - level0 is O(live blocks) per malloc/free, so an allocation-heavy silicon app needs its own allocator
+      (mruby: silicon-alloc.c).
+- **2026-10-15, late: R-55's monitor fixes are LANDED on capstone-bootstrap** (capstone-sbi 2ea8a9a, caplifive-opensbi
+  5695abf, caplifive-buildroot a3191e8). They are four plus two squashed commits of the silicon line:
+  - the supervised CALL and classic hook;
+  - B0's managed applications;
+  - the FAULT report;
+  - R-55's cursors and SHRINK.
+  Gated on QEMU: run.py 25/25 and sockets 11/11. tag_pages 676 -> 681 is bisected to 10a0690's aligned data_top, a
+  placement change.
+
+  The board's shared FPGA checkout stays pinned at df0e9a8 / 93440d5.
+
+  **Built and awaiting board runs** (the board is the lead's to release):
+  - the exact-regions monitor: a nominal-bounds region table and exact remainders, the region table at 127 slots,
+    the module and libcapstone at 127 (r55-regions/ has the replay, its controls and the predictions);
+  - the sublet fix: QEMU A/B identical; nginx's test is not run, because its recipe is broken on dev (pg_level0.c
+    removed by c5d247874078);
+  - C5u with its proper defines (dccb46a3fd0f).
+- **2026-10-15 23:54: `caplifive_sublet_d93a8d66b.bit` FLASHED on the lead's word; 2026-10-16 00:23: the bare floor
+  reads every vector as pre-registered** (S-16 identical to FP; derive/kill 19, split-shares-node 7, mrev-orphan 8,
+  sup-sublet 26, stale-access 9: every stale load and store refused with 25, no stale store landing). The Sublet
+  instructions, their refusal causes, MREV deepening and the shared-node split are confirmed on silicon; the bug
+  corpus's temporal predictions take "refused, cause 25". Running next: the s1gap repeats, then the Linux half on the
+  R-55 monitor.
+- **Next:** the Sublet bitstream inherits every R-55 item (the full scheme on every capability), so before its flash:
+  the carve policy in the monitor (granule-aligned points or SHRINK plus explicit cursor, OVERLAP 0 under
+  --format full --renorm), the runtime's sublet_carve fix, and the lockstep list as recorded. Then the lead's word.
+  The second FP respin (fp-renorm-dual 2859dfb67) is a timing experiment only now, since -15.310 runs; its build
+  is the lead's call. Earlier choices superseded: the lead chose the monitor fix (mtime's explicit cursor plus a region chain whose bases are
+  representable; no reflash, keeps the FP fixes; the RTL lane's recommendation), a flash back to 0568f93a9 (cursorless, loses the FP fixes), or a build of
+  the (a) tree 2a3a87dfc (cursorless kept, R-11's truncated tops back, the same renormalisation path and likely the
+  same WNS). Separately: whether the second respin (fp-renorm-dual 2859dfb67) is built for the FP acceptance chain (empirical: every
+  accepted bitstream was negative, -8.3 to -12.9; the fallback stays registered) or held for a cheaper
+  renormalisation; the Sublet seal and grade; convert the 26 readings-only sweep arms to write tohost.
 
 2026-10-13 — **The Sublet allocator seam is built and measured: 23 of the 23 reachable PHP cases
 are caught on virtual Capstone, and 9 of them need per-object revocation specifically.**
@@ -127,6 +538,88 @@ poisons the next tenant and faults at `zend_alloc.c:404` during `zend_startup`. 
 an `--enable-debug` build, ~60x slower than upstream's reference record, which is why
 `runtime/virtual/run.py`'s two 200,000-allocation recycling cases are impractical here; the gate
 stands at 34 of its 41 checks, with mruby and everything downstream of it unresolved.
+
+2026-10-10 — **Sublet lifetime extension: review the paired QEMU/runtime change
+on `isa/sublet-lifetimes`.** Its [qualification](../design/virtual-capstone/development.md#sublet-lifetime-qualification)
+covers the ISA, storage formats, public C wrappers and existing processor
+regressions. Land the QEMU change in `virtual-capstone` before selecting its
+landed commit in the superproject. Rebuild the Linux adapter; the node-table
+ABI and namespace limits changed. The next allocator step is to migrate a
+small adapter to derive/revoke-child and requalify its negative cases before
+measuring workloads. No allocator capacity/performance improvement is yet
+claimed by this implementation.
+# Current Capstone next step
+
+## Read this first (2026-10-13)
+
+This file was 1,560 lines, and it is a next-step file: a superseded
+instruction here is not merely stale, it is an instruction. Everything dated
+before 2026-10-01 is now in
+[`history/13-10-2026_01-00-00_next-step-journal-through-2026-09-29.md`](../history/13-10-2026_01-00-00_next-step-journal-through-2026-09-29.md),
+verbatim and with an index of all 20 sections -- including the five separate
+blocks headed `0. CURRENT`, each current when it was written. Do not take a
+next step from that file. The cut is by date alone; the dated entries below
+are what is in force.
+
+**The four open fronts, as of 2026-10-13.**
+
+1. **Land the allocator migration.** `ports/nested-allocators-rebased`
+   (PR #219, draft, conflict-free, native CI green) carries the eight ports on
+   managed lifetimes and the physical Sublet heap's removal. Its one open check
+   is **memcached fixture 24**: both page moves complete with the reversal flag
+   set, and the protected arm returns `1800021` instead of faulting. The
+   fixture now has to prove the orphan-header dereference actually happens
+   before its temporal-fault prediction is touched; the gate stays recorded
+   FAIL, not normalised to PASS. See the
+   [cleanup qualification](../../runtime/virtual/results/managed-mallocng/README.md).
+2. **Build the eight ports fresh, and gate them.** Seven of the eight were
+   last *relinked* from cached virtual objects rather than rebuilt from source
+   (`relink.json` names them). All eight now build through one entry,
+   `ports/common/application/build-virtual.sh`, with one selector
+   (`CAPSTONE_VIRTUAL_LIFETIMES`); a rebuilt SDK now invalidates a port's build
+   tree instead of leaving stale objects behind. What is owed is the fresh
+   builds themselves, and QEMU protection gates running regularly rather than
+   only the host/native CI.
+3. **The next bitstream.** `next-bitstream-r51-r52` (capstone-ariane
+   `0568f93a9`) is approved and in synthesis. Owed, in order: the synth lane's
+   routed numbers to the board lane; the reflash on the lead's own word; the
+   three pre-registered boots. The next RTL candidate after it is **R-44**
+   (the CPMP adopts unseen ids), which needs an evidence feed plus a seed for
+   `cpmp(0..2)` or the board does not boot --
+   `docs/plans/r44-cpmp-evidence-tracker.md` is the proposal awaiting the
+   lead's decision.
+4. **Corpora and ports housekeeping**, detailed in the 2026-10-04 section
+   below: `ffmpeg/plane-repros` case 0 is the one unmeasured CheriBSD arm of
+   54 and needs libavutil cross-built with the CHERI SDK; `check-ports.py` is
+   blocked on one real problem (`ports/sqlite/cheribsd` declares 3.22.0
+   against a `pin_source` carrying no version) and no gate runs it; 36
+   committed files carry foreign home-directory paths, which is the lead's
+   call. Run the corpus gates from a tree at `dev`'s tip -- the shared clone
+   is ~170 commits behind and reports 14 corpora / 108 cases against the real
+   23 / 218.
+
+2026-10-10 — **CheriBSD PoisonCap is removed** (branch `nested/poisoncap-removal`; PostgreSQL's arm
+goes with its rewrite). Every PoisonCap next step below is void, and its results stay as history.
+See `current-state.md`.
+
+2026-10-12 — **Sublet ISA is merged; allocator cleanup has fresh qualification.**
+QEMU #21 and runtime #216 are integrated, with the superproject pinned to QEMU
+`7dbfdd534eea`. The migration moves the eight nested allocator ports to the
+managed lifetime operations and retires the physical Sublet heap and active
+PoisonCap tooling. Review the per-port code and its recorded controls together.
+Historical measurements identify their original builds; they are not results
+from the rebased tree. The PostgreSQL hosted runner retains the per-case
+negative controls introduced by #218, and the fresh paired run detects all
+five defects while all safe variants complete. The
+[cleanup qualification](../../runtime/virtual/results/managed-mallocng/README.md)
+records allocator, runtime, corpus and application checks. Review and land the
+migration branch with this evidence. Next investigate memcached fixture 24:
+both page moves complete, but the protected run returns instead of faulting.
+Establish whether the orphan-head access occurs before changing its prediction.
+The previously mentioned CPython pop discrepancy is absent from the current
+sharded archive: recomputing all 2,183 outcomes matches its zero-difference
+stock/protected summary. Earlier failed runs and differences from native
+remain recorded; this audit is not a new suite run.
 
 2026-10-10 — **The next bitstream is approved and in synthesis: `next-bitstream-r51-r52` = capstone-ariane
 `0568f93a9` (776d9d859 + R-52 + R-51). The lead's word: "yes, go, approve synth".**
@@ -314,71 +807,6 @@ the FPGA monitor's supervised CALL, with no fabricated gp. Preflight was off, fo
   - B0 on the board (branch `b0-silicon-runtime`: the gp-captable delegated hello-world, which passes in QEMU without
     fabricated gp);
   - S-17 stays watched through apertures 219..222.
-
-## PHP ON VIRTUAL CAPSTONE — PHASE B MEASURED, 2026-10-15
-
-**Real PHP 5.0.0 runs as a Linux user process on virtual Capstone, and the scored run is in.**
-145 TUs — the Makefile's own `PHP_GLOBAL_OBJS` + `PHP_CLI_OBJS`, nothing dropped — so `main/`
-(26), `main/streams/` (9), `sapi/cli`, `TSRM/`, `regex/` and all 65 of `ext/standard` are
-linked and PHP owns `main()`. Phase A's ~360-line SAPI is gone. Guest output is byte-identical
-to native glibc PHP 5.0.0 from the corpus's pristine build.
-
-**The entire PHP-side change is one flag and two configure answers**: `-D__off64_t=off_t`
-(musl's `cookie_seek_function_t` *is* the pointer form `COOKIE_SEEKER_USES_OFF64_T` declares),
-and `HAVE_RES_NMKQUERY`/`HAVE_RES_NSEND` set to 0 for a libc with no reentrant resolver. 143 of
-143 TUs compiled first try. `Zend/` and `ext/` stay byte-identical from the read-only corpus
-mount, which is the whole basis of the result.
-
-**Result, against pre-registration `692e9d79a244` (cited by hash, pushed before the run):**
-
-```
-php-real-stock    CAUGHT=2   MISSED=26  infra=1  out-of-denominator=2
-php-real-block    CAUGHT=8   MISSED=19  infra=1  out-of-denominator=2  unattributed=1
-php-real-object   CAUGHT=21  MISSED=7   infra=1  out-of-denominator=2
-php-real-exact    CAUGHT=25  MISSED=1   infra=1  out-of-denominator=2  unattributed=2
-```
-
-**25 of 28** (31 less CRASH-057 and CRASH-100, which the oracle itself crashes on, less
-CRASH-092, which gave no reading). Gates all passed with real inputs: revokes 0/0/8937/8937,
-8 revoke instructions in the image, the bound probe faulting as declared on both spatial arms.
-Bundles are `bundle-php-real-{stock,block,object,exact}/{verdicts.jsonl,inputs.json}`, image
-sha256 `b36d053690136b03f92dcb8ebb67bde2759168fd3167d17c6f3fdaeebebf8836`.
-
-**63 of 72 pre-registered cells as predicted**, compared mechanically. Eight of the nine
-deviations are two cases that were NO-READING as predicted with a more precise reason. **One
-substantive miss: CRASH-140 on the block arm**, predicted CAUGHT, observed `unattributed`
-because it faults at `Zend/zend_hash.c:998` rather than ASAN's `zend_builtin_functions.c:1433`
-— the conservative direction. The cell named in advance as most likely to move, the
-nine-vs-seven `AG(cache)` split, did not move.
-
-**Four apparatus changes were made after the pre-registration and are named in the plan**
-(`docs/plans/2026-10-12-php-virtual-capstone-retarget.md`, "Phase B — RESULT"): a per-run
-watchdog; a second route to `reached` (this one moved two cells toward CAUGHT, and the
-direction was fixed in advance by the pre-registration, not the data); three gates that had no
-input at all, the revoke-ordering gate among them; and `out-of-denominator` as a reason.
-
-### What is owed on this lane, in order
-
-1. **CRASH-008 and CRASH-073's attribution.** Both fault; neither is attributable by site.
-   CRASH-073's ASAN site is inside `zend_alloc.c`; CRASH-008's overrun is performed by
-   `strcat` → `__stpcpy` inside musl-capstone's `string_bounds_safe.c`, so its audit hook
-   would go in a **shared** component — a separate decision, not this lane's to take alone.
-2. **CRASH-092 hangs and the cheapest explanation is refuted.** PHP 5.0.0's
-   `php_sock_stream_wait_for_data` turns one persistent `select()` error into an infinite loop,
-   but `app/probe-select.c` shows select and poll both correct here (4 stages, 0 failures), so
-   the hang is in PHP's stream logic, not the platform. Needs a run with PHP-level tracing.
-3. **`PHP_VIRTUAL_SHRINK_STACK=1` as its own variable.** Wired, off for this run by the
-   pre-registration, never measured. It is what would make a stack-object defect catchable;
-   re-measure the known cases with it on before claiming anything about that class.
-4. **The 24 Phase A cases re-measured on real PHP** — done for all of them by this run; what
-   remains is writing the agreement up as the two-column comparison.
-5. Carried: platform gate 34/41; `run-malloc.py` 17/19 (both failures traced to a buildroot
-   glibc oracle); the physical column's CRASH-035 reading; CRASH-057's interior free; the
-   corpus restructuring into `NN_<upstream-fix>_<slug>/`.
-
-**User-owned and still open:** `~/.claude-kisp/secrets/name-denylist.txt` and
-`fpga-console-url` (every commit on this lane needs `PRECOMMIT_SCAN_NO_URL_FILE=1` without
-them); the Typst deck `case-studies/php-capstone-deck/slides.typ` wants these final numbers.
 
 ## APP PORTS AND BUG CORPORA — 2026-10-04. **Nothing is owed on memcached, tshark or FFmpeg.** All 24
 registered-but-unmeasured cells are measured and committed: FFmpeg pool corpus 40-47 on both app arms
@@ -818,915 +1246,8 @@ Trace tooling: use the [shared readers and format-adapter contract](../../ports/
 for new allocator traces. The development branch includes the pending port PRs;
 the [upstream integration plan](../plans/port-stack-integration.md) remains relevant
 when those independent PRs land. Historical milestone entries follow.
-## PostgreSQL allocator work — 2026-09-18
-
-The CMake component now has all four Sublet manager ports. Next, build paired
-consumer-level defect fixtures (the existing native `live_parts` case and the
-Slab-backed reorderbuffer candidate) rather than counting allocator lifetime
-tests as those reproducers. See `ports/postgres/memory-contexts/README.md` and
-`ref/postgres-nested-allocator-defects.md`. The board work below is independent.
-
-
-Port integration (2026-09-19): follow the [cross-repository plan](../plans/port-stack-integration.md)
-for the allocator, corpus and cooperative fault-recovery PRs. Shared runtime
-and state-file merge conflicts remain integration work; the board milestones
-below are a separate track. Build entry points are in the [port catalog](../../ports/README.md).
-
-## 0. CURRENT — 2026-09-29 (evening). **Resident bitstream: `caplifive_r43_8f6a0af98.bit`** (RTL `8f6a0af98`: R-42 + R-43 second fix + R-45), acceptance a1..a10 PASS, board released. **Next, in order:** (1) the revocation-heavy measurements R-43 blocked — R1 (B3/B4) and P1 cell 6 — are unblocked on this bitstream and can be measured for the paper; (2) R-44 (the CPMP's adopt-on-sight, S/U mode) is the remaining authority escape of R-35's class — its fix needs positive evidence for the CPMP entries plus a seed for the hardcoded `cpmp(0..2)` ids, synthesis before any board time, and a first S-mode boot as acceptance; (3) if a tracer capture is taken for any reason, count the cause-`0x4000000000000019` entries (replays) per point to test the a3 cold-ramp mechanism — no cold boot for it alone; (4) R-46 (refetch metadata) stays accepted until a workload carries more than one code capability. Records: `tests/fpga-repros/R43-revocation-cache-false-deny/`, `docs/ref/ISSUES.md` R-43/R-44/R-45/R-46.
-
-## 0. CURRENT — 2026-09-29 (superseded by the entry above). **Next: synthesize capstone-ariane `0f5185a6d` (R-43 + R-45), then reflash and run the board lane's staged R-43 set.** The staged set, each boot opening with `k800`:
-- R1 harnesses B3/B4, which must complete;
-- live16/128/512, which must return 544/4352/17408;
-- the R-35 stale probe, which must still trap 25;
-- the ladder;
-- P1 cells 5/6.
-
-The synthesis predictions are in `docs/plans/r43-query-on-miss.md`. It is the highest-risk edit class (a new term into the load path), so compare the loop by identity and read WNS. The resident bitstream is `caplifive_r42_6cbdaeeb4.bit`. On apollo, obey the TSan benchmark rules: only CPUs 0-7,32-39.
-
-## 0. CURRENT — 2026-09-25. **Resident bitstream: `caplifive_r35_4ad0df694.bit`** (RTL `4ad0df694`, R-35's fix; the 2026-09-17 section below names the PREVIOUS one). Next board steps, in order:
-1. **Reflash to `caplifive_r42_6cbdaeeb4.bit`** (R-42, lead-authorized; sha256 `0cd45bb0…2b8c05`, at `/tmp/capstone/_bitstreams/` on apollo). The acceptance boot is pre-registered in `tests/fpga-repros/R42-icache-killed-miss-refill/`: control, the ladder with the slow layout expected at ≈1.000×, and the R-35 stale probe LAST, which must still trap 25.
-2. **R-43's first test:** a SQLite workload on that image. A correct result with no cause-25 trap bounds the false-deny rate.
-3. Optional, only if the lead wants R-35's denial attributed: R-43's residency discriminator.
-
-RTL work next: **R-44** (the CPMP adopt, S/U mode). It needs a seed for `cpmp(0..2)` before any fail-closed tracker can boot.
-Cycle comparisons across any of these reflashes must hold loop layout fixed (R-42) and global placement fixed (`RTL-give-cost-tracks-global-placement/`).
-
-## 0. CURRENT — 2026-09-17 (18:10). **THE BOARD WAS REFLASHED AND THE FIRST BOOT DEMONSTRATED PERMITTED REUSE.** The resident bitstream is `caplifive_m1_054cea69b.bit` (RTL `054cea69b` — splice **+ reclaimer** + the R-34/R-24 merge), confirmed by reading `nv_bitstream_name` back off a fresh `flash_state` event; the previous `caplifive_r30r31_1bfff7776.bit` is still registered server-side, so reverting is one flash. **Every board result predating this flash is stale as a live comparison and keeps its value only as a record.** **The pilot boot: `k800 retval=4` twice, zero refused-or-trap lines, and an invocation reaching `stop=target` at 200,000 allocations against a pool of 65,532 distinct indices WITHOUT exhausting it — more allocations than the pool holds distinct indices cannot happen without reuse, and it needed no node-id read, which matters because this bitstream exposes none.** **Both cost curves went FLAT: minting 72.09 cycles (sd 0.03) and release 103.16 (sd 0.05) over 200,000 allocations, against 66.7→130-218 with a knee at alloc≈1792 and a ~12× release growth on the deployed bitstream. The same analysis reads sd 44-58 and 13,600 on the old capture, so the flatness rests on a ~1000× dispersion difference rather than judgement.** **A PRE-REGISTERED FALSIFIER FIRED AND IS NOT A REFUTATION — "one curve flattens, the other does not"; both flattened, and the reason was written down by two other lanes BEFORE the run (reclamation makes node-table growth the free-list miss rate, so the distinct-index set never approaches the cache's 2,048-node capacity and the knee cannot form). Recorded in those terms because a falsifier that fires plus an after-the-fact explanation is worth nothing and the only difference is the timestamp.** **THE MONITOR MOVE WAS A PREREQUISITE, NOT A TIDY-UP: the bitstream makes capability exception delivery LIVE, and the old monitor's `add t5, sp, t5` then a store through the untagged result is refused-and-DROPPED today but refused-and-DELIVERED inside its own trap handler with delivery live, on the `rdtime` path. Monitor is `2dcd3a5`, pinned in all eight drivers (`FPGA_BITSTREAM`/monitor gates), and the baked firmware was scanned two-sided before the boot (1 integer-derived access in capability-mode text before, 0 after, control 7,115 both times).** **M1's start gate is STILL 1 of 3 and no reclaiming arm is scheduled — the RTL lane has now delivered the algorithm and stale-reference invariant, and parts 2 and 3 are with the lead. Their stronger statement is carried: the protocol's accounting identity is FALSE for this design, not merely unmeasurable — `occupied + free + structural + RETIRED + LEAKED = 65,532`, where LEAKED includes the handle of every revoke — so the fourth completion condition can be ANSWERED but not SATISFIED as written.** **The reclaim coefficient is BOUNDED, not measured (`c < 0.3277`), and the bound mixes handle leak with RETIREMENT — an index retires permanently after 16,384 allocations of itself and a LIFO free list concentrates reuse, so ~12 indices retired over the pilot. The two are not separable on the board; both terms are reported.** **The ~5.4-cycle move in the minting floor is UNATTRIBUTED between the splice and the reclaimer; the splice-only build `379248185` exists and would separate them by a reflash.** **P3's bitstream now EXISTS and is resident — the old "gated on a bitstream that does not exist" is void — but its repro folder is SIM-ONLY (`fpga-repros/R34-.../00-README.md:11`, "the board has not run this test"), so a board image must still be built from its `.S` sources.** **The occupancy-versus-object pair is RETIRED, not ranked: its independent variable was refuted three ways.** Bundles: `experiments/results/M1/2026-09-17-reclaimer-pilot` and `.../2026-09-17-cache-capacity`, both pushed.
-
-> **Next (in order), by owner:**
->
-> * **The lead** — M1 start-gate parts 2 and 3 (approve the algorithm and the stale-reference
->   invariant, both now written), and whether three-of-four with the accounting identity's failure as
->   a named result counts as M1 completion.
-> * **`apollo-board`** — desk work while gated: `m1-bundle.py` (E3 needs it), the H1 bundle at 1 of 7
->   files, the `stale_alias_type` disambiguation, and the §7 entries. On the lead's word: the M1
->   four-arm series, 3 boots × 4 arms at 10C with `M1_MAXRET` raised, plus a long capacity-bound run
->   ordered LAST in a boot (exhaustion traps into a domain with `mtvec` 0 and looks like a hang).
 
 ---
 
-## 0b. SUPERSEDED by the entry above, kept for its detail — 2026-09-16 (14:45). **A RETRACTION leads: 87.1 cycles per node is NOT the cold revoke slope — its segment crosses the warm/cold knee (N = 2,048 is still 84 % warm), so it measures the knee; the cold figure to cite is the board lane's Q4 SILICON fit, 25.45 cycles per node walked (R² = 0.999969, eleven points wholly cold). The 3.000 warm slope is unaffected.** **R-12's COST half is built, measured and synthesised — `r12-splice-revoked-nodes`, submodule `f1331daed`, parent `9a5716d5ab6c`: a deferred one-shot splice at the walk exit, two writes independent of run length, unspliced 3.000 cycles per dead node crossed against spliced 0.000 (399/516/481 cycles at N = 4,096/6,144/8,192 versus 167,498/294,367/403,353, 839× at the largest rung), 95/95 sweep, lint PASS, synthesis exit 0 at WNS −9.225 against the flashed −12.425 with loops 29 → 13. NOT FLASHED, and R-12's CAPACITY half — the 65,532 ceiling — is untouched.** **Two warnings are inseparable from that synthesis number: the timing gain is NOT attributable to unlinking (a runtime property cannot move a static loop count; the splice duplicated the response send, so anvil registered the endpoint — ~9 one-bit registers, +72 implemented flops in the unit, −206 design-wide), and ~642 LUTs appeared OUTSIDE the unit with nobody able to say where.** **The sub-8 anomaly is the write buffer, by matched pair rather than inference: exactly two rungs sit exactly +91 above the fit at N = 6 and 7, halving the write-through dcache write buffer 8 → 4 moved the pair to N = 2 and 3 (a shift of exactly four) while every rung from N = 8 up stayed byte-identical — so `3N + 249` is a bound in NEITHER direction below its range (over by 196/151/60 at N = 2/3/4, under by 91 at N = 6/7).** **The reclamation v2 spec is committed and audited and does NOT ship as written (`docs/plans/2026-09-16-revnode-reclamation-v2.md`): the audit found three of its mechanisms individually wrong after the author had reviewed it twice; item 6 (the three sites that grant authority without ever consulting a node) is the fatal one, and Part B (graceful exhaustion) is separable and approvable alone.** **M1's start gate is 1 of 3 — the lead named the RTL lane as runtime/RTL owner on 2026-09-16; the two approvals left cannot come from the owner, and nothing is scheduled until both are given.** **`S12_MEM_DELAY` is truncated to four bits, so every "40-cycle memory" figure in the documents realises as 8 and the knob is a period-16 SAWTOOTH, not a monotone dial (measured totals 708/1,415/3,427/1,004 at defines 0/2/12/16 — turning it up from 12 to 16 turns latency DOWN); a magnitude label, not a retraction of any result resting on latency being non-zero.** **The stale-artifact trap now fires mechanically (`a0d83f6b8a14`): a worktree generates its anvil output at creation, so a later source patch leaves every local gate testing the pre-edit design — an afternoon's 95-test sweep read "the change is inert" and meant "the change is absent", voiding the lint numbers and two cost measurements quoted beside it.** **Four result bundles on the paper remote reviewed rather than accepted (`7e77374aa2b5`), one of them keeping all seven entries while recording the loss of its own raw evidence; the packaging hole generalises to bundles this lane cannot see.** **The board is `apollo-board`'s and this session is backup, hands-off.**
-
-> **Next (in order), by owner:**
->
-> * **`apollo-board`** — the queue in gate order (`docs/plans/2026-09-15-consolidated-board-queue.md`):
->   P2 (F1's C-32 confirming boot) the moment the author-line ruling lands and the compiler merge
->   follows, then the NEW occupancy-versus-object pair, which is the run that decides whether P1's
->   superlinear `give` is a finding about table OCCUPANCY or an artefact of what the churn varied
->   incidentally. P3 stays gated on a bitstream that does not exist.
-> * **The RTL lane (named M1 owner)** — parts 2 and 3 of the gate are the lead's, so nothing
->   reclaiming is planned meanwhile. The one experiment that would settle where the 3.2 ns actually
->   came from is a synthesis of a semantically null duplication of that send site, with its generated
->   RTL read back before it goes; that is a synth-lane run on the lead's word, not a lane's own call.
-> * **This session (backup)** — D3 is **DONE** (2026-09-16): the monitor change is
->   `capstone-sbi` `d3-monitor-capability-writeback` at `2dcd3a5`, validated by a matched pair against
->   the delivery-fix branch — replacement cause 0 with its store landing, old shape cause 24 with its
->   store refused, one trap in the run and it was the control's. The branch is held off
->   `capstone-bootstrap` so the drivers keep their pinned monitor, and it lands with the R-34/R-24 pair
->   whenever the lead schedules that bitstream. **Pushed** — the allowlist was retired 2026-09-16 and a
->   task branch no longer needs an entry; the hook still blocks shared history, deletion,
->   non-fast-forward and `capstone/paper`. Nothing else here is mine and unstarted.
->
-> **Waiting on the lead — ten, merged rather than replaced (nothing here is dropped for being a day old):**
-> (1) ~~the **author-line ruling**~~ — **waived, and C-32 is no longer held by it** (corrected
-> 2026-09-17): design A merged at `e3bb47b43680`, so the mechanical half is settled by git. C-32 is
-> now held by the **design question being reopened** — design A is on dev and measured not to fix
-> `setupLookaside`; mechanism and evidence in
-> `docs/history/17-09-2026_14-23-55_c32-design-a-sinkfold-mechanism.md`. Whether the ruling still
-> bears on P2 or other optimised Sublet numbers is not this lane's to say and is left standing; (2) the **fault-rung ruling** — how a fault rung earns its
-> recorded emulator pass — which blocks S1's and S2's invalid-operation cells and H1's fault family and
-> has the widest reach in the catalogue; (3) the narrowed **METHODS** question: are S1/S2's
-> `unsafe-success` cells an *enforcement failure* that stops dependent performance publication?
-> (4) **Q-04**; (5) **Optional assignments** for `P3-cost-attribution` and `P4-cache-effects`, or
-> explicitly not yet; (6) a **reviewer's name** for D4's work orders; (7) whether **R-34's confirmation
-> boot is worth a reflash**; (8) the **R-29 lint-gate fork**; (9) the **board branch push** —
-> `board/e1-s1s2-hardware` still carries the E1/R1/M2/H1 bundles on one host only, read access to the
-> paper remote is solved and write access is not (403); (10) **M1 gate parts 2 and 3**, plus the W3
-> wording (does "reference-accounting invariant" name the property rather than refcounting as the
-> mechanism?) and whether **Part B ships alone**.
->
-> **Rules that held today:** a generated artifact older than the source it came from makes every gate
-> beside it void, and the check has to be mechanical because remembering it is what failed; turning a
-> testbench knob ON is not the same as making the arm under test EXPERIENCE the condition — identical
-> readings with the knob on are evidence the arms did not change; a fit quoted without its range
-> measures whatever the range straddles, and "out of range" does not make it safe in one direction
-> either; a point can agree with a fit for a reason unrelated to the fit, so bound a range by its
-> mechanism rather than by walking outward until agreement stops; and a file correctly excluded by
-> `.gitignore` and correctly declared absent by a manifest can still be sitting in the bundle
-> directory — check that every file PRESENT is tracked, not only that every file NAMED is.
-
-## 0. CURRENT — 2026-09-15 (16:30). **The consolidated board queue is `docs/plans/2026-09-15-consolidated-board-queue.md`: what `apollo-board` runs, in gate order, built from each lane's own statement of its state — P0 the hand-over boot (one invocation, NOT control-only: the driver refuses an empty list), P1 the no-reclamation baseline with H1's `tighten`/`shrinkto` arms riding boot 1, P2 F1's C-32 boot (preempts P1 if the merge lands mid-flight), P3 R-34's confirmation after a bitstream that does not exist yet; desk items D1–D4, of which D3 (the monitor's plain accesses through integer bases) is now a PREREQUISITE for the R-34 bitstream rather than a follow-up. Four decisions are named for the lead there.** Earlier (15:40): **HANDOVER IN PROGRESS: the board lane moves to `apollo-board` (a session on the apollo server; `docs/plans/2026-09-15-board-lane-handover.md`). The board stays with this session until apollo-board's control-only boot (Q0 in that plan) reads `done`; then apollo-board is the board lane and this session is backup, hands-off. **The paper lane moves to `apollo-paper` in the same way (`docs/plans/2026-09-15-paper-lane-handover.md`), with its audit of the draft against the measurements at `docs/history/15-09-2026_15-44-40_sublet-draft-audit.md`: one live contradiction (tab:safety's four plain-data rows, unsupported for two independent reasons and neither of them the discipline's), the results the manuscript can take, and `studies.json`'s real state — R1 stranded on an old base, M2 owed, and an evidence-state edit now also needs the appendix row, which is manuscript.** The board drivers, chains and invocation lists are now in the repo at `tests/rtl-smoke/drivers/` (portable: repo root from the script, `CAPSTONE_ARTIFACTS`, `.claude-kisp/secrets`, the per-target buildroot layout as knobs).** Earlier today (14:45): **The follow-on plan (`docs/plans/2026-09-15-sublet-paper-follow-on.md`) is executed except F1's boot: F2 (M-11 structural, `transcript.py`, GATED), F3 (bundle hygiene; the push is the lead's: the paper repo refuses this account, 403), F4 (R-21/R-22 read SPEC on silicon, §7w, Q-12 filed), F5 (M2's chase, four boots, 225 records, §7y — with a pre-registration CORRECTION written before the numbers were read: the chase queries ONE node per access in both arms, so the pair measures the query under a growing LIVE-node count, and the arms are indistinguishable from 36 to 8,196 live nodes — deviations 0.00–0.03 % inside cross-boot spreads of 0.00–1.25 %; M2's DRAM delta 39.19 and E4's 39.2 validate each other), F6 (the M1 churn series prepared in the harness and flow-checked on the emulator, driver written, not launched). Found on the way, at the desk: R-34 — the LSU raises its exceptions and the load unit drops them; the stock `rv64mi-p-ma_addr` fails on this RTL with capmode never set (dev d01f2f820345; the RTL lane has the folder; entangled with R-24). The M2 bakes ran under a private memory lock at the lead's direction (13:17, "run on board!") because the machine lock was held by another project's build.**
-
-> **Next (in order):** F1's confirming boot when design A reaches dev (the compiler lane has it on their branch, 46c53b7b6ae2 + 19bc05cf21b1; the merge is blocked on the lead's ruling whether the collaborator's author lines are in the no-names rule's scope; the gate is "0 integer-only sites other than `renameResolveTrigger`'s PHI residue"): rebuild ⑥ at pure -O2, scan, SLT on the -O2 image as the emulator pass, one boot via `board-c6var.sh` (pre-registered 5568/37966/32565/37966/5401, cycles within 0.1 % of arm C's 1,376,190,813). Then, if the lead wants it, the M1 no-reclamation baseline (`f6/chain-m1.sh`, two boots). The board is free.
->
-> **Waiting on the lead:** the author-line ruling (holds every optimised Sublet number); METHODS:86 + tab:safety as one question (the four plain-data rows are unsupported for two independent reasons now, the gate and R-34; the capability rows stand); Q-04; the M1 audit order; R-24 with R-34's fix; the board branch push (`board/e1-s1s2-hardware` in `~/capstone-artifacts/paper-wt`, unpushed: E1, R1, M2 bundles, the S1S2 scope note).
->
-> **Rules that held today:** a cause number in an expected-value field is a source-derived constant and needs the commit it was read at (the obn arm's "traps, cause 24" could never have happened: 24 is DEBUG_REQUEST); an "instrument under-determines" check before the claim goes out (the M2 touched-node quantity; caught at two boots, before any reading); a simulation citation needs the artifact hashes at the moment of reading (the auditor could not re-examine the run I had overwritten); and "does not fire" versus "is raised and dropped" share an observable — the auditor separated them and the RTL lane needed the difference.
-
-## 0. CURRENT — 2026-09-15 (02:30). **The ⑥ -O1/-O2 counter divergence is LOCALISED to the port's `setupLookaside`: sw81 repeats sw80b to the unit (deterministic), sw82's -O1 image diverges identically, R-29's shape is absent from both optimised images, bisection arm A (twenty allocator functions at -O0 inside the -O2 image) changes nothing, and the `--stats` boot (sw8x-o2stats, §7s) reads ZERO lookaside slots on the board against 25,010 hits on the emulator — pre-registered from the counters' decomposition (the lookaside block taken, no slot carved, every request served by memsys5). So the -O2/-O1 Sublet cycle counts on record are lookaside-OFF runs and the -O2 ⑥/⑤ ratio is NOT cited; the -O0 pair (sw79, 1.1024) stands. **MECHANISM FOUND (02:45): C-32 live on silicon** — the RTL's `movc` nulls an UNTAGGED source (the emulator keeps it, Q-04), and the port's `setupLookaside` at -O1/-O2 moves the block's integer base through `movc` and re-reads it, so `pStart` reads 0 and the lookaside is never set up; registry updated (C-32 box, Q-04 heading/box, C-46 line); the compiler lane has the hand-off (C-32's design choice is the lead's and now blocks P1's O2 arms); a CFG scan bounds the shape to one live site plus three candidates per optimised image, zero at -O0. **Arm C CONFIRMED (sw8x-optC2, 02:57): `setupLookaside` alone at -O0 inside the -O2 image returns the emulator's counters to the unit and 1,376 M cycles (from 1,520 M) — ⑥/⑤ at -O2 = 1.1791 on matched backing, labelled a bounded-prototype diagnostic with the C-32 workaround; P1's O2 number waits on the compiler's bridge fix.** ⑤-O2 and ⑤-O0 both read lookaside ON with `--stats` (25,010 hits, max 154 slots) — every ratio on record has both operands' configuration read; the family's cross-boot precision is 0.02–0.05 %. **E3 COMPLETE (04:58): eight R1 boots, 420 records, 84 cases at five repetitions, bundle at `experiments/results/R1/fpga-2026-09-15/` on the local board branch; REVOKE 23.0 cycles per node, fill 1.81 c/B, flat in heap and depth, object release 593–612 cycles.** **E1 COMPLETE (07:38): repetitions 2 and 3 read every one of the 21 cells identically to repetition 1 (63 records, bundle `experiments/results/S1S2/sw78-rep1-3/` on the local board branch, db99ad2).** **E4 DONE (11:36, §7v): a dependent load costs 9.00 cycles in the 32 KiB D$ and 48.2 cycles from DRAM (flat 256 KiB–1 MiB), the timer 2 cycles per `mcycle` read; the H1 manifest's calibration and instruction-test fields are filled (the forbidden-linear-copy family has simulation coverage only).** The plan's E1–E5 are complete on silicon (E6 deferred by the lead); the board is free. Next: the lead's decisions (C-32's fix design, now blocking P1's O2 arms; Q-04; the paper's framing calls; where the board branch `board/e1-s1s2-hardware` goes), the synth lane's per-module extraction for H1, and the drivers' summaries derived from the seam-joined parse (M-11). E3's R1 harness: boots 1–2 of 8 on silicon (§7t) — REVOKE node-linear at 22.7 cycles per node, the UNINIT fill byte-linear at 1.81 c/B and store-path bound, release ≈ 1.81·B + 22.7·nd + 58.9·n; independent of the unrelated heap and of nesting depth; an object's release-to-reuse 578–658 cycles with no fill; the spatial arm repeats to the cycle. M3's ledger in §7u (Sublet metadata 1.74× peak payload). Queue: arm C → R1 boots 3–8 → E1 repetitions 2/3 (ten boots) → a ⑤-O2 `--stats` boot.**
-
-> **Next (in order):** read arm C against its §7s pre-registration and the oracle's answer; if arm C returns the emulator's counters, find the instruction among `setupLookaside`'s 371 lines with a directed RTL-simulation test of the idiom (`rtl-sim` skill: integer view of a tagged capability register, cursor placement after `split`/`mrev`/`cincoffset`/`movc`) and register it; R1 boots 3–8 → bundle → `experiments/results/R1/` in the paper worktree; E1 repetitions → bundle; E4's boot; the ⑤-O2 `--stats` check; state docs.
-
-> CURRENT — 2026-09-15 (01:00). **E1 repetition 1 done; E2 landed (sw79, ⑥/⑤ = 1.1024 at the matched 2 MiB payload backing — after a RETRACTION: the Sublet arm's `HEAP` token is the TABLES region, not a heap, §7s); P1's -O2 arms are on silicon (sw80a: ⑤-O2 1,167,116,810, native-O2 856,450,080, ⑤/native = 1.3627 against 1.2103 at -O0) — and ⑥-O2 (sw80b, 1,520,327,895) returned the oracle hash with Sublet counters that are NOT the emulator's (+3.1 k splits/inits, +3.3 k mrevs/revokes), so it is recorded and NOT citable until sw81 (the same image again, determinism) and sw82 (the -O1 image, 902822a8f303dbaa) say which of "deterministic RTL-vs-emulator divergence" / "R-29-class hazard" it is. M-8's mechanism corrected from source (no `.capstone_gp_initdesc` → no gp; cause 25 = not a capability). The helper lane's merges (PRs #36–#41 on dev, capstone-qemu #4 on `c128-qemu-merge` `acaa44c228`) are in: the E1 sources on dev equal the branch tip the images came from (the two diagnostic stops 10/11 now on dev), and the merged emulator, built apart from the pinned binary, halts s9 at the FPGA's own site (+0x3D2C, cause 24) — the s9 cell has both columns. E3's R1 harness (`capstone/sublet/r1/`) runs on the emulator (affected-nodes series: nd = 2n, the fill = B bytes, survivors intact, the pool back linear); the full oracle sweep is running, then its boots.**
-
-> **Next (in order):** read sw81 and sw82 (§7s); if sw81 repeats sw80b's counters, the divergence is deterministic and the -O2 image goes to the RTL oracle / claim-auditor with the question "which capability instruction sequence in the -O2 allocator gives a different result on the RTL than on the emulator" (the patched `memsys5Free` branches on `aCtrl` bytes only; Q-11's type read is not on that path); if the counters differ again, R-29's shape (a plain `sd` to a granule's high word before a 128-bit `ldc`) is the first suspect and the -O2 image's `sd`/`ldc` adjacency in `memsys5Free`/`sublet_give_to` is what to read. Then E3 boots (one invocation per (arm, series, pattern) of `r1_slots_pools.dom` through the readback host, `--arena 8388608`; ≤ 10 invocations per boot, node demand printed by the harness, budget 50,000), E1 repetitions 2/3, E4's boot, E5's ledger (⑥'s tables: 41 bytes per 64-byte atom of the pool = 1,344,064 for 2 MiB — a real M3 entry now that the token is read right).
->
-> **Rules that held tonight (2):** a linear region released while top-of-stack is POPPED and the next `create_region` in the boot faults inside the monitor (ISSUES M-9) — keep a `--tables` region above every `--arena` grant; region slots are never reclaimed within a boot, so ≤ 12 region-bearing invocations per boot; the emulator console truncates a long guest command silently (M-10) — invocation lists go in a script in the share directory; the preflight BLOCKS on unused files in the target dir (retire `speedtest1.dom`/`sqlite_host.user` when a boot does not stage them); never edit a driver while a boot chain that will read it is running — stop the chain by PID first; `SQLITE_OPTNONE_FUNCS` (build-sqlite-silicon.sh) is the bisection knob for the ⑥ -O1/-O2 counter divergence.
->
-> **Rules that held tonight:** a printed token's name is not its meaning — read what prints it (`HEAP` in the Sublet build = `sublet_tables_len`); ugrep `-q` on a file with UART bytes returns 1 (the -O2 record gates fired on a present record: `-a`, and the record lives in `sqlite-speedtest1.log`, not `measure.out`); a `grep -q` under `pipefail` SIGPIPEs readelf and fires a gate on a present section (use `-c`); the host refuses a `--speedtest1` line without `--testset`; the readback host declares a 64 KiB hostcall region (`meta->result`), the plain host 4 KiB — a domain reads the declaration instead of compiling a constant.
-
-> CURRENT — 2026-09-14 (night). **The Sublet-paper plan (`docs/plans/2026-09-14-sublet-paper-board-experiments.md`, approved) is executing: E1's first hardware repetition of the S1/S2 safety matrix is COMPLETE (sw78 r1b1–r1b5, §7r); E2 (sw79) and P1's -O2 arms (sw80a/b) are the next boots; repetitions 2 and 3 of E1 follow.** What the board said: eleven of fourteen nginx cells at the emulator's mark; the stale-handle REVOKE faults on silicon (mcause 26 at `revoke t0`); the type read of a revoked handle is 2 on the RTL and 7 on the emulator (Q-11: QEMU's `ldc` untags, the RTL's does not — the subpool test's phase 13 encodes the emulator); the protected arm's touch after destroy RETURNS on silicon through a TAGGED stale pointer (s3 C30000 the port's fill, s10/s11 type 1, s5 reads the new occupant C5005B; the LSU's checks are M-mode-gated, R-31) — the paper's three "stops at access" rows are emulator evidence, the lead's framing call; the PostgreSQL test images do not enter on the board monitor (M-8, `delin gp`). Hand-offs answered: compiler lane — the SQLite domain builds and runs at -O1/-O2 (C-17 corrected, B6 not to be written), so P1's O2 arms exist on QEMU (⑤ 330,723,308; ⑥ 338,496,909; native 240,654,449; drivers sw80a/b ready); RTL lane — 16 bytes per node from the address arithmetic, the 1 MiB pool, the tag shadow at 6.25 % of DRAM against 0.78 % on chip, and a generation-tagged reclamation design (`docs/plans/2026-09-14-revnode-reclamation-design.md`) awaiting the lead's audit order; synth lane — `run.tcl` has no seed parameter (single-seed reports only, a hook is a flow change for the lead), timing at 25 MHz is not closed (WNS −12.425 ns, ~19 MHz implied) and must not be written as "achieved"; cheri lane — the no-CHERI twin is not a matched Capstone baseline. E2's QEMU pre-run: cell ⑥ at a 2 MiB arena 692,392,094 (+0.34 %, HEAP 1344064: the port carves 64.1 % of the arena). Instruments: `DOMAIN_BASE_VA` for the nginx/PostgreSQL builds, the runner reads the probe hosts' results, the preflight's parser reads a selector with spaces as host arguments (it had dropped the image from the wanted set and blocked sw78 r1b3). Rules learned: a driver's `pgrep` guard matches the shell that launched it if that shell's text names the pattern; the QEMU smoke runner does not take the shared lock (wrap it).
-
-## 0. CURRENT — 2026-09-14 (evening). **The 2026-09-14 plan's boots are done: sw77 = `main --size 20` with lookaside ON on both arms, ratio 1.1937 → 1.19 (pre-registered 1.19; the OFF pair read 1.1940) — the first "as shipped" SQLite rows on silicon; sw76 = the entry watchdog fired live; sw74/74b/75 = the Sublet cell re-based on the #3 module (⑥/⑤ 1.0951), cell 5 unmoved, the rounded-arena reclaim completing (audited: inferred attribution), and two per-boot rules: ONE Sublet workload per boot (R-12, 43k mints) and ONE REGION_ARENA workload per boot (sw77 arm 6, mechanism open). sw73: size 100 at 1.18 (§7p).** Earlier headers follow.
-
-> CURRENT — 2026-09-14 (afternoon). **Boots A/A' (sw74, sw74b) done: cell 6 re-based on the #3 module (2,794,183,730 cycles at HEAP 911104), the lookaside-ON baseline (2,108,202,651, 25,122 lookasides on silicon), the rounded-arena reclaim completing through csinit twice (R-33 account, attribution inferred — audited), and a second Sublet run per boot exhausting the rev-node pool (R-12, head 0xFFFF) — ONE Sublet workload per boot from now on. Boots B/C/D next (drivers written). sw73: `main --size 100` at 1.18 (§7p).** Earlier headers follow.
-
-> CURRENT — 2026-09-14 (morning). **Boot sw73 DONE: `main --size 100` on silicon, both arms at the native oracle, ratio 1.1819 → 1.18, exactly the pre-registered value (§7p); sw72 gave the R-33 rounding log and the S-15 share-trap instrument their positive controls; all seventeen new collaborator PRs (#19–#35) landed; S-15 CONFIRMED end to end (sw68 size 20 at 1.19x; sw69 mcause 27).** Earlier headers follow.
-
-> CURRENT — 2026-09-14 (night). **Boot sw73 (`main --size 100` pair, overnight) is RUNNING; sw72 gave the R-33 rounding log its positive control and the S-15 share-trap instrument its positive control; all seventeen new collaborator PRs (#19–#35) are landed; S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27).** Earlier header follows.
-
-> CURRENT — 2026-09-13 (evening). **S-15 CONFIRMED end to end on silicon (sw68 fix runs size-20 at 1.19x; sw69 reads the fault back as mcause 27); ten of eleven collaborator PRs landed (all but capstone-qemu #3); #3 is on the FPGA image, proven by sw71.**
-
-> **Boot sw66 (the exact redraw of sw64's image, manifest-verified, same monitor and module):**
-> control `retval=4`; the native baseline at `--size 20` RETURNED — `3807866 2738af78`,
-> **54,230,566,323 cycles**, 36 min; the domain image stalled at `F2/share3 → SHA5`, no `SHA6`, no
-> `G/enter` — **the same point as sw64, second draw, so deterministic for this image.** By the
-> monitor's own SHA5/SHA6 definitions the hang is in the domain's share-entry execution, with
-> `mtvec = 0`. §7o.
->
-> **sw65 tested nothing about sw64.** Three variables changed at once (mtvec, `SQLITE_FULL/FLOAT`,
-> source state), and its image had never run on QEMU: the runner passes `cma=` only on request, its
-> QEMU phase died at `C2/mkarena` after the image was written, and the preflight's QEMU-pass gate
-> covers `BAKED_RUNGS` only. Run today under QEMU with `cma=256M` the sw65
-> image completes cleanly (`RC 0`), so its `sqlite3_initialize refused` is not reproducible off-board
-> and is not sw64's failure. **The S-15 double delin is NOT sw64's discriminator**: the arena branch
-> is code-identical across both images and sw65's passed share3 with it.
->
-> **The pair is proven.** sw64's commit recovered from the worktree reflog (`cc55013c2106`); the
-> recipe without the flag reproduced `23da3b126a304585` / `7c27697818b0abe0` exactly; the mtvec
-> image is `214b300efd169f03` with a QEMU size-1 licence at `cma=256M`. **sw67 RETURNED from share3**
-> (`SHA6`, where sw66 hangs), entered, and died at `sqlite3_initialize` (`0x5117BAD3` = sw65). By the
-> glue's own discriminator rule the share3 entry faults — **audited as an account, not yet a
-> measured root cause** (share3 also differs in region residency and size; the handler has no
-> positive control here), while the mechanism is now sourced at the RTL commit: DELIN raises
-> UNEXPECTED_CAP_TYPE on a non-LINEAR operand and is the only type-sensitive instruction in the
-> branch. Fix applied on `dev` (no domain delin of the monitor-delinearised grant); **sw68 (the fixed
-> image, no trap vector) PASSED share3 and RAN size-20 to completion** — **64,732,455,367 cycles**,
-> hash `3807866 2738af78`, **ratio 1.1940** (baseline 54,214,856,567; pre-registered band 1.17–1.27).
-> **sw69 read the trap word back: `arena0 = 4139818259 = 0xF6C09D13`, mcause field 27 =
-> UNEXPECTED_CAP_TYPE**, written during the share3 domcall; then `obs = 0x5117BAD3` = the
-> sqlite3_initialize failure sw67 died on. S-15 confirmed end to end: mechanism sourced in the RTL,
-> fault read back as mcause 27, fix proven. §7o and the ISSUES.md S-15 heading carry it. (The driver
-> header's decimal `4139621651` was a mis-decimalisation of `0xF6C09D13`; hardware matched the hex.)
->
-> **Third instrument failure on this question, fixed:** the entry watchdog counted console
-> `[event]` chatter as liveness and could not fire live (`f7f2c9030623`).
->
-> **PRs LANDED (plain merges, scanned over the push range, pushed):** #15, #16 (+print fix), #11→#13
-> (PostgreSQL); this session — **buildroot #2/#3** (merged in `caplifive-buildroot`, pushed
-> `capstone-bootstrap`=`d04bd83`; the QEMU-side module rebuilt and three controls run: new host works,
-> an OLD host trips `Unrecognised IOCTL` = the ioctl-struct grew and every board host must be rebuilt,
-> an over-declaring image is refused at order 11), **#17** (+follow-up dropping the dead blocks;
-> control on real images: cell5 DOES NOT FIT o11, fix image o10), **#18** (MicroPython; run-nightly
-> resolved to keep both PG and MPY gates; gate `PASS=4 FAIL=0`). **Nine of eleven landed.**
->
->**FPGA-side #3 LANDED and PROVEN on silicon (boot sw71, 22:07).** `caplifive-system/sw/buildroot`
-> fast-forwarded to `d04bd83`, the module rebaked (`.ko ed807a292aaad3f6`, both markers), and the two
-> board hosts rebuilt for the grown ioctl struct: the board's `lpc` is `ladder_perf_ctl`, a
-> freestanding controller with a PRIVATE copy of the struct, grown by hand (f308efe2; QEMU pair: the
-> old controller, bit-identical to the board's previous lpc, `Unrecognised IOCTL`; the new one
-> `RESULT k800 retval=4`), and `sqlite_host` rebuilt against the merged libcapstone (6e3cd65c, the
-> same binary that passed the QEMU control). Control-first boot, every pre-registered reading met:
-> `RESULT k800 retval=4` (skew closed on silicon); the declaring image f795151f: `Domain requirement =
-> 1281952 (stack 1048576)`, `A/dom-ok`, shares, `G/enter`, `H/return`, `Verification Hash: 111130
-> 1e792c9d`, 2,669,560,340 cycles at `--size 1`, HEAP 134217728, zero rounding lines. The native
-> baseline build's `-fno-common` link failure was real and is fixed too (e78fc6ab). The submodule and
-> parent gitlinks are bumped to record the landed state.
->
-> **#14 LANDED** (merge `d616ea4e` + a follow-up correcting the lit test's claim). The tautology was
-> a STALE-BINARY artifact: the checkout `llc` was 73 objects behind source, so every "unpatched llc"
-> read was about the wrong compiler. Rebuilt pre-fix and post-fix and diffed: the whole 160-test image
-> differs by EXACTLY 17 instructions, every one an in-place `sd ra`→`stc ra` / `ld ra`→`ldc ra` width
-> swap in `__capstone_cap_init` — 13 capability spills (each preceded by `ldc ra, N(gp)`) truncated
-> pre-fix, correct post-fix, plus the reloads; the 1 surviving `sd ra` is the prologue save. Neither
-> the lit test (byte-identical both ways) nor `capinit-scan` (flags scalar bases, not truncated spills)
-> gates it; the direct gate is the `sd ra` spill count, 14→1. claim-auditor SUPPORTED (refuted
-> incidental-shift, wrong-widen and wrong-truncate). Regression on the post-fix toolchain, artifacts
-> saved: lit 93/93 (1 XFAIL), authority 32/32 + sentinel, sqlite-silicon PASS, MicroPython PASS=4/0.
-> **Only capstone-qemu #3 remains** (collaborator rebase; two of four commits already on our branch;
-> conflicts would revert `cabc953e58`). Hand-off note under `/tmp/capstone/` carries the skew,
-> over-declaration, #14, lpc and default-build findings.
-
-### Open, carried forward explicitly
-
-* ~~sw67's reading decides the next instrument~~ DISCHARGED: sw69 read the fault back (mcause 27) and
-  sw68 proved the fix; S-15 is closed end to end (§7o).
-* R-33 still owes its rounding-log positive control (one arm where 1,419,584 rounds by 1,728 must
-  show the "not representable" line once) and the bottom-truncation arm. The control cannot be a
-  `--pool` arm of the REGION_ARENA host (it refuses `--pool`); it is `bigregion.user 1419584`,
-  rebuilt for the #3 module, read in the capture channel and in its own count.
-* `--size 100`: the precondition fired (sw68 measured the CPIs: native 3.83, domain 3.65 — DERIVED
-  from §7l's size-20 counts and §7o's cycles), so the pair costs ≈8.4 h of arm time (baseline ≈3.8 h,
-  domain ≈4.6 h; the domain count is projected), not the 8.8–17.6 h quoted below. The lead said GO
-  (2026-09-13); the plan `docs/plans/2026-09-13-pr-queue-and-sqlite-experiments.md` §2.4 carries the
-  pre-run, budget and invalidators.
-* **Hosts with a PRIVATE copy of `ioctl_dom_create_args` — ALL GROWN (B2, 2026-09-14).** The struct's
-  size is in the ioctl number, so a rebuild alone changes nothing: `ladder_perf_ctl.c` (f308efe2, QEMU
-  pair: old ctl `Unrecognised IOCTL`, new ctl `RESULT k800 retval=4`) and, in one commit, the same two
-  zeroed fields in `borrow_cost_fpga_ctl.c`, `borrow_cost_fpga_nogp_ctl.c`,
-  `borrow_breakdown_fpga_nogp_ctl.c`, `gpfree_fpga_ctl.c`, `rev_transferred_probe_ctl.c` and the
-  R01/R02/R16 repro copies (the R01 copy proven as a QEMU pair against `rawhazard5.dom`; the prebuilt
-  `images/ladder_perf_ctl` in R01/R02 is still the pre-#3 binary and is labelled so in their READMEs).
-  Their binaries are cited instruments: the hash of each changes at its next build, note it beside the
-  measurement row. `caplifive-buildroot-domain-sizing.patch` is a snapshot `vendor-patches/refresh.sh`
-  regenerates, left as is. Board overlay: `bigregion.user` rebuilt for sw72 (383779bdef8c6d6e);
-  `rtpc` rebuilt 2026-09-14 after sw73 (d595cb24 → `4f1fe8f67ddf6830`, 8768 B both, markers
-  `/dev/capstone`/`RESULT`/`retval=` present; QEMU pair with the rebuilt `rev_transferred_probe.dom`:
-  the pre-B2 source's build `create_dom failed`, the new one `RESULT revxfer retval=574619742` — the
-  pre-B2 build is b7f76fe1, not the retired d595cb24, so the pair is source-old vs source-new) and
-  `sqlite_host_rr.user` (the default-mode SQLite host that takes `--tail/--arena/--tables/--pool`;
-  c1d06da8 → `e03e61268e941241`, 27,768 → 27,808 B, built with `HOST_EXTRA_DEFS=-DSQLITE_HC_REGION_SIZE=65536`
-  — the first rebuild without that define passed the string gate and then failed both images at the
-  region check ("speedtest1 did not run"), which is what the QEMU pair is for; the correct build is
-  byte-identical to the host the measure script builds). QEMU pair for it: the old binary
-  `create_dom failed`; the new one runs the 1.5 MiB static-heap image to the oracle (`HEAP 1572864`)
-  and ⑥'s Sublet image with `--arena 1419584 --tables 1750285` to the oracle. **Observation:** ⑥'s
-  image on the #3 module reports `HEAP 911104`, not the 910,008 of its §4g row — R-33's rounding of
-  the non-representable 1,419,584 arena moved the Sublet geometry by 1,096 bytes; any new Sublet row
-  must be re-based on the #3 module, and ⑥'s archived count is not comparable to a #3-module run.
-  Both hosts are staged in `overlay/` and `build/target/` (git-ignored there, as every staged host is;
-  the drivers pin them by hash), baked into the image at the next boot's bake step. No old-struct host
-  remains on the overlay.
-* **Boot sw70 is VOID, not a #3 reading:** `ladder_base_ctl` (the native baseline controller, no
-  `/dev/capstone`) was staged into the `lpc` slot -- same name, different program, 6x the size -- the
-  board reset under it and no RESULT came back. Its fixes: the native build's `-fno-common` link
-  (e78fc6ab), the controller's private struct (f308efe2), and a same-program staging gate in the
-  driver (marker strings + size class, not just the hash of what was built). sw71 reruns it.
-* **Boot sw72 (controls, 2026-09-13 late) PASSED:** control `retval=4`; `bigregion.user 4194304` →
-  `not-representable-lines=0`, `bigregion.user 1419584` → `1` (R-33's rounding log fired for the first
-  time anywhere); the pair image `214b300efd169f03` with the readback host (2af56927) at `--size 1` →
-  `SQ: share-trap=4139818259` (`0xF6C09D13`, mcause 27, off 160844, at share3), `X/fail obs=3`, no
-  `G/enter` — the S-15 instrument fix's positive control (negative control on QEMU: fix image, no trap
-  line, sentinel unchanged, oracle hash). The runner treats that designed stop as HARD STOP and writes
-  no scoped `boot.txt`; readings taken from the raw driver log after this run's own `load_image`.
-  Runner follow-up LANDED 2026-09-14 after sw73: `run_sqlite_stages_fpga.py` recognises
-  `SQ: share-trap=` as a terminal result (logs word, mcause, share) instead of HARD-STOPPING on
-  "obs=3, not a staged marker", so the transcript is written; regexes checked against sw72's raw
-  log (positive) and sw73's (negative); exercised on the board by the next probe boot.
-* **Boots of the 2026-09-14 plan (§7q):** sw74 (Boot A) — cell 6 on the #3 module 2,794,183,730 cycles
-  at HEAP 911104 (−0.12 % vs sw61), the lookaside-ON baseline 2,108,202,651 (+0.03 % vs sw60's cell 2),
-  the rounded-arena reclaim completing through csinit (RCLM 0 → 1, no RCPR/RCSH/RCRE; audited: R-33's
-  account, attribution to the rounding inferred, the settling arm owed); its arm 4 and sw74b's arm 4
-  — a SECOND Sublet workload in one boot — wedged with `rev_node_head = 0xFFFF` (R-12: 43k mints per
-  run). sw74b also showed `--stats` innocent (25,010 lookasides on silicon as the first run). sw75
-  (Boot B) — cell 5 on the #3 module 2,551,483,818 (−0.0009 % vs sw60), its `--stats` second run fine,
-  the representable-arena probe control clean; re-based silicon ⑥/⑤ = 1.0951. sw76 (Boot C) — the entry
-  watchdog's live positive control FIRED on sw64's stall (`ENTRY-STALL … no SHA6 for 421s`, runner
-  terminated, board released, no reset in the window); its first attempt had been blocked by a
-  transient of the preflight's control-record check (passes on re-run; file unchanged, no git operation
-  on record in the window — unexplained). sw77 (Boot D) — the
-  lookaside-ON size-20 pair: native 53,142,976,993, domain 63,437,512,052, **1.1937 → 1.19** at the
-  oracle on both arms (sw68's OFF pair 1.1940); the trailing `--stats` re-run of the domain image
-  stopped at its second 128 MiB `mkarena` of the boot (not R-12: head 289; not M-7: nothing was
-  released) — **one REGION_ARENA workload per boot** from now on, its lookaside check done on QEMU
-  (25,010). The runner's summary had printed that arm as an R-16 entry stall (the fixed text of its
-  never-entered branch); it now keys on the transcript's last share tag, and its S-15 share-trap
-  summary line, keyed by the bare domain path, could never have fired for a selector-bearing arm —
-  both fixed, self-tested on the sw76/sw77 transcripts. Owed from the plan: the R-33 settling arm (monitor 4274268 + a pre-rounding `.ko`), the
-  size-100 instret image, seven testsets at size 20 — none scheduled.
-* **Boot sw73 RETURNED 2026-09-14 08:53, driver rc=0 — §7p.** Native 337,235,381,252 cycles (3.75 h),
-  domain 398,572,346,349 (4.43 h), both `23674002 573a4409`, `HEAP 134217728 DROPPED 0 RC 0`; **ratio
-  1.1819 → 1.18** (pre-registered ≈1.18, band 1.14–1.24); all five invalidators checked; rounding lines
-  0, share-trap lines 0, sentinel read back. Size series on silicon: 1.2195 (1), 1.1940 (20), 1.1819 (100).
-* Boot sw73 (`main --size 100` pair) LAUNCHED 2026-09-14 00:11 via `board-b73.sh` (bare launcher,
-  Monitor scoped after its own `load_image`): control → `speedtest1_baseline|warm --size 100` → control
-  → `speedtest1.dom --speedtest1 --size 100` LAST; `BUDGET=43200`; image f795151f, host 2af56927,
-  baseline ed548785. Pre-registered: both hashes `23674002 573a4409`, `DROPPED 0`, ratio ≈1.18 (band
-  1.14–1.24, two decimals), NOMEM the named hours-in failure, invalidator #3 re-registered at ~164× the
-  size-1 count. Pre-run under QEMU icount: size 100 = 111,482,174,837 instructions at the oracle.
-* `run-speedtest1-measure.sh` must size `cma=` from the arena itself above 4 MiB and record a
-  hash-keyed QEMU pass; `preflight-board-run.sh` must require that record for every
-  `SQLITE_STAGE_DOMS` image.
-* **#14's `capinit-scan.py` positive control — CLOSED as "cannot fire on the spill form" (B4,
-  2026-09-14).** The LARGE (160-test) MicroPython image built on the pre-#14 compiler
-  (`9c9448d2a096ac11`) and the one built after (`3e2326daeeb669c7`) both scan to the same four
-  `quiet` lines (scalar `stc a0` into a global) and no FAULTING verdict — the scan flags scalar bases,
-  not truncated spills, so it is not the gate. The gate of record is the spill count over the whole
-  `__capstone_cap_init` span (5,419 instructions, local labels included): `sd ra` 15 → 2 and
-  `stc ra` 23 → 36 (13 spills widened) plus 4 `ld ra` → `ldc ra` reloads = the 17-instruction static
-  diff. Counting only up to the first local label reads 1 → 1 and misses all of it.
-* **2.1 (post-#14 icount pair) DONE 2026-09-14, recipe recovered:** ④ = measure-script defaults +
-  `SPEEDTEST1_HEAP=2097152` (+ `SPEEDTEST1_STACK=385024` to load on #3): `6cf8edf637f72063` hashes to
-  the oracle and counts **692,983,497 — identical to the archived ④**. ① environment control (archived
-  native binary, today's environment): 545,617,503, 5,993 below the archived count (1.1e-5; the
-  pre-registered ~1e-7 was §7l's size-20 figure, 1,847 absolute — same absolute noise). §4g.
-* **⑤ᴳ heap sweep (2.5) DONE 2026-09-14:** memsys5 + lookaside completes at 1,572,864 (oracle,
-  678,529,384 cycles) and faults at 1,310,720 and below; the fault is the exit handler's deliberate
-  UNEXPECTED_CAP_TYPE after `fatal_error` (`capstone_stdio_on_exit+0x6c`), identical at every size —
-  ⑤ᴳ is the abort path, not S-14; ⑥'s 910,008 geometry cannot be matched by the knob (§4g).
-* The toolchain binary is STALE by `toolchain-fresh` (the `opt`/`llvm-symbolizer` targets #15 added
-  were never built; the only `llvm/` commit since is a citation re-point) — rebuilt at #14's step.
-
-## 0z. EARLIER — 2026-09-13 (morning). **BRIDGE HOLDS. The size-20 rehearsal FAILED at the 128 MiB arena's SHARE, and cost 8 h to a timeout that should have been a 3-minute abort.**
-
-> **sw63 discharged the bridge.** §7k's images unchanged, all seven pairs within 0.075 pp of their
-> §7k values against a 0.171 pp band. §7f–§7k carry forward. §7m.
->
-> **sw64 did NOT produce a rehearsal.** No CPI, no ratio. Control passed; then `share3` — the
-> 128 MiB arena — reached `SHA5` (monitor handing control to the domain) and never reached `SHA6`, so
-> the host never got to its own `enter`. **Creation of the 128 MiB arena WORKS**
-> (`SQ: arena_bytes=134217728`); it is the SHARE that hangs. Not the generic R-16 "never ran": the
-> domain got control and hung inside it. §7n.
->
-> **Two things before any further board time.** (1) **The entry gate must be separate from the idle
-> budget.** `SQLITE_IDLE_S=28800` was correct for a legitimately silent multi-hour arm and is what
-> turned this into an 8-hour loss; `ENTRY_STALL_S=420` was exported but is read ONLY by
-> `board-watchdog.sh`, which the driver never started, so it did nothing. Reaching `SHA6`/`G/enter`
-> must be bounded in minutes, then the long budget applies. (2) **Decide size vs per-image** before
-> re-running: a redraw tests per-image, a smaller arena tests size and needs a host rebuild.
-
-
-> **Boot sw63 discharged the bridge.** §7k's images unchanged on `caplifive_r30r31_1bfff7776`, every
-> comparable pair within **0.07 pp** of its §7k value against a 0.171 pp band, `main` at 1.2195 vs
-> 1.220. Controls both ends, 7/7 verification hashes agree, zero R-33 rounding lines. §7m.
->
-> **Next:** the `--size 20` rehearsal (boot sw64) buys the CPI that decides whether `--size 100` is
-> ~8.8 h or ~17.6 h. Then `--size 100` is a decision, not a default.
-
-## 2026-09-18 — ggml ownership follow-up
-
-The Whisper context allocator now has native transcription recording, full-library
-reference comparison and spatial/Sublet replay in `capstone/ports/whisper/ggml-context/`.
-A full application port must coordinate graph completion with the backing-buffer
-owner before exclusive rebind, preserve borrowed graph access after descriptor
-free, and separately address backend tensor-data allocation. The component
-results do not establish protected inference. See its README and numeric bundle.
-
-## 2026-09-18 — allocator-port follow-up
-
-CPython 3.13.7 pymalloc now has native reference comparison, workload recording,
-spatial/Sublet QEMU replay and paired lifetime probes in
-`capstone/ports/cpython/pymalloc/`. Follow-up work can extend the recorded workload
-coverage and measure metadata/node costs under matched budgets. Full interpreter
-execution and FPGA validation remain separate milestones; the component results
-do not establish either. See the component README and its `results/` bundle.
-
-## 0. CURRENT — 2026-09-12. **R-31 FIXED ON SILICON; R-30's 1,728 BYTES SOLVED — IT IS BOUNDS RE-ENCODING, NOW FILED AS R-33.**
-
-Three boots on `caplifive_r30r31_1bfff7776`, every one with a passing `k800` control.
-
-| | |
-|---|---|
-| **R-31** | **FIXED, verified on silicon** (sw60). `SHA2:00000003` = `cap_type` UNINIT where the old bitstream returned LINEAR; `RCPR` did not fire, so the cursor is at base too. Through the monitor's real share/revoke path. |
-| **R-30** | **Closed. Its one-byte precondition is FIXED** (sw61, `init=5334`), and the separate 1,728-byte shortfall it carried is **not a fill failure at all** — boot sw62 shows every store advanced and `end` re-encoded high. Re-filed as **R-33**. |
-| **R-33** | **ISA-level; over-permissive store DEMONSTRATED; FIXED in firmware but UNBOOTED.** Non-representable region lengths let a cursor move widen a capability's authority past its own allocation. Two matched RTL-sim pairs at the flashed hash: `CINCOFFSET` widens an ordinary LINEAR capability, and a store at the true end is refused for the representable control and retires without fault for the non-representable arm. **Fix:** the kernel rounds region lengths to the granule at creation (`caplifive-buildroot 8da1559`) — reserving exactly what the hardware widens to — and the monitor's reclaim postcondition is split into a re-encoding-immune fill check plus a new `RCRE` INIT-precondition check (`capstone-sbi 4274268`). The **base** half is unfixed and rests on `CONFIG_CMA_ALIGNMENT`. Still unshown: the store on **silicon**, and bottom truncation. |
-| **the matrix** | complete on silicon. ABI cost **~1.21**, the two allocators **indistinguishable at this precision** (④/① 1.2124, ⑤/② 1.2107 — 0.17 pp against a 0.171 pp band; the deterministic QEMU pair does resolve and shows lookaside marginally cheaper, so "barely depends", not "independent"). The Sublet **configuration** costs **9.6 %** on silicon against 1.8 % on QEMU — a 5.5× gap consistent with an O(bytes) reclaim, but both pairs carry a heap-geometry mismatch, so not "the discipline" and not a measurement of the mechanism. Corrected 2026-09-12. |
-
-**The instrument that made R-31 measurable, and why the earlier one could not.** The reclaim is
-guarded at `sbi_capstone.c:1309`, inside `shared_region_annotated` — it fires when a SHARE finds a
-handle a PREVIOUS revoke left UNINIT. Every arm before sw60 revoked only at teardown and so could
-never reach it; sw59's `RCLM = 0` was structural, not evidence. The probe
-(`SQLITE_HOST_REVOKE_RESHARE`, a second binary so the measurement host stays byte-identical)
-releases the pool FIRST — while `tables` is still above it, so "revoked, the slot kept" is a property
-of the region stack — then shares the revoked region, then shares a fresh one to read the counter.
-
-**Next, and it is a question rather than a task: reconcile sw60 against sw61.** *Narrowed on
-2026-09-12 — the framing above was too weak in one direction and too strong in the other.* The two
-boots are **not in conflict about the FIX**: R-30's one-byte claim was about INIT's precondition, the
-fix made cursor-at-`end` legal, and sw61 is that fix working 5,334 times. sw60 is a fill that never
-reached `end`, one step earlier, where INIT refusing is correct. **What did not survive is R-30's
-wording, not the change.** Going the other way: **the monitor's own arithmetic cannot produce 1,728.**
-`C_RECLAIM_FILL` sets `n = (end - base) >> 4` and each `stc` advances one granule, so the loop admits
-at most a 15-byte shortfall — and `RCPR` not firing proves the cursor started at base. That also kills
-the allocator-rounding account for free, since `n` is computed from the same `end - base`. Three
-accounts survived that round, and the RTL lane then refuted one of them from the RTL the same day
-(`4fa59c3643b5`): `end` cannot move during the fill, because STC's UNINIT path advances the cursor by
-exactly 16 and passes the metadata carrying `end` through unchanged. **So the remaining question is
-not which mechanism but which denominator** — 88,724 stores attempted or 88,832, with 108 not
-advancing either way — and the instrument below names that, not the cause. **The experiment that
-discriminates the cause is a pair of boots at two different large region sizes:** a constant 1,728 is
-a fixed tail effect, a shortfall that scales is a proportional store-failure rate. Do NOT spend a boot
-on the exact-multiple-of-4096 pair — both arms predict the same answer once the modulo bound above is
-applied. See the R-30 box in `ISSUES.md` and
-`history/12-09-2026_R30-sw60-sw61-reconciliation-attempt.md`.
-
-> ### ⚠ THE RESIDENT FIRMWARE IS TWO MONITOR COMMITS BEHIND, AND THE BOARD SCRIPTS WILL SAY SO
->
-> Every boot on this bitstream (sw59, sw60, sw61) ran monitor **`2c49c41`**. Two commits have landed
-> since and **neither has ever booted**: `75d96d2` (define `CAP_TYPE_UNINIT`; behaviour-neutral by
-> inspection) and the `RCEN`/`RCCU` reclaim instrument added 2026-09-12. Both compile, and the two
-> new tags are linked into `fw_payload.elf` at **5 sites each — the same five as `RCSH` and `RCPR`,
-> i.e. all five `C_DO_RECLAIM` call sites** (verified by disassembly, with `RCSH`/`RCPR`/`RCLM` as
-> positive controls, since a literal-bytes search finds none of them and reads as a clean absence).
-> **Compiles is not boots.** Treat the next board run as a monitor change: control first, and expect
-> it to carry the firmware delta as well as whatever it was launched for.
->
-> `board-b59.sh`/`b60.sh`/`b61.sh` all gate on `rev-parse HEAD = 2c49c41` and will now **FAIL that
-> gate** — correctly. Update the expected hash deliberately when the next driver is written; do not
-> delete the gate. (`board-b62.sh` gates on `d1bd7e4` and is now one commit stale for the same
-> reason.)
->
-> **AND THE BAKE LOOP IS NOW INSUFFICIENT.** Every driver bakes with
-> `for a in linux-rebuild opensbi-rebuild`. That never rebuilds the kernel module, so a boot needing
-> R-33's representability fix would ship a **stale `capstone.ko`** with a clean `rc=0`.
-> `modcapstone-rebuild` must run FIRST — before the pass that rolls the cpio, since it installs into
-> `TARGET_DIR` — giving `modcapstone-rebuild, linux-rebuild, opensbi-rebuild`. Check the result by
-> CONTENT (`strings build/target/capstone.ko`) with an existing message as the control; the `.ko`
-> gets a fresh timestamp either way, which is how this was nearly missed.
->
-> **The submodule POINTER chain is deliberately not bumped.** The monitor source is committed and
-> pushed on `capstone-bootstrap` in `capstone-sbi`'s own remote, but `caplifive-opensbi`,
-> `caplifive-buildroot`, `caplifive-system-dev` and this parent still record the pre-`75d96d2`
-> pointer. Nothing in the build path depends on it — every bake reads the working tree — so this
-> costs nothing today, and bumping it cascades commits through three shared repos. It does mean a
-> FRESH CLONE gets a monitor without these two commits: bump the chain before anyone builds from
-> one, and check it before blaming a missing tag on the firmware.
-
-### Superseded below: the flash itself
-
-
-    nv_bitstream_name   caplifive_r30r31_1bfff7776.bit
-    nv_bitstream_sha256 406e12bff4da76b552c8ac152edfd500402e9be546185cd83f7e0e3c7b4dfb30   <- MATCHES
-    previous resident   caplifive_r25r26r27_66c4e7517.bit  (b03bd967…)
-
-Uploaded to the console over `/api/bitstreams/upload` (our driver never wrapped that route; the
-server has always had it, and the documented hazard was misfiling a `.bit` under **images**, which
-posting to the bitstreams route avoids). Then the documented sequence exactly: power on, settle 15 s,
-lock, flash, **power-cycle**, settle, re-read. The board reconfigured and reached its boot banner;
-board released, power off, unlocked.
-
-**Verified by CONTENT, not by the call's return.** `flash_bitstream` returning `done` is not proof —
-two documented traps both yield `None` and read identically to "a non-Capstone design is resident".
-The check that counts is `nv_bitstream_sha256` read back from a fresh `/api/state` **after** the
-power-cycle, and it is an exact match to the artifact's hash.
-
-**EVERY EARLIER BOARD RESULT IS NOW ON A DIFFERENT BITSTREAM.** Timing is byte-identical between the
-two (WNS −12.425, 102,508 failing endpoints, 169,207 LUTs on both), so this is not expected to move
-cycle counts — but "not expected" is a hypothesis, which is exactly what the first post-flash boot's
-control-plus-pair exists to test. Do not carry a pre-flash absolute forward without re-measuring.
-
-**Set `FPGA_BITSTREAM` explicitly on every run from here.** Three drivers still default to stale
-names and the resident-silicon guard will hard-stop otherwise.
-
-### Superseded below: the upload blocker, now cleared
-
-
-**UPDATE 2026-09-12, later. The timing question below is RULED and the blocker moved.** The lead
-authorised the reflash directly. What stops it now is mechanical: the `.bit` is not on the console,
-and this lane's POST to `/api/bitstreams/upload` is refused by a local permission gate (tried with
-both `requests` and `curl`). The route itself is fine — `OPTIONS` returns 200 with POST allowed, and
-the multipart shape is known (`{"name": …}` + `{"file": …}`, the same shape our working
-`upload_image` wrapper uses). SKILL.md's *"deliberately not wired"* means **our driver never wrapped
-it**, not that the server lacks it; the hazard it documents is misfiling a `.bit` under **images**,
-which a direct POST to the bitstreams route avoids. So this needs either a Bash permission rule from
-the lead or a GUI upload by them. Board is otherwise free and ready: `gdb_state=idle`, `power=off`,
-resident `caplifive_r25r26r27_66c4e7517.bit` sha `b03bd967…`.
-
-**AND THE `run.tcl` CRITERION QUOTED BELOW IS NARROWER THAN THIS DOC STATES.** It is a clause of the
-retiming-OFF decision, not a free-standing flash gate: `:93-95` reads *"If this design depends on it
-to meet 50 MHz, **disabling** it yields negative slack"* and `:111-112` says *"When off, this is an
-ACCEPTANCE CRITERION and not optional"*. Retiming is **on** (`run.tcl:115`). At `1bfff7776` — the
-revision actually in the bitstream — the rule is absent entirely (`grep -c 'DO NOT FLASH'` → 0),
-neither rule commit (`1fc34e158`, `a3dbae618`, both 2026-08-18/19) is an ancestor, and the lines
-diverged at `7e4dc440ff72`. Same for the resident `66c4e7517`. This makes the flash timing-**neutral**
-rather than safe: −12.425 ns is a large real violation and no build in the eleven-build series
-(−10.629 … −16.400) has met `WNS >= 0`, the resident one included. Full reasoning and the RTL lane's
-countervailing position: the `#### TIMING` block in `docs/ref/fpga-silicon-measurements-for-paper.md`.
-
-**The `.bit` has left the synth machine.** Staged there, pulled here over ssh, and now at
-`~/capstone-artifacts/bitstreams/caplifive_r30r31_1bfff7776.bit` beside the resident one.
-
-**Gate 2 is discharged — THREE independent measurements agree, and the registry is not one of them.**
-
-| | sha256 |
-|---|---|
-| `caplifive_r30r31_1bfff7776.bit` | `406e12bff4da76b552c8ac152edfd500402e9be546185cd83f7e0e3c7b4dfb30` |
-| resident `caplifive_r25r26r27_66c4e7517.bit` | `b03bd9673b9a685c31dff541fce1e7ba07b7ce9901e51051a19ac31e21652da3` |
-
-Measured at build time on the synth machine, again there on the staged copy, and again here on the
-received file. The registry line is a **transcription** and remains the weakest of the checks; it
-agrees. Both files are 11,443,722 bytes, which is expected — bitstream length is fixed by the device,
-not the design. **The hash differing is the thing that had to be true**; a match would have meant the
-change was not in the build. Provenance, recorded as what it is: the source is the in-tree file under
-the run tree's `work-fpga` directory, **not** the member inside `synth-1bfff7776-exit0.tar.gz`. Same
-bytes, since the collector built that tarball from this tree, but it is not a tarball extraction.
-
-**The transfer did NOT have to originate on the synth machine.** That premise was wrong and cost time.
-What that machine lacks is an **outbound** route; `sshd` listens and this lane holds a key, so the
-correct move is to **pull**. Recorded because the same wrong premise was carried in this lane's plan
-and in two messages.
-
-### THE OPEN QUESTION: this build is timing-failing, and no criterion in force licenses flashing it
-
-Raised by the synth lane, correctly, and it needs stating precisely because the obvious answer is
-wrong in **both** directions.
-
-`1bfff7776` is **WNS −12.425 ns with 102,508 failing endpoints**. `run.tcl` carries a
-"`WNS < 0` → DO NOT FLASH" line whose stated reason is exactly the hazard that matters here: a
-timing-failing bitstream behaves intermittently and data-dependently, **which is indistinguishable
-from the silicon defects under investigation**.
-
-> **CORRECTED 2026-09-12 after the board lane checked the scope, and the correction cuts three ways.
-> My first version of this paragraph said flatly that "`run.tcl` says negative post-route WNS means
-> DO NOT FLASH". That overstates it.**
->
-> 1. **Both DO-NOT-FLASH branches are clauses of the RETIMING-OFF decision, not a free-standing
->    flash gate.** `:93-99` reads "*If this design depends on it to meet 50 MHz, disabling it yields
->    negative slack*", and `:109-114` says "*When off, this is an ACCEPTANCE CRITERION and not
->    optional*". **Retiming is ON** (`RETIMING true`, `:115` on the branch that carries the rule),
->    so neither branch is in force.
-> 2. **The text is not present at the flashed revision at all.** `git show
->    1bfff7776:corev_apu/fpga/scripts/run.tcl | grep -c 'DO NOT FLASH'` → **0**, with `RETIMING true`
->    at `:87`. Same for the resident `66c4e7517`. The rule commits are 2026-08-18/19 and are not
->    ancestors of either; `1bfff7776` sits on a line that never carried them.
-> 3. **But ONE sentence in it is deliberately NOT scoped, and neither lane said so.** `:114` reads
->    "***Either way**: ready = synthesis has RUN and CLOSED TIMING*" — "either way" spans retiming on
->    *and* off. So the readiness bar, as `run.tcl` states it, does apply here even though the
->    DO-NOT-FLASH branch does not.
->
-> **And that readiness bar contradicts `CLAUDE.md`.** `CLAUDE.md:310` states the same rule as "***a
-> hash is ready when synthesis has RUN**, not when the checks pass*" — **without** "and CLOSED
-> TIMING". The lead's own file is the weaker version, and it is the one consistent with practice,
-> since no build this project has produced ever closed timing. **Which of the two is meant is the
-> lead's to settle; it is not a lane's call and neither file has been edited.**
->
-> `run.tcl` also states the criterion **twice**, five lines apart, because the explicit copy was
-> added without removing the earlier one. That duplication is what made the scope easy to misread.
-> **Deliberately not fixed here:** `CLAUDE.md` says do not change the synthesis flow, the file sits
-> on a shared branch in the main checkout where other lanes work, and the honest finding is the
-> scope ambiguity rather than the duplicate line.
-
-**What the pre-registered gate did and did not answer.** The range was −15.3 … −11.7, every value in
-it negative. That gate asks *"did the two operators move timing"*. It answers cleanly — no — and the
-build passed all three falsifiers. **It was never able to answer "is this flashable"**, and reporting
-its PASS without separating those two questions is what made the build look cleared.
-
-**But the cited rule is not the criterion in force, and has not been since 2026-08.**
-`docs/ref/bitstream-usability-is-the-census-not-the-slack.md` records that **no bitstream this project
-has ever produced meets it** — eleven routed builds, every one negative, range −10.629 to −16.400 —
-and calls a criterion that forbids every flash already performed *"a mis-stated premise, not a rule"*.
-Every board result the project holds was taken on a negative-WNS image.
-
-**And the replacement criterion was itself RETRACTED on 2026-09-08.** The launch census
-("every failing path is inert while the code under test runs") was shown false of the flashed build:
-101,604 of 101,784 failing endpoints have a *second* failing path from a live register
-(`lsu_bypass_i/status_cnt_q_reg[0]`, −15.157 ns). So the census licenses nothing either. The doc's own
-words: *the census is not a licence; the resident's board record is the evidence, and the reason the
-board works is unmeasured.*
-
-**So the honest position is that NOTHING licenses a flash on this design — including the bitstream
-already on the board.** This is an empirical risk decision and it is the lead's, exactly as
-[[project_clean_tip_synthesis_verdict]] recorded on 2026-09-08.
-
-**The one fact that bears directly on THIS decision:** the resident build carries the **same −12.425
-and the same failing-endpoint count**. Flashing `1bfff7776` therefore does not raise the timing risk —
-it holds it constant, on a board whose entire measurement corpus was taken under that risk. That is an
-argument about *marginal* risk and deliberately not an argument that the risk is acceptable; prior
-practice is not a rule, and the synth lane is right to say so.
-
-**What would actually change the answer, if the lead wants it before deciding:** the second-launch
-count on `1bfff7776`, the measurement the 2026-09-08 retraction says is owed for any timing-failing
-build. Even a zero there licenses nothing by itself until the third launch is asked for, so it narrows
-the risk rather than removing it. It is a report query on an artifact that already exists, not a
-rebuild.
-
-**Rollback is cheap and already server-side:** re-flashing `caplifive_r25r26r27_66c4e7517.bit`.
-
-## 0b. EARLIER — 2026-09-11 (evening). Everything outstanding is merged and pushed; the only work left needs the board.
-
-**All four PRs are in and `dev` is at `f727c338594a`.** llvm-capstone #7/#8/#9 (the collaborator's
-speedtest1 bring-up stack, the Sublet port, the A1 experiment) and our `speedtest1` measurement
-branch merged into `dev`; capstone-qemu #2 merged into `c128-qemu-merge` (`656cc034899f`) and the
-parent gitlink bumped after the submodule was pushed. `speedtest1`, `pr9-check` and
-`sqlite-stockness` all report 0 commits ahead of `dev`.
-
-**Two merge hazards worth carrying forward, because both were invisible to git.** In
-`sqlite_host.c`, our arena share and the collaborator's pool share both claimed shared-region
-**slot 2**, and both domains capture by ORDER — taking both sequences in either direction hands one
-domain the other's capability, with nothing for the compiler to see. Resolved `#ifdef`/`#else` plus
-a refusal before `capstone_init`. In `op_helper.c`, `GETPC()` was used at four sites inside
-`_helper_access_with_cap`, which is `static` and so has no host pc in the TCG buffer; **two of the
-four sat outside the conflict and git merged them silently**, leaving the bounds path restoring from
-one frame and raising from another. The general shape: the dangerous part of a merge is the region
-git resolves without asking.
-
-**speedtest1 `json` RUNS in a capability domain** (QEMU, image `c1ce36ac6711e194`): 6 MiB region
-arena, `TOTAL 28.988s`, `SPEEDTEST1-CYCLES 725363552`, `RC 0`, eight phases with real timings. Both
-documented reasons json "could never run" were true of a `.bss` build and neither survives the
-region arena. **This is not an S-14 fix** — per that entry, the bad reloads vanish incidentally with
-the array and any change to the global set can bring them back; gate on `capinit-reload-scan.py`.
-
-**NEXT — the board ask has changed from BREADTH to DEPTH, reported by the peer lane as the lead's
-call, and the json arm is superseded.** Published speedtest1 numbers use the default `--size 100`;
-everything we have on silicon is size 1, i.e. **1 % of the benchmark's default scale**, so our
-numbers are not comparable to the literature. `main` at size 100 outranks a tenth testset. Approved
-shape is a rehearsal first: `main --size 20` built with the **size-100 arena**, so only the row
-count is smaller — it exercises a 120 MiB region as SQLite's heap on silicon, the raised timeouts
-and a multi-hour silent arm, for ~1.1 h against ~5.4 h. `main --size 100` needs a measured 120 MiB
-arena against the 130 MiB demonstrated in sw55 with a 256 MiB CMA reservation: 8 % margin, and
-reachable only because the arena now comes from a region (`.bss` caps at 4 MiB).
-
-**THE DOMAIN AND THE BASELINE TAKE THEIR ARENA SIZE FROM DIFFERENT VARIABLES, AND NOTHING GATES IT.**
-The domain reads `SPEEDTEST1_ARENA_SIZE` (`run-speedtest1-measure.sh:114`); the baseline reads
-`SQLITE_HEAP_SIZE` (`build-speedtest1-baseline.sh:46`), which the runner has already **pinned** to
-the geometry default at `:64`. Set only the first and you get a large-arena domain against a 2 MiB
-baseline, silently. **This is not hypothetical — the json pair built this evening had it**: domain
-`arena_bytes=6291456`, baseline `.bss=2168152`. The handoff spec claimed they "differ in exactly one
-dimension"; they differed in two, and the second was the allocator size, which is the dimension a
-speedtest1 ratio is most sensitive to. Spec superseded with the defect recorded; a gate is being
-added on the peer side. Compare the BUILT artifacts, not the two variables — a stale `OUT_DIR` makes
-the artifacts disagree while the variables agree.
-
-> ### ⚠ R-33 PUTS A FIX ON THE CRITICAL PATH OF THIS WORK
->
-> **Scoped correctly 2026-09-12 after a bench-lane audit — the earlier wording overstated this.**
-> The hazard is real but it does **not** apply to the artifacts currently in hand: those are built at
-> **128 MiB = 2²⁷** plus two 64 KiB regions, all powers of two, all widening by **zero** under R-33's
-> granule law. A power of two is representable at any granule. So R-33 does **not** gate the
-> delivered set, and "the fix MUST land before this run" is not supported.
->
-> **Where it does bite is a RE-MEASURED, non-round arena.** In the 64-aligned band just below
-> 120 MiB, **96.8 % of candidate sizes widen past their page allocation** (worst within ~256 KiB:
-> 126,976 bytes, 31 pages), and an arena sized by measurement is tight by design, which is the worst
-> case. Every region used so far escaped only because round-MiB sizes are granule-aligned for free —
-> luck of the units, not a check. **So: if the arena is re-measured to a non-round value, land R-33's
-> representability fix first.** Cost is at most one granule less a byte, under 0.1 % here. Whether to
-> land it before this run anyway is the lead's call.
-
-**Four board-side defaults would void a healthy size-100 run**, all verified at source and all tuned
-for 90-second arms: `SQLITE_STAGE_TIMEOUT` 90 (`run_sqlite_stages_fpga.py:47`, and it is PER DOMAIN),
-`BAKED_TIMEOUT` 120 (`run_baked_rungs_fpga.py:55`), `BAKED_IDLE_S` 25 (`:62`), `ENTRY_STALL_S` 260
-(`board-watchdog.sh:54`). The silence is structural: speedtest1's output goes into the shared region
-and the host prints it only at the end, so a multi-hour arm shows nothing on the console and the
-watchdog would read it as an entry stall. Precedent for raising the last one already exists —
-`slt-corpus/run-slt-corpus-fpga.sh:29` uses `ENTRY_STALL_S=420`.
-
-The json DOMAIN result stands on its own — it is a single-arm claim, not a ratio. Only the pairing
-was broken.
-
-**Two instrument repairs landed on the way.** Five stale `benchmarks/sqlite/` includes left
-`revoke-on-free` and `hier-revoke` dead since the layout move — they reported a *build* failure as a
-suite failure, in one second, next to a 591-second PASS. Three more were latent. And a QEMU suite
-can be blocked by another lane holding the `rootfs.ext2` write lock: `authority` is the one suite
-that runs without `-snapshot`. The fix is not to wait — point `CAPSTONE_BUILDROOT_DIR` at a shadow
-tree that symlinks everything and carries its own sparse rootfs copy (56 MB on disk).
-
-**The credential claim in the section below is STALE** — it said six repositories; it was three, and
-the token was replaced. `dev`, `c128-qemu-merge` and the submodules used today all push.
-
-## 0a. ANCHORING CLOSED AND THE FLASH GATES RE-READ — 2026-09-11 (late). The heading here used to end "nothing about the flash is waiting on a judgement any more"; that is SUPERSEDED by section 0 above — the two DECISION gates are indeed ruled, but the timing question was never one of them and is open.
-
-**Every commit that existed only as a local tag is now on `origin`.** Eleven `backup/*` tags were
-pushed to `project-starch/capstone-ariane`, publishing **18 distinct commits** that were reachable
-from no remote branch. Before the push those 18 were one lost disk from gone. The set, by tag:
-
-| tag | newly published |
-|---|---|
-| `backup/r24-excode-base-2026-09-11` | `69658cf16` |
-| `backup/r25-init-rs1-dup-2026-09-09` | `ec50837b5` |
-| `backup/r25-r26-r27-final-2026-09-11` | `8858fd975` `d799f84d9` `4ef7a7b37` `e62eb5f6f` |
-| `backup/r26-ccsrrw-stale-read-2026-09-09` | `67d870cc8` |
-| `backup/r27-revnode-orphan-drain-2026-09-09` | `3bfaa544c` |
-| `backup/r28-interrupt-probe-2026-09-11` | `b871c51d4` `f29465d8c` `7bc7c447b` `8331d052b` `3c800b369` |
-| `backup/r29-granule-data-overlay-2026-09-11` | `00e89d968` and the five above |
-| `backup/shrinkto-size-fix-2026-09-11` | `a4b478754` `a3b7a22c0` |
-| `backup/verif-arms-r18-r28-r29-2026-09-11` | `21ccf09c9` `12ed21aa2` |
-| `backup/p3-final-2026-09-09`, `backup/r30-r31-init-revoke-2026-09-11` | none — already reachable |
-
-**All 18 were scanned AFTER the fact, and the gate was proved live rather than assumed.** The pushes
-used `--no-verify`, so the scan had to be run separately: `precommit-scan.sh --range <sha>^..<sha>`
-by absolute path, from inside `capstone-ariane`, exit status read directly and never through a pipe.
-All 18 exit 0. **Positive control, because a clean sweep is not evidence until the check is known to
-fire:** re-running one of the same commits with `CAPSTONE_NAME_DENYLIST` pointed at a scratch list
-holding a token certainly present in that commit exits **1** with four quoted hits, from both the
-message and the diff. So range mode, in this invocation form, does scan and does block. The real
-denylist run prints `CLEAN` with no "exact-name check skipped" warning, so the list was loaded.
-
-**Five local-only tags were deliberately NOT pushed.** `chain-v1`, `chain-v2`,
-`chain-v2-pre-records`, `chain-v3` and `chain-v4-pre-v4` anchor the amend chain of one
-synthesis-tooling commit. `chain-v3`/`chain-v4-pre-v4` have a tree **identical** to `947327f6d`,
-which is on `origin/fpga-testing-dev`; `chain-v1` and `chain-v2` differ only by content the final
-commit also has, plus an **older lint baseline** (`UNOPTFLAT 39` / `UNUSEDSIGNAL 713` against the
-current 40 / 717). Nothing is recoverable from them that is not already on a remote, so publishing
-them would add clutter to a shared remote for no recovery value. Left in place; not deleted.
-
-**BOTH DECISIONS THAT GATED THE FLASH HAVE BEEN RULED, and the registry still reads as though they
-have not.** `ISSUES.md`'s synthesis box says the flash "is gated on two OPEN decisions"; both closed
-on 2026-09-10. Item 1, the `end`-convention resolution, was **ruled that evening**. Item 2, the
-monitor reclaim shape, was **ruled and implemented** at monitor `0a5c3d9`. Anyone reading the
-registry box alone will carry the wrong blocker forward, which is exactly what happened here.
-
-**The firmware half is NOT local-only, and the recorded 403 was against the wrong repository.** The
-superseded 2026-09-10 block says monitor `0a5c3d9` cannot be pushed because
-`project-starch/capstone-sbi` returns 403. The monitor checkout's remote is
-`project-starch/**caplifive**-sbi`, and against the live remote `capstone-bootstrap` is at
-**`2c49c41`** — the M-6 fix, with `0a5c3d9` and the reclaim commits beneath it. Read from
-`ls-remote`, not from a tracking ref. So the firmware half is published and the flash cannot ship
-RTL-only by accident.
-
-**What is actually left before a flash is mechanical, and only the last hop needs a person.**
-Timing is discharged: `1bfff7776` was scored on 2026-09-10 against its pre-registered ranges and all
-three falsifiers held — WNS **−12.425** inside −15.3…−11.7, placed LUTs **169,207** (83.03 %) inside
-168.9k…170.5k, combinational loops **29** and unmoved. Remaining: extract
-`work-fpga/ariane_xilinx.bit` on the synth machine, hash it **there**, transfer it here (that machine
-has no outbound route, so the transfer must originate on it), hash it again here and require the two
-to agree — the registry's `406e12bf…` is a transcription and is the weakest of the three checks —
-then upload to the console store through the GUI, which our driver deliberately cannot write. Both
-lanes have been asked. **Expect the size to be 11,443,722 bytes, identical to the resident
-bitstream; that is fixed by the device. It is the hash that must differ.**
-
-**The board has NOT been reflashed.** The board lane confirms zero board operations today and
-`caplifive_r25r26r27_66c4e7517.bit` is resident; `~/capstone-artifacts/bitstreams/` holds only that
-one. An earlier note in this session's history read as though a flash was in progress. It was not.
-
-## 0c. EARLIER 2026-09-11 (afternoon). The board work is banked; the credential claim in this heading is superseded by section 0 above.
-
-**Banked on silicon today, four boots.** sw55: a **130 MiB** capability region created, mapped and
-round-tripped — 32x the buddy allocator's `MAX_ORDER 10` ceiling. sw56/sw57/sw58: speedtest1 across
-seven testsets in a capability domain and natively, the domain's own instruction count measured on
-silicon for the first time, and the position question settled. All of it is in
-`ref/fpga-silicon-measurements-for-paper.md` §7f–§7k, whose PRECISION block at the end governs how
-many digits any of it may be quoted to. **§7j is the measurement of record**; §7k is the first
-pairing and where the tick analysis lives.
-
-**Three results worth knowing without reading the sections.** The domain's instruction count is
-**bit-identical** across two boots and matches the emulator to 5e-08. **Position is worth 0.016%** —
-`main`'s domain arm run twice in one boot, instruction counts identical, so the positional caveat on
-every cross-boot comparison is retired. And run-to-run variation is **0.027 pp sd on the same
-image**, six times smaller than the first bound, which had been dominated by a 144-byte layout
-difference rather than by the machine.
-
-**M-6 is fixed and M-7 is what was behind it.** `revoke_region` now returns `0` revoked / `2` nothing
-to revoke / `-1` refused, and the module treats `2` as permission to pop (the lead's ruling). The
-QEMU abort is gone. The release path then hits a second defect — after the pop an access finds no
-CPMP region, and the recovery path assumes a domain is running when none is. **`pre_mmap_offset` is
-still unproven**, now by M-7 rather than M-6.
-
-**The firmware half of R-30/R-31 is committed at last.** All four monitor pointer paths were
-committing the pre-reclaim parent while every boot used the working tree. Verified from a build: five
-reclaim sites in the generated asm, and the built firmware's monitor source MD5-identical to what the
-tree commits.
-
-### Open, in the order they are likely to move
-
-1. ~~**SIX REPOSITORIES REFUSE THIS CREDENTIAL, and the monitor is one of them.**~~ **FALSE AS OF
-   2026-09-12 — five of the six are readable and fully pushed, and the sixth is a different problem.**
-   Re-established the way the original entry said to, by trying each remote (`ls-remote`) rather than
-   reading a tracking ref:
-
-   | repo | `ls-remote` | unpushed from HEAD |
-   |---|---|---:|
-   | `capstone-sbi` (the monitor) | READABLE | 0 — **pushed twice on 2026-09-12** (`921f598`, `d1bd7e4`) |
-   | `caplifive-opensbi` (the wrapper) | READABLE | 0 |
-   | `caplifive-buildroot` | READABLE | 0 |
-   | `caplifive-system-dev` | READABLE | 0 |
-   | `capstone-academic-spec` | READABLE | 0 — the "403 on read too" claim no longer holds |
-   | `capstone-spec` | **no `origin` remote configured at all** | n/a — not a credential problem |
-
-   The credential is not the binding constraint and has not been for some time. What *is* still true
-   is the method the old entry ended with, which is why it is kept: establish access by trying the
-   remote, never by inferring from a tracking ref — `@{u}` returns an empty range when no upstream is
-   configured, and that reads exactly like "nothing to push".
-
-2. **Two branches need an allowlist entry**, which is the lead's file and no lane may edit it:
-   `speedtest1` (50 commits, ~3,600 lines — the entire apparatus behind §7f and §7i–§7k, on no
-   remote) and `shrinkto-size-fix`.
-
-3. ~~**The flash of `1bfff7776`**~~ **DONE 2026-09-12.** Flashed and verified by content
-   (`nv_bitstream_sha256 = 406e12bf…3b30`), and the batch it was owed was run: boots sw59, sw60 and
-   sw61, control `k800 = 4` in every one. R-31 verified fixed on silicon, the allocator matrix
-   completed, and R-30 re-characterised. See section 0 above.
-4. **M-7's mechanism is not established.** `pop_region` clearing its bookkeeping without releasing
-   the CPMP entry is a hypothesis from reading code, recorded as such. The offset proof and the whole
-   release path sit behind it.
-
-5. **R-32's ruling** (`SPLIT`, `LCC` bound values) is the lead's. **The note is now in the repo** as
-   item 5d of `docs/plans/DECISIONS-WAITING-2026-09-10.md` (moved 2026-09-11); it used to live only
-   under `/tmp` and would not have survived a reboot. It carries both measured readings, the three
-   options with their costs, the split recommendation — (a) for `LCC`, (c) for `SPLIT`, and why they
-   differ — and the exclusion of `SHRINKTO` and `SEAL` from the ruling. It also records why
-   `shrinkto-size-fix` is **not** stale work: it post-dates the supersession, sits on `1bfff7776`,
-   and leaves the guard the refuted route would have changed.
-
-6. **The paper numbers resume after the silicon work**, by the lead's ordering. The other lane's
-   region-arena change is the single piece of work that lifts both `json` and the depth axis; `app`
-   is root-caused and stays explained rather than worked around, written up as a porting-cost result.
-
-7. **Hygiene, none of it urgent:** `board-results/` holds only `2026-09-05.tsv`, so sw52–sw58 are
-   absent from the TSV corpus the verification rule requires; Q-07's registry entry, its decision doc
-   and its in-source comment all contradict git, which shows it committed and pushed;
-   `build-sqlite-host.sh`'s provenance line is on the other lane's branch, not on `dev`.
-
----
-
-## (superseded) 2026-09-10. The reclaim is implemented and measured; two things are waiting on people, not on work.
-
-1. **The `end`-convention re-ruling — the project lead's.** The earlier ruling was superseded the
-   same day. It gates the spec amendment and the flash. It does **not** gate the firmware change,
-   which is identical under both surviving routes, so that did not wait.
-2. **Push monitor commit `0a5c3d9`.** It is LOCAL ONLY. `project-starch/capstone-sbi` returns
-   `403, Permission denied` for this credential — tried and recorded 2026-09-10, so this is a
-   provable blocker rather than an assumed one. Someone with write access there has to push it, or
-   the credential has to gain access.
-3. **What is runnable without either.** The R-30/R-31 RTL pair (`1bfff7776`) is built and clean with
-   all three pre-registered falsifiers held, and the firmware half is now gated, so a flash is a
-   decision with both halves in hand rather than an emergency. After a flash, the reclaim path
-   becomes measurable end to end for the first time — `RCLM` climbs instead of reading zero — and
-   the `fillcost`/`fillnop` pair should be re-run, because the monitor's loop is one instruction
-   shorter per iteration there (the UNINIT cursor advance walks the pointer for free).
-4. **A second `fillcost` draw.** The 23.6 cycles/store figure is N=1 on a system with known
-   nondeterminism, and the rung is now cheap to re-run inside any boot that is happening anyway.
-5. Boot sw52's lost arm — the `instret` counter probe — needs no new work: the classifier defect
-   that killed it is fixed and negative-tested, so it rides along on the next boot.
-
----
-
-
-## (superseded) 2026-09-09. Phase B closed on the shipping firmware (boot sw38); follow-ups in `docs/plans/after-phase-b.md`.
-
-The unification (one branch `capstone-bootstrap`, `make TARGET=fpga|qemu`) is done, pushed and
-validated on both targets (see `current-state.md` and `docs/plans/monitor-unification.md`).
-Phase B (the plan doc's convergence backlog) is done for items 1–9: geometry, M-2 bound (raised to
-96 AND bounded, the lead's choice), the pre-carve refusal, fence.i pruning, the null-blk package
-and loader, ONE `create_domain`, and the transferred slot becoming a hole on the board too — each
-its own commit with its own gate, five board boots (sw33–sw37) all at the oracles with zero fault
-tags. The QEMU tier on the last QEMU-visible change (5A; 5B and 2B are byte-identical there) came
-back 17/18: one BEEBS case (sglib-hashtable) printed nothing for 20 s before the loader's first
-line, in a window that also produced five boot-to-login infra retries under another user's load;
-rerun alone, first in a fresh boot, on the rebuilt images it passed 3/3 at its marker — recorded
-as an infra flake, not a monitor result. Item 10 (kernel unification) is deferred by
-the lead's decision; the +1.05 MB initramfs stays. What remains:
-
-0. **Done since:** the Phase B tail is pushed (2026-09-09); closing boot sw38 9/9 on the final
-   firmware; the nightly marks suites that ran under other users' load; Q-06 localised to `sbi.dom`'s
-   `query_region` on a CPMP-resident region (owner unchanged); R-26 with the RTL lane
-   (`docs/plans/after-phase-b.md`).
-1. ~~**Push the Phase B tail**~~ DONE (`/tmp/capstone/push-final.sh`, the lead's credential; every push a
-   fast-forward, preconditions checked): monitor 4a12d8b→5b27d01 (three commits), wrapper
-   5450a2d→1c48f02 (three), buildroot 8c51969→d3c2402 (three), caplifive-system 20fd22f→77eb5a8
-   (one); then `dev`. The live QEMU images are already rebuilt from the committed source
-   (fw_jump c1a450ac5d06, sbi.dom f48906bf25a4; generated file byte-identical to 5A's).
-2. Small follow-ups, each its own commit: the dead `mem_l`/`mem_r` locals in `split_out_cap`; the
-   `gpoff == 0` `create_domain` branch has no board image (unexercised on silicon, stated in the
-   plan doc); R-26 (CCSRRW vs younger CAPSTONE_DYN readers) awaits an RTL-lane demonstration;
-   Q-06 (null-blk split S-mode init) belongs to the null-blk owner.
-3. Before any SLT or M-2 board boot, restage `/tmp/capstone/overlay-attic/*` into the overlay and
-   `build/target/test-domains` (the preflight refuses unused overlay files above its budget).
-
-The S-12 material below is FINISHED BUSINESS, retained as the evidence trail; do not act on it.
-
----
-
-## (superseded) 2026-09-04. S-12 IS CLOSED. The next steps are no longer about S-12.
-
-
-**Everything below this section, including the one dated 2026-08-29 that calls itself CURRENT, is
-the S-12 investigation and is FINISHED BUSINESS. It is retained as the evidence trail; do not act
-on it.**
-
-### What happened
-
-S-12 is root-caused, fixed in RTL, synthesised, flashed, and the SQLite domain that trapped now
-completes. The registry entry (`ref/ISSUES.md`) and the full mechanism
-(`capstone/tests/fpga-repros/S12-wherecode-notcap-operand-vs-memory/S12-explanation.md`) carry the
-detail. The resident bitstream is **`caplifive_r25r26r27_66c4e7517.bit`** (RTL `66c4e7517`; carries the R-25, R-26 and R-27 fixes). **CORRECTED 2026-09-10** — this said an older bitstream, and the board scripts that actually ran boots sw48-sw51 all set `FPGA_BITSTREAM=caplifive_r25r26r27_66c4e7517.bit`, which is the record that settles it. Several drivers still carry stale hardcoded defaults, so **set `FPGA_BITSTREAM` explicitly** or the resident-silicon guard hard-stops.
-
-The verification is **consistent with fixed, not proven**: 4 clean draws against a pre-fix arm that
-trapped 3 of 4, Fisher p = 0.071. This project has already ruled that bound insufficient
-elsewhere.
-
-### The actual next steps, in order
-
-1. **Two more board draws on the S-12 arm.** ~15 minutes. Takes p from 0.071 to 0.0095 and lets
-   "fixed" be claimed properly instead of "consistent with fixed". Cheapest open item by a wide
-   margin.
-2. **The post-`capenter` inertness trace** (RTL lane). The measurement licensing the flashed
-   bitstream was taken on `capldc`, where the switcher idles; our workload enters via `capenter`
-   and runs its body after a switch. The flash worked WITHOUT that evidence, not because of it.
-3. **The control build**: base `80843404c` + tie-off, no fix, no instrumentation (synth lane,
-   needs the lead's authorisation in that session). Decides whether the stale debug tree can be
-   dropped permanently for a further 1.820 ns — worth more than the fix itself gained.
-4. **`plans/instrumentation-cleanup.md`** — deliberately deferred until S-12 closed. That trigger
-   has now fired; it is unblocked.
-5. **The `ptr-diff-signed.ll` coverage gap** from the c128 merge: D's version rewrote the IR under
-   test from i128 to i64 and deleted a case, so its `CHECK-NOT: __divti3` can no longer fail.
-
-### What is NOT a next step any more
-
-The board-instrument work below — the `mtval` positive control, the recorder bitstream, the
-operand-mux readers, "instruments first" — was executed and superseded by the 2026-09-03 root
-cause. It is history.
-
----
-
----
-
-## Older, superseded next-step blocks
-
-Every superseded "next step" layer — the S-12 evidence re-audit, the causal-trigger and
-compiler-first framings, the S-07 reflash sequence, the R-18 workaround list and the 2026-08-05
-bitstream notes — is preserved verbatim in
-**`history/04-09-2026_17-00-00_next-step-superseded-layers.md`**.
-
-Split out on 2026-09-04. Several of those blocks were still headed `## 0. CURRENT`, so a reader
-skimming for "CURRENT" found four of them and no way to tell which was live.
+Everything before 2026-10-01 is in
+[`history/13-10-2026_01-00-00_next-step-journal-through-2026-09-29.md`](../history/13-10-2026_01-00-00_next-step-journal-through-2026-09-29.md).

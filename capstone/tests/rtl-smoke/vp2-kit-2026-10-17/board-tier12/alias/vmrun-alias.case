@@ -1,0 +1,15 @@
+  alias-load)
+    # The alias-load test (pre-registered in tier3-smoke/README.md; compiler lane alias-load ae6a930bc0ab): the one image,
+    # one capstone-vexec process per arm in the registered order (inb, alias, outside, past), CAPSTONE_EXEC_DIAGNOSTICS=1.
+    # Each prints AL_PRE, AL_LOADED value=N and AL_DONE, or faults. Markers AL_ARM / AL_EXIT bracket each arm.
+    # RESULT alias-load retval = the number of arms whose process did not start (exit 127); faults are readings.
+    cd /test-domains/vm || { echo "RESULT alias-load retval=951"; exit 1; }
+    grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko diag_emerg=1 || { echo "RESULT alias-load retval=952"; exit 1; }
+    r=0
+    for a in "inb 100" "alias 0x10100" "outside 0x16000" "past 0x4ed0"; do
+      set -- $a; echo "AL_ARM $1 $2"
+      CAPSTONE_EXEC_DIAGNOSTICS=1 ./capstone-vexec alias-load.dom $2 > /tmp/al.out 2>&1; s=$?
+      cat /tmp/al.out; echo "AL_EXIT $1 $s"
+      [ $s -eq 127 ] && r=$((r + 1))
+    done
+    echo "RESULT alias-load retval=$r" ;;

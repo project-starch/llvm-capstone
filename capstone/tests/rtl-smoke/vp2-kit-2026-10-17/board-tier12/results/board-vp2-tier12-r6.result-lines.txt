@@ -1,0 +1,36 @@
+# vp2 boot r6 (Tier 1+2), 2026-10-18 05:23-05:55: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload bbc3cd7e9e1d6b56
+# (Image 5a3b6462bc2cc6e4; monitor capstone-sbi vp2/fetch-retry 007d81d: the CPMX diagnostic + CAPSTONE_VP2_FETCH_RETRY),
+# module 0cc4760d21fde17a (the compiler lane's 457b78f27e10). Pre-registered at lane vp2-tier12 452c1611a52e.
+# The run was ENDED BY SIGINT at 05:55 (driver rc 130) after the vm-suite's `vm` step had made no progress for ~25 min;
+# the driver released the board but wrote no board.txt, so these lines come from driver.log, scoped to this run's
+# load_image (the per-rung segments are reconstructed from the UART stream). The raw capture is not committed.
+
+DRIVER rc=130 05:55:32 (SIGINT, by the board lane, after ~25 min without progress in vm-suite's `vm` step)
+RESULT b0-stats retval=0
+RESULT b0-hello retval=0
+RESULT vm-contract retval=0
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+FRTY retries 2 at  2 FRTY:01110DD4
+
+## vm-contract (Tier 1): the identity branch, the first virtual application on silicon
+  FRTY:01110DD4
+  CAPSTONE_VM_ADD_OK slot=5 base=0x3fa5304000 bytes=8192 reg=10 perms=7 linear=1
+  VIRTUAL_APPLICATION_OK argv env files heap_growth heap_retirement mmap
+  VM_EXIT:normal:0
+  CAPSTONE_VM_ADD_OK slot=5 base=0x3f87a0c000 bytes=8192 reg=10 perms=7 linear=1
+  capstone-exec: domain fault cause=25 pc=0x3f879140f0 address=0x3f87a16060 entry=0x3f8790094c code=0x3f87900000-0x3f87980000 last=0xc0de0001 preparing=0xc0de0001 sha256=125705371837
+  VM_EXIT:stale:139
+  The `ok` run's 24 grants equal QEMU's 24 (bytes, reg, perms, linear), in order, checked by script against the
+  q30-run serial; bases differ, as they must.
+  The FRTY pc 0x01110DD4 is the low half of ffffffff01110dd4 = capstone_vm .text 0xdd4 = retire+0xdc, the instruction
+  after `.4byte 0xa607975b` (CSRETIRE), taken before the first grant. After that one retry none of the 511 steps of
+  `ok` (and of `stale`) faulted: the refusal is not per escape.
+
+## vm-suite (Tier 2): stopped in its third step
+  VM_EXIT:normal:0
+  VM_EXIT:threads:1
+  normal 0 and threads 1, as pre-registered (threads refused at create on one slot: VM_CONTRACT_FAIL:thread create).
+  `vm`: its first launch read as QEMU's (grants 0-10, VM_CONTRACT_FAIL:thread create, STATS). Its second launch made
+  QEMU's grants up to `slot=9 bytes=16384` (the mmap(8193, PROT_READ) of vm_contract) and then nothing but the
+  suite's heartbeats (VMHB 1..53) for ~25 min. QEMU's next line is the 4096-byte grant of the next mmap; between the two
+  vm_contract() executes only `require(p[8192] == 0, "read-only first touch")`.

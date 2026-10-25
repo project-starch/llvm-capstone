@@ -1,0 +1,55 @@
+# Tier 3 prediction, arm ppE: the board lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 21 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-pymalloc platform qkit7-wrapper cells 20 tally {"MISSED": 20}
+# controls [["uaf-block", "complete"]]
+00_gh-143543_groupby_reentrant_eq image fce49f8115cfd404 MISSED cause None at None reached True completed True attribution null
+01_gh-146613_grouper_parent_key image 44d5d2836b77c66e MISSED cause None at None reached True completed True attribution null
+02_gh-142829_hamt_eq_interior_cursor image 9cd8071f271e8fff MISSED cause None at None reached True completed True attribution null
+03_gh-142831_json_encoder_list_item image 71b14aa74f73b98f MISSED cause None at None reached True completed True attribution null
+04_gh-145244_json_encoder_dict_key image 805d5654e32f2090 MISSED cause None at None reached True completed True attribution null
+05_gh-148660_odict_copy_stale_link image 41381e6a1872d856 MISSED cause None at None reached True completed True attribution null
+06_gh-151295_bytes_join_reentrant_buffer image 67263b93bbb3c0a6 MISSED cause None at None reached True completed True attribution null
+07_gh-148395_decompressor_next_in image 1ea5c7102c5efe33 MISSED cause None at None reached True completed True attribution null
+08_gh-112127_atexit_unregister_borrowed_tuple image 5cb03d97d23c777b MISSED cause None at None reached True completed True attribution null
+09_gh-139210_iterparse_event_name image 9f65981c55ab2a88 MISSED cause None at None reached True completed True attribution null
+10_gh-142560_bytearray_search_realloc image 7ba46bbbafcd941f MISSED cause None at None reached True completed True attribution null
+11_gh-142783_zoneinfo_eager_decref image 5b7671db6d35a38c MISSED cause None at None reached True completed True attribution null
+12_gh-143004_counter_update_borrowed_value image c154e3878f08b355 MISSED cause None at None reached True completed True attribution null
+13_gh-144833_ssl_decref_self_then_read image 73bdd71f1145c074 MISSED cause None at None reached True completed True attribution null
+14_gh-146011_decimal_signaldict_outlives_context image 0328e39ce2f2bc82 MISSED cause None at None reached True completed True attribution null
+15_gh-149449_unicodedata_capi_cached image 5d59307d93a9cc0a MISSED cause None at None reached True completed True attribution null
+16_gh-151403_fork_exec_fspath image 582b22b8bfdad3f1 MISSED cause None at None reached True completed True attribution null
+17_gh-151416_spawnv_fspath image 366fcc7548a9a6b8 MISSED cause None at None reached True completed True attribution null
+18_gh-151695_curses_screen_encoding_global image e9785df7975f2db9 MISSED cause None at None reached True completed True attribution null
+19_gh-153539_textio_tell_reentrant_decoder image f7f2f2f9fdbaf198 MISSED cause None at None reached True completed True attribution null
+# image 78b35424f85bca8a  defect-00-78b35424f85bca8a.dom
+# image fce49f8115cfd404  defect-00-fce49f8115cfd404.dom
+# image 44d5d2836b77c66e  defect-01-44d5d2836b77c66e.dom
+# image 9cd8071f271e8fff  defect-02-9cd8071f271e8fff.dom
+# image 71b14aa74f73b98f  defect-03-71b14aa74f73b98f.dom
+# image 805d5654e32f2090  defect-04-805d5654e32f2090.dom
+# image 41381e6a1872d856  defect-05-41381e6a1872d856.dom
+# image 67263b93bbb3c0a6  defect-06-67263b93bbb3c0a6.dom
+# image 1ea5c7102c5efe33  defect-07-1ea5c7102c5efe33.dom
+# image 5cb03d97d23c777b  defect-08-5cb03d97d23c777b.dom
+# image 9f65981c55ab2a88  defect-09-9f65981c55ab2a88.dom
+# image 7ba46bbbafcd941f  defect-10-7ba46bbbafcd941f.dom
+# image 5b7671db6d35a38c  defect-11-5b7671db6d35a38c.dom
+# image c154e3878f08b355  defect-12-c154e3878f08b355.dom
+# image 73bdd71f1145c074  defect-13-73bdd71f1145c074.dom
+# image 0328e39ce2f2bc82  defect-14-0328e39ce2f2bc82.dom
+# image 5d59307d93a9cc0a  defect-15-5d59307d93a9cc0a.dom
+# image 582b22b8bfdad3f1  defect-16-582b22b8bfdad3f1.dom
+# image 366fcc7548a9a6b8  defect-17-366fcc7548a9a6b8.dom
+# image e9785df7975f2db9  defect-18-e9785df7975f2db9.dom
+# image f7f2f2f9fdbaf198  defect-19-f7f2f2f9fdbaf198.dom
+# QEMU probe line: PROBE arm=E-pretouch-stack
+# QEMU probe line: PROBE m16=0x3f9b7e8000 mod32K=0  a64=0x3f977c0000 mod128K=0
+# QEMU probe line: PROBE &metadata=0x3f9dae3e10 (granule 0x3f9dae3e10) &used=0x3f9dae3e50 samepage=1
+# QEMU probe line: PROBE v1 after-backing-init   raw lo=0x3f9b7e8000 hi=0x8f8dfa77ec used=0 | cap typetag=1 base=0x3f9b7e8000 end=0x3f9c7e8000 cursor=0x3f9b7e8000
+# QEMU probe line: PROBE v2 after-allocator-init raw lo=0x3f9b7e8000 hi=0x8f8dfa77ec used=0 | cap typetag=1 base=0x3f9b7e8000 end=0x3f9c7e8000 cursor=0x3f9b7e8000
+# QEMU probe line: PROBE ok v1=1 v2=1
+# QEMU probe line: PROBE c4=0x3f9db84000 mod8=0
+# QEMU probe line: PROBE continuing into the real path

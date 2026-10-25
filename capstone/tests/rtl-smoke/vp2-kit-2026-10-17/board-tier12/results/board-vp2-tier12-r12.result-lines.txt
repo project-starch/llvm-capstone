@@ -1,0 +1,91 @@
+# vp2 boot r12 (Tier 1+2), 2026-10-18 08:21-08:33: caplifive_vp2_bf3db3175 (resident, no flash), fw_payload 778836000a52d476
+# (monitor 007d81d), module 06d663f30bf29825 (r11's code, the banner at KERN_EMERG), suite vm-suite-inner-r12.sh.
+# Pre-registered at lane vp2-tier12 585f4391f32e. Result lines only, from run3r12/board.txt and SEQ.
+
+DRIVER rc=1 08:33:47; watchdog lines 50
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=NONE oracle=22 NOT-AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+VM-SUITE board-check rc=1 :: 18 of 41 true; 15 off the pre-registration ['sparse-churn', 'sparse-stale', 'sqlite_write', 'sqlite_read', 'mruby', 'fault_causes', 'nested_denial_site', 'vm_denial_sites', 'vm_denial_operations', 'linux_pages_released', 'linux_demand_faults', 'sparse_recycling', 'sqlite_results', 'mruby_results', 'completed']
+FRTY retries 4 at       4 FRTY:0111109C 
+DIAG fault repeats: 
+ELOOP lines:       2 capstone_vm: fault at 0x3faf4ba000 cause 15 resolved 65 times;      2 capstone_vm: fault at 0x3faf4ba000 cause 15 resolved 66 times;
+BANNER (console, pr_emerg; KMSG copies excluded):       1 capstone_vm: loaded, diag resolve-sites-4, supervisor_slots=1;
+KMSG windows: after-vm 4 lines (END 1); after-returning 10 lines (KMSG-AFTER-RETURNING-END lines=1860)
+KMSG thread-refused (the window's must-fire) after vm: 1
+KMSG refusal lines after vm: 
+KMSG refusal lines after the returning steps: capstone_vm: resolve refused at vma: addr 0x3fa0530000 cause 15 need 0x2 pc 0x3fa0493254 prev(addr 0x3fa0530000 cause 15 rep 0) found 1 flags 0x100071 file 0;capstone_vm: resolve refused at vma: addr 0x3fa0530000 cause 15 need 0x2 pc 0x3fa0493254 prev(addr 0x3fa0530000 cause 15 rep 0) found 1 flags 0x100071 file 0;capstone_vm: resolve refused at vma: addr 0x3f867a0000 cause 13 need 0x1 pc 0x3f867134d0 prev(addr 0x3f867a0000 cause 15 rep 0) found 1 flags 0x100070 file 0;capstone_vm: resolve refused at vma: addr 0x3f867a0000 cause 13 need 0x1 pc 0x3f867134d0 prev(addr 0x3f867a0000 cause 15 rep 0) found 1 flags 0x100070 file 0;capstone_vm: resolve refused at vma: addr 0x3f91cb5000 cause 13 need 0x1 pc 0x3f91c137bc prev(addr 0x3f91cb4000 cause 15 rep 0) found 1 flags 0x100070 file 0;capstone_vm: resolve refused at vma: addr 0x3f91cb5000 cause 13 need 0x1 pc 0x3f91c137bc prev(addr 0x3f91cb4000 cause 15 rep 0) found 1 flags 0x100070 file 0;
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_R12_DONE 08:33:47
+FENCE flips (the runner's extraction expected a digit; the bool parameter reads back Y, so it is taken from the transcript):
+        1 FENCE_BEFORE_ENTRY:Y:before-sparse-stale-fence1
+
+## vm-suite exits, in order
+  VM_EXIT:normal:0
+  VM_EXIT:threads:1
+  VM_EXIT:vm:139
+  VM_EXIT:nested:0
+  VM_EXIT:nested-stale:139
+  VM_EXIT:heap-threads:1
+  VM_EXIT:stale:139
+  VM_EXIT:bounds:139
+  VM_EXIT:retired:139
+  VM_EXIT:vm-ro-write:139
+  VM_EXIT:vm-none-read:139
+  VM_EXIT:vm-guard:139
+  VM_EXIT:vm-padding:139
+  VM_EXIT:preempt:143
+  VM_EXIT:parallel_one:0
+  VM_EXIT:parallel_two:0
+  Through parallel_two: the 16 exits and 9 launcher fault lines equal r11's in cause and code-relative pc (by script).
+## the module's lines (dmesg, read in the guest; the must-fire present)
+  KMSG-AFTER-VM: [  130.198658] capstone_vm: loaded, diag resolve-sites-4, supervisor_slots=1
+  KMSG-AFTER-VM: [  160.539996] capstone_vm: thread create refused, 1 supervisor slot in use
+  KMSG-AFTER-VM: [  165.181657] capstone_vm: fault at 0x3faf4ba000 cause 15 resolved 65 times with no change; the page is pinned and the PTE is untouched by this module
+  KMSG-AFTER-VM: [  165.184208] capstone_vm: fault at 0x3faf4ba000 cause 15 resolved 66 times with no change; the page is pinned and the PTE is untouched by this module
+  KMSG-AFTER-VM-END
+  KMSG-AFTER-RETURNING: [  160.539996] capstone_vm: thread create refused, 1 supervisor slot in use
+  KMSG-AFTER-RETURNING: [  184.030630] capstone_vm: thread create refused, 1 supervisor slot in use
+  KMSG-AFTER-RETURNING: [  204.158906] capstone_vm: resolve refused at vma: addr 0x3fa0530000 cause 15 need 0x2 pc 0x3fa0493254 prev(addr 0x3fa0530000 cause 15 rep 0) found 1 flags 0x100071 file 0
+  KMSG-AFTER-RETURNING: [  204.161878] capstone_vm: resolve refused at vma: addr 0x3fa0530000 cause 15 need 0x2 pc 0x3fa0493254 prev(addr 0x3fa0530000 cause 15 rep 0) found 1 flags 0x100071 file 0
+  KMSG-AFTER-RETURNING: [  209.529192] capstone_vm: resolve refused at vma: addr 0x3f867a0000 cause 13 need 0x1 pc 0x3f867134d0 prev(addr 0x3f867a0000 cause 15 rep 0) found 1 flags 0x100070 file 0
+  KMSG-AFTER-RETURNING: [  209.532224] capstone_vm: resolve refused at vma: addr 0x3f867a0000 cause 13 need 0x1 pc 0x3f867134d0 prev(addr 0x3f867a0000 cause 15 rep 0) found 1 flags 0x100070 file 0
+  KMSG-AFTER-RETURNING: [  214.867836] capstone_vm: resolve refused at vma: addr 0x3f91cb5000 cause 13 need 0x1 pc 0x3f91c137bc prev(addr 0x3f91cb4000 cause 15 rep 0) found 1 flags 0x100070 file 0
+  KMSG-AFTER-RETURNING: [  214.870830] capstone_vm: resolve refused at vma: addr 0x3f91cb5000 cause 13 need 0x1 pc 0x3f91c137bc prev(addr 0x3f91cb4000 cause 15 rep 0) found 1 flags 0x100070 file 0
+  KMSG-AFTER-RETURNING-END lines=1860
+  vm's launcher line:
+    capstone-exec: domain fault cause=15 pc=0x3faf4124ac address=0x3faf4ba000 entry=0x3faf40094c code=0x3faf400000-0x3faf480000 last=0xc0de0001 preparing=0xc0de0001 sha256=12
+  `vm`: the cause-15 store fault at the launcher's address (arena base + 0x2000) was resolved 65 times with no change,
+  and the S-24 bound ended it (-ELOOP; the second line is the launcher's idempotent repeat). No resolve() refusal site
+  fired: the !same deduction is refuted. The A/D-loop candidate's predicted reading, an -ELOOP line, is what printed.
+  vm-ro-write (code 0x13254), vm-none-read (0x134d0) and vm-guard (0x137bc): `vma` lines with need 0x2 against flags
+  without VM_WRITE, and need 0x1 against flags without VM_READ, as the compiler lane's QEMU control predicts.
+## the fence pair
+  echo 1 read back Y; sparse-stale (fence=1) WEDGED. The fence=0 arm and sparse-churn were not reached.
+## the wedge apertures (sparse-stale, fence=1)
+  sw=255 TRAP LOG {seen,mcause[6:0]} 0x89 10001001
+  sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x25 00100101
+  sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0xc4 11000100
+  sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x00 00000000
+  sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x03 00000011
+  sw=228 {1,dom_switch_idx[6:0]} 0xb8 10111000
+  sw=229 {load_state[3:0],0000} 0x00 00000000
+  sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+  sw=193 {00000,store_buf_commit_cnt} 0x01 00000001
+  sw=194 {000000,store_state} 0x03 00000011
+  sw=195 {0000,load_state} 0x00 00000000
+  sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0x26 00100110
+  sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x82 10000010
+  sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0x00 00000000
+  sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+  commit pc (scoreboard slot 0; stale after a flush) 0x0000003fa7410e98
+  trap-log mepc 0xffffffff800abe4a
+  trap-log tval 0x00000000003c1793
+  rev_node_debug_ex 0x0000004e00000000
+  rev_node_head_ex 0x006d
+  rev_node_serving_idx_ex 0x00000000
+  All 15 switch apertures equal r8's and r9's sparse wedges (by script), which ran without any fence; the commit pc
+  code offset is the same (...10e98, free+4). Only the trap log differs (residue). With r8/r9 as the fence-off arms
+  (other boots, other module builds): the fence does not remove the sparse wedge.

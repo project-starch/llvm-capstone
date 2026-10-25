@@ -1,0 +1,28 @@
+{
+  "arm": "sublet",
+  "build": {
+    "heap": "sublet",
+    "opt": "-O0",
+    "runtime_sha256": "7cfdeb6b3454a281d5780ab4bb84713917f770f6e486a59ab5398c8e35c90638",
+    "sdk": "/tmp/sdk-app-sublet",
+    "virtual": "OFF"
+  },
+  "cases": 5,
+  "configuration": "app-sublet",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/c-repros",
+  "platform": {
+    "compiler": "a951a180589d096b5cfbc0f8d49864244f808644b4740c3877d041070fa0a6e7",
+    "exact_bounds": false,
+    "firmware": "b2cd0c0da50ae1f084d895b76b9d8b41a419ead4461c4bb672201c5860525033",
+    "judge": "c5e5872372b392de5325a2951e0ef57798cb9295d753b2b77db7223732c7a25f",
+    "kernel": "457f3e2db2e5cebcc2ac041e6f7705f930a1c5f2e56311caa373af7d412ac821",
+    "profile": "physical",
+    "qemu": "0d6506b7e99c6fa28ade61dd006c2b9eda8e897931308b88eaaa4587963aafd4",
+    "rootfs": "d584da23ad6de66a621fadbbd71dd01604612887640c1b57a70c31a006d52c5f",
+    "runner": "4e2d727125a2f8fcc67c11b25e2d6b0c7312ac8e27e9c8bb806814d85595ce11"
+  },
+  "tally": {
+    "CAUGHT": 5
+  }
+}

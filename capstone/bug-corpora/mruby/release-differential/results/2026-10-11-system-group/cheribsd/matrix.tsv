@@ -1,0 +1,22 @@
+run	build	rc	cheri_fault	function	in_fault_sites	frees	quarantined_after_free	reused_while_quarantined	sweeps	output
+control:eval	plain	0								
+control:depth-d40	plain	0								DEEP 40 40
+control:depth-d500	plain	0								DEEP 500 500
+control:revocation	plain	162	tag	read_probe						REVOCATION_CONTROL revocation=1 tag_after_sweep=0 reissued=1
+control:sweep (probed churn)	probed	0				400833	400833	0	6	CHURN done
+control:no-sweep (probed eval)	probed	0				804	804	0	0	
+observation:fmt-depth40	plain	162	length (bounds)	mrb_str_format						
+01_13e017c2f_opgetidx0-stale-regs	plain	162	tag	mrb_vformat	no					
+01_13e017c2f_opgetidx0-stale-regs	probed	162	tag	mrb_vformat	no					
+03_59552ecb8_sprintf-format-mutated	plain	0								["PASS"]
+03_59552ecb8_sprintf-format-mutated	probed	0				1238	1238	0	0	["PASS"]
+06_84cc5aa60_khash-freed-buckets	plain	162	length (bounds)	kh_get_set_val	yes					
+06_84cc5aa60_khash-freed-buckets	probed	162	length (bounds)	kh_get_set_val	yes					
+09_0cf969a2b_shaped-iv-reshaped	plain	0								["PASS"]
+09_0cf969a2b_shaped-iv-reshaped	probed	0				1459	1459	0	0	["PASS"]
+10_7c5915799_struct-member-storage	plain	0								["Struct#== and #eql? with a member that replaces the storage", "NOT_FALSE", "true"]
+10_7c5915799_struct-member-storage	probed	0				1506	1506	0	0	["Struct#== and #eql? with a member that replaces the storage", "NOT_FALSE", "true"]
+17_bef45e223_pat-values-stale-ptr-and-len	plain	0								["pattern matching - a key that moves the subject", "NOT_FALSE", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+17_bef45e223_pat-values-stale-ptr-and-len	probed	0				1994	1994	0	0	["pattern matching - a key that moves the subject", "NOT_FALSE", "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25,
+11_cb51fce92_task-stack-envs	plain	0								CASE11 ready | CASE11 completed 30
+11_cb51fce92_task-stack-envs	probed	0				869	869	0	0	CASE11 ready | CASE11 completed 30

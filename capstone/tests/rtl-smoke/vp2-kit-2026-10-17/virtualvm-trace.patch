@@ -1,0 +1,14 @@
+diff --git a/capstone/bug-corpora/tools/virtualvm.py b/capstone/bug-corpora/tools/virtualvm.py
+index c6dbb32c4de1..8707df1f3353 100644
+--- a/capstone/bug-corpora/tools/virtualvm.py
++++ b/capstone/bug-corpora/tools/virtualvm.py
+@@ -75,6 +75,9 @@ class Batch:
+                  # with diagnostics on (as run-ports.py runs it); without it a fault is a bare
+                  # SIGSEGV, which no observe() may read as the mechanism reporting.
+                  "export CAPSTONE_EXEC_DIAGNOSTICS=1"]
++        # board lane, private: VIRTUALVM_TRACE=1 also turns on the launcher's CAPSTONE_VM_TRACE lines
++        if os.environ.get("VIRTUALVM_TRACE"):
++            lines.append("export CAPSTONE_VM_TRACE=1")
+         for name, command in self.steps:
+             lines += [f"echo '{BEGIN}{name}'", f"( {command} ) > /tmp/step.out 2>&1", "rc=$?",
+                       "cat /tmp/step.out", f"echo \"{END}{name} $rc\""]

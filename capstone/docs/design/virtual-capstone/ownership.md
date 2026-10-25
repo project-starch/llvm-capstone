@@ -42,9 +42,9 @@ threads, but a successful move consumes its source. `SPLIT` partitions its
 range; it does not create two owners of the same bytes. A retained revocation
 handle is management authority, not a second ordinary read/write pointer.
 
-C programs need aliases. The allocator creates a senior revocation handle,
-then uses `DELIN` to turn the child into a copyable non-linear pointer.
-Copies keep the child's lifetime identity. Revocation invalidates them all.
+C programs need aliases. Virtual mallocng consumes and delinearizes the VM
+grant once, then uses `CDERIVE` to create managed group and object lifetimes.
+Copies keep the object's lifetime identity. `CREVOKE` invalidates them all.
 Therefore “linear ownership” does **not** mean every C pointer is move-only.
 
 For a linear load, reading the slot also consumes it. Consequently `LDC`
@@ -55,12 +55,12 @@ before either source consumption or destination publication.
 ## A malloc/free example
 
 The diagram shows authority relationships, not the table's storage layout.
-Several split block roots can sit beneath the same arena ancestor.
+Several managed groups can sit beneath the same arena ancestor.
 
 ```mermaid
 flowchart TB
     ARENA["Kernel-owned arena ancestor"]
-    HANDLE["Allocator's revocation handle"]
+    HANDLE["Allocator's managed group"]
     OBJ["Current object lifetime"]
     P["Pointer p"]
     Q["Alias q"]
@@ -70,9 +70,10 @@ flowchart TB
 ```
 
 1. Linux supplies backing; the adapter mints an arena grant beneath its
-   private ancestor. mallocng splits the grant into its chosen groups and slots.
-2. `malloc` retains a handle, delinearizes the child and bounds the returned
-   pointer to the requested extent (one byte for a zero-size request). ABI v5
+   private ancestor. mallocng derives a group and retains narrowed group copies
+   for its chosen slots. Its allocation policy enforces their non-overlap.
+2. `malloc` derives a child bounded to the requested extent
+   (one byte for a zero-size request). ABI v5
    preserves those bounds through QEMU shadow metadata.
 3. `q = p` copies a non-linear capability. Both pointers name the same lifetime.
 4. `free(p)` revokes the object subtree before making the block reusable.
@@ -80,13 +81,18 @@ flowchart TB
 5. A later allocation at that address receives a new lifetime. The old
    pointer stays invalid. Numerical node-ID reuse requires the sweep below.
 
-For nested allocators, the heap can instead loan a **linear** block and keep
-its senior handle. The nested allocator splits it and creates object
-lifetimes. Returning the block revokes all those descendants before reuse.
+Nested allocators receive an ordinary malloc object carrying MANAGE. They
+derive their own child lifetimes and revoke them on inner free or reset.
+Freeing the outer object revokes all those descendants before reuse.
 An allocator that merely reuses bytes inside one still-live outer allocation
 does not obtain inner temporal protection automatically.
 
-## What REVOKE means here
+## Managed and linear revocation
+
+`CREVOKE(parent, child)` requires MANAGE on the parent and a live direct child.
+It ends that child and its subtree while preserving the parent. Payload bytes
+are unchanged; reissuing a range uses a fresh `CDERIVE`. This is the operation
+used by virtual mallocng and the migrated nested allocators.
 
 Abstractly, `N_A` is a forest. `REVOKE(R)` invalidates the proper descendants
 of `node(R)` in that forest, leaving the operand node live. It requires a
@@ -94,7 +100,8 @@ revocation capability and transforms that handle into reclaimed authority.
 If a linear descendant was revoked and the handle has write permission,
 the result is `UNINIT`; otherwise it is linear. The cursor returns to the
 base. An `UNINIT` region must be initialized before it becomes readable
-linear authority again. The runtime retains this rule.
+linear authority again. This legacy linear operation remains available for
+ownership-transfer protocols; virtual mallocng no longer uses it per object.
 
 The implementation stores a depth-ordered list and walks the affected run.
 Accesses check their own record, so just marking an ancestor invalid would

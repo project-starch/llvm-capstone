@@ -19,7 +19,7 @@ main() {
     else FW=$P/fw-ctl/opensbi/build/platform/generic/firmware/fw_jump.elf; FAB=0; fi
     rm -rf $S
     echo "== arm $arm: firmware $(sha256sum $FW | cut -c1-12) GP_FABRICATE=$FAB"
-    CAPSTONE_GP_FABRICATE=$FAB CAPSTONE_MOVC_NULL_SCALAR=1 taskset -c 0-7,32-39 nice -n 10 timeout 900 \
+    CAPSTONE_GP_FABRICATE=$FAB CAPSTONE_MOVC_NULL_SCALAR=1 nice -n 10 timeout 900 \
       $VM --state $S up "${ARGS[@]}" --firmware $FW > $S.up.log 2>&1
     echo "   up rc=$? $(tail -1 $S.up.log | cut -c1-100)"
     for img in b0-hello legacy-ctl; do

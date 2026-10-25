@@ -34,10 +34,7 @@ def classify(stdout, diagnostics, result, fixture):
     # mirror of a clean zero, and it showed up on the three known-good controls first.
     lines = stdout.replace('TSAPP-', 'FFAPP-').replace('MCAPP-', 'FFAPP-').splitlines()
     marks = re.findall(rf'^FFAPP-FIX {fixture} mark=([0-9a-f]+)$', '\n'.join(lines), re.M)
-    refusal = re.findall(r'^FFAPP-POOL fail (\d+)$', '\n'.join(lines), re.M)
     done = int(marks[0], 16) if len(marks) == 1 else None
-    if done is None and len(refusal) == 1:
-        done = int(refusal[0])
     if result.get('kind') == 'exit':
         if done is None or result.get('value') != done & 255 or result.get('fault'):
             raise ValueError('fixture mark and actual exit status disagree')
@@ -62,8 +59,6 @@ def matches(got, detail, info, kind, value, fixture):
         return got == kind and (int(detail, 16) >> 20 == fixture if value == '*' else detail == value)
     if kind == 'FAULT':
         return got == kind and (value == 'any' or detail == value)
-    if kind == 'POOLFAIL':
-        return got == kind and detail == value
     if kind == 'LEN':
         length = info['len']
         return length is not None and (length > 65536 if value == 'arena' else length == int(value))

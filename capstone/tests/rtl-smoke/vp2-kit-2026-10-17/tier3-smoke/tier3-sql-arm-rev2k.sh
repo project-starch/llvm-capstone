@@ -1,0 +1,89 @@
+#!/bin/bash
+# sql0-csr-treeB (2026-10-20, BOARD 2): an S-23 INSTRUMENT boot. sql0-treeB (rev2h) with ONE change, the monitor: kits
+# bkit7-rev2xBC / bkit7-rev2xmBC are the BD kits on capstone-sbi c3917e8 (FRTM beside each FRTY; RFSR/RFSH/RFCT at each S/U data
+# refusal). The runner stays 1f099612, so the cells are VOID (the empty-directory defect), declared before the boot; NOT scored.
+# Starts on CHAIN_B2C_GO. rev2h's header follows.
+# sql0-treeB (2026-10-19 evening, BOARD 2): sql0-drt (rev2g) on tree B (caplifive_vp2c_8de3c48cf), board 2. Kits bkit7-rev2xBD /
+# bkit7-rev2xmBD are the data-retry kits with tree B's bitstream, board 2's URL file, FPGA_BOARD=2 and dev's driver with the
+# lease client (make-treeB2-kits.sh). It starts on CHAIN_B2_SQL_GO. rev2g's header follows.
+# sql0-drt (2026-10-19 evening): sql0-rf (rev2f) with ONE change, the monitor: kits bkit7-rev2xD/bkit7-rev2xmD are the
+# refusal-read kits on capstone-sbi f13dbc5 (03a1ffe + CAPSTONE_S23_DATA_RETRY: S-23b step 1, DRT1/DRTX) (make-drt-kits.sh).
+# It starts on CHAIN_DRT_SQL_GO. rev2f's header follows.
+# sql0-rf (2026-10-19 evening): sql0-fix (rev2e) with ONE change, the monitor: kits bkit7-rev2xR/bkit7-rev2xmR are the fix
+# kits on capstone-sbi 03a1ffe (5b5e86b + CAPSTONE_S23_REFUSAL_READ: RFSL/RFTY/RFVD at a refusal) (make-rf-kits.sh). It starts
+# on CHAIN_RF_GO. rev2e's header follows.
+# sql0-fix (2026-10-19 evening): sql0-treeA (rev2d) with ONE change, the monitor: kits bkit7-rev2xF/bkit7-rev2xmF are
+# bkit7-rev2xA/bkit7-rev2xmA on capstone-sbi 5b5e86b (S-23a's guarded strobe, FRGS/FRGU/FRGD) and wrapper aab63d5 with
+# CAPSTONE_QUANTUM_PRINT and CAPSTONE_BOOT_QUANTUM=2000000 (make-fix-kits.sh). It runs only after the monitor's canary
+# (run-s26.sh fix1) judged PASS: the chain writes CHAIN_FIX1_PASS. rev2d's header follows.
+# sql0-rev2d (2026-10-19): rev2c on tree A (caplifive_vp2c_8522d72fe) with the kit's execute-bit fix. rev2c's boot
+# failed in every session at postgres's own check of its binary, which the kit had baked 0644. Kits bkit7-rev2xA and
+# bkit7-rev2xmA are bkit7-rev2s and bkit7-rev2m with the tree A bitstream and one recipe line: a staged file whose source
+# is executable keeps 0755. The runner, inputs, size gate, prediction and gates are rev2c's. It runs after the tree A
+# Linux steps end, and only on TAL DONE (a STOP or HOLD there holds it). rev2c's header follows.
+# Tier 3 postgres/sql-repros vp2-malloc on module revision 39d8492d, third form (2026-10-19): rev2b's inputs and kits
+# unchanged, with sql run-arm.py's board path fixed. rev2b's boot ran 21/21 sessions and every one failed at
+# `cp -a /mnt/vm/pgcluster` (the QEMU kit's mount; the board stages under /test-domains/vbatch), and the bake's 0775
+# directories would have failed postgres's data-directory check next. The runner now takes the cluster path from the
+# batch and chmods the copy 700. It runs only if the runner is that fix (sha256/16 below) and the QEMU check of it
+# (<mnt-hdd>/capstone/t3-sql-trim-vm-r2/CHECK) reads PASS for the same hash.
+#
+# rev2b's header follows.
+# Tier 3 postgres/sql-repros vp2-malloc on module revision 39d8492d, second form (2026-10-19). The first form stopped at
+# the firmware cap (30,050,824 B over 26,000,000), so: the image is lt0 with --discard-locals (64010720f1a6b3bc; loaded
+# bytes, the Capstone sections and every non-.L symbol identical to 81ee24a0); the fixture is the native16 cluster
+# trimmed (no template0/template1, a 1 MiB WAL segment; run-arm's record 956173e054762e91); --pg-share is the share the
+# native16 record used. One boot of 21 single-user postgres sessions through sql-repros' run-arm.py.
+# FIRST a measure-only bake on kit bkit7-rev2m (bkit7-rev2s with a stop after the firmware build; no board access); the
+# board boot on kit bkit7-rev2s (module 39d8492d, BOARD_TIMEOUT_MULT=4) runs only if that firmware is under 26,000,000 B.
+# Scored against t3-sql-trim-vm/bundle, the QEMU record on these exact inputs (9 of 9 cells equal to the native16 record,
+# evidence text included). After the boot the bundle's fixture record must be 956173e054762e91 and its image
+# 64010720f1a6b3bc, or the arm is VOID.
+# Usage: tier3-sql-arm-rev2d.sh <after> <out>: runs once <after> (the tree A Linux steps' out) reads TAL DONE.
+# SQL_RUN / SQL_TAG / SQL_BUSY / SQL_RUNNER replace the run dir, the tag, the board-1 busy check (board-busy.py 1) and the
+# runner for the stubbed dry run. Ends by itself.
+main() {
+  set -u
+  local W=${1:?after} O=${2:?out}; local S; S=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+  local H=/mnt/hdd/$USER/capstone K=/mnt/hdd/$USER/capstone/t3-smoke/bkit7-rev2xBC LB=/tmp/capstone/vp2-prep/llvm-bin-v6
+  local IMG=/mnt/hdd/$USER/capstone/t3-new6/postgres-lt0-dl/image/postgres.dom FIX=/mnt/hdd/$USER/capstone/t3-new6/tmp/pgfixture-trim/cluster
+  local SHARE=/mnt/hdd/$USER/capstone/t3-new6/tmp/pgfixture/install/share/postgresql KM=/mnt/hdd/$USER/capstone/t3-smoke/bkit7-rev2xmBC
+  local P=$H/t3-sql-trim-vm/bundle TAG=${SQL_TAG:-sql0-csr-treeB} R=${SQL_RUN:-$H/t3-run-treeB/sql0-csr-treeB}
+  local RUN=${SQL_RUNNER:-/tmp/capstone/wt-gate/capstone/bug-corpora/postgres/sql-repros/shared/run-arm.py} end=$(( $(date +%s) + 86400 )) rc
+  until grep -a -q "^CHAIN_B2C_GO\|^STOP" "$W" 2>/dev/null || [ "$(date +%s)" -ge $end ]; do sleep 30; done
+  grep -a -q "^CHAIN_B2C_GO" "$W" || { echo "SQL HOLD: no CHAIN_B2C_GO ($(tail -1 "$W"))" >> "$O"; return 1; }
+  local k; for k in $K $KM; do
+    grep -qx "BOARD_BITSTREAM=caplifive_vp2c_8de3c48cf" $k/board.env && grep -qx "FPGA_BOARD=2" $k/board.env && grep -qx "BOARD_MONITOR_COMMIT=c3917e8" $k/board.env && grep -q 'if \[ -x "$STAGE/$f" \]; then m=0755' $k/board-run.sh \
+      || { echo "SQL STOP: $k is not a tree B board-2 data-retry kit with the execute-bit rule" >> "$O"; return 1; }
+  done
+  [ "$(sha256sum $K/adapter/module/capstone_vm.ko | cut -c1-16)" = 39d8492d5c18216b ] || { echo "SQL STOP: the kit's module is not 39d8492d" >> "$O"; return 1; }
+  grep -qx "BOARD_TIMEOUT_MULT=4" $K/board.env && ( cd $K && sha256sum -c --quiet SHA256SUMS ) || { echo "SQL STOP: the kit is not bkit7-rev2xBC as recorded" >> "$O"; return 1; }
+  [ "$(sha256sum $IMG | cut -c1-16)" = 64010720f1a6b3bc ] || { echo "SQL STOP: the image is not 64010720" >> "$O"; return 1; }
+  [ "$(sha256sum $KM/adapter/module/capstone_vm.ko | cut -c1-16)" = 39d8492d5c18216b ] && grep -q "MEASURE-ONLY" $KM/board-run.sh || { echo "SQL STOP: the measurement kit is not bkit7-rev2xmBC" >> "$O"; return 1; }
+  local RH; RH=$(sha256sum "$RUN" | cut -c1-16)
+  [ "$RH" = "${SQL_RUNNER_SHA:-1f099612d70a9576}" ] || { echo "SQL STOP: the runner is $RH, not the board-path fix" >> "$O"; return 1; }
+  grep -qx "PASS $RH" "${SQL_QCHECK:-$H/t3-sql-trim-vm-r2/CHECK}" 2>/dev/null || { echo "SQL STOP: no QEMU PASS for runner $RH" >> "$O"; return 1; }
+  [ -d $FIX ] && [ -d "$P" ] || { echo "SQL STOP: no fixture or no prediction bundle" >> "$O"; return 1; }
+  [ -e "$R" ] && { echo "SQL STOP: $R exists" >> "$O"; return 1; }
+  ${SQL_BUSY:-python3 /tmp/capstone/wt-b2/capstone/tests/rtl-smoke/board-busy.py 2} > /dev/null || { echo "SQL STOP: board 2 is busy" >> "$O"; return 1; }
+  mkdir -p "$R/tmp" "$R/measure/tmp"
+  # 1. the measure-only bake: the same invocation on kit bkit7-rev2m, which stops after the firmware build
+  ( cd /tmp/capstone/wt-gate || exit 1
+    CAPSTONE_TMP_ROOT=$R/measure/tmp taskset -c 16-31 timeout 3600 python3 "$RUN" --arm virtual-malloc --board-kit $KM \
+      --image $IMG --fixture $FIX --pg-share $SHARE --llvm-bin $LB --out "$R/measure/out" --raw "$R/measure/raw" ) > "$R/measure/run.log" 2>&1
+  local sz; sz=$(grep -a -o "MEASURE-ONLY: firmware [0-9]* B\|STOP: firmware [0-9]* B" "$R/measure/raw/guest/SEQ" 2>/dev/null | grep -o "[0-9]\+" | head -1)
+  echo "SQL MEASURE: firmware ${sz:-NONE} B against 26000000 ($(grep -a -o 'manifest [0-9]* files, stage [0-9]* bytes' "$R/measure/raw/guest/SEQ" 2>/dev/null))" >> "$O"
+  [ -n "$sz" ] && [ "$sz" -le 26000000 ] || { echo "SQL STOP: the measured firmware is not under the cap; no boot" >> "$O"; return 1; }
+  ${SQL_BUSY:-python3 /tmp/capstone/wt-b2/capstone/tests/rtl-smoke/board-busy.py 2} > /dev/null || { echo "SQL STOP: board 2 is busy" >> "$O"; return 1; }
+  echo "T3PG $TAG BEGIN $(date +%T) (trigger: $(head -1 "$W"))" >> "$O"
+  ( cd /tmp/capstone/wt-gate || exit 1
+    CAPSTONE_TMP_ROOT=$R/tmp taskset -c 16-31 timeout 36000 python3 "$RUN" --arm virtual-malloc --board-kit $K \
+      --image $IMG --fixture $FIX --pg-share $SHARE --llvm-bin $LB --out "$R/out" --raw "$R/raw" ) > "$R/run.log" 2>&1; rc=$?
+  echo "T3PG $TAG END $(date +%T) rc=$rc :: $(grep -a -o 'virtual boot: [A-Z a-z]*' "$R/run.log" | head -1) :: $(grep -a '^--- ' "$R/run.log" | tail -1)" >> "$O"
+  local B=$R/raw/guest/board.txt
+  echo "SQL CELLS VOID (declared before the boot: the empty-directory staging defect); not scored" >> "$O"
+  echo "SQL S-23: FRTY $(grep -a -c '^FRTY:' $B 2>/dev/null) DRT1 $(grep -a -c '^DRT1:' $B 2>/dev/null) DRTX $(grep -a -c '^DRTX:' $B 2>/dev/null) Oops $(grep -a -c Oops $B 2>/dev/null)" >> "$O"
+  echo "SQL S-23 values: FRTM [$(grep -a '^FRTM:' $B 2>/dev/null | sort | uniq -c | tr '\n' ' ')] RFSR [$(grep -a '^RFSR:' $B 2>/dev/null | sort | uniq -c | tr '\n' ' ')] RFSH [$(grep -a '^RFSH:' $B 2>/dev/null | sort | uniq -c | tr '\n' ' ')] RFCT [$(grep -a '^RFCT:' $B 2>/dev/null | sort | uniq -c | tr '\n' ' ')]" >> "$O"
+  echo "SQL DONE $(date +%T)" >> "$O"
+}
+main "$@"; exit $?

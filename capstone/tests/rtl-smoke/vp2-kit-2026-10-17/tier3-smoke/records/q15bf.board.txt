@@ -1,0 +1,23 @@
+# Tier 3 board reading, arm q15bf: kit bkit7-rev2xBD (module 39d8492d; monitor capstone-sbi f13dbc5), tree B caplifive_vp2c_8de3c48cf on board 2, q15 subset f, SDK t3-freeze-nb. Result lines only.
+# board 2 (from the run log's [fpga-board] line)
+# arm vp2-nested-pools configuration virtual-sqlite-memsys5-pools platform board:caplifive_vp2c_8de3c48cf cells 3 tally {"CAUGHT": 2, "MISSED": 1}
+# controls [["bounds-mem5", "fault"], ["uaf-mem5", "fault"]]
+30_fz06_recordcompareint_overread image c779455fbf2c5fce CAUGHT cause 28 at vdbeRecordCompareInt+536 reached True completed False attribution "function"
+31_fz10_dbstat_decodepage_overflow image 7bce22b0db683239 MISSED cause None at None reached True completed True attribution null
+32_fz11_dbstat_freechain_overflow image 4824ea3ee852924c CAUGHT cause 28 at statDecodePage+704 reached True completed False attribution "function"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 30_fz06_recordcompareint_overread: verdict CAUGHT cause 28 pc vdbeRecordCompareInt+536
+  DIFF 31_fz10_dbstat_decodepage_overflow: verdict MISSED cause None pc None
+      verdict: qemu CAUGHT board MISSED
+      completed: qemu False board True
+      cause: qemu 28 board None
+      pc_off: qemu statDecodePage+2024 board None
+      attribution: qemu "function" board null
+  SAME 32_fz11_dbstat_freechain_overflow: verdict CAUGHT cause 28 pc statDecodePage+704
+  2 of 3 cells the same
+## the boot
+  BOARD_RUN_START 08:23:46 bitstream caplifive_vp2c_8de3c48cf monitor f13dbc5
+  manifest 15 files, stage 14433309 bytes
+  firmware f67e735027846a38 21662216 B
+  DRIVER rc=0 08:35:11
+  BOARD_RUN_DONE 08:35:11

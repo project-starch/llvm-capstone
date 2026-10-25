@@ -1,0 +1,28 @@
+{
+  "original": {
+    "passed": true,
+    "failures": [],
+    "exit": 0
+  },
+  "unit": {
+    "passed": true,
+    "failures": [
+      "FAIL UNIT"
+    ],
+    "exit": 1
+  },
+  "counts": {
+    "passed": true,
+    "failures": [
+      "FAIL small_cnt_tab"
+    ],
+    "exit": 1
+  },
+  "inplace": {
+    "passed": true,
+    "failures": [
+      "FAIL realloc n <= avail_size"
+    ],
+    "exit": 1
+  }
+}

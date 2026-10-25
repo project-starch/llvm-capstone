@@ -10,6 +10,7 @@
 #define _GNU_SOURCE
 #include "capstone/delegate.h"
 #include <errno.h>
+#include <fenv.h>
 #include <setjmp.h>
 #include <signal.h>
 #include <stdint.h>
@@ -343,6 +344,11 @@ static void run_event(struct pending *p) {
   to_set(saved, &uc.uc_sigmask);
   uc.uc_mcontext.__gregs[0] = shown;
   struct call c = {a, sig, &si, &uc};
+  /* Linux saves the floating-point state with the signal frame and sigreturn
+     restores it: the interrupted code keeps its rounding mode and flags,
+     whatever the handler does to them. */
+  fenv_t fenv;
+  fegetenv(&fenv);
   /* frame and on_alt identify which running handlers a longjmp leaves. */
   if ((a->flags & SA_ONSTACK) && alt_enabled && !on_altstack()) {
     char *top = (char *)alt.ss_sp + (alt.ss_size & ~(size_t)15);
@@ -353,6 +359,7 @@ static void run_event(struct pending *p) {
     p->on_alt = on_altstack();
     invoke(&c);
   }
+  fesetenv(&fenv);
   /* sigreturn's mask: what the handler left in uc_sigmask */
   uint64_t restore = of_set(&uc.uc_sigmask) & ~(bit(SIGKILL) | bit(SIGSTOP));
   transition++;

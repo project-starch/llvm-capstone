@@ -1,0 +1,61 @@
+# vp2 Tier 2 boot 4c (the record), 2026-10-18 11:38-11:46: caplifive_vp2_bf3db3175 (resident), fw_payload baa132ee2fbd535e
+# (monitor 007d81d), module a56fc415ad7133aa (r13's, resolve-sites-10), suite vm-suite-inner-b4b.sh (resolve_dirty Y for
+# vm alone). Pre-registered at lane vp2-tier12 8ac6cc3143d8. Result lines only, from run3b4c/board.txt and SEQ.
+
+DRIVER rc=0 11:46:15; watchdog lines 30
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+RUNG vm-suite retval=17 oracle=17 AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+VM-SUITE board-check rc=1 :: 20 of 41 true; 13 off the pre-registration ['sparse-churn', 'sparse-stale', 'sqlite_write', 'sqlite_read', 'mruby', 'fault_causes', 'vm_denial_sites', 'vm_denial_operations', 'linux_pages_released', 'linux_demand_faults', 'sparse_recycling', 'sqlite_results', 'mruby_results']
+FRTY retries 4 at       4 FRTY:011110E0 
+BANNER (console, pr_emerg; KMSG copies excluded):       1 capstone_vm: loaded, diag resolve-sites-10, supervisor_slots=1;
+RESOLVE_DIRTY read-back: RESOLVE_DIRTY:N:default RESOLVE_DIRTY:Y:before-vm RESOLVE_DIRTY:N:after-vm 
+NOT RUN (S-25): VM_NOT_RUN:sqlite_write:S-25 VM_NOT_RUN:sqlite_read:S-25 VM_NOT_RUN:mruby:S-25 VM_NOT_RUN:sparse-stale:S-25 VM_NOT_RUN:sparse-churn:S-25 
+KMSG window VM: 3 lines, END 1; thread-refused (must-fire) 2; bound lines 0; refusal sites 
+KMSG window RETURNING: 9 lines, END 1; thread-refused (must-fire) 3; bound lines 0; refusal sites       6 resolve refused at vma 
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:normal:0 VM_EXIT:threads:1 VM_EXIT:vm:1 VM_EXIT:nested:0 VM_EXIT:nested-stale:139 VM_EXIT:heap-threads:1 VM_EXIT:stale:139 VM_EXIT:bounds:139 VM_EXIT:retired:139 VM_EXIT:vm-ro-write:139 VM_EXIT:vm-none-read:139 VM_EXIT:vm-guard:139 VM_EXIT:vm-padding:139 VM_EXIT:preempt:143 VM_EXIT:parallel_one:0 VM_EXIT:parallel_two:0 VM_EXIT:cleanup:1 
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+TIER12_B4C_DONE 11:46:15
+
+## vm-suite exits, in order
+  VM_EXIT:normal:0
+  VM_EXIT:threads:1
+  RESOLVE_DIRTY:N:default
+  RESOLVE_DIRTY:Y:before-vm
+  VM_EXIT:vm:1
+  RESOLVE_DIRTY:N:after-vm
+  VM_EXIT:nested:0
+  VM_EXIT:nested-stale:139
+  VM_EXIT:heap-threads:1
+  VM_EXIT:stale:139
+  VM_EXIT:bounds:139
+  VM_EXIT:retired:139
+  VM_EXIT:vm-ro-write:139
+  VM_EXIT:vm-none-read:139
+  VM_EXIT:vm-guard:139
+  VM_EXIT:vm-padding:139
+  VM_EXIT:preempt:143
+  VM_EXIT:parallel_one:0
+  VM_EXIT:parallel_two:0
+  VM_NOT_RUN:sqlite_write:S-25
+  VM_NOT_RUN:sqlite_read:S-25
+  VM_NOT_RUN:mruby:S-25
+  VM_NOT_RUN:sparse-stale:S-25
+  VM_NOT_RUN:sparse-churn:S-25
+  VM_EXIT:cleanup:1
+## scored (every comparison by script)
+  Tier 1 identity, as in r6-r13 (boots 4 and 4b failed it on their modules).
+  The 17 exits equal the reference-pin QEMU prediction (capstone-qemu b290f5656600, svadu=false): normal 0,
+  threads 1, vm 1 (under resolve_dirty=Y for vm alone, read back N/Y/N), nested 0, nested-stale 139,
+  heap-threads 1, stale/bounds/retired/vm-ro-write/vm-none-read/vm-guard/vm-padding 139, preempt 143,
+  parallel_one 0, parallel_two 0; cleanup 1 (the board kernel cannot unload the module; 0 on QEMU).
+  The 16 steps shared with r13 equal r13 in exit and in every fault line's cause and code offset.
+  The S-25 steps (sparse-stale, sparse-churn, sqlite_write, sqlite_read, mruby) were NOT RUN.
+  No wedge. 4 S-23 retries (FRTY), as in every Tier 1/2 boot.
+## the module control
+  The same suite, image, launcher and monitor as boot 4b; only the module differs (a00109e9 there, a56fc415 here).
+  4b faulted every context, and 4c reads the record. The regression is in what changed from a56fc415 to
+  29c8e54e/a00109e9 other than the resolve_dirty default: the Q-26 wait rewrite, or the escape-print code. Bisected
+  next on the compiler lane's two single-change modules.

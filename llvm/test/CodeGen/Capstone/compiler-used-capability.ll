@@ -54,10 +54,11 @@ entry:
 
 
 ; Object view (measured 2026-09-04): the two symbol halves are R_64
-; relocations at their slot offsets and nothing else is relocated in .rodata --
+; relocations at their slot offsets and nothing else is relocated in .data --
 ; in particular no relocation for the llvm.compiler.used array, which must not
 ; reach the object.  Type NAMES print as "Unknown" until C-37.
-; OBJ: .rela.rodata {
+; (__capstone_cap_init writes the holder, so it is placed with the writable data.)
+; OBJ: .rela.data {
 ; OBJ-NEXT: 0x0 {{R_Capstone_64|Unknown}} callee 0x0
 ; OBJ-NEXT: 0x10 {{R_Capstone_64|Unknown}} bundle 0x0
 ; OBJ-NEXT: }

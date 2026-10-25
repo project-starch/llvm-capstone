@@ -1,0 +1,6 @@
+# Boot r7's runner (run-tier12-r7.sh) with every pin real (firmware 684684692449f302, the stage with module
+# 8fdfa127cf13a7c2) and only the driver stubbed. 2026-10-18 06:0x.
+synthetic clean transcript    every rung AS-ORACLE; identity; board-check 33 of 41, 0 off; FRTY 0; DIAG none
+r6's reconstructed transcript identity; vm-suite NONE (no END marker); FRTY 2 at 01110DD4; DIAG none
+a transcript with one DIAG line   "DIAG fault repeats: 1 DIAG fault repeat=2 cause=13 addr=... pte=..."
+wrong firmware hash           STOP (rc 1)

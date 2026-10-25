@@ -86,6 +86,17 @@ void capstone_delegate_host_free(struct capstone_delegate_host *host);
  * must fail launch unless filtering was explicitly disabled. */
 int capstone_delegate_seccomp(void);
 
+/* The pieces of capstone_delegate_seccomp, for tests. The allowlist: sorted,
+ * without duplicates, at most `capacity` numbers; returns how many, or 0 when
+ * it does not fit. The program: a search over the n numbers of `allow`
+ * (sorted, distinct, n >= 1) into `program`, which holds
+ * CAPSTONE_SECCOMP_PROGRAM_MAX(n) instructions; returns its length. */
+#define CAPSTONE_SECCOMP_PROGRAM_MAX(n) (4 + 3 * (n))
+struct sock_filter;
+unsigned capstone_delegate_seccomp_allowlist(uint16_t *allow, unsigned capacity);
+unsigned capstone_delegate_seccomp_program(const uint16_t *allow, unsigned n,
+                                           struct sock_filter *program);
+
 /* The fault record line, written without blocking. `image` may be NULL. */
 void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host *host,
                                     const char *image, uint64_t cause, uint64_t pc,

@@ -74,7 +74,9 @@ DTB_ADDR = 0x82200000
 #     version -1  -> adapter held by another process        (reap the orphan)
 # Runs at 15 s were in fact succeeding, so this is insurance against a latent race, not a fix for
 # an observed one.
-POWER_ON_SETTLE = 25.0
+# Board #2 (2026-10-19) was verified with 30 s from power-on (USB connect) to the first examine; board 1 has run at 25 s
+# for months. 35 s gives board 2 margin, and board 1's value is unchanged so its runs stay comparable.
+POWER_ON_SETTLE = 35.0 if os.environ.get("FPGA_BOARD", "1").strip() == "2" else 25.0
 # Seconds to hold the board off during a --power-cycle, so a wedged/reset-looping
 # core is fully cleared before the cold power-on (and its POWER_ON_SETTLE).
 POWER_CYCLE_OFF = 8.0

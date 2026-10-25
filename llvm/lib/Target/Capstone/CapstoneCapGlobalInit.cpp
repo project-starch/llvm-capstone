@@ -224,6 +224,21 @@ bool CapstoneCapGlobalInit::runOnModule(Module &M) {
   if (Items.empty())
     return false;
 
+  // Every holder is written at run time, so none of them is a constant: a
+  // `const char *const tbl[] = {...}` would otherwise be placed in .rodata,
+  // and an image whose read-only data is mapped without write permission
+  // faults on the first initializer store. Clearing the flag also makes the
+  // stores below well defined (a store to a constant global is not). The
+  // holder then goes where any initialized variable goes, .data(.<name>);
+  // an explicit section attribute is left as written. The source's constness
+  // is kept as an attribute for the .gct emitter, whose records for
+  // one-field structs are limited to constant holders.
+  for (const StoreItem &It : Items)
+    if (It.Holder->isConstant()) {
+      It.Holder->addAttribute(CapstoneCapInitConstHolder);
+      It.Holder->setConstant(false);
+    }
+
   // Synthesize `void __capstone_cap_init(void)` in the program address space
   // (matching ordinary Capstone functions) and emit the stores. It is given
   // *internal* linkage rather than exported under a fixed name: a fixed external

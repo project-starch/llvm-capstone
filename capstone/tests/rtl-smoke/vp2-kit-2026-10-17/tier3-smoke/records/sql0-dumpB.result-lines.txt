@@ -1,0 +1,81 @@
+# sql0-dumpB (2026-10-20 11:09-12:32, board 2, tree B caplifive_vp2c_8de3c48cf): result lines, from the arm's own output.
+# Module fault-regs-1 0d92d06a2abc6298, image DIAG-BTU a2bf0a6ed7c6784b, runner 7ce203f9. UNGATED.
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 34129943 bytes)
+T3PG sql0-dumpB BEGIN 11:09:47 (trigger: CHAIN_FR1 BEGIN 11:01:48)
+T3PG sql0-dumpB END 12:32:20 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 1, 'MISSED': 6, 'NO-READING:out-of-denominator': 2}
+SQL inputs as recorded: fixture 956173e054762e91, image a2bf0a6ed7c6784b
+SQL MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+SQL S-23: FRTY 0 DRT1 0 DRTX 0 Oops 0; banner fault-regs-1 x1; release lines 21, with succeeded < attempted 0
+SQL CELL # arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2c_8de3c48cf cells 9 tally {"CAUGHT": 1, "MISSED": 6, "NO-READING:out-of-denominator": 2}
+SQL CELL # controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+SQL CELL 01_12a6206864a0_to_char_tz_overflow image a2bf0a6ed7c6784b MISSED cause None at None reached True completed True attribution null
+SQL CELL 02_3ed3dbbf44_ts_headline_int16_overflow image a2bf0a6ed7c6784b CAUGHT cause 28 at memcpy+200 reached True completed False attribution "control"
+SQL CELL 03_8c34261109_ltree_lquery_uint16_overflow image a2bf0a6ed7c6784b NO-READING:out-of-denominator cause None at None reached False completed False attribution null
+SQL CELL 04_3d160401b65e_oidvector_oob_read image a2bf0a6ed7c6784b MISSED cause None at None reached True completed True attribution null
+SQL CELL 05_849da8210539_ascii_multibyte_oob_read image a2bf0a6ed7c6784b MISSED cause None at None reached True completed True attribution null
+SQL CELL 06_e91dcfccaa_regexp_conv_buf_overrun image a2bf0a6ed7c6784b MISSED cause None at None reached True completed True attribution null
+SQL CELL 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec image a2bf0a6ed7c6784b NO-READING:out-of-denominator cause None at None reached False completed False attribution null
+SQL CELL 08_c4d51b6274_levenshtein_stop_column_oob_write image a2bf0a6ed7c6784b MISSED cause None at None reached True completed True attribution null
+SQL CELL 09_7a7d9693c7_pgp_sesskey_overflow image a2bf0a6ed7c6784b MISSED cause None at None reached True completed True attribution null
+SQL DIAG-BTU hints 3
+SQL DIAG-BTU preflight-02-ltree :: DIAG-BTU existing (oprname, oprleft, oprright, oprnamespace)=(>=, 12777, 12777, 2200) tid (14,31) blk 5 off 57 posting 0/0 len 32 checked (14,35) raw00000e001f00204000000000000000003e3d0000e9310000e931000098080000 | new tid (14,35) len 32 raw00000e002300204000000000000000003e3d0000e9310000e931000098080000
+SQL DIAG-BTU 03_8c34261109_ltree_lquery_uint16_overflow :: DIAG-BTU existing (oprname, oprleft, oprright, oprnamespace)=(>=, 12777, 12777, 2200) tid (14,31) blk 5 off 57 posting 0/0 len 32 checked (14,35) raw00000e001f00204000000000000000003e3d0000e9310000e931000098080000 | new tid (14,35) len 32 raw00000e002300204000000000000000003e3d0000e9310000e931000098080000
+SQL DIAG-BTU 03_8c34261109_ltree_lquery_uint16_overflow-control :: DIAG-BTU existing (oprname, oprleft, oprright, oprnamespace)=(>=, 12777, 12777, 2200) tid (14,31) blk 5 off 57 posting 0/0 len 32 checked (14,35) raw00000e001f00204000000000000000003e3d0000e9310000e931000098080000 | new tid (14,35) len 32 raw00000e002300204000000000000000003e3d0000e9310000e931000098080000
+SQL FREG blocks 4
+SQL FREG control-bounds-malloc :: FREG thread=0 rc=0 kind=2 cause=28 pc=3fa3041080 addr=3fa6072690 entries=8998 entry_pcc=3fa3000110:1001d4007004
+SQL FREG control-bounds-malloc :: FREG x0 3fa3041080:1001d4007004* 3fa3040ca8:0* 3fa5ffedd0:100994007000* 3fa3000000:1001d4007004
+SQL FREG control-bounds-malloc :: FREG x4 3fa6065000:103f949c0020 3fa6072680:0* 20:0* 3fa6072680:10af91a82680*
+SQL FREG control-bounds-malloc :: FREG x8 3fa5ffedf0:100994007000 3fa531d540:3e0b967029c1* 3fa6072690:3e1b91a42680* 1:0*
+SQL FREG control-bounds-malloc :: FREG x12 3fa3e38d54:0* 0:0* 3fa3ea3160:0* 3fa607268:0*
+SQL FREG control-bounds-malloc :: FREG x16 3fa3ea3160:0* 0:0* 3fa6072680:3e1b91a42680* 3e:0*
+SQL FREG control-bounds-malloc :: FREG x20 18:0* 24:0* c:0 3fa5322d40:3ba397840e11
+SQL FREG control-bounds-malloc :: FREG x24 3fa5322b10:3ba397840e11 3fa3319e98:0 3fa5322420:3ba397840e11 4a:0
+SQL FREG control-bounds-malloc :: FREG x28 6b:0 72:0 0:0 0:0
+SQL FREG control-bounds-malloc :: FREG args 3fa6072690 1 3fa3e38d54 0 3fa3ea3160 3fa607268 3fa3ea3160 0
+SQL FREG control-bounds-malloc :: FREG sp+0x0 3fa5ffee40 100994007000 3fa3040ca8 0
+SQL FREG control-bounds-malloc :: FREG sp+0x20 3e 0 3fa5322880 3ba397840e11
+SQL FREG control-bounds-malloc :: FREG sp+0x40 31 0 3fa5ffefb0 100994007000
+SQL FREG control-bounds-malloc :: FREG sp+0x60 3fa330e690 1001d3040a70 3fa5ffefbf 100993f02fbf
+SQL FREG control-uaf-malloc :: FREG thread=0 rc=0 kind=2 cause=25 pc=3f8a0410a8 addr=3f8c8002f0 entries=8997 entry_pcc=3f8a000110:1001d4006004
+SQL FREG control-uaf-malloc :: FREG x0 3f8a0410a8:1001d4006004* 3f8a040d94:0* 3f8c7fedd0:100994007000* 3f8a000000:1001d4006004
+SQL FREG control-uaf-malloc :: FREG x4 3f8c6f5000:103f949c0020 3f8c8002f0:0* 30:0* 3f8c8002f0:109b90c802f0*
+SQL FREG control-uaf-malloc :: FREG x8 3f8c7fedf0:100994007000 3f8baa9540:3e0b967009c1* 3f8c8002f0:3e1b90c402f0* 3f8a041094:0*
+SQL FREG control-uaf-malloc :: FREG x12 3f8ae38d54:0* b0:0* e:0* 1:0*
+SQL FREG control-uaf-malloc :: FREG x16 0:0* 3f8af0e4a0:1001d15424a0* 3f8c8002f0:3e1b90c402f0* 3e:0*
+SQL FREG control-uaf-malloc :: FREG x20 18:0* 24:0* c:0 3f8baaed40:3ba397842e11
+SQL FREG control-uaf-malloc :: FREG x24 3f8baaeb10:3ba397842e11 3f8a319e98:0 3f8baae420:3ba397842e11 4a:0
+SQL FREG control-uaf-malloc :: FREG x28 6b:0 72:0 0:0 0:0
+SQL FREG control-uaf-malloc :: FREG args 3f8c8002f0 3f8a041094 3f8ae38d54 b0 e 1 0 3f8af0e4a0
+SQL FREG control-uaf-malloc :: FREG sp+0x0 3f8c7fee40 100994007000 3f8a040d94 0
+SQL FREG control-uaf-malloc :: FREG sp+0x20 3e 0 3f8baae880 3ba397842e11
+SQL FREG control-uaf-malloc :: FREG sp+0x40 31 0 3f8c7fefb0 100994007000
+SQL FREG control-uaf-malloc :: FREG sp+0x60 3f8a30e690 1001d3040a70 3f8c7fefbf 100993f02fbf
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG thread=0 rc=0 kind=2 cause=28 pc=3f99001be4 addr=3f9a8dc5f0 entries=8480 entry_pcc=3f99001bb8:1001d4005004
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG x0 3f99001be4:1001d4005004* 3f9979dda0:0* 3f9b5fe6c0:100994005000* 3f99000000:1001d4005004
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG x4 3f9b625000:103f949c0020 1130:0* 90:0* 6:0*
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG x8 3f9b5fe6e0:100994005000* 3f9b5fe7b0:1009920427b0* 3f9a8db4d4:396b94be12f9* 3f9a8926bd:3af794ae22ab*
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG x12 3f9a8d34d4:0* 3f9a8dc5f0:396b94be12f9* 78:0* 3f9a8dc5f1:396b94be12f9*
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG x16 3f9a8dc5f1:0* 3f9a8db4c0:0* 80:0* 3f9a8db4d4:396b94be12f9*
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG x20 3f9a8da7b0:396b94be12f9* aaaaaaaaaaaaaaab:0* 1:0* 2:0*
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG x24 ffff:0* 3f99001b1c:0* 3f9a8db4d0:396b94be12f9* 1:0*
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG x28 3:0* 0:0 40:0 1:0*
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG args 3f9a8db4d4 3f9a8926bd 3f9a8d34d4 3f9a8dc5f0 78 3f9a8dc5f1 3f9a8dc5f1 3f9a8db4c0
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG sp+0x0 3f9b5fe7b0 100994005000 3f9979dda0 39b397141c51
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG sp+0x20 4a 0 3f9a8d9200 3967942e00b9
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG sp+0x40 3f99ec9340 1001d0d41340 3f9b5fe7b0 100994005000
+SQL FREG 02_3ed3dbbf44_ts_headline_int16_overflow :: FREG sp+0x60 3f9b5fe7b0 1009920427b0 3f9b5fe810 0
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG thread=0 rc=-14 kind=4 cause=12 pc=0 addr=0 entries=11009 entry_pcc=3f9700011c:1001d4007004
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG x0 0:1001d4007004* 3f9778bcbc:0* 3f9a2fe8e0:100994006000* 3f97000000:1001d4007004
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG x4 3f9a381000:103f949c0020 3f9967a180:0* 3f97a73f0c:1001d4007004* 3f97da11f0:0*
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG x8 3f9a2fee60:100994006000* 3f97ec6d30:1001d4007004* 3f9a382d30:48cb97342cd0* 3f9a382d50:48cb97342cd0*
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG x12 3f97564e80:0* 3f973c82c4:0* 3f9713ab1c:0* 3f97292c7c:0*
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG x16 3f972531f0:0* 3f97230998:0* 0:0* 3f973c9410:0*
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG x20 3f998b3390:14e397840e11* 3f9a382d30:48cb97342cd0* 0:0* 3f998b2cf0:14e397840e11*
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG x24 0:0* 0:0* 3f97ec6d20:1001d4007004* 3f9a2fed68:100994006000*
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG x28 3f97da11f0:0* 200000000000:0* 101010101010101:0 7fffffffffffc000:0
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG args 3f9a382d30 3f9a382d50 3f97564e80 3f973c82c4 3f9713ab1c 3f97292c7c 3f972531f0 3f97230998
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG sp+0x0 0 0 0 0
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG sp+0x20 0 0 0 0
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG sp+0x40 3f97230998 0 3f972531f0 0
+SQL FREG 07_1af08af694_pg_trgm_picksplit_getsign_on_bitvec :: FREG sp+0x60 3f97292c7c 0 3f9713ab1c 0
+SQL DONE 12:32:20

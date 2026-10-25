@@ -1,0 +1,57 @@
+# Tier 3 board reading, arm wm0-treeA: kit bkit7-rev2sA (module 39d8492d5c18216b; batch budget x4), tree A caplifive_vp2c_8522d72fe, pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-wmem platform board:caplifive_vp2c_8522d72fe cells 23 tally {"MISSED": 23}
+# controls [["bounds-chunk", "complete"], ["uaf-chunk", "complete"], ["uaf-jumbo", "fault"]]
+00_3c8be14c82_rpcrdma_write_offsets_global image 86fd8e04a8bd334e MISSED cause None at None reached True completed True attribution null
+01_c14d731e45_cms_oid_global image f9218b640fb6ea21 MISSED cause None at None reached True completed True attribution null
+02_99da8c2cdc_mdb_address_column image 33fcd23b3fb5d237 MISSED cause None at None reached True completed True attribution null
+03_6eab9f83ab_cola_info_column image 32a845a5c744ca1c MISSED cause None at None reached True completed True attribution null
+04_b48759e4a4_qnet6_col_set_str image ec066b9abc5d8e57 MISSED cause None at None reached True completed True attribution null
+05_5a109265a6_usbll_address_struct image adb52ef371bf5e1f MISSED cause None at None reached True completed True attribution null
+06_a8b16d74e1_x509if_last_dn_static image e136d4c5c350e9e9 MISSED cause None at None reached True completed True attribution null
+07_fb504bc76c_mysql_auth_method image d5d978fb005c6467 MISSED cause None at None reached True completed True attribution null
+08_31ab1a0a17_sip_cseq_method image d49418cbd9cd9a12 MISSED cause None at None reached True completed True attribution null
+09_693dc40936_geonw_proto_data_tvb image d16dbf7482e1e010 MISSED cause None at None reached True completed True attribution null
+10_6fd3af5e99_t38_reassembly_buffer image 82aaa49cda9e497b MISSED cause None at None reached True completed True attribution null
+11_3a5f82dfb5_http_header_map image 55baee106f62fbba MISSED cause None at None reached True completed True attribution null
+12_90bb3a5c9e_xml_root_name_recycled image e9fc1ee708a2b303 MISSED cause None at None reached True completed True attribution null
+13_0261fd7da6_http_range_cursor_past_chunk image cb559721df25f24c MISSED cause None at None reached True completed True attribution null
+14_1d8acb21ab_solaredge_payload_six_past image 6630182266449f2a MISSED cause None at None reached True completed True attribution null
+15_d24613c461_opcua_padding_below_chunk image e9b55a1e844997d1 MISSED cause None at None reached True completed True attribution null
+16_e8ef9df09d_dcp_etsi_rs_parity_write image 3849f78246252a0a MISSED cause None at None reached True completed True attribution null
+17_5a560f3f6a_dns_one_byte_write image 71d1020771e4b990 MISSED cause None at None reached True completed True attribution null
+18_716a200295_rtps_batch_sample_info_unguarded image 34d73aaa7754c843 MISSED cause None at None reached True completed True attribution null
+19_4a4871a831_ntlmssp_blob_length_before_check image de2c829c566334c9 MISSED cause None at None reached True completed True attribution null
+20_ed20250c13_proto_undecoded_bitmap_unbounded image aa3bc776d1b14c35 MISSED cause None at None reached True completed True attribution null
+21_69dac89280_tcp_flags_str_sixteen_bytes image 3751bec143736b75 MISSED cause None at None reached True completed True attribution null
+22_c702b44a01_usbhid_output_usages_freed_twice image 696127102b3be2e4 MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_3c8be14c82_rpcrdma_write_offsets_global: verdict MISSED cause None pc None
+  SAME 01_c14d731e45_cms_oid_global: verdict MISSED cause None pc None
+  SAME 02_99da8c2cdc_mdb_address_column: verdict MISSED cause None pc None
+  SAME 03_6eab9f83ab_cola_info_column: verdict MISSED cause None pc None
+  SAME 04_b48759e4a4_qnet6_col_set_str: verdict MISSED cause None pc None
+  SAME 05_5a109265a6_usbll_address_struct: verdict MISSED cause None pc None
+  SAME 06_a8b16d74e1_x509if_last_dn_static: verdict MISSED cause None pc None
+  SAME 07_fb504bc76c_mysql_auth_method: verdict MISSED cause None pc None
+  SAME 08_31ab1a0a17_sip_cseq_method: verdict MISSED cause None pc None
+  SAME 09_693dc40936_geonw_proto_data_tvb: verdict MISSED cause None pc None
+  SAME 10_6fd3af5e99_t38_reassembly_buffer: verdict MISSED cause None pc None
+  SAME 11_3a5f82dfb5_http_header_map: verdict MISSED cause None pc None
+  SAME 12_90bb3a5c9e_xml_root_name_recycled: verdict MISSED cause None pc None
+  SAME 13_0261fd7da6_http_range_cursor_past_chunk: verdict MISSED cause None pc None
+  SAME 14_1d8acb21ab_solaredge_payload_six_past: verdict MISSED cause None pc None
+  SAME 15_d24613c461_opcua_padding_below_chunk: verdict MISSED cause None pc None
+  SAME 16_e8ef9df09d_dcp_etsi_rs_parity_write: verdict MISSED cause None pc None
+  SAME 17_5a560f3f6a_dns_one_byte_write: verdict MISSED cause None pc None
+  SAME 18_716a200295_rtps_batch_sample_info_unguarded: verdict MISSED cause None pc None
+  SAME 19_4a4871a831_ntlmssp_blob_length_before_check: verdict MISSED cause None pc None
+  SAME 20_ed20250c13_proto_undecoded_bitmap_unbounded: verdict MISSED cause None pc None
+  SAME 21_69dac89280_tcp_flags_str_sixteen_bytes: verdict MISSED cause None pc None
+  SAME 22_c702b44a01_usbhid_output_usages_freed_twice: verdict MISSED cause None pc None
+  23 of 23 cells the same
+## the boot
+  BOARD_RUN_START 15:10:24 bitstream caplifive_vp2c_8522d72fe monitor 007d81d
+  manifest 36 files, stage 8642469 bytes
+  firmware a9ea9d89713957e2 19565064 B
+  DRIVER rc=0 15:20:29
+  BOARD_RUN_DONE 15:20:30

@@ -11,11 +11,25 @@
 #include <errno.h>
 #include <capstone/virtual.h>
 #include "vm.h"
+#include <capstone/capability.h>
+
+/* This program tests the runtime's own allocator, so every allocation must
+ * reach it. Applications compile hosted, where clang may remove a malloc/free
+ * pair it can see through and treat the removed allocation as successful: the
+ * recycling loop below then allocated nothing, and the failed-realloc check
+ * compiled to a constant. A call through a volatile function pointer is one the
+ * compiler cannot see through, whatever the SDK's flags. (no_builtin on the
+ * calling functions does not prevent the elision.) */
+static void *(*volatile contract_malloc)(size_t) = malloc;
+static void *(*volatile contract_calloc)(size_t, size_t) = calloc;
+static void *(*volatile contract_realloc)(void *, size_t) = realloc;
+static void (*volatile contract_free)(void *) = free;
+#define malloc(n) contract_malloc(n)
+#define calloc(n, m) contract_calloc(n, m)
+#define realloc(p, n) contract_realloc(p, n)
+#define free(p) contract_free(p)
 
 extern int malloc_trim(size_t);
-extern unsigned long __capstone_sublet_malloc_linear(size_t, sublet_cap *);
-extern void __capstone_sublet_free_linear(unsigned long);
-extern void __capstone_sublet_heap_stats(unsigned long [9]);
 static void *volatile stale;
 static jmp_buf jump;
 static __thread unsigned thread_value = 41;
@@ -88,15 +102,66 @@ static void vm_contract(void)
     require(old != NULL, "realloc original");
     old[0] = 33;
     errno = 0;
-    require(!realloc(old, (256UL << 20) + 1) && errno == ENOMEM && old[0] == 33,
+    require(!realloc(old, CV_MAX_REGION_BYTES + 1) && errno == ENOMEM && old[0] == 33,
             "realloc failure preserves original");
     free(old);
     puts("VIRTUAL_VM_OK protections guards requested_length unused_pages execute rollback");
+}
+/* A region above the first profile's 256 MiB, a process above its 1 GiB, both
+ * ceilings, and the release of a freed region's charge. free clears the whole
+ * payload, so only the 600 MiB region is freed; the others stay sparse until
+ * exit, where the module retires them. */
+static void vm_large_contract(void)
+{
+    size_t big = 300UL << 20, bigger = 600UL << 20, half = 1536UL << 20, last = 800UL << 20;
+    char *a = malloc(big);
+    require(a != NULL, "malloc above 256 MiB");
+    a[0] = 1; a[big - 1] = 2;
+    char *b = realloc(a, bigger);
+    require(b != NULL && b[0] == 1 && b[big - 1] == 2, "realloc keeps the data");
+    b[bigger - 1] = 3;
+    char *c = malloc(half), *d = malloc(half);
+    require(c != NULL && d != NULL, "registered VA above 1 GiB");
+    c[0] = 4; c[half - 1] = 5; d[0] = 6; d[half - 1] = 7;
+    /* 600 + 1536 + 1536 + 800 MiB is above 4 GiB, startup regions or not. */
+    errno = 0;
+    require(!malloc(last) && errno == ENOMEM, "the process's ceiling");
+    errno = 0;
+    require(!malloc(CV_MAX_REGION_BYTES + 1) && errno == ENOMEM, "the region ceiling");
+    require(b[bigger - 1] == 3 && c[half - 1] == 5 && d[half - 1] == 7, "data after the refusals");
+    /* Without the 600 MiB charge, 3072 + 800 MiB leaves 224 MiB for the
+     * startup regions: a charge that free leaked would refuse this again. */
+    free(b);
+    char *e = malloc(last);
+    require(e != NULL, "free releases the region's charge");
+    e[0] = 8; e[last - 1] = 9;
+    puts("VIRTUAL_VM_LARGE_OK region aggregate realloc release");
+}
+/* More registered mappings than the first profile's 512: every allocation
+ * above mallocng's mmap threshold is a mapping of its own. One byte of each is
+ * touched, and they are freed again. */
+static void vm_mappings_contract(void)
+{
+    enum { count = 1200 };
+    static char *held[count];
+    const size_t bytes = 140000;
+    for (unsigned i = 0; i < count; ++i) {
+        held[i] = malloc(bytes);
+        require(held[i] != NULL, "mapping above 512");
+        held[i][bytes - 1] = (char)i;
+    }
+    for (unsigned i = 0; i < count; ++i)
+        require(held[i][bytes - 1] == (char)i, "mapping data");
+    for (unsigned i = 0; i < count; ++i)
+        free(held[i]);
+    puts("VIRTUAL_VM_MAPPINGS_OK 1200");
 }
 int main(int argc, char **argv)
 {
     const char *mode = argc > 1 ? argv[1] : "ok";
     if (!strcmp(mode, "vm")) { vm_contract(); return 0; }
+    if (!strcmp(mode, "vm-large")) { vm_large_contract(); return 0; }
+    if (!strcmp(mode, "vm-mappings")) { vm_mappings_contract(); return 0; }
     if (!strcmp(mode, "vm-ro-write") || !strcmp(mode, "vm-none-read") ||
         !strcmp(mode, "vm-guard") || !strcmp(mode, "vm-padding")) {
         char *p = mmap(NULL, 8193, PROT_READ | PROT_WRITE,
@@ -125,33 +190,30 @@ int main(int argc, char **argv)
         }
         fail("VM denial survived");
     }
-    if (!strcmp(mode, "linear") || !strcmp(mode, "linear-stale")) {
-        sublet_cap loan;
-        unsigned long before[9], after[9];
-        __capstone_sublet_heap_stats(before);
-        unsigned long base = __capstone_sublet_malloc_linear(4096, &loan);
-        require(base && base == sublet_base(&loan) && sublet_end(&loan) >= base + 4096,
-                "linear block grant");
-        char *p = sublet_take(&loan);
-        memset(p, 0x5a, 4096);
+    if (!strcmp(mode, "nested") || !strcmp(mode, "nested-stale")) {
+        char *allocation = malloc(4096);
+        require(allocation != NULL, "nested block allocation");
+        char *parent = capstone_cap_derive(allocation, 0, 4096);
+        char *p = capstone_cap_derive(parent, 0, 128);
+        char *sibling = capstone_cap_derive(parent, 128, 128);
+        p[0] = 17; sibling[0] = 31;
         stale = p;
-        __capstone_sublet_free_linear(base);
-        __capstone_sublet_heap_stats(after);
-        require(after[0] == before[0] + 1 && after[1] == before[1] + 1 &&
-                after[7] >= before[7] + 1 && after[2] == 0, "linear block retire counters"); /* Nested group retirement can also revoke its parent. */
-        char *replacement = malloc(4096);
-        require(replacement != NULL, "linear block reuse");
-        replacement[0] = 23;
-        if (!strcmp(mode, "linear-stale")) {
-            puts("VIRTUAL_LINEAR_ACCESS:stale"); fflush(stdout);
-            __asm__ volatile(".global cap_vm_fault_linear\ncap_vm_fault_linear:\nlbu zero, 0(%0)"
+        capstone_cap_revoke_child(parent, p);
+        parent[0] = 23;
+        require(sibling[0] == 31, "sibling survives child retirement");
+        char *replacement = capstone_cap_derive(parent, 0, 128);
+        require((uintptr_t)replacement == (uintptr_t)p && replacement[0] == 23,
+                "same-address successor survives");
+        /* Free the outer malloc object: its child and grandchild must die. */
+        stale = capstone_cap_derive(replacement, 0, 16);
+        free(allocation);
+        if (!strcmp(mode, "nested-stale")) {
+            puts("VIRTUAL_NESTED_ACCESS:stale"); fflush(stdout);
+            __asm__ volatile(".global cap_vm_fault_nested\ncap_vm_fault_nested:\nlbu zero, 0(%0)"
                              : : "r"(stale) : "memory");
-            fail("linear descendant survived retirement");
+            fail("nested descendant survived outer free");
         }
-        require(replacement[0] == 23, "linear replacement live");
-        free(replacement);
-        (void)malloc_trim(0); /* musl selects group release during free. */
-        puts("VIRTUAL_LINEAR_OK");
+        puts("VIRTUAL_NESTED_OK");
         return 0;
     }
     if (!strcmp(mode, "heap-threads")) {
@@ -182,6 +244,30 @@ int main(int argc, char **argv)
         require(!munmap(stack, bytes), "heap thread stack retire");
         puts("VIRTUAL_HEAP_THREADS_OK shared_ownership metadata_growth arena_growth");
         return 0;
+    }
+    if (!strcmp(mode, "dense-churn")) {
+        /* The board's stopgap control on silicon: reach collect() without sparse-churn's walk over fresh pages, which
+         * wedged on bf3db3175 (S-25's face) before the table ran out. collect() runs only when the module has retired a
+         * record (node_retired > 0, capstone_vm.c ensure_nodes), so ONE arena is mapped, touched and unmapped first: the
+         * launcher's unmap_arena issues CV_RETIRE. Then every store stays inside one 4 KiB block written up front: each
+         * CDERIVE of a 128-byte child mints a record and none is revoked, so a small flat table (node_flat_records) runs
+         * out in place. The predicted end is the module's "collect skipped" line and the step's terminal exit. */
+        unsigned char *page = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        require(page != MAP_FAILED, "dense retire arena");
+        page[0] = 1;
+        require(!munmap(page, 4096), "dense retire");
+        unsigned char *block = malloc(4096);
+        require(block != NULL, "dense block");
+        memset(block, 0x5a, 4096);
+        for (unsigned i = 0; i < 1000000; ++i) {
+            unsigned char *child = capstone_cap_derive(block, (i % 32) * 128, 128);
+            child[0] = (unsigned char)i;
+            if ((i + 1) % 1000 == 0) {
+                printf("VIRTUAL_DENSE_PROGRESS derived=%u\n", i + 1);
+                fflush(stdout);
+            }
+        }
+        fail("dense churn derived 1000000 children without running out");
     }
     if (!strcmp(mode, "sparse-churn") || !strcmp(mode, "sparse-stale")) {
         void *reserved = mmap(NULL, 64UL << 20, PROT_NONE,

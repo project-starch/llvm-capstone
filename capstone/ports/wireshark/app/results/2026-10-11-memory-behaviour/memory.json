@@ -1,0 +1,2796 @@
+{
+ "program": "Wireshark 4.6.8",
+ "pre_registration": "82c1607119ec",
+ "workload": "tshark -r C -V -n on the app port's capture set (dhcp, dns_port, http, arp, their four flipped copies, ntp, dns-ooo), TZ=UTC, empty configuration",
+ "allocator_statistics": "not exposed",
+ "repetitions": 3,
+ "images": {
+  "stock": {
+   "image_sha256": "9fd099f23376ab05acd3a68c380b6259a52ea95a76d0a9527fe3cb8be5dfec2e",
+   "nested": "none"
+  },
+  "protected": {
+   "image_sha256": "be27d346309a9a1e1b460f69b51703a17b1996eb5444e9aa4f425740d2ab6d36",
+   "nested": "wireshark"
+  }
+ },
+ "runner_sha256": "62b90297cd57f1e45ad8c699ecd5c1586bf28848747efe443335f8faf2a07080",
+ "gate_sha256": "4cab1598a20cf7b96e4974aaf4242fe5e2290063a88c481b952cf4b340a0344a",
+ "max_rss_note": "busybox 1.36.1 time %M prints 4x ru_maxrss on 4 KiB pages; max_rss_kb_corrected = printed/4",
+ "per_capture": {
+  "dhcp": {
+   "stock": {
+    "nodes": [
+     14713,
+     14972,
+     14888
+    ],
+    "peak": [
+     11155,
+     11155,
+     11155
+    ],
+    "pages": [
+     8857,
+     8857,
+     8857
+    ],
+    "node_capacity": [
+     17408,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     4,
+     4,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9245,
+     9245,
+     9245
+    ],
+    "steps": [
+     13814,
+     13806,
+     13815
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     290816,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     53928,
+     53928,
+     53988
+    ],
+    "max_rss_printed": [
+     215712,
+     215712,
+     215952
+    ],
+    "elapsed_s": [
+     39.05,
+     39.01,
+     39.15
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 14713,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 14713,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 14972,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 14972,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 14888,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 14888,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "df1713eb374fe5fc3c708091cf8622c077394565db93cf8977594477f02006cf"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     18288,
+     17834,
+     17053
+    ],
+    "peak": [
+     11156,
+     11156,
+     11155
+    ],
+    "pages": [
+     8858,
+     8858,
+     8857
+    ],
+    "node_capacity": [
+     21504,
+     21504,
+     17408
+    ],
+    "node_growths": [
+     5,
+     5,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     1
+    ],
+    "reclaimed": [
+     0,
+     0,
+     15784
+    ],
+    "faults": [
+     9257,
+     9257,
+     9245
+    ],
+    "steps": [
+     13903,
+     13904,
+     13822
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     356352,
+     356352,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     53992,
+     53932,
+     53932
+    ],
+    "max_rss_printed": [
+     215968,
+     215728,
+     215728
+    ],
+    "elapsed_s": [
+     39.23,
+     39.68,
+     39.29
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 18288,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 18288,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 17834,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 17834,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 16895,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 17053,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 1,
+      "nodes_reclaimed": 15784
+     }
+    ],
+    "stdout_sha256": [
+     "df1713eb374fe5fc3c708091cf8622c077394565db93cf8977594477f02006cf"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  },
+  "dns_port": {
+   "stock": {
+    "nodes": [
+     16241,
+     16500,
+     16445
+    ],
+    "peak": [
+     11184,
+     11184,
+     11184
+    ],
+    "pages": [
+     8867,
+     8867,
+     8867
+    ],
+    "node_capacity": [
+     17408,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     4,
+     4,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9263,
+     9263,
+     9263
+    ],
+    "steps": [
+     13720,
+     13755,
+     13784
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     290816,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     53996,
+     53996,
+     53936
+    ],
+    "max_rss_printed": [
+     215984,
+     215984,
+     215744
+    ],
+    "elapsed_s": [
+     41.63,
+     41.84,
+     42.04
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 1528,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 16241,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 1528,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 16500,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 1557,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 16445,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "c74b3491490fab856544bb183581159e8b423086f6ed50623d8c81301c9090b8"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     19521,
+     19752,
+     19346
+    ],
+    "peak": [
+     11184,
+     11184,
+     11184
+    ],
+    "pages": [
+     8867,
+     8867,
+     8867
+    ],
+    "node_capacity": [
+     21504,
+     21504,
+     21504
+    ],
+    "node_growths": [
+     5,
+     5,
+     5
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9263,
+     9263,
+     9263
+    ],
+    "steps": [
+     13771,
+     13822,
+     13770
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     356352,
+     356352,
+     356352
+    ],
+    "max_rss_kb_corrected": [
+     54004,
+     54000,
+     54000
+    ],
+    "max_rss_printed": [
+     216016,
+     216000,
+     216000
+    ],
+    "elapsed_s": [
+     41.94,
+     42.39,
+     41.96
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 1233,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 19521,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 1918,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 19752,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 2451,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 19346,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "c74b3491490fab856544bb183581159e8b423086f6ed50623d8c81301c9090b8"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  },
+  "http": {
+   "stock": {
+    "nodes": [
+     12366,
+     12530,
+     12530
+    ],
+    "peak": [
+     11159,
+     11158,
+     11158
+    ],
+    "pages": [
+     8860,
+     8859,
+     8859
+    ],
+    "node_capacity": [
+     13312,
+     13312,
+     13312
+    ],
+    "node_growths": [
+     3,
+     3,
+     3
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9246,
+     9245,
+     9245
+    ],
+    "steps": [
+     13636,
+     13666,
+     13681
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     225280,
+     225280,
+     225280
+    ],
+    "max_rss_kb_corrected": [
+     54000,
+     53996,
+     54000
+    ],
+    "max_rss_printed": [
+     216000,
+     215984,
+     216000
+    ],
+    "elapsed_s": [
+     45.11,
+     45.55,
+     45.66
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12366,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12530,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12530,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "8b55e1c98c33ff30f238ae8c1410524fe49c4c74c96aa4a824c1d4854f495dac"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     13986,
+     13986,
+     13739
+    ],
+    "peak": [
+     11159,
+     11159,
+     11158
+    ],
+    "pages": [
+     8860,
+     8860,
+     8859
+    ],
+    "node_capacity": [
+     17408,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     4,
+     4,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9246,
+     9246,
+     9235
+    ],
+    "steps": [
+     13671,
+     13705,
+     13653
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     290816,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     53940,
+     53940,
+     54004
+    ],
+    "max_rss_printed": [
+     215760,
+     215760,
+     216016
+    ],
+    "elapsed_s": [
+     45.52,
+     45.99,
+     45.76
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 13986,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 13986,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 13739,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "8b55e1c98c33ff30f238ae8c1410524fe49c4c74c96aa4a824c1d4854f495dac"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  },
+  "arp": {
+   "stock": {
+    "nodes": [
+     12132,
+     11951,
+     12224
+    ],
+    "peak": [
+     11136,
+     11137,
+     11137
+    ],
+    "pages": [
+     8849,
+     8850,
+     8850
+    ],
+    "node_capacity": [
+     13312,
+     13312,
+     13312
+    ],
+    "node_growths": [
+     3,
+     3,
+     3
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9232,
+     9233,
+     9233
+    ],
+    "steps": [
+     13617,
+     13542,
+     13590
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     225280,
+     225280,
+     225280
+    ],
+    "max_rss_kb_corrected": [
+     53996,
+     54000,
+     54000
+    ],
+    "max_rss_printed": [
+     215984,
+     216000,
+     216000
+    ],
+    "elapsed_s": [
+     49.55,
+     48.81,
+     48.97
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12132,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 11951,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12224,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "d04154a74f26942e85a0e532db3e922fe70dd30221bfded2f6488876528c52df"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     12628,
+     12720,
+     12786
+    ],
+    "peak": [
+     11136,
+     11137,
+     11136
+    ],
+    "pages": [
+     8849,
+     8850,
+     8849
+    ],
+    "node_capacity": [
+     13312,
+     13312,
+     13312
+    ],
+    "node_growths": [
+     3,
+     3,
+     3
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9232,
+     9233,
+     9232
+    ],
+    "steps": [
+     13661,
+     13587,
+     13561
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     225280,
+     225280,
+     225280
+    ],
+    "max_rss_kb_corrected": [
+     54000,
+     54004,
+     54000
+    ],
+    "max_rss_printed": [
+     216000,
+     216016,
+     216000
+    ],
+    "elapsed_s": [
+     49.85,
+     49.32,
+     49.26
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12628,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12720,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12786,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "d04154a74f26942e85a0e532db3e922fe70dd30221bfded2f6488876528c52df"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  },
+  "dhcp.flip": {
+   "stock": {
+    "nodes": [
+     15563,
+     14787,
+     15603
+    ],
+    "peak": [
+     11156,
+     11155,
+     11155
+    ],
+    "pages": [
+     8858,
+     8857,
+     8857
+    ],
+    "node_capacity": [
+     17408,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     4,
+     4,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9257,
+     9245,
+     9245
+    ],
+    "steps": [
+     13729,
+     13635,
+     13665
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     290816,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     54000,
+     54000,
+     53996
+    ],
+    "max_rss_printed": [
+     216000,
+     216000,
+     215984
+    ],
+    "elapsed_s": [
+     54.53,
+     52.88,
+     53.48
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 15563,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 14787,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 15603,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "891f584de2b905849135fa30e1791801bb0a55e4378d102088863e3bcf60b5bb"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     17243,
+     17277,
+     17087
+    ],
+    "peak": [
+     11155,
+     11155,
+     11155
+    ],
+    "pages": [
+     8857,
+     8857,
+     8857
+    ],
+    "node_capacity": [
+     17408,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     4,
+     4,
+     4
+    ],
+    "collections": [
+     1,
+     1,
+     1
+    ],
+    "reclaimed": [
+     14728,
+     14072,
+     15800
+    ],
+    "faults": [
+     9245,
+     9245,
+     9245
+    ],
+    "steps": [
+     13728,
+     13684,
+     13705
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     290816,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     53940,
+     53940,
+     54004
+    ],
+    "max_rss_printed": [
+     215760,
+     215760,
+     216016
+    ],
+    "elapsed_s": [
+     54.63,
+     53.31,
+     54.96
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 17243,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 1,
+      "nodes_reclaimed": 14728
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 17277,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 1,
+      "nodes_reclaimed": 14072
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 17087,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 1,
+      "nodes_reclaimed": 15800
+     }
+    ],
+    "stdout_sha256": [
+     "891f584de2b905849135fa30e1791801bb0a55e4378d102088863e3bcf60b5bb"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  },
+  "dns_port.flip": {
+   "stock": {
+    "nodes": [
+     15125,
+     15385,
+     15494
+    ],
+    "peak": [
+     11183,
+     11184,
+     11184
+    ],
+    "pages": [
+     8866,
+     8867,
+     8867
+    ],
+    "node_capacity": [
+     17408,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     4,
+     4,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9244,
+     9263,
+     9263
+    ],
+    "steps": [
+     13696,
+     13736,
+     13746
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     290816,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     54000,
+     54000,
+     53996
+    ],
+    "max_rss_printed": [
+     216000,
+     216000,
+     215984
+    ],
+    "elapsed_s": [
+     57.98,
+     57.6,
+     58.55
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 15125,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 15385,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 15494,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "37e34f919762ad931a96f379db4d7c3cffefc08cd61b2d7800f18585a62f4747"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     18847,
+     18849,
+     18792
+    ],
+    "peak": [
+     11184,
+     11184,
+     11184
+    ],
+    "pages": [
+     8867,
+     8867,
+     8867
+    ],
+    "node_capacity": [
+     21504,
+     21504,
+     21504
+    ],
+    "node_growths": [
+     5,
+     5,
+     5
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9263,
+     9263,
+     9263
+    ],
+    "steps": [
+     13785,
+     13767,
+     13796
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     356352,
+     356352,
+     356352
+    ],
+    "max_rss_kb_corrected": [
+     54004,
+     54000,
+     53940
+    ],
+    "max_rss_printed": [
+     216016,
+     216000,
+     215760
+    ],
+    "elapsed_s": [
+     57.86,
+     57.8,
+     58.25
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 18847,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 18849,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 18792,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "37e34f919762ad931a96f379db4d7c3cffefc08cd61b2d7800f18585a62f4747"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  },
+  "http.flip": {
+   "stock": {
+    "nodes": [
+     12501,
+     12705,
+     12524
+    ],
+    "peak": [
+     11158,
+     11158,
+     11159
+    ],
+    "pages": [
+     8859,
+     8859,
+     8860
+    ],
+    "node_capacity": [
+     13312,
+     13312,
+     13312
+    ],
+    "node_growths": [
+     3,
+     3,
+     3
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9245,
+     9245,
+     9246
+    ],
+    "steps": [
+     13592,
+     13584,
+     13598
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     225280,
+     225280,
+     225280
+    ],
+    "max_rss_kb_corrected": [
+     53936,
+     53936,
+     53936
+    ],
+    "max_rss_printed": [
+     215744,
+     215744,
+     215744
+    ],
+    "elapsed_s": [
+     35.16,
+     35.02,
+     35.16
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12501,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12705,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12524,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "73c486b3d5be28f6ef91bad170c9264ddda1e071653b448c712af8c64d8cfbd3"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     13788,
+     13811,
+     13759
+    ],
+    "peak": [
+     11158,
+     11159,
+     11158
+    ],
+    "pages": [
+     8859,
+     8860,
+     8859
+    ],
+    "node_capacity": [
+     17408,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     4,
+     4,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9245,
+     9246,
+     9245
+    ],
+    "steps": [
+     13644,
+     13632,
+     13609
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     290816,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     54000,
+     53940,
+     54000
+    ],
+    "max_rss_printed": [
+     216000,
+     215760,
+     216000
+    ],
+    "elapsed_s": [
+     35.25,
+     35.2,
+     34.99
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 13788,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 13811,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 13759,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "73c486b3d5be28f6ef91bad170c9264ddda1e071653b448c712af8c64d8cfbd3"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  },
+  "arp.flip": {
+   "stock": {
+    "nodes": [
+     11945,
+     11877,
+     11862
+    ],
+    "peak": [
+     11136,
+     11137,
+     11137
+    ],
+    "pages": [
+     8849,
+     8850,
+     8850
+    ],
+    "node_capacity": [
+     13312,
+     13312,
+     13312
+    ],
+    "node_growths": [
+     3,
+     3,
+     3
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9232,
+     9233,
+     9233
+    ],
+    "steps": [
+     13597,
+     13491,
+     13642
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     225280,
+     225280,
+     225280
+    ],
+    "max_rss_kb_corrected": [
+     53996,
+     54000,
+     54000
+    ],
+    "max_rss_printed": [
+     215984,
+     216000,
+     216000
+    ],
+    "elapsed_s": [
+     39.07,
+     38.41,
+     39.46
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 11945,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 11877,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 11862,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "54ee4b929d0075c5284756d817f65abb0e6e6ba3a52609286f622e7b9d90aa87"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     12815,
+     12633,
+     12803
+    ],
+    "peak": [
+     11136,
+     11136,
+     11136
+    ],
+    "pages": [
+     8849,
+     8849,
+     8849
+    ],
+    "node_capacity": [
+     13312,
+     13312,
+     13312
+    ],
+    "node_growths": [
+     3,
+     3,
+     3
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9232,
+     9222,
+     9232
+    ],
+    "steps": [
+     13630,
+     13525,
+     13524
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     225280,
+     225280,
+     225280
+    ],
+    "max_rss_kb_corrected": [
+     53940,
+     54000,
+     53940
+    ],
+    "max_rss_printed": [
+     215760,
+     216000,
+     215760
+    ],
+    "elapsed_s": [
+     39.1,
+     38.92,
+     38.44
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12815,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12633,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12803,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "54ee4b929d0075c5284756d817f65abb0e6e6ba3a52609286f622e7b9d90aa87"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  },
+  "ntp": {
+   "stock": {
+    "nodes": [
+     12192,
+     12192,
+     11947
+    ],
+    "peak": [
+     11146,
+     11146,
+     11145
+    ],
+    "pages": [
+     8853,
+     8853,
+     8852
+    ],
+    "node_capacity": [
+     13312,
+     13312,
+     13312
+    ],
+    "node_growths": [
+     3,
+     3,
+     3
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9237,
+     9237,
+     9226
+    ],
+    "steps": [
+     13588,
+     13589,
+     13591
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     225280,
+     225280,
+     225280
+    ],
+    "max_rss_kb_corrected": [
+     54000,
+     53936,
+     53936
+    ],
+    "max_rss_printed": [
+     216000,
+     215744,
+     215744
+    ],
+    "elapsed_s": [
+     42.95,
+     43.26,
+     43.53
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12192,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 12192,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 11947,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "336f591d9d4499b5e6e26d90e35e88950580306756015edae5c4dd2212e56623"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     13217,
+     13217,
+     13200
+    ],
+    "peak": [
+     11147,
+     11147,
+     11146
+    ],
+    "pages": [
+     8854,
+     8854,
+     8853
+    ],
+    "node_capacity": [
+     17408,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     4,
+     4,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9238,
+     9238,
+     9237
+    ],
+    "steps": [
+     13611,
+     13654,
+     13603
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     290816,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     54000,
+     54004,
+     53940
+    ],
+    "max_rss_printed": [
+     216000,
+     216016,
+     215760
+    ],
+    "elapsed_s": [
+     42.99,
+     43.88,
+     43.38
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 13217,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 13217,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 13200,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "336f591d9d4499b5e6e26d90e35e88950580306756015edae5c4dd2212e56623"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  },
+  "dns-ooo": {
+   "stock": {
+    "nodes": [
+     14626,
+     15794,
+     15765
+    ],
+    "peak": [
+     11156,
+     11157,
+     11157
+    ],
+    "pages": [
+     8858,
+     8859,
+     8859
+    ],
+    "node_capacity": [
+     17408,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     4,
+     4,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9247,
+     9248,
+     9248
+    ],
+    "steps": [
+     13688,
+     13620,
+     13669
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     290816,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     53936,
+     53936,
+     53996
+    ],
+    "max_rss_printed": [
+     215744,
+     215744,
+     215984
+    ],
+    "elapsed_s": [
+     47.84,
+     46.95,
+     47.37
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 14626,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 15794,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 15765,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "8e6d3060e941199fa1361ea4bd7bc691314165f39e3e20e5f85d4aceb27d87c3"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   },
+   "protected": {
+    "nodes": [
+     18044,
+     16905,
+     16747
+    ],
+    "peak": [
+     11157,
+     11156,
+     11156
+    ],
+    "pages": [
+     8859,
+     8858,
+     8858
+    ],
+    "node_capacity": [
+     21504,
+     17408,
+     17408
+    ],
+    "node_growths": [
+     5,
+     4,
+     4
+    ],
+    "collections": [
+     0,
+     0,
+     0
+    ],
+    "reclaimed": [
+     0,
+     0,
+     0
+    ],
+    "faults": [
+     9248,
+     9247,
+     9247
+    ],
+    "steps": [
+     13732,
+     13682,
+     13626
+    ],
+    "arenas": [
+     33,
+     33,
+     33
+    ],
+    "node_bytes": [
+     356352,
+     290816,
+     290816
+    ],
+    "max_rss_kb_corrected": [
+     54000,
+     54000,
+     54004
+    ],
+    "max_rss_printed": [
+     216000,
+     216000,
+     216016
+    ],
+    "elapsed_s": [
+     48.0,
+     47.48,
+     46.97
+    ],
+    "delta": [
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 18044,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 16905,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     },
+     {
+      "version": 0,
+      "live_domains": 0,
+      "live_regions": 0,
+      "live_bytes": 0,
+      "cached_bytes": 0,
+      "poisoned_blocks": 0,
+      "nodes_high_water": 0,
+      "nodes_live": 0,
+      "nodes_retired": 0,
+      "nodes_allocated_total": 16747,
+      "tag_pages": 0,
+      "node_capacity": 0,
+      "node_bytes": 0,
+      "collections": 0,
+      "nodes_reclaimed": 0
+     }
+    ],
+    "stdout_sha256": [
+     "8e6d3060e941199fa1361ea4bd7bc691314165f39e3e20e5f85d4aceb27d87c3"
+    ],
+    "stderr_sha256": [
+     "ebd622b6ccde7da09196a2219a097dedaa3e3e220486cffe2d8cf2f0052d18a8"
+    ]
+   }
+  }
+ },
+ "boots": {
+  "stock-1": {
+   "completed": true,
+   "boot_stats": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   }
+  },
+  "stock-2": {
+   "completed": true,
+   "boot_stats": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   }
+  },
+  "stock-3": {
+   "completed": true,
+   "boot_stats": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   }
+  },
+  "protected-1": {
+   "completed": true,
+   "boot_stats": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   }
+  },
+  "protected-2": {
+   "completed": true,
+   "boot_stats": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   }
+  },
+  "protected-3": {
+   "completed": true,
+   "boot_stats": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   }
+  }
+ },
+ "totals_lifetimes_per_boot": {
+  "stock": [
+   137404,
+   138693,
+   139282
+  ],
+  "protected": [
+   158377,
+   156984,
+   155312
+  ]
+ }
+}

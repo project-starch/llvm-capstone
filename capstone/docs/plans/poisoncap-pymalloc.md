@@ -1,5 +1,7 @@
 # PoisonCap pymalloc integration
 
+> **Removed 2026-10-10.** CheriBSD PoisonCap (our adapter, its backends and runners) is gone from the tree; PostgreSQL's arm goes with its rewrite. This plan is history, and the results it produced stay where they were recorded.
+
 Work branch: `ports/10-poisoncap-pymalloc`, based on the verified FFmpeg
 PoisonCap integration and current `dev`. Reuse the published compiler, QEMU,
 CheriBSD image and platform controls; keep platform sources outside Git.

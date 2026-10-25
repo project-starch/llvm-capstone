@@ -1,0 +1,24 @@
+# cpython lt0 (2026-10-19 20:38 - 2026-10-20 01:16, board 1, tree A, kit bkit7-rev2xnD): runner and judge lines
+CPY lt0 BEGIN 20:38:23
+APPVM collect rc=75 calls=54 20:38:24
+APPVM boot rc=0 01:16:17 :: session <mnt-hdd>/capstone/t3-run-treeA/cpy-lt0/session: 54/54 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeA/cpy-lt0/session/guest/board.txt; phase read
+APPVM read rc=0 01:16:20 :: --- vp2-malloc (virtual-cpython): {'CAUGHT': 9, 'MISSED': 10, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 12}
+CPY lt0 ARM END rc=0 01:16:20
+CPY lt0 JUDGE rc=1 :: lt0: 23 of 32 inside their sets; 2 moved (varying verdict outside its set); 7 divergence(s) on stable cases
+CPY lt0 S-23: DRT1 14 DRTX 0 Oops 0 (from <mnt-hdd>/capstone/t3-run-treeA/cpy-lt0/session/guest/board.txt)
+CPY lt0 DONE 01:16:20
+pin OK: {"guest_env": ["PYTHONHASHSEED=0"], "hash_abc": 1453079729188098211, "hash_randomization": 0, "kernel_cmdline": "earlycon console=ttyS0,57600 norandmaps", "pythonhashseed": "0"}
+  DIVERGENCE (stable case) 01_gh-139071_heap-overflow-in-set-dealloc-setobject: CAUGHT 4/set_dealloc+264 notes='' (set: ['CAUGHT'])
+  DIVERGENCE (stable case) 02_gh-140471_fix-buffer-overflow-in-ast-node: NO-READING 12/None+None notes='' (set: ['MISSED'])
+  varying 05_gh-140497_cpython-crash-heap-buffer-overflow-python: CAUGHT inside its verdict set; site 28/_PyDict_FromItems+144 not among the sampled sites (reported, not graded)
+  varying 09_gh-140802_heap-buffer-overflow-in-pycore-interpframe: CAUGHT inside its verdict set; site 4/visit_decref+0 not among the sampled sites (reported, not graded)
+  DIVERGENCE (stable case) 10_gh-142554_avoid-divmod-crashes-due-to-bad: NO-READING 12/None+None notes='' (set: ['CAUGHT'])
+  DIVERGENCE (stable case) 13_gh-144169_fix-three-crashes-in-ast-objects: NO-READING 12/None+None notes='' (set: ['NO-READING'])
+  varying 15_gh-148973_fix-segfault-on-mismatch-between-consts: NO-READING inside its verdict set; site 12/None+None not among the sampled sites (reported, not graded)
+  DIVERGENCE (stable case) 23_gh-142560_bytearray-search-realloc: NO-READING 12/None+None notes='' (set: ['MISSED'])
+  DIVERGENCE (stable case) 25_gh-142829_hamt-eq-interior-cursor: NO-READING 12/None+None notes='' (set: ['MISSED'])
+  MOVED (varying verdict outside its set) 27_gh-143004_counter-update-borrowed-value: NO-READING 12/None+None notes='' (set: ['CAUGHT', 'MISSED'])
+  DIVERGENCE (stable case) 28_gh-143543_groupby-reentrant-eq: NO-READING 12/None+None notes='' (set: ['CAUGHT'])
+  MOVED (varying verdict outside its set) 30_gh-146613_grouper-parent-key: NO-READING 12/None+None notes='' (set: ['CAUGHT'])
+  varying 31_gh-148660_odict-copy-stale-link: NO-READING inside its verdict set; site 12/None+None not among the sampled sites (reported, not graded)
+lt0: 23 of 32 inside their sets; 2 moved (varying verdict outside its set); 7 divergence(s) on stable cases

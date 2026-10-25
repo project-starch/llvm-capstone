@@ -49,7 +49,7 @@ and ASan reports it. The two side by side are the project's axis, measured rathe
 
 ## Arms not measured here
 
-`spatial`, `sublet`, both PoisonCap arms and `cheribsd-revocation` are declared **predictions**.
+`spatial`, `sublet` and `cheribsd-revocation` are declared **predictions**.
 `spatial` and `sublet` are predicted to **complete**: the crossing is inside one `av_malloc`, so a
 per-allocation bound is in bounds for it.
 

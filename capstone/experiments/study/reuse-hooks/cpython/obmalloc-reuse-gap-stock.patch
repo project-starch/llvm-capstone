@@ -1,0 +1,96 @@
+--- a/Objects/obmalloc.c
++++ b/Objects/obmalloc.c
+@@ -1463,6 +1463,71 @@
+ 
+ typedef struct _obmalloc_state OMState;
+ 
++#ifdef EXP_REUSE_GAP
++/* Reuse-distance observer (pre-registration 16d2171a3edc): pymalloc's block
++ * hand-out and free, by the address obmalloc itself works with. Integers
++ * only; the table is static, outside every arena. One line at exit. */
++#include <stdio.h>
++#include <unistd.h>
++#include "reuse-gap-observer.h"
++#define EXP_REUSE_GAP_CAPACITY ((size_t)1 << 20)
++static struct reuse_gap_slot exp_reuse_gap_slots[EXP_REUSE_GAP_CAPACITY];
++static struct reuse_gap_observer exp_reuse_gap;
++static int exp_reuse_gap_ready;
++
++static void
++exp_reuse_gap_report(void)
++{
++    const struct reuse_gap_observer *o = &exp_reuse_gap;
++    char line[1024];
++    int n = snprintf(line, sizeof line,
++        "REUSE-GAP pymalloc capacity=%zu attempts=%llu issues=%llu "
++        "releases=%llu reuses=%llu distinct_starts=%llu error=%u bins=",
++        o->capacity, (unsigned long long)o->attempts,
++        (unsigned long long)o->issues, (unsigned long long)o->releases,
++        (unsigned long long)o->reuses,
++        (unsigned long long)o->distinct_starts, o->error);
++    for (unsigned i = 0; i < 32 && n > 0 && (size_t)n < sizeof line; ++i) {
++        n += snprintf(line + n, sizeof line - (size_t)n, i ? ",%llu" : "%llu",
++                      (unsigned long long)o->bins[i]);
++    }
++    if (n > 0 && (size_t)n + 1 < sizeof line) {
++        line[n++] = '\n';
++        (void)!write(2, line, (size_t)n);
++    }
++}
++
++static void
++exp_reuse_gap_start(void)
++{
++    reuse_gap_init(&exp_reuse_gap, exp_reuse_gap_slots, EXP_REUSE_GAP_CAPACITY);
++    exp_reuse_gap_ready = 1;
++    if (atexit(exp_reuse_gap_report)) {
++        static const char msg[] = "REUSE-GAP pymalloc atexit failed\n";
++        (void)!write(2, msg, sizeof msg - 1);
++    }
++}
++
++static void
++exp_reuse_gap_issue(uint64_t start, uint64_t size)
++{
++    if (!exp_reuse_gap_ready) {
++        exp_reuse_gap_start();
++    }
++    reuse_gap_attempt(&exp_reuse_gap);
++    reuse_gap_issue(&exp_reuse_gap, start, size);
++}
++
++static void
++exp_reuse_gap_release(uint64_t start)
++{
++    if (!exp_reuse_gap_ready) {
++        exp_reuse_gap_start();
++    }
++    reuse_gap_release(&exp_reuse_gap, start);
++}
++#endif
++
+ /* obmalloc state for main interpreter and shared by all interpreters without
+  * their own obmalloc state.  By not explicitly initalizing this structure, it
+  * will be allocated in the BSS which is a small performance win.  The radix
+@@ -2238,6 +2303,11 @@
+         bp = allocate_from_new_pool(state, size);
+     }
+ 
++#ifdef EXP_REUSE_GAP
++    if (bp != NULL) {
++        exp_reuse_gap_issue(AS_UINT(bp), INDEX2SIZE(size));
++    }
++#endif
+     return (void *)bp;
+ }
+ 
+@@ -2482,6 +2552,9 @@
+         return 0;
+     }
+     /* We allocated this address. */
++#ifdef EXP_REUSE_GAP
++    exp_reuse_gap_release(AS_UINT(p));
++#endif
+ 
+     /* Link p to the start of the pool's freeblock list.  Since
+      * the pool had at least the p block outstanding, the pool

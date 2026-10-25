@@ -3843,7 +3843,7 @@ and saying so was this document's own "a clean result is not evidence until the 
 fire" rule being broken in the act of invoking it. (Bench-lane audit.) **Closed 2026-09-13 by boot
 sw72:** the line fired once on a `bigregion.user 1419584` arm and zero times on the `4194304` arm of
 the same boot, positive and negative control together (§7o), so the zeros above now say what they
-appear to say.
+appear to say. **[RETRACTED 2026-10-18: sw72's count was taken from dmesg. The line is `pr_info` (modcapstone `capstone.c:306` at d04bd83, `:352` at 8fd1ea1249a9), and the board drivers set `/proc/sys/kernel/printk` to 1 before the first rung (`fpga_driver/run_ladder_perf_fpga.py:201`, since 2026-07-25), so it can never reach the UART capture. So the capture's zeros above still say nothing; the power-of-two argument below is what licenses the comparison.]**
 
 **The positive control is cheap and is owed:** one `--pool`-derived arm, where 1,419,584 rounds by
 1,728, shows the line once. After that a zero means something permanently. Until then the correct
@@ -4146,7 +4146,7 @@ board pair projects to 3.83 h + 4.52 h; the pre-registered cycle ratio for sw73 
 *Boot sw72, the controls boot* (control `retval=4`): **R-33's rounding log fired for the first time
 anywhere** — `bigregion.user 1419584` (rebuilt to count the module's "not representable" line in
 dmesg) reports `not-representable-lines=1`, and the representable `4194304` arm reports `0`, positive
-and negative control in one boot; every earlier "zero rounding lines" reading is now informative.
+and negative control in one boot; every earlier "zero rounding lines" reading is now informative **[RETRACTED 2026-10-18: not for the UART capture, which can never carry this pr_info line during a rung; sw72 controlled the dmesg channel only]**.
 **The S-15 instrument is fixed and controlled:** the measurement host now reads every REV_SHARED
 region's first word back after the share (default-on; a planted sentinel in the arena makes
 "unchanged" a positive reading). Negative control on QEMU (fix image): no trap line, sentinel
@@ -4199,7 +4199,7 @@ native board instret is 164.4× §4g's size-1 board instret (578,533,909) and 1.
 icount, consistent; (4) NOMEM, the named hours-in failure (128 MiB built against 120 MiB measured
 need) — absent: `RC 0` and the oracle hash on the domain arm; (5) `capinit-reload-scan` — satisfied by
 staging the scanned image by hash (the driver's manifest check). Also read: the module's rounding line
-fired 0 times (informative since sw72's positive control); the share-readback instrument printed no
+fired 0 times (informative since sw72's positive control **[RETRACTED 2026-10-18: a capture zero; uninformative, see §7o's bracket]**); the share-readback instrument printed no
 `share-trap` line and read the arena sentinel back unchanged (`SQ: arena0=1592590336` = `0x5EED0000`)
 before `G/enter` — the negative reading on silicon for a measurement image; all three shares returned
 (`SHA5`→`SHA6`); watchdog never fired.
@@ -5988,3 +5988,1026 @@ boot, and each board image is named by hash.
 - **R-51 is fixed on silicon in the same bitstream:** a domain's PC capability is enforced after a RETURN yield (the
   matched pair reads 0 / 0x1C / 0x1C, against 0 / 0xBAD / 0). The memcached B-series and its oracle hash are unchanged
   on it, and so is the supervision overhead (+0.666 %).
+
+## The bounds encoder on silicon: R-54 observed, and R-11 on the heap (B4, caplifive_r51r52_0568f93a9, 2026-10-13)
+- **R-54:** the full bounds scheme does not renormalise. A capability whose span, rounded to its granule, reaches the
+  next power of two decodes about half short once its cursor leaves the base.
+  - r54-bounds read 39, as pre-registered (lane b0-silicon-runtime 3b2c603fe8b0).
+  - 65535 B decoded 32768, and 8191 B decoded 4096, after a cursor move of 8.
+  - The controls 65536 B and 65471 B covered.
+  - A real malloc(65535) decoded [-48, +32784).
+- **R-11 on the heap:** that malloc(65535) read 3 bytes short AT BASE, because it straddles a 4 MiB boundary. The
+  cursorless branch truncates its top, and the glue-only workaround does not reach the heap.
+- **Scope:**
+  - These are bounds READ BACK with lcc. No access was made through a short capability, so no fault is claimed.
+  - QEMU reads every value exact: it keeps fat bounds.
+  - The fixes are pending: the renormalisation for R-54, and the format move for R-11.
+
+## mruby 4.0.0-rc2 runs on silicon as a delegated application, byte-identical to the native build on four steps (B5, caplifive_fpb_afcd19bea, 2026-10-15)
+mruby is the second application of the virtual profile ported to the silicon ABI, after memcached. Details, the
+pre-registration and the matched pairs are in plans/b0-silicon-delegated-runtime.md (B5).
+
+**The result:**
+- **Correctness.** One boot ran `-e`, a program on stdin, the port's smoke.rb (GC, raise/rescue, floats, a file
+  written and read back, a directory listing) and five of mruby's own benchmarks.
+  - Each stdout's sha256 equals the x86 gcc build's: 53c234e5e8472b6a, 5476dba1f4bd59f1, 791d0649e254c15e and
+    8d1539bc79e2b630.
+  - Each step's allocation count equals QEMU's.
+  - Images: mruby.dom a7ac283d7050a5d8; firmware 7d9f274ffd11; controls b0-hello db4385ff and b5-hello 0042544c.
+- **Wall time on the board,** in seconds, from Time.now inside the domain; sizes reduced for the board:
+
+  | benchmark | size | board s |
+  |---|---|---|
+  | mandel_term | as shipped | 138.18 |
+  | fib | 24 | 45.52 |
+  | so_lists | 3 x 1000 | 2.46 |
+  | so_mandelbrot | 32 | 30.67 |
+  | ao_render | 8 x 8, 4 AO samples | 81.99 |
+
+  Per launch: 45.5 s cold (`p 1+1`) and 24.6 s cached (the stdin step). Board / QEMU host time is 6.4-7.6 per benchmark.
+- **Build:**
+  - gp-captable, full LTO, `-O1`, soft-float `+m +a`; 2.0 MB code, 2,622 globals, a 64 MiB domain.
+  - check-repr OK at all 193 placements under the full bounds scheme (pool carve); zero FP instructions in the image.
+  - mruby's allocator on size classes (silicon-alloc.c). level0's first-fit list made the GC test take minutes.
+
+**Scope, before quoting:**
+- The unprotected baseline is B5n, below.
+- The sizes are the board's, not the benchmarks' published ones.
+- No per-object spatial claim: GC heap pages carry one capability for 1,024 objects. No temporal claim. R-55's
+  isolation caveat applies to every domain on this bitstream.
+
+### The baseline: native mruby on the same board (B5n, 2026-10-15, firmware 9e2cbbaf9ac4)
+The same mruby, scripts and sizes as an ordinary Linux process on the same silicon. Built with the board's gcc 12.3
+and glibc (rv64g lp64d hard-float), with the silicon build's gems and defines. Every stdout is byte-identical to x86
+native. The domain's bench was repeated in the same boot: identical hash and allocation count, times within 0.11% of
+B5's on four benchmarks and 0.9% on the 2.4 s so_lists.
+
+| benchmark | domain s (mean of 2) | native -O2 s | native -O1 s | domain / -O2 | domain / -O1 |
+|---|---|---|---|---|---|
+| mandel_term | 138.20 | 90.85 | 109.75 | 1.52 | 1.26 |
+| fib(24) | 45.51 | 29.92 | 36.53 | 1.52 | 1.25 |
+| so_lists (3 x 1000) | 2.45 | 1.68 | 1.92 | 1.46 | 1.27 |
+| so_mandelbrot (32) | 30.68 | 18.46 | 22.37 | 1.66 | 1.37 |
+| ao_render (8) | 81.95 | 59.71 | 69.69 | 1.37 | 1.18 |
+| total | 298.78 | 200.62 | 240.26 | 1.49 | 1.24 |
+
+Launch: the domain takes 45.5 s for its first launch (`p 1+1`) and 24.6 s for the next, with the image cached
+(the stdin step); native takes 3.6-3.9 s for `p 1+1`. The domain's split between
+image, regions and interpreter start is not measured.
+
+**Quote it as an upper bound.** These ratios are not the cost of capabilities alone. Besides the protection, the
+domain differs in:
+- soft-float against hard-float;
+- clang/musl/full-LTO against gcc/glibc/dynamic;
+- a size-class allocator against glibc malloc;
+- delegated system calls.
+
+ao_render, the FP-heaviest benchmark, has the smallest ratio.
+
+## Sublet's child lifetimes run on silicon: CDERIVE / CREVOKE, MREV deepening, a supervised domain, and stale accesses trapping 25, each read exactly as simulated (caplifive_sublet_d93a8d66b, 2026-10-16)
+The bitstream is capstone-ariane capstone-sublet d93a8d66b: the FP tree plus the capability word
+`{revnode_id 30 | perm 4 | cap_type 3 | bounds 27}`, CDERIVE (0x51) and CREVOKE (0x52), the node parent link, MREV
+deepening, and CREVOKE in R-45's commit flush.
+- sha256 89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430, routed WNS -15.856.
+- Flashed 2026-10-15 23:54 on the lead's word, and read back.
+- Every arm below is a bare M-mode JTAG image: no monitor and no Linux. Each ran on its own power cycle, with
+  control-call-retpc reading its 8 values identically. The pre-registrations are on lane b0-silicon-runtime
+  (7b36092c8d3e) and in tests/rtl-smoke/sublet-bare-2026-10-15/PREREG.md.
+
+**Timing control.** The S-16 set reads 18 arms and 98 readings, identical to caplifive_fpb_afcd19bea's. R-51 reads
+0x1c 0x1c and 0 0x1c 0x1c; s10b reads 8 1. Both are identical to FP.
+
+**The Sublet arms.** Every reading equals the RTL simulation's vector by position. Images are given by sha256/16.
+
+| arm | image | SR | what it shows on silicon |
+|---|---|---|---|
+| sublet-derive-kill | 6b6eb589929a2d90 | 19 | A child is minted with perm 0xe (RW+MANAGE) over [buf+256, buf+768), and stores and loads through it. Refusals read 29 (not a direct child), 27 (no MANAGE), 29 (size 0, window outside the parent). Loads through a killed child and grandchild trap 25. A CINCOFFSET copy shares the node. Freed slots are reused. A LINEAR parent reads 26, and a capability as the size reads 24. |
+| sublet-split-shares-node | 029dff8faf069d6e | 7 | A non-linear SPLIT keeps its node. Both halves die with one CREVOKE (25, 25). |
+| sublet-mrev-orphan | 22989ae01b40f4dc | 8 | MREV deepens its subtree. The would-be orphan reads 25 at #6 and #8, where a tree without deepening reads 0. |
+| sup-sublet | d7b3e3f811aa582d | 26 | CDERIVE and CREVOKE inside a supervised domain. Arm 0 returns, with 0x77 / 0xe / 0x5a5a stored through the inherited LINEAR. Arms 1-4 escape with CSUPSTATUS 5 and CSUPCAUSE 25 / 27 / 29 / 26 at offset 0, with the stub left SEALED. mcause 0. |
+| stale-access | c0c635e5acf09bfc | 9 | A data load and a data store through a revoked capability each trap 25, on three paths: a CREVOKE'd child, a LINEAR piece under a revoked MREV handle, and a killed child reloaded with LDC (the LDC itself does not fault). No stale store landed: the base reads 0x77. Exactly 6 traps. |
+
+**The FP positive control** ran on afcd19bea before the flash.
+- derive-kill printed SUPTEST BEGIN and SB1 and no reading: its first CDERIVE raises 2 there, and the handler loops
+  between it and the following LCC (24). The RTL lane reproduced this in simulation.
+- The pre-registered "0x2 at #1" was reasoned from the handler and never run on the FP tree; the corrected
+  PREREG says so.
+- The image reads nothing on FP and its full vector on Sublet.
+
+**R1's revoke constant, FP against Sublet, on the same image** (s1-revoke-gap-2026-10-14).
+- Revoke cycles at k = 1..4. FP is one run; Sublet is three.
+
+  | arm | FP | Sublet run 1 / 2 / 3 |
+  |---|---|---|
+  | close (REVOKE right after MREV) | 58 33 49 73 | 58 33 45 71 / 58 33 45 71 / 58 33 45 71 |
+  | far (~4,000 cycles later) | 66 33 45 71 | 69 33 45 71 / 66 33 45 77 / 67 33 45 71 |
+
+- Outcome A, as pre-registered (PREREG.md, "Silicon predictions": close k = 1 never higher on Sublet, far equal at
+  every k). Close k = 1 reads 58 on both bitstreams in all four runs, and the far arm agrees within the run-to-run
+  spread. So the published 76 cycles at 2 nodes and 22.7 per node are predicted to hold on the Sublet bitstream.
+  - The prediction also expected close k = 1 LOWER on Sublet, by FP's MREV drain. It reads equal because silicon shows
+    no such drain.
+  - What silicon does not show is the simulation's penalty for a revoke right behind an MREV: 150 cycles at
+    S12_MEM_DELAY=12, against close 58 and far 66 on silicon (PREREG.md, "On the board").
+  - The "+8" belongs to a different shape, r12-s1's ladder: the handle in a register, eight or more MREVs. This pair
+    does not reproduce it and does not claim to explain it (PREREG.md, "Read before the board run"). This bullet
+    first attributed the +8 to this pair (021adf5423af); corrected 2026-10-16.
+- Silicon's run-to-run spread is up to 6 cycles on one reading (far k = 1: 66-69; far k = 4: 71-77). With FP read
+  once, close k = 3 / 4 (45 / 71 on Sublet, 49 / 73 on FP) are not attributed to the bitstream.
+
+**Scope, before quoting:**
+- These are directed RTL tests run on silicon: they read the instructions' semantics, not an application.
+- The application-level rows on this bitstream (Linux, SQLite, R1, the cell 6 pair for the sublet-runtime fix) are
+  pre-registered (lane dfbe4f93d433) and recorded separately.
+- CDERIVE rounds a child's bounds outward where physical QEMU refuses with 29 (ISSUES Q-15); no arm here
+  reads that.
+
+### The application rows on the same bitstream: Linux, SQLite, R1, the ladder and the sublet-runtime fix (2026-10-16 00:29-03:10)
+Every row reads as pre-registered (lane dfbe4f93d433), each on its own cold boot. The firmwares, monitor and module are
+the FP respin's (shared tree d04bd83 / df0e9a8 / 93440d5).
+- **Linux:** boots, with k800 4 and s06agg 64.
+- **Boot C+F:** every rung equal to the respin, r54-bounds 64.
+- **R1** (R-43 a1, a3): `alloc=160 minted=191 revoked=160`; 12 wide points ok.
+  - Both images, a1's `079b1f3a` and a3's `46f99c7b`, and a2's `1b7a04fe` below, predate the sublet-runtime fix
+    (2026-10-16 23:20, `tests/rtl-smoke/r1-sublet-2026-10-16`), so their carves alias on this bitstream.
+  - a1 and a3 were completion checks, and no figure here is cited from them.
+  - a2's verdict below is the monitor's region ids and OVERLAP 0, carved outside the domain, so it does not depend on
+    the domain's runtime.
+  - R1's warm and cold figures on this bitstream are pre-registered on the fixed-runtime image `66764b0e` (same
+    folder).
+- **R-43's live sweeps:** 544 / 4352 / 17408.
+- **The 17-rung ladder:** retval and instret identical to the respin's, cycles within 0.74%.
+- **P1 cell 5:** `112006 38bb59fd`, 1,156,968,951 cycles.
+- **Supervised SQLite (C5u, on the exact-regions monitor line):** 1,282 preemptions, four hashes correct, quiet
+  overhead +0.70%.
+- **The R-55 stale probe (a10):** refused with 25 at its recorded pc.
+- **The sublet-runtime fix, as a matched pair of P1 cell 6 images** that differ only by sublet_split's SHRINK:
+  - the fixed image completes with QEMU's hash and exact sublet counters (5568/37970/32569/37970/5401), CPI 3.756;
+  - the unfixed image wedges with mcause 26 at `revoke` in sqlite3DbNNFreeNN, the R-55 signature the frozen image
+    showed on the respin.
+- Images: fixed 4bfe3b0ec8494385, unfixed b029b33c879495e9 (capstone-artifacts/c6-sublet-fix-2026-10-15).
+
+QEMU's physical profile keeps exact SPLIT bases and cannot tell the two apart.
+
+### CDERIVE / CREVOKE from a delegated application (B6, firmware 7a4ef23ad162, 2026-10-16)
+b6-sublet.c (image d989874aa2ca0161) runs under Linux and the monitor and uses the runtime's capstone_cap_derive /
+capstone_cap_revoke_child on its malloc'd heap.
+- A perm-7 block derives a group with perm 15 (MANAGE) over exactly [+0, +4096).
+- The group derives a child over exactly [+256, +768); a store through the child reads back through the group.
+- The child derives a grandchild [+256, +320).
+- CREVOKE(group, child) reads the child and the grandchild invalid (0), the group valid, and the bytes still there.
+- A fresh child over the same range works.
+- rc 0, every reading as pre-registered (lane 2a91e97661b4, 0fa554ba6c3e), with the b0-hello and r54-bounds (64)
+  controls in the same boot.
+- QEMU (acbad0f7ec82) reads the same, except that its lcc validity stub reports the revoked children as 1.
+
+### The monitor's region table under the full bounds scheme, fixed on silicon (R-55, 2026-10-16)
+On a full-scheme bitstream, the FPGA monitor's carves rounded to decoded bounds. Nearly every carve then left an extra
+fragment, and R-43 a2 filled the 96-slot region table at invocation 8 of 12 (the FP respin). The fix:
+- a nominal-bounds table of 127 slots;
+- remainders cut into exact pieces;
+- Linux's region ended at 0xC0000000.
+It is landed on capstone-bootstrap: capstone-sbi 234ee66, caplifive-opensbi 3ab5655, caplifive-buildroot 549d686.
+
+On caplifive_sublet_d93a8d66b:
+- R-43 a2 completes all 12 invocations, with 60 of 60 R1 points ok and no RGNF, EXCT or EXCS.
+- The replay of the board's own carve sequence reproduces every region id with OVERLAP 0, so no remainder's decoded
+  bounds reach a carved domain.
+- The same change on the supervised-call line runs supervised SQLite (C5u) and the process ABI with every B-series
+  rung (boot P).
+
+### Where a delegated application's launch goes (boot P, 2026-10-16)
+capstone-exec's own launch ticks (rdtime at each stage; the board's timebase is 12.5 MHz) for mruby, a 2.9 MB image
+in a 64 MiB domain:
+- the first launch in a boot takes 35.1 s, of which domain creation is 22.9 s, mapping the regions 9.1 s and reading
+  the image 2.4 s;
+- a second launch takes 14.3 s, with domain creation 2.2 s and the regions still 9.2 s;
+- b0-hello (a 128 KiB image in a 256 KiB domain) launches in 1.6 s.
+So the cold penalty sits in domain creation, and the region cost scales with the domain's size. These are stage
+boundaries in the launcher. What the monitor and the CMA do inside each stage is not split.
+
+## The plain bug corpora of memcached, FFmpeg and tshark on silicon: every spatial defect caught, and every temporal one caught by per-object lifetimes and missed without them (caplifive_sublet_d93a8d66b, 2026-10-16)
+This covers 72 case directories: 46 plain-heap (FFmpeg 13 is a duplicate of 02) and 26 plain-temporal.
+- Each case was built for the silicon ABI (B0 pipeline, -O0, the pool carve) and run as a Linux-hosted domain through
+  capstone-exec.
+- The fixed run and the buggy run share one image.
+- The arm's controls ran in the same boot.
+- Pre-registered before each boot: the helper lane's per-case table (silicon-predictions/2026-10-16-plain, dev
+  510126308bb6) and bug-corpora/silicon-runs/2026-10-16-plain (lane fa3806536fa7 and 0f1c5d7f7463).
+
+| arm | heap | spatial (46) | temporal (26) | controls |
+|---|---|---|---|---|
+| silicon-lifetimes | level0, each object a CDERIVE child at its request size; free is CREVOKE | 46 CAUGHT at the labelled probe, cause 28 | 26 CAUGHT at the labelled probe, cause 25 | oob 28, uaf 25 at their probes; clean and subobj return |
+| silicon-level0 | level0, per-object bounds only | 46 CAUGHT at the labelled probe, cause 28 | 26 MISSED (the defect reproduces) | oob 28 at its probe; uaf returns; clean and subobj return |
+
+- **The fixed arm** of every case printed VERDICT FIXED and exited 0.
+- **148 of 148 runs per boot ended by themselves.** A domain fault ends only its own capstone-exec, and the next run
+  continues: the first deliberate faults through the process ABI on silicon.
+- **The silicon-mimic QEMU** (capstone-qemu d35af47b163c, GP_FABRICATE=0) read every row the same, on the same images.
+  Two cause codes differ:
+  - spatial: QEMU reports 5 / 7, the RTL its own OUT_OF_BOUNDS, 28;
+  - temporal: QEMU reports 24, because its ldc untags a revoked capability (ISSUES Q-11), and the RTL 25.
+
+**Scope, before quoting:**
+- These are the plain corpora. Their objects come from malloc, so per-object bounds catch every spatial crossing here.
+  Every object is exact at its 16-byte placement under the full scheme (the prediction table's geometry).
+- The sub-object (9) and nested (50) corpora are not in these rows.
+- The lifetimes arm is level0 with a CDERIVE child per object. A request that is not exact at its placement would keep
+  plain bounds and no lifetime; none in this corpus does.
+- It is not the virtual profile's mallocng.
+
+## FFmpeg's sub-object and buffer-pool corpora on silicon: field bounds catch 7 of 9 member crossings, and the pool's own lifetimes catch all 4 reuses (caplifive_sublet_d93a8d66b, 2026-10-16)
+Five arms in one boot (05:51-06:46): firmware 37ae782f7718b018, the exact-regions supervised-call monitor, the
+127-slot process-ABI module, 94 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-subobject-pool (lane 1ef381aaa812), from the silicon-mimic
+  QEMU's reading of the same images.
+- Results: RESULTS.md there.
+
+| arm | heap and allocator | rows | controls |
+|---|---|---|---|
+| silicon-subobject | level0, plus field bounds (`-Xclang -fcapstone-subobject-bounds`) | sub-object 9: 7 CAUGHT 28 at the probe or a declared site, 04 and 06 MISSED | subobj CAUGHT 28 |
+| silicon-level0 | level0, bounds only | sub-object 9: 9 MISSED | subobj, uaf return |
+| silicon-lifetimes | level0 + per-object lifetimes | sub-object 9: 9 MISSED | uaf CAUGHT 25 |
+| silicon-pool-stock | lifetimes heap, FFmpeg 9.0.1's AVBufferPool stock (patch 0001) | pool 4: 4 MISSED; control 90 completes | uaf CAUGHT 25 |
+| silicon-pool-sublet | lifetimes heap, the pool with patch 0003 (each hand-out a CDERIVE child, CREVOKEd at release) | pool 4: **4 CAUGHT 25**; control 90 CAUGHT 25 | uaf CAUGHT 25 |
+
+- **Every row and control is as pre-registered,** by outcome, cause and site, on the pre-registered image: 37 of 37
+  rows and 20 of 20 controls.
+- **The two field-bounds misses (04, 06)** have images byte-identical to the level0 arm's. Field bounds change nothing
+  in them.
+- **The pool arm** is the first application allocator on silicon whose CDERIVE nests inside the lifetimes heap:
+  - the pool's child sits inside the entry's lifetime, which sits inside level0's object;
+  - its catches are at `ff2_case_run`, a fault site the cases declared before any run, as on QEMU.
+
+**Scope, before quoting:**
+- Sub-object crossings stay inside one allocation, so per-object bounds and lifetimes miss them by construction.
+  - Field bounds narrow a pointer to a member.
+  - 04 and 06 cross in ways that no member bound sees.
+- The pool cases are temporal: a returned entry is used through a stale reference. Stock FFmpeg reissues it, and patch
+  0003 revokes the user's child at release.
+- **These images need 88 MiB domains,** because the sub-object driver takes 64 MiB of payload up front. They launched
+  without a CMA failure; one launch read 1.66 s.
+
+## FFmpeg's carved corpus on silicon: bounding each carved region catches all 13 crossings, and the Sublet carve's lifetimes hold (caplifive_sublet_d93a8d66b, 2026-10-16)
+Three arms in one boot (06:46-07:01): firmware 124238b7d5b41abd, set 2's line, 98 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-carved (lane e4f15d4b7a32).
+- Results: RESULTS.md there.
+
+| arm | carve | 13 cases | carve controls |
+|---|---|---|---|
+| silicon-level0 | upstream's pointer arithmetic | 13 MISSED | 99 completes |
+| silicon-carve-bounds | `FFC_CARVE_BOUNDS`: SHRINK per region | **13 CAUGHT 28** at the probe | 99 CAUGHT 28 |
+| silicon-carve-sublet | `FFC_SUBLET_CARVE`: a CDERIVE child per region, CREVOKE at a re-carve, over the lifetimes heap | **13 CAUGHT 28** at the probe | 99 CAUGHT 28; 98 (a re-carved region's old alias) CAUGHT 25 |
+
+- **Every row and control is as pre-registered,** by outcome, cause and site, on the pre-registered image.
+- **The predictions came from a silicon-mimic QEMU that rounds an inexact CDERIVE child as the RTL does:**
+  capstone-qemu silicon/cderive-round ce1be0c642, `CAPSTONE_CDERIVE_ROUND=1`.
+  - Its codec matches the RTL lane's bounds-model.py on 200,018 random triples.
+  - The RTL compresses every capability result at writeback (ex_stage.sv:1515 / :1528 at d93a8d66b), so the rounding
+    is immediate there too.
+- **One inexact derive was read on the board.** Case 00's group over a 35,840-byte block: its regions sit 48 bytes
+  below the case's arithmetic (`base_eq=0`), on silicon as on that QEMU, and the case reads as predicted anyway.
+
+**Scope, before quoting:**
+- The carved crossings stay inside one malloc'd block. A remedy is only possible at the carving code, which these two
+  arms add, in the corpus's driver, not in FFmpeg.
+- Every region here is at most 2,048 bytes, below the 4 KiB where the full scheme's bounds become inexact.
+
+## memcached's nested allocators and FFmpeg's plane case on silicon: patch 0006 catches all five reuses at the stale read; plane bounds catch the plane crossing (caplifive_sublet_d93a8d66b, 2026-10-16)
+Four arms in one boot (07:11-07:43): firmware 8c1a74aec8105d2d, the line of sets 2 and 3, 60 runs, each ended by
+itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-nested (lane 02105a6f4c96).
+- Results: RESULTS.md there.
+
+| arm | rows |
+|---|---|
+| memcached-silicon-mc-stock (slabs.c / cache.c stock, lifetimes heap) | 00-07 MISSED; 08 CAUGHT 28 (declared site); control 90 completes |
+| memcached-silicon-mc-sublet (patch 0006: every chunk and cache object a CDERIVE child, CREVOKEd at free) | **00-04 CAUGHT 25** at the stale read; 06-07 CAUGHT 28; 05 and 08 no reading; control 90 CAUGHT 25 |
+| plane-silicon-level0 | MISSED |
+| plane-silicon-carve-bounds | CAUGHT 28 at the probe |
+
+- **Every outcome and site is as pre-registered.** One cause is not: 05's fixed run read 24, not the 25 predicted. The
+  case's own sentinel byte overwrites the next item's `sublet_parent`, so CREVOKE gets a non-capability. RESULTS.md has
+  the detail.
+- **The level0 these images use places blocks of 4 KiB and up on their granule,** so a CDERIVE over them is exact and
+  base == cursor. Patch 0006's arithmetic needs that. An inexact child keeps its cursor at the requested start while
+  its base rounds down.
+
+**Scope, before quoting:**
+- memcached's 9 cases are 5 temporal (00-04) and 4 spatial (05-08).
+- 05 has no reading on any Sublet build, virtual included.
+- 08's buffer is a 16,400-byte child that rounds up 16 bytes at its granule: a predicted spatial difference on
+  silicon, where the scan stops in the slack.
+
+## wireshark's wmem corpus on silicon: patch 0001 catches all 23 (14 temporal, 9 spatial), stock wmem none (caplifive_sublet_d93a8d66b, 2026-10-16)
+Two arms in one boot (07:43-08:26): firmware 6cbb3a4494fcdc73, the line of sets 2-4, 106 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-wmem (lane 8bb5542ed567).
+- Results: RESULTS.md there.
+
+| arm | 14 temporal | 9 spatial | controls (uaf-chunk / uaf-jumbo / bounds-chunk) |
+|---|---|---|---|
+| wmem as released, lifetimes heap | 14 MISSED | 9 MISSED | completes / CAUGHT 25 / completes |
+| wmem with patch 0001 (every object a CDERIVE child of its block, CREVOKE at free and at the pool reset) | **14 CAUGHT 25** | **9 CAUGHT 28** | CAUGHT 25 / CAUGHT 25 / CAUGHT 28 |
+
+- **Every row and control is as pre-registered,** by outcome, cause and site, on the pre-registered image: 26 of 26
+  per arm.
+- **The catches are at each case's labelled probe,** except the double free (22), which faults in its declared
+  `wmem_block_sublet_free`.
+
+**Scope, before quoting:**
+- These cases are wmem's packet-pool defects: a reset ends every packet-scope object while the pool's first 2 MiB
+  block stays allocated. So a malloc-level defence cannot see them, and the stock arm's 23 MISSED says so on silicon.
+- The jumbo control faults on both arms because the jumbo is returned to `g_free`. That needs level0 to place a 2 MiB
+  block on its granule (dev `06f0b29f0463`).
+- Built with the port's Release flags (`-O3 -DNDEBUG`).
+
+## The nested-lifetime controls on silicon: every permitted access completes, and only the stale reference faults (caplifive_sublet_d93a8d66b, 2026-10-16)
+Six arms in one boot (08:26-08:52): firmware a43fcda381219db6, 63 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-lifetime-controls (lane 75ce44a1ceeb), from
+  `docs/plans/2026-10-11-nested-lifetime-controls.md`'s registered prediction.
+- Results: RESULTS.md there.
+
+| port | patch | parent, sibling and successor runs | the successor's stale read: Sublet arm / stock arm |
+|---|---|---|---|
+| FFmpeg AVBufferPool (91-93) | 0003 | all complete on both arms | CAUGHT 25 / completes |
+| memcached slabs (91-93) and cache.c (94-96) | 0006 | all complete on both arms (the Sublet arm also through the page's generation) | CAUGHT 25 (93, 96) / completes |
+| wmem block (00-03) and block_fast (00-02) | 0001 | all complete on both arms | CAUGHT 25 / completes |
+
+- **All 39 control runs are as pre-registered,** by outcome, cause and site, on the pre-registered image.
+- **On silicon, these lifetime patches reject no permitted access.** They reject the stale reference only, at its
+  labelled probe.
+
+**Scope, before quoting:** three controls per allocator (block_fast has no sibling control), driven through each
+allocator's API in the corpus's own builds. These show the absence of false positives on these shapes, not in general.
+
+## mruby's benchmarks on the Sublet bitstream: the silicon ABI costs 1.25x native at the same -O1 and 1.50x against native -O2, both arms in one boot (caplifive_sublet_d93a8d66b, 2026-10-16)
+The board campaign's benchmark 5 (`docs/plans/2026-10-16-board-campaign-all.md`). It is the B5 pair: mruby 4.0.0-rc2
+as a capstone-exec domain (image a7ac283d7050a5d8) and as a native Linux process (gcc 12.3, glibc, -O2 and -O1), in
+one boot.
+- Pre-registered: `docs/plans/b0-silicon-delegated-runtime.md`, "B5 pair" (lane 1d9a1b9b5d5d).
+- Firmware 2edb66370270cdab. Every stdout byte-identical to x86 native.
+
+| benchmark | domain | native -O2 | native -O1 | domain / -O2 | domain / -O1 |
+|---|---|---|---|---|---|
+| mandel_term | 138.34 | 90.59 | 109.37 | 1.53 | 1.26 |
+| fib(24) | 45.49 | 29.75 | 36.04 | 1.53 | 1.26 |
+| so_lists (3 x 1000) | 2.46 | 1.67 | 1.93 | 1.47 | 1.28 |
+| so_mandelbrot (32) | 30.67 | 18.36 | 22.24 | 1.67 | 1.38 |
+| ao_render (8) | 81.89 | 59.42 | 69.60 | 1.38 | 1.18 |
+| total | 298.85 | 199.79 | 239.16 | 1.50 | 1.25 |
+
+Seconds, Time.now inside each process. The domain and -O2 are each the mean of two runs in the boot, which agree within
+0.20% and 0.50%.
+
+**Scope, before quoting:**
+- The ratio is an UPPER BOUND on the cost of capabilities: the domain also differs in soft-float, clang/musl, full
+  LTO, its size-class allocator and the delegation of every system call.
+- The 2026-10-15 B5n boot read the same ratios on the FP bitstream (`caplifive_fpb_afcd19bea`). Both arms' times
+  agree across the two bitstreams within 1.4%.
+- Launch is excluded: 45 s for the domain's cold launch, against 4 s natively.
+
+## PostgreSQL's c-repros on silicon: per-object bounds catch all five frontend defects at the function the case names (caplifive_sublet_d93a8d66b, 2026-10-16)
+Two arms in one boot (16:33-16:41): firmware 1d2bbbf37f63f435, 28 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-postgres-c (lane 61f0433d704c).
+- Results: RESULTS.md there.
+
+| arm | 5 cases | 5 negative controls |
+|---|---|---|
+| level0, per-object bounds | 5 CAUGHT 28: 3 at the function the case names, 2 at a declared site | complete |
+| level0 + per-object lifetimes | 5 CAUGHT 28, at the same sites | complete |
+
+- Every row and control is as pre-registered, by outcome, cause and site, on the pre-registered image.
+- The cases drive PostgreSQL 17.5's real upstream functions (libpq, pg_dump, ecpg, saslprep, the tar streamer),
+  compiled from the pin.
+
+**Scope:** these are the PostgreSQL corpus's malloc-backed cases. Its server-level (`sql-repros`) and
+memory-context (`mmgr-repros`) corpora are separate.
+
+## PostgreSQL's memory-context corpus on silicon: patch 0003 catches all five use-after-frees and double frees, stock managers none (caplifive_sublet_d93a8d66b, 2026-10-16)
+Two arms in one boot (16:41-16:53): firmware 9dc96b2345000482, 30 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-postgres-mmgr (lane a13fe2ed2cbd).
+- Results: RESULTS.md there.
+
+| arm | 5 cases | 5 negative controls | corpus control |
+|---|---|---|---|
+| stock managers (patches 0001 + 0002) | 5 complete, the stale access unseen | complete | completes |
+| Sublet managers (+ patch 0003: chunks CDERIVE children, CREVOKEd at pfree and context death) | 5 CAUGHT 25: 4 at pg_probe, the double free in GetMemoryChunkMethodID (declared) | complete | CAUGHT 25 |
+
+- 21 of 22 rows are as pre-registered, by outcome, cause and site, on the pre-registered image.
+- The exception is case 00's site, which RESULTS.md attributes from the disassembly. QEMU faulted at the pointer
+  arithmetic on the untagged child. Silicon keeps the revoked child tagged (ISSUES Q-11), so it faults at the first read
+  through it, the case's other declared site.
+- The managers are PostgreSQL 17.0's own aset, mcxt, generation, slab and bump.
+
+## The SQLite 3.22.0 engine-repros control arm on the Sublet bitstream: every cell as on the emulator and as on R-43 v2, with the corrected input (caplifive_sublet_d93a8d66b, 2026-10-16)
+Three boots on the classic line (firmware 5db66334e5404751, 662157e243dc2c77, c6cde9ac856624d5).
+- Folder: `tests/rtl-smoke/repro322-silicon-2026-10-16/`. Pre-registered at lane 423d3a56d0bb (boots 1-2) and
+  40256f289171 (boot 3). RESULTS.md and `results/` there.
+- It repeats the 2026-10-01 section above on the new bitstream. The images are rebuilt from the adapted input that
+  carries the sorter's 16-byte alignment (7fc92e19).
+
+| | cells | silicon |
+|---|---|---|
+| returning | base322, wschema, blobwrite, mem5design, blobclose, jsonstatic, jsonroot | every one returned, its output identical to the emulator's line for line |
+| FAULT | backupattach, detachtrig | wedged, mcause 24, each at the emulator's instruction (`sqlite3BtreeUpdateMeta+0x48`, `sqlite3DropTriggerPtr+0x154`), tval 0 |
+| boot 3 | blobclose03 (corpus case 03), the corpus's uaf-mem5 and bounds-mem5 controls, the review branch's case 02 | every one returned, as on the emulator |
+
+- Both FAULT cells are null-pointer faults of the unprotected control arm, not detections.
+- The refusal record read EMPTY at both wedges. It was not readable in boot 3, which had no wedge.
+- Lookaside is off in these images (`sqlite3Config` szLookaside 0, nLookaside 0), and memsys5's heap is 256 KiB.
+
+## CPython's pymalloc corpus on silicon: patch 0003 refuses all twenty use-after-frees at the stale load, pymalloc as released none (caplifive_sublet_d93a8d66b, 2026-10-16)
+Two arms in one boot (18:11-18:54): firmware 5049ca43f7595b41, 50 runs, each ended by itself.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-pymalloc (lane 9aa15f58c846).
+- Results: RESULTS.md there.
+
+| arm | 20 cases | corpus control (a freed block read through the probe) |
+|---|---|---|
+| pymalloc as released (patches 0001 + 0002) | 20 complete, every stale access unseen | completes |
+| + patch 0003 (every block a CDERIVE child of its arena, CREVOKEd when taken back) | 20 CAUGHT 25 at `read_probe` | CAUGHT 25 at `read_probe` |
+
+- 42 of 42 rows are as pre-registered, by outcome, cause and site, on the pre-registered image.
+- The cases are the corpus's twenty CPython 3.13.7 defects. Each is the port's replay around CPython's own
+  `Objects/obmalloc.c`, in 128 MiB domains.
+- The emulator reads 24 for each refusal and silicon reads 25 (ISSUES Q-11).
+
+## mruby's release-differential corpus on silicon, bounds only: per-object bounds refuse all five spatial defects (28), the temporal ones manifest as on the emulator (caplifive_sublet_d93a8d66b, 2026-10-16)
+One boot (18:55-19:36): firmware 6bf139245abaabc1, 25 runs. B5's interpreter mruby.dom a7ac283d7050a5d8 runs each case's
+upstream regression test.
+- Pre-registered: bug-corpora/silicon-runs/2026-10-16-mruby-bounds (lane 13f97a853606, 3bff031359fd).
+- Results: RESULTS.md there.
+
+| class | cases | silicon |
+|---|---|---|
+| spatial | 12-16 | 5 CAUGHT 28 at the overflowing access |
+| temporal | 01-04, 06-10 | 01, 02, 07: CAUGHT 24 at a null/integer pointer; 06: CAUGHT 28; 03, 04, 08, 10: wrong answer; 09: silent |
+| spatial + temporal | 17 | CAUGHT 24 |
+| null dereference, type confusion | 18-22 | CAUGHT 24 |
+
+- 21 of 21 rows as pre-registered by outcome, cause and site, with the port's smoke.rb control completing.
+- The arm revokes nothing, so its temporal rows are not detections. The five spatial rows are.
+- QEMU's 5 / 7 read 28 and its 24 reads 24. This is the first no-revocation arm, and its reading is consistent with the
+  earlier sets' 24 -> 25 being Q-11's revoked-capability case only.
+- Every faulting case outlived the corpus rung's 120 s watchdog after printing its fault line, which no earlier set
+  showed. Not explained here.
+
+## Two capability/native pairs already measured on the Sublet bitstream by its acceptance boots, recorded here (caplifive_sublet_d93a8d66b, 2026-10-16 01:31-01:53)
+The Sublet acceptance (Linux half, dev d5fe0b4092f7) ran both pairs below on the classic line (d04bd83 / df0e9a8 /
+93440d5) and reported only their capability halves. Each pair ran in one boot.
+
+**P1 cell 5 beside the native -O2 baseline** (boot sw8x-b80s-s10-p1o2-c5, firmware 58cea02e55e5b7d7, 01:43-01:53):
+- the images are cell 5 `5f4b44257c933477` (memsys5 + lookaside 1200,40, 2 MiB heap, -O2) and the native -O2
+  `speedtest1_baseline` `9a80c1cd2a576ed2`, with the relinked k800 `589ceee3853c6092` and host `2c9e82d101b48160`;
+- k800 returned 4 twice, both arms read `112006 38bb59fd`, lookasides 25,010 and 25,122, and there was one boot banner.
+
+| arm | cycles | CPI against its QEMU count |
+|---|---:|---:|
+| cell 5, `--size 1 --stats` | 1,156,968,951 | 3.498 (330,731,081) |
+| native -O2, `warm --size 1 --stats` | 856,160,837 | 3.557 (240,714,705) |
+
+**cell 5 / native -O2 = 1.3513.**
+- The same images read 1.3510 on R-42 (boot p1o2-c5, 2026-09-29).
+- The native arm reproduces across the two bitstreams within 0.005 % (856,120,199 then).
+- **Corrected the same day.** This section first said P1's cell 6 "still needs an -O2 build carrying the
+  sublet-runtime fix". It does not.
+  - The acceptance's "fixed" cell 6 `4bfe3b0ec8494385`, the c6pair boot, is that build. Its disassembly is identical to
+    an -O2 rebuild with the fix (612b3ec514c0, lane HEAD), and its `CPDOMREQ` (data 0x135de0, stack 0x100000) equals P1's
+    own cell 6 `df484d98b489aeab`.
+  - The "-O1" in that boot's log is the driver's label text, not the image's level.
+  - It read 1,292,584,693 cycles here (CPI 3.756 against its QEMU 344,110,502).
+  - What is missing is a native beside it in one boot. It needs its own boot, because both cells enter at 0x10000.
+
+**The 17-rung ladder at K = 0, both halves** (boot s10, 01:31-01:42): the capability half, then the bare-metal sweep.
+- Paired by `ladder-revival-2026-09-22/pair-halves.py`, unchanged. The control passes all three gates: instruction
+  ratio 1.00002, baseline CPI 1.2000, a 15/15 floor.
+- 17 admissible rows, cycle ratios 0.981× (`beebs_cover`) to 2.227× (`beebs_insertsort`).
+- Records: `tests/rtl-smoke/ladder-sublet-2026-10-16/results/K0-s10.*`.
+- This is one layout draw. Layouts K = 1..3 are pre-registered there (lane bc200ac88bd3), for the median over
+  K = 0..3.
+
+## H1 calibration on the Sublet bitstream: the instrument reads as on R-43 v2, and REVOKE reads 12-53 % lower, also on a fixed-runtime image (caplifive_sublet_d93a8d66b, 2026-10-16/17)
+Three cold boots (h1s16r1-r3, 19:36-20:17), each running `h1-v2-calibration.txt` on the 2026-09-29 image
+da9c54e578845735. Folder: `tests/rtl-smoke/h1-sublet-2026-10-16/` (pre-registered at lane 21e38145c053; RESULTS.md and
+`results/`).
+- **As on R-43 v2, in every boot:**
+  - latency 9 / 9 / 40 / 48 / 48 cycles per load at 4 KiB-1 MiB;
+  - the timer `cyc_cyc=2 ret_ret=1`;
+  - the nodes regression nd = 2n with ok=1 bad=0;
+  - the linear types 7,1,7,7,7,1,7,1,0,1,0,1.
+- **One pre-registered threshold exceeded:** boot 3's 64 KiB traversals spread 0.117 cycles per load (limit 0.1). The
+  value stays 40.
+- **REVOKE:**
+  - 71 / 145 / 608-634 / 2,336-2,370 / 9,354-9,692 cycles at n = 1 / 4 / 16 / 64 / 256, against 144-146 / 193 /
+    722-725 / 2,873-2,897 / 11,106-11,293 on v2;
+  - about 18.5 cycles per destroyed node at n = 256, against 22.0;
+  - the fixed part halves.
+
+> **RETRACTED (2026-10-16 23:10): the attribution of this drop to the bitstream.**
+> - **The image predates the fix.** H1's image `da9c54e578845735` was built on 2026-09-29, before the sublet-runtime fix
+>   a07a11194fa0. It contains no SHRINK, the instruction that fix adds to `sublet_split`; fixed builds of the same
+>   runtime carry four.
+> - **So its carves are wrong here.** Its `sublet_split` gives the lower piece its parent's decoded start, and under
+>   this bitstream's full bounds scheme that rounds below the nominal base (ISSUES R-55, the runtime half).
+> - **A sibling image showed it.** `1b7a04fe237e1580`, same harness and vintage, faulted at M2's first chase on this
+>   bitstream (boot m2s16-b1): mcause 6 storing to address 1, the address the carves' aliasing predicts.
+> - **What is withdrawn:** "revocation is cheaper on this bitstream". The REVOKE figures below are readings of this
+>   image on this bitstream, and they stand as readings; the drop's attribution waits for a fixed-runtime image.
+> - **What stays, as readings of the same image:** latency, timer, node counts and linear types.
+>
+> **RESOLVED (2026-10-17 02:53) by the fixed-runtime test (`tests/rtl-smoke/h1f-sublet-2026-10-16`):** three boots of a
+> rebuild carrying the fix (66764b0e, 14 SHRINK) read the same drop. At n >= 16 it reads 0.84-0.86 of v2, against the old
+> image's 0.82-0.86; the fixed part (n = 1) reads 0.47. So the drop is a property of this bitstream and its classic-line
+> monitor, not of the image's runtime. Whether the bitstream or the monitor (93440d5 against 2dcd3a5) causes it is
+> still open.
+
+## S1 on the Sublet bitstream: SQLite's use-after-free refused at the access, as on R-43 v2 (caplifive_sublet_d93a8d66b, 2026-10-16)
+Three boots (s1sql-b1s16-b3s16, 20:17-21:40) on the classic line. They repeat "S1 on R-43 v2" with images rebuilt on
+dev's port and runtime, which carry the sublet-runtime fix:
+- memsys5, unprotected: `41f9b021371b4b66` at 0x810000;
+- Sublet: `445d93b331cd3ba2` at 0xc10000.
+Folder: `tests/rtl-smoke/s1-sqlite-silicon-2026-10-16/` (pre-registered at lane 930bd30d1060; RESULTS.md and
+`results/`).
+
+**Every pre-registered reading holds, in every boot:**
+- k800 returned 4.
+- The six memsys5 cells and the three returning Sublet cells printed the emulator's markers. memsys5 reads the
+  freed lookaside slot and the freed 4,096 B block, and the byte past a 128 B block.
+- **The Sublet cells:**
+  - p1, the lookaside slot after `sqlite3_finalize`: **cause 25** at the probe's `lbu` (+0x1e46c), record LATCHED,
+    hit-dead;
+  - p2, the 4,096 B block after `sqlite3_free`: **cause 25** at its `lbu` (+0x1df18), record LATCHED, hit-dead;
+  - p6, the byte past a 128 B block: **cause 28** at its `lbu` (+0x1e9b0), record EMPTY.
+- The emulator reads 24 for p1 and p2, because it untags a revoked capability (Q-11), and 5 for p6, as pre-registered.
+
+**The refusal ids**, recorded and not attributed to the probe (ten invocations ran first), read as generation
+id[29:16] and index id[15:0]:
+- boot 1: generation 1 at index 386;
+- boot 2: generation 3 at index 226.
+
+**Limits, as on R-43 v2:**
+- the fault cells are N = 1;
+- before-reuse only;
+- the survivors ran before the fault.
+
+## The 17-rung ladder over layouts K = 0..3 on the Sublet bitstream: median 1.160×, as phase 10, geometric mean 1.313× (caplifive_sublet_d93a8d66b, 2026-10-16)
+Boot s10 for K = 0, then s16cap-K1..K3 with their bare sweeps (21:40-22:15). These repeat phase 10's layout-randomised
+table (`-DLADDER_PAD=K` in both halves). Folder: `tests/rtl-smoke/ladder-sublet-2026-10-16/` (K = 1..3 pre-registered
+at lane bc200ac88bd3; `results/`).
+- **As pre-registered at every K:**
+  - capability half 17/17 correct, every instret equal to K = 0's;
+  - bare half every rung 15/15, with instret and retval as the capability half's;
+  - `pair-halves.py`'s control gates pass, with 17 admissible rows.
+- **The median over K = 0..3, over the 15 kernels:** 0.991× (`beebs_cover`) to 2.270× (`beebs_insertsort`), median
+  **1.160×**, geometric mean **1.313×**.
+- **Against phase 10:** on 054cea69b it read 0.990×-2.154×, 1.160× and 1.299×, reproduced exactly from its record by
+  the same tool.
+  - 12 kernel medians agree to within 0.6 %.
+  - `coremark_matrix` (1.460 → 1.567) and `beebs_insertsort` (2.154 → 2.270) are the only two rungs whose capability
+    build moved since then (instret 31,560 → 31,803 and 962 → 971). This run cannot split build from silicon there.
+  - `beebs_janne` (1.993 → 2.072, identical instructions) is inside its 13.2 % boot-to-boot band (phase 11).
+- **Layout bands:** `beebs_janne` 7.7 %, `beebs_bs` 5.7 %, `beebs_insertsort` 4.7 %; every other kernel 1.4 % or less.
+- Table: `results/K0-3.summary.txt`.
+
+## SQLLogicTest on the Sublet bitstream: all seven files identical to native, 10,809 records (caplifive_sublet_d93a8d66b, 2026-10-16/17)
+One file per boot (23:16-02:12). Each boot runs the relinked k800 first, then the SQLite domain, on the classic line.
+The images were rebuilt with dev147 and validated under QEMU against a native baseline rebuilt from the same tree.
+Folder: `tests/rtl-smoke/slt-sublet-2026-10-16/` (pre-registered at lane 0d68d03ea85c; RESULTS.md and `results/`).
+- **All seven files match native on silicon, k800 4 in every boot:**
+  - negctl and aggfunc reproduce their deliberate failures exactly, 2 + 5 plus one parse error and 1 + 10;
+  - select1 and select2: 1,000 queries each;
+  - select3: 3,320;
+  - select4: 2,648 queries plus 184 skipped for size;
+  - select5: 732 queries and 704 statements.
+- **Against §7c (`caplifive_s12fix_5097eb166`):** the same verdict on every file, with two differences in the inputs.
+  - The negative control gained two arms (23 records), and select4 now compares the 31 empty results §7c's runner
+    skipped. Both come from the 2026-09-30 runner fix.
+  - Three region/heap classes run with reduced stacks (1,507,328 / 458,752 B), because today's code no longer fits the
+    order-10 allocation beside the old ones.
+- select4 ran 4,621 s, against about 78 min on s12fix. That is a correctness run, not a timing.
+
+## H1 on a fixed-runtime image: the REVOKE drop holds, so it is the Sublet bitstream's or its monitor's (caplifive_sublet_d93a8d66b, 2026-10-17)
+Three cold boots (h1fs16r1-r3, 02:12-02:53) of H1's list on `66764b0e62075e57`: the R1 harness rebuilt from the lane
+with the sublet-runtime fix (14 SHRINK words), the defaults and 0x410000. Folder: `tests/rtl-smoke/h1f-sublet-2026-10-16/`
+(pre-registered at lane 3e021fae4070 with both outcomes written down; RESULTS.md and `results/`).
+- **Every instrument reading as R-43 v2 in all three boots:** latency 9/9/40/48/48, the timer 2/2/1, nd = 2n ok=1,
+  the linear types, k800 4 twice.
+- **REVOKE at n = 1/4/16/64/256:** 64-92 / 145-183 / 616-652 / 2,399-2,437 / 9,432-9,523 cycles.
+  - That is outcome (b), the old image's drop: 0.84-0.86 of v2 at n >= 16 and 0.47 at n = 1.
+  - It is not outcome (a), v2's values.
+- **So the retraction of H1's attribution (783fb0f93f7e) is resolved:** the drop is not the unfixed carve.
+- **Bitstream or monitor** (93440d5 against v2's 2dcd3a5) is still open.
+
+## P1 cells 5 and 6 beside the native -O2 baseline on the Sublet bitstream: cell 6 / native 1.509, cell 5 / native 1.418 (caplifive_sublet_d93a8d66b, 2026-10-17)
+Two cold boots (p1s16b-c5, p1s16b-c6, 02:55-03:22) on the classic line. Each runs one cell and the native -O2 warm
+baseline `9a80c1cd2a576ed2` between two k800 controls. Folder: `tests/rtl-smoke/p1-sublet-2026-10-16/`
+(pre-registered at lane 83ce50f019b4, amended at 5131d25ce2eb; RESULTS.md and `results/`).
+- **Every identity reading as pre-registered:** k800 4 twice, `112006 38bb59fd` on every arm, HEAP DROPPED 0,
+  lookasides 25,010 / 25,122, and cell 6's sublet line 5568/37970/32569/37970/5401.
+
+| arm | image | cycles | CPI against QEMU |
+|---|---|---:|---:|
+| cell 5 (memsys5 + lookaside, 2 MiB) | `21f4b2659074511c` | 1,213,784,631 | 3.636 |
+| cell 6 (the Sublet port, fixed runtime) | `4bfe3b0ec8494385` | 1,292,707,481 | 3.757 |
+| native -O2 warm (the two boots) | `9a80c1cd2a576ed2` | 856,244,108 / 856,627,547 | 3.557 / 3.559 |
+
+- **cell 6 / native = 1.5091** (pre-registered ≈ 1.510). The cell reads within 0.01 % of the same image's c6pair
+  boot (2026-10-16).
+- **cell 5 / native = 1.4176**, against the pre-registered ≈ 1.364. Today's cell 5 is a new build: same geometry,
+  different code, from dev's tree and dev147. It runs at CPI 3.636, where the 09-30 image `5f4b44257c933477` ran at
+  3.498. The earlier 1.3513 is that image's ratio.
+- **cell 6 / cell 5 = 1.065** across the boots, 1.0645 normalised by each boot's own native.
+- **The board's idle MemFree** is 940,924 / 941,680 kB after Linux and 938,032 / 934,332 kB at the end of the boot.
+  This is the virtual-profile plan's memory figure.
+- **Not established:** N = 1 per cell, at size 1; why the new cell 5 build runs at a higher CPI.
+
+## M2's dependent chase on the Sublet bitstream: S/P rises to 1.66 from N = 256, where r30r31 read 1.0000 (caplifive_sublet_d93a8d66b, 2026-10-17)
+Eight cold boots (m2f16-01 to -08, 03:22-05:08) on the classic line, with the fixed-runtime R1 harness `66764b0e`.
+The September image mis-carves on this bitstream (R-55, the runtime half). Folder: `tests/rtl-smoke/m2-sublet-2026-10-16/`
+(pre-registered at lane 7fc8751dc0e5, amended before the boots; RESULTS.md and `results/`).
+- **Every check holds:** 225 of 225 points with the emulator's checksum, every cold traversal ok, minted D/P 6 and S
+  2N+4, k800 4 twice in every boot, and no refusal.
+
+| N | D | P | S | S/P |
+|---:|---:|---:|---:|---:|
+| 16 | 10.00 | 18.00 | 18.00 | 1.0000 |
+| 64 | 10.00 | 18.00 | 18.00 | 1.0000 |
+| 256 | 10.00 | 18.00 | 29.95 | 1.6639 |
+| 1024 | 41.81 | 61.38 | 99.10 | 1.6144 |
+| 4096 | 49.25 | 88.45 | 123.52 | 1.3964 |
+
+Cycles per access, the median of 15 runs.
+- **D and P equal r30r31's §7y to 0.05 cycles** (41.84 / 49.25 and 61.37 / 88.45 there). S/P was 1.0000-1.0003 there.
+- **So the pre-registered outcome is (a):** an access through a record capability costs S about 12 cycles more at
+  N = 256, and 35-38 more at N ≥ 1024.
+- **The rise starts between 132 and 516 live nodes.** That is the LSU's revocation validity cache: 64 sets × 4
+  ways = 256 ids, indexed by the id's low 6 bits (capstone-ariane d93a8d66b `core/load_store_unit.sv:258-260`).
+  The pre-registration had assumed §7t's 2,048. A hit costs nothing, so S equals P up to N = 64. Per the RTL lane,
+  a miss is the rev-node probe (R-43's query-on-miss).
+- **Not established:** the knee's exact position, and how the surcharge at N ≥ 1024 splits between the probe and
+  the D-cache misses of the node records.
+
+## R1 warm and cold on the Sublet bitstream: node-proportional as on 054cea69b, 21.6 % cheaper per node warm, and the cold constant ends 1.9 % below (caplifive_sublet_d93a8d66b, 2026-10-17)
+Fifteen warm boots (r1wf16-01 to -15, 90 invocations, 420 records) and five cold boots (r1cf16r1 to r5, 60 records).
+- They ran on the classic line (buildroot d04bd83, monitor 93440d5, as each boot logs them) with the fixed-runtime R1
+  harness `66764b0e62075e57`, verified per boot from the boot's own payload. The September images mis-carve
+  on this bitstream (R-55, the runtime half).
+- The folder is `tests/rtl-smoke/r1-sublet-2026-10-16/`. It was pre-registered at lane f0613167b4b8 and amended four
+  times before these boots, the last at f8b4bfde7f6a; RESULTS.md is there.
+- The fits are the 054cea69b campaigns' own `analyze.py`, unchanged.
+
+**Every check holds:**
+- k800 read 4 twice in all 20 boots;
+- every invocation printed its `R1 end` line and `released pool rc=1`;
+- all 480 records read `ok=1 bad=0`;
+- no refusal.
+
+| warm | this bitstream | 054cea69b |
+|---|---|---|
+| REVOKE per affected node, shared | **17.97**, R² 0.99977 | 22.91 |
+| REVOKE per affected node, combined | **15.37**, R² 0.99979 | 15.92 |
+| bookkeeping per node, shared / combined | 28.76 / 28.59 | 28.54 / 28.79 |
+| bytes, heap, object size | no dependence (R² 0.007 / 0.007 / 0.044) | no dependence |
+| delegation depth, node count 47 at every level | no trend (R² 0.35 / 0.23); chain 1 is always the first point, and the first point reads 0.79-1.23x the rest on every axis | shared -0.73 (R² 0.003), combined -5.63 (R² 0.18) |
+| fill against bytes, the positive control | 1.8125 cycles/byte, R² 0.9999999983 | 1.8125 |
+| repeatability, median / max spread | 1.5 % / 25.4 % | 7.8 % / 39.5 % |
+
+**Cold, cycles per destroyed node (median of 5):**
+
+| `nd` | 64 | 512 | 1,024 | 2,048 | 4,096 | 8,192 | 16,384 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| this bitstream | **14.84** | 17.00 | 19.01 | 22.74 | 25.79 | 27.06 | **27.62** |
+| 054cea69b | 19.66 | 22.05 | 23.62 | 25.09 | 27.74 | 28.14 | 28.15 |
+
+**What changed:**
+- **The warm end is about a quarter cheaper; the cold end is nearly unchanged (-1.9 % at 16,384).**
+  - It reads -22 % at nd = 256 and 512.
+  - At nd = 64, -24.5 %, but that is the invocation's first point, which carries extra first-point timing.
+  - H1's REVOKE drop on the same image reads the same way.
+- **Cold over warm is 1.86x**, against 1.43x.
+- **The approach is still a ramp:** the largest interval holds 16.1 % of the rise, at nd = 1,536, below the
+  2,048-node capacity.
+- **It has not saturated by 16,384:** the top two rungs are 2.1 % apart, against 0.034 %.
+
+**Not established:**
+- why the warm end moved: the bitstream (the node record's parent link, R-45's flush), the monitor (93440d5 against
+  2dcd3a5) and the image all differ;
+- where the cold constant saturates;
+- depth apart from the first-point effect, which needs a reversed-order boot;
+- timing closure.
+
+## M1 on the Sublet bitstream: all four conditions as on R-43 v2, on the fixed-runtime images (caplifive_sublet_d93a8d66b, 2026-10-17)
+Five boots on the classic line (buildroot d04bd83, monitor 93440d5) with `REFUSAL_RECORD=1`, on rebuilds that carry the
+sublet-runtime fix. The 2026-10-01 images mis-carve here (R-55, the runtime half). Folder:
+`tests/rtl-smoke/m1-sublet-2026-10-16/`, pre-registered at lane 0f3a221c015a, corrected at a69e5fe5bfdc and amended before any boot at 4f130895e813; RESULTS.md
+is there.
+
+| condition | reading |
+|---|---|
+| permitted reuse | drop and ring reach 10C (`alloc=655320`) against the 65,532-index pool, in every boot that runs them, with no exhaustion |
+| accounting | `minted − revoked = 31` on every snapshot (318 in m1s16f-1, 201 in m1s16f-5, 539 in each probe boot) |
+| stale operations | after all four Design arms, ONE stale access per boot is refused at the probe's own instruction with cause 25: READ age 0 at image+0x4938, WRITE age 0 at image+0x499c, READ age 2 (below). The same instructions through live aliases succeed earlier in each boot, and the refusal record reads LATCHED |
+| pressure | `stop=buffer alloc=43297`; release enters phase 2 at 43,290 and ends at 51,948 |
+
+**Cost against v2**, reported, not predicted, per operation: the median over an arm's snapshots.
+
+| arm | take, this run | take, v2 | give, this run | give, v2 |
+|---|---|---|---|---|
+| drop | 94.347 | 72.029 | 106.046 | 107.057 |
+| pressure | 88.000 | 72.010 | 75.053 | 75.066 |
+
+- **Take rose 16 to 22 cycles; give is unchanged to about 1 cycle.**
+- **The image changed:** the fixed runtime's `sublet_split` SHRINK and cursor-based take. The bitstream changed too.
+- These boots do not separate the two.
+
+**Observed, not predicted:** the age-2 row's latched refusal sits at generation 1,352, with index = head − 1 (257 / 258)
+and serving = head − 16 (242). Those are R-43 v2's m1v2s-4 relations and generation, with a different B.
+
+**Not established:** the take rise's attribution; the turnover witness (deferred: this bitstream's node ids are not
+modelled); N = 1 per row.
+
+## C-81 and the silicon corpus verdicts: no in-scope reading depends on a tag-dropping inline copy (the silicon half, 2026-10-17)
+
+**The defect (ISSUES C-81).** A constant-size copy whose alignment the compiler cannot prove is expanded inline into
+scalar chunks, and a scalar chunk never carries a capability's tag. So a copied capability arrives with its address
+and tag 0, and its next use reads cause 24. The silicon corpus images were built with `-ffreestanding -fno-builtin`, so
+explicit `memcpy` calls go to the runtime's copy. What C-81 can still reach is `__builtin_memcpy` and the copies the
+compiler synthesises.
+
+**The instrument** (`capstone/tests/rtl-smoke/c81-silicon-exposure-2026-10-17/`):
+- Each verdict image is rebuilt twice, plain and as a compile-only twin with `-capstone-lower-memops-via-libcall`,
+  which turns every inline mem* expansion into a call. The plain rebuild must reproduce the board image's sha256.
+- The expansions are enumerated by the mem* references the twin gains, per function (`memcalls2.py`).
+- Each scalar run the twin removes is judged by `granule-check.py`: are 16 contiguous bytes copied through registers
+  loaded in the same run, the least a scalar copy needs to move a capability? It has a two-sided control.
+- A shape scanner's plain-only runs are NOT an enumeration. It saw 2 of SQLite's 48 expansions; withdrawn as a method
+  claim on dev 935196067e79.
+
+| image | inline expansions the twin diverts | runs flagged | what they copy | verdicts touched |
+|---|---:|---:|---|---|
+| SQLite stock 02 / 05 (in scope, CAUGHT 24) | 48 / 47 | 1 each | `cacheEntryClear`'s `yColCache`, no pointer | none: both stand |
+| set 1, memcached plain-heap (controls, heap-00) | 12 / 13 | 1 | `dl_round`'s signal record, no pointer | none: the rows are cause 28 |
+| mruby (rows outside the totals) | 2,957 | 3 | the signal record, a six-`uint32_t` spawn action, an `mrb_value`'s type-tag half | none (below) |
+
+- **SQLite 02/05:** over every scalar run in the image, not only the diverted ones, a strict object-copy check flags
+  only `yColCache` and an 8-byte spill chain.
+- **mruby:** for each of its nine cause-24 rows the faulting value is identified, and none is a tag-stripped
+  capability:
+  - 01, 07, 18-21 fault on a NULL base;
+  - 02 is the VM's instruction fetch;
+  - 17's value has bit 61 set;
+  - 22's 0x7d8000 is the inline-packed symbol `:f0`.
+  Eight of the nine are byte-identical on QEMU, which lays the domain out 0x34200000 higher.
+  - Not excluded: a stripped tag elsewhere steering a different value to the fault. The twin cannot be run to test it:
+    it faults in `memcpy` before any case code.
+- **Sets 2-9 are not twinned:** none of their in-scope rows reads cause 24, the only reading C-81 can produce.
+- **The 10-11 virtual record's SQLite 12/24** (cause 24, completing on v6): the record images and their SDK are gone,
+  so C-81 cannot be tested there. Those two stay "differ, unexplained".
+
+Evidence on dev: 7122c158e6c1 and 935196067e79 (SQLite, and the correction), 419fbf06bbc4 and 021568237f34 (set 1,
+mruby), 16f9756828d6 (SQLite 12/24).
+
+**Scope:** the silicon images only. The virtual-profile corpus images were built without `-fno-builtin`, so explicit
+`memcpy` calls there are exposed too, and nothing here covers them.
+
+## speedtest1 `main --size 100`, domain against native, on the Sublet bitstream: ratio 1.1835, as pre-registered (caplifive_sublet_d93a8d66b, 2026-10-17)
+
+The board campaign's item 10, a repeat of §7p (sw73, ratio 1.1819, another bitstream). The set was rebuilt with §7p's
+recipe: FULL=on, FLOAT=on, -O0, a 128 MiB region arena on the domain and a 128 MiB static heap natively, dev147
+612b3ec514c0. Images: domain 2e839991ffd34e79, host 2af56927aaf907e9 (both byte-identical to §7p's), native
+50bd00d74f63fd4c. Pre-registered before the boots on lane 816de2675b21; the folder is
+`capstone/tests/rtl-smoke/st100-sublet-2026-10-16/`.
+
+| boot | arm | hash | `SPEEDTEST1-CYCLES` | wall (`TOTAL`) |
+|---|---|---|---:|---:|
+| pre-boot, size 1 | native `warm` | `111130 1e792c9d` | 2,199,168,382 | 87.8 s |
+| pre-boot, size 1 | domain | `111130 1e792c9d` | 2,674,009,545 | 106.8 s |
+| pair, size 100 | native `warm` | `23674002 573a4409` | 336,762,395,125 | 13,469.7 s |
+| pair, size 100 | domain | `23674002 573a4409` | 398,552,257,537 | 15,941.1 s |
+
+- **Size-100 ratio 1.1835**, inside the pre-registered ~1.18 (band 1.14-1.24).
+  - The absolutes are within 0.15 % of the predictions from sw73's cycles per instruction: 337.2 G and 398.6 G.
+  - Both arms hash to the native oracle.
+  - The domain reads `HEAP 134217728 DROPPED 0 RC 0`, with no NOMEM, share-trap or refusal; k800 reads 4 before and
+    after.
+- **Size-1 ratio 1.2159**, against the predicted ~1.22.
+- **Recorded, not predicted:** the native's `BASELINE-WARM INSTRS` is 95,124,732,502 against QEMU's 90,025,116,459. The
+  board counts every instruction the hart retired in the interval, kernel work included.
+- **Not established:** N = 1 per arm.
+
+## vp1 on silicon: the physical regression identical to the Sublet bitstream, and vp1's arms as pre-registered (caplifive_vp1_9ed9a2594, 2026-10-17)
+
+vp1's first board session, the gate before vp2. `caplifive_vp1_9ed9a2594.bit` (sha256 `01072623f8f24b20…`, routed WNS
+-15.615) was flashed on the lead's word with readback. The session was pre-registered in
+`capstone/tests/rtl-smoke/vp1-bare-2026-10-17/PREREG.md`, and its rule was to stop on any reading that differs from
+the Sublet bitstream d93a8d66b. Result lines: `results/board-vp1-9ed9a2594.result-lines.txt` there. Every row is
+matched to d93a8d66b's record by image hash.
+
+| set | arms | against d93a8d66b |
+|---|---:|---|
+| S-16 | 18 | 98 of 98 readings identical |
+| Sublet floor | 6 | 77 of 77 readings identical |
+| s1gap | 3 | functional readings identical; one timed reading differs, inside d93a8d66b's own run-to-run spread |
+| corpus set 7 (PostgreSQL c-repros, process-ABI line, same firmware payload) | 5 rungs | 33 of 33 records identical |
+
+- **vp1's own arms read as pre-registered:**
+  - vb-trans, q17-order and vb-trans-plain match vp1's simulated vector and not d93a8d66b's, so the bitstream carries
+    vp1's change;
+  - vb-trans-off, the flag-off build, matches both.
+- **One infrastructure event:** an S-16 arm's JTAG `load_image` timed out before the image started, so it produced no
+  reading. It was re-run once with the same image, under a rule pushed before the retry, and read the record's
+  vector.
+- **Not established:** N = 1 per arm. This is a regression check of the physical profile, not a cost measurement.
+
+## vp2 on silicon: all 25 pre-registered arms read their simulated vectors, and the physical regression is identical to the Sublet bitstream, twice (caplifive_vp2_bf3db3175, 2026-10-17)
+
+vp2's first board session. `caplifive_vp2_bf3db3175.bit` (sha256 `776cdd8c40d98570…`, routed WNS -19.019) was flashed
+on the lead's explicit word after vp1's first session ended as pre-registered. The preflight ran on the sealed hash,
+and the readback named the bitstream. The session ran unattended from the pre-registered chain, and every step gated
+the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with result lines in
+`results/board-vp2-bf3db3175.result-lines.txt`. Every run is matched to its image by hash.
+
+| step | result |
+|---|---|
+| canary, pass 1 and pass 2 against d93a8d66b | S-16 98/98 and floor 77/77 readings identical in each pass; s1gap's functional readings identical |
+| canary, pass 1 against pass 2 | identical by the same rules: 9 of 9 comparisons pass |
+| the 25 pre-registered arms | 25 of 25 equal to their board vectors, count and values |
+| the 25 arms again, same resident bitstream | 25 of 25 equal to their vectors, and each identical to the first run |
+| corpus set 7 (same firmware payload as d93a8d66b's run) | 33 of 33 records identical |
+
+- **The arms:**
+  - item D's: the virtual-context runs va-runv..va-runv7, va-barrier, va-q15, and va-csmint in its emulated and
+    monitor forms;
+  - item A's: va-flat with its control, va-alloc with its three controls, va-ns-collide with its control, and
+    va-straddle;
+  - vb-trans and vb-trans-plain as their VB_TABLE builds;
+  - vp1's q17-order and vb-trans-off, byte for byte.
+- **Where the vectors come from:** each one is from simulating that exact image on bf3db3175's RTL, not from the test
+  headers, because the board recorder changes some readings.
+- **The comparator was checked on this session's own readings.** It says "NOT vp2" for one altered value, a short
+  readout, another arm's vector, and va-flat's vector read from va-flat-off's run. So a flag-on arm and its flag-off
+  control differ on silicon, as pre-registered.
+- **No image failed to start**, in the canary or among the arms.
+- **Not established:**
+  - N = 2 per arm. The 25 arms ran a second time (pre-registered before it ran) and read identically, as the
+    canary's two passes did. Two runs cannot rule out a rarer nondeterminism.
+  - This is the bare profile. vp2 under Linux in the virtual profile (Tier 1/2 and the corpus bundles of Tier 3)
+    waits on the flat-table module and the pinned kit.
+
+## Juliet SPATIAL on vp2 silicon: every image of a 755-case stratified sample faults or exits exactly as the QEMU silicon-mimic reference, on both trees (caplifive_vp2c_8522d72fe and caplifive_vp2c_8de3c48cf, 2026-10-22)
+
+- **What ran:**
+  - The compiler lane's stratified spatial sample: 755 Juliet cases, every one of the 261 functional variants of CWE
+    121, 122, 124, 126 and 127, at flow roles 01, 54 and 67.
+  - Census build: build.json 806cc24afbc10194, image-set digest 83fddeb7deb79e77, on the cw r60 SDK.
+  - Run on both vp2 trees in parallel: board 1 (tree A, caplifive_vp2c_8522d72fe) and board 2 (tree B,
+    caplifive_vp2c_8de3c48cf). 24 cold-boot batches per tree, module 54d8a3af, launcher b27afefc.
+  - The folder is `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/`. The result lines are
+    `records/juliet-spatial-b{1,2}.result-lines.txt`; the pre-registration is lane commit 49b04ff8ef6c.
+- **The grade is cell by cell against the same build on QEMU** (the compiler lane's tB-mimic run). For each image it
+  compares the exit, the fault cause, the fault site (symbol + offset) and whether it timed out. The tool is
+  `juliet-obs-compare.py`, whose planted-change control fires.
+
+| | tree A | tree B |
+|---|---|---|
+| image cells equal to QEMU | all | all |
+| all cells, with controls | 1513 / 1513 | 1512 / 1513 (the uaf control, below) |
+| bad images faulting at QEMU's site, cause 28 | 716 | 716 |
+| MISSED (the same 22 cases as on QEMU) | 22 | 22 |
+| NOT-TRIGGERED, pointer-size dependent | 9 | 9 |
+| good images CORRECT | 755 / 755 | 755 / 755 in their cells (672 counted, 83 in void batches) |
+| pc=0, DRT1, FRTY, Oops, INJS, INJL over 25 transcripts | 0 | 0 |
+
+- **What it supports:** on vp2 silicon, spatial detection over this sample behaves image for image as the QEMU
+  silicon-mimic reference. Compact bounds are exact below 4 KiB (cap_compress.c:49), and every Juliet spatial buffer
+  is below that (the compiler lane's reading), so this sample tests detection, not rounding.
+- **What it does not:**
+  - judge.py's CAUGHT verdict needs QEMU's own "Cap mem access OOB" line, which silicon never prints. On a board every
+    catch therefore reads NO-READING:unattributed. The attribution of a fault to the overflowed object exists on QEMU
+    only.
+  - The 22 MISSED are not silicon readings. They miss identically on QEMU: six wchar_t snprintf variants at all three
+    roles, and four CWE126/CWE170 cases.
+- **The uaf control's cause 13:**
+  - The runner's use-after-free control normally faults with cause 25, at the revocation check. In some runs it
+    faults instead with cause 13, a load page fault, at the same instruction and the same address.
+  - Juliet readings: tree B 3 of 48 runs, tree A 0 of 48. judge.py requires 25, so those 3 batches on tree B are void.
+  - A dedicated repeat of 120 runs per tree in one boot read **2 of 120 on tree A and 5 of 120 on tree B**. The reading
+    is on both trees, not one, and the launcher trace is identical for both causes.
+  - In both causes the use-after-free read is stopped.
+  - **Where the 13 comes from** (a further 200 runs per tree, reading the module's own refusal line from the kernel
+    ring): tree A 4 of 200 and tree B 1 of 200, and every one is `resolve refused at arena` at its own fault address.
+    - So the freed region was already retired and unmapped at the read. That is unconditional, because musl frees
+      the 32-byte group's own 4 KiB mapping.
+    - In those runs the load took the page fault instead of the revocation verdict. Over all repeats it is 6 of 320
+      per tree.
+    - Which path lets the page fault win is open. The RTL lane's directed simulation (26 revoke-path arms plus the
+      monitor-retire arms) finds NO route to a 13 through a revoked or retired capability, so the 13s are
+      silicon-only.
+  - **Does a revoked read ever COMPLETE on silicon? Not in 400 tries.** Two arms kept the freed memory MAPPED:
+    - a retired region kept mapped by a test launcher, the 13s' own shape, on tree A;
+    - a freed object on a page held by live neighbours, on tree B.
+    Each arm refused 200 of 200 reads with cause 25, and none completed. The unchanged control in the same two boots
+    read 13 in 13 of 400. On the region arm, 0 of 200 against the control's 8 of 200 gives one-sided Fisher p =
+    0.0036, and a 95 % bound of 1.5 % per run on a silent read.
+  - So in these runs the 13s need the munmap (its TLB maintenance, timing and address reuse), and they do not come
+    with completed reads. At the fault, the module reads no arena and no PTE (`arena -1 ... pte rc=-22`, all 7
+    examined with that module).
+  - **The retire itself was checked too** (the runtime lane's module 9d0ac297, tree B, 400 runs):
+    - the ancestor's record read VALID before each of 4,400 accepted retires, and dead after every one;
+    - this includes the 10 runs that read cause 13 in that boot;
+    - so a retire that fails to take effect is ruled out as the 13's source.
+
+## The batch bitstream on silicon, both boards: item 1 re-arms, item 5 completes sparse-churn, item 6 recycles with generations, and mruby Sublet reads as QEMU (caplifive_vp2c_c721c1a2a, 2026-10-22)
+
+- **The bitstream:**
+  - `caplifive_vp2c_c721c1a2a.bit`, sha256 8f4a486f2c96…, routed WNS -18.529; the resident vp2 lineage sealed at
+    -19.019.
+  - Flashed on the lead's word to board 1 (14:20) and board 2 (15:29). Each read back the new name, and each tree's
+    previous bitstream stays registered as the fallback.
+  - Folder: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/`, kits bkit8-batch-*, outputs t3-run-batch-c721c1a2a-b*. No
+    earlier record was overwritten. Every run was pre-registered.
+
+| reading | board 1 | board 2 |
+|---|---|---|
+| s23-cpmp-rearm bare (item 1, namespace-aware CPMP/PC trackers): six re-arm probes ALLOWED → DENIED, total 8 → 14 | batch vector, 25 of 25 | batch vector, equal to board 1's |
+| Tier 1: b0-stats, b0-hello, vm-contract | 0, 0, 0 | 0, 0, 0 |
+| sparse-churn (S-25/R-57, item 5): every earlier vp2 boot wedged here | completes: 200,000 allocations, 600,041 nodes through a 4,096-record table, 0 collections | the same, identical counts |
+| va-alloc-csret bare (item 6, generations in virtual node ids) | VOID (the PREREG counted 20 trace prints; the image prints 17) | PASS: ids 0x10004 and 0x20004 (generations 1 and 2), REC_GEN 2 |
+| mruby Sublet + smoke-fit (blocked on the trees by the flat table) | 23 of 23 cells as its batch QEMU reference | — |
+| FRTY / FRTC / DRT1 / INJS / INJL / Oops / pc=0 | 0 | 0 |
+
+- **The RTL lane graded s23 and va-alloc against its own pre-registrations by value.** The rows above are as it graded
+  them.
+- **va-alloc on board 1 is VOID, not a pass**, though its 17 values equal the corrected vector: the vector was
+  corrected after that boot. Board 2's boot under the corrected rule is the reading.
+- **Still running at this entry:** cpython lt1 and postgres pg-pools (board 1) and cpython lt0 (board 2), each against
+  its batch QEMU reference.
+
+## The corpus on the batch bitstream, R-61 on silicon, and bitstream 2 on both boards (caplifive_vp2c_c721c1a2a and caplifive_vp2c_dcc6daf6e, 2026-10-22 to 2026-10-25)
+
+Folder: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/` (README sections and `records/`). Every run was
+pre-registered before its boot, and no earlier record was overwritten. Every cell is compared with a QEMU reference
+built the same way: the compiler lane's batch-kit references, and for bitstream 2 its 18-bit twin.
+
+**The batch bitstream c721c1a2a, every corpus arm** (dev 7de7f9cd4b00, efa8286b4723, 1f351b6be31c):
+
+| reading | result |
+|---|---|
+| the pass's 25 arms, 346 cells | 346 of 346 in verdict, 342 in every field; the four are Q-31's ruled ordering (silicon 4/13 where QEMU 24, the same pc) |
+| cpython lt1, pg-pools, mruby (stock, Sublet with smoke-fit), perl (stock, Sublet) | every cell as its reference (32, 9, 23, 23, 11, 11) |
+| xlang (repro 15, lua-cdp 13), ffmpeg plane (2 arms), sqlite capi (19) | every cell as its reference |
+| Juliet temporal (366) and spatial (755) | every non-rand image cell as QEMU (judge.py cannot read CAUGHT on silicon; graded by juliet-obs-compare: spatial 1513/1513, temporal 729/735 with the 5 rand draws equal under seed) |
+| the uaf control's cause 13 | 6 of 200 (trees about 2.2 %): unchanged by the batch |
+| cpython lt0 18 with application mremap | CAUGHT, cause 28 in mmap_ass_subscript (MISSED without mremap) |
+
+**R-61 on c721c1a2a, both boards, byte-identical:**
+- after a refused consuming LDC, and also after a NON-consuming one (from a read-only page, and from a writable page
+  with D clear), the next legal load faults with cause 15 at its own address, and the word is not copied
+  (dev 1f351b6be31c, 40a35b997697).
+
+**Bitstream 2, dcc6daf6e, on both boards** (dev b9d3857be06f):
+- **Its contents:** the 18-bit index, the tracer dropped, and the ring cut, which is R-61's fix.
+- **The flash:** routed WNS -9.790, against the batch's -18.529. It was flashed on the lead's word.
+
+| reading | board 1 | board 2 |
+|---|---|---|
+| s23 / va-alloc (the 18-bit id format: 0x40004, 0x80004) | AS EXPECTED / PASS | identical |
+| Tier 1 | identical to the batch | identical |
+| hold 100000 at default capacity | HOLD-OK, high_water 105,569 of 262,144 | identical (batch: HOLD-NULL, 64,001 of 65,536) |
+| R-61 kits (7 images) | every image its fixed-tree vector | identical |
+| the 20 capacity-cell calls (the ten lt1 cells the 16-bit table stopped) | 20/20 verdicts as the twin, high_water up to 106,284 | 20/20, the same verdicts |
+
+- The capacity cells' allocation totals sit 0.25-0.43 % under QEMU's, while the two boards agree within a few records.
+  That is a platform offset, and the board's launcher is a different binary.
+- The uaf control's silicon-only cause 13 is unchanged by bitstream 2: 2 and 8 of 200 on the two boards (2.5 %). The
+  batch read 6 of 200 and the trees about 2.2 %.
+
+## The whole corpus on bitstream 2, both boards: every cell as the 18-bit QEMU twin, and the ten capacity cells now CAUGHT on silicon (caplifive_vp2c_dcc6daf6e, 2026-10-25)
+
+Folder: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/`, the README sections "The corpus on bitstream 2" and
+`records/b2bs-*.result-lines.txt`. Every arm was pre-registered before its boot, against the compiler lane's
+bitstream-2 references (the 18-bit twin qkit7-b2twin3-q8). Every one of those references equals its batch reference,
+except the lt0 and lt1 cells named below.
+
+| arm | board | result against its bitstream-2 reference |
+|---|---|---|
+| cpython lt1 (mremap relink) | 1 | 32 of 32: CAUGHT 27, against the batch bitstream's 17. All ten capacity cells are CAUGHT at the twin's sites |
+| cpython lt0 (mremap relink) | 2 | 31 of 32. Case 18 is CAUGHT (cause 28, mmap_ass_subscript). The one difference is Q-31 case 01 |
+| postgres sql0, pg-pools (trimmed) | 2, 1 | 9 of 9 each |
+| the 23-arm pass re-read | both | every field equal, except sq0d's three Q-31 cells (19, 20 and 22), as on the batch |
+| mruby stock / Sublet, perl stock / Sublet | 1 | 23/23, 23/23, 11/11, 11/11 |
+| xlang, plane (2 arms), sqlite capi | 2 | every cell as its reference |
+| Juliet temporal / spatial (juliet-obs-compare) | 1 / 2 | 726/735 with seeded 56/56 (the 9 are all rand-driven `_12` draws) / 1513/1513 |
+
+- **What bitstream 2 changes on silicon:** in the runtime lane's silicon tally (38 rows, 1,625 cells), exactly two
+  rows differ from the batch bitstream's.
+  - **cpython lt1:** CAUGHT 17 → 27, the ten cells the 16-bit table stopped.
+  - **cpython lt0:** CAUGHT 15 → 16, case 18, which the mremap relink lets reach its site.
+  - Every other row is identical in every count.
+- **lt1 was read from the boot's own transcript.** The boot completed (54 steps, `vbatch END rc=0`), but the runner's
+  6-hour wrapper budget expired during it. `tier3-appvm-salvage.sh` replays the driver's transcript through the
+  session tool's own parse, without touching the board. On a completed session it reproduces that session's read, 32
+  of 32.
+- **Q-31 (silicon raises cause 4 or 13 where QEMU raises 24, at the same site):** lt0 01 and sq0 19, 20 and 22. The
+  verdicts and sites are equal.
+- **Each arm is N=1 on this bitstream.** A second pass, graded cell for cell against these readings, is pre-registered
+  and running.

@@ -351,7 +351,7 @@ and on nothing that happened in the tree before.
 ## Patches to musl: round counts, capabilities and threads
 
 Under the delegated runtime every syscall is a round trip through the launcher, so the
-port's cost model is the number of rounds, and `musl-patches/` holds the three places where
+port's cost model is the number of rounds, and `musl-patches/` holds the four places where
 upstream musl spends one for nothing on this platform, and five where a pointer does not
 survive the way upstream keeps it: in a `long`, which on capstone64 holds an address and not
 a capability, or in a layout made for pointers of at most 8 bytes.
@@ -382,9 +382,13 @@ a capability, or in a layout made for pointers of at most 8 bytes.
   in `open`, `fopen` and `__fopen_rb_ca`. Linux honours the flag; the second call was
   musl's fallback for kernels that did not. The sites that set the flag on a descriptor
   they did not open (`fdopendir`, `fdopen` with `e`, `freopen` on an open stream) keep it.
+- `0010` the virtual mallocng (`0009`, no `brk`) opens a meta-area reservation, all but its
+  guard page, with one `mprotect` instead of one per page. A meta carries its slots'
+  capabilities here, about a page each, so upstream's page-at-a-time opening cost a round
+  per new group: 268 rounds of the SPEC CPU2017 gcc test job.
 
 The rule for `libc-test/patches/` is unchanged: tests are patched only in how they reach
-memory, never in what they check. Of the library patches, 0001 to 0003 change only its round
+memory, never in what they check. Of the library patches, 0001 to 0003 and 0010 change only its round
 count; 0004, 0005, 0007 and 0008 only keep a pointer a capability, and 0006 gives a type the
 room its pointers need.
 The rest of the saving is in the runtime: identity (`getpid` and friends) and the two clocks
@@ -408,12 +412,20 @@ bash capstone/ports/common/application/build-sdk.sh <SDK> <musl tree> <libc-caps
 python3 capstone/ports/musl-capstone/libc-test/run-libc-test-delegated.py ... --tests inet_pton mntent
 ```
 
-Exit codes: `0` pass, `1` regression against the pinned `BASELINE_OK`, `2` the
+All four follow the virtual profile by default: the survey takes
+`--profile physical`, and `build-musl-capstone.sh` and `build-sdk.sh` take
+`CAPSTONE_APPLICATION_PROFILE=physical`. The archive's name does not record its
+profile; an SDK must be built from an archive of its own profile, and
+`capstone-cc` refuses a link whose objects disagree with the SDK's FP profile.
+
+Exit codes: `0` pass, `1` regression against the expected count (all 1,361 on
+the virtual profile, the pinned `BASELINE_OK` on the physical one), `2` the
 harness could not measure (unprepared tree, no compiler, empty file list, or a
 flipped control).
 
 **The survey has two positive controls**, because a survey that cannot fail is
-not evidence: `src/stdlib/abs.c` must compile and `src/string/strlen.c` must
-fail. If either flips, the script prints ERROR instead of a number. When the
+not evidence: `src/stdlib/abs.c` must compile, and `src/string/strlen.c` must
+fail on the physical profile (on the virtual one every file compiles, so it must
+compile there). If either flips, the script prints ERROR instead of a number. When the
 string routines are replaced, the second control has to be retired on purpose —
 that is the intent, not an accident to work around.

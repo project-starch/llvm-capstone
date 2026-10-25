@@ -1,0 +1,40 @@
+# tier3-c18-batch.sh 12c16307b7fd21f5 + tier3-replay-board.py ff9014fd2097d73f: dry run, 2026-10-24 12:1x.
+# The board step is boardvm's stub mode (BOARDVM_STUB_TRANSCRIPT): a hand-written transcript of the five steps with the reference's own
+# fault line ('ok'), the same with high_water moved by 5 ('moved'), and the lt0 transcript replayed against lt1's reference ('lt1kit',
+# the comparator firing on every field). Their numbers are inputs, not data.
+
+## ok
+C18 lt0 BEGIN 12:18:55 board 1 kit bkit8-batch-nb1 image 7b871db70b7ec373 booking 91
+C18 lt0 END rc=0 12:18:55 :: calls 1 ran 1 completed True
+C18 reference: {'exit': ('signal', 11), 'cause': 28, 'function': 'mmap_ass_subscript', 'high_water': 6095, 'allocated_total': 16326, 'capacity': 65536, 'tail': ['capstone-exec: domain fault cause=28 pc=0x3ff659edf0 address=0x3ff5f7afff entry=0x3ff6000868 code=0x3ff6000000-0x3ff7000000 last=0x4f preparing=0x4f sha256=7b871db70b7ec37348cbfcd4a6678fa705a9eb9353500e1a0bd9f41a22e9faac image=/mnt/vm/images/cpython-7b871db70b7ec373.dom', 'Segmentation fault']}
+C18 board:     {'exit': ('signal', 11), 'cause': 28, 'function': 'mmap_ass_subscript', 'high_water': 6095, 'allocated_total': 16326, 'capacity': 65536, 'tail': ['capstone-exec: domain fault cause=28 pc=0x3ff659edf0 address=0x3ff5f7afff entry=0x3ff6000868 code=0x3ff6000000-0x3ff7000000 last=0x4f']}
+C18 COMPARE: board completed True; fields differing none
+C18 lt0 COMPARE rc=0
+C18 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+C18 lt0 board1 DONE 12:18:55
+
+## moved
+C18 lt0 BEGIN 12:18:55 board 1 kit bkit8-batch-nb1 image 7b871db70b7ec373 booking 91
+C18 lt0 END rc=0 12:18:56 :: calls 1 ran 1 completed True
+C18 reference: {'exit': ('signal', 11), 'cause': 28, 'function': 'mmap_ass_subscript', 'high_water': 6095, 'allocated_total': 16326, 'capacity': 65536, 'tail': ['capstone-exec: domain fault cause=28 pc=0x3ff659edf0 address=0x3ff5f7afff entry=0x3ff6000868 code=0x3ff6000000-0x3ff7000000 last=0x4f preparing=0x4f sha256=7b871db70b7ec37348cbfcd4a6678fa705a9eb9353500e1a0bd9f41a22e9faac image=/mnt/vm/images/cpython-7b871db70b7ec373.dom', 'Segmentation fault']}
+C18 board:     {'exit': ('signal', 11), 'cause': 28, 'function': 'mmap_ass_subscript', 'high_water': 6100, 'allocated_total': 16326, 'capacity': 65536, 'tail': ['capstone-exec: domain fault cause=28 pc=0x3ff659edf0 address=0x3ff5f7afff entry=0x3ff6000868 code=0x3ff6000000-0x3ff7000000 last=0x4f']}
+C18 COMPARE: board completed True; fields differing ['high_water']
+C18 lt0 COMPARE rc=1
+C18 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+C18 lt0 board1 DONE 12:18:56
+
+## lt1kit
+C18 lt1 BEGIN 12:18:56 board 2 kit bkit8-batch-nb2 image 8bcc40cf13731e12 booking 92
+C18 lt1 END rc=0 12:18:56 :: calls 1 ran 1 completed True
+C18 reference: {'exit': ('exit', 1), 'cause': None, 'function': None, 'high_water': 64014, 'allocated_total': 189444, 'capacity': 65536, 'tail': ['  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked', 'SystemError: error return without exception set']}
+C18 board:     {'exit': ('signal', 11), 'cause': 28, 'function': 'mmap_ass_subscript', 'high_water': 6095, 'allocated_total': 16326, 'capacity': 65536, 'tail': ['capstone-exec: domain fault cause=28 pc=0x3ff659edf0 address=0x3ff5f7afff entry=0x3ff6000868 code=0x3ff6000000-0x3ff7000000 last=0x4f']}
+C18 COMPARE: board completed True; fields differing ['exit', 'cause', 'function', 'high_water', 'allocated_total']
+C18 lt1 COMPARE rc=1
+C18 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+C18 lt1 board2 DONE 12:18:56
+
+## busy
+C18 STOP: board 1 is busy
+
+## badtag
+C18 STOP: tag lt9

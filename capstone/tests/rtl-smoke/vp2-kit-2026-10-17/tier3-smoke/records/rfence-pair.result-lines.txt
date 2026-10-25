@@ -1,0 +1,20 @@
+# the caplifive-sbi #4 (SBI RFENCE) pair, board 1 (tree A), 2026-10-21 12:11-12:27: result lines. UNGATED.
+RFP ctl BEGIN 12:11:03 kit bkit7-rev2xDN2 monitor f13dbc5 booking 72
+RFP ctl END 12:19:39 rc=0 :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 4}
+RFP ctl COMPARE vs reference rc=0 :: 4 of 4 cells the same
+RFP ctl console: load_image at log line 44; uart chars before 9687 after 68388
+RFP ctl console: remote-fence warnings 620; RFENCE detected 0; Runtime SBI Version ['1.0']; last kernel ts 198.627647
+RFP ctl console: (before load_image, i.e. the replay: remote-fence warnings 0)
+RFP ctl readings: b0-stats ticks=1771005 pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+RFP ctl wall: BOARD_RUN_START 12:11:03 bitstream DRIVER rc=0 12:19:38 
+RFP var BEGIN 12:19:39 kit bkit7-rev2xDN2rf monitor e1db99e booking 73
+RFP var END 12:27:40 rc=0 :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 4}
+RFP var COMPARE vs reference rc=0 :: 4 of 4 cells the same
+RFP var console: load_image at log line 47; uart chars before 158 after 26894
+RFP var console: remote-fence warnings 0; RFENCE detected 1; Runtime SBI Version ['1.0']; last kernel ts 164.579125
+RFP var console: (before load_image, i.e. the replay: remote-fence warnings 0)
+RFP var readings: b0-stats ticks=1712985 pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+RFP var wall: BOARD_RUN_START 12:19:39 bitstream DRIVER rc=0 12:27:40 
+RFP DONE 12:27:41
+## variant vs control (compare-pilot)
+4 of 4 cells the same

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # nginx's pool, in a Capstone domain. Upstream ngx_palloc.c byte for byte, this port's shim in
-# place of ngx_core.h's forty-seven headers, the PostgreSQL port's pg_level0.c as the level below
-# so both ports stand on the same one, and a driver that checks what it wrote.
+# place of ngx_core.h's forty-seven headers, the level-0 allocator pg_level0.c below it (the PostgreSQL
+# port's, vendored into port/level0/ when that port retired it), and a driver that checks what it wrote.
 #
 # Two link passes like the other ports: the globals offset is not known until the first link says
 # how large the text is, and under -capstone-gp-captable that offset decides the carve.
@@ -23,7 +23,8 @@ CLANG=$CAPSTONE_CLANG
 LD_LLD=$CAPSTONE_LD_LLD
 LADDER=$REPO/capstone/tests/runtime-qemu/silicon-ladder
 GPFREE=$REPO/capstone/tests/runtime-qemu/gp-free-domain
-PG=$REPO/capstone/ports/postgres/port/freestanding
+PG=$SCRIPT_DIR/port/level0   # pg_level0.c and pg_string.c, vendored from the PostgreSQL port (c5d247874078^)
+                             # $PG/../stubinc is port/stubinc/, its freestanding headers, vendored with it
 
 # The allocator, with only its two nginx includes redirected. Everything else is upstream, which
 # is what the port-effort count needs to stay honest.
@@ -79,7 +80,7 @@ AMALGAM=$OBJ/ngx_all.c
 {
   echo '#include "ngx_shim.h"'
   # The level below first: the allocator above it must see malloc and free declared, and both
-  # files are included rather than copied so the two ports stand on the same level 0.
+  # files are included as they stand (port/level0/, vendored unchanged from the PostgreSQL port).
   echo "#include \"$PG/pg_level0.c\""
   echo "#include \"$PG/pg_string.c\""
   echo "#include \"$REPO/capstone/benchmarks/beebs/adapted/beebs_freestanding_string.c\""

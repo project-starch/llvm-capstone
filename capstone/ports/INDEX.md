@@ -13,11 +13,11 @@
 
 | component | pinned version | runs on | workload | corpora |
 |---|---|---|---|---|
-| `cpython/app` | 3.13.7 | capstone-domain, cheribsd-purecap | objects.py JSON/GC qualification workload | `pymalloc-repros` |
+| `cpython/app` | 3.13.7 | capstone-virtual, cheribsd-purecap | objects.py JSON/GC qualification workload | `pymalloc-repros`, `allocator-boundary-repros` |
 | `ffmpeg/app` | 9.0.1 | capstone-domain | matroska demuxer to mpeg4 decoder, per-frame framemd5 | `plain-heap-repros`, `plane-repros`, `subobject-repros` |
 | `memcached/app` | 1.6.45 | capstone-domain, capstone-virtual, native | mc-harness: a fixed text- and meta-protocol script over one connection and 2 x -t concurrent ones, compared byte for byte with the native server | `allocator-repros`, `plain-heap-repros` |
 | `micropython` | 2e3304a | capstone-domain, silicon | the registered upstream test selection | -- |
-| `mruby/app` | 4.0.0-rc2 | capstone-domain, native | mrbtest, and the upstream ao-render benchmark for the study | `gc-slot-repros` |
+| `mruby/app` | 4.0.0-rc2 | capstone-domain, capstone-virtual, native | mrbtest, and the upstream ao-render benchmark for the study | `gc-slot-repros`, `release-differential` |
 | `perl/musl` | 5.36.3 | capstone-domain, capstone-virtual, native | scripts/smoke.pl, byte-identical to the native reference | `release-differential` |
 | `postgres/app` | 17.5 | capstone-domain, cheribsd-purecap | work.sql, checked against the native 16-byte-MAXALIGN oracle | -- |
 | `sqlite/app` | 3.22.0 | capstone-domain, native | work.sql.in and again.sql on a database file, with a second writer refused while the first holds a transaction; speedtest1 main at size 1 with the per-phase result oracle; each byte for byte against the native build of the same release | -- |
@@ -29,13 +29,13 @@
 | component | pinned version | runs on | workload | corpora |
 |---|---|---|---|---|
 | `apr/pools` | 1.7.4 | capstone-domain, cheribsd-purecap, native | -- | `apr-pool-repros`, `bucket-repros` |
-| `cpython/pymalloc` | 3.13.7 | capstone-domain, cheribsd-purecap, native | -- | `pymalloc-repros` |
+| `cpython/pymalloc` | 3.13.7 | capstone-virtual, cheribsd-purecap, native | -- | `pymalloc-repros` |
 | `ffmpeg/buffer-pool` | 9.0.1 | capstone-domain, cheribsd-purecap, native | -- | `pool-repros` |
 | `memcached/allocators` | 1.6.45 | capstone-domain, cheribsd-purecap, native | -- | `allocator-repros` |
 | `nginx` | 1.28.0 | capstone-domain, native | -- | -- |
-| `postgres/memory-contexts` | 17.0 | capstone-domain, cheribsd-purecap, linux-guest, native | -- | `mmgr-repros` |
+| `postgres/memory-contexts` | 17.0 | capstone-virtual, cheribsd-purecap, native | -- | `mmgr-repros` |
 | `whisper/ggml-context` | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | -- |
-| `wireshark/wmem` | 4.6.8 | capstone-domain, cheribsd-purecap, native | -- | `wmem-repros` |
+| `wireshark/wmem` | 4.6.8 | capstone-virtual, cheribsd-purecap, native | -- | `wmem-repros` |
 
 ## platform-build -- the same release built for another platform, without an adapter
 

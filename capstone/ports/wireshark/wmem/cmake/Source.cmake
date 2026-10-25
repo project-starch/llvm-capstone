@@ -17,7 +17,7 @@ function(wm_source variant)
       "${WM_ARCHIVE}" "${UPSTREAM_sha256}" "${source}" --variant "${variant}"
     DEPENDS "${WM_ARCHIVE}" ${patch_inputs} "${PROJECT_SOURCE_DIR}/cmake/prepare-source.py"
     VERBATIM)
-  add_custom_target(source-${variant} DEPENDS "${source}/prepared.stamp")
+  add_custom_target(source-${variant} ALL DEPENDS "${source}/prepared.stamp")
   set_source_files_properties(${products} PROPERTIES GENERATED TRUE)
 endfunction()
 function(wm_upstream_units out variant)

@@ -1,0 +1,9 @@
+{
+  "case": 90,
+  "title": "CONTROL: a buffer returned to its AVBufferPool stays with the pool, so the system allocator never sees it end; patch 0003 revokes it at the return",
+  "control_for": "the virtual-malloc and virtual-nested-pools arms of ffmpeg/pool-repros",
+  "arms": {
+    "virtual-malloc": {"oracle": "complete: the pool keeps the entry, one virtual-mallocng object that is never freed"},
+    "virtual-nested-pools": {"oracle": "fault at read_probe: pool_release_buffer revoked the user's child (CREVOKE)", "cause": 25}
+  }
+}

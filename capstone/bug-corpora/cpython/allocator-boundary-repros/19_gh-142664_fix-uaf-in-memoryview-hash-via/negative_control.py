@@ -1,18 +1,29 @@
 #!/usr/bin/env python3
-"""Strong negative control for case 19.
+"""Strong negative control for case 19, scoped to the case's own defect.
 
-Same allocation and free traffic as trigger.py: the same upstream test file is
-run through the same runpy/unittest path with no method named, as the trigger names none. The one
-difference is that the array subclass's __hash__ no longer releases the memoryview or clears the buffer, so hash() runs over a buffer that stays live; the same 4096-byte array, the same read-only memoryview and the same two hash calls still happen, and the rest of the file runs as the trigger runs it.
+A whole-file control is NOT achievable here, and that is a measured fact
+rather than a judgement. trigger.py runs the whole upstream file, and the
+sublet arm faults at three distinct sites inside it:
 
-A fault here is a fault that does not depend on the defect, so it disqualifies
-this case's detection rather than confirming it. The control self-tests: if
-unittest reports a failure this control did not expect, the control is wrong,
-not the arm, and it says so and exits 3.
+  pc=0xc05c3f70  gh-142664, this case's defect (memoryview.__hash__)
+  pc=0xc06226cc  gh-143195, a use-after-free in memoryview.hex(sep) via a
+                 re-entrant sep.__len__ -- a different issue, also live here
+  pc=0xc034a960  OtherTest.test_use_released_memory, gh-92888's regression
+                 test, which PASSES on the pinned host build and produces no
+                 ASan report with pymalloc or with PYTHONMALLOC=malloc
+
+The third site is not a defect this corpus holds and no host oracle flags it,
+so no amount of editing the file's defects makes a whole-file control silent.
+
+This control is therefore paired with probe-142664.py instead of with
+trigger.py: both select the same six tests by name, the probe with the
+re-entrant release in place and this control with it removed. A fault in the
+probe and silence here is a complete qualification of the detection, and it
+does not depend on the whole-file run at all.
 """
 import io, runpy, sys, os
 
-ALLOWED = ('test_hex_use_after_free',)
+ALLOWED = ()
 
 
 class Tee(io.TextIOBase):
@@ -32,7 +43,7 @@ class Tee(io.TextIOBase):
 
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
-sys.argv = ['negative_control_test.py', '-v']
+sys.argv = ["negative_control_test.py", "-v", "-k", "hash_use_after_free"]
 
 tee = Tee(sys.stderr)
 saved = sys.stderr
@@ -47,13 +58,13 @@ finally:
     tee.flush()
 
 text = "".join(tee.buf)
-print('NEGATIVE-CONTROL no defect performed')
+print("NEGATIVE-CONTROL no defect performed")
 
 bad = [ln for ln in text.splitlines()
        if ln.startswith(("FAIL: ", "ERROR: "))
        and not any(a in ln for a in ALLOWED)]
-if "Ran " not in text:
-    bad.append("unittest never reported how many tests it ran")
+if "Ran 6 tests" not in text:
+    bad.append("expected exactly the six hash_use_after_free tests")
 if bad:
     print("NEGATIVE-CONTROL SELFTEST-FAILED unittest rc=%r" % (code,))
     for ln in bad[:10]:

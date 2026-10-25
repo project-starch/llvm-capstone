@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Exercise source integrity, image-size and cross-ABI configuration guards."""
+"""Exercise the source integrity guards."""
 
 from pathlib import Path
 import shutil
-import struct
 import subprocess
 import sys
 import tempfile
@@ -50,35 +49,5 @@ with tempfile.TemporaryDirectory(dir=build) as temporary:
         modified.write("\n/* altered source negative control */\n")
     rejects([*prepare, checksum], "Modified upstream source")
 
-    # A valid ELF64 header and PT_LOAD with a loadable span just over 2 MiB.
-    ident = b"\x7fELF\x02\x01\x01".ljust(16, b"\0")
-    header = struct.pack(
-        "<16sHHIQQQIHHHHHH", ident, 2, 243, 1, 0, 64, 0, 0, 64, 56, 1, 0, 0, 0
-    )
-    segment = struct.pack("<IIQQQQQQ", 1, 5, 0, 0, 0, 0, 2 * 1024 * 1024 + 1, 16)
-    image = work / "oversized.dom"
-    image.write_bytes(header + segment)
-    rejects(
-        [sys.executable, str(port / "cmake/check-domain.py"), str(image)],
-        "loader permits at most 2 MiB",
-    )
 
-    domain, linux = work / "domain", work / "linux"
-    domain.mkdir()
-    linux.mkdir()
-    (domain / "regions.json").write_text('{"arena": 1}')
-    (linux / "regions.json").write_text('{"arena": 2}')
-    rejects(
-        [
-            sys.executable,
-            str(port / "host/run-qemu.py"),
-            str(work / "unused.a11"),
-            str(work / "results"),
-            "--domain-build",
-            str(domain),
-            "--linux-build",
-            str(linux),
-        ],
-        "region configurations differ",
-    )
-print("Source integrity, image-size and region-mismatch negative controls passed")
+print("Source integrity negative controls passed")

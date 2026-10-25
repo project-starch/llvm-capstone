@@ -1,0 +1,32 @@
+# Tier 3 board reading, arm fso-fix6b: kit bkit7-fix6t (module d71f207a3af5546b, the S-27 workaround; batch budget 300 s per step), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2_bf3db3175 cells 9 tally {"MISSED": 9}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_8864fd0aec_cbs_h265_pic_timing_member image a0f57569427f6892 MISSED cause None at None reached True completed True attribution null
+01_68845e26f7_vulkan_hevc_refpicset_member image a1dcc9a1404caa98 MISSED cause None at None reached True completed True attribution null
+02_e058af88ab_vulkan_hevc_dpb_member image 8030f85dcd793f4b MISSED cause None at None reached True completed True attribution null
+03_89de2f0de1_aac_arith_last_member image aaa867ae4fc894f2 MISSED cause None at None reached True completed True attribution null
+04_1a00ea51cb_rtsp_control_url_underflow image f0c0f3c2cf5aed80 MISSED cause None at None reached True completed True attribution null
+05_d29ff88422_vulkan_av1_tile_sizes image f4e9b603d669aed0 MISSED cause None at None reached True completed True attribution null
+06_a809a784ec_vvc_entry_point_start_ctu image ecde6cc230d056f3 MISSED cause None at None reached True completed True attribution null
+07_275e217b10_hlsenc_key_uri_strlcpy_size image a4e2c8c0717cf4b6 MISSED cause None at None reached True completed True attribution null
+08_fb862976df_cbs_h266_col_width_val image f027eb86aafd79eb MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_8864fd0aec_cbs_h265_pic_timing_member: verdict MISSED cause None pc None
+  SAME 01_68845e26f7_vulkan_hevc_refpicset_member: verdict MISSED cause None pc None
+  SAME 02_e058af88ab_vulkan_hevc_dpb_member: verdict MISSED cause None pc None
+  SAME 03_89de2f0de1_aac_arith_last_member: verdict MISSED cause None pc None
+  SAME 04_1a00ea51cb_rtsp_control_url_underflow: verdict MISSED cause None pc None
+  SAME 05_d29ff88422_vulkan_av1_tile_sizes: verdict MISSED cause None pc None
+  SAME 06_a809a784ec_vvc_entry_point_start_ctu: verdict MISSED cause None pc None
+  SAME 07_275e217b10_hlsenc_key_uri_strlcpy_size: verdict MISSED cause None pc None
+  SAME 08_fb862976df_cbs_h266_col_width_val: verdict MISSED cause None pc None
+  9 of 9 cells the same
+## the boot
+  T3SEQ fso-fix6b BEGIN 22:22:55 ffmpeg/subobject-repros virtual-malloc (14 extra args)
+  T3SEQ fso-fix6b END 23:06:10 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'MISSED': 9}
+  T3SEQ fso-fix6b PAYLOAD stage 3437846 B, 1306587 B gzip; firmware 19565064 B
+  BOARD_RUN_START 22:23:01 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 19 files, stage 3437846 bytes
+  firmware d52863795ec5ea29 19565064 B
+  DRIVER rc=0 23:06:10
+  BOARD_RUN_DONE 23:06:10

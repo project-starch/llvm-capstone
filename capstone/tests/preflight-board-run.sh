@@ -85,7 +85,17 @@ if [[ -f "$FW" ]]; then
     # it fell through to the warn below and this pairing went unchecked for every supervised-CALL run.
     # caplifive_r51r52_0568f93a9.bit (2026-10-11) is 776d9d859 plus R-51 and R-52, which touch only ex_stage.sv and
     # issue_read_operands.sv; the anvil sources are identical, so it keeps the supcall lineage's 65536-node pool.
-    *65536*|*_r20*|*supcall*|*r51r52*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
+    # caplifive_fpb_4a4261bb4.bit (the FP bitstream, option (b), pre-registered 2026-10-14) is 0568f93a9 plus R-53,
+    # the R-52 residual, R-54 and the encoder without the cursorless scheme: commit_stage.sv, issue_read_operands.sv
+    # and ariane_pkg.sv only, anvil sources identical, the same 65536-node pool. caplifive_sublet_*.bit (the Sublet
+    # bitstream, capstone-sublet) changes the node RECORD (a parent link in the b word) but not the pool: INIT_STAGE
+    # still sets head := 3 and REVNODE_SENTINEL stays 65535, so it is the same DTS. Added before either flash, so a
+    # run on the new silicon cannot fall through to the unknown-name block below. caplifive_vp2_*.bit (bf3db3175, the
+    # virtual profile's item A/D/E build) keeps the same DTS and capability word (the RTL lane's grade, 2026-10-17):
+    # item A's lifetime table lives at srevroot in memory and leaves the physical 65536-node pool unmoved.
+    # caplifive_vp2c_*.bit (tree A, capstone-ariane virtual-profile-2-c 8522d72fe) changes four core files over bf3db3175
+    # (commit_stage, csr_regfile, cva6, ex_stage) and no Anvil source, so it keeps vp2's 65536-node pool.
+    *65536*|*_r20*|*supcall*|*r51r52*|*_fpb_*|*_sublet_*|*_vp1_*|*_vp2_*|*_vp2c_*)  [[ "$have_64k" -ge 1 && "$have_1021" -eq 0 ]] \
         && ok "DTS matches $BITSTREAM (0x3c2d2000)" \
         || bad "DTS/bitstream MISMATCH: $BITSTREAM needs 0x3c2d2000 (found 1021=$have_1021 64k=$have_64k)" ;;
     # An unknown name BLOCKS (the lead, 2026-10-04). It used to warn, and _r20 and supcall both fell through that warn
@@ -164,7 +174,7 @@ if [[ -d "$OVERLAY" ]]; then
 # Also: in that form the dom position may be a VERB for the host binary ("warm", "probe") rather
 # than a path. Those arms stage no .dom of their own, so requiring "warm.dom" is wrong.
 _expand_wanted() {   # prints one needed FILENAME per line
-  local _d _e _rest _bc _ac; local -a _de
+  local _d _e _rest _bc _ac _t; local -a _de
   _isfile() { [[ "$1" == /* || "$1" == *.dom ]]; }
   # emit the FILENAME a rung stages, not the bare rung name: every caller normalises with
   # ${x%.dom}.dom, and the requested-but-absent gate below needs a name it can stat.
@@ -193,6 +203,13 @@ _expand_wanted() {   # prints one needed FILENAME per line
       else
         _isfile "$_bc" && printf '%s\n' "$(basename -- "$_bc")"
         [[ "$_ac" == *" "* ]] && _isfile "${_ac%% *}" && printf '%s\n' "$(basename -- "${_ac%% *}")"
+        # A FIFTH form, 2026-10-16: an input path AFTER a flag, the SLT corpus's
+        #   sqlite stage         /path/img.dom:--slt /path/case.test
+        # Reading only the first word dropped the case file from the wanted set, so the boots that used select3/4/5's
+        # 0.7-1.2 MB case files were refused for "not using" them. Every path among the arguments is a staged
+        # input when it lies under /test-domains/, the overlay's mount point (/tmp or /mnt/host are not overlay files,
+        # and C15 would refuse them as requested-but-absent); an overlay file named nowhere in the run is still unwanted.
+        for _t in $_ac; do [[ "$_t" == /test-domains/* ]] && printf '%s\n' "$(basename -- "$_t")"; done
       fi
     done
   fi
@@ -326,7 +343,24 @@ fi
 # One boot already spent 245 s of the 300 with no warning.
 if [[ -n "$FW" && -f "$FW" ]]; then
   _b=$(stat -c%s "$FW"); _upl=$(( _b / 131293 ))
-  if (( _b > 20000000 )); then
+  if [[ -n "${PREFLIGHT_DECLARED_DIR:-}" ]]; then
+    # A DECLARED bake (the vp2 bug-corpus boots, decided 2026-10-17): a deliberate payload beyond the clean base, so C10's
+    # purpose -- no undeclared stale domain rides along -- is checked by CONTENT instead of by size. Every regular file
+    # in the firmware's own initramfs must match the clean base or the bake's manifest by path and sha256, every
+    # declared file must be present, and the total is capped at 26,000,000 bytes (the upload rule below still applies).
+    # Negative-tested before first use: an undeclared file BLOCKS, and a declared bake at 26,000,001 bytes BLOCKS.
+    if (( _b > 26000000 )); then
+      bad "firmware ${_b} bytes exceeds the DECLARED-bake cap of 26,000,000"
+    else
+      _dp=$(python3 "$(dirname "${BASH_SOURCE[0]}")/fw-declared-payload.py" "$FW" "$PREFLIGHT_DECLARED_DIR" 2>&1); _drc=$?
+      if (( _drc == 0 )); then
+        ok "firmware ${_b} bytes, a DECLARED bake within 26,000,000: $(tail -1 <<< "$_dp")"
+      else
+        while IFS= read -r _l; do say "BLOCK" "$_l"; done <<< "$_dp"
+        bad "DECLARED bake: the firmware's initramfs is not exactly the clean base plus $PREFLIGHT_DECLARED_DIR/manifest.txt (rc ${_drc})"
+      fi
+    fi
+  elif (( _b > 20000000 )); then
     bad "firmware $(( _b / 1048576 )) MB exceeds the 20 MB working budget -- the overlay is dirty. A clean one is ~17.5 MB; only a retained multi-megabyte domain gets it past 20."
   else
     ok "firmware $(( _b / 1048576 )) MB within the 20 MB working budget (~${_upl}s upload)"

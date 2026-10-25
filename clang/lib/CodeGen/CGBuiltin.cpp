@@ -2599,6 +2599,21 @@ static RValue EmitHipStdParUnsupportedBuiltin(CodeGenFunction *CGF,
   return RValue::get(CGF->Builder.CreateCall(UBF, Args));
 }
 
+// llvm.returnaddress yields an address-space-0 pointer: on Capstone a 64-bit
+// address, while `void *` is a capability. The C value is made from the
+// address, an integer-derived pointer that carries the return address and no
+// authority. Using the intrinsic's value as it is would store or pass a 64-bit
+// pointer where a capability is expected.
+static Value *convertReturnAddress(CodeGenFunction &CGF, Value *RA,
+                                   QualType Ty) {
+  llvm::Type *CTy = CGF.ConvertType(Ty);
+  if (!CGF.getTarget().getTriple().isCapstone() || RA->getType() == CTy)
+    return RA;
+  llvm::Type *AddrTy = CGF.CGM.getDataLayout().getIntPtrType(RA->getType());
+  return CGF.Builder.CreateIntToPtr(CGF.Builder.CreatePtrToInt(RA, AddrTy),
+                                    CTy);
+}
+
 RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
                                         const CallExpr *E,
                                         ReturnValueSlot ReturnValue) {
@@ -4770,11 +4785,13 @@ RValue CodeGenFunction::EmitBuiltinExpr(const GlobalDecl GD, unsigned BuiltinID,
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),
                                                    getContext().UnsignedIntTy);
     Function *F = CGM.getIntrinsic(Intrinsic::returnaddress);
-    return RValue::get(Builder.CreateCall(F, Depth));
+    return RValue::get(
+        convertReturnAddress(*this, Builder.CreateCall(F, Depth), E->getType()));
   }
   case Builtin::BI_ReturnAddress: {
     Function *F = CGM.getIntrinsic(Intrinsic::returnaddress);
-    return RValue::get(Builder.CreateCall(F, Builder.getInt32(0)));
+    return RValue::get(convertReturnAddress(
+        *this, Builder.CreateCall(F, Builder.getInt32(0)), E->getType()));
   }
   case Builtin::BI__builtin_frame_address: {
     Value *Depth = ConstantEmitter(*this).emitAbstract(E->getArg(0),

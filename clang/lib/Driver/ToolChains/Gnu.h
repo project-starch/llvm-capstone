@@ -449,6 +449,18 @@ public:
   }
 
   virtual void addExtraOpts(llvm::opt::ArgStringList &CmdArgs) const {}
+
+  // A bare Capstone target (no OS) is the Capstone application platform, whose
+  // C library is musl: math functions report errors through floating-point
+  // exceptions only (math_errhandling == MATH_ERREXCEPT) and never write errno.
+  // So, as for a Linux musl target, the compiler need not assume they do.
+  bool IsMathErrnoDefault() const override {
+    if ((getTriple().getArch() == llvm::Triple::capstone32 ||
+         getTriple().getArch() == llvm::Triple::capstone64) &&
+        getTriple().getOS() == llvm::Triple::UnknownOS)
+      return false;
+    return Generic_GCC::IsMathErrnoDefault();
+  }
 };
 
 } // end namespace toolchains

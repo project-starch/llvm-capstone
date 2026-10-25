@@ -1,0 +1,7 @@
+SQL MEASURE: firmware 25856520 B against 26000000 (manifest 1072 files, stage 28812578 bytes)
+T3PG sql0-srzdev-treeB BEGIN 06:08:58 (trigger: Q15 q15a BEGIN 05:25:41 only 00,01,02,03,04,05)
+T3PG sql0-srzdev-treeB END 06:50:08 rc=1 :: virtual boot: completed :: 
+SQL CELLS VOID (declared before the boot: the empty-directory staging defect); not scored
+SQL MUST-FIRE: staged module 90bf036f59da1231 (want 90bf036f59da1231); banner 'srevroot-zero-2' x1
+SQL S-23: FRTY 21 DRT1 0 DRTX 0 Oops 0 (sql0-nf-treeB: FRTY 0, DRT1 0; predicted FRTY 21, DRT1 0)
+SQL DONE 06:50:08

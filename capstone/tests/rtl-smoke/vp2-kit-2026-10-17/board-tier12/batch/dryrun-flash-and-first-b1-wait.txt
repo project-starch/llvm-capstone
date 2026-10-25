@@ -1,0 +1,11 @@
+# flash-and-first-b1.sh's busy check is now a wait (2026-10-22 12:23): busy twice then free proceeds; always busy stops.
+== busy-then-free
+FB arm ended 12:23:49
+FB board 1 free 12:23:51
+FB FLASH BEGIN 12:23:51 booking 997 # book 1 30 vp2 batch c721c1a2a REFLASH (board 1, the lead's word)
+FB FLASH END rc=0 12:23:51
+FB FIRST rc=0 12:23:51; SEQ:
+FB DONE 12:23:51
+== always-busy (FB_BUSYMAX=2)
+FB arm ended 12:23:51
+FB STOP: board 1 stayed busy

@@ -60,7 +60,9 @@ if [[ ! -f "$PATCHED" ]]; then
   #   Reversed (or previously applied) patch detected!  ... 28 out of 28 hunks ignored
   # and the build fails. It fires only when $PATCHED is MISSING -- a cold or cleared
   # CAPSTONE_TMP_ROOT -- which is why a warm tree never showed it.
-  env -u SQLITE_SUBLET_PATCH OUT_DIR="$(dirname "$PATCHED")" \
+  # -u DOMAIN_SRC / DOMAIN_EXTRA_DEFS likewise: a caller that sets them for THIS build (the measure flow does) would
+  # otherwise hand the bootstrap a domain source it does not build, and the cold path fails.
+  env -u SQLITE_SUBLET_PATCH -u DOMAIN_SRC -u DOMAIN_EXTRA_DEFS OUT_DIR="$(dirname "$PATCHED")" \
     bash "$SCRIPT_DIR/build-sqlite-capstone.sh" >/dev/null
 fi
 [[ -f "$PATCHED" ]] || { echo "still no $PATCHED" >&2; exit 1; }
@@ -2779,6 +2781,13 @@ COMMON=("${SUBLET_INC[@]}" -target capstone64-unknown-elf -Xclang -target-featur
         -ffreestanding -fno-builtin
         -include "$ADAPTED/capstone_sqlite_libc.h"
         -I"$ADAPTED/stubinc" -I"$ADAPTED" -I"$SCRIPT_DIR" -I"$VFS_DIR" -I"$OBJ_DIR"
+        # capstone/runtime/include UNCONDITIONALLY, not only on the Sublet path. SUBLET_INC above
+        # carries it, but only when SQLITE_SUBLET_PATCH is set, and repro322_common.h now does
+        # `#include <capstone/representable.h>` in EVERY configuration -- added by 99aa4350bcfb
+        # (this lane) without the matching -I, which broke build-corpus-images.sh with
+        # "'capstone/representable.h' file not found". The duplicate when SUBLET_INC is non-empty
+        # is harmless.
+        -I"$REPO_ROOT/capstone/runtime/include"
         -I"$(dirname "$PATCHED")" -I"$BUILTINS")
 
 echo "== compiling the single silicon TU (this is the first time SQLite sees the silicon ABI)"

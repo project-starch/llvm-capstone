@@ -1,4 +1,7 @@
-"""Verify the pinned release, extract only the wmem subtree, apply the strict patch series."""
+"""Verify the pinned release, extract only the wmem subtree, apply the strict patch series.
+
+reference: wmem as released. sublet: patch 0001, every object of the block and block_fast
+allocators a Sublet child lifetime of its block."""
 
 import argparse
 import hashlib
@@ -12,7 +15,7 @@ p = argparse.ArgumentParser(description=__doc__)
 p.add_argument("archive", type=Path)
 p.add_argument("sha256")
 p.add_argument("destination", type=Path)
-p.add_argument("--variant", choices=("reference", "ported"), default="ported")
+p.add_argument("--variant", choices=("reference", "sublet"), default="sublet")
 a = p.parse_args()
 with a.archive.open("rb") as f:
     if hashlib.file_digest(f, "sha256").hexdigest() != a.sha256:
@@ -32,7 +35,7 @@ with tempfile.TemporaryDirectory(dir=a.destination.parent) as temporary:
     )
     if not patches:
         p.error("missing patch series")
-    if a.variant == "ported":
+    if a.variant == "sublet":
         for patch in patches:
             subprocess.run(
                 ["patch", "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(patch)],

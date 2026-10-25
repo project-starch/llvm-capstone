@@ -1,0 +1,23 @@
+# Tier 3 board reading, arm pgm0: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-mallocng-replay platform board:caplifive_vp2_bf3db3175 cells 5 tally {"MISSED": 5}
+# controls [["uaf-chunk", "complete"]]
+00_1f5b6a5e5d_tuplestore_double_free image 5332a0d5b39ed66d MISSED cause None at None reached True completed True attribution null
+01_3549ffb6af_vacuum_dead_items_stale_struct image b23a29fa45876f02 MISSED cause None at None reached True completed True attribution null
+02_ed394c4bdf_live_parts_stale_alias image 94884683216d2d84 MISSED cause None at None reached True completed True attribution null
+03_a61592253e_pgoutput_entry_cxt_teardown image 56abc01b36cf6a4d MISSED cause None at None reached True completed True attribution null
+04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn image 6609f8404c0b80d2 MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_1f5b6a5e5d_tuplestore_double_free: verdict MISSED cause None pc None
+  SAME 01_3549ffb6af_vacuum_dead_items_stale_struct: verdict MISSED cause None pc None
+  SAME 02_ed394c4bdf_live_parts_stale_alias: verdict MISSED cause None pc None
+  SAME 03_a61592253e_pgoutput_entry_cxt_teardown: verdict MISSED cause None pc None
+  SAME 04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn: verdict MISSED cause None pc None
+  5 of 5 cells the same
+## the boot
+  T3PG pgm0 BEGIN 15:50:38
+  T3PG pgm0 END rc=0 15:59:15 :: --- vp2-malloc (virtual-mallocng-replay): {'MISSED': 5}
+  BOARD_RUN_START 15:50:39 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 20 files, stage 5780035 bytes
+  firmware a4b3611394d33e97 19565064 B
+  DRIVER rc=0 15:59:15
+  BOARD_RUN_DONE 15:59:15

@@ -1,0 +1,43 @@
+# make-batch-kit.sh + run-batch-first.sh dry run, 2026-10-22 11:58. Board 2, a PLACEHOLDER bitstream name caplifive_vp2c_c721c1a2a (the flashed file's
+# real name is set at flash time). Kit made into <scratch> (MK_X). s23 stubbed (S23_RUN writes the batch or the pre-batch vector),
+# Tier 1 stubbed (BF_DRIVER copies an earlier Tier 1 transcript, run-t1-fr1-b2; its rung values are that boot's, not data).
+== make-batch-kit
+MK kit <scratch>/bf/kits/bkit8-batch-b2: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit7-rev2xBDN2:
+< BOARD_BITSTREAM=caplifive_vp2c_8de3c48cf
+> BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+< BOARD_FW_MON=/tmp/capstone/csbi-drt
+< BOARD_MONITOR_COMMIT=f13dbc5
+< BOARD_FW_DEFINES="-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY -DCAPSTONE_QUANTUM_PRINT -DCAPSTONE_BOOT_QUANTUM=2000000 -DCAPSTONE_S23_REFUSAL_READ -DCAPSTONE_S23_DATA_RETRY"
+> BOARD_FW_MON=/tmp/capstone/csbi-batch
+> BOARD_MONITOR_COMMIT=d9da397
+> BOARD_FW_DEFINES="-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY -DCAPSTONE_QUANTUM_PRINT -DCAPSTONE_BOOT_QUANTUM=2000000 -DCAPSTONE_S23_REFUSAL_READ -DCAPSTONE_S23_DATA_RETRY -DCAPSTONE_FETCH_RETRY_CAP"
+MK module 21fbfc397e7c7a42 DONE
+== chain, s23 stub vector batch
+BF START 11:58:34 board 2 bitstream caplifive_vp2c_c721c1a2a kit bkit8-batch-b2 fw 6423545a
+S23 BEGIN 11:58:34 board 2 bitstream caplifive_vp2c_c721c1a2a image bcefd969e128113f driver /tmp/capstone/wt-b2/capstone/tests/rtl-smoke booking 998 # book 2 20 vp2-tier12 s23-cpmp-rearm bare (board 2) expect batch
+998 # unbook 998 # book 2 20 vp2-tier12 s23-cpmp-rearm bare (board 2)
+S23 END rc=0 11:58:34 :: UART: stub batch
+S23 AS EXPECTED (batch): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14
+S23 GRADE rc=0
+S23 board2 DONE 11:58:34
+BF TIER1 BEGIN 11:58:34 booking 999 # book 2 150 vp2 batch bitstream Tier 1 (board 2)
+999 # unbook 999 # book 2 150 vp2 batch bitstream Tier 1 (board 2)
+BF TIER1 DRIVER rc=0 11:58:36; watchdog lines 0
+RUNG b0-stats retval=0 (rev7 oracle 0, reference only)
+RUNG b0-hello retval=0 (rev7 oracle 0, reference only)
+RUNG vm-contract retval=0 (rev7 oracle 0, reference only)
+RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:1 
+VM_BEGIN without VM_EXIT: 
+FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+BF board2 DONE 11:58:37
+== chain, s23 stub vector pre
+BF START 11:58:37 board 2 bitstream caplifive_vp2c_c721c1a2a kit bkit8-batch-b2 fw 6423545a
+S23 BEGIN 11:58:37 board 2 bitstream caplifive_vp2c_c721c1a2a image bcefd969e128113f driver /tmp/capstone/wt-b2/capstone/tests/rtl-smoke booking 998 # book 2 20 vp2-tier12 s23-cpmp-rearm bare (board 2) expect batch
+998 # unbook 998 # book 2 20 vp2-tier12 s23-cpmp-rearm bare (board 2)
+S23 END rc=0 11:58:37 :: UART: stub pre
+S23 FINDING: reads pre (re-arm {'Q5': 0, 'Q8': 0, 'Q10': 0, 'Q12a': 0, 'Q12b': 0, 'Q13d': 0}, total 8) where batch is expected
+S23 GRADE rc=1
+S23 board2 DONE 11:58:37
+BF STOP: s23 did not read AS EXPECTED (batch); Tier 1 not booted

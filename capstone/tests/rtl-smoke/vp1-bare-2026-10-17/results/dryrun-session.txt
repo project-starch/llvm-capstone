@@ -1,0 +1,14 @@
+# vp1's first session, dry-run end to end before the re-run arm (2026-10-17 19:56, board calls stubbed with d93a8d66b's records; s1gap from its second repeat, so the cycle counts differ as they do run to run)
+AFTER-FLASH START 19:56:35 caplifive_vp1_9ed9a2594.bit
+VP1BARE_START 19:56:35 caplifive_vp1_9ed9a2594.bit
+S16 vs d93a8d66b rc=0 18 arms, 98 reference readings, 0 not identical 19:56:35
+FLOOR vs d93a8d66b rc=0 6 arms, 77 reference readings, 0 not identical 19:56:35
+S1GAP vs d93a8d66b rc=1 3 arms, 40 reference readings, 2 not identical (timed readings: a cycle-count difference is reported, not a defect) 19:56:35
+S1GAPF vs d93a8d66b rc=0 3 arms, 0 with a functional difference 19:56:35
+VP1ARM vb-trans-off rc=0 :: VERDICT vb-trans-off: AS PRE-REGISTERED for vp1 19:56:35
+VP1ARM vb-trans rc=0 :: VERDICT vb-trans: AS PRE-REGISTERED for vp1 19:56:35
+VP1ARM q17-order rc=0 :: VERDICT q17-order: AS PRE-REGISTERED for vp1 19:56:35
+VP1ARM vb-trans-plain rc=0 :: VERDICT vb-trans-plain: AS PRE-REGISTERED for vp1 19:56:35
+VP1BARE_DONE 19:56:35
+C7 vs d93a8d66b rc=0 33 reference records, 33 new, 0 differ 19:56:35
+AFTER-FLASH DONE 19:56:35

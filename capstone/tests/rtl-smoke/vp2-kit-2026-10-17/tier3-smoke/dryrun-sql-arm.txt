@@ -1,0 +1,9 @@
+# tier3-sql-arm.sh dry run (2026-10-18 20:59), the runner stubbed (it writes the QEMU record's bundle as the board's),
+# the real score-arm.sh under dry-run tags:
+# - guard: beside sq0b-fix6's live boot, "SQL STOP: a driver is running".
+# - pass: the runner gets --arm virtual-malloc --board-kit bkit7-fix6s --image (lt0) --fixture (native16) and the
+#   llvm-bin; "SQL inputs as recorded: fixture 173aa5b35c1b57b9, image 81ee24a0a1e957c9"; 9 of 9 the same; SQL DONE.
+# - void: the stub writes another fixture record; "SQL VOID: fixture record 0000000000000000 (want 173aa5b35c1b57b9)",
+#   nothing scored.
+# The kit's budget: the recipe's stub mode reads BAKED_TIMEOUT=27600 for the runner's 6900 (21 sessions).
+# The dry run's records and bundle were removed by name afterwards.

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Run one plain-heap, plain-temporal, subobject, plane or carved corpus on a Capstone application domain arm.
 
-    run-capstone-domain.py --corpus <corpus dir> --arm spatial|sublet \\
+    run-capstone-domain.py --corpus <corpus dir> --arm spatial|capstone-subobject|capstone-carve-bounds \\
         --sdk <application SDK> --state <capstone-vm state> --out <fresh dir> [--cc-arg ARG]...
 
 --cc-arg adds a source, archive or flag to every case's compile, for the two corpora whose cases
@@ -12,19 +12,20 @@ Every case becomes one domain image, built by the SDK's capstone-cc at -O0 (the 
 native arms build at -O0 too: an optimiser that folds or hoists the crossing moves the fault off
 the labelled probe). Each image runs twice in the same boot, `fixed N` and then `buggy N`.
 
-WHAT THE TWO ARMS ARE. The SDK decides the arm, not the label: the tool reads the SDK's
-CAPSTONE_APPLICATION_HEAP and refuses a mismatch.
-  spatial  level0 heap. malloc narrows the returned capability to the bytes requested
-           (CAPSTONE_LEVEL0_OBJECT_BOUNDS, on by default since 2026-09-30); free only marks
-           the block free, so a stale pointer keeps working.
-  sublet   the Sublet system allocator. Per-object bounds as above, and free revokes every
-           capability to the released object.
+WHAT THE ARMS ARE. Every arm runs on a physical-profile SDK, whose heap is level0: malloc narrows
+the returned capability to the bytes requested (CAPSTONE_LEVEL0_OBJECT_BOUNDS, on by default since
+2026-09-30); free only marks the block free, so a stale pointer keeps working. The tool refuses a
+virtual-profile SDK (CAPSTONE_APPLICATION_VIRTUAL=ON); those run under run-virtual-cases.py.
+  spatial                the level0 heap as above.
+  capstone-subobject     the same with field bounds (-Xclang -fcapstone-subobject-bounds).
+  capstone-carve-bounds  the same with the corpus's carve narrowed at the carving code.
+The Sublet-heap arms (sublet, sublet-chunks, sublet-carve, sublet-full) were removed with the heap
+on 2026-10-11; their recorded verdicts stay in the case files.
 
 WHAT THIS REFUSES TO SCORE.
-  * Any row, unless this boot's own controls behaved: a one-past-the-end write must fault on
-    both arms; a use-after-free read must fault on sublet and must complete on spatial. A
-    control that does not do that means the arm is not what it says, and the run exits 75
-    with no matrix.
+  * Any row, unless this boot's own controls behaved: a one-past-the-end write must fault and a
+    use-after-free read must complete. A control that does not do that means the arm is not what
+    it says, and the run exits 75 with no matrix.
   * A buggy row whose FIXED run did not print `VERDICT FIXED` and exit 0. That run is the
     case's own control on this platform: the same image, the same allocations, minus the
     defect. It also proves argv reached the program, since only `fixed` can print FIXED.
@@ -50,26 +51,11 @@ sys.path.insert(0, str(HERE))
 import verdicts  # noqa: E402
 REPO = HERE.parents[2]
 RUN = REPO / "capstone/ports/common/application/run.py"
-SDK_HEAP = {"spatial": "level0", "sublet": "sublet", "sublet-chunks": "sublet",
-            "capstone-subobject": "level0", "capstone-carve-bounds": "level0", "sublet-carve": "sublet",
-            "sublet-full": "sublet"}
-REVOKING = ("sublet", "sublet-chunks", "sublet-carve", "sublet-full")
-# sublet-full: a plain case in its program's whole Sublet configuration -- the Sublet heap plus the
-# program's nested-allocator port, linked and brought up before main() by tools/full-config/<program>.c.
-# Every run must print that constructor's `FULLCONFIG <program> ... live` line, or the image is not
-# the configuration it claims and the run exits 75.
-FULLCONFIG = re.compile(r"^FULLCONFIG \S+ .*\blive\b.*$", re.M)
-# The carve switch each carve arm needs, per corpus. capstone-carve-bounds narrows a pointer into
-# the malloc'd block; sublet-carve is the Sublet port of the carve: the block is lent LINEAR by the
-# Sublet heap and split into one region per carve (carved corpus only).
+ARMS = ("spatial", "capstone-subobject", "capstone-carve-bounds")
+# The carve switch the carve arm needs, per corpus: capstone-carve-bounds narrows a pointer into the
+# malloc'd block.
 ARM_CARVE = {"capstone-carve-bounds": {"carved-repros": "-DFFC_CARVE_BOUNDS",
-                                       "plane-repros": "-DFFP_CARVE_BOUNDS"},
-             "sublet-carve": {"carved-repros": "-DFFC_SUBLET_CARVE", "plane-repros": "-DFFP_SUBLET_CARVE"}}
-# The Sublet carve's own controls, per corpus: one shows the port's BOUND (a crossing out of a region
-# it issued), the other its REVOCATION (an alias used after its region was carved again, or after the
-# frame was freed). Each runs fixed and buggy in the same boot; buggy must fault at the probe.
-CARVE_CONTROLS = {"carved-repros": (("carve-control.c", 99), ("carve-recarve-control.c", 98)),
-                  "plane-repros": (("plane-bound-control.c", 99), ("plane-free-control.c", 98))}
+                                       "plane-repros": "-DFFP_CARVE_BOUNDS"}}
 
 # The tool's own controls, compiled with the corpus's SDK into the same boot.
 CONTROL_C = r'''
@@ -145,13 +131,11 @@ def corpus_kind(corpus):
 
 def predicted(kind, arm):
     """The buggy run's predicted outcome, fixed before any run (see the module docstring)."""
-    if arm in ("capstone-carve-bounds", "sublet-carve"):
+    if arm == "capstone-carve-bounds":
         return "CAUGHT"                     # each carved region is narrowed to its own extent
     if kind == "spatial":
-        return "CAUGHT"                     # both arms: the crossing leaves an exact bound
-    if kind == "interior":
-        return "DEFECT-REPRODUCED"          # both arms: an allocation-granular bound is in bounds for it
-    return "CAUGHT" if arm in REVOKING else "DEFECT-REPRODUCED"
+        return "CAUGHT"                     # the crossing leaves an exact bound
+    return "DEFECT-REPRODUCED"              # interior: in bounds for the allocation; temporal: free revokes nothing
 
 
 # pc attribution and the fault line are shared with every runner, in verdicts.py.
@@ -202,7 +186,7 @@ def classify(text, result, symbols, probe_re):
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--corpus", type=Path, required=True)
-    ap.add_argument("--arm", choices=sorted(SDK_HEAP), required=True)
+    ap.add_argument("--arm", choices=ARMS, required=True)
     ap.add_argument("--sdk", type=Path, required=True)
     ap.add_argument("--state", type=Path, required=True)
     ap.add_argument("--out", type=Path, required=True)
@@ -240,10 +224,9 @@ def main():
         return 75
     overrides = json.loads(a.predictions.read_text()) if a.predictions else {}
     cache = (a.sdk / "CMakeCache.txt").read_text()
-    heap = re.search(r"^CAPSTONE_APPLICATION_HEAP:STRING=(\S+)", cache, re.M)
-    if not heap or heap.group(1) != SDK_HEAP[a.arm]:
-        print(f"CONTROL-FAILED arm {a.arm} needs an SDK built with HEAP={SDK_HEAP[a.arm]}; "
-              f"{a.sdk} has {heap.group(1) if heap else 'none'}", file=sys.stderr)
+    if re.search(r"^CAPSTONE_APPLICATION_VIRTUAL:BOOL=(ON|TRUE|1)$", cache, re.M | re.I):
+        print(f"CONTROL-FAILED {a.sdk} is a virtual-profile SDK; arm {a.arm} needs a physical one (level0)",
+              file=sys.stderr)
         return 75
     llvm_dir = re.search(r"^CAPSTONE_LLVM_BUILD_DIR:\S*=(\S+)", cache, re.M)
     llvm_bin = a.llvm_bin or (Path(llvm_dir.group(1)) / "bin" if llvm_dir else None)
@@ -294,7 +277,7 @@ def main():
     ctl_syms = Symbols(llvm_bin, ctl_img)
     ctl_probe = re.compile(r"^ctl_(read|write)_probe$")
     want = {"clean": "RETURNED", "oob": "CAUGHT",
-            "uaf": "CAUGHT" if a.arm in REVOKING else "RETURNED",
+            "uaf": "RETURNED",
             # Field bounds are what the capstone-subobject arm adds; every other arm must NOT see a
             # crossing that stays inside the allocation, or it is not the arm it says it is.
             "subobj": "CAUGHT" if subobject else "RETURNED"}
@@ -314,34 +297,10 @@ def main():
             (a.out / "controls.json").write_text(json.dumps(controls, indent=2) + "\n")
             return 75
 
-    # ---- the Sublet carve's own controls: the bound AND the revocation, in this boot ----
     # A prefixed probe (ffh_read_probe, wsh_write_probe_u8) or the subobject corpus's unprefixed one
     # (write_probe). The prefix used to be required, so subobject 05 and 08 -- at write_probe+0x58 --
     # printed "NOT the labelled probe".
     probe_re = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
-    if a.arm == "sublet-carve":
-        for src, num in CARVE_CONTROLS[corpus.name]:
-            img = bindir / f"control-{num}.dom"
-            b = subprocess.run([str(cc), "-O0", f"-I{shared}", str(shared / src), str(shared / "driver.c"),
-                                *a.cc_arg, "-o", str(img)], capture_output=True, text=True)
-            if b.returncode:
-                print(f"CONTROL-FAILED {src} build: {b.stderr[:300]}", file=sys.stderr)
-                return 75
-            syms = Symbols(llvm_bin, img)
-            ftext, fres = run_image(a.state, img, ["fixed", str(num)], rundir / f"control-{num}-fixed")
-            fout, fdetail = classify(ftext, fres, syms, probe_re)
-            btext, bres = run_image(a.state, img, ["buggy", str(num)], rundir / f"control-{num}-buggy")
-            bout, bdetail = classify(btext, bres, syms, probe_re)
-            ok = (fout == "FIXED" and fres.get("value") == 0 and bout == "CAUGHT"
-                  and "(the labelled probe)" in bdetail)
-            controls[f"carve-{num}"] = dict(fixed=f"{fout} {fdetail}", buggy=f"{bout} {bdetail}",
-                                            required="fixed FIXED, buggy CAUGHT at the probe")
-            print(f"  control carve-{num} fixed={fout} buggy={bout} {'ok' if ok else 'FAILED'}  {bdetail[:100]}",
-                  flush=True)
-            if not ok:
-                print(f"CONTROL-FAILED {src}: the Sublet carve is not what it says", file=sys.stderr)
-                (a.out / "controls.json").write_text(json.dumps(controls, indent=2) + "\n")
-                return 75
 
     # ---- the cases --------------------------------------------------------------------
     expect = predicted(kind, a.arm)
@@ -356,12 +315,6 @@ def main():
         fixed_ok = fout == "FIXED" and fres.get("kind") == "exit" and fres.get("value") == 0
         btext, bres = run_image(a.state, img, ["buggy", n], rundir / f"{d.name}-buggy")
         bout, bdetail = classify(btext, bres, syms, probe_re)
-        if a.arm == "sublet-full":
-            for which, text in (("fixed", ftext), ("buggy", btext)):
-                if not FULLCONFIG.search(text) or "FULLCONFIG-FAILED" in text:
-                    print(f"CONTROL-FAILED {d.name} {which}: no live FULLCONFIG line; the image is not the "
-                          "full configuration", file=sys.stderr)
-                    return 75
         if not fixed_ok:
             outcome = "FIXED-ARM-FAILED"
             detail = f"fixed run read {fout}: {fdetail}; buggy run ({bout}: {bdetail}) is not scored"
@@ -375,7 +328,6 @@ def main():
                    as_predicted=outcome == want_row and (outcome != "CAUGHT" or "(the labelled probe)" in detail
                                                          or site),
                    image_sha256=sha256(img), fixed=f"{fout} exit={fres.get('value')}",
-                   **({"full_config": FULLCONFIG.search(btext).group(0)} if a.arm == "sublet-full" else {}),
                    buggy_exit=f"{bres.get('kind')}={bres.get('value')}")
         rows.append(row)
         print(f"  {d.name:<62} {outcome:<18} {'ok ' if row['as_predicted'] else 'DIFF'} {detail[:110]}", flush=True)
@@ -390,8 +342,7 @@ def main():
     record = dict(
         corpus=str(corpus.relative_to(REPO)), kind=kind, arm=a.arm, started=started,
         predicted_buggy_outcome=expect,
-        sdk=dict(path=str(a.sdk), heap=heap.group(1),
-                 heap_log=(re.search(r"^CAPSTONE_APPLICATION_HEAP_LOG:STRING=(\S+)", cache, re.M) or [None, None])[1],
+        sdk=dict(path=str(a.sdk), heap="level0",
                  runtime_sha256=sha256(a.sdk / "libapplication-runtime.a"),
                  sdk_json_sha256=sha256(a.sdk / "sdk.json") if (a.sdk / "sdk.json").exists() else None),
         compiler=subprocess.run([str(cc), "--version"], capture_output=True, text=True).stdout.splitlines()[0],

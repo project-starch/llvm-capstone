@@ -1,0 +1,25 @@
+silicon-pym-stock:control-clean controls.dom clean
+silicon-pym-stock:control-oob controls.dom oob
+silicon-pym-stock:control-uaf controls.dom uaf
+silicon-pym-stock:control-subobj controls.dom subobj
+silicon-pym-stock:cpython-pymalloc-00-case cpython-pymalloc-00.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-00.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-01-case cpython-pymalloc-01.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-01.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-02-case cpython-pymalloc-02.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-02.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-03-case cpython-pymalloc-03.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-03.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-04-case cpython-pymalloc-04.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-04.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-05-case cpython-pymalloc-05.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-05.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-06-case cpython-pymalloc-06.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-06.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-07-case cpython-pymalloc-07.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-07.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-08-case cpython-pymalloc-08.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-08.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-09-case cpython-pymalloc-09.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-09.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-10-case cpython-pymalloc-10.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-10.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-11-case cpython-pymalloc-11.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-11.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-12-case cpython-pymalloc-12.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-12.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-13-case cpython-pymalloc-13.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-13.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-14-case cpython-pymalloc-14.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-14.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-15-case cpython-pymalloc-15.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-15.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-16-case cpython-pymalloc-16.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-16.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-17-case cpython-pymalloc-17.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-17.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-18-case cpython-pymalloc-18.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-18.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-19-case cpython-pymalloc-19.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-19.bin /tmp/pym-report.bin
+silicon-pym-stock:cpython-pymalloc-controls-00-control cpython-pymalloc-controls-00.dom /test-domains/corpus/c9-pym-silicon-pym-stock/pym-fixture-00.bin /tmp/pym-report.bin

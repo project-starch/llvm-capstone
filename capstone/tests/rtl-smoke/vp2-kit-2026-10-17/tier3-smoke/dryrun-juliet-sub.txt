@@ -1,0 +1,25 @@
+# tier3-juliet-sub.sh dry runs, 2026-10-21 13:18, every call stubbed (boot: BOARDVM_STUB_TRANSCRIPT, a real pass transcript; busy; booking).
+## jsub-dry.out
+JSUB BEGIN 13:18:43 run.py 4b663651d0638eef build 741cd6b3bf55fb93 booking 999
+unbooked 999
+JSUB END rc=0 13:18:43 :: 1 batches in 0.0 s -> <scratch>/jsub-dry3/observations.json
+BATCH batch000 completed=True sequence-as-planned=False wall_s=0.0 heartbeats(30s)=4 stats=NO readings={'pc=0': 0, 'DRT1': 0, 'FRTY': 0, 'Oops': 0, 'INJS': 0, 'INJL': 0, 'node-floor-2': 1}
+STEPS 14 limit_ms 10000 runner 4b663651d0638eef helper bb65b77ac802a9f3
+JSUB READ rc=0
+JSUB DONE 13:18:43
+## jsub-dry.planted (the same transcript with a DRT1 line and an INJS line appended: both must count)
+JSUB BEGIN 13:18:53 run.py 4b663651d0638eef build 741cd6b3bf55fb93 booking 999
+unbooked 999
+JSUB END rc=0 13:18:53 :: 1 batches in 0.0 s -> <scratch>/jp-root/observations.json
+BATCH batch000 completed=True sequence-as-planned=False wall_s=0.0 heartbeats(30s)=4 stats=NO readings={'pc=0': 0, 'DRT1': 1, 'FRTY': 0, 'Oops': 0, 'INJS': 1, 'INJL': 0, 'node-floor-2': 1}
+STEPS 14 limit_ms 10000 runner 4b663651d0638eef helper bb65b77ac802a9f3
+JSUB READ rc=0
+JSUB DONE 13:18:53
+## jsub-dry.busy
+JSUB STOP: board 1 is busy
+## jsub-dry.409
+JSUB STOP: the hub refused the booking (409): 409 held
+## jsub-dry.exists
+JSUB STOP: <scratch>/jsub-dry exists
+## jsub-dry.sha
+JSUB STOP: subset build.json is not the pre-registered one

@@ -1,0 +1,13 @@
+# tier3-juliet-spatial.sh dry run, 2026-10-22 02:38: only the boot stubbed (BOARDVM_STUB_TRANSCRIPT = tree A's TEMPORAL batch000 board.txt for every batch); run.py, probe.py and judge.py run for real, with every pin (wt-jb a772f0112ae3, wt-corpus b3cc8cb4be5a and judge 93aa5ad9, build.json 806cc24a, manifest 03f048a1, image-set digest 83fddeb7deb79e77) checked
+# NOTE: the judge counted 23 of 24 batches as valid on this stub, because batch validity compares step NAMES (s000.., ok-0, ctl-*) and the temporal stub's names have the same shape as the spatial plan's; its verdicts are therefore meaningless here. A live batch's transcript is that batch's own boot, so this is a property of the stub, not of a board run. The probe reads NO DATA (rc 75) because the stub carries no probe step.
+JS run BEGIN 02:38:46 board 1 booking 999
+unbooked 999
+JS run END rc=0 02:38:47 :: 24 batches completed, 0 not :: 24 batches in 0.7 s -> <mnt-hdd>/capstone/scratch-jsdry/run/observations.json
+JS probe BEGIN 02:38:47 board 1 booking 999
+unbooked 999
+JS probe END rc=75 02:38:47 :: 0 batches completed, 0 not :: {}
+JS judge rc=75 :: CWE-127: caught 0 missed 2; bad {'NO-READING:unexpected-cause': 72, 'MISSED': 2, 'NO-READING:batch-void': 19}; good {'CORRECT': 74, 'NO-READING:batch-void': 19}; strict {} runs: {'census': (23, 24)} 
+JS verdicts: 755 {('NO-READING:unexpected-cause', 'CORRECT', '25'): 705, ('MISSED', 'CORRECT', ''): 23, ('INTRA-OBJECT:NO-READING:unexpected-cause', 'CORRECT', '25'): 8, ('NO-READING:batch-void', 'NO-READING:batch-void', ''): 19}
+JS MISSED rows: 23 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE131_memmove_67 CWE121_Stack_Based_Buffer_Overflow__CWE193_char_declare_ncpy_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_char_alloca_loop_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_char_declare_ncpy_67 CWE121_Stack_Based_Buffer_Overflow__CWE805_int_declare_loop_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_memmove_01 CWE121_Stack_Based_Buffer_Overflow__CWE806_char_alloca_loop_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_char_declare_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_01 CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_01
+JS readings: 25 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board1 DONE 02:38:54

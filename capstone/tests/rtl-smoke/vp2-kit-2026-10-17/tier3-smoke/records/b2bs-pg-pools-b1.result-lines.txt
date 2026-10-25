@@ -1,0 +1,10 @@
+# postgres pg-pools (trimmed) on bitstream 2, board 1 (tier3-pg-b2-arm.sh): result lines.
+PG MEASURE: firmware 25856520 B against 26000000
+T3PG b2-pg-pools-b1 BEGIN 08:55:45
+T3PG b2-pg-pools-b1 END 10:51:12 rc=0 :: --- vp2-pg-pools (virtual-mallocng-pg-pools): {'CAUGHT': 5, 'MISSED': 2, 'NO-READING:unattributed': 2}
+PG inputs as recorded: fixture 956173e054762e91, image dc2a1356dce735e0
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x1
+b2-pg-pools-b1: bundle -> wt-gate/capstone/bug-corpora/postgres/sql-repros/results/2026-10-25-b2-dcc6daf6e-b1/vp2-pg-pools
+b2-pg-pools-b1: 9 of 9 cells the same (rc 0)
+PG DONE 10:51:12

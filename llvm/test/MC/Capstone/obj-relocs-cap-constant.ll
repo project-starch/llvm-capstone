@@ -1,5 +1,6 @@
 ; A constant holding a function's address: the integer address lands in
-; .rodata under an R_64 relocation, and __capstone_cap_init materialises the
+; .data under an R_64 relocation (since #265 a holder that __capstone_cap_init
+; writes is not constant, so it is no longer placed in .rodata), and __capstone_cap_init materialises the
 ; function's address PC-relatively (PCREL_HI20 on the symbol, PCREL_LO12_I on
 ; the auipc's label) to mint the capability it stores over the constant at
 ; start-up.  Pin all three relocations.  Measured 2026-09-04 on the branch
@@ -12,7 +13,7 @@
 ; RUN: llvm-readobj -r --expand-relocs %t.o | FileCheck %s
 ; RUN: llvm-readelf -h -r %t.o | FileCheck --check-prefixes=READELF,NOUNK %s
 ;
-; READELF checks follow the output order (header, .rela.text, .rela.rodata);
+; READELF checks follow the output order (header, .rela.text, .rela.data);
 ; NOUNK is a prefix of nothing but a NOT, so it covers the whole output.
 ; READELF: Machine:{{.*}}Capstone
 ; READELF: R_Capstone_PCREL_HI20
@@ -35,7 +36,7 @@ define i64 @f() {
 ; CHECK: Type: R_Capstone_PCREL_LO12_I
 ; CHECK-NEXT: Symbol: .Lpcrel_hi1 (
 
-; CHECK: Section ({{[0-9]+}}) .rela.rodata {
+; CHECK: Section ({{[0-9]+}}) .rela.data {
 ; CHECK-NEXT: Relocation {
 ; CHECK-NEXT: Offset: 0x0
 ; CHECK-NEXT: Type: R_Capstone_64

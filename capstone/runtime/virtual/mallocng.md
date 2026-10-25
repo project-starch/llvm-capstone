@@ -12,7 +12,7 @@ Capstone application
 Capstone-compiled musl mallocng
         | choose slot                  | needs OS backing
         v                              v
-local SPLIT / MREV / DELIN / REVOKE     mmap / munmap / mremap / mprotect
+local CDERIVE / CREVOKE                mmap / munmap / mremap / mprotect
         |                              | VM boundary
 bounded object capability             trusted adapter -> Linux
 ```
@@ -34,39 +34,44 @@ A group header still occupies 16 bytes. Its metadata reference is a scalar
 identifier; allocator authority comes from the private metadata index, never
 from converting that identifier into a capability.
 
-A mapping is partitioned into a header and the exact slots selected by
-mallocng. Each slot has aligned linear ownership and an out-of-line record
-holding its revocation handle. A private 4,096-bucket index chains these
-records; bucket count does not limit object count, and chains grow with the
-live population. `enframe` retains musl's offset calculation.
+A mapping grant is delinearized once and supplies a managed group lifetime.
+Each slot retains a narrowed copy of that group authority; it needs neither
+a linear partition nor its own parent node. The out-of-line slot record holds
+that parent and the current issued child. A private 4,096-bucket index chains
+these records; bucket count does not limit object count, and chains grow with
+the live population. `enframe` retains musl's offset calculation.
 The four prefix bytes immediately before a slot are represented in that
 record; prefixes at nonzero offsets remain inside the slot. This prevents a
-slot's allocator metadata access from crossing into its neighbour's linear
-ownership. Footer checks remain inside the owning slot.
+slot's allocator metadata access from crossing its bounds. Footer checks
+remain inside the owning slot. Non-overlap follows mallocng's slot geometry;
+the managed lifetime instructions do not enforce non-overlap.
 
 ```text
 mapping ancestor (retained by the kernel)
-  +-- group header
-  +-- slot owner / allocator handle
-  |     +-- current non-linear lifetime
-  |            +-- internal full-slot pointer (allocator only)
-  |            +-- bounded public pointer and its aliases
-  +-- next slot owner
+  +-- managed group (allocator only; also covers the header)
+        +-- current public object and its aliases
+        +-- another current object
+        +-- nested mallocng group
+              +-- its current objects
 ```
 
 The application receives only the requested object bounds. The allocator's
-full-slot pointer permits its private prefix/footer operations. `free`
+bounded group copies permit its private prefix/footer operations. `free`
 validates the supplied capability before looking up internal authority,
 clears payload tags and revokes the lifetime before the upstream backend
 publishes the slot as free. A successful in-place realloc rotates the
 lifetime; a failed realloc preserves the original. Moving realloc uses the
 existing Capstone memcpy, which copies non-linear tags and consumes linear
-ones. Explicit Sublet loans remain linear; reclaiming their descendants
-retains the UNINIT initialization rule.
+ones. Inner allocators use ordinary malloc/free and derive their own children
+from the allocation. There is no separate linear heap loan API. Freeing the
+outer object invalidates its descendants. Linear grants remain at the VM
+boundary, where mapping ownership is transferred.
 
 The capability records enlarge `struct meta`; upstream's existing metadata
 allocator grows according to that representation's `sizeof`. This is a real
-metadata cost, separate from payload policy. There is no 65,536-object array
+metadata cost, separate from payload policy. The managed slot record keeps the
+same four capability fields as the previous representation, and the old
+linear tail field is removed from `struct meta`. There is no 65,536-object array
 or replacement buddy allocator. The hash index has a fixed number of buckets
 but unlimited linked entries within available metadata/resources. It does
 not choose allocation addresses. A shared lock covers publication and the
@@ -88,7 +93,13 @@ qualification separately checks behavior, lifetimes and the service boundary.
 ## VM remapping
 
 Large realloc follows upstream's mremap branch. Heap mappings use their
-page-rounded requested length, without the old power-of-two padding.
+page-rounded requested length, without the old power-of-two padding. One
+mapping holds at most `CV_MAX_REGION_BYTES` (2 GiB) and a process's mappings
+`CV_MAX_BYTES` (4 GiB), from `vm-abi.h`. A malloc needs `IB + UNIT` bytes above
+its payload, so the largest payload is a little under 2 GiB. Pages are backed and
+pinned as they are first touched, so only what a program touches counts against
+guest RAM; `free` clears the whole payload and so touches every page of it. QEMU's exact-bounds metadata for a page that has held a capability
+also costs host memory, about 6 KiB per 4 KiB page.
 The native launcher invokes Linux `mremap(MREMAP_MAYMOVE)`; it does not run
 mallocng. The module's BEGIN/END transaction:
 
@@ -108,7 +119,7 @@ swap/migration and multi-hart execution are not added by this allocator port.
 
 ## Processor storage contract
 
-ABI v5 requires QEMU's explicit `x-capstone-exact-bounds=true` profile. The
+ABI v6 runs on QEMU's default profile (option iii). The
 launcher checks its advertised bit before starting the image. Version 2/3
 images remain accepted; the withdrawn native-heap version 4 is rejected.
 

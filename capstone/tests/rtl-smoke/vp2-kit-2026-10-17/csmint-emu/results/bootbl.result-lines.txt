@@ -1,0 +1,22 @@
+RESULT b0-stats retval=0
+capstone-exec: launch ticks image=2141396 hash=905 spawner=1439554 device=1552759 domain=4502781 regions=5428270 seccomp=5449853 total=20515518
+RESULT b0-hello retval=0
+capstone-exec: launch ticks image=1808215 hash=867 spawner=1262120 device=1633199 domain=2334211 regions=4171522 seccomp=5437711 total=16647845
+RESULT b5-hello retval=0
+B5e capstone-exec: launch ticks image=29693904 hash=804 spawner=1357394 device=1445303 domain=290506091 regions=113603669 seccomp=5380569 total=441987734
+MRUBY b5-mruby-e-stats sha 53c234e5e8472b6a bytes 2 want 53c234e5e8472b6a rc 0 secs 46.02
+RESULT b5-mruby-e-stats retval=0
+B5e capstone-exec: launch ticks image=28712270 hash=843 spawner=1346534 device=1621546 domain=27128161 regions=113924206 seccomp=5463741 total=178197301
+MRUBY b5-mruby-stdin-stats sha 5476dba1f4bd59f1 bytes 4 want 5476dba1f4bd59f1 rc 0 secs 24.97
+RESULT b5-mruby-stdin-stats retval=0
+B5e TIME bm_mandel_term 138351 ms
+B5e TIME bm_fib 45524 ms
+B5e TIME bm_so_lists 2466 ms
+B5e TIME bm_so_mandelbrot 30683 ms
+B5e TIME bm_ao_render 81931 ms
+MRUBY b5-mruby-bench sha 8d1539bc79e2b630 bytes 297 want 8d1539bc79e2b630 rc 0 secs 326.57
+RESULT b5-mruby-bench retval=0
+RESULT r54-bounds retval=64
+RESULT cw-pool retval=0
+RESULT b6-sublet retval=0
+RESULT b0-stats2 retval=0

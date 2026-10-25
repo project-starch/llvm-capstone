@@ -1,0 +1,22 @@
+# Tier 3 prediction, arm pgm0: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 11 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-mallocng-replay platform qkit7-wrapper cells 5 tally {"MISSED": 5}
+# controls [["uaf-chunk", "complete"]]
+00_1f5b6a5e5d_tuplestore_double_free image 5332a0d5b39ed66d MISSED cause None at None reached True completed True attribution null
+01_3549ffb6af_vacuum_dead_items_stale_struct image b23a29fa45876f02 MISSED cause None at None reached True completed True attribution null
+02_ed394c4bdf_live_parts_stale_alias image 94884683216d2d84 MISSED cause None at None reached True completed True attribution null
+03_a61592253e_pgoutput_entry_cxt_teardown image 56abc01b36cf6a4d MISSED cause None at None reached True completed True attribution null
+04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn image 6609f8404c0b80d2 MISSED cause None at None reached True completed True attribution null
+# image 5332a0d5b39ed66d  case-00-tuplestore-double-free
+# image a4ef810c1420a954  case-00-tuplestore-double-free-control
+# image b23a29fa45876f02  case-01-vacuum-dead-items-stale-struct
+# image 10c81e2865d272bd  case-01-vacuum-dead-items-stale-struct-control
+# image 94884683216d2d84  case-02-live-parts-stale-alias
+# image 727c333da2a83d77  case-02-live-parts-stale-alias-control
+# image 56abc01b36cf6a4d  case-03-pgoutput-entry-cxt-teardown
+# image 8a3ab84258b86fba  case-03-pgoutput-entry-cxt-teardown-control
+# image 6609f8404c0b80d2  case-04-reorderbuffer-spec-insert-lsn
+# image cb9b68b48198497f  case-04-reorderbuffer-spec-insert-lsn-control
+# image bbc3bbd2fb358acc  control-00-uaf-chunk

@@ -31,6 +31,7 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
@@ -82,12 +83,15 @@ def main():
     p.add_argument("--state", type=Path, required=True)
     p.add_argument("--arm", required=True, choices=sorted(BUILD_ARM))
     p.add_argument("--build", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--raw", type=Path, required=True)
     p.add_argument("--only", help="comma-separated case number prefixes")
     a = p.parse_args()
+    sdk_builtins.gate([a.build], who="sqlite:run-virtual.py")
 
     config = json.loads((CORPUS / "corpus.json").read_text())["arm_configurations"][a.arm]
+    import boardvm
+    rec = boardvm.record_arm(a.arm, appvm.on_board(a.state))  # vp2-<arm> for a board session
     spec = v.load_arms()[config]
     build = json.loads((a.build / "build.json").read_text())
     if build.get("arm") != BUILD_ARM[a.arm] or appvm.sdk_identity(build["sdk"])[1] != "virtual" \
@@ -117,26 +121,26 @@ def main():
         claims = json.loads((d / "case.json").read_text())
         image = a.build / f"{d.name}.dom"
         if d.name in build.get("not_applicable", []):
-            o = v.Observation(case=d.name, arm=a.arm, infra="out-of-denominator",
+            o = v.Observation(case=d.name, arm=rec, infra="out-of-denominator",
                               notes="the builder marks it not applicable to this arm (it configures sqlite_heap itself)")
         elif not image.is_file():
-            o = v.Observation(case=d.name, arm=a.arm, infra="build-failed", notes=f"no {image.name}")
+            o = v.Observation(case=d.name, arm=rec, infra="build-failed", notes=f"no {image.name}")
         else:
             tag = build["cases"][d.name]["tag"]
             text, result = appvm.run_app(a.state, image, [tag], a.raw / d.name, timeout=300)
             o = observe(tag, text, result, v.Symbols(a.llvm_bin, image), set(claims.get("fault_sites", [])))
             o.image_sha256 = v.sha256(image)
-        o.case, o.arm, o.controls = d.name, a.arm, list(controls)
+        o.case, o.arm, o.controls = d.name, rec, list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
         print(f"{d.name[:52]:<52} {verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:80]}",
               flush=True)
-    record = v.write_bundle(a.output, "sqlite/engine-repros", a.arm, rows, {
+    record = v.write_bundle(a.output, "sqlite/engine-repros", rec, rows, {
         "configuration": config, "predicted": PREDICTED[a.arm],
         "build": {k: build[k] for k in ("arm", "sdk", "opt", "groups")},
         "amalgamation_sha256": v.sha256(Path(build["amalgamation"]) / "sqlite3.c"),
         "platform": appvm.platform(a.state, a.llvm_bin / "clang", HERE)})
-    print(f"--- {a.arm} ({config}): {record['tally']}")
+    print(f"--- {rec} ({config}): {record['tally']}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 

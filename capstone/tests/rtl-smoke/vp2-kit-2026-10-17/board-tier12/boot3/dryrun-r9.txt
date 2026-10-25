@@ -1,0 +1,3 @@
+# Boot r9 runner dry run (firmware b47f82487c6030f6; module ce3a542d00acce86; the suite with sparse-churn last), driver
+# stubbed: clean synthetic: identity, 33 of 41, 0 off; r8 real transcript (vm-suite wedged, no END): board-check reads
+# to the end (BOARD_TO_END=1) and reports 41 tests (5 true, 28 off); wrong firmware: STOP.

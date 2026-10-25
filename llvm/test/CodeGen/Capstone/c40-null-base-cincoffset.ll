@@ -1,7 +1,8 @@
 ; C-40: address arithmetic on the NULL capability must not become a cincoffset
-; whose base is the zero register.  On this ISA cincoffset raises
-; UNEXPECTED_OPERAND when rs1 holds no capability, and null holds none, so
-; `cincoffset rd, zero, rs2` faults on every execution.  The middle end and the
+; whose base is the zero register.  Until the CHERI rule (2026-10-14)
+; cincoffset raised UNEXPECTED_OPERAND when rs1 held no capability, so
+; `cincoffset rd, zero, rs2` faulted on every execution; it now computes the
+; same untagged integer, and the integer lowering below stays the direct one.  The middle end and the
 ; codegen pipeline create exactly that shape: Loop Strength Reduction rewrites a
 ; pointer loop's exit test `a == aLast` into `(gep i8, null, %lsr.iv) == null`
 ; (SCEVExpander's expansion for a non-integral address space), which is what

@@ -1858,6 +1858,1386 @@ Predicted on caplifive_r51r52_0568f93a9:
   - Handed to the RTL lane for a directed arm in this exact order (N=1 boot; the shape is deterministic,
     40,000 of 40,000).
 
+## Acceptance of the R-53 + R-52-residual bitstream, pre-registered 2026-10-13 (before any build; hash to be pinned)
+The RTL lane confirmed both in simulation, on branch capstone-sublet off 0568f93a9:
+- **R-53 (was S-19):** with FS = Clean, fld, fadd.d, fmv.d.x and fcvt.w.d leave sstatus FS = 2 (Clean) and SD = 0 on
+  0568f93a9 and on 776d9d859; only fsflags dirties FS. With the #2936 parenthesisation each sets FS = 3, SD = 1.
+- **The R-52 residual:** order A, bare, reads exactly 0x3feb71f814fa0d22 (2 x frac), the board's value. Orders B and D
+  and the 40-nop variant read the correct 0x406e0db8fc0a7d07. fmul.d in place of fdiv.d reads 2 x the product, so it is
+  any longer-latency FP op in flight when the shorter one issues. On 776d9d859 the arm reads 0: R-52's fix made FP
+  forwarding live and exposed it. The fix is in progress (arm r52-fcvt-behind-fdiv.S).
+
+Predictions for a bitstream carrying both fixes, written before it exists. Everything else is predicted unchanged
+from 0568f93a9's acceptance (above).
+
+**SCOPE CHANGE, 2026-10-13: the same branch also carries the Sublet-lifetimes capability format move (4-bit perm,
+27-bit bounds).** Every "unchanged" row below is CONDITIONAL until the RTL lane answers four questions:
+- the exact encoding change;
+- which software must change in lockstep (QEMU, the compiler, the monitor, the runtime, the module);
+- whether images built for 0568f93a9 stay valid, since the R-43 and S-16 controls are same-image comparisons;
+- whether check-repr.py's compress/decompress port, the R-11 build gate, still models the hardware. **Answered
+  2026-10-13: yes under `--format full`, which also found R-54; see "check-repr.py under the Sublet capability
+  format" below.**
+The FP rows (B3i, B3j, fphold, now()) do not depend on the capability format.
+- **B3j (b3-fpnow-probe):** shapes A, B, C and D each read **0 of 40,000 wrong**, and the checker control passes. C's
+  1 of 20,000 on 0568f93a9 is predicted to go too, if it was R-53's stale restore.
+- **B3i (b3-fpstate-probe):** n, w, l, z, s and f each read **IIIIIIIIIIII**. The signal frame and the fork child
+  read I. k reads I except fs5. The switch counts stay as on 0568f93a9 (w vol 1, l invol >= 1, z vol 1, f vol 1).
+- **B3f/B3g/B3h (b3-fphold-probe):** every variant reads 0 of 12 changed, and v7 reads exactly 1.
+- **b3-clock-probe:** arith 0 of 200,000; the self-test 1 of 12; hold-native and hold-domain 0 of 12. **now() checked
+  against the integer clock printed beside it:** in[0] within 1 s of the monotonic reading, not in [0, 2).
+- The harness's stop_seconds is then a real FP measurement, and should be in QEMU's 1.1-1.5 s range or a little above.
+- R-51 0 / 0x1C / 0x1C, the S-16 set, the R-43 list, C5u, s10b and s06agg: unchanged.
+- **Refutations:**
+  - any B3j shape wrong;
+  - any B3i window reading 0, C or ?;
+  - a now() value under 2 s when the integer clock reads hundreds.
+
+## check-repr.py under the Sublet capability format (2026-10-13): the gate ported, and the encoder's wrap (R-54)
+This answers the SCOPE CHANGE's fourth question for the R-11 gate. `check-repr.py --format full` models the
+capstone-sublet RTL, read in the RTL lane's working tree on 2026-10-13 before 13:04, i.e. before the R-54 renormalisation
+landed in that tree, and before any commit: `bounds_t` is the 27-bit full
+scheme for every capability, and the cursorless branch is gone. `compress_bounds` and `decompress_bounds` keep the old
+full branch's bodies, so the port is the existing one with the `start == cursor` branch skipped. `--format cursorless`
+stays the default, for 0568f93a9 and earlier. **Since committed:** the format move is capstone-ariane d34c26002, on
+fp-fixes 4a4261bb4. Its bounds encoder and decoder are 4a4261bb4's full branch, renormalisation included, with the
+cursorless type and decoder branch removed (`git diff 4a4261bb4 d34c26002`). `--format full --renorm` models it, and
+`--format full` alone is the pre-13:04 tree the predictions below were made from.
+
+**The port is checked against two other transcriptions.** `qemu-encoder-diff.py` builds capstone-qemu's
+`cap_compress.c` (origin/isa/sublet-lifetimes) standalone and runs 60,000 random triples through both:
+- 0 word mismatches, 0 decode mismatches;
+- the harness fires: a one-character mutant of the port's top round-up gives 13,697 of 20,000 mismatches;
+- two other mutants were equivalent on its input domain: the R correction with the cursor in bounds, and the iE = 0
+  carry at length 0. Neither is a finding about the port.
+- the C mirrors the RTL's identifiers, so it guards against a typo, not a shared misreading. A claim-auditor wrote a
+  third port straight from the SV, with explicit bit slicing: 0 mismatches on 300,000 cases.
+
+**R-54: the full scheme does not renormalise.** `compress_bounds` rounds the top up with `T[11:3] += 1` and keeps E.
+- When that pushes the span to 2^13 granules, the word needs E+1, and decodes about half the span SHORT.
+- Exactly, over 200,000 random cases with no exception: [s, e) with len >= 4 KiB, E = hb(len) - 12 and g = 2^(E+3)
+  decodes not covering itself iff roundup(e, g) - rounddown(s, g) >= 2^(E+13).
+- Example: [0xadf2a000, 0xadfa9fe0) decodes [0xadf2a000, 0xadf6a000).
+- QEMU's encoder had the same flaw. It showed it only through STC, because its SPLIT and SHRINK keep exact bounds.
+- On 0568f93a9 it applies whenever a cursor leaves the base (the same full branch). On capstone-sublet it also applies
+  at every SPLIT.
+- The RTL lane confirmed it with its own port and is fixing it in the RTL: renormalise to E+1 when the predicate
+  holds. Its tree carries the step from 13:04, not yet committed; capstone-qemu has it in aad781e15a. Sequencing is
+  the lead's.
+- The audit (claim-auditor, 2026-10-13) found nothing after `compress_bounds` that renormalises or refuses. It
+  reproduced the 5 trap bases with its own port, and read 0 of 255 with the renormalised encoder.
+  - Two model corrections, neither changing a verdict: the glue hands the stack over with its cursor AT t1
+    (`scc sp, sp, t1`), not at top - 16; and the runtime's later carves (context.c) are not replayed.
+
+**The replay now also fails on:**
+- SPLIT TRAP: a carve point outside the remainder's decoded bounds; SPLIT raises ILLEGAL_OPERAND_VALUE.
+- SHORT ONCE MOVED: a global's zero-fill walker, the stack handed over at its top, dom_data or the context arena
+  re-encoding short.
+- OVERLAP (full only): a capability reaching outside its own storage. It fails unless `--allow-overlap`.
+
+Classic (non-domreq) images go through the same replay under `--format full`, with the module's
+code_len + max(code_len, 64 KiB) block and the monitor's unmanaged split. `--self-test` runs the model's four positive
+controls; each fails on a deliberately exact model. build-b0-hello.sh runs it, and takes `B0_CAP_FORMAT`.
+
+**On 0568f93a9 (cursorless), nothing changes.** The per-image verdicts equal the committed tool's: k800 OK, the R-43
+images OK, the SQLite cells AT RISK at 14 bases and stale-full r1_slots_pools at 7, all known. b0-hello, b1-thread and
+memcached ba7e6921 stay OK; none of their globals, stacks, dom_data or arenas re-encodes short.
+
+**Predicted for the capstone-sublet encoding WITHOUT the renormalisation (the tree before 13:04):**
+| image | fault | OVERLAP, up to |
+|---|---|---|
+| k800, s06agg (classic) | none | 64 B, 112 B |
+| R-43 live16/128/512, r1_slots_pools (both) | none | 1,008 B; 496 / 2,560 B |
+| cell5, cell6, cell6-r43probe (SQLite) | none: the 14 trap bases of 0568f93a9 go | 4,096 B |
+| b0-hello | none | 384 B |
+| b1-thread | **SPLIT TRAP at 5 of 255 CMA bases** (R-54, the stack remainder wraps) | 2,048 B |
+| memcached ba7e6921 | none | 32,768 B |
+- So the acceptance list's same-image controls are not refuted by the encoding. With the renormalising encoder,
+  b1-thread's trap bases are predicted to go; check-repr will model that from the RTL commit, not from its description.
+- **OVERLAP is a safety change, not a fault.** With the cursorless branch gone, SPLIT rounds the remainder's top up into
+  the global just carved, and the next global inherits it. Every glue-carved global's capability reaches into its
+  upper neighbour, and the stack's top into the lowest global, by up to the remainder's granule. That is the runtime
+  glue's design input.
+- Carving the >= 8 KiB globals separately and the rest inside one sub-region would bound it at 128 B for memcached,
+  64 B for b1-thread, 32 B for b0-hello and 128 B for the SQLite cell. One sub-region for all globals gives 32 KiB
+  for memcached, which has a 16 MiB global.
+
+## B4 pre-registered (2026-10-13, before the boot): R-54 on silicon, 0568f93a9
+R-54 is predicted from source and two independent ports. This boot asks the resident bitstream directly, and becomes
+the "before" arm for the bitstream that carries the renormalisation.
+
+**Probe:** `runtime/silicon/r54-bounds.c`, image r54-bounds.dom sha256 0b0ff5d555188612. It was built by
+build-b0-hello.sh with B0_ARENA = 2 MiB and B0_DATA = 3 MiB; the R-11 gate and its self-test passed.
+- Each arm narrows a capability to [s, s + n) with `shrink` (cursor on the base: the cursorless write-back), reads its
+  bounds with lcc, moves the cursor by 8 with cincoffsetimm (the full-branch write-back), and reads them again.
+- In the artifact: `shrink a0` -> `lcc a3/a1, a0` -> `cincoffsetimm a0, a0, 0x8` -> `lcc a2/a0, a0`.
+- Nothing is dereferenced through a capability under test, so every arm returns.
+- s is an offset from a 4 KiB-aligned anchor in a 1 MiB heap block, so the readings, as offsets from s, are
+  base-independent.
+- H is the allocator's own `malloc(65535)`, walked the same way, with R-54's predicate printed for its own base.
+
+**QEMU control (fw-b1-a11d424, GP_FABRICATE=0, MOVC_NULL_SCALAR=1):** b0-hello rc 0; r54-bounds rc 0, every reading
+exact: QEMU keeps fat bounds. H landed at s % 4096 = 2544, where the predicate says short.
+
+**Boot:** caplifive_r51r52_0568f93a9 (resident), firmware built from the B4 private image like B3j's (wrapper 882892f,
+monitor 1f9aedd, `-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET`).
+Rungs: b0-stats, b0-hello (control), r54-bounds, b0-stats2. PREFLIGHT=0 (private image).
+
+**Predicted readings, from check-repr.py's port (offsets from s):**
+| arm | n | at base | moved |
+|---|---|---|---|
+| A | 65,535 at anchor + 0 | [+0, +65535) | **[+0, +32768) SHORT** |
+| B | 65,520 at anchor + 16 | [+0, +65520) | **[-16, +32752) SHORT** |
+| C | 8,191 at anchor + 0 | [+0, +8191) | **[+0, +4096) SHORT** |
+| D | 65,536 (control) | [+0, +65536) | [+0, +65536) covers |
+| G | 65,471 (control) | [+0, +65471) | [+0, +65472) covers: rounded up 1 B, no wrap |
+| H | malloc(65535) | [+0, +65535) | SHORT iff its printed predicate says short; at s % 4096 = 2544 (QEMU's place), [-48, +32784) |
+- rc (oracle) = **39**: A, B, C and H. 7 if H lands where its predicate says covers.
+- b0-hello retval 0; b0-stats and b0-stats2 retval 0.
+
+**Refutations:**
+- A, B or C covering once moved: R-54 does not hold on silicon as stated, or the core renormalises somewhere the
+  source reading missed.
+- D or G short, or G's end not +65472: the port's full branch is wrong.
+- Any at-base reading inexact (rc bit 64): the shrink write-back is not the cursorless branch the model assumes.
+- H disagreeing with its own printed predicate.
+
+**On the renormalising bitstream** (the RTL lane's fix, predicted only once check-repr ports it from the commit), every
+arm should read covering, and rc 0.
+
+## B4 RESULT (2026-10-13 13:21-13:26, caplifive_r51r52_0568f93a9, firmware bc0f7df85e64): R-54 observed on silicon, and R-11 on the heap
+- b0-stats retval 0; b0-hello (control) retval 0 (DBAS 0xac080000); b0-stats2 retval 0.
+- **r54-bounds retval 39, as predicted** (image 0b0ff5d555188612, DBAS 0xac100000). Offsets from s, at base, then
+  after the cursor moved by 8:
+  - A, n 65535: [+0, +65535) then **[+0, +32768) SHORT**;
+  - B, n 65520 at +16: [+0, +65520) then **[-16, +32752) SHORT**;
+  - C, n 8191: [+0, +8191) then **[+0, +4096) SHORT**;
+  - D, n 65536: [+0, +65536) then [+0, +65536), covers;
+  - G, n 65471: [+0, +65471) then [+0, +65472), covers, rounded up 1 B as predicted;
+  - H, malloc(65535) at s % 4096 = 3568: **at base [+0, +65532)**, then **[-48, +32784) SHORT** (its predicate: short).
+- Every A-G reading equals check-repr.py's port, value for value. R-54 is silicon behaviour, not a model artefact.
+- **One pre-registered row missed: H at base.** I predicted [+0, +65535) from QEMU's placement (s % 4096 = 2544). On the
+  board H sat at s % 4096 = 3568, the same residue modulo its 64-byte granule, so the moved reading held.
+  - The at-base reading is 3 bytes short. That is the CURSORLESS branch truncating the top (R-11's mechanism), E = 2.
+  - check-repr's model reproduces both of H's readings exactly at 16 addresses, every one straddling 0xac400000. That
+    boundary lies inside the 4 MiB domain at 0xac100000.
+- **RETRACTED (made in lane commit 2d7d41c93d85 and relayed to the lead by the RTL lane):** "level0 narrows each
+  object to exactly n bytes with cap_shrink(p, c, c + n), which is exact because the cursor sits on the base". It is
+  exact only for an object that stays inside one 2 MiB window, or whose end is a multiple of 2^E. One that crosses a
+  2^(20+E) boundary loses up to 2^E - 1 bytes at its top before any cursor moves.
+  - R-11's workaround (CAPSTONE_GLUE_CARVE_ALIGN) covers the glue's carve, not the heap.
+  - What would have caught it: the H row's prediction came from QEMU's address, and the window rule depends on the
+    absolute address. H's at-base value should have been predicted per address, as its moved value was.
+- **So for the next bitstreams:**
+  - the renormalisation (R-54's fix) closes the moved-cursor half;
+  - only removing the cursorless branch (the format move) closes the heap's at-base truncation;
+  - between them, a level0 stopgap (round each narrowed end to a granule the window rule keeps) would trade away
+    exact-n bounds. That is the runtime side's call.
+
+## The FP bitstream's two encoder options, as check-repr reads them (2026-10-13)
+The RTL lane's fp-fixes branch: cc1159a51 (R-53) -> ae21e121e (the R-52 residual, rs3) -> 2a3a87dfc (R-54's
+renormalisation). It is building a fourth, optional commit that turns the cursorless branch off in the ENCODER only.
+The decoder still accepts cursorless words, so no image format moves. The lead chooses between the two.
+
+`check-repr.py --renorm` ports 2a3a87dfc's step. It agrees with that commit's bounds-model.py on 300,000 decodes,
+fixed and unfixed; a cross-check (renormalised port against the unfixed model) differs on 14,570 of 20,000, so the
+comparison fires. It also agrees with capstone-qemu aad781e15a (`qemu-encoder-diff.py --renorm`: 0 mismatches, 0 short
+decodes). Against the unfixed QEMU it differs on exactly the 1,089 wrapping triples.
+
+**(a) R-53 + rs3 + renorm** (`--format cursorless --renorm`):
+- Every verdict equals today's. The R-11 trap bases already known stay: stale-full r1_slots_pools at 7, the SQLite
+  cells at 14.
+- R-54's moved-cursor half closes. B4's A, B, C and H are predicted to cover once moved.
+- R-11 stays where the glue workaround does not reach. On the heap, B4's H at base stays [+0, +65532) when it
+  straddles a 4 MiB boundary.
+
+**(b) (a) + encoder-cursorless-off** (`--format full --renorm`):
+- No fault on any image: k800, s06agg, both r1_slots_pools, R-43 live16, the SQLite cells, b0-hello, b1-thread,
+  memcached and r54-bounds. R-11's trap bases and b1-thread's wrap traps both go.
+- OVERLAP on every image: a glue-carved global's capability reaches into its upper neighbour by up to the
+  remainder's granule.
+  - k800 64 B, s06agg 112 B;
+  - r1_slots_pools 2,560 B (stale-full) and 496 B;
+  - R-43 live16 1,008 B;
+  - SQLite cells 4,064 to 4,096 B;
+  - b0-hello 384 B, b1-thread 2,048 B, r54-bounds 4,096 B;
+  - memcached 32,768 B.
+- Nothing faults from that, but per-global separation on silicon is gone until the glue carves a globals sub-region.
+- Heap objects of 4 KiB and up get outward-rounded bounds at base.
+
+**The monitor under both options** (the RTL lane's question, 2026-10-13). check-repr now replays the monitor's own
+splits too: code, seal, dom_data, the descriptor area, gp, and code at its entry.
+- **Renormalisation needs no monitor change.** An exact region never renormalises: its rounded span is its length,
+  which is below 2^(E+13). dom_data, seal and the descriptor area are always exact, because their ends sit on
+  repr_gran and their own granule is no larger. All 11 images read every monitor capability exact, under every
+  encoder.
+- **C-13's rule misses the CODE region under a full-scheme encoding, i.e. (b) and the format move.** repr_gran is sized
+  from the data length. When code dominates, split_size's own granule is larger, and the domain's code capability
+  rounds its top past split_size into the seal region.
+  - Synthetic managed layouts (700-1000 KiB of code, 40 KiB of data, 1 MiB block): 68 of 74 sizes; none under
+    cursorless. This is now a --self-test control.
+  - None of the 11 real images is code-heavy enough.
+  - Fix, if (b) or the format move is taken: size the granule from max(split_size's own granule, repr_gran) in
+    create_domain (the FPGA monitor line, this lane's), with the firmware for that bitstream.
+
+## FP-bitstream acceptance amended for R-54, pre-registered 2026-10-13 (before any build; bitstream hash to be pinned)
+The bitstream the lead chooses is either:
+- **(a) capstone-ariane 2a3a87dfc**: R-53 cc1159a51, the R-52 residual's rs3 fix ae21e121e, and R-54's renormalisation,
+  off 0568f93a9;
+- **(b) 4a4261bb4**: (a) plus the encoder's cursorless branch removed. Its tree is byte-identical to 328f61761's, the
+  one ported and checked (tree 8bdb52a5).
+Both are on origin fp-fixes. The RTL lane's 95-test sweeps on 2a3a87dfc and 4a4261bb4 are identical to 0568f93a9's
+test by test. **Corrected 2026-10-14 (the RTL lane's retraction):**
+- That comparison was of exit codes only.
+- 26 of the 95 tests are readings-only arms that end in a spin. They reach the sweep's 2,000,013-cycle limit on every
+  tree, baseline included, and the testbench reported that limit as SUCCESS. For those 26 it compared nothing.
+- The RTL lane is re-running the readings-level comparison (.sweep-compare.py: exceptions, CAPPRINT readings,
+  retired instructions) over every gated tree, and re-taking the baseline under the fixed harness.
+- The board predictions below stand on their own grounds: check-repr's model, and the readings recorded on
+  0568f93a9. The sweep was supporting evidence only.
+- **The readings-level result (the RTL lane, 2026-10-14):** .sweep-compare.py compared each test's taken exceptions,
+  CAPPRINT readings, retired instructions and SUP_TRACE detector count against the 0568f93a9 baseline's output.
+  - 2a3a87dfc, 4a4261bb4 (this bitstream's tree), d34c26002, and Sublet steps 2-4: 92 of 92 identical, detector 0
+    on both sides.
+  - Sublet step 5: one difference that is not a reading. r31-revoke-cursor retired 999,229 against 999,223 at the
+    2,000,013-cycle cutoff, with the same exceptions and readings; it is a spin-to-the-limit arm cut six
+    instructions apart.
+  - rand, perf_tcache_random and perf_riscv_random have no log on any tree, the baseline included.
+  - So option (b)'s neutrality holds on readings.
+The earlier rows (B3j, B3i, fphold, b3-clock and now(), R-51, the S-16 set, the R-43 list, C5u, s10b,
+s06agg) stand as pre-registered above; this adds what R-54's fix and option (b) change.
+
+**B4's r54-bounds (image 0b0ff5d555188612), from check-repr.py's port** (`--renorm`, cursorless for (a), full for
+(b)); offsets from s, at base then moved by 8:
+| arm | 0568f93a9 (B4, observed) | (a) 2a3a87dfc | (b) 4a4261bb4 |
+|---|---|---|---|
+| A 65535 | [+0, +65535) / [+0, +32768) | [+0, +65535) / [+0, +65536) | [+0, +65536) / [+0, +65536) |
+| B 65520 at +16 | [+0, +65520) / [-16, +32752) | [+0, +65520) / [-16, +65520) | [-16, +65520) / [-16, +65520) |
+| C 8191 | [+0, +8191) / [+0, +4096) | [+0, +8191) / [+0, +8192) | [+0, +8192) / [+0, +8192) |
+| D 65536 | [+0, +65536) / same | same | same |
+| G 65471 | [+0, +65471) / [+0, +65472) | [+0, +65471) / [+0, +65472) | [+0, +65472) / [+0, +65472) |
+| H malloc(65535), straddling a 4 MiB boundary as at B4 | [+0, +65532) / [-48, +32784) | [+0, +65532) / [-112, +65552) | [-112, +65552) / same |
+| H not straddling | (not observed) | [+0, +65535) / [-112, +65552) | [-112, +65552) / same |
+| **rc** | **39** | **0** | **64** (bit 64: the at-base readings round outward, by design) |
+- Under (a), H at base keeps R-11's truncation when it straddles. It covers once moved.
+
+**The R-11 gate per option** (check-repr.py; the images are k800, s06agg, both r1_slots_pools, R-43 live16, cell5,
+cell6, b0-hello, b1-thread, memcached ba7e6921 and r54-bounds):
+- (a): `--format cursorless --renorm`. Every verdict as on 0568f93a9: stale-full r1 AT RISK at 7 bases, cell5/cell6 at
+  14, all others OK.
+- (b): `--format full --renorm`. No fault on any image, but OVERLAP on every one (64 B for k800 to 32,768 B for
+  memcached); a build gate passes it only with --allow-overlap. Every monitor capability is exact for these
+  images under both options.
+
+**Standing controls under (b):** predicted unchanged, because none of their readings is a bound read back.
+- The encoder change touches every capability written with its cursor on the base.
+- A reading that changes under (b) but not under (a) points at the encoder change, not at R-53, rs3 or the
+  renormalisation.
+
+**Refutations:**
+- (a): any arm short once moved; rc other than 0 (the H line may read +65532 at base and still rc 0).
+- (b): rc other than 64; any arm short; any at-base reading other than the table's.
+- Either: a standing control changing.
+
+## FP bitstream (b) acceptance staged, 2026-10-14 (before the flash; the bitstream hash pinned when sealed)
+**Sealed (the synth lane, 2026-10-14):** caplifive_fpb_4a4261bb4.bit, sha256
+a63cbd815fe96957a979fc94c6c1bf29060428db9523d43485d392aeca10ff65, 11,443,722 B.
+- **Routed WNS -15.360: OUTSIDE the pre-registered band -13.335..-5.855.** The worst paths enter compress_bounds,
+  which the synthesis pre-registration's discriminator (capstone-sublet-rtl.md) names as the renormalisation.
+- The flash is the lead's decision, with that WNS stated.
+- If it is flashed, the chain's first control, the S-16 bare set, stops the chain on any timing-induced failure
+  before a verdict is read.
+- **The respin, sealed 2026-10-14:** caplifive_fpb_afcd19bea.bit, sha256
+  d8d2b641da70207c74d41a69ef60a561426fc573b6767fd03bd6d3c28a5fb3f8, 11,443,722 B.
+  - Routed WNS -15.310: still OUTSIDE the band, 0.050 ns better (inside the noise a null change has shown).
+    TNS 13 % better. The prediction "WNS back in band" is refuted; the worst path's endpoints are the next read.
+  - Functionally, the encoder decides E as 2a3a87dfc did wherever the rounded top is representable, so every
+    prediction above carries to it unchanged.
+  - Lockstep QEMU: capstone-qemu 4a21b485b01f, the same residue form.
+  - The flash is the lead's decision, between 4a4261bb4 (-15.360) and afcd19bea (-15.310); the acceptance takes
+    either.
+- A verified add-free form of the renormalisation test went to the RTL lane for a respin, if one is wanted:
+  wrap iff (q == 1023 and the remainders are nonzero) or (q == 1022 and sr + lr > g), with q = len >> (E+3).
+  It matches 2a3a87dfc's step on 400,000 regions.
+The lead chose option (b), capstone-ariane 4a4261bb4, to be built as caplifive_fpb_4a4261bb4.bit (the RTL lane's
+synthesis pre-registration: dev cd8c12bc2627). The acceptance of record is 5e82c06d61f9's (b) column, plus the FP rows
+of fc3225fb237d and 6bc165f2e1c2. Staged in /tmp/capstone/accept-fpb (chain.sh, r43/, oracles/):
+- **Order, as 0568f93a9's chain:**
+  1. the S-16 bare set;
+  2. the R-43 list a1-a10;
+  3. C5u;
+  4. R-51;
+  5. s10b;
+  6. s06agg;
+  7. boot C+F, the one change of form: the B-series, the FP probes and r54-bounds in ONE private image.
+  The chain stops at the first control that fails.
+- **Boot C+F:**
+  - rungs: b0-stats, b0-hello (control), b1-thread, b2-memcached, b3-setclock, b3-oracle, b3-fpstate (B3i),
+    b3-fpnow (B3j), b3-fphold (B3f), r54-bounds, b3-clock (last: on 776d9d859 it did not return), b0-stats2;
+  - private image 79f84cd81fef8dfa and firmware abdb54361c4f (wrapper 882892f, monitor 1f9aedd, QUIET), every staged
+    file hash-checked in the initramfs and removed again from the shared buildroot;
+  - images by hash: b0-hello db4385ff32deddf6, b1-thread ac2369aa6a548926, memcached ba7e6921cf27f2b6,
+    r54-bounds 0b0ff5d555188612, fphold 48f5eb725abbbd49, fpstate 957a6ac11149f931, fpnow 4e4e7604faca561b,
+    clock 5aa140cf39647700.
+- **Oracles:** 0 for every rung but r54-bounds, which is 64 under (b), in a separate oracles/ directory so the
+  resident bitstream's 39 stays scorable.
+- **CPU pinning:** the scripts are the mask-free copies (dev 7d02b385901a); none pins to apollo's measurement half.
+- **s06agg reads 64**, as pre-registered. The RTL lane raised and withdrew a cursorless dependence: its verdict reads
+  plain data through the NOT_CAP path, before compress_bounds.
+- **Added 2026-10-14, exploratory, outside the verdict: the REVOKE timed pair** (step 5b, after s10b;
+  run-capstl.sh's new `s1gap` set). The images are s1gap-close b351bc50610e61bc and s1gap-far 5a35240633e85f2c,
+  board_rec 0x80003080, from dev feecdba9d635.
+  - Re-verified here: SHA256SUMS OK; each image carries four `ldc; csrr mcycle; REVOKE; csrr mcycle` brackets, R1's
+    shape, at 0x800002cc / 0x8000040c / 0x80000548 / 0x80000684; the pair differs only in the four GAP
+    immediates, the GAP reading and the banner character.
+  - The same images run again on the Sublet bitstream. They are graded against s1-revoke-gap-2026-10-14/PREREG.md,
+    as a pattern rather than cycle values: far equal on both bitstreams at every k; close k = 2..4 equal; close k = 1
+    LOWER on Sublet than on FP, never higher. That is outcome A, under which R1's 76 / 22.7 hold.
+  - The PREREG reads the close arm's k = 2..4 gap brackets as a REVOKE's walk continuing after retirement. R1's own
+    silicon data rule that out in R1's shape: the fill is 474,817 cycles at EVERY n for B = 256 KiB, and the REVOKE
+    bracket is node-linear (fpga-silicon-measurements-for-paper.md). So no REVOKE work spills past R1's bracket,
+    and the release model's per-term split stands.
+
+## FP respin acceptance RESULT so far (2026-10-15, caplifive_fpb_afcd19bea.bit): Linux does not boot; root-cause candidate, and boot M pre-registered
+Flashed on the lead's word in conversation (01:29-01:31; the read-back named it; 0568f93a9 stays registered).
+- **S-16 control set (bare, 01:32-01:47):** 18 of 18 arms complete; all 98 readings identical to 0568f93a9's run.
+- **R-43 a1 (01:47-02:18): FAILED, and the chain stopped there as designed.**
+  - Every Linux boot stops after `sched_clock: 64 bits at 13MHz ...`, with `------------[ cut here ]------------` and
+    no further output. That held on all three cold-boot attempts with today's rebuilt a1 firmware.
+  - The shared checkout's preflight predates the `caplifive_fpb_*` row, so the R-43 sub-chain declared
+    PREFLIGHT_DTS_NODES=65536. The C-DTS check ran and passed. afcd19bea's revocation-node base equals 0568f93a9's.
+- **Matched pair: the bitstream, not the firmware (02:18-02:47).**
+  - The pinned firmware fw_2f49d5b257f7 booted to a login on 0568f93a9 on 2026-10-11 (k800 4, s06agg 64).
+  - On afcd19bea it hangs at the same character offset, 3 of 3.
+  - The driver code, the boot sequence and the environment are identical; the only variable is the bitstream. The
+    claim-auditor CONFIRMED this.
+  - The first divergence comes before the warning: the `sched_clock` line is stamped `[0.000168]` on 0568f93a9 and
+    `[0.000000]` on all six afcd19bea boots, i.e. S-mode time reads 0.
+  - The warning matches random_init's `WARN(!entropy, "Missing cycle counter...")`, whose message has no newline.
+  - After the hang the hart takes no debug halt (OpenOCD: `dmstatus=0x00030c82`, allrunning, `failed to halt`).
+  - The CLINT's mtime counts at reset (GDB: 0x030da3c0 -> 0x04900aac in about 2 s).
+- **Bare rows on afcd19bea (02:51-02:58):**
+  - R-51 before 0x1C/0x1C, after 0/0x1C/0x1C; s10b 8/1: identical to 0568f93a9's.
+  - s1gap (exploratory, for the RTL lane's PREREG):
+    - close: k=1 gap 0x8, revoke 0x3A; k=2 0x2F/0x21; k=3 0x1D/0x31; k=4 0x1C/0x49;
+    - far: k=1 0xFA6/0x42; k=2 0xFBC/0x21; k=3 0xFBD/0x2D; k=4 0xFBD/0x47;
+    - no traps.
+- **Breakpoint probes: void.** A software breakpoint at sbi_timer_value never stopped. Its positive control, a
+  breakpoint at `_trap_handler`, never stopped either. After CAPENTER, traps enter through `ctvec` (`_cap_trap_entry`),
+  so that control was mis-chosen. Whether software breakpoints fire in M-mode on this core is UNRESOLVED.
+
+**Root-cause candidate (not yet confirmed on the board): option (b)'s encoder displaces the cursor of the monitor's
+boot-time mtime capability.**
+1. The core has no `time` CSR. The FPGA monitor emulates S-mode rdtime in handle_exception as `time_val = *mtime`
+   (sbi_capstone.c, CAPSTONE_TARGET_FPGA).
+2. cap_env_init mints `mtime` with split_out_cap(0x200bff8, 8, 0): one SPLIT at 0x200bff8, then a SPLIT of the upper
+   piece at 0x200c000, keeping that split's lower piece.
+3. Anvil SPLIT gives the lower piece `cursor = rs1_orig.metadata.start`, its parent's DECODED start
+   (capstone_dyn_unit.anvil func SPLIT).
+4. Under the cursorless scheme (0568f93a9), the upper piece [0x200bff8, 0x10000000) keeps an exact base, because its
+   cursor sits on its base. Under the full scheme (4a4261bb4 and afcd19bea) its base rounds down to 0x2000000.
+   `mtime` therefore comes out as [0x2000000, 0x200c000) with its cursor at 0x2000000, and `*mtime` reads the CLINT's
+   msip, which is 0.
+5. The replay of the whole boot carve through check-repr's encoder is silicon-ladder/monitor-boot-carve.py.
+   Under the full scheme it also shows these cursors displaced, each piece overlapping its neighbour:
+   - the boot stack: cursor 0x80000000 against 0x80080380;
+   - the interrupt-handler stack: cursor 0x80000000 against 0x80082380;
+   - the interrupt-handler seal: cursor 0x8008a000 against 0x8008a380.
+   The UART, mtimecmp and the interrupt-handler code are exact. Under cursorless all seven are exact.
+6. This mechanism is not timing. It predicts that 4a4261bb4, and the Sublet build (which carries the same encoder
+   change), fail the same way under this monitor. QEMU's SPLIT keeps exact bounds, so QEMU cannot show it.
+7. **The gate's blind spot:** check-repr's monitor_splits judged a split piece's bounds (SHORT/OVERLAP) and never the
+   cursor the monitor dereferences. It also replayed create_domain only, not cap_env_init. That is the CLAUDE.md
+   class "a check keyed to one shape".
+
+**Boot M, pre-registered (before the boot): the cursor fix alone, on afcd19bea.** Private firmware, never landed.
+- **How it was built:** /tmp/capstone/fpb-diag/build.sh copies opensbi-custom, regenerates the monitor with capstone-c,
+  and links the pinned firmware's own kernel payload.
+- **Gates:**
+  - the regenerated control `.c.S` equals the shared one byte for byte;
+  - the control image fw-ctl edaf8fc29228 equals the pinned 2f49d5b257f7 except the payload-end word (+16) and 16
+    trailing zero bytes.
+- **The patched image:** fw-mtime 647dce4c7fce. In cap_env_init it reports the mtime capability's decoded base and
+  cursor (MTMB, MTMC), sets the cursor to SBI_MTIME_ADDR, and reports it again (MTMF). No other change.
+- **Form:** chain step 6 (k800, then s06agg), the driver unchanged, FPGA_FW pointing at fw-mtime.
+- **Predictions:**
+  - UART: `MTMB:0x2000000`, `MTMC:0x2000000`, `MTMF:0x200bff8`. If MTMC reads 0x200bff8, the cursor was never
+    displaced and the mechanism is REFUTED.
+  - The sched_clock line is stamped nonzero, and there is no CUT_HERE at random_init.
+  - Linux reaches login; k800 retval 4; s06agg 64.
+- **Outcomes that are not a pass:**
+  - Linux still stops after a nonzero stamp: time-0 is explained but is not the whole story. The displaced interrupt
+    carves are next, and the run is read no further.
+  - MTMC reads 0x2000000 but the stamp is still `[0.000000]`: the patch did not reach the emulation path, and the
+    image is checked before anything else.
+  - No OpenSBI banner: boot fw-ctl as the control before concluding anything.
+
+## Boot M RESULT (2026-10-15 03:30-03:47, caplifive_fpb_afcd19bea, firmware fw-mtime 647dce4c7fce): every reading as pre-registered; R-55 confirmed
+- **UART:**
+  - before the change: `MTMB:02000000`, `MTMC:02000000`;
+  - after it: `MTMF:0200BFF8`.
+  So the monitor's mtime capability had base and cursor at the CLINT's base, and the one change put the cursor on
+  mtime.
+- **Linux:** `[    0.000166] sched_clock: ...`, then `Calibrating delay loop` and a login; no CUT_HERE.
+- **The rungs:** k800 `retval=4 instret=1089`, s06agg `retval=64`. This is chain step 6's form; on 2026-10-11 the same
+  form read the same values on 0568f93a9.
+- **The driver's s07 detector:** it printed its own SELFTEST FAIL / INSTRUMENT FAULT lines. They are outside the
+  verdict and say nothing about the core.
+- **The matched pair, one cursor apart:** fw-ctl (equal to the pinned image, which hangs 3 of 3) against fw-mtime
+  (boots). The mtime cursor is the cause of time reading 0, and removing it removes the warning and the hang.
+  - ~~The time-0 hang, and the wedge after its warning, are fully explained by the mtime cursor. The other displaced
+    carves (R-55's list) did not stop Linux or these two domains. Interrupt-heavy work has not run on them.~~
+  - RETRACTED 2026-10-15. Why the kernel's WARN path never completes on afcd19bea is UNRESOLVED. That path never ran
+    on 0568f93a9, and the debug-halt failure has no positive control on a running core.
+  - The other displaced cursors are never dereferenced: the boot stack's and the interrupt stack's are reset, and
+    this silicon never reads the seal. R-55 records this, and what does matter: the region table, where under
+    the full scheme Linux's region begins at 0x80000000.
+- **Registered:** R-55 in ISSUES.md.
+- **What is left for the acceptance:** the chain cannot resume on the shared firmware, which still carries the
+  displaced cursor. The path (a monitor fix landed and the chain re-run on afcd19bea, or a flash back) is the lead's.
+
+## FP respin acceptance RE-RUN with the R-55 monitor fix, pre-registered 2026-10-15 (before the run)
+**The fix:** caplifive-opensbi df0e9a8 on the board line (49b0f93) and d7489e3 on wrapper/supcall-fpga (882892f).
+- cap_env_init sets the cursor of the UART, mtime and mtimecmp carves explicitly, under CAPSTONE_TARGET_FPGA.
+- **Codegen gates (capstone-c 8cda52c):** QEMU's monitor assembly is byte-identical on both lines. The FPGA assembly
+  differs only inside cap_env_init: three scc, and the frame 784 -> 896 B. dom_init's carve is unchanged.
+- **The four firmwares, each rebuilt beside a control** (/tmp/capstone/r55-fix/build-all.sh):
+
+  | Row | Control | Fixed |
+  |---|---|---|
+  | s06agg | edaf8fc29228 (the pinned 2f49d5b257f7 but the payload-end word) | d20d29774e6d |
+  | C5u | d07761ded4ce (the pinned image, exactly) | 3acdf5c1da70 |
+  | boot C+F | abdb54361c4f (exact) | c4cc59c141b6 |
+  | boot W | ff1e132b1084 (exact) | 10599ef5ea9f |
+
+  Each fixed image differs from its control only in one window of about 1 KB of OpenSBI's code, and every payload
+  is byte-identical.
+- **C5u's monitor:** it was built 2026-10-03 with an older capstone-c, so its source cannot be regenerated byte-identically.
+  The fix is patched into its archived assembly instead (r55-fix/asm-patch.py, three `li t1; scc(a0, a0, t1)`
+  at the three call sites). The control then reproduces d07761ded4ce exactly, with CAPSTONE_PLATFORM_DEFS
+  -DCAPSTONE_SUPERVISED_CALL.
+- **R-43 rows:** baked from the shared tree, whose components/opensbi moves 49b0f93 -> df0e9a8 (sbi_capstone_dom.c only).
+  The chain refuses the R-43 verdict if the bake's opensbi-custom does not carry R-55.
+
+**AMENDED before the run (same day): the fix has a runtime half, and the firmwares are rebuilt with both halves.**
+- **The runtime half** (R-55's second correction): capstone-sbi 6dad416 on the board line (2dcd3a5) and fc5e3c6 on
+  monitor/b0-managed-gp (1f9aedd). Each sets an explicit cursor:
+  - in create_domain, before the globals copy (dom_code and dom_data);
+  - in create_region;
+  - in share_child_region (body).
+  It is FPGA only. QEMU's assembly is byte-identical on both lines, and the FPGA changes are only in those three
+  functions (four scc).
+- **The firmwares** (r55-fix/build-all-2.sh) replace the table above:
+
+  | Row | Firmware | Notes |
+  |---|---|---|
+  | s06agg | b6cc1ea73168 | payload identical to the control's |
+  | boot C+F | d99e57bbee62 | |
+  | boot W | 76488c0374da | |
+  | C5u | a377c2415fd8 | |
+
+  - boot C+F and boot W build on the same worktrees as their controls, which reproduce the pinned images.
+  - **C5u changes kind:** its 2026-10-03 monitor cannot be regenerated by today's capstone-c, and no define set
+    reproduces its assembly. It runs the current supervised-call line, with both halves and its own payload
+    (identical to d07761ded4ce's). It is a functional row: k800 4 twice and the hashes of record. Its overhead is
+    reported, not compared with 0568f93a9's.
+- **The shared tree:** components/opensbi at df0e9a8, and its capstone-sbi at 6dad416. The chain checks both, and
+  refuses the R-43 verdict unless the bake's opensbi-custom carries R-55 in both files.
+- **Isolation (the lead's decision, 2026-10-15):** this run accepts the full scheme's carve overlap (domain isolation
+  from Linux weaker until the carve-policy change). Rows that read a bounds fault are read against their record as
+  usual. A changed fault reading there is the first thing checked against that overlap.
+
+**Attempts 1 and 2, and a second amendment before attempt 3 (same day).**
+- **Attempt 1 (13:05):** s06agg passed (k800 4, s06agg 64, `sched_clock` [0.000165]). R-43 then refused before any boot:
+  board-r1e4.sh's gate wants the monitor to be exactly 2dcd3a5. The R-43 and P1 drivers now run as private copies
+  whose gate is `merge-base --is-ancestor 2dcd3a5 HEAD`.
+  - That gate accepts 6dad416 and refuses the old pin 4274268.
+  - The committed drivers carry the same change on the lane, 2c9d7ce3e8ba.
+- **Attempt 2 (13:14):** s06agg passed again. R-43 a1 booted Linux, and the k800 control returned 4. The SQLite host
+  then stopped at its first region map: `capstone: map_region: region 18 is at or above the mapping limit (MAP_SIZE_LIMIT
+  268435456)`, then `SQ: X/fail`.
+  - The bake carried both R-55 halves.
+  - The REGION_CREATE was carved in CMA out of Linux's long tail region, and under the full scheme it decoded from
+    0x80000000, about 700 MiB.
+  - That is R-55's bounds half breaking a function, not only isolation.
+- **The bounds fix:** capstone-sbi 93440d5 (board) / 7361e1c (supcall). split_out_cap SHRINKs the piece it returns to
+  exactly [base, base + len) (keeps its node, clamps the cursor to base). This covers every split_out_cap caller.
+  - QEMU is byte-identical on both lines, and the FPGA change is in split_out_cap only.
+  - The generated assembly stores the shrunk register back to `region`'s home slot.
+  - Under the over-wide bounds, a revoked region's reclaim would also have zeroed its whole decoded range.
+- **Attempt 3's firmwares** (r55-fix/fw3), each payload identical to its control's:
+
+  | Row | Firmware |
+  |---|---|
+  | s06agg | 8b4cbb4b4dff |
+  | boot C+F | 060d6566c956 |
+  | boot W | 69895472f098 |
+  | C5u | 1f971278fd42 |
+
+  The shared tree's monitor is at 93440d5. The chain checks that the bake's copy carries "R-55 (bounds)".
+
+**Predictions: those of record, unchanged.**
+- The (b) column of 5e82c06d61f9, the FP rows of fc3225fb237d and 6bc165f2e1c2, b08839bbb7df's staging (r54-bounds
+  64, every other rung 0), and 540a1814a90a for boot W (cw-align 8, cw-pool 0).
+- The fix changes only cap_env_init's MMIO cursors. No row depends on it except through Linux booting.
+- The first gate: s06agg k800 4 and s06agg 64 on d20d29774e6d, with a nonzero `sched_clock` stamp.
+
+**Not re-run.** S-16 18/18, R-51, s10b and s1gap are bare, use no monitor, and were recorded on this bitstream
+today.
+
+**Outputs:** under /tmp/capstone/accept-fpb-r55, with R-43 tags `s8*`, so the first run's `s7*` records and
+0568f93a9's saved records stay intact.
+
+## FP respin acceptance RESULT with the R-55 fixes (2026-10-15, caplifive_fpb_afcd19bea): the FP fixes hold on silicon; R-55's family stops two rows
+Firmwares fw3 (s06agg 8b4cbb4b4dff, boot C+F 060d6566c956, boot W 69895472f098, C5u 1f971278fd42). The shared tree was
+at df0e9a8 / 93440d5, and every R-43 bake carried "R-55 (bounds)". The runs: attempt 3 (13:33-14:02), then attempt 4
+(14:04-16:37), each row its own cold boot.
+
+**Verdict.**
+- **The FP fixes hold on silicon, every reading as pre-registered:** R-52's residual (B3j) and R-53 (B3i, B3f, b3-clock),
+  and R-54 (r54-bounds 64 under (b)).
+- R-51, R-43 and R-29 are unchanged.
+- No row failed in a way the out-of-band WNS explains. Every failure below is attributed to software that assumes
+  SPLIT keeps exact bases (R-55's family).
+- **Two rows fail on that family:** a2 (the monitor's region table) and a9 (the sublet runtime inside a frozen image).
+- C5u's supervision was not exercised.
+
+**Rows run before the monitor mattered** (the first run, bare, before the fixes): S-16 18/18 with 98 readings
+identical; R-51 0x1C/0x1C and 0/0x1C/0x1C; s10b 8/1; s1gap recorded for the RTL lane.
+
+**Linux rows:**
+- **s06agg, three times:** k800 4, s06agg 64, `sched_clock` [0.000165].
+- **a1:** `speedtest1-ran=1320222911`; `R1 m1 end alloc=160 minted=191 revoked=160 retained=0 released=0`; k800 4,
+  instret 1089. Identical to 0568f93a9.
+- **a2: FAIL** at invocation 8 of 12. create_region reports `RGNF:0000E00C RGNN:00000060`: the 96-slot region table
+  is full.
+  - The respin used about 11 slots per invocation (r1/r2 = 18/20, 29/31, ...). 0568f93a9 used about 6 (14/15, 21/22,
+    ...), reaching 81/82 by invocation 12.
+  - Cause: split_out_cap decides head or tail carve on the DECODED bounds, which the full scheme rounds. Nearly every
+    carve becomes a middle carve and leaves an extra fragment.
+- **a3:** 12 wide points, ok 12, bad 0, refused 0; `speedtest1-ran=1320264012`. Identical.
+- **a4, a5, a6:** live-sweep 544, 4352 and 17408 (R-43 stays fixed).
+- **a7, the ladder:** 17 of 17 retval == oracle; instret identical to 0568f93a9's run on all 17; cycles within ±1.6%.
+  - The first cold boot hit a JTAG/USB error (`LIBUSB_ERROR_NO_DEVICE`), and the driver retried.
+- **a8, P1 cell 5:** `112006 38bb59fd`; SPEEDTEST1-CYCLES 1157815881 / 855987678 (+0.02% / -0.05%).
+- **a9, P1 cell 6: FAIL** (a wedge, recorded by its driver as rc 0; see below).
+  - The domain entered (`ENT0`) and never returned. The trap log reads mcause 26 (UNEXPECTED_CAPABILITY_TYPE), mepc
+    DBAS+0x3a170, tval 0xac11a8c0.
+  - The faulting instruction is `revoke t0` in `sqlite3DbNNFreeNN`, on a capability loaded from the sublet slot
+    table.
+  - Mechanism (model, not traced per slot): `sublet_carve` (runtime/include/sublet/sublet.h) hands out the lower piece
+    of `split(from, end)`, at `from`'s decoded start. Under the full scheme every allocation after the first starts
+    below its own start, with its cursor there: on a 2 MiB arena the second 64 B allocation's cursor sits on the
+    first's. That corrupts the slot table. 0568f93a9 ran this frozen image to the end (1241480977 cycles).
+- **a10:** mcause 25, mepc DBAS+0x4354, tval 0xac100000, refusal latched. As pre-registered. The refusal id reads 0x63
+  against 0x5f, a node id that shifts with allocation history.
+- **C5u: functional only.** Its 2026-10-03 monitor cannot be regenerated, so it ran the current supervised-call line.
+  - **Explained 2026-10-15: no call was supervised, because that build lacked the defines.** r55-fix/build-all-2.sh
+    built C5u with `CAPSTONE_SUPERVISED_CALL CAPSTONE_SUPERVISOR_CSR_EVENTS CAPSTONE_SUPERVISE_QUIET`.
+  - The classic hook compiles only under `CAPSTONE_SUPERVISE_CLASSIC_TEST`. C5u's own pre-registration
+    (supmon-2026-10-03/PREREG.md) used `CLASSIC_TEST, CLASSIC_MASK=14, QUIET_MASK=12, FENCE_MASK=4, TRACE_EVENTS,
+    MAX_RESUMES=4000`.
+  - The transcripts agree: 0568f93a9's C5u printed 1,283 SUPK, 1,280 SUPA and 4 SUPM; this one printed none.
+  - Two-sided on the generated assembly: a build with those defines carries the SUPM tag, and one without does not.
+  - A correctly built C5u firmware on the current line (r55/exact-regions, image a9e838663d64) is dccb46a3fd0f,
+    dom_stack gate PASS. It awaits its board run.
+  - This was a build error of this lane's, not a monitor defect.
+  - Four supervised-mode speedtests, hash `112006 38bb59fd` each, k800 4.
+  - But no SUP* trace tag appeared, and all four read about 2.552 G cycles. On 0568f93a9 the same four read 2.552 G
+    baseline, 2.569 G and 2.570 G quiet (+0.67%), and 2.905 G loud.
+  - So supervised preemption was not exercised. This row does not test it on this firmware.
+- **Boot C+F: every row as pre-registered.**
+  - B3j: A-D 0 of 40,000 wrong, and the checker control passes.
+  - B3i: all I, except k's fs5 (`?`), as predicted.
+  - B3f: every variant 0 of 12, and v7 exactly 1.
+  - b3-clock: arith 0 of 200,000; self-test 1; hold-native and hold-domain 0; now() in the hundreds of seconds beside
+    the integer clock.
+  - stop_seconds 4.52 / 5.20: above the soft QEMU-based expectation of 1.1-1.5 s, not a refutation.
+  - b3-oracle transcript `e0a254c47e7ee28c`, 1,931,207 bytes; b1-thread 124; b2 VERSION/STORED/VALUE.
+  - r54-bounds 64, with all four arms covering.
+- **Boot W:** cw-align rc 8 (every global BEYOND) and cw-pool rc 0 (every global its own storage). As pre-registered,
+  so the pool carve is confirmed on silicon.
+
+**Instrument note.** board-c6var.sh ended a wedged cell 6 with rc 0 ("done") and no SPEEDTEST1-CYCLES. Its verdict did
+not require the result line it exists to read. The chain read the row through that rc, and the wedge was caught by
+reading the transcript.
+
+**Open, R-55's family:**
+1. The region table: split_out_cap's head/tail tests read decoded bounds. The fix is nominal bounds per region, which
+   on the board line needs a larger boot stack. Raising the 96-slot limit only postpones it.
+2. The sublet runtime: `sublet_carve` (and `sublet_take_linear`'s `capstone_cap_base`) must not take a lower piece's
+   decoded start for its carve point. Frozen images built on it cannot pass on a full-scheme bitstream.
+3. Isolation: remainders still overlap carved pieces. The PMP masks the monitor's own range.
+4. QEMU's physical profile keeps exact SPLIT bases, so none of this is visible before silicon.
+
+## B5 pre-registered (2026-10-15, before the boot): mruby 4.0.0-rc2 on silicon, caplifive_fpb_afcd19bea
+The lead asked for a benchmark "based on virtual Capstone" on the FP respin. Virtual-profile images cannot run on this
+RTL (no C-mode translation, lifetime tables, CSRUNV/srevroot, exact bounds or per-domain FP;
+virtual-capstone-rtl-feasibility.md), so one of the virtual profile's applications is ported to the silicon ABI, as
+memcached was (B2/B3). The lead chose to port one; mruby was picked: no threads or fork, and a native-identical oracle.
+
+**The build** (lane 903fb4ed27da, 38b9e1d741b8, cf7b041dbbcd):
+- `build-b5-mruby.sh`: mruby's rake compiles every object with build-b0-hello.sh's own flags, and build-b0-hello.sh
+  does the full-LTO link.
+  - Gems: stdlib, stdlib-ext, math, metaprog, io, errno, dir; level0 heap.
+  - Gates: check-repr under full+renorm with the pool carve, and the new `no-fp-gate.py`.
+- Two defects found on the way, both in QEMU, both fixed before any board run:
+  1. **`setjmp.S` (38b9e1d741b8).** Under the gp-captable ABI, longjmp called its C helper at gp + the helper's
+     address. mruby's first `raise` faulted with cause 2 at a pc outside the code. No silicon program had called
+     longjmp before.
+  2. **level0's first-fit list is O(live blocks) per malloc and per free.** smoke.rb's GC step took about 4.5
+     minutes of QEMU. `silicon-alloc.c` now serves mruby's allocator from size classes (O(1)); large blocks stay
+     on level0.
+     - Matched pair, the allocator alone: smoke 249.9 s → 16.9 s host, with byte-identical output up to the
+       setjmp fault.
+     - bench's ao_render: 57.2 s → 10.7 s.
+
+**Native oracle and QEMU** (silicon-mimic: CAPSTONE_GP_FABRICATE=0, CAPSTONE_MOVC_NULL_SCALAR=1, firmware
+d5c57ee765c9). Every step's stdout is byte-identical to the native build's (x86 gcc -O2), with exit status 0:
+
+| step | what | stdout sha (16) | bytes | QEMU host s | slab pages / small allocs |
+|---|---|---|---|---|---|
+| e | `mruby -e 'p 1+1'` | 53c234e5e8472b6a | 2 | 5.7 | 27 / 678 |
+| stdin | the program on stdin | 5476dba1f4bd59f1 | 4 | 5.8 | 27 / 695 |
+| smoke | smoke.rb: core classes, GC, raise/rescue, floats, a file written and read back, Dir.entries | 791d0649e254c15e | 270 | 11.1 | 822 / 40897 |
+| bench | b5-bench.rb: mandel_term, fib(24), so_lists 3x1000, so_mandelbrot 32, ao_render 8 | 8d1539bc79e2b630 | 297 | 50.2 | 139 / 83453 |
+
+QEMU's per-benchmark times (stderr, not compared): mandel_term 21.1 s, fib 7.1 s, so_lists 0.3 s, so_mandelbrot
+4.7 s, ao_render 10.7 s.
+
+**The boot.**
+- Images by hash:
+  - mruby.dom a7ac283d7050a5d8;
+  - b5-hello.dom 0042544c7ec7e2cf: b0-hello with B5's flags and pool carve, mruby's pair;
+  - b0-hello.dom db4385ff32deddf6: the frozen control, which passed boot C+F on this bitstream.
+- Private image: Image eae0dfbadfa87a6f. Its gzip initramfs was extracted and every B5 file checked by hash, b0run.sh
+  fc926af6bd742936 included.
+- Firmware 7d9f274ffd1114a2: build-fpga-fw.sh on wrapper d7489e3 + monitor 7361e1c with boot C+F's supervised-call
+  defines; gate PASS. The shared tree stays at df0e9a8 / 93440d5.
+- Amended before the boot: the first bake (Image bd1efb37a5ab80fe, firmware 9ae0dd55b3397e96) copied
+  /test-domains/mruby/* into /tmp/b5, native.sha included. smoke.rb lists that directory, so its allocation count
+  would have differed from QEMU's, which had the eight .rb files only. The rung now copies `*.rb` and reads the hashes
+  in place.
+- Capacity: the board's CMA pool is 256 MiB (`linux,cma@ac000000`) and the module's process cache 384 MiB, against
+  mruby's 64 MiB domain, the largest process-ABI domain yet on silicon. check-repr covers all 193 of its 1 MiB-aligned
+  placements in that pool.
+- Entry VA: all three images enter at 0x10000. R-3 concerns classic `lpc` domains. Boots C+F and W each ran several
+  0x10000 process-ABI images in one boot.
+- PREFLIGHT=0 (private image). board-watchdog.sh runs beside the driver, with ABORT_ON_ENTRY_STALL=1 and
+  ENTRY_STALL_S=420.
+- Rungs, in order: b0-stats, b0-hello, b5-hello, b5-mruby-e, b5-mruby-stdin, b5-mruby-smoke, b5-mruby-bench,
+  b0-stats2.
+  - That is six launches. Boot C+F ran six launches plus a minted context inside the 96-slot region table (R-43 a2,
+    R-55).
+
+**Predictions:**
+1. Every rung retval 0.
+2. Each `MRUBY <step> sha` equals the table's hash, and the five `B5o BENCH` lines equal native's.
+3. Each `B5e B5 alloc:` line equals QEMU's: pages and small counts as in the table, fallback 0. The allocation
+   sequence does not depend on time.
+4. Wall times are NOT predicted, since no board/QEMU ratio for this kind of code is measured. They are the benchmark
+   result; the watchdogs (600 / 600 / 900 / 2400 s) are set for a board up to ~20x slower than QEMU.
+
+**What a failure would say:**
+- b0-hello fails: the boot is VOID.
+- b5-hello fails with b0-hello passing: today's runtime (merged since the Oct 14 image: #225, #233, the sublet_heap
+  removal, #240) or the pool carve on a launch. The mruby rows are collateral.
+- e fails with b5-hello passing: mruby's size or shape on silicon (2.0 MB code, 40 MiB data, 2,622 globals). R-55's
+  family is the first suspect, although check-repr reads OK and OVERLAP 0 at all 193 bases.
+- stdin or smoke fail with e passing: a delegated path that no silicon rung has used before (a read from stdin; open,
+  write, read back and getdents), or longjmp on silicon. smoke's B5o lines name the last M-step.
+- bench reads 910 with smoke passing: a computation differs, and the BENCH line names the benchmark (soft-float and
+  musl's libm are the first suspects for ao_render and so_mandelbrot).
+- 912: slower than its budget. That is not a correctness failure; re-size.
+- A full region table (`RGNF 0000E00C`): R-55 a2, not counted against mruby.
+- e fails with a launcher error (ENOMEM/ENOSPC before any domain marker): CMA could not supply 64 MiB contiguous.
+  That is a size result, not R-55; shrink B0_DATA, since QEMU's peaks are 822 slab pages of 4,096.
+
+## B5 RESULT (2026-10-15 19:09-19:22, caplifive_fpb_afcd19bea, firmware 7d9f274ffd11): mruby runs on silicon, every pre-registered reading as predicted
+One boot, eight rungs, every retval 0 against its oracle. The images were checked by hash inside the image before the
+boot (pre-registration b224758891fe).
+
+| rung | result | stdout sha (16) | allocator line | board s |
+|---|---|---|---|---|
+| b0-stats | retval 0 | | | |
+| b0-hello (frozen control db4385ff) | retval 0, byte-exact | | | |
+| b5-hello (0042544c) | retval 0, byte-exact | | | |
+| b5-mruby-e | retval 0 | 53c234e5e8472b6a = native | pages=27/4096 small=678 fallback=0 = QEMU | 45.49 |
+| b5-mruby-stdin | retval 0, prints `385` | 5476dba1f4bd59f1 = native | 27 / 695 / 0 = QEMU | 24.59 |
+| b5-mruby-smoke | retval 0, M1-M13 and SMOKE_DONE | 791d0649e254c15e = native | 822 / 40897 / 0 = QEMU | 65.85 |
+| b5-mruby-bench | retval 0, the five BENCH lines = native's | 8d1539bc79e2b630 = native | 139 / 83453 / 0 = QEMU | 326.46 |
+| b0-stats2 | retval 0; live_domains 0, cached_bytes 67796992 (QEMU's value) | | | |
+
+- No region-table refusal: six launches fit, as boot C+F's did.
+- board-watchdog.sh ran (53 lines, no abort).
+- The bench rung's heartbeat kept the console live through its 326 s.
+
+**What is now established on silicon** (each a first):
+- a 2.0 MB-code, 2,622-global application on the gp-captable ABI under the full bounds scheme;
+- longjmp (`raise`/`rescue`, after the setjmp.S fix);
+- file delegation: a file created, written, closed and read back, and a directory listed;
+- standard input;
+- a 64 MiB process-ABI domain (CMA and the process cache held it; the cache retained it between launches);
+- soft-float and musl's libm through ao_render and so_mandelbrot, byte-identical to x86 glibc's results at these
+  sizes.
+
+**The benchmark.** Wall time per benchmark, from mruby's Time.now inside the domain (stderr, not compared):
+
+| benchmark (size) | board s | QEMU host s | board / QEMU |
+|---|---|---|---|
+| mandel_term (as shipped) | 138.18 | 21.07 | 6.56 |
+| fib(24) | 45.52 | 7.09 | 6.42 |
+| so_lists (3 x 1000) | 2.46 | 0.34 | 7.18 |
+| so_mandelbrot (32) | 30.67 | 4.67 | 6.57 |
+| ao_render (8 x 8, 4 AO samples) | 81.99 | 10.74 | 7.64 |
+| total | 298.82 | 43.91 | 6.81 |
+
+The board's per-launch overhead, read from step e (`p 1+1`): 45.5 s. That covers the 2.9 MB image, the 64 MiB
+domain's regions and mrb_open with every gem. With the image cached (step stdin), it is 24.6 s.
+
+**What this does NOT establish:**
+- Overhead against an unprotected baseline: the QEMU column is host time, a consistency check, not a baseline. The
+  baseline is mruby as a native Linux process on the same board.
+- Bounds on every object: the allocator narrows each block to its request, but mruby's GC heap pages are level0
+  blocks of 1,024 objects each, and an object's capability is derived from its page's, so it carries the page's
+  bounds. Spatial safety for each Ruby object is not claimed.
+- Temporal safety: none, as level0.
+- R-55's isolation caveat holds for every domain on this bitstream: a carve's remainder can overlap its neighbour,
+  and the PMP masks only the monitor's range.
+
+## B5n pre-registered (2026-10-15, before the boot): the unprotected baseline, native mruby on the same board, and B5's bench repeated
+B5 measured the protected side only. B5n runs the same mruby as an ordinary Linux process on the same board and
+silicon, with the same scripts and the same hash check, and repeats the domain's bench in the same boot.
+
+**The native builds** (`build_config-board-native.rb`):
+- The board's own toolchain: buildroot gcc 12.3, glibc, rv64g lp64d hard-float, no RVC. These are busybox's and libc's
+  flags.
+- The same gems and defines as the silicon build, at two levels: `-O2` (mruby-rv64-O2 99af8bde1e36acf8) and `-O1` (the
+  silicon build's level; mruby-rv64-O1 1e6246f22c06055b).
+- QEMU pre-check (the VM's glibc accepts them): `e` and bench at both levels are byte-identical to x86 native
+  (53c234e5e8472b6a, 8d1539bc79e2b630).
+- What differs from the domain besides the protection: hard-float against soft-float, gcc/glibc against clang/musl,
+  and dynamic linking against one full-LTO image. So the ratio is an UPPER BOUND on the silicon ABI's cost, not the
+  cost of capabilities alone.
+
+**The boot.**
+- Image 50b7d46c47b340e9: its initramfs was extracted and every file checked by hash, b0run.sh 4e080fbdc8f7ffdc
+  included.
+- Firmware 9e2cbbaf9ac492bd, built as B5's (wrapper d7489e3, monitor 7361e1c).
+- b0run.sh now runs both arms through one function, b5_mruby. Its domain path is unchanged in behaviour: re-tested on
+  the host, all eight rungs read 0, a wrong hash 910, and a hung process 912.
+- Rungs: b0-stats, b0-hello (frozen control), b5-native-O2-e, b5-native-O2-bench, b5-native-O1-e, b5-native-O1-bench,
+  b5-mruby-bench (B5's image a7ac283d7050a5d8, again), b0-stats2.
+- Two launches, so the region table is not a concern.
+
+**Predictions:**
+1. Every retval 0. That includes the native bench's hash equal to x86's, so native hard-float is correct on this
+   bitstream, as B3j/B3i/B3f (boot C+F) say for R-52 and R-53.
+2. The domain bench repeats B5:
+   - sha 8d1539bc79e2b630;
+   - allocator 139/83453/0;
+   - each benchmark's time within ±2% of B5's (138.18, 45.52, 2.46, 30.67, 81.99 s). The ladder's cycles repeat
+     within ±1.6%.
+3. Native is faster than the domain on every benchmark. The ratios are the result and are NOT predicted.
+
+**What a failure would say:**
+- A native hash differs (910): a computation is wrong in a NATIVE hard-float process on this bitstream. That is the
+  R-52/R-53 family again, and the BENCH line names the benchmark. It would void the baseline's timing, not B5.
+- The domain repeat differs in hash or allocator count: B5's result does not repeat. That is the first thing to
+  re-examine.
+- A time outside ±2%: run-to-run variance is larger than the ladder's. Any quoted ratio then needs N > 1 per arm.
+
+## B5n RESULT (2026-10-15 19:32-19:52, caplifive_fpb_afcd19bea, firmware 9e2cbbaf9ac4): the baseline, every pre-registered reading as predicted; the domain runs mruby's benchmarks 1.18-1.37x slower than native at the same -O1
+One boot, eight rungs, every retval 0 against its oracle (pre-registration 372e0fc9a889).
+
+**Correctness:**
+- Native mruby on the board, at -O2 and -O1, prints stdout byte-identical to x86 native for `e` and bench. So native
+  hard-float is correct on this bitstream for this workload, R-52 and R-53 included.
+- The domain bench repeats B5 exactly: sha 8d1539bc79e2b630 and allocator 139/83453/0.
+
+**Times** (seconds, Time.now inside the process; "domain" is the mean of B5 and B5n):
+
+| benchmark | domain B5 | domain B5n | repeat | native -O2 | native -O1 | domain / -O2 | domain / -O1 |
+|---|---|---|---|---|---|---|---|
+| mandel_term | 138.18 | 138.22 | +0.02% | 90.85 | 109.75 | 1.52 | 1.26 |
+| fib(24) | 45.52 | 45.49 | -0.07% | 29.92 | 36.53 | 1.52 | 1.25 |
+| so_lists (3 x 1000) | 2.46 | 2.44 | -0.90% | 1.68 | 1.92 | 1.46 | 1.27 |
+| so_mandelbrot (32) | 30.67 | 30.69 | +0.07% | 18.46 | 22.37 | 1.66 | 1.37 |
+| ao_render (8) | 81.99 | 81.90 | -0.11% | 59.71 | 69.69 | 1.37 | 1.18 |
+| total | 298.82 | 298.73 | | 200.62 | 240.26 | 1.49 | 1.24 |
+
+Launch:
+- domain: 45.49 s for step `e` (`p 1+1`, cold) and 24.59 s for step stdin (the next launch, image cached);
+- native: 3.85 s at -O2 and 3.59 s at -O1.
+
+**Reading it:**
+- At the same optimisation level the silicon ABI costs 1.18-1.37x per benchmark, 1.24x in total.
+- Against the native -O2 build it costs 1.37-1.66x, 1.49x in total.
+- These are UPPER BOUNDS on the cost of capabilities. Besides the protection, the domain differs in:
+  - soft-float against hard-float;
+  - clang/musl against gcc/glibc;
+  - full LTO against dynamic linking;
+  - the size-class allocator against glibc's malloc;
+  - the delegation of every system call.
+- The FP-heaviest benchmark (ao_render) shows the SMALLEST ratio, which suggests soft-float is not the main contributor.
+- The repeat agrees within 0.11% on four benchmarks and 0.9% on so_lists (the shortest, 2.4 s). N = 2 for the domain,
+  N = 1 per native level.
+- Launch is the outlier: 21-42 s against under 4 s. Not attributed: these rungs ran without
+  CAPSTONE_EXEC_DIAGNOSTICS, so the split between the 2.9 MB image, the 64 MiB domain's regions and mrb_open is not
+  measured. The domain's size is the first suspect, since B0_DATA (40 MiB) is far above QEMU's peak use.
+
+## R-55 (regions) pre-registered (2026-10-15, before the boot): a nominal-bounds region table with exact remainders, R-43 a2 on caplifive_fpb_afcd19bea
+**The change** (all FPGA; QEMU's monitor assembly byte-identical, plain and supervised):
+- **The monitor** (capstone-sbi r55/board-exact eb88326 on the board line, the same change as r55/exact-regions
+  ebe0a25 on the supcall line):
+  - every slot carries its nominal bounds;
+  - with exact_regions, coverage and head/tail are decided on them;
+  - after boot every remainder is cut into pieces whose decoded bounds equal their nominal ones (SPLIT, then SHRINK,
+    then a read-back that reports EXCT if a piece is still inexact);
+  - a cut the decoded bounds do not allow is reported (EXCS), never executed;
+  - CAPSTONE_MAX_REGION_N is 127, the most capstone-c's dom_init can carve.
+- **The wrapper** (caplifive-opensbi r55/board-exact a8bdc90; supcall line 1269c77):
+  - exact_regions turns on only when the encoder rounds (region 1's decoded base is not _cap_text_end);
+  - Linux's region ends at 0xC0000000 (every remainder <= 1 GiB, granule <= 1 MiB);
+  - the boot's slots are cut exact;
+  - the plain dom_stack is 16 KiB (gate: 8336 B carved).
+- **Module and libcapstone:** MAX_REGION_N 127 (caplifive-buildroot r55/region-limit-127 211d48a). The rr host is
+  rebuilt against it: 0a5c9025e8e6f5db, by the recipe that reproduces 2c9e82d101b48160 byte for byte.
+
+**The instrument** (tests/runtime-qemu/silicon-ladder/r55-regions/): a replay of the region table.
+- It uses check-repr's literal port of the RTL encoder and the monitor's carve algorithm, under the recorded a2 carve
+  sequences.
+- Controls:
+  - it reproduces every slot id of 0568f93a9's a2 under cursorless (14 tests) and of the respin's under the full
+    scheme (9 tests, table full at 96);
+  - its OVERLAP metric reads 0 on 0568f93a9 and 508 pairs over 47 carved ranges on the respin.
+- Under the new policy: 111 slots for 0568f93a9's twelve invocations plus the closing k800, OVERLAP 0, no inexact
+  piece.
+
+**The boot** (board line, plain build through the shared buildroot):
+- The shared checkout was moved from buildroot d04bd83 / opensbi df0e9a8 / capstone-sbi 93440d5 to 211d48a / a8bdc90
+  / eb88326.
+- The runner is the R-43 a2 list unchanged (r1_slots_pools 1b7a04fe237e1580, relinked k800 589ceee3), output tag s9a2.
+
+**Predictions:**
+1. **As a2's own pre-registration:**
+   - RESULT k800 retval=4 twice, from the relinked control;
+   - 12 x speedtest1-ran=0x4EB1xxxx;
+   - every R1 point line ok=1 bad=0;
+   - 12 x released pool rc=1;
+   - no cause-25.
+   So Linux boots on the new boot carve, and the twelfth invocation completes. On the respin the table filled at
+   invocation 8.
+2. **No RGNF, RGNO, EXCT or EXCS line.**
+3. **Region ids:**
+   - If every DBAS/BASE equals 0568f93a9's sequence (the respin's first eight did), the ids are:
+     - opening k800: [24];
+     - invocations: [28,29,31,32,34], [36,37,38,39,41], [42,43,44,45,47], [49,50,51,52,53],
+       [55,56,58,59,61], [63,64,65,66,68], [69,70,71,72,74], [76,77,78,79,81], [82,83,84,85,86],
+       [88,90,92,93,95], [96,97,98,99,101], [103,104,105,106,108];
+     - closing k800: [110].
+   - Whatever the addresses, the replay of the board's own recorded sequence must reproduce every id it reads, and
+     report OVERLAP 0.
+
+**What a failure would say:**
+- Linux does not boot: the boot carve (the DRAM split or the post-boot cutting) is wrong. The fallback is the
+  shared checkout's previous pins (a firmware load, no reflash).
+- RGNF: the slot budget is wrong.
+- EXCT: the granule rule mispredicts exactness on silicon.
+- Ids that differ while the addresses equal the record: the C and the replay disagree. Diff the two algorithms
+  before anything else.
+
+**Amended 2026-10-16, before the boot: a2 runs on caplifive_sublet_d93a8d66b instead.** The FP respin is no longer
+flashed. The predictions above are unchanged:
+- d93a8d66b's encoder makes the same E decision as afcd19bea's on every representable region (RTL lane,
+  2026-10-16);
+- its one SPLIT change (a non-linear SPLIT keeps its node) changes node consumption, not the monitor's region table;
+- the Sublet acceptance's Linux rows passed on this bitstream with the previous monitor.
+The run is run-accept-exact.sh a2 with tag s9a2. The shared checkout moves to buildroot 211d48a, opensbi a8bdc90 and
+capstone-sbi eb88326 for the boot, and an EXIT trap restores d04bd83 / df0e9a8 / 93440d5.
+## R-55 (regions) RESULT (2026-10-16 03:22-03:40, caplifive_sublet_d93a8d66b, firmware 98d83e4ea98d): every prediction holds
+The board line with exact regions ran R-43 a2: wrapper a8bdc90, monitor eb88326, module and libcapstone at 127 slots
+(buildroot 211d48a), host 0a5c9025e8e6f5db, tag s9a2. The shared checkout returned to d04bd83 / df0e9a8 / 93440d5
+afterwards.
+- **First attempt, 03:20:** refused by the preflight before any boot. The Sublet name is in dev's preflight table but
+  not in the shared checkout's older copy. It was re-run with PREFLIGHT_DTS_NODES=65536 declared.
+- **Prediction 1 holds:**
+  - all 12 invocations complete, where the respin's table filled at 8;
+  - 60 of 60 R1 point lines ok=1 bad=0, and 12 x released pool rc=1;
+  - k800 4 twice from the relinked control;
+  - speedtest1-ran 1320222720 at the first invocation.
+- **Prediction 2 holds:** no RGNF, RGNO, EXCT or EXCS line in the transcript.
+- **Prediction 3 holds, by its second clause.** The CMA placed the shares elsewhere than 0568f93a9's record (first share
+  0x8125f000 against 0x818c0000), so the conditional id list does not apply.
+  - extract.py turns the board's own sequence into r55-regions/a2-sublet-d93a8d66b.json.
+  - replay.py --format full --policy exact --region2-end 0xC0000000 reproduces every id: 0 of 14 tests differ.
+  - It reports OVERLAP 0 and 0 inexact pieces, with 115 slots used and 104 live.
+- With C5u's clean run of the supcall line's same change (no EXCT, EXCS or RGNF; 1,282 supervised preemptions), the
+  region-table half of R-55 is fixed on silicon. It awaits landing on capstone-bootstrap.
+
+## The Sublet bitstream (capstone-sublet, after the FP acceptance): open items on the board side, 2026-10-14
+The RTL lane builds it from capstone-sublet when its gates pass. Its tip on 2026-10-14 is d93a8d66b, and the 95-test
+sweep reads 91 identical on readings against a re-taken 0568f93a9 baseline under the fixed harness, plus one
+cutoff-count difference. It flashes only after the FP acceptance boots, because its decoder no longer reads
+cursorless words. Before its pre-registration, this lane owes:
+1. **The gate:**
+   - check-repr.py's default and build-b0-hello.sh's B0_CAP_FORMAT move to `full --renorm`; this is already due at
+     the FP (b) flash, since (b) encodes every capability in the full scheme;
+   - OVERLAP: `--allow-overlap` with the figures recorded per image until the globals sub-region carve lands
+     (whether that carve must come first is the lead's choice);
+   - WIDEN under full already raises.
+2. **CAPSTONE_GLUE_CARVE_ALIGN:** it computes the cursorless granule, the `xor/srli 21` pair. Under the full scheme
+   it is a documented no-op until the sub-region carve replaces it.
+3. **The monitor's create_domain granule (C-13):** max(split_size's own granule, repr_gran). It matters only for
+   code-heavy images, and none is in the acceptance set.
+4. **Predictions to pre-register:**
+   - r54-bounds 64, as on (b);
+   - s06agg 64 (plain data through the NOT_CAP path);
+   - every image of the (b) table with the same check-repr verdicts, because the encoder is identical to (b)'s;
+   - the R1 release-cost harness's REVOKE readings: TWO OUTCOMES registered. (Revised 2026-10-14: the first
+     version predicted "unchanged" on the premise that S1's REVOKE sits directly behind an MREV. The RTL lane
+     corrected that premise.)
+     - On d93a8d66b's S1 ladder the timed REVOKE reads +8 cycles at every node count
+       (n1 0x13d -> 0x145 ... n160 0x2557 -> 0x255f). In s1-n8 the last MREV commits at 3838 (3846 on step 5),
+       then a NE, a csrr and the LCCs; the REVOKE issues at 3844 and commits at 4284 on BOTH trees.
+     - So everything before it ran 8 cycles early, and the REVOKE completes at a pinned absolute cycle about 440
+       cycles after the MREV. What pins it is UNRESOLVED: a rev-node write of MREV still draining, the R-35 fill
+       taps, or the simulation memory model's fixed-delay schedule. A one-change variant puts it in MREV's
+       reorder, not in the kill-mode exits.
+     - R1 brackets REVOKE right after the handle's ldc (r1_slots_pools.c:139-143), with the handle's MREV at
+       fixture issue time and no other rev-node traffic in between.
+     - **Outcome A, unchanged** (76 cycles at 2 nodes, 22.7 per node, fpga-silicon-measurements-for-paper.md): the
+       pin is a simulation-model artefact, or a drain that completes before R1's bracket opens.
+     - **Outcome B, intercept +8, slope unchanged:** the pin is RTL, a drain of MREV's last write that a later
+       REVOKE still waits behind. The paper's intercept then moves.
+     - The RTL lane offered a timed pair for the Sublet bare set: a REVOKE right behind an MREV, and one with no
+       MREV or rev-node traffic in the previous ~1,000 cycles. It settles A against B on the acceptance boot, and
+       is pre-registered from simulation before the flash.
+5. **The Sublet acceptance floor (the RTL lane's):** three bare JTAG arms pre-registered from simulation
+   (sublet-derive-kill 19 readings, sublet-mrev-orphan 8, sublet-split-shares-node 7). The positive control is the
+   same arms on the FP bitstream, which trap 2 at the first CDERIVE.
+6. **Optional, this lane:** a runtime-level rung (capstone_cap_derive / capstone_cap_revoke_child through
+   build-b0-hello.sh, in the shape of QEMU's sublet cases 0/1/3/7/10/22), with values pre-registered from the RTL
+   simulation of the same source.
+
+## Sublet acceptance pre-registered (2026-10-15, before any Sublet boot): caplifive_sublet_d93a8d66b.bit
+**The flash.**
+- The lead's own word in conversation, 2026-10-15: "Flash Sublet now". It replaces `caplifive_fpb_afcd19bea.bit`, which
+  stays the registered fallback.
+- The file was pulled from the synth host's d93a worktree: sha256
+  89ba6d816c23b1115585ff6bcc2d5ceeb4523967731a84baf4f8955256077430, 11,443,722 B, equal to the sealed hash.
+- Routed WNS is -15.856. The synth lane notes that run.tcl:93-99 warns that a timing-failing bitstream can behave
+  intermittently. So a single failure on this bitstream is repeated before it is attributed to anything.
+- The lockstep items above hold where they touch these rows:
+  - the FP acceptance boots are complete;
+  - the images below are full-format, as on (b);
+  - the rev-node memory is unchanged (CAP_REVNODE_MEM_BASE 0xBFF0_0000, a 16-bit index on both trees), so
+    PREFLIGHT_DTS_NODES stays 65536.
+
+**The FP positive control, run before the flash (23:48-23:51, afcd19bea), did NOT read as pre-registered.**
+- control-call-retpc: SR 8, `0 0x12 0x21 0 0x51 0 0 0`, identical to 01:33 the same day.
+- sublet-derive-kill (6b6eb589929a2d90): SUPTEST BEGIN and SB1, then no SR or SV at all, and the 90 s timeout.
+- The PREREG's "0x2 at #1" did not read, because the image never reached its first CAPPRINT. It did not read the
+  Sublet vector either, and that is what this control existed to show.
+- Likely mechanism (sent to the RTL lane, unconfirmed): the test's handler resumes every trap at s10, so a trap on the
+  FP tree loops.
+  - Either `CAPPERM(a1, 14)` traps before s10 is set (the MANAGE bit predates d34c26002),
+  - or CDERIVE traps 2 and the resumed `LCC` on the un-derived s1 traps again.
+- The PREREG's sentence was checked on the step-before tree (the new word, no CDERIVE), not on the FP tree.
+
+**Bare half** (`/tmp/capstone/accept-sublet/chain-bare.sh`; one power cycle per image; out `/tmp/capstone/accept-sublet`).
+1. **Control:** the S-16 set, 18 arms and 98 readings, identical to the FP respin's record (accept-fpb/accept).
+   cmp-readings.py exits 0 only when every arm is present and identical. Any difference STOPS the chain.
+2. **The RTL lane's floor:** sublet-bare-2026-10-15/PREREG.md (dev 368c0d641107, 9289c83847ed, 413de971c6f5), graded
+   by position with grade-floor.py. Both directions were tested on synthetic logs.
+   - control-call-retpc as above.
+   - **sublet-derive-kill**, SR 19: `0xe 0x100 0x300 0x1 0x1234 0xe 0x1d 0x1b 0x0 0x19 0x19 0x1d 0x1d 0x0 0x19 0xe 0x5678
+     0x1a 0x18`.
+   - **sublet-split-shares-node**, SR 7: `0x1111 0x2222 0x0 0x19 0x19 0x0 0x19`.
+   - **sublet-mrev-orphan**, SR 8: `0x0 0x0 0x0 0x0 0x0 0x19 0x19 0x19`.
+   - **sup-sublet**, SR 26: `0x0 0x1 0x77 0xe 0x5a5a 0x0 0x5 0x19 0x0 0x4 0x0 0x5 0x1b 0x0 0x4 0x0 0x5 0x1d 0x0 0x4 0x0 0x5
+     0x1a 0x0 0x4 0x0`. This is the first supervised domain on this bitstream.
+   - **The negative readings inside them:** derive-kill's refusals 0x1d / 0x1b / 0x19, the dead-child loads 0x19 (R-45's
+     flush now covering CREVOKE), and mrev-orphan's 0x19 at #6 and #8.
+3. **s1gap**, graded by s1-revoke-gap-2026-10-14/PREREG.md against the FP readings of 02:58.
+   - The FP readings:
+     - close: `0x8 0x3a 0x0 | 0x2f 0x21 0x0 | 0x1d 0x31 0x0 | 0x1c 0x49 0x0 | 0x0 0x0 0x0 0x4`;
+     - far: `0xfa6 0x42 0x0 | 0xfbc 0x21 0x0 | 0xfbd 0x2d 0x0 | 0xfbd 0x47 0x0 | 0x0 0x0 0x3e8 0x4`.
+   - Predicted on Sublet:
+     - the far arm equal at every k;
+     - the close arm equal at k = 2..4;
+     - the close arm's k = 1 revoke at or below 0x3a, never above.
+   - A Sublet reading above FP's at any index is a finding against outcome A, and is read first.
+   - For R1, the far shape predicts that the published 76 cycles at 2 nodes and 22.7 per node hold.
+4. **r51:** before `0x1c 0x1c`, after `0x0 0x1c 0x1c`. **s10b:** `0x8 0x1`. Both as on FP.
+
+**Linux half** (`chain-linux.sh`; each row its own cold boot; R-43 tags `s10*`, so the respin's `s8*` records stay).
+- **Inputs:**
+  - the shared tree at buildroot d04bd83, opensbi df0e9a8, capstone-sbi 93440d5, checked before any boot;
+  - the respin's fw3 firmwares, by hash: s06agg 8b4cbb4b4dff, boot C+F 060d6566c956, boot W 69895472f098;
+  - C5u's corrected firmware dccb46a3fd0f.
+- **Predictions:** those of the respin's R-55 result above, unchanged. The encoder makes the same E decision as
+  afcd19bea on every representable region, and no row uses CDERIVE or CREVOKE.
+
+1. **s06agg** (the gate for the rest): k800 4, s06agg 64, and a nonzero `sched_clock` stamp.
+2. **Boot C+F:**
+   - B3j: 0 of 40,000 wrong, and the checker control passes;
+   - B3i: all I, except k's fs5;
+   - B3f: 0 of 12, and v7 exactly 1;
+   - b3-clock: arith 0 of 200,000, self-test 1, hold 0 / 0;
+   - b3-oracle transcript e0a254c47e7ee28c, 1,931,207 B;
+   - b1-thread 124; b2 VERSION/STORED/VALUE;
+   - **r54-bounds 64.**
+3. **R-43:**
+   - a1: `speedtest1-ran=0x4EB1xxxx`, `R1 m1 end ... alloc=160 minted=191 revoked=160`, k800 4;
+   - a3: 12 wide points, ok 12;
+   - a4 / a5 / a6: live-sweep 544 / 4352 / 17408;
+   - a7: 17 of 17 retval == oracle, with instret identical to 0568f93a9's;
+   - a8: `112006 38bb59fd`, lookasides 25010;
+   - a10, last: mcause 25, mepc DBAS+0x4354, tval 0xac100000.
+   - **Not re-run here:**
+     - a2, which on this monitor fills the 96-slot table (RGNF E00C); its exact-regions arm is a separate row;
+     - the frozen a9, a known R-55 sublet wedge (mcause 26); the cell 6 matched pair replaces it.
+4. **C5u** on dccb46a3fd0f: SUPK and SUPA in the thousands, 4 SUPM, four speedtests at `112006 38bb59fd`, and the quiet
+   arm's overhead near 0568f93a9's +0.67%. This is the firmware's first silicon run, so it comes after the known rows.
+5. **Boot W:** cw-align 8, cw-pool 0.
+
+6. **The cell 6 matched pair**, the test of the sublet-runtime fix. It runs after boot W, with fixed first, then
+   unfixed, then a10 last.
+   - Staging: ~/capstone-artifacts/c6-sublet-fix-2026-10-15 (README, SHA256SUMS, qemu-pass records).
+   - The respin a9's invocation: `--stats`, 2 MiB arena, tables 1750285, rr host 2c9e82d101b48160, relinked k800.
+   - The private board-c6var.sh copy changes two things:
+     - a run with no SPEEDTEST1-CYCLES ends `no-result`, rc 3, instead of `done`. This is the respin's
+       instrument defect, negative-tested: the respin a9's log writes no-result, and two completed cell 6 logs
+       do not;
+     - the default-arena record is waived (`C6_QEMU_DEFAULT=none`), because this pair was measured at the boot's
+       2 MiB only.
+   - **fixed** 4bfe3b0ec8494385 (lane fd16ea507fef): completes with `112006 38bb59fd`, sublet
+     5568/37970/32569/37970/5401, lookasides 25010, cycles = 344,110,502 x CPI 3.2..4.9.
+   - **unfixed** b029b33c879495e9 (dev 9efa92875356): does NOT complete. Predicted: mcause 26 or 25 in the sublet free
+     path, as the frozen image did on the respin.
+   - The pair separates the hypotheses:
+     - if unfixed completes, the fix is not shown necessary on silicon, and R-55's sublet mechanism is in doubt;
+     - if fixed fails, the fix is not sufficient.
+
+The exact-regions a2, the process-ABI boot and B5 on this bitstream follow. Each is pre-registered in its own
+section before it runs.
+
+## Sublet acceptance RESULT, the bare half (2026-10-15 23:55 to 2026-10-16 00:30, caplifive_sublet_d93a8d66b): every pre-registered reading holds
+The full table is in fpga-silicon-measurements-for-paper.md ("Sublet's child lifetimes run on silicon").
+- **S-16:** 18 arms and 98 readings, identical to FP. **R-51** and **s10b** are identical to FP.
+- **The RTL lane's floor:** five of five as pre-registered, by position.
+  - derive-kill 19, split-shares-node 7, mrev-orphan 8 and sup-sublet 26.
+  - stale-access 9: every stale load and store traps 25, and no stale store landed.
+  - control-call-retpc reads its 8 values identically in every bare session.
+- **s1gap:** outcome A. Close k = 1 revokes in 58 cycles on both bitstreams, in all four runs.
+  - The far arm is equal to FP within silicon's run-to-run spread, which is up to 6 cycles.
+  - Close k = 3 / 4 read 45 / 71 on all three Sublet runs, against FP's single 49 / 73. They are not attributed:
+    FP was read once.
+- **The FP positive control did not read its pre-registered 0x2.** It read nothing, a trap loop that the RTL lane
+  reproduced in simulation, as recorded in the pre-registration's amendment.
+- **One void attempt.** chain-bare.sh's first pass of the floor (00:10:54-00:11:27) never reached the board:
+  - the loop did not export FPGA_URL, and every runner exited with "FPGA_URL not set";
+  - floor.sh re-ran it at 00:18 with the URL exported. No board time was spent on the void pass.
+  - Its outputs are kept in accept-sublet/floor-void-nourl.
+
+## Sublet acceptance RESULT, the Linux half (2026-10-16 00:29-03:10, caplifive_sublet_d93a8d66b): every pre-registered row holds, and the cell 6 pair confirms the sublet-runtime fix on silicon
+Shared tree d04bd83 / df0e9a8 / 93440d5. The respin's fw3 firmwares, by hash: s06agg 8b4cbb4b4dff, boot C+F
+060d6566c956, boot W 69895472f098. C5u ran dccb46a3fd0f. Each row ran on its own cold boot, with R-43 tags s10*.
+- **s06agg:** k800 4, s06agg 64, `sched_clock` [0.000167]. Linux boots on the Sublet bitstream.
+- **Boot C+F:** every rung's retval equals the respin's, and r54-bounds reads 64. The detail lines are identical apart
+  from clock values and one involuntary context switch in B3i, with its registers all I:
+  - B3j: 0 of 40,000 wrong, and the checker control passes;
+  - B3f: every variant 0 of 12;
+  - the b3-oracle transcript reads e0a254c47e7ee28c.
+- **R-43,** read from each row's own extracted R1 lines:
+  - a1: `R1 m1 end arm=drop stop=target alloc=160 minted=191 revoked=160`, speedtest1-ran 1320222911, k800 4;
+  - a3: 12 wide points, ok 12, speedtest1-ran 1320264012;
+  - a4 / a5 / a6: live-sweep 544 / 4352 / 17408, trap log seen 0. R-43's fix holds at 512 live.
+- **a7, the ladder:** 17 of 17 retval == oracle; retval and instret identical to the respin's on all 17; cycles within
+  0.74%.
+- **a8, P1 cell 5:** `112006 38bb59fd`, lookasides 25010, 1,156,968,951 cycles (the respin read 1,157,815,881).
+- **C5u** on its corrected firmware (supcall line + exact regions, the classic-supervision defines):
+  - 1,282 SUPK, 1,279 SUPA and 4 SUPM (0568f93a9: 1,283 / 1,280 / 4);
+  - four speedtests at `112006 38bb59fd`, k800 4 twice;
+  - quiet +0.70% and quiet-fence +0.71% over plain 2,550,801,325 (0568f93a9: +0.67%);
+  - no RGNF, EXCT or EXCS, so the exact-regions monitor's first silicon run held;
+  - not pre-registered: loud reads +7.33%, against +13.8% on 0568f93a9 under a different monitor.
+- **Boot W:** cw-align 8, cw-pool 0.
+- **The cell 6 pair** (the sublet-runtime fix; the private driver's no-result check armed):
+  - **fixed** 4bfe3b0ec8494385: completes with `112006 38bb59fd`, sublet `split=5568 mrev=37970 delin=32569
+    revoke=37970 init=5401` (QEMU's exactly), lookasides 25010, 1,292,584,693 cycles (CPI 3.756 against QEMU's
+    344,110,502);
+  - **unfixed** b029b33c879495e9: does NOT complete, as predicted. The private driver ended it `no-result` (no SPEEDTEST1-CYCLES).
+    - trap log 0x9a: mcause 26;
+    - mepc DBAS+0x3b6e0, which is VA 0x4b6e0, `revoke t0` in sqlite3DbNNFreeNN, on a capability just loaded
+      from the sublet slot table. (The frozen image's a9 on the respin maps the same way: DBAS+0x3a170 is
+      VA 0x4a170, the same revoke);
+    - tval 0xac11a8c0, the respin a9's value.
+  - The two images differ only by sublet_split's SHRINK (lane fd16ea507fef), so the matched pair attributes
+    the wedge to the runtime's carve and shows the fix removes it on silicon.
+- **a10:** mcause 25 (trap log 0x99), mepc DBAS+0x4354 (DBAS 0x81A00000), tval 0xac100000, as pre-registered.
+
+## B6 pre-registered (2026-10-16, before the boot): CDERIVE / CREVOKE from a delegated application, caplifive_sublet_d93a8d66b
+The bare floor showed the instructions on silicon with nothing between the test and the core. B6 issues them from a
+Linux-hosted domain, through the runtime's own helpers (`capstone_cap_derive`, `capstone_cap_revoke_child` in
+runtime/include/capstone/capability.h), on the heap malloc hands the domain. This is the path the bug corpus's nested
+arms and every migrated allocator take.
+
+**Why it can work with no monitor change.** An rtl-oracle read at d93a8d66b, whose lines this lane re-read:
+- CDERIVE checks the parent's type (NONLIN) and never MANAGE, and mints the child with `(parent.perm & 7) | 8`
+  (capstone_dyn_unit.anvil:272);
+- only CREVOKE needs MANAGE (:306);
+- CAPENTER's genesis capabilities are perm 7 (capstone_flu_unit.anvil:503).
+So a domain derives a group from its perm-7 heap block, and the group (with MANAGE) derives and revokes its children.
+
+**The image:** runtime/silicon/b6-sublet.c, built by build-b0-hello.sh (B0_APP=b6-sublet, pool carve).
+- d989874aa2ca0161 (frozen at /tmp/capstone/b6/frozen).
+- check-repr full+renorm OK at 512 bases, OVERLAP 0; no FP instructions.
+- 8 CDERIVE and 2 CREVOKE encodings; sup-static-audit 0 forbidden.
+
+**Arms:** P malloc(8192); G = derive(p, 0, 4096); C = derive(g, 256, 512); S a store through c read through c and g;
+K = derive(c, 0, 64); R revoke_child(g, c); N = derive(g, 256, 512) again; E revoke_child(g, c2). Every value is read
+with lcc or through a live capability, so every arm returns.
+
+**QEMU** (silicon-mimic, firmware d5c57ee765c9, capstone-qemu acbad0f7ec82 with the physical decode, sha256 7867d241):
+- every line as designed, with rc 80. The two set bits are R and E: QEMU's lcc validity selector is a stub that reads
+  1 for a revoked child (op_helper.c helper_cslcc; ISSUES Q-11's second divergence);
+- negative control on the pre-decode QEMU (4940d3fde12b): cause 2 at the first CDERIVE (0xa2b39bdb).
+
+The first build (a39ca7382563fef5) read a revoked child's validity after a printf call. Under QEMU the callee's
+spill and restore of that register handed back a non-capability, so lcc raised 24. That is ISSUES Q-11: QEMU's ldc
+untags a loaded capability whose node is revoked, while the RTL forwards it unchanged. The rung now reads validity
+before any call, so it reads the same on both.
+
+**Predicted on silicon** (rc 0):
+- the QEMU lines, except that R reads `c valid 0, k valid 0, g valid 1, g+256 0x1234` and E reads `c2 valid 0, g valid
+  1`. Silicon's lcc validity is the node's: s1gap read a revoked base as 0 in every run;
+- P: `valid 1 type 1 perm 7 len 8192`;
+- G: `valid 1 type 1 perm 15 [+0, +4096)`;
+- C: `perm 15 [+256, +768)`;
+- S: 0x1234 / 0x1234;
+- K: `perm 15 [+256, +320)`;
+- N: `perm 15 [+256, +768)`, g+256 0x5678.
+- **Controls in the same boot:** b0-stats 0, b0-hello 0 (db4385ff32deddf6), r54-bounds 64 (0b0ff5d555188612), all
+  as boot C+F read on this bitstream.
+- **What would refute it:**
+  - a fault in B6, so capstone-exec returns its own code: the domain path refuses what the bare floor allowed;
+  - any perm or bounds value other than above;
+  - a revoked child reading valid 1: CREVOKE did not end the child's node.
+
+**The run:** b0-bake-b6.sh bakes a private image (the B4/B5 pattern, restored by an EXIT trap). Its firmware is built
+on boot C+F's recipe (wrapper d7489e3, monitor 7361e1c, the supervised-call defines). It bakes only after the Linux
+half of the Sublet acceptance releases the shared buildroot.
+- **Built 2026-10-16 03:10, before the boot:**
+  - private Image d68e4edcc4e0795a;
+  - firmware **7a4ef23ad1626527** (dom_stack gate PASS);
+  - staged b6-sublet.dom d989874aa2ca0161 and b0run.sh f579e57cfa3f5de4, the committed file with the b6-sublet case;
+  - every staged file present in the cpio, and absent again after the restore bake.
+- **Rungs:** b0-stats b0-hello r54-bounds b6-sublet b0-stats2.
+
+## B6 RESULT (2026-10-16 03:11-03:16, caplifive_sublet_d93a8d66b, firmware 7a4ef23ad162): every line as pre-registered
+CDERIVE and CREVOKE work from a Linux-hosted delegated application, through the runtime's helpers, with no monitor
+change.
+- **Rungs:** b0-stats 0, b0-hello 0, r54-bounds 64, **b6-sublet 0**, b0-stats2 0.
+- **The B6 lines on silicon:**
+
+  ```
+  B6 P: valid 1 type 1 perm 7 len 8192 base%16 0
+  B6 G: valid 1 type 1 perm 15 [+0, +4096)
+  B6 C: valid 1 type 1 perm 15 [+256, +768)
+  B6 S: through c 0x1234, through g+256 0x1234
+  B6 K: valid 1 type 1 perm 15 [+256, +320)
+  B6 R: after revoke_child(g, c): c valid 0, k valid 0, g valid 1, g+256 0x1234
+  B6 N: valid 1 type 1 perm 15 [+256, +768)
+  B6 N: g+256 0x5678
+  B6 E: after revoke_child(g, c2): c2 valid 0, g valid 1
+  B6 rc=0
+  ```
+
+- Every line equals QEMU's (acbad0f7ec82) except R and E. There silicon reads the revoked children valid 0, as
+  predicted; QEMU's lcc validity is a stub (Q-11).
+- **What it establishes on silicon:**
+  - a perm-7 heap block derives a group that carries MANAGE;
+  - the group's children have exact bounds and share bytes with it;
+  - CREVOKE ends a child and its grandchild (the subtree) and leaves the group live with the bytes in place;
+  - the range is reusable by a fresh child.
+- This is the allocator pattern the bug corpus's malloc arms need. It runs with no monitor change.
+
+## Boot P pre-registered (2026-10-16, before the boot): the process ABI on the exact-regions supcall line, and where B5's launch goes
+The last silicon row the R-55 plan owes:
+- the process ABI on the exact-regions monitor, with the 127-slot module;
+- an attribution of B5's 45.5 s cold launch.
+It runs on caplifive_sublet_d93a8d66b.
+
+- **Firmware 1b44a465d96753b2:** wrapper 1269c77 + monitor ebe0a25 (r55/exact-regions, the change a2 just read on the
+  board line), with boot C+F's supervised-call defines.
+- **Private Image ae58cf97765442da,** carrying:
+  - the 127-slot process-ABI module f2a2645cc570dcc6, as /capstone.ko and capstone-proc.ko;
+  - B5's mruby.dom a7ac283d7050a5d8 and its scripts;
+  - b0-hello, b5-hello, r54-bounds, cw-pool 24b8a8f477942e2d and b6-sublet d989874aa2ca0161;
+  - b0run.sh 726913dd4ed8d239.
+- **b0run.sh's new rungs,** b5-mruby-e-stats and b5-mruby-stdin-stats: B5's e and stdin steps with
+  CAPSTONE_DELEGATE_STATS=1. capstone-exec then prints `launch ticks image= hash= spawner= device= domain= regions=
+  seccomp= total=` (rdtime at each stage boundary, exec.c report_stats) and its delegate counters. The hash check and
+  the retvals are the plain steps'.
+- **Rungs:** b0-stats b0-hello b5-hello b5-mruby-e-stats b5-mruby-stdin-stats b5-mruby-bench r54-bounds cw-pool
+  b6-sublet b0-stats2.
+
+**Predictions:**
+- every rung's retval 0, except r54-bounds 64;
+- mruby e 53c234e5e8472b6a, stdin 5476dba1f4bd59f1, bench 8d1539bc79e2b630;
+- bench times within a few percent of B5's (same image and bitstream family);
+- b6-sublet 0 under this monitor, cw-pool 0;
+- no EXCT, EXCS or RGNF line.
+
+**Exploratory, no prediction:** the launch-tick split, and whether e (the first launch in the boot) and stdin read
+B5's cold 45.5 s and cached 24.6 s.
+
+**What a failure would say:** the boot differs from B5's only in the monitor (exact regions) and in the module (127
+slots), so a refused launch, a fault or a differing hash points at one of those two.
+
+## Boot P RESULT (2026-10-16 03:42-03:55, caplifive_sublet_d93a8d66b, firmware 1b44a465d967): every rung as pre-registered
+The exact-regions supcall monitor (ebe0a25) and the 127-slot process-ABI module run every B-series rung.
+- **Rungs:** b0-stats 0, b0-hello 0, b5-hello 0; b5-mruby-e-stats 0, b5-mruby-stdin-stats 0, b5-mruby-bench 0; r54-bounds
+  64; cw-pool 0; **b6-sublet 0**; b0-stats2 0.
+- **mruby's hashes:** 53c234e5e8472b6a, 5476dba1f4bd59f1, 8d1539bc79e2b630, as B5.
+- **Wall times:** e 45.74 s, stdin 24.99 s and bench 326.51 s. B5 read 45.5 s cold and 24.6 s cached.
+- No EXCT, EXCS or RGNF.
+
+**Where B5's launch goes** (capstone-exec's launch ticks: rdtime at each stage boundary; timebase 12.5 MHz, the board
+DTS's `timebase-frequency = <0xbebc20>`):
+
+| launch | image | spawner | device | domain | regions | seccomp | launch total | wall |
+|---|---|---|---|---|---|---|---|---|
+| mruby -e, first launch (cold) | 2.37 s | 0.11 | 0.12 | **22.93 s** | **9.12 s** | 0.44 | 35.09 s | 45.74 s |
+| mruby stdin, second launch | 2.29 s | 0.11 | 0.12 | 2.18 s | **9.16 s** | 0.43 | 14.29 s | 24.99 s |
+| b0-hello (128 KiB image, 256 KiB domain) | 0.17 s | 0.11 | 0.13 | 0.36 s | 0.43 s | 0.44 | 1.64 s | |
+
+- The cold launch's extra 20.7 s is all in the domain stage (from the device open to the domain's creation). A second
+  launch pays 2.2 s there.
+- Mapping the domain's regions costs 9.1 s on every launch of the 64 MiB mruby domain, against 0.43 s for b0-hello's.
+  That scales with the domain's size, not its image.
+- After the launch, about 10.7 s remains on both runs (the program and its exit), which these ticks do not split.
+- Exploratory, not a prediction. The stage boundaries are exec.c's launch_mark calls. What happens inside the domain and
+  regions stages (the monitor's create_domain and the CMA mapping of the regions) is not split by them.
+
+## The board's checkout on capstone-bootstrap, pre-registered (2026-10-16, before the boots)
+The board's shared checkout still runs the acceptance pins d04bd83 / df0e9a8 / 93440d5. capstone-bootstrap now carries
+R-55's every half: buildroot 549d686 (25 commits past d04bd83: the module and libcapstone at 127, the supervision line),
+opensbi 3ab5655 and capstone-sbi 234ee66, whose tree is the supervised-call line with exact regions.
+- C5u and boot P ran that monitor through private firmwares.
+- Never on silicon: the classic R-43 path baked from that tree, with the module, wrapper and monitor all from
+  capstone-bootstrap.
+
+Three rows settle it. Each is baked from the shared tree moved to the bootstrap pins, on its own cold boot on
+caplifive_sublet_d93a8d66b, with tags s12*. The acceptance pins come back in an EXIT trap.
+
+**Predictions** (as the Sublet acceptance's rows on the old pins, and as a2 on the board line):
+- **a1:** `R1 m1 end arm=drop stop=target alloc=160 minted=191 revoked=160`, k800 4 twice, one speedtest1-ran.
+- **a4:** `live-sweep ok live=16 reads=32 sum=544 expect=544`, k800 4 twice.
+- **a2** (host 0a5c9025e8e6f5db, built with libcapstone at 127): all 12 invocations complete; no RGNF, RGNO, EXCT or EXCS;
+  the replay of the board's own sequence reproduces every id with OVERLAP 0.
+
+**What a failure would say:** the bootstrap tree differs from the validated pins in the supervised-call monitor line
+(classic path untested on silicon) and in 25 buildroot commits. A failure keeps the board on the acceptance pins and
+is attributed by diffing the two trees, not by guessing.
+
+## The board's checkout on capstone-bootstrap, RESULT (2026-10-16 04:16-04:22): the classic path does not run on it; the board stays on the acceptance pins
+- **a2 on the bootstrap pins:** Linux boots, then the k800 control fails at once: `ladder-perf: create_dom failed`
+  (HARD STOP: no RESULT). Tag s12a2.
+- **a1 and a4** were refused before any boot by a driver copy pinned to d04bd83 exactly. Their re-run was cancelled:
+  the same control would fail the same way.
+- **Why:** capstone-bootstrap's module is the process-ABI line. Twelve commits between d04bd83 and 549d686 make it so:
+  process.c, ADOPT/FORGET, context ids, 16 descriptors. The frozen classic hosts (lpc 3b93a2b6e2adfa36,
+  sqlite_host_rr.user) speak the classic interface. This lane's own B0 bake scripts already say a classic control
+  cannot share a module load with the process ABI.
+- **The miss:** the pre-registration's premise, that the bootstrap module still serves the classic rows, was not
+  checked before spending the boot. It was available in this lane's notes. One boot, about 5 minutes.
+- **What capstone-bootstrap IS validated by:** boot P, the process ABI on the same monitor tree (234ee66's tree is
+  ebe0a25's) with the 127-slot process module, every rung as pre-registered.
+- **Converging the board needs one of two things,** a decision for later:
+  - the classic hosts rebuilt against capstone-bootstrap's libcapstone;
+  - or the classic rows moved to process-ABI images.
+- Until then the board's shared checkout stays at d04bd83 / df0e9a8 / 93440d5.
+
+## The pool carve: per-global separation under the full bounds scheme (2026-10-14)
+Under option (b) and the Sublet bitstream every capability is full-encoded, and the glue's split-per-global carve no
+longer separates globals.
+- **Why:** each SPLIT off the stack remainder rounds the remainder's top UP into the piece just carved, and the next
+  global inherits that top.
+- **How much:** each global's capability reaches into its neighbour by up to the remainder's granule; check-repr
+  reads 64 B (k800) to 32 KiB (memcached).
+- **Why CARVE_ALIGN doesn't help:** it computes the cursorless granule.
+
+**Design (CAPSTONE_GLUE_POOL_CARVE; build-b0-hello.sh B0_GLUE_CARVE=pool):**
+- Pass 1 walks the descriptor for the pieces' lowest base without touching a capability.
+- ONE split cuts the stack [base, P_lo) from the pool [P_lo, END), with P_lo aligned to the stack remainder's
+  granule.
+- The table and every global come from a cincoffset copy of the (NONLIN) pool, narrowed with SHRINK
+  (capstone_flu_unit.anvil: narrows rd in place, keeps its node, clamps the cursor). Each piece is aligned to its OWN
+  full-scheme granule.
+- s7 (the pool) is cleared before the application starts.
+- A global's capability then depends only on its own length and alignment, and no revocation node is spent per
+  global: about 265 fewer for memcached, about 160 for the SQLite cell. The node budgets already recorded were
+  measured with the split carve and stay valid for those images.
+
+**Model first (check-repr.py carve_pool):** 11 images, every CMA base.
+- full+renorm: 0 traps, 0 short, 0 short-once-moved, **OVERLAP 0**; padding 64 B to 3.8 KiB; every stack margin
+  above its requirement.
+- The split carve on the same images overlaps everywhere (64 B to 32 KiB): the control.
+- cursorless: also exact for these 11 images. That is not guaranteed in general: a small global straddling a 32 MiB
+  boundary would truncate. The glue therefore stays aligned to each piece's own granule, and check-repr verifies each
+  image against the resident format.
+- check-repr detects the pool glue from the image: the table's `shrink(gp, t1, t4)`, 0x03d311db.
+
+**Built and run:**
+- With the define off, the glue object and b0-hello are byte-identical to the unmodified glue (82b5bb388e2f8f7a,
+  f75bb823bdde319a).
+- b0-hello with the pool carve: eecd8964994b10d4, gate OK. Under full+renorm it reads OVERLAP 0, against the split
+  build's overlap at all 512 bases, up to 384 B.
+- The disassembly shows the pool split (0x0d611bdb, `split s7, sp, s6`), the table's and each global's
+  cincoffset + shrink, and `li s7, 0`.
+- QEMU (fw-b1-a11d424, GP_FABRICATE=0): both builds print the hello line, rc 0.
+- b1-thread (with its context arena): split 0fc75a06633ae0bf, pool a5ec32d0c5095f0d. Under full+renorm the split
+  build overlaps at all 255 bases (up to 2,048 B) and the pool build at none. In QEMU both join with 124, rc 0.
+- memcached (the B2 recipe): split 62fad1bc8bc15a79, pool 1c63bff566577a4f, from the same tree. Under full+renorm
+  the pool build reads OVERLAP 0 at all 225 bases.
+  - In QEMU (fw-b1-top, GP_FABRICATE=0, the guest clock set as for B3c), the oracle harness reads transcript
+    e0a254c47e7ee28c (1,931,207 bytes) for BOTH builds. That is the native oracle's hash, and both exit 0 on TERM.
+- QEMU proves the glue runs and the program works; only the model proves the bounds. The board witness is
+  carve-witness.c, pre-registered separately.
+- The default stays B0_GLUE_CARVE=align, so no existing build changes. Images built for the FP (b) or Sublet
+  bitstream should use pool.
+
+## Boot W pre-registered (2026-10-14, before the flash): the globals carve on silicon, split against pool
+The FP chain's step 8, after boot C+F, EXPLORATORY: outside the acceptance verdict, and unable to stop the chain.
+It is the board's first direct reading of per-global separation.
+- The probe: runtime/silicon/carve-witness.c, eight initialised globals of 24, 100, 5000, 40, 9000, 7, 65536 and
+  200 bytes. Each reads its own capability's base and end with lcc, relative to its address.
+- Built twice from one source with B0_DATA = 1 MiB (the default 256 KiB failed the gate: stack margin -72,592,
+  which is the gate working):
+  - cw-align: the split carve, cafd2c97fcd2a25c;
+  - cw-pool: the pool carve, dev 93e440624945, 24b8a8f477942e2d.
+- Rungs: b0-stats, b0-hello (control), cw-align, cw-pool, b0-stats2. Private image 328e0d5f4c3d152f, firmware
+  ff1e132b1084 (wrapper 882892f, monitor 1f9aedd, QUIET).
+- **Predicted on the FP bitstream (b), from check-repr's replay** (`--format full --renorm`, the records of g0..g7
+  mapped through their template offsets):
+  - **cw-align rc 8 at every CMA base:** every global's capability reaches outside its storage. At 248 of 255 bases
+    the readings are g0 [+0, +1488), g1 [+0, +1600), g2 [+0, +6608), g3 [+0, +512), g4 [+0, +9520), g5 [+0, +1456),
+    g6 [-80, +66864), g7 [+0, +1536). The other 7 bases have four other patterns, all rc 8.
+  - **cw-pool rc 0 at every base**, each capability exactly its own 16-byte-rounded storage: g0 [+0, +32),
+    g1 [+0, +112), g2 [+0, +5008), g3 [+0, +48), g4 [+0, +9008), g5 [+0, +16), g6 [+0, +65536), g7 [+0, +208).
+  - Each line is checked against the replay at the DBAS the run prints.
+- **On a cursorless bitstream (0568f93a9), for reference:** both builds read exact at most bases. cw-align shows
+  CARVE_ALIGN's own padding at a few, which is not neighbour overlap.
+- **QEMU** (fw-b1-a11d424, GP_FABRICATE=0): both builds read rc 0 with the pool prediction's exact values. QEMU's
+  SPLIT keeps fat bounds, so QEMU cannot show the split carve's overlap; that is why this witness runs on silicon.
+- **Refutations:**
+  - cw-pool any line BEYOND, or any value other than the table above: the pool carve does not separate on silicon;
+  - cw-align rc 0 on (b): the encoder change did not reach the carve as modelled.
+  Either is read before anything else.
+
 ## Open after B3 (2026-10-05)
 - **The SDK context probe on the private QEMU platform is not a working gate for the B0 monitor line.** This
   was found while checking that B1's runtime change does not regress the SDK path (/tmp/capstone/b0validate-*,
@@ -1889,3 +3269,72 @@ Predicted on caplifive_r51r52_0568f93a9:
   fallback.
 - Untagged function pointers under gp-captable are acceptable for the hello path. This is the prior-art sweep's
   assumption; check it in B0.5's disassembly.
+
+## B5 pair pre-registered (2026-10-16, before the boot): mruby's domain and native builds in one boot on caplifive_sublet_d93a8d66b
+The board campaign's wave 2 (`docs/plans/2026-10-16-board-campaign-all.md`, benchmark 5). B5n's native baseline
+ran on caplifive_fpb_afcd19bea (2026-10-15), and boot P ran the domain on the Sublet bitstream. A ratio across two
+bitstreams is not a measurement, so this boot runs both arms, each twice for the domain and native -O2, once for -O1.
+
+**The images,** all unchanged:
+- B5's mruby.dom a7ac283d7050a5d8, the image boot P ran;
+- B5n's native mruby-rv64-O2 99af8bde1e36acf8 and -O1 1e6246f22c06055b;
+- the scripts and native.sha of `/tmp/capstone/b5m/board`;
+- b0run.sh 38f8dcf9b1823daa. Its b5 rungs are unchanged since boot P (bc621df72268): the only change is the corpus
+  rung.
+
+**The boot:**
+- private image fa4d625d3d165cb2 (18 files, each checked by hash in the initramfs), firmware 2edb66370270cdab;
+- the exact-regions supcall line (wrapper 1269c77, monitor ebe0a25) with the 127-slot module.
+- Rungs, interleaved so a drift during the boot touches both arms: b0-stats, b0-hello, b5-native-O2-e,
+  b5-native-O2-bench, b5-mruby-e, b5-mruby-bench, b5-native-O2-bench, b5-mruby-bench, b5-native-O1-e,
+  b5-native-O1-bench, b0-stats2.
+
+**Predictions,** from the two records (boot P's and B5n's transcripts):
+1. Every retval 0: each step's stdout hash equals native.sha (`e` 53c234e5e8472b6a, bench 8d1539bc79e2b630).
+2. Both domain benches repeat boot P:
+   - allocator 139/83453/0;
+   - each benchmark within ±2% of boot P's 138315, 45514, 2458, 30708, 81907 ms.
+3. Native repeats B5n within ±2% per benchmark, the bitstream notwithstanding:
+   - -O2: 90847, 29921, 1677, 18464, 59712 ms;
+   - -O1: 109745, 36530, 1922, 22371, 69695 ms.
+   B5's domain times agreed across the two bitstreams within 0.1%.
+4. The two repeats of each arm agree within ±1% per benchmark (so_lists, at 2.4 s the shortest, within ±2%).
+5. The domain/native ratios per benchmark are the result and are NOT predicted. If 2 and 3 hold, they equal B5n's
+   (1.18-1.37x at -O1, 1.37-1.66x at -O2) within the noise. Unlike B5n's, they come from one boot on the bitstream
+   the paper's Sublet rows use.
+
+**What a failure would say:**
+- A native hash differs (910): a native hard-float computation is wrong on this bitstream (the R-52/R-53 family).
+  It voids the baseline, not the domain.
+- A domain repeat differs in hash or allocator count: boot P does not repeat, so re-examine before reading anything.
+- A time outside its band: run-to-run or bitstream variance is larger than assumed, and the ratio is quoted with
+  its spread instead.
+
+No wedge is expected: every image and rung has run on this bitstream or on its predecessor.
+
+## B5 pair RESULT (2026-10-16 16:03-16:33, caplifive_sublet_d93a8d66b, firmware 2edb66370270): every pre-registered reading holds; mruby's domain costs 1.25x native at the same -O1, 1.50x against native -O2
+One boot, eleven rungs, every retval 0 against its oracle (pre-registration 1d9a1b9b5d5d).
+
+**Every prediction held,** computed from the transcript, not by hand:
+1. every stdout hash equals native.sha;
+2. both domain benches repeat boot P within 0.20% per benchmark, and the allocator reads 139/83453/0 both times;
+3. native repeats B5n's FP-bitstream times within 0.74% at -O2 and 1.35% at -O1;
+4. repeats within one boot agree within 0.20% (domain) and 0.50% (native -O2).
+
+**Times** (seconds, Time.now inside the process; the domain and -O2 are means of two runs in this boot):
+
+| benchmark | domain | native -O2 | native -O1 | domain / -O2 | domain / -O1 |
+|---|---|---|---|---|---|
+| mandel_term | 138.34 | 90.59 | 109.37 | 1.53 | 1.26 |
+| fib(24) | 45.49 | 29.75 | 36.04 | 1.53 | 1.26 |
+| so_lists (3 x 1000) | 2.46 | 1.67 | 1.93 | 1.47 | 1.28 |
+| so_mandelbrot (32) | 30.67 | 18.36 | 22.24 | 1.67 | 1.38 |
+| ao_render (8) | 81.89 | 59.42 | 69.60 | 1.38 | 1.18 |
+| total | 298.85 | 199.79 | 239.16 | 1.50 | 1.25 |
+
+**Reading it:**
+- These are B5n's ratios again, now from one boot on the bitstream the paper's Sublet rows use. Both arms' times
+  are the same on the FP and Sublet bitstreams within 1.4%.
+- They remain UPPER BOUNDS on the cost of capabilities, for B5n's reasons: soft-float, clang/musl, full LTO, the
+  size-class allocator and the delegation of every system call, against gcc/glibc native.
+- Launch: 45.13 s for the domain's cold `e`, against 3.89 s / 3.67 s natively, as B5n read it.

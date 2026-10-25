@@ -1,0 +1,65 @@
+# Tier 3 board reading, arm wm0 (wireshark/wmem-repros virtual-malloc, recorded vp2-malloc), 2026-10-18 13:02-13:13: bkit7
+# (module 3005ed52, pin off), firmware 8a96f6dad5f2d681 (19,565,064 B), through the appvm batch session. Pre-registered at
+# lane 7f7283ef8772 (prediction: MISSED 23; controls bounds-chunk complete, uaf-chunk complete, uaf-jumbo fault).
+T3APPVM wm0 BEGIN 13:02:12
+APPVM collect rc=75 calls=26 13:02:12
+APPVM images equal <mnt-hdd>/capstone/t3-images-nb/wm0.images.SHA256SUMS (26)
+APPVM boot rc=1 13:13:33 :: session <mnt-hdd>/capstone/t3-run/wm0/session: 2/26 steps ran; share linked; boot DID NOT COMPLETE; transcript <mnt-hdd>/capstone/t3-run/wm0/session/guest/board.txt; phase read
+APPVM read rc=75 13:13:33 :: --- vp2-malloc (virtual-wmem): {'NO-READING:control-failed': 23}
+T3APPVM wm0 END rc=0 13:13:33
+## the batch rung's steps (the step output prints only when a step ends)
+  @@STEP-BEGIN session-share
+  @@STEP-END session-share 0
+  @@STEP-BEGIN virtual-malloc-00-uaf-chunk
+  @@STEP-END virtual-malloc-00-uaf-chunk 0
+  @@STEP-BEGIN virtual-malloc-01-uaf-jumbo
+## the wedge apertures
+  sw=255 TRAP LOG {seen,mcause[6:0]} 0x88 10001000
+  sw=224 {excommit,ldsync,stsync,lsu_rdy,dyn_rdy,flu_rdy,flush,privM} 0x1e 00011110
+  sw=225 {tbe,wstore,wload,wrev,domsw,stall,memwr,memwait} 0x88 10001000
+  sw=226 {data_valid,data_ack,data_resp_valid,data_resp_ack,reg_valid,reg_ack,reg_resp_valid,reg_resp_ack} 0x80 10000000
+  sw=227 {commit_dsw_valid,dsw_commit_ack,issue_reg_resp_v,csr_reg_resp_v,frontend_reg_resp_v,data_req.write_en,reg_req.is_set,data_req.metadata_en} 0x05 00000101
+  sw=228 {1,dom_switch_idx[6:0]} 0x9c 10011100
+  sw=229 {load_state[3:0],0000} 0x00 00000000
+  sw=192 {0000000,commit_instr[0].valid} 0x00 00000000
+  sw=193 {00000,store_buf_commit_cnt} 0x04 00000100
+  sw=194 {000000,store_state} 0x03 00000011
+  sw=195 {0000,load_state} 0x00 00000000
+  sw=219 [715bdd1fe+] lsu_ctrl.operation (fu_op of the bypass head) 0x00 00000000
+  sw=220 [715bdd1fe+] {lsu_ctrl.valid,bypass_empty,0,0,fu[3:0]} (fu 1 LOAD 2 STORE 12 CAPSTONE_DYN) 0x40 01000000
+  sw=221 [715bdd1fe+] {commit_queue_valid[3:0],st_data_req,st_data_gnt,no_st_pending,0} 0xd0 11010000
+  sw=222 [715bdd1fe+] {tag_state[2:0] (0 IDLE 1 WAIT 2 WR 3 RD),tag_wr_pend[2:0],tag_rd_inflight,0} 0x00 00000000
+  commit pc (scoreboard slot 0; stale after a flush) 0x0000003f9e896f54
+  trap-log mepc 0x0000000000035a88
+  trap-log tval 0x0000000000000073
+  rev_node_debug_ex 0x0000002d00000000
+  rev_node_head_ex 0x006d
+  rev_node_serving_idx_ex 0x00000000
+## against S-25's kit-application face (r10) and R-49's switch starvation
+    192   0x01   0x00   <- differs
+    193   0x04   0x04
+    194   0x00   0x03   <- differs
+    195   0x00   0x00
+    219   0x00   0x00
+    220   0x40   0x40
+    221   0x00   0xd0   <- differs
+    222   0x00   0x00
+    224   0x1d   0x1e   <- differs
+    225   0x80   0x88   <- differs
+    226   0x00   0x80   <- differs
+    227   0x03   0x05   <- differs
+    228   0xb8   0x9c   <- differs
+    229   0x00   0x00
+    255   0x88   0x88
+                 commit pc: 0x0000003f90e62638  0x0000003f9e896f54
+             trap-log mepc: 0x0000000000035a88  0x0000000000035a88
+             trap-log tval: 0x0000000000000073  0x0000000000000073
+         rev_node_debug_ex: 0x0000000040000033  0x0000002d00000000
+          rev_node_head_ex: 0x006d  0x006d
+   rev_node_serving_idx_ex: 0x0000004a  0x00000000
+  15 switch apertures; 7 equal in every boot, 8 differ
+  BOARD_RUN_START 13:02:12 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 36 files, stage 8643233 bytes
+  firmware 8a96f6dad5f2d681 19565064 B
+  DRIVER rc=1 13:13:33
+  BOARD_RUN_DONE 13:13:33

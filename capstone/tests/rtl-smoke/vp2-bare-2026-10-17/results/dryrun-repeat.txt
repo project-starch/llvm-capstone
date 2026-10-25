@@ -1,0 +1,9 @@
+# The 25-arm repeat's script (run-vp2-rep.sh), dry-run 2026-10-17 21:58-21:59 before it runs, with only the innermost
+# runner stubbed. The stub asserts the image exists, a record address is set, and FPGA_BITSTREAM is the vp2 name; it
+# writes the FIRST run's real uart.txt for that arm.
+## first run's readings replayed
+REP1 START 25 arms caplifive_vp2_bf3db3175.bit; 25 REP1ARM lines AS PRE-REGISTERED; REP1 vs RUN1: 25 of 25 arms identical
+## one value altered in va-runv (an SV 0 read as 1)
+REP1ARM va-runv :: VERDICT va-runv: NOT vp2; REP1 vs RUN1 DIFF va-runv (both vectors printed); REP1 vs RUN1: 24 of 25 arms identical
+## an existing output directory
+refused, rc 2 ("exists; a repeat writes a fresh directory")

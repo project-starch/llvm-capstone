@@ -1,0 +1,11 @@
+# Boot 3-T1's third run (run-tier1-3r3.sh) with every pin real (firmware 31abc60d3d27d4be, the re-staged stage with
+# module 0cc4760d21fde17a, the lane driver) and only the driver stubbed. The stub asserts the three-rung BAKED_RUNGS.
+# 2026-10-18 04:4x.
+the repeat's real transcript   vm-contract 922 NOT-AS-ORACLE; BRANCH reply-slot (ADD_REFUSED ... errno=14)
+clean identity transcript      vm-contract 0 AS-ORACLE; BRANCH identity
+boot 3-T1's real transcript    vm-contract 922 NOT-AS-ORACLE; BRANCH qemu-csr (tval 0xcc002573)
+no transcript                  NO DATA: no board transcript (rc 2)
+wrong firmware hash            STOP: the firmware is not the pre-registered one (rc 1)
+(The identity arm's first construction spliced at the marker inside the echoed command line rather than the rung's
+own marker line and read reply-slot; rebuilt with line-anchored markers, it reads identity. A construction error in the
+dry run, not in the script.)

@@ -1,0 +1,8 @@
+CPP cpyp-DB BEGIN 07:39:53 kit bkit7-rev2xnBD monitor f13dbc5
+APPVM collect rc=75 calls=9 07:39:54
+APPVM boot rc=0 08:23:30 :: session <mnt-hdd>/capstone/t3-run-treeB/cpyp-DB/session: 9/9 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeB/cpyp-DB/session/guest/board.txt; phase read
+APPVM read rc=0 08:23:31 :: --- vp2-malloc (virtual-cpython): {'MISSED': 2, 'NO-READING:unattributed': 1}
+CPP cpyp-DB ARM END rc=0 08:23:31
+CPP cpyp-DB steps: 10 begun, 10 ended; DRT1 1 DRTX 0 FRTY 9 Oops 0
+CPP cpyp-DB pc=0 by step:       1 17_gh-157325_fix-an-oob-read-in-the-control       1 23_gh-142560_bytearray-search-realloc       1 23_gh-142560_bytearray-search-realloc-control 
+CPP DONE 08:23:31

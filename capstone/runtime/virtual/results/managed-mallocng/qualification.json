@@ -1,0 +1,87 @@
+{
+  "status": "QUALIFIED_WITH_RECORDED_NEGATIVE",
+  "date": "2026-10-12",
+  "source_base": "6756a8b7b8fa",
+  "source_identity": "Changed source files identified below; commits organized after the runs",
+  "qemu_commit": "7dbfdd534eea90b64b84cb1da8961bc168bb8dea",
+  "source_sha256": {
+    "capstone/bug-corpora/ffmpeg/carved-repros/shared/carve-recarve-control.c": "d3359ca4f75ff2a55340f97a4bbda5b7a37c4f9864949ea77fdffbc0b72d5913",
+    "capstone/bug-corpora/ffmpeg/carved-repros/shared/corpus.h": "cae9ab3e77c7841ab21cd764f5d9420d81adbd6c2a748df7d27d5acd81e30823",
+    "capstone/bug-corpora/ffmpeg/carved-repros/shared/driver.c": "fde750b4f6d7bca8276dec8419b1c1363b1220cb38d81ee3dc6f4b7d6f335863",
+    "capstone/bug-corpora/postgres/mmgr-repros/shared/run-defects.py": "1828cd55218710e79d44cfdb9444c19cf457575eade4a10342946150c698215d",
+    "capstone/bug-corpora/tools/arms.json": "f1cdc00265d518f00973b7402d62ebf031ce1db0420da0dda048fe9d623066a4",
+    "capstone/bug-corpora/tools/run-virtual-cases.py": "5ff1997ee87a3fedd8afc1d5a9c02484c6d89cfea47f9f1cb6763cba6f782545",
+    "capstone/ports/common/application/build.py": "a308adec61692e8f4b3b738afebea798a38bf2fd0e2ec34ea8d96bdedb7e02d2",
+    "capstone/ports/common/application/check-safety-test.py": "1c7843b86d838b6e36467985ca8b0a5066b2edfdaafbd160df2c243fec6cf74e",
+    "capstone/ports/common/application/lifetime-instructions.py": "a5761122d671a661a93e7478a79c155be70a33bcdade3ab8486d1d2e10cba0da",
+    "capstone/ports/common/tests/test_lifetime_instructions.py": "2234dc9468090e2748d062d3a76916ca738173acc84060ed483027bca73144ce",
+    "capstone/ports/ffmpeg/app/host/build-domain.sh": "092d5f705c10bfc1fe0f7da03e75cc4e67ab15039edbb882944bc0d33abddc75",
+    "capstone/ports/ffmpeg/app/host/run.py": "6ea82238a5230bd44091ee68c1dec06a14212731ce824371af7f822f746d48ae",
+    "capstone/ports/memcached/app/deps/env.sh": "c1f46f83354200f6296268d98d3bd65a74ba89e8aa7d41980ecb828e0b952966",
+    "capstone/ports/memcached/app/host/build-sublet.sh": "191844deb19c9d19a08393514c7c9a6ee5d502fab3a37390a2be2342d54fd211",
+    "capstone/ports/memcached/app/src/mcapp-safety.c": "e68f2839d4b31a4185cf9b84c82311079396dff644b524205bd097e9d0b27a31",
+    "capstone/ports/musl-capstone/arch-capstone64/malloc_capstone.h": "cd72a7cb43d0c12946c21ff64b1d08e04e17dbe6b951e115c339ed3e43ed54c3",
+    "capstone/ports/musl-capstone/musl-patches/0009-virtual-mallocng-capabilities.patch": "7cb7222e2b49ea640f4db0ed54badaa9f3dfc4913876dc701d7f8c4b17f15992",
+    "capstone/ports/wireshark/app/deps/env.sh": "99ac54fdb965f35a4536d70429b67d9896fb55bcfcaebab3d0081c92c0fdbe56",
+    "capstone/ports/wireshark/app/host/build-domain.sh": "c7929370f284cac8248d57512643fb8da579a572647a26d686f13e55bda389d2",
+    "capstone/ports/wireshark/app/host/run.py": "4bfd998c5a55a5218b0c8827b554dc3170760d29a87bce35464ac992b1476827",
+    "capstone/runtime/application/CMakeLists.txt": "dfb5c32d7f84ad2f45675b18c7eea901eef12b1f3e4082cc67bf6c4242518879",
+    "capstone/runtime/virtual/build-sdk.sh": "7fb7f05c7b79e4d83fb217cbb8be7bb4d92af22ca59280ecafdec0c1d9179b13",
+    "capstone/runtime/virtual/contract.c": "d7cb3c5cfedc2aa75b504b29c69e0d7b99db5681cffc8feb85a48b7262888ca1",
+    "capstone/runtime/virtual/heap.c": "3cad900520a458b7a8f1df588921dc0bd8c0caf98f41f05e47f82f49f36778dd",
+    "capstone/runtime/virtual/malloc-contract.c": "fbbeba96af0a02a5da1dd71e7d3aa58210d2113acac12a47144a2522774b0ed9",
+    "capstone/runtime/virtual/run-malloc.py": "266ff6263888cf2fc4d9550160b5a493ffe6e317dc634489e7bffb87cb12a347",
+    "capstone/runtime/virtual/run.py": "88fe940ed83b383ff22a6f68c5c4ffd1b850d59d069686651f8f6001c0a9a112",
+    "capstone/runtime/include/capstone/capability.h": "905973d5fc5020c0c3acd3bd6e1344d420363f96cec12b085101e9a89ac6ac9f",
+    "capstone/runtime/virtual/vm.h": "4349856693738bd296a7ef8c624c9994655d99d359b539e929df847294199ce7",
+    "capstone/runtime/virtual/mapping.c": "6902255ba1786281f42a99c3de750640a00d57589cb01b7115329283b1f734c1",
+    "capstone/runtime/virtual/module/capstone_vm.c": "13ba68d15655f757694060b587bdec9d8850d8c527d2152002080cf83b0806e8"
+  },
+  "build_scope": {
+    "qemu": "Fresh build at the exact submodule pin",
+    "adapter": "Fresh build against that QEMU header",
+    "musl": "Fresh source preparation and 1361/1361 virtual translation units",
+    "runtime": "Fresh SDK and contract images",
+    "memcached": "Fresh source builds including libevent native tests and protected/stock allocator object controls",
+    "postgres_corpus": "Fresh protected/stock component and safe-control builds",
+    "ffmpeg_carve": "Fresh protected/stock corpus builds",
+    "other_applications": "Cached virtual upstream objects relinked with fresh managed mallocng SDK; no claim of full upstream source rebuild",
+    "native_malloc_reference": "RV64 glibc contract build; API/content checks, not allocator placement equivalence",
+    "compiler": "Reused qualified virtual compiler; sparse checkout prevents the automatic lit drift check"
+  },
+  "host_checks": {
+    "common": {
+      "run": 35,
+      "passed": 34,
+      "skipped": 1
+    },
+    "runtime_python": {
+      "run": 25,
+      "passed": 25
+    },
+    "corpus_judges": {
+      "run": 84,
+      "passed": 84
+    },
+    "runtime_ctest": {
+      "run": 87,
+      "passed": 87
+    },
+    "safety_judge": {
+      "run": 3,
+      "passed": 3
+    }
+  },
+  "known_negative": {
+    "memcached_fixture": 24,
+    "expected": "FAULT temporal",
+    "observed": "RETURN 1800021",
+    "interpretation": "Header and data page moves completed with reversal enabled; no attributed stale-header fault. This does not establish that the intended orphan-head dereference occurred.",
+    "control_25": "RETURN 1900020 as expected"
+  },
+  "limits": [
+    "One-hart QEMU evidence; no new RTL or performance claim",
+    "Only the listed application workloads were rerun; historic long upstream suites retain their original source identities",
+    "Protected memcached is not a fully passing safety qualification; fixture 24 remains unresolved"
+  ]
+}

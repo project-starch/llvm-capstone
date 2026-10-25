@@ -1,0 +1,24 @@
+# tier3-cpy-nm.sh stubbed dry run (2026-10-20 16:22), board 2's path. Every call stubbed: CPY_ARM (writes the mimic
+# reference's bundle, or it with case 01 made MISSED), CPY_BUSY, CPY_ROOT, CPY_BOOK; the trigger file stands in for the previous arm.
+== branch ok
+CPY nm BEGIN 16:22:33 board 2 booking 99
+APPVM stub
+UNBOOK 99: 200
+CPY nm ARM END rc=0 16:22:33
+CPY nm JUDGE rc=0 :: lt0: 32 of 32 inside their sets; 0 moved (varying verdict outside its set); 0 divergence(s) on stable cases
+CPY nm readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+CPY nm DONE 16:22:33
+== branch flip
+CPY nm BEGIN 16:22:33 board 2 booking 99
+APPVM stub
+UNBOOK 99: 200
+CPY nm ARM END rc=0 16:22:33
+CPY nm JUDGE rc=1 :: lt0: 31 of 32 inside their sets; 0 moved (varying verdict outside its set); 1 divergence(s) on stable cases
+CPY nm readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+CPY nm DONE 16:22:33
+== branch hold
+CPY HOLD: q15p did not end DONE (PASS STOP: x)
+== branch busy
+CPY STOP: board 2 is busy
+== branch 409
+CPY STOP: the hub refused the booking (409, someone holds board 2): BOOK FAILED 409

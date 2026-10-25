@@ -24,6 +24,23 @@ def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def self_reported_noop(detail):
+    """True when a fixture's own mark says its triggering condition never happened.
+
+    mcapp-safety.c marks a no-op with MCAPP_MARK(n, 0xE00xx) -- "triggering condition not
+    created", "not linked", "no filler value" -- or 0x7, "the mover waited: the page did not
+    move". Every mark a fixture returns for a real outcome is a small value (0x1, 0x20, 0x101,
+    0x15b, 0x1ee ...), so the ranges do not overlap. safety-expect.txt says so in prose:
+    "A 0xE0018 mark means the triggering condition was not created; 0x7 means the header page
+    did not move. Either is a finding about the fixture, never a pass." The RETURN * matcher
+    cannot enforce that -- it checks only the fixture prefix -- so fixture 24 passed this gate
+    81/81 on the plain arm while never building its orphan (measured 2026-10-13). This is the
+    enforcement.
+    """
+    low = int(detail, 16) & 0xFFFFF
+    return low >= 0xE0000 or low == 0x7
+
+
 def worker_counts(data):
     counts = {}
     for value in re.findall(rb'^MC-WORKER (\d+) conn$', data, re.M):
@@ -36,6 +53,10 @@ def main():
     p = argparse.ArgumentParser(description=__doc__)
     for name in ('build', 'adapter', 'qemu', 'images', 'cross-cc', 'pthread', 'work'):
         p.add_argument('--' + name, type=Path, required=True)
+    # virtual: the plain images on the outer revoking heap, judged by the `sublet` predictions.
+    # sublet: host/build-sublet.sh's images (patch 0006, Sublet inside slabs.c and cache.c), judged by
+    # the `lifetimes` predictions. The worker-marker image and the native controls are the same.
+    p.add_argument('--arm', choices=('virtual', 'sublet'), default='virtual')
     p.add_argument('--port', type=int, default=21299)
     p.add_argument('--timeout', type=int, default=1200)
     p.add_argument('--native-reference', type=Path,
@@ -50,8 +71,10 @@ def main():
     subprocess.run([str(a.cross_cc), '-O1', '-Wall', str(harness_source), '-lpthread', '-o', str(stage/'mc-harness')], check=True)
     inputs = dict(launcher=a.adapter/'capstone-vexec', module=a.adapter/'module/capstone_vm.ko',
                   job=a.adapter/'capstone-job', pthread=a.pthread,
-                  memcached=a.build/'domain/memcached.dom', marker=a.build/'marker/memcached.dom',
-                  safety=a.build/'safety/memcached-safety-virtual.dom',
+                  memcached=a.build/('sublet/memcached.dom' if a.arm == 'sublet' else 'domain/memcached.dom'),
+                  marker=a.build/'marker/memcached.dom',
+                  safety=a.build/('sublet/memcached-safety.dom' if a.arm == 'sublet'
+                                  else 'safety/memcached-safety-virtual.dom'),
                   native=a.build/'native/bin/memcached', native_marker=a.build/'marker/memcached-native',
                   qemu=a.qemu, harness_source=harness_source)
     inputs.update({name: a.images/name for name in ('Image', 'fw_jump.elf', 'rootfs.ext2')})
@@ -98,13 +121,14 @@ def main():
               'insmod capstone_vm.ko || exit 1', 'chmod 666 /dev/capstone-vm',
               'export CAPSTONE_EXEC_DIAGNOSTICS=1',
               'echo MC_BEGIN:pthread', './capstone-vexec ./pthread.dom', 'echo MC_END:pthread:$?']
+    predicted_arm = 'lifetimes' if a.arm == 'sublet' else 'sublet'
     predictions = {}
     for line in (APP/'host/safety-expect.txt').read_text().splitlines():
         words = line.split('#')[0].split()
-        if len(words) == 4 and words[0] == 'sublet':
+        if len(words) == 4 and words[0] == predicted_arm:
             predictions.setdefault(int(words[1]), []).append(words[2:])
     if not predictions:
-        raise ValueError('no Sublet predictions for the virtual outer heap')
+        raise ValueError(f'no {predicted_arm} predictions in host/safety-expect.txt')
     cases = [('normal1', 'memcached', 'TERM', 0), ('normal2', 'memcached', 'TERM', 0),
              ('usr1', 'memcached', 'USR1', 0), ('marker', 'marker', 'TERM', 0)]
     cases += [(f'fx{n}', 'safety', 'TERM', n) for n in sorted(predictions)]
@@ -177,14 +201,21 @@ def main():
             fixtures.append(dict(fixture=number, passed=passed, outcome=got, detail=detail,
                                  expected=predictions[number]))
             check(label + '_prediction', passed)
+            # A no-op mark fails unless a prediction names that exact mark, which is how a
+            # KNOWN no-op is recorded rather than hidden (fixture 23: RETURN 1700007).
+            registered = any(want[0] == 'RETURN' and want[1] != '*' and want[1] == detail
+                             for want in predictions[number])
+            check(label + '_trigger',
+                  got != 'RETURN' or registered or not self_reported_noop(detail))
     check('adapter_cleanup', run.returncode == 0 and '\nMC_CLEANUP:0\n' in log)
-    record = dict(status='PASS' if all(c['passed'] for c in checks) else 'FAIL',
+    record = dict(status='PASS' if all(c['passed'] for c in checks) else 'FAIL', arm=a.arm,
                   checks=checks, fixtures=fixtures, workers=4, harts=1, virtual_vm_abi=5,
                   native_reference_sha256=sha(reference_record) if reference_record else None,
                   native_transcript_sha256={label: hashlib.sha256(files['transcript.norm']).hexdigest()
                                             for label, files in native.items()},
-                  safety_prediction_arm='sublet',
-                  known_gaps=['nested slab/cache lifetimes', 'bipbuffer logical reuse'],
+                  safety_prediction_arm=predicted_arm,
+                  known_gaps=(['bipbuffer logical reuse'] if a.arm == 'sublet'
+                              else ['nested slab/cache lifetimes', 'bipbuffer logical reuse']),
                   input_sha256={name: sha(path) for name, path in inputs.items()},
                   runner_sha256=sha(Path(__file__)), gate_sha256=hashlib.sha256(gate.encode()).hexdigest(),
                   predictions_sha256=sha(APP/'host/safety-expect.txt'))

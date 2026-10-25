@@ -1,0 +1,5 @@
+Q15 q15f BEGIN 08:23:46 only 30,31,32
+Q15 q15f ARM END rc=0 08:35:11
+Q15 q15f COMPARE NO DATA :: FileExistsError: [Errno 17] File exists: '<mnt-hdd>/capstone/t3-q15sq/q15f.pred'
+Q15 q15f readings: Q15_PAD 1; cause=29 0; DRT1 0 DRTX 0 FRTY 3 Oops 0
+Q15 DONE 08:35:11

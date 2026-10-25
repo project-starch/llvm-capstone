@@ -19,6 +19,8 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/prctl.h>
+#include <sys/select.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/uio.h>
 #include <signal.h>
@@ -338,17 +340,26 @@ int __capstone_delegate_ready(void) {
  * takes its high half from the `user` lanes, which a plain store forwards as 0;
  * an 8-byte `ld` of the same word reads correctly. 8-byte moves made the stream
  * byte-exact on two boots. */
+/* The word moves as one ld and one sd. `__builtin_memcpy(&word, s, 8)` from an
+   unsigned char pointer carries no alignment, and the backend lowered it to
+   eight lbu with shifts: 30 instructions per word on every delegated read and
+   write (538.imagick_r's output alone, 864 KB, cost 3.3M instruction attempts
+   here). A typed load of an address the head loop aligned is one ld. */
+typedef uint64_t __attribute__((__may_alias__)) dl_word;
+
 static void dl_bytes(void *dst, const void *src, size_t n) {
   unsigned char *d = dst;
   const unsigned char *s = src;
-  while (n && ((__builtin_capstone_cap_get_cursor(d) | __builtin_capstone_cap_get_cursor((void *)s)) & 7)) { *d++ = *s++; --n; }
-  while (n >= 8) {
-    uint64_t word;
-    __builtin_memcpy(&word, s, 8);   /* an 8-byte load and store, never a capability */
-    *(uint64_t *)d = word;
-    d += 8; s += 8; n -= 8;
+  size_t dc = __builtin_capstone_cap_get_cursor(d), sc = __builtin_capstone_cap_get_cursor((void *)s);
+  if (!((dc ^ sc) & 7)) {   /* equally aligned: a short head, then whole words */
+    while (n && (dc & 7)) { *d++ = *s++; --n; ++dc; }
+    while (n >= 8) {
+      dl_word word = *(const dl_word *)s;   /* an 8-byte load and store, never a capability */
+      *(dl_word *)d = word;
+      d += 8; s += 8; n -= 8;
+    }
   }
-  while (n) { *d++ = *s++; --n; }
+  while (n) { *d++ = *s++; --n; }   /* unequal alignment, or the tail */
 }
 
 /* Offset 0 means NULL for an optional buffer, so no buffer ever lives there:
@@ -1217,6 +1228,46 @@ long __capstone_delegate_hello(unsigned long entry_address, unsigned long code_b
   return r;
 }
 
+/* A read or write whose buffer does not fit the exchange region is clamped
+ * (dl_call_once), so one delegated round moves at most the region. Linux moves
+ * a regular file's whole request unless the file ends or a signal or error
+ * intervenes, and programs rely on it: SPEC CPU2017's xz reads its input with
+ * one read() and takes any short count for the end of the file, so it got the
+ * first 262,128 bytes of a 1,287,176-byte file and reported corrupt data.
+ *
+ * For a regular file the transfer is therefore repeated until the request is
+ * complete, a round moves nothing (the end of the file) or a round fails; a
+ * failure after progress reports the bytes moved, as an interrupted transfer
+ * does. Pipes, sockets and terminals keep the single round: there a short
+ * count is the kernel's own answer, and another round could block. */
+static long dl_transfer(uint64_t nr, syscall_arg_t raw[CAPSTONE_DELEGATE_ARGS]) {
+  long first = dl_call(nr, raw);
+  size_t want = (size_t)(unsigned long)raw[2];
+  if (first <= 0 || (size_t)first >= want)
+    return first;
+  struct stat st;
+  syscall_arg_t query[CAPSTONE_DELEGATE_ARGS] = {raw[0], (syscall_arg_t)&st, 0, 0, 0, 0};
+  if (dl_call(CAPSTONE_SYS_fstat, query) != 0 || !S_ISREG(st.st_mode))
+    return first;
+  int positioned = nr == CAPSTONE_SYS_pread64 || nr == CAPSTONE_SYS_pwrite64;
+  /* The offset is an integer in a pointer-typed slot, so it carries no tag.
+     Arithmetic written as (long)raw[3] + done folds back into pointer
+     arithmetic on that slot, and CIncOffset faults on an untagged operand;
+     the cursor read is an integer the compiler cannot turn back. */
+  unsigned long offset = (unsigned long)__builtin_capstone_cap_get_cursor(raw[3]);
+  size_t done = (size_t)first;
+  while (done < want) {
+    syscall_arg_t next[CAPSTONE_DELEGATE_ARGS] = {
+        raw[0], (char *)raw[1] + done, (syscall_arg_t)(unsigned long)(want - done),
+        positioned ? (syscall_arg_t)(offset + done) : raw[3], raw[4], raw[5]};
+    long more = dl_call(nr, next);
+    if (more <= 0)
+      break;
+    done += (size_t)more;
+  }
+  return (long)done;
+}
+
 long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
                               syscall_arg_t c, syscall_arg_t d,
                               syscall_arg_t e, syscall_arg_t f) {
@@ -1283,8 +1334,33 @@ long __capstone_delegate_call(long n, syscall_arg_t a, syscall_arg_t b,
     const struct { const sigset_t *ss; size_t len; } *sig = (const void *)f;
     if (sig && sig->ss && sig->len != 8) return -EINVAL;
     raw[5] = sig && sig->ss ? (syscall_arg_t)sig->ss : 0;
-    return dl_call(CAPSTONE_SYS_pselect6, raw);
+    /* The kernel reads and writes only the longs nfds covers; the wire moves
+       whole FD_SETSIZE-bit sets. A caller may pass a shorter set (perl sizes
+       its own to the highest fd), so each set travels through a full local
+       one: the covered bytes are checked and copied in, the rest is zero, and
+       only the covered bytes go back. Above FD_SETSIZE the sets go as they are. */
+    long nfds = (long)a;
+    if (nfds < 0 || nfds > FD_SETSIZE)
+      return dl_call(CAPSTONE_SYS_pselect6, raw);
+    size_t bytes = ((size_t)nfds + 63) / 64 * 8;
+    fd_set local[3];
+    void *user[3] = {(void *)b, (void *)c, (void *)d};
+    for (int i = 0; i < 3; ++i)
+      if (user[i]) {
+        if (bytes && !dl_buffer_ok(user[i], bytes, 6))
+          return -EFAULT;
+        memset(&local[i], 0, sizeof local[i]);
+        dl_bytes(&local[i], user[i], bytes);
+        raw[1 + i] = (syscall_arg_t)&local[i];
+      }
+    long r = dl_call(CAPSTONE_SYS_pselect6, raw);
+    if (r >= 0)
+      for (int i = 0; i < 3; ++i)
+        if (user[i]) dl_bytes(user[i], &local[i], bytes);
+    return r;
   }
+  case SYS_read: case SYS_write: case SYS_pread64: case SYS_pwrite64:
+    return dl_transfer((uint64_t)n, raw);
   case SYS_readv:
     return dl_vector((long)a, (const struct iovec *)b, (long)c, 0, 0, 0);
   case SYS_writev:

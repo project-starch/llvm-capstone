@@ -61,6 +61,27 @@ WEDGE_APERTURES = (
 )
 
 
+def no_result_kind(text):
+    """Why a rung with no RESULT and no SHA6 gave none (2026-10-17). The R-16 entry-stall verdict
+    holds only for a rung that started the classic domain share (some SHA<n> marker) and never
+    reached SHA6. A Linux-module rung has no SHA markers, and vp2 Tier 1's vm-contract was
+    labelled an entry stall while its transcript carried the monitor's EXCX report of a cause-24
+    trap from S-mode, which was the reading.
+
+    Since the S-trap injection (capstone-sbi vp2/os-trap-inject), an EXCX or ILLX for a trap from S or U is followed
+    by INJS: the monitor handed it to the kernel and went on, so the kernel's response is the reading. NODM and INJL
+    are the monitor's own stops."""
+    if re.search(r"(?:NODM|INJL):[0-9A-Fa-f]{8}", text):
+        return "monitor-stop"
+    if re.search(r"INJS:[0-9A-Fa-f]{8}", text):
+        return "injected-trap"
+    if re.search(r"(?:EXCX|ILLX):[0-9A-Fa-f]+", text):
+        return "monitor-trap"
+    if re.search(r"\bSHA[0-5]:", text):
+        return "entry-stall"
+    return "no-share-markers"
+
+
 def read_wedge_apertures(console):
     def setsw(v):
         for bit in range(8):
@@ -250,10 +271,28 @@ def main():
             # for the same confusion on the SQLite path.
             entered = "SHA6:" in text
             results.append((r, pos, got, oracles[r]))
-            if got is None and not entered:
+            kind = no_result_kind(text) if got is None and not entered else None
+            if kind == "monitor-trap":
+                log(f"  {r}: NO RESULT, and the monitor reported an unhandled trap: "
+                    f"{' '.join(re.findall(r'(?:EXCX|MCAU|MEPC|MTVL|MSTA):[0-9A-Fa-f]+', text))}. That report "
+                    f"IS the reading: classify it (MSTA's MPP says whose pc MEPC is). Not an entry stall.")
+            elif kind == "injected-trap":
+                log(f"  {r}: NO RESULT; the monitor handed a trap from S or U to the kernel: "
+                    f"{' '.join(re.findall(r'(?:EXCX|ILLX|MCAU|MEPC|MTVL|MSTA|INJS):[0-9A-Fa-f]+', text))}. "
+                    f"The kernel's response (an oops, or a signal to the process) is the reading. Not an entry stall.")
+            elif kind == "monitor-stop":
+                log(f"  {r}: NO RESULT; the MONITOR stopped: "
+                    f"{' '.join(re.findall(r'(?:NODM|INJL|EXCX|ILLX|MCAU|MEPC|MTVL|MSTA):[0-9A-Fa-f]+', text))}. "
+                    f"NODM: a domain fault return with no domain call outstanding; INJL: an injection that would "
+                    f"land on the faulting pc. The core is the monitor's; later rungs are collateral.")
+            elif kind == "entry-stall":
                 log(f"  {r}: NO SHA6 -- ENTRY STALL (R-16), the domain never ran. This slot "
                     f"carries NO VERDICT about the code. R-16 is per-image: REDRAW (vary "
                     f"FDREG_DRAW/QR_DRAW, sha256sum the set), do not retry this binary.")
+            elif kind == "no-share-markers":
+                log(f"  {r}: NO RESULT and no SHA marker at all: not a domain-share rung (a Linux "
+                    f"module or host program), or it died before any share. NOT an R-16 entry "
+                    f"stall; classify it from its own transcript.")
             else:
                 log(f"  {r}: retval={got} oracle={oracles[r]} "
                     f"{'OK' if got == oracles[r] else 'MISMATCH/NO-RESULT'}"
@@ -276,6 +315,21 @@ def main():
                 log(f"STOPPING after {r} wedged: {len(RUNGS) - pos} later rung(s) are "
                     f"collateral, not results")
                 break
+        else:
+            # BAKED_FINAL_APERTURES=1: no rung wedged, so read the same apertures after the last rung. ONLY THE STATIC
+            # FIELDS READ AT REST: 228 (the switcher's cur_idx, changed only by a walk), the latched trap log and the
+            # R-43 record. The board's LED pulse stretcher holds every bit high for ~2^20 cycles after it pulses
+            # (ariane_xilinx.sv:956-966), so on a running core -- and idle Linux is running -- each dynamic field
+            # (192-195, 219-227) reads as the OR over that window: the first read gave a commit count of 7 for a 4-deep
+            # queue. A commit-queue control needs a parked core (wfi with interrupts masked, or a debug halt). A
+            # wedge's read is valid because a wedged core is still. The shell is idle here, so the odd switch values
+            # that take the console's TX pin cost nothing.
+            if os.environ.get("BAKED_FINAL_APERTURES") == "1":
+                log("no rung wedged: reading the resting core's apertures (BAKED_FINAL_APERTURES=1)")
+                ap = read_wedge_apertures(console)
+                for line in ap:
+                    log(f"  APERTURE {line}")
+                transcript.append("===== final apertures (no wedge) =====\n" + "\n".join(ap) + "\n")
     finally:
         print("RUN_DONE", flush=True)
         try:

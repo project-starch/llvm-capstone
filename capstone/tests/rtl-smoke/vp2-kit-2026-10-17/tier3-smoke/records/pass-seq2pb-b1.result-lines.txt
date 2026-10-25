@@ -1,0 +1,19 @@
+# board 1 (tree A) pb9, pb12, pb10 (2026-10-20 20:18-20:46), tier3-pass-seq2.sh on board2.spec: result lines, plus INJS/INJL per boot. UNGATED.
+SEQ START 20:19:44 board 1 spec 5cb2e4c8ad546617 (3 arms)
+PASS pb9 BEGIN 20:19:45 board 1 kind cases booking 33
+PASS pb9 END 20:28:10 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-ffmpeg-pool-stock): {'MISSED': 4}
+PASS pb9 COMPARE vs reference rc=0 :: 4 of 4 cells the same
+PASS pb9 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pb12 BEGIN 20:28:10 board 1 kind cases booking 34
+PASS pb12 END 20:38:03 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-memcached-stock): {'CAUGHT': 1, 'MISSED': 8}
+PASS pb12 COMPARE vs reference rc=0 :: 9 of 9 cells the same
+PASS pb12 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS pb10 BEGIN 20:38:03 board 1 kind cases booking 35
+PASS pb10 END 20:46:37 rc=0 :: virtual boot: completed :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 4}
+PASS pb10 COMPARE vs reference rc=0 :: 4 of 4 cells the same
+PASS pb10 readings: pc=0 0 DRT1 0 DRTX 0 FRTY 0 Oops 0 banner node-floor-2 x1
+PASS seq2-1 DONE 20:46:38
+## INJS / INJL per boot
+pb9 INJS 0 INJL 0 vbatch-END 1
+pb12 INJS 0 INJL 0 vbatch-END 1
+pb10 INJS 0 INJL 0 vbatch-END 1

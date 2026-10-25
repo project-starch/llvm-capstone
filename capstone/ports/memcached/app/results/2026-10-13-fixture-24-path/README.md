@@ -1,0 +1,94 @@
+# memcached fixture 24: the triggering condition is never created
+
+2026-10-13. Fixture 24 reverses upstream `c0e5a99` so that an expired CHUNKED
+item's header takes the header-only free path when its page moves, orphaning its
+data chunk with a dangling head; a later move of the chunk's page should make the
+slab mover read that head. Its registered prediction is a temporal fault on the
+protected arm (`host/safety-expect.txt`, written 2026-10-11 before either arm was
+built).
+
+The previous record stopped short of the path: fixture 24 returned `1800021` on
+the protected arm, both page moves completed with the reversal flag on, and
+[managed-mallocng](../../../../runtime/virtual/results/managed-mallocng/README.md)
+said so plainly -- "this does not prove the intended orphan-header dereference
+occurred ... Establishing the mover's actual path is still required." This
+establishes it.
+
+## What the mover actually does
+
+Two path witnesses now sit in `slabs_mover.c` (patch 0005), set by fixture 24 and
+read back by it: one at the reversed header-only free branch, one at
+`it = a->ch->head`. Both identify the fixture's own header by **cursor address**,
+`mcapp_cur`, the identity test this port uses everywhere else.
+
+Measured on both arms, same reading:
+
+    MCAPP-FIX 24 header-page-moved=1 reversed=1
+    MCAPP-FIX 24 header-only=0
+    MCAPP-FIX 24 triggering condition not created (header-only branch not observed)
+    MCAPP-FIX 24 mark=18e0018
+
+**The header-only free branch is never taken for the fixture's header.** The
+orphan is never built, so the second move has no dangling head to read, and the
+fault the protected arm is predicted to raise has nothing to raise it. The
+`1800021` of the earlier run was a return from a sequence that never created its
+own precondition; it was evidence about the fixture, not about the protection.
+
+The two arms differ only in the inner protection (patch 0006) and read
+identically, which also rules out that patch's `assoc_find` re-lookup of `it` as
+the cause. Why the branch is not taken is the open question -- the candidates are
+which page of `hdr_cls` the mover selects (4,370 freed fillers share the class
+with the four headers) and whether the expired headers are reclaimed before the
+move reaches them. Both are answerable with a counter that does not key on the
+fixture's own header; neither is answered here.
+
+The protected gate stays **FAIL**. It is not normalised to PASS.
+
+## The gate accepted the no-op
+
+`safety-expect.txt` says of these marks: "A 0xE0018 mark means the triggering
+condition was not created; 0x7 means the header page did not move. Either is a
+finding about the fixture, never a pass." The `RETURN *` matcher cannot enforce
+that -- `check-safety.py:59` compares only the fixture prefix, `int(detail,16) >>
+20 == fixture` -- so `0xE0018` satisfies it. On the plain arm, whose prediction
+*is* `RETURN *`, this gate reported **81 of 81 checks passing** over a fixture
+that had done nothing.
+
+`host/run-virtual.py` now adds one check per fixture, `fxN_trigger`, which fails
+a `RETURN` whose mark is one of the fixtures' own no-op codes unless a prediction
+names that exact mark -- which is how a *known* no-op stays recorded rather than
+hidden. Fixture 23 is that case: its prediction is `RETURN 1700007`, the "page did
+not move" mark, registered as the expected outcome, and it passes.
+
+Classifier checked against every mark these runs produced, including `e0015c` --
+fixture 14's real result, which looks like a no-op code until the fixture number
+is masked off the high bits.
+
+## Results
+
+| arm | predictions | checks | pass | fail |
+|---|---|---|---|---|
+| `sublet` (protected, patch 0006) | `lifetimes` | 108 | 106 | `fx24_prediction`, `fx24_trigger` |
+| `virtual` (plain outer heap) | `sublet` | 105 | 104 | `fx24_trigger` |
+
+The plain arm passed 81/81 before this change and 104/105 after it. Nothing about
+the subject changed between those two runs -- only the instrument.
+
+`sublet-result.json` and `virtual-result.json` carry every input hash;
+`*-fixture-lines.txt` are fixtures 24 and 25 as the guest printed them.
+
+Inputs, both arms: QEMU `8684835922d495cd` built from this tree's submodule
+pointer `7dbfdd534eea`, the pin `runtime/virtual/README.md` names; adapter
+launcher `8dc9bce1ffa6623f` and module `3341505720fbab58` built from this tree;
+`Image e833dfb12bccf8a3`, `rootfs.ext2 62049800ed0fa882`, `fw_jump.elf
+44cd6cbc2d225c2f`; runner `b736076b66f61fba`, predictions `a183e1c5c4a39236`.
+Compiler: clang/lld 22.0.0 at `cda7e335ff9f`.
+
+## The patch did not apply
+
+The witness hunk carried a hand-written old-side line number of 283 for a line at
+268. `host/build-safety.sh` applies with `--fuzz=0`, and GNU patch 2.7.6 treats
+`--fuzz=0` as *no offset search at all*, so the hunk was rejected and the build
+stopped at `patch ...0005-safety-fixtures.patch FAILED`. This code had therefore
+never been compiled. The `slabs_mover.c` section is now generated by `diff -u`
+rather than renumbered by hand; all six patches apply at `--fuzz=0`.

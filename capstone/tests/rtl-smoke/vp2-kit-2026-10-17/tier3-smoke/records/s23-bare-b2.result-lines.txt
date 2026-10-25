@@ -1,0 +1,6 @@
+s23-bare-b2 (2026-10-21 22:26-22:27, board 2, tree B caplifive_vp2c_8de3c48cf; pre-registered 48405d2abdd5; image sha256 bcefd969e128113f..., board_rec 0x80004040)
+runner: wt-b2 sup-bare-2026-10-03-ladder/run_sup_bare.py; booking 90 unbooked; powered off and lease released
+UART: SUPTEST BEGIN, SB1, SR 0x19 (25), SUPTEST END
+SV: 0x80800000 0x5a23 0x0 0x0 0x1 0x1 0x0 0x0 0x1 0x0 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x0 0x0 0x1 0x1 0x0 0x5 0x8 0x55
+PREREG 7ae1d8491466 pre-batch vector: identical in all 25 values (a0 = 0x80800000 is CAPENTER's grant)
+s23-grade.py (graded by 7ae1d8491466): AS EXPECTED (pre), re-arm Q5 Q8 Q10 Q12a Q12b Q13d all 0, total 8

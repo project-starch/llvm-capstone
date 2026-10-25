@@ -47,7 +47,7 @@ own member. That is `native-fix-differential`, and it is the arm these rows are 
 
 **What is measured, and what is declared.** Cases 0-2 carry a Capstone reading from probe cases
 40-42 of `ports/ffmpeg/buffer-pool/security-tests`, run under QEMU on modes 0 and 2. Cases 3-9 are
-measured on `native-fix-differential` and `native-detect`; their Capstone and PoisonCap arms are
+measured on `native-fix-differential` and `native-detect`; their Capstone arms are
 **declared predictions**, recorded before the runs so a refutation stays visible.
 
 **`cheribsd-revocation` is MEASURED for all ten, 2026-10-06** (`results/20261006-cheribsd/`):

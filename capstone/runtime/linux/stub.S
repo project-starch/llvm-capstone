@@ -9,6 +9,10 @@
  * kernel's own restart (epc rewound to the ecall, a0 restored). A pc at
  * capstone_stub_after with a0 == -EINTR is a call the signal interrupted.
  */
+    /* Name the translation unit explicitly: without a .file directive the assembler
+     * records the compiler driver's randomly named temporary, so .strtab -- and therefore the
+     * binary's hash -- differs between two builds of identical source. */
+    .file "stub.S"
     .text
     .globl capstone_stub_syscall
     .type capstone_stub_syscall, %function

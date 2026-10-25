@@ -1,0 +1,12 @@
+case	arm	outcome	cause	function	in_fault_sites	harness
+01_ad5fedb002_for-loop-gv-freed-early	virtual-nested-pools	fault	25	Perl_pp_iter	yes	
+02_d2cddbe1df_caller-args-freed-sv	virtual-nested-pools	fault	25	Perl_sv_setsv_flags		
+03_9e298ab597_av-extend-unshift-stale-slots	virtual-nested-pools	completed				[PASS] 1
+04_e4be969235_join-delimiter-freed-by-magic	virtual-nested-pools	fault	25	memmove	yes	
+05_17535c984a_cloned-const-sub-unrefcounted	virtual-nested-pools	fault	25	Perl_cv_undef_flags		
+06_40727c420c_code-blocks-count-reused	virtual-nested-pools	completed				[FAIL] 5 of 29: 12,like,code in array 8,got=XAB-QC | 15,unlike,code in array 8 not 3 | 25,like,code in array 14,got=aabb-bb-=ee
+07_39b4841b25_recursive-code-eval-rex-freed	virtual-nested-pools	fault	25	S_regcppop	yes	
+08_b7b77ffc1e_clear-errsv-on-a-glob	virtual-nested-pools	fault	28	Perl_pp_gvsv	no	
+09_1189b87114_special-block-cv-freed	virtual-nested-pools	fault	25	Perl_newATTRSUB_x	yes	
+10_254b30e378_perlio-scalar-write-overlap	virtual-nested-pools	fault	25	memmove	yes	
+11_af11b0c528_cow-subbeg-across-code-eval	virtual-nested-pools	completed				[FAIL] 3 of 3: 1,is,[perl #16952] failed (?{}) branch keeps prior captures,got=foo-o

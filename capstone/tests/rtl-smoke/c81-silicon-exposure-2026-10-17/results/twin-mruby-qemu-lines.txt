@@ -1,0 +1,29 @@
+qemu ea7af742266e CDERIVE_ROUND=1 firmware d5c57ee765c9
+up rc=0 VM ready; share mounted at /mnt/host. State: /tmp/capstone/corpus-sil/vm-silicon-mruby-bounds-c81
+  control clean  RETURNED   required RETURNED  ok  CONTROL clean RETURNED 1
+  control oob    CAUGHT     required CAUGHT    ok  cause=7 pc=0xe0200f54 address=0xe0263918 in ctl_write_probe+0x2c (the labelled probe)
+  control uaf    RETURNED   required RETURNED  ok  CONTROL uaf RETURNED observed=0xaa reissued=1
+  control subobj RETURNED   required RETURNED  ok  CONTROL subobj RETURNED b0=0x5a
+  mruby-smoke-control      CAUGHT             DIFFERS (predicted COMPLETED)  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-01-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-02-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-03-case CAUGHT             DIFFERS (predicted COMPLETED)  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-04-case CAUGHT             DIFFERS (predicted WRONG-ANSWER)  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-06-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-07-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-08-case CAUGHT             DIFFERS (predicted WRONG-ANSWER)  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-09-case CAUGHT             DIFFERS (predicted COMPLETED)  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-10-case CAUGHT             DIFFERS (predicted WRONG-ANSWER)  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-12-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-13-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-14-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-15-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-16-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-17-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-18-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-19-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-20-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-21-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+  mruby-release-differential-22-case CAUGHT             as predicted  cause=24 pc=0xe030c96c address=0xe2246e90 in memcpy+0xc8 (NOT the labelled probe)
+controls FAILED; 15 of 20 rows as predicted
+QEMU_ARM_DONE silicon-mruby-bounds rc=75

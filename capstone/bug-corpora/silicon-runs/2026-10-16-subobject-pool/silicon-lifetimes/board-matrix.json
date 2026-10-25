@@ -1,0 +1,129 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3948 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac080f88 address=0xac0e3930 in ctl_read_probe+0x20 (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-subobject-00",
+   "case": "00_8864fd0aec_cbs_h265_pic_timing_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED index 600 of num_nalus_in_du_minus1[600] overwrote the low half of du_cpb_removal_delay_increment_minus1[0], inside one refstruct allocation",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "d1965b322352ef478e33f9d23f99fb359757db41b489bcaa2838ea08c40af9f3",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-01",
+   "case": "01_68845e26f7_vulkan_hevc_refpicset_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED nb_refs = 16 wrote 8 bytes past RefPicSetStCurrBefore[8] into RefPicSetStCurrAfter, inside one refstruct allocation",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "ba8378862b60cb4e412d553ab460499d5548b546e2a4605bcfe447a0e8b1f8fe",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-02",
+   "case": "02_e058af88ab_vulkan_hevc_dpb_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the DPB walk wrote ref_src[16], which is h265_refs[0], inside one refstruct allocation",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "04215ad5c5c35110a18bf4c3fc09e1c9e7062e47db2c5189a9816bd79e96f017",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-03",
+   "case": "03_89de2f0de1_aac_arith_last_member",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED index 512 of last[512] read the low byte of last_len, inside one allocation, and fed it into the arithmetic-coding context",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "d6dea03a6ab9aae94fd99240f3db5c11bc0a4568e7fab9f2475b6999cd3a6c70",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-04",
+   "case": "04_1a00ea51cb_rtsp_control_url_underflow",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED strlen(control_url)-1 wrapped to SIZE_MAX and the read landed one byte before control_url, on interleaved_max, inside one allocation",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "22e4301e2208ded227b5996b854e38c653c3178cb9b7a2140fb746477ee074bb",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-05",
+   "case": "05_d29ff88422_vulkan_av1_tile_sizes",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the pre-loop `> MAX_TILES` check let tileCount reach 256 and the write landed on std_ref's first four bytes, inside one allocation",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "ca6be84bb697dcdf22460029878f66dd4e1ee0a9b5f28bde828dbbc7f0ebaa80",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-06",
+   "case": "06_a809a784ec_vvc_entry_point_start_ctu",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED j was bounded by nothing, so the writes walked 8 words off the end of entry_point_start_ctu and overwrote the next member, inside one allocation",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "038a5a9f4da2f11a5cdee56629f775160387310bf23a6a1eda8afc358725c2f0",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-07",
+   "case": "07_275e217b10_hlsenc_key_uri_strlcpy_size",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the source length was passed as av_strlcpy's destination size, so the copy ran 16 bytes past key_uri into key_string (15 'A' plus the terminator), inside one allocation",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "a56fa13b33c1bddf7e9bfb17b6060c98d61518bfc972288e1e60648cb08c4727",
+   "as_predicted": true
+  },
+  {
+   "name": "ffmpeg-subobject-08",
+   "case": "08_fb862976df_cbs_h266_col_width_val",
+   "corpus": "capstone/bug-corpora/ffmpeg/subobject-repros",
+   "kind": "interior",
+   "outcome": "DEFECT-REPRODUCED",
+   "detail": "VERDICT DEFECT-REPRODUCED the loop's guard was keyed to num_tile_columns, which is assigned only after the loop, so 6 writes ran past col_width_val into row_height_val",
+   "predicted": "DEFECT-REPRODUCED",
+   "image_sha256": "3c2a8a2d1e19c58954215b2bd4af66969b7b25ec406a1cf9cdaa53432524197c",
+   "as_predicted": true
+  }
+ ]
+}

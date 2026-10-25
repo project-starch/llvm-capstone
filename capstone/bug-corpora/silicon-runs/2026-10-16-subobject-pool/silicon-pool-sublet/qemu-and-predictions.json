@@ -1,0 +1,108 @@
+{
+ "arm": "silicon-pool-sublet",
+ "build": {
+  "defs": "-DCAPSTONE_LEVEL0_LIFETIMES=1",
+  "app_cflags": "",
+  "extra_cflags": "-fno-inline -std=gnu11 -DFF2_SYSTEM_MEMORY -I/tmp/capstone/wt-b0/capstone/ports/ffmpeg/buffer-pool/src/shared -I/tmp/capstone/ffmpeg-sublet/ffmpeg-protected -I/tmp/capstone/wt-b0/capstone/ports/ffmpeg/buffer-pool/cmake/replay-config -I/tmp/capstone/wt-b0/capstone/runtime/include",
+  "extra_src": [
+   "buffer.c",
+   "refstruct.c",
+   "observe-pool-events.c",
+   "system-memory.c",
+   "level0-memalign.c"
+  ]
+ },
+ "controls_qemu": {
+  "clean": "RETURNED",
+  "oob": "CAUGHT",
+  "uaf": "CAUGHT",
+  "subobj": "RETURNED"
+ },
+ "rows": [
+  {
+   "name": "ffmpeg-pool-00",
+   "case": "00_461fb22053_af_join_dedup_bound",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "image_sha256": "aed6d5c37dd99881b80877500865b7a51139d441660980f8b5d55799511a6a55",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "ff2_case_run"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "ff2_case_run"
+   }
+  },
+  {
+   "name": "ffmpeg-pool-01",
+   "case": "01_1886c3269d_h264_refs_partial_clear",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "image_sha256": "385de4f19712941fed071641ca6e2b490780716ae09c2ddf8472e5b608f31bcd",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "ff2_case_run"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "ff2_case_run"
+   }
+  },
+  {
+   "name": "ffmpeg-pool-02",
+   "case": "02_316531e61c_vidstab_parked_plane_pointer",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "image_sha256": "0011650c90386a99c0ea3466ea216ed933f7afb9b6f2aa39e974eb6a0746ce8a",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "ff2_case_run"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "ff2_case_run"
+   }
+  },
+  {
+   "name": "ffmpeg-pool-03",
+   "case": "03_5c66a3ab51_vvc_nonref_output_releases_tabs",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros",
+   "kind": "pool",
+   "image_sha256": "f1c38b267bbb32bcbc16103f357371f409ac4441c14f2e139ffbc18fb62fbc04",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "ff2_case_run"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "ff2_case_run"
+   }
+  },
+  {
+   "name": "ffmpeg-pool-controls-virtual-90",
+   "case": "90_ctl_buffer_returned_to_pool",
+   "corpus": "capstone/bug-corpora/ffmpeg/pool-repros/controls/virtual",
+   "kind": "pool-control",
+   "image_sha256": "6720a534afac4ecc1242324ed5985808a669e13b9378d111d35acf0a31e0b710",
+   "qemu": {
+    "outcome": "CAUGHT",
+    "cause": 24,
+    "site": "read_probe"
+   },
+   "predicted_board": {
+    "outcome": "CAUGHT",
+    "cause": 25,
+    "site": "read_probe"
+   }
+  }
+ ]
+}

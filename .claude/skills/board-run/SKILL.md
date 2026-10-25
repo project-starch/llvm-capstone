@@ -39,6 +39,12 @@ Deterministic, never delegated, same standing as `precommit-scan.sh`. It checks 
 in the artifact, images are distinct, the control has a published passing record
 (`ref/known-good-controls.md`), the DTS matches the resident bitstream, and the slot budget.
 
+**A boot run with the driver's preflight off (`PREFLIGHT=0`, as every vp2 Tier 1/2/3 recipe does) is UNGATED,
+and its record must say so.** The driver itself prints "Any verdict from this boot is UNGATED -- say so when reporting
+it". A whole Tier 3 campaign's records omitted this until an auditor read the driver logs (2026-10-18). State it in the
+result lines and the commit message. Name the checks that stood in for the C-gates: image identity by sha256, the
+fault line's image hash, the firmware cap, and the recipe's pins.
+
 ## 0. Before you spend a boot — three offline checks
 
 Each of these has cost real board time when skipped.
@@ -87,6 +93,22 @@ Each of these has cost real board time when skipped.
    ```
    Not a preflight gate on purpose: whether a `delin` is safe depends on its operand's type, which a
    static scan cannot see, and images that run correctly on silicon have one in `sublet_take`.
+7. **A reused image is only as fixed as its build.** "The same image as last time" keeps a run
+   comparable, but it also keeps every bug that image was built with. When the resident bitstream
+   needs a runtime fix, check that the fix is in the image itself before reusing a frozen one. The
+   check is the fix's own instruction in the image's text, not the build date. Under the full bounds
+   scheme (fpb_*, sublet_*), a Sublet-runtime image must carry a07a11194fa0's SHRINK
+   (`(w & 0xfe00707f) == 0x0200105b`, four in a fixed build). Without it, carves alias. On 2026-10-16
+   H1, R1, M1 and M2 reran September images that had 0, and H1's REVOKE finding had to be
+   retracted (dev 783fb0f93f7e).
+8. **An unattended script is armed only after a stubbed dry run.** Before a session or chain is armed to run on the
+   board without you (after a flash, or behind another run), run a copy with ONLY the board calls stubbed (runner,
+   upload, flash) on recorded data. Waits, locks and gates run for real, from the parent the armed run will have. It
+   must reach its last rung and exercise each branch of its gates, and each injected failure must be asserted to have
+   changed its input. Keep that output beside the pre-registration. `bash -n` is not this. On 2026-10-17 vp1 flashed,
+   then its session died on its first line (`local W=... F=$W/...` under `set -u`), and nothing had shown it until the
+   board was waiting. The same night, a chain's dry run passed with its board-free wait stubbed. That wait matched the
+   chain's own parent and had no bound, so it would never have returned.
 
 ## 1. Bake it in — never UART
 
@@ -202,6 +224,13 @@ The driver already hard-stops on this and calls the arm a PHANTOM, refusing to r
 `SQ: G/enter` / `SQ: H/return` markers that follow — they belong to a domain that was never
 loaded. Trust that guard; it is there because those markers otherwise look like a real run.
 
+**A `host|label:args` arm runs that program instead of the host, and it must print a marker the driver
+accepts as its result**, or the driver HARD STOPS at it ("… produced None, not a staged marker") and the
+rest of the boot is lost. The accepted forms are `RESULT <x> retval=<n>`, `BASELINE-PROBE <what> = <digits>`,
+or a probe host's own verdict. Before baking a new kind of arm, run its program and match the output against
+those regexes in `run_sqlite_stages_fpga.py`. A `/proc/meminfo` arm that printed only the file cost boot
+p1s16-c5 this way (2026-10-16).
+
 ```bash
 cd capstone/tests/rtl-smoke
 BAKED_RUNGS="ctl_rung unknown_rung" python3 -m fpga_driver.run_baked_rungs_fpga
@@ -238,7 +267,17 @@ silence** (~130 KiB/s), so a lower threshold aborts healthy runs *mid-upload*. T
 default did exactly that and produced a session's worth of false "will not boot" / "cyclic boot" /
 "firmware is broken" diagnoses. Scope any log scan to **this run's own `load_image`** — the
 console replays ~548 KB of the previous boot on connect, so grepping the whole log matches
-stale markers.
+stale markers. **Read results from the driver's per-rung transcript (`BAKED_OUT`, already cut per
+rung), never from the raw `driver.log`,** and scope even a live watch to the lines after this run's
+`monitor load_image`. On 2026-10-18 a monitor over the raw `driver.log` reported the previous boot's
+grant refusals and fault lines as the boot in progress. Only their repeated base addresses gave them
+away.
+
+**During rungs the console shows only KERN_EMERG.** `cold_boot` sets `/proc/sys/kernel/printk` to 1 before the first
+rung (`run_ladder_perf_fpga.py:201`), so a module's pr_warn or pr_err never reaches the transcript. The rfence
+warnings you see are boot-time, from before that setup. Read kernel lines in the guest script with `dmesg` after the
+step, matched by content. Positive-control the read with a line that must have fired in the same window. Boot r11
+(2026-10-18) lost its whole diagnostic this way, and an earlier "A/D refuted" rested on the same invisible lines.
 
 ### Switch values are not just a mux selector — the low three bits steal the console
 
@@ -268,6 +307,12 @@ Rules that follow:
 * **Post-run odd reads are safe by construction**: `debug_led_o` goes to the LEDs, a different pin
   from the console TX, so an odd aperture cannot corrupt the reading itself — it can only steal
   console output happening at the same time.
+* **A read of a RUNNING core is an OR, not a snapshot.** The LED pulse stretcher holds every bit high
+  for about 2^20 cycles (`ariane_xilinx.sv:956-966`), so each dynamic aperture (192-195, 219-227) reads
+  as the OR over that window. Idle Linux is running. Only a still core gives a snapshot: wedged, or
+  parked in `wfi` with interrupts masked. At rest, only 228 (the switcher's last index), the latched
+  trap log and the R-43 record read true. The first resting read on vp2 gave a commit count of 7 for a
+  4-deep queue (2026-10-18).
 
 ## 3. THE ORDERING RULE — this is what makes a verdict valid
 

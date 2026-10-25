@@ -36,3 +36,16 @@ row24 / sqlite-d9305a65c876 -- spellfix editDist3Install() registers editdist3()
  * domain then calls it to perform the freed-config read.
  * NOTE: -DSQLITE_DQS=0 -> SQL string literals must be single-quoted.
 ```
+
+## 2026-10-11: the trigger is the CheriBSD copy
+
+`case.c` is now byte-identical to `ports/sqlite/cheribsd/cases/` (the copy the CheriBSD probe runs used).
+The source above is the earlier trigger. Why it was replaced: the corpus copy forced OOM by filling the heap with blocks; host ASan was silent on it. The CheriBSD copy sweeps an allocation-failure point through a wrapped allocator until spellfix init returns NOMEM with editdist3 still registered, then calls it; host ASan (the wrapper on the system allocator) reports the heap-use-after-free in editDist3FindLang. Evidence:
+`results/2026-10-11-host-asan/results.json`, from `shared/run-host-asan.py` (every SQLite object its own
+malloc, lookaside off).
+
+One change against the CheriBSD copy, made the same day: `run_case` turns the lookaside off
+(`SQLITE_CONFIG_LOOKASIDE, 0, 0`) before `sqlite3_initialize`. A lookaside slot is handed out
+without calling the allocator, so the counting wrapper cannot fail it. With the lookaside on, 8 of
+spellfix init's 16 allocations reached the wrapper on Capstone and the sweep printed `NO BUG STATE
+FOUND`; host ASan, built with the lookaside off, found the bug state at the 14th.

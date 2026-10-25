@@ -1,0 +1,1117 @@
+{
+ "what": "Perl 5.36.3 row of the nested-lifetime controls (capstone/docs/plans/2026-10-11-nested-lifetime-controls.md, registered in 53325bba0d5c)",
+ "llvm_capstone": {
+  "head": "53325bba0d5c",
+  "branch": "ports/nested-lifetime-controls",
+  "snapshot": "git archive 53325bba0d5c capstone compiler-rt/lib/builtins, unpacked on the build host as ~/ctl-perl/repo",
+  "uncommitted_files_sha256": {
+   "controls/build-controls.sh": "a194a9a4f2342d5dea7c680a24365475b94d9c3756d160ed6bb38df4e9b86ce6",
+   "controls/collect.py": "8ba9ea442c3d49f2f997021014ce52b73d706ed0de3897ef98e6b23e5c7d2dae",
+   "controls/run-controls.sh": "719152a11eeb3b574badc72be8571fcc9528b12aa093cae21891ac52b0799a40",
+   "controls/svhead-controls.c": "25fd2a80be0309e2be6eb79794a8cbb3a173b879c1f873955f7c97b42ae6b01e",
+   "results/2026-10-11-controls/build.sh": "0220b163e7d59b84ce86886fa681854539951d707a98a58972482bc0f9a5cf27",
+   "results/2026-10-11-controls/run.sh": "d7c222df294e6f6714745e679120d6a7f35b97e031ba5080f6e9680cf83d003d"
+  },
+  "note": "the uncommitted files are this directory's scripts and controls/; the Perl builds use only committed files"
+ },
+ "builds": {
+  "script": "results/2026-10-11-controls/build.sh (ports/perl/musl/build-perl-domain.sh, PERLD_PROFILE=virtual, JOBS=24, both in parallel)",
+  "compiler_clang_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "sdk_capstone_cc_sha256": "8e4bd500cedb90078f0492758254b9cb5f4c31df89aee85803e267437414ecd6",
+  "release": {
+   "config": "PERLD_SUBLET=0, port patches 0001-0011",
+   "perl_image_sha256": "312d398e6071b38fd1dbcf2b8a3b034b6d9b49f9560bebbf79a5fc51c64aa769",
+   "libperl_a_sha256": "b9f40d1a63c66e5cc75b0e96994a46eda07450180f26e6a8f4879aaec0db190d",
+   "wall_s": 357,
+   "controls_image_sha256": "65cb418d7908b01be05452bfe75cda8a75df5166318eebb4c1d418a732098af2",
+   "controls_cflags": "-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -O2 -g"
+  },
+  "protected": {
+   "config": "PERLD_SUBLET=1: port patches 0001-0011 + ports/perl/sublet/patches/5.36.3/0001, -DPERL_CAPSTONE_SUBLET",
+   "perl_image_sha256": "98d67b3dca5e698548eae6c6c203cd0eaf1716cd595aff29462bc5e1c9121a08",
+   "libperl_a_sha256": "dd3f9afb0b4445663cd62dd2ced10e5e35acf904620530d13ebc21167527e4df",
+   "wall_s": 358,
+   "controls_image_sha256": "be3ae1ed2bf254c54074bf4924975b0eec687d7551ca0397098299715e055160",
+   "controls_cflags": "-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 -D_GNU_SOURCE -DPERL_CAPSTONE_SUBLET -I<repo>/capstone/runtime/include -O2 -g"
+  },
+  "controls_link": "controls/build-controls.sh: svhead-controls.c compiled with the build's own CFLAGS (Makefile.config, without -DPERL_CORE) and linked with the build's SDK against its libperl.a; relinked identically (same sha256) before each round"
+ },
+ "platform": {
+  "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "run_staged_py": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c",
+  "profile": "virtual (x-capstone-u-mode)",
+  "exact_bounds": true,
+  "harts": 1,
+  "boot": "runtime/virtual/run-staged.py, one boot per arm per round, the two arms in parallel, each with its own QEMU lock; image sha256 rechecked in the guest"
+ },
+ "rounds": {
+  "measured-1": {
+   "meta": {
+    "tag": "20261011-231325",
+    "snapshot": "53325bba0d5c"
+   },
+   "arms": {
+    "release": {
+     "image": "~/ctl-perl/img/ctl-release.dom",
+     "image_sha256": "65cb418d7908b01be05452bfe75cda8a75df5166318eebb4c1d418a732098af2",
+     "serial_sha256": "915b0f0369d7974f6fdb5ca1a357919d285c28195c977f7231e0ad1d50c0caf3",
+     "runs": {
+      "parent": {
+       "exit": 0,
+       "seconds": 4.69,
+       "result": "PASS",
+       "result_detail": "freed_flags=yes free_list_link=yes write_read_back=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3fb7e2a550",
+         "base": "0x3fb7e29590",
+         "end": "0x3fb7e2a580"
+        },
+        "arena": {
+         "addr": "0x3fb7e29590",
+         "base": "0x3fb7e29590",
+         "end": "0x3fb7e2a580"
+        },
+        "parent": {
+         "addr": "0x3fb7e2a550",
+         "base": "0x3fb7e29590",
+         "end": "0x3fb7e2a580"
+        }
+       },
+       "probes": [
+        {
+         "label": "parent-read-flags",
+         "at": "svhead-controls.c:130"
+        },
+        {
+         "label": "parent-read-link",
+         "at": "svhead-controls.c:131"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:132"
+        },
+        {
+         "label": "parent-write-refcnt",
+         "at": "svhead-controls.c:133"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:134"
+        },
+        {
+         "label": "parent-write-refcnt",
+         "at": "svhead-controls.c:135"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:136"
+        }
+       ],
+       "last_probe": {
+        "label": "parent-read-refcnt",
+        "at": "svhead-controls.c:136"
+       },
+       "lines": [
+        "BUILD release",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1 (SvREFCNT_dec to 0: sv_free2 -> del_SV -> plant_SV)",
+        "PL_sv_root addr=0x3fb7e2a550 (A=0x3fb7e2a550) link_expected=0x3fb7cfd9a0",
+        "ARENA_HEAD via=walk addr=0x3fb7e2a550",
+        "READ flags=0xff (SVTYPEMASK=0xff) link=0x3fb7cfd9a0 refcnt=0 wrote=0x5a5a5a5a read_back=0x5a5a5a5a restored=0",
+        "RESULT parent PASS freed_flags=yes free_list_link=yes write_read_back=yes",
+        "DONE parent"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "sibling": {
+       "exit": 0,
+       "seconds": 4.97,
+       "result": "PASS",
+       "result_detail": "intact=yes write_read_back=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3fa3f256e0",
+         "base": "0x3fa3f24750",
+         "end": "0x3fa3f25740"
+        },
+        "B": {
+         "addr": "0x3fa3f25710",
+         "base": "0x3fa3f24750",
+         "end": "0x3fa3f25740"
+        }
+       },
+       "probes": [
+        {
+         "label": "sibling-read-flags",
+         "at": "svhead-controls.c:178"
+        },
+        {
+         "label": "sibling-read-iv",
+         "at": "svhead-controls.c:179"
+        },
+        {
+         "label": "sibling-read-refcnt",
+         "at": "svhead-controls.c:180"
+        },
+        {
+         "label": "sibling-write-iv",
+         "at": "svhead-controls.c:181"
+        },
+        {
+         "label": "sibling-read-iv",
+         "at": "svhead-controls.c:182"
+        }
+       ],
+       "last_probe": {
+        "label": "sibling-read-iv",
+        "at": "svhead-controls.c:182"
+       },
+       "lines": [
+        "BUILD release",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "SAME_ARENA arena=0x3fa3f24750 tries=3 B_minus_A=48",
+        "FREE A refcnt=1",
+        "READ B flags=0x1101 iv=0xb0b0b02 refcnt=1 wrote=0xb0b0b03 read_back=0xb0b0b03 SvIV=0xb0b0b03 after_sv_setiv=0xb0b0b02",
+        "RESULT sibling PASS intact=yes write_read_back=yes",
+        "DONE sibling"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "successor": {
+       "exit": 0,
+       "seconds": 4.95,
+       "result": "PASS",
+       "result_detail": "C_at_A=yes C_read_write=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3fba1a6550",
+         "base": "0x3fba1a5590",
+         "end": "0x3fba1a6580"
+        },
+        "C": {
+         "addr": "0x3fba1a6550",
+         "base": "0x3fba1a5590",
+         "end": "0x3fba1a6580"
+        }
+       },
+       "probes": [
+        {
+         "label": "successor-read-flags",
+         "at": "svhead-controls.c:222"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:223"
+        },
+        {
+         "label": "successor-write-iv",
+         "at": "svhead-controls.c:224"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:225"
+        }
+       ],
+       "last_probe": {
+        "label": "successor-read-iv",
+        "at": "svhead-controls.c:225"
+       },
+       "lines": [
+        "BUILD release",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1",
+        "SUCCESSOR newSV_calls=1 A=0x3fba1a6550 C=0x3fba1a6550 equal=yes",
+        "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+        "RESULT successor PASS C_at_A=yes C_read_write=yes",
+        "DONE successor"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "stale": {
+       "exit": 0,
+       "seconds": 4.8,
+       "result": "PASS",
+       "result_detail": "stale_read_completed reads_C=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3f92a9e550",
+         "base": "0x3f92a9d590",
+         "end": "0x3f92a9e580"
+        },
+        "C": {
+         "addr": "0x3f92a9e550",
+         "base": "0x3f92a9d590",
+         "end": "0x3f92a9e580"
+        }
+       },
+       "probes": [
+        {
+         "label": "successor-read-flags",
+         "at": "svhead-controls.c:222"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:223"
+        },
+        {
+         "label": "successor-write-iv",
+         "at": "svhead-controls.c:224"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:225"
+        },
+        {
+         "label": "stale-read-flags",
+         "at": "svhead-controls.c:236"
+        },
+        {
+         "label": "stale-read-iv",
+         "at": "svhead-controls.c:237"
+        }
+       ],
+       "last_probe": {
+        "label": "stale-read-iv",
+        "at": "svhead-controls.c:237"
+       },
+       "lines": [
+        "BUILD release",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1",
+        "SUCCESSOR newSV_calls=1 A=0x3f92a9e550 C=0x3f92a9e550 equal=yes",
+        "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+        "STALE about to read through the old pointer to A (0x3f92a9e550)",
+        "READ via_A flags=0x1101 iv=0xc0c0c05 (C: flags=0x1101 iv=0xc0c0c05)",
+        "RESULT stale PASS stale_read_completed reads_C=yes",
+        "DONE stale"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      }
+     }
+    },
+    "protected": {
+     "image": "~/ctl-perl/img/ctl-protected.dom",
+     "image_sha256": "be3ae1ed2bf254c54074bf4924975b0eec687d7551ca0397098299715e055160",
+     "serial_sha256": "55b4ca02e39b01c55d48e4db8544cc8d8e245b7788fc2269a4588405a7806852",
+     "runs": {
+      "parent": {
+       "exit": 0,
+       "seconds": 4.81,
+       "result": "PASS",
+       "result_detail": "freed_flags=yes free_list_link=yes write_read_back=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3f957ee510",
+         "base": "0x3f957ee510",
+         "end": "0x3f957ee540"
+        },
+        "arena": {
+         "addr": "0x3f957ed550",
+         "base": "0x3f957ed550",
+         "end": "0x3f957eea80"
+        },
+        "parent": {
+         "addr": "0x3f957ee510",
+         "base": "0x3f957ed550",
+         "end": "0x3f957eea80"
+        }
+       },
+       "probes": [
+        {
+         "label": "parent-read-flags",
+         "at": "svhead-controls.c:130"
+        },
+        {
+         "label": "parent-read-link",
+         "at": "svhead-controls.c:131"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:132"
+        },
+        {
+         "label": "parent-write-refcnt",
+         "at": "svhead-controls.c:133"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:134"
+        },
+        {
+         "label": "parent-write-refcnt",
+         "at": "svhead-controls.c:135"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:136"
+        }
+       ],
+       "last_probe": {
+        "label": "parent-read-refcnt",
+        "at": "svhead-controls.c:136"
+       },
+       "lines": [
+        "BUILD protected (PERL_CAPSTONE_SUBLET)",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1 (SvREFCNT_dec to 0: sv_free2 -> del_SV -> plant_SV)",
+        "PL_sv_root addr=0x3f957ee510 (A=0x3f957ee510) link_expected=0x3f957c18b0",
+        "ARENA_HEAD via=Perl_sv_arena_head addr=0x3f957ee510 walk=0x3f957ee510 same=yes",
+        "READ flags=0xff (SVTYPEMASK=0xff) link=0x3f957c18b0 refcnt=0 wrote=0x5a5a5a5a read_back=0x5a5a5a5a restored=0",
+        "RESULT parent PASS freed_flags=yes free_list_link=yes write_read_back=yes",
+        "DONE parent"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "sibling": {
+       "exit": 0,
+       "seconds": 5.11,
+       "result": "PASS",
+       "result_detail": "intact=yes write_read_back=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3f940fa4e0",
+         "base": "0x3f940fa4e0",
+         "end": "0x3f940fa510"
+        },
+        "B": {
+         "addr": "0x3f940fa510",
+         "base": "0x3f940fa510",
+         "end": "0x3f940fa540"
+        }
+       },
+       "probes": [
+        {
+         "label": "sibling-read-flags",
+         "at": "svhead-controls.c:178"
+        },
+        {
+         "label": "sibling-read-iv",
+         "at": "svhead-controls.c:179"
+        },
+        {
+         "label": "sibling-read-refcnt",
+         "at": "svhead-controls.c:180"
+        },
+        {
+         "label": "sibling-write-iv",
+         "at": "svhead-controls.c:181"
+        },
+        {
+         "label": "sibling-read-iv",
+         "at": "svhead-controls.c:182"
+        }
+       ],
+       "last_probe": {
+        "label": "sibling-read-iv",
+        "at": "svhead-controls.c:182"
+       },
+       "lines": [
+        "BUILD protected (PERL_CAPSTONE_SUBLET)",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "SAME_ARENA arena=0x3f940f9550 tries=3 B_minus_A=48",
+        "FREE A refcnt=1",
+        "READ B flags=0x1101 iv=0xb0b0b02 refcnt=1 wrote=0xb0b0b03 read_back=0xb0b0b03 SvIV=0xb0b0b03 after_sv_setiv=0xb0b0b02",
+        "RESULT sibling PASS intact=yes write_read_back=yes",
+        "DONE sibling"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "successor": {
+       "exit": 0,
+       "seconds": 5.04,
+       "result": "PASS",
+       "result_detail": "C_at_A=yes C_read_write=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3fa58d2510",
+         "base": "0x3fa58d2510",
+         "end": "0x3fa58d2540"
+        },
+        "C": {
+         "addr": "0x3fa58d2510",
+         "base": "0x3fa58d2510",
+         "end": "0x3fa58d2540"
+        }
+       },
+       "probes": [
+        {
+         "label": "successor-read-flags",
+         "at": "svhead-controls.c:222"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:223"
+        },
+        {
+         "label": "successor-write-iv",
+         "at": "svhead-controls.c:224"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:225"
+        }
+       ],
+       "last_probe": {
+        "label": "successor-read-iv",
+        "at": "svhead-controls.c:225"
+       },
+       "lines": [
+        "BUILD protected (PERL_CAPSTONE_SUBLET)",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1",
+        "SUCCESSOR newSV_calls=1 A=0x3fa58d2510 C=0x3fa58d2510 equal=yes",
+        "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+        "RESULT successor PASS C_at_A=yes C_read_write=yes",
+        "DONE successor"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "stale": {
+       "exit": 139,
+       "seconds": 6.19,
+       "result": null,
+       "result_detail": null,
+       "pointers": {
+        "A": {
+         "addr": "0x3fa0c02510",
+         "base": "0x3fa0c02510",
+         "end": "0x3fa0c02540"
+        },
+        "C": {
+         "addr": "0x3fa0c02510",
+         "base": "0x3fa0c02510",
+         "end": "0x3fa0c02540"
+        }
+       },
+       "probes": [
+        {
+         "label": "successor-read-flags",
+         "at": "svhead-controls.c:222"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:223"
+        },
+        {
+         "label": "successor-write-iv",
+         "at": "svhead-controls.c:224"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:225"
+        },
+        {
+         "label": "stale-read-flags",
+         "at": "svhead-controls.c:236"
+        }
+       ],
+       "last_probe": {
+        "label": "stale-read-flags",
+        "at": "svhead-controls.c:236"
+       },
+       "lines": [
+        "BUILD protected (PERL_CAPSTONE_SUBLET)",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1",
+        "SUCCESSOR newSV_calls=1 A=0x3fa0c02510 C=0x3fa0c02510 equal=yes",
+        "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+        "STALE about to read through the old pointer to A (0x3fa0c02510)"
+       ],
+       "outcome": "fault",
+       "fault": {
+        "cause": 25,
+        "pc": "0x3f9f8153b8",
+        "address": "0x3fa0c02524",
+        "code_start": "0x3f9f800000",
+        "link_pc": "0x253b8",
+        "function": "probe_read_flags",
+        "offset": 20,
+        "source": "~/ctl-perl/repo/capstone/bug-corpora/perl/release-differential/controls/svhead-controls.c:38:3"
+       },
+       "stderr": [
+        "capstone-exec: domain fault cause=25 pc=0x3f9f8153b8 address=0x3fa0c02524 entry=0x3f9f8009a0 code=0x3f9f800000-0x3fa0000000 last=0x42 preparing=0x42 sha256=be3ae1ed2bf254c54074bf4924975b0eec687d7551ca0397098299715e055160 image=/mnt/vm/ctl.dom",
+        "Segmentation fault"
+       ]
+      }
+     }
+    }
+   },
+   "boot_wall_s": {
+    "release": 28,
+    "protected": 29
+   }
+  },
+  "measured-2": {
+   "meta": {
+    "tag": "20261011-231440",
+    "snapshot": "53325bba0d5c"
+   },
+   "arms": {
+    "release": {
+     "image": "~/ctl-perl/img/ctl-release.dom",
+     "image_sha256": "65cb418d7908b01be05452bfe75cda8a75df5166318eebb4c1d418a732098af2",
+     "serial_sha256": "5399bb9ac99ae7c46045c25608bc9eadcbb2333e05b30930c95a0496bc2d5278",
+     "runs": {
+      "parent": {
+       "exit": 0,
+       "seconds": 4.67,
+       "result": "PASS",
+       "result_detail": "freed_flags=yes free_list_link=yes write_read_back=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3faba72550",
+         "base": "0x3faba71590",
+         "end": "0x3faba72580"
+        },
+        "arena": {
+         "addr": "0x3faba71590",
+         "base": "0x3faba71590",
+         "end": "0x3faba72580"
+        },
+        "parent": {
+         "addr": "0x3faba72550",
+         "base": "0x3faba71590",
+         "end": "0x3faba72580"
+        }
+       },
+       "probes": [
+        {
+         "label": "parent-read-flags",
+         "at": "svhead-controls.c:130"
+        },
+        {
+         "label": "parent-read-link",
+         "at": "svhead-controls.c:131"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:132"
+        },
+        {
+         "label": "parent-write-refcnt",
+         "at": "svhead-controls.c:133"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:134"
+        },
+        {
+         "label": "parent-write-refcnt",
+         "at": "svhead-controls.c:135"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:136"
+        }
+       ],
+       "last_probe": {
+        "label": "parent-read-refcnt",
+        "at": "svhead-controls.c:136"
+       },
+       "lines": [
+        "BUILD release",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1 (SvREFCNT_dec to 0: sv_free2 -> del_SV -> plant_SV)",
+        "PL_sv_root addr=0x3faba72550 (A=0x3faba72550) link_expected=0x3faba079a0",
+        "ARENA_HEAD via=walk addr=0x3faba72550",
+        "READ flags=0xff (SVTYPEMASK=0xff) link=0x3faba079a0 refcnt=0 wrote=0x5a5a5a5a read_back=0x5a5a5a5a restored=0",
+        "RESULT parent PASS freed_flags=yes free_list_link=yes write_read_back=yes",
+        "DONE parent"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "sibling": {
+       "exit": 0,
+       "seconds": 4.42,
+       "result": "PASS",
+       "result_detail": "intact=yes write_read_back=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3fb3fee6e0",
+         "base": "0x3fb3fed750",
+         "end": "0x3fb3fee740"
+        },
+        "B": {
+         "addr": "0x3fb3fee710",
+         "base": "0x3fb3fed750",
+         "end": "0x3fb3fee740"
+        }
+       },
+       "probes": [
+        {
+         "label": "sibling-read-flags",
+         "at": "svhead-controls.c:178"
+        },
+        {
+         "label": "sibling-read-iv",
+         "at": "svhead-controls.c:179"
+        },
+        {
+         "label": "sibling-read-refcnt",
+         "at": "svhead-controls.c:180"
+        },
+        {
+         "label": "sibling-write-iv",
+         "at": "svhead-controls.c:181"
+        },
+        {
+         "label": "sibling-read-iv",
+         "at": "svhead-controls.c:182"
+        }
+       ],
+       "last_probe": {
+        "label": "sibling-read-iv",
+        "at": "svhead-controls.c:182"
+       },
+       "lines": [
+        "BUILD release",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "SAME_ARENA arena=0x3fb3fed750 tries=3 B_minus_A=48",
+        "FREE A refcnt=1",
+        "READ B flags=0x1101 iv=0xb0b0b02 refcnt=1 wrote=0xb0b0b03 read_back=0xb0b0b03 SvIV=0xb0b0b03 after_sv_setiv=0xb0b0b02",
+        "RESULT sibling PASS intact=yes write_read_back=yes",
+        "DONE sibling"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "successor": {
+       "exit": 0,
+       "seconds": 4.39,
+       "result": "PASS",
+       "result_detail": "C_at_A=yes C_read_write=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3f86b5e550",
+         "base": "0x3f86b5d590",
+         "end": "0x3f86b5e580"
+        },
+        "C": {
+         "addr": "0x3f86b5e550",
+         "base": "0x3f86b5d590",
+         "end": "0x3f86b5e580"
+        }
+       },
+       "probes": [
+        {
+         "label": "successor-read-flags",
+         "at": "svhead-controls.c:222"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:223"
+        },
+        {
+         "label": "successor-write-iv",
+         "at": "svhead-controls.c:224"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:225"
+        }
+       ],
+       "last_probe": {
+        "label": "successor-read-iv",
+        "at": "svhead-controls.c:225"
+       },
+       "lines": [
+        "BUILD release",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1",
+        "SUCCESSOR newSV_calls=1 A=0x3f86b5e550 C=0x3f86b5e550 equal=yes",
+        "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+        "RESULT successor PASS C_at_A=yes C_read_write=yes",
+        "DONE successor"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "stale": {
+       "exit": 0,
+       "seconds": 4.4,
+       "result": "PASS",
+       "result_detail": "stale_read_completed reads_C=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3fba54e550",
+         "base": "0x3fba54d590",
+         "end": "0x3fba54e580"
+        },
+        "C": {
+         "addr": "0x3fba54e550",
+         "base": "0x3fba54d590",
+         "end": "0x3fba54e580"
+        }
+       },
+       "probes": [
+        {
+         "label": "successor-read-flags",
+         "at": "svhead-controls.c:222"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:223"
+        },
+        {
+         "label": "successor-write-iv",
+         "at": "svhead-controls.c:224"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:225"
+        },
+        {
+         "label": "stale-read-flags",
+         "at": "svhead-controls.c:236"
+        },
+        {
+         "label": "stale-read-iv",
+         "at": "svhead-controls.c:237"
+        }
+       ],
+       "last_probe": {
+        "label": "stale-read-iv",
+        "at": "svhead-controls.c:237"
+       },
+       "lines": [
+        "BUILD release",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1",
+        "SUCCESSOR newSV_calls=1 A=0x3fba54e550 C=0x3fba54e550 equal=yes",
+        "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+        "STALE about to read through the old pointer to A (0x3fba54e550)",
+        "READ via_A flags=0x1101 iv=0xc0c0c05 (C: flags=0x1101 iv=0xc0c0c05)",
+        "RESULT stale PASS stale_read_completed reads_C=yes",
+        "DONE stale"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      }
+     }
+    },
+    "protected": {
+     "image": "~/ctl-perl/img/ctl-protected.dom",
+     "image_sha256": "be3ae1ed2bf254c54074bf4924975b0eec687d7551ca0397098299715e055160",
+     "serial_sha256": "cc8e4cbf23cbe9b0999f2edb6a33fed378bc3cb29a6750ee740eda9bd4508eb3",
+     "runs": {
+      "parent": {
+       "exit": 0,
+       "seconds": 4.72,
+       "result": "PASS",
+       "result_detail": "freed_flags=yes free_list_link=yes write_read_back=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3f8e252510",
+         "base": "0x3f8e252510",
+         "end": "0x3f8e252540"
+        },
+        "arena": {
+         "addr": "0x3f8e251550",
+         "base": "0x3f8e251550",
+         "end": "0x3f8e252a80"
+        },
+        "parent": {
+         "addr": "0x3f8e252510",
+         "base": "0x3f8e251550",
+         "end": "0x3f8e252a80"
+        }
+       },
+       "probes": [
+        {
+         "label": "parent-read-flags",
+         "at": "svhead-controls.c:130"
+        },
+        {
+         "label": "parent-read-link",
+         "at": "svhead-controls.c:131"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:132"
+        },
+        {
+         "label": "parent-write-refcnt",
+         "at": "svhead-controls.c:133"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:134"
+        },
+        {
+         "label": "parent-write-refcnt",
+         "at": "svhead-controls.c:135"
+        },
+        {
+         "label": "parent-read-refcnt",
+         "at": "svhead-controls.c:136"
+        }
+       ],
+       "last_probe": {
+        "label": "parent-read-refcnt",
+        "at": "svhead-controls.c:136"
+       },
+       "lines": [
+        "BUILD protected (PERL_CAPSTONE_SUBLET)",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1 (SvREFCNT_dec to 0: sv_free2 -> del_SV -> plant_SV)",
+        "PL_sv_root addr=0x3f8e252510 (A=0x3f8e252510) link_expected=0x3f8e21d8b0",
+        "ARENA_HEAD via=Perl_sv_arena_head addr=0x3f8e252510 walk=0x3f8e252510 same=yes",
+        "READ flags=0xff (SVTYPEMASK=0xff) link=0x3f8e21d8b0 refcnt=0 wrote=0x5a5a5a5a read_back=0x5a5a5a5a restored=0",
+        "RESULT parent PASS freed_flags=yes free_list_link=yes write_read_back=yes",
+        "DONE parent"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "sibling": {
+       "exit": 0,
+       "seconds": 4.5,
+       "result": "PASS",
+       "result_detail": "intact=yes write_read_back=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3fb36274e0",
+         "base": "0x3fb36274e0",
+         "end": "0x3fb3627510"
+        },
+        "B": {
+         "addr": "0x3fb3627510",
+         "base": "0x3fb3627510",
+         "end": "0x3fb3627540"
+        }
+       },
+       "probes": [
+        {
+         "label": "sibling-read-flags",
+         "at": "svhead-controls.c:178"
+        },
+        {
+         "label": "sibling-read-iv",
+         "at": "svhead-controls.c:179"
+        },
+        {
+         "label": "sibling-read-refcnt",
+         "at": "svhead-controls.c:180"
+        },
+        {
+         "label": "sibling-write-iv",
+         "at": "svhead-controls.c:181"
+        },
+        {
+         "label": "sibling-read-iv",
+         "at": "svhead-controls.c:182"
+        }
+       ],
+       "last_probe": {
+        "label": "sibling-read-iv",
+        "at": "svhead-controls.c:182"
+       },
+       "lines": [
+        "BUILD protected (PERL_CAPSTONE_SUBLET)",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "SAME_ARENA arena=0x3fb3626550 tries=3 B_minus_A=48",
+        "FREE A refcnt=1",
+        "READ B flags=0x1101 iv=0xb0b0b02 refcnt=1 wrote=0xb0b0b03 read_back=0xb0b0b03 SvIV=0xb0b0b03 after_sv_setiv=0xb0b0b02",
+        "RESULT sibling PASS intact=yes write_read_back=yes",
+        "DONE sibling"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "successor": {
+       "exit": 0,
+       "seconds": 4.51,
+       "result": "PASS",
+       "result_detail": "C_at_A=yes C_read_write=yes",
+       "pointers": {
+        "A": {
+         "addr": "0x3f863b2510",
+         "base": "0x3f863b2510",
+         "end": "0x3f863b2540"
+        },
+        "C": {
+         "addr": "0x3f863b2510",
+         "base": "0x3f863b2510",
+         "end": "0x3f863b2540"
+        }
+       },
+       "probes": [
+        {
+         "label": "successor-read-flags",
+         "at": "svhead-controls.c:222"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:223"
+        },
+        {
+         "label": "successor-write-iv",
+         "at": "svhead-controls.c:224"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:225"
+        }
+       ],
+       "last_probe": {
+        "label": "successor-read-iv",
+        "at": "svhead-controls.c:225"
+       },
+       "lines": [
+        "BUILD protected (PERL_CAPSTONE_SUBLET)",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1",
+        "SUCCESSOR newSV_calls=1 A=0x3f863b2510 C=0x3f863b2510 equal=yes",
+        "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+        "RESULT successor PASS C_at_A=yes C_read_write=yes",
+        "DONE successor"
+       ],
+       "outcome": "completed",
+       "stderr": []
+      },
+      "stale": {
+       "exit": 139,
+       "seconds": 5.72,
+       "result": null,
+       "result_detail": null,
+       "pointers": {
+        "A": {
+         "addr": "0x3f8fc86510",
+         "base": "0x3f8fc86510",
+         "end": "0x3f8fc86540"
+        },
+        "C": {
+         "addr": "0x3f8fc86510",
+         "base": "0x3f8fc86510",
+         "end": "0x3f8fc86540"
+        }
+       },
+       "probes": [
+        {
+         "label": "successor-read-flags",
+         "at": "svhead-controls.c:222"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:223"
+        },
+        {
+         "label": "successor-write-iv",
+         "at": "svhead-controls.c:224"
+        },
+        {
+         "label": "successor-read-iv",
+         "at": "svhead-controls.c:225"
+        },
+        {
+         "label": "stale-read-flags",
+         "at": "svhead-controls.c:236"
+        }
+       ],
+       "last_probe": {
+        "label": "stale-read-flags",
+        "at": "svhead-controls.c:236"
+       },
+       "lines": [
+        "BUILD protected (PERL_CAPSTONE_SUBLET)",
+        "INTERP up sizeof(SV)=48 arena_heads=84",
+        "FREE A refcnt=1",
+        "SUCCESSOR newSV_calls=1 A=0x3f8fc86510 C=0x3f8fc86510 equal=yes",
+        "READ C flags=0x1101 iv=0xc0c0c04 wrote=0xc0c0c05 read_back=0xc0c0c05",
+        "STALE about to read through the old pointer to A (0x3f8fc86510)"
+       ],
+       "outcome": "fault",
+       "fault": {
+        "cause": 25,
+        "pc": "0x3f8e8153b8",
+        "address": "0x3f8fc86524",
+        "code_start": "0x3f8e800000",
+        "link_pc": "0x253b8",
+        "function": "probe_read_flags",
+        "offset": 20,
+        "source": "~/ctl-perl/repo/capstone/bug-corpora/perl/release-differential/controls/svhead-controls.c:38:3"
+       },
+       "stderr": [
+        "capstone-exec: domain fault cause=25 pc=0x3f8e8153b8 address=0x3f8fc86524 entry=0x3f8e8009a0 code=0x3f8e800000-0x3f8f000000 last=0x42 preparing=0x42 sha256=be3ae1ed2bf254c54074bf4924975b0eec687d7551ca0397098299715e055160 image=/mnt/vm/ctl.dom",
+        "Segmentation fault"
+       ]
+      }
+     }
+    }
+   },
+   "boot_wall_s": {
+    "release": 26,
+    "protected": 27
+   }
+  }
+ },
+ "first_run": {
+  "tag": "20261011-231151",
+  "controls_source": "svhead-controls.c before the sibling change (sha256 3a4a8a3c05075ec4...)",
+  "controls_image_sha256": {
+   "release": "64545c1a407481beec474dc46e6744ac4b6f0b0aa4597774abb12700f505e0cb",
+   "protected": "3d40040d4d6a63fb80d08034643c1c394b69dc3a32a6f76ee892e032083523e3"
+  },
+  "outcomes": {
+   "release": {
+    "parent": [
+     "completed",
+     "PASS",
+     null
+    ],
+    "sibling": [
+     "exit1",
+     "FAIL",
+     null
+    ],
+    "successor": [
+     "completed",
+     "PASS",
+     null
+    ],
+    "stale": [
+     "completed",
+     "PASS",
+     null
+    ]
+   },
+   "protected": {
+    "parent": [
+     "completed",
+     "PASS",
+     null
+    ],
+    "sibling": [
+     "exit1",
+     "FAIL",
+     null
+    ],
+    "successor": [
+     "completed",
+     "PASS",
+     null
+    ],
+    "stale": [
+     "fault",
+     null,
+     25
+    ]
+   }
+  },
+  "why_superseded": "the sibling mode took B as the next heads after A and required B in A's arena; A was the last free head of its arena, so no B in 4096 newSViv was, and the mode ended before any access (no probe announced) on both arms. Changed to take A and B as two consecutive heads that share an arena. The other three modes gave the same outcomes as both measured rounds."
+ }
+}

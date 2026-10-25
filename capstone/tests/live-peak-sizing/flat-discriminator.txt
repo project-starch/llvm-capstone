@@ -1,0 +1,13 @@
+FLAT DISCRIMINATOR 13:07:50: kit qkit7-batch2-lp qemu bb96f69552135b93 module a05c198bfcc5f55c; pre-registered at wt-cov dfc80198307c
+FLAT fb cell lt1:13 rc=0 13:08:46 serial /mnt/hdd/<user>/capstone/live-peak/flat-lt1-13/guest/serial.log
+INST	c00-13_gh-144169_fix-three-crashes-in-ast-objects	inst=1	root=0x82e00000	peak=[64256,64511]	minted=[137904,141999]	{'NEW': 1, 'PEAK': 822, 'STEP': 62, 'MINT': 33}
+  parse rc=0
+  CALL 13_gh-144169_fix-three-crashes-in-ast-objects: signal 11 fault 30 _PyObject_Calloc module: high_water 64256 allocated_total 137904 collections 0 reclaimed 0
+  MemoryError lines in serial: 0
+FLAT fa cell lt1:02 rc=0 13:09:30 serial /mnt/hdd/<user>/capstone/live-peak/flat-lt1-02/guest/serial.log
+INST	c00-02_gh-140471_fix-buffer-overflow-in-ast-node	inst=1	root=0x82e00000	peak=[64256,64256]	minted=[137902,137902]	{'NEW': 1, 'PEAK': 822, 'STEP': 62, 'MINT': 33, 'RESET': 1}
+INST	c01-02_gh-140471_fix-buffer-overflow-in-ast-node-control	inst=2	root=0x82e00000	peak=[64256,64511]	minted=[126359,130454]	{'NEW': 1, 'PEAK': 516, 'STEP': 62, 'MINT': 30}
+  parse rc=0
+  CALL 02_gh-140471_fix-buffer-overflow-in-ast-node: signal 11 fault 30 _PyObject_Calloc module: high_water 64256 allocated_total 137902 collections 0 reclaimed 0
+  CALL 02_gh-140471_fix-buffer-overflow-in-ast-node-control: signal 11 fault 30 _PyObject_Calloc module: high_water 64256 allocated_total 264261 collections 0 reclaimed 0
+  MemoryError lines in serial: 0

@@ -1,0 +1,56 @@
+# Bitstream 2 (caplifive_vp2c_dcc6daf6e) on board 2: flash and first boots, result lines only (flash-and-first-bs2-b2.sh).
+FB sql0 ended 16:43:59
+FB board 2 free 16:43:59
+STORE 3 names; wanted ['no-such-bitstream-3215534.bit']; missing ['no-such-bitstream-3215534.bit']
+STORE 3 names; wanted ['caplifive_vp2c_c721c1a2a.bit']; missing []
+FB FLASH BEGIN 16:43:59 booking 192
+[flash 16:43:59] local sha256 matches the synth lane's sealed hash
+[flash 16:43:59] resident before: 'caplifive_vp2c_c721c1a2a.bit'
+[flash 16:43:59] not in the server store -- uploading via API
+[flash 16:44:04] upload HTTP 201
+[flash 16:44:04] present in the server store
+[flash 16:44:19] flashing caplifive_vp2c_dcc6daf6e.bit (~90 s)
+[flash 16:45:58] MANDATORY power cycle: off 8 s, on 15 s
+[flash 16:46:21] resident AFTER power cycle: 'caplifive_vp2c_dcc6daf6e.bit'
+[flash 16:46:21] powered off
+[flash 16:46:21] unlocked
+rc=0
+UNBOOK 192: 200
+FB FLASH END rc=0 16:46:21
+MK kit <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b2: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2:
+< BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+> BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE
+FB FIRST rc=0 17:12:18; SEQ:
+  BF START 16:46:21 board 2 bitstream caplifive_vp2c_dcc6daf6e kit bkit9-b2-b2 fw 0c24496f
+  S23 BEGIN 16:46:22 board 2 bitstream caplifive_vp2c_dcc6daf6e image bcefd969e128113f driver /tmp/capstone/wt-b2/capstone/tests/rtl-smoke booking 193 expect batch
+  UNBOOK 193: 200
+  S23 END rc=0 16:47:14 :: [sup 16:47:13] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+  S23 AS EXPECTED (batch): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14
+  S23 GRADE rc=0
+  S23 board2 DONE 16:47:14
+  VA BEGIN 16:47:14 board 2 bitstream caplifive_vp2c_dcc6daf6e image 9491707dfa1613e3 driver /tmp/capstone/wt-b2/capstone/tests/rtl-smoke booking 194 expect b2
+  UNBOOK 194: 200
+  VA END rc=0 16:48:06 :: [sup 16:48:05] UART: begin=True SB1=True SR=['0000000000000011'] SV lines=17
+  VA-ALLOC PASS (bitstream-2 vector): 0x0 0x40004 0x0 0x80004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x8 0x3 0x4 0x1 0x8 0x0
+  VA GRADE rc=0
+  VA board2 DONE 16:48:06
+  BF TIER1 BEGIN 16:48:06 booking 195
+  UNBOOK 195: 200
+  BF TIER1 DRIVER rc=0 17:12:18; watchdog lines 96
+  RUNG b0-stats retval=0 (rev7 oracle 0, reference only)
+  RUNG b0-hello retval=0 (rev7 oracle 0, reference only)
+  RUNG vm-contract retval=0 (rev7 oracle 0, reference only)
+  RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+  VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:0 
+    CAPSTONE_VM_STATS arenas=11 pages=496 peak=892 nodes=76 steps=511 faults=426 collections=0 reclaimed=0 rounds=12 bytes_in=214 bytes_out=143 node_bytes=65536 node_capacity=4096 node_growths=0
+    CAPSTONE_VM_STATS arenas=10 pages=489 peak=491 nodes=600041 steps=200065 faults=24 collections=0 reclaimed=0 rounds=8 bytes_in=367 bytes_out=64 node_bytes=65536 node_capacity=4096 node_growths=0
+  SPARSE: VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags
+  VM_BEGIN without VM_EXIT: 
+  FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0
+  CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+  BF board2 DONE 17:12:18
+FB DONE 17:12:18
+## the monitor-print positive control: monitor report tags in Tier 1's board.txt, batch Tier 1 (board 2) then bitstream 2
+  SHA-tag lines 18, RGID 3, RCLM 3
+  SHA-tag lines 18, RGID 3, RCLM 3

@@ -86,7 +86,8 @@ while true; do
     idle=$(( SECONDS - last_change ))
     # NO-BOOT: load_image issued but the board never printed a boot banner. Seen when the
     # JTAG transfer silently moves nothing -- the log shows load_image, set $pc, continue, and
-    # then dead air, with no "downloaded N bytes" line. The runner would otherwise burn its
+    # then dead air, with no "downloaded N bytes" line -- and also when the download COMPLETES and
+    # the board stays silent after `continue` (the label below tells the two apart). The runner would otherwise burn its
     # whole per-domain budget on a board that has no image in DDR.
     if [ "$ABORT_ON_ENTRY_STALL" = "1" ] && [ "$idle" -ge "$ENTRY_STALL_S" ] && [ -f "$LOG" ]; then
       # RUN-SCOPED, same reason as the entry-stall scan below: `tail -c +$START_SIZE` was
@@ -104,8 +105,17 @@ while true; do
             # and neither. Keying on the banner would never have fired.
             *"buildroot login"*|*"SQ: "*) ;;        # userspace reached: fine
             *)
-              echo "NO-BOOT ${now_elapsed}s  load_image issued, no boot banner and no download for ${idle}s"
-              echo "  -> JTAG transfer moved nothing; this boot is dead. Aborting runner."
+              # Two shapes reach here, and the label must not conflate them (2026-10-19: four boots
+              # were labelled "moved nothing" whose downloads had completed). The download's own
+              # line ends "(N KiB/s)"; the console may split it across events, so match that tail.
+              case "$scan0" in
+                *"KiB/s)"*)
+                  echo "NO-BOOT ${now_elapsed}s  download complete, no UART after continue for ${idle}s"
+                  echo "  -> the image was transferred; the board printed nothing after it (a dead boot or a dead UART path). Aborting runner." ;;
+                *)
+                  echo "NO-BOOT ${now_elapsed}s  load_image issued, no download and no boot banner for ${idle}s"
+                  echo "  -> JTAG transfer moved nothing; this boot is dead. Aborting runner." ;;
+              esac
               [ -n "$RUNNER_PID" ] && kill -0 "$RUNNER_PID" 2>/dev/null && kill -TERM "$RUNNER_PID" 2>/dev/null
               echo "ENDED   ${now_elapsed}s"; exit 0 ;;
           esac ;;

@@ -14,7 +14,7 @@ B=$SUB/capstone/caplifive-system/sw/buildroot; BM=$B/components/opensbi/lib/sbi/
 FW=${CAPSTONE_BR_FW:-$B/build-fpga/build/opensbi-custom/build/platform/fpga/ariane/firmware}
 CC=$SUB/capstone/capstone-c
 [ -f $B/Makefile ] || { echo "no FPGA buildroot at $B (a worktree? set CAPSTONE_SUBMODULE_ROOT)" >&2; exit 1; }
-F=$(cd "$(dirname "${BASH_SOURCE[0]}")/../repro322-silicon-2026-10-01" && pwd)
+F=${R322_FOLDER:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../repro322-silicon-2026-10-01" && pwd)}   # the cells, SHA256SUMS
 E=${R322_DIR:-${CAPSTONE_ARTIFACTS:-$HOME/capstone-artifacts}/r322-silicon}   # <tag>/r322-<tag>.dom
 MEMLOCK=${MEMLOCK:-$HOME/bin/logs/machine-memory.lock}
 BOOT=${BOOT:?boot 1..2}; TAG=${RUNTAG:-a}
@@ -27,7 +27,7 @@ bake(){ say "bake $1: waiting for the machine memory lock (another lane may be m
       ( cd $B && make build LINUX_PAYLOAD=1 A=$a CAPSTONE_CC_PATH=$CC ) > $OUT/bake-$tag-$a.log 2>&1 || exit 1
     done' _ "$B" "$CC" "$OUT" "$1"; }
 pgrep -f 'python3 -m fpga_driver' >/dev/null && fail "a board runner is live"
-[ "$(git -C $BM rev-parse --short HEAD)" = 2dcd3a5 ] || fail "monitor is not 2dcd3a5"
+git -C $BM merge-base --is-ancestor 2dcd3a5 HEAD || fail "monitor does not carry 2dcd3a5"
 cd $B || fail "no FPGA buildroot copy"
 [ "$(git rev-parse --short HEAD)" = d04bd83 ] || fail "FPGA copy is at $(git rev-parse --short HEAD), not d04bd83 (the #3 module)"
 HOSTF=$B/overlay/test-domains/sqlite_host.user

@@ -1,0 +1,42 @@
+# tier3-juliet-batch.sh 143b29deacae571f dry run, 2026-10-23 04:44, board 1: run.py/probe.py stubbed (each prints the
+# --build/--sdk/--board-kit it was handed and one completed batch), judge.py stubbed (it writes the batch QEMU reference's own
+# temporal-verdicts.tsv; FLIP=<row> turns one row MISSED); busy and the hub stubbed.
+
+## ok
+JF run BEGIN 04:44:02 board 1 booking 61
+JF run END rc=0 04:44:02 :: 1 batches completed, 0 not :: args: --build <mnt-hdd>/capstone/juliet-r60/r60/build-census --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1 
+JF run-seeded BEGIN 04:44:02 board 1 booking 61
+JF run-seeded END rc=0 04:44:02 :: 1 batches completed, 0 not :: args: --build <mnt-hdd>/capstone/juliet-r60/r60/build-seeded --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1 
+JF probe BEGIN 04:44:02 board 1 booking 61
+JF probe END rc=0 04:44:02 :: 1 batches completed, 0 not :: args: --sdk <mnt-hdd>/capstone/juliet-r60/r60/sdk --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1 
+JF judge rc=0 :: judge stub: --manifest <mnt-hdd>/capstone/juliet-r60/manifest-temporal.json --build <mnt-hdd>/capstone/juliet-r60/r60/build-census  
+JF verdicts: 366 {('CAUGHT', 'CORRECT', '25'): 366}
+JF MISSED rows: 0
+JF COMPARE batch QEMU -> board: cases 366/366 differ 0
+JF readings: 3 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JF board1 DONE 04:44:02
+
+## flip
+JF run BEGIN 04:44:02 board 1 booking 61
+JF run END rc=0 04:44:02 :: 1 batches completed, 0 not :: args: --build <mnt-hdd>/capstone/juliet-r60/r60/build-census --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1 
+JF run-seeded BEGIN 04:44:02 board 1 booking 61
+JF run-seeded END rc=0 04:44:02 :: 1 batches completed, 0 not :: args: --build <mnt-hdd>/capstone/juliet-r60/r60/build-seeded --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1 
+JF probe BEGIN 04:44:02 board 1 booking 61
+JF probe END rc=0 04:44:02 :: 1 batches completed, 0 not :: args: --sdk <mnt-hdd>/capstone/juliet-r60/r60/sdk --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1 
+JF judge rc=0 :: judge stub: --manifest <mnt-hdd>/capstone/juliet-r60/manifest-temporal.json --build <mnt-hdd>/capstone/juliet-r60/r60/build-census  
+JF verdicts: 366 {('CAUGHT', 'CORRECT', '25'): 365, ('MISSED', 'CORRECT', '25'): 1}
+JF MISSED rows: 1 TWINS-NEEDED CWE415_Double_Free__malloc_free_char_04
+JF COMPARE batch QEMU -> board: cases 366/366 differ 1
+  CWE415_Double_Free__malloc_free_char_04: ('CAUGHT', 'CORRECT', '25', 'checked+0x14', 'STRICT:unique') -> ('MISSED', 'CORRECT', '25', 'checked+0x14', 'STRICT:unique')
+JF readings: 3 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JF board1 DONE 04:44:02
+
+## busy
+JF STOP: board 1 is busy before run
+
+## h409
+JF STOP: the hub refused the booking (409) before run: 61
+## obs-compare section of the dry run
+JF OBS-COMPARE census rc=2 :: NO DATA: <scratch>/jb/r-ok2/run/observations.json does not exist
+JF OBS-COMPARE seeded rc=2 :: NO DATA: <scratch>/jb/r-ok2/run-seeded/observations.json does not exist
+# (the stub writes no observations.json, so both compares must read NO DATA: the added step runs and does not pass on nothing)

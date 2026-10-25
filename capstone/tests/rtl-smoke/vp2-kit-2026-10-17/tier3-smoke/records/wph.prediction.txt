@@ -1,0 +1,31 @@
+# Tier 3 prediction, arm wph: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 13 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-mallocng platform qkit7-wrapper cells 12 tally {"CAUGHT": 12}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_19c51d27b9_netscaler_record_past_page image c8d460fcb71f552e CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+01_373504f7c9_dfvm_error_message_wrong_index image 999dc9d11795d55d CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+02_381681583b_pcapng_nrb_custom_string_over_copy image a86e51dbc7d1c9cc CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+03_c556b648aa_strptime_reads_past_null_timezone image a94d6c7e31419fc4 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+04_87803328179_blf_apptext_sized_without_terminator image 4302e619175e8c24 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+05_140aad08e081_nettrace_packet_buf_scanned_by_strstr image a408585b2a361f85 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+06_3aad1ef236e6_t61_accent_branch_reads_the_following_byte image 9e64d27b8ff014a4 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+07_e2ca71beaed2_uat_unbinstring_leaves_no_terminator image a0bc8b8b94b887f9 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+08_0cae98570ebc_cl_find_custom_memcmp_reads_the_prefix_length image 345fcf64dd28bc79 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+09_bf123efe154d_uat_oid_empty_field_underflows_the_index image ab286b3e06cf6cb9 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+10_e9b933473e8f_address_to_str_buf_clamps_to_size_not_last_index image 6696564e3feb1b9f CAUGHT cause 28 at wsh_write_probe+88 reached True completed False attribution "probe"
+11_4b15bf76a7f7_oid_to_str_buf_tail_reservation_one_short image c3bb2f5ba0e7795d CAUGHT cause 28 at wsh_write_probe+88 reached True completed False attribution "probe"
+# image c8d460fcb71f552e  00_19c51d27b9_netscaler_record_past_page.dom
+# image 999dc9d11795d55d  01_373504f7c9_dfvm_error_message_wrong_index.dom
+# image a86e51dbc7d1c9cc  02_381681583b_pcapng_nrb_custom_string_over_copy.dom
+# image a94d6c7e31419fc4  03_c556b648aa_strptime_reads_past_null_timezone.dom
+# image 4302e619175e8c24  04_87803328179_blf_apptext_sized_without_terminator.dom
+# image a408585b2a361f85  05_140aad08e081_nettrace_packet_buf_scanned_by_strstr.dom
+# image 9e64d27b8ff014a4  06_3aad1ef236e6_t61_accent_branch_reads_the_following_byte.dom
+# image a0bc8b8b94b887f9  07_e2ca71beaed2_uat_unbinstring_leaves_no_terminator.dom
+# image 345fcf64dd28bc79  08_0cae98570ebc_cl_find_custom_memcmp_reads_the_prefix_length.dom
+# image ab286b3e06cf6cb9  09_bf123efe154d_uat_oid_empty_field_underflows_the_index.dom
+# image 6696564e3feb1b9f  10_e9b933473e8f_address_to_str_buf_clamps_to_size_not_last_index.dom
+# image c3bb2f5ba0e7795d  11_4b15bf76a7f7_oid_to_str_buf_tail_reservation_one_short.dom
+# image 491655742d378fcd  controls.dom

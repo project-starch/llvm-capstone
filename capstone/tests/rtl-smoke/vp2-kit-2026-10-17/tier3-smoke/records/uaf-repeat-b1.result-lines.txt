@@ -1,0 +1,13 @@
+# uaf-control repeat (uaf-repeat.py, N=120, a80fa4ae05c3), board 1 / tree A, 2026-10-22. Result lines only.
+UR BEGIN 10:25:54 board 1 booking 104 N=120
+UNBOOK 104: 200
+UR END rc=0 10:52:09
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3fa2710c24 address=0x3fa27ee050 entry=0x3fa2700868 code=0x3fa2700000-0x3fa2780000 last=0x42 preparing=0x42 sha256=b1decb0612856121de37383cbe4e812e1
+RUN uaf-53-plain rc={'kind': 'signal', 'value': 11, 'fault': 'cause=13 pc=0x3fbd810c70 address=0x3fbd90b040
+RUN uaf-55-plain rc={'kind': 'signal', 'value': 11, 'fault': 'cause=13 pc=0x3fbd110c70 address=0x3fbd1ce040
+TALLY plain cause 13: 2
+TALLY plain cause 25: 58
+TALLY traced cause 25: 60
+completed=True steps=121 of 121 transcript=<mnt-hdd>/capstone/t3-run-treeA/uaf-repeat/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board1 DONE 10:52:09

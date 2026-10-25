@@ -1,0 +1,22 @@
+# Ladder cycle ratio (capability / bare-metal) per layout K and the median over K = 0..3, caplifive_sublet_d93a8d66b
+# from the four pair-halves.py outputs in this folder; instr = the instruction ratio, identical at every K
+rung                    K0      K1      K2      K3   median          range   instr
+beebs_cover          0.981   0.991   0.995   0.991    0.991  0.981-0.995     0.999
+ctrsanity            1.000   1.000   1.000   1.001    1.000  1.000-1.001     1.000
+rv8_sha512           1.006   1.007   1.006   1.007    1.006  1.006-1.007     0.996
+rv8_primes           1.010   1.008   1.008   1.010    1.009  1.008-1.010     1.000
+beebs_aha_mont64     1.009   1.010   1.010   1.010    1.010  1.009-1.010     1.000
+rv8_sha512s          1.013   1.014   1.015   1.014    1.014  1.013-1.015     1.092
+ctrsanitys           1.048   1.046   1.042   1.048    1.047  1.042-1.048     1.002
+beebs_prime          1.050   1.050   1.052   1.053    1.051  1.050-1.053     1.000
+beebs_crc32          1.128   1.128   1.128   1.129    1.128  1.128-1.129     0.959
+beebs_ns             1.160   1.160   1.162   1.160    1.160  1.160-1.162     0.987
+beebs_cnt            1.201   1.201   1.201   1.200    1.201  1.200-1.201     1.197
+beebs_bs             1.441   1.456   1.420   1.374    1.430  1.374-1.456     0.992
+coremark_matrix      1.567   1.567   1.564   1.567    1.567  1.564-1.567     1.239
+matmult_int          1.689   1.688   1.682   1.687    1.688  1.682-1.689     1.337
+beebs_recursion      1.982   1.960   1.963   1.973    1.968  1.960-1.982     1.500
+beebs_janne          2.110   1.984   2.034   2.144    2.072  1.984-2.144     0.943
+beebs_insertsort     2.227   2.236   2.334   2.304    2.270  2.227-2.334     1.194
+
+17 rungs, 68 rows

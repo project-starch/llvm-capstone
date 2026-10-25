@@ -1,0 +1,14 @@
+--- ident/capstone_vm.c	2026-10-18 05:06:14.870744761 +0800
++++ aligned/capstone_vm.c	2026-10-18 05:06:35.734744545 +0800
+@@ -553,7 +553,10 @@
+ static unsigned long run(unsigned long frame, unsigned long action)
+ {
+     unsigned long result;
+-    asm volatile(".insn r 0x5b, 1, 0x24, %0, %1, %2"
++    /* EXPERIMENT (board lane, vp2 boot 3-T1's third run, 2026-10-18): on bf3db3175 the S caller's first fetch after a
++     * CSRUNV escape faulted (instruction access) when CSRUNV was the last word of a 64-byte line, and never when the
++     * next instruction shared CSRUNV's line. Start CSRUNV on a line so its return fetch stays in that line. */
++    asm volatile(".balign 64\n\t.insn r 0x5b, 1, 0x24, %0, %1, %2"
+                  : "=&r"(result) : "r"(frame), "r"(action) : "memory");
+     return result;
+ }

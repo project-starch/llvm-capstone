@@ -1,0 +1,22 @@
+# cpython lt1 (mremap relink 8bcc40cf) on bitstream 2, board 1: the arm's own lines (its wrapper timed out at 6 h), then the salvage's lines
+# (tier3-appvm-salvage.sh, pre-registered at 460edecc2e58), the transcript readings, and the ten capacity cells.
+CB lt1 BEGIN 02:36:53 board 1 kit bkit9-b2-nb1 booking 258
+CB lt1 ARM END rc=124 08:36:53 :: 
+CB lt1 COMPARE vs reference rc=2 :: NO DATA: reference 32 cells, board 0 cells
+CB lt1 readings: pc=0  DRT1  FRTY  FRTC  Oops  INJS  INJL  collect-skipped  norandmaps-in-cmdline 
+CB lt1 DONE 08:36:53
+SALVAGE boot-parse rc=0 :: session <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/cpy-lt1/session-salvage: 54/54 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/cpy-lt1/session-salvage/guest/board.txt; phase read
+SALVAGE firmware 49a2427bd9a037ef kernel 7d503be46cebde73
+APPVM read rc=0 08:54:52 :: --- vp2-nested-pools (virtual-cpython-pools): {'CAUGHT': 27, 'MISSED': 3, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 1}
+lt1 SALVAGE COMPARE vs ref-b2/lt1 (verdicts-compare): 32 of 32 cells the same
+transcript: 1 vbatch END rc=0; readings pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0; norandmaps in the command line 1
+capacity cell 02_gh-140471_fix-buffer-overflow-in-ast-node: CAUGHT cause 28 in memcpy, by control
+capacity cell 10_gh-142554_avoid-divmod-crashes-due-to-bad: CAUGHT cause 28 in l_divmod, by function
+capacity cell 13_gh-144169_fix-three-crashes-in-ast-objects: CAUGHT cause 28 in unicode_fromformat_write_str, by function
+capacity cell 18_gh-157335_fix-out-of-bounds-write-in: CAUGHT cause 28 in mmap_ass_subscript, by function
+capacity cell 19_gh-142664_fix-uaf-in-memoryview-hash-via: CAUGHT cause 25 in fnv, by control
+capacity cell 23_gh-142560_bytearray-search-realloc: CAUGHT cause 25 in memchr, by function
+capacity cell 27_gh-143004_counter-update-borrowed-value: CAUGHT cause 25 in slot_nb_add, by function
+capacity cell 28_gh-143543_groupby-reentrant-eq: CAUGHT cause 25 in _PyEval_Vector, by function
+capacity cell 30_gh-146613_grouper-parent-key: CAUGHT cause 25 in PyObject_RichCompare, by function
+capacity cell 31_gh-148660_odict-copy-stale-link: CAUGHT cause 25 in odict_copy, by function

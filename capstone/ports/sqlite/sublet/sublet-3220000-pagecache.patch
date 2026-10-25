@@ -1,0 +1,154 @@
+Subject: [PATCH] Page-cache assignments as Sublet lifetimes (CDERIVE/CREVOKE)
+Upstream: sqlite 3.22.0 amalgamation
+Upstream-SHA256: 7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2 (sqlite3.c)
+Applies-To: sqlite3-capstone.c with sublet-3220000-memsys5.patch already
+  applied, with patch -F0 -p1. ports/sqlite/repro322/build-virtual.py
+  --pagecache applies both, in that order.
+
+SQLite's third nested allocator is the page cache, and the lifetime it ends
+is not an allocation. A page object is assigned to a page number, and later
+recycled for a different one or dropped; the buffer is reused, never handed
+back, so nothing that watches malloc and free can see that end. This patch
+makes the assignment a capability: the cache hands out a child lifetime of
+the buffer while the assignment holds, and ending the assignment revokes it,
+so MemPage.aData and the cell pointers parsed out of it die with the page
+number they belonged to.
+
+# pcache1Issue derives the child where pcache1FetchStage2 assigns iKey;
+# pcache1Retire revokes it in pcache1RemoveFromHash, which both the recycle
+# (freeFlag 0) and the discard (freeFlag 1) go through, and in
+# pcache1TruncateUnsafe, which unlinks a dropped page by hand. PgHdr1.pRaw
+# keeps the buffer as the allocator gave it, so pcache1FreePage and
+# pcache1MemSize hand the allocator its own pointer and page.pBuf can be the
+# assignment's. One derive is enough: a memsys5 block already carries MANAGE,
+# because CDERIVE grants it to every child.
+#
+# NOT the pin. The reference count reaching zero looks like the end -- and
+# sqlite3PagerGetData asserts a held reference -- but it is not one: for an
+# in-memory database pcacheUnpin is documented as a no-op, the page keeps its
+# contents, and SQLite reads a page's data at nRef==0. Revoking there was
+# measured first and it breaks the engine: all 29 in-memory cases of the
+# engine corpus then fault at the same instruction in sqlite3Get4byte,
+# reading page 1's header during open, and the file-backed cases fail with
+# SQLITE_NOTADB. The assert is stricter than the code.
+#
+# The offset CDERIVE takes is relative to the parent's base, not its cursor,
+# and a bulk-pool page's buffer is an offset into one allocation whose base is
+# the pool's start: deriving at offset 0 gave every page a capability over the
+# FIRST page's bytes, and the engine read page 1's header out of the wrong
+# page (SQLITE_NOTADB on every file-backed case). pcache1Issue therefore
+# derives at the pointer's own displacement, as memsys5Init does for the heap.
+#
+# What it gives up: a page unpinned but still assigned keeps its capability,
+# because nothing has ended; a holder that keeps a pointer across an unpin
+# and reads it before any recycle is not caught. pcache1Rekey moves a live
+# page to a new number under its holder and is left alone for the same
+# reason. The bounds are the page, so an overrun within one page is the
+# btree's own cell bounds to answer, not this patch's.
+--- a/sqlite3-capstone.c
++++ b/sqlite3-capstone.c
+@@ -46199,6 +46199,8 @@ struct PgHdr1 {
+   unsigned int iKey;             /* Key value (page number) */
+   u8 isBulkLocal;                /* This page from bulk local storage */
+   u8 isAnchor;                   /* This is the PGroup.lru element */
++  u8 isIssued;                   /* Sublet: page.pBuf is this assignment's child */
++  void *pRaw;                    /* Sublet: the buffer as the allocator gave it */
+   PgHdr1 *pNext;                 /* Next in hash table chain */
+   PCache1 *pCache;               /* Cache that currently owns this page */
+   PgHdr1 *pLruNext;              /* Next in LRU list of unpinned pages */
+@@ -46396,7 +46398,8 @@ static int pcache1InitBulk(PCache1 *pCache){
+     int nBulk = sqlite3MallocSize(zBulk)/pCache->szAlloc;
+     do{
+       PgHdr1 *pX = (PgHdr1*)&zBulk[pCache->szPage];
+-      pX->page.pBuf = zBulk;
++      pX->page.pBuf = pX->pRaw = zBulk;
++      pX->isIssued = 0;
+       pX->page.pExtra = &pX[1];
+       pX->isBulkLocal = 1;
+       pX->isAnchor = 0;
+@@ -46541,15 +46544,42 @@ static PgHdr1 *pcache1AllocPage(PCache1 *pCache, int benignMalloc){
+     pcache1EnterMutex(pCache->pGroup);
+ #endif
+     if( pPg==0 ) return 0;
+-    p->page.pBuf = pPg;
++    p->page.pBuf = p->pRaw = pPg;
+     p->page.pExtra = &p[1];
+     p->isBulkLocal = 0;
++    p->isIssued = 0;
+     p->isAnchor = 0;
+   }
+   (*pCache->pnPurgeable)++;
+   return p;
+ }
+ 
++/*
++** Sublet lifetimes.  A page object is assigned to a page number and later
++** recycled for a different one, or dropped; the buffer is reused, not freed,
++** so that end is invisible to anything watching malloc and free.  While the
++** assignment holds, the cache hands out a child lifetime of the buffer
++** (CDERIVE); ending the assignment revokes it (CREVOKE), so every pointer the
++** holder derived -- MemPage.aData and the cell pointers parsed out of it --
++** dies with the page number it belonged to.  The cache keeps reaching the
++** buffer through PgHdr1.pRaw, so recycling and freeing are unaffected.
++*/
++static void pcache1Issue(PgHdr1 *p, int szPage){
++  assert( p->isIssued==0 );
++  /* The offset is relative to the parent's BASE, and a bulk-pool page's
++  ** pointer is an offset into one allocation whose base is the pool's start. */
++  p->page.pBuf = capstone_cap_derive(p->pRaw,
++      (uptr)p->pRaw - __builtin_capstone_cap_get_base(p->pRaw), szPage);
++  p->isIssued = 1;
++}
++static void pcache1Retire(PgHdr1 *p){
++  if( p->isIssued ){
++    capstone_cap_revoke_child(p->pRaw, p->page.pBuf);
++    p->page.pBuf = p->pRaw;
++    p->isIssued = 0;
++  }
++}
++
+ /*
+ ** Free a page object allocated by pcache1AllocPage().
+ */
+@@ -46562,7 +46592,7 @@ static void pcache1FreePage(PgHdr1 *p){
+     p->pNext = pCache->pFree;
+     pCache->pFree = p;
+   }else{
+-    pcache1Free(p->page.pBuf);
++    pcache1Free(p->pRaw);
+ #ifdef SQLITE_PCACHE_SEPARATE_HEADER
+     sqlite3_free(p);
+ #endif
+@@ -46696,6 +46726,7 @@ static void pcache1RemoveFromHash(PgHdr1 *pPage, int freeFlag){
+   *pp = (*pp)->pNext;
+ 
+   pCache->nPage--;
++  pcache1Retire(pPage);
+   if( freeFlag ) pcache1FreePage(pPage);
+ }
+ 
+@@ -46761,6 +46792,7 @@ static void pcache1TruncateUnsafe(
+         pCache->nPage--;
+         *pp = pPage->pNext;
+         if( PAGE_IS_UNPINNED(pPage) ) pcache1PinPage(pPage);
++        pcache1Retire(pPage);
+         pcache1FreePage(pPage);
+       }else{
+         pp = &pPage->pNext;
+@@ -47006,6 +47038,7 @@ static SQLITE_NOINLINE PgHdr1 *pcache1FetchStage2(
+     unsigned int h = iKey % pCache->nHash;
+     pCache->nPage++;
+     pPage->iKey = iKey;
++    pcache1Issue(pPage, pCache->szPage);
+     pPage->pNext = pCache->apHash[h];
+     pPage->pCache = pCache;
+     pPage->pLruPrev = 0;
+@@ -47320,7 +47353,7 @@ SQLITE_PRIVATE int sqlite3PcacheReleaseMemory(int nReq){
+        &&  (p=pcache1.grp.lru.pLruPrev)!=0
+        &&  p->isAnchor==0
+     ){
+-      nFree += pcache1MemSize(p->page.pBuf);
++      nFree += pcache1MemSize(p->pRaw);
+ #ifdef SQLITE_PCACHE_SEPARATE_HEADER
+       nFree += sqlite3MemSize(p);
+ #endif

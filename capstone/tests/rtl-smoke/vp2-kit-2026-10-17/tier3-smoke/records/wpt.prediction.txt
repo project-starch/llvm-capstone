@@ -1,0 +1,27 @@
+# Tier 3 prediction, arm wpt: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 11 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-mallocng platform qkit7-wrapper cells 10 tally {"CAUGHT": 10}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_f3c2e6087e7b_k12_callee_frees_its_own_argument image b304116324cc9f5d CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+01_7dcf69480de8_peak_trc_callee_frees_state_struct image 0d5800de0b12f439 CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+02_0fc7f3781351_wspstat_container_freed_before_its_contents image f74fafcc50689b93 CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+03_012a179785ab_filesystem_alias_named_copy_is_not_a_copy image ef5497a127a24c0f CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+04_07ffcf90426b_extcap_one_help_string_stored_in_many_owners image 526847c4ce0360d3 CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+05_fb46cda19602_wtap_close_inner_loop_rewinds_outer_cursor image f5eee5051dc06cd0 CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+06_d3e3c00fbbe2_prefs_static_filter_label_not_cleared image 9eb9763e78401c50 CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+07_8dc7d164dcdb_prefs_reset_not_idempotent image 7ed251c6797f9f91 CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+08_48a00fd55671_ftype_string_freed_twice_by_caller_and_callee image 6a0a2d96340f3dfc CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+09_cfc15838bdec_capture_ifinfo_out_parameter_left_unassigned image e65d052d1e612e0a CAUGHT cause 25 at wst_read_probe+56 reached True completed False attribution "probe"
+# image b304116324cc9f5d  00_f3c2e6087e7b_k12_callee_frees_its_own_argument.dom
+# image 0d5800de0b12f439  01_7dcf69480de8_peak_trc_callee_frees_state_struct.dom
+# image f74fafcc50689b93  02_0fc7f3781351_wspstat_container_freed_before_its_contents.dom
+# image ef5497a127a24c0f  03_012a179785ab_filesystem_alias_named_copy_is_not_a_copy.dom
+# image 526847c4ce0360d3  04_07ffcf90426b_extcap_one_help_string_stored_in_many_owners.dom
+# image f5eee5051dc06cd0  05_fb46cda19602_wtap_close_inner_loop_rewinds_outer_cursor.dom
+# image 9eb9763e78401c50  06_d3e3c00fbbe2_prefs_static_filter_label_not_cleared.dom
+# image 7ed251c6797f9f91  07_8dc7d164dcdb_prefs_reset_not_idempotent.dom
+# image 6a0a2d96340f3dfc  08_48a00fd55671_ftype_string_freed_twice_by_caller_and_callee.dom
+# image e65d052d1e612e0a  09_cfc15838bdec_capture_ifinfo_out_parameter_left_unassigned.dom
+# image 491655742d378fcd  controls.dom

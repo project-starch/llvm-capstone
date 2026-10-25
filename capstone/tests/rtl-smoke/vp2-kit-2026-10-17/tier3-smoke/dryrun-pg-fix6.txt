@@ -1,0 +1,6 @@
+# tier3-pg-fix6.sh dry run (2026-10-18 23:53), tier3-pg-arm.sh stubbed (each arm's 3005ed52 board run copied in), the real
+# score-arm.sh under a dry-run tag and results directory:
+# - pass (the re-run out reads FIX6BSEQ DONE): pgc, pgm0, pgm1 through the arm script with kit bkit7-fix6t and the pg
+#   builds; scored against t3-<arm>/bundle, 5 of 5 each (the 3005ed52 readings, so the scorer reads what it is given).
+# - guard: beside mpt-fix6b's live boot, "PGF STOP: a driver is running".
+# The dry run's records and bundles were removed by name afterwards.

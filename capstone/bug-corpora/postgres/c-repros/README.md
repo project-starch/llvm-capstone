@@ -25,15 +25,37 @@ decision, 2026-10-10).
 
 **The arm recorded as `sublet` on 2026-10-06 was not the Sublet heap, and is dropped.** It ran on
 the SDK that `ports/postgres/app/build-domain.sh` builds for the server's `PGSU_NESTED=sublet` arm.
-Both PostgreSQL SDKs keep the default `CAPSTONE_APPLICATION_HEAP level0`
-(`runtime/application/CMakeLists.txt`); the sublet one only adds a grant for the server's context
-pools, which these programs never use. Its five catches -- at the same pcs as the `spatial` run --
+Both PostgreSQL SDKs kept the default `CAPSTONE_APPLICATION_HEAP level0`
+(`runtime/application/CMakeLists.txt`); the sublet one only added a grant for the server's context
+pools, which these programs never use (the grant went with the lifetime adapter on 2026-10-11). Its five catches -- at the same pcs as the `spatial` run --
 were level0 bounds under a Sublet label. The run stays in `results/sublet-20261006-161014` as the
 record of what was measured; no verdict is taken from it.
 
+**Historical physical Sublet arm, measured 2026-10-11 and now retired.**
+The lifetime-port migration removes this heap and its active arm declaration.
+The following describes the archived build, whose result bundle is retained.
+In that build, `CAPSTONE_APPLICATION_HEAP` took `sublet` as well as `level0`, and
+`ports/musl-capstone/runtime/sublet_heap.c` implements it: a binary buddy allocator over one
+linear region, each block with its own revocation node, the alias shrunk to the request so the
+bounds are the object's rather than the block's, and `free` scrubbing and revoking so every copy
+of the alias dies. Build the SDK with `-DCAPSTONE_APPLICATION_HEAP=sublet` and `malloc`, `free`
+and `realloc` come from `sublet_heap.c.obj` instead of `level0.c.obj`. `tools/arms.json` names
+that configuration `app-sublet`, and it declares what separates it from `app-level0`: `uaf-malloc`
+must FAULT here and must COMPLETE there. The runner checks both in the same boot before any case
+runs, and refuses a build whose `build.json` heap does not match the configuration, so the
+mistake of 2026-10-06 cannot be repeated silently. All five are CAUGHT, with the controls as
+declared: `results/20261011-034640-qemu/sublet`.
+
 ## Building and running
 
-    # once per arm: an application SDK built with the arm's heap
+**The SDK is a corpus SDK (C-81).** Build it with `CAPSTONE_SDK_CORPUS=1` exported
+(`CAPSTONE_SDK_CORPUS=1 bash capstone/runtime/virtual/build-sdk.sh <out> <musl>`, or the port's
+builder): `build-sdk.sh` then appends `-fno-builtin` and refuses an SDK whose effective setting is
+otherwise, because with `malloc` as a library builtin LLVM may elide an allocation a case observes.
+`tools/check-sdk-builtins.py <SDK or build>` checks one already built; every corpus runner
+(`tools/sdk_builtins.py`, called before anything starts) refuses anything else with exit 78.
+
+    # once per arm: an application SDK of the arm's profile (physical: level0)
     bash shared/build-domain.sh <SDK> <OUT>          # cases, controls.dom, build.json (the SDK's heap)
     python3 shared/run-arm.py --arm spatial --state <capstone-vm state> --bindir <OUT> \
         --llvm-bin <compiler>/bin
@@ -50,6 +72,17 @@ Observation per run to the shared judge (`tools/verdicts.py`, SCHEMA.md "Verdict
 as the defect's only in the function the case names before its access (`expect_fault_in`) or in a
 `fault_sites` entry its `case.json` justifies; the pc is resolved from the image's own symbols. The
 bundle goes to `results/<stamp>-qemu/<arm>/`; console logs stay outside the repository.
+
+Each case also carries its **own** negative control, which is the other way a fault is attributed.
+`controls.dom` asks whether this configuration reports at all; a case's control asks whether THIS
+fault depends on THIS defect. It is the same program built with `-DPGCLIENT_NEGATIVE_CONTROL`,
+which moves one value to the safe side of the boundary the defect crosses and leaves the
+allocation, the call and the function under test as they were, so it must COMPLETE. The build
+emits it as `<case>-control.dom` -- a suffix no case discovery matches, so a control can never be
+picked up as a measurement -- and the runner runs it in the same boot, from the same build, only
+when a case faulted without being attributed by its declared function. A control that completes
+attributes the fault; a control that faults says the fault was not the defect, and the row says
+so instead of counting.
 
 ## Results on record
 

@@ -1,0 +1,42 @@
+# tier3-mp-arm.sh dry runs, 2026-10-21 16:17, every call stubbed: the arm (a stub writing the reference's own matrix.tsv and a real pass transcript), busy, booking
+## good-mruby-stock
+MP mruby-stock BEGIN 16:17:16 board 2 runner 9db9f5f7cf60fcda appvm-arm 11967b378bda73c8 wt-ref 6764d96229f6 booking 999
+unbooked 999
+MP mruby-stock END 16:17:16 rc=0 :: APPVM read rc=0 :: --- stub
+MP mruby-stock COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MP mruby-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1
+MP board2 DONE 16:17:16
+## good-perl-stock
+MP perl-stock BEGIN 16:17:53 board 2 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 999
+unbooked 999
+MP perl-stock END 16:17:54 rc=0 :: APPVM read rc=0 :: --- stub
+MP perl-stock COMPARE vs reference rc=0 :: 11 of 11 cells the same
+MP perl-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1
+MP board2 DONE 16:17:54
+## good-perl-sublet
+MP perl-sublet BEGIN 16:17:57 board 1 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 999
+unbooked 999
+MP perl-sublet END 16:17:57 rc=0 :: APPVM read rc=0 :: --- stub
+MP perl-sublet COMPARE vs reference rc=0 :: 11 of 11 cells the same
+MP perl-sublet readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1
+MP board1 DONE 16:17:57
+## flip-perl-sublet
+MP perl-sublet BEGIN 16:17:57 board 1 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 999
+unbooked 999
+MP perl-sublet END 16:17:57 rc=0 :: APPVM read rc=0 :: --- stub
+MP perl-sublet COMPARE vs reference rc=1 :: 10 of 11 cells the same
+MP perl-sublet readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x1
+MP board1 DONE 16:17:57
+## sublet-refused
+MP STOP: mruby-sublet's reference did not read clean (needs APPVM read rc=0 with "control smoke ok" in <mnt-hdd>/capstone/corpus-mp/refs/tB-mimic/mruby-sublet.log)
+## refuse78
+MP perl-stock BEGIN 16:18:01 board 2 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 999
+unbooked 999
+MP perl-stock END 16:18:01 rc=78 :: APPVM read rc=0 :: --- stub
+MP STOP: the arm script refused perl-stock (rc=78)
+## busy
+MP STOP: board 2 is busy
+## 409
+MP STOP: the hub refused the booking (409): 409 held
+## unknown-tag
+MP STOP: tag cpython has no recipe

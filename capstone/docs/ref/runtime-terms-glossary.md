@@ -273,7 +273,7 @@ libc, syscall ABI, kernel user ABI handling, and related Linux runtime surfaces.
 
 ## 6. Allocator terms
 
-The allocator work (Sublet, PoisonCap, the ports under `ports/`, the corpora under
+The allocator work (Sublet, the ports under `ports/`, the corpora under
 `bug-corpora/`) uses the six words below, each with one meaning. The programs we port
 use the same words for other things, so **an upstream name always carries its
 program**: aset chunk, pymalloc block, pymalloc pool, wmem block, memcached page,
@@ -281,12 +281,18 @@ APR memnode. A bare *block*, *object* or *pool* means the term defined here.
 
 ### System allocator
 The allocator that `malloc` and `free` resolve to: glibc on Linux, CheriBSD's libc,
-and in a Capstone domain one of the two heaps in `ports/musl-capstone/runtime/`:
+and on Capstone one heap per profile:
 
-- the **first-fit heap** (`level0.c`): first fit over one static arena, per-object
-  bounds unless built with `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, no revocation;
-- the **Sublet heap** (`sublet_heap.c`): a buddy heap over a granted region,
-  per-object bounds, and every free revokes.
+- the **first-fit heap** (`ports/musl-capstone/runtime/level0.c`), the physical
+  profile's: first fit over one static arena, per-object bounds unless built with
+  `-DCAPSTONE_LEVEL0_OBJECT_BOUNDS=0`, no revocation;
+- **virtual mallocng** (`runtime/virtual/heap.c`), the virtual profile's and the
+  protected system allocator: musl mallocng, each object bounded exactly, and its
+  lifetime retired on free, so a stale capability to it faults.
+
+The **Sublet heap** (`sublet_heap.c`, a buddy heap over a granted region whose every
+free revoked) was the physical profile's second heap. It was removed on 2026-10-11;
+results recorded on it keep their arm names.
 
 The paper and older notes call the system allocator *level 0*. In code,
 `level0` names the first-fit heap only (`level0.c`, `CAPSTONE_LEVEL0_*`, the
@@ -340,13 +346,16 @@ mode*, *heap mode* or *adapter mode*; an adapter's numeric knob stays *mode 0/1/
 
 An arm that changes only the system allocator is named `sysalloc-<protection>`:
 
-| Arm | System allocator | FFmpeg, memcached, tshark | mruby, Perl, `build.py --heap` | heap qualification |
+| Arm | System allocator | FFmpeg, memcached, tshark | mruby, Perl | heap qualification |
 |---|---|---|---|---|
 | `sysalloc-none` | first-fit heap, no per-object bounds | `level0` | — | `control` |
 | `sysalloc-bounds` | first-fit heap, per-object bounds | `shrink` | `level0` | `level0` |
-| `sysalloc-sublet` | Sublet heap | `sublet` | `sublet` | `sublet` |
+| `sysalloc-sublet` | Sublet heap, removed 2026-10-11 | — | — | — |
 
-The knob values in the middle columns are today's code. The same value means
+`sysalloc-sublet` names recorded results only: its knob values (`sublet`, `HEAP=sublet`,
+`build.py --heap sublet`) went with the heap on 2026-10-11. The system allocator that
+ends a freed object's lifetime is now virtual mallocng, the corpora's `virtual-malloc`
+arm. The knob values in the middle columns are today's code. The same value means
 different arms in different ports (`level0` is `sysalloc-none` in one column and
 `sysalloc-bounds` in the next), which is why results name the arm, not the knob.
 Per-object bounds became the first-fit heap's default with PR #170 (on `dev`
@@ -354,11 +363,11 @@ Per-object bounds became the first-fit heap's default with PR #170 (on `dev`
 `level0` result recorded earlier is `sysalloc-none`.
 
 An arm that changes a nested allocator keeps its corpus name: `spatial` (per-object
-bounds, no revocation), `sublet` (the allocator's Sublet port), `poisoncap-spatial`,
-`poisoncap-protected`. `cheribsd-revocation` is CheriBSD's system allocator with
+bounds, no revocation), `sublet` (the allocator's Sublet port), and, in PostgreSQL's corpus only since
+2026-10-10, `poisoncap-spatial` and `poisoncap-protected`. `cheribsd-revocation` is CheriBSD's system allocator with
 revocation on and the nested allocator unchanged. An arm that changes both says
-so: mruby's `sublet-gc` and tshark's `chunks` are `sysalloc-sublet` plus that
-program's Sublet port (mruby's GC object slots, wmem's block allocator).
+so: mruby's `sublet-gc` and tshark's `chunks` were `sysalloc-sublet` plus that
+program's Sublet port (mruby's GC object slots, wmem's block allocator), retired with it.
 
 ### Revocation capability, alias
 The paper's names for what the Sublet API calls a handle (`sublet_handle`) and for

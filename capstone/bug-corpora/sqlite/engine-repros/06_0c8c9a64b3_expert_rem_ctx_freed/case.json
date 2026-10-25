@@ -28,14 +28,25 @@
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "NO-READING",
       "verdict_note": "reached, then neither completed nor faulted",
-      "verdict_from": "results/2026-10-10-virtual/virtual-malloc",
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-malloc",
       "verdict_reason": "inconclusive"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3fa64203f4 in idxRemFunc; by function: idxRemFunc is where host ASan reported it",
-      "verdict_from": "results/2026-10-10-virtual/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3fb941f8bc in idxRemFunc; by function: idxRemFunc is where host ASan reported it",
+      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+    },
+    "silicon-sqlite-stock": {
+      "status": "not written",
+      "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
+    },
+    "vp2-malloc": {
+      "verdict": "NO-READING",
+      "verdict_note": "reached, then neither completed nor faulted",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+      "verdict_reason": "inconclusive",
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
     }
   },
   "status": "spatial run 2026-10-04/05: completes; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1021b86c8; cheribsd-revocation run 2026-10-04/05: completes; the probe witnesses the defective access (kind=UAF, hits=12, witnesses=4)",

@@ -1,0 +1,53 @@
+# make-b2-kit.sh afb5147fb842960d dry run, 2026-10-22 19:2x: MK_X = a scratch root, bitstream name caplifive_vp2c_DRYRUN0000.
+# The parts: module <mnt-hdd>/capstone/board-modules/capstone_vm-215a09be5a89360c.ko (runtime lane), launcher capstone-vexec-fad465ce4dea7121.
+# Module instruction widths by llvm-objdump (8 hex digits = 4-byte, 4 = RVC), with an rv64gc object as the control that RVC shows as 4:
+   capstone_vm-215a09be5a89360c.ko widths {8: 4770, 2: 1}
+   capstone_vm-21fbfc397e7c7a42.ko widths {8: 4770, 2: 1}
+   control rv64gc f(): widths {4: 2}
+#   (the one 2-digit line in both modules is a single byte, not an instruction: 0 RVC in 215a09be, as in the batch module)
+   index_bits parameter in 215a09be: 1
+## b1
+MK kit <scratch>/mk2/x/bkit9-b2-b1: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1:
+< BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+> BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000
+MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE
+## b2
+MK kit <scratch>/mk2/x/bkit9-b2-b2: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b2:
+< BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+> BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000
+MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE
+## nb1
+MK kit <scratch>/mk2/x/bkit9-b2-nb1: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit8-batch-nb1:
+< BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+> BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000
+MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE
+## nb2
+MK kit <scratch>/mk2/x/bkit9-b2-nb2: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit8-batch-nb2:
+< BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+> BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000
+MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE
+## mb1
+MK kit <scratch>/mk2/x/bkit9-b2-mb1: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit8-batch-mb1:
+< BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+> BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000
+MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE
+## mb2
+MK kit <scratch>/mk2/x/bkit9-b2-mb2: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit8-batch-mb2:
+< BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+> BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000
+MK module 215a09be5a89360c launcher fad465ce4dea7121 DONE
+## exists
+MK STOP: <scratch>/mk2/x/bkit9-b2-b1 exists
+## wrongmod
+MK STOP: the module <mnt-hdd>/capstone/board-modules/capstone_vm-21fbfc397e7c7a42.ko is not 215a09be5a89360c
+## wrongvex
+MK STOP: the launcher <mnt-hdd>/capstone/board-modules/capstone-vexec-b628905f5ddda804 is not fad465ce4dea7121
+## badname
+MK STOP: bitstream name vp2c_bad
+## the six scratch kits
+bkit9-b2-b1 sums ok BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000  measure-only=0
+bkit9-b2-b2 sums ok BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000 FPGA_BOARD=2  measure-only=0
+bkit9-b2-mb1 sums ok BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000  measure-only=1
+bkit9-b2-mb2 sums ok BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000 FPGA_BOARD=2  measure-only=1
+bkit9-b2-nb1 sums ok BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000 norandmaps  measure-only=0
+bkit9-b2-nb2 sums ok BOARD_BITSTREAM=caplifive_vp2c_DRYRUN0000 norandmaps FPGA_BOARD=2  measure-only=0

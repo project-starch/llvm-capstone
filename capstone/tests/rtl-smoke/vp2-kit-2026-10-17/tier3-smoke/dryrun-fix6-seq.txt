@@ -1,0 +1,9 @@
+# tier3-fix6-seq.sh dry run (2026-10-18 19:16), the sequence stubbed (each arm's 3005ed52 board run copied in as its
+# reading), the real score-arm.sh under dry-run tags and a dry-run results directory:
+# - pass (the pair out reads PAIR DONE and "pym0-fix6: 20 of 20 cells the same (rc 0)"): fso, pb12 and pb10 run under
+#   their ARMS.spec lines with the -fix6-style tag, then each is scored against t3-<arm>/bundle: fso 0 of 9, pb12 0 of 9,
+#   pb10 1 of 4, which are the 3005ed52 records' own readings, so the scorer reads what it is given; FIX6SEQ DONE.
+# - off (PAIR DONE, pym0 "0 of 20"): FIX6SEQ HOLD naming the pym0 line; nothing runs.
+# - stop (PAIR STOP): FIX6SEQ HOLD naming the stop line; nothing runs.
+# The dry run's records and bundles were removed by name afterwards. Not exercised: the kit-module hash gate and a
+# missing ARMS.spec line or prediction bundle (all three exist).

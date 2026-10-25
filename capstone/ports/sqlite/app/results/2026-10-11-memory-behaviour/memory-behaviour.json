@@ -1,0 +1,1718 @@
+{
+ "schema": 1,
+ "date": "2026-10-11",
+ "preregistration": {
+  "file": "capstone/docs/plans/2026-10-11-protected-memory-behaviour.md",
+  "commit": "82c1607119ec"
+ },
+ "platform_sha256": {
+  "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "run-staged.py": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c"
+ },
+ "platform_options": "virt-capstone, 1 hart, -m 2G, x-capstone-u-mode=true, x-capstone-exact-bounds=true (run-staged.py defaults)",
+ "n_per_arm": 3,
+ "boot_layout": "one arm per boot; all 12 boots (6 SQLite, 6 PostgreSQL) in parallel on one host, each with its own QEMU lock and work directory",
+ "program": "SQLite 3.22.0",
+ "workload": "speedtest1 main --size 1, memsys5 heap --heap 8388608 64, with --stats",
+ "guest_command": "/usr/bin/time -v /mnt/vm/capstone-vexec /mnt/vm/speedtest1.dom --stats --heap 8388608 64 --size 1 st.db (cwd /tmp), env CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1",
+ "images": {
+  "stock": {
+   "file": "speedtest1.dom",
+   "sha256": "385a7fbb38fcbbd6d2558e9491b4d5e0609ef658132853c0ee280c53c18a37a0",
+   "SQLITE_HEAP": "memsys5"
+  },
+  "protected": {
+   "file": "speedtest1.dom",
+   "sha256": "9981f0bef468e8002dcb021ee65be2cd75ad414673532768c47a46c41760d405",
+   "SQLITE_HEAP": "memsys5-sublet",
+   "patch": "capstone/ports/sqlite/sublet/sublet-3220000-memsys5.patch",
+   "patch_sha256": "3f16cf52933c20a93cbc860e90bd42f388710fc4c60f407227146ab60b5f9dd2"
+  }
+ },
+ "gate_sh_sha256": {
+  "stock": "908a82bb3dbbbdbcb40b9c991fc328741acf2717f6a98ed56405f4ede5647c81",
+  "protected": "67a65f41a1d0caf3e46086ef441eb274e17ca5c118ea4ad28fff327a2e59113a"
+ },
+ "counter_sources": {
+  "speedtest1_stats": "speedtest1 --stats lines, parsed verbatim (cur, and max where printed); SQLITE_STATUS_MALLOC_COUNT is printed as \"Outstanding Allocations\"; no cumulative malloc count is printed",
+  "launcher_stats": "capstone-vexec --stats immediately before and after the run; delta = after - before",
+  "process_vm_stats": "CAPSTONE_VM_STATS line printed by the launcher at the domain exit (pages and peak are pinned 4 KiB pages)",
+  "time_v_max_rss_kib": "busybox time -v \"Maximum resident set size\" (wait4 ru_maxrss) of the launcher process",
+  "vmhwm_last_sample_kib": "background /proc/<pid>/status VmHWM sampler; INVALID: recorded a pid other than the launcher main process, see README"
+ },
+ "repetitions": {
+  "stock-1": {
+   "exit": 0,
+   "guest_wall_s": 35,
+   "domain_fault": false,
+   "completed": true,
+   "launcher_stats_before": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 30,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 30,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "launcher_stats_delta": {
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 30,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 30,
+    "tag_pages": 0,
+    "node_capacity": 0,
+    "node_bytes": 0,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "process_vm_stats": {
+    "arenas": 9,
+    "pages": 869,
+    "peak": 2918,
+    "nodes": 30,
+    "steps": 35106,
+    "faults": 2066,
+    "collections": 0,
+    "reclaimed": 0,
+    "rounds": 15223,
+    "bytes_in": 1987376,
+    "bytes_out": 773987,
+    "node_bytes": 28672,
+    "node_capacity": 1024,
+    "node_growths": 0,
+    "launch_ns": 673086100,
+    "elapsed_ns": 33138910900
+   },
+   "time_v_max_rss_kib": 49104,
+   "time_v_exit_status": 0,
+   "time_v_elapsed": "0m 34.77s",
+   "vmhwm_last_sample_kib": 116,
+   "rmmod_status": 0,
+   "phases": [
+    {
+     "phase": 100,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 110,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 120,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 130,
+     "rows": 25,
+     "hash": "86f7643d251c40ef"
+    },
+    {
+     "phase": 140,
+     "rows": 10,
+     "hash": "0c7b7e747ae91a62"
+    },
+    {
+     "phase": 142,
+     "rows": 1050,
+     "hash": "359b7f1ecbeaaff8"
+    },
+    {
+     "phase": 145,
+     "rows": 100,
+     "hash": "a0d680adf09a4a75"
+    },
+    {
+     "phase": 150,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 160,
+     "rows": 100,
+     "hash": "df2ea006eed925a5"
+    },
+    {
+     "phase": 161,
+     "rows": 100,
+     "hash": "24d182f082f52e7c"
+    },
+    {
+     "phase": 170,
+     "rows": 100,
+     "hash": "7e14902b1948dce8"
+    },
+    {
+     "phase": 180,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 190,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 200,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 210,
+     "rows": 1,
+     "hash": "78a5f1150135b920"
+    },
+    {
+     "phase": 230,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 240,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 250,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 260,
+     "rows": 1,
+     "hash": "0c3a0c3404ffd068"
+    },
+    {
+     "phase": 270,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 280,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 290,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 300,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 310,
+     "rows": 900,
+     "hash": "5f60bc2cdcb89e99"
+    },
+    {
+     "phase": 320,
+     "rows": 1,
+     "hash": "9b7e48527050edfe"
+    },
+    {
+     "phase": 400,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 410,
+     "rows": 700,
+     "hash": "649813fe025d510b"
+    },
+    {
+     "phase": 500,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 510,
+     "rows": 700,
+     "hash": "7e30b42e2404cc90"
+    },
+    {
+     "phase": 520,
+     "rows": 512,
+     "hash": "07aa5d31c6064a19"
+    },
+    {
+     "phase": 980,
+     "rows": 1,
+     "hash": "b8835f20872ee7fa"
+    },
+    {
+     "phase": 990,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    }
+   ],
+   "speedtest1_stats": {
+    "compile_options": [
+     "COMPILER=clang-22.0.0",
+     "ENABLE_MEMSYS5",
+     "THREADSAFE=1"
+    ],
+    "Lookaside Slots Used": {
+     "cur": 1,
+     "max": 82
+    },
+    "Successful lookasides": 24639,
+    "Lookaside size faults": 159,
+    "Lookaside OOM faults": 0,
+    "Pager Heap Usage": 326928,
+    "Page cache hits": 33653,
+    "Page cache misses": 0,
+    "Page cache writes": 263,
+    "Schema Heap Usage": 16640,
+    "Statement Heap Usage": 0,
+    "Memory Used (bytes)": {
+     "cur": 0,
+     "max": 1117760
+    },
+    "Outstanding Allocations": {
+     "cur": 0,
+     "max": 238
+    },
+    "Pcache Overflow Bytes": {
+     "cur": 0,
+     "max": 528384
+    },
+    "Largest Allocation": 120000,
+    "Largest Pcache Allocation": 4592
+   },
+   "speedtest1_total_s": 29.732,
+   "phases_equal_same_answers_8MiB": true,
+   "host_boot_wall_s": 44
+  },
+  "stock-2": {
+   "exit": 0,
+   "guest_wall_s": 35,
+   "domain_fault": false,
+   "completed": true,
+   "launcher_stats_before": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 30,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 30,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "launcher_stats_delta": {
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 30,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 30,
+    "tag_pages": 0,
+    "node_capacity": 0,
+    "node_bytes": 0,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "process_vm_stats": {
+    "arenas": 9,
+    "pages": 869,
+    "peak": 2918,
+    "nodes": 30,
+    "steps": 35170,
+    "faults": 2066,
+    "collections": 0,
+    "reclaimed": 0,
+    "rounds": 15223,
+    "bytes_in": 1987376,
+    "bytes_out": 773987,
+    "node_bytes": 28672,
+    "node_capacity": 1024,
+    "node_growths": 0,
+    "launch_ns": 666912400,
+    "elapsed_ns": 32667684600
+   },
+   "time_v_max_rss_kib": 49104,
+   "time_v_exit_status": 0,
+   "time_v_elapsed": "0m 34.19s",
+   "vmhwm_last_sample_kib": 116,
+   "rmmod_status": 0,
+   "phases": [
+    {
+     "phase": 100,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 110,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 120,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 130,
+     "rows": 25,
+     "hash": "86f7643d251c40ef"
+    },
+    {
+     "phase": 140,
+     "rows": 10,
+     "hash": "0c7b7e747ae91a62"
+    },
+    {
+     "phase": 142,
+     "rows": 1050,
+     "hash": "359b7f1ecbeaaff8"
+    },
+    {
+     "phase": 145,
+     "rows": 100,
+     "hash": "a0d680adf09a4a75"
+    },
+    {
+     "phase": 150,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 160,
+     "rows": 100,
+     "hash": "df2ea006eed925a5"
+    },
+    {
+     "phase": 161,
+     "rows": 100,
+     "hash": "24d182f082f52e7c"
+    },
+    {
+     "phase": 170,
+     "rows": 100,
+     "hash": "7e14902b1948dce8"
+    },
+    {
+     "phase": 180,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 190,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 200,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 210,
+     "rows": 1,
+     "hash": "78a5f1150135b920"
+    },
+    {
+     "phase": 230,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 240,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 250,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 260,
+     "rows": 1,
+     "hash": "0c3a0c3404ffd068"
+    },
+    {
+     "phase": 270,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 280,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 290,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 300,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 310,
+     "rows": 900,
+     "hash": "5f60bc2cdcb89e99"
+    },
+    {
+     "phase": 320,
+     "rows": 1,
+     "hash": "9b7e48527050edfe"
+    },
+    {
+     "phase": 400,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 410,
+     "rows": 700,
+     "hash": "649813fe025d510b"
+    },
+    {
+     "phase": 500,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 510,
+     "rows": 700,
+     "hash": "7e30b42e2404cc90"
+    },
+    {
+     "phase": 520,
+     "rows": 512,
+     "hash": "07aa5d31c6064a19"
+    },
+    {
+     "phase": 980,
+     "rows": 1,
+     "hash": "b8835f20872ee7fa"
+    },
+    {
+     "phase": 990,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    }
+   ],
+   "speedtest1_stats": {
+    "compile_options": [
+     "COMPILER=clang-22.0.0",
+     "ENABLE_MEMSYS5",
+     "THREADSAFE=1"
+    ],
+    "Lookaside Slots Used": {
+     "cur": 1,
+     "max": 82
+    },
+    "Successful lookasides": 24639,
+    "Lookaside size faults": 159,
+    "Lookaside OOM faults": 0,
+    "Pager Heap Usage": 326928,
+    "Page cache hits": 33653,
+    "Page cache misses": 0,
+    "Page cache writes": 263,
+    "Schema Heap Usage": 16640,
+    "Statement Heap Usage": 0,
+    "Memory Used (bytes)": {
+     "cur": 0,
+     "max": 1117760
+    },
+    "Outstanding Allocations": {
+     "cur": 0,
+     "max": 238
+    },
+    "Pcache Overflow Bytes": {
+     "cur": 0,
+     "max": 528384
+    },
+    "Largest Allocation": 120000,
+    "Largest Pcache Allocation": 4592
+   },
+   "speedtest1_total_s": 29.416,
+   "phases_equal_same_answers_8MiB": true,
+   "host_boot_wall_s": 44
+  },
+  "stock-3": {
+   "exit": 0,
+   "guest_wall_s": 34,
+   "domain_fault": false,
+   "completed": true,
+   "launcher_stats_before": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 30,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 30,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "launcher_stats_delta": {
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 30,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 30,
+    "tag_pages": 0,
+    "node_capacity": 0,
+    "node_bytes": 0,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "process_vm_stats": {
+    "arenas": 9,
+    "pages": 869,
+    "peak": 2918,
+    "nodes": 30,
+    "steps": 35091,
+    "faults": 2066,
+    "collections": 0,
+    "reclaimed": 0,
+    "rounds": 15223,
+    "bytes_in": 1987376,
+    "bytes_out": 773987,
+    "node_bytes": 28672,
+    "node_capacity": 1024,
+    "node_growths": 0,
+    "launch_ns": 636716200,
+    "elapsed_ns": 31927058100
+   },
+   "time_v_max_rss_kib": 49104,
+   "time_v_exit_status": 0,
+   "time_v_elapsed": "0m 33.59s",
+   "vmhwm_last_sample_kib": 116,
+   "rmmod_status": 0,
+   "phases": [
+    {
+     "phase": 100,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 110,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 120,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 130,
+     "rows": 25,
+     "hash": "86f7643d251c40ef"
+    },
+    {
+     "phase": 140,
+     "rows": 10,
+     "hash": "0c7b7e747ae91a62"
+    },
+    {
+     "phase": 142,
+     "rows": 1050,
+     "hash": "359b7f1ecbeaaff8"
+    },
+    {
+     "phase": 145,
+     "rows": 100,
+     "hash": "a0d680adf09a4a75"
+    },
+    {
+     "phase": 150,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 160,
+     "rows": 100,
+     "hash": "df2ea006eed925a5"
+    },
+    {
+     "phase": 161,
+     "rows": 100,
+     "hash": "24d182f082f52e7c"
+    },
+    {
+     "phase": 170,
+     "rows": 100,
+     "hash": "7e14902b1948dce8"
+    },
+    {
+     "phase": 180,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 190,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 200,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 210,
+     "rows": 1,
+     "hash": "78a5f1150135b920"
+    },
+    {
+     "phase": 230,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 240,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 250,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 260,
+     "rows": 1,
+     "hash": "0c3a0c3404ffd068"
+    },
+    {
+     "phase": 270,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 280,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 290,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 300,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 310,
+     "rows": 900,
+     "hash": "5f60bc2cdcb89e99"
+    },
+    {
+     "phase": 320,
+     "rows": 1,
+     "hash": "9b7e48527050edfe"
+    },
+    {
+     "phase": 400,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 410,
+     "rows": 700,
+     "hash": "649813fe025d510b"
+    },
+    {
+     "phase": 500,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 510,
+     "rows": 700,
+     "hash": "7e30b42e2404cc90"
+    },
+    {
+     "phase": 520,
+     "rows": 512,
+     "hash": "07aa5d31c6064a19"
+    },
+    {
+     "phase": 980,
+     "rows": 1,
+     "hash": "b8835f20872ee7fa"
+    },
+    {
+     "phase": 990,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    }
+   ],
+   "speedtest1_stats": {
+    "compile_options": [
+     "COMPILER=clang-22.0.0",
+     "ENABLE_MEMSYS5",
+     "THREADSAFE=1"
+    ],
+    "Lookaside Slots Used": {
+     "cur": 1,
+     "max": 82
+    },
+    "Successful lookasides": 24639,
+    "Lookaside size faults": 159,
+    "Lookaside OOM faults": 0,
+    "Pager Heap Usage": 326928,
+    "Page cache hits": 33653,
+    "Page cache misses": 0,
+    "Page cache writes": 263,
+    "Schema Heap Usage": 16640,
+    "Statement Heap Usage": 0,
+    "Memory Used (bytes)": {
+     "cur": 0,
+     "max": 1117760
+    },
+    "Outstanding Allocations": {
+     "cur": 0,
+     "max": 238
+    },
+    "Pcache Overflow Bytes": {
+     "cur": 0,
+     "max": 528384
+    },
+    "Largest Allocation": 120000,
+    "Largest Pcache Allocation": 4592
+   },
+   "speedtest1_total_s": 28.846,
+   "phases_equal_same_answers_8MiB": true,
+   "host_boot_wall_s": 43
+  },
+  "protected-1": {
+   "exit": 0,
+   "guest_wall_s": 36,
+   "domain_fault": false,
+   "completed": true,
+   "launcher_stats_before": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 4862,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 28256,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 6,
+    "nodes_reclaimed": 27923
+   },
+   "launcher_stats_delta": {
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 4862,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 28256,
+    "tag_pages": 0,
+    "node_capacity": 0,
+    "node_bytes": 0,
+    "collections": 6,
+    "nodes_reclaimed": 27923
+   },
+   "process_vm_stats": {
+    "arenas": 9,
+    "pages": 869,
+    "peak": 2918,
+    "nodes": 28256,
+    "steps": 35191,
+    "faults": 2066,
+    "collections": 6,
+    "reclaimed": 27923,
+    "rounds": 15223,
+    "bytes_in": 1987375,
+    "bytes_out": 773987,
+    "node_bytes": 94208,
+    "node_capacity": 5120,
+    "node_growths": 1,
+    "launch_ns": 673613100,
+    "elapsed_ns": 33700026100
+   },
+   "time_v_max_rss_kib": 49104,
+   "time_v_exit_status": 0,
+   "time_v_elapsed": "0m 35.34s",
+   "vmhwm_last_sample_kib": 116,
+   "rmmod_status": 0,
+   "phases": [
+    {
+     "phase": 100,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 110,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 120,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 130,
+     "rows": 25,
+     "hash": "86f7643d251c40ef"
+    },
+    {
+     "phase": 140,
+     "rows": 10,
+     "hash": "0c7b7e747ae91a62"
+    },
+    {
+     "phase": 142,
+     "rows": 1050,
+     "hash": "359b7f1ecbeaaff8"
+    },
+    {
+     "phase": 145,
+     "rows": 100,
+     "hash": "a0d680adf09a4a75"
+    },
+    {
+     "phase": 150,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 160,
+     "rows": 100,
+     "hash": "df2ea006eed925a5"
+    },
+    {
+     "phase": 161,
+     "rows": 100,
+     "hash": "24d182f082f52e7c"
+    },
+    {
+     "phase": 170,
+     "rows": 100,
+     "hash": "7e14902b1948dce8"
+    },
+    {
+     "phase": 180,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 190,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 200,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 210,
+     "rows": 1,
+     "hash": "78a5f1150135b920"
+    },
+    {
+     "phase": 230,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 240,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 250,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 260,
+     "rows": 1,
+     "hash": "0c3a0c3404ffd068"
+    },
+    {
+     "phase": 270,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 280,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 290,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 300,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 310,
+     "rows": 900,
+     "hash": "5f60bc2cdcb89e99"
+    },
+    {
+     "phase": 320,
+     "rows": 1,
+     "hash": "9b7e48527050edfe"
+    },
+    {
+     "phase": 400,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 410,
+     "rows": 700,
+     "hash": "649813fe025d510b"
+    },
+    {
+     "phase": 500,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 510,
+     "rows": 700,
+     "hash": "7e30b42e2404cc90"
+    },
+    {
+     "phase": 520,
+     "rows": 512,
+     "hash": "07aa5d31c6064a19"
+    },
+    {
+     "phase": 980,
+     "rows": 1,
+     "hash": "b8835f20872ee7fa"
+    },
+    {
+     "phase": 990,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    }
+   ],
+   "speedtest1_stats": {
+    "compile_options": [
+     "COMPILER=clang-22.0.0",
+     "ENABLE_MEMSYS5",
+     "THREADSAFE=1"
+    ],
+    "Lookaside Slots Used": {
+     "cur": 1,
+     "max": 82
+    },
+    "Successful lookasides": 24639,
+    "Lookaside size faults": 163,
+    "Lookaside OOM faults": 0,
+    "Pager Heap Usage": 325016,
+    "Page cache hits": 33653,
+    "Page cache misses": 0,
+    "Page cache writes": 263,
+    "Schema Heap Usage": 12064,
+    "Statement Heap Usage": 0,
+    "Memory Used (bytes)": {
+     "cur": 0,
+     "max": 796216
+    },
+    "Outstanding Allocations": {
+     "cur": 0,
+     "max": 254
+    },
+    "Pcache Overflow Bytes": {
+     "cur": 0,
+     "max": 378656
+    },
+    "Largest Allocation": 120000,
+    "Largest Pcache Allocation": 4592
+   },
+   "speedtest1_total_s": 30.565,
+   "phases_equal_same_answers_8MiB": true,
+   "host_boot_wall_s": 45
+  },
+  "protected-2": {
+   "exit": 0,
+   "guest_wall_s": 36,
+   "domain_fault": false,
+   "completed": true,
+   "launcher_stats_before": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 4862,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 28256,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 6,
+    "nodes_reclaimed": 27923
+   },
+   "launcher_stats_delta": {
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 4862,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 28256,
+    "tag_pages": 0,
+    "node_capacity": 0,
+    "node_bytes": 0,
+    "collections": 6,
+    "nodes_reclaimed": 27923
+   },
+   "process_vm_stats": {
+    "arenas": 9,
+    "pages": 869,
+    "peak": 2918,
+    "nodes": 28256,
+    "steps": 35208,
+    "faults": 2066,
+    "collections": 6,
+    "reclaimed": 27923,
+    "rounds": 15223,
+    "bytes_in": 1987375,
+    "bytes_out": 773987,
+    "node_bytes": 94208,
+    "node_capacity": 5120,
+    "node_growths": 1,
+    "launch_ns": 622720400,
+    "elapsed_ns": 33741210600
+   },
+   "time_v_max_rss_kib": 49104,
+   "time_v_exit_status": 0,
+   "time_v_elapsed": "0m 35.39s",
+   "vmhwm_last_sample_kib": 116,
+   "rmmod_status": 0,
+   "phases": [
+    {
+     "phase": 100,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 110,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 120,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 130,
+     "rows": 25,
+     "hash": "86f7643d251c40ef"
+    },
+    {
+     "phase": 140,
+     "rows": 10,
+     "hash": "0c7b7e747ae91a62"
+    },
+    {
+     "phase": 142,
+     "rows": 1050,
+     "hash": "359b7f1ecbeaaff8"
+    },
+    {
+     "phase": 145,
+     "rows": 100,
+     "hash": "a0d680adf09a4a75"
+    },
+    {
+     "phase": 150,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 160,
+     "rows": 100,
+     "hash": "df2ea006eed925a5"
+    },
+    {
+     "phase": 161,
+     "rows": 100,
+     "hash": "24d182f082f52e7c"
+    },
+    {
+     "phase": 170,
+     "rows": 100,
+     "hash": "7e14902b1948dce8"
+    },
+    {
+     "phase": 180,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 190,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 200,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 210,
+     "rows": 1,
+     "hash": "78a5f1150135b920"
+    },
+    {
+     "phase": 230,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 240,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 250,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 260,
+     "rows": 1,
+     "hash": "0c3a0c3404ffd068"
+    },
+    {
+     "phase": 270,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 280,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 290,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 300,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 310,
+     "rows": 900,
+     "hash": "5f60bc2cdcb89e99"
+    },
+    {
+     "phase": 320,
+     "rows": 1,
+     "hash": "9b7e48527050edfe"
+    },
+    {
+     "phase": 400,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 410,
+     "rows": 700,
+     "hash": "649813fe025d510b"
+    },
+    {
+     "phase": 500,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 510,
+     "rows": 700,
+     "hash": "7e30b42e2404cc90"
+    },
+    {
+     "phase": 520,
+     "rows": 512,
+     "hash": "07aa5d31c6064a19"
+    },
+    {
+     "phase": 980,
+     "rows": 1,
+     "hash": "b8835f20872ee7fa"
+    },
+    {
+     "phase": 990,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    }
+   ],
+   "speedtest1_stats": {
+    "compile_options": [
+     "COMPILER=clang-22.0.0",
+     "ENABLE_MEMSYS5",
+     "THREADSAFE=1"
+    ],
+    "Lookaside Slots Used": {
+     "cur": 1,
+     "max": 82
+    },
+    "Successful lookasides": 24639,
+    "Lookaside size faults": 163,
+    "Lookaside OOM faults": 0,
+    "Pager Heap Usage": 325016,
+    "Page cache hits": 33653,
+    "Page cache misses": 0,
+    "Page cache writes": 263,
+    "Schema Heap Usage": 12064,
+    "Statement Heap Usage": 0,
+    "Memory Used (bytes)": {
+     "cur": 0,
+     "max": 796216
+    },
+    "Outstanding Allocations": {
+     "cur": 0,
+     "max": 254
+    },
+    "Pcache Overflow Bytes": {
+     "cur": 0,
+     "max": 378656
+    },
+    "Largest Allocation": 120000,
+    "Largest Pcache Allocation": 4592
+   },
+   "speedtest1_total_s": 30.641,
+   "phases_equal_same_answers_8MiB": true,
+   "host_boot_wall_s": 45
+  },
+  "protected-3": {
+   "exit": 0,
+   "guest_wall_s": 35,
+   "domain_fault": false,
+   "completed": true,
+   "launcher_stats_before": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 0,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 0,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   },
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 4862,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 28256,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 6,
+    "nodes_reclaimed": 27923
+   },
+   "launcher_stats_delta": {
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 4862,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 28256,
+    "tag_pages": 0,
+    "node_capacity": 0,
+    "node_bytes": 0,
+    "collections": 6,
+    "nodes_reclaimed": 27923
+   },
+   "process_vm_stats": {
+    "arenas": 9,
+    "pages": 869,
+    "peak": 2918,
+    "nodes": 28256,
+    "steps": 35176,
+    "faults": 2066,
+    "collections": 6,
+    "reclaimed": 27923,
+    "rounds": 15223,
+    "bytes_in": 1987375,
+    "bytes_out": 773987,
+    "node_bytes": 94208,
+    "node_capacity": 5120,
+    "node_growths": 1,
+    "launch_ns": 671624500,
+    "elapsed_ns": 33400387000
+   },
+   "time_v_max_rss_kib": 49104,
+   "time_v_exit_status": 0,
+   "time_v_elapsed": "0m 35.04s",
+   "vmhwm_last_sample_kib": 116,
+   "rmmod_status": 0,
+   "phases": [
+    {
+     "phase": 100,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 110,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 120,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 130,
+     "rows": 25,
+     "hash": "86f7643d251c40ef"
+    },
+    {
+     "phase": 140,
+     "rows": 10,
+     "hash": "0c7b7e747ae91a62"
+    },
+    {
+     "phase": 142,
+     "rows": 1050,
+     "hash": "359b7f1ecbeaaff8"
+    },
+    {
+     "phase": 145,
+     "rows": 100,
+     "hash": "a0d680adf09a4a75"
+    },
+    {
+     "phase": 150,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 160,
+     "rows": 100,
+     "hash": "df2ea006eed925a5"
+    },
+    {
+     "phase": 161,
+     "rows": 100,
+     "hash": "24d182f082f52e7c"
+    },
+    {
+     "phase": 170,
+     "rows": 100,
+     "hash": "7e14902b1948dce8"
+    },
+    {
+     "phase": 180,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 190,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 200,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 210,
+     "rows": 1,
+     "hash": "78a5f1150135b920"
+    },
+    {
+     "phase": 230,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 240,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 250,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 260,
+     "rows": 1,
+     "hash": "0c3a0c3404ffd068"
+    },
+    {
+     "phase": 270,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 280,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 290,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 300,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 310,
+     "rows": 900,
+     "hash": "5f60bc2cdcb89e99"
+    },
+    {
+     "phase": 320,
+     "rows": 1,
+     "hash": "9b7e48527050edfe"
+    },
+    {
+     "phase": 400,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 410,
+     "rows": 700,
+     "hash": "649813fe025d510b"
+    },
+    {
+     "phase": 500,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    },
+    {
+     "phase": 510,
+     "rows": 700,
+     "hash": "7e30b42e2404cc90"
+    },
+    {
+     "phase": 520,
+     "rows": 512,
+     "hash": "07aa5d31c6064a19"
+    },
+    {
+     "phase": 980,
+     "rows": 1,
+     "hash": "b8835f20872ee7fa"
+    },
+    {
+     "phase": 990,
+     "rows": 0,
+     "hash": "cbf29ce484222325"
+    }
+   ],
+   "speedtest1_stats": {
+    "compile_options": [
+     "COMPILER=clang-22.0.0",
+     "ENABLE_MEMSYS5",
+     "THREADSAFE=1"
+    ],
+    "Lookaside Slots Used": {
+     "cur": 1,
+     "max": 82
+    },
+    "Successful lookasides": 24639,
+    "Lookaside size faults": 163,
+    "Lookaside OOM faults": 0,
+    "Pager Heap Usage": 325016,
+    "Page cache hits": 33653,
+    "Page cache misses": 0,
+    "Page cache writes": 263,
+    "Schema Heap Usage": 12064,
+    "Statement Heap Usage": 0,
+    "Memory Used (bytes)": {
+     "cur": 0,
+     "max": 796216
+    },
+    "Outstanding Allocations": {
+     "cur": 0,
+     "max": 254
+    },
+    "Pcache Overflow Bytes": {
+     "cur": 0,
+     "max": 378656
+    },
+    "Largest Allocation": 120000,
+    "Largest Pcache Allocation": 4592
+   },
+   "speedtest1_total_s": 30.231,
+   "phases_equal_same_answers_8MiB": true,
+   "host_boot_wall_s": 45
+  }
+ }
+}

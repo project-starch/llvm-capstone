@@ -8,9 +8,7 @@ It does not execute httpd, APR's other subsystems, or any threaded use of a
 pool: `APR_HAS_THREADS` and `APR_ALLOCATOR_USES_MMAP` are zero, as in the
 census, and the `APR_POOL_DEBUG` implementation is not built. A
 [stock CheriBSD build](host/cheribsd/README.md) exists -- the platform's own
-`malloc` under every node, no adapter authority -- and a PoisonCap build
-(`-DAPRP_POISONCAP=ON`), whose adapters map every node and poison it where
-the Sublet adapter revokes it.
+`malloc` under every node, no adapter authority.
 
 ## Layout and source boundary
 
@@ -116,23 +114,6 @@ Measured 2026-09-22 under QEMU: 14 of 14 arms
 (`security-tests/results/20260922-buckets-qemu/`); the corpus's own
 measurement is with the corpus.
 
-## PoisonCap
-
-`-DAPRP_POISONCAP=ON` on the `cheribsd` preset replaces the stock adapters
-with `src/cheribsd/node-poison.c` and, with buckets, `src/cheribsd/bucket-poison.c`.
-Every node is one mapped region that keeps `SW_VMEM` and `POISON` authority
-for the manager; what APR and the bucket allocator are handed is an exactly
-bounded alias without either, so a sweep revokes it and nothing else. Mode 0
-invalidates nothing. Mode 1 poisons and sweeps -- every granule, one
-synchronous sweep, clear, zero -- a node at `aprp_node_release` and at
-discard, and a bucket piece at its individual `apr_bucket_free`: the same
-transitions the Sublet adapters act on, from the memory side. The memnode
-header fields upstream reads across a transition are put back through the
-fresh alias, as in the Sublet adapter. Regions stay mapped until process exit,
-so libc can never explain a pair. The corpora build it through
-`shared/build-cases.sh poisoncap` and run mode 0 and 1 as a pair under
-`supervise` (`runners/poisoncap/`).
-
 ## CheriBSD
 
 The `cheribsd` preset builds the same allocator for CheriBSD purecap with
@@ -154,8 +135,7 @@ there; with it off it completes.
 
 Two things a reader of the preset should know. `CMAKE_EXE_LINKER_FLAGS` is
 `-fuse-ld=lld`, because the SDK ships `ld.lld` and no `ld`, so clang otherwise
-falls back to the host's linker (`unrecognised emulation mode: elf64lriscv`);
-the pymalloc PoisonCap build passes the same flag from its script. And
+falls back to the host's linker (`unrecognised emulation mode: elf64lriscv`). And
 `allocator-example` prints `ALLOCATOR_EXAMPLE apr PASS pointer_bytes=16` as its
 last line, which is what the shared runner's component registration expects.
 

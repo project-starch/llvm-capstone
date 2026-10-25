@@ -1,0 +1,28 @@
+--- eloop/capstone_vm.c	2026-10-18 06:31:42.645691718 +0800
++++ eloopdiag/capstone_vm.c	2026-10-18 06:32:14.344691390 +0800
+@@ -1055,7 +1055,24 @@
+              * and the quantum stops the entry before the retry, and the launcher's idempotent
+              * CV_RESOLVE then repeats it. */
+             if (address == t->last_fault_addr && cause == t->last_fault_cause) {
+-                if (++t->fault_repeat > CV_FAULT_REPEAT_MAX) {
++                ++t->fault_repeat;
++                /* DIAGNOSTIC (board lane, vp2 boot r8; not the module's revision): the PTE the domain's
++                 * walker reads, so the repeat names its bits (A = 0x40, D = 0x80 in the RISC-V PTE). At
++                 * pr_warn: the board console does not show pr_info. */
++                if (t->fault_repeat == 2 || t->fault_repeat == 16 || t->fault_repeat > CV_FAULT_REPEAT_MAX) {
++                    pte_t *ptep;
++                    spinlock_t *ptl;
++                    unsigned long pv = ~0UL;
++                    mmap_read_lock(c->mm);
++                    if (!follow_pte(c->mm, address, &ptep, &ptl)) {
++                        pv = pte_val(*ptep);
++                        pte_unmap_unlock(ptep, ptl);
++                    }
++                    mmap_read_unlock(c->mm);
++                    pr_warn("capstone_vm: DIAG fault repeat=%u cause=%lu addr=%lx pc=%lx pte=%lx\n",
++                            t->fault_repeat, cause, address, t->frame[4], pv);
++                }
++                if (t->fault_repeat > CV_FAULT_REPEAT_MAX) {
+                     pr_warn_ratelimited("capstone_vm: fault at 0x%lx cause %lu resolved %u times "
+                                         "with no change; the page is pinned and the PTE is "
+                                         "untouched by this module\n",

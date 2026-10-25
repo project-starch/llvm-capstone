@@ -1,0 +1,17 @@
+arm	spatial
+capacity	mod
+image	spatial-mod
+image_sha256	68b6cc59313af5ba4297d03abeff3792ef225fe0da9c66402383ab1fe92839d2
+rev_nodes	65536
+started_utc	2026-10-10T06:15:43Z
+positive_control	EXP-OK cpython 552
+discipline	none
+case_timeout	300
+only	all
+ended_utc	2026-10-10T06:20:57Z
+cases	32
+negative_control	1
+negative_control_detections	0
+VOID	only 3 of 32 cases executed; the VM died after case 03 and the rest returned
+VOID	"VM is not running", which rc 1 made look like SILENT. The pass this run
+VOID	reported is an instrument that was not running. Superseded.

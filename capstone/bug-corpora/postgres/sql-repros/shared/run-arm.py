@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Run the sql-repros cases on one Capstone domain arm, and record what each run showed.
+"""Run the sql-repros cases on one virtual Capstone arm, and record what each run showed.
 
-    run-arm.py --arm spatial|sublet --state <vm state> --image <root>/link/postgres.dom
+    run-arm.py --arm virtual-malloc|virtual-pg-pools --virtual-kit <kit> | --state <vm state>
+               --image <out>/image/postgres.dom
                --fixture <initdb'd cluster> --llvm-bin <compiler>/bin [--out <dir>] [--only 02,03]
 
 This runner REPORTS; tools/verdicts.py decides. Each case is its trigger.sql on a stand-alone
@@ -18,13 +19,13 @@ backend against a fresh copy of the fixture, and becomes one Observation:
               neither is not a catch: case 03's sublet fault was in exactly that position, and
               its control faulted at the same instruction
 
-WHAT THE ARM IS, read from the image's build root and never from the label: `domain/nested.mode`
-(none, or sublet for PostgreSQL's context pools) and the runtime SDK's heap. corpus.json maps the
+WHAT THE ARM IS, read from the image's manifest and never from the label: `nested` (none, or
+postgres for the memory-context port's patch 0003) and the heap. corpus.json maps the
 arm to a configuration in tools/arms.json, which fixes both; a mismatch is refused.
 
 Before any case the configuration's controls run in the server, on the same image, through
 pgcorpus_reach's corpus_control(): a write past and a read after free of a malloc'd object, and
-on the nested-sublet configuration the same through palloc. A silence is MISSED only when every
+on the pools configuration the same through palloc. A silence is MISSED only when every
 control did what the configuration declares.
 
 WHAT THIS STILL REFUSES, each because it went wrong once: scoring a run whose backend prompt never
@@ -36,6 +37,7 @@ Exit: 0 judged, 75 nothing could be judged.
 """
 import argparse
 import json
+import posixpath
 import re
 import shutil
 import subprocess
@@ -47,14 +49,14 @@ HERE = Path(__file__).resolve()
 CORPUS = HERE.parents[1]
 REPO = HERE.parents[5]
 sys.path.insert(0, str(REPO / "capstone/bug-corpora/tools"))
+import sdk_builtins  # noqa: E402  (C-81: refuse a builtins build before anything starts)
 import appvm  # noqa: E402
+import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
 # What each configuration's image must be: (nested mode, SDK heap).
-BUILD = {"app-level0": ("none", "level0"),
-         "app-level0-pg-nested-sublet": ("sublet", "level0"),
-         "virtual-mallocng": ("none", "virtual-mallocng"),
+BUILD = {"virtual-mallocng": ("none", "virtual-mallocng"),
          "virtual-mallocng-pg-pools": ("sublet", "virtual-mallocng")}
 PG_ARGS = ("--single -D {data} -c shared_buffers=4MB -c max_connections=10 -c timezone=GMT "
            "-c log_timezone=GMT -c dynamic_shared_memory_type=sysv postgres")
@@ -86,6 +88,23 @@ def backend(args, sql_path, data_name, out_base, timeout=1800):
         run_args=["--user", "1000:1000", "--stdin", str(sql_path)], timeout=timeout)
 
 
+def statements(path):
+    """The file's statements, one per line, with comment-only and blank lines dropped.
+
+    `postgres --single` prints a prompt for every input LINE, comments included, and the setup
+    attribution below counts prompts against the number of CREATE EXTENSION lines ahead of the
+    trigger. A control file with a fifty-line header therefore looks as though it ran fifty
+    statements, so a fault inside CREATE EXTENSION would be attributed to the trigger instead of
+    to setup. Raised in review on PR #198, where case 03's control showed 23 prompts for one
+    CREATE EXTENSION. Dropping what is not a statement makes the count exact. The corpus already
+    requires one statement per line, because this backend has no line continuation, so no
+    statement is split by this. What was sent is written out beside the run.
+    """
+    keep = [ln for ln in path.read_text().splitlines()
+            if ln.strip() and not ln.lstrip().startswith("--")]
+    return "".join(ln + "\n" for ln in keep)
+
+
 def cluster(args, name):
     """A fresh cluster per run: a case must not inherit another's damage."""
     data = args.share / name
@@ -108,8 +127,16 @@ def session(args, sql_text_or_path, name, raw):
         return args.runs.get(name, ("", {"kind": "none"}))
     if args.batch is not None:
         staged = args.batch.put(f"sql/{name}.sql", sql)
-        args.batch.step(name, "rm -rf /tmp/pgd && cp -a /mnt/vm/pgcluster /tmp/pgd && chown -R nobody /tmp/pgd "
-                        f"&& su nobody -s /bin/sh -c 'cd /mnt/vm; ./capstone-vexec ./bin/postgres "
+        # The root is /mnt/vm on QEMU and /test-domains/vbatch on the board. The board bake recreates the cluster's
+        # directories 0775, and postgres refuses a data directory with group or other write access, hence the chmod.
+        # The board bake stages FILES only, so the cluster's empty directories (pg_notify, pg_serial, pg_snapshots, ...)
+        # never reach the board, and postgres stops at startup: "could not open directory "pg_notify"" in all 21
+        # sessions of sql0-drt (2026-10-19). Each session recreates them after its copy; on QEMU, whose mount carries
+        # them, the mkdir -p is a no-op.
+        root = posixpath.dirname(args.cluster_guest)
+        mk = "".join(f" && mkdir -p /tmp/pgd/{d}" for d in getattr(args, "cluster_empty_dirs", []))
+        args.batch.step(name, f"rm -rf /tmp/pgd && cp -a {args.cluster_guest} /tmp/pgd{mk} && chown -R nobody /tmp/pgd && chmod 700 /tmp/pgd "
+                        f"&& su nobody -s /bin/sh -c 'cd {root}; ./capstone-vexec ./bin/postgres "
                         f"{PG_ARGS.format(data='/tmp/pgd')} < {staged}'; rc=$?; rm -rf /tmp/pgd; exit $rc")
         return "", {"kind": "none"}
     data = f"pgdata-{name}"
@@ -167,12 +194,15 @@ def observe(case_dir, text, result, available, preinstalled=(), symbols=None):
         o.notes = (f"ran against a fixture that already carried {', '.join(pre)}; "
                    "this row says nothing about whether this arm can create it")
     setup = len(needed)
+    # Exact because the runner sends statements only; see statements().
     prompts = text.count("backend>")
     fault = faulted(text, result, symbols)
     if fault:
         o.fault = fault
         o.reached = prompts > setup
-        o.reach_evidence = f"{prompts} backend prompt(s) for {setup} CREATE EXTENSION line(s) ahead of the trigger"
+        o.reach_evidence = (f"{prompts} statement(s) reached the backend, against {setup} CREATE "
+                            f"EXTENSION line(s) ahead of the trigger; comment and blank lines are "
+                            f"not sent, so the count is statements and not input lines")
         sites = set(meta.get("fault_sites", []))
         if fault.symbol and fault.symbol in sites:
             o.attribution, o.attribution_evidence = "function", f"{fault.symbol} is a declared fault site"
@@ -325,15 +355,15 @@ def measure(args, spec, raw, preinstalled, symbols):
 
     rows = []
     for case_dir in cases(args):
-        text, result = session(args, case_dir / "trigger.sql", case_dir.name, raw)
+        text, result = session(args, statements(case_dir / "trigger.sql"), case_dir.name, raw)
         if planning:
             if (case_dir / "control.sql").is_file():
-                session(args, case_dir / "control.sql", f"{case_dir.name}-control", raw)
+                session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw)
             continue
         o = observe(case_dir, text, result, available, preinstalled, symbols)
-        o.arm, o.image_sha256, o.controls = args.arm, v.sha256(args.image), list(controls)
+        o.arm, o.image_sha256, o.controls = args.rec, v.sha256(args.image), list(controls)
         if o.fault and o.reached and not o.attribution and (case_dir / "control.sql").is_file():
-            ctext, cresult = session(args, case_dir / "control.sql", f"{case_dir.name}-control", raw)
+            ctext, cresult = session(args, statements(case_dir / "control.sql"), f"{case_dir.name}-control", raw)
             if faulted(ctext, cresult):
                 o.attribution_evidence += "; its control.sql FAULTS too, so the fault is not the defect's"
             elif "backend>" in ctext and cresult.get("kind") == "exit":
@@ -355,6 +385,8 @@ def main():
     where.add_argument("--state", type=Path, help="a persistent capstone-vm (physical profile)")
     where.add_argument("--virtual-kit", type=Path, help="the virtual platform kit (tools/virtualvm.py); "
                        "every session then runs in ONE boot")
+    where.add_argument("--board-kit", type=Path, help="the same boot on the vp2 board (tools/boardvm.py); the "
+                       "bundle records arm vp2-<arm>")
     parser.add_argument("--share", type=Path, help="physical: defaults to the state's own share")
     parser.add_argument("--image", type=Path, required=True)
     parser.add_argument("--fixture", type=Path, required=True,
@@ -362,7 +394,7 @@ def main():
     parser.add_argument("--pg-share", type=Path,
                         help="the share/postgresql the image reads (timezone sets etc.); "
                              "default <fixture>/../install/share/postgresql")
-    parser.add_argument("--llvm-bin", type=Path, required=True)
+    parser.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     parser.add_argument("--preinstalled", default="",
                         help="comma-separated extensions the fixture already carries; every row "
                              "that used one says so")
@@ -373,23 +405,25 @@ def main():
     parser.add_argument("--raw", type=Path, help="console logs, SQL and the virtual stage; never inside the bundle")
     parser.add_argument("--only", help="comma-separated case numbers")
     args = parser.parse_args()
+    sdk_builtins.gate([args.image], who="postgres:run-arm.py")
     args.batch, args.replay, args.runs = None, False, {}
 
     decl = json.loads((CORPUS / "corpus.json").read_text())
     config = decl.get("arm_configurations", {}).get(args.arm)
     if config not in BUILD:
-        sys.exit(f"arm {args.arm!r} is not a Capstone domain arm of this corpus")
+        sys.exit(f"arm {args.arm!r} is not a virtual arm of this corpus")
     spec = v.load_arms()[config]
     nested, heap, root = identity(args.image)
-    if (nested, heap) != BUILD[config] or (spec["target"] == "capstone-virtual") != bool(args.virtual_kit or appvm.profile(args.state) == "virtual"):
+    if (nested, heap) != BUILD[config] or (spec["target"] == "capstone-virtual") != bool(args.virtual_kit or args.board_kit or appvm.profile(args.state) == "virtual"):
         print(f"CONTROL-FAILED {args.image} is nested={nested} heap={heap} and the run is on "
-              f"{'the virtual kit' if args.virtual_kit else 'a physical VM'}; arm {args.arm} is {config}, "
+              f"{'the virtual kit' if args.virtual_kit else 'the board kit' if args.board_kit else 'a physical VM'}; arm {args.arm} is {config}, "
               f"which needs nested={BUILD[config][0]} heap={BUILD[config][1]} on {spec['target']}",
               file=sys.stderr)
         return 75
     args.extensions = args.extensions or root / "share" / "extension"
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = args.out or CORPUS / "results" / f"{stamp}-qemu" / args.arm
+    args.rec = boardvm.record_arm(args.arm, args.board_kit)
+    out = args.out or CORPUS / "results" / f"{stamp}-{'vp2' if args.board_kit else 'qemu'}" / args.rec
     raw = args.raw or Path("/tmp/capstone/sql-repros-raw") / f"{stamp}-{args.arm}"
     raw.mkdir(parents=True, exist_ok=True)
     preinstalled = {e.strip() for e in args.preinstalled.split(",") if e.strip()}
@@ -399,21 +433,24 @@ def main():
     pg_share = args.pg_share = args.pg_share or args.fixture.parent / "install/share/postgresql"
     if not (pg_share / "timezonesets").is_dir():
         sys.exit(f"no PostgreSQL share at {pg_share}")
-    if args.virtual_kit:
-        args.batch = virtualvm.Batch(raw / "stage")
+    if args.virtual_kit or args.board_kit:
+        Batch, kit = boardvm.select(args.virtual_kit, args.board_kit)
+        args.batch = Batch(raw / "stage")
         args.batch.put("bin/postgres", args.image)
         args.batch.put("share", pg_share)
         if args.extensions.is_dir():
             for source in sorted(args.extensions.iterdir()):
                 args.batch.put(f"share/extension/{source.name}", source)
-        args.batch.put("pgcluster", args.fixture)
+        args.cluster_guest = args.batch.put("pgcluster", args.fixture)   # the guest path each session copies
+        args.cluster_empty_dirs = sorted(p.relative_to(args.fixture).as_posix() for p in args.fixture.rglob("*")
+                                         if p.is_dir() and not any(p.iterdir()))
         measure(args, spec, raw, preinstalled, symbols)            # plan every session
         args.runs, serial, completed = args.batch.execute(
-            args.virtual_kit, raw / "guest", timeout=600 + 300 * len(args.batch.steps))
+            kit, raw / "guest", timeout=600 + 300 * len(args.batch.steps))
         print(f"  virtual boot: {'completed' if completed else 'DID NOT COMPLETE'}; "
               f"{len(args.runs)}/{len(args.batch.steps)} sessions ran; serial {serial}", flush=True)
         args.replay = True
-        platform = virtualvm.platform(args.virtual_kit, args.llvm_bin / "clang", HERE)
+        platform = boardvm.run_platform(args.virtual_kit, args.board_kit, args.llvm_bin / "clang", HERE, raw / "guest")
     else:
         vmconfig = json.loads((args.state / "config.json").read_text())
         args.share = args.share or Path(vmconfig["share"])
@@ -423,13 +460,76 @@ def main():
         platform = appvm.platform(args.state, args.llvm_bin / "clang", HERE)
     wanted, available, rows = measure(args, spec, raw, preinstalled, symbols)
 
-    record = v.write_bundle(out, "postgres/sql-repros", args.arm, rows, {
+    record = v.write_bundle(out, "postgres/sql-repros", args.rec, rows, {
         "configuration": config, "image": {"sha256": v.sha256(args.image), "nested": nested, "heap": heap},
-        "fixture": {"cluster_tree_sha256": tree_sha(args.fixture), "preinstalled": sorted(preinstalled)},
+        "fixture": fixture_record(args.fixture, preinstalled),
         "extensions": {"wanted": wanted, "available": sorted(available)},
         "platform": platform})
-    print(f"--- {args.arm} ({config}): {record['tally']}\nresults: {out}")
+    print(f"--- {args.rec} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
+
+
+def fixture_record(fixture, preinstalled):
+    """What the fixture is, and where it came from.
+
+    The tree hash says WHICH cluster this was, so "the same fixture" no longer rests on a host
+    path -- the gap raised in review on PR #198. It does not say which build produced it, and a
+    cluster whose extensions were created by one image is being handed to another. make-fixture.py
+    writes that beside the fixture as <fixture>.provenance.json, so it is carried here when it
+    exists and its absence is recorded rather than passed over.
+    """
+    record = {"cluster_tree_sha256": tree_sha(fixture), "cluster_stable_tree_sha256": stable_tree_sha(fixture),
+              "preinstalled": sorted(preinstalled)}
+    # make-fixture.py writes <fixture>.provenance.json. A fixture built before it did leaves only
+    # its run record, <fixture>.json, which carries the builder image's sha256 under image_sha256
+    # -- the same fact under another name. Either is taken, and the record says which file it came
+    # from, because "which build created these extensions" is the question and not the filename.
+    for candidate in (Path(str(fixture) + ".provenance.json"),
+                      Path(fixture).with_suffix(".provenance.json"),
+                      Path(str(fixture) + ".json"),
+                      Path(fixture).with_suffix(".json")):
+        if not candidate.is_file():
+            continue
+        try:
+            loaded = json.loads(candidate.read_text())
+        except json.JSONDecodeError:
+            continue
+        digest = loaded.get("builder_image_sha256") or loaded.get("image_sha256")
+        if not digest:
+            continue
+        record["provenance"] = loaded
+        record["provenance_from"] = str(candidate)
+        record["builder_image_sha256"] = digest
+        return record
+    record["provenance"] = None
+    record["provenance_note"] = ("no provenance beside the fixture and no builder image in its "
+                                 "run record, so which image created its extensions is not "
+                                 "recorded in this run")
+    return record
+
+
+# The files PostgreSQL stamps with the time (pg_control, pgstat.stat, the WAL checkpoint record): two otherwise identical
+# clusters differ in them, so a REBUILT fixture never matches cluster_tree_sha256. The stable hash leaves them out and is
+# computed exactly as ports/postgres/app/build-native16-fixture.py's cluster_stable_tree_sha256, so a bundle's value can be
+# compared with the builder manifest's directly.
+TIME_BEARING = ("global/pg_control", "pg_stat/", "pg_wal/0")
+
+
+def stable_tree_sha(root):
+    import hashlib
+    h = hashlib.sha256()
+    root = Path(root)
+    for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root).as_posix()
+        if path.is_file() and relative.startswith(TIME_BEARING):
+            continue
+        if path.is_dir():
+            h.update(b"d\0" + relative.encode() + b"\0")
+        elif path.is_file() and not path.is_symlink():
+            h.update(b"f\0" + relative.encode() + b"\0" + hashlib.sha256(path.read_bytes()).hexdigest().encode() + b"\0")
+        else:
+            raise ValueError(f"nonregular cluster entry: {path}")
+    return h.hexdigest()
 
 
 def tree_sha(root):

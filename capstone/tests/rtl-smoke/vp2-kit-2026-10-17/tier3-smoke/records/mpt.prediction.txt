@@ -1,0 +1,14 @@
+# Tier 3 prediction, arm mpt (memcached/plain-temporal-repros virtual-malloc; the board records vp2-malloc): the compiler
+# lane's QEMU run on t3-smoke/qkit7 (capstone-qemu binary 7a4f3a64776f0c88 behind a wrapper, sha256/16 5f731f99ec6a19b2,
+# that strips exact bounds and appends svadu=false; module 5bfc38f808e1effd, no params), SDK t3-freeze, 2026-10-18 12:47.
+# Its four images equal the board's staged list by sha256 (diff over the full hashes). The bundle's 'compiler' field is
+# the judge's --llvm-bin clang (ba603a574ce08ea4), not the SDK's: the image hashes are the compiled bytes' identity.
+# arm virtual-malloc configuration virtual-mallocng platform qkit7-wrapper cells 3 tally {"CAUGHT": 3}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_0d4901071c74_restart_line_freed_at_entry_but_not_cleared image f76b089115a659f4 CAUGHT cause 25 at mct_read_probe+56 reached True completed False attribution "probe"
+01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll image c6c3b4490abef1c9 CAUGHT cause 25 at mct_write_probe+88 reached True completed False attribution "probe"
+02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher image 2126edc5837f79fc CAUGHT cause 25 at mct_read_probe+56 reached True completed False attribution "probe"
+# image f76b089115a659f4  00_0d4901071c74_restart_line_freed_at_entry_but_not_cleared.dom
+# image c6c3b4490abef1c9  01_e7793811f8c8_logger_write_to_watcher_freed_by_the_poll.dom
+# image 2126edc5837f79fc  02_3bc58f6ea55a_logger_loop_condition_still_reads_the_freed_watcher.dom
+# image 491655742d378fcd  controls.dom

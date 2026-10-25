@@ -1,0 +1,67 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "amalgamation_sha256": "87497ab605bedd0dbee27a209c1eeff8c89b229b13f921a7efdbb81a13f779fd",
+    "link": [
+      "-Wl,--wrap=main",
+      "shared/virtual-main.c"
+    ],
+    "rewrite_pass": "capstone/ports/sqlite/build-sqlite-capstone.sh",
+    "rewrite_pass_sha256": "faabd06260c09e254a876b4289895559b725d767893cfe2763222656f4e60d2a",
+    "rewritten_sha256": "3b2007721ca31ea37f0d0d3f484d70db8bd1b1d922d03c41b0d329a4dea0c15c",
+    "row_flags": [
+      "-O0",
+      "-g"
+    ],
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ],
+    "sdk_json_sha256": "f5145cbb88dde6b57ea5a0b7e4fd60da47f5bcc6701b8ec3e3e44ba1ad433e14",
+    "sqlite": "3.53.3",
+    "sqlite3_o_sha256": "57969f848b9381fd3ce1928fa815e73cd1ea7a0d4ba47f22f4f89cd8eea8190c",
+    "sqlite_flags": [
+      "-O1",
+      "-g",
+      "-DSQLITE_THREADSAFE=0",
+      "-DSQLITE_OMIT_LOAD_EXTENSION",
+      "-DHAVE_MALLOC_H=1",
+      "-DHAVE_MALLOC_USABLE_SIZE=1"
+    ]
+  },
+  "cases": 19,
+  "classes": {
+    "none": {
+      "row15_cpython_subinterp_gil": "no program",
+      "row17_node_bind_typecast_abort": "correct, no false alarm",
+      "row18_php_columntype_after_reset": "correct, no false alarm",
+      "row19_php_result_lifecycle": "correct, no false alarm"
+    },
+    "null-deref": {
+      "row12_expo_unfinalized_close": "fault cause=24 in main",
+      "row13_cpython_deleted_rowfactory": "fault cause=12 in an unsymbolized pc",
+      "row14_cpython_uninit_connection": "fault cause=24 in main"
+    }
+  },
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "sqlite/capi-repros",
+  "decisions": "the project lead, relayed by the runtime lane, 2026-10-22: (a) 3.53.3 + rewrites + usable size; (b) generic malloc controls, no FIXED twin; (c) UAF cause 25 and the bad-free refusal CAUGHT, null-deref its own class, none correct at exit 0",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "a405840dce789345422ab901bb44df0a1d166677b564c68303f24ae286b847f0",
+    "module": "a05c198bfcc5f55ce6887923901013704f4c078901e8efcfb3cc531b8bed2c8e",
+    "profile": "virtual",
+    "qemu": "f750b8fb164745bb9d54381221ddc0ae9d85e6254465e05b2ed46a97fa4983b4",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "09c9fec1ac33653dd13360df3e1b886e38e21cfa719761455a231bd70a4e18a5"
+  },
+  "predicted": "heap-use-after-free and bad-free rows CAUGHT at their ASan frame",
+  "tally": {
+    "CAUGHT": 12,
+    "NO-READING:out-of-denominator": 7
+  }
+}

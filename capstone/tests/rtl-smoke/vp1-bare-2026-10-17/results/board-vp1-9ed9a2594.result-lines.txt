@@ -1,0 +1,21 @@
+# vp1's first board session: caplifive_vp1_9ed9a2594.bit (sha256 01072623f8f24b20..., routed WNS -15.615), flashed
+# 2026-10-17 19:54:57 on the lead's word with readback; session 19:56:58-20:38:32. Pre-registered in ../PREREG.md (dev
+# 76c8fe446fcd, 88d670de65bc; the infra-retry amendment on lane 39119a59fb50, pushed before the retry). Every row is
+# matched to its reference BY IMAGE HASH: all 18 S-16, 6 floor and 3 s1gap arms ran the same image hashes as
+# d93a8d66b's record (checked by script against both runs' SEQ logs). The vp1 arms' hashes are the PREREG's and images/SHA256SUMS'.
+#
+# Infrastructure event: S-16 arm s16st-esc-n8 (c710c07f8bf11c56) did not start at 20:03. The JTAG load_image timed out
+# "waiting for busy to go low" before `continue`, so it produced no reading. It was re-run once with the same image at
+# 20:29 (continue-vp1.sh, under the pre-registered rule) and read 1 1 1 4 0x77 0, the record's vector.
+
+S-16 set (18 arms)          vs d93a8d66b  IDENTICAL 98/98 readings (17 on the first attempt, s16st-esc-n8 on its retry)
+Sublet floor (6 arms)       vs d93a8d66b  IDENTICAL 77/77 readings
+s1gap (3 arms)              vs d93a8d66b  functional readings IDENTICAL (cmp-s1gap.py); one timed reading differs, as
+                                          on d93a8d66b itself: s1gap-far k=1 revoke 0x42 (record 0x45; d93a8d66b's
+                                          three runs read 0x45 0x42 0x43)
+vb-trans-off   79e670cc77352ee4  AS PRE-REGISTERED (SR 13), equal to vp1's and d93a8d66b's vectors (flag off)
+vb-trans       a3fa54d0e6f54f16  AS PRE-REGISTERED (SR 36), equal to vp1's vector, NOT d93a8d66b's
+q17-order      ee2adf9b373e5028  AS PRE-REGISTERED (SR 3),  equal to vp1's vector, NOT d93a8d66b's
+vb-trans-plain 997bc656df3be645  AS PRE-REGISTERED (SR 5),  equal to vp1's vector, NOT d93a8d66b's
+corpus set 7 (PostgreSQL c-repros, process-ABI line, firmware 1d2bbbf37f63f435, the same payload as d93a8d66b's run)
+                            vs d93a8d66b  IDENTICAL 33/33 records (compare-corpus.py)

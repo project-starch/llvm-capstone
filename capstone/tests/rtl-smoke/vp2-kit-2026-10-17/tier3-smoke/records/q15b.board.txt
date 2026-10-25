@@ -1,0 +1,24 @@
+# Tier 3 board reading, arm q15b: kit bkit7-rev2xBD (module 39d8492d; monitor capstone-sbi f13dbc5), tree B caplifive_vp2c_8de3c48cf on board 2, q15 subset b, SDK t3-freeze-nb. Result lines only.
+# board 2 (from the run log's [fpga-board] line)
+# arm vp2-nested-pools configuration virtual-sqlite-memsys5-pools platform board:caplifive_vp2c_8de3c48cf cells 6 tally {"CAUGHT": 3, "MISSED": 3}
+# controls [["bounds-mem5", "fault"], ["uaf-mem5", "fault"]]
+06_0c8c9a64b3_expert_rem_ctx_freed image b23d1ef5e8e20289 CAUGHT cause 25 at idxRemFunc+404 reached True completed False attribution "function"
+07_129371553c_fts3_destroy_oom_stale_table image b0740beb5a40d682 CAUGHT cause 25 at fts3DestroyMethod+548 reached True completed False attribution "function"
+08_51dd67080a_fts3_offsets_stale_buffer image 1b004a2a2464682e MISSED cause None at None reached True completed True attribution null
+09_fix-2026-08-17_fts3_snippet_stale_buffer image 24dcb82aef487de1 MISSED cause None at None reached True completed True attribution null
+10_becd68ba0d_fts3_snippet_or_stale_iter image eec3fd287c6969e8 CAUGHT cause 25 at fts3SnippetAdvance+300 reached True completed False attribution "function"
+11_dee0359ddb_fts3_zterm_stale_buffer image 51d84450aede3c0a MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 06_0c8c9a64b3_expert_rem_ctx_freed: verdict CAUGHT cause 25 pc idxRemFunc+404
+  SAME 07_129371553c_fts3_destroy_oom_stale_table: verdict CAUGHT cause 25 pc fts3DestroyMethod+548
+  SAME 08_51dd67080a_fts3_offsets_stale_buffer: verdict MISSED cause None pc None
+  SAME 09_fix-2026-08-17_fts3_snippet_stale_buffer: verdict MISSED cause None pc None
+  SAME 10_becd68ba0d_fts3_snippet_or_stale_iter: verdict CAUGHT cause 25 pc fts3SnippetAdvance+300
+  SAME 11_dee0359ddb_fts3_zterm_stale_buffer: verdict MISSED cause None pc None
+  6 of 6 cells the same
+## the boot
+  BOARD_RUN_START 05:39:27 bitstream caplifive_vp2c_8de3c48cf monitor f13dbc5
+  manifest 18 files, stage 24947989 bytes
+  firmware 7928bd367a9c3757 23759368 B
+  DRIVER rc=0 05:53:40
+  BOARD_RUN_DONE 05:53:40

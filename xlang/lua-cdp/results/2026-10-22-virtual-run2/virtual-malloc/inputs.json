@@ -1,0 +1,46 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "flags": [
+      "-O0",
+      "-g"
+    ],
+    "link": [
+      "-Wl,--wrap=main",
+      "xlang/virtual/virtual-main.c"
+    ],
+    "mock": "xlang/lua-cdp/cheri/mock_report.c",
+    "prefix_maps": [
+      "<bindir>=/xlang-build",
+      "<repo>=/repo"
+    ],
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ],
+    "sdk_json_sha256": "f5145cbb88dde6b57ea5a0b7e4fd60da47f5bcc6701b8ec3e3e44ba1ad433e14",
+    "sites": "xlang/virtual/sites.tsv",
+    "sites_sha256": "ae09bb1e3d970552f479e6931c88c04da33b7b19b9a62d928935ecd7bf1dbf2e"
+  },
+  "cases": 13,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "xlang/lua-cdp",
+  "decisions": "the project lead, relayed by the runtime lane, 2026-10-22: (a) malloc controls plus per-row declared sites, no no-revoke runtime; (b) the mruby shim rows dropped",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "a405840dce789345422ab901bb44df0a1d166677b564c68303f24ae286b847f0",
+    "module": "a05c198bfcc5f55ce6887923901013704f4c078901e8efcfb3cc531b8bed2c8e",
+    "profile": "virtual",
+    "qemu": "f750b8fb164745bb9d54381221ddc0ae9d85e6254465e05b2ed46a97fa4983b4",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "6fcf3b750b8a1d9ca8a374c88ff2e274be3f2fb71ff78a6b16f64f3eb659dc0f"
+  },
+  "predicted": "every kept temporal row CAUGHT at its declared site; the stack use-after-return row MISSED",
+  "tally": {
+    "CAUGHT": 13
+  }
+}

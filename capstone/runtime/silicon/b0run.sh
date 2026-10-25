@@ -25,6 +25,46 @@ load_proc_module() {
   fi
   insmod /test-domains/capstone-proc.ko && [ -c /dev/capstone ]
 }
+# B5: one mruby step through the given command -- a domain (capstone-exec mruby.dom) or the native build -- with
+# the same staging, watchdog and hash check. Usage: b5_mruby <rung> <step> <command...>; see the b5-mruby case.
+b5_mruby() {
+  rung=$1 step=$2; shift 2
+  # Only the scripts are copied: smoke.rb lists this directory (M12), so it must hold exactly what QEMU's did --
+  # the eight .rb files -- or the allocator's counts, which the pre-registration predicts, would differ by an entry.
+  rm -rf /tmp/b5 /tmp/b5.wd; mkdir -p /tmp/b5 && cp /test-domains/mruby/*.rb /tmp/b5/ || { echo "RESULT $rung retval=911"; exit 1; }
+  want=$(awk -v s="$step" '$1 == s { print $2 }' /test-domains/mruby/native.sha)
+  [ -n "$want" ] || { echo "B5: no native hash for $step"; echo "RESULT $rung retval=911"; exit 1; }
+  # Watchdogs from QEMU's times (e/stdin 6 s, smoke 11 s, bench 50 s, launch included) with room for a board of
+  # unknown speed relative to QEMU: generous, since a watchdog ending a slow but correct run would void it.
+  case $step in smoke) limit=900 ;; bench) limit=2400 ;; *) limit=600 ;; esac
+  ( i=0; while [ $i -lt $((limit / 10 + 2)) ]; do sleep 10; i=$((i+1)); echo "B5: hb $i"; done ) &
+  hb=$!
+  t0=$(cut -d' ' -f1 /proc/uptime)
+  case $step in
+    e)     "$@" -e 'p 1+1' ;;
+    stdin) "$@" < /tmp/b5/stdin.rb ;;
+    smoke) "$@" /tmp/b5/smoke.rb /tmp/b5 ;;
+    bench) "$@" /tmp/b5/b5-bench.rb /tmp/b5 ;;
+  esac > /tmp/b5.out 2> /tmp/b5.err &
+  cx=$!
+  ( sleep $limit
+    if kill -0 $cx 2>/dev/null; then
+      echo watchdog > /tmp/b5.wd
+      echo "B5: watchdog: $1 still running at $limit s; SIGTERM"; kill -TERM $cx; sleep 5; kill -KILL $cx 2>/dev/null
+    fi ) &
+  wd=$!
+  wait $cx
+  rc=$?
+  t1=$(cut -d' ' -f1 /proc/uptime)
+  kill $hb $wd 2>/dev/null
+  sed 's/^/B5o /' /tmp/b5.out; sed 's/^/B5e /' /tmp/b5.err
+  got=$(sha256sum < /tmp/b5.out | cut -c1-16)
+  echo "MRUBY $rung sha $got bytes $(wc -c < /tmp/b5.out) want $want rc $rc secs $(awk -v a="$t0" -v b="$t1" 'BEGIN { printf "%.2f", b - a }')"
+  if [ -e /tmp/b5.wd ]; then echo "RESULT $rung retval=912"
+  elif [ $rc -ne 0 ]; then echo "RESULT $rung retval=$((1000 + rc))"
+  elif [ "$got" = "$want" ]; then echo "RESULT $rung retval=0"
+  else echo "RESULT $rung retval=910"; fi
+}
 case "$rung" in
   k800|k800r)
     # k800r is the k800 RELINKED at 0x20000 (589ceee3): b0-hello.dom enters at 0x10000, and a second domain at a
@@ -38,7 +78,9 @@ case "$rung" in
     echo "B0: capstone-exec --stats rc=$rc"
     if [ $rc -eq 0 ]; then echo "RESULT $rung retval=0"; else echo "RESULT $rung retval=902"; fi
     ;;
-  b0-hello)
+  b0-hello|b5-hello)
+    # b5-hello is b0-hello built from B5's tree with B5's flags (full+renorm, the pool carve): mruby's pair, which
+    # differs from it only in the application.
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     echo "B0: process-ABI module loaded"
     /usr/bin/capstone-exec --stats || { echo "RESULT $rung retval=902"; exit 1; }
@@ -76,7 +118,7 @@ case "$rung" in
       echo "RESULT $rung retval=903"
     fi
     ;;
-  b0-memcpy|b0-printf|b1-thread|b0-strtod)
+  b0-memcpy|b0-printf|b1-thread|b0-strtod|r54-bounds|cw-align|cw-pool|b6-sublet)
     # The application's own exit status is the result; capstone-exec's own failures keep their codes (125 and so on).
     # B0.8 b0-memcpy, the R-29 memcpy guard on silicon: 0 the unguarded control miscopied and the guarded copy never
     # did; 1 the guarded copy miscopied; 2 the control never miscopied (void: no hazard created).
@@ -85,6 +127,14 @@ case "$rung" in
     # B1 b1-thread, one minted context: 0 joined with the expected value; 3 pthread_create failed; 4 pthread_join
     # failed; 5 joined with a wrong value.
     # B1.0b b0-strtod, the narrowed float parser: 0 all 23 cases equal the host's; otherwise the number that differ.
+    # B4 r54-bounds (ISSUES R-54): a bitmask, bit k set if arm k (A B C D G H) decoded SHORT once its cursor moved;
+    # 64 if an at-base reading was not exact. QEMU reads 0; 0568f93a9 is predicted 39 (A, B, C and H).
+    # cw-align / cw-pool (carve-witness.c, the same source with the split and the pool globals carve): the number of
+    # its eight globals whose capability reaches outside its own 16-byte-rounded storage. Under the full bounds scheme
+    # (FP bitstream (b), Sublet) check-repr predicts cw-align 8 and cw-pool 0 at every base.
+    # B6 b6-sublet (capstone_cap_derive / capstone_cap_revoke_child from a domain): a bitmask, bit k set if arm k
+    # (G C S K R N E) read other than its expectation. Sublet bitstream predicted 0; QEMU reads 80 (R and E: its lcc
+    # validity selector is a stub that always reads 1, op_helper.c helper_cslcc).
     load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
     /usr/bin/capstone-exec "$dom" > /tmp/b0.out 2> /tmp/b0.err
     rc=$?
@@ -112,6 +162,66 @@ case "$rung" in
     echo "B2: client rc=$crc memcached rc=$mrc job $(cat /tmp/b2-job.json 2>/dev/null)"
     cat /tmp/b2.out; cat /tmp/b2.err
     echo "RESULT $rung retval=$((crc * 10 + (mrc != 0)))"
+    ;;
+  b5-mruby-e|b5-mruby-stdin|b5-mruby-smoke|b5-mruby-bench)
+    # B5: mruby 4.0.0-rc2 as a gp-captable delegated application (build-b5-mruby.sh). Each step's stdout is compared
+    # with the native build's (/test-domains/mruby/native.sha: "<step> <first 16 hex of sha256>"):
+    #   e      mruby -e 'p 1+1'
+    #   stdin  the program on standard input (stdin.rb)
+    #   smoke  smoke.rb: core classes, GC, recursion, exceptions, floats, a file written and read back, a directory
+    #   bench  b5-bench.rb: five of mruby's benchmarks, sized for the board; the wall time of each on stderr
+    # The scripts run from /tmp/b5, a copy, since smoke.rb writes there. retval: 0 the stdout hash equals the native
+    # one and the exit status is 0; 910 the hash differs and the status is 0; 911 the files could not be staged;
+    # 912 the watchdog ended a launcher Linux was still running; 1000 + the exit status otherwise.
+    # One image serves the four steps (the driver names /test-domains/<rung>.dom; four 2.9 MB copies would cost the
+    # JTAG upload ~70 s for nothing).
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    b5_mruby "$rung" "${rung#b5-mruby-}" /usr/bin/capstone-exec /test-domains/mruby.dom
+    ;;
+  b5-mruby-e-stats|b5-mruby-stdin-stats)
+    # Where B5's launch goes: the same step with CAPSTONE_DELEGATE_STATS=1, so capstone-exec prints its launch ticks
+    # (image, hash, spawner, device, domain, regions, seccomp; rdtime) and its delegate counters on stderr, which
+    # b5_mruby prints as B5e lines. The stdout hash check and the retvals are the plain step's.
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    step=${rung#b5-mruby-}; step=${step%-stats}
+    b5_mruby "$rung" "$step" env CAPSTONE_DELEGATE_STATS=1 /usr/bin/capstone-exec /test-domains/mruby.dom
+    ;;
+  corpus-*)
+    # The bug corpus on silicon (bug-corpora/tools/run-silicon-cases.py; docs/plans/2026-10-15-bug-corpus-on-fpga.md):
+    # every line of /test-domains/corpus/<arm>/runs.txt is `<key> <image> <argv...>`, run in order through capstone-exec
+    # with its fault record on stderr, bracketed `CORPUS-RUN <key> BEGIN` / `CORPUS-RUN <key> END kind= value=` for the
+    # host-side judge. Each run has its own 120 s watchdog. retval: the number of runs that ended without the watchdog's
+    # help short of the list's length (0 = every run ended by itself; the judge reads the rest from the transcript).
+    load_proc_module || { echo "RESULT $rung retval=901"; exit 1; }
+    dir=/test-domains/corpus/${rung#corpus-}
+    [ -f $dir/runs.txt ] || { echo "RESULT $rung retval=911"; exit 1; }
+    total=0; ended=0
+    while read -r key img args; do
+      [ -n "$key" ] || continue
+      total=$((total + 1))
+      echo "CORPUS-RUN $key BEGIN"
+      rm -f /tmp/corpus.wd
+      CAPSTONE_EXEC_DIAGNOSTICS=1 /usr/bin/capstone-exec $dir/$img $args > /tmp/corpus.out 2>&1 &
+      cx=$!
+      ( sleep 120; if kill -0 $cx 2>/dev/null; then echo wd > /tmp/corpus.wd; kill -KILL $cx; fi ) &
+      wd=$!
+      wait $cx; rc=$?
+      kill $wd 2>/dev/null; wait $wd 2>/dev/null
+      cat /tmp/corpus.out
+      if [ -e /tmp/corpus.wd ]; then echo "CORPUS-RUN $key WATCHDOG"; fi
+      if [ $rc -gt 128 ]; then kind=signal; value=$((rc - 128)); else kind=exit; value=$rc; fi
+      [ -e /tmp/corpus.wd ] || ended=$((ended + 1))
+      echo "CORPUS-RUN $key END kind=$kind value=$value"
+    done < $dir/runs.txt
+    echo "CORPUS: $ended of $total runs ended by themselves"
+    echo "RESULT $rung retval=$((total - ended))"
+    ;;
+  b5-native-O2-e|b5-native-O2-bench|b5-native-O1-e|b5-native-O1-bench)
+    # B5's unprotected baseline: the same mruby as a NATIVE Linux process (build_config-board-native.rb: the board's
+    # gcc 12.3 and glibc, rv64g lp64d hard-float, at -O2 and -O1), the same scripts and the same hash check. No module
+    # and no domain.
+    opt=${rung#b5-native-}; opt=${opt%%-*}
+    b5_mruby "$rung" "${rung##*-}" /test-domains/mruby-rv64-$opt
     ;;
   b3-setclock)
     # B3w: the board's wall clock, read and then set for the b3-oracle rung that follows. memcached's negative

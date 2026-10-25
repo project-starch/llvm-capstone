@@ -1,0 +1,8 @@
+# tier3-sv-batch.sh dry run (2026-10-19 14:03), the inner runner stubbed (it writes each arm's SR/SV lines and the
+# `] continue` marker), the images, their SHA256SUMS, the table and compare-sv.py real:
+# - [1] TAL DONE, with every arm given its tree A vector except sv-fetch, which is given tree B's: six arms "cmp rc=0 ...
+#   AS PRE-REGISTERED for tree A", sv-fetch "cmp rc=1 ... NOT tree A", then "SVBATCH DONE ... 6 of 7 as pre-registered".
+# - [2] "TAL HOLD": "SVBATCH HOLD".
+# compare-sv.py by itself, on sv-fetch: tree A's values against tree A rc 0, tree B's against tree A rc 1, tree B's
+# against tree B rc 0, and an empty reading NO-READING rc 2.
+# The first version logged the status of the pipe's last stage as the comparator's rc; it was fixed before this run.

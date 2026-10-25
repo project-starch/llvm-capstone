@@ -9864,7 +9864,7 @@ static SDValue getAddressForMemoryInput(SDValue Chain, const SDLoc &Location,
   if (isa<ConstantFP>(OpVal) || isa<ConstantInt>(OpVal) ||
       isa<ConstantVector>(OpVal) || isa<ConstantDataVector>(OpVal)) {
     OpInfo.CallOperand = DAG.getConstantPool(
-        cast<Constant>(OpVal), TLI.getPointerTy(DAG.getDataLayout()));
+        cast<Constant>(OpVal), TLI.getConstantPoolPtrTy(DAG.getDataLayout()));
     return Chain;
   }
 
@@ -10403,9 +10403,24 @@ void SelectionDAGBuilder::visitInlineAsm(const CallBase &Call,
         assert((OpInfo.isIndirect ||
                 OpInfo.ConstraintType != TargetLowering::C_Memory) &&
                "Operand must be indirect to be a mem!");
-        assert(InOperandVal.getValueType() ==
-                   TLI.getPointerTy(DAG.getDataLayout()) &&
+#ifndef NDEBUG
+        // A memory operand is a pointer in the address space it came from: the
+        // operand's own (an indirect pointer), the constant pool's (a spilled
+        // constant), or the frame's (a stack temporary). On a fat-pointer
+        // target such as Capstone (C-80) those are capability types, not the
+        // AS0 integer that getPointerTy(DL) names.
+        const DataLayout &MemDL = DAG.getDataLayout();
+        EVT MemVT = InOperandVal.getValueType();
+        Type *OpTy =
+            OpInfo.CallOperandVal ? OpInfo.CallOperandVal->getType() : nullptr;
+        assert((MemVT == TLI.getPointerTy(MemDL) ||
+                MemVT == TLI.getConstantPoolPtrTy(MemDL) ||
+                MemVT == TLI.getFrameIndexTy(MemDL) ||
+                (OpTy && OpTy->isPointerTy() &&
+                 MemVT == TLI.getPointerTy(MemDL,
+                                           OpTy->getPointerAddressSpace()))) &&
                "Memory operands expect pointer values");
+#endif
 
         const InlineAsm::ConstraintCode ConstraintID =
             TLI.getInlineAsmMemConstraint(OpInfo.ConstraintCode);

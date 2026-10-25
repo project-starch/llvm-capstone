@@ -1,0 +1,8 @@
+# The CPMX diagnostic run (run-tier1-3r4.sh) with every pin real (firmware e56ec94f185ad5ee, the third run's stage) and
+# only the driver stubbed (the stub asserts the three-rung BAKED_RUNGS). 2026-10-18.
+the third run's real transcript  vm-contract NONE; BRANCH injected (MTVL:81D2E940 INJS:00000002, no END marker)
+clean identity transcript        vm-contract 0 AS-ORACLE; BRANCH identity
+no transcript                    NO DATA: no board transcript (rc 2)
+wrong firmware hash              STOP: the firmware is not the pre-registered one (rc 1)
+cpmx-diag-read.py --selftest     PASS (covered-loaded, covered-unloaded x2, uncovered, NO DATA)
+cpmx-diag-read.py on the third run's transcript   NO DATA (rc 2): that firmware had no dump

@@ -3,12 +3,51 @@
 [Guide](README.md) · Previous: [ISA](isa.md) · Next: [Guarantees](guarantees.md)
 
 Use the matching processor, compiler, runtime and application profile.
-The core virtual stack has landed on `dev`. The node-growth review branch
-`review/virtual-node-growth` adds paged lifetime storage on top of `dev` and
-the build repairs in `review/virtual-build-repairs`. Source links below retain
-the original review boundaries; use the checkout's QEMU pin for new builds.
-`virtual-musl-local` adds Capstone-compiled mallocng executing locally in the
-application; see the [allocator contract](../../../runtime/virtual/mallocng.md).
+The virtual stack, paged lifetime storage, build repairs and local mallocng
+have landed on `dev`. Source links below retain the original review boundaries;
+use the checkout's QEMU pin for new builds. The managed allocator migration
+uses `CDERIVE`/`CREVOKE` in mallocng and nested pools; see the
+[allocator contract](../../../runtime/virtual/mallocng.md) and
+[current qualification](../../../runtime/virtual/results/managed-mallocng/README.md).
+
+## Sublet lifetime qualification
+
+The Sublet extension changes the capability and node-table layouts. Rebuild
+QEMU and the Linux adapter together. The C wrappers use existing `.insn`
+support; rebuilding LLVM for new opcodes is unnecessary. The [ISA contract](isa.md#sublet-child-lifetimes)
+documents the range, authority and format rules.
+
+```sh
+source capstone/tests/capstone-test-env.sh
+python3 capstone/capstone-qemu/tests/virtual-capstone-model/model.py
+bash capstone/capstone-qemu/tests/sublet-lifetimes/run.sh
+bash capstone/runtime/tests/sublet-lifetimes/run.sh
+bash capstone/capstone-qemu/tests/virtual-capstone-m1/run.sh
+bash capstone/capstone-qemu/tests/virtual-capstone-runtime/run.sh
+bash capstone/capstone-qemu/tests/virtual-capstone-runtime/exact-bounds.sh
+```
+
+Verified on this implementation: 9,758 model prefixes and eight directed
+traces per storage backend (host, flat and paged); 41 table/encoding checks,
+19 paged growth/reuse checks, and detected mutation controls; 74 Sublet
+instruction checks; eight C-wrapper checks with the existing compiler;
+60 M1, 69 virtual-runtime and four exact-bounds regression checks. The Linux
+adapter builds with the new shared header and 30-bit namespace limits. A
+Linux smoke using a matching kernel/module pair and the recorded local-mallocng
+contract binary passes normal execution, stale-access denial (cause 25,
+exit 139), and module cleanup.
+Allocator migration, full workload measurements and RTL remain separate.
+
+Re-measured on 2026-10-16 at capstone-qemu `virtual-capstone` d35af47b163c, by the RTL lane for its directed
+tests (`docs/plans/2026-10-16-virtual-profile-on-silicon.md`). The suites have grown since the counts above:
+- `sublet-lifetimes`: 119/119, now including the physical-profile cases;
+- `virtual-capstone-m1`: 69/69;
+- `virtual-capstone-runtime`: 69/69, and `exact-bounds.sh` 4/4;
+- `capstone-x0-writes`: 24/24;
+- `capstone-untagged-arith`: 6/6.
+dev's `runtime/tests/sublet-lifetimes` now has 20 wrapper checks (two optimisation levels, its variants, and the
+flat and paged layouts), not eight. Its 20/20 ran on an SDK from 2026-10-10, not a fresh build. Only `exact-bounds.sh`
+and one `sublet-lifetimes` case run with `x-capstone-exact-bounds=true`.
 
 ## Repositories and profiles
 
@@ -80,7 +119,7 @@ the VM-service profile.
 |---|---|---|
 | SQLite, mruby | Included in [#184](https://github.com/project-starch/llvm-capstone/pull/184) | Recorded workloads; not full upstream suites |
 | Perl | [#186](https://github.com/project-starch/llvm-capstone/pull/186) | `PERLD_PROFILE=virtual`; existing build restrictions remain |
-| CPython | [#187](https://github.com/project-starch/llvm-capstone/pull/187) | Inner temporal protection requires `CPY_SUBLET_MODE=1` |
+| CPython | [#187](https://github.com/project-starch/llvm-capstone/pull/187) | Inner temporal protection is the `CPY_SUBLET=1` build (patch 0014, `CDERIVE`/`CREVOKE` in obmalloc) |
 | PostgreSQL | [#188](https://github.com/project-starch/llvm-capstone/pull/188) | Single-user backend profile |
 | FFmpeg | [#189](https://github.com/project-starch/llvm-capstone/pull/189) | Configured decoder/pool workloads |
 | tshark | [#190](https://github.com/project-starch/llvm-capstone/pull/190) | Offline profile and selected wmem adapters |

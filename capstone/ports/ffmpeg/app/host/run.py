@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run FFmpeg milestones and its changed-input oracle on a running shared VM."""
 import argparse
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -19,12 +20,16 @@ def main():
     if not args.state:
         parser.error('--state or CAPSTONE_VM_STATE is required')
     work = Path(os.environ.get('FFAPP_WORK', '/tmp/capstone/ffmpeg-app'))
-    heap = os.environ.get('FFAPP_HEAP', 'level0')
-    if heap not in ('level0', 'shrink', 'sublet'):
-        parser.error('FFAPP_HEAP must be level0, shrink or sublet')
-    domain = 'domain' + ('-' + heap if heap != 'level0' else '')
-    if os.environ.get('FFAPP_POOL'):
-        domain += '-pool' + os.environ['FFAPP_POOL']
+    profile = json.loads((Path(args.state) / 'config.json').read_text()).get('identity', {}).get('profile', 'physical')
+    if profile == 'virtual':
+        if 'FFAPP_HEAP' in os.environ:
+            parser.error('FFAPP_HEAP is physical-only; virtual uses mallocng')
+        heap = 'mallocng'
+    else:
+        heap = os.environ.get('FFAPP_HEAP', 'level0')
+        if heap not in ('level0', 'shrink'):
+            parser.error('FFAPP_HEAP must be level0 or shrink')
+    domain = 'domain-shrink' if heap == 'shrink' else 'domain'
     clip = os.environ.get('FFAPP_CLIP_SECONDS', '1')
     suffix = '' if clip == '1' else '-' + clip + 's'
     images = work / (domain + suffix)

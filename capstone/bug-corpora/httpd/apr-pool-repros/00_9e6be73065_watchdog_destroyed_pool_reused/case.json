@@ -30,16 +30,6 @@
       "verdict": "CAUGHT",
       "verdict_from": "results/20260921-qemu/matrix.tsv case 0 mode sublet: passed=True cause=24 pc=0x101866a8c expected_pc=0x101866a8c"
     },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "complete: exactly bounded node aliases, nothing invalidated; sweeps=0"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "oracle": "SIGPROT at the labelled read probe: the destroyed pool's node was poisoned and swept when APR filed it",
-      "signal": 34,
-      "si_code": 2
-    },
     "native-detect": {
       "status": "not written",
       "requires": "the nodes never reach malloc, so ASan has no event; Valgrind with APR's own annotations is the arm that could discriminate"

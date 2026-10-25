@@ -1,0 +1,315 @@
+{
+ "program": "PostgreSQL 17.5",
+ "pre_registration": "16d2171a3edc",
+ "workload": "work.sql in the single-user backend (run-ports.py command)",
+ "boundaries": {
+  "contexts": {
+   "stock": {
+    "buckets": {
+     "1": 13772,
+     "2": 5856,
+     "3": 6980,
+     "4": 12733,
+     "5": 1838,
+     "6": 1069,
+     "7": 354,
+     "8": 300,
+     "9": 265,
+     "10": 123,
+     "11": 302,
+     "12": 165,
+     "13": 255,
+     "14": 56,
+     "15": 80,
+     "16": 71
+    },
+    "issues": 54083,
+    "releases": 51228,
+    "reuses": 44219,
+    "distinct_starts": 9864,
+    "attempts": 54083,
+    "error": 0
+   },
+   "protected": {
+    "buckets": {
+     "1": 13772,
+     "2": 5855,
+     "3": 6982,
+     "4": 12735,
+     "5": 1840,
+     "6": 1065,
+     "7": 345,
+     "8": 296,
+     "9": 223,
+     "10": 94,
+     "11": 395,
+     "12": 361,
+     "13": 258,
+     "14": 41,
+     "15": 56,
+     "16": 72
+    },
+    "issues": 54085,
+    "releases": 51230,
+    "reuses": 44390,
+    "distinct_starts": 9695,
+    "attempts": 54085,
+    "error": 0
+   }
+  }
+ },
+ "contexts_detail": {
+  "stock": {
+   "capacity": 131072,
+   "reset_releases": 14832,
+   "pfree_and_moving_realloc_releases": 36396,
+   "in_place_resizes": 0
+  },
+  "protected": {
+   "capacity": 131072,
+   "reset_releases": 14832,
+   "pfree_and_moving_realloc_releases": 36398,
+   "in_place_resizes": 0
+  }
+ },
+ "repetitions": {
+  "stock": [
+   {
+    "rep": 2,
+    "guest_wall_s": 49,
+    "boundaries": {
+     "contexts": {
+      "buckets": {
+       "1": 13772,
+       "2": 5855,
+       "3": 6981,
+       "4": 12732,
+       "5": 1839,
+       "6": 1069,
+       "7": 355,
+       "8": 303,
+       "9": 271,
+       "10": 135,
+       "11": 311,
+       "12": 165,
+       "13": 255,
+       "14": 58,
+       "15": 80,
+       "16": 64
+      },
+      "issues": 54093,
+      "releases": 51238,
+      "reuses": 44245,
+      "distinct_starts": 9848,
+      "attempts": 54093,
+      "error": 0
+     }
+    },
+    "contexts_detail": {
+     "capacity": 131072,
+     "reset_releases": 14832,
+     "pfree_and_moving_realloc_releases": 36406,
+     "in_place_resizes": 0
+    }
+   },
+   {
+    "rep": 3,
+    "guest_wall_s": 49,
+    "boundaries": {
+     "contexts": {
+      "buckets": {
+       "1": 13772,
+       "2": 5855,
+       "3": 6981,
+       "4": 12732,
+       "5": 1839,
+       "6": 1069,
+       "7": 355,
+       "8": 303,
+       "9": 274,
+       "10": 118,
+       "11": 304,
+       "12": 165,
+       "13": 255,
+       "14": 56,
+       "15": 80,
+       "16": 64
+      },
+      "issues": 54093,
+      "releases": 51238,
+      "reuses": 44222,
+      "distinct_starts": 9871,
+      "attempts": 54093,
+      "error": 0
+     }
+    },
+    "contexts_detail": {
+     "capacity": 131072,
+     "reset_releases": 14832,
+     "pfree_and_moving_realloc_releases": 36406,
+     "in_place_resizes": 0
+    }
+   }
+  ],
+  "protected": [
+   {
+    "rep": 2,
+    "guest_wall_s": 49,
+    "boundaries": {
+     "contexts": {
+      "buckets": {
+       "1": 13772,
+       "2": 5854,
+       "3": 6983,
+       "4": 12734,
+       "5": 1840,
+       "6": 1065,
+       "7": 351,
+       "8": 298,
+       "9": 226,
+       "10": 94,
+       "11": 382,
+       "12": 360,
+       "13": 266,
+       "14": 42,
+       "15": 56,
+       "16": 72
+      },
+      "issues": 54093,
+      "releases": 51238,
+      "reuses": 44395,
+      "distinct_starts": 9698,
+      "attempts": 54093,
+      "error": 0
+     }
+    },
+    "contexts_detail": {
+     "capacity": 131072,
+     "reset_releases": 14832,
+     "pfree_and_moving_realloc_releases": 36406,
+     "in_place_resizes": 0
+    }
+   },
+   {
+    "rep": 3,
+    "guest_wall_s": 49,
+    "boundaries": {
+     "contexts": {
+      "buckets": {
+       "1": 13772,
+       "2": 5854,
+       "3": 6983,
+       "4": 12735,
+       "5": 1840,
+       "6": 1066,
+       "7": 352,
+       "8": 296,
+       "9": 230,
+       "10": 100,
+       "11": 316,
+       "12": 352,
+       "13": 256,
+       "14": 40,
+       "15": 58,
+       "16": 71
+      },
+      "issues": 54093,
+      "releases": 51238,
+      "reuses": 44321,
+      "distinct_starts": 9772,
+      "attempts": 54093,
+      "error": 0
+     }
+    },
+    "contexts_detail": {
+     "capacity": 131072,
+     "reset_releases": 14832,
+     "pfree_and_moving_realloc_releases": 36406,
+     "in_place_resizes": 0
+    }
+   }
+  ]
+ },
+ "repetitions_identical_to_planned_boot": {
+  "stock": false,
+  "protected": false
+ },
+ "images": {
+  "stock": "9cd1e63df3744a101f9fdbc24b5df555b802a34c18eebc1f3378393ca44b2217",
+  "protected": "e4735dd71638d2acffc42fc78eb3f929f12f99333ce038f4fca7c77112063b03"
+ },
+ "mcxt_sources": {
+  "stock": "207d9efe443757bd52aa0a238211528f7adf63131174df1d736044e07d27c650",
+  "protected": "6b80f930cc2c2501e555703310cfb09850bcf9775d719d33e87fa1b51dad2f74"
+ },
+ "sanity": {
+  "stock": {
+   "exit": 0,
+   "domain_fault": false,
+   "completed": true,
+   "rmmod": 0,
+   "rows": 22,
+   "rows_sha256": "280000084d6bc8493f3c91444aed0fc7d3d09d0c38e05030deb4ec809d25789c",
+   "rows_equal_same_answers": true,
+   "guest_wall_s": 42,
+   "process_vm_stats": "arenas=86 pages=9240 peak=10789 nodes=6203 steps=16079 faults=8674 collections=0 reclaimed=0 rounds=1376 bytes_in=2042286 bytes_out=3248924 node_bytes=159744 node_capacity=9216 node_growths=2 launch_ns=7116146300 elapsed_ns=35361853800",
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 6203,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 6203,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 0,
+    "nodes_reclaimed": 0
+   }
+  },
+  "protected": {
+   "exit": 0,
+   "domain_fault": false,
+   "completed": true,
+   "rmmod": 0,
+   "rows": 22,
+   "rows_sha256": "280000084d6bc8493f3c91444aed0fc7d3d09d0c38e05030deb4ec809d25789c",
+   "rows_equal_same_answers": true,
+   "guest_wall_s": 44,
+   "process_vm_stats": "arenas=92 pages=9288 peak=10837 nodes=65235 steps=16245 faults=8729 collections=3 reclaimed=45143 rounds=1376 bytes_in=2042293 bytes_out=3248924 node_bytes=356352 node_capacity=21504 node_growths=5 launch_ns=7124262900 elapsed_ns=36421809900",
+   "launcher_stats_after": {
+    "version": 1,
+    "live_domains": 0,
+    "live_regions": 0,
+    "live_bytes": 0,
+    "cached_bytes": 0,
+    "poisoned_blocks": 0,
+    "nodes_high_water": 21246,
+    "nodes_live": 0,
+    "nodes_retired": 0,
+    "nodes_allocated_total": 65235,
+    "tag_pages": 0,
+    "node_capacity": 1024,
+    "node_bytes": 28672,
+    "collections": 3,
+    "nodes_reclaimed": 45143
+   }
+  }
+ },
+ "platform": {
+  "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+  "capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+  "capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+  "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+  "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+  "clang": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "work.sql": "f4310b7544287f8b1b400fac0820cf3162fe137048bcb940ff92cd158055346c",
+  "gate.sh stock": "fe28a190963445f0cd7e19e1fde2e392c70f624754971b712e1c6afadbf9f1ca",
+  "gate.sh protected": "d2d2a498f97872674c63b9cbbd43c6e7a7810dd20251f5bcbcbc95574633d51c"
+ }
+}

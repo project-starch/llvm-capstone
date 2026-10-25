@@ -1,0 +1,23 @@
+control ctrsanity: clean=15/15  instr ratio=1.00002  baseline CPI=1.2000  cycle ratio=1.0005
+control PASSED -- rows below are admissible (the control's own cycle ratio is reported, not gated)
+
+rung                  cap cyc   base cyc   cycles    cap ins   base ins   instr     CPI boots cap spread
+beebs_cover           160,085    161,503   0.991x     76,469     76,513   0.999   0.992     1          0
+ctrsanity             600,356    600,041   1.001x    500,030    500,022   1.000   1.001     1          0  (control)
+rv8_sha512            543,671    540,137   1.007x    460,950    462,646   0.996   1.010     1          0
+rv8_primes          6,344,865  6,284,080   1.010x  3,245,855  3,245,861   1.000   1.010     1          0
+beebs_aha_mont64      286,390    283,624   1.010x    256,697    256,622   1.000   1.009     1          0
+rv8_sha512s           118,718    117,035   1.014x     75,477     69,108   1.092   0.929     1          0
+ctrsanitys              6,329      6,040   1.048x      5,029      5,021   1.002   1.046     1          0  (control)
+beebs_prime             9,774      9,280   1.053x      2,703      2,704   1.000   1.054     1          0
+beebs_crc32            48,332     42,795   1.129x     29,723     31,000   0.959   1.178     1          0
+beebs_ns              102,620     88,451   1.160x     61,299     62,097   0.987   1.175     1          0
+beebs_cnt             114,051     95,043   1.200x     69,387     57,949   1.197   1.002     1          0
+beebs_bs                2,094      1,524   1.374x        820        827   0.992   1.386     1          0
+coremark_matrix        57,242     36,523   1.567x     31,803     25,673   1.239   1.265     1          0
+matmult_int            19,088     11,312   1.687x      9,722      7,272   1.337   1.262     1          0
+beebs_recursion        19,148      9,703   1.973x      3,029      2,019   1.500   1.315     1          0
+beebs_janne               684        319   2.144x        198        210   0.943   2.274     1          0
+beebs_insertsort        2,772      1,203   2.304x        971        813   1.194   1.929     1          0
+
+17 admissible rows

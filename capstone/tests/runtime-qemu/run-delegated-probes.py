@@ -10,13 +10,17 @@ line: a variant with no result is a FAIL.
 
   run-delegated-probes.py --sdk SDK --work DIR --build-only
   run-delegated-probes.py --sdk SDK --work DIR --state STATE [--only NAME...]
-                          [--arith-expect trap|cheri] [--report FILE]
+                          [--report FILE]
   run-delegated-probes.py --self-test
 
 The images are staged in a fresh directory inside the VM's share and removed
 afterwards. The variants run in the order below: every one expected to return
 first, then the ones expected to fault, and last untagged-cap-arith's case 2,
 which aborts a QEMU without the scc fix.
+
+untagged-cap-arith's cases 1 and 2 are judged by the guest's profile, which
+capstone_vm records in the state directory: the virtual profile computes an
+untagged result, the physical profile raises 24 as the RTL does.
 
 What the probes check, and what replaced their HostCall v0 controls: see
 README.md in this directory. The controls that linked an older runtime file
@@ -26,9 +30,17 @@ the symptom its old control produced.
 
 movc runs in any guest and is judged by the switch that guest's QEMU was
 started with (CAPSTONE_MOVC_NULL_SCALAR, recorded in the state directory);
-run it once in a guest with the switch off and once in one with it on. It is
-built twice: movc-rule with the compiler's live-source copy rule (C-32's fix)
-and movc-keep with +movc-keeps-integer-source, a plain movc for every copy.
+run it once in a guest with the switch off and once in one with it on. On the
+physical profile QEMU's MOVC nulls an untagged source as the RTL does, so
+there it is judged as with the switch on, whatever the switch. It is
+built twice: movc-rule with the compiler's live-source copy rule (C-32's fix,
+-movc-keeps-integer-source, which overrides the virtual SDK's default) and
+movc-keep with +movc-keeps-integer-source, a plain movc for every copy. The
+override reaches only the probe's own file. An SDK whose sdk.json codegen has
+the feature (the virtual SDK since Q-04) built its runtime and libc for Q-04's
+MOVC, so movc-rule, and intcap, which keeps the SDK's codegen, are reported as
+failures naming that cause in a guest whose MOVC nulls an untagged source.
+Qualify the old MOVC with an SDK built without the feature.
 With the switch on, keep must lose C-32's two values (the positive control)
 and rule must not. The build refuses (exit 2) a toolchain that lacks either,
 because a keep built without the feature is a duplicate of rule and a rule
@@ -180,6 +192,19 @@ def check_tls_overrun(record, out, err, ctx):
     return problems
 
 
+# An SDK whose codegen has +movc-keeps-integer-source (the virtual SDK since
+# Q-04) built its runtime, libc and builtins, and every probe file that keeps
+# its default, for Q-04's MOVC. Where MOVC nulls an untagged source (the
+# switch, or the physical profile) such an image mixes two MOVC rules, so its
+# result proves nothing either way.
+def q04_sdk_under_old_movc(ctx, what):
+    if ctx.get("sdk-movc-keeps") and (ctx.get("movc-switch") == "1" or ctx.get("profile") != "virtual"):
+        return [f"the SDK compiles its runtime and libc with +movc-keeps-integer-source (Q-04); a guest "
+                f"whose MOVC nulls an untagged source (CAPSTONE_MOVC_NULL_SCALAR=1 or the physical "
+                f"profile) cannot qualify {what} against it: use an SDK built without the feature"]
+    return []
+
+
 def check_movc(variant):
     def check(record, out, err, ctx):
         problems = exits(record, 0)
@@ -188,10 +213,20 @@ def check_movc(variant):
         iconv = re.search(rf"^MOVC-ICONV {variant} n=(\d+)$", out, re.M)
         if not probe or not c32 or not iconv:
             return problems + [f"no MOVC-PROBE, MOVC-C32 {variant} or MOVC-ICONV {variant} line"]
-        on = ctx.get("movc-switch") == "1"
+        switch = ctx.get("movc-switch") == "1"
+        # Physical QEMU models the silicon: its MOVC nulls an untagged source
+        # whatever the switch says, as the RTL does until Q-04 (b).
+        physical = ctx.get("profile") != "virtual"
+        on = switch or physical
         b, c, got, n = probe.group(1), probe.group(2), c32.group(1), int(iconv.group(1))
+        if variant == "rule":
+            # The probe's own file is built without the feature, but the
+            # runtime, libc and builtins it links assume Q-04's MOVC.
+            problems += q04_sdk_under_old_movc(ctx, "movc-rule")
         if on and (b, c) == ("5", "5"):
-            problems.append("switch on changed nothing: this QEMU has no CAPSTONE_MOVC_NULL_SCALAR")
+            problems.append("physical profile kept an untagged source: this QEMU predates the Q-04 split"
+                            if physical else
+                            "switch on changed nothing: this QEMU has no CAPSTONE_MOVC_NULL_SCALAR")
         elif (b, c) != ("5", "0" if on else "5"):
             problems.append(f"probe b={b} c={c}, want b=5 c={'0' if on else '5'}")
         if not on or variant == "rule":
@@ -203,9 +238,12 @@ def check_movc(variant):
         elif got != "0x1" or n >= 3:
             problems.append(f"c32 got={got} iconv n={n}, want 0x1 and n<3: "
                             "the positive control did not see C-32")
+        # The switch reports itself only where it decides: the physical
+        # profile nulls before the switch is consulted.
         notices = ctx.get("movc-notices")
-        if notices is not None and bool(notices) != on:
-            problems.append(f"{notices} switch notices in qemu.log with the switch {'on' if on else 'off'}")
+        if notices is not None and bool(notices) != (switch and not physical):
+            problems.append(f"{notices} switch notices in qemu.log with the switch {'on' if switch else 'off'}"
+                            + (" on the physical profile" if physical else ""))
         return problems
     return check
 
@@ -220,7 +258,9 @@ def check_intcap(variant):
         bad = lines(out, rf"INTCAP {variant} [a-z]+ BAD")
         end = lines(out, rf"INTCAP {variant} END ")
         if variant == "intcap":
-            problems = exits(record, 0)
+            # Built with the SDK's codegen: a plain movc for every copy. The
+            # control (uptr) still runs, as movc-keep does.
+            problems = exits(record, 0) + q04_sdk_under_old_movc(ctx, "intcap")
             if ok != sorted(INTCAP_INTEGER + INTCAP_POINTER):
                 problems.append(f"ok for {ok}, want all nine cases")
             if end != ["INTCAP intcap END bad=0"]:
@@ -248,15 +288,18 @@ def check_arith(case):
             if "ARITH-CASE 0 cinc=1 scc=1" not in out.splitlines():
                 problems.append(f"control: {lines(out, r'ARITH-CASE')}")
             return problems
-        if ctx.get("arith-expect", "trap") == "cheri":
-            want = "0x5008" if case == 1 else "0x6000"
-            problems = exits(record, 0)
-            if f"ARITH-CASE {case} result={want}" not in out.splitlines():
-                problems.append(f"want result={want}: {lines(out, r'ARITH-CASE')}")
+        if ctx.get("profile") != "virtual":
+            # Physical QEMU models the silicon: an untagged operand raises 24.
+            problems = faults(record, 24)
+            if lines(out, rf"ARITH-CASE {case} "):
+                problems.append(f"printed a result: {lines(out, r'ARITH-CASE')}")
             return problems
-        problems = faults(record, 24)
-        if lines(out, rf"ARITH-CASE {case} "):
-            problems.append(f"printed a result: {lines(out, r'ARITH-CASE')}")
+        # The virtual profile (2026-10-14): on an untagged operand both
+        # compute an untagged integer instead of raising 24.
+        want = "0x5008" if case == 1 else "0x6000"
+        problems = exits(record, 0)
+        if f"ARITH-CASE {case} result={want}" not in out.splitlines():
+            problems.append(f"want result={want}: {lines(out, r'ARITH-CASE')}")
         return problems
     return check
 
@@ -288,8 +331,11 @@ VARIANTS = {
                    check_done("SUBWORD-ATOMICS-DONE")),
     "subword-O2": (["subword-atomics/subword_atomics.c"], ["-O2"], [], [],
                    check_done("SUBWORD-ATOMICS-DONE")),
-    "movc-rule": (["movc-null-scalar/movc_test.c"], ["-O2", '-DVARIANT="rule"'], [], [],
-                  check_movc("rule")),
+    # The virtual SDK's codegen turns +movc-keeps-integer-source on (Q-04); rule
+    # turns it off again (SDK flags come first, the last setting wins).
+    "movc-rule": (["movc-null-scalar/movc_test.c"],
+                  ["-O2", '-DVARIANT="rule"', "-Xclang", "-target-feature",
+                   "-Xclang", "-movc-keeps-integer-source"], [], [], check_movc("rule")),
     "movc-keep": (["movc-null-scalar/movc_test.c"],
                   ["-O2", '-DVARIANT="keep"', "-Xclang", "-target-feature",
                    "-Xclang", "+movc-keeps-integer-source"], [], [], check_movc("keep")),
@@ -352,7 +398,11 @@ def build(sdk, work, only):
         out.unlink(missing_ok=True)
         cmd = [str(sdk / "capstone-cc"), "-std=c11", *flags, *(str(HERE / s) for s in sources),
                "-o", str(out)]
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        # movc-keep is the control that shows what +movc-keeps-integer-source does under a
+        # MOVC that nulls an untagged source; capstone-cc refuses it on a physical SDK
+        # unless this compile, and only this one, opts in.
+        env = {**os.environ, "CAPSTONE_ALLOW_UNSAFE_MOVC_PROBE": "1"} if name == "movc-keep" else None
+        result = subprocess.run(cmd, capture_output=True, text=True, env=env)
         if result.returncode or not out.exists():
             raise SystemExit(f"run-delegated-probes: {name} did not build (rc {result.returncode}):\n"
                              f"{' '.join(cmd)}\n{result.stderr[-2000:]}")
@@ -412,8 +462,9 @@ def run(args, config, built):
     share = Path(vm["share"])
     env = dict(os.environ, PYTHONPATH=str(HOST))
     cli = [sys.executable, "-m", "capstone_vm", "--state", str(state)]
-    ctx = {"arith-expect": args.arith_expect,
-           "movc-switch": vm.get("identity", {}).get("environment", {}).get("CAPSTONE_MOVC_NULL_SCALAR", "0")}
+    ctx = {"movc-switch": vm.get("identity", {}).get("environment", {}).get("CAPSTONE_MOVC_NULL_SCALAR", "0"),
+           "profile": vm.get("identity", {}).get("profile", "physical"),
+           "sdk-movc-keeps": "+movc-keeps-integer-source" in config.get("codegen", [])}
     native = args.work / "init-fini.native.txt"
     ctx["init-fini-native"] = native.read_text() if native.exists() else ""
     stage = Path(tempfile.mkdtemp(prefix="runtime-probes-", dir=share))
@@ -470,7 +521,7 @@ def run(args, config, built):
             "sdk": str(args.sdk), "cc": config["cc"], "state": str(state),
             "vm_files": {k: v.get("sha256") for k, v in vm.get("identity", {}).get("files", {}).items()},
             "qemu_environment": vm.get("identity", {}).get("environment", {}),
-            "arith_expect": args.arith_expect, "results": results}, indent=1) + "\n")
+            "profile": ctx["profile"], "results": results}, indent=1) + "\n")
     return 1 if failed or not results else 0
 
 
@@ -481,7 +532,7 @@ def self_test():
     segv = {"kind": "signal", "value": 11, "fault": "capstone-exec: domain fault cause=24 pc=0x1"}
     native = "CTOR p 1\nCTOR a 2 env=before-main\nCTOR b 3\nMAIN 4\nDTOR b 5\nDTOR a 6\nDTOR p 7\n"
     ctx = {"init-fini-native": native, "large-written": large_pattern(),
-           "big-stdout-file": big_stdout_expected(), "arith-expect": "trap"}
+           "big-stdout-file": big_stdout_expected()}
     exit_out = "EXIT-TEST before exit\nEXIT-TEST atexit handler ran\n"
     rf = "RETURN-FLUSH line 1\nRETURN-FLUSH line 2\nRETURN-FLUSH line 3\nRETURN-FLUSH atexit handler ran\n"
     movc = lambda c, v, got, n: (f"MOVC-PROBE b=5 c={c}\nMOVC-C32 {v} got={got} want=0x5000 called=1\n"
@@ -539,25 +590,47 @@ def self_test():
         ("cap-atomics: untagged pointer faulted", check_done("CAP-ATOMICS-DONE"), segv,
          "ok   control: long store and fetch_add\n", "", {}, False),
         ("movc-rule off", check_movc("rule"), ok_exit(0), movc("5", "rule", "0x5000", 3), "",
-         {"movc-switch": "0", "movc-notices": 0}, True),
+         {"movc-switch": "0", "movc-notices": 0, "profile": "virtual"}, True),
         ("movc-keep off", check_movc("keep"), ok_exit(0), movc("5", "keep", "0x5000", 3), "",
-         {"movc-switch": "0", "movc-notices": 0}, True),
+         {"movc-switch": "0", "movc-notices": 0, "profile": "virtual"}, True),
         ("movc-rule on", check_movc("rule"), ok_exit(0), movc("0", "rule", "0x5000", 3), "",
-         {"movc-switch": "1", "movc-notices": 1}, True),
+         {"movc-switch": "1", "movc-notices": 1, "profile": "virtual"}, True),
         ("movc-keep on", check_movc("keep"), ok_exit(0), movc("0", "keep", "0x1", 1), "",
-         {"movc-switch": "1", "movc-notices": 1}, True),
+         {"movc-switch": "1", "movc-notices": 1, "profile": "virtual"}, True),
         ("movc-rule on: the copy rule missed a copy", check_movc("rule"), ok_exit(0),
-         movc("0", "rule", "0x1", 1), "", {"movc-switch": "1", "movc-notices": 1}, False),
+         movc("0", "rule", "0x1", 1), "", {"movc-switch": "1", "movc-notices": 1, "profile": "virtual"}, False),
         ("movc-keep on: the control did not see C-32", check_movc("keep"), ok_exit(0),
-         movc("0", "keep", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 1}, False),
+         movc("0", "keep", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 1, "profile": "virtual"}, False),
         ("movc-keep off: lost a value with QEMU's default", check_movc("keep"), ok_exit(0),
-         movc("5", "keep", "0x1", 1), "", {"movc-switch": "0", "movc-notices": 0}, False),
+         movc("5", "keep", "0x1", 1), "", {"movc-switch": "0", "movc-notices": 0, "profile": "virtual"}, False),
         ("movc-rule on: a QEMU without the switch", check_movc("rule"), ok_exit(0),
-         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 0}, False),
+         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 0, "profile": "virtual"}, False),
         ("movc-rule off: a notice with the switch off", check_movc("rule"), ok_exit(0),
-         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 1}, False),
+         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 1, "profile": "virtual"}, False),
+        ("movc-rule on: the SDK's own code assumes Q-04", check_movc("rule"), ok_exit(0),
+         movc("0", "rule", "0x5000", 3), "",
+         {"movc-switch": "1", "movc-notices": 1, "profile": "virtual", "sdk-movc-keeps": True}, False),
+        ("movc-keep on with a Q-04 SDK", check_movc("keep"), ok_exit(0), movc("0", "keep", "0x1", 1), "",
+         {"movc-switch": "1", "movc-notices": 1, "profile": "virtual", "sdk-movc-keeps": True}, True),
+        ("movc-rule physical", check_movc("rule"), ok_exit(0), movc("0", "rule", "0x5000", 3), "",
+         {"movc-switch": "0", "movc-notices": 0, "profile": "physical"}, True),
+        ("movc-keep physical", check_movc("keep"), ok_exit(0), movc("0", "keep", "0x1", 1), "",
+         {"movc-switch": "0", "movc-notices": 0, "profile": "physical"}, True),
+        ("movc-rule physical, switch on", check_movc("rule"), ok_exit(0), movc("0", "rule", "0x5000", 3), "",
+         {"movc-switch": "1", "movc-notices": 0, "profile": "physical"}, True),
+        ("movc-rule physical: an untagged source kept", check_movc("rule"), ok_exit(0),
+         movc("5", "rule", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0, "profile": "physical"},
+         False),
+        ("movc-keep physical: the control did not see C-32", check_movc("keep"), ok_exit(0),
+         movc("0", "keep", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0, "profile": "physical"},
+         False),
+        ("movc-rule physical: a switch notice", check_movc("rule"), ok_exit(0),
+         movc("0", "rule", "0x5000", 3), "", {"movc-switch": "1", "movc-notices": 1, "profile": "physical"},
+         False),
+        ("movc-keep, no profile recorded: judged as physical", check_movc("keep"), ok_exit(0),
+         movc("0", "keep", "0x1", 1), "", {"movc-switch": "0", "movc-notices": 0}, True),
         ("movc-rule: the other variant's lines", check_movc("rule"), ok_exit(0),
-         movc("5", "keep", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0}, False),
+         movc("5", "keep", "0x5000", 3), "", {"movc-switch": "0", "movc-notices": 0, "profile": "virtual"}, False),
         ("intcap", check_intcap("intcap"), ok_exit(0), intcap("intcap", ALL) + "INTCAP intcap END bad=0\n",
          "", {}, True),
         ("intcap: the pointer lost its tag", check_intcap("intcap"), segv, intcap("intcap", INT), "", {},
@@ -566,17 +639,41 @@ def self_test():
          intcap("intcap", ALL).replace("shift ok", "shift BAD got=0x0 want=0x10")
          + "INTCAP intcap END bad=1\n", "", {}, False),
         ("intcap-uptr", check_intcap("uptr"), segv, intcap("uptr", INT), "", {}, True),
+        ("intcap with a Q-04 SDK, switch off", check_intcap("intcap"), ok_exit(0),
+         intcap("intcap", ALL) + "INTCAP intcap END bad=0\n", "",
+         {"movc-switch": "0", "profile": "virtual", "sdk-movc-keeps": True}, True),
+        ("intcap with a Q-04 SDK, switch on: even a pass proves nothing", check_intcap("intcap"), ok_exit(0),
+         intcap("intcap", ALL) + "INTCAP intcap END bad=0\n", "",
+         {"movc-switch": "1", "profile": "virtual", "sdk-movc-keeps": True}, False),
+        ("intcap with a Q-04 SDK on the physical profile", check_intcap("intcap"), ok_exit(0),
+         intcap("intcap", ALL) + "INTCAP intcap END bad=0\n", "",
+         {"movc-switch": "0", "profile": "physical", "sdk-movc-keeps": True}, False),
+        ("intcap-uptr with a Q-04 SDK, switch on", check_intcap("uptr"), segv, intcap("uptr", INT), "",
+         {"movc-switch": "1", "profile": "virtual", "sdk-movc-keeps": True}, True),
         ("intcap-uptr: the pointer cases passed", check_intcap("uptr"), ok_exit(0),
          intcap("uptr", ALL) + "INTCAP uptr END bad=0\n", "", {}, False),
         ("intcap-uptr: faulted among the integers", check_intcap("uptr"), segv,
          "INTCAP uptr int ok\n", "", {}, False),
         ("arith-0", check_arith(0), ok_exit(0), "ARITH-CASE 0 cinc=1 scc=1\n", "", {}, True),
-        ("arith-1 trap", check_arith(1), segv, "", "", {}, True),
-        ("arith-1 trap: printed a result", check_arith(1), ok_exit(0), "ARITH-CASE 1 result=0x5008\n", "",
-         {}, False),
-        ("arith-2 cheri", check_arith(2), ok_exit(0), "ARITH-CASE 2 result=0x6000\n", "",
-         {"arith-expect": "cheri"}, True),
-        ("arith-2 cheri: trapped", check_arith(2), segv, "", "", {"arith-expect": "cheri"}, False),
+        ("arith-1 virtual", check_arith(1), ok_exit(0), "ARITH-CASE 1 result=0x5008\n", "",
+         {"profile": "virtual"}, True),
+        ("arith-1 virtual: trapped", check_arith(1), segv, "", "", {"profile": "virtual"}, False),
+        ("arith-1 virtual: wrong result", check_arith(1), ok_exit(0), "ARITH-CASE 1 result=0x0\n", "",
+         {"profile": "virtual"}, False),
+        ("arith-2 virtual", check_arith(2), ok_exit(0), "ARITH-CASE 2 result=0x6000\n", "",
+         {"profile": "virtual"}, True),
+        ("arith-2 virtual: trapped", check_arith(2), segv, "", "", {"profile": "virtual"}, False),
+        ("arith-1 physical", check_arith(1), segv, "", "", {"profile": "physical"}, True),
+        ("arith-1 physical: computed", check_arith(1), ok_exit(0), "ARITH-CASE 1 result=0x5008\n", "",
+         {"profile": "physical"}, False),
+        ("arith-1 physical: another cause", check_arith(1),
+         {**segv, "fault": "capstone-exec: domain fault cause=26 pc=0x1"}, "", "", {"profile": "physical"}, False),
+        ("arith-2 physical", check_arith(2), segv, "", "", {"profile": "physical"}, True),
+        ("arith-2 physical: computed", check_arith(2), ok_exit(0), "ARITH-CASE 2 result=0x6000\n", "",
+         {"profile": "physical"}, False),
+        ("arith-1, no profile recorded: judged as physical", check_arith(1), segv, "", "", {}, True),
+        ("arith-1, no profile recorded: computed", check_arith(1), ok_exit(0),
+         "ARITH-CASE 1 result=0x5008\n", "", {}, False),
     ]
     bad = 0
     for name, check, record, out, err, update, must_pass in cases:
@@ -594,8 +691,6 @@ def main():
     parser.add_argument("--work", type=Path, help="where the images and the references are built")
     parser.add_argument("--state", type=Path, help="capstone_vm state directory of a running guest")
     parser.add_argument("--only", nargs="*", default=[], choices=sorted(VARIANTS), metavar="NAME")
-    parser.add_argument("--arith-expect", choices=["trap", "cheri"], default="trap",
-                        help="untagged-cap-arith: today's ISA (cause 24) or CHERI's rule")
     parser.add_argument("--timeout", type=float, default=120)
     parser.add_argument("--report", type=Path)
     parser.add_argument("--build-only", action="store_true")

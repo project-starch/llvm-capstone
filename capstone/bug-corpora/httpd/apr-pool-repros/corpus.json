@@ -12,8 +12,6 @@
   "required_arms": [
     "spatial",
     "sublet",
-    "poisoncap-spatial",
-    "poisoncap-protected",
     "cheribsd-revocation",
     "native-detect",
     "native-fix-differential"
@@ -26,7 +24,6 @@
   "runners": [
     "capstone/bug-corpora/httpd/apr-pool-repros/runners/capstone-domain/run-defects.py",
     "capstone/bug-corpora/httpd/apr-pool-repros/runners/cheribsd/run-defects.py",
-    "capstone/bug-corpora/httpd/apr-pool-repros/runners/poisoncap/run-defects.py",
     "capstone/bug-corpora/httpd/apr-pool-repros/runners/run-native.sh"
   ],
   "checker": "capstone/bug-corpora/tools/check-corpus.py",

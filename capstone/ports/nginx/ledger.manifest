@@ -4,6 +4,10 @@
 # The allocator itself is patches/0001-pool-under-sublet.patch and is NOT in this list: it is
 # counted by port-effort.py against its own .classes file, and a second count of it here could
 # only disagree.
+#
+# Not counted either: port/level0/pg_level0.c and pg_string.c, the level 0 below the pool, and port/stubinc/, the
+# freestanding headers they compile against. They are the PostgreSQL port's files, vendored unchanged when that
+# port retired level 0 (c5d247874078); nginx wrote none of them.
 
 adapted/ngx_shim.h          compat   replaces ngx_config.h and ngx_core.h, and carries the two upstream lines a capability target needs corrected
 ngxtrace.h                  glue     the record format, shared with the recorder in the paper repository and fetched there at a pinned commit

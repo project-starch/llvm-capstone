@@ -1,0 +1,38 @@
+# tier3-mp-stock-batch.sh 71422fc3cc7c8573 dry run, 2026-10-23 03:50: the arm script stubbed (it writes the tick
+# reference's own matrix, FLIP= changes one cell's cause, SMOKE= the control line, RC= its exit, VB= the transcript's vbatch END rc).
+
+## ok
+MB BEGIN 03:50:25 board 1 kit bkit8-batch-b1 booking 21
+MB END 03:50:25 rc=0 :: APPVM read rc=0 00:00:00 :: --- virtual-malloc: control smoke ok; {'fault': 20, 'completed': 3}
+MB COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB board1 DONE 03:50:25
+
+## flip
+MB BEGIN 03:50:25 board 1 kit bkit8-batch-b1 booking 21
+MB END 03:50:25 rc=0 :: APPVM read rc=0 00:00:00 :: --- virtual-malloc: control smoke ok; {'fault': 20, 'completed': 3}
+MB COMPARE vs reference rc=1 :: 22 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB board1 DONE 03:50:25
+
+## refuse
+MB BEGIN 03:50:25 board 1 kit bkit8-batch-b1 booking 21
+MB END 03:50:25 rc=78 :: APPVM read rc=0 00:00:00 :: --- virtual-malloc: control smoke ok; {'fault': 20, 'completed': 3}
+MB STOP: the arm script refused (rc=78)
+
+## smokefail
+MB BEGIN 03:50:25 board 1 kit bkit8-batch-b1 booking 21
+MB END 03:50:25 rc=0 :: APPVM read rc=0 00:00:00 :: --- virtual-malloc: control smoke FAILED; {'fault': 20, 'completed': 3}
+MB VOID: the board run's own controls did not pass :: APPVM read rc=0 00:00:00 :: --- virtual-malloc: control smoke FAILED; {'fault': 20, 'completed': 3}
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB board1 DONE 03:50:25
+
+## inc
+MB BEGIN 03:50:26 board 1 kit bkit8-batch-b1 booking 21
+MB END 03:50:26 rc=0 :: APPVM read rc=0 00:00:00 :: --- virtual-malloc: control smoke ok; {'fault': 20, 'completed': 3}
+MB COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB STOP: the boot did not complete (no vbatch END rc=0)
+
+## busy
+MB STOP: board 1 is busy

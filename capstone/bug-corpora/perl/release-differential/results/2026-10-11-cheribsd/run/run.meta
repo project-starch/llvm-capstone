@@ -1,0 +1,8 @@
+arm	cheribsd-revocation
+perl_sha256	0f2aef270453def1bda863fdccb286bbcde8279eb6e22ea9eca7bf0ed1c2b38a
+revocation_default	1
+started_utc	2026-10-10T21:15:44Z
+sicode_control	bounds si_code=1 (PROT_CHERI_BOUNDS), revoked si_code=2 (PROT_CHERI_TAG), revoked with revocation off: no fault
+eval_control	42 with QUARANTINE shadow=mapped allocs=1135 frees=144 quarantined_after_free=144 reused_while_quarantined=0 sweeps=0
+shim_control	SHIMOK
+ended_utc	2026-10-10T21:21:03Z

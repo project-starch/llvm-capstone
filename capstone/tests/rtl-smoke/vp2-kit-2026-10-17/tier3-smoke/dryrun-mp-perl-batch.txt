@@ -1,0 +1,50 @@
+# tier3-mp-perl-batch.sh e662c3950ef27d13 dry run, 2026-10-23 04:00, board 2: the arm script stubbed (it writes the trimmed
+# batch reference's own matrix; FLIP= changes one cell's cause, CTL= the controls line, RC= its exit, VB= the transcript's vbatch END
+# rc). The first attempt stopped at its first step: the runner wrote under a root it had not created; fixed (mkdir of the parent).
+
+## ok
+MP perl-stock BEGIN 04:00:53 board 2 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 12
+MP perl-stock END 04:00:53 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': True, 'shim': True}; {}
+MP perl-stock COMPARE vs reference rc=0 :: 11 of 11 cells the same
+MP perl-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP perl-sublet BEGIN 04:00:53 board 2 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 12
+MP perl-sublet END 04:00:53 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': True, 'shim': True}; {}
+MP perl-sublet COMPARE vs reference rc=0 :: 11 of 11 cells the same
+MP perl-sublet readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP board2 DONE 04:00:53
+
+## flip
+MP perl-stock BEGIN 04:00:53 board 2 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 12
+MP perl-stock END 04:00:53 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': True, 'shim': True}; {}
+MP perl-stock COMPARE vs reference rc=1 :: 10 of 11 cells the same
+MP perl-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP perl-sublet BEGIN 04:00:54 board 2 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 12
+MP perl-sublet END 04:00:54 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': True, 'shim': True}; {}
+MP perl-sublet COMPARE vs reference rc=1 :: 10 of 11 cells the same
+MP perl-sublet readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP board2 DONE 04:00:54
+
+## ctlfail
+MP perl-stock BEGIN 04:00:54 board 2 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 12
+MP perl-stock END 04:00:54 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': False, 'shim': True}}; {}
+MP perl-stock VOID: the board run's own controls did not pass (needs APPVM read rc=0 with "controls {'eval': True, 'shim': True}"): no cell is a reading :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': False, 'shim': True}}; {}
+MP perl-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP board2 DONE 04:00:54
+
+## refuse
+MP perl-stock BEGIN 04:00:54 board 2 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 12
+MP perl-stock END 04:00:54 rc=78 :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': True, 'shim': True}; {}
+MP STOP: the arm script refused perl-stock (rc=78)
+
+## mruby
+MP STOP: tag mruby-stock has no recipe
+
+## inc
+MP perl-stock BEGIN 04:00:55 board 2 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 12
+MP perl-stock END 04:00:55 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': True, 'shim': True}; {}
+MP perl-stock COMPARE vs reference rc=0 :: 11 of 11 cells the same
+MP perl-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP STOP after perl-stock: the boot did not complete (no vbatch END rc=0)
+
+## busy
+MP STOP: board 2 is busy

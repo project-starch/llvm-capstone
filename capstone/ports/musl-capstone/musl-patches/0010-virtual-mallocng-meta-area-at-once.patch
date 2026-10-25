@@ -1,0 +1,42 @@
+Virtual mallocng opens a meta-area reservation with one mprotect
+
+Without brk (patch 0009), mallocng takes meta areas from an anonymous
+reservation mapped PROT_NONE, n = 2, 4, 8, ... pages behind a guard page,
+and makes them readable and writable one page at a time as metas are
+needed. Upstream a page holds dozens of metas; here a meta carries its
+slots' capabilities (cap_slots, about 3 KiB for 32 slots), so nearly every
+new group takes a page, and every mprotect is a round trip to the
+launcher: 268 of them in the SPEC CPU2017 gcc test job. The virtual
+profile now opens all of a reservation but its guard page in one call,
+before the reservation is published (a failed call unmaps it, so the next
+allocation retries rather than writing into PROT_NONE memory); pages not
+yet used still cost nothing until first touched.
+
+--- a/src/malloc/mallocng/malloc.c
++++ b/src/malloc/mallocng/malloc.c
+@@ -82,10 +82,25 @@
+ 			p = mmap(0, n*pagesize, PROT_NONE,
+ 				MAP_PRIVATE|MAP_ANON, -1, 0);
+ 			if (p==MAP_FAILED) return 0;
++#ifdef CAPSTONE_MUSL_MALLOC
++			// A meta here carries its slots' capabilities, about a page each,
++			// and every mprotect is a request to the launcher. Open all but
++			// the guard page at once, before the reservation is published;
++			// untouched pages still cost nothing.
++			if (mprotect(p + pagesize, (n-1)*pagesize, PROT_READ|PROT_WRITE)
++			    && errno != ENOSYS) {
++				munmap(p, n*pagesize);
++				return 0;
++			}
++#endif
+ 			ctx.avail_meta_areas = p + pagesize;
+ 			ctx.avail_meta_area_count = (n-1)*(pagesize>>12);
+ 			ctx.meta_alloc_shift++;
+ 		}
++#ifdef CAPSTONE_MUSL_MALLOC
++		// Without brk every meta area comes from a reservation opened above.
++		need_unprotect = 0;
++#endif
+ 		p = ctx.avail_meta_areas;
+ 		if ((uintptr_t)p & (pagesize-1)) need_unprotect = 0;
+ 		if (need_unprotect)

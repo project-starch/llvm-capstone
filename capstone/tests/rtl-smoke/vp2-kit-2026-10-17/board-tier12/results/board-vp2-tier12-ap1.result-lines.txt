@@ -1,0 +1,19 @@
+# vp2 arena-pin Tier 1 boot, 2026-10-18 12:09-12:15: caplifive_vp2_bf3db3175 (resident), fw_payload 83e5c5c6d6f89471
+# (monitor 007d81d, Image cb4afdc24841a11d), module 3005ed52e860c7af (arena-pin-1 on a2a0b2f4, arena_pin at its default,
+# off). Rungs b0-stats, b0-hello, vm-contract; the vm-suite rung not run. Pre-registered at lane vp2-tier12 e1eb22d1633e.
+# Result lines only, from run3ap1/board.txt (the driver's scoped transcript) and SEQ.
+
+DRIVER rc=0 12:14:58; watchdog lines 23
+RUNG b0-stats retval=0 oracle=0 AS-ORACLE
+RUNG b0-hello retval=0 oracle=0 AS-ORACLE
+RUNG vm-contract retval=0 oracle=0 AS-ORACLE
+VM-CONTRACT BRANCH identity: VIRTUAL_APPLICATION_OK, then the stale access denied with 25 (exit 139)
+FRTY retries 1 at       1 FRTY:011110E8 
+BANNER (console, pr_emerg; KMSG copies excluded):       1 capstone_vm: loaded, diag arena-pin-1, supervisor_slots=1;
+## scored (by script)
+  Predicted: vm-contract identity, as on a2a0b2f4 (the esconly boot). Read: identity.
+  The vm-contract fault line equals boots 4c and be in cause (25), code offset (0x140f0) and entry (0x94c); the
+  fault address is the heap's, which differs on every boot (4c 0xd9060, be 0xf0060, here 0x114060 from the code base).
+  The pin code is not harmful by being present: Tier 1 passes on 3005ed52 with arena_pin off.
+  One S-23 fetch retry (FRTY), as in the earlier boots; its address varies from boot to boot (r8-r13, 4c, be read
+  01110E44, 01111434, 0111109C, 011110E0).

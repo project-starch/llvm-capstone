@@ -1,0 +1,444 @@
+{
+ "program": "perl 5.36.3",
+ "n_per_arm": 1,
+ "stdout_hash": "sha256 of the file's stdout; Capstone arms read from the serial log with CRLF normalised to LF",
+ "tap_hash": "sha256 of the TAP outcome lines ('ok N' / 'not ok N', one per line, in order) plus the plan line",
+ "files": {
+  "base/cond.t": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 81,
+    "stdout_sha256": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "plan": 4,
+    "ok": 4,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147"
+   },
+   "stock": {
+    "exit": 0,
+    "stdout_bytes": 81,
+    "stdout_sha256": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "plan": 4,
+    "ok": 4,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "guest_wall_s": 16.5,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true
+   },
+   "protected": {
+    "exit": 0,
+    "stdout_bytes": 81,
+    "stdout_sha256": "49a8eb79c9300445ff9f25fc7d8e9364dc6c3c766a09cacc0dc704562a223485",
+    "plan": 4,
+    "ok": 4,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "guest_wall_s": 16.39,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true,
+    "stdout_equals_stock": true
+   }
+  },
+  "base/if.t": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 31,
+    "stdout_sha256": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "plan": 2,
+    "ok": 2,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "0c118838f800730ae4bb75f4266999deb5029fcacf435fe63a58ce43237ff4dd"
+   },
+   "stock": {
+    "exit": 0,
+    "stdout_bytes": 31,
+    "stdout_sha256": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "plan": 2,
+    "ok": 2,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "0c118838f800730ae4bb75f4266999deb5029fcacf435fe63a58ce43237ff4dd",
+    "guest_wall_s": 16.02,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true
+   },
+   "protected": {
+    "exit": 0,
+    "stdout_bytes": 31,
+    "stdout_sha256": "f3e52b93ba9c614badc97edb2484ec1cf9be6d29d3ad6d4eb17b4f75d59d6fe9",
+    "plan": 2,
+    "ok": 2,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "0c118838f800730ae4bb75f4266999deb5029fcacf435fe63a58ce43237ff4dd",
+    "guest_wall_s": 16.09,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true,
+    "stdout_equals_stock": true
+   }
+  },
+  "base/lex.t": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 2596,
+    "stdout_sha256": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "plan": 120,
+    "ok": 120,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "096f7279f0b991e479df9ff2107e6762ca4fa2a682ac86beb2b5a616433fa7a0"
+   },
+   "stock": {
+    "exit": 0,
+    "stdout_bytes": 2596,
+    "stdout_sha256": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "plan": 120,
+    "ok": 120,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "096f7279f0b991e479df9ff2107e6762ca4fa2a682ac86beb2b5a616433fa7a0",
+    "guest_wall_s": 19.45,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true
+   },
+   "protected": {
+    "exit": 0,
+    "stdout_bytes": 2596,
+    "stdout_sha256": "6c379691d9683b249e687321ac3bc8444515d149c490749730d56872303a66e8",
+    "plan": 120,
+    "ok": 120,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "096f7279f0b991e479df9ff2107e6762ca4fa2a682ac86beb2b5a616433fa7a0",
+    "guest_wall_s": 14.44,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true,
+    "stdout_equals_stock": true
+   }
+  },
+  "base/num.t": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 333,
+    "stdout_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "plan": 56,
+    "ok": 56,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2"
+   },
+   "stock": {
+    "exit": 0,
+    "stdout_bytes": 333,
+    "stdout_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "plan": 56,
+    "ok": 56,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "guest_wall_s": 16.92,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true
+   },
+   "protected": {
+    "exit": 0,
+    "stdout_bytes": 333,
+    "stdout_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "plan": 56,
+    "ok": 56,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "0979daee0acfae256e2dd47b77c1fc7b4105c24270fe1c5ca12ec661df2a2bc2",
+    "guest_wall_s": 17.46,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true,
+    "stdout_equals_stock": true
+   }
+  },
+  "base/pat.t": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 43,
+    "stdout_sha256": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "plan": 2,
+    "ok": 2,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "0c118838f800730ae4bb75f4266999deb5029fcacf435fe63a58ce43237ff4dd"
+   },
+   "stock": {
+    "exit": 0,
+    "stdout_bytes": 43,
+    "stdout_sha256": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "plan": 2,
+    "ok": 2,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "0c118838f800730ae4bb75f4266999deb5029fcacf435fe63a58ce43237ff4dd",
+    "guest_wall_s": 16.13,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true
+   },
+   "protected": {
+    "exit": 0,
+    "stdout_bytes": 43,
+    "stdout_sha256": "4b0ceccd8cce9875f2fe8371bbe62dc5ef13e85a67261b5869a4876b9c8d1bad",
+    "plan": 2,
+    "ok": 2,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "0c118838f800730ae4bb75f4266999deb5029fcacf435fe63a58ce43237ff4dd",
+    "guest_wall_s": 16.23,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true,
+    "stdout_equals_stock": true
+   }
+  },
+  "base/rs.t": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 1314,
+    "stdout_sha256": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "plan": 41,
+    "ok": 41,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "de077f00dc7b3581f475642980b594eeb315a77ff6220d10f46aace6c9774149"
+   },
+   "stock": {
+    "exit": 0,
+    "stdout_bytes": 1314,
+    "stdout_sha256": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "plan": 41,
+    "ok": 41,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "de077f00dc7b3581f475642980b594eeb315a77ff6220d10f46aace6c9774149",
+    "guest_wall_s": 18.41,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true
+   },
+   "protected": {
+    "exit": 0,
+    "stdout_bytes": 1314,
+    "stdout_sha256": "54116ee14af818b671e5f77988672ea35fb551de8cf9eaa40176d3a648966a9a",
+    "plan": 41,
+    "ok": 41,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "de077f00dc7b3581f475642980b594eeb315a77ff6220d10f46aace6c9774149",
+    "guest_wall_s": 12.27,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true,
+    "stdout_equals_stock": true
+   }
+  },
+  "base/term.t": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 54,
+    "stdout_sha256": "954eb67d78c6ac5a8a1ae9f86632c6b12ab45e67822531ed39da37678814c61f",
+    "plan": 7,
+    "ok": 7,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "704c509e5b4ca81525249bbfcc409e40836fb7b3aa9c8f4d2d1f22b586aeccb4"
+   },
+   "stock": {
+    "exit": 139,
+    "stdout_bytes": 10,
+    "stdout_sha256": "f432ad69c1aab1363b37c5be4bfd0eb385c31f12ba16e08a131395f65ce8d449",
+    "plan": 7,
+    "ok": 1,
+    "not_ok": 0,
+    "missing": 6,
+    "tap_sha256": "f432ad69c1aab1363b37c5be4bfd0eb385c31f12ba16e08a131395f65ce8d449",
+    "guest_wall_s": 18.82,
+    "fault": {
+     "cause": 25,
+     "pc_offset": "0x72ca9c",
+     "symbol": "fileno_unlocked"
+    },
+    "stdout_equals_native": false,
+    "tap_equals_native": false
+   },
+   "protected": {
+    "exit": 139,
+    "stdout_bytes": 10,
+    "stdout_sha256": "f432ad69c1aab1363b37c5be4bfd0eb385c31f12ba16e08a131395f65ce8d449",
+    "plan": 7,
+    "ok": 1,
+    "not_ok": 0,
+    "missing": 6,
+    "tap_sha256": "f432ad69c1aab1363b37c5be4bfd0eb385c31f12ba16e08a131395f65ce8d449",
+    "guest_wall_s": 20.26,
+    "fault": {
+     "cause": 25,
+     "pc_offset": "0x727a30",
+     "symbol": "fileno_unlocked"
+    },
+    "stdout_equals_native": false,
+    "tap_equals_native": false,
+    "stdout_equals_stock": true
+   }
+  },
+  "base/translate.t": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 7768,
+    "stdout_sha256": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "plan": 257,
+    "ok": 257,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "e0062d88d874fb62aa1f542fa607d0147cb4cd0aabb352692eab39bffc8d813b"
+   },
+   "stock": {
+    "exit": 0,
+    "stdout_bytes": 7768,
+    "stdout_sha256": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "plan": 257,
+    "ok": 257,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "e0062d88d874fb62aa1f542fa607d0147cb4cd0aabb352692eab39bffc8d813b",
+    "guest_wall_s": 16.51,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true
+   },
+   "protected": {
+    "exit": 0,
+    "stdout_bytes": 7768,
+    "stdout_sha256": "c1268208f88fc3fac250f1ffe030d1dbace77154de286fa45d2d5cc1b87f0da1",
+    "plan": 257,
+    "ok": 257,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "e0062d88d874fb62aa1f542fa607d0147cb4cd0aabb352692eab39bffc8d813b",
+    "guest_wall_s": 16.21,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true,
+    "stdout_equals_stock": true
+   }
+  },
+  "base/while.t": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 25,
+    "stdout_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "plan": 4,
+    "ok": 4,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147"
+   },
+   "stock": {
+    "exit": 0,
+    "stdout_bytes": 25,
+    "stdout_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "plan": 4,
+    "ok": 4,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "guest_wall_s": 16.02,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true
+   },
+   "protected": {
+    "exit": 0,
+    "stdout_bytes": 25,
+    "stdout_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "plan": 4,
+    "ok": 4,
+    "not_ok": 0,
+    "missing": 0,
+    "tap_sha256": "a57799323a51f3b672de85e87c4781373afd85eed3fa7e2bf59b8d47d0692147",
+    "guest_wall_s": 8.95,
+    "fault": null,
+    "stdout_equals_native": true,
+    "tap_equals_native": true,
+    "stdout_equals_stock": true
+   }
+  },
+  "smoke": {
+   "native": {
+    "exit": 0,
+    "stdout_bytes": 360,
+    "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e"
+   },
+   "stock": {
+    "exit": 1,
+    "stdout_bytes": 75,
+    "stdout_sha256": "36b2e3551a0de33350ba9c84fad2b30f1ee9da9962336dc8758a3888470ba4ac",
+    "guest_wall_s": 27.48,
+    "fault": null,
+    "stdout_equals_native": false,
+    "stderr": "Out of memory!"
+   },
+   "protected": {
+    "exit": 1,
+    "stdout_bytes": 75,
+    "stdout_sha256": "36b2e3551a0de33350ba9c84fad2b30f1ee9da9962336dc8758a3888470ba4ac",
+    "guest_wall_s": 33.77,
+    "fault": null,
+    "stdout_equals_native": false,
+    "stdout_equals_stock": true,
+    "stderr": "Out of memory!"
+   }
+  }
+ },
+ "followup_smoke_2000": {
+  "what": "smoke.pl with CAPSTONE_PERL_SMOKE_OBJECTS=2000, one boot, same two images; unregistered follow-up",
+  "why": "the registered default (20,000 objects) exhausts the virtual heap on both Capstone arms; 2,000 is the setting the port's earlier virtual run used",
+  "boot_start_utc": "2026-10-11T08:42Z",
+  "boot_wall_s": 67,
+  "native": {
+   "exit": 0,
+   "stdout_bytes": 360,
+   "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+   "wall_s": 0.045
+  },
+  "stock": {
+   "image_sha256": "e4c27891c419ebd92a157745a7174b98d97c4e5b52098839ca8fe0104d998e7a",
+   "exit": 0,
+   "stdout_bytes": 360,
+   "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+   "stdout_sha256_in_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+   "stderr_bytes": 0,
+   "guest_wall_s": 28.34,
+   "stdout_equals_native": true
+  },
+  "protected": {
+   "image_sha256": "20856abd9cfbb5c40a249f28c06f753bbfe85b370c2bc73f408a74e3c15045b8",
+   "exit": 0,
+   "stdout_bytes": 360,
+   "stdout_sha256": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+   "stdout_sha256_in_guest": "a4863fc7bf3ca18217711d9df5fea63f1851bb96d6f79e1a487680ae9268450e",
+   "stderr_bytes": 0,
+   "guest_wall_s": 32.02,
+   "stdout_equals_native": true,
+   "stdout_equals_stock": true
+  }
+ }
+}

@@ -1,0 +1,20 @@
+{
+  "arm": "silicon-pym-stock",
+  "bitstream": "caplifive_sublet_d93a8d66b (sha256 89ba6d81...)",
+  "cases": 20,
+  "configuration": "silicon-pymalloc-stock",
+  "contract": "verdicts-v1",
+  "corpus": "capstone/bug-corpora/cpython/pymalloc-repros",
+  "platform": {
+    "compiler": "clang 22.0.0git (llvm-capstone 612b3ec514c0), per the board lane; images built by runtime/silicon/build-b0-hello.sh through tools/run-silicon-cases.py build; CPython 3.13.7 (Python-3.13.7.tgz 6c9d8083...): the replay's main.c + case.c + obmalloc.c + src/shared/backing.c + runners/silicon/aligned-alloc.c, gnu11 -O0, lifetimes heap; pymalloc as released (the port's ported variant, patches 0001 + 0002)",
+    "firmware": "5049ca43f7595b41: the exact-regions supervised-call line of sets 2-8; one boot for two arms",
+    "kernel": "Image 49c794e1fbd63081",
+    "qemu": "none: silicon. The same images, by sha256, first ran on the silicon-mimic capstone-qemu silicon/cderive-round ce1be0c642 (CAPSTONE_CDERIVE_ROUND=1; silicon-runs/2026-10-16-pymalloc/silicon-pym-stock/qemu-and-predictions.json)",
+    "runner": "b0run.sh, one corpus rung per arm (board lane); summarised in silicon-runs/2026-10-16-pymalloc/silicon-pym-stock/board-matrix.json and re-read here from the board transcript"
+  },
+  "pre_registration": "the board's README and qemu-and-predictions.json, lane 9aa15f58c846 (before the boot)",
+  "source_bundle": "capstone/bug-corpora/silicon-runs/2026-10-16-pymalloc/silicon-pym-stock",
+  "tally": {
+    "MISSED": 20
+  }
+}

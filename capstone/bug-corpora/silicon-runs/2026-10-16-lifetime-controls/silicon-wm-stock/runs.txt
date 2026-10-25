@@ -1,0 +1,11 @@
+silicon-wm-stock:control-clean controls.dom clean
+silicon-wm-stock:control-oob controls.dom oob
+silicon-wm-stock:control-uaf controls.dom uaf
+silicon-wm-stock:control-subobj controls.dom subobj
+silicon-wm-stock:wireshark-wmem-controls-lifetime-00-parent wireshark-wmem-controls-lifetime-00.dom 0 0
+silicon-wm-stock:wireshark-wmem-controls-lifetime-01-sibling wireshark-wmem-controls-lifetime-01.dom 0 1
+silicon-wm-stock:wireshark-wmem-controls-lifetime-02-successor wireshark-wmem-controls-lifetime-02.dom 0 2
+silicon-wm-stock:wireshark-wmem-controls-lifetime-03-stale wireshark-wmem-controls-lifetime-03.dom 0 3
+silicon-wm-stock:wireshark-wmem-controls-lifetime-block-fast-00-parent wireshark-wmem-controls-lifetime-block-fast-00.dom 0 0
+silicon-wm-stock:wireshark-wmem-controls-lifetime-block-fast-01-successor wireshark-wmem-controls-lifetime-block-fast-01.dom 0 1
+silicon-wm-stock:wireshark-wmem-controls-lifetime-block-fast-02-stale wireshark-wmem-controls-lifetime-block-fast-02.dom 0 2

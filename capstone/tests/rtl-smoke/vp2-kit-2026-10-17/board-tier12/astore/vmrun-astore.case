@@ -1,0 +1,15 @@
+  alias-store)
+    # The alias-store test (pre-registered in tier3-smoke/README.md; compiler lane alias-store 6c8f59560766): the one image,
+    # one capstone-vexec process per arm in the registered order (inb, alias, outside, past), CAPSTONE_EXEC_DIAGNOSTICS=1.
+    # Each prints AS_PRE, AS_STORED, AS_READBACK value=N and AS_DONE, or faults. Markers AS_ARM / AS_EXIT bracket each arm.
+    # RESULT alias-store retval = the number of arms whose process did not start (exit 127); faults are readings.
+    cd /test-domains/vm || { echo "RESULT alias-store retval=961"; exit 1; }
+    grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko diag_emerg=1 || { echo "RESULT alias-store retval=962"; exit 1; }
+    r=0
+    for a in "inb 100" "alias 0x10100" "outside 0x16000" "past 0x4ed0"; do
+      set -- $a; echo "AS_ARM $1 $2"
+      CAPSTONE_EXEC_DIAGNOSTICS=1 ./capstone-vexec alias-store.dom $2 > /tmp/as.out 2>&1; s=$?
+      cat /tmp/as.out; echo "AS_EXIT $1 $s"
+      [ $s -eq 127 ] && r=$((r + 1))
+    done
+    echo "RESULT alias-store retval=$r" ;;

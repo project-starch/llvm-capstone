@@ -1,0 +1,34 @@
+# Tier 3 prediction, arm fcs: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 15 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-nested-pools configuration virtual-ffmpeg-carve platform qkit7-wrapper cells 13 tally {"CAUGHT": 13}
+# controls [["bounds-malloc", "fault"], ["live-carve", "complete"], ["uaf-carve", "fault"], ["uaf-malloc", "fault"]]
+00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short image a1064fdcaea8192d CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+01_699341d647_apedec_array_0000_writes_64_into_channel_1 image a5cb9ba467e5e0cc CAUGHT cause 28 at ffc_write_probe_u32+88 reached True completed False attribution "probe"
+02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel image fb69f48cd8f437fe CAUGHT cause 28 at ffc_read_probe_u32+56 reached True completed False attribution "probe"
+03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix image 621b6cce8091932b CAUGHT cause 28 at ffc_read_probe_u32+56 reached True completed False attribution "probe"
+04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel image e0664df1b97d55e1 CAUGHT cause 28 at ffc_write_probe_u32+88 reached True completed False attribution "probe"
+05_9d3032b960_alsdec_opt_order_past_max_order image 200a35d61b092026 CAUGHT cause 28 at ffc_write_probe_u32+88 reached True completed False attribution "probe"
+06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420 image 945a5767da89582c CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+07_2563a33856_vp9_intra_pred_carved_for_old_bpp image aa0480091dfe5aa9 CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+08_b5ff61695f_swscale_v_line_at_pre_doubling_stride image 12c8a6503847ed32 CAUGHT cause 28 at ffc_write_probe_u32+88 reached True completed False attribution "probe"
+09_043bcdcdb0_svq1enc_inter_block_runs_into_source image 82244527822ccb59 CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+10_d2213b6493_rv34_b_block_carved_at_old_linesize image 392e9bb494e3c7c3 CAUGHT cause 28 at ffc_write_probe_u8+88 reached True completed False attribution "probe"
+11_68226ed9ec_vorbis_type1_residue_end_spans_channels image d5c085d7bd38db7c CAUGHT cause 28 at ffc_read_probe_u32+56 reached True completed False attribution "probe"
+12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice image 568886562ba75544 CAUGHT cause 28 at ffc_read_probe_u32+56 reached True completed False attribution "probe"
+# image a1064fdcaea8192d  00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short.dom
+# image a5cb9ba467e5e0cc  01_699341d647_apedec_array_0000_writes_64_into_channel_1.dom
+# image fb69f48cd8f437fe  02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel.dom
+# image 621b6cce8091932b  03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix.dom
+# image e0664df1b97d55e1  04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel.dom
+# image 200a35d61b092026  05_9d3032b960_alsdec_opt_order_past_max_order.dom
+# image 945a5767da89582c  06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420.dom
+# image aa0480091dfe5aa9  07_2563a33856_vp9_intra_pred_carved_for_old_bpp.dom
+# image 12c8a6503847ed32  08_b5ff61695f_swscale_v_line_at_pre_doubling_stride.dom
+# image 82244527822ccb59  09_043bcdcdb0_svq1enc_inter_block_runs_into_source.dom
+# image 392e9bb494e3c7c3  10_d2213b6493_rv34_b_block_carved_at_old_linesize.dom
+# image d5c085d7bd38db7c  11_68226ed9ec_vorbis_type1_residue_end_spans_channels.dom
+# image 568886562ba75544  12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice.dom
+# image 6ae6b2c3f43c73c4  carve-controls.dom
+# image 491655742d378fcd  controls.dom

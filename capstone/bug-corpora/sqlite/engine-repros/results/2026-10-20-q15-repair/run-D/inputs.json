@@ -1,0 +1,85 @@
+{
+  "amalgamation_sha256": "7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2",
+  "arm": "virtual-nested-pools",
+  "build": {
+    "arm": "memsys5-sublet",
+    "groups": {
+      "core": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_PREUPDATE_HOOK",
+        "-DSQLITE_COUNTOFVIEW_OPTIMIZATION"
+      ],
+      "coreT": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-USQLITE_OMIT_TEMPDB"
+      ],
+      "ext": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "fts3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "fts3P": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4",
+        "-DSQLITE_ENABLE_FTS3_PARENTHESIS"
+      ],
+      "fts5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "json": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_JSON1"
+      ],
+      "memfs3": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS3",
+        "-DSQLITE_ENABLE_FTS4"
+      ],
+      "memfs5": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_FTS5"
+      ],
+      "memfsdb": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_DBSTAT_VTAB"
+      ],
+      "memfsp": [
+        "-USQLITE_OMIT_INCRBLOB"
+      ],
+      "rtree": [
+        "-USQLITE_OMIT_INCRBLOB",
+        "-DSQLITE_ENABLE_RTREE",
+        "-DSQLITE_RTREE_INT_ONLY",
+        "-USQLITE_OMIT_SHARED_CACHE"
+      ]
+    },
+    "opt": "-O0",
+    "sdk": "/mnt/hdd/<user>/capstone/t3-freeze-nb/sdk"
+  },
+  "cases": 33,
+  "configuration": "virtual-sqlite-memsys5-pools",
+  "contract": "verdicts-v1",
+  "corpus": "sqlite/engine-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "a405840dce789345422ab901bb44df0a1d166677b564c68303f24ae286b847f0",
+    "module": "5bfc38f808e1effd22e44641e1c7fc8cdde956b418a41ecf66dea206ef75c946",
+    "profile": "virtual",
+    "qemu": "5f731f99ec6a19b2395e9bbe8fc374d996eee59430c0c0c93b5a9e582d55f2cf",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "b3f1aa0ea60442f82193ef57e978f70f2ec377a99c57bcfa41276e95d8464546"
+  },
+  "predicted": "CAUGHT",
+  "tally": {
+    "CAUGHT": 2,
+    "NO-READING:unattributed": 31
+  }
+}

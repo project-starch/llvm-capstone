@@ -6,8 +6,9 @@ system supplies page tables, physical pages, scheduling and system services.
 The integration goal is a reusable processor interface with a small OS adapter.
 
 This guide describes the **supervised virtual C implementation**,
-as of 2026-10-07. The core stack is on `dev`; the paged node-store extension
-is on `review/virtual-node-growth`. Applications still run in C mode. Linux runs the native
+as of 2026-10-12. The core stack, paged node store, local mallocng and managed
+lifetime ISA are on `dev`; the allocator migration is on
+`ports/nested-allocators-rebased`. Applications run in C mode. Linux runs the native
 launcher and its worker threads, and a loadable module connects them to the
 processor. The recorded platform needs no additional Linux-core or firmware
 patch. This is a QEMU implementation, not a released RTL interface.

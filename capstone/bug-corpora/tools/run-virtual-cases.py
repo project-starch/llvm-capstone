@@ -2,6 +2,7 @@
 """Run a case.c corpus of FFmpeg, tshark or memcached on the virtual Capstone profile, all in one boot.
 
     run-virtual-cases.py --corpus <corpus dir> --arm virtual-malloc --virtual-kit <kit> --sdk <virtual SDK>
+                         (or --board-kit <board kit>: the same steps in one vp2 board boot, tools/boardvm.py)
                          --llvm-bin <dir with llvm-nm> [--cc-arg ...] [--out DIR] [--raw DIR] [--only 00,03]
 
 This runner REPORTS; tools/verdicts.py decides, as for every virtual corpus. It is the
@@ -28,8 +29,8 @@ free), and the judge scores no silence from a run whose controls did otherwise.
 
 WHAT THE ARM IS is read from the SDK and the kit, never from the label: the SDK's CMakeCache must
 say CAPSTONE_APPLICATION_VIRTUAL=ON (appvm.sdk_identity), the corpus.json must map the arm to a
-capstone-virtual configuration, and the run must be on a kit. A physical SDK or VM is refused --
-run-capstone-domain.py checks only the heap, and a virtual SDK would pass it as `spatial`.
+capstone-virtual configuration, and the run must be on a kit. A physical SDK or VM is refused, as
+run-capstone-domain.py refuses a virtual SDK.
 
 PREBUILT MODE (--prebuilt BUILD --prebuilt-controls BUILD), for the nested corpora: a case there is
 not a free-standing case.c but a program linked against its port's allocator library, built by the
@@ -40,6 +41,8 @@ of each run, the reach marker the case prints before its defective access, and t
 function the case's own case.c calls; a fault anywhere else is unattributed.
 
 Exit: 0 judged, 75 nothing could be judged (infrastructure, controls, a wrong build or SDK).
+      78 the SDK's effective codegen is not -fno-builtin and records no builtins_allowed (C-81,
+      tools/check-sdk-builtins.py); checked before anything is built or booted.
 """
 import argparse
 import json
@@ -54,12 +57,13 @@ TOOLS = HERE.parent
 REPO = HERE.parents[3]
 sys.path.insert(0, str(TOOLS))
 import appvm  # noqa: E402
+import boardvm  # noqa: E402
 import virtualvm  # noqa: E402
 import verdicts as v  # noqa: E402
 
 PROBE = re.compile(r"(^|_)(read|write)_probe(_u8|_u32)?$")
 CONTROLS_C = REPO / "capstone/bug-corpora/postgres/c-repros/shared/controls.c"
-CORPORA = ("plain-heap-repros", "plain-temporal-repros", "subobject-repros", "carved-repros")
+CORPORA = ("plain-heap-repros", "plain-temporal-repros", "subobject-repros", "carved-repros", "plane-repros")
 
 
 def observe(number, text, result, symbols=None, sites=()):
@@ -122,13 +126,32 @@ def observe_control(name, text, result):
     return "complete" if f"CONTROL {name} RETURNED" in text else "none"
 
 
+def record_arm(a):
+    """The arm name the bundle records. --arm stays the virtual arm, for the configuration and adapter lookups; a board
+    run records under its own name, vp2-<arm without "virtual-">, which corpus.json maps to the SAME configuration, so
+    the QEMU bundle is never displaced as the corpus's current record of the virtual arm."""
+    return a.arm_name or boardvm.record_arm(a.arm, a.board_kit)
+
+
+def backend(a):
+    """(kit, Batch class, the kit's required files, platform(kit, compiler, runner)) for --virtual-kit or --board-kit.
+    The board record's firmware and kernel come from the recipe's own record after the run (boardvm.record_firmware)."""
+    if a.board_kit:
+        return a.board_kit, boardvm.BoardBatch, boardvm.FILES, boardvm.platform
+    return a.virtual_kit, virtualvm.Batch, virtualvm.FILES, virtualvm.platform
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--corpus", type=Path, required=True)
     p.add_argument("--arm", required=True)
-    p.add_argument("--virtual-kit", type=Path, required=True)
+    p.add_argument("--arm-name", help="the arm the bundle records (default: --arm; with --board-kit, vp2-<arm>)")
+    kits = p.add_mutually_exclusive_group(required=True)
+    kits.add_argument("--virtual-kit", type=Path, help="the QEMU kit (virtualvm)")
+    kits.add_argument("--board-kit", type=Path,
+                     help="a vp2 board kit (boardvm, tools/board/): the same steps in one board boot (Tier 3)")
     p.add_argument("--sdk", type=Path, required=True)
-    p.add_argument("--llvm-bin", type=Path, required=True)
+    p.add_argument("--llvm-bin", type=v.llvm_bin_dir, required=True)
     p.add_argument("--cc-arg", action="append", default=[])
     p.add_argument("--out", type=Path)
     p.add_argument("--raw", type=Path)
@@ -136,6 +159,13 @@ def main():
     p.add_argument("--prebuilt", type=Path, help="the port's capstone-application build of the corpus")
     p.add_argument("--prebuilt-controls", type=Path, help="the same build of the corpus's virtual controls")
     a = p.parse_args()
+    # C-81: a builtins build can elide the allocations a case observes; refused before anything boots
+    extra = [w for c in a.cc_arg for w in ("--extra", c)]
+    gate = subprocess.run([sys.executable, str(Path(__file__).with_name("check-sdk-builtins.py")), *extra, str(a.sdk)])
+    if gate.returncode:
+        print(f"CONTROL-FAILED {a.sdk}: SDK-BUILTINS gate exit {gate.returncode}", file=sys.stderr)
+        return 78
+    rec = record_arm(a)
     corpus = a.corpus.resolve()
     if a.prebuilt:
         return run_hosted(a, corpus)
@@ -154,13 +184,14 @@ def main():
         print(f"CONTROL-FAILED {a.sdk} is a {profile} SDK (heap {heap}); this runner needs the virtual profile",
               file=sys.stderr)
         return 75
-    missing = [f for f in virtualvm.FILES if not (a.virtual_kit / f).is_file()]
+    kit, Batch, kit_files, kit_platform = backend(a)
+    missing = [f for f in kit_files if not (kit / f).is_file()]
     if missing:
-        print(f"CONTROL-FAILED kit {a.virtual_kit} lacks {missing}", file=sys.stderr)
+        print(f"CONTROL-FAILED kit {kit} lacks {missing}", file=sys.stderr)
         return 75
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = a.out or (corpus / "results" / f"{stamp}-virtual" / a.arm)
-    raw = a.raw or Path("/tmp/capstone/virtual-cases-raw") / f"{stamp}-{corpus.parent.name}-{corpus.name}-{a.arm}"
+    out = a.out or (corpus / "results" / f"{stamp}-{'vp2' if a.board_kit else 'virtual'}" / rec)
+    raw = a.raw or Path("/tmp/capstone/virtual-cases-raw") / f"{stamp}-{corpus.parent.name}-{corpus.name}-{rec}"
     bindir = raw / "bin"
     bindir.mkdir(parents=True, exist_ok=False)
     cc = a.sdk / "capstone-cc"
@@ -186,20 +217,52 @@ def main():
         if b.returncode:
             print(f"CONTROL-FAILED controls build: {b.stderr[:300]}", file=sys.stderr)
             return 75
-    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"]]
+    carve_controls = {"live-carve", "uaf-carve"} if config == "virtual-ffmpeg-carve" else set()
+    # ffmpeg/plane-repros' frame carve (shared/virtual-frame.c, in the arm's --cc-arg): a read at the
+    # alpha plane's last byte must complete, one byte past it must fault at the probe (the plane's
+    # bound), and a read after av_frame_free must fault at the probe (the frame's lifetime ended).
+    plane_controls = {"plane-live", "plane-bound", "plane-free"} if config == "virtual-ffmpeg-plane-carve" else set()
+    plan = [(f"control-{n}", controls_img, [n]) for n in spec["controls"]
+            if n not in carve_controls and n not in plane_controls]
+    if carve_controls:
+        carve_img = bindir / "carve-controls.dom"
+        b = subprocess.run([str(cc), "-O0", "-DFFC_SUBLET_CARVE", f"-I{shared}",
+                            f"-I{REPO / 'capstone/runtime/include'}",
+                            str(shared / "carve-recarve-control.c"), str(shared / "driver.c"),
+                            "-o", str(carve_img)], capture_output=True, text=True)
+        if b.returncode:
+            print(f"CONTROL-FAILED carve controls build: {b.stderr[:300]}", file=sys.stderr)
+            return 75
+        plan += [("control-live-carve", carve_img, ["fixed", "98"]),
+                 ("control-uaf-carve", carve_img, ["buggy", "98"])]
+    plane_imgs = {}
+    if plane_controls:
+        for src, number in (("plane-bound-control.c", "99"), ("plane-free-control.c", "98")):
+            img = bindir / src.replace(".c", ".dom")
+            b = subprocess.run([str(cc), "-O0", "-DCORPUS_VIRTUAL", f"-I{shared}", str(shared / src),
+                                str(shared / "driver.c"), *a.cc_arg, "-o", str(img)], capture_output=True, text=True)
+            if b.returncode:
+                print(f"CONTROL-FAILED plane control {src}: {b.stderr[:300]}", file=sys.stderr)
+                return 75
+            plane_imgs[number] = img
+        plan += [("control-plane-live", plane_imgs["99"], ["fixed", "99"]),
+                 ("control-plane-bound", plane_imgs["99"], ["buggy", "99"]),
+                 ("control-plane-free", plane_imgs["98"], ["buggy", "98"])]
     for d in found:
         if d.name in built:
             n = str(int(d.name[:2]))
             plan += [(f"{d.name}-fixed", built[d.name], ["fixed", n]), (f"{d.name}-buggy", built[d.name], ["buggy", n])]
 
     # ---- one boot ----
-    batch = virtualvm.Batch(raw / "stage")
+    batch = Batch(raw / "stage")
     for name, image, argv in plan:
         batch.put(f"images/{image.name}", image)
         batch.step(name, f"./capstone-vexec ./images/{image.name} {' '.join(argv)}")
-    runs, serial, completed = batch.execute(a.virtual_kit, raw / "guest", timeout=300 + 60 * len(plan))
+    runs, serial, completed = batch.execute(kit, raw / "guest", timeout=300 + 60 * len(plan))
     print(f"  virtual boot: {'completed' if completed else 'DID NOT COMPLETE'}; serial {serial}", flush=True)
-    platform = virtualvm.platform(a.virtual_kit, a.llvm_bin / "clang", HERE)
+    platform = kit_platform(kit, a.llvm_bin / "clang", HERE)
+    if a.board_kit:
+        boardvm.record_firmware(platform, raw / "guest")
 
     controls = []
     for name in spec["controls"]:
@@ -207,7 +270,14 @@ def main():
             controls.append(v.Control(name, "none", "the control did not run"))
             continue
         text, result = runs[f"control-{name}"]
-        controls.append(v.Control(name, observe_control(name, text, result),
+        seen = observe_control(name, text, result)
+        if name in carve_controls or name in plane_controls:
+            img = carve_img if name in carve_controls else plane_imgs["98" if name == "plane-free" else "99"]
+            fault = v.domain_fault(result.get("fault") or "", v.Symbols(a.llvm_bin, img))
+            seen = ("fault" if fault and fault.symbol and PROBE.search(fault.symbol) else
+                    "complete" if result.get("kind") == "exit" and result.get("value") == 0
+                    and "VERDICT FIXED" in text else "none")
+        controls.append(v.Control(name, seen,
                                   evidence_line(result, text)))
         print(f"  control {name:<14} {controls[-1].observed:<9} (expected {spec['controls'][name]})", flush=True)
 
@@ -216,30 +286,30 @@ def main():
         number = str(int(d.name[:2]))
         sites = json.loads((d / "case.json").read_text()).get("fault_sites") or ()
         if d.name in build_errors:
-            o = v.Observation(case=d.name, arm=a.arm, infra="build-failed", notes=build_errors[d.name])
+            o = v.Observation(case=d.name, arm=rec, infra="build-failed", notes=build_errors[d.name])
         elif f"{d.name}-buggy" not in runs or f"{d.name}-fixed" not in runs:
-            o = v.Observation(case=d.name, arm=a.arm, infra="infra", notes="the boot ended before this case ran")
+            o = v.Observation(case=d.name, arm=rec, infra="infra", notes="the boot ended before this case ran")
         else:
             ftext, fres = runs[f"{d.name}-fixed"]
             btext, bres = runs[f"{d.name}-buggy"]
             if not fixed_ok(number, ftext, fres):
-                o = v.Observation(case=d.name, arm=a.arm, infra="control-failed",
+                o = v.Observation(case=d.name, arm=rec, infra="control-failed",
                                   notes="the FIXED run of the same image did not print VERDICT FIXED and exit 0: "
                                         + (next((l for l in ftext.splitlines() if "VERDICT" in l or "CONTROL-FAILED" in l),
                                                 str(fres)))[:200])
             else:
                 o = observe(number, btext, bres, v.Symbols(a.llvm_bin, built[d.name]), sites)
-            o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(built[d.name])
+            o.case, o.arm, o.image_sha256 = d.name, rec, v.sha256(built[d.name])
         o.controls = list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
         print(f"{d.name:<60} {verdict[0]}{':' + verdict[1] if verdict[1] else ''}  {verdict[2][:90]}", flush=True)
 
-    record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", a.arm, rows, {
+    record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", rec, rows, {
         "configuration": config, "build": {"sdk_identity": [heap, profile], "cc_args": [local_path(c) for c in a.cc_arg],
                                            "flags": ["-O0", "-DCORPUS_VIRTUAL"]},
         "platform": platform})
-    print(f"--- {a.arm} ({config}): {record['tally']}\nresults: {out}")
+    print(f"--- {rec} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 
@@ -262,42 +332,57 @@ def wmem_probe(case_dir):
 
 
 HOSTED = {
-    # wireshark/wmem-repros on the wmem port (ports/wireshark/wmem, preset capstone-application).
-    #   virtual-malloc: stock wmem, g_malloc/g_free = virtual mallocng (WM_LIBC_SYSTEM), mode 0; the
-    #     buggy run is the fix differential (`0 N buggy`), whose temporal cases ASSERT the stale chunk
-    #     was reoccupied before reading it -- the build the CheriBSD libc arm ran.
-    #   virtual-nested-pools: the Sublet region and chunk layers over a payload the virtual heap lends
-    #     linear (WM_SUBLET, shared/driver-virtual.c), mode 1; the buggy run is the protected sequence
-    #     (`1 N`), as the physical sublet-chunks arm ran it, with no observation added.
-    # Both: the fixed run is the differential (`MODE N fixed`): VERDICT FIXED and exit 0.
+    # wireshark/wmem-repros on the wmem port (ports/wireshark/wmem, preset capstone-application),
+    # g_malloc/g_free being virtual mallocng in both arms.
+    #   virtual-malloc: wmem as released (WM_SUBLET=OFF); the buggy run is the fix differential
+    #     (`0 N buggy`), whose temporal cases ASSERT the stale chunk was reoccupied before reading it.
+    #   virtual-nested-pools: the port's patch 0001 (WM_SUBLET=ON), every block and block_fast object
+    #     a CDERIVE child of its block, revoked by CREVOKE; the buggy run is the plain sequence (`0 N`).
+    # Both: the fixed run is the differential (`0 N fixed`): VERDICT FIXED and exit 0.
     "wmem-repros": dict(
-        cache={"virtual-malloc": {"WM_LIBC_SYSTEM": "ON", "WM_CHUNKS": "OFF", "WM_SUBLET": "OFF"},
-               "virtual-nested-pools": {"WM_SUBLET": "ON", "WM_CHUNKS": "ON", "WM_LIBC_SYSTEM": "OFF"}},
-        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        cache={"virtual-malloc": {"WM_SUBLET": "OFF"}, "virtual-nested-pools": {"WM_SUBLET": "ON"}},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "0"},
         buggy={"virtual-malloc": ["buggy"], "virtual-nested-pools": []},
         probe=wmem_probe,
         ready="WM_DEFECT case={n} ready",
         done="WM_DEFECT case={n} mode={mode} completed",
-        controls_dir="controls/virtual",
-        control_names={90: "jumbo-reset-90", 91: "chunk-free-91"},
+        controls_dir="controls",
+        control_names={0: "uaf-chunk", 1: "uaf-jumbo", 2: "bounds-chunk"},
     ),
     # memcached/allocator-repros on the allocators port (ports/memcached/allocators), built by the
     # corpus's own shared/build-cases.sh capstone-application, whose programs print the case.c
     # drivers' lines (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
     #   virtual-malloc: the stock ledger, every slab page and cache.c object one virtual-mallocng
     #     object (MCP_STOCK_MALLOC, as the ASan arm), `fixed|buggy N`.
-    #   virtual-nested-pools: the shared ledger on the Sublet authority over a payload the virtual
-    #     heap lends linear (MCP_SUBLET, shared/driver-virtual.c), mode 1: `fixed|buggy N 1`.
+    #   virtual-nested-pools: slabs.c and cache.c with the application's Sublet patch 0006 and no
+    #     ledger (MCP_SUBLET, shared/driver-virtual.c): `fixed|buggy N`.
     "allocator-repros": dict(
         format="case-line",
         cache={"virtual-malloc": {"MCP_STOCK_MALLOC": "ON", "MCP_SUBLET": "OFF"},
                "virtual-nested-pools": {"MCP_SUBLET": "ON", "MCP_STOCK_MALLOC": "OFF"}},
         cache_dir="work/port",
         program="bin/defect-{nn}",
-        extra={"virtual-malloc": [], "virtual-nested-pools": ["1"]},
+        extra={"virtual-malloc": [], "virtual-nested-pools": []},
         mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
         controls_dir="controls/virtual",
         control_names={90: "chunk-free-90"},
+    ),
+    # ffmpeg/pool-repros on the buffer-pool port (ports/ffmpeg/buffer-pool), built by the corpus's
+    # own shared/build-cases.sh capstone-application, whose programs print the case.c driver's lines
+    # (`case=N arm=...`, VERDICT), so observe()/fixed_ok() read them.
+    #   virtual-malloc: the stock pools, every entry one virtual-mallocng object, `fixed|buggy N`.
+    #   virtual-nested-pools: the pools with patch 0003 (FFPOOL_SUBLET), every hand-out a child
+    #     lifetime of its entry, revoked at the return: `fixed|buggy N`.
+    "pool-repros": dict(
+        format="case-line",
+        cache={"virtual-malloc": {"FFPOOL_SUBLET": "OFF"},
+               "virtual-nested-pools": {"FFPOOL_SUBLET": "ON"}},
+        cache_dir="work/port",
+        program="bin/defect-{nn}",
+        extra={"virtual-malloc": [], "virtual-nested-pools": []},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        controls_dir="controls/virtual",
+        control_names={90: "pool-return-90"},
     ),
 }
 
@@ -340,8 +425,8 @@ def cache_says(build, want, sdk):
 
 
 def label_addresses(llvm_bin, image, names):
-    """Link addresses of the named symbols, zero-size labels included (wm_widen_probe is a label
-    inside a static function, which Symbols.lookup would report as that function instead)."""
+    """Link addresses of the named symbols, zero-size labels included (a fault-site label inside a
+    static function, which Symbols.lookup would report as that function instead)."""
     if not names:
         return {}
     out = subprocess.run([str(Path(llvm_bin) / "llvm-nm"), "--defined-only", str(image)],
@@ -412,6 +497,7 @@ def fixed_hosted(n, mode, text, result, done):
 
 
 def run_hosted(a, corpus):
+    rec = record_arm(a)
     if corpus.name not in HOSTED:
         sys.exit(f"CONTROL-FAILED {corpus}: --prebuilt takes {sorted(HOSTED)}")
     ad = HOSTED[corpus.name]
@@ -433,14 +519,15 @@ def run_hosted(a, corpus):
         if why:
             print(f"CONTROL-FAILED {build} is not the {a.arm} build: {why}", file=sys.stderr)
             return 75
-    missing = [f for f in virtualvm.FILES if not (a.virtual_kit / f).is_file()]
+    kit, Batch, kit_files, kit_platform = backend(a)
+    missing = [f for f in kit_files if not (kit / f).is_file()]
     if missing:
-        print(f"CONTROL-FAILED kit {a.virtual_kit} lacks {missing}", file=sys.stderr)
+        print(f"CONTROL-FAILED kit {kit} lacks {missing}", file=sys.stderr)
         return 75
     mode = ad["mode"][a.arm]
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    out = a.out or (corpus / "results" / f"{stamp}-virtual" / a.arm)
-    raw = a.raw or Path("/tmp/capstone/virtual-cases-raw") / f"{stamp}-{corpus.parent.name}-{corpus.name}-{a.arm}"
+    out = a.out or (corpus / "results" / f"{stamp}-{'vp2' if a.board_kit else 'virtual'}" / rec)
+    raw = a.raw or Path("/tmp/capstone/virtual-cases-raw") / f"{stamp}-{corpus.parent.name}-{corpus.name}-{rec}"
     bindir = raw / "bin"
     bindir.mkdir(parents=True, exist_ok=False)
     found = sorted(d for d in corpus.glob("[0-9][0-9]_*") if (d / "case.c").is_file())
@@ -487,13 +574,15 @@ def run_hosted(a, corpus):
         plan += [(f"{d.name}-fixed", programs[d.name], run_argv("fixed", n)),
                  (f"{d.name}-buggy", programs[d.name], run_argv("buggy", n))]
 
-    batch = virtualvm.Batch(raw / "stage")
+    batch = Batch(raw / "stage")
     for name, image, argv in plan:
         batch.put(f"images/{image.name}", image)
         batch.step(name, f"./capstone-vexec ./images/{image.name} {' '.join(argv)}")
-    runs, serial, completed = batch.execute(a.virtual_kit, raw / "guest", timeout=300 + 60 * len(plan))
+    runs, serial, completed = batch.execute(kit, raw / "guest", timeout=300 + 60 * len(plan))
     print(f"  virtual boot: {'completed' if completed else 'DID NOT COMPLETE'}; serial {serial}", flush=True)
-    platform = virtualvm.platform(a.virtual_kit, a.llvm_bin / "clang", HERE)
+    platform = kit_platform(kit, a.llvm_bin / "clang", HERE)
+    if a.board_kit:
+        boardvm.record_firmware(platform, raw / "guest")
 
     controls = []
     for c in spec["controls"]:
@@ -522,12 +611,12 @@ def run_hosted(a, corpus):
     for d in found:
         n = str(int(d.name[:2]))
         if f"{d.name}-buggy" not in runs or f"{d.name}-fixed" not in runs:
-            o = v.Observation(case=d.name, arm=a.arm, infra="infra", notes="the boot ended before this case ran")
+            o = v.Observation(case=d.name, arm=rec, infra="infra", notes="the boot ended before this case ran")
         else:
             ftext, fres = runs[f"{d.name}-fixed"]
             btext, bres = runs[f"{d.name}-buggy"]
             if not (fixed_ok(n, ftext, fres) if caseline else fixed_hosted(n, mode, ftext, fres, ad["done"])):
-                o = v.Observation(case=d.name, arm=a.arm, infra="control-failed",
+                o = v.Observation(case=d.name, arm=rec, infra="control-failed",
                                   notes="the FIXED run of the same image did not finish with VERDICT FIXED and exit 0: "
                                         + (next((l for l in ftext.splitlines() if "VERDICT" in l or "CONTROL-FAILED" in l),
                                                 str(fres)))[:200])
@@ -539,7 +628,7 @@ def run_hosted(a, corpus):
                 o = observe_hosted(n, mode, btext, bres, v.Symbols(a.llvm_bin, programs[d.name]), ad["probe"](d),
                                    ad["ready"], ad["done"], bool(ad["buggy"][a.arm]), sites,
                                    label_addresses(a.llvm_bin, programs[d.name], set(sites)))
-        o.case, o.arm, o.image_sha256 = d.name, a.arm, v.sha256(programs[d.name])
+        o.case, o.arm, o.image_sha256 = d.name, rec, v.sha256(programs[d.name])
         o.controls = list(controls)
         verdict = v.judge(o, spec)
         rows.append((o, verdict))
@@ -548,14 +637,14 @@ def run_hosted(a, corpus):
     cache_text = (a.prebuilt / ad.get("cache_dir", "") / "CMakeCache.txt").read_text()
     opts = {k: re.search(rf"^{k}:\w+=(.*)$", cache_text, re.M)
             for k in (*ad["cache"][a.arm], "CMAKE_BUILD_TYPE", "CMAKE_C_FLAGS")}
-    record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", a.arm, rows, {
+    record = v.write_bundle(out, f"{corpus.parent.name}/{corpus.name}", rec, rows, {
         "configuration": config,
         "build": {"sdk_identity": [heap, profile], "prebuilt": local_path(str(a.prebuilt)),
-                  "cache": {k: (m.group(1) if m else None) for k, m in opts.items()},
+                  "cache": {k: (local_path(m.group(1)) if m else None) for k, m in opts.items()},
                   "argv": {"fixed": run_argv("fixed", "N"), "buggy": run_argv("buggy", "N")},
                   "controls": {c: v.sha256(prog) for c, (_, prog) in port_controls.items()}},
         "platform": platform})
-    print(f"--- {a.arm} ({config}): {record['tally']}\nresults: {out}")
+    print(f"--- {rec} ({config}): {record['tally']}\nresults: {out}")
     return 75 if rows and all(r[1][0] == v.NO_READING for r in rows) else 0
 
 

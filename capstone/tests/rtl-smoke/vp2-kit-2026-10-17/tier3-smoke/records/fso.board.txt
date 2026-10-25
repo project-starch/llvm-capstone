@@ -1,0 +1,68 @@
+# Tier 3 board reading, arm fso: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2_bf3db3175 cells 9 tally {"NO-READING:control-failed": 9}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_8864fd0aec_cbs_h265_pic_timing_member image a0f57569427f6892 NO-READING:control-failed cause None at None reached False completed False attribution null
+01_68845e26f7_vulkan_hevc_refpicset_member image a1dcc9a1404caa98 NO-READING:control-failed cause None at None reached False completed False attribution null
+02_e058af88ab_vulkan_hevc_dpb_member image 8030f85dcd793f4b NO-READING:control-failed cause None at None reached False completed False attribution null
+03_89de2f0de1_aac_arith_last_member image aaa867ae4fc894f2 NO-READING:control-failed cause None at None reached False completed False attribution null
+04_1a00ea51cb_rtsp_control_url_underflow image f0c0f3c2cf5aed80 NO-READING:control-failed cause None at None reached False completed False attribution null
+05_d29ff88422_vulkan_av1_tile_sizes image f4e9b603d669aed0 NO-READING:control-failed cause None at None reached False completed False attribution null
+06_a809a784ec_vvc_entry_point_start_ctu image ecde6cc230d056f3 NO-READING:control-failed cause None at None reached False completed False attribution null
+07_275e217b10_hlsenc_key_uri_strlcpy_size image a4e2c8c0717cf4b6 NO-READING:control-failed cause None at None reached False completed False attribution null
+08_fb862976df_cbs_h266_col_width_val image f027eb86aafd79eb NO-READING:control-failed cause None at None reached False completed False attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  DIFF 00_8864fd0aec_cbs_h265_pic_timing_member: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+  DIFF 01_68845e26f7_vulkan_hevc_refpicset_member: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+  DIFF 02_e058af88ab_vulkan_hevc_dpb_member: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+  DIFF 03_89de2f0de1_aac_arith_last_member: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+  DIFF 04_1a00ea51cb_rtsp_control_url_underflow: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+  DIFF 05_d29ff88422_vulkan_av1_tile_sizes: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+  DIFF 06_a809a784ec_vvc_entry_point_start_ctu: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+  DIFF 07_275e217b10_hlsenc_key_uri_strlcpy_size: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+  DIFF 08_fb862976df_cbs_h266_col_width_val: verdict NO-READING cause None pc None
+      verdict: qemu MISSED board NO-READING
+      reason: qemu None board control-failed
+      reached: qemu True board False
+      completed: qemu True board False
+  0 of 9 cells the same
+## the boot
+  T3SEQ fso BEGIN 15:01:09 ffmpeg/subobject-repros virtual-malloc (14 extra args)
+  T3SEQ fso END 15:12:16 rc=75 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'NO-READING:control-failed': 9}
+  T3SEQ fso PAYLOAD stage 3437038 B, 1306299 B gzip; firmware 19565064 B
+  BOARD_RUN_START 15:01:15 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 19 files, stage 3437038 bytes
+  firmware 51944aeeefa4f886 19565064 B
+  DRIVER rc=0 15:12:16
+  BOARD_RUN_DONE 15:12:16

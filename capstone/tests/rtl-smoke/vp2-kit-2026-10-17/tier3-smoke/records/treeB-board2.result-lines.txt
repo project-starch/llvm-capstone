@@ -1,0 +1,56 @@
+# tree B on board 2 (2026-10-19 19:27-21:12), result lines from the session logs
+CHAIN-TREEB START 19:27:12
+FLASH tree B rc=0 19:29:51: [flash-bit 19:27:13] resident before: 'caplifive_sublet_d93a8d66b.bit' [flash-bit 19:27:17] flash-back path present: caplifive_sublet_d93a8d66b.bit (board 2's previous resident) is in the store [flash-bit 19:29:51] resident AFTER power cycle: 'caplifive_vp2c_8de3c48cf.bit' rc=0 
+CANARY rc=0 20:30:24: CANARY PASS 9 of 9 20:30:24
+ARMS rc=0 20:55:41: VP2ARMS DONE 20:55:41 25 as pre-registered
+C7 done 21:04:27: C7 vs d93a8d66b rc=0 33 reference records, 33 new, 0 differ 21:04:27
+CHAIN_TREEB_STEPS123_DONE
+CANARY1 START 19:29:51 caplifive_vp2c_8de3c48cf.bit
+CANARY1 S16 vs d93a8d66b rc=0 18 arms, 98 reference readings, 0 not identical 19:54:10
+CANARY1 FLOOR vs d93a8d66b rc=0 6 arms, 77 reference readings, 0 not identical 20:00:09
+CANARY1 S1GAPF vs d93a8d66b rc=0 3 arms, 0 with a functional difference 20:03:13
+CANARY2 START 20:03:13 caplifive_vp2c_8de3c48cf.bit
+CANARY2 S16 vs d93a8d66b rc=0 18 arms, 98 reference readings, 0 not identical 20:21:24
+CANARY2 FLOOR vs d93a8d66b rc=0 6 arms, 77 reference readings, 0 not identical 20:27:23
+CANARY2 S1GAPF vs d93a8d66b rc=0 3 arms, 0 with a functional difference 20:30:24
+CANARY12 S16 pass1 vs pass2 rc=0 18 arms, 98 reference readings, 0 not identical
+CANARY12 FLOOR pass1 vs pass2 rc=0 6 arms, 77 reference readings, 0 not identical
+CANARY12 S1GAPF pass1 vs pass2 rc=0 3 arms, 0 with a functional difference
+CANARY PASS 9 of 9 20:30:24
+VP2ARMS START 20:30:24 25 arms
+VP2ARM va-runv rc=0 :: VERDICT va-runv: AS PRE-REGISTERED for vp2 20:31:22
+VP2ARM va-runv-quantum rc=0 :: VERDICT va-runv-quantum: AS PRE-REGISTERED for vp2 20:32:22
+VP2ARM va-runv2 rc=0 :: VERDICT va-runv2: AS PRE-REGISTERED for vp2 20:33:23
+VP2ARM va-runv3 rc=0 :: VERDICT va-runv3: AS PRE-REGISTERED for vp2 20:34:23
+VP2ARM va-runv4 rc=0 :: VERDICT va-runv4: AS PRE-REGISTERED for vp2 20:35:23
+VP2ARM va-runv5 rc=0 :: VERDICT va-runv5: AS PRE-REGISTERED for vp2 20:36:23
+VP2ARM va-runv6 rc=0 :: VERDICT va-runv6: AS PRE-REGISTERED for vp2 20:37:23
+VP2ARM va-runv7 rc=0 :: VERDICT va-runv7: AS PRE-REGISTERED for vp2 20:38:28
+VP2ARM va-barrier rc=0 :: VERDICT va-barrier: AS PRE-REGISTERED for vp2 20:39:28
+VP2ARM va-q15 rc=0 :: VERDICT va-q15: AS PRE-REGISTERED for vp2 20:40:28
+VP2ARM va-csmint-emu rc=0 :: VERDICT va-csmint-emu: AS PRE-REGISTERED for vp2 20:41:29
+VP2ARM va-csmint-mon rc=0 :: VERDICT va-csmint-mon: AS PRE-REGISTERED for vp2 20:42:29
+VP2ARM va-straddle rc=0 :: VERDICT va-straddle: AS PRE-REGISTERED for vp2 20:43:29
+VP2ARM va-flat rc=0 :: VERDICT va-flat: AS PRE-REGISTERED for vp2 20:44:29
+VP2ARM va-flat-off rc=0 :: VERDICT va-flat-off: AS PRE-REGISTERED for vp2 20:45:28
+VP2ARM va-alloc rc=0 :: VERDICT va-alloc: AS PRE-REGISTERED for vp2 20:46:28
+VP2ARM va-alloc-off rc=0 :: VERDICT va-alloc-off: AS PRE-REGISTERED for vp2 20:47:33
+VP2ARM va-alloc-corrupt rc=0 :: VERDICT va-alloc-corrupt: AS PRE-REGISTERED for vp2 20:48:33
+VP2ARM va-alloc-exhaust rc=0 :: VERDICT va-alloc-exhaust: AS PRE-REGISTERED for vp2 20:49:33
+VP2ARM va-ns-collide rc=0 :: VERDICT va-ns-collide: AS PRE-REGISTERED for vp2 20:50:33
+VP2ARM va-ns-collide-off rc=0 :: VERDICT va-ns-collide-off: AS PRE-REGISTERED for vp2 20:51:33
+VP2ARM vb-trans-vp2 rc=0 :: VERDICT vb-trans-vp2: AS PRE-REGISTERED for vp2 20:52:34
+VP2ARM vb-trans-plain-vp2 rc=0 :: VERDICT vb-trans-plain-vp2: AS PRE-REGISTERED for vp2 20:53:33
+VP2ARM q17-order rc=0 :: VERDICT q17-order: AS PRE-REGISTERED for vp2 20:54:33
+VP2ARM vb-trans-off rc=0 :: VERDICT vb-trans-off: AS PRE-REGISTERED for vp2 20:55:33
+VP2ARMS DONE 20:55:41 25 as pre-registered
+C7 vs d93a8d66b rc=0 33 reference records, 33 new, 0 differ 21:04:27
+SVBATCH START 21:05:14 on caplifive_vp2c_8de3c48cf.bit
+SVARM sv-stale cmp rc=0 ::    sv-stale: read count 6 values ['0xaaaa', '0xbbbb', '0x3', '0xb', '0xaaaa', '0x55']; want 6 ['0xaaaa', '0xbbbb', '0x3', '0xb', '0xaaaa', '0x55'] VERDICT sv-stale: AS PRE-REGISTERED for tree B  21:06:06
+SVARM sv-stale-f cmp rc=0 ::    sv-stale-f: read count 6 values ['0xaaaa', '0xbbbb', '0x3', '0xb', '0xaaaa', '0x55']; want 6 ['0xaaaa', '0xbbbb', '0x3', '0xb', '0xaaaa', '0x55'] VERDICT sv-stale-f: AS PRE-REGISTERED for tree B  21:07:07
+SVARM sv-stale-b cmp rc=0 ::    sv-stale-b: read count 6 values ['0xaaaa', '0xbbbb', '0x3', '0xb', '0xaaaa', '0x55']; want 6 ['0xaaaa', '0xbbbb', '0x3', '0xb', '0xaaaa', '0x55'] VERDICT sv-stale-b: AS PRE-REGISTERED for tree B  21:08:07
+SVARM sv-stale-bf cmp rc=0 ::    sv-stale-bf: read count 6 values ['0xaaaa', '0xbbbb', '0x3', '0xb', '0xaaaa', '0x55']; want 6 ['0xaaaa', '0xbbbb', '0x3', '0xb', '0xaaaa', '0x55'] VERDICT sv-stale-bf: AS PRE-REGISTERED for tree B  21:09:08
+SVARM sv-stale-bn cmp rc=0 ::    sv-stale-bn: read count 6 values ['0xaaaa', '0xcccc', '0x3', '0xb', '0xaaaa', '0x55']; want 6 ['0xaaaa', '0xcccc', '0x3', '0xb', '0xaaaa', '0x55'] VERDICT sv-stale-bn: AS PRE-REGISTERED for tree B  21:10:08
+SVARM sv-fetch-c cmp rc=0 ::    sv-fetch-c: read count 5 values ['0xaaaa', '0xc', '0x80006000', '0x80006000', '0x55']; want 5 ['0xaaaa', '0xc', '0x80006000', '0x80006000', '0x55'] VERDICT sv-fetch-c: AS PRE-REGISTERED for tree B  21:11:09
+SVARM sv-fetch cmp rc=0 ::    sv-fetch: read count 5 values ['0xaaaa', '0xc', '0x80006000', '0x80006000', '0x55']; want 5 ['0xaaaa', '0xc', '0x80006000', '0x80006000', '0x55'] VERDICT sv-fetch: AS PRE-REGISTERED for tree B  21:12:09
+SVBATCH DONE 21:12:17 7 of 7 as pre-registered for tree B

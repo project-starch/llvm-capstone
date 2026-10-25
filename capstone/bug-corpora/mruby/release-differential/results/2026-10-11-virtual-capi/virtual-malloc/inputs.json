@@ -1,0 +1,53 @@
+{
+  "arm": "virtual-malloc",
+  "image_sha256": "7b5872bc7141cbadd9e1bf3057e025ad25040ad6a50542ada1214f899c172a61",
+  "cases": 23,
+  "control": {
+    "smoke": "completed",
+    "smoke_done": true
+  },
+  "timeout_s": 120,
+  "platform": {
+    "qemu": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+    "firmware": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
+    "launcher": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+    "ssh_server": "900e4b0526538c4af35825f33ba192acb5f2f9b7dc49938039b5b8084db29882",
+    "module": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+    "job_helper": "fb6192b8641012fe3154c1af2c4084072a40662a1117b2c01ae4431d88838cc1",
+    "compiler": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+    "runner": "4994d930d0f63712795e023d3d600f382696c4107ca87b199ada85dd9096eecd",
+    "judge": "c5e5872372b392de5325a2951e0ef57798cb9295d753b2b77db7223732c7a25f",
+    "profile": "virtual",
+    "exact_bounds": true
+  },
+  "triggers": {
+    "01_13e017c2f_opgetidx0-stale-regs": "d14931f11f9581b9e828488c8234c328e67c667431d75d0caaf8db93762c5f53",
+    "02_39aecc143_openter-block-collected": "32630f92670f3e75d5a088807066f893a2d8fad4fac26ccfff868f833ba4863c",
+    "03_59552ecb8_sprintf-format-mutated": "2386565ffeb74cf40ee5e436d7ef9848bdcfa4fe5ad0059429f5a4fd25d06b98",
+    "04_606d9a6b2_merge-pair-collected": "6dd37dea82e17bf470f2a6d9a54ca0f8da621ee46edb765e39c651aac73ac795",
+    "05_628ccec60_task-values-unmarked": "9df7538d9b4f305a6e859e9ac73573d263cf314395d18bf2edae878bec92b47b",
+    "06_84cc5aa60_khash-freed-buckets": "893225cda27aa7dbcb82cc8172b0f703e83c6eb49f1e8e49fb4bfb76ca1e1625",
+    "07_eb7693857_vacated-slot-read": "383da15f828861c886092aed739a4e174cc44218cf71e0677d28f56f527cee78",
+    "08_fb4974528_hash-ext-walk-carries": "fb406cbd0aec4333e8a4ee284c86403086ebebeca6bcaed1de54f391ba3965c2",
+    "09_0cf969a2b_shaped-iv-reshaped": "1d0dba6af34688a21781117ec0f1be3dfdf7a28f07f7f5fd5ec08f55d2b52e7d",
+    "10_7c5915799_struct-member-storage": "2c0de3bb3a06b59f2d85135da5bd92d8f1225efeebb7a2d0d717af6f8b035b27",
+    "11_cb51fce92_task-stack-envs": "3711c6f7f36f5340b603544593c87e9f438ee63e256eb06d48178da540e4282d",
+    "12_4663fef45_eql-delete-past-entries": "db3952efb6d85a2b49f17ba4f79c03f55a514035c8f1194b635058475ef0d308",
+    "13_4a386f80e_pack-uu-signed-overflow": "82d72174567b23ec79a89188b4165801d9c774c2c0bee647a1f367538abce6a7",
+    "14_93eb74a59_case-splat-stale-count": "6db329fd7087b0f2b71c0f5e506920753ae18f5494c6a250c9a82418af19331c",
+    "15_af6f23ddb_prepend-self-reference": "2a008caa6952914f1c51686b315ed5d02094f50474dfafb134796d7efc5f2230",
+    "16_ec89364c4_ary-fill-int-overflow": "5ee65c4723d572d7e97171e2c80149135c3411ac61abb137ea8730d52764453c",
+    "17_bef45e223_pat-values-stale-ptr-and-len": "7b89e0e16c89eee2db6faa86a71d490e3c51e9021e1c27b5b018f02738eea51d",
+    "18_03f242d09_mod-visibility-null-mt": "41b330d9f8699a9f89a6cbd6f67728fdf795d9c9a0525e6a8b55efdf0a86947a",
+    "19_77d1d928f_method-defined-null-mt": "545ce398c4a5c1bac332b9a28767062c28fc4259717bc66a87ed5d6bd9ceba31",
+    "20_94993eede_visibility-unprepared-mt": "d3323be9d7e24e95622b4436721d0736c49621f78babd93636766948e3552a12",
+    "21_ff047f5fe_method-defined-inherit-null-mt": "2e1df0b9d8f11db98707dd70468f974fb3b185dce62189b4899af002fe8f3e18",
+    "22_d8911416c_alias-mid-as-irep": "edead2a25c8aa5e26c6a4c6bca4af09910874da0de96ac18c8a86f0a3748b2f5",
+    "23_1737589f0_file-join-recursive-array": "6a29ed2c6a91292d03a812d3663fbfa11427d491578c05a91ad3085d66bbf2d5"
+  },
+  "drivers": {
+    "11_cb51fce92_task-stack-envs": "261f758d08f5229a62a7100a90a5eca8dfd2cba2ede95c3bc708d58141094328"
+  }
+}

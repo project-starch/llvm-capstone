@@ -1,0 +1,2 @@
+# image sha256/16	address	evidence (checked against the image by the gate)	reason
+491655742d378fcd	0x21290	fini_array_size=0	unreachable: musl libc_exit_fini is never called (the runtime's strong __libc_exit_fini overrides the weak alias, C-82), and its .fini_array is empty

@@ -1,0 +1,16 @@
+# name	row	boot	va	sha256/16	want (the silicon-mimic emulator's reading of THIS image, CAPSTONE_GP_FABRICATE=0)
+base322	-	1	0x410000	a958958b0d8d5101	__CAPSTONE_SQLITE_MEMORY_PASSED__
+wschema	8	1	0x810000	ea36f5293be2343c	wschema NOTRAP done
+blobwrite	20	1	0xc10000	7bb39642429c275d	blobwrite NOTRAP done
+mem5design	25	1	0x1010000	38c3fe7b7013c706	mem5design NOTRAP done
+blobclose	5	1	0x1410000	bd12d56dcf97f01e	blobclose NOTRAP done
+jsonstatic	174a	1	0x1810000	0508d144b3796880	jsoneachstatic NOTRAP done
+jsonroot	174b	1	0x1c10000	33e71cce67e5ea0c	jsoneachroot NOTRAP done
+backupattach	15	1	0x2010000	8fe5a153c1229ac3	FAULT
+base322	-	2	0x410000	a958958b0d8d5101	__CAPSTONE_SQLITE_MEMORY_PASSED__
+detachtrig	4	2	0x2410000	02ca19e2f6f5affe	FAULT
+base322	-	3	0x410000	a958958b0d8d5101	__CAPSTONE_SQLITE_MEMORY_PASSED__
+blobclose03	c03	3	0x1410000	634b15ac0e5f9c98	blobclose NOTRAP done
+ctluafmem5	ctl	3	0x2810000	30b37a0448073a7a	CONTROL uaf-mem5 mark, returns
+ctlboundsmem5	ctl	3	0x3010000	2cb47577b8fc9a59	CONTROL bounds-mem5 mark, returns
+backupattachrev	c02rev	3	0x2c10000	1fc539c154e66fe2	backupattach NOTRAP done

@@ -1,0 +1,2 @@
+# Boot r10 runner dry run (firmware 9b3eb92a963acb7c), driver stubbed: clean synthetic: identity, 33 of 41, 0 off; r9 real
+# transcript (sparse-stale wedge): identity, board-check reads to the end; wrong firmware: STOP.

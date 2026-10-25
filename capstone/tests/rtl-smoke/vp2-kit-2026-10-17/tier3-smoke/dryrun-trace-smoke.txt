@@ -1,0 +1,108 @@
+# tier3-trace-smoke.sh + trace-smoke.py dry runs, 2026-10-21 21:4x: (a) booking, busy and boot stubbed (BOARDVM_STUB_TRANSCRIPT, a transcript with no steps); (b) the generated guest script under busybox with a fake capstone-vexec (s1 completes, s2 loops on one delegated call), bounds cut to 3 s
+## (a) the wrapper: a stepless transcript reads NO DATA (exit 2)
+TS BEGIN 21:42:19 board 1 image 8c7cd27614353067 smoke.rb 16718df7d583aa21 tools e6c68a531557 booking 999
+unbooked 999
+TS END rc=2 21:42:19 :: NO DATA: 0 of 8 steps in the transcript
+TS board1 DONE 21:42:19
+NO DATA: 0 of 8 steps in the transcript
+smoke steps bounded:       4 sleep 600; stall
+## (b) the guest script (heartbeats and run 1's 30 repeated lines dropped)
+@@STEP-BEGIN smoke-1
+M1 hello
+SMOKE_DONE
+@@STEP-END smoke-1 0
+@@STEP-BEGIN sum-1
+TRACE lines 31 service 31
+     30 NR 64 12
+      1 NR 94 0
+TAIL
+CAPSTONE_VM_SERVICE tid=0 nr=94 result=0
+@@STEP-END sum-1 0
+@@STEP-BEGIN smoke-2
+@@STEP-BOUND smoke-2 600
+Killed
+M1 hello
+@@STEP-END smoke-2 137
+@@STALL smoke-2 sh: can't open /proc/2033789/stat: no such file
+@@STALL smoke-2 sh: can't open /proc/2033790/stat: no such file
+@@STALL smoke-2 proc 1 2033707 capstone-vexec state=S ppid=2033681 utime=0 stime=0 wchan=do_wait syscall=
+@@STALL smoke-2 sh: can't open /proc/2033786/stat: no such file
+@@STALL smoke-2 sh: can't open /proc/2033788/stat: no such file
+@@STALL smoke-2 mod 1 sfences= satp=/ busy=
+@@STALL smoke-2 escapes UNSET
+@@STALL smoke-2 proc 2 2033707 capstone-vexec state=S ppid=2033681 utime=0 stime=1 wchan=do_wait syscall=
+@@STALL smoke-2 sh: can't open /proc/2033786/stat: no such file
+@@STALL smoke-2 sh: can't open /proc/2033788/stat: no such file
+@@STALL smoke-2 mod 2 sfences= satp=/ busy=
+dmesg: klogctl: Operation not permitted
+@@STEP-BEGIN sum-2
+TRACE lines 490 service 163
+    163 NR 61 0
+KIND     163 CAPSTONE_VM_BOUNDARY kind=11
+KIND     163 CAPSTONE_VM_BOUNDARY kind=10
+KIND       1 CAPSTONE_VM_ADD_OK slot=0
+TAIL
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+CAPSTONE_VM_BOUNDARY kind=11
+CAPSTONE_VM_BOUNDARY kind=10
+CAPSTONE_VM_SERVICE tid=0 nr=61 result=0
+@@STEP-END sum-2 0
+@@STEP-BEGIN smoke-3
+M1 hello
+SMOKE_DONE
+@@STEP-END smoke-3 0
+@@STEP-BEGIN sum-3
+TRACE lines 31 service 31
+     30 NR 64 12
+      1 NR 94 0
+TAIL
+CAPSTONE_VM_SERVICE tid=0 nr=94 result=0
+@@STEP-END sum-3 0
+@@STEP-BEGIN smoke-4
+M1 hello
+SMOKE_DONE
+@@STEP-END smoke-4 0
+@@STEP-BEGIN sum-4
+TRACE lines 31 service 31
+     30 NR 64 12
+      1 NR 94 0
+TAIL
+CAPSTONE_VM_SERVICE tid=0 nr=94 result=0
+@@STEP-END sum-4 0
+VIRTUAL_STAGED_DONE

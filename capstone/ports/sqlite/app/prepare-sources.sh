@@ -36,22 +36,21 @@ patch -s -p1 -d "$ROOT" < "$PORT/study/speedtest1-oracle.patch"
 grep -q 'STUDY-ORACLE phase=%d rows=%llu hash=%016llx' "$ROOT/speedtest1.c"
 
 bash "$PORT/adapt-sqlite-322.sh" "$AMALGAMATION" "$ROOT" > /dev/null
-# One more adaptation, for a path only this build takes. With temporary data in files (SQLite's
-# default TEMP_STORE), the sorter packs its records into one buffer at ROUND8 offsets, and every
-# record holds a pointer 16 bytes in (SorterRecord.u.pNext): a record 8 bytes off its boundary
-# faults at its first link (a misaligned store, cause 6, in vdbeSorterSort; the first CREATE
-# INDEX reaches it). Records go at 16-byte offsets. The freestanding builds define
-# SQLITE_TEMP_STORE=3, so sqlite3TempInMemory() keeps them off this path; the rewrite stays out
-# of adapt-sqlite-322.sh, whose output their recorded images are built from.
+# This build needs the sorter's records at 16-byte offsets. With temporary data in files (SQLite's
+# default TEMP_STORE), the sorter packs its records into one buffer, and every record holds a
+# pointer 16 bytes in (SorterRecord.u.pNext): a record 8 bytes off its boundary faults at its
+# first link (a misaligned store, cause 6, in vdbeSorterSort; the first CREATE INDEX reaches it).
+# adapt-sqlite-322.sh makes that rewrite since 423d13f5b81f, which also reproduces the virtual
+# arms' recorded input, so this script only checks it: the rewritten line once, the released one
+# gone. (It rewrote the line itself before, and that rewrite failed once the line had moved.)
 python3 - "$ROOT/sqlite3.c" <<'PY'
 import sys
-path = sys.argv[1]
-text = open(path).read()
+text = open(sys.argv[1]).read()
 old = "    pSorter->iMemory += ROUND8(nReq);\n"
 new = "    pSorter->iMemory += (nReq+15)&~15;  /* Capstone: records hold pointers */\n"
-if text.count(old) != 1:
-    raise SystemExit("prepare-sources: the sorter's ROUND8(nReq) line is not there exactly once")
-open(path, "w").write(text.replace(old, new))
+if text.count(new) != 1 or text.count(old) != 0:
+    raise SystemExit("prepare-sources: the sorter's 16-byte record offset is not in the adapted "
+                     f"amalgamation (rewritten {text.count(new)}, released {text.count(old)})")
 PY
 cp "$AMALGAMATION/sqlite3.c" "$ROOT/sqlite3-stock.c"
 cp "$AMALGAMATION/sqlite3ext.h" "$AMALGAMATION/shell.c" "$ROOT/"

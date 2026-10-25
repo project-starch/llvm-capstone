@@ -1,0 +1,12 @@
+mp-mruby-stock-b2 capture boot (2026-10-21 20:48-22:26, board 2, tree B caplifive_vp2c_8de3c48cf, kit bkit7-rev2xBDN2; pre-registered 444ebaf621b8)
+tools: tier3-appvm-arm-tools2.sh, session tool dev e6c68a531557; runner 9db9f5f7cf60fcda, images = the reference's (8c7cd27614353067, MRB_TICK_UNIT 4)
+control-smoke: END 0, SMOKE_DONE (M1..M13)
+cells read from the transcript by hand (the boot was stopped, so the session read has no cells), against the tB-mimic QEMU reference's own serial:
+  01: exit 139, cause 25, mrb_vm_exec+0xb3fc   = reference
+  02: exit 139, cause 24, mrb_vm_exec+0x9f0    = reference
+  03: exit 139, cause 25, mrb_str_format+0x2e4 = reference (it sat at 47 lines for a time, then completed)
+  04: exit 0                                   = reference
+  05: END 137 at its 2400 s bound (reference exit 0): no reading
+05 @@STALL: launcher state R, utime 34866 -> 35038, stime 197869 -> 198732; resume_sfences 7889 flat; satp refreshes +4392
+05 escape trace 16 of 16: event 3 kind 0x3 cause 0xb, alternating code+0xbc and code+0xb0, as on tree A
+stopped 22:26:25 by SIGINT to its driver (FPGA_BOARD=2 checked); 06-23 not run; tier3-mp-arm VOID (no session cells); booking 88 unbooked

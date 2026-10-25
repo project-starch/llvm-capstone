@@ -1,0 +1,34 @@
+# S-30 pair dry runs (2026-10-19 18:23-18:26), stubbed; scratch paths shown as <scratch>
+## s30-prep (stub bake: the stage during the bake differs from rev7's record in vmrun.sh and vm-contract.sh only)
+SP BAKE 18:23:41: the pair's stage, vm-contract.sh 6be39dbbf3bd427a, vmrun.sh 11f0f5a89d324234
+SP stage restored to its record 18:23:41
+SP IMAGE cd3eb03c37325a62 dtb 6c6e8bce4e324fd7
+SP FW s30-old 9e7347c2adcc8f9a 219 B wrapper aab63d5
+SP FW s30-new 9e7347c2adcc8f9a 219 B wrapper 9bee361
+SP DONE 18:23:41
+stub bake: vmrun cases: 1; vm-contract 6be39dbbf3bd427a
+vmrun.sh: FAILED
+vm/vm-contract.sh: FAILED
+sha256sum: WARNING: 2 computed checksums did NOT match
+  cpio test-domains/vmrun.sh: present
+BAKE_DONE
+## the chain, both arms, stub driver
+CHAIN_S30 BEGIN 18:25:28
+S30 s30-old BEGIN 18:25:28 fw 4104ef2029145164 rungs [b0-stats vm-contract b0-hello s30-read] board 1
+S30 s30-old DRIVER rc=0 18:25:30; board line: [fpga-board] 1 
+  RUNG b0-stats retval=0 oracle=0
+  RUNG vm-contract retval=0 oracle=0
+  RUNG b0-hello retval=0 oracle=0
+  RUNG s30-read retval=0 oracle=0
+S30 s30-old JUDGE rc=0 :: JUDGE PASS
+S30 s30-new BEGIN 18:25:30 fw f187c4d4f3ade200 rungs [b0-stats vm-contract b0-hello s30-read] board 1
+S30 s30-new DRIVER rc=0 18:25:32; board line: [fpga-board] 1 
+  RUNG b0-stats retval=0 oracle=0
+  RUNG vm-contract retval=0 oracle=0
+  RUNG b0-hello retval=0 oracle=0
+  RUNG s30-read retval=3 oracle=3
+S30 s30-new JUDGE rc=0 :: JUDGE PASS
+S30 DONE 18:25:32
+CHAIN_S30 DONE rc=0 18:25:32
+## the chain's HOLD branch (stage-1 pid gone)
+CHAIN_S30 HOLD: stage 1 did not end

@@ -35,11 +35,8 @@ The [qualification evidence](results/2026-09-28/) records the existing
 regexes, closures, methods, files and packing complete. These are two smoke
 processes, not the complete Perl test suite or a memory benchmark.
 
-This qualification binary keeps Perl's upstream nested allocators.
-`PERL_CHERI_SV_HEADS=1` builds the study variant instead: patch 0001 and the
-PoisonCap backend of [`../sv-heads`](../sv-heads/README.md) replace the SV-head
-arenas, and the common phase observer is linked in. One binary carries the
-spatial control and PoisonCap (`PERL_POISONCAP_MODE=0/1`, which the CheriBSD
-runner sets from the arm). Its [four-arm campaign](../../../experiments/study/results/perl-reuse-four-arm-20260928/README.md)
-admits Perl's SV heads to the cross-application reuse figure; SV bodies, hash
-entries and OP slabs remain upstream's.
+This qualification binary keeps Perl's upstream nested allocators. Until
+2026-10-10 `PERL_CHERI_SV_HEADS=1` built a study variant with the PoisonCap
+backend of [`../sv-heads`](../sv-heads/README.md); that backend was removed, and
+its [four-arm campaign](../../../experiments/study/results/perl-reuse-four-arm-20260928/README.md)
+stays as recorded.

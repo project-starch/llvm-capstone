@@ -1,0 +1,5 @@
+# Boot r12 runner dry run (2026-10-18), driver stubbed, on a synthetic transcript:
+# - it extracts the console banner (KMSG copies excluded: 1; with the console line removed: empty), both dmesg windows
+#   with the must-fire count, the labelled fence flips and the refusal lines whole;
+# - a wrong firmware hash: STOP.
+# The first banner count double-counted the dmesg copy (2); it now excludes KMSG- lines.

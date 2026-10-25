@@ -1,0 +1,18 @@
+# va-osinject revision 3 on capstone-ariane bf3db3175's RTL (the RTL lane, 2026-10-18), with the monitor's trap entry from
+# capstone-sbi vp2/inject-shared 04c6c89e7fd6 (sbi_capstone.S 819747aab8865303..., capstone_csmint.S 4600d04680158edf...,
+# sbi_capstone.h 2c6f6bcab4ce180e..., checked before the build). Pre-registered at lane rtl-osinject-rev3 6fdd6cf14042
+# (../README.md, "Revision 3"). The arm source is revision 2's, byte-identical (12510f1b91a6d97f392d...).
+# Addresses from nm on the built ELF: slotA 0x8000a000, ldc_s 0x8000103c, ldc_u 0x80002008, csmint_u 0x80002020,
+# descB 0x8000b040, _cap_trap_entry 0x800030c4, _inject_s_trap 0x80003228 (all as in revision 2).
+# Read from the run's retirement trace (vp7-wt/.sup/osinj3/) by capprint-readings.py. Columns: scause, stval, SPP, sepc,
+# t2, s5, s6 (row 3 adds slotB's two words).
+# Build identities: the run's retirement trace va-osinject.dasm sha256 f82eed99149d6a233098... (differs from revision 2's,
+# the entry's two instructions changed), the control's e9c3e06bc2a9d18d3bea... (identical to revision 2's: the control
+# never executes the changed instructions).
+
+row 1, S origin   0x18 0x8000a000 0x1 0x8000103c 0x7777 0x5555 0x6666   AS PREDICTED (= revision 2)
+row 2, U origin   0x18 0x8000a000 0x0 0x80002008 0x7777 0x5555 0x6666   AS PREDICTED (= revision 2)
+row 3, U CSMINT   0x2 0xa0b5165b 0x0 0x80002020 0x7777 0x5555 0x6666 0x0 0x0   AS PREDICTED (= revision 2)
+pass marker        SUCCESS after 73,679 cycles (tohost 0); revision 2 took 73,570: the two CCSRRWs cost 109 cycles over the run   AS PREDICTED
+control (-DOSINJECT_CONTROL)  0 CAPPRINTs, no pass marker, FAILED at the cycle limit (4,000,013 cycles)   AS PREDICTED
+# 23 of 23 values as predicted: the CEPC form of the entry reads what the mepc form read, on the RTL where CEPC's cursor is mepc.

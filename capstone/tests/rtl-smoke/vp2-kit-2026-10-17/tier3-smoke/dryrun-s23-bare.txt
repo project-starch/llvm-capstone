@@ -1,0 +1,40 @@
+# tier3-s23-bare.sh + s23-grade.py dry runs, 2026-10-21 21:48: busy, booking and run_sup_bare.py stubbed (the stub copies a planted UART and never prints the URL); the image is extracted from dev 0c215bf0983f and checked by sha256 for real
+## board 2, stub UART pre
+S23 BEGIN 21:48:42 board 2 bitstream caplifive_vp2c_8de3c48cf image bcefd969e128113f driver /tmp/capstone/wt-b2/capstone/tests/rtl-smoke booking 999 expect pre
+unbooked 999
+S23 END rc=0 21:48:42 :: [sup] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+S23 AS EXPECTED (pre): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 0, 'Q8': 0, 'Q10': 0, 'Q12a': 0, 'Q12b': 0, 'Q13d': 0}, total 8
+S23 GRADE rc=0
+S23 board2 DONE 21:48:42
+## board 2, stub UART batch
+S23 BEGIN 21:48:42 board 2 bitstream caplifive_vp2c_8de3c48cf image bcefd969e128113f driver /tmp/capstone/wt-b2/capstone/tests/rtl-smoke booking 999 expect pre
+unbooked 999
+S23 END rc=0 21:48:42 :: [sup] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+S23 FINDING: reads batch (re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14) where pre is expected
+S23 GRADE rc=1
+S23 board2 DONE 21:48:42
+## board 2, stub UART empty
+S23 BEGIN 21:48:42 board 2 bitstream caplifive_vp2c_8de3c48cf image bcefd969e128113f driver /tmp/capstone/wt-b2/capstone/tests/rtl-smoke booking 999 expect pre
+unbooked 999
+S23 END rc=0 21:48:42 :: [sup] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+NO DATA: <scratch>/s23d/root-empty/uart.txt does not exist
+S23 GRADE rc=2
+S23 board2 DONE 21:48:42
+## board 1, stub UART pre
+S23 BEGIN 21:48:42 board 1 bitstream caplifive_vp2c_8522d72fe image bcefd969e128113f driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 999 expect pre
+unbooked 999
+S23 END rc=0 21:48:42 :: [sup] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+S23 AS EXPECTED (pre): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 0, 'Q8': 0, 'Q10': 0, 'Q12a': 0, 'Q12b': 0, 'Q13d': 0}, total 8
+S23 GRADE rc=0
+S23 board1 DONE 21:48:42
+## s23-grade.py on planted UARTs (expect pre unless named)
+[pre, expect pre] S23 AS EXPECTED (pre): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 0, 'Q8': 0, 'Q10': 0, 'Q12a': 0, 'Q12b': 0, 'Q13d': 0}, total 8 (rc=0)
+[batch, expect pre] S23 FINDING: reads batch (re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14) where pre is expected (rc=0)
+[batch, expect batch] S23 AS EXPECTED (batch): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14 (rc=0)
+[onefilp, expect pre] S23 FINDING: re-arm probes {'Q5': 1, 'Q8': 0, 'Q10': 0, 'Q12a': 0, 'Q12b': 0, 'Q13d': 0}, total 9 (neither pre-batch 0/8 nor batch 1/14) (rc=0)
+[q1, expect pre] S23 VOID: Q1 reads 1 (the instrument control) (rc=0)
+[moved, expect pre] S23 VOID (instrument moved): true-deny/control probes ['Q3'], last cause 0x5, a0 0x0 (rc=0)
+[sr24, expect pre] S23 VOID: SR ['0000000000000018'] (want one SR = 25) (rc=0)
+[empty, expect pre] S23 VOID: SR [] (want one SR = 25) (rc=0)
+## s23-grade.py on a real board UART of another bare arm (sup-sublet, tree A c1): parsed, then VOID as not this arm
+S23 VOID: SR ['000000000000001A'] (want one SR = 25) (rc=2)

@@ -1,0 +1,9 @@
+# tier3-fix6b-seq.sh dry run (2026-10-18 20:38), the sequence stubbed (each arm's 3005ed52 board run copied in), the real
+# score-arm.sh under dry-run tags and a dry-run results directory:
+# - with FENCE DONE in the fence out and pb10's -dryb run.log already reading "virtual boot: completed": pb10 is skipped,
+#   fso and pb12 run on bkit7-fix6t under their ARMS.spec lines and are scored (0 of 9 each, the 3005ed52 readings, so
+#   the scorer reads what it is given); FIX6BSEQ DONE.
+# The kit's budget scaling was checked with the recipe's own stub mode: bkit7-fix6 passes BAKED_TIMEOUT=1500 for a
+# 20-step plan (TO 1500), bkit7-fix6t passes 6300 (300 + 300 x 20).
+# Not exercised: the kit checks (module, BOARD_STEP_S, SHA256SUMS; the kit is the real one and verifies) and the HOLD
+# branch (12 h wait). The dry run's records and bundles were removed by name afterwards.

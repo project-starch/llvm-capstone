@@ -1,0 +1,82 @@
+# sql0-dumpB cell 07's pc=0, mapped to its call site (2026-10-20). FREG: pc=0, x1 = image base + 0x78bcbc, x18 (s2) = 0,
+# x19 (s3) = image base + 0x3c9410. The image's .text starts at VA 0x10000 at the base, so x1 is VA 0x79bcbc, the
+# instruction after a jalr, and s3 is VA 0x3d9410 = list_delete_first. Disassembly by llvm-objdump --triple=capstone64-unknown-elf.
+## DIAG-BTU a2bf0a6ed7c6784b, ProcessUtilitySlow (0x79af00): s2 is set once, copied by MOVC, then called
+    79bc30:      	addi	a7, a7, -0x27c
+    79bc34:      	mv	s2, a1
+    79bc38:      	mv	a1, a2
+    79bc3c:      	stc	a1, -0x4f0(s0)
+    79bc40:      	mv	a1, a3
+    79bc44:      	stc	a1, -0x500(s0)
+    79bc48:      	mv	a1, a4
+    79bc4c:      	stc	a1, -0x510(s0)
+    79bc50:      	mv	a1, a5
+    79bc54:      	stc	a1, -0x520(s0)
+    79bc58:      	mv	a1, a6
+    79bc5c:      	stc	a1, -0x530(s0)
+    79bc60:      	mv	a1, a7
+    79bc64:      	stc	a1, -0x540(s0)
+    79bc68:      	movc	s5, a0
+    79bc6c:      	movc	s3, s2
+    79bc70:      	j	0x79bcac <.Lpcrel_hi273+0x98>
+    79bc74:      	movc	a0, s8
+    79bc78:      	movc	a1, s7
+    79bc7c:      	ldc	a2, -0x4f0(s0)
+    79bc80:      	jalr	a2
+    79bc84:      	movc	a1, s6
+    79bc88:      	ldc	a2, -0x500(s0)
+    79bc8c:      	jalr	a2
+    79bc90:      	movc	s5, a0
+    79bc94:      	mv	a0, s5
+    79bc98:      	beqz	a0, 0x79bca4 <.Lpcrel_hi273+0x90>
+    79bc9c:      	ldc	a0, -0x510(s0)
+    79bca0:      	jalr	a0
+    79bca4:      	mv	a0, s5
+    79bca8:      	beqz	a0, 0x79c2ac <.Lpcrel_hi437+0x14>
+    79bcac:      	movc	a0, s5
+    79bcb0:      	ldc	a1, 0x10(s5)
+    79bcb4:      	ldc	s7, 0x0(a1)
+    79bcb8:      	jalr	s2
+    79bcbc:      	lw	a1, 0x0(s7)
+## the same code in the rebuilt image d9787ac28e495969 (no +movc-keeps-integer-source): the copy goes through memory, s2 is kept
+    7d8a6c:      	addi	a7, a7, 0xd4
+    7d8a70:      	mv	s2, a1
+    7d8a74:      	mv	a1, a2
+    7d8a78:      	stc	a1, -0x500(s0)
+    7d8a7c:      	mv	a1, a3
+    7d8a80:      	stc	a1, -0x510(s0)
+    7d8a84:      	mv	a1, a4
+    7d8a88:      	stc	a1, -0x520(s0)
+    7d8a8c:      	mv	a1, a5
+    7d8a90:      	stc	a1, -0x530(s0)
+    7d8a94:      	mv	a1, a6
+    7d8a98:      	stc	a1, -0x540(s0)
+    7d8a9c:      	mv	a1, a7
+    7d8aa0:      	stc	a1, -0x550(s0)
+    7d8aa4:      	movc	s5, a0
+    7d8aa8:      	stc	s2, -0xf0(s0)
+    7d8aac:      	ldc	s3, -0xf0(s0)
+    7d8ab0:      	j	0x7d8af0 <.Lpcrel_hi273+0xa0>
+    7d8ab4:      	stc	s8, -0xf0(s0)
+    7d8ab8:      	ldc	a0, -0xf0(s0)
+    7d8abc:      	movc	a1, s7
+    7d8ac0:      	ldc	a2, -0x500(s0)
+    7d8ac4:      	jalr	a2
+    7d8ac8:      	movc	a1, s6
+    7d8acc:      	ldc	a2, -0x510(s0)
+    7d8ad0:      	jalr	a2
+    7d8ad4:      	movc	s5, a0
+    7d8ad8:      	mv	a0, s5
+    7d8adc:      	beqz	a0, 0x7d8ae8 <.Lpcrel_hi273+0x98>
+    7d8ae0:      	ldc	a0, -0x520(s0)
+    7d8ae4:      	jalr	a0
+    7d8ae8:      	mv	a0, s5
+    7d8aec:      	beqz	a0, 0x7d9174 <.Lpcrel_hi437+0x14>
+    7d8af0:      	stc	s5, -0xf0(s0)
+    7d8af4:      	ldc	a0, -0xf0(s0)
+    7d8af8:      	ldc	a1, 0x10(s5)
+    7d8afc:      	ldc	s7, 0x0(a1)
+    7d8b00:      	jalr	s2
+## c32-movc-jalr-path.py over each ProcessUtilitySlow (straight-line and j-followed paths only; a hit is a candidate, 0 is not absence)
+  DIAG-BTU: HIT movc s3,s2 @79bc6c -> jalr s2 @79bcb8;movc rd!=rs: 181, movc-then-jalr-of-source: 1;
+  rebuilt:  movc rd!=rs: 62, movc-then-jalr-of-source: 0;

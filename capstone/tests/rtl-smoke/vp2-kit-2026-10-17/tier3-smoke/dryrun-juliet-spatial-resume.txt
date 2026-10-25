@@ -1,0 +1,17 @@
+# tier3-juliet-spatial-resume.sh dry run, 2026-10-22 10:08, stubbed (JS_BUSY/JS_BOOK/JS_PROBE/JS_JUDGE/JS_ROOT).
+# ok = a copy of board 1's completed run.log + observations.json; norun, hasprobe (probe/ present) and short (20 of 24
+# batch lines) must refuse. Verdicts in a dry run are never data.
+== ok
+JS probe BEGIN 10:08:32 board 1 booking 999 # book 1 20 vp2-tier12 juliet spatial probe (board 1)
+999 # unbook 999 # book 1 20 vp2-tier12 juliet spatial probe (board 1)
+JS probe END rc=0 10:08:32 :: 0 batches completed, 0 not :: PROBE-STUB --sdk <mnt-hdd>/capstone/juliet-sp/sdk --board-kit <mnt-hdd>/capstone/t3-smoke/bkit7-rev2xDN2 --helper /mnt/hdd/alexe
+JS judge rc=0 :: JUDGE-STUB --manifest <mnt-hdd>/capstone/juliet-sp/manifest-spatial-sample.json --juliet <mnt-hdd>/capstone/juliet-vp2/src/C --build <mnt-hdd>/capstone/juliet-sp/build-census --run /tmp/claude-1000/-hom
+JS verdicts: NO DATA
+JS readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board1 DONE 10:08:32
+== norun
+JS STOP: <scratch>/dr/norun has no completed run phase
+== hasprobe
+JS STOP: <scratch>/dr/hasprobe/probe or <scratch>/dr/hasprobe/results exists
+== short
+JS STOP: <scratch>/dr/short has no completed run phase

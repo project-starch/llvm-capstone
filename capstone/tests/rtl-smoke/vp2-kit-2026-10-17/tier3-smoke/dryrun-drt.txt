@@ -1,0 +1,23 @@
+# chain-drt dry runs (2026-10-19 18:55), stubbed; scratch paths shown as <scratch>
+## drtdry/out
+CHAIN_DRT BEGIN 18:55:54
+CHAIN_DRT_SQL_GO 18:55:54
+CHAIN_DRT SQL0 END rc=0 18:55:54 :: SQL DONE stub
+CHAIN_DRT_PB10_GO 18:55:54
+CHAIN_DRT PB10 END rc=0 18:55:54 :: PB10 DONE stub
+CHAIN_DRT BRACKET END rc=0 18:55:54
+CHAIN_DRT DONE 18:55:54
+## drtdry/out.bracket
+stub q600 q300 q100
+## drtdry/sqlout
+SQL MEASURE: firmware 21000000 B against 26000000 (manifest 9 files, stage 123 bytes)
+T3PG sql0-dry BEGIN 18:55:54 (trigger: CHAIN_DRT_SQL_GO x)
+T3PG sql0-dry END 18:55:54 rc=0 :: virtual boot: completed  :: 
+SQL VOID: fixture record 00 (want 956173e054762e91), image 00 (want 64010720f1a6b3bc)
+## drtdry/pbout
+PB10 pb10-drt BEGIN 18:55:54 kit bkit7-pb10D monitor f13dbc5
+T3SEQ pb10-drt BEGIN kit <mnt-hdd>/capstone/t3-smoke/bkit7-pb10D spec [ffmpeg/pool-repros|virtual-nested-pools|--prebuilt <mnt-hdd>/capsto
+T3SEQ pb10-drt END rc=1
+PB10 pb10-drt SEQ END rc=0 18:55:54
+STUB SCORE tag=pb10-drt bundle=<mnt-hdd>/capstone/t3-pb10/bundle ARM_DIR=virtual-nested-pools-drt RESULTS_DIR=2026-10-19-vp2c-treeA KIT_DESC=kit bkit7-pb10D (module d71f207a3af5546b, the S-27 workaroun
+PB10 DONE 18:55:54

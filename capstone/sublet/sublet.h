@@ -47,15 +47,27 @@ struct sublet_stats {
 };
 static struct sublet_stats sublet_stats;
 
-/* [lo] = [base, mid), keeps its node; [hi] = [mid, end), a fresh node */
+/* [lo] = [base, mid), keeps its node; [hi] = [mid, end), a fresh node.
+ *
+ * A slot's cursor is its region's NOMINAL base. SPLIT gives [hi] cursor = mid, but gives [lo] its parent's DECODED
+ * start, and under a full-scheme bounds encoder a long parent's decoded start rounds below its nominal base (ISSUES
+ * R-55; the runtime's copy of this header, runtime/include/sublet/sublet.h, explains the failure it caused). So [lo]
+ * is SHRUNK to [nominal, mid). That restores the cursor, and makes the bounds exact when the piece is representable.
+ * Under exact bounds (capstone-qemu, the cursorless scheme) it changes nothing. SHRINK is funct7 1: rd is narrowed
+ * in place to [rs1, rs2), with its cursor clamped into the new bounds. */
 static inline void sublet_split(sublet_cap *lo, unsigned long mid, sublet_cap *hi) {
   __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%0)\n"
+                   ".insn r 0x5b, 0x1, 0x04, t2, t0, x2\n"      /* t2 = the nominal base (cursor) */
                    ".insn r 0x5b, 0x1, 0x06, t1, t0, %1\n"
-                   ".insn s 0x5b, 0x4, t0, 0(%0)\n"
+                   ".insn r 0x5b, 0x1, 0x04, t3, t0, x3\n"      /* t3 = [lo]'s decoded base */
+                   "bltu t2, t3, 1f\n"
+                   "bgeu t2, %1, 1f\n"
+                   ".insn r 0x5b, 0x1, 0x01, t0, t2, %1\n"
+                   "1: .insn s 0x5b, 0x4, t0, 0(%0)\n"
                    ".insn s 0x5b, 0x4, t1, 0(%2)\n"
                    :
                    : "r"(lo), "r"(mid), "r"(hi)
-                   : "t0", "t1", "memory");
+                   : "t0", "t1", "t2", "t3", "memory");
   sublet_stats.split++;
 }
 
@@ -75,7 +87,8 @@ static inline void *sublet_take(sublet_cap *slot) {
 }
 
 /* the block goes out linear, to a level that carves it: [slot] keeps the handle,
-   [out] gets the block. Returns the block's base address. */
+   [out] gets the block. Returns the block's base address: its NOMINAL base, the
+   cursor (see sublet_split; the decoded base can lie below it, R-55). */
 static inline unsigned long sublet_take_linear(sublet_cap *slot, sublet_cap *out) {
   unsigned long base;
   /* the base is read before the store: a store of a linear capability nulls
@@ -83,7 +96,7 @@ static inline unsigned long sublet_take_linear(sublet_cap *slot, sublet_cap *out
   __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n"
                    ".insn r 0x5b, 0x1, 0x08, t1, t0, x0\n"
                    ".insn s 0x5b, 0x4, t1, 0(%1)\n"
-                   ".insn r 0x5b, 0x1, 0x04, %0, t0, x3\n"
+                   ".insn r 0x5b, 0x1, 0x04, %0, t0, x2\n"
                    ".insn s 0x5b, 0x4, t0, 0(%2)\n"
                    : "=&r"(base)
                    : "r"(slot), "r"(out)
@@ -193,10 +206,15 @@ static inline unsigned long sublet_type(sublet_cap *slot) {
                    : "=&r"(v) : "r"(slot) : "t0", "memory");
   return v;
 }
+/* sublet_base is the region's NOMINAL base, which Sublet keeps in the cursor (sublet_split), not the decoded base
+   lcc x3 reads: under a full-scheme encoder a long region's decoded base rounds below the point it was carved at
+   (R-55), and every caller here computes its next carve point from this value. Where bounds are exact the two are
+   equal for every region a slot holds: SPLIT's upper piece, REVOKE and INIT (offset 0) all put the cursor at the
+   base. sublet_end stays the decoded end. */
 static inline unsigned long sublet_base(sublet_cap *slot) {
   unsigned long v;
   __asm__ volatile(".insn i 0x5b, 0x3, t0, 0(%1)\n"
-                   ".insn r 0x5b, 0x1, 0x04, %0, t0, x3\n"
+                   ".insn r 0x5b, 0x1, 0x04, %0, t0, x2\n"
                    ".insn s 0x5b, 0x4, t0, 0(%1)\n"
                    : "=&r"(v) : "r"(slot) : "t0", "memory");
   return v;

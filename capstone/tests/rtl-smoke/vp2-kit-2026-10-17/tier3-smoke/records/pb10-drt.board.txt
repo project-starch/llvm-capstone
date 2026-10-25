@@ -1,0 +1,23 @@
+# Tier 3 board reading, arm pb10-drt: kit bkit7-pb10D (module d71f207a3af5546b, the S-27 workaround; batch budget 300 s per step; monitor capstone-sbi f13dbc5), tree A caplifive_vp2c_8522d72fe, pin off, SDK t3-freeze-nb. Result lines only.
+# board 1 (from the run log's [fpga-board] line)
+# arm vp2-nested-pools configuration virtual-ffmpeg-pool-sublet platform board:caplifive_vp2c_8522d72fe cells 4 tally {"CAUGHT": 4}
+# controls [["bounds-malloc", "fault"], ["pool-return-90", "fault"], ["uaf-malloc", "fault"]]
+00_461fb22053_af_join_dedup_bound image df5eea02db56843a CAUGHT cause 25 at ff2_case_run+1464 reached True completed False attribution "function"
+01_1886c3269d_h264_refs_partial_clear image 0f1bfd544ecc559d CAUGHT cause 25 at ff2_case_run+664 reached True completed False attribution "function"
+02_316531e61c_vidstab_parked_plane_pointer image 84fbc193c1709b0a CAUGHT cause 25 at ff2_case_run+384 reached True completed False attribution "function"
+03_5c66a3ab51_vvc_nonref_output_releases_tabs image d6666b4618df1d6e CAUGHT cause 25 at ff2_case_run+816 reached True completed False attribution "function"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_461fb22053_af_join_dedup_bound: verdict CAUGHT cause 25 pc ff2_case_run+1464
+  SAME 01_1886c3269d_h264_refs_partial_clear: verdict CAUGHT cause 25 pc ff2_case_run+664
+  SAME 02_316531e61c_vidstab_parked_plane_pointer: verdict CAUGHT cause 25 pc ff2_case_run+384
+  SAME 03_5c66a3ab51_vvc_nonref_output_releases_tabs: verdict CAUGHT cause 25 pc ff2_case_run+816
+  4 of 4 cells the same
+## the boot
+  T3SEQ pb10-drt BEGIN 19:48:39 ffmpeg/pool-repros virtual-nested-pools (4 extra args)
+  T3SEQ pb10-drt END 19:57:13 rc=0 :: virtual boot: completed :: --- vp2-nested-pools (virtual-ffmpeg-pool-sublet): {'CAUGHT': 4}
+  T3SEQ pb10-drt PAYLOAD stage 2577912 B, 1016204 B gzip; firmware 17467912 B
+  BOARD_RUN_START 19:48:40 bitstream caplifive_vp2c_8522d72fe monitor f13dbc5
+  manifest 15 files, stage 2577912 bytes
+  firmware 75b998861c039fa8 17467912 B
+  DRIVER rc=0 19:57:13
+  BOARD_RUN_DONE 19:57:13

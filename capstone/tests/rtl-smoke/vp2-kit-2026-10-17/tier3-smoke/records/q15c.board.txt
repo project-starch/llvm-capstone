@@ -1,0 +1,24 @@
+# Tier 3 board reading, arm q15c: kit bkit7-rev2xBD (module 39d8492d; monitor capstone-sbi f13dbc5), tree B caplifive_vp2c_8de3c48cf on board 2, q15 subset c, SDK t3-freeze-nb. Result lines only.
+# board 2 (from the run log's [fpga-board] line)
+# arm vp2-nested-pools configuration virtual-sqlite-memsys5-pools platform board:caplifive_vp2c_8de3c48cf cells 6 tally {"CAUGHT": 5, "MISSED": 1}
+# controls [["bounds-mem5", "fault"], ["uaf-mem5", "fault"]]
+12_fb8ca7de0c_fts5_inplace_stale_leaf image c3c8ca6f6e42d97f CAUGHT cause 25 at fts5SegIterNextPage+276 reached True completed False attribution "function"
+13_fix-2026-06-08_fts5_near_stale_phrase image 07bfb4a4879d43d0 MISSED cause None at None reached True completed True attribution null
+14_25e3073741_fts5_structure_release_refcount image 24b228f5b4c6dbc9 CAUGHT cause 25 at fts5StructureRelease+92 reached True completed False attribution "function"
+15_2639ddc474_fts5_vocab_eof_stale_poslist image e74187a55c97d3d7 CAUGHT cause 25 at sqlite3Fts5PoslistNext64+380 reached True completed False attribution "function"
+16_unfixed_json_each_root_stale_key image 795400346b894059 CAUGHT cause 25 at memcmp+24 reached True completed False attribution "function"
+17_28001204f4_json_each_static_stale_key image 4f409349c76d6ebd CAUGHT cause 25 at memcmp+24 reached True completed False attribution "function"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 12_fb8ca7de0c_fts5_inplace_stale_leaf: verdict CAUGHT cause 25 pc fts5SegIterNextPage+276
+  SAME 13_fix-2026-06-08_fts5_near_stale_phrase: verdict MISSED cause None pc None
+  SAME 14_25e3073741_fts5_structure_release_refcount: verdict CAUGHT cause 25 pc fts5StructureRelease+92
+  SAME 15_2639ddc474_fts5_vocab_eof_stale_poslist: verdict CAUGHT cause 25 pc sqlite3Fts5PoslistNext64+380
+  SAME 16_unfixed_json_each_root_stale_key: verdict CAUGHT cause 25 pc memcmp+24
+  SAME 17_28001204f4_json_each_static_stale_key: verdict CAUGHT cause 25 pc memcmp+24
+  6 of 6 cells the same
+## the boot
+  BOARD_RUN_START 05:53:41 bitstream caplifive_vp2c_8de3c48cf monitor f13dbc5
+  manifest 18 files, stage 24827084 bytes
+  firmware 0493a159c80f902c 23759368 B
+  DRIVER rc=0 06:07:58
+  BOARD_RUN_DONE 06:07:58

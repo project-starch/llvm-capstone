@@ -48,7 +48,8 @@ int main(int argc, char **argv) {
     return 41;
   if (write(1, "stdout\n", 7) != 7 || write(2, "stderr\n", 7) != 7)
     return 42;
-  /* These two controls require the same application built with HEAP=sublet. */
+  /* Temporal controls: no physical build revokes on free, so both run to the
+     sentinel there; on the virtual profile free revokes and they fault. */
   if (!strcmp(argv[1], "fault-stale")) {
     volatile unsigned char *stale = malloc(64);
     if (!stale) return 46;
@@ -97,11 +98,10 @@ int main(int argc, char **argv) {
     }
   }
   /* The heap qualification (docs/plans/capstone-heap-protection.md). Every
-   * fault-* case below must end in SIGSEGV on the HEAP=sublet build and run to
-   * completion on the control, HEAP=level0 built with
+   * fault-* case below runs to completion on the control, level0 built with
    * CAPSTONE_LEVEL0_OBJECT_BOUNDS=0. On the default level0 build, which bounds
    * each allocation, the spatial cases (fault-bounds, fault-bounds-large,
-   * fault-realloc-shrink) end in SIGSEGV too and the others complete. The heap-*
+   * fault-realloc-shrink) end in SIGSEGV and the others complete. The heap-*
    * cases fall through to the ordinary tail on success and return a distinct
    * code on the first failed check. */
   if (!strcmp(argv[1], "fault-bounds")) {
@@ -127,8 +127,8 @@ int main(int argc, char **argv) {
   }
   if (!strcmp(argv[1], "fault-realloc-shrink")) {
     /* a realloc that shrinks returns a pointer to the new size, whether the
-       heap moves the block (sublet) or shrinks it in place and releases the
-       tail (level0): the last byte inside first, then one past it */
+       heap moves the block or shrinks it in place and releases the tail
+       (level0): the last byte inside first, then one past it */
     volatile unsigned char *p = malloc(4096);
     if (!p) return 46;
     volatile unsigned char *q = realloc((void *)p, 24);

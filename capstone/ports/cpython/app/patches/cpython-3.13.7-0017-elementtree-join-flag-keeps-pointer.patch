@@ -1,0 +1,54 @@
+Subject: [PATCH 0017] _elementtree: carry the join flag by pointer arithmetic
+Upstream: CPython 3.13.7
+Upstream-Archive: https://www.python.org/ftp/python/3.13.7/Python-3.13.7.tgz
+Upstream-SHA256: 6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2
+Build-Variants: capstone64 virtual application (musl); native
+Apply-From: upstream source root, with patch --batch --forward --fuzz=0 -p1
+
+An Element keeps a "join" flag in the low bit of its text and tail
+pointers. Upstream sets and clears it through uintptr_t: JOIN_OBJ is
+(uintptr_t)p & ~1 and JOIN_SET is (uintptr_t)p | flag. Where a pointer is a
+capability, the pointer rebuilt from that integer is untagged, and the first
+use of one faults: ET.Element('a') dies in element_init, where
+_set_joined_ptr decrements the reference count of JOIN_OBJ(self->text)
+(cause 24, measured 2026-10-11 on both virtual images,
+results/2026-10-11-same-answers, finding F3). regrtest's --junit-xml builds
+its report with ElementTree and dies the same way.
+
+JOIN_OBJ and JOIN_SET become inline functions that subtract and add the flag
+on the pointer itself, so the result is derived from the pointer and keeps
+its capability. Arithmetic is done only when the flag is set or is being set,
+so NULL (element_gc_traverse after a clear) and unflagged pointers pass
+through untouched. JOIN_GET still reads the address bit. On a platform where
+a pointer is an address, the results are the same values as upstream's.
+
+--- a/Modules/_elementtree.c
++++ b/Modules/_elementtree.c
+@@ -55,8 +55,25 @@
+    JOIN_OBJ.  see comments in the ElementObject definition for more
+    info. */
+ #define JOIN_GET(p) ((uintptr_t) (p) & 1)
+-#define JOIN_SET(p, flag) ((void*) ((uintptr_t) (JOIN_OBJ(p)) | (flag)))
+-#define JOIN_OBJ(p) ((PyObject*) ((uintptr_t) (p) & ~(uintptr_t)1))
++#define JOIN_SET(p, flag) _join_set((PyObject *) (p), (flag))
++#define JOIN_OBJ(p) _join_obj((PyObject *) (p))
++
++/* The flag is added to and subtracted from the pointer, never masked
++   through an integer: a pointer rebuilt from an integer has lost its
++   provenance, and where a pointer is a capability it is no longer one.
++   NULL and unflagged pointers are returned as they are. */
++static inline PyObject *
++_join_obj(PyObject *p)
++{
++    return JOIN_GET(p) ? (PyObject *) ((char *) p - 1) : p;
++}
++
++static inline void *
++_join_set(PyObject *p, int flag)
++{
++    p = _join_obj(p);
++    return flag ? (void *) ((char *) p + 1) : (void *) p;
++}
+ 
+ /* Py_SETREF for a PyObject* that uses a join flag. */
+ Py_LOCAL_INLINE(void)

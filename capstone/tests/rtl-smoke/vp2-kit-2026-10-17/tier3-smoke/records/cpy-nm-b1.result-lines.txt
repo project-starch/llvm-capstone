@@ -1,0 +1,25 @@
+# cpython lt0 on board 1 (tree A), 2026-10-20 20:47 - 10-21 02:54: result lines. UNGATED. The wrapper's 21600 s timeout killed the arm script at
+# 02:47:20 while the driver ran on (finished 02:54); the read was recovered by recover-appvm-read.sh, as board 2's.
+CPY nm BEGIN 20:47:20 board 1 booking 36
+SDK-BUILTINS OK <mnt-hdd>/capstone/t3-nomovc/cpython-lt0-dl
+    <mnt-hdd>/capstone/t3-nomovc/cpython-lt0-dl/image/sdk/sdk.json: effective -fno-builtin
+    <mnt-hdd>/capstone/t3-nomovc/cpython-lt0-dl/source/runtime/sdk.json: effective -fno-builtin
+APPVM collect rc=75 calls=54 20:47:22
+CPY nm ARM END rc=124 02:47:20
+CPY nm JUDGE rc=2 :: NO DATA: [Errno 2] No such file or directory: '<mnt-hdd>/capstone/t3-run-treeA/cpy-nm/out/inputs.json'
+CPY nm readings: pc=0  DRT1  DRTX  FRTY  Oops  banner node-floor-2 x
+CPY nm DONE 02:47:20
+## recovery
+session <mnt-hdd>/capstone/t3-run-treeA/cpy-nm/session: 54/54 steps ran; share linked; boot completed; transcript <mnt-hdd>/capstone/t3-run-treeA/cpy-nm/session/guest/board.txt; phase read
+--- vp2-malloc (virtual-cpython): {'CAUGHT': 14, 'MISSED': 14, 'NO-READING:inconclusive': 1, 'NO-READING:infra': 1, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 1}
+## judge
+pin OK: {"guest_env": ["PYTHONHASHSEED=0"], "hash_abc": 1453079729188098211, "hash_randomization": 0, "kernel_cmdline": "earlycon console=ttyS0,57600 norandmaps", "pythonhashseed": "0"}
+  DIVERGENCE (stable case) 01_gh-139071_heap-overflow-in-set-dealloc-setobject: CAUGHT 4/set_dealloc+284 notes='' (set: ['CAUGHT'])
+  varying 31_gh-148660_odict-copy-stale-link: CAUGHT inside its verdict set; site 12/None+None not among the sampled sites (reported, not graded)
+lt0: 31 of 32 inside their sets; 0 moved (varying verdict outside its set); 1 divergence(s) on stable cases
+## readings
+pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 vbatch-END 1
+## tree A vs tree B (compare-pilot, board 2's bundle against board 1's)
+SAME 31_gh-148660_odict-copy-stale-link: verdict CAUGHT cause 12 pc None+None
+SAME 32_gh-149449_unicodedata-capi-cached: verdict NO-READING cause 12 pc None+None
+32 of 32 cells the same

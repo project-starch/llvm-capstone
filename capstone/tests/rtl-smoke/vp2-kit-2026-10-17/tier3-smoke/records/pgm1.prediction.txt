@@ -1,0 +1,22 @@
+# Tier 3 prediction, arm pgm1: the compiler lane's QEMU run on t3-smoke/qkit7 (capstone-qemu 7a4f3a64776f0c88 behind
+# the wrapper 5f731f99ec6a19b2: exact bounds stripped, svadu=false appended), module 5bfc38f808e1effd (no params), SDK
+# t3-freeze-nb. Its 11 staged images equal the board's list by full sha256 (checked by register-prediction.sh).
+# The bundle's 'compiler' field is the judge's --llvm-bin clang; the image hashes are the compiled bytes' identity.
+# arm virtual-pg-pools configuration virtual-mallocng-replay-pools platform qkit7-wrapper cells 5 tally {"CAUGHT": 5}
+# controls [["uaf-chunk", "fault"]]
+00_1f5b6a5e5d_tuplestore_double_free image a220c6539e27f4e2 CAUGHT cause 25 at GetMemoryChunkMethodID+84 reached True completed False attribution "function"
+01_3549ffb6af_vacuum_dead_items_stale_struct image 25698cd8d3f0120b CAUGHT cause 25 at pg_probe+56 reached True completed False attribution "probe"
+02_ed394c4bdf_live_parts_stale_alias image 39230a140d65abb9 CAUGHT cause 25 at pg_probe+56 reached True completed False attribution "probe"
+03_a61592253e_pgoutput_entry_cxt_teardown image fb324296fac76719 CAUGHT cause 25 at pg_probe+56 reached True completed False attribution "probe"
+04_9e0b4b1ab5_reorderbuffer_spec_insert_lsn image 972fdec53b3f45be CAUGHT cause 25 at pg_probe+56 reached True completed False attribution "probe"
+# image a220c6539e27f4e2  case-00-tuplestore-double-free
+# image 28776ae902298043  case-00-tuplestore-double-free-control
+# image 25698cd8d3f0120b  case-01-vacuum-dead-items-stale-struct
+# image 396a30fe7f047834  case-01-vacuum-dead-items-stale-struct-control
+# image 39230a140d65abb9  case-02-live-parts-stale-alias
+# image 7cbd7d5e0df8a31a  case-02-live-parts-stale-alias-control
+# image fb324296fac76719  case-03-pgoutput-entry-cxt-teardown
+# image 594000a0684aa6d5  case-03-pgoutput-entry-cxt-teardown-control
+# image 972fdec53b3f45be  case-04-reorderbuffer-spec-insert-lsn
+# image 4033d9b406d402b0  case-04-reorderbuffer-spec-insert-lsn-control
+# image 8057701b318a5bed  control-00-uaf-chunk

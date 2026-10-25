@@ -1,0 +1,40 @@
+# Tier 3 board reading, arm fca: kit bkit7 (module 3005ed52, pin off), SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2_bf3db3175 cells 13 tally {"MISSED": 13}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short image 4f1fecc9c2f133ba MISSED cause None at None reached True completed True attribution null
+01_699341d647_apedec_array_0000_writes_64_into_channel_1 image 19c533aed02f5520 MISSED cause None at None reached True completed True attribution null
+02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel image 91a243fdcc8e902a MISSED cause None at None reached True completed True attribution null
+03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix image a68b6216697d1c26 MISSED cause None at None reached True completed True attribution null
+04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel image 940d7c5ca8e119fc MISSED cause None at None reached True completed True attribution null
+05_9d3032b960_alsdec_opt_order_past_max_order image ecc2bf9676a69fac MISSED cause None at None reached True completed True attribution null
+06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420 image 5a80289ff1bb1543 MISSED cause None at None reached True completed True attribution null
+07_2563a33856_vp9_intra_pred_carved_for_old_bpp image c959efbf3925f3fd MISSED cause None at None reached True completed True attribution null
+08_b5ff61695f_swscale_v_line_at_pre_doubling_stride image 4ac7fcaa508b14fa MISSED cause None at None reached True completed True attribution null
+09_043bcdcdb0_svq1enc_inter_block_runs_into_source image 34f2f8042f983f6f MISSED cause None at None reached True completed True attribution null
+10_d2213b6493_rv34_b_block_carved_at_old_linesize image fc27da0724609920 MISSED cause None at None reached True completed True attribution null
+11_68226ed9ec_vorbis_type1_residue_end_spans_channels image c754b56c4b8f369d MISSED cause None at None reached True completed True attribution null
+12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice image 87be65b0d3b6c463 MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_85407c7e63_mpegvideo_edge_emu_u_block_one_row_short: verdict MISSED cause None pc None
+  SAME 01_699341d647_apedec_array_0000_writes_64_into_channel_1: verdict MISSED cause None pc None
+  SAME 02_cd7524fdd1_apedec_filter_3800_reads_past_short_channel: verdict MISSED cause None pc None
+  SAME 03_55937bb4a7_alsdec_ra_block_runs_into_next_channel_prefix: verdict MISSED cause None pc None
+  SAME 04_cd09284924_alsdec_mcc_chan_data_one_slot_per_channel: verdict MISSED cause None pc None
+  SAME 05_9d3032b960_alsdec_opt_order_past_max_order: verdict MISSED cause None pc None
+  SAME 06_2d0bea4719_vp9_uv_nnz_ctx_sized_for_420: verdict MISSED cause None pc None
+  SAME 07_2563a33856_vp9_intra_pred_carved_for_old_bpp: verdict MISSED cause None pc None
+  SAME 08_b5ff61695f_swscale_v_line_at_pre_doubling_stride: verdict MISSED cause None pc None
+  SAME 09_043bcdcdb0_svq1enc_inter_block_runs_into_source: verdict MISSED cause None pc None
+  SAME 10_d2213b6493_rv34_b_block_carved_at_old_linesize: verdict MISSED cause None pc None
+  SAME 11_68226ed9ec_vorbis_type1_residue_end_spans_channels: verdict MISSED cause None pc None
+  SAME 12_ac59fc542f_thumbnail_hbd_tail_index_past_plane_slice: verdict MISSED cause None pc None
+  13 of 13 cells the same
+## the boot
+  T3SEQ fca BEGIN 13:45:33 ffmpeg/carved-repros virtual-malloc 
+  T3SEQ fca END 13:55:20 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'MISSED': 13}
+  T3SEQ fca PAYLOAD stage 3695970 B, 1479408 B gzip; firmware 19565064 B
+  BOARD_RUN_START 13:45:36 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 23 files, stage 3695970 bytes
+  firmware 86d9a7274d58aeec 19565064 B
+  DRIVER rc=0 13:55:19
+  BOARD_RUN_DONE 13:55:19

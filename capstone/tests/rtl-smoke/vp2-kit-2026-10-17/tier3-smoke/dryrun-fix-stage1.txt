@@ -1,0 +1,75 @@
+# chain-fix-stage1 dry runs (2026-10-19 18:11-18:12), stubbed runners; paths under the session scratch shown as <scratch>
+## cfdry/out0
+CHAIN_FIX BEGIN 18:11:33
+CHAIN_FIX1_PASS 18:11:33
+CHAIN_SQL0 END rc=0 18:11:33 :: SQL DONE stub (saw PASS)
+CHAIN_PB10_GO 18:11:33
+CHAIN_PB10 END rc=0 18:11:33 :: PB10 DONE stub (saw GO)
+CHAIN_BRACKET END rc=0 18:11:33
+CHAIN_FIX DONE 18:11:33
+## cfdry/out0.bracket
+stub s26 q600 q300 q100
+S26 q600 JUDGE rc=0 :: x
+S26 q300 JUDGE rc=0 :: x
+S26 q100 JUDGE rc=0 :: x
+## cfdry/out1
+CHAIN_FIX BEGIN 18:11:33
+CHAIN_FIX1_FAIL 18:11:33 :: S26 fix1 JUDGE rc=1 :: x; sql0 and pb10 do not run
+CHAIN_BRACKET END rc=0 18:11:33
+CHAIN_FIX DONE 18:11:33
+## cfdry/out1.bracket
+stub s26 q600 q300 q100
+S26 q600 JUDGE rc=1 :: x
+S26 q300 JUDGE rc=1 :: x
+S26 q100 JUDGE rc=1 :: x
+## sqldry/out
+SQL MEASURE: firmware 21000000 B against 26000000 (manifest 9 files, stage 123 bytes)
+T3PG sql0-dry BEGIN 18:12:06 (trigger: CHAIN_FIX1_PASS x)
+T3PG sql0-dry END 18:12:06 rc=0 :: virtual boot: completed  :: 
+SQL VOID: fixture record 00 (want 956173e054762e91), image 00 (want 64010720f1a6b3bc)
+## sqldry/out2
+SQL HOLD: the monitor's canary did not pass (CHAIN_FIX1_FAIL x)
+## sqldry/out3
+SQL STOP: board 1 is busy
+## pbdry/out
+PB10 pb10-fix BEGIN 18:12:21 kit bkit7-pb10F monitor 5b5e86b
+T3SEQ pb10-fix BEGIN kit <mnt-hdd>/capstone/t3-smoke/bkit7-pb10F spec [ffmpeg/pool-repros|virtual-nested-pools|--prebuilt <mnt-hdd>/capsto
+T3SEQ pb10-fix END rc=1
+PB10 pb10-fix SEQ END rc=0 18:12:21
+STUB SCORE tag=pb10-fix bundle=<mnt-hdd>/capstone/t3-pb10/bundle ARM_DIR=virtual-nested-pools-fix RESULTS_DIR=2026-10-19-vp2c-treeA KIT_DESC=kit bkit7-pb10F (module d71f207a3af5546b, the S-27 workaroun
+PB10 pb10-treeA BEGIN 18:12:21 kit bkit7-pb10A monitor 007d81d
+T3SEQ pb10-treeA BEGIN kit <mnt-hdd>/capstone/t3-smoke/bkit7-pb10A spec [ffmpeg/pool-repros|virtual-nested-pools|--prebuilt <mnt-hdd>/caps
+T3SEQ pb10-treeA END rc=1
+PB10 pb10-treeA SEQ END rc=0 18:12:21
+STUB SCORE tag=pb10-treeA bundle=<mnt-hdd>/capstone/t3-pb10/bundle ARM_DIR=virtual-nested-pools-treeA RESULTS_DIR=2026-10-19-vp2c-treeA KIT_DESC=kit bkit7-pb10A (module d71f207a3af5546b, the S-27 workaroun
+PB10 DONE 18:12:21
+## pbdry/out2
+PB10 HOLD: no CHAIN_PB10_GO (STOP)
+## pbdry/out3
+PB10 STOP: board 1 is busy
+## s26dry/out/run-fix1/SEQ
+S26 fix1 BEGIN 18:11:45 fw f40b38ae6b0f74f7 rungs [b0-stats vm-contract b0-hello] board 1
+S26 fix1 DRIVER rc=0 18:11:47; board line: [fpga-board] 1 
+  RUNG b0-stats retval=0 oracle=0
+  RUNG vm-contract retval=0 oracle=0
+  RUNG b0-hello retval=0 oracle=0
+S26 fix1 JUDGE rc=0 :: JUDGE PASS
+    OK   QNT0 ['001E8480']
+    OK   no QNT1 line in fix1 []
+    OK   b0-stats retval 0 (want 0, the control)
+    OK   vm-contract retval 0 (want 0, identity branch, no STEP before it)
+    OK   identity branch lines present
+    OK   b0-hello retval 0 (want 0)
+    NOTE steps ['511'] (var read 511); FRTY 1, FRGD []
+    JUDGE PASS
+## s26dry/out/run-q600/SEQ
+S26 q600 BEGIN 18:11:47 fw 85df5930f42dfec1 rungs [b0-stats vm-contract] board 1
+S26 q600 DRIVER rc=0 18:11:49; board line: [fpga-board] 1 
+  RUNG b0-stats retval=0 oracle=0
+  RUNG vm-contract retval=0 oracle=0
+S26 q600 JUDGE rc=1 :: JUDGE FAIL (1)
+    FAIL QNT0 ['001E8480']
+    OK   no QNT1 line in q600 []
+    READING q600: COMPLETED, steps 511, elapsed 6.5 s, so E = 1000 (model)
+    OK   identity branch lines present
+    JUDGE FAIL (1)

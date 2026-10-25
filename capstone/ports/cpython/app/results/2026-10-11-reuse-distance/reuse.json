@@ -1,0 +1,334 @@
+{
+ "program": "CPython 3.13.7",
+ "pre_registration": "16d2171a3edc",
+ "workload": "run-ports.py JSON/GC one-liner, verbatim (cpython.dom -S -c '...CPYTHON-OK 1000'), one interpreter process per boot; the observer covers that whole process: start-up, workload and finalisation",
+ "boundaries": {
+  "pymalloc": {
+   "stock": {
+    "buckets": {
+     "1": 5191,
+     "2": 8494,
+     "3": 2826,
+     "4": 1706,
+     "5": 2029,
+     "6": 1595,
+     "7": 824,
+     "8": 789,
+     "9": 813,
+     "10": 630,
+     "11": 365,
+     "12": 157,
+     "13": 51,
+     "14": 27
+    },
+    "issues": 51670,
+    "releases": 47885,
+    "reuses": 25497,
+    "distinct_starts": 26173,
+    "attempts": 51670,
+    "error": 0,
+    "capacity": 1048576,
+    "median_bucket": 2,
+    "guest_seconds": 36,
+    "boot_wall_seconds": 45.0,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 5191,
+       "2": 8494,
+       "3": 2826,
+       "4": 1706,
+       "5": 2029,
+       "6": 1595,
+       "7": 824,
+       "8": 789,
+       "9": 813,
+       "10": 630,
+       "11": 365,
+       "12": 157,
+       "13": 51,
+       "14": 27
+      },
+      "issues": 51670,
+      "releases": 47885,
+      "reuses": 25497,
+      "distinct_starts": 26173,
+      "attempts": 51670,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 2,
+      "guest_seconds": 36,
+      "boot_wall_seconds": 45.0
+     },
+     {
+      "buckets": {
+       "1": 5191,
+       "2": 8494,
+       "3": 2826,
+       "4": 1706,
+       "5": 2030,
+       "6": 1594,
+       "7": 824,
+       "8": 789,
+       "9": 813,
+       "10": 630,
+       "11": 365,
+       "12": 157,
+       "13": 51,
+       "14": 27
+      },
+      "issues": 51670,
+      "releases": 47885,
+      "reuses": 25497,
+      "distinct_starts": 26173,
+      "attempts": 51670,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 2,
+      "guest_seconds": 36,
+      "boot_wall_seconds": 45.1
+     },
+     {
+      "buckets": {
+       "1": 5192,
+       "2": 8493,
+       "3": 2827,
+       "4": 1707,
+       "5": 2032,
+       "6": 1591,
+       "7": 824,
+       "8": 790,
+       "9": 812,
+       "10": 629,
+       "11": 365,
+       "12": 157,
+       "13": 51,
+       "14": 27
+      },
+      "issues": 51670,
+      "releases": 47885,
+      "reuses": 25497,
+      "distinct_starts": 26173,
+      "attempts": 51670,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 2,
+      "guest_seconds": 37,
+      "boot_wall_seconds": 45.7
+     }
+    ],
+    "buckets_from": "repetition 1"
+   },
+   "protected": {
+    "buckets": {
+     "1": 5197,
+     "2": 8499,
+     "3": 2820,
+     "4": 1704,
+     "5": 2032,
+     "6": 1591,
+     "7": 821,
+     "8": 797,
+     "9": 814,
+     "10": 626,
+     "11": 367,
+     "12": 157,
+     "13": 51,
+     "14": 27
+    },
+    "issues": 51670,
+    "releases": 47885,
+    "reuses": 25503,
+    "distinct_starts": 26167,
+    "attempts": 51670,
+    "error": 0,
+    "capacity": 1048576,
+    "median_bucket": 2,
+    "guest_seconds": 37,
+    "boot_wall_seconds": 45.9,
+    "repetitions": [
+     {
+      "buckets": {
+       "1": 5197,
+       "2": 8499,
+       "3": 2820,
+       "4": 1704,
+       "5": 2032,
+       "6": 1591,
+       "7": 821,
+       "8": 797,
+       "9": 814,
+       "10": 626,
+       "11": 367,
+       "12": 157,
+       "13": 51,
+       "14": 27
+      },
+      "issues": 51670,
+      "releases": 47885,
+      "reuses": 25503,
+      "distinct_starts": 26167,
+      "attempts": 51670,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 2,
+      "guest_seconds": 37,
+      "boot_wall_seconds": 45.9
+     },
+     {
+      "buckets": {
+       "1": 5196,
+       "2": 8494,
+       "3": 2823,
+       "4": 1705,
+       "5": 2032,
+       "6": 1591,
+       "7": 821,
+       "8": 798,
+       "9": 814,
+       "10": 627,
+       "11": 367,
+       "12": 157,
+       "13": 51,
+       "14": 27
+      },
+      "issues": 51670,
+      "releases": 47885,
+      "reuses": 25503,
+      "distinct_starts": 26167,
+      "attempts": 51670,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 2,
+      "guest_seconds": 37,
+      "boot_wall_seconds": 45.9
+     },
+     {
+      "buckets": {
+       "1": 5196,
+       "2": 8494,
+       "3": 2823,
+       "4": 1705,
+       "5": 2033,
+       "6": 1590,
+       "7": 821,
+       "8": 798,
+       "9": 814,
+       "10": 627,
+       "11": 367,
+       "12": 157,
+       "13": 51,
+       "14": 27
+      },
+      "issues": 51670,
+      "releases": 47885,
+      "reuses": 25503,
+      "distinct_starts": 26167,
+      "attempts": 51670,
+      "error": 0,
+      "capacity": 1048576,
+      "median_bucket": 2,
+      "guest_seconds": 37,
+      "boot_wall_seconds": 45.7
+     }
+    ],
+    "buckets_from": "repetition 1"
+   }
+  }
+ },
+ "comparison": {
+  "pymalloc": {
+   "median_bucket": {
+    "stock": [
+     2,
+     2,
+     2
+    ],
+    "protected": [
+     2,
+     2,
+     2
+    ]
+   },
+   "reusediff_rep1": 0.0008171303457965016,
+   "reusediff_all_pairs": [
+    0.0005613195002720209,
+    0.0008171303457965016
+   ],
+   "reusediff_within_arm": {
+    "stock": [
+     3.9220300427494914e-05,
+     0.0002745421029924887
+    ],
+    "protected": [
+     3.921107320707662e-05,
+     0.0002744775124495485
+    ]
+   },
+   "identical_bins_rep1": false
+  }
+ },
+ "images": {
+  "stock": {
+   "staged_sha256": {
+    "capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+    "capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+    "cpython.dom": "dcad934a920d46162d222150ce26dd2463dfc077261eea589737bb845b88d0c2",
+    "gate.sh": "4bef8ce28ceb5dd55676f516776249e6494edc0a069ddb3c5ad7fa00521a6dff"
+   }
+  },
+  "protected": {
+   "staged_sha256": {
+    "capstone-vexec": "3975314a7a6da119c4bff6a0ab0c601fcd96d305f59a0a68fe5b36b9bd544ad4",
+    "capstone_vm.ko": "a1c6cb6b79a98cf1f09e55a37adf2320e2b9787922b7e10bf4088c27e396e512",
+    "cpython.dom": "9fa4d381bd0573efeada0d38a2d202202787599d03b3a50ee597bd176fe21bde",
+    "gate.sh": "4bef8ce28ceb5dd55676f516776249e6494edc0a069ddb3c5ad7fa00521a6dff"
+   }
+  }
+ },
+ "platform": {
+  "platform_sha256": {
+   "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+   "fw_jump.elf": "44cd6cbc2d225c2fea6c6000ea0b9eab83bc34e769a7c95c036cf17b6fe0f116",
+   "qemu-system-riscv64": "af37cc3269d1cfb47a72eb79cc3dfd2397848c613ca703e43625c68ab50ad27d",
+   "rootfs.ext2": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845"
+  },
+  "run_staged_sha256": "d6770b8b9c55ef8a4e136a17f5411a2fe2f139af9fee47f5e02328810acfc54c"
+ },
+ "build": {
+  "source_snapshot": "git archive 16d2171a3edc capstone + experiments/study/reuse-hooks/{cpython,mruby} + compiler-rt/lib/builtins of 9bc6f9adf1c9, committed as a fresh repository; the images were linked at its second commit (the mruby patch's stdlib.h fix), runtime_dirty false",
+  "recipe": "experiments/study/reuse-hooks/cpython/build-cpython-reuse.sh ARM OUT (build-virtual.sh's cpython recipe + the hook patch between configure and compile; CPY_TEST_CAPI=1 as the memory-behaviour images)",
+  "define": "-DEXP_REUSE_GAP in the configured Makefile's CONFIGURE_CPPFLAGS, both arms",
+  "observer_header_sha256": "627b0fe3ac30d75b384b35f37e9436c329f9f506afc13b94fb3ab87fc2df1769",
+  "observer_capacity": 1048576,
+  "clang_sha256": "4c6135feafae20c23edf01a4964d51459d7acb85469cd50166704e1f9a3365d4",
+  "arms": {
+   "stock": {
+    "cpy_sublet": 0,
+    "manifest_nested": "none",
+    "hook_patch": "obmalloc-reuse-gap-stock.patch",
+    "hook_patch_sha256": "689a732df8f061a3395bb5abbcff0ef0612892627708681c9a7bdceef9c349cf",
+    "obmalloc_c_sha256": "2a46f69f1312b5233fb695f5c832bdad7181d85691d9ef7a077fd4f4c4df4e96",
+    "image_sha256": "dcad934a920d46162d222150ce26dd2463dfc077261eea589737bb845b88d0c2",
+    "cderive_crevoke_in_text": [
+     0,
+     0
+    ],
+    "build_seconds": 225
+   },
+   "protected": {
+    "cpy_sublet": 1,
+    "manifest_nested": "cpython",
+    "hook_patch": "obmalloc-reuse-gap-protected.patch",
+    "hook_patch_sha256": "5e4f24eb85658d2a45b2c1c481d4a56b1949ce62cd34b718fd450b7da42e528b",
+    "obmalloc_c_sha256": "58337a5c5df673c11cf792ea668091fc634b24adc36135e2b491b1d290f48c09",
+    "image_sha256": "9fa4d381bd0573efeada0d38a2d202202787599d03b3a50ee597bd176fe21bde",
+    "cderive_crevoke_in_text": [
+     8,
+     2
+    ],
+    "build_seconds": 224
+   }
+  }
+ }
+}

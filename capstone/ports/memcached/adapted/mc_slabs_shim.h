@@ -60,6 +60,10 @@ typedef uint32_t client_flags_t;
  * Structure for storing items within memcached.
  */
 typedef struct _stritem {                                       /* :613-637 */
+#ifdef MC_CAPSTONE_SUBLET
+    /* The application's patch 0006: the generation of this chunk's page. */
+    void            *sublet_parent;
+#endif
     /* Protected by LRU locks */
     struct _stritem *next;
     struct _stritem *prev;
@@ -86,6 +90,9 @@ typedef struct _stritem {                                       /* :613-637 */
 
 /* Header when an item is actually a chunk of another item. */
 typedef struct _strchunk {                                      /* :661-673 */
+#ifdef MC_CAPSTONE_SUBLET
+    void             *sublet_parent; /* as in item, so the layouts stay in step */
+#endif
     struct _strchunk *next;     /* points within its own chain. */
     struct _strchunk *prev;     /* can potentially point to the head. */
     struct _stritem  *head;     /* always points to the owner chunk */

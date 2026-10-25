@@ -1,0 +1,45 @@
+--- ident/capstone_vm.c	2026-10-18 05:06:14.870744761 +0800
++++ resolvediag/capstone_vm.c	2026-10-18 05:57:43.961712806 +0800
+@@ -983,12 +983,42 @@
+     }
+ }
+ 
++/* DIAGNOSTIC (board lane, vp2 boot r6, 2026-10-18; not the module's revision): contract.dom's `vm` mode stopped
++ * making progress on silicon right after `mmap(8193, PROT_READ)` and before its next grant, where the only statement is
++ * the read-only first touch p[8192]. Report a page fault that resolve() sees again at the same pc and address, with
++ * the PTE as the domain's page table holds it, so a fault loop names its PTE bits. */
++static unsigned long diag_last_addr, diag_last_pc;
++static unsigned long diag_repeat;
++static void diag_fault_repeat(struct context *c, unsigned long address, unsigned long cause, unsigned long pc)
++{
++    pte_t *ptep;
++    spinlock_t *ptl;
++    unsigned long pv = ~0UL;
++    if (address == diag_last_addr && pc == diag_last_pc) {
++        ++diag_repeat;
++    } else {
++        diag_last_addr = address; diag_last_pc = pc; diag_repeat = 0;
++        return;
++    }
++    if (diag_repeat != 2 && diag_repeat != 16 && diag_repeat != 256 && diag_repeat != 65536)
++        return;
++    mmap_read_lock(c->mm);
++    if (!follow_pte(c->mm, address, &ptep, &ptl)) {
++        pv = pte_val(*ptep);
++        pte_unmap_unlock(ptep, ptl);
++    }
++    mmap_read_unlock(c->mm);
++    pr_info("capstone_vm: DIAG fault repeat=%lu cause=%lu addr=%lx pc=%lx pte=%lx\n",
++            diag_repeat, cause, address, pc, pv);
++}
++
+ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
+ {
+     unsigned long address = t->frame[5], cause = t->frame[3];
+     struct page *page;
+     struct vm_area_struct *v;
+     unsigned long required = cause == 15 ? VM_WRITE : cause == 12 ? VM_EXEC : VM_READ;
++    diag_fault_repeat(c, address, cause, t->frame[4]);
+     if (!t->started || t->event != 4 || (cause != 12 && cause != 13 && cause != 15))
+         return -EINVAL;
+     for (unsigned i = 0; i < CV_MAX_ARENAS; ++i) {

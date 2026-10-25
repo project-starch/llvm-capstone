@@ -1,0 +1,17 @@
+# q300 (2026-10-19, board 1, tree A): judge and rung lines
+OK   QNT0 ['0000012C']
+OK   no QNT1 line in q300 []
+READING q300: COMPLETED, steps 160942, elapsed 219.0 s, so E = 57 (model)
+OK   identity branch lines present
+JUDGE READING
+RESULT b0-stats retval=0
+@@PARAM resume_satp_refreshes=0:before-ok
+@@PARAM resume_satp_refreshes=21916:t30
+@@PARAM resume_satp_refreshes=47728:t60
+@@PARAM resume_satp_refreshes=97485:t120
+@@PARAM resume_satp_refreshes=147198:t180
+CAPSTONE_VM_STATS arenas=11 pages=496 peak=892 nodes=76 steps=160942 faults=426 collections=0 reclaimed=0 rounds=12 bytes_in=214 bytes_out=143 node_bytes=65536 node_capacity=4096 node_growths=0 launch_ns=2645921680 elapsed_ns=219007445440
+VM_EXIT:normal:0
+@@PARAM resume_satp_refreshes=160941:after-ok
+VM_EXIT:stale:139
+RESULT vm-contract retval=0

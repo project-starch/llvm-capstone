@@ -9,13 +9,21 @@ used.
 | arm | configuration (`tools/arms.json`) | build | what bounds a pymalloc block |
 |---|---|---|---|
 | `virtual-malloc` | `virtual-pymalloc` | `-DPYMALLOC_SUBLET=OFF` | nothing: the arena is one mallocng object |
-| `virtual-nested-pools` | `virtual-pymalloc-pools` | `-DPYMALLOC_SUBLET=ON`, mode 1 | the lifetime adapter, one capability per block, retired on free |
+| `virtual-nested-pools` | `virtual-pymalloc-pools` | `-DPYMALLOC_SUBLET=ON` | patch 0003: one derived child per block, revoked on free |
 
-In the pools arm the virtual heap lends the arena as one linear capability
-(`__capstone_sublet_malloc_linear`), and `ports/common/include/borrow-aligned-block.h` carves the
-16 KiB pool alignment the adapter requires out of it.
+In the pools arm the replay is built with the port's patch 0003: obmalloc derives one child of
+the arena region per arena and one child per block, bounded to the request (`CDERIVE`), and
+revokes the block's child when it takes the block back (`CREVOKE`,
+`docs/design/virtual-capstone/isa.md`).
 
 ## Build
+
+**The SDK is a corpus SDK (C-81).** Build it with `CAPSTONE_SDK_CORPUS=1` exported
+(`CAPSTONE_SDK_CORPUS=1 bash capstone/runtime/virtual/build-sdk.sh <out> <musl>`, or the port's
+builder): `build-sdk.sh` then appends `-fno-builtin` and refuses an SDK whose effective setting is
+otherwise, because with `malloc` as a library builtin LLVM may elide an allocation a case observes.
+`tools/check-sdk-builtins.py <SDK or build>` checks one already built; every corpus runner
+(`tools/sdk_builtins.py`, called before anything starts) refuses anything else with exit 78.
 
     export CAPSTONE_SDK=<virtual application SDK>
     shared/build-cases.sh capstone-application OUT-OFF -DPYMALLOC_SUBLET=OFF

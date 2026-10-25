@@ -1,0 +1,13 @@
+Q15 q15a BEGIN 05:25:41 only 00,01,02,03,04,05
+Q15 q15a ARM END rc=0 05:39:26
+Q15 q15a COMPARE vs run C rc=0 :: 6 of 6 cells the same
+Q15 q15a readings: Q15_PAD 2; cause=29 0; DRT1 0 DRTX 0 FRTY 6 Oops 0
+Q15 q15b BEGIN 05:39:26 only 06,07,08,09,10,11
+Q15 q15b ARM END rc=0 05:53:40
+Q15 q15b COMPARE vs run C rc=0 :: 6 of 6 cells the same
+Q15 q15b readings: Q15_PAD 3; cause=29 0; DRT1 0 DRTX 0 FRTY 6 Oops 0
+Q15 q15c BEGIN 05:53:40 only 12,13,14,15,16,17
+Q15 q15c ARM END rc=0 06:07:58
+Q15 q15c COMPARE vs run C rc=0 :: 6 of 6 cells the same
+Q15 q15c readings: Q15_PAD 1; cause=29 0; DRT1 0 DRTX 0 FRTY 6 Oops 0
+Q15 DONE 06:07:58

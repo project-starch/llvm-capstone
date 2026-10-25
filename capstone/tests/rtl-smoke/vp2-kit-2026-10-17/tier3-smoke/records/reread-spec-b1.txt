@@ -1,0 +1,15 @@
+# sanitized copy of the re-read spec rr-b1 (sha256/16 27beeb2ce188edaa)
+# board 1 re-read on c721c1a2a (after pg-pools)
+fph|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/ffmpeg/plain-heap-repros --arm virtual-malloc
+fpt|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/ffmpeg/plain-temporal-repros --arm virtual-malloc
+fca|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/ffmpeg/carved-repros --arm virtual-malloc
+fcs|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/ffmpeg/carved-repros --arm virtual-nested-pools --cc-arg=-DFFC_SUBLET_CARVE --cc-arg=-I/tmp/capstone/wt-gate/capstone/runtime/include
+fso|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/ffmpeg/subobject-repros --arm virtual-malloc --cc-arg=-std=c11 --cc-arg=-Daligned_alloc(a,n)=malloc(n) --cc-arg=-isystem --cc-arg=<mnt-hdd>/capstone/t3-freeze/llvm/lib/clang/22/include --cc-arg=-I/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/shared --cc-arg=-I/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported --cc-arg=-I/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/cmake/replay-config --cc-arg=-I/tmp/capstone/wt-gate/capstone/runtime/include --cc-arg=/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported/libavutil/buffer.c --cc-arg=/tmp/capstone/ffmpeg-buffer-pool/build/native/sources/ffmpeg-ported/libavutil/refstruct.c --cc-arg=/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/shared/observe-pool-events.c --cc-arg=/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/shared/pool-allocator.c --cc-arg=/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/shared/metadata-allocator.c --cc-arg=/tmp/capstone/wt-gate/capstone/ports/ffmpeg/buffer-pool/src/native/replay/payload-pointers.c
+mph|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/memcached/plain-heap-repros --arm virtual-malloc
+mpt|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/memcached/plain-temporal-repros --arm virtual-malloc
+wph|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/wireshark/plain-heap-repros --arm virtual-malloc
+wpt|cases|-|-|--corpus /tmp/capstone/wt-gate/capstone/bug-corpora/wireshark/plain-temporal-repros --arm virtual-malloc
+pgc|pgc|-|-|--arm virtual-malloc --bindir <mnt-hdd>/capstone/t3-images-r60/pg/pgc-bin
+pgm0|pgm|-|-|--arm virtual-malloc --hosted-build <mnt-hdd>/capstone/t3-images-r60/pg/mmgr-cases-OFF --controls-hosted-build <mnt-hdd>/capstone/t3-images-r60/pg/mmgr-controls-OFF
+pgm1|pgm|-|-|--arm virtual-pg-pools --hosted-build <mnt-hdd>/capstone/t3-images-r60/pg/mmgr-cases-ON --controls-hosted-build <mnt-hdd>/capstone/t3-images-r60/pg/mmgr-controls-ON
+sq0|appvm6:capstone/bug-corpora/sqlite/engine-repros/shared/run-virtual.py|-|-|--arm virtual-malloc --build <mnt-hdd>/capstone/t3-images-r60/sqlite/build-virtual-malloc

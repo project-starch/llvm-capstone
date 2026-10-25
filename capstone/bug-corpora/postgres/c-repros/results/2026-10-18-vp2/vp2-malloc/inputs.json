@@ -1,0 +1,32 @@
+{
+  "arm": "vp2-malloc",
+  "build": {
+    "heap": "virtual-mallocng",
+    "opt": "-O0",
+    "runtime_sha256": "d10e4e75f12f601ae1465d47c8ebd603532d665893c69cea57b102274c37b5f1",
+    "sdk": "<mnt-hdd>/capstone/t3-freeze-nb/sdk",
+    "virtual": "ON"
+  },
+  "cases": 5,
+  "configuration": "virtual-mallocng",
+  "contract": "verdicts-v1",
+  "corpus": "postgres/c-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "2c495d3f46d0bd00336caeb579de30292cee1468390e92f6f19681a4e3d459f9",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "00cd681a6103883b7a32b5748159ac79e1588baf77bc07d975f3a3d1c0519c9f",
+    "launcher": "b27afefc09c6cae679b74b90e98f1d69c079951b7934c068c717a5c222607177",
+    "machine": "board",
+    "module": "3005ed52e860c7af5da2b7fdf30ca1790de5da63c79983abe59937a13a4cba0a",
+    "monitor": "007d81d",
+    "monitor_defines": "-DCAPSTONE_SUPERVISED_CALL -DCAPSTONE_SUPERVISOR_CSR_EVENTS -DCAPSTONE_SUPERVISE_QUIET -DCAPSTONE_VP2_CSMINT -DCAPSTONE_CPMX_DIAG -DCAPSTONE_VP2_FETCH_RETRY",
+    "profile": "virtual",
+    "qemu": "board:caplifive_vp2_bf3db3175",
+    "rootfs": "board initramfs (baked; see firmware)",
+    "runner": "343ecbd79966a2c7ca92a10176aaa71fa001cfcce7f552565a54ea1dc83122f6"
+  },
+  "tally": {
+    "CAUGHT": 5
+  }
+}

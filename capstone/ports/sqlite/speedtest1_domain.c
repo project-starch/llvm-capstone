@@ -24,6 +24,7 @@
 #include "sqlite3.h"
 #include "sqlite_hostcall.h"
 
+#include <capstone/representable.h>
 #ifndef SQLITE_HEAP_SIZE
 #define SQLITE_HEAP_SIZE (256U * 1024U)
 #endif
@@ -57,7 +58,14 @@ void sqlite3_sublet_stats(unsigned long *aOut);
 #define CAPSTONE_DELIN(value)                                                \
   __asm__ volatile(".insn r 0x5b, 0x1, 0x3, %0, x0, x0" : "+r"(value))
 
-static unsigned char sqlite_heap[SQLITE_HEAP_SIZE] __attribute__((aligned(16)));
+/* Option (iii): memsys5 derives mem5.pHeap and mem5.zPool over the WHOLE arena, so the arena's
+ * own base must be a multiple of its bounds granule -- 2048 for 1 MiB, 512 for 256 KiB -- or the
+ * compressed encoder truncates it downward and the pool gains authority below itself. aligned(16)
+ * was enough when QEMU kept exact shadow bounds; it is not under the compact profile. */
+CAPSTONE_REPR_ASSERT_POW2(SQLITE_HEAP_SIZE, "SQLITE_HEAP_SIZE");
+static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]
+    __attribute__((aligned(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
+                           ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE))));
 /* -DSPEEDTEST1_PAD=<bytes>: grow the image by that much and nothing else, to tell a layout effect
    from a code change (bisection aid, 2026-09-10). */
 #ifdef SPEEDTEST1_PAD

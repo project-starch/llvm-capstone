@@ -1,0 +1,23 @@
+# Tier 3 board reading, arm sq0e-fix6: kit bkit7-fix6 (module d71f207a3af5546b, the S-27 workaround: resume rd = x0), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-sqlite-memsys5 platform board:caplifive_vp2_bf3db3175 cells 6 tally {"CAUGHT": 1, "MISSED": 5}
+# controls [["bounds-mem5", "complete"], ["uaf-mem5", "complete"]]
+24_d4b646997a_writable_schema_stale_table image 7c8bfc885ea3914a CAUGHT cause 24 at sqlite3OpenTable+648 reached True completed False attribution "function"
+25_415540ddaa_fts5_getvarint_overread image 11257df82efed8bb MISSED cause None at None reached True completed True attribution null
+26_8f5b14a5c2_fts5_decode_getvarint32_overread image d7777fc30dafc5f6 MISSED cause None at None reached True completed True attribution null
+27_a783931794_fts3_getvarint_overread image 86af2fcc45131b95 MISSED cause None at None reached True completed True attribution null
+28_c7def600bd_fts3_matchinfo_overread image 70ab014a9ddd03ea MISSED cause None at None reached True completed True attribution null
+29_fz02_btree_get4byte_page_overread image 670f0ba5e74990d3 MISSED cause None at None reached True completed True attribution null
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 24_d4b646997a_writable_schema_stale_table: verdict CAUGHT cause 24 pc sqlite3OpenTable+648
+  SAME 25_415540ddaa_fts5_getvarint_overread: verdict MISSED cause None pc None
+  SAME 26_8f5b14a5c2_fts5_decode_getvarint32_overread: verdict MISSED cause None pc None
+  SAME 27_a783931794_fts3_getvarint_overread: verdict MISSED cause None pc None
+  SAME 28_c7def600bd_fts3_matchinfo_overread: verdict MISSED cause None pc None
+  SAME 29_fz02_btree_get4byte_page_overread: verdict MISSED cause None pc None
+  6 of 6 cells the same
+## the boot
+  BOARD_RUN_START 21:35:50 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 18 files, stage 24705556 bytes
+  firmware e26fda0a9b846ef6 23759368 B
+  DRIVER rc=0 21:48:27
+  BOARD_RUN_DONE 21:48:27

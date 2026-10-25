@@ -1,0 +1,38 @@
+{
+ "arm": "cheribsd-revocation: stock CheriBSD riscv64-purecap, libc revocation at the platform default (on, asynchronous, not on every free)",
+ "sysctls": {
+  "security.cheri.runtime_revocation_default": "1",
+  "security.cheri.runtime_revocation_async": "1",
+  "security.cheri.runtime_revocation_every_free_default": "0"
+ },
+ "exception_logging": {
+  "machdep.log_user_cheri_exceptions": "1"
+ },
+ "uname": "15.0-CURRENT riscv",
+ "platform_sha256_prefix": {
+  "cheribsd-riscv64-purecap.img": "e7470361adeb6511",
+  "kernel": "62be5d3f24dc2585",
+  "qemu-system-riscv64cheri": "dc34b3f2e265083d",
+  "bbl fw_jump": "c8652f09235371db"
+ },
+ "binaries_sha256": {
+  "mruby-relink": "5784fa990c80eb2adccabdf7df457caf6964098e3db27269dee644956e987a6b",
+  "mruby-qprobe": "506d7bb9d50cbdf6df0d7c52d95539d518ab3ab4fe4b7880b5303e0eb3d0ace8",
+  "capi-11": "7f8904381f34b780b853812961cdcca735470251a90a2cb6cfcf093e5bdc81ff",
+  "capi-11-qprobe": "c5d0576e5fc91aad8f79b216e88fff054c9437e4b8d8dff1d13c32a4ccbc993c",
+  "revocation-control": "f2b4b8ba03010017c66948e9402c24453be94d44d4b37e687cc9cc1ffa019a09"
+ },
+ "interpreter": "mruby-relink: byte-identical to the 2026-10-06 arm's build/cheribsd/bin/mruby (sha256 5784fa99...), relinked by probe/build-cheribsd-extra.sh",
+ "probe": "quarantine-probe.c sha256 fa283f76...b97263554, -DQPROBE_WRAP, wrapped around malloc/calloc/realloc/free",
+ "controls": {
+  "eval": "./mruby -e 'puts 6*7' printed 42",
+  "depth": "the 2026-10-06 depth/d40.rb and d500.rb, byte for byte: DEEP 40 40, DEEP 500 500",
+  "revocation": "revocation-control: revocation=1 tag_after_sweep=0 reissued=1, then CHERI tag fault at read_probe+0, the labelled load (rc 162)",
+  "sweep_counter_live": "probed churn of 400,833 allocations: sweeps=6; probed eval: sweeps=0"
+ },
+ "fault_location": "the console's CHERI fault record (machdep.log_user_cheri_exceptions=1): sepcc resolved against the image's own symbols",
+ "probe_reads_state_not_fate": "the counters are process-wide: they show every free quarantined and no allocation returned while quarantined, with no completed sweep, so no freed block of the run was reissued; they do not name the stale block. The probed builds change sizes and addresses; here every probed run ended as its plain run did.",
+ "observation": "not a case and not a control: a 40-frame recursion printed with String#% (fmt-d40.rb) took a CHERI length fault in mrb_str_format, in a correct program; recorded in the matrix",
+ "attempts": "third boot; the first stopped when a 121 MB uncompressed kit exceeded the runner's 120 s scp limit (no case ran), the second when the run's own first version of the depth control (the fmt-d40.rb form) faulted, before any case ran",
+ "where": "p13, 2026-10-11, one boot"
+}

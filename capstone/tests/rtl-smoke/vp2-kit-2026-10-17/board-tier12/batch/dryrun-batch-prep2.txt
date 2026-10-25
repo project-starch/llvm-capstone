@@ -1,0 +1,21 @@
+# batch-prep.sh (gated images) dry runs, 2026-10-21 17:16: bake and firmware stubbed. The image dir in every case is the FIRST prep's stage (the v9 images); 98bfe0d9ab76 stands in for a passing runtime revision
+## v9-refused
+rc=1
+REFUSE: f6dfd19d9396 heap.c hunks present [False, False] (bind_slots, backend_pointer)
+BP STOP: runtime f6dfd19d9396 does not pass r60-runtime-gate
+## wrong-hashes
+rc=1
+PASS: 98bfe0d9ab76 heap.c carries both hunks
+BP STOP: the images are 125705371837ea92,a902e740fc5d3b0f,a5942a1add489597, not 0000,a902e740fc5d3b0f,a5942a1add489597
+## passing-rev
+rc=0
+PASS: 98bfe0d9ab76 heap.c carries both hunks
+BP STAGE rev7's six files, images 125705371837ea92,a902e740fc5d3b0f,a5942a1add489597 (runtime 98bfe0d9ab76, gate PASS), capstone_vm.ko 21fbfc397e7c7a42 (9 files)
+BP BAKE 17:16:58: 14 files
+BP IMAGE 6fb6d3835a3563bf dtb c3ce3e5f31000e5c
+BP FW 541b3e9daa09b20b 1000 B on image 6fb6d3835a3563bf; FRTC present
+BP DONE 17:16:58
+## planted record mismatch (vmrun.sh's hash altered in a copy of the record)
+rc=1
+PASS: 98bfe0d9ab76 heap.c carries both hunks
+BP STOP: the private stage's six files are not rev7's record

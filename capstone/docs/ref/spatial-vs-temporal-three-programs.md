@@ -139,6 +139,26 @@ How the three columns read:
 - **Temporal, Sublet in nested 49 of 49.** The port revokes on the allocator's own release, so the
   23 fault -- case 22 at the allocator's own handback probe, where its second free hands back a revoked chunk;
   the 26 plain ones read as in column 2.
+- **On silicon, column 3's temporal 49 of 49 holds** (`caplifive_sublet_d93a8d66b`, 2026-10-16, board sets 1-5).
+  The 26 plain cases ran on level0 with per-object lifetimes and the 23 nested under their ports' patches (FFmpeg's
+  pools 0003, memcached 0006, wmem 0001). Every one traps with cause 25, the RTL's stale access, where
+  capstone-qemu reads 24 (ISSUES Q-11). 44 trap at the labelled probe, and 5 in a function their case declares
+  (FFmpeg's 4 pool cases in `ff2_case_run`, wmem 22 in `wmem_block_sublet_free`). The arms are `bug-corpora`'s
+  `silicon-lifetimes`, `silicon-pool-sublet`, `silicon-mc-sublet` and `silicon-wm-sublet`. Every row is in
+  `docs/plans/2026-10-15-bug-corpus-on-fpga.md` section 7.
+- **On silicon, the other cells: temporal column 2 reads 26 of 49, spatial 46 of 81 in column 2 and 69 of 81
+  in column 3**, against physical's 26, 46 and 71. They are counted from `case.json` by this table's own
+  spatial/temporal rule.
+  - Column 2 is the lifetimes heap with each nested allocator stock. The carved and plane corpora use
+    `silicon-level0`, whose per-object bounds are the same.
+  - Column 3 is each port's Sublet arm. Plain cases read as in column 2.
+  - The two spatial rows short of physical are memcached 05 and 08, which have no reading on silicon:
+    - 05: its sentinel byte clears patch 0006's `sublet_parent`, and it has no reading on the virtual arm either;
+    - 08: its 16,400-byte cache.c child rounds up 16 bytes at its 32-byte granule, so the case refuses its
+      premise. That is pre-registered: decision (a)'s accepted spatial difference.
+  - The plane case has no Sublet carve on silicon, and physical column 3 reads it NOT CAUGHT.
+  - The separate bounds remedies, also on silicon: field bounds catch 7 of 9 sub-object cases, plane bounds 1 of
+    1, and carve bounds 13 of 13.
 - **Spatial, Sublet in malloc 46 of 81** is the Sublet heap's per-object bound: all 45 plain
   cases that leave their allocation, and memcached 8 (its rbuf object is its own allocation); nothing inside a block.
 - **Spatial, Sublet in nested 71 of 81.** The chunk and slab ports bound each chunk (wmem 9/9, slab
@@ -329,9 +349,7 @@ reading; it printed 334 when made strict, and none now. A cell reads **caught / 
 
 The columns are one mechanism each. **ASan**: the native build under AddressSanitizer, with
 positive controls reporting in the same run. **CheriBSD**: stock purecap, libc revocation on.
-**PoisonCap bounds / protected**: the rebuilt published PoisonCap platform in mode 0 (bounds, no
-revocation) and mode 1 (poison on free, then revocation) — for the nested corpora, through each
-allocator's PoisonCap adapter, as Sublet goes through each allocator's Sublet port. **Capstone
+**Capstone
 bounds**: on plain rows the level0 heap (malloc narrowed to the request); on NESTED rows the
 allocator's port in mode 0 -- each chunk its own bound (wmem's `wm_narrow`, memcached's ledger), no
 revocation -- so those cells are a port's per-chunk bound, not malloc's (corrected at the audit: this
@@ -341,29 +359,29 @@ heap, and on the nested corpora the allocator's Sublet port.
 
 **Temporal (49)**
 
-| program | allocator layer | axis | n | ASan | CheriBSD | PoisonCap mode 0 | PoisonCap mode 1 | Capstone bounds | Capstone + Sublet |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|
-| FFmpeg | AVBufferPool | nested | 4 | 0 / 4 | 0 / 4 | 0 / 4 | 4 / 4 | 0 / 4 | 4 / 4 |
-| FFmpeg | direct malloc | plain | 13 | 13 / 13 | 0 / 13 | 0 / 13 | 12 / 13 | 0 / 13 | 13 / 13 |
-| tshark | wmem | nested | 14 | 0 / 14 | 0 / 14 | 0 / 14 | 14 / 14 | 0 / 14 | 14 / 14 |
-| tshark | direct g_malloc | plain | 10 | 10 / 10 | 0 / 10 | 0 / 10 | 9 / 10 | 0 / 10 | 10 / 10 |
-| memcached | slabs.c / cache.c | nested | 5 | 0 / 5 | 0 / 5 | 0 / 5 | 5 / 5 | 0 / 5 | 5 / 5 |
-| memcached | direct malloc | plain | 3 | 3 / 3 | 0 / 3 | 0 / 3 | 3 / 3 | 0 / 3 | 3 / 3 |
-| **Total** |  | 23 n · 26 p | 49 | 26 / 49 | 0 / 49 | 0 / 49 | 47 / 49 | 0 / 49 | 49 / 49 |
+| program | allocator layer | axis | n | ASan | CheriBSD | Capstone bounds | Capstone + Sublet |
+|---|---|---|---:|---:|---:|---:|---:|
+| FFmpeg | AVBufferPool | nested | 4 | 0 / 4 | 0 / 4 | 0 / 4 | 4 / 4 |
+| FFmpeg | direct malloc | plain | 13 | 13 / 13 | 0 / 13 | 0 / 13 | 13 / 13 |
+| tshark | wmem | nested | 14 | 0 / 14 | 0 / 14 | 0 / 14 | 14 / 14 |
+| tshark | direct g_malloc | plain | 10 | 10 / 10 | 0 / 10 | 0 / 10 | 10 / 10 |
+| memcached | slabs.c / cache.c | nested | 5 | 0 / 5 | 0 / 5 | 0 / 5 | 5 / 5 |
+| memcached | direct malloc | plain | 3 | 3 / 3 | 0 / 3 | 0 / 3 | 3 / 3 |
+| **Total** |  | 23 n · 26 p | 49 | 26 / 49 | 0 / 49 | 0 / 49 | 49 / 49 |
 
 **Spatial (81)**
 
-| program | allocator layer | axis | n | ASan | CheriBSD | PoisonCap mode 0 | PoisonCap mode 1 | Capstone bounds | Capstone + Sublet |
-|---|---|---|---:|---:|---:|---:|---:|---:|---:|
-| FFmpeg | carved buffer | nested | 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 |
-| FFmpeg | frame-pool plane | nested | 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 |
-| FFmpeg | direct malloc | plain | 24 | 24 / 24 | 21 / 24 | 21 / 24 | 21 / 24 | 24 / 24 | 24 / 24 |
-| FFmpeg | inside one struct | plain | 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 |
-| tshark | wmem | nested | 9 | 0 / 9 | 0 / 9 | 9 / 9 | 9 / 9 | 9 / 9 | 9 / 9 |
-| tshark | direct g_malloc | plain | 12 | 12 / 12 | 11 / 12 | 11 / 12 | 11 / 12 | 12 / 12 | 12 / 12 |
-| memcached | slabs.c / cache.c | nested | 4 | 1 / 4 | 1 / 4 | 2 / 4 | 2 / 4 | 2 / 4 | 2 / 4 |
-| memcached | direct malloc | plain | 9 | 9 / 9 | 8 / 9 | 8 / 9 | 8 / 9 | 9 / 9 | 9 / 9 |
-| **Total** |  | 27 n · 54 p | 81 | 46 / 81 | 41 / 81 | 51 / 81 | 51 / 81 | 56 / 81 | 56 / 81 |
+| program | allocator layer | axis | n | ASan | CheriBSD | Capstone bounds | Capstone + Sublet |
+|---|---|---|---:|---:|---:|---:|---:|
+| FFmpeg | carved buffer | nested | 13 | 0 / 13 | 0 / 13 | 0 / 13 | 0 / 13 |
+| FFmpeg | frame-pool plane | nested | 1 | 0 / 1 | 0 / 1 | 0 / 1 | 0 / 1 |
+| FFmpeg | direct malloc | plain | 24 | 24 / 24 | 21 / 24 | 24 / 24 | 24 / 24 |
+| FFmpeg | inside one struct | plain | 9 | 0 / 9 | 0 / 9 | 0 / 9 | 0 / 9 |
+| tshark | wmem | nested | 9 | 0 / 9 | 0 / 9 | 9 / 9 | 9 / 9 |
+| tshark | direct g_malloc | plain | 12 | 12 / 12 | 11 / 12 | 12 / 12 | 12 / 12 |
+| memcached | slabs.c / cache.c | nested | 4 | 1 / 4 | 1 / 4 | 2 / 4 | 2 / 4 |
+| memcached | direct malloc | plain | 9 | 9 / 9 | 8 / 9 | 9 / 9 | 9 / 9 |
+| **Total** |  | 27 n · 54 p | 81 | 46 / 81 | 41 / 81 | 56 / 81 | 56 / 81 |
 
 How each reads, and why it misses what it misses:
 
@@ -375,18 +393,12 @@ How each reads, and why it misses what it misses:
   0/23 nested temporal -- memcached 8 is the only nested crossing that leaves a malloc'd block, because
   upstream mallocs each cache.c object on its own; an arena, a pool or a carve is one block to ASan. Every silent row ran with controls that
   reported a read past, and a read after free of, a block the size of that corpus's arena.
-- **CheriBSD and PoisonCap read the same on every plain spatial row** — the PoisonCap libc rounds
-  requests to the same size classes (17 and 24 bytes to 32, measured in the same boot), so the same
-  five slack rows complete on all three. On temporal, CheriBSD's quarantine withholds the freed
-  chunk (no fault, no reuse); PoisonCap mode 0 reissues it (the defect reproduces) and mode 1 traps
-  the stale access through the poison (si_code 3) — 24 of 26 plain cases. The other two (FFmpeg
-  plain-temporal 12, tshark plain-temporal 04) completed, reading 0x30: refuted predictions,
-  recorded as such; both keep a second same-size block live across the free (N = 2, no cause
-  claimed).
-- **PoisonCap on the nested corpora needs each allocator's adapter**, exactly as Sublet needs each
-  port: with it, mode 1 catches all 23 nested temporal cases (case 22 in wm_widen, the handback), and the wmem and slab adapters'
-  per-chunk bounds catch nested spatial crossings that leave a chunk (wmem 13-21, slab 05 and 08)
-  even in mode 0.
+- **CheriBSD misses five plain spatial rows to size-class slack**: libc rounds requests to size
+  classes (17 and 24 bytes to 32), so those crossings stay inside the capability. On temporal, its
+  quarantine withholds the freed chunk (no fault, no reuse).
+- **The two PoisonCap columns** (mode 0 and mode 1 of the published PoisonCap platform, through
+  each allocator's PoisonCap adapter on the nested rows) were removed on 2026-10-10 with the
+  adapters. Their readings stay in each corpus's `results/`.
 - **Capstone bounds and Capstone + Sublet** are unchanged in kind: exact per-object bounds catch
   every plain spatial row, including the five CheriBSD slack misses; Sublet adds the temporal
   column (49/49), and nothing spatial, because a spatial bug frees nothing.
@@ -533,8 +545,10 @@ How each mechanism reads, and why it misses what it misses:
 - **Capstone + Sublet, temporal 48/48.** `free` (or the inner allocator's release, on the Sublet
   ports of FFmpeg's pools, wmem and memcached's slabs) revokes the object, and the stale access
   faults with **cause 24** at the labelled probe. **QEMU only:** capstone-qemu reloads a revoked
-  capability untagged (ISSUES Q-11); deployed silicon lets such a data access retire, so these are
-  detections on the emulator, not a silicon claim. wmem case 12 is caught by the chunk port
+  capability untagged (ISSUES Q-11), hence cause 24. On silicon an access through a revoked capability
+  traps with cause 25 (the stale-access arm on `caplifive_sublet_d93a8d66b`, 2026-10-16). These 48 are
+  the emulator's readings. The silicon readings, 49 of 49 once wmem 22 was added, are in section 0.
+  wmem case 12 is caught by the chunk port
   (`sublet-chunks`); the region-granular `sublet` build completes it.
 - **Capstone + Sublet, spatial 57/70 — the same 57 as bounds only.** Revocation has nothing to fire
   on while the object is alive; every spatial catch on this arm is the inherited per-object bound.

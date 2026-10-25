@@ -1,0 +1,13 @@
+# tier3-uaf-repeat-batch.sh 765aee09ae3aef13 dry run, 2026-10-23 08:2x: uaf-repeat.py stubbed (it prints two TALLY lines and the argv it got).
+## ok1
+UR BEGIN 08:14:05 board 1 booking 81 N=200 args --no-trace --dmesg kit bkit8-batch-b1
+UR END rc=0 08:14:05
+TALLY plain cause 25: 198
+TALLY plain cause 13: 2
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board1 DONE 08:14:05
+args: --board-kit <mnt-hdd>/capstone/t3-smoke/bkit8-batch-b1 --n 200 --no-trace --dmesg 
+## busy
+UR STOP: board 1 is busy
+## b3
+UR STOP: board 3

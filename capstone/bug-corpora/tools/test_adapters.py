@@ -3,7 +3,7 @@
     python3 -m unittest discover -s capstone/bug-corpora/tools -p 'test_*.py'
 
 The c-repros inputs are the committed console and result files of its 2026-10-06 runs; the mmgr
-inputs are lines from a 2026-10-10 serial log, quoted as the guest printed them.
+inputs are the launcher's lines from a 2026-10-10 virtual run, quoted as the guest printed them.
 """
 import importlib.util
 import json
@@ -91,6 +91,111 @@ class CRepros(unittest.TestCase):
         self.assertEqual(self.run_arm.observe_control("uaf-malloc", "", {"fault": line}), "none")
 
 
+class MmgrCaseControls(unittest.TestCase):
+    """Safe variants remain separate programs and cannot qualify a broken arm."""
+    runner = load(CORPORA / "postgres/mmgr-repros/shared/run-defects.py", "mmgr_controls")
+
+    def setUp(self):
+        self.observed = v.Observation(case="00_case", arm="virtual-pg-pools", reached=True,
+                                      fault=v.Fault(cause=24, pc=16))
+
+    def test_case_and_control_paths_are_distinct(self):
+        d = Path("00_fix_tuplestore_double_free")
+        self.assertEqual(self.runner.program(Path("build"), d),
+                         Path("build/bin/00-tuplestore-double-free"))
+        self.assertEqual(self.runner.program(Path("build"), d, control=True),
+                         Path("build/bin/00-tuplestore-double-free-control"))
+
+    def test_held_control_attributes_an_unplaced_fault(self):
+        co = v.Observation(case="", arm="", reached=True, completed=True)
+        self.runner.qualify_fault(self.observed, co)
+        self.assertEqual(v.judge(self.observed, {"controls": {}})[0], v.CAUGHT)
+        self.assertEqual(self.observed.attribution, "control")
+
+    def test_faulting_control_invalidates_even_a_labelled_fault(self):
+        self.observed.attribution = "probe"
+        co = v.Observation(case="", arm="", fault=v.Fault(cause=28, pc=32))
+        self.runner.qualify_fault(self.observed, co)
+        self.assertEqual(v.judge(self.observed, {"controls": {}})[:2],
+                         (v.NO_READING, "unattributed"))
+
+    def test_missing_unreached_and_timed_out_controls_do_not_attribute(self):
+        for co in (None, v.Observation(case="", arm="", completed=True),
+                   v.Observation(case="", arm="", reached=True, completed=True, infra="infra")):
+            with self.subTest(control=co):
+                self.runner.qualify_fault(self.observed, co)
+                self.assertEqual(v.judge(self.observed, {"controls": {}})[0], v.NO_READING)
+
+    def test_completed_control_preserves_a_declared_site(self):
+        self.observed.attribution = "function"
+        co = v.Observation(case="", arm="", reached=True, completed=True)
+        self.runner.qualify_fault(self.observed, co)
+        self.assertEqual(self.observed.attribution, "function")
+
+
+class SqlThresholdProbe(unittest.TestCase):
+    """The probe generator must reproduce what was actually run.
+
+    The bisection that attributed case 03's fault is only reproducible if the inputs are. The
+    committed control is the generator's own output at 48 variants, so the two cannot drift.
+    """
+    gen = load(CORPORA / "postgres/sql-repros/shared/make-threshold-probe.py", "pg_probe_gen")
+    CORPUS = CORPORA / "postgres/sql-repros"
+
+    def test_48_variants_is_the_committed_control(self):
+        control = next(self.CORPUS.glob("03_*")) / "control.sql"
+        sent = [ln for ln in control.read_text().splitlines()
+                if ln.strip() and not ln.lstrip().startswith("--")]
+        self.assertEqual(self.gen.probe(48).splitlines(), sent)
+
+    def test_66_variants_is_the_committed_trigger(self):
+        trigger = next(self.CORPUS.glob("03_*")) / "trigger.sql"
+        sent = [ln for ln in trigger.read_text().splitlines()
+                if ln.strip() and not ln.lstrip().startswith("--")]
+        self.assertEqual(self.gen.probe(66).splitlines(), sent)
+
+    def test_the_count_is_the_number_of_variants(self):
+        self.assertNotIn("||", self.gen.probe(1))
+        for n in (2, 48, 63, 64, 66):
+            self.assertIn(f", {n - 1}))", self.gen.probe(n))
+
+    def test_a_level_needs_at_least_one_variant(self):
+        with self.assertRaises(ValueError):
+            self.gen.probe(0)
+
+
+class CReprosCaseControl(unittest.TestCase):
+    """A case's OWN negative control, which is what attributes its fault to its defect.
+
+    Distinct from controls.dom, which asks whether the configuration reports at all. The judge
+    takes `control` as an attribution, so a fault whose control completed is CAUGHT and a fault
+    whose control faulted too is not.
+    """
+    run_arm = load(CORPORA / "postgres/c-repros/shared/run-arm.py", "c_run_arm_ctl")
+    FAULT = ("capstone-exec: domain fault cause=7 pc=0x3f88044408 address=0x1 entry=0x2 "
+             "code=0x3f88000000-0x3f89000000 last=0x4f")
+
+    def test_a_control_that_completes_holds(self):
+        text = "case 0 BEGIN\ncase 0 RETURNED\n"
+        self.assertEqual(self.run_arm.case_control("0", text, {"kind": "exit", "value": 0})[0],
+                         "held")
+
+    def test_a_control_that_faults_is_broken(self):
+        seen, why = self.run_arm.case_control(
+            "0", "case 0 BEGIN\n", {"kind": "signal", "value": 11, "fault": self.FAULT},
+            FakeSymbols("memcpy"))
+        self.assertEqual(seen, "broken")
+        self.assertIn("faults too", why)
+
+    def test_a_control_that_never_ran_gives_nothing(self):
+        self.assertEqual(self.run_arm.case_control("0", "", {"kind": "exit", "value": 0})[0], "none")
+
+    def test_a_control_that_neither_returned_nor_faulted_gives_nothing(self):
+        self.assertEqual(
+            self.run_arm.case_control("0", "case 0 BEGIN\n", {"kind": "exit", "value": 0})[0],
+            "none")
+
+
 class SqlRepros(unittest.TestCase):
     run_arm = load(CORPORA / "postgres/sql-repros/shared/run-arm.py", "sql_run_arm")
     CORPUS = CORPORA / "postgres/sql-repros"
@@ -126,6 +231,23 @@ class SqlRepros(unittest.TestCase):
                                  self.ALL)
         verdict = v.judge(o, {"controls": {}, "controls_for_missed": []})
         self.assertEqual(verdict[:2], (v.NO_READING, "setup-fault"))
+
+    def test_statements_sends_no_comment_lines(self):
+        """A control file's header must not count as statements that ran.
+
+        `postgres --single` prints a prompt per input LINE, so case 03's control showed 23
+        prompts for its one CREATE EXTENSION and a fault inside that statement would have been
+        attributed to the trigger. Raised in review on PR #198; the runner now sends statements
+        only, so the prompt count is the statement count.
+        """
+        control = next(self.CORPUS.glob("03_*")) / "control.sql"
+        raw = control.read_text().splitlines()
+        sent = self.run_arm.statements(control).splitlines()
+        self.assertGreater(len(raw) - len(sent), 20)
+        self.assertTrue(all(ln.strip() and not ln.lstrip().startswith("--") for ln in sent))
+        self.assertEqual(sent, [ln for ln in raw
+                                if ln.strip() and not ln.lstrip().startswith("--")])
+        self.assertEqual(len(sent), 2)
 
     def test_control_counts_only_a_fault_in_its_own_probe(self):
         line = ("capstone-exec: domain fault cause=24 pc=0x3f88044408 address=0x1 entry=0x2 "
@@ -198,36 +320,36 @@ class Sqlite(unittest.TestCase):
 
 class Mmgr(unittest.TestCase):
     mmgr = load(CORPORA / "postgres/mmgr-repros/shared/run-defects.py", "mmgr_run")
-    SERIAL = """[CAPSTONE] Print = Scalar(0xcf18000000000002)
-[CAPSTONE] Print = Cap(1, 0x7, 0x101a1280c, 0x101a00000, 0x101ae9800)
-[CAPSTONE] Print = Cap(1, 0x7, 0x101a1287c, 0x101a00000, 0x101ae9800)
-[CAPSTONE] domain halted by capability fault: cause = 24, pc = 0x101a1280c, tval = 0x0, badaddr = 0x0
-"""
+    FAULT = ("capstone-exec: domain fault cause=24 pc=0x3f9d810ba8 address=0x3f98e1e050 "
+             "entry=0x3f9d800890 code=0x3f9d800000-0x3f9da00000 last=0x42 preparing=0x42")
+    TEXT = f"PG_DEFECT case=3 ready\ncapstone-vm: {FAULT}\ncapstone-vm: application terminated by signal 11\n"
+    RESULT = {"kind": "signal", "value": 11, "fault": FAULT, "image_sha256": "0" * 64}
 
-    def observe(self, serial, sites=()):
-        self.mmgr.SYMBOLS = {"img": FakeSymbols("pg_probe")}
-        orig = v.sha256
-        self.mmgr.v.sha256 = lambda p: "0" * 64
-        try:
-            return self.mmgr.observe(serial, 2, 1, "img", set(sites))
-        finally:
-            self.mmgr.v.sha256 = orig
+    def observe(self, text, result, symbol="pg_probe", sites=()):
+        return self.mmgr.observe_hosted(3, text, result, FakeSymbols(symbol), set(sites))
 
-    def test_fault_at_the_published_probe(self):
-        o = self.observe(self.SERIAL)
+    def test_fault_in_the_probe(self):
+        o = self.observe(self.TEXT, self.RESULT)
         self.assertEqual((o.reached, o.attribution, o.fault.cause), (True, "probe", 24))
 
+    def test_fault_at_a_declared_site(self):
+        o = self.observe(self.TEXT, self.RESULT, "SubletRelease", {"SubletRelease"})
+        self.assertEqual(o.attribution, "function")
+
     def test_fault_elsewhere_is_unattributed(self):
-        o = self.observe(self.SERIAL.replace("pc = 0x101a1280c", "pc = 0x101a05cf0"))
-        self.assertIsNone(o.attribution)
+        self.assertIsNone(self.observe(self.TEXT, self.RESULT, "AllocSetAlloc").attribution)
 
-    def test_delivered_fault_needs_the_launcher_death(self):
-        serial = self.SERIAL.replace("domain halted by capability fault", "domain capability fault delivered")
-        self.assertIsNone(self.observe(serial).fault)
-        self.assertIsNotNone(self.observe(serial + "__EXIT_CODE__139\n").fault)
+    def test_completion_without_fault(self):
+        o = self.observe("PG_DEFECT case=3 ready\nPG_DEFECT case=3 mode=0 completed\n",
+                         {"kind": "exit", "value": 0})
+        self.assertEqual((o.reached, o.completed, o.fault), (True, True, None))
 
-    def test_no_serial_is_infra(self):
-        self.assertEqual(self.observe("").infra, "infra")
+    def test_control_failure_is_infra(self):
+        o = self.observe("CONTROL-FAILED fixture is case 3, run asked for 4\n", {"kind": "exit", "value": 75})
+        self.assertEqual(o.infra, "infra")
+
+    def test_no_output_is_infra(self):
+        self.assertEqual(self.observe("", {"kind": "exit", "value": 1}).infra, "infra")
 
 
 if __name__ == "__main__":
@@ -346,14 +468,14 @@ class VirtualHosted(unittest.TestCase):
             t = Path(t)
             sdk = t / "sdk"
             sdk.mkdir()
-            (t / "CMakeCache.txt").write_text(f"WM_SUBLET:BOOL=ON\nWM_CHUNKS:BOOL=ON\nCAPSTONE_SDK:PATH={sdk}\n"
+            (t / "CMakeCache.txt").write_text(f"WM_SUBLET:BOOL=ON\nCAPSTONE_SDK:PATH={sdk}\n"
                                               "PORT_PLATFORM:STRING=capstone-application\n")
             want = self.rv.HOSTED["wmem-repros"]["cache"]
             self.assertEqual(self.rv.cache_says(t, want["virtual-nested-pools"], sdk), "")
-            self.assertIn("WM_LIBC_SYSTEM", self.rv.cache_says(t, want["virtual-malloc"], sdk))
+            self.assertIn("WM_SUBLET", self.rv.cache_says(t, want["virtual-malloc"], sdk))
             self.assertIn("CAPSTONE_SDK", self.rv.cache_says(t, want["virtual-nested-pools"], t))
 
-    def test_memcached_cache_lives_in_the_port_work_dir_and_names_its_ledger(self):
+    def test_memcached_cache_lives_in_the_port_work_dir_and_names_its_variant(self):
         import tempfile
         with tempfile.TemporaryDirectory() as t:
             t = Path(t)
@@ -374,11 +496,11 @@ class VirtualHosted(unittest.TestCase):
         link = 0x10234 - 0x10000 + sym.base
         text = "WM_DEFECT case=22 ready\n" + self.FAULT
         o = self.rv.observe_hosted("22", "1", text, {"kind": "signal", "value": 11}, sym, None, self.READY,
-                                   self.DONE, False, ("wm_widen", "wm_widen_probe"), {"wm_widen_probe": link})
+                                   self.DONE, False, ("alloc_free", "alloc_handback_probe"), {"alloc_handback_probe": link})
         o.controls = [v.Control("c", "fault", "")]
         self.assertEqual(v.judge(o, self.CTL)[0], v.CAUGHT)
         off = self.rv.observe_hosted("22", "1", text, {"kind": "signal", "value": 11}, sym, None, self.READY,
-                                     self.DONE, False, ("wm_widen", "wm_widen_probe"), {"wm_widen_probe": link + 4})
+                                     self.DONE, False, ("alloc_free", "alloc_handback_probe"), {"alloc_handback_probe": link + 4})
         off.controls = [v.Control("c", "fault", "")]
         self.assertEqual(v.judge(off, self.CTL)[:2], (v.NO_READING, "unattributed"))
 
@@ -391,14 +513,14 @@ class VirtualHosted(unittest.TestCase):
             (d / "case.json").write_text("{}\n")
             with self.assertRaises(SystemExit):
                 self.rv.wmem_probe(d)
-            (d / "case.json").write_text('{"fault_sites": ["wm_widen"]}\n')
+            (d / "case.json").write_text('{"fault_sites": ["wmem_block_sublet_free"]}\n')
             self.assertIsNone(self.rv.wmem_probe(d))
 
     def test_port_controls_run_unobserved(self):
         w, m = self.rv.HOSTED["wmem-repros"], self.rv.HOSTED["allocator-repros"]
-        self.assertEqual(self.rv.port_control_argv(w, "virtual-malloc", "0", "91"), ["0", "91"])
-        self.assertEqual(self.rv.port_control_argv(w, "virtual-nested-pools", "1", "90"), ["1", "90"])
-        self.assertEqual(self.rv.port_control_argv(m, "virtual-nested-pools", "1", "90"), ["buggy", "90", "1"])
+        self.assertEqual(self.rv.port_control_argv(w, "virtual-malloc", "0", "1"), ["0", "1"])
+        self.assertEqual(self.rv.port_control_argv(w, "virtual-nested-pools", "0", "2"), ["0", "2"])
+        self.assertEqual(self.rv.port_control_argv(m, "virtual-nested-pools", "1", "90"), ["buggy", "90"])
 
     def test_control_evidence_is_a_line_not_a_character(self):
         self.assertEqual(self.rv.evidence_line({"fault": "capstone-exec: domain fault cause=24"}, ""),
@@ -408,3 +530,38 @@ class VirtualHosted(unittest.TestCase):
     def test_stem_matches_the_ports_program_name(self):
         self.assertEqual(self.rv.stem(Path("13_0261fd7da6_http_range_cursor_past_chunk")),
                          "13-http-range-cursor-past-chunk")
+
+
+class CpythonMemoryError(unittest.TestCase):
+    """allocator-boundary-repros' MemoryError rule, on lt0 13's own output (b2twin2-q8, 2026-10-22, as the guest
+    printed it): undeclared, a MemoryError is capacity; declared by the case, it is the defect running unseen."""
+    rv = load(CORPORA / "cpython/allocator-boundary-repros/runners/virtual/run-virtual.py", "cpy_run_virtual")
+    TEXT = ("ABR BEGIN\nERROR\n\nERROR: test_non_str_kwarg (__main__.ASTConstructorTests.test_non_str_kwarg)\n"
+            "Traceback (most recent call last):\n  File \"upstream_test.py\", line 3150, in test_non_str_kwarg\n"
+            "    ast.Name(**{object(): 'y'})\nMemoryError\n\nRan 1 test in 1.093s\n\nFAILED (errors=1)\nABR EXIT 1\n")
+    RESULT = {"kind": "exit", "value": 1}
+    CONTROLS = [v.Control("bounds-malloc", "fault"), v.Control("uaf-malloc", "fault")]
+
+    def judged(self, o):
+        o.controls = list(self.CONTROLS)
+        return v.judge(o, {"controls": {"bounds-malloc": "fault", "uaf-malloc": "fault"},
+                           "controls_for_missed": ["bounds-malloc", "uaf-malloc"]})
+
+    def test_undeclared_memory_error_is_capacity(self):
+        o = self.rv.observe(self.TEXT, self.RESULT, FakeSymbols("main"), set())
+        self.assertEqual((o.infra, o.notes), ("infra", "capacity: MemoryError"))
+        self.assertEqual(self.judged(o)[:2], (v.NO_READING, "infra"))
+
+    def test_declared_memory_error_is_the_defect_unseen(self):
+        o = self.rv.observe(self.TEXT, self.RESULT, FakeSymbols("main"), set(), "the measured reason")
+        self.assertIsNone(o.infra)
+        self.assertTrue(o.reached and o.completed)
+        self.assertIn("the measured reason", o.notes)
+        self.assertEqual(self.judged(o)[:2], (v.MISSED, None))
+
+    def test_declaration_does_not_mask_a_fault(self):
+        result = dict(self.RESULT, fault="capstone-exec: domain fault cause=28 pc=0x3f00001000 address=0x0 "
+                                         "entry=0x3f00000868 code=0x3f00000000-0x3f00080000")
+        o = self.rv.observe(self.TEXT, result, FakeSymbols("unicode_fromformat_write_str"),
+                            {"unicode_fromformat_write_str"}, "the measured reason")
+        self.assertEqual(self.judged(o)[0], v.CAUGHT)

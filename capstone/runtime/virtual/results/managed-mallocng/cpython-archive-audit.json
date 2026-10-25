@@ -1,0 +1,10 @@
+{
+  "source": "capstone/ports/cpython/app/results/2026-10-11-same-answers/outcomes-sharded.json",
+  "sha256": "6840efb87c765e689a4473a3355a4b53bd52f4c7849741dba9b9e2cf454cf11a",
+  "scope": "Recomputed archived outcome comparison, not a fresh interpreter test campaign",
+  "compared": 2183,
+  "only_stock": [],
+  "only_protected": [],
+  "differences": [],
+  "recorded_summary_matches": true
+}

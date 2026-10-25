@@ -89,6 +89,15 @@ static cl::opt<bool>
                    cl::desc("Enable sinking and folding of instruction copies"),
                    cl::init(true), cl::Hidden);
 
+// On by default. Off restores the PseudoTRUNC_CAP integer write before every
+// reader of an extracted address, so a board regression can be bisected to
+// this pass without a rebuild.
+static cl::opt<bool> EnableCursorReadFold(
+    "capstone-enable-cursor-read-fold", cl::Hidden,
+    cl::desc("Read an extracted capability address straight from the "
+             "capability register when every reader is an ALU op or compare"),
+    cl::init(true));
+
 static cl::opt<bool>
     EnableLoopDataPrefetch("capstone-enable-loop-data-prefetch", cl::Hidden,
                            cl::desc("Enable the loop data prefetch pass"),
@@ -116,6 +125,7 @@ extern "C" LLVM_ABI LLVM_EXTERNAL_VISIBILITY void LLVMInitializeCapstoneTarget()
   initializeCapstonePostLegalizerCombinerPass(*PR);
   initializeKCFIPass(*PR);
   initializeCapstoneDeadRegisterDefinitionsPass(*PR);
+  initializeCapstoneCursorReadFoldPass(*PR);
   initializeCapstoneLateBranchOptPass(*PR);
   initializeCapstoneMakeCompressibleOptPass(*PR);
   initializeCapstoneGatherScatterLoweringPass(*PR);
@@ -656,6 +666,12 @@ void CapstonePassConfig::addMachineSSAOptimization() {
   if (TM->getTargetTriple().isCapstone64()) {
     addPass(createCapstoneOptWInstrsPass());
   }
+
+  // Last of the machine SSA optimisations: the combiner's reassociation, the
+  // peepholes and the W-instruction rewrites are done, so the pass judges
+  // readers in the shape the register allocator will see.
+  if (EnableCursorReadFold)
+    addPass(createCapstoneCursorReadFoldPass());
 }
 
 void CapstonePassConfig::addPreRegAlloc() {

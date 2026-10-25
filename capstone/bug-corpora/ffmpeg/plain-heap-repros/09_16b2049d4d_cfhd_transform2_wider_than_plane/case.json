@@ -25,24 +25,6 @@
       "platform": "Capstone application VM on capstone-qemu 32e7c9754f9a, kernel e58613598c89, firmware 6f2b082cb677, capstone-exec 0752aa7c49c9, module a88ed2159b43; SDK heap=sublet runtime b73508e5005b; compiler 7d01722aab88",
       "verdict": "CAUGHT"
     },
-    "poisoncap-spatial": {
-      "mode": 0,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode0/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x102176 pc=0x102176; fault pc 0x102176 INSIDE ffh_write_probe_u8 [0x10215e, 0x102182). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=0; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
-      "status": "measured",
-      "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault; on CheriBSD that is conditional on the usable size for this request, which is a step function and must be read in-guest.",
-      "verdict": "CAUGHT",
-      "platform": "PoisonCap mode 0: the rebuilt published PoisonCap platform (CHERI-PURECAP-QEMU-POISON kernel, libc with the mrs poison-retire fix), runtime revocation OFF (booted on the second host)"
-    },
-    "poisoncap-protected": {
-      "mode": 1,
-      "signal": 34,
-      "si_code": 1,
-      "oracle": "MEASURED 2026-10-09, results/2026-10-09-poisoncap-mode1/: **CAUGHT**: SIGPROT, si_code 1 (PROT_CHERI_BOUNDS), addr=0x102176 pc=0x102176; fault pc 0x102176 INSIDE ffh_write_probe_u8 [0x10215e, 0x102182). The fixed arm of the same binary exits 0 with VERDICT FIXED. Platform controls fired in the same boot (cheribsd-abi: CHERI_ABI pointer_bytes=16 runtime_revocation=1; cheribsd-bounds: CHERI_BOUNDARY_READY). Predicted before the run (the corpus's committed predictions and 2852edcdd747 (size-class slack)).",
-      "status": "measured",
-      "prediction": "PREDICTED, not measured: added after this corpus's last platform run. The crossing leaves a direct allocation, so a per-allocation bound SHOULD fault; on CheriBSD that is conditional on the usable size for this request, which is a step function and must be read in-guest.",
-      "verdict": "CAUGHT",
-      "platform": "PoisonCap mode 1: the same platform with runtime revocation ON -- poison on free, then revocation (booted on the second host)"
-    },
     "cheribsd-revocation": {
       "signal": 34,
       "si_code": 1,
@@ -89,9 +71,27 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=28 pc=0x3fa0e90be8 in ffh_write_probe_u8; by probe: the fault is at the labelled probe ffh_write_probe_u8",
       "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "silicon-level0": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b): the same silicon-ABI build and board run with level0 as it ships (tools/arms.json silicon-level0, the bounds-only control arm). A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's oob control faulted and its uaf control completed. Pre-registered in silicon-predictions/2026-10-16-plain: CAUGHT, per-object bounds at the request size (cause 28).",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac081148 in ffh_write_probe_u8; by probe: the fault is at the labelled probe ffh_write_probe_u8",
+      "verdict_from": "results/2026-10-16-silicon/silicon-level0"
+    },
+    "silicon-lifetimes": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b): the case built for the silicon ABI and run as a delegated application, its heap level0 with CAPSTONE_LEVEL0_LIFETIMES (tools/arms.json silicon-level0-lifetimes; built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py). A fault at the case's labelled probe or a declared fault site, after its fixed run printed VERDICT FIXED and exited 0, is CAUGHT. Completing with VERDICT DEFECT-REPRODUCED is MISSED, provided the boot's oob and uaf controls both faulted. Pre-registered in silicon-predictions/2026-10-16-plain: CAUGHT, the child at the request size being exact (the RTL reports cause 28, OUT_OF_BOUNDS).",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac081148 in ffh_write_probe_u8; by probe: the fault is at the labelled probe ffh_write_probe_u8",
+      "verdict_from": "results/2026-10-16-silicon/silicon-lifetimes"
+    },
+    "vp2-malloc": {
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f98e10a08 in ffh_write_probe_u8; by probe: the fault is at the labelled probe ffh_write_probe_u8",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+      "oracle": "virtual profile, the program's allocator stock on virtual mallocng (tools/arms.json virtual-mallocng; tools/run-virtual-cases.py): a fault at the case's labelled probe or a declared fault site, with its FIXED arm completing on the same image, or the case completes and this arm did not see it"
     }
   },
-  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT. poisoncap-spatial measured 2026-10-09 (results/2026-10-09-poisoncap-mode0/): CAUGHT. poisoncap-protected measured 2026-10-09 (results/2026-10-09-poisoncap-mode1/): CAUGHT.",
+  "status": "built 2026-10-08; native arms measured by runners/run-native.sh in the same commit. The platform arms are declared predictions. Capstone measured 2026-10-09 (results/2026-10-09-capstone/): spatial CAUGHT, sublet CAUGHT. capstone-subobject measured 2026-10-09 (results/2026-10-09-capstone-subobject/): CAUGHT. cheribsd-subobject measured 2026-10-09 (results/2026-10-09-cheribsd-subobject/): CAUGHT.",
   "nested": false,
   "nested_why": "the crossed buffer came straight from the platform allocator with no inner allocator between, so under this inventory's axis -- WHO ALLOCATED THE OBJECT -- this row is NOT nested.",
   "distinguishing": "the crossing length is a MULTIPLE of a stream-declared value rather than the value itself -- the transform doubles it -- so a guard on the declared width alone does not bound the write."

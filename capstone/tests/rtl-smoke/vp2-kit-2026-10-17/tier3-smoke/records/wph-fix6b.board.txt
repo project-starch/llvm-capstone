@@ -1,0 +1,38 @@
+# Tier 3 board reading, arm wph-fix6b: kit bkit7-fix6t (module d71f207a3af5546b, the S-27 workaround; batch budget 300 s per step), pin off, SDK t3-freeze-nb. Result lines only.
+# arm vp2-malloc configuration virtual-mallocng platform board:caplifive_vp2_bf3db3175 cells 12 tally {"CAUGHT": 12}
+# controls [["bounds-malloc", "fault"], ["uaf-malloc", "fault"]]
+00_19c51d27b9_netscaler_record_past_page image c8d460fcb71f552e CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+01_373504f7c9_dfvm_error_message_wrong_index image 999dc9d11795d55d CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+02_381681583b_pcapng_nrb_custom_string_over_copy image a86e51dbc7d1c9cc CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+03_c556b648aa_strptime_reads_past_null_timezone image a94d6c7e31419fc4 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+04_87803328179_blf_apptext_sized_without_terminator image 4302e619175e8c24 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+05_140aad08e081_nettrace_packet_buf_scanned_by_strstr image a408585b2a361f85 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+06_3aad1ef236e6_t61_accent_branch_reads_the_following_byte image 9e64d27b8ff014a4 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+07_e2ca71beaed2_uat_unbinstring_leaves_no_terminator image a0bc8b8b94b887f9 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+08_0cae98570ebc_cl_find_custom_memcmp_reads_the_prefix_length image 345fcf64dd28bc79 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+09_bf123efe154d_uat_oid_empty_field_underflows_the_index image ab286b3e06cf6cb9 CAUGHT cause 28 at wsh_read_probe+56 reached True completed False attribution "probe"
+10_e9b933473e8f_address_to_str_buf_clamps_to_size_not_last_index image 6696564e3feb1b9f CAUGHT cause 28 at wsh_write_probe+88 reached True completed False attribution "probe"
+11_4b15bf76a7f7_oid_to_str_buf_tail_reservation_one_short image c3bb2f5ba0e7795d CAUGHT cause 28 at wsh_write_probe+88 reached True completed False attribution "probe"
+## compare-pilot.py <prediction bundle> <board bundle>
+  SAME 00_19c51d27b9_netscaler_record_past_page: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 01_373504f7c9_dfvm_error_message_wrong_index: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 02_381681583b_pcapng_nrb_custom_string_over_copy: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 03_c556b648aa_strptime_reads_past_null_timezone: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 04_87803328179_blf_apptext_sized_without_terminator: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 05_140aad08e081_nettrace_packet_buf_scanned_by_strstr: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 06_3aad1ef236e6_t61_accent_branch_reads_the_following_byte: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 07_e2ca71beaed2_uat_unbinstring_leaves_no_terminator: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 08_0cae98570ebc_cl_find_custom_memcmp_reads_the_prefix_length: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 09_bf123efe154d_uat_oid_empty_field_underflows_the_index: verdict CAUGHT cause 28 pc wsh_read_probe+56
+  SAME 10_e9b933473e8f_address_to_str_buf_clamps_to_size_not_last_index: verdict CAUGHT cause 28 pc wsh_write_probe+88
+  SAME 11_4b15bf76a7f7_oid_to_str_buf_tail_reservation_one_short: verdict CAUGHT cause 28 pc wsh_write_probe+88
+  12 of 12 cells the same
+## the boot
+  T3SEQ wph-fix6b BEGIN 01:10:22 wireshark/plain-heap-repros virtual-malloc 
+  T3SEQ wph-fix6b END 01:20:14 rc=0 :: virtual boot: completed :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 12}
+  T3SEQ wph-fix6b PAYLOAD stage 3446596 B, 1380578 B gzip; firmware 19565064 B
+  BOARD_RUN_START 01:10:25 bitstream caplifive_vp2_bf3db3175 monitor 007d81d
+  manifest 22 files, stage 3446596 bytes
+  firmware 7d5fa5a92c709ee3 19565064 B
+  DRIVER rc=0 01:20:14
+  BOARD_RUN_DONE 01:20:14

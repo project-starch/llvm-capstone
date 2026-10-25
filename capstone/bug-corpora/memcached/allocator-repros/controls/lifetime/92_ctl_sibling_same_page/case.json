@@ -1,0 +1,17 @@
+{
+  "case": 92,
+  "title": "CONTROL (sibling): A and B from the same slab page, A freed with slabs_free, B read and written through B, B's header and data intact",
+  "variants": {
+    "sibling": "the only sequence"
+  },
+  "arms": {
+    "virtual-malloc": {
+      "oracle": "complete, B intact"
+    },
+    "virtual-nested-pools": {
+      "oracle": "complete, B intact"
+    }
+  },
+  "control_for": "the lifetime patch 0006 (virtual-nested-pools) leaves permitted accesses alone; pre-registered in capstone/docs/plans/2026-10-11-nested-lifetime-controls.md",
+  "run": "ctl-92 92 VARIANT, built by controls/lifetime/build-controls.sh, run by controls/lifetime/run-controls.py"
+}

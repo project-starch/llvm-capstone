@@ -15,7 +15,10 @@ p.add_argument("sha256")
 p.add_argument("version")
 p.add_argument("destination", type=Path)
 p.add_argument("--patch-tool", default="patch")
-p.add_argument("--variant", choices=("ported", "reference"), default="ported")
+# ported: the patches that make pymalloc run as a standalone, capability-correct
+# allocator (0001, 0002). protected: also 0003, the Sublet protection.
+# reference: 0001 only, the native comparison build.
+p.add_argument("--variant", choices=("ported", "protected", "reference"), default="ported")
 a = p.parse_args()
 with a.archive.open("rb") as stream:
     if hashlib.file_digest(stream, "sha256").hexdigest() != a.sha256:
@@ -32,6 +35,8 @@ with tempfile.TemporaryDirectory(dir=a.destination.parent) as temporary:
         p.error("missing allocator patch series")
     for patch in patches:
         if a.variant == "reference" and "-0001-" not in patch.name:
+            continue
+        if a.variant == "ported" and "-0003-" in patch.name:
             continue
         subprocess.run(
             [a.patch_tool, "--batch", "--forward", "--fuzz=0", "-p1", "-i", str(patch)],

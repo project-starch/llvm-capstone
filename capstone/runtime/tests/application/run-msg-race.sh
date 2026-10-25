@@ -16,7 +16,7 @@ trap 'capstone-vm --state "$VM" down > /dev/null 2>&1' EXIT
 for attempt in $(seq 1 2400); do
   rm -rf "$VM"
   # shellcheck disable=SC2086
-  capstone-vm --state "$VM" up $CAPSTONE_VM_UP_ARGS --share "$OUT/share" --boot-timeout 600 > "$OUT/up.log" 2>&1 && break
+  capstone-vm --state "$VM" up $CAPSTONE_VM_UP_ARGS --profile physical --share "$OUT/share" --boot-timeout 600 > "$OUT/up.log" 2>&1 && break
   grep -q "Another Capstone VM owns" "$OUT/up.log" || { tail -3 "$OUT/up.log"; exit 3; }
   sleep 3
 done

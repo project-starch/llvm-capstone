@@ -1,0 +1,17 @@
+# cpython lt0 18 / lt1 18 with application mremap on the batch bitstream c721c1a2a (tier3-c18-batch.sh): result lines only.
+C18 lt0 BEGIN 12:19:44 board 1 kit bkit8-batch-nb1 image 7b871db70b7ec373 booking 176
+C18 lt0 END rc=0 12:37:47 :: calls 1 ran 1 completed True
+C18 reference: {'exit': ('signal', 11), 'cause': 28, 'function': 'mmap_ass_subscript', 'high_water': 6095, 'allocated_total': 16326, 'capacity': 65536, 'tail': ['capstone-exec: domain fault cause=28 pc=0x3ff659edf0 address=0x3ff5f7afff entry=0x3ff6000868 code=0x3ff6000000-0x3ff7000000 last=0x4f preparing=0x4f sha256=7b871db70b7ec37348cbfcd4a6678fa705a9eb9353500e1a0bd9f41a22e9faac image=/mnt/vm/images/cpython-7b871db70b7ec373.dom', 'Segmentation fault']}
+C18 board:     {'exit': ('signal', 11), 'cause': 28, 'function': 'mmap_ass_subscript', 'high_water': 6095, 'allocated_total': 16329, 'capacity': 65536, 'tail': ['capstone-exec: domain fault cause=28 pc=0x3ff659edf0 address=0x3ff5f4dfff entry=0x3ff6000868 code=0x3ff6000000-0x3ff7000000 last=0x4f preparing=0x4f sha256=7b871db70b7ec37348cbfcd4a6678fa705a9eb9353500e1a0bd9f41a22e9faac image=/test-domains/vbatch/images/cpython-7b871db70b7ec373.dom', 'Segmentation fault']}
+C18 COMPARE: board completed True; fields differing ['allocated_total']
+C18 lt0 COMPARE rc=1
+C18 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+C18 lt0 board1 DONE 12:37:47
+C18 lt1 BEGIN 12:19:44 board 2 kit bkit8-batch-nb2 image 8bcc40cf13731e12 booking 177
+C18 lt1 END rc=0 12:36:24 :: calls 1 ran 1 completed True
+C18 reference: {'exit': ('exit', 1), 'cause': None, 'function': None, 'high_water': 64014, 'allocated_total': 189444, 'capacity': 65536, 'tail': ['  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked', 'SystemError: error return without exception set']}
+C18 board:     {'exit': ('exit', 1), 'cause': None, 'function': None, 'high_water': 64011, 'allocated_total': 188809, 'capacity': 65536, 'tail': ['  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked', 'SystemError: error return without exception set']}
+C18 COMPARE: board completed True; fields differing ['high_water', 'allocated_total']
+C18 lt1 COMPARE rc=1
+C18 readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+C18 lt1 board2 DONE 12:36:24

@@ -14,15 +14,11 @@
  * explicitly does not put in a domain. Each case names its upstream fix; the
  * per-case PROVENANCE.md says line by line what was reduced.
  *
- * TWO TARGETS, SAME SEQUENCES. With PYMALLOC_POISONCAP a case builds as an
- * ordinary CheriBSD purecap program against the port's PoisonCap adapter, and
- * keeps the same two modes: mode 0 is request-bounded spatial authority with
- * no per-object invalidation and must COMPLETE, mode 1 adds lifetime
- * invalidation and must FAULT. Only three things differ, and none of them is a
- * case: the probes become capability-base accesses (clbu/csb) so the label
- * sits on an instruction the trap PC can be compared against, the markers
- * become printed lines instead of Capstone marker instructions, and a SIGPROT
- * handler turns the fault into one machine-readable line before re-raising.
+ * TARGETS. The same sequences build for the virtual Capstone profile (the
+ * capstone-application preset, with and without the port's patch 0003), for
+ * stock CheriBSD purecap and natively. Only the probe instructions differ: on
+ * a purecap ABI they are capability-base accesses (clbu/csb), so the label
+ * sits on an instruction a fault's pc can be compared against.
  *
  * SIZE. Every block is well under pymalloc's 512-byte threshold, so all of it
  * is pool memory that never reaches malloc. Cases 6, 10 and 19 have upstream
@@ -34,11 +30,6 @@
 #define PYC_CORPUS_H
 #include "port.h"
 #include <string.h>
-#ifdef PYMALLOC_POISONCAP
-/* The hosted CheriBSD/PoisonCap build only. The Capstone domain build is
- * freestanding and has none of these. */
-#include <cheri/cheric.h>
-#endif
 
 #define CHECK(x, n)                                                            \
   do {                                                                         \
@@ -58,17 +49,11 @@ static volatile unsigned char *held;
 __attribute__((noinline)) static unsigned
 read_probe(const volatile unsigned char *p) {
   unsigned long value;
-#if defined(PYMALLOC_POISONCAP) || defined(__CHERI_PURE_CAPABILITY__)
-  /* Capability-base byte load. The label sits ON the faulting instruction, so
-   * the SIGPROT handler can require the fault here rather than anywhere in the
-   * program; a "C" operand keeps the stale capability itself as the base.
-   *
-   * The condition is the ABI and not one platform: on ANY purecap target a
-   * pointer is a capability and cannot be held in an integer register, so an
-   * "r" operand fails to compile ("couldn't allocate input reg for constraint
-   * 'r'"). It read PYMALLOC_POISONCAP alone until 2026-10-08, which is one
-   * reason stock CheriBSD had never been built for this corpus. The Capstone
-   * domain target does not define the macro and keeps the integer form. */
+#if defined(__CHERI_PURE_CAPABILITY__)
+  /* Capability-base byte load. The label sits ON the faulting instruction; a
+   * "C" operand keeps the stale capability itself as the base. On a purecap
+   * ABI a pointer cannot be held in an integer register, so an "r" operand
+   * fails to compile there. */
   __asm__ volatile(".globl pyc_defect_read\npyc_defect_read:\nclbu %0, 0(%1)\n"
                    : "=r"(value)
                    : "C"(p)
@@ -82,14 +67,11 @@ read_probe(const volatile unsigned char *p) {
   return value;
 }
 
-/* No case writes, so nothing calls this. It is kept alive explicitly because
- * the label must exist: on the Capstone target mark() publishes the address of
- * pyc_defect_write, and with one program per case there is no longer a
- * `(void)write_probe;` at the end of a shared defect() to hold the reference.
- * Without `used`, --gc-sections drops the function and the link fails. */
+/* No case writes, so nothing calls this; `used` keeps the pyc_defect_write
+ * label in the image for any case that does. */
 __attribute__((used, noinline)) static void write_probe(volatile unsigned char *p) {
   unsigned long value = 93;
-#if defined(PYMALLOC_POISONCAP) || defined(__CHERI_PURE_CAPABILITY__)
+#if defined(__CHERI_PURE_CAPABILITY__)
   __asm__ volatile(".globl pyc_defect_write\npyc_defect_write:\n"
                    "csb %0, 0(%1)\n" ::"r"(value),
                    "C"(p)
@@ -102,35 +84,10 @@ __attribute__((used, noinline)) static void write_probe(volatile unsigned char *
 #endif
 }
 
-/* Publish the case and both probe addresses, so the host knows which
- * instruction a fault is allowed to be at. On CheriBSD the addresses travel
- * with the fault instead: the handler compares the trap PC against the
- * pyc_defect_read label itself, so the marker only has to say that the case
- * reached its critical access. */
-static void mark(unsigned which) {
-#ifdef PYMALLOC_DOMAIN
-  extern void pyc_defect_read(void), pyc_defect_write(void);
-  unsigned long code = 0xcf19000000000000UL | which;
-  __asm__ volatile(".insn r 0x5b, 0x1, 0x43, x0, %0, x0\n"
-                   ".insn r 0x5b, 0x1, 0x43, x0, %1, x0\n"
-                   ".insn r 0x5b, 0x1, 0x43, x0, %2, x0\n" ::"r"(code),
-                   "r"(pyc_defect_read), "r"(pyc_defect_write)
-                   : "memory");
-#else
-  /* Nothing to publish anywhere else, and -- the reason this is keyed on
-   * PYMALLOC_DOMAIN rather than on "not PoisonCap", as its three sibling
-   * corpora already are -- the marker instructions MUST NOT be emitted off
-   * the freestanding domain. Their oracle is the monitor reading them; there
-   * is no monitor in a hosted build. On CheriBSD the supervisor observes the
-   * fault from outside (signal, si_code and PC from the kernel, the expected
-   * address from the child's map and the ELF), and in the virtual address
-   * space the launcher reports the fault and the runner resolves the probe
-   * from the image. Emitting them hosted on Capstone made all twenty cases
-   * stop with cause 2, ILLEGAL_INST, before any case had run: QEMU's U-mode
-   * decoder does not implement that custom opcode. Measured 2026-10-07. */
-  (void)which;
-#endif
-}
+/* The point a case reaches just before its stale access. Runners observe the
+ * fault from outside -- the launcher or the CheriBSD supervisor -- and resolve
+ * its pc against pyc_defect_read in the image, so nothing is published. */
+static void mark(unsigned which) { (void)which; }
 
 /* An odict node: a link the loop follows, and a payload. Sized so the whole
  * node is one pymalloc block. */

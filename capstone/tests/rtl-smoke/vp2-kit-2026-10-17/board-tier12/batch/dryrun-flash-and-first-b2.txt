@@ -1,0 +1,19 @@
+# flash-and-first-b2.sh dry run, 2026-10-22 14:19, all external steps stubbed; the stubs print the FPGA_BOARD and URL file they were handed.
+FB arm ended 14:19:04
+FB board 2 free 14:19:04
+STORE stub: FPGA_BOARD=2 url_file=fpga-console-url-board2
+STORE stub: FPGA_BOARD=2 url_file=fpga-console-url-board2
+FB FLASH BEGIN 14:19:04 booking 997 # book 2 30 vp2 batch c721c1a2a REFLASH (board 2, the lead's word)
+FLASH-STUB board=2 url=fpga-console-url-board2 args caplifive_vp2c_c721c1a2a.bit
+997 # unbook 997 # book 2 30 vp2 batch c721c1a2a REFLASH (board 2, the lead's word)
+FB FLASH END rc=0 14:19:04
+MK kit <scratch>/fb/kits-b2/bkit8-batch-b2: board.env diff against <mnt-hdd>/capstone/t3-smoke/bkit7-rev2xBDN2:
+< BOARD_BITSTREAM=caplifive_vp2c_8de3c48cf
+> BOARD_BITSTREAM=caplifive_vp2c_c721c1a2a
+< BOARD_FW_MON=/tmp/capstone/csbi-drt
+< BOARD_MONITOR_COMMIT=f13dbc5
+> BOARD_FW_MON=/tmp/capstone/csbi-batch
+> BOARD_MONITOR_COMMIT=d9da397
+MK module 21fbfc397e7c7a42 DONE
+FB FIRST rc=0 14:19:04; SEQ:
+FB DONE 14:19:04

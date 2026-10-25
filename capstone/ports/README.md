@@ -16,8 +16,7 @@ For the four newer allocator components, start with the
 [shared CheriBSD guide](common/host/cheribsd/README.md): one purecap toolchain,
 matching `host/cheribsd/build.sh` and `run.sh` scripts, CMake library targets,
 and standalone link examples. The guide states the protection boundary of
-each adapter. The experimental FFmpeg PoisonCap adapter has its own platform
-and validation workflow linked from that guide.
+each adapter.
 
 ## Components
 
@@ -26,7 +25,7 @@ and validation workflow linked from that guide.
 | SQLite | In-memory SQL workloads and memsys5/lookaside lifetime experiments | [SQLite](sqlite/README.md), [Sublet](sqlite/sublet/README.md); existing shell drivers |
 | MicroPython | Freestanding interpreter and GC test workloads | [MicroPython](micropython/README.md); existing shell drivers |
 | nginx | Pool allocator replay, pool/block lifetime and stale-access probes; not a web server | [Domain runner](nginx/run-nginx-domain.sh), [Sublet runner](nginx/run-nginx-subpool.sh); existing shell drivers |
-| APR | Pool allocator in a Capstone domain with a Sublet adapter, and apr-util's bucket allocator carried on top of it (`-DAPRP_BUCKETS=ON`); a stock CheriBSD build against the platform's own malloc and a PoisonCap build; for the httpd/APR pool and bucket defect corpora; not httpd, not threaded pools | [pools](apr/pools/README.md); shared CMake layout. The [census](apr/README.md) that preceded it stays beside it |
+| APR | Pool allocator in a Capstone domain with a Sublet adapter, and apr-util's bucket allocator carried on top of it (`-DAPRP_BUCKETS=ON`); a stock CheriBSD build against the platform's own malloc; for the httpd/APR pool and bucket defect corpora; not httpd, not threaded pools | [pools](apr/pools/README.md); shared CMake layout. The [census](apr/README.md) that preceded it stays beside it |
 | memcached | The slab allocator and the per-thread object cache of 1.6.45 in a Capstone domain with a Sublet adapter, and a stock CheriBSD build against the platform's own malloc, for the memcached defect corpus; not the server, not its threads, not the page mover | [allocators](memcached/allocators/README.md); shared CMake layout. The [census](memcached/README.md) that preceded it stays beside it |
 | musl | Domain libc, host-call services and functional tests; incomplete OS/thread support | [musl](musl-capstone/README.md); existing shell drivers |
 | FFmpeg | AVBufferPool/AVRefStructPool replay from native decoder recordings; not domain video decoding | [Buffer pools](ffmpeg/buffer-pool/README.md); shared CMake layout |
@@ -151,3 +150,38 @@ See the [integration plan](../docs/plans/port-stack-integration.md) for the
 remaining cross-repository prerequisites and merge conflicts. Experimental
 application ports have manual validation; a skipped GitHub workflow is not a
 passing port test.
+
+## Reading a port change: mechanism and evidence are not the same diff
+
+A port change is mostly its evidence. Measured over the twenty commits that
+migrate the eight nested allocators to managed lifetimes, with the two commands
+below: **45,449 lines of mechanism across 452 files, 155,989 lines of recorded
+results across 827 files** -- 23% against 77%. The results are compact records
+with input and tool hashes, as the section above requires, but there are a great
+many of them, and a reviewer who reads a port change front to back spends most
+of the time in `verdicts.jsonl` and `outcomes*.json`.
+
+They are not meant to be read. They are meant to be **checked against the hashes
+in their own `results/*/` directory**, and recomputed if in doubt. The mechanism
+is meant to be read. So read the two separately:
+
+```sh
+# the mechanism: patches, adapter headers, runners, build glue, docs
+git diff <base>..<head> -- ':!*/results/*' ':!*/bug-corpora/*'
+
+# the evidence, checked rather than read
+git diff <base>..<head> -- '*/results/*' '*/bug-corpora/*'
+```
+
+Per port, the first command is small enough to read in one sitting: mruby 1,075
+lines, perl 1,157, sqlite 1,422, memcached 2,928, FFmpeg 3,315, CPython 4,692,
+Wireshark 5,511, PostgreSQL 16,920.
+
+**Mechanism and evidence stay in the same commit**, and that is deliberate. A
+code-only commit asserts that an allocator's objects now have managed lifetimes
+with nothing showing that they do; an evidence-only commit records verdicts
+against image hashes that are not yet in the tree. Neither stands on its own,
+which is this repository's bar for a commit, and `git bisect` degrades badly
+across the pair: an evidence-only commit can never fail, so a bisect lands on a
+mechanism commit whose measurement has not arrived and cannot tell a wrong arm
+from a missing one. The split above is a reading order, not a commit boundary.

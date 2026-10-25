@@ -1,0 +1,150 @@
+{
+ "controls": {
+  "clean": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL clean RETURNED 1",
+   "required": "RETURNED",
+   "ok": true
+  },
+  "oob": {
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac080f54 address=0xac0e3998 in ctl_write_probe+0x2c (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "uaf": {
+   "outcome": "CAUGHT",
+   "detail": "cause=25 pc=0xac080f88 address=0xac0e3980 in ctl_read_probe+0x20 (the labelled probe)",
+   "required": "CAUGHT",
+   "ok": true
+  },
+  "subobj": {
+   "outcome": "RETURNED",
+   "detail": "CONTROL subobj RETURNED b0=0x5a",
+   "required": "RETURNED",
+   "ok": true
+  }
+ },
+ "rows": [
+  {
+   "name": "postgres-c-00-case",
+   "case": "00_CVE-2026-6477_pqfn_unbounded_result_copy",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1087e8 address=0xac3e7af8 in memcpy+0xe0 (NOT the labelled probe) (a declared fault site)",
+   "predicted": "CAUGHT",
+   "image_sha256": "d7dd3cc8906368cff0a1b62eb78e79d78ab019887f984e44a67c4592b0278213",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "postgres-c-00-ctl-control",
+   "case": "00_CVE-2026-6477_pqfn_unbounded_result_copy",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `case 0 RETURNED`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "4f27a6b6b0067040a638e3fc9a39961f66fe4e43d975fb50e214d73b507ae781",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-c-01-case",
+   "case": "01_CVE-2026-19385_pgdump_transform_list_overread",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac100fcc address=0xac3f2d10 in pgclient_case_run+0xa4 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "ff34d31726d8ce09b0aa0f01489e73a6d5016a778e35d721a42eaaac8b9c99a5",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "postgres-c-01-ctl-control",
+   "case": "01_CVE-2026-19385_pgdump_transform_list_overread",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `case 1 RETURNED`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "04fc26b3b196d958026842debc56bd810c85bbf67bf1342fe83a808c4a2ef916",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-c-02-case",
+   "case": "02_CVE-2026-16241_ecpg_bytea_negative_length",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101de0 address=0xac3f2b81 in ecpg_hex_decode+0x150 (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "7b038fe3199f41a93f801d57afae56ef86db9149f2e3692b63a9e4ba728a052a",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "postgres-c-02-ctl-control",
+   "case": "02_CVE-2026-16241_ecpg_bytea_negative_length",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `case 2 RETURNED`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "74b43b52023099c657634b4ce64b5e2f3b226835e5a3d8deeb9be4d1531f5803",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-c-03-case",
+   "case": "03_5d61bdd114_saslprep_truncated_utf8_overread",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac101e84 address=0xac3e7af4 in pg_utf8_islegal+0xc0 (NOT the labelled probe) (a declared fault site)",
+   "predicted": "CAUGHT",
+   "image_sha256": "e5b3195fd73998311353ab8125b215b89504db6271fb494a0be7db99942fb362",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "postgres-c-03-ctl-control",
+   "case": "03_5d61bdd114_saslprep_truncated_utf8_overread",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `case 3 RETURNED`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "18349294415013460fe59afedb50511a5101e318fdcaf3136a990cd24d0656b8",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  },
+  {
+   "name": "postgres-c-04-case",
+   "case": "04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c",
+   "outcome": "CAUGHT",
+   "detail": "cause=28 pc=0xac1020d0 address=0xac3f2b98 in pgclient_consume_content+0x5c (the labelled probe)",
+   "predicted": "CAUGHT",
+   "image_sha256": "c2a2cf9bf013f0f8a11bbc4bfb0174f5a0f92450c11870a9904d129c18abaab5",
+   "as_predicted": true,
+   "predicted_tool": "CAUGHT"
+  },
+  {
+   "name": "postgres-c-04-ctl-control",
+   "case": "04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer",
+   "corpus": "capstone/bug-corpora/postgres/c-repros",
+   "kind": "pg-c-control",
+   "outcome": "COMPLETED",
+   "detail": "completed: `case 4 RETURNED`, exit 0",
+   "predicted": "COMPLETED",
+   "image_sha256": "cd63cb8d5219ac28a0b30923e549abbd89669807c8e6b5831a3cf767772a9a82",
+   "as_predicted": true,
+   "predicted_tool": "COMPLETED"
+  }
+ ]
+}

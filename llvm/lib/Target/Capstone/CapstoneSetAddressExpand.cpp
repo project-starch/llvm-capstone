@@ -9,8 +9,10 @@
 // Expands PseudoSetAddr, the selection of llvm.capstone.cap.set.address, into a
 // dispatch on the operand's type. __intcap arithmetic produces a value whose
 // address is new and whose authority is the operand's, but the operand may hold
-// a plain integer: `scc` alone would trap on it on the RTL (and on QEMU), and
-// `cincoffset` likewise. So:
+// a plain integer, or a sealed, uninitialised or linear capability. `scc` on an
+// integer computes under the CHERI rule (2026-10-14) but traps on the RTL until
+// it adopts the rule, and on a sealed or uninitialised capability it traps
+// everywhere. So:
 //
 //   head:    t = lcc cap, 1           ; selector 1 is total: untagged -> 7
 //            d = addi t, -1           ; NONLIN -> 0
@@ -27,8 +29,9 @@
 //
 // It runs before register allocation, after the SSA-level MachineLICM and
 // MachineCSE, which therefore saw one side-effect-free pseudo. The scc it
-// emits is in trapsOnUntaggedOperand, so the post-RA passes that move code
-// (C-66) keep it behind its branch. It runs at every optimization level.
+// emits is in trapsOnUntaggedOperand (it still raises 26 on a sealed or
+// uninitialised capability), so the post-RA passes that move code (C-66) keep
+// it behind its branch. It runs at every optimization level.
 //
 //===----------------------------------------------------------------------===//
 

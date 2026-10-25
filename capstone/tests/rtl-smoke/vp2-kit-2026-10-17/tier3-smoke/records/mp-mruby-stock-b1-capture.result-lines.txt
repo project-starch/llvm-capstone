@@ -1,0 +1,13 @@
+mp-mruby-stock-b1 capture (2026-10-21 20:48-21:38, board 1, tree A caplifive_vp2c_8522d72fe, kit bkit7-rev2xDN2; pre-registered 444ebaf621b8, amended a84df28df367)
+tools: tier3-appvm-arm-tools2.sh, session tool dev e6c68a531557 (bound 2400 s + stall capture); runner 9db9f5f7cf60fcda, images = the reference's
+monitor at boot: QNT0:001E8480 (csupquantum 2,000,000), so not S-26's quantum-0 shape
+control-smoke: END 137 at its bound; heartbeat 4015B/50L at HB 1, 22147B/281L from HB 8 to the kill (HB 76); text: M1..M11 printed ("M11 file 50"), then one grant, no M12
+  (M12 is `Dir.entries(dir).include?('smoke.rb')`, the step after M11's file read)
+@@STALL proc 98 capstone-vexec state=R utime 49961 -> 50122, stime 181612 -> 182365 across the 5 s window; wchan 0, syscall "running"
+@@STALL proc 100 capstone-vexec (child) state=S wchan __skb_wait_for_more_packets syscall 212, no CPU
+@@STALL mod: resume_sfences 5921 -> 5921, resume_satp_refreshes 984363 -> 987964 (+3601), resume_satp_changed 0, busy_frame_refusals 0; "escapes on"
+escape trace (16 of 16, 2605.59-2605.80 s): event 3 frame kind 0x3 cause 0xb, alternating pc code+0xbc (a0 0x3f9011c000) and code+0xb0 (a0 code+0xac)
+  code+0xb0 = the ecall in __capstone_vm_thread_self (li a7, 0xb); code+0xbc = the ecall in __capstone_vm_delegate_transport (li a7, 0xa)
+  i.e. a service loop: thread_self, then one delegated system call, ~40 pairs a second, with no fault resolved
+@@DMESG: load banner, the 16 escape lines, "release retires attempted=62 succeeded=62"; no "collect skipped", no ELOOP
+UART: FRTY 0, DRT1 0, INJS 0, INJL 0, Oops 0; session read: control smoke FAILED (VOID); booking 87 unbooked

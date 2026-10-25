@@ -1,0 +1,25 @@
+{
+ "arm": "sysalloc-bounds: the Capstone application domain, the first-fit heap with each allocation bounded and no revocation (tools/arms.json app-level0)",
+ "image_sha256": "0f208270af54fbdf9f2e0aa265d2bb42e98234ef33dd163525daea48e1aaaec7",
+ "capi_11_sha256": "e98e31813dda94c087630db156b373fb59cfaeeba10813bcb9b6e7ac6535180a",
+ "platform_sha256": {
+  "qemu-system-riscv64": "ce85ea00eb154d87063d71c733c130ba1ec54d118c5301f2c730c74674fb9873",
+  "Image": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b",
+  "fw_jump.elf": "db8ad1c5b08f5be02124ebd3e5c827f809945bde3be9c29f25c0dc53e0f1669d",
+  "rootfs.ext2": "fb55450e273e42e1a592cb0e8329632e1694da2323e41a68ddd587c41c94326f",
+  "capstone.ko": "c8be95a5c5ff3e6f6c7a852b6c5b7ee109ef7273df2f94b09690f3d34508c5cf",
+  "capstone-exec": "e604885a6e40f18c636496dcc0c46865fe5cf62a76ae9e3a2390cbc4bc4826fa",
+  "capstone-job": "1a670e41283cafc8c3e94bae34c53ca4d955f90a449362aaf13e2a4845bd9168"
+ },
+ "host_package": "capstone/runtime/host of llvm-capstone 1b7d47d39732",
+ "controls": {
+  "smoke_done": true,
+  "d40": true,
+  "d500": true
+ },
+ "watchdog_s": {
+  "case": 25,
+  "control": 600
+ },
+ "where": "p13, one boot, 2026-10-11; the first boot's smoke control was killed by a 25 s watchdog (no reading), the second gave the same status, cause and pc for every case"
+}

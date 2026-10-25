@@ -86,7 +86,7 @@ crossing that leaves the allocation is seen by every tool; one that stays inside
 
 ## Arms not measured here
 
-`spatial`, `sublet`, both PoisonCap arms and `cheribsd-revocation` are **declared predictions**,
+`spatial`, `sublet` and `cheribsd-revocation` are **declared predictions**,
 each with its mechanism, because this corpus has no Capstone-domain runner yet. Two of them are
 worth stating plainly:
 

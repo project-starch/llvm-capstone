@@ -14,9 +14,9 @@
   "arms": {
     "spatial": {
       "oracle": "the overrun of the malloc'd object is reported as a domain fault, or the case completes and this arm did not see it. level0 narrows a returned pointer to the bytes requested, not to a size class, so unlike the purecap guest the bound here is the object itself; the host's fault line carries the pc, and the expect_fault_in line the case prints before the defect is what attributes it.",
-      "verdict": "detected",
-      "evidence": "capability fault: capstone-exec: domain fault cause=5 pc=0xc020fac0 address=0xc0258138 entry=0xc0200cc8 code=0xc0200000-0xc4250000 last=0x42 preparing=0x42 sha256=c7de42e2c6a81dd6d501c56c1d8a5b7995698650f557ff6234d42d19e02161b7 image=/mnt/host/applications/04_f1298a4c20_bbstreamer_tar_trailer_stale_pointer-c7de42e2c6a81dd6d501c56c1d8a5b7995698650f557ff6234d42d19e02161b7.dom; case expected it in pgclient_consume_content@0xc020f9dc",
-      "run": "run 2026-10-06 by the corpus's own runner (shared/run-arm.py for the Capstone arms, shared/run-cheribsd.sh for the purecap one); see results/"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=5 pc=0xe020fad4 in pgclient_consume_content; by function: pgclient_consume_content is the case's declared fault site",
+      "verdict_from": "results/20261010-150616-qemu/spatial"
     },
     "cheribsd-revocation": {
       "oracle": "SIGPROT(34) -- CHERI-DETECTED. The next streamer reads pad_bytes_expected bytes from a pointer bbstreamer_buffer_until had already advanced to one past the end of the chunk, so the first byte read is already out of bounds. CheriBSD riscv64-purecap, static build, 2026-10-06. The PG_DEFECT marker printed before the fault, so the setup provably ran and the fault is the defective access rather than something earlier. Fault attributed to the defect, 2026-10-06: the case declares the function its fault belongs to and the handler reports the faulting PC and return address as offsets from it. signal=34 si_code=1, pc-expect=+58 against pgclient_consume_content: the faulting instruction is 58 bytes into the next streamer, which is the consumer bbstreamer_tar.c:225 hands the advanced pointer to.",
@@ -33,6 +33,24 @@
       "verdict": "CAUGHT",
       "verdict_note": "cause=28 pc=0x3f9c412058 in pgclient_consume_content; by function: pgclient_consume_content is the case's declared fault site",
       "verdict_from": "results/2026-10-10-virtual/virtual-malloc"
+    },
+    "silicon-level0": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), set 7: the case against PostgreSQL 17.5's own client functions (shared/upstream_*.c) over level0 as it ships, bounds only (tools/arms.json silicon-level0). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. The case's -DPGCLIENT_NEGATIVE_CONTROL image must print `case N RETURNED` and exit 0. Then a fault after `PG_DEFECT case=N mark` in the function the case names (`expect_fault_in=`) or a declared fault site is CAUGHT; `case N RETURNED` is MISSED, provided the boot's controls behaved as tools/arms.json declares. Pre-registered by the board lane (lane 61f0433d704c, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac101b0c in pgclient_consume_content; by probe: the fault is in pgclient_consume_content, the function the case named before its access",
+      "verdict_from": "results/2026-10-16-silicon/silicon-level0"
+    },
+    "silicon-lifetimes": {
+      "oracle": "silicon (FPGA, caplifive_sublet_d93a8d66b), set 7: the same over level0 with per-object lifetimes (tools/arms.json silicon-level0-lifetimes). Built by tools/run-silicon-cases.py, read from the board transcript by tools/silicon-verdicts.py. The case's -DPGCLIENT_NEGATIVE_CONTROL image must print `case N RETURNED` and exit 0. Then a fault after `PG_DEFECT case=N mark` in the function the case names (`expect_fault_in=`) or a declared fault site is CAUGHT; `case N RETURNED` is MISSED, provided the boot's controls behaved as tools/arms.json declares. Pre-registered by the board lane (lane 61f0433d704c, before the boot): CAUGHT.",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0xac1020d0 in pgclient_consume_content; by probe: the fault is in pgclient_consume_content, the function the case named before its access",
+      "verdict_from": "results/2026-10-16-silicon/silicon-lifetimes"
+    },
+    "vp2-malloc": {
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=28 pc=0x3f8c491cf4 in pgclient_consume_content; by function: pgclient_consume_content is the case's declared fault site",
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+      "oracle": "virtual profile (tools/arms.json virtual-mallocng): a domain fault in the function the case names (expect_fault_in, or fault_sites), or the case returns after its mark and this arm did not see it"
     }
   },
   "status": "measured on all three arms 2026-10-06: spatial=detected, sublet=detected, cheribsd-revocation=detected",

@@ -1,0 +1,51 @@
+# qualify.py on the v2 images (patch 0009, not 0010), stock (left) and PERLD_SUBLET=1 (right), 2026-10-11.
+# 47 of the 50 files ran before the run was stopped for patch 0010; every one ended the same on both images.
+# ok counts are of lines flushed before the process ended.
+  op/my.t                      completed                                   ok=59	  completed                                   ok=59
+  base/lex.t                   completed                                   ok=12	  completed                                   ok=12
+  op/die.t                     completed                                   ok=20	  completed                                   ok=20
+  op/ref.t                     fault       24 ck_builtin_func1             ok=0 	  fault       24 ck_builtin_func1             ok=0 
+  op/local.t                   fault       24 Perl_sv_clear                ok=19	  fault       24 Perl_sv_clear                ok=19
+  op/sub.t                     fault       24 Perl_sv_clear                ok=32	  fault       24 Perl_sv_clear                ok=32
+  op/closure.t                 fault       24 Perl_sv_clear                ok=50	  fault       24 Perl_sv_clear                ok=50
+  op/gv.t                      fault       24 Perl_mro_package_moved       ok=23	  fault       24 Perl_mro_package_moved       ok=23
+  op/stash.t                   fault       24 Perl_mro_get_linear_isa      ok=2 	  fault       24 Perl_mro_get_linear_isa      ok=2 
+  op/caller.t                  completed                                   ok=10	  completed                                   ok=10
+  op/eval.t                    fault       24 Perl_mro_package_moved       ok=12	  fault       24 Perl_mro_package_moved       ok=12
+  op/hash.t                    fault       24 ck_builtin_func1             ok=0 	  fault       24 ck_builtin_func1             ok=0 
+  op/array.t                   fault       24 ck_builtin_func1             ok=0 	  fault       24 ck_builtin_func1             ok=0 
+  op/for.t                     completed                                   ok=14	  completed                                   ok=14
+  op/universal.t               fault       24 Perl_mro_get_linear_isa      ok=12	  fault       24 Perl_mro_get_linear_isa      ok=12
+  op/tie.t                     completed                                   ok=0 	  completed                                   ok=0 
+  op/magic.t                   fault       25 fileno                       ok=60	  fault       25 fileno                       ok=60
+  io/open.t                    fault       24 ck_builtin_func1             ok=0 	  fault       24 ck_builtin_func1             ok=0 
+  io/print.t                   fault       24 Perl_sv_clear                ok=0 	  fault       24 Perl_sv_clear                ok=0 
+  op/readline.t                completed                                   ok=25	  completed                                   ok=25
+  op/undef.t                   completed                                   ok=74	  completed                                   ok=74
+  op/delete.t                  completed                                   ok=56	  completed                                   ok=56
+  op/each.t                    completed                                   ok=63	  completed                                   ok=63
+  op/split.t                   completed                                   ok=19	  completed                                   ok=19
+  op/join.t                    fault       24 ck_builtin_func1             ok=0 	  fault       24 ck_builtin_func1             ok=0 
+  op/sort.t                    fault       24 ck_builtin_func1             ok=0 	  fault       24 ck_builtin_func1             ok=0 
+  op/method.t                  fault       24 Perl_mro_package_moved       ok=0 	  fault       24 Perl_mro_package_moved       ok=0 
+  op/do.t                      fault       24 Perl_sv_clear                ok=0 	  fault       24 Perl_sv_clear                ok=0 
+  op/attrs.t                   completed                                   ok=0 	  completed                                   ok=0 
+  op/state.t                   completed                                   ok=16	  completed                                   ok=16
+  op/goto.t                    completed                                   ok=11	  completed                                   ok=11
+  op/tr.t                      fault       24 Perl_pp_aassign              ok=0 	  fault       24 Perl_pp_aassign              ok=0 
+  op/sprintf.t                 fault       24 Perl_sv_clear                ok=3 	  fault       24 Perl_sv_clear                ok=3 
+  op/inc.t                     fault       24 Perl_sv_clear                ok=42	  fault       24 Perl_sv_clear                ok=42
+  op/lc.t                      fault       24 Perl_pp_aassign              ok=0 	  fault       24 Perl_pp_aassign              ok=0 
+  op/chop.t                    fault       24 Perl_pp_mapwhile             ok=13	  fault       24 Perl_pp_mapwhile             ok=13
+  op/push.t                    completed                                   ok=32	  completed                                   ok=32
+  op/splice.t                  completed                                   ok=33	  completed                                   ok=33
+  op/reverse.t                 completed                                   ok=25	  completed                                   ok=25
+  op/grep.t                    completed                                   ok=67	  completed                                   ok=67
+  op/range.t                   fault       24 Perl_sv_clear                ok=14	  fault       24 Perl_sv_clear                ok=14
+  op/sub_lval.t                fault       24 Perl_pp_aassign              ok=21	  fault       24 Perl_pp_aassign              ok=21
+  op/die_keeperr.t             completed                                   ok=24	  completed                                   ok=24
+  op/svflags.t                 completed                                   ok=0 	  completed                                   ok=0 
+  op/gc.t                      exit2                                       ok=0 	  exit2                                       ok=0 
+  op/lex.t                     completed                                   ok=24	  completed                                   ok=24
+  op/concat2.t                 fault       24 ck_builtin_func1             ok=0 	  fault       24 ck_builtin_func1             ok=0 
+  op/qr.t                      completed                                   ok=37	

@@ -1,0 +1,9 @@
+# board-m1s16f-1-b1: k800 lines 2
+RESULT k800 retval=4 cycles=4482 ran=53406 instret=1089
+RESULT k800 retval=4 cycles=4451 ran=53406 instret=1089
+R1 m1 start arm=drop C=65532 target=655320 fixture_nodes=31 budget=900000 maxret=4096 leaf=64 touch=64 pool=1024 resident=1024 snap_every=4096
+R1 m1 end arm=drop stop=target alloc=655320 minted=655351 revoked=655320 retained=0 released=0
+R1 m1 start arm=ring C=65532 target=655320 fixture_nodes=31 budget=900000 maxret=4096 leaf=64 touch=64 pool=1024 resident=1024 snap_every=4096
+R1 m1 end arm=ring stop=target alloc=655320 minted=655351 revoked=655320 retained=16 released=0
+# R1 m1 snapshot lines: 318
+# no wedge dump: the run returned

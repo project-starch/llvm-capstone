@@ -32,7 +32,8 @@ entry:
 ; __capstone_cap_init is registered as an ADD64/SUB64 pair.  Relocation type
 ; NAMES print as "Unknown" until C-37 (lib/Object/ELF.cpp has no EM_CAPSTONE
 ; case); the offsets and symbols are the pin.
-; OBJ: .rela.rodata {
+; (__capstone_cap_init writes the holder, so it is placed with the writable data.)
+; OBJ: .rela.data {
 ; OBJ-NEXT: 0x0 {{R_Capstone_64|Unknown}} callee 0x0
 ; OBJ-NEXT: 0x10 {{R_Capstone_64|Unknown}} bundle 0x0
 ; OBJ-NEXT: }

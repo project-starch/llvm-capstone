@@ -12,13 +12,6 @@ struct raw_block {
 static unsigned char *metadata;
 static size_t used;
 static struct raw_block *available;
-/* PYMALLOC_CAPABILITY, not PYMALLOC_DOMAIN: what decides whether this file
- * owns the arena is whether a capability lifetime adapter owns it instead --
- * src/allocators/sublet/block-lifetimes.c or src/cheribsd/poisoncap-lifetimes.c
- * -- and that is independent of whether the program is freestanding. Keying it
- * on the domain conflated the two, and the two came apart as soon as the
- * adapter was wanted in a hosted process: see cmake/Replay.cmake. */
-#ifndef PYMALLOC_CAPABILITY
 static unsigned char *arena;
 static size_t arena_used, arena_count, arena_releases;
 static struct {
@@ -26,16 +19,11 @@ static struct {
   unsigned live;
 } arenas[32];
 static uint64_t decisions;
-#endif
 void pym_backing_init(void *m, void *a) {
   metadata = m;
-#ifndef PYMALLOC_CAPABILITY
   arena = a;
   /* Pools must be 16 KiB aligned; arenas need not be 1 MiB aligned. */
   arena_used = (-(uintptr_t)a) & 16383;
-#else
-  (void)a;
-#endif
 }
 void *pym_raw_malloc(size_t n) {
   if (n > PYM_META_BYTES - 64)
@@ -87,7 +75,6 @@ void *pym_raw_realloc(void *p, size_t n) {
   }
   return q;
 }
-#ifndef PYMALLOC_CAPABILITY
 void *pym_arena_alloc(void *ctx, size_t n) {
   (void)ctx;
   if (n != 1048576)
@@ -139,40 +126,6 @@ void pym_backing_stats(struct pym_header *h) {
   h->arena_frees = arena_releases;
   h->metadata = used;
 }
-uintptr_t pym_arena_address(void *p) { return (uintptr_t)p; }
-void *pym_pool_create(uintptr_t address, size_t overhead) {
-  (void)overhead;
-  return pym_pool_pointer((void *)address);
-}
-void pym_pool_reclass(void *p, size_t size, size_t overhead) {
-  (void)p;
-  (void)size;
-  (void)overhead;
-}
-void *pym_block_pointer(void *p, size_t offset) {
-  return (unsigned char *)p + offset;
-}
-void *pym_issue(void *p, size_t n) {
-  (void)n;
-  return p;
-}
-void *pym_release(void *p) { return p; }
-void *pym_resize(void *p, size_t n) {
-  (void)n;
-  return p;
-}
-size_t pym_requested(void *p) {
-  (void)p;
-  return SIZE_MAX;
-}
-void pym_validate(void *p) { (void)p; }
-void *pym_user_raw_malloc(size_t n) { return pym_raw_malloc(n); }
-void pym_user_raw_free(void *p) { pym_raw_free(p); }
-void *pym_user_raw_realloc(void *p, size_t n) { return pym_raw_realloc(p, n); }
-void pym_set_mode(unsigned mode) {
-  if (mode)
-    pym_fail(205);
-}
 void pym_observe(unsigned op, void *ptr, size_t size) {
   if (!ptr)
     return;
@@ -188,11 +141,3 @@ void pym_observe(unsigned op, void *ptr, size_t size) {
   decisions = decisions * 33 ^ (location + size * 13 + op);
 }
 uint64_t pym_decision_checksum(void) { return decisions; }
-#else
-size_t pym_metadata_used(void) { return used; }
-void pym_observe(unsigned op, void *ptr, size_t size) {
-  (void)op;
-  (void)ptr;
-  (void)size;
-}
-#endif
