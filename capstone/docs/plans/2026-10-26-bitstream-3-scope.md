@@ -97,8 +97,9 @@ runs on bitstream 2, board 2 (the board lane's lane c2cae6529f8d, `records/b2bs-
 init strobe writes at entry (`csr_regfile.sv`, register id 69 at dcc6daf6e: mstatus zeroed, SXL/UXL kept, FS Initial,
 priv M), unmodified since; +920 is the context's live mstatus at the escape (the trap is stripped before the CSR file
 sees it, `commit_stage.sv:228-234`, and the walk saves id 3 before restoring the caller, `capstone_dom_switcher.anvil:483`).
-So the load ran at M with MPRV 0 and the capability check was gated ON. MPP 0 is the strobe's zero and is read only
-under MPRV or by an MRET, neither of which applies. N=1; H2, H3 and H4 remain, which is what the instrument below separates,
+So the load ran at M with MPRV 0 and the capability check was gated ON. MPP 0 is the strobe's zero: a context never
+traps into M (its traps are stripped into escapes) and never executes an MRET, so nothing writes MPP after entry, and
+MPP is read only under MPRV or by an MRET. N=1; H2, H3 and H4 remain, which is what the instrument below separates,
 so row (b) stays in bitstream 3.
 
 **Free steps first (no bitstream):**
@@ -111,16 +112,32 @@ so row (b) stays in bitstream 3.
   hit-dead, the check DID deny that node at some point in the run; it cannot say which access, so it supports but does
   not decide H4.
 
+**What the mapped-page arms add (the runtime lane's point, 2026-10-26).** With the retired region kept MAPPED the read
+was refused 400 times in 400 and never completed; a deny lost at the munmap rate (~2.5 %) on those pages would have shown
+about ten silent reads. So whatever loses the verdict needs the access to take the page-table walk: the munmap flushes the
+translation, every read of the freed page then misses the DTLB and walks, and the walk ends in the 13; on the kept-mapped
+page the translation is most likely DTLB-resident, so no walk is taken. That makes the live forms of H3 and H4 "the
+verdict is lost only on an access that misses the DTLB", and H4's mechanism (the exception sampled only with
+`lsu_req_i`) is exactly a walk-dependent one. **A further free arm decides it before any bitstream:** keep the retired
+region mapped but have the module flush that page's translation before the read (a kernel TLB flush of the page, with
+no unmap), so the read walks and the walk SUCCEEDS. A lost verdict then shows as a silent completed read at about the
+munmap rate; none in several hundred makes the walk-dependent forms unlikely and points at H2. That arm is the runtime
+lane's, module-side.
+
 **The instrument, if the free steps do not decide it:** a per-access verdict record, observation only, read through the
 debug apertures after the trap.
 - **Latched for every LSU access** while `lsu_ctrl.valid`: the gate bits (`capmode_i`, `ld_st_priv_lvl_i`), the verdict
   arm actually taken (one-hot: allow-hit, allow-record, deny-hit-dead, deny-same-cycle, deny-probe-dead, miss-replay,
-  no-evidence, another cap cause), the node id (30 bits), and `lsu_ctrl.vaddr[31:0]`.
+  no-evidence, another cap cause), the node id (30 bits), `lsu_ctrl.vaddr[31:0]`, and the access's translation: the
+  DTLB hit sampled with the request (`lsu_dtlb_hit_o`, `cva6_mmu.sv:60`) and whether the PTW was walking for it
+  (`ptw_active`, `:147`), with a cycle count from the verdict to the MMU's exception.
 - **Frozen** at the first exception the LSU delivers with cause 13 (or 15, R-61's relabel, kept for completeness), with
   one more bit: whether `misaligned_ex_q.valid` was set in the MMU when the 13 left it.
 - **Read** after the escape; the vaddr is matched against the trap's mtval to tie the record to the faulting access.
-- **Predicted readings:** H1 gate bit 0; H2 allow arm with the freed node's id; H3 miss-replay arm; H4 a deny arm with
-  the MMU's misaligned bit clear. Each is a different reading, so the instrument is informative under every hypothesis
+- **Predicted readings:** H1 gate bit 0 (refuted by step 0a; the bit is kept as the record's own control); H2 an allow
+  arm with the freed node's id; H3 the miss-replay arm on a DTLB miss with a walk; H4 a deny arm on a DTLB miss with a
+  walk, the MMU's misaligned bit clear when the 13 left it, and a verdict-to-exception count longer than the one cycle
+  the simulation shows. Each is a different reading, so the instrument is informative under every hypothesis
   on the table; the rule "what will it read if the best hypothesis is TRUE" is met.
 - **Estimate:** about 100 flops and a handful of aperture windows in `cva6.sv`'s debug mux. Aperture taps have cost FSM
   encoding and LED slack before (`fpga-aperture-taps-cost-fsm-encoding-and-led-slack`), so it gets the size gate; it
