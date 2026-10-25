@@ -136,6 +136,14 @@ the operands latched as the sfence's own, `ex_stage.sv:2136-2144`) is a clean ex
 expected to repeat the earlier reading. In H4's terms, the candidate is a verdict lost when the walk ends in a FAULT; the
 record separates it by the MMU's exception cause beside `ptw_active` and the cycle count.
 
+**Where the hypotheses stand, the basis for the record's fields.** The kept-mapped reads are successful-walk evidence:
+400 of 400 refused, none completed, on reads whose translation the satp flush had removed. A verdict lost on a walk that
+succeeds, whether a deny (H4) or a miss's replay (H3), would have completed some of those reads. So H3 and H4 survive
+only in their faulting-walk form, a verdict lost when the walk ends in the page fault, and the question for the record is
+**H2 (the check allowed) against a verdict lost on a faulting walk (H3/H4)**: an allow arm reads H2; a deny or a
+miss-replay arm with `ptw_active` set, the MMU's exception a page fault and the misaligned bit clear when it left reads
+H3/H4. H1 is refuted (step 0a).
+
 **The instrument, if the free steps do not decide it:** a per-access verdict record, observation only, read through the
 debug apertures after the trap.
 - **Latched for every LSU access** while `lsu_ctrl.valid`: the gate bits (`capmode_i`, `ld_st_priv_lvl_i`), the verdict
