@@ -8727,3 +8727,22 @@ Record: `records/b2n2r-capi-b2.result-lines.txt`.
 - The 13-16 boot's pc=0 count of 1 is row 13's `cause=12 pc=0x0`, as predicted. Other readings are 0.
 - **Against the pre-registration (18ccde319e99): every reading holds.** With this, every non-Juliet arm of the corpus
   has two bitstream-2 readings, equal cell for cell.
+
+### Bitstream 2 N=2 result: Juliet spatial, every case cell the same; one uaf-control step at the known silicon-only cause 13 (board 1, 2026-10-25 10:20-16:41)
+
+Record: `records/b2n2-juliet-spatial-b1.result-lines.txt`.
+- **juliet-obs-compare against the first reading (board 2): 1512 of 1513, 1 different.** The difference is not a case
+  cell.
+  - It is the aggregate `controls:ctl-uaf` cell: 48 uaf-control steps, all cause 25 at control_read_probe+0x38 in the
+    first reading.
+  - In this reading, 47 are cause 25 and one (batch011 ctl-uaf-0) is **cause 13 at the same site**. That is the
+    silicon-only uaf-control behaviour measured at 6/200 on the batch and 10/400 on bitstream 2. One of 48 is inside
+    that rate.
+  - judge.py voids that batch for its control (census 23 of 24); judge.py is not the grade.
+- **Every case cell of the 755 is the same, the three tolerated CWE170 cases included.** 25 boot transcripts, readings 0.
+- **Against the pre-registration (f86be8d6e89c):** the prediction "1513 of 1513" did not name the uaf-control
+  exception. Board 2's phase-2 pre-registration did name it, for Juliet temporal, and this one should have. **Read
+  strictly, the reading misses its prediction by that one control cell**, and the miss is the documented control
+  behaviour, not a case difference. It is recorded as such.
+- **N=2 on bitstream 2 is complete:** every arm of the corpus has two board readings, mostly on opposite boards. They are
+  equal cell for cell, except the rand-driven Juliet `_12` draws and this one control step.
