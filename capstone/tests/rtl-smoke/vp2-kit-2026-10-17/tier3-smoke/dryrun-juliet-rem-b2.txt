@@ -1,0 +1,37 @@
+# tier3-juliet-rem-b2.sh 4a312d2705cd75c3 dry run, 2026-10-26 03:2x: a FAKE part 01 made from real data (the sample's build-census, manifest
+# and bitstream-2 QEMU observations; the temporal seeded build and its observations as the seeded half), run.py/probe.py stubbed to return the
+# part's own observations (FLIP=s001 makes one census step a clean exit), judge.py stubbed, busy and the hub stubbed. obs-compare runs for real.
+
+## ok
+JR part 01 reference: phases all rc=0; RESULT RESULT-A
+JR part 01 manifest 03f048a19f5ea0f5 cases 755 census images 1512 seeded images 55
+JR run BEGIN 03:27:00 board 1 booking 71
+JR run END rc=0 03:27:00 :: 1 batches completed, 0 not :: batch000 completed=True
+JR run-seeded BEGIN 03:27:00 board 1 booking 71
+JR run-seeded END rc=0 03:27:00 :: 1 batches completed, 0 not :: batch000 completed=True
+JR probe BEGIN 03:27:00 board 1 booking 71
+JR probe END rc=0 03:27:00 :: 1 batches completed, 0 not :: batch000 completed=True
+JR judge rc=0 (not a reading on silicon) :: judge stub
+JR OBS-COMPARE census rc=0 :: 1513 of 1513 cells the same, 0 different, 0 tolerated
+JR OBS-COMPARE seeded rc=0 :: 56 of 56 cells the same, 0 different, 0 tolerated
+JR readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JR part 01 board1 DONE 03:27:07
+
+## flip
+JR part 01 reference: phases all rc=0; RESULT RESULT-A
+JR part 01 manifest 03f048a19f5ea0f5 cases 755 census images 1512 seeded images 55
+JR run BEGIN 03:27:08 board 2 booking 72
+JR run END rc=0 03:27:08 :: 1 batches completed, 0 not :: batch000 completed=True
+JR run-seeded BEGIN 03:27:08 board 2 booking 72
+JR run-seeded END rc=0 03:27:08 :: 1 batches completed, 0 not :: batch000 completed=True
+JR probe BEGIN 03:27:08 board 2 booking 72
+JR probe END rc=0 03:27:08 :: 1 batches completed, 0 not :: batch000 completed=True
+JR judge rc=0 (not a reading on silicon) :: judge stub
+JR OBS-COMPARE census rc=1 :: 1512 of 1513 cells the same, 1 different, 0 tolerated
+JR OBS-COMPARE seeded rc=0 :: 56 of 56 cells the same, 0 different, 0 tolerated
+JR DIFF [OTHER] obs-census.cmp CWE121_Stack_Based_Buffer_Overflow__CWE129_large_01.bad: reference [(('signal', 11), 28, 'CWE121_Stack_Based_Buffer_Overflow__CWE129_large_01_bad+0xb8', False)] board [(('exit', 0), None, None, False)]
+JR readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JR part 01 board2 DONE 03:27:14
+
+## nopart
+JR STOP: part 02's reference is not complete

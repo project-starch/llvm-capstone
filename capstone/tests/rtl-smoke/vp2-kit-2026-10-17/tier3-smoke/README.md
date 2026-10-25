@@ -8746,3 +8746,31 @@ Record: `records/b2n2-juliet-spatial-b1.result-lines.txt`.
   behaviour, not a case difference. It is recorded as such.
 - **N=2 on bitstream 2 is complete:** every arm of the corpus has two board readings, mostly on opposite boards. They are
   equal cell for cell, except the rand-driven Juliet `_12` draws and this one control step.
+
+### Bitstream 2: the Juliet spatial REMAINDER on both boards, part by part, pre-registered (2026-10-26 03:3x, before any part's boot)
+
+- **Why:** on the lead's word ("resume all experiments"), relayed by the runtime lane. The 8,383 spatial cases beyond the
+  755-case sample are cut into 12 parts by the compiler lane (`juliet-rem/manifest-partNN.json`).
+  - That lane makes each part's QEMU reference on the 18-bit twin (`juliet-rem/run-parts.sh`: build census and seeded
+    on the r60 SDK, then run, run-seeded, probe and judge), marking `.done-partNN` when a part is complete.
+- **What runs:** `tier3-juliet-rem-b2.sh <board> <log> <NN>`, on bkit9-b2-b<board>.
+  - It refuses a part whose reference is incomplete. The checks: `.done`; a RESULT line with the manifest's hash and
+    every phase at rc=0; run-parts.sh naming qkit7-b2twin3-q8; the sample's runners, helper and SDK by hash.
+  - It runs the part's own census and seeded builds, then the probe, and judge.py for the record.
+  - Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/juliet-rem/partNN`.
+  - Scheduling: each board takes the lowest-numbered completed part that neither board has claimed (an atomic mkdir
+    claim), so both boards work through all 12 parts.
+- **The grade:** juliet-obs-compare against the part's QEMU observations, census then seeded, **with no tolerance**.
+  Every difference is printed with a class: uaf-control, rand-driven `_12` draw, CWE170 (value-dependent candidate),
+  or OTHER.
+- **Dry run:** `dryrun-juliet-rem-b2.txt`. A fake part built from real data reads 1513/1513 and 56/56 against itself;
+  one planted step reads 1 different, classed OTHER; a part with no reference refuses.
+- **Predictions, per part:**
+  - every census and seeded cell the same as QEMU, except possibly:
+    - the `controls:ctl-uaf` cell, when a uaf-control step reads the silicon-only cause 13 (about 2.5% per step, so
+      roughly a 1-in-2 chance per part of about 24-48 steps);
+    - rand-driven `_12` draws, if a part holds any, scored by its seeded build;
+    - value-dependent CWE170 cases, named as candidates. The sample tolerated three such cases. None is tolerated
+      here, so each one is reported.
+  - readings 0.
+  - **Any OTHER difference is a finding.**
