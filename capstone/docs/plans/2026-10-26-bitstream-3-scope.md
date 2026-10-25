@@ -124,6 +124,18 @@ no unmap), so the read walks and the walk SUCCEEDS. A lost verdict then shows as
 munmap rate; none in several hundred makes the walk-dependent forms unlikely and points at H2. That arm is the runtime
 lane's, module-side.
 
+**Correction to the paragraph above (2026-10-26, from source).** The kept-mapped reads very likely already walked. Every
+switcher write of register id 66 (satp) raises `dom_tlb_flush_o` (`csr_regfile.sv:2056` at dcc6daf6e, the S-29 fix),
+routed as `flush_all_i` to every TLB (`ex_stage.sv:821`, `load_store_unit.sv:571`, `cva6_mmu.sv:197/:229/:262`), and the
+switcher writes id 66 at every ENTRY, RESUME and ESCAPE (the caller's snapshot restore). So wherever an escape (the
+printf mark) sits between the free and the read, the read's translation had been flushed and it walked. "The loss needs a
+walk" is therefore weaker than written: the live distinction is a walk that SUCCEEDS (kept mapped: always refused) against
+one that FAULTS (unmapped: ~2.5 % report the walk's 13). The runtime lane's walk arm (runtime/pin-pte-census c945b77d3dd9,
+an explicit `sfence.vma x0, x0` before every CSRUNV, which does flush every L1 and shared entry: `cva6_tlb.sv:247-251`,
+the operands latched as the sfence's own, `ex_stage.sv:2136-2144`) is a clean explicit control of that walk and is
+expected to repeat the earlier reading. In H4's terms, the candidate is a verdict lost when the walk ends in a FAULT; the
+record separates it by the MMU's exception cause beside `ptw_active` and the cycle count.
+
 **The instrument, if the free steps do not decide it:** a per-access verdict record, observation only, read through the
 debug apertures after the trap.
 - **Latched for every LSU access** while `lsu_ctrl.valid`: the gate bits (`capmode_i`, `ld_st_priv_lvl_i`), the verdict
