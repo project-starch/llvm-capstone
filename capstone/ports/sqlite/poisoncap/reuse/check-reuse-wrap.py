@@ -114,6 +114,9 @@ def main():
     if not (start and done and end):
         return 1
     check('installed', done['installed'] == '1')
+    # zip() and sum() over a short list would pass a report that dropped bins: require all 32.
+    for label, d in (('start', start), ('alloc-done', done), ('exit', end)):
+        check(f'{label} reports 32 bins', len(d['bins']) == 32, str(len(d['bins'])))
     check('start snapshot holds exactly the seeded events', int(start['attempts']) == max([0] + [x[2] for x in pre])
           and int(start['issues']) == sum(1 for x in pre if x[0] == 'I'), f"start attempts={start['attempts']}")
     exp = oracle(out, pre)
@@ -126,7 +129,7 @@ def main():
             continue
         check(f'alloc-done {k}', int(done[k]) == exp[k], f'wrapper {done[k]} oracle {exp[k]}')
     check('alloc-done bins', done['bins'] == exp['bins'], f"wrapper {done['bins']} oracle {exp['bins']}")
-    if os.environ.get('REUSE_EXPECT_QUARANTINE'):
+    if os.environ.get('REUSE_EXPECT_QUARANTINE') == '1':
         # An allocator that withholds freed blocks (PoisonCap's quarantine of 4,096 entries) returns none
         # within a short sequence: the oracle then covers issues, releases and moves, not the bins (the
         # bin code is the same on every platform and is checked where reuse happens).

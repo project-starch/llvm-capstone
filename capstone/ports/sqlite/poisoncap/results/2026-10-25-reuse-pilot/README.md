@@ -46,7 +46,13 @@ the realloc oracle reading the old offset before the call; the checks now requir
 exit 0, the traced output to equal the wrapped one, the exit report to dominate the alloc-done snapshot
 bin by bin, and at least 1,000 allocations and 1,000 SQL steps in a pilot). The second part passes on
 every platform, and its three edited-report negative controls fail. The bullets below describe the first part
-unless they say otherwise.
+unless they say otherwise. A second review found the exit-bin check passing a report that put every
+reuse in one bin (shown: the previous checker passes it), and the pilot gate checking attempts but not
+reuses; both are fixed and the record's third part re-runs every set. Two statements of the review
+commit are corrected here: `reuse-wrap.c` reads the PCACHE2 and MALLOC arguments as non-const method
+pointers where SQLite's own fallback and default-cache calls pass const ones, the same as SQLite's own
+`sqlite3_config` reads them (a qualifier difference, not a different object type); and the module
+arguments are recorded in each result row (`module_args`), not in the `@@PARAMS` line.
 
 - **Native** (GNU ld, upstream memsys5): `reuse/test-reuse-wrap.c` prints every call and address;
   `reuse/check-reuse-wrap.py` recomputes the counters and bins independently: ALL PASS, including output
