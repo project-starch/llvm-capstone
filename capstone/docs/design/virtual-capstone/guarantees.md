@@ -78,6 +78,13 @@ profile continues to reject inexact CSMINT descriptors. A future tag-bit-only im
 must not widen authority during a round trip. Reconcile the formats and test
 representability before claiming ISA/RTL equivalence or freezing the format.
 
+Freeing cursor bits for a wider lifetime id starts with an invariant, not a
+format change: under `x-capstone-addr` (isa.md, "Capability addresses") a
+tagged capability carries only an address the policy allows, Sv39-canonical by
+default. Only QEMU enforces it so far. The repacked format must wait until the
+RTL enforces the same rule and the corpus and benchmark kits run unchanged
+under it.
+
 Other remaining interface decisions include permanent opcode/CSR allocations,
 portable context storage and resource-failure behavior. A second OS adapter
 would test the intended integration boundary. These are engineering tasks

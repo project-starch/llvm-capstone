@@ -263,6 +263,40 @@ fix is in silicon, from "never dereference" to "never leave the window"). **Refi
 
 **R-60's predicate in closed form (recorded 2026-10-21; capstone-ariane 1b6f9c446, proof r60-window-equality.py at 0d842cec9, reproduced independently by the semantics owner).** The first implementation computed the ruling literally, decompress_bounds(compress_bounds(fat), c_new) != fat, twice per pack, and did not synthesise (trial B: technology mapping at 94-96 GB against 5.4 GB). The ruling is unchanged; its implementation is: with E read from the source's stored word (E = iE ? E : 0) and start the decoded base, the cursors that decode to the same bounds form ONE window [w_lo, w_lo + 2^(E+14)) with w_lo = (start & ~(2^(E+11) - 1)) - 2^(E+11) mod 2^64, so the tag clears iff E + 14 < 64 and (c_new - w_lo) mod 2^64 >= 2^(E+14). It equals the round-trip form on 2.26 million cases (random decoded regions over E 0..49 at both window edges and one byte past each, inexact sources, B3 = 0, starts within a span of 2^64, E + 14 >= 64), and re-encoding a decoded fat changes neither E nor iE (0 of 149,238). One instance suffices: a register never holds a cursor outside the window of its own decode (the register file holds the compressed word and every read decodes it at the register's own cursor), so the rs1 slot can fire only when rd == rs1, where it carries the result; the round-trip form stays in the RTL as a simulation-only oracle that stops the run on any disagreement or on an out-of-window unmoved rs1 slot, and it stayed silent on every arm.
 
+**Capability addresses: `x-capstone-addr` (proposed 2026-10-25; QEMU at capstone-qemu
+`isa/v39-address-policy` 49a225e408, not in the RTL and not yet pinned here).** A TAGGED capability's cursor must be an address the machine's address
+policy allows: `sv39` (the default: bits 63:39 equal bit 38), `sv48`, `sv57` (the same at bits 47 and 56), `phys56`
+(bits 63:56 clear) or `off`. Only the cursor is restricted; bounds may end at, start beyond or span refused addresses,
+as the reset root does. The 128-bit encoding is unchanged: this is the first step toward giving cursor[63:39] to a wider
+lifetime id, and it makes those bits carry no information first. The policy is a CPU property fixed when the machine
+starts, the same on every hart, and never derived from `satp.MODE`. An operation whose result would carry a refused
+cursor gives the integer cursor, untagged, with a ZERO metadata half, exactly R-60's cleared result; returning to an
+allowed address does not restore the tag (except through the physical profile's legacy gp fabrication, which builds a
+tagged PCC-derived gp with cursor 0 from an untagged gp). This covers CINCOFFSET, CINCOFFSETIMM, SCC, INIT, SHRINK's clamped cursor,
+both halves of SPLIT, REVOKE's reset to base, the UNINIT advance after a completed STC (the store stands; when the STC also consumes that register as its source,
+the result is cnull as before), LDC after the
+tag map's bounds are restored, the CJALR link, the genesis and debug-minted capabilities, context and frame loads and
+stores, and SEAL, whose address is its frame, the base. Moving the PC faults with 29 before any state changes instead:
+a CJALR or CBNZ target, immediate included (tval the target); a capability-mode fetch from a refused address, the
+second half of a crossing instruction included (tval the refused address, or the instruction's start in virtual C,
+whose PCC check covers the whole instruction before its second half is fetched; never page fault 12); CALL through a seal whose frame
+or resumed pc is refused and RETURN whose continuation, frame or resumed pc is refused (before either is consumed);
+RETURN to the handler with a refused new ctvec; MRET into C mode at a refused pc and MRET promoting a
+refused scalar ctvec; CSMINT with a refused descriptor cursor (tval 0, before any id is allocated); and a CSRUNV resume
+or reply at a refused pc (tval 0, before the context or the reply slot changes). A handler whose frame or resumed pc is
+refused takes no H-interrupt; it stays pending in cis. Until the RTL enforces the rule, QEMU's default predicts a check
+silicon does not make; it differs only where a tagged cursor, a sealed capability's frame base, or the target of a
+jump, return or fetch lies outside the allowed range. `x-capstone-addr=off` keeps
+the pin's behaviour except for the fixes in the same series, which hold under every policy: CBNZ looks its target up
+on every execution, RETURN to the handler with an untagged cepc faults 29 (the pin aborts on an assertion), CAPENTER
+always flushes the TLB and ends its translation block, a refused debug mint leaves rd unchanged, a semihosting
+result in a0 is untagged, and CALL, RETURN and the H-interrupt check look at the frame's pc slot before the exchange
+reads it, so a frame must be stable RAM (an untagged slot is read from memory one extra time, which an MMIO frame
+would see). Evidence (p12): capstone-qemu `tests/capstone-addr-policy` 89/89, with negative controls
+(the rule off, and the unchanged pin, which aborts on the RETURN and CALL cases; 2026-10-25), and on the series above
+(2026-10-26) every commit builds, the suite passes 89/89 with each case's verdict lines identical to the first
+version, and the Tier 0 suites keep their recorded counts. Known untested paths are listed in that suite's README.
+
 **CPMP entries are physical (ruled 2026-10-20, semantics owner; S-23, R-60's batch item 1).** A CPMP entry holds only
 a capability of the PHYSICAL namespace. Every supported producer is the monitor's M-mode region path (swap_cpmp, the
 boot carves, region grants), which runs with csupctl.table clear; a context's virtual nodes live in its registers, frame
