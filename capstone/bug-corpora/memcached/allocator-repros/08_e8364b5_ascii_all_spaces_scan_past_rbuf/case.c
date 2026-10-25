@@ -44,7 +44,7 @@ MC_CASE(8) {
    * and is why the defect is an overrun rather than a single stray read. */
   memset(rbuf, ' ', READ_BUFFER_SIZE);
   memset(successor, ' ', READ_BUFFER_SIZE);
-  size_t rbytes = READ_BUFFER_SIZE;
+  size_t rbytes = READ_BUFFER_SIZE; MC_FILL_USABLE_EXTENT(rbuf, rbytes);
 
   /* try_read_command_ascii at the pin, :370-372:
    *
