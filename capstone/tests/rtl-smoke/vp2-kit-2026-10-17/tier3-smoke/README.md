@@ -8924,3 +8924,26 @@ Record: `records/b2bs-census-b1.result-lines.txt`. Counters are cumulative, page
   has no part left, so N=2 is cross-board. Output: `t3-run-b2-dcc6daf6e-b<board>/rfix-bare`.
 - **Predictions:** every image reads its PREREG vector exactly on both boards, so R-58, R-59 and Q-24 are each CONFIRMED
   ON SILICON at N=2. Any other vector is a finding.
+
+### Bitstream 2, result: fault_mstatus. The one cause-13 event reads MPRV = 0 in a non-zero, written mstatus word, which refutes H1 for that event; one event, below the predicted count (board 2, 2026-10-26 03:36-04:13)
+
+Record: `records/b2bs-uaf-ms-b2.result-lines.txt`.
+- **The run:** 202 of 202 steps completed. `@@PARAM fault_mstatus=Y` was read back, so the parameter took. The bounds
+  control faulted (cause 28). Readings 0.
+- **Counts:** cause 13 in **1 of 200** (run uaf-185), cause 25 in 199.
+  - **The pre-registration predicted about 2 to 12.** One is below that band. At 2.5% per run, P(<= 1 of 200) = 0.039:
+    an unlikely count, not an impossible one. The earlier bitstream-2 rate was 10 of 400.
+  - The count is reported as outside the prediction. It does not bear on the mstatus reading.
+- **The cause-13 event** printed its two "resolve refused at arena" lines (addr 0x3f84ce1040, pc 0x3f84c10c70, the
+  control_read_probe site), and each was followed by its refused-escape line:
+  `mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3f84ce1040 cause 13`.
+  - The word decodes to MPRV 0, MPP 0, MIE 0, MPIE 0, FS 1, UXL 2 and SXL 2.
+  - **It is not 0x0, so the escape wrote it.**
+  - The cause-25 runs carry no refusal and no mstatus line, as predicted. uaf-repeat.py's own per-run listing shows run
+    190 with the two refusals because its 12-line dmesg tail still holds run 185's lines; mstatus-read.py attributes
+    lines to the run that first shows them.
+- **By the pre-registration's rule: MPRV = 0 on every cause-13 refusal (2 of 2), so H1 is REFUTED for this event.**
+  - This is N = 1 event, two refusals of one fault.
+  - The pre-registered consequence is that H2-H4 remain, and the aperture instrument goes into bitstream 3.
+  - The word's MPP is 0 rather than 3. The pre-registration only named MPP's role when MPRV = 1, so that observation is
+    recorded, not interpreted.
