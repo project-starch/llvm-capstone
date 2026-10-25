@@ -23,6 +23,14 @@ source "$HERE/../../../tests/capstone-test-env.sh"
 R=$CAPSTONE_REPO_ROOT
 WHAT=${1:-probe}
 
+# THE IMAGE MUST BE REPRODUCIBLE FROM ITS RECORDED HASH. sapi/cli/php_cli.c:695,697 put
+# __DATE__ and __TIME__ into PHP's own `php -v` banner, so two builds of identical source in
+# different minutes produced different images -- which made every bundle's image_sha256 an
+# identity tag rather than something a reader could rebuild and check. clang honours
+# SOURCE_DATE_EPOCH for both macros; with it pinned, two builds are byte-identical (verified).
+# Override it only to deliberately stamp a build, never to "freshen" one.
+export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1700000000}
+
 OUT=${PHP_VIRTUAL_OUT:-$CAPSTONE_TMP_ROOT/virtual-runtime}
 SDK="$OUT/sdk"
 CC="$SDK/capstone-cc"

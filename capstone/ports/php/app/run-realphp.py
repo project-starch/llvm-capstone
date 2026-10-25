@@ -67,7 +67,7 @@ stdout comparison is kept as a REPORTED note -- printed, and carried into the bu
 `reached` rests on the two facts above. A divergence is therefore visible on every case without
 silently deciding any of them.
 """
-import argparse, json, re, subprocess, sys
+import argparse, hashlib, json, re, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -551,6 +551,35 @@ def cross_arm_gates(args, per_arm, llvm_bin):
     return problems, revokes_in_image
 
 
+def sha256_file(path):
+    """sha256 of a file on this host, for the platform record. A bundle that names its inputs
+    by path says nothing about what those files contained when it ran."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def platform_record(args):
+    """Every platform binary by sha256, with its path for the reader. A file that is absent is
+    said to be absent -- an omitted key would read as an input that did not matter."""
+    def binary(path):
+        path = Path(path)
+        return f"{sha256_file(path)}  {path}" if path.exists() else f"MISSING:{path}"
+    return {
+        "compiler": subprocess.run([str(args.llvm_bin / "clang"), "--version"],
+                                   capture_output=True, text=True).stdout.splitlines()[0],
+        "qemu": binary(args.qemu),
+        "firmware": binary(args.images / "fw_jump.elf"),
+        "kernel": binary(args.images / "Image"),
+        "rootfs": binary(args.images / "rootfs.ext2"),
+        "launcher": binary(args.adapter / "capstone-vexec"),
+        "module": binary(args.adapter / "module" / "capstone_vm.ko"),
+        "runner": "ports/php/app/run-realphp.py",
+    }
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__,
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -597,6 +626,14 @@ def main():
     # probe transcript, which is the one run in the session whose image can change on its own.
     probe_sha = subprocess.run(["sha256sum", str(args.probe)], capture_output=True,
                                text=True).stdout.split()[0]
+    # THE PLATFORM RECORD IS TAKEN BEFORE THE FIRST BOOT, and by content. It used to be
+    # written afterwards and as PATHS, which named files on this host and said nothing about
+    # what they held: the kernel under build-qemu/images was built from a buildroot checkout
+    # that is not the pin the superproject records, so no bundle written that way can say
+    # which kernel it ran on. rootfs.ext2 in particular is WRITTEN BY THE GUEST, so a hash
+    # taken after the arms have run is not the filesystem that was booted.
+    platform = platform_record(args)
+
     if not args.from_record:
         stage_inputs(args, cases)
 
@@ -740,12 +777,6 @@ def main():
             counts[key] = counts.get(key, 0) + 1
         print(f"  {arm:18} " + "  ".join(f"{k}={v}" for k, v in sorted(counts.items())))
 
-    platform = {
-        "compiler": subprocess.run([str(args.llvm_bin / "clang"), "--version"],
-                                   capture_output=True, text=True).stdout.splitlines()[0],
-        "qemu": str(args.qemu), "firmware": str(args.images / "fw_jump.elf"),
-        "kernel": str(args.images / "Image"), "runner": "ports/php/app/run-realphp.py",
-    }
     for arm in ARMS:
         verdicts.write_bundle(args.out / f"bundle-{arm}", "php-5.0.0-bug-corpus", arm, rows[arm],
                               {"platform": platform, "image_sha256": image_sha,

@@ -589,6 +589,48 @@ def node_table_cases():
           "node_initial_pages=7 " in rv.guest_script(runs, node_pages=7), True)
 
 
+def provenance_cases():
+    """A bundle must identify its platform BY CONTENT. These were recorded as bare paths, so a
+    bundle named files on one host and said nothing about what they held -- and the kernel here
+    was built from a buildroot checkout that is not the pin the superproject records."""
+    print("\n-- the platform record --")
+    import hashlib
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        (d / "Image").write_bytes(b"kernel bytes")
+        want = hashlib.sha256(b"kernel bytes").hexdigest()
+        check("a platform binary is hashed, not just named",
+              R.sha256_file(d / "Image"), want)
+
+        images, adapter = d, d / "adapter"
+        (d / "fw_jump.elf").write_bytes(b"fw")
+        (d / "rootfs.ext2").write_bytes(b"rootfs")
+        (adapter / "module").mkdir(parents=True)
+        (adapter / "capstone-vexec").write_bytes(b"launcher")
+        (adapter / "module" / "capstone_vm.ko").write_bytes(b"module")
+        args = types.SimpleNamespace(llvm_bin=Path("/nonexistent"), qemu=d / "qemu",
+                                     images=images, adapter=adapter)
+        try:
+            rec = R.platform_record(args)
+        except (FileNotFoundError, IndexError):
+            # clang is absent in this sandbox; the compiler line is not what is under test
+            R.subprocess = types.SimpleNamespace(
+                run=lambda *a, **k: types.SimpleNamespace(stdout="clang stub\n"))
+            rec = R.platform_record(args)
+            R.subprocess = subprocess
+
+        check("the kernel is recorded by digest", rec["kernel"].split()[0], want)
+        check("the launcher and the module are recorded too",
+              all(len(rec[k].split()[0]) == 64 for k in ("launcher", "module")), True)
+        check("the guest-written rootfs is recorded as well", "rootfs" in rec, True)
+        check("an ABSENT binary says so rather than being omitted",
+              rec["qemu"].startswith("MISSING:"), True)
+        check("and a missing input is never mistaken for a 64-hex digest",
+              len(rec["qemu"].split()[0]) == 64, False)
+        check("the judge's required keys are all present",
+              [k for k in verdicts.PLATFORM_KEYS if k not in rec], [])
+
+
 def lint():
     print("\n-- lint --")
     for mod in ("pyflakes", "flake8"):
@@ -612,6 +654,7 @@ if __name__ == "__main__":
     main_path_cases()
     stale_image_case()
     node_table_cases()
+    provenance_cases()
     lint()
     print()
     if FAILURES:
