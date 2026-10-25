@@ -8969,3 +8969,14 @@ Record: `records/b2bs-uaf-ms-b2.result-lines.txt`.
   - MPRV = 0 refutes it for that event;
   - a 0x0 word decides nothing.
   - The tally is reported per (MPRV, MPP), and per event.
+
+### Addendum to the fault_mstatus x400 pre-registration (e97af7bb27bb), before any of its boots (2026-10-26 04:3x)
+
+- **Withdrawn before pre-registration:** the runtime lane proposed a flush-all arm (module c8baa339, resume_flush_all;
+  W-obj and W-reg on kept-mapped pages) to replace the x400, then withdrew it.
+  - At dcc6daf6e every switcher write of satp already raises the TLB flush to every TLB (the S-29 fix), so the
+    kept-mapped reads already walked successfully. That arm was never pre-registered or run.
+- **The slot reverts to the fault_mstatus run, at N = 200 per board, not 400**, as the runtime lane now asks.
+  - It keeps the lowest priority, and is dropped if board time is short.
+  - UR_TAG `-x200`; the predictions scale to about 2 to 10 cause-13 events per board.
+  - The H1 rule is unchanged.
