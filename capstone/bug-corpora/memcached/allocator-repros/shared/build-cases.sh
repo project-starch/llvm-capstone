@@ -83,7 +83,9 @@ capstone-application)
   fi
   for dir in "$CORPUS"/[0-9][0-9]_*/; do
     number=$(basename "$dir" | cut -c1-2)
-    "$CAPSTONE_SDK/capstone-cc" -std=c11 -O1 -g -Wall -Wextra -DNDEBUG -DCHUNK_ALIGN_BYTES=16 "${carve[@]}" \
+    # MC_CASE_CFLAGS: extra case flags, e.g. -DMC_FILL_USABLE_EXTENT_ON (case 8's variant, shared/corpus.h).
+    # shellcheck disable=SC2086
+    "$CAPSTONE_SDK/capstone-cc" -std=c11 -O1 -g -Wall -Wextra -DNDEBUG -DCHUNK_ALIGN_BYTES=16 "${carve[@]}" ${MC_CASE_CFLAGS:-} \
       -I"$CORPUS/shared" -I"$PORT/src/shared" -I"$SRC" -I"$PORT/../adapted" \
       -I"$REPO/capstone/runtime/include" \
       -o "$OUT/bin/defect-$number" "$dir/case.c" "$driver" "$work/libmemcached-allocators.a"

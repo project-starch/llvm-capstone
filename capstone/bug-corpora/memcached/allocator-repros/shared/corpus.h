@@ -169,4 +169,20 @@ void mc_case_body(int fixed, struct mc_outcome *o);
   }                                                                            \
   void mc_case_body(int fixed, struct mc_outcome *o)
 #endif
+/* Case 8's variant hook, a statement on the line that sets the read buffer's size, so an
+ * image built without the variant is the image built before the hook existed. With
+ * -DMC_FILL_USABLE_EXTENT_ON it fills the bytes from the end of the buffer to the end of
+ * the buffer's own capability with spaces. On the Q-15 nested build that is the tail
+ * pad cache.c rounds a lifetime up by (16 bytes for READ_BUFFER_SIZE): without it the
+ * scan stops at the pad's first byte, inside the bound, and the case's precondition
+ * (785) refuses a verdict. Everywhere the capability ends at the buffer, it writes
+ * nothing. The case already fills what follows the buffer with spaces; this is that
+ * premise applied to the bytes the allocator put in between. */
+#if defined(MC_FILL_USABLE_EXTENT_ON)
+#define MC_FILL_USABLE_EXTENT(p, n)                                            \
+  memset((p) + (n), ' ',                                                       \
+         (size_t)(__builtin_capstone_cap_get_end(p) - (uintptr_t)((p) + (n))))
+#else
+#define MC_FILL_USABLE_EXTENT(p, n) ((void)0)
+#endif
 #endif /* MC_CORPUS_H */
