@@ -9002,3 +9002,13 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
 - **Against the pre-registration (cb4eea9ea09f): every reading holds.**
 - Under the lead's earlier "do" on this variant, the runtime lane takes the fill reading as case 08's reading. memcached's
   ported column then reads 20 of 21, with 1 no reading.
+
+### Correction to the two pb13q15 08 sections above: the lead has not ruled on the variant (2026-10-26)
+
+- Both sections say the runtime lane would take the fill reading as case 08's "under the lead's earlier 'do' on this
+  variant". **That is wrong.** It was the runtime lane's own recommendation in its pending-decisions list, not a ruling by
+  the lead (that lane's correction, 2026-10-26).
+- Whether a variant's reading replaces the case's reading is a denominator decision for the lead, and it is pending.
+- Until the lead rules, the pb13q15 row keeps 08 = NO-READING control-failed 785. The fill reading is recorded as its
+  own row (pb13q15-08fill in the silicon tally), not counted.
+- The readings themselves are unchanged.
