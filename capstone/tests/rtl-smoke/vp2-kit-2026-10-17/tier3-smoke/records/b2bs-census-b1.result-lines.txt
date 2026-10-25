@@ -1,0 +1,16 @@
+# the pin_pte_census gate on bitstream 2, board 1 (tier3-census-b2.sh): result lines.
+CE BEGIN 03:31:29 board 1 kit bkit9-b2-pc1 booking 363
+CE END rc=0 03:39:19
+CENSUS boot completed; transcript <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/census/guest/board.txt; steps ['off-walk', 'on', 'uaf', 'vma', 'walk']
+READ off-walk: RUN:off-walk:rc=0
+READ off-walk: counters pages/absent/write/dirty/young/write_clean = 0/0/0/0/0/0
+READ on: ON:Y
+READ walk: RUN:on-walk:rc=0
+READ walk: counters pages/absent/write/dirty/young/write_clean = 528/0/528/528/528/0
+READ vma: RUN:on-vma:rc=0
+READ vma: counters pages/absent/write/dirty/young/write_clean = 1019/0/1018/1018/1019/0
+READ uaf: RUN:on-uaf:rc=139
+READ uaf: capstone-exec: domain fault cause=25 pc=0x3fab590c70 address=0x3fab63d040
+READ uaf: counters pages/absent/write/dirty/young/write_clean = 1514/0/1513/1513/1514/0
+CE readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CE board1 DONE 03:39:19

@@ -8835,3 +8835,23 @@ Record: `records/b2n2-juliet-spatial-b1.result-lines.txt`.
     normal M-mode context.
   - If H1 holds, it can only be intermittent, since a permanent MPRV would fault every load. A refusal with no mstatus
     line is a failed print path, and is reported.
+
+### Bitstream 2, result: the pin_pte_census gate. write_clean is 0 at every read on the board's 6.4.14 kernel, the same shape as QEMU (board 1, 2026-10-26 03:31-03:39)
+
+Record: `records/b2bs-census-b1.result-lines.txt`. Counters are cumulative, pages/absent/write/dirty/young/write_clean.
+
+| read | board (6.4.14) | QEMU (6.1) |
+|---|---|---|
+| census off, after pin.dom walk | 0/0/0/0/0/0 | 0/0/0/0/0/0 |
+| walk | 528/0/528/528/528/0 | 516/0/516/516/516/0 |
+| vma | 1019/0/1018/1018/1019/0 | 1002/0/1001/1001/1002/0 |
+| uaf (cause 25, control_read_probe) | 1514/0/1513/1513/1514/0 | 1491/0/1490/1490/1491/0 |
+
+- **Every writable page the module pinned is dirty on the board kernel too, so write_clean is 0 at every read.** One
+  page is read-only, from vma, as on QEMU.
+- The page counts run about 2% higher on the board, with the same shape: the walk pins 528 against 516.
+- The off-state walk returned rc 0 with every counter at 0. That is both the module's health control and the census's
+  negative control.
+- Readings 0. **Against the pre-registration (68ef34d55080): every reading holds.**
+- **What it supports:** in these programs R-61 can arm on silicon only from read-only pages, as on QEMU. This is
+  consistent with the corpus's zero cause 15.
