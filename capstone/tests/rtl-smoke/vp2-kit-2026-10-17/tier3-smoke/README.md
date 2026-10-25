@@ -8718,3 +8718,12 @@ Record: `records/b2n2b-b2.result-lines.txt`.
   `t3-run-b2-dcc6daf6e-b2/n2r/na`.
 - **Prediction:** n2-grade 0 different on each group against the first reading. Row 13's own predicted `cause=12 pc=0x0`
   shows as the pc=0 count of 1 in the 13-16 boot, as twice before.
+
+### Bitstream 2 N=2 result: capi 10-19 re-run, identical to the first reading (board 2, 2026-10-25 14:2x-14:52)
+
+Record: `records/b2n2r-capi-b2.result-lines.txt`.
+- **n2-grade 0 different on each group:** 10-12 at 3 cells, 13-16 at 4 and 17-19 at 3. Each also matches the reference
+  (verdicts-compare).
+- The 13-16 boot's pc=0 count of 1 is row 13's `cause=12 pc=0x0`, as predicted. Other readings are 0.
+- **Against the pre-registration (18ccde319e99): every reading holds.** With this, every non-Juliet arm of the corpus
+  has two bitstream-2 readings, equal cell for cell.
