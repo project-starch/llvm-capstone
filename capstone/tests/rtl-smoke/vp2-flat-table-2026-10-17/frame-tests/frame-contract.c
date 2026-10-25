@@ -6,6 +6,12 @@
  *              every escape restores on the RTL, S-21) before the child runs: with fix (a) the write
  *              faults cause 25; without it the write lands and the child still reaches its exit ECALL
  *              (QEMU keeps the caller internally, so the overwrite itself has no effect there)
+ *              MEASURED 2026-10-26: does NOT separate the modules. Its child exits at once, the launcher then
+ *              unmaps the frame (exec.c, after CV_THREAD_EXIT), and that unmap's retire kills the copy on a
+ *              module without fix (a) too. `copy` races the same exit.
+ *   prewrite   the control: write our copy at frame+1024 with no create -> must land
+ *   write-live a child that never exits, then write our copy at frame+1024 while it lives: with fix (a) the
+ *              write faults cause 25; without it the write lands (the S-21 window, create to exit)
  * The frame is filled exactly as runtime/virtual/thread.c fills it. Prints FRAME_TEST lines; a survived read exits 1. */
 #include <capstone/capability.h>
 #include <capstone/virtual.h>
@@ -20,6 +26,7 @@ extern long __capstone_vm_thread_create_frame(void *frame);
 static void *child(void *unused) { (void)unused; capstone_virtual_thread_exit(NULL); }
 static volatile int child_ran;
 static void *child_flag(void *unused) { (void)unused; child_ran = 1; capstone_virtual_thread_exit(NULL); }
+static void *child_live(void *unused) { (void)unused; child_ran = 1; for (;;) __asm__ volatile("" ::: "memory"); }
 static unsigned char stack_area[16384] __attribute__((aligned(16)));
 
 static unsigned char *acquire(size_t bytes)
@@ -89,6 +96,29 @@ int main(int argc, char **argv)
         fflush(stdout);
         for (unsigned long i = 0; i < 400000000UL && !child_ran; ++i) __asm__ volatile("" ::: "memory");
         printf("FRAME_TEST:write1024 child_ran=%d (the child ran to its exit ECALL)\n", child_ran);
+        return 0;
+    }
+    if (!strcmp(argv[1], "prewrite")) {
+        unsigned char *f = acquire(4096);
+        if (!f) { puts("FRAME_TEST:prewrite acquire-failed"); return 3; }
+        fill_entry(f, child_flag);
+        ((volatile uint64_t *)(f + 1024))[0] = 0x5321000000000001UL;
+        printf("FRAME_TEST:prewrite WROTE frame+1024 with no create (expect: lands)\n");
+        return 0;
+    }
+    if (!strcmp(argv[1], "write-live")) {
+        unsigned char *f = acquire(4096);
+        if (!f) { puts("FRAME_TEST:write-live acquire-failed"); return 3; }
+        fill_entry(f, child_live);
+        long a = __capstone_vm_thread_create_frame(f);
+        for (unsigned long i = 0; i < 400000000UL && !child_ran; ++i) __asm__ volatile("" ::: "memory");
+        printf("FRAME_TEST:write-live created=%ld child_ran=%d (the child lives); writing our copy at frame+1024\n",
+               a, child_ran);
+        fflush(stdout);
+        ((volatile uint64_t *)(f + 1024))[0] = 0x5321000000001024UL;
+        ((volatile uint64_t *)(f + 1120))[0] = 0x5321000000001120UL;
+        ((volatile uint64_t *)(f + 1408))[0] = 0x5321000000001408UL;
+        printf("FRAME_TEST:write-live WROTE frame+1024, +1120, +1408 while the child lives\n");
         return 0;
     }
     return 2;

@@ -54,3 +54,49 @@ On both kits:
 
 QEMU keeps the S caller internally, so on kitB the overwrite has no effect beyond landing. The check measures the
 frame's REACHABILITY, which is fix (a)'s whole claim, not the RTL's restore.
+
+## Read 2026-10-26 (frame-contract.dom 527ae631233a93e1): kitB's prediction FAILED, and the pair does not separate
+
+| mode | kitA (fix a) | kitB (no retire) |
+|---|---|---|
+| twice | first=1 second=-16 child_ran=1 (as predicted) | the same (as predicted) |
+| copy | created=1, cause 25 at frame+0x38 (as predicted) | **created=1, cause 25 at frame+0x38**, against the predicted `SURVIVED` |
+| write1024 | created=1, cause 25 at frame+0x400 (as predicted) | **created=1, cause 25 at frame+0x400**, against the predicted WROTE |
+
+On both kits: slot gate OK, banner `supervisor_slots=2`, halts 0, and `child frame grant not retired` 0.
+- Module B was the one loaded: its staged hash is 51d59efd8b19c541, the same as the kit's.
+- Module B does lack the retire: it has 2 CSRETIRE encodings to A's 3.
+
+**RETRACTION.** The five-item gate's `copy` reading (RESULT-five-item-revision-gate.md, "Frame tests (S-21)",
+`created=1, then cause=25`) has stood as evidence that fix (a) makes the domain's copy dead. Without the retire, the
+same test reads the same 25. It does not measure fix (a), and neither does `write1024`.
+
+**Why** (found with diagnostic modes after the read; diag.dom ad143468a3bc22599a50e6a82f0cf6e1, one boot per kit):
+
+| diagnostic | kitA | kitB |
+|---|---|---|
+| prewrite (no create) | WROTE | WROTE |
+| waitfirst (create, wait for the child to exit, write) | cause 25 | cause 25 |
+| spin (create a child that never exits, write while it lives) | **cause 25** | **WROTE** |
+
+When a child exits, the launcher unmaps its frame arena (runtime/virtual/exec.c, the CV_THREAD_EXIT path's
+`unmap_arena(request.frame, 4096)`). That unmap's retire kills the domain's copy whatever the module did at create.
+- `copy` and `write1024` use a child that exits at once, so they race the exit.
+- The window fix (a) closes is create to child exit. Only a write while the child lives measures it, and there the
+  modules separate.
+
+## Pre-registered 2026-10-26, before its boots: the corrected two-sided check
+
+frame-contract.dom b749e682daf358a0 adds two modes, run on fresh boots of both kits:
+- `prewrite`: the control. Write the copy at +1024 with no create.
+- `write-live`: create a child that never exits, wait for it to run, then write +1024, +1120 and +1408.
+
+| mode | kitA (fix a) | kitB (no retire) |
+|---|---|---|
+| prewrite | WROTE | WROTE |
+| write-live | created > 0, child_ran=1, then cause 25 at frame+0x400; no WROTE | created > 0, child_ran=1, WROTE |
+
+The spin readings above are the same shape; these boots are the confirmation, since that finding was post hoc.
+
+**What counts against fix (a):** a WROTE in kitA's write-live. **What voids the run:** prewrite not landing on either
+kit, or kitB's write-live faulting.
