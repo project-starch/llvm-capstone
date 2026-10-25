@@ -100,3 +100,22 @@ The spin readings above are the same shape; these boots are the confirmation, si
 
 **What counts against fix (a):** a WROTE in kitA's write-live. **What voids the run:** prewrite not landing on either
 kit, or kitB's write-live faulting.
+
+## Read 2026-10-26 (frame-contract.dom b749e682daf358a0): the corrected pair separates, as pre-registered
+
+| mode | kitA (fix a) | kitB (no retire) |
+|---|---|---|
+| prewrite | WROTE | WROTE |
+| write-live | created=1 child_ran=1, then domain fault cause 25 at frame+0x400; no WROTE | created=1 child_ran=1, WROTE frame+1024, +1120, +1408 while the child lives |
+
+On both kits: slot gate OK, banner `supervisor_slots=2`, halts 0, `child frame grant not retired` 0. With the
+diagnostic spin boots above, this is N=2 per kit.
+
+**So fix (a) holds where it matters.** From CV_THREAD_CREATE until the child exits, the domain cannot write its
+child's frame at frame+1024.., the S caller's snapshot that every escape restores on the RTL. Without the retire it
+can.
+
+Scope:
+- This is QEMU with two slots. QEMU keeps the caller internally, so it measures the frame's reachability, which is the
+  fix's claim, not the RTL restore.
+- On today's one-slot bitstreams the create is refused first, and the board path never reaches the retire.
