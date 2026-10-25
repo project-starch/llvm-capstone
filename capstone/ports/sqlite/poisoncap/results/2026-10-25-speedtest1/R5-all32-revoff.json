@@ -1,0 +1,72 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/memsys5-all32/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 36000,
+ "revocation_default_off": true,
+ "kernel_root": "~/poisoncap-platform/kernels/poison-nodebug",
+ "started_utc": "2026-10-25T01:39:40Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "pre": [],
+ "sysctl_at_run": "security.cheri.runtime_revocation_default: 0\nsysctl: unknown oid 'debug.witness.watch'",
+ "seconds": 1161.1,
+ "exit": "no exit (ssh: Connection to 127.0.0.1 closed by remote host.)",
+ "console": [
+  "panic: Poison probe missing page 0x4fef8000",
+  "KDB: stack backtrace:",
+  "kdb_backtrace() at kdb_backtrace+0x30",
+  "vpanic() at vpanic+0x18a",
+  "panic() at panic+0x4a",
+  "vm_cheri_revoke_probe_poison() at vm_cheri_revoke_probe_poison+0x96",
+  "do_trap_supervisor() at do_trap_supervisor+0x9e",
+  "KDB: enter: panic",
+  "Stopped at      kdb_enter+0x50:"
+ ],
+ "stdout": "INIT\nnHeap= 268435456\npHeap= 0x41600000\nmnReq= 16\nheap len =268435456, expected = 268435456\n-- Speedtest1 for SQLite 3.22.0 2026-04-26 20:43:19 637f6b03b9f1f31849ef0b4691ac21\n 100 - 50000 INSERTs into table with no index......................   18.484s\n 110 - 50000 ordered INSERTS with one index/PK.....................   41.082s\n 120 - 50000 unordered INSERTS with one index/PK...................   42.763s\n 130 - 25 SELECTS, numeric BETWEEN, unindexed......................   38.961s\n 140 - 10 SELECTS, LIKE, unindexed.................................   52.348s\n 142 - 10 SELECTS w/ORDER BY, unindexed............................   78.914s\n 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................   58.504s\n 150 - CREATE INDEX five times..................................... ",
+ "stdout_from": "last poll at 362.0 s (guest stopped answering)",
+ "finished_utc": "2026-10-25T01:59:43Z",
+ "tests": [
+  {
+   "id": 100,
+   "name": "50000 INSERTs into table with no index",
+   "seconds": 18.484
+  },
+  {
+   "id": 110,
+   "name": "50000 ordered INSERTS with one index/PK",
+   "seconds": 41.082
+  },
+  {
+   "id": 120,
+   "name": "50000 unordered INSERTS with one index/PK",
+   "seconds": 42.763
+  },
+  {
+   "id": 130,
+   "name": "25 SELECTS, numeric BETWEEN, unindexed",
+   "seconds": 38.961
+  },
+  {
+   "id": 140,
+   "name": "10 SELECTS, LIKE, unindexed",
+   "seconds": 52.348
+  },
+  {
+   "id": 142,
+   "name": "10 SELECTS w/ORDER BY, unindexed",
+   "seconds": 78.914
+  },
+  {
+   "id": 145,
+   "name": "10 SELECTS w/ORDER BY and LIMIT, unindexed",
+   "seconds": 58.504
+  }
+ ],
+ "running_at_end": {
+  "id": 150,
+  "name": "CREATE INDEX five times"
+ },
+ "runner_log_tail": [
+  "exit=no exit (ssh: Connection to 127.0.0.1 closed by remote host.) seconds=1161.1 tests=7 console_lines=9",
+  "100 110 120 130 140 142 145"
+ ]
+}

@@ -1,0 +1,134 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/memsys5/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 18000,
+ "revocation_default_off": true,
+ "kernel_root": "~/poisoncap-platform/kernels/poison-nodebug",
+ "started_utc": "2026-10-24T17:05:07Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "pre": [
+  {
+   "command": "sysctl security.cheri.runtime_revocation_default=1",
+   "rc": 0,
+   "output": "security.cheri.runtime_revocation_default: 0 -> 1"
+  }
+ ],
+ "sysctl_at_run": "security.cheri.runtime_revocation_default: 1\nsysctl: unknown oid 'debug.witness.watch'",
+ "seconds": 15261.3,
+ "exit": 0,
+ "stdout": "INIT\nnHeap= 268435456\npHeap= 0x41600000\nmnReq= 16\nheap len =268435456, expected = 268435456\nptr is tagged1\nptr is tagged0\n-- Speedtest1 for SQLite 3.22.0 2026-04-26 20:43:19 637f6b03b9f1f31849ef0b4691ac21\n 100 - 50000 INSERTs into table with no index......................   18.999s\n 110 - 50000 ordered INSERTS with one index/PK.....................   36.078s\n 120 - 50000 unordered INSERTS with one index/PK...................   41.950s\n 130 - 25 SELECTS, numeric BETWEEN, unindexed......................   38.027s\n 140 - 10 SELECTS, LIKE, unindexed.................................   49.515s\n 142 - 10 SELECTS w/ORDER BY, unindexed............................   76.488s\n 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................   55.389s\n 160 - 10000 SELECTS, numeric BETWEEN, indexed..................... 14476.185s\n 190 - DELETE and REFILL one table.................................   24.873s\n 210 - ALTER TABLE ADD COLUMN, and query...........................    1.811s\n 240 - 50000 UPDATES of individual rows............................   44.619s\n 250 - One big UPDATE of the whole 50000-row table.................    8.892s\n 260 - Query added column after filling............................    1.897s\n 280 - 50000 DELETEs of individual rows............................   30.449s\n 300 - Refill a 50000-row table using (b&1)==(a&1).................   28.292s\n 320 - subquery in result set......................................  231.784s\n 400 - 70000 REPLACE ops on an IPK.................................   40.653s\n 410 - 70000 SELECTS on an IPK.....................................   23.259s\n 980 - PRAGMA integrity_check......................................   17.861s\n 990 - ANALYZE.....................................................    1.151s\n       TOTAL....................................................... 15248.172s\n",
+ "stderr": "",
+ "console": [],
+ "finished_utc": "2026-10-24T21:20:20Z",
+ "tests": [
+  {
+   "id": 100,
+   "name": "50000 INSERTs into table with no index",
+   "seconds": 18.999
+  },
+  {
+   "id": 110,
+   "name": "50000 ordered INSERTS with one index/PK",
+   "seconds": 36.078
+  },
+  {
+   "id": 120,
+   "name": "50000 unordered INSERTS with one index/PK",
+   "seconds": 41.95
+  },
+  {
+   "id": 130,
+   "name": "25 SELECTS, numeric BETWEEN, unindexed",
+   "seconds": 38.027
+  },
+  {
+   "id": 140,
+   "name": "10 SELECTS, LIKE, unindexed",
+   "seconds": 49.515
+  },
+  {
+   "id": 142,
+   "name": "10 SELECTS w/ORDER BY, unindexed",
+   "seconds": 76.488
+  },
+  {
+   "id": 145,
+   "name": "10 SELECTS w/ORDER BY and LIMIT, unindexed",
+   "seconds": 55.389
+  },
+  {
+   "id": 160,
+   "name": "10000 SELECTS, numeric BETWEEN, indexed",
+   "seconds": 14476.185
+  },
+  {
+   "id": 190,
+   "name": "DELETE and REFILL one table",
+   "seconds": 24.873
+  },
+  {
+   "id": 210,
+   "name": "ALTER TABLE ADD COLUMN, and query",
+   "seconds": 1.811
+  },
+  {
+   "id": 240,
+   "name": "50000 UPDATES of individual rows",
+   "seconds": 44.619
+  },
+  {
+   "id": 250,
+   "name": "One big UPDATE of the whole 50000-row table",
+   "seconds": 8.892
+  },
+  {
+   "id": 260,
+   "name": "Query added column after filling",
+   "seconds": 1.897
+  },
+  {
+   "id": 280,
+   "name": "50000 DELETEs of individual rows",
+   "seconds": 30.449
+  },
+  {
+   "id": 300,
+   "name": "Refill a 50000-row table using (b&1)==(a&1)",
+   "seconds": 28.292
+  },
+  {
+   "id": 320,
+   "name": "subquery in result set",
+   "seconds": 231.784
+  },
+  {
+   "id": 400,
+   "name": "70000 REPLACE ops on an IPK",
+   "seconds": 40.653
+  },
+  {
+   "id": 410,
+   "name": "70000 SELECTS on an IPK",
+   "seconds": 23.259
+  },
+  {
+   "id": 980,
+   "name": "PRAGMA integrity_check",
+   "seconds": 17.861
+  },
+  {
+   "id": 990,
+   "name": "ANALYZE",
+   "seconds": 1.151
+  }
+ ],
+ "console_from_serial": [
+  "KDB: debugger backends: ddb",
+  "KDB: current backend: ddb",
+  "<user>@<host>:~/poisoncap-platform/work/build/cheribsd-riscv64-purecap-build~/poisoncap-platform/work/source/cheribsd/riscv.riscv64c/sys/CHERI-PURECAP-QEMU-POISON-NODEBUG riscv"
+ ],
+ "runner_log_tail": [
+  "exit=0 seconds=15261.3 tests=20 console_lines=0",
+  "100 110 120 130 140 142 145 160 190 210 240 250 260 280 300 320 400 410 980 990"
+ ]
+}

@@ -1,0 +1,24 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/cheribuild/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 14400,
+ "revocation_default_off": true,
+ "started_utc": "2026-10-24T16:45:19Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "seconds": 5.0,
+ "exit": 1,
+ "stdout": "",
+ "stderr": "Failed to configure memsys3 1 \n",
+ "console": [],
+ "finished_utc": "2026-10-24T16:46:33Z",
+ "tests": [],
+ "console_from_serial": [
+  "KDB: debugger backends: ddb",
+  "KDB: current backend: ddb",
+  "<user>@<host>:~/poisoncap-platform/work/build/cheribsd-riscv64-purecap-build~/poisoncap-platform/work/source/cheribsd/riscv.riscv64c/sys/CHERI-PURECAP-QEMU-POISON riscv"
+ ],
+ "runner_log_tail": [
+  "exit=1 seconds=5.0 tests=0 console_lines=0",
+  ""
+ ]
+}

@@ -1,0 +1,60 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/memsys5/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 14400,
+ "revocation_default_off": true,
+ "started_utc": "2026-10-24T16:45:19Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "seconds": 14407.1,
+ "exit": 124,
+ "stdout": "INIT\nnHeap= 268435456\npHeap= 0x41600000\nmnReq= 16\nheap len =268435456, expected = 268435456\nptr is tagged1\nptr is tagged0\n-- Speedtest1 for SQLite 3.22.0 2026-04-26 20:43:19 637f6b03b9f1f31849ef0b4691ac21\n 100 - 50000 INSERTs into table with no index......................   22.720s\n 110 - 50000 ordered INSERTS with one index/PK.....................   41.972s\n 120 - 50000 unordered INSERTS with one index/PK...................   48.719s\n 130 - 25 SELECTS, numeric BETWEEN, unindexed......................   36.742s\n 140 - 10 SELECTS, LIKE, unindexed.................................   49.844s\n 142 - 10 SELECTS w/ORDER BY, unindexed............................   76.226s\n 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................   52.180s\n 160 - 10000 SELECTS, numeric BETWEEN, indexed..................... ",
+ "stderr": "",
+ "console": [],
+ "finished_utc": "2026-10-24T20:46:34Z",
+ "tests": [
+  {
+   "id": 100,
+   "name": "50000 INSERTs into table with no index",
+   "seconds": 22.72
+  },
+  {
+   "id": 110,
+   "name": "50000 ordered INSERTS with one index/PK",
+   "seconds": 41.972
+  },
+  {
+   "id": 120,
+   "name": "50000 unordered INSERTS with one index/PK",
+   "seconds": 48.719
+  },
+  {
+   "id": 130,
+   "name": "25 SELECTS, numeric BETWEEN, unindexed",
+   "seconds": 36.742
+  },
+  {
+   "id": 140,
+   "name": "10 SELECTS, LIKE, unindexed",
+   "seconds": 49.844
+  },
+  {
+   "id": 142,
+   "name": "10 SELECTS w/ORDER BY, unindexed",
+   "seconds": 76.226
+  },
+  {
+   "id": 145,
+   "name": "10 SELECTS w/ORDER BY and LIMIT, unindexed",
+   "seconds": 52.18
+  }
+ ],
+ "console_from_serial": [
+  "KDB: debugger backends: ddb",
+  "KDB: current backend: ddb",
+  "<user>@<host>:~/poisoncap-platform/work/build/cheribsd-riscv64-purecap-build~/poisoncap-platform/work/source/cheribsd/riscv.riscv64c/sys/CHERI-PURECAP-QEMU-POISON riscv"
+ ],
+ "runner_log_tail": [
+  "exit=124 seconds=14407.1 tests=7 console_lines=0",
+  "100 110 120 130 140 142 145"
+ ]
+}

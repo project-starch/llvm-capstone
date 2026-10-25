@@ -1,0 +1,73 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/memsys5/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 3600,
+ "revocation_default_off": true,
+ "started_utc": "2026-10-24T16:52:57Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "pre": [
+  {
+   "command": "sysctl debug.witness.watch=0",
+   "rc": 0,
+   "output": "debug.witness.watch: 1 -> 0"
+  },
+  {
+   "command": "sysctl security.cheri.runtime_revocation_default=1",
+   "rc": 0,
+   "output": "security.cheri.runtime_revocation_default: 0 -> 1"
+  }
+ ],
+ "sysctl_at_run": "security.cheri.runtime_revocation_default: 1\ndebug.witness.watch: 0",
+ "seconds": 3607.4,
+ "exit": 124,
+ "stdout": "INIT\nnHeap= 268435456\npHeap= 0x41600000\nmnReq= 16\nheap len =268435456, expected = 268435456\nptr is tagged1\nptr is tagged0\n-- Speedtest1 for SQLite 3.22.0 2026-04-26 20:43:19 637f6b03b9f1f31849ef0b4691ac21\n 100 - 50000 INSERTs into table with no index......................   27.030s\n 110 - 50000 ordered INSERTS with one index/PK.....................   42.471s\n 120 - 50000 unordered INSERTS with one index/PK...................   49.362s\n 130 - 25 SELECTS, numeric BETWEEN, unindexed......................   38.901s\n 140 - 10 SELECTS, LIKE, unindexed.................................   51.903s\n 142 - 10 SELECTS w/ORDER BY, unindexed............................   80.175s\n 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................   60.652s\n 160 - 10000 SELECTS, numeric BETWEEN, indexed..................... ",
+ "stderr": "",
+ "console": [],
+ "finished_utc": "2026-10-24T17:54:29Z",
+ "tests": [
+  {
+   "id": 100,
+   "name": "50000 INSERTs into table with no index",
+   "seconds": 27.03
+  },
+  {
+   "id": 110,
+   "name": "50000 ordered INSERTS with one index/PK",
+   "seconds": 42.471
+  },
+  {
+   "id": 120,
+   "name": "50000 unordered INSERTS with one index/PK",
+   "seconds": 49.362
+  },
+  {
+   "id": 130,
+   "name": "25 SELECTS, numeric BETWEEN, unindexed",
+   "seconds": 38.901
+  },
+  {
+   "id": 140,
+   "name": "10 SELECTS, LIKE, unindexed",
+   "seconds": 51.903
+  },
+  {
+   "id": 142,
+   "name": "10 SELECTS w/ORDER BY, unindexed",
+   "seconds": 80.175
+  },
+  {
+   "id": 145,
+   "name": "10 SELECTS w/ORDER BY and LIMIT, unindexed",
+   "seconds": 60.652
+  }
+ ],
+ "console_from_serial": [
+  "KDB: debugger backends: ddb",
+  "KDB: current backend: ddb",
+  "<user>@<host>:~/poisoncap-platform/work/build/cheribsd-riscv64-purecap-build~/poisoncap-platform/work/source/cheribsd/riscv.riscv64c/sys/CHERI-PURECAP-QEMU-POISON riscv"
+ ],
+ "runner_log_tail": [
+  "exit=124 seconds=3607.4 tests=7 console_lines=0",
+  "100 110 120 130 140 142 145"
+ ]
+}

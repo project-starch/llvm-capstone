@@ -1,0 +1,34 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/memsys5-all32/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 28800,
+ "revocation_default_off": true,
+ "kernel_root": "~/poisoncap-platform/kernels/poison-nodebug",
+ "started_utc": "2026-10-25T01:22:35Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "pre": [
+  {
+   "command": "sysctl security.cheri.runtime_revocation_default=1",
+   "rc": 0,
+   "output": "security.cheri.runtime_revocation_default: 0 -> 1"
+  }
+ ],
+ "sysctl_at_run": "security.cheri.runtime_revocation_default: 1\nsysctl: unknown oid 'debug.witness.watch'",
+ "seconds": 14.3,
+ "exit": 162,
+ "stdout": "__RC=162\n",
+ "stderr": "",
+ "console": [
+  "poison exception",
+  "poison top 40c0f000",
+  "poison base 40c0e000",
+  "cappver =0, poisonpver =0",
+  "poison exception faulting base 40c0e000, size 4096 rw1"
+ ],
+ "finished_utc": "2026-10-25T01:23:42Z",
+ "tests": [],
+ "runner_log_tail": [
+  "exit=162 seconds=14.3 tests=0 console_lines=5",
+  ""
+ ]
+}
