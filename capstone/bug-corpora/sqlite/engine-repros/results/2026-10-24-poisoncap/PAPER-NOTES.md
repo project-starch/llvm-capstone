@@ -112,7 +112,36 @@ How to report each:
   were either hanging or triggering a kernel panic", attributed to "recursive page fault handling as a
   result of poison probes in the revoker". All 32 passed on FPGA without revocation, and the reported
   results are "limited to a subset of the SQLite tests that were able to complete".
-- v3 (2026-09-29) no longer states these counts. A summary of its full text found none; we have not
-  checked v3 line by line.
-- Their artifact's 20 enabled tests do not match v1's 15 completing ones; nothing published says which
-  20, or why.
+- v1's Figure 6 plots "MEMSYS5 revocation+PoisonCap" bars for 13 phases only: 110, 120, 130, 140,
+  142, 145, 161, 230, 240, 250, 260, 320, 400 (read off the figure; the text says 15 completed).
+- v3 (2026-09-29) drops the counts and the "subset" sentence (searched the full text for hang, panic,
+  subset, "were able to complete"). Its Figure 4 plots "PoisonCap revocation(MEMSYS5)" bars for all 32
+  phases.
+- The three published sets disagree:
+
+  | source | what it reports for PoisonCap with revocation |
+  |---|---|
+  | v1 text | completed: 15 of 32; hung or panicked: 17 |
+  | v1 Figure 6 | plotted: 13 phases |
+  | artifact `speedtest1.c` | enabled in the driver: 20; commented out: 12 |
+  | v3 Figure 4 | plotted: all 32 phases |
+
+  These are different predicates (completed, plotted, enabled), so the rows need not agree; what the
+  table shows is that no published source names the completed set.
+
+  - 161 and 230 have v1 bars but are disabled in the artifact.
+  - 9 artifact-enabled phases have no v1 bar: 100, 160, 190, 210, 280, 300, 410, 980, 990.
+  - v3 shows bars for the 12 phases the artifact disables.
+  - Nothing published says which of these is current.
+- Run on their QEMU, their code unedited (`ports/sqlite/poisoncap/results/2026-10-25-speedtest1/`), on a
+  kernel with their FPGA kernel's options:
+  - the artifact's 20 tests complete with both revocation layers active (one run, 4.2 h at their
+    default `--size 100`);
+  - their own 32-test driver (commit a879a48e) ended in the same kernel panic (`Poison probe missing
+    page`) in 4 of 4 runs; where the output was copied (3 runs), test 150, "CREATE INDEX five times",
+    was the last test started. It also happens with libc revocation off throughout; their memsys5
+    calls the revoker itself, the plausible trigger (not identified in the records).
+  - With libc revocation on from boot, copying the binary into the guest already fails: the debug
+    kernel panics, the NODEBUG kernel stops answering.
+  - Their published build recipe does not enable memsys5; configure's `--enable-memsys5` is needed for
+    their `main()` to run.

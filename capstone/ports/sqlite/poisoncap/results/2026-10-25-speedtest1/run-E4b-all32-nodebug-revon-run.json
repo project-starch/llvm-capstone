@@ -1,0 +1,36 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/memsys5-all32/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 28800,
+ "revocation_default_off": true,
+ "kernel_root": "~/poisoncap-platform/kernels/poison-nodebug",
+ "started_utc": "2026-10-24T17:05:07Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "pre": [
+  {
+   "command": "sysctl security.cheri.runtime_revocation_default=1",
+   "rc": 0,
+   "output": "security.cheri.runtime_revocation_default: 0 -> 1"
+  }
+ ],
+ "sysctl_at_run": "security.cheri.runtime_revocation_default: 1\nsysctl: unknown oid 'debug.witness.watch'",
+ "seconds": 1155.0,
+ "exit": "no exit (ssh: Connection to 127.0.0.1 closed by remote host.)",
+ "console": [
+  "panic: Poison probe missing page 0x4fef8000",
+  "KDB: stack backtrace:",
+  "kdb_backtrace() at kdb_backtrace+0x30",
+  "vpanic() at vpanic+0x18a",
+  "panic() at panic+0x4a",
+  "vm_cheri_revoke_probe_poison() at vm_cheri_revoke_probe_poison+0x96",
+  "do_trap_supervisor() at do_trap_supervisor+0x9e",
+  "KDB: enter: panic",
+  "Stopped at      kdb_enter+0x50:"
+ ],
+ "finished_utc": "2026-10-24T17:25:08Z",
+ "tests": [],
+ "runner_log_tail": [
+  "exit=no exit (ssh: Connection to 127.0.0.1 closed by remote host.) seconds=1155.0 tests=0 console_lines=9",
+  ""
+ ]
+}

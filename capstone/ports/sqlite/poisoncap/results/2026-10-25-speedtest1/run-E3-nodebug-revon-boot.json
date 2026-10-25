@@ -1,0 +1,43 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/memsys5/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 3600,
+ "revocation_default_off": false,
+ "kernel_root": "~/poisoncap-platform/kernels/poison-nodebug",
+ "started_utc": "2026-10-24T16:55:24Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 1\nkern.features.cheri_revoke: 1",
+ "finished_utc": "2026-10-24T16:57:56Z",
+ "console": [
+  "KDB: debugger backends: ddb",
+  "KDB: current backend: ddb",
+  "<user>@<host>:~/poisoncap-platform/work/build/cheribsd-riscv64-purecap-build~/poisoncap-platform/work/source/cheribsd/riscv.riscv64c/sys/CHERI-PURECAP-QEMU-POISON-NODEBUG riscv"
+ ],
+ "tests": [],
+ "runner_log_tail": [
+  "    sys.exit(main())",
+  "             ~~~~^^",
+  "  File \"~/poisoncap-platform/repo/capstone/ports/sqlite/poisoncap/speedtest1-guest.py\", line 71, in main",
+  "    guest.copy(a.binary, 'root@127.0.0.1:/tmp/st/speedtest1')",
+  "    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "  File \"~/poisoncap-platform/repo/capstone/ports/common/host/cheribsd/guest.py\", line 105, in copy",
+  "    result = subprocess.run(",
+  "        [",
+  "    ...<10 lines>...",
+  "        timeout=120,",
+  "    )",
+  "  File \"/usr/lib/python3.14/subprocess.py\", line 557, in run",
+  "    stdout, stderr = process.communicate(input, timeout=timeout)",
+  "                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^",
+  "  File \"/usr/lib/python3.14/subprocess.py\", line 1221, in communicate",
+  "    stdout, stderr = self._communicate(input, endtime, timeout)",
+  "                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "  File \"/usr/lib/python3.14/subprocess.py\", line 2154, in _communicate",
+  "    self._check_timeout(endtime, orig_timeout, stdout, stderr)",
+  "    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "  File \"/usr/lib/python3.14/subprocess.py\", line 1268, in _check_timeout",
+  "    raise TimeoutExpired(",
+  "    ...<2 lines>...",
+  "            stderr=b''.join(stderr_seq) if stderr_seq else None)",
+  "subprocess.TimeoutExpired: Command '['scp', '-O', '-i', '~/poisoncap-platform/speedtest1/run-E3-nodebug-revon-boot/vm/guest-key', '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=no', '-o', 'UserKnownHostsFile=/dev/null', '-o', 'ConnectTimeout=5', '-o', 'BatchMode=yes', '-o', 'LogLevel=ERROR', '-P', '10097', '~/poisoncap-platform/speedtest1/memsys5/speedtest1', 'root@127.0.0.1:/tmp/st/speedtest1']' timed out after 120 seconds"
+ ]
+}

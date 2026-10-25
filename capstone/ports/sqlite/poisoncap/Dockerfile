@@ -11,3 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       libarchive-dev libarchive-tools libbz2-dev libglib2.0-dev libpixman-1-dev libexpat1-dev \
       libgmp-dev libattr1-dev libcap-ng-dev zlib1g-dev libssl-dev meson openssh-client \
     && rm -rf /var/lib/apt/lists/*
+# cheribuild's sqlite target requires tclsh (its check_system_dependencies), used by
+# build-speedtest1.sh. A separate layer, so the platform's earlier layers are unchanged.
+RUN apt-get update && apt-get install -y --no-install-recommends tcl \
+    && rm -rf /var/lib/apt/lists/*
