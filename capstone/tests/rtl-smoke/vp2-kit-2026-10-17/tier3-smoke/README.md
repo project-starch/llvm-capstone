@@ -8992,3 +8992,13 @@ Record: `records/b2bs-httpd-b1.result-lines.txt`.
   and fault on nested, as declared. All four boots completed; readings 0.
 - **Against the pre-registration (b86eff8b49e4): every reading holds.** The N=2 reading on board 2 is still owed. It
   runs when a slot opens there between Juliet remainder parts.
+
+### pb13q15 case 08 on bitstream 2, result: the fill variant is CAUGHT on silicon, cause 28 in mc_case_body; the unflagged control reads NO-READING 785, each as the twin (board 1, 2026-10-26 04:31-04:45)
+
+Record: `records/b2bs-pb08-b1.result-lines.txt`.
+- **unflagged:** NO-READING, control-failed (CONTROL-FAILED 785); 1 of 1 as the lane's QEMU bundle.
+- **fill:** **CAUGHT, cause 28 in mc_case_body**, attributed by function; 1 of 1 as the bundle.
+- Controls: bounds-malloc, uaf-malloc and chunk-free-90 fault on both. Both boots completed; readings 0.
+- **Against the pre-registration (cb4eea9ea09f): every reading holds.**
+- Under the lead's earlier "do" on this variant, the runtime lane takes the fill reading as case 08's reading. memcached's
+  ported column then reads 20 of 21, with 1 no reading.
