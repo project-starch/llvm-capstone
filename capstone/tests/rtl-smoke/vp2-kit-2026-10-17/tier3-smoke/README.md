@@ -8677,3 +8677,18 @@ Record: `records/b2n2-b2.result-lines.txt`.
   - Juliet census: differences only in `_12` draws (0 OTHER), and seeded 56 of 56;
   - a uaf-control cause 13 shows as a ctl step difference, and is reported as such if it appears;
   - readings 0.
+
+### Bitstream 2 N=2 phase 2, board 1 result: the 9 plain pass arms, mruby and perl identical to their first readings (2026-10-25 06:1x-10:19)
+
+Record: `records/b2n2b-b1.result-lines.txt`.
+- **n2-grade, 0 different on each:** fph 25, fpt 13, fca 13, fcs 13, fso 9, mph 9, mpt 3, wph 12 and wpt 10.
+- **matrix-compare against the first reading:** mruby stock 23 of 23, mruby Sublet 23 of 23, perl stock 11 of 11 and
+  perl Sublet 11 of 11. Each is also equal to its reference.
+- Readings 0. **Against the pre-registration (aabf9b0bca0d): every reading holds.**
+
+### Bitstream 2 N=2, board 1: the Juliet spatial sample (first read on board 2), pre-registered (2026-10-25 10:2x)
+
+- **What runs:** `tier3-juliet-spatial-b2.sh 1` with JS_ROOT `t3-run-b2-dcc6daf6e-b1/n2/juliet-spatial`, which is cross-board.
+- **The grade:** juliet-obs-compare between the first reading's observations (board 2) and the second's, with the
+  three value-dependent CWE170 cases tolerated.
+- **Prediction:** 1513 of 1513 the same, with the tolerated cases reported; readings 0.
