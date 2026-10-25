@@ -210,25 +210,49 @@ int __wrap_sqlite3_config(int op, ...) {
     rc = __real_sqlite3_config(op, v);
     break;
   }
-  /* One pointer. SQLite calls some of these itself (sqlite3PCacheSetDefault: PCACHE2): with lld,
-   * --wrap also redirects references inside the object that defines the symbol. */
+  /* One pointer, read and passed on with its own type (an ellipsis argument is not converted, so
+   * va_arg must name the type the caller passed). SQLite calls some of these itself
+   * (sqlite3PCacheSetDefault: PCACHE2): with lld, --wrap also redirects references inside the
+   * object that defines the symbol. */
   case SQLITE_CONFIG_MALLOC:
-  case SQLITE_CONFIG_GETMALLOC:
-  case SQLITE_CONFIG_MUTEX:
-  case SQLITE_CONFIG_GETMUTEX:
-  case SQLITE_CONFIG_PCACHE:
-  case SQLITE_CONFIG_GETPCACHE:
-  case SQLITE_CONFIG_PCACHE2:
-  case SQLITE_CONFIG_GETPCACHE2:
-  case SQLITE_CONFIG_PCACHE_HDRSZ: {
-    void *v = va_arg(ap, void *);
+  case SQLITE_CONFIG_GETMALLOC: {
+    sqlite3_mem_methods *v = va_arg(ap, sqlite3_mem_methods *);
     if (op == SQLITE_CONFIG_MALLOC && installed) fail(11, "malloc-after-install", 0);
     rc = __real_sqlite3_config(op, v);
     break;
   }
-  case SQLITE_CONFIG_LOG:
+  case SQLITE_CONFIG_MUTEX:
+  case SQLITE_CONFIG_GETMUTEX: {
+    sqlite3_mutex_methods *v = va_arg(ap, sqlite3_mutex_methods *);
+    rc = __real_sqlite3_config(op, v);
+    break;
+  }
+  case SQLITE_CONFIG_PCACHE:
+  case SQLITE_CONFIG_GETPCACHE: {
+    sqlite3_pcache_methods *v = va_arg(ap, sqlite3_pcache_methods *);
+    rc = __real_sqlite3_config(op, v);
+    break;
+  }
+  case SQLITE_CONFIG_PCACHE2:
+  case SQLITE_CONFIG_GETPCACHE2: {
+    sqlite3_pcache_methods2 *v = va_arg(ap, sqlite3_pcache_methods2 *);
+    rc = __real_sqlite3_config(op, v);
+    break;
+  }
+  case SQLITE_CONFIG_PCACHE_HDRSZ: {
+    int *v = va_arg(ap, int *);
+    rc = __real_sqlite3_config(op, v);
+    break;
+  }
+  case SQLITE_CONFIG_LOG: {
+    void (*f)(void *, int, const char *) = va_arg(ap, void (*)(void *, int, const char *));
+    void *arg = va_arg(ap, void *);
+    rc = __real_sqlite3_config(op, f, arg);
+    break;
+  }
   case SQLITE_CONFIG_SQLLOG: {
-    void *f = va_arg(ap, void *), *arg = va_arg(ap, void *);
+    void (*f)(void *, sqlite3 *, const char *, int) = va_arg(ap, void (*)(void *, sqlite3 *, const char *, int));
+    void *arg = va_arg(ap, void *);
     rc = __real_sqlite3_config(op, f, arg);
     break;
   }
@@ -249,6 +273,9 @@ int __wrap_sqlite3_config(int op, ...) {
     int n = va_arg(ap, int), m = va_arg(ap, int);
     rc = __real_sqlite3_config(op, buf, n, m);
     if (op == SQLITE_CONFIG_HEAP && rc == SQLITE_OK && buf) install(buf, n);
+    /* A HEAP with no buffer after installation clears SQLite's methods: later allocations would
+     * bypass the observer, so the measurement is void. */
+    if (op == SQLITE_CONFIG_HEAP && rc == SQLITE_OK && !buf && installed) fail(12, "heap-null-after-install", 0);
     break;
   }
   default:

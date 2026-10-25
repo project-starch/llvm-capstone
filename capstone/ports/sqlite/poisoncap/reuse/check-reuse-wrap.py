@@ -15,6 +15,7 @@ through memsys5 before the program's first call; the oracle is seeded with those
 build with -DREUSE_WRAP_TRACE (its "EV" lines before the "start" snapshot), and that build's reports must
 equal the untraced build's. Exit 0 only if every check holds.
 """
+import os
 import re
 import sys
 
@@ -125,8 +126,15 @@ def main():
             continue
         check(f'alloc-done {k}', int(done[k]) == exp[k], f'wrapper {done[k]} oracle {exp[k]}')
     check('alloc-done bins', done['bins'] == exp['bins'], f"wrapper {done['bins']} oracle {exp['bins']}")
-    check('oracle exercised reuse and moves', exp['reuses'] > 100 and exp['moved'] > 10,
-          f"reuses={exp['reuses']} moved={exp['moved']}")
+    if os.environ.get('REUSE_EXPECT_QUARANTINE'):
+        # An allocator that withholds freed blocks (PoisonCap's quarantine of 4,096 entries) returns none
+        # within a short sequence: the oracle then covers issues, releases and moves, not the bins (the
+        # bin code is the same on every platform and is checked where reuse happens).
+        check('quarantining allocator: no reuse in the sequence, moves exercised',
+              exp['reuses'] == 0 and exp['moved'] > 10, f"reuses={exp['reuses']} moved={exp['moved']}")
+    else:
+        check('oracle exercised reuse and moves', exp['reuses'] > 100 and exp['moved'] > 10,
+              f"reuses={exp['reuses']} moved={exp['moved']}")
     for label, d in (('alloc-done', done), ('exit', end)):
         n = {k: int(d[k]) for k in FIELDS}
         check(f'{label} error=0', d['error'] == '0', d.get('first_error', ''))
@@ -134,6 +142,13 @@ def main():
         check(f'{label} issues == distinct + reuses', n['issues'] == n['distinct'] + n['reuses'])
         check(f'{label} sum(bins) == reuses', sum(d['bins']) == n['reuses'])
         check(f'{label} live == issues - releases', int(d['live']) == n['issues'] - n['releases'])
+    # The exit report has no oracle of its own (the SQL part's allocations are SQLite's), but it must
+    # extend the alloc-done snapshot: every counter and every bin at least as large, and the SQL part
+    # must have allocated (a wrapper that zeroed or rewrote its counters at exit fails here).
+    for k in FIELDS:
+        check(f'exit {k} >= alloc-done {k}', int(end[k]) >= int(done[k]), f'{end[k]} < {done[k]}')
+    check('exit attempts > alloc-done attempts (the SQL part allocates)', int(end['attempts']) > int(done['attempts']))
+    check('exit bins >= alloc-done bins, bin by bin', all(e >= d for e, d in zip(end['bins'], done['bins'])))
     steps = [int(x) for x in re.findall(r'^STEP (-?\d+)$', out, re.M)]
     resets = [int(x) for x in re.findall(r'^RESET (-?\d+)$', out, re.M)]
     check('SQL steps 101 x4 then 19', steps == [101] * 4 + [19], str(steps))

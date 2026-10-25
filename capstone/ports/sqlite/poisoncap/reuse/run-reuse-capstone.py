@@ -31,6 +31,10 @@ def main():
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--run', action='append', required=True, metavar='NAME=IMAGE[:ARGS]')
     p.add_argument('--timeout', type=int, default=3600, help='the whole boot')
+    p.add_argument('--module-args', default='',
+                   help='capstone_vm module parameters at insmod, e.g. node_flat_records=16777216 (the flat '
+                        "lifetime table's default, 65,536 records, is exhausted from speedtest1 --size 20 on: "
+                        'cause 30); recorded in WORK/results.jsonl')
     p.add_argument('--per-process', type=int, default=0,
                    help='seconds per process, then the process is killed (exit 143); 0: none. A watchdog in the '
                         'gate script: the guest rootfs has no timeout(1)')
@@ -46,7 +50,8 @@ def main():
     shutil.copy2(a.platform / 'adapter/capstone-vexec', stage / 'capstone-vexec')
     shutil.copy2(a.platform / 'adapter/module/capstone_vm.ko', stage / 'capstone_vm.ko')
     lines = ['#!/bin/sh', 'dmesg -n 1',
-             'insmod /mnt/vm/capstone_vm.ko || { echo "@@INSMOD failed"; echo VIRTUAL_STAGED_DONE; exit 1; }',
+             f'insmod /mnt/vm/capstone_vm.ko {a.module_args} || {{ echo "@@INSMOD failed"; echo VIRTUAL_STAGED_DONE; exit 1; }}',
+             'echo "@@PARAMS $(cat /sys/module/capstone_vm/parameters/node_flat_records)"',
              'cp /mnt/vm/capstone-vexec /tmp/vexec && chmod 755 /tmp/vexec']
     for i, (name, image, args) in enumerate(runs):
         shutil.copy2(image, stage / f'i{i}.dom')
@@ -69,11 +74,15 @@ def main():
     (a.work / 'run-staged.out').write_text(done.stdout + done.stderr)
     serial = (a.work / 'boot/serial.log').read_bytes().decode(errors='replace').replace('\r', '')
     failures = [] if '\nVIRTUAL_STAGED_DONE\n' in serial else ['the boot did not finish']
+    if '@@INSMOD failed' in serial:
+        failures.append(f'insmod failed with {a.module_args!r}')
+    fm = re.search(r'^@@PARAMS (\d+)$', serial, re.M)
+    flat = int(fm.group(1)) if fm else None
     with (a.work / 'results.jsonl').open('w') as out:
         for name, image, args in runs:
             m = re.search(rf'^@@BEGIN {re.escape(name)}\n(.*?)^@@END {re.escape(name)} rc=(\d+)$', serial, re.M | re.S)
             row = {'name': name, 'image_sha256': hashlib.sha256(image.read_bytes()).hexdigest(), 'args': args,
-                   'ran': bool(m)}
+                   'module_args': a.module_args, 'node_flat_records': flat, 'ran': bool(m)}
             if m:
                 body = m.group(1)
                 part = lambda tag, nxt: (re.search(rf'^@@{tag} {re.escape(name)}\n(.*?)^@@{nxt} ', body + f'@@END {name} ',

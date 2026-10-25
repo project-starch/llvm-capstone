@@ -65,6 +65,9 @@ def main():
     check('all five processes present', all(n in runs for n in need), sorted(runs))
     if not all(n in runs for n in need):
         return 1
+    for n in ('test-wrapped', 'test-traced', 'test-plain'):
+        check(f'{n} exit 0', runs[n]['rc'] == 0, runs[n]['rc'])
+    check('test-traced stdout equals test-wrapped stdout', runs['test-traced']['stdout'] == runs['test-wrapped']['stdout'])
     with tempfile.TemporaryDirectory() as t:
         t = Path(t)
         (t / 'w.out').write_text(runs['test-wrapped']['stdout'])
@@ -86,6 +89,8 @@ def main():
     if rep:
         n = {k: int(rep[k]) for k in ('attempts', 'issues', 'releases', 'reuses', 'distinct', 'failed', 'live')}
         check('pilot: installed=1 error=0', rep['installed'] == '1' and rep['error'] == '0', rep.get('first_error'))
+        check('pilot: the observer saw the workload (>= 1000 allocations, >= 100 reuses or a quarantining allocator)',
+              n['attempts'] >= 1000 and n['distinct'] > 0, n)
         check('pilot: attempts == issues + failed', n['attempts'] == n['issues'] + n['failed'])
         check('pilot: issues == distinct + reuses', n['issues'] == n['distinct'] + n['reuses'])
         check('pilot: sum(bins) == reuses', sum(rep['bins']) == n['reuses'])
@@ -95,6 +100,7 @@ def main():
     sql = re.findall(r'^SQL-CHECK (.*)$', w['stderr'], re.M)
     s = dict(kv.split('=', 1) for kv in sql[-1].split()) if sql else {}
     check('pilot: no SQL step or reset error', s.get('step_other') == '0' and s.get('reset_err') == '0', s)
+    check('pilot: SQL calls were counted (>= 1000 steps)', int(s.get('step_row', 0)) + int(s.get('step_done', 0)) >= 1000, s)
     print('ALL PASS' if ok else 'FAILED')
     return 0 if ok else 1
 

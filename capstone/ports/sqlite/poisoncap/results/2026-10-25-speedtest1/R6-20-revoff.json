@@ -1,0 +1,124 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/memsys5/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 28800,
+ "revocation_default_off": true,
+ "kernel_root": "~/poisoncap-platform/kernels/poison-nodebug",
+ "started_utc": "2026-10-25T01:39:40Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "pre": [],
+ "sysctl_at_run": "security.cheri.runtime_revocation_default: 0\nsysctl: unknown oid 'debug.witness.watch'",
+ "seconds": 16902.6,
+ "exit": 0,
+ "stdout": "INIT\nnHeap= 268435456\npHeap= 0x41600000\nmnReq= 16\nheap len =268435456, expected = 268435456\nptr is tagged1\nptr is tagged0\n-- Speedtest1 for SQLite 3.22.0 2026-04-26 20:43:19 637f6b03b9f1f31849ef0b4691ac21\n 100 - 50000 INSERTs into table with no index......................   18.416s\n 110 - 50000 ordered INSERTS with one index/PK.....................   40.408s\n 120 - 50000 unordered INSERTS with one index/PK...................   42.791s\n 130 - 25 SELECTS, numeric BETWEEN, unindexed......................   39.179s\n 140 - 10 SELECTS, LIKE, unindexed.................................   52.315s\n 142 - 10 SELECTS w/ORDER BY, unindexed............................   78.686s\n 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................   58.533s\n 160 - 10000 SELECTS, numeric BETWEEN, indexed..................... 15958.461s\n 190 - DELETE and REFILL one table.................................   32.344s\n 210 - ALTER TABLE ADD COLUMN, and query...........................    2.196s\n 240 - 50000 UPDATES of individual rows............................   57.980s\n 250 - One big UPDATE of the whole 50000-row table.................   10.552s\n 260 - Query added column after filling............................    2.229s\n 280 - 50000 DELETEs of individual rows............................   38.452s\n 300 - Refill a 50000-row table using (b&1)==(a&1).................   36.566s\n 320 - subquery in result set......................................  312.870s\n 400 - 70000 REPLACE ops on an IPK.................................   51.622s\n 410 - 70000 SELECTS on an IPK.....................................   31.330s\n 980 - PRAGMA integrity_check......................................   23.606s\n 990 - ANALYZE.....................................................    1.325s\n       TOTAL....................................................... 16889.861s\n",
+ "stderr": "",
+ "console": [],
+ "finished_utc": "2026-10-25T06:22:11Z",
+ "tests": [
+  {
+   "id": 100,
+   "name": "50000 INSERTs into table with no index",
+   "seconds": 18.416
+  },
+  {
+   "id": 110,
+   "name": "50000 ordered INSERTS with one index/PK",
+   "seconds": 40.408
+  },
+  {
+   "id": 120,
+   "name": "50000 unordered INSERTS with one index/PK",
+   "seconds": 42.791
+  },
+  {
+   "id": 130,
+   "name": "25 SELECTS, numeric BETWEEN, unindexed",
+   "seconds": 39.179
+  },
+  {
+   "id": 140,
+   "name": "10 SELECTS, LIKE, unindexed",
+   "seconds": 52.315
+  },
+  {
+   "id": 142,
+   "name": "10 SELECTS w/ORDER BY, unindexed",
+   "seconds": 78.686
+  },
+  {
+   "id": 145,
+   "name": "10 SELECTS w/ORDER BY and LIMIT, unindexed",
+   "seconds": 58.533
+  },
+  {
+   "id": 160,
+   "name": "10000 SELECTS, numeric BETWEEN, indexed",
+   "seconds": 15958.461
+  },
+  {
+   "id": 190,
+   "name": "DELETE and REFILL one table",
+   "seconds": 32.344
+  },
+  {
+   "id": 210,
+   "name": "ALTER TABLE ADD COLUMN, and query",
+   "seconds": 2.196
+  },
+  {
+   "id": 240,
+   "name": "50000 UPDATES of individual rows",
+   "seconds": 57.98
+  },
+  {
+   "id": 250,
+   "name": "One big UPDATE of the whole 50000-row table",
+   "seconds": 10.552
+  },
+  {
+   "id": 260,
+   "name": "Query added column after filling",
+   "seconds": 2.229
+  },
+  {
+   "id": 280,
+   "name": "50000 DELETEs of individual rows",
+   "seconds": 38.452
+  },
+  {
+   "id": 300,
+   "name": "Refill a 50000-row table using (b&1)==(a&1)",
+   "seconds": 36.566
+  },
+  {
+   "id": 320,
+   "name": "subquery in result set",
+   "seconds": 312.87
+  },
+  {
+   "id": 400,
+   "name": "70000 REPLACE ops on an IPK",
+   "seconds": 51.622
+  },
+  {
+   "id": 410,
+   "name": "70000 SELECTS on an IPK",
+   "seconds": 31.33
+  },
+  {
+   "id": 980,
+   "name": "PRAGMA integrity_check",
+   "seconds": 23.606
+  },
+  {
+   "id": 990,
+   "name": "ANALYZE",
+   "seconds": 1.325
+  }
+ ],
+ "console_from_serial": [
+  "KDB: debugger backends: ddb",
+  "KDB: current backend: ddb",
+  "<user>@<host>:~/poisoncap-platform/work/build/cheribsd-riscv64-purecap-build~/poisoncap-platform/work/source/cheribsd/riscv.riscv64c/sys/CHERI-PURECAP-QEMU-POISON-NODEBUG riscv"
+ ]
+}
