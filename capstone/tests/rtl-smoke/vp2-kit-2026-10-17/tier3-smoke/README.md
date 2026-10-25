@@ -8980,3 +8980,15 @@ Record: `records/b2bs-uaf-ms-b2.result-lines.txt`.
   - It keeps the lowest priority, and is dropped if board time is short.
   - UR_TAG `-x200`; the predictions scale to about 2 to 10 cause-13 events per board.
   - The H1 rule is unchanged.
+
+### httpd on bitstream 2, result: every cell as the twin; malloc 9 of 9 MISSED, nested pools 9 of 9 CAUGHT (board 1, 2026-10-26 03:55-04:30)
+
+Record: `records/b2bs-httpd-b1.result-lines.txt`.
+- **apr-pool-repros:** virtual-malloc 1 of 1 MISSED; virtual-nested-pools 1 of 1 CAUGHT. Each is 1 of 1 against the
+  reference.
+- **bucket-repros:** virtual-malloc 8 of 8 MISSED; virtual-nested-pools 8 of 8 CAUGHT. Each is 8 of 8 against the
+  reference.
+- **Controls:** bounds-malloc and uaf-malloc fault on every arm. node-released-90 and piece-filed-90 complete on malloc
+  and fault on nested, as declared. All four boots completed; readings 0.
+- **Against the pre-registration (b86eff8b49e4): every reading holds.** The N=2 reading on board 2 is still owed. It
+  runs when a slot opens there between Juliet remainder parts.
