@@ -8774,3 +8774,32 @@ Record: `records/b2n2-juliet-spatial-b1.result-lines.txt`.
       here, so each one is reported.
   - readings 0.
   - **Any OTHER difference is a finding.**
+
+### Bitstream 2: the pin_pte_census gate (R-61's open question: why the corpus read no cause 15), pre-registered (2026-10-26 03:5x, before its boot)
+
+- **Why:** R-61 arms on an LDC from a page whose PTE lacks W && D. The corpus read no cause 15 on silicon. One candidate
+  explanation is that every module pin is FOLL_WRITE and so leaves writable pages dirty.
+  - The runtime lane's branch runtime/pin-pte-census (a06950b3ab1b) counts the PTE bits of every page the module pins.
+    It hooks all three pin sites (add, pin_ahead and resolve's own pin_user_pages_remote, read in the diff), and the
+    count is default-off.
+  - Its board build is 0fa26564e9450bf0. The unmodified tree rebuilds bitstream 2's 215a09be byte for byte.
+  - On QEMU (kernel 6.1, svadu=false), every writable pinned page came out dirty. The board kernel is 6.4.14.
+- **What runs:** `tier3-census-b2.sh 1 <log>`. It runs tier3-census-board.py, the QEMU gate's calls
+  (modfix/census-gate/stage/gate.sh) in one board boot through boardvm, on the census kit bkit9-b2-pc1.
+  - The kit is bkit9-b2-b1 with only the module swapped; the runner checks that by SHA256SUMS.
+  - The calls, with counters cumulative: pin.dom walk with the census off and a read; the census on; pin.dom walk and a
+    read; pin.dom vma and a read; controls.dom uaf-malloc, its fault and a read. Run with CAPSTONE_EXEC_DIAGNOSTICS=1.
+  - Inputs pinned by hash: pin.dom cc2b05a1, controls.dom b1decb06.
+  - Dry run: `dryrun-census-b2.txt`. A stub transcript carrying the QEMU readings parses; a planted write_clean shows; a
+    truncated boot reads NO DATA.
+  - **No separate Tier 1:** the module change is default-off. The off-state walk is the in-boot control, and a module
+    that broke contexts would fail it. The runtime lane marks the arm diagnostic only, so no record rests on it.
+- **Predictions** (QEMU's cumulative pages/absent/write/dirty/young/write_clean):
+  - off 0/0/0/0/0/0;
+  - walk about 516/0/516/516/516/0;
+  - vma about 1002/0/1001/1001/1002/0, the one read-only page from vma;
+  - uaf about 1491/0/1490/1490/1491/0, faulting cause 25 (or the known silicon-only 13);
+  - **write_clean 0 at every read;**
+  - readings 0.
+- **A non-zero write_clean** would mean the board kernel leaves some pinned writable pages clean, and R-61's exposure
+  on silicon is wider than the corpus suggests.
