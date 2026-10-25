@@ -8903,3 +8903,24 @@ Record: `records/b2bs-census-b1.result-lines.txt`. Counters are cumulative, page
 - **The remainder parts on board 1 wait behind these.** Board 1's scheduler was stopped before it claimed anything (no
   claim existed). It restarts after pb08, so it cannot take board 1 between httpd's boots. Board 2's scheduler is
   unchanged.
+
+### R-58, R-59 and Q-24 on silicon: the rtl lane's bare kit on bitstream 2, N=2 across the boards, pre-registered (2026-10-26 04:2x, before the boots)
+
+- **Why:** the rtl lane's kit (llvm-capstone land/rtl-fixes-kit 30117b74cc8f, `capstone/tests/rtl-smoke/r58-r59-q24-bare-2026-10-26/`,
+  its own PREREG.md) reads silicon acceptance for three fixes on bitstream 2, with no new bitstream.
+- **What runs:** `tier3-rfix-bare.sh <board> <log> 30117b74cc8f`.
+  - It is tier3-r61-bare.sh's bare path (run_sup_bare.py from the kit's driver tree) with the six images in the
+    PREREG's order: va-runv (the control), va-srevroot (R-58), va-runv-r59 and va-runv-r59-low (R-59), then q24-deleg
+    (the Q-24 control) and q24-deleg-on (Q-24).
+  - Each image is taken from the kit commit, checked against its sha256/16 and board_rec, and loaded at 0x80000000; one
+    cold bare boot each.
+  - A control that does not read its vector stops the session.
+  - **The grade, `rfix-grade.py`,** reads the PREREG table from the PREREG.md the session ran, and applies its rules:
+    VOID unless va-runv is exact; R-58 by va-srevroot; R-59 by both r59 images; Q-24 by q24-deleg-on, with q24-deleg
+    as its control (a differing control voids the pair).
+  - Dry run: `dryrun-rfix-bare.txt`. Exact vectors confirm all three; a flipped q24-deleg voids Q-24 alone; a flipped
+    control voids the session and stops it.
+- **Order:** queued behind the Juliet remainder parts, as the rtl lane asked. It runs on each board once its scheduler
+  has no part left, so N=2 is cross-board. Output: `t3-run-b2-dcc6daf6e-b<board>/rfix-bare`.
+- **Predictions:** every image reads its PREREG vector exactly on both boards, so R-58, R-59 and Q-24 are each CONFIRMED
+  ON SILICON at N=2. Any other vector is a finding.
