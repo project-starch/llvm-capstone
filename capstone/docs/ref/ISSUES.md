@@ -339,7 +339,7 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 **Impact.** A program that branches on these errnos (ENODEV for an unsupported file mapping, ENOMEM for an oversize mapping) takes another path. No port has been checked for such a dependency.
 
 
-## S-21 — silicon only: every CSRUNV escape restores the S caller's registers and CSRs (M-mode ones included) from frame+1024, and a child thread's frame is a page the domain can write `OPEN — security, silicon only, found 2026-10-18 by the board lane reading vp2 Tier 1 boot 3-T1's repeat (confirmed from source by the claim-auditor and two-sided by the RTL lane; NOT YET DEMONSTRATED, the RTL lane's sim arm is pre-registered); RULED the same day by the semantics owner: the module makes a child frame unreachable before its first entry (the compiler lane), and the RTL keeps the caller snapshot out of the frame on the next bitstream (the RTL lane); a consequence of vp2 item D's decision 1`
+## S-21 — silicon only: every CSRUNV escape restores the S caller's registers and CSRs (M-mode ones included) from frame+1024, and a child thread's frame is a page the domain can write `OPEN — security, silicon only, found 2026-10-18 by the board lane reading vp2 Tier 1 boot 3-T1's repeat (confirmed from source by the claim-auditor and two-sided by the RTL lane; NOT YET DEMONSTRATED, the RTL lane's sim arm is pre-registered); RULED the same day by the semantics owner: the module makes a child frame unreachable before its first entry (the compiler lane), and the RTL keeps the caller snapshot out of the frame on the next bitstream (the RTL lane); a consequence of vp2 item D's decision 1; fix (a) ON DEV since ffb6fc71f523 (2026-10-20); measured two-sided on QEMU 2026-10-26 (dev 33a555af8e21)`
 
 Siblings: S-22 (the paused context's OWN state, read back from the same domain-reachable frame), Q-30 (the frame slots'
 visibility after an escape, which is how this was found). The main thread is not affected: its frame is a kernel page.
@@ -384,6 +384,27 @@ ECALL reads 25 after the fix and reaches the ECALL on the pre-fix module. Truste
 (Q-23), so copying the start frame into a kernel page is not available. (b) The RTL (next bitstream, costed and
 pre-registered by the RTL lane): the caller snapshot kept out of the frame, in a kernel-only save area or the CSR file
 for the one slot, since (a) relies on the adapter never granting a frame page.
+
+**(a) LANDED** (dev ffb6fc71f523). capstone_vm.c's CV_THREAD_CREATE CSRETIREs the frame arena's ancestor after
+pin_thread_frame. If the retire fails it refuses with -EACCES and a must-fire line. It sets arena->ancestor_retired, so the
+launcher's later unmap skips a second retire.
+- The retire sits after the supervisor_slots -EBUSY refusal. On one-slot bitstreams it is unreachable, and the board path
+  is unchanged.
+- **The two-sided check** (dev 33a555af8e21, `capstone/tests/rtl-smoke/vp2-flat-table-2026-10-17/PREREG-s21-two-sided.md`)
+  compares two-slot copies of qkit7-b2twin3-q8: dev's module, against the same source minus the retire block
+  (frame-tests/s21-prefix.patch).
+  - **write-live:** a child that never exits, the domain writing frame+1024, +1120 and +1408 while it lives. With the fix
+    it reads cause 25 at frame+0x400; without it, the write lands. On fresh boots that is one pair (pre-registered at
+    c87d9087bf99); counting the diagnostic boots, N=2 per module.
+  - The first pre-registered pair (bbf9ae351624), in which the child exits at once, did NOT separate: the module without
+    the retire also read 25. That is what found the window below.
+  - **prewrite control:** the write lands on both modules.
+- **The window (a) closes** runs from create to the child's exit. At the exit the launcher unmaps the frame arena (exec.c
+  after CV_THREAD_EXIT), and that unmap's retire kills the copy on either module. A test whose child exits at once
+  therefore cannot measure (a). The spec above, "writes before the ECALL", must be read as "while the child lives".
+- **Retracted evidence** (dev 1d6de50b8308): the five-item gate's frame `copy` reading (cause 25) is NOT evidence for (a).
+  It reads the same 25 on the module without the retire. Cite the write-live pair instead.
+- Exposure is unchanged: nil on one-slot bitstreams, live with N slots.
 
 **Exposure today** (verified at llvm-capstone 457b78f27e10). A child frame runs only in a second context slot.
 - **vp2 has one slot.** The RTL refuses a second CSRUNV with 29 while the creator's context holds the slot (Q-26).
