@@ -53,6 +53,7 @@ not the time of a panic.
 | `run-E1-revon-witness`, `run-E2-revon-nowitness` | memsys5 | debug (E2: WITNESS off at run time) | on from the run | tests 100-145 complete; 1 h cap reached inside test 160 |
 | `run-E3b-nodebug-revon-run` | memsys5 | NODEBUG | on from the run | tests 100-145 complete; 1 h cap reached inside test 160 |
 | **`run-E3c-nodebug-revon-run-long`** | **memsys5 (20 tests)** | **NODEBUG** | **on from the run** | **all 20 tests complete, exit 0, 15,261 s (test 160: 14,476 s)** |
+| **`R6-20-revoff`** | **memsys5 (20 tests)** | **NODEBUG** | **off throughout** | **all 20 tests complete, exit 0, 16,903 s (test 160: 15,958 s)** |
 | **`run-E4b-…`, `R4-…`, `R4b-…`** | **memsys5-all32** | **NODEBUG** | **on from the run** | **kernel panic `Poison probe missing page 0x4fef8000` in `vm_cheri_revoke_probe_poison`; the run's ssh returned after 1,155-1,162 s. R4/R4b: in the last copy of the output (at 362 s) tests 100-145 are complete and test 150, "CREATE INDEX five times", has started. E4b kept no output** |
 | **`R5-all32-revoff`** | **memsys5-all32** | **NODEBUG** | **off throughout** | **the same panic and page; ssh returned after 1,161 s; the last copy (362 s) shows the same: 100-145 complete, 150 started** |
 | `R1-…`, `R1b-…` | memsys5-all32 | NODEBUG | on from the run | exit 162 (SIGPROT) at start-up, before any output: poison fault, write to the poisoned 4 KiB block at 0x40c0e000. These two ran with stdout piped (`tee` to the console); see below |
@@ -68,6 +69,8 @@ throughout. In R4, R4b and R5 the last successful copy is from 362 s; nothing wa
 
 - Their published benchmark (20 tests) completes with both revocation layers active, on their FPGA
   kernel's options (E3c).
+- It also completes with the libc default off throughout (R6). Test 160 dominates both runs (14,476 s on,
+  15,958 s off). The two ran at different times on a shared host, so the times are not a comparison.
 - Their own 32-test driver, with stdout to a file, ended in the same kernel panic in 4 of 4 runs. In the
   three whose output was copied, test 150 ("CREATE INDEX five times", the first of the 12 tests the
   artifact comments out) was the last test started 800 s before the panic was seen; that it was still
@@ -90,4 +93,3 @@ throughout. In R4, R4b and R5 the last successful copy is from 362 s; nothing wa
 
 - R2 and R3, runs with `--console-echo` and the libc default off, were stopped by hand after R1; E4 was
   stopped by hand for a longer cap. None is a result.
-- R6, their 20 tests with the libc default off on the NODEBUG kernel, is still running.

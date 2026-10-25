@@ -39,9 +39,13 @@ static const char *off(const void *p) {
 
 void reuse_wrap_snapshot(const char *label);  /* reuse-wrap.c, or snapshot-stub.c in unwrapped builds */
 
-int main(void) {
+int main(int argc, char **argv) {
   void *live[256] = {0};
   int i, rc;
+  /* Steps of the call sequence (default 20000). On PoisonCap the program's own live pointer is changed
+   * from outside after about 6,000 steps (2026-10-25, with and without the wrapper, with and without
+   * libc revocation): its qualification uses a shorter sequence. */
+  int steps = argc > 1 ? atoi(argv[1]) : 20000;
   sqlite3 *db;
   sqlite3_stmt *st;
   heap = malloc(HEAP_BYTES);
@@ -54,14 +58,16 @@ int main(void) {
   puts("BASE");
   fflush(stdout);
   reuse_wrap_snapshot("start");
-  for (i = 0; i < 20000; ++i) {
+  for (i = 0; i < steps; ++i) {
     unsigned k = next() % 256, op = next() % 4, n = 1 + next() % 3000;
     if (!live[k] && op != 3) {
       live[k] = sqlite3_malloc((int)n);
       printf("M %u %s\n", n, off(live[k]));
     } else if (live[k] && op == 3) {
+      char was[24];  /* the old offset, taken before the call: the old block may be gone after it */
+      snprintf(was, sizeof was, "%s", off(live[k]));
       void *q = sqlite3_realloc(live[k], (int)n);
-      printf("R %s %u %s\n", off(live[k]), n, off(q));
+      printf("R %s %u %s\n", was, n, off(q));
       if (q) live[k] = q;
     } else if (live[k]) {
       printf("F %s\n", off(live[k]));

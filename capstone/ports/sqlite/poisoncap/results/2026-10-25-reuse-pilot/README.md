@@ -30,7 +30,23 @@ side: their speedtest1.c (one dead function removed, `reuse/make-speedtest1-caps
 from `reuse/shim/`) with SQLite 3.22.0, built by `reuse/build-reuse-capstone.sh`, run on the dev-v6
 virtual platform by `reuse/run-reuse-capstone.py`.
 
+The virtual platform is the paged one: the default `runtime/virtual/build-adapter.sh` module (paged
+lifetime table, grows on demand), v7 QEMU with `x-capstone-test-csrs=true`, module argument
+`supervisor_slots=32`. A first attempt used the flat silicon-twin kit (`-DCAPSTONE_VM_FLAT_TABLE`, at most
+65,536 records, no growth), on which Sublet runs died from `--size 20` on with cause 30 in
+`capstone_cap_derive`, the table full; that is the kit's limit, not the platform's. On the paged platform
+both Sublet arms complete `--size 20` (exit 0, 8,470 allocations, 7,835 reuses, identical bins).
+`reuse/launch-capstone-arm.sh` and `reuse/launch-poisoncap-arm.sh` start one result run each.
+
 ## Qualification (`qualification.txt`)
+
+The record has two parts: the wrapper of the first commit, and the wrapper, test program and checks
+after a review (exact `va_arg` types, a failure on `SQLITE_CONFIG_HEAP` with a null heap after install,
+the realloc oracle reading the old offset before the call; the checks now require every test program to
+exit 0, the traced output to equal the wrapped one, the exit report to dominate the alloc-done snapshot
+bin by bin, and at least 1,000 allocations and 1,000 SQL steps in a pilot). The second part passes on
+every platform, and its three edited-report negative controls fail. The bullets below describe the first part
+unless they say otherwise.
 
 - **Native** (GNU ld, upstream memsys5): `reuse/test-reuse-wrap.c` prints every call and address;
   `reuse/check-reuse-wrap.py` recomputes the counters and bins independently: ALL PASS, including output
@@ -41,7 +57,10 @@ virtual platform by `reuse/run-reuse-capstone.py`.
   unwrapped one ended in a kernel panic in their revoker. With the heap from malloc (as their main()),
   all four builds (wrapped, traced, unwrapped twice) end identically at the same output line (5,281, exit
   162, SIGPROT), on a free of a pointer whose address became heap+1, never handed out: their system's
-  behaviour, the same with and without the wrapper. Not investigated further.
+  behaviour, the same with and without the wrapper. Not investigated further. After the review the test
+  program takes its step count as an argument: at 4,000 steps, before that line, all three PoisonCap
+  test programs exit 0 and pass every oracle check, in quarantine mode (`REUSE_EXPECT_QUARANTINE=1`: a
+  quarantining allocator need not reuse at all).
 - **Pilots**: wrapped and unwrapped speedtest1 complete the same 20 tests in every arm; installed=1,
   error=0, no SQL error; attempts == issues + failed, issues == distinct + reuses, sum(bins) == reuses,
   live == issues - releases. The wrapper's cost at size 1: 6.09 s against 6.04 s (PoisonCap), 12.35 s
