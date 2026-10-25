@@ -229,6 +229,44 @@ module_param(arena_pin, bool, 0644);
 static unsigned long pin_ahead_pages = 1;
 module_param(pin_ahead_pages, ulong, 0444);
 
+/* pin_pte_census (default off): R-61's open question for the runtime lane (2026-10-25). R-61 arms on an
+ * LDC from a page whose PTE lacks W && D, and the corpus showed no cause 15 on silicon; one candidate is
+ * that every page this module pins comes out dirty, because every pin is FOLL_WRITE. With this set, each
+ * page the module pins (add()'s eager pin, resolve()'s lazy pin, the pin-ahead window) has its PTE read
+ * right after the pin and counted. The counters are read-only parameters (cat
+ * /sys/module/capstone_vm/parameters/census_*): pages read, absent, writable, dirty, young, and
+ * writable-but-clean (W && !D, the arming state on a writable page). Read-only present pages are
+ * census_pages - census_absent - census_write. Nothing else changes. */
+static bool pin_pte_census;
+module_param(pin_pte_census, bool, 0644);
+static unsigned long census_pages, census_absent, census_write, census_dirty, census_young, census_write_clean;
+module_param(census_pages, ulong, 0444);
+module_param(census_absent, ulong, 0444);
+module_param(census_write, ulong, 0444);
+module_param(census_dirty, ulong, 0444);
+module_param(census_young, ulong, 0444);
+module_param(census_write_clean, ulong, 0444);
+static void pte_census(struct mm_struct *mm, unsigned long address, bool locked)
+{
+    pte_t *ptep;
+    spinlock_t *ptl;
+    unsigned long pv = 0;
+    int rc;
+    if (!locked) mmap_read_lock(mm);
+    rc = follow_pte(mm, address, &ptep, &ptl);
+    if (!rc) {
+        pv = pte_val(*ptep);
+        pte_unmap_unlock(ptep, ptl);
+    }
+    if (!locked) mmap_read_unlock(mm);
+    ++census_pages;
+    if (rc || !pte_present(__pte(pv))) { ++census_absent; return; }
+    if (pte_write(__pte(pv))) ++census_write;
+    if (pte_dirty(__pte(pv))) ++census_dirty;
+    if (pte_young(__pte(pv))) ++census_young;
+    if (pte_write(__pte(pv)) && !pte_dirty(__pte(pv))) ++census_write_clean;
+}
+
 /* The retired count, from wherever this format keeps it. */
 /* The CSMINT descriptor, v7 (Q-23's ruling). Six words, 8-aligned:
  *   w0 base
@@ -933,6 +971,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     if (!r->linear) {
         n = pin_user_pages_fast(r->address, r->bytes / PAGE_SIZE, FOLL_WRITE, pages);
         if (n != r->bytes / PAGE_SIZE) goto unpin;
+        if (pin_pte_census)
+            for (i = 0; i < n; ++i)
+                pte_census(c->mm, r->address + i * PAGE_SIZE, false);
     }
     for (i = 0; i < n; ++i)
         if (!PageAnon(pages[i]) || page_mapcount(pages[i]) != 1) goto unpin;
@@ -1235,6 +1276,9 @@ static void pin_ahead(struct context *c, struct arena *a,
 #endif
         for (long j = max(n, 0L); j < batch; ++j)
             pages[j] = NULL;
+        if (pin_pte_census)
+            for (long j = 0; j < max(n, 0L); ++j)
+                pte_census(c->mm, start + (done + j) * PAGE_SIZE, true);
         for (long j = 0; j < max(n, 0L); ++j) {
             if (!PageAnon(pages[j]) || page_mapcount(pages[j]) != 1) {
                 for (long k = j; k < n; ++k) {
@@ -1358,6 +1402,7 @@ module_param(busy_frame_refusals, ulong, 0444);
 static bool resolve_pte;
 module_param(resolve_pte, bool, 0644);
 
+
 /* The bound as a PARAMETER, so the -ELOOP path can be made to FIRE before a board boot is spent
  * on it. On QEMU `vm`'s store passes, so at the production bound of 64 this path never executes
  * and the PTE read above would reach silicon unvalidated -- which is the shape this project has
@@ -1457,6 +1502,8 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             return -EFAULT;
         }
         TEST_HOOK(1);
+        if (pin_pte_census)
+            pte_census(c->mm, address & PAGE_MASK, true);
         if (!PageAnon(page) || page_mapcount(page) != 1) {
             CV_RESOLVE_FAIL("anon", "pfn 0x%lx anon %d mapcount %d refs %d vm_flags 0x%lx",
                             page_to_pfn(page), !!PageAnon(page), page_mapcount(page),
