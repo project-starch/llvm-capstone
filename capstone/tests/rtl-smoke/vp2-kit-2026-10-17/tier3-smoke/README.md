@@ -8947,3 +8947,25 @@ Record: `records/b2bs-uaf-ms-b2.result-lines.txt`.
   - The pre-registered consequence is that H2-H4 remain, and the aperture instrument goes into bitstream 3.
   - The word's MPP is 0 rather than 3. The pre-registration only named MPP's role when MPRV = 1, so that observation is
     recorded, not interpreted.
+
+### Bitstream 2: fault_mstatus on the uaf control x400 on each board, to accumulate cause-13 events, pre-registered (2026-10-26 04:1x, before the boots)
+
+- **Why:** the 0a reading is N = 1 event. The runtime lane asks for one dedicated x400 per board, at lower priority than
+  any corpus arm.
+  - The corpus itself stays on 215a09be. A module swap there would put a second variable under the sample-vs-remainder
+    comparison, and the Juliet runner takes no dmesg read anyway.
+- **What runs:** `tier3-uaf-repeat-ms.sh <board> <log> 400` with UR_ARGS `--no-trace --dmesg`, UR_BOOKMIN 120 and UR_TAG
+  `-x400`, on bkit9-b2-ms1 and bkit9-b2-ms2.
+  - bkit9-b2-ms1 is made as ms2 was: bkit9-b2-b1 with only module 1a4cae57 and `fault_mstatus=1`. The kit diff is the
+    module line plus the params line.
+  - Each board's run is chained after its fix-kit session.
+  - **Budget:** 200 runs took 37 min, so 400 should take about 75 min, inside the wrapper's 7200 s (about 1.5x).
+  - mstatus-read.py reads the result. Output: `t3-run-b2-dcc6daf6e-b<board>/uaf-repeat-ms-x400`.
+- **Predictions:**
+  - cause 13 in about 4 to 20 of 400 on each board, each with two refusals, each refusal followed by its mstatus line;
+  - no mstatus line on a cause-25 run; readings 0.
+- **The H1 rule, unchanged from 0a:**
+  - MPRV = 1 AND MPP != 3 on a cause-13 refusal confirms H1 for that event;
+  - MPRV = 0 refutes it for that event;
+  - a 0x0 word decides nothing.
+  - The tally is reported per (MPRV, MPP), and per event.
