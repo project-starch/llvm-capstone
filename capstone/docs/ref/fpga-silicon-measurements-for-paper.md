@@ -7033,3 +7033,38 @@ Folder: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/`, the README s
   - Juliet temporal's rand-driven `_12` draws: 5 of 735 census cells, with the seeded build 56/56;
   - one Juliet spatial uaf-control step of 48 at the silicon-only cause 13 (the rate measured at 10/400).
 - **One boot was lost to infrastructure.** A console lease timeout lost capi 10-12; the re-run of 10-19 is identical.
+
+## Bugs caught out of all bugs, per program, on bitstream 2 (caplifive_vp2c_dcc6daf6e, 2026-10-25)
+
+Derived by `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/catch-table.py` from the board lane's silicon
+tally `records/b2-silicon-tally.tsv` (38 rows, 1,625 cells; `records/b2-silicon-tally.md` says how each row was read).
+The script holds the arm-to-program mapping and the out-of-denominator rows, and exits 1 on a missing or duplicated arm,
+a row whose counts do not sum to its cells, an out-of-denominator count the row cannot carry, or twin arms that differ.
+Each of those three refusals was shown to fire on a mutated tally.
+
+- **Columns:** "malloc" is Sublet only in the system allocator (the vp2-malloc arm, the program's inner allocator
+  stock). "Ported" is the program's own inner allocator ported to derive and revoke its children (vp2-nested-pools;
+  vp2-pg-pools for PostgreSQL). A corpus with no inner allocator on its path counts the same in both columns.
+- **Denominator:** all the program's bugs. A run that stopped before reaching its bug (n, no reading) stays in the
+  denominator as neither caught nor missed. Out of the denominator by the lead's decisions: SQLite capi's 7 (null
+  dereferences and rows with nothing to catch) and the 11 mruby shim rows of xlang-repro.
+
+| program | bugs | malloc: caught / missed / no reading | ported: caught / missed / no reading |
+|---|---|---|---|
+| FFmpeg | 65 | 38 / 27 / 0 | 55 / 10 / 0 |
+| tshark | 45 | 22 / 23 / 0 | 44 / 0 / 1 |
+| memcached | 21 | 13 / 8 / 0 | 19 / 0 / 2 |
+| CPython | 52 | 16 / 33 / 3 | 47 / 3 / 2 |
+| PostgreSQL | 19 | 7 / 12 / 0 | 15 / 2 / 2 |
+| SQLite | 45 | 16 / 27 / 2 | 39 / 6 / 0 |
+| Lua and mruby shims | 17 | 16 / 1 / 0 | 16 / 1 / 0 |
+| **all seven** | **264** | **128 / 131 / 5 (48.5 %)** | **235 / 22 / 7 (89.0 %)** |
+
+- **Against the batch bitstream** (`records/batch-silicon-tally.tsv`, the same script): 127 and 225 of 264. The
+  difference is the two CPython rows of the previous entry.
+- **Juliet**, not in the seven-program total: temporal 366 of 366; the spatial sample 716 of 755 (22 missed, 17 not
+  triggered). These are the bitstream-2 QEMU reference's counts, carried to silicon by the board's cell-for-cell
+  equality (the previous two entries).
+- **FFmpeg's 9 inside-one-struct cases and its frame-pool plane** read missed in both columns: one allocation, so object
+  bounds cannot separate them.
+- **Every cell is N=2** (the previous entry).
