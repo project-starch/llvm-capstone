@@ -1,0 +1,48 @@
+{
+  "arm": "virtual-nested-pools",
+  "build": {
+    "argv": {
+      "buggy": [
+        "buggy",
+        "N"
+      ],
+      "fixed": [
+        "fixed",
+        "N"
+      ]
+    },
+    "cache": {
+      "CMAKE_BUILD_TYPE": "Debug",
+      "CMAKE_C_FLAGS": "-isystem /mnt/hdd/<user>/capstone/t3-freeze-r60/llvm/lib/clang/22/include",
+      "MCP_STOCK_MALLOC": "OFF",
+      "MCP_SUBLET": "ON"
+    },
+    "controls": {
+      "chunk-free-90": "76dc9b516c409d380b82115b693299d4a6fd961d0d05a429c334b52e46e3426d"
+    },
+    "prebuilt": "/mnt/hdd/<user>/capstone/pb08/b13-unflagged/cases",
+    "sdk_identity": [
+      "virtual-mallocng",
+      "virtual"
+    ]
+  },
+  "cases": 1,
+  "configuration": "virtual-memcached-sublet",
+  "contract": "verdicts-v1",
+  "corpus": "memcached/allocator-repros",
+  "platform": {
+    "compiler": "ba603a574ce08ea400153ec9ee0c46dd8a87cc32036961c0e22fc599445efd0b",
+    "firmware": "6f2b082cb677f026dba4b87cb39946ce33b76db6ae362e94c11b4f9e88d3e9bb",
+    "judge": "2ed6701045dd5689334e981b29709d8a95a89ffedae4c8618ff9f4f1be93dd8c",
+    "kernel": "e58613598c89710384e0d9bbc0de456e5e03c3d79fc7067f5ab61fe7fcde258a",
+    "launcher": "fad465ce4dea71218016182dba80784d1b9f105910dd09655f4037401a6027af",
+    "module": "3325473537072a3a7b5484ab9ef770158898358ac47c013287058bdd7f71be2c",
+    "profile": "virtual",
+    "qemu": "e5fa4bcb6f5c450baa3297b89d0fee908f0514a2437ea29dac885a7f16b7b410",
+    "rootfs": "9903242c37a724250e5586b70c5b60d1719db946edd5ed215e64bb52259f1661",
+    "runner": "9b5e409c92e1fe664882c544a788df56ace6b86b50893af6a3050751bb09dac7"
+  },
+  "tally": {
+    "NO-READING:control-failed": 1
+  }
+}
