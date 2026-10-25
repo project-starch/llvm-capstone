@@ -1402,7 +1402,6 @@ module_param(busy_frame_refusals, ulong, 0444);
 static bool resolve_pte;
 module_param(resolve_pte, bool, 0644);
 
-
 /* The bound as a PARAMETER, so the -ELOOP path can be made to FIRE before a board boot is spent
  * on it. On QEMU `vm`'s store passes, so at the production bound of 64 this path never executes
  * and the PTE read above would reach silicon unvalidated -- which is the shape this project has
@@ -1455,12 +1454,29 @@ module_param(resolve_dirty, bool, 0644);
         CV_EMIT(fmt, ##__VA_ARGS__);                \
     }                                               \
 } while (0)
-#define CV_RESOLVE_FAIL(site, fmt, ...)                                            \
+/* fault_mstatus (default off): the bitstream-3 scope note's step 0a (dev fe33d0dbaabd, H1 for the uaf
+ * control's silicon-only cause 13). The RTL's capability check is gated on capmode && the effective
+ * privilege being M, so a context mstatus with MPRV set and MPP != M would turn it off while
+ * translation stays on. The ESCAPE saves the context's mstatus at frame +920; with this set, every
+ * resolve refusal is followed by one line with that word, MPRV (bit 17) and MPP (bits 12:11).
+ * MPRV = 0 refutes H1 for that fault. capstone-qemu's escape does not write +920 (its frame ends at
+ * x31), so on QEMU the word reads 0 by construction: the line is a control for the print path only. */
+static bool fault_mstatus;
+module_param(fault_mstatus, bool, 0644);
+#define CV_FRAME_SAVED_MSTATUS (920 / 8)
+#define CV_RESOLVE_FAIL(site, fmt, ...) do {                                       \
     CV_EMIT("capstone_vm: resolve refused at %s: addr 0x%lx cause %lu need 0x%lx "  \
             "pc 0x%lx prev(addr 0x%lx cause %lu rep %u) " fmt "\n",                 \
             site, address, cause, required, t->frame[4],                            \
             t->last_fault_addr, t->last_fault_cause, t->fault_repeat,               \
-            ##__VA_ARGS__)
+            ##__VA_ARGS__);                                                         \
+    if (fault_mstatus) {                                                            \
+        unsigned long ms_ = READ_ONCE(t->frame[CV_FRAME_SAVED_MSTATUS]);            \
+        CV_EMIT("capstone_vm: refused-escape mstatus 0x%lx mprv %lu mpp %lu "        \
+                "addr 0x%lx cause %lu\n", ms_, (ms_ >> 17) & 1, (ms_ >> 11) & 3,    \
+                address, cause);                                                    \
+    }                                                                               \
+} while (0)
 
 static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 {
