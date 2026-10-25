@@ -8803,3 +8803,35 @@ Record: `records/b2n2-juliet-spatial-b1.result-lines.txt`.
   - readings 0.
 - **A non-zero write_clean** would mean the board kernel leaves some pinned writable pages clean, and R-61's exposure
   on silicon is wider than the corpus suggests.
+
+### Bitstream 2: fault_mstatus on the uaf control x200 (the bitstream-3 scope note's step 0a, H1 for the silicon-only cause 13), pre-registered (2026-10-26 04:0x, before its boot)
+
+- **Why:** the rtl lane's bitstream-3 scope note (dev fe33d0dbaabd), relayed by the runtime lane, asks whether the
+  silicon-only cause 13 comes from H1: a context mstatus with MPRV = 1 and MPP != 3. The capability check is gated on
+  capmode with an effective privilege of M, so that state would turn the check off while translation stays on.
+- **The module:** runtime/pin-pte-census ea83c374ae37, board build 1a4cae57a9f7ffc5. It is the census module plus
+  `fault_mstatus`, default off. When on, every "resolve refused" line is followed by
+  `capstone_vm: refused-escape mstatus 0x.. mprv N mpp N addr .. cause ..`.
+  - The word is the context's mstatus as the escape saved it at frame +920. The rtl lane read it at dcc6daf6e as the
+    live mstatus_q, unmodified (commit_stage.sv:228-234, switcher anvil:483, csr_regfile.sv:478).
+  - QEMU's escape does not write +920, so the QEMU control (two refusals, two lines; none with the parameter off)
+    proves the print path, not the value.
+- **What runs:** `tier3-uaf-repeat-ms.sh 2 <log> 200` with UR_ARGS `--no-trace --dmesg`.
+  - It is tier3-uaf-repeat-b2.sh on the kit bkit9-b2-ms2: bkit9-b2-b2 with only the module swapped, plus the kit
+    parameter `fault_mstatus=1`. boardvm writes the parameter after insmod and refuses the run unless it reads back.
+  - `mstatus-read.py` reads each run's own new dmesg lines from steps.json.
+  - Dry run and the reader's controls: `dryrun-uaf-repeat-ms.txt`. On the earlier bitstream-2 run it finds exactly that
+    record's 8 cause-13 runs with 2 refusals each and no mstatus line. A planted line is read and counted once.
+- **Predictions, written before the run:**
+  - cause 13 in about 2 to 12 of 200 (2.5%), each with two refusals, and **each refusal followed by one mstatus line**;
+  - cause-25 runs carry no refusal, so no mstatus line;
+  - readings 0.
+- **How the reading decides:**
+  - **H1 confirmed:** MPRV = 1 AND MPP != 3 on the cause-13 refusals. H1 needs both bits.
+  - **H1 refuted:** MPRV = 0 on every cause-13 refusal. Then H2-H4 remain, and the aperture instrument goes into
+    bitstream 3.
+  - **Not H1:** MPRV = 1 with MPP = 3 keeps the check on.
+  - **Uninformative:** a word of 0x0, meaning the escape did not write it. A non-zero word with MPP = 3 and MPRV = 0 is a
+    normal M-mode context.
+  - If H1 holds, it can only be intermittent, since a permanent MPRV would fault every load. A refusal with no mstatus
+    line is a failed print path, and is reported.

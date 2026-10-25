@@ -1,0 +1,13 @@
+# tier3-uaf-repeat-ms.sh 1dbca084da89619d dry run, 2026-10-26: uaf-repeat.py stubbed. Board 2's kit bkit9-b2-ms2 exists; board 1's does not, so it refuses.
+## board 2
+UR BEGIN 03:35:21 board 2 booking 82 N=200 args --no-trace --dmesg kit bkit9-b2-ms2
+UR END rc=0 03:35:21
+TALLY plain cause 25: 198
+TALLY plain cause 13: 2
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 03:35:21
+## board 1
+UR STOP: kit <mnt-hdd>/capstone/t3-smoke/bkit9-b2-ms1
+## mstatus-read.py 7f779fd51656a097 controls
+on the bitstream-2 uaf-dm run (module 215a09be, no fault_mstatus): 8 runs cause=13 refused=2 mstatus_lines=0 (the record's 8), 0 cause-25 runs with a refusal; TALLY none: no refused-escape line in any run's dmesg tail
+on a planted steps.json (one mstatus line repeated into the next run's tail): TALLY run-cause 13 mstatus 0x20000 mprv 1 mpp 0: 1 (counted once)
