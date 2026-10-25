@@ -194,3 +194,91 @@ Every arm exited rc 0, and every stamp names QEMU 708bbff5, module 33254735 and 
 - lt1's ten capacity cells now reach their sites;
 - lt0 18 reaches its defect through mremap;
 - lt0 09's site moved with the mremap relink, not with the bitstream.
+
+## Juliet spatial REMAINDER (pre-registered 2026-10-26, before its builds and runs)
+
+**What:** the full spatial manifest (juliet-sp/manifest-spatial-full.json, 9,138 cases) minus the 755-case sample,
+which leaves 8,383 cases. The lead's "resume all experiments and all work" takes this, relayed by the runtime lane.
+- **Parts:** sorted by case name and cut into 12 consecutive parts of 699 (the last 694), in
+  juliet-rem/manifest-partNN.json, so each is sample-sized for the boards. 261 cases use rand() flows, 20-24 per part.
+
+**The recipe:** juliet-rem/run-parts.sh, per part:
+- `build.py` census and `--seeded` (8 jobs) on a copy of the r60 SDK t3-freeze-nb-nomovc-cw-r60, as the sample and
+  the temporal set were built;
+- `run.py` census and seeded, `probe.py` (wt-juliet a772f0112ae3) and `judge.py` (wt-corpus b3cc8cb4be5a) on
+  qkit7-b2twin3-q8;
+- odd parts on QEMU domain A, even parts on domain B.
+
+**The comparison:** every part against the 2026-10-19 exact-bounds record (wt-corpus
+juliet/results/2026-10-19-virtual/spatial-verdicts.tsv, which holds all 8,383) by verdict, with `juliet-rem/classify-moves.py`.
+It sorts every moved case into the three classes the sample measured, or UNEXPECTED. Tested before any build:
+- it puts the sample's 23 moves into exactly those classes (18, 3, 2) with 0 unexpected;
+- it reads the record against itself as 0 moves;
+- it flags a planted CAUGHT → MISSED as UNEXPECTED;
+- it reads a missing table as NO DATA (exit 2).
+
+**Predicted, per part and in total:**
+- **wide-snprintf:** every case the record holds as NOT-TRIGGERED:wide-snprintf (202 in the remainder) reads MISSED.
+  judge.py relabels that family only from the case's own twin reading, and these runs have no twin phase. This is an
+  instrument effect, not a change in detection.
+- **cwe170:** CWE-126/127 CWE170 cases may move either way. Whether the over-read runs on depends on what follows the
+  copy.
+- **intra-reason:** intra-object cases may change between NO-READING reasons, staying NO-READING.
+- **UNEXPECTED: 0** in every part. Every other case reads its 2026-10-19 verdict. Nothing else separates the twin
+  from the exact-bounds record for these cases: the compact format is exact below 4,096 bytes, and every Juliet
+  spatial buffer is far below that.
+
+### Read, 2026-10-26: 0 UNEXPECTED in all 12 parts. Every move falls in a pre-registered class
+
+The run: juliet-rem/run-parts.sh. Lanes A and B ran 03:25-06:15 on QEMU domains A and B.
+- Recipes: wt-corpus b3cc8cb4be5a, clean.
+- Runner tree: wt-juliet a772f0112ae3, clean.
+- Kit: QEMU 708bbff5663f0e86, module 3325473537072a3a, vexec fad465ce4dea7121.
+
+Every build, run, probe and judge step exited 0, and each judge read all of its census and seeded batches.
+
+The result tables are in `juliet-remainder/partNN-spatial-verdicts.tsv`, with the comparison script
+(`classify-moves.py`) and the CWE170 class list (`cwe170-class.tsv`). The manifests are not committed: they are the
+full spatial manifest minus the sample, sorted by case and cut into 699s.
+
+Manifest sha256/16 for parts 01-12: 0fca00bab0923463 925bcde3e13fdd76 0d53c576490fa6c0 906b95c26ec823cf
+ab5d9c9f82280f34 744487b5056c3e39 0152d5ef40086a8a e8c019c43378d157 b5239e2abb038715 9963d6f286a73d56 0e0e7d3d532cc2e9
+0d2a99a219d5316d.
+
+| part | verdicts now | moved | classes | UNEXPECTED |
+|---|---|---|---|---|
+| 01 | CAUGHT 699 | 0 | | 0 |
+| 02 | CAUGHT 699 | 0 | | 0 |
+| 03 | CAUGHT 637, MISSED 62 | 62 | wide-snprintf 62 | 0 |
+| 04 | CAUGHT 664, MISSED 35 | 35 | wide-snprintf 35 | 0 |
+| 05 | CAUGHT 622, MISSED 35, INTRA-OBJECT 42 | 52 | wide-snprintf 35, intra-reason 17 | 0 |
+| 06 | CAUGHT 673, INTRA-OBJECT 26 | 0 | | 0 |
+| 07 | CAUGHT 664, MISSED 35 | 35 | wide-snprintf 35 | 0 |
+| 08 | CAUGHT 553, MISSED 35, INTRA-OBJECT 34, NOT-TRIGGERED 77 | 52 | wide-snprintf 35, intra-reason 17 | 0 |
+| 09 | CAUGHT 637, INTRA-OBJECT 34, NOT-TRIGGERED 28 | 0 | | 0 |
+| 10 | CAUGHT 632, MISSED 67 | 50 | cwe170 50 | 0 |
+| 11 | CAUGHT 699 | 0 | | 0 |
+| 12 | CAUGHT 694 | 0 | | 0 |
+
+Over the 8,383 cases, 286 moved, against 7,883 / 57 / 136 / 307 in the record. By top-level verdict:
+
+| | CAUGHT | MISSED | INTRA-OBJECT NO-READING | NOT-TRIGGERED |
+|---|---|---|---|---|
+| now | 7,873 | 269 | 136 | 105 |
+| record | 7,883 | 57 | 136 | 307 |
+
+- **wide-snprintf: 202 of 202.** Every case the record holds as NOT-TRIGGERED:wide-snprintf reads MISSED, which is the
+  predicted count. It is an instrument effect: judge.py relabels the family only from a twin reading these runs do
+  not take.
+- **intra-reason: 34, in parts 05 and 08.** All 34 are one relabel: NO-READING `unexpected-cause` becomes NO-READING
+  `unattributed(STRICT-FAIL:size-32)`, plain or seeded. All 136 intra-object cases stay NO-READING.
+- **cwe170: 50, all in part 10.** Every remainder case whose name carries Juliet's `__CWE170_` flaw variant is in part
+  10: 102 cases, all CWE126 buffer over-reads.
+  - The moves go both ways: 20 MISSED → CAUGHT and 30 CAUGHT → MISSED.
+  - On those 102 cases the record reads 45 CAUGHT / 57 MISSED, and this run reads 35 / 67.
+  - The catch is memchr reading past the copy (cause 28). Whether the read gets there depends on whether a NUL follows
+    the copy, so these cells are value-dependent on any platform, silicon included. They are not stable readings of
+    the protection.
+
+So on these 8,383 cases bitstream 2's twin differs from the exact-bounds record only where the pre-registration said
+it could. The CAUGHT count falls by exactly 10, and all 10 are the CWE170 net.

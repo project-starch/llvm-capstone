@@ -1,0 +1,700 @@
+case	cwe	wchar_t	intra_object	rand_flow	verdict	good	cause	site	strict	asan	twin
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_13	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_14	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_15	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_16	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_17	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_18	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_21	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_22	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_31	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_32	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_34	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_41	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_42	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_44	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_45	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_51	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_52	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_53	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_61	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_63	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_64	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_65	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_66	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_memmove_68	121	True	False	False	CAUGHT	CORRECT	28	memmove+0x164	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_02	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_03	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_04	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_05	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_06	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_07	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_08	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_09	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_10	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_11	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_12	121	True	False	True	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_13	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_14	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_15	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_16	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_17	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_18	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_21	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_22	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_31	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_32	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_34	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_41	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_42	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_44	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_45	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_51	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_52	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_53	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_61	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_63	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_64	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_65	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_66	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncat_68	121	True	False	False	CAUGHT	CORRECT	28	wcsncat+0x64	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_02	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_03	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_04	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_05	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_06	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_07	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_08	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_09	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_10	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_11	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_12	121	True	False	True	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_13	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_14	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_15	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_16	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_17	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_18	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_21	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_22	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_31	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_32	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_34	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_41	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_42	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_44	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_45	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_51	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_52	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_53	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_61	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_63	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_64	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_65	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_66	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_ncpy_68	121	True	False	False	CAUGHT	CORRECT	28	wcsncpy+0x3c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_02	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_03	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_04	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_05	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_06	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_07	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_08	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_09	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_10	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_11	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_12	121	True	False	True	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_13	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_14	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_15	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_16	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_17	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_18	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_21	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_22	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_31	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_32	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_34	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_41	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_42	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_44	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_45	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_51	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_52	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_53	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_61	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_63	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_64	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_65	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_66	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_68	121	True	False	False	MISSED	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_02	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_03	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_04	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_05	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_06	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_07	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_08	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_09	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_10	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_11	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_12	121	False	True	True	INTRA-OBJECT:NO-READING:seeded(MISSED,NO-READING:unattributed(STRICT-FAIL:size-32))	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_13	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_14	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_15	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_16	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_17	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_18	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memcpy+0xa8			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_02	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_03	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_04	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_05	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_06	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_07	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_08	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_09	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_10	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_11	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_12	121	False	True	True	INTRA-OBJECT:NO-READING:seeded(MISSED,NO-READING:unattributed(STRICT-FAIL:size-32))	CORRECT					
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_13	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_14	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_15	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_16	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_17	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memmove_18	121	False	True	False	INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)	CORRECT	28	memmove+0x130			
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_02	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_03	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_04	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_05	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_06	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_07	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_08	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_09	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_10	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_11	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_12	121	False	False	True	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_13	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_14	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_15	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_16	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_17	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_18	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_31	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_32	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_34	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_41	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_44	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_45	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_51	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_52	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_53	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_63	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_64	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_65	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_66	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cat_68	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_02	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_03	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_04	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_05	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_06	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_07	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_08	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_09	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_10	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_11	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_12	121	False	False	True	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_13	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_14	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_15	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_16	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_17	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_18	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_31	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_32	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_34	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_41	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_44	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_45	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_51	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_52	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_53	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_63	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_64	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_65	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_66	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_alloca_cpy_68	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_02	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_03	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_04	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_05	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_06	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_07	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_08	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_09	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_10	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_11	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_12	121	False	False	True	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_13	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_14	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_15	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_16	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_17	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_18	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_31	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_32	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_34	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_41	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_44	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_45	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_51	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_52	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_53	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_63	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_64	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_65	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_66	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cat_68	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_02	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_03	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_04	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_05	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_06	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_07	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_08	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_09	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_10	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_11	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_12	121	False	False	True	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_13	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_14	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_15	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_16	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_17	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_18	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_31	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_32	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_34	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_41	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_44	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_45	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_51	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_52	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_53	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_63	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_64	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_65	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_66	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_char_declare_cpy_68	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_02	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_03	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_04	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_05	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_06	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_07	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_08	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_09	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_10	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_11	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_12	121	True	False	True	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_13	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_14	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_15	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_16	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_17	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_18	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_31	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_32	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_34	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_41	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_44	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_45	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_51	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_52	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_53	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_63	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_64	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_65	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_66	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cat_68	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_02	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_03	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_04	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_05	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_06	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_07	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_08	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_09	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_10	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_11	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_12	121	True	False	True	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_13	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_14	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_15	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_16	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_17	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_18	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_31	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_32	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_34	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_41	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_44	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_45	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_51	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_52	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_53	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_63	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_64	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_65	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_66	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_alloca_cpy_68	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_02	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_03	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_04	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_05	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_06	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_07	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_08	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_09	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_10	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_11	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_12	121	True	False	True	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_13	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_14	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_15	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_16	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_17	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_18	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_31	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_32	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_34	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_41	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_44	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_45	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_51	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_52	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_53	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_63	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_64	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_65	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_66	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cat_68	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_02	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_03	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_04	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_05	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_06	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_07	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_08	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_09	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_10	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_11	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_12	121	True	False	True	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_13	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_14	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_15	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_16	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_17	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_18	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_31	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_32	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_34	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_41	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_44	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_45	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_51	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_52	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_53	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_63	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_64	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_65	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_66	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__dest_wchar_t_declare_cpy_68	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:unique		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_02	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_03	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_04	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_05	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_06	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_07	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_08	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_09	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_10	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_11	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_12	121	False	False	True	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_13	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_14	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_15	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_16	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_17	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_18	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_21	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_22	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_31	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_32	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_34	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_41	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_42	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_44	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_45	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_51	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_52	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_53	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_61	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_63	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_64	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_65	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_66	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cat_68	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_02	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_03	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_04	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_05	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_06	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_07	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_08	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_09	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_10	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_11	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_12	121	False	False	True	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_13	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_14	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_15	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_16	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_17	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_18	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_21	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_22	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_31	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_32	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_34	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_41	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_42	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_44	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_45	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_51	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_52	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_53	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_61	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_63	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_64	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_65	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_66	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_alloca_cpy_68	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_02	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_03	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_04	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_05	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_06	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_07	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_08	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_09	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_10	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_11	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_12	121	False	False	True	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_13	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_14	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_15	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_16	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_17	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_18	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_21	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_22	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_31	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_32	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_34	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_41	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_42	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_44	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_45	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_51	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_52	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_53	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_61	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_63	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_64	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_65	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_66	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cat_68	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_02	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_03	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_04	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_05	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_06	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_07	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_08	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_09	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_10	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_11	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_12	121	False	False	True	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_13	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_14	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_15	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_16	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_17	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_18	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_21	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_22	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_31	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_32	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_34	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_41	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_42	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_44	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_45	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_51	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_52	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_53	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_61	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_63	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_64	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_65	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_66	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_char_declare_cpy_68	121	False	False	False	CAUGHT	CORRECT	28	__stpcpy+0x2c	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_02	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_03	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_04	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_05	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_06	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_07	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_08	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_09	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_10	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_11	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_12	121	True	False	True	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_13	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_14	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_15	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_16	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_17	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_18	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_21	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_22	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_31	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_32	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_34	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_41	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_42	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_44	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_45	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_51	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_52	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_53	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_61	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_63	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_64	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_65	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_66	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cat_68	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_02	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_03	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_04	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_05	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_06	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_07	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_08	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_09	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_10	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_11	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_12	121	True	False	True	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_13	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_14	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_15	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_16	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_17	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_18	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_21	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_22	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_31	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_32	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_34	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_41	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_42	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_44	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_45	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_51	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_52	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_53	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_61	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_63	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_64	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_65	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_66	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_alloca_cpy_68	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_02	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_03	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_04	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_05	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_06	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_07	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_08	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_09	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_10	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_11	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_12	121	True	False	True	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_13	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_14	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_15	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_16	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_17	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_18	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_21	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_22	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_31	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_32	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_34	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_41	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_42	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_44	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_45	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_51	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_52	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_53	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_61	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_63	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_64	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_65	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_66	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cat_68	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_02	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_03	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_04	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_05	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_06	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_07	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_08	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_09	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_10	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_11	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_12	121	True	False	True	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_13	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_14	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_15	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_16	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_17	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_18	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_21	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_22	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_31	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_32	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_34	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_41	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_42	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_44	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_45	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_51	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_52	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_53	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_61	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_63	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_64	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_65	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_66	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__src_wchar_t_declare_cpy_68	121	True	False	False	CAUGHT	CORRECT	28	wcscpy+0x28	STRICT:ambiguous-2		
+CWE121_Stack_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_02	121	True	True	False	INTRA-OBJECT:NO-READING:unexpected-cause	CORRECT	24	wmemchr+0x1c			
+CWE121_Stack_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_03	121	True	True	False	INTRA-OBJECT:NO-READING:unexpected-cause	CORRECT	24	wmemchr+0x1c			
+CWE121_Stack_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_04	121	True	True	False	INTRA-OBJECT:NO-READING:unexpected-cause	CORRECT	24	wmemchr+0x1c			
+CWE121_Stack_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_05	121	True	True	False	INTRA-OBJECT:NO-READING:unexpected-cause	CORRECT	24	wmemchr+0x1c			
+CWE121_Stack_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_06	121	True	True	False	INTRA-OBJECT:NO-READING:unexpected-cause	CORRECT	24	wmemchr+0x1c			
+CWE121_Stack_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_07	121	True	True	False	INTRA-OBJECT:NO-READING:unexpected-cause	CORRECT	24	wmemchr+0x1c			
+CWE121_Stack_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_08	121	True	True	False	INTRA-OBJECT:NO-READING:unexpected-cause	CORRECT	24	wmemchr+0x1c			
+CWE121_Stack_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_09	121	True	True	False	INTRA-OBJECT:NO-READING:unexpected-cause	CORRECT	24	wmemchr+0x1c			
