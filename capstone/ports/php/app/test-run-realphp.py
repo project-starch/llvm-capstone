@@ -566,6 +566,29 @@ def stale_image_case():
     stale_guard("a stale PROBE transcript is still refused", probe_sha="c" * 64)
 
 
+def node_table_cases():
+    """THE NODE TABLE IS PART OF THE INSTRUMENT, so its size is pinned by a test.
+
+    CRASH-046 and CRASH-075 produced `setup-fault` on all four arms because the module's
+    default 4-page node table could not grow fast enough for a workload holding ~12,600
+    live blocks, and heap.c's ensure_ids(256) then handed back NULL. Nothing about that
+    failure looks like a size: it surfaces as "the heap would not lend a block". If the
+    insmod line silently loses its parameter the two cases simply go back to being
+    unreadable, so the line itself is asserted here rather than trusted.
+    """
+    print("\n-- the node table --")
+    spec = importlib.util.spec_from_file_location("rv", HERE / "run-virtual.py")
+    rv = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rv)
+    runs = [("CRASH-001", "img 1")]
+    text = rv.guest_script(runs)
+    check("the guest insmods the module with a pre-grown node table",
+          "insmod capstone_vm.ko node_initial_pages=1024 || exit 1" in text, True)
+    check("1024 pages is 262144 nodes, at 256 per page", rv.NODE_PAGES * 256, 262144)
+    check("and the size is overridable for a directed experiment",
+          "node_initial_pages=7 " in rv.guest_script(runs, node_pages=7), True)
+
+
 def lint():
     print("\n-- lint --")
     for mod in ("pyflakes", "flake8"):
@@ -588,6 +611,7 @@ if __name__ == "__main__":
     observation_cases()
     main_path_cases()
     stale_image_case()
+    node_table_cases()
     lint()
     print()
     if FAILURES:

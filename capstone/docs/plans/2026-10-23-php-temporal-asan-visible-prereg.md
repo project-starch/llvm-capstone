@@ -132,3 +132,76 @@ CRASH-068 faults at an unsymbolised pc before the case's marker on every arm; an
 exhausts the seam's block provider (`code=1 the heap would not lend a block`, at ~8,000 live
 blocks) on every arm, an instrument capacity limit that needs a larger arena and therefore a
 rebuild this run declines to make.
+
+## Second amendment — three instrument fixes, filed before the run that tests them
+
+The first readable run of this population produced five non-catches. Each was investigated to a
+mechanism, and **none of the five was the capability mechanism failing to notice the bug**. Three
+had a cause fixable by a build or launch parameter; those three are fixed here, and this
+amendment records what each is predicted to do BEFORE the run that tests it.
+
+### What was wrong, and what changed
+
+1. **CRASH-081 — the guest stack, not the allocator.** The fault was `cause=28` with `rs1=x2`
+   (the stack pointer), address `0x3fb1affff0`, bounds `0x3fb1b00000..0x3fb1c00000`: a 16-byte
+   store 16 bytes BELOW a stack of exactly 1 MiB, at a function prologue. The trigger recurses
+   deeply on purpose, so PHP exhausted the stack before reaching the use-after-realloc; Linux
+   gives ASAN 8 MiB and it survives. The symbolised line (`zend-cap-blocks.c:425`, the opening
+   brace of the exit-reporting function) was whichever frame was being entered, not a seam bug.
+   **Fix: `CAPSTONE_APPLICATION_STACK_BYTES` 1 MiB -> 8 MiB** (and `DATA_BYTES` -> 16 MiB, since
+   `Application.cmake:17` requires data to cover stack). Verified in the new image:
+   `.capstone_domreq` now reads `DATA=16843008 STACK=8388608`.
+
+2. **CRASH-046 and CRASH-075 — revocation node IDs, not memory.** Both reported `code=1 the heap
+   would not lend a block`, at 12,646 and 8,038 live blocks. `heap.c`'s
+   `__capstone_sublet_malloc_linear` opens with `ensure_ids(256)`, which returns `-ENOMEM` when
+   the module cannot grow the node table; the heap then returns NULL. The module defaults to
+   `node_initial_pages=4` growing in batches of 16, one page carries 256 nodes, and this seam
+   mints ~4 nodes per block with `collections=0 reclaimed=0` -- retired IDs are never swept, so
+   demand only grows. **Fix: the guest now `insmod`s with `node_initial_pages=1024`** = 262,144
+   nodes, the value and the reason the retarget plan already prescribed. The insmod line is
+   pinned by three offline checks, because losing the parameter would silently restore the
+   failure under a message that says nothing about sizes.
+
+3. **CRASH-068 — a catch inside a function with no debug info.** `cause=24` at a pc that
+   symbolised to `??:0`. Resolved by symbol: **`strlen + 0x14`**. ASAN reports the
+   use-after-free at `spprintf.c:518`, and the trigger's own comment says the error path does
+   `free(c->name)` and then formats that name -- so `spprintf` calls `strlen` on the freed
+   string and our tag check fires on exactly that read. **Fix: the SDK's C files are now built
+   with `-g`**, so `string_bounds_safe.c` carries DWARF. Verified: that pc now resolves to
+   `string_bounds_safe.c:40:9`, where the old image gave `??:0`.
+
+   NOTE: the flag must be `CMAKE_C_FLAGS_RELEASE`, not `CMAKE_C_FLAGS`. The toolchain assembles
+   its `-ffreestanding -nostdinc -isystem<musl>` prologue into `CMAKE_C_FLAGS_INIT`, which CMake
+   honours only while `CMAKE_C_FLAGS` is absent from the cache; setting the latter discards the
+   prologue and clang finds host glibc headers. The first attempt failed exactly that way.
+
+### Predictions
+
+| case | now | predicted after | why |
+|---|---|---|---|
+| CRASH-046 | setup-fault (all arms) | a reading on all arms | 262,144 nodes vs ~50,000 needed |
+| CRASH-075 | setup-fault (all arms) | a reading on all arms | same |
+| CRASH-081 | setup-fault (all arms) | a reading on all arms | 8 MiB stack for a deep recursion |
+| CRASH-068 | setup-fault, site `??:0` | **`unattributed`, site `string_bounds_safe.c`** | `-g` makes the fault legible, NOT attributed: the rule wants ASAN's own file and this is a libc primitive called from it |
+| CRASH-113 | unattributed | unattributed | untouched by all three fixes |
+| the 6 caught | CAUGHT on 3 protected arms | unchanged | untouched by all three fixes |
+
+**CRASH-068 is stated as still-NO-READING on purpose.** `-g` buys a named site, not a verdict.
+Promoting it needs the attribution question settled -- a fault inside a string primitive
+attributed to the caller ASAN names -- which is the same open question as CRASH-008 and
+CRASH-073, now three cases rather than two. It is not settled here and is not being settled by
+a build flag.
+
+### The images changed, so the published comparison must be re-made
+
+```
+php-real-seam.dom  b36d0536...8836  ->  3cff5a15b9fa737b60ffb519470c3fab889c3ad02430f6127216913611183cc8
+probe-seam.dom     5cca4723...a3d0  ->  419ec120a0ac9af115ba591fb746fd1951ce4fa329011980fceffb4995207174
+```
+
+The old pair is kept byte-for-byte so the published 31-case numbers remain reproducible. But a
+bigger stack and a bigger node table are changes the ASAN-blind 31 were ALSO measured without,
+so that population must be re-run on this image before the two tables are set beside each other.
+Until that re-run exists, the published 25-of-28 and anything measured here are on different
+instruments and are not comparable.

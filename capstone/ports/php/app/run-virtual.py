@@ -36,7 +36,10 @@ MARK = "VM_EXIT"
 KERNEL_LINE = re.compile(r"^\[\s*\d+\.\d+\]")
 
 
-def guest_script(runs, env=(), run_timeout=0):
+NODE_PAGES = 1024
+
+
+def guest_script(runs, env=(), run_timeout=0, node_pages=NODE_PAGES):
     """runs: list of (name, argv-string). One capstone-vexec invocation each.
 
     env: NAME=VALUE pairs exported before the runs. This is how an arm that is a RUNTIME mode
@@ -56,7 +59,20 @@ def guest_script(runs, env=(), run_timeout=0):
     wins. The kill is SIGKILL, so `wait` reports 137 -- but the marker is what the reader keys
     on, because an exit code can be produced by the program and a marker only by this loop.
     """
-    lines = ["#!/bin/sh", "cd /mnt/vm || exit 1", "insmod capstone_vm.ko || exit 1",
+    # node_initial_pages: THE NODE TABLE IS A MEASURED CEILING, NOT A FORMALITY. The module
+    # defaults to 4 pages and grows in batches of 16 (module/capstone_vm.c:59), and
+    # heap.c's every linear loan opens with ensure_ids(256) -- so a workload that mints
+    # nodes faster than the table grows gets a NULL from the heap, which this port's seam
+    # reports as "the heap would not lend a block" and the judge refuses as setup-fault.
+    # That is exactly what happened to CRASH-046 (12,646 live blocks) and CRASH-075
+    # (8,038): not memory, node IDs, with `collections=0 reclaimed=0` showing retired IDs
+    # are never swept, so demand only ever grows. One page carries 256 nodes
+    # (node_add_page(c, pages * 256)), so 1024 pages is 262,144 -- against the ~4 per
+    # block this seam mints. The retarget plan prescribed exactly this value and the
+    # reason: "load the module with node_initial_pages=1024 so startup does not provoke a
+    # growth-and-sweep storm".
+    lines = ["#!/bin/sh", "cd /mnt/vm || exit 1",
+             f"insmod capstone_vm.ko node_initial_pages={int(node_pages)} || exit 1",
              "export CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1"]
     for pair in env:
         lines.append(f"export {pair}")
@@ -101,6 +117,8 @@ def main():
     p.add_argument("-e", "--env", action="append", default=[], metavar="NAME=VALUE",
                    help="exported in the guest before every run (e.g. PHP_CAP_MODE=6)")
     p.add_argument("--memory", default="2G")
+    p.add_argument("--node-pages", type=int, default=NODE_PAGES,
+                   help="capstone_vm.ko node_initial_pages (256 nodes per page)")
     p.add_argument("--timeout", type=int, default=600)
     p.add_argument("--run-timeout", type=int, default=0,
                    help="guest seconds per run before it is killed (0: no watchdog)")
@@ -140,7 +158,7 @@ def main():
     for pair in a.env:
         if "=" not in pair:
             sys.exit(f"--env wants NAME=VALUE, got {pair!r}")
-    (stage / "gate.sh").write_text(guest_script(runs, a.env, a.run_timeout))
+    (stage / "gate.sh").write_text(guest_script(runs, a.env, a.run_timeout, a.node_pages))
 
     disk = work / "stage.ext4"
     with disk.open("wb") as f:
