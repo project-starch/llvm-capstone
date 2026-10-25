@@ -34,5 +34,9 @@
     "capstone/bug-corpora/httpd/apr-pool-repros/results/20260922-poisoncap"
   ],
   "advisories": [],
-  "shape_table": true
+  "shape_table": true,
+  "arm_configurations": {
+    "virtual-malloc": "virtual-aprpool-stock",
+    "virtual-nested-pools": "virtual-aprpool-sublet"
+  }
 }

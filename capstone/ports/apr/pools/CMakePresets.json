@@ -38,6 +38,14 @@
       }
     },
     {
+      "name": "capstone-application",
+      "inherits": "base",
+      "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/capstone-application.cmake",
+      "cacheVariables": {
+        "BUILD_TESTING": false
+      }
+    },
+    {
       "name": "linux-guest",
       "inherits": "base",
       "toolchainFile": "${sourceDir}/../../common/cmake/toolchains/linux-guest.cmake"

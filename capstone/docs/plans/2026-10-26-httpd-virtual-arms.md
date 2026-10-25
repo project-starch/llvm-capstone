@@ -73,3 +73,13 @@ mis-paired build cannot run unprotected and read as a result.
 - any nested-arm case that completes.
 
 Each is reported as found, not explained away.
+
+## Changes found at build time, before any run
+
+- **The stock bucket adapter returned an integer cast back to a pointer** (`return (void *)p->address`, twice). It
+  works natively, and on purecap CheriBSD, where `uintptr_t` is a capability. On Capstone the result is untagged, as
+  the compiler's own `-Wcapstone-pointer-roundtrip` warning said, so the stock arm would have faulted inside its own
+  bookkeeping. The fix: a piece's pointer is now the block header's pointer plus the piece's offset. It is the same
+  address on every target, so the native and CheriBSD arms do not move.
+- **The configurations are four, not two:** `virtual-apr{pool,bucket}-{stock,sublet}`. The runner runs every control a
+  configuration lists, and each corpus carries only its own port control.

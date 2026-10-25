@@ -384,6 +384,23 @@ HOSTED = {
         controls_dir="controls/virtual",
         control_names={90: "pool-return-90"},
     ),
+    # httpd/apr-pool-repros and httpd/bucket-repros on the APR pools port (ports/apr/pools), built by
+    # each corpus's own shared/build-cases.sh capstone-application, whose drivers print
+    # `case=N arm=...` and VERDICT, so observe()/fixed_ok() read them.
+    #   virtual-malloc: the stock adapters (src/cheribsd/node-malloc.c, src/native/bucket-pointers.c),
+    #     every node one virtual-mallocng object, filed on APR's own free list and never freed.
+    #   virtual-nested-pools: src/virtual/ (APRP_SUBLET), every node a CDERIVE child revoked at its
+    #     release and every bucket piece one revoked at its file; the driver runs mode 1.
+    **{name: dict(
+        format="case-line",
+        cache={"virtual-malloc": {"APRP_SUBLET": "OFF"}, "virtual-nested-pools": {"APRP_SUBLET": "ON"}},
+        cache_dir="work/port",
+        program="bin/defect-{nn}",
+        extra={"virtual-malloc": [], "virtual-nested-pools": []},
+        mode={"virtual-malloc": "0", "virtual-nested-pools": "1"},
+        controls_dir="controls/virtual",
+        control_names={90: control},
+    ) for name, control in (("apr-pool-repros", "node-released-90"), ("bucket-repros", "piece-filed-90"))},
 }
 
 

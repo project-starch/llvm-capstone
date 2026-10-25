@@ -613,6 +613,66 @@
         "plane-bound",
         "plane-free"
       ]
+    },
+    "virtual-aprpool-stock": {
+      "target": "capstone-virtual",
+      "summary": "httpd/apr-pool-repros on the virtual profile with APR's pools STOCK on virtual mallocng: the pools port's capstone-application build with APRP_SUBLET=OFF, i.e. the stock adapters (src/cheribsd/node-malloc.c), built by the corpus's shared/build-cases.sh capstone-application. Every node is one virtual-mallocng object; a destroyed pool's node goes on APR's own free list and reaches free() only at apr_allocator_destroy",
+      "mechanism": "exact bounds and lifetime retirement of every node APR takes from the system; none on a free-list transition",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "node-released-90": "complete"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "node-released-90"
+      ]
+    },
+    "virtual-aprpool-sublet": {
+      "target": "capstone-virtual",
+      "summary": "httpd/apr-pool-repros with the pools port's virtual nested adapters (APRP_SUBLET=ON, src/virtual/): nodes come from virtual mallocng as upstream's come from malloc; each node's owner is a CDERIVE child of its memory, and a pool gets a fresh CDERIVE child of the owner at every issue, revoked (CREVOKE) at the node's release. The cases' driver runs mode 1, which only this adapter accepts",
+      "mechanism": "per-node revocation at APR's own free-list transitions, by the two lifetime instructions",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "node-released-90": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "node-released-90"
+      ]
+    },
+    "virtual-aprbucket-stock": {
+      "target": "capstone-virtual",
+      "summary": "httpd/bucket-repros on the virtual profile with APR's pools and apr-util's bucket allocator STOCK on virtual mallocng: the pools port's capstone-application build with APRP_SUBLET=OFF, i.e. the stock adapters (src/cheribsd/node-malloc.c, src/native/bucket-pointers.c), built by the corpus's shared/build-cases.sh capstone-application. Every node is one virtual-mallocng object; a destroyed pool's node or a returned bucket block goes on APR's own free list and reaches free() only at apr_allocator_destroy",
+      "mechanism": "exact bounds and lifetime retirement of every node APR takes from the system; none on a free-list transition, none per bucket piece",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "piece-filed-90": "complete"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "piece-filed-90"
+      ]
+    },
+    "virtual-aprbucket-sublet": {
+      "target": "capstone-virtual",
+      "summary": "httpd/bucket-repros with the pools port's virtual nested adapters (APRP_SUBLET=ON, src/virtual/): nodes come from virtual mallocng as upstream's come from malloc; each node's owner is a CDERIVE child of its memory, and a pool gets a fresh CDERIVE child of the owner at every issue, revoked (CREVOKE) at the node's release; every bucket piece is a CDERIVE child of its block, revoked at apr_bucket_free's file and dying with the block at the node's release. The cases' driver runs mode 1, which only this adapter accepts",
+      "mechanism": "per-node and per-bucket-piece revocation at APR's own free-list transitions, by the two lifetime instructions",
+      "controls": {
+        "bounds-malloc": "fault",
+        "uaf-malloc": "fault",
+        "piece-filed-90": "fault"
+      },
+      "controls_for_missed": [
+        "bounds-malloc",
+        "uaf-malloc",
+        "piece-filed-90"
+      ]
     }
   }
 }

@@ -6,6 +6,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+/* The adapter's mode. 0 everywhere but the virtual nested build, whose
+ * adapter (ports/apr/pools/src/virtual/) accepts only 1: build-cases.sh
+ * capstone-application passes -DAPRP_DRIVER_MODE=1 with APRP_SUBLET=ON. */
+#ifndef APRP_DRIVER_MODE
+#define APRP_DRIVER_MODE 0
+#endif
+
 _Noreturn void aprp_fail(unsigned code) {
   fprintf(stderr, "CONTROL-FAILED %u\n", code);
   exit(75); /* an infrastructure failure is never a verdict */
@@ -24,7 +31,7 @@ int main(int argc, char **argv) {
     aprp_fail(702);
   aprp_meta_init(metadata);
   aprp_payload_init(payload);
-  aprp_set_mode(0);
+  aprp_set_mode(APRP_DRIVER_MODE);
   if (apr_pool_initialize() != APR_SUCCESS)
     aprp_fail(700);
   apr_pool_t *root = NULL;

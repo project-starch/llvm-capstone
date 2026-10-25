@@ -34,5 +34,9 @@
     "capstone/bug-corpora/httpd/bucket-repros/results/20260922-poisoncap-negative-control"
   ],
   "advisories": [],
-  "shape_table": true
+  "shape_table": true,
+  "arm_configurations": {
+    "virtual-malloc": "virtual-aprbucket-stock",
+    "virtual-nested-pools": "virtual-aprbucket-sublet"
+  }
 }

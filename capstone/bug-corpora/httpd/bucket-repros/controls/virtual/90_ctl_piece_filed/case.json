@@ -1,0 +1,9 @@
+{
+  "case": 90,
+  "title": "CONTROL: a bucket piece filed by apr_bucket_free stays inside its block, so the system allocator never sees it end; the nested adapter revokes it at the file",
+  "control_for": "the virtual-malloc and virtual-nested-pools arms of httpd/bucket-repros",
+  "arms": {
+    "virtual-malloc": {"oracle": "complete: the piece goes on the allocator's freelist inside a live node; virtual mallocng sees no free"},
+    "virtual-nested-pools": {"oracle": "fault at read_probe: aprb_file revoked the piece (CREVOKE)"}
+  }
+}
