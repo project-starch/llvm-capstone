@@ -8649,3 +8649,31 @@ Record: `records/b2n2-b1.result-lines.txt`.
   As controls, matrix-compare reads a matrix against itself as 11 of 11 and perl stock against perl Sublet as 7 of 11.
 - **Prediction:** every cell the same as the first reading. No exception is named, since none of these arms has a Q-31
   cell. Readings 0.
+
+### Bitstream 2 N=2, board 2 result: lt0, sqlite and the postgres arms identical to their first readings, the Q-31 cells included (2026-10-24 22:31 to 2026-10-25 09:26)
+
+Record: `records/b2n2-b2.result-lines.txt`.
+- **lt0:** n2-grade **32 of 32, 0 allowed.** Case 01 reads cause 4 at set_dealloc+284 again, so the Q-31 cell repeats
+  exactly. Against the QEMU reference it is 31 of 32, as before.
+- **Read on board 2, first read on board 1, n2-grade 0 different on each:** sq0a-f (sq0d 6 of 6, 0 allowed: cells 19
+  and 20 read cause 4 again and 22 reads cause 13 again), pgc 5, pgm0 5 and pgm1 5.
+- **Same board:** sq1q15a-f and pgm1q15, every cell the same.
+- **pg-pools on board 2 (first on board 1):** 9 of 9 against the first reading and the reference.
+- Readings 0. **Against the pre-registration (60709f69bfc2): every reading holds.**
+- **The Q-31 exceptions were never needed.** Silicon's cause 4/13 at those sites is deterministic, across boards.
+
+### Bitstream 2 N=2 phase 2, board 2: the new arms, then Juliet temporal, pre-registered (2026-10-25 09:3x)
+
+- **The runs:**
+  - the new arms with NA_ROOT `t3-run-b2-dcc6daf6e-b2/n2/na`, on the same board as their first reading;
+  - then Juliet temporal with JF_ROOT `.../b2/n2/juliet-temporal`, first read on board 1 (cross-board).
+- **The grade:**
+  - n2-grade.py on xlang (both), plane (both) and the six capi groups;
+  - for Juliet, juliet-obs-compare between the FIRST board reading's observations and the second's, census then seeded.
+    A filter splits the census differences into rand-driven `_12` draws and OTHER. On the first run's compare it reads 9
+    `_12` and 0 OTHER; on a planted non-`_12` line it reads 1 OTHER.
+- **Predictions:**
+  - every new-arm cell the same as the first reading;
+  - Juliet census: differences only in `_12` draws (0 OTHER), and seeded 56 of 56;
+  - a uaf-control cause 13 shows as a ctl step difference, and is reported as such if it appears;
+  - readings 0.
