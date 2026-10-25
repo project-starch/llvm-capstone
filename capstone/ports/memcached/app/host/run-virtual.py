@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import socket
 import subprocess
 import sys
 
@@ -57,11 +58,18 @@ def main():
     # sublet: host/build-sublet.sh's images (patch 0006, Sublet inside slabs.c and cache.c), judged by
     # the `lifetimes` predictions. The worker-marker image and the native controls are the same.
     p.add_argument('--arm', choices=('virtual', 'sublet'), default='virtual')
-    p.add_argument('--port', type=int, default=21299)
+    p.add_argument('--port', type=int, default=0,
+                   help='host port of the native reference servers; 0 (default): a free one, chosen once')
     p.add_argument('--timeout', type=int, default=1200)
     p.add_argument('--native-reference', type=Path,
                    help='Reuse native transcripts from a passing gate with identical native binaries and harness source')
     a = p.parse_args()
+    if a.port == 0:
+        # The native servers listen on the HOST: two gates on one host with one fixed port talked to
+        # each other's servers (2026-10-25). A free port chosen once; a racer taking it fails the bind.
+        with socket.socket() as reservation:
+            reservation.bind(('127.0.0.1', 0))
+            a.port = reservation.getsockname()[1]
     a.work.mkdir(parents=True, exist_ok=False)
     stage = a.work / 'stage'
     stage.mkdir()

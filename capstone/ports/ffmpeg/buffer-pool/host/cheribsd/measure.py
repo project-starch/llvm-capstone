@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import shlex
+import socket
 import struct
 import subprocess
 import sys
@@ -35,11 +36,18 @@ def main():
     p.add_argument("--build", type=Path, required=True)
     p.add_argument("--repetitions", type=int, default=3)
     p.add_argument("--workload", action="append")
-    p.add_argument("--port", type=int, default=10426)
+    p.add_argument("--port", type=int, default=0,
+                   help="host port forwarded to the guest's ssh; 0 (default): a free one, chosen once")
     p.add_argument("--runtime-revocation", choices=("off", "on"), default="off")
     p.add_argument("--label", default="cheri-spatial-arena")
     p.add_argument("--churn-rounds", type=int, default=0)
     a = p.parse_args()
+    if a.port == 0:
+        # A fixed default would collide when two measurements share a host; capstone_vm's pattern:
+        # a free port chosen once, and QEMU's hostfwd fails safely if a racer takes it.
+        with socket.socket() as reservation:
+            reservation.bind(("127.0.0.1", 0))
+            a.port = reservation.getsockname()[1]
     if a.repetitions < 1:
         p.error("repetitions must be positive")
     if a.churn_rounds < 0 or a.churn_rounds > 3000000:
