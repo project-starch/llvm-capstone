@@ -110,8 +110,11 @@ def main():
         ax.text(right, yc[-1] / 2, f'{cl} (solid),\n{pl} (dashed):\nidentical curves', fontsize=8,
                 color=INK, ha='right', va='center')
     else:
-        ax.text(right, yc[-1] + 4, cl, fontsize=8, color=CONTROL, ha='right', va='bottom')
-        ax.text(right, yp[-1] + 4, pl, fontsize=8, color=PROTECTED, ha='right', va='bottom')
+        # Above its curve's end, or below it when the curve ends near the top of the axis.
+        for y, label, color in ((yc[-1], cl, CONTROL), (yp[-1], pl, PROTECTED)):
+            above = y + 4 <= 92
+            ax.text(right, y + 4 if above else y - 4, label, fontsize=8, color=color, ha='right',
+                    va='bottom' if above else 'top')
     if a.note:
         fig.text(0.01, 0.005, a.note, fontsize=6.5, color=MUTED)
     out = Path(a.out)
