@@ -8855,3 +8855,27 @@ Record: `records/b2bs-census-b1.result-lines.txt`. Counters are cumulative, page
 - Readings 0. **Against the pre-registration (68ef34d55080): every reading holds.**
 - **What it supports:** in these programs R-61 can arm on silicon only from read-only pages, as on QEMU. This is
   consistent with the corpus's zero cause 15.
+
+### httpd on bitstream 2: APR pools and apr-util buckets, both virtual arms, N=2 cross-board, pre-registered (2026-10-26 04:0x, before the boots)
+
+- **Why:** httpd is a new corpus, landed on dev at 6d9e397df3ca by the compiler lane: apr-pool-repros (1 case) and
+  bucket-repros (8 cases). Its QEMU references on qkit7-b2twin3-q8 are committed under
+  `bug-corpora/httpd/<corpus>/results/2026-10-26-virtual/<arm>` (pre-registered at 733c0f4248cd).
+- **What runs:** `tier3-httpd-b2.sh <board> <log>`: one boot per corpus x arm, four boots.
+  - run-virtual-cases.py --prebuilt runs from a clean worktree at 6d9e397df3ca (runner e464b106, the runner the
+    references record).
+  - The compiler lane's prebuilt images must equal, by sha256/16, the STAMP lines in httpd-v/REFS.txt that the
+    references were run from.
+  - It uses the same SDK (f5145cbb) and llvm-bin.
+  - The grade is verdicts-compare against the committed reference.
+  - Dry run: `dryrun-httpd-b2.txt`. A flipped case fires the comparator, and an incomplete boot stops the run.
+- **Order:**
+  - board 1 now (output `t3-run-b2-dcc6daf6e-b1/httpd`);
+  - then the N=2 reading on board 2, after the fault_mstatus arm, with HT_SUB `httpd-n2`. It is graded by n2-grade.py
+    against board 1's reading as well as against the reference.
+- **Predictions:**
+  - **virtual-malloc: 9 of 9 MISSED** (1 + 8), each reached with VERDICT DEFECT-REPRODUCED, the controls as declared;
+  - **virtual-nested-pools: 9 of 9 CAUGHT, cause 25 in read_probe**, attributed by probe;
+  - every cell as the reference in verdicts-compare's fields, and N=2 0 different;
+  - the uaf-malloc control may read the silicon-only cause 13, which is a control, not a cell;
+  - readings 0.
