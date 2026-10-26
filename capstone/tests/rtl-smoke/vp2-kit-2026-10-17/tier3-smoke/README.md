@@ -9221,3 +9221,38 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     remain, and the aperture instrument goes into bitstream 3.
 - **The rate:** 3 of 200 and 6 of 200 here, against 1 of 200 in 0a and 10 of 400 in the bitstream-2 uaf x400 record. Together that is
   20 of 1,000 uaf-control runs, 2.0%.
+
+### Q-34's store side on bitstream 2: a misaligned plain `sw` and `sd` inside a context, both boards, N=1 each, pre-registered (2026-10-26 14:0x, before the boots)
+
+- **Why:** the lead's decision, relayed by the runtime lane. The semantics owner's Q-34 ruling holds that a misaligned
+  plain store in a protected context raises 6 and is terminal. That half was predicted from the RTL's code (the same
+  `data_misaligned` arm covers `SW`), not read.
+- **The program:** `misal-store.c`, built with the Juliet SDK (`capstone-cc -O0`, sdk.json f5145cbb, the uaf control's
+  recipe). The image is `misal-store.dom`, e3107737d6cb6031.
+  - It makes one 32-byte malloc object, and every access stays inside it. Only the width and the offset vary.
+  - Disassembled: the plain `sw` at misal_store_w+0x58 (code+0x10c40), the `sd` at misal_store_d+0x58 (code+0x10cac),
+    and the `lw` at misal_load_w+0x38 (code+0x10cf8). Each goes through the object's capability.
+- **What runs:** `tier3-misal-b2.sh <board> <log>`, which calls tier3-misal.py: one boot on the corpus kit
+  bkit9-b2-b<board> (module 215a09be, launcher fad465ce, no parameters). The steps, in this order:
+  - aligned-sw (+4) and aligned-sd (+8), the controls;
+  - misal-lw (+1), Q-34's load, as the positive control;
+  - misal-sw (+1), misal-sd (+1) and misal-sd4 (+4, which is 4-aligned but not 8-aligned);
+  - aligned-sw-post, the control again after the faults.
+  - The reader exits 2 on any step it cannot read.
+- **Dry run:** `dryrun-misal-b2.txt`. The stubs are a real board transcript's frame with the steps planted. Faults read
+  as FAULT with cause and pc, returns as RETURNED, a missing step as NO DATA (exit 2), and a step with both as
+  UNREADABLE (exit 2). The wrapper stops on a busy board and on an existing output root.
+- **The QEMU twin, run here before the boots** (`records/misal-twin.result-lines.txt`): every step RETURNS its written
+  value, the four misaligned ones included. That is Q-34's "the twin completes", for stores as well as loads.
+- **Predictions, per board:**
+  - aligned-sw, aligned-sd and aligned-sw-post RETURN 0x11223344 / 0x1122334455667788 / 0x11223344. A control that does
+    not return voids the boot.
+  - **misal-lw: FAULT cause 4 at code+0x10cf8**, Q-34's load. If it returns, the boot says nothing about Q-34.
+  - **misal-sw: FAULT cause 6 at code+0x10c40.**
+  - **misal-sd and misal-sd4: FAULT cause 6 at code+0x10cac.**
+  - readings 0.
+- **What the readings decide:**
+  - Cause 6 on the three stores confirms the ruling's store half.
+  - A store that RETURNS means silicon performs misaligned stores, against the RTL reading.
+  - A store that reads cause 4 is a store reported as a load (Q-09's shape, in the RTL).
+  - misal-sd4 separates an 8-byte alignment check from a 4-byte one.

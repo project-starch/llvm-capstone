@@ -1,0 +1,62 @@
+# tier3-misal-b2.sh / tier3-misal.py dry run, 2026-10-26. Every board call stubbed (MS_BUSY, MS_BOOK, MS_RUN; BOARDVM_STUB_TRANSCRIPT skips the recipe).
+# The stubs are a REAL board transcript's rung frame (board 1's census boot) with the misal steps planted (mkstub.py, not committed).
+## stub 'fault': tier3-misal.py --board-kit bkit9-b2-b1
+READ aligned-sw: RETURNED 0x11223344 exit exit 0
+READ aligned-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-lw: FAULT cause 4 at code+0x10cf8 exit signal 11
+READ misal-sw: FAULT cause 6 at code+0x10c40 exit signal 11
+READ misal-sd: FAULT cause 6 at code+0x10cac exit signal 11
+READ misal-sd4: FAULT cause 6 at code+0x10cac exit signal 11
+READ aligned-sw-post: RETURNED 0x11223344 exit exit 0
+## stub 'returned': tier3-misal.py --board-kit bkit9-b2-b1
+READ aligned-sw: RETURNED 0x11223344 exit exit 0
+READ aligned-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-lw: RETURNED 0x5a5a5a5a exit exit 0
+READ misal-sw: RETURNED 0x11223344 exit exit 0
+READ misal-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-sd4: RETURNED 0x1122334455667788 exit exit 0
+READ aligned-sw-post: RETURNED 0x11223344 exit exit 0
+## stub 'missing': tier3-misal.py --board-kit bkit9-b2-b1
+READ aligned-sw: RETURNED 0x11223344 exit exit 0
+READ aligned-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-lw: FAULT cause 4 at code+0x10cf8 exit signal 11
+READ misal-sw: FAULT cause 6 at code+0x10c40 exit signal 11
+READ misal-sd: NO DATA (mark seen, result none)
+READ misal-sd4: NO DATA (mark absent, result none)
+READ aligned-sw-post: NO DATA (mark absent, result none)
+## stub 'both': tier3-misal.py --board-kit bkit9-b2-b1
+READ aligned-sw: RETURNED 0x11223344 exit exit 0
+READ aligned-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-lw: FAULT cause 4 at code+0x10cf8 exit signal 11
+READ misal-sw: UNREADABLE (returned True, fault True)
+READ misal-sd: FAULT cause 6 at code+0x10cac exit signal 11
+READ misal-sd4: FAULT cause 6 at code+0x10cac exit signal 11
+READ aligned-sw-post: RETURNED 0x11223344 exit exit 0
+## exit statuses: fault 0, returned 0, missing 2, both 2
+## the wrapper on the fault stub (board 1):
+MS BEGIN 13:58:43 board 1 kit bkit9-b2-b1 booking 999 # book 1 30 vp2 bitstream 2 Q-34 misaligned-store arm (board 1)
+999 # unbook 999 # book 1 30 vp2 bitstream 2 Q-34 misaligned-store arm (board 1)
+MS END rc=0 13:58:43
+MISAL kit <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b1 boot completed; transcript <scratch> steps 7
+READ aligned-sw: RETURNED 0x11223344 exit exit 0
+READ aligned-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-lw: FAULT cause 4 at code+0x10cf8 exit signal 11
+READ misal-sw: FAULT cause 6 at code+0x10c40 exit signal 11
+READ misal-sd: FAULT cause 6 at code+0x10cac exit signal 11
+READ misal-sd4: FAULT cause 6 at code+0x10cac exit signal 11
+READ aligned-sw-post: RETURNED 0x11223344 exit exit 0
+MS readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+MS board1 DONE 13:58:43
+## a busy board:
+MS STOP: board 2 is busy
+## an existing output root:
+MS STOP: <scratch> exists
+## the QEMU twin (qkit7-b2twin3-q8), the real boot, board-free:
+MISAL kit <mnt-hdd>/capstone/t3-smoke/qkit7-b2twin3-q8 boot completed; transcript <mnt-hdd>/capstone/misal-store/twin/guest/serial.log; steps 7
+READ aligned-sw: RETURNED 0x11223344 exit exit 0
+READ aligned-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-lw: RETURNED 0x5a5a5a5a exit exit 0
+READ misal-sw: RETURNED 0x11223344 exit exit 0
+READ misal-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-sd4: RETURNED 0x1122334455667788 exit exit 0
+READ aligned-sw-post: RETURNED 0x11223344 exit exit 0
