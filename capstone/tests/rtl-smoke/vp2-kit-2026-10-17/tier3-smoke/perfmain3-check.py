@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-"""perfmain3-check.py <kit dir> <runner sha256/16> <done tag>: a T3 perf kit's pre-launch check (2026-10-27), run before any
+"""perfmain3-check.py <kit dir> <runner sha256/16> <done tag> [arms, default T1,T2,T3]: a T3 perf kit's pre-launch check (2026-10-27), run before any
 board is booked. Checks, and prints one line per failure:
 - the stage matches its SHA256SUMS, and SHA256SUMS covers every stage file;
 - the run script's sha256/16 is the one given, and it ends in @@PERF-<done tag>-DONE;
 - every @@PERF-BEGIN line of the run script equals its steps.tsv row (n, program, arm, proc, K, args), and names an image
   under the arm's directory that exists and is a Capstone image (ELF e_machine 259);
-- per program, the T1, T2 and T3 images are three distinct files, and each arm has the same number of processes;
+- per program, the images of the given arms (default T1, T2 and T3) are distinct files, and each arm has the same number
+  of processes;
 - **each program's args equal the args the MAIN RUN gave that program** (perf/main1/k*/steps.tsv and perf/main2/*/steps.tsv).
   A program the main run never ran is a failure, so the check cannot pass by having nothing to compare. This is the check
   that the first T3 kits (2026-10-27, voided) failed: huffbench-libc ran "1 5" where the main run gave the non-re-entrant
@@ -23,9 +24,10 @@ PERF = Path("/mnt/hdd") / Path.home().name / "capstone/perf"
 
 
 def main():
-    if len(sys.argv) != 4:
+    if len(sys.argv) not in (4, 5):
         print(__doc__); sys.exit(2)
     kit, sha, done = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+    arms = set((sys.argv[4] if len(sys.argv) == 5 else "T1,T2,T3").split(","))
     stage = kit / "stage"
     runners = sorted(stage.glob("run-*.sh"))
     if not stage.is_dir() or len(runners) != 1 or not (kit / "steps.tsv").is_file():
@@ -71,10 +73,10 @@ def main():
         elif args not in main_args[prog]:
             bad.append(f"line {n}: {prog} {arm} args '{args}', the main run gave {sorted(main_args[prog])}")
     for (prog, K), d in img.items():
-        if len(d) != 3 or len(set(d.values())) != 3:
-            bad.append(f"{prog} K{K}: T1/T2/T3 images are not three distinct files ({sorted(d)})")
+        if set(d) != arms or len(set(d.values())) != len(arms):
+            bad.append(f"{prog} K{K}: the {sorted(arms)} images are not {len(arms)} distinct files ({sorted(d)})")
     for prog, c in per_arm.items():
-        if len(set(c.values())) != 1 or set(c) != {"T1", "T2", "T3"}:
+        if len(set(c.values())) != 1 or set(c) != arms:
             bad.append(f"{prog}: processes per arm {dict(c)}")
     for b in bad:
         print(f"FAIL {kit.name}: {b}")

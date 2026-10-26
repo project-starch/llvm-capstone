@@ -10145,3 +10145,25 @@ Tool: `r64-census.py`.
   - run-b3-after.sh stubbed, then refusing a bitstream-2 kit;
   - the real tier3-hold-batch.sh with a forced busy, which passes its kit check for a board-2 bitstream-3 kit and
     refuses one on board 1.
+
+### Bitstream 3: the runtime lane's perf kit b3k1 on board 2, pre-registered (2026-10-27 02:4x, before any flash)
+
+- **What runs:** `perf/main4/b3k1`, as ONE boot. The runtime lane pre-registered it, with its predictions, on
+  runtime/bench-counters 8bfc279da208.
+  - Runner run-b3k1.sh cbf60f75e5eb79ae; the stage is 3,407,004 B, and its SHA256SUMS cover all 10 files.
+  - Launcher 978c09d6 and module 9c60fb53, as in the main run.
+  - First, `@@B3-ID` lines: native ludcmp and st at `1 3`, the bitstream-2 FP discriminator's binaries. Then 24
+    processes: ludcmp, st and minver × T1/T2 × 4, ABBA, at the main run's `1 5`.
+- **Checked here:** `perfmain3-check.py` PASSES on it with arms T1,T2. The check gained an arms argument, default
+  T1,T2,T3. The three-arm demand fails it, and the T3 kits' readings are unchanged.
+- **When:** `tier3-b3k1.sh`, on board 2 only. It starts only after board 2's flash chain has reached its regression
+  controls (`FB AFTER` and `FB DONE`); an `FB HOLD` or `FB STOP` starts nothing.
+- **How:** `tier3-perfpilot-b3.sh` with PP_SUB main4-b3k1, a 2,700 s step and a 60-minute booking.
+  - It is tier3-perfpilot-b2.sh with three changes: the bitstream-3 kits (bkit12-perf-b3 checked against bkit11-b3),
+    the e7af48457 bitstream check, and the t3-run-b3-e7af48457 output root. PP_KITROOT is added for dry runs.
+  - Dry runs: `dryrun-b3-perf.txt`.
+- **Pass (the runtime lane's criterion):**
+  - `@@PERF-B3K1-DONE` last;
+  - 24 `@@PERF-END` lines, all rc=0;
+  - its predictions: verify_failed=0 and BENCH-DONE failed=0 on both `@@B3-ID` lines (bitstream 2 read VERIFY-FAILED
+    on every iteration), and the 24 processes bit-exact with the twin.
