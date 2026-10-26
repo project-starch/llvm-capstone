@@ -128,7 +128,7 @@ __capstone_vm_futex:
     li a7, CV_SERVICE_FUTEX
     ecall
     ret
-.section .gct
+.section .gct,"a",@progbits
 .balign 16
 .global __capstone_gct_start
 .hidden __capstone_gct_start

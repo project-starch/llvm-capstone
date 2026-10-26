@@ -145,9 +145,9 @@ swap/migration and multi-hart execution are not added by this allocator port.
 
 ## Processor storage contract
 
-ABI v6 runs on QEMU's default profile (option iii). The
-launcher checks its advertised bit before starting the image. Version 2/3
-images remain accepted; the withdrawn native-heap version 4 is rejected.
+ABI v7 runs on QEMU's default profile (option iii). The
+launcher accepts this version only; an image of an earlier version must be
+rebuilt.
 
 The profile makes the existing physical shadow bounds authoritative during
 minting and context-frame restoration as well as capability spill/reload.

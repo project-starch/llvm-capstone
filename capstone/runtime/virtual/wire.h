@@ -9,6 +9,10 @@
 struct cv_map {
     __u64 thread, address, bytes, permissions, reg, cursor, linear;
     __u64 id;
+    /* The image grant only (reg 3): its first rx_bytes are the read+execute
+     * segment, mapped from the image file without write permission. They are
+     * neither pinned nor swept; the rest is pinned as any eager grant. */
+    __u64 rx_bytes;
 };
 struct cv_step {
     /* Zero is the original process thread. Other IDs are allocated by

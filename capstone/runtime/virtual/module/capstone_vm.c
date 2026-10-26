@@ -35,6 +35,10 @@ struct arena {
     struct rb_node node;
     u64 id;
     unsigned long address, bytes, ancestor;
+    /* The image's read+execute prefix (zero for every other arena): mapped
+     * from the image file without write permission, so it never holds a tag;
+     * not pinned, not swept. pages[] and count cover the pages after it. */
+    unsigned long rx_bytes;
     struct page **pages;
     unsigned count;
     bool lazy;
@@ -447,6 +451,14 @@ static struct arena *arena_at(struct context *c, unsigned long address)
     struct arena *a = address == ULONG_MAX ? NULL : arena_below(c, address + 1);
     return a && address - a->address < a->bytes ? a : NULL;
 }
+/* A fault in the image's read+execute prefix. Linux resolves it from the
+ * file, with fault-around and no pin, so it is not one of the adapter's fault
+ * events: how many there are depends on the page cache, not on the arena. */
+static bool text_fault(struct context *c, unsigned long address)
+{
+    struct arena *a = arena_at(c, address);
+    return a && address - a->address < a->rx_bytes;
+}
 /* Does [address, address + bytes) overlap an arena other than skip? */
 static bool arena_overlaps(struct context *c, unsigned long address,
                            unsigned long bytes, struct arena *skip)
@@ -578,7 +590,7 @@ static int pin_remaining(struct context *c, struct arena *a)
     mmap_read_lock(c->mm);
     for (unsigned j = 0; j < a->count; ++j) {
         struct page *page;
-        unsigned long address = a->address + j * PAGE_SIZE;
+        unsigned long address = a->address + a->rx_bytes + j * PAGE_SIZE;
         int resident;
         if (a->pages[j]) continue;
         resident = resident_page(c->mm, address);
@@ -955,7 +967,11 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
         (t->started && (t->event != 3 || r->reg != 10 || t->reply_cap)) ||
         (!t->started && r->reg != 2 && r->reg != 3 &&
          r->reg != 10 && r->reg != 11 && r->reg != 12 && r->reg != 13) ||
-        (r->reg == 3 && (!(r->permissions & 1) || r->linear)))
+        (r->reg == 3 && (!(r->permissions & 1) || r->linear)) ||
+        /* Only the initial image grant has a read+execute prefix, a whole
+         * number of pages strictly inside it, and it starts there. */
+        (r->rx_bytes && (r->reg != 3 || t->started || (r->rx_bytes & (PAGE_SIZE - 1)) ||
+                         r->rx_bytes >= r->bytes || r->cursor >= r->address + r->rx_bytes)))
         return -EINVAL;
     if (arena_overlaps(c, r->address, r->bytes, NULL)) return -EINVAL;
     if (c->registered_bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
@@ -963,18 +979,36 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     mmap_read_lock(c->mm);
     for (unsigned long at = r->address; at < r->address + r->bytes;) {
         struct vm_area_struct *v = find_vma(c->mm, at);
-        if (!v || v->vm_start > at || v->vm_file || (v->vm_flags & VM_SHARED) ||
-            ((r->permissions & 4) && !(v->vm_flags & (r->linear ? VM_MAYREAD : VM_READ))) ||
-            ((r->permissions & 2) && !(v->vm_flags & (r->linear ? VM_MAYWRITE : VM_WRITE))) ||
-            ((r->permissions & 1) && !(v->vm_flags & (r->linear ? VM_MAYEXEC : VM_EXEC)))) {
+        unsigned long rx_end = r->address + r->rx_bytes;
+        bool rx = at < rx_end;
+        bool bad;
+        if (!v || v->vm_start > at || (v->vm_flags & VM_SHARED)) {
             mmap_read_unlock(c->mm); return -EACCES;
         }
+        if (rx)
+            /* Image text: a private file mapping, readable and executable,
+             * never writable. The trusted launcher keeps it that way. */
+            bad = !v->vm_file || (v->vm_flags & VM_WRITE) ||
+                  (v->vm_flags & (VM_READ | VM_EXEC)) != (VM_READ | VM_EXEC);
+        else if (r->rx_bytes)
+            /* Image data: private and writable, never executable. A file
+             * mapping is allowed: pinning breaks its copy-on-write below and
+             * only exclusive anonymous pages are retained. */
+            bad = (v->vm_flags & (VM_READ | VM_WRITE)) != (VM_READ | VM_WRITE) ||
+                  (v->vm_flags & VM_EXEC);
+        else
+            bad = v->vm_file ||
+                  ((r->permissions & 4) && !(v->vm_flags & (r->linear ? VM_MAYREAD : VM_READ))) ||
+                  ((r->permissions & 2) && !(v->vm_flags & (r->linear ? VM_MAYWRITE : VM_WRITE))) ||
+                  ((r->permissions & 1) && !(v->vm_flags & (r->linear ? VM_MAYEXEC : VM_EXEC)));
+        if (bad) { mmap_read_unlock(c->mm); return -EACCES; }
 #ifdef CONFIG_TRANSPARENT_HUGEPAGE
         if (!(v->vm_flags & VM_NOHUGEPAGE)) {
             mmap_read_unlock(c->mm); return -EOPNOTSUPP;
         }
 #endif
-        at = min((unsigned long)(r->address + r->bytes), v->vm_end);
+        at = min(min((unsigned long)(r->address + r->bytes), v->vm_end),
+                 rx ? rx_end : ULONG_MAX);
     }
     mmap_read_unlock(c->mm);
     /* Everything that can fail is prepared before the grant is minted. The
@@ -985,7 +1019,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     if (!a) return -ENOMEM;
     a->id = c->next_id + 1;
     if (xa_insert(&c->ids, a->id, a, GFP_KERNEL_ACCOUNT)) { kfree(a); return -ENOMEM; }
-    pages = kvcalloc(r->bytes / PAGE_SIZE, sizeof(*pages), GFP_KERNEL_ACCOUNT);
+    pages = kvcalloc((r->bytes - r->rx_bytes) / PAGE_SIZE, sizeof(*pages), GFP_KERNEL_ACCOUNT);
     if (!pages) { xa_erase(&c->ids, a->id); kfree(a); return -ENOMEM; }
     if (!r->linear) {
         /* Freed before the mint, so it is not a lasting allocation: no account. */
@@ -996,8 +1030,9 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     /* Growing RW arenas start with absent PTEs. Linux resolves each first
      * touch through GUP, then the adapter pins that backing until retirement. */
     if (!r->linear) {
-        n = pin_user_pages_fast(r->address, r->bytes / PAGE_SIZE, FOLL_WRITE, pages);
-        if (n != r->bytes / PAGE_SIZE) goto unpin;
+        n = pin_user_pages_fast(r->address + r->rx_bytes, (r->bytes - r->rx_bytes) / PAGE_SIZE,
+                                FOLL_WRITE, pages);
+        if (n != (r->bytes - r->rx_bytes) / PAGE_SIZE) goto unpin;
     }
     for (i = 0; i < n; ++i)
         if (!PageAnon(pages[i]) || page_mapcount(pages[i]) != 1) goto unpin;
@@ -1052,7 +1087,8 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     restore_root(old);
     local_irq_restore(flags); preempt_enable();
     a->address = r->address; a->bytes = r->bytes; a->ancestor = ancestor;
-    a->pages = pages; a->count = r->bytes / PAGE_SIZE; a->lazy = r->linear;
+    a->rx_bytes = r->rx_bytes;
+    a->pages = pages; a->count = (r->bytes - r->rx_bytes) / PAGE_SIZE; a->lazy = r->linear;
     arena_insert(c, a);
     c->registered_bytes += a->bytes;
     r->id = c->next_id = a->id;
@@ -1492,6 +1528,24 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
     if (!t->started || t->event != 4 || (cause != 12 && cause != 13 && cause != 15))
         return -EINVAL;
     a = arena_at(c, address);
+    if (a && address - a->address < a->rx_bytes) {
+        /* Image text: Linux maps the file page (and its neighbours, by
+         * fault-around), with no copy and no pin. A store is refused: these
+         * pages are never writable. fixup_user_fault checks read access
+         * only, so execute permission is checked here. */
+        int rc;
+        if (cause == 15) return -EACCES;
+        mmap_read_lock(c->mm);
+        v = find_vma(c->mm, address);
+        if (!v || v->vm_start > address || !v->vm_file ||
+            (v->vm_flags & (VM_WRITE | VM_SHARED)) ||
+            !(v->vm_flags & (cause == 12 ? VM_EXEC : VM_READ))) {
+            mmap_read_unlock(c->mm); return -EACCES;
+        }
+        rc = fixup_user_fault(c->mm, address, cause == 12 ? FAULT_FLAG_INSTRUCTION : 0, NULL);
+        mmap_read_unlock(c->mm);
+        return rc;
+    }
     if (a && a->lazy) {
         unsigned index;
         long n;
@@ -1881,7 +1935,7 @@ thread_unwind:
         struct cv_step r __uninitialized;
         struct cv_thread *t;
         u64 budget_end;
-        bool resolved = false;
+        bool resolved = false, text = false;
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
@@ -1915,7 +1969,7 @@ thread_unwind:
         TEST_HOOK(3);
         for (unsigned long action = r.reply ? 2 : 0, entries = 0;;
              action = 0, ++entries) {
-            if (entries) TEST_HOOK(2);
+            if (entries && !text) TEST_HOOK(2);  /* after a data fault only, see below */
             preempt_disable(); local_irq_save(flags);
             /* Checked with interrupts and preemption off, immediately before
              * CSRUNV: no interrupt can set need_resched or a signal between
@@ -1990,7 +2044,12 @@ thread_unwind:
              * whose own CV_RESOLVE fails the same way and delivers it. A
              * fault resolved here but stopped before the next entry is
              * resolved again, idempotently, by the launcher's CV_RESOLVE. */
-            TEST_HOOK(4);
+            /* A text fault is not a fault event (text_fault), nor an
+             * injection point of the test build's stop hooks: neither this
+             * one nor the re-entry hook above. */
+            text = text_fault(c, t->frame[5]);
+            if (!text)
+                TEST_HOOK(4);
             if (cv_step_stop(budget_end)) {
                 TEST_STOPPED(false);
                 break;
@@ -1998,7 +2057,7 @@ thread_unwind:
             if (resolve(c, t, budget_end))
                 break;
             t->sfence_pending = true;
-            ++c->stats.faults;
+            if (!text) ++c->stats.faults;
         }
         if (t->event == 5) {
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
@@ -2017,7 +2076,7 @@ thread_unwind:
         r.reserved[0] = r.reserved[1] = 0;
         r.thread = t->id;
         t->terminal = r.kind == 2;
-        if (r.kind == 4 && !resolved) ++c->stats.faults;
+        if (r.kind == 4 && !resolved && !text_fault(c, r.address)) ++c->stats.faults;
         rc = copy_to_user((void __user *)arg, &r, sizeof(r)) ? -EFAULT : 0;
         if (rc) t->terminal = true;
     } else if (op == CV_RESOLVE) {
