@@ -36,6 +36,13 @@ pre-registration named in advance as faulting on any build.
 Seven of seven scoreable on the protected arms: CRASH-062, 070, 078, 083, 113, 117, 155.
 `stock` catches only CRASH-078.
 
+Two of the three refused cells were chased afterwards and are written up in
+`targeted-stack-and-arena/`: **CRASH-081 is a catch blocked only by a 1 MiB declared stack**
+(CAUGHT at `ext/standard/array.c:3938`, ASAN's own line, on a 64 MiB-stack image), and CRASH-075
+is a platform ceiling -- `CV_MAX_ARENAS`, 8192 regions, 8,089 of them 4 KiB. Those runs are
+DIFFERENT IMAGES; the tables here are unchanged and the improved counts are deliberately not
+quoted into this file.
+
 **There is no committed baseline for this population.** The run that preceded it was never
 recorded -- no bundle, no table -- which the pre-registration says in its own words, so this is
 the first recorded measurement of it. Nothing here should be described as having "changed".
