@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Qualify the reuse-distance instrument on a platform before any speedtest1 number counts.
 
-    qualify-reuse.py poisoncap QUAL_DIR          (speedtest1-guest.py runs: QUAL_DIR/<name>/result.json)
+    qualify-reuse.py poisoncap QUAL_DIR          (speedtest1/run.py runs: QUAL_DIR/<name>/result.json)
     qualify-reuse.py capstone RESULTS_JSONL ARM  (run-reuse-capstone.py rows named <arm>-<name>)
 
 Names: test-wrapped, test-traced, test-plain, st-wrapped-size1 (or st-size1), st-plain-size1.

@@ -30,7 +30,7 @@ DEFS=(-O0 -DHAVE_MALLOC_H=1 -DHAVE_MALLOC_USABLE_SIZE=1 -DSQLITE_OMIT_LOAD_EXTEN
 NM=$(dirname "$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cc"])' "$SDK/sdk.json")")/llvm-nm
 WRAP=(-Wl,--wrap=sqlite3_config -Wl,--wrap=sqlite3_step -Wl,--wrap=sqlite3_reset)
 [ "$(sha256sum "$AMALG/sqlite3.c" | cut -c1-16)" = 7fc92e19a3af61f3 ] || { echo "not the 3.22.0 amalgamation" >&2; exit 2; }
-# The artifact's speedtest1.c (build-speedtest1.sh's source tree holds whichever variant was built last).
+# The artifact's speedtest1.c (speedtest1/build.sh's source tree holds whichever variant was built last).
 [ "$(sha256sum "$THEIRS" | cut -c1-16)" = 49d0815e03640f10 ] || { echo "$THEIRS is not the artifact's speedtest1.c" >&2; exit 2; }
 mkdir -p "$OUT/common"
 python3 "$HERE/make-speedtest1-capstone.py" "$THEIRS" "$OUT/common/speedtest1.c"

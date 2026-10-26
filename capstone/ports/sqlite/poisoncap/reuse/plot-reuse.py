@@ -6,7 +6,7 @@ protected configuration, from reuse-wrap.c's reports.
 
 No title: the axes and the legend say what is shown; which system and run belongs in the caption.
 
-SOURCE is a speedtest1-guest.py result.json (PoisonCap side), or RESULTS_JSONL#ROW_NAME
+SOURCE is a speedtest1/run.py result.json (PoisonCap side), or RESULTS_JSONL#ROW_NAME
 (run-reuse-capstone.py rows, Sublet side). The REUSE-GAP line at exit gives issues and the 32 bins
 (bin b: distances of bit length b+1, i.e. [2^b, 2^(b+1)-1]).
 

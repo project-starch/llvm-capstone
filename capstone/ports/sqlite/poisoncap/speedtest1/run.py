@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """Run PoisonCap's own speedtest1 on their platform, as their driver runs it: no arguments.
 
-    speedtest1-guest.py OUT --binary FILE [--args "..."] [--timeout S] [--platform DIR] [--port N]
-                        [--kernel-root DIR] [--revocation-default-off] [--pre CMD ...]
-                        [--after-start CMD] [--poll S] [--console-echo]
+    run.py OUT --binary FILE [--args "..."] [--timeout S] [--platform DIR] [--port N]
+           [--kernel-root DIR] [--revocation-default-off] [--pre CMD ...]
+           [--after-start CMD] [--poll S] [--console-echo]
 
-One boot of their image, single-user through ports/common/host/cheribsd/guest.py (the multi-user boot
-of this build panics). The binary is copied in and run once in an empty directory, with the given
+One boot of their image, single-user through platform/poisoncap_guest.py (the multi-user boot of this
+build panics). The binary is copied in and run once in an empty directory, with the given
 arguments (none by default: their main() configures memsys5 itself, and speedtest1's defaults are
 --size 100 --testset main and a temporary database).
 
@@ -42,17 +42,10 @@ import time
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'platform'))
 import poisoncap_guest  # noqa: E402
+from records import CONSOLE, scrub  # noqa: E402
 
 TEST = re.compile(r'^\s*(\d{3}) - (.*?)\.{3,}\s*([0-9.]+)s\s*$', re.M)
 STARTED = re.compile(r'^\s*(\d{3}) - (.*?)\.{3,}', re.M)
-CONSOLE = re.compile(r'panic|trap|fatal|revok|poison|KDB|Stopped at|exception|signal|lock of', re.I)
-HOME = re.compile(r'/home/[^/\s"\']+/')
-USERHOST = re.compile(r'\b[\w.-]+@(?!127\.0\.0\.1\b)[\w.-]+')
-
-
-def scrub(text):
-    """Home paths to ~/, user@host to <user>@<host>; the rest of the line is kept."""
-    return USERHOST.sub('<user>@<host>', HOME.sub('~/', text))
 
 
 def sha256(path):
@@ -63,7 +56,7 @@ def sha256(path):
     return h.hexdigest()
 
 
-def main():
+def parse_args():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('out', type=Path)
     p.add_argument('--binary', type=Path, required=True)
@@ -91,9 +84,98 @@ def main():
     a = p.parse_args()
     if a.console_echo and a.after_start:
         p.error('--console-echo and --after-start cannot be combined')
+    return a
+
+
+def run_command(a, command):
+    """The guest shell line that runs speedtest1 in /tmp/st and prints __EXIT=<status>: with stdout and
+    stderr to files, with --after-start's command 2 s after it was backgrounded, or (--console-echo)
+    through tee to the console, with speedtest1's own status as __RC."""
+    if a.console_echo:
+        return (f'cd /tmp/st && chmod 755 speedtest1 && {{ timeout {a.timeout} {command}; '
+                f'echo "__RC=$?"; }} 2>&1 | tee out.txt > /dev/console; echo "__EXIT=$?"')
+    if a.after_start:
+        # cd on its own: `a && b && (c) &` would background the whole && list.
+        return (f'cd /tmp/st || exit 9; chmod 755 speedtest1; '
+                f'( timeout {a.timeout} {command} > out.txt 2> err.txt; echo "__EXIT=$?" ) & '
+                f'sleep 2; {a.after_start} > after-start.txt 2>&1; echo "__AFTER=$?" >> after-start.txt; '
+                f'sysctl security.cheri.runtime_revocation_default >> after-start.txt 2>&1; wait')
+    return (f'cd /tmp/st && chmod 755 speedtest1 && timeout {a.timeout} {command} '
+            f'> out.txt 2> err.txt; echo "__EXIT=$?"')
+
+
+class Poller:
+    """Every INTERVAL s, copies out.txt and after-start.txt out of the guest over a second ssh; keeps the
+    last successful copy (snapshot) and every attempt's time and outcome (polls)."""
+
+    def __init__(self, guest, interval):
+        self.guest, self.interval = guest, interval
+        self.polls = []
+        self.snapshot = {'text': '', 'after': '', 'at': None}
+        self.stopped = threading.Event()
+        self.thread = None
+
+    def start(self, t0):
+        self.t0 = t0
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    def stop(self):
+        self.stopped.set()
+        if self.thread:
+            self.thread.join(timeout=90)
+
+    def _loop(self):
+        while not self.stopped.wait(self.interval):
+            t = round(time.monotonic() - self.t0, 1)
+            try:
+                q = self.guest.ssh('cat /tmp/st/out.txt; echo __SPLIT__; cat /tmp/st/after-start.txt 2>/dev/null',
+                                   timeout=60)
+            except subprocess.TimeoutExpired:
+                self.polls.append([t, 'timeout'])
+                continue
+            if q.returncode == 0 and '__SPLIT__' in q.stdout:
+                out, after = q.stdout.split('__SPLIT__\n', 1) if '__SPLIT__\n' in q.stdout else (q.stdout, '')
+                if not self.stopped.is_set():
+                    self.snapshot.update(text=out, after=after, at=t)
+                self.polls.append([t, 'ok'])
+            else:
+                self.polls.append([t, f'rc={q.returncode}'])
+
+
+def finish_record(res, a, serial, before, started, exit_seen, poller):
+    """What the record gets whether or not the run finished: the polls; without an exit status, the last
+    copied stdout; the console of the run's window (or of the whole boot if the run never started);
+    the completed tests and the last one started."""
+    if poller:
+        res['polls'] = poller.polls
+        if started and not exit_seen:
+            res['stdout'] = poller.snapshot['text']
+            res['stdout_from'] = f"last successful poll at {poller.snapshot['at']} s"
+            if a.after_start:
+                res['after_start'] = {'command': a.after_start, 'observed': res['stdout_from'],
+                                      'output': poller.snapshot['after'].strip()}
+    if serial.exists():
+        text = serial.read_bytes().decode(errors='replace').replace('\r', '')
+        window = text[before:] if started else text
+        res['console_scope'] = 'run window' if started else 'whole boot (the run never started)'
+        lines = [scrub(l.strip()) for l in window.splitlines()]
+        res['console'] = [l for l in lines if CONSOLE.search(l)][:200]
+        res['console_tail'] = lines[-300:]
+        if a.console_echo and started and not exit_seen:
+            res['stdout'], res['stdout_from'] = scrub(window), 'serial console'
+    out = res.get('stdout') or ''
+    res['tests'] = [{'id': int(i), 'name': n.strip(), 'seconds': float(s)} for i, n, s in TEST.findall(out)]
+    started_tests = STARTED.findall(out)
+    if started_tests and (not res['tests'] or int(started_tests[-1][0]) != res['tests'][-1]['id']):
+        res['last_started'] = {'id': int(started_tests[-1][0]), 'name': started_tests[-1][1].strip(),
+                               'observed': res.get('stdout_from', 'at exit')}
+
+
+def main():
+    a = parse_args()
     (a.out / 'vm').mkdir(parents=True, exist_ok=False)
-    work = a.platform / 'work'
-    kernel_root = a.kernel_root or work / 'output/rootfs-riscv64-purecap'
+    kernel_root = a.kernel_root or a.platform / 'work/output/rootfs-riscv64-purecap'
     guest = poisoncap_guest.new_guest(a.platform, a.out / 'vm', a.port, kernel_root=kernel_root,
                                       revocation_default_off=a.revocation_default_off)
     serial = a.out / 'vm/serial.log'
@@ -104,78 +186,40 @@ def main():
            'kernel_root': scrub(str(a.kernel_root)) if a.kernel_root else 'platform rootfs',
            'revocation_default_off': a.revocation_default_off,
            'started_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'stage': []}
+    poller = Poller(guest, a.poll) if a.poll else None
     t0 = None
     m = None
-    snapshot = {'text': '', 'after': '', 'at': None}
-    polls = []
-    stop = threading.Event()
-    poller = None
     before = 0
-
-    def stage(name):
-        res['stage'].append(name)
-
-    def poll():
-        while not stop.wait(a.poll):
-            t = round(time.monotonic() - t0, 1)
-            try:
-                q = guest.ssh('cat /tmp/st/out.txt; echo __SPLIT__; cat /tmp/st/after-start.txt 2>/dev/null',
-                              timeout=60)
-            except subprocess.TimeoutExpired:
-                polls.append([t, 'timeout'])
-                continue
-            if q.returncode == 0 and '__SPLIT__' in q.stdout:
-                out, after = q.stdout.split('__SPLIT__\n', 1) if '__SPLIT__\n' in q.stdout else (q.stdout, '')
-                if not stop.is_set():
-                    snapshot.update(text=out, after=after, at=t)
-                polls.append([t, 'ok'])
-            else:
-                polls.append([t, f'rc={q.returncode}'])
-
     try:
-        stage('boot')
+        res['stage'].append('boot')
         guest.start()
-        stage('sysctl')
+        res['stage'].append('sysctl')
         res['sysctl'] = guest.ssh('sysctl security.cheri.runtime_revocation_default '
                                   'kern.features.cheri_revoke').stdout.strip()
-        stage('copy')
+        res['stage'].append('copy')
         guest.ssh('mkdir -p /tmp/st && rm -rf /tmp/st/*')
         guest.copy(a.binary, 'root@127.0.0.1:/tmp/st/speedtest1')
-        stage('pre')
+        res['stage'].append('pre')
         res['pre'] = []
         for cmd in a.pre:
             r = guest.ssh(cmd)
             res['pre'].append({'command': cmd, 'rc': r.returncode, 'output': (r.stdout + r.stderr).strip()})
         res['sysctl_at_run'] = guest.ssh('sysctl security.cheri.runtime_revocation_default '
                                          'debug.witness.watch 2>&1').stdout.strip()
-        stage('run')
+        res['stage'].append('run')
         before = serial.stat().st_size
-        if a.console_echo:
-            run = (f'cd /tmp/st && chmod 755 speedtest1 && {{ timeout {a.timeout} {command}; '
-                   f'echo "__RC=$?"; }} 2>&1 | tee out.txt > /dev/console; echo "__EXIT=$?"')
-        elif a.after_start:
-            # cd on its own: `a && b && (c) &` would background the whole && list.
-            run = (f'cd /tmp/st || exit 9; chmod 755 speedtest1; '
-                   f'( timeout {a.timeout} {command} > out.txt 2> err.txt; echo "__EXIT=$?" ) & '
-                   f'sleep 2; {a.after_start} > after-start.txt 2>&1; echo "__AFTER=$?" >> after-start.txt; '
-                   f'sysctl security.cheri.runtime_revocation_default >> after-start.txt 2>&1; wait')
-        else:
-            run = (f'cd /tmp/st && chmod 755 speedtest1 && timeout {a.timeout} {command} '
-                   f'> out.txt 2> err.txt; echo "__EXIT=$?"')
         t0 = time.monotonic()
-        if a.poll:
-            poller = threading.Thread(target=poll, daemon=True)
-            poller.start()
-        r = guest.ssh(run, timeout=a.timeout + 300)
-        res['seconds'] = round(time.monotonic() - t0, 1)
-        stop.set()
         if poller:
-            poller.join(timeout=90)
+            poller.start(t0)
+        r = guest.ssh(run_command(a, command), timeout=a.timeout + 300)
+        res['seconds'] = round(time.monotonic() - t0, 1)
+        if poller:
+            poller.stop()
         res['ssh_rc'] = r.returncode
         m = re.search(r'^__EXIT=(\d+)$', r.stdout or '', re.M)
         res['exit'] = int(m.group(1)) if m else 'no exit (ssh: %s)' % scrub((r.stderr or '').strip()[-200:])
         if m:
-            stage('fetch')
+            res['stage'].append('fetch')
             q = guest.ssh('cat /tmp/st/out.txt', timeout=300)
             res['stdout'], res['stdout_from'] = q.stdout, ('at exit' if q.returncode == 0 else f'fetch rc={q.returncode}')
             res['stderr'] = guest.ssh('cat /tmp/st/err.txt 2>/dev/null', timeout=300).stdout
@@ -190,35 +234,11 @@ def main():
         if t0 is not None and 'seconds' not in res:
             res['seconds'] = round(time.monotonic() - t0, 1)
     finally:
-        stop.set()
         if poller:
-            poller.join(timeout=90)
+            poller.stop()
         guest.close()
         res['finished_utc'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
-        if a.poll:
-            res['polls'] = polls
-        if t0 is not None and not m:
-            if a.poll:
-                res['stdout'] = snapshot['text']
-                res['stdout_from'] = f"last successful poll at {snapshot['at']} s"
-                if a.after_start:
-                    res['after_start'] = {'command': a.after_start, 'observed': res['stdout_from'],
-                                          'output': snapshot['after'].strip()}
-        if serial.exists():
-            text = serial.read_bytes().decode(errors='replace').replace('\r', '')
-            window = text[before:] if t0 is not None else text
-            res['console_scope'] = 'run window' if t0 is not None else 'whole boot (the run never started)'
-            lines = [scrub(l.strip()) for l in window.splitlines()]
-            res['console'] = [l for l in lines if CONSOLE.search(l)][:200]
-            res['console_tail'] = lines[-300:]
-            if a.console_echo and t0 is not None and not m:
-                res['stdout'], res['stdout_from'] = scrub(window), 'serial console'
-        out = res.get('stdout') or ''
-        res['tests'] = [{'id': int(i), 'name': n.strip(), 'seconds': float(s)} for i, n, s in TEST.findall(out)]
-        started = STARTED.findall(out)
-        if started and (not res['tests'] or int(started[-1][0]) != res['tests'][-1]['id']):
-            res['last_started'] = {'id': int(started[-1][0]), 'name': started[-1][1].strip(),
-                                   'observed': res.get('stdout_from', 'at exit')}
+        finish_record(res, a, serial, before, t0 is not None, m is not None, poller)
         (a.out / 'result.json').write_text(json.dumps(res, indent=1) + '\n')
     print(f"exit={res.get('exit')} seconds={res.get('seconds')} tests={len(res['tests'])} "
           f"error={res.get('error', '-')}")
