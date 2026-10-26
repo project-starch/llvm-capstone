@@ -30,21 +30,24 @@ def main():
     ap.add_argument("--pilot-dir", type=Path, default=KIT, help="holds stage/, SHA256SUMS and the steps file (default: the first pilot)")
     ap.add_argument("--runner-sha", default=RUNNER_SHA, help="run-pilot.sh's sha256/16")
     ap.add_argument("--steps", default="steps.tsv", help="the steps file's name in --pilot-dir")
+    ap.add_argument("--runner", default="run-pilot.sh", help="the stage's run script (a main-run kit names it run-k<n>.sh)")
+    ap.add_argument("--done", default="PILOT", help="the run script's done marker is @@PERF-<this>-DONE")
+    ap.add_argument("--step-s", type=int, default=2700, help="the step's bound in seconds (the boot's budget is this + 300)")
     ap.add_argument("out", type=Path)
     a = ap.parse_args()
     stage = a.pilot_dir / "stage"
     chk = subprocess.run(["sha256sum", "-c", "--quiet", str(a.pilot_dir / "SHA256SUMS")], cwd=stage, capture_output=True, text=True)
     if chk.returncode != 0:
         print(f"PILOT STOP: the stage does not match its SHA256SUMS: {chk.stdout[-300:]}{chk.stderr[-300:]}"); sys.exit(2)
-    if hashlib.sha256((stage / "run-pilot.sh").read_bytes()).hexdigest()[:16] != a.runner_sha:
-        print(f"PILOT STOP: run-pilot.sh is not {a.runner_sha}"); sys.exit(2)
+    if hashlib.sha256((stage / a.runner).read_bytes()).hexdigest()[:16] != a.runner_sha:
+        print(f"PILOT STOP: {a.runner} is not {a.runner_sha}"); sys.exit(2)
     plan = list(csv.DictReader(open(a.pilot_dir / a.steps), delimiter="\t"))
     a.out.mkdir(parents=True, exist_ok=False)
     b = boardvm.BoardBatch(a.out / "stage")
     pilot = b.put("pilot", stage)
-    b.step("pilot", f"sh {pilot}/run-pilot.sh")
-    b.bounds = {"pilot": 135}     # x the kit's BOARD_STEP_MULT (20) = 2700 s, the runtime lane's 45 min
-    runs, transcript, completed = b.execute(a.board_kit, a.out / "guest", timeout=3000)   # boardvm: script budget 3000-300 = 2700 s = the step bound; board-run.sh: x4 + 1800 = 13800 s
+    b.step("pilot", f"sh {pilot}/{a.runner}")
+    b.bounds = {"pilot": a.step_s / 20}     # x the kit's BOARD_STEP_MULT (20) = --step-s (2700 s, 45 min, for a pilot)
+    runs, transcript, completed = b.execute(a.board_kit, a.out / "guest", timeout=a.step_s + 300)   # boardvm: script budget = --step-s; board-run.sh: x BOARD_TIMEOUT_MULT 4 + 1800 s
     text, result = runs.get("pilot", ("", {"kind": "none"}))
     print(f"PILOT kit {a.board_kit} boot {'completed' if completed else 'DID NOT COMPLETE'}; transcript {transcript}; "
           f"step result {json.dumps(result, sort_keys=True)}")
@@ -74,15 +77,18 @@ def main():
         tails = sorted({m.group(1) for m in re.finditer(r"check=0x[0-9a-f]+(.*)$", body, re.M)})
         errs = len(re.findall(r"^BENCH-ERROR ", body, re.M))
         dn = re.search(r"^BENCH-DONE \S+ failed=(\d+)$", body, re.M)
-        ok = (e.group(6) == "0" and len(bench) == 11 and checks == 11 and same and not repeat and errs == 0
-              and dn is not None and dn.group(1) == "0")
+        want = sum(int(x) for x in s.get("args", "1 10").split())     # W warm-up + I timed iterations
+        vfail = len(re.findall(r"VERIFY-FAILED", body))
+        ok = (e.group(6) == "0" and len(bench) == want and checks == want and same and not repeat and errs == 0
+              and vfail == 0 and dn is not None and dn.group(1) == "0")
         nok += ok
-        print(f"READ {n} {s['program']} {s['arm']} {s['proc']} K{s['K']}: rc {e.group(6)}, {len(bench)} BENCH, "
+        print(f"READ {n} {s['program']} {s['arm']} {s['proc']} K{s['K']}: rc {e.group(6)}, {len(bench)} BENCH (want {want}), "
+              f"VERIFY-FAILED {vfail}, "
               f"{checks} with check= (suffixes {tails}), BENCH-ERROR {errs}, BENCH-DONE failed={dn.group(1) if dn else 'ABSENT'}, "
               f"plan {'matches' if same else 'DIFFERS'}, quote {'REPEATS the previous' if repeat else 'new'}"
               + (f", stderr_lines {errl}" if errl is not None else "") + f" :: {quote[:110]}")
-    done = re.search(r"^@@PERF-PILOT-DONE$", text, re.M)
-    print(f"READ summary: {nok} of {len(plan)} processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE "
+    done = re.search(rf"^@@PERF-{re.escape(a.done)}-DONE$", text, re.M)
+    print(f"READ summary: {nok} of {len(plan)} processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; {a.done}-DONE "
           f"{'present' if done else 'ABSENT'}")
     if re.search(r"Oops|Unable to handle|BUG:", text):
         print("READ: KERNEL OOPS in the step's text"); rc = 2

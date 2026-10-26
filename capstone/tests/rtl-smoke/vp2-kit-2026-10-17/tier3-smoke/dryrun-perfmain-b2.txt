@@ -1,0 +1,58 @@
+# tier3-perfmain-b2.sh and the generalised tier3-perfpilot.py: dry run for the perf MAIN RUN batch 1, 2026-10-26. Every board call stubbed.
+# Kits checked before writing this: k1-k4 (perf/main1) and s1-s6 (perf/main1b) each match their SHA256SUMS and run-<kit>.sh hash, launcher 978c09d6 in every stage;
+# every run script's 214/150/142/136 process lines match the one template and steps.tsv's order; both arms of each program in one kit; s1-s6 hold the 100 programs once each.
+# Stage sizes (raw / gzip): k1 18052713/6952991 k2 17592881/6705816 k3 17730315/6850373 k4 16919663/6496796; s1-s6 gzip 4248715-5154757 (pilot 2: 8717025/3449893 -> fw 21662216 B; cap 26000000).
+## the coordinator, k1's firmware decision stubbed (PM_RUNKIT, PM_SEQ, PM_PASS):
+### case fit
+PM k1 on board 1 BEGIN
+PM k1 on board 1 END rc=0
+PM k1 firmware decision: firmware abcd 25100000 B
+PM SPLIT k1-k4: k1's firmware fits the cap
+PM k3 on board 1 BEGIN
+PM k2 on board 2 BEGIN
+PM k3 on board 1 END rc=0
+PM k2 on board 2 END rc=0
+PM k4 on board 2 BEGIN
+PM k4 on board 2 END rc=0
+PM DONE
+rc=0
+### case cap
+PM k1 on board 1 BEGIN
+PM k1 on board 1 END rc=0
+PM k1 firmware decision: STOP: firmware 27000000 B over the cap 26000000
+PM SPLIT s1-s6: k1 stopped on the cap
+PM s2 on board 2 BEGIN
+PM s1 on board 1 BEGIN
+PM s2 on board 2 END rc=0
+PM s1 on board 1 END rc=0
+PM s4 on board 2 BEGIN
+PM s3 on board 1 BEGIN
+PM s4 on board 2 END rc=0
+PM s3 on board 1 END rc=0
+PM s6 on board 2 BEGIN
+PM s5 on board 1 BEGIN
+PM s6 on board 2 END rc=0
+PM s5 on board 1 END rc=0
+PM DONE
+rc=0
+### case other
+PM k1 on board 1 BEGIN
+PM k1 on board 1 END rc=0
+PM k1 firmware decision: STOP: bake failed
+PM STOP: k1 gave no firmware decision (STOP: bake failed); nothing else launched
+rc=1
+## the reader on k1-shaped stubs (W+I from steps.tsv, VERIFY-FAILED, a cause-4 rc 139 process):
+### stub good
+READ 7 expint T1 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 17 :: bench cycles=1007 instret
+READ 9 ctl-empty T1 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 19 :: bench cycles=1009 inst
+READ summary: 214 of 214 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; K1-DONE present
+### stub verify
+READ 7 expint T1 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 17 :: bench cycles=1007 instret
+READ 9 ctl-empty T1 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 1, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 19 :: bench cycles=1009 inst
+READ summary: 213 of 214 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; K1-DONE present
+### stub cause4
+READ 7 expint T1 3 K0: rc 139, 0 BENCH (want 6), VERIFY-FAILED 0, 0 with check= (suffixes []), BENCH-ERROR 0, BENCH-DONE failed=ABSENT, plan matches, quote new, stderr_lines 17 :: bench cycles=1007 in
+READ 9 ctl-empty T1 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 19 :: bench cycles=1009 inst
+READ summary: 213 of 214 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; K1-DONE present
+## the pilot-2 regression: READ summary: 68 of 68 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE present
+## timeouts: step 7200 s = the boot's script budget; board-run.sh (7200+300) x 4 + 1800 = 31800 s; the wrapper 32400 s; booking 120 min (the hub's maximum)

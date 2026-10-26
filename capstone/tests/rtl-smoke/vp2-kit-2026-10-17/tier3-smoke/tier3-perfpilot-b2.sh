@@ -3,7 +3,7 @@
 # on the perf kit bkit10-perf-b<board> = bkit9-b2-b<board> with only the adapter swapped to the runtime lane's bench build
 # of dev's new module revision (launcher 978c09d61f774315, module 9c60fb53f80ce67e, lane runtime/bench-counters). The
 # runtime lane's gate: modinfo must list parm bench_cycles, bench_instret and bench_entries. Output
-# <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/perfpilot. PP_BUSY / PP_BOOK / PP_RUN / PP_ROOT stub the dry run; PP_SUB names the output subdirectory and PP_ARGS passes tier3-perfpilot.py options (a later pilot).
+# <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/perfpilot. PP_BUSY / PP_BOOK / PP_RUN / PP_ROOT stub the dry run; PP_SUB names the output subdirectory and PP_ARGS passes tier3-perfpilot.py options (a later pilot or a main-run kit); PP_BOOKMIN and PP_WRAP_TO set the booking minutes and the wrapper timeout (defaults 75 and 14400).
 # Usage: tier3-perfpilot-b2.sh <board 1|2> <out log>.
 main() {
   set -u
@@ -24,11 +24,11 @@ main() {
     || { echo "PP STOP: the module does not list the three bench parameters" >> "$O"; return 1; }
   [ -e "$R" ] && { echo "PP STOP: $R exists" >> "$O"; return 1; }
   ${PP_BUSY:-$BUSY} > /dev/null || { echo "PP STOP: board $BRD is busy" >> "$O"; return 1; }
-  bid=$(${PP_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} book $BRD 75 "vp2 bitstream 2 perf-eval pilot (board $BRD)"); rc=$?
+  bid=$(${PP_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} book $BRD ${PP_BOOKMIN:-75} "vp2 bitstream 2 perf-eval ${PP_SUB:-perfpilot} (board $BRD)"); rc=$?
   [ $rc = 3 ] && { echo "PP STOP: the hub refused the booking (409): $bid" >> "$O"; return 1; }
   [ $rc = 0 ] || { echo "PP NOTE: booking failed rc=$rc ($bid); continuing unbooked" >> "$O"; bid=; }
   echo "PP BEGIN $(date +%T) board $BRD kit ${K##*/} booking ${bid:-none}" >> "$O"
-  taskset -c 16-31 timeout 14400 ${PP_RUN:-python3 $S/tier3-perfpilot.py} --board-kit $K ${PP_ARGS:-} $R > $R.log 2>&1; rc=$?
+  taskset -c 16-31 timeout ${PP_WRAP_TO:-14400} ${PP_RUN:-python3 $S/tier3-perfpilot.py} --board-kit $K ${PP_ARGS:-} $R > $R.log 2>&1; rc=$?
   [ -n "$bid" ] && ${PP_BOOK:-python3 /tmp/capstone/lab-hub/lab-book.py} unbook $bid >> "$O" 2>&1
   echo "PP END rc=$rc $(date +%T)" >> "$O"
   grep "^READ\|^PILOT" $R.log >> "$O"

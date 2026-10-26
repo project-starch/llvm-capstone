@@ -9474,3 +9474,42 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     reads 22, the marks' own floor.
 - **Not judged here:** the T1-T2 differences in the table. The pilot estimates noise, and the per-iteration analysis
   is the runtime lane's.
+
+### The perf evaluation's MAIN RUN, batch 1: 100 programs over both boards, the kit split decided by k1's firmware, pre-registered (2026-10-26 17:1x, before any boot)
+
+- **The plan:** the runtime lane's PREREG-t1-t2-sampling.md, last section, "Pilot read and the main run's dimensions".
+  P=4 processes per arm with "1 5", and P=11 with "0 1" for crc32, huffbench, huffbench-libc and wikisort.
+  - The images are built from dev 4f054964a7d8's SDKs. By the runtime lane, every image passed the layout gate and the
+    QEMU functional pass on the bitstream-2 twin, in both arms and at every K.
+  - The kits are bkit10-perf-b1 and -b2, the pilot's adapter.
+- **Two splits of the same 100 programs** (98 benchmarks plus ctl-empty and ctl-loop). Both arms of a program are always
+  in one kit.
+  - **k1-k4** (perf/main1, 25 programs and 214 processes each, about 1.2 h): run-k1..k4.sh 7d453b37a1ca5952,
+    0b8936b415b39679, 68a3b8587416b32a, 8bca173a2ff4ed45. Stages 16.9-18.1 MB raw, 6.5-7.0 MB gzipped.
+  - **s1-s6** (perf/main1b, 16-17 programs each, about 0.75-0.8 h): run-s1..s6.sh 018bea9b137c7730, 34d6374e904b43e3,
+    0067952dcb872fc6, 717dc6445d35f492, 2f290a53b7406955, 19286b13ccadd642. Stages 4.2-5.2 MB gzipped.
+  - Checked here, both sets: every stage matches its SHA256SUMS and run-script hash, with launcher 978c09d6 in each.
+    Every script's process lines match one template and steps.tsv's order. s1-s6 hold the 100 programs once each.
+- **The firmware cap decides the split** (BOARD_FW_CAP 26,000,000 B). Scaled from pilot 2 (9.6 MB stage, 3.45 MB
+  gzipped, firmware 21,662,216 B), the k stages land at about 24-26.3 MB, at or over the cap.
+  - The runtime lane's rule: if the k bake fits, run k1-k4; if it stops on the cap, run s1-s6 on BOTH boards; never mix
+    the two.
+  - `tier3-perfmain-b2.sh` applies it. k1, the largest stage, is baked first and alone on board 1, and its `SEQ` line
+    decides:
+    - it fits: board 1 runs k1 then k3, board 2 runs k2 then k4;
+    - over the cap: board 1 runs s1, s3, s5, board 2 runs s2, s4, s6;
+    - anything else: stop.
+- **Each kit is one boot**, by `tier3-perfpilot-b2.sh` with PP_SUB `main1-<kit>`, through tier3-perfpilot.py.
+  - The reader is generalised. It expects W+I BENCH lines per process, from steps.tsv's args, and checks for
+    VERIFY-FAILED and the kit's own `@@PERF-<KIT>-DONE`. The pilot-2 stub still reads 68 of 68.
+  - Timeouts: step 7,200 s, then board-run.sh 31,800 s, then the wrapper 32,400 s. Booking 120 min, the hub's maximum.
+  - Dry run: `dryrun-perfmain-b2.txt` (all three branches of the coordinator; the reader on k1-shaped stubs).
+- **Predictions** (the runtime lane's, verbatim):
+  1. Every process: rc=0; exactly W+I BENCH lines with no VERIFY-FAILED; BENCH-DONE failed=0.
+  2. check= is identical across all iterations and both arms of a program.
+  3. A program whose timed region does no allocation: instret T2 = T1 to within entries x ~130 per iteration.
+  4. An allocating program (the 15 with K1-K3 images): instret T2 > T1.
+  5. Silicon-only risk, written down in advance: a misaligned plain access traps with cause 4/6 on silicon, where the
+     twin completes it (Q-34). So a program that ran clean on the twin may fault here with rc=139 and cause 4 or 6. If
+     it does, that is a finding for that program, not an infrastructure failure, and the kit continues.
+- Batch 2 (coremark, dhrystone, matmult-int) follows as one small kit, after its rebuilt images pass.
