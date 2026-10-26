@@ -2546,6 +2546,58 @@ from an unprivileged domain is a finding even behind a configuration error, and 
       - So QEMU's 65,536-id pool is close in SIZE; the divergence is generations, push and retire.
       - Prediction kind (d) narrows to "an index ≥ 65,535", which the RTL cannot reach.
 
+## Q-34 — a misaligned PLAIN load in a protected context completes on QEMU, while the RTL traps it with cause 4 (and, by the same code, a store with cause 6): a twin-fidelity gap with a verdict consequence `OPEN — observed 2026-10-26 on bitstream 2 dcc6daf6e, board 2, Juliet spatial remainder part01 (lane vp2-tier12 d54e7a6582e2); filed by the board lane from the compiler lane's QEMU reading and the rtl lane's RTL reading, each re-read here; the fix is a QEMU pin, the semantics owner's call`
+
+**The cells** (seeded build, so no rand draw; lane vp2-tier12 d54e7a6582e2, `tier3-smoke/records/b2bs-juliet-rem-part01-b2.result-lines.txt`, which lands on dev with the remainder's results):
+
+| image | the twin (qkit7-b2twin3-q8) | silicon |
+|---|---|---|
+| CWE121_Stack_Based_Buffer_Overflow__CWE135_12.bad.s00 | cause 28 at wcslen+0x2c, address code+0x2837d | cause 4 at wcslen+0x14, address code+0x28355 |
+| CWE121_Stack_Based_Buffer_Overflow__CWE135_12.bad.s01 | cause 28 at wcscpy+0x1c, address code+0x2837d | cause 4 at wcscpy+0x1c, address code+0x28355 |
+
+- **The access:** wcslen+0x14 is `lw a2, 0(a0)` and wcscpy+0x1c is `lw a3, 0(a1)`, disassembled from the seeded `.s00.dom`.
+  They read 4-byte wide characters from the case's char string at image address 0x38355, which is odd.
+- **Silicon** traps the FIRST such load. **QEMU** performs it and every 4-byte step after it, ten in-bounds misaligned
+  `lw` in all. It faults 40 bytes on at the bound with cause 28 (the twin's serial.log, read by the compiler lane).
+- **Not Q-31:** no capability exception is pending at the faulting load. Q-31 ruled only on the ORDER of the two
+  exceptions.
+
+**The mechanism, both sides:**
+- **The RTL** (capstone-ariane 96eb969da = core dcc6daf6e, re-read here):
+  - `core/load_store_unit.sv`'s data_misaligned_detection sets `data_misaligned` for `LW, LWU, SW, ...` at a misaligned
+    address, with no privilege, capmode or context term.
+  - The capability exception is merged only `if (CVA6Cfg.CAPSTONE_EXT && cap_exception.valid && !misaligned_exception.valid)`.
+  - In a supervised context the trap is an ESCAPE (commit_stage.sv:228-234, the rtl lane's reading), so OpenSBI's
+    misaligned emulation is never reached.
+  - capstone_vm.c resolve() on dev returns unless `cause == 12, 13 or 15` on event 4, so a 4 is terminal for the run.
+- **QEMU** (capstone-qemu 46b69c03a4, the twin's 708bbff5; re-read here):
+  - capstone_check_access (op_helper.c:1858) checks alignment only under `if(size == 16)` (LDC/STC).
+  - `trans_lw` is `gen_load(ctx, a, MO_TESL)`, and trans_rvi.c.inc has no MO_ALIGN at all. So TCG carries out the
+    misaligned access, as upstream does.
+- **Both are spec-legal:** an EEI may perform or trap misaligned plain accesses. No ruling chose QEMU's behaviour. The
+  RTL's trap is what R-34's fix delivered.
+
+**Scope (a lower bound):**
+- The compiler lane scanned all 288 remainder twin transcripts, 9,541 fault lines, for a faulting access that was itself
+  misaligned (address mod size not 0).
+  - The scan's first version read 0 because of a pc-format mismatch. Fixed, it finds .s00 and .s01.
+  - It found three cells, all in part01: the two above and the census CWE135_12.bad, whose board draw took the good path.
+- **Blind spot:** a misaligned access QEMU completed without faulting leaves no line. So cells where one precedes an
+  aligned fault, or happens in a run that completes, are not counted.
+- **Untested prediction:** a misaligned plain store reads cause 6 on silicon where QEMU stores.
+
+**Grading, until ruled:**
+- A silicon 4 (or 6) at an access the twin performed misaligned is this gap, not a new finding and not a miss of the
+  spatial defect (the rtl lane's reading).
+- Whether it counts as CAUGHT is the corpus owner's ruling. Until then the remainder records keep such cells as
+  differences.
+
+**The fix, if the semantics owner wants the twin aligned:** a QEMU pin in capstone_check_access.
+- Raise 4/6 whenever the address mod size is not 0, for every size, gated on capstone_protected_data, so recorded
+  physical-profile results stay reproducible.
+- Place it BEFORE the tag, type and bounds checks. That is the RTL's merge order, and it would also close Q-31's order.
+- It changes twin references wherever a context performs a misaligned plain access.
+
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
 > **This is the residue of the `end`-convention resolution, and it is deliberate rather than
