@@ -13,6 +13,10 @@ Input: a TSV with a header and one row per timed iteration (warm-up rows have it
           process means, a two-level bootstrap interval as a check, the instret ratio; per suite: the geometric
           mean of the ratios with a two-level bootstrap interval; box plots per suite.
 
+--arms BASE,TEST picks the pair (default T1,T2), so the same code reports T3 against T1 or T2 from a three-arm
+run: rows of the third known arm (T1, T2 or T3) are set aside, an unknown arm is still an error. Internally the
+pair sits in the slots 'T1' (base) and 'T2' (test); only the labels change.
+
 Exit 1 on no data, a failed process, a program whose arms ran on different boards or boots, or fewer than
 --min-procs processes in an arm: "no data" is an error, never an empty table.
 """
@@ -32,6 +36,10 @@ def die(msg):
     sys.exit(1)
 
 
+KNOWN = ('T1', 'T2', 'T3')
+NAMES = {'T1': 'T1', 'T2': 'T2'}   # slot -> printed arm name; set from --arms
+
+
 def load(path, min_procs):
     rows = list(csv.DictReader(open(path), delimiter='\t'))
     if not rows:
@@ -45,9 +53,13 @@ def load(path, min_procs):
         p = r['program']
         suite[p] = r['suite']
         where[p].add((r['board'], r['boot']))
-        if r['arm'] not in ('T1', 'T2'):
+        if r['arm'] not in KNOWN:
             problems.append(f'{p}: arm {r["arm"]!r}')
             continue
+        slot = {v: k for k, v in NAMES.items()}.get(r['arm'])
+        if slot is None:
+            continue
+        r = {**r, 'arm': slot}
         if r['rc'] != '0':
             problems.append(f'{p} {r["arm"]} proc {r["proc"]}: rc={r["rc"]}')
             continue
@@ -62,7 +74,7 @@ def load(path, min_procs):
             problems.append(f'{p}: arms ran in more than one board/boot {sorted(where[p])}')
         for arm in ('T1', 'T2'):
             if len(arms[arm]) < min_procs:
-                problems.append(f'{p} {arm}: {len(arms[arm])} processes, fewer than {min_procs}')
+                problems.append(f'{p} {NAMES[arm]}: {len(arms[arm])} processes, fewer than {min_procs}')
     if problems:
         die('refusing to report:\n  ' + '\n  '.join(sorted(set(problems))))
     return data, suite
@@ -176,7 +188,8 @@ def cmd_report(a):
                       blo=math.exp(np.quantile(b, 0.025)), bhi=math.exp(np.quantile(b, 0.975)),
                       ins_ratio=float(np.median(i2) / np.median(i1)),
                       ins_const='yes' if len(set(i1)) == 1 and len(set(i2)) == 1 else 'no',
-                      verdict='no measurable difference' if lo <= 0 <= hi else ('T2 slower' if lo > 0 else 'T2 faster'))
+                      verdict='no measurable difference' if lo <= 0 <= hi else
+                      (f'{NAMES["T2"]} slower' if lo > 0 else f'{NAMES["T2"]} faster'))
     cols = ['suite', 'program', 'procs', 'ratio', 'lo', 'hi', 'blo', 'bhi', 'ins_ratio', 'ins_const', 'verdict']
     with (a.out / 'per-program.tsv').open('w') as f:
         f.write('\t'.join(cols) + '\n')
@@ -184,14 +197,15 @@ def cmd_report(a):
             v = {**d, 'program': p}
             f.write('\t'.join(f'{v[c]:.4f}' if isinstance(v[c], float) else str(v[c]) for c in cols) + '\n')
     with (a.out / 'per-suite.tsv').open('w') as f:
-        f.write('suite\tprograms\tgeomean\tlo\thi\tT2_slower\tT2_faster\tno_difference\n')
+        f.write(f'suite\tprograms\tgeomean\tlo\thi\t{NAMES["T2"]}_slower\t{NAMES["T2"]}_faster\tno_difference\n')
         for s in sorted(set(suite.values())):
             ps = [p for p in per if per[p]['suite'] == s]
             gm = math.exp(np.mean([math.log(per[p]['ratio']) for p in ps]))
             gb = np.exp(np.mean([boots[p] for p in ps], axis=0))
             v = [per[p]['verdict'] for p in ps]
             f.write(f'{s}\t{len(ps)}\t{gm:.4f}\t{np.quantile(gb, 0.025):.4f}\t{np.quantile(gb, 0.975):.4f}\t'
-                    f'{v.count("T2 slower")}\t{v.count("T2 faster")}\t{v.count("no measurable difference")}\n')
+                    f'{v.count(NAMES["T2"] + " slower")}\t{v.count(NAMES["T2"] + " faster")}\t'
+                    f'{v.count("no measurable difference")}\n')
             boxes(s, sorted(ps), data, a.out / f'box-{s}.svg')
     print((a.out / 'per-suite.tsv').read_text(), end='')
 
@@ -200,6 +214,8 @@ def boxes(s, ps, data, path):
     import matplotlib
     matplotlib.use('Agg')
     import matplotlib.pyplot as plt
+    # Deterministic SVG: a fixed id salt and no date, so a rerun reproduces the file byte for byte.
+    matplotlib.rcParams['svg.hashsalt'] = 'perf-analyze'
     fig, ax = plt.subplots(figsize=(max(6, 0.45 * len(ps) + 2), 4.5))
     pos, vals, colors = [], [], []
     for i, p in enumerate(ps):
@@ -216,10 +232,10 @@ def boxes(s, ps, data, path):
     ax.axhline(1.0, color='#444', linewidth=0.8)
     ax.set_xticks([3 * i + 0.5 for i in range(len(ps))])
     ax.set_xticklabels(ps, rotation=60, ha='right', fontsize=8)
-    ax.set_ylabel("cycles / the program's T1 median")
-    ax.set_title(f'{s}: T1 (grey) and T2 (orange), every timed iteration')
+    ax.set_ylabel(f"cycles / the program's {NAMES['T1']} median")
+    ax.set_title(f'{s}: {NAMES["T1"]} (grey) and {NAMES["T2"]} (orange), every timed iteration')
     fig.tight_layout()
-    fig.savefig(path)
+    fig.savefig(path, metadata={'Date': None})
     plt.close(fig)
 
 
@@ -241,7 +257,13 @@ def main():
     r.add_argument('--min-procs', type=int, default=3)
     r.add_argument('--boot', type=int, default=10000)
     r.add_argument('--seed', type=int, default=20261026)
+    for q in (p, r):
+        q.add_argument('--arms', default='T1,T2', help='BASE,TEST (default T1,T2)')
     a = ap.parse_args()
+    base, test = a.arms.split(',')
+    if base == test or {base, test} - set(KNOWN):
+        die(f'--arms {a.arms}: want two different arms of {KNOWN}')
+    NAMES.update(T1=base, T2=test)
     (cmd_pilot if a.cmd == 'pilot' else cmd_report)(a)
 
 

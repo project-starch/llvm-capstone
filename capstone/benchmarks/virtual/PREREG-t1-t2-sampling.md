@@ -208,3 +208,58 @@ recorded here, before the main run.
 rule with I = 1 gives P = 11 per arm.
 
 **Allocating programs.** The 4 processes per arm take K0, K1, K2 and K3, one each.
+
+## T3: lifetimes without scrub (2026-10-27, before any T3 boot)
+
+**Why.** T2/T1 bundles two allocator costs: per-object lifetimes (a CDERIVE child per malloc, a CREVOKE per free) and
+the scrub on free. T3 has lifetimes on and scrub off (`CAPSTONE_HEAP_LIFETIMES=1`, `CAPSTONE_HEAP_SCRUB_FREE=0`).
+So T3/T1 is the lifetimes' cost and T2/T3 the scrub's. The lead approved the arm on 2026-10-27, to run after the
+T1/T2 main run, which is complete.
+
+**Programs.** The 15 that allocate inside the timed region, and nothing else: miniz-libc, huffbench-libc, the five sglib-*-libc (dllist, hashtable, listinsertsort, listsort,
+rbtree), the three ctl-*-libc, and rv8 aes, miniz, norx, primes and qsort.
+- A program with no allocation in its timed region reads T2/T1 at 1.003 or below with equal instret. T3 cannot
+  differ there, so it is not run.
+
+**Images.**
+- T3's SDK is built from the same dev tree as T1's and T2's.
+- check-sdks.py, T2 against T3, lists the expected differences: heap.c.obj (archive member and object),
+  sdk.json `heap_scrub_free`, the heap-switch lines in build.ninja and CMakeCache, and output paths.
+  - It lists one unexpected file, `sdk/__pycache__/capstone-cccpython-312.pyc`, present only in sdk-T3.
+  - That file is the bytecode cache of the capstone-cc wrapper, whose source is byte-identical in both SDKs. It is
+    not linked into any image.
+- The three-SDK heap-layout record gives every arm the same padded heap region.
+- check-arms.py passes 60/60 for T3 against T2 (`perf/build3/gate-T2-T3.tsv`, its PASS rows are exactly the
+  60 T3 images): every input section outside the allocator sits at the same address.
+- T1 and T2 images are byte-identical to the main run's.
+
+**Design.**
+- Three kits, `perf/main3b/t3k{1,2,3}`: one boot each, each program's three arms in that same boot.
+- Arms alternate in ABCCBA order, T1 T3 T2 T2 T3 T1, starting with C for odd positions.
+- The dimensions are the main run's:
+  - P = 4 processes × (W = 1, I = 5) per arm;
+  - huffbench-libc, which is not re-entrant, gets P = 11 × (0, 1) per arm;
+  - the four processes of an allocating program take K0 to K3.
+- Run-script hashes, sha256 first 16:
+  - t3k1 0ecbbc7c4c9f5ec8 (81 processes);
+  - t3k2 fc24bc09d77351fc (60);
+  - t3k3 37861b84fca1ac04 (60).
+- A first build of these kits ran huffbench-libc at (1, 5) because `--single` was left out (`perf/main3`, hashes
+  6570bfd8…, 8d80b9a8…, a13d53d3…). It was withdrawn before any boot.
+
+**Analysis.** perf-analyze.py `report` on the T3 boots' rows, with `--arms T1,T3`, `--arms T3,T2` and
+`--arms T1,T2`. Each is the same estimator as the main run, on a pair of arms from the same boot.
+
+**Predictions.**
+1. **Instructions.** For every program, the median instret per iteration orders T1 ≤ T3 ≤ T2. T3 does the
+   lifetime work, and T2 adds the scrub.
+2. **miniz-libc.** Most of its slowdown is the scrub: T2/T3 carries more than 80 % of log(T2/T1), so T3/T1 is
+   below 1.17.
+   - The basis is an inference from the main run, not a measurement: escapes of 1,714 against 589, and instret
+     1.265.
+   - If T3/T1 is instead close to T2/T1, the cost is the lifetimes and the inference is wrong.
+   - The escape counts move with it: T3's entries are near T1's if the escapes are the scrub's first-touch faults.
+3. **T2/T1 replicate.** These boots re-measure T2/T1 for the 15 programs on a second boot. This is the first
+   boot-to-boot reading; the main run measured each program in one boot only.
+   - Expected: each program's replicate lies inside the union of the two Welch intervals.
+   - A program outside it is reported as a boot effect, with no top-up.

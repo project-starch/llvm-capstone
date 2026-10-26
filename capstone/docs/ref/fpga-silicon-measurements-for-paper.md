@@ -7349,6 +7349,21 @@ T2/T1, with the cycle interval:
   - No image sets a directed mode: no fsrm, and all 408 fdiv/fsqrt encode rm=dyn.
   - The only FP-CSR instructions are the runtime's fenv.c pair, used by the pthread save/restore (frcsr/fscsr), and
     compiler-rt's long-double rounding hooks (frrm, csrs fflags).
+- R-66 (fdiv.s/fsqrt.s on a register that is not NaN-boxed) cannot reach them either.
+  - Every source of all 84 fdiv.s, in all 654 images, was last written by a single-precision op.
+  - The census walks back to each source's last writer; its control flags `fmv.d.x` and `fadd.d` writers.
+  - minver's one loop-carried source was resolved by hand: every writer of fa1 in `minver` is fmv.s, flw or fdiv.s.
+- R-65 (an fdiv result just below the smallest normal reads zero) depends on the value, so it cannot be censused
+  statically. It is unfixed in bitstream 3 too.
+  - The rtl lane counted it dynamically, with a host replica that returns the IEEE result and classes every
+    fdiv/fsqrt.
+  - Over every division, none of the three programs produces a tiny result (|r| ≤ the smallest normal, which
+    contains R-65's band) or an overflow: ludcmp's 285,600 fdiv.s, st's 943,000 fdiv.d plus 9,200 fsqrt.d, and
+    minver's 356,399 fdiv.s.
+  - minver has one special-operand division; there R-64 changes only the flags.
+  - The replica's fidelity is anchored for minver only: its state hash equals the twin's, 0xd6cc5fbda167dc7b.
+    ludcmp and st carry no hash (0x0).
+  - So the bitstream-3 prediction for the three (twin bit-exact) rests on R-62/R-63 alone.
 - 11 programs' outputs are unchecked: no real verify and no state hash.
 - duff and lcdnum came out at ±3.4 % and ±2.8 % (between-process noise above the pilot's). They are reported as
   measured, with no top-up.
