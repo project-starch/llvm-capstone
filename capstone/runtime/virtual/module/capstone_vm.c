@@ -24,6 +24,26 @@ _Static_assert(sizeof(struct cv_step) == 136, "cv_step is two user-copy chunks a
 #define __uninitialized __attribute__((uninitialized))
 #endif
 #include "cap_rev_table_abi.h"
+/* The processor's lifetime-id width, which bounds how many records a table may publish: 30 (every
+ * bitstream so far, the namespace's 2^30) or 55 (QEMU's x-capstone-ids=55: a 25-bit slot, so at
+ * most 2^25 records, and a table that publishes more is refused at CSRUNV, a trap the kernel does
+ * not handle). A BUILD define, like CAPSTONE_VM_FLAT_TABLE: the kit picks it with the processor.
+ * The 55 limit comes from the ABI header the build copies beside this file, so a 55 build against
+ * a header without it does not compile. The 30 build compiles to the same object as before. */
+#ifndef CAPSTONE_VM_IDS
+#define CAPSTONE_VM_IDS 30
+#endif
+#if CAPSTONE_VM_IDS == 55
+#ifndef CAP_REV_WIDE_RECORDS
+#error "CAPSTONE_VM_IDS=55 needs the ids-55 cap_rev_table_abi.h beside the module"
+#endif
+#define CV_ID_RECORDS_MAX CAP_REV_WIDE_RECORDS
+#elif CAPSTONE_VM_IDS == 30
+#define CV_ID_RECORDS_MAX CAP_REV_TABLE_NAMESPACE_SIZE
+#else
+#error "CAPSTONE_VM_IDS: 30 or 55"
+#endif
+#define CV_ID_PAGES_MAX (CV_ID_RECORDS_MAX / CAP_REV_TABLE_PAGE_NODES)
 /* One rule, shared with the launcher and the allocator. No #include of its own and only
  * __builtin_clzl and unsigned long, so it is valid kernel C. */
 #include "representable.h"
@@ -171,6 +191,13 @@ MODULE_PARM_DESC(node_max_records,
 #error "CAPSTONE_VM_INDEX_BITS: 16 (vp2, batch) or 18 (option A)"
 #endif
 #define CV_FLAT_RECORDS_MAX (1UL << CAPSTONE_VM_INDEX_BITS)
+#if CV_FLAT_RECORDS_MAX > CV_ID_RECORDS_MAX
+#error "the flat table's index width exceeds the lifetime id's"
+#endif
+#if CAPSTONE_VM_IDS == 55
+static unsigned long ids = CAPSTONE_VM_IDS;
+module_param(ids, ulong, 0444);
+#endif
 #if CAPSTONE_VM_INDEX_BITS != 16
 static unsigned long index_bits = CAPSTONE_VM_INDEX_BITS;
 module_param(index_bits, ulong, 0444);
@@ -329,7 +356,7 @@ static int node_add_page(struct context *c, unsigned long id)
 
 static int node_grow(struct context *c, unsigned long required)
 {
-    unsigned long limit = node_max_pages ?: CAP_REV_TABLE_MAX_PAGES;
+    unsigned long limit = node_max_pages ?: CV_ID_PAGES_MAX;
     unsigned long pages = node_capacity(c) / 256, before = pages;
     unsigned long need, end;
     /* Flat capacity is fixed at creation; node_add_page writes the paged directory, which in a
@@ -717,7 +744,7 @@ static int ensure_nodes(struct context *c, unsigned long required)
     unsigned long collect_min;
     bool collected = false;
     int error;
-    if (required > CAP_REV_TABLE_NAMESPACE_SIZE) return -ENOMEM;
+    if (required > CV_ID_RECORDS_MAX) return -ENOMEM;
     /* vp2's 16-bit node index: refuse growth past the flat table's ceiling. */
     if (node_max_records && required > node_max_records) return -ENOMEM;
     if (node_table_flat && required > CV_FLAT_RECORDS) return -ENOMEM;
@@ -1807,7 +1834,7 @@ retry:
         if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
         t = find_thread(c, r.thread);
         if (!t || t->terminal) { rc = -ESRCH; goto out; }
-        if (r.available > CAP_REV_TABLE_NAMESPACE_SIZE - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
+        if (r.available > CV_ID_RECORDS_MAX - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
         if (node_max_records &&
             r.available > node_max_records - CAP_REV_TABLE_RESERVE) { rc = -ENOMEM; goto out; }
         rc = ensure_nodes(c, r.available + CAP_REV_TABLE_RESERVE);
@@ -2150,9 +2177,9 @@ static int vm_open(struct inode *inode, struct file *f)
     unsigned long available;
     if (num_online_cpus() != 1 || !current->mm || PAGE_SIZE != 4096)
         return -EOPNOTSUPP;
-    if (node_initial_pages < 2 || node_initial_pages > CAP_REV_TABLE_MAX_PAGES ||
-        !node_batch_pages || node_batch_pages > CAP_REV_TABLE_MAX_PAGES ||
-        node_max_pages > CAP_REV_TABLE_MAX_PAGES ||
+    if (node_initial_pages < 2 || node_initial_pages > CV_ID_PAGES_MAX ||
+        !node_batch_pages || node_batch_pages > CV_ID_PAGES_MAX ||
+        node_max_pages > CV_ID_PAGES_MAX ||
         (node_max_pages && node_max_pages < node_initial_pages)) return -EINVAL;
     c = kvzalloc(sizeof(*c), GFP_KERNEL);
     if (!c) return -ENOMEM;
