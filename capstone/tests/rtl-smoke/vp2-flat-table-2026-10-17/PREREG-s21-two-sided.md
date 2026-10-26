@@ -178,3 +178,43 @@ either kit.
   it carries a `const` capability-initialised holder, as this one does through musl's `__atexit_lockptr`. That may
   include bitstream-2 reference images built with t3-freeze-r60; it has not been checked image by image. This is a
   compatibility consequence of #273/#274, reported to the runtime lane, not a defect claim.
+
+## Read 2026-10-26 (pr-frame-contract2.dom e06ee57a55ba7574): fix (a) separates on the stack; `copy` deviates on prkitB
+
+| mode | prkitA (fix a) | prkitB (no retire) |
+|---|---|---|
+| twice | first=1 second=-16, child_ran=1 | first=1 second=-16, child_ran=1 |
+| copy | cause 25 | **SURVIVED read=3 (exit 1)**, predicted 25 |
+| prewrite | WROTE | WROTE |
+| write-live | created=1 child_ran=1, then cause 25 at frame+0x400; no WROTE | created=1 child_ran=1, WROTE frame+1024, +1120, +1408 |
+
+On both kits: slot gate OK, banner `supervisor_slots=2`, `already backs a thread` 1, `thread create refused` 1,
+`child frame grant not retired` 0, halts 0. Every voiding rule passes and nothing counts against fix (a). **On the
+stack, as on dev, the domain cannot write a live child's frame with the retire and can without it.**
+
+**The deviation, reported as found:** `copy` on prkitB survived where 25 was predicted. `copy` reads with no wait, so
+it races the launcher's exit unmap (`exec.c`, after CV_THREAD_EXIT, identical in both trees). Two readings fit and this
+pair cannot tell them apart:
+- the race moved (for example #282's shorter service round lets the parent read first);
+- the stack's exit unmap no longer retires the frame. `unmap_arena(request.frame, 4096)` returning -EINVAL is
+  tolerated silently, and #250 rewrote the registry it looks the frame up in.
+
+### Pre-registered before any boot: `copy-exited`, the discriminator
+
+- **New mode** in frame-contract.c (cd2c3d16290da162): a `child_flag` child. The parent waits for the flag, sleeps
+  0.5 s and spins 4×10^8, then reads its copy. The child has then exited and the launcher has run its exit unmap.
+- **Images:** pr-frame-contract3.dom 37c6f82232f3c078 (pr-sdk2, cc-prmerged, v7) for prkitA/prkitB, run as `copy`
+  then `copy-exited`. dev-frame-contract3.dom 3dc08fb66c4566e6 (t3-freeze-nb-nomovc-cw-r60 SDK, v6, the SDK whose images
+  ran on kitA/kitB above) for dev's kitA/kitB, run as `copy-exited`. One boot per kit, same insmod arguments.
+
+| kit | copy-exited predicted |
+|---|---|
+| kitA (dev, fix a) | cause 25 |
+| kitB (dev, no retire): **the control** that the wait is long enough | cause 25 (dev's exit unmap retires the frame) |
+| prkitA (stack, fix a) | cause 25 |
+| prkitB (stack, no retire) | 25 if the stack's exit unmap retires the frame; SURVIVED if it does not |
+
+- **Void:** kitB SURVIVES (the wait is too short to show anything), or any create ≤ 0, or child_ran=0.
+- **Reading:** prkitB 25 → `copy`'s survival was the race, and the stack's exit unmap works. prkitB SURVIVED with
+  kitB 25 → the stack's child-exit unmap no longer retires the frame, a finding against #250/#264 for the runtime lane.
+  `copy` on prkitB is repeated for N=2 and is reported either way.

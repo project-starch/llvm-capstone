@@ -12,6 +12,10 @@
  *   prewrite   the control: write our copy at frame+1024 with no create -> must land
  *   write-live a child that never exits, then write our copy at frame+1024 while it lives: with fix (a) the
  *              write faults cause 25; without it the write lands (the S-21 window, create to exit)
+ *   copy-exited  `copy` after the child has EXITED (flag seen, then a 0.5 s sleep and a bounded spin): the
+ *              launcher's exit unmap retires the frame on any module, so the read faults cause 25 with or
+ *              without fix (a). A SURVIVED read on a module without the retire means the exit unmap did not
+ *              retire the frame (or the wait was too short: dev's no-retire kit is the control that it is not)
  * The frame is filled exactly as runtime/virtual/thread.c fills it. Prints FRAME_TEST lines; a survived read exits 1. */
 #include <capstone/capability.h>
 #include <capstone/virtual.h>
@@ -19,6 +23,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include "vm.h"
 
 extern long __capstone_vm_thread_create_frame(void *frame);
@@ -79,6 +84,20 @@ int main(int argc, char **argv)
         fflush(stdout);
         volatile uint64_t v = ((volatile uint64_t *)f)[7];
         printf("FRAME_TEST:copy SURVIVED read=%lu\n", (unsigned long)v);
+        return 1;
+    }
+    if (!strcmp(argv[1], "copy-exited")) {
+        unsigned char *f = acquire(4096);
+        if (!f) { puts("FRAME_TEST:copy-exited acquire-failed"); return 3; }
+        fill_entry(f, child_flag);
+        long a = __capstone_vm_thread_create_frame(f);
+        for (unsigned long i = 0; i < 400000000UL && !child_ran; ++i) __asm__ volatile("" ::: "memory");
+        usleep(500000);
+        for (unsigned long i = 0; i < 400000000UL; ++i) __asm__ volatile("" ::: "memory");
+        printf("FRAME_TEST:copy-exited created=%ld child_ran=%d (the child has exited); reading our copy\n", a, child_ran);
+        fflush(stdout);
+        volatile uint64_t v = ((volatile uint64_t *)f)[7];
+        printf("FRAME_TEST:copy-exited SURVIVED read=%lu\n", (unsigned long)v);
         return 1;
     }
     if (!strcmp(argv[1], "write1024")) {
