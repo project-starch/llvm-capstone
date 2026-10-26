@@ -39,8 +39,12 @@ not be told from one with a record; the audit found 26 such cells in memcached a
 then had to be traced by hand. A bare oracle is now NOT RUN, and so is a cell the old ASan-text
 fallback used to accept.
 
-A case whose case.json carries `duplicate_of` (the same upstream defect as another case of the same
-corpus, e.g. a release-branch backport of the same fix) is left out of every table and listed."""
+A case is left out of every table, and listed, when its case.json carries either `duplicate_of`
+(the same upstream defect as another case of the same corpus, e.g. a release-branch backport of the
+same fix) or `withdrawn` (the review found the case is not a measurement of what it names -- a
+trigger that does not reach its defect, a positive control counted as a case). Both keep the
+directory and the number; neither is counted. `class`, where a case states its axis outright, wins
+over reading the axis out of `lifetime_ender`."""
 import collections
 import json
 import pathlib
@@ -188,8 +192,9 @@ rows, odd, dups = [], [], []
 for p in TARGETS:
     for cj in sorted((BC / p).glob("*/[0-9][0-9]_*/case.json")):
         d = json.loads(cj.read_text())
-        if d.get("duplicate_of"):
-            dups.append(f"{p}/{cj.parts[-3]}/{cj.parent.name} = {d['duplicate_of']}")
+        if d.get("duplicate_of") or d.get("withdrawn"):
+            dups.append(f"{p}/{cj.parts[-3]}/{cj.parent.name} = "
+                        + (f"duplicate of {d['duplicate_of']}" if d.get("duplicate_of") else "withdrawn"))
             continue
         corpus = cj.parts[-3]
         le = str(d.get("lifetime_ender", "")).strip().upper()
@@ -250,8 +255,9 @@ for p in EXTRA if ALL else ():
             sys.exit(f"catch-tables: {p}/{corpus} has cases but no entry in EXTRA_GROUPS")
         layer, nested, c2arm, c3arm = EXTRA_GROUPS[(p, corpus)]
         d = json.loads(cj.read_text())
-        if d.get("duplicate_of"):
-            dups.append(f"{p}/{corpus}/{cj.parent.name} = {d['duplicate_of']}")
+        if d.get("duplicate_of") or d.get("withdrawn"):
+            dups.append(f"{p}/{corpus}/{cj.parent.name} = "
+                        + (f"duplicate of {d['duplicate_of']}" if d.get("duplicate_of") else "withdrawn"))
             continue
         a = d["arms"]
         r = dict(prog=p, corpus=corpus, layer=layer, case=cj.parent.name, kind=extra_kind(d), nested=nested,
@@ -278,7 +284,7 @@ def cell(g, k):
     return f"{c['caught']}/{run}" + (f" (+{extra} ?)" if extra else "")
 
 
-print(f"cases: {len(rows)}" + (f" (and {len(dups)} duplicate{'s' if len(dups) > 1 else ''} left out: "
+print(f"cases: {len(rows)}" + (f" (and {len(dups)} left out of every table: "
                                  + "; ".join(dups) + ")" if dups else ""))
 for kind in ("temporal", "spatial"):
     print(f"\n{kind.upper()}")

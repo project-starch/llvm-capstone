@@ -12,17 +12,17 @@
   "fidelity": "real consumer, real allocator, with a reconstructed trigger -- see case 34 for why the SQL had to be re-derived and why it must be replayed one statement per process",
   "arms": {
     "spatial": {
-      "oracle": "completes and prints its own marker ('NOTRAP done', rc=0). Recorded as no-marker until 2026-10-05, when the raw log disproved it: the runner had filed it INFRA because the BOOT returned 1 -- the next case in the queue hung -- and charged that to the head of the remaining list. The case's own return code says why nothing was detected: s0_rc=11, SQLITE_CORRUPT -- the trigger's database image is rejected before the defect",
+      "oracle": "completes and prints its own marker ('NOTRAP done', rc=0). Recorded as no-marker until 2026-10-05, when the raw log disproved it: the runner had filed it INFRA because the BOOT returned 1 -- the next case in the queue hung -- and charged that to the head of the remaining list. The case's own return code says why nothing was detected: s0_rc=11, SQLITE_CORRUPT -- the trigger's database image is rejected before the defect ARENA NOT COMPARABLE WITH THE VIRTUAL ARMS: this physical reading was taken at corpus322.sh:216's hard-coded -DSQLITE_HEAP_SIZE=262144, while the case declares arena_bytes 1048576 and the virtual arms were built at it. This arm is arena-granular -- the arena IS the bound -- so the arena decides the spatial result and this cell is not comparable with theirs. The arm is superseded (see README.md) and is not re-run.",
       "run": "2026-10-05"
     },
     "sublet": {
-      "oracle": "completes and prints its own marker ('NOTRAP done', rc=0). Recorded as no-marker until 2026-10-05, when the raw log disproved it: the runner had filed it INFRA because the BOOT returned 1 -- the next case in the queue hung -- and charged that to the head of the remaining list. The case's own return code says why nothing was detected: s0_rc=11, SQLITE_CORRUPT -- the trigger's database image is rejected before the defect",
+      "oracle": "completes and prints its own marker ('NOTRAP done', rc=0). Recorded as no-marker until 2026-10-05, when the raw log disproved it: the runner had filed it INFRA because the BOOT returned 1 -- the next case in the queue hung -- and charged that to the head of the remaining list. The case's own return code says why nothing was detected: s0_rc=11, SQLITE_CORRUPT -- the trigger's database image is rejected before the defect BUILT AT A DIFFERENT ARENA: corpus322.sh:216 hard-codes -DSQLITE_HEAP_SIZE=262144 while the case declares arena_bytes 1048576. Per-block bounds mean the arena is not this arm's bound, so the reading is not void for that reason, but it is a different build from the one the case declares and from the virtual arms', and at 262144 some fts cases exhaust memsys5 outright. The arm is superseded (see README.md) and is not re-run.",
       "run": "2026-10-05",
       "verdict": "MISSED",
       "verdict_from": "results/matrix.tsv case 30 sublet: not-detected"
     },
     "cheribsd-revocation": {
-      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran ARENA NOT COMPARABLE WITH THE VIRTUAL ARMS: this reading was taken with the CheriBSD builder's then hard-coded -DSQLITE_HEAP_SIZE=262144, while the case declares arena_bytes 1048576 and the virtual arms were built at it. On an arena-granular arm the arena IS the bound, so this cell is not comparable with those until CheriBSD is re-run at the declared arena. The builder now honours arena_bytes; the recorded cell predates that and has not been re-measured.",
       "verdict": "MISSED",
       "verdict_from": "results/matrix.tsv case 30 cheribsd-revocation: not-detected"
     },
@@ -53,5 +53,7 @@
   "fault_sites": [
     "vdbeRecordCompareInt"
   ],
-  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in vdbeRecordCompareInt (live_proof); that run is independent of the Capstone arms and predates them."
+  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in vdbeRecordCompareInt (live_proof); that run is independent of the Capstone arms and predates them.",
+  "arena_bytes": 1048576,
+  "arena_bytes_why": "the three builders disagreed about this until 2026-10-19 -- the virtual arms used a 1 MiB header default against CheriBSD's 262144 -- and on an arena-granular arm the arena IS the bound, so the spatial row was comparing arenas rather than mechanisms"
 }
