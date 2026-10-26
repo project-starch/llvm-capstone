@@ -1,0 +1,23 @@
+# tier3-fpds-bare.sh / fpds-grade.py / tier3-fpds-place.sh dry run, 2026-10-26. Every board call stubbed.
+# The kit, checked here: llvm-capstone 84488ed6db17 carries capstone/tests/rtl-smoke/fp-divsqrt-bare-2026-10-26/ (PREREG.md, images/SHA256SUMS); fp-all.bin 07692df2c3710353, board_rec 0x80007000.
+## fpds-grade.py on planted recorder lines (SR 10 and ten SV words):
+exact: FPDS CONFIRMED ON SILICON: the rounding defect is on the board (the vector is exact)
+  rc=0
+noton: FPDS NOT ON SILICON: 0 fdiv and 0 fsqrt mismatches on the 512 cases, position 8 exact
+  rc=1
+void: FPDS VOID: SR is not 10 or position 8 is not the last quotient (the loop did not finish, or not this image)
+  rc=2
+finding: FPDS FINDING: 0: read 0x5 want 0x17
+  rc=1
+no uart.txt: FPDS fp-all NO DATA
+  rc=2
+## tier3-fpds-bare.sh 2, the runner stubbed (RF_RUN writes the exact vector):
+RF fp-all BEGIN 18:33:08 board 2 bitstream caplifive_vp2c_dcc6daf6e image 07692df2c3710353 rec 0x80007000 booking 996 # book 2 20 vp2 bitstream 2 fdiv/fsqrt rounding fp-all bare (board 2)
+996 # unbook 996 # book 2 20 vp2 bitstream 2 fdiv/fsqrt rounding fp-all bare (board 2)
+RF fp-all END rc=0 18:33:08 :: [sup] UART: begin=True SB1=True SR=['000000000000000A'] SV lines=10
+FPDS fp-all read: SR ['000000000000000A'] :: 0x17 0x13 0x3 0xc1d880ad3d2bf68c 0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1
+FPDS fp-all want: SR 10 :: 0x17 0x13 0x3 0xc1d880ad3d2bf68c 0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1
+FPDS CONFIRMED ON SILICON: the rounding defect is on the board (the vector is exact)
+RF GRADE rc=0
+RF board2 DONE 18:33:08
+## tier3-fpds-place.sh: b2k1 on board 2 and ended, k3 not yet -> board 2; b2k1 running on board 2 and k3 ended -> board 1; a STOP in the perf logs -> stop (all three read as stated)

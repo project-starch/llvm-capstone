@@ -9569,3 +9569,27 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     - divsqrt agrees between native and context: either both read bad=0, or both read bad>0.
   - Any native failure that fits neither, or a context failure at n=1e5 with none at n=2e7, is a third outcome,
     reported as read.
+
+### fdiv.d / fsqrt.d rounding on silicon: the rtl lane's bare kit, one cold boot, queued behind the perf kits, pre-registered (2026-10-26 18:3x, before its boot)
+
+- **Why:** the rtl lane reads in simulation that the divsqrt unit takes its RNE sticky bit only from 4 extra quotient
+  bits (norm_div_sqrt_mvp.sv:385-387). As a result, 23 of 512 divides and 19 of 512 square roots land 1 ulp low. An
+  adversarial audit confirmed this with a bit model. It is the rtl lane's leading cause of ludcmp/st's VERIFY-FAILED.
+- **The kit:** llvm-capstone land/rtl-fp-kit 84488ed6db17 (its own pre-registration),
+  `capstone/tests/rtl-smoke/fp-divsqrt-bare-2026-10-26/`.
+  - One board image, fp-all.bin 07692df2c3710353 (board_rec 0x80007000, SR 10). fp-c3 and fp-c15 are sim-only.
+  - Its vector was simulated from the image itself on dcc6daf6e's RTL: `0x17 0x13 0x3 0xc1d880ad3d2bf68c
+    0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1`.
+- **What runs:** `tier3-fpds-bare.sh <board> <log> 84488ed6db17`, derived from tier3-rfix-bare.sh. It takes the image
+  and PREREG.md from the kit commit, checks them by hash and board_rec, and runs one run_sup_bare.py boot.
+  - **The grade, `fpds-grade.py`, applies the PREREG's rules:**
+    - VOID unless SR is 10 and position 8 is 0xc100794b211e882c;
+    - CONFIRMED ON SILICON if the vector is exact;
+    - NOT ON SILICON if positions 0 and 1 read 0 with position 8 exact;
+    - anything else a finding, value by value.
+  - **Placement, `tier3-fpds-place.sh`:** the first board whose perf queue is done. Board 1: k1, fpdiag, k3. Board 2:
+    k2, k4. Batch 2 goes to whichever board ends its second kit first.
+  - Dry run: `dryrun-fpds-bare.txt`. All four grades and NO DATA. The stubbed runner reads CONFIRMED. Placement reads
+    both orders and the stop.
+- **Predictions:** the rtl lane's PREREG, as above. If the sim reading transfers to silicon, the vector reads exact:
+  CONFIRMED ON SILICON.
