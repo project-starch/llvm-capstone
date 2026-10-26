@@ -119,3 +119,42 @@ Scope:
 - This is QEMU with two slots. QEMU keeps the caller internally, so it measures the frame's reachability, which is the
   fix's claim, not the RTL restore.
 - On today's one-slot bitstreams the create is refused first, and the board path never reaches the retire.
+
+## Pre-registered 2026-10-26, before any boot: the same pair on the collaborator PR stack (#250 #264 #258 #273 #274 #282)
+
+Requested by the runtime lane before it lands the stack on dev. #250 rewrites the arena registry the retire looks up
+(`find_arena`), #273 changes the image format (two load segments) and #282 the CV_STEP record. The retire block itself
+is byte-identical: `s21-prefix.patch` applies to the merged source at an offset of 156 lines.
+
+- **Tree:** the runtime lane's local merge chain fca004e7e063 on dev 8b2f10bed0c1, checked out clean in a worktree of
+  this lane's. capstone_vm.c a4e5486fa5ce5b0a (dev's is e3da522ee472c743).
+- **Modules** (18-bit flat, the twin recipe, QEMU headers = capstone-qemu 46b69c03a4's `cap_rev_table_abi.h`, no RVC):
+  - prkitA: the merged source, module 9ab2eb23fac728ba.
+  - prkitB: the same minus the retire block (source 97073d4f9fc46086, no `child frame grant not retired` line), module
+    459a8096258e9afd.
+- **Kits:** qkit7-b2twin3-q8 (QEMU 708bbff5663f0e86, firmware and images hard-linked) with two supervisor slots and the
+  merged tree's launcher, capstone-vexec 62753dd693cc4a25 (equal to the runtime lane's adapter-merged build). They differ
+  ONLY by the module.
+- **Image:** frame-contract.c ba0b697e74e0289b (unchanged from dev), built with an SDK made from the merged tree (runtime
+  43e6e03abba0dffc) and the frozen bitstream-2 compiler t3-freeze-r60: pr-frame-contract.dom 1ad2b7649cb31b96, two LOAD
+  segments (R E, RW). The compiler PRs in the stack (#283, #275) are not in this image. The image is the same on both
+  kits, so the compiler is not a variable here.
+- **Run:** one boot per kit, insmod `supervisor_slots=2 diag_emerg=1`, modes in order twice, copy, prewrite, write-live
+  (write-live last, because its child never exits). Same harness as above (virtualvm, unchanged between dev and the merge).
+
+Predicted readings:
+
+| mode | prkitA (fix a) | prkitB (no retire) |
+|---|---|---|
+| twice | first > 0, second = -16, child_ran=1, exit 0 | the same |
+| copy | cause 25 (the exit-unmap race above: NOT separating) | cause 25 |
+| prewrite | WROTE | WROTE |
+| write-live | created > 0, child_ran=1, then cause 25 at frame+0x400; no WROTE | created > 0, child_ran=1, WROTE |
+
+Must-fire lines on both: slot gate OK, banner `supervisor_slots=2`, `already backs a thread` 1 and `thread create
+refused` 1 (from twice), `child frame grant not retired` 0, halts 0.
+
+**What counts against fix (a) on the stack:** a WROTE in prkitA's write-live, or prkitA's write-live create refused
+(created ≤ 0) when prkitB's succeeds, which would mean #250's registry no longer lets the retire find the frame arena.
+**What voids the run:** prewrite not landing on either kit, prkitB's write-live faulting, or twice not reading -16 on
+either kit.
