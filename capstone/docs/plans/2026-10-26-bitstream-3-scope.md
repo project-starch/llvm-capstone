@@ -230,7 +230,10 @@ on bitstream 2 are attributed to it by an exact-value match (ISSUES R-62), and n
 - Simulation: 0 misses in all four operations, the exact/subnormal control arms read 0, and the rounding-mode arm
   reads 15 of 15. Claim-audited. Lint PASS at baseline.
 - Remaining, unused by the failing programs: the directed modes and NX with all-zero extra bits (they need the
-  remainder), the rarer subnormal-result error, and overflow to infinity under the directed modes.
+  remainder) and the rarer subnormal-result error.
+- Considered, not in: R-64 (measured in simulation the same day, after the hash went to synth). It covers the unit's
+  exception flags on special operands and on overflow, and overflow to infinity under the directed modes. No program
+  is known to read either.
 - Next: the 95-test sweep, the synthesis-only size gate, then the full build. The flash is the lead's word.
 
 

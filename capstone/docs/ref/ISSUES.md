@@ -3801,7 +3801,8 @@ midpoint exists.
 **Remaining after the fix** (none reached by the failing programs, which use round-to-nearest):
 - the directed modes and NX when the computed extra bits are all zero, which need the remainder;
 - the rarer same-shape error on subnormal results;
-- overflow returns infinity under every mode, where IEEE gives the largest finite value under RTZ, RDN and RUP;
+- overflow returns infinity under every mode, where IEEE gives the largest finite magnitude under RTZ, under RDN for a
+  positive result and under RUP for a negative one (measured, with the unit's flag defects: R-64);
 - the rounding-mode swap is R-63.
 
 The upstream alternative was a cvfpu revision with `DivSqrtSel`/THMULTI (the C910 divider, after 0.7.0). It is an
@@ -3834,6 +3835,44 @@ sqrt(2) to …bcc. It was checked here by script against the PREREG (image prefi
 **Reach** (the board lane's census, `98b7b798f9d4`, not re-run here): over all 152 T1 perf images there is no fdiv/fsqrt with a static directed mode (the
 encodings carry rm 7, dynamic; dtoa's rtz fcvt is the pattern's positive control). fcsr is written only by the
 runtime's fesetenv, which no program object references. So R-63 cannot reach the perf run.
+
+### R-64 — the divide/sqrt unit's exception flags are not IEEE on special operands and on overflow, and an overflowing `fdiv` returns infinity under every rounding mode: inf/x, x/inf and sqrt(inf) raise OF, 0/0 raises DZ beside NV, an exact subnormal result raises UF, and an overflow never raises NX · `DEMONSTRATED IN SIMULATION 2026-10-26 (capstone-ariane r62-divsqrt 0fdeeb1df / 284de8f0f, tests on the e7af48457 core; the fp-of and fp-special readings match predictions written into their headers before the runs, but committed with the readings, so no pre-run artifact fixes the order; fp-uf was a characterisation arm with no prediction); on bitstream 2 by source, not read on silicon (the branches involved are the vendored ones, byte-identical in the R-62 copy); NO FIX YET. Found 2026-10-26 by the RTL lane while measuring R-62's overflow residual`
+
+Siblings: R-62 (which bit decides the rounding) and R-63 (which mode is applied), in the same unit and file. This one
+is the special-case and overflow branches of the normaliser, which neither fix touches.
+
+**Mechanism** (`core/fpu_div_sqrt_fix/norm_div_sqrt_mvp.sv`, the copy of cvfpu 3116391 that R-62 compiles; the
+branches below are unchanged from the vendored file):
+- the `Inf_a_SI` branch (inf/x, sqrt(+inf)) and the `Inf_b_SI` branch (x/inf) set `Exp_OF_S`. inf/0 also takes the
+  `Inf_a_SI` branch, because it is checked before the zero divisor, so by source it raises OF too (not tested);
+- the 0/0 branch sets `Div_Zero_S` as well as `NV_OP_S`;
+- the denormal-result branches set `Exp_UF_S` whether or not the result is exact (by source: written unconditionally
+  in all three; measured on one exact case);
+- the overflow branches return exponent all-ones with mantissa 0 and `Mant_forround_D` = 0. The rounding stage then
+  adds nothing, so the result is infinity under every mode, and `In_Exact_S` (= `Mant_rounded_S`) reads 0.
+
+**Readings** (sim, `.sup/fpof`, `.sup/fpuf`, `.sup/fpsp`, model stamped rtl e7af48457; fflags cleared before each op):
+- `fp-of-divsqrt.S`: DBL_MAX/0.5, −DBL_MAX/0.5 and FLT_MAX/0.5 under frm 0..4 read infinity of the result's sign in all
+  15, with fflags 0x4. IEEE gives the largest finite magnitude under RTZ, under RDN for a positive result and under RUP
+  for a negative one, and raises OF|NX (0x5) every time.
+- `fp-special-divsqrt.S`: all eleven results are IEEE-correct. The flags read inf/2 0x4, 2/inf 0x4, sqrt(inf) 0x4,
+  0/0 0x18 and 4·min_sub/2 0x2, against IEEE 0, 0, 0, 0x10 and 0. 1/0, −1/0, inf/inf, sqrt(−1), 0/2 and sqrt(−0) read
+  the IEEE flags, which is the control that the readout works.
+- `fp-uf-divsqrt.S`, the low-end twin: min_sub/2 (a tie), −min_sub/4 and min_subf/4 under frm 0..4 read the IEEE
+  value in all 15, with fflags 0x3. So an INEXACT underflow reads IEEE on the fixed tree. That does not carry over to
+  bitstream 2, where R-63 still exchanges RDN and RUP. An exact subnormal result is the UF defect above.
+- In the same model `fp-rm-divsqrt.S` read 15/15 correct (the R-63 fix is in). The IEEE columns were checked on the
+  host FPU under fenv (x86-64; RMM is not available there and follows from its definition).
+
+**Reach:** not measured. The values differ from the twin only on an overflowing division under RTZ, RDN or RUP. R-63's
+census found no static directed mode in the perf images, and found fcsr written only by fesetenv, which no program
+object references. The flags differ on any program that reads fflags after one of these operations. Flag reads were
+not counted.
+
+**Fix** (not written): in the overflow branches, return the largest finite magnitude under RTZ, under RDN for a
+positive result and under RUP for a negative one, and raise NX with OF. Clear OF in the infinite-operand branches,
+clear DZ on 0/0, and raise UF only with NX. This is a few terms in the same file. It is not in bitstream 3: that hash
+was with synth before this was found, and R-62 is the blocker.
 
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
