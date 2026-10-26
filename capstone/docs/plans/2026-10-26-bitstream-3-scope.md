@@ -236,7 +236,11 @@ on bitstream 2 are attributed to it by an exact-value match (ISSUES R-62), and n
   is known to read either. R-65 (a subnormal quotient that rounds up into the smallest normal reads zero) and R-66 (an
   unboxed FP32 operand is computed instead of read as NaN) were found the same evening and are not in either. All
   three are fixed together on capstone-ariane r64-flags 76eeec974 for a later bitstream.
-- Next: the 95-test sweep, the synthesis-only size gate, then the full build. The flash is the lead's word.
+- **Bitstream 3 = capstone-ariane e7af48457 (R-62 + R-63), sealed and flashed on both boards on 2026-10-27.**
+  - It is caplifive_vp2c_e7af48457, sha256 d6ed97b6…, WNS −10.047.
+  - R-62 and R-63 are FIXED ON SILICON at N=2. ludcmp, st and minver now match the twin.
+  - Every regression reading is identical to bitstream 2's.
+  - See ISSUES R-62 for the gate, the seal and the boots.
 
 
 ## Not in this note

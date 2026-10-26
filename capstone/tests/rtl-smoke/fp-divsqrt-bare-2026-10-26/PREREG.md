@@ -26,3 +26,21 @@ Positions (0-based):
   512 cases, and the sim finding does not transfer. That would be a finding in itself about the bitstream's build.
 - Any other vector is a finding, graded value by value. Different counts with the same first misses would point at a
   partial difference.
+
+## Bitstream 3 (capstone-ariane e7af48457, the R-62/R-63 fix), pre-registered 2026-10-27 before its first boot
+
+The same image (`fp-all.bin`, sha256 `07692df2…`; its ELF `out/fp-all.elf` sha256 `86f60524…` is the one simulated
+here and for the dcc6daf6e vector) was simulated on the bitstream-3 core: capstone-ariane r62-divsqrt 35559fa27,
+whose core/ is e7af48457's, dirty=no (`.sup/fpkitb3`, same recorder extraction at 0x80007000). The extraction
+reproduces the dcc6daf6e vector from that run's log (`.sup/fpkit`), which is the control.
+
+| image | board_rec | SR | vector on e7af48457 |
+|---|---|---|---|
+| `fp-all.bin` | 0x80007000 | 10 | `0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1` |
+
+Grading on bitstream 3:
+- **VOID** unless SR is 10 and position 8 is 0xc100794b211e882c, as above.
+- **R-62 FIXED ON SILICON:** the e7af48457 vector exactly: 0 misses in both operations, no first miss, NX set.
+- **The board still carries the defect:** the dcc6daf6e vector. Check the resident bitstream's hash first: either this is
+  not bitstream 3, or the fix did not reach the build.
+- Any other vector is a finding, graded value by value.

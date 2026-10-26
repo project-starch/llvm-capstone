@@ -3701,7 +3701,7 @@ bare kit (the prediction on c721c1a2a: 15 at the legal load).
 a clear, so it can no longer reach an unrelated exception. That commit also moves every consuming LDC's clear into
 LDC_CLEAR_WAIT, so the fixed tree's readings support the fix without isolating the scoping alone.
 
-### R-62 — `fdiv` and `fsqrt` are not correctly rounded: fpnew 0.7.0's divide/sqrt unit takes its round-to-nearest-even sticky bit from a few extra quotient bits only, never from the remainder, so a result just above half an ulp rounds DOWN to the even neighbour (sim: `.d` 23 and 19 of 512, `.s` 53 and 27 of 512, each 1 ulp toward zero) · `CONFIRMED ON SILICON 2026-10-26 on bitstream 2 at N=2 cross-board (the double operations read the simulated vector exactly on both boards, byte-identical: bare kit fp-divsqrt-bare-2026-10-26, board 1 ca7a573b0ffd, board 2 490119e05f3d); FIX IN RTL, simulation only: capstone-ariane r62-divsqrt a73a7c670 + e7af48457 (round-to-nearest correct for normal results; the rounding-mode decode of R-63 in the same file), lint PASS at baseline, not yet synthesised. RTL defect in the vendored FPU (core/cvfpu at 3116391 "Release 0.7.0", unit fpu_div_sqrt_mvp), on every bitstream that carries it; found 2026-10-26 by the RTL lane; root cause read in source and claim-audited twice; the BEEBS deviations on bitstream 2 (ludcmp, st, minver) attributed to it by an exact-value match`
+### R-62 — `fdiv` and `fsqrt` are not correctly rounded: fpnew 0.7.0's divide/sqrt unit takes its round-to-nearest-even sticky bit from a few extra quotient bits only, never from the remainder, so a result just above half an ulp rounds DOWN to the even neighbour (sim: `.d` 23 and 19 of 512, `.s` 53 and 27 of 512, each 1 ulp toward zero) · `FIXED ON SILICON 2026-10-27 on bitstream 3 (caplifive_vp2c_e7af48457, sha256 d6ed97b6…) at N=2 cross-board: fp-all reads the pre-registered bitstream-3 vector (0 fdiv and 0 fsqrt misses of 512) on both boards, byte-identical (board lane 2f6c97ffd6d5; checked here by script, the bitstream-2 sessions reading the old vector as control); ludcmp and st verify and minver's check= equals the twin's on silicon. Was CONFIRMED ON SILICON 2026-10-26 on bitstream 2 at N=2 (board 1 ca7a573b0ffd, board 2 490119e05f3d). Fix: capstone-ariane r62-divsqrt a73a7c670 + e7af48457 (round-to-nearest correct for normal results; the rounding-mode decode of R-63 in the same file). RTL defect in the vendored FPU (core/cvfpu at 3116391 "Release 0.7.0", unit fpu_div_sqrt_mvp), on every bitstream that carries it; found 2026-10-26 by the RTL lane; root cause read in source and claim-audited twice; the BEEBS deviations on bitstream 2 (ludcmp, st, minver) attributed to it by an exact-value match`
 
 Siblings: R-52 (the earlier FP defect on silicon, a WRITE-BACK fault, fixed; a different mechanism, values there were
 the destination's earlier contents, not 1 ulp off), Q-34 (a different FP-adjacent divergence, misaligned accesses).
@@ -3796,7 +3796,36 @@ midpoint exists.
   - no latch, and no listed loop cone touched;
   - every other output is bit-identical.
 - **Lint:** PASS at a73a7c670 with every counter at the bitstream-2 baseline.
-- **Pending:** the 95-test sweep, the synthesis-only size gate and a bitstream. The flash is the lead's word.
+- **Gates on e7af48457:** the 95-test sweep is identical to bitstream 2's (92, 0 differ, 3 missing on both sides), and
+  rv64ud-p-* passes 12 of 12.
+- **Size gate PASS on every key:**
+  - add_sources.tcl builds the fix file once and the cvfpu copy 0 times; bitstream 2's builds the cvfpu copy once,
+    which is the control;
+  - mapping peak 5,004.9 MB;
+  - 0 Synth 8-326 cuts, 0 timing-loop headers and 0 check_timing loops;
+  - core 144,584 LUT / 41,423 FF against 144,633 / 41,424;
+  - div_sqrt_top_mvp −42 LUT.
+- **Full build sealed** (synth, exit 0, 2h05m51s, peak 21.52 GB): .bit 11,443,722 B, sha256
+  d6ed97b6d341ea058d497838e43558900823c36591c44046d3cfc0b7f55b423b.
+  - Placed 169,061 LUT / 63,647 FF, against bitstream 2's 169,076 / 63,648.
+  - 0 routing errors, 0 combinational loops, TIMING-23 0.
+  - WNS −10.047 against −9.790, a change of −0.257, inside the null band.
+  - Congestion: the routed-checkpoint report segfaulted twice. On the placed checkpoint, no window is above level 5,
+    the same as bitstream 2. There is no router-estimate reading for this build.
+  - The worst 20 paths start at csr_regfile cpmp_q, the batch's family. Neither fpnew_bulk nor fpnew_divsqrt_multi
+    appears on the worst 500 (POS 500/500, NEG 0). The worst path from the divider flops is +19.672, and into them
+    −2.063, starting at cpmp_q.
+- **Flashed 2026-10-27** on the lead's word in the board lane's session: board 2 at 02:55, board 1 at 03:29.
+- **First boots on both boards**, all as pre-registered (board lane 1c58f863f1d7 / 5c758b0cfbab, results
+  2f6c97ffd6d5):
+  - fp-all and fp-rm read the fixed vectors;
+  - s23, va-alloc and Tier 1 are identical to bitstream 2's;
+  - hold 100000 reaches a high water of 105,569;
+  - R-61 and R-61 arming read the fixed vectors;
+  - the fixes kit is EXACT on all 6 images;
+  - b3k1 on board 2: 24 of 24 processes rc 0. minver reads check=0xd6cc5fbda167dc7b on all 48 BENCH lines, the twin's
+    value (bitstream 2 read 74ceeb9e…). ludcmp and st read check=0x0 with 0 VERIFY-FAILED. Values read here from
+    the raw pilot.txt.
 
 **Remaining after the fix** (none reached by the failing programs, which use round-to-nearest):
 - the directed modes and NX when the computed extra bits are all zero, which need the remainder;
@@ -3809,7 +3838,7 @@ The upstream alternative was a cvfpu revision with `DivSqrtSel`/THMULTI (the C91
 89-commit bump touching the FMA and cast units too, it was not read for correctness, and it is not taken.
 Bitstream-3 scope note, row (d).
 
-### R-63 — `fdiv`/`fsqrt` under RDN round toward +inf and under RUP toward −inf, and RMM truncates: fpnew hands its rounding-mode encoding to the divide/sqrt unit unmapped, and the unit numbers the modes differently · `CONFIRMED ON SILICON 2026-10-26 on bitstream 2 at N=2 cross-board (bare kit fp-rm-bare-2026-10-26, pre-registered at land/rtl-rm-kit 75f129f56497 and board lane 411e93dc1ebc; both boards read the simulated bitstream-2 vector exactly and byte-identically, board lane 98b7b798f9d4); FIX IN RTL, simulation only: capstone-ariane r62-divsqrt e7af48457 (the same patched normaliser as R-62). Found 2026-10-26 by the R-62 audit, read in source; on every bitstream that carries fpnew 0.7.0's divsqrt`
+### R-63 — `fdiv`/`fsqrt` under RDN round toward +inf and under RUP toward −inf, and RMM truncates: fpnew hands its rounding-mode encoding to the divide/sqrt unit unmapped, and the unit numbers the modes differently · `FIXED ON SILICON 2026-10-27 on bitstream 3 (caplifive_vp2c_e7af48457) at N=2 cross-board: fp-rm reads the pre-registered fixed-RTL vector on both boards, byte-identical (board lane 2f6c97ffd6d5; checked here by script, bitstream 2's sessions reading the swapped vector as control). Was CONFIRMED ON SILICON 2026-10-26 on bitstream 2 at N=2 (pre-registered at land/rtl-rm-kit 75f129f56497, board lane 98b7b798f9d4). Fix: capstone-ariane r62-divsqrt e7af48457 (the same patched normaliser as R-62). Found 2026-10-26 by the R-62 audit, read in source; on every bitstream that carries fpnew 0.7.0's divsqrt`
 
 Sibling: R-62, the same unit and the same file, a different mechanism (which bit decides the rounding, not which
 mode is applied).
