@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Build the published PoisonCap platform with the recipe in
 # ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/ (prepare.py, platform.sh), one stage after
-# another, each timed. Run it through build-platform-docker.sh: the recipe needs the host it was
-# written for (Ubuntu 24.04, clang-18), which the container provides.
+# another, each timed. build.sh runs it in the container: the recipe needs the host it was written
+# for (Ubuntu 24.04, clang-18).
 #
-#   bash build-platform.sh [stage ...]     stages: prepare verify llvm qemu cheribsd image
+#   bash build-stages.sh [stage ...]     stages: prepare verify llvm qemu cheribsd image
 #                                          (default: all, in that order)
 #
 # POISONCAP_PLATFORM (default ~/poisoncap-platform) holds work/, logs/ and the pinned cheribuild

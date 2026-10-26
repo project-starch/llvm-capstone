@@ -2,7 +2,7 @@
 # PoisonCap's speedtest1 with the reuse-distance wrapper linked in, and the wrapper's test programs,
 # all against their sqlite3.c and with their compiler and flags. Their sources are not touched.
 #
-#   bash platform/in-container.sh bash .../reuse/build-reuse-poisoncap.sh [VARIANT]   (memsys5 | memsys5-spatial)
+#   bash platform/run-in-container.sh bash .../reuse/build-reuse-poisoncap.sh [VARIANT]   (memsys5 | memsys5-spatial)
 #
 # Starts from build-speedtest1.sh's VARIANT build (default memsys5: their protection on; memsys5-spatial:
 # their NESTED_TEMPORAL switch off; it is rerun here, so the build directory is that variant's): cheribuild's configured build directory, whose Makefile gives the compiler, the flags,
@@ -17,7 +17,7 @@
 # The --wrap routing is checked in the binaries' symbols: __wrap_sqlite3_config defined and the
 # program's references to sqlite3_config, sqlite3_step and sqlite3_reset bound to the wrappers.
 set -euo pipefail
-P=${POISONCAP_PLATFORM:?run through in-container.sh}
+P=${POISONCAP_PLATFORM:?run through platform/run-in-container.sh}
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 VARIANT=${1:-memsys5}
 OUT=$P/speedtest1/reuse-$VARIANT

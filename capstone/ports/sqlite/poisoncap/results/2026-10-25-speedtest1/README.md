@@ -21,7 +21,7 @@ their published numbers come from their FPGA, which is not available here.
   - `CHERI-PURECAP-QEMU-POISON-NODEBUG` (`kernel-poison-nodebug/`): their FPGA kernel's options on the
     QEMU board. It is their `CHERI-PURECAP-QEMU-NODEBUG` plus the three option lines of their
     `CHERI-PURECAP-GFE-POISON-NODEBUG`; a new config file, no file of theirs changed
-    (`platform/build-kernel-poison-nodebug.sh`).
+    (`platform/build-nodebug-kernel.sh`).
 - **Arguments:** none. Their `main()` configures memsys5 itself: a 256 MiB heap from `malloc`, minimum 16.
   speedtest1's defaults are then `--size 100 --testset main` with a temporary database.
 

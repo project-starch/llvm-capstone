@@ -3,7 +3,7 @@
 # (pycheribuild/projects/cross/sqlite.py at the pinned cheribuild) with --sqlite/build-speedtest,
 # over their source tree exactly as published. Nothing of theirs is edited.
 #
-#   bash platform/in-container.sh bash .../speedtest1/build-speedtest1.sh VARIANT   (cheribuild | memsys5 | memsys5-all32)
+#   bash platform/run-in-container.sh bash .../speedtest1/build-speedtest1.sh VARIANT   (cheribuild | memsys5 | memsys5-all32)
 #
 # The source tree: the artifact's sqlite/ is their fork CTSRD-CHERI/sqlite at a879a48e (its manifest
 # says so) with two files changed and not committed, src/mem5.c and test/speedtest1.c. So the tree is
@@ -27,7 +27,7 @@
 #               "CHERI spatial-safe MEMSYS5" configuration. The control for the reuse comparison.
 set -euo pipefail
 VARIANT=${1:?cheribuild, memsys5, memsys5-all32 or memsys5-spatial}
-P=${POISONCAP_PLATFORM:?run through in-container.sh}
+P=${POISONCAP_PLATFORM:?run through platform/run-in-container.sh}
 W=$P/work
 SRC=$W/source/sqlite
 ART=$W/artifact.tar.gz

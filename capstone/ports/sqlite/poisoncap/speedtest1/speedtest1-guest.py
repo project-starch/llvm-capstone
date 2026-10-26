@@ -80,7 +80,7 @@ def main():
                         'the copy-in, before speedtest1 runs')
     p.add_argument('--kernel-root', type=Path,
                    help='boot KERNEL_ROOT/boot/kernel/kernel instead of the platform rootfs\'s (e.g. '
-                        'build-kernel-poison-nodebug.sh\'s); the disk image is the platform\'s either way')
+                        'platform/build-nodebug-kernel.sh\'s); the disk image is the platform\'s either way')
     p.add_argument('--pre', action='append', default=[],
                    help='a guest command run (and recorded) after the copy, before speedtest1; repeatable')
     p.add_argument('--after-start', metavar='CMD',
