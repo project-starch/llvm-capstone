@@ -1,0 +1,29 @@
+# tier3-pb08-b2.sh df703018f774b041 dry run, 2026-10-26 04:1x: run-virtual-cases.py stubbed (it writes the lane's own QEMU bundle verdicts; FLIP=fill
+# makes fill MISSED), busy and the hub stubbed; the worktree, kit, image and reference gates run for real.
+
+## ok
+PB unflagged BEGIN 03:56:35 board 1 images defect-08 4722c4afa1754616 ctl 76dc9b516c409d38 booking 91
+PB unflagged END rc=0 03:56:35 :: --- stub unflagged
+PB unflagged COMPARE vs reference rc=0 :: 1 of 1 cells the same
+PB cell 08_e8364b5_ascii_all_spaces_scan_past_rbuf NO-READING control-failed cause=None sym=None attr=None notes=CONTROL-FAILED 785
+PB unflagged readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PB fill BEGIN 03:56:35 board 1 images defect-08 b1f8b63798e3b403 ctl 76dc9b516c409d38 booking 91
+PB fill END rc=0 03:56:35 :: --- stub fill
+PB fill COMPARE vs reference rc=0 :: 1 of 1 cells the same
+PB cell 08_e8364b5_ascii_all_spaces_scan_past_rbuf CAUGHT  cause=28 sym=mc_case_body attr=function notes=
+PB fill readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PB board1 DONE 03:56:35
+
+## flip
+PB unflagged BEGIN 03:56:35 board 2 images defect-08 4722c4afa1754616 ctl 76dc9b516c409d38 booking 92
+PB unflagged END rc=0 03:56:35 :: --- stub unflagged
+PB unflagged COMPARE vs reference rc=0 :: 1 of 1 cells the same
+PB cell 08_e8364b5_ascii_all_spaces_scan_past_rbuf NO-READING control-failed cause=None sym=None attr=None notes=CONTROL-FAILED 785
+PB unflagged readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PB fill BEGIN 03:56:35 board 2 images defect-08 b1f8b63798e3b403 ctl 76dc9b516c409d38 booking 92
+PB fill END rc=0 03:56:35 :: --- stub fill
+PB fill COMPARE vs reference rc=1 :: 0 of 1 cells the same
+DIFF 08_e8364b5_ascii_all_spaces_scan_past_rbuf: reference ('CAUGHT', 'function', 28, 'mc_case_body', 456) board ('MISSED', 'function', 28, 'mc_case_body', 456)
+PB cell 08_e8364b5_ascii_all_spaces_scan_past_rbuf MISSED  cause=28 sym=mc_case_body attr=function notes=
+PB fill readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PB board2 DONE 03:56:35

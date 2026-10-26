@@ -1,0 +1,20 @@
+# pb13q15 case 08, unflagged and fill, on bitstream 2, board 1 (tier3-pb08-b2.sh): result lines.
+PB unflagged BEGIN 04:30:45 board 1 images defect-08 4722c4afa1754616 ctl 76dc9b516c409d38 booking 370
+PB unflagged END rc=75 04:38:18 :: --- vp2-nested-pools (virtual-memcached-sublet): {'NO-READING:control-failed': 1}
+    virtual boot: completed; serial <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/pb08/unflagged/raw/guest/board.txt
+    control bounds-malloc    fault     (expected fault)
+    control uaf-malloc       fault     (expected fault)
+    control chunk-free-90    fault     (expected fault)
+PB unflagged COMPARE vs reference rc=0 :: 1 of 1 cells the same
+PB cell 08_e8364b5_ascii_all_spaces_scan_past_rbuf NO-READING control-failed cause=None sym=None attr=None notes=CONTROL-FAILED 785
+PB unflagged readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PB fill BEGIN 04:38:18 board 1 images defect-08 b1f8b63798e3b403 ctl 76dc9b516c409d38 booking 371
+PB fill END rc=0 04:45:47 :: --- vp2-nested-pools (virtual-memcached-sublet): {'CAUGHT': 1}
+    virtual boot: completed; serial <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/pb08/fill/raw/guest/board.txt
+    control bounds-malloc    fault     (expected fault)
+    control uaf-malloc       fault     (expected fault)
+    control chunk-free-90    fault     (expected fault)
+PB fill COMPARE vs reference rc=0 :: 1 of 1 cells the same
+PB cell 08_e8364b5_ascii_all_spaces_scan_past_rbuf CAUGHT  cause=28 sym=mc_case_body attr=function notes=
+PB fill readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PB board1 DONE 04:45:47

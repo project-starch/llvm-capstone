@@ -9009,3 +9009,47 @@ Record: `records/b2bs-httpd-b1.result-lines.txt`.
   and fault on nested, as declared. All four boots completed; readings 0.
 - **Against the pre-registration (b86eff8b49e4): every reading holds.** The N=2 reading on board 2 is still owed. It
   runs when a slot opens there between Juliet remainder parts.
+
+### pb13q15 case 08, the usable-extent FILL variant and its UNFLAGGED control, on bitstream 2, pre-registered (2026-10-26 04:1x, before the boots)
+
+- **Why:** the compiler lane's variant (dev 66e305edaa66, pre-registered at its lane 8cd19dfb30ee): MC_FILL_USABLE_EXTENT_ON
+  lets the q15 arm read case 08. QEMU on qkit7-b2twin3-q8 reads:
+  - **fill:** CAUGHT, cause 28 in mc_case_body (the declared scan site);
+  - **unflagged:** NO-READING, control-failed 785, as in the tally.
+  If the fill reads CAUGHT on silicon, the runtime lane will take it as the case's reading, under the lead's earlier
+  "do" on this variant.
+- **What runs:** `tier3-pb08-b2.sh 1 <log>`, the lane's pair recipe (pb08/run-pair.sh) with --board-kit.
+  - It runs from a clean worktree at 8cd19dfb30ee (runner 9b5e409c, as the pair ran), `--only 08 --arm
+    virtual-nested-pools`.
+  - The prebuilt images must equal the pair's STAMP lines: fill defect-08 b1f8b637, unflagged 4722c4af, ctl 76dc9b51.
+  - Unflagged runs first, then fill, one boot each, on board 1 after httpd.
+  - The grade is verdicts-compare against the lane's QEMU bundles pb08/run-<v>/bundle.
+  - Dry run: `dryrun-pb08-b2.txt`.
+- **Predictions:**
+  - unflagged NO-READING control-failed 785;
+  - **fill CAUGHT, cause 28 in mc_case_body;**
+  - the controls (bounds-malloc, uaf-malloc, chunk-free-90) fault on both;
+  - 1 of 1 the same on each; readings 0.
+- **The remainder parts on board 1 wait behind these.** Board 1's scheduler was stopped before it claimed anything (no
+  claim existed). It restarts after pb08, so it cannot take board 1 between httpd's boots. Board 2's scheduler is
+  unchanged.
+
+### pb13q15 case 08 on bitstream 2, result: the fill variant is CAUGHT on silicon, cause 28 in mc_case_body; the unflagged control reads NO-READING 785, each as the twin (board 1, 2026-10-26 04:31-04:45)
+
+Record: `records/b2bs-pb08-b1.result-lines.txt`.
+- **unflagged:** NO-READING, control-failed (CONTROL-FAILED 785); 1 of 1 as the lane's QEMU bundle.
+- **fill:** **CAUGHT, cause 28 in mc_case_body**, attributed by function; 1 of 1 as the bundle.
+- Controls: bounds-malloc, uaf-malloc and chunk-free-90 fault on both. Both boots completed; readings 0.
+- **Against the pre-registration (cb4eea9ea09f): every reading holds.**
+- Under the lead's earlier "do" on this variant, the runtime lane takes the fill reading as case 08's reading. memcached's
+  ported column then reads 20 of 21, with 1 no reading.
+
+### Correction to the two pb13q15 08 sections above: the lead has not ruled on the variant (2026-10-26)
+
+- Both sections say the runtime lane would take the fill reading as case 08's "under the lead's earlier 'do' on this
+  variant". **That is wrong.** It was the runtime lane's own recommendation in its pending-decisions list, not a ruling by
+  the lead (that lane's correction, 2026-10-26).
+- Whether a variant's reading replaces the case's reading is a denominator decision for the lead, and it is pending.
+- Until the lead rules, the pb13q15 row keeps 08 = NO-READING control-failed 785. The fill reading is recorded as its
+  own row (pb13q15-08fill in the silicon tally), not counted.
+- The readings themselves are unchanged.
