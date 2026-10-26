@@ -1,0 +1,80 @@
+# dry run of tier3-fp6466-bare.sh and fp6466-grade.py (2026-10-27, before any boot), every board call stubbed
+## fp6466-grade.py on sessions built from a REAL bare recorder transcript (board 1's bitstream-3 fp-rm uart.txt), the SR/SV lines replaced by the PREREG's vectors
+### allb3 (exit 0)
+FP6466 fp-of CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-special CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-carry CONFIRMED ON SILICON (R-65): the bitstream-3 vector exactly
+FP6466 fp-box CONFIRMED ON SILICON (R-66): the bitstream-3 vector exactly
+FP6466 fp-edge CONFIRMED ON SILICON (R-65/R-66 (edge)): the bitstream-3 vector exactly
+### onefix (exit 1)
+FP6466 fp-of CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-special CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-carry CONFIRMED ON SILICON (R-65): the bitstream-3 vector exactly
+FP6466 fp-box NOT ON SILICON (R-66): the fixed-core vector; check the resident bitstream first
+FP6466 fp-edge CONFIRMED ON SILICON (R-65/R-66 (edge)): the bitstream-3 vector exactly
+### finding (exit 1)
+FP6466 fp-of CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-special CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-carry FINDING: 0: read 0x1 want 0x0
+FP6466 fp-box CONFIRMED ON SILICON (R-66): the bitstream-3 vector exactly
+FP6466 fp-edge CONFIRMED ON SILICON (R-65/R-66 (edge)): the bitstream-3 vector exactly
+### void (exit 2)
+FP6466 fp-of VOID: SR ['000000000000001D'] / 29 values, want 30
+FP6466 fp-special CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-carry CONFIRMED ON SILICON (R-65): the bitstream-3 vector exactly
+FP6466 fp-box CONFIRMED ON SILICON (R-66): the bitstream-3 vector exactly
+FP6466 fp-edge CONFIRMED ON SILICON (R-65/R-66 (edge)): the bitstream-3 vector exactly
+### missing (exit 2)
+FP6466 fp-of CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-special CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-carry CONFIRMED ON SILICON (R-65): the bitstream-3 vector exactly
+FP6466 fp-box CONFIRMED ON SILICON (R-66): the bitstream-3 vector exactly
+FP6466 fp-edge NO DATA
+## the runner on each board's real bitstream-3 kit, run_sup_bare.py stubbed to plant the bitstream-3-vector sessions
+RF fp-of BEGIN 05:07:27 board 1 bitstream caplifive_vp2c_e7af48457 image 90f69604fe905881 rec 0x80003000 booking 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-of bare (board 1)
+999 unbook 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-of bare (board 1)
+RF fp-of END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80003000 img=90f69604fe905881 bitstream=caplifive_vp2c_e7af48457.bit board=1
+RF fp-special BEGIN 05:07:27 board 1 bitstream caplifive_vp2c_e7af48457 image d9517d17b67ad17f rec 0x80004000 booking 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-special bare (board 1)
+999 unbook 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-special bare (board 1)
+RF fp-special END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80004000 img=d9517d17b67ad17f bitstream=caplifive_vp2c_e7af48457.bit board=1
+RF fp-carry BEGIN 05:07:27 board 1 bitstream caplifive_vp2c_e7af48457 image e140fc92332fb378 rec 0x80003000 booking 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-carry bare (board 1)
+999 unbook 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-carry bare (board 1)
+RF fp-carry END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80003000 img=e140fc92332fb378 bitstream=caplifive_vp2c_e7af48457.bit board=1
+RF fp-box BEGIN 05:07:27 board 1 bitstream caplifive_vp2c_e7af48457 image dda547c2c0dc5d85 rec 0x80003000 booking 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-box bare (board 1)
+999 unbook 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-box bare (board 1)
+RF fp-box END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80003000 img=dda547c2c0dc5d85 bitstream=caplifive_vp2c_e7af48457.bit board=1
+RF fp-edge BEGIN 05:07:27 board 1 bitstream caplifive_vp2c_e7af48457 image fa3e38de7e3e893b rec 0x80003000 booking 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-edge bare (board 1)
+999 unbook 999 book 1 20 vp2 bitstream 3 R-64/R-65/R-66 fp-edge bare (board 1)
+RF fp-edge END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80003000 img=fa3e38de7e3e893b bitstream=caplifive_vp2c_e7af48457.bit board=1
+FP6466 fp-of CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-special CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-carry CONFIRMED ON SILICON (R-65): the bitstream-3 vector exactly
+FP6466 fp-box CONFIRMED ON SILICON (R-66): the bitstream-3 vector exactly
+FP6466 fp-edge CONFIRMED ON SILICON (R-65/R-66 (edge)): the bitstream-3 vector exactly
+RF GRADE rc=0
+RF board1 DONE 05:07:27
+RF fp-of BEGIN 05:07:27 board 2 bitstream caplifive_vp2c_e7af48457 image 90f69604fe905881 rec 0x80003000 booking 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-of bare (board 2)
+999 unbook 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-of bare (board 2)
+RF fp-of END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80003000 img=90f69604fe905881 bitstream=caplifive_vp2c_e7af48457.bit board=2
+RF fp-special BEGIN 05:07:27 board 2 bitstream caplifive_vp2c_e7af48457 image d9517d17b67ad17f rec 0x80004000 booking 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-special bare (board 2)
+999 unbook 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-special bare (board 2)
+RF fp-special END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80004000 img=d9517d17b67ad17f bitstream=caplifive_vp2c_e7af48457.bit board=2
+RF fp-carry BEGIN 05:07:27 board 2 bitstream caplifive_vp2c_e7af48457 image e140fc92332fb378 rec 0x80003000 booking 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-carry bare (board 2)
+999 unbook 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-carry bare (board 2)
+RF fp-carry END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80003000 img=e140fc92332fb378 bitstream=caplifive_vp2c_e7af48457.bit board=2
+RF fp-box BEGIN 05:07:27 board 2 bitstream caplifive_vp2c_e7af48457 image dda547c2c0dc5d85 rec 0x80003000 booking 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-box bare (board 2)
+999 unbook 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-box bare (board 2)
+RF fp-box END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80003000 img=dda547c2c0dc5d85 bitstream=caplifive_vp2c_e7af48457.bit board=2
+RF fp-edge BEGIN 05:07:27 board 2 bitstream caplifive_vp2c_e7af48457 image fa3e38de7e3e893b rec 0x80003000 booking 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-edge bare (board 2)
+999 unbook 999 book 2 20 vp2 bitstream 3 R-64/R-65/R-66 fp-edge bare (board 2)
+RF fp-edge END rc=0 05:07:27 :: [sup stub] UART: begin=True SB1=True rec=0x80003000 img=fa3e38de7e3e893b bitstream=caplifive_vp2c_e7af48457.bit board=2
+FP6466 fp-of CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-special CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-carry CONFIRMED ON SILICON (R-65): the bitstream-3 vector exactly
+FP6466 fp-box CONFIRMED ON SILICON (R-66): the bitstream-3 vector exactly
+FP6466 fp-edge CONFIRMED ON SILICON (R-65/R-66 (edge)): the bitstream-3 vector exactly
+RF GRADE rc=0
+RF board2 DONE 05:07:27
+## a bitstream-2 kit, and a kit commit that is not the R-64/R-66 kit
+RF STOP: board.env (board 1, bitstream caplifive_vp2c_dcc6daf6e, driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke)
+RF STOP: 75f129f56497 carries no capstone/tests/rtl-smoke/fp-r64-r66-bare-2026-10-27/PREREG.md

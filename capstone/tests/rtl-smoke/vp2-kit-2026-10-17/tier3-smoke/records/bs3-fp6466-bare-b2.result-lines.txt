@@ -1,0 +1,28 @@
+# R-64/R-65/R-66 bare kit (5adf7a954946) on bitstream 3, board 2 (tier3-fp6466-bare.sh). Result lines only.
+RF fp-of BEGIN 05:08:07 board 2 bitstream caplifive_vp2c_e7af48457 image 90f69604fe905881 rec 0x80003000 booking 454
+UNBOOK 454: 200
+RF fp-of END rc=0 05:08:58 :: [sup 05:08:58] UART: begin=True SB1=True SR=['000000000000001E'] SV lines=30
+RF fp-special BEGIN 05:08:59 board 2 bitstream caplifive_vp2c_e7af48457 image d9517d17b67ad17f rec 0x80004000 booking 456
+UNBOOK 456: 200
+RF fp-special END rc=0 05:09:50 :: [sup 05:09:50] UART: begin=True SB1=True SR=['0000000000000016'] SV lines=22
+RF fp-carry BEGIN 05:09:50 board 2 bitstream caplifive_vp2c_e7af48457 image e140fc92332fb378 rec 0x80003000 booking 458
+UNBOOK 458: 200
+RF fp-carry END rc=0 05:10:42 :: [sup 05:10:41] UART: begin=True SB1=True SR=['0000000000000028'] SV lines=40
+RF fp-box BEGIN 05:10:42 board 2 bitstream caplifive_vp2c_e7af48457 image dda547c2c0dc5d85 rec 0x80003000 booking 460
+UNBOOK 460: 200
+RF fp-box END rc=0 05:11:34 :: [sup 05:11:33] UART: begin=True SB1=True SR=['000000000000000A'] SV lines=10
+RF fp-edge BEGIN 05:11:34 board 2 bitstream caplifive_vp2c_e7af48457 image fa3e38de7e3e893b rec 0x80003000 booking 462
+UNBOOK 462: 200
+RF fp-edge END rc=0 05:12:26 :: [sup 05:12:25] UART: begin=True SB1=True SR=['0000000000000038'] SV lines=56
+FP6466 fp-of read: SR ['000000000000001E'] :: 0x7ff0000000000000 0x4 0xfff0000000000000 0x4 0x7f800000 0x4 0x7ff0000000000000 0x4 0xfff0000000000000 0x4 0x7f800000 0x4 0x7ff0000000000000 0x4 0xfff0000000000000 0x4 0x7f800000 0x4 0x7ff0000000000000 0x4 0xfff0000000000000 0x4 0x7f800000 0x4 0x7ff0000000000000 0x4 0xfff0000000000000 0x4 0x7f800000 0x4
+FP6466 fp-of CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-special read: SR ['0000000000000016'] :: 0x7ff0000000000000 0x4 0x0 0x4 0x7ff0000000000000 0x4 0x7ff8000000000000 0x18 0x7ff0000000000000 0x8 0xfff0000000000000 0x8 0x7ff8000000000000 0x10 0x7ff8000000000000 0x10 0x0 0x0 0x8000000000000000 0x0 0x2 0x2
+FP6466 fp-special CONFIRMED ON SILICON (R-64): the bitstream-3 vector exactly
+FP6466 fp-carry read: SR ['0000000000000028'] :: 0x0 0x3 0xfffffffffffff 0x2 0x0 0x3 0x8000000000000000 0x3 0xfffffffffffff 0x3 0xfffffffffffff 0x2 0x7fffff 0x3 0x800fffffffffffff 0x3 0xfffffffffffff 0x3 0xfffffffffffff 0x2 0x7fffff 0x3 0x8000000000000000 0x3 0x0 0x3 0xfffffffffffff 0x2 0x0 0x3 0x800fffffffffffff 0x3 0x0 0x3 0xfffffffffffff 0x2 0x0 0x3 0x8000000000000000 0x3
+FP6466 fp-carry CONFIRMED ON SILICON (R-65): the bitstream-3 vector exactly
+FP6466 fp-box read: SR ['000000000000000A'] :: 0xffffffff3f000000 0x0 0xffffffff3f000000 0x0 0xffffffff40000000 0x0 0xffffffff7fc00000 0x0 0xffffffff3f000000 0x0
+FP6466 fp-box CONFIRMED ON SILICON (R-66): the bitstream-3 vector exactly
+FP6466 fp-edge read: SR ['0000000000000038'] :: 0xfffffffffffff 0x3 0x800fffffffffffff 0x3 0xffffffff007fffff 0x3 0xffffffff807fffff 0x3 0xffffffff80000000 0x3 0xfffffffffffff 0x3 0x800fffffffffffff 0x3 0xffffffff007fffff 0x3 0xffffffff807fffff 0x3 0xffffffff807fffff 0x3 0xfffffffffffff 0x3 0x8000000000000000 0x3 0xffffffff007fffff 0x3 0xffffffff80000000 0x3 0xffffffff80000000 0x3 0x0 0x3 0x800fffffffffffff 0x3 0xffffffff00000000 0x3 0xffffffff807fffff 0x3 0xffffffff807fffff 0x3 0xfffffffffffff 0x3 0x800fffffffffffff 0x3 0xffffffff007fffff 0x3 0xffffffff807fffff 0x3 0xffffffff80000000 0x3 0xffffffff7fc00000 0x10 0xffffffff3f000000 0x0 0xffffffff3f000000 0x0
+FP6466 fp-edge CONFIRMED ON SILICON (R-65/R-66 (edge)): the bitstream-3 vector exactly
+RF GRADE rc=0
+RF board2 DONE 05:12:26
