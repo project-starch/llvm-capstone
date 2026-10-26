@@ -3,10 +3,11 @@
 
 usage: summarize.py OUT_DIR [JSON_OUT]
 A pass is a set of cells, each with a census file OUT_DIR/<cell>.jsonl. A pass with OUT_DIR/cells.tsv (the server
-runners) lists its cells there as <cell> <executable> <verdict>, and a cell's measured processes are those of that
-executable. A SPEC pass (run-spec.sh) has one cell per benchmark, its verdict is runcpu's in
-OUT_DIR/logs/<benchmark>.log (or, once packed, OUT_DIR/verdicts.txt), and a benchmark process is one whose executable name contains "_base.census" (SPEC
-names binaries <exe>_base.<label>) and is not one of SPEC's image validators (imagevalidate_<n>, built with the same
+runners) lists its cells there as <cell> <selector> <verdict>, and a cell's measured processes are those its
+selector picks: an executable's base name, or re:<regex> searched in the whole command line. A SPEC pass (run-
+spec.sh) has one cell per benchmark, its verdict is runcpu's in OUT_DIR/logs/<benchmark>.log (or, once packed,
+OUT_DIR/verdicts.txt), and a benchmark process is one whose executable name contains "_base.census" (SPEC names
+binaries <exe>_base.<label>) and is not one of SPEC's image validators (imagevalidate_<n>, built with the same
 label, run on 511, 525, 526 and 538 outputs); the shells, specinvoke, specdiff and validator lines in the same file
 are dropped. 525.x264_r's ldecod_r, which decodes the input, stays and is reported as its own executable. Prints one
 row per benchmark process (an invocation of one input) and one per cell (the maximum over its processes, which is
@@ -22,6 +23,18 @@ MARK = "_base.census"
 
 def is_benchmark(exe):
     return MARK in exe and not exe.startswith("imagevalidate_")
+
+
+def spec(exe, cmdline):
+    return is_benchmark(exe)
+
+
+def keeper(selector):
+    """a cells.tsv selector: an executable's base name, or re:<regex> searched in the whole command line"""
+    if selector.startswith("re:"):
+        rx = re.compile(selector[3:])
+        return lambda exe, cmdline: rx.search(cmdline) is not None
+    return lambda exe, cmdline: exe == selector
 
 
 def verdict(log):
@@ -41,17 +54,17 @@ def verdict_text(text):
 
 
 def cells(out):
-    """(cell, keep(executable) -> bool, verdict) for every cell of the pass"""
+    """(cell, keep(executable, cmdline) -> bool, verdict) for every cell of the pass"""
     manifest = os.path.join(out, "cells.tsv")
     if os.path.exists(manifest):
         rows = [l.rstrip("\n").split("\t") for l in open(manifest) if "\t" in l]
-        return [(c, lambda e, x=x: e == x, v) for c, x, v, *_ in rows]
+        return [(c, keeper(x), v) for c, x, v, *_ in rows]
     benches = sorted(f[:-6] for f in os.listdir(out) if f.endswith(".jsonl"))
     packed = os.path.join(out, "verdicts.txt")   # a pass packed by pack.py keeps runcpu's verdict lines only
     if not os.path.isdir(os.path.join(out, "logs")) and os.path.exists(packed):
         lines = dict(l.rstrip("\n").split(": ", 1) for l in open(packed))
-        return [(b, is_benchmark, verdict_text(lines.get(b, ""))) for b in benches]
-    return [(b, is_benchmark, verdict(os.path.join(out, "logs", b + ".log"))) for b in benches]
+        return [(b, spec, verdict_text(lines.get(b, ""))) for b in benches]
+    return [(b, spec, verdict(os.path.join(out, "logs", b + ".log"))) for b in benches]
 
 
 def processes(out, cell, keep):
@@ -60,7 +73,7 @@ def processes(out, cell, keep):
     for line in open(path) if os.path.exists(path) else []:
         r = json.loads(line)
         exe = os.path.basename(r["cmdline"].split(" ", 1)[0])
-        if keep(exe):
+        if keep(exe, r["cmdline"]):
             r["exe"] = exe.split(MARK)[0]
             r["args"] = r["cmdline"].split(" ", 1)[1] if " " in r["cmdline"] else ""
             rows.append(r)

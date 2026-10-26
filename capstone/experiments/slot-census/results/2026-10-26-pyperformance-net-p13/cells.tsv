@@ -1,0 +1,7 @@
+py-pymalloc-asyncio_tcp	re:--worker	valid	rc=0 29s
+py-pymalloc-asyncio_tcp_ssl	re:--worker	valid	rc=0 88s
+py-pymalloc-asyncio_websockets	re:--worker	valid	rc=0 27s
+py-malloc-asyncio_tcp	re:--worker	valid	rc=0 29s
+py-malloc-asyncio_tcp_ssl	re:--worker	valid	rc=0 85s
+py-malloc-asyncio_websockets	re:--worker	valid	rc=0 28s
+CENSUS_DONE

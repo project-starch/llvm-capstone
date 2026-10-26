@@ -1,0 +1,27 @@
+dropping old tables...
+NOTICE:  table "pgbench_accounts" does not exist, skipping
+NOTICE:  table "pgbench_branches" does not exist, skipping
+NOTICE:  table "pgbench_history" does not exist, skipping
+NOTICE:  table "pgbench_tellers" does not exist, skipping
+creating tables...
+generating data (client-side)...
+100000 of 100000 tuples (100%) of pgbench_accounts done (elapsed 0.06 s, remaining 0.00 s)
+vacuuming...
+creating primary keys...
+done in 0.22 s (drop tables 0.00 s, create tables 0.00 s, client-side generate 0.10 s, vacuum 0.03 s, primary keys 0.09 s).
+init rc=0
+pgbench (17.6)
+starting vacuum...end.
+transaction type: <builtin: TPC-B (sort of)>
+scaling factor: 1
+query mode: simple
+number of clients: 16
+number of threads: 16
+maximum number of tries: 1
+duration: 120 s
+number of transactions actually processed: 196349
+number of failed transactions: 0 (0.000%)
+latency average = 9.780 ms
+initial connection time = 9.846 ms
+tps = 1635.967247 (without initial connection time)
+run rc=0

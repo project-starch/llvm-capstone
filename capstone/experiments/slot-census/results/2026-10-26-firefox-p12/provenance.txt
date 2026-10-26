@@ -1,0 +1,18 @@
+date 2026-10-26T09:20:30Z
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+0368acc02daf579f361e7a4d5a3fe63ec19649607b1123918dde7783f6aaae48  slotcensus.c
+b327e898f075970a0626dfdd8a65d97723abf02d02a4f15f7a336c7bbd2d89f4  control.c
+d6fb92c84ca94704abdc42ea08ac7ab84c1fef1b04988d34249f45d59b05972d  control_cxx.cc
+852a692d73c438d485b967cb4b6c482191db74c61c398ba86a37320c4a969dfa  slotcensus.so
+0cb61fb2d396634155a13065cd57e946a9b060672266d0aa0626522781f58cf1  firefox-nightly.tar.xz
+d9eef28cf803c961cb2ab71f8dc01ea07284490b33b8d5e5988b66e188301f4b  libffcensus.so
+0bde38707eb0a686a20c6bd50f4adcc7d60d4f73c60eb83ee9e0db8f65823e04  geckodriver-v0.36.0-linux64.tar.gz
+firefox Version=161.0a1
+firefox BuildID=20261024215018
+firefox SourceStamp=19272f1f7a2c1a4bc07452f957d48d0b9a980197
+replace-malloc headers: mozilla-central 19272f1f7a2c1a4bc07452f957d48d0b9a980197 memory/build
+geckodriver 0.36.0, selenium 4.27.1, firefox -headless
+speedometer 2.1 a1e842164bc1803be6afa658bbb1336ecc726b12
+speedometer 3.1 1386415be8fef2f6b6bbdbe1828872471c5d802a

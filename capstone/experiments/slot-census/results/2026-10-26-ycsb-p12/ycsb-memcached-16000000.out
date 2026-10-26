@@ -1,0 +1,18 @@
+== load
+[OVERALL], RunTime(ms), 135991
+[OVERALL], Throughput(ops/sec), 117654.84480590628
+[INSERT], Operations, 16000000
+[INSERT], Return=OK, 16000000
+== a
+[OVERALL], RunTime(ms), 8955
+[OVERALL], Throughput(ops/sec), 111669.45840312674
+[READ], Operations, 500133
+[READ], Return=OK, 500133
+[UPDATE], Operations, 499867
+[UPDATE], Return=OK, 499867
+== c
+[OVERALL], RunTime(ms), 7518
+[OVERALL], Throughput(ops/sec), 133014.09949454642
+[READ], Operations, 1000000
+[READ], Return=OK, 1000000
+items 16000000 (want 16000000)

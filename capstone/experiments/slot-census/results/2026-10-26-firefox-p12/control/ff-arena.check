@@ -1,0 +1,6 @@
+PASS EXPECT peak_live: census 2100, expected 2100 (+64)
+PASS EXPECT allocs: census 2200, expected 2200 (+64)
+PASS EXPECT frees: census 2200, expected 2200 (+64)
+PASS EXPECT realloc_moved: census 100, expected 100
+PASS EXPECT forked: census 0, expected 0
+CONTROL PASS

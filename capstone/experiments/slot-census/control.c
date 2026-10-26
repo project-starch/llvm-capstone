@@ -65,6 +65,7 @@ int main(void)
         say("EXPECT_CHILD", "peak_live", live_at_fork + CHILD);
         say("EXPECT_CHILD", "allocs", CHILD);
         say("EXPECT_CHILD", "forked", 1);
+        clearenv();                             /* as nginx does to its workers: the tracer must still report */
         exit(0);                                /* exit, not _exit: the tracer reports from a destructor */
     }
     int st = 0;

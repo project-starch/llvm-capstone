@@ -1,0 +1,10 @@
+EXPECT_CHILD peak_live 8000
+EXPECT_CHILD allocs 3000
+EXPECT_CHILD forked 1
+EXPECT peak_live 10000
+EXPECT allocs 10400
+EXPECT frees 5400
+EXPECT end_live 5000
+EXPECT realloc_moved 100
+EXPECT realloc_inplace 50
+EXPECT forked 0

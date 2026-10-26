@@ -1,0 +1,1 @@
+{"pid":101038,"ppid":88749,"cmdline":"./malloc-large","forked":0,"peak_live":22,"end_live":1,"allocs":2001,"frees":2000,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live_bytes":416516432,"size_log2":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,0,0,0,0,0,289,774,937,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}

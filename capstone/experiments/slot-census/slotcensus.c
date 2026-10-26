@@ -15,8 +15,10 @@
  *   and 1).
  * Bytes are malloc_usable_size, so they include the allocator's rounding: peak_live_bytes is an upper bound on the
  * requested bytes live at the byte peak, and the byte peak need not coincide with the object peak.
- * Without SLOTCENSUS_OUT nothing is written. Allocations made by dlsym before the real functions are resolved come
- * from a static buffer and are not counted. */
+ * Without SLOTCENSUS_OUT nothing is written. The path is read once at start-up (and kept across fork), because some
+ * programs clear the environment of the processes they fork (nginx's workers keep only the variables its env
+ * directive names): a path read at exit would be gone, and those processes would silently not report. Allocations
+ * made by dlsym before the real functions are resolved come from a static buffer and are not counted. */
 #define _GNU_SOURCE
 #include <dlfcn.h>
 #include <fcntl.h>
@@ -40,6 +42,8 @@ static long long live, peak, allocs, frees, moved, inplace, failed;
 static long long live_bytes, peak_bytes;
 static long long size_log2[64];
 static int forked;
+
+static char out_path[4096];   /* $SLOTCENSUS_OUT, read at start-up: nginx and others clear a child's environment */
 
 static char boot[1 << 16];
 static size_t boot_used;
@@ -201,14 +205,17 @@ static void child_after_fork(void)
 
 __attribute__((constructor)) static void init(void)
 {
+    const char *path = getenv("SLOTCENSUS_OUT");
+    if (path && strlen(path) < sizeof out_path)
+        strcpy(out_path, path);
     resolve();
     pthread_atfork(NULL, NULL, child_after_fork);
 }
 
 __attribute__((destructor)) static void report(void)
 {
-    const char *path = getenv("SLOTCENSUS_OUT");
-    if (!path)
+    const char *path = out_path;
+    if (!*path)
         return;
     char cmd[1024] = "?";
     int fd = open("/proc/self/cmdline", O_RDONLY);

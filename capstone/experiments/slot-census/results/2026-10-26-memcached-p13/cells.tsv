@@ -1,5 +1,0 @@
-memcached-10000	memcached	valid	rc=0 load=0 1s
-memcached-100000	memcached	valid	rc=0 load=0 1s
-memcached-1000000	memcached	valid	rc=0 load=0 4s
-memcached-10000000	memcached	valid	rc=0 load=0 45s
-CENSUS_DONE

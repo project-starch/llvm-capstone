@@ -21,16 +21,20 @@ def main():
     copy = lambda f: open(os.path.join(dest, f), "w").write(scrub(open(os.path.join(src, f), errors="replace").read()))
     os.makedirs(os.path.join(dest, "control"))
     for f in sorted(os.listdir(os.path.join(src, "control"))):
-        copy(os.path.join("control", f))
+        # ffcensus's controls keep their raw files in subdirectories
+        if os.path.isfile(os.path.join(src, "control", f)):
+            copy(os.path.join("control", f))
     for f in ("slotcensus.cfg", "provenance.txt", "runs.txt", "cells.tsv"):
         if os.path.exists(os.path.join(src, f)):
             copy(f)
     spec = not os.path.exists(os.path.join(src, "cells.tsv"))
     verdicts = []
     for cell, keep, _ in cells(src):
-        exe = lambda l: os.path.basename(json.loads(l)["cmdline"].split(" ")[0])
+        cmd = lambda l: json.loads(l)["cmdline"]
         path = os.path.join(src, cell + ".jsonl")
-        lines = [l for l in open(path) if keep(exe(l))] if os.path.exists(path) else []
+        lines = []
+        if os.path.exists(path):
+            lines = [l for l in open(path) if keep(os.path.basename(cmd(l).split(" ")[0]), cmd(l))]
         open(os.path.join(dest, cell + ".jsonl"), "w").write(scrub("".join(lines)))
         if os.path.exists(os.path.join(src, cell + ".out")):   # the program's own output (server runners)
             copy(cell + ".out")

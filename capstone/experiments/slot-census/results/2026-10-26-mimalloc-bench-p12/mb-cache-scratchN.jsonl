@@ -1,0 +1,1 @@
+{"pid":101025,"ppid":88749,"cmdline":"./cache-scratch 8 1000 1 2000000 8","forked":0,"peak_live":15,"end_live":5,"allocs":20,"frees":15,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live_bytes":76600,"size_log2":[8,0,0,0,0,0,2,1,8,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}

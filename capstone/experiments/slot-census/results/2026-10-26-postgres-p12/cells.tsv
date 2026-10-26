@@ -1,0 +1,4 @@
+postgres-1	re:^(\S*/)?postgres(:|\s|$)	valid	stop=0 121s
+postgres-10	re:^(\S*/)?postgres(:|\s|$)	valid	stop=0 146s
+postgres-100	re:^(\S*/)?postgres(:|\s|$)	valid	stop=0 182s
+CENSUS_DONE

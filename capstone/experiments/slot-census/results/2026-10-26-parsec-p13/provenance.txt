@@ -1,0 +1,27 @@
+date 2026-10-26T08:20:13Z
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+5dd46294f55f57f8ffeb7c9cc2d800bbe53bb7c6ac96690ae8cdc727a52a7f20  slotcensus.c
+f7210f77035b73cb817a69be59b2ecccd1d15bc04b75ca60e72b88d90f0b34c0  control.c
+d6fb92c84ca94704abdc42ea08ac7ab84c1fef1b04988d34249f45d59b05972d  control_cxx.cc
+a2466f3de424bf5e2e2bbb67c8cbf3e6d6dcfa5054a46340f897a05f7254629b  slotcensus.so
+cbdc6a41d97c82eb8b86270dff2a89ce1a723293b907a1f2358eebb6d9a6445f  parsec-3.0-core.tar.gz
+378b3653d8597cad29476b20ff520bdb25b8e90269a3f044e262ff660899fed2  parsec-3.0-input-sim.tar.gz
+0369c81067c4591abafc6e4648c9775f5ad60dacfcb2c3a5b2ccdcf91ebf5973  parsec-3.0-input-native.truncated.tar.gz
+parsec 3.0-beta-20150206 config gcc, threads 8, inputs simlarge native
+export CFLAGS=" -O3 -std=gnu11 -fcommon -Wno-error=implicit-function-declaration -Wno-error=int-conversion -Wno-error=incompatible-pointer-types -Wno-error=implicit-int -DHUGE=3.40282347e+38F -g -funroll-loops -fprefetch-loop-arrays ${PORTABILITY_FLAGS}"
+export CXXFLAGS="-O3 -std=gnu++11 -g -funroll-loops -fprefetch-loop-arrays -fpermissive -fno-exceptions ${PORTABILITY_FLAGS}"
+build blackscholes ok
+build bodytrack ok
+build canneal ok
+build dedup ok
+build facesim ok
+build ferret ok
+build fluidanimate ok
+build freqmine ok
+build raytrace FAILED
+build streamcluster ok
+build swaptions ok
+build vips ok
+build x264 ok

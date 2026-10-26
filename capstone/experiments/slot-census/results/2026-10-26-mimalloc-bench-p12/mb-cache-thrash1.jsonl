@@ -1,0 +1,1 @@
+{"pid":101000,"ppid":88749,"cmdline":"./cache-thrash 1 1000 1 2000000 8","forked":0,"peak_live":4,"end_live":2,"allocs":4,"frees":2,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live_bytes":74096,"size_log2":[0,0,0,2,0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}

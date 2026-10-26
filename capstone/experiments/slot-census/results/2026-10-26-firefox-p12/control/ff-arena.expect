@@ -1,0 +1,5 @@
+EXPECT peak_live 2100
+EXPECT allocs 2200
+EXPECT frees 2200
+EXPECT realloc_moved 100
+EXPECT forked 0

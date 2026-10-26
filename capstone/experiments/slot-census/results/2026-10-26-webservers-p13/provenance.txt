@@ -1,0 +1,17 @@
+date 2026-10-26T08:27:21Z
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+0368acc02daf579f361e7a4d5a3fe63ec19649607b1123918dde7783f6aaae48  slotcensus.c
+b327e898f075970a0626dfdd8a65d97723abf02d02a4f15f7a336c7bbd2d89f4  control.c
+d6fb92c84ca94704abdc42ea08ac7ab84c1fef1b04988d34249f45d59b05972d  control_cxx.cc
+852a692d73c438d485b967cb4b6c482191db74c61c398ba86a37320c4a969dfa  slotcensus.so
+958876757782190a1653e14dc26dfc7ba263de310e04c113e11e97d1bef45a42  nginx-1.20.2.tar.gz
+4e6ce03e0336e8b4a3d6c2b70b1c5e18590a5673a98186da90d4f33c23defc09  pcre-8.45.tar.gz
+e255f696bff6e329f5d19091da6b06164b8d59d62cb9e673625bdcd27fe7bdad  wrk-4.2.0.tar.gz
+503a7da4a4a27fd496037998b17078dc9fe004db32c657c96cce8356b8aa2eb6  httpd-2.4.58.tar.gz
+a4137dd82a185076fa50ba54232d920a17c6469c30b0876569e1c2a05ff311d9  apr-1.7.4.tar.gz
+2b74d8932703826862ca305b094eef2983c27b39d5c9414442e9976a9acf1983  apr-util-1.6.3.tar.gz
+nginx nginx version: nginx/1.20.2 --with-pcre; 16 workers; wrk 4.2.0 -t16 -c256 -d30s, 64-byte file
+httpd Server version: Apache/2.4.58 (Unix) Server MPM:     event
+ab -n 100000 -c 128, 64-byte file

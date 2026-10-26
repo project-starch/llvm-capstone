@@ -1,0 +1,3 @@
+nginx	re:^nginx: (master|worker) process	valid	wrk=0 stopped=0 workers=16 31s
+httpd	httpd	valid	ab=0 failed=0 stopped=0 8s
+CENSUS_DONE
