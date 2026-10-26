@@ -583,7 +583,22 @@ def node_table_cases():
     runs = [("CRASH-001", "img 1")]
     text = rv.guest_script(runs)
     check("the guest insmods the module with a pre-grown node table",
-          "insmod capstone_vm.ko node_initial_pages=1024 || exit 1" in text, True)
+          "insmod capstone_vm.ko node_initial_pages=1024 supervisor_slots=32 || exit 1" in text,
+          True)
+    # Both of these decide whether the platform runs AT ALL, so they are asserted rather than
+    # assumed. supervisor_slots defaults to 1 (what silicon holds) and every thread and
+    # shared-heap check in runtime/virtual/run.py fails there; x-capstone-test-csrs keeps CSR
+    # 0xcc0, which the PAGED module reads once per context creation and which upstream made
+    # illegal by default on 2026-10-18. Missing either one, the guest wedges with `cause = 24`
+    # inside the monitor and names neither cause.
+    check("the module gets more than silicon's single supervisor slot",
+          "supervisor_slots=32" in text, True)
+    check("and the emulator keeps the CSR the paged module reads",
+          "x-capstone-test-csrs=true" in rv.QEMU_CPU, True)
+    check("with matching supervisor slots on the emulator side",
+          "x-capstone-supervisor-slots=32" in rv.QEMU_CPU, True)
+    check("the exact-bounds profile is still selected",
+          "x-capstone-exact-bounds=true" in rv.QEMU_CPU, True)
     check("1024 pages is 262144 nodes, at 256 per page", rv.NODE_PAGES * 256, 262144)
     check("and the size is overridable for a directed experiment",
           "node_initial_pages=7 " in rv.guest_script(runs, node_pages=7), True)
@@ -627,6 +642,15 @@ def provenance_cases():
               rec["qemu"].startswith("MISSING:"), True)
         check("and a missing input is never mistaken for a 64-hex digest",
               len(rec["qemu"].split()[0]) == 64, False)
+        # The platform is not only its binaries. These two properties decide whether the
+        # platform runs at all, run.py records paths and hashes but deliberately not argv, and
+        # two runs differing only in them are NOT equivalent -- so the bundle has to say.
+        check("the record names the emulator's capability properties, not just its hash",
+              "x-capstone-test-csrs=true" in rec.get("qemu_cpu", ""), True)
+        check("and the arguments the module was loaded with",
+              "supervisor_slots=32" in rec.get("module_args", ""), True)
+        check("the node table size is recorded with them",
+              "node_initial_pages=" in rec.get("module_args", ""), True)
         check("the judge's required keys are all present",
               [k for k in verdicts.PLATFORM_KEYS if k not in rec], [])
 

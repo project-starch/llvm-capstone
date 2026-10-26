@@ -1,0 +1,77 @@
+{
+  "schema": 1,
+  "status": "FAIL",
+  "checks": {
+    "completed": true,
+    "growth": true,
+    "two_live_populations": true,
+    "node_count_reported": false,
+    "stale": true,
+    "stale_site": true,
+    "budget_errno": true,
+    "quota_fault": true,
+    "causes": true,
+    "cleanup": true,
+    "no_contract_failure": true,
+    "grew_past_old_limit": true,
+    "recycled": true,
+    "bounded_reuse": true,
+    "actual_metadata_bytes": true,
+    "inputs_unchanged": true
+  },
+  "stats": [
+    {
+      "arenas": 10,
+      "pages": 485,
+      "peak": 485,
+      "nodes": 140028,
+      "steps": 1228,
+      "faults": 17,
+      "collections": 2,
+      "reclaimed": 140004,
+      "rounds": 6,
+      "bytes_in": 115,
+      "bytes_out": 64,
+      "node_bytes": 1142784,
+      "node_capacity": 70656,
+      "node_growths": 17,
+      "launch_ns": 210603600,
+      "elapsed_ns": 6960112400
+    },
+    {
+      "arenas": 9,
+      "pages": 484,
+      "peak": 484,
+      "nodes": 22,
+      "steps": 49,
+      "faults": 16,
+      "collections": 0,
+      "reclaimed": 0,
+      "rounds": 4,
+      "bytes_in": 79,
+      "bytes_out": 64,
+      "node_bytes": 36864,
+      "node_capacity": 1536,
+      "node_growths": 1,
+      "launch_ns": 145562300,
+      "elapsed_ns": 310236300
+    }
+  ],
+  "sha256": {
+    "qemu": "d9de56fc74c77f8a2fbfed79624c3ff73baa7110192a7e07b7829989e5957d6d",
+    "application": "bc287cbfdbc7404b33539d9744f4ed9390970516db259f67fee7fab9e0a3f1e5",
+    "launcher": "8489f201ae0447f938a9fa8f6856b6719a54810d0c0a433873a037e731bf68d1",
+    "module": "5878060e59e1b114a99d3e04128284508cfb13ffd2356204b943856aa78837be",
+    "Image": "108d811705e71414d022748d21fb040b4dc18ca15df87faf637704091f73bfe5",
+    "fw_jump.elf": "b1663eb62a192741055589bafd60aea8121d464efb3afd7da2b98508316639ef",
+    "rootfs.ext2": "aa811268f1a69f7f79bfc09d778267d6370d306414f707cda1908eecc591626a"
+  },
+  "source_sha256": {
+    "run-nodes.py": "88da47d55635b945a1d00a696fcd9902b661e2c1a3de3e9d62e0e03994c2395d",
+    "node-contract.c": "517c28f05123b6770e86406b7d65ea4199118cdb950f24c8e058430f42bf2fb3",
+    "run-staged.py": "87c211a019bce7b4ce598f8d323c5b9936af4e15b9e8635e9abdf4c2e939c3d7"
+  },
+  "gate_sha256": "ef4f85cb0766ca0dd179ff9e0b48b04df820c218841a9b8f2476c915e8b09c35",
+  "node_count": 70000,
+  "scope": "one hart, trusted Linux, process-local paged node store"
+}

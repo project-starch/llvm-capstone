@@ -31,6 +31,33 @@ check below.
 import argparse, fcntl, json, os, re, select, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
 
+# THE PLATFORM PROPERTIES, NAMED ONCE AND RECORDED.
+#
+# x-capstone-test-csrs: upstream made CSRs 0x5c0 (scapctl) and 0xcc0 (urevavail) illegal by
+# DEFAULT on 2026-10-18 (Q-21/Q-22), because vp2 silicon has neither. The PAGED build of
+# capstone_vm.ko still reads 0xcc0 once per context creation (module/capstone_vm.c:2006); only
+# the flat build (-DCAPSTONE_VM_FLAT_TABLE) does without it. So the default module and the
+# default emulator are mutually incompatible, and the symptom names neither of them: the trap
+# is undelegated, reaches M-mode, and return_from_domain stores through a null caller_buf -- a
+# CSRUNV domain has no CALLING domain -- wedging the guest with `cause = 24` inside the monitor
+# and no mention of a CSR. `qemu -d int` is what shows the real chain.
+#
+# The PAGED table is a deliberate choice over flat, not an accident of the default: flat caps
+# the lifetime table at CV_FLAT_RECORDS (65,536) and this seam's measured node high-water is
+# 64,587-90,218, so flat would exhaust it mid-run and a cause-30 resource fault lands at an
+# arbitrary pc -- indistinguishable from a catch.
+#
+# x-capstone-supervisor-slots: 1 by default, which is what silicon holds (csr_regfile.sv has a
+# single slot). Every thread and shared-heap check in runtime/virtual/run.py fails at 1.
+#
+# Named here and imported by run-realphp.py's platform_record so the two cannot drift:
+# runtime/virtual/run.py records input paths and hashes but DELIBERATELY not argv, so two runs
+# differing only in these properties are otherwise indistinguishable in the record.
+QEMU_CPU = ("rv64,sstc=false,h=false,sv48=false,sv57=false,"
+            "x-capstone-u-mode=true,x-capstone-exact-bounds=true,"
+            "x-capstone-test-csrs=true,x-capstone-supervisor-slots=32")
+MODULE_ARGS = "supervisor_slots=32"
+
 MARK = "VM_EXIT"
 # "[   17.332387] ..." -- a kernel console line, not application output.
 KERNEL_LINE = re.compile(r"^\[\s*\d+\.\d+\]")
@@ -72,7 +99,7 @@ def guest_script(runs, env=(), run_timeout=0, node_pages=NODE_PAGES):
     # reason: "load the module with node_initial_pages=1024 so startup does not provoke a
     # growth-and-sweep storm".
     lines = ["#!/bin/sh", "cd /mnt/vm || exit 1",
-             f"insmod capstone_vm.ko node_initial_pages={int(node_pages)} || exit 1",
+             f"insmod capstone_vm.ko node_initial_pages={int(node_pages)} {MODULE_ARGS} || exit 1",
              "export CAPSTONE_VM_STATS=1 CAPSTONE_EXEC_DIAGNOSTICS=1"]
     for pair in env:
         lines.append(f"export {pair}")
@@ -173,8 +200,7 @@ def main():
            "-device", "virtio-blk-device,drive=hd0",
            "-drive", f"file={disk},format=raw,id=gate,readonly=on",
            "-device", "virtio-blk-device,drive=gate",
-           "-cpu", "rv64,sstc=false,h=false,sv48=false,sv57=false,"
-                   "x-capstone-u-mode=true,x-capstone-exact-bounds=true"]
+           "-cpu", QEMU_CPU]
 
     serial = a.serial_log or (work / "serial.log")
     lock_path = os.environ.get("CAPSTONE_QEMU_LOCK") or str(Path.home() / ".capstone-locks/qemu.lock")

@@ -67,11 +67,22 @@ stdout comparison is kept as a REPORTED note -- printed, and carried into the bu
 `reached` rests on the two facts above. A divergence is therefore visible on every case without
 silently deciding any of them.
 """
-import argparse, hashlib, json, re, subprocess, sys
+import argparse, hashlib, importlib.util, json, re, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[3]
+
+
+def run_virtual_module():
+    """run-virtual.py's platform constants, IMPORTED rather than copied. A second copy of the
+    -cpu string in the record is a record that can disagree with the run it describes, which is
+    worse than no record at all: it reads as evidence. The filename has a hyphen, so it cannot
+    be a plain import."""
+    spec = importlib.util.spec_from_file_location("php_run_virtual", HERE / "run-virtual.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 TOOLS = REPO / "capstone" / "bug-corpora" / "tools"
 sys.path.insert(0, str(TOOLS))
 import verdicts                                                          # noqa: E402
@@ -567,6 +578,7 @@ def platform_record(args):
     def binary(path):
         path = Path(path)
         return f"{sha256_file(path)}  {path}" if path.exists() else f"MISSING:{path}"
+    virtual = run_virtual_module()
     return {
         "compiler": subprocess.run([str(args.llvm_bin / "clang"), "--version"],
                                    capture_output=True, text=True).stdout.splitlines()[0],
@@ -576,6 +588,13 @@ def platform_record(args):
         "rootfs": binary(args.images / "rootfs.ext2"),
         "launcher": binary(args.adapter / "capstone-vexec"),
         "module": binary(args.adapter / "module" / "capstone_vm.ko"),
+        # The two platform PROPERTIES, not just the binaries. runtime/virtual/run.py records
+        # paths and hashes but deliberately not argv, and these properties decide whether the
+        # platform runs at all: without x-capstone-test-csrs the paged module's one read of CSR
+        # 0xcc0 is an illegal instruction, and at the default supervisor-slots=1 every thread
+        # and shared-heap check fails. Two runs differing only in these are NOT equivalent.
+        "qemu_cpu": virtual.QEMU_CPU,
+        "module_args": f"node_initial_pages={virtual.NODE_PAGES} {virtual.MODULE_ARGS}",
         "runner": "ports/php/app/run-realphp.py",
     }
 
