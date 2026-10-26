@@ -9256,3 +9256,30 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - A store that RETURNS means silicon performs misaligned stores, against the RTL reading.
   - A store that reads cause 4 is a store reported as a load (Q-09's shape, in the RTL).
   - misal-sd4 separates an 8-byte alignment check from a 4-byte one.
+
+### Q-34's store side, result: silicon raises cause 6 on every misaligned plain store and cause 4 on the misaligned load, on both boards, where the twin completes every one (2026-10-26 13:59-14:08)
+
+- **Records:** `records/b2bs-misal-b1.result-lines.txt`, `records/b2bs-misal-b2.result-lines.txt`; the twin's
+  `records/misal-twin.result-lines.txt`. Pre-registration 9695ece729d0. One boot per board (bookings 395 and 394), each
+  boot completed, readings 0.
+
+| step | QEMU twin | board 1 | board 2 |
+|---|---|---|---|
+| aligned-sw (+4) | RETURNED 0x11223344 | RETURNED 0x11223344 | RETURNED 0x11223344 |
+| aligned-sd (+8) | RETURNED 0x1122334455667788 | the same | the same |
+| misal-lw (+1) | RETURNED 0x5a5a5a5a | cause 4 at code+0x10cf8 | cause 4 at code+0x10cf8 |
+| misal-sw (+1) | RETURNED 0x11223344 | cause 6 at code+0x10c40 | cause 6 at code+0x10c40 |
+| misal-sd (+1) | RETURNED 0x1122334455667788 | cause 6 at code+0x10cac | cause 6 at code+0x10cac |
+| misal-sd4 (+4) | RETURNED 0x1122334455667788 | cause 6 at code+0x10cac | cause 6 at code+0x10cac |
+| aligned-sw-post | RETURNED 0x11223344 | RETURNED 0x11223344 | RETURNED 0x11223344 |
+
+- **Every prediction holds.** The controls return before and after the faults. The positive control reads Q-34's cause 4
+  at misal_load_w+0x38. Each store faults at its own instruction (misal_store_w+0x58, misal_store_d+0x58).
+- **The raw tval** is the object's base + 1 (`...041`) for the +1 accesses, and base + 4 (`...044`) for misal-sd4.
+  Each is inside the 32-byte object, so no capability exception was pending.
+- **What it decides:**
+  - The store half of the semantics owner's Q-34 ruling is now read on silicon: a misaligned plain store in a context
+    raises 6, and it is terminal.
+  - The alignment check is per access width: an `sd` at a 4-aligned address faults.
+  - A store is never reported as a load (no Q-09 shape).
+  - The twin completes all four misaligned accesses, so Q-34's divergence covers stores too.
