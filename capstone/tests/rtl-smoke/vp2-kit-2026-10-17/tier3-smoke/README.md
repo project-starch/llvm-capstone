@@ -10024,3 +10024,35 @@ Tool: `r64-census.py`.
   - Calls through function-pointer tables are invisible to the reference resolution: memcpy resolves to only 3 direct
     sites in perl.
   - Images that ran on earlier divsqrt bitstreams are not in this population.
+
+### The perf evaluation's T3 arm on bitstream 2: pre-registration (2026-10-27, before any boot)
+
+- **What runs:** the runtime lane's three T3 kits, `perf/main3b/t3k1..t3k3`. The runtime lane pre-registered them,
+  with its predictions, on runtime/bench-counters `edea56432aaa`:
+  - each program's T1, T3 and T2 arms run in one boot;
+  - t3k1 has 81 processes (huffbench-libc at `0 1`, 11 per arm), t3k2 and t3k3 have 60 each;
+  - runners `run-t3k1.sh` 0ecbbc7c4c9f5ec8, `run-t3k2.sh` fc24bc09d77351fc, `run-t3k3.sh` 37861b84fca1ac04;
+  - stages of 14,455,176, 15,089,847 and 15,180,523 B, under the 26,000,000 B firmware cap.
+  - The first build, `perf/main3`, is void and is never booted: huffbench-libc, which is not re-entrant, ran at `1 5`.
+- **Checked here before booking, `perfmain3-check.py`:**
+  - each stage matches its SHA256SUMS, and the sums cover every stage file;
+  - each runner's hash and its `@@PERF-T3K<n>-DONE` end;
+  - every run line equals its steps.tsv row, and names an existing Capstone image under its arm's directory;
+  - each program's T1, T2 and T3 images are three distinct files, with equal process counts per arm;
+  - **each program's args equal the main run's** (perf/main1 and main2, 5 plans).
+  - All three kits PASS. The check's positive control is the voided first build: it fails t3k1 on all 12
+    huffbench-libc lines and passes the other two.
+- **How:** `tier3-perfmain3-b2.sh`.
+  - Board 2 runs t3k2 while board 1 runs t3k1 and then t3k3. One kit per boot, never split, nothing else in the boot.
+  - Each kit is one `tier3-perfpilot-b2.sh` boot on bkit10-perf-b<board>: bitstream 2 caplifive_vp2c_dcc6daf6e,
+    launcher 978c09d61f774315, module 9c60fb53f80ce67e. Output `main3-<kit>`, step 3,600 s, booked 75 min each.
+  - Any check failure launches nothing.
+  - Dry run: `dryrun-perfmain3-b2.txt`, every boot stubbed. It shows the pending-hash STOP, the check against the void
+    build, and the armed order.
+- **Pass per kit (the runtime lane's criterion):**
+  - the last line is `@@PERF-T3K<n>-DONE`;
+  - 81 / 60 / 60 `@@PERF-END` lines, all rc=0;
+  - tier3-perfpilot.py reads every planned process.
+- **Prediction (functional only; the timing predictions are the runtime lane's):** every process passes, as these 15
+  programs' T1 and T2 processes did in the main run. Read post hoc with perfmain-table.py, which removes mid-line
+  heartbeats. A T3-only failure would be a finding about the T3 build, not the board.

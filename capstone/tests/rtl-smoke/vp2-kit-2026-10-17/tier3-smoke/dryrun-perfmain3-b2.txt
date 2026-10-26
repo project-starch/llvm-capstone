@@ -1,0 +1,57 @@
+# dry run of tier3-perfmain3-b2.sh (2026-10-27), every board call stubbed (PM3_RUNKIT, PM3_PASS)
+## 1. hashes not yet filled (PENDING): every kit fails perfmain3-check.py, nothing is launched
+FAIL t3k1: run-t3k1.sh is not PENDING
+FAIL t3k1: line 36: huffbench-libc T2 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 37: huffbench-libc T3 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 38: huffbench-libc T1 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 39: huffbench-libc T1 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 40: huffbench-libc T3 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 41: huffbench-libc T2 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 42: huffbench-libc T2 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 43: huffbench-libc T3 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 44: huffbench-libc T1 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 45: huffbench-libc T1 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 46: huffbench-libc T3 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 47: huffbench-libc T2 args '1 5', the main run gave ['0 1']
+CHECK t3k1 runner PENDING: 60 processes, 5 programs, main-run reference from 5 plans: 13 FAILURE(S)
+FAIL t3k2: run-t3k2.sh is not PENDING
+CHECK t3k2 runner PENDING: 60 processes, 5 programs, main-run reference from 5 plans: 1 FAILURE(S)
+FAIL t3k3: run-t3k3.sh is not PENDING
+CHECK t3k3 runner PENDING: 60 processes, 5 programs, main-run reference from 5 plans: 1 FAILURE(S)
+PM3 STOP: a kit failed perfmain3-check.py; nothing launched
+## 2. perfmain3-check.py against the VOIDED first build (perf/main3): t3k1 fails on huffbench-libc's args (positive control), t3k2/t3k3 pass
+FAIL t3k1: line 36: huffbench-libc T2 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 37: huffbench-libc T3 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 38: huffbench-libc T1 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 39: huffbench-libc T1 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 40: huffbench-libc T3 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 41: huffbench-libc T2 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 42: huffbench-libc T2 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 43: huffbench-libc T3 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 44: huffbench-libc T1 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 45: huffbench-libc T1 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 46: huffbench-libc T3 args '1 5', the main run gave ['0 1']
+FAIL t3k1: line 47: huffbench-libc T2 args '1 5', the main run gave ['0 1']
+CHECK t3k1 runner 6570bfd8936f045d: 60 processes, 5 programs, main-run reference from 5 plans: 12 FAILURE(S)
+rc=1
+CHECK t3k2 runner 8d80b9a8edbe8138: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+rc=0
+CHECK t3k3 runner a13d53d3e9643591: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+rc=0
+## 3. the armed script with the main3b hashes and a stubbed boot: checks pass, board 2 runs t3k2 while board 1 runs t3k1 then t3k3
+CHECK t3k1 runner 0ecbbc7c4c9f5ec8: 81 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k2 runner fc24bc09d77351fc: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k3 runner 37861b84fca1ac04: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+PM3 t3k2 on board 2 BEGIN 02:13:04
+PM3 t3k1 on board 1 BEGIN 02:13:04
+PM3 t3k1 on board 1 END rc=0 02:13:05 :: READ summary: STUB t3k1 on board 1
+PM3 t3k2 on board 2 END rc=0 02:13:05 :: READ summary: STUB t3k2 on board 2
+PM3 t3k3 on board 1 BEGIN 02:13:05
+PM3 t3k3 on board 1 END rc=0 02:13:06 :: READ summary: STUB t3k3 on board 1
+PM3 DONE 02:13:06
+STUB boot board 1 kit t3k1 at 02:13:04.085421888
+READ summary: STUB t3k1 on board 1
+STUB boot board 2 kit t3k2 at 02:13:04.085273575
+READ summary: STUB t3k2 on board 2
+STUB boot board 1 kit t3k3 at 02:13:05.090997745
+READ summary: STUB t3k3 on board 1
