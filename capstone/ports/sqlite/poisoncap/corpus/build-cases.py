@@ -100,7 +100,7 @@ def build_engines(compiler, flags, groups, source, out):
     return engine
 
 
-def case_inputs(case, tag, extra, ext_src, heap_bytes):
+def case_inputs(case, tag, extra, ext_src, heap_bytes, heap_min=None, heap_malloc=False):
     """A case's sources and extra flags: case.c, the in-memory VFS when it uses one, the extension
     source two cases need with its include flags, and --heap-bytes's heap size when given."""
     sources = [str(case / 'case.c')]
@@ -113,6 +113,10 @@ def case_inputs(case, tag, extra, ext_src, heap_bytes):
         extension_flags = [o if not o.startswith('-I') else f'-I{ext_src}/ext/{o[2:]}' for o in options]
     if heap_bytes:
         extra = [e for e in extra if not e.startswith('-DSQLITE_HEAP_SIZE=')] + [f'-DSQLITE_HEAP_SIZE={heap_bytes}']
+    if heap_min:
+        extra = [e for e in extra if not e.startswith('-DSQLITE_HEAP_MIN_REQ=')] + [f'-DSQLITE_HEAP_MIN_REQ={heap_min}']
+    if heap_malloc:
+        extra = [*extra, '-DREPRO322_HEAP_MALLOC']
     return sources, [*extra, *extension_flags]
 
 
@@ -126,8 +130,15 @@ def main():
     p.add_argument('--opt', default='-O0')
     p.add_argument('--only', help='comma-separated case number prefixes')
     p.add_argument('--heap-bytes', type=int,
-                   help='SENSITIVITY ONLY: every case\'s memsys5 heap at this size (a power of two), '
-                        'overriding the corpus\'s sizes; never for the main row')
+                   help='every case\'s memsys5 heap at this size (a power of two), overriding the '
+                        'corpus\'s sizes; the main row uses 268435456, the heap their speedtest1 '
+                        'driver configures (results/2026-10-26-poisoncap-heap256/)')
+    p.add_argument('--heap-min', type=int,
+                   help='memsys5\'s minimum request (SQLITE_HEAP_MIN_REQ, default 64); their speedtest1 '
+                        'main() passes 16')
+    p.add_argument('--heap-malloc', action='store_true',
+                   help='take every case\'s memsys5 heap from malloc before main() instead of a static '
+                        'array (REPRO322_HEAP_MALLOC), as their speedtest1 main() does')
     a = p.parse_args()
     work = a.platform.resolve() / 'work'
     cc = work / 'sdk/bin/clang'
@@ -152,7 +163,7 @@ def main():
         if group not in engine:
             failed.append(case.name)
             continue
-        sources, case_flags = case_inputs(case, tag, extra, a.ext_src, a.heap_bytes)
+        sources, case_flags = case_inputs(case, tag, extra, a.ext_src, a.heap_bytes, a.heap_min, a.heap_malloc)
         ok = run(compiler.program(flags[group], case_flags, sources, engine[group], a.out / case.name),
                  a.out / f'{case.name}.log')
         (built if ok else failed).append(case.name)
@@ -168,7 +179,7 @@ def main():
 
     (a.out / 'build.json').write_text(json.dumps(dict(
         compiler=str(cc), target=compiler.target, amalgamation=str(a.amalgamation), opt=a.opt,
-        heap_bytes=a.heap_bytes, no_lookaside=a.no_lookaside, groups={g: flags[g] for g in sorted(engine)},
+        heap_bytes=a.heap_bytes, heap_min=a.heap_min, heap_malloc=a.heap_malloc, no_lookaside=a.no_lookaside, groups={g: flags[g] for g in sorted(engine)},
         cases={c.name: dict(tag=t, group=g, extra=e) for c, (t, g, e) in cases.items()},
         built=built, controls=controls, failed=failed), indent=2) + '\n')
     print(f'built={len(built)} failed={len(failed)} ({a.out})')

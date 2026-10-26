@@ -38,6 +38,12 @@ import verdicts as v  # noqa: E402
 CONTROLS = (('control_uaf_mem5', 'control_uaf_mem5'), ('control_bounds_mem5', 'control_bounds_mem5'))
 # What each control must read: a stale read and an overflowing write, each at its own function.
 CONTROL_FAULT = {'control_uaf_mem5': (25, 'control_read'), 'control_bounds_mem5': (28, 'control_write')}
+# The block port's controls, run when the build has them (build-virtual.py --block-port --observe
+# controls/control_realloc_*_mem5.c --observe controls/control_capacity_mem5.c). A realloc that keeps
+# its block is a new lifetime, so the read through the old pointer faults, unless the build is the
+# ablation; a failed realloc and growth into the block without a realloc end nothing and return.
+BLOCK_CONTROLS = ('control_realloc_same_mem5', 'control_realloc_shrink_mem5',
+                  'control_realloc_fail_mem5', 'control_capacity_mem5')
 
 
 def temporal():
@@ -69,6 +75,19 @@ def main():
     runs = [(n, t) for n, t in CONTROLS if (a.build / f'{n}.dom').exists()]
     if len(runs) != len(CONTROLS):
         sys.exit('the build lacks its controls (build-virtual.py --observe controls/control_*_mem5.c)')
+    expect_fault, expect_return = dict(CONTROL_FAULT), set()
+    if build.get('sublet_port') == 'block':
+        block = [n for n in BLOCK_CONTROLS if (a.build / f'{n}.dom').exists()]
+        if len(block) != len(BLOCK_CONTROLS):
+            sys.exit('a block-port build lacks its realloc controls (build-virtual.py --observe '
+                     'controls/control_realloc_*_mem5.c --observe controls/control_capacity_mem5.c)')
+        runs += [(n, n) for n in block]
+        for n in ('control_realloc_same_mem5', 'control_realloc_shrink_mem5'):
+            if build.get('realloc_keeps_lifetime'):
+                expect_return.add(n)
+            else:
+                expect_fault[n] = (25, 'control_read')
+        expect_return.update(('control_realloc_fail_mem5', 'control_capacity_mem5'))
     runs += [(c, build['cases'][c]['tag']) for c in sorted(wanted)]
 
     if a.parse_only:
@@ -138,9 +157,11 @@ def main():
                 failures.append(f'{name}: exit 0 without a RETURNED line')
             if f and not f['function']:
                 failures.append(f'{name}: fault pc {f["pc"]} in no function of the image')
-            want = CONTROL_FAULT.get(name)
+            want = expect_fault.get(name)
             if want and (not f or (f['cause'], f['function']) != want):
                 failures.append(f'{name}: expected cause {want[0]} in {want[1]}, read {f and (f["cause"], f["function"])}')
+            if name in expect_return and (f or not row['returned']):
+                failures.append(f'{name}: expected to return without a fault, read {f and (f["cause"], f["function"])}')
     print('staged rc', boot_rc)
     for failure in failures:
         print('FAILED', failure)
