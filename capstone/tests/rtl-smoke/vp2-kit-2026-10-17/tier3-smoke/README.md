@@ -9141,3 +9141,12 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     fault_mstatus x200 (e50f65806556).
   - **board 1:** the bare kit, then fault_mstatus x200.
   - Every prediction stands as registered.
+
+### Result: Juliet spatial remainder part02 on board 1 (pre-registration 19fadd9ec614): as predicted, every census difference a rand-driven `_12` draw, seeded 96 of 96
+
+- **Record:** `records/b2bs-juliet-rem-part02-b1.result-lines.txt`. Manifest 925bcde3e13fdd76, 699 cases, 1,400 census and
+  95 seeded images. 22 census and 2 seeded batches completed. Readings 0 in all 25 boot transcripts; judge.py 22/22.
+- **The grade, with no tolerance:** census 1388 of 1401 cells the same, seeded 96 of 96.
+- **The 13 census differences** are all rand-driven `_12` draws (`jrem-classify.py`: 0 uaf-control, 0 CWE170, 0 OTHER).
+- **Status:** with part01, this is the whole of the remainder read on silicon before the lead's stop (addendum
+  d1fba0ad3725). Both records are an UNCOUNTED addendum: neither enters a Juliet total.
