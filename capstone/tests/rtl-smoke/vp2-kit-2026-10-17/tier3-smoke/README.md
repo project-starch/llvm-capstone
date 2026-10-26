@@ -9610,3 +9610,24 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   `st` and `nbody`".
   - If nbody passes, the hypothesis does not account for st as it stands.
   - The FP programs in k2-k4 whose checks are tolerant are expected to pass.
+
+### Addendum to the nbody prediction above, still before k3 boots (2026-10-26 18:4x): a pass would not refute it by itself
+
+- **The rtl lane's refinement, checked here at origin/dev:** the shared libm `sqrt` (beebs_softfloat_libm.c) is immune
+  to the defect.
+  - It seeds y with four Newton steps that do use fdiv (`y = 0.5 * (y + x / y)`).
+  - It then pulls y down and pushes it up by the exact residual `(x - hi) - lo` from `two_prod_square`, until y is the
+    correctly rounded root.
+  - So a 1-ulp-low divide in the seed is corrected away, unless a compiler lowers the call to fsqrt.d.
+- **So a program's exposure is its OWN fdiv.d on the verified path,** plus any fsqrt.d emitted for sqrt.
+  - It fails deterministically if one of those divides lands on one of the bad operand cases (about 4% in the rtl
+    lane's 512).
+  - ludcmp divides very often; st a handful of times per iteration, and it fails.
+- **The prediction as amended:** nbody fails VERIFY deterministically in every process IF its verified path divides
+  on a bad case. That is likely, not forced.
+  - **A pass weakens the hypothesis only together with a count of fdiv.d / fsqrt.d on that path,** from nbody's own
+    disassembly.
+  - The original wording above stands as it was written. This narrows what a pass would mean.
+- **The decisive check is host-side,** and it is the runtime lane's call because it is a QEMU change: run the same
+  images on a twin whose fdiv/fsqrt round as the RTL does (a truncated 56-bit quotient with sticky from 4 extra bits;
+  a 57-bit isqrt). If ludcmp and st then read VERIFY-FAILED, the attribution is closed.
