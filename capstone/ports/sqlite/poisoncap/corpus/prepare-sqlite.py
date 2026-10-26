@@ -34,7 +34,7 @@ import sys
 import tarfile
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[3]
+REPO = HERE.parents[4]
 RECIPE = REPO / 'capstone/ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap'
 # Read from the artifact on 2026-10-24 and matched against the source audit
 # experiments/study/results/20260927-poisoncap-source-audit.json.

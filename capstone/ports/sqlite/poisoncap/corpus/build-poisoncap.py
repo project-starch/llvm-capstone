@@ -28,7 +28,7 @@ import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
-REPO = HERE.parents[3]
+REPO = HERE.parents[4]
 REPRO = REPO / 'capstone/ports/sqlite/repro322'
 spec = importlib.util.spec_from_file_location('build_virtual', REPRO / 'build-virtual.py')
 build_virtual = importlib.util.module_from_spec(spec)

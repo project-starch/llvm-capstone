@@ -28,7 +28,7 @@ import json
 from pathlib import Path
 import subprocess
 
-REPO = Path(__file__).resolve().parents[4]
+REPO = Path(__file__).resolve().parents[5]
 CORPUS = REPO / 'capstone/bug-corpora/sqlite/engine-repros'
 
 

@@ -5,7 +5,7 @@ Plan: `PLAN.md` (this folder; pre-registered as docs/plans/2026-10-24-sqlite-poi
 qualified trigger, reported as such on every arm). Case 18 is a constructed demonstrator and is
 reported beside the 18 upstream defects.
 
-Runs (`ports/sqlite/poisoncap/build-poisoncap.py`, one boot each through `guest-run.py`): their
+Runs (`ports/sqlite/poisoncap/corpus/build-poisoncap.py`, one boot each through `guest-run.py`): their
 `mem5.c` as published, with lookaside on and with lookaside off. Temporal only, so no spatial arm:
 a poison fault (SIGPROT code 3 with their console's poison line) can only come from their mechanism,
 as a cause-25 (revoked) fault can only come from ours. Verdicts by `verdicts.py`: fault at site, and

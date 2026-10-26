@@ -21,7 +21,7 @@ from pathlib import Path
 import re
 import sys
 
-REPO = Path(__file__).resolve().parents[4]
+REPO = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(REPO / 'capstone/ports/common/host/cheribsd'))
 from guest import Guest  # noqa: E402
 

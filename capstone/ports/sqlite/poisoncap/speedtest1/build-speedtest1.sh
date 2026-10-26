@@ -3,7 +3,7 @@
 # (pycheribuild/projects/cross/sqlite.py at the pinned cheribuild) with --sqlite/build-speedtest,
 # over their source tree exactly as published. Nothing of theirs is edited.
 #
-#   bash in-container.sh bash .../build-speedtest1.sh VARIANT   (cheribuild | memsys5 | memsys5-all32)
+#   bash platform/in-container.sh bash .../speedtest1/build-speedtest1.sh VARIANT   (cheribuild | memsys5 | memsys5-all32)
 #
 # The source tree: the artifact's sqlite/ is their fork CTSRD-CHERI/sqlite at a879a48e (its manifest
 # says so) with two files changed and not committed, src/mem5.c and test/speedtest1.c. So the tree is

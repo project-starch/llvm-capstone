@@ -13,7 +13,7 @@ amalgamation (`prepare-sqlite.json`). Each run is one boot; the gate (controls) 
 Every case was run twice per row (`runs/published-*` and `runs/published-*-rep2`). The catch readings
 agree in every case; the second run also records failing `rc=` lines, which reclassified case 23 from
 "returned" to "returned-with-error". Result lines: `runs/*/results.jsonl`; scoring:
-`verdicts/*/verdicts.md` (`ports/sqlite/poisoncap/verdicts.py`).
+`verdicts/*/verdicts.md` (`ports/sqlite/poisoncap/corpus/verdicts.py`).
 
 This is the second version of this file. The first (62a3999c) scored 19 cases and left 12, 15 and 21
 open. Below, the population is corrected, and each of PoisonCap's five non-catches has an explanation
