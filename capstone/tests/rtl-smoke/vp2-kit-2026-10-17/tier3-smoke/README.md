@@ -9660,3 +9660,35 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - minver has 3 fdiv.s and an exact FNV check.
 - minver's pass beside ludcmp's failure (also 3 fdiv.s) fits the per-operand reading: a program fails only if a divide
   lands on a bad case. It does not test that reading.
+
+### The FP discriminator, result: native ludcmp and st FAIL as the context builds do; FP state survives escapes. H-FPU, as pre-registered; H-escape refuted (board 1, 2026-10-26 18:30-18:41)
+
+- **Record:** `records/b2bs-fpdiag-b1.result-lines.txt`. Pre-registration 1bd320e77ded, stage run-fpdiag.sh
+  1991d4a73faa93c8. One boot (booking 401), completed, readings 0. All 12 sections read.
+
+| section | native | context (entries) |
+|---|---|---|
+| fp-escape, n=1e5 | bad=0, rc 0 | bad=0, rc 0 (33) |
+| fp-escape, n=5e7 | bad=0, rc 0 | bad=0, rc 0 (308) |
+| fp-divsqrt, n=1e5 | bad=0, rc 0 | bad=0, rc 0 (36) |
+| fp-divsqrt, n=2e7 | bad=0, rc 0 | bad=0, rc 0 (653) |
+| ludcmp "1 3" | rc 1, VERIFY-FAILED 4 of 4 | rc 1, VERIFY-FAILED 4 of 4 |
+| st "1 3" | rc 1, VERIFY-FAILED 4 of 4 | rc 1, VERIFY-FAILED 4 of 4 |
+
+- **The decisive cell, native ludcmp and st, FAILS**, as the context images do. These are plain Linux processes built
+  by gcc -O2 static, a different compiler and no context.
+  - So the failure belongs to the processor's FP arithmetic, not to the capability context or its escapes:
+    **H-FPU, as pre-registered.**
+- **H-escape is refuted for these programs:** FP state survives hundreds of escapes, in fadd-only loops (308 entries)
+  and in div/sqrt loops (653 entries), with every result exact.
+- **The divsqrt sections pass on both sides.** Their cases (division by 1.0, the sqrt of a perfect square) are the
+  easiest exact ones, which the runtime lane's prediction allowed either way. They do not test the rounding defect.
+- **What this points to, and what it does not settle:** a wrong-result defect in the FPU on operands that ludcmp and
+  st reach, natively and in a context alike.
+  - The rtl lane's reading is the RNE sticky bit taken from only 4 extra quotient bits, so a divide or square root
+    lands 1 ulp low on about 4% of operands, in both .d and .s (sim).
+  - That reading fits this result, but this boot does not test it: its bare kit, behind the perf queue, does.
+- **The perf run's FP programs:** a program's VERIFY is exposed on silicon wherever its verified path divides or
+  takes a square root in hardware on a bad operand. ludcmp and st are not usable as performance rows for the T1/T2
+  comparison of RESULTS. Their cycle and instret counts are still read, both arms run the same arithmetic, and how to
+  report them is the runtime lane's call.
