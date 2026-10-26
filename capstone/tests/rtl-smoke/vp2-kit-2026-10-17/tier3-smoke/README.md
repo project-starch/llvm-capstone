@@ -9513,3 +9513,16 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
      twin completes it (Q-34). So a program that ran clean on the twin may fault here with rc=139 and cause 4 or 6. If
      it does, that is a finding for that program, not an infrastructure failure, and the kit continues.
 - Batch 2 (coremark, dhrystone, matmult-int) follows as one small kit, after its rebuilt images pass.
+
+### The perf evaluation's MAIN RUN, batch 2: coremark, rv8-dhrystone and matmult-int, as a third boot on the board that ends batch 1 first, pre-registered (2026-10-26 17:3x, before its boot)
+
+- **The kit:** the runtime lane's `perf/main2/b2k1`, 2.3 MB. Its images come from build2/: coremark's and dhrystone's
+  prints are silenced, and matmult-int is the de-duplicated matmult. All three passed the twin's functional pass, by
+  the runtime lane.
+- **Checked here:** the stage matches its SHA256SUMS; run-b2k1.sh e48f64aedd30000d; launcher 978c09d6. All 24 process
+  lines match the template and steps.tsv: P=4 per arm with "1 5", about 9 min.
+- **Placement:** `tier3-perfmain2-b2.sh` watches batch 1's coordinator log. It runs the kit on whichever board ends its
+  second kit first (board 1's k3 or board 2's k4), and stops if batch 1 stops.
+  - One tier3-perfpilot-b2.sh boot, with PP_SUB `main2-b2k1`, step 2,700 s and booking 45 min.
+  - Dry run: `dryrun-perfmain2-b2.txt`, for both placements and the stop.
+- **Predictions:** batch 1's five, verbatim (above).
