@@ -40,6 +40,46 @@ Seven of seven scoreable on the protected arms: CRASH-062, 070, 078, 083, 113, 1
 recorded -- no bundle, no table -- which the pre-registration says in its own words, so this is
 the first recorded measurement of it. Nothing here should be described as having "changed".
 
+## Sensitivity: the same records with the oracle-crashing cases scored
+
+`temporal-scored-with-oracle-crashes/` re-judges the **same stored runs** with
+`--score-oracle-crashes`, which lifts the `out-of-denominator` refusal so the 19 cases whose
+pristine record is `SIGNAL:11` are read by their fault SITE. It is reported beside the default
+scoring, never instead of it; the default table above is the published result.
+
+| arm | CAUGHT | MISSED | unattributed | inconclusive | setup-fault | infra |
+|---|---|---|---|---|---|---|
+| `php-real-stock` | 4 | 6 | 7 | 8 | 3 | 1 |
+| `php-real-block` | 18 | - | 8 | - | 2 | 1 |
+| `php-real-object` | **26** | - | - | - | 2 | 1 |
+| `php-real-exact` | **26** | - | - | - | 2 | 1 |
+
+**What this does and does not say.** It is NOT 26 defects that native execution misses: native PHP
+segfaults on all 19 of these, which is why they are out of the default denominator. What it
+measures is *where* the failure lands. On 26 of 29 the capability fault lands in the case's own
+ASAN-recorded file -- 24 of them by revoked-capability load (cause 25) -- whereas the native
+signal lands wherever reuse happened to break. That is a localisation claim, and it is the one
+these cases can support.
+
+`object` and `exact` are identical, as they should be on a population that varies lifetime rather
+than bounds; the ordering 4 < 18 < 26 = 26 is monotone.
+
+Two things here are reported, not claimed. Three of `stock`'s four catches are cause 24, an
+untagged pointer caught by the platform's baseline tag discipline with no revocation involved.
+The fourth, CRASH-072, is cause 25 on an arm whose seam counter reads `revokes=0`, which can only
+come from `heap.c`'s own revoke-on-free underneath the seam -- plausible, and unconfirmed, so it
+should not be used before it is checked. CRASH-068 and CRASH-081 remain `setup-fault` under either
+scoring and are the only two cases in this population that genuinely fault before their defect.
+
+**This table is a correction.** Its first measurement reported CAUGHT=7 on every arm with all 19
+cases reading `setup-fault`, and that was an instrument defect, not a result: `main()` ANDed the
+oracle's premise into `site_licensed` while only `observe()`'s refusal was lifted, so `reached`
+was false by construction for exactly the cases the flag exists to score, and the judge tests
+`reached` before attribution. The faults had already been attributed to each case's own line. The
+fix separates the two questions the code's own comment says must stay separate, is inert on the
+default scoring (240 cells re-judged, 0 differ), and now carries an end-to-end must-fire control
+in `test-run-realphp.py` that was negative-tested against the defect.
+
 ## Against the pre-registration
 
 Held: no regression among the already-caught cases, which matters because the seam's block

@@ -354,7 +354,7 @@ def arm_controls(arm, sanity_ok, probe_ok, arms):
 
 
 def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached, llvm_bin,
-            image, precondition_met=True, site_licensed=False):
+            image, precondition_met=True, site_licensed=False, score_oracle_crashes=False):
     obs = verdicts.Observation(case=case, arm=arm, image_sha256=image_sha, controls=controls)
     # NO PREMISE, SO NO PAIR. The corpus's own pristine record says native PHP does not
     # complete this case -- it crashes with no capability platform anywhere near it -- so there
@@ -366,12 +366,27 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # native PHP also has, and CRASH-100 is silent and so reads `not-reached`, which is a claim
     # about our run rather than about the oracle. Both are NO-READING either way, so this moves
     # no case into or out of CAUGHT; it makes the reason true.
-    if oracle_crashes(spec):
+    #
+    # --score-oracle-crashes LIFTS THIS, and the reason to want it is narrow but real: a native
+    # SIGNAL lands wherever the reused memory happened to break, while a capability fault lands
+    # at the offending access. "Turns a nondeterministic crash into a localised fault" is a
+    # different claim from "turns silence into a fault", and it is one these cases CAN support.
+    #
+    # What it does NOT do is grant the cell a catch. Attribution still has to hold, and the
+    # stock arm still faults on these by construction -- so the honest use of this scoring is
+    # the per-arm ATTRIBUTION rate, not the headline count, and the two scorings must be
+    # reported side by side. Default off, so the published denominator is unchanged.
+    if oracle_crashes(spec) and not score_oracle_crashes:
         obs.infra = "out-of-denominator"
         obs.notes = (f"the corpus's pristine record for this case is "
                      f"{spec['pristine_outcome']!r}: native PHP dies on a signal, "
                      f"so there is no pair to read")
         return obs
+    if oracle_crashes(spec):
+        obs.notes = (f"SCORED WITH THE ORACLE CRASHING: the corpus's pristine record is "
+                     f"{spec['pristine_outcome']!r}, so native PHP dies on this case too and a "
+                     f"fault here is NOT evidence that the protection found something plain "
+                     f"execution missed. Read the fault SITE, not the verdict.")
     # NO DATA IS AN ERROR, NOT A ZERO. Both of these say the harness never got a reading, and
     # both would otherwise fall through to `completed=False, reached=False` -- which the judge
     # reports as `not-reached`, a statement about the PROGRAM. The first measurement made
@@ -639,6 +654,11 @@ def main():
     p.add_argument("--from-record", action="store_true",
                    help="re-judge stored runs without booting")
     p.add_argument("--prereg", default="", help="the pre-registration commit this run answers")
+    p.add_argument("--score-oracle-crashes", action="store_true",
+                   help="also score the cases whose pristine record is a SIGNAL -- native PHP "
+                        "dies on them too, so a fault is NOT evidence the protection found "
+                        "something plain execution missed; read the fault SITE, and report this "
+                        "scoring BESIDE the default one, never instead of it")
     args = p.parse_args()
     args.scratch = args.scratch or (args.out / "stage")
     args.out.mkdir(parents=True, exist_ok=True)
@@ -771,11 +791,22 @@ def main():
                 hit = True
                 break
         # THE LICENCE ANSWERS "DID THE TRIGGER RUN", NOT "IS THERE A PAIR TO READ". Those are
-        # different questions and folding them together is wrong in a way the offline suite
-        # caught: CRASH-057's pristine record is SIGNAL:11, so native PHP crashes on it with no
-        # capability platform anywhere near, and a fault of ours is not evidence of a catch
-        # whatever line it lands on. The oracle's premise is kept as a separate conjunct.
-        site_licensed[case] = hit and not oracle_crashes(spec)
+        # different questions, and until 2026-10-26 the line below folded them together while
+        # this comment said not to: it read `hit and not oracle_crashes(spec)`.
+        #
+        # In the DEFAULT scoring that conjunct is dead code: observe() returns
+        # `out-of-denominator` for an oracle-crashing case before `reached` is ever consulted,
+        # and for every other case `not oracle_crashes(spec)` is already true. So removing it
+        # cannot move a published cell, which is checked by re-judging, not asserted.
+        #
+        # Under --score-oracle-crashes it was actively wrong, and wrong in the one direction
+        # that misattributes a catch to a port bug: it made `reached` false BY CONSTRUCTION for
+        # exactly the 19 cases that flag exists to score. The judge tests `reached` before
+        # attribution (verdicts.py:125), so all 19 read `setup-fault` -- our instrument blamed
+        # for faults that had already landed at the case's own ASAN-recorded file, by
+        # revoked-capability load, with attribution=function established. The oracle's premise
+        # belongs in that early return, which is now where it lives alone.
+        site_licensed[case] = hit
         precondition_met[case] = hit if spec["requires"] else True
         if spec["requires"]:
             print(f"    {case}: precondition {spec['requires']!r} "
@@ -794,7 +825,8 @@ def main():
             obs = observe(case, spec, arm, image_sha, text,
                           per_arm[arm]["rec"]["exits"].get(case),
                           controls, stock_reached[case], args.llvm_bin, args.image,
-                          precondition_met[case], site_licensed[case])
+                          precondition_met[case], site_licensed[case],
+                          args.score_oracle_crashes)
             if case in output_diverged:
                 note(obs, "the stock arm's output differs from the corpus's pristine record "
                           "(reported, not gated: see the module docstring on the deviation)")

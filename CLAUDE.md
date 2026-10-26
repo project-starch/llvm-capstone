@@ -402,6 +402,17 @@ Cheap habits that catch all of the above:
   and passed. `precommit-scan.sh` did that on 2026-08-27 — called from a subdirectory, exit 127,
   reported as "scan-rc" alongside a commit. Treat any exit status the gate does not itself define
   as BLOCKED, not as a pass.
+* **A predicate enforced in TWO places is relaxed in BOTH or neither — and an option that
+  relaxes one is the likeliest way to get a confident, void result.** Both halves of this bit on
+  2026-10-26: the image's capability-instruction gate lived in `build-virtual.sh` *and*
+  `run-realphp.py`, and updating one left the other refusing a finished 29-case run; then
+  `--score-oracle-crashes` lifted `observe()`'s oracle refusal while `main()` still ANDed the
+  same premise into `site_licensed`, so `reached` was false by construction and all 19 cases the
+  flag exists to score read `setup-fault` — our own instrument blamed for faults that had already
+  landed at each case's ASAN-recorded line by revoked-capability load. **Grep the predicate by
+  NAME before trusting a flag that relaxes it**, and give the flag a must-fire control: one that
+  moves every affected cell to a single NO-READING reason is indistinguishable from one that does
+  nothing.
 * **Prefer `python3` to `grep`** for anything that must be counted or must return zero meaningfully.
 * **Make "no data" an ERROR, not a zero.** A tool that finds nothing should exit non-zero and say
   where it looked, never print an empty result that renders like a finding.

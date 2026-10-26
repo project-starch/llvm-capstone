@@ -493,6 +493,40 @@ def main_path_cases():
         inputs = json.loads((tmp / "out" / "bundle-php-real-exact" / "inputs.json").read_text())
         check("the pre-registration is recorded", inputs["pre_registration"], "deadbeef")
 
+    # THE POSITIVE CONTROL FOR --score-oracle-crashes, which it did not have on 2026-10-26 and
+    # which is why the flag shipped doing nothing. It lifts the out-of-denominator refusal above
+    # so the 19 oracle-crashing cases can be read by their fault SITE; the first run of it
+    # returned `setup-fault` on all 19, because `site_licensed` was ANDed with
+    # `not oracle_crashes(spec)` in main()'s pass one while only observe()'s early return was
+    # lifted. `reached` was then false by construction, and the judge tests `reached` BEFORE
+    # attribution -- so every one of those faults, already attributed to the case's own
+    # ASAN-recorded file by a revoked-capability load, was reported as OUR bug.
+    #
+    # A flag that moves 19 cells to one NO-READING reason is indistinguishable from a flag that
+    # does nothing, which is what makes this a must-fire control and not a nicety. It is driven
+    # end to end rather than against observe(), deliberately: the defect was in main(), so a
+    # unit test passing site_licensed=True by hand would have stayed green throughout.
+    with tempfile.TemporaryDirectory() as d3:
+        tmp3 = Path(d3)
+        rc = drive(tmp3, faults={"php-real-exact": ("CRASH-086", "CRASH-110", "CRASH-057",
+                                                    "CRASH-092"),
+                                 "php-real-object": ("CRASH-086",)},
+                   extra_argv=("--score-oracle-crashes",))
+        check("scoring the oracle-crashing cases completes", rc, 0)
+        rows3 = [json.loads(l) for l in
+                 (tmp3 / "out" / "bundle-php-real-exact" / "verdicts.jsonl").read_text().splitlines()]
+        got3 = {r["observation"]["case"]: (r["verdict"], r["reason"]) for r in rows3}
+        check("--score-oracle-crashes reads the fault SITE, not setup-fault",
+              got3["CRASH-057"], (verdicts.CAUGHT, None))
+        obs3 = {r["observation"]["case"]: r["observation"] for r in rows3}
+        check("and the licence is the trigger having run, not the oracle's premise",
+              obs3["CRASH-057"]["reached"], True)
+        check("the cell still carries the warning that native PHP dies on it too",
+              "NOT evidence" in (obs3["CRASH-057"]["notes"] or ""), True)
+        # The flag must not leak into the default scoring: same records, no flag, still refused.
+        check("without the flag the same record is still out-of-denominator",
+              by_case["CRASH-057"]["reason"], "out-of-denominator")
+
     # ... and when NOTHING faults for it, its silence must be refused rather than read as MISSED.
     with tempfile.TemporaryDirectory() as d2:
         tmp2 = Path(d2)
