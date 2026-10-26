@@ -38,8 +38,7 @@ mkdir -p "$OUT/boot/kernel"
 python3 "$P/cheribuild/cheribuild.py" cheribsd-riscv64-purecap --skip-update --skip-world --skip-install \
   --source-root "$W/source" --build-root "$W/build" --tools-root "$W" --output-root "$W/output" \
   --cheribsd/source-directory "$W/source/cheribsd" \
-  --clang-path "$(command -v "${POISONCAP_REAL_CC:-clang-18}")" \
-  --clang++-path "$(command -v "${POISONCAP_REAL_CXX:-clang++-18}")" \
+  --clang-path "$(command -v clang-18)" --clang++-path "$(command -v clang++-18)" \
   --cheribsd/toolchain custom --cheribsd/toolchain-path "$W/sdk" --make-jobs "${BUILD_JOBS:-64}" \
   --kernel-config "$NAME" --cheribsd/no-build-tests > "$OUT/cheribuild.log" 2>&1 \
   || { tail -30 "$OUT/cheribuild.log"; exit 4; }

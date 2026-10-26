@@ -6,23 +6,13 @@ source "$REPO/capstone/tests/capstone-test-env.sh"
 WORK=${1:?usage: platform.sh WORK llvm|qemu|cheribsd|image}
 STAGE=${2:?select a build stage}
 JOBS=${BUILD_JOBS:-3}
-# The host compiler that builds LLVM and QEMU. clang-18 is what the platform was first built
-# with; a host without it (Ubuntu 26.04 ships clang-21) names its own. The same compiler builds
-# CheriBSD's host-side bootstrap tools (cheribuild --clang-path).
-HOST_CC=${POISONCAP_HOST_CC:-clang-18}
-HOST_CXX=${POISONCAP_HOST_CXX:-clang++-18}
-# Extra host C++ flags for the LLVM build. This LLVM revision's SmallVector.h uses uint64_t without
-# including <cstdint>; GCC 15's libstdc++ no longer pulls it in, so such a host needs
-# POISONCAP_HOST_CXXFLAGS="-include cstdint". The sources stay as published.
-HOST_CXXFLAGS=${POISONCAP_HOST_CXXFLAGS:-}
 mkdir -p "$WORK"
 WORK=$(cd "$WORK" && pwd)
 case "$WORK/" in "$REPO/"*) echo "Use a build directory outside the repository" >&2; exit 2;; esac
 case "$STAGE" in
 llvm)
   cmake -G Ninja -S "$WORK/source/llvm-project/llvm" -B "$WORK/build/llvm" \
-    -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER="$HOST_CC" -DCMAKE_CXX_COMPILER="$HOST_CXX" \
-    -DCMAKE_CXX_FLAGS="$HOST_CXXFLAGS" \
+    -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-18 -DCMAKE_CXX_COMPILER=clang++-18 \
     -DCMAKE_INSTALL_PREFIX="$WORK/sdk" '-DLLVM_ENABLE_PROJECTS=clang;lld' \
     '-DLLVM_TARGETS_TO_BUILD=RISCV;X86' -DLLVM_ENABLE_ASSERTIONS=ON \
     -DLLVM_INCLUDE_TESTS=OFF -DLLVM_INCLUDE_BENCHMARKS=OFF -DLLVM_INCLUDE_EXAMPLES=OFF \
@@ -41,7 +31,7 @@ qemu)
   mkdir -p "$WORK/build/qemu"
   cd "$WORK/build/qemu"
   "$WORK/source/qemu/configure" --target-list=riscv64cheri-softmmu \
-    --prefix="$WORK/sdk" --cc="$HOST_CC" --cxx="$HOST_CXX" --disable-werror \
+    --prefix="$WORK/sdk" --cc=clang-18 --cxx=clang++-18 --disable-werror \
     --disable-docs --disable-capstone --disable-gtk --disable-sdl --disable-opengl \
     --enable-slirp=git --disable-linux-user --disable-bsd-user --with-git-submodules=ignore
   ninja -j "$JOBS" qemu-system-riscv64xcheri qemu-img
@@ -58,7 +48,6 @@ cheribsd|image)
   : "${CHERIBUILD:?set CHERIBUILD to the cheribuild.py entry point}"
   common=(--skip-update --source-root "$WORK/source" --build-root "$WORK/build" --tools-root "$WORK"
     --output-root "$WORK/output" --cheribsd/source-directory "$WORK/source/cheribsd"
-    --clang-path "$(command -v "$HOST_CC")" --clang++-path "$(command -v "$HOST_CXX")"
     --cheribsd/toolchain custom --cheribsd/toolchain-path "$WORK/sdk" --make-jobs "$JOBS")
   if [[ "$STAGE" == cheribsd ]]; then
     "${PYTHON:-python3}" "$CHERIBUILD" cheribsd-riscv64-purecap "${common[@]}" \
