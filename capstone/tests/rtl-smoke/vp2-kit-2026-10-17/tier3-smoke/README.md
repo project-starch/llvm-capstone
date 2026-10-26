@@ -10078,3 +10078,176 @@ Tool: `r64-census.py`.
   per-process count.
 - The functional prediction holds. The timing analysis, including the ordering T1 ≤ T3 ≤ T2 by instret, is the
   runtime lane's.
+
+### Bitstream 3 (capstone-ariane e7af48457, the R-62/R-63 divider fixes) on both boards: reflash and first boots, pre-registered (2026-10-27 02:4x, before the seal and the flash)
+
+- **Authority.** The lead's own word, in the board lane's session on 2026-10-27: "as soon as the bitstream is ready, do
+  the re-flash; you have my go-ahead now." The runtime lane holds a relayed go-ahead too; it has agreed that this lane
+  flashes and that it will not touch the consoles.
+- **What changes:**
+  - `git diff --stat dcc6daf6e e7af48457` in capstone-ariane: `core/fpu_div_sqrt_fix/norm_div_sqrt_mvp.sv` (new, the
+    R-62/R-63 fix) and its `core/Flist.cva6` line; the rest is tests.
+  - `ariane_pkg.sv:612` CAP_REVNODE_MEM_BASE `56'hBFF0_0000` reads the same at both commits. So the DTS, firmware, monitor,
+    module and launcher stay bitstream 2's, and only BOARD_BITSTREAM changes.
+  - R-64, R-65 and R-66 remain in bitstream 3, as the rtl lane recorded.
+- **"Ready".** The build is sealed by synth with a sha256, has completed route and bitgen with no unrouted nets, and
+  sits within noise of bitstream 2:
+  - WNS no worse than −14 ns (bitstream 2: −9.790 ns; the per-path null alone spans several ns);
+  - utilisation within the per-module redistribution floor.
+  A build outside that goes back to the lead, unflashed.
+- **Order:** each board flashes when its T3 kits have ended: board 2 after t3k2, board 1 after t3k3. A board running a
+  pre-registered arm is never interrupted.
+- **How:** `board-tier12/batch/flash-and-first-bs3.sh <board> <log> <name> <local .bit> <sha256>`, one per board. Each
+  step gates the next:
+  1. wait for the T3 end line, then for the board to be free;
+  2. the store-has control (a nonexistent name must read missing);
+  3. bitstream 2 (`caplifive_vp2c_dcc6daf6e.bit`) must be registered as the fallback;
+  4. local sha256 against the seal;
+  5. a 30-minute booking, then the flash with `drivers/flash-bitstream.py` (upload if absent, flash, power cycle). The
+     `nv_bitstream_name` readback must equal the name.
+  6. `make-b3-kit.sh` copies bkit9-b2-b<board> to bkit11-b3-b<board>, and bkit10-perf-b<board> to
+     bkit12-perf-b3-b<board>. Only BOARD_BITSTREAM changes: every other SHA256SUMS line must equal the source's, and
+     board.env must differ in that one line.
+  7. `run-b3-first.sh`.
+  - Dry run: `dryrun-flash-and-first-bs3.txt`, with every board and console call stubbed and the kit step real into
+    scratch. It covers:
+    - both boards' full paths;
+    - the missing-fallback, failed-readback and wrong-name STOPs;
+    - board 1 kept waiting while only t3k1 has ended;
+    - a store control that reads "present";
+    - a defect vector read as NOT AS PREDICTED.
+- **Predictions, per board, each its own cold boot:**
+  1. **fp-all bare** (rtl kit 84488ed6db17), graded by fpds-grade.py: its fixed-RTL branch,
+     `FPDS NOT ON SILICON: 0 fdiv and 0 fsqrt mismatches on the 512 cases, position 8 exact`. That is **R-62 fixed on
+     silicon**. Bitstream 2 read the defect vector on both boards.
+  2. **fp-rm bare** (rtl kit 75f129f56497), graded by fprm-grade.py: its fixed-RTL branch, `FPRM NOT ON SILICON: the
+     fixed-RTL vector`. That is **R-63 fixed on silicon**: RDN, RUP and RMM correctly rounded.
+     - Both graders were written for bitstream 2, so their "NOT ON SILICON" label is the success reading here.
+     - Neither step gates the chain. Any other grade is surfaced as a result about the build.
+  3. **s23 bare `--expect batch`:** AS EXPECTED, SR 25, re-arm total 14.
+  4. **va-alloc bare `--expect b2`:** PASS on the bitstream-2 vector.
+  5. **Tier 1** (firmware 0c24496f):
+     - b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1;
+     - VM exits normal:0, stale:139, sparse-churn:0, and VIRTUAL_SPARSE_CHURN_OK;
+     - no VM_BEGIN without VM_EXIT;
+     - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 all 0.
+     These are bitstream 2's own first-boot readings (`records/bs2-dcc6daf6e-first-b1/b2`), and only the divider
+     changed.
+- **Then:** the runtime lane's perf kit `perf/main4/b3k1` (runner cbf60f75e5eb79ae, its pre-registration
+  runtime/bench-counters 8bfc279da208), one boot, under its own pre-registration here before its boot.
+- The seal's name, path and sha256 are recorded in an amendment here before each board's chain is launched.
+
+### Bitstream 3, AMENDMENT before any flash (2026-10-27 02:4x): the rtl lane's handoff items 5 and 6; an exact fp-all grade; the regression controls
+
+- **The rtl lane's handoff, items 5 and 6.** Items 1-4 (name, path, sha256 and grade) come at the seal.
+  - Outside verif/, bitstream 3 differs from dcc6daf6e in exactly two files (Flist.cva6 and the new normaliser), with
+    no submodule moves. Checked above with `git diff --stat`.
+  - **No SPI write before the rtl lane's grade of the seal.** That is in addition to "ready" as stated above.
+- **fp-all is graded against the EXACT bitstream-3 vector** (the rtl lane's PREREG section at land/rtl-b3-prereg
+  bc8e895d8db1, simulated on e7af48457's core):
+  `0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1`, SR 10.
+  - The new `fpds-b3-grade.py` reads both vectors from that commit:
+    - **R-62 FIXED ON SILICON** = the e7af48457 vector exactly;
+    - **STILL THE DEFECT** = the dcc6daf6e vector (check the resident bitstream first);
+    - otherwise a FINDING;
+    - VOID unless SR is 10 and position 8 is the last quotient.
+  - This replaces fpds-grade.py's weaker fixed branch, which needed only positions 0-1 to be 0, as the prediction. Its
+    line stays in the log.
+  - Controls: the real bitstream-2 session reads STILL THE DEFECT. Copies of it edited to the bitstream-3 vector, to one
+    changed value and to SR 9 read FIXED, FINDING and VOID; a missing session reads NO DATA.
+- **Regression controls** (`run-b3-after.sh`, the rtl lane's item c), run by the chain only when the first boots read as
+  bitstream 2's did: s23 and va-alloc graded rc=0, Tier 1 done, rungs 0 0 0 1. Each must read its bitstream-2 reading:
+  1. hold 100000: HOLD-PEAK and HOLD-OK 100000, exit 0, high_water 105,569 of 262,144. `tier3-hold-batch.sh` now also
+     accepts a bkit11-b3-b<board> kit (same module 215a09be); nothing else changed.
+  2. R-61 (kit 61faf96f5863): control PASS; r61-stale2 and r61-stale NOT-REPRODUCED, the fixed tree's vectors.
+  3. R-61 arming (kit 6910f80d4903): control and stale0 exact; r61a-stale3 and r61a-stale4 on the fixed tree's vectors.
+  4. The fixes kit (30117b74cc8f): all six images EXACT, so R-58, R-59 and Q-24 read as on bitstream 2.
+- Dry runs are appended to `dryrun-flash-and-first-bs3.txt`:
+  - the chain's gate fed the REAL bitstream-2 first-boot lines, and the same lines with vm-suite or s23 changed;
+  - run-b3-after.sh stubbed, then refusing a bitstream-2 kit;
+  - the real tier3-hold-batch.sh with a forced busy, which passes its kit check for a board-2 bitstream-3 kit and
+    refuses one on board 1.
+
+### Bitstream 3: the runtime lane's perf kit b3k1 on board 2, pre-registered (2026-10-27 02:4x, before any flash)
+
+- **What runs:** `perf/main4/b3k1`, as ONE boot. The runtime lane pre-registered it, with its predictions, on
+  runtime/bench-counters 8bfc279da208.
+  - Runner run-b3k1.sh cbf60f75e5eb79ae; the stage is 3,407,004 B, and its SHA256SUMS cover all 10 files.
+  - Launcher 978c09d6 and module 9c60fb53, as in the main run.
+  - First, `@@B3-ID` lines: native ludcmp and st at `1 3`, the bitstream-2 FP discriminator's binaries. Then 24
+    processes: ludcmp, st and minver × T1/T2 × 4, ABBA, at the main run's `1 5`.
+- **Checked here:** `perfmain3-check.py` PASSES on it with arms T1,T2. The check gained an arms argument, default
+  T1,T2,T3. The three-arm demand fails it, and the T3 kits' readings are unchanged.
+- **When:** `tier3-b3k1.sh`, on board 2 only. It starts only after board 2's flash chain has reached its regression
+  controls (`FB AFTER` and `FB DONE`); an `FB HOLD` or `FB STOP` starts nothing.
+- **How:** `tier3-perfpilot-b3.sh` with PP_SUB main4-b3k1, a 2,700 s step and a 60-minute booking.
+  - It is tier3-perfpilot-b2.sh with three changes: the bitstream-3 kits (bkit12-perf-b3 checked against bkit11-b3),
+    the e7af48457 bitstream check, and the t3-run-b3-e7af48457 output root. PP_KITROOT is added for dry runs.
+  - Dry runs: `dryrun-b3-perf.txt`.
+- **Pass (the runtime lane's criterion):**
+  - `@@PERF-B3K1-DONE` last;
+  - 24 `@@PERF-END` lines, all rc=0;
+  - its predictions: verify_failed=0 and BENCH-DONE failed=0 on both `@@B3-ID` lines (bitstream 2 read VERIFY-FAILED
+    on every iteration), and the 24 processes bit-exact with the twin.
+
+### Bitstream 3, AMENDMENT at the seal (2026-10-27 02:5x, before either chain is launched): the sealed build and its grade
+
+- **The bitstream:** `caplifive_vp2c_e7af48457.bit` (the console name follows bitstream 2's convention, as agreed with
+  the rtl lane), 11,443,722 B, sha256 `d6ed97b6d341ea058d497838e43558900823c36591c44046d3cfc0b7f55b423b`.
+  - Synth's file: `~/scratch/capstone-b3/corev_apu/fpga/work-fpga/ariane_xilinx.bit` on its host, worktree HEAD
+    `e7af48457931f33b6dbc1a58185d6f9577c4bc05`.
+  - Its only tracked modifications are the host environment and guard scripts (env.sh, env_cap.sh, fpga-env.sh,
+    synth-guard.sh), the same four as bitstream 2's capstone-vp3rc build.
+  - Copied to `<mnt-hdd>/capstone/bitstreams/caplifive_vp2c_e7af48457.bit` (read-only). The copy's hash equals the
+    seal and the file read on the host.
+- **The rtl lane's grade, against the keys it pre-registered before the build:**
+  - placed LUT 169,061 and FF 63,647, inside ±2,000 / ±300;
+  - check_timing 0 combinational loops, TIMING-23 0;
+  - 0 routing errors;
+  - WNS −10.047 against bitstream 2's −9.790, inside the null band; WHS +0.029.
+  - The routed congestion report and the worst-path families are pending, read-only and not gating.
+  - The runtime lane's criterion is met too: write_bitstream OK, 215,406 nets fully routed.
+- **"Ready" as pre-registered is met:** sealed, routed, WNS no worse than −14 ns, utilisation in band, graded.
+- **Launch:** `flash-and-first-bs3.sh 2 <log> caplifive_vp2c_e7af48457 <copy> d6ed97b6…` and the same for board 1.
+  Each waits for its board's T3 end line, and `tier3-b3k1.sh` waits for board 2's chain.
+
+### Bitstream 3 on both boards, result (2026-10-27 02:52-04:16): flashed; R-62 and R-63 FIXED ON SILICON at N=2; every first-boot and regression reading as bitstream 2's; b3k1 PASS
+
+- Records: `records/bs3-e7af48457-b1` and `-b2` (flash, first boots, regression controls) and `records/bs3-perf-b3k1-b2`,
+  all `.result-lines.txt`.
+- **The flashes**, each after its board's T3 kits ended:
+
+| board | booking | span | resident before | `nv_bitstream_name` after the power cycle |
+|---|---|---|---|---|
+| 2 | 412 | 02:52:51–02:55:13 | `caplifive_vp2c_dcc6daf6e.bit` | `caplifive_vp2c_e7af48457.bit` |
+| 1 | 419 | 03:26:52–03:29:05 | `caplifive_vp2c_dcc6daf6e.bit` | `caplifive_vp2c_e7af48457.bit` |
+
+  - Each passed the store control, had the bitstream-2 fallback registered, matched the seal's hash, and uploaded with
+    HTTP 201.
+  - The kits bkit11-b3 and bkit12-perf-b3 each differ from their source in the one board.env line only.
+- **R-62 FIXED ON SILICON, both boards.** fp-all reads SR 10 and
+  `0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1`: the rtl lane's e7af48457
+  vector exactly (fpds-b3-grade.py). Bitstream 2 read the defect vector, 23 fdiv.d and 19 fsqrt.d misses in 512.
+- **R-63 FIXED ON SILICON, both boards.** fp-rm reads SR 16 and the fixed-RTL vector exactly: RDN, RUP and RMM
+  correctly rounded.
+- **N=2:** the fp-all and fp-rm SR/SV lines are byte-identical across the boards (`cmp`, 11 and 17 lines). The rtl lane
+  re-read board 2's two sessions with its own script and agrees, and the same script reads bitstream 2's sessions as
+  bitstream 2.
+- **First boots, both boards, identical to bitstream 2's:**
+  - s23 AS EXPECTED (SR 25, re-arm total 14); va-alloc PASS on the bitstream-2 vector;
+  - Tier 1 rungs 0 0 0 1, VM exits normal 0 / stale 139 / sparse-churn 0, VIRTUAL_SPARSE_CHURN_OK;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 all 0;
+  - the two CAPSTONE_VM_STATS lines identical across the boards and to bitstream 2's record.
+- **Regression controls, both boards, identical to bitstream 2's:**
+  - hold 100000: HOLD-PEAK and HOLD-OK 100000, exit 0, high_water 105,569 of 262,144;
+  - R-61: control PASS, r61-stale2 and r61-stale NOT-REPRODUCED;
+  - R-61 arming: control and stale0 PASS, stale3 and stale4 NOT-REPRODUCED;
+  - the fixes kit: all six images EXACT, so R-58, R-59 and Q-24 read as on bitstream 2.
+- **b3k1 (board 2, booking 438, 03:46:48–04:01:38): PASS on the runtime lane's criterion.**
+  - 24 `@@PERF-END`, all rc=0, ending in `@@PERF-B3K1-DONE`.
+  - Both identification lines read as the runtime lane predicted: native ludcmp and st at `verify_failed=0` and
+    BENCH-DONE failed=0. On bitstream 2 they failed their own verify on every iteration.
+  - checks-diff.py against the twin: minver EQUAL (`0xd6cc5fbda167dc7b`), where the same tool read DIFFERS on
+    bitstream 2. ludcmp and st print no state hash.
+- **Against the pre-registrations (1c58f863f1d7, amended at 5c758b0cfbab and 4820b8fcd219; 9161f84dba39): every
+  reading holds.** R-64, R-65 and R-66 remain in this bitstream, as recorded.

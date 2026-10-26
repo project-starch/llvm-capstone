@@ -1,0 +1,47 @@
+# Bitstream 3: the runtime lane's perf kit perf/main4/b3k1 on board 2 (tier3-b3k1.sh -> tier3-perfpilot-b3.sh). Result lines only.
+CHECK b3k1 runner cbf60f75e5eb79ae: 24 processes, 3 programs, main-run reference from 5 plans: PASS
+B3K BEGIN 03:46:48
+B3K END rc=0 04:01:38 :: READ summary: 24 of 24 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; B3K1-DONE present
+B3K rc=0
+PP BEGIN 03:46:48 board 2 kit bkit12-perf-b3-b2 booking 438
+UNBOOK 438: 200
+PP END rc=0 04:01:38
+PILOT kit <mnt-hdd>/capstone/t3-smoke/bkit12-perf-b3-b2 boot completed; transcript <mnt-hdd>/capstone/t3-run-b3-e7af48457-b2/main4-b3k1/guest/board.txt; step result {"kind": "exit", "value": 0}
+READ bench parameters: 3 ['bench_cycles', 'bench_entries', 'bench_instret']
+READ 0 st T1 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=187272616 instret=70924641 entries=384
+READ 1 st T2 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=187293475 instret=70924742 entries=384
+READ 2 st T2 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=187251739 instret=70923588 entries=384
+READ 3 st T1 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=187486233 instret=70924575 entries=384
+READ 4 st T1 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=187293771 instret=70925471 entries=384
+READ 5 st T2 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=187805443 instret=70925198 entries=384
+READ 6 st T2 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=187296218 instret=70924509 entries=384
+READ 7 st T1 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=187704662 instret=70925811 entries=384
+READ 8 minver T2 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=199432721 instret=71988848 entries=390
+READ 9 minver T1 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=199721473 instret=71990374 entries=390
+READ 10 minver T1 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=199411597 instret=71990262 entries=390
+READ 11 minver T2 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=199694836 instret=71990416 entries=390
+READ 12 minver T2 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=199427725 instret=71990080 entries=390
+READ 13 minver T1 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=199621413 instret=71989478 entries=390
+READ 14 minver T1 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=199382479 instret=71989575 entries=390
+READ 15 minver T2 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=199682035 instret=71990084 entries=390
+READ 16 ludcmp T1 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=170764611 instret=72419984 entries=372
+READ 17 ludcmp T2 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=170761669 instret=72420586 entries=372
+READ 18 ludcmp T2 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=170813668 instret=72420810 entries=372
+READ 19 ludcmp T1 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=170787858 instret=72420432 entries=372
+READ 20 ludcmp T1 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=171112979 instret=72421216 entries=372
+READ 21 ludcmp T2 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=170812897 instret=72420026 entries=372
+READ 22 ludcmp T2 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=171303349 instret=72420810 entries=372
+READ 23 ludcmp T1 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=170775675 instret=72420208 entries=372
+READ summary: 24 of 24 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; B3K1-DONE present
+PP readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PP board2 DONE 04:01:38
+# from the step text: 24 @@PERF-END, rc!=0 0; last line: @@PERF-B3K1-DONE
+@@B3-ID native ludcmp
+@@B3-ID ludcmp rc=0 verify_failed=0 bench=4 BENCH-DONE beebs/ludcmp failed=0
+@@B3-ID native st
+@@B3-ID st rc=0 verify_failed=0 bench=4 BENCH-DONE beebs/st failed=0
+# checks-diff.py against perf/twin-checks.tsv:
+CHECK NO-HASH  beebs/ludcmp                       silicon 0x0 twin 0x0
+CHECK EQUAL    beebs/minver                       silicon 0xd6cc5fbda167dc7b twin 0xd6cc5fbda167dc7b
+CHECK NO-HASH  beebs/st                           silicon 0x0 twin 0x0
+COUNT EQUAL 1 DIFFERS 0 NO-HASH 2 SPLIT 0 NO-TWIN 0 of 3

@@ -7464,3 +7464,30 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
 - The always-on hardware lifetime check is in every arm.
 - Skipping the scrub for a free that is about to unmap was not built or measured. That is the runtime improvement the
   miniz-libc reading suggests.
+
+## R-62 and R-63 fixed on silicon at N=2, with every bitstream-2 regression reading unchanged (caplifive_vp2c_e7af48457, both boards, 2026-10-27)
+
+- **The bitstream.** capstone-ariane e7af48457 is bitstream 2 (dcc6daf6e) plus the divider's new normaliser
+  (`core/fpu_div_sqrt_fix/norm_div_sqrt_mvp.sv`). Outside verif/ nothing else changes, and the memory map is identical.
+  - It was sealed with sha256 d6ed97b6…b423b and graded by the rtl lane: 0 loops, 0 routing errors, WNS −10.047
+    against bitstream 2's −9.790.
+  - Both boards were flashed on the lead's word, and each read `caplifive_vp2c_e7af48457.bit` back from nv_bitstream_name.
+  - R-64, R-65 and R-66 remain in this bitstream.
+- **R-62 is fixed on silicon.** The rtl lane's fp-all bare image (512 fdiv.d and 512 fsqrt.d cases against
+  correctly rounded results) reads 0 fdiv and 0 fsqrt misses on both boards.
+  - That is its pre-registered bitstream-3 vector exactly. Bitstream 2 read 23 and 19 results one ulp low.
+- **R-63 is fixed on silicon.** The fp-rm image (1/3, −1/3 and sqrt(2) under all five rounding modes) reads the
+  fixed-RTL vector on both boards. RDN, RUP and RMM are correctly rounded, where bitstream 2 exchanged RDN and RUP and
+  truncated under RMM.
+- **N=2:** both images' recorder lines are byte-identical across the two boards.
+- **Nothing else moved.** Every bitstream-2 reading repeated exactly on both boards:
+  - s23 (SR 25, re-arm 14) and va-alloc (the 18-bit-index vector);
+  - Tier 1: rungs 0 0 0 1, the same VM exits, and CAPSTONE_VM_STATS identical to bitstream 2's;
+  - hold 100000, high_water 105,569 of 262,144;
+  - R-61 and R-61 arming on the fixed vectors;
+  - all six images of the R-58 / R-59 / Q-24 kit.
+- The perf consequence (ludcmp, st and minver now correct) is the section above, "ludcmp, st and minver on
+  bitstream 3".
+- Records: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/bs3-e7af48457-b1` and `-b2`, and
+  `bs3-perf-b3k1-b2`. Pre-registered on vp2-tier12 at 1c58f863f1d7 (amended at 5c758b0cfbab and 4820b8fcd219); result
+  2f6c97ffd6d5.

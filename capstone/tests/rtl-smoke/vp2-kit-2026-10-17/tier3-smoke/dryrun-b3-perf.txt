@@ -1,0 +1,59 @@
+# dry run of the bitstream-3 perf path (2026-10-27): perfmain3-check.py with arms, tier3-perfpilot-b3.sh and tier3-b3k1.sh; every board call stubbed
+## perfmain3-check.py on perf/main4/b3k1, arms T1,T2 (PASS), then demanding T1,T2,T3 (must fail); the T3 kits unchanged (main3b PASS, the void main3 t3k1 fails)
+CHECK b3k1 runner cbf60f75e5eb79ae: 24 processes, 3 programs, main-run reference from 5 plans: PASS
+  exit 0
+FAIL b3k1: st K0: the ['T1', 'T2', 'T3'] images are not 3 distinct files (['T1', 'T2'])
+FAIL b3k1: minver K0: the ['T1', 'T2', 'T3'] images are not 3 distinct files (['T1', 'T2'])
+FAIL b3k1: ludcmp K0: the ['T1', 'T2', 'T3'] images are not 3 distinct files (['T1', 'T2'])
+FAIL b3k1: st: processes per arm {'T1': 4, 'T2': 4}
+FAIL b3k1: minver: processes per arm {'T2': 4, 'T1': 4}
+FAIL b3k1: ludcmp: processes per arm {'T1': 4, 'T2': 4}
+CHECK b3k1 runner cbf60f75e5eb79ae: 24 processes, 3 programs, main-run reference from 5 plans: 6 FAILURE(S)
+  exit 1
+CHECK t3k1 runner 0ecbbc7c4c9f5ec8: 81 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k1 runner 6570bfd8936f045d: 60 processes, 5 programs, main-run reference from 5 plans: 12 FAILURE(S)
+## tier3-perfpilot-b3.sh on the scratch bitstream-3 kits (PP_KITROOT), the boot stubbed; then the real kit root, which has no bitstream-3 kit yet
+PP BEGIN 02:45:13 board 2 kit bkit12-perf-b3-b2 booking 999 book 2 60 vp2 bitstream 3 perf-eval main4-b3k1 (board 2)
+999 unbook 999 book 2 60 vp2 bitstream 3 perf-eval main4-b3k1 (board 2)
+PP END rc=0 02:45:13
+PP board2 DONE 02:45:13
+STUB perfpilot.py --board-kit <scratch> --pilot-dir <mnt-hdd>/capstone/perf/main4/b3k1 --runner run-b3k1.sh --runner-sha cbf60f75e5eb79ae --done B3K1 --step-s 2700 <scratch>
+PP STOP: <mnt-hdd>/capstone/t3-smoke/bkit12-perf-b3-b2 is not bkit11-b3-b2 with only the bench adapter swapped in
+## tier3-b3k1.sh against a chain log that reached its regression controls, one that HELD, one that STOPPED, and one that never ends
+### ok
+CHECK b3k1 runner cbf60f75e5eb79ae: 24 processes, 3 programs, main-run reference from 5 plans: PASS
+B3K BEGIN 02:45:38
+B3K END rc=0 02:45:38 :: READ summary: STUB b3k1 on board 2
+### hold
+B3K HOLD: the flash chain did not reach its regression controls (FB HOLD: the first boots did not read as predicted; the regression controls were not run)
+### stop
+B3K HOLD: the flash chain did not reach its regression controls (FB STOP: the flash did not read back x.bit)
+### none
+B3K STOP: the flash chain did not end
+## run-b3-first.sh standalone with the real fpds-b3-grade.py: a planted bitstream-2 session, then the edited fixed copy
+### planted fpds-bare
+B3 START 02:43:44 board 2 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b2
+STUB FPDS planted fpds-bare
+FPDS-B3 read: SR ['000000000000000A'] :: 0x17 0x13 0x3 0xc1d880ad3d2bf68c 0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1
+FPDS-B3 want (e7af48457): SR 10 :: 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1
+FPDS-B3 STILL THE DEFECT: the dcc6daf6e vector; check the resident bitstream first
+B3 FPDS-B3 GRADE rc=1
+B3 FP-ALL: FPDS-B3 STILL THE DEFECT: the dcc6daf6e vector; check the resident bitstream first :: NOT AS PREDICTED
+FPRM NOT ON SILICON: the fixed-RTL vector (stub)
+B3 FP-RM: FPRM NOT ON SILICON: the fixed-RTL vector (stub) :: AS PREDICTED (R-63 fixed on silicon)
+B3 FIRST rc=0 02:43:44
+  stub-first
+B3 board2 DONE 02:43:44
+### planted fixed
+B3 START 02:43:44 board 2 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b2
+STUB FPDS planted fixed
+FPDS-B3 read: SR ['000000000000000A'] :: 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1
+FPDS-B3 want (e7af48457): SR 10 :: 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1
+FPDS-B3 R-62 FIXED ON SILICON: the e7af48457 vector exactly (0 fdiv and 0 fsqrt misses, NX set)
+B3 FPDS-B3 GRADE rc=0
+B3 FP-ALL: FPDS-B3 R-62 FIXED ON SILICON: the e7af48457 vector exactly (0 fdiv and 0 fsqrt misses, NX set) :: AS PREDICTED (R-62 fixed on silicon)
+FPRM NOT ON SILICON: the fixed-RTL vector (stub)
+B3 FP-RM: FPRM NOT ON SILICON: the fixed-RTL vector (stub) :: AS PREDICTED (R-63 fixed on silicon)
+B3 FIRST rc=0 02:43:44
+  stub-first
+B3 board2 DONE 02:43:44

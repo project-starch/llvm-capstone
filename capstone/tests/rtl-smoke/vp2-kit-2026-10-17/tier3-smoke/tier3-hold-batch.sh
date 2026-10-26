@@ -2,7 +2,8 @@
 # live-peak `hold 100000` on one board (2026-10-23; pre-registered in README.md before the boot): the bitstream-2
 # discriminator (a context at the module's DEFAULT capacity holding more than 65,535 live records) and its batch control.
 # tier3-hold-board.py in one boardvm boot with the board's kit; the kit must carry no module parameters, and must be the
-# board's batch kit (bkit8-batch-b<board>, module 21fbfc39) or its bitstream-2 kit (bkit9-b2-b<board>, module 215a09be).
+# board's batch kit (bkit8-batch-b<board>, module 21fbfc39), its bitstream-2 kit (bkit9-b2-b<board>, module 215a09be),
+# or its bitstream-3 kit (bkit11-b3-b<board>, the same module; added 2026-10-27).
 # Starts when <after> reads <after ERE> ("-" at once). Usage: tier3-hold-batch.sh <board 1|2> <kit dir> <after|-> <ERE> <log>.
 # HB_RUN / HB_BUSY / HB_BOOK / HB_ROOT stub the dry run.
 main() {
@@ -21,7 +22,7 @@ main() {
   fi
   local ms bs; ms=$(sha256sum $K/adapter/module/capstone_vm.ko | cut -c1-16); bs=$(sed -n 's/^BOARD_BITSTREAM=//p' $K/board.env)
   ( cd $K && sha256sum -c --quiet SHA256SUMS ) && { [ $BRD = 2 ] && grep -qx "FPGA_BOARD=2" $K/board.env || { [ $BRD = 1 ] && ! grep -q "^FPGA_BOARD=2" $K/board.env; }; } \
-    && case "${K##*/}:$ms" in bkit8-batch-b$BRD:21fbfc397e7c7a42|bkit9-b2-b$BRD:215a09be5a89360c) true;; *) false;; esac \
+    && case "${K##*/}:$ms" in bkit8-batch-b$BRD:21fbfc397e7c7a42|bkit9-b2-b$BRD:215a09be5a89360c|bkit11-b3-b$BRD:215a09be5a89360c) true;; *) false;; esac \
     || { echo "HB STOP: $K is not board $BRD's batch or bitstream-2 kit (module $ms)" >> "$O"; return 1; }
   [ -z "$(git -C /tmp/capstone/wt-newarms status --short --untracked-files=no)" ] && [ "$(git -C /tmp/capstone/wt-newarms rev-parse --short=12 HEAD)" = bcf5f1724110 ] \
     || { echo "HB STOP: wt-newarms is not a clean bcf5f1724110" >> "$O"; return 1; }

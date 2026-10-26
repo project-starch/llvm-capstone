@@ -1,0 +1,342 @@
+# Bitstream 3 (caplifive_vp2c_e7af48457) on board 1: flash, first boots and regression controls, result lines only (flash-and-first-bs3.sh).
+FB board 1's T3 kits ended 03:26:51: PM3 t3k3 on board 1 END rc=0 03:26:28 :: READ summary: 60 of 60 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BEN
+FB board 1 free 03:26:51
+[fpga-board] 1
+[fpga-lease] board 1: no lease API (404): leases not available; local lock only
+STORE 46 names; wanted ['no-such-bitstream-613533.bit']; missing ['no-such-bitstream-613533.bit']
+[fpga-board] 1
+[fpga-lease] board 1: no lease API (404): leases not available; local lock only
+STORE 46 names; wanted ['caplifive_vp2c_dcc6daf6e.bit']; missing []
+FB FLASH BEGIN 03:26:52 board 1 booking 419
+[flash 03:26:52] local sha256 matches the synth lane's sealed hash
+[fpga-board] 1
+[fpga-lease] board 1: no lease API (404): leases not available; local lock only
+[flash 03:26:52] resident before: 'caplifive_vp2c_dcc6daf6e.bit'
+[flash 03:26:52] not in the server store -- uploading via API
+[flash 03:26:57] upload HTTP 201
+[flash 03:26:57] present in the server store
+[flash 03:27:12] flashing caplifive_vp2c_e7af48457.bit (~90 s)
+[flash 03:28:42] MANDATORY power cycle: off 8 s, on 15 s
+[flash 03:29:05] resident AFTER power cycle: 'caplifive_vp2c_e7af48457.bit'
+[flash 03:29:05] powered off
+[flash 03:29:05] unlocked
+rc=0
+UNBOOK 419: 200
+FB FLASH END rc=0 03:29:05
+MK3 kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-b1 from bkit9-b2-b1: board.env diff:
+< BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+> BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+MK3 bkit11-b3-b1 DONE
+MK3 kit <mnt-hdd>/capstone/t3-smoke/bkit12-perf-b3-b1 from bkit10-perf-b1: board.env diff:
+< BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+> BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+MK3 bkit12-perf-b3-b1 DONE
+FB FIRST rc=0 03:55:37; SEQ:
+  B3 START 03:29:05 board 1 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b1
+  RF fp-all BEGIN 03:29:05 board 1 bitstream caplifive_vp2c_e7af48457 image 07692df2c3710353 rec 0x80007000 booking 420
+  UNBOOK 420: 200
+  RF fp-all END rc=0 03:29:47 :: [sup 03:29:46] UART: begin=True SB1=True SR=['000000000000000A'] SV lines=10
+  FPDS fp-all read: SR ['000000000000000A'] :: 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1
+  FPDS fp-all want: SR 10 :: 0x17 0x13 0x3 0xc1d880ad3d2bf68c 0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1
+  FPDS NOT ON SILICON: 0 fdiv and 0 fsqrt mismatches on the 512 cases, position 8 exact
+  RF GRADE rc=1
+  RF board1 DONE 03:29:47
+  FPDS-B3 read: SR ['000000000000000A'] :: 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1
+  FPDS-B3 want (e7af48457): SR 10 :: 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1
+  FPDS-B3 R-62 FIXED ON SILICON: the e7af48457 vector exactly (0 fdiv and 0 fsqrt misses, NX set)
+  B3 FPDS-B3 GRADE rc=0
+  B3 FP-ALL: FPDS-B3 R-62 FIXED ON SILICON: the e7af48457 vector exactly (0 fdiv and 0 fsqrt misses, NX set) :: AS PREDICTED (R-62 fixed on silicon)
+  RF fp-rm BEGIN 03:29:47 board 1 bitstream caplifive_vp2c_e7af48457 image 45a7397cc4d4f099 rec 0x80003000 booking 421
+  UNBOOK 421: 200
+  RF fp-rm END rc=0 03:30:30 :: [sup 03:30:29] UART: begin=True SB1=True SR=['0000000000000010'] SV lines=16
+  FPRM fp-rm read: SR ['0000000000000010'] :: 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x3fd5555555555555 0xbfd5555555555556 0x3ff6a09e667f3bcc 0x3fd5555555555556 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x1
+  FPRM fp-rm want (bitstream 2): SR 16 :: 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x3fd5555555555556 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555556 0x3ff6a09e667f3bcc 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x1
+  FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build
+  RF GRADE rc=1
+  RF board1 DONE 03:30:30
+  B3 FP-RM: FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build :: AS PREDICTED (R-63 fixed on silicon)
+  B3 FIRST rc=0 03:55:37
+    BF START 03:30:30 board 1 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b1 fw 0c24496f
+    S23 BEGIN 03:30:30 board 1 bitstream caplifive_vp2c_e7af48457 image bcefd969e128113f driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 422 expect batch
+    UNBOOK 422: 200
+    S23 END rc=0 03:31:12 :: [sup 03:31:11] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+    S23 AS EXPECTED (batch): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14
+    S23 GRADE rc=0
+    S23 board1 DONE 03:31:12
+    VA BEGIN 03:31:12 board 1 bitstream caplifive_vp2c_e7af48457 image 9491707dfa1613e3 driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 423 expect b2
+    UNBOOK 423: 200
+    VA END rc=0 03:31:54 :: [sup 03:31:53] UART: begin=True SB1=True SR=['0000000000000011'] SV lines=17
+    VA-ALLOC PASS (bitstream-2 vector): 0x0 0x40004 0x0 0x80004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x8 0x3 0x4 0x1 0x8 0x0
+    VA GRADE rc=0
+    VA board1 DONE 03:31:54
+    BF TIER1 BEGIN 03:31:54 booking 424
+    UNBOOK 424: 200
+    BF TIER1 DRIVER rc=0 03:55:37; watchdog lines 94
+    RUNG b0-stats retval=0 (rev7 oracle 0, reference only)
+    RUNG b0-hello retval=0 (rev7 oracle 0, reference only)
+    RUNG vm-contract retval=0 (rev7 oracle 0, reference only)
+    RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+    VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:0 
+      CAPSTONE_VM_STATS arenas=11 pages=496 peak=892 nodes=76 steps=511 faults=426 collections=0 reclaimed=0 rounds=12 bytes_in=214 bytes_out=143 node_bytes=65536 node_capacity=4096 node_growths=0
+      CAPSTONE_VM_STATS arenas=10 pages=489 peak=491 nodes=600041 steps=200065 faults=24 collections=0 reclaimed=0 rounds=8 bytes_in=367 bytes_out=64 node_bytes=65536 node_capacity=4096 node_growths=0
+    SPARSE: VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags
+    VM_BEGIN without VM_EXIT: 
+    FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0
+    CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+    BF board1 DONE 03:55:37
+  B3 board1 DONE 03:55:37
+FB first boots as predicted; regression controls BEGIN 03:55:37
+FB AFTER rc=0 04:16:17; SEQ:
+  B3A START 03:55:37 board 1 kit bkit11-b3-b1
+  HB BEGIN 03:55:37 board 1 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b1 module 215a09be5a89360c booking 439
+  UNBOOK 439: 200
+  HB END rc=0 04:07:05
+  HOLD boot completed; transcript <mnt-hdd>/capstone/t3-run-b3-e7af48457-b1/after/hold/guest/board.txt; steps ['hold', 'stats0', 'stats1']
+  READ hold lines: HOLD-PEAK 100000 | HOLD-OK 100000
+  READ hold result: {"kind": "exit", "value": 0}
+  READ hold fault: none
+  READ stats0: nodes_high_water 0 nodes_allocated_total 0 node_capacity 262144 nodes_live 0
+  READ stats1: nodes_high_water 105569 nodes_allocated_total 105569 node_capacity 262144 nodes_live 0
+  HB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0
+  HB board1 DONE 04:07:05
+  B3A hold rc=0 04:07:05
+  R61 r61-control BEGIN 04:07:05 board 1 bitstream caplifive_vp2c_e7af48457 image c710e0d5156c2c0d rec 0x80013000 booking 440
+  UNBOOK 440: 200
+  R61 r61-control END rc=0 04:07:48 :: [sup 04:07:47] UART: begin=True SB1=True SR=['0000000000000024'] SV lines=36
+  R61 r61-control PASS (control): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0xd 0x0 0x0 0x5 0x99 0x0 0x5 0xf 0x0 0x0 0x0 0x5 0xf 0x0 0x5 0x0 0x5 0x1c 0x0 0x0 0x5 0x0
+  R61 r61-control GRADE rc=0
+  R61 r61-stale2 BEGIN 04:07:48 board 1 bitstream caplifive_vp2c_e7af48457 image 993876a985b934b9 rec 0x80014000 booking 441
+  UNBOOK 441: 200
+  R61 r61-stale2 END rc=0 04:08:30 :: [sup 04:08:29] UART: begin=True SB1=True SR=['0000000000000017'] SV lines=23
+  R61 r61-stale2 NOT-REPRODUCED (the fixed tree's vector on c721c1a2a): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0xf 0x0 0x0 0x5 0x2 0x18 0x420590db 0x1234 0x0
+  R61 r61-stale2 GRADE rc=1
+  R61 r61-stale BEGIN 04:08:30 board 1 bitstream caplifive_vp2c_e7af48457 image f4d9ea5b47bd8b40 rec 0x80014000 booking 442
+  UNBOOK 442: 200
+  R61 r61-stale END rc=0 04:09:13 :: [sup 04:09:12] UART: begin=True SB1=True SR=['0000000000000016'] SV lines=22
+  R61 r61-stale NOT-REPRODUCED (the fixed tree's vector on c721c1a2a): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0xf 0x0 0x0 0x5 0xd 0x0 0x0 0x0
+  R61 r61-stale GRADE rc=1
+  R61 board1 DONE 04:09:13
+  B3A r61 rc=0 04:09:13
+  R61 r61a-control BEGIN 04:09:13 board 1 bitstream caplifive_vp2c_e7af48457 image d6becdd7209b19ab rec 0x80013000 booking 443
+  UNBOOK 443: 200
+  R61 r61a-control END rc=0 04:09:56 :: [sup 04:09:55] UART: begin=True SB1=True SR=['0000000000000024'] SV lines=36
+  R61A r61a-control PASS (control): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0xd 0x0 0x0 0x5 0x99 0x0 0x5 0xf 0x0 0x0 0x0 0x5 0xf 0x0 0x5 0x0 0x5 0x1c 0x0 0x0 0x5 0x0
+  R61 r61a-control GRADE rc=0
+  R61 r61a-stale0 BEGIN 04:09:56 board 1 bitstream caplifive_vp2c_e7af48457 image 30e1d23c1c2c497e rec 0x80014000 booking 444
+  UNBOOK 444: 200
+  R61 r61a-stale0 END rc=0 04:10:38 :: [sup 04:10:37] UART: begin=True SB1=True SR=['0000000000000013'] SV lines=19
+  R61A r61a-stale0 PASS (normal exit): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0x2 0x18 0x420590db 0x1234 0x0
+  R61 r61a-stale0 GRADE rc=0
+  R61 r61a-stale3 BEGIN 04:10:38 board 1 bitstream caplifive_vp2c_e7af48457 image 231b16cddbcbe588 rec 0x80014000 booking 445
+  UNBOOK 445: 200
+  R61 r61a-stale3 END rc=0 04:11:21 :: [sup 04:11:20] UART: begin=True SB1=True SR=['0000000000000016'] SV lines=22
+  R61A r61a-stale3 NOT-REPRODUCED (the fixed tree's vector on c721c1a2a): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0x2 0x0 0x5 0x2 0x18 0x420590db 0x1234 0x0
+  R61 r61a-stale3 GRADE rc=1
+  R61 r61a-stale4 BEGIN 04:11:21 board 1 bitstream caplifive_vp2c_e7af48457 image 9be0fc798e9e544f rec 0x80014000 booking 446
+  UNBOOK 446: 200
+  R61 r61a-stale4 END rc=0 04:12:03 :: [sup 04:12:03] UART: begin=True SB1=True SR=['0000000000000016'] SV lines=22
+  R61A r61a-stale4 NOT-REPRODUCED (the fixed tree's vector on c721c1a2a): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0x2 0x0 0x5 0x2 0x18 0x420590db 0x1234 0x0
+  R61 r61a-stale4 GRADE rc=1
+  R61 board1 DONE 04:12:03
+  B3A r61a rc=0 04:12:03
+  RF va-runv BEGIN 04:12:04 board 1 bitstream caplifive_vp2c_e7af48457 image 274823b4df9e3a4a rec 0x8000c000 booking 447
+  UNBOOK 447: 200
+  RF va-runv END rc=0 04:12:46 :: [sup 04:12:45] UART: begin=True SB1=True SR=['000000000000000F'] SV lines=15
+  RF va-srevroot BEGIN 04:12:46 board 1 bitstream caplifive_vp2c_e7af48457 image 2fbafdfd2eaec3c1 rec 0x8000d000 booking 448
+  UNBOOK 448: 200
+  RF va-srevroot END rc=0 04:13:28 :: [sup 04:13:27] UART: begin=True SB1=True SR=['0000000000000014'] SV lines=20
+  RF va-runv-r59 BEGIN 04:13:28 board 1 bitstream caplifive_vp2c_e7af48457 image f551e9d2492ca6ba rec 0x8000c000 booking 449
+  UNBOOK 449: 200
+  RF va-runv-r59 END rc=0 04:14:11 :: [sup 04:14:10] UART: begin=True SB1=True SR=['000000000000000F'] SV lines=15
+  RF va-runv-r59-low BEGIN 04:14:11 board 1 bitstream caplifive_vp2c_e7af48457 image 981fcf633194ee20 rec 0x8000c000 booking 450
+  UNBOOK 450: 200
+  RF va-runv-r59-low END rc=0 04:14:53 :: [sup 04:14:52] UART: begin=True SB1=True SR=['000000000000000F'] SV lines=15
+  RF q24-deleg BEGIN 04:14:53 board 1 bitstream caplifive_vp2c_e7af48457 image 6fd2c0b60fe340ab rec 0x80003000 booking 451
+  UNBOOK 451: 200
+  RF q24-deleg END rc=0 04:15:35 :: [sup 04:15:34] UART: begin=True SB1=True SR=['0000000000000005'] SV lines=5
+  RF q24-deleg-on BEGIN 04:15:35 board 1 bitstream caplifive_vp2c_e7af48457 image 0e82f2adca300741 rec 0x80003000 booking 452
+  UNBOOK 452: 200
+  RF q24-deleg-on END rc=0 04:16:17 :: [sup 04:16:16] UART: begin=True SB1=True SR=['0000000000000005'] SV lines=5
+  RFIX va-runv EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x0 0x9
+  RFIX va-srevroot EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x80007000 0x80007000 0x80007000 0x80008000 0x0 0x0 0x9
+  RFIX va-runv-r59 EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+  RFIX va-runv-r59-low EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+  RFIX q24-deleg EXACT: 0x0 0x0 0x0 0x18 0x0
+  RFIX q24-deleg-on EXACT: 0x1000000 0x18 0x0 0x9 0xc
+  RFIX R-58 CONFIRMED ON SILICON (va-srevroot exact)
+  RFIX R-59 CONFIRMED ON SILICON (va-runv-r59, va-runv-r59-low exact)
+  RFIX Q-24 CONFIRMED ON SILICON (q24-deleg-on exact)
+  RF GRADE rc=0
+  RF board1 DONE 04:16:17
+  B3A rfix rc=0 04:16:17
+  B3A board1 DONE 04:16:17
+FB DONE 04:16:17
+CHAIN1 rc=0
+## the per-step SEQs
+### SEQ
+B3 START 03:29:05 board 1 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b1
+RF fp-all BEGIN 03:29:05 board 1 bitstream caplifive_vp2c_e7af48457 image 07692df2c3710353 rec 0x80007000 booking 420
+UNBOOK 420: 200
+RF fp-all END rc=0 03:29:47 :: [sup 03:29:46] UART: begin=True SB1=True SR=['000000000000000A'] SV lines=10
+FPDS fp-all read: SR ['000000000000000A'] :: 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1
+FPDS fp-all want: SR 10 :: 0x17 0x13 0x3 0xc1d880ad3d2bf68c 0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1
+FPDS NOT ON SILICON: 0 fdiv and 0 fsqrt mismatches on the 512 cases, position 8 exact
+RF GRADE rc=1
+RF board1 DONE 03:29:47
+FPDS-B3 read: SR ['000000000000000A'] :: 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1
+FPDS-B3 want (e7af48457): SR 10 :: 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1
+FPDS-B3 R-62 FIXED ON SILICON: the e7af48457 vector exactly (0 fdiv and 0 fsqrt misses, NX set)
+B3 FPDS-B3 GRADE rc=0
+B3 FP-ALL: FPDS-B3 R-62 FIXED ON SILICON: the e7af48457 vector exactly (0 fdiv and 0 fsqrt misses, NX set) :: AS PREDICTED (R-62 fixed on silicon)
+RF fp-rm BEGIN 03:29:47 board 1 bitstream caplifive_vp2c_e7af48457 image 45a7397cc4d4f099 rec 0x80003000 booking 421
+UNBOOK 421: 200
+RF fp-rm END rc=0 03:30:30 :: [sup 03:30:29] UART: begin=True SB1=True SR=['0000000000000010'] SV lines=16
+FPRM fp-rm read: SR ['0000000000000010'] :: 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x3fd5555555555555 0xbfd5555555555556 0x3ff6a09e667f3bcc 0x3fd5555555555556 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x1
+FPRM fp-rm want (bitstream 2): SR 16 :: 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x3fd5555555555556 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555556 0x3ff6a09e667f3bcc 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x1
+FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build
+RF GRADE rc=1
+RF board1 DONE 03:30:30
+B3 FP-RM: FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build :: AS PREDICTED (R-63 fixed on silicon)
+B3 FIRST rc=0 03:55:37
+  BF START 03:30:30 board 1 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b1 fw 0c24496f
+  S23 BEGIN 03:30:30 board 1 bitstream caplifive_vp2c_e7af48457 image bcefd969e128113f driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 422 expect batch
+  UNBOOK 422: 200
+  S23 END rc=0 03:31:12 :: [sup 03:31:11] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+  S23 AS EXPECTED (batch): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14
+  S23 GRADE rc=0
+  S23 board1 DONE 03:31:12
+  VA BEGIN 03:31:12 board 1 bitstream caplifive_vp2c_e7af48457 image 9491707dfa1613e3 driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 423 expect b2
+  UNBOOK 423: 200
+  VA END rc=0 03:31:54 :: [sup 03:31:53] UART: begin=True SB1=True SR=['0000000000000011'] SV lines=17
+  VA-ALLOC PASS (bitstream-2 vector): 0x0 0x40004 0x0 0x80004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x8 0x3 0x4 0x1 0x8 0x0
+  VA GRADE rc=0
+  VA board1 DONE 03:31:54
+  BF TIER1 BEGIN 03:31:54 booking 424
+  UNBOOK 424: 200
+  BF TIER1 DRIVER rc=0 03:55:37; watchdog lines 94
+  RUNG b0-stats retval=0 (rev7 oracle 0, reference only)
+  RUNG b0-hello retval=0 (rev7 oracle 0, reference only)
+  RUNG vm-contract retval=0 (rev7 oracle 0, reference only)
+  RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+  VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:0 
+    CAPSTONE_VM_STATS arenas=11 pages=496 peak=892 nodes=76 steps=511 faults=426 collections=0 reclaimed=0 rounds=12 bytes_in=214 bytes_out=143 node_bytes=65536 node_capacity=4096 node_growths=0
+    CAPSTONE_VM_STATS arenas=10 pages=489 peak=491 nodes=600041 steps=200065 faults=24 collections=0 reclaimed=0 rounds=8 bytes_in=367 bytes_out=64 node_bytes=65536 node_capacity=4096 node_growths=0
+  SPARSE: VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags
+  VM_BEGIN without VM_EXIT: 
+  FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0
+  CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+  BF board1 DONE 03:55:37
+B3 board1 DONE 03:55:37
+### first/SEQ
+BF START 03:30:30 board 1 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b1 fw 0c24496f
+S23 BEGIN 03:30:30 board 1 bitstream caplifive_vp2c_e7af48457 image bcefd969e128113f driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 422 expect batch
+UNBOOK 422: 200
+S23 END rc=0 03:31:12 :: [sup 03:31:11] UART: begin=True SB1=True SR=['0000000000000019'] SV lines=25
+S23 AS EXPECTED (batch): SR 25, Q1 0, every true-deny and control probe as the vector, re-arm {'Q5': 1, 'Q8': 1, 'Q10': 1, 'Q12a': 1, 'Q12b': 1, 'Q13d': 1}, total 14
+S23 GRADE rc=0
+S23 board1 DONE 03:31:12
+VA BEGIN 03:31:12 board 1 bitstream caplifive_vp2c_e7af48457 image 9491707dfa1613e3 driver /tmp/capstone/wt-gate/capstone/tests/rtl-smoke booking 423 expect b2
+UNBOOK 423: 200
+VA END rc=0 03:31:54 :: [sup 03:31:53] UART: begin=True SB1=True SR=['0000000000000011'] SV lines=17
+VA-ALLOC PASS (bitstream-2 vector): 0x0 0x40004 0x0 0x80004 0x1 0x0 0x0 0x4 0x3 0x0 0x0 0x8 0x3 0x4 0x1 0x8 0x0
+VA GRADE rc=0
+VA board1 DONE 03:31:54
+BF TIER1 BEGIN 03:31:54 booking 424
+UNBOOK 424: 200
+BF TIER1 DRIVER rc=0 03:55:37; watchdog lines 94
+RUNG b0-stats retval=0 (rev7 oracle 0, reference only)
+RUNG b0-hello retval=0 (rev7 oracle 0, reference only)
+RUNG vm-contract retval=0 (rev7 oracle 0, reference only)
+RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+VM exits: VM_EXIT:normal:0 VM_EXIT:stale:139 VM_EXIT:sparse-churn:0 
+  CAPSTONE_VM_STATS arenas=11 pages=496 peak=892 nodes=76 steps=511 faults=426 collections=0 reclaimed=0 rounds=12 bytes_in=214 bytes_out=143 node_bytes=65536 node_capacity=4096 node_growths=0
+  CAPSTONE_VM_STATS arenas=10 pages=489 peak=491 nodes=600041 steps=200065 faults=24 collections=0 reclaimed=0 rounds=8 bytes_in=367 bytes_out=64 node_bytes=65536 node_capacity=4096 node_growths=0
+SPARSE: VIRTUAL_SPARSE_CHURN_OK allocations=200000 protected_stale_tags
+VM_BEGIN without VM_EXIT: 
+FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0
+CPMX-DIAG rc=2 :: CPMX-DIAG NO DATA: no region dump followed by MTVL/CPMX
+BF board1 DONE 03:55:37
+### after/SEQ
+B3A START 03:55:37 board 1 kit bkit11-b3-b1
+HB BEGIN 03:55:37 board 1 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b1 module 215a09be5a89360c booking 439
+UNBOOK 439: 200
+HB END rc=0 04:07:05
+HOLD boot completed; transcript <mnt-hdd>/capstone/t3-run-b3-e7af48457-b1/after/hold/guest/board.txt; steps ['hold', 'stats0', 'stats1']
+READ hold lines: HOLD-PEAK 100000 | HOLD-OK 100000
+READ hold result: {"kind": "exit", "value": 0}
+READ hold fault: none
+READ stats0: nodes_high_water 0 nodes_allocated_total 0 node_capacity 262144 nodes_live 0
+READ stats1: nodes_high_water 105569 nodes_allocated_total 105569 node_capacity 262144 nodes_live 0
+HB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0
+HB board1 DONE 04:07:05
+B3A hold rc=0 04:07:05
+R61 r61-control BEGIN 04:07:05 board 1 bitstream caplifive_vp2c_e7af48457 image c710e0d5156c2c0d rec 0x80013000 booking 440
+UNBOOK 440: 200
+R61 r61-control END rc=0 04:07:48 :: [sup 04:07:47] UART: begin=True SB1=True SR=['0000000000000024'] SV lines=36
+R61 r61-control PASS (control): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0xd 0x0 0x0 0x5 0x99 0x0 0x5 0xf 0x0 0x0 0x0 0x5 0xf 0x0 0x5 0x0 0x5 0x1c 0x0 0x0 0x5 0x0
+R61 r61-control GRADE rc=0
+R61 r61-stale2 BEGIN 04:07:48 board 1 bitstream caplifive_vp2c_e7af48457 image 993876a985b934b9 rec 0x80014000 booking 441
+UNBOOK 441: 200
+R61 r61-stale2 END rc=0 04:08:30 :: [sup 04:08:29] UART: begin=True SB1=True SR=['0000000000000017'] SV lines=23
+R61 r61-stale2 NOT-REPRODUCED (the fixed tree's vector on c721c1a2a): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0xf 0x0 0x0 0x5 0x2 0x18 0x420590db 0x1234 0x0
+R61 r61-stale2 GRADE rc=1
+R61 r61-stale BEGIN 04:08:30 board 1 bitstream caplifive_vp2c_e7af48457 image f4d9ea5b47bd8b40 rec 0x80014000 booking 442
+UNBOOK 442: 200
+R61 r61-stale END rc=0 04:09:13 :: [sup 04:09:12] UART: begin=True SB1=True SR=['0000000000000016'] SV lines=22
+R61 r61-stale NOT-REPRODUCED (the fixed tree's vector on c721c1a2a): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0xf 0x0 0x0 0x5 0xd 0x0 0x0 0x0
+R61 r61-stale GRADE rc=1
+R61 board1 DONE 04:09:13
+B3A r61 rc=0 04:09:13
+R61 r61a-control BEGIN 04:09:13 board 1 bitstream caplifive_vp2c_e7af48457 image d6becdd7209b19ab rec 0x80013000 booking 443
+UNBOOK 443: 200
+R61 r61a-control END rc=0 04:09:56 :: [sup 04:09:55] UART: begin=True SB1=True SR=['0000000000000024'] SV lines=36
+R61A r61a-control PASS (control): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0xd 0x0 0x0 0x5 0x99 0x0 0x5 0xf 0x0 0x0 0x0 0x5 0xf 0x0 0x5 0x0 0x5 0x1c 0x0 0x0 0x5 0x0
+R61 r61a-control GRADE rc=0
+R61 r61a-stale0 BEGIN 04:09:56 board 1 bitstream caplifive_vp2c_e7af48457 image 30e1d23c1c2c497e rec 0x80014000 booking 444
+UNBOOK 444: 200
+R61 r61a-stale0 END rc=0 04:10:38 :: [sup 04:10:37] UART: begin=True SB1=True SR=['0000000000000013'] SV lines=19
+R61A r61a-stale0 PASS (normal exit): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0x2 0x18 0x420590db 0x1234 0x0
+R61 r61a-stale0 GRADE rc=0
+R61 r61a-stale3 BEGIN 04:10:38 board 1 bitstream caplifive_vp2c_e7af48457 image 231b16cddbcbe588 rec 0x80014000 booking 445
+UNBOOK 445: 200
+R61 r61a-stale3 END rc=0 04:11:21 :: [sup 04:11:20] UART: begin=True SB1=True SR=['0000000000000016'] SV lines=22
+R61A r61a-stale3 NOT-REPRODUCED (the fixed tree's vector on c721c1a2a): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0x2 0x0 0x5 0x2 0x18 0x420590db 0x1234 0x0
+R61 r61a-stale3 GRADE rc=1
+R61 r61a-stale4 BEGIN 04:11:21 board 1 bitstream caplifive_vp2c_e7af48457 image 9be0fc798e9e544f rec 0x80014000 booking 446
+UNBOOK 446: 200
+R61 r61a-stale4 END rc=0 04:12:03 :: [sup 04:12:03] UART: begin=True SB1=True SR=['0000000000000016'] SV lines=22
+R61A r61a-stale4 NOT-REPRODUCED (the fixed tree's vector on c721c1a2a): 0x0 0x5 0x2 0x28 0x420590db 0x77 0x1234 0x0 0x5 0x2 0x5a5a 0x0 0x0 0x5 0x2 0x0 0x5 0x2 0x18 0x420590db 0x1234 0x0
+R61 r61a-stale4 GRADE rc=1
+R61 board1 DONE 04:12:03
+B3A r61a rc=0 04:12:03
+RF va-runv BEGIN 04:12:04 board 1 bitstream caplifive_vp2c_e7af48457 image 274823b4df9e3a4a rec 0x8000c000 booking 447
+UNBOOK 447: 200
+RF va-runv END rc=0 04:12:46 :: [sup 04:12:45] UART: begin=True SB1=True SR=['000000000000000F'] SV lines=15
+RF va-srevroot BEGIN 04:12:46 board 1 bitstream caplifive_vp2c_e7af48457 image 2fbafdfd2eaec3c1 rec 0x8000d000 booking 448
+UNBOOK 448: 200
+RF va-srevroot END rc=0 04:13:28 :: [sup 04:13:27] UART: begin=True SB1=True SR=['0000000000000014'] SV lines=20
+RF va-runv-r59 BEGIN 04:13:28 board 1 bitstream caplifive_vp2c_e7af48457 image f551e9d2492ca6ba rec 0x8000c000 booking 449
+UNBOOK 449: 200
+RF va-runv-r59 END rc=0 04:14:11 :: [sup 04:14:10] UART: begin=True SB1=True SR=['000000000000000F'] SV lines=15
+RF va-runv-r59-low BEGIN 04:14:11 board 1 bitstream caplifive_vp2c_e7af48457 image 981fcf633194ee20 rec 0x8000c000 booking 450
+UNBOOK 450: 200
+RF va-runv-r59-low END rc=0 04:14:53 :: [sup 04:14:52] UART: begin=True SB1=True SR=['000000000000000F'] SV lines=15
+RF q24-deleg BEGIN 04:14:53 board 1 bitstream caplifive_vp2c_e7af48457 image 6fd2c0b60fe340ab rec 0x80003000 booking 451
+UNBOOK 451: 200
+RF q24-deleg END rc=0 04:15:35 :: [sup 04:15:34] UART: begin=True SB1=True SR=['0000000000000005'] SV lines=5
+RF q24-deleg-on BEGIN 04:15:35 board 1 bitstream caplifive_vp2c_e7af48457 image 0e82f2adca300741 rec 0x80003000 booking 452
+UNBOOK 452: 200
+RF q24-deleg-on END rc=0 04:16:17 :: [sup 04:16:16] UART: begin=True SB1=True SR=['0000000000000005'] SV lines=5
+RFIX va-runv EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x0 0x9
+RFIX va-srevroot EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x80007000 0x80007000 0x80007000 0x80008000 0x0 0x0 0x9
+RFIX va-runv-r59 EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+RFIX va-runv-r59-low EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+RFIX q24-deleg EXACT: 0x0 0x0 0x0 0x18 0x0
+RFIX q24-deleg-on EXACT: 0x1000000 0x18 0x0 0x9 0xc
+RFIX R-58 CONFIRMED ON SILICON (va-srevroot exact)
+RFIX R-59 CONFIRMED ON SILICON (va-runv-r59, va-runv-r59-low exact)
+RFIX Q-24 CONFIRMED ON SILICON (q24-deleg-on exact)
+RF GRADE rc=0
+RF board1 DONE 04:16:17
+B3A rfix rc=0 04:16:17
+B3A board1 DONE 04:16:17
