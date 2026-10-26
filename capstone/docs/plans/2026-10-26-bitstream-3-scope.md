@@ -233,7 +233,9 @@ on bitstream 2 are attributed to it by an exact-value match (ISSUES R-62), and n
   remainder) and the rarer subnormal-result error.
 - Considered, not in: R-64 (measured in simulation the same day, after the hash went to synth). It covers the unit's
   exception flags on special operands and on overflow, and overflow to infinity under the directed modes. No program
-  is known to read either.
+  is known to read either. R-65 (a subnormal quotient that rounds up into the smallest normal reads zero) and R-66 (an
+  unboxed FP32 operand is computed instead of read as NaN) were found the same evening and are not in either. All
+  three are fixed together on capstone-ariane r64-flags 76eeec974 for a later bitstream.
 - Next: the 95-test sweep, the synthesis-only size gate, then the full build. The flash is the lead's word.
 
 

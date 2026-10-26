@@ -3916,6 +3916,40 @@ fraction bits are already 0. A normal result has bit 52 set before rounding and 
 cannot fire on it. The third subnormal branch shifts right by at least 3, so its bit 52 is 0. All 40 prints read IEEE
 after the fix, and the random and exact arms are unchanged.
 
+### R-66 — `fdiv.s` and `fsqrt.s` compute on an FP32 operand that is not NaN-boxed instead of treating it as the canonical NaN: fpnew's divide/sqrt wrapper never reads `is_boxed_i` · `DEMONSTRATED IN SIMULATION 2026-10-26 (fp-box-divsqrt.S on the e7af48457 core, capstone-ariane r62-divsqrt 04644daab); on bitstream 2 and in bitstream 3 by source (vendored fpnew 0.7.0); not read on silicon; FIX IN RTL, simulation only: capstone-ariane r64-flags 76eeec974, not in bitstream 3. Found by the claim-auditor of the R-64 fix, read in source`
+
+Siblings: R-62 to R-65 are in the same unit's normaliser. This one is in its fpnew wrapper (`fpnew_divsqrt_multi.sv`).
+
+**Mechanism:** RISC-V D's NaN-boxing rule makes an FP32 operand read as the canonical NaN when the upper 32 bits of its
+f register are not all ones. fpnew computes `is_boxed` per operand and hands it to every unit. The FMA unit passes
+its copy to the classifier (`fpnew_fma_multi.sv:130`, `:196`). `fpnew_divsqrt_multi.sv` declares `is_boxed_i` (`:33`)
+and never reads it.
+
+**Reading** (`fp-box-divsqrt.S`, `.sup/fpbox`; every value predicted in the header before the run):
+- unboxed 1.0f / boxed 2.0f reads 0.5f, and so does boxed 1.0f / unboxed 2.0f;
+- fsqrt.s of an unboxed 4.0f reads 2.0f;
+- RISC-V gives the canonical NaN, 0xffffffff7fc00000, for all three;
+- fadd.s with the same unboxed operand reads the canonical NaN, so the FMA unit checks;
+- a boxed fdiv.s reads correctly;
+- fflags 0x0 throughout.
+
+**Reach:** only code that runs an FP32 divide or square root on a register last written as a double or as an integer
+move. A compiler never emits that for well-typed C. Not censused.
+
+**Fix** (r64-flags `76eeec974`): a patched copy of the wrapper (`core/fpu_div_sqrt_fix/fpnew_divsqrt_multi.sv`, selected
+by Flist) substitutes the boxed canonical NaN at the input stage for an unboxed FP32 operand. Operand b is checked for
+a division ONLY, because for fsqrt CVA6 reads rs2 from the integer file (`is_rs2_fpr` excludes FSQRT,
+`ariane_pkg.sv:998`). Operand b is then x0 = 0, which reads as unboxed, and the unit's NaN test on b is not gated by
+the operation.
+- The first cut checked both operands. It would have turned every fsqrt.s into a NaN.
+- `fp-sqrtb-divsqrt.S` guards it. On that ungated variant its fsqrt.s row reads the canonical NaN, which is the
+  positive control. On the fix it reads 2.0f.
+- After the fix fp-box rows 1–3 read the canonical NaN, the boxed control is unchanged, and every other FP arm is
+  unchanged.
+
+That guard arm also records a refuted prediction of mine. Reading the decoder alone, I predicted that fsqrt returns
+NaN whenever f0 holds a NaN. It does not, because fsqrt never reads f0.
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
