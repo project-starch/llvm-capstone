@@ -7367,4 +7367,67 @@ T2/T1, with the cycle interval:
 - 11 programs' outputs are unchecked: no real verify and no state hash.
 - duff and lcdnum came out at ±3.4 % and ±2.8 % (between-process noise above the pilot's). They are reported as
   measured, with no top-up.
-- The boot × arm interaction is not measured: each program ran on one board.
+- The boot × arm interaction was not measured in the main run, where each program ran in one boot. The T3 boots below
+  re-measure T2/T1 for the 15 allocating programs in a second boot. 14 of 15 overlap; miniz-libc differs by 0.8 %.
+
+## Where temporal safety's cost comes from: per-object lifetimes (T3) against scrub on free, on silicon (caplifive_vp2c_dcc6daf6e, both boards, 2026-10-27)
+
+**What T3 is.** T3 keeps per-object lifetimes (a CDERIVE child per malloc, a CREVOKE per free) and drops the scrub on
+free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T2/T1.
+- The arm ran for the 15 programs that allocate inside the timed region. Every other program reads T2/T1 at 1.003 or
+  below with equal instret.
+- All three arms of a program ran in one boot (ABCCBA), at the main run's dimensions.
+- 201 of 201 processes pass. The pre-registration is runtime/bench-counters edea56432aaa, with two amendments made
+  before any data was read.
+- The data and the regeneration recipe are in `capstone/benchmarks/virtual/results/2026-10-27-t3-bitstream2/`.
+
+**Per program** (cycles; Welch 95 %):
+
+| program | T3/T1, lifetimes | T2/T3, scrub | T2/T1, both | escapes T1 / T3 / T2 |
+|---|---|---|---|---|
+| miniz-libc | 1.002 [0.997, 1.007] | 2.178 [2.167, 2.188] | 2.182 [2.175, 2.189] | 589 / 590 / 1714 |
+| sglib-dllist-libc | 1.062 [1.053, 1.070] | 1.026 [1.017, 1.035] | 1.089 [1.080, 1.098] | 148 / 168 / 168 |
+| sglib-hashtable-libc | 1.058 [1.053, 1.063] | 1.024 [1.019, 1.030] | 1.084 [1.078, 1.090] | 160 / 181 / 181 |
+| sglib-listinsertsort-libc | 1.064 [1.054, 1.074] | 1.023 [1.014, 1.032] | 1.089 [1.077, 1.100] | 157 / 178 / 178 |
+| sglib-listsort-libc | 1.062 [1.055, 1.070] | 1.027 [1.021, 1.034] | 1.091 [1.083, 1.099] | 157 / 178 / 178 |
+| sglib-rbtree-libc | 1.048 [1.042, 1.055] | 1.022 [1.015, 1.029] | 1.071 [1.063, 1.080] | 130 / 148 / 148 |
+| ctl-stack-libc | 1.020 [1.012, 1.027] | 1.029 [1.022, 1.036] | 1.049 [1.042, 1.056] | 69 / 77 / 77 |
+| ctl-string-libc | 1.020 [1.015, 1.024] | 1.012 [1.007, 1.017] | 1.032 [1.027, 1.037] | 55 / 63 / 63 |
+| ctl-vector-libc | 1.018 [1.009, 1.027] | 1.030 [1.022, 1.039] | 1.048 [1.041, 1.056] | 71 / 81 / 82 |
+| rv8-norx | 1.000 [1.000, 1.000] | 1.080 [1.079, 1.081] | 1.080 [1.079, 1.081] | 149 / 149 / 149 |
+| rv8-miniz | 1.000 [0.992, 1.008] | 1.056 [1.048, 1.063] | 1.055 [1.047, 1.064] | 99 / 99 / 143 |
+| rv8-aes | 1.000 [0.996, 1.004] | 1.037 [1.032, 1.041] | 1.036 [1.032, 1.041] | 91 / 91 / 91 |
+| rv8-primes | 0.998 [0.988, 1.007] | 1.004 [1.002, 1.006] | 1.001 [0.992, 1.011] | 39 / 39 / 39 |
+| huffbench-libc | 0.997 [0.985, 1.009] | 1.003 [0.998, 1.008] | 1.000 [0.988, 1.012] | 138 / 138 / 138 |
+| rv8-qsort | 1.000 [0.999, 1.001] | 1.000 [0.999, 1.001] | 1.000 [0.999, 1.001] | 164 / 164 / 164 |
+
+**Readings.**
+- **The two costs fall in different places.**
+  - Per-object lifetimes cost 2–6 % in the programs that allocate many small objects: sglib-* and ctl-*.
+  - They cost nothing measurable in rv8, and nothing in miniz-libc.
+  - Scrub is the larger cost wherever buffers are large: miniz-libc ×2.18, rv8-norx 8 %, rv8-miniz 5.6 %, rv8-aes
+    3.7 %.
+- **miniz-libc's ×2.18 is the scrub alone.** The scrub carries 99.8 % of log(T2/T1), against the pre-registered
+  threshold of > 80 %.
+  - The extra escapes appear only with the scrub (590 → 1714), and instret rises 26 % only with it.
+  - rv8-miniz, the same compressor, shows the same signature at small scale: escapes 99 → 143 only in T2.
+  - This supports the main run's inferred mechanism: free zeroes large buffers just before they are unmapped,
+    touching pages that were never used. The escape counts are the evidence. The page-fault attribution itself
+    is still inferred.
+- **The escapes in sglib-* and ctl-* come with the lifetimes**, not the scrub: they rise T1 → T3 and stay at T2.
+- **rv8-norx's scrub costs 8 % of cycles for 1 % more instructions.** That is memory traffic, not work.
+- **Suite geomeans over these 15 programs:**
+  - BEEBS-libc (10): T3/T1 1.0347 [1.0326, 1.0369], T2/T3 1.1021 [1.1001, 1.1041];
+  - RV8 (5): T3/T1 0.9994 [0.9973, 1.0013], T2/T3 1.0347 [1.0330, 1.0363].
+
+**Pre-registered checks** (t3-checks.txt):
+1. Instret order T1 ≤ T3 ≤ T2 (0.1 % tolerance): holds for all 15.
+2. miniz-libc's scrub share > 0.80: holds at 0.998; T3/T1 = 1.002, against the < 1.17 predicted.
+3. T2/T1 replicate, interval overlap with the main run: holds for 14 of 15.
+   - **Miss: miniz-libc**, 2.182 [2.175, 2.189] here against 2.165 [2.156, 2.174] in the main run.
+   - That is a boot effect of 0.8 % on the most memory-bound program. It is reported as measured, with no top-up.
+
+**What this does not measure.**
+- The always-on hardware lifetime check is in every arm.
+- Skipping the scrub for a free that is about to unmap was not built or measured. That is the runtime improvement the
+  miniz-libc reading suggests.
