@@ -339,7 +339,7 @@ So neither #238's SDK flag nor #27's MOVC change causes it.
 **Impact.** A program that branches on these errnos (ENODEV for an unsupported file mapping, ENOMEM for an oversize mapping) takes another path. No port has been checked for such a dependency.
 
 
-## S-21 — silicon only: every CSRUNV escape restores the S caller's registers and CSRs (M-mode ones included) from frame+1024, and a child thread's frame is a page the domain can write `OPEN — security, silicon only, found 2026-10-18 by the board lane reading vp2 Tier 1 boot 3-T1's repeat (confirmed from source by the claim-auditor and two-sided by the RTL lane; NOT YET DEMONSTRATED, the RTL lane's sim arm is pre-registered); RULED the same day by the semantics owner: the module makes a child frame unreachable before its first entry (the compiler lane), and the RTL keeps the caller snapshot out of the frame on the next bitstream (the RTL lane); a consequence of vp2 item D's decision 1`
+## S-21 — silicon only: every CSRUNV escape restores the S caller's registers and CSRs (M-mode ones included) from frame+1024, and a child thread's frame is a page the domain can write `OPEN — security, silicon only, found 2026-10-18 by the board lane reading vp2 Tier 1 boot 3-T1's repeat (confirmed from source by the claim-auditor and two-sided by the RTL lane; NOT YET DEMONSTRATED, the RTL lane's sim arm is pre-registered); RULED the same day by the semantics owner: the module makes a child frame unreachable before its first entry (the compiler lane), and the RTL keeps the caller snapshot out of the frame on the next bitstream (the RTL lane); a consequence of vp2 item D's decision 1; fix (a) ON DEV since ffb6fc71f523 (2026-10-20); measured two-sided on QEMU 2026-10-26 (dev 33a555af8e21)`
 
 Siblings: S-22 (the paused context's OWN state, read back from the same domain-reachable frame), Q-30 (the frame slots'
 visibility after an escape, which is how this was found). The main thread is not affected: its frame is a kernel page.
@@ -384,6 +384,27 @@ ECALL reads 25 after the fix and reaches the ECALL on the pre-fix module. Truste
 (Q-23), so copying the start frame into a kernel page is not available. (b) The RTL (next bitstream, costed and
 pre-registered by the RTL lane): the caller snapshot kept out of the frame, in a kernel-only save area or the CSR file
 for the one slot, since (a) relies on the adapter never granting a frame page.
+
+**(a) LANDED** (dev ffb6fc71f523). capstone_vm.c's CV_THREAD_CREATE CSRETIREs the frame arena's ancestor after
+pin_thread_frame. If the retire fails it refuses with -EACCES and a must-fire line. It sets arena->ancestor_retired, so the
+launcher's later unmap skips a second retire.
+- The retire sits after the supervisor_slots -EBUSY refusal. On one-slot bitstreams it is unreachable, and the board path
+  is unchanged.
+- **The two-sided check** (dev 33a555af8e21, `capstone/tests/rtl-smoke/vp2-flat-table-2026-10-17/PREREG-s21-two-sided.md`)
+  compares two-slot copies of qkit7-b2twin3-q8: dev's module, against the same source minus the retire block
+  (frame-tests/s21-prefix.patch).
+  - **write-live:** a child that never exits, the domain writing frame+1024, +1120 and +1408 while it lives. With the fix
+    it reads cause 25 at frame+0x400; without it, the write lands. On fresh boots that is one pair (pre-registered at
+    c87d9087bf99); counting the diagnostic boots, N=2 per module.
+  - The first pre-registered pair (bbf9ae351624), in which the child exits at once, did NOT separate: the module without
+    the retire also read 25. That is what found the window below.
+  - **prewrite control:** the write lands on both modules.
+- **The window (a) closes** runs from create to the child's exit. At the exit the launcher unmaps the frame arena (exec.c
+  after CV_THREAD_EXIT), and that unmap's retire kills the copy on either module. A test whose child exits at once
+  therefore cannot measure (a). The spec above, "writes before the ECALL", must be read as "while the child lives".
+- **Retracted evidence** (dev 1d6de50b8308): the five-item gate's frame `copy` reading (cause 25) is NOT evidence for (a).
+  It reads the same 25 on the module without the retire. Cite the write-live pair instead.
+- Exposure is unchanged: nil on one-slot bitstreams, live with N slots.
 
 **Exposure today** (verified at llvm-capstone 457b78f27e10). A child frame runs only in a second context slot.
 - **vp2 has one slot.** The RTL refuses a second CSRUNV with 29 while the creator's context holds the slot (Q-26).
@@ -2524,6 +2545,58 @@ from an unprivileged domain is a finding even behind a configuration error, and 
         have bits 17:16 clear.
       - So QEMU's 65,536-id pool is close in SIZE; the divergence is generations, push and retire.
       - Prediction kind (d) narrows to "an index ≥ 65,535", which the RTL cannot reach.
+
+## Q-34 — a misaligned PLAIN load in a protected context completes on QEMU, while the RTL traps it with cause 4 (and, by the same code, a store with cause 6): a twin-fidelity gap with a verdict consequence `OPEN — observed 2026-10-26 on bitstream 2 dcc6daf6e, board 2, Juliet spatial remainder part01 (lane vp2-tier12 d54e7a6582e2); filed by the board lane from the compiler lane's QEMU reading and the rtl lane's RTL reading, each re-read here; the fix is a QEMU pin, the semantics owner's call`
+
+**The cells** (seeded build, so no rand draw; lane vp2-tier12 d54e7a6582e2, `tier3-smoke/records/b2bs-juliet-rem-part01-b2.result-lines.txt`, which lands on dev with the remainder's results):
+
+| image | the twin (qkit7-b2twin3-q8) | silicon |
+|---|---|---|
+| CWE121_Stack_Based_Buffer_Overflow__CWE135_12.bad.s00 | cause 28 at wcslen+0x2c, address code+0x2837d | cause 4 at wcslen+0x14, address code+0x28355 |
+| CWE121_Stack_Based_Buffer_Overflow__CWE135_12.bad.s01 | cause 28 at wcscpy+0x1c, address code+0x2837d | cause 4 at wcscpy+0x1c, address code+0x28355 |
+
+- **The access:** wcslen+0x14 is `lw a2, 0(a0)` and wcscpy+0x1c is `lw a3, 0(a1)`, disassembled from the seeded `.s00.dom`.
+  They read 4-byte wide characters from the case's char string at image address 0x38355, which is odd.
+- **Silicon** traps the FIRST such load. **QEMU** performs it and every 4-byte step after it, ten in-bounds misaligned
+  `lw` in all. It faults 40 bytes on at the bound with cause 28 (the twin's serial.log, read by the compiler lane).
+- **Not Q-31:** no capability exception is pending at the faulting load. Q-31 ruled only on the ORDER of the two
+  exceptions.
+
+**The mechanism, both sides:**
+- **The RTL** (capstone-ariane 96eb969da = core dcc6daf6e, re-read here):
+  - `core/load_store_unit.sv`'s data_misaligned_detection sets `data_misaligned` for `LW, LWU, SW, ...` at a misaligned
+    address, with no privilege, capmode or context term.
+  - The capability exception is merged only `if (CVA6Cfg.CAPSTONE_EXT && cap_exception.valid && !misaligned_exception.valid)`.
+  - In a supervised context the trap is an ESCAPE (commit_stage.sv:228-234, the rtl lane's reading), so OpenSBI's
+    misaligned emulation is never reached.
+  - capstone_vm.c resolve() on dev returns unless `cause == 12, 13 or 15` on event 4, so a 4 is terminal for the run.
+- **QEMU** (capstone-qemu 46b69c03a4, the twin's 708bbff5; re-read here):
+  - capstone_check_access (op_helper.c:1858) checks alignment only under `if(size == 16)` (LDC/STC).
+  - `trans_lw` is `gen_load(ctx, a, MO_TESL)`, and trans_rvi.c.inc has no MO_ALIGN at all. So TCG carries out the
+    misaligned access, as upstream does.
+- **Both are spec-legal:** an EEI may perform or trap misaligned plain accesses. No ruling chose QEMU's behaviour. The
+  RTL's trap is what R-34's fix delivered.
+
+**Scope (a lower bound):**
+- The compiler lane scanned all 288 remainder twin transcripts, 9,541 fault lines, for a faulting access that was itself
+  misaligned (address mod size not 0).
+  - The scan's first version read 0 because of a pc-format mismatch. Fixed, it finds .s00 and .s01.
+  - It found three cells, all in part01: the two above and the census CWE135_12.bad, whose board draw took the good path.
+- **Blind spot:** a misaligned access QEMU completed without faulting leaves no line. So cells where one precedes an
+  aligned fault, or happens in a run that completes, are not counted.
+- **Untested prediction:** a misaligned plain store reads cause 6 on silicon where QEMU stores.
+
+**Grading, until ruled:**
+- A silicon 4 (or 6) at an access the twin performed misaligned is this gap, not a new finding and not a miss of the
+  spatial defect (the rtl lane's reading).
+- Whether it counts as CAUGHT is the corpus owner's ruling. Until then the remainder records keep such cells as
+  differences.
+
+**The fix, if the semantics owner wants the twin aligned:** a QEMU pin in capstone_check_access.
+- Raise 4/6 whenever the address mod size is not 0, for every size, gated on capstone_protected_data, so recorded
+  physical-profile results stay reproducible.
+- Place it BEFORE the tag, type and bounds checks. That is the RTL's merge order, and it would also close Q-31's order.
+- It changes twin references wherever a context performs a misaligned plain access.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 

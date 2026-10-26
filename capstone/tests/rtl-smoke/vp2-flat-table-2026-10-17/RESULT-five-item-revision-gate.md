@@ -26,6 +26,8 @@ exit 1 (the control). Images: frame-contract.dom 359163cf6ccc681f (from frame-te
 |---|---|---|
 | twice | second create on a live child's frame -EBUSY, first child unharmed | first=1 second=-16; child_ran=1; console `already backs a thread` 1 |
 | copy | the domain's read of its own copy of a granted frame faults | created=1, then cause=25 (exit signal 11) |
+
+**RETRACTED 2026-10-26: the `copy` row is not evidence for S-21's fix (a).** The same test reads the same cause 25 on this module with the CV_THREAD_CREATE retire block removed. Its child exits at once, and the launcher's unmap of the frame at the child's exit (runtime/virtual/exec.c, after CV_THREAD_EXIT) retires the arena whatever the module did at create. The window fix (a) closes is create to child exit. A write while the child lives measures it: 25 with the fix, and the write lands without it (PREREG-s21-two-sided.md, frame-contract.c `write-live`).
 | overlap | a grant overlapping a live frame EINVAL; adjacent grants accepted | EINVAL; adjacent-above rc=0, adjacent-below rc=0; OVERLAP_TEST:PASS |
 | multipage | a multi-page frame refused | rc=-22 |
 
