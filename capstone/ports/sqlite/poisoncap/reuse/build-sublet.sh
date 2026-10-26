@@ -13,6 +13,10 @@
 #   spatial        the same without per-object revocation (+ sublet-spatial-only.py): its control
 #   sublet         the port as ported (request-sized bounds and sizes): a side note
 #   stock          memsys5 as SQLite ships it (no Sublet)
+# Not in the default list (ARMS=...):
+#   block-port          the block port (sublet-3220000-memsys5-block.patch): block bounds, stock
+#                       rounding, and every successful realloc a new lifetime, as the corpus runs it
+#   block-port-spatial  the same without per-object revocation (+ sublet-spatial-only.py): its control
 # The engine source is staged as build-virtual.py stages it (the amalgamation with the corpus's two FTS
 # fixes, then the patches), compiled with the feature defines of PoisonCap's own build
 # (OPT_FEATURE_FLAGS and TCC there: OMIT_LOAD_EXTENSION, ENABLE_MEMSYS5, ENABLE_COLUMN_METADATA,
@@ -47,12 +51,18 @@ for arm in ${ARMS:-block-bounds spatial sublet stock}; do
   python3 "$PORT/fts5-azarg-patch.py" "$S" > /dev/null
   python3 "$PORT/fts3-doclist-null-patch.py" "$S" > /dev/null
   INC=()
-  if [ "$arm" != stock ]; then
-    patch -s -F0 -p1 -d "$A/src" < "$PORT/sublet/sublet-3220000-memsys5.patch"
-    INC=(-I"$REPO/capstone/runtime/include")
-  fi
+  case $arm in
+    block-port|block-port-spatial)
+      patch -s -F0 -p1 -d "$A/src" < "$PORT/sublet/sublet-3220000-memsys5-block.patch"
+      INC=(-I"$REPO/capstone/runtime/include") ;;
+    block-bounds|spatial|sublet)
+      patch -s -F0 -p1 -d "$A/src" < "$PORT/sublet/sublet-3220000-memsys5.patch"
+      INC=(-I"$REPO/capstone/runtime/include") ;;
+    stock) ;;
+    *) echo "unknown arm: $arm" >&2; exit 2 ;;
+  esac
   case $arm in block-bounds|spatial) python3 "$PORT/sublet/sublet-block-bounds.py" "$S" > /dev/null ;; esac
-  [ "$arm" != spatial ] || python3 "$PORT/sublet/sublet-spatial-only.py" "$S" > /dev/null
+  case $arm in spatial|block-port-spatial) python3 "$PORT/sublet/sublet-spatial-only.py" "$S" > /dev/null ;; esac
   "$CC" "${DEFS[@]}" "${INC[@]}" -I"$AMALG" -c "$S" -o "$A/sqlite3.o"
   "$CC" "$OUT/common/speedtest1.o" "$OUT/common/reuse-wrap.o" "$A/sqlite3.o" "${WRAP[@]}" -lm -o "$A/speedtest1.dom"
   "$CC" "$OUT/common/speedtest1.o" "$A/sqlite3.o" -lm -o "$A/speedtest1-plain.dom"
