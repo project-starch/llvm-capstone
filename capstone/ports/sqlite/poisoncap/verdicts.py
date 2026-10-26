@@ -7,7 +7,7 @@ RUN is a guest-run.py output directory (run.json, results.jsonl); each names the
 whose unstripped binaries give the symbol table a fault's PC offset is looked up in. Run where
 PoisonCap's llvm-nm runs (in-container.sh).
 
-Per case, the plan's tiers (docs/plans/2026-10-24-sqlite-poisoncap-corpus.md, rule 5):
+Per case, the plan's tiers (bug-corpora/sqlite/engine-repros/results/2026-10-24-poisoncap/PLAN.md, rule 5):
   qualified         the case declares fault_sites (case.json); otherwise "no qualified trigger"
   fault at site     the process faulted and the PC's function is one of the fault_sites
   mechanism-signed  fault at site, and the fault is the poison report: SIGPROT si_code 3

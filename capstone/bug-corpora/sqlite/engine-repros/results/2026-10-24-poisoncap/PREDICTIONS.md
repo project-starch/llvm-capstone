@@ -1,6 +1,6 @@
 # Predictions: the temporal cases on PoisonCap's published memsys5 (written before the run)
 
-Plan: `capstone/docs/plans/2026-10-24-sqlite-poisoncap-corpus.md`. Scope: the 25 temporal cases of
+Plan: `PLAN.md` (this folder; pre-registered as docs/plans/2026-10-24-sqlite-poisoncap-corpus.md). Scope: the 25 temporal cases of
 `results/matrix.tsv`; 19 declare `fault_sites` (qualified), 6 do not (01, 04, 08, 09, 11, 13: no
 qualified trigger, reported as such on every arm). Case 18 is a constructed demonstrator and is
 reported beside the 18 upstream defects.
