@@ -120,7 +120,8 @@ def main():
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out.with_suffix('.png'), dpi=200, bbox_inches='tight')
-    fig.savefig(out.with_suffix('.pdf'), bbox_inches='tight')
+    # No creation date: an unchanged plot stays byte-identical when it is redrawn.
+    fig.savefig(out.with_suffix('.pdf'), bbox_inches='tight', metadata={'CreationDate': None})
     with out.with_suffix('.csv').open('w', newline='') as f:
         w = csv.writer(f)
         w.writerow(['gap_upper_edge', f'{cl} cum %', f'{pl} cum %', 'control - protected pp'])

@@ -51,8 +51,8 @@ Predictions: `bug-corpora/sqlite/engine-repros/results/2026-10-24-poisoncap/PRED
    strips the permission on allocation. A static heap would switch their protection off, so their
    arm hands SQLite a heap capability without `CHERI_PERM_POISON`, the one change their `malloc`
    makes, in every case. Cases 07 and 22 pass the static `sqlite_heap` to `SQLITE_CONFIG_HEAP`
-   themselves, so the mechanism has to reach them too (open design point for step 3: a malloc'd
-   heap where the source allows it, or the same permission strip on the static array). A control
+   themselves, so the mechanism has to reach them too (decided in step 3: the same permission
+   strip on the static array, `repro322_common.h` under `REPRO322_POISONCAP`). A control
    first checks that the heap capability lacks the permission and that a planted memsys5
    use-after-free faults.
 3. **The corpus's own cases and settings.** Each case's `case.c` from the corpus (not the older
@@ -110,13 +110,16 @@ Predictions: `bug-corpora/sqlite/engine-repros/results/2026-10-24-poisoncap/PRED
 
 ## Steps
 
+Complete (2026-10-24): the result is `bug-corpora/sqlite/engine-repros/results/2026-10-24-poisoncap/`
+(`RESULTS.md`, `EVIDENCE.md`, `PREDICTIONS.md`).
+
 | # | Step | State |
 |---|---|---|
 | 1 | `ports/sqlite/poisoncap/prepare-sqlite.py WORK`: artifact by its pin, `sqlite/` extracted, `mem5.c` checked against the audit hash, both amalgamations generated in a fixed environment | done |
 | 2 | Platform on p13: `ports/sqlite/poisoncap/build-platform-docker.sh` (the recipe's `prepare.py` and `platform.sh` in a pinned container), then `guest-smoke.py` | done |
-| 3 | `build-poisoncap.py`: the corpus `case.c` files for CheriBSD purecap against each amalgamation, malloc-backed heap | not written |
-| 4 | Runner: one boot, controls first, per-case exit, signal, kernel report, core PC and fault site | not written |
-| 5 | Predictions committed, then the run, twice | — |
+| 3 | `build-poisoncap.py`: the corpus `case.c` files for CheriBSD purecap against each amalgamation (static heap with `CHERI_PERM_POISON` removed, `REPRO322_POISONCAP`) | done |
+| 4 | Runner (`guest-run.py`) and scoring (`verdicts.py`): one boot, controls first, per-case exit, signal, kernel report and fault site | done |
+| 5 | Predictions committed, then the run, twice | done |
 
 Step 1, 2026-10-24 (WORK `/tmp/capstone/sqlite-poisoncap-corpus`, 65 s): archive sha256
 `c5e8b07d4f70ed8c…` equal to the pin, 1,703 files under `sqlite/`, `mem5.c` `d8cb4c0e…`;
