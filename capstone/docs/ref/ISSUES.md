@@ -3836,7 +3836,7 @@ sqrt(2) to …bcc. It was checked here by script against the PREREG (image prefi
 encodings carry rm 7, dynamic; dtoa's rtz fcvt is the pattern's positive control). fcsr is written only by the
 runtime's fesetenv, which no program object references. So R-63 cannot reach the perf run.
 
-### R-64 — the divide/sqrt unit's exception flags are not IEEE on special operands and on overflow, and an overflowing `fdiv` returns infinity under every rounding mode: inf/x, x/inf and sqrt(inf) raise OF, 0/0 raises DZ beside NV, an exact subnormal result raises UF, and an overflow never raises NX · `DEMONSTRATED IN SIMULATION 2026-10-26 (capstone-ariane r62-divsqrt 0fdeeb1df / 284de8f0f, tests on the e7af48457 core; the fp-of and fp-special readings match predictions written into their headers before the runs, but committed with the readings, so no pre-run artifact fixes the order; fp-uf was a characterisation arm with no prediction); on bitstream 2 by source, not read on silicon (the branches involved are the vendored ones, byte-identical in the R-62 copy); NO FIX YET. Found 2026-10-26 by the RTL lane while measuring R-62's overflow residual`
+### R-64 — the divide/sqrt unit's exception flags are not IEEE on special operands and on overflow, and an overflowing `fdiv` returns infinity under every rounding mode: inf/x, x/inf and sqrt(inf) raise OF, 0/0 raises DZ beside NV, an exact subnormal result raises UF, and an overflow never raises NX · `DEMONSTRATED IN SIMULATION 2026-10-26 (capstone-ariane r62-divsqrt 0fdeeb1df / 284de8f0f, tests on the e7af48457 core; the fp-of and fp-special readings match predictions written into their headers before the runs, but committed with the readings, so no pre-run artifact fixes the order; fp-uf was a characterisation arm with no prediction); on bitstream 2 by source, not read on silicon (the branches involved are the vendored ones, byte-identical in the R-62 copy); FIX IN RTL, simulation only: capstone-ariane r64-flags 76eeec974, not in bitstream 3 (UF on an exact tiny result kept as a residual). Found 2026-10-26 by the RTL lane while measuring R-62's overflow residual`
 
 Siblings: R-62 (which bit decides the rounding) and R-63 (which mode is applied), in the same unit and file. This one
 is the special-case and overflow branches of the normaliser, which neither fix touches.
@@ -3864,15 +3864,57 @@ branches below are unchanged from the vendored file):
 - In the same model `fp-rm-divsqrt.S` read 15/15 correct (the R-63 fix is in). The IEEE columns were checked on the
   host FPU under fenv (x86-64; RMM is not available there and follows from its definition).
 
-**Reach:** not measured. The values differ from the twin only on an overflowing division under RTZ, RDN or RUP. R-63's
-census found no static directed mode in the perf images, and found fcsr written only by fesetenv, which no program
-object references. The flags differ on any program that reads fflags after one of these operations. Flag reads were
-not counted.
+**Reach** (the runtime lane's census, not re-run here): none of the 654 perf images (T1/T2 batches 1 and 2, T3) can
+expose R-64. They were disassembled with `--mattr=+f,+d`, with fpdiag's fp-divsqrt.dom as the control (fdiv.d 1,
+fsqrt.d 1). The only fcsr instructions are frcsr/fscsr in fegetenv/fesetenv (pthread), frrm in __fe_getround, and a
+csrs fflags in __fe_raise_inexact (compiler-rt). There is no frflags, no fetestexcept and no fsrm anywhere, and all
+408 fdiv/fsqrt carry rm = 7 (dynamic). The bug-corpus images are not covered; that census is the board lane's.
 
-**Fix** (not written): in the overflow branches, return the largest finite magnitude under RTZ, under RDN for a
-positive result and under RUP for a negative one, and raise NX with OF. Clear OF in the infinite-operand branches,
-clear DZ on 0/0, and raise UF only with NX. This is a few terms in the same file. It is not in bitstream 3: that hash
-was with synth before this was found, and R-62 is the blocker.
+**Fix in RTL, simulation only** (capstone-ariane r64-flags `76eeec974`, with R-65 and R-66; not in bitstream 3):
+- the infinite-operand branches stop setting OF, and 0/0 stops setting DZ;
+- on overflow under RTZ, RDN with a positive result or RUP with a negative one, the output is the largest finite
+  magnitude;
+- NX is raised with OF.
+
+All three R-64 arms read IEEE except one row, and the random and exact arms are unchanged. Lint is at baseline.
+
+**Residual, kept deliberately:** UF is still raised on an EXACT tiny result (fp-special row 11, fp-carry's B column).
+A first cut gated UF on NX (b5bcf6897). The fix's claim-auditor refuted it on a normaliser-only harness: NX itself is
+lost when an inexact tiny result's computed extra bits are all zero (R-62's residual). So the gate lost UF on 9 of
+6,000 sampled tiny results and gained none, since no exact tiny result occurred in 7,811 random samples. The gate
+comes back when NX comes from the remainder.
+
+
+### R-65 — an `fdiv` result that is subnormal before rounding and rounds up into the smallest normal reads ZERO (of the result's sign), in FP64 and FP32, under every mode that rounds it up · `DEMONSTRATED IN SIMULATION 2026-10-26 (fp-carry-divsqrt.S on the e7af48457 core, capstone-ariane r62-divsqrt 4ba8d64e8 / 04644daab); on bitstream 2 and in bitstream 3 by source (vendored code, untouched by R-62/R-63); not read on silicon; FIX IN RTL, simulation only: capstone-ariane r64-flags 76eeec974, not in bitstream 3. Found by the claim-auditor of the R-64 fix on a normaliser-only harness`
+
+Siblings: R-62, R-63 and R-64, in the same unit and file. This one is the rounding stage's renormalisation.
+
+**Mechanism** (`norm_div_sqrt_mvp.sv`, the vendored rounding stage):
+- the three subnormal-result branches leave the hidden-bit position (bit 52) at 0, with exponent 0;
+- the renormalisation counts only a carry out of the hidden bit (`Mant_renorm_S = Mant_upperRounded_D[C_MANT_FP64+1]`,
+  `Exp_res_round_D = Exp_res_norm_D + Mant_renorm_S`);
+- so a round-up that carries INTO bit 52, which is the step to the smallest normal, leaves the exponent at 0, and the
+  packing drops bit 52. The result reads zero.
+
+**Reading** (`fp-carry-divsqrt.S`, `.sup/fpcarry`; four divisions under frm 0..4, 40 prints). Every value was
+predicted from source in the header before the run, and the header was committed with the reading:
+- 0x001fffffffffffff / 2.0, a tie, reads 0x0 under RNE, RUP and RMM. IEEE gives 0x0010000000000000.
+- Its negation reads −0 under RNE, RDN and RMM.
+- The FP32 twin 0x00ffffff / 2.0f reads 0x0 where IEEE gives 0x00800000.
+- So nine entries carry, and fflags read 0x3 on all nine. RTZ and the opposite directed mode read IEEE, as does the
+  exact neighbour 0x001ffffffffffffe / 2.0.
+- The IEEE column comes from the host FPU under fenv (RMM from its definition).
+- The same grader, given the unfixed tree's readings, reports these nine plus R-64's mismatches (34 in all). That is
+  the control that the grader fires.
+
+**Reach:** only results in the last half-ulp below the smallest normal, of either sign, and only from a division,
+since a square root is never subnormal. Not censused, because the condition is a value and no static count of it is
+possible.
+
+**Fix** (r64-flags `76eeec974`): when the pre-rounding exponent is 0, a carry into bit 52 adds 1 to the exponent; the
+fraction bits are already 0. A normal result has bit 52 set before rounding and a nonzero exponent, so the term
+cannot fire on it. The third subnormal branch shifts right by at least 3, so its bit 52 is 0. All 40 prints read IEEE
+after the fix, and the random and exact arms are unchanged.
 
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
