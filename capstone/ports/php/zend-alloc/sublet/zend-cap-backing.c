@@ -1,6 +1,6 @@
 /* The seam's metadata: fixed slabs of records, and one chained hash over the payload base.
  *
- * WHY SLABS AND NOT AN ARRAY. Each record holds three sublet_cap slots, and a slot is a PLACE:
+ * WHY SLABS AND NOT AN ARRAY. Each record is the revocation parent of live children, and the
  * a linear capability moves when it is copied, so a record that is memcpy'd or realloc'd takes
  * its capabilities with it in a way the hardware does not agree to. The records therefore never
  * move. Slabs are allocated from musl (the level below PHP's allocator, not PHP's), chained,
@@ -91,10 +91,11 @@ struct zend_cap_block *zend_cap_record_new(void)
         r = &s->records[s->used++];
     }
     /* The slots must be EMPTY, not merely zeroed C memory: a reused record whose slot still
-     * held something would have the next sublet_take operate on a stranger's region. */
-    sublet_clear(&r->senior);
-    sublet_clear(&r->header);
-    sublet_clear(&r->payload);
+     * held something would have the next derive cut a child from a stranger's block. */
+    r->parent = (void *)0;
+    r->header = (void *)0;
+    r->payload = (void *)0;
+    r->object = (void *)0;
     r->alias = (void *)0;
     r->header_alias = (void *)0;
     r->next = (struct zend_cap_block *)0;
@@ -108,9 +109,10 @@ struct zend_cap_block *zend_cap_record_new(void)
 void zend_cap_record_free(struct zend_cap_block *r)
 {
     if (!r || !r->live) { return; }
-    sublet_clear(&r->senior);
-    sublet_clear(&r->header);
-    sublet_clear(&r->payload);
+    r->parent = (void *)0;
+    r->header = (void *)0;
+    r->payload = (void *)0;
+    r->object = (void *)0;
     r->alias = (void *)0;
     r->header_alias = (void *)0;
     r->live = 0;

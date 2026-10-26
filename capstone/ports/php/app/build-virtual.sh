@@ -73,12 +73,16 @@ case "$WHAT" in
   probe)
     # The seam probe: can a lent block be split so that retiring the payload leaves PHP's
     # header live? Everything in the allocator plan depends on the answer.
-    SRC="$R/capstone/ports/php/zend-alloc/sublet/probe-sublet-split.c"
-    IMG="$OUT/probe-sublet-split.dom"
+    # probe-derive-split.c, not probe-sublet-split.c: the latter probed the Sublet loan
+    # (__capstone_sublet_malloc_linear) that upstream deleted on 2026-10-25, so it cannot
+    # link at all. The new probe settles the same questions for CDERIVE/CREVOKE.
+    SRC="$R/capstone/ports/php/zend-alloc/sublet/probe-derive-split.c"
+    IMG="$OUT/probe-derive-split.dom"
     echo "  compiling the seam probe ..."
     # -I $R/capstone so <sublet/sublet.h> resolves to capstone/sublet/sublet.h, which is the
     # header the virtual heap itself uses (runtime/virtual/vm.h includes ../../sublet/sublet.h).
-    "$CC" -O1 -I"$R/capstone" "$SRC" -o "$IMG" || { echo "probe build FAILED" >&2; exit 1; }
+    "$CC" -O1 -I"$R/capstone" -I"$R/capstone/runtime/include" "$SRC" -o "$IMG" \
+      || { echo "probe build FAILED" >&2; exit 1; }
     echo "  built $IMG"
     "$CAPSTONE_LLVM_BIN/llvm-readobj" --sections "$IMG" 2>/dev/null \
       | awk '/Name: .capstone_virtual/{f=1} f&&/Size:/{print "    .capstone_virtual size: " $2; exit}'
@@ -174,7 +178,7 @@ case "$WHAT" in
     SEAM="$R/capstone/ports/php/zend-alloc/sublet"
     IMG="$OUT/probe-seam.dom"
     echo "  compiling the seam probe ..."
-    "$CC" -O1 -I"$R/capstone" -I"$SEAM" \
+    "$CC" -O1 -I"$R/capstone" -I"$R/capstone/runtime/include" -I"$SEAM" \
       "$SEAM/probe-seam.c" "$SEAM/zend-cap-blocks.c" "$SEAM/zend-cap-backing.c" \
       -o "$IMG" || { echo "seam probe build FAILED" >&2; exit 1; }
     echo "  built $IMG"
@@ -538,7 +542,11 @@ case "$WHAT" in
         -Wno-implicit-int -Wno-implicit-function-declaration -Wno-format-security
         -I"$T" -I"$T/Zend" -I"$T/main" -I"$T/TSRM" -I"$T/ext" -I"$T/ext/standard"
         -I"$T/regex" -I"$T/sapi/cli")
-    if [ "$MODE" = seam ]; then CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone"); fi
+    # runtime/include for <capstone/capability.h>: the seam cuts its header and payload
+    # children with CDERIVE/CREVOKE since the nested loan ABI was removed on 2026-10-25.
+    if [ "$MODE" = seam ]; then
+      CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" -I"$R/capstone/runtime/include")
+    fi
     # SHRINK-STACK: its own variable, as the plan requires. The 4 MiB domain ceiling that
     # forced it off physically is gone, and it is what makes a stack-object defect (CRASH-100,
     # stack-use-after-return) catchable at all -- but it is not free and must be measured
@@ -615,9 +623,16 @@ case "$WHAT" in
     # otherwise every temporal column would read the same and all three would look like
     # "nothing revoked". The same gate run-cases.py applies before it believes a pair.
     if [ "$MODE" = seam ]; then
-      _rev=$("$CAPSTONE_LLVM_BIN/llvm-objdump" -d "$IMG" 2>/dev/null | grep -c '\brevoke\b')
-      [ "$_rev" -gt 0 ] || { echo "  the seam image contains NO revoke instruction" >&2; exit 1; }
-      echo "    revoke instructions: $_rev"
+      # BY ENCODING, NOT BY MNEMONIC. This was `grep -c '\brevoke\b'` until 2026-10-26, when the
+      # seam moved onto CDERIVE/CREVOKE: llvm-objdump knows neither and prints both as
+      # <unknown>, so the mnemonic is absent from a CORRECT image. The gate failing closed is how
+      # that was caught, and count-cap-insns.py reads the instruction words instead.
+      _rev=$(cd "$R" && "$CAPSTONE_LLVM_BIN/llvm-objdump" -d "$IMG" 2>/dev/null \
+             | python3 -I capstone/ports/php/app/count-cap-insns.py --require) || {
+        echo "  $_rev" >&2
+        echo "  the seam image cannot issue or cannot revoke -- every temporal column would read alike" >&2
+        exit 1; }
+      echo "  seam capability instructions: $_rev"
     fi
     sha256sum "$IMG"
     ;;

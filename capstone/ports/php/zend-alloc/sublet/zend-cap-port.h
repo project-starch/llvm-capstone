@@ -39,7 +39,8 @@
 #define ZEND_CAP_PORT_H
 
 #include <stddef.h>
-#include <sublet/sublet.h>
+#include <capstone/capability.h>
+#include <malloc_capstone.h>
 
 /* ---- geometry ------------------------------------------------------------------------- */
 
@@ -49,10 +50,12 @@
  * it against PHP's own sizeof at compile time; a tree configured otherwise must not build. */
 #define ZEND_CAP_HDR    48UL
 
-/* A capability. Sublet regions are "aligned and sized to whole capabilities": sublet_give_to
- * fills its region in 16-byte steps before init, and a region that is not a whole number of
- * capabilities long cannot be written through -- init then traps. So the payload is padded up
- * to a multiple of this, and the loan is 48 + that. */
+/* A capability. The payload is padded up to a multiple of this and the block is 48 + that, so
+ * both derived children's edges land on a grain. Option (iii) is the reason it still matters:
+ * the bounds encoder truncates an unaligned base DOWNWARD and only rounds the end up, so an
+ * off-grain base would hand a child authority BELOW itself. (Under the old Sublet loan the
+ * reason was different -- a region that was not a whole number of capabilities could not be
+ * written through before init.) */
 #define ZEND_CAP_GRAIN  16UL
 #define ZEND_CAP_ROUND(n) (((unsigned long)(n) + ZEND_CAP_GRAIN - 1UL) & ~(ZEND_CAP_GRAIN - 1UL))
 
@@ -75,7 +78,7 @@
  *
  * The first temporal pair was mode 0 against mode 2, and BOTH arms caught CRASH-003 at the same
  * instruction -- Zend/zend_execute.c:669, a write through a zval pointer read out of freed
- * memory. The reason is that this platform's own malloc revokes: __capstone_sublet_free_linear
+ * memory. The reason is that this platform's own malloc revokes: the heap's own free
  * rotates the heap's authority, which is senior to the loan, so every alias to a block that
  * reaches ZEND_DO_FREE dies whatever this layer does. "No inner revocation" is therefore NOT
  * "stock PHP lifetimes" here, and a catch in such a pair cannot be attributed to the seam
@@ -116,21 +119,37 @@ void zend_cap_fail(int code, const char *what, unsigned long a, unsigned long b)
 
 /* ---- the per-block record --------------------------------------------------------------
  *
- * A sublet_cap is a PLACE, not a value: a linear capability moves when it is copied, so an
- * allocator under Sublet keeps every capability it owns in a slot in memory. A record must
- * therefore never be memcpy'd, realloc'd or moved, which is why the metadata heap is a chain
- * of fixed slabs rather than a growable array.
+ * CDERIVE/CREVOKE, NOT A SUBLET LOAN, SINCE 2026-10-26. The 2026-10-25 merge deleted
+ * __capstone_sublet_malloc_linear/_free_linear from runtime/virtual/heap.c -- the linear loan
+ * every block used to come through, and which this port was the only consumer of. Linear
+ * authority is no longer exported at all: __capstone_malloc_map keeps its grant in the heap's
+ * private slot and returns a bare base ("a scalar placeholder crosses only the private
+ * backend", heap.c:192).
  *
- * The three slots come first so that each sits at a 16-byte offset from a 16-aligned record. */
+ * The replacement is capability.h's CDERIVE/CREVOKE, and the seam's SHAPE is unchanged -- split
+ * at the 48-byte header, retire the payload per _efree, never revoke the header. What changes is
+ * that children are NON-LINEAR references cut from a non-linear parent, so they are values and
+ * not places, and the sublet_cap slots are gone. The record must still never be moved, because
+ * it is the index's identity and the parent of live children.
+ *
+ * Every move below was measured before this was written, by probe-derive-split.c against this
+ * runtime: the header stays writable after the payload is revoked (stage 2), a revoked payload
+ * denies with cause 25 (stage 3), and a re-derive over the same bytes leaves the previous
+ * tenant's alias dead (stage 4). The object sits 48 bytes INTO the parent, not at its base
+ * (stage 1), which is why pay_off is computed and never assumed. */
 struct zend_cap_block {
-    sublet_cap senior;      /* taken BEFORE any split: one revoke ends every descendant */
-    sublet_cap header;      /* [B, B+48): the handle, once the header alias is out */
-    sublet_cap payload;     /* [B+48, end): the region, or the handle while a payload is issued */
+    void *parent;           /* the heap's block capability: non-linear, carries MANAGE, senior to
+                             * both children by construction -- no separate handle is needed.
+                             * NEVER handed upward: it spans mallocng's slot prefix too. */
+    void *header;           /* [obj, obj+48): derived once, never revoked. What PHP holds. */
+    void *payload;          /* [obj+48, obj+bytes): re-derived per issue, revoked per retire */
+    void *object;           /* exactly what malloc() returned, for free() at block death */
+    unsigned long pay_off;  /* the payload's offset from the PARENT'S base -- see stage 1 */
     void *alias;            /* the FULL payload alias -- what the ALLOCATOR copies through */
     void *header_alias;     /* what PHP holds as `p` */
     struct zend_cap_block *next;    /* hash chain */
     unsigned long key;      /* B + 48, the payload base: the one index key */
-    unsigned long base;     /* B, the loan's base, for __capstone_sublet_free_linear */
+    unsigned long base;     /* B, the object's cursor */
     unsigned long bytes;    /* the loan's length, a whole number of grains */
     unsigned long size;     /* the caller's last requested size, for realloc's copy length */
     unsigned int issued;    /* a payload alias is currently out */
@@ -163,8 +182,8 @@ void *zend_cap_header(void *ptr);                      /* ZEND_CAP_HEADER(ptr) *
 void  zend_cap_retire(void *p);                        /* ZEND_CAP_RETIRE(p) */
 
 /* How much the seam did, for the gate that requires the fault arm to revoke strictly more than
- * the control. sublet_stats is static per translation unit (sublet.h:46-48), so heap.c's
- * counters do not see this layer's -- it needs its own. */
+ * the control. This layer keeps its own counters: the heap's are not visible here, and after
+ * the move to CDERIVE/CREVOKE there is no shared stats block to read at all. */
 void zend_cap_stats(unsigned long out[8]);
 /* Arm the atexit printer for the two PHP_VIRTUAL SEAM lines. Idempotent, and called
  * from the first block allocation: on real PHP nothing else is in a position to print

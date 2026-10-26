@@ -38,8 +38,6 @@
  * (declared runtime/virtual/vm.h:23). Declared here rather than by including those headers:
  * this translation unit is compiled against PHP's include path, and the three signatures are
  * the whole of what it needs from the level below. */
-unsigned long __capstone_sublet_malloc_linear(size_t n, sublet_cap *out);
-void          __capstone_sublet_free_linear(unsigned long base);
 long          __capstone_vm_nodes(unsigned long available);
 
 static unsigned int cap_mode;
@@ -129,9 +127,13 @@ static void cap_issue(struct zend_cap_block *r)
 {
     if (r->issued) { return; }
     reserve_nodes();
-    r->alias = sublet_take(&r->payload);
+    /* A FRESH CDERIVE over the same extent, which is what leaves the previous tenant's alias
+     * dead even though the bytes are live again -- measured as stage 4 of probe-derive-split.c
+     * before this was written. */
+    r->payload = capstone_cap_derive(r->parent, r->pay_off, r->bytes - ZEND_CAP_HDR);
+    r->alias = r->payload;
     if (!r->alias) {
-        zend_cap_fail(ZEND_CAP_FAIL_GEOMETRY, "payload take produced nothing", r->key, 0);
+        zend_cap_fail(ZEND_CAP_FAIL_GEOMETRY, "payload derive produced nothing", r->key, 0);
     }
     r->issued = 1;
     ++st_issues;
@@ -140,13 +142,13 @@ static void cap_issue(struct zend_cap_block *r)
 /* End a block: the senior revoke kills the header alias, the payload region and every object
  * alias ever issued from it, in one operation. Then the loan goes back.
  *
- * The lower level revokes too -- __capstone_sublet_free_linear rotates the heap's own
- * authority, which is senior to the loan -- and it does so in BOTH arms. That is deliberate:
- * the level below is held constant so the temporal pair differs only in whether _efree
- * revokes. */
+ * The level below is held constant across the arms, deliberately, so the temporal pair differs
+ * only in whether _efree revokes. The loan's return used to supply that for free by rotating
+ * the heap's own authority; free() does not, so the children are revoked here in both arms and
+ * only the COUNT is arm-dependent. See the note in the body. */
 static void cap_retire_block(struct zend_cap_block *r)
 {
-    unsigned long base = r->base;
+    void *object = r->object;
     unsigned int mode = zend_cap_mode();
 
     if (!(mode & ZEND_CAP_MODE_RETURN)) {
@@ -159,13 +161,19 @@ static void cap_retire_block(struct zend_cap_block *r)
         if (st_live) { --st_live; }
         return;
     }
-    if (mode & ZEND_CAP_MODE_REVOKE) {
-        sublet_give_to(&r->senior, &r->header);
-        ++st_revokes;
-    }
+    if (mode & ZEND_CAP_MODE_REVOKE) { ++st_revokes; }
+    /* THE CHILDREN DIE IN BOTH ARMS, AND ONLY THE COUNT IS ARM-DEPENDENT. The loan's return used
+     * to rotate the heap's own authority, which was senior to the loan, so it ended these
+     * children whichever arm was running -- the note above says why that matters: the level
+     * below is held constant so the temporal pair differs only in whether _efree revokes.
+     * free() does NOT end them, so the revokes are issued here to keep that invariant. It is
+     * also required for the level below: a child that outlived its block would be live
+     * authority over bytes mallocng is free to hand to someone else. */
+    if (r->payload) { capstone_cap_revoke_child(r->parent, r->payload); }
+    if (r->header)  { capstone_cap_revoke_child(r->parent, r->header); }
     zend_cap_unindex(r);
     zend_cap_record_free(r);
-    __capstone_sublet_free_linear(base);
+    free(object);
     ++st_frees;
     if (st_live) { --st_live; }
 }
@@ -178,21 +186,48 @@ void *zend_cap_block_alloc(size_t bytes)
     /* On real PHP this is the only place the seam is guaranteed to be entered before exit. */
     zend_cap_report_at_exit();
 
-    /* PHP asks for 48 + REAL_SIZE(n). The payload must be a whole number of capabilities or
-     * sublet_give_to cannot write through it before init, so round the request up; 48 is itself
-     * a multiple of the grain, so this rounds the payload and nothing else. */
+    /* PHP asks for 48 + REAL_SIZE(n). The request is still rounded to a whole number of
+     * capabilities: 48 is itself a multiple of the grain, so this rounds the payload and nothing
+     * else, and it keeps both derived children's edges on a grain -- which is what Option (iii)
+     * wants, since the encoder truncates an unaligned base DOWNWARD and only rounds the end up.
+     * (It is no longer needed to let a give write through the region before init; nothing writes
+     * through a region now.) */
     want = ZEND_CAP_ROUND(bytes);
     if (want < ZEND_CAP_HDR + ZEND_CAP_GRAIN) { want = ZEND_CAP_HDR + ZEND_CAP_GRAIN; }
 
     r = zend_cap_record_new();
     if (!r) { return (void *)0; }                 /* zend_cap_record_new already failed loudly */
 
-    base = __capstone_sublet_malloc_linear(want, &r->header);
-    if (!base) {
+    r->object = malloc(want);
+    if (!r->object) {
         zend_cap_record_free(r);
         zend_cap_fail(ZEND_CAP_FAIL_LOAN, "the heap would not lend a block", want, 0);
         return (void *)0;
     }
+    {
+        /* The heap's own capability over this block: non-linear, carrying MANAGE, and therefore
+         * a usable CDERIVE parent and CREVOKE authority. slot_start() is the accessor that means
+         * THIS block; r->issued on the heap's slot is a group-level capability and would grant
+         * authority over every sibling object in the size class. */
+        struct capstone_malloc_slot *slot = __capstone_malloc_find(r->object);
+        if (!slot) {
+            zend_cap_fail(ZEND_CAP_FAIL_LOAN, "the heap does not know the block it returned",
+                          (unsigned long)__builtin_capstone_cap_get_cursor(r->object), want);
+            return (void *)0;
+        }
+        r->parent = __capstone_malloc_slot_start(slot);
+        if (!r->parent) {
+            zend_cap_fail(ZEND_CAP_FAIL_LOAN, "no block capability on the heap's slot",
+                          (unsigned long)__builtin_capstone_cap_get_cursor(r->object), want);
+            return (void *)0;
+        }
+    }
+    base = __builtin_capstone_cap_get_cursor(r->object);
+    /* CDERIVE offsets are from the PARENT'S base, and the object is NOT at that base: mallocng's
+     * slot prefix lies below it (48 bytes when probe-derive-split.c stage 1 measured it). Taking
+     * this offset from the object rather than assuming zero is the difference between bounding
+     * the header and bounding the prefix. */
+    r->pay_off = (base - __builtin_capstone_cap_get_base(r->parent)) + ZEND_CAP_HDR;
     if (base & (ZEND_CAP_GRAIN - 1UL)) {
         zend_cap_fail(ZEND_CAP_FAIL_ALIGN, "loan base is not capability-aligned", base, want);
     }
@@ -200,17 +235,20 @@ void *zend_cap_block_alloc(size_t bytes)
     /* THE SENIOR HANDLE IS TAKEN BEFORE ANY SPLIT. A handle taken before the split is senior to
      * both halves, so one revoke at block death ends the header, the payload region and every
      * alias below them. Taken after, it would cover only one half. */
-    sublet_handle(&r->header, &r->senior);
-    sublet_split(&r->header, base + ZEND_CAP_HDR, &r->payload);
+    /* NO SEPARATE SENIOR HANDLE. sublet_handle() had to be taken before the split so that one
+     * revoke could end both halves; the CDERIVE parent is senior to every child it cuts by
+     * construction, so the block capability already is that handle. The payload is derived
+     * lazily by cap_issue, which is what makes each issue a fresh node over the same bytes. */
+    r->header = capstone_cap_derive(r->parent, r->pay_off - ZEND_CAP_HDR, ZEND_CAP_HDR);
     ++st_splits;
 
     r->base = base;
     r->bytes = want;
     r->key = base + ZEND_CAP_HDR;
     r->size = 0;
-    r->header_alias = sublet_take(&r->header);
+    r->header_alias = r->header;
     if (!r->header_alias) {
-        zend_cap_fail(ZEND_CAP_FAIL_GEOMETRY, "header take produced nothing", base, want);
+        zend_cap_fail(ZEND_CAP_FAIL_GEOMETRY, "header derive produced nothing", base, want);
     }
     zend_cap_index(r);
     ++st_blocks;
@@ -354,7 +392,8 @@ void zend_cap_retire(void *p)
         fflush(stderr);
         abort();
     }
-    sublet_give(&r->payload);
+    capstone_cap_revoke_child(r->parent, r->payload);
+    r->payload = (void *)0;
     ++st_revokes;
     r->issued = 0;
     r->alias = (void *)0;

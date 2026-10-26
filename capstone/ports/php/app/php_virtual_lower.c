@@ -27,7 +27,7 @@
  *
  * The first version of this function returned p unchanged, on the strength of reading
  * runtime/virtual/heap.c: free() and realloc() take the caller's pointer only as an address
- * plus a one-byte probe at the cursor, then work through r->raw -- the capability the heap
+ * plus a one-byte probe at the cursor, then work through the slot's own capability -- the one the heap
  * retained over the block. That reading is correct, and app/probe-hier-widen.c confirmed it on
  * the machine: free and realloc both succeed through a narrowed pointer, with a negative
  * control proving the narrowing was enforced.
@@ -65,20 +65,30 @@ void *zend_cap_widen(void *p)
 {
     struct capstone_malloc_slot *r;
     unsigned long c;
+    void *blk;
     if (!p) { return p; }
     r = __capstone_malloc_find(p);
     if (!r) { r = __capstone_malloc_find((char *)p - ZEND_CAP_HEADER_BYTES); }
     /* Not a block this heap handed out (a static buffer, or a pointer PHP synthesised): hand it
      * back unchanged rather than inventing authority for it. */
-    if (!r || !r->raw) { return p; }
-    /* Re-base onto r->raw's CURSOR, not its base. The physical widen uses the base
-     * (php_capstone_malloc.c:190) because its arena slots hold a capability whose cursor IS
-     * its base; heap.c's r->raw is the pointer mallocng returned, so its cursor sits at the
-     * block key while its base is lower -- mallocng's slot prefix and size-class slack are
-     * below and above the object. Using the base therefore shifted the cursor by exactly that
-     * prefix, and _efree's `ptr - 48` would have landed 16 bytes off the header. Caught by
-     * probe-hier-widen.c stage 3, which checks the cursor survives the widen rather than only
-     * that the extent grew.
+    if (!r || !r->parent) { return p; }
+    /* Carry p's CURSOR onto the block capability, rather than taking the block's base. The
+     * physical widen uses the base (php_capstone_malloc.c:190) because its arena slots hold a
+     * capability whose cursor IS its base. Here the base is lower than the object: mallocng's
+     * slot prefix and size-class slack lie below and above it. Using the base therefore shifted
+     * the cursor by exactly that prefix, and _efree's `ptr - 48` would have landed 16 bytes off
+     * the header. Caught by probe-hier-widen.c stage 3, which checks the cursor survives the
+     * widen rather than only that the extent grew.
+     *
+     * WHY THIS FORM IS INDEPENDENT OF WHERE THE BLOCK'S CURSOR SITS, which is what makes it
+     * survive the 2026-10-25 slot-API change. `blk + (c - cursor(blk))` yields blk's BOUNDS with
+     * the cursor at c whatever cursor(blk) was, so it does not depend on the heap parking the
+     * block capability at the object. It used to read r->raw, the pointer mallocng returned;
+     * that field is gone. r->issued is NOT its replacement -- it is a group-level capability over
+     * 16 + stride * count and the child that revocation names (heap.c:219, :240), so widening
+     * onto it would hand PHP authority over the whole GROUP, every sibling object included.
+     * __capstone_malloc_slot_start() is the one accessor that means this block and nothing
+     * more.
      *
      * NOTE WHAT THIS GRANTS. The recovered capability spans the heap's whole block, which
      * includes mallocng's slot prefix below the object. PHP only ever holds it as the parked
@@ -87,7 +97,8 @@ void *zend_cap_widen(void *p)
      * physical port makes the same trade for the same reason and says so
      * (php_capstone_zend_hier.c, on zc_rebound keeping the base). */
     c = __builtin_capstone_cap_get_cursor(p);
-    return (void *)((char *)r->raw + (c - __builtin_capstone_cap_get_cursor(r->raw)));
+    blk = __capstone_malloc_slot_start(r);
+    return (void *)((char *)blk + (c - __builtin_capstone_cap_get_cursor(blk)));
 }
 
 /* For the probe: the block extent the widen recovers, so a test can check the widen did
@@ -97,7 +108,8 @@ unsigned long zend_cap_block_end(void *p)
 {
     struct capstone_malloc_slot *r = p ? __capstone_malloc_find(p) : 0;
     if (!r) { r = p ? __capstone_malloc_find((char *)p - ZEND_CAP_HEADER_BYTES) : 0; }
-    return (r && r->raw) ? __builtin_capstone_cap_get_end(r->raw) : 0UL;
+    return (r && r->parent)
+        ? __builtin_capstone_cap_get_end(__capstone_malloc_slot_start(r)) : 0UL;
 }
 
 /* The diagnostic channel the physical port encodes in a deliberate fault.
