@@ -1,0 +1,10 @@
+# tier3-perfmain2-b2.sh dry run, 2026-10-26 (the boot stubbed by PM2_RUN; batch 1's log planted):
+## case b2first: batch-1 log PM k4 on board 2 END rc=0;PM k3 on board 1 END rc=0;
+PM2 b2k1 on board 2 (its second batch-1 kit ended first) BEGIN
+PM2 END rc=0 :: READ summary: stub board 2
+## case b1first: batch-1 log PM k3 on board 1 END rc=0;
+PM2 b2k1 on board 1 (its second batch-1 kit ended first) BEGIN
+PM2 END rc=0 :: READ summary: stub board 1
+## case stop: batch-1 log PM STOP: x;
+PM2 STOP: batch 1 stopped
+# The kit, checked here: perf/main2/b2k1 matches its SHA256SUMS; run-b2k1.sh e48f64aedd30000d; launcher 978c09d6; 24 of 24 process lines match the template and steps.tsv; programs coremark, matmult-int, rv8-dhrystone; args 1 5; stage 2284819 B.
