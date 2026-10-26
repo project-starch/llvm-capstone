@@ -40,7 +40,16 @@ def main():
     p.add_argument('--exact-bounds', action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; "
                         "it is kept so a suite can be run both ways as a two-sided control.")
+    p.add_argument('--sdk', type=Path, help='the SDK the application was built with: its sdk.json '
+                   '(heap_lifetimes, heap_scrub_free) selects the denial expectations and is recorded')
     a = p.parse_args()
+    # The qualified heap gives every object a lifetime; an SDK built with
+    # CAPSTONE_HEAP_LIFETIMES=OFF cannot deny a stale object, and its expectations say so.
+    heap = dict(lifetimes=True, scrub_free=True)
+    if a.sdk:
+        config = json.loads((a.sdk / 'sdk.json').read_text())
+        heap = dict(lifetimes=bool(config.get('heap_lifetimes', True)),
+                    scrub_free=bool(config.get('heap_scrub_free', True)))
     nm = Path(os.environ.get('CAPSTONE_LLVM_BIN', '')) / 'llvm-nm'
     symbols = {name: int(value, 16) for value, _, name in
                (line.split() for line in subprocess.check_output([str(nm), str(a.application)],
@@ -60,6 +69,8 @@ def main():
                   application=a.application, native=a.native, qemu=a.qemu,
                   source=HERE / 'malloc-contract.c')
     inputs.update({name: a.images / name for name in ('Image', 'fw_jump.elf', 'rootfs.ext2')})
+    if a.sdk:
+        inputs['sdk_json'] = a.sdk / 'sdk.json'
     for key, name in [('launcher', 'capstone-vexec'), ('module', 'capstone_vm.ko'),
                       ('application', 'malloc.dom'), ('native', 'native-malloc')]:
         shutil.copy2(inputs[key], stage / name)
@@ -77,6 +88,8 @@ echo MALLOC_POPULATION_EXIT:$?
 '''
     if not a.skip_churn:
         gate += 'CAPSTONE_VM_STATS=1 ./capstone-vexec malloc.dom churn\necho MALLOC_CHURN_EXIT:$?\n'
+    # Without lifetimes the program may survive a stale probe; it then says so and exits 0.
+    survive = '' if heap['lifetimes'] else ' may-survive'
     gate += '''CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom align-probe
 echo MALLOC_ALIGN_PROBE_EXIT:$?
 CAPSTONE_VM_STATS=1 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom predicate
@@ -88,7 +101,7 @@ echo MALLOC_HOT_EXIT:$?
 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot-service-control
 echo MALLOC_HOT_CONTROL_EXIT:$?
 for case in stale inplace-stale remap-stale bounds stale-free reuse-stale reuse-free interior-free; do
-  ./capstone-vexec malloc.dom "$case"
+  ./capstone-vexec malloc.dom "$case"''' + survive + '''
   echo MALLOC_DENIAL_EXIT:$case:$?
 done
 rmmod capstone_vm
@@ -127,13 +140,32 @@ echo VIRTUAL_STAGED_DONE
     checks['remap_align_reported'] = len(remap_counts) == 1
     if not a.skip_churn:
         checks['200000_lifetimes'] = 'MALLOC_CHURN_OK\n' in log and 'MALLOC_CHURN_EXIT:0\n' in log
-        checks['collection_exercised'] = any(int(n) > 0 for n in re.findall(r'collections=(\d+)', log))
+        # Only per-object lifetimes put the node table under pressure.
+        if heap['lifetimes']:
+            checks['collection_exercised'] = any(int(n) > 0 for n in re.findall(r'collections=(\d+)', log))
     # Match only after the setup marker, up to this process's exit marker.
-    sites = [('reuse-stale', 25, 'cap_malloc_fault_store'), ('reuse-free', 25, 'cap_malloc_validate'),
-             ('stale', 25, 'cap_malloc_fault_store'), ('remap-stale', 25, 'cap_malloc_fault_store'), ('inplace-stale', 25, 'cap_malloc_fault_store'),
-             ('bounds', 28, 'cap_malloc_fault_store'), ('stale-free', 25, 'cap_malloc_validate'),
-             ('interior-free', 2, 'cap_malloc_invalid_free')]
-    for name, cause, symbol in sites:
+    # Each case: (cause, faulting site), or None when the probe must survive. The denial
+    # cases anchor their size class, so a freed object never empties its group: what the
+    # probe reads is the object's own lifetime. Without lifetimes, a stale object survives;
+    # a mapping that mremap retired still faults (remap-stale); a second free finds no slot
+    # record (stale-free) and an interior pointer none either (interior-free).
+    if heap['lifetimes']:
+        sites = {'reuse-stale': (25, 'cap_malloc_fault_store'), 'reuse-free': (25, 'cap_malloc_validate'),
+                 'stale': (25, 'cap_malloc_fault_store'), 'remap-stale': (25, 'cap_malloc_fault_store'),
+                 'inplace-stale': (25, 'cap_malloc_fault_store'), 'bounds': (28, 'cap_malloc_fault_store'),
+                 'stale-free': (25, 'cap_malloc_validate'), 'interior-free': (2, 'cap_malloc_invalid_free')}
+    else:
+        sites = {'reuse-stale': None, 'reuse-free': None, 'stale': None, 'inplace-stale': None,
+                 'remap-stale': (25, 'cap_malloc_fault_store'), 'bounds': (28, 'cap_malloc_fault_store'),
+                 'stale-free': (2, 'cap_malloc_invalid_free'), 'interior-free': (2, 'cap_malloc_invalid_free')}
+    for name, site in sites.items():
+        if site is None:
+            match = re.search(r'MALLOC_FAULT_READY:' + re.escape(name) + r'\n(.*?)MALLOC_DENIAL_EXIT:' +
+                              re.escape(name) + r':0\n', log, re.S)
+            checks[name] = bool(match and 'MALLOC_SURVIVED:' + name + '\n' in match[1] and
+                                'domain fault' not in match[1] and 'MALLOC_FAIL' not in match[1])
+            continue
+        cause, symbol = site
         match = re.search(r'MALLOC_FAULT_READY:' + re.escape(name) + r'\n(.*?)MALLOC_DENIAL_EXIT:' +
                           re.escape(name) + r':139\n', log, re.S)
         fault = re.search(r'domain fault cause=(\d+) pc=0x([0-9a-f]+).*?code=0x([0-9a-f]+)-',
@@ -153,6 +185,7 @@ echo VIRTUAL_STAGED_DONE
     checks['real_linux_mremap_growth_and_shrink'] = log.count('CAPSTONE_VM_REMAP_OK') >= 2
     record = dict(status='PASS' if all(checks.values()) else 'FAIL', tests=checks,
                   virtual_vm_abi=image_abi(a.application), harts=1, allocator='Capstone-compiled musl 1.2.5 mallocng; upstream allocation policy',
+                  heap=heap, denial_expectations='per-object lifetimes' if heap['lifetimes'] else 'bounds only',
                   # The REQUESTED count is not a result. Report it only when the domain
                   # echoed it back, so a collapsed run cannot publish a figure it never reached.
                   malloc_count=(a.malloc_count if checks['malloc_count_reported'] else None),

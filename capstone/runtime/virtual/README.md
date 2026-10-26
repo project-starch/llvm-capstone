@@ -350,6 +350,11 @@ Inside that guest, load `capstone_vm.ko` and invoke
 The launcher reports node use, pinned pages, service/copy counters, and guest
 monotonic launch/elapsed times. These QEMU times are not processor benchmarks.
 
+The heap's two measurement switches, `CAPSTONE_HEAP_LIFETIMES` and
+`CAPSTONE_HEAP_SCRUB_FREE` (both ON here; `-D...=OFF` as a further argument builds the
+bounds-only and the scrub-free arms, recorded in `sdk.json`), are described in
+[mallocng.md](mallocng.md#measurement-switches).
+
 To exercise node growth and reuse, build `node-contract.c` with this SDK:
 
 ```sh
