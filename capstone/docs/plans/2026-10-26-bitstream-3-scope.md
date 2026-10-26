@@ -22,6 +22,7 @@ the rows below spend.
 | (c3) Q-31 | ordering divergence | no (ruled: the RTL order is the reference) | a QEMU pin | — | out |
 | (c4) stale status lines | R-58, R-59, Q-24 read OPEN though their RTL fixes are on silicon since the batch | no | — | — | corrected; all three CONFIRMED ON SILICON 2026-10-26 at N=2 (below) |
 | (c5) Q-34 | a misaligned plain access in a context traps 4/6 on silicon; QEMU completes it | no (ruled 2026-10-26: the trap is the intended result, terminal for the run) | none; the QEMU twin traps inside supervised contexts | — | out: no hardware misaligned support |
+| (d) FP divide/sqrt rounding | fdiv / fsqrt round to the wrong neighbour (sim, 512 cases each: .d 23 / 19, .s 53 / 27) | yes: the divsqrt unit | none that keeps hard-float div/sqrt; programs with exact FP checks fail (ludcmp, st on bitstream 2) | unknown: a cvfpu bump to a revision with `DivSqrtSel`, THMULTI (the C910 unit), correctness not yet read | the lead's call; R-62 |
 
 ## (a) S-21 / S-22: the frame is domain-reachable
 
@@ -194,6 +195,43 @@ debug apertures after the trap.
   `va-srevroot` (R-58: the caller reads its OWN srevroot back after a context), `va-runv-r59` / `va-runv-r59-low`
   (R-59: a malformed table root is refused at entry), and a Q-24 arm (firmware sets a capability cause in medeleg; an
   S-mode capability fault lands in S). R-58, R-59 and Q-24 are CONFIRMED ON SILICON at N=2.
+
+## (d) FP divide and square root are not correctly rounded
+
+Found 2026-10-26 while chasing the BEEBS `ludcmp` / `st` VERIFY-FAILED on bitstream 2. Those programs pass on the QEMU
+twin, whose softfloat is correctly rounded. `fp-ieee-divsqrt.S` (capstone-ariane vp3-ringcut `4357e64d8`) runs 512
+cases (seed 20261026) in bare M-mode under RNE against Python's correctly rounded doubles:
+- **The misses:** 23 `fdiv.d` and 19 `fsqrt.d` results, each 1 ulp toward zero.
+- **Per operand:** cases 3 and 15 run alone behind 32 nops and a fence and read the same bits.
+- **Single precision too:** `fp-ieee-divsqrt-s.S` (`03da28028`, seed 20261027, against numpy float32) reads 53
+  `fdiv.s` and 27 `fsqrt.s` misses of 512, each 1 ulp toward zero. FP32 runs through the same unit with
+  "24+4 more iterations for rounding bits" (`control_mvp.sv`, `State_ctl_S` 6'h1b / 6'h0d). ludcmp divides
+  only in single precision (3 `fdiv.s`, static count).
+- **Mechanism, by source:** fpnew 0.7.0's divsqrt (`fpu_div_sqrt_mvp`, MERGED at `fpu_wrap.sv:92`) takes the
+  round-to-nearest-even sticky bit only from four extra quotient bits, never from the remainder
+  (`norm_div_sqrt_mvp.sv:342/354`, `:385-387`). So a true result just above half an ulp is rounded as a tie, to the
+  even neighbour below it.
+- **The audit:** a bit model of that rounding predicts exactly the 23 and 19 failing indices and reproduces all 512
+  mantissas, while a remainder-aware sticky bit predicts no misses (adversarial audit, 2026-10-26).
+- **Same RTL in both flows:** nothing in the FPGA flow selects another unit.
+
+The context escape path was ruled out on the way, in the same tree: `va-runv-fp.S` covers plain, quantum-preempted,
+and fdiv / fadd / fdiv shapes, and every check reads 0. A quantum or interrupt escape cannot flush an FP op in flight
+in any case, because the escape is injected at decode (`decoder.sv:2096`).
+
+**Status: R-62 in `docs/ref/ISSUES.md`.** The BEEBS deviations on bitstream 2 are attributed to it. Native ludcmp and
+st fail VERIFY 4 of 4 as plain Linux processes (board lane `99c5620924e9`), as their context builds do. A host build
+routes every fdiv and sqrt through a C model of the RTL rounding (validated 0 of 2,048 against the traced RTL
+results). It fails ludcmp and st where IEEE passes them, and it turns minver's IEEE state 0xd6cc5fbda167dc7b, the
+twin's, into silicon's 0x74ceeb9e3de2c383 exactly. The direct instruction reading on silicon is the bare kit
+`capstone/tests/rtl-smoke/fp-divsqrt-bare-2026-10-26` (pre-registered at land/rtl-fp-kit `84488ed6db17` and the board
+lane's `b1fe19fecf0b`), queued behind the 2026-10-26 perf kits.
+
+**Options, none costed:** upstream cvfpu never changed this unit's rounding after 0.7.0; the later commits to it fix
+flush and SIMD sync only. Later revisions add `DivSqrtSel` with THMULTI, the C910 unit with FP64 support (`1905e33`,
+after 0.7.0). Whether THMULTI is correctly rounded has not been read or run here. A sim of `fp-ieee-divsqrt` on a
+bumped cvfpu would say so, at the cost of a submodule bump that every other worktree shares through the symlinked
+mounts, so it needs its own worktree. Size and timing are unknown until the synthesis-only gate.
 
 ## Not in this note
 

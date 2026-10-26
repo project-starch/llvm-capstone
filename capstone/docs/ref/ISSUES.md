@@ -3701,6 +3701,78 @@ bare kit (the prediction on c721c1a2a: 15 at the legal load).
 a clear, so it can no longer reach an unrelated exception. That commit also moves every consuming LDC's clear into
 LDC_CLEAR_WAIT, so the fixed tree's readings support the fix without isolating the scoping alone.
 
+### R-62 — `fdiv` and `fsqrt` are not correctly rounded: fpnew 0.7.0's divide/sqrt unit takes its round-to-nearest-even sticky bit from a few extra quotient bits only, never from the remainder, so a result just above half an ulp rounds DOWN to the even neighbour (sim: `.d` 23 and 19 of 512, `.s` 53 and 27 of 512, each 1 ulp toward zero) · `OPEN — RTL defect in the vendored FPU (core/cvfpu at 3116391 "Release 0.7.0", unit fpu_div_sqrt_mvp), on every bitstream that carries it, bitstream 2 dcc6daf6e included; found 2026-10-26 by the RTL lane; root cause read in source and claim-audited; the BEEBS deviations on bitstream 2 (ludcmp, st, minver) attributed to it by an exact-value match; the direct instruction reading on silicon (bare kit fp-divsqrt-bare-2026-10-26) is queued; the fix is a bitstream decision for the lead`
+
+Siblings: R-52 (the earlier FP defect on silicon, a WRITE-BACK fault, fixed; a different mechanism, values there were
+the destination's earlier contents, not 1 ulp off), Q-34 (a different FP-adjacent divergence, misaligned accesses).
+
+**Mechanism** (`core/cvfpu/src/fpu_div_sqrt_mvp/hdl/`, fpnew 0.7.0, selected unconditionally as the DIVSQRT
+opgroup's MERGED unit at `core/fpu_wrap.sv:92`; no ifdef in cvfpu, fpu_div_sqrt_mvp or fpu_wrap, and the FPGA flist
+is flattened from the same `core/Flist.cva6`):
+- The iteration unit computes the quotient (or root) to a fixed number of bits beyond the result; `control_mvp.sv`'s
+  comments read "53+4 more iterations for rounding bits" (FP64) and "24+4" (FP32).
+- The normaliser's only mantissa input is that quotient (`norm_div_sqrt_mvp.sv:48`, `Mant_in_DI`). Rounding takes
+  `Mant_lower_D` and `Mant_sticky_bit_D = | Mant_forround_D[...]` from its low bits (`:342`/`:354` build
+  `Mant_forround_D`, `:385-387` for FP64, `:372-377` for FP32). The final REMAINDER never reaches the sticky bit.
+- So when the computed extra bits read exactly half (round bit 1, the rest 0) while the true result is a little
+  above half, the case is rounded as a tie, and ties-to-even keeps an even LSB. The result is 1 ulp toward zero.
+- Every observed miss has an even truncated LSB and a true fraction between 0.50 and 0.60 ulp.
+
+**Readings** (simulation of dcc6daf6e's core, capstone-ariane vp3-ringcut, tests only above it):
+- `fp-ieee-divsqrt.S` (`4357e64d8`), 512 cases from seed 20261026, a and b = ±[1,2)·2^[−30,30], bare M-mode, RNE
+  (rm dyn, frm 0), compared bit for bit with Python's correctly rounded doubles: 23 `fdiv.d` and 19 `fsqrt.d`
+  misses. The first are case 3, which got 0xc1d880ad3d2bf68c where …68d is correct, and case 15, which got
+  0x4094146748614d06 where …d07 is correct. The last quotient is exact, so the loop ran to the end. Both references
+  were checked with exact rational arithmetic.
+- `-DONECASE=3` and `-DONECASE=15` run one case behind 32 nops and a fence and read the same bits, so the error
+  depends on the operands, not on the instruction sequence.
+- `fp-ieee-divsqrt-s.S` (`03da28028`), 512 cases from seed 20261027 against numpy float32: 53 `fdiv.s` and 27
+  `fsqrt.s` misses, each 1 ulp toward zero (first: case 12, 0x43b9ae0c where …0d is correct; case 1, 0x383df3d8
+  where …d9 is correct).
+- **The bit model:** truncate the quotient to K extra bits and round with a sticky bit from those bits only, K = 4
+  (FP64) or 3 (FP32) on the 1.x path and one fewer on the 0.1x path. It reproduces ALL 2,048 traced RTL results bit
+  for bit (512 each of fdiv.d, fsqrt.d, fdiv.s and fsqrt.s). A remainder-aware sticky bit predicts no misses. The
+  FP64 model came from an adversarial audit that rebuilt every case from the retire trace; the FP32 K was fitted
+  (512/512, with 2, 4 and 5 rejected). The C model and the rewrite are in the kit's `host-model/`.
+- The context escape path was ruled out on the way: `va-runv-fp.S` covers non-zero FP state across an escape and a
+  resume, plain, quantum-preempted and fdiv/fadd/fdiv shapes, and every check reads 0. A quantum or interrupt
+  escape cannot flush an FP op in flight in any case: it is injected at decode (`decoder.sv:2096`), so every older
+  instruction retires first.
+
+**On silicon, bitstream 2** (`caplifive_vp2c_dcc6daf6e`):
+- BEEBS ludcmp and st read VERIFY-FAILED in every process, both arms, every iteration including the warm-up
+  (board lane `35e798ae28a9`, k1). They read the same as plain native Linux processes, 4 of 4 (`99c5620924e9`).
+  The QEMU twin, whose softfloat is correctly rounded, passes them. Their verifies are exact comparisons (upstream
+  `libludcmp.c:184-209` and `libst.c:197-211`), and the images divide in `fdiv.s` (ludcmp) and `fdiv.d`/`fsqrt.d` (st).
+- minver's check value, an FNV of its output state (the perf harness's `beebs/state/minver.c`), reads
+  0x74ceeb9e3de2c383 on all 48 silicon BENCH lines (k2; read here from the raw capture, which stays
+  uncommitted per the raw-capture rule; the board lane's record is `be1067107983`). The twin reads 0xd6cc5fbda167dc7b (the runtime lane's comparison).
+  minver's own verify is upstream's `return -1`, so its silicon "pass" checked nothing.
+- **Exact-value attribution:** host builds of the same sources and flags (-O2 -ffp-contract=off; the harness's
+  9,900 iterations per unit), with every fdiv and sqrt in the IR replaced by the C model:
+  - ludcmp and st verify 0 under the model and 1 under IEEE;
+  - minver's check is the twin's 0xd6cc5fbda167dc7b under IEEE and silicon's 0x74ceeb9e3de2c383 under the model;
+  - nbody verifies under both (30 fdiv.d executed through the model); its sqrt sits in bodies_energy, which
+    benchmark() never calls. PREDICTED to pass on silicon, registered before it ran
+    (board lane `2c1dd79a1379`).
+- **Pending:** the direct instruction reading, the bare kit `capstone/tests/rtl-smoke/fp-divsqrt-bare-2026-10-26`
+  (`fp-all`, one cold boot). It is pre-registered at land/rtl-fp-kit `84488ed6db17` and board lane `b1fe19fecf0b`,
+  with VOID, CONFIRMED and NOT-ON-SILICON rules, and its result is added here when read.
+
+**Caveats:**
+- No upstream record of this defect was found in the submodule. Upstream cvfpu's later commits to this unit fix
+  flush and SIMD sync only.
+- Untested corollary of the same lines: NX may be missed for an inexact result whose extra bits are all zero.
+- The perf build's VERIFY passes are mostly void. In `perf/build/native/src`, 30 of 57 programs' verify_benchmark
+  return −1 (the board lane's census, `2d6260bd8fb1`), and the runtime lane is moving the gate to a twin
+  comparison. A pass there is not evidence that a program avoided this defect.
+
+**Fix, options only:** a cvfpu revision with `DivSqrtSel` and its THMULTI unit (the C910 divider, after 0.7.0,
+`1905e33`). Its rounding has not been read or run here, and its size and timing are unknown until the
+synthesis-only gate. Software that needs correctly rounded results can avoid relying on the unit's last bit (a residual-corrected
+routine, as the shared libm sqrt does). Bitstream-3 scope
+note, row (d).
+
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
 **What happens** (bf3db3175, read by the RTL lane and audited by a claim-auditor against the trace). The store syncer
