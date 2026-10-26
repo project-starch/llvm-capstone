@@ -1,0 +1,11 @@
+# The rtl lane's fdiv.d/fsqrt.d rounding bare kit (land/rtl-fp-kit 84488ed6db17, fp-divsqrt-bare-2026-10-26) on bitstream 2, board 1 (tier3-fpds-bare.sh via tier3-fpds-place.sh;
+# pre-registered b1fe19fecf0b): the runner's result lines and fpds-grade.py's verdict against the kit's PREREG.md rules.
+RF fp-all BEGIN 19:52:18 board 1 bitstream caplifive_vp2c_dcc6daf6e image 07692df2c3710353 rec 0x80007000 booking 405
+RF fp-all END rc=0 19:53:01 :: [sup 19:53:00] UART: begin=True SB1=True SR=['000000000000000A'] SV lines=10
+FPDS fp-all read: SR ['000000000000000A'] :: 0x17 0x13 0x3 0xc1d880ad3d2bf68c 0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1
+FPDS fp-all want: SR 10 :: 0x17 0x13 0x3 0xc1d880ad3d2bf68c 0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1
+FPDS CONFIRMED ON SILICON: the rounding defect is on the board (the vector is exact)
+RF GRADE rc=0
+RF board1 DONE 19:53:01
+FP fp-all on board 1 (its perf queue is done) BEGIN 19:52:18
+FP END rc=0 19:53:01 :: FPDS CONFIRMED ON SILICON: the rounding defect is on the board (the vector is exact)

@@ -9779,3 +9779,72 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   sglib-dllist, sglib-dllist-libc, sglib-hashtable, sglib-hashtable-libc, trio-snprintf-libc, trio-sscanf-libc).
   Their silicon arithmetic is unverified in this run. They are integer programs, so the FPU defect is no known risk
   to them, but nothing in the run shows it.
+
+### Batch 1, k3 and k4 read: every program clean in both arms; nbody PASSES in all 8 processes, as the standing prediction says (board 1 18:41-19:51, board 2 18:38-19:51)
+
+- **k3 (board 1, `main1-k3/pilot.txt`, record `records/b2bs-perfmain-k3-b1.result-lines.txt`):** 214 of 214
+  processes pass in perfmain-table.py, and every program passes in both arms.
+  - **nbody: T1 4/4, T2 4/4, VERIFY passing in every process.** That is the rtl lane's executed-path prediction above
+    (PASSES), not the original one (fails like st), which it superseded before nbody ran.
+  - The runner's own summary read 213 of 214. The odd one is process 79 (frac T2 p3), and it is the INSTRUMENT, not
+    the program. boardvm's heartbeat loop keeps running while a step's output is cat to the console. One heartbeat
+    landed in the middle of frac's warm-up line: `entries@@HB 101 ... tail=...` then `=41 ns=1721404400
+    check=0xf4240` on the next line. So that line lost its check= to the runner's pattern.
+  - Removing the heartbeat line rejoins it: entries 41, check 0xf4240, like the 5 iterations after it. frac has rc 0,
+    6 BENCH lines and BENCH-DONE failed=0. The heartbeat's tail decodes to the step's LAST bytes
+    (sglib-hashtable-libc's BENCH-DONE), so it fired during the final cat.
+  - The other kits also carry one heartbeat inside a process's text (k1 1, k2 1, k4 0), each at a line boundary,
+    where it is harmless.
+- **k4 (board 2, `main1-k4/pilot.txt`, record `records/b2bs-perfmain-k4-b2.result-lines.txt`):** 214 of 214, every
+  program in both arms.
+- **Batch 1 in total:** 100 programs, 856 processes. 840 pass. The 16 that fail are exactly ludcmp and st, all
+  8 processes of each (k1).
+- **perfmain-table.py and checks-diff.py now remove every `@@HB` line before parsing.** They print `UNSPLICED <n>` for
+  each mid-line one, so a repair is never silent. With the repair, k1, k2 and k4 read as before (198, 214 and 214),
+  and k3 reads 214, the UNSPLICED line naming its file. The runner's in-boot reader (tier3-perfpilot.py) is unchanged:
+  batch 2's boot uses it as pre-registered.
+
+### Silicon check= against the twin's, k1-k4 (all 100 batch-1 programs): 59 equal, minver differs, 40 carry no state hash; checks-diff.py had a name collision, fixed
+
+- **Over all four kits** (record `records/b2bs-perfmain-checks-k1k4.txt`):
+  - **59 EQUAL;**
+  - **1 DIFFERS:** minver, as in k1+k2;
+  - **40 NO-HASH;**
+  - **0 SPLIT.**
+- **Among the FP programs:** cubic, fir, newlib-exp, newlib-log, sqrt and whetstone are EQUAL to the twin. Their
+  verifies are no-ops (fir, cubic, whetstone, newlib-*) or absent, so this equality is their only check, and it holds.
+  nbody, fdct, jfdctint, newlib-sqrt and stb_perlin carry no hash: nbody is checked by its real VERIFY (passes), the
+  others by nothing in this run.
+- **Programs that no check reaches:** the same 8 as above (no-op verify and no hash). Four more have no hash and a
+  verify this tree does not define, so it is unread: beebs miniz, qrduino, trio-snprintf, trio-sscanf.
+- **The tool's defect, found by this run:** checks-diff.py keyed programs by bench name and dropped the suite. BEEBS and
+  RV8 both have a `miniz` and a `qsort`, so over k1-k4 it merged beebs/miniz (0x0) with rv8/miniz (0x21c700), and
+  beebs/qsort with rv8/qsort, and printed two SPLITs. Its twin table had the same merge: the second row
+  overwrote the first.
+  - It now keys on suite/name and refuses a twin file with two rows for one key (tested on a duplicated row: NO DATA,
+    exit 2).
+  - SPLIT still fires (tested on a step text with one extra beebs/qsort line at a different check: SPLIT).
+  - **The k1+k2 record is unchanged under the fix,** program for program (29/1/20). Neither collision pair was in
+    k1+k2 with both members, and the twin values it compared were the right members by luck: rv8/qsort was the
+    overwriting row and was the qsort present.
+
+### The rtl lane's fdiv.d / fsqrt.d rounding kit, result: CONFIRMED ON SILICON, the vector exact (board 1, 2026-10-26 19:52-19:53)
+
+- **Placement:** tier3-fpds-place.sh put it on board 1, the first board whose perf queue was done (k3 ended 19:51:50).
+- **The reading** (record `records/b2bs-fpds-bare-b1.result-lines.txt`, UART `fpds-bare/fp-all/uart.txt`):
+  - image fp-all.bin 07692df2c3710353, checked by hash;
+  - board_rec 0x80007000;
+  - SR 10, SV `0x17 0x13 0x3 0xc1d880ad3d2bf68c 0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07
+    0xc100794b211e882c 0x1`. That is the PREREG's simulated vector exactly, read here in uart.txt itself, not only
+    through fpds-grade.py.
+  - **fpds-grade.py: CONFIRMED ON SILICON.** By the PREREG's positions, silicon reproduces the 23 of 512 fdiv.d and 19
+    of 512 fsqrt.d results that land 1 ulp low, with the same first misses as the simulation.
+- **One post-run artefact:** the runner's gdb dump after SUPTEST END could not halt the core (`Unable to halt`,
+  `remote failure reply 'E0E'`), so no register or memory dump was read. The grade rests on the UART lines, as the
+  PREREG's rules do.
+- **What it settles,** together with the discriminator (H-FPU) and the rtl lane's host model (ludcmp and st verify 0,
+  nbody 1, minver's exact hash), st's failure is R-62's double-precision divide/sqrt rounding on silicon.
+  - ludcmp divides in single precision only (3 static fdiv.s, 42 executed in the host model). This kit tests only the
+    double operations, so for ludcmp the silicon side rests on the discriminator and the host model, whose fdiv.s
+    rounding matches the RTL in simulation (53 of 512).
+  - Nothing in this run points at the capability system.

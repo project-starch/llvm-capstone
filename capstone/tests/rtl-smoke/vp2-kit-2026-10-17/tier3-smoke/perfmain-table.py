@@ -10,10 +10,20 @@ import sys
 from collections import defaultdict
 
 
+# boardvm's heartbeat loop keeps running while a step's output is cat to the console, so a heartbeat can land INSIDE a
+# process's text, and once (k3 process 79, 2026-10-26) in the middle of a BENCH line ("entries@@HB ...\n=41 ns=...").
+# Every @@HB line is removed before parsing; the mid-line ones are counted and printed (a repair, never silent).
+def unsplice(t, path):
+    mid = len(re.findall(r"(?<!\n)@@HB \d+ out=\S* tail=[A-Za-z0-9+/=]*\n", t[1:]))
+    if mid:
+        print(f"UNSPLICED {mid} mid-line heartbeat(s) in {path}")
+    return re.sub(r"@@HB \d+ out=\S* tail=[A-Za-z0-9+/=]*\n", "", t)
+
+
 def main():
     if len(sys.argv) < 3:
         print(__doc__); sys.exit(2)
-    text = open(sys.argv[1], errors="replace").read()
+    text = unsplice(open(sys.argv[1], errors="replace").read(), sys.argv[1])
     plan = {int(r["n"]): r for r in csv.DictReader(open(sys.argv[2]), delimiter="\t")}
     only = set(sys.argv[3:])
     blocks = re.split(r"(?m)^@@PERF-BEGIN ", text)[1:]
