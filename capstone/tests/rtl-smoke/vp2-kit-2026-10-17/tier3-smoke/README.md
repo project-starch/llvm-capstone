@@ -9692,3 +9692,20 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   takes a square root in hardware on a bad operand. ludcmp and st are not usable as performance rows for the T1/T2
   comparison of RESULTS. Their cycle and instret counts are still read, both arms run the same arithmetic, and how to
   report them is the runtime lane's call.
+
+### Correction to the nbody prediction, before nbody runs (2026-10-26 18:4x; k3 is booted, but its heartbeats show no process yet, and nbody is k3's processes 56-63): the rtl lane now predicts nbody PASSES
+
+- **The rtl lane's revision, reversing its earlier "should fail":** the basis is a host build of nbody with every fdiv
+  and sqrt routed through a C model of the RTL rounding.
+  - The model matches all 2,048 traced RTL results bit for bit, and its IEEE control reproduces 23/19/53/27.
+  - nbody's benchmark() calls only offset_momentum. The bodies_energy call is commented out in nbody.c, so the static
+    fsqrt.d counted above never executes, and none of its 30 executed fdiv.d hits a bad case.
+  - Verify is 1 under both the model and IEEE.
+- **The same host check on k1's failures matches silicon:** ludcmp verifies 0 under the model (42 fdiv.s), and st 0
+  (410 fdiv.d, 4 fsqrt.d). Both verify 1 under IEEE.
+- **The prediction now standing: nbody PASSES VERIFY in every process.** The earlier wording (fails, then "likely, not
+  forced") is superseded by this executed-path count, and it stays in the history above.
+  - A static count of instructions present is not a count of instructions executed. The table above counted the
+    first.
+- **minver's exact test,** if its silicon state hash is in the records: the model gives c9e816d4302a644b and IEEE gives
+  205d510d90af10ba.
