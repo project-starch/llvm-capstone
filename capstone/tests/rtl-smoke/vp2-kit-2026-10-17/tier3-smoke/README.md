@@ -9162,3 +9162,25 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - the chain then went on to the bare kit.
   - The partial output under `t3-run-b2-dcc6daf6e-b2/httpd-n2` is not a reading and is not graded.
 - **httpd's rows read N=1, not repeated.**
+
+### R-58, R-59 and Q-24 on silicon, result: every image reads its PREREG vector exactly on both boards, so all three are CONFIRMED ON SILICON at N=2, cross-board (2026-10-26 12:43-12:53)
+
+- **Records:** `records/b2bs-rfix-bare-b1.result-lines.txt` (board 1, 12:43-12:47) and
+  `records/b2bs-rfix-bare-b2.result-lines.txt` (board 2, 12:48-12:53). Pre-registration 14fe83614573, kit 30117b74cc8f.
+- **The six images,** by sha256/16 on both boards:
+  - va-runv 274823b4df9e3a4a;
+  - va-srevroot 2fbafdfd2eaec3c1;
+  - va-runv-r59 f551e9d2492ca6ba;
+  - va-runv-r59-low 981fcf633194ee20;
+  - q24-deleg 6fd2c0b60fe340ab;
+  - q24-deleg-on 0e82f2adca300741.
+  Each ran as one cold bare boot, rc 0.
+- **Every vector is EXACT on both boards.** The RFIX lines are identical across the boards, byte for byte.
+  - The va-runv control reads `... 0xb 0x0 0x9`.
+  - va-srevroot reads 0x80007000 0x80007000 0x80007000 0x80008000 in its srevroot words.
+  - Both r59 images read 0x1d and 0xfffffffffffffff0.
+  - q24-deleg-on reads `0x1000000 0x18 0x0 0x9 0xc`, beside its control q24-deleg `0x0 0x0 0x0 0x18 0x0`.
+- **rfix-grade.py, rc 0 on each board:** R-58 CONFIRMED ON SILICON (va-srevroot exact), R-59 CONFIRMED ON SILICON
+  (both r59 images exact), Q-24 CONFIRMED ON SILICON (q24-deleg-on exact).
+- **As predicted.** This was the queue's first item after the Juliet stop (addendum d1fba0ad3725 and its correction
+  f1460dce5ffd). Each board went straight on to fault_mstatus x200.
