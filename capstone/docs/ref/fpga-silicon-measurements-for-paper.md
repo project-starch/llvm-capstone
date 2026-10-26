@@ -7198,3 +7198,30 @@ counted from its verdict TSVs:
 - Pre-registered at the board lane's 14fe83614573, before the boots. Every prediction holds.
 - ISSUES R-58, R-59 and Q-24 read CONFIRMED ON SILICON from 0aa2a8afb38e (the rtl lane, which re-checked these result
   lines independently: 12 of 12 vectors match, with a negative test).
+
+## The silicon-only cause 13 on the uaf control is not H1: every event read has MPRV = 0 in the context's saved mstatus, on both boards (caplifive_vp2c_dcc6daf6e, 2026-10-26)
+
+- **The question** (the rtl lane's bitstream-3 scope note, step 0a): does the silicon-only cause 13 come from H1, a
+  context mstatus with MPRV = 1 and MPP != 3, which would turn the capability check off while translation stays on?
+- **The instrument:** the runtime lane's module 1a4cae57a9f7ffc5 (branch runtime/pin-pte-census ea83c374ae37) with
+  `fault_mstatus=1`.
+  - It prints the context's mstatus, as the escape saved it at frame +920, after every "resolve refused" line.
+  - The rtl lane read that word at dcc6daf6e as the live mstatus_q, unmodified.
+  - The parameter was read back on every boot.
+- **The runs:** the uaf control, x200 per boot, on kits bkit9-b2-ms1/ms2 (bitstream 2's kits with only the module
+  swapped). Records `tier3-smoke/records/b2bs-uaf-ms-b2`, `b2bs-uaf-ms200-b1` and `b2bs-uaf-ms200-b2`.
+
+| boot | cause-13 events | refusals | every mstatus line |
+|---|---|---|---|
+| 0a, board 2 | 1 of 200 | 2 | 0xa00002000, MPRV 0, MPP 0 |
+| x200, board 1 | 3 of 200 | 6 | 0xa00002000, MPRV 0, MPP 0 |
+| x200, board 2 | 6 of 200 | 10 | 0xa00002000, MPRV 0, MPP 0 |
+
+- **H1 is refuted for all 10 events read, on both boards.**
+  - The word is non-zero and the same in every event, so the escape wrote it.
+  - By the pre-registered rule, H2-H4 remain, and the aperture instrument goes into bitstream 3.
+- **Every refusal printed its mstatus line, and no cause-25 run printed one.**
+- **The rate:** with the bitstream-2 uaf x400 record (10 of 400), the cause-13 rate is 20 of 1,000 uaf-control runs.
+- **Not predicted:** two of board 2's six events carried ONE refusal instead of two. The boot's whole dmesg confirms
+  this. Every earlier event read for refusals carried two. This is unexplained.
+- **Pre-registrations** (board lane): aeb1d8d3bbbf (0a), e97af7bb27bb and its addendum e50f65806556 (x200 per board).

@@ -9096,3 +9096,128 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   (both r59 images exact), Q-24 CONFIRMED ON SILICON (q24-deleg-on exact).
 - **As predicted.** This was the queue's first item after the Juliet stop (addendum d1fba0ad3725 and its correction
   f1460dce5ffd). Each board went straight on to fault_mstatus x200.
+
+### Bitstream 2: fault_mstatus on the uaf control x200 (the bitstream-3 scope note's step 0a, H1 for the silicon-only cause 13), pre-registered (2026-10-26 04:0x, before its boot)
+
+- **Why:** the rtl lane's bitstream-3 scope note (dev fe33d0dbaabd), relayed by the runtime lane, asks whether the
+  silicon-only cause 13 comes from H1: a context mstatus with MPRV = 1 and MPP != 3. The capability check is gated on
+  capmode with an effective privilege of M, so that state would turn the check off while translation stays on.
+- **The module:** runtime/pin-pte-census ea83c374ae37, board build 1a4cae57a9f7ffc5. It is the census module plus
+  `fault_mstatus`, default off. When on, every "resolve refused" line is followed by
+  `capstone_vm: refused-escape mstatus 0x.. mprv N mpp N addr .. cause ..`.
+  - The word is the context's mstatus as the escape saved it at frame +920. The rtl lane read it at dcc6daf6e as the
+    live mstatus_q, unmodified (commit_stage.sv:228-234, switcher anvil:483, csr_regfile.sv:478).
+  - QEMU's escape does not write +920, so the QEMU control (two refusals, two lines; none with the parameter off)
+    proves the print path, not the value.
+- **What runs:** `tier3-uaf-repeat-ms.sh 2 <log> 200` with UR_ARGS `--no-trace --dmesg`.
+  - It is tier3-uaf-repeat-b2.sh on the kit bkit9-b2-ms2: bkit9-b2-b2 with only the module swapped, plus the kit
+    parameter `fault_mstatus=1`. boardvm writes the parameter after insmod and refuses the run unless it reads back.
+  - `mstatus-read.py` reads each run's own new dmesg lines from steps.json.
+  - Dry run and the reader's controls: `dryrun-uaf-repeat-ms.txt`. On the earlier bitstream-2 run it finds exactly that
+    record's 8 cause-13 runs with 2 refusals each and no mstatus line. A planted line is read and counted once.
+- **Predictions, written before the run:**
+  - cause 13 in about 2 to 12 of 200 (2.5%), each with two refusals, and **each refusal followed by one mstatus line**;
+  - cause-25 runs carry no refusal, so no mstatus line;
+  - readings 0.
+- **How the reading decides:**
+  - **H1 confirmed:** MPRV = 1 AND MPP != 3 on the cause-13 refusals. H1 needs both bits.
+  - **H1 refuted:** MPRV = 0 on every cause-13 refusal. Then H2-H4 remain, and the aperture instrument goes into
+    bitstream 3.
+  - **Not H1:** MPRV = 1 with MPP = 3 keeps the check on.
+  - **Uninformative:** a word of 0x0, meaning the escape did not write it. A non-zero word with MPP = 3 and MPRV = 0 is a
+    normal M-mode context.
+  - If H1 holds, it can only be intermittent, since a permanent MPRV would fault every load. A refusal with no mstatus
+    line is a failed print path, and is reported.
+
+### Bitstream 2, result: fault_mstatus. The one cause-13 event reads MPRV = 0 in a non-zero, written mstatus word, which refutes H1 for that event; one event, below the predicted count (board 2, 2026-10-26 03:36-04:13)
+
+Record: `records/b2bs-uaf-ms-b2.result-lines.txt`.
+- **The run:** 202 of 202 steps completed. `@@PARAM fault_mstatus=Y` was read back, so the parameter took. The bounds
+  control faulted (cause 28). Readings 0.
+- **Counts:** cause 13 in **1 of 200** (run uaf-185), cause 25 in 199.
+  - **The pre-registration predicted about 2 to 12.** One is below that band. At 2.5% per run, P(<= 1 of 200) = 0.039:
+    an unlikely count, not an impossible one. The earlier bitstream-2 rate was 10 of 400.
+  - The count is reported as outside the prediction. It does not bear on the mstatus reading.
+- **The cause-13 event** printed its two "resolve refused at arena" lines (addr 0x3f84ce1040, pc 0x3f84c10c70, the
+  control_read_probe site), and each was followed by its refused-escape line:
+  `mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3f84ce1040 cause 13`.
+  - The word decodes to MPRV 0, MPP 0, MIE 0, MPIE 0, FS 1, UXL 2 and SXL 2.
+  - **It is not 0x0, so the escape wrote it.**
+  - The cause-25 runs carry no refusal and no mstatus line, as predicted. uaf-repeat.py's own per-run listing shows run
+    190 with the two refusals because its 12-line dmesg tail still holds run 185's lines; mstatus-read.py attributes
+    lines to the run that first shows them.
+- **By the pre-registration's rule: MPRV = 0 on every cause-13 refusal (2 of 2), so H1 is REFUTED for this event.**
+  - This is N = 1 event, two refusals of one fault.
+  - The pre-registered consequence is that H2-H4 remain, and the aperture instrument goes into bitstream 3.
+  - The word's MPP is 0 rather than 3. The pre-registration only named MPP's role when MPRV = 1, so that observation is
+    recorded, not interpreted.
+
+### Bitstream 2: fault_mstatus on the uaf control x400 on each board, to accumulate cause-13 events, pre-registered (2026-10-26 04:1x, before the boots)
+
+- **Why:** the 0a reading is N = 1 event. The runtime lane asks for one dedicated x400 per board, at lower priority than
+  any corpus arm.
+  - The corpus itself stays on 215a09be. A module swap there would put a second variable under the sample-vs-remainder
+    comparison, and the Juliet runner takes no dmesg read anyway.
+- **What runs:** `tier3-uaf-repeat-ms.sh <board> <log> 400` with UR_ARGS `--no-trace --dmesg`, UR_BOOKMIN 120 and UR_TAG
+  `-x400`, on bkit9-b2-ms1 and bkit9-b2-ms2.
+  - bkit9-b2-ms1 is made as ms2 was: bkit9-b2-b1 with only module 1a4cae57 and `fault_mstatus=1`. The kit diff is the
+    module line plus the params line.
+  - Each board's run is chained after its fix-kit session.
+  - **Budget:** 200 runs took 37 min, so 400 should take about 75 min, inside the wrapper's 7200 s (about 1.5x).
+  - mstatus-read.py reads the result. Output: `t3-run-b2-dcc6daf6e-b<board>/uaf-repeat-ms-x400`.
+- **Predictions:**
+  - cause 13 in about 4 to 20 of 400 on each board, each with two refusals, each refusal followed by its mstatus line;
+  - no mstatus line on a cause-25 run; readings 0.
+- **The H1 rule, unchanged from 0a:**
+  - MPRV = 1 AND MPP != 3 on a cause-13 refusal confirms H1 for that event;
+  - MPRV = 0 refutes it for that event;
+  - a 0x0 word decides nothing.
+  - The tally is reported per (MPRV, MPP), and per event.
+
+### Addendum to the fault_mstatus x400 pre-registration (e97af7bb27bb), before any of its boots (2026-10-26 04:3x)
+
+- **Withdrawn before pre-registration:** the runtime lane proposed a flush-all arm (module c8baa339, resume_flush_all;
+  W-obj and W-reg on kept-mapped pages) to replace the x400, then withdrew it.
+  - At dcc6daf6e every switcher write of satp already raises the TLB flush to every TLB (the S-29 fix), so the
+    kept-mapped reads already walked successfully. That arm was never pre-registered or run.
+- **The slot reverts to the fault_mstatus run, at N = 200 per board, not 400**, as the runtime lane now asks.
+  - It keeps the lowest priority, and is dropped if board time is short.
+  - UR_TAG `-x200`; the predictions scale to about 2 to 10 cause-13 events per board.
+  - The H1 rule is unchanged.
+
+### Bitstream 2, result: fault_mstatus x200 on each board. Every one of the nine new cause-13 events reads MPRV = 0 (mstatus 0xa00002000, MPP 0), so H1 is refuted for every event read; two events carried one refusal, not two (2026-10-26 12:47-13:31)
+
+- **Records:**
+  - `records/b2bs-uaf-ms200-b1.result-lines.txt` (board 1, bkit9-b2-ms1, 12:47-13:24);
+  - `records/b2bs-uaf-ms200-b2.result-lines.txt` (board 2, bkit9-b2-ms2, 12:53-13:31).
+  - Pre-registration e97af7bb27bb, addendum e50f65806556 (x200 per board).
+- **The runs:** on each board, steps.json reads completed True, n 200, 202 steps. The transcript reads back
+  `@@PARAM fault_mstatus=Y`. The bounds control faulted cause 28. Readings 0 on both boards.
+
+| | board 1 | board 2 |
+|---|---|---|
+| cause 13 / cause 25 | 3 / 197 | 6 / 194 |
+| cause-13 runs | uaf-8, 85, 145 | uaf-25, 111, 155, 186, 195, 199 |
+| refusals (the boot's whole dmesg) | 6 | 10 |
+| refused-escape lines, on cause-13 runs | 6 | 10 |
+| mstatus word / MPRV / MPP, every line | 0xa00002000 / 0 / 0 | 0xa00002000 / 0 / 0 |
+| mstatus lines on cause-25 runs | 0 | 0 |
+
+- **Against the predictions:**
+  - **2 to 10 cause-13 events per board: holds** (3 and 6).
+  - **Each refusal followed by its mstatus line: holds** (mstatus_lines = refused on every event).
+  - **No mstatus line on a cause-25 run: holds.** mstatus-read.py tallies by the run's own cause, and has no cause-25
+    entry on either board.
+  - **Each event with two refusals: holds for 7 of 9, not for 2.** Board 2's uaf-155 and uaf-195 carry ONE refusal
+    each.
+    - This is not a reader artifact. The boot-wide dmesg dump (DMESG-ALL) also lists a single "resolve refused" line
+      at 1481.83 s and at 1840.62 s, beside pairs for the other four events. Its REFUSED count is 10.
+    - Every earlier cause-13 event read for refusals on this bitstream carried two: the 8 cause-13 runs of the uaf-dm
+      run (`dryrun-uaf-repeat-ms.txt`), and 0a's one event. This is reported, not explained.
+- **The H1 rule** (unchanged since 0a) refutes H1 for any event with MPRV = 0.
+  - Every refusal of all nine events reads MPRV = 0. With 0a's event, H1 is refuted for all 10 cause-13 events read
+    on bitstream 2, on both boards.
+  - The word is non-zero and identical in every event (0xa00002000, MPP 0), so the escape wrote it. By the rule, H2-H4
+    remain, and the aperture instrument goes into bitstream 3.
+- **The rate:** 3 of 200 and 6 of 200 here, against 1 of 200 in 0a and 10 of 400 in the bitstream-2 uaf x400 record. Together that is
+  20 of 1,000 uaf-control runs, 2.0%.
