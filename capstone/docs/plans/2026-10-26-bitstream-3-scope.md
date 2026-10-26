@@ -91,7 +91,7 @@ changed since, and two corrections to that note:
    D-cache or PTW latency the simulation's fixed delay does not produce), the verdict is dropped and the walk's 13 is
    what is reported.
 
-**H1 is REFUTED for the one event read (step 0a, 2026-10-26).** The runtime lane's `fault_mstatus` (runtime/pin-pte-census
+**H1 is REFUTED for every event read: 10 cause-13 events on both boards (step 0a and the x200 repeats, 2026-10-26).** The runtime lane's `fault_mstatus` (runtime/pin-pte-census
 ea83c374ae37, board module 1a4cae57) printed the context's saved mstatus at both refusals of the one cause-13 event in 200
 runs on bitstream 2, board 2 (the board lane's lane c2cae6529f8d, `records/b2bs-uaf-ms-b2.result-lines.txt`):
 `0xa00002000`, decoded here as MPRV 0, MPP 0, FS 1 (Initial), UXL 2, SXL 2, MIE 0, MPIE 0. That is exactly the value the
@@ -100,8 +100,13 @@ priv M), unmodified since; +920 is the context's live mstatus at the escape (the
 sees it, `commit_stage.sv:228-234`, and the walk saves id 3 before restoring the caller, `capstone_dom_switcher.anvil:483`).
 So the load ran at M with MPRV 0 and the capability check was gated ON. MPP 0 is the strobe's zero: a context never
 traps into M (its traps are stripped into escapes) and never executes an MRET, so nothing writes MPP after entry, and
-MPP is read only under MPRV or by an MRET. N=1; H2, H3 and H4 remain, which is what the instrument below separates,
-so row (b) stays in bitstream 3.
+MPP is read only under MPRV or by an MRET. The x200 repeats then read the same word at every event: board 1 3 of 200,
+board 2 6 of 200 (pre-registered e97af7bb27bb, addendum e50f65806556; dev `154e4342ac92`). Counted here from the three
+result-lines files: 10 events, 18 refused-escape lines, every one `0xa00002000 mprv 0 mpp 0`, none on a cause-25 run.
+Every event faults at the same pc (code + 0x10c70, `control_read_probe`) and at an address ending 0x040. Two board-2
+events carried one refusal line instead of two (confirmed by the boot-wide dmesg). Not explained, and not read here;
+the mstatus word of each is the same. N=10; H2, H3 and H4 remain, which is what the instrument below separates, so row (b)
+stays in bitstream 3.
 
 **Free steps first (no bitstream):**
 - **Step 0a (module, the runtime lane):** at the cause-13 escape, print the context's saved mstatus (frame `+920`): MPRV
