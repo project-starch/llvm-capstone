@@ -269,3 +269,30 @@ rbtree), the three ctl-*-libc, and rv8 aes, miniz, norx, primes and qsort.
    - Amendment, 2026-10-27, after launch and before any T3 transcript was read: the first wording, "lies inside
      the union of the two Welch intervals", holds by construction. Each estimate lies inside its own interval, so
      it could never fail. The overlap test replaces it.
+
+## Bitstream 3: rerun of ludcmp, st and minver (2026-10-27, before any bitstream-3 boot)
+
+Bitstream 3 is capstone-ariane e7af48457, which carries the R-62/R-63 divsqrt fix. Its memory map is unchanged from
+dcc6daf6e: CAP_TAG_MEM_BASE 0xBC2D_2D2D and CAP_REVNODE_MEM_BASE 0xBFF0_0000 at both commits. The board lane flashes
+it, runs a Tier 1 control boot and the rtl lane's bare FP kit, then this kit.
+
+**Kit** `perf/main4/b3k1`, one boot, run-b3k1.sh sha256 cbf60f75e5eb79ae.
+- First, the identification step, native with no context: `ludcmp 1 3` and `st 1 3`.
+  - These are the same binaries (sha256 3b9f085a…, b486bd0a…) that read VERIFY-FAILED on every iteration on
+    bitstream 2, in the FP discriminator boot.
+- Then T1 and T2 for ludcmp, st and minver, with the main run's images and dimensions: P = 4 × (W = 1, I = 5) per
+  arm, ABBA.
+
+**Predictions.**
+1. **Identification:** both native programs read verify_failed=0 and BENCH-DONE failed=0.
+   - Bitstream 2 read VERIFY-FAILED on every iteration.
+   - If either still fails, the board is not running the fixed RTL, or the fix is incomplete on silicon. Nothing
+     after it is read until that is settled.
+2. **Correctness:** every process passes in both arms.
+   - check= equals the twin's for minver: 0xd6cc5fbda167dc7b.
+   - Bitstream 2 read 0x74ceeb9e3de2c383, the RTL-rounding model's value.
+   - ludcmp and st carry no hash; for them the reading is VERIFY pass.
+   - The rtl lane's dynamic census found no division in R-64's, R-65's or R-66's reach in these three programs. So
+     a remaining difference from the twin would point elsewhere.
+3. **Timing:** T2/T1 for all three is 1.000 within the main run's precision. None allocates in its timed region.
+   - These are reported as bitstream-3 rows, never pooled with the bitstream-2 suite geomean.
