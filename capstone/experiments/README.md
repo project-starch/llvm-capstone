@@ -7,6 +7,8 @@ probes into a port's domain and records what it measured.
 
     a1-sqlite-reuse/    A1: does the allocator below see the objects in the nested allocator?
                         SQLite's lookaside pool over memsys5, unprotected and under the Sublet port
+    slot-census/        how many heap objects are live at once: the whole-run peak per process that sizes
+                        the lifetime-id slots, measured natively on x86 (SPEC CPU2017 first)
 
 Each directory has a `run.sh` that builds through the port, runs its control first and prints a
 verdict against what the directory records; a control that fails exits 75 with no verdict, as in
