@@ -9892,3 +9892,14 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   ludcmp and st, every process, attributed to R-62 (above).
   - check= against the twin: 61 EQUAL, 1 DIFFERS (minver, R-62's exact model value), 41 NO-HASH.
   - 11 programs carry neither a real verify nor a hash.
+
+### fp-all at N=2, cross-board: the same bare kit on board 2, pre-registered (2026-10-26 20:1x, before its boot)
+
+- **Why:** R-62 is CONFIRMED ON SILICON from board 1 alone (N=1). R-58, R-59 and Q-24 were read on both boards. This
+  repeats the board-1 boot on board 2, so the reading is cross-board.
+- **What runs:** `tier3-fpds-bare.sh 2 <log> 84488ed6db17`, unchanged since board 1's boot. It runs the same image
+  (fp-all.bin 07692df2c3710353, checked by hash), rec 0x80007000 and fpds-grade.py, on kit bkit9-b2-b2.
+- **Prediction:** CONFIRMED ON SILICON, with the vector byte-identical to board 1's: `0x17 0x13 0x3 0xc1d880ad3d2bf68c
+  0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1`.
+  - Any difference from board 1 is a cross-board finding, read value by value.
+  - VOID by the PREREG's rule (SR not 10, or position 8 wrong) says nothing about the divider.
