@@ -10167,3 +10167,24 @@ Tool: `r64-census.py`.
   - 24 `@@PERF-END` lines, all rc=0;
   - its predictions: verify_failed=0 and BENCH-DONE failed=0 on both `@@B3-ID` lines (bitstream 2 read VERIFY-FAILED
     on every iteration), and the 24 processes bit-exact with the twin.
+
+### Bitstream 3, AMENDMENT at the seal (2026-10-27 02:5x, before either chain is launched): the sealed build and its grade
+
+- **The bitstream:** `caplifive_vp2c_e7af48457.bit` (the console name follows bitstream 2's convention, as agreed with
+  the rtl lane), 11,443,722 B, sha256 `d6ed97b6d341ea058d497838e43558900823c36591c44046d3cfc0b7f55b423b`.
+  - Synth's file: `~/scratch/capstone-b3/corev_apu/fpga/work-fpga/ariane_xilinx.bit` on its host, worktree HEAD
+    `e7af48457931f33b6dbc1a58185d6f9577c4bc05`.
+  - Its only tracked modifications are the host environment and guard scripts (env.sh, env_cap.sh, fpga-env.sh,
+    synth-guard.sh), the same four as bitstream 2's capstone-vp3rc build.
+  - Copied to `<mnt-hdd>/capstone/bitstreams/caplifive_vp2c_e7af48457.bit` (read-only). The copy's hash equals the
+    seal and the file read on the host.
+- **The rtl lane's grade, against the keys it pre-registered before the build:**
+  - placed LUT 169,061 and FF 63,647, inside ±2,000 / ±300;
+  - check_timing 0 combinational loops, TIMING-23 0;
+  - 0 routing errors;
+  - WNS −10.047 against bitstream 2's −9.790, inside the null band; WHS +0.029.
+  - The routed congestion report and the worst-path families are pending, read-only and not gating.
+  - The runtime lane's criterion is met too: write_bitstream OK, 215,406 nets fully routed.
+- **"Ready" as pre-registered is met:** sealed, routed, WNS no worse than −14 ns, utilisation in band, graded.
+- **Launch:** `flash-and-first-bs3.sh 2 <log> caplifive_vp2c_e7af48457 <copy> d6ed97b6…` and the same for board 1.
+  Each waits for its board's T3 end line, and `tier3-b3k1.sh` waits for board 2's chain.
