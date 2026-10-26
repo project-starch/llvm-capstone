@@ -1,0 +1,47 @@
+# tier3-census-b2.sh 4d824825878a0b46 + tier3-census-board.py b49d9da58803178a dry run, 2026-10-26 03:5x: the board
+# boot stubbed by boardvm's BOARDVM_STUB_TRANSCRIPT (a transcript carrying the QEMU gate's readings; 'wc' plants write_clean=7; 'cut' truncates it).
+
+## ok
+CE BEGIN 03:30:57 board 1 kit bkit9-b2-pc1 booking 81
+CE END rc=0 03:30:57
+CENSUS boot completed; transcript <scratch>/census/w-out-ok/guest/board.txt; steps ['off-walk', 'on', 'uaf', 'vma', 'walk']
+READ off-walk: RUN:off-walk:rc=0
+READ off-walk: counters pages/absent/write/dirty/young/write_clean = 0/0/0/0/0/0
+READ on: ON:Y
+READ walk: RUN:on-walk:rc=0
+READ walk: counters pages/absent/write/dirty/young/write_clean = 516/0/516/516/516/0
+READ vma: RUN:on-vma:rc=0
+READ vma: counters pages/absent/write/dirty/young/write_clean = 1002/0/1001/1001/1002/0
+READ uaf: RUN:on-uaf:rc=139
+READ uaf: capstone-exec: domain fault cause=25 pc=0x3f00000c70 address=0x3f00001000
+READ uaf: counters pages/absent/write/dirty/young/write_clean = 1491/0/1490/1490/1491/0
+CE readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CE board1 DONE 03:30:57
+
+## wc
+CE BEGIN 03:30:57 board 1 kit bkit9-b2-pc1 booking 81
+CE END rc=0 03:30:57
+CENSUS boot completed; transcript <scratch>/census/w-out-wc/guest/board.txt; steps ['off-walk', 'on', 'uaf', 'vma', 'walk']
+READ off-walk: RUN:off-walk:rc=0
+READ off-walk: counters pages/absent/write/dirty/young/write_clean = 0/0/0/0/0/0
+READ on: ON:Y
+READ walk: RUN:on-walk:rc=0
+READ walk: counters pages/absent/write/dirty/young/write_clean = 516/0/516/516/516/7
+READ vma: RUN:on-vma:rc=0
+READ vma: counters pages/absent/write/dirty/young/write_clean = 1002/0/1001/1001/1002/7
+READ uaf: RUN:on-uaf:rc=139
+READ uaf: capstone-exec: domain fault cause=25 pc=0x3f00000c70 address=0x3f00001000
+READ uaf: counters pages/absent/write/dirty/young/write_clean = 1491/0/1490/1490/1491/7
+CE readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+CE board1 DONE 03:30:57
+
+## cut (the driver alone)
+CENSUS boot DID NOT COMPLETE; transcript <scratch>/census/out-cut/guest/board.txt; steps ['off-walk', 'on', 'vma', 'walk']
+READ off-walk: RUN:off-walk:rc=0
+READ off-walk: counters pages/absent/write/dirty/young/write_clean = 0/0/0/0/0/0
+READ on: ON:Y
+READ walk: RUN:on-walk:rc=0
+READ walk: counters pages/absent/write/dirty/young/write_clean = 516/0/516/516/516/0
+READ vma: RUN:on-vma:rc=0
+READ vma: counters NO DATA
+READ uaf: counters NO DATA
