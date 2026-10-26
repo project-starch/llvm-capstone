@@ -30,11 +30,14 @@ side: their speedtest1.c (one dead function removed, `reuse/make-speedtest1-caps
 from `reuse/shim/`) with SQLite 3.22.0, built by `reuse/build-reuse-capstone.sh`, run on the dev-v6
 virtual platform by `reuse/run-reuse-capstone.py`.
 
-The virtual platform is the paged one: the default `runtime/virtual/build-adapter.sh` module (paged
-lifetime table, grows on demand), v7 QEMU with `x-capstone-test-csrs=true`, module argument
-`supervisor_slots=32`. A first attempt used the flat silicon-twin kit (`-DCAPSTONE_VM_FLAT_TABLE`, at most
-65,536 records, no growth), on which Sublet runs died from `--size 20` on with cause 30 in
-`capstone_cap_derive`, the table full; that is the kit's limit, not the platform's. On the paged platform
+The pilot's Sublet rows (`pilots-size1.json`: images 55cc0ed6 / 086e9fd8, built with the wrapper before
+the review fixes) ran on the flat silicon-twin kit (`-DCAPSTONE_VM_FLAT_TABLE`, at most 65,536 records,
+no growth), which holds a `--size 1` run. From `--size 20` on, Sublet runs died there with cause 30 in
+`capstone_cap_derive`, the table full; that is the kit's limit, not the platform's. The result runs
+(`../2026-10-25-reuse-size100/`) use the paged platform: the default `runtime/virtual/build-adapter.sh`
+module (paged lifetime table, grows on demand), v7 QEMU with `x-capstone-test-csrs=true`, module argument
+`supervisor_slots=32`. There the qualified images (9836684d / 6bfe4d1b) give the pilot's bins exactly
+(`qualification.txt`, second and third parts). On the paged platform
 both Sublet arms complete `--size 20` (exit 0, 8,470 allocations, 7,835 reuses, identical bins).
 `reuse/launch-capstone-arm.sh` and `reuse/launch-poisoncap-arm.sh` start one result run each.
 
@@ -75,7 +78,7 @@ arguments are recorded in each result row (`module_args`), not in the `@@PARAMS`
   sqlite3PCacheSetDefault, sqlite3_exec's steps), which GNU ld does not; the wrapper forwards every
   configuration operation typed and aborts on one it does not know.
 
-## Pilot, `--size 1` (`pilots-size1.json`, `plots/`)
+## Pilot, `--size 1` (`pilots-size1.json`)
 
 | arm | allocations | reuses |
 |---|---|---|
@@ -89,5 +92,5 @@ frees never fill its 4,096 entries, and it never holds 16 MiB. The two controls 
 988) because the Sublet port keeps a size table inside the heap; each protected curve is read against its
 own control.
 
-Plots: one per system, no title (`reuse/plot-reuse.py`; the form the project lead approved). Each comes
-with its caption (`*.caption.txt`, counts filled in from the reports) and its values (`*.csv`).
+The size-1 plots are not kept: the result plots are `../2026-10-25-reuse-size100/plots/`, in the form
+the project lead approved on the pilot (`reuse/plot-reuse.py`).

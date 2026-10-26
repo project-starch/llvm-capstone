@@ -137,6 +137,8 @@ How to report each:
   kernel with their FPGA kernel's options:
   - the artifact's 20 tests complete with both revocation layers active (one run, 4.2 h at their
     default `--size 100`);
+  - they also complete with libc revocation off throughout (one run, R6, 4.7 h); their memsys5 still
+    revokes through its own calls;
   - their own 32-test driver (commit a879a48e) ended in the same kernel panic (`Poison probe missing
     page`) in 4 of 4 runs; where the output was copied (3 runs), test 150, "CREATE INDEX five times",
     was the last test started. It also happens with libc revocation off throughout; their memsys5
@@ -145,3 +147,19 @@ How to report each:
     kernel panics, the NODEBUG kernel stops answering.
   - Their published build recipe does not enable memsys5; configure's `--enable-memsys5` is needed for
     their `main()` to run.
+
+## Address reuse at memsys5 (speedtest1, `--size 100`)
+
+From `ports/sqlite/poisoncap/results/2026-10-25-reuse-size100/` (plots there, approved form). Their speedtest1
+driver at its default, observed from outside memsys5 by a link-time wrapper; each system against its own
+control with temporal protection off (PoisonCap: their own `NESTED_TEMPORAL` switch; Sublet: per-object
+revocation removed). Spatial protection on throughout.
+
+- PoisonCap: temporal off, 51,499 of 52,146 allocations reuse a freed start address (95 % of them within a
+  distance of 7); temporal on, 35,316 (67.7 %), 92 % of them at distances 512 to 65,535. Their quarantine
+  delays reuse; it does not prevent it. At `--size 1` (1,180 allocations) it reused nothing: the
+  quarantine never filled.
+- Sublet: temporal off and on both reuse 51,499 of 52,146, every counter and bin identical; revocation moves
+  no address.
+- Repetitions: PoisonCap three sets, Sublet sets 1 and 2 so far; every set identical in every counter and bin.
+
