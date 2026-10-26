@@ -1,0 +1,13 @@
+date 2026-10-26T09:46:14Z
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+measure instructions: DynamoRIO 11.3.0, slotins client
+7f360ab01267a7893847fb7b931ab0964bfe6e02c614156d68bdf6b368a0af4a  slotins.c
+0c68e87b3301c41649e2a5cb96bdf93b9cc43c7f554a5e63696199d00de6d0ee  insctl.c
+9c16c4883b521ed38afd7ed0a35d4342d9880460890037063c55d5603ea25ae2  slotins/libslotins.so
+0db7cb47613475c5060ce47ad24dc73875cddeda4d13196ab3a98b356326ac72  sqlite-amalgamation-3220000.zip
+7bc5a3ce285690db85bd3f97034a467e19096b787c9c9c09a23b1513a43c8913  sqlite-src-3220000.zip
+b2dd2fb9eae084bc085a16ab408ac10e67fdc8b9903435d2f428d9205851f5b6  speedtest1
+build gcc -O2 speedtest1.c sqlite3.c (amalgamation defaults)
+sizes 25 50 100 200 400 800

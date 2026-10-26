@@ -1,0 +1,16 @@
+octane-richards	qjs	valid	rc=0 4s
+octane-deltablue	qjs	valid	rc=0 4s
+octane-crypto	qjs	valid	rc=0 58s
+octane-raytrace	qjs	valid	rc=0 19s
+octane-earley-boyer	qjs	valid	rc=0 56s
+octane-regexp	qjs	valid	rc=0 93s
+octane-splay	qjs	valid	rc=0 9s
+octane-navier-stokes	qjs	valid	rc=0 25s
+octane-pdfjs	qjs	valid	rc=0 24s
+octane-mandreel	qjs	valid	rc=0 154s
+octane-gbemu	qjs	valid	rc=0 29s
+octane-code-load	qjs	valid	rc=0 6s
+octane-box2d	qjs	valid	rc=0 19s
+octane-zlib	qjs	valid	rc=0 1339s
+octane-typescript	qjs	valid	rc=0 118s
+CENSUS_DONE

@@ -35,15 +35,17 @@ PY=$TOOL/python/bin/python3
   || { echo "run-pyperformance: pyperformance install failed" >&2; exit 1; }
 PP=$TOOL/pp/bin/pyperformance
 
-# the arm control: PYTHONMALLOC must reach the interpreter, and pymalloc must hide small objects
+# the arm control (census passes): PYTHONMALLOC must reach the interpreter, and pymalloc must hide small objects
+ARMS=(pymalloc malloc)
+[ "$MEASURE" = instructions ] && ARMS=(malloc)   # the arm allocations per instruction is drawn for
 cat > "$TOOL/hold.py" <<'EOF'
 held = [object() for _ in range(200000)]
 EOF
-for arm in malloc pymalloc; do
+[ "$MEASURE" = census ] && for arm in malloc pymalloc; do
   rm -f "$OUT/control/py-$arm.jsonl"
   SLOTCENSUS_OUT=$OUT/control/py-$arm.jsonl LD_PRELOAD=$TOOL/slotcensus.so PYTHONMALLOC=$arm "$PY" "$TOOL/hold.py"
 done
-python3 - "$OUT/control" <<'EOF' || exit 75
+[ "$MEASURE" = census ] && { python3 - "$OUT/control" <<'EOF' || exit 75; }
 import json, sys
 peak = {a: max((json.loads(l)["peak_live"] for l in open(f"{sys.argv[1]}/py-{a}.jsonl")), default=0)
         for a in ("malloc", "pymalloc")}
@@ -63,6 +65,28 @@ fi
 cd "$OUT" || exit 1
 "$PP" venv create --python="$PY" -b default > "$OUT/logs/venv.log" 2>&1 \
   || { echo "run-pyperformance: venv create failed" >&2; exit 1; }
+# Instruction passes start only pyperf's workers under DynamoRIO: the venv's python3 becomes a wrapper that runs a
+# command line with --worker under it and everything else (pyperformance, pip, the benchmark's driver) natively, as
+# the venv's python, so the workers the driver spawns come back through the wrapper. Under DynamoRIO the whole
+# driver followed every child, and 16 cells ran 1 h 43 min without finishing one (2026-10-26).
+if [ "$MEASURE" = instructions ]; then
+  VB=$(echo "$OUT"/venv/*/bin)
+  [ -L "$VB/python3" ] && [ ! -e "$VB/python3-real" ] || { echo "run-pyperformance: venv $VB?" >&2; exit 1; }
+  mv "$VB/python3" "$VB/python3-real"
+  cat > "$VB/python3" <<EOF
+#!/bin/bash
+for a; do
+  [ "\$a" = --worker ] && exec "$DRRUN" -c "$SLOTINS" "\$SLOTCENSUS_OUT" -- "$VB/python3-real" "\$@"
+done
+exec -a "\$0" "$VB/python3-real" "\$@"
+EOF
+  chmod 755 "$VB/python3"
+  # the wrapper's python must still be the venv's: sys.prefix the venv, sys.executable the name it was started as
+  for x in "$VB/python" "$VB/python3"; do
+    [ "$("$x" -c 'import sys; print(sys.prefix, sys.executable)')" = "${VB%/bin} $x" ] \
+      || { echo "run-pyperformance: $x is not the venv's python" >&2; exit 1; }
+  done
+fi
 {
   provenance_tracer
   (cd "$CACHE" && sha256sum "$T")
@@ -71,12 +95,15 @@ cd "$OUT" || exit 1
   echo "pyperformance $("$PP" --version 2>&1)"
   echo "run pyperformance run --fast -b <benchmark>, arms PYTHONMALLOC=pymalloc and PYTHONMALLOC=malloc"
   echo "benchmarks ${#BENCH[@]}: ${BENCH[*]}"
+  [ "$MEASURE" = instructions ] && echo "instructions: pyperf's workers (--worker) under DynamoRIO, the rest native"
 } > "$OUT/provenance.txt"
 
 run_cell() {   # arm benchmark
   local arm=$1 b=$2 cell=py-$1-$2 t rc v
   t=$(date +%s)
-  SLOTCENSUS_OUT=$OUT/$cell.jsonl LD_PRELOAD=$TOOL/slotcensus.so PYTHONMALLOC=$arm \
+  local launch=(measured "$OUT/$cell.jsonl")
+  [ "$MEASURE" = instructions ] && launch=(env SLOTCENSUS_OUT="$OUT/$cell.jsonl")   # the workers' wrapper reads it
+  PYTHONMALLOC=$arm "${launch[@]}" \
     "$PP" run --python="$PY" --fast -b "$b" -o "$OUT/logs/$cell.json" \
     --inherit-environ PYTHONMALLOC,LD_PRELOAD,SLOTCENSUS_OUT > "$OUT/logs/$cell.log" 2>&1
   rc=$?
@@ -85,11 +112,11 @@ run_cell() {   # arm benchmark
 }
 # $JOBS cells at a time (the counts do not depend on timing; one cell after another takes hours)
 for b in "${BENCH[@]}"; do
-  for arm in pymalloc malloc; do
+  for arm in "${ARMS[@]}"; do
     while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n; done
     run_cell "$arm" "$b" &
   done
 done
 wait
-cat "$OUT/cells-pymalloc.tsv" "$OUT/cells-malloc.tsv" > "$OUT/cells.tsv"
+for arm in "${ARMS[@]}"; do cat "$OUT/cells-$arm.tsv"; done > "$OUT/cells.tsv"
 echo CENSUS_DONE >> "$OUT/cells.tsv"

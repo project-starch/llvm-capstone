@@ -1,0 +1,1 @@
+{"pid":1967983,"ppid":1967982,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/apps/swaptions/inst/amd64-linux.gcc-pthreads/bin/swaptions -ns 64 -sm 40000 -nt 8","forked":0,"instructions":21190510078,"allocs":960910,"frees":960207,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":934,"end_live":703}

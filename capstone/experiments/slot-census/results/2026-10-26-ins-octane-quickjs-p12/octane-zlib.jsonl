@@ -1,0 +1,1 @@
+{"pid":294181,"ppid":268726,"cmdline":"./qjs tests/octane/run.js zlib","forked":0,"instructions":819199921107,"allocs":1566,"frees":1566,"realloc_moved":532,"realloc_inplace":305,"failed":0,"peak_live":455,"end_live":0}

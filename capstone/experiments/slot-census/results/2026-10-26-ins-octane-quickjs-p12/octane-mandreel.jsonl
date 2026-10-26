@@ -1,0 +1,1 @@
+{"pid":293757,"ppid":268726,"cmdline":"./qjs tests/octane/run.js mandreel","forked":0,"instructions":90802664190,"allocs":11716,"frees":11716,"realloc_moved":3819,"realloc_inplace":3091,"failed":0,"peak_live":3451,"end_live":0}

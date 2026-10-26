@@ -1,0 +1,27 @@
+parsec-simlarge-blackscholes	blackscholes	valid	rc=0 3s
+parsec-simlarge-bodytrack	bodytrack	valid	rc=0 5s
+parsec-simlarge-canneal	canneal	valid	rc=0 9s
+parsec-simlarge-dedup	dedup	valid	rc=0 4s
+parsec-simlarge-facesim	facesim	valid	rc=0 30s
+parsec-simlarge-ferret	ferret	valid	rc=0 4s
+parsec-simlarge-fluidanimate	fluidanimate	valid	rc=0 4s
+parsec-simlarge-freqmine	freqmine	valid	rc=0 5s
+parsec-simlarge-raytrace	rtview	INVALID	rc=none 3s
+parsec-simlarge-streamcluster	streamcluster	valid	rc=0 4s
+parsec-simlarge-swaptions	swaptions	valid	rc=0 5s
+parsec-simlarge-vips	vips	valid	rc=0 5s
+parsec-simlarge-x264	x264	valid	rc=0 5s
+parsec-native-blackscholes	blackscholes	valid	rc=0 84s
+parsec-native-bodytrack	bodytrack	valid	rc=0 57s
+parsec-native-canneal	canneal	INVALID	input-missing
+parsec-native-dedup	dedup	INVALID	input-missing
+parsec-native-facesim	facesim	valid	rc=0 793s
+parsec-native-ferret	ferret	valid	rc=0 86s
+parsec-native-fluidanimate	fluidanimate	valid	rc=0 108s
+parsec-native-freqmine	freqmine	valid	rc=0 151s
+parsec-native-raytrace	rtview	INVALID	input-missing
+parsec-native-streamcluster	streamcluster	valid	rc=0 104s
+parsec-native-swaptions	swaptions	valid	rc=0 107s
+parsec-native-vips	vips	valid	rc=0 37s
+parsec-native-x264	x264	INVALID	input-missing
+CENSUS_DONE

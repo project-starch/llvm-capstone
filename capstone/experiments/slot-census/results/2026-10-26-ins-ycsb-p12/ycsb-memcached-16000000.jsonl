@@ -1,0 +1,1 @@
+{"pid":298060,"ppid":298058,"cmdline":"<PASS>/tool/memcached-1.6.45/memcached -l 127.0.0.1 -p 21223 -U 0 -m 65536 -t 4 -c 4096 -A","forked":0,"instructions":121350765914,"allocs":22962,"frees":38,"realloc_moved":12,"realloc_inplace":11,"failed":0,"peak_live":22933,"end_live":22924}

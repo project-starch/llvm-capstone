@@ -48,7 +48,7 @@ for scale in "${SCALES[@]}"; do
   D=$TOOL/data-$scale
   t=$(date +%s)
   "$B/initdb" -D "$D" -A trust -U bench > "$OUT/logs/$cell.initdb" 2>&1 || exit 1
-  SLOTCENSUS_OUT=$OUT/$cell.jsonl LD_PRELOAD=$TOOL/slotcensus.so \
+  measured "$OUT/$cell.jsonl" \
     "$B/pg_ctl" -D "$D" -w -l "$OUT/logs/$cell.server" -o "-p $PORT -k $D -c listen_addresses=''" start \
     > "$OUT/logs/$cell.pgctl" 2>&1 || { echo "run-postgres: server did not start" >&2; exit 1; }
   {

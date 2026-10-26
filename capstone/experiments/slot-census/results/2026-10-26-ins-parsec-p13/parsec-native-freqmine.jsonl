@@ -1,0 +1,1 @@
+{"pid":1974890,"ppid":1974888,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/apps/freqmine/inst/amd64-linux.gcc/bin/freqmine webdocs_250k.dat 11000","forked":0,"instructions":2452293737977,"allocs":3358,"frees":3303,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":598,"end_live":55}

@@ -1,0 +1,1 @@
+{"pid":293243,"ppid":293240,"cmdline":"../run_base_refrate_census-m64.0000/povray_r_base.census-m64 SPEC-benchmark-ref.ini","forked":0,"instructions":4007059418029,"allocs":129206,"frees":129181,"realloc_moved":71,"realloc_inplace":649,"failed":0,"peak_live":11687,"end_live":25}

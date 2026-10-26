@@ -1,0 +1,15 @@
+date 2026-10-26T15:54:08Z
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+measure instructions: DynamoRIO 11.3.0, slotins client
+51034c494d61b32c838fd3583abd6fce81d7dc83eb97359c7d9f12b35ad63c27  slotins.c
+f8cdac1a00f96bbfc8e60cd7424e81f96ca6944cd2670a071481db7c37d6053f  insctl.c
+ee2685737300956560e0fe40892b54abfd4c1a016fb3db97521d0e2b24a359cc  slotins/libslotins.so
+6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2  Python-3.13.7.tgz
+python Python 3.13.7 (main, Oct 26 2026, 23:52:52) [GCC 15.2.0]
+build ./configure (defaults) && make && make install
+pyperformance pyperformance 1.14.0
+run pyperformance run --fast -b <benchmark>, arms PYTHONMALLOC=pymalloc and PYTHONMALLOC=malloc
+benchmarks 1: asyncio_tcp
+instructions: pyperf's workers (--worker) under DynamoRIO, the rest native

@@ -43,7 +43,7 @@ for size in "${SIZES[@]}"; do
     look=(); [ $arm = nolookaside ] && look=(--lookaside 0 0)
     rm -f "$OUT/$cell.db"
     t=$(date +%s)
-    SLOTCENSUS_OUT=$OUT/$cell.jsonl LD_PRELOAD=$TOOL/slotcensus.so \
+    measured "$OUT/$cell.jsonl" \
       "$TOOL/speedtest1" --size "$size" --stats "${look[@]}" "$OUT/$cell.db" > "$OUT/$cell.out" 2>&1
     rc=$?
     v=INVALID; [ $rc = 0 ] && grep -q 'TOTAL' "$OUT/$cell.out" && v=valid

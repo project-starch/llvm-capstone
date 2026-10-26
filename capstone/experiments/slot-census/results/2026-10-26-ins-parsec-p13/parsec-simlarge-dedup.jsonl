@@ -1,0 +1,1 @@
+{"pid":1965463,"ppid":1965462,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/kernels/dedup/inst/amd64-linux.gcc/bin/dedup -c -p -v -t 8 -i media.dat -o output.dat.ddp","forked":0,"instructions":34496695004,"allocs":464955,"frees":464969,"realloc_moved":0,"realloc_inplace":46277,"failed":0,"peak_live":187263,"end_live":-14}

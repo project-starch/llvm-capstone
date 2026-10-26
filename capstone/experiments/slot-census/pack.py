@@ -21,8 +21,8 @@ def main():
     copy = lambda f: open(os.path.join(dest, f), "w").write(scrub(open(os.path.join(src, f), errors="replace").read()))
     os.makedirs(os.path.join(dest, "control"))
     for f in sorted(os.listdir(os.path.join(src, "control"))):
-        # ffcensus's controls keep their raw files in subdirectories
-        if os.path.isfile(os.path.join(src, "control", f)):
+        # ffcensus's controls keep their raw files in subdirectories, and a build log (slotins) is not a result
+        if os.path.isfile(os.path.join(src, "control", f)) and not f.endswith(".log"):
             copy(os.path.join("control", f))
     for f in ("slotcensus.cfg", "provenance.txt", "runs.txt", "cells.tsv"):
         if os.path.exists(os.path.join(src, f)):

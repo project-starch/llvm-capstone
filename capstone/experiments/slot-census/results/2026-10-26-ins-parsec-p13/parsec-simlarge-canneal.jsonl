@@ -1,0 +1,1 @@
+{"pid":1965091,"ppid":1965090,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/kernels/canneal/inst/amd64-linux.gcc/bin/canneal 8 15000 2000 400000.nets 128","forked":0,"instructions":5935921596,"allocs":3383061,"frees":3383056,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":1198059,"end_live":5}

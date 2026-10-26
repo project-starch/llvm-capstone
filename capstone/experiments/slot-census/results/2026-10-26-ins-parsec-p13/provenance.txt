@@ -1,0 +1,27 @@
+date 2026-10-26T13:36:00Z
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+measure instructions: DynamoRIO 11.3.0, slotins client
+51034c494d61b32c838fd3583abd6fce81d7dc83eb97359c7d9f12b35ad63c27  slotins.c
+f8cdac1a00f96bbfc8e60cd7424e81f96ca6944cd2670a071481db7c37d6053f  insctl.c
+c5295f939945b1b6b4f48946c33836e2831293d5d9bef2d25b1a64b887d86874  slotins/libslotins.so
+cbdc6a41d97c82eb8b86270dff2a89ce1a723293b907a1f2358eebb6d9a6445f  parsec-3.0-core.tar.gz
+378b3653d8597cad29476b20ff520bdb25b8e90269a3f044e262ff660899fed2  parsec-3.0-input-sim.tar.gz
+0369c81067c4591abafc6e4648c9775f5ad60dacfcb2c3a5b2ccdcf91ebf5973  parsec-3.0-input-native.truncated.tar.gz
+parsec 3.0-beta-20150206 config gcc, threads 8, inputs simlarge native
+export CFLAGS=" -O3 -std=gnu11 -fcommon -Wno-error=implicit-function-declaration -Wno-error=int-conversion -Wno-error=incompatible-pointer-types -Wno-error=implicit-int -DHUGE=3.40282347e+38F -g -funroll-loops -fprefetch-loop-arrays ${PORTABILITY_FLAGS}"
+export CXXFLAGS="-O3 -std=gnu++11 -g -funroll-loops -fprefetch-loop-arrays -fpermissive -fno-exceptions ${PORTABILITY_FLAGS}"
+build blackscholes ok
+build bodytrack ok
+build canneal ok
+build dedup ok
+build facesim ok
+build ferret ok
+build fluidanimate ok
+build freqmine ok
+build raytrace FAILED
+build streamcluster ok
+build swaptions ok
+build vips ok
+build x264 ok

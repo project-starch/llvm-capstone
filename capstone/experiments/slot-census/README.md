@@ -16,6 +16,8 @@ programs' own allocation behaviour is measured, not a port's.
                  control_cxx.cc     positive control (C++ new[]/delete[])
                  ffcontrol.c        ffcensus's positive controls (control.c's sequence and an arena sequence)
                  check-control.py   compares a control's expected counts with its census lines
+                 slotins.c          instructions and allocations per process, a DynamoRIO client (+ slotins.cmake)
+                 insctl.c           slotins's control: loops of known instruction counts, threads and a fork
                  tracer.sh          sourced by every runner: builds the tracer and controls, runs the controls
     runners      run-spec.sh        SPEC CPU2017 rate
                  run-parsec.sh      PARSEC 3.0
@@ -30,7 +32,7 @@ programs' own allocation behaviour is measured, not a port's.
                  run-mimalloc-bench.sh  mimalloc-bench (allocator stress tests)
     analysis     summarize.py       one pass: per-process and per-cell peaks, verdicts; "no data" is an error
                  pack.py            copies a pass into results/<pass>/ with host paths removed
-                 report.py          every pass in results/ -> REPORT.md, figures/slots.pdf, its caption
+                 report.py          every pass in results/ -> REPORT.md, figures/slots.pdf and rates.pdf, captions
     data         results/<pass>/    one directory per pass, raw lines only
 
 ## The suites
@@ -98,7 +100,10 @@ Runner notes that change what is measured:
   are intact (blackscholes, bodytrack, facesim, ferret, fluidanimate, freqmine, vips; streamcluster and swaptions need
   none), and canneal, dedup and x264 are measured on simlarge only. PARSEC has no output checks.
 - **pyperformance**: the measured processes are pyperf's workers. An extra control holds 200,000 objects: with
-  `PYTHONMALLOC=malloc` its peak must reach 200,000, with pymalloc stay below 20,000.
+  `PYTHONMALLOC=malloc` its peak must reach 200,000, with pymalloc stay below 20,000. Three benchmarks run their
+  workload in a child of the worker (pyperf's `bench_command`: 2to3, python_startup, python_startup_no_site), and
+  no child is recorded, so their peaks (82,332 to 82,379 with malloc) are the worker's: the interpreter and pyperf,
+  not the workload.
 - **PostgreSQL**: every postgres process is measured; a backend is a fork child, so its count starts at the live
   set it inherits from the postmaster.
 - **YCSB**: YCSB 0.17.0 with its own Redis and memcached bindings, on a Temurin JDK 11 unpacked in the pass
@@ -125,6 +130,36 @@ resolves the real functions (a 64 KiB static buffer), and processes that end in 
 Cross-check: the SPEC ref peaks of 500.perlbench_r and 502.gcc_r agree with an earlier, separately written tracer
 on the same host (1,252,835 and 1,069,978).
 
+## Allocations per instruction
+
+The second figure divides a cell's allocations by the instructions its measured processes executed. Both counts come
+from the same run under DynamoRIO 11.3.0 (`SLOTCENSUS_MEASURE=instructions`, the slotins client), because some
+benchmarks run for a fixed time or calibrate their loop counts (Octane, pyperf), so a run under instrumentation does
+less work than the census run and a ratio across two runs would mix two amounts of work. slotins counts application
+instructions per basic block into a per-thread counter and wraps the malloc family with the tracer's rules. Every
+runner runs the same commands in both modes. The exceptions: PARSEC's instruction passes do not follow execs
+(facesim's `system("mkdir")` otherwise starts the multicall coreutils under the name `libdynamorio`), and
+pyperformance's run only pyperf's workers under DynamoRIO, through a wrapper in the venv, with the rest native.
+Four pyperformance benchmarks have no instruction count: 2to3, python_startup, python_startup_no_site and dask start
+subprocesses with `close_fds=True`, and under DynamoRIO 11.3.0 the child spins forever, with or without a client and
+with or without `-no_follow_children` (`close_fds=False` and `os.posix_spawn` run, 2026-10-26).
+
+Before measuring, an instruction pass runs `insctl`: a 2-instruction loop run 10^8 times must count 2 instructions
+per iteration more than a run with none, to within 1,000 instructions, for one thread, four threads (two still alive
+at exit) and a fork (the child counts its own loop and none of its parent's threads). A client built with
+DynamoRIO's skip-thread-exit-at-exit option fails it. control.c and control_cxx.cc under DynamoRIO must match their
+expected allocation counts. Cross-check: on SQLite speedtest1 the DynamoRIO allocation counts match the census's to
+within 0.5%.
+
+The third figure (`figures/peak-rate.pdf`) plots each run with both measurements as its peak against its allocations
+per year, and draws how long a 55-bit lifetime id split into slot and generation bits lasts: with i slot bits and g
+generation bits a slot retires after 2^g uses, so a process with peak L lasts until it has made (2^i - L) x 2^g
+allocations. Allocations per year need an instruction rate, which the figure assumes: 10^10 instructions per second
+per process (`IPS` in `report.py`). That is above every measured RISC-V core we found (2026-10): CVA6 runs at up to
+1.7 GHz in 22 nm with an IPC of 0.82 to 0.99 (arXiv 1904.05442), the SG2044 at 2.6 GHz (arXiv 2508.13840), SiFive's
+P550 at 1.4 GHz with an IPC above 2 on its best SPEC programs (Chips and Cheese). The years scale as 1/rate: a
+process twice as fast, or a multi-threaded process whose threads share its ids on several cores, halves them.
+
 ## Running
 
     bash run-spec.sh ~/spec2017/SPEC17 <pass-dir> [test|train|ref] [benchmark...]
@@ -138,6 +173,7 @@ on the same host (1,252,835 and 1,069,978).
     bash run-postgres.sh <pass-dir> [scale...]
     bash run-sqlite.sh <pass-dir> [size...]
     bash run-mimalloc-bench.sh <pass-dir> [test...]
+    SLOTCENSUS_MEASURE=instructions bash run-<suite>.sh ...   (not Firefox: mozjemalloc is not wrapped)
     python3 summarize.py <pass-dir>
     python3 pack.py <pass-dir> results/<pass>
     uv run --with matplotlib python report.py

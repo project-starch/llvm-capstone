@@ -1,0 +1,3 @@
+Peak live heap objects in one process against the heap allocations it would make in a year at 10^10 instructions per second (per process, summed over its threads, 365.25-day years). Allocations per instruction are measured under DynamoRIO. A 55-bit lifetime id with 25 slot and 30 generation bits supports at least (2^25 - peak) x 2^30 allocations before a process can run out of slots. The line is that bound for one year, the arrow the gap to the run closest to it.
+
+The 142 runs shown are those of the 152 in the census with a measured allocation rate as well (Redis left out). Without a rate: pyperformance (4), Firefox (2). With 25 slot and 30 generation bits the shortest bound among them is about 65 years, for spectral_norm (pyperformance, PYTHONMALLOC=malloc). 

@@ -49,7 +49,7 @@ for keys in "${KEYS[@]}"; do
   cell=rocksdb-$keys
   rm -rf "$TOOL/db"
   t=$(date +%s)
-  SLOTCENSUS_OUT=$OUT/$cell.jsonl LD_PRELOAD=$TOOL/slotcensus.so \
+  measured "$OUT/$cell.jsonl" \
     "$DB" --benchmarks="$BENCHMARKS" --num="$keys" --value_size=100 --cache_size=1073741824 --compression_type=none \
     --db="$TOOL/db" \
     > "$OUT/$cell.out" 2>&1

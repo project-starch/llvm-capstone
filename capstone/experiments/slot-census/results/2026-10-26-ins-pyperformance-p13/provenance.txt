@@ -1,0 +1,15 @@
+date 2026-10-26T14:29:30Z
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+measure instructions: DynamoRIO 11.3.0, slotins client
+51034c494d61b32c838fd3583abd6fce81d7dc83eb97359c7d9f12b35ad63c27  slotins.c
+f8cdac1a00f96bbfc8e60cd7424e81f96ca6944cd2670a071481db7c37d6053f  insctl.c
+a2592db2b0a15047732035a8dcb2f2f1a52d14ec754d84d9261e93dd08fe48ac  slotins/libslotins.so
+6c9d80839cfa20024f34d9a6dd31ae2a9cd97ff5e980e969209746037a5153b2  Python-3.13.7.tgz
+python Python 3.13.7 (main, Oct 26 2026, 22:28:11) [GCC 15.2.0]
+build ./configure (defaults) && make && make install
+pyperformance pyperformance 1.14.0
+run pyperformance run --fast -b <benchmark>, arms PYTHONMALLOC=pymalloc and PYTHONMALLOC=malloc
+benchmarks 97: 2to3 argparse argparse_subparsers async_generators async_tree async_tree_cpu_io_mixed async_tree_cpu_io_mixed_tg async_tree_eager async_tree_eager_cpu_io_mixed async_tree_eager_cpu_io_mixed_tg async_tree_eager_io async_tree_eager_io_tg async_tree_eager_memoization async_tree_eager_memoization_tg async_tree_eager_tg async_tree_io async_tree_io_tg async_tree_memoization async_tree_memoization_tg async_tree_tg asyncio_tcp asyncio_tcp_ssl asyncio_websockets base64 bpe_tokeniser chameleon chaos comprehensions concurrent_imap coroutines coverage crypto_pyaes dask deepcopy deltablue django_template docutils dulwich_log fannkuch fastapi float gc_collect gc_traversal generators genshi go hexiom html5lib json_dumps json_loads logging mako mdp meteor_contest nbody networkx networkx_connected_components networkx_k_core nqueens pathlib pickle pickle_dict pickle_list pickle_pure_python pidigits pprint pyflate python_startup python_startup_no_site raytrace regex_compile regex_dna regex_effbot regex_v8 richards richards_super scimark spectral_norm sphinx sqlalchemy_declarative sqlalchemy_imperative sqlglot_v2 sqlglot_v2_optimize sqlglot_v2_parse sqlglot_v2_transpile sqlite_synth sympy telco tomli_loads tornado_http typing_runtime_protocols unpack_sequence unpickle unpickle_list unpickle_pure_python xdsl xml_etree
+instructions: pyperf's workers (--worker) under DynamoRIO, the rest native

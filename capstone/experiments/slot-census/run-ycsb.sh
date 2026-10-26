@@ -101,14 +101,14 @@ for records in "${RECORDS[@]}"; do
       port=$PORT_R binding=redis-binding class=site.ycsb.db.RedisClient
       props=(-p redis.host=127.0.0.1 -p redis.port=$PORT_R)
       up $port && { echo "run-ycsb: port $port is taken" >&2; exit 1; }
-      SLOTCENSUS_OUT=$OUT/$cell.jsonl LD_PRELOAD=$TOOL/slotcensus.so \
+      measured "$OUT/$cell.jsonl" \
         "$R/src/redis-server" --port $port --bind 127.0.0.1 --save "" --appendonly no --set-proc-title no \
         --dir "$OUT" > "$OUT/logs/$cell.server" 2>&1 &
     else
       port=$PORT_M binding=memcached-binding class=site.ycsb.db.MemcachedClient
       props=(-p memcached.hosts=127.0.0.1:$PORT_M)
       up $port && { echo "run-ycsb: port $port is taken" >&2; exit 1; }
-      SLOTCENSUS_OUT=$OUT/$cell.jsonl LD_PRELOAD=$TOOL/slotcensus.so \
+      measured "$OUT/$cell.jsonl" \
         "$M/memcached" -l 127.0.0.1 -p $port -U 0 -m 65536 -t 4 -c 4096 -A > "$OUT/logs/$cell.server" 2>&1 &
     fi
     srv=$!

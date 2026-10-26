@@ -1,0 +1,9 @@
+ycsb-redis-100000	redis-server	valid	rc=0 phases=000 ok=000 items=100001 109s
+ycsb-memcached-100000	memcached	valid	rc=0 phases=000 ok=000 items=100000 62s
+ycsb-redis-1000000	redis-server	valid	rc=0 phases=000 ok=000 items=1000001 239s
+ycsb-memcached-1000000	memcached	valid	rc=0 phases=000 ok=000 items=1000000 99s
+ycsb-redis-5000000	redis-server	valid	rc=0 phases=000 ok=000 items=5000001 828s
+ycsb-memcached-5000000	memcached	valid	rc=0 phases=000 ok=000 items=5000000 261s
+ycsb-redis-16000000	redis-server	valid	rc=0 phases=000 ok=000 items=16000001 2367s
+ycsb-memcached-16000000	memcached	valid	rc=0 phases=000 ok=000 items=16000000 820s
+CENSUS_DONE

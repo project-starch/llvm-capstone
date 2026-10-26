@@ -1,0 +1,13 @@
+sqlite-lookaside-25	speedtest1	valid	rc=0 23s
+sqlite-nolookaside-25	speedtest1	valid	rc=0 14s
+sqlite-lookaside-50	speedtest1	valid	rc=0 20s
+sqlite-nolookaside-50	speedtest1	valid	rc=0 23s
+sqlite-lookaside-100	speedtest1	valid	rc=0 47s
+sqlite-nolookaside-100	speedtest1	valid	rc=0 48s
+sqlite-lookaside-200	speedtest1	valid	rc=0 91s
+sqlite-nolookaside-200	speedtest1	valid	rc=0 86s
+sqlite-lookaside-400	speedtest1	valid	rc=0 200s
+sqlite-nolookaside-400	speedtest1	valid	rc=0 255s
+sqlite-lookaside-800	speedtest1	valid	rc=0 450s
+sqlite-nolookaside-800	speedtest1	valid	rc=0 430s
+CENSUS_DONE

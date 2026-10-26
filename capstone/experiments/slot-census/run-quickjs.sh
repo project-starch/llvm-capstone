@@ -41,7 +41,7 @@ cd "$Q" || exit 1
 for b in "${BENCH[@]}"; do
   cell=octane-$b
   t=$(date +%s)
-  SLOTCENSUS_OUT=$OUT/$cell.jsonl LD_PRELOAD=$TOOL/slotcensus.so ./qjs tests/octane/run.js "$b" > "$OUT/$cell.out" 2>&1
+  measured "$OUT/$cell.jsonl" ./qjs tests/octane/run.js "$b" > "$OUT/$cell.out" 2>&1
   rc=$?
   v=INVALID; [ $rc = 0 ] && grep -q '^Score (version' "$OUT/$cell.out" && v=valid
   printf '%s\tqjs\t%s\trc=%s %ss\n' "$cell" "$v" "$rc" "$(( $(date +%s) - t ))" | tee -a "$OUT/cells.tsv"

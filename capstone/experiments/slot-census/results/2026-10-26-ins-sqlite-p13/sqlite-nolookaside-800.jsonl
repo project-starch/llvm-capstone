@@ -1,0 +1,1 @@
+{"pid":1441917,"ppid":1303916,"cmdline":"<PASS>/tool/speedtest1 --size 800 --stats --lookaside 0 0 <PASS>/sqlite-nolookaside-800.db","forked":0,"instructions":249630420089,"allocs":17439095,"frees":17439095,"realloc_moved":606567,"realloc_inplace":190223,"failed":0,"peak_live":1163,"end_live":0}

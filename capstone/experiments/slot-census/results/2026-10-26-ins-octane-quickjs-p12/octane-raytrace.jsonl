@@ -1,0 +1,1 @@
+{"pid":275726,"ppid":268726,"cmdline":"./qjs tests/octane/run.js raytrace","forked":0,"instructions":13981197018,"allocs":25529,"frees":25529,"realloc_moved":36,"realloc_inplace":37,"failed":0,"peak_live":162,"end_live":0}

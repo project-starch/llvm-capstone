@@ -414,6 +414,159 @@ Cells above half of 2^24 (8,388,608):
 | xml_etree | PYTHONMALLOC=malloc | application | 136,981 | 15,609,168 | **no** | yes | yes | 2026-10-26-pyperformance-p13 |
 | xml_etree | PYTHONMALLOC=pymalloc | hidden | 4,312 | 6,168,360 | yes | yes | yes | 2026-10-26-pyperformance-p13 |
 
+## Peak against allocation rate
+
+Every cell with a census peak and an instruction pass, as drawn in `figures/peak-rate.pdf`.
+
+| suite | program | dataset | peak live objects | allocations per 1,000 instructions |
+|---|---|---|---:|---:|
+| Octane | box2d | Octane | 1,475 | 0.000726 |
+| Octane | code-load | Octane | 17,291 | 0.0215 |
+| Octane | crypto | Octane | 289 | 0.000148 |
+| Octane | deltablue | Octane | 205 | 0.00189 |
+| Octane | earley-boyer | Octane | 3,370 | 0.00327 |
+| Octane | gbemu | Octane | 1,350 | 0.000525 |
+| Octane | mandreel | Octane | 3,452 | 0.000129 |
+| Octane | navier-stokes | Octane | 134 | 4.51e-05 |
+| Octane | pdfjs | Octane | 2,132 | 0.0782 |
+| Octane | raytrace | Octane | 163 | 0.00183 |
+| Octane | regexp | Octane | 1,239 | 0.0236 |
+| Octane | richards | Octane | 126 | 0.000168 |
+| Octane | splay | Octane | 36,157 | 0.0123 |
+| Octane | typescript | Octane | 34,015 | 0.00442 |
+| Octane | zlib | Octane | 456 | 1.91e-06 |
+| PARSEC | blackscholes | native | 14 | 4.22e-08 |
+| PARSEC | bodytrack | native | 8,486 | 0.000606 |
+| PARSEC | canneal | simlarge | 1,198,060 | 0.57 |
+| PARSEC | dedup | simlarge | 179,325 | 0.0135 |
+| PARSEC | facesim | native | 710,378 | 0.000361 |
+| PARSEC | ferret | native | 141,470 | 0.000338 |
+| PARSEC | fluidanimate | native | 229,928 | 0.000124 |
+| PARSEC | freqmine | native | 598 | 1.37e-06 |
+| PARSEC | streamcluster | native | 25 | 9.85e-06 |
+| PARSEC | swaptions | native | 1,822 | 0.0453 |
+| PARSEC | vips | native | 2,818 | 0.00363 |
+| PARSEC | x264 | simlarge | 562 | 7.98e-05 |
+| Redis | redis-server | 100,000 records | 3,915,839 | 0.659 |
+| Redis | redis-server | 1,000,000 records | 39,015,840 | 1.43 |
+| Redis | redis-server | 5,000,000 records | 195,015,841 | 1.89 |
+| Redis | redis-server | 16,000,000 records | 624,015,887 | 2.02 |
+| SPEC CPU2017 | 500.perlbench_r | ref | 1,252,835 | 0.0597 |
+| SPEC CPU2017 | 502.gcc_r | ref | 1,069,976 | 0.125 |
+| SPEC CPU2017 | 505.mcf_r | ref | 15,010 | 0.000498 |
+| SPEC CPU2017 | 508.namd_r | ref | 3,494 | 7.88e-06 |
+| SPEC CPU2017 | 510.parest_r | ref | 2,374,734 | 0.043 |
+| SPEC CPU2017 | 511.povray_r | ref | 11,685 | 3.22e-05 |
+| SPEC CPU2017 | 519.lbm_r | ref | 5 | 3.96e-09 |
+| SPEC CPU2017 | 520.omnetpp_r | ref | 2,396,575 | 0.405 |
+| SPEC CPU2017 | 523.xalancbmk_r | ref | 2,337,540 | 0.0998 |
+| SPEC CPU2017 | 525.x264_r | ref | 3,435 | 4.68e-05 |
+| SPEC CPU2017 | 526.blender_r | ref | 328,463 | 0.00477 |
+| SPEC CPU2017 | 531.deepsjeng_r | ref | 3 | 1.46e-09 |
+| SPEC CPU2017 | 538.imagick_r | ref | 440 | 0.00706 |
+| SPEC CPU2017 | 541.leela_r | ref | 25,627 | 0.0193 |
+| SPEC CPU2017 | 544.nab_r | ref | 80,151 | 0.000182 |
+| SPEC CPU2017 | 557.xz_r | ref | 21 | 6.14e-08 |
+| SQLite | speedtest1, lookaside off | size 25 | 1,147 | 0.135 |
+| SQLite | speedtest1, lookaside off | size 50 | 1,147 | 0.125 |
+| SQLite | speedtest1, lookaside off | size 100 | 1,163 | 0.112 |
+| SQLite | speedtest1, lookaside off | size 200 | 1,164 | 0.0984 |
+| SQLite | speedtest1, lookaside off | size 400 | 1,163 | 0.0845 |
+| SQLite | speedtest1, lookaside off | size 800 | 1,164 | 0.0699 |
+| pyperformance | argparse | PYTHONMALLOC=malloc | 90,881 | 0.633 |
+| pyperformance | argparse_subparsers | PYTHONMALLOC=malloc | 125,402 | 0.649 |
+| pyperformance | async_generators | PYTHONMALLOC=malloc | 301,069 | 0.715 |
+| pyperformance | async_tree | PYTHONMALLOC=malloc | 662,675 | 0.485 |
+| pyperformance | async_tree_cpu_io_mixed | PYTHONMALLOC=malloc | 684,091 | 0.594 |
+| pyperformance | async_tree_cpu_io_mixed_tg | PYTHONMALLOC=malloc | 693,333 | 0.581 |
+| pyperformance | async_tree_eager | PYTHONMALLOC=malloc | 103,249 | 0.454 |
+| pyperformance | async_tree_eager_cpu_io_mixed | PYTHONMALLOC=malloc | 261,517 | 0.644 |
+| pyperformance | async_tree_eager_cpu_io_mixed_tg | PYTHONMALLOC=malloc | 605,162 | 0.61 |
+| pyperformance | async_tree_eager_io | PYTHONMALLOC=malloc | 1,123,039 | 0.381 |
+| pyperformance | async_tree_eager_io_tg | PYTHONMALLOC=malloc | 1,133,394 | 0.361 |
+| pyperformance | async_tree_eager_memoization | PYTHONMALLOC=malloc | 356,400 | 0.436 |
+| pyperformance | async_tree_eager_memoization_tg | PYTHONMALLOC=malloc | 626,594 | 0.422 |
+| pyperformance | async_tree_eager_tg | PYTHONMALLOC=malloc | 578,422 | 0.459 |
+| pyperformance | async_tree_io | PYTHONMALLOC=malloc | 1,118,712 | 0.397 |
+| pyperformance | async_tree_io_tg | PYTHONMALLOC=malloc | 1,130,968 | 0.381 |
+| pyperformance | async_tree_memoization | PYTHONMALLOC=malloc | 700,660 | 0.434 |
+| pyperformance | async_tree_memoization_tg | PYTHONMALLOC=malloc | 709,975 | 0.418 |
+| pyperformance | async_tree_tg | PYTHONMALLOC=malloc | 671,703 | 0.461 |
+| pyperformance | asyncio_tcp | PYTHONMALLOC=malloc | 103,339 | 0.506 |
+| pyperformance | asyncio_tcp_ssl | PYTHONMALLOC=malloc | 112,781 | 0.112 |
+| pyperformance | asyncio_websockets | PYTHONMALLOC=malloc | 120,412 | 0.0253 |
+| pyperformance | base64 | PYTHONMALLOC=malloc | 622,522 | 1.66 |
+| pyperformance | bpe_tokeniser | PYTHONMALLOC=malloc | 111,440 | 0.694 |
+| pyperformance | chameleon | PYTHONMALLOC=malloc | 122,943 | 0.646 |
+| pyperformance | chaos | PYTHONMALLOC=malloc | 83,852 | 0.401 |
+| pyperformance | comprehensions | PYTHONMALLOC=malloc | 83,634 | 0.644 |
+| pyperformance | concurrent_imap | PYTHONMALLOC=malloc | 91,435 | 0.613 |
+| pyperformance | coroutines | PYTHONMALLOC=malloc | 82,323 | 0.793 |
+| pyperformance | coverage | PYTHONMALLOC=malloc | 113,612 | 0.545 |
+| pyperformance | crypto_pyaes | PYTHONMALLOC=malloc | 85,181 | 1.41 |
+| pyperformance | deepcopy | PYTHONMALLOC=malloc | 85,448 | 0.636 |
+| pyperformance | deltablue | PYTHONMALLOC=malloc | 99,905 | 0.445 |
+| pyperformance | django_template | PYTHONMALLOC=malloc | 228,807 | 0.562 |
+| pyperformance | docutils | PYTHONMALLOC=malloc | 565,599 | 0.521 |
+| pyperformance | dulwich_log | PYTHONMALLOC=malloc | 113,738 | 0.763 |
+| pyperformance | fannkuch | PYTHONMALLOC=malloc | 82,319 | 0.478 |
+| pyperformance | fastapi | PYTHONMALLOC=malloc | 338,125 | 0.189 |
+| pyperformance | float | PYTHONMALLOC=malloc | 481,726 | 0.541 |
+| pyperformance | gc_collect | PYTHONMALLOC=malloc | 83,260 | 0.267 |
+| pyperformance | gc_traversal | PYTHONMALLOC=malloc | 83,596 | 0.686 |
+| pyperformance | generators | PYTHONMALLOC=malloc | 281,503 | 0.803 |
+| pyperformance | genshi | PYTHONMALLOC=malloc | 128,241 | 0.558 |
+| pyperformance | go | PYTHONMALLOC=malloc | 89,653 | 0.294 |
+| pyperformance | hexiom | PYTHONMALLOC=malloc | 84,521 | 0.346 |
+| pyperformance | html5lib | PYTHONMALLOC=malloc | 292,425 | 0.57 |
+| pyperformance | json_dumps | PYTHONMALLOC=malloc | 82,485 | 0.825 |
+| pyperformance | json_loads | PYTHONMALLOC=malloc | 82,728 | 0.829 |
+| pyperformance | logging | PYTHONMALLOC=malloc | 95,438 | 0.436 |
+| pyperformance | mako | PYTHONMALLOC=malloc | 185,366 | 0.621 |
+| pyperformance | mdp | PYTHONMALLOC=malloc | 197,463 | 0.22 |
+| pyperformance | meteor_contest | PYTHONMALLOC=malloc | 89,551 | 0.511 |
+| pyperformance | nbody | PYTHONMALLOC=malloc | 82,918 | 0.121 |
+| pyperformance | networkx | PYTHONMALLOC=malloc | 3,641,172 | 0.501 |
+| pyperformance | networkx_connected_components | PYTHONMALLOC=malloc | 3,637,736 | 0.506 |
+| pyperformance | networkx_k_core | PYTHONMALLOC=malloc | 4,422,996 | 0.442 |
+| pyperformance | nqueens | PYTHONMALLOC=malloc | 84,325 | 0.728 |
+| pyperformance | pathlib | PYTHONMALLOC=malloc | 95,722 | 1.03 |
+| pyperformance | pickle | PYTHONMALLOC=malloc | 85,258 | 0.403 |
+| pyperformance | pickle_dict | PYTHONMALLOC=malloc | 85,193 | 0.228 |
+| pyperformance | pickle_list | PYTHONMALLOC=malloc | 85,268 | 0.373 |
+| pyperformance | pickle_pure_python | PYTHONMALLOC=malloc | 85,362 | 0.564 |
+| pyperformance | pidigits | PYTHONMALLOC=malloc | 82,465 | 0.0976 |
+| pyperformance | pprint | PYTHONMALLOC=malloc | 182,993 | 0.642 |
+| pyperformance | pyflate | PYTHONMALLOC=malloc | 445,618 | 0.805 |
+| pyperformance | raytrace | PYTHONMALLOC=malloc | 84,254 | 0.313 |
+| pyperformance | regex_compile | PYTHONMALLOC=malloc | 88,287 | 0.661 |
+| pyperformance | regex_dna | PYTHONMALLOC=malloc | 99,087 | 0.0973 |
+| pyperformance | regex_effbot | PYTHONMALLOC=malloc | 82,888 | 0.193 |
+| pyperformance | regex_v8 | PYTHONMALLOC=malloc | 93,170 | 0.726 |
+| pyperformance | richards | PYTHONMALLOC=malloc | 83,901 | 0.215 |
+| pyperformance | richards_super | PYTHONMALLOC=malloc | 83,815 | 0.197 |
+| pyperformance | scimark | PYTHONMALLOC=malloc | 85,124 | 0.81 |
+| pyperformance | spectral_norm | PYTHONMALLOC=malloc | 82,536 | 1.74 |
+| pyperformance | sphinx | PYTHONMALLOC=malloc | 739,096 | 0.481 |
+| pyperformance | sqlalchemy_declarative | PYTHONMALLOC=malloc | 200,128 | 0.562 |
+| pyperformance | sqlalchemy_imperative | PYTHONMALLOC=malloc | 200,342 | 0.535 |
+| pyperformance | sqlglot_v2 | PYTHONMALLOC=malloc | 112,485 | 0.68 |
+| pyperformance | sqlglot_v2_optimize | PYTHONMALLOC=malloc | 123,546 | 0.675 |
+| pyperformance | sqlglot_v2_parse | PYTHONMALLOC=malloc | 115,481 | 0.513 |
+| pyperformance | sqlglot_v2_transpile | PYTHONMALLOC=malloc | 117,227 | 0.529 |
+| pyperformance | sqlite_synth | PYTHONMALLOC=malloc | 83,202 | 0.627 |
+| pyperformance | sympy | PYTHONMALLOC=malloc | 428,443 | 0.514 |
+| pyperformance | telco | PYTHONMALLOC=malloc | 82,480 | 0.768 |
+| pyperformance | tomli_loads | PYTHONMALLOC=malloc | 743,230 | 0.867 |
+| pyperformance | tornado_http | PYTHONMALLOC=malloc | 168,313 | 0.56 |
+| pyperformance | typing_runtime_protocols | PYTHONMALLOC=malloc | 83,348 | 0.623 |
+| pyperformance | unpack_sequence | PYTHONMALLOC=malloc | 83,048 | 0.298 |
+| pyperformance | unpickle | PYTHONMALLOC=malloc | 85,480 | 0.897 |
+| pyperformance | unpickle_list | PYTHONMALLOC=malloc | 85,243 | 1.04 |
+| pyperformance | unpickle_pure_python | PYTHONMALLOC=malloc | 85,556 | 0.371 |
+| pyperformance | xdsl | PYTHONMALLOC=malloc | 251,236 | 0.632 |
+| pyperformance | xml_etree | PYTHONMALLOC=malloc | 136,981 | 0.555 |
+
 ## Excluded cells
 
 - 2026-10-26-parsec-p13 parsec-simlarge-raytrace: INVALID (rc=none 2s)

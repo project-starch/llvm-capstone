@@ -1,0 +1,12 @@
+date 2026-10-26T10:11:12Z
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+measure instructions: DynamoRIO 11.3.0, slotins client
+7f360ab01267a7893847fb7b931ab0964bfe6e02c614156d68bdf6b368a0af4a  slotins.c
+0c68e87b3301c41649e2a5cb96bdf93b9cc43c7f554a5e63696199d00de6d0ee  insctl.c
+a8793e984f068ce4321d0b67a94465d884d631c9121a908997ab7feeb50705a4  slotins/libslotins.so
+b376e839b322978313d929fd20663b11ba58b75df5a46c126dd19ea2fa70ad2a  quickjs-2026-06-04.tar.xz
+11549a45b25b055946eeac2a0064399297dcf80062c6c07b644e0bc5eb329817  quickjs-extras-2026-06-04.tar.xz
+quickjs 2026-06-04, make qjs (Makefile defaults)
+octane benchmarks richards deltablue crypto raytrace earley-boyer regexp splay navier-stokes pdfjs mandreel gbemu code-load box2d zlib typescript; qjs tests/octane/run.js <name>

@@ -45,10 +45,16 @@ default=base:
    EXTRA_CFLAGS   = -fcommon -fpermissive -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -fgnu89-inline
 526.blender_r=base:
    EXTRA_CFLAGS   = -fcommon -fpermissive -std=gnu99
-default:
-   preENV_LD_PRELOAD    = $TOOL/slotcensus.so
-   preENV_SLOTCENSUS_OUT = %{census_out}
 EOF
+# the measured programs: census passes preload the tracer into everything runcpu starts (its output names the
+# benchmark binary); instruction passes start each benchmark command under DynamoRIO through runcpu's submit hook
+if [ "$MEASURE" = instructions ]; then
+  printf 'default:\n   submit = %s -c %s %%{census_out} -- $command\n   use_submit_for_speed = 1\n' \
+    "$DRRUN" "$SLOTINS" >> "$CFG"
+else
+  printf 'default:\n   preENV_LD_PRELOAD    = %s\n   preENV_SLOTCENSUS_OUT = %%{census_out}\n' \
+    "$TOOL/slotcensus.so" >> "$CFG"
+fi
 cp "$CFG" "$OUT/slotcensus.cfg"
 
 # 4. provenance

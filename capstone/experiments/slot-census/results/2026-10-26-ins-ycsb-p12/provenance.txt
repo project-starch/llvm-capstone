@@ -1,0 +1,17 @@
+date 2026-10-26T10:12:35Z
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+measure instructions: DynamoRIO 11.3.0, slotins client
+7f360ab01267a7893847fb7b931ab0964bfe6e02c614156d68bdf6b368a0af4a  slotins.c
+0c68e87b3301c41649e2a5cb96bdf93b9cc43c7f554a5e63696199d00de6d0ee  insctl.c
+17b1f16bc44160f6b4c945dbae664cfce32ca7b777d7eb48621fade8ed4159f7  slotins/libslotins.so
+d80d8b67c4b1da9c7d9dc0d40cdd9a651f0c0f44e580aea00fb3f86cffb6f5cc  ycsb-0.17.0.tar.gz
+191baa2e052627614022171400a917d28f0987dc54da48aaf07b06f552bb9884  OpenJDK11U-jdk_x64_linux_hotspot_11.0.25_9.tar.gz
+960a8ec15e34ff40e57ff16837b26b33bd81f2da6d24497bb63de532a323a18e  redis-7.2.16.tar.gz
+d362c64e6d8d5287153501eabf7c85b4a761432fbf53f5d7b085d0bb1653c1dd  memcached-1.6.45.tar.gz
+java openjdk version "11.0.25" 2024-10-15
+redis Redis server v=7.2.16 sha=00000000:0 malloc=libc bits=64 build=533b8649d7d643ef (make MALLOC=libc BUILD_TLS=no)
+memcached memcached 1.6.45 (libevent 2.1.12-stable static)
+ycsb 0.17.0: load, then workloads A and C with operationcount=1000000, 64 threads, default 10x100-byte fields
+records 100000 1000000 5000000 16000000

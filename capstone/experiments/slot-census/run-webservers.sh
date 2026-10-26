@@ -68,7 +68,7 @@ sed -i -e 's/^worker_processes .*/worker_processes  16;/' -e "s/listen       80;
 grep -q "worker_processes  16;" "$N/conf/nginx.conf" && grep -q "listen       $PORT_N;" "$N/conf/nginx.conf" \
   || { echo "run-webservers: nginx.conf changed" >&2; exit 1; }
 t=$(date +%s)
-SLOTCENSUS_OUT=$OUT/nginx.jsonl LD_PRELOAD=$TOOL/slotcensus.so "$N/sbin/nginx" > "$OUT/logs/nginx.server" 2>&1
+measured "$OUT/nginx.jsonl" "$N/sbin/nginx" > "$OUT/logs/nginx.server" 2>&1
 sleep 1
 "$TOOL/wrk-$WRK/wrk" -t16 -c256 -d30s "http://127.0.0.1:$PORT_N/file64" > "$OUT/nginx.out" 2>&1; load=$?
 "$N/sbin/nginx" -s quit; for i in $(seq 1 100); do [ -e "$N/logs/nginx.pid" ] || break; sleep 0.2; done
@@ -88,7 +88,7 @@ cp "$TOOL/file64" "$H/htdocs/file64"
 sed -i "s/^Listen 80$/Listen $PORT_A/" "$H/conf/httpd.conf"
 grep -q "^Listen $PORT_A$" "$H/conf/httpd.conf" || { echo "run-webservers: httpd.conf changed" >&2; exit 1; }
 t=$(date +%s)
-SLOTCENSUS_OUT=$OUT/httpd.jsonl LD_PRELOAD=$TOOL/slotcensus.so "$H/bin/apachectl" -k start \
+measured "$OUT/httpd.jsonl" "$H/bin/apachectl" -k start \
   > "$OUT/logs/httpd.server" 2>&1
 sleep 1
 "$H/bin/ab" -n 100000 -c 128 "http://127.0.0.1:$PORT_A/file64" > "$OUT/httpd.out" 2>&1; load=$?

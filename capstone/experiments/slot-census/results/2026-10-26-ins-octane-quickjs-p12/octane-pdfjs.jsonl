@@ -1,0 +1,1 @@
+{"pid":293723,"ppid":268726,"cmdline":"./qjs tests/octane/run.js pdfjs","forked":0,"instructions":12985600530,"allocs":1015756,"frees":1015756,"realloc_moved":15605,"realloc_inplace":2849,"failed":0,"peak_live":2131,"end_live":0}

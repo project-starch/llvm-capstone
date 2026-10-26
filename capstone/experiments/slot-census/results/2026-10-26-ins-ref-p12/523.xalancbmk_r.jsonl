@@ -1,0 +1,1 @@
+{"pid":293257,"ppid":293256,"cmdline":"../run_base_refrate_census-m64.0000/cpuxalan_r_base.census-m64 -v t5.xml xalanc.xsl","forked":0,"instructions":1386358525279,"allocs":138365267,"frees":138365266,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":2337539,"end_live":1}

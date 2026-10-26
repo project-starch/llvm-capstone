@@ -90,9 +90,13 @@ RE+='\tptr->Run\(\);\n)\}/$1\treturn NULL;\n}/'
 perl -0pi -e "$RE" "$CM"
 grep -q "return NULL;" "$CM" || { echo "run-parsec: canneal main.cpp changed" >&2; exit 1; }
 
+# Instruction passes do not follow execs: the benchmark is one process, and facesim's system("mkdir -p ...") under
+# DynamoRIO started the multicall coreutils as "libdynamorio" ("coreutils: unknown program", facesim exit 255)
+if [ "$MEASURE" = instructions ]; then LAUNCH="$DRRUN -no_follow_children -c $SLOTINS \$CENSUS_FILE --"
+else LAUNCH="env SLOTCENSUS_OUT=\$CENSUS_FILE LD_PRELOAD=$TOOL/slotcensus.so"; fi
 cat > "$TOOL/submit.sh" <<EOF
 #!/bin/bash
-SLOTCENSUS_OUT=\$CENSUS_FILE LD_PRELOAD=$TOOL/slotcensus.so "\$@"
+$LAUNCH "\$@"
 echo \$? > "\$CENSUS_RC"
 EOF
 chmod 755 "$TOOL/submit.sh"

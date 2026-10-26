@@ -80,6 +80,15 @@ def processes(out, cell, keep):
     return rows
 
 
+def instruction_pass(out, todo):
+    """a pass whose lines count instructions (slotins.c) rather than allocations"""
+    for b, keep, v in todo:
+        path = os.path.join(out, b + ".jsonl")
+        for line in open(path) if os.path.exists(path) else []:
+            return "instructions" in json.loads(line)
+    return False
+
+
 def main():
     out = sys.argv[1]
     todo = cells(out)
@@ -87,6 +96,17 @@ def main():
         print(f"summarize: no cells in {out}", file=sys.stderr)
         return 1
     ok, summary = True, []
+    if instruction_pass(out, todo):   # a slotins pass (SLOTCENSUS_MEASURE=instructions): instructions per process
+        print(f"{'cell':<24} {'executable':<24} {'instructions':>17} fork  arguments")
+        for b, keep, v in todo:
+            rows = processes(out, b, keep)
+            ok &= bool(rows) and v == "valid"
+            for r in rows:
+                print(f"{b:<24} {r['exe']:<24} {r['instructions']:>17,} {r['forked']:>4}  {r['args'][:60]}")
+            print(f"{b:<24} {'= sum (' + v + ')':<24} {sum(r['instructions'] for r in rows):>17,}" if rows
+                  else f"{b:<24} NO DATA ({v})")
+        print("SUMMARY OK" if ok else "SUMMARY INCOMPLETE: a cell lacks instruction lines or a valid verdict")
+        return 0 if ok else 1
     print(f"{'cell':<24} {'executable':<24} {'peak_live':>11} {'allocs':>13} {'peak_bytes':>14} fork  arguments")
     for b, keep, v in todo:
         rows = processes(out, b, keep)

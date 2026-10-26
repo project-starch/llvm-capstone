@@ -1,0 +1,1 @@
+{"pid":285305,"ppid":268726,"cmdline":"./qjs tests/octane/run.js regexp","forked":0,"instructions":47895739019,"allocs":1128419,"frees":1128419,"realloc_moved":722192,"realloc_inplace":50104,"failed":0,"peak_live":1238,"end_live":0}

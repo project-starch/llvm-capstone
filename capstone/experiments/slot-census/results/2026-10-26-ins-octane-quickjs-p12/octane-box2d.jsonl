@@ -1,0 +1,1 @@
+{"pid":294134,"ppid":268726,"cmdline":"./qjs tests/octane/run.js box2d","forked":0,"instructions":10715247587,"allocs":7777,"frees":7777,"realloc_moved":698,"realloc_inplace":542,"failed":0,"peak_live":1474,"end_live":0}

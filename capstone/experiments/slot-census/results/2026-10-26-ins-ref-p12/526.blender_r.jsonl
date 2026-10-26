@@ -1,0 +1,1 @@
+{"pid":293271,"ppid":293270,"cmdline":"../run_base_refrate_census-m64.0000/blender_r_base.census-m64 sh3_no_char.blend --render-output sh3_no_char_ --threads 1 -b -F RAWTGA -s 849 -e 849 -a","forked":0,"instructions":1762372566143,"allocs":8412372,"frees":8412365,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":328464,"end_live":7}

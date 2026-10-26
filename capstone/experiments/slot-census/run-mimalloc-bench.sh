@@ -68,7 +68,7 @@ for t in "${TESTS[@]}"; do
   cell=mb-$name
   read -r -a argv <<< "$args"
   s=$(date +%s)
-  SLOTCENSUS_OUT=$OUT/$cell.jsonl LD_PRELOAD=$TOOL/slotcensus.so "./$exe" "${argv[@]}" < "$input" \
+  measured "$OUT/$cell.jsonl" "./$exe" "${argv[@]}" < "$input" \
     > "$OUT/logs/$cell.log" 2>&1
   rc=$?
   v=INVALID; [ $rc = 0 ] && v=valid

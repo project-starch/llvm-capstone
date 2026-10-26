@@ -1,0 +1,1 @@
+{"pid":293141,"ppid":293139,"cmdline":"../run_base_refrate_census-m64.0000/namd_r_base.census-m64 --input apoa1.input --output apoa1.ref.output --iterations 65","forked":0,"instructions":2566542792930,"allocs":20233,"frees":20085,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":3493,"end_live":148}

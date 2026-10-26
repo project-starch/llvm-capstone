@@ -1,0 +1,1 @@
+{"pid":293290,"ppid":268726,"cmdline":"./qjs tests/octane/run.js splay","forked":0,"instructions":3709818730,"allocs":45619,"frees":45619,"realloc_moved":20,"realloc_inplace":21,"failed":0,"peak_live":36155,"end_live":0}

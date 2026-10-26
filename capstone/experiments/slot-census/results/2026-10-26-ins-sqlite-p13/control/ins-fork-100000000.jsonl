@@ -1,0 +1,2 @@
+{"pid":1304339,"ppid":1304338,"cmdline":"<PASS>/tool/insctl 100000000 fork","forked":1,"instructions":400001481,"allocs":0,"frees":0,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":0,"end_live":0}
+{"pid":1304338,"ppid":1303916,"cmdline":"<PASS>/tool/insctl 100000000 fork","forked":0,"instructions":200116883,"allocs":0,"frees":0,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":0,"end_live":0}
