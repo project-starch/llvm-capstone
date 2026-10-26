@@ -158,3 +158,23 @@ refused` 1 (from twice), `child frame grant not retired` 0, halts 0.
 (created ≤ 0) when prkitB's succeeds, which would mean #250's registry no longer lets the retire find the frame arena.
 **What voids the run:** prewrite not landing on either kit, prkitB's write-live faulting, or twice not reading -16 on
 either kit.
+
+### Addendum, before the re-run: the first boot pair was VOID on its image, which is rebuilt with the merged compiler
+
+- **What the pair read** (pr-frame-contract.dom 1ad2b7649cb31b96): on BOTH kits, every step, prewrite included, died
+  before `main` with cause 15 (store page fault) at `__capstone_cap_init`+0x38 (`stc a2, 0(a0)`), address
+  `__atexit_lockptr`. That is musl's `const` capability-initialised holder, which this compiler put in `.rodata`, so in the
+  R+X segment that the stack's launcher maps from the file without write permission. Prewrite did not land, so by the
+  rule above the run is void. It says nothing about fix (a). Module lines: banner and `supervisor_slots=2` on both,
+  halts 0.
+- **The premise that failed:** "the compiler is not a variable here". The stack's `link.ld` relies on the compiler
+  placing such holders in `.data` (#265, `49c1b69212eb`, on dev since 2026-10-21). t3-freeze-r60 (8807df747411) predates it,
+  and so does the 2026-10-20 cc-dev (c0ccf4f36b32), whose musl object also has the holder in `.rodata`.
+- **The change:** the SDK and image are rebuilt from the same tree with the stack's own compiler, cc-prmerged
+  (clang fca004e7e063, binary b90e13006a016791, which carries #265, #283 and #275). Runtime 35c55ea403065902, and
+  pr-frame-contract2.dom e06ee57a55ba7574, where `__atexit_lockptr` is in `.data` (the RW segment). Modules, kits,
+  launcher, modes, predictions and voiding rules are unchanged.
+- **For the stack itself:** under the stack's launcher, an image from a compiler without #265 dies at start-up whenever
+  it carries a `const` capability-initialised holder, as this one does through musl's `__atexit_lockptr`. That may
+  include bitstream-2 reference images built with t3-freeze-r60; it has not been checked image by image. This is a
+  compatibility consequence of #273/#274, reported to the runtime lane, not a defect claim.
