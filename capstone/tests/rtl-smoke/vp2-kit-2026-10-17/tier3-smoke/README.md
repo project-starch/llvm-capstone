@@ -9395,3 +9395,20 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     exhausted the 64K table after about 40K allocations. A failure here with cause 24 after a NULL malloc is a
     finding, not a pilot failure.
   - readings 0.
+
+### The perf pilot, stopped (2026-10-26 15:47, at the runtime lane's request): no reading; the launcher's per-mapping stderr line ruined wall time
+
+- **Why it was stopped:** the runtime lane found that capstone-vexec prints `CAPSTONE_VM_ADD_OK ...` to stderr for
+  every admitted mapping (exec.c:270, unconditional), and on the board stderr goes to the UART.
+  - sglib-rbtree churns 4 KiB mappings thousands of times per iteration, so each process waited on the UART for minutes.
+  - The runtime lane saw step 12 of 68 after 30 min.
+  - The in-context counters are unaffected; wall time is not.
+  - The images were also pre-heap-fix, and are being rebuilt.
+- **What was done:** the board driver and the runner were stopped by process group. The wrapper released booking 397
+  (HTTP 200), and board 2 then read FREE.
+- **No partial transcript survived on disk.** The baked-rung driver writes the rung's capture only when the run ends.
+  - So `guest/board.txt` was never written, the step text `pilot.txt` is empty, and `driver.log` holds no PERF lines.
+  - The console server's UART ring buffer still holds the boot's tail, and replays it on the next connect. The next
+    board-2 boot's raw capture is the place to recover it from, if no other client connects first.
+- **Not a reading:** nothing from this boot is graded. The next pilot kit runs each process with its stderr redirected
+  to tmpfs, on images rebuilt from dev 4f054964a7d8.
