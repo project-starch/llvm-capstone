@@ -40,9 +40,15 @@ The following R-type encodings all use opcode `0x5b`, funct3 `1`.
 | `CREVOKE rs1, rs2` (rd=0) | `0x52` | Management-capable non-linear parent, non-linear child reference | Invalidate that direct child and its subtree |
 | `CSRETIRE rd, rs1, rs2` | `0x53` | Ancestor ID; conventionally zero in rs2 | Zero on success, one on rejected retirement |
 
-Virtual applications can execute `CDERIVE` and `CREVOKE`. Both decode only in the virtual profile
-(`x-capstone-u-mode=true`); the physical profile raises illegal-instruction fault 2 for them, as the
-RTL, which does not implement them, would. `CSRUNV` and
+Virtual applications can execute `CDERIVE` and `CREVOKE`. Both decode in every profile, in QEMU and on
+the RTL (capstone-ariane since d93a8d66b); a nonzero rd on `CREVOKE` is illegal-instruction fault 2 on both.
+QEMU refuses an inexact `CDERIVE` child with 29 unless exact bounds is enabled; the RTL refuses it only
+under its table namespace (`vctx_table_o`, `csr_regfile.sv:2885-2887`: a supervised context with
+`csupctl.virt` or under CSRUNV; S outside supervision with `srevroot` non-zero; M outside supervision with
+`csupctl.table`). Outside that namespace it keeps Q-15's physical behaviour, ruled as is: the child is
+rounded outward, except at an unrepresentable top, which decodes as an empty capability. Behaviour still
+undecided between the two implementations is listed in
+[the Sublet spec review](../../plans/2026-10-18-sublet-spec-review.md). `CSRUNV` and
 `CSRETIRE` require trusted S or scalar M mode and reject C mode. `CSMINT`
 rejects U and virtual C; its decoder also accepts legacy physical C when
 the extension is enabled. It must remain a trusted root-creation operation.
@@ -309,8 +315,9 @@ registers, privilege and roots. It writes an event and returns its kind in rd.
 | 4 | Page fault | Resolve a permitted fault, then action 0 retries the instruction |
 | 5 | Node pressure | Sweep and reclaim before retrying; fail if capacity remains insufficient |
 
-There are currently 32 supervisor slots on the hart, shared with the physical
-supervisor. This is a QEMU resource limit. A terminal context must be forgotten
+QEMU provides `x-capstone-supervisor-slots` supervisor slots on the hart, default 1 (Q-26, as on the
+RTL), shared with the physical supervisor. A suite that needs several outstanding saved contexts sets more
+for itself. A terminal context must be forgotten
 before its frame is reused. The frame format does not by itself specify a
 future RTL context-storage implementation.
 
@@ -484,16 +491,25 @@ trusted metadata and the one-hart profile.
 
 The QEMU memory encoding is 128 bits: ordinary cursor in the low 64 bits;
 the upper word contains 27 bounds bits, 3 type bits, 4 permission bits and
-a 30-bit node ID. It contains neither generation nor address-space bits.
-The deployed RTL instead allocates 28 bounds bits and 30 node bits.
+a 30-bit node id with no address-space bits. On silicon the id is {generation, index}, and the index
+width is the bitstream's: 16 bits on vp2 and the batch bitstream ({generation[29:16], index[15:0]}, the
+generation ruling of 2026-10-20 above), 18 bits on bitstream 2 ({generation[29:18], index[17:0]}, in
+both namespaces), and the module's `CAPSTONE_VM_INDEX_BITS` build define must match it. The superproject's
+QEMU pin (b290f5656600) carries no generation: its virtual ids are bare indices, recycled after a tag
+sweep; bitstream-2 predictions use the 18-bit build on capstone-qemu `virtual/flat-index-18`.
+The RTL has the same field split (capstone-ariane since d34c26002), but different raw type codes
+(RTL LINEAR 1, NONLIN 2; QEMU LIN 0, NONLIN 1), so the two encodings are not binary-interchangeable;
+the RTL also renormalises bounds where the pinned QEMU (b290f5656600) does not (Q-16).
 Moreover, some QEMU data paths retain uncompressed bounds beside the tag.
 Exact minting alone does not settle general SHRINK/SPLIT/store/load
 representability. [Encoding conformance remains open](guarantees.md).
 
-Implementation: [decoder][decode], [CSRs][csr], [mint/retire][table],
-[context and collection][supervisor], [instruction policy and translation][translate].
+Implementation at the original interface revision: [decoder][decode], [CSRs][csr], [mint/retire][table],
+[context and collection][supervisor], [instruction policy and translation][translate]. The
+superproject's QEMU pin is capstone-qemu `virtual-capstone-v7` [b290f5656600][qemu-ref].
 
 [qemu]: https://github.com/project-starch/capstone-qemu/tree/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9
+[qemu-ref]: https://github.com/project-starch/capstone-qemu/tree/b290f5656600
 [spec-patch]: https://github.com/project-starch/llvm-capstone/blob/e0313149630450c1a906cc3506b317add64266e0/capstone/docs/plans/virtual-capstone-isa.patch
 [decode]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/insn32.decode
 [csr]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/csr.c
