@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Build the published PoisonCap platform with the recipe in
 # ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/ (prepare.py, platform.sh), one stage after
-# another, each timed.
+# another, each timed. Run it through build-platform-docker.sh: the recipe needs the host it was
+# written for (Ubuntu 24.04, clang-18), which the container provides.
 #
 #   bash build-platform.sh [stage ...]     stages: prepare verify llvm qemu cheribsd image
 #                                          (default: all, in that order)
@@ -9,20 +10,6 @@
 # POISONCAP_PLATFORM (default ~/poisoncap-platform) holds work/, logs/ and the pinned cheribuild
 # (cheribuild/, at platform.json's cheribuild_commit). Each stage logs to logs/<stage>.log and
 # appends one line to logs/STAGES.tsv; logs/DRIVE_DONE gets the overall rc at the end.
-#
-# The supported way to run it is build-platform-docker.sh, which runs this script inside an Ubuntu
-# 24.04 container with clang-18, the host the recipe was written for, and sets POISONCAP_HOST_COMPAT=0.
-#
-# POISONCAP_HOST_COMPAT=1 (the default when run directly) adds workarounds for a newer host, as far
-# as they were taken on p13 (Ubuntu 26.04: clang-21, GCC 15 libstdc++, a glibc whose strchr returns
-# const char * for a const argument) before the CheriBSD bootstrap failed in libstdc++'s thread
-# headers and the build moved into the container. None of them changes a published source file:
-#   - POISONCAP_HOST_CC/CXX name the host compiler for every stage (default clang-21 here);
-#   - POISONCAP_HOST_CXXFLAGS="-include cstdint" for the LLVM build, whose SmallVector.h uses
-#     uint64_t without including <cstdint>;
-#   - the host compiler is a wrapper adding -Wno-error=incompatible-pointer-types-discards-qualifiers
-#     after the build's own flags: CheriBSD's bootstrap libc (getopt_long.c) assigns strchr's
-#     result to char * and builds with that warning as an error.
 set -uo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 REPO=$(git -C "$HERE" rev-parse --show-toplevel)
@@ -30,22 +17,7 @@ REC=$REPO/capstone/ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap
 P=${POISONCAP_PLATFORM:-$HOME/poisoncap-platform}
 WORK=$P/work
 LOG=$P/logs
-CC_REAL=${POISONCAP_REAL_CC:-clang-21}
-CXX_REAL=${POISONCAP_REAL_CXX:-clang++-21}
 mkdir -p "$LOG" "$WORK"
-if [ "${POISONCAP_HOST_COMPAT:-1}" = 1 ]; then
-  mkdir -p "$P/host-cc"
-  for pair in "cc:$CC_REAL" "c++:$CXX_REAL"; do
-    name=${pair%%:*}; real=$(command -v "${pair#*:}") || { echo "no ${pair#*:} on PATH" >&2; exit 2; }
-    printf '#!/bin/sh\nexec %s "$@" -Wno-error=incompatible-pointer-types-discards-qualifiers\n' \
-      "$real" > "$P/host-cc/$name"
-    chmod 755 "$P/host-cc/$name"
-  done
-  export POISONCAP_HOST_CC=$P/host-cc/cc POISONCAP_HOST_CXX=$P/host-cc/c++
-  export POISONCAP_HOST_CXXFLAGS=${POISONCAP_HOST_CXXFLAGS:--include cstdint}
-else
-  export POISONCAP_HOST_CC=$CC_REAL POISONCAP_HOST_CXX=$CXX_REAL
-fi
 export BUILD_JOBS=${BUILD_JOBS:-64}
 export CHERIBUILD=${CHERIBUILD:-$P/cheribuild/cheribuild.py}
 want=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["cheribuild_commit"])' "$REC/platform.json")
