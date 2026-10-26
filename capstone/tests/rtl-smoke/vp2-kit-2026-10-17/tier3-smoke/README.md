@@ -9412,3 +9412,30 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     board-2 boot's raw capture is the place to recover it from, if no other client connects first.
 - **Not a reading:** nothing from this boot is graded. The next pilot kit runs each process with its stderr redirected
   to tmpfs, on images rebuilt from dev 4f054964a7d8.
+
+### The perf evaluation's SECOND pilot, replacing the stopped one: 68 processes in one boot, board 2, pre-registered (2026-10-26 16:1x, before the boot)
+
+- **The kit:** bkit10-perf-b2, as for the stopped pilot (launcher 978c09d61f774315, module 9c60fb53f80ce67e).
+- **The stage:** the runtime lane's `perf/pilot2/stage` (8.4 MB), checked against its SHA256SUMS: run-pilot.sh
+  d32938c507d4d995, capstone-vexec 978c09d6, and T1/ and T2/ with 16 images each. The steps are in steps-pilot.tsv.
+  - **Images:** built on dev 4f054964a7d8, which carries the heap-ids fix, with dev's compiler and
+    -movc-keeps-integer-source. By the runtime lane:
+    - the layout gate passes, with every non-heap section at identical addresses in both arms, and its negative control
+      fails;
+    - on the twin, rbtree's entries per iteration fall from about 20,600 to 117-163;
+    - these 16 passed on the twin before the fix, and the fix's gate is green;
+    - the full QEMU functional pass over all 149 images is still running.
+  - **run-pilot.sh, checked line by line here:** all 68 process lines match one template and steps-pilot.tsv's order.
+    Each process's stderr goes to /tmp/perf.err; @@PERF-END prints `stderr_lines=N` and the dmesg bench quote. The
+    same 68 processes as the stopped pilot, args "1 10".
+- **What runs:** `PP_SUB=perfpilot2 PP_ARGS="--pilot-dir <mnt-hdd>/capstone/perf/pilot2 --runner-sha d32938c507d4d995
+  --steps steps-pilot.tsv" tier3-perfpilot-b2.sh 2 <log>`.
+  - tier3-perfpilot.py gains those three options; its defaults are the first pilot's. The reader reads stderr_lines,
+    and compares the quote without it, so a repeat is still caught.
+  - Timeouts are as before: step 2,700 s, inside the boot's 13,800 s, inside the wrapper's 14,400 s.
+  - Dry run: `dryrun-perfpilot2-b2.txt`.
+- **Predictions** (the runtime lane's, verbatim):
+  - Every process: rc=0, 11 BENCH lines, every check verified.
+  - rbtree T2: rc=0.
+  - ctl-loop minus ctl-empty instret = 20,000,002 + about 125-170 x (extra entries).
+  - Entries per timed iteration: tens to low hundreds for rbtree, single or low double digits for coremark and janne.

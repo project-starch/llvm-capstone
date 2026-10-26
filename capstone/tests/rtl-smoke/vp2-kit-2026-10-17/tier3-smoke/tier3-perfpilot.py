@@ -27,15 +27,18 @@ RUNNER_SHA = "7cccbc7b9d067f19"
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--board-kit", type=Path, required=True)
+    ap.add_argument("--pilot-dir", type=Path, default=KIT, help="holds stage/, SHA256SUMS and the steps file (default: the first pilot)")
+    ap.add_argument("--runner-sha", default=RUNNER_SHA, help="run-pilot.sh's sha256/16")
+    ap.add_argument("--steps", default="steps.tsv", help="the steps file's name in --pilot-dir")
     ap.add_argument("out", type=Path)
     a = ap.parse_args()
-    stage = KIT / "stage"
-    chk = subprocess.run(["sha256sum", "-c", "--quiet", str(KIT / "SHA256SUMS")], cwd=stage, capture_output=True, text=True)
+    stage = a.pilot_dir / "stage"
+    chk = subprocess.run(["sha256sum", "-c", "--quiet", str(a.pilot_dir / "SHA256SUMS")], cwd=stage, capture_output=True, text=True)
     if chk.returncode != 0:
         print(f"PILOT STOP: the stage does not match its SHA256SUMS: {chk.stdout[-300:]}{chk.stderr[-300:]}"); sys.exit(2)
-    if hashlib.sha256((stage / "run-pilot.sh").read_bytes()).hexdigest()[:16] != RUNNER_SHA:
-        print(f"PILOT STOP: run-pilot.sh is not {RUNNER_SHA}"); sys.exit(2)
-    plan = list(csv.DictReader(open(KIT / "steps.tsv"), delimiter="\t"))
+    if hashlib.sha256((stage / "run-pilot.sh").read_bytes()).hexdigest()[:16] != a.runner_sha:
+        print(f"PILOT STOP: run-pilot.sh is not {a.runner_sha}"); sys.exit(2)
+    plan = list(csv.DictReader(open(a.pilot_dir / a.steps), delimiter="\t"))
     a.out.mkdir(parents=True, exist_ok=False)
     b = boardvm.BoardBatch(a.out / "stage")
     pilot = b.put("pilot", stage)
@@ -50,7 +53,8 @@ def main():
     bp = re.findall(r"^(bench_\w+)$", text, re.M)
     print(f"READ bench parameters: {len(bp)} {bp}")
     begins = {int(m.group(1)): m.end() for m in re.finditer(r"^@@PERF-BEGIN (\d+) .*$", text, re.M)}
-    ends = {int(m.group(1)): m for m in re.finditer(r"^@@PERF-END (\d+) (\S+) (\S+) (\d+) (\S+) rc=(\d+) ?(.*)$", text, re.M)}
+    ends = {int(m.group(1)): m for m in re.finditer(r"^@@PERF-END (\d+) (\S+) (\S+) (\d+) (\S+) rc=(\d+) ?(?:stderr_lines=(\d+) ?)?(.*)$",
+                                                     text, re.M)}
     prev_quote, nok = None, 0
     for s in plan:
         n = int(s["n"])
@@ -63,7 +67,8 @@ def main():
         bench = re.findall(r"^BENCH .*$", body, re.M)
         checks = sum(1 for l in bench if "check=" in l)
         same = (e.group(2), e.group(3), e.group(4), e.group(5)) == (s["program"], s["arm"], s["proc"], f"K{s['K']}")
-        quote = e.group(7).strip()
+        quote = e.group(8).strip()
+        errl = e.group(7)
         repeat = quote and quote == prev_quote
         prev_quote = quote
         tails = sorted({m.group(1) for m in re.finditer(r"check=0x[0-9a-f]+(.*)$", body, re.M)})
@@ -74,7 +79,8 @@ def main():
         nok += ok
         print(f"READ {n} {s['program']} {s['arm']} {s['proc']} K{s['K']}: rc {e.group(6)}, {len(bench)} BENCH, "
               f"{checks} with check= (suffixes {tails}), BENCH-ERROR {errs}, BENCH-DONE failed={dn.group(1) if dn else 'ABSENT'}, "
-              f"plan {'matches' if same else 'DIFFERS'}, quote {'REPEATS the previous' if repeat else 'new'} :: {quote[:110]}")
+              f"plan {'matches' if same else 'DIFFERS'}, quote {'REPEATS the previous' if repeat else 'new'}"
+              + (f", stderr_lines {errl}" if errl is not None else "") + f" :: {quote[:110]}")
     done = re.search(r"^@@PERF-PILOT-DONE$", text, re.M)
     print(f"READ summary: {nok} of {len(plan)} processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE "
           f"{'present' if done else 'ABSENT'}")
