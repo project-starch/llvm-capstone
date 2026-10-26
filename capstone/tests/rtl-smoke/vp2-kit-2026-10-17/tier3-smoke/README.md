@@ -9911,3 +9911,31 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   the same first misses. As pre-registered.
 - As on board 1, the post-run gdb dump could not halt the core, so the grade rests on UART.
 - **R-62 on silicon is now N=2, cross-board.**
+
+### R-63 on silicon: the rtl lane's rounding-mode bare kit, one cold boot on EACH board (N=2 cross-board), pre-registered (2026-10-26 20:2x, before either boot)
+
+- **Why:** the rtl lane filed R-63 on dev (50b230a551a6), from simulation only. The divider applies RDN as RUP and RUP
+  as RDN, and truncates under RMM. Silicon has not been read.
+- **The kit:** llvm-capstone land/rtl-rm-kit 75f129f56497 (its own PREREG.md),
+  `capstone/tests/rtl-smoke/fp-rm-bare-2026-10-26/`. Checked here at the commit:
+  - one image, fp-rm.bin 45a7397cc4d4f099 (sha256 in full matches the PREREG table), board_rec 0x80003000, SR 16;
+  - positions 0-14 are 1/3, -1/3 and sqrt(2) under frm RNE, RTZ, RDN, RUP and RMM in that order, and position 15 is
+    fflags.
+- **What runs:** `tier3-fprm-bare.sh <board> <log> 75f129f56497`. It is tier3-fpds-bare.sh with the kit folder, image
+  spec, output directory (`fprm-bare`) and grader changed. Board 1 and board 2 boot at the same time, each on its own
+  bkit9-b2-b<board> kit.
+- **Grade, `fprm-grade.py`, the PREREG's rules.** It reads SR from the table and both vectors from the PREREG's
+  backticked lines:
+  - VOID unless SR is 16 and positions 0-5 (RNE, RTZ) are exact;
+  - **R-63 CONFIRMED ON SILICON** if the bitstream-2 vector is exact;
+  - NOT ON SILICON if the fixed-RTL vector is exact;
+  - anything else is a FINDING, value by value against both vectors.
+- **Dry run** (`dryrun-fprm-bare.txt`, every board call stubbed): each grade on planted lines reads as stated (exact,
+  fixed, SR 15, a wrong RNE word, one wrong RDN word, no UART). The stubbed runner reads CONFIRMED. It STOPs on an
+  existing output directory, on a kit commit without the folder (84488ed6db17), and on a busy board.
+- **Prediction:** the rtl lane's simulation of this image on bitstream 2's RTL, so R-63 CONFIRMED ON SILICON on both
+  boards, with identical SR/SV lines:
+  `0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc
+  0x3fd5555555555556 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555556 0x3ff6a09e667f3bcc
+  0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x1`.
+  - A difference between the boards is a cross-board finding.
