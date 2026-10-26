@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# launch-poisoncap-arm.sh VARIANT PORT WORK: PoisonCap's wrapped speedtest1 (no arguments), E3c protocol.
+# launch-poisoncap.sh VARIANT PORT WORK: PoisonCap's wrapped speedtest1 (no arguments), E3c protocol.
 # The E3c protocol: kernel with their FPGA kernel options, libc revocation default 0 at boot (so sshd starts
 # and the binary is copied in), set to 1 before the run; stdout to a file, no polling.
 cd ~/poisoncap-platform/repo/capstone/ports/sqlite/poisoncap/speedtest1

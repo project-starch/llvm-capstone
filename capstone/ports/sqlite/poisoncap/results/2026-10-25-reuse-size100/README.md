@@ -13,10 +13,10 @@ pilot README; the qualification of every binary named here is in its `qualificat
 
 - `runs.json`: every collected run's result lines (binary and kernel hashes, exit status, the 20 test times,
   the wrapper's `REUSE-GAP` and `SQL-CHECK` lines at exit); `reports.jsonl`: the report lines the plots read.
-- `checks.txt`: `reuse/collect-reuse.py`'s verdict per run (admissible: exit 0, the 20 tests, installed=1,
+- `checks.txt`: `reuse/collect.py`'s verdict per run (admissible: exit 0, the 20 tests, installed=1,
   error=0, 32 bins, the four identities, >= 1,000 issues, no SQL error), whether repetitions agree, and
   which set each plot shows (the lowest set whose two runs used the qualified binaries).
-- `plots/`: one plot per system (`reuse/plot-reuse.py`, the approved form: no title, shared x axis), each with
+- `plots/`: one plot per system (`reuse/plot.py`, the approved form: no title, shared x axis), each with
   its caption and values (`.csv`).
 - `kit-comparison.txt`: the Sublet arms on the result runs' SDK kit (llvm-capstone f4f58b02, 2026-10-20) and on
   one built from dev 9c779890, `--size 20`, side by side on one host: the same counters and bins, the same time
@@ -31,7 +31,7 @@ pilot README; the qualification of every binary named here is in its `qualificat
 | 3 | p12; aad6a979 / 97b02659 | p13; 9836684d / 6bfe4d1b |
 
 PoisonCap: E3c protocol (their FPGA kernel's options, libc revocation default 0 at boot and 1 from the run),
-`reuse/launch-poisoncap-arm.sh`. Sublet: the paged virtual platform, `reuse/launch-capstone-arm.sh`.
+`reuse/launch-poisoncap.sh`. Sublet: the paged virtual platform, `reuse/launch-capstone.sh`.
 
 ## Result
 
@@ -49,3 +49,6 @@ PoisonCap: E3c protocol (their FPGA kernel's options, libc revocation default 0 
   set 1 with its earlier wrapper included.
 - Run times: PoisonCap 16,656-16,871 s on p13 and 20,239-20,380 s on p12; Sublet 31,510-31,960 s on p13 and 35,465 / 36,247 s on p12.
   Not a cost comparison (different platforms, shared hosts).
+
+The reuse/ tools were renamed on 2026-10-26, after every run here; qualification.txt and kit-comparison.txt
+keep the names they were produced with: `build-reuse-poisoncap.sh` is `build-poisoncap.sh`, `build-reuse-capstone.sh` is `build-capstone.sh`, `run-reuse-capstone.py` is `run-capstone.py`, `check-reuse-wrap.py` is `check-wrapper.py`, `qualify-reuse.py` is `qualify.py`, `collect-reuse.py` is `collect.py`, `plot-reuse.py` is `plot.py`, `launch-capstone-arm.sh` is `launch-capstone.sh`, `launch-poisoncap-arm.sh` is `launch-poisoncap.sh`.
