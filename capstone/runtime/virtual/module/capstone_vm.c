@@ -95,6 +95,12 @@ struct context {
      * per retire from free_count before and after, so one module reads correctly on both bitstreams:
      * on one without the item free_count never moves and pushed_flat stays 0. */
     unsigned long pushed_flat;
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+    /* Performance build only: cycle and instret retired between entering and leaving each CSRUNV,
+     * summed over every thread of the context. Linux's own work (escapes, delegated calls, fault
+     * resolution) is outside the window. */
+    atomic64_t bench_cycles, bench_instret, bench_entries;
+#endif
     /* The image file, writers denied from CV_IMAGE until release. */
     struct file *image;
     wait_queue_head_t remap_wait;
@@ -1493,6 +1499,19 @@ module_param(fault_repeat_max, ulong, 0644);
 static bool resolve_dirty;
 module_param(resolve_dirty, bool, 0644);
 
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+/* Performance build only: cycle and instret retired inside CSRUNV windows, cumulative over every context since the
+ * module loaded. A program reads them through sysfs (delegated read, outside every window) immediately before and
+ * after its timed region, so the difference is the region's own count: no start-up, no Linux. The board runs one hart
+ * and one benchmark process at a time, so the module-wide sum is that process's. */
+static unsigned long long bench_cycles, bench_instret, bench_entries;
+module_param(bench_cycles, ullong, 0444);
+module_param(bench_instret, ullong, 0444);
+/* CSRUNV entries: each one after the first in a timed region is an escape whose resume (switcher walk,
+ * the satp write's TLB flush, the refill) lands inside the next window, so a reading carries its count. */
+module_param(bench_entries, ullong, 0444);
+#endif
+
 #define CV_EMIT(fmt, ...) do {                      \
     if (diag_emerg) pr_emerg(fmt, ##__VA_ARGS__);   \
     else            pr_warn(fmt, ##__VA_ARGS__);    \
@@ -2010,7 +2029,22 @@ thread_unwind:
                 WRITE_ONCE(t->frame[CV_FRAME_SAVED_SATP], satp);
                 ++resume_satp_refreshes;
             }
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+            {
+                /* Interrupts are off: both reads bracket the CSRUNV alone. */
+                unsigned long cy0 = csr_read(CSR_CYCLE), in0 = csr_read(CSR_INSTRET);
+                t->event = run_event(t, action);
+                unsigned long dcy = csr_read(CSR_CYCLE) - cy0, din = csr_read(CSR_INSTRET) - in0;
+                atomic64_add(dcy, &c->bench_cycles);
+                atomic64_add(din, &c->bench_instret);
+                WRITE_ONCE(bench_cycles, bench_cycles + dcy);
+                WRITE_ONCE(bench_instret, bench_instret + din);
+                WRITE_ONCE(bench_entries, bench_entries + 1);
+                atomic64_inc(&c->bench_entries);
+            }
+#else
             t->event = run_event(t, action);
+#endif
             t->started = true; t->reply_cap = false;
             local_irq_restore(flags); preempt_enable();
             ++c->stats.steps;
@@ -2265,6 +2299,12 @@ static int vm_release(struct inode *inode, struct file *f)
                      attempted, c->retired_flat - before, c->pushed_flat - pushed_before,
                      (unsigned long)CV_NODE_FIRST);
     }
+#ifdef CAPSTONE_VM_BENCH_COUNTERS
+    /* Must-fire, one per context, KERN_EMERG because the board console shows nothing lower. */
+    pr_emerg("capstone_vm: bench cycles=%lld instret=%lld entries=%lld\n",
+             (long long)atomic64_read(&c->bench_cycles), (long long)atomic64_read(&c->bench_instret),
+             (long long)atomic64_read(&c->bench_entries));
+#endif
     list_for_each_entry_safe(t, tmp, &c->threads, link) {
         list_del(&t->link);
         if (t->user_frame) { clear_thread_frame(t); drop_thread_frame(t); }
