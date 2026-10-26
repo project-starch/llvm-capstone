@@ -1,0 +1,25 @@
+# The rtl lane's R-58 / R-59 / Q-24 bare kit (land/rtl-fixes-kit 30117b74cc8f, r58-r59-q24-bare-2026-10-26) on bitstream 2, board 2 (tier3-rfix-bare.sh;
+# pre-registered 14fe83614573): the runner's result lines and rfix-grade.py's verdicts against the kit's PREREG.md table.
+RF va-runv BEGIN 12:48:09 board 2 bitstream caplifive_vp2c_dcc6daf6e image 274823b4df9e3a4a rec 0x8000c000 booking 387
+RF va-runv END rc=0 12:49:01 :: [sup 12:49:00] UART: begin=True SB1=True SR=['000000000000000F'] SV lines=15
+RF va-srevroot BEGIN 12:49:01 board 2 bitstream caplifive_vp2c_dcc6daf6e image 2fbafdfd2eaec3c1 rec 0x8000d000 booking 388
+RF va-srevroot END rc=0 12:49:56 :: [sup 12:49:54] UART: begin=True SB1=True SR=['0000000000000014'] SV lines=20
+RF va-runv-r59 BEGIN 12:49:56 board 2 bitstream caplifive_vp2c_dcc6daf6e image f551e9d2492ca6ba rec 0x8000c000 booking 389
+RF va-runv-r59 END rc=0 12:50:49 :: [sup 12:50:48] UART: begin=True SB1=True SR=['000000000000000F'] SV lines=15
+RF va-runv-r59-low BEGIN 12:50:49 board 2 bitstream caplifive_vp2c_dcc6daf6e image 981fcf633194ee20 rec 0x8000c000 booking 390
+RF va-runv-r59-low END rc=0 12:51:42 :: [sup 12:51:41] UART: begin=True SB1=True SR=['000000000000000F'] SV lines=15
+RF q24-deleg BEGIN 12:51:42 board 2 bitstream caplifive_vp2c_dcc6daf6e image 6fd2c0b60fe340ab rec 0x80003000 booking 391
+RF q24-deleg END rc=0 12:52:34 :: [sup 12:52:33] UART: begin=True SB1=True SR=['0000000000000005'] SV lines=5
+RF q24-deleg-on BEGIN 12:52:34 board 2 bitstream caplifive_vp2c_dcc6daf6e image 0e82f2adca300741 rec 0x80003000 booking 392
+RF q24-deleg-on END rc=0 12:53:29 :: [sup 12:53:28] UART: begin=True SB1=True SR=['0000000000000005'] SV lines=5
+RFIX va-runv EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x0 0x9
+RFIX va-srevroot EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x80007000 0x80007000 0x80007000 0x80008000 0x0 0x0 0x9
+RFIX va-runv-r59 EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+RFIX va-runv-r59-low EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+RFIX q24-deleg EXACT: 0x0 0x0 0x0 0x18 0x0
+RFIX q24-deleg-on EXACT: 0x1000000 0x18 0x0 0x9 0xc
+RFIX R-58 CONFIRMED ON SILICON (va-srevroot exact)
+RFIX R-59 CONFIRMED ON SILICON (va-runv-r59, va-runv-r59-low exact)
+RFIX Q-24 CONFIRMED ON SILICON (q24-deleg-on exact)
+RF GRADE rc=0
+RF board2 DONE 12:53:29

@@ -7178,3 +7178,23 @@ counted from its verdict TSVs:
   - Parts 03 and 04 were stopped mid-run without a reading. Parts 05-12 did not run.
   - Q-34 does not touch the sample: every sample case cell equals the twin, and no sample or temporal reading on
     bitstream 2 has a cause 4.
+
+## R-58, R-59 and Q-24 confirmed on silicon at N=2 cross-board, on bitstream 2 (caplifive_vp2c_dcc6daf6e, 2026-10-26)
+
+- **What ran:** the rtl lane's bare kit (`capstone/tests/rtl-smoke/r58-r59-q24-bare-2026-10-26/`, on dev since
+  0aa2a8afb38e from 30117b74cc8f, with its own PREREG.md). It runs six bare images, one cold boot each, on both boards. No new bitstream.
+  The runner is `tier3-smoke/tier3-rfix-bare.sh`, graded by `rfix-grade.py`, which reads the PREREG table from the
+  kit itself.
+- **Result:** every image reads its pre-registered vector EXACTLY on both boards, and the two boards' vectors are
+  identical. Records: `tier3-smoke/records/b2bs-rfix-bare-b{1,2}.result-lines.txt`.
+
+| fix | image(s) | reading |
+|---|---|---|
+| (control) | va-runv | exact on both boards; a mismatch would have voided the session |
+| R-58 | va-srevroot | exact: CONFIRMED ON SILICON |
+| R-59 | va-runv-r59, va-runv-r59-low | both exact: CONFIRMED ON SILICON |
+| Q-24 | q24-deleg-on, with q24-deleg as its control | both exact: CONFIRMED ON SILICON |
+
+- Pre-registered at the board lane's 14fe83614573, before the boots. Every prediction holds.
+- ISSUES R-58, R-59 and Q-24 read CONFIRMED ON SILICON from 0aa2a8afb38e (the rtl lane, which re-checked these result
+  lines independently: 12 of 12 vectors match, with a negative test).

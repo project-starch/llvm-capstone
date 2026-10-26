@@ -1,0 +1,64 @@
+# tier3-rfix-bare.sh 78bb3b81aa9e3b1e + rfix-grade.py 91bbce38a3980c71 dry run, 2026-10-26 04:2x: run_sup_bare.py stubbed (it writes
+# each image's own PREREG vector as SR/SV lines; FLIP=<image> flips the last value's low bit), busy and the hub stubbed; the kit commit, image hashes and recs are read for real.
+
+## ok
+RF va-runv BEGIN 04:03:36 board 1 bitstream caplifive_vp2c_dcc6daf6e image 274823b4df9e3a4a rec 0x8000c000 booking 91
+RF va-runv END rc=0 04:03:36 :: UART: stub va-runv
+RF va-srevroot BEGIN 04:03:36 board 1 bitstream caplifive_vp2c_dcc6daf6e image 2fbafdfd2eaec3c1 rec 0x8000d000 booking 91
+RF va-srevroot END rc=0 04:03:36 :: UART: stub va-srevroot
+RF va-runv-r59 BEGIN 04:03:36 board 1 bitstream caplifive_vp2c_dcc6daf6e image f551e9d2492ca6ba rec 0x8000c000 booking 91
+RF va-runv-r59 END rc=0 04:03:36 :: UART: stub va-runv-r59
+RF va-runv-r59-low BEGIN 04:03:36 board 1 bitstream caplifive_vp2c_dcc6daf6e image 981fcf633194ee20 rec 0x8000c000 booking 91
+RF va-runv-r59-low END rc=0 04:03:36 :: UART: stub va-runv-r59-low
+RF q24-deleg BEGIN 04:03:36 board 1 bitstream caplifive_vp2c_dcc6daf6e image 6fd2c0b60fe340ab rec 0x80003000 booking 91
+RF q24-deleg END rc=0 04:03:36 :: UART: stub q24-deleg
+RF q24-deleg-on BEGIN 04:03:36 board 1 bitstream caplifive_vp2c_dcc6daf6e image 0e82f2adca300741 rec 0x80003000 booking 91
+RF q24-deleg-on END rc=0 04:03:36 :: UART: stub q24-deleg-on
+RFIX va-runv EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x0 0x9
+RFIX va-srevroot EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x80007000 0x80007000 0x80007000 0x80008000 0x0 0x0 0x9
+RFIX va-runv-r59 EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+RFIX va-runv-r59-low EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+RFIX q24-deleg EXACT: 0x0 0x0 0x0 0x18 0x0
+RFIX q24-deleg-on EXACT: 0x1000000 0x18 0x0 0x9 0xc
+RFIX R-58 CONFIRMED ON SILICON (va-srevroot exact)
+RFIX R-59 CONFIRMED ON SILICON (va-runv-r59, va-runv-r59-low exact)
+RFIX Q-24 CONFIRMED ON SILICON (q24-deleg-on exact)
+RF GRADE rc=0
+RF board1 DONE 04:03:36
+
+## flipq
+RF va-runv BEGIN 04:03:36 board 2 bitstream caplifive_vp2c_dcc6daf6e image 274823b4df9e3a4a rec 0x8000c000 booking 92
+RF va-runv END rc=0 04:03:36 :: UART: stub va-runv
+RF va-srevroot BEGIN 04:03:36 board 2 bitstream caplifive_vp2c_dcc6daf6e image 2fbafdfd2eaec3c1 rec 0x8000d000 booking 92
+RF va-srevroot END rc=0 04:03:36 :: UART: stub va-srevroot
+RF va-runv-r59 BEGIN 04:03:36 board 2 bitstream caplifive_vp2c_dcc6daf6e image f551e9d2492ca6ba rec 0x8000c000 booking 92
+RF va-runv-r59 END rc=0 04:03:36 :: UART: stub va-runv-r59
+RF va-runv-r59-low BEGIN 04:03:36 board 2 bitstream caplifive_vp2c_dcc6daf6e image 981fcf633194ee20 rec 0x8000c000 booking 92
+RF va-runv-r59-low END rc=0 04:03:36 :: UART: stub va-runv-r59-low
+RF q24-deleg BEGIN 04:03:36 board 2 bitstream caplifive_vp2c_dcc6daf6e image 6fd2c0b60fe340ab rec 0x80003000 booking 92
+RF q24-deleg END rc=0 04:03:36 :: UART: stub q24-deleg
+RF q24-deleg-on BEGIN 04:03:36 board 2 bitstream caplifive_vp2c_dcc6daf6e image 0e82f2adca300741 rec 0x80003000 booking 92
+RF q24-deleg-on END rc=0 04:03:36 :: UART: stub q24-deleg-on
+RFIX va-runv EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x0 0x9
+RFIX va-srevroot EXACT: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x80007000 0x80007000 0x80007000 0x80008000 0x0 0x0 0x9
+RFIX va-runv-r59 EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+RFIX va-runv-r59-low EXACT: 0x2 0x2 0x1234 0x2 0x1d 0xfffffffffffffff0 0x0 0x0 0xfffffffffffffff0 0x0 0x0 0x5 0x1d 0x0 0x9
+RFIX q24-deleg DIFFERS: SR ['0000000000000005'] (5 values, want 5) :: 4: read 0x1 want 0x0 :: 0x0 0x0 0x0 0x18 0x1
+RFIX q24-deleg-on EXACT: 0x1000000 0x18 0x0 0x9 0xc
+RFIX R-58 CONFIRMED ON SILICON (va-srevroot exact)
+RFIX R-59 CONFIRMED ON SILICON (va-runv-r59, va-runv-r59-low exact)
+RFIX Q-24 VOID: its control q24-deleg did not read its vector
+RF GRADE rc=1
+RF board2 DONE 04:03:36
+
+## flipctl
+RF va-runv BEGIN 04:03:36 board 1 bitstream caplifive_vp2c_dcc6daf6e image 274823b4df9e3a4a rec 0x8000c000 booking 91
+RF va-runv END rc=0 04:03:36 :: UART: stub va-runv
+RF VOID: the control va-runv did not read its vector; the session stops before the fix images
+RFIX va-runv DIFFERS: SR ['000000000000000f'] (15 values, want 15) :: 14: read 0x8 want 0x9 :: 0x2 0x2 0x1234 0x2 0xb 0x0 0x0 0x55 0x0 0x77 0x77 0x5 0xb 0x0 0x8
+RFIX va-srevroot NO DATA
+RFIX va-runv-r59 NO DATA
+RFIX va-runv-r59-low NO DATA
+RFIX q24-deleg NO DATA
+RFIX q24-deleg-on NO DATA
+RFIX VOID: the control va-runv did not read its vector exactly

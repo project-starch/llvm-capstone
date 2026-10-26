@@ -9053,3 +9053,46 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
 - Until the lead rules, the pb13q15 row keeps 08 = NO-READING control-failed 785. The fill reading is recorded as its
   own row (pb13q15-08fill in the silicon tally), not counted.
 - The readings themselves are unchanged.
+
+### R-58, R-59 and Q-24 on silicon: the rtl lane's bare kit on bitstream 2, N=2 across the boards, pre-registered (2026-10-26 04:2x, before the boots)
+
+- **Why:** the rtl lane's kit (llvm-capstone land/rtl-fixes-kit 30117b74cc8f, `capstone/tests/rtl-smoke/r58-r59-q24-bare-2026-10-26/`,
+  its own PREREG.md) reads silicon acceptance for three fixes on bitstream 2, with no new bitstream.
+- **What runs:** `tier3-rfix-bare.sh <board> <log> 30117b74cc8f`.
+  - It is tier3-r61-bare.sh's bare path (run_sup_bare.py from the kit's driver tree) with the six images in the
+    PREREG's order: va-runv (the control), va-srevroot (R-58), va-runv-r59 and va-runv-r59-low (R-59), then q24-deleg
+    (the Q-24 control) and q24-deleg-on (Q-24).
+  - Each image is taken from the kit commit, checked against its sha256/16 and board_rec, and loaded at 0x80000000; one
+    cold bare boot each.
+  - A control that does not read its vector stops the session.
+  - **The grade, `rfix-grade.py`,** reads the PREREG table from the PREREG.md the session ran, and applies its rules:
+    VOID unless va-runv is exact; R-58 by va-srevroot; R-59 by both r59 images; Q-24 by q24-deleg-on, with q24-deleg
+    as its control (a differing control voids the pair).
+  - Dry run: `dryrun-rfix-bare.txt`. Exact vectors confirm all three; a flipped q24-deleg voids Q-24 alone; a flipped
+    control voids the session and stops it.
+- **Order:** queued behind the Juliet remainder parts, as the rtl lane asked. It runs on each board once its scheduler
+  has no part left, so N=2 is cross-board. Output: `t3-run-b2-dcc6daf6e-b<board>/rfix-bare`.
+- **Predictions:** every image reads its PREREG vector exactly on both boards, so R-58, R-59 and Q-24 are each CONFIRMED
+  ON SILICON at N=2. Any other vector is a finding.
+
+### R-58, R-59 and Q-24 on silicon, result: every image reads its PREREG vector exactly on both boards, so all three are CONFIRMED ON SILICON at N=2, cross-board (2026-10-26 12:43-12:53)
+
+- **Records:** `records/b2bs-rfix-bare-b1.result-lines.txt` (board 1, 12:43-12:47) and
+  `records/b2bs-rfix-bare-b2.result-lines.txt` (board 2, 12:48-12:53). Pre-registration 14fe83614573, kit 30117b74cc8f.
+- **The six images,** by sha256/16 on both boards:
+  - va-runv 274823b4df9e3a4a;
+  - va-srevroot 2fbafdfd2eaec3c1;
+  - va-runv-r59 f551e9d2492ca6ba;
+  - va-runv-r59-low 981fcf633194ee20;
+  - q24-deleg 6fd2c0b60fe340ab;
+  - q24-deleg-on 0e82f2adca300741.
+  Each ran as one cold bare boot, rc 0.
+- **Every vector is EXACT on both boards.** The RFIX lines are identical across the boards, byte for byte.
+  - The va-runv control reads `... 0xb 0x0 0x9`.
+  - va-srevroot reads 0x80007000 0x80007000 0x80007000 0x80008000 in its srevroot words.
+  - Both r59 images read 0x1d and 0xfffffffffffffff0.
+  - q24-deleg-on reads `0x1000000 0x18 0x0 0x9 0xc`, beside its control q24-deleg `0x0 0x0 0x0 0x18 0x0`.
+- **rfix-grade.py, rc 0 on each board:** R-58 CONFIRMED ON SILICON (va-srevroot exact), R-59 CONFIRMED ON SILICON
+  (both r59 images exact), Q-24 CONFIRMED ON SILICON (q24-deleg-on exact).
+- **As predicted.** This was the queue's first item after the Juliet stop (addendum d1fba0ad3725 and its correction
+  f1460dce5ffd). Each board went straight on to fault_mstatus x200.
