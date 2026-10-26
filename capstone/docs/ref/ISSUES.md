@@ -2546,7 +2546,7 @@ from an unprivileged domain is a finding even behind a configuration error, and 
       - So QEMU's 65,536-id pool is close in SIZE; the divergence is generations, push and retire.
       - Prediction kind (d) narrows to "an index ≥ 65,535", which the RTL cannot reach.
 
-## Q-34 — a misaligned PLAIN load in a protected context completes on QEMU, while the RTL traps it with cause 4 (a store, by the same RTL code, is predicted to trap with 6; untested): a twin-fidelity gap with a verdict consequence `RULED semantics 2026-10-26 by the semantics owner (silicon is the reference) / OPEN twin fix — observed 2026-10-26 on bitstream 2 dcc6daf6e, board 2, Juliet spatial remainder part01 (lane vp2-tier12 d54e7a6582e2); filed by the board lane from the compiler lane's QEMU reading and the rtl lane's RTL reading, each re-read here; the fix is a QEMU pin, the semantics owner's call`
+## Q-34 — a misaligned PLAIN load in a protected context completes on QEMU, while the RTL traps it with cause 4 (a misaligned plain store with cause 6, read on silicon 2026-10-26): a twin-fidelity gap with a verdict consequence `RULED semantics 2026-10-26 by the semantics owner (silicon is the reference) / OPEN twin fix — observed 2026-10-26 on bitstream 2 dcc6daf6e, board 2, Juliet spatial remainder part01 (lane vp2-tier12 d54e7a6582e2); filed by the board lane from the compiler lane's QEMU reading and the rtl lane's RTL reading, each re-read here; the fix is a QEMU pin, the semantics owner's call`
 
 **The cells** (seeded build, so no rand draw; lane vp2-tier12 d54e7a6582e2, `tier3-smoke/records/b2bs-juliet-rem-part01-b2.result-lines.txt`, which lands on dev with the remainder's results):
 
@@ -2584,7 +2584,7 @@ from an unprivileged domain is a finding even behind a configuration error, and 
   - It found three cells, all in part01: the two above and the census CWE135_12.bad, whose board draw took the good path.
 - **Blind spot:** a misaligned access QEMU completed without faulting leaves no line. So cells where one precedes an
   aligned fault, or happens in a run that completes, are not counted.
-- **Untested prediction:** a misaligned plain store reads cause 6 on silicon where QEMU stores.
+- **The store side, read on silicon 2026-10-26** (below): a misaligned plain store reads cause 6 where QEMU stores.
 
 **Grading, until ruled:**
 - A silicon 4 (or 6) at an access the twin performed misaligned is this gap, not a new finding and not a miss of the
@@ -2613,6 +2613,7 @@ from an unprivileged domain is a finding even behind a configuration error, and 
   - Until it lands, Q-34 stays a known divergence. The twin's prediction is wrong by construction for any cell whose
     path has a misaligned plain access.
 - **The store's cause 6** follows from the same code. It is worth one directed arm when convenient, not urgent.
+  (Run 2026-10-26, below: read on silicon.)
 - **Grading** (the semantics owner's recommendation; the lead can override how it is counted):
   - The corpus definition already covers the cell: the run stopped before its bug. The trap is at the first wide `lw`,
     and the overflow is 40 bytes further on.
@@ -2622,6 +2623,20 @@ from an unprivileged domain is a finding even behind a configuration error, and 
     reason.")
 - **Where the cells stand:** they are in the Juliet spatial remainder, whose silicon run the lead stopped on 2026-10-26.
   They are recorded but counted in no total; see the measurements doc's Juliet scope entry.
+
+**The store side, read on silicon** (2026-10-26, the board lane; lane vp2-tier12 pre-registration 9695ece729d0, result
+a30537aef8b0; records `tier3-smoke/records/b2bs-misal-b{1,2}.result-lines.txt`):
+- **The probe:** `misal-store.dom` (e3107737d6cb6031, built from the uaf control's recipe). It makes one 32-byte malloc
+  object, and every access stays inside it. One boot per board on the pinned bitstream-2 corpus kits.
+- **The QEMU twin completes all four misaligned accesses,** each with its written value.
+- **Both boards read the same:**
+  - `lw` at +1 traps cause 4 (misal_load_w+0x38);
+  - `sw` at +1 traps cause 6 (misal_store_w+0x58);
+  - `sd` at +1 and at +4 trap cause 6 (misal_store_d+0x58);
+  - tval is the object's base + 1 or + 4, inside the object;
+  - the aligned `sw`/`sd` controls return before and after.
+- **So the ruling's store half holds on silicon.** The check is per access width (an `sd` at a 4-aligned address
+  traps), and a store is never reported as a load.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 

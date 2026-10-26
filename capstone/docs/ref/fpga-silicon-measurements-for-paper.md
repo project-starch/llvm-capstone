@@ -7225,3 +7225,20 @@ counted from its verdict TSVs:
 - **Not predicted:** two of board 2's six events carried ONE refusal instead of two. The boot's whole dmesg confirms
   this. Every earlier event read for refusals carried two. This is unexplained.
 - **Pre-registrations** (board lane): aeb1d8d3bbbf (0a), e97af7bb27bb and its addendum e50f65806556 (x200 per board).
+
+## A misaligned plain access inside a context traps on silicon (cause 4 load, cause 6 store) and completes on the QEMU twin: Q-34, both halves read (caplifive_vp2c_dcc6daf6e, 2026-10-26)
+
+- **The probe:** `tier3-smoke/misal-store.c`, one 32-byte object with every access inside it, on the pinned
+  bitstream-2 corpus kits. One boot per board, plus the twin qkit7-b2twin3-q8 run board-free.
+  Records: `tier3-smoke/records/b2bs-misal-b{1,2}.result-lines.txt` and `misal-twin.result-lines.txt`.
+- **Silicon, both boards identical:**
+  - `lw` at +1 reads cause 4;
+  - `sw` at +1, `sd` at +1 and `sd` at +4 read cause 6, each at its own instruction;
+  - the aligned `sw`/`sd` controls return before and after.
+- **The twin** completes all four misaligned accesses.
+- **Why it matters for the corpus:** the semantics owner ruled that silicon is the reference (ISSUES Q-34). A case
+  whose path performs a misaligned plain access stops at the alignment trap on silicon, and is graded NO-READING (the
+  run stopped before its bug). The twin's prediction for such a case is wrong by construction until the twin traps too.
+  - In the bitstream-2 Juliet readings, only two spatial remainder cells (CWE135_12 seeded, part01, uncounted) were
+    affected.
+  - No counted cell was affected: the sample and the temporal set have no cause 4 on silicon.

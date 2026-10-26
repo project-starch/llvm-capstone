@@ -1,0 +1,9 @@
+# Q-34 store arm: the QEMU twin qkit7-b2twin3-q8 reading of misal-store.dom e3107737d6cb6031 (tier3-misal.py --kit), 2026-10-26, board-free.
+MISAL kit <mnt-hdd>/capstone/t3-smoke/qkit7-b2twin3-q8 boot completed; transcript <mnt-hdd>/capstone/misal-store/twin/guest/serial.log; steps 7
+READ aligned-sw: RETURNED 0x11223344 exit exit 0
+READ aligned-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-lw: RETURNED 0x5a5a5a5a exit exit 0
+READ misal-sw: RETURNED 0x11223344 exit exit 0
+READ misal-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-sd4: RETURNED 0x1122334455667788 exit exit 0
+READ aligned-sw-post: RETURNED 0x11223344 exit exit 0

@@ -1,0 +1,17 @@
+# Q-34 store arm on bitstream 2, board 1 (tier3-misal-b2.sh; pre-registered 9695ece729d0): the runner's result lines, then each fault's raw cause, pc and address from the board transcript.
+MS BEGIN 13:59:46 board 1 kit bkit9-b2-b1 booking 395
+MS END rc=0 14:08:03
+MISAL kit <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b1 boot completed; transcript <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/misal/guest/board.txt; steps 7
+READ aligned-sw: RETURNED 0x11223344 exit exit 0
+READ aligned-sd: RETURNED 0x1122334455667788 exit exit 0
+READ misal-lw: FAULT cause 4 at code+0x10cf8 exit signal 11
+READ misal-sw: FAULT cause 6 at code+0x10c40 exit signal 11
+READ misal-sd: FAULT cause 6 at code+0x10cac exit signal 11
+READ misal-sd4: FAULT cause 6 at code+0x10cac exit signal 11
+READ aligned-sw-post: RETURNED 0x11223344 exit exit 0
+MS readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+MS board1 DONE 14:08:03
+RAW domain fault cause=4 pc=0x3fa0490cf8 address=0x3fa056f041
+RAW domain fault cause=6 pc=0x3f8c890cac address=0x3f8c98f041
+RAW domain fault cause=6 pc=0x3f96010cac address=0x3f9610b044
+RAW domain fault cause=6 pc=0x3fad990c40 address=0x3fadaab041
