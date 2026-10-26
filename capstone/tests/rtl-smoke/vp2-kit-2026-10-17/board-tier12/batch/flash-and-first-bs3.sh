@@ -7,7 +7,8 @@
 # - the fallback that must be registered is bitstream 2, caplifive_vp2c_dcc6daf6e.bit;
 # - the kits are make-b3-kit.sh copies of the board's bitstream-2 kits (bkit9-b2 -> bkit11-b3, bkit10-perf ->
 #   bkit12-perf-b3), changing only BOARD_BITSTREAM;
-# - the first boots are run-b3-first.sh.
+# - the first boots are run-b3-first.sh, then run-b3-after.sh's regression controls when the first boots read as
+#   bitstream 2's did.
 # Each step gates the next.
 # Usage: flash-and-first-bs3.sh <board 1|2> <log> <bitstream name, no .bit> <local .bit> <sha256>.
 # FB_* stub every external step for the dry run.
@@ -54,6 +55,20 @@ main() {
     || { echo "FB STOP: kit" >> $O; return 1; }
   ${FB_FIRST:-bash $S/run-b3-first.sh} $BRD $NAME $OUT; rc=$?
   echo "FB FIRST rc=$rc $(date +%T); SEQ:" >> $O; sed 's/^/  /' $OUT/SEQ >> $O 2>/dev/null
+  # The regression controls run only when the first boots read as bitstream 2's did (s23 and va-alloc graded rc=0, Tier 1
+  # done with rungs 0 0 0 1). The fp readings do not gate them.
+  local q=$OUT/SEQ ok=1 r v
+  grep -q "^  S23 GRADE rc=0$" $q && grep -q "^  VA GRADE rc=0$" $q && grep -q "^  BF board$BRD DONE" $q || ok=0
+  for r in "b0-stats 0" "b0-hello 0" "vm-contract 0" "vm-suite 1"; do
+    set -- $r; grep -q "^  RUNG $1 retval=$2 " $q || ok=0
+  done
+  if [ $ok = 1 ]; then
+    echo "FB first boots as predicted; regression controls BEGIN $(date +%T)" >> $O
+    ${FB_AFTER:-bash $S/run-b3-after.sh} $BRD $OUT/after; echo "FB AFTER rc=$? $(date +%T); SEQ:" >> $O
+    sed 's/^/  /' $OUT/after/SEQ >> $O 2>/dev/null
+  else
+    echo "FB HOLD: the first boots did not read as predicted; the regression controls were not run" >> $O
+  fi
   echo "FB DONE $(date +%T)" >> $O
 }
 main "$@"; exit $?

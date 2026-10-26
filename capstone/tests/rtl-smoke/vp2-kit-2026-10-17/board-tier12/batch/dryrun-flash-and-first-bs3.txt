@@ -111,3 +111,52 @@ FB STOP: board 1's T3 kits did not end
 FB board 2's T3 kits ended 02:36:33: PM3 t3k2 on board 2 END rc=0 03:00:00 :: x
 FB board 2 free 02:36:33
 FB STOP: store-has control read rc=0, not 1
+
+# ADDENDUM (2026-10-27 02:4x, before any flash): the exact bitstream-3 fp-all grade and the regression controls
+## fpds-b3-grade.py on the REAL bitstream-2 session (board 1) and on copies of it edited to each other reading (exit codes)
+FPDS-B3 STILL THE DEFECT: the dcc6daf6e vector; check the resident bitstream first
+  exit 0
+FPDS-B3 R-62 FIXED ON SILICON: the e7af48457 vector exactly (0 fdiv and 0 fsqrt misses, NX set)
+  exit 0
+FPDS-B3 FINDING: 3: read 0x5 want 0x0
+  exit 0
+FPDS-B3 VOID: SR is not 10 or position 8 is not the last quotient
+  exit 0
+FPDS-B3 NO DATA: no <scratch>
+  exit 0
+## the chain's regression-control gate, its first-boot SEQ built from the REAL bitstream-2 first-boot lines (board 2's record)
+### ok2
+    RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+FB first boots as predicted; regression controls BEGIN 02:41:39
+FB AFTER rc=0 02:41:39; SEQ:
+  STUB run-b3-after board 2
+FB DONE 02:41:39
+### ok1
+    RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+FB first boots as predicted; regression controls BEGIN 02:41:40
+FB AFTER rc=0 02:41:40; SEQ:
+  STUB run-b3-after board 1
+FB DONE 02:41:40
+### vms
+    RUNG vm-suite retval=0 (rev7 oracle 1, reference only)
+FB HOLD: the first boots did not read as predicted; the regression controls were not run
+FB DONE 02:41:40
+### s23
+    RUNG vm-suite retval=1 (rev7 oracle 1, reference only)
+FB HOLD: the first boots did not read as predicted; the regression controls were not run
+FB DONE 02:41:41
+## run-b3-after.sh with every step stubbed, then given a bitstream-2 kit
+B3A START 02:42:06 board 2 kit bkit11-b3-b2
+STUB hold board 2 kit <scratch> after - ere - HB_ROOT=<scratch>
+B3A hold rc=0 02:42:06
+STUB r61-stub.sh board 2 args 61faf96f5863 HB_ROOT= R61_KIT=<scratch> R61_ROOT=<scratch> RF_KIT= RF_ROOT=
+B3A r61 rc=0 02:42:06
+STUB r61a-stub.sh board 2 args 6910f80d4903 HB_ROOT= R61_KIT=<scratch> R61_ROOT=<scratch> RF_KIT= RF_ROOT=
+B3A r61a rc=0 02:42:06
+STUB rfix-stub.sh board 2 args 30117b74cc8f HB_ROOT= R61_KIT= R61_ROOT= RF_KIT=<scratch> RF_ROOT=<scratch>
+B3A rfix rc=0 02:42:06
+B3A board2 DONE 02:42:06
+B3A STOP: kit <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b2 does not verify or is not a bitstream-3 kit
+## tier3-hold-batch.sh (real) with the scratch bitstream-3 kit, the busy check forced: board 2 passes the kit check; board 1 refuses a board-2 kit
+HB STOP: board 2 is busy
+HB STOP: <scratch> is not board 1's batch or bitstream-2 kit (module 215a09be5a89360c)

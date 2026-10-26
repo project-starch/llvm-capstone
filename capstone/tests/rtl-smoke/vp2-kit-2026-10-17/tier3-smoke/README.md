@@ -10114,3 +10114,34 @@ Tool: `r64-census.py`.
 - **Then:** the runtime lane's perf kit `perf/main4/b3k1` (runner cbf60f75e5eb79ae, its pre-registration
   runtime/bench-counters 8bfc279da208), one boot, under its own pre-registration here before its boot.
 - The seal's name, path and sha256 are recorded in an amendment here before each board's chain is launched.
+
+### Bitstream 3, AMENDMENT before any flash (2026-10-27 02:4x): the rtl lane's handoff items 5 and 6; an exact fp-all grade; the regression controls
+
+- **The rtl lane's handoff, items 5 and 6.** Items 1-4 (name, path, sha256 and grade) come at the seal.
+  - Outside verif/, bitstream 3 differs from dcc6daf6e in exactly two files (Flist.cva6 and the new normaliser), with
+    no submodule moves. Checked above with `git diff --stat`.
+  - **No SPI write before the rtl lane's grade of the seal.** That is in addition to "ready" as stated above.
+- **fp-all is graded against the EXACT bitstream-3 vector** (the rtl lane's PREREG section at land/rtl-b3-prereg
+  bc8e895d8db1, simulated on e7af48457's core):
+  `0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1`, SR 10.
+  - The new `fpds-b3-grade.py` reads both vectors from that commit:
+    - **R-62 FIXED ON SILICON** = the e7af48457 vector exactly;
+    - **STILL THE DEFECT** = the dcc6daf6e vector (check the resident bitstream first);
+    - otherwise a FINDING;
+    - VOID unless SR is 10 and position 8 is the last quotient.
+  - This replaces fpds-grade.py's weaker fixed branch, which needed only positions 0-1 to be 0, as the prediction. Its
+    line stays in the log.
+  - Controls: the real bitstream-2 session reads STILL THE DEFECT. Copies of it edited to the bitstream-3 vector, to one
+    changed value and to SR 9 read FIXED, FINDING and VOID; a missing session reads NO DATA.
+- **Regression controls** (`run-b3-after.sh`, the rtl lane's item c), run by the chain only when the first boots read as
+  bitstream 2's did: s23 and va-alloc graded rc=0, Tier 1 done, rungs 0 0 0 1. Each must read its bitstream-2 reading:
+  1. hold 100000: HOLD-PEAK and HOLD-OK 100000, exit 0, high_water 105,569 of 262,144. `tier3-hold-batch.sh` now also
+     accepts a bkit11-b3-b<board> kit (same module 215a09be); nothing else changed.
+  2. R-61 (kit 61faf96f5863): control PASS; r61-stale2 and r61-stale NOT-REPRODUCED, the fixed tree's vectors.
+  3. R-61 arming (kit 6910f80d4903): control and stale0 exact; r61a-stale3 and r61a-stale4 on the fixed tree's vectors.
+  4. The fixes kit (30117b74cc8f): all six images EXACT, so R-58, R-59 and Q-24 read as on bitstream 2.
+- Dry runs are appended to `dryrun-flash-and-first-bs3.txt`:
+  - the chain's gate fed the REAL bitstream-2 first-boot lines, and the same lines with vm-suite or s23 changed;
+  - run-b3-after.sh stubbed, then refusing a bitstream-2 kit;
+  - the real tier3-hold-batch.sh with a forced busy, which passes its kit check for a board-2 bitstream-3 kit and
+    refuses one on board 1.
