@@ -7064,12 +7064,72 @@ Each of those three refusals was shown to fire on a mutated tally.
 
 - **Against the batch bitstream** (`records/batch-silicon-tally.tsv`, the same script): 127 and 225 of 264. The
   difference is the two CPython rows of the previous entry.
-- **Juliet**, not in the seven-program total: temporal 366 of 366; the spatial sample 716 of 755 (22 missed, 17 not
-  triggered). These are the bitstream-2 QEMU reference's counts, carried to silicon by the board's cell-for-cell
-  equality (the previous two entries).
+- **Juliet**, not in the seven-program total: temporal 366 of 366, and the spatial sample. The sample's raw reference
+  counts are 716 caught, 22 missed and 17 no reading, carried to silicon by the board's cell-for-cell equality (the
+  previous two entries). Its 17 are 9 not triggered and 8 intra-object. Quote it in the emulator's classes, per the
+  next entry.
 - **FFmpeg's 9 inside-one-struct cases and its frame-pool plane** read missed in both columns: one allocation, so object
   bounds cannot separate them.
 - **Every cell of the seven is N=2** (the previous entry). httpd is N=1 so far: board 1, every cell as the
   compiler lane's QEMU reference (dev 6d9e397df3ca's results); its second reading is queued on board 2.
 - **The batch tally has no httpd rows;** the script says so and reports the seven, and fails if a tally carries some
   of a program's arms but not all.
+
+## Juliet: what to quote, in one set of classes (the lead's reporting decision, 2026-10-26)
+
+**The decision** (relayed by the runtime lane):
+- the full Juliet set is reported on the emulator;
+- the FPGA results are all 366 temporal cases and the 755-case spatial sample, which covers all 261 spatial
+  functional variants (the Juliet SPATIAL entry above);
+- the FPGA matches the emulator on those cases;
+- the silicon run of the spatial remainder is stopped.
+
+**Emulator, the full set.** The record is `capstone/bug-corpora/juliet/results/2026-10-19-virtual/` (981ab7a3f3d8),
+counted from its verdict TSVs:
+
+| set | cases | caught | missed | intra-object, reported apart | not triggered | good images correct |
+|---|---|---|---|---|---|---|
+| temporal, CWE-415/416 | 366 | 366 | 0 | 0 | 0 | 366 / 366 |
+| spatial, CWE-121/122/124/126/127 | 9,138 | 8,600 | 60 | 144 | 334 | 9,138 / 9,138 |
+
+- **Missed:** all 60 are CWE170 cases. The catch is an over-read past the copy, and whether it reaches the bound
+  depends on whether a NUL follows the copy, so these cells are value-dependent on any platform.
+- **Intra-object:** the 144 are all NO-READING, by reason 102 unexpected-cause, 34 unattributed(STRICT-FAIL:size-32),
+  and 8 seeded variants of the two (6 + 2). They overflow inside one allocation, so they are reported apart, as
+  outside what object bounds can separate.
+- **Not triggered:** the 334 are 220 NOT-TRIGGERED:wide-snprintf and 114 NOT-TRIGGERED:sizeof-ptr. The latter's
+  overflow size depends on `sizeof(pointer)`, which is 16 here; the record's mechanism probe reads `int64_t*` = 16.
+- **False positives:** 0.
+- The five columns sum to 9,138. Any text that quotes 8,600 / 60 / 144 must quote the 334 too, or the gap reads as
+  unreported failures.
+
+**The silicon sample, in the emulator's classes.** Joining the 755 sample cases against the record:
+
+| | caught | missed | intra-object | not triggered |
+|---|---|---|---|---|
+| the record's verdicts on the 755 | 717 | 3 (CWE170) | 8 | 27 (18 wide-snprintf + 9 sizeof-ptr) |
+| the bitstream-2 QEMU reference, raw labels (= silicon, cell for cell) | 716 | 22 | 8 | 9 |
+
+- **The raw "22 missed" is not the emulator's missed class.**
+  - The board-reference runs take no twin reading, and judge.py relabels the wide-snprintf family only from the
+    case's own twin. So those 18 cases read MISSED there and NOT-TRIGGERED in the record.
+  - The other 4 are CWE170.
+- **Against the record, the reference moves 23 cases (classify-moves.py reads the same 18, 3, 2):**
+  - the 18 relabels above;
+  - 3 value-dependent CWE170 cases, 2 caught → missed and 1 missed → caught;
+  - 2 intra-object reason relabels, which stay NO-READING.
+- **Quote the sample as 717 / 3 / 8 / 27,** equal to the emulator cell by cell (1,513 / 1,513 on bitstream 2). Do not
+  quote "22 missed" next to the full set's "60 missed, all CWE-170": on one page the two contradict each other.
+- The Juliet SPATIAL entry above omits the intra-object row, so its rows sum to 747; its "all cells equal" row covers
+  the 8.
+
+**Build flag.**
+- The 2026-10-19 record was built with `+movc-keeps-integer-source`, per its summary's sdk codegen and all three run
+  fingerprints. Board images are built without it (lead decision 2026-10-20, C-32). That includes the sample and the
+  remainder, whose SDK `t3-freeze-nb-nomovc-cw-r60` carries `-movc-keeps-integer-source`.
+- The full-set figure is carried over to the board build by two results:
+  - the sample above;
+  - the remainder rerun on bitstream 2's twin, 5ba00233d449: 8,383 cases, 0 unexpected against the record, CAUGHT
+    7,873 against 7,883, and the 10 are all CWE170 (`capstone/tests/bitstream2-board-refs/README.md`).
+- So 8,600 is an emulator figure for the virtual-profile build. Wherever prose says "the same binaries" ran on both,
+  it must say which figure it uses: the sample's, or the remainder rerun's.
