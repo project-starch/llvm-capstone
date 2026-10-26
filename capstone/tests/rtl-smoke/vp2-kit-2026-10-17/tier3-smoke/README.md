@@ -10188,3 +10188,25 @@ Tool: `r64-census.py`.
 - **"Ready" as pre-registered is met:** sealed, routed, WNS no worse than −14 ns, utilisation in band, graded.
 - **Launch:** `flash-and-first-bs3.sh 2 <log> caplifive_vp2c_e7af48457 <copy> d6ed97b6…` and the same for board 1.
   Each waits for its board's T3 end line, and `tier3-b3k1.sh` waits for board 2's chain.
+
+### The perf evaluation's T3 arm on bitstream 2, result: all three kits PASS (2026-10-27 02:15-03:26)
+
+- Records: `records/b2bs-perfmain3-t3k1-b1`, `-t3k2-b2` and `-t3k3-b1` `.result-lines.txt`.
+- **Every pre-registered check passed:**
+  - the three kits passed perfmain3-check.py before any booking;
+  - every boot completed;
+  - every process's plan line matched, with W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and
+    a new dmesg quote;
+  - pc=0, DRT1, FRTY, Oops, INJS and INJL all 0.
+
+| kit | board | booking | span | @@PERF-END | rc≠0 | last line |
+|---|---|---|---|---|---|---|
+| t3k1 | 1 | 409 | 02:15:26–02:48:04 | 81 | 0 | `@@PERF-T3K1-DONE` |
+| t3k2 | 2 | 410 | 02:15:26–02:52:41 | 60 | 0 | `@@PERF-T3K2-DONE` |
+| t3k3 | 1 | 411 | 02:48:04–03:26:28 | 60 | 0 | `@@PERF-T3K3-DONE` |
+
+- **Cross-check:** perfmain-table.py, run independently, reads 81, 60 and 60 processes PASS and 0 FAIL, with no
+  mid-line heartbeat. Its per-program summary prints only the T1 and T2 columns; the T3 processes are inside the
+  per-process count.
+- The functional prediction holds. The timing analysis, including the ordering T1 ≤ T3 ≤ T2 by instret, is the
+  runtime lane's.
