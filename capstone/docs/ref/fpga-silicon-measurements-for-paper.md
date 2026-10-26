@@ -7291,3 +7291,17 @@ counted from its verdict TSVs:
     sglib-hashtable(-libc), stb_perlin, trio-snprintf(-libc). Their silicon output is unchecked in this run.
 - **Timing readings** (cycles, instret and module entries per iteration) are in the per-process READ lines and the
   transcripts. The T1-against-T2 analysis is the runtime lane's.
+
+## R-63 on silicon: the divider applies RDN as RUP and RUP as RDN, and truncates under RMM, on both boards (caplifive_vp2c_dcc6daf6e, 2026-10-26)
+
+- **What ran:** the rtl lane's bare kit (fp-rm.bin 45a7397cc4d4f099, board_rec 0x80003000; its PREREG at llvm-capstone
+  75f129f56497), one cold boot on each board. Pre-registered at 411e93dc1ebc. Records:
+  `tier3-smoke/records/b2bs-fprm-bare-b1.result-lines.txt` and `-b2`.
+- **Reading:** both boards give SR 16 and the vector the rtl lane simulated on bitstream 2's RTL, byte for byte, and
+  they are identical across the boards.
+  - 1/3, -1/3 and sqrt(2) are correct under RNE and RTZ.
+  - RDN gives RUP's results, and RUP gives RDN's.
+  - RMM truncates sqrt(2) to 0x3ff6a09e667f3bcc.
+- **Reach:** none in the perf evaluation. Across its 152 T1 images, no fdiv/fsqrt carries a static directed mode, and
+  fcsr is written only by the runtime's fesetenv, which no program object references. The perf run's FP failures are
+  R-62's alone.
