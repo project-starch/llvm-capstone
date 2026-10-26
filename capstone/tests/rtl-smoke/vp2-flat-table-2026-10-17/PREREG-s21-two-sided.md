@@ -218,3 +218,25 @@ pair cannot tell them apart:
 - **Reading:** prkitB 25 → `copy`'s survival was the race, and the stack's exit unmap works. prkitB SURVIVED with
   kitB 25 → the stack's child-exit unmap no longer retires the frame, a finding against #250/#264 for the runtime lane.
   `copy` on prkitB is repeated for N=2 and is reported either way.
+
+### Read 2026-10-26: the deviation was the race; the stack's exit unmap still retires the frame
+
+| kit | image | copy | copy-exited |
+|---|---|---|---|
+| kitA (dev, fix a) | dev-frame-contract3.dom 3dc08fb6 | (not run) | created=1 child_ran=1, cause 25 |
+| kitB (dev, no retire): the control | dev-frame-contract3.dom 3dc08fb6 | (not run) | created=1 child_ran=1, cause 25 |
+| prkitA (stack, fix a) | pr-frame-contract3.dom 37c6f822 | cause 25 | created=1 child_ran=1, cause 25 |
+| prkitB (stack, no retire) | pr-frame-contract3.dom 37c6f822 | **cause 25** | created=1 child_ran=1, cause 25 |
+
+All four boots: slot gate OK, banner `supervisor_slots=2`, `child frame grant not retired` 0, halts 0.
+
+- **The control fired:** with no retire at create, dev's kitB faults after the child's exit. So the wait is long enough
+  for the exit unmap to run, and a 25 on prkitB is that unmap's retire.
+- **prkitB reads 25 after the exit:** under #250's registry the launcher's child-exit unmap still finds and retires the
+  frame. The second reading is ruled out.
+- **`copy` on prkitB:** SURVIVED once and 25 once. That is the race between the parent's read and the child's exit
+  unmap, as `copy`'s note already says. It was predicted as 25 on both kits, and that prediction was wrong only in
+  treating a race as having a fixed outcome.
+
+**Overall, on the PR stack (merge chain fca004e7e063):** fix (a) separates exactly as on dev (write-live: 25 with the
+retire, WROTE without), and the frame is still retired at child exit.
