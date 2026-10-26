@@ -205,3 +205,133 @@ bigger stack and a bigger node table are changes the ASAN-blind 31 were ALSO mea
 so that population must be re-run on this image before the two tables are set beside each other.
 Until that re-run exists, the published 25-of-28 and anything measured here are on different
 instruments and are not comparable.
+
+---
+
+# Third amendment (2026-10-26): a new instrument, and BOTH populations on it
+
+Filed before the run, as the rule requires, and the result commit cites this commit's hash.
+
+## Why the earlier predictions cannot be carried over
+
+Everything between the trigger and the hardware changed since the second amendment:
+
+| layer | change |
+|---|---|
+| upstream | merged `origin/dev`, 879 commits (`8001cabd3e05`) |
+| arena ceiling | `CV_MAX_ARENAS` 512 -> 8192 -- the reason for the merge |
+| firmware + monitor | rebuilt at the recorded buildroot pin (`d04bd83` -> `8fd1ea1`, opensbi `49b0f93` -> `cf344cf`, monitor `2c49c41` -> `4674ab6`). The KERNEL SOURCE is unchanged (`830b3c68` both sides) |
+| musl | `0009` rewritten (+344), `0010` (+42), `string_bounds_safe.c` (+108), `sublet_heap.c` deleted |
+| allocator seam | block provider re-based from the deleted Sublet loan onto CDERIVE/CREVOKE (`fa8902138ab0`) |
+| platform properties | `x-capstone-test-csrs=true`, `supervisor-slots=32` -- without which NOTHING runs |
+| bounds | Option (iii): exact below 4 KiB, `2^(msb(len)-9)` granule at or above |
+
+## The baseline of record, and an honest gap in it
+
+The run after the second amendment (the fourth measurement of this population) was **never
+committed**: no bundle, no table, no record of any kind. Its numbers exist only in a working
+session, so they are not evidence and are not cited here. The baseline of record therefore
+remains the state the second amendment describes, and this run is the **first recorded
+measurement of this population on a platform whose own gate passes** (`run.py` 42/42,
+`ports/php/app/results/platform-qualification-2026-10-26/`).
+
+That gap is itself a finding about the apparatus: `run-realphp.py` writes a bundle only when it
+is asked to, so a run driven by hand leaves nothing behind. Treat an uncommitted run as not
+having happened.
+
+## Predictions, 29 `temporal-asan-visible`
+
+Per arm, unchanged in shape from the second amendment:
+
+| | `stock` (0) | `block` (4) | `object` (6) | `exact` (7) |
+|---|---|---|---|---|
+| cases reaching `_efree` | MISSED | see below | **CAUGHT** | **CAUGHT** |
+
+And these specific cells, each falsifiable:
+
+1. **CRASH-046, CRASH-075, CRASH-081 become readings on all four arms.** The measured cause of
+   their `setup-fault` was `errno 28` (ENOSPC) with `arenas=512` exactly, at every failure on
+   every arm, against passing controls at `arenas=17`. The ceiling is now 8192 and `vm-mappings`
+   -- which holds 1200 mappings and fails on the old module -- passes.
+
+   **This is the prediction most likely to fail, and it has failed before.** The second
+   amendment predicted the same outcome for these same three cases, attributing them to node
+   exhaustion, and was wrong: capacity was 262,144 against a peak of 64,587-90,218 with
+   `node_growths=0`. If they stay `setup-fault` now, the arena ceiling was not the whole cause
+   either, and the next step is to read `b=` on the failure rather than to theorise again.
+
+2. **CRASH-068 moves its fault site but stays `NO-READING unattributed`.** It faulted inside a
+   libc string primitive (`string_bounds_safe.c:40`, `strlen`), and that file changed by +108
+   lines along with musl's `memcpy`/`memmove`/`memset` word paths. So the site should move. It
+   should NOT become CAUGHT: attribution wants ASAN's own file and line, and a libc primitive
+   called from PHP is not that, however the bytes moved.
+
+3. **CRASH-113 stays `unattributed`.** It faults at `zend_execute_API.c:626` where ASAN names
+   `zend_hash.c:850`, and nothing in this work touches it. A change here would mean the
+   discrepancy was an artefact of the old instrument and would need explaining before use.
+
+4. **The six cases previously CAUGHT on the three protected arms stay CAUGHT.** The boring
+   prediction, and the one that matters most: the seam's block provider was rewritten. If any of
+   the six regresses, that is a re-base defect and not a finding about PHP. `probe-seam.dom`
+   reproduces all ten of its documented stages, so I expect no regression -- which is exactly
+   why a regression would be informative.
+
+5. **`block` catches a strictly higher fraction than the 6 of 21 it managed on the
+   cache-hidden cases.** Carried forward unchanged. No number predicted.
+
+6. **No case is CAUGHT on `exact` by an overflow inside the Option (iii) granule.** New, and it
+   is a limit rather than a hope: at or above 4 KiB the bound is rounded up to
+   `2^(msb(len)-9)`, so a small overflow past a large object is NOT catchable. Any CAUGHT whose
+   fault address lies within that slack is an artefact and must be refused.
+
+## Predictions, 31 `asan-blind`
+
+Re-run on the same instrument, which the second amendment already said was required before the
+two tables may be set side by side.
+
+- **24 reachable cases: CAUGHT on the protected arms**, as recorded.
+- **The 7 OS-dependent cases stay `not-reached`**: CRASH-008, 084, 086, 099, 112, 092, 100.
+- **CRASH-100 specifically stays out of the denominator**, and for a reason that is a property
+  of this build rather than of the platform: it needs `stack-use-after-return`, and the image
+  still reports `shrink-stack: off (the comparison build)`. Turning it on is its own variable
+  and its own pre-registration; it is NOT part of this run.
+- **CRASH-008 and CRASH-073 move their fault sites but stay out of the denominator**, same
+  reasoning as CRASH-068: `stpcpy` and `memcpy` are libc primitives, and the merge rewrote them.
+
+## What would make this measurement void
+
+The cross-arm gates are unchanged and all must pass, with one replaced because the old form
+silently stopped meaning anything:
+
+- the image must contain BOTH capability instructions it needs -- `derive=16 revoke=6` measured
+  by `count-cap-insns.py`, by ENCODING, because `objdump` prints CDERIVE and CREVOKE as
+  `<unknown>` and the old `grep -c '\brevoke\b'` would pass a correct image for absent;
+- distinct mode lines per arm;
+- strictly more revokes on the retiring arms than on the control;
+- the bound probe faulting as declared;
+- the benign workload completing with revocation on;
+- and, newly: any run whose node high-water comes within `CV_NODE_RESERVE` of capacity is
+  refused, because a cause-30 resource fault lands at an arbitrary pc and is otherwise
+  indistinguishable from a catch. Capacity is 262,144 on the paged table; the flat table's
+  65,536 would NOT clear this population's measured 64,587-90,218, which is why the paged
+  table is used.
+
+## Vehicle
+
+    clang          9bdb06e96beaedb9805ec63d8eb494bfb052e09e8b9904ff4b998443752b62e6  (f3b69c7af1c4)
+    qemu           d9de56fc74c77f8a2fbfed79624c3ff73baa7110192a7e07b7829989e5957d6d
+    fw_jump.elf    b1663eb62a192741055589bafd60aea8121d464efb3afd7da2b98508316639ef
+    Image          108d811705e71414d022748d21fb040b4dc18ca15df87faf637704091f73bfe5
+    rootfs.ext2    aa811268f1a69f7f79bfc09d778267d6370d306414f707cda1908eecc591626a
+    capstone-vexec 8489f201ae0447f938a9fa8f6856b6719a54810d0c0a433873a037e731bf68d1
+    capstone_vm.ko 5878060e59e1b114a99d3e04128284508cfb13ffd2356204b943856aa78837be
+    php-real-seam  f8a15344e9fe31942566ef2a44011972672390660ebaef76db362c57f595372f
+    probe-seam     9481b7cea04809ae4621f56d4decc596e1e7b9071afa51fa4c1522baabbbc744
+    -cpu           rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,
+                   x-capstone-exact-bounds=true,x-capstone-test-csrs=true,
+                   x-capstone-supervisor-slots=32
+    insmod         node_initial_pages=1024 supervisor_slots=32
+
+The image is byte-identical across two builds. The `-cpu` string and the module arguments are
+recorded in every bundle's `inputs.json` from this run forward: they decide whether the platform
+runs at all, and two runs differing only in them are not the same measurement.
