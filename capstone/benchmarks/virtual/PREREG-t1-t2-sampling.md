@@ -251,8 +251,11 @@ rbtree), the three ctl-*-libc, and rv8 aes, miniz, norx, primes and qsort.
 `--arms T1,T2`. Each is the same estimator as the main run, on a pair of arms from the same boot.
 
 **Predictions.**
-1. **Instructions.** For every program, the median instret per iteration orders T1 ≤ T3 ≤ T2. T3 does the
-   lifetime work, and T2 adds the scrub.
+1. **Instructions.** For every program, the median instret per iteration orders T1 ≤ T3 ≤ T2 within a tolerance
+   of 0.1 % of T1's: T3 ≥ T1 × 0.999 and T2 ≥ T3 × 0.999. T3 does the lifetime work, and T2 adds the scrub.
+   - Amendment, 2026-10-27, before any T3 transcript was read: the first wording had no tolerance.
+   - A dry run on the main run's rows showed instret is not constant: rv8-qsort's T1 median exceeds its T2 median
+     by 35 of 11.4 million. So the strict order fails on noise alone.
 2. **miniz-libc.** Most of its slowdown is the scrub: T2/T3 carries more than 80 % of log(T2/T1), so T3/T1 is
    below 1.17.
    - The basis is an inference from the main run, not a measurement: escapes of 1,714 against 589, and instret
