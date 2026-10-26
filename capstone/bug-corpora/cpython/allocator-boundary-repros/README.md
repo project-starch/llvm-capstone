@@ -159,11 +159,11 @@ required -- is a consequence on either axis.
 | arm | withdrawn | cases |
 |---|---:|---|
 | `virtual-malloc` | 6 | 01, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`), 32 (temporal, `cause=12`, an instruction page fault -- not a capability rule at all) |
-| `virtual-nested-pools` | **0** | every one of its 26 catches carries its axis's code |
-| `cheribsd-revocation` | 7 | 01, 05, 09, 10, 14 (spatial, `si_code=2`), 31 (temporal, `si_code=2`, decided by `si_addr` -- see below), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
+| `virtual-nested-pools` | **0** | every one of its 27 catches carries its axis's code |
+| `cheribsd-revocation` | 8 | 01, 05, 09, 10, 13, 14 (spatial, `si_code=2`), 31 (temporal, `si_code=2`, decided by `si_addr` -- see below), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
 
-Counting them the arms read 15 / 30, 26 / 30 and 11 / 30; withdrawn, **9 / 30,
-26 / 30 and 4 / 30**. On the **nested** rows, 19 of the 30, ③ is 0 in both
+Counting them the arms read 15 / 31, 27 / 31 and 12 / 31; withdrawn, **9 / 31,
+27 / 31 and 4 / 31**. On the **nested** rows, 20 of the 31, ③ is 0 in both
 cells and ① is 0 in the spatial one.
 
 **On the temporal axis the fault code alone cannot decide a CheriBSD cell.**
@@ -175,7 +175,7 @@ mechanism, at `0x426656a8`, a heap address. Case `31` re-ran at `0x5e5f06` --
 `09`'s shape -- so it is withdrawn, and with it the arena-return explanation its
 oracle offered, since that would have put the fault at the stale access on a
 heap address inside the freed block. Each case's own `note` records which fault was which and
-why, and `~/cpython-false-positive-examples/` carries the minimal C.
+why.
 
 **The denominator is every case both Capstone arms REACHED** -- `reached` in the
 observation, the runner's own record that the trigger got to the defect before its
@@ -183,13 +183,18 @@ defective access. Reaching it is the arm's chance at the defect; what the arm th
 did or failed to do with that chance is the measurement. So a case an arm reached
 and then could not read stays in and scores as no detection, while a case an arm
 never reached is out, because the arm was never given the chance. On this bundle
-that is **30 of 32**: `11` is out, not reached on either arm (the trigger stops on
-`ModuleNotFoundError` before the case), and `13` is out on `virtual-malloc` alone
-(`capacity: MemoryError`). `13` is the case to read carefully: `virtual-nested-pools`
-DID detect it, `cause=28` in `unicode_fromformat_write_str`, but the row is held out
-because the only arm with a reading on it is the arm that detected -- there is
-nothing to compare that catch against. `18` is **in**: both arms reached it and both
-MISSED. It had been held out on `NOTIMPL` from the `spatial` and `sublet` arms
+that is **31 of 32**: `11` alone is out, not reached on either arm (the trigger
+stops on `ModuleNotFoundError` before the case).
+
+`13` is **in**, on `dev`'s rule rather than this bundle's reading. `case.json`
+declares `memory_error_is_the_defect`, which records that the `MemoryError`
+`virtual-malloc` hits is the defect's own uncaught read and not the table
+refusing; under that rule the case is reached and the arm missed it.
+`runners/virtual/run-virtual.py` applies the rule, so it takes effect on a run,
+and the declared bundle predates it: the cell still reads
+`NO-READING:infra`, and reads MISSED-pending until the arm is re-measured.
+`virtual-nested-pools` detects it, `cause=28` in `unicode_fromformat_write_str`.
+`18` is **in**: both arms reached it and both MISSED. It had been held out on `NOTIMPL` from the `spatial` and `sublet` arms
 retired on 2026-10-11, which is a verdict from arms this table no longer reports.
 Including it is the conservative direction -- it is a case both unprotected arms and
 Sublet missed, so holding it out removed evidence against Sublet.
@@ -222,11 +227,11 @@ caveat on two rows:
   gains a probe that marks the access -- `probe-140551.py`, `probe-157325.py` --
   because upstream's reproducers mark nothing, and `06` gains a
   `negative_control.py`.
-* **`02`, `03` and `04` are pinned**: five repeats per arm under
-  `PYTHONHASHSEED=0`, because unpinned they moved. `02` and `03` are genuine
-  `cause=28` catches on `virtual-nested-pools` every time; `04` misses on all
-  three arms every time. Two readings disappeared under the pin -- `03`'s
-  `si_code=2` and `04`'s `cause=24` -- and both were unpinned artefacts.
+* **`02`, `03` and `04` read from the declared bundle like every other row.**
+  They were re-measured under `PYTHONHASHSEED=0` with five repeats per arm
+  during the review; those runs are not in the committed bundle, so they are not
+  what the table reports and the claims they carried have been dropped from the
+  notes.
 * **`16` on Sublet was `NO-READING` and is a detection, shown `D 28‖`.** It
   had faulted `cause=28` in `advance_with_locations`, a symbol the case did not
   declare. That symbol is `read_byte` inlined: `read_byte` is one statement,
@@ -262,9 +267,10 @@ against `ld a1, 0x0(a0)` at `address=0x7`, a plain load through what that
 returned.
 
 **`tools/verdicts.py` could enforce the Capstone half automatically.** Its
-optional `catch_causes` key, which SQLite's two configurations declare as
-`[25, 28]`, would score a `cause=24` fault MISSED. The key does not exist on
-`dev`, so it is not declared here. Two things would have to happen in the same
+optional `catch_causes` key, proposed in PR #259, would score a `cause=24` fault
+MISSED where a configuration declared it as `[25, 28]`. No configuration
+declares it in any tree -- `tools/arms.json` has no such key on `dev` or on any
+open branch -- and the key itself exists only in that pull request. Two things would have to happen in the same
 commit, and neither is this review's to do alone: the key lands in
 `tools/verdicts.py` **with** its entry in `SCHEMA.md` and a test, and this
 corpus's bundle is re-folded, because `derive-verdicts.py --check` re-judges
@@ -274,26 +280,20 @@ used by this corpus alone, so no other corpus's numbers move -- but "no other
 corpus moves" is not the same as "safe to declare", and an earlier revision of
 this paragraph ran the two together.
 
-### Two cells that moved for a reason worth recording
+### One cell that moved for a reason worth recording
 
-**Case 02 and case 04 were content-dependent until they were pinned.** 02 was
+**Case 02 and case 04 depend on the contents of neighbouring memory.** 02 was
 `D 5` on the pools arm in `results/2026-10-10-sublet-isa` and MISSED in the
 first full run of 2026-10-18; 04 was MISSED in that run and `cause=24` in the
 re-run, from the same image and the same trigger. `_copy_characters` copies a
 length taken from the field the overread fetched, so what the copy does depends
-on what lies past the object, and CPython randomises that per process. A cell
-that turns on the contents of neighbouring memory is not a property of the
-mechanism.
+on what lies past the object, and CPython randomises that per process.
 
-That is why 02, 03 and 04 were re-measured with `PYTHONHASHSEED=0` and five
-repeats on each of the three arms. Pinned, every cell is the same on all five:
-02 and 03 are `cause=28` catches on the pools arm with the faulting pc differing
-only in load base, 04 misses on all three arms, and CheriBSD is silent on all
-three with its `si_code` selftest passing before each repeat. Two readings
-disappeared under the pin and were artefacts -- 03's `si_code=2` and 04's
-`cause=24`. **The five-repeat runs are not in the committed bundle**, which
-holds one run per arm; they are recorded in each case's `note`, and the figure
-a reader should take from the table is the bundle's.
+Both read from the declared bundle, like every other row in the table: 02 is
+MISSED on both virtual arms, 04 is MISSED on `virtual-malloc` and `CAUGHT`
+`cause=28` in `_copy_characters` on `virtual-nested-pools`. The
+`PYTHONHASHSEED=0` repeats run during the review are not in the committed
+bundle and are not what the table reports.
 
 **Case 16's fault was real and unattributable, and the reason was a symbol
 name.** The pools arm faults `cause=28` in `advance_with_locations`, which was
