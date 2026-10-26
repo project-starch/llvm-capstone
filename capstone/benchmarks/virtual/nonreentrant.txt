@@ -1,0 +1,6 @@
+# programs whose iterations do not repeat (a check that changes, or verification lost after the
+# first iteration) in the sizing run (resize.py): run one timed iteration per process, "0 1"
+crc32
+huffbench
+huffbench-libc
+wikisort
