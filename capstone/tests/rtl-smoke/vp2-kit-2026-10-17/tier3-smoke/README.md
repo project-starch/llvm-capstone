@@ -9649,3 +9649,14 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - **An instrument note:** a first count read 0 fdiv/fsqrt in all three images. The disassembler decodes no F/D
     instruction under the capstone64 triple unless `--mattr=+f,+d` is given; it printed `unimp` instead. That zero was
     the instrument's, and the counts above are with the flag.
+
+### Batch 1, k2 read (board 2, 17:17-18:38): 214 of 214 processes clean, every program in both arms
+
+- **Records:** `records/b2bs-perfmain-k2-b2.result-lines.txt`, and k1's `records/b2bs-perfmain-k1-b1.result-lines.txt`
+  (k1 read above).
+- **k2's FP-list programs all pass every process** (static FP ops from `--mattr=+f,+d`):
+  - fir and jfdctint have no FP instructions;
+  - matmult-float is fadd.s and fmul.s only;
+  - minver has 3 fdiv.s and an exact FNV check.
+- minver's pass beside ludcmp's failure (also 3 fdiv.s) fits the per-operand reading: a program fails only if a divide
+  lands on a bad case. It does not test that reading.
