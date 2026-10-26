@@ -1,0 +1,49 @@
+# tier3-httpd-b2.sh c8b2323cdf52dda3 dry run, 2026-10-26 03:5x: run-virtual-cases.py stubbed (it writes the committed QEMU reference's
+# verdicts; FLIP=<case prefix> flips one; VB= the transcript's vbatch END rc), busy and the hub stubbed; the image and kit gates run for real.
+
+## ok
+HT apr-pool-repros virtual-malloc BEGIN 03:54:19 board 1 images defect-00=557eb658eaf61b74 ctl 1ab83cb44a1b7e5f booking 91
+HT apr-pool-repros virtual-malloc END rc=0 03:54:19 :: --- stub apr-pool-repros virtual-malloc <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b1
+HT apr-pool-repros virtual-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+HT apr-pool-repros virtual-malloc readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT apr-pool-repros virtual-nested-pools BEGIN 03:54:19 board 1 images defect-00=e8d64f56c1cc64c1 ctl 9a91407b685983f7 booking 91
+HT apr-pool-repros virtual-nested-pools END rc=0 03:54:19 :: --- stub apr-pool-repros virtual-nested-pools <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b1
+HT apr-pool-repros virtual-nested-pools COMPARE vs reference rc=0 :: 1 of 1 cells the same
+HT apr-pool-repros virtual-nested-pools readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT bucket-repros virtual-malloc BEGIN 03:54:19 board 1 images defect-00=e99403d2ed6d274a defect-01=1bfbefa29b758ea2 defect-02=31b05fdb2f9c4371 defect-03=67e04b6976a70b0d defect-04=eaf059ff9036fe40 defect-05=2879cd5cb81442ce defect-06=4907128b64ec3027 defect-07=4d462eae3e1f8b21 ctl e0f9649489ee2966 booking 91
+HT bucket-repros virtual-malloc END rc=0 03:54:19 :: --- stub bucket-repros virtual-malloc <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b1
+HT bucket-repros virtual-malloc COMPARE vs reference rc=0 :: 8 of 8 cells the same
+HT bucket-repros virtual-malloc readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT bucket-repros virtual-nested-pools BEGIN 03:54:20 board 1 images defect-00=1de59e74d375ec39 defect-01=61191d55c9571e57 defect-02=ed8dfb70b31b508d defect-03=2e0801807a31319c defect-04=22abcc8028e9d920 defect-05=0b5b574c9cebdb2e defect-06=14c4919e0db03069 defect-07=40bcc58163b70c20 ctl a954023b05d09ff7 booking 91
+HT bucket-repros virtual-nested-pools END rc=0 03:54:20 :: --- stub bucket-repros virtual-nested-pools <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b1
+HT bucket-repros virtual-nested-pools COMPARE vs reference rc=0 :: 8 of 8 cells the same
+HT bucket-repros virtual-nested-pools readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT board1 DONE 03:54:20
+
+## flip
+HT apr-pool-repros virtual-malloc BEGIN 03:54:20 board 2 images defect-00=557eb658eaf61b74 ctl 1ab83cb44a1b7e5f booking 92
+HT apr-pool-repros virtual-malloc END rc=0 03:54:20 :: --- stub apr-pool-repros virtual-malloc <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b2
+HT apr-pool-repros virtual-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+HT apr-pool-repros virtual-malloc readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT apr-pool-repros virtual-nested-pools BEGIN 03:54:20 board 2 images defect-00=e8d64f56c1cc64c1 ctl 9a91407b685983f7 booking 92
+HT apr-pool-repros virtual-nested-pools END rc=0 03:54:20 :: --- stub apr-pool-repros virtual-nested-pools <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b2
+HT apr-pool-repros virtual-nested-pools COMPARE vs reference rc=0 :: 1 of 1 cells the same
+HT apr-pool-repros virtual-nested-pools readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT bucket-repros virtual-malloc BEGIN 03:54:20 board 2 images defect-00=e99403d2ed6d274a defect-01=1bfbefa29b758ea2 defect-02=31b05fdb2f9c4371 defect-03=67e04b6976a70b0d defect-04=eaf059ff9036fe40 defect-05=2879cd5cb81442ce defect-06=4907128b64ec3027 defect-07=4d462eae3e1f8b21 ctl e0f9649489ee2966 booking 92
+HT bucket-repros virtual-malloc END rc=0 03:54:20 :: --- stub bucket-repros virtual-malloc <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b2
+HT bucket-repros virtual-malloc COMPARE vs reference rc=1 :: 7 of 8 cells the same
+DIFF 03_d9c2352952_buckets_from_pool_that_dies_first: reference ('MISSED', None, None, None, None) board ('CAUGHT', None, None, None, None)
+HT bucket-repros virtual-malloc readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT bucket-repros virtual-nested-pools BEGIN 03:54:20 board 2 images defect-00=1de59e74d375ec39 defect-01=61191d55c9571e57 defect-02=ed8dfb70b31b508d defect-03=2e0801807a31319c defect-04=22abcc8028e9d920 defect-05=0b5b574c9cebdb2e defect-06=14c4919e0db03069 defect-07=40bcc58163b70c20 ctl a954023b05d09ff7 booking 92
+HT bucket-repros virtual-nested-pools END rc=0 03:54:20 :: --- stub bucket-repros virtual-nested-pools <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b2
+HT bucket-repros virtual-nested-pools COMPARE vs reference rc=1 :: 7 of 8 cells the same
+DIFF 03_d9c2352952_buckets_from_pool_that_dies_first: reference ('CAUGHT', 'probe', 25, 'read_probe', 20) board ('MISSED', 'probe', 25, 'read_probe', 20)
+HT bucket-repros virtual-nested-pools readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT board2 DONE 03:54:20
+
+## vb
+HT apr-pool-repros virtual-malloc BEGIN 03:54:20 board 1 images defect-00=557eb658eaf61b74 ctl 1ab83cb44a1b7e5f booking 91
+HT apr-pool-repros virtual-malloc END rc=0 03:54:20 :: --- stub apr-pool-repros virtual-malloc <mnt-hdd>/capstone/t3-smoke/bkit9-b2-b1
+HT apr-pool-repros virtual-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+HT apr-pool-repros virtual-malloc readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT STOP after apr-pool-repros virtual-malloc: the boot did not complete
