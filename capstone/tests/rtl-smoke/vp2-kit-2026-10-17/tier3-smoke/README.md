@@ -9631,3 +9631,21 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
 - **The decisive check is host-side,** and it is the runtime lane's call because it is a QEMU change: run the same
   images on a twin whose fdiv/fsqrt round as the RTL does (a truncated 56-bit quotient with sticky from 4 extra bits;
   a 57-bit isqrt). If ludcmp and st then read VERIFY-FAILED, the attribution is closed.
+- **The count the amended prediction asks for, taken before k3 boots** (`llvm-objdump --mattr=+f,+d` on each T1
+  image; static counts):
+
+| program (kit) | fdiv.d | fsqrt.d | fdiv.s | k1 reading |
+|---|---|---|---|---|
+| nbody (k3) | 7 | 1 | 0 | not yet read |
+| st (k1) | 9 | 5 (2 in Calc_LinCorrCoef) | 0 | fails, every process |
+| ludcmp (k1) | 0 | 0 | 3 | fails, every process |
+| qurt (k1) | 2 | 0 | 7 | passes (tolerant check) |
+| expint (k1) | 0 | 0 | 0 | passes |
+
+  - nbody's sqrt is lowered to an inline fsqrt.d, so it does NOT go through the immune libm path. Its exposure is 7
+    fdiv.d and 1 fsqrt.d.
+  - ludcmp divides in SINGLE precision only. If ludcmp's failure is this defect, the defect reaches fdiv.s too. The rtl
+    lane's 512 cases test only the double operations.
+  - **An instrument note:** a first count read 0 fdiv/fsqrt in all three images. The disassembler decodes no F/D
+    instruction under the capstone64 triple unless `--mattr=+f,+d` is given; it printed `unimp` instead. That zero was
+    the instrument's, and the counts above are with the flag.
