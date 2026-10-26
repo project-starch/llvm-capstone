@@ -3701,7 +3701,7 @@ bare kit (the prediction on c721c1a2a: 15 at the legal load).
 a clear, so it can no longer reach an unrelated exception. That commit also moves every consuming LDC's clear into
 LDC_CLEAR_WAIT, so the fixed tree's readings support the fix without isolating the scoping alone.
 
-### R-62 — `fdiv` and `fsqrt` are not correctly rounded: fpnew 0.7.0's divide/sqrt unit takes its round-to-nearest-even sticky bit from a few extra quotient bits only, never from the remainder, so a result just above half an ulp rounds DOWN to the even neighbour (sim: `.d` 23 and 19 of 512, `.s` 53 and 27 of 512, each 1 ulp toward zero) · `CONFIRMED ON SILICON 2026-10-26 on bitstream 2 (board 1, N=1; the double operations read the simulated vector exactly, bare kit fp-divsqrt-bare-2026-10-26, board lane ca7a573b0ffd); FIX IN RTL, simulation only: capstone-ariane r62-divsqrt a73a7c670 + e7af48457 (round-to-nearest correct for normal results; the rounding-mode decode of R-63 in the same file), lint PASS at baseline, not yet synthesised. RTL defect in the vendored FPU (core/cvfpu at 3116391 "Release 0.7.0", unit fpu_div_sqrt_mvp), on every bitstream that carries it; found 2026-10-26 by the RTL lane; root cause read in source and claim-audited twice; the BEEBS deviations on bitstream 2 (ludcmp, st, minver) attributed to it by an exact-value match`
+### R-62 — `fdiv` and `fsqrt` are not correctly rounded: fpnew 0.7.0's divide/sqrt unit takes its round-to-nearest-even sticky bit from a few extra quotient bits only, never from the remainder, so a result just above half an ulp rounds DOWN to the even neighbour (sim: `.d` 23 and 19 of 512, `.s` 53 and 27 of 512, each 1 ulp toward zero) · `CONFIRMED ON SILICON 2026-10-26 on bitstream 2 at N=2 cross-board (the double operations read the simulated vector exactly on both boards, byte-identical: bare kit fp-divsqrt-bare-2026-10-26, board 1 ca7a573b0ffd, board 2 490119e05f3d); FIX IN RTL, simulation only: capstone-ariane r62-divsqrt a73a7c670 + e7af48457 (round-to-nearest correct for normal results; the rounding-mode decode of R-63 in the same file), lint PASS at baseline, not yet synthesised. RTL defect in the vendored FPU (core/cvfpu at 3116391 "Release 0.7.0", unit fpu_div_sqrt_mvp), on every bitstream that carries it; found 2026-10-26 by the RTL lane; root cause read in source and claim-audited twice; the BEEBS deviations on bitstream 2 (ludcmp, st, minver) attributed to it by an exact-value match`
 
 Siblings: R-52 (the earlier FP defect on silicon, a WRITE-BACK fault, fixed; a different mechanism, values there were
 the destination's earlier contents, not 1 ulp off), Q-34 (a different FP-adjacent divergence, misaligned accesses).
@@ -3808,7 +3808,7 @@ The upstream alternative was a cvfpu revision with `DivSqrtSel`/THMULTI (the C91
 89-commit bump touching the FMA and cast units too, it was not read for correctness, and it is not taken.
 Bitstream-3 scope note, row (d).
 
-### R-63 — `fdiv`/`fsqrt` under RDN round toward +inf and under RUP toward −inf, and RMM truncates: fpnew hands its rounding-mode encoding to the divide/sqrt unit unmapped, and the unit numbers the modes differently · `FIX IN RTL, simulation only: capstone-ariane r62-divsqrt e7af48457 (the same patched normaliser as R-62). Found 2026-10-26 by the R-62 audit, read in source and confirmed in simulation; on every bitstream that carries fpnew 0.7.0's divsqrt, bitstream 2 included (silicon not read)`
+### R-63 — `fdiv`/`fsqrt` under RDN round toward +inf and under RUP toward −inf, and RMM truncates: fpnew hands its rounding-mode encoding to the divide/sqrt unit unmapped, and the unit numbers the modes differently · `CONFIRMED ON SILICON 2026-10-26 on bitstream 2 at N=2 cross-board (bare kit fp-rm-bare-2026-10-26, pre-registered at land/rtl-rm-kit 75f129f56497 and board lane 411e93dc1ebc; both boards read the simulated bitstream-2 vector exactly and byte-identically, board lane 98b7b798f9d4); FIX IN RTL, simulation only: capstone-ariane r62-divsqrt e7af48457 (the same patched normaliser as R-62). Found 2026-10-26 by the R-62 audit, read in source; on every bitstream that carries fpnew 0.7.0's divsqrt`
 
 Sibling: R-62, the same unit and the same file, a different mechanism (which bit decides the rounding, not which
 mode is applied).
@@ -3828,7 +3828,12 @@ rationals):
 **Fix:** the normaliser's round-up `case` decodes fpnew's encoding. The mantissa is a magnitude, so RDN rounds it up
 for a negative result, RUP for a positive one, and RMM whenever the round bit is set (ties away from zero).
 **Limit:** the directed modes still need the remainder when the computed extra bits are all zero (R-62, remaining).
-Silicon has not been read; a directed-mode bare arm would read it on bitstream 2 in one boot.
+**On silicon** (bitstream 2, both boards, 2026-10-26): `fp-rm` (image 45a7397cc4d4f099, rec 0x80003000) reads SR 16 and the
+simulated bitstream-2 vector exactly on both boards. RDN and RUP are exchanged value for value, and RMM truncates
+sqrt(2) to …bcc. It was checked here by script against the PREREG (image prefix, rec, SR, sixteen values).
+**Reach** (the board lane's census, `98b7b798f9d4`, not re-run here): over all 152 T1 perf images there is no fdiv/fsqrt with a static directed mode (the
+encodings carry rm 7, dynamic; dtoa's rtz fcvt is the pattern's positive control). fcsr is written only by the
+runtime's fesetenv, which no program object references. So R-63 cannot reach the perf run.
 
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 
