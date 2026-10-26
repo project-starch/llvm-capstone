@@ -9184,3 +9184,40 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   (both r59 images exact), Q-24 CONFIRMED ON SILICON (q24-deleg-on exact).
 - **As predicted.** This was the queue's first item after the Juliet stop (addendum d1fba0ad3725 and its correction
   f1460dce5ffd). Each board went straight on to fault_mstatus x200.
+
+### Bitstream 2, result: fault_mstatus x200 on each board. Every one of the nine new cause-13 events reads MPRV = 0 (mstatus 0xa00002000, MPP 0), so H1 is refuted for every event read; two events carried one refusal, not two (2026-10-26 12:47-13:31)
+
+- **Records:**
+  - `records/b2bs-uaf-ms200-b1.result-lines.txt` (board 1, bkit9-b2-ms1, 12:47-13:24);
+  - `records/b2bs-uaf-ms200-b2.result-lines.txt` (board 2, bkit9-b2-ms2, 12:53-13:31).
+  - Pre-registration e97af7bb27bb, addendum e50f65806556 (x200 per board).
+- **The runs:** on each board, steps.json reads completed True, n 200, 202 steps. The transcript reads back
+  `@@PARAM fault_mstatus=Y`. The bounds control faulted cause 28. Readings 0 on both boards.
+
+| | board 1 | board 2 |
+|---|---|---|
+| cause 13 / cause 25 | 3 / 197 | 6 / 194 |
+| cause-13 runs | uaf-8, 85, 145 | uaf-25, 111, 155, 186, 195, 199 |
+| refusals (the boot's whole dmesg) | 6 | 10 |
+| refused-escape lines, on cause-13 runs | 6 | 10 |
+| mstatus word / MPRV / MPP, every line | 0xa00002000 / 0 / 0 | 0xa00002000 / 0 / 0 |
+| mstatus lines on cause-25 runs | 0 | 0 |
+
+- **Against the predictions:**
+  - **2 to 10 cause-13 events per board: holds** (3 and 6).
+  - **Each refusal followed by its mstatus line: holds** (mstatus_lines = refused on every event).
+  - **No mstatus line on a cause-25 run: holds.** mstatus-read.py tallies by the run's own cause, and has no cause-25
+    entry on either board.
+  - **Each event with two refusals: holds for 7 of 9, not for 2.** Board 2's uaf-155 and uaf-195 carry ONE refusal
+    each.
+    - This is not a reader artifact. The boot-wide dmesg dump (DMESG-ALL) also lists a single "resolve refused" line
+      at 1481.83 s and at 1840.62 s, beside pairs for the other four events. Its REFUSED count is 10.
+    - Every earlier cause-13 event on this bitstream carried two refusals: the 8 runs of the 400-run record, and 0a's one
+      event. This is reported, not explained.
+- **The H1 rule** (unchanged since 0a) refutes H1 for any event with MPRV = 0.
+  - Every refusal of all nine events reads MPRV = 0. With 0a's event, H1 is refuted for all 10 cause-13 events read
+    on bitstream 2, on both boards.
+  - The word is non-zero and identical in every event (0xa00002000, MPP 0), so the escape wrote it. By the rule, H2-H4
+    remain, and the aperture instrument goes into bitstream 3.
+- **The rate:** 3 of 200 and 6 of 200 here, against 1 of 200 in 0a and 10 of 400 in the earlier record. Together that is
+  20 of 1,000 uaf-control runs, 2.0%.

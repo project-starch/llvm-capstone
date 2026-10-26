@@ -1,0 +1,93 @@
+# fault_mstatus on the uaf control x200, board 2 (tier3-uaf-repeat-ms.sh, kit bkit9-b2-ms2; pre-registered e97af7bb27bb, addendum e50f65806556): result lines (the kernel banner line omitted), then mstatus-read.py.
+# The DMESG lines sample a 12-line dmesg tail every 10th run, so a cause-25 run's sample can show the previous cause-13 run's refusals (same timestamps); mstatus-read.py counts each run's own new lines.
+UR BEGIN 12:53:29 board 2 booking 393 N=200 args --no-trace --dmesg kit bkit9-b2-ms2
+UR END rc=0 13:31:01
+BOUNDS-0 {'kind': 'signal', 'value': 11, 'fault': 'capstone-exec: domain fault cause=28 pc=0x3fb0510c24 address=0x3fb0611050 entry=0x3fb0500868 code=0x3fb0500000-0x3fb0580000 last=0x42 preparing=0x42 sha256=b1decb0612856121de37383cbe4e812e1
+DMESG uaf-10-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-20-plain cause=25 dm_lines=12 refused=0
+RUN uaf-25-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f97090c70 address=0x3f97188040 entry=0x3f97080868 code=0x3f97080000-0x3f97100000 last=0x42 preparing=0x42 sha256=b1decb0612856121de3
+DMESG uaf-25-plain cause=13 dm_lines=12 refused=2
+  DM [  328.460198] capstone_vm: resolve refused at arena: addr 0x3f97188040 cause 13 need 0x1 pc 0x3f97090c70 prev(addr 0x3f97188008 cause 13 rep 0) no lazy arena covers this address
+  DM [  328.486665] capstone_vm: resolve refused at arena: addr 0x3f97188040 cause 13 need 0x1 pc 0x3f97090c70 prev(addr 0x3f97188008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-30-plain cause=25 dm_lines=12 refused=2
+  DM [  328.460198] capstone_vm: resolve refused at arena: addr 0x3f97188040 cause 13 need 0x1 pc 0x3f97090c70 prev(addr 0x3f97188008 cause 13 rep 0) no lazy arena covers this address
+  DM [  328.486665] capstone_vm: resolve refused at arena: addr 0x3f97188040 cause 13 need 0x1 pc 0x3f97090c70 prev(addr 0x3f97188008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-40-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-50-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-60-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-70-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-80-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-90-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-100-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-110-plain cause=25 dm_lines=12 refused=0
+RUN uaf-111-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f7fe90c70 address=0x3f7ffae040 entry=0x3f7fe80868 code=0x3f7fe80000-0x3f7ff00000 last=0x42 preparing=0x42 sha256=b1decb0612856121de
+DMESG uaf-111-plain cause=13 dm_lines=12 refused=2
+  DM [ 1092.768518] capstone_vm: resolve refused at arena: addr 0x3f7ffae040 cause 13 need 0x1 pc 0x3f7fe90c70 prev(addr 0x3f7ffae008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1092.827137] capstone_vm: resolve refused at arena: addr 0x3f7ffae040 cause 13 need 0x1 pc 0x3f7fe90c70 prev(addr 0x3f7ffae008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-120-plain cause=25 dm_lines=12 refused=1
+  DM [ 1092.827137] capstone_vm: resolve refused at arena: addr 0x3f7ffae040 cause 13 need 0x1 pc 0x3f7fe90c70 prev(addr 0x3f7ffae008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-130-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-140-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-150-plain cause=25 dm_lines=12 refused=0
+RUN uaf-155-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3fab690c70 address=0x3fab75c040 entry=0x3fab680868 code=0x3fab680000-0x3fab700000 last=0x42 preparing=0x42 sha256=b1decb0612856121de
+DMESG uaf-155-plain cause=13 dm_lines=12 refused=1
+  DM [ 1481.826693] capstone_vm: resolve refused at arena: addr 0x3fab75c040 cause 13 need 0x1 pc 0x3fab690c70 prev(addr 0x3fab75c008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-160-plain cause=25 dm_lines=12 refused=1
+  DM [ 1481.826693] capstone_vm: resolve refused at arena: addr 0x3fab75c040 cause 13 need 0x1 pc 0x3fab690c70 prev(addr 0x3fab75c008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-170-plain cause=25 dm_lines=12 refused=0
+DMESG uaf-180-plain cause=25 dm_lines=12 refused=0
+RUN uaf-186-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3f9df10c70 address=0x3f9e01d040 entry=0x3f9df00868 code=0x3f9df00000-0x3f9df80000 last=0x42 preparing=0x42 sha256=b1decb0612856121de
+DMESG uaf-186-plain cause=13 dm_lines=12 refused=2
+  DM [ 1756.640550] capstone_vm: resolve refused at arena: addr 0x3f9e01d040 cause 13 need 0x1 pc 0x3f9df10c70 prev(addr 0x3f9e01d008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1756.668407] capstone_vm: resolve refused at arena: addr 0x3f9e01d040 cause 13 need 0x1 pc 0x3f9df10c70 prev(addr 0x3f9e01d008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-190-plain cause=25 dm_lines=12 refused=2
+  DM [ 1756.640550] capstone_vm: resolve refused at arena: addr 0x3f9e01d040 cause 13 need 0x1 pc 0x3f9df10c70 prev(addr 0x3f9e01d008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1756.668407] capstone_vm: resolve refused at arena: addr 0x3f9e01d040 cause 13 need 0x1 pc 0x3f9df10c70 prev(addr 0x3f9e01d008 cause 13 rep 0) no lazy arena covers this address
+RUN uaf-195-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3fb2610c70 address=0x3fb26c5040 entry=0x3fb2600868 code=0x3fb2600000-0x3fb2680000 last=0x42 preparing=0x42 sha256=b1decb0612856121de
+DMESG uaf-195-plain cause=13 dm_lines=12 refused=1
+  DM [ 1840.624903] capstone_vm: resolve refused at arena: addr 0x3fb26c5040 cause 13 need 0x1 pc 0x3fb2610c70 prev(addr 0x3fb26c5008 cause 13 rep 0) no lazy arena covers this address
+RUN uaf-199-plain rc={'kind': 'signal', 'value': 11, 'fault': 'FL capstone-exec: domain fault cause=13 pc=0x3fabf10c70 address=0x3fabfdc040 entry=0x3fabf00868 code=0x3fabf00000-0x3fabf80000 last=0x42 preparing=0x42 sha256=b1decb0612856121de
+DMESG uaf-199-plain cause=13 dm_lines=12 refused=3
+  DM [ 1840.624903] capstone_vm: resolve refused at arena: addr 0x3fb26c5040 cause 13 need 0x1 pc 0x3fb2610c70 prev(addr 0x3fb26c5008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1878.578016] capstone_vm: resolve refused at arena: addr 0x3fabfdc040 cause 13 need 0x1 pc 0x3fabf10c70 prev(addr 0x3fabfdc008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1878.636003] capstone_vm: resolve refused at arena: addr 0x3fabfdc040 cause 13 need 0x1 pc 0x3fabf10c70 prev(addr 0x3fabfdc008 cause 13 rep 0) no lazy arena covers this address
+DMESG uaf-200-plain cause=25 dm_lines=12 refused=3
+  DM [ 1840.624903] capstone_vm: resolve refused at arena: addr 0x3fb26c5040 cause 13 need 0x1 pc 0x3fb2610c70 prev(addr 0x3fb26c5008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1878.578016] capstone_vm: resolve refused at arena: addr 0x3fabfdc040 cause 13 need 0x1 pc 0x3fabf10c70 prev(addr 0x3fabfdc008 cause 13 rep 0) no lazy arena covers this address
+  DM [ 1878.636003] capstone_vm: resolve refused at arena: addr 0x3fabfdc040 cause 13 need 0x1 pc 0x3fabf10c70 prev(addr 0x3fabfdc008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL @@HB 55 out=203B/12L
+DMESG-ALL REFUSED 10
+DMESG-ALL DA [  328.460198] capstone_vm: resolve refused at arena: addr 0x3f97188040 cause 13 need 0x1 pc 0x3f97090c70 prev(addr 0x3f97188008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [  328.486665] capstone_vm: resolve refused at arena: addr 0x3f97188040 cause 13 need 0x1 pc 0x3f97090c70 prev(addr 0x3f97188008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1092.768518] capstone_vm: resolve refused at arena: addr 0x3f7ffae040 cause 13 need 0x1 pc 0x3f7fe90c70 prev(addr 0x3f7ffae008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1092.827137] capstone_vm: resolve refused at arena: addr 0x3f7ffae040 cause 13 need 0x1 pc 0x3f7fe90c70 prev(addr 0x3f7ffae008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1481.826693] capstone_vm: resolve refused at arena: addr 0x3fab75c040 cause 13 need 0x1 pc 0x3fab690c70 prev(addr 0x3fab75c008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1756.640550] capstone_vm: resolve refused at arena: addr 0x3f9e01d040 cause 13 need 0x1 pc 0x3f9df10c70 prev(addr 0x3f9e01d008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1756.668407] capstone_vm: resolve refused at arena: addr 0x3f9e01d040 cause 13 need 0x1 pc 0x3f9df10c70 prev(addr 0x3f9e01d008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1840.624903] capstone_vm: resolve refused at arena: addr 0x3fb26c5040 cause 13 need 0x1 pc 0x3fb2610c70 prev(addr 0x3fb26c5008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1878.578016] capstone_vm: resolve refused at arena: addr 0x3fabfdc040 cause 13 need 0x1 pc 0x3fabf10c70 prev(addr 0x3fabfdc008 cause 13 rep 0) no lazy arena covers this address
+DMESG-ALL DA [ 1878.636003] capstone_vm: resolve refused at arena: addr 0x3fabfdc040 cause 13 need 0x1 pc 0x3fabf10c70 prev(addr 0x3fabfdc008 cause 13 rep 0) no lazy arena covers this address
+TALLY plain cause 13: 6
+TALLY plain cause 25: 194
+completed=True steps=202 of 202 transcript=<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b2/uaf-repeat-ms-x200/work/board.txt
+UR readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+UR board2 DONE 13:31:01
+RUN uaf-25-plain cause=13 refused=2 mstatus_lines=2
+  MS [  328.463728] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3f97188040 cause 13
+  MS [  328.488698] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3f97188040 cause 13
+RUN uaf-111-plain cause=13 refused=2 mstatus_lines=2
+  MS [ 1092.770647] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3f7ffae040 cause 13
+  MS [ 1092.829255] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3f7ffae040 cause 13
+RUN uaf-155-plain cause=13 refused=1 mstatus_lines=1
+  MS [ 1481.828817] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3fab75c040 cause 13
+RUN uaf-186-plain cause=13 refused=2 mstatus_lines=2
+  MS [ 1756.644105] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3f9e01d040 cause 13
+  MS [ 1756.670491] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3f9e01d040 cause 13
+RUN uaf-195-plain cause=13 refused=1 mstatus_lines=1
+  MS [ 1840.627026] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3fb26c5040 cause 13
+RUN uaf-199-plain cause=13 refused=2 mstatus_lines=2
+  MS [ 1878.580148] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3fabfdc040 cause 13
+  MS [ 1878.638152] capstone_vm: refused-escape mstatus 0xa00002000 mprv 0 mpp 0 addr 0x3fabfdc040 cause 13
+TALLY run-cause 13 mstatus 0xa00002000 mprv 0 mpp 0: 10
+# mstatus-read rc=0
+# steps.json: completed True, n 200, 202 steps; the board transcript reads back @@PARAM fault_mstatus=Y
