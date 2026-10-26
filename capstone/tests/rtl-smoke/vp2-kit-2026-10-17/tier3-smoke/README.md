@@ -9362,3 +9362,36 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - The 112-instruction spread across the empties is the same order as one entry's cost.
   - Settling it is the instrument owner's: compare instret per entry on a probe whose entry count varies at a fixed
     workload.
+
+### The perf evaluation's PILOT: 68 processes in one boot, board 2, pre-registered (2026-10-26 15:1x, before the boot)
+
+- **Why:** the runtime lane's sampling plan, `wt-bench/capstone/benchmarks/virtual/PREREG-t1-t2-sampling.md` rev 2,
+  "The pilot". It estimates noise before the main run. Board 1 stays free.
+- **The kit:** bkit10-perf-b2 is bkit9-b2-b2 with only the probe's adapter swapped (launcher 978c09d61f774315, module
+  9c60fb53f80ce67e). SHA256SUMS differ in the two adapter lines only, and the modinfo gate is as the probe's.
+- **The stage:** the runtime lane's `perf/pilot/kit/stage` (8.4 MB), checked against its SHA256SUMS: capstone-vexec
+  978c09d6, run-pilot.sh 7cccbc7b9d067f19, and T1/ and T2/ with 16 images each.
+  - The images come from dev c2b137cdfee6 WITHOUT the heap-ids fix, deliberately: this is noise only, and pre-fix is
+    the conservative side.
+  - run-pilot.sh was read before staging. It makes 68 `capstone-vexec` calls in steps.tsv's order, each followed by
+    one dmesg read: 5 programs x 2 arms x 6 processes in ABBA order, plus ctl-empty and ctl-loop x 2 per arm, each
+    with "1 10" (one warm-up, then 10 timed iterations).
+  - A weakness, read in it: each @@PERF-END quotes dmesg's LAST bench line. A process that printed none would carry the
+    previous one's. tier3-perfpilot.py reports a repeated quote.
+- **What runs:** `tier3-perfpilot-b2.sh 2 <log>`, which calls tier3-perfpilot.py. The whole stage goes in as one batch
+  step.
+  - Per process, the reader checks: rc; 11 BENCH lines; check= on each, with its suffix; BENCH-ERROR lines;
+    BENCH-DONE failed=; that the order matches steps.tsv; and the quote.
+  - Timeouts nest: the step's 2,700 s sits inside the boot's 13,800 s, which sits inside the wrapper's 14,400 s
+    (`dryrun-perfpilot-b2.txt`).
+  - Dry run: `dryrun-perfpilot-b2.txt`. 68 of 68 read on a good stub. A missing quote is reported as a repeat, and a
+    stopped boot reads NO DATA from the cut and exits 2.
+  - The per-iteration analysis is the runtime lane's.
+- **Predictions** (the runtime lane's, written before the boot):
+  - every process rc=0, with 11 BENCH lines whose check= verifies;
+  - ctl-loop minus ctl-empty instret is about 20,000,002 + ~125 x (extra entries);
+  - instret is constant across the timed iterations of a non-allocating program, up to entries x ~125;
+  - **sglib-rbtree-libc T2 rc=0 on silicon,** because bitstream 2 recycles revoked records. On the old QEMU it
+    exhausted the 64K table after about 40K allocations. A failure here with cause 24 after a NULL malloc is a
+    finding, not a pilot failure.
+  - readings 0.
