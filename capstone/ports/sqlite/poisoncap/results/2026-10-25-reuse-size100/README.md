@@ -30,8 +30,6 @@ pilot README; the qualification of every binary named here is in its `qualificat
 | 2 | p12; aad6a979 / 97b02659 | p12; 9836684d / 6bfe4d1b |
 | 3 | p12; aad6a979 / 97b02659 | p13; 9836684d / 6bfe4d1b |
 
-Sublet set 3 was still running when this was committed; `checks.txt` lists the runs collected.
-
 PoisonCap: E3c protocol (their FPGA kernel's options, libc revocation default 0 at boot and 1 from the run),
 `reuse/launch-poisoncap-arm.sh`. Sublet: the paged virtual platform, `reuse/launch-capstone-arm.sh`.
 
@@ -47,7 +45,7 @@ PoisonCap: E3c protocol (their FPGA kernel's options, libc revocation default 0 
 - Sublet's revocation moves no address: the two arms' reports are identical.
 - The two controls issue the same number of blocks and reuse as many, but their bins differ slightly (as at
   `--size 1`); each protected curve is read against its own control.
-- All three PoisonCap sets are identical in every counter and bin, set 1's earlier wrapper included; Sublet sets 1
-  and 2 likewise.
-- Run times: PoisonCap 16,656-16,871 s on p13 and 20,239-20,380 s on p12; Sublet 31,783 / 31,960 s on p13 and 36,247 / 35,465 s on p12.
+- All three sets of each system are identical in every counter and bin (12 runs, all admissible), PoisonCap's
+  set 1 with its earlier wrapper included.
+- Run times: PoisonCap 16,656-16,871 s on p13 and 20,239-20,380 s on p12; Sublet 31,510-31,960 s on p13 and 35,465 / 36,247 s on p12.
   Not a cost comparison (different platforms, shared hosts).

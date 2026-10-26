@@ -990,5 +990,201 @@
   ],
   "qualified": true,
   "problems": []
+ },
+ {
+  "system": "sublet",
+  "set": 3,
+  "arm": "off",
+  "host": "p13",
+  "binary_sha256": "9836684d734550f20747bedb3228d0c3ab70526a2896e3909a843fb3877ee45c",
+  "module_args": "supervisor_slots=32",
+  "exit": 0,
+  "total_seconds": 31649.83,
+  "tests": [
+   [
+    100,
+    38.329
+   ],
+   [
+    110,
+    60.51
+   ],
+   [
+    120,
+    65.359
+   ],
+   [
+    130,
+    76.768
+   ],
+   [
+    140,
+    100.389
+   ],
+   [
+    142,
+    140.814
+   ],
+   [
+    145,
+    116.635
+   ],
+   [
+    160,
+    30142.533
+   ],
+   [
+    190,
+    34.477
+   ],
+   [
+    210,
+    4.068
+   ],
+   [
+    240,
+    88.039
+   ],
+   [
+    250,
+    16.029
+   ],
+   [
+    260,
+    4.227
+   ],
+   [
+    280,
+    58.262
+   ],
+   [
+    300,
+    42.226
+   ],
+   [
+    320,
+    511.726
+   ],
+   [
+    400,
+    63.742
+   ],
+   [
+    410,
+    48.324
+   ],
+   [
+    980,
+    34.366
+   ],
+   [
+    990,
+    3.007
+   ]
+  ],
+  "report": [
+   "REUSE-GAP memsys5 at=exit installed=1 heap=268435456 unit=16 attempts=52146 issues=52146 releases=52146 reuses=51499 distinct=647 failed=0 moved=20541 inplace=0 live=0 maxunit=12782624 error=0 first_error=- bins=11439,32319,5163,1640,444,234,89,13,20,14,4,44,34,4,9,29,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+   "SQL-CHECK step_row=233900 step_done=400102 step_other=0 first_step_other=0 reset_ok=400086 reset_err=0 first_reset_err=0"
+  ],
+  "qualified": true,
+  "problems": []
+ },
+ {
+  "system": "sublet",
+  "set": 3,
+  "arm": "on",
+  "host": "p13",
+  "binary_sha256": "6bfe4d1b45f051ccfc36d74914080e4ee524094f2651ca93794a5731089ea80b",
+  "module_args": "supervisor_slots=32",
+  "exit": 0,
+  "total_seconds": 31510.82,
+  "tests": [
+   [
+    100,
+    38.874
+   ],
+   [
+    110,
+    61.257
+   ],
+   [
+    120,
+    66.489
+   ],
+   [
+    130,
+    77.645
+   ],
+   [
+    140,
+    99.416
+   ],
+   [
+    142,
+    141.068
+   ],
+   [
+    145,
+    116.557
+   ],
+   [
+    160,
+    30003.437
+   ],
+   [
+    190,
+    34.212
+   ],
+   [
+    210,
+    4.008
+   ],
+   [
+    240,
+    88.451
+   ],
+   [
+    250,
+    15.979
+   ],
+   [
+    260,
+    4.143
+   ],
+   [
+    280,
+    58.748
+   ],
+   [
+    300,
+    41.971
+   ],
+   [
+    320,
+    509.611
+   ],
+   [
+    400,
+    64.201
+   ],
+   [
+    410,
+    48.814
+   ],
+   [
+    980,
+    33.031
+   ],
+   [
+    990,
+    2.908
+   ]
+  ],
+  "report": [
+   "REUSE-GAP memsys5 at=exit installed=1 heap=268435456 unit=16 attempts=52146 issues=52146 releases=52146 reuses=51499 distinct=647 failed=0 moved=20541 inplace=0 live=0 maxunit=12782624 error=0 first_error=- bins=11439,32319,5163,1640,444,234,89,13,20,14,4,44,34,4,9,29,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+   "SQL-CHECK step_row=233900 step_done=400102 step_other=0 first_step_other=0 reset_ok=400086 reset_err=0 first_reset_err=0"
+  ],
+  "qualified": true,
+  "problems": []
  }
 ]
