@@ -34,7 +34,7 @@ import sys
 import tarfile
 import time
 
-REPO = Path(__file__).resolve().parents[4]
+REPO = Path(__file__).resolve().parents[5]
 CORPUS = REPO / 'capstone/bug-corpora/sqlite/engine-repros'
 sys.path.insert(0, str(REPO / 'capstone/ports/common/host/cheribsd'))
 from guest import Guest  # noqa: E402

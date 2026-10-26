@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a QEMU kernel with the options of PoisonCap's FPGA kernel, for their speedtest1 runs.
 #
-#   bash in-container.sh bash .../build-kernel-poison-nodebug.sh
+#   bash platform/in-container.sh bash .../platform/build-kernel-poison-nodebug.sh
 #
 # Their artifact ships two purecap POISON kernels: CHERI-PURECAP-QEMU-POISON (a debug kernel:
 # WITNESS, INVARIANTS, DEADLKRES, which the platform boots) and CHERI-PURECAP-GFE-POISON-NODEBUG (the

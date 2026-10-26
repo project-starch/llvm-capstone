@@ -7,7 +7,7 @@ their published numbers come from their FPGA, which is not available here.
 
 - **Source:** their fork CTSRD-CHERI/sqlite at a879a48e (the commit the artifact's own `manifest` names)
   with the artifact's two uncommitted files laid over it (`src/mem5.c`, `test/speedtest1.c`). After the
-  build the tree equals the artifact's `sqlite/` file for file (`build-speedtest1.sh` checks it), except
+  build the tree equals the artifact's `sqlite/` file for file (`speedtest1/build-speedtest1.sh` checks it), except
   in `build-memsys5-all32`, whose `test/speedtest1.c` is a879a48e's by design.
 - **Build:** their pinned cheribuild (07d5e034), `sqlite-riscv64-purecap --sqlite/build-speedtest`, their
   SDK and CheriBSD sysroot (`build-*/`).
@@ -21,7 +21,7 @@ their published numbers come from their FPGA, which is not available here.
   - `CHERI-PURECAP-QEMU-POISON-NODEBUG` (`kernel-poison-nodebug/`): their FPGA kernel's options on the
     QEMU board. It is their `CHERI-PURECAP-QEMU-NODEBUG` plus the three option lines of their
     `CHERI-PURECAP-GFE-POISON-NODEBUG`; a new config file, no file of theirs changed
-    (`build-kernel-poison-nodebug.sh`).
+    (`platform/build-kernel-poison-nodebug.sh`).
 - **Arguments:** none. Their `main()` configures memsys5 itself: a 256 MiB heap from `malloc`, minimum 16.
   speedtest1's defaults are then `--size 100 --testset main` with a temporary database.
 
@@ -36,8 +36,8 @@ an edit to `mem5.c`.
 
 ## Results
 
-Runner: `speedtest1-guest.py`, single-user boot (their image's multi-user boot panics). One guest per run.
-Each `*.json` is one run's record, written by the runner as it was at the time (`collect-speedtest1.py`
+Runner: `speedtest1/speedtest1-guest.py`, single-user boot (their image's multi-user boot panics). One guest per run.
+Each `*.json` is one run's record, written by the runner as it was at the time (`speedtest1/collect-speedtest1.py`
 scrubbed paths and user@host strings and added `console_from_serial` and `runner_log_tail` where the
 record lacked them). These records predate the runner's current fields: they have no binary or kernel
 hash (see `build-*/SHA256SUMS` and `kernel-poison-nodebug/SHA256SUMS`), and `running_at_end` means the

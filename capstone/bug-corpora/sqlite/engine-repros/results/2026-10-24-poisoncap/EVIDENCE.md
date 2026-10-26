@@ -54,7 +54,7 @@ CHERI_CAP_SIZE), ...)` (`cheri-helper-utils.h:387` on that branch). Their Toooba
 shift with no mask on bit 1. Neither the branch nor the RTL was built or run here.
 
 The measurement this explains is `runs/ev3-la`, control `uaf_offsets`
-(`ports/sqlite/poisoncap/controls/uaf_offsets.c`): for each offset, a fresh child process allocates a
+(`ports/sqlite/poisoncap/corpus/controls/uaf_offsets.c`): for each offset, a fresh child process allocates a
 128-byte block (a 100-byte request), frees it, and reads one byte at that offset through a pointer
 derived before the free. Offsets 0-31, 55
 and 127: SIGPROT (code 3) at exactly the 16 offsets with bit 1 clear, a normal exit at the 18 with bit 1

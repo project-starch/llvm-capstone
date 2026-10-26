@@ -2,7 +2,7 @@
 # PoisonCap's speedtest1 with the reuse-distance wrapper linked in, and the wrapper's test programs,
 # all against their sqlite3.c and with their compiler and flags. Their sources are not touched.
 #
-#   bash in-container.sh bash .../reuse/build-reuse-poisoncap.sh [VARIANT]   (memsys5 | memsys5-spatial)
+#   bash platform/in-container.sh bash .../reuse/build-reuse-poisoncap.sh [VARIANT]   (memsys5 | memsys5-spatial)
 #
 # Starts from build-speedtest1.sh's VARIANT build (default memsys5: their protection on; memsys5-spatial:
 # their NESTED_TEMPORAL switch off; it is rerun here, so the build directory is that variant's): cheribuild's configured build directory, whose Makefile gives the compiler, the flags,
@@ -21,7 +21,7 @@ P=${POISONCAP_PLATFORM:?run through in-container.sh}
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 VARIANT=${1:-memsys5}
 OUT=$P/speedtest1/reuse-$VARIANT
-bash "$HERE/../build-speedtest1.sh" "$VARIANT"
+bash "$HERE/../speedtest1/build-speedtest1.sh" "$VARIANT"
 B=$P/work/build/sqlite-riscv64-purecap-build
 rm -rf "$OUT"; mkdir -p "$OUT"
 # The Makefile's own compile command (TCC) and link libraries (TLIBS), as make expands them.
