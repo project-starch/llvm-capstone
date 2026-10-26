@@ -73,6 +73,11 @@ static int run_case(void);
 #ifndef SQLITE_HEAP_SIZE
 #define SQLITE_HEAP_SIZE (1024U * 1024U)
 #endif
+/* memsys5's minimum request (SQLITE_CONFIG_HEAP's last argument). PoisonCap's speedtest1 main()
+ * passes 16; --heap-min on both builders sets it for a matched run. */
+#ifndef SQLITE_HEAP_MIN_REQ
+#define SQLITE_HEAP_MIN_REQ 64
+#endif
 #ifdef REPRO322_VIRTUAL_MEMSYS5
 /* The granule macros below are the freestanding branch's too, which includes this header at its
  * own top; this branch needs it as well, and build-virtual.py passes the runtime include for both
@@ -83,7 +88,23 @@ static int run_case(void);
  * compressed encoder truncates it downward and the pool gains authority below itself. aligned(16)
  * was enough when QEMU kept exact shadow bounds; it is not under the compact profile. */
 CAPSTONE_REPR_ASSERT_POW2(SQLITE_HEAP_SIZE, "SQLITE_HEAP_SIZE");
-#ifndef REPRO322_POISONCAP
+#ifdef REPRO322_HEAP_MALLOC
+/* The heap from the C library before main(), as PoisonCap's speedtest1 main() takes its 256 MiB with
+ * malloc, so it is not part of the image (the Sublet launcher refuses a 512 MiB image grant). Aligned
+ * to the bounds granule for the reason above. On PoisonCap the view drops CHERI_PERM_POISON, as the
+ * static array's does below. A failed allocation prints before BEGIN, so the run reads NO-READING. */
+#include <stdlib.h>
+typedef unsigned char repro_heap_t[SQLITE_HEAP_SIZE];
+static repro_heap_t *repro_heap_block;
+__attribute__((constructor)) static void repro_heap_allocate(void) {
+  repro_heap_block = aligned_alloc(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
+                                   ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE), SQLITE_HEAP_SIZE);
+  if (!repro_heap_block) { fputs("CONTROL-FAILED heap allocation\n", stdout); exit(2); }
+}
+#endif
+#if !defined(REPRO322_POISONCAP) && defined(REPRO322_HEAP_MALLOC)
+#define sqlite_heap (*repro_heap_block)
+#elif !defined(REPRO322_POISONCAP)
 static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]
     __attribute__((aligned(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
                            ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE))));
@@ -94,15 +115,20 @@ static unsigned char sqlite_heap[SQLITE_HEAP_SIZE]
 #include <signal.h>
 #include <ucontext.h>
 #include <unistd.h>
+#ifndef REPRO322_HEAP_MALLOC
 static unsigned char sqlite_heap_storage[SQLITE_HEAP_SIZE]
     __attribute__((aligned(CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE) < 16UL
                            ? 16UL : CAPSTONE_REPR_GRANULE_POW2(SQLITE_HEAP_SIZE))));
 typedef unsigned char repro_heap_t[SQLITE_HEAP_SIZE];
+#define REPRO322_HEAP_BASE (&sqlite_heap_storage)
+#else
+#define REPRO322_HEAP_BASE repro_heap_block
+#endif
 /* The array as SQLite receives it: same bounds, CHERI_PERM_POISON removed. Every use of the name
  * goes through this, cases 07 and 22 included, which configure the heap themselves; sizeof still
  * reads the array's size. */
 static repro_heap_t *repro_heap_view(void) {
-  return (repro_heap_t *)cheri_andperm(&sqlite_heap_storage, ~(size_t)CHERI_PERM_POISON);
+  return (repro_heap_t *)cheri_andperm(REPRO322_HEAP_BASE, ~(size_t)CHERI_PERM_POISON);
 }
 #define sqlite_heap (*repro_heap_view())
 /* The faulting PC, as an offset into the object that holds it, for the host to name the function;
@@ -159,7 +185,7 @@ static int repro_init(void) {
     return rc;
   }
 #endif
-  rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof sqlite_heap, 64);
+  rc = sqlite3_config(SQLITE_CONFIG_HEAP, sqlite_heap, (int)sizeof sqlite_heap, SQLITE_HEAP_MIN_REQ);
   if (rc != SQLITE_OK) {
     /* Never fall through to the platform allocator here: that would silently
      * turn the nested arm into the system-allocator arm and the two columns

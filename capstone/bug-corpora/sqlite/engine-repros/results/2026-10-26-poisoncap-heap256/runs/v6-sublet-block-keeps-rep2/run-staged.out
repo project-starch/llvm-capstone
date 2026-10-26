@@ -1,0 +1,3 @@
+run-staged: -cpu rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,svadu=false,x-capstone-supervisor-slots=32
+qemu-lock: global shared + domain block-b.lock exclusive granted 1793005774.2 (waited 0.0 s)
+runs/v6-sublet-block-keeps-rep2/boot/serial.log

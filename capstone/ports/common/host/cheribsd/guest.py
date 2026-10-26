@@ -98,6 +98,8 @@ class Guest:
             ["ssh", *self.ssh_options, "-p", str(self.port), "root@127.0.0.1", command],
             capture_output=True,
             text=True,
+            # A case's stale read can print the bytes it read; strict UTF-8 would end the whole run.
+            errors="replace",
             timeout=timeout,
         )
 

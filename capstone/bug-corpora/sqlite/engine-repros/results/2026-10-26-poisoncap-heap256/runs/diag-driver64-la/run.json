@@ -1,0 +1,17 @@
+{
+ "build": "builds/diag-driver64-la",
+ "expect": "published",
+ "cases": [
+  "16_unfixed_json_each_root_stale_key",
+  "17_28001204f4_json_each_static_stale_key"
+ ],
+ "started_utc": "2026-10-26T09:08:25Z",
+ "unpacked": "9",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "gate": {
+  "heap_perm_poison=0 in every control": true,
+  "reuse_clean returns": true,
+  "uaf_read faults with SIGPROT code 3 and a poison console line": true
+ },
+ "finished_utc": "2026-10-26T09:14:16Z"
+}
