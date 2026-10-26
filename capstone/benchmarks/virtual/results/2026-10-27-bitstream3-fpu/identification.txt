@@ -1,0 +1,2 @@
+@@B3-ID ludcmp rc=0 verify_failed=0 bench=4 BENCH-DONE beebs/ludcmp failed=0
+@@B3-ID st rc=0 verify_failed=0 bench=4 BENCH-DONE beebs/st failed=0

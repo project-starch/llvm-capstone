@@ -1,0 +1,2 @@
+suite	programs	geomean	lo	hi	T2_slower	T2_faster	no_difference
+beebs	3	1.0001	0.9994	1.0009	0	0	3

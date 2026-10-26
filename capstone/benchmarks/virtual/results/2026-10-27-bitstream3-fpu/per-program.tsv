@@ -1,0 +1,4 @@
+suite	program	procs	ratio	lo	hi	blo	bhi	ins_ratio	ins_const	verdict
+beebs	ludcmp	4/4	1.0004	0.9986	1.0021	0.9992	1.0019	1.0000	no	no measurable difference
+beebs	minver	4/4	1.0000	0.9990	1.0010	0.9991	1.0010	1.0000	no	no measurable difference
+beebs	st	4/4	1.0000	0.9982	1.0019	0.9985	1.0016	1.0000	no	no measurable difference

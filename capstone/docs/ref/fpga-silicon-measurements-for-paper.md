@@ -7336,6 +7336,7 @@ cost of per-object lifetimes plus scrub-on-free, not the cost of temporal safety
 | RV8 | 7 | 1.0245 | 1.0228–1.0261 | 4 / 1 / 2 |
 | CoreMark | 1 | 1.0002 | 0.9997–1.0012 | — |
 | BEEBS "-libc" (allocators routed to malloc) | 13 | 1.1067 | 1.1048–1.1085 | 9 / 0 / 4 |
+| controls (ctl-empty, ctl-loop) | 2 | 1.0007 | 0.9972–1.0045 | 0 / 0 / 2 |
 
 **Where the cost appears:** only in programs that allocate and free inside the timed region. Cycles and instructions,
 T2/T1, with the cycle interval:
@@ -7356,6 +7357,7 @@ T2/T1, with the cycle interval:
 - ludcmp and st: their silicon results fail verification natively too, through R-62 (the FPU's divide/sqrt
   rounding). Their T2/T1 is 1.000; both arms run identical arithmetic.
 - minver's silicon result also deviates (R-62).
+  - On bitstream 3, where R-62 and R-63 are fixed, all three are correct; see the section on the bitstream-3 rerun.
 - R-64 (the divide/sqrt unit's fflags, and its overflow values under a directed rounding mode) cannot reach any of
   these images.
   - The census disassembled all 654 T1/T2/T3 images with FP decoding (`--mattr=+f,+d`).
@@ -7383,6 +7385,23 @@ T2/T1, with the cycle interval:
   measured, with no top-up.
 - The boot × arm interaction was not measured in the main run, where each program ran in one boot. The T3 boots below
   re-measure T2/T1 for the 15 allocating programs in a second boot. 14 of 15 overlap; miniz-libc differs by 0.8 %.
+
+## ludcmp, st and minver on bitstream 3: correct, with T2/T1 = 1.000 (caplifive_vp2c_e7af48457, board 2, 2026-10-27)
+
+- **What ran.** The bitstream-2 main run's T1 and T2 images for the three R-62-affected programs, in one boot on
+  board 2 after the bitstream-3 flash, at the main run's dimensions.
+  - Pre-registered on runtime/bench-counters at 8bfc279da208.
+  - Data and recipe: `capstone/benchmarks/virtual/results/2026-10-27-bitstream3-fpu/`.
+- **The board ran the fixed divider.** The first step ran ludcmp and st natively, outside any context.
+  - These are the same binaries that read VERIFY-FAILED on 4 of 4 iterations (failed=4, rc 1) on bitstream 2.
+  - On bitstream 3 both read failed=0 and rc 0.
+- **Correctness.** All 24 processes pass in both arms.
+  - minver's check= is the QEMU twin's, 0xd6cc5fbda167dc7b, on every iteration. Bitstream 2 read 0x74ceeb9e3de2c383.
+    So its bitstream-2 deviation was R-62's, as attributed.
+  - ludcmp and st have no hash; their own verify passes.
+- **Timing.** T2/T1 is ludcmp 1.0004 [0.9986, 1.0021], minver 1.0000 [0.9990, 1.0010] and st 1.0000 [0.9982, 1.0019].
+  None allocates in its timed region, as predicted.
+  - These are bitstream-3 rows. The bitstream-2 suite geomeans are not recomputed with them.
 
 ## Where temporal safety's cost comes from: per-object lifetimes (T3) against scrub on free, on silicon (caplifive_vp2c_dcc6daf6e, both boards, 2026-10-27)
 
