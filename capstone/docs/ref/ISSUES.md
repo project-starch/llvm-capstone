@@ -3768,9 +3768,13 @@ is flattened from the same `core/Flist.cva6`):
 - No upstream record of this defect was found in the submodule. Upstream cvfpu's later commits to this unit fix
   flush and SIMD sync only.
 - Untested corollary of the same lines: NX may be missed for an inexact result whose extra bits are all zero.
-- The perf build's VERIFY passes are mostly void. In `perf/build/native/src`, 30 of 57 programs' verify_benchmark
-  return −1 (the board lane's census, `2d6260bd8fb1`), and the runtime lane is moving the gate to a twin
-  comparison. A pass there is not evidence that a program avoided this defect.
+- Some perf-build VERIFY passes are void, about a third of them, not most. Recount from the exact .c files on each
+  program's compile line in perf/build/native/build.log: 36 of 94 BEEBS programs have upstream's no-op
+  verify_benchmark (`return -1`) taking the first `#if` branch of the four trio programs, 34 with trio-sscanf(-libc)'s
+  branch resolved to its real check. The board lane's independent recount reads 33 of 92. Its first count, "30 of 57"
+  (`2d6260bd8fb1`), covered only perf/build/native/src; this entry repeated it as "mostly void", and that overstated it.
+  minver and qurt are no-ops; ludcmp, st and nbody are real. For a no-op program a pass is no evidence that it avoided
+  this defect, and the runtime lane is moving the gate to a twin comparison.
 
 **Fix in RTL (simulation only, not yet synthesised): capstone-ariane r62-divsqrt `a73a7c670` + `e7af48457`.** The
 remainder is not needed for round-to-nearest. For p-bit significands, a correctly rounded quotient or square root
