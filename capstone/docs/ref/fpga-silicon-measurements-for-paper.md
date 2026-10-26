@@ -7242,3 +7242,16 @@ counted from its verdict TSVs:
   - In the bitstream-2 Juliet readings, only two spatial remainder cells (CWE135_12 seeded, part01, uncounted) were
     affected.
   - No counted cell was affected: the sample and the temporal set have no cause 4 on silicon.
+
+## The perf evaluation's counters on silicon: S-mode reads cycle and instret, and dev's new module revision passes its Tier 1 contract (caplifive_vp2c_dcc6daf6e, board 1, 2026-10-26)
+
+- **What ran:** one boot on board 1. The kit is bkit9-b2-b1 with only the runtime lane's bench build swapped in:
+  launcher 978c09d61f774315, module 9c60fb53f80ce67e (dev c2b137cdfee6's revision plus a compile-time-only instrument
+  that sums cycle and instret across CSRUNV). The images are v7.
+  Record: `tier3-smoke/records/b2bs-perfprobe-b1.result-lines.txt`.
+- **Tier 1 contract:** `ok` reads VIRTUAL_APPLICATION_OK, exit 0; `stale` is denied with cause 25, exit 139.
+- **The counters read on silicon:** an empty marked region costs about 20,400 instructions and 18 module entries.
+  - A 1e7-iteration loop adds 2e7 + 1,877 to 1,989 instructions at about 1.52 cycles per instruction, with 15 more
+    entries.
+  - The excess, about 125 instructions per extra entry, is counted inside the window. At the main run's scale it is
+    about 1e-4 of a reading, so it is not corrected. Entries are recorded beside every reading.

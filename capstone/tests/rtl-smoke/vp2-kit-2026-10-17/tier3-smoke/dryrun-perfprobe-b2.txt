@@ -1,0 +1,44 @@
+# tier3-perfprobe-b2.sh / tier3-perfprobe.py dry run, 2026-10-26. Every board call stubbed (PP_BUSY, PP_BOOK, PP_RUN; BOARDVM_STUB_TRANSCRIPT skips the recipe).
+# The stubs are board 1's census boot transcript (a real board frame) with the four steps planted; the bench numbers in them are placeholders, not predictions.
+## stub 'good'
+READ params: 3 bench parameters ['bench_cycles', 'bench_entries', 'bench_instret']
+READ ok: bench [  101.000000] capstone_vm: bench cycles=1000 instret=900 entries=3
+READ ok: rc 0, VIRTUAL_APPLICATION_OK present
+READ probe: bench [  102.000000] capstone_vm: bench cycles=2000 instret=1800 entries=6
+READ probe: rc 0, 10 PROBE lines, done present
+READ stale: bench [  103.000000] capstone_vm: bench cycles=3000 instret=2700 entries=9
+READ stale: rc 139, fault cause 25 at code+0x10c70
+## stub 'missing'
+READ params: 3 bench parameters ['bench_cycles', 'bench_entries', 'bench_instret']
+READ ok: bench [  101.000000] capstone_vm: bench cycles=1000 instret=900 entries=3
+READ ok: rc 0, VIRTUAL_APPLICATION_OK present
+READ probe: NO DATA
+READ stale: NO DATA
+## stub 'oops'
+READ params: 3 bench parameters ['bench_cycles', 'bench_entries', 'bench_instret']
+READ ok: bench [  101.000000] capstone_vm: bench cycles=1000 instret=900 entries=3
+READ ok: rc 0, VIRTUAL_APPLICATION_OK present
+READ probe: KERNEL OOPS in the step's text
+READ probe: NO DATA
+READ stale: NO DATA
+## exit statuses: good 0, missing 2, oops 2
+## the wrapper on the good stub (board 1):
+PP BEGIN 15:00:18 board 1 kit bkit10-perf-b1 booking 999 # book 1 40 vp2 bitstream 2 perf-eval counter probe and Tier 1 (board 1)
+999 # unbook 999 # book 1 40 vp2 bitstream 2 perf-eval counter probe and Tier 1 (board 1)
+PP END rc=0 15:00:18
+PERF kit <mnt-hdd>/capstone/t3-smoke/bkit10-perf-b1 boot completed; transcript <scratch> steps 4
+READ params: 3 bench parameters ['bench_cycles', 'bench_entries', 'bench_instret']
+READ ok: bench [  101.000000] capstone_vm: bench cycles=1000 instret=900 entries=3
+READ ok: rc 0, VIRTUAL_APPLICATION_OK present
+READ probe: bench [  102.000000] capstone_vm: bench cycles=2000 instret=1800 entries=6
+READ probe: rc 0, 10 PROBE lines, done present
+READ stale: bench [  103.000000] capstone_vm: bench cycles=3000 instret=2700 entries=9
+READ stale: rc 139, fault cause 25 at code+0x10c70
+PP readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PP board1 DONE 15:00:18
+## no kit (board 2):
+PP STOP: <mnt-hdd>/capstone/t3-smoke/bkit10-perf-b2 is not bkit9-b2-b2 with only the bench adapter swapped in
+## a busy board:
+PP STOP: board 1 is busy
+## the modinfo gate: bench 9c60fb53f80ce67e lists 3 bench parameters; the default 215a09be5a89360c lists 0
+## the module's instruction widths (llvm-objdump, a parser whose control object reads 3 compressed): 0 compressed, 5067 full-width

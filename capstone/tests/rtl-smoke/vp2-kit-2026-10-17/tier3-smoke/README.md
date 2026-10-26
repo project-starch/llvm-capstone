@@ -9283,3 +9283,82 @@ Record: `records/b2bs-uaf-ms-b2.result-lines.txt`.
   - The alignment check is per access width: an `sd` at a 4-aligned address faults.
   - A store is never reported as a load (no Q-09 shape).
   - The twin completes all four misaligned accesses, so Q-34's divergence covers stores too.
+
+### The perf evaluation's first boot: the counter probe and the Tier 1 contract of dev's new module revision (bench build), board 1 only, pre-registered (2026-10-26 15:0x, before the boot)
+
+- **Why:** the lead's performance evaluation, relayed by the runtime lane. It compares Sublet spatial against
+  spatial+temporal on CoreMark, RV8 and BEEBS, counted by a default-off module instrument (cycle and instret summed
+  across CSRUNV).
+  - This first boot checks two things: that S-mode can read cycle and instret on the board kernel, and the new module
+    revision's Tier 1 contract. That revision is dev c2b137cdfee6 (mapping registry, image write denial, the two-segment
+    v7 image, CV_STEP 136). It has had no Tier 1 boot before, and its launcher refuses v6 images.
+  - One board only; board 2 stays free.
+- **The kit:** bkit10-perf-b1 is bkit9-b2-b1 with only the adapter swapped. SHA256SUMS differ in the two adapter lines
+  only.
+  - The runtime lane's bench build (lane runtime/bench-counters = dev plus a compile-time-only instrument):
+    capstone-vexec 978c09d61f774315 and capstone_vm.ko 9c60fb53f80ce67e (flat, 18-bit index, 6.4.14, built with
+    -DCAPSTONE_VM_BENCH_COUNTERS).
+  - **Gates checked before the boot:**
+    - modinfo lists parm bench_cycles, bench_instret and bench_entries; the default 215a09be lists none;
+    - vermagic 6.4.14 SMP riscv;
+    - 0 compressed instructions, by a parser whose control object reads 3.
+- **The images** (the runtime lane's, v7, built by dev's compiler with -movc-keeps-integer-source): probe.dom
+  0100285f9c66605d and contract.dom 072bc796396597a4.
+- **What runs:** `tier3-perfprobe-b2.sh 1 <log>`, which calls tier3-perfprobe.py, one boot through boardvm. The steps:
+  - params: the module's bench parameters;
+  - ok: `contract.dom ok argument`, with CAPSTONE_VM_CONTRACT=environment, CAPSTONE_VM_STATS=1 and
+    CAPSTONE_EXEC_DIAGNOSTICS=1, as vm-contract.sh runs it;
+  - probe: `probe.dom`;
+  - stale: `contract.dom stale`.
+  - After each step it collects the new `capstone_vm: bench cycles=... instret=... entries=...` dmesg lines.
+  - Dry run: `dryrun-perfprobe-b2.txt`. A missing step and an oops each read NO DATA (exit 2), and the oops is named.
+    The kit gate stops on a missing kit, and the busy gate stops too.
+- **Predictions** (the probe's are the runtime lane's, written before the boot):
+  - **params:** 3 bench parameters.
+  - **ok (Tier 1):** `VIRTUAL_APPLICATION_OK`, exit 0.
+  - **stale (Tier 1):** denied with cause 25, exit 139. The known silicon-only cause 13, about 2% on the uaf control,
+    would also be a denial, and is reported as such.
+  - **probe:** 10 PROBE lines, then `PROBE done`, exit 0.
+    - empty r=1..4: entries > 0 and the same small number each time; instret identical across r=1..4. That is the mark
+      overhead, 3 delegated preads per mark.
+    - loop r=1..4: loop instret minus the same r's empty instret is in [20,000,000, 20,001,000]; cycles >= instret;
+      entries >= the empty's.
+    - r=0 may differ (first-touch faults).
+  - one bench dmesg line per process; readings 0.
+- **The stop branch:** if S-mode cannot read cycle or instret, the module oopses at the first CSRUNV. That is at insmod
+  plus the first launch, so at the ok step. Then the boot stops, the runtime lane is told, and the fallback is wall time.
+
+### The perf evaluation's first boot, result: S-mode reads cycle and instret; the new module revision passes its Tier 1 contract; the probe misses two of its numeric predictions, both small (board 1, 2026-10-26 15:01-15:08)
+
+- **Record:** `records/b2bs-perfprobe-b1.result-lines.txt`. Pre-registration a6e51b03112d. One boot (booking 396),
+  completed, readings 0, no oops.
+- **The counters work:** no oops at the first CSRUNV. Every process printed one `capstone_vm: bench` line, and the
+  module lists its 3 bench parameters. **The wall-time fallback is not needed.**
+- **Tier 1 contract of dev c2b137cdfee6's revision (bench build): PASSES, as predicted.**
+  - `ok`: VIRTUAL_APPLICATION_OK, exit 0 (bench cycles=20886982, instret=1157833, entries=503).
+  - `stale`: denied with cause 25, exit 139, at code+0x14e10.
+
+| r | empty instret / entries | loop instret / entries / cycles | loop - empty instret | over 2e7 |
+|---|---|---|---|---|
+| 0 | 20543 / 18 | 20022308 / 33 / 30358342 | 20001765 | 1765 |
+| 1 | 20453 / 18 | 20022330 / 33 / 30354446 | 20001877 | 1877 |
+| 2 | 20341 / 18 | 20022226 / 33 / 30352605 | 20001885 | 1885 |
+| 3 | 20363 / 18 | 20022352 / 33 / 30353878 | 20001989 | 1989 |
+| 4 | 20363 / 18 | 20022240 / 33 / 30352976 | 20001877 | 1877 |
+
+- **Against the probe's predictions:**
+  - 10 PROBE lines, PROBE done, exit 0: **holds**.
+  - Empty entries the same small number at r=1..4: **holds** (18).
+  - **Empty instret identical across r=1..4: MISSED.** The values are 20453, 20341, 20363, 20363, a spread of 112 (0.5%).
+  - **Loop minus empty in [20,000,000, 20,001,000]: MISSED at every r.** The excess over 2e7 is 1,877 to 1,989 at
+    r=1..4, about twice the band's 1,000.
+  - Cycles >= instret: **holds** (about 1.52 cycles per instruction in the loop).
+  - Loop entries >= the empty's: **holds** (33 against 18).
+- **One arithmetic that fits the miss, offered as a candidate and not a finding:** each loop takes 15 more module
+  entries than its empty (33 against 18). The excess divided by 15 is 125 to 133 instructions per extra entry at
+  r=1..4.
+  - That would be counted instructions per entry or exit, inside the CSRUNV window, which the per-mark accounting did
+    not budget for.
+  - The 112-instruction spread across the empties is the same order as one entry's cost.
+  - Settling it is the instrument owner's: compare instret per entry on a probe whose entry count varies at a fixed
+    workload.

@@ -1,0 +1,23 @@
+# The perf evaluation's first boot, board 1 (tier3-perfprobe-b2.sh, kit bkit10-perf-b1; pre-registered a6e51b03112d): the runner's result lines.
+PP BEGIN 15:01:05 board 1 kit bkit10-perf-b1 booking 396
+PP END rc=0 15:08:53
+PERF kit <mnt-hdd>/capstone/t3-smoke/bkit10-perf-b1 boot completed; transcript <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/perfprobe/guest/board.txt; steps 4
+READ params: 3 bench parameters ['bench_cycles', 'bench_entries', 'bench_instret']
+READ ok: bench [  120.608835] capstone_vm: bench cycles=20886982 instret=1157833 entries=503
+READ ok: rc 0, VIRTUAL_APPLICATION_OK present
+READ probe: bench [  136.149800] capstone_vm: bench cycles=156432422 instret=100515653 entries=477
+READ probe: rc 0, 10 PROBE lines, done present
+READ probe line: empty r=0 cycles=253959 instret=20543 entries=18
+READ probe line: loop r=0 n=10000000 cycles=30358342 instret=20022308 entries=33 predicted_instret_min=20000000
+READ probe line: empty r=1 cycles=246427 instret=20453 entries=18
+READ probe line: loop r=1 n=10000000 cycles=30354446 instret=20022330 entries=33 predicted_instret_min=20000000
+READ probe line: empty r=2 cycles=245981 instret=20341 entries=18
+READ probe line: loop r=2 n=10000000 cycles=30352605 instret=20022226 entries=33 predicted_instret_min=20000000
+READ probe line: empty r=3 cycles=244979 instret=20363 entries=18
+READ probe line: loop r=3 n=10000000 cycles=30353878 instret=20022352 entries=33 predicted_instret_min=20000000
+READ probe line: empty r=4 cycles=241980 instret=20363 entries=18
+READ probe line: loop r=4 n=10000000 cycles=30352976 instret=20022240 entries=33 predicted_instret_min=20000000
+READ stale: bench [  149.648603] capstone_vm: bench cycles=716693 instret=43344 entries=42
+READ stale: rc 139, fault cause 25 at code+0x14e10
+PP readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PP board1 DONE 15:08:53
