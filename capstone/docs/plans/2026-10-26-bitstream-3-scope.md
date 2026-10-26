@@ -22,7 +22,7 @@ the rows below spend.
 | (c3) Q-31 | ordering divergence | no (ruled: the RTL order is the reference) | a QEMU pin | — | out |
 | (c4) stale status lines | R-58, R-59, Q-24 read OPEN though their RTL fixes are on silicon since the batch | no | — | — | corrected; all three CONFIRMED ON SILICON 2026-10-26 at N=2 (below) |
 | (c5) Q-34 | a misaligned plain access in a context traps 4/6 on silicon; QEMU completes it | no (ruled 2026-10-26: the trap is the intended result, terminal for the run) | none; the QEMU twin traps inside supervised contexts | — | out: no hardware misaligned support |
-| (d) FP divide/sqrt rounding | fdiv / fsqrt round to the wrong neighbour (sim, 512 cases each: .d 23 / 19, .s 53 / 27) | yes: the divsqrt unit | none that keeps hard-float div/sqrt; programs with exact FP checks fail (ludcmp, st on bitstream 2) | unknown: a cvfpu bump to a revision with `DivSqrtSel`, THMULTI (the C910 unit), correctness not yet read | the lead's call; R-62 |
+| (d) FP divide/sqrt rounding | fdiv / fsqrt round to the wrong neighbour (sim, 512 cases each: .d 23 / 19, .s 53 / 27) | yes: the divsqrt unit | none that keeps hard-float div/sqrt; programs with exact FP checks fail (ludcmp, st on bitstream 2) | a few LUTs in the normaliser (estimate): capstone-ariane r62-divsqrt e7af48457, sim-clean, lint PASS | **in**: R-62 is the blocker (the lead, 2026-10-26); R-62 + R-63 |
 
 ## (a) S-21 / S-22: the frame is domain-reachable
 
@@ -219,19 +219,20 @@ The context escape path was ruled out on the way, in the same tree: `va-runv-fp.
 and fdiv / fadd / fdiv shapes, and every check reads 0. A quantum or interrupt escape cannot flush an FP op in flight
 in any case, because the escape is injected at decode (`decoder.sv:2096`).
 
-**Status: R-62 in `docs/ref/ISSUES.md`.** The BEEBS deviations on bitstream 2 are attributed to it. Native ludcmp and
-st fail VERIFY 4 of 4 as plain Linux processes (board lane `99c5620924e9`), as their context builds do. A host build
-routes every fdiv and sqrt through a C model of the RTL rounding (validated 0 of 2,048 against the traced RTL
-results). It fails ludcmp and st where IEEE passes them, and it turns minver's IEEE state 0xd6cc5fbda167dc7b, the
-twin's, into silicon's 0x74ceeb9e3de2c383 exactly. The direct instruction reading on silicon is the bare kit
-`capstone/tests/rtl-smoke/fp-divsqrt-bare-2026-10-26` (pre-registered at land/rtl-fp-kit `84488ed6db17` and the board
-lane's `b1fe19fecf0b`), queued behind the 2026-10-26 perf kits.
+**Status: R-62 CONFIRMED ON SILICON** (board 1, `fp-all` exact, board lane `ca7a573b0ffd`). The BEEBS deviations
+on bitstream 2 are attributed to it by an exact-value match (ISSUES R-62), and nbody passed on silicon as predicted.
 
-**Options, none costed:** upstream cvfpu never changed this unit's rounding after 0.7.0; the later commits to it fix
-flush and SIMD sync only. Later revisions add `DivSqrtSel` with THMULTI, the C910 unit with FP64 support (`1905e33`,
-after 0.7.0). Whether THMULTI is correctly rounded has not been read or run here. A sim of `fp-ieee-divsqrt` on a
-bumped cvfpu would say so, at the cost of a submodule bump that every other worktree shares through the symlinked
-mounts, so it needs its own worktree. Size and timing are unknown until the synthesis-only gate.
+**Fix (the lead, 2026-10-26: "R-62 is the blocker, concentrate on it"): capstone-ariane r62-divsqrt `a73a7c670` +
+`e7af48457`.** It is one patched copy of the normaliser, selected by `core/Flist.cva6`.
+- Round-to-nearest treats a set round bit as sticky on the normal-result branches: a correctly rounded quotient or
+  root of p-bit significands can never sit exactly on a midpoint.
+- The rounding mode is decoded in fpnew's encoding, which fixes R-63 (RDN/RUP exchanged, RMM truncating).
+- Simulation: 0 misses in all four operations, the exact/subnormal control arms read 0, and the rounding-mode arm
+  reads 15 of 15. Claim-audited. Lint PASS at baseline.
+- Remaining, unused by the failing programs: the directed modes and NX with all-zero extra bits (they need the
+  remainder), the rarer subnormal-result error, and overflow to infinity under the directed modes.
+- Next: the 95-test sweep, the synthesis-only size gate, then the full build. The flash is the lead's word.
+
 
 ## Not in this note
 
