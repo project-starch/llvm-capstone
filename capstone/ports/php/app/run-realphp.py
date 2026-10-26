@@ -67,7 +67,7 @@ stdout comparison is kept as a REPORTED note -- printed, and carried into the bu
 `reached` rests on the two facts above. A divergence is therefore visible on every case without
 silently deciding any of them.
 """
-import argparse, hashlib, importlib.util, json, re, subprocess, sys
+import argparse, hashlib, importlib.util, io, json, re, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -83,6 +83,20 @@ def run_virtual_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def cap_insn_counter():
+    """count-cap-insns.py's counter, IMPORTED rather than reimplemented.
+
+    There used to be two copies of this gate -- one here and one in build-virtual.sh -- and on
+    2026-10-26 they drifted: the build's copy was moved to the instruction ENCODING when the seam
+    went to CDERIVE/CREVOKE, and this one was left counting a `revoke` MNEMONIC that
+    llvm-objdump does not emit for either instruction. The build passed and this refused the
+    whole measurement after all eight guest sessions had run. One implementation, imported."""
+    spec = importlib.util.spec_from_file_location("php_cap_insns", HERE / "count-cap-insns.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.count
 TOOLS = REPO / "capstone" / "bug-corpora" / "tools"
 sys.path.insert(0, str(TOOLS))
 import verdicts                                                          # noqa: E402
@@ -540,10 +554,14 @@ def cross_arm_gates(args, per_arm, llvm_bin):
     problems = []
     dis = subprocess.run([str(Path(llvm_bin) / "llvm-objdump"), "-d", str(args.image)],
                          capture_output=True, text=True).stdout
-    revokes_in_image = len(re.findall(r"\brevoke\b", dis))
-    if revokes_in_image == 0:
-        problems.append("the image contains no revoke instruction, so no arm could revoke "
-                        "anything and all three temporal columns would read alike")
+    # BY ENCODING, NOT BY MNEMONIC: objdump prints CDERIVE and CREVOKE as <unknown>, so a
+    # mnemonic count reads zero on a CORRECT image. BOTH are required -- an image that can issue
+    # but not revoke is exactly the shape that would report a clean sweep with nothing revoked.
+    derives_in_image, revokes_in_image = cap_insn_counter()(io.StringIO(dis))
+    if revokes_in_image == 0 or derives_in_image == 0:
+        problems.append(f"the image cannot issue or cannot revoke (derive={derives_in_image} "
+                        f"revoke={revokes_in_image}), so no arm could revoke anything and all "
+                        "three temporal columns would read alike")
     modes = {arm: per_arm[arm]["mode_word"] for arm in per_arm}
     if len(set(v for v in modes.values() if v is not None)) != len(modes):
         problems.append(f"the arms did not report distinct mode words: {modes}")
@@ -559,7 +577,7 @@ def cross_arm_gates(args, per_arm, llvm_bin):
         problems.append(f"revokes did not order stock==0, block==0, object>0: {rev}. Without "
                         f"that ordering a temporal catch cannot be attributed to the seam "
                         f"rather than to the allocator underneath it")
-    return problems, revokes_in_image
+    return problems, derives_in_image, revokes_in_image
 
 
 def sha256_file(path):
@@ -635,7 +653,12 @@ def main():
         cases = {c: cases[c] for c in args.case if c in cases}
         if not cases:
             sys.exit("--case selected nothing in the population")
-    print(f"population: {len(cases)} ASAN-blind cases, derived from the corpus's own definition")
+    # NAME THE POPULATION THAT IS ACTUALLY RUNNING. This said "ASAN-blind" whichever set was
+    # selected, so a temporal-asan-visible run announced itself as its own complement -- and a
+    # reader checking which population a log belongs to got the wrong answer from the one line
+    # that looks authoritative.
+    print(f"population: {len(cases)} {args.population} cases, "
+          "derived from the corpus's own definition")
 
     image_sha = subprocess.run(["sha256sum", str(args.image)], capture_output=True,
                                text=True).stdout.split()[0]
@@ -696,8 +719,8 @@ def main():
         if wants_probe:
             print(f"    {BOUND_PROBE}: {'faulted as declared' if probe_ok else 'DID NOT'}")
 
-    problems, revokes_in_image = cross_arm_gates(args, per_arm, args.llvm_bin)
-    print(f"\ncross-arm gates: revoke instructions in image = {revokes_in_image}")
+    problems, derives_in_image, revokes_in_image = cross_arm_gates(args, per_arm, args.llvm_bin)
+    print(f"\ncross-arm gates: image capability instructions derive={derives_in_image} revoke={revokes_in_image}")
     if problems:
         for t in problems:
             print(f"  GATE FAILED: {t}", file=sys.stderr)

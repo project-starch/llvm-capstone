@@ -8,7 +8,8 @@ driven end to end against synthetic transcripts before anything is launched.
 AND WHY EACH GATE IS SHOWN FIRING. A gate that has never failed is not known to work. The
 cross-arm checks below are each driven to FAIL on purpose and asserted to refuse the run.
 """
-import importlib.util, json, re, subprocess, sys, tempfile, types
+import importlib.util
+import io, json, re, subprocess, sys, tempfile, types
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -433,7 +434,11 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
         if "sha256sum" in prog:
             text = (PROBE_SHA if str(cmd[1]).endswith("p.dom") else SHA) + "  x\n"
         elif "objdump" in prog:
-            text = "revoke\nrevoke\n"
+            # Real CDERIVE/CREVOKE encodings, because the gate reads instruction WORDS now:
+            # llvm-objdump prints both as <unknown>, so a stub emitting the word "revoke" would
+            # test a check that no longer exists. funct7 0x51/0x52, funct3 1, opcode 0x5b.
+            text = ("   10000: 5b 10 00 a2  \t<unknown>\n"
+                    "   10004: 5b 10 00 a4  \t<unknown>\n")
         elif "clang" in prog:
             text = "clang version test\n"
         elif "symbolizer" in prog:
@@ -604,6 +609,35 @@ def node_table_cases():
           "node_initial_pages=7 " in rv.guest_script(runs, node_pages=7), True)
 
 
+def cap_insn_cases():
+    """The image gate reads instruction WORDS, not a mnemonic.
+
+    This gate decides whether the whole measurement is believed: the seam is a runtime mode, so
+    an image that cannot revoke would make all three temporal columns read alike. It was a
+    `grep -c '\\brevoke\\b'` over objdump until 2026-10-26, and llvm-objdump prints both CDERIVE
+    and CREVOKE as <unknown> -- so after the seam moved onto them the gate read zero on a
+    CORRECT image. It existed in two copies, which drifted: the build's was fixed, the runner's
+    was not, and the runner refused a whole 29-case measurement after all four arms had run.
+    These pin the encoding so a third copy cannot drift silently."""
+    print("\n-- the image capability-instruction gate --")
+    spec = importlib.util.spec_from_file_location("cci", HERE / "count-cap-insns.py")
+    cci = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cci)
+    # funct7 0x51 CDERIVE / 0x52 CREVOKE, funct3 1, opcode 0x5b -- little-endian in the dump.
+    derive = "   10000: 5b 10 00 a2  \t<unknown>\n"
+    revoke = "   10004: 5b 10 00 a4  \t<unknown>\n"
+    check("both instructions are counted from their encodings",
+          cci.count(io.StringIO(derive + revoke)), (1, 1))
+    check("the word 'revoke' in the text counts for NOTHING",
+          cci.count(io.StringIO("revoke\nrevoke\nrevoke\n")), (0, 0))
+    check("a near miss on funct7 is not counted",
+          cci.count(io.StringIO("   10000: 5b 10 00 a6  \t<unknown>\n")), (0, 0))
+    check("a near miss on the opcode is not counted",
+          cci.count(io.StringIO("   10000: 5a 10 00 a4  \t<unknown>\n")), (0, 0))
+    check("an image with derives but no revokes is not enough",
+          cci.count(io.StringIO(derive * 9)), (9, 0))
+
+
 def provenance_cases():
     """A bundle must identify its platform BY CONTENT. These were recorded as bare paths, so a
     bundle named files on one host and said nothing about what they held -- and the kernel here
@@ -678,6 +712,7 @@ if __name__ == "__main__":
     main_path_cases()
     stale_image_case()
     node_table_cases()
+    cap_insn_cases()
     provenance_cases()
     lint()
     print()

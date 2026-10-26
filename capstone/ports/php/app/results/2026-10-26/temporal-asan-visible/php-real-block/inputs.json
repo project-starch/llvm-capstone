@@ -1,0 +1,27 @@
+{
+  "arm": "php-real-block",
+  "cases": 29,
+  "contract": "verdicts-v1",
+  "corpus": "php-5.0.0-bug-corpus",
+  "image_sha256": "f8a15344e9fe31942566ef2a44011972672390660ebaef76db362c57f595372f",
+  "platform": {
+    "compiler": "clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git f3b69c7af1c4588fdccd95ec6c54fcdd1a8d7aa5)",
+    "firmware": "b1663eb62a192741055589bafd60aea8121d464efb3afd7da2b98508316639ef  /home/jason/Research/TAL/pointer-safe-playground/llvm-capstone/capstone/caplifive-buildroot/build-qemu/images/fw_jump.elf",
+    "kernel": "108d811705e71414d022748d21fb040b4dc18ca15df87faf637704091f73bfe5  /home/jason/Research/TAL/pointer-safe-playground/llvm-capstone/capstone/caplifive-buildroot/build-qemu/images/Image",
+    "launcher": "8489f201ae0447f938a9fa8f6856b6719a54810d0c0a433873a037e731bf68d1  /home/jason/Research/TAL/pointer-safe-playground/llvm-capstone/capstone/container/tmp/virtual-runtime/adapter/capstone-vexec",
+    "module": "5878060e59e1b114a99d3e04128284508cfb13ffd2356204b943856aa78837be  /home/jason/Research/TAL/pointer-safe-playground/llvm-capstone/capstone/container/tmp/virtual-runtime/adapter/module/capstone_vm.ko",
+    "module_args": "node_initial_pages=1024 supervisor_slots=32",
+    "qemu": "d9de56fc74c77f8a2fbfed79624c3ff73baa7110192a7e07b7829989e5957d6d  /home/jason/Research/TAL/pointer-safe-playground/llvm-capstone/capstone/capstone-qemu/build/qemu-system-riscv64",
+    "qemu_cpu": "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true,x-capstone-test-csrs=true,x-capstone-supervisor-slots=32",
+    "rootfs": "aa811268f1a69f7f79bfc09d778267d6370d306414f707cda1908eecc591626a  /home/jason/Research/TAL/pointer-safe-playground/llvm-capstone/capstone/caplifive-buildroot/build-qemu/images/rootfs.ext2",
+    "runner": "ports/php/app/run-realphp.py"
+  },
+  "population": "ASAN-blind, recomputed from the corpus",
+  "pre_registration": "7437d8ffb35861aec45aa8a6e381a3bae7440ead",
+  "tally": {
+    "CAUGHT": 7,
+    "NO-READING:infra": 1,
+    "NO-READING:out-of-denominator": 19,
+    "NO-READING:setup-fault": 2
+  }
+}
