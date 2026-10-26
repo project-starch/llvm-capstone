@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Score one lookaside row of PoisonCap's published arm.
 
-    verdicts.py --published RUN [--spatial RUN] --nm PATH/llvm-nm --rootfs DIR --out DIR
+    score-cases.py --published RUN [--spatial RUN] --nm PATH/llvm-nm --rootfs DIR --out DIR
 
-RUN is a guest-run.py output directory (run.json, results.jsonl); each names the build it ran,
+RUN is a run-cases.py output directory (run.json, results.jsonl); each names the build it ran,
 whose unstripped binaries give the symbol table a fault's PC offset is looked up in. Run where
 PoisonCap's llvm-nm runs (platform/run-in-container.sh).
 
@@ -104,6 +104,57 @@ def score(row, build, nm, sites, rootfs):
     return rec
 
 
+def gates_passed(published_meta, spatial_meta):
+    """Both runs passed their gates (without a spatial run, the published one did)."""
+    passed = lambda meta: bool(meta.get('gate')) and all(meta['gate'].values())
+    return passed(published_meta) and (spatial_meta is None or passed(spatial_meta))
+
+
+def judge(case, published, spatial, nm, rootfs):
+    """One case's row: its tiers on the published run and, given a spatial run, on that one too.
+    PUBLISHED and SPATIAL are (build dir, rows by name); SPATIAL is None without a spatial run."""
+    sites = json.loads((CORPUS / case / 'case.json').read_text()).get('fault_sites') or []
+    p_rec = score(published[1].get(case), published[0], nm, sites, rootfs)
+    s_rec = score(spatial[1].get(case), spatial[0], nm, sites, rootfs) if spatial else None
+    row = {'case': case, 'qualified': bool(sites), 'fault_sites': sites, 'published': p_rec, 'spatial': s_rec}
+    row['mechanism_signed'] = (row['qualified'] and p_rec['at_site'] and p_rec.get('signal') == 'SIGPROT'
+                               and p_rec.get('code') == '3' and p_rec.get('poison_console', False))
+    # A control that did not read (no-reading, unresolved, not run) cannot support attribution.
+    usable = s_rec is not None and s_rec['outcome'] in ('returned', 'fault') and \
+        not (s_rec['outcome'] == 'fault' and s_rec.get('function') is None)
+    row['attributable'] = (row['qualified'] and p_rec['at_site'] and usable and not s_rec['at_site']) if s_rec else None
+    return row
+
+
+def count(table):
+    counts = {'qualified': 0, 'fault_at_site': 0, 'attributable': 0, 'mechanism_signed': 0}
+    for row in table:
+        if row['qualified']:
+            counts['qualified'] += 1
+            counts['fault_at_site'] += row['published']['at_site']
+            counts['attributable'] += bool(row['attributable'])
+            counts['mechanism_signed'] += row['mechanism_signed']
+    return counts
+
+
+def render(table, counts, with_spatial):
+    """verdicts.md: one table row per case, then the counts."""
+    def cell(x):
+        if x is None:
+            return 'not run'
+        return x['outcome'] + (f" {x.get('function')} code={x.get('code')}" if x['outcome'] == 'fault' else '')
+    lines = ['| case | published | spatial | signed | attributable |', '|---|---|---|---|---|']
+    for r in table:
+        name = r['case'] if r['qualified'] else r['case'] + ' (no qualified trigger)'
+        lines.append(f"| {name} | {cell(r['published'])} | {cell(r['spatial'])} | "
+                     f"{'yes' if r['mechanism_signed'] else ''} | {'yes' if r['attributable'] else ''} |")
+    lines.append('')
+    lines.append(f"qualified {counts['qualified']}: fault at site {counts['fault_at_site']}, "
+                 f"mechanism-signed {counts['mechanism_signed']}"
+                 + (f", attributable {counts['attributable']}" if with_spatial else ''))
+    return lines
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--published', type=Path, required=True)
@@ -113,48 +164,20 @@ def main():
     p.add_argument('--out', type=Path, required=True)
     a = p.parse_args()
     pub_meta, pub = load(a.published)
-    spa_meta, spa = load(a.spatial) if a.spatial else ({'gate': {'none': True}, 'cases': [], 'build': ''}, {})
-    if not (pub_meta.get('gate') and all(pub_meta['gate'].values())
-            and spa_meta.get('gate') and all(spa_meta['gate'].values())):
+    spa_meta, spa = load(a.spatial) if a.spatial else (None, None)
+    if not gates_passed(pub_meta, spa_meta):
         raise SystemExit('a run did not pass its gate; nothing to score')
-    pub_build, spa_build = Path(pub_meta['build']), Path(spa_meta['build'])
-    cases = sorted(set(pub_meta['cases']) | set(spa_meta['cases']))
-    table, counts = [], {'qualified': 0, 'fault_at_site': 0, 'attributable': 0, 'mechanism_signed': 0}
-    for case in cases:
-        sites = json.loads((CORPUS / case / 'case.json').read_text()).get('fault_sites') or []
-        p_rec = score(pub.get(case), pub_build, a.nm, sites, a.rootfs)
-        s_rec = score(spa.get(case), spa_build, a.nm, sites, a.rootfs) if a.spatial else None
-        row = {'case': case, 'qualified': bool(sites), 'fault_sites': sites, 'published': p_rec, 'spatial': s_rec}
-        row['mechanism_signed'] = (row['qualified'] and p_rec['at_site'] and p_rec.get('signal') == 'SIGPROT'
-                                   and p_rec.get('code') == '3' and p_rec.get('poison_console', False))
-        # A control that did not read (no-reading, unresolved, not run) cannot support attribution.
-        usable = s_rec is not None and s_rec['outcome'] in ('returned', 'fault') and \
-            not (s_rec['outcome'] == 'fault' and s_rec.get('function') is None)
-        row['attributable'] = (row['qualified'] and p_rec['at_site'] and usable and not s_rec['at_site']) if s_rec else None
-        table.append(row)
-        if row['qualified']:
-            counts['qualified'] += 1
-            counts['fault_at_site'] += p_rec['at_site']
-            counts['attributable'] += bool(row['attributable'])
-            counts['mechanism_signed'] += row['mechanism_signed']
+    published = (Path(pub_meta['build']), pub)
+    spatial = (Path(spa_meta['build']), spa) if a.spatial else None
+    cases = sorted(set(pub_meta['cases']) | set(spa_meta['cases'] if spa_meta else []))
+    table = [judge(case, published, spatial, a.nm, a.rootfs) for case in cases]
+    counts = count(table)
     a.out.mkdir(parents=True, exist_ok=True)
     (a.out / 'verdicts.json').write_text(json.dumps({'published': str(a.published), 'spatial': str(a.spatial),
                                                      'counts': counts, 'cases': table}, indent=1) + '\n')
-    lines = ['| case | published | spatial | signed | attributable |', '|---|---|---|---|---|']
-    for r in table:
-        def cell(x):
-            if x is None:
-                return 'not run'
-            return x['outcome'] + (f" {x.get('function')} code={x.get('code')}" if x['outcome'] == 'fault' else '')
-        name = r['case'] if r['qualified'] else r['case'] + ' (no qualified trigger)'
-        lines.append(f"| {name} | {cell(r['published'])} | {cell(r['spatial'])} | "
-                     f"{'yes' if r['mechanism_signed'] else ''} | {'yes' if r['attributable'] else ''} |")
-    lines.append('')
-    lines.append(f"qualified {counts['qualified']}: fault at site {counts['fault_at_site']}, "
-                 f"mechanism-signed {counts['mechanism_signed']}"
-                 + (f", attributable {counts['attributable']}" if a.spatial else ''))
+    lines = render(table, counts, bool(a.spatial))
     (a.out / 'verdicts.md').write_text('\n'.join(lines) + '\n')
-    print('\n'.join(lines[-1:]))
+    print(lines[-1])
 
 
 if __name__ == '__main__':

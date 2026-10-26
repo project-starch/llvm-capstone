@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """DIAGNOSTIC ONLY: a copy of PoisonCap's published amalgamation with print statements added.
 
-    diag-amalgamation.py SRC_DIR OUT_DIR
+    make-diag-amalgamation.py SRC_DIR OUT_DIR
 
 Never used for a verdict. It exists to explain individual results (cases 12 and 15 of the temporal
 run): which blocks their memsys5 frees and when, when the quarantine is flushed, whether a reallocation

@@ -3,11 +3,8 @@
 
     smoke-test.py OUT [--platform DIR] [--port PORT]
 
-Boots through ports/common/host/cheribsd/guest.py, the Guest every earlier PoisonCap run used:
-single-user, `security.cheri.runtime_revocation_default=0` set on the console before sshd starts
-(the published kernel panics, share->excl at vm_map.c:6103, when libc's automatic revocation runs
-in ordinary processes; ports/ffmpeg/buffer-pool/results/measurements/20260919-poisoncap-pilot).
-Explicit revocation calls are unaffected.
+Boots single-user with `security.cheri.runtime_revocation_default=0` set on the console before sshd
+starts (poisoncap_guest.py beside this script says why).
 
 Then, over SSH: the kernel and CHERI sysctls, every cheribsdtest test whose name mentions poison,
 and each of those run on its own. OUT/smoke.json holds the result lines; OUT/vm/serial.log the
@@ -16,18 +13,14 @@ every one of them passed.
 """
 import argparse
 import json
-import os
 from pathlib import Path
 import re
 import sys
 
-REPO = Path(__file__).resolve().parents[5]
-sys.path.insert(0, str(REPO / 'capstone/ports/common/host/cheribsd'))
-from guest import Guest  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import poisoncap_guest  # noqa: E402
 
 TEST_BINARIES = ('cheribsdtest-purecap', 'cheribsdtest-purecap-dynamic')
-# Generous budgets: the guest runs under TCG on a shared host.
-BUDGETS = {'CHERI_GUEST_BOOT_SECONDS': 1200, 'CHERI_GUEST_CMD_SECONDS': 600, 'CHERI_SSH_READY_SECONDS': 600}
 
 
 def find_poison_tests(run):
@@ -53,19 +46,12 @@ def verdict(record):
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('out', type=Path)
-    p.add_argument('--platform', type=Path,
-                   default=Path(os.environ.get('POISONCAP_PLATFORM', Path.home() / 'poisoncap-platform')))
-    p.add_argument('--port', type=int, default=10087)
+    poisoncap_guest.add_platform_arguments(p, port=10087)
     a = p.parse_args()
-    for name, seconds in BUDGETS.items():
-        os.environ.setdefault(name, str(seconds))
-    work = a.platform / 'work'
+    poisoncap_guest.use_generous_budgets()
     a.out.mkdir(parents=True, exist_ok=False)
     (a.out / 'vm').mkdir()
-    guest = Guest(work / 'sdk', work / 'output/rootfs-riscv64-purecap',
-                  work / 'output/cheribsd-riscv64-purecap.img', a.out / 'vm', a.port,
-                  disable_default_revocation=True)
-    (a.out / 'vm/command.json').write_text(json.dumps(guest.argv) + '\n')
+    guest = poisoncap_guest.new_guest(a.platform, a.out / 'vm', a.port)
     record = {'booted': False}
     try:
         guest.start()

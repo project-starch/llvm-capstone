@@ -13,7 +13,13 @@ amalgamation (`prepare-sqlite.json`). Each run is one boot; the gate (controls) 
 Every case was run twice per row (`runs/published-*` and `runs/published-*-rep2`). The catch readings
 agree in every case; the second run also records failing `rc=` lines, which reclassified case 23 from
 "returned" to "returned-with-error". Result lines: `runs/*/results.jsonl`; scoring:
-`verdicts/*/verdicts.md` (`ports/sqlite/poisoncap/corpus/verdicts.py`).
+`verdicts/*/verdicts.md` (`ports/sqlite/poisoncap/corpus/score-cases.py`).
+
+The tools were renamed on 2026-10-26, after every run here; PREDICTIONS.md and PREDICTIONS-REVIEW.md keep the
+names they were written with: `build-poisoncap.py` is `corpus/build-cases.py`, `guest-run.py` is
+`corpus/run-cases.py`, `verdicts.py` is `corpus/score-cases.py`, `diag-amalgamation.py` is
+`corpus/make-diag-amalgamation.py`, `guest-smoke.py` is `platform/smoke-test.py`
+(all under `ports/sqlite/poisoncap/`).
 
 This is the second version of this file. The first (62a3999c) scored 19 cases and left 12, 15 and 21
 open. Below, the population is corrected, and each of PoisonCap's five non-catches has an explanation
@@ -77,7 +83,8 @@ once the heap is larger.
 
 **Rounding: 12.** The defect needs `fts5StructureExtendLevel`'s `aSeg` array to move when it grows.
 Their memsys5 rounds every request up to a power-of-two block, so growing from 12 to 24 bytes stays in
-the same block (`runs/diag-hooks-la`, a diagnostic copy of their source with print statements only:
+the same block (`runs/diag-hooks-la`, a diagnostic copy of their source with print statements only, made by
+`corpus/make-diag-amalgamation.py`:
 aSeg 0x2a3840 before and after). Nothing is freed, there is no stale access to catch, and the scan
 completes with 5 rows. Our Sublet port bounds each block to the request and reports that size, so the
 array moves and the stale read happens.

@@ -97,7 +97,8 @@ How to report each:
   `uaf_keepperm` shows that keeping the permission bypasses their check. The memsys5 quarantine's
   revocation threshold (at least 16 MiB held) is never reached in a 1 MiB heap.
 - Diagnostic only, never counted: `runs/diag-hooks-la` and `runs/diag3-la` ran a copy of their SQLite
-  with print statements added, to locate the array in 12 and the read address in 15. Every counted
+  with print statements added (`corpus/make-diag-amalgamation.py`), to locate the array in 12 and the
+  read address in 15. Every counted
   run uses their code unmodified.
 
 ## Their own SQLite evaluation (speedtest1), for related work
