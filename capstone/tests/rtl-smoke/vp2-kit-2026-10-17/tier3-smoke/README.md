@@ -9848,3 +9848,33 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     double operations, so for ludcmp the silicon side rests on the discriminator and the host model, whose fdiv.s
     rounding matches the RTL in simulation (53 of 512).
   - Nothing in this run points at the capability system.
+
+### Correction: the no-op verify census counted a directory, not what the build compiled; over batch 1's 92 BEEBS programs, 33 verifies are no-ops, and 11 programs (not 8) have neither a verify nor a hash (2026-10-26 20:2x)
+
+- **What was wrong:** the census above ("30 of 57") read `perf/build/native/src`. That directory holds only the files the
+  perf build patched: a program's other sources compile from `/tmp/capstone/beebs-src/src`, as its compile lines in
+  `perf/build/native/build.log` show. nbody, st, ludcmp, trio_test.c and others are not in the directory at all.
+  - The count stays literally true of that directory. As a statement about the perf build, it was a filtered
+    population, and the "13 with no definition" were simply sources it did not contain.
+  - The census also took a file's FIRST verify_benchmark. trio_test.c has two, under `#ifdef TRIO_SNPRINTF` (`return
+    -1`) and `#elif TRIO_SSCANF` (real, expected 15).
+- **Redone from the build itself:** `census-verify.py` reads each program's .c files from its own compile lines and
+  takes the definition whose `#ifdef`/`#elif` macro that line defines. Record: `records/b2bs-perf-verify-census.txt`.
+  - Controls: minver must read NO-OP and st REAL, else exit 2. Tested by pointing minver at st's compile line:
+    CONTROL FAILED, exit 2. A log with no compile line is NO DATA, exit 2.
+  - **Over the 94 programs in the log, 34 are NO-OP and 60 REAL. Over batch 1's 92 BEEBS programs, 33 are NO-OP.**
+- **What changes:**
+  - **Still no-ops:** minver and qurt, so the minver and qurt readings above stand. nbody, st and ludcmp are REAL, so
+    nbody's 8/8 pass in k3 is a real verify passing.
+  - **No-ops the first list missed:** fasta, miniz, picojpeg, stb_perlin and trio-snprintf.
+  - **trio-sscanf and trio-sscanf-libc are REAL;** the first list called trio-sscanf-libc a no-op.
+  - **Programs no check reaches** (no-op verify AND check=0x0 on silicon and twin): **11**, not 8. They are fasta,
+    miniz, miniz-libc, rijndael, sglib-dllist, sglib-dllist-libc, sglib-hashtable, sglib-hashtable-libc, stb_perlin,
+    trio-snprintf and trio-snprintf-libc.
+    - stb_perlin is floating point, so R-62 is a possible risk to it that this run cannot see.
+    - beebs-main.c says a no-op program is built with BEEBS_STATE_CHECK and a state hash. For these 11 it yields 0 on
+      both sides. That is the runtime lane's to read.
+  - 22 of the 33 no-op programs are covered by a non-zero hash instead (21 EQUAL, minver DIFFERS).
+  - **The manifest's own_verify column disagrees for trio-snprintf and trio-snprintf-libc only** (it says yes, and the
+    compiled branch is `return -1`). Every other program agrees.
+- **The k1-k4 check= section above changes only in its "no check reaches" paragraph,** which this replaces.
