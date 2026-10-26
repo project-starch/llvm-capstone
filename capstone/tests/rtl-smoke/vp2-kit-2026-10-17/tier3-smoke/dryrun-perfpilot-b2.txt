@@ -1,0 +1,23 @@
+# tier3-perfpilot-b2.sh / tier3-perfpilot.py dry run, 2026-10-26. Every board call stubbed (PP_BUSY, PP_BOOK, PP_RUN; BOARDVM_STUB_TRANSCRIPT skips the recipe).
+# The stubs are board 1's census boot transcript (a real board frame) with a 68-process pilot step planted from steps.tsv (placeholder numbers, not predictions).
+## stub 'good' (good rc=0)
+READ bench parameters: 3 ['bench_cycles', 'bench_entries', 'bench_instret']
+READ summary: 68 of 68 processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE present
+## stub 'repeat' (repeat rc=0)
+READ bench parameters: 3 ['bench_cycles', 'bench_entries', 'bench_instret']
+READ 30 rv8-aes T2 3 K3: rc 0, 11 BENCH, 11 with check= (suffixes [' ok']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote REPEATS the previous :: bench cycles=1029 instret=929 entries=32
+READ summary: 67 of 68 processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE present
+## stub 'short' (short rc=2)
+READ bench parameters: 3 ['bench_cycles', 'bench_entries', 'bench_instret']
+READ 41 janne_complex T1 2 K0: NO DATA (begin False, end False)
+READ 42 janne_complex T1 3 K0: NO DATA (begin False, end False)
+READ 43 janne_complex T2 3 K0: NO DATA (begin False, end False)
+## the wrapper on the good stub (board 2):
+PP BEGIN 15:15:12 board 2 kit bkit10-perf-b2 booking 998 # book 2 75 vp2 bitstream 2 perf-eval pilot (board 2)
+PP END rc=0 15:15:12
+PILOT kit <mnt-hdd>/capstone/t3-smoke/bkit10-perf-b2 boot completed; transcript <scratch> step result {"kind": "exit", "value": 0}
+READ bench parameters: 3 ['bench_cycles', 'bench_entries', 'bench_instret']
+READ summary: 68 of 68 processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE present
+PP readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PP board2 DONE 15:15:12
+## timeouts, nested: step bound 135 x BOARD_STEP_MULT 20 = 2700 s, clamped to boardvm's script budget 3000 - 300 = 2700 s; board-run.sh 3000 x BOARD_TIMEOUT_MULT 4 + 1800 = 13800 s; the wrapper 14400 s

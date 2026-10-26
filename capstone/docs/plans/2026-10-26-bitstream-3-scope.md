@@ -22,6 +22,7 @@ the rows below spend.
 | (c3) Q-31 | ordering divergence | no (ruled: the RTL order is the reference) | a QEMU pin | — | out |
 | (c4) stale status lines | R-58, R-59, Q-24 read OPEN though their RTL fixes are on silicon since the batch | no | — | — | corrected; all three CONFIRMED ON SILICON 2026-10-26 at N=2 (below) |
 | (c5) Q-34 | a misaligned plain access in a context traps 4/6 on silicon; QEMU completes it | no (ruled 2026-10-26: the trap is the intended result, terminal for the run) | none; the QEMU twin traps inside supervised contexts | — | out: no hardware misaligned support |
+| (d) FP divide/sqrt rounding | fdiv / fsqrt round to the wrong neighbour (sim, 512 cases each: .d 23 / 19, .s 53 / 27) | yes: the divsqrt unit | none that keeps hard-float div/sqrt; programs with exact FP checks fail (ludcmp, st on bitstream 2) | a few LUTs in the normaliser (estimate): capstone-ariane r62-divsqrt e7af48457, sim-clean, lint PASS | **in**: R-62 is the blocker (the lead, 2026-10-26); R-62 + R-63 |
 
 ## (a) S-21 / S-22: the frame is domain-reachable
 
@@ -91,7 +92,7 @@ changed since, and two corrections to that note:
    D-cache or PTW latency the simulation's fixed delay does not produce), the verdict is dropped and the walk's 13 is
    what is reported.
 
-**H1 is REFUTED for the one event read (step 0a, 2026-10-26).** The runtime lane's `fault_mstatus` (runtime/pin-pte-census
+**H1 is REFUTED for every event read: 10 cause-13 events on both boards (step 0a and the x200 repeats, 2026-10-26).** The runtime lane's `fault_mstatus` (runtime/pin-pte-census
 ea83c374ae37, board module 1a4cae57) printed the context's saved mstatus at both refusals of the one cause-13 event in 200
 runs on bitstream 2, board 2 (the board lane's lane c2cae6529f8d, `records/b2bs-uaf-ms-b2.result-lines.txt`):
 `0xa00002000`, decoded here as MPRV 0, MPP 0, FS 1 (Initial), UXL 2, SXL 2, MIE 0, MPIE 0. That is exactly the value the
@@ -100,8 +101,13 @@ priv M), unmodified since; +920 is the context's live mstatus at the escape (the
 sees it, `commit_stage.sv:228-234`, and the walk saves id 3 before restoring the caller, `capstone_dom_switcher.anvil:483`).
 So the load ran at M with MPRV 0 and the capability check was gated ON. MPP 0 is the strobe's zero: a context never
 traps into M (its traps are stripped into escapes) and never executes an MRET, so nothing writes MPP after entry, and
-MPP is read only under MPRV or by an MRET. N=1; H2, H3 and H4 remain, which is what the instrument below separates,
-so row (b) stays in bitstream 3.
+MPP is read only under MPRV or by an MRET. The x200 repeats then read the same word at every event: board 1 3 of 200,
+board 2 6 of 200 (pre-registered e97af7bb27bb, addendum e50f65806556; dev `154e4342ac92`). Counted here from the three
+result-lines files: 10 events, 18 refused-escape lines, every one `0xa00002000 mprv 0 mpp 0`, none on a cause-25 run.
+Every event faults at the same pc (code + 0x10c70, `control_read_probe`) and at an address ending 0x040. Two board-2
+events carried one refusal line instead of two (confirmed by the boot-wide dmesg). Not explained, and not read here;
+the mstatus word of each is the same. N=10; H2, H3 and H4 remain, which is what the instrument below separates, so row (b)
+stays in bitstream 3.
 
 **Free steps first (no bitstream):**
 - **Step 0a (module, the runtime lane):** at the cause-13 escape, print the context's saved mstatus (frame `+920`): MPRV
@@ -189,6 +195,44 @@ debug apertures after the trap.
   `va-srevroot` (R-58: the caller reads its OWN srevroot back after a context), `va-runv-r59` / `va-runv-r59-low`
   (R-59: a malformed table root is refused at entry), and a Q-24 arm (firmware sets a capability cause in medeleg; an
   S-mode capability fault lands in S). R-58, R-59 and Q-24 are CONFIRMED ON SILICON at N=2.
+
+## (d) FP divide and square root are not correctly rounded
+
+Found 2026-10-26 while chasing the BEEBS `ludcmp` / `st` VERIFY-FAILED on bitstream 2. Those programs pass on the QEMU
+twin, whose softfloat is correctly rounded. `fp-ieee-divsqrt.S` (capstone-ariane vp3-ringcut `4357e64d8`) runs 512
+cases (seed 20261026) in bare M-mode under RNE against Python's correctly rounded doubles:
+- **The misses:** 23 `fdiv.d` and 19 `fsqrt.d` results, each 1 ulp toward zero.
+- **Per operand:** cases 3 and 15 run alone behind 32 nops and a fence and read the same bits.
+- **Single precision too:** `fp-ieee-divsqrt-s.S` (`03da28028`, seed 20261027, against numpy float32) reads 53
+  `fdiv.s` and 27 `fsqrt.s` misses of 512, each 1 ulp toward zero. FP32 runs through the same unit with
+  "24+4 more iterations for rounding bits" (`control_mvp.sv`, `State_ctl_S` 6'h1b / 6'h0d). ludcmp divides
+  only in single precision (3 `fdiv.s`, static count).
+- **Mechanism, by source:** fpnew 0.7.0's divsqrt (`fpu_div_sqrt_mvp`, MERGED at `fpu_wrap.sv:92`) takes the
+  round-to-nearest-even sticky bit only from four extra quotient bits, never from the remainder
+  (`norm_div_sqrt_mvp.sv:342/354`, `:385-387`). So a true result just above half an ulp is rounded as a tie, to the
+  even neighbour below it.
+- **The audit:** a bit model of that rounding predicts exactly the 23 and 19 failing indices and reproduces all 512
+  mantissas, while a remainder-aware sticky bit predicts no misses (adversarial audit, 2026-10-26).
+- **Same RTL in both flows:** nothing in the FPGA flow selects another unit.
+
+The context escape path was ruled out on the way, in the same tree: `va-runv-fp.S` covers plain, quantum-preempted,
+and fdiv / fadd / fdiv shapes, and every check reads 0. A quantum or interrupt escape cannot flush an FP op in flight
+in any case, because the escape is injected at decode (`decoder.sv:2096`).
+
+**Status: R-62 CONFIRMED ON SILICON** (board 1, `fp-all` exact, board lane `ca7a573b0ffd`). The BEEBS deviations
+on bitstream 2 are attributed to it by an exact-value match (ISSUES R-62), and nbody passed on silicon as predicted.
+
+**Fix (the lead, 2026-10-26: "R-62 is the blocker, concentrate on it"): capstone-ariane r62-divsqrt `a73a7c670` +
+`e7af48457`.** It is one patched copy of the normaliser, selected by `core/Flist.cva6`.
+- Round-to-nearest treats a set round bit as sticky on the normal-result branches: a correctly rounded quotient or
+  root of p-bit significands can never sit exactly on a midpoint.
+- The rounding mode is decoded in fpnew's encoding, which fixes R-63 (RDN/RUP exchanged, RMM truncating).
+- Simulation: 0 misses in all four operations, the exact/subnormal control arms read 0, and the rounding-mode arm
+  reads 15 of 15. Claim-audited. Lint PASS at baseline.
+- Remaining, unused by the failing programs: the directed modes and NX with all-zero extra bits (they need the
+  remainder), the rarer subnormal-result error, and overflow to infinity under the directed modes.
+- Next: the 95-test sweep, the synthesis-only size gate, then the full build. The flash is the lead's word.
+
 
 ## Not in this note
 

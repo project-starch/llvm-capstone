@@ -7225,3 +7225,69 @@ counted from its verdict TSVs:
 - **Not predicted:** two of board 2's six events carried ONE refusal instead of two. The boot's whole dmesg confirms
   this. Every earlier event read for refusals carried two. This is unexplained.
 - **Pre-registrations** (board lane): aeb1d8d3bbbf (0a), e97af7bb27bb and its addendum e50f65806556 (x200 per board).
+
+## A misaligned plain access inside a context traps on silicon (cause 4 load, cause 6 store) and completes on the QEMU twin: Q-34, both halves read (caplifive_vp2c_dcc6daf6e, 2026-10-26)
+
+- **The probe:** `tier3-smoke/misal-store.c`, one 32-byte object with every access inside it, on the pinned
+  bitstream-2 corpus kits. One boot per board, plus the twin qkit7-b2twin3-q8 run board-free.
+  Records: `tier3-smoke/records/b2bs-misal-b{1,2}.result-lines.txt` and `misal-twin.result-lines.txt`.
+- **Silicon, both boards identical:**
+  - `lw` at +1 reads cause 4;
+  - `sw` at +1, `sd` at +1 and `sd` at +4 read cause 6, each at its own instruction;
+  - the aligned `sw`/`sd` controls return before and after.
+- **The twin** completes all four misaligned accesses.
+- **Why it matters for the corpus:** the semantics owner ruled that silicon is the reference (ISSUES Q-34). A case
+  whose path performs a misaligned plain access stops at the alignment trap on silicon, and is graded NO-READING (the
+  run stopped before its bug). The twin's prediction for such a case is wrong by construction until the twin traps too.
+  - In the bitstream-2 Juliet readings, only two spatial remainder cells (CWE135_12 seeded, part01, uncounted) were
+    affected.
+  - No counted cell was affected: the sample and the temporal set have no cause 4 on silicon.
+
+## The perf evaluation's counters on silicon: S-mode reads cycle and instret, and dev's new module revision passes its Tier 1 contract (caplifive_vp2c_dcc6daf6e, board 1, 2026-10-26)
+
+- **What ran:** one boot on board 1. The kit is bkit9-b2-b1 with only the runtime lane's bench build swapped in:
+  launcher 978c09d61f774315, module 9c60fb53f80ce67e (dev c2b137cdfee6's revision plus a compile-time-only instrument
+  that sums cycle and instret across CSRUNV). The images are v7.
+  Record: `tier3-smoke/records/b2bs-perfprobe-b1.result-lines.txt`.
+- **Tier 1 contract:** `ok` reads VIRTUAL_APPLICATION_OK, exit 0; `stale` is denied with cause 25, exit 139.
+- **The counters read on silicon:** an empty marked region costs about 20,400 instructions and 18 module entries.
+  - A 1e7-iteration loop adds 2e7 + 1,877 to 1,989 instructions at about 1.52 cycles per instruction, with 15 more
+    entries.
+  - The excess, about 125 instructions per extra entry, is counted inside the window. At the main run's scale it is
+    about 1e-4 of a reading, so it is not corrected. Entries are recorded beside every reading.
+
+## The perf evaluation's main run on silicon: 864 of 880 processes pass in both arms; the 16 failures (ludcmp, st) are R-62's divide/sqrt rounding, which reads on silicon exactly as simulated (caplifive_vp2c_dcc6daf6e, both boards, 2026-10-26)
+
+- **What ran:** the runtime lane's perf kits, T1 and T2 arms per process, on both boards. Records are under
+  `tier3-smoke/records/`.
+  - **Batch 1:** k1-k4, 100 programs, 856 processes; the split was decided by k1's firmware, 23,759,368 B, under the cap.
+  - **Batch 2:** b2k1, coremark, matmult-int and rv8-dhrystone, 24 processes.
+  - The kits are bkit10-perf-b1/b2 (launcher 978c09d61f774315, module 9c60fb53f80ce67e, v7 images).
+- **Functional result:** 864 of 880 processes pass (rc 0, every warm-up and timed BENCH line, BENCH-DONE failed=0), in
+  both arms. The 16 failures are exactly ludcmp and st: every process, both arms, every iteration VERIFY-FAILED, with no
+  fault.
+  - One k3 process (frac) first read as a failure. A console heartbeat had landed mid-line in its warm-up BENCH line, so
+    the failure was the instrument's. The readers now strip heartbeat lines and say so.
+- **Attribution: R-62, on silicon.**
+  - **The FP discriminator (one boot)** read the same failures in ludcmp and st native, outside any context. FP state
+    also survives escapes (fp-escape and fp-divsqrt bad=0 everywhere). So it is the FPU, not the capability system.
+  - **The rtl lane's bare kit (fp-all 07692df2c3710353)** read its simulated vector exactly on silicon: 23 of 512
+    fdiv.d and 19 of 512 fsqrt.d results 1 ulp low, with the same first misses. It read the same on both boards, the
+    UART lines byte-identical (N=2 cross-board).
+  - **minver's silicon state hash** (0x74ceeb9e3de2c383, all 48 lines) equals the rtl lane's RTL-rounding host model
+    exactly. The IEEE twin reads 0xd6cc5fbda167dc7b.
+  - **The model's prediction for nbody** (PASS, from its executed path; written before nbody ran) held in all 8
+    processes.
+  - **The same model predicts check = twin** for the six FP programs whose silicon hash equals the twin's (cubic, fir,
+    newlib-exp, newlib-log, sqrt and whetstone). The rtl lane ran host replicas built from each program's compile
+    lines, whose IEEE builds reproduce the twin. This covers each program's own arithmetic, not its libm calls.
+  - ludcmp divides in single precision only. That half rests on the discriminator and the host model; the bare kit
+    tests the double operations.
+- **check= against the QEMU twin, per program:** 61 EQUAL, 1 DIFFERS (minver, as above), 41 carry no state hash
+  (0x0 on both sides, which tests nothing).
+  - **Verifies, read from the files each program's compile lines name** (census-verify.py): 33 of batch 1's 92 BEEBS
+    verifies are upstream's no-op `return -1`, so for those a VERIFY pass checks nothing.
+  - **11 programs carry neither a real verify nor a hash:** fasta, miniz, miniz-libc, rijndael, sglib-dllist(-libc),
+    sglib-hashtable(-libc), stb_perlin, trio-snprintf(-libc). Their silicon output is unchecked in this run.
+- **Timing readings** (cycles, instret and module entries per iteration) are in the per-process READ lines and the
+  transcripts. The T1-against-T2 analysis is the runtime lane's.

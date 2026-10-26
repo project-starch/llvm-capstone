@@ -2546,7 +2546,7 @@ from an unprivileged domain is a finding even behind a configuration error, and 
       - So QEMU's 65,536-id pool is close in SIZE; the divergence is generations, push and retire.
       - Prediction kind (d) narrows to "an index ≥ 65,535", which the RTL cannot reach.
 
-## Q-34 — a misaligned PLAIN load in a protected context completes on QEMU, while the RTL traps it with cause 4 (a store, by the same RTL code, is predicted to trap with 6; untested): a twin-fidelity gap with a verdict consequence `RULED semantics 2026-10-26 by the semantics owner (silicon is the reference) / OPEN twin fix — observed 2026-10-26 on bitstream 2 dcc6daf6e, board 2, Juliet spatial remainder part01 (lane vp2-tier12 d54e7a6582e2); filed by the board lane from the compiler lane's QEMU reading and the rtl lane's RTL reading, each re-read here; the fix is a QEMU pin, the semantics owner's call`
+## Q-34 — a misaligned PLAIN load in a protected context completes on QEMU, while the RTL traps it with cause 4 (a misaligned plain store with cause 6, read on silicon 2026-10-26): a twin-fidelity gap with a verdict consequence `RULED semantics 2026-10-26 by the semantics owner (silicon is the reference) / OPEN twin fix — observed 2026-10-26 on bitstream 2 dcc6daf6e, board 2, Juliet spatial remainder part01 (lane vp2-tier12 d54e7a6582e2); filed by the board lane from the compiler lane's QEMU reading and the rtl lane's RTL reading, each re-read here; the fix is a QEMU pin, the semantics owner's call`
 
 **The cells** (seeded build, so no rand draw; lane vp2-tier12 d54e7a6582e2, `tier3-smoke/records/b2bs-juliet-rem-part01-b2.result-lines.txt`, which lands on dev with the remainder's results):
 
@@ -2584,7 +2584,7 @@ from an unprivileged domain is a finding even behind a configuration error, and 
   - It found three cells, all in part01: the two above and the census CWE135_12.bad, whose board draw took the good path.
 - **Blind spot:** a misaligned access QEMU completed without faulting leaves no line. So cells where one precedes an
   aligned fault, or happens in a run that completes, are not counted.
-- **Untested prediction:** a misaligned plain store reads cause 6 on silicon where QEMU stores.
+- **The store side, read on silicon 2026-10-26** (below): a misaligned plain store reads cause 6 where QEMU stores.
 
 **Grading, until ruled:**
 - A silicon 4 (or 6) at an access the twin performed misaligned is this gap, not a new finding and not a miss of the
@@ -2613,6 +2613,7 @@ from an unprivileged domain is a finding even behind a configuration error, and 
   - Until it lands, Q-34 stays a known divergence. The twin's prediction is wrong by construction for any cell whose
     path has a misaligned plain access.
 - **The store's cause 6** follows from the same code. It is worth one directed arm when convenient, not urgent.
+  (Run 2026-10-26, below: read on silicon.)
 - **Grading** (the semantics owner's recommendation; the lead can override how it is counted):
   - The corpus definition already covers the cell: the run stopped before its bug. The trap is at the first wide `lw`,
     and the overflow is 40 bytes further on.
@@ -2622,6 +2623,20 @@ from an unprivileged domain is a finding even behind a configuration error, and 
     reason.")
 - **Where the cells stand:** they are in the Juliet spatial remainder, whose silicon run the lead stopped on 2026-10-26.
   They are recorded but counted in no total; see the measurements doc's Juliet scope entry.
+
+**The store side, read on silicon** (2026-10-26, the board lane; lane vp2-tier12 pre-registration 9695ece729d0, result
+a30537aef8b0; records `tier3-smoke/records/b2bs-misal-b{1,2}.result-lines.txt`):
+- **The probe:** `misal-store.dom` (e3107737d6cb6031, built from the uaf control's recipe). It makes one 32-byte malloc
+  object, and every access stays inside it. One boot per board on the pinned bitstream-2 corpus kits.
+- **The QEMU twin completes all four misaligned accesses,** each with its written value.
+- **Both boards read the same:**
+  - `lw` at +1 traps cause 4 (misal_load_w+0x38);
+  - `sw` at +1 traps cause 6 (misal_store_w+0x58);
+  - `sd` at +1 and at +4 trap cause 6 (misal_store_d+0x58);
+  - tval is the object's base + 1 or + 4, inside the object;
+  - the aligned `sw`/`sd` controls return before and after.
+- **So the ruling's store half holds on silicon.** The check is per access width (an `sd` at a 4-aligned address
+  traps), and a store is never reported as a load.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 
@@ -3685,6 +3700,135 @@ bare kit (the prediction on c721c1a2a: 15 at the legal load).
 2026-10-24): the refusal reads `ldc_store_ok_q` and is scoped to `state_q == LDC_CLEAR_WAIT`, the only state that issues
 a clear, so it can no longer reach an unrelated exception. That commit also moves every consuming LDC's clear into
 LDC_CLEAR_WAIT, so the fixed tree's readings support the fix without isolating the scoping alone.
+
+### R-62 — `fdiv` and `fsqrt` are not correctly rounded: fpnew 0.7.0's divide/sqrt unit takes its round-to-nearest-even sticky bit from a few extra quotient bits only, never from the remainder, so a result just above half an ulp rounds DOWN to the even neighbour (sim: `.d` 23 and 19 of 512, `.s` 53 and 27 of 512, each 1 ulp toward zero) · `CONFIRMED ON SILICON 2026-10-26 on bitstream 2 (board 1, N=1; the double operations read the simulated vector exactly, bare kit fp-divsqrt-bare-2026-10-26, board lane ca7a573b0ffd); FIX IN RTL, simulation only: capstone-ariane r62-divsqrt a73a7c670 + e7af48457 (round-to-nearest correct for normal results; the rounding-mode decode of R-63 in the same file), lint PASS at baseline, not yet synthesised. RTL defect in the vendored FPU (core/cvfpu at 3116391 "Release 0.7.0", unit fpu_div_sqrt_mvp), on every bitstream that carries it; found 2026-10-26 by the RTL lane; root cause read in source and claim-audited twice; the BEEBS deviations on bitstream 2 (ludcmp, st, minver) attributed to it by an exact-value match`
+
+Siblings: R-52 (the earlier FP defect on silicon, a WRITE-BACK fault, fixed; a different mechanism, values there were
+the destination's earlier contents, not 1 ulp off), Q-34 (a different FP-adjacent divergence, misaligned accesses).
+
+**Mechanism** (`core/cvfpu/src/fpu_div_sqrt_mvp/hdl/`, fpnew 0.7.0, selected unconditionally as the DIVSQRT
+opgroup's MERGED unit at `core/fpu_wrap.sv:92`; no ifdef in cvfpu, fpu_div_sqrt_mvp or fpu_wrap, and the FPGA flist
+is flattened from the same `core/Flist.cva6`):
+- The iteration unit computes the quotient (or root) to a fixed number of bits beyond the result; `control_mvp.sv`'s
+  comments read "53+4 more iterations for rounding bits" (FP64) and "24+4" (FP32).
+- The normaliser's only mantissa input is that quotient (`norm_div_sqrt_mvp.sv:48`, `Mant_in_DI`). Rounding takes
+  `Mant_lower_D` and `Mant_sticky_bit_D = | Mant_forround_D[...]` from its low bits (`:342`/`:354` build
+  `Mant_forround_D`, `:385-387` for FP64, `:372-377` for FP32). The final REMAINDER never reaches the sticky bit.
+- So when the computed extra bits read exactly half (round bit 1, the rest 0) while the true result is a little
+  above half, the case is rounded as a tie, and ties-to-even keeps an even LSB. The result is 1 ulp toward zero.
+- Every observed miss has an even truncated LSB and a true fraction between 0.50 and 0.60 ulp.
+
+**Readings** (simulation of dcc6daf6e's core, capstone-ariane vp3-ringcut, tests only above it):
+- `fp-ieee-divsqrt.S` (`4357e64d8`), 512 cases from seed 20261026, a and b = ±[1,2)·2^[−30,30], bare M-mode, RNE
+  (rm dyn, frm 0), compared bit for bit with Python's correctly rounded doubles: 23 `fdiv.d` and 19 `fsqrt.d`
+  misses. The first are case 3, which got 0xc1d880ad3d2bf68c where …68d is correct, and case 15, which got
+  0x4094146748614d06 where …d07 is correct. The last quotient is exact, so the loop ran to the end. Both references
+  were checked with exact rational arithmetic.
+- `-DONECASE=3` and `-DONECASE=15` run one case behind 32 nops and a fence and read the same bits, so the error
+  depends on the operands, not on the instruction sequence.
+- `fp-ieee-divsqrt-s.S` (`03da28028`), 512 cases from seed 20261027 against numpy float32: 53 `fdiv.s` and 27
+  `fsqrt.s` misses, each 1 ulp toward zero (first: case 12, 0x43b9ae0c where …0d is correct; case 1, 0x383df3d8
+  where …d9 is correct).
+- **The bit model:** truncate the quotient to K extra bits and round with a sticky bit from those bits only, K = 4
+  (FP64) or 3 (FP32) on the 1.x path and one fewer on the 0.1x path. It reproduces ALL 2,048 traced RTL results bit
+  for bit (512 each of fdiv.d, fsqrt.d, fdiv.s and fsqrt.s). A remainder-aware sticky bit predicts no misses. The
+  FP64 model came from an adversarial audit that rebuilt every case from the retire trace; the FP32 K was fitted
+  (512/512, with 2, 4 and 5 rejected). The C model and the rewrite are in the kit's `host-model/`.
+- The context escape path was ruled out on the way: `va-runv-fp.S` covers non-zero FP state across an escape and a
+  resume, plain, quantum-preempted and fdiv/fadd/fdiv shapes, and every check reads 0. A quantum or interrupt
+  escape cannot flush an FP op in flight in any case: it is injected at decode (`decoder.sv:2096`), so every older
+  instruction retires first.
+
+**On silicon, bitstream 2** (`caplifive_vp2c_dcc6daf6e`):
+- BEEBS ludcmp and st read VERIFY-FAILED in every process, both arms, every iteration including the warm-up
+  (board lane `35e798ae28a9`, k1). They read the same as plain native Linux processes, 4 of 4 (`99c5620924e9`).
+  The QEMU twin, whose softfloat is correctly rounded, passes them. Their verifies are exact comparisons (upstream
+  `libludcmp.c:184-209` and `libst.c:197-211`), and the images divide in `fdiv.s` (ludcmp) and `fdiv.d`/`fsqrt.d` (st).
+- minver's check value, an FNV of its output state (the perf harness's `beebs/state/minver.c`), reads
+  0x74ceeb9e3de2c383 on all 48 silicon BENCH lines (k2; read here from the raw capture, which stays
+  uncommitted per the raw-capture rule; the board lane's record is `be1067107983`). The twin reads 0xd6cc5fbda167dc7b (the runtime lane's comparison).
+  minver's own verify is upstream's `return -1`, so its silicon "pass" checked nothing.
+- **Exact-value attribution:** host builds of the same sources and flags (-O2 -ffp-contract=off; the harness's
+  9,900 iterations per unit), with every fdiv and sqrt in the IR replaced by the C model:
+  - ludcmp and st verify 0 under the model and 1 under IEEE;
+  - minver's check is the twin's 0xd6cc5fbda167dc7b under IEEE and silicon's 0x74ceeb9e3de2c383 under the model;
+  - nbody verifies under both (30 fdiv.d executed through the model); its sqrt sits in bodies_energy, which
+    benchmark() never calls. PREDICTED to pass on silicon, registered before it ran
+    (board lane `2c1dd79a1379`). READ 2026-10-26 (k3): nbody passes VERIFY in all 8 processes (T1 4/4, T2 4/4; board
+    lane `ca7a573b0ffd`, its upstream verify an exact comparison).
+- **The direct instruction reading, CONFIRMED ON SILICON** (board 1, 2026-10-26 19:52, one cold bare boot; board lane
+  `ca7a573b0ffd`, pre-registered at land/rtl-fp-kit `84488ed6db17` and board lane `b1fe19fecf0b`). `fp-all` (image
+  07692df2c3710353, rec 0x80007000) reads SR 10 and the simulated vector exactly: 0x17 fdiv.d misses and 0x13 fsqrt.d
+  misses of 512, the same first misses (case 3: 0xc1d880ad3d2bf68c for …68d; case 15: 0x4094146748614d06 for …d07), and
+  the exact last quotient. It was checked here by script against the PREREG table (image prefix, rec, SR, ten values),
+  and the board lane read uart.txt directly. Scope: this kit tests the double operations only. The single-precision
+  side rests on the simulation arm, the native ludcmp cell and the host model.
+
+**Caveats:**
+- No upstream record of this defect was found in the submodule. Upstream cvfpu's later commits to this unit fix
+  flush and SIMD sync only.
+- Untested corollary of the same lines: NX may be missed for an inexact result whose extra bits are all zero.
+- Some perf-build VERIFY passes are void, about a third of them, not most. Recount from the exact .c files on each
+  program's compile line in perf/build/native/build.log: 36 of 94 BEEBS programs have upstream's no-op
+  verify_benchmark (`return -1`) taking the first `#if` branch of the four trio programs, 34 with trio-sscanf(-libc)'s
+  branch resolved to its real check. The board lane's independent recount reads 33 of 92. Its first count, "30 of 57"
+  (`2d6260bd8fb1`), covered only perf/build/native/src; this entry repeated it as "mostly void", and that overstated it.
+  minver and qurt are no-ops; ludcmp, st and nbody are real. For a no-op program a pass is no evidence that it avoided
+  this defect, and the runtime lane is moving the gate to a twin comparison.
+
+**Fix in RTL (simulation only, not yet synthesised): capstone-ariane r62-divsqrt `a73a7c670` + `e7af48457`.** The
+remainder is not needed for round-to-nearest. For p-bit significands, a correctly rounded quotient or square root
+can never lie exactly on a (p+1)-bit midpoint (odd-part argument: odd(a) = odd(b)·q′ ≥ 2^p > odd(a) for division,
+odd(rad) = q′² ≥ 2^2p > rad for the square root). So when the round bit is set the true value is strictly above the
+midpoint. In a patched copy of the normaliser (`core/fpu_div_sqrt_fix/norm_div_sqrt_mvp.sv`, selected by
+`core/Flist.cva6`, the submodule untouched), the round bit is ORed into the sticky term of the round-to-nearest
+round-up, on the three normal-result branches only. A subnormal result rounds at a coarser position, where a
+midpoint exists.
+- **Simulation:** 0 misses of 512 in each of fdiv.d, fsqrt.d, fdiv.s and fsqrt.s (unfixed 23 / 19 / 53 / 27). The
+  control arms fp-ieee-exact and fp-ieee-exact-s (224 rows each: exact quotients, perfect squares, subnormal results,
+  32 exact subnormal midpoints, subnormal operands) read 0 misses fixed. Unfixed they read 0 divide misses and 11
+  sqrt misses per precision, which the C model predicts exactly. Every run's log names the file it compiled.
+- **Host model of the fixed rounding:** ludcmp, st and nbody verify, and minver reads the twin's 0xd6cc5fbda167dc7b.
+- **The audit (claim-auditor, 2026-10-26):**
+  - the theorem holds for every input reaching the flagged branches, subnormal operands included, with an exhaustive
+    FP16 model and a positive control at a coarser position;
+  - the round bit is mapped correctly in every format;
+  - no latch, and no listed loop cone touched;
+  - every other output is bit-identical.
+- **Lint:** PASS at a73a7c670 with every counter at the bitstream-2 baseline.
+- **Pending:** the 95-test sweep, the synthesis-only size gate and a bitstream. The flash is the lead's word.
+
+**Remaining after the fix** (none reached by the failing programs, which use round-to-nearest):
+- the directed modes and NX when the computed extra bits are all zero, which need the remainder;
+- the rarer same-shape error on subnormal results;
+- overflow returns infinity under every mode, where IEEE gives the largest finite value under RTZ, RDN and RUP;
+- the rounding-mode swap is R-63.
+
+The upstream alternative was a cvfpu revision with `DivSqrtSel`/THMULTI (the C910 divider, after 0.7.0). It is an
+89-commit bump touching the FMA and cast units too, it was not read for correctness, and it is not taken.
+Bitstream-3 scope note, row (d).
+
+### R-63 — `fdiv`/`fsqrt` under RDN round toward +inf and under RUP toward −inf, and RMM truncates: fpnew hands its rounding-mode encoding to the divide/sqrt unit unmapped, and the unit numbers the modes differently · `FIX IN RTL, simulation only: capstone-ariane r62-divsqrt e7af48457 (the same patched normaliser as R-62). Found 2026-10-26 by the R-62 audit, read in source and confirmed in simulation; on every bitstream that carries fpnew 0.7.0's divsqrt, bitstream 2 included (silicon not read)`
+
+Sibling: R-62, the same unit and the same file, a different mechanism (which bit decides the rounding, not which
+mode is applied).
+
+**Mechanism.** fpnew's encoding is RNE 0, RTZ 1, RDN 2, RUP 3, RMM 4 (`core/cvfpu/src/fpnew_pkg.sv:131-135`).
+`fpnew_divsqrt_multi.sv:101`/`:285` passes `rnd_mode_i` to the unit's `RM_SI` unmapped. The unit's own constants are
+NEAREST 0, TRUNC 1, PLUSINF 2, MINUSINF 3 (`fpu_div_sqrt_mvp/hdl/defs_div_sqrt_mvp.sv:18-21`), and the normaliser's
+round-up `case` has no arm for 4. So RDN (2) rounds toward +inf, RUP (3) toward −inf, and RMM (4) takes the default,
+which never rounds up. Nothing else in the unit reads the mode.
+
+**Reading** (`fp-rm-divsqrt.S`, capstone-ariane `e7af48457`; 1/3, −1/3 and sqrt(2) under frm 0..4, against exact
+rationals):
+- on the unfixed normaliser (a73a7c670), RNE and RTZ are correct, RDN and RUP are exchanged value for value (1/3 under
+  RDN reads 0x3fd5555555555556, the RUP value), and RMM truncates (sqrt(2) reads …bcc for …bcd);
+- with the mode decoded in fpnew's encoding (e7af48457), all 15 values are correctly rounded.
+
+**Fix:** the normaliser's round-up `case` decodes fpnew's encoding. The mantissa is a magnitude, so RDN rounds it up
+for a negative result, RUP for a positive one, and RMM whenever the round bit is set (ties away from zero).
+**Limit:** the directed modes still need the remainder when the computed extra bits are all zero (R-62, remaining).
+Silicon has not been read; a directed-mode bare arm would read it on bitstream 2 in one boot.
 
 ### R-57 — a capability STORE whose translation faults retires WITHOUT its page fault and is committed to the store buffer, which copies an INVALID speculative entry into its commit queue (a ghost head that never drains) and underflows its speculative count: the vp2 wedges r8..r11 `OPEN ON SILICON (caplifive_vp2_bf3db3175); DEMONSTRATED in simulation 2026-10-18 by a matched pair; FIXED on virtual-profile-2-c 2114e11bd for the next bitstream; the store-side twin of R-56; software rule S-25 (no capability store as a page's first access) until then`
 

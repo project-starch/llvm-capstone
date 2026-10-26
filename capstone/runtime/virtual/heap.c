@@ -8,6 +8,7 @@
 #include <malloc_capstone.h>
 #include <capstone/capability.h>
 #include "vm.h"
+#include "vm-abi.h"
 #include <capstone/representable.h>
 
 /* The two switches of the spatial-versus-temporal measurement (runtime/application CMake
@@ -75,18 +76,43 @@ void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t 
  * Dropping the pre-check is BEHAVIOUR-PRESERVING, not a trade: the module's ensure_nodes() opens
  * with `if (available >= required) return 0;` over the table header, which is the authoritative
  * copy of the same quantity the CSR mirrored. So the decision is unchanged and merely made one
- * level in. The cost is a service call on the path that previously returned without one; it is
- * per-MAPPING (three call sites, all ensure_ids(256), on mallocng's group-mapping paths) and not
- * per-allocation, and it is measured rather than assumed in the record beside this change.
+ * level in. The cost is a service call on the path that previously returned without one.
+ *
+ * CORRECTION (2026-10-26): that cost was PER ALLOCATION, not per mapping as this comment used to say.
+ * malloc, realloc and aligned_alloc each called ensure_ids(256) unconditionally, so every one of them
+ * left the context for a full delegated round (thousands of instructions; #282 profiles one round at
+ * 6,890) in both measurement arms, T1 included, where a malloc takes no record at all.
+ *
+ * So the heap now counts instead of asking. A successful call leaves at least IDS_ASK records
+ * available (the module's ensure_nodes guarantees available >= required); the heap then takes up to
+ * IDS_ASK - CV_NODE_RESERVE - 1 of them, one per CDERIVE it issues (take_id), before it asks again,
+ * so it never drives the table to the hardware's pressure threshold on its own. That is one service
+ * call per ~255 records taken, and none for an allocation that takes none (T1's SHRINK). Records
+ * taken outside the heap (a ported program's own nested allocator, CSNODE) are not counted here;
+ * they are what the hardware's kind-5 pressure escape is for, which the module answers with
+ * ensure_nodes and a retry (capstone_vm.c, CV_STEP, event 5) -- the backstop this hint never
+ * replaced. Frees do not refill the count: a CREVOKE retires a record and frees it only at a
+ * collection, so counting takes alone errs on the side of asking early.
  *
  * Availability is not a thing the application polls. The signals are the hardware's kind-5 pressure
  * escape and the module's collection; a hint, if one is ever wanted, is a service call like the one
  * below and never a CSR. */
+#define IDS_ASK (CV_NODE_RESERVE + 256)
+/* The most records one heap call takes before its next ensure_ids: a mapping group, a nested group
+ * and the object's own child. */
+#define IDS_PER_CALL 3
+static size_t ids_budget;   /* records the heap may still take before asking; under the heap lock */
 static int ensure_ids(size_t need)
 {
-    long rc = __capstone_vm_nodes(need);
+    if (ids_budget >= need) return 0;
+    long rc = __capstone_vm_nodes(IDS_ASK);
     if (rc < 0) { errno = -rc; return -1; }
+    ids_budget = IDS_ASK - CV_NODE_RESERVE - 1;
     return 0;
+}
+static inline void take_id(void)
+{
+    if (ids_budget) --ids_budget;
 }
 /* Keep musl's group geometry. Slot parents are narrowed copies of one
  * managed group, not linear partitions or separate lifetime nodes. The
@@ -169,6 +195,7 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
 static void *issue_child(void *parent, size_t offset, size_t size)
 {
 #if CAPSTONE_HEAP_LIFETIMES
+    take_id();
     return capstone_cap_derive(parent, offset, size);
 #else
     size_t start = __builtin_capstone_cap_get_base(parent) + offset;
@@ -193,6 +220,7 @@ static void end_child(void *parent, void *child)
 }
 static void *mapping_group(sublet_cap *grant, size_t bytes)
 {
+    take_id();
     return capstone_cap_derive(cap_vm_copyable(grant), 0, bytes);
 }
 void *__capstone_malloc_map(size_t bytes)
@@ -384,7 +412,7 @@ void *malloc(size_t n)
     if (want < n) { errno = ENOMEM; return NULL; }   /* overflow on a hostile size */
     lock_heap();
     void *raw;
-    if (ensure_ids(256)) { __capstone_malloc_ids_failed++; raw = NULL; }
+    if (ensure_ids(IDS_PER_CALL)) { __capstone_malloc_ids_failed++; raw = NULL; }
     else { raw = __capstone_mallocng_malloc(want); if (!raw) __capstone_malloc_ng_null++; }
     void *p = publish(raw, want);
     unlock_heap(); return p;
@@ -430,7 +458,7 @@ void *realloc(void *p, size_t n)
      * unrounded block would hand out a capability past the allocation. */
     size_t want = capstone_repr_round(n ? n : 1);
     if (want < n) { unlock_heap(); errno = ENOMEM; return NULL; }
-    void *q = ensure_ids(256) ? NULL
+    void *q = ensure_ids(IDS_PER_CALL) ? NULL
             : publish(__capstone_mallocng_realloc(backend_pointer(r), want), want);
     unlock_heap(); return q;
 }
@@ -444,7 +472,7 @@ void *aligned_alloc(size_t a, size_t n)
      * rounding added to malloc had simply never been applied to its two siblings. */
     size_t want = capstone_repr_round(n ? n : 1);
     if (want < n) { unlock_heap(); errno = ENOMEM; return NULL; }
-    void *p = ensure_ids(256) ? NULL
+    void *p = ensure_ids(IDS_PER_CALL) ? NULL
             : publish(__capstone_mallocng_aligned_alloc(a, want), want);
     unlock_heap(); return p;
 }

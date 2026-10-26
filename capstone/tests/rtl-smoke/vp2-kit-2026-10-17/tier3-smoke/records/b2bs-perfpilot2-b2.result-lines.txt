@@ -1,0 +1,76 @@
+# The perf evaluation's second pilot, board 2 (tier3-perfpilot-b2.sh, PP_SUB perfpilot2; pre-registered 59093fd4d3ca): the runner's result lines (one READ line per process).
+PP BEGIN 16:08:38 board 2 kit bkit10-perf-b2 booking 398
+PP END rc=0 16:51:27
+PILOT kit <mnt-hdd>/capstone/t3-smoke/bkit10-perf-b2 boot completed; transcript <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b2/perfpilot2/guest/board.txt; step result {"kind": "exit", "value": 0}
+READ bench parameters: 3 ['bench_cycles', 'bench_entries', 'bench_instret']
+READ 0 rv8-miniz T1 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=356920471 instret=126342607 entries=1368
+READ 1 rv8-miniz T2 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=376624981 instret=127399253 entries=1852
+READ 2 rv8-miniz T2 1 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=378199996 instret=127400954 entries=1852
+READ 3 rv8-miniz T1 1 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=358206805 instret=126344679 entries=1368
+READ 4 rv8-miniz T1 2 K2: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=358604799 instret=126342327 entries=1368
+READ 5 rv8-miniz T2 2 K2: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=378500597 instret=127401351 entries=1852
+READ 6 rv8-miniz T2 3 K3: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=378500830 instret=127403728 entries=1852
+READ 7 rv8-miniz T1 3 K3: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=356937939 instret=126343698 entries=1368
+READ 8 rv8-miniz T1 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=357058884 instret=126343835 entries=1368
+READ 9 rv8-miniz T2 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=377866715 instret=127403755 entries=1852
+READ 10 rv8-miniz T2 5 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=378217595 instret=127402523 entries=1852
+READ 11 rv8-miniz T1 5 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=358470935 instret=126344843 entries=1368
+READ 12 sglib-rbtree-libc T2 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=627655686 instret=109972161 entries=2061
+READ 13 sglib-rbtree-libc T1 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=583396923 instret=106482006 entries=1872
+READ 14 sglib-rbtree-libc T1 1 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=581669403 instret=106482006 entries=1872
+READ 15 sglib-rbtree-libc T2 1 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=624294620 instret=109971265 entries=2061
+READ 16 sglib-rbtree-libc T2 2 K2: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=624850172 instret=109971713 entries=2061
+READ 17 sglib-rbtree-libc T1 2 K2: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=585921291 instret=106486598 entries=1872
+READ 18 sglib-rbtree-libc T1 3 K3: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=581930493 instret=106486934 entries=1872
+READ 19 sglib-rbtree-libc T2 3 K3: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=625070729 instret=109974513 entries=2061
+READ 20 sglib-rbtree-libc T2 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=627617841 instret=109972497 entries=2061
+READ 21 sglib-rbtree-libc T1 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=583519575 instret=106484793 entries=1872
+READ 22 sglib-rbtree-libc T1 5 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=581807077 instret=106485112 entries=1872
+READ 23 sglib-rbtree-libc T2 5 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 458 :: bench cycles=624498953 instret=109969779 entries=2061
+READ 24 rv8-aes T1 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=243118389 instret=124667830 entries=1271
+READ 25 rv8-aes T2 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=252193733 instret=125209259 entries=1271
+READ 26 rv8-aes T2 1 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=251684291 instret=125210379 entries=1271
+READ 27 rv8-aes T1 1 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=242954665 instret=124667382 entries=1271
+READ 28 rv8-aes T1 2 K2: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=243528002 instret=124666598 entries=1271
+READ 29 rv8-aes T2 2 K2: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=251725976 instret=125212283 entries=1271
+READ 30 rv8-aes T2 3 K3: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=251693376 instret=125210827 entries=1271
+READ 31 rv8-aes T1 3 K3: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=243516153 instret=124665254 entries=1271
+READ 32 rv8-aes T1 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=242966550 instret=124666710 entries=1271
+READ 33 rv8-aes T2 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=251927123 instret=125209931 entries=1271
+READ 34 rv8-aes T2 5 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=252110793 instret=125208923 entries=1271
+READ 35 rv8-aes T1 5 K1: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 65 :: bench cycles=242848420 instret=124666486 entries=1271
+READ 36 janne_complex T2 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=360988722 instret=132703346 entries=680
+READ 37 janne_complex T1 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361479202 instret=132705432 entries=680
+READ 38 janne_complex T1 1 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361074807 instret=132704088 entries=680
+READ 39 janne_complex T2 1 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361027629 instret=132704466 entries=680
+READ 40 janne_complex T2 2 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361358075 instret=132705474 entries=680
+READ 41 janne_complex T1 2 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361353993 instret=132703192 entries=680
+READ 42 janne_complex T1 3 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361026856 instret=132704984 entries=680
+READ 43 janne_complex T2 3 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361426473 instret=132704578 entries=680
+READ 44 janne_complex T2 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361320941 instret=132705250 entries=680
+READ 45 janne_complex T1 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361083822 instret=132704200 entries=680
+READ 46 janne_complex T1 5 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361083717 instret=132704088 entries=680
+READ 47 janne_complex T2 5 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=361277012 instret=132704802 entries=680
+READ 48 coremark T1 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=435611593 instret=134352609 entries=736
+READ 49 coremark T2 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=434885851 instret=134356966 entries=736
+READ 50 coremark T2 1 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=434941948 instret=134357102 entries=736
+READ 51 coremark T1 1 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=435530976 instret=134355077 entries=736
+READ 52 coremark T1 2 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=435599932 instret=134352211 entries=736
+READ 53 coremark T2 2 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=435424797 instret=134356721 entries=736
+READ 54 coremark T2 3 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=434965754 instret=134357603 entries=736
+READ 55 coremark T1 3 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=434883779 instret=134352007 entries=736
+READ 56 coremark T1 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=435539907 instret=134355752 entries=736
+READ 57 coremark T2 4 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=435715897 instret=134358765 entries=736
+READ 58 coremark T2 5 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=435593145 instret=134359188 entries=736
+READ 59 coremark T1 5 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 20 :: bench cycles=434900076 instret=134351860 entries=736
+READ 60 ctl-empty T1 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=7627392 instret=680479 entries=504
+READ 61 ctl-empty T2 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=7645359 instret=681081 entries=504
+READ 62 ctl-empty T2 1 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=7654685 instret=678841 entries=504
+READ 63 ctl-empty T1 1 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=7672833 instret=679471 entries=504
+READ 64 ctl-loop T1 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=339337157 instret=220707028 entries=671
+READ 65 ctl-loop T2 0 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=339392946 instret=220707518 entries=671
+READ 66 ctl-loop T2 1 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=339003930 instret=220706958 entries=671
+READ 67 ctl-loop T1 1 K0: rc 0, 11 BENCH, 11 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=339256521 instret=220706804 entries=671
+READ summary: 68 of 68 processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE present
+PP readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PP board2 DONE 16:51:27

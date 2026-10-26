@@ -1,0 +1,38 @@
+# tier3-fpdiag.py and tier3-perfmain-b1tail.sh dry run, 2026-10-26. Every board call stubbed (BOARDVM_STUB_TRANSCRIPT; T_RUN).
+# Stubs: board 1's census transcript frame with 12 @@FP sections planted, one shaped as H-escape, one as H-FPU; a third with a section missing.
+## stub escape (rc 0)
+READ native n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=100000 f4=100000 f5=100000 f6=100000 f7=100000
+READ native n=50000000: rc 0; n=50000000 bad=0 :: f0=50000000 f1=50000000 f2=50000000 f3=50000000 f4=50000000 f5=50000000 f6=50000000 f7=500
+READ context n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=100000 f4=100000 f5=100000 f6=100000 f7=100000; quote bench 
+READ context n=50000000: rc 1; n=50000000 bad=8 :: f0=0 f1=0 f2=0 f3=0 f4=0 f5=0 f6=0 f7=0; quote bench cycles=1 instret=1 entries=99
+READ native divsqrt n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=0
+READ native divsqrt n=20000000: rc 0; n=20000000 bad=0 :: f0=20000000 f1=20000000 f2=20000000 f3=0
+READ context divsqrt n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=0; quote bench cycles=1 instret=1 entries=9
+READ context divsqrt n=20000000: rc 1; n=20000000 bad=1 :: f0=20000000 f1=20000000 f2=20000000 f3=1e-16; quote bench cycles=1 instret=1 entr
+READ native ludcmp: rc 0; 4 BENCH, VERIFY-FAILED 0, BENCH-DONE failed=0
+READ native st: rc 0; 4 BENCH, VERIFY-FAILED 0, BENCH-DONE failed=0
+READ context ludcmp: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=3
+READ context st: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=3
+## stub fpu (rc 0)
+READ native n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=100000 f4=100000 f5=100000 f6=100000 f7=100000
+READ native n=50000000: rc 0; n=50000000 bad=0 :: f0=50000000 f1=50000000 f2=50000000 f3=50000000 f4=50000000 f5=50000000 f6=50000000 f7=500
+READ context n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=100000 f4=100000 f5=100000 f6=100000 f7=100000; quote bench 
+READ context n=50000000: rc 0; n=50000000 bad=0 :: f0=50000000 f1=50000000 f2=50000000 f3=50000000 f4=50000000 f5=50000000 f6=50000000 f7=50
+READ native divsqrt n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=0
+READ native divsqrt n=20000000: rc 0; n=20000000 bad=0 :: f0=20000000 f1=20000000 f2=20000000 f3=0
+READ context divsqrt n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=0; quote bench cycles=1 instret=1 entries=9
+READ context divsqrt n=20000000: rc 0; n=20000000 bad=0 :: f0=20000000 f1=20000000 f2=20000000 f3=0; quote bench cycles=1 instret=1 entries=
+READ native ludcmp: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=3
+READ native st: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=3
+READ context ludcmp: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=3
+READ context st: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=3
+## stub missing (rc 2): READ context st: NO DATA
+## the runner-hash gate refused the stage when it changed under it (17:52): 'FPDIAG STOP: run-fpdiag.sh is not a19e3a68314d6809'
+## board 1's tail chain (stubbed boots), then batch 2's placement reading its log:
+PM k1 on board 1 END rc=0
+PM fpdiag on board 1 BEGIN
+PM fpdiag on board 1 END rc=0
+PM k3 on board 1 BEGIN
+PM k3 on board 1 END rc=0 :: READ summary: stub k3
+PM2 b2k1 on board 1 (its second batch-1 kit ended first) BEGIN
+PM2 END rc=0 :: READ summary: stub board 1

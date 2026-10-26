@@ -1,0 +1,18 @@
+# tier3-perfpilot-b2.sh / tier3-perfpilot.py dry run for the SECOND pilot (perf/pilot2), 2026-10-26. Every board call stubbed.
+# run-pilot.sh d32938c507d4d995 checked line by line: all 68 lines match the one template (stderr to /tmp/perf.err, @@PERF-END with stderr_lines= and the dmesg quote) and steps-pilot.tsv's order.
+## stub 'good' (new @@PERF-END format)
+READ summary: 68 of 68 processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE present
+## stub 'repeat' (new @@PERF-END format)
+READ 30 rv8-aes T2 3 K3: rc 0, 11 BENCH, 11 with check= (suffixes [' ok']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote REPEATS the previous, stderr_lines 70 :: bench cycles=1029 instret=929 entries=32
+READ summary: 67 of 68 processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE present
+## stub 'short' (new @@PERF-END format)
+READ 41 janne_complex T1 2 K0: NO DATA (begin False, end False)
+READ 42 janne_complex T1 3 K0: NO DATA (begin False, end False)
+READ 43 janne_complex T2 3 K0: NO DATA (begin False, end False)
+## the first pilot's format still parses (good stub): READ summary: 68 of 68 processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE present
+## the wrapper with PP_SUB/PP_ARGS on the good stub:
+PP BEGIN 16:08:07 board 2 kit bkit10-perf-b2 booking 997 # book 2 75 vp2 bitstream 2 perf-eval pilot (board 2)
+PP END rc=0 16:08:07
+READ summary: 68 of 68 processes rc 0, 11 BENCH lines, no BENCH-ERROR, BENCH-DONE failed=0 and a new quote; PILOT-DONE present
+PP readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PP board2 DONE 16:08:07

@@ -1,0 +1,33 @@
+# The FP discriminator, board 1 (tier3-fpdiag.py via tier3-perfpilot-b2.sh PP_SUB fpdiag; pre-registered 1bd320e77ded): the runner's result lines.
+PP BEGIN 18:30:14 board 1 kit bkit10-perf-b1 booking 401
+PP END rc=0 18:41:32
+READ native n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=100000 f4=100000 f5=100000 f6=100000 f7=100000
+READ native n=50000000: rc 0; n=50000000 bad=0 :: f0=50000000 f1=50000000 f2=50000000 f3=50000000 f4=50000000 f5=50000000 f6=50000000 f7=50000000
+READ context n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=100000 f4=100000 f5=100000 f6=100000 f7=100000; quote bench cycles=1811534 instret=1065473 entries=33
+READ context n=50000000: rc 0; n=50000000 bad=0 :: f0=50000000 f1=50000000 f2=50000000 f3=50000000 f4=50000000 f5=50000000 f6=50000000 f7=50000000; quote bench cycles=552639857 instret=500099756 entries=308
+READ native divsqrt n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=0
+READ native divsqrt n=20000000: rc 0; n=20000000 bad=0 :: f0=20000000 f1=20000000 f2=20000000 f3=0
+READ context divsqrt n=100000: rc 0; n=100000 bad=0 :: f0=100000 f1=100000 f2=100000 f3=0; quote bench cycles=6855288 instret=845673 entries=36
+READ context divsqrt n=20000000: rc 0; n=20000000 bad=0 :: f0=20000000 f1=20000000 f2=20000000 f3=0; quote bench cycles=1245183017 instret=160122549 entries=653
+READ native ludcmp: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=4
+READ native ludcmp line: BENCH beebs/ludcmp it=w0 cycles=0 instret=0 entries=0 ns=803509120 check=0x0 VERIFY-FAILED
+READ native ludcmp line: BENCH beebs/ludcmp it=0 cycles=0 instret=0 entries=0 ns=803977280 check=0x0 VERIFY-FAILED
+READ native ludcmp line: BENCH beebs/ludcmp it=1 cycles=0 instret=0 entries=0 ns=803383520 check=0x0 VERIFY-FAILED
+READ native ludcmp line: BENCH beebs/ludcmp it=2 cycles=0 instret=0 entries=0 ns=802180000 check=0x0 VERIFY-FAILED
+READ native st: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=4
+READ native st line: BENCH beebs/st it=w0 cycles=0 instret=0 entries=0 ns=1781643680 check=0x0 VERIFY-FAILED
+READ native st line: BENCH beebs/st it=0 cycles=0 instret=0 entries=0 ns=1779980640 check=0x0 VERIFY-FAILED
+READ native st line: BENCH beebs/st it=1 cycles=0 instret=0 entries=0 ns=3476496560 check=0x0 VERIFY-FAILED
+READ native st line: BENCH beebs/st it=2 cycles=0 instret=0 entries=0 ns=3273486400 check=0x0 VERIFY-FAILED
+READ context ludcmp: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=4
+READ context ludcmp line: BENCH beebs/ludcmp it=w0 cycles=28014562 instret=12029612 entries=35 ns=1196808080 check=0x0 VERIFY-FAILED
+READ context ludcmp line: BENCH beebs/ludcmp it=0 cycles=28007713 instret=12029388 entries=35 ns=1196894400 check=0x0 VERIFY-FAILED
+READ context ludcmp line: BENCH beebs/ludcmp it=1 cycles=28010524 instret=12029500 entries=35 ns=1201125920 check=0x0 VERIFY-FAILED
+READ context ludcmp line: BENCH beebs/ludcmp it=2 cycles=28008746 instret=12029500 entries=35 ns=1194303760 check=0x0 VERIFY-FAILED
+READ context st: rc 1; 4 BENCH, VERIFY-FAILED 4, BENCH-DONE failed=4
+READ context st line: BENCH beebs/st it=w0 cycles=30771913 instret=11780616 entries=37 ns=1315624960 check=0x0 VERIFY-FAILED
+READ context st line: BENCH beebs/st it=0 cycles=30766522 instret=11780616 entries=37 ns=1320140320 check=0x0 VERIFY-FAILED
+READ context st line: BENCH beebs/st it=1 cycles=30762684 instret=11780728 entries=37 ns=1316056000 check=0x0 VERIFY-FAILED
+READ context st line: BENCH beebs/st it=2 cycles=30765098 instret=11780840 entries=37 ns=1318481600 check=0x0 VERIFY-FAILED
+PP readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PP board1 DONE 18:41:32

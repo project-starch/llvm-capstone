@@ -9221,3 +9221,693 @@ Record: `records/b2bs-uaf-ms-b2.result-lines.txt`.
     remain, and the aperture instrument goes into bitstream 3.
 - **The rate:** 3 of 200 and 6 of 200 here, against 1 of 200 in 0a and 10 of 400 in the bitstream-2 uaf x400 record. Together that is
   20 of 1,000 uaf-control runs, 2.0%.
+
+### Q-34's store side on bitstream 2: a misaligned plain `sw` and `sd` inside a context, both boards, N=1 each, pre-registered (2026-10-26 14:0x, before the boots)
+
+- **Why:** the lead's decision, relayed by the runtime lane. The semantics owner's Q-34 ruling holds that a misaligned
+  plain store in a protected context raises 6 and is terminal. That half was predicted from the RTL's code (the same
+  `data_misaligned` arm covers `SW`), not read.
+- **The program:** `misal-store.c`, built with the Juliet SDK (`capstone-cc -O0`, sdk.json f5145cbb, the uaf control's
+  recipe). The image is `misal-store.dom`, e3107737d6cb6031.
+  - It makes one 32-byte malloc object, and every access stays inside it. Only the width and the offset vary.
+  - Disassembled: the plain `sw` at misal_store_w+0x58 (code+0x10c40), the `sd` at misal_store_d+0x58 (code+0x10cac),
+    and the `lw` at misal_load_w+0x38 (code+0x10cf8). Each goes through the object's capability.
+- **What runs:** `tier3-misal-b2.sh <board> <log>`, which calls tier3-misal.py: one boot on the corpus kit
+  bkit9-b2-b<board> (module 215a09be, launcher fad465ce, no parameters). The steps, in this order:
+  - aligned-sw (+4) and aligned-sd (+8), the controls;
+  - misal-lw (+1), Q-34's load, as the positive control;
+  - misal-sw (+1), misal-sd (+1) and misal-sd4 (+4, which is 4-aligned but not 8-aligned);
+  - aligned-sw-post, the control again after the faults.
+  - The reader exits 2 on any step it cannot read.
+- **Dry run:** `dryrun-misal-b2.txt`. The stubs are a real board transcript's frame with the steps planted. Faults read
+  as FAULT with cause and pc, returns as RETURNED, a missing step as NO DATA (exit 2), and a step with both as
+  UNREADABLE (exit 2). The wrapper stops on a busy board and on an existing output root.
+- **The QEMU twin, run here before the boots** (`records/misal-twin.result-lines.txt`): every step RETURNS its written
+  value, the four misaligned ones included. That is Q-34's "the twin completes", for stores as well as loads.
+- **Predictions, per board:**
+  - aligned-sw, aligned-sd and aligned-sw-post RETURN 0x11223344 / 0x1122334455667788 / 0x11223344. A control that does
+    not return voids the boot.
+  - **misal-lw: FAULT cause 4 at code+0x10cf8**, Q-34's load. If it returns, the boot says nothing about Q-34.
+  - **misal-sw: FAULT cause 6 at code+0x10c40.**
+  - **misal-sd and misal-sd4: FAULT cause 6 at code+0x10cac.**
+  - readings 0.
+- **What the readings decide:**
+  - Cause 6 on the three stores confirms the ruling's store half.
+  - A store that RETURNS means silicon performs misaligned stores, against the RTL reading.
+  - A store that reads cause 4 is a store reported as a load (Q-09's shape, in the RTL).
+  - misal-sd4 separates an 8-byte alignment check from a 4-byte one.
+
+### Q-34's store side, result: silicon raises cause 6 on every misaligned plain store and cause 4 on the misaligned load, on both boards, where the twin completes every one (2026-10-26 13:59-14:08)
+
+- **Records:** `records/b2bs-misal-b1.result-lines.txt`, `records/b2bs-misal-b2.result-lines.txt`; the twin's
+  `records/misal-twin.result-lines.txt`. Pre-registration 9695ece729d0. One boot per board (bookings 395 and 394), each
+  boot completed, readings 0.
+
+| step | QEMU twin | board 1 | board 2 |
+|---|---|---|---|
+| aligned-sw (+4) | RETURNED 0x11223344 | RETURNED 0x11223344 | RETURNED 0x11223344 |
+| aligned-sd (+8) | RETURNED 0x1122334455667788 | the same | the same |
+| misal-lw (+1) | RETURNED 0x5a5a5a5a | cause 4 at code+0x10cf8 | cause 4 at code+0x10cf8 |
+| misal-sw (+1) | RETURNED 0x11223344 | cause 6 at code+0x10c40 | cause 6 at code+0x10c40 |
+| misal-sd (+1) | RETURNED 0x1122334455667788 | cause 6 at code+0x10cac | cause 6 at code+0x10cac |
+| misal-sd4 (+4) | RETURNED 0x1122334455667788 | cause 6 at code+0x10cac | cause 6 at code+0x10cac |
+| aligned-sw-post | RETURNED 0x11223344 | RETURNED 0x11223344 | RETURNED 0x11223344 |
+
+- **Every prediction holds.** The controls return before and after the faults. The positive control reads Q-34's cause 4
+  at misal_load_w+0x38. Each store faults at its own instruction (misal_store_w+0x58, misal_store_d+0x58).
+- **The raw tval** is the object's base + 1 (`...041`) for the +1 accesses, and base + 4 (`...044`) for misal-sd4.
+  Each is inside the 32-byte object, so no capability exception was pending.
+- **What it decides:**
+  - The store half of the semantics owner's Q-34 ruling is now read on silicon: a misaligned plain store in a context
+    raises 6, and it is terminal.
+  - The alignment check is per access width: an `sd` at a 4-aligned address faults.
+  - A store is never reported as a load (no Q-09 shape).
+  - The twin completes all four misaligned accesses, so Q-34's divergence covers stores too.
+
+### The perf evaluation's first boot: the counter probe and the Tier 1 contract of dev's new module revision (bench build), board 1 only, pre-registered (2026-10-26 15:0x, before the boot)
+
+- **Why:** the lead's performance evaluation, relayed by the runtime lane. It compares Sublet spatial against
+  spatial+temporal on CoreMark, RV8 and BEEBS, counted by a default-off module instrument (cycle and instret summed
+  across CSRUNV).
+  - This first boot checks two things: that S-mode can read cycle and instret on the board kernel, and the new module
+    revision's Tier 1 contract. That revision is dev c2b137cdfee6 (mapping registry, image write denial, the two-segment
+    v7 image, CV_STEP 136). It has had no Tier 1 boot before, and its launcher refuses v6 images.
+  - One board only; board 2 stays free.
+- **The kit:** bkit10-perf-b1 is bkit9-b2-b1 with only the adapter swapped. SHA256SUMS differ in the two adapter lines
+  only.
+  - The runtime lane's bench build (lane runtime/bench-counters = dev plus a compile-time-only instrument):
+    capstone-vexec 978c09d61f774315 and capstone_vm.ko 9c60fb53f80ce67e (flat, 18-bit index, 6.4.14, built with
+    -DCAPSTONE_VM_BENCH_COUNTERS).
+  - **Gates checked before the boot:**
+    - modinfo lists parm bench_cycles, bench_instret and bench_entries; the default 215a09be lists none;
+    - vermagic 6.4.14 SMP riscv;
+    - 0 compressed instructions, by a parser whose control object reads 3.
+- **The images** (the runtime lane's, v7, built by dev's compiler with -movc-keeps-integer-source): probe.dom
+  0100285f9c66605d and contract.dom 072bc796396597a4.
+- **What runs:** `tier3-perfprobe-b2.sh 1 <log>`, which calls tier3-perfprobe.py, one boot through boardvm. The steps:
+  - params: the module's bench parameters;
+  - ok: `contract.dom ok argument`, with CAPSTONE_VM_CONTRACT=environment, CAPSTONE_VM_STATS=1 and
+    CAPSTONE_EXEC_DIAGNOSTICS=1, as vm-contract.sh runs it;
+  - probe: `probe.dom`;
+  - stale: `contract.dom stale`.
+  - After each step it collects the new `capstone_vm: bench cycles=... instret=... entries=...` dmesg lines.
+  - Dry run: `dryrun-perfprobe-b2.txt`. A missing step and an oops each read NO DATA (exit 2), and the oops is named.
+    The kit gate stops on a missing kit, and the busy gate stops too.
+- **Predictions** (the probe's are the runtime lane's, written before the boot):
+  - **params:** 3 bench parameters.
+  - **ok (Tier 1):** `VIRTUAL_APPLICATION_OK`, exit 0.
+  - **stale (Tier 1):** denied with cause 25, exit 139. The known silicon-only cause 13, about 2% on the uaf control,
+    would also be a denial, and is reported as such.
+  - **probe:** 10 PROBE lines, then `PROBE done`, exit 0.
+    - empty r=1..4: entries > 0 and the same small number each time; instret identical across r=1..4. That is the mark
+      overhead, 3 delegated preads per mark.
+    - loop r=1..4: loop instret minus the same r's empty instret is in [20,000,000, 20,001,000]; cycles >= instret;
+      entries >= the empty's.
+    - r=0 may differ (first-touch faults).
+  - one bench dmesg line per process; readings 0.
+- **The stop branch:** if S-mode cannot read cycle or instret, the module oopses at the first CSRUNV. That is at insmod
+  plus the first launch, so at the ok step. Then the boot stops, the runtime lane is told, and the fallback is wall time.
+
+### The perf evaluation's first boot, result: S-mode reads cycle and instret; the new module revision passes its Tier 1 contract; the probe misses two of its numeric predictions, both small (board 1, 2026-10-26 15:01-15:08)
+
+- **Record:** `records/b2bs-perfprobe-b1.result-lines.txt`. Pre-registration a6e51b03112d. One boot (booking 396),
+  completed, readings 0, no oops.
+- **The counters work:** no oops at the first CSRUNV. Every process printed one `capstone_vm: bench` line, and the
+  module lists its 3 bench parameters. **The wall-time fallback is not needed.**
+- **Tier 1 contract of dev c2b137cdfee6's revision (bench build): PASSES, as predicted.**
+  - `ok`: VIRTUAL_APPLICATION_OK, exit 0 (bench cycles=20886982, instret=1157833, entries=503).
+  - `stale`: denied with cause 25, exit 139, at code+0x14e10.
+
+| r | empty instret / entries | loop instret / entries / cycles | loop - empty instret | over 2e7 |
+|---|---|---|---|---|
+| 0 | 20543 / 18 | 20022308 / 33 / 30358342 | 20001765 | 1765 |
+| 1 | 20453 / 18 | 20022330 / 33 / 30354446 | 20001877 | 1877 |
+| 2 | 20341 / 18 | 20022226 / 33 / 30352605 | 20001885 | 1885 |
+| 3 | 20363 / 18 | 20022352 / 33 / 30353878 | 20001989 | 1989 |
+| 4 | 20363 / 18 | 20022240 / 33 / 30352976 | 20001877 | 1877 |
+
+- **Against the probe's predictions:**
+  - 10 PROBE lines, PROBE done, exit 0: **holds**.
+  - Empty entries the same small number at r=1..4: **holds** (18).
+  - **Empty instret identical across r=1..4: MISSED.** The values are 20453, 20341, 20363, 20363, a spread of 112 (0.5%).
+  - **Loop minus empty in [20,000,000, 20,001,000]: MISSED at every r.** The excess over 2e7 is 1,877 to 1,989 at
+    r=1..4, about twice the band's 1,000.
+  - Cycles >= instret: **holds** (about 1.52 cycles per instruction in the loop).
+  - Loop entries >= the empty's: **holds** (33 against 18).
+- **One arithmetic that fits the miss, offered as a candidate and not a finding:** each loop takes 15 more module
+  entries than its empty (33 against 18). The excess divided by 15 is 125 to 133 instructions per extra entry at
+  r=1..4.
+  - That would be counted instructions per entry or exit, inside the CSRUNV window, which the per-mark accounting did
+    not budget for.
+  - The 112-instruction spread across the empties is the same order as one entry's cost.
+  - Settling it is the instrument owner's: compare instret per entry on a probe whose entry count varies at a fixed
+    workload.
+
+### The perf evaluation's PILOT: 68 processes in one boot, board 2, pre-registered (2026-10-26 15:1x, before the boot)
+
+- **Why:** the runtime lane's sampling plan, `wt-bench/capstone/benchmarks/virtual/PREREG-t1-t2-sampling.md` rev 2,
+  "The pilot". It estimates noise before the main run. Board 1 stays free.
+- **The kit:** bkit10-perf-b2 is bkit9-b2-b2 with only the probe's adapter swapped (launcher 978c09d61f774315, module
+  9c60fb53f80ce67e). SHA256SUMS differ in the two adapter lines only, and the modinfo gate is as the probe's.
+- **The stage:** the runtime lane's `perf/pilot/kit/stage` (8.4 MB), checked against its SHA256SUMS: capstone-vexec
+  978c09d6, run-pilot.sh 7cccbc7b9d067f19, and T1/ and T2/ with 16 images each.
+  - The images come from dev c2b137cdfee6 WITHOUT the heap-ids fix, deliberately: this is noise only, and pre-fix is
+    the conservative side.
+  - run-pilot.sh was read before staging. It makes 68 `capstone-vexec` calls in steps.tsv's order, each followed by
+    one dmesg read: 5 programs x 2 arms x 6 processes in ABBA order, plus ctl-empty and ctl-loop x 2 per arm, each
+    with "1 10" (one warm-up, then 10 timed iterations).
+  - A weakness, read in it: each @@PERF-END quotes dmesg's LAST bench line. A process that printed none would carry the
+    previous one's. tier3-perfpilot.py reports a repeated quote.
+- **What runs:** `tier3-perfpilot-b2.sh 2 <log>`, which calls tier3-perfpilot.py. The whole stage goes in as one batch
+  step.
+  - Per process, the reader checks: rc; 11 BENCH lines; check= on each, with its suffix; BENCH-ERROR lines;
+    BENCH-DONE failed=; that the order matches steps.tsv; and the quote.
+  - Timeouts nest: the step's 2,700 s sits inside the boot's 13,800 s, which sits inside the wrapper's 14,400 s
+    (`dryrun-perfpilot-b2.txt`).
+  - Dry run: `dryrun-perfpilot-b2.txt`. 68 of 68 read on a good stub. A missing quote is reported as a repeat, and a
+    stopped boot reads NO DATA from the cut and exits 2.
+  - The per-iteration analysis is the runtime lane's.
+- **Predictions** (the runtime lane's, written before the boot):
+  - every process rc=0, with 11 BENCH lines whose check= verifies;
+  - ctl-loop minus ctl-empty instret is about 20,000,002 + ~125 x (extra entries);
+  - instret is constant across the timed iterations of a non-allocating program, up to entries x ~125;
+  - **sglib-rbtree-libc T2 rc=0 on silicon,** because bitstream 2 recycles revoked records. On the old QEMU it
+    exhausted the 64K table after about 40K allocations. A failure here with cause 24 after a NULL malloc is a
+    finding, not a pilot failure.
+  - readings 0.
+
+### The perf pilot, stopped (2026-10-26 15:47, at the runtime lane's request): no reading; the launcher's per-mapping stderr line ruined wall time
+
+- **Why it was stopped:** the runtime lane found that capstone-vexec prints `CAPSTONE_VM_ADD_OK ...` to stderr for
+  every admitted mapping (exec.c:270, unconditional), and on the board stderr goes to the UART.
+  - sglib-rbtree churns 4 KiB mappings thousands of times per iteration, so each process waited on the UART for minutes.
+  - The runtime lane saw step 12 of 68 after 30 min.
+  - The in-context counters are unaffected; wall time is not.
+  - The images were also pre-heap-fix, and are being rebuilt.
+- **What was done:** the board driver and the runner were stopped by process group. The wrapper released booking 397
+  (HTTP 200), and board 2 then read FREE.
+- **No partial transcript survived on disk.** The baked-rung driver writes the rung's capture only when the run ends.
+  - So `guest/board.txt` was never written, the step text `pilot.txt` is empty, and `driver.log` holds no PERF lines.
+  - The console server's UART ring buffer still holds the boot's tail, and replays it on the next connect. The next
+    board-2 boot's raw capture is the place to recover it from, if no other client connects first.
+- **Not a reading:** nothing from this boot is graded. The next pilot kit runs each process with its stderr redirected
+  to tmpfs, on images rebuilt from dev 4f054964a7d8.
+
+### The perf evaluation's SECOND pilot, replacing the stopped one: 68 processes in one boot, board 2, pre-registered (2026-10-26 16:1x, before the boot)
+
+- **The kit:** bkit10-perf-b2, as for the stopped pilot (launcher 978c09d61f774315, module 9c60fb53f80ce67e).
+- **The stage:** the runtime lane's `perf/pilot2/stage` (8.4 MB), checked against its SHA256SUMS: run-pilot.sh
+  d32938c507d4d995, capstone-vexec 978c09d6, and T1/ and T2/ with 16 images each. The steps are in steps-pilot.tsv.
+  - **Images:** built on dev 4f054964a7d8, which carries the heap-ids fix, with dev's compiler and
+    -movc-keeps-integer-source. By the runtime lane:
+    - the layout gate passes, with every non-heap section at identical addresses in both arms, and its negative control
+      fails;
+    - on the twin, rbtree's entries per iteration fall from about 20,600 to 117-163;
+    - these 16 passed on the twin before the fix, and the fix's gate is green;
+    - the full QEMU functional pass over all 149 images is still running.
+  - **run-pilot.sh, checked line by line here:** all 68 process lines match one template and steps-pilot.tsv's order.
+    Each process's stderr goes to /tmp/perf.err; @@PERF-END prints `stderr_lines=N` and the dmesg bench quote. The
+    same 68 processes as the stopped pilot, args "1 10".
+- **What runs:** `PP_SUB=perfpilot2 PP_ARGS="--pilot-dir <mnt-hdd>/capstone/perf/pilot2 --runner-sha d32938c507d4d995
+  --steps steps-pilot.tsv" tier3-perfpilot-b2.sh 2 <log>`.
+  - tier3-perfpilot.py gains those three options; its defaults are the first pilot's. The reader reads stderr_lines,
+    and compares the quote without it, so a repeat is still caught.
+  - Timeouts are as before: step 2,700 s, inside the boot's 13,800 s, inside the wrapper's 14,400 s.
+  - Dry run: `dryrun-perfpilot2-b2.txt`.
+- **Predictions** (the runtime lane's, verbatim):
+  - Every process: rc=0, 11 BENCH lines, every check verified.
+  - rbtree T2: rc=0.
+  - ctl-loop minus ctl-empty instret = 20,000,002 + about 125-170 x (extra entries).
+  - Entries per timed iteration: tens to low hundreds for rbtree, single or low double digits for coremark and janne.
+
+### The perf evaluation's second pilot, result: all 68 processes complete and verify on silicon, both arms; two numeric predictions read partly outside their words (board 2, 2026-10-26 16:08-16:51)
+
+- **Record:** `records/b2bs-perfpilot2-b2.result-lines.txt`; the full step text is
+  `t3-run-b2-dcc6daf6e-b2/perfpilot2/pilot.txt`. Pre-registration 59093fd4d3ca. One boot (booking 398), completed in
+  43 min, readings 0, no oops.
+- **Every process:** rc=0, 11 BENCH lines, 0 BENCH-ERROR, BENCH-DONE failed=0, in the planned order, and a new dmesg
+  quote for each (68 of 68). stderr_lines ranged from 9 to 458.
+- **check=:** each program prints ONE value, identical over every iteration (warm-up included) and across T1 and T2:
+  - coremark 0x70a5db4b905fd88a; rv8-aes 0x17b4434fc90257db; rv8-miniz 0x21c700; sglib-rbtree-libc 0x1356;
+    janne_complex 0x1;
+  - the controls 0x0.
+  - Whether each equals the program's reference value is the runtime lane's comparison.
+- **rbtree T2: rc 0 on every process, as predicted.**
+
+| program | arm | instret (median of 60) | instret spread | entries per timed iteration | CPI |
+|---|---|---|---|---|---|
+| coremark | T1 / T2 | 11,968,389 / 11,968,389 | 0.006% / 0.005% | 40 / 40 | 3.187 / 3.186 |
+| janne_complex | T1 / T2 | 12,027,632 / 12,027,688 | 0.005% / 0.003% | 38 / 38 | 2.696 / 2.696 |
+| rv8-aes | T1 / T2 | 11,296,653 / 11,346,094 | 0.008% / 0.009% | 91 / 91 | 1.919 / 1.980 |
+| rv8-miniz | T1 / T2 | 11,446,742 / 11,538,008 | 0.012% / 0.017% | 99 / 143 | 2.796 / 2.924 |
+| sglib-rbtree-libc | T1 / T2 | 9,630,330 / 9,947,244 | 0.46% / 0.46% | 130-174 / 147-191 | 5.413 / 5.635 |
+| ctl-empty | T1 / T2 | 25,582 / 25,582 | 1.3% / 1.3% | 22 / 22 | |
+| ctl-loop | T1 / T2 | 20,027,459 / 20,027,459 | 0.002% / 0.003% | 37 / 37 | 1.519 / 1.519 |
+
+- **ctl-loop minus ctl-empty** (each timed iteration against the arm's empty median): 20,001,653 to 20,001,989, with 15
+  extra entries.
+  - That is 110 to 133 instructions per extra entry. The prediction said "about 125-170".
+  - 4 of the 12 iterations fall below 125 (110.1, 117.5, 117.5, 117.5), and none is above 133.
+- **Entries per timed iteration:**
+  - rbtree 130-191: "tens to low hundreds", **holds**.
+  - coremark 40 and janne 38: the prediction said "single or low double digits", and these are higher. ctl-empty alone
+    reads 22, the marks' own floor.
+- **Not judged here:** the T1-T2 differences in the table. The pilot estimates noise, and the per-iteration analysis
+  is the runtime lane's.
+
+### The perf evaluation's MAIN RUN, batch 1: 100 programs over both boards, the kit split decided by k1's firmware, pre-registered (2026-10-26 17:1x, before any boot)
+
+- **The plan:** the runtime lane's PREREG-t1-t2-sampling.md, last section, "Pilot read and the main run's dimensions".
+  P=4 processes per arm with "1 5", and P=11 with "0 1" for crc32, huffbench, huffbench-libc and wikisort.
+  - The images are built from dev 4f054964a7d8's SDKs. By the runtime lane, every image passed the layout gate and the
+    QEMU functional pass on the bitstream-2 twin, in both arms and at every K.
+  - The kits are bkit10-perf-b1 and -b2, the pilot's adapter.
+- **Two splits of the same 100 programs** (98 benchmarks plus ctl-empty and ctl-loop). Both arms of a program are always
+  in one kit.
+  - **k1-k4** (perf/main1, 25 programs and 214 processes each, about 1.2 h): run-k1..k4.sh 7d453b37a1ca5952,
+    0b8936b415b39679, 68a3b8587416b32a, 8bca173a2ff4ed45. Stages 16.9-18.1 MB raw, 6.5-7.0 MB gzipped.
+  - **s1-s6** (perf/main1b, 16-17 programs each, about 0.75-0.8 h): run-s1..s6.sh 018bea9b137c7730, 34d6374e904b43e3,
+    0067952dcb872fc6, 717dc6445d35f492, 2f290a53b7406955, 19286b13ccadd642. Stages 4.2-5.2 MB gzipped.
+  - Checked here, both sets: every stage matches its SHA256SUMS and run-script hash, with launcher 978c09d6 in each.
+    Every script's process lines match one template and steps.tsv's order. s1-s6 hold the 100 programs once each.
+- **The firmware cap decides the split** (BOARD_FW_CAP 26,000,000 B). Scaled from pilot 2 (9.6 MB stage, 3.45 MB
+  gzipped, firmware 21,662,216 B), the k stages land at about 24-26.3 MB, at or over the cap.
+  - The runtime lane's rule: if the k bake fits, run k1-k4; if it stops on the cap, run s1-s6 on BOTH boards; never mix
+    the two.
+  - `tier3-perfmain-b2.sh` applies it. k1, the largest stage, is baked first and alone on board 1, and its `SEQ` line
+    decides:
+    - it fits: board 1 runs k1 then k3, board 2 runs k2 then k4;
+    - over the cap: board 1 runs s1, s3, s5, board 2 runs s2, s4, s6;
+    - anything else: stop.
+- **Each kit is one boot**, by `tier3-perfpilot-b2.sh` with PP_SUB `main1-<kit>`, through tier3-perfpilot.py.
+  - The reader is generalised. It expects W+I BENCH lines per process, from steps.tsv's args, and checks for
+    VERIFY-FAILED and the kit's own `@@PERF-<KIT>-DONE`. The pilot-2 stub still reads 68 of 68.
+  - Timeouts: step 7,200 s, then board-run.sh 31,800 s, then the wrapper 32,400 s. Booking 120 min, the hub's maximum.
+  - Dry run: `dryrun-perfmain-b2.txt` (all three branches of the coordinator; the reader on k1-shaped stubs).
+- **Predictions** (the runtime lane's, verbatim):
+  1. Every process: rc=0; exactly W+I BENCH lines with no VERIFY-FAILED; BENCH-DONE failed=0.
+  2. check= is identical across all iterations and both arms of a program.
+  3. A program whose timed region does no allocation: instret T2 = T1 to within entries x ~130 per iteration.
+  4. An allocating program (the 15 with K1-K3 images): instret T2 > T1.
+  5. Silicon-only risk, written down in advance: a misaligned plain access traps with cause 4/6 on silicon, where the
+     twin completes it (Q-34). So a program that ran clean on the twin may fault here with rc=139 and cause 4 or 6. If
+     it does, that is a finding for that program, not an infrastructure failure, and the kit continues.
+- Batch 2 (coremark, dhrystone, matmult-int) follows as one small kit, after its rebuilt images pass.
+
+### The perf evaluation's MAIN RUN, batch 2: coremark, rv8-dhrystone and matmult-int, as a third boot on the board that ends batch 1 first, pre-registered (2026-10-26 17:3x, before its boot)
+
+- **The kit:** the runtime lane's `perf/main2/b2k1`, 2.3 MB. Its images come from build2/: coremark's and dhrystone's
+  prints are silenced, and matmult-int is the de-duplicated matmult. All three passed the twin's functional pass, by
+  the runtime lane.
+- **Checked here:** the stage matches its SHA256SUMS; run-b2k1.sh e48f64aedd30000d; launcher 978c09d6. All 24 process
+  lines match the template and steps.tsv: P=4 per arm with "1 5", about 9 min.
+- **Placement:** `tier3-perfmain2-b2.sh` watches batch 1's coordinator log. It runs the kit on whichever board ends its
+  second kit first (board 1's k3 or board 2's k4), and stops if batch 1 stops.
+  - One tier3-perfpilot-b2.sh boot, with PP_SUB `main2-b2k1`, step 2,700 s and booking 45 min.
+  - Dry run: `dryrun-perfmain2-b2.txt`, for both placements and the stop.
+- **Predictions:** batch 1's five, verbatim (above).
+
+### The FP discriminator on board 1, between k1 and k3; batch 1's coordinator re-planned for it, pre-registered (2026-10-26 18:0x, before its boot)
+
+- **Why:** k1's live heartbeats showed ludcmp and st reading `check=0x0 VERIFY-FAILED` on every iteration, with rc=1
+  and no fault. Both are FP-heavy, and both passed on the twin. The runtime lane asks for one short discriminator boot
+  on board 1 right after k1 and before k3. It decides whether the FP programs' results in k2-k4 can be used.
+  - Ruled out beforehand by reading the RTL: B3i's FS-Dirty parenthesisation. dcc6daf6e's commit_stage.sv:182 carries
+    upstream 2700d14's fix. R-52 is fixed on silicon.
+  - The rtl lane's read, relayed: ESCAPE saves f0..f31 and fcsr on every kind. The remaining suspect is an escape
+    landing while an fdiv or fsqrt result is still in flight.
+- **The re-plan:** tier3-perfmain-b2.sh's main shell (pid 3690571) was stopped at 17:52, before k1 ended, so it never
+  launches k3.
+  - Its two subshells were left untouched: k1 on board 1, and k2 then k4 on board 2. They run on and still write their
+    PM lines to its log.
+  - `tier3-perfmain-b1tail.sh` waits for "PM k1 on board 1 END", then runs the discriminator and then k3, with k3
+    exactly as the coordinator would have run it. Its PM lines go to the same log, which batch 2's placement reads.
+- **The stage:** `perf/fpdiag/board-stage`, run-fpdiag.sh 1991d4a73faa93c8. The runtime lane added fp-divsqrt at
+  17:52, after the first check, and has stated it FINAL. It matches its SHA256SUMS.
+  - The context ludcmp and st images are k1's own T1 images by hash (0ba624fb8f63b442, 215a6ee0e2ec25cd).
+  - The native ludcmp, st, fp-escape and fp-divsqrt are static hard-float RISC-V executables (gcc -O2).
+- **The sections, 12 in one boot:**
+  - fp-escape, native and context, at n = 1e5 and 5e7. Eight f registers accumulate 1.0, exact in double.
+  - fp-divsqrt, native and context, at n = 1e5 and 2e7. Each iteration does fadd, fdiv.d by 1.0 and fsqrt.d of a
+    square, and the accumulated difference must stay exactly 0.
+  - ludcmp and st, native and context, with "1 3".
+- **What runs:** `PP_SUB=fpdiag PP_RUN="python3 tier3-fpdiag.py" tier3-perfpilot-b2.sh 1`, kit bkit10-perf-b1. The
+  reader reads each section's FPESC / FPDIV bad=, BENCH, VERIFY-FAILED, BENCH-DONE, fault, rc and quote.
+  - Dry run: `dryrun-fpdiag-b1.txt`. Both hypothesis shapes read correctly, and a missing section exits 2.
+- **The twin:** every step reads bad=0, rc=0, failed=0 (fp-escape context at n=5e7: 5,924 entries; divsqrt at n=2e7:
+  1,745).
+- **Predictions** (the runtime lane's, two-sided):
+  - **H-escape** (a context's FP state is lost across an escape, including a stale save while an fdiv/fsqrt result is
+    in flight):
+    - context divsqrt at n=2e7 reads bad>0, with f3 != 0 or f1/f2 != n;
+    - context fp-escape at n=5e7 may read bad>0 (fadd-only may pass);
+    - context at n=1e5 reads bad=0, unless a tick lands inside the loop;
+    - every native section passes; native ludcmp and st pass; context ludcmp and st fail.
+  - **H-FPU** (silicon FP arithmetic differs from QEMU's):
+    - **native ludcmp and st FAIL, as the context builds do. This is the decisive cell.**
+    - fp-escape passes everywhere.
+    - divsqrt agrees between native and context: either both read bad=0, or both read bad>0.
+  - Any native failure that fits neither, or a context failure at n=1e5 with none at n=2e7, is a third outcome,
+    reported as read.
+
+### fdiv.d / fsqrt.d rounding on silicon: the rtl lane's bare kit, one cold boot, queued behind the perf kits, pre-registered (2026-10-26 18:3x, before its boot)
+
+- **Why:** the rtl lane reads in simulation that the divsqrt unit takes its RNE sticky bit only from 4 extra quotient
+  bits (norm_div_sqrt_mvp.sv:385-387). As a result, 23 of 512 divides and 19 of 512 square roots land 1 ulp low. An
+  adversarial audit confirmed this with a bit model. It is the rtl lane's leading cause of ludcmp/st's VERIFY-FAILED.
+- **The kit:** llvm-capstone land/rtl-fp-kit 84488ed6db17 (its own pre-registration),
+  `capstone/tests/rtl-smoke/fp-divsqrt-bare-2026-10-26/`.
+  - One board image, fp-all.bin 07692df2c3710353 (board_rec 0x80007000, SR 10). fp-c3 and fp-c15 are sim-only.
+  - Its vector was simulated from the image itself on dcc6daf6e's RTL: `0x17 0x13 0x3 0xc1d880ad3d2bf68c
+    0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1`.
+- **What runs:** `tier3-fpds-bare.sh <board> <log> 84488ed6db17`, derived from tier3-rfix-bare.sh. It takes the image
+  and PREREG.md from the kit commit, checks them by hash and board_rec, and runs one run_sup_bare.py boot.
+  - **The grade, `fpds-grade.py`, applies the PREREG's rules:**
+    - VOID unless SR is 10 and position 8 is 0xc100794b211e882c;
+    - CONFIRMED ON SILICON if the vector is exact;
+    - NOT ON SILICON if positions 0 and 1 read 0 with position 8 exact;
+    - anything else a finding, value by value.
+  - **Placement, `tier3-fpds-place.sh`:** the first board whose perf queue is done. Board 1: k1, fpdiag, k3. Board 2:
+    k2, k4. Batch 2 goes to whichever board ends its second kit first.
+  - Dry run: `dryrun-fpds-bare.txt`. All four grades and NO DATA. The stubbed runner reads CONFIRMED. Placement reads
+    both orders and the stop.
+- **Predictions:** the rtl lane's PREREG, as above. If the sim reading transfers to silicon, the vector reads exact:
+  CONFIRMED ON SILICON.
+
+### Batch 1, k1 read, and one prediction written before the kit that tests it (2026-10-26 18:3x; nbody is in k3, not yet booted)
+
+- **k1, board 1, 17:16-18:30:** 198 of 214 processes clean (`main1-k1/pilot.txt`; perfmain-table.py).
+  - The 16 failures are exactly ludcmp and st: all 8 processes of each, in both arms. rc=1, and every iteration reads
+    `check=0x0 VERIFY-FAILED`, the warm-up included. Entries are 35 and 37 per iteration, in the passing programs' band.
+  - No fault and no rc=139, so not Q-34.
+  - k1's other FP programs pass every process in both arms: expint 8/8, qurt 8/8 (it uses sqrt), dtoa 8/8.
+  - The k1 record lands with k3's.
+- **The rtl lane's reading of the shape:** a deterministic 1-ulp error per fdiv/fsqrt (their bare kit, pre-registered
+  above). qurt's check is tolerant: `qurt_approx` passes `d < 1e-3f` (beebs_qurt_capstone_tail.c, read here at
+  origin/dev). st's is an exact equality against a correctly rounded sqrt.
+- **PREDICTION, under that reading, before k3 boots:** nbody fails VERIFY in every process and in both arms, as st does.
+  capstone-softfloat-libm.md at origin/dev names the shared correctly rounded sqrt "for the exact-equality checks in
+  `st` and `nbody`".
+  - If nbody passes, the hypothesis does not account for st as it stands.
+  - The FP programs in k2-k4 whose checks are tolerant are expected to pass.
+
+### Addendum to the nbody prediction above, still before k3 boots (2026-10-26 18:4x): a pass would not refute it by itself
+
+- **The rtl lane's refinement, checked here at origin/dev:** the shared libm `sqrt` (beebs_softfloat_libm.c) is immune
+  to the defect.
+  - It seeds y with four Newton steps that do use fdiv (`y = 0.5 * (y + x / y)`).
+  - It then pulls y down and pushes it up by the exact residual `(x - hi) - lo` from `two_prod_square`, until y is the
+    correctly rounded root.
+  - So a 1-ulp-low divide in the seed is corrected away, unless a compiler lowers the call to fsqrt.d.
+- **So a program's exposure is its OWN fdiv.d on the verified path,** plus any fsqrt.d emitted for sqrt.
+  - It fails deterministically if one of those divides lands on one of the bad operand cases (about 4% in the rtl
+    lane's 512).
+  - ludcmp divides very often; st a handful of times per iteration, and it fails.
+- **The prediction as amended:** nbody fails VERIFY deterministically in every process IF its verified path divides
+  on a bad case. That is likely, not forced.
+  - **A pass weakens the hypothesis only together with a count of fdiv.d / fsqrt.d on that path,** from nbody's own
+    disassembly.
+  - The original wording above stands as it was written. This narrows what a pass would mean.
+- **The decisive check is host-side,** and it is the runtime lane's call because it is a QEMU change: run the same
+  images on a twin whose fdiv/fsqrt round as the RTL does (a truncated 56-bit quotient with sticky from 4 extra bits;
+  a 57-bit isqrt). If ludcmp and st then read VERIFY-FAILED, the attribution is closed.
+- **The count the amended prediction asks for, taken before k3 boots** (`llvm-objdump --mattr=+f,+d` on each T1
+  image; static counts):
+
+| program (kit) | fdiv.d | fsqrt.d | fdiv.s | k1 reading |
+|---|---|---|---|---|
+| nbody (k3) | 7 | 1 | 0 | not yet read |
+| st (k1) | 9 | 5 (2 in Calc_LinCorrCoef) | 0 | fails, every process |
+| ludcmp (k1) | 0 | 0 | 3 | fails, every process |
+| qurt (k1) | 2 | 0 | 7 | passes (tolerant check) |
+| expint (k1) | 0 | 0 | 0 | passes |
+
+  - nbody's sqrt is lowered to an inline fsqrt.d, so it does NOT go through the immune libm path. Its exposure is 7
+    fdiv.d and 1 fsqrt.d.
+  - ludcmp divides in SINGLE precision only. If ludcmp's failure is this defect, the defect reaches fdiv.s too. The rtl
+    lane's 512 cases test only the double operations.
+  - **An instrument note:** a first count read 0 fdiv/fsqrt in all three images. The disassembler decodes no F/D
+    instruction under the capstone64 triple unless `--mattr=+f,+d` is given; it printed `unimp` instead. That zero was
+    the instrument's, and the counts above are with the flag.
+
+### Batch 1, k2 read (board 2, 17:17-18:38): 214 of 214 processes clean, every program in both arms
+
+- **Records:** `records/b2bs-perfmain-k2-b2.result-lines.txt`, and k1's `records/b2bs-perfmain-k1-b1.result-lines.txt`
+  (k1 read above).
+- **k2's FP-list programs all pass every process** (static FP ops from `--mattr=+f,+d`):
+  - fir and jfdctint have no FP instructions;
+  - matmult-float is fadd.s and fmul.s only;
+  - minver has 3 fdiv.s and an exact FNV check.
+- minver's pass beside ludcmp's failure (also 3 fdiv.s) fits the per-operand reading: a program fails only if a divide
+  lands on a bad case. It does not test that reading.
+
+### The FP discriminator, result: native ludcmp and st FAIL as the context builds do; FP state survives escapes. H-FPU, as pre-registered; H-escape refuted (board 1, 2026-10-26 18:30-18:41)
+
+- **Record:** `records/b2bs-fpdiag-b1.result-lines.txt`. Pre-registration 1bd320e77ded, stage run-fpdiag.sh
+  1991d4a73faa93c8. One boot (booking 401), completed, readings 0. All 12 sections read.
+
+| section | native | context (entries) |
+|---|---|---|
+| fp-escape, n=1e5 | bad=0, rc 0 | bad=0, rc 0 (33) |
+| fp-escape, n=5e7 | bad=0, rc 0 | bad=0, rc 0 (308) |
+| fp-divsqrt, n=1e5 | bad=0, rc 0 | bad=0, rc 0 (36) |
+| fp-divsqrt, n=2e7 | bad=0, rc 0 | bad=0, rc 0 (653) |
+| ludcmp "1 3" | rc 1, VERIFY-FAILED 4 of 4 | rc 1, VERIFY-FAILED 4 of 4 |
+| st "1 3" | rc 1, VERIFY-FAILED 4 of 4 | rc 1, VERIFY-FAILED 4 of 4 |
+
+- **The decisive cell, native ludcmp and st, FAILS**, as the context images do. These are plain Linux processes built
+  by gcc -O2 static, a different compiler and no context.
+  - So the failure belongs to the processor's FP arithmetic, not to the capability context or its escapes:
+    **H-FPU, as pre-registered.**
+- **H-escape is refuted for these programs:** FP state survives hundreds of escapes, in fadd-only loops (308 entries)
+  and in div/sqrt loops (653 entries), with every result exact.
+- **The divsqrt sections pass on both sides.** Their cases (division by 1.0, the sqrt of a perfect square) are the
+  easiest exact ones, which the runtime lane's prediction allowed either way. They do not test the rounding defect.
+- **What this points to, and what it does not settle:** a wrong-result defect in the FPU on operands that ludcmp and
+  st reach, natively and in a context alike.
+  - The rtl lane's reading is the RNE sticky bit taken from only 4 extra quotient bits, so a divide or square root
+    lands 1 ulp low on about 4% of operands, in both .d and .s (sim).
+  - That reading fits this result, but this boot does not test it: its bare kit, behind the perf queue, does.
+- **The perf run's FP programs:** a program's VERIFY is exposed on silicon wherever its verified path divides or
+  takes a square root in hardware on a bad operand. ludcmp and st are not usable as performance rows for the T1/T2
+  comparison of RESULTS. Their cycle and instret counts are still read, both arms run the same arithmetic, and how to
+  report them is the runtime lane's call.
+
+### Correction to the nbody prediction, before nbody runs (2026-10-26 18:4x; k3 is booted, but its heartbeats show no process yet, and nbody is k3's processes 56-63): the rtl lane now predicts nbody PASSES
+
+- **The rtl lane's revision, reversing its earlier "should fail":** the basis is a host build of nbody with every fdiv
+  and sqrt routed through a C model of the RTL rounding.
+  - The model matches all 2,048 traced RTL results bit for bit, and its IEEE control reproduces 23/19/53/27.
+  - nbody's benchmark() calls only offset_momentum. The bodies_energy call is commented out in nbody.c, so the static
+    fsqrt.d counted above never executes, and none of its 30 executed fdiv.d hits a bad case.
+  - Verify is 1 under both the model and IEEE.
+- **The same host check on k1's failures matches silicon:** ludcmp verifies 0 under the model (42 fdiv.s), and st 0
+  (410 fdiv.d, 4 fsqrt.d). Both verify 1 under IEEE.
+- **The prediction now standing: nbody PASSES VERIFY in every process.** The earlier wording (fails, then "likely, not
+  forced") is superseded by this executed-path count, and it stays in the history above.
+  - A static count of instructions present is not a count of instructions executed. The table above counted the
+    first.
+- **minver's exact test,** if its silicon state hash is in the records: the model gives c9e816d4302a644b and IEEE gives
+  205d510d90af10ba.
+
+### minver's check= on silicon against the rtl lane's rounding model (2026-10-26 18:5x): an exact 64-bit match, with one open point
+
+- **Read on silicon** (k2, `main1-k2/pilot.txt`): minver prints `check=0x74ceeb9e3de2c383` on all 48 BENCH lines, both
+  arms, every iteration. VERIFY passes in every process.
+- **The rtl lane's account:** check= is minver's state hash, an FNV over a_i, c, det and result (beebs/state/minver.c,
+  printed by the harness's post()). With the harness's 9,900 iterations per unit:
+  - its host RTL-rounding model gives 0x74ceeb9e3de2c383, the silicon value exactly;
+  - its host IEEE build gives 0xd6cc5fbda167dc7b, which the runtime lane says is the twin's value.
+  - The lane's earlier c9e816d4... and 205d510d... came from a wrong 2-iteration host loop. minver inverts its matrix
+    in place on every call, so the state depends on the iteration count.
+- **Not checked here:** the twin's minver value. No twin minver reading is under perf/ (searched), so
+  0xd6cc5fbda167dc7b is relayed.
+- **Open:** minver's VERIFY hashes only a_i and det against a native reference (beebs_minver_capstone_tail.c at
+  origin/dev), and it PASSES on silicon. So if silicon's state deviates from IEEE, the deviation must be in c or
+  result, not in a_i or det, or the perf harness's verify differs from dev's tail. That is the rtl lane's and the
+  runtime lane's to settle.
+- **If it holds:** a value the model predicts to 64 bits is strong evidence that the model is silicon's FP rounding.
+  It would also mean a VERIFY pass does not by itself certify a program's arithmetic on silicon.
+
+### Correction: in the perf build, minver's VERIFY and 29 other programs' check nothing, so their "VERIFY pass" is void; qurt is not a negative control (2026-10-26 18:5x)
+
+- **The rtl lane's reconciliation, checked here at the file:**
+  - the perf images compile `perf/build/native/src/minver/libminver.c` with -DBEEBS_STATE_CHECK;
+  - its `verify_benchmark` is upstream's `return -1;` ("This benchmark does not support verification");
+  - `#include "beebs/state/minver.c"` is at :257;
+  - the harness reads -1 as a pass.
+  - So k2's 48 minver passes verified nothing. Dev's beebs_minver_capstone_tail.c, with MINVER_EXPECTED_FNV, is the
+    capstone-corpus build, a different one.
+  - The lane's model after 9,900 iterations: a_i and det differ from IEEE (det 0x1.309dap-9 against 0x1.309ca2p-9),
+    c is identical, and result is 0. So silicon's deviation is in a_i and det.
+- **Counted over the perf build's native sources** (57 programs in `perf/build/native/src`, not all 100). Each
+  verify_benchmark body was found by brace matching, with minver as the control (it reads no-op):
+  - **30 have `return -1`, so they check nothing:** bs compress crc cubic fir huffbench huffbench-libc lcdnum
+    miniz-libc minver newlib-exp newlib-log newlib-mod ns qsort qurt rijndael select sglib-arrayheapsort
+    sglib-arrayquicksort sglib-arraysort sglib-dllist sglib-dllist-libc sglib-hashtable sglib-hashtable-libc
+    trio-snprintf-libc trio-sscanf-libc ud whetstone wikisort;
+  - 14 have a real verify (the ctl controls, dtoa, and the sglib list and rbtree sorts);
+  - 13 have no definition in that tree (coremark, the rv8 programs, miniz, picojpeg, qrduino, and trio-snprintf and
+    trio-sscanf). They verify elsewhere or not at all, which is not read here.
+  - A first count with a simpler pattern missed nested parentheses in the signature and reported minver as having no
+    verify. The control caught it.
+- **Consequences for what is recorded above:**
+  - **qurt's pass is not a tolerance-based negative control in this run:** its perf-build verify is `return -1`. The
+    tolerant `qurt_approx` is dev's capstone tail, the other build. The k1 reading "qurt passes" says nothing about
+    its arithmetic.
+  - k2's FP passes (fir, minver) and k4's whetstone and cubic carry no verification either.
+  - **What does constrain arithmetic in this run is check=,** the state hash. Prediction 2 makes it equal across arms
+    and iterations, and that holds. It does not compare against IEEE. Against the twin's check= values (the runtime
+    lane's), it would.
+
+### Silicon check= against the twin's, per program, k1+k2 (2026-10-26 18:5x): 29 equal, minver differs, 20 carry no state hash
+
+- **The twin's values:** the runtime lane's `perf/twin-checks.tsv`, 105 programs with one check= each, from the QEMU
+  functional pass on kit-twin-bench. T1, T2 and native agree there; twin minver is 0xd6cc5fbda167dc7b over 33
+  readings.
+  - The runtime lane makes this comparison a required gate per program.
+- **`checks-diff.py`** (record `records/b2bs-perfmain-checks-k1k2.txt`). Over the 50 programs of k1+k2, each
+  silicon value is one per program across every iteration and both arms (no SPLIT):
+  - **29 EQUAL** with a real state hash;
+  - **1 DIFFERS:** minver, silicon 0x74ceeb9e3de2c383 against the twin's 0xd6cc5fbda167dc7b, silently, its VERIFY
+    being a no-op;
+  - **20 NO-HASH:** check= is 0x0 on both sides, because the program prints no state hash. Equality there tests
+    nothing. ludcmp and st are among them, caught only by their real VERIFY.
+- **A first version counted 0x0 = 0x0 as EQUAL** and read 49 of 50. A gate that cannot fire was being counted as a
+  pass. In the twin file, 42 of 105 programs read 0x0.
+- **Programs that no check reaches at all:** upstream's no-op verify AND check=0x0, 8 programs (miniz-libc, rijndael,
+  sglib-dllist, sglib-dllist-libc, sglib-hashtable, sglib-hashtable-libc, trio-snprintf-libc, trio-sscanf-libc).
+  Their silicon arithmetic is unverified in this run. They are integer programs, so the FPU defect is no known risk
+  to them, but nothing in the run shows it.
+
+### Batch 1, k3 and k4 read: every program clean in both arms; nbody PASSES in all 8 processes, as the standing prediction says (board 1 18:41-19:51, board 2 18:38-19:51)
+
+- **k3 (board 1, `main1-k3/pilot.txt`, record `records/b2bs-perfmain-k3-b1.result-lines.txt`):** 214 of 214
+  processes pass in perfmain-table.py, and every program passes in both arms.
+  - **nbody: T1 4/4, T2 4/4, VERIFY passing in every process.** That is the rtl lane's executed-path prediction above
+    (PASSES), not the original one (fails like st), which it superseded before nbody ran.
+  - The runner's own summary read 213 of 214. The odd one is process 79 (frac T2 p3), and it is the INSTRUMENT, not
+    the program. boardvm's heartbeat loop keeps running while a step's output is cat to the console. One heartbeat
+    landed in the middle of frac's warm-up line: `entries@@HB 101 ... tail=...` then `=41 ns=1721404400
+    check=0xf4240` on the next line. So that line lost its check= to the runner's pattern.
+  - Removing the heartbeat line rejoins it: entries 41, check 0xf4240, like the 5 iterations after it. frac has rc 0,
+    6 BENCH lines and BENCH-DONE failed=0. The heartbeat's tail decodes to the step's LAST bytes
+    (sglib-hashtable-libc's BENCH-DONE), so it fired during the final cat.
+  - The other kits also carry one heartbeat inside a process's text (k1 1, k2 1, k4 0), each at a line boundary,
+    where it is harmless.
+- **k4 (board 2, `main1-k4/pilot.txt`, record `records/b2bs-perfmain-k4-b2.result-lines.txt`):** 214 of 214, every
+  program in both arms.
+- **Batch 1 in total:** 100 programs, 856 processes. 840 pass. The 16 that fail are exactly ludcmp and st, all
+  8 processes of each (k1).
+- **perfmain-table.py and checks-diff.py now remove every `@@HB` line before parsing.** They print `UNSPLICED <n>` for
+  each mid-line one, so a repair is never silent. With the repair, k1, k2 and k4 read as before (198, 214 and 214),
+  and k3 reads 214, the UNSPLICED line naming its file. The runner's in-boot reader (tier3-perfpilot.py) is unchanged:
+  batch 2's boot uses it as pre-registered.
+
+### Silicon check= against the twin's, k1-k4 (all 100 batch-1 programs): 59 equal, minver differs, 40 carry no state hash; checks-diff.py had a name collision, fixed
+
+- **Over all four kits** (record `records/b2bs-perfmain-checks-k1k4.txt`):
+  - **59 EQUAL;**
+  - **1 DIFFERS:** minver, as in k1+k2;
+  - **40 NO-HASH;**
+  - **0 SPLIT.**
+- **Among the FP programs:** cubic, fir, newlib-exp, newlib-log, sqrt and whetstone are EQUAL to the twin. Their
+  verifies are no-ops (fir, cubic, whetstone, newlib-*) or absent, so this equality is their only check, and it holds.
+  nbody, fdct, jfdctint, newlib-sqrt and stb_perlin carry no hash: nbody is checked by its real VERIFY (passes), the
+  others by nothing in this run.
+- **Programs that no check reaches:** the same 8 as above (no-op verify and no hash). Four more have no hash and a
+  verify this tree does not define, so it is unread: beebs miniz, qrduino, trio-snprintf, trio-sscanf.
+- **The tool's defect, found by this run:** checks-diff.py keyed programs by bench name and dropped the suite. BEEBS and
+  RV8 both have a `miniz` and a `qsort`, so over k1-k4 it merged beebs/miniz (0x0) with rv8/miniz (0x21c700), and
+  beebs/qsort with rv8/qsort, and printed two SPLITs. Its twin table had the same merge: the second row
+  overwrote the first.
+  - It now keys on suite/name and refuses a twin file with two rows for one key (tested on a duplicated row: NO DATA,
+    exit 2).
+  - SPLIT still fires (tested on a step text with one extra beebs/qsort line at a different check: SPLIT).
+  - **The k1+k2 record is unchanged under the fix,** program for program (29/1/20). Neither collision pair was in
+    k1+k2 with both members, and the twin values it compared were the right members by luck: rv8/qsort was the
+    overwriting row and was the qsort present.
+
+### The rtl lane's fdiv.d / fsqrt.d rounding kit, result: CONFIRMED ON SILICON, the vector exact (board 1, 2026-10-26 19:52-19:53)
+
+- **Placement:** tier3-fpds-place.sh put it on board 1, the first board whose perf queue was done (k3 ended 19:51:50).
+- **The reading** (record `records/b2bs-fpds-bare-b1.result-lines.txt`, UART `fpds-bare/fp-all/uart.txt`):
+  - image fp-all.bin 07692df2c3710353, checked by hash;
+  - board_rec 0x80007000;
+  - SR 10, SV `0x17 0x13 0x3 0xc1d880ad3d2bf68c 0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07
+    0xc100794b211e882c 0x1`. That is the PREREG's simulated vector exactly, read here in uart.txt itself, not only
+    through fpds-grade.py.
+  - **fpds-grade.py: CONFIRMED ON SILICON.** By the PREREG's positions, silicon reproduces the 23 of 512 fdiv.d and 19
+    of 512 fsqrt.d results that land 1 ulp low, with the same first misses as the simulation.
+- **One post-run artefact:** the runner's gdb dump after SUPTEST END could not halt the core (`Unable to halt`,
+  `remote failure reply 'E0E'`), so no register or memory dump was read. The grade rests on the UART lines, as the
+  PREREG's rules do.
+- **What it settles,** together with the discriminator (H-FPU) and the rtl lane's host model (ludcmp and st verify 0,
+  nbody 1, minver's exact hash), st's failure is R-62's double-precision divide/sqrt rounding on silicon.
+  - ludcmp divides in single precision only (3 static fdiv.s, 42 executed in the host model). This kit tests only the
+    double operations, so for ludcmp the silicon side rests on the discriminator and the host model, whose fdiv.s
+    rounding matches the RTL in simulation (53 of 512).
+  - Nothing in this run points at the capability system.
+
+### Correction: the no-op verify census counted a directory, not what the build compiled; over batch 1's 92 BEEBS programs, 33 verifies are no-ops, and 11 programs (not 8) have neither a verify nor a hash (2026-10-26 20:2x)
+
+- **What was wrong:** the census above ("30 of 57") read `perf/build/native/src`. That directory holds only the files the
+  perf build patched: a program's other sources compile from `/tmp/capstone/beebs-src/src`, as its compile lines in
+  `perf/build/native/build.log` show. nbody, st, ludcmp, trio_test.c and others are not in the directory at all.
+  - The count stays literally true of that directory. As a statement about the perf build, it was a filtered
+    population, and the "13 with no definition" were simply sources it did not contain.
+  - The census also took a file's FIRST verify_benchmark. trio_test.c has two, under `#ifdef TRIO_SNPRINTF` (`return
+    -1`) and `#elif TRIO_SSCANF` (real, expected 15).
+- **Redone from the build itself:** `census-verify.py` reads each program's .c files from its own compile lines and
+  takes the definition whose `#ifdef`/`#elif` macro that line defines. Record: `records/b2bs-perf-verify-census.txt`.
+  - Controls: minver must read NO-OP and st REAL, else exit 2. Tested by pointing minver at st's compile line:
+    CONTROL FAILED, exit 2. A log with no compile line is NO DATA, exit 2.
+  - **Over the 94 programs in the log, 34 are NO-OP and 60 REAL. Over batch 1's 92 BEEBS programs, 33 are NO-OP.**
+- **What changes:**
+  - **Still no-ops:** minver and qurt, so the minver and qurt readings above stand. nbody, st and ludcmp are REAL, so
+    nbody's 8/8 pass in k3 is a real verify passing.
+  - **No-ops the first list missed:** fasta, miniz, picojpeg, stb_perlin and trio-snprintf.
+  - **trio-sscanf and trio-sscanf-libc are REAL;** the first list called trio-sscanf-libc a no-op.
+  - **Programs no check reaches** (no-op verify AND check=0x0 on silicon and twin): **11**, not 8. They are fasta,
+    miniz, miniz-libc, rijndael, sglib-dllist, sglib-dllist-libc, sglib-hashtable, sglib-hashtable-libc, stb_perlin,
+    trio-snprintf and trio-snprintf-libc.
+    - stb_perlin is floating point, so R-62 is a possible risk to it that this run cannot see.
+    - beebs-main.c says a no-op program is built with BEEBS_STATE_CHECK and a state hash. For these 11 it yields 0 on
+      both sides. That is the runtime lane's to read.
+  - 22 of the 33 no-op programs are covered by a non-zero hash instead (21 EQUAL, minver DIFFERS).
+  - **The manifest's own_verify column disagrees for trio-snprintf and trio-snprintf-libc only** (it says yes, and the
+    compiled branch is `return -1`). Every other program agrees.
+- **The k1-k4 check= section above changes only in its "no check reaches" paragraph,** which this replaces.
+
+### Batch 2 read (board 2, 19:51-20:07): 24 of 24 processes clean; coremark and rv8 dhrystone hash as the twin; the main run is complete
+
+- **b2k1** (`main2-b2k1/pilot.txt`, record `records/b2bs-perfmain2-b2k1-b2.result-lines.txt`): coremark, matmult-int and
+  rv8-dhrystone each pass 4 of 4 processes in both arms. The runner and perfmain-table.py agree, and no heartbeat is
+  spliced.
+- **check= against the twin:** coremark 0x70a5db4b905fd88a and rv8 dhrystone 0x1fbda00054142 are EQUAL. matmult-int
+  has no hash, but its verify is REAL (census-verify.py over `perf/build2/native/build.log`).
+  - The batch-1 images are hash-identical in build and build2 (nbody 15588983d4aa2aba, minver ff368bc0e9e8977b), so
+    the census over build's log describes what batch 1 staged.
+- **The main run, both batches:** 103 programs, 880 processes on bitstream 2. 864 pass in both arms. The 16 failures are
+  ludcmp and st, every process, attributed to R-62 (above).
+  - check= against the twin: 61 EQUAL, 1 DIFFERS (minver, R-62's exact model value), 41 NO-HASH.
+  - 11 programs carry neither a real verify nor a hash.
+
+### fp-all at N=2, cross-board: the same bare kit on board 2, pre-registered (2026-10-26 20:1x, before its boot)
+
+- **Why:** R-62 is CONFIRMED ON SILICON from board 1 alone (N=1). R-58, R-59 and Q-24 were read on both boards. This
+  repeats the board-1 boot on board 2, so the reading is cross-board.
+- **What runs:** `tier3-fpds-bare.sh 2 <log> 84488ed6db17`, unchanged since board 1's boot. It runs the same image
+  (fp-all.bin 07692df2c3710353, checked by hash), rec 0x80007000 and fpds-grade.py, on kit bkit9-b2-b2.
+- **Prediction:** CONFIRMED ON SILICON, with the vector byte-identical to board 1's: `0x17 0x13 0x3 0xc1d880ad3d2bf68c
+  0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1`.
+  - Any difference from board 1 is a cross-board finding, read value by value.
+  - VOID by the PREREG's rule (SR not 10, or position 8 wrong) says nothing about the divider.
+
+### fp-all at N=2, result: CONFIRMED ON SILICON on board 2, the SR/SV lines byte-identical to board 1's (2026-10-26 20:09-20:10)
+
+- Record: `records/b2bs-fpds-bare-b2.result-lines.txt`. The UART SR and SV lines of the two boards compare equal with
+  `cmp`. The vector is the PREREG's: 23 of 512 fdiv.d and 19 of 512 fsqrt.d results land 1 ulp low on both boards, with
+  the same first misses. As pre-registered.
+- As on board 1, the post-run gdb dump could not halt the core, so the grade rests on UART.
+- **R-62 on silicon is now N=2, cross-board.**
