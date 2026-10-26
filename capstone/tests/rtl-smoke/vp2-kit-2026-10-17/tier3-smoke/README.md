@@ -9099,3 +9099,45 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - a garbled DIFF line, a missing summary and a missing file each exit 2.
 - **Unchanged:** the runner, which is still running parts 02 and 03, and the grade (cell equality, no tolerance). Each
   part's record carries this classifier's lines beside the runner's.
+
+### Part01's cause 4: the rtl lane's RTL reading (2026-10-26), checked here at source
+
+- **What the rtl lane read** (capstone-ariane 96eb969da, core dcc6daf6e):
+  - A misaligned `lw` sets `data_misaligned`, and the LOAD arm raises LD_ADDR_MISALIGNED with no privilege, capmode or
+    context term. This is delivered since R-34's fix.
+  - In a supervised context the trap becomes an ESCAPE (commit_stage.sv:228-234), so OpenSBI's misaligned emulation is
+    never reached.
+- **Checked here:**
+  - core/load_store_unit.sv at 96eb969da: `LW, LWU, SW, ...` sets `data_misaligned`, and
+    `if (CVA6Cfg.CAPSTONE_EXT && cap_exception.valid && !misaligned_exception.valid)` sits at the end of
+    data_misaligned_detection.
+  - capstone_vm.c on dev: resolve() returns unless `cause == 12, 13 or 15` on event 4, so a 4 ends the run.
+  - The QEMU side, the lane says: capstone-qemu deb7d75756 has no MO_ALIGN on plain loads, as upstream.
+- **The lane's classification:**
+  - It is a twin divergence of the Q-31 family (QEMU completes what the RTL traps), not an RTL defect.
+  - Whether a context sees 4 or an emulated load is the semantics owner's call (runtime).
+- **Open:** how the corpus grades a silicon 4 at an odd address where the twin reads 28 further on. It is not a miss of
+  the spatial defect, by the lane's reading. Whether it is CAUGHT is the corpus owner's ruling. Until then the two cells
+  stay differences.
+
+### Addendum, 2026-10-26 12:4x, before the boots it orders: the Juliet spatial remainder STOPS on silicon (the lead's decision, relayed by the runtime lane); the short queue follows
+
+- **The decision:** Juliet is reported as:
+  - the full set on the emulator (366 temporal, 9,138 spatial);
+  - on the FPGA, all 366 temporal and the 755-case stratified spatial sample, which covers all 261 variants.
+  - The remainder differs from the sample only in control-flow wrappers.
+- **What was stopped, at 12:41:**
+  - board 2's part03 (from 10:44, in census batch006) and board 1's part04 (from 11:01, in census batch006);
+  - both schedulers first, so no further part could be claimed, then each part's runner and board driver by process
+    group;
+  - hub bookings 376 and 378 released (HTTP 200); both boards then read FREE.
+  - **Parts 03 and 04 have no reading:** their run phases did not finish, and nothing from them is graded or counted.
+  - **Parts 05-12 do not run.**
+- **Parts 01 and 02 are complete.** Their records land as an UNCOUNTED addendum, beside Q-34 and its ruling.
+- **The short queue, in this order:**
+  - **board 2:** httpd N=2 (pre-registration b86eff8b49e4, `tier3-httpd-b2.sh 2` with HT_SUB `httpd-n2`, graded by
+    n2-grade.py against board 1's reading and by verdicts-compare against the reference). The pre-registration had it
+    after the fault_mstatus arm; only the order changes. Then the rtl lane's bare kit (14fe83614573), then
+    fault_mstatus x200 (e50f65806556).
+  - **board 1:** the bare kit, then fault_mstatus x200.
+  - Every prediction stands as registered.
