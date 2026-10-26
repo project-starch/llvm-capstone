@@ -10056,3 +10056,61 @@ Tool: `r64-census.py`.
 - **Prediction (functional only; the timing predictions are the runtime lane's):** every process passes, as these 15
   programs' T1 and T2 processes did in the main run. Read post hoc with perfmain-table.py, which removes mid-line
   heartbeats. A T3-only failure would be a finding about the T3 build, not the board.
+
+### Bitstream 3 (capstone-ariane e7af48457, the R-62/R-63 divider fixes) on both boards: reflash and first boots, pre-registered (2026-10-27 02:4x, before the seal and the flash)
+
+- **Authority.** The lead's own word, in the board lane's session on 2026-10-27: "as soon as the bitstream is ready, do
+  the re-flash; you have my go-ahead now." The runtime lane holds a relayed go-ahead too; it has agreed that this lane
+  flashes and that it will not touch the consoles.
+- **What changes:**
+  - `git diff --stat dcc6daf6e e7af48457` in capstone-ariane: `core/fpu_div_sqrt_fix/norm_div_sqrt_mvp.sv` (new, the
+    R-62/R-63 fix) and its `core/Flist.cva6` line; the rest is tests.
+  - `ariane_pkg.sv:612` CAP_REVNODE_MEM_BASE `56'hBFF0_0000` reads the same at both commits. So the DTS, firmware, monitor,
+    module and launcher stay bitstream 2's, and only BOARD_BITSTREAM changes.
+  - R-64, R-65 and R-66 remain in bitstream 3, as the rtl lane recorded.
+- **"Ready".** The build is sealed by synth with a sha256, has completed route and bitgen with no unrouted nets, and
+  sits within noise of bitstream 2:
+  - WNS no worse than −14 ns (bitstream 2: −9.790 ns; the per-path null alone spans several ns);
+  - utilisation within the per-module redistribution floor.
+  A build outside that goes back to the lead, unflashed.
+- **Order:** each board flashes when its T3 kits have ended: board 2 after t3k2, board 1 after t3k3. A board running a
+  pre-registered arm is never interrupted.
+- **How:** `board-tier12/batch/flash-and-first-bs3.sh <board> <log> <name> <local .bit> <sha256>`, one per board. Each
+  step gates the next:
+  1. wait for the T3 end line, then for the board to be free;
+  2. the store-has control (a nonexistent name must read missing);
+  3. bitstream 2 (`caplifive_vp2c_dcc6daf6e.bit`) must be registered as the fallback;
+  4. local sha256 against the seal;
+  5. a 30-minute booking, then the flash with `drivers/flash-bitstream.py` (upload if absent, flash, power cycle). The
+     `nv_bitstream_name` readback must equal the name.
+  6. `make-b3-kit.sh` copies bkit9-b2-b<board> to bkit11-b3-b<board>, and bkit10-perf-b<board> to
+     bkit12-perf-b3-b<board>. Only BOARD_BITSTREAM changes: every other SHA256SUMS line must equal the source's, and
+     board.env must differ in that one line.
+  7. `run-b3-first.sh`.
+  - Dry run: `dryrun-flash-and-first-bs3.txt`, with every board and console call stubbed and the kit step real into
+    scratch. It covers:
+    - both boards' full paths;
+    - the missing-fallback, failed-readback and wrong-name STOPs;
+    - board 1 kept waiting while only t3k1 has ended;
+    - a store control that reads "present";
+    - a defect vector read as NOT AS PREDICTED.
+- **Predictions, per board, each its own cold boot:**
+  1. **fp-all bare** (rtl kit 84488ed6db17), graded by fpds-grade.py: its fixed-RTL branch,
+     `FPDS NOT ON SILICON: 0 fdiv and 0 fsqrt mismatches on the 512 cases, position 8 exact`. That is **R-62 fixed on
+     silicon**. Bitstream 2 read the defect vector on both boards.
+  2. **fp-rm bare** (rtl kit 75f129f56497), graded by fprm-grade.py: its fixed-RTL branch, `FPRM NOT ON SILICON: the
+     fixed-RTL vector`. That is **R-63 fixed on silicon**: RDN, RUP and RMM correctly rounded.
+     - Both graders were written for bitstream 2, so their "NOT ON SILICON" label is the success reading here.
+     - Neither step gates the chain. Any other grade is surfaced as a result about the build.
+  3. **s23 bare `--expect batch`:** AS EXPECTED, SR 25, re-arm total 14.
+  4. **va-alloc bare `--expect b2`:** PASS on the bitstream-2 vector.
+  5. **Tier 1** (firmware 0c24496f):
+     - b0-stats 0, b0-hello 0, vm-contract 0, vm-suite 1;
+     - VM exits normal:0, stale:139, sparse-churn:0, and VIRTUAL_SPARSE_CHURN_OK;
+     - no VM_BEGIN without VM_EXIT;
+     - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 all 0.
+     These are bitstream 2's own first-boot readings (`records/bs2-dcc6daf6e-first-b1/b2`), and only the divider
+     changed.
+- **Then:** the runtime lane's perf kit `perf/main4/b3k1` (runner cbf60f75e5eb79ae, its pre-registration
+  runtime/bench-counters 8bfc279da208), one boot, under its own pre-registration here before its boot.
+- The seal's name, path and sha256 are recorded in an amendment here before each board's chain is launched.

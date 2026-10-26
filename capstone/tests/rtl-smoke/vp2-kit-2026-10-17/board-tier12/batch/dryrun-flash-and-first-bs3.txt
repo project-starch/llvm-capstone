@@ -1,0 +1,113 @@
+# dry run of flash-and-first-bs3.sh / make-b3-kit.sh / run-b3-first.sh (2026-10-27), every board and console call stubbed
+# (FB_WAITF/BUSY/STORE/BOOK/FLASH stubs; make-b3-kit.sh REAL, writing into scratch from the real bitstream-2 kits; run-b3-first.sh
+# with B3_FPDS/B3_FPRM/B3_FIRST stubs printing each grader's possible lines). The bitstream name is a placeholder.
+## make-b3-kit.sh alone: bkit9-b2-b1 and bkit10-perf-b2 copied; an existing destination and a non-e7af48457 name refused
+MK3 kit <scratch> from bkit9-b2-b1: board.env diff:
+< BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+> BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+MK3 k1 DONE
+MK3 kit <scratch> from bkit10-perf-b2: board.env diff:
+< BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+> BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+MK3 p2 DONE
+MK3 STOP: <scratch> exists
+MK3 STOP: bitstream name caplifive_vp2c_dcc6daf6e is not an e7af48457 build
+## chain: full2
+FB board 2's T3 kits ended 02:36:20: PM3 t3k2 on board 2 END rc=0 03:00:00 :: x
+FB board 2 free 02:36:20
+STUB STORE missing no-such-bitstream-558616.bit
+STUB STORE has caplifive_vp2c_dcc6daf6e.bit
+FB FLASH BEGIN 02:36:20 board 2 booking 999
+STUB FLASH board 2 urlfile <home-secret-file> caplifive_vp2c_e7af48457.bit
+STUB unbook 999
+FB FLASH END rc=0 02:36:20
+MK3 kit <scratch> from bkit9-b2-b2: board.env diff:
+< BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+> BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+MK3 bkit11-b3-b2 DONE
+MK3 kit <scratch> from bkit10-perf-b2: board.env diff:
+< BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+> BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+MK3 bkit12-perf-b3-b2 DONE
+FB FIRST rc=0 02:36:21; SEQ:
+  B3 START 02:36:21 board 2 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b2
+  STUB FPDS kit <scratch> root <scratch> board 2 commit 84488ed6db17
+  FPDS fp-all read: SR 10 :: x
+  FPDS NOT ON SILICON: 0 fdiv and 0 fsqrt mismatches on the 512 cases, position 8 exact
+  B3 FP-ALL: FPDS NOT ON SILICON: 0 fdiv and 0 fsqrt mismatches on the 512 cases, position 8 exact :: AS PREDICTED (R-62 fixed on silicon)
+  STUB FPRM kit <scratch> root <scratch> board 2 commit 75f129f56497
+  FPRM fp-rm want (bitstream 2): SR 16 :: y
+  FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build
+  B3 FP-RM: FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build :: AS PREDICTED (R-63 fixed on silicon)
+  B3 FIRST rc=0 02:36:21
+    STUB run-b2-first board 2 bs caplifive_vp2c_e7af48457 kit <scratch>
+  B3 board2 DONE 02:36:21
+FB DONE 02:36:21
+## chain: full1
+FB board 1's T3 kits ended 02:36:21: PM3 t3k3 on board 1 END rc=0 03:40:00 :: y
+FB board 1 free 02:36:21
+STUB STORE missing no-such-bitstream-558711.bit
+STUB STORE has caplifive_vp2c_dcc6daf6e.bit
+FB FLASH BEGIN 02:36:21 board 1 booking 999
+STUB FLASH board 1 urlfile default caplifive_vp2c_e7af48457.bit
+STUB unbook 999
+FB FLASH END rc=0 02:36:21
+MK3 kit <scratch> from bkit9-b2-b1: board.env diff:
+< BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+> BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+MK3 bkit11-b3-b1 DONE
+MK3 kit <scratch> from bkit10-perf-b1: board.env diff:
+< BOARD_BITSTREAM=caplifive_vp2c_dcc6daf6e
+> BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+MK3 bkit12-perf-b3-b1 DONE
+FB FIRST rc=0 02:36:21; SEQ:
+  B3 START 02:36:21 board 1 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b1
+  STUB FPDS kit <scratch> root <scratch> board 1 commit 84488ed6db17
+  FPDS fp-all read: SR 10 :: x
+  FPDS NOT ON SILICON: 0 fdiv and 0 fsqrt mismatches on the 512 cases, position 8 exact
+  B3 FP-ALL: FPDS NOT ON SILICON: 0 fdiv and 0 fsqrt mismatches on the 512 cases, position 8 exact :: AS PREDICTED (R-62 fixed on silicon)
+  STUB FPRM kit <scratch> root <scratch> board 1 commit 75f129f56497
+  FPRM fp-rm want (bitstream 2): SR 16 :: y
+  FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build
+  B3 FP-RM: FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build :: AS PREDICTED (R-63 fixed on silicon)
+  B3 FIRST rc=0 02:36:21
+    STUB run-b2-first board 1 bs caplifive_vp2c_e7af48457 kit <scratch>
+  B3 board1 DONE 02:36:21
+FB DONE 02:36:21
+## chain: nofb
+FB board 2's T3 kits ended 02:36:21: PM3 t3k2 on board 2 END rc=0 03:00:00 :: x
+FB board 2 free 02:36:21
+STUB STORE missing no-such-bitstream-558808.bit
+STUB STORE missing fallback
+FB STOP: the fallback (bitstream 2) is not registered
+## chain: flfail
+FB board 1's T3 kits ended 02:36:21: PM3 t3k3 on board 1 END rc=0 03:40:00 :: y
+FB board 1 free 02:36:21
+STUB STORE missing no-such-bitstream-558823.bit
+STUB STORE has caplifive_vp2c_dcc6daf6e.bit
+FB FLASH BEGIN 02:36:21 board 1 booking 999
+STUB FLASH board 1 urlfile default caplifive_vp2c_e7af48457.bit
+STUB unbook 999
+FB FLASH END rc=1 02:36:21
+FB STOP: the flash did not read back caplifive_vp2c_e7af48457.bit
+## chain: bad
+FB STOP: bitstream name caplifive_vp2c_dcc6daf6e is not an e7af48457 build
+## run-b3-first.sh SEQ when fp-all reads the DEFECT vector (rd)
+B3 START 02:36:21 board 2 bitstream caplifive_vp2c_e7af48457 kit bkit11-b3-b2
+STUB FPDS kit <scratch> root <scratch> board 2 commit 84488ed6db17
+FPDS fp-all read: SR 10 :: x
+FPDS CONFIRMED ON SILICON: the rounding defect is on the board (the vector is exact)
+B3 FP-ALL: FPDS CONFIRMED ON SILICON: the rounding defect is on the board (the vector is exact) :: NOT AS PREDICTED
+STUB FPRM kit <scratch> root <scratch> board 2 commit 75f129f56497
+FPRM fp-rm want (bitstream 2): SR 16 :: y
+FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build
+B3 FP-RM: FPRM NOT ON SILICON: the fixed-RTL vector (directed modes correctly rounded), a finding about the build :: AS PREDICTED (R-63 fixed on silicon)
+B3 FIRST rc=0 02:36:21
+  STUB run-b2-first board 2 bs caplifive_vp2c_e7af48457 kit <scratch>
+B3 board2 DONE 02:36:21
+## board 1 with only t3k1 ended (must keep waiting, then STOP at FB_WAITMAX)
+FB STOP: board 1's T3 kits did not end
+## store-has control reading 'present' for a nonexistent name
+FB board 2's T3 kits ended 02:36:33: PM3 t3k2 on board 2 END rc=0 03:00:00 :: x
+FB board 2 free 02:36:33
+FB STOP: store-has control read rc=0, not 1
