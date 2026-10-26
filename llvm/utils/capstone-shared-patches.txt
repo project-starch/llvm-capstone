@@ -100,6 +100,7 @@ llvm/lib/CodeGen/DwarfEHPrepare.cpp | +26 -4 | // space 0. On a capability targe
 llvm/lib/CodeGen/EarlyIfConversion.cpp | +7 -0 | if (TII->canTrap(MI)) {
 llvm/lib/CodeGen/MachineCSE.cpp | +8 -0 | // capability increment above that test, where kwnames is NULL.
 llvm/lib/CodeGen/MachineLICM.cpp | +16 -1 | MachineLoop *SpeculationLoop = nullptr;
+llvm/lib/CodeGen/PrologEpilogInserter.cpp | +7 -1 | int64_t SlotDelta =
 llvm/lib/CodeGen/SelectionDAG/DAGCombiner.cpp | +31 -15 | static bool isIntegerTruncate(SDValue N) {
 llvm/lib/CodeGen/SelectionDAG/LegalizeDAG.cpp | +7 -7 | DAG.getConstantPool(LLVMC, TLI.getConstantPoolPtrTy(DAG.getDataLayout()));
 llvm/lib/CodeGen/SelectionDAG/LegalizeFloatTypes.cpp | +8 -2 | // space 0, a capability target passes it as an integer (C-86, see
