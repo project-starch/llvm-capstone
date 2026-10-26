@@ -9327,3 +9327,38 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - one bench dmesg line per process; readings 0.
 - **The stop branch:** if S-mode cannot read cycle or instret, the module oopses at the first CSRUNV. That is at insmod
   plus the first launch, so at the ok step. Then the boot stops, the runtime lane is told, and the fallback is wall time.
+
+### The perf evaluation's first boot, result: S-mode reads cycle and instret; the new module revision passes its Tier 1 contract; the probe misses two of its numeric predictions, both small (board 1, 2026-10-26 15:01-15:08)
+
+- **Record:** `records/b2bs-perfprobe-b1.result-lines.txt`. Pre-registration a6e51b03112d. One boot (booking 396),
+  completed, readings 0, no oops.
+- **The counters work:** no oops at the first CSRUNV. Every process printed one `capstone_vm: bench` line, and the
+  module lists its 3 bench parameters. **The wall-time fallback is not needed.**
+- **Tier 1 contract of dev c2b137cdfee6's revision (bench build): PASSES, as predicted.**
+  - `ok`: VIRTUAL_APPLICATION_OK, exit 0 (bench cycles=20886982, instret=1157833, entries=503).
+  - `stale`: denied with cause 25, exit 139, at code+0x14e10.
+
+| r | empty instret / entries | loop instret / entries / cycles | loop - empty instret | over 2e7 |
+|---|---|---|---|---|
+| 0 | 20543 / 18 | 20022308 / 33 / 30358342 | 20001765 | 1765 |
+| 1 | 20453 / 18 | 20022330 / 33 / 30354446 | 20001877 | 1877 |
+| 2 | 20341 / 18 | 20022226 / 33 / 30352605 | 20001885 | 1885 |
+| 3 | 20363 / 18 | 20022352 / 33 / 30353878 | 20001989 | 1989 |
+| 4 | 20363 / 18 | 20022240 / 33 / 30352976 | 20001877 | 1877 |
+
+- **Against the probe's predictions:**
+  - 10 PROBE lines, PROBE done, exit 0: **holds**.
+  - Empty entries the same small number at r=1..4: **holds** (18).
+  - **Empty instret identical across r=1..4: MISSED.** The values are 20453, 20341, 20363, 20363, a spread of 112 (0.5%).
+  - **Loop minus empty in [20,000,000, 20,001,000]: MISSED at every r.** The excess over 2e7 is 1,877 to 1,989 at
+    r=1..4, about twice the band's 1,000.
+  - Cycles >= instret: **holds** (about 1.52 cycles per instruction in the loop).
+  - Loop entries >= the empty's: **holds** (33 against 18).
+- **One arithmetic that fits the miss, offered as a candidate and not a finding:** each loop takes 15 more module
+  entries than its empty (33 against 18). The excess divided by 15 is 125 to 133 instructions per extra entry at
+  r=1..4.
+  - That would be counted instructions per entry or exit, inside the CSRUNV window, which the per-mark accounting did
+    not budget for.
+  - The 112-instruction spread across the empties is the same order as one entry's cost.
+  - Settling it is the instrument owner's: compare instret per entry on a probe whose entry count varies at a fixed
+    workload.
