@@ -9962,3 +9962,65 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     `U memcpy`.
   - So nothing in these images sets a directed mode (a restored environment can only carry what was saved), and
     R-62 alone accounts for ludcmp and st.
+
+### R-64 and R-66 static reach over the bitstream-2 bug-corpus images (2026-10-26/27)
+
+Asked by the rtl lane after filing R-64 (db755fec4825) and R-66 (5d1435c245d9); the runtime lane's census covered only
+the perf images. R-65 cannot be counted statically. Record: `records/b2bs-r64-r66-census.txt`.
+Tool: `r64-census.py`.
+
+- **Population:** every ELF under both bitstream-2 run directories (b1 and b2), 44,870 paths. Excluded, with reasons:
+  - 22,496 relocatable `.o`: the OpenSBI build trees;
+  - the 330 `fw_payload.elf`: their `payload_bin` is the kernel and initramfs embedded as data, which disassembles as
+    noise (73,566 "static-rm" divides spread evenly over all five modes);
+  - the kernel is not censused.
+- **What was censused:** the remaining 7,931 distinct images:
+  - 6,505 corpus `.dom`, plus 88 corpus images with case names;
+  - every perf `.dom` that ran;
+  - OpenSBI `fw_jump`/`fw_dynamic`;
+  - the native fpdiag, `capstone-vexec`, `juliet-timeout` and `postgres` binaries.
+- **How it counts:** `llvm-objdump --mattr=+f,+d`, decoding the rm field from each encoding. Two controls must read
+  exactly or the tool exits 2:
+  - a synthetic object exercising every channel, including immediates that look like CSR numbers (`csrsi mip, 0x2`),
+    which must not count;
+  - fp-divsqrt.dom: fdiv.d 1 and fsqrt.d 1, both rm 7.
+  - It agrees with the runtime lane's census on st (14 divides/square roots) and whetstone (7).
+- **R-64: no corpus image can observe it.**
+  - **No fdiv/fsqrt carries a static directed mode** (0 across the 7,931 images).
+  - **Flag reads outside the runtime's fenv**, none of which interprets the flags:
+    - glibc's printf internals and BEEBS st's `Calc_*`/`sqrtf64` (native fpdiag only) each run
+      `frflags; flt.d; fsflags`, a save and restore around a quiet compare. It was read in the disassembly.
+    - perl's `fetestexcept` has no code reference. By resolving every `auipc`+`addi`/`jalr` pair, perl references
+      `fesetround` only from `XS_POSIX_fesetround`, and no perl case, control or harness file uses POSIX (33 files;
+      the `use strict` control hits 2).
+  - **Rounding-mode writes:** the runtime's `fesetenv`; OpenSBI's `csrwi fcsr, 0` at hart re-init; and that same perl
+    POSIX binding.
+  - cpython reads frm (`fegetround`) only.
+- **R-66: no FP64 value reaches an fdiv.s or fsqrt.s source.** Over the 179 fdiv.s (there is no fsqrt.s), three
+  passes ran:
+  - **A linear backward scan:** 172 FP32, 5 unresolved and 2 FP64 candidates. All 7 were resolved by hand:
+    - postgres `calc_rank_or` 9d1060 is reached only through `j 0x9d1054`, after `flw fa2` at 9d1090. Its `fld fa2`
+      (the 1.64493406685 constant) does not reach it.
+    - postgres 9d0f90: fa4's only FP64 writer is overwritten by `fmv.s` on both entries.
+    - minver 1e9d0 (T1 and T2) and ludcmp 10768: every write to their source registers is FP32.
+  - **A function-wide writer check:** 106 linear-FP32 sites sit in functions that also have an FP64 writer for the
+    same register. They are in 4 cpython images (`_Py_hashtable_*` and the bundled expat) and in postgres.
+    - **This retired a draft reading of "no site" taken from the linear scan alone. It was never committed.**
+  - **The deciding pass, reaching definitions over each function's CFG:**
+    - It runs wherever the function has an FP64 writer. Branch targets come from the operand; a call leaves the
+      caller-saved registers "call"; a site entered only indirectly reads "unreached", never clean.
+    - Result: **0 sites with FP64 reaching and 0 unreached.**
+    - Synthetic controls must read exactly:
+      - an `fld` merging with an `flw` across a branch reads {D, S};
+      - an `fld` skipped by a jump into a loop does not count;
+      - a divide after `jr` reads unreached.
+    - The first control caught a parse bug before any real run: the branch target was being read from the
+      `<sym+0x..>` offset.
+    - On real disassembly, the pass agrees with both postgres hand resolutions. Relabelling the `fdiv.d` at 9d0fb0
+      (fed by `fcvt.d.s` and `fld`) as `fdiv.s` reads {D}.
+  - The two postgres images differ in calc_rank_or only in two `auipc`/`addi` constants.
+- **Limits:**
+  - A value live into a function (an argument) or returned by a call is taken as NaN-boxed, as the ABI requires.
+  - Calls through function-pointer tables are invisible to the reference resolution: memcpy resolves to only 3 direct
+    sites in perl.
+  - Images that ran on earlier divsqrt bitstreams are not in this population.

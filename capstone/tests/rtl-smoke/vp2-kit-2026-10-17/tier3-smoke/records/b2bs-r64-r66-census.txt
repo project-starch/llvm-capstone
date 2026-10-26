@@ -1,0 +1,284 @@
+# R-64 / R-66 static reach over every image under the two bitstream-2 run directories (2026-10-26/27)
+# tool: tier3-smoke/r64-census.py sha256/16 99f88ecf29fa93d8 as run; committed as 37346bc9e3459ff7, which differs only in writing its /mnt/hdd paths through Path.home(), llvm-objdump -d --mattr=+f,+d (cc-prmerged)
+# population: every ELF under <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1 and -b2: 44870 paths.
+#   first pass (all 44870): 22496 relocatable .o skipped (the OpenSBI build trees), 8261 distinct images.
+#   330 fw_payload.elf dropped for the final pass: their payload_bin is the kernel Image + initramfs embedded as DATA,
+#   and disassembled it reads as noise (static-rm fdiv/fsqrt spread evenly over all five modes, 73566 of them).
+#   final pass below: the remaining 7931 distinct images.
+CONTROLS fired: synthetic object (every channel, R-66 D/S/?) and fp-divsqrt.dom (fdiv.d 1, fsqrt.d 1, dyn)
+SKIPPED: {}
+TOTAL 7931 paths, 7931 distinct images: {'fdiv.d rm=dyn': 4039, 'fdiv.s rm=dyn': 179, 'flag-read': 6951, 'flag-write': 6966, 'fsqrt.d rm=dyn': 26, 'r66 fdiv.s S-with-D-writer-in-fn': 106, 'r66 fdiv.s src=?': 5, 'r66 fdiv.s src=D': 2, 'r66 fdiv.s src=S': 172, 'rm-read': 6980, 'rm-write': 7589}
+IMAGES WITH: {'fdiv.d rm=dyn': 154, 'fdiv.s rm=dyn': 25, 'flag-read': 6935, 'flag-write': 6934, 'fsqrt.d rm=dyn': 11, 'r66 fdiv.s S-with-D-writer-in-fn': 6, 'r66 fdiv.s src=?': 5, 'r66 fdiv.s src=D': 2, 'r66 fdiv.s src=S': 25, 'rm-read': 6934, 'rm-write': 7587}
+  R66-CANDIDATE fdiv.s fa3, fa2, fa3 @9d1060 <- calc_rank_or
+  R66-PATHCHECK fdiv.s fa0, fa0, fa5 @9d10cc <- calc_rank_or
+  R66-PATHCHECK fdiv.s fa0, fa4, fa2 @81f78c <- mcelem_array_contained_selec
+  R66-PATHCHECK fdiv.s fa1, fa5, fa3 @81f7c0 <- mcelem_array_contained_selec
+  R66-PATHCHECK fdiv.s fa3, fa2, fa3 @81f83c <- mcelem_array_contained_selec
+  R66-PATHCHECK fdiv.s fa3, fa4, fa3 @81f79c <- mcelem_array_contained_selec
+  R66-PATHCHECK fdiv.s fa3, fa5, fa4 @1323cc <- system_samplescangetsamplesize
+  R66-PATHCHECK fdiv.s fa3, fa5, fa4 @958fdc <- range_gist_picksplit
+  R66-PATHCHECK fdiv.s fa3, fa5, fa4 @959798 <- range_gist_picksplit
+  R66-PATHCHECK fdiv.s fa4, fa2, fa4 @820558 <- calc_distr
+  R66-PATHCHECK fdiv.s fa4, fa3, fa4 @7547ec <- BgBufferSync
+  R66-PATHCHECK fdiv.s fa4, fa3, fa4 @7547f4 <- BgBufferSync
+  R66-PATHCHECK fdiv.s fa4, fa4, fa3 @4e0c4 <- calc_word_similarity
+  R66-PATHCHECK fdiv.s fa4, fa4, fa5 @9cf268 <- calc_rank
+  R66-PATHCHECK fdiv.s fa4, fa4, fa5 @9cf280 <- calc_rank
+  R66-PATHCHECK fdiv.s fa4, fa4, fa5 @9cf2f8 <- calc_rank
+  R66-PATHCHECK fdiv.s fa5, fa4, fa5 @131efc <- bernoulli_samplescangetsamplesize
+  R66-PATHCHECK fdiv.s fa5, fa4, fa5 @81f6d4 <- mcelem_array_contained_selec
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367434 <- _Py_hashtable_steal
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @3675ec <- _Py_hashtable_set
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367628 <- _Py_hashtable_steal
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @36769c <- _Py_hashtable_steal
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @3677e0 <- _Py_hashtable_set
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367854 <- _Py_hashtable_set
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367890 <- _Py_hashtable_steal
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367a48 <- _Py_hashtable_set
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @48b40 <- gin_trgm_consistent
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @48d3c <- gin_trgm_triconsistent
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @4e074 <- calc_word_similarity
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6a74 <- doProlog
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6c68 <- doProlog
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6cdc <- doProlog
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6e38 <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6e84 <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6ed0 <- doProlog
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6f3c <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e702c <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7078 <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e70a0 <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e70ec <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7130 <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e71a4 <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7294 <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e72e0 <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7398 <- accountingDiffTolerated
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e774c <- processXmlDecl
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7940 <- processXmlDecl
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e79b4 <- processXmlDecl
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7ba8 <- processXmlDecl
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e917c <- doIgnoreSection
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e9370 <- doIgnoreSection
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e93e4 <- doIgnoreSection
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e95d8 <- doIgnoreSection
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ecbe4 <- doContent
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ecdd8 <- doContent
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ece4c <- doContent
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ed040 <- doContent
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6eed54 <- epilogProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6eef48 <- epilogProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6eefbc <- epilogProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef1b0 <- epilogProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef514 <- doCdataSection
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef708 <- doCdataSection
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef77c <- doCdataSection
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef970 <- doCdataSection
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f09c0 <- appendAttributeValue
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f0bb4 <- appendAttributeValue
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f0c28 <- appendAttributeValue
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f0e1c <- appendAttributeValue
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f14e8 <- storeEntityValue
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f16dc <- storeEntityValue
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1750 <- storeEntityValue
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1944 <- storeEntityValue
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1ba0 <- externalEntityInitProcessor2
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1d94 <- externalEntityInitProcessor2
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1e08 <- externalEntityInitProcessor2
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1ffc <- externalEntityInitProcessor2
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f20e4 <- entityValueInitProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f22d8 <- entityValueInitProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f234c <- entityValueInitProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f248c <- externalParEntProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f2540 <- entityValueInitProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f2680 <- externalParEntProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f26f4 <- externalParEntProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f28e8 <- externalParEntProcessor
+  R66-PATHCHECK fdiv.s fa5, fa5, fa4 @a218c <- g_box_consider_split
+  R66-UNRESOLVED fdiv.s fa1, fa2, fa1 @1e9d0 <- minver
+  R66-UNRESOLVED fdiv.s fa3, fa4, fa3 @9d0f90 <- calc_rank_or
+  R66-UNRESOLVED fdiv.s fa4, fa4, fa2 @10768 <- ludcmp.part.0
+  flag-read frcsr a1 <- fegetenv
+  flag-read frflags a1 <- fetestexcept
+  flag-read frflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0
+  flag-read frflags a4 <- Calc_LinCorrCoef, Calc_Var_Stddev, __printf_fphex_buffer, benchmark, sqrtf64
+  flag-write csrc fflags, a0 <- feclearexcept
+  flag-write csrs fflags, a0 <- __fe_raise_inexact
+  flag-write csrsi fflags, 0x10 <- __lttf2, __unordtf2
+  flag-write fsflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0
+  flag-write fsflags a4 <- Calc_LinCorrCoef, Calc_Var_Stddev, __printf_fphex_buffer, benchmark, sqrtf64
+  rm-read frrm a0 <- __fe_getround, fegetround
+  rm-read frrm a4 <- __printf_fp_buffer_1.constprop.0.isra.0
+  rm-read frrm a5 <- __lttf2, __printf_fphex_buffer, __unordtf2
+  rm-write csrwi fcsr, 0x0 <- sbi_hart_reinit
+  rm-write fscsr a0 <- fesetenv
+  rm-write fsrm a0 <- __fesetround
+rc=0
+
+# per image kind (final pass)
+images  kind                                   flag-read rm-write static-rm div/sqrt(dyn) | fdiv.s/fsqrt.s: linear S/?/D, D-writer-in-fn, dataflow D-reaches, unreached
+  6505  corpus *.dom                                6507     6507         0          2592 | 68/0/0, 64, 0, 0
+   330  OpenSBI fw_dynamic.elf                         0      330         0             0 | 0/0/0, 0, 0, 0
+   330  OpenSBI fw_jump.elf                            0      330         0             0 | 0/0/0, 0, 0, 0
+   330  OpenSBI test.elf                               0        0         0             0 | 0/0/0, 0, 0, 0
+   330  perf *.dom (main1/main2/perfpilot)           330      330         0           216 | 40/2/0, 0, 0, 0
+    88  corpus case-named images                      88       88         0            23 | 0/0/0, 0, 0, 0
+     5  capstone_vm.ko                                 0        0         0             0 | 0/0/0, 0, 0, 0
+     3  capstone-vexec                                 6        0         0             0 | 0/0/0, 0, 0, 0
+     2  postgres                                       2        2         0          1390 | 60/2/2, 42, 0, 0
+     1  fp-divsqrt.dom                                 1        1         0             2 | 0/0/0, 0, 0, 0
+     1  fp-divsqrt.native                              2        0         0             2 | 0/0/0, 0, 0, 0
+     1  fp-escape.dom                                  1        1         0             0 | 0/0/0, 0, 0, 0
+     1  fp-escape.native                               2        0         0             0 | 0/0/0, 0, 0, 0
+     1  ludcmp                                         2        0         0             5 | 4/1/0, 0, 0, 0
+     1  st                                             8        0         0            14 | 0/0/0, 0, 0, 0
+     1  capstone.ko.stock                              0        0         0             0 | 0/0/0, 0, 0, 0
+     1  juliet-timeout                                 2        0         0             0 | 0/0/0, 0, 0, 0
+total 7931
+
+# dataflow probe on postgres calc_rank_or (real disassembly, b1 pg-pools image): reaching classes per fdiv.s,
+# then the fdiv.d at 9d0fb0 relabelled fdiv.s as a must-fire (its sources come from fcvt.d.s and fld)
+0x9d0f90 fdiv.s fa3, fa4, fa3 ['S']
+0x9d1060 fdiv.s fa3, fa2, fa3 ['S']
+0x9d10cc fdiv.s fa0, fa0, fa5 ['S']
+probe fdiv.d@9d0fb0 as fdiv.s: ['D']
+
+# hits outside the runtime's fenv (fegetenv, fesetenv, __fe_getround, __fe_raise_inexact), grouped by image kind
+   3 capstone-vexec         | flag-read frflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/capcells/sess-lt1-13-0/stage/capstone-vexec
+   3 capstone-vexec         | flag-read frflags a4 <- __printf_fphex_buffer | e.g. b1/capcells/sess-lt1-13-0/stage/capstone-vexec
+   3 capstone-vexec         | flag-write csrsi fflags, 0x10 <- __lttf2, __unordtf2 | e.g. b1/capcells/sess-lt1-13-0/stage/capstone-vexec
+   3 capstone-vexec         | flag-write fsflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/capcells/sess-lt1-13-0/stage/capstone-vexec
+   3 capstone-vexec         | flag-write fsflags a4 <- __printf_fphex_buffer | e.g. b1/capcells/sess-lt1-13-0/stage/capstone-vexec
+   3 capstone-vexec         | rm-read frrm a4 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/capcells/sess-lt1-13-0/stage/capstone-vexec
+   3 capstone-vexec         | rm-read frrm a5 <- __lttf2, __printf_fphex_buffer, __unordtf2 | e.g. b1/capcells/sess-lt1-13-0/stage/capstone-vexec
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367434 <- _Py_hashtable_steal | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @3675ec <- _Py_hashtable_set | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367628 <- _Py_hashtable_steal | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @36769c <- _Py_hashtable_steal | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @3677e0 <- _Py_hashtable_set | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367854 <- _Py_hashtable_set | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367890 <- _Py_hashtable_steal | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @367a48 <- _Py_hashtable_set | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6a74 <- doProlog | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6c68 <- doProlog | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6cdc <- doProlog | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6e38 <- accountingDiffTolerated | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6e84 <- accountingDiffTolerated | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6ed0 <- doProlog | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e6f3c <- accountingDiffTolerated | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e702c <- accountingDiffTolerated | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7078 <- accountingDiffTolerated | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e70a0 <- accountingDiffTolerated | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e70ec <- accountingDiffTolerated | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7130 <- accountingDiffTolerated | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e71a4 <- accountingDiffTolerated | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7294 <- accountingDiffTolerated | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e72e0 <- accountingDiffTolerated | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7398 <- accountingDiffTolerated | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e774c <- processXmlDecl | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7940 <- processXmlDecl | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e79b4 <- processXmlDecl | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e7ba8 <- processXmlDecl | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e917c <- doIgnoreSection | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e9370 <- doIgnoreSection | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e93e4 <- doIgnoreSection | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6e95d8 <- doIgnoreSection | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ecbe4 <- doContent | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ecdd8 <- doContent | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ece4c <- doContent | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ed040 <- doContent | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6eed54 <- epilogProcessor | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6eef48 <- epilogProcessor | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6eefbc <- epilogProcessor | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef1b0 <- epilogProcessor | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef514 <- doCdataSection | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef708 <- doCdataSection | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef77c <- doCdataSection | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6ef970 <- doCdataSection | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f09c0 <- appendAttributeValue | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f0bb4 <- appendAttributeValue | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f0c28 <- appendAttributeValue | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f0e1c <- appendAttributeValue | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f14e8 <- storeEntityValue | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f16dc <- storeEntityValue | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1750 <- storeEntityValue | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1944 <- storeEntityValue | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1ba0 <- externalEntityInitProcessor2 | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1d94 <- externalEntityInitProcessor2 | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1e08 <- externalEntityInitProcessor2 | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f1ffc <- externalEntityInitProcessor2 | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f20e4 <- entityValueInitProcessor | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f22d8 <- entityValueInitProcessor | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f234c <- entityValueInitProcessor | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f248c <- externalParEntProcessor | e.g. b1/capcells/sess-lt0-18-0/stage/images/cpython-23a2f0cbd80ddfbe.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f2540 <- entityValueInitProcessor | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f2680 <- externalParEntProcessor | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f26f4 <- externalParEntProcessor | e.g. b1/capcells/sess-lt1-13-0/stage/images/cpython-916e14f9b3f622c9.dom
+   1 cpython-H.dom          | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @6f28e8 <- externalParEntProcessor | e.g. b1/capcells/lt1-27-1/stage/images/cpython-8bcc40cf13731e12.dom
+   4 cpython-H.dom          | rm-read frrm a0 <- fegetround | e.g. b1/capcells/lt0-18-0/stage/images/cpython-7b871db70b7ec373.dom
+   1 fp-divsqrt.native      | flag-read frflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/fp-divsqrt.native
+   1 fp-divsqrt.native      | flag-read frflags a4 <- __printf_fphex_buffer | e.g. b1/fpdiag/stage/fpdiag/fp-divsqrt.native
+   1 fp-divsqrt.native      | flag-write csrsi fflags, 0x10 <- __lttf2, __unordtf2 | e.g. b1/fpdiag/stage/fpdiag/fp-divsqrt.native
+   1 fp-divsqrt.native      | flag-write fsflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/fp-divsqrt.native
+   1 fp-divsqrt.native      | flag-write fsflags a4 <- __printf_fphex_buffer | e.g. b1/fpdiag/stage/fpdiag/fp-divsqrt.native
+   1 fp-divsqrt.native      | rm-read frrm a4 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/fp-divsqrt.native
+   1 fp-divsqrt.native      | rm-read frrm a5 <- __lttf2, __printf_fphex_buffer, __unordtf2 | e.g. b1/fpdiag/stage/fpdiag/fp-divsqrt.native
+   1 fp-escape.native       | flag-read frflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/fp-escape.native
+   1 fp-escape.native       | flag-read frflags a4 <- __printf_fphex_buffer | e.g. b1/fpdiag/stage/fpdiag/fp-escape.native
+   1 fp-escape.native       | flag-write csrsi fflags, 0x10 <- __lttf2, __unordtf2 | e.g. b1/fpdiag/stage/fpdiag/fp-escape.native
+   1 fp-escape.native       | flag-write fsflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/fp-escape.native
+   1 fp-escape.native       | flag-write fsflags a4 <- __printf_fphex_buffer | e.g. b1/fpdiag/stage/fpdiag/fp-escape.native
+   1 fp-escape.native       | rm-read frrm a4 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/fp-escape.native
+   1 fp-escape.native       | rm-read frrm a5 <- __lttf2, __printf_fphex_buffer, __unordtf2 | e.g. b1/fpdiag/stage/fpdiag/fp-escape.native
+ 330 fw_dynamic.elf         | rm-write csrwi fcsr, 0x0 <- sbi_hart_reinit | e.g. b1/capcells/lt0-18-0/guest/fw/opensbi/build/platform/fpga/ariane/firmw
+ 330 fw_jump.elf            | rm-write csrwi fcsr, 0x0 <- sbi_hart_reinit | e.g. b1/capcells/lt0-18-0/guest/fw/opensbi/build/platform/fpga/ariane/firmw
+   1 juliet-timeout         | flag-read frflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b2/uaf-repeat-dm/stage/juliet-timeout
+   1 juliet-timeout         | flag-read frflags a4 <- __printf_fphex_buffer | e.g. b2/uaf-repeat-dm/stage/juliet-timeout
+   1 juliet-timeout         | flag-write csrsi fflags, 0x10 <- __lttf2, __unordtf2 | e.g. b2/uaf-repeat-dm/stage/juliet-timeout
+   1 juliet-timeout         | flag-write fsflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b2/uaf-repeat-dm/stage/juliet-timeout
+   1 juliet-timeout         | flag-write fsflags a4 <- __printf_fphex_buffer | e.g. b2/uaf-repeat-dm/stage/juliet-timeout
+   1 juliet-timeout         | rm-read frrm a4 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b2/uaf-repeat-dm/stage/juliet-timeout
+   1 juliet-timeout         | rm-read frrm a5 <- __lttf2, __printf_fphex_buffer, __unordtf2 | e.g. b2/uaf-repeat-dm/stage/juliet-timeout
+   1 ludcmp                 | R66-UNRESOLVED fdiv.s fa4, fa4, fa2 @10768 <- ludcmp.part.0 | e.g. b1/fpdiag/stage/fpdiag/ludcmp
+   1 ludcmp                 | flag-read frflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/ludcmp
+   1 ludcmp                 | flag-read frflags a4 <- __printf_fphex_buffer | e.g. b1/fpdiag/stage/fpdiag/ludcmp
+   1 ludcmp                 | flag-write csrsi fflags, 0x10 <- __lttf2, __unordtf2 | e.g. b1/fpdiag/stage/fpdiag/ludcmp
+   1 ludcmp                 | flag-write fsflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/ludcmp
+   1 ludcmp                 | flag-write fsflags a4 <- __printf_fphex_buffer | e.g. b1/fpdiag/stage/fpdiag/ludcmp
+   1 ludcmp                 | rm-read frrm a4 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/ludcmp
+   1 ludcmp                 | rm-read frrm a5 <- __lttf2, __printf_fphex_buffer, __unordtf2 | e.g. b1/fpdiag/stage/fpdiag/ludcmp
+   2 minver.KN.dom          | R66-UNRESOLVED fdiv.s fa1, fa2, fa1 @1e9d0 <- minver | e.g. b2/main1-k2/stage/pilot/T1/minver.K0.dom
+   2 perl-H.dom             | flag-read frflags a1 <- fetestexcept | e.g. b1/mp-perl-stock/session/collect/images/perl-76f1141df548fd9a.dom
+   2 perl-H.dom             | flag-write csrc fflags, a0 <- feclearexcept | e.g. b1/mp-perl-stock/session/collect/images/perl-76f1141df548fd9a.dom
+   2 perl-H.dom             | rm-read frrm a0 <- fegetround | e.g. b1/mp-perl-stock/session/collect/images/perl-76f1141df548fd9a.dom
+   2 perl-H.dom             | rm-write fsrm a0 <- __fesetround | e.g. b1/mp-perl-stock/session/collect/images/perl-76f1141df548fd9a.dom
+   2 postgres               | R66-CANDIDATE fdiv.s fa3, fa2, fa3 @9d1060 <- calc_rank_or | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa0, fa0, fa5 @9d10cc <- calc_rank_or | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa0, fa4, fa2 @81f78c <- mcelem_array_contained_selec | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa1, fa5, fa3 @81f7c0 <- mcelem_array_contained_selec | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa3, fa2, fa3 @81f83c <- mcelem_array_contained_selec | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa3, fa4, fa3 @81f79c <- mcelem_array_contained_selec | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa3, fa5, fa4 @1323cc <- system_samplescangetsamplesize | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa3, fa5, fa4 @958fdc <- range_gist_picksplit | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa3, fa5, fa4 @959798 <- range_gist_picksplit | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa4, fa2, fa4 @820558 <- calc_distr | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa4, fa3, fa4 @7547ec <- BgBufferSync | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa4, fa3, fa4 @7547f4 <- BgBufferSync | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa4, fa4, fa3 @4e0c4 <- calc_word_similarity | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa4, fa4, fa5 @9cf268 <- calc_rank | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa4, fa4, fa5 @9cf280 <- calc_rank | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa4, fa4, fa5 @9cf2f8 <- calc_rank | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa5, fa4, fa5 @131efc <- bernoulli_samplescangetsamplesize | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa5, fa4, fa5 @81f6d4 <- mcelem_array_contained_selec | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @48b40 <- gin_trgm_consistent | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @48d3c <- gin_trgm_triconsistent | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @4e074 <- calc_word_similarity | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-PATHCHECK fdiv.s fa5, fa5, fa4 @a218c <- g_box_consider_split | e.g. b1/pg-pools/raw/stage/bin/postgres
+   2 postgres               | R66-UNRESOLVED fdiv.s fa3, fa4, fa3 @9d0f90 <- calc_rank_or | e.g. b1/pg-pools/raw/stage/bin/postgres
+   1 st                     | flag-read frflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/st
+   1 st                     | flag-read frflags a4 <- Calc_LinCorrCoef, Calc_Var_Stddev, __printf_fphex_buffer, benchmark, sqrtf64 | e.g. b1/fpdiag/stage/fpdiag/st
+   1 st                     | flag-write csrsi fflags, 0x10 <- __lttf2, __unordtf2 | e.g. b1/fpdiag/stage/fpdiag/st
+   1 st                     | flag-write fsflags a3 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/st
+   1 st                     | flag-write fsflags a4 <- Calc_LinCorrCoef, Calc_Var_Stddev, __printf_fphex_buffer, benchmark, sqrtf64 | e.g. b1/fpdiag/stage/fpdiag/st
+   1 st                     | rm-read frrm a4 <- __printf_fp_buffer_1.constprop.0.isra.0 | e.g. b1/fpdiag/stage/fpdiag/st
+   1 st                     | rm-read frrm a5 <- __lttf2, __printf_fphex_buffer, __unordtf2 | e.g. b1/fpdiag/stage/fpdiag/st
