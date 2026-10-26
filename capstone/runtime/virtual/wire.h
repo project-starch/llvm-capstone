@@ -16,6 +16,12 @@ struct cv_step {
     __u64 thread;
     __u64 reply, result;
     __u64 kind, cause, pc, address, args[8];
+    /* Pads the record to 136 bytes. Linux's RISC-V user copy (both pointers
+     * 8-byte aligned, as here) moves 64-byte chunks by word while more than one
+     * chunk remains and the rest byte by byte: 120 bytes cost a 56-byte tail
+     * and 128 a 64-byte one; 136 is two chunks and 8 bytes. The size is part
+     * of the CV_STEP ioctl number: module and launcher change together. */
+    __u64 reserved[2];
 };
 /* A start frame is a page-aligned, writable user page containing the virtual
  * CSRUNV frame format. The trusted adapter fills satp and srevroot, then
