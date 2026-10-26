@@ -9709,3 +9709,22 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     first.
 - **minver's exact test,** if its silicon state hash is in the records: the model gives c9e816d4302a644b and IEEE gives
   205d510d90af10ba.
+
+### minver's check= on silicon against the rtl lane's rounding model (2026-10-26 18:5x): an exact 64-bit match, with one open point
+
+- **Read on silicon** (k2, `main1-k2/pilot.txt`): minver prints `check=0x74ceeb9e3de2c383` on all 48 BENCH lines, both
+  arms, every iteration. VERIFY passes in every process.
+- **The rtl lane's account:** check= is minver's state hash, an FNV over a_i, c, det and result (beebs/state/minver.c,
+  printed by the harness's post()). With the harness's 9,900 iterations per unit:
+  - its host RTL-rounding model gives 0x74ceeb9e3de2c383, the silicon value exactly;
+  - its host IEEE build gives 0xd6cc5fbda167dc7b, which the runtime lane says is the twin's value.
+  - The lane's earlier c9e816d4... and 205d510d... came from a wrong 2-iteration host loop. minver inverts its matrix
+    in place on every call, so the state depends on the iteration count.
+- **Not checked here:** the twin's minver value. No twin minver reading is under perf/ (searched), so
+  0xd6cc5fbda167dc7b is relayed.
+- **Open:** minver's VERIFY hashes only a_i and det against a native reference (beebs_minver_capstone_tail.c at
+  origin/dev), and it PASSES on silicon. So if silicon's state deviates from IEEE, the deviation must be in c or
+  result, not in a_i or det, or the perf harness's verify differs from dev's tail. That is the rtl lane's and the
+  runtime lane's to settle.
+- **If it holds:** a value the model predicts to 64 bits is strong evidence that the model is silicon's FP rounding.
+  It would also mean a VERIFY pass does not by itself certify a program's arithmetic on silicon.
