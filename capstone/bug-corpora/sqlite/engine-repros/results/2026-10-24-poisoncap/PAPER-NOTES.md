@@ -162,5 +162,5 @@ revocation removed). Spatial protection on throughout.
   quarantine never filled.
 - Sublet: temporal off and on both reuse 51,499 of 52,146, every counter and bin identical; revocation moves
   no address.
-- Repetitions: PoisonCap three sets, Sublet sets 1 and 2 so far; every set identical in every counter and bin.
+- Repetitions: three sets per system, 12 runs; every set identical in every counter and bin.
 
