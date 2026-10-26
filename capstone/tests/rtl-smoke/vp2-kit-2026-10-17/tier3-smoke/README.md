@@ -9593,3 +9593,20 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     both orders and the stop.
 - **Predictions:** the rtl lane's PREREG, as above. If the sim reading transfers to silicon, the vector reads exact:
   CONFIRMED ON SILICON.
+
+### Batch 1, k1 read, and one prediction written before the kit that tests it (2026-10-26 18:3x; nbody is in k3, not yet booted)
+
+- **k1, board 1, 17:16-18:30:** 198 of 214 processes clean (`main1-k1/pilot.txt`; perfmain-table.py).
+  - The 16 failures are exactly ludcmp and st: all 8 processes of each, in both arms. rc=1, and every iteration reads
+    `check=0x0 VERIFY-FAILED`, the warm-up included. Entries are 35 and 37 per iteration, in the passing programs' band.
+  - No fault and no rc=139, so not Q-34.
+  - k1's other FP programs pass every process in both arms: expint 8/8, qurt 8/8 (it uses sqrt), dtoa 8/8.
+  - The k1 record lands with k3's.
+- **The rtl lane's reading of the shape:** a deterministic 1-ulp error per fdiv/fsqrt (their bare kit, pre-registered
+  above). qurt's check is tolerant: `qurt_approx` passes `d < 1e-3f` (beebs_qurt_capstone_tail.c, read here at
+  origin/dev). st's is an exact equality against a correctly rounded sqrt.
+- **PREDICTION, under that reading, before k3 boots:** nbody fails VERIFY in every process and in both arms, as st does.
+  capstone-softfloat-libm.md at origin/dev names the shared correctly rounded sqrt "for the exact-equality checks in
+  `st` and `nbody`".
+  - If nbody passes, the hypothesis does not account for st as it stands.
+  - The FP programs in k2-k4 whose checks are tolerant are expected to pass.
