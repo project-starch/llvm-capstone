@@ -9903,3 +9903,11 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   0xc1d880ad3d2bf68d 0xf 0x4094146748614d06 0x4094146748614d07 0xc100794b211e882c 0x1`.
   - Any difference from board 1 is a cross-board finding, read value by value.
   - VOID by the PREREG's rule (SR not 10, or position 8 wrong) says nothing about the divider.
+
+### fp-all at N=2, result: CONFIRMED ON SILICON on board 2, the SR/SV lines byte-identical to board 1's (2026-10-26 20:09-20:10)
+
+- Record: `records/b2bs-fpds-bare-b2.result-lines.txt`. The UART SR and SV lines of the two boards compare equal with
+  `cmp`. The vector is the PREREG's: 23 of 512 fdiv.d and 19 of 512 fsqrt.d results land 1 ulp low on both boards, with
+  the same first misses. As pre-registered.
+- As on board 1, the post-run gdb dump could not halt the core, so the grade rests on UART.
+- **R-62 on silicon is now N=2, cross-board.**
