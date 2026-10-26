@@ -9526,3 +9526,46 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - One tier3-perfpilot-b2.sh boot, with PP_SUB `main2-b2k1`, step 2,700 s and booking 45 min.
   - Dry run: `dryrun-perfmain2-b2.txt`, for both placements and the stop.
 - **Predictions:** batch 1's five, verbatim (above).
+
+### The FP discriminator on board 1, between k1 and k3; batch 1's coordinator re-planned for it, pre-registered (2026-10-26 18:0x, before its boot)
+
+- **Why:** k1's live heartbeats showed ludcmp and st reading `check=0x0 VERIFY-FAILED` on every iteration, with rc=1
+  and no fault. Both are FP-heavy, and both passed on the twin. The runtime lane asks for one short discriminator boot
+  on board 1 right after k1 and before k3. It decides whether the FP programs' results in k2-k4 can be used.
+  - Ruled out beforehand by reading the RTL: B3i's FS-Dirty parenthesisation. dcc6daf6e's commit_stage.sv:182 carries
+    upstream 2700d14's fix. R-52 is fixed on silicon.
+  - The rtl lane's read, relayed: ESCAPE saves f0..f31 and fcsr on every kind. The remaining suspect is an escape
+    landing while an fdiv or fsqrt result is still in flight.
+- **The re-plan:** tier3-perfmain-b2.sh's main shell (pid 3690571) was stopped at 17:52, before k1 ended, so it never
+  launches k3.
+  - Its two subshells were left untouched: k1 on board 1, and k2 then k4 on board 2. They run on and still write their
+    PM lines to its log.
+  - `tier3-perfmain-b1tail.sh` waits for "PM k1 on board 1 END", then runs the discriminator and then k3, with k3
+    exactly as the coordinator would have run it. Its PM lines go to the same log, which batch 2's placement reads.
+- **The stage:** `perf/fpdiag/board-stage`, run-fpdiag.sh 1991d4a73faa93c8. The runtime lane added fp-divsqrt at
+  17:52, after the first check, and has stated it FINAL. It matches its SHA256SUMS.
+  - The context ludcmp and st images are k1's own T1 images by hash (0ba624fb8f63b442, 215a6ee0e2ec25cd).
+  - The native ludcmp, st, fp-escape and fp-divsqrt are static hard-float RISC-V executables (gcc -O2).
+- **The sections, 12 in one boot:**
+  - fp-escape, native and context, at n = 1e5 and 5e7. Eight f registers accumulate 1.0, exact in double.
+  - fp-divsqrt, native and context, at n = 1e5 and 2e7. Each iteration does fadd, fdiv.d by 1.0 and fsqrt.d of a
+    square, and the accumulated difference must stay exactly 0.
+  - ludcmp and st, native and context, with "1 3".
+- **What runs:** `PP_SUB=fpdiag PP_RUN="python3 tier3-fpdiag.py" tier3-perfpilot-b2.sh 1`, kit bkit10-perf-b1. The
+  reader reads each section's FPESC / FPDIV bad=, BENCH, VERIFY-FAILED, BENCH-DONE, fault, rc and quote.
+  - Dry run: `dryrun-fpdiag-b1.txt`. Both hypothesis shapes read correctly, and a missing section exits 2.
+- **The twin:** every step reads bad=0, rc=0, failed=0 (fp-escape context at n=5e7: 5,924 entries; divsqrt at n=2e7:
+  1,745).
+- **Predictions** (the runtime lane's, two-sided):
+  - **H-escape** (a context's FP state is lost across an escape, including a stale save while an fdiv/fsqrt result is
+    in flight):
+    - context divsqrt at n=2e7 reads bad>0, with f3 != 0 or f1/f2 != n;
+    - context fp-escape at n=5e7 may read bad>0 (fadd-only may pass);
+    - context at n=1e5 reads bad=0, unless a tick lands inside the loop;
+    - every native section passes; native ludcmp and st pass; context ludcmp and st fail.
+  - **H-FPU** (silicon FP arithmetic differs from QEMU's):
+    - **native ludcmp and st FAIL, as the context builds do. This is the decisive cell.**
+    - fp-escape passes everywhere.
+    - divsqrt agrees between native and context: either both read bad=0, or both read bad>0.
+  - Any native failure that fits neither, or a context failure at n=1e5 with none at n=2e7, is a third outcome,
+    reported as read.
