@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Boot the PoisonCap platform once and run its own PoisonCap tests, before any corpus case.
 
-    guest-smoke.py OUT [--platform DIR] [--port PORT]
+    smoke-test.py OUT [--platform DIR] [--port PORT]
 
 Boots through ports/common/host/cheribsd/guest.py, the Guest every earlier PoisonCap run used:
 single-user, `security.cheri.runtime_revocation_default=0` set on the console before sshd starts
@@ -25,10 +25,29 @@ REPO = Path(__file__).resolve().parents[5]
 sys.path.insert(0, str(REPO / 'capstone/ports/common/host/cheribsd'))
 from guest import Guest  # noqa: E402
 
+TEST_BINARIES = ('cheribsdtest-purecap', 'cheribsdtest-purecap-dynamic')
 # Generous budgets: the guest runs under TCG on a shared host.
-for name, seconds in (('CHERI_GUEST_BOOT_SECONDS', 1200), ('CHERI_GUEST_CMD_SECONDS', 600),
-                      ('CHERI_SSH_READY_SECONDS', 600)):
-    os.environ.setdefault(name, str(seconds))
+BUDGETS = {'CHERI_GUEST_BOOT_SECONDS': 1200, 'CHERI_GUEST_CMD_SECONDS': 600, 'CHERI_SSH_READY_SECONDS': 600}
+
+
+def find_poison_tests(run):
+    """The first test binary that lists its tests, and the names among them that mention poison."""
+    for binary in TEST_BINARIES:
+        listing = run(f'{binary} -l')
+        if listing['rc'] == 0:
+            return {'binary': binary, 'names': re.findall(r'^\s*(\S*poison\S*)', listing['stdout'], re.M | re.I)}
+    return None
+
+
+def verdict(record):
+    """(passed, summary lines): booted, the revocation default 0, and at least one poison test, all passing."""
+    default_off = '.runtime_revocation_default: 0' in record.get('sysctl', {}).get('stdout', '')
+    runs = record.get('runs', [])
+    passed = bool(record['booted'] and default_off and runs and all(r['rc'] == 0 for r in runs))
+    lines = [f"booted={record['booted']} default_off={default_off} poison_tests={len(runs)} "
+             f"passed={sum(r['rc'] == 0 for r in runs)}"]
+    lines += [f"  rc={r['rc']}  {r['cmd']}" for r in runs]
+    return passed, lines
 
 
 def main():
@@ -38,6 +57,8 @@ def main():
                    default=Path(os.environ.get('POISONCAP_PLATFORM', Path.home() / 'poisoncap-platform')))
     p.add_argument('--port', type=int, default=10087)
     a = p.parse_args()
+    for name, seconds in BUDGETS.items():
+        os.environ.setdefault(name, str(seconds))
     work = a.platform / 'work'
     a.out.mkdir(parents=True, exist_ok=False)
     (a.out / 'vm').mkdir()
@@ -56,30 +77,15 @@ def main():
 
         record['uname'] = run('uname -a')
         record['sysctl'] = run('sysctl security.cheri kern.features.cheri_revoke 2>&1')
-        tests = None
-        for binary in ('cheribsdtest-purecap', 'cheribsdtest-purecap-dynamic'):
-            listing = run(f'{binary} -l')
-            if listing['rc'] == 0:
-                names = re.findall(r'^\s*(\S*poison\S*)', listing['stdout'], re.M | re.I)
-                tests = {'binary': binary, 'names': names}
-                break
+        tests = find_poison_tests(run)
         record['poison_tests'] = tests
-        record['runs'] = []
-        if tests:
-            for name in tests['names']:
-                record['runs'].append(run(f"{tests['binary']} {name}", timeout=900))
+        record['runs'] = [run(f"{tests['binary']} {name}", timeout=900) for name in tests['names']] if tests else []
     finally:
         guest.close()
         (a.out / 'smoke.json').write_text(json.dumps(record, indent=1) + '\n')
-
-    default_off = '.runtime_revocation_default: 0' in record.get('sysctl', {}).get('stdout', '')
-    runs = record.get('runs', [])
-    ok = record['booted'] and default_off and runs and all(r['rc'] == 0 for r in runs)
-    print(f"booted={record['booted']} default_off={default_off} poison_tests={len(runs)} "
-          f"passed={sum(r['rc'] == 0 for r in runs)}")
-    for r in runs:
-        print(f"  rc={r['rc']}  {r['cmd']}")
-    return 0 if ok else 1
+    passed, lines = verdict(record)
+    print('\n'.join(lines))
+    return 0 if passed else 1
 
 
 if __name__ == '__main__':

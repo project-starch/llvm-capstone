@@ -5,7 +5,7 @@
 
 RUN is a guest-run.py output directory (run.json, results.jsonl); each names the build it ran,
 whose unstripped binaries give the symbol table a fault's PC offset is looked up in. Run where
-PoisonCap's llvm-nm runs (in-container.sh).
+PoisonCap's llvm-nm runs (platform/run-in-container.sh).
 
 Per case, the plan's tiers (bug-corpora/sqlite/engine-repros/results/2026-10-24-poisoncap/PLAN.md, rule 5):
   qualified         the case declares fault_sites (case.json); otherwise "no qualified trigger"

@@ -1,8 +1,8 @@
 # The build host for the published PoisonCap platform: Ubuntu 24.04 with clang-18, the host the
 # recipe in ports/ffmpeg/buffer-pool/host/cheribsd/poisoncap/ was written for. Used by
-# build-platform-docker.sh; the platform sources and outputs stay on the host, mounted in.
+# run-in-container.sh; the platform sources and outputs stay on the host, mounted in.
 # The base is pinned by digest. Package versions are not pinned by apt; the wrapper records
-# `dpkg -l` of every build into the platform's logs instead.
+# `dpkg -l` of every build (build.sh) into the platform's logs instead.
 FROM ubuntu@sha256:33ceb71981b602c1a7443a53469e4dba065f7503eab3078a2d7a57a2ab987517
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \

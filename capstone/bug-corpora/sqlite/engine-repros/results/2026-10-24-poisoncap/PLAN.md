@@ -117,7 +117,7 @@ Complete (2026-10-24): the result is `bug-corpora/sqlite/engine-repros/results/2
 | # | Step | State |
 |---|---|---|
 | 1 | `ports/sqlite/poisoncap/corpus/prepare-sqlite.py WORK`: artifact by its pin, `sqlite/` extracted, `mem5.c` checked against the audit hash, both amalgamations generated in a fixed environment | done |
-| 2 | Platform on p13: `ports/sqlite/poisoncap/platform/build-platform-docker.sh` (the recipe's `prepare.py` and `platform.sh` in a pinned container), then `guest-smoke.py` | done |
+| 2 | Platform on p13: `ports/sqlite/poisoncap/platform/build.sh` (the recipe's `prepare.py` and `platform.sh` in a pinned container), then `platform/smoke-test.py` | done |
 | 3 | `build-poisoncap.py`: the corpus `case.c` files for CheriBSD purecap against each amalgamation (static heap with `CHERI_PERM_POISON` removed, `REPRO322_POISONCAP`) | done |
 | 4 | Runner (`guest-run.py`) and scoring (`verdicts.py`): one boot, controls first, per-case exit, signal, kernel report and fault site | done |
 | 5 | Predictions committed, then the run, twice | done |
@@ -129,12 +129,12 @@ identical when regenerated in the fixed environment (cc 13.3.0, GNU Make 4.3, tc
 `sqlite3.c` differ in the removed define and in the line of SQLite's own `__LINE__` self-check.
 
 Step 2, p13, 2026-10-24: built in the pinned Ubuntu 24.04 container with clang-18
-(`ports/sqlite/poisoncap/platform/build-platform-docker.sh`, no host workaround active): prepare 214 s and
+(`ports/sqlite/poisoncap/platform/build.sh`, no host workaround active): prepare 214 s and
 verify 18 s (85,453 files), LLVM 385 s, QEMU 43 s, CheriBSD world and the CHERI-PURECAP-QEMU-POISON
 kernel 806 s, image 9 s. An earlier attempt on the host toolchain (clang-21, GCC 15) built LLVM and
 QEMU with two workarounds and then failed in CheriBSD's C++ bootstrap tools; it is not used. Boot
 firmware: the stock CHERI BBL, sha256 `c8652f09…`, the file the earlier PoisonCap study recorded.
-Kernel `ab2192d7…`, QEMU `35f1febd…`. Smoke (`ports/sqlite/poisoncap/platform/guest-smoke.py`): booted
+Kernel `ab2192d7…`, QEMU `35f1febd…`. Smoke (`ports/sqlite/poisoncap/platform/smoke-test.py`): booted
 through `Guest`, `runtime_revocation_default` 0, `kern.features.cheri_revoke` 1, and the four
 PoisonCap tests in their own cheribsdtest (`cheri_poison_mmap`, `cheri_poison_fault_read`,
 `cheri_poison_revoke`, `cheri_poison_revoke_bounds`) each print PASS; no panic on the console.

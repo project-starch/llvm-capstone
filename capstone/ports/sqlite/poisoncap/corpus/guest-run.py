@@ -4,7 +4,7 @@
     guest-run.py OUT --build DIR --expect published|spatial [--cases temporal|all|NN,NN]
                  [--controls-only] [--platform DIR] [--port PORT]
 
-The guest boots through ports/common/host/cheribsd/guest.py, as guest-smoke.py does (single-user,
+The guest boots through ports/common/host/cheribsd/guest.py, as platform/smoke-test.py does (single-user,
 security.cheri.runtime_revocation_default=0 before sshd; the reason is in that script). The build's
 binaries are copied in unchanged and each runs as its own process, `./NAME TAG`, under a timeout.
 
