@@ -2546,7 +2546,7 @@ from an unprivileged domain is a finding even behind a configuration error, and 
       - So QEMU's 65,536-id pool is close in SIZE; the divergence is generations, push and retire.
       - Prediction kind (d) narrows to "an index ≥ 65,535", which the RTL cannot reach.
 
-## Q-34 — a misaligned PLAIN load in a protected context completes on QEMU, while the RTL traps it with cause 4 (and, by the same code, a store with cause 6): a twin-fidelity gap with a verdict consequence `OPEN — observed 2026-10-26 on bitstream 2 dcc6daf6e, board 2, Juliet spatial remainder part01 (lane vp2-tier12 d54e7a6582e2); filed by the board lane from the compiler lane's QEMU reading and the rtl lane's RTL reading, each re-read here; the fix is a QEMU pin, the semantics owner's call`
+## Q-34 — a misaligned PLAIN load in a protected context completes on QEMU, while the RTL traps it with cause 4 (a store, by the same RTL code, is predicted to trap with 6; untested): a twin-fidelity gap with a verdict consequence `RULED semantics 2026-10-26 by the semantics owner (silicon is the reference) / OPEN twin fix — observed 2026-10-26 on bitstream 2 dcc6daf6e, board 2, Juliet spatial remainder part01 (lane vp2-tier12 d54e7a6582e2); filed by the board lane from the compiler lane's QEMU reading and the rtl lane's RTL reading, each re-read here; the fix is a QEMU pin, the semantics owner's call`
 
 **The cells** (seeded build, so no rand draw; lane vp2-tier12 d54e7a6582e2, `tier3-smoke/records/b2bs-juliet-rem-part01-b2.result-lines.txt`, which lands on dev with the remainder's results):
 
@@ -2571,7 +2571,7 @@ from an unprivileged domain is a finding even behind a configuration error, and 
     misaligned emulation is never reached.
   - capstone_vm.c resolve() on dev returns unless `cause == 12, 13 or 15` on event 4, so a 4 is terminal for the run.
 - **QEMU** (capstone-qemu 46b69c03a4, the twin's 708bbff5; re-read here):
-  - capstone_check_access (op_helper.c:1858) checks alignment only under `if(size == 16)` (LDC/STC).
+  - capstone_check_access (op_helper.c:1858) checks alignment only under `if(size == 16)` (LDC/STC), at :1976.
   - `trans_lw` is `gen_load(ctx, a, MO_TESL)`, and trans_rvi.c.inc has no MO_ALIGN at all. So TCG carries out the
     misaligned access, as upstream does.
 - **Both are spec-legal:** an EEI may perform or trap misaligned plain accesses. No ruling chose QEMU's behaviour. The
@@ -2597,6 +2597,31 @@ from an unprivileged domain is a finding even behind a configuration error, and 
   physical-profile results stay reproducible.
 - Place it BEFORE the tag, type and bounds checks. That is the RTL's merge order, and it would also close Q-31's order.
 - It changes twin references wherever a context performs a misaligned plain access.
+
+**The ruling** (the semantics owner, 2026-10-26, relayed by the runtime lane, in its words):
+- **Silicon is the reference.** A misaligned plain access inside a protected context raises 4 (load) or 6 (store), and
+  that is terminal for the run.
+- **No emulation in the module.** Emulating it would make the module a second access path, which would have to apply the
+  domain's capability at exactly the bytes accessed.
+- **Defined C never reaches it.** The compiler emits no misaligned plain access for defined code. Juliet's CWE135 gets
+  there only through a misaligned `wchar_t *`, which is undefined behaviour.
+- **The order is Q-31's:** the alignment check comes before tag and bounds.
+- **The twin should match.** QEMU should trap a misaligned plain load or store with 4/6 and tval = the address while
+  executing in a supervised context.
+  - Outside a context nothing changes: OpenSBI's emulation on silicon completes the access, as QEMU does.
+  - That is a capstone-qemu twin change for whoever owns the twin build.
+  - Until it lands, Q-34 stays a known divergence. The twin's prediction is wrong by construction for any cell whose
+    path has a misaligned plain access.
+- **The store's cause 6** follows from the same code. It is worth one directed arm when convenient, not urgent.
+- **Grading** (the semantics owner's recommendation; the lead can override how it is counted):
+  - The corpus definition already covers the cell: the run stopped before its bug. The trap is at the first wide `lw`,
+    and the overflow is 40 bytes further on.
+  - It is not CAUGHT, because cause 4 is an alignment trap, not a capability check of the defect. It is not MISSED,
+    because the run never passed the bug undetected.
+  - So it is NO-READING, and it stays in the denominator. (juliet/README.md: "Anything else is NO-READING with a
+    reason.")
+- **Where the cells stand:** they are in the Juliet spatial remainder, whose silicon run the lead stopped on 2026-10-26.
+  They are recorded but counted in no total; see the measurements doc's Juliet scope entry.
 
 ## R-32 — the spec and the RTL still disagree by ONE on every bound taken or returned as a VALUE `SEAL's half FIXED ON SILICON 2026-10-03 (caplifive_supcall_36a641e0b.bit): all seven sup-sealsize arms bare on the board exact to simulation -- 64/1023/off8 trap 29, 1024/2048/off16/cur960 seal with the canaries intact (board lane, tests/rtl-smoke/sup-bare-2026-10-03-ladder); SHRINKTO's off-by-one and the two convention questions still OPEN`
 

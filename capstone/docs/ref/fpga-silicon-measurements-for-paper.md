@@ -6874,6 +6874,7 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
 | bad images faulting at QEMU's site, cause 28 | 716 | 716 |
 | MISSED (the same 22 cases as on QEMU) | 22 | 22 |
 | NOT-TRIGGERED, pointer-size dependent | 9 | 9 |
+| INTRA-OBJECT, NO-READING (the 8 type_overrun memcpy/memmove cases at role 01, below) | 8 | 8 |
 | good images CORRECT | 755 / 755 | 755 / 755 in their cells (672 counted, 83 in void batches) |
 | pc=0, DRT1, FRTY, Oops, INJS, INJL over 25 transcripts | 0 | 0 |
 
@@ -6884,6 +6885,15 @@ the next. The folder is `capstone/tests/rtl-smoke/vp2-bare-2026-10-17/`, with re
   - judge.py's CAUGHT verdict needs QEMU's own "Cap mem access OOB" line, which silicon never prints. On a board every
     catch therefore reads NO-READING:unattributed. The attribution of a fault to the overflowed object exists on QEMU
     only.
+  - The 8 INTRA-OBJECT cases (verdict INTRA-OBJECT:NO-READING in the QEMU reference's spatial-verdicts.tsv) equal QEMU
+    image for image on both trees. The overrun stays inside one object, so the verdict is a NO-READING on QEMU too:
+    - four read `unattributed(STRICT-FAIL:size-32)`, faulting cause 28 in memcpy+0xa8 or memmove+0x130:
+      CWE121_Stack_Based_Buffer_Overflow__char_type_overrun_memcpy_01, CWE121_..._char_type_overrun_memmove_01,
+      CWE122_Heap_Based_Buffer_Overflow__char_type_overrun_memcpy_01 and CWE122_..._char_type_overrun_memmove_01;
+    - four read `unexpected-cause`, faulting cause 24 in wmemchr+0x1c:
+      CWE121_Stack_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_01, CWE121_..._wchar_t_type_overrun_memmove_01,
+      CWE122_Heap_Based_Buffer_Overflow__wchar_t_type_overrun_memcpy_01 and CWE122_..._wchar_t_type_overrun_memmove_01.
+    With them the table sums to 755 (716 + 22 + 9 + 8); before this row it summed to 747.
   - The 22 MISSED are not silicon readings. They miss identically on QEMU: six wchar_t snprintf variants at all three
     roles, and four CWE126/CWE170 cases.
 - **The uaf control's cause 13:**
@@ -7059,7 +7069,7 @@ Each of those three refusals was shown to fire on a mutated tally.
 | SQLite | 45 | 16 / 27 / 2 | 39 / 6 / 0 |
 | Lua and mruby shims | 17 | 16 / 1 / 0 | 16 / 1 / 0 |
 | **all seven** | **264** | **128 / 131 / 5 (48.5 %)** | **235 / 22 / 7 (89.0 %)** |
-| httpd (APR pools 1, apr-util buckets 8; added 2026-10-26) | 9 | 0 / 9 / 0 | 9 / 0 / 0 |
+| httpd (APR pools 1, apr-util buckets 8; added 2026-10-26; N=1, not repeated) | 9 | 0 / 9 / 0 | 9 / 0 / 0 |
 | **all eight** | **273** | **128 / 140 / 5 (46.9 %)** | **244 / 22 / 7 (89.4 %)** |
 
 - **Against the batch bitstream** (`records/batch-silicon-tally.tsv`, the same script): 127 and 225 of 264. The
@@ -7070,8 +7080,8 @@ Each of those three refusals was shown to fire on a mutated tally.
   next entry.
 - **FFmpeg's 9 inside-one-struct cases and its frame-pool plane** read missed in both columns: one allocation, so object
   bounds cannot separate them.
-- **Every cell of the seven is N=2** (the previous entry). httpd is N=1 so far: board 1, every cell as the
-  compiler lane's QEMU reference (dev 6d9e397df3ca's results); its second reading is queued on board 2.
+- **Every cell of the seven is N=2** (the previous entry). httpd is N=1, not repeated (the lead's decision,
+  2026-10-26): board 1, every cell as the compiler lane's QEMU reference (dev 6d9e397df3ca's results).
 - **The batch tally has no httpd rows;** the script says so and reports the seven, and fails if a tally carries some
   of a program's arms but not all.
 
@@ -7120,8 +7130,8 @@ counted from its verdict TSVs:
   - 2 intra-object reason relabels, which stay NO-READING.
 - **Quote the sample as 717 / 3 / 8 / 27,** equal to the emulator cell by cell (1,513 / 1,513 on bitstream 2). Do not
   quote "22 missed" next to the full set's "60 missed, all CWE-170": on one page the two contradict each other.
-- The Juliet SPATIAL entry above omits the intra-object row, so its rows sum to 747; its "all cells equal" row covers
-  the 8.
+- The Juliet SPATIAL entry above now carries the intra-object row (8), so its rows sum to 755. Its "all cells equal"
+  row covers the 8.
 
 **Build flag.**
 - The 2026-10-19 record was built with `+movc-keeps-integer-source`, per its summary's sdk codegen and all three run
@@ -7133,3 +7143,38 @@ counted from its verdict TSVs:
     7,873 against 7,883, and the 10 are all CWE170 (`capstone/tests/bitstream2-board-refs/README.md`).
 - So 8,600 is an emulator figure for the virtual-profile build. Wherever prose says "the same binaries" ran on both,
   it must say which figure it uses: the sample's, or the remainder rerun's.
+
+## Juliet on bitstream 2: "the FPGA matches the emulator" checked record by record, and the spatial remainder's two parts read before the stop (board lane, 2026-10-26)
+
+- **The scope** is the previous entry's: the lead's reporting decision.
+  - The reason given for it: the sample covers every defect variant, and the remaining spatial cases differ from it only
+    in their control-flow wrappers.
+- **How it is graded:** every reading below by `juliet-obs-compare.py`, cell for cell, against the bitstream-2
+  reference.
+  - That reference is the compiler lane's 18-bit twin, qkit7-b2twin3-q8. It equals the batch bitstream's reference cell
+    for cell (its REST-B lines: "juliet temporal batch -> b2: cells 366/366 differ 0" and "juliet spatial batch -> b2:
+    cells 755/755 differ 0").
+  - The board lane re-ran each compare from the kept observations on 2026-10-26, with no board involved, and read the
+    same counts.
+
+| reading | record (`tier3-smoke/records/`) | cells equal to the emulator |
+|---|---|---|
+| spatial sample, first, board 2 | `b2bs-juliet-spatial-b2.result-lines.txt` | 1513 / 1513 |
+| spatial sample, N=2, board 1 | `b2n2-juliet-spatial-b1.result-lines.txt` | 1512 / 1513; the one is the uaf CONTROL (1 of 48 steps at the silicon-only cause 13), no case cell |
+| temporal, first, board 1 | `b2bs-juliet-temporal-b1.result-lines.txt` | census 726 / 735, seeded 56 / 56 |
+| temporal, N=2, board 2 | `b2n2b-b2.result-lines.txt` | census 727 / 735, seeded 56 / 56 |
+
+- **What "equal" means for temporal:** every census difference (9, then 8) is a rand-driven `_12` draw. Those cases take
+  a random branch, so a census run cannot be compared draw for draw. They are scored by the seeded build, which pins
+  the draw and reads 56 of 56 both times.
+- **The two spatial remainder parts read before the stop** are recorded but counted in no total:
+  - part01 on board 2 (`b2bs-juliet-rem-part01-b2.result-lines.txt`, 699 cases):
+    - census 1390 / 1401, the 11 being 10 `_12` draws and 1 uaf-control step;
+    - seeded 90 / 92, the 2 being ISSUES Q-34: a misaligned plain load that the twin completes and silicon traps with
+      cause 4. The semantics owner ruled that silicon is the reference, and its grading reads NO-READING (the run
+      stopped before its bug).
+  - part02 on board 1 (`b2bs-juliet-rem-part02-b1.result-lines.txt`, 699 cases): census 1388 / 1401, all 13 `_12`
+    draws; seeded 96 / 96.
+  - Parts 03 and 04 were stopped mid-run without a reading. Parts 05-12 did not run.
+  - Q-34 does not touch the sample: every sample case cell equals the twin, and no sample or temporal reading on
+    bitstream 2 has a cause 4.

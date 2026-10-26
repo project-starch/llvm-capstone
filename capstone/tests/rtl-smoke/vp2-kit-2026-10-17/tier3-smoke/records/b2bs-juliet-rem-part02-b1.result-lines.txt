@@ -1,0 +1,33 @@
+# Juliet spatial remainder part02 on bitstream 2, board 1 (tier3-juliet-rem-b2.sh; pre-registered 19fadd9ec614): the runner's result lines,
+# then jrem-classify.py over the kept obs-census.cmp / obs-seeded.cmp (it supersedes the runner's inline labels). THE GRADE is the OBS-COMPARE lines.
+JR part 02 reference: phases all rc=0; RESULT RESULT-B
+JR part 02 manifest 925bcde3e13fdd76 cases 699 census images 1400 seeded images 95
+JR run BEGIN 04:45:48 board 1 booking 372
+JR run END rc=0 10:27:39 :: 22 batches completed, 0 not :: 22 batches in 20511.4 s -> <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/juliet-rem/part02/run/observations.json
+JR run-seeded BEGIN 10:27:39 board 1 booking 374
+JR run-seeded END rc=0 10:54:31 :: 2 batches completed, 0 not :: 2 batches in 1611.4 s -> <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b1/juliet-rem/part02/run-seeded/observations.json
+JR probe BEGIN 10:54:31 board 1 booking 377
+JR probe END rc=0 11:01:39 :: 0 batches completed, 0 not :: {"sizeof-ptr": {"double*": "16", "double": "8", "int64_t*": "16", "int64_t": "8", "struct*": "16", "struct": "8"}}
+JR judge rc=0 (not a reading on silicon) :: runs: {'census': (22, 22), 'seeded': (2, 2)}
+JR OBS-COMPARE census rc=1 :: 1388 of 1401 cells the same, 13 different, 0 tolerated
+JR OBS-COMPARE seeded rc=0 :: 96 of 96 cells the same, 0 different, 0 tolerated
+JR readings: 25 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JR part 02 board1 DONE 11:01:55
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE193_wchar_t_declare_memcpy_12.bad :: ref signal 11 cause=28 memcpy+0xdc :: board exit 0 cause=None None
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE193_wchar_t_declare_memmove_12.bad :: ref exit 0 cause=None None :: board signal 11 cause=28 memmove+0x164
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_char_alloca_loop_12.bad :: ref exit 0 cause=None None :: board signal 11 cause=28 CWE121_Stack_Based_Buffer_Overflow__CWE805_char_alloca_loop_12_bad+0x1f8
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_char_alloca_memcpy_12.bad :: ref signal 11 cause=28 memcpy+0xdc :: board exit 0 cause=None None
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_char_alloca_ncat_12.bad :: ref exit 0 cause=None None :: board signal 11 cause=28 strncat+0x60
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_char_alloca_ncpy_12.bad :: ref exit 0 cause=None None :: board signal 11 cause=28 __stpncpy+0x1c
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_char_alloca_snprintf_12.bad :: ref signal 11 cause=28 memcpy+0xdc :: board exit 0 cause=None None
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_char_declare_loop_12.bad :: ref signal 11 cause=28 CWE121_Stack_Based_Buffer_Overflow__CWE805_char_declare_loop_12_bad+0x194 :: board exit 0 cause=None None
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_char_declare_ncat_12.bad :: ref signal 11 cause=28 strncat+0x60 :: board exit 0 cause=None None
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_char_declare_ncpy_12.bad :: ref exit 0 cause=None None :: board signal 11 cause=28 __stpncpy+0x1c
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_char_declare_snprintf_12.bad :: ref signal 11 cause=28 memcpy+0xdc :: board exit 0 cause=None None
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_int64_t_alloca_loop_12.bad :: ref signal 11 cause=28 CWE121_Stack_Based_Buffer_Overflow__CWE805_int64_t_alloca_loop_12_bad+0x1f4 :: board exit 0 cause=None None
+CLASS [rand _12 draw] census CWE121_Stack_Based_Buffer_Overflow__CWE805_int64_t_declare_memmove_12.bad :: ref exit 0 cause=None None :: board signal 11 cause=28 memmove+0x138
+COUNT uaf-control 0
+COUNT rand _12 draw 13
+COUNT CWE170 class 0
+COUNT OTHER 0
+# jrem-classify rc=0

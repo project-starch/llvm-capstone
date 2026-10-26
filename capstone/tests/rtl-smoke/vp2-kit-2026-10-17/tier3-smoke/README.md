@@ -8746,3 +8746,181 @@ Record: `records/b2n2-juliet-spatial-b1.result-lines.txt`.
   behaviour, not a case difference. It is recorded as such.
 - **N=2 on bitstream 2 is complete:** every arm of the corpus has two board readings, mostly on opposite boards. They are
   equal cell for cell, except the rand-driven Juliet `_12` draws and this one control step.
+
+### Bitstream 2: the Juliet spatial REMAINDER on both boards, part by part, pre-registered (2026-10-26 03:3x, before any part's boot)
+
+- **Why:** on the lead's word ("resume all experiments"), relayed by the runtime lane. The 8,383 spatial cases beyond the
+  755-case sample are cut into 12 parts by the compiler lane (`juliet-rem/manifest-partNN.json`).
+  - That lane makes each part's QEMU reference on the 18-bit twin (`juliet-rem/run-parts.sh`: build census and seeded
+    on the r60 SDK, then run, run-seeded, probe and judge), marking `.done-partNN` when a part is complete.
+- **What runs:** `tier3-juliet-rem-b2.sh <board> <log> <NN>`, on bkit9-b2-b<board>.
+  - It refuses a part whose reference is incomplete. The checks: `.done`; a RESULT line with the manifest's hash and
+    every phase at rc=0; run-parts.sh naming qkit7-b2twin3-q8; the sample's runners, helper and SDK by hash.
+  - It runs the part's own census and seeded builds, then the probe, and judge.py for the record.
+  - Output: `<mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b<board>/juliet-rem/partNN`.
+  - Scheduling: each board takes the lowest-numbered completed part that neither board has claimed (an atomic mkdir
+    claim), so both boards work through all 12 parts.
+- **The grade:** juliet-obs-compare against the part's QEMU observations, census then seeded, **with no tolerance**.
+  Every difference is printed with a class: uaf-control, rand-driven `_12` draw, CWE170 (value-dependent candidate),
+  or OTHER.
+- **Dry run:** `dryrun-juliet-rem-b2.txt`. A fake part built from real data reads 1513/1513 and 56/56 against itself;
+  one planted step reads 1 different, classed OTHER; a part with no reference refuses.
+- **Predictions, per part:**
+  - every census and seeded cell the same as QEMU, except possibly:
+    - the `controls:ctl-uaf` cell, when a uaf-control step reads the silicon-only cause 13 (about 2.5% per step, so
+      roughly a 1-in-2 chance per part of about 24-48 steps);
+    - rand-driven `_12` draws, if a part holds any, scored by its seeded build;
+    - value-dependent CWE170 cases, named as candidates. The sample tolerated three such cases. None is tolerated
+      here, so each one is reported.
+  - readings 0.
+  - **Any OTHER difference is a finding.**
+
+### Addendum to the Juliet remainder pre-registration (19fadd9ec614), before part10's boot (2026-10-26 05:4x): the CWE170 class is a name SUBSTRING
+
+- **The gap:** the runner classed a difference as "CWE170" only when the case name STARTED with CWE170_. Juliet puts the
+  base CWE first and the flaw variant after the double underscore (CWE126_Buffer_Overread__CWE170_char_memcpy_02).
+  The rule would therefore have classed every one of the class's cases OTHER.
+- **The class:** the compiler lane defines it by a name substring: a case is in the class when its name contains `CWE170`.
+  Juliet calls that variant "improper null termination". The string read that follows a copy left without a NUL runs
+  until it meets a NUL or a bound, so its reading depends on the bytes that follow.
+  - The lane's lists: `juliet-rem/part10-cwe170-class.txt` (102 names, sha256/16 6d11432c43ecdd7b) and
+    `juliet-rem/cwe170-class.tsv` (507e42429a22b57f).
+  - Checked here against the 12 manifests: the substring occurs in 102 cases, all in part10, and every one is
+    `__CWE170_`. Parts 01-09, 11 and 12 hold none.
+- **The change:** the runner now classes a difference "CWE170 (value-dependent class)" when `"CWE170" in` the case name.
+  This is the lane's own classify-moves.py rule. Parts 01 and 02, already running, contain no such case, so nothing they
+  read changes.
+- **Prediction for part10, added:** its QEMU reference reads 632 CAUGHT and 67 MISSED, the CWE170 class 35 CAUGHT and
+  67 MISSED. On silicon the class may differ from QEMU in either direction, because whether memchr meets a NUL depends on
+  memory contents. Those differences are reported as the class, by name and by direction. **Any difference outside the
+  102 is still a finding.**
+
+### Result: Juliet spatial remainder part01 on board 2 (pre-registration 19fadd9ec614): two seeded cells differ outside every predicted class, silicon's misaligned-load trap (cause 4) where QEMU reads the bound (28)
+
+- **Record:** `records/b2bs-juliet-rem-part01-b2.result-lines.txt`. Manifest 0fca00bab0923463, 699 cases, 1,400 census and
+  91 seeded images. 22 census and 2 seeded batches completed. Readings 0 in all 25 boot transcripts.
+- **The grade, with no tolerance:** census 1390 of 1401 cells the same, seeded 90 of 92.
+- **The 13 differences, classed by `jrem-classify.py`** (see the addendum below for why its labels replace the runner's):
+  - **10 rand-driven `_12` draws in the census run.** These are predicted.
+  - **1 uaf-control:** 1 of 44 `ctl-uaf` steps reads cause 13 for 25 at control_read_probe+0x38, also as predicted.
+  - **2 OTHER, both in the SEEDED run: a finding.** CWE121_Stack_Based_Buffer_Overflow__CWE135_12.bad.s00 and .s01.
+    The seeded build pins the draw, so neither one can be a draw.
+
+| image | QEMU (the twin) | silicon |
+|---|---|---|
+| .s00 | signal 11, cause 28, wcslen+0x2c, address code+0x2837d | signal 11, cause 4, wcslen+0x14, address code+0x28355 |
+| .s01 | signal 11, cause 28, wcscpy+0x1c, address code+0x2837d | signal 11, cause 4, wcscpy+0x1c, address code+0x28355 |
+
+- **What the image does,** disassembled from the seeded build's `.s00.dom` (`llvm-objdump`, t3-freeze):
+  - wcslen+0x14 is its first `lw a2, 0(a0)`, before the loop. wcscpy+0x1c is the loop's `lw a3, 0(a1)`. Both read
+    4-byte wide characters from the case's char string, at image address 0x38355, which is odd.
+- **The reading:**
+  - Silicon traps the FIRST wide load, at the pointer passed in, with cause 4 (load address misaligned). No capability
+    fault is raised there: QEMU loads from the same address without one.
+  - QEMU performs that misaligned load and every 4-byte step after it, up to code+0x2837d, 40 bytes on. There it
+    faults with cause 28, on the bound.
+  - So QEMU executes a misaligned in-bounds plain load inside a context, and silicon raises cause 4 for it.
+- **This is not Q-31.**
+  - Q-31 is an ORDERING difference. There the address is bad and the capability check would fail too, so both
+    exceptions compete. Its ruling covers "a silicon 4 or 13 where the record says 24 on the same pc".
+  - Here no capability exception is pending at the faulting load. On .s00 the pc differs too.
+- **The consequence:**
+  - On silicon these two images stop at a non-capability fault before the overflow is reached. QEMU records a bounds
+    catch.
+  - Whether the misalignment also hides the catch in other Juliet cases depends on the source's alignment. Of part01's
+    35 census CWE135 bad images on QEMU:
+    - 34 fault at a 4-aligned stack address, and every one matches on silicon;
+    - the 35th is CWE135_12.bad, at an odd image address. Its draw took the good path on the board (exit 0), so silicon
+      never reached that load.
+  - It is recorded here as a finding. It is handed to the compiler lane (the twin) and the rtl lane. No ISSUES entry is
+    filed by this lane until the twin's owner says whether QEMU's misaligned plain load is intended.
+- **judge.py rc 75,** for the record only:
+  - Its batch-validity rule requires every `ctl-uaf` step to read cause 25 (judge.py:130-136). So the census batch
+    holding the cause-13 step is voided: 31 bad cases read NO-READING:batch-void.
+  - The grade is the observation compare, which compares that batch cell for cell.
+
+### Addendum to the Juliet remainder pre-registration (19fadd9ec614), after part01 and before any other part is recorded: the runner's difference LABELS were wrong in two ways; `jrem-classify.py` replaces them
+
+- **The gaps,** both found on part01's own lines:
+  - The runner's inline classifier took the case key up to the FIRST colon, so `controls:ctl-uaf` became `controls`.
+    The uaf-control class could never fire, and part01's predicted cause-13 step was labelled OTHER. The dry run planted
+    one step and saw OTHER, which was the label for this very key, so the control could not tell the two apart.
+  - It labelled any `_12.` key a rand-driven draw in the SEEDED run as well. The seeded build pins the draw, so a seeded
+    difference is never a draw. The rule hid part01's two cause-4 cells under the predicted class.
+- **The change:** `jrem-classify.py <obs-census.cmp> <obs-seeded.cmp>` re-reads the kept compare files.
+  - uaf-control: only when every differing step reads 13 for the reference's 25, at the same site and exit.
+  - `_12` draw: in the census run only.
+  - CWE170: as in addendum de7d470759c3.
+  - Everything else is OTHER, with any cause-4 site named.
+  - It exits 2 on a missing file, a missing summary line, or a DIFF line it cannot parse.
+- **Controls,** each from part01's real compare files with one line planted:
+  - the real files read 10 / 1 / 0 / 2;
+  - the cause-13 step planted as 24 reads OTHER;
+  - a seeded `_12` cell planted as exit 0 reads OTHER;
+  - a planted CWE170 name reads CWE170 class;
+  - a garbled DIFF line, a missing summary and a missing file each exit 2.
+- **Unchanged:** the runner, which is still running parts 02 and 03, and the grade (cell equality, no tolerance). Each
+  part's record carries this classifier's lines beside the runner's.
+
+### Part01's cause 4: the rtl lane's RTL reading (2026-10-26), checked here at source
+
+- **What the rtl lane read** (capstone-ariane 96eb969da, core dcc6daf6e):
+  - A misaligned `lw` sets `data_misaligned`, and the LOAD arm raises LD_ADDR_MISALIGNED with no privilege, capmode or
+    context term. This is delivered since R-34's fix.
+  - In a supervised context the trap becomes an ESCAPE (commit_stage.sv:228-234), so OpenSBI's misaligned emulation is
+    never reached.
+- **Checked here:**
+  - core/load_store_unit.sv at 96eb969da: `LW, LWU, SW, ...` sets `data_misaligned`, and
+    `if (CVA6Cfg.CAPSTONE_EXT && cap_exception.valid && !misaligned_exception.valid)` sits at the end of
+    data_misaligned_detection.
+  - capstone_vm.c on dev: resolve() returns unless `cause == 12, 13 or 15` on event 4, so a 4 ends the run.
+  - The QEMU side, the lane says: capstone-qemu deb7d75756 has no MO_ALIGN on plain loads, as upstream.
+- **The lane's classification:**
+  - It is a twin divergence of the Q-31 family (QEMU completes what the RTL traps), not an RTL defect.
+  - Whether a context sees 4 or an emulated load is the semantics owner's call (runtime).
+- **Open:** how the corpus grades a silicon 4 at an odd address where the twin reads 28 further on. It is not a miss of
+  the spatial defect, by the lane's reading. Whether it is CAUGHT is the corpus owner's ruling. Until then the two cells
+  stay differences.
+
+### Addendum, 2026-10-26 12:4x, before the boots it orders: the Juliet spatial remainder STOPS on silicon (the lead's decision, relayed by the runtime lane); the short queue follows
+
+- **The decision:** Juliet is reported as:
+  - the full set on the emulator (366 temporal, 9,138 spatial);
+  - on the FPGA, all 366 temporal and the 755-case stratified spatial sample, which covers all 261 variants.
+  - The remainder differs from the sample only in control-flow wrappers.
+- **What was stopped, at 12:41:**
+  - board 2's part03 (from 10:44, in census batch006) and board 1's part04 (from 11:01, in census batch006);
+  - both schedulers first, so no further part could be claimed, then each part's runner and board driver by process
+    group;
+  - hub bookings 376 and 378 released (HTTP 200); both boards then read FREE.
+  - **Parts 03 and 04 have no reading:** their run phases did not finish, and nothing from them is graded or counted.
+  - **Parts 05-12 do not run.**
+- **Parts 01 and 02 are complete.** Their records land as an UNCOUNTED addendum, beside Q-34 and its ruling.
+- **The short queue, in this order:**
+  - **board 2:** httpd N=2 (pre-registration b86eff8b49e4, `tier3-httpd-b2.sh 2` with HT_SUB `httpd-n2`, graded by
+    n2-grade.py against board 1's reading and by verdicts-compare against the reference). The pre-registration had it
+    after the fault_mstatus arm; only the order changes. Then the rtl lane's bare kit (14fe83614573), then
+    fault_mstatus x200 (e50f65806556).
+  - **board 1:** the bare kit, then fault_mstatus x200.
+  - Every prediction stands as registered.
+
+### Result: Juliet spatial remainder part02 on board 1 (pre-registration 19fadd9ec614): as predicted, every census difference a rand-driven `_12` draw, seeded 96 of 96
+
+- **Record:** `records/b2bs-juliet-rem-part02-b1.result-lines.txt`. Manifest 925bcde3e13fdd76, 699 cases, 1,400 census and
+  95 seeded images. 22 census and 2 seeded batches completed. Readings 0 in all 25 boot transcripts; judge.py 22/22.
+- **The grade, with no tolerance:** census 1388 of 1401 cells the same, seeded 96 of 96.
+- **The 13 census differences** are all rand-driven `_12` draws (`jrem-classify.py`: 0 uaf-control, 0 CWE170, 0 OTHER).
+- **Status:** with part01, this is the whole of the remainder read on silicon before the lead's stop (addendum
+  d1fba0ad3725). Both records are an UNCOUNTED addendum: neither enters a Juliet total.
+
+### Correction to the addendum above (2026-10-26 12:4x): httpd stays at N=1; its board-2 repeat was dropped after it started
+
+- **The lead's update, relayed by the runtime lane:** httpd stays at N=1, and the queue is the bare kit then
+  fault_mstatus x200 on each board. It arrived after board 2 had begun httpd N=2 (12:43:36, apr-pool-repros
+  virtual-malloc, booking 380).
+- **What was done:**
+  - board 2's run was stopped by process group in its first boot (END rc=143 at 12:48:08), with no reading;
+  - booking 380 was released (HTTP 200), and the runner stopped itself ("the boot did not complete");
+  - the chain then went on to the bare kit.
+  - The partial output under `t3-run-b2-dcc6daf6e-b2/httpd-n2` is not a reading and is not graded.
+- **httpd's rows read N=1, not repeated.**
