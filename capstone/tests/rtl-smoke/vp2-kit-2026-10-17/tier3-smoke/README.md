@@ -10210,3 +10210,44 @@ Tool: `r64-census.py`.
   per-process count.
 - The functional prediction holds. The timing analysis, including the ordering T1 ≤ T3 ≤ T2 by instret, is the
   runtime lane's.
+
+### Bitstream 3 on both boards, result (2026-10-27 02:52-04:16): flashed; R-62 and R-63 FIXED ON SILICON at N=2; every first-boot and regression reading as bitstream 2's; b3k1 PASS
+
+- Records: `records/bs3-e7af48457-b1` and `-b2` (flash, first boots, regression controls) and `records/bs3-perf-b3k1-b2`,
+  all `.result-lines.txt`.
+- **The flashes**, each after its board's T3 kits ended:
+
+| board | booking | span | resident before | `nv_bitstream_name` after the power cycle |
+|---|---|---|---|---|
+| 2 | 412 | 02:52:51–02:55:13 | `caplifive_vp2c_dcc6daf6e.bit` | `caplifive_vp2c_e7af48457.bit` |
+| 1 | 419 | 03:26:52–03:29:05 | `caplifive_vp2c_dcc6daf6e.bit` | `caplifive_vp2c_e7af48457.bit` |
+
+  - Each passed the store control, had the bitstream-2 fallback registered, matched the seal's hash, and uploaded with
+    HTTP 201.
+  - The kits bkit11-b3 and bkit12-perf-b3 each differ from their source in the one board.env line only.
+- **R-62 FIXED ON SILICON, both boards.** fp-all reads SR 10 and
+  `0x0 0x0 0xffffffffffffffff 0x0 0x0 0xffffffffffffffff 0x0 0x0 0xc100794b211e882c 0x1`: the rtl lane's e7af48457
+  vector exactly (fpds-b3-grade.py). Bitstream 2 read the defect vector, 23 fdiv.d and 19 fsqrt.d misses in 512.
+- **R-63 FIXED ON SILICON, both boards.** fp-rm reads SR 16 and the fixed-RTL vector exactly: RDN, RUP and RMM
+  correctly rounded.
+- **N=2:** the fp-all and fp-rm SR/SV lines are byte-identical across the boards (`cmp`, 11 and 17 lines). The rtl lane
+  re-read board 2's two sessions with its own script and agrees, and the same script reads bitstream 2's sessions as
+  bitstream 2.
+- **First boots, both boards, identical to bitstream 2's:**
+  - s23 AS EXPECTED (SR 25, re-arm total 14); va-alloc PASS on the bitstream-2 vector;
+  - Tier 1 rungs 0 0 0 1, VM exits normal 0 / stale 139 / sparse-churn 0, VIRTUAL_SPARSE_CHURN_OK;
+  - FRTY, FRTC, DRT1, INJS, INJL, Oops and pc=0 all 0;
+  - the two CAPSTONE_VM_STATS lines identical across the boards and to bitstream 2's record.
+- **Regression controls, both boards, identical to bitstream 2's:**
+  - hold 100000: HOLD-PEAK and HOLD-OK 100000, exit 0, high_water 105,569 of 262,144;
+  - R-61: control PASS, r61-stale2 and r61-stale NOT-REPRODUCED;
+  - R-61 arming: control and stale0 PASS, stale3 and stale4 NOT-REPRODUCED;
+  - the fixes kit: all six images EXACT, so R-58, R-59 and Q-24 read as on bitstream 2.
+- **b3k1 (board 2, booking 438, 03:46:48–04:01:38): PASS on the runtime lane's criterion.**
+  - 24 `@@PERF-END`, all rc=0, ending in `@@PERF-B3K1-DONE`.
+  - Both identification lines read as the runtime lane predicted: native ludcmp and st at `verify_failed=0` and
+    BENCH-DONE failed=0. On bitstream 2 they failed their own verify on every iteration.
+  - checks-diff.py against the twin: minver EQUAL (`0xd6cc5fbda167dc7b`), where the same tool read DIFFERS on
+    bitstream 2. ludcmp and st print no state hash.
+- **Against the pre-registrations (1c58f863f1d7, amended at 5c758b0cfbab and 4820b8fcd219; 9161f84dba39): every
+  reading holds.** R-64, R-65 and R-66 remain in this bitstream, as recorded.
