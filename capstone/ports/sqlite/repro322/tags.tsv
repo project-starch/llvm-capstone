@@ -55,3 +55,4 @@ rtreestatic	21_eab0e10304_rtree_static_bind_stale_text	case
 spellfixoom	22_fix-2026-07-26_spellfix_oom_stale_vtab	case
 staticbind	23_eab0e10304_fts3_static_bind_stale_text	case
 wschema	24_d4b646997a_writable_schema_stale_table	case
+pwithbackport	33_f932f7145e_compound_cte_backport_pwith	case
