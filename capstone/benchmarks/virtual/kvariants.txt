@@ -1,0 +1,16 @@
+# programs that allocate inside the timed region (counting build, resize.py): built at K = 0..3
+ctl-stack-libc
+ctl-string-libc
+ctl-vector-libc
+huffbench-libc
+miniz-libc
+rv8-aes
+rv8-miniz
+rv8-norx
+rv8-primes
+rv8-qsort
+sglib-dllist-libc
+sglib-hashtable-libc
+sglib-listinsertsort-libc
+sglib-listsort-libc
+sglib-rbtree-libc
