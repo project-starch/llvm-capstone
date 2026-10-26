@@ -3868,7 +3868,15 @@ branches below are unchanged from the vendored file):
 expose R-64. They were disassembled with `--mattr=+f,+d`, with fpdiag's fp-divsqrt.dom as the control (fdiv.d 1,
 fsqrt.d 1). The only fcsr instructions are frcsr/fscsr in fegetenv/fesetenv (pthread), frrm in __fe_getround, and a
 csrs fflags in __fe_raise_inexact (compiler-rt). There is no frflags, no fetestexcept and no fsrm anywhere, and all
-408 fdiv/fsqrt carry rm = 7 (dynamic). The bug-corpus images are not covered; that census is the board lane's.
+408 fdiv/fsqrt carry rm = 7 (dynamic).
+The board lane's census covers the bug corpus (dev 73771dd01777, `r64-census.py`; not re-run here): all 7,931 distinct
+images that ran on bitstream 2, which are 6,505 corpus .dom files, the perf .dom files, OpenSBI and the native tools.
+- No fdiv/fsqrt carries a static rounding mode.
+- The flag reads outside the runtime's fenv are frflags/fsflags save-and-restore pairs (glibc printf, BEEBS st) and a
+  perl fetestexcept with no code reference.
+- So none of those images can observe R-64. Images that ran only on earlier bitstreams are not covered.
+- It also found that runtime's `rm.py` reads 0 on word-format disassembly. The perf census used byte format, and its
+  control fired.
 
 **Fix in RTL, simulation only** (capstone-ariane r64-flags `76eeec974`, with R-65 and R-66; not in bitstream 3):
 - the infinite-operand branches stop setting OF, and 0/0 stops setting DZ;
@@ -3876,7 +3884,11 @@ csrs fflags in __fe_raise_inexact (compiler-rt). There is no frflags, no feteste
   magnitude;
 - NX is raised with OF.
 
-All three R-64 arms read IEEE except one row, and the random and exact arms are unchanged. Lint is at baseline.
+All three R-64 arms read IEEE except the exact-tiny UF entries kept as the residual below: fp-special row 11, and
+fp-carry's B column once per mode, 6 entries. The random and exact arms are unchanged. Lint is at baseline. The 95-test
+sweep on 76eeec974 is identical to bitstream 3's: 92, 0 differ, 3 missing on both sides. It is claim-audited twice.
+On b5bcf6897 the overflow and special-operand edits were supported, with 29,600 adversarial special-operand
+evaluations and 0 bad. On 76eeec974 R-65 and R-66 were supported.
 
 **Residual, kept deliberately:** UF is still raised on an EXACT tiny result (fp-special row 11, fp-carry's B column).
 A first cut gated UF on NX (b5bcf6897). The fix's claim-auditor refuted it on a normaliser-only harness: NX itself is
@@ -3908,8 +3920,22 @@ predicted from source in the header before the run, and the header was committed
   the control that the grader fires.
 
 **Reach:** only results in the last half-ulp below the smallest normal, of either sign, and only from a division,
-since a square root is never subnormal. Not censused, because the condition is a value and no static count of it is
-possible.
+since a square root is never subnormal. It cannot be censused statically, because the condition is a value. For the
+three programs that failed on bitstream 2, a host-replica model counted every division and root in the harness loop:
+- ludcmp: 285,600 fdiv.s;
+- st: 943,000 fdiv.d and 9,200 fsqrt.d;
+- minver: 356,399 fdiv.s, whose state hash equals the twin's.
+
+None of the three has any result at or below the smallest normal. The model's self-test registers one of each class
+(scratchpad model rtlfp_census.c). So R-65 cannot change those programs' values.
+
+More arms: `fp-edge-divsqrt.S`, pre-registered at capstone-ariane c94148507.
+- It covers the carry through the OTHER subnormal branch, a quotient below 1 with Exp_in 1, and the FP32 negative carries.
+- On the e7af48457 core all seven carries read zero, as predicted (35559fa27).
+- On the fix they read IEEE (r64-flags 319301b38).
+- The fix's auditor ran 300,000 invariant cases with 0 violations. All 1,767 harness carries were IEEE, against 0 of
+  1,767 on the control. The residual is R-62's lost sticky: 61 FP64 directed-mode carries with all-zero extra bits do
+  not fire, and the control fails them identically.
 
 **Fix** (r64-flags `76eeec974`): when the pre-rounding exponent is 0, a carry into bit 52 adds 1 to the exponent; the
 fraction bits are already 0. A normal result has bit 52 set before rounding and a nonzero exponent, so the term
@@ -3933,8 +3959,19 @@ and never reads it.
 - a boxed fdiv.s reads correctly;
 - fflags 0x0 throughout.
 
-**Reach:** only code that runs an FP32 divide or square root on a register last written as a double or as an integer
-move. A compiler never emits that for well-typed C. Not censused.
+**Reach:** only code that runs an FP32 divide or square root on a register last written as a double or by an integer
+move. Two censuses, neither re-run here, find no image that can expose it:
+- **Runtime's, over the 654 perf images:** it walks back to the last writer of every fdiv.s/fsqrt.s source. There are 84
+  fdiv.s and 0 fsqrt.s, and every source is a single-precision writer. minver's loop-carried fa1 was checked by hand.
+  Its positive control is an object that flags fmv.d.x → fdiv.s and fadd.d → fsqrt.s.
+- **The board lane's, over the 7,931 bug-corpus images** (dev 73771dd01777): reaching definitions over each function's
+  CFG find 0 fdiv.s sites that an FP64 definition reaches, and no image has an fsqrt.s. Its controls are a branch
+  merge, a skipped load and an fdiv.d relabelled as fdiv.s.
+
+`fp-edge-divsqrt.S` part 2 adds an sNaN partner, two unboxed operands and a partly-ones upper half. All three compute
+a number on the e7af48457 core where RISC-V requires the canonical NaN. On the fix all three read the canonical NaN, with
+NV only for the sNaN partner. The fix is claim-audited: indexing, transaction, fsqrt's x0 operand b and FP64 are
+untouched, no hazard by reading, and the lint shows `is_boxed_i` now read.
 
 **Fix** (r64-flags `76eeec974`): a patched copy of the wrapper (`core/fpu_div_sqrt_fix/fpnew_divsqrt_multi.sv`, selected
 by Flist) substitutes the boxed canonical NaN at the input stage for an unboxed FP32 operand. Operand b is checked for
