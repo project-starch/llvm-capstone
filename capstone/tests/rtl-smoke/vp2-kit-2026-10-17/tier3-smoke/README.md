@@ -9150,3 +9150,15 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
 - **The 13 census differences** are all rand-driven `_12` draws (`jrem-classify.py`: 0 uaf-control, 0 CWE170, 0 OTHER).
 - **Status:** with part01, this is the whole of the remainder read on silicon before the lead's stop (addendum
   d1fba0ad3725). Both records are an UNCOUNTED addendum: neither enters a Juliet total.
+
+### Correction to the addendum above (2026-10-26 12:4x): httpd stays at N=1; its board-2 repeat was dropped after it started
+
+- **The lead's update, relayed by the runtime lane:** httpd stays at N=1, and the queue is the bare kit then
+  fault_mstatus x200 on each board. It arrived after board 2 had begun httpd N=2 (12:43:36, apr-pool-repros
+  virtual-malloc, booking 380).
+- **What was done:**
+  - board 2's run was stopped by process group in its first boot (END rc=143 at 12:48:08), with no reading;
+  - booking 380 was released (HTTP 200), and the runner stopped itself ("the boot did not complete");
+  - the chain then went on to the bare kit.
+  - The partial output under `t3-run-b2-dcc6daf6e-b2/httpd-n2` is not a reading and is not graded.
+- **httpd's rows read N=1, not repeated.**
