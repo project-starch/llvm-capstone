@@ -10285,3 +10285,19 @@ Tool: `r64-census.py`.
 - **Prediction:** the rtl lane's simulation of these images on e7af48457's core, so all five read CONFIRMED ON
   SILICON on both boards, with identical SR/SV lines across the boards. A difference between the boards is a
   cross-board finding.
+
+### R-64, R-65 and R-66 on silicon, result: all five images CONFIRMED ON SILICON on both boards, the SR/SV lines byte-identical across them (2026-10-27 05:08-05:12)
+
+- Records: `records/bs3-fp6466-bare-b1.result-lines.txt` and `-b2`. The UART for each image is under each board's
+  `t3-run-b3-e7af48457-b<board>/fp6466-bare/<image>/`.
+- Every image's hash and board_rec matched the kit commit, and its SR matched the table: fp-of 30, fp-special 22,
+  fp-carry 40, fp-box 10, fp-edge 56.
+- **fp6466-grade.py: every image reads its bitstream-3 vector exactly, on both boards** (RF GRADE rc=0 twice):
+  - **R-64 CONFIRMED ON SILICON** (fp-of, fp-special): an overflowing division returns infinity under every rounding
+    mode with fflags 0x4, and the special operands raise the vector's flags;
+  - **R-65 CONFIRMED ON SILICON** (fp-carry, fp-edge part 1): a subnormal quotient that rounds up into the smallest
+    normal reads 0;
+  - **R-66 CONFIRMED ON SILICON** (fp-box, fp-edge part 2): fdiv.s and fsqrt.s compute on non-NaN-boxed operands.
+- **N=2:** each image's SR/SV lines compare equal across the two boards (`cmp`; 31, 23, 41, 11 and 57 lines).
+- Against the pre-registration (df6bfa10eef4): every reading holds. These are the baseline readings for the bitstream
+  that carries r64-flags, where each image must read its fixed-core vector.
