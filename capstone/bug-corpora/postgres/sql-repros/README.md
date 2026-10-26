@@ -99,9 +99,14 @@ What IS checkable here is weaker and points the same way: the revocation log end
 trigger's last answer with none of the shutdown-checkpoint lines the control's log reaches,
 so the backend died after the statements completed rather than at the defective store.
 Counting them the arms read 3 / 9, 7 / 9 and 3 / 9; withdrawn, 2 / 9, 7 / 9 and 2 / 9.
-`tools/verdicts.py` would score the first automatically if `virtual-mallocng` declared
-`catch_causes` as SQLite's configurations do, but that configuration is shared by eleven
-corpora across four lanes, so it is left to them.
+Those pools figures put case 09 in the denominator, where its cell is a NO-READING;
+`catch-tables.py`, which counts a NO-READING as neither, prints `7 / 8 (+1 ?)` for the
+same arm. Both are right about different denominators, and SCHEMA's rule is the tool's.
+A key that would score the first automatically, `catch_causes`, is proposed in PR #259 and
+exists in no tree here: `tools/verdicts.py` on this branch has no such key, and no
+configuration in `tools/arms.json` declares one. Were it to land, declaring it on
+`virtual-mallocng` would reach eleven corpora across four lanes, so the declaration is
+theirs to make and not this corpus's.
 
 ### What the 2026-10-18 review changed
 
@@ -127,7 +132,7 @@ A rung is not a case: it is the case's statement with one parameter changed, and
 corpus documents running one -- `shared/make-threshold-probe.py` writing a `.sql` that
 `run-arm.py --only <case> --sql <file>` then runs, as that script's header describes for case
 03 -- cannot be followed, because `run-arm.py` has no `--sql` option; its arguments are at
-`shared/run-arm.py:371-396`. The generator is also case 03's lquery arithmetic specifically,
+`shared/run-arm.py:383-406`. The generator is also case 03's lquery arithmetic specifically,
 not a ladder for this one. Committing this ladder therefore needs a probe path that exists,
 and until there is one the two claims that depend only on it -- that the chunk boundary sits
 between -8 and -9, and that `virtual-malloc` faults at -16 alone -- stay unverifiable here.
@@ -143,7 +148,7 @@ static and inlined, so `case.json` declares the two symbols that can carry the p
 and the branch holding the defect is never entered.
 
 **And on 2026-10-21 that `control.sql` did the attributing, which is what closes this
-cell.** `shared/run-arm.py:355` runs the control only
+cell.** `shared/run-arm.py:365` runs the control only
 `if o.fault and o.reached and not o.attribution`, so while the site list stood the declared
 symbol matched the pc first and the control never ran: the `CAUGHT` rested on a list read
 off the source -- a list whose own `fault_sites_why` opened "Derived from the source, not
@@ -173,11 +178,20 @@ the same place on both bound settings, so bound width is irrelevant to it.
 
 ## What these results do not say
 
-**Five vp2 bundles beside this corpus ran case 08's OLD trigger, and their 08 cell is not a
+**Seven vp2 bundles beside this corpus ran case 08's OLD trigger, and their 08 cell is not a
 measurement.** `results/2026-10-19-vp2c-treeA/vp2-malloc`,
 `results/2026-10-20-vp2c-treeA/vp2-malloc-nf2`, `.../vp2-malloc-nomovc`,
-`results/2026-10-20-vp2c-treeB/vp2-malloc-nf2` and `.../vp2-malloc-nomovc` each record 08
-`MISSED`, "reached ... and completed with no fault" (line 8 of each `verdicts.jsonl`). They
+`results/2026-10-20-vp2c-treeB/vp2-malloc-nf2`, `.../vp2-malloc-nomovc`, and the two dev
+landed on 2026-10-23, `results/2026-10-22-batch-c721c1a2a-b1/vp2-pg-pools` and
+`results/2026-10-22-batch-c721c1a2a-b2/vp2-malloc-nomovc`, each record 08 `MISSED`,
+"reached ... and completed with no fault" (line 8 of each `verdicts.jsonl`), with the old
+trigger's reach shape "(4 prompts, 1 setup line(s))".
+
+The `b2-silicon-tally` rows `sql0` and `pg-pools` come from dev-tree boots, whose
+`08/trigger.sql` has been sha256 `9e298de7...` since 2026-10-06 against this tree's
+`28586f0c...`, so they ran the old trigger too. Those bundles record no per-case trigger
+hash, so for the tally rows that is inferred from the tree they booted and not read from a
+record. The tier3 table's output is unaffected either way. They
 ran the parameters this review replaced, and `08/trigger.sql`'s own header sets out why those
 never reached the defective store: `levenshtein.c:159` takes `max_d = -1`, `stop_column`
 stays at `m + 1`, and the guard at `:240` is never true. A silence from a trigger that cannot
@@ -189,11 +203,19 @@ CheriBSD bundle also ran, by sha256: `inputs.json`'s `ran_sha256` for 08 is
 a bundle is only ever written by a runner, so correcting them means re-running them, and
 whether the board arm is re-run is not this corpus's call. Read their 08 row as void.
 
-**Both bundles here were measured with exact bounds on.** `inputs.json` records
-`platform.exact_bounds: true` for `virtual-malloc` and for `virtual-pg-pools`, on the same
-emulator (`platform.qemu` `ff8eb824...`). A chunk-level catch on the pools arm is therefore a
-statement about a bound the hardware applied as requested, not about a rounded one; nothing
-here measures the compact-bounds behaviour the vp2 bundles exercise.
+**Exact bounds: what the record says, and what it does not.** The 2026-10-18 bundles record
+`platform.exact_bounds: true` for both arms. The 2026-10-21 pools bundle, which
+`verdict_bundles` now declares, **omits the field**: that run went through appvm's session
+path, and the session branch of `platform()` never copies it. Whether exact bounds were on
+for the 10-21 run is therefore not established by this tree. Its nine verdicts are identical
+to the 10-18 pools bundle's, which is consistent with exact bounds but does not prove them.
+
+The same comparison is not one-variable in its runner either. Between the two pools bundles
+the runner hash moves `2de3338a2036` -> `292e7440305d` and the judge hash `07c940f428b4` ->
+`2ed6701045dd`; the kit, the image and the fixture are the same. A chunk-level catch on the
+pools arm is a statement about a bound the hardware applied as requested only to the extent
+that the 10-18 record carries forward; nothing here measures the compact-bounds behaviour the
+vp2 bundles exercise.
 
 `results/matrix.tsv` and the `results/*-20261006-*`, `-20261008-*` and `-control-20261010-*`
 directories are the runs scored by the runner of their day, which counted any fault after the setup
