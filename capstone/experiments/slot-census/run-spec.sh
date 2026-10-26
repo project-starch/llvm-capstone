@@ -17,34 +17,13 @@ BENCH=("$@")
                                   531.deepsjeng_r 541.leela_r 557.xz_r 508.namd_r 510.parest_r 511.povray_r
                                   519.lbm_r 526.blender_r 538.imagick_r 544.nab_r)
 [ -e "$OUT" ] && { echo "run-spec: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/control" "$OUT/logs"; OUT=$(cd "$OUT" && pwd)
-TOOL=$OUT/tool; mkdir -p "$TOOL"
+mkdir -p "$OUT/logs"; OUT=$(cd "$OUT" && pwd)
+TOOL=$OUT/tool
 
-# 1. the tracer and the controls
-gcc -O2 -fPIC -shared -pthread -o "$TOOL/slotcensus.so" "$HERE/slotcensus.c" -ldl || exit 1
-gcc -O2 -fno-builtin -o "$TOOL/control" "$HERE/control.c" || exit 1   # see control.c
-g++ -O2 -o "$TOOL/control_cxx" "$HERE/control_cxx.cc" || exit 1
-
-# 2. controls: C (with a fork child), C++, and the negative control (no tracer: the checker must refuse)
-control() {   # name, binary, preload (1/0), want (pass/fail)
-  local name=$1 bin=$2 pre=$3 want=$4 rc
-  rm -f "$OUT/control/$name.jsonl"
-  if [ "$pre" = 1 ]; then
-    SLOTCENSUS_OUT=$OUT/control/$name.jsonl LD_PRELOAD=$TOOL/slotcensus.so "$bin" > "$OUT/control/$name.expect"
-  else
-    SLOTCENSUS_OUT=$OUT/control/$name.jsonl "$bin" > "$OUT/control/$name.expect"
-  fi
-  python3 "$HERE/check-control.py" "$OUT/control/$name.expect" "$OUT/control/$name.jsonl" > "$OUT/control/$name.check"
-  rc=$?
-  if { [ "$want" = pass ] && [ $rc = 0 ]; } || { [ "$want" = fail ] && [ $rc = 1 ]; }; then
-    echo "control $name: as expected ($want)"
-  else
-    echo "control $name: NOT as expected (want $want, checker rc $rc)"; cat "$OUT/control/$name.check"; exit 75
-  fi
-}
-control c "$TOOL/control" 1 pass
-control cxx "$TOOL/control_cxx" 1 pass
-control negative "$TOOL/control" 0 fail
+# 1-2. the tracer and the controls
+. "$HERE/tracer.sh"
+build_tracer
+run_controls
 
 # 3. the SPEC config, from SPEC's example
 cd "$SPEC_ROOT" && source shrc > /dev/null || exit 1
@@ -74,13 +53,9 @@ cp "$CFG" "$OUT/slotcensus.cfg"
 
 # 4. provenance
 {
-  echo "date $(date -u +%FT%TZ)"
+  provenance_tracer
   echo "size $SIZE"
   echo "benchmarks ${BENCH[*]}"
-  echo "gcc $(gcc -dumpfullversion) g++ $(g++ -dumpfullversion)"
-  echo "glibc $(ldd --version | head -1)"
-  echo "cpu $(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2-)"
-  (cd "$HERE" && sha256sum slotcensus.c control.c control_cxx.cc) && (cd "$TOOL" && sha256sum slotcensus.so)
 } > "$OUT/provenance.txt"
 
 # 5. build every benchmark once (the compilers run under the tracer too; census_out is /dev/null here)

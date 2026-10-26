@@ -1,0 +1,58 @@
+-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+ 100 - 100000 INSERTs into table with no index.....................    0.144s
+ 110 - 100000 ordered INSERTS with one index/PK....................    0.201s
+ 120 - 100000 unordered INSERTS with one index/PK..................    0.255s
+ 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    0.180s
+ 140 - 10 SELECTS, LIKE, unindexed.................................    0.246s
+ 142 - 10 SELECTS w/ORDER BY, unindexed............................    0.448s
+ 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    0.265s
+ 150 - CREATE INDEX five times.....................................    0.657s
+ 160 - 20000 SELECTS, numeric BETWEEN, indexed.....................    0.273s
+ 161 - 20000 SELECTS, numeric BETWEEN, PK..........................    0.254s
+ 170 - 20000 SELECTS, text BETWEEN, indexed........................    0.595s
+ 180 - 100000 INSERTS with three indexes...........................    0.614s
+ 190 - DELETE and REFILL one table.................................    0.619s
+ 200 - VACUUM......................................................    0.766s
+ 210 - ALTER TABLE ADD COLUMN, and query...........................    0.016s
+ 230 - 20000 UPDATES, numeric BETWEEN, indexed.....................    0.321s
+ 240 - 100000 UPDATES of individual rows...........................    0.569s
+ 250 - One big UPDATE of the whole 100000-row table................    0.093s
+ 260 - Query added column after filling............................    0.010s
+ 270 - 20000 DELETEs, numeric BETWEEN, indexed.....................    0.854s
+ 280 - 100000 DELETEs of individual rows...........................    0.785s
+ 290 - Refill two 100000-row tables using REPLACE..................    1.190s
+ 300 - Refill a 100000-row table using (b&1)==(a&1)................    0.524s
+ 310 - 20000 four-ways joins.......................................    1.201s
+ 320 - subquery in result set......................................    1.351s
+ 400 - 140000 REPLACE ops on an IPK................................    0.495s
+ 410 - 140000 SELECTS on an IPK....................................    2.032s
+ 500 - 140000 REPLACE on TEXT PK...................................    0.615s
+ 510 - 140000 SELECTS on a TEXT PK.................................    1.479s
+ 520 - 140000 SELECT DISTINCT......................................    0.214s
+ 980 - PRAGMA integrity_check......................................    1.339s
+ 990 - ANALYZE.....................................................    0.081s
+       TOTAL.......................................................   18.686s
+-- Compile option: COMPILER=gcc-15.2.0
+-- Compile option: THREADSAFE=1
+-- Lookaside Slots Used:        0 (max 0)
+-- Successful lookasides:       0
+-- Lookaside size faults:       4
+-- Lookaside OOM faults:        0
+-- Pager Heap Usage:            2108056 bytes
+-- Page cache hits:             10375907
+-- Page cache misses:           2686723
+-- Page cache writes:           886686
+-- Schema Heap Usage:           6728 bytes
+-- Statement Heap Usage:        0 bytes
+-- Memory Used (bytes):         0 (max 7572880)
+-- Outstanding Allocations:     0 (max 1163)
+-- Pcache Overflow Bytes:       0 (max 4061936)
+-- Largest Allocation:          3512373 bytes
+-- Largest Pcache Allocation:   4360 bytes
+-- Bytes received by read():    11130819364
+-- Bytes sent to write():       3904214678
+-- Read() system calls:         2996531
+-- Write() system calls:        1017133
+-- Bytes rcvd from storage:     0
+-- Bytes sent to storage:       420438016
+-- Cancelled write bytes:       86634496

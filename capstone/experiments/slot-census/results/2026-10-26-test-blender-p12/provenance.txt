@@ -1,0 +1,13 @@
+date 2026-10-26T06:29:25Z
+size test
+benchmarks 526.blender_r
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+f9b0f20429e24c1cd2eb47eeeeccccf309b093605d1978262487f4ee989bf629  slotcensus.c
+f7210f77035b73cb817a69be59b2ecccd1d15bc04b75ca60e72b88d90f0b34c0  control.c
+d6fb92c84ca94704abdc42ea08ac7ab84c1fef1b04988d34249f45d59b05972d  control_cxx.cc
+a2466f3de424bf5e2e2bbb67c8cbf3e6d6dcfa5054a46340f897a05f7254629b  slotcensus.so
+build rc=0 27s
+Build errors for fprate: None
+runs 20s

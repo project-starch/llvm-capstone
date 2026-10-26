@@ -1,0 +1,14 @@
+date 2026-10-26T06:09:40Z
+size train
+benchmarks 500.perlbench_r 502.gcc_r 505.mcf_r 520.omnetpp_r 523.xalancbmk_r 525.x264_r 531.deepsjeng_r 541.leela_r 557.xz_r 508.namd_r 510.parest_r 511.povray_r 519.lbm_r 526.blender_r 538.imagick_r 544.nab_r
+gcc 15.2.0 g++ 15.2.0
+glibc ldd (Ubuntu GLIBC 2.43-2ubuntu2.4) 2.43
+cpu  Intel(R) Xeon(R) Gold 6230 CPU @ 2.10GHz
+5dd46294f55f57f8ffeb7c9cc2d800bbe53bb7c6ac96690ae8cdc727a52a7f20  slotcensus.c
+f7210f77035b73cb817a69be59b2ecccd1d15bc04b75ca60e72b88d90f0b34c0  control.c
+d6fb92c84ca94704abdc42ea08ac7ab84c1fef1b04988d34249f45d59b05972d  control_cxx.cc
+a2466f3de424bf5e2e2bbb67c8cbf3e6d6dcfa5054a46340f897a05f7254629b  slotcensus.so
+build rc=0 218s
+Build errors for intrate: None
+Build errors for fprate: None
+runs 171s

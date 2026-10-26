@@ -1,0 +1,5 @@
+redis-10000	redis-server	valid	rc=0 dbsize=30003 82s
+redis-100000	redis-server	valid	rc=0 dbsize=286316 70s
+redis-1000000	redis-server	valid	rc=0 dbsize=2070608 74s
+redis-10000000	redis-server	valid	rc=0 dbsize=12172543 88s
+CENSUS_DONE

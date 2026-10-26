@@ -1,0 +1,3 @@
+EXPECT peak_live 4000
+EXPECT allocs 4000
+EXPECT forked 0

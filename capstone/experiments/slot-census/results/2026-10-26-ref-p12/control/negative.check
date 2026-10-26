@@ -1,0 +1,3 @@
+FAIL EXPECT: 0 census lines with forked=0 (want exactly 1)
+FAIL EXPECT_CHILD: 0 census lines with forked=1 (want exactly 1)
+CONTROL FAIL

@@ -1,0 +1,8 @@
+stored 1000000
+hits 1000000
+deleted 100000
+limit_maxbytes 8589934592
+bytes 152000001
+curr_items 900000
+total_items 1000000
+total_malloced 192937984
