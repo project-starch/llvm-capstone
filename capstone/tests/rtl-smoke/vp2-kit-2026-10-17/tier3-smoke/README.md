@@ -9939,3 +9939,26 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   0x3fd5555555555556 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555556 0x3ff6a09e667f3bcc
   0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x1`.
   - A difference between the boards is a cross-board finding.
+
+### R-63 on silicon, result: CONFIRMED ON SILICON on both boards, the SR/SV lines byte-identical across them (2026-10-26 20:19-20:20)
+
+- Records: `records/b2bs-fprm-bare-b1.result-lines.txt` and `-b2`. UART is in `fprm-bare/fp-rm/uart.txt` under each
+  board's run directory. The two boards' SR/SV lines compare equal with `cmp`.
+- **Both boards read SR 16 and the PREREG's bitstream-2 vector exactly:**
+  - RNE and RTZ are correct;
+  - under RDN the board gives RUP's results (1/3 rounds up to …556, -1/3 to …555, sqrt(2) to …bcd);
+  - under RUP it gives RDN's;
+  - under RMM sqrt(2) is truncated to …bcc;
+  - fflags reads 0x1 (NX).
+- **fprm-grade.py: R-63 CONFIRMED ON SILICON** on both boards. As pre-registered, N=2 cross-board.
+- **R-63 can touch none of the perf run's readings.** Checked over all 152 T1 images (perf/build/T1 and batch 2's
+  three) with `llvm-objdump --mattr=+f,+d`:
+  - **No fdiv or fsqrt carries a static directed mode.** The pattern for a trailing `rtz|rdn|rup|rmm` operand has a
+    positive control: it finds 8 in dtoa, on fcvt. The fdiv.d words read here encode rm 7, dynamic.
+  - **Each image writes fcsr once, in the runtime's `fesetenv`** (libapplication-runtime.a fenv.c). It sets a saved
+    environment, or 0 for the default.
+  - **No program object references fesetenv or fesetround.** By llvm-nm over perf/build{,2}/T1/obj, the only
+    references are the runtime's own pthread.c and signals.c (`U fesetenv`). Control: the same scan finds 26
+    `U memcpy`.
+  - So nothing in these images sets a directed mode (a restored environment can only carry what was saved), and
+    R-62 alone accounts for ludcmp and st.

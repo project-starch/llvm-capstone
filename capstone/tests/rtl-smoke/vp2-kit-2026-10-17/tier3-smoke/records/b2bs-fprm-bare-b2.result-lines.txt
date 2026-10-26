@@ -1,0 +1,9 @@
+# The rtl lane's R-63 rounding-mode bare kit (land/rtl-rm-kit 75f129f56497, fp-rm-bare-2026-10-26) on bitstream 2, board 2 (tier3-fprm-bare.sh;
+# pre-registered 411e93dc1ebc): the runner's result lines and fprm-grade.py's verdict against the kit's PREREG.md rules.
+RF fp-rm BEGIN 20:19:58 board 2 bitstream caplifive_vp2c_dcc6daf6e image 45a7397cc4d4f099 rec 0x80003000 booking 408
+RF fp-rm END rc=0 20:20:56 :: [sup 20:20:50] UART: begin=True SB1=True SR=['0000000000000010'] SV lines=16
+FPRM fp-rm read: SR ['0000000000000010'] :: 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x3fd5555555555556 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555556 0x3ff6a09e667f3bcc 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x1
+FPRM fp-rm want (bitstream 2): SR 16 :: 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x3fd5555555555556 0xbfd5555555555555 0x3ff6a09e667f3bcd 0x3fd5555555555555 0xbfd5555555555556 0x3ff6a09e667f3bcc 0x3fd5555555555555 0xbfd5555555555555 0x3ff6a09e667f3bcc 0x1
+FPRM R-63 CONFIRMED ON SILICON: RDN and RUP exchanged and RMM truncating, exactly as simulated
+RF GRADE rc=0
+RF board2 DONE 20:20:56
