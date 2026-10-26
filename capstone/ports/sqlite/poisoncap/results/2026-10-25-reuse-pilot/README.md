@@ -24,11 +24,11 @@ Block-sized bounds on our side match PoisonCap's allocation policy and bounds gr
 (request-sized bounds) makes SQLite allocate differently (1,306) and is a side note.
 
 PoisonCap side: their speedtest1 and SQLite built by `speedtest1/build.sh` (their pinned cheribuild,
-`--enable-memsys5`), wrapped by `reuse/build-reuse-poisoncap.sh`, run on the kernel with their FPGA
+`--enable-memsys5`), wrapped by `reuse/build-poisoncap.sh`, run on the kernel with their FPGA
 kernel's options, libc revocation on from the run (the protocol of the completed 20-test run). Sublet
 side: their speedtest1.c (one dead function removed, `reuse/make-speedtest1-capstone.py`, CheriBSD headers
-from `reuse/shim/`) with SQLite 3.22.0, built by `reuse/build-reuse-capstone.sh`, run on the dev-v6
-virtual platform by `reuse/run-reuse-capstone.py`.
+from `reuse/shim/`) with SQLite 3.22.0, built by `reuse/build-capstone.sh`, run on the dev-v6
+virtual platform by `reuse/run-capstone.py`.
 
 The pilot's Sublet rows (`pilots-size1.json`: images 55cc0ed6 / 086e9fd8, built with the wrapper before
 the review fixes) ran on the flat silicon-twin kit (`-DCAPSTONE_VM_FLAT_TABLE`, at most 65,536 records,
@@ -39,7 +39,7 @@ module (paged lifetime table, grows on demand), v7 QEMU with `x-capstone-test-cs
 `supervisor_slots=32`. There the qualified images (9836684d / 6bfe4d1b) give the pilot's bins exactly
 (`qualification.txt`, second and third parts). On the paged platform
 both Sublet arms complete `--size 20` (exit 0, 8,470 allocations, 7,835 reuses, identical bins).
-`reuse/launch-capstone-arm.sh` and `reuse/launch-poisoncap-arm.sh` start one result run each.
+`reuse/launch-capstone.sh` and `reuse/launch-poisoncap.sh` start one result run each.
 
 ## Qualification (`qualification.txt`)
 
@@ -58,7 +58,7 @@ pointers where SQLite's own fallback and default-cache calls pass const ones, th
 arguments are recorded in each result row (`module_args`), not in the `@@PARAMS` line.
 
 - **Native** (GNU ld, upstream memsys5): `reuse/test-reuse-wrap.c` prints every call and address;
-  `reuse/check-reuse-wrap.py` recomputes the counters and bins independently: ALL PASS, including output
+  `reuse/check-wrapper.py` recomputes the counters and bins independently: ALL PASS, including output
   identical with and without the wrapper and the SQL error control. A copy with the bin edges off by one
   fails it (negative control).
 - **Sublet arms** (stock, as ported, block-bounds, spatial-only): ALL PASS on the platform.
@@ -93,4 +93,7 @@ frees never fill its 4,096 entries, and it never holds 16 MiB. The two controls 
 own control.
 
 The size-1 plots are not kept: the result plots are `../2026-10-25-reuse-size100/plots/`, in the form
-the project lead approved on the pilot (`reuse/plot-reuse.py`).
+the project lead approved on the pilot (`reuse/plot.py`).
+
+The reuse/ tools were renamed on 2026-10-26, after every run here; qualification.txt and kit-comparison.txt
+keep the names they were produced with: `build-reuse-poisoncap.sh` is `build-poisoncap.sh`, `build-reuse-capstone.sh` is `build-capstone.sh`, `run-reuse-capstone.py` is `run-capstone.py`, `check-reuse-wrap.py` is `check-wrapper.py`, `qualify-reuse.py` is `qualify.py`, `collect-reuse.py` is `collect.py`, `plot-reuse.py` is `plot.py`, `launch-capstone-arm.sh` is `launch-capstone.sh`, `launch-poisoncap-arm.sh` is `launch-poisoncap.sh`.

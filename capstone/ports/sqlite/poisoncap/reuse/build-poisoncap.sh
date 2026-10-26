@@ -2,18 +2,19 @@
 # PoisonCap's speedtest1 with the reuse-distance wrapper linked in, and the wrapper's test programs,
 # all against their sqlite3.c and with their compiler and flags. Their sources are not touched.
 #
-#   bash platform/run-in-container.sh bash .../reuse/build-reuse-poisoncap.sh [VARIANT]   (memsys5 | memsys5-spatial)
+#   bash platform/run-in-container.sh bash .../reuse/build-poisoncap.sh [VARIANT]   (memsys5 | memsys5-spatial)
 #
 # Starts from speedtest1/build.sh's VARIANT build (default memsys5: their protection on; memsys5-spatial:
-# their NESTED_TEMPORAL switch off; it is rerun here, so the build directory is that variant's): cheribuild's configured build directory, whose Makefile gives the compiler, the flags,
-# the generated sqlite3.c and the speedtest1 link rule. Then:
+# their NESTED_TEMPORAL switch off; it is rerun here, so the build directory is that variant's):
+# cheribuild's configured build directory, whose Makefile gives the compiler, the flags, the generated
+# sqlite3.c and the speedtest1 link rule. Then:
 #   - reuse-wrap.o, compiled with the Makefile's own $(TCC) (compiler, flags, include paths and the
 #     feature defines, -DSQLITE_ENABLE_MEMSYS5 among them), in the build directory;
 #   - speedtest1 relinked by the Makefile's own rule, with TLIBS extended by reuse-wrap.o and
 #     -Wl,--wrap=sqlite3_config,--wrap=sqlite3_step,--wrap=sqlite3_reset (the old binary is removed
 #     first: the rule's prerequisites do not include TLIBS);
 #   - test-wrapped, test-traced (-DREUSE_WRAP_TRACE) and test-plain from test-reuse-wrap.c and the
-#     same sqlite3.c, for check-reuse-wrap.py on their platform.
+#     same sqlite3.c, for check-wrapper.py on their platform.
 # The --wrap routing is checked in the binaries' symbols: __wrap_sqlite3_config defined and the
 # program's references to sqlite3_config, sqlite3_step and sqlite3_reset bound to the wrappers.
 set -euo pipefail
