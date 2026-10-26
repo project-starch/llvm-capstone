@@ -27,8 +27,8 @@ PoisonCap side: their speedtest1 and SQLite built by `speedtest1/build.sh` (thei
 `--enable-memsys5`), wrapped by `reuse/build-poisoncap.sh`, run on the kernel with their FPGA
 kernel's options, libc revocation on from the run (the protocol of the completed 20-test run). Sublet
 side: their speedtest1.c (one dead function removed, `reuse/make-speedtest1-capstone.py`, CheriBSD headers
-from `reuse/shim/`) with SQLite 3.22.0, built by `reuse/build-capstone.sh`, run on the dev-v6
-virtual platform by `reuse/run-capstone.py`.
+from `reuse/shim/`) with SQLite 3.22.0, built by `reuse/build-sublet.sh`, run on the dev-v6
+virtual platform by `reuse/run-sublet.py`.
 
 The pilot's Sublet rows (`pilots-size1.json`: images 55cc0ed6 / 086e9fd8, built with the wrapper before
 the review fixes) ran on the flat silicon-twin kit (`-DCAPSTONE_VM_FLAT_TABLE`, at most 65,536 records,
@@ -39,7 +39,7 @@ module (paged lifetime table, grows on demand), v7 QEMU with `x-capstone-test-cs
 `supervisor_slots=32`. There the qualified images (9836684d / 6bfe4d1b) give the pilot's bins exactly
 (`qualification.txt`, second and third parts). On the paged platform
 both Sublet arms complete `--size 20` (exit 0, 8,470 allocations, 7,835 reuses, identical bins).
-`reuse/launch-capstone.sh` and `reuse/launch-poisoncap.sh` start one result run each.
+`reuse/launch-sublet.sh` and `reuse/launch-poisoncap.sh` start one result run each.
 
 ## Qualification (`qualification.txt`)
 
@@ -96,4 +96,4 @@ The size-1 plots are not kept: the result plots are `../2026-10-25-reuse-size100
 the project lead approved on the pilot (`reuse/plot.py`).
 
 The reuse/ tools were renamed on 2026-10-26, after every run here; qualification.txt and kit-comparison.txt
-keep the names they were produced with: `build-reuse-poisoncap.sh` is `build-poisoncap.sh`, `build-reuse-capstone.sh` is `build-capstone.sh`, `run-reuse-capstone.py` is `run-capstone.py`, `check-reuse-wrap.py` is `check-wrapper.py`, `qualify-reuse.py` is `qualify.py`, `collect-reuse.py` is `collect.py`, `plot-reuse.py` is `plot.py`, `launch-capstone-arm.sh` is `launch-capstone.sh`, `launch-poisoncap-arm.sh` is `launch-poisoncap.sh`.
+keep the names they were produced with: `build-reuse-poisoncap.sh` is `build-poisoncap.sh`, `build-reuse-capstone.sh` is `build-sublet.sh`, `run-reuse-capstone.py` is `run-sublet.py`, `check-reuse-wrap.py` is `check-wrapper.py`, `qualify-reuse.py` is `qualify.py`, `collect-reuse.py` is `collect.py`, `plot-reuse.py` is `plot.py`, `launch-capstone-arm.sh` is `launch-sublet.sh`, `launch-poisoncap-arm.sh` is `launch-poisoncap.sh`.

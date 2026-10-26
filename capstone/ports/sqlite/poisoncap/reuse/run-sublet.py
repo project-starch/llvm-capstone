@@ -2,7 +2,7 @@
 """Run images on virtual Capstone in ONE staged boot (runtime/virtual/run-staged.py), each in an empty
 directory, with its own arguments.
 
-    run-capstone.py --platform DIR --work NEW --run NAME=IMAGE[:ARGS] [--run ...] [--timeout S]
+    run-sublet.py --platform DIR --work NEW --run NAME=IMAGE[:ARGS] [--run ...] [--timeout S]
                           [--per-process S]
 
 platform: qemu-system-riscv64, images/{fw_jump.elf,Image,rootfs.ext2}, adapter/{capstone-vexec,

@@ -2,7 +2,7 @@
 # The Capstone side of the reuse-distance comparison: PoisonCap's speedtest1 driver on virtual Capstone,
 # with the same wrapper, against three memsys5 arms, and the wrapper's test programs per arm.
 #
-#   bash build-capstone.sh SDK AMALGAMATION OUT
+#   bash build-sublet.sh SDK AMALGAMATION OUT
 #     SDK           a virtual-profile SDK directory (capstone-cc, sdk.json)
 #     AMALGAMATION  SQLite 3.22.0's amalgamation directory (sqlite3.c 7fc92e19..., sqlite3.h)
 #

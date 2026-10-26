@@ -6,7 +6,7 @@ and plot one figure per system.
 
 MIRROR holds copies of the hosts' run directories, one per host: MIRROR/<host>/speedtest1/reuse-size100/
 set<N>-poisoncap-{off,on}/result.json (speedtest1/run.py) and MIRROR/<host>/reuse-capstone-runs/
-set<N>-sublet-{off,on}/results.jsonl (run-capstone.py, row <arm>-size100: spatial is off,
+set<N>-sublet-{off,on}/results.jsonl (run-sublet.py, row <arm>-size100: spatial is off,
 block-bounds on). A run directory without its record is still running and is skipped.
 
 OUT gets runs.json (each run's result lines only: hashes, exit status, the test times, the wrapper's two

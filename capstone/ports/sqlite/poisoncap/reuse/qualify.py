@@ -2,7 +2,7 @@
 """Qualify the reuse-distance instrument on a platform before any speedtest1 number counts.
 
     qualify.py poisoncap QUAL_DIR          (speedtest1/run.py runs: QUAL_DIR/<name>/result.json)
-    qualify.py capstone RESULTS_JSONL ARM  (run-capstone.py rows named <arm>-<name>)
+    qualify.py capstone RESULTS_JSONL ARM  (run-sublet.py rows named <arm>-<name>)
 
 Names: test-wrapped, test-traced, test-plain, st-wrapped-size1 (or st-size1), st-plain-size1.
   1. check-wrapper.py on the three test programs (the independent oracle, the identities, the SQL
