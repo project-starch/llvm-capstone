@@ -119,3 +119,124 @@ Scope:
 - This is QEMU with two slots. QEMU keeps the caller internally, so it measures the frame's reachability, which is the
   fix's claim, not the RTL restore.
 - On today's one-slot bitstreams the create is refused first, and the board path never reaches the retire.
+
+## Pre-registered 2026-10-26, before any boot: the same pair on the collaborator PR stack (#250 #264 #258 #273 #274 #282)
+
+Requested by the runtime lane before it lands the stack on dev. #250 rewrites the arena registry the retire looks up
+(`find_arena`), #273 changes the image format (two load segments) and #282 the CV_STEP record. The retire block itself
+is byte-identical: `s21-prefix.patch` applies to the merged source at an offset of 156 lines.
+
+- **Tree:** the runtime lane's local merge chain fca004e7e063 on dev 8b2f10bed0c1, checked out clean in a worktree of
+  this lane's. capstone_vm.c a4e5486fa5ce5b0a (dev's is e3da522ee472c743).
+- **Modules** (18-bit flat, the twin recipe, QEMU headers = capstone-qemu 46b69c03a4's `cap_rev_table_abi.h`, no RVC):
+  - prkitA: the merged source, module 9ab2eb23fac728ba.
+  - prkitB: the same minus the retire block (source 97073d4f9fc46086, no `child frame grant not retired` line), module
+    459a8096258e9afd.
+- **Kits:** qkit7-b2twin3-q8 (QEMU 708bbff5663f0e86, firmware and images hard-linked) with two supervisor slots and the
+  merged tree's launcher, capstone-vexec 62753dd693cc4a25 (equal to the runtime lane's adapter-merged build). They differ
+  ONLY by the module.
+- **Image:** frame-contract.c ba0b697e74e0289b (unchanged from dev), built with an SDK made from the merged tree (runtime
+  43e6e03abba0dffc) and the frozen bitstream-2 compiler t3-freeze-r60: pr-frame-contract.dom 1ad2b7649cb31b96, two LOAD
+  segments (R E, RW). The compiler PRs in the stack (#283, #275) are not in this image. The image is the same on both
+  kits, so the compiler is not a variable here.
+- **Run:** one boot per kit, insmod `supervisor_slots=2 diag_emerg=1`, modes in order twice, copy, prewrite, write-live
+  (write-live last, because its child never exits). Same harness as above (virtualvm, unchanged between dev and the merge).
+
+Predicted readings:
+
+| mode | prkitA (fix a) | prkitB (no retire) |
+|---|---|---|
+| twice | first > 0, second = -16, child_ran=1, exit 0 | the same |
+| copy | cause 25 (the exit-unmap race above: NOT separating) | cause 25 |
+| prewrite | WROTE | WROTE |
+| write-live | created > 0, child_ran=1, then cause 25 at frame+0x400; no WROTE | created > 0, child_ran=1, WROTE |
+
+Must-fire lines on both: slot gate OK, banner `supervisor_slots=2`, `already backs a thread` 1 and `thread create
+refused` 1 (from twice), `child frame grant not retired` 0, halts 0.
+
+**What counts against fix (a) on the stack:** a WROTE in prkitA's write-live, or prkitA's write-live create refused
+(created ≤ 0) when prkitB's succeeds, which would mean #250's registry no longer lets the retire find the frame arena.
+**What voids the run:** prewrite not landing on either kit, prkitB's write-live faulting, or twice not reading -16 on
+either kit.
+
+### Addendum, before the re-run: the first boot pair was VOID on its image, which is rebuilt with the merged compiler
+
+- **What the pair read** (pr-frame-contract.dom 1ad2b7649cb31b96): on BOTH kits, every step, prewrite included, died
+  before `main` with cause 15 (store page fault) at `__capstone_cap_init`+0x38 (`stc a2, 0(a0)`), address
+  `__atexit_lockptr`. That is musl's `const` capability-initialised holder, which this compiler put in `.rodata`, so in the
+  R+X segment that the stack's launcher maps from the file without write permission. Prewrite did not land, so by the
+  rule above the run is void. It says nothing about fix (a). Module lines: banner and `supervisor_slots=2` on both,
+  halts 0.
+- **The premise that failed:** "the compiler is not a variable here". The stack's `link.ld` relies on the compiler
+  placing such holders in `.data` (#265, `49c1b69212eb`, on dev since 2026-10-21). t3-freeze-r60 (8807df747411) predates it,
+  and so does the 2026-10-20 cc-dev (c0ccf4f36b32), whose musl object also has the holder in `.rodata`.
+- **The change:** the SDK and image are rebuilt from the same tree with the stack's own compiler, cc-prmerged
+  (clang fca004e7e063, binary b90e13006a016791, which carries #265, #283 and #275). Runtime 35c55ea403065902, and
+  pr-frame-contract2.dom e06ee57a55ba7574, where `__atexit_lockptr` is in `.data` (the RW segment). Modules, kits,
+  launcher, modes, predictions and voiding rules are unchanged.
+- **For the stack itself:** under the stack's launcher, an image from a compiler without #265 dies at start-up whenever
+  it carries a `const` capability-initialised holder, as this one does through musl's `__atexit_lockptr`. That may
+  include bitstream-2 reference images built with t3-freeze-r60; it has not been checked image by image. This is a
+  compatibility consequence of #273/#274, reported to the runtime lane, not a defect claim.
+
+## Read 2026-10-26 (pr-frame-contract2.dom e06ee57a55ba7574): fix (a) separates on the stack; `copy` deviates on prkitB
+
+| mode | prkitA (fix a) | prkitB (no retire) |
+|---|---|---|
+| twice | first=1 second=-16, child_ran=1 | first=1 second=-16, child_ran=1 |
+| copy | cause 25 | **SURVIVED read=3 (exit 1)**, predicted 25 |
+| prewrite | WROTE | WROTE |
+| write-live | created=1 child_ran=1, then cause 25 at frame+0x400; no WROTE | created=1 child_ran=1, WROTE frame+1024, +1120, +1408 |
+
+On both kits: slot gate OK, banner `supervisor_slots=2`, `already backs a thread` 1, `thread create refused` 1,
+`child frame grant not retired` 0, halts 0. Every voiding rule passes and nothing counts against fix (a). **On the
+stack, as on dev, the domain cannot write a live child's frame with the retire and can without it.**
+
+**The deviation, reported as found:** `copy` on prkitB survived where 25 was predicted. `copy` reads with no wait, so
+it races the launcher's exit unmap (`exec.c`, after CV_THREAD_EXIT, identical in both trees). Two readings fit and this
+pair cannot tell them apart:
+- the race moved (for example #282's shorter service round lets the parent read first);
+- the stack's exit unmap no longer retires the frame. `unmap_arena(request.frame, 4096)` returning -EINVAL is
+  tolerated silently, and #250 rewrote the registry it looks the frame up in.
+
+### Pre-registered before any boot: `copy-exited`, the discriminator
+
+- **New mode** in frame-contract.c (cd2c3d16290da162): a `child_flag` child. The parent waits for the flag, sleeps
+  0.5 s and spins 4×10^8, then reads its copy. The child has then exited and the launcher has run its exit unmap.
+- **Images:** pr-frame-contract3.dom 37c6f82232f3c078 (pr-sdk2, cc-prmerged, v7) for prkitA/prkitB, run as `copy`
+  then `copy-exited`. dev-frame-contract3.dom 3dc08fb66c4566e6 (t3-freeze-nb-nomovc-cw-r60 SDK, v6, the SDK whose images
+  ran on kitA/kitB above) for dev's kitA/kitB, run as `copy-exited`. One boot per kit, same insmod arguments.
+
+| kit | copy-exited predicted |
+|---|---|
+| kitA (dev, fix a) | cause 25 |
+| kitB (dev, no retire): **the control** that the wait is long enough | cause 25 (dev's exit unmap retires the frame) |
+| prkitA (stack, fix a) | cause 25 |
+| prkitB (stack, no retire) | 25 if the stack's exit unmap retires the frame; SURVIVED if it does not |
+
+- **Void:** kitB SURVIVES (the wait is too short to show anything), or any create ≤ 0, or child_ran=0.
+- **Reading:** prkitB 25 → `copy`'s survival was the race, and the stack's exit unmap works. prkitB SURVIVED with
+  kitB 25 → the stack's child-exit unmap no longer retires the frame, a finding against #250/#264 for the runtime lane.
+  `copy` on prkitB is repeated for N=2 and is reported either way.
+
+### Read 2026-10-26: the deviation was the race; the stack's exit unmap still retires the frame
+
+| kit | image | copy | copy-exited |
+|---|---|---|---|
+| kitA (dev, fix a) | dev-frame-contract3.dom 3dc08fb6 | (not run) | created=1 child_ran=1, cause 25 |
+| kitB (dev, no retire): the control | dev-frame-contract3.dom 3dc08fb6 | (not run) | created=1 child_ran=1, cause 25 |
+| prkitA (stack, fix a) | pr-frame-contract3.dom 37c6f822 | cause 25 | created=1 child_ran=1, cause 25 |
+| prkitB (stack, no retire) | pr-frame-contract3.dom 37c6f822 | **cause 25** | created=1 child_ran=1, cause 25 |
+
+All four boots: slot gate OK, banner `supervisor_slots=2`, `child frame grant not retired` 0, halts 0.
+
+- **The control fired:** with no retire at create, dev's kitB faults after the child's exit. So the wait is long enough
+  for the exit unmap to run, and a 25 on prkitB is that unmap's retire.
+- **prkitB reads 25 after the exit:** under #250's registry the launcher's child-exit unmap still finds and retires the
+  frame. The second reading is ruled out.
+- **`copy` on prkitB:** SURVIVED once and 25 once. That is the race between the parent's read and the child's exit
+  unmap, as `copy`'s note already says. It was predicted as 25 on both kits, and that prediction was wrong only in
+  treating a race as having a fixed outcome.
+
+**Overall, on the PR stack (merge chain fca004e7e063):** fix (a) separates exactly as on dev (write-live: 25 with the
+retire, WROTE without), and the frame is still retired at child exit.
