@@ -118,8 +118,8 @@ Complete (2026-10-24): the result is `bug-corpora/sqlite/engine-repros/results/2
 |---|---|---|
 | 1 | `ports/sqlite/poisoncap/corpus/prepare-sqlite.py WORK`: artifact by its pin, `sqlite/` extracted, `mem5.c` checked against the audit hash, both amalgamations generated in a fixed environment | done |
 | 2 | Platform on p13: `ports/sqlite/poisoncap/platform/build.sh` (the recipe's `prepare.py` and `platform.sh` in a pinned container), then `platform/smoke-test.py` | done |
-| 3 | `build-poisoncap.py`: the corpus `case.c` files for CheriBSD purecap against each amalgamation (static heap with `CHERI_PERM_POISON` removed, `REPRO322_POISONCAP`) | done |
-| 4 | Runner (`guest-run.py`) and scoring (`verdicts.py`): one boot, controls first, per-case exit, signal, kernel report and fault site | done |
+| 3 | `corpus/build-cases.py`: the corpus `case.c` files for CheriBSD purecap against each amalgamation (static heap with `CHERI_PERM_POISON` removed, `REPRO322_POISONCAP`) | done |
+| 4 | Runner (`corpus/run-cases.py`) and scoring (`corpus/score-cases.py`): one boot, controls first, per-case exit, signal, kernel report and fault site | done |
 | 5 | Predictions committed, then the run, twice | done |
 
 Step 1, 2026-10-24 (WORK `/tmp/capstone/sqlite-poisoncap-corpus`, 65 s): archive sha256

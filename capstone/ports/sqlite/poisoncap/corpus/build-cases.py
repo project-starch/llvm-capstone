@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Build the SQLite 3.22.0 engine corpus for PoisonCap's published platform (CheriBSD purecap).
 
-    build-poisoncap.py --platform DIR --amalgamation DIR --ext-src DIR --out NEW_DIR [--no-lookaside]
+    build-cases.py --platform DIR --amalgamation DIR --ext-src DIR --out NEW_DIR [--no-lookaside]
 
 The sibling of ports/sqlite/repro322/build-virtual.py, and deliberately built from it: the case
 list, the tag-to-group manifest and the per-group feature flags come from that file's own
@@ -18,9 +18,11 @@ drift between our arms and this one. What differs, and why:
   * -lpthread: SQLite is built thread-safe, as on our arms, and FreeBSD keeps pthreads out of libc;
   * the amalgamation is PoisonCap's (prepare-sqlite.py: published or spatial), staged as a copy
     with the same two source fixes every arm compiles.
-The memsys5 arm only: SQLITE_CONFIG_HEAP over the static array, as --memsys5 there.
+The memsys5 arm only: SQLITE_CONFIG_HEAP over the static array, as --memsys5 there. The controls
+(controls/*.c) are built with the same harness, flags and core-group engine as the cases.
 """
 import argparse
+from dataclasses import dataclass
 import importlib.util
 import json
 from pathlib import Path
@@ -39,6 +41,30 @@ PURECAP = ['--target=riscv64-unknown-freebsd', '-march=rv64imafdcxcheri', '-mabi
 CONFIG = ['-DSQLITE_MALLOCSIZE=malloc_usable_size', '-include', 'malloc_np.h']
 FIXES = (('fts5-azarg-patch.py', '(azArg ? &azArg[1] : 0)'),
          ('fts3-doclist-null-patch.py', 'pDL->aAll ? &pDL->aAll[pDL->nAll] : 0'))
+# Cases that compile an extension from SQLite's ext/ tree beside case.c: its file and include flags.
+EXTENSIONS = {'expertrem': ('expert/sqlite3expert.c', ['-Iexpert']),
+              'spellfixoom': ('misc/spellfix.c', ['-DSQLITE_CORE', '-Imisc'])}
+
+
+@dataclass
+class Compiler:
+    """PoisonCap's clang for one build: the engine compile and the program link every binary uses."""
+    cc: Path
+    target: list
+    opt: str
+    amalgamation: Path
+    no_lookaside: bool
+
+    def engine(self, group_flags, source, obj):
+        return [str(self.cc), *self.target, self.opt, *CONFIG, *group_flags, '-DSQLITE_ENABLE_MEMSYS5',
+                f'-I{self.amalgamation}', '-c', str(source), '-o', str(obj)]
+
+    def program(self, group_flags, extra, sources, engine_obj, binary):
+        return [str(self.cc), *self.target, self.opt, '-DREPRO322_VIRTUAL', '-DREPRO322_VIRTUAL_MEMSYS5',
+                '-DREPRO322_POISONCAP', *(['-DREPRO322_NO_LOOKASIDE'] if self.no_lookaside else []),
+                f'-I{REPO}/capstone/runtime/include', *CONFIG, *group_flags, *extra,
+                f'-I{REPRO}', f'-I{self.amalgamation}', *sources, str(engine_obj), '-lm', '-lpthread',
+                '-o', str(binary)]
 
 
 def run(command, log):
@@ -46,6 +72,48 @@ def run(command, log):
         stream.write(' '.join(command) + '\n')
         stream.flush()
         return subprocess.run(command, stdout=stream, stderr=subprocess.STDOUT).returncode == 0
+
+
+def stage_amalgamation(amalgamation, out):
+    """OUT/src/sqlite3.c: the amalgamation with the two source fixes every arm compiles, each applied
+    unless the source already has it."""
+    (out / 'src').mkdir()
+    source = out / 'src/sqlite3.c'
+    source.write_bytes((amalgamation / 'sqlite3.c').read_bytes())
+    for script, marker in FIXES:
+        if marker not in source.read_text(errors='replace'):
+            done = subprocess.run([sys.executable, str(REPO / 'capstone/ports/sqlite' / script), str(source)],
+                                  capture_output=True, text=True)
+            if done.returncode:
+                sys.exit(f'{script} failed: {done.stdout}{done.stderr}')
+    return source
+
+
+def build_engines(compiler, flags, groups, source, out):
+    """One engine object per feature group; the groups that failed to compile are left out."""
+    engine = {}
+    for group in sorted(groups):
+        obj = out / 'obj' / f'sqlite3-{group}.o'
+        if run(compiler.engine(flags[group], source, obj), out / f'engine-{group}.log'):
+            engine[group] = obj
+        print(f'  engine {group:<10} {"OK" if group in engine else "FAIL"}')
+    return engine
+
+
+def case_inputs(case, tag, extra, ext_src, heap_bytes):
+    """A case's sources and extra flags: case.c, the in-memory VFS when it uses one, the extension
+    source two cases need with its include flags, and --heap-bytes's heap size when given."""
+    sources = [str(case / 'case.c')]
+    if 'repro_memfs' in (case / 'case.c').read_text():
+        sources.append(str(REPRO / 'repro322_memfs.c'))
+    extension_flags = []
+    if tag in EXTENSIONS:
+        relative, options = EXTENSIONS[tag]
+        sources.append(str(ext_src / 'ext' / relative))
+        extension_flags = [o if not o.startswith('-I') else f'-I{ext_src}/ext/{o[2:]}' for o in options]
+    if heap_bytes:
+        extra = [e for e in extra if not e.startswith('-DSQLITE_HEAP_SIZE=')] + [f'-DSQLITE_HEAP_SIZE={heap_bytes}']
+    return sources, [*extra, *extension_flags]
 
 
 def main():
@@ -69,79 +137,38 @@ def main():
             sys.exit(f'missing {need}')
     a.out.mkdir(parents=True, exist_ok=False)
     (a.out / 'obj').mkdir()
-    target = [*PURECAP, f'--sysroot={sysroot}']
+    compiler = Compiler(cc, [*PURECAP, f'--sysroot={sysroot}'], a.opt, a.amalgamation, a.no_lookaside)
 
     flags, cases = build_virtual.group_flags(), build_virtual.case_groups()
     if a.only:
         keep = set(a.only.split(','))
         cases = {c: v for c, v in cases.items() if c.name[:2] in keep}
-
-    staged = a.out / 'src'
-    staged.mkdir()
-    source = staged / 'sqlite3.c'
-    source.write_bytes((a.amalgamation / 'sqlite3.c').read_bytes())
-    for script, marker in FIXES:
-        if marker not in source.read_text(errors='replace'):
-            done = subprocess.run([sys.executable, str(REPO / 'capstone/ports/sqlite' / script), str(source)],
-                                  capture_output=True, text=True)
-            if done.returncode:
-                sys.exit(f'{script} failed: {done.stdout}{done.stderr}')
-
-    engine = {}
+    source = stage_amalgamation(a.amalgamation, a.out)
     # core always: the controls link against it, whatever --only selects.
-    for group in sorted({g for _, g, _ in cases.values()} | {'core'}):
-        obj = a.out / 'obj' / f'sqlite3-{group}.o'
-        command = [str(cc), *target, a.opt, *CONFIG, *flags[group], '-DSQLITE_ENABLE_MEMSYS5',
-                   f'-I{a.amalgamation}', '-c', str(source), '-o', str(obj)]
-        if run(command, a.out / f'engine-{group}.log'):
-            engine[group] = obj
-        print(f'  engine {group:<10} {"OK" if group in engine else "FAIL"}')
+    engine = build_engines(compiler, flags, {g for _, g, _ in cases.values()} | {'core'}, source, a.out)
 
-    extension = {'expertrem': ('expert/sqlite3expert.c', ['-Iexpert']),
-                 'spellfixoom': ('misc/spellfix.c', ['-DSQLITE_CORE', '-Imisc'])}
-    built, failed = [], []
+    built, controls, failed = [], [], []
     for case, (tag, group, extra) in sorted(cases.items()):
         if group not in engine:
             failed.append(case.name)
             continue
-        body = (case / 'case.c').read_text()
-        sources = [str(case / 'case.c')]
-        if 'repro_memfs' in body:
-            sources.append(str(REPRO / 'repro322_memfs.c'))
-        extra_inc = []
-        if tag in extension:
-            relative, options = extension[tag]
-            sources.append(str(a.ext_src / 'ext' / relative))
-            extra_inc = [o if not o.startswith('-I') else f'-I{a.ext_src}/ext/{o[2:]}' for o in options]
-        binary = a.out / case.name
-        if a.heap_bytes:
-            extra = [e for e in extra if not e.startswith('-DSQLITE_HEAP_SIZE=')] + [f'-DSQLITE_HEAP_SIZE={a.heap_bytes}']
-        command = [str(cc), *target, a.opt, '-DREPRO322_VIRTUAL', '-DREPRO322_VIRTUAL_MEMSYS5',
-                   '-DREPRO322_POISONCAP', *(['-DREPRO322_NO_LOOKASIDE'] if a.no_lookaside else []),
-                   f'-I{REPO}/capstone/runtime/include', *CONFIG, *flags[group], *extra, *extra_inc,
-                   f'-I{REPRO}', f'-I{a.amalgamation}', *sources, str(engine[group]), '-lm', '-lpthread',
-                   '-o', str(binary)]
-        ok = run(command, a.out / f'{case.name}.log')
+        sources, case_flags = case_inputs(case, tag, extra, a.ext_src, a.heap_bytes)
+        ok = run(compiler.program(flags[group], case_flags, sources, engine[group], a.out / case.name),
+                 a.out / f'{case.name}.log')
         (built if ok else failed).append(case.name)
         print(f'  {case.name:<52} {"OK" if ok else "FAIL"} [{group}]')
-    # The controls (controls/*.c): same harness, flags and core-group engine as the cases.
-    controls = []
     for control in sorted((HERE / 'controls').glob('*.c')):
         if 'core' not in engine:
             failed.append(control.name)
             continue
-        binary = a.out / control.stem
-        command = [str(cc), *target, a.opt, '-DREPRO322_VIRTUAL', '-DREPRO322_VIRTUAL_MEMSYS5',
-                   '-DREPRO322_POISONCAP', *(['-DREPRO322_NO_LOOKASIDE'] if a.no_lookaside else []),
-                   f'-I{REPO}/capstone/runtime/include', *CONFIG, *flags['core'],
-                   f'-I{REPRO}', f'-I{a.amalgamation}', str(control), str(engine['core']),
-                   '-lm', '-lpthread', '-o', str(binary)]
-        ok = run(command, a.out / f'{control.stem}.log')
+        ok = run(compiler.program(flags['core'], [], [str(control)], engine['core'], a.out / control.stem),
+                 a.out / f'{control.stem}.log')
         (controls if ok else failed).append(control.stem)
         print(f'  control {control.stem:<44} {"OK" if ok else "FAIL"}')
+
     (a.out / 'build.json').write_text(json.dumps(dict(
-        compiler=str(cc), target=target, amalgamation=str(a.amalgamation), opt=a.opt, heap_bytes=a.heap_bytes,
-        no_lookaside=a.no_lookaside, groups={g: flags[g] for g in sorted(engine)},
+        compiler=str(cc), target=compiler.target, amalgamation=str(a.amalgamation), opt=a.opt,
+        heap_bytes=a.heap_bytes, no_lookaside=a.no_lookaside, groups={g: flags[g] for g in sorted(engine)},
         cases={c.name: dict(tag=t, group=g, extra=e) for c, (t, g, e) in cases.items()},
         built=built, controls=controls, failed=failed), indent=2) + '\n')
     print(f'built={len(built)} failed={len(failed)} ({a.out})')

@@ -22,7 +22,7 @@ was read is its author's statement; the timestamps allow it and cannot show it.
 
 ## Heap arms: only the heap size differs
 
-`runs/heap8-la` and `runs/heap32-la` were built by `build-poisoncap.py --heap-bytes`. Against the
+`runs/heap8-la` and `runs/heap32-la` were built by `corpus/build-cases.py --heap-bytes`. Against the
 `published-la` build, on the run host: `src/sqlite3.c` is byte-identical (`cmp`); the engine compile
 commands (`engine-core.log`, `engine-fts3.log`, `engine-rtree.log`, first line) are identical once the
 build directory's own name is removed; the case compile commands for 07, 21 and 23 differ by exactly one
@@ -58,4 +58,7 @@ The measurement this explains is `runs/ev3-la`, control `uaf_offsets`
 128-byte block (a 100-byte request), frees it, and reads one byte at that offset through a pointer
 derived before the free. Offsets 0-31, 55
 and 127: SIGPROT (code 3) at exactly the 16 offsets with bit 1 clear, a normal exit at the 18 with bit 1
-set, 34 of 34. Case 15's stale read is at 0x236c37, which has bit 1 set (`runs/diag3-la`).
+set, 34 of 34. Case 15's stale read is at 0x236c37, which has bit 1 set (`runs/diag3-la`). The same run
+read offset 0x37 of a freed block twice more, after a read through the same pointer before the free
+(`uaf_read_before_free`) and without one (`uaf_interior`): both returned, so the earlier read is not what
+lets case 15's access through; offset 0x37 has bit 1 set either way.

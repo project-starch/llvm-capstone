@@ -5,7 +5,7 @@ is the harness around it.
 
 | folder | what | results |
 |---|---|---|
-| `platform/` | their platform (LLVM, QEMU, CheriBSD) built in a pinned container, the NODEBUG kernel with their FPGA kernel's options, a smoke test | — |
+| `platform/` | their platform (LLVM, QEMU, CheriBSD) built in a pinned container, the NODEBUG kernel with their FPGA kernel's options, the guest every runner boots (`poisoncap_guest.py`), a smoke test | — |
 | `corpus/` | the SQLite engine corpus's temporal cases on their memsys5: build, run, score | `bug-corpora/sqlite/engine-repros/results/2026-10-24-poisoncap/` |
 | `speedtest1/` | their own benchmark, built and run as published | `results/2026-10-25-speedtest1/` |
 | `reuse/` | reuse distance at memsys5 on both systems: instrument, qualification, runs, plots | `results/2026-10-25-reuse-pilot/`, `results/2026-10-25-reuse-size100/` |

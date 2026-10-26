@@ -33,7 +33,6 @@ start-up on a poison fault (2 of 2 runs, 2026-10-25) where it does not with stdo
 import argparse
 import hashlib
 import json
-import os
 from pathlib import Path
 import re
 import subprocess
@@ -41,9 +40,8 @@ import sys
 import threading
 import time
 
-REPO = Path(__file__).resolve().parents[5]
-sys.path.insert(0, str(REPO / 'capstone/ports/common/host/cheribsd'))
-from guest import Guest  # noqa: E402
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'platform'))
+import poisoncap_guest  # noqa: E402
 
 TEST = re.compile(r'^\s*(\d{3}) - (.*?)\.{3,}\s*([0-9.]+)s\s*$', re.M)
 STARTED = re.compile(r'^\s*(\d{3}) - (.*?)\.{3,}', re.M)
@@ -71,9 +69,7 @@ def main():
     p.add_argument('--binary', type=Path, required=True)
     p.add_argument('--args', default='', help='speedtest1 arguments; none by default, as their driver')
     p.add_argument('--timeout', type=int, default=4 * 3600)
-    p.add_argument('--platform', type=Path,
-                   default=Path(os.environ.get('POISONCAP_PLATFORM', Path.home() / 'poisoncap-platform')))
-    p.add_argument('--port', type=int, default=10089)
+    poisoncap_guest.add_platform_arguments(p, port=10089)
     p.add_argument('--revocation-default-off', action='store_true',
                    help='set the libc revocation default to 0 from the single-user shell, before sshd starts. '
                         'With it left on, this build panics (debug kernel) or stops answering (NODEBUG) during '
@@ -98,8 +94,8 @@ def main():
     (a.out / 'vm').mkdir(parents=True, exist_ok=False)
     work = a.platform / 'work'
     kernel_root = a.kernel_root or work / 'output/rootfs-riscv64-purecap'
-    guest = Guest(work / 'sdk', kernel_root, work / 'output/cheribsd-riscv64-purecap.img', a.out / 'vm', a.port,
-                  disable_default_revocation=a.revocation_default_off)
+    guest = poisoncap_guest.new_guest(a.platform, a.out / 'vm', a.port, kernel_root=kernel_root,
+                                      revocation_default_off=a.revocation_default_off)
     serial = a.out / 'vm/serial.log'
     command = './speedtest1' + (' ' + a.args if a.args else '')
     res = {'invocation': scrub(' '.join(sys.argv)), 'command': command, 'timeout': a.timeout,
