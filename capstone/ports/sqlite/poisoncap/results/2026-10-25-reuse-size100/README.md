@@ -31,7 +31,7 @@ pilot README; the qualification of every binary named here is in its `qualificat
 | 3 | p12; aad6a979 / 97b02659 | p13; 9836684d / 6bfe4d1b |
 
 PoisonCap: E3c protocol (their FPGA kernel's options, libc revocation default 0 at boot and 1 from the run),
-`reuse/launch-poisoncap.sh`. Sublet: the paged virtual platform, `reuse/launch-capstone.sh`.
+`reuse/launch-poisoncap.sh`. Sublet: the paged virtual platform, `reuse/launch-sublet.sh`.
 
 ## Result
 
@@ -51,4 +51,4 @@ PoisonCap: E3c protocol (their FPGA kernel's options, libc revocation default 0 
   Not a cost comparison (different platforms, shared hosts).
 
 The reuse/ tools were renamed on 2026-10-26, after every run here; qualification.txt and kit-comparison.txt
-keep the names they were produced with: `build-reuse-poisoncap.sh` is `build-poisoncap.sh`, `build-reuse-capstone.sh` is `build-capstone.sh`, `run-reuse-capstone.py` is `run-capstone.py`, `check-reuse-wrap.py` is `check-wrapper.py`, `qualify-reuse.py` is `qualify.py`, `collect-reuse.py` is `collect.py`, `plot-reuse.py` is `plot.py`, `launch-capstone-arm.sh` is `launch-capstone.sh`, `launch-poisoncap-arm.sh` is `launch-poisoncap.sh`.
+keep the names they were produced with: `build-reuse-poisoncap.sh` is `build-poisoncap.sh`, `build-reuse-capstone.sh` is `build-sublet.sh`, `run-reuse-capstone.py` is `run-sublet.py`, `check-reuse-wrap.py` is `check-wrapper.py`, `qualify-reuse.py` is `qualify.py`, `collect-reuse.py` is `collect.py`, `plot-reuse.py` is `plot.py`, `launch-capstone-arm.sh` is `launch-sublet.sh`, `launch-poisoncap-arm.sh` is `launch-poisoncap.sh`.
