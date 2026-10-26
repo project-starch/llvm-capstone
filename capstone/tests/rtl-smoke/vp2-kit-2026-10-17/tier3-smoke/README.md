@@ -9759,3 +9759,23 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - **What does constrain arithmetic in this run is check=,** the state hash. Prediction 2 makes it equal across arms
     and iterations, and that holds. It does not compare against IEEE. Against the twin's check= values (the runtime
     lane's), it would.
+
+### Silicon check= against the twin's, per program, k1+k2 (2026-10-26 18:5x): 29 equal, minver differs, 20 carry no state hash
+
+- **The twin's values:** the runtime lane's `perf/twin-checks.tsv`, 105 programs with one check= each, from the QEMU
+  functional pass on kit-twin-bench. T1, T2 and native agree there; twin minver is 0xd6cc5fbda167dc7b over 33
+  readings.
+  - The runtime lane makes this comparison a required gate per program.
+- **`checks-diff.py`** (record `records/b2bs-perfmain-checks-k1k2.txt`). Over the 50 programs of k1+k2, each
+  silicon value is one per program across every iteration and both arms (no SPLIT):
+  - **29 EQUAL** with a real state hash;
+  - **1 DIFFERS:** minver, silicon 0x74ceeb9e3de2c383 against the twin's 0xd6cc5fbda167dc7b, silently, its VERIFY
+    being a no-op;
+  - **20 NO-HASH:** check= is 0x0 on both sides, because the program prints no state hash. Equality there tests
+    nothing. ludcmp and st are among them, caught only by their real VERIFY.
+- **A first version counted 0x0 = 0x0 as EQUAL** and read 49 of 50. A gate that cannot fire was being counted as a
+  pass. In the twin file, 42 of 105 programs read 0x0.
+- **Programs that no check reaches at all:** upstream's no-op verify AND check=0x0, 8 programs (miniz-libc, rijndael,
+  sglib-dllist, sglib-dllist-libc, sglib-hashtable, sglib-hashtable-libc, trio-snprintf-libc, trio-sscanf-libc).
+  Their silicon arithmetic is unverified in this run. They are integer programs, so the FPU defect is no known risk
+  to them, but nothing in the run shows it.
