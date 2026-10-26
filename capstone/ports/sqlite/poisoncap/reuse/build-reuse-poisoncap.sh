@@ -4,7 +4,7 @@
 #
 #   bash platform/run-in-container.sh bash .../reuse/build-reuse-poisoncap.sh [VARIANT]   (memsys5 | memsys5-spatial)
 #
-# Starts from build-speedtest1.sh's VARIANT build (default memsys5: their protection on; memsys5-spatial:
+# Starts from speedtest1/build.sh's VARIANT build (default memsys5: their protection on; memsys5-spatial:
 # their NESTED_TEMPORAL switch off; it is rerun here, so the build directory is that variant's): cheribuild's configured build directory, whose Makefile gives the compiler, the flags,
 # the generated sqlite3.c and the speedtest1 link rule. Then:
 #   - reuse-wrap.o, compiled with the Makefile's own $(TCC) (compiler, flags, include paths and the
@@ -21,7 +21,7 @@ P=${POISONCAP_PLATFORM:?run through platform/run-in-container.sh}
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 VARIANT=${1:-memsys5}
 OUT=$P/speedtest1/reuse-$VARIANT
-bash "$HERE/../speedtest1/build-speedtest1.sh" "$VARIANT"
+bash "$HERE/../speedtest1/build.sh" "$VARIANT"
 B=$P/work/build/sqlite-riscv64-purecap-build
 rm -rf "$OUT"; mkdir -p "$OUT"
 # The Makefile's own compile command (TCC) and link libraries (TLIBS), as make expands them.

@@ -23,7 +23,7 @@ Block-sized bounds on our side match PoisonCap's allocation policy and bounds gr
 (`cheri_setbounds(p, memsys5Size(p))`): 1,180 allocations at size 1 in all four arms. The port as ported
 (request-sized bounds) makes SQLite allocate differently (1,306) and is a side note.
 
-PoisonCap side: their speedtest1 and SQLite built by `speedtest1/build-speedtest1.sh` (their pinned cheribuild,
+PoisonCap side: their speedtest1 and SQLite built by `speedtest1/build.sh` (their pinned cheribuild,
 `--enable-memsys5`), wrapped by `reuse/build-reuse-poisoncap.sh`, run on the kernel with their FPGA
 kernel's options, libc revocation on from the run (the protocol of the completed 20-test run). Sublet
 side: their speedtest1.c (one dead function removed, `reuse/make-speedtest1-capstone.py`, CheriBSD headers

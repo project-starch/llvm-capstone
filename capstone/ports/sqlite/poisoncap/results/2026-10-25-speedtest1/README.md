@@ -7,7 +7,7 @@ their published numbers come from their FPGA, which is not available here.
 
 - **Source:** their fork CTSRD-CHERI/sqlite at a879a48e (the commit the artifact's own `manifest` names)
   with the artifact's two uncommitted files laid over it (`src/mem5.c`, `test/speedtest1.c`). After the
-  build the tree equals the artifact's `sqlite/` file for file (`speedtest1/build-speedtest1.sh` checks it), except
+  build the tree equals the artifact's `sqlite/` file for file (`speedtest1/build.sh` checks it), except
   in `build-memsys5-all32`, whose `test/speedtest1.c` is a879a48e's by design.
 - **Build:** their pinned cheribuild (07d5e034), `sqlite-riscv64-purecap --sqlite/build-speedtest`, their
   SDK and CheriBSD sysroot (`build-*/`).
@@ -36,10 +36,12 @@ an edit to `mem5.c`.
 
 ## Results
 
-Runner: `speedtest1/speedtest1-guest.py`, single-user boot (their image's multi-user boot panics). One guest per run.
-Each `*.json` is one run's record, written by the runner as it was at the time (`speedtest1/collect-speedtest1.py`
-scrubbed paths and user@host strings and added `console_from_serial` and `runner_log_tail` where the
-record lacked them). These records predate the runner's current fields: they have no binary or kernel
+Runner: `speedtest1/run.py` (then named speedtest1-guest.py), single-user boot (their image's multi-user boot panics). One guest per run.
+Each `*.json` is one run's record, written by the runner as it was at the time. The collector of the time
+(now `speedtest1/collect.py`) scrubbed paths and user@host strings, added `runner_log_tail` where a
+runner's own output was given, and added `console_from_serial`, the whole boot's matching console
+lines, where the record had no console lines of the run's window; the current collector no longer
+adds the latter. These records predate the runner's current fields: they have no binary or kernel
 hash (see `build-*/SHA256SUMS` and `kernel-poison-nodebug/SHA256SUMS`), and `running_at_end` means the
 last test seen started in the stdout the record holds. `seconds` is how long the run's ssh call lasted,
 not the time of a panic.

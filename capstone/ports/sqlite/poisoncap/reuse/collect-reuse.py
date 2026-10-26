@@ -5,7 +5,7 @@ and plot one figure per system.
     collect-reuse.py MIRROR OUT [--plot]
 
 MIRROR holds copies of the hosts' run directories, one per host: MIRROR/<host>/speedtest1/reuse-size100/
-set<N>-poisoncap-{off,on}/result.json (speedtest1-guest.py) and MIRROR/<host>/reuse-capstone-runs/
+set<N>-poisoncap-{off,on}/result.json (speedtest1/run.py) and MIRROR/<host>/reuse-capstone-runs/
 set<N>-sublet-{off,on}/results.jsonl (run-reuse-capstone.py, row <arm>-size100: spatial is off,
 block-bounds on). A run directory without its record is still running and is skipped.
 
@@ -24,10 +24,12 @@ import subprocess
 import sys
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE.parent / 'platform'))
+import records  # noqa: E402
+
 TESTS = [100, 110, 120, 130, 140, 142, 145, 160, 190, 210, 240, 250, 260, 280, 300, 320, 400, 410, 980, 990]
 TEST = re.compile(r'^\s*(\d{3}) - .*?\.{3,}\s*([0-9.]+)s\s*$', re.M)
 TOTAL = re.compile(r'^\s*TOTAL\.+\s*([0-9.]+)s\s*$', re.M)
-HOME = re.compile(r'/home/[^/\s"\']+/')
 # The binaries each arm was qualified with (qualification.txt); others are plotted only as preliminary.
 QUALIFIED = {
     ('poisoncap', 'off'): {'aad6a979'}, ('poisoncap', 'on'): {'97b02659'},
@@ -35,10 +37,6 @@ QUALIFIED = {
 }
 SUBLET_ROW = {'off': 'spatial-size100', 'on': 'block-bounds-size100'}
 FIELDS = ('attempts', 'issues', 'releases', 'reuses', 'distinct', 'failed', 'moved', 'inplace', 'live')
-
-
-def scrub(s):
-    return HOME.sub('~/', s) if isinstance(s, str) else s
 
 
 def report_lines(err):
@@ -54,7 +52,7 @@ def discover(mirror):
         r = json.loads(f.read_text())
         runs.append({'system': 'poisoncap', 'set': int(m[1]), 'arm': m[2], 'host': f.parts[len(mirror.parts)],
                      'binary_sha256': r.get('binary_sha256'), 'kernel_sha256': r.get('kernel_sha256'),
-                     'invocation': scrub(r.get('invocation')), 'exit': r.get('exit'), 'seconds': r.get('seconds'),
+                     'invocation': records.scrub(r.get('invocation')), 'exit': r.get('exit'), 'seconds': r.get('seconds'),
                      'stdout': r.get('stdout') or '', 'stderr': r.get('stderr') or ''})
     for f in sorted(mirror.glob('*/reuse-capstone-runs/set*-sublet-*/results.jsonl')):
         m = re.fullmatch(r'set(\d+)-sublet-(off|on)', f.parent.name)
@@ -171,7 +169,7 @@ def main():
             ok &= res.returncode == 0
             said = (res.stdout + res.stderr).strip().replace(f'{out}/', '')   # paths relative to OUT
             lines.append(f"PLOT {name}: set {pick}{'' if pick in qual else ' (PRELIMINARY: not the qualified binaries)'}"
-                         f", xmax {xmax:,}: {scrub(said)}")
+                         f", xmax {xmax:,}: {records.scrub(said)}")
     (out / 'checks.txt').write_text('\n'.join(lines) + '\n')
     print('\n'.join(lines))
     return 0 if ok else 1
