@@ -21,6 +21,8 @@ def main():
     p.add_argument('--work', type=Path, required=True, help='New output directory')
     p.add_argument("--exact-bounds", action=argparse.BooleanOptionalAction, default=False,
                    help="Run QEMU's exact-bounds profile. Option (iii) does not need it; it is kept so a suite can be run both ways as a two-sided control.")
+    p.add_argument('--share', type=Path,
+                   help='Directory exported to the guest over 9p (mount tag gate9p), for gates that need it')
     a = p.parse_args()
     a.work.mkdir(parents=True, exist_ok=False)
     disk = a.work / 'stage.ext4'
@@ -54,6 +56,8 @@ def main():
     a.work.mkdir(parents=True, exist_ok=True)
     (a.work / 'cpu.txt').write_text(cmd[-1] + "\n")
     print(f"run-staged: -cpu {cmd[-1]}", flush=True)
+    if a.share:
+        cmd += ['-virtfs', f'local,path={a.share.resolve()},mount_tag=gate9p,security_model=none,id=gate9p']
     completed = login = sent = False
     out = b''
     with qemu_lock(), (a.work/'serial.log').open('wb') as log:

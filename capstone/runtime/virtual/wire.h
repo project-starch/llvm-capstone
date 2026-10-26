@@ -62,4 +62,8 @@ struct cv_global {
 #define CV_REMAP_BEGIN _IOW('V', 25, struct cv_remap)
 #define CV_REMAP_END _IOW('V', 26, struct cv_remap)
 #define CV_PROFILE _IOR('V', 27, __u64)
+/* The image file, by descriptor, before the launcher validates it: the module
+ * denies writers to it (ETXTBSY, as Linux does for a running executable) until
+ * the context is released, so the bytes validated are the bytes loaded. */
+#define CV_IMAGE _IOW('V', 28, __s32)
 #endif
