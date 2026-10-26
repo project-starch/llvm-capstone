@@ -10251,3 +10251,37 @@ Tool: `r64-census.py`.
     bitstream 2. ludcmp and st print no state hash.
 - **Against the pre-registrations (1c58f863f1d7, amended at 5c758b0cfbab and 4820b8fcd219; 9161f84dba39): every
   reading holds.** R-64, R-65 and R-66 remain in this bitstream, as recorded.
+
+### R-64, R-65 and R-66 on silicon: the rtl lane's bare kit on bitstream 3, both boards, pre-registered (2026-10-27 05:1x, before the boots)
+
+- **What runs:** the rtl lane's kit at llvm-capstone land/rtl-r6466-kit 5adf7a954946,
+  `capstone/tests/rtl-smoke/fp-r64-r66-bare-2026-10-27/`, with its own PREREG.md. Five images, one cold bare boot each,
+  in the PREREG's order:
+
+| image | sha256/16 | board_rec | SR | issue |
+|---|---|---|---|---|
+| fp-of | 90f69604fe905881 | 0x80003000 | 30 | R-64 (overflow value and NX) |
+| fp-special | d9517d17b67ad17f | 0x80004000 | 22 | R-64 (special-operand flags) |
+| fp-carry | e140fc92332fb378 | 0x80003000 | 40 | R-65 |
+| fp-box | dda547c2c0dc5d85 | 0x80003000 | 10 | R-66 |
+| fp-edge | fa3e38de7e3e893b | 0x80003000 | 56 | R-65 other branch, R-66 partners |
+
+- **How:** `tier3-fp6466-bare.sh <board> <log> 5adf7a954946`, board 1 and board 2 at the same time, each on its
+  bkit11-b3 kit. It is tier3-fprm-bare.sh with the kit, the five-image list, the bitstream-3 kit and output root, and
+  the grader changed. It STOPs unless the kit names `caplifive_vp2c_e7af48457`. Each image's hash and board_rec are
+  checked against the kit commit before its boot.
+- **Grade, `fp6466-grade.py`, the PREREG's rules.** Each image's SR and its two vectors (bitstream 3, and the fixed
+  core r64-flags 319301b38) are read from the PREREG; a vector whose length is not SR is an unreadable PREREG.
+  - VOID unless SR matches;
+  - **CONFIRMED ON SILICON** = the bitstream-3 vector exactly;
+  - NOT ON SILICON = the fixed-core vector;
+  - anything else is a FINDING, value by value.
+  - Exit 0 only if all five are CONFIRMED.
+- **Dry run** (`dryrun-fp6466-bare.txt`), every board call stubbed:
+  - the grader on sessions built from a real bare recorder transcript: all CONFIRMED; one fixed vector; one changed
+    value; one short SR; one image missing (exit 0, 1, 1, 2, 2);
+  - the runner on both real bitstream-3 kits;
+  - STOPs on a bitstream-2 kit and on a kit commit without this PREREG.
+- **Prediction:** the rtl lane's simulation of these images on e7af48457's core, so all five read CONFIRMED ON
+  SILICON on both boards, with identical SR/SV lines across the boards. A difference between the boards is a
+  cross-board finding.
