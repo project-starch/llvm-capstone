@@ -9439,3 +9439,38 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - rbtree T2: rc=0.
   - ctl-loop minus ctl-empty instret = 20,000,002 + about 125-170 x (extra entries).
   - Entries per timed iteration: tens to low hundreds for rbtree, single or low double digits for coremark and janne.
+
+### The perf evaluation's second pilot, result: all 68 processes complete and verify on silicon, both arms; two numeric predictions read partly outside their words (board 2, 2026-10-26 16:08-16:51)
+
+- **Record:** `records/b2bs-perfpilot2-b2.result-lines.txt`; the full step text is
+  `t3-run-b2-dcc6daf6e-b2/perfpilot2/pilot.txt`. Pre-registration 59093fd4d3ca. One boot (booking 398), completed in
+  43 min, readings 0, no oops.
+- **Every process:** rc=0, 11 BENCH lines, 0 BENCH-ERROR, BENCH-DONE failed=0, in the planned order, and a new dmesg
+  quote for each (68 of 68). stderr_lines ranged from 9 to 458.
+- **check=:** each program prints ONE value, identical over every iteration (warm-up included) and across T1 and T2:
+  - coremark 0x70a5db4b905fd88a; rv8-aes 0x17b4434fc90257db; rv8-miniz 0x21c700; sglib-rbtree-libc 0x1356;
+    janne_complex 0x1;
+  - the controls 0x0.
+  - Whether each equals the program's reference value is the runtime lane's comparison.
+- **rbtree T2: rc 0 on every process, as predicted.**
+
+| program | arm | instret (median of 60) | instret spread | entries per timed iteration | CPI |
+|---|---|---|---|---|---|
+| coremark | T1 / T2 | 11,968,389 / 11,968,389 | 0.006% / 0.005% | 40 / 40 | 3.187 / 3.186 |
+| janne_complex | T1 / T2 | 12,027,632 / 12,027,688 | 0.005% / 0.003% | 38 / 38 | 2.696 / 2.696 |
+| rv8-aes | T1 / T2 | 11,296,653 / 11,346,094 | 0.008% / 0.009% | 91 / 91 | 1.919 / 1.980 |
+| rv8-miniz | T1 / T2 | 11,446,742 / 11,538,008 | 0.012% / 0.017% | 99 / 143 | 2.796 / 2.924 |
+| sglib-rbtree-libc | T1 / T2 | 9,630,330 / 9,947,244 | 0.46% / 0.46% | 130-174 / 147-191 | 5.413 / 5.635 |
+| ctl-empty | T1 / T2 | 25,582 / 25,582 | 1.3% / 1.3% | 22 / 22 | |
+| ctl-loop | T1 / T2 | 20,027,459 / 20,027,459 | 0.002% / 0.003% | 37 / 37 | 1.519 / 1.519 |
+
+- **ctl-loop minus ctl-empty** (each timed iteration against the arm's empty median): 20,001,653 to 20,001,989, with 15
+  extra entries.
+  - That is 110 to 133 instructions per extra entry. The prediction said "about 125-170".
+  - 4 of the 12 iterations fall below 125 (110.1, 117.5, 117.5, 117.5), and none is above 133.
+- **Entries per timed iteration:**
+  - rbtree 130-191: "tens to low hundreds", **holds**.
+  - coremark 40 and janne 38: the prediction said "single or low double digits", and these are higher. ctl-empty alone
+    reads 22, the marks' own floor.
+- **Not judged here:** the T1-T2 differences in the table. The pilot estimates noise, and the per-iteration analysis
+  is the runtime lane's.
