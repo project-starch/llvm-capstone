@@ -261,5 +261,8 @@ rbtree), the three ctl-*-libc, and rv8 aes, miniz, norx, primes and qsort.
    - The escape counts move with it: T3's entries are near T1's if the escapes are the scrub's first-touch faults.
 3. **T2/T1 replicate.** These boots re-measure T2/T1 for the 15 programs on a second boot. This is the first
    boot-to-boot reading; the main run measured each program in one boot only.
-   - Expected: each program's replicate lies inside the union of the two Welch intervals.
-   - A program outside it is reported as a boot effect, with no top-up.
+   - Expected: each program's Welch 95 % interval from these boots overlaps its interval from the main run.
+   - A program whose intervals are disjoint is reported as a boot effect, with no top-up.
+   - Amendment, 2026-10-27, after launch and before any T3 transcript was read: the first wording, "lies inside
+     the union of the two Welch intervals", holds by construction. Each estimate lies inside its own interval, so
+     it could never fail. The overlap test replaces it.
