@@ -9728,3 +9728,34 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   runtime lane's to settle.
 - **If it holds:** a value the model predicts to 64 bits is strong evidence that the model is silicon's FP rounding.
   It would also mean a VERIFY pass does not by itself certify a program's arithmetic on silicon.
+
+### Correction: in the perf build, minver's VERIFY and 29 other programs' check nothing, so their "VERIFY pass" is void; qurt is not a negative control (2026-10-26 18:5x)
+
+- **The rtl lane's reconciliation, checked here at the file:**
+  - the perf images compile `perf/build/native/src/minver/libminver.c` with -DBEEBS_STATE_CHECK;
+  - its `verify_benchmark` is upstream's `return -1;` ("This benchmark does not support verification");
+  - `#include "beebs/state/minver.c"` is at :257;
+  - the harness reads -1 as a pass.
+  - So k2's 48 minver passes verified nothing. Dev's beebs_minver_capstone_tail.c, with MINVER_EXPECTED_FNV, is the
+    capstone-corpus build, a different one.
+  - The lane's model after 9,900 iterations: a_i and det differ from IEEE (det 0x1.309dap-9 against 0x1.309ca2p-9),
+    c is identical, and result is 0. So silicon's deviation is in a_i and det.
+- **Counted over the perf build's native sources** (57 programs in `perf/build/native/src`, not all 100). Each
+  verify_benchmark body was found by brace matching, with minver as the control (it reads no-op):
+  - **30 have `return -1`, so they check nothing:** bs compress crc cubic fir huffbench huffbench-libc lcdnum
+    miniz-libc minver newlib-exp newlib-log newlib-mod ns qsort qurt rijndael select sglib-arrayheapsort
+    sglib-arrayquicksort sglib-arraysort sglib-dllist sglib-dllist-libc sglib-hashtable sglib-hashtable-libc
+    trio-snprintf-libc trio-sscanf-libc ud whetstone wikisort;
+  - 14 have a real verify (the ctl controls, dtoa, and the sglib list and rbtree sorts);
+  - 13 have no definition in that tree (coremark, the rv8 programs, miniz, picojpeg, qrduino, and trio-snprintf and
+    trio-sscanf). They verify elsewhere or not at all, which is not read here.
+  - A first count with a simpler pattern missed nested parentheses in the signature and reported minver as having no
+    verify. The control caught it.
+- **Consequences for what is recorded above:**
+  - **qurt's pass is not a tolerance-based negative control in this run:** its perf-build verify is `return -1`. The
+    tolerant `qurt_approx` is dev's capstone tail, the other build. The k1 reading "qurt passes" says nothing about
+    its arithmetic.
+  - k2's FP passes (fir, minver) and k4's whetstone and cubic carry no verification either.
+  - **What does constrain arithmetic in this run is check=,** the state hash. Prediction 2 makes it equal across arms
+    and iterations, and that holds. It does not compare against IEEE. Against the twin's check= values (the runtime
+    lane's), it would.
