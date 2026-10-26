@@ -1,0 +1,40 @@
+# The perf evaluation's main run, batch 2, kit b2k1 on board 2 (tier3-perfmain2-b2.sh; pre-registered 851b443b64e2): the runner's result lines (one READ line per process), perfmain-table.py's per-program summary and checks-diff.py against the twin.
+PP BEGIN 19:51:57 board 2 kit bkit10-perf-b2 booking 404
+UNBOOK 404: 200
+PP END rc=0 20:07:59
+PILOT kit <mnt-hdd>/capstone/t3-smoke/bkit10-perf-b2 boot completed; transcript <mnt-hdd>/capstone/t3-run-b2-dcc6daf6e-b2/main2-b2k1/guest/board.txt; step result {"kind": "exit", "value": 0}
+READ bench parameters: 3 ['bench_cycles', 'bench_entries', 'bench_instret']
+READ 0 rv8-dhrystone T1 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 11 :: bench cycles=404178249 instret=65179648 entries=502
+READ 1 rv8-dhrystone T2 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 11 :: bench cycles=405049472 instret=65179547 entries=503
+READ 2 rv8-dhrystone T2 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 11 :: bench cycles=405261157 instret=65180153 entries=503
+READ 3 rv8-dhrystone T1 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 11 :: bench cycles=404160954 instret=65179155 entries=502
+READ 4 rv8-dhrystone T1 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 11 :: bench cycles=403805306 instret=65179379 entries=502
+READ 5 rv8-dhrystone T2 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 11 :: bench cycles=404931867 instret=65180248 entries=503
+READ 6 rv8-dhrystone T2 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 11 :: bench cycles=405204596 instret=65180248 entries=503
+READ 7 rv8-dhrystone T1 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 11 :: bench cycles=404512795 instret=65178483 entries=502
+READ 8 matmult-int T2 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=147721092 instret=72087331 entries=360
+READ 9 matmult-int T1 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=147692211 instret=72087849 entries=360
+READ 10 matmult-int T1 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=147641528 instret=72087737 entries=360
+READ 11 matmult-int T2 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=147640535 instret=72087443 entries=360
+READ 12 matmult-int T2 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=148409172 instret=72088688 entries=361
+READ 13 matmult-int T1 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=147680844 instret=72087401 entries=360
+READ 14 matmult-int T1 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=147823816 instret=72087272 entries=360
+READ 15 matmult-int T2 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 9 :: bench cycles=147690486 instret=72088343 entries=360
+READ 16 coremark T1 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 15 :: bench cycles=237332228 instret=73238712 entries=421
+READ 17 coremark T2 0 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 15 :: bench cycles=237356114 instret=73241040 entries=421
+READ 18 coremark T2 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 15 :: bench cycles=237403970 instret=73242596 entries=421
+READ 19 coremark T1 1 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 15 :: bench cycles=237360679 instret=73240182 entries=421
+READ 20 coremark T1 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 15 :: bench cycles=237419278 instret=73239194 entries=421
+READ 21 coremark T2 2 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 15 :: bench cycles=237266913 instret=73241379 entries=421
+READ 22 coremark T2 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 15 :: bench cycles=237652838 instret=73242806 entries=421
+READ 23 coremark T1 3 K0: rc 0, 6 BENCH (want 6), VERIFY-FAILED 0, 6 with check= (suffixes ['']), BENCH-ERROR 0, BENCH-DONE failed=0, plan matches, quote new, stderr_lines 15 :: bench cycles=237225724 instret=73239528 entries=421
+READ summary: 24 of 24 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; B2K1-DONE present
+PP readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+PP board2 DONE 20:07:59
+PROGRAM coremark               T1 pass/fail 4/0  T2 pass/fail 4/0
+PROGRAM matmult-int            T1 pass/fail 4/0  T2 pass/fail 4/0
+PROGRAM rv8-dhrystone          T1 pass/fail 4/0  T2 pass/fail 4/0
+CHECK NO-HASH  beebs/matmult-int                  silicon 0x0 twin 0x0
+CHECK EQUAL    coremark/coremark                  silicon 0x70a5db4b905fd88a twin 0x70a5db4b905fd88a
+CHECK EQUAL    rv8/dhrystone                      silicon 0x1fbda00054142 twin 0x1fbda00054142
+COUNT EQUAL 2 DIFFERS 0 NO-HASH 1 SPLIT 0 NO-TWIN 0 of 3

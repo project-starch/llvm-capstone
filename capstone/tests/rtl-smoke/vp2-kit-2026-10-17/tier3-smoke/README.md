@@ -9878,3 +9878,17 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
   - **The manifest's own_verify column disagrees for trio-snprintf and trio-snprintf-libc only** (it says yes, and the
     compiled branch is `return -1`). Every other program agrees.
 - **The k1-k4 check= section above changes only in its "no check reaches" paragraph,** which this replaces.
+
+### Batch 2 read (board 2, 19:51-20:07): 24 of 24 processes clean; coremark and rv8 dhrystone hash as the twin; the main run is complete
+
+- **b2k1** (`main2-b2k1/pilot.txt`, record `records/b2bs-perfmain2-b2k1-b2.result-lines.txt`): coremark, matmult-int and
+  rv8-dhrystone each pass 4 of 4 processes in both arms. The runner and perfmain-table.py agree, and no heartbeat is
+  spliced.
+- **check= against the twin:** coremark 0x70a5db4b905fd88a and rv8 dhrystone 0x1fbda00054142 are EQUAL. matmult-int
+  has no hash, but its verify is REAL (census-verify.py over `perf/build2/native/build.log`).
+  - The batch-1 images are hash-identical in build and build2 (nbody 15588983d4aa2aba, minver ff368bc0e9e8977b), so
+    the census over build's log describes what batch 1 staged.
+- **The main run, both batches:** 103 programs, 880 processes on bitstream 2. 864 pass in both arms. The 16 failures are
+  ludcmp and st, every process, attributed to R-62 (above).
+  - check= against the twin: 61 EQUAL, 1 DIFFERS (minver, R-62's exact model value), 41 NO-HASH.
+  - 11 programs carry neither a real verify nor a hash.
