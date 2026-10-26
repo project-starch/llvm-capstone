@@ -9212,12 +9212,12 @@ Record: `records/b2bs-pb08-b1.result-lines.txt`.
     each.
     - This is not a reader artifact. The boot-wide dmesg dump (DMESG-ALL) also lists a single "resolve refused" line
       at 1481.83 s and at 1840.62 s, beside pairs for the other four events. Its REFUSED count is 10.
-    - Every earlier cause-13 event on this bitstream carried two refusals: the 8 runs of the 400-run record, and 0a's one
-      event. This is reported, not explained.
+    - Every earlier cause-13 event read for refusals on this bitstream carried two: the 8 cause-13 runs of the uaf-dm
+      run (`dryrun-uaf-repeat-ms.txt`), and 0a's one event. This is reported, not explained.
 - **The H1 rule** (unchanged since 0a) refutes H1 for any event with MPRV = 0.
   - Every refusal of all nine events reads MPRV = 0. With 0a's event, H1 is refuted for all 10 cause-13 events read
     on bitstream 2, on both boards.
   - The word is non-zero and identical in every event (0xa00002000, MPP 0), so the escape wrote it. By the rule, H2-H4
     remain, and the aperture instrument goes into bitstream 3.
-- **The rate:** 3 of 200 and 6 of 200 here, against 1 of 200 in 0a and 10 of 400 in the earlier record. Together that is
+- **The rate:** 3 of 200 and 6 of 200 here, against 1 of 200 in 0a and 10 of 400 in the bitstream-2 uaf x400 record. Together that is
   20 of 1,000 uaf-control runs, 2.0%.
