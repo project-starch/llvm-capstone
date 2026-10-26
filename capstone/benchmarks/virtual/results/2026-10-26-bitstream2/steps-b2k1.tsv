@@ -1,0 +1,25 @@
+n	program	arm	proc	K	args
+0	rv8-dhrystone	T1	0	0	1 5
+1	rv8-dhrystone	T2	0	0	1 5
+2	rv8-dhrystone	T2	1	0	1 5
+3	rv8-dhrystone	T1	1	0	1 5
+4	rv8-dhrystone	T1	2	0	1 5
+5	rv8-dhrystone	T2	2	0	1 5
+6	rv8-dhrystone	T2	3	0	1 5
+7	rv8-dhrystone	T1	3	0	1 5
+8	matmult-int	T2	0	0	1 5
+9	matmult-int	T1	0	0	1 5
+10	matmult-int	T1	1	0	1 5
+11	matmult-int	T2	1	0	1 5
+12	matmult-int	T2	2	0	1 5
+13	matmult-int	T1	2	0	1 5
+14	matmult-int	T1	3	0	1 5
+15	matmult-int	T2	3	0	1 5
+16	coremark	T1	0	0	1 5
+17	coremark	T2	0	0	1 5
+18	coremark	T2	1	0	1 5
+19	coremark	T1	1	0	1 5
+20	coremark	T1	2	0	1 5
+21	coremark	T2	2	0	1 5
+22	coremark	T2	3	0	1 5
+23	coremark	T1	3	0	1 5
