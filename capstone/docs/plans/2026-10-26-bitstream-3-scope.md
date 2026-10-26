@@ -20,7 +20,8 @@ the rows below spend.
 | (c1) Q-26 N slots | one saved virtual context in the CSR file | yes | the module serializes today | ~72 flops per slot + N 64-bit frame compares on the commit path | the lead's call; it makes (a1)/(a2) live |
 | (c2) R-60 narrowing | — | done in bitstream 2 | — | — | closed |
 | (c3) Q-31 | ordering divergence | no (ruled: the RTL order is the reference) | a QEMU pin | — | out |
-| (c4) stale status lines | R-58, R-59, Q-24 read OPEN though their RTL fixes are on silicon since the batch | no | — | — | corrected in this commit; silicon acceptance arms owed (below) |
+| (c4) stale status lines | R-58, R-59, Q-24 read OPEN though their RTL fixes are on silicon since the batch | no | — | — | corrected; all three CONFIRMED ON SILICON 2026-10-26 at N=2 (below) |
+| (c5) Q-34 | a misaligned plain access in a context traps 4/6 on silicon; QEMU completes it | no (ruled 2026-10-26: the trap is the intended result, terminal for the run) | none; the QEMU twin traps inside supervised contexts | — | out: no hardware misaligned support |
 
 ## (a) S-21 / S-22: the frame is domain-reachable
 
@@ -180,12 +181,14 @@ debug apertures after the trap.
   `x-capstone-supervisor-slots`.
 - **Stale status lines corrected in this commit** (the RTL lane's own rows): R-58 (the caller's srevroot, batch item 2,
   `524326f34`), R-59 (the precheck, batch item 3, `750ed72e4`) and Q-24 (the medeleg mask admits causes 24-30,
-  `3244170b0`) are FIXED IN RTL and present on every bitstream since the batch `c721c1a2a`, bitstream 2 included. None
-  has a silicon reading yet: the batch's acceptance was sim-only for items 2-4.
-- **Owed silicon acceptance, no bitstream needed (bare kits on bitstream 2, the board lane's to run if wanted):**
+  `3244170b0`) are FIXED IN RTL and present on every bitstream since the batch `c721c1a2a`, bitstream 2 included. The
+  batch's acceptance was sim-only for items 2-4; the silicon reading followed (next item).
+- **Silicon acceptance, READ 2026-10-26 on bitstream 2, both boards, every vector exact and identical across the boards**
+  (kit `r58-r59-q24-bare-2026-10-26`, pre-registered `30117b74cc8f`, readings vp2-tier12 `fcd6dbac2194`; checked here by
+  script against the PREREG table, the checker negative-tested on one altered value). The arms, as built:
   `va-srevroot` (R-58: the caller reads its OWN srevroot back after a context), `va-runv-r59` / `va-runv-r59-low`
   (R-59: a malformed table root is refused at entry), and a Q-24 arm (firmware sets a capability cause in medeleg; an
-  S-mode capability fault lands in S). The kits are built and simulated from their images here on request.
+  S-mode capability fault lands in S). R-58, R-59 and Q-24 are CONFIRMED ON SILICON at N=2.
 
 ## Not in this note
 
