@@ -48,6 +48,11 @@ FAULT30 = FAULT.replace("cause=25", "cause=30")
 # dereferencing its own corrupted pointer, not the mechanism catching anything, and arms.json
 # does not list it among the PHP configurations' protective causes.
 FAULT24 = FAULT.replace("cause=25", "cause=24")
+# ...and with the return address and frame pointer the launcher prints since 2026-10-27, as the
+# escape left them in the frame's x1 and x8 slots. The pc here is musl's strlen in the real
+# image; the ra is inside xbuf_format_converter.
+FAULT_RA = FAULT.replace("pc=0x3f904e7f90 address=0x3f909c8074",
+                         "pc=0x3f90411888 address=0x3f90a0ba20 ra=0x3f90508d7c fp=0x3f80a01f00")
 SHA = "a" * 64
 # The bound probe is a DIFFERENT image by design, so its transcript carries its own
 # sha and the guard has to know that without being blinded to a stale probe.
@@ -247,6 +252,42 @@ def observation_cases():
     check("a fault in the libc leaf ASan names is unattributed", reason, "unattributed")
     check("and says it is unresolved for want of a return address",
           "unresolved" in ev and "return address" in ev, True)
+    # WITH A RETURN ADDRESS the leaf is read through its caller, one hop, and only that.
+    orig_at = R.symbolize_at
+    def by_pc(table):
+        return lambda llvm_bin, image, pc, text: table.get(pc, ("", "", 0))
+    STRLEN_PC, RA = 0x3f90411888, 0x3f90508d7c
+    R.symbolize = fake_symbolize("", 0, func="strlen")
+    R.symbolize_at = by_pc({RA - 2: ("xbuf_format_converter", "/b/main/spprintf.c", 518)})
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_RA % SHA, 139,
+                    controls(), False, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a libc leaf called from the declared function is CAUGHT", v, verdicts.CAUGHT)
+    check("and the evidence names the caller and the ra",
+          "called from xbuf_format_converter" in ev and "ra=0x3f90508d7c" in ev, True)
+    check("and it licensed its own reach (no completing control needed)", obs.reached, True)
+    check("the fault carries ra and fp into the bundle", (obs.fault.ra, obs.fault.fp),
+          (0x3f90508d7c, 0x3f80a01f00))
+    R.symbolize_at = by_pc({RA - 2: ("php_error_cb", "/b/main/main.c", 624)})
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_RA % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a libc leaf called from ANOTHER function is unattributed", reason, "unattributed")
+    check("and says where it was called from", "called from php_error_cb" in ev, True)
+    R.symbolize_at = by_pc({RA - 2: ("xbuf_format_converter", "/b/main/other.c", 5)})
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_RA % SHA, 139,
+                    controls(), True, "/x", "/y")
+    check("the declared caller in another file is unattributed",
+          verdicts.judge(obs, exact)[1], "unattributed")
+    # The caller is read ONE hop only: a strlen called from the declared function's own callee
+    # is not seen as the declared function.
+    R.symbolize_at = by_pc({RA - 2: ("vspprintf", "/b/main/spprintf.c", 725)})
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_RA % SHA, 139,
+                    controls(), True, "/x", "/y")
+    check("a caller in the declared file but not the declared function is unattributed",
+          verdicts.judge(obs, exact)[1], "unattributed")
+    R.symbolize_at = orig_at
+
     # An unrelated strlen -- a case whose ASan leaf is NOT strlen -- gets no such sentence.
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
                     controls(), True, "/x", "/y")

@@ -349,23 +349,30 @@ def image_base(llvm_bin, image):
 
 
 def symbolize(llvm_bin, image, fault, text):
-    """(function, file, line) for a fault, from the image's symbols and line tables. The
-    function is '' when the symbolizer has none, and (file, line) is ('', 0) when there are no
-    line tables for it -- musl's routines in this image, say, which have a symbol and no
+    """(function, file, line) for a fault's pc; see symbolize_at."""
+    if fault is None:
+        return "", "", 0
+    return symbolize_at(llvm_bin, image, fault.pc, text)
+
+
+def symbolize_at(llvm_bin, image, pc, text):
+    """(function, file, line) for a runtime pc, from the image's symbols and line tables. The
+    function is '' when the symbol table has none, and (file, line) is ('', 0) when there are
+    no line tables for it -- musl's routines in this image, say, which have a symbol and no
     source. The function used to be discarded here, which left every libc fault a bare
     pc: the judge could not even say "this is strlen"."""
     m = re.search(r"code=(0x[0-9a-f]+)-", text)
-    if not m or fault is None:
+    if not m:
         return "", "", 0
     code = int(m.group(1), 16)
-    static = fault.pc - code + image_base(llvm_bin, image)
+    static = pc - code + image_base(llvm_bin, image)
     # THE FUNCTION COMES FROM THE SYMBOL TABLE, NOT FROM THE SYMBOLIZER. This image keeps its
     # local symbols, and llvm-symbolizer's function line then names whatever symbol is nearest
     # -- `.Lpcrel_hi9`, an assembler label -- or `??`. The first judge built on that line read
     # every fault as "not the declared function" (corpus-run3, 2026-10-27: zero CAUGHT on 66
     # cases). verdicts.Symbols walks nm's sized function symbols, which is what Fault.symbol
     # was always meant to carry; the symbolizer supplies only the line table's file:line.
-    func, _ = symbols_of(llvm_bin, image).lookup(fault.pc, code)
+    func, _ = symbols_of(llvm_bin, image).lookup(pc, code)
     func = func or ""
     out = subprocess.run([str(Path(llvm_bin) / "llvm-symbolizer"), "--obj", str(image),
                           "--functions=none", f"{static:#x}"],
@@ -538,14 +545,36 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         elif not path and leaf.get("outside") and func and func == leaf.get("func"):
             # A libc leaf: the fault is in the routine ASan's own frame #0 names (strlen under
             # xbuf_format_converter, CRASH-068). That is consistent with the defect and proves
-            # nothing: strlen is on many paths, and whether THIS call came from the declared
-            # caller needs the return address, which the launcher does not report
-            # (runtime/virtual/wire.h cv_step carries cause, pc and address only). Unresolved,
-            # said so, and not promoted.
-            obs.attribution_evidence = (
-                f"the fault is in {func}, the libc routine ASan's own frame #0 names for this "
-                f"case, with no line table; whether this call came from the declared "
-                f"{spec['fault_sites']} is not observable without a return address -- unresolved")
+            # nothing by itself: strlen is on many paths. What ties it to the case is its
+            # CALLER, which the launcher reports since 2026-10-27 as the return address the
+            # escape left in the frame's x1 slot (wire.h cv_step ra). ra-2 lies inside the
+            # call instruction whether that is 2 or 4 bytes long, so it symbolizes to the
+            # caller's own line. A leaf keeps ra intact by definition, which is what makes the
+            # one-hop reading sound without a stack walk; a non-leaf libc routine would
+            # not be read this way (its frame #0 would carry a line table or a deeper stack).
+            if fault.ra:
+                cfunc, cpath, cline = symbolize_at(llvm_bin, image, fault.ra - 2, text)
+                if cfunc in spec["fault_sites"] and cpath.endswith(site_file):
+                    at_site = True
+                    obs.attribution = "function"
+                    obs.attribution_evidence = (
+                        f"the fault is in {func}, the libc routine ASan's own frame #0 names for "
+                        f"this case, called from {cfunc} at {site_file}:{cline} (ra={fault.ra:#x}), "
+                        f"the function this case declares (fault_sites, ASan frame "
+                        f"#{(site or {}).get('index', 1)})"
+                        + (", at ASan's own line" if cline == spec["asan_line"] else
+                           f" (ASan: line {spec['asan_line']})"))
+                else:
+                    obs.attribution_evidence = (
+                        f"the fault is in {func}, the libc routine ASan's own frame #0 names for "
+                        f"this case, but it was called from {cfunc or '?'} at {cpath or '?'}:{cline} "
+                        f"(ra={fault.ra:#x}), not from the declared {spec['fault_sites']}")
+            else:
+                obs.attribution_evidence = (
+                    f"the fault is in {func}, the libc routine ASan's own frame #0 names for this "
+                    f"case, with no line table; whether this call came from the declared "
+                    f"{spec['fault_sites']} is not observable without a return address, and "
+                    f"this record carries none -- unresolved")
         else:
             obs.attribution_evidence = (f"faulted in {func or '?'} at {path or '?'}:{line} but the "
                                         f"declared site is {spec['fault_sites']} in {site_file}")
