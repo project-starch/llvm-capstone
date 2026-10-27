@@ -183,7 +183,7 @@ def main():
         "-virtfs", f"local,path={share_dir},mount_tag=hostshare,security_model=none,id=hostshare",
         "-chardev", "stdio,mux=on,id=ch0,signal=on",
         "-mon", "chardev=ch0,mode=readline", "-serial", "chardev:ch0",
-        "-cpu", "rv64,sstc=false,h=false",
+        "-cpu", "rv64,sstc=false,h=false,sv48=false,sv57=false",
     ]
 
     def boot_and_run_one(domain, log):

@@ -367,7 +367,7 @@ def main() -> int:
         "-serial",
         "chardev:ch0",
         "-cpu",
-        "rv64,sstc=false,h=false",
+        "rv64,sstc=false,h=false,sv48=false,sv57=false",
     ]
     qemu_cmd.extend(args.qemu_extra_arg)
 

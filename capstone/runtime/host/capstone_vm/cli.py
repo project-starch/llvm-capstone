@@ -451,7 +451,7 @@ insmod /mnt/control/module
             "-netdev", f"user,id=net,restrict=on,hostfwd=tcp:127.0.0.1:{port}-:22",
             "-device", "virtio-net-device,netdev=net", "-device", "virtio-rng-device",
             "-cpu", ("rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true"
-                     + (",x-capstone-exact-bounds=true" if exact_bounds else "")) if profile == "virtual" else "rv64,sstc=false,h=false",
+                     + (",x-capstone-exact-bounds=true" if exact_bounds else "")) if profile == "virtual" else "rv64,sstc=false,h=false,sv48=false,sv57=false",
         ]
         config = {"port": port, "share": str(share), "command": command, "identity": identity_config}
         (state / "config.json").write_text(json.dumps(config, indent=2) + "\n")

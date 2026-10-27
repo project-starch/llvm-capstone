@@ -24,7 +24,7 @@ exec "$QEMU_BINARY" \
   -chardev stdio,mux=on,id=ch0,signal=on \
   -mon chardev=ch0,mode=readline \
   -serial chardev:ch0 \
-  -cpu rv64,sstc=false,h=false
+  -cpu rv64,sstc=false,h=false,sv48=false,sv57=false
 # -netdev user,id=net0,hostfwd=tcp::60022-:22 \
 # -device e1000,netdev=net0
 
