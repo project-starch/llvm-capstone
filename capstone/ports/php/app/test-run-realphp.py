@@ -392,6 +392,28 @@ def observation_cases():
 
 def helper_cases():
     print("\n-- the derivations --")
+    # symbolize_at with the symbolizer's answer for a pc that has no line table. The function
+    # comes from nm; the location is "??:0:0", which is NO file -- the leaf rule in observe()
+    # keys on an empty file, and "??" reached it as a file name on the first run with ra.
+    real_run = subprocess.run
+    def stub(cmd, *a, **k):
+        prog = str(cmd[0])
+        if prog.endswith("llvm-nm"):
+            return types.SimpleNamespace(stdout="0000000000011880 0000000000000040 T strlen\n", stderr="", returncode=0)
+        if prog.endswith("llvm-readelf"):
+            return types.SimpleNamespace(stdout="  LOAD  0x000000 0x0000000000010000 0x0000000000010000\n", stderr="", returncode=0)
+        if "symbolizer" in prog:
+            return types.SimpleNamespace(stdout="??:0:0\n", stderr="", returncode=0)
+        return real_run(cmd, *a, **k)
+    subprocess.run = stub
+    R._SYMBOLS.clear()
+    try:
+        got = R.symbolize_at("/llvm", "/img-nolines", 0x3fb9001888,
+                             "code=0x3fb9000000-0x3fb9400000")
+    finally:
+        subprocess.run = real_run
+        R._SYMBOLS.clear()
+    check("a pc with a symbol and no line table is (function, no file)", got, ("strlen", "", 0))
     check("app_output drops kernel lines and stats",
           R.app_output(["[    1.0] boot", "hello", "CAPSTONE_VM_STATS nodes=1", "world"]),
           "hello\nworld")

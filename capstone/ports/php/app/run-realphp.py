@@ -379,7 +379,11 @@ def symbolize_at(llvm_bin, image, pc, text):
                          capture_output=True, text=True).stdout.splitlines()
     where = out[0].strip() if out else ""
     m2 = re.match(r"(.+?):(\d+):\d+$", where)
-    if not m2:
+    # No line table for this pc prints "??:0:0", which the pattern above reads as a file
+    # named "??" at line 0. It is no file. CRASH-068's strlen fault read "faulted in strlen at
+    # ??:0" on every arm of the first run with a return address (corpus-run4, 2026-10-27) and
+    # never reached the leaf rule, which asks for an EMPTY file.
+    if not m2 or m2.group(1) == "??":
         return func, "", 0
     # Returned WHOLE and compared by suffix, not trimmed against a list of known build prefixes.
     # The symbolizer's path depends on where the tree was mirrored and on whether a file came
