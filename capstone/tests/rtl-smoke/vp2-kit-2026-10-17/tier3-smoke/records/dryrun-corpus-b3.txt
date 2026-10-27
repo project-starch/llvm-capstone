@@ -1,0 +1,86 @@
+# tier3-corpus-b3.sh b202238ca509bf45, tier3-pg-b3-arm.sh 2496f8d8df4aa09d, tier3-cpy-b3-arm.sh 0792bbfdf0d116e8: dry run 2026-10-27 22:2x.
+# Every external call stubbed: the pg runner (writes a MEASURE-ONLY SEQ for an -mb kit, else copies BUNDLE as its output), its QEMU check, busy, the lab hub, scoring; the cpython arm script (writes the bitstream-2 reference's own verdicts; FLIP=<case> flips one). Kit, image, reference-stamp and bundle gates run live.
+
+## sql0b2
+PG MEASURE: firmware 25000000 B against 26000000
+T3PG dry-sql0b2 BEGIN 22:21:59 booking 92
+UNBOOK-STUB 92
+T3PG dry-sql0b2 END 22:21:59 rc=0 :: --- stub: arm virtual-malloc image postgres-lt0
+PG inputs as recorded: fixture 956173e054762e91, image cf61cb4333d35cb6
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x0
+SCORE-STUB dry-sql0b2 <mnt-hdd>/capstone/batch-refs-b2/ref-b2/sql0/bundle <scratch>/dryco/r-sql0b2 <scratch>/dryco/sql0b2.out
+PG DONE 22:21:59
+## sql0b2 rc=0
+
+## sql0over
+PG MEASURE: firmware 26500000 B against 26000000
+PG STOP: the measured firmware is not under the cap; no boot
+## sql0over rc=1
+
+## sql0busy
+PG STOP: board 2 is busy
+## sql0busy rc=1
+
+## pgbad
+PG STOP: tag pgx
+## pgbad rc=2
+
+## sql0b1
+PG STOP: <mnt-hdd>/capstone/t3-smoke/bkit11-b3-mb1 is not a bitstream-3 kit with the execute-bit rule
+## sql0b1 rc=1
+
+## lt1b1
+CB lt1 BEGIN 22:22:13 board 1 kit bkit11-b3-nb1 booking 91
+UNBOOK-STUB 91
+CB lt1 ARM END rc=0 22:22:13 :: APPVM read rc=0 00:00:00 :: --- stub --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-nb1 --build <mnt-hdd>/capstone/t3-mremap/cpython-lt1-mremap-build 
+CB lt1 COMPARE vs reference rc=0 :: 32 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 22:22:13
+## lt1b1 rc=0
+
+## lt0b2
+CB lt0 BEGIN 22:22:14 board 2 kit bkit11-b3-nb2 booking 92
+UNBOOK-STUB 92
+CB lt0 ARM END rc=0 22:22:14 :: APPVM read rc=0 00:00:00 :: --- stub --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-nb2 --build <mnt-hdd>/capstone/t3-mremap/cpython-lt0-mremap-build 
+CB lt0 COMPARE vs reference rc=0 :: 32 of 32 cells the same
+CB lt0 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt0 DONE 22:22:14
+## lt0b2 rc=0
+
+## lt1flip
+CB lt1 BEGIN 22:22:14 board 2 kit bkit11-b3-nb2 booking 92
+UNBOOK-STUB 92
+CB lt1 ARM END rc=0 22:22:14 :: APPVM read rc=0 00:00:00 :: --- stub --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-nb2 --build <mnt-hdd>/capstone/t3-mremap/cpython-lt1-mremap-build 
+CB lt1 COMPARE vs reference rc=1 :: 31 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 22:22:14
+## lt1flip rc=0
+
+## lt1busy
+CB STOP: board 1 is busy
+## lt1busy rc=1
+
+## orchestrator, arms stubbed (ARM-STUB); co-a every arm rc=0, co-b sql0 rc=1
+### co-a
+CO lt1 on board 1 BEGIN 22:22:24
+CO sql0 on board 2 BEGIN 22:22:24
+CO sql0 on board 2 END rc=0 22:22:25
+CO lt1 on board 1 END rc=0 22:22:25
+  ARM-STUB board 2 tag sql0 log corpus-b3-sql0-b2.out
+  ARM-STUB board 1 tag lt1 log corpus-b3-lt1-b1.out
+CO lt0 on board 2 BEGIN 22:22:25
+CO lt0 on board 2 END rc=0 22:22:26
+  ARM-STUB board 2 tag lt0 log corpus-b3-lt0-b2.out
+CO DONE 22:22:26
+### co-b
+CO lt1 on board 1 BEGIN 22:22:26
+CO sql0 on board 2 BEGIN 22:22:26
+CO lt1 on board 1 END rc=0 22:22:27
+CO sql0 on board 2 END rc=1 22:22:27
+  ARM-STUB board 1 tag lt1 log corpus-b3-lt1-b1.out
+  ARM-STUB board 2 tag sql0 log corpus-b3-sql0-b2.out
+CO lt0 on board 2 BEGIN 22:22:27
+CO lt0 on board 2 END rc=0 22:22:28
+  ARM-STUB board 2 tag lt0 log corpus-b3-lt0-b2.out
+CO DONE 22:22:28

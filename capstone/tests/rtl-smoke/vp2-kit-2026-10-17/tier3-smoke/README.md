@@ -10378,3 +10378,49 @@ Tool: `r64-census.py`.
 - **The functional prediction holds:** every process passes, and on none of these 88 programs does one arm's check=
   differ from the other two. Comparing check= against bitstream 2's main-run values is the runtime lane's reading, as
   is the timing analysis.
+
+### The corpus on bitstream 3, first arms: cpython lt1 (board 1), postgres sql0 then cpython lt0 (board 2), pre-registered (2026-10-27 22:3x, before any boot)
+
+- **Why:** a corpus regression read on the bitstream that fixes R-62 and R-63. Bitstream 3 is bitstream 2 plus the
+  divider's new normaliser, and nothing else in the core changes. These are the three arms bitstream 2 read first.
+  Each repeated exactly at bitstream 2's N=2 (lt1 and sql0), so any difference is evidence about the change.
+- **What runs:** `tier3-corpus-b3.sh`. Board 1 runs lt1; board 2 runs sql0 and then lt0. Each arm is its own cold boot,
+  so lt0 runs once sql0's script returns, whatever its status.
+  - **`tier3-pg-b3-arm.sh` and `tier3-cpy-b3-arm.sh`** are the bitstream-2 runners with only the board side changed:
+    - kits bkit11-b3-b2, bkit11-b3-mb2 (measure-only), bkit11-b3-nb1 and bkit11-b3-nb2 (norandmaps). These are
+      make-b3-kit.sh copies of the bitstream-2 kits made tonight: every file hash equal except board.env, which
+      differs only in BOARD_BITSTREAM=caplifive_vp2c_e7af48457, and module 215a09be5a89360c is unchanged. The driver
+      HARD STOPs unless the resident bitstream is that name.
+    - output `t3-run-b3-e7af48457-b<board>/{sql0,cpy-lt1,cpy-lt0}`; pg results filed under RESULTS_DIR
+      2026-10-27-b3-e7af48457-b2;
+    - lab-hub bookings of 240 min (pg; the bitstream-2 pg runner had none) and 480 min (cpython; bitstream 2's lt1
+      ran over 6 h).
+  - **Unchanged from bitstream 2:**
+    - images: sql0 cf61cb43, lt1 8bcc40cf, lt0 7b871db7;
+    - runners: pg 7ce203f9, cpython dc606bd1 with appvm-arm 666d920e;
+    - the trimmed fixture 956173e0;
+    - the references batch-refs-b2/ref-b2/{sql0,lt1,lt0}, on the 18-bit twin qkit7-b2twin3-q8(-nr). Their stamps and
+      SWITCHES are checked as before.
+  - **Graders:** pg by score-arm.sh against ref-b2/sql0/bundle, after the measured firmware passes the 26,000,000 B
+    cap and the must-fire lines fire. cpython by verdicts-compare.py against ref-b2/<tag>/out on (verdict,
+    attribution, cause, symbol, offset).
+  - Dry run: `records/dryrun-corpus-b3.txt`, every external call stubbed. It covers:
+    - every arm's armed path;
+    - the firmware-cap, busy, bad-tag and missing-kit stops;
+    - the grade's positive control, one lt1 verdict flipped, which reads 31 of 32 with rc=1;
+    - the orchestrator with sql0 passing and failing.
+- **Checked against bitstream 3's open ISSUES rows:**
+  - R-64, R-65 and R-66 remain, and were present on bitstream 2 too.
+  - Q-31 (cause 4 where QEMU reads 24) is not in the FPU.
+  - Neither changes a prediction.
+- **Predictions: each arm reads what bitstream 2's board read.**
+  - **sql0: 9 of 9 as ref-b2/sql0**, CAUGHT 2 and MISSED 7, with must-fire OK and the readings 0.
+  - **lt1: verdicts-compare 32 of 32** against ref-b2/lt1: CAUGHT 27, MISSED 3, not-reached 1, unattributed 1.
+    The ten capacity cells are CAUGHT at their declared sites.
+  - **lt0: 31 of 32** against ref-b2/lt0. The one difference is case 01, CAUGHT at set_dealloc+284 with cause 4
+    where QEMU reads 24 (Q-31, as on bitstream 2 and the batch). Case 18 is CAUGHT with cause 28 in
+    mmap_ass_subscript, and case 09 is at dict_traverse.
+  - norandmaps is in the cpython command lines, and every reading is 0.
+- **Any other difference** is a finding about bitstream 3, reported cell by cell. Its first suspect is a
+  division-dependent path. The orchestrator's END rc says only whether a script ran; the grade is the compare and score
+  lines.
