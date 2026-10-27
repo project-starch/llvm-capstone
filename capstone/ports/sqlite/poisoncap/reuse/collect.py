@@ -2,12 +2,14 @@
 """Collect the --size 100 result runs of the reuse-distance comparison, check each, compare the repetitions,
 and plot one figure per system.
 
-    collect.py MIRROR OUT [--plot]
+    collect.py MIRROR OUT [--plot] [--block-port]
 
 MIRROR holds copies of the hosts' run directories, one per host: MIRROR/<host>/speedtest1/reuse-size100/
 set<N>-poisoncap-{off,on}/result.json (speedtest1/run.py) and MIRROR/<host>/reuse-capstone-runs/
 set<N>-sublet-{off,on}/results.jsonl (run-sublet.py, row <arm>-size100: spatial is off,
-block-bounds on). A run directory without its record is still running and is skipped.
+block-bounds on). With --block-port, the Sublet runs are the block port's instead:
+block-set<N>-{off,on}/results.jsonl, rows block-port-spatial-size100 (off) and block-port-size100 (on).
+A run directory without its record is still running and is skipped.
 
 OUT gets runs.json (each run's result lines only: hashes, exit status, the test times, the wrapper's two
 report lines; home paths scrubbed), checks.txt (every check, every run) and, with --plot, plots/ from
@@ -35,10 +37,19 @@ QUALIFIED = {
     ('poisoncap', 'off'): {'aad6a979'}, ('poisoncap', 'on'): {'97b02659'},
     ('sublet', 'off'): {'9836684d'}, ('sublet', 'on'): {'6bfe4d1b'},
 }
-SUBLET_ROW = {'off': 'spatial-size100', 'on': 'block-bounds-size100'}
+# The Sublet arms: the request port with block-sized bounds (2026-10-25), or the block port, whose
+# realloc also renews a lifetime that keeps its block (2026-10-27, qualified in run qual-block).
+SUBLET_ARMS = {
+    'bounds': {'dir': r'set(\d+)-sublet-(off|on)', 'glob': 'set*-sublet-*',
+               'row': {'off': 'spatial-size100', 'on': 'block-bounds-size100'},
+               'qualified': {'off': {'9836684d'}, 'on': {'6bfe4d1b'}}},
+    'block': {'dir': r'block-set(\d+)-(off|on)', 'glob': 'block-set*-*',
+              'row': {'off': 'block-port-spatial-size100', 'on': 'block-port-size100'},
+              'qualified': {'off': {'c9bd7f08'}, 'on': {'ec10dd06'}}},
+}
 
 
-def discover(mirror):
+def discover(mirror, arms):
     runs = []
     for f in sorted(mirror.glob('*/speedtest1/reuse-size100/set*-poisoncap-*/result.json')):
         m = re.fullmatch(r'set(\d+)-poisoncap-(off|on)', f.parent.name)
@@ -47,10 +58,12 @@ def discover(mirror):
                      'binary_sha256': r.get('binary_sha256'), 'kernel_sha256': r.get('kernel_sha256'),
                      'invocation': records.scrub(r.get('invocation')), 'exit': r.get('exit'), 'seconds': r.get('seconds'),
                      'stdout': r.get('stdout') or '', 'stderr': r.get('stderr') or ''})
-    for f in sorted(mirror.glob('*/reuse-capstone-runs/set*-sublet-*/results.jsonl')):
-        m = re.fullmatch(r'set(\d+)-sublet-(off|on)', f.parent.name)
+    sublet = SUBLET_ARMS[arms]
+    QUALIFIED[('sublet', 'off')], QUALIFIED[('sublet', 'on')] = sublet['qualified']['off'], sublet['qualified']['on']
+    for f in sorted(mirror.glob(f"*/reuse-capstone-runs/{sublet['glob']}/results.jsonl")):
+        m = re.fullmatch(sublet['dir'], f.parent.name)
         rows = {json.loads(l)['name']: json.loads(l) for l in f.read_text().splitlines() if l.strip()}
-        r = rows.get(SUBLET_ROW[m[2]], {})
+        r = rows.get(sublet['row'][m[2]], {})
         runs.append({'system': 'sublet', 'set': int(m[1]), 'arm': m[2], 'host': f.parts[len(mirror.parts)],
                      'binary_sha256': r.get('image_sha256'), 'module_args': r.get('module_args'),
                      'exit': r.get('rc'), 'ran': r.get('ran', False), 'fault': r.get('fault'),
@@ -168,7 +181,7 @@ def plot_systems(out, runs):
 def main():
     mirror, out = Path(sys.argv[1]), Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
-    runs = discover(mirror)
+    runs = discover(mirror, 'block' if '--block-port' in sys.argv[3:] else 'bounds')
     if not runs:
         sys.exit(f'no finished run under {mirror}')
     for r in runs:
