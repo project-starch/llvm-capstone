@@ -1,0 +1,62 @@
+What each hunk of php-5.0.0-0001-zend-alloc-sublet-hooks.patch does, and why it is there.
+
+The patch is INERT without -DZEND_CAP_SUBLET: the three macros then expand to exactly the
+arithmetic they replace, and zend_alloc.c compiles to the same object as the pristine source.
+The build asserts that with cmp rather than trusting it, so the physical column's results and
+Phase A's hierarchical results are unaffected by the file having been patched at all.
+
+Nothing in PHP's own logic moves. Not REAL_SIZE, not cache_index, not MAX_CACHED_MEMORY, not
+the list macros, not the cache policy, not the control flow of any function.
+
+  hunk 1  after the ZEND_DO_* macro chain
+          Adds the seam's own block: the include, the three ZEND_DO_* redefinitions, and the
+          three ZEND_CAP_* macros with their inert fallbacks. This is the only hunk that adds
+          more than one line of code.
+
+  hunk 2  _emalloc, the AG(cache) HIT return
+          (void *)((char *)p + sizeof(zend_mem_header) + MEM_HEADER_PADDING)
+            -> ZEND_CAP_PAYLOAD(p, size)
+          The cache path matters as much as the fresh one: a block handed back from the cache
+          must be re-issued under a FRESH revocation node, or the previous tenant's alias is
+          still live over the same bytes. That is the one property an allocator reusing bytes
+          inside a live outer allocation does not get for free.
+
+  hunk 3  _emalloc, the FRESH return -- same substitution.
+
+  hunk 4  _efree, the header derivation
+          (zend_mem_header *)((char *)ptr - 48) -> ZEND_CAP_HEADER(ptr)
+          By lookup, not arithmetic. The client's capability is bounded to its own object and
+          cannot reach the header at all, which is what makes an under-read below the object
+          catchable here when it was not in hierarchical mode.
+
+  hunk 5  _efree, the RETIRE -- the only new statement in the file.
+          Placed after CALCULATE_REAL_SIZE_AND_CACHE_INDEX(p->size) and BEFORE the cache
+          branch, so one line covers both the park and the real free. Everything below it --
+          p->size, p->cached = 1, the park itself, REMOVE_POINTER_FROM_LIST and ZEND_DO_FREE --
+          then runs against live memory, exactly as upstream.
+          THIS IS WHERE THE PHYSICAL PORT HAD TO DEVIATE. With one capability spanning header
+          and payload, revoking the caller's pointer killed the header too, so that port
+          hoisted REMOVE_POINTER_FROM_LIST above the revoke and made it unconditional -- a
+          change to PHP's own _efree that cost four false CAUGHT verdicts to find and still
+          costs CRASH-057 a NO-READING. The split makes it unnecessary.
+
+  hunk 6  _erealloc, the header derivation (p = orig = ...) -> ZEND_CAP_HEADER(ptr).
+          `orig` is load-bearing: the failure path does ADD_POINTER_TO_LIST(orig), so the old
+          block must still be alive after a failed realloc. zend_cap_block_realloc therefore
+          allocates the new block first and retires the old one only on success.
+
+  hunk 7  _erealloc, the payload return -- same substitution as hunks 2 and 3. Note the
+          upstream text here has no spaces around the + signs, which is why it is a separate
+          hunk rather than part of one replacement.
+
+  hunk 8  _mem_block_check, the header derivation -> ZEND_CAP_HEADER(ptr).
+          NOT COMPILED in this configuration: lines 640-786 of the pristine file are inside
+          #if ZEND_DEBUG, and ZEND_DEBUG is 0 here. Patched anyway so that "every derivation in
+          this file goes through the hook" holds without a caveat, and so a debug build would
+          be wrong in a way the geometry assertion catches at compile time rather than subtly
+          at run time.
+
+NOT PATCHED, deliberately: line 778's payload derivation inside the same ZEND_DEBUG region
+feeds _mem_block_check's argument and is dead for the same reason; and the ZEND_MM /
+ZEND_WIN32 branches of the ZEND_DO_* chain, which this tree cannot take (Zend/zend_mm.h:31-36
+undefines ZEND_MM unconditionally).

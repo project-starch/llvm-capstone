@@ -1,0 +1,758 @@
+#!/usr/bin/env python3
+"""Offline tests for run-realphp.py. No guest, no toolchain, no corpus.
+
+WHY THIS EXISTS. The previous session left two NameErrors in a runner's own code; the first cost
+a 15-minute boot to find. Every boot here is four boots and ~40 minutes, so main()'s wiring is
+driven end to end against synthetic transcripts before anything is launched.
+
+AND WHY EACH GATE IS SHOWN FIRING. A gate that has never failed is not known to work. The
+cross-arm checks below are each driven to FAIL on purpose and asserted to refuse the run.
+"""
+import importlib.util
+import io, json, re, subprocess, sys, tempfile, types
+from pathlib import Path
+
+HERE = Path(__file__).resolve().parent
+spec = importlib.util.spec_from_file_location("runreal", HERE / "run-realphp.py")
+R = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(R)
+sys.path.insert(0, str(HERE.parents[3] / "capstone/bug-corpora/tools"))
+import verdicts
+
+FAILURES = []
+
+
+def check(name, got, want):
+    if got != want:
+        FAILURES.append(f"{name}: got {got!r}, want {want!r}")
+        print(f"  FAIL {name}: got {got!r}, want {want!r}")
+    else:
+        print(f"  ok   {name}")
+
+
+FAULT = ("capstone-exec: domain fault cause=24 pc=0x3f904e7f90 address=0x3f909c8074 "
+         "entry=0x3f904009a0 code=0x3f90400000-0x3f90800000 last=0x39 preparing=0x39 "
+         "sha256=%s image=php-real-seam.dom")
+# The same fault line with the RESOURCE cause: the node table ran out, which lands at an
+# arbitrary pc and must never be read as a catch.
+FAULT30 = FAULT.replace("cause=24", "cause=30")
+SHA = "a" * 64
+# The bound probe is a DIFFERENT image by design, so its transcript carries its own
+# sha and the guard has to know that without being blinded to a stale probe.
+PROBE_SHA = "b" * 64
+STATS = ("CAPSTONE_VM_STATS arenas=16 pages=1778 peak=1994 nodes=%d steps=1943 faults=664 "
+         "collections=0 reclaimed=0 rounds=54 bytes_in=544 bytes_out=21229 node_bytes=225280 "
+         "node_capacity=%d node_growths=3 launch_ns=1 elapsed_ns=2")
+
+SPEC = {"cwe": "CWE-416", "requires": "", "asan_func": "user_tick_function_call",
+        "asan_file": "ext/standard/basic_functions.c", "asan_line": 2135,
+        "pristine_stdout": "done\n", "pristine_outcome": "OK"}
+
+
+def fake_symbolize(path, line):
+    return lambda llvm_bin, image, fault, text: (path, line)
+
+
+def controls(sanity="complete", probe="fault"):
+    """The declared controls. probe=None for a temporal arm, which declares no bound probe --
+    the judge RAISES on a control an arm does not declare, which is the behaviour that keeps a
+    control from being borrowed from an arm that has one."""
+    out = [verdicts.Control(name=R.SANITY, observed=sanity)]
+    if probe is not None:
+        out.append(verdicts.Control(name=R.BOUND_PROBE, observed=probe))
+    return out
+
+
+def observation_cases():
+    print("\n-- observe() and the judge --")
+    arms = verdicts.load_arms()
+    exact = arms["php-real-exact"]
+    orig = R.symbolize
+
+    # A fault at ASAN's own file AND line, with the trigger shown live: CAUGHT.
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA + "\n" + STATS % (100, 9216),
+                    139, controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("caught at ASAN's own line", (v, reason), (verdicts.CAUGHT, None))
+    check("the evidence says 'its own line'", "its own line" in ev, True)
+
+    # A neighbouring line in the same file is still the catch, and says so.
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2137)
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, _, ev = verdicts.judge(obs, exact)
+    check("caught at a neighbouring line", v, verdicts.CAUGHT)
+    check("the evidence names ASAN's line", "ASAN: line 2135" in ev, True)
+
+    # A fault in a DIFFERENT file is not this case's defect.
+    R.symbolize = fake_symbolize("Zend/zend_hash.c", 400)
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    check("wrong file is unattributed", verdicts.judge(obs, exact)[1], "unattributed")
+
+    # A fault in the seam's OWN source is a port artefact, never a catch.
+    R.symbolize = fake_symbolize("capstone/ports/php/zend-alloc/sublet/zend-cap-blocks.c", 120)
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a fault in the seam is unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and says it is a port artefact", "port artefact" in ev, True)
+
+    # A case whose ASAN site IS the allocator cannot be attributed by site.
+    alloc_spec = dict(SPEC, asan_file="Zend/zend_alloc.c", asan_line=403)
+    R.symbolize = fake_symbolize("Zend/zend_alloc.c", 403)
+    obs = R.observe("CRASH-073", alloc_spec, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("allocator-site case is unattributed", reason, "unattributed")
+    check("and asks for the audit arm", "audit arm" in ev, True)
+
+    # Faulted, but the trigger was never shown to run: setup-fault, NOT a catch.
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), False, "/x", "/y")
+    check("fault without reach is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
+
+    # Silent, trigger live, controls held: MISSED is a real reading.
+    obs = R.observe("CRASH-086", SPEC, "php-real-stock", SHA, "done\n" + STATS % (100, 9216),
+                    0, [verdicts.Control(name=R.SANITY, observed="complete")], True, "/x", "/y")
+    check("silence with controls is MISSED", verdicts.judge(obs, arms["php-real-stock"])[0],
+          verdicts.MISSED)
+
+    # Silent, but the arm's own control did NOT hold: not a reading at all.
+    obs = R.observe("CRASH-086", SPEC, "php-real-stock", SHA, "done\n", 0,
+                    [verdicts.Control(name=R.SANITY, observed="did-not-complete")], True, "/x", "/y")
+    check("silence on a broken arm is control-failed",
+          verdicts.judge(obs, arms["php-real-stock"])[1], "control-failed")
+
+    # The node table ran out. The fault SAYS so, on the line the pc comes from, so this is
+    # keyed on the cause and not on a threshold over a counter -- see CAUSE_RESOURCE on why
+    # the counter the pre-registration named is neither printed nor comparable to capacity.
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
+                    FAULT30 % SHA + "\n" + STATS % (9000, 9216), 139, controls(), True, "/x", "/y")
+    v, reason, _ = verdicts.judge(obs, exact)
+    check("a cause-30 resource fault is refused", (v, reason), (verdicts.NO_READING, "infra"))
+
+    # AND THE COUNTERS DO NOT REFUSE ANYTHING ON THEIR OWN. nodes= is cumulative, so it exceeds
+    # the capacity on healthy runs; the old threshold fired on about twenty good runs of this
+    # measurement, catches included.
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
+                    FAULT % SHA + "\n" + STATS % (13480, 13312), 139, controls(), True, "/x", "/y")
+    check("nodes over capacity is reported, not gated",
+          verdicts.judge(obs, exact)[0], verdicts.CAUGHT)
+    check("and the counters are in the notes", "cumulative, not a high-water" in obs.notes, True)
+
+    # The seam itself failed: an instrument failure, never a verdict.
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
+                    "ZEND_CAP_FAIL code=3 unknown key 0x40\n", 139, controls(), True, "/x", "/y")
+    check("a seam failure is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
+
+    # Caught on the STOCK arm, so no control arm completed and stock_reached is False. Without
+    # the site licence this is `setup-fault` -- the instrument blamed for the platform's
+    # clearest result -- which is what CRASH-022 and CRASH-102 actually did.
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
+    obs = R.observe("CRASH-022", SPEC, "php-real-stock", SHA, FAULT % SHA, 139,
+                    controls(probe=None), False, "/x", "/y", True, False)
+    check("no licence: a stock-arm catch reads as setup-fault",
+          verdicts.judge(obs, arms["php-real-stock"])[1], "setup-fault")
+    obs = R.observe("CRASH-022", SPEC, "php-real-stock", SHA, FAULT % SHA, 139,
+                    controls(probe=None), False, "/x", "/y", True, True)
+    check("a fault at ASAN's own site licenses reach",
+          verdicts.judge(obs, arms["php-real-stock"])[0], verdicts.CAUGHT)
+    check("and says which route licensed it",
+          "own ASAN-recorded site" in obs.reach_evidence, True)
+
+    # THE LICENCE MUST NOT RESCUE A FAULT SOMEWHERE ELSE. It is granted by a fault at the
+    # case's own site on SOME arm; an arm that faulted in the seam, or at an unrelated line,
+    # still reports unattributed on its own account.
+    R.symbolize = fake_symbolize("ext/standard/url.c", 132)
+    obs = R.observe("CRASH-022", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), False, "/x", "/y", True, True)
+    check("the licence does not attribute a fault elsewhere",
+          verdicts.judge(obs, exact)[1], "unattributed")
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
+
+    # AND THE LICENCE DOES NOT CREATE A PREMISE. A case the pristine build itself crashes on
+    # has no pair to read; where the trigger got to is beside the point. main() withholds the
+    # licence for those, and the offline suite drives that path in main_path_cases().
+
+    # A `requires` case still needs the precondition: the licence and the precondition are the
+    # same fact, so a case with neither is refused exactly as before.
+    req = dict(SPEC, requires="network: working loopback")
+    obs = R.observe("CRASH-092", req, "php-real-stock", SHA, "done\n" + STATS % (100, 9216), 0,
+                    [verdicts.Control(name=R.SANITY, observed="complete")], True, "/x", "/y",
+                    False, False)
+    check("an unconfirmed precondition is still not a reading",
+          verdicts.judge(obs, arms["php-real-stock"])[1], "not-reached")
+
+    # The oracle says native PHP does not complete this case: out of the denominator, and said
+    # so, rather than decaying into a claim about our instrument or our run.
+    nopremise = dict(SPEC, pristine_outcome="SIGNAL:11")
+    obs = R.observe("CRASH-057", nopremise, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), False, "/x", "/y", True, False)
+    v, reason, _ = verdicts.judge(obs, exact)
+    check("a case the oracle crashes on is out of the denominator",
+          (v, reason), (verdicts.NO_READING, "out-of-denominator"))
+    obs = R.observe("CRASH-100", nopremise, "php-real-stock", SHA, "", 0,
+                    controls(probe=None), False, "/x", "/y", True, False)
+    check("and so is a silent one", verdicts.judge(obs, arms["php-real-stock"])[1],
+          "out-of-denominator")
+    # ...but a case PHP ENDS ITSELF, with a diagnostic and exit 255, is not that. It has an
+    # oracle, so it is scoreable, and calling it out-of-denominator would discard a reading.
+    fatal = dict(SPEC, pristine_outcome="EXIT:255", pristine_rc=255)
+    check("a PHP fatal error is not a crash, for denominator purposes",
+          R.oracle_crashes(fatal), False)
+    check("a signal is", R.oracle_crashes(dict(SPEC, pristine_outcome="SIGNAL:11")), True)
+    obs = R.observe("CRASH-062", fatal, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y", True, False)
+    v, reason, _ = verdicts.judge(obs, exact)
+    check("so it is judged on its merits, not thrown out",
+          reason != "out-of-denominator", True)
+
+    # AND IT MUST BE ABLE TO READ AS A PLAIN MISS. `completed` once hardcoded exit 0, so a case
+    # whose oracle is EXIT:255 could not be completed on ANY arm and every cell decayed to
+    # `inconclusive` -- including the control's, which takes the case's whole column with it.
+    # This is the regression test for that: ending exactly as the oracle ended is completing.
+    done = "ZEND_CAP_MODE 0 exact=0 revoke=0\ndone\n"
+    obs = R.observe("CRASH-062", fatal, "php-real-stock", SHA, done, 255,
+                    controls(probe=None), True, "/x", "/y")
+    check("ending as the oracle ended counts as completing", obs.completed, True)
+    check("so a fatal-error case can read as a plain MISSED",
+          verdicts.judge(obs, arms["php-real-stock"])[0], verdicts.MISSED)
+    # The converse: exit 0 where the oracle said 255 is NOT completing.
+    obs = R.observe("CRASH-062", fatal, "php-real-stock", SHA, done, 0,
+                    controls(probe=None), True, "/x", "/y")
+    check("but exiting 0 where the oracle exited 255 is not", obs.completed, False)
+
+    # THE SCRIPT PATH IS NOT A DIVERGENCE. PHP prints the script's absolute path inside its own
+    # warnings and fatal errors; the corpus recorded a host path and the guest runs /mnt/vm. A
+    # literal comparison reports a divergence on every such case, differing only in that path.
+    pathy = dict(SPEC, pristine_stdout="Fatal error: nested in /corpus/CRASH-062.php on line 3")
+    obs = R.observe("CRASH-062", pathy, "php-real-stock", SHA,
+                    "ZEND_CAP_MODE 0 exact=0 revoke=0\n"
+                    "Fatal error: nested in /mnt/vm/CRASH-062.php on line 3\n",
+                    0, controls(probe=None), True, "/x", "/y")
+    check("a differing script path is not an output divergence",
+          "differs" in (obs.notes or ""), False)
+    # ...but a real difference in what PHP said still is.
+    obs = R.observe("CRASH-062", pathy, "php-real-stock", SHA,
+                    "ZEND_CAP_MODE 0 exact=0 revoke=0\n"
+                    "Fatal error: something else in /mnt/vm/CRASH-062.php on line 3\n",
+                    0, controls(probe=None), True, "/x", "/y")
+    check("a real difference in PHP's own words still is",
+          "differs" in (obs.notes or ""), True)
+
+    # The per-run watchdog fired. A killed run is the harness giving up, never a statement
+    # about the program -- and in particular never the `not-reached` it would decay to if the
+    # marker were ignored, because a killed run is silent and un-reached by construction.
+    obs = R.observe("CRASH-092", SPEC, "php-real-stock", SHA,
+                    "ZEND_CAP_MODE 0 exact=0 revoke=0\nVM_EXIT_TIMEOUT:CRASH-092\nKilled\n",
+                    137, controls(), True, "/x", "/y")
+    v, reason, _ = verdicts.judge(obs, arms["php-real-stock"])
+    check("a watchdog kill is infra, not a reading", (v, reason), (verdicts.NO_READING, "infra"))
+
+    # No exit status at all: the guest session ended before this run reported.
+    obs = R.observe("CRASH-092", SPEC, "php-real-stock", SHA, "", None,
+                    controls(), True, "/x", "/y")
+    v, reason, _ = verdicts.judge(obs, arms["php-real-stock"])
+    check("a run with no exit status is infra", (v, reason), (verdicts.NO_READING, "infra"))
+
+    # Completed, but not with the oracle's output: recorded as a note, still MISSED.
+    obs = R.observe("CRASH-086", SPEC, "php-real-stock", SHA, "something else\n", 0,
+                    [verdicts.Control(name=R.SANITY, observed="complete")], True, "/x", "/y")
+    check("divergent output is noted", "differs from the corpus's pristine record" in obs.notes, True)
+    R.symbolize = orig
+
+
+def helper_cases():
+    print("\n-- the derivations --")
+    check("app_output drops kernel lines and stats",
+          R.app_output(["[    1.0] boot", "hello", "CAPSTONE_VM_STATS nodes=1", "world"]),
+          "hello\nworld")
+    # Taken from a REAL transcript: the launcher prints its stats with no preceding newline, so
+    # when PHP's output does not end in one they share a line. A startswith() filter left the
+    # whole thing in place and the oracle comparison then failed for CRASH-008 alone.
+    check("stats concatenated onto PHP's last line are still stripped",
+          R.app_output(["999999999999999CAPSTONE_VM_STATS arenas=39 nodes=1 node_capacity=2"]),
+          "999999999999999")
+    check("a stats line standing alone leaves no blank line",
+          R.app_output(["done", "CAPSTONE_VM_STATS arenas=1 nodes=1 node_capacity=2"]), "done")
+    # And the indentation var_dump emits must survive, or every indented case reads not-reached.
+    check("leading whitespace is data, not noise",
+          R.app_output(["array(2) {", '  ["scheme"]=>', "}"]),
+          'array(2) {\n  ["scheme"]=>\n}')
+    check("strip_seam_noise keeps only PHP's own output",
+          R.strip_seam_noise("ZEND_CAP_MODE 6 exact=0 revoke=1\ndone\nPHP_VIRTUAL SEAM blocks=1 "
+                             "frees=1 issues=1 retires=1 revokes=1"), "done")
+    check("same_as_oracle ignores a trailing newline", R.same_as_oracle("done", "done\n"), True)
+    check("same_as_oracle is otherwise exact", R.same_as_oracle("done!", "done"), False)
+    check("node_pressure takes the high-water",
+          R.node_pressure(R.STATS_LINE.pattern and (STATS % (10, 99) + "\n" + STATS % (40, 99))),
+          (40, 99))
+    check("seam_counters reads the mode and the revokes",
+          R.seam_counters("ZEND_CAP_MODE 6 exact=0 revoke=1\nPHP_VIRTUAL SEAM blocks=3 frees=2 "
+                          "issues=4 retires=2 revokes=77"), (6, 77))
+
+
+def fake_corpus(root, ids=("CRASH-086", "CRASH-110")):
+    """A corpus with the two files the population is defined by, plus the pristine oracle."""
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "corpus").mkdir(exist_ok=True)
+    stderr = ("==1==ERROR: AddressSanitizer: heap-use-after-free\n"
+              "    #0 0x55 in user_tick_function_call /b/ext/standard/basic_functions.c:2135\n")
+    default, stock, pristine = [], [], []
+    for i, cid in enumerate(ids):
+        (root / "corpus" / f"{cid}.php").write_text("<?php echo \"done\\n\";\n")
+        default.append({"id": cid, "cwe": "CWE-416", "requires": "",
+                        "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
+        stock.append({"id": cid, "outcome": "OK"})
+        pristine.append({"id": cid, "outcome": "OK", "stdout": "done\n"})
+    # A case with a DECLARED PRECONDITION. CRASH-092's shape: it echoes its marker whether or
+    # not its own listener came up, so a silence cannot be told from a platform that caught
+    # nothing -- unless some arm faults at ASAN's site and thereby proves the precondition held.
+    (root / "corpus" / "CRASH-092.php").write_text("<?php echo \"done\\n\";\n")
+    default.append({"id": "CRASH-092", "cwe": "CWE-416",
+                    "requires": "network: working loopback",
+                    "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
+    stock.append({"id": "CRASH-092", "outcome": "OK"})
+    pristine.append({"id": "CRASH-092", "outcome": "OK", "stdout": "done\n"})
+    # A case the PRISTINE build already crashes on: there is no silence to interpret, so it must
+    # read not-reached however the arms behave. This is CRASH-057's situation.
+    (root / "corpus" / "CRASH-057.php").write_text("<?php echo \"done\\n\";\n")
+    default.append({"id": "CRASH-057", "cwe": "CWE-416", "requires": "",
+                    "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
+    stock.append({"id": "CRASH-057", "outcome": "OK"})
+    pristine.append({"id": "CRASH-057", "outcome": "SIGNAL:11", "stdout": "done\n"})
+    # A case that is NOT ASAN-blind (ASAN catches it with the stock allocator too) must be
+    # excluded, or the denominator silently grows.
+    default.append({"id": "CRASH-999", "cwe": "CWE-416", "requires": "",
+                    "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
+    stock.append({"id": "CRASH-999", "outcome": "ASAN:heap-use-after-free"})
+    pristine.append({"id": "CRASH-999", "outcome": "OK", "stdout": ""})
+    # A case PHP ends with its OWN fatal error: exit 255, a deterministic diagnostic, no
+    # crash. It has a perfectly good oracle and MUST stay in the denominator. The old test
+    # `pristine_outcome != "OK"` threw cases like this out as "native PHP crashes on it".
+    (root / "corpus" / "CRASH-062.php").write_text("<?php echo \"done\\n\";\n")
+    default.append({"id": "CRASH-062", "cwe": "CWE-416", "requires": "",
+                    "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
+    stock.append({"id": "CRASH-062", "outcome": "OK"})
+    pristine.append({"id": "CRASH-062", "outcome": "EXIT:255", "rc": 255,
+                     "stdout": "\nFatal error: Class declarations may not be nested\n"})
+    for e in pristine:
+        e.setdefault("rc", -11 if e["outcome"].startswith("SIGNAL:") else 0)
+    (root / "results-asan-default.json").write_text(json.dumps({"results": default}))
+    (root / "results-asan-stockalloc.json").write_text(json.dumps({"results": stock}))
+    (root / "results-pristine-default.json").write_text(json.dumps({"results": pristine}))
+    # The corpus's OWN view of the same fact, which population() gates against the runs.
+    (root / "metadata").mkdir(exist_ok=True)
+    (root / "metadata" / "corpus.json").write_text(json.dumps(
+        [{"id": e["id"], "cwe": "CWE-416",
+          "crashes_on_pristine_build": "True" if e["outcome"].startswith("SIGNAL:") else "False"}
+         for e in pristine]))
+
+
+def population_cases():
+    print("\n-- population() --")
+    with tempfile.TemporaryDirectory() as d:
+        root = Path(d) / "corpus-root"
+        fake_corpus(root)
+        pop = R.population(root)
+        check("only the ASAN-blind cases are in the denominator",
+              sorted(pop), ["CRASH-057", "CRASH-062", "CRASH-086", "CRASH-092", "CRASH-110"])
+        check("the expected site comes from ASAN's own frame",
+              (pop["CRASH-086"]["asan_file"], pop["CRASH-086"]["asan_line"]),
+              ("ext/standard/basic_functions.c", 2135))
+        check("the pristine oracle is carried", pop["CRASH-086"]["pristine_stdout"], "done\n")
+        check("a case PHP ends with its own fatal error stays in the denominator",
+              "CRASH-062" in pop, True)
+        # The complement population: CWE-416 that ASAN finds unaided. CRASH-999 is the fixture's
+        # not-blind case, so it is the one and only member here -- and must NOT appear above.
+        tpop = R.population(root, "temporal-asan-visible")
+        check("the temporal-asan-visible population is the complement",
+              sorted(tpop), ["CRASH-999"])
+        check("and it does not overlap the ASAN-blind one",
+              sorted(set(tpop) & set(pop)), [])
+        # THE GATE MUST BE ABLE TO FIRE. Make the corpus's own field disagree with its own run.
+        meta = json.loads((root / "metadata" / "corpus.json").read_text())
+        for m in meta:
+            if m["id"] == "CRASH-086":
+                m["crashes_on_pristine_build"] = "True"       # but its run says OK
+        (root / "metadata" / "corpus.json").write_text(json.dumps(meta))
+        try:
+            R.population(root)
+            check("a corpus whose crash flag contradicts its own run is refused", "ran", "refused")
+        except SystemExit as e:
+            check("a corpus whose crash flag contradicts its own run is refused",
+                  "crashes_on_pristine_build" in str(e), True)
+
+
+def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=True,
+                 stdout="done", sha=SHA, probe_sha=PROBE_SHA):
+    seam = f"ZEND_CAP_MODE {mode} exact={1 if mode & 1 else 0} revoke={1 if mode & 2 else 0}"
+    stats = STATS % (100, 9216)
+    out, exits = {}, {}
+    out[R.SANITY] = [seam, f"PHP_VIRTUAL SEAM blocks=9 frees=9 issues=9 retires=9 revokes={revokes}",
+                     "sanity 600 200 17" if sanity_ok else "", stats]
+    exits[R.SANITY] = 0 if sanity_ok else 139
+    if probe is not None:
+        out[R.BOUND_PROBE] = ["S7 rounded arm read index 9 = 0x00 -- the slack is reachable",
+                              FAULT % probe_sha] if probe else ["S7 rounded arm read index 9 = 0x00"]
+        exits[R.BOUND_PROBE] = 139 if probe else 0
+    for c in cases:
+        if c in case_faults:
+            out[c] = [seam, FAULT % sha, stats]
+            exits[c] = 139
+        else:
+            out[c] = [seam, stdout, stats]
+            exits[c] = 0
+    return {"booted": True, "reached_script": True, "completed": True, "panic": False,
+            "exits": exits, "output": out, "serial_log": "x"}
+
+
+def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None):
+    """Run main() end to end over stored records, with the toolchain stubbed out."""
+    root = tmp / "corpus-root"
+    fake_corpus(root)
+    out = tmp / "out"
+    out.mkdir(exist_ok=True)
+    cases = ["CRASH-057", "CRASH-086", "CRASH-092", "CRASH-110"]
+    faults = faults or {}
+    declared = [verdicts.load_arms()[a]["mode"] for a in R.ARMS]
+    modes = modes or declared
+    for arm, mode, rev in zip(R.ARMS, modes, revokes):
+        probe = True if R.BOUND_PROBE in verdicts.load_arms()[arm]["controls"] else None
+        rec = synth_record(cases, mode, rev, case_faults=faults.get(arm, ()), probe=probe)
+        (out / f"{arm}-run.json").write_text(json.dumps(rec))
+    img = tmp / "php-real-seam.dom"
+    img.write_bytes(b"\x7fELF" + b"\0" * 64)
+
+    real_run, real_call = subprocess.run, subprocess.call
+    def fake_run(cmd, *a, **k):
+        prog = str(cmd[0])
+        text = ""
+        if "sha256sum" in prog:
+            text = (PROBE_SHA if str(cmd[1]).endswith("p.dom") else SHA) + "  x\n"
+        elif "objdump" in prog:
+            # Real CDERIVE/CREVOKE encodings, because the gate reads instruction WORDS now:
+            # llvm-objdump prints both as <unknown>, so a stub emitting the word "revoke" would
+            # test a check that no longer exists. funct7 0x51/0x52, funct3 1, opcode 0x5b.
+            text = ("   10000: 5b 10 00 a2  \t<unknown>\n"
+                    "   10004: 5b 10 00 a4  \t<unknown>\n")
+        elif "clang" in prog:
+            text = "clang version test\n"
+        elif "symbolizer" in prog:
+            text = "??\n/b/ext/standard/basic_functions.c:2135:9\n"
+        elif "readelf" in prog:
+            text = "  LOAD           0x000000 0x0000000000010000 0x0000000000010000\n"
+        elif prog.endswith("llvm-nm"):
+            text = "0000000000010000 00000010 T main\n"
+        return types.SimpleNamespace(stdout=text, stderr="", returncode=0)
+    subprocess.run, subprocess.call = fake_run, (lambda *a, **k: 0)
+    argv = sys.argv
+    sys.argv = ["run-realphp.py", "--qemu", "/q", "--images", str(tmp), "--adapter", str(tmp),
+                "--image", str(img), "--probe", str(tmp / "p.dom"), "--corpus", str(root),
+                "--out", str(out), "--llvm-bin", str(tmp), "--from-record",
+                "--prereg", "deadbeef", *extra_argv]
+    try:
+        R.main()
+        return 0
+    except SystemExit as e:
+        return e.code if isinstance(e.code, int) else 1
+    finally:
+        sys.argv = argv
+        subprocess.run, subprocess.call = real_run, real_call
+
+
+def main_path_cases():
+    print("\n-- main() end to end, and every gate shown FIRING --")
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        rc = drive(tmp, faults={"php-real-exact": ("CRASH-086", "CRASH-110", "CRASH-057",
+                                                   "CRASH-092"),
+                                "php-real-object": ("CRASH-086",)})
+        check("a clean measurement completes", rc, 0)
+        b = tmp / "out" / "bundle-php-real-exact" / "verdicts.jsonl"
+        check("the bundle is written", b.is_file(), True)
+        rows = [json.loads(l) for l in b.read_text().splitlines()]
+        check("every case is judged", len(rows), 5)
+        by_case = {r["observation"]["case"]: r for r in rows}
+        check("the fault arm caught the two with a premise",
+              sorted(by_case[c]["verdict"] for c in ("CRASH-086", "CRASH-110")),
+              [verdicts.CAUGHT, verdicts.CAUGHT])
+        # The oracle says the pristine build crashes on CRASH-057, so even a fault at ASAN's own
+        # site is not a reading: there is no silence on the control arm to compare it against,
+        # and the reason names the oracle rather than blaming our setup for a native crash.
+        check("a case the pristine build crashes on is not a reading",
+              (by_case["CRASH-057"]["verdict"], by_case["CRASH-057"]["reason"]),
+              (verdicts.NO_READING, "out-of-denominator"))
+        # CRASH-092 faults at ASAN's site on the exact arm here, so its precondition is proved
+        # and that licenses the catch.
+        check("a precondition case that faults at ASAN's site is CAUGHT",
+              by_case["CRASH-092"]["verdict"], verdicts.CAUGHT)
+        inputs = json.loads((tmp / "out" / "bundle-php-real-exact" / "inputs.json").read_text())
+        check("the pre-registration is recorded", inputs["pre_registration"], "deadbeef")
+
+    # THE POSITIVE CONTROL FOR --score-oracle-crashes, which it did not have on 2026-10-26 and
+    # which is why the flag shipped doing nothing. It lifts the out-of-denominator refusal above
+    # so the 19 oracle-crashing cases can be read by their fault SITE; the first run of it
+    # returned `setup-fault` on all 19, because `site_licensed` was ANDed with
+    # `not oracle_crashes(spec)` in main()'s pass one while only observe()'s early return was
+    # lifted. `reached` was then false by construction, and the judge tests `reached` BEFORE
+    # attribution -- so every one of those faults, already attributed to the case's own
+    # ASAN-recorded file by a revoked-capability load, was reported as OUR bug.
+    #
+    # A flag that moves 19 cells to one NO-READING reason is indistinguishable from a flag that
+    # does nothing, which is what makes this a must-fire control and not a nicety. It is driven
+    # end to end rather than against observe(), deliberately: the defect was in main(), so a
+    # unit test passing site_licensed=True by hand would have stayed green throughout.
+    with tempfile.TemporaryDirectory() as d3:
+        tmp3 = Path(d3)
+        rc = drive(tmp3, faults={"php-real-exact": ("CRASH-086", "CRASH-110", "CRASH-057",
+                                                    "CRASH-092"),
+                                 "php-real-object": ("CRASH-086",)},
+                   extra_argv=("--score-oracle-crashes",))
+        check("scoring the oracle-crashing cases completes", rc, 0)
+        rows3 = [json.loads(l) for l in
+                 (tmp3 / "out" / "bundle-php-real-exact" / "verdicts.jsonl").read_text().splitlines()]
+        got3 = {r["observation"]["case"]: (r["verdict"], r["reason"]) for r in rows3}
+        check("--score-oracle-crashes reads the fault SITE, not setup-fault",
+              got3["CRASH-057"], (verdicts.CAUGHT, None))
+        obs3 = {r["observation"]["case"]: r["observation"] for r in rows3}
+        check("and the licence is the trigger having run, not the oracle's premise",
+              obs3["CRASH-057"]["reached"], True)
+        check("the cell still carries the warning that native PHP dies on it too",
+              "NOT evidence" in (obs3["CRASH-057"]["notes"] or ""), True)
+        # The flag must not leak into the default scoring: same records, no flag, still refused.
+        check("without the flag the same record is still out-of-denominator",
+              by_case["CRASH-057"]["reason"], "out-of-denominator")
+
+    # ... and when NOTHING faults for it, its silence must be refused rather than read as MISSED.
+    with tempfile.TemporaryDirectory() as d2:
+        tmp2 = Path(d2)
+        drive(tmp2, faults={"php-real-exact": ("CRASH-086",)})
+        rows2 = [json.loads(l) for l in
+                 (tmp2 / "out" / "bundle-php-real-stock" / "verdicts.jsonl").read_text().splitlines()]
+        got = {r["observation"]["case"]: (r["verdict"], r["reason"]) for r in rows2}
+        check("an unconfirmed precondition refuses the silence",
+              got["CRASH-092"], (verdicts.NO_READING, "not-reached"))
+        check("a case with no precondition still reads MISSED",
+              got["CRASH-086"][0], verdicts.MISSED)
+
+    with tempfile.TemporaryDirectory() as d:
+        rc = drive(Path(d), revokes=(0, 0, 0, 0))
+        check("GATE: object revoking nothing is refused", rc != 0, True)
+    with tempfile.TemporaryDirectory() as d:
+        rc = drive(Path(d), revokes=(5, 0, 77, 77))
+        check("GATE: stock revoking is refused", rc != 0, True)
+    with tempfile.TemporaryDirectory() as d:
+        rc = drive(Path(d), modes=[6, 6, 6, 6])
+        check("GATE: arms reporting one mode word are refused", rc != 0, True)
+    with tempfile.TemporaryDirectory() as d:
+        rc = drive(Path(d), modes=[0, 4, 6, 6])
+        check("GATE: a mode word disagreeing with arms.json is refused", rc != 0, True)
+
+
+def stale_guard(label, *, sha=SHA, probe_sha=PROBE_SHA, want_refused=True):
+    # Asserted on the REASON, not on the exit status: these records trip other gates too (the
+    # synthetic arms all report the same revoke count), so "it exited non-zero" would pass
+    # whether or not the sha guard was the thing that fired.
+    """Drive the stale-transcript guard with the shas the stored runs claim.
+
+    Parameterised rather than copied because the guard now has two sides and a bug on either
+    is silent: the CASE runs must match the PHP image and the bound probe must match the
+    PROBE image, which is a different file on purpose. The measurement found this the
+    expensive way -- the guard refused the probe's own honest transcript and killed the run
+    after three arms, because it compared every run against the PHP image."""
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        root = tmp / "corpus-root"; fake_corpus(root)
+        out = tmp / "out"; out.mkdir()
+        for arm in R.ARMS:
+            probe = True if R.BOUND_PROBE in verdicts.load_arms()[arm]["controls"] else None
+            rec = synth_record(["CRASH-086", "CRASH-110"], verdicts.load_arms()[arm]["mode"], 77,
+                               case_faults=("CRASH-086",), probe=probe, sha=sha,
+                               probe_sha=probe_sha)
+            (out / f"{arm}-run.json").write_text(json.dumps(rec))
+        img = tmp / "php-real-seam.dom"; img.write_bytes(b"\x7fELF")
+        real_run, real_call = subprocess.run, subprocess.call
+        subprocess.run = lambda cmd, *a, **k: types.SimpleNamespace(
+            stdout=((PROBE_SHA if str(cmd[1]).endswith("p.dom") else SHA) + "  x\n")
+            if "sha256sum" in str(cmd[0]) else "revoke\n", stderr="", returncode=0)
+        subprocess.call = lambda *a, **k: 0
+        argv = sys.argv
+        sys.argv = ["x", "--qemu", "/q", "--images", str(tmp), "--adapter", str(tmp),
+                    "--image", str(img), "--probe", str(tmp / "p.dom"), "--corpus", str(root),
+                    "--out", str(out), "--llvm-bin", str(tmp), "--from-record"]
+        why = ""
+        try:
+            R.main()
+        except SystemExit as e:
+            why = "" if isinstance(e.code, int) else str(e.code or "")
+        finally:
+            sys.argv = argv
+            subprocess.run, subprocess.call = real_run, real_call
+        check(label, "the stored transcript is from image" in why, want_refused)
+
+
+def stale_image_case():
+    print("\n-- the stale-transcript guard --")
+    # A case transcript from another PHP image.
+    stale_guard("a transcript from another image is refused", sha="c" * 64)
+    # The probe's OWN transcript, carrying the probe image's sha, is what it should be.
+    stale_guard("the probe's own sha is not treated as stale", want_refused=False)
+    # ...and the exemption is not a hole: a probe transcript from a THIRD image is refused.
+    stale_guard("a stale PROBE transcript is still refused", probe_sha="c" * 64)
+
+
+def node_table_cases():
+    """THE NODE TABLE IS PART OF THE INSTRUMENT, so its size is pinned by a test.
+
+    CRASH-046 and CRASH-075 produced `setup-fault` on all four arms because the module's
+    default 4-page node table could not grow fast enough for a workload holding ~12,600
+    live blocks, and heap.c's ensure_ids(256) then handed back NULL. Nothing about that
+    failure looks like a size: it surfaces as "the heap would not lend a block". If the
+    insmod line silently loses its parameter the two cases simply go back to being
+    unreadable, so the line itself is asserted here rather than trusted.
+    """
+    print("\n-- the node table --")
+    spec = importlib.util.spec_from_file_location("rv", HERE / "run-virtual.py")
+    rv = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(rv)
+    runs = [("CRASH-001", "img 1")]
+    text = rv.guest_script(runs)
+    check("the guest insmods the module with a pre-grown node table",
+          "insmod capstone_vm.ko node_initial_pages=1024 supervisor_slots=32 || exit 1" in text,
+          True)
+    # Both of these decide whether the platform runs AT ALL, so they are asserted rather than
+    # assumed. supervisor_slots defaults to 1 (what silicon holds) and every thread and
+    # shared-heap check in runtime/virtual/run.py fails there; x-capstone-test-csrs keeps CSR
+    # 0xcc0, which the PAGED module reads once per context creation and which upstream made
+    # illegal by default on 2026-10-18. Missing either one, the guest wedges with `cause = 24`
+    # inside the monitor and names neither cause.
+    check("the module gets more than silicon's single supervisor slot",
+          "supervisor_slots=32" in text, True)
+    check("and the emulator keeps the CSR the paged module reads",
+          "x-capstone-test-csrs=true" in rv.QEMU_CPU, True)
+    check("with matching supervisor slots on the emulator side",
+          "x-capstone-supervisor-slots=32" in rv.QEMU_CPU, True)
+    check("the exact-bounds profile is still selected",
+          "x-capstone-exact-bounds=true" in rv.QEMU_CPU, True)
+    check("1024 pages is 262144 nodes, at 256 per page", rv.NODE_PAGES * 256, 262144)
+    check("and the size is overridable for a directed experiment",
+          "node_initial_pages=7 " in rv.guest_script(runs, node_pages=7), True)
+
+
+def cap_insn_cases():
+    """The image gate reads instruction WORDS, not a mnemonic.
+
+    This gate decides whether the whole measurement is believed: the seam is a runtime mode, so
+    an image that cannot revoke would make all three temporal columns read alike. It was a
+    `grep -c '\\brevoke\\b'` over objdump until 2026-10-26, and llvm-objdump prints both CDERIVE
+    and CREVOKE as <unknown> -- so after the seam moved onto them the gate read zero on a
+    CORRECT image. It existed in two copies, which drifted: the build's was fixed, the runner's
+    was not, and the runner refused a whole 29-case measurement after all four arms had run.
+    These pin the encoding so a third copy cannot drift silently."""
+    print("\n-- the image capability-instruction gate --")
+    spec = importlib.util.spec_from_file_location("cci", HERE / "count-cap-insns.py")
+    cci = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(cci)
+    # funct7 0x51 CDERIVE / 0x52 CREVOKE, funct3 1, opcode 0x5b -- little-endian in the dump.
+    derive = "   10000: 5b 10 00 a2  \t<unknown>\n"
+    revoke = "   10004: 5b 10 00 a4  \t<unknown>\n"
+    check("both instructions are counted from their encodings",
+          cci.count(io.StringIO(derive + revoke)), (1, 1))
+    check("the word 'revoke' in the text counts for NOTHING",
+          cci.count(io.StringIO("revoke\nrevoke\nrevoke\n")), (0, 0))
+    check("a near miss on funct7 is not counted",
+          cci.count(io.StringIO("   10000: 5b 10 00 a6  \t<unknown>\n")), (0, 0))
+    check("a near miss on the opcode is not counted",
+          cci.count(io.StringIO("   10000: 5a 10 00 a4  \t<unknown>\n")), (0, 0))
+    check("an image with derives but no revokes is not enough",
+          cci.count(io.StringIO(derive * 9)), (9, 0))
+
+
+def provenance_cases():
+    """A bundle must identify its platform BY CONTENT. These were recorded as bare paths, so a
+    bundle named files on one host and said nothing about what they held -- and the kernel here
+    was built from a buildroot checkout that is not the pin the superproject records."""
+    print("\n-- the platform record --")
+    import hashlib
+    with tempfile.TemporaryDirectory() as d:
+        d = Path(d)
+        (d / "Image").write_bytes(b"kernel bytes")
+        want = hashlib.sha256(b"kernel bytes").hexdigest()
+        check("a platform binary is hashed, not just named",
+              R.sha256_file(d / "Image"), want)
+
+        images, adapter = d, d / "adapter"
+        (d / "fw_jump.elf").write_bytes(b"fw")
+        (d / "rootfs.ext2").write_bytes(b"rootfs")
+        (adapter / "module").mkdir(parents=True)
+        (adapter / "capstone-vexec").write_bytes(b"launcher")
+        (adapter / "module" / "capstone_vm.ko").write_bytes(b"module")
+        args = types.SimpleNamespace(llvm_bin=Path("/nonexistent"), qemu=d / "qemu",
+                                     images=images, adapter=adapter)
+        try:
+            rec = R.platform_record(args)
+        except (FileNotFoundError, IndexError):
+            # clang is absent in this sandbox; the compiler line is not what is under test
+            R.subprocess = types.SimpleNamespace(
+                run=lambda *a, **k: types.SimpleNamespace(stdout="clang stub\n"))
+            rec = R.platform_record(args)
+            R.subprocess = subprocess
+
+        check("the kernel is recorded by digest", rec["kernel"].split()[0], want)
+        check("the launcher and the module are recorded too",
+              all(len(rec[k].split()[0]) == 64 for k in ("launcher", "module")), True)
+        check("the guest-written rootfs is recorded as well", "rootfs" in rec, True)
+        check("an ABSENT binary says so rather than being omitted",
+              rec["qemu"].startswith("MISSING:"), True)
+        check("and a missing input is never mistaken for a 64-hex digest",
+              len(rec["qemu"].split()[0]) == 64, False)
+        # The platform is not only its binaries. These two properties decide whether the
+        # platform runs at all, run.py records paths and hashes but deliberately not argv, and
+        # two runs differing only in them are NOT equivalent -- so the bundle has to say.
+        check("the record names the emulator's capability properties, not just its hash",
+              "x-capstone-test-csrs=true" in rec.get("qemu_cpu", ""), True)
+        check("and the arguments the module was loaded with",
+              "supervisor_slots=32" in rec.get("module_args", ""), True)
+        check("the node table size is recorded with them",
+              "node_initial_pages=" in rec.get("module_args", ""), True)
+        check("the judge's required keys are all present",
+              [k for k in verdicts.PLATFORM_KEYS if k not in rec], [])
+
+
+def lint():
+    print("\n-- lint --")
+    for mod in ("pyflakes", "flake8"):
+        p = subprocess.run([sys.executable, "-m", mod, str(HERE / "run-realphp.py"),
+                            str(Path(__file__))], capture_output=True, text=True)
+        if p.returncode != 127 and (p.stdout or p.stderr or p.returncode == 0):
+            if p.stdout.strip():
+                print(p.stdout.strip())
+                FAILURES.append(f"{mod} reported findings")
+            else:
+                print(f"  ok   {mod} clean")
+            return
+    print("  NOTE: neither pyflakes nor flake8 is installed, so NO linter ran. This is reported "
+          "rather than skipped silently: an absent check reads exactly like a passing one.")
+
+
+if __name__ == "__main__":
+    helper_cases()
+    population_cases()
+    observation_cases()
+    main_path_cases()
+    stale_image_case()
+    node_table_cases()
+    cap_insn_cases()
+    provenance_cases()
+    lint()
+    print()
+    if FAILURES:
+        print(f"{len(FAILURES)} FAILURES")
+        for f in FAILURES:
+            print(f"  {f}")
+        sys.exit(1)
+    print("all checks pass")

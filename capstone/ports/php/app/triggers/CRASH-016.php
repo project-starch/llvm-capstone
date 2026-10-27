@@ -1,0 +1,1 @@
+echo sprintf("%'", 'x');

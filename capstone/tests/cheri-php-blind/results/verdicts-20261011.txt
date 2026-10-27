@@ -1,0 +1,48 @@
+# config reality (per pass) -- a row verdict is void if these are wrong:
+#   spatial   runtime_revocation_default=0 runtime_revocation_every_free_default=0  REVOKE_ENABLED=0
+#   temporal  runtime_revocation_default=1 runtime_revocation_every_free_default=0  REVOKE_ENABLED=1
+#   eager     runtime_revocation_default=1 runtime_revocation_every_free_default=1  REVOKE_ENABLED=1
+
+row                      arm         spatial          temporal         eager            verdict                predicted        
+------------------------------------------------------------------------------------------------------------------------------------------------------
+a1_uaf_read              stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+a1_uaf_read              patched     exit0@DONE       exit0@DONE       SIGPROT@USE-BEGIN BLOCKED-SWEEP(eager)   BLOCKED-SWEEP    
+a2_uaf_write             stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+a2_uaf_write             patched     exit0@DONE       exit0@DONE       SIGPROT@USE-BEGIN BLOCKED-SWEEP(eager)   BLOCKED-SWEEP    
+a3_uaf_recycled          stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+a3_uaf_recycled          patched     exit0@DONE       exit0@DONE       SIGPROT@USE-BEGIN BLOCKED-SWEEP(eager)   MISS             << UNEXPECTED
+a4_uaf_zval_member       stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+a4_uaf_zval_member       patched     exit0@DONE       exit0@DONE       SIGPROT@USE-BEGIN BLOCKED-SWEEP(eager)   BLOCKED-SWEEP    
+a5_double_efree          stockalloc  SIGPROT@SHUT-BEGIN SIGPROT@SHUT-BEGIN SIGPROT@SHUT-BEGIN LATE@SHUT              LATE@SHUT        
+a5_double_efree          patched     SIGPROT@USE-BEGIN SIGPROT@USE-BEGIN SIGPROT@USE-BEGIN BLOCKED-SYNC           BLOCKED-ABORT    << UNEXPECTED
+a6_uaf_after_shutdown    stockalloc  exit0@DONE       exit0@DONE       SIGPROT@USE-BEGIN BLOCKED-SWEEP(eager)   BLOCKED-SWEEP    
+a6_uaf_after_shutdown    patched     exit0@DONE       exit0@DONE       SIGPROT@USE-BEGIN BLOCKED-SWEEP(eager)   BLOCKED-SWEEP    
+b1_oob_read_slack        stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+b1_oob_read_slack        patched     exit0@DONE       exit0@DONE       exit0@DONE       MISS                   BLOCKED-SYNC     << UNEXPECTED
+b2_oob_write_slack       stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+b2_oob_write_slack       patched     exit0@DONE       exit0@DONE       exit0@DONE       MISS                   BLOCKED-SYNC     << UNEXPECTED
+b3_oob_read_past_block   stockalloc  SIGPROT@USE-BEGIN SIGPROT@USE-BEGIN SIGPROT@USE-BEGIN BLOCKED-SYNC           BLOCKED-SYNC     
+b3_oob_read_past_block   patched     SIGPROT@USE-BEGIN SIGPROT@USE-BEGIN SIGPROT@USE-BEGIN BLOCKED-SYNC           BLOCKED-SYNC     
+c1_stack_after_return    stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+c1_stack_after_return    patched     exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+b4_header_underflow      stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+b4_header_underflow      patched     exit0@DONE       exit0@DONE       exit0@DONE       MISS                   MISS             
+z0_sanity                stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       RAN-CLEAN              DONE             
+z0_sanity                patched     exit0@DONE       exit0@DONE       exit0@DONE       RAN-CLEAN              DONE             
+z1_bounds_probe          stockalloc  exit0@DONE       exit0@DONE       exit0@DONE       RAN-CLEAN              DONE             
+z1_bounds_probe          patched     exit0@DONE       exit0@DONE       exit0@DONE       RAN-CLEAN              DONE             
+z2_libc_uaf              stockalloc  exit0@DONE       exit0@DONE       SIGPROT@USE-BEGIN BLOCKED-SWEEP(eager)   BLOCKED-SWEEP    
+z2_libc_uaf              patched     exit0@DONE       exit0@DONE       SIGPROT@USE-BEGIN BLOCKED-SWEEP(eager)   BLOCKED-SWEEP    
+------------------------------------------------------------------------------------------------------------------------------------------------------
+
+# modelled-defect rows only (the 31), by arm and verdict:
+#   temporal  stockalloc  MISS=4
+#   temporal  patched     BLOCKED-SWEEP=4
+#   spatial   stockalloc  MISS=2
+#   spatial   patched     MISS=2
+
+# PREDICTION MISSES (pre-registered vs measured) -- investigate before reporting:
+#   a3_uaf_recycled [patched] predicted MISS, measured BLOCKED-SWEEP(eager)
+#   a5_double_efree [patched] predicted BLOCKED-ABORT, measured BLOCKED-SYNC
+#   b1_oob_read_slack [patched] predicted BLOCKED-SYNC, measured MISS
+#   b2_oob_write_slack [patched] predicted BLOCKED-SYNC, measured MISS
