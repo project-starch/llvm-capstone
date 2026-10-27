@@ -1,0 +1,6 @@
+
+PostgreSQL stand-alone backend 17.5
+backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> backend> 	 1: levenshtein_less_equal	(typeid = 23, len = 4, typmod = -1, byval = t)
+	----
+	 1: levenshtein_less_equal = "536870913"	(typeid = 23, len = 4, typmod = -1, byval = t)
+	----
