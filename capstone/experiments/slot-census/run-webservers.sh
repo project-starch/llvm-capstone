@@ -17,13 +17,9 @@ set -u
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 OUT=$1
 NGINX=1.20.2 PCRE=8.45 WRK=4.2.0 HTTPD=2.4.58 APR=1.7.4 APRUTIL=1.6.3
-CACHE=${SLOTCENSUS_CACHE:-$HOME/slot-census/cache}
 PORT_N=${SLOTCENSUS_NGINX_PORT:-18080} PORT_A=${SLOTCENSUS_HTTPD_PORT:-18081}
-[ -e "$OUT" ] && { echo "run-webservers: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/logs" "$CACHE"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
-build_tracer
-run_controls
+start_pass
 
 fetch() {   # file url
   [ -s "$CACHE/$1" ] || curl -fsSL -o "$CACHE/$1" "$2" || { echo "run-webservers: download of $1 failed" >&2; exit 1; }
@@ -71,16 +67,15 @@ t=$(date +%s)
 measured "$OUT/nginx.jsonl" "$N/sbin/nginx" > "$OUT/logs/nginx.server" 2>&1
 sleep 1
 "$TOOL/wrk-$WRK/wrk" -t16 -c256 -d30s "http://127.0.0.1:$PORT_N/file64" > "$OUT/nginx.out" 2>&1; load=$?
-"$N/sbin/nginx" -s quit; for i in $(seq 1 100); do [ -e "$N/logs/nginx.pid" ] || break; sleep 0.2; done
+"$N/sbin/nginx" -s quit; for _ in $(seq 1 100); do [ -e "$N/logs/nginx.pid" ] || break; sleep 0.2; done
 stopped=1; [ -e "$N/logs/nginx.pid" ] || stopped=0
 # all 16 workers must have reported (a census missing them would read as a valid, tiny peak)
 workers=$(grep -c '"cmdline":"nginx: worker process' "$OUT/nginx.jsonl")
 v=INVALID
 [ $load = 0 ] && [ $stopped = 0 ] && [ "$workers" -ge 16 ] && ! grep -qE "Socket errors|Non-2xx" "$OUT/nginx.out" \
   && v=valid
-printf '%s\t%s\t%s\twrk=%s stopped=%s workers=%s %ss\n' nginx 're:^nginx: (master|worker) process' "$v" "$load" \
-  "$stopped" "$workers" \
-  "$(( $(date +%s) - t ))" | tee -a "$OUT/cells.tsv"
+record_cell nginx 're:^nginx: (master|worker) process' "$v" \
+  "wrk=$load stopped=$stopped workers=$workers $(( $(date +%s) - t ))s"
 
 # httpd: its stock configuration with the port and the 64-byte file
 H=$TOOL/httpd
@@ -92,11 +87,10 @@ measured "$OUT/httpd.jsonl" "$H/bin/apachectl" -k start \
   > "$OUT/logs/httpd.server" 2>&1
 sleep 1
 "$H/bin/ab" -n 100000 -c 128 "http://127.0.0.1:$PORT_A/file64" > "$OUT/httpd.out" 2>&1; load=$?
-"$H/bin/apachectl" -k graceful-stop; for i in $(seq 1 150); do [ -e "$H/logs/httpd.pid" ] || break; sleep 0.2; done
+"$H/bin/apachectl" -k graceful-stop; for _ in $(seq 1 150); do [ -e "$H/logs/httpd.pid" ] || break; sleep 0.2; done
 stopped=1; [ -e "$H/logs/httpd.pid" ] || stopped=0
 failed=$(sed -n 's/^Failed requests: *//p' "$OUT/httpd.out"); non2xx=$(grep -c "Non-2xx" "$OUT/httpd.out")
 v=INVALID
 [ $load = 0 ] && [ $stopped = 0 ] && [ "${failed:-x}" = 0 ] && [ "$non2xx" = 0 ] && v=valid
-printf '%s\t%s\t%s\tab=%s failed=%s stopped=%s %ss\n' httpd 'httpd' "$v" "$load" "${failed:-?}" "$stopped" \
-  "$(( $(date +%s) - t ))" | tee -a "$OUT/cells.tsv"
+record_cell httpd httpd "$v" "ab=$load failed=${failed:-?} stopped=$stopped $(( $(date +%s) - t ))s"
 echo CENSUS_DONE >> "$OUT/cells.tsv"

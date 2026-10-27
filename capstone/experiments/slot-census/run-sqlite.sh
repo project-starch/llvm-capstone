@@ -12,12 +12,8 @@ set -u
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 OUT=$1; shift
 SIZES=("$@"); [ ${#SIZES[@]} -gt 0 ] || SIZES=(25 50 100 200 400 800)
-CACHE=${SLOTCENSUS_CACHE:-$HOME/slot-census/cache}
-[ -e "$OUT" ] && { echo "run-sqlite: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT" "$CACHE"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
-build_tracer
-run_controls
+start_pass
 
 # SQLite 3.22.0 and speedtest1 from the same release
 for z in sqlite-amalgamation-3220000.zip sqlite-src-3220000.zip; do
@@ -47,7 +43,7 @@ for size in "${SIZES[@]}"; do
       "$TOOL/speedtest1" --size "$size" --stats "${look[@]}" "$OUT/$cell.db" > "$OUT/$cell.out" 2>&1
     rc=$?
     v=INVALID; [ $rc = 0 ] && grep -q 'TOTAL' "$OUT/$cell.out" && v=valid
-    printf '%s\tspeedtest1\t%s\trc=%s %ss\n' "$cell" "$v" "$rc" "$(( $(date +%s) - t ))" | tee -a "$OUT/cells.tsv"
+    record_cell "$cell" speedtest1 "$v" "rc=$rc $(( $(date +%s) - t ))s"
     rm -f "$OUT/$cell.db"
   done
 done

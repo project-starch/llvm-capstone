@@ -1,11 +1,7 @@
 /* slotcensus: an LD_PRELOAD census of simultaneously live heap objects, for sizing lifetime-id slots.
  *
- * Exact at every event: every successful allocation and free updates one live counter, and the peak is the running
- * maximum of that counter (compare-and-swap), never a sample. Counted entry points: malloc, calloc, realloc,
- * reallocarray, free, posix_memalign, aligned_alloc, memalign, valloc, pvalloc (C++ operator new/delete reach malloc
- * and free through libstdc++). realloc: NULL old pointer = an allocation; size 0 that frees = a free; a result at the
- * old address = in place (no change to the live count); a result elsewhere = a move (one free, one allocation, the
- * live count unchanged; counted as moved). malloc(0) returns a unique pointer, so it is an object.
+ * Counted entry points: malloc, calloc, realloc, reallocarray, free, posix_memalign, aligned_alloc, memalign, valloc,
+ * pvalloc (C++ operator new/delete reach malloc and free through libstdc++), by the rules in census.h.
  *
  * Per process, at exit, one JSON line is appended to $SLOTCENSUS_OUT:
  *   pid, ppid, cmdline (the first 1023 bytes of /proc/self/cmdline, arguments joined by spaces), forked (1 if this
@@ -30,6 +26,8 @@
 #include <string.h>
 #include <unistd.h>
 
+#include "census.h"
+
 static void *(*r_malloc)(size_t);
 static void *(*r_calloc)(size_t, size_t);
 static void *(*r_realloc)(void *, size_t);
@@ -38,9 +36,7 @@ static int (*r_posix_memalign)(void **, size_t, size_t);
 static void *(*r_aligned_alloc)(size_t, size_t);
 static void *(*r_memalign)(size_t, size_t);
 
-static long long live, peak, allocs, frees, moved, inplace, failed;
-static long long live_bytes, peak_bytes;
-static long long size_log2[64];
+static struct census_counts counts;
 static int forked;
 
 static char out_path[4096];   /* $SLOTCENSUS_OUT, read at start-up: nginx and others clear a child's environment */
@@ -66,37 +62,15 @@ static void resolve(void)
     resolving = 0;
 }
 
-static void raise_max(long long *max, long long v)
-{
-    long long old = __atomic_load_n(max, __ATOMIC_RELAXED);
-    while (v > old && !__atomic_compare_exchange_n(max, &old, v, 1, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {}
-}
-
-static void note_size(size_t n)
-{
-    unsigned b = n > 1 ? 63 - (unsigned)__builtin_clzll((unsigned long long)n) : 0;
-    __atomic_add_fetch(&size_log2[b], 1, __ATOMIC_RELAXED);
-}
-
 static void note_alloc(void *p, size_t requested)
 {
-    if (!p) {
-        __atomic_add_fetch(&failed, 1, __ATOMIC_RELAXED);
-        return;
-    }
-    __atomic_add_fetch(&allocs, 1, __ATOMIC_RELAXED);
-    note_size(requested);
-    raise_max(&peak, __atomic_add_fetch(&live, 1, __ATOMIC_RELAXED));
-    raise_max(&peak_bytes, __atomic_add_fetch(&live_bytes, (long long)malloc_usable_size(p), __ATOMIC_RELAXED));
+    census_alloc(&counts, p, requested, p ? (int64_t)malloc_usable_size(p) : 0);
 }
 
 static void note_free(void *p)
 {
-    if (!p || in_boot(p))
-        return;
-    __atomic_add_fetch(&frees, 1, __ATOMIC_RELAXED);
-    __atomic_sub_fetch(&live, 1, __ATOMIC_RELAXED);
-    __atomic_sub_fetch(&live_bytes, (long long)malloc_usable_size(p), __ATOMIC_RELAXED);
+    if (p && !in_boot(p))
+        census_free(&counts, (int64_t)malloc_usable_size(p));
 }
 
 void *malloc(size_t n) { resolve(); void *p = r_malloc(n); note_alloc(p, n); return p; }
@@ -129,29 +103,9 @@ void *realloc(void *o, size_t n)
         note_alloc(p, n);
         return p;
     }
-    size_t was = malloc_usable_size(o);
+    int64_t was = (int64_t)malloc_usable_size(o);
     void *p = r_realloc(o, n);
-    if (!p) {
-        if (n == 0) {   /* glibc's realloc(p, 0) frees p and returns NULL */
-            __atomic_add_fetch(&frees, 1, __ATOMIC_RELAXED);
-            __atomic_sub_fetch(&live, 1, __ATOMIC_RELAXED);
-            __atomic_sub_fetch(&live_bytes, (long long)was, __ATOMIC_RELAXED);
-        } else {        /* failed: the old object is untouched */
-            __atomic_add_fetch(&failed, 1, __ATOMIC_RELAXED);
-        }
-        return p;
-    }
-    note_size(n);
-    if (p == o) {
-        __atomic_add_fetch(&inplace, 1, __ATOMIC_RELAXED);
-    } else {
-        /* a move is one free and one allocation; the live count does not change */
-        __atomic_add_fetch(&moved, 1, __ATOMIC_RELAXED);
-        __atomic_add_fetch(&allocs, 1, __ATOMIC_RELAXED);
-        __atomic_add_fetch(&frees, 1, __ATOMIC_RELAXED);
-    }
-    raise_max(&peak_bytes, __atomic_add_fetch(&live_bytes, (long long)malloc_usable_size(p) - (long long)was,
-                                              __ATOMIC_RELAXED));
+    census_realloc(&counts, o, p, n, was, p ? (int64_t)malloc_usable_size(p) : 0);
     return p;
 }
 
@@ -193,14 +147,10 @@ void *pvalloc(size_t n)
     return memalign(page, (n + page - 1) & ~(page - 1));
 }
 
-/* A fork child starts with the parent's live objects; its own counts start at zero and its peak at that live set. */
 static void child_after_fork(void)
 {
     forked = 1;
-    allocs = frees = moved = inplace = failed = 0;
-    memset(size_log2, 0, sizeof size_log2);
-    peak = live;
-    peak_bytes = live_bytes;
+    census_after_fork(&counts);
 }
 
 __attribute__((constructor)) static void init(void)
@@ -220,12 +170,7 @@ __attribute__((destructor)) static void report(void)
     char cmd[1024] = "?";
     int fd = open("/proc/self/cmdline", O_RDONLY);
     if (fd >= 0) {
-        ssize_t n = read(fd, cmd, sizeof cmd - 1);
-        n = n > 0 ? n : 0;
-        while (n > 0 && cmd[n - 1] == 0) --n;   /* the trailing NUL */
-        cmd[n] = 0;
-        for (ssize_t i = 0; i < n; ++i)
-            cmd[i] = cmd[i] == 0 ? ' ' : cmd[i] == '"' || cmd[i] == '\\' || (unsigned char)cmd[i] < 0x20 ? '_' : cmd[i];
+        census_cmdline(cmd, read(fd, cmd, sizeof cmd - 1));
         close(fd);
     }
     char line[4096];
@@ -233,10 +178,11 @@ __attribute__((destructor)) static void report(void)
                        "{\"pid\":%d,\"ppid\":%d,\"cmdline\":\"%s\",\"forked\":%d,\"peak_live\":%lld,\"end_live\":%lld,"
                        "\"allocs\":%lld,\"frees\":%lld,\"realloc_moved\":%lld,\"realloc_inplace\":%lld,\"failed\":%lld,"
                        "\"peak_live_bytes\":%lld,\"size_log2\":[",
-                       (int)getpid(), (int)getppid(), cmd, forked, peak, live, allocs, frees, moved, inplace,
-                       failed, peak_bytes);
+                       (int)getpid(), (int)getppid(), cmd, forked, (long long)counts.peak, (long long)counts.live,
+                       (long long)counts.allocs, (long long)counts.frees, (long long)counts.moved,
+                       (long long)counts.inplace, (long long)counts.failed, (long long)counts.peak_bytes);
     for (int b = 0; b < 64 && len < (int)sizeof line - 32; ++b)
-        len += snprintf(line + len, sizeof line - len, "%s%lld", b ? "," : "", size_log2[b]);
+        len += snprintf(line + len, sizeof line - len, "%s%lld", b ? "," : "", (long long)counts.size_log2[b]);
     len += snprintf(line + len, sizeof line - len, "]}\n");
     fd = open(path, O_WRONLY | O_APPEND | O_CREAT, 0644);
     if (fd >= 0) {

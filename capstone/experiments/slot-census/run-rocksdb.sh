@@ -15,11 +15,8 @@ KEYS=("$@"); [ ${#KEYS[@]} -gt 0 ] || KEYS=(1000000 10000000)
 VERSION=v10.10.1
 GFLAGS=v2.2.2
 BENCHMARKS=fillrandom,readrandom,seekrandom,overwrite
-[ -e "$OUT" ] && { echo "run-rocksdb: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/logs"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
-build_tracer
-run_controls
+start_pass
 
 git -c advice.detachedHead=false clone -q --depth 1 -b "$GFLAGS" https://github.com/gflags/gflags "$TOOL/gflags-src" &&
 git -c advice.detachedHead=false clone -q --depth 1 -b "$VERSION" https://github.com/facebook/rocksdb "$TOOL/rocksdb" \
@@ -55,7 +52,7 @@ for keys in "${KEYS[@]}"; do
     > "$OUT/$cell.out" 2>&1
   rc=$?
   v=INVALID; [ $rc = 0 ] && v=valid
-  printf '%s\tdb_bench\t%s\trc=%s %ss\n' "$cell" "$v" "$rc" "$(( $(date +%s) - t ))" | tee -a "$OUT/cells.tsv"
+  record_cell "$cell" db_bench "$v" "rc=$rc $(( $(date +%s) - t ))s"
   rm -rf "$TOOL/db"
 done
 echo CENSUS_DONE >> "$OUT/cells.tsv"

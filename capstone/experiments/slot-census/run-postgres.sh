@@ -16,15 +16,11 @@ HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 OUT=$1; shift
 SCALES=("$@"); [ ${#SCALES[@]} -gt 0 ] || SCALES=(1 10 100)
 VERSION=17.6
-CACHE=${SLOTCENSUS_CACHE:-$HOME/slot-census/cache}
 PORT=${SLOTCENSUS_PG_PORT:-25432}
 CLIENTS=${SLOTCENSUS_PG_CLIENTS:-16}
 SECONDS_RUN=${SLOTCENSUS_PG_SECONDS:-120}
-[ -e "$OUT" ] && { echo "run-postgres: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/logs" "$CACHE"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
-build_tracer
-run_controls
+start_pass
 
 T=postgresql-$VERSION.tar.bz2
 [ -s "$CACHE/$T" ] || curl -fsSL -o "$CACHE/$T" "https://ftp.postgresql.org/pub/source/v$VERSION/$T" || exit 1
@@ -60,8 +56,7 @@ for scale in "${SCALES[@]}"; do
   v=INVALID
   grep -q '^init rc=0' "$OUT/$cell.out" && grep -q '^run rc=0' "$OUT/$cell.out" &&
     grep -q 'number of failed transactions: 0' "$OUT/$cell.out" && [ $stop = 0 ] && v=valid
-  printf '%s\tre:^(\\S*/)?postgres(:|\\s|$)\t%s\tstop=%s %ss\n' "$cell" "$v" "$stop" \
-    "$(( $(date +%s) - t ))" | tee -a "$OUT/cells.tsv"
+  record_cell "$cell" 're:^(\S*/)?postgres(:|\s|$)' "$v" "stop=$stop $(( $(date +%s) - t ))s"
   rm -rf "$D"
 done
 echo CENSUS_DONE >> "$OUT/cells.tsv"

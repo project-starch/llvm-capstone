@@ -10,7 +10,8 @@ programs' own allocation behaviour is measured, not a port's.
 
 ## Layout
 
-    instrument   slotcensus.c       the tracer (LD_PRELOAD)
+    instrument   census.h           the counting rules every tracer shares (one place for realloc, fork, peaks)
+                 slotcensus.c       the tracer (LD_PRELOAD)
                  ffcensus.c         the same census for Firefox, as a replace-malloc library (+ ffcensus-dump.py)
                  control.c          positive control (C, with a fork child that clears its environment)
                  control_cxx.cc     positive control (C++ new[]/delete[])
@@ -18,7 +19,9 @@ programs' own allocation behaviour is measured, not a port's.
                  check-control.py   compares a control's expected counts with its census lines
                  slotins.c          instructions and allocations per process, a DynamoRIO client (+ slotins.cmake)
                  insctl.c           slotins's control: loops of known instruction counts, threads and a fork
-                 tracer.sh          sourced by every runner: builds the tracer and controls, runs the controls
+                 check-instructions.py  compares insctl's instruction counts with what its loops must add
+                 tracer.sh          sourced by every runner: start_pass (pass directory, tools, controls),
+                                    measured (one measured command in either mode), record_cell (one cells.tsv row)
     runners      run-spec.sh        SPEC CPU2017 rate
                  run-parsec.sh      PARSEC 3.0
                  run-pyperformance.sh  pyperformance on CPython

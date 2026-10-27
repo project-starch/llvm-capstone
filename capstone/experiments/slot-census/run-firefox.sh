@@ -19,13 +19,9 @@ HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 OUT=$1; shift
 VERSIONS=("$@"); [ ${#VERSIONS[@]} -gt 0 ] || VERSIONS=(2.1 3.1)
 GECKO=0.36.0 SELENIUM=4.27.1
-CACHE=${SLOTCENSUS_CACHE:-$HOME/slot-census/cache}
 PORT=${SLOTCENSUS_SPEEDOMETER_PORT:-18090}
-[ -e "$OUT" ] && { echo "run-firefox: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/logs" "$CACHE"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
-build_tracer
-run_controls
+start_pass
 
 # Firefox Nightly and the replace-malloc headers of its exact source changeset
 F_T=firefox-nightly.tar.xz G_T=geckodriver-v$GECKO-linux64.tar.gz
@@ -130,7 +126,6 @@ for v in "${VERSIONS[@]}"; do
   python3 "$HERE/ffcensus-dump.py" "$D" > "$OUT/$cell.jsonl"; dump=$?
   procs=$(grep -c . "$OUT/$cell.jsonl"); content=$(grep -c -- "-contentproc" "$OUT/$cell.jsonl")
   v_=INVALID; [ $rc = 0 ] && [ $dump = 0 ] && [ "$content" -ge 1 ] && grep -q '^score ' "$OUT/$cell.out" && v_=valid
-  printf '%s\t%s\t%s\trc=%s processes=%s content=%s %ss\n' "$cell" 're:firefox' "$v_" "$rc" "$procs" "$content" \
-    "$(( $(date +%s) - t ))" | tee -a "$OUT/cells.tsv"
+  record_cell "$cell" 're:firefox' "$v_" "rc=$rc processes=$procs content=$content $(( $(date +%s) - t ))s"
 done
 echo CENSUS_DONE >> "$OUT/cells.tsv"

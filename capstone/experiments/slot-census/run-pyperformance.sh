@@ -17,12 +17,8 @@ OUT=$1; shift
 VERSION=3.13.7
 PYPERFORMANCE=1.14.0
 JOBS=${SLOTCENSUS_PY_JOBS:-16}
-CACHE=${SLOTCENSUS_CACHE:-$HOME/slot-census/cache}
-[ -e "$OUT" ] && { echo "run-pyperformance: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/logs" "$CACHE"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
-build_tracer
-run_controls
+start_pass
 
 T=Python-$VERSION.tgz
 [ -s "$CACHE/$T" ] || curl -fsSL -o "$CACHE/$T" "https://www.python.org/ftp/python/$VERSION/$T" || exit 1

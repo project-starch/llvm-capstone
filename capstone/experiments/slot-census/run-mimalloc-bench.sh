@@ -14,11 +14,8 @@ HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 OUT=$1; shift
 COMMIT=391382606681408e34d96ec54e9e6c79805aa3ac
 PROCS=${SLOTCENSUS_MB_PROCS:-8}
-[ -e "$OUT" ] && { echo "run-mimalloc-bench: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/logs"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
-build_tracer
-run_controls
+start_pass
 
 MB=$TOOL/mimalloc-bench
 git -c advice.detachedHead=false clone -q https://github.com/daanx/mimalloc-bench "$MB" &&
@@ -72,6 +69,6 @@ for t in "${TESTS[@]}"; do
     > "$OUT/logs/$cell.log" 2>&1
   rc=$?
   v=INVALID; [ $rc = 0 ] && v=valid
-  printf '%s\t%s\t%s\trc=%s %ss\n' "$cell" "$exe" "$v" "$rc" "$(( $(date +%s) - s ))" | tee -a "$OUT/cells.tsv"
+  record_cell "$cell" "$exe" "$v" "rc=$rc $(( $(date +%s) - s ))s"
 done
 echo CENSUS_DONE >> "$OUT/cells.tsv"

@@ -11,11 +11,9 @@
  * joins the process's when the thread exits, and DynamoRIO runs every live thread's exit event before the process
  * exit event, so the total is exact.
  * Allocations: drwrap wraps malloc, calloc, realloc, free, posix_memalign, aligned_alloc, memalign and valloc in every
- * module that exports them, with slotcensus.c's rules: a successful allocation is one allocation and one live object;
- * free(non-null) one free; realloc(NULL, n) an allocation, realloc(p, 0) returning NULL a free, a result at the old
- * address in place, elsewhere a move (one allocation, one free, live unchanged). Peak live objects is the running
- * maximum by compare-and-swap. Unlike the preloaded tracer, a wrapped entry point also sees libc's internal calls
- * (stdio buffers and the like), a few objects more.
+ * module that exports them, counted by the rules in census.h (without bytes or sizes: the post-call sees only the
+ * result). Unlike the preloaded tracer, a wrapped entry point also sees libc's internal calls (stdio buffers and the
+ * like), a few objects more.
  * drrun follows child processes; a fork child starts with the live set it inherits and zero counts, and an exec
  * starts a new process line. At exit each process appends one JSON line to OUT_FILE: pid, ppid, cmdline (as
  * slotcensus.c records it), forked, instructions, allocs, frees, realloc_moved, realloc_inplace, failed, peak_live,
@@ -23,6 +21,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "census.h"
 #include "dr_api.h"
 #include "drmgr.h"
 #include "drreg.h"
@@ -32,7 +31,7 @@ static uint64 count;   /* the exited threads' instructions */
 static int tls;               /* drmgr TLS field: the thread's counter, for the exit events */
 static reg_id_t tls_seg;       /* raw TLS slot: the same pointer, for the inline add */
 static uint tls_offs;
-static int64 live, peak, allocs, frees, moved, inplace, failed;
+static struct census_counts counts;
 static int forked;
 static char out_path[4096];
 
@@ -76,47 +75,25 @@ static dr_emit_flags_t count_bb(void *drcontext, void *tag, instrlist_t *bb, ins
     return DR_EMIT_DEFAULT;
 }
 
-static void raise_max(int64 *max, int64 v)
-{
-    int64 old = __atomic_load_n(max, __ATOMIC_RELAXED);
-    while (v > old && !__atomic_compare_exchange_n(max, &old, v, 1, __ATOMIC_RELAXED, __ATOMIC_RELAXED)) {}
-}
-
-static void note_alloc(void *p)
-{
-    if (!p) {
-        __atomic_add_fetch(&failed, 1, __ATOMIC_RELAXED);
-        return;
-    }
-    __atomic_add_fetch(&allocs, 1, __ATOMIC_RELAXED);
-    raise_max(&peak, __atomic_add_fetch(&live, 1, __ATOMIC_RELAXED));
-}
-
-static void note_free(void)
-{
-    __atomic_add_fetch(&frees, 1, __ATOMIC_RELAXED);
-    __atomic_sub_fetch(&live, 1, __ATOMIC_RELAXED);
-}
-
 /* the allocating calls: the result decides */
 static void post_alloc(void *wrapcxt, void *user_data)
 {
-    note_alloc(drwrap_get_retval(wrapcxt));
+    census_alloc(&counts, drwrap_get_retval(wrapcxt), 0, 0);
 }
 
 static void post_posix_memalign(void *wrapcxt, void *user_data)
 {
-    note_alloc((int)(ptr_int_t)drwrap_get_retval(wrapcxt) == 0 ? (void *)1 : NULL);
+    census_alloc(&counts, (int)(ptr_int_t)drwrap_get_retval(wrapcxt) == 0 ? (void *)1 : NULL, 0, 0);
 }
 
 static void pre_free(void *wrapcxt, void **user_data)
 {
     if (drwrap_get_arg(wrapcxt, 0) != NULL)
-        note_free();
+        census_free(&counts, 0);
 }
 
 /* realloc: the old pointer goes to the post-call, its low bit set when the requested size is 0 (heap pointers are
- * 16-byte aligned) */
+ * 16-byte aligned). census_realloc needs only whether the size is 0: slotins records no sizes */
 static void pre_realloc(void *wrapcxt, void **user_data)
 {
     *user_data = (void *)((ptr_uint_t)drwrap_get_arg(wrapcxt, 0) | (drwrap_get_arg(wrapcxt, 1) == 0 ? 1 : 0));
@@ -127,20 +104,10 @@ static void post_realloc(void *wrapcxt, void *user_data)
     void *old = (void *)((ptr_uint_t)user_data & ~(ptr_uint_t)1);
     int to_zero = (int)((ptr_uint_t)user_data & 1);
     void *p = drwrap_get_retval(wrapcxt);
-    if (old == NULL) {
-        note_alloc(p);
-    } else if (p == NULL) {
-        if (to_zero)
-            note_free();
-        else
-            __atomic_add_fetch(&failed, 1, __ATOMIC_RELAXED);
-    } else if (p == old) {
-        __atomic_add_fetch(&inplace, 1, __ATOMIC_RELAXED);
-    } else {
-        __atomic_add_fetch(&moved, 1, __ATOMIC_RELAXED);
-        __atomic_add_fetch(&allocs, 1, __ATOMIC_RELAXED);
-        __atomic_add_fetch(&frees, 1, __ATOMIC_RELAXED);
-    }
+    if (old == NULL)
+        census_alloc(&counts, p, 0, 0);
+    else
+        census_realloc(&counts, old, p, to_zero ? 0 : 1, 0, 0);
 }
 
 static void wrap(const module_data_t *mod, const char *name, void (*pre)(void *, void **),
@@ -167,8 +134,7 @@ static void child_after_fork(void *drcontext)
 {
     count = 0;
     *(uint64 *)drmgr_get_tls_field(drcontext, tls) = 0;   /* the forking thread: its count so far is the parent's */
-    allocs = frees = moved = inplace = failed = 0;
-    peak = live;   /* the live set it inherits */
+    census_after_fork(&counts);
     forked = 1;
 }
 
@@ -177,13 +143,8 @@ static void report(void)
     char cmd[1024] = "?";
     file_t f = dr_open_file("/proc/self/cmdline", DR_FILE_READ);
     if (f != INVALID_FILE) {
-        ssize_t n = dr_read_file(f, cmd, sizeof cmd - 1);
+        census_cmdline(cmd, (long)dr_read_file(f, cmd, sizeof cmd - 1));
         dr_close_file(f);
-        n = n > 0 ? n : 0;
-        while (n > 0 && cmd[n - 1] == 0) --n;
-        cmd[n] = 0;
-        for (ssize_t i = 0; i < n; ++i)
-            cmd[i] = cmd[i] == 0 ? ' ' : cmd[i] == '"' || cmd[i] == '\\' || (unsigned char)cmd[i] < 0x20 ? '_' : cmd[i];
     }
     char line[1700];
     int len = dr_snprintf(line, sizeof line,
@@ -191,8 +152,9 @@ static void report(void)
                           "\"allocs\":%lld,\"frees\":%lld,\"realloc_moved\":%lld,\"realloc_inplace\":%lld,"
                           "\"failed\":%lld,\"peak_live\":%lld,\"end_live\":%lld}\n",
                           (int)dr_get_process_id(), (int)dr_get_parent_id(), cmd, forked, (unsigned long long)count,
-                          (long long)allocs, (long long)frees, (long long)moved, (long long)inplace,
-                          (long long)failed, (long long)peak, (long long)live);
+                          (long long)counts.allocs, (long long)counts.frees, (long long)counts.moved,
+                          (long long)counts.inplace, (long long)counts.failed, (long long)counts.peak,
+                          (long long)counts.live);
     file_t o = dr_open_file(out_path, DR_FILE_WRITE_APPEND);
     if (o != INVALID_FILE && len > 0) {
         dr_write_file(o, line, (size_t)(len < (int)sizeof line ? len : (int)sizeof line - 1));

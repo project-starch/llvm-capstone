@@ -24,15 +24,11 @@ REDIS=7.2.16
 MEMCACHED=1.6.45
 OPS=${SLOTCENSUS_YCSB_OPS:-1000000}
 THREADS=64
-CACHE=${SLOTCENSUS_CACHE:-$HOME/slot-census/cache}
 PORT_R=${SLOTCENSUS_REDIS_PORT:-16381}
 PORT_M=${SLOTCENSUS_MEMCACHED_PORT:-21213}
-[ -e "$OUT" ] && { echo "run-ycsb: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/logs" "$CACHE"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
 . "$HERE/libevent.sh"
-build_tracer
-run_controls
+start_pass
 
 fetch() {   # file url
   [ -s "$CACHE/$1" ] || curl -fsSL -o "$CACHE/$1" "$2" || { echo "run-ycsb: download of $1 failed" >&2; exit 1; }
@@ -60,7 +56,7 @@ build_libevent
   (cd "$CACHE" && sha256sum "$Y_T" "$J_T" "$R_T" "$M_T")
   echo "java $(head -1 "$OUT/logs/java.txt")"
   echo "redis $("$R/src/redis-server" --version) (make MALLOC=libc BUILD_TLS=no)"
-  echo "memcached $("$M/memcached" -V) (libevent $LIBEVENT static)"
+  echo "memcached $("$M/memcached" -V) (libevent $LIBEVENT static, sha256 $LIBEVENT_SHA)"
   echo "ycsb $YCSB: load, then workloads A and C with operationcount=$OPS, $THREADS threads, default 10x100-byte fields"
   echo "records ${RECORDS[*]}"
 } > "$OUT/provenance.txt"
@@ -99,20 +95,20 @@ for records in "${RECORDS[@]}"; do
     t=$(date +%s)
     if [ $server = redis ]; then
       port=$PORT_R binding=redis-binding class=site.ycsb.db.RedisClient
-      props=(-p redis.host=127.0.0.1 -p redis.port=$PORT_R)
+      props=(-p redis.host=127.0.0.1 -p "redis.port=$PORT_R")
       up $port && { echo "run-ycsb: port $port is taken" >&2; exit 1; }
       measured "$OUT/$cell.jsonl" \
         "$R/src/redis-server" --port $port --bind 127.0.0.1 --save "" --appendonly no --set-proc-title no \
         --dir "$OUT" > "$OUT/logs/$cell.server" 2>&1 &
     else
       port=$PORT_M binding=memcached-binding class=site.ycsb.db.MemcachedClient
-      props=(-p memcached.hosts=127.0.0.1:$PORT_M)
+      props=(-p "memcached.hosts=127.0.0.1:$PORT_M")
       up $port && { echo "run-ycsb: port $port is taken" >&2; exit 1; }
       measured "$OUT/$cell.jsonl" \
         "$M/memcached" -l 127.0.0.1 -p $port -U 0 -m 65536 -t 4 -c 4096 -A > "$OUT/logs/$cell.server" 2>&1 &
     fi
     srv=$!
-    for i in $(seq 1 100); do up $port && break; sleep 0.1; done
+    for _ in $(seq 1 100); do up $port && break; sleep 0.1; done
     ycsb -load "$binding" "$class" workloada "$records" "$OUT/logs/$cell.load" "${props[@]}"; load=$?
     ycsb -t "$binding" "$class" workloada "$records" "$OUT/logs/$cell.a" "${props[@]}"; a=$?
     ycsb -t "$binding" "$class" workloadc "$records" "$OUT/logs/$cell.c" "${props[@]}"; c=$?
@@ -136,9 +132,8 @@ for records in "${RECORDS[@]}"; do
     } > "$OUT/$cell.out"
     v=INVALID
     [ "$rc$load$a$c$okl$oka$okc" = 0000000 ] && [ "${n:-x}" = "$want" ] && v=valid
-    printf '%s\t%s\t%s\trc=%s phases=%s%s%s ok=%s%s%s items=%s %ss\n' "$cell" \
-      "$([ $server = redis ] && echo redis-server || echo memcached)" "$v" "$rc" "$load" "$a" "$c" "$okl" "$oka" \
-      "$okc" "${n:-?}" "$(( $(date +%s) - t ))" | tee -a "$OUT/cells.tsv"
+    record_cell "$cell" "$([ $server = redis ] && echo redis-server || echo memcached)" "$v" \
+      "rc=$rc phases=$load$a$c ok=$okl$oka$okc items=${n:-?} $(( $(date +%s) - t ))s"
   done
 done
 echo CENSUS_DONE >> "$OUT/cells.tsv"

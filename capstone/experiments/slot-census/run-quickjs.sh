@@ -12,15 +12,11 @@ set -u
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 OUT=$1; shift
 VERSION=2026-06-04
-CACHE=${SLOTCENSUS_CACHE:-$HOME/slot-census/cache}
 BENCH=("$@")
 [ ${#BENCH[@]} -gt 0 ] || BENCH=(richards deltablue crypto raytrace earley-boyer regexp splay navier-stokes pdfjs
                                   mandreel gbemu code-load box2d zlib typescript)
-[ -e "$OUT" ] && { echo "run-quickjs: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/logs" "$CACHE"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
-build_tracer
-run_controls
+start_pass
 
 for a in quickjs-$VERSION.tar.xz quickjs-extras-$VERSION.tar.xz; do
   [ -s "$CACHE/$a" ] || curl -fsSL -o "$CACHE/$a" "https://bellard.org/quickjs/$a" || exit 1
@@ -44,6 +40,6 @@ for b in "${BENCH[@]}"; do
   measured "$OUT/$cell.jsonl" ./qjs tests/octane/run.js "$b" > "$OUT/$cell.out" 2>&1
   rc=$?
   v=INVALID; [ $rc = 0 ] && grep -q '^Score (version' "$OUT/$cell.out" && v=valid
-  printf '%s\tqjs\t%s\trc=%s %ss\n' "$cell" "$v" "$rc" "$(( $(date +%s) - t ))" | tee -a "$OUT/cells.tsv"
+  record_cell "$cell" qjs "$v" "rc=$rc $(( $(date +%s) - t ))s"
 done
 echo CENSUS_DONE >> "$OUT/cells.tsv"

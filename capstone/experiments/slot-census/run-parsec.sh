@@ -16,14 +16,10 @@ HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 OUT=$1; shift
 INPUTS=("$@"); [ ${#INPUTS[@]} -gt 0 ] || INPUTS=(simlarge native)
 THREADS=${SLOTCENSUS_PARSEC_THREADS:-8}
-CACHE=${SLOTCENSUS_CACHE:-$HOME/slot-census/cache}
 PKGS=(blackscholes bodytrack canneal dedup facesim ferret fluidanimate freqmine raytrace streamcluster swaptions vips
       x264)
-[ -e "$OUT" ] && { echo "run-parsec: $OUT exists" >&2; exit 2; }
-mkdir -p "$OUT/logs"; OUT=$(cd "$OUT" && pwd); TOOL=$OUT/tool
 . "$HERE/tracer.sh"
-build_tracer
-run_controls
+start_pass
 
 ARCH=(parsec-3.0-core.tar.gz)
 for i in "${INPUTS[@]}"; do
@@ -130,7 +126,7 @@ for input in "${INPUTS[@]}"; do
     # x264's and holds none after it) is recorded as such, without a run
     indir=$(compgen -G "$P/pkgs/*/$pkg/inputs" | head -1)
     if [ -n "$indir" ] && ! tar tf "$indir/input_$input.tar" > /dev/null 2>&1; then   # absent or cut short
-      printf '%s\t%s\tINVALID\tinput-missing\n' "$cell" "${EXE[$pkg]:-$pkg}" | tee -a "$OUT/cells.tsv"
+      record_cell "$cell" "${EXE[$pkg]:-$pkg}" INVALID input-missing
       continue
     fi
     t=$(date +%s)
@@ -139,8 +135,7 @@ for input in "${INPUTS[@]}"; do
       > "$OUT/logs/$cell.log" 2>&1
     rc=$(cat "$OUT/$cell.rc" 2>/dev/null || echo none)
     v=INVALID; [ "$rc" = 0 ] && v=valid
-    printf '%s\t%s\t%s\trc=%s %ss\n' "$cell" "${EXE[$pkg]:-$pkg}" "$v" "$rc" "$(( $(date +%s) - t ))" \
-      | tee -a "$OUT/cells.tsv"
+    record_cell "$cell" "${EXE[$pkg]:-$pkg}" "$v" "rc=$rc $(( $(date +%s) - t ))s"
     rm -rf "$P"/pkgs/*/"$pkg"/run   # the unpacked input and outputs; native inputs reach gigabytes
   done
 done

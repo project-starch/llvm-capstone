@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 # Sourced by run-ycsb.sh: build libevent $LIBEVENT static into $TOOL/libevent (memcached needs it; the measuring
 # hosts have no libevent headers). Needs OUT, TOOL and CACHE; sets LIBEVENT_SHA.
 
@@ -9,7 +10,8 @@ build_libevent() {   # into $TOOL/libevent, static; sets LIBEVENT_SHA
     "https://github.com/libevent/libevent/releases/download/release-$LIBEVENT/$E" || exit 1
   tar xzf "$CACHE/$E" -C "$TOOL" || exit 1
   (cd "$TOOL/libevent-$LIBEVENT" && ./configure --prefix="$TOOL/libevent" --disable-shared --disable-openssl \
-     > "$OUT/libevent-build.log" 2>&1 && make -j16 install >> "$OUT/libevent-build.log" 2>&1) \
+     > "$OUT/logs/libevent-build.log" 2>&1 && make -j16 install >> "$OUT/logs/libevent-build.log" 2>&1) \
     || { echo "libevent: build failed" >&2; exit 1; }
+  # shellcheck disable=SC2034   # run-ycsb.sh records it in its provenance
   LIBEVENT_SHA=$(cd "$CACHE" && sha256sum "$E" | cut -c1-64)
 }
