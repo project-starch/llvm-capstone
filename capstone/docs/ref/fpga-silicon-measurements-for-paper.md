@@ -7465,6 +7465,48 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
 - Skipping the scrub for a free that is about to unmap was not built or measured. That is the runtime improvement the
   miniz-libc reading suggests.
 
+## T3 on the other 88 programs: neither lifetimes nor scrub costs anything measurable where the timed region does not allocate (caplifive_vp2c_e7af48457, both boards, 2026-10-27)
+
+- **What ran.** T1, T3 and T2 for each of the 88 programs that the section above left out, so all 103 programs now
+  have the three arms. All three arms of a program ran in one boot, at the main run's dimensions.
+  - 1119 of 1119 processes pass, over four boots: kits t3a1–t3a4.
+  - The 88 ran on bitstream 3 and the 15 on bitstream 2. The two sets are reported side by side and never pooled.
+  - Pre-registration 92e59181f84d, pushed before any boot. The checks script was committed before any transcript
+    was read.
+  - Data and regeneration recipe: `capstone/benchmarks/virtual/results/2026-10-27-t3all-bitstream3/`.
+- **Geomean over the 88** (cycles; two-level bootstrap 95 %):
+  - T3/T1 (lifetimes) 1.0000 [0.9997, 1.0004];
+  - T2/T3 (scrub) 1.0002 [0.9996, 1.0010];
+  - T2/T1 1.0003 [0.9996, 1.0011].
+- **Per program.**
+  - Every T3/T1 and T2/T3 point lies within 1 %, except lcdnum and ctl-empty, whose intervals contain 1 (below).
+  - Five programs have an interval that excludes 1 in some pair, none by more than 0.34 %:
+    - sglib-rbtree and trio-snprintf read T3/T1 1.0034 and 1.0017 and T2/T3 0.9967 and 0.9981, so their T2/T1 holds
+      at 1.000. That is a property of the T3 images, not a cost.
+    - wikisort T3/T1 0.9998;
+    - rv8-sha512 T2/T3 1.0001;
+    - stringsearch1 T2/T1 1.0007.
+- **Pre-registered checks.**
+  1. check= is one value across the three arms for all 88. It equals the QEMU twin's hash for all 50 programs that
+     have one.
+  2. instret agrees within 0.025 % (crc32 the largest), against 0.1 %.
+  3. Two misses of the 1 % per-program band:
+     - **lcdnum** T2/T3 0.9846 [0.964, 1.006]. It is the noisiest program: single iterations read 7–17 % below
+       their process's median, in every arm.
+     - **ctl-empty** T2/T3 1.0315 [0.935, 1.138]. One T2 process read about 15 % high in all five iterations.
+       Its timed region is 0.3 M cycles, and its instret and entries equal the other processes'.
+     - Both geomeans lie inside [0.995, 1.005].
+  4. This run's T2/T1 interval overlaps the main run's for all 88.
+- **Reading.**
+  - The cost of temporal safety in these benchmarks is confined to the 15 programs that call the runtime's
+    malloc/free in the timed region.
+  - Where they do not, enabling per-object lifetimes and the scrub changes nothing measurable. All three geomeans'
+    intervals contain 1 and lie within 0.11 % of it.
+- **Instruments.** The driver's heartbeat split guest lines four times, once inside a `check=` field.
+  - parse-board.py now rejoins them, and t3all-checks.py keys the twin's table by suite as well as name
+    (b729deaf33d2).
+  - On bitstream 2 the only split was a warm-up row, so no committed ratio changes.
+
 ## R-62 and R-63 fixed on silicon at N=2, with every bitstream-2 regression reading unchanged (caplifive_vp2c_e7af48457, both boards, 2026-10-27)
 
 - **The bitstream.** capstone-ariane e7af48457 is bitstream 2 (dcc6daf6e) plus the divider's new normaliser

@@ -296,3 +296,40 @@ it, runs a Tier 1 control boot and the rtl lane's bare FP kit, then this kit.
      a remaining difference from the twin would point elsewhere.
 3. **Timing:** T2/T1 for all three is 1.000 within the main run's precision. None allocates in its timed region.
    - These are reported as bitstream-3 rows, never pooled with the bitstream-2 suite geomean.
+
+## T3 on the other 88 programs, bitstream 3 (2026-10-27, before any of these boots)
+
+**Why.** The lead asked for T3 on every program, not only on the 15 that allocate inside the timed region. This
+section covers the remaining 88, so every one of the 103 programs gets all three arms.
+
+**Platform.** Bitstream 3 (caplifive_vp2c_e7af48457) on both boards, with the board lane's bitstream-3 perf platform
+(the one b3k1 ran on). The 15 keep their bitstream-2 T3 rows; the two sets are reported side by side with the
+bitstream named on every row, and never pooled into one suite geomean across bitstreams.
+
+**Images.**
+- T1 and T2: `perf/build2`, the images the main run booted. The 85 programs `build` and `build2` share are
+  byte-identical there; coremark, matmult-int and rv8-dhrystone are the resized b2k1 images.
+- T3: `perf/build4`, built for these 88 by `build-t3all.sh` from the same tree (wt-perf 86f638759ecf), compiler
+  (cc-prmerged), SDK (`sdk-T3`, runtime 3d74dc21d4ec4f4b) and controlled heap layout (`heap-layout-3arm.json`) as
+  the first T3 images.
+- Layout gate `check-arms.py build2/T2 build4/T3`: 88 of 88 pairs PASS (the other 60 pairs are the 15 programs'
+  images, which have no build4 counterpart).
+
+**Kits** `perf/main5/t3a1..t3a4`, 22 programs each, three arms in one boot, ABC..CBA, P = 4 × (W = 1, I = 5) per
+arm; crc32, huffbench and wikisort (not re-entrant) at P = 11 × (0, 1). Launcher 978c09d61f774315. Run scripts:
+t3a1 95581eee5424dd8d, t3a2 bd4ef4ee77c21fc6, t3a3 8d7f4b3cec3b260c, t3a4 c2f7cc1b012f7c57. Board 1 runs t3a1
+then t3a3, board 2 t3a2 then t3a4; make-kits estimates 1.5 h per kit.
+
+**Predictions.** None of the 88 calls the runtime's malloc or free inside its timed region; on bitstream 2 every one
+read T2/T1 at 1.003 or below with equal instret.
+1. **Correctness.** Every process exits 0 with no VERIFY-FAILED, and within each program check= is the same in all
+   three arms. Where the QEMU twin has a hash (`twin-checks.tsv`), check= equals it. A program that differs from its
+   twin is reported with its value; R-64/R-65/R-66 remain in bitstream 3 and are the first suspects.
+2. **instret.** Per program, the three arms' instret agree within 0.1 %.
+3. **Cycles.** Per program, T3/T1 and T2/T3 lie within 1 % of 1.000 (point estimate). The geomeans of T3/T1 and of
+   T2/T3 over the 88 lie in [0.995, 1.005].
+4. **Replicate.** This run's T2/T1 overlaps the main run's interval for each program. A program that does not is
+   reported with both intervals; a cross-bitstream difference is expected only where the divider runs.
+
+**Analysis.** parse-board.py, then perf-analyze.py `report --arms` for T1,T3 / T3,T2 / T1,T2, as for the first T3
+run; the checks above by a script committed with the results.
