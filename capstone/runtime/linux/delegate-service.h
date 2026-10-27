@@ -100,6 +100,6 @@ unsigned capstone_delegate_seccomp_program(const uint16_t *allow, unsigned n,
 /* The fault record line, written without blocking. `image` may be NULL. */
 void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host *host,
                                     const char *image, uint64_t cause, uint64_t pc,
-                                    uint64_t address);
+                                    uint64_t address, uint64_t ra, uint64_t fp);
 
 #endif

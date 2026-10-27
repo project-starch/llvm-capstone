@@ -18,7 +18,9 @@ import sys
 
 RECORD = re.compile(
     r"capstone-exec: domain fault cause=(?P<cause>\d+) pc=0x(?P<pc>[0-9a-f]+) "
-    r"address=0x(?P<address>[0-9a-f]+) entry=0x(?P<entry>[0-9a-f]+) "
+    r"address=0x(?P<address>[0-9a-f]+)"
+    # the register words the virtual launcher prints when the platform wrote them
+    r"(?: ra=0x(?P<ra>[0-9a-f]+) fp=0x(?P<fp>[0-9a-f]+))? entry=0x(?P<entry>[0-9a-f]+) "
     r"code=0x(?P<base>[0-9a-f]+)-0x(?P<end>[0-9a-f]+)"
     r"(?: last=0x[0-9a-f]+ preparing=0x[0-9a-f]+)?(?: sha256=(?P<sha256>[0-9a-f]{64}))?"
     r"(?: image=(?P<image>.*))?$")

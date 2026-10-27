@@ -696,11 +696,13 @@ static void fault(const struct cv_step *step)
     const char *record = getenv("CAPSTONE_FAULT_RECORD");
     int fd = record && *record ? open(record, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600) : -1;
     if (fd >= 0) {
-        capstone_delegate_fault_record(fd, h, image_path, step->cause, step->pc, step->address);
+        capstone_delegate_fault_record(fd, h, image_path, step->cause, step->pc, step->address,
+                                       step->ra, step->fp);
         close(fd);
     }
     if (isatty(2) || getenv("CAPSTONE_EXEC_DIAGNOSTICS"))
-        capstone_delegate_fault_record(2, h, image_path, step->cause, step->pc, step->address);
+        capstone_delegate_fault_record(2, h, image_path, step->cause, step->pc, step->address,
+                                       step->ra, step->fp);
     /* Signal death stops the process before Linux releases shared mappings. */
     capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, NULL, NULL);
 }

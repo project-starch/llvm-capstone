@@ -109,6 +109,37 @@ class Parser(unittest.TestCase):
     def test_no_fault_line(self):
         self.assertIsNone(v.domain_fault("capstone-vm: application exited 0"))
 
+    # The launcher's line in its three shapes: before 2026-10-27 (no register words), with the
+    # words, and with the words at zero (a platform that wrote no register slot).
+    BASE = "capstone-exec: domain fault cause=25 pc=0x3f90411888 address=0x3f90a0ba20"
+    TAIL = " entry=0x3f904009a0 code=0x3f90400000-0x3f90800000 last=0x39"
+    LINES = {"old": BASE + TAIL,
+             "regs": BASE + " ra=0x3f90508d7c fp=0x3f80a01f00" + TAIL,
+             "zero": BASE + " ra=0x0 fp=0x0" + TAIL}
+
+    def test_register_words(self):
+        # Read when present and non-zero, None otherwise, so nothing downstream can mistake a
+        # missing word for an address.
+        with_ra = v.domain_fault(self.LINES["regs"])
+        self.assertEqual((with_ra.cause, with_ra.pc, with_ra.ra, with_ra.fp),
+                         (25, 0x3f90411888, 0x3f90508d7c, 0x3f80a01f00))
+        old = v.domain_fault(self.LINES["old"])
+        self.assertEqual((old.cause, old.ra, old.fp), (25, None, None))
+        zero = v.domain_fault(self.LINES["zero"])
+        self.assertEqual((zero.pc, zero.ra, zero.fp), (0x3f90411888, None, None))
+
+    def test_fault_line_groups_are_what_the_runners_read(self):
+        # run-capstone-domain.py and run-virtual-cases.py take FAULT_LINE's group(4) as the
+        # code base (`int(m.group(4), 16)`); the register words must not shift it. Every shape
+        # of the line, and the committed pre-2026-10-27 record, give the same four groups.
+        for shape, line in self.LINES.items():
+            m = v.FAULT_LINE.search(line)
+            self.assertEqual((m.group(1), int(m.group(2), 16), m.group(3), int(m.group(4), 16)),
+                             ("25", 0x3f90411888, "0x3f90a0ba20", 0x3f90400000), shape)
+            self.assertEqual(m.lastindex, 4, shape)
+        m = v.FAULT_LINE.search(json.loads(self.C00.read_text())["fault"])
+        self.assertEqual((m.group(1), int(m.group(4), 16) < int(m.group(2), 16)), ("7", True))
+
 
 class Bundle(unittest.TestCase):
     PLATFORM = {k: "unrecorded" for k in v.PLATFORM_KEYS}
