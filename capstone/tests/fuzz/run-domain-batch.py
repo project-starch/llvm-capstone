@@ -55,7 +55,7 @@ def qemu_command(qemu_binary, buildroot_dir, share_dir):
         "-device", "virtio-blk-device,drive=hd0",
         "-virtfs", f"local,path={share_dir},mount_tag=hostshare,security_model=none,id=hostshare",
         "-chardev", "stdio,mux=on,id=ch0,signal=on", "-mon", "chardev=ch0,mode=readline",
-        "-serial", "chardev:ch0", "-cpu", "rv64,sstc=false,h=false",
+        "-serial", "chardev:ch0", "-cpu", "rv64,sstc=false,h=false,sv48=false,sv57=false",
     ]
 
 
