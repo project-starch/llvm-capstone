@@ -33,7 +33,16 @@ def main():
     ap.add_argument('--boot', required=True)
     ap.add_argument('--out', type=Path, required=True)
     a = ap.parse_args()
-    lines = a.transcript.read_text(errors='replace').splitlines()
+    text = a.transcript.read_text(errors='replace')
+    # The driver's heartbeat (`@@HB <i> out=..B/..L tail=<base64>`) is its own line, but it can land in the middle of
+    # a guest line ("ns=16960066@@HB 129 ...\n40 check=..."). Remove every heartbeat with its newline, which rejoins
+    # the guest line, and count the mid-line ones: a repair, never silent (as checks-diff.py and perfmain-table.py).
+    hb = re.compile(r'@@HB \d+ out=\S* tail=[A-Za-z0-9+/=]*\n')
+    mid = sum(1 for m in hb.finditer(text) if m.start() > 0 and text[m.start() - 1] != '\n')
+    text = hb.sub('', text)
+    if mid:
+        print(f'parse-board: rejoined {mid} guest line(s) split by a mid-line @@HB', file=sys.stderr)
+    lines = text.splitlines()
     procs, cur, problems, last_quote = [], None, [], None
     for ln in lines:
         m = BEGIN.search(ln)

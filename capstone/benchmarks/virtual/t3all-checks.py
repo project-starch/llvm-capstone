@@ -19,7 +19,13 @@ if not rows: sys.exit('t3all-checks: no timed rows in ' + runs)
 ins, chk, suite = defaultdict(lambda: defaultdict(list)), defaultdict(set), {}
 for r in rows:
     ins[r['program']][r['arm']].append(int(r['instret'])); chk[r['program']].add(r['check']); suite[r['program']] = r['suite']
-tw = {r['bench_name']: r['twin_checks'] for r in csv.DictReader(open(twin), delimiter='\t')}
+# The twin table is keyed by (suite, bench name): beebs/qsort and rv8/qsort are different programs (so are the two
+# miniz). A run's program is the bench name with its suite as prefix for ctl and rv8 (rv8-qsort), and its beebs-libc
+# programs are the twin's beebs rows.
+tw = {(r['suite'], r['bench_name']): r['twin_checks'] for r in csv.DictReader(open(twin), delimiter='\t')}
+def twin_key(p):
+    s = 'beebs' if suite[p] == 'beebs-libc' else suite[p]
+    return s, p[len(s) + 1:] if p.startswith(s + '-') else p
 pp = lambda d: {r['program']: r for r in csv.DictReader(open(f'{d}/per-program.tsv'), delimiter='\t')}
 p13, p32, p12 = pp(d13), pp(d32), pp(d12)
 main = {}
@@ -31,7 +37,7 @@ for p in sorted(ins):
     m = {a: st.median(ins[p][a]) for a in ('T1', 'T3', 'T2')}
     spread = max(m.values()) / min(m.values()) - 1
     if spread > 0.001: miss.append(f'{p}: instret spread {spread:.4%}')
-    c = sorted(chk[p]); t = tw.get(p, '?')
+    c = sorted(chk[p]); t = tw.get(twin_key(p), '?')
     if len(c) != 1: miss.append(f'{p}: check differs across arms {c}')
     elif t not in ('0x0', '?') and c[0] != t: miss.append(f'{p}: check {c[0]} != twin {t}')
     a, b, r12 = float(p13[p]['ratio']), float(p32[p]['ratio']), p12[p]
