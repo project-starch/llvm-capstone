@@ -240,7 +240,7 @@ def population(corpus, kind="asan-blind"):
                      f"behind out-of-denominator cannot be checked -- refusing to run.")
     if not cases:
         sys.exit(f"no case directory under {corpus} is in population {kind!r}")
-    recorded = {"asan-blind": 46, "temporal-asan-visible": 20}.get(kind)
+    recorded = {"asan-blind": 46, "temporal-asan-visible": 19}.get(kind)
     if recorded is not None and len(cases) != recorded:
         print(f"NOTE: the {kind} population is {len(cases)} today, not the {recorded} the plan "
               f"records. That is a change in the corpus, not in this runner.", file=sys.stderr)

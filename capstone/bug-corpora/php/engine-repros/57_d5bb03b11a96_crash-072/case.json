@@ -1,5 +1,5 @@
 {
- "case": 58,
+ "case": 57,
  "upstream_fix": "d5bb03b11a96",
  "title": "CRASH-072: open stream derefs freed volatile url wrapper hash at request shutdown uaf (use-after-free)",
  "consumer": "main/streams/streams.c:1403",

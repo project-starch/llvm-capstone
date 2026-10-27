@@ -24,8 +24,10 @@ Populations (the port's two measured sets, recomputed here, never retyped):
   asan-blind              ASan reports the defect with PHP's allocator PATCHED (cache off, no
                           rounding) and reads OK with it AS SHIPPED: emalloc's cache or its
                           8-byte rounding hides the defect from any detector at free().
-  temporal-asan-visible   CWE-416 that ASan reports unaided: efree reached free(), so a
-                          detector at the libc boundary sees it. The control population.
+  temporal-asan-visible   CWE-416 that ASan reports unaided (as shipped) and classifies as a
+                          use-after-free (patched build): efree reached free(), so a detector
+                          at the libc boundary sees it. The control population. A case no
+                          build reports as a use-after-free is neither (CRASH-064).
 
 Each case directory holds trigger.php (the corpus script, byte for byte), oracle.json (what
 run-realphp.py needs: population, ASan's first PHP frame and its whole ACCESS stack, the kind
@@ -116,11 +118,20 @@ def populations(asan, stock, meta):
         blind = e["outcome"] != "OK" and stock.get(cid, {}).get("outcome") == "OK"
         if blind:
             out[cid] = "asan-blind"
-        elif meta[cid]["cwe"] == "CWE-416" and stock.get(cid, {}).get("outcome", "").startswith("ASAN:"):
+        elif (meta[cid]["cwe"] == "CWE-416" and stock.get(cid, {}).get("outcome", "").startswith("ASAN:")
+              and e["outcome"] == "ASAN:heap-use-after-free"):
             # Visible means ASan REPORTS it with the allocator as shipped -- the stockalloc run,
             # not the patched one. A case the as-shipped build ends with PHP's own fatal error
             # (EXIT:255, no report) is visible to nobody and belongs to neither population; the
             # first build of this corpus tested the patched run here and admitted two such.
+            # And the defect has to BE a use-after-free as ASan classifies one: with the
+            # allocator as shipped 18 of these die as ASan:SEGV (the stale access lands on
+            # reused memory), so the class is read from the patched run, which names them
+            # heap-use-after-free. A case NEITHER build reports as a use-after-free is not one
+            # a detector at free() can see: CRASH-064 dereferences an integer read from a
+            # reused object-store bucket (the free-list link written over the object pointer
+            # in the bucket's union) -- a bad pointer, not a freed one, on both builds -- and
+            # does not belong to the population that exists as the control for such detectors.
             out[cid] = "temporal-asan-visible"
     return out
 
@@ -269,18 +280,21 @@ Hence **{pop}**: {why}.
 def self_test():
     """The population rule and the frame rule on synthetic entries; the derivations the offline
     suite of run-realphp.py no longer exercises since its fixture became case directories."""
-    meta = {k: {"cwe": v} for k, v in {"A": "CWE-416", "B": "CWE-416", "C": "CWE-416", "D": "CWE-125", "E": "CWE-416", "F": "CWE-416"}.items()}
+    meta = {k: {"cwe": v} for k, v in {"A": "CWE-416", "B": "CWE-416", "C": "CWE-416", "D": "CWE-125", "E": "CWE-416", "F": "CWE-416", "G": "CWE-416", "H": "CWE-416"}.items()}
     asan = {"A": {"outcome": "ASAN:heap-use-after-free"}, "B": {"outcome": "ASAN:heap-use-after-free"},
             "C": {"outcome": "ASAN:heap-use-after-free"}, "D": {"outcome": "ASAN:heap-buffer-overflow"},
-            "E": {"outcome": "OK"}, "F": {"outcome": "ASAN:heap-use-after-free"}}
+            "E": {"outcome": "OK"}, "F": {"outcome": "ASAN:heap-use-after-free"}, "G": {"outcome": "ASAN:SEGV"},
+            "H": {"outcome": "ASAN:heap-use-after-free"}}
     stock = {"A": {"outcome": "OK"},                              # blind: patched reports, as shipped OK
              "B": {"outcome": "ASAN:heap-use-after-free"},        # visible: as shipped reports
              "C": {"outcome": "EXIT:255"},                        # PHP's own fatal error as shipped: neither
              "D": {"outcome": "OK"},                              # blind, spatial
              "E": {"outcome": "OK"},                              # nothing anywhere: neither
-             "F": {"outcome": "SIGNAL:11"}}                       # crashes as shipped, no report: neither
+             "F": {"outcome": "SIGNAL:11"},                       # crashes as shipped, no report: neither
+             "G": {"outcome": "ASAN:SEGV"},                       # SEGV on both builds (CRASH-064): neither
+             "H": {"outcome": "ASAN:SEGV"}}                       # SEGV as shipped, UAF patched: visible
     got = populations(asan, stock, meta)
-    want = {"A": "asan-blind", "B": "temporal-asan-visible", "D": "asan-blind"}
+    want = {"A": "asan-blind", "B": "temporal-asan-visible", "D": "asan-blind", "H": "temporal-asan-visible"}
     checks = [("the population rule", got, want)]
     frame = ASAN_FRAME.search("    #0 0x55 in user_tick_function_call /x/y/ext/standard/basic_functions.c:2135\n")
     checks.append(("the frame rule takes the first PHP frame", (frame.group(1), frame.group(2), frame.group(3)),

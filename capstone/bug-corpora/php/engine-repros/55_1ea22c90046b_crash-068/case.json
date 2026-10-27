@@ -1,5 +1,5 @@
 {
- "case": 56,
+ "case": 55,
  "upstream_fix": "1ea22c90046b",
  "title": "CRASH-068: register constant redefine frees name before error message uaf (use-after-free)",
  "consumer": "Zend/zend_constants.c:320",
