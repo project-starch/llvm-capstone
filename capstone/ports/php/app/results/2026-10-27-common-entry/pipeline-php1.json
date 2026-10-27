@@ -1,0 +1,13 @@
+{
+  "application": "php",
+  "lifetimes": 1,
+  "port_variable": "PHP_REALPHP_ALLOC=seam",
+  "shared_sdk": true,
+  "relinked_by_build_py": false,
+  "output": {
+    "source": "/tmp/php-kit/common/php1/source",
+    "image": "/tmp/php-kit/common/php1/image",
+    "sdk": "/tmp/php-kit/common/php1/sdk"
+  },
+  "dry_run": false
+}

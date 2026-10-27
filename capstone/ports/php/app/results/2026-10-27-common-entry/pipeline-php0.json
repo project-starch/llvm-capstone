@@ -1,0 +1,13 @@
+{
+  "application": "php",
+  "lifetimes": 0,
+  "port_variable": "PHP_REALPHP_ALLOC=stock",
+  "shared_sdk": true,
+  "relinked_by_build_py": false,
+  "output": {
+    "source": "/tmp/php-kit/common/php0/source",
+    "image": "/tmp/php-kit/common/php0/image",
+    "sdk": "/tmp/php-kit/common/php0/sdk"
+  },
+  "dry_run": false
+}
