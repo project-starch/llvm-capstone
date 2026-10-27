@@ -10550,3 +10550,22 @@ prediction holds.
   - Readings 0 throughout.
   - Any other difference is a finding about bitstream 3, reported cell by cell. Its first suspect is an FP divide or
     square-root path.
+
+### The 15 allocating programs' T3 kits on bitstream 3, result: t3k1, t3k2 and t3k3 all PASS (2026-10-28 04:42-07:03)
+
+Pre-registered at 1376fc11746c (the board side) and runtime/perf-t3-all 811dc7a43eb3 (the analysis). Each kit is
+graded by the pre-registered criterion: its DONE line, the END count all rc=0, the strict `tier3-perfpilot.py --reread`
+exiting 0, and readings 0.
+
+| kit | board | booking | ran | processes | @@PERF-END rc=0 | reread | checks agree (sets; programs across arms) | firmware |
+|---|---|---|---|---|---|---|---|---|
+| t3k1 | 1 | 470 | 04:42:58-05:15:27 | 81 of 81 | 81 of 81 | exit 0 | 15 of 15; 5 of 5 | 6ffe91357a44a9dd |
+| t3k3 | 1 | 471 | 05:15:27-05:53:27 | 60 of 60 | 60 of 60 | exit 0 | 15 of 15; 5 of 5 | 458af92f8c1b41f6 |
+| t3k2 | 2 | 473 | 06:26:59-07:03:39 | 60 of 60 | 60 of 60 | exit 0 | 15 of 15; 5 of 5 | 8d0e7e4276c2fa44 |
+
+- **Resident bitstream:** every SEQ reads caplifive_vp2c_e7af48457. Each step text ends in its `@@PERF-T3K<n>-DONE`.
+- **Heartbeats and readings:** 0 mid-line heartbeats, and pc=0, DRT1, FRTY, Oops, INJS and INJL are all 0.
+- **Waits:** each board waited for its corpus arm as pre-registered. Board 1 started at lt1's END and board 2 at lt0's.
+- **What this does not cover:** the runtime lane's predictions (check= and instret equal to the bitstream-2 T3 run's,
+  interval overlap, and the suite geomeans over 103 programs). Those are graded by that lane on these transcripts.
+- **Records:** `records/b3bs-perfmain6-t3k{1,3}-b1.result-lines.txt` and `records/b3bs-perfmain6-t3k2-b2.result-lines.txt`.
