@@ -435,7 +435,11 @@ case "$WHAT" in
     : > "$B/libc-syms.txt"
     find "$OUT" -name '*.a' -print 2>/dev/null | while read -r _a; do
       "$CAPSTONE_LLVM_BIN/llvm-nm" --defined-only "$_a" 2>/dev/null | awk '$1!="U"{print $NF}'
-    done | sort -u > "$B/libc-syms.txt"
+    done | LC_ALL=C sort -u > "$B/libc-syms.txt"
+    # LC_ALL=C is load-bearing. Under en_US.UTF-8, sort -u collates with punctuation ignored at
+    # the first level, so `__mmap` and `mmap` are "duplicates" and one of them is dropped --
+    # which read as "the SDK has no mmap" on 2026-10-27 against an SDK that defined it (T in
+    # libapplication-runtime.a, W in libc). 174 symbols went missing that way.
     for _s in fork vfork posix_spawn popen system mmap munmap fopencookie dn_expand dn_skipname; do
       grep -qx "$_s" "$B/libc-syms.txt" \
         || { echo "  the SDK has no '$_s' -- php_config.h claims it; re-check the TU list" >&2; exit 2; }
@@ -503,7 +507,7 @@ case "$WHAT" in
     # PHP_GLOBAL_OBJS and PHP_CLI_OBJS are what `make` builds. Read, not retyped: a list of
     # real PHP that lives in our repo would drift from real PHP and the drift would be invisible.
     { sed -n '/^PHP_GLOBAL_OBJS *=/p' "$P/Makefile"; sed -n '/^PHP_CLI_OBJS *=/p' "$P/Makefile"; } \
-      | grep -o '[A-Za-z_0-9/]*\.lo' | sed 's/\.lo$/.c/' | sort -u > "$B/tus.txt"
+      | grep -o '[A-Za-z_0-9/]*\.lo' | sed 's/\.lo$/.c/' | LC_ALL=C sort -u > "$B/tus.txt"
     TU_N=$(wc -l < "$B/tus.txt")
     [ "$TU_N" -ge 140 ] || { echo "  only $TU_N TUs read from the Makefile -- PHP_GLOBAL_OBJS moved" >&2; exit 2; }
     # The point of this case is that PHP's own host is linked. If these are absent we are
