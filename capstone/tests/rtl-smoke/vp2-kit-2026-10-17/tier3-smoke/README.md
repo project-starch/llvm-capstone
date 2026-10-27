@@ -10460,3 +10460,23 @@ Tool: `r64-census.py`.
 - **Predictions:** the runtime lane's, quoted, not mine. Every process exits 0, check= equals the bitstream-2 T3 run's,
   and instret per iteration is within 0.1 % of it. Bitstream 3 differs from bitstream 2 only in fpnew's divide/sqrt unit
   (R-62/R-63), and these are integer programs.
+
+### The corpus on bitstream 3: postgres pg-pools on board 1, pre-registered (2026-10-28 05:5x, before the boot)
+
+- **Why:** the next corpus arm bitstream 2 read. Board 1 is free once main6's t3k1 and t3k3 have run, and board 2 is
+  still on lt0. It is repeated as on bitstream 2, so any difference is evidence about the change.
+- **What runs:** `tier3-pg-b3-arm.sh 1 <log> pg-pools`, the same runner as sql0 above (2496f8d8df4aa09d), on kits
+  bkit11-b3-b1 and bkit11-b3-mb1.
+  - bkit11-b3-mb1 is new tonight. make-b3-kit.sh copied it from bkit9-b2-mb1, and only board.env's BOARD_BITSTREAM
+    changes. Its file hashes, board.env aside, equal bkit11-b3-mb2's.
+  - Unchanged from bitstream 2:
+    - image dc2a1356dce735e0;
+    - runner 7ce203f9;
+    - the trimmed fixture 956173e0;
+    - the reference batch-refs-b2/pgp-trim/bundle, with its stamp checked.
+  - Results are filed under RESULTS_DIR 2026-10-27-b3-e7af48457-b1, with a 240-min lab-hub booking.
+- **Dry run:** `records/dryrun-pools-b3.txt`. The kit gates and the stamp check run live; every board call is stubbed.
+  It covers the armed path and the busy stop.
+- **Prediction:** what bitstream 2's board read. That is 9 of 9 cells as pgp-trim (CAUGHT 5, MISSED 2, NO-READING
+  unattributed 2), with the firmware under the 26,000,000 B cap, must-fire OK, and the readings 0. Any other difference
+  is a finding about bitstream 3, reported cell by cell.
