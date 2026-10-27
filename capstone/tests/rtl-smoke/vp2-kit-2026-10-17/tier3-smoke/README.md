@@ -10569,3 +10569,20 @@ exiting 0, and readings 0.
 - **What this does not cover:** the runtime lane's predictions (check= and instret equal to the bitstream-2 T3 run's,
   interval overlap, and the suite geomeans over 103 programs). Those are graded by that lane on these transcripts.
 - **Records:** `records/b3bs-perfmain6-t3k{1,3}-b1.result-lines.txt` and `records/b3bs-perfmain6-t3k2-b2.result-lines.txt`.
+
+### The corpus on bitstream 3, result: postgres pg-pools 9 of 9, as bitstream 2 read (board 1, 2026-10-28 05:56-07:54)
+
+Pre-registered at lane commit 90227d3792f0; the prediction holds.
+- **Cells:** 9 of 9 the same as batch-refs-b2/pgp-trim, with CAUGHT 5, MISSED 2 and NO-READING unattributed 2.
+  - The five catches are at __stpcpy+44, memcpy+220 (twice), oidvectorout+56 and pg_wchar2utf_with_len+140, all
+    cause 28.
+  - The two unattributed cells read cause 28 at pg_popcount_optimized+292 and memcpy+220.
+- **Run checks:**
+  - all four controls fault: bounds and uaf, malloc and palloc;
+  - must-fire OK;
+  - fixture 956173e0 and image dc2a1356 as recorded;
+  - firmware 25,856,520 B, under the cap;
+  - readings 0;
+  - SEQ reads caplifive_vp2c_e7af48457, and the booking was 472.
+- **Records:** `records/b3bs-pg-pools-b1.result-lines.txt` and `records/b3-pg-pools-b1.board.txt`, the latter being
+  score-arm.sh's per-cell lines.
