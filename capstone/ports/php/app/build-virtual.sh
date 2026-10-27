@@ -436,10 +436,12 @@ case "$WHAT" in
     find "$OUT" -name '*.a' -print 2>/dev/null | while read -r _a; do
       "$CAPSTONE_LLVM_BIN/llvm-nm" --defined-only "$_a" 2>/dev/null | awk '$1!="U"{print $NF}'
     done | LC_ALL=C sort -u > "$B/libc-syms.txt"
-    # LC_ALL=C is load-bearing. Under en_US.UTF-8, sort -u collates with punctuation ignored at
-    # the first level, so `__mmap` and `mmap` are "duplicates" and one of them is dropped --
-    # which read as "the SDK has no mmap" on 2026-10-27 against an SDK that defined it (T in
-    # libapplication-runtime.a, W in libc). 174 symbols went missing that way.
+    # LC_ALL=C is load-bearing. With uutils coreutils 0.8.0 (the sort Ubuntu 26.04 ships) under
+    # en_US.UTF-8, `printf '__mmap\nmmap\n' | sort -u` prints ONE line: the collation treats the
+    # two as duplicates and drops one, which read as "the SDK has no mmap" on 2026-10-27 against
+    # an SDK that defined it (T in libapplication-runtime.a, W in libc); munmap and dn_expand
+    # went the same way, 174 of 4718 symbols in all. GNU sort 9.4 under the same locale keeps
+    # both, so the failure depends on the host's sort, and C collation removes the dependency.
     for _s in fork vfork posix_spawn popen system mmap munmap fopencookie dn_expand dn_skipname; do
       grep -qx "$_s" "$B/libc-syms.txt" \
         || { echo "  the SDK has no '$_s' -- php_config.h claims it; re-check the TU list" >&2; exit 2; }
