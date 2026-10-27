@@ -410,8 +410,12 @@ def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=
             "exits": exits, "output": out, "serial_log": "x"}
 
 
-def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None):
-    """Run main() end to end over stored records, with the toolchain stubbed out."""
+def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None,
+          defaulted=False):
+    """Run main() end to end over stored records, with the toolchain stubbed out.
+
+    defaulted: the first arm's sanity transcript carries ZEND_CAP_MODE_DEFAULTED, as an image
+    built with a baked-in arm prints when no PHP_CAP_MODE named one."""
     root = tmp / "corpus-root"
     fake_corpus(root)
     out = tmp / "out"
@@ -423,6 +427,8 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
     for arm, mode, rev in zip(R.ARMS, modes, revokes):
         probe = True if R.BOUND_PROBE in verdicts.load_arms()[arm]["controls"] else None
         rec = synth_record(cases, mode, rev, case_faults=faults.get(arm, ()), probe=probe)
+        if defaulted and arm == R.ARMS[0]:
+            rec["output"][R.SANITY].insert(0, f"ZEND_CAP_MODE_DEFAULTED {mode}")
         (out / f"{arm}-run.json").write_text(json.dumps(rec))
     img = tmp / "php-real-seam.dom"
     img.write_bytes(b"\x7fELF" + b"\0" * 64)
@@ -723,6 +729,20 @@ def provenance_cases():
               [k for k in verdicts.PLATFORM_KEYS if k not in rec], [])
 
 
+def defaulted_arm_cases():
+    """An image that took a baked-in arm is not a measurement; a transcript at another arm's
+    mode is not this arm's reading. Both refused, stored records included."""
+    print("\n-- a defaulted or mismatched arm --")
+    with tempfile.TemporaryDirectory() as d:
+        check("a run whose sanity transcript says ZEND_CAP_MODE_DEFAULTED is refused",
+              drive(Path(d), defaulted=True) != 0, True)
+    with tempfile.TemporaryDirectory() as d:
+        declared = [verdicts.load_arms()[a]["mode"] for a in R.ARMS]
+        wrong = list(declared); wrong[-1] = declared[-2]          # the exact arm's records at the object arm's mode
+        check("a run whose transcripts report another arm's mode is refused",
+              drive(Path(d), modes=wrong) != 0, True)
+
+
 def sanity_text_cases():
     """The sanity control's script is what every arm must complete; pin what it must contain."""
     print("\n-- the sanity script --")
@@ -767,6 +787,7 @@ if __name__ == "__main__":
     node_table_cases()
     cap_insn_cases()
     provenance_cases()
+    defaulted_arm_cases()
     sanity_text_cases()
     lint()
     print()

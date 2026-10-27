@@ -31,7 +31,7 @@
 # A port's own variable still works and still means what it meant; setting one
 # that contradicts the selector is an error rather than a silent winner.
 #
-# ONE SDK. Ports that accept an SDK (mruby, sqlite) are given one built here,
+# ONE SDK. Ports that accept an SDK (mruby, sqlite, php) are given one built here,
 # so every image in one output directory shares one SDK identity. Ports that
 # build their own (cpython, postgres, ffmpeg, tshark, memcached, perl) still
 # do; pipeline.json records which, because that is the remaining difference and
@@ -82,6 +82,15 @@ elif [[ $LIFETIMES == 1 ]]; then
   echo "memcached builds every arm in one output; leave CAPSTONE_VIRTUAL_LIFETIMES at 0" >&2
   exit 2
 fi
+# php's protected image bakes its arm in (the generic runners set no PHP_CAP_MODE and the seam
+# refuses to guess). Resolved HERE, before the dry-run report, so pipeline.json records it; and
+# only 6 or 7 is the selector's meaning -- 0 revokes nothing and leaks, 4 revokes per block.
+if [[ $APP == php && $LIFETIMES == 1 ]]; then
+  export PHP_REALPHP_DEFAULT_MODE=${PHP_REALPHP_DEFAULT_MODE:-6}
+  case "$PHP_REALPHP_DEFAULT_MODE" in 6|7) ;;
+    *) echo "PHP_REALPHP_DEFAULT_MODE=$PHP_REALPHP_DEFAULT_MODE is not a protected arm; CAPSTONE_VIRTUAL_LIFETIMES=1 means 6 (lifetimes) or 7 (lifetimes and exact bounds)" >&2; exit 2 ;;
+  esac
+fi
 
 # Ports that take an SDK rather than building one.
 case "$APP" in mruby|sqlite|php) SHARED_SDK=1 ;; *) SHARED_SDK=0 ;; esac
@@ -95,6 +104,7 @@ RELINK=1   # cleared by the ports whose recipe links the final image itself
 report() {
   mkdir -p "$OUT"
   [[ -n $PORT_VAR ]] && SELECTED="$PORT_VAR=$PORT_VALUE" || SELECTED=
+  [[ -z ${PHP_REALPHP_DEFAULT_MODE:-} ]] || SELECTED="$SELECTED PHP_REALPHP_DEFAULT_MODE=$PHP_REALPHP_DEFAULT_MODE"
   CAPSTONE_PIPELINE_APP=$APP CAPSTONE_PIPELINE_LIFETIMES=$LIFETIMES \
   CAPSTONE_PIPELINE_SELECTED=$SELECTED CAPSTONE_PIPELINE_SHARED_SDK=$SHARED_SDK \
   CAPSTONE_PIPELINE_RELINK=$RELINK CAPSTONE_PIPELINE_DRY=$DRY \
@@ -192,11 +202,9 @@ case "$APP" in
     # with the tree patches (ports/php/app/patches/README.md).
     PHP_SRC=$(bash "$PORTS/php/app/prepare-sources.sh" "$OUT/source" | tail -1)
     export PHP_SRC PHP_VIRTUAL_OUT=$OUT
-    # The protected image bakes its arm in: the generic runners (run.py, run-ports.py) set no
-    # PHP_CAP_MODE, and the seam refuses to guess one. Mode 6 is the selector's meaning -- a
-    # lifetime per object, PHP's own bounds; PHP_REALPHP_DEFAULT_MODE=7 adds exact bounds. A
+    # The protected image's arm (PHP_REALPHP_DEFAULT_MODE, resolved with the selector above):
+    # mode 6, a lifetime per object with PHP's own bounds, or 7 with exact bounds. A
     # measurement image (run-realphp.py's) is built without a default and names its arm per run.
-    [[ $LIFETIMES != 1 ]] || export PHP_REALPHP_DEFAULT_MODE=${PHP_REALPHP_DEFAULT_MODE:-6}
     bash "$PORTS/php/app/build-virtual.sh" realphp
     mkdir -p "$OUT/image"
     ln -sfn "$OUT/realphp/php-real-$PORT_VALUE.dom" "$OUT/image/php.dom"

@@ -336,7 +336,8 @@ bash capstone/ports/sqlite/app/build-domain.sh "$out/sdk" "$out/sqlite-source" "
 MRBD_ROOT="$out/mruby" MRBD_SDK="$out/sdk" MRBD_PIN=4.0.0-rc2 \
   bash capstone/ports/mruby/app/build-mruby-domain.sh
 PHP_SRC=$(bash capstone/ports/php/app/prepare-sources.sh "$out/php-source" | tail -1) \
-  PHP_VIRTUAL_OUT="$out" bash capstone/ports/php/app/build-virtual.sh realphp   # $out/realphp/php-real-stock.dom
+  PHP_VIRTUAL_OUT="$out" PHP_REALPHP_ALLOC=stock \
+  bash capstone/ports/php/app/build-virtual.sh realphp          # $out/realphp/php-real-stock.dom
 
 python3 capstone/runtime/virtual/run.py \
   --qemu capstone/capstone-qemu/build/qemu-system-riscv64 \

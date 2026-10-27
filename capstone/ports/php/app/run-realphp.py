@@ -734,6 +734,21 @@ def main():
             if got and got.group(1) != want:
                 sys.exit(f"{arm}/{name}: the stored transcript is from image {got.group(1)[:12]}, "
                          f"not {want[:12]}")
+        # THE ARM IS NAMED, NEVER DEFAULTED. The common application build bakes an arm into its
+        # image (ZEND_CAP_DEFAULT_MODE) for the generic runners; such an image says
+        # ZEND_CAP_MODE_DEFAULTED when it takes that default. A measurement run that shows that
+        # line in ANY transcript did not name its arm and is refused, stored records included.
+        # And every run that reports a mode must report the arm's: a transcript at another mode
+        # is not this arm's reading, whatever the sanity run said.
+        for name, lines in rec["output"].items():
+            joined = "\n".join(lines)
+            if "ZEND_CAP_MODE_DEFAULTED" in joined:
+                sys.exit(f"{arm}/{name}: the image took a DEFAULT arm (ZEND_CAP_MODE_DEFAULTED); "
+                         f"a measurement names its arm, so this image cannot be measured")
+            seen = MODE_LINE.search(joined)
+            if seen and int(seen.group(1)) != mode:
+                sys.exit(f"{arm}/{name}: the transcript reports PHP_CAP_MODE {seen.group(1)}, "
+                         f"not this arm's {mode}")
         texts[arm] = {n: app_output(l) for n, l in rec["output"].items()}
         sanity_text = texts[arm].get(SANITY, "")
         sanity_ok = (rec["exits"].get(SANITY) == 0

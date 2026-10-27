@@ -78,7 +78,9 @@ void zend_cap_fail(int code, const char *what, unsigned long a, unsigned long b)
 
 /* THE ARM, NAMED OUT LOUD AND NEVER GUESSED. An absent PHP_CAP_MODE is a failure, not a
  * default: a run that silently chose an arm is a run whose result means nothing, and the
- * suite's own gate requires the two runs of a pair to report DIFFERENT mode lines. */
+ * suite's own gate requires the two runs of a pair to report DIFFERENT mode lines. The one
+ * exception is a build with ZEND_CAP_DEFAULT_MODE (the common application entry's image for
+ * the generic runners), which takes that mode and SAYS so, and which run-realphp.py refuses. */
 void zend_cap_set_mode(unsigned int mode)
 {
     cap_mode = mode;

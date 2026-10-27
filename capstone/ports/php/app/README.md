@@ -35,10 +35,13 @@ to the platform gate, or this port's own `run-virtual.py` for one boot with many
 
 ## The measurement instrument, separately
 
-`build-virtual.sh realphp` on its own builds the images `run-realphp.py` measures with:
-`PHP_REALPHP_ALLOC=stock|seam`, one seam image serving the block, object and exact arms by
-`PHP_CAP_MODE` at run time (4, 6, 7; `tools/arms.json` `php-real-*`), and no default -- a run
-that does not name its arm is refused. The corpus it is scored against is external; see
+`build-virtual.sh realphp` on its own builds the images `run-realphp.py` measures with. Two
+"stock"s are in play and are not the same thing: `PHP_REALPHP_ALLOC=stock` is the UNPATCHED
+image above (no seam at all), the honest-gap column of the spatial pair; the arm
+`php-real-stock` is the SEAM image at `PHP_CAP_MODE=0` (nothing revoked, the loan leaked).
+The runner uses one seam image for all four of its arms, modes 0, 4, 6 and 7
+(`tools/arms.json` `php-real-*`), named per run and never defaulted: a transcript that says
+`ZEND_CAP_MODE_DEFAULTED` is refused. The corpus it is scored against is external; see
 `results/2026-10-26/README.md` for the recorded result and its 2026-10-27 correction, and
 `results/2026-10-27-requalification/` for what ran on today's dev.
 
