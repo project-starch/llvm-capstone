@@ -1,1 +1,0 @@
-{"pid":1965835,"ppid":1965833,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/apps/facesim/inst/amd64-linux.gcc/bin/facesim -timing -threads 8","forked":0,"instructions":171356004771,"allocs":4608429,"frees":4594813,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":710377,"end_live":13616}

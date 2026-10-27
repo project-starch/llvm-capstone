@@ -1,1 +1,0 @@
-{"pid":293173,"ppid":293172,"cmdline":"../run_base_refrate_census-m64.0000/omnetpp_r_base.census-m64 -c General -r 0","forked":0,"instructions":1126558754588,"allocs":455917865,"frees":455907790,"realloc_moved":2,"realloc_inplace":0,"failed":0,"peak_live":2396575,"end_live":10075}

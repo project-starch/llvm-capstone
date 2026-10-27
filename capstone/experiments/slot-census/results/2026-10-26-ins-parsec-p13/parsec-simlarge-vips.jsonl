@@ -1,1 +1,0 @@
-{"pid":1968339,"ppid":1968338,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/apps/vips/inst/amd64-linux.gcc/bin/vips im_benchmark bigben_2662x5500.v output.v","forked":0,"instructions":28119148792,"allocs":110541,"frees":109822,"realloc_moved":19,"realloc_inplace":32,"failed":0,"peak_live":2880,"end_live":719}

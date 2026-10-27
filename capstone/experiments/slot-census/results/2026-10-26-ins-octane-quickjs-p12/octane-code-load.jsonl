@@ -1,1 +1,0 @@
-{"pid":294125,"ppid":268726,"cmdline":"./qjs tests/octane/run.js code-load","forked":0,"instructions":2062477827,"allocs":44409,"frees":44409,"realloc_moved":7722,"realloc_inplace":3846,"failed":0,"peak_live":2518,"end_live":0}

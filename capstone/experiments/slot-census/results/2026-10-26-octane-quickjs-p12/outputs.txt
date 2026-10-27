@@ -1,0 +1,47 @@
+octane-richards	Richards: 699
+octane-richards	----
+octane-richards	Score (version 9): 699
+octane-deltablue	DeltaBlue: 655
+octane-deltablue	----
+octane-deltablue	Score (version 9): 655
+octane-crypto	Crypto: 809
+octane-crypto	----
+octane-crypto	Score (version 9): 809
+octane-raytrace	RayTrace: 1291
+octane-raytrace	----
+octane-raytrace	Score (version 9): 1291
+octane-earley-boyer	EarleyBoyer: 1661
+octane-earley-boyer	----
+octane-earley-boyer	Score (version 9): 1661
+octane-regexp	RegExp: 339
+octane-regexp	----
+octane-regexp	Score (version 9): 339
+octane-splay	Splay: 2800
+octane-splay	SplayLatency: 5764
+octane-splay	----
+octane-splay	Score (version 9): 4018
+octane-navier-stokes	NavierStokes: 1920
+octane-navier-stokes	----
+octane-navier-stokes	Score (version 9): 1920
+octane-pdfjs	PdfJS: 2907
+octane-pdfjs	----
+octane-pdfjs	Score (version 9): 2907
+octane-mandreel	Mandreel: 646
+octane-mandreel	MandreelLatency: 5231
+octane-mandreel	----
+octane-mandreel	Score (version 9): 1839
+octane-gbemu	Gameboy: 5627
+octane-gbemu	----
+octane-gbemu	Score (version 9): 5627
+octane-code-load	CodeLoad: 11256
+octane-code-load	----
+octane-code-load	Score (version 9): 11256
+octane-box2d	Box2D: 2641
+octane-box2d	----
+octane-box2d	Score (version 9): 2641
+octane-zlib	zlib: 1070
+octane-zlib	----
+octane-zlib	Score (version 9): 1070
+octane-typescript	Typescript: 7823
+octane-typescript	----
+octane-typescript	Score (version 9): 7823

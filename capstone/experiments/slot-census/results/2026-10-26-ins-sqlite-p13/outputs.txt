@@ -1,0 +1,696 @@
+sqlite-lookaside-25	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-lookaside-25	 100 - 12500 INSERTs into table with no index......................    0.580s
+sqlite-lookaside-25	 110 - 12500 ordered INSERTS with one index/PK.....................    0.414s
+sqlite-lookaside-25	 120 - 12500 unordered INSERTS with one index/PK...................    0.332s
+sqlite-lookaside-25	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    0.384s
+sqlite-lookaside-25	 140 - 10 SELECTS, LIKE, unindexed.................................    0.461s
+sqlite-lookaside-25	 142 - 10 SELECTS w/ORDER BY, unindexed............................    0.677s
+sqlite-lookaside-25	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    0.518s
+sqlite-lookaside-25	 150 - CREATE INDEX five times.....................................    0.474s
+sqlite-lookaside-25	 160 - 2500 SELECTS, numeric BETWEEN, indexed......................    0.227s
+sqlite-lookaside-25	 161 - 2500 SELECTS, numeric BETWEEN, PK...........................    0.166s
+sqlite-lookaside-25	 170 - 2500 SELECTS, text BETWEEN, indexed.........................    0.343s
+sqlite-lookaside-25	 180 - 12500 INSERTS with three indexes............................    0.508s
+sqlite-lookaside-25	 190 - DELETE and REFILL one table.................................    0.546s
+sqlite-lookaside-25	 200 - VACUUM......................................................    7.628s
+sqlite-lookaside-25	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.723s
+sqlite-lookaside-25	 230 - 2500 UPDATES, numeric BETWEEN, indexed......................    0.154s
+sqlite-lookaside-25	 240 - 12500 UPDATES of individual rows............................    0.217s
+sqlite-lookaside-25	 250 - One big UPDATE of the whole 12500-row table.................    0.072s
+sqlite-lookaside-25	 260 - Query added column after filling............................    0.014s
+sqlite-lookaside-25	 270 - 2500 DELETEs, numeric BETWEEN, indexed......................    0.259s
+sqlite-lookaside-25	 280 - 12500 DELETEs of individual rows............................    0.232s
+sqlite-lookaside-25	 290 - Refill two 12500-row tables using REPLACE...................    0.770s
+sqlite-lookaside-25	 300 - Refill a 12500-row table using (b&1)==(a&1).................    0.394s
+sqlite-lookaside-25	 310 - 2500 four-ways joins........................................    0.555s
+sqlite-lookaside-25	 320 - subquery in result set......................................    1.006s
+sqlite-lookaside-25	 400 - 17500 REPLACE ops on an IPK.................................    0.325s
+sqlite-lookaside-25	 410 - 17500 SELECTS on an IPK.....................................    0.548s
+sqlite-lookaside-25	 500 - 17500 REPLACE on TEXT PK....................................    2.229s
+sqlite-lookaside-25	 510 - 17500 SELECTS on a TEXT PK..................................    0.674s
+sqlite-lookaside-25	 520 - 17500 SELECT DISTINCT.......................................    0.174s
+sqlite-lookaside-25	 980 - PRAGMA integrity_check......................................    0.721s
+sqlite-lookaside-25	 990 - ANALYZE.....................................................    0.186s
+sqlite-lookaside-25	       TOTAL.......................................................   22.511s
+sqlite-lookaside-25	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-lookaside-25	-- Compile option: THREADSAFE=1
+sqlite-lookaside-25	-- Lookaside Slots Used:        1 (max 81)
+sqlite-lookaside-25	-- Successful lookasides:       473333
+sqlite-lookaside-25	-- Lookaside size faults:       41
+sqlite-lookaside-25	-- Lookaside OOM faults:        0
+sqlite-lookaside-25	-- Pager Heap Usage:            2108056 bytes
+sqlite-lookaside-25	-- Page cache hits:             1173347
+sqlite-lookaside-25	-- Page cache misses:           15219
+sqlite-lookaside-25	-- Page cache writes:           5564
+sqlite-lookaside-25	-- Schema Heap Usage:           6728 bytes
+sqlite-lookaside-25	-- Statement Heap Usage:        0 bytes
+sqlite-lookaside-25	-- Memory Used (bytes):         0 (max 4452984)
+sqlite-lookaside-25	-- Outstanding Allocations:     0 (max 1101)
+sqlite-lookaside-25	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-lookaside-25	-- Largest Allocation:          1048576 bytes
+sqlite-lookaside-25	-- Largest Pcache Allocation:   4360 bytes
+sqlite-lookaside-25	-- Bytes received by read():    66448676
+sqlite-lookaside-25	-- Bytes sent to write():       41568392
+sqlite-lookaside-25	-- Read() system calls:         51204
+sqlite-lookaside-25	-- Write() system calls:        16706
+sqlite-lookaside-25	-- Bytes rcvd from storage:     0
+sqlite-lookaside-25	-- Bytes sent to storage:       41721856
+sqlite-lookaside-25	-- Cancelled write bytes:       5435392
+sqlite-nolookaside-25	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-nolookaside-25	 100 - 12500 INSERTs into table with no index......................    0.663s
+sqlite-nolookaside-25	 110 - 12500 ordered INSERTS with one index/PK.....................    0.540s
+sqlite-nolookaside-25	 120 - 12500 unordered INSERTS with one index/PK...................    0.486s
+sqlite-nolookaside-25	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    0.439s
+sqlite-nolookaside-25	 140 - 10 SELECTS, LIKE, unindexed.................................    0.473s
+sqlite-nolookaside-25	 142 - 10 SELECTS w/ORDER BY, unindexed............................    0.695s
+sqlite-nolookaside-25	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    0.522s
+sqlite-nolookaside-25	 150 - CREATE INDEX five times.....................................    0.487s
+sqlite-nolookaside-25	 160 - 2500 SELECTS, numeric BETWEEN, indexed......................    0.340s
+sqlite-nolookaside-25	 161 - 2500 SELECTS, numeric BETWEEN, PK...........................    0.211s
+sqlite-nolookaside-25	 170 - 2500 SELECTS, text BETWEEN, indexed.........................    0.369s
+sqlite-nolookaside-25	 180 - 12500 INSERTS with three indexes............................    0.424s
+sqlite-nolookaside-25	 190 - DELETE and REFILL one table.................................    0.338s
+sqlite-nolookaside-25	 200 - VACUUM......................................................    0.492s
+sqlite-nolookaside-25	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.067s
+sqlite-nolookaside-25	 230 - 2500 UPDATES, numeric BETWEEN, indexed......................    0.156s
+sqlite-nolookaside-25	 240 - 12500 UPDATES of individual rows............................    0.318s
+sqlite-nolookaside-25	 250 - One big UPDATE of the whole 12500-row table.................    0.073s
+sqlite-nolookaside-25	 260 - Query added column after filling............................    0.015s
+sqlite-nolookaside-25	 270 - 2500 DELETEs, numeric BETWEEN, indexed......................    0.295s
+sqlite-nolookaside-25	 280 - 12500 DELETEs of individual rows............................    0.311s
+sqlite-nolookaside-25	 290 - Refill two 12500-row tables using REPLACE...................    0.771s
+sqlite-nolookaside-25	 300 - Refill a 12500-row table using (b&1)==(a&1).................    0.405s
+sqlite-nolookaside-25	 310 - 2500 four-ways joins........................................    0.623s
+sqlite-nolookaside-25	 320 - subquery in result set......................................    0.993s
+sqlite-nolookaside-25	 400 - 17500 REPLACE ops on an IPK.................................    0.409s
+sqlite-nolookaside-25	 410 - 17500 SELECTS on an IPK.....................................    0.454s
+sqlite-nolookaside-25	 500 - 17500 REPLACE on TEXT PK....................................    0.331s
+sqlite-nolookaside-25	 510 - 17500 SELECTS on a TEXT PK..................................    0.714s
+sqlite-nolookaside-25	 520 - 17500 SELECT DISTINCT.......................................    0.142s
+sqlite-nolookaside-25	 980 - PRAGMA integrity_check......................................    0.563s
+sqlite-nolookaside-25	 990 - ANALYZE.....................................................    0.130s
+sqlite-nolookaside-25	       TOTAL.......................................................   13.249s
+sqlite-nolookaside-25	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-nolookaside-25	-- Compile option: THREADSAFE=1
+sqlite-nolookaside-25	-- Lookaside Slots Used:        0 (max 0)
+sqlite-nolookaside-25	-- Successful lookasides:       0
+sqlite-nolookaside-25	-- Lookaside size faults:       4
+sqlite-nolookaside-25	-- Lookaside OOM faults:        0
+sqlite-nolookaside-25	-- Pager Heap Usage:            2108064 bytes
+sqlite-nolookaside-25	-- Page cache hits:             1173347
+sqlite-nolookaside-25	-- Page cache misses:           15219
+sqlite-nolookaside-25	-- Page cache writes:           5564
+sqlite-nolookaside-25	-- Schema Heap Usage:           6728 bytes
+sqlite-nolookaside-25	-- Statement Heap Usage:        0 bytes
+sqlite-nolookaside-25	-- Memory Used (bytes):         0 (max 4340600)
+sqlite-nolookaside-25	-- Outstanding Allocations:     0 (max 1146)
+sqlite-nolookaside-25	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-nolookaside-25	-- Largest Allocation:          1048576 bytes
+sqlite-nolookaside-25	-- Largest Pcache Allocation:   4360 bytes
+sqlite-nolookaside-25	-- Bytes received by read():    66448684
+sqlite-nolookaside-25	-- Bytes sent to write():       41568394
+sqlite-nolookaside-25	-- Read() system calls:         51204
+sqlite-nolookaside-25	-- Write() system calls:        16706
+sqlite-nolookaside-25	-- Bytes rcvd from storage:     0
+sqlite-nolookaside-25	-- Bytes sent to storage:       41721856
+sqlite-nolookaside-25	-- Cancelled write bytes:       5435392
+sqlite-lookaside-50	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-lookaside-50	 100 - 25000 INSERTs into table with no index......................    0.547s
+sqlite-lookaside-50	 110 - 25000 ordered INSERTS with one index/PK.....................    0.560s
+sqlite-lookaside-50	 120 - 25000 unordered INSERTS with one index/PK...................    0.519s
+sqlite-lookaside-50	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    0.566s
+sqlite-lookaside-50	 140 - 10 SELECTS, LIKE, unindexed.................................    0.717s
+sqlite-lookaside-50	 142 - 10 SELECTS w/ORDER BY, unindexed............................    1.111s
+sqlite-lookaside-50	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    0.817s
+sqlite-lookaside-50	 150 - CREATE INDEX five times.....................................    0.670s
+sqlite-lookaside-50	 160 - 5000 SELECTS, numeric BETWEEN, indexed......................    0.345s
+sqlite-lookaside-50	 161 - 5000 SELECTS, numeric BETWEEN, PK...........................    0.335s
+sqlite-lookaside-50	 170 - 5000 SELECTS, text BETWEEN, indexed.........................    0.569s
+sqlite-lookaside-50	 180 - 25000 INSERTS with three indexes............................    0.628s
+sqlite-lookaside-50	 190 - DELETE and REFILL one table.................................    0.648s
+sqlite-lookaside-50	 200 - VACUUM......................................................    0.751s
+sqlite-lookaside-50	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.085s
+sqlite-lookaside-50	 230 - 5000 UPDATES, numeric BETWEEN, indexed......................    0.305s
+sqlite-lookaside-50	 240 - 25000 UPDATES of individual rows............................    0.365s
+sqlite-lookaside-50	 250 - One big UPDATE of the whole 25000-row table.................    0.118s
+sqlite-lookaside-50	 260 - Query added column after filling............................    0.024s
+sqlite-lookaside-50	 270 - 5000 DELETEs, numeric BETWEEN, indexed......................    0.558s
+sqlite-lookaside-50	 280 - 25000 DELETEs of individual rows............................    0.455s
+sqlite-lookaside-50	 290 - Refill two 25000-row tables using REPLACE...................    1.387s
+sqlite-lookaside-50	 300 - Refill a 25000-row table using (b&1)==(a&1).................    0.679s
+sqlite-lookaside-50	 310 - 5000 four-ways joins........................................    1.087s
+sqlite-lookaside-50	 320 - subquery in result set......................................    2.234s
+sqlite-lookaside-50	 400 - 35000 REPLACE ops on an IPK.................................    0.534s
+sqlite-lookaside-50	 410 - 35000 SELECTS on an IPK.....................................    0.749s
+sqlite-lookaside-50	 500 - 35000 REPLACE on TEXT PK....................................    0.536s
+sqlite-lookaside-50	 510 - 35000 SELECTS on a TEXT PK..................................    0.966s
+sqlite-lookaside-50	 520 - 35000 SELECT DISTINCT.......................................    0.290s
+sqlite-lookaside-50	 980 - PRAGMA integrity_check......................................    1.146s
+sqlite-lookaside-50	 990 - ANALYZE.....................................................    0.237s
+sqlite-lookaside-50	       TOTAL.......................................................   20.538s
+sqlite-lookaside-50	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-lookaside-50	-- Compile option: THREADSAFE=1
+sqlite-lookaside-50	-- Lookaside Slots Used:        1 (max 81)
+sqlite-lookaside-50	-- Successful lookasides:       941906
+sqlite-lookaside-50	-- Lookaside size faults:       59
+sqlite-lookaside-50	-- Lookaside OOM faults:        0
+sqlite-lookaside-50	-- Pager Heap Usage:            2108056 bytes
+sqlite-lookaside-50	-- Page cache hits:             2322039
+sqlite-lookaside-50	-- Page cache misses:           105060
+sqlite-lookaside-50	-- Page cache writes:           34198
+sqlite-lookaside-50	-- Schema Heap Usage:           6728 bytes
+sqlite-lookaside-50	-- Statement Heap Usage:        0 bytes
+sqlite-lookaside-50	-- Memory Used (bytes):         0 (max 4452984)
+sqlite-lookaside-50	-- Outstanding Allocations:     0 (max 1101)
+sqlite-lookaside-50	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-lookaside-50	-- Largest Allocation:          2048000 bytes
+sqlite-lookaside-50	-- Largest Pcache Allocation:   4360 bytes
+sqlite-lookaside-50	-- Bytes received by read():    440977564
+sqlite-lookaside-50	-- Bytes sent to write():       178533704
+sqlite-lookaside-50	-- Read() system calls:         177515
+sqlite-lookaside-50	-- Write() system calls:        56831
+sqlite-lookaside-50	-- Bytes rcvd from storage:     0
+sqlite-lookaside-50	-- Bytes sent to storage:       86827008
+sqlite-lookaside-50	-- Cancelled write bytes:       11403264
+sqlite-nolookaside-50	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-nolookaside-50	 100 - 25000 INSERTs into table with no index......................    0.601s
+sqlite-nolookaside-50	 110 - 25000 ordered INSERTS with one index/PK.....................    0.668s
+sqlite-nolookaside-50	 120 - 25000 unordered INSERTS with one index/PK...................    0.651s
+sqlite-nolookaside-50	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    0.530s
+sqlite-nolookaside-50	 140 - 10 SELECTS, LIKE, unindexed.................................    0.704s
+sqlite-nolookaside-50	 142 - 10 SELECTS w/ORDER BY, unindexed............................    1.103s
+sqlite-nolookaside-50	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    0.808s
+sqlite-nolookaside-50	 150 - CREATE INDEX five times.....................................    0.672s
+sqlite-nolookaside-50	 160 - 5000 SELECTS, numeric BETWEEN, indexed......................    0.455s
+sqlite-nolookaside-50	 161 - 5000 SELECTS, numeric BETWEEN, PK...........................    0.398s
+sqlite-nolookaside-50	 170 - 5000 SELECTS, text BETWEEN, indexed.........................    0.657s
+sqlite-nolookaside-50	 180 - 25000 INSERTS with three indexes............................    0.622s
+sqlite-nolookaside-50	 190 - DELETE and REFILL one table.................................    0.614s
+sqlite-nolookaside-50	 200 - VACUUM......................................................    0.848s
+sqlite-nolookaside-50	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.055s
+sqlite-nolookaside-50	 230 - 5000 UPDATES, numeric BETWEEN, indexed......................    0.314s
+sqlite-nolookaside-50	 240 - 25000 UPDATES of individual rows............................    0.512s
+sqlite-nolookaside-50	 250 - One big UPDATE of the whole 25000-row table.................    0.110s
+sqlite-nolookaside-50	 260 - Query added column after filling............................    0.024s
+sqlite-nolookaside-50	 270 - 5000 DELETEs, numeric BETWEEN, indexed......................    0.592s
+sqlite-nolookaside-50	 280 - 25000 DELETEs of individual rows............................    0.575s
+sqlite-nolookaside-50	 290 - Refill two 25000-row tables using REPLACE...................    1.760s
+sqlite-nolookaside-50	 300 - Refill a 25000-row table using (b&1)==(a&1).................    0.687s
+sqlite-nolookaside-50	 310 - 5000 four-ways joins........................................    1.194s
+sqlite-nolookaside-50	 320 - subquery in result set......................................    2.296s
+sqlite-nolookaside-50	 400 - 35000 REPLACE ops on an IPK.................................    0.667s
+sqlite-nolookaside-50	 410 - 35000 SELECTS on an IPK.....................................    0.900s
+sqlite-nolookaside-50	 500 - 35000 REPLACE on TEXT PK....................................    0.663s
+sqlite-nolookaside-50	 510 - 35000 SELECTS on a TEXT PK..................................    1.123s
+sqlite-nolookaside-50	 520 - 35000 SELECT DISTINCT.......................................    0.308s
+sqlite-nolookaside-50	 980 - PRAGMA integrity_check......................................    1.211s
+sqlite-nolookaside-50	 990 - ANALYZE.....................................................    0.335s
+sqlite-nolookaside-50	       TOTAL.......................................................   22.657s
+sqlite-nolookaside-50	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-nolookaside-50	-- Compile option: THREADSAFE=1
+sqlite-nolookaside-50	-- Lookaside Slots Used:        0 (max 0)
+sqlite-nolookaside-50	-- Successful lookasides:       0
+sqlite-nolookaside-50	-- Lookaside size faults:       4
+sqlite-nolookaside-50	-- Lookaside OOM faults:        0
+sqlite-nolookaside-50	-- Pager Heap Usage:            2108064 bytes
+sqlite-nolookaside-50	-- Page cache hits:             2322039
+sqlite-nolookaside-50	-- Page cache misses:           105060
+sqlite-nolookaside-50	-- Page cache writes:           34198
+sqlite-nolookaside-50	-- Schema Heap Usage:           6728 bytes
+sqlite-nolookaside-50	-- Statement Heap Usage:        0 bytes
+sqlite-nolookaside-50	-- Memory Used (bytes):         0 (max 4340600)
+sqlite-nolookaside-50	-- Outstanding Allocations:     0 (max 1146)
+sqlite-nolookaside-50	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-nolookaside-50	-- Largest Allocation:          2048000 bytes
+sqlite-nolookaside-50	-- Largest Pcache Allocation:   4360 bytes
+sqlite-nolookaside-50	-- Bytes received by read():    440977629
+sqlite-nolookaside-50	-- Bytes sent to write():       178533706
+sqlite-nolookaside-50	-- Read() system calls:         177515
+sqlite-nolookaside-50	-- Write() system calls:        56831
+sqlite-nolookaside-50	-- Bytes rcvd from storage:     0
+sqlite-nolookaside-50	-- Bytes sent to storage:       86827008
+sqlite-nolookaside-50	-- Cancelled write bytes:       11403264
+sqlite-lookaside-100	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-lookaside-100	 100 - 50000 INSERTs into table with no index......................    0.896s
+sqlite-lookaside-100	 110 - 50000 ordered INSERTS with one index/PK.....................    1.046s
+sqlite-lookaside-100	 120 - 50000 unordered INSERTS with one index/PK...................    1.085s
+sqlite-lookaside-100	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    1.200s
+sqlite-lookaside-100	 140 - 10 SELECTS, LIKE, unindexed.................................    1.436s
+sqlite-lookaside-100	 142 - 10 SELECTS w/ORDER BY, unindexed............................    2.289s
+sqlite-lookaside-100	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    1.830s
+sqlite-lookaside-100	 150 - CREATE INDEX five times.....................................    1.488s
+sqlite-lookaside-100	 160 - 10000 SELECTS, numeric BETWEEN, indexed.....................    0.931s
+sqlite-lookaside-100	 161 - 10000 SELECTS, numeric BETWEEN, PK..........................    0.907s
+sqlite-lookaside-100	 170 - 10000 SELECTS, text BETWEEN, indexed........................    1.475s
+sqlite-lookaside-100	 180 - 50000 INSERTS with three indexes............................    1.391s
+sqlite-lookaside-100	 190 - DELETE and REFILL one table.................................    1.397s
+sqlite-lookaside-100	 200 - VACUUM......................................................    1.399s
+sqlite-lookaside-100	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.166s
+sqlite-lookaside-100	 230 - 10000 UPDATES, numeric BETWEEN, indexed.....................    0.789s
+sqlite-lookaside-100	 240 - 50000 UPDATES of individual rows............................    1.067s
+sqlite-lookaside-100	 250 - One big UPDATE of the whole 50000-row table.................    0.294s
+sqlite-lookaside-100	 260 - Query added column after filling............................    0.048s
+sqlite-lookaside-100	 270 - 10000 DELETEs, numeric BETWEEN, indexed.....................    1.429s
+sqlite-lookaside-100	 280 - 50000 DELETEs of individual rows............................    1.064s
+sqlite-lookaside-100	 290 - Refill two 50000-row tables using REPLACE...................    2.993s
+sqlite-lookaside-100	 300 - Refill a 50000-row table using (b&1)==(a&1).................    1.453s
+sqlite-lookaside-100	 310 - 10000 four-ways joins.......................................    2.466s
+sqlite-lookaside-100	 320 - subquery in result set......................................    6.415s
+sqlite-lookaside-100	 400 - 70000 REPLACE ops on an IPK.................................    1.169s
+sqlite-lookaside-100	 410 - 70000 SELECTS on an IPK.....................................    1.596s
+sqlite-lookaside-100	 500 - 70000 REPLACE on TEXT PK....................................    1.226s
+sqlite-lookaside-100	 510 - 70000 SELECTS on a TEXT PK..................................    2.031s
+sqlite-lookaside-100	 520 - 70000 SELECT DISTINCT.......................................    0.632s
+sqlite-lookaside-100	 980 - PRAGMA integrity_check......................................    2.648s
+sqlite-lookaside-100	 990 - ANALYZE.....................................................    0.480s
+sqlite-lookaside-100	       TOTAL.......................................................   46.736s
+sqlite-lookaside-100	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-lookaside-100	-- Compile option: THREADSAFE=1
+sqlite-lookaside-100	-- Lookaside Slots Used:        1 (max 81)
+sqlite-lookaside-100	-- Successful lookasides:       1876230
+sqlite-lookaside-100	-- Lookaside size faults:       97
+sqlite-lookaside-100	-- Lookaside OOM faults:        0
+sqlite-lookaside-100	-- Pager Heap Usage:            2108064 bytes
+sqlite-lookaside-100	-- Page cache hits:             4886314
+sqlite-lookaside-100	-- Page cache misses:           588457
+sqlite-lookaside-100	-- Page cache writes:           190611
+sqlite-lookaside-100	-- Schema Heap Usage:           6728 bytes
+sqlite-lookaside-100	-- Statement Heap Usage:        0 bytes
+sqlite-lookaside-100	-- Memory Used (bytes):         0 (max 4491264)
+sqlite-lookaside-100	-- Outstanding Allocations:     0 (max 1157)
+sqlite-lookaside-100	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-lookaside-100	-- Largest Allocation:          2048000 bytes
+sqlite-lookaside-100	-- Largest Pcache Allocation:   4360 bytes
+sqlite-lookaside-100	-- Bytes received by read():    2434645139
+sqlite-lookaside-100	-- Bytes sent to write():       866637974
+sqlite-lookaside-100	-- Read() system calls:         733998
+sqlite-lookaside-100	-- Write() system calls:        240190
+sqlite-lookaside-100	-- Bytes rcvd from storage:     0
+sqlite-lookaside-100	-- Bytes sent to storage:       187723776
+sqlite-lookaside-100	-- Cancelled write bytes:       30855168
+sqlite-nolookaside-100	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-nolookaside-100	 100 - 50000 INSERTs into table with no index......................    1.116s
+sqlite-nolookaside-100	 110 - 50000 ordered INSERTS with one index/PK.....................    1.339s
+sqlite-nolookaside-100	 120 - 50000 unordered INSERTS with one index/PK...................    1.329s
+sqlite-nolookaside-100	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    0.934s
+sqlite-nolookaside-100	 140 - 10 SELECTS, LIKE, unindexed.................................    1.186s
+sqlite-nolookaside-100	 142 - 10 SELECTS w/ORDER BY, unindexed............................    1.682s
+sqlite-nolookaside-100	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    1.240s
+sqlite-nolookaside-100	 150 - CREATE INDEX five times.....................................    1.337s
+sqlite-nolookaside-100	 160 - 10000 SELECTS, numeric BETWEEN, indexed.....................    0.743s
+sqlite-nolookaside-100	 161 - 10000 SELECTS, numeric BETWEEN, PK..........................    0.988s
+sqlite-nolookaside-100	 170 - 10000 SELECTS, text BETWEEN, indexed........................    1.649s
+sqlite-nolookaside-100	 180 - 50000 INSERTS with three indexes............................    1.697s
+sqlite-nolookaside-100	 190 - DELETE and REFILL one table.................................    1.799s
+sqlite-nolookaside-100	 200 - VACUUM......................................................    1.758s
+sqlite-nolookaside-100	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.102s
+sqlite-nolookaside-100	 230 - 10000 UPDATES, numeric BETWEEN, indexed.....................    1.071s
+sqlite-nolookaside-100	 240 - 50000 UPDATES of individual rows............................    1.653s
+sqlite-nolookaside-100	 250 - One big UPDATE of the whole 50000-row table.................    0.258s
+sqlite-nolookaside-100	 260 - Query added column after filling............................    0.049s
+sqlite-nolookaside-100	 270 - 10000 DELETEs, numeric BETWEEN, indexed.....................    1.527s
+sqlite-nolookaside-100	 280 - 50000 DELETEs of individual rows............................    1.284s
+sqlite-nolookaside-100	 290 - Refill two 50000-row tables using REPLACE...................    2.872s
+sqlite-nolookaside-100	 300 - Refill a 50000-row table using (b&1)==(a&1).................    1.409s
+sqlite-nolookaside-100	 310 - 10000 four-ways joins.......................................    2.499s
+sqlite-nolookaside-100	 320 - subquery in result set......................................    6.240s
+sqlite-nolookaside-100	 400 - 70000 REPLACE ops on an IPK.................................    1.285s
+sqlite-nolookaside-100	 410 - 70000 SELECTS on an IPK.....................................    1.717s
+sqlite-nolookaside-100	 500 - 70000 REPLACE on TEXT PK....................................    1.342s
+sqlite-nolookaside-100	 510 - 70000 SELECTS on a TEXT PK..................................    2.125s
+sqlite-nolookaside-100	 520 - 70000 SELECT DISTINCT.......................................    0.589s
+sqlite-nolookaside-100	 980 - PRAGMA integrity_check......................................    2.459s
+sqlite-nolookaside-100	 990 - ANALYZE.....................................................    0.445s
+sqlite-nolookaside-100	       TOTAL.......................................................   47.723s
+sqlite-nolookaside-100	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-nolookaside-100	-- Compile option: THREADSAFE=1
+sqlite-nolookaside-100	-- Lookaside Slots Used:        0 (max 0)
+sqlite-nolookaside-100	-- Successful lookasides:       0
+sqlite-nolookaside-100	-- Lookaside size faults:       4
+sqlite-nolookaside-100	-- Lookaside OOM faults:        0
+sqlite-nolookaside-100	-- Pager Heap Usage:            2108072 bytes
+sqlite-nolookaside-100	-- Page cache hits:             4886314
+sqlite-nolookaside-100	-- Page cache misses:           588457
+sqlite-nolookaside-100	-- Page cache writes:           190611
+sqlite-nolookaside-100	-- Schema Heap Usage:           6728 bytes
+sqlite-nolookaside-100	-- Statement Heap Usage:        0 bytes
+sqlite-nolookaside-100	-- Memory Used (bytes):         0 (max 4375200)
+sqlite-nolookaside-100	-- Outstanding Allocations:     0 (max 1162)
+sqlite-nolookaside-100	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-nolookaside-100	-- Largest Allocation:          2048000 bytes
+sqlite-nolookaside-100	-- Largest Pcache Allocation:   4360 bytes
+sqlite-nolookaside-100	-- Bytes received by read():    2434634329
+sqlite-nolookaside-100	-- Bytes sent to write():       866637976
+sqlite-nolookaside-100	-- Read() system calls:         733996
+sqlite-nolookaside-100	-- Write() system calls:        240190
+sqlite-nolookaside-100	-- Bytes rcvd from storage:     0
+sqlite-nolookaside-100	-- Bytes sent to storage:       187723776
+sqlite-nolookaside-100	-- Cancelled write bytes:       30855168
+sqlite-lookaside-200	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-lookaside-200	 100 - 100000 INSERTs into table with no index.....................    1.435s
+sqlite-lookaside-200	 110 - 100000 ordered INSERTS with one index/PK....................    1.910s
+sqlite-lookaside-200	 120 - 100000 unordered INSERTS with one index/PK..................    1.886s
+sqlite-lookaside-200	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    1.691s
+sqlite-lookaside-200	 140 - 10 SELECTS, LIKE, unindexed.................................    2.287s
+sqlite-lookaside-200	 142 - 10 SELECTS w/ORDER BY, unindexed............................    3.804s
+sqlite-lookaside-200	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    2.650s
+sqlite-lookaside-200	 150 - CREATE INDEX five times.....................................    2.342s
+sqlite-lookaside-200	 160 - 20000 SELECTS, numeric BETWEEN, indexed.....................    1.931s
+sqlite-lookaside-200	 161 - 20000 SELECTS, numeric BETWEEN, PK..........................    1.929s
+sqlite-lookaside-200	 170 - 20000 SELECTS, text BETWEEN, indexed........................    2.544s
+sqlite-lookaside-200	 180 - 100000 INSERTS with three indexes...........................    2.435s
+sqlite-lookaside-200	 190 - DELETE and REFILL one table.................................    2.626s
+sqlite-lookaside-200	 200 - VACUUM......................................................    2.268s
+sqlite-lookaside-200	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.091s
+sqlite-lookaside-200	 230 - 20000 UPDATES, numeric BETWEEN, indexed.....................    1.778s
+sqlite-lookaside-200	 240 - 100000 UPDATES of individual rows...........................    1.647s
+sqlite-lookaside-200	 250 - One big UPDATE of the whole 100000-row table................    0.356s
+sqlite-lookaside-200	 260 - Query added column after filling............................    0.071s
+sqlite-lookaside-200	 270 - 20000 DELETEs, numeric BETWEEN, indexed.....................    2.493s
+sqlite-lookaside-200	 280 - 100000 DELETEs of individual rows...........................    2.088s
+sqlite-lookaside-200	 290 - Refill two 100000-row tables using REPLACE..................    4.647s
+sqlite-lookaside-200	 300 - Refill a 100000-row table using (b&1)==(a&1)................    2.336s
+sqlite-lookaside-200	 310 - 20000 four-ways joins.......................................    4.557s
+sqlite-lookaside-200	 320 - subquery in result set......................................   16.362s
+sqlite-lookaside-200	 400 - 140000 REPLACE ops on an IPK................................    3.860s
+sqlite-lookaside-200	 410 - 140000 SELECTS on an IPK....................................    5.002s
+sqlite-lookaside-200	 500 - 140000 REPLACE on TEXT PK...................................    3.103s
+sqlite-lookaside-200	 510 - 140000 SELECTS on a TEXT PK.................................    4.488s
+sqlite-lookaside-200	 520 - 140000 SELECT DISTINCT......................................    1.194s
+sqlite-lookaside-200	 980 - PRAGMA integrity_check......................................    4.414s
+sqlite-lookaside-200	 990 - ANALYZE.....................................................    0.624s
+sqlite-lookaside-200	       TOTAL.......................................................   90.849s
+sqlite-lookaside-200	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-lookaside-200	-- Compile option: THREADSAFE=1
+sqlite-lookaside-200	-- Lookaside Slots Used:        1 (max 81)
+sqlite-lookaside-200	-- Successful lookasides:       3739352
+sqlite-lookaside-200	-- Lookaside size faults:       173
+sqlite-lookaside-200	-- Lookaside OOM faults:        0
+sqlite-lookaside-200	-- Pager Heap Usage:            2108064 bytes
+sqlite-lookaside-200	-- Page cache hits:             10375907
+sqlite-lookaside-200	-- Page cache misses:           2686723
+sqlite-lookaside-200	-- Page cache writes:           886686
+sqlite-lookaside-200	-- Schema Heap Usage:           6728 bytes
+sqlite-lookaside-200	-- Statement Heap Usage:        0 bytes
+sqlite-lookaside-200	-- Memory Used (bytes):         0 (max 7688936)
+sqlite-lookaside-200	-- Outstanding Allocations:     0 (max 1158)
+sqlite-lookaside-200	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-lookaside-200	-- Largest Allocation:          3512373 bytes
+sqlite-lookaside-200	-- Largest Pcache Allocation:   4360 bytes
+sqlite-lookaside-200	-- Bytes received by read():    11131105851
+sqlite-lookaside-200	-- Bytes sent to write():       3904215718
+sqlite-lookaside-200	-- Read() system calls:         2996647
+sqlite-lookaside-200	-- Write() system calls:        1017139
+sqlite-lookaside-200	-- Bytes rcvd from storage:     0
+sqlite-lookaside-200	-- Bytes sent to storage:       423677952
+sqlite-lookaside-200	-- Cancelled write bytes:       86638592
+sqlite-nolookaside-200	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-nolookaside-200	 100 - 100000 INSERTs into table with no index.....................    1.257s
+sqlite-nolookaside-200	 110 - 100000 ordered INSERTS with one index/PK....................    1.776s
+sqlite-nolookaside-200	 120 - 100000 unordered INSERTS with one index/PK..................    2.708s
+sqlite-nolookaside-200	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    2.185s
+sqlite-nolookaside-200	 140 - 10 SELECTS, LIKE, unindexed.................................    2.963s
+sqlite-nolookaside-200	 142 - 10 SELECTS w/ORDER BY, unindexed............................    5.944s
+sqlite-nolookaside-200	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    3.021s
+sqlite-nolookaside-200	 150 - CREATE INDEX five times.....................................    2.634s
+sqlite-nolookaside-200	 160 - 20000 SELECTS, numeric BETWEEN, indexed.....................    2.206s
+sqlite-nolookaside-200	 161 - 20000 SELECTS, numeric BETWEEN, PK..........................    2.125s
+sqlite-nolookaside-200	 170 - 20000 SELECTS, text BETWEEN, indexed........................    2.541s
+sqlite-nolookaside-200	 180 - 100000 INSERTS with three indexes...........................    3.158s
+sqlite-nolookaside-200	 190 - DELETE and REFILL one table.................................    2.289s
+sqlite-nolookaside-200	 200 - VACUUM......................................................    2.050s
+sqlite-nolookaside-200	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.083s
+sqlite-nolookaside-200	 230 - 20000 UPDATES, numeric BETWEEN, indexed.....................    1.769s
+sqlite-nolookaside-200	 240 - 100000 UPDATES of individual rows...........................    1.900s
+sqlite-nolookaside-200	 250 - One big UPDATE of the whole 100000-row table................    0.344s
+sqlite-nolookaside-200	 260 - Query added column after filling............................    0.072s
+sqlite-nolookaside-200	 270 - 20000 DELETEs, numeric BETWEEN, indexed.....................    2.422s
+sqlite-nolookaside-200	 280 - 100000 DELETEs of individual rows...........................    2.224s
+sqlite-nolookaside-200	 290 - Refill two 100000-row tables using REPLACE..................    4.338s
+sqlite-nolookaside-200	 300 - Refill a 100000-row table using (b&1)==(a&1)................    2.191s
+sqlite-nolookaside-200	 310 - 20000 four-ways joins.......................................    3.982s
+sqlite-nolookaside-200	 320 - subquery in result set......................................   12.776s
+sqlite-nolookaside-200	 400 - 140000 REPLACE ops on an IPK................................    2.204s
+sqlite-nolookaside-200	 410 - 140000 SELECTS on an IPK....................................    2.684s
+sqlite-nolookaside-200	 500 - 140000 REPLACE on TEXT PK...................................    2.266s
+sqlite-nolookaside-200	 510 - 140000 SELECTS on a TEXT PK.................................    3.446s
+sqlite-nolookaside-200	 520 - 140000 SELECT DISTINCT......................................    1.015s
+sqlite-nolookaside-200	 980 - PRAGMA integrity_check......................................    4.307s
+sqlite-nolookaside-200	 990 - ANALYZE.....................................................    0.662s
+sqlite-nolookaside-200	       TOTAL.......................................................   85.542s
+sqlite-nolookaside-200	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-nolookaside-200	-- Compile option: THREADSAFE=1
+sqlite-nolookaside-200	-- Lookaside Slots Used:        0 (max 0)
+sqlite-nolookaside-200	-- Successful lookasides:       0
+sqlite-nolookaside-200	-- Lookaside size faults:       4
+sqlite-nolookaside-200	-- Lookaside OOM faults:        0
+sqlite-nolookaside-200	-- Pager Heap Usage:            2108072 bytes
+sqlite-nolookaside-200	-- Page cache hits:             10375907
+sqlite-nolookaside-200	-- Page cache misses:           2686723
+sqlite-nolookaside-200	-- Page cache writes:           886686
+sqlite-nolookaside-200	-- Schema Heap Usage:           6728 bytes
+sqlite-nolookaside-200	-- Statement Heap Usage:        0 bytes
+sqlite-nolookaside-200	-- Memory Used (bytes):         0 (max 7572896)
+sqlite-nolookaside-200	-- Outstanding Allocations:     0 (max 1163)
+sqlite-nolookaside-200	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-nolookaside-200	-- Largest Allocation:          3512373 bytes
+sqlite-nolookaside-200	-- Largest Pcache Allocation:   4360 bytes
+sqlite-nolookaside-200	-- Bytes received by read():    11131081762
+sqlite-nolookaside-200	-- Bytes sent to write():       3904215720
+sqlite-nolookaside-200	-- Read() system calls:         2996641
+sqlite-nolookaside-200	-- Write() system calls:        1017139
+sqlite-nolookaside-200	-- Bytes rcvd from storage:     0
+sqlite-nolookaside-200	-- Bytes sent to storage:       420466688
+sqlite-nolookaside-200	-- Cancelled write bytes:       86638592
+sqlite-lookaside-400	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-lookaside-400	 100 - 200000 INSERTs into table with no index.....................    2.141s
+sqlite-lookaside-400	 110 - 200000 ordered INSERTS with one index/PK....................    2.988s
+sqlite-lookaside-400	 120 - 200000 unordered INSERTS with one index/PK..................    3.269s
+sqlite-lookaside-400	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    2.851s
+sqlite-lookaside-400	 140 - 10 SELECTS, LIKE, unindexed.................................    4.152s
+sqlite-lookaside-400	 142 - 10 SELECTS w/ORDER BY, unindexed............................    7.671s
+sqlite-lookaside-400	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    4.970s
+sqlite-lookaside-400	 150 - CREATE INDEX five times.....................................    4.474s
+sqlite-lookaside-400	 160 - 40000 SELECTS, numeric BETWEEN, indexed.....................    5.959s
+sqlite-lookaside-400	 161 - 40000 SELECTS, numeric BETWEEN, PK..........................    5.914s
+sqlite-lookaside-400	 170 - 40000 SELECTS, text BETWEEN, indexed........................    5.299s
+sqlite-lookaside-400	 180 - 200000 INSERTS with three indexes...........................    4.977s
+sqlite-lookaside-400	 190 - DELETE and REFILL one table.................................    5.282s
+sqlite-lookaside-400	 200 - VACUUM......................................................    4.295s
+sqlite-lookaside-400	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.131s
+sqlite-lookaside-400	 230 - 40000 UPDATES, numeric BETWEEN, indexed.....................    5.206s
+sqlite-lookaside-400	 240 - 200000 UPDATES of individual rows...........................    3.129s
+sqlite-lookaside-400	 250 - One big UPDATE of the whole 200000-row table................    0.626s
+sqlite-lookaside-400	 260 - Query added column after filling............................    0.127s
+sqlite-lookaside-400	 270 - 40000 DELETEs, numeric BETWEEN, indexed.....................    5.231s
+sqlite-lookaside-400	 280 - 200000 DELETEs of individual rows...........................    3.984s
+sqlite-lookaside-400	 290 - Refill two 200000-row tables using REPLACE..................   10.049s
+sqlite-lookaside-400	 300 - Refill a 200000-row table using (b&1)==(a&1)................    5.591s
+sqlite-lookaside-400	 310 - 40000 four-ways joins.......................................    8.370s
+sqlite-lookaside-400	 320 - subquery in result set......................................   46.431s
+sqlite-lookaside-400	 400 - 280000 REPLACE ops on an IPK................................    6.465s
+sqlite-lookaside-400	 410 - 280000 SELECTS on an IPK....................................    7.035s
+sqlite-lookaside-400	 500 - 280000 REPLACE on TEXT PK...................................    5.854s
+sqlite-lookaside-400	 510 - 280000 SELECTS on a TEXT PK.................................    8.610s
+sqlite-lookaside-400	 520 - 280000 SELECT DISTINCT......................................    3.087s
+sqlite-lookaside-400	 980 - PRAGMA integrity_check......................................   13.579s
+sqlite-lookaside-400	 990 - ANALYZE.....................................................    1.736s
+sqlite-lookaside-400	       TOTAL.......................................................  199.483s
+sqlite-lookaside-400	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-lookaside-400	-- Compile option: THREADSAFE=1
+sqlite-lookaside-400	-- Lookaside Slots Used:        1 (max 81)
+sqlite-lookaside-400	-- Successful lookasides:       7458418
+sqlite-lookaside-400	-- Lookaside size faults:       340
+sqlite-lookaside-400	-- Lookaside OOM faults:        0
+sqlite-lookaside-400	-- Pager Heap Usage:            2108064 bytes
+sqlite-lookaside-400	-- Page cache hits:             20180508
+sqlite-lookaside-400	-- Page cache misses:           7520730
+sqlite-lookaside-400	-- Page cache writes:           2722225
+sqlite-lookaside-400	-- Schema Heap Usage:           6728 bytes
+sqlite-lookaside-400	-- Statement Heap Usage:        0 bytes
+sqlite-lookaside-400	-- Memory Used (bytes):         0 (max 15997912)
+sqlite-lookaside-400	-- Outstanding Allocations:     0 (max 1157)
+sqlite-lookaside-400	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-lookaside-400	-- Largest Allocation:          8383277 bytes
+sqlite-lookaside-400	-- Largest Pcache Allocation:   4360 bytes
+sqlite-lookaside-400	-- Bytes received by read():    31272875716
+sqlite-lookaside-400	-- Bytes sent to write():       11944490181
+sqlite-lookaside-400	-- Read() system calls:         8193052
+sqlite-lookaside-400	-- Write() system calls:        3056405
+sqlite-lookaside-400	-- Bytes rcvd from storage:     0
+sqlite-lookaside-400	-- Bytes sent to storage:       975355904
+sqlite-lookaside-400	-- Cancelled write bytes:       186646528
+sqlite-nolookaside-400	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-nolookaside-400	 100 - 200000 INSERTs into table with no index.....................    3.298s
+sqlite-nolookaside-400	 110 - 200000 ordered INSERTS with one index/PK....................    4.973s
+sqlite-nolookaside-400	 120 - 200000 unordered INSERTS with one index/PK..................    5.625s
+sqlite-nolookaside-400	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    3.943s
+sqlite-nolookaside-400	 140 - 10 SELECTS, LIKE, unindexed.................................    5.772s
+sqlite-nolookaside-400	 142 - 10 SELECTS w/ORDER BY, unindexed............................   10.411s
+sqlite-nolookaside-400	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    6.808s
+sqlite-nolookaside-400	 150 - CREATE INDEX five times.....................................    6.006s
+sqlite-nolookaside-400	 160 - 40000 SELECTS, numeric BETWEEN, indexed.....................    8.901s
+sqlite-nolookaside-400	 161 - 40000 SELECTS, numeric BETWEEN, PK..........................    8.989s
+sqlite-nolookaside-400	 170 - 40000 SELECTS, text BETWEEN, indexed........................    8.554s
+sqlite-nolookaside-400	 180 - 200000 INSERTS with three indexes...........................    7.495s
+sqlite-nolookaside-400	 190 - DELETE and REFILL one table.................................    8.318s
+sqlite-nolookaside-400	 200 - VACUUM......................................................    6.095s
+sqlite-nolookaside-400	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.196s
+sqlite-nolookaside-400	 230 - 40000 UPDATES, numeric BETWEEN, indexed.....................    7.471s
+sqlite-nolookaside-400	 240 - 200000 UPDATES of individual rows...........................    5.399s
+sqlite-nolookaside-400	 250 - One big UPDATE of the whole 200000-row table................    0.880s
+sqlite-nolookaside-400	 260 - Query added column after filling............................    0.179s
+sqlite-nolookaside-400	 270 - 40000 DELETEs, numeric BETWEEN, indexed.....................    7.869s
+sqlite-nolookaside-400	 280 - 200000 DELETEs of individual rows...........................    6.891s
+sqlite-nolookaside-400	 290 - Refill two 200000-row tables using REPLACE..................   13.473s
+sqlite-nolookaside-400	 300 - Refill a 200000-row table using (b&1)==(a&1)................    7.220s
+sqlite-nolookaside-400	 310 - 40000 four-ways joins.......................................   11.344s
+sqlite-nolookaside-400	 320 - subquery in result set......................................   50.008s
+sqlite-nolookaside-400	 400 - 280000 REPLACE ops on an IPK................................    7.038s
+sqlite-nolookaside-400	 410 - 280000 SELECTS on an IPK....................................    7.743s
+sqlite-nolookaside-400	 500 - 280000 REPLACE on TEXT PK...................................    6.698s
+sqlite-nolookaside-400	 510 - 280000 SELECTS on a TEXT PK.................................    9.459s
+sqlite-nolookaside-400	 520 - 280000 SELECT DISTINCT......................................    3.087s
+sqlite-nolookaside-400	 980 - PRAGMA integrity_check......................................   13.394s
+sqlite-nolookaside-400	 990 - ANALYZE.....................................................    1.693s
+sqlite-nolookaside-400	       TOTAL.......................................................  255.230s
+sqlite-nolookaside-400	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-nolookaside-400	-- Compile option: THREADSAFE=1
+sqlite-nolookaside-400	-- Lookaside Slots Used:        0 (max 0)
+sqlite-nolookaside-400	-- Successful lookasides:       0
+sqlite-nolookaside-400	-- Lookaside size faults:       4
+sqlite-nolookaside-400	-- Lookaside OOM faults:        0
+sqlite-nolookaside-400	-- Pager Heap Usage:            2108072 bytes
+sqlite-nolookaside-400	-- Page cache hits:             20180508
+sqlite-nolookaside-400	-- Page cache misses:           7520730
+sqlite-nolookaside-400	-- Page cache writes:           2722225
+sqlite-nolookaside-400	-- Schema Heap Usage:           6728 bytes
+sqlite-nolookaside-400	-- Statement Heap Usage:        0 bytes
+sqlite-nolookaside-400	-- Memory Used (bytes):         0 (max 15881872)
+sqlite-nolookaside-400	-- Outstanding Allocations:     0 (max 1162)
+sqlite-nolookaside-400	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-nolookaside-400	-- Largest Allocation:          8383277 bytes
+sqlite-nolookaside-400	-- Largest Pcache Allocation:   4360 bytes
+sqlite-nolookaside-400	-- Bytes received by read():    31272851590
+sqlite-nolookaside-400	-- Bytes sent to write():       11944490183
+sqlite-nolookaside-400	-- Read() system calls:         8193046
+sqlite-nolookaside-400	-- Write() system calls:        3056405
+sqlite-nolookaside-400	-- Bytes rcvd from storage:     0
+sqlite-nolookaside-400	-- Bytes sent to storage:       969322496
+sqlite-nolookaside-400	-- Cancelled write bytes:       191164416
+sqlite-lookaside-800	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-lookaside-800	 100 - 400000 INSERTs into table with no index.....................    5.428s
+sqlite-lookaside-800	 110 - 400000 ordered INSERTS with one index/PK....................    8.273s
+sqlite-lookaside-800	 120 - 400000 unordered INSERTS with one index/PK..................   10.618s
+sqlite-lookaside-800	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    8.232s
+sqlite-lookaside-800	 140 - 10 SELECTS, LIKE, unindexed.................................    9.492s
+sqlite-lookaside-800	 142 - 10 SELECTS w/ORDER BY, unindexed............................   22.836s
+sqlite-lookaside-800	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................   14.903s
+sqlite-lookaside-800	 150 - CREATE INDEX five times.....................................   11.691s
+sqlite-lookaside-800	 160 - 80000 SELECTS, numeric BETWEEN, indexed.....................   21.667s
+sqlite-lookaside-800	 161 - 80000 SELECTS, numeric BETWEEN, PK..........................   23.911s
+sqlite-lookaside-800	 170 - 80000 SELECTS, text BETWEEN, indexed........................   16.239s
+sqlite-lookaside-800	 180 - 400000 INSERTS with three indexes...........................   12.622s
+sqlite-lookaside-800	 190 - DELETE and REFILL one table.................................   17.711s
+sqlite-lookaside-800	 200 - VACUUM......................................................    8.842s
+sqlite-lookaside-800	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.273s
+sqlite-lookaside-800	 230 - 80000 UPDATES, numeric BETWEEN, indexed.....................   17.137s
+sqlite-lookaside-800	 240 - 400000 UPDATES of individual rows...........................    6.648s
+sqlite-lookaside-800	 250 - One big UPDATE of the whole 400000-row table................    1.352s
+sqlite-lookaside-800	 260 - Query added column after filling............................    0.255s
+sqlite-lookaside-800	 270 - 80000 DELETEs, numeric BETWEEN, indexed.....................   10.292s
+sqlite-lookaside-800	 280 - 400000 DELETEs of individual rows...........................    7.860s
+sqlite-lookaside-800	 290 - Refill two 400000-row tables using REPLACE..................   19.984s
+sqlite-lookaside-800	 300 - Refill a 400000-row table using (b&1)==(a&1)................   11.187s
+sqlite-lookaside-800	 310 - 80000 four-ways joins.......................................   15.530s
+sqlite-lookaside-800	 320 - subquery in result set......................................   99.364s
+sqlite-lookaside-800	 400 - 560000 REPLACE ops on an IPK................................    8.855s
+sqlite-lookaside-800	 410 - 560000 SELECTS on an IPK....................................    9.642s
+sqlite-lookaside-800	 500 - 560000 REPLACE on TEXT PK...................................    8.874s
+sqlite-lookaside-800	 510 - 560000 SELECTS on a TEXT PK.................................   12.768s
+sqlite-lookaside-800	 520 - 560000 SELECT DISTINCT......................................    4.755s
+sqlite-lookaside-800	 980 - PRAGMA integrity_check......................................   20.697s
+sqlite-lookaside-800	 990 - ANALYZE.....................................................    2.498s
+sqlite-lookaside-800	       TOTAL.......................................................  450.436s
+sqlite-lookaside-800	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-lookaside-800	-- Compile option: THREADSAFE=1
+sqlite-lookaside-800	-- Lookaside Slots Used:        1 (max 81)
+sqlite-lookaside-800	-- Successful lookasides:       14893032
+sqlite-lookaside-800	-- Lookaside size faults:       643
+sqlite-lookaside-800	-- Lookaside OOM faults:        0
+sqlite-lookaside-800	-- Pager Heap Usage:            2108064 bytes
+sqlite-lookaside-800	-- Page cache hits:             44002917
+sqlite-lookaside-800	-- Page cache misses:           18520896
+sqlite-lookaside-800	-- Page cache writes:           6731678
+sqlite-lookaside-800	-- Schema Heap Usage:           6728 bytes
+sqlite-lookaside-800	-- Statement Heap Usage:        0 bytes
+sqlite-lookaside-800	-- Memory Used (bytes):         0 (max 28689800)
+sqlite-lookaside-800	-- Outstanding Allocations:     0 (max 1158)
+sqlite-lookaside-800	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-lookaside-800	-- Largest Allocation:          15372455 bytes
+sqlite-lookaside-800	-- Largest Pcache Allocation:   4360 bytes
+sqlite-lookaside-800	-- Bytes received by read():    77116796816
+sqlite-lookaside-800	-- Bytes sent to write():       29514011333
+sqlite-lookaside-800	-- Read() system calls:         19943379
+sqlite-lookaside-800	-- Write() system calls:        7498672
+sqlite-lookaside-800	-- Bytes rcvd from storage:     0
+sqlite-lookaside-800	-- Bytes sent to storage:       2032902144
+sqlite-lookaside-800	-- Cancelled write bytes:       393211904
+sqlite-nolookaside-800	-- Speedtest1 for SQLite 3.22.0 2018-01-22 18:45:57 0c55d179733b46d8d0ba4d88e01a25
+sqlite-nolookaside-800	 100 - 400000 INSERTs into table with no index.....................    4.745s
+sqlite-nolookaside-800	 110 - 400000 ordered INSERTS with one index/PK....................    7.553s
+sqlite-nolookaside-800	 120 - 400000 unordered INSERTS with one index/PK..................    8.808s
+sqlite-nolookaside-800	 130 - 25 SELECTS, numeric BETWEEN, unindexed......................    5.486s
+sqlite-nolookaside-800	 140 - 10 SELECTS, LIKE, unindexed.................................    8.210s
+sqlite-nolookaside-800	 142 - 10 SELECTS w/ORDER BY, unindexed............................   15.414s
+sqlite-nolookaside-800	 145 - 10 SELECTS w/ORDER BY and LIMIT, unindexed..................    9.724s
+sqlite-nolookaside-800	 150 - CREATE INDEX five times.....................................    9.042s
+sqlite-nolookaside-800	 160 - 80000 SELECTS, numeric BETWEEN, indexed.....................   21.324s
+sqlite-nolookaside-800	 161 - 80000 SELECTS, numeric BETWEEN, PK..........................   21.518s
+sqlite-nolookaside-800	 170 - 80000 SELECTS, text BETWEEN, indexed........................   12.606s
+sqlite-nolookaside-800	 180 - 400000 INSERTS with three indexes...........................   11.365s
+sqlite-nolookaside-800	 190 - DELETE and REFILL one table.................................   11.557s
+sqlite-nolookaside-800	 200 - VACUUM......................................................    8.539s
+sqlite-nolookaside-800	 210 - ALTER TABLE ADD COLUMN, and query...........................    0.270s
+sqlite-nolookaside-800	 230 - 80000 UPDATES, numeric BETWEEN, indexed.....................   18.877s
+sqlite-nolookaside-800	 240 - 400000 UPDATES of individual rows...........................    8.316s
+sqlite-nolookaside-800	 250 - One big UPDATE of the whole 400000-row table................    1.339s
+sqlite-nolookaside-800	 260 - Query added column after filling............................    0.273s
+sqlite-nolookaside-800	 270 - 80000 DELETEs, numeric BETWEEN, indexed.....................   11.248s
+sqlite-nolookaside-800	 280 - 400000 DELETEs of individual rows...........................    9.403s
+sqlite-nolookaside-800	 290 - Refill two 400000-row tables using REPLACE..................   20.630s
+sqlite-nolookaside-800	 300 - Refill a 400000-row table using (b&1)==(a&1)................   11.291s
+sqlite-nolookaside-800	 310 - 80000 four-ways joins.......................................   16.933s
+sqlite-nolookaside-800	 320 - subquery in result set......................................  102.224s
+sqlite-nolookaside-800	 400 - 560000 REPLACE ops on an IPK................................   10.292s
+sqlite-nolookaside-800	 410 - 560000 SELECTS on an IPK....................................   10.980s
+sqlite-nolookaside-800	 500 - 560000 REPLACE on TEXT PK...................................   10.059s
+sqlite-nolookaside-800	 510 - 560000 SELECTS on a TEXT PK.................................   13.765s
+sqlite-nolookaside-800	 520 - 560000 SELECT DISTINCT......................................    4.839s
+sqlite-nolookaside-800	 980 - PRAGMA integrity_check......................................   20.107s
+sqlite-nolookaside-800	 990 - ANALYZE.....................................................    2.451s
+sqlite-nolookaside-800	       TOTAL.......................................................  429.188s
+sqlite-nolookaside-800	-- Compile option: COMPILER=gcc-15.2.0
+sqlite-nolookaside-800	-- Compile option: THREADSAFE=1
+sqlite-nolookaside-800	-- Lookaside Slots Used:        0 (max 0)
+sqlite-nolookaside-800	-- Successful lookasides:       0
+sqlite-nolookaside-800	-- Lookaside size faults:       4
+sqlite-nolookaside-800	-- Lookaside OOM faults:        0
+sqlite-nolookaside-800	-- Pager Heap Usage:            2108072 bytes
+sqlite-nolookaside-800	-- Page cache hits:             44002917
+sqlite-nolookaside-800	-- Page cache misses:           18520896
+sqlite-nolookaside-800	-- Page cache writes:           6731678
+sqlite-nolookaside-800	-- Schema Heap Usage:           6728 bytes
+sqlite-nolookaside-800	-- Statement Heap Usage:        0 bytes
+sqlite-nolookaside-800	-- Memory Used (bytes):         0 (max 28573784)
+sqlite-nolookaside-800	-- Outstanding Allocations:     0 (max 1163)
+sqlite-nolookaside-800	-- Pcache Overflow Bytes:       0 (max 4061936)
+sqlite-nolookaside-800	-- Largest Allocation:          15372455 bytes
+sqlite-nolookaside-800	-- Largest Pcache Allocation:   4360 bytes
+sqlite-nolookaside-800	-- Bytes received by read():    77116957913
+sqlite-nolookaside-800	-- Bytes sent to write():       29514011335
+sqlite-nolookaside-800	-- Read() system calls:         19943418
+sqlite-nolookaside-800	-- Write() system calls:        7498672
+sqlite-nolookaside-800	-- Bytes rcvd from storage:     499712
+sqlite-nolookaside-800	-- Bytes sent to storage:       2086764544
+sqlite-nolookaside-800	-- Cancelled write bytes:       414916608

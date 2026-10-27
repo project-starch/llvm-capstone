@@ -1,1 +1,0 @@
-{"pid":280884,"ppid":268726,"cmdline":"./qjs tests/octane/run.js earley-boyer","forked":0,"instructions":40953085002,"allocs":133966,"frees":133966,"realloc_moved":119,"realloc_inplace":69,"failed":0,"peak_live":3213,"end_live":0}

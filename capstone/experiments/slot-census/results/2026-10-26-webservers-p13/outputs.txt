@@ -1,0 +1,54 @@
+nginx	Running 30s test @ http://127.0.0.1:18080/file64
+nginx	  16 threads and 256 connections
+nginx	  Thread Stats   Avg      Stdev     Max   +/- Stdev
+nginx	    Latency   487.05us  140.69us   5.94ms   81.90%
+nginx	    Req/Sec    30.71k     3.09k   45.12k    68.66%
+nginx	  14701357 requests in 30.10s, 4.31GB read
+nginx	Requests/sec: 488421.10
+nginx	Transfer/sec:    146.72MB
+httpd	This is ApacheBench, Version 2.3 <$Revision: 1903618 $>
+httpd	Copyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/
+httpd	Licensed to The Apache Software Foundation, http://www.apache.org/
+httpd	Benchmarking 127.0.0.1 (be patient)
+httpd	Completed 10000 requests
+httpd	Completed 20000 requests
+httpd	Completed 30000 requests
+httpd	Completed 40000 requests
+httpd	Completed 50000 requests
+httpd	Completed 60000 requests
+httpd	Completed 70000 requests
+httpd	Completed 80000 requests
+httpd	Completed 90000 requests
+httpd	Completed 100000 requests
+httpd	Finished 100000 requests
+httpd	Server Software:        Apache/2.4.58
+httpd	Server Hostname:        127.0.0.1
+httpd	Server Port:            18081
+httpd	Document Path:          /file64
+httpd	Document Length:        64 bytes
+httpd	Concurrency Level:      128
+httpd	Time taken for tests:   6.475 seconds
+httpd	Complete requests:      100000
+httpd	Failed requests:        0
+httpd	Total transferred:      28300000 bytes
+httpd	HTML transferred:       6400000 bytes
+httpd	Requests per second:    15443.56 [#/sec] (mean)
+httpd	Time per request:       8.288 [ms] (mean)
+httpd	Time per request:       0.065 [ms] (mean, across all concurrent requests)
+httpd	Transfer rate:          4268.09 [Kbytes/sec] received
+httpd	Connection Times (ms)
+httpd	              min  mean[+/-sd] median   max
+httpd	Connect:        0    4   1.1      3      13
+httpd	Processing:     1    5   1.8      4      46
+httpd	Waiting:        1    3   1.6      3      45
+httpd	Total:          5    8   2.3      8      49
+httpd	Percentage of the requests served within a certain time (ms)
+httpd	  50%      8
+httpd	  66%      8
+httpd	  75%      8
+httpd	  80%      8
+httpd	  90%      9
+httpd	  95%     12
+httpd	  98%     17
+httpd	  99%     18
+httpd	 100%     49 (longest request)

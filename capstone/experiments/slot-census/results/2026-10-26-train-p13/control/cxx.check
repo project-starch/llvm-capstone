@@ -1,4 +1,0 @@
-PASS EXPECT peak_live: census 4001, expected 4000 (+64)
-PASS EXPECT allocs: census 4001, expected 4000 (+64)
-PASS EXPECT forked: census 0, expected 0
-CONTROL PASS

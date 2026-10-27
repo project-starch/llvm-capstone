@@ -1,2 +1,0 @@
-{"pid":269135,"ppid":269132,"cmdline":"<PASS>/tool/insctl 0 fork","forked":1,"instructions":1481,"allocs":0,"frees":0,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":0,"end_live":0}
-{"pid":269132,"ppid":268724,"cmdline":"<PASS>/tool/insctl 0 fork","forked":0,"instructions":116951,"allocs":0,"frees":0,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":0,"end_live":0}

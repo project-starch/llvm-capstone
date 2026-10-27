@@ -1,1 +1,0 @@
-{"pid":1972283,"ppid":1972282,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/apps/fluidanimate/inst/amd64-linux.gcc/bin/fluidanimate 8 500 in_500K.fluid out.fluid","forked":0,"instructions":1857667356218,"allocs":229932,"frees":229926,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":229927,"end_live":6}

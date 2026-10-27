@@ -1,1 +1,0 @@
-{"pid":157763,"ppid":157642,"cmdline":"./qjs tests/octane/run.js richards","forked":0,"peak_live":126,"end_live":1,"allocs":1024,"frees":1023,"realloc_moved":19,"realloc_inplace":16,"failed":0,"peak_live_bytes":416480,"size_log2":[0,0,0,0,0,0,1,0,3,154,32,549,298,3,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}

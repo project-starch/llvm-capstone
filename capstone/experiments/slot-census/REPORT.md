@@ -578,4 +578,4 @@ Every cell with a census peak and an instruction pass, as drawn in `figures/peak
 - 2026-10-26-pyperformance-p13 py-pymalloc-asyncio_tcp: INVALID (rc=1 10s), valid in 2026-10-26-pyperformance-net-p13
 - 2026-10-26-pyperformance-p13 py-malloc-asyncio_tcp: INVALID (rc=1 3s), valid in 2026-10-26-pyperformance-net-p13
 - 2026-10-26-pyperformance-p13 py-malloc-asyncio_websockets: INVALID (rc=1 3s), valid in 2026-10-26-pyperformance-net-p13
-- 2026-10-26-test-p12 526.blender_r: no verdict, valid in 2026-10-26-ref-p12, 2026-10-26-test-blender-p12, 2026-10-26-train-p13
+- 2026-10-26-test-p12 526.blender_r: no verdict (rc=0 4s), valid in 2026-10-26-ref-p12, 2026-10-26-test-blender-p12, 2026-10-26-train-p13

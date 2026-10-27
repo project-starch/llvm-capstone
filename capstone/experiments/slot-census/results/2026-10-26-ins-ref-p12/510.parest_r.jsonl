@@ -1,1 +1,0 @@
-{"pid":293230,"ppid":293229,"cmdline":"../run_base_refrate_census-m64.0000/parest_r_base.census-m64 ref.prm","forked":0,"instructions":3637294500689,"allocs":156558742,"frees":156558704,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":2374733,"end_live":38}

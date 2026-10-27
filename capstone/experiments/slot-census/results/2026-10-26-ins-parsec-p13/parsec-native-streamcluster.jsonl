@@ -1,1 +1,0 @@
-{"pid":1988191,"ppid":1988190,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/kernels/streamcluster/inst/amd64-linux.gcc/bin/streamcluster 10 20 128 1000000 200000 5000 none output.txt 8","forked":0,"instructions":903046480152,"allocs":8892,"frees":8883,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":24,"end_live":9}

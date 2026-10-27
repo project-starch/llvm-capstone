@@ -1,1 +1,0 @@
-{"pid":1964735,"ppid":1964734,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/apps/bodytrack/inst/amd64-linux.gcc/bin/bodytrack sequenceB_4 4 4 4000 5 0 8","forked":0,"instructions":10869403124,"allocs":9543,"frees":9546,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":8227,"end_live":-3}

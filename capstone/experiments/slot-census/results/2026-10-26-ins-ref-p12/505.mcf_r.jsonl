@@ -1,1 +1,0 @@
-{"pid":293129,"ppid":293126,"cmdline":"../run_base_refrate_census-m64.0000/mcf_r_base.census-m64 inp.in","forked":0,"instructions":995191539468,"allocs":495342,"frees":495342,"realloc_moved":3,"realloc_inplace":1,"failed":0,"peak_live":15009,"end_live":0}

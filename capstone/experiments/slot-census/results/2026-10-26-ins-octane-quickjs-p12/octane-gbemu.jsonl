@@ -1,1 +1,0 @@
-{"pid":293960,"ppid":268726,"cmdline":"./qjs tests/octane/run.js gbemu","forked":0,"instructions":16412676513,"allocs":8610,"frees":8610,"realloc_moved":696,"realloc_inplace":521,"failed":0,"peak_live":1349,"end_live":0}

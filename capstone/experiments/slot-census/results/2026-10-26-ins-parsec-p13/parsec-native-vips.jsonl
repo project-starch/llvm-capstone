@@ -1,1 +1,0 @@
-{"pid":1989092,"ppid":1989091,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/apps/vips/inst/amd64-linux.gcc/bin/vips im_benchmark orion_18000x18000.v output.v","forked":0,"instructions":655547614231,"allocs":2382506,"frees":2381787,"realloc_moved":19,"realloc_inplace":30,"failed":0,"peak_live":2884,"end_live":719}

@@ -1,1 +1,0 @@
-{"pid":1969299,"ppid":1969297,"cmdline":"<PASS>/tool/parsec-3.0/pkgs/apps/blackscholes/inst/amd64-linux.gcc/bin/blackscholes 8 in_10M.txt prices.txt","forked":0,"instructions":426460206933,"allocs":18,"frees":12,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":13,"end_live":6}

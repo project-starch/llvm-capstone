@@ -1,1 +1,0 @@
-{"pid":296696,"ppid":268726,"cmdline":"./qjs tests/octane/run.js typescript","forked":0,"instructions":77048011015,"allocs":340362,"frees":340362,"realloc_moved":2760,"realloc_inplace":1431,"failed":0,"peak_live":34014,"end_live":0}

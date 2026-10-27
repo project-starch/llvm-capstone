@@ -31,9 +31,9 @@ programs' own allocation behaviour is measured, not a port's.
                  run-sqlite.sh      SQLite speedtest1
                  run-mimalloc-bench.sh  mimalloc-bench (allocator stress tests)
     analysis     summarize.py       one pass: per-process and per-cell peaks, verdicts; "no data" is an error
-                 pack.py            copies a pass into results/<pass>/ with host paths removed
-                 report.py          every pass in results/ -> REPORT.md, figures/slots.pdf and rates.pdf, captions
-    data         results/<pass>/    one directory per pass, raw lines only
+                 pack.py            packs a pass into results/<pass>/ (five files) with host paths removed
+                 report.py          every pass in results/ -> REPORT.md, figures/ (slots, rates, peak-rate), captions
+    data         results/<pass>/    one directory per pass, result lines only
 
 ## The suites
 
@@ -189,9 +189,16 @@ and each server cell a few minutes.
 
 ## Results
 
-`results/<pass>/` holds what `pack.py` copies, with the pass directory written `<PASS>` and the home directory
-`<HOME>`: the control files, each cell's census lines (measured processes only), the program's own output where a
-runner keeps one, `cells.tsv` or SPEC's `verdicts.txt`, the generated SPEC config, and `provenance.txt`. Full build
-and run logs carry the host's paths and stay on the host. A pass is named `<date>-<what>-<host>`, all measured on
+`results/<pass>/` holds what `pack.py` writes, with the pass directory written `<PASS>` and the home directory
+`<HOME>`, in five files:
+- `provenance.txt`: what ran and how (for SPEC with the generated runcpu config).
+- `cells.tsv`: one row per cell, its selector, verdict and the runner's note (for SPEC runcpu's verdict line, exit
+  code and run time).
+- `processes.jsonl`: the census line of every measured process, with its cell.
+- `outputs.txt`: the program's own result lines where a server runner keeps them (YCSB's operation counts, for one).
+- `control.txt`: every control's checker lines, expected against measured values.
+
+Full build and run logs, the raw control records and every process a cell does not measure carry the host's paths or
+nothing the report needs, and stay on the host. A pass is named `<date>-<what>-<host>`, all measured on
 Xeon Gold 6230 hosts with GCC 15.2 and glibc 2.43. `report.py` lists any cell that is not valid under "Excluded
 cells", with its reason.

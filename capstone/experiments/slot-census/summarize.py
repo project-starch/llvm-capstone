@@ -2,14 +2,14 @@
 """Summarise one pass: the measured processes' census lines and each cell's validation verdict.
 
 usage: summarize.py OUT_DIR [JSON_OUT]
-A pass is a set of cells, each with a census file OUT_DIR/<cell>.jsonl. A pass with OUT_DIR/cells.tsv (the server
-runners) lists its cells there as <cell> <selector> <verdict>, and a cell's measured processes are those its
-selector picks: an executable's base name, or re:<regex> searched in the whole command line. A SPEC pass (run-
-spec.sh) has one cell per benchmark, its verdict is runcpu's in OUT_DIR/logs/<benchmark>.log (or, once packed,
-OUT_DIR/verdicts.txt), and a benchmark process is one whose executable name contains "_base.census" (SPEC names
-binaries <exe>_base.<label>) and is not one of SPEC's image validators (imagevalidate_<n>, built with the same
-label, run on 511, 525, 526 and 538 outputs); the shells, specinvoke, specdiff and validator lines in the same file
-are dropped. 525.x264_r's ldecod_r, which decodes the input, stays and is reported as its own executable. Prints one
+A pass is a set of cells, each with a census file OUT_DIR/<cell>.jsonl while it runs (pack.py merges them into
+OUT_DIR/processes.jsonl, one line per measured process with its cell). A pass with OUT_DIR/cells.tsv lists its cells
+there as <cell> <selector> <verdict> [note], and a cell's measured processes are those its selector picks: an
+executable's base name, re:<regex> searched in the whole command line, or spec. A SPEC pass (run-spec.sh) has no
+cells.tsv until it is packed: one cell per benchmark, its verdict runcpu's in OUT_DIR/logs/<benchmark>.log. A SPEC
+benchmark process (selector spec) is one whose executable name contains "_base.census" (SPEC names binaries
+<exe>_base.<label>) and is not one of SPEC's image validators (imagevalidate_<n>, built with the same label, run on
+511, 525, 526 and 538 outputs); the shells, specinvoke, specdiff and validator lines in the same file are dropped. 525.x264_r's ldecod_r, which decodes the input, stays and is reported as its own executable. Prints one
 row per benchmark process (an invocation of one input) and one per cell (the maximum over its processes, which is
 what sizes the slots), and with JSON_OUT writes the same as JSON there (derived data stays out of the pass
 directory). Exit 1 if any cell has no census line or no valid verdict: "no data" is an error, never a zero."""
@@ -30,7 +30,9 @@ def spec(exe, cmdline):
 
 
 def keeper(selector):
-    """a cells.tsv selector: an executable's base name, or re:<regex> searched in the whole command line"""
+    """a cells.tsv selector: an executable's base name, re:<regex> searched in the whole command line, or spec"""
+    if selector == "spec":
+        return spec
     if selector.startswith("re:"):
         rx = re.compile(selector[3:])
         return lambda exe, cmdline: rx.search(cmdline) is not None
@@ -60,17 +62,28 @@ def cells(out):
         rows = [l.rstrip("\n").split("\t") for l in open(manifest) if "\t" in l]
         return [(c, keeper(x), v) for c, x, v, *_ in rows]
     benches = sorted(f[:-6] for f in os.listdir(out) if f.endswith(".jsonl"))
-    packed = os.path.join(out, "verdicts.txt")   # a pass packed by pack.py keeps runcpu's verdict lines only
-    if not os.path.isdir(os.path.join(out, "logs")) and os.path.exists(packed):
-        lines = dict(l.rstrip("\n").split(": ", 1) for l in open(packed))
-        return [(b, spec, verdict_text(lines.get(b, ""))) for b in benches]
     return [(b, spec, verdict(os.path.join(out, "logs", b + ".log"))) for b in benches]
+
+
+_merged = {}
+
+
+def census_lines(out, cell):
+    """a cell's census lines: from OUT_DIR/processes.jsonl in a packed pass, else from OUT_DIR/<cell>.jsonl"""
+    merged = os.path.join(out, "processes.jsonl")
+    if os.path.exists(merged):
+        if merged not in _merged:
+            _merged[merged] = {}
+            for line in open(merged):
+                _merged[merged].setdefault(json.loads(line)["cell"], []).append(line)
+        return _merged[merged].get(cell, [])
+    path = os.path.join(out, cell + ".jsonl")
+    return open(path).readlines() if os.path.exists(path) else []
 
 
 def processes(out, cell, keep):
     rows = []
-    path = os.path.join(out, cell + ".jsonl")
-    for line in open(path) if os.path.exists(path) else []:
+    for line in census_lines(out, cell):
         r = json.loads(line)
         exe = os.path.basename(r["cmdline"].split(" ", 1)[0])
         if keep(exe, r["cmdline"]):
@@ -83,8 +96,7 @@ def processes(out, cell, keep):
 def instruction_pass(out, todo):
     """a pass whose lines count instructions (slotins.c) rather than allocations"""
     for b, keep, v in todo:
-        path = os.path.join(out, b + ".jsonl")
-        for line in open(path) if os.path.exists(path) else []:
+        for line in census_lines(out, b):
             return "instructions" in json.loads(line)
     return False
 

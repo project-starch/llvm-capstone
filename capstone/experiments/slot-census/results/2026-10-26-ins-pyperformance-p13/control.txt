@@ -1,0 +1,19 @@
+== c
+PASS EXPECT allocs: census 10405, expected 10400 (+64)
+PASS EXPECT frees: census 5406, expected 5400 (+64)
+PASS EXPECT realloc_moved: census 100, expected 100
+PASS EXPECT realloc_inplace: census 50, expected 50
+PASS EXPECT forked: census 0, expected 0
+PASS EXPECT_CHILD allocs: census 3000, expected 3000 (+64)
+PASS EXPECT_CHILD forked: census 1, expected 1
+CONTROL PASS
+== cxx
+PASS EXPECT allocs: census 4001, expected 4000 (+64)
+PASS EXPECT forked: census 0, expected 0
+CONTROL PASS
+== ins
+PASS single forked=0: 119201 -> 200119361, delta 200000160, want 200000000
+PASS threads forked=0: 127794 -> 800127919, delta 800000125, want 800000000
+PASS fork forked=1: 1721 -> 400001721, delta 400000000, want 400000000
+PASS fork forked=0: 122172 -> 400122337, delta 400000165, want 400000000
+CONTROL PASS

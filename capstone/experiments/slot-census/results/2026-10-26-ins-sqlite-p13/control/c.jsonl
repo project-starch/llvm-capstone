@@ -1,2 +1,0 @@
-{"pid":1304524,"ppid":1304485,"cmdline":"<PASS>/tool/control","forked":1,"instructions":535542,"allocs":3000,"frees":0,"realloc_moved":0,"realloc_inplace":0,"failed":0,"peak_live":7999,"end_live":7999}
-{"pid":1304485,"ppid":1303916,"cmdline":"<PASS>/tool/control","forked":0,"instructions":2981412,"allocs":10405,"frees":5406,"realloc_moved":100,"realloc_inplace":50,"failed":0,"peak_live":10000,"end_live":4999}

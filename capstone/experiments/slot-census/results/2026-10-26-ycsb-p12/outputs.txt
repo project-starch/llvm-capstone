@@ -1,0 +1,144 @@
+ycsb-redis-100000	== load
+ycsb-redis-100000	[OVERALL], RunTime(ms), 3497
+ycsb-redis-100000	[OVERALL], Throughput(ops/sec), 28595.939376608523
+ycsb-redis-100000	[INSERT], Operations, 100000
+ycsb-redis-100000	[INSERT], Return=OK, 100000
+ycsb-redis-100000	== a
+ycsb-redis-100000	[OVERALL], RunTime(ms), 11661
+ycsb-redis-100000	[OVERALL], Throughput(ops/sec), 85755.93859874796
+ycsb-redis-100000	[READ], Operations, 500240
+ycsb-redis-100000	[READ], Return=OK, 500240
+ycsb-redis-100000	[UPDATE], Operations, 499760
+ycsb-redis-100000	[UPDATE], Return=OK, 499760
+ycsb-redis-100000	== c
+ycsb-redis-100000	[OVERALL], RunTime(ms), 13156
+ycsb-redis-100000	[OVERALL], Throughput(ops/sec), 76010.94557616297
+ycsb-redis-100000	[READ], Operations, 1000000
+ycsb-redis-100000	[READ], Return=OK, 1000000
+ycsb-redis-100000	items 100001 (want 100001)
+ycsb-memcached-100000	== load
+ycsb-memcached-100000	[OVERALL], RunTime(ms), 1536
+ycsb-memcached-100000	[OVERALL], Throughput(ops/sec), 65104.166666666664
+ycsb-memcached-100000	[INSERT], Operations, 100000
+ycsb-memcached-100000	[INSERT], Return=OK, 100000
+ycsb-memcached-100000	== a
+ycsb-memcached-100000	[OVERALL], RunTime(ms), 7462
+ycsb-memcached-100000	[OVERALL], Throughput(ops/sec), 134012.32913428036
+ycsb-memcached-100000	[READ], Operations, 500710
+ycsb-memcached-100000	[READ], Return=OK, 500710
+ycsb-memcached-100000	[UPDATE], Operations, 499290
+ycsb-memcached-100000	[UPDATE], Return=OK, 499290
+ycsb-memcached-100000	== c
+ycsb-memcached-100000	[OVERALL], RunTime(ms), 7531
+ycsb-memcached-100000	[OVERALL], Throughput(ops/sec), 132784.4907714779
+ycsb-memcached-100000	[READ], Operations, 1000000
+ycsb-memcached-100000	[READ], Return=OK, 1000000
+ycsb-memcached-100000	items 100000 (want 100000)
+ycsb-redis-1000000	== load
+ycsb-redis-1000000	[OVERALL], RunTime(ms), 31655
+ycsb-redis-1000000	[OVERALL], Throughput(ops/sec), 31590.5860053704
+ycsb-redis-1000000	[INSERT], Operations, 1000000
+ycsb-redis-1000000	[INSERT], Return=OK, 1000000
+ycsb-redis-1000000	== a
+ycsb-redis-1000000	[OVERALL], RunTime(ms), 11875
+ycsb-redis-1000000	[OVERALL], Throughput(ops/sec), 84210.52631578948
+ycsb-redis-1000000	[READ], Operations, 498509
+ycsb-redis-1000000	[READ], Return=OK, 498509
+ycsb-redis-1000000	[UPDATE], Operations, 501491
+ycsb-redis-1000000	[UPDATE], Return=OK, 501491
+ycsb-redis-1000000	== c
+ycsb-redis-1000000	[OVERALL], RunTime(ms), 13028
+ycsb-redis-1000000	[OVERALL], Throughput(ops/sec), 76757.75253300583
+ycsb-redis-1000000	[READ], Operations, 1000000
+ycsb-redis-1000000	[READ], Return=OK, 1000000
+ycsb-redis-1000000	items 1000001 (want 1000001)
+ycsb-memcached-1000000	== load
+ycsb-memcached-1000000	[OVERALL], RunTime(ms), 9399
+ycsb-memcached-1000000	[OVERALL], Throughput(ops/sec), 106394.29726566657
+ycsb-memcached-1000000	[INSERT], Operations, 1000000
+ycsb-memcached-1000000	[INSERT], Return=OK, 1000000
+ycsb-memcached-1000000	== a
+ycsb-memcached-1000000	[OVERALL], RunTime(ms), 7032
+ycsb-memcached-1000000	[OVERALL], Throughput(ops/sec), 142207.0534698521
+ycsb-memcached-1000000	[READ], Operations, 500294
+ycsb-memcached-1000000	[READ], Return=OK, 500294
+ycsb-memcached-1000000	[UPDATE], Operations, 499706
+ycsb-memcached-1000000	[UPDATE], Return=OK, 499706
+ycsb-memcached-1000000	== c
+ycsb-memcached-1000000	[OVERALL], RunTime(ms), 7571
+ycsb-memcached-1000000	[OVERALL], Throughput(ops/sec), 132082.9480914014
+ycsb-memcached-1000000	[READ], Operations, 1000000
+ycsb-memcached-1000000	[READ], Return=OK, 1000000
+ycsb-memcached-1000000	items 1000000 (want 1000000)
+ycsb-redis-5000000	== load
+ycsb-redis-5000000	[OVERALL], RunTime(ms), 176955
+ycsb-redis-5000000	[OVERALL], Throughput(ops/sec), 28255.77124127603
+ycsb-redis-5000000	[INSERT], Operations, 5000000
+ycsb-redis-5000000	[INSERT], Return=OK, 5000000
+ycsb-redis-5000000	== a
+ycsb-redis-5000000	[OVERALL], RunTime(ms), 12501
+ycsb-redis-5000000	[OVERALL], Throughput(ops/sec), 79993.60051195904
+ycsb-redis-5000000	[READ], Operations, 499671
+ycsb-redis-5000000	[READ], Return=OK, 499671
+ycsb-redis-5000000	[UPDATE], Operations, 500329
+ycsb-redis-5000000	[UPDATE], Return=OK, 500329
+ycsb-redis-5000000	== c
+ycsb-redis-5000000	[OVERALL], RunTime(ms), 14174
+ycsb-redis-5000000	[OVERALL], Throughput(ops/sec), 70551.71440666009
+ycsb-redis-5000000	[READ], Operations, 1000000
+ycsb-redis-5000000	[READ], Return=OK, 1000000
+ycsb-redis-5000000	items 5000001 (want 5000001)
+ycsb-memcached-5000000	== load
+ycsb-memcached-5000000	[OVERALL], RunTime(ms), 43151
+ycsb-memcached-5000000	[OVERALL], Throughput(ops/sec), 115872.1698222521
+ycsb-memcached-5000000	[INSERT], Operations, 5000000
+ycsb-memcached-5000000	[INSERT], Return=OK, 5000000
+ycsb-memcached-5000000	== a
+ycsb-memcached-5000000	[OVERALL], RunTime(ms), 7829
+ycsb-memcached-5000000	[OVERALL], Throughput(ops/sec), 127730.23374632775
+ycsb-memcached-5000000	[READ], Operations, 500513
+ycsb-memcached-5000000	[READ], Return=OK, 500513
+ycsb-memcached-5000000	[UPDATE], Operations, 499487
+ycsb-memcached-5000000	[UPDATE], Return=OK, 499487
+ycsb-memcached-5000000	== c
+ycsb-memcached-5000000	[OVERALL], RunTime(ms), 7457
+ycsb-memcached-5000000	[OVERALL], Throughput(ops/sec), 134102.1858656296
+ycsb-memcached-5000000	[READ], Operations, 1000000
+ycsb-memcached-5000000	[READ], Return=OK, 1000000
+ycsb-memcached-5000000	items 5000000 (want 5000000)
+ycsb-redis-16000000	== load
+ycsb-redis-16000000	[OVERALL], RunTime(ms), 580104
+ycsb-redis-16000000	[OVERALL], Throughput(ops/sec), 27581.26129107884
+ycsb-redis-16000000	[INSERT], Operations, 16000000
+ycsb-redis-16000000	[INSERT], Return=OK, 16000000
+ycsb-redis-16000000	== a
+ycsb-redis-16000000	[OVERALL], RunTime(ms), 12583
+ycsb-redis-16000000	[OVERALL], Throughput(ops/sec), 79472.30390209012
+ycsb-redis-16000000	[READ], Operations, 500133
+ycsb-redis-16000000	[READ], Return=OK, 500133
+ycsb-redis-16000000	[UPDATE], Operations, 499867
+ycsb-redis-16000000	[UPDATE], Return=OK, 499867
+ycsb-redis-16000000	== c
+ycsb-redis-16000000	[OVERALL], RunTime(ms), 14457
+ycsb-redis-16000000	[OVERALL], Throughput(ops/sec), 69170.64397869544
+ycsb-redis-16000000	[READ], Operations, 1000000
+ycsb-redis-16000000	[READ], Return=OK, 1000000
+ycsb-redis-16000000	items 16000001 (want 16000001)
+ycsb-memcached-16000000	== load
+ycsb-memcached-16000000	[OVERALL], RunTime(ms), 135991
+ycsb-memcached-16000000	[OVERALL], Throughput(ops/sec), 117654.84480590628
+ycsb-memcached-16000000	[INSERT], Operations, 16000000
+ycsb-memcached-16000000	[INSERT], Return=OK, 16000000
+ycsb-memcached-16000000	== a
+ycsb-memcached-16000000	[OVERALL], RunTime(ms), 8955
+ycsb-memcached-16000000	[OVERALL], Throughput(ops/sec), 111669.45840312674
+ycsb-memcached-16000000	[READ], Operations, 500133
+ycsb-memcached-16000000	[READ], Return=OK, 500133
+ycsb-memcached-16000000	[UPDATE], Operations, 499867
+ycsb-memcached-16000000	[UPDATE], Return=OK, 499867
+ycsb-memcached-16000000	== c
+ycsb-memcached-16000000	[OVERALL], RunTime(ms), 7518
+ycsb-memcached-16000000	[OVERALL], Throughput(ops/sec), 133014.09949454642
+ycsb-memcached-16000000	[READ], Operations, 1000000
+ycsb-memcached-16000000	[READ], Return=OK, 1000000
+ycsb-memcached-16000000	items 16000000 (want 16000000)

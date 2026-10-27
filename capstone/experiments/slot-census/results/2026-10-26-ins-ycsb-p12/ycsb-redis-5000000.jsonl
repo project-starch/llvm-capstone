@@ -1,1 +1,0 @@
-{"pid":294934,"ppid":294932,"cmdline":"<PASS>/tool/redis-7.2.16/src/redis-server --port 16391 --bind 127.0.0.1 --save  --appendonly no --set-proc-title no --dir <PASS>","forked":0,"instructions":220554102464,"allocs":416019906,"frees":221009074,"realloc_moved":272,"realloc_inplace":1604,"failed":0,"peak_live":195016952,"end_live":195010832}
