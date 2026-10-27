@@ -3,8 +3,8 @@
 
 Written for every build and for --dry-run, so the pipeline a run used can be
 read back without rereading the script that chose it. The remaining
-inconsistency it exists to make visible is shared_sdk: six of the eight ports
-build an SDK inside their own recipe and two take one built for them.
+inconsistency it exists to make visible is shared_sdk: six of the nine ports
+build an SDK inside their own recipe and three take one built for them.
 """
 import json
 import os

@@ -1,0 +1,46 @@
+{
+ "booted": true,
+ "reached_script": true,
+ "completed": true,
+ "panic": false,
+ "exits": {
+  "version": 1,
+  "hello-m0": 0,
+  "churn-m0": 0,
+  "sort-faults": 139
+ },
+ "output": {
+  "version": [
+   "PHP 5.0.0 (cli) (built: Nov 14 2023 22:13:20)",
+   "Copyright (c) 1997-2004 The PHP Group",
+   "Zend Engine v2.0.0, Copyright (c) 1998-2004 Zend Technologies",
+   "CAPSTONE_VM_STATS arenas=15 pages=974 peak=1184 nodes=3644 steps=878 faults=486 collections=0 reclaimed=0 rounds=19 bytes_in=338 bytes_out=16 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=65184000 elapsed_ns=1213959400"
+  ],
+  "hello-m0": [
+   "hello from PHP 5.0.0",
+   "3,CAPSTONE_VM_ADD_OK slot=123 base=0x3faec97000 bytes=4096 reg=10 perms=6 linear=1",
+   "3,1,2 OK [    3.893032] remote fence extension is not available in SBI v1.0",
+   "ca72431bf6bc7729c82dbb19ed7a9f2c",
+   "CAPSTONE_VM_STATS arenas=15 pages=983 peak=1199 nodes=3758 steps=939 faults=512 collections=0 reclaimed=0 rounds=56 bytes_in=353 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=38163700 elapsed_ns=743782000"
+  ],
+  "churn-m0": [
+   "churn 197900",
+   "CAPSTONE_VM_STATS arenas=17 pages=995 peak=1209 nodes=112443 steps=12260 faults=2622 collections=0 reclaimed=0 rounds=48 bytes_in=301 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=37403400 elapsed_ns=41837480000"
+  ],
+  "sort-faults": [
+   "[CAPSTONE] Cap mem access requires capability: pc = 3f830bd86c, rs1 = x11, imm = 16, value = 3f82f70250, value_hi = 3a2f88b40220",
+   "capstone-exec: domain fault cause=24 pc=0x3f830bd86c address=0x3f82f70260 entry=0x3f83000948 code=0x3f83000000-0x3f83400000 last=0x39 preparing=0x39 sha256=1d575b77227915f9db98344b67a1ae6b16459eceeea7730a5a25393bea6e8b92 image=php-real-stock.dom",
+   "Segmentation fault"
+  ]
+ },
+ "serial_log": "/tmp/php-kit/smoke/smoke-stock.serial",
+ "filtered": {
+  "what": "lines beginning with CAPSTONE_VM_ADD_OK (launcher mappings) or a kernel timestamp removed from output; fragments the console interleaved mid-line remain; exits and every other line kept",
+  "removed_per_run": {
+   "version": 123,
+   "hello-m0": 127,
+   "churn-m0": 2230,
+   "sort-faults": 127
+  }
+ }
+}

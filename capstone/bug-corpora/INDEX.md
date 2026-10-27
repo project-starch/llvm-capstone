@@ -13,7 +13,7 @@
 | third-party defects, as cases | `capstone/bug-corpora/` | 297 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 31 | one self-contained report per defect, the folder is the report |
-| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 161 open, 77 resolved | the registry, not reproduced cases |
+| our own compiler and runtime defects | `docs/ref/ISSUES.md` | 166 open, 77 resolved | the registry, not reproduced cases |
 
 Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug material and are counted nowhere above: they are this project's own oracles. 4 components have them: `apr/pools`, `ffmpeg/buffer-pool`, `memcached/allocators`, `whisper/ggml-context`.
 
@@ -70,6 +70,9 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/nginx` | allocator-component | 1.28.0 | capstone-domain, native | -- | 0 |
 | `capstone/ports/perl/cheribsd` | platform-build | 5.36.3 | cheribsd-purecap | -- | 0 |
 | `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, capstone-virtual, native | `release-differential` | 11 |
+| `capstone/ports/php/app` | full-application | 5.0.0 | capstone-virtual | -- | 0 |
+| `capstone/ports/php/engine` | full-application | 5.0.0 | capstone-domain | -- | 0 |
+| `capstone/ports/php/zend-alloc` | allocator-component | 5.0.0 | capstone-domain, capstone-virtual | -- | 0 |
 | `capstone/ports/postgres/app` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
 | `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-virtual, cheribsd-purecap, native | `mmgr-repros` | 5 |
 | `capstone/ports/sqlite/app` | full-application | 3.22.0 | capstone-domain, native | -- | 0 |
@@ -105,6 +108,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `xlang/toctou-double-fetch` is triage only -- nothing built.
 - `xlang/toctou-double-fetch` does not record live_in_pin: Nothing is built, so there is no case to place in a pin.
 - `capstone/ports/micropython` is a complete application with no corpus.
+- `capstone/ports/php/app` is a complete application with no corpus.
+- `capstone/ports/php/engine` is a complete application with no corpus.
 - `capstone/ports/postgres/app` is a complete application with no corpus.
 - `capstone/ports/sqlite/app` is a complete application with no corpus.
 - `capstone/bug-corpora/ffmpeg/carved-repros` is not referenced by any port.json.

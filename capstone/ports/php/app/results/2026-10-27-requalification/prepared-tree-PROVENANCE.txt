@@ -1,0 +1,9 @@
+PHP 5.0.0, prepared by capstone/ports/php/app/prepare-sources.sh on 2026-10-27T03:12:06Z
+tarball: https://museum.php.net/php5/php-5.0.0.tar.gz  sha256 5783e0c0ba94f165633a565fe73a83e59cf17b6880ef95fa8f936dc6301d6919
+configure: CFLAGS=-std=gnu89 ./configure --disable-all  (145 translation units)
+tree patches, in order:
+  php-5.0.0-0001-zend-modules-h-includes-zend-compile-h.patch  26d20562cc6c84bd
+  php-5.0.0-0002-zend-qsort-swap-keeps-the-capability.patch  be722bea08ba6abc
+patch set: 310891501dbe1400485a658cccda60fa5e2f8aa3edac7c69e35cee0b1b99684c
+The seam patch (0003) is not in this tree; build-virtual.sh applies it to a copy of
+Zend/zend_alloc.c for the seam arms only.

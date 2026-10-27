@@ -1,0 +1,56 @@
+zend_qsort.c: swap pointer-sized units when the elements allow it, so pointers keep their tag.
+
+zend_hash_sort builds a Bucket ** array and hands it to zend_qsort, whose _zend_qsort_swap
+moves an element as ints and then as chars. On Capstone a pointer copied through int or
+char stores comes back without its capability tag. For a 20-element array zend_qsort swaps
+slots 0 and 9 before the first comparison, so array_data_compare (sort), array_key_compare
+(ksort) and array_user_compare (usort) dereference an untagged Bucket * at their first
+`f->pData` or `f->nKeyLength` and fault with cause 24 -- on any input, with or without a
+defect in the program. Measured 2026-10-27 on the virtual profile: `sort(array(3,1,2))`
+faults; a 20-line probe swapping two malloc'd pointers through int stores, then char
+stores, leaves both tags clear.
+
+The collaborator's recorded result read exactly this fault as a catch: CRASH-022 (usort,
+ext/standard/array.c:546) CAUGHT on all four arms and CRASH-078 (ksort, array.c:162) the
+same, every cell cause 24, none cause 25. Those eight cells are this swap, not the defect.
+
+Same rule as the PostgreSQL port's 0013 for sort_template.h: an element that holds a
+pointer is pointer-aligned and its size is a multiple of the pointer size, so when both
+element addresses and the size allow it the swap moves void * units, which the compiler
+copies as capabilities; anything else keeps the int and char loops exactly as they were.
+Guarded by __SIZEOF_INTCAP__, which only the capability compiler defines, so a native build
+of the same tree is byte-for-byte the release's. gnu89: the block sits after the function's
+declarations, and the loop variable is declared with them.
+
+Applied to the prepared source tree by prepare-sources.sh, for every arm: a stock arm that
+cannot sort is not a stock arm.
+
+--- a/Zend/zend_qsort.c
++++ b/Zend/zend_qsort.c
+@@ -33,6 +33,26 @@
+ 	register size_t i;
+ 	int             t_i;
+ 	char            t_c;
++#if defined(__SIZEOF_INTCAP__)
++	/* capstone: a pointer moved as ints or chars loses its capability tag, and
++	 * zend_hash_sort sorts an array of Bucket *. An element that holds a pointer is
++	 * pointer-aligned and a multiple of the pointer size, so swap in pointer-sized
++	 * units whenever both elements and the size allow it; the compiler copies those
++	 * as capabilities. Anything else keeps the loops below. */
++	if (siz % sizeof(void *) == 0 &&
++	    ((size_t) a) % sizeof(void *) == 0 &&
++	    ((size_t) b) % sizeof(void *) == 0) {
++		void **pa = (void **) a;
++		void **pb = (void **) b;
++		size_t n;
++		for (n = 0; n < siz / sizeof(void *); n++) {
++			void *t = pa[n];
++			pa[n] = pb[n];
++			pb[n] = t;
++		}
++		return;
++	}
++#endif
+ 
+ 	tmp_a_int = (int *) a;
+ 	tmp_b_int = (int *) b;

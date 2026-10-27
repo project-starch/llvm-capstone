@@ -1,0 +1,29 @@
+zend_modules.h: include zend_compile.h, so the arg_info externs see a complete struct (PHP 5.2.0's own fix).
+
+Zend/zend_modules.h:34-38 declares `extern struct _zend_arg_info first_arg_force_ref[2];`
+and four more sized arrays of that struct. The struct is defined in zend_compile.h:145,
+which this header does not include. A translation unit that reaches zend_modules.h first
+through zend_globals.h:37 -- zend_alloc.c and 112 others of the 145 the cli build compiles
+-- therefore declares an array of an incomplete type, which no current compiler accepts:
+gcc 15, clang 21 and this fork's clang 22 all say "array has incomplete element type
+'struct _zend_arg_info'". The 2004 toolchain this release shipped against accepted it.
+
+The fix is the one PHP itself made: by 5.2.0 zend_modules.h includes zend_compile.h right
+after zend.h (php-src tag php-5.2.0, Zend/zend_modules.h:25-26). One added line. It changes
+declaration order only: no structure, macro value or function body differs, and
+zend_compile.h's own include of zend_globals.h is guarded, so the cycle terminates.
+
+Applied to the prepared source tree by prepare-sources.sh, so every build and every arm
+sees the same tree. The collaborator's /corpus/build/php-5.0.0 tree, which is not in this
+repository, necessarily carried some compile fix of its own; which one is not recorded.
+
+--- a/Zend/zend_modules.h
++++ b/Zend/zend_modules.h
+@@ -23,6 +23,7 @@
+ #define MODULES_H
+
+ #include "zend.h"
++#include "zend_compile.h"
+
+ #define INIT_FUNC_ARGS		int type, int module_number TSRMLS_DC
+ #define INIT_FUNC_ARGS_PASSTHRU	type, module_number TSRMLS_CC

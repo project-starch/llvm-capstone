@@ -2,7 +2,7 @@
 
 Complete Linux application ports now use the
 [delegated ABI-v2 build and runner](common/application/README.md): Perl, mruby,
-CPython, PostgreSQL single-user, SQLite, FFmpeg and offline tshark. Old application
+CPython, PostgreSQL single-user, SQLite, FFmpeg, offline tshark and PHP 5.0.0. Old application
 images must be rebuilt. The component/allocator and silicon targets described
 below are separate from these application entry points.
 
@@ -31,6 +31,7 @@ each adapter.
 | FFmpeg | AVBufferPool/AVRefStructPool replay from native decoder recordings; not domain video decoding | [Buffer pools](ffmpeg/buffer-pool/README.md); shared CMake layout |
 | PostgreSQL | Memory-context replay and memory profiles; not a database server | [PostgreSQL](postgres/README.md), [CMake component](postgres/memory-contexts/CMakeLists.txt); shared CMake layout plus older shell drivers |
 | CPython | Real pymalloc replay from native interpreter recordings; not a domain interpreter | [pymalloc](cpython/pymalloc/README.md); shared CMake layout |
+| PHP | PHP 5.0.0's command-line interpreter with `ext/standard` as a virtual-profile application, stock or with an allocator seam in `Zend/zend_alloc.c` (a lifetime per `emalloc` object, optionally exact bounds); not a web SAPI, no other extensions | [app](php/app/README.md), [patches](php/app/patches/README.md); the [seam adapter](php/zend-alloc/port.json) and the physical-profile [engine](php/engine/port.json) beside it |
 | Whisper / ggml | Context allocator and buffer-epoch replay; not domain speech recognition | [ggml contexts](whisper/ggml-context/README.md); shared CMake layout |
 | Wireshark / wmem | All four wmem allocators with pool-reset epochs and lifetime fixtures; not domain packet dissection | [wmem](wireshark/wmem/README.md); shared CMake layout |
 

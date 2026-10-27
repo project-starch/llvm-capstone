@@ -1,0 +1,54 @@
+{
+ "booted": true,
+ "reached_script": true,
+ "completed": true,
+ "panic": false,
+ "exits": {
+  "nomode-hello": 0,
+  "nomode-sort": 0,
+  "override-m7": 0
+ },
+ "output": {
+  "nomode-hello": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE_DEFAULTED 6",
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "hello from PHP 5.0.0",
+   "3,CAPSTONE_VM_ADD_OK slot=125 base=0x3fbcd41000 bytes=4096 reg=10 perms=6 linear=1",
+   "3,1,2 OK [    2.814441] remote fence extension is not available in SBI v1.0",
+   "ca72431bf6bc7729c82dbb19ed7a9f2c",
+   "PHP_VIRTUAL SEAM blocks=279 frees=279 issues=342 retires=307 revokes=586 splits=279 reallocs=35 live=0",
+   "PHP_VIRTUAL SEAM records_live=0 records_peak=229 slabs=1 lookups=1305",
+   "CAPSTONE_VM_STATS arenas=16 pages=1153 peak=1370 nodes=4377 steps=1522 faults=686 collections=0 reclaimed=0 rounds=62 bytes_in=613 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=52115400 elapsed_ns=1220181100"
+  ],
+  "nomode-sort": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE_DEFAULTED 6",
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "sorted CAPSTONE_VM_ADD_OK slot=125 base=0x3f82bca000 bytes=4096 reg=10 perms=6 linear=1",
+   "1,2,3",
+   "PHP_VIRTUAL SEAM blocks=267 frees=267 issues=318 retires=283 revokes=550 splits=267 reallocs=35 live=0",
+   "PHP_VIRTUAL SEAM records_live=0 records_peak=221 slabs=1 lookups=1221",
+   "CAPSTONE_VM_STATS arenas=16 pages=1153 peak=1369 nodes=4329 steps=1409 faults=685 collections=0 reclaimed=0 rounds=54 bytes_in=561 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=27026600 elapsed_ns=463851400"
+  ],
+  "override-m7": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "hello from PHP 5.0.0",
+   "3,CAPSTONE_VM_ADD_OK slot=125 base=0x3fae72f000 bytes=4096 reg=10 perms=6 linear=1",
+   "3,1,2 OK ca72431bf6bc7729c82dbb19ed7a9f2c",
+   "PHP_VIRTUAL SEAM blocks=287 frees=287 issues=352 retires=315 revokes=602 splits=287 reallocs=37 live=0",
+   "PHP_VIRTUAL SEAM records_live=0 records_peak=235 slabs=1 lookups=1343",
+   "CAPSTONE_VM_STATS arenas=16 pages=1153 peak=1370 nodes=4403 steps=1460 faults=686 collections=0 reclaimed=0 rounds=61 bytes_in=587 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=29322200 elapsed_ns=497687000"
+  ]
+ },
+ "serial_log": "/tmp/php-kit/common/nomode.serial",
+ "filtered": {
+  "what": "lines beginning with CAPSTONE_VM_ADD_OK or a kernel timestamp removed; mid-line fragments remain; exits and every other line kept",
+  "removed_per_run": {
+   "nomode-hello": 129,
+   "nomode-sort": 129,
+   "override-m7": 129
+  }
+ }
+}

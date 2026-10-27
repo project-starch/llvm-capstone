@@ -86,6 +86,15 @@ cat /tmp/sqlite.out
 ./capstone-vexec mruby.dom -e 'puts "MRUBY_SUM=#{(1..100).inject(0){|s,n| s+n}}"; File.open("/tmp/virtual-ruby", "w"){|f| f.write("virtual")}; puts "MRUBY_FILE=#{File.read("/tmp/virtual-ruby")}"' > /tmp/mruby.out 2>&1
 echo VM_EXIT:mruby:$?
 cat /tmp/mruby.out
+if [ -f php.dom ]; then
+  # PHP 5.0.0 (ports/php/app): sorts, so PHP's own qsort swap keeping its capabilities is on
+  # the gate; writes and reads a file through the delegated syscalls. The line is built first
+  # and written once: echo with several arguments writes each one, and the launcher's
+  # diagnostics (2>&1) landed between "file=" and the file's contents (2026-10-27).
+  ./capstone-vexec php.dom -n -r '$a = array(3, 1, 2); sort($a); $f = fopen("/tmp/virtual-php", "w"); fwrite($f, "virtual"); fclose($f); $s = "PHP_VIRTUAL_OK sorted=" . implode(",", $a) . " md5=" . md5("capstone") . " file=" . file_get_contents("/tmp/virtual-php") . "\n"; echo $s;' > /tmp/php.out 2>&1
+  echo VM_EXIT:php:$?
+  cat /tmp/php.out
+fi
 if [ -f perl.dom ]; then
   ./capstone-vexec perl.dom -e 'my $sum = 0; $sum += $_ for 1..100; open my $w, ">", "/tmp/virtual-perl" or die $!; print $w "virtual"; close $w; open my $r, "<", "/tmp/virtual-perl" or die $!; my $text = <$r>; close $r; print "PERL_VIRTUAL_OK sum=$sum file=$text\n"' > /tmp/perl.out 2>&1
   echo VM_EXIT:perl:$?
@@ -120,6 +129,7 @@ def main():
     p.add_argument('--sqlite', type=Path, required=True)
     p.add_argument('--mruby', type=Path, required=True)
     p.add_argument('--perl', type=Path)
+    p.add_argument('--php', type=Path, help='ports/php/app image (the common entry\'s OUT/image/php.dom)')
     p.add_argument('--perl-smoke', type=Path)
     p.add_argument('--legacy-application', type=Path)
     p.add_argument('--skip-recycling', action='store_true', help='Omit the two long recycling cases; recorded explicitly')
@@ -153,6 +163,7 @@ def main():
               **{n: a.images/n for n in ('Image', 'fw_jump.elf', 'rootfs.ext2')}}
     if a.legacy_application: inputs['legacy'] = a.legacy_application
     if a.perl: inputs['perl'] = a.perl
+    if a.php: inputs['php'] = a.php
     if a.perl_smoke: inputs['perl_smoke'] = a.perl_smoke
     shutil.copyfile(inputs['launcher'], stage/'capstone-vexec')
     (stage/'capstone-vexec').chmod(0o755)
@@ -161,6 +172,7 @@ def main():
     shutil.copyfile(a.sqlite, stage/'sqlite3.dom')
     shutil.copyfile(a.mruby, stage/'mruby.dom')
     if a.perl: shutil.copyfile(a.perl, stage/'perl.dom')
+    if a.php: shutil.copyfile(a.php, stage/'php.dom')
     if a.perl_smoke: shutil.copyfile(a.perl_smoke, stage/'perl-smoke.pl')
     if a.legacy_application: shutil.copyfile(a.legacy_application, stage/'legacy.dom')
     # Empty args leave the line byte-identical to the pre-option script: ' __MODULE_ARGS__'
@@ -238,6 +250,9 @@ def main():
         tests[name] = lines.count(f'VM_EXIT:{name}:{code}') == 1
     if a.legacy_application:
         tests['legacy_abi_rejected'] = lines.count('VM_EXIT:legacy:126') == 1 and any('Exec format error' in s for s in lines)
+    if a.php:
+        tests['php'] = lines.count('VM_EXIT:php:0') == 1
+        tests['php_output'] = lines.count('PHP_VIRTUAL_OK sorted=1,2,3 md5=ca72431bf6bc7729c82dbb19ed7a9f2c file=virtual') == 1
     if a.perl:
         tests['perl'] = lines.count('VM_EXIT:perl:0') == 1
         tests['perl_output'] = lines.count('PERL_VIRTUAL_OK sum=5050 file=virtual') == 1
@@ -300,7 +315,7 @@ def main():
     base_stats = stats[:2] + stats[start:start + 5]
     release_stats = [s for s in base_stats if s['peak'] > s['pages'] + 300]
     demand_stats = [s for s in base_stats if s.get('faults', 0) >= 384]
-    expected_stats = (10 if a.skip_recycling else 11) + (1 if a.perl else 0) + (1 if a.perl_smoke else 0)
+    expected_stats = (10 if a.skip_recycling else 11) + (1 if a.perl else 0) + (1 if a.perl_smoke else 0) + (1 if a.php else 0)
     tests['linux_pages_released'] = len(stats) == expected_stats and len(release_stats) == 3
     tests['linux_demand_faults'] = len(stats) == expected_stats and len(demand_stats) == 3
     tests['unused_pages_not_populated'] = len(stats) >= 4 and stats[2]['peak'] - stats[2]['pages'] < 32

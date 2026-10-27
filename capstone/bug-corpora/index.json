@@ -1872,6 +1872,88 @@
       "where": "capstone/ports/perl/musl"
     },
     {
+      "program": "php",
+      "role": "full-application",
+      "title": "Real PHP 5.0.0 (PHP's own main(), 145 translation units) as a Linux process on the virtual profile, one image serving four allocator arms selected at run time by PHP_CAP_MODE",
+      "upstream": {
+        "version": "5.0.0",
+        "pin_source": {
+          "file": "capstone/ports/php/app/prepare-sources.sh",
+          "grep": "VERSION=5.0.0"
+        }
+      },
+      "targets": [
+        "capstone-virtual"
+      ],
+      "workload": "the 31-case population ASAN misses and the 29-case population it sees, each trigger a .php script on stdin, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the corpus's ASAN and pristine records; php -n -v exits 1 as native PHP does and the stock arm's output matches the native glibc build",
+      "evidence": [
+        "capstone/ports/php/app/results/2026-10-27-common-entry",
+        "capstone/ports/php/app/results/2026-10-27-requalification",
+        "capstone/ports/php/app/results/2026-10-26",
+        "capstone/ports/php/app/results/platform-qualification-2026-10-26"
+      ],
+      "related": [
+        "capstone/ports/php/zend-alloc",
+        "capstone/ports/php/engine",
+        "capstone/tests/cheri-php-blind"
+      ],
+      "status": "builds through ports/common/application/build-virtual.sh php for both selector values and passes runtime/virtual/run.py --php 44/44 on dev 0b0b3414dca5 (results/2026-10-27-common-entry); rebuilt from scratch and smoke-tested the same day (results/2026-10-27-requalification). The 2026-10-26 corpus populations are NOT re-run (the corpus scripts and oracles are external); their README carries the 2026-10-27 correction for CRASH-022/078",
+      "note": "PHP's source is the tree app/prepare-sources.sh prepares: the museum php-5.0.0.tar.gz by SHA-256, configured --disable-all, with the tree patches of app/patches (0001 compile fix, 0002 qsort swap). The oracle it is scored against (results-asan-default.json, results-asan-stockalloc.json, results-pristine-default.json and the case metadata) still comes from an external corpus not in this repository; there is no bug-corpora/php yet. The Zend allocator seam the protected arms use is ports/php/zend-alloc/sublet, applied as patch 0003.",
+      "where": "capstone/ports/php/app"
+    },
+    {
+      "program": "php",
+      "role": "full-application",
+      "title": "PHP 5.0.0's Zend engine in a physical Capstone domain under a hand-written SAPI and a stub libc, one image per corpus trigger (-DRUNG_E_CRASHnnn); the comparison column the virtual app port was retargeted from",
+      "upstream": {
+        "version": "5.0.0",
+        "pin_source": {
+          "file": "capstone/ports/php/engine/build-engine.sh",
+          "grep": "P=${PHP_SRC:-/corpus/build/php-5.0.0}"
+        }
+      },
+      "targets": [
+        "capstone-domain"
+      ],
+      "workload": "the corpus triggers compiled into the image through rung_E_domain.c, run by run-triggers.sh; FINDINGS.md holds the measurement in the order it was learned",
+      "evidence": [
+        "capstone/ports/php/engine/FINDINGS.md"
+      ],
+      "related": [
+        "capstone/ports/php/app",
+        "capstone/ports/php/zend-alloc"
+      ],
+      "status": "historical: the physical-profile port, kept unchanged as the comparison column; the app port supersedes it for every measurement since 2026-10-15",
+      "note": "Reads PHP's source from the same external /corpus mount as the app port. app/triggers is the trigger text lifted out of this port's #ifdef ladder (extract-triggers.py --check keeps the two equal).",
+      "where": "capstone/ports/php/engine"
+    },
+    {
+      "program": "php",
+      "role": "allocator-component",
+      "title": "PHP 5.0.0's Zend allocator (zend_alloc.c) with a Capstone seam: per-object bounds on the recorded request size, and the sublet/ adapter that splits each emalloc block into a header and a CDERIVE/CREVOKE payload region the app port's protected arms run on",
+      "upstream": {
+        "version": "5.0.0",
+        "pin_source": {
+          "file": "capstone/ports/php/zend-alloc/run-crash008.sh",
+          "grep": "CRASH-008 matched pair: PHP 5.0.0's Zend allocator, unpatched, in a Capstone domain."
+        }
+      },
+      "targets": [
+        "capstone-domain",
+        "capstone-virtual"
+      ],
+      "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-seam.c and sublet/probe-derive-split.c on the virtual profile, which qualify the seam before the app port's arms are believed",
+      "evidence": [
+        "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26"
+      ],
+      "related": [
+        "capstone/ports/php/app",
+        "capstone/ports/php/engine"
+      ],
+      "note": "Not historical: sublet/ is the adapter the app port's seam arms link, and app/patches/php-5.0.0-0003-zend-alloc-sublet-hooks.patch is what its build applies to zend_alloc.c for its block, object and exact arms (PHP_CAP_MODE 4, 6 and 7); only the domain runners here are from the physical-profile phase. The block provider was moved onto CDERIVE/CREVOKE on 2026-10-26 after the nested loan ABI was removed upstream.",
+      "where": "capstone/ports/php/zend-alloc"
+    },
+    {
       "program": "postgres",
       "role": "full-application",
       "title": "The complete PostgreSQL single-user backend, on Capstone and CheriBSD purecap",
@@ -2237,7 +2319,7 @@
     }
   ],
   "issues": {
-    "open": 161,
+    "open": 166,
     "resolved": 77
   },
   "fixtures": [
@@ -2368,6 +2450,8 @@
     "`xlang/toctou-double-fetch` is triage only -- nothing built.",
     "`xlang/toctou-double-fetch` does not record live_in_pin: Nothing is built, so there is no case to place in a pin.",
     "`capstone/ports/micropython` is a complete application with no corpus.",
+    "`capstone/ports/php/app` is a complete application with no corpus.",
+    "`capstone/ports/php/engine` is a complete application with no corpus.",
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
     "`capstone/ports/sqlite/app` is a complete application with no corpus.",
     "`capstone/bug-corpora/ffmpeg/carved-repros` is not referenced by any port.json.",
