@@ -391,7 +391,7 @@ def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=
 
 
 def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None,
-          defaulted=False):
+          defaulted=False, probe_mode_line=False):
     """Run main() end to end over stored records, with the toolchain stubbed out.
 
     defaulted: the first arm's sanity transcript carries ZEND_CAP_MODE_DEFAULTED, as an image
@@ -409,6 +409,8 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
         rec = synth_record(cases, mode, rev, case_faults=faults.get(arm, ()), probe=probe)
         if defaulted and arm == R.ARMS[0]:
             rec["output"][R.SANITY].insert(0, f"ZEND_CAP_MODE_DEFAULTED {mode}")
+        if probe_mode_line and R.BOUND_PROBE in rec["output"]:
+            rec["output"][R.BOUND_PROBE].insert(0, "ZEND_CAP_MODE 7 exact=1 revoke=1")
         (out / f"{arm}-run.json").write_text(json.dumps(rec))
     img = tmp / "php-real-seam.dom"
     img.write_bytes(b"\x7fELF" + b"\0" * 64)
@@ -724,6 +726,13 @@ def defaulted_arm_cases():
         wrong = list(declared); wrong[-1] = declared[-2]          # the exact arm's records at the object arm's mode
         check("a run whose transcripts report another arm's mode is refused",
               drive(Path(d), modes=wrong) != 0, True)
+    # The bound probe sets its own modes (stage 7 reads index 9 rounded, then exact), so its
+    # transcript says PHP_CAP_MODE 7 on every arm that runs it; that is the probe's mode, not
+    # the arm's, and must not be read as a mismatch. The first corpus run from
+    # bug-corpora/php/engine-repros was refused exactly so (2026-10-27).
+    with tempfile.TemporaryDirectory() as d:
+        check("the bound probe's own mode line is not held against the arm",
+              drive(Path(d), probe_mode_line=True) == 0, True)
 
 
 def sanity_text_cases():

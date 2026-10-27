@@ -743,8 +743,10 @@ def main():
             if "ZEND_CAP_MODE_DEFAULTED" in joined:
                 sys.exit(f"{arm}/{name}: the image took a DEFAULT arm (ZEND_CAP_MODE_DEFAULTED); "
                          f"a measurement names its arm, so this image cannot be measured")
+            # The bound probe is its own image and sets its own modes (rounded, then exact, each
+            # reading index 9), so its mode lines are the probe's, never this arm's.
             seen = MODE_LINE.search(joined)
-            if seen and int(seen.group(1)) != mode:
+            if name != BOUND_PROBE and seen and int(seen.group(1)) != mode:
                 sys.exit(f"{arm}/{name}: the transcript reports PHP_CAP_MODE {seen.group(1)}, "
                          f"not this arm's {mode}")
         texts[arm] = {n: app_output(l) for n, l in rec["output"].items()}
