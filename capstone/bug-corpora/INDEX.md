@@ -37,7 +37,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/mruby/gc-slot-repros`](mruby/gc-slot-repros) | mruby | 4.0.0-rc2 | 0 | not recorded | 0 | case-json | planned |
 | [`capstone/bug-corpora/mruby/release-differential`](mruby/release-differential) | mruby | 4.0.0-rc2 | 23 | 23 live | 0 | script-trigger | measured |
 | [`capstone/bug-corpora/perl/release-differential`](perl/release-differential) | perl | 5.36.3 | 11 | 11 live | 0 | script-trigger | measured |
-| [`capstone/bug-corpora/php/engine-repros`](php/engine-repros) | php | 5.0.0 | 68 | 68 live | 0 | script-trigger | built |
+| [`capstone/bug-corpora/php/engine-repros`](php/engine-repros) | php | 5.0.0 | 68 | 68 live | 0 | script-trigger | measured |
 | [`capstone/bug-corpora/postgres/c-repros`](postgres/c-repros) | postgres | 17.5 | 5 | 5 live | 3 | case-json | measured |
 | [`capstone/bug-corpora/postgres/mmgr-repros`](postgres/mmgr-repros) | postgres | 17.5 | 5 | 5 live | 0 | case-json | measured |
 | [`capstone/bug-corpora/postgres/sql-repros`](postgres/sql-repros) | postgres | 17.5 | 9 | 9 live | 4 | script-trigger | measured |
@@ -97,7 +97,6 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/php/engine-repros` has no triage inventory under docs/ref/.
-- `capstone/bug-corpora/php/engine-repros` commits no result bundle of its own.
 - `capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.
 - `capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.

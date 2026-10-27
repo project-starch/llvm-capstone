@@ -1,0 +1,62 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "allocator": "seam",
+    "application": "php",
+    "image_sha256": "c7309c906a68a79da70a3aaed6f97be2ea1b5280087b5fc9a120db184554339f",
+    "mode": 4,
+    "profile": "virtual"
+  },
+  "cases": 68,
+  "configuration": "php-real-block",
+  "contract": "verdicts-v1",
+  "corpus": "php/engine-repros",
+  "platform": {
+    "compiler": "clang version 22.0.0git (https://github.com/project-starch/llvm-capstone 500f854f46a6eeca25455c0cc414ef5380141398)",
+    "firmware": "4dd4a2ade361a8bdb9cc45aeca02c6b7309b60d1e8701c2a4ed91c117a495f16  /tmp/php-kit/platform/images/fw_jump.elf",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b  /tmp/php-kit/platform/images/Image",
+    "launcher": "8378b036dd0aee29842fd4cde8bcb4b6243704b39118b655b59bea3b1e051090  /tmp/php-kit/platform/adapter/capstone-vexec",
+    "module": "dff9fafd384702680da196620c0f9ab7d6135bfe50d996734dba63147558d9a8  /tmp/php-kit/platform/adapter/module/capstone_vm.ko",
+    "module_args": "node_initial_pages=1024 supervisor_slots=32",
+    "qemu": "28b9ae0fb42adb9f97477ef9d1267dfcb411b7bf6d5753173444da09f894f42c  /tmp/php-kit/platform/qemu-system-riscv64",
+    "qemu_cpu": "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true,x-capstone-test-csrs=true,x-capstone-supervisor-slots=32",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845  /tmp/php-kit/platform/images/rootfs.ext2",
+    "runner": "ports/php/app/run-realphp.py"
+  },
+  "population": "asan-blind + temporal-asan-visible, one boot per population; see populations",
+  "populations": {
+    "asan-blind": {
+      "cases": 46,
+      "inputs.json": "5a224fc236c2461a8ceca68e540d816f9612edf53dc31136a3263b1798b4ec60",
+      "tally": {
+        "CAUGHT": 13,
+        "MISSED": 22,
+        "NO-READING:infra": 2,
+        "NO-READING:not-reached": 1,
+        "NO-READING:out-of-denominator": 7,
+        "NO-READING:unattributed": 1
+      },
+      "verdicts.jsonl": "40311c365bd1907b3432264800a33ae177f0e803875a99a21308230e69ca2733"
+    },
+    "temporal-asan-visible": {
+      "cases": 22,
+      "inputs.json": "a3b78be9dc019f6f99e2b209f9cf99a8600059a45211b4f3995b6cd6b1c4cbc5",
+      "tally": {
+        "CAUGHT": 3,
+        "NO-READING:out-of-denominator": 18,
+        "NO-READING:setup-fault": 1
+      },
+      "verdicts.jsonl": "458cfd491cbf3e6a41af653a43f15e0550b8bd7fd2b9e4518152c96cdd5a2d38"
+    }
+  },
+  "pre_registration": "af23230f70e5117ce6057e4717f03401c150bb41",
+  "tally": {
+    "CAUGHT": 16,
+    "MISSED": 22,
+    "NO-READING:infra": 2,
+    "NO-READING:not-reached": 1,
+    "NO-READING:out-of-denominator": 25,
+    "NO-READING:setup-fault": 1,
+    "NO-READING:unattributed": 1
+  }
+}

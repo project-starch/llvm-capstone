@@ -88,6 +88,10 @@ mechanism, so that a surprise is a surprise:
 - The 16 cases placed differently from the collaborator's populations carry no prediction
   beyond the mechanism above; whatever they read is a reading of this instrument.
 
+## The first run
+
+`results/2026-10-27-first-run/`: both populations on dev `0b0b3414dca5` with the patched port, one bundle per arm (the two populations merged by `tools/merge-population-bundles.py`, sources by hash). Its README has the tables; `derive-verdicts.py` wrote the verdicts into every `case.json` from those bundles, and `check-corpus.py` re-judges them.
+
 ## Not here
 
 The 59 default-build cases outside both populations: 30 spatial defects ASan sees unaided

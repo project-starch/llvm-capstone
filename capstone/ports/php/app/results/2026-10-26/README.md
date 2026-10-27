@@ -50,8 +50,9 @@ swaps pointer-sized units when the elements allow it (the PostgreSQL port's rule
 `sort_template.h`), so `sort`, `usort` and `ksort` work on every arm; and the runner's
 `revocation-sanity` control now sorts three ways with a comparator that touches nothing, so an
 arm whose sort faults reads "did not complete" on its control instead of catching. CRASH-022 and
-CRASH-078 become measurable for the first time with that patch; their readings are owed by a
-rerun of both populations on the prepared tree, and are not in this file.
+CRASH-078 became measurable with that patch and were read on 2026-10-27 from the framework's
+corpus, `bug-corpora/php/engine-repros/results/2026-10-27-first-run/`: both MISSED on the stock
+control and CAUGHT by revocation (cause 25) at ASan's own line on every protected arm.
 
 The judge cannot tell this artefact from a detection on its own: attribution is by the ASAN
 *file* (`run-realphp.py`, `verdicts.py`), and cause 24 is a legitimate detection class elsewhere

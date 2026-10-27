@@ -931,7 +931,7 @@
         "virtual-nested-pools",
         "virtual-nested-exact"
       ],
-      "status": "built",
+      "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
         "true": 68
@@ -945,7 +945,8 @@
       "advisories": [],
       "runners": [
         "capstone/ports/php/app/run-realphp.py",
-        "capstone/bug-corpora/php/engine-repros/tools/build-cases.py"
+        "capstone/bug-corpora/php/engine-repros/tools/build-cases.py",
+        "capstone/bug-corpora/php/engine-repros/tools/merge-population-bundles.py"
       ],
       "arm_configurations": {
         "virtual-malloc": "php-real-block",
@@ -953,6 +954,14 @@
         "virtual-nested-exact": "php-real-exact"
       },
       "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 46 asan-blind and 22 temporal-asan-visible here against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases are placed differently and one (CRASH-100, needs an HTTP listener) is absent, each said in its PROVENANCE.md. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The 59 default-build cases outside both populations (30 spatial ASan sees unaided, NULL dereferences, type confusions) are not here yet.",
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-27-first-run/virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-27-first-run/virtual-nested-pools",
+        "virtual-nested-exact": "results/2026-10-27-first-run/virtual-nested-exact"
+      },
+      "evidence": [
+        "capstone/bug-corpora/php/engine-repros/results/2026-10-27-first-run"
+      ],
       "where": "capstone/bug-corpora/php/engine-repros"
     },
     {
@@ -2506,7 +2515,6 @@
     "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/php/engine-repros` has no triage inventory under docs/ref/.",
-    "`capstone/bug-corpora/php/engine-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.",
     "`capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.",
