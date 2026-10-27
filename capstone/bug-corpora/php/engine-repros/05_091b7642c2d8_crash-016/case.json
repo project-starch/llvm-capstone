@@ -8,6 +8,10 @@
  "live_in_pin": true,
  "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-buffer-overflow at ext/standard/formatted_print.c:592 in php_formatted_print when trigger.php runs; the corpus records the fix as php-src 091b7642c2d8a087d3cbcba681369abfb964330d, which postdates the release, and names the defect at ext/standard/formatted_print.c:599-600 (defect); OOB read observed one iteration later at ext/standard/formatted_print.c:592",
  "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build completes it natively, so an arm that completes it saw nothing. ",
+ "fault_sites": [
+  "php_formatted_print"
+ ],
+ "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has php_formatted_print at ext/standard/formatted_print.c:592 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
  "arms": {
   "virtual-malloc": {
    "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"

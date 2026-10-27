@@ -28,8 +28,10 @@ Populations (the port's two measured sets, recomputed here, never retyped):
                           detector at the libc boundary sees it. The control population.
 
 Each case directory holds trigger.php (the corpus script, byte for byte), oracle.json (what
-run-realphp.py needs: population, ASan's first PHP frame, the pristine run's outcome and
-stdout), case.json (the framework's script-trigger record) and PROVENANCE.md.
+run-realphp.py needs: population, ASan's first PHP frame and its whole ACCESS stack, the kind
+of requirement the case declares, the pristine run's outcome and stdout), case.json (the
+framework's script-trigger record, with `fault_sites` naming the one function a fault may land
+in and be this defect's) and PROVENANCE.md.
 
 --write creates or rewrites the directories; without it the script only reports what it
 would do and whether existing directories differ. Idempotent: the same inputs give the same
@@ -44,6 +46,52 @@ REPO = CORPUS_DIR.parents[3]
 POPULATIONS = ("asan-blind", "temporal-asan-visible")
 # The same frame rule as ports/php/app/run-realphp.py: ASan's first frame inside PHP's tree.
 ASAN_FRAME = re.compile(r"#\d+ 0x[0-9a-f]+ in (\S+) [^ ]*?((?:Zend|main|ext|sapi|TSRM|regex)/[\w./]+):(\d+)")
+# One frame of any ASan stack: index, function, the rest of the line (a source location or a
+# `(binary+0x..)` for a frame without line tables).
+ANY_FRAME = re.compile(r"^\s*#(\d+) 0x[0-9a-f]+ in (\S+) (.*)$")
+PHP_PATH = re.compile(r"((?:Zend|main|ext|sapi|TSRM|regex)/[\w./]+):(\d+)")
+# A requirement the corpus declares per case is one of two kinds, and the judge treats them
+# differently: an EXECUTION requirement (a writable /tmp, a working loopback) is a precondition
+# the trigger needs met on OUR platform to run at all, so a silence on an arm is a reading only
+# once something confirmed it was met. A DETECTOR OPTION (an ASAN_OPTIONS knob) is a
+# requirement on ASan's own instrument -- what it needs to REPORT the defect -- and is not a
+# precondition for the trigger running here at all; refusing a case because Capstone has not
+# enabled an ASan option would be unsound. Classified here, from the declaration's text, never
+# from a run.
+DETECTOR_OPTION = re.compile(r"^\s*ASAN_OPTIONS\b")
+
+
+def requires_kind(text):
+    if not text.strip():
+        return ""
+    return "detector-option" if DETECTOR_OPTION.match(text) else "execution"
+
+
+def access_stack(stderr):
+    """ASan's ACCESS stack -- the first stack of the report, the one under the READ/WRITE line --
+    as a list of frames, in order. A frame inside PHP's tree carries file and line; any other
+    (a libc routine, a sanitizer interceptor) carries only the function and where it came
+    from, so the judge can see that the leaf is not PHP without mistaking it for a site.
+
+    The allocation and free stacks that follow in the report are NOT taken: a frame from
+    those names where the object was made or released, which is not where the defect's access
+    is, and admitting one would turn a fault at any free() into this case's catch.
+    """
+    frames, started = [], False
+    for line in (stderr or "").splitlines():
+        m = ANY_FRAME.match(line)
+        if not m:
+            if started:
+                break
+            continue
+        started = True
+        index, func, rest = int(m.group(1)), m.group(2), m.group(3)
+        php = PHP_PATH.search(rest)
+        if php:
+            frames.append({"index": index, "func": func, "file": php.group(1), "line": int(php.group(2))})
+        else:
+            frames.append({"index": index, "func": func, "outside": rest.split("(")[0].strip() or rest.strip()})
+    return frames
 TEMPORAL = {"CWE-416": "temporal", "CWE-415": "temporal", "CWE-590": "temporal"}
 SPATIAL = {"CWE-125": "spatial", "CWE-787": "spatial", "CWE-190": "spatial"}
 ARMS = {
@@ -108,6 +156,13 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
     if not frame:
         raise SystemExit(f"{cid}: our ASan stderr has no PHP source frame; no site for the judge")
     func, path, line = frame.group(1), frame.group(2), int(frame.group(3))
+    stack = access_stack(a.get("stderr", ""))
+    site = next((f for f in stack if "file" in f), None)
+    if site is None or (site["func"], site["file"], site["line"]) != (func, path, line):
+        raise SystemExit(f"{cid}: the access stack's first PHP frame is not the frame rule's "
+                         f"({site} vs {func} {path}:{line}); the report has more than one stack "
+                         f"before its PHP frame, or the parser disagrees with itself")
+    leaf = stack[0] if stack and "outside" in stack[0] else None
     crashed = p["outcome"].startswith("SIGNAL:")
     fix = fix_id(m["upstream_fix_commit"])
     name = dir_name(number, fix, cid)
@@ -116,7 +171,8 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
     oracle = {
         "id": cid, "population": pop, "cwe": m["cwe"], "category": m["category"],
         "requires": m["requires"],
-        "asan": {"class": a["outcome"], "func": func, "file": path, "line": line},
+        "requires_kind": requires_kind(m["requires"]),
+        "asan": {"class": a["outcome"], "func": func, "file": path, "line": line, "stack": stack},
         "stockalloc": stock[cid]["outcome"],
         "pristine": {"outcome": p["outcome"], "rc": p["rc"], "stdout": p.get("stdout", "")},
         "crashes_on_pristine_build": crashed,
@@ -150,6 +206,21 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
                         "sensitivity scoring (run-realphp.py --score-oracle-crashes) reads it by fault site instead. "
                         if crashed else "The pristine build completes it natively, so an arm that completes it saw nothing. ")
                      + (f"Needs: {m['requires']}. " if m["requires"] else "")),
+        # The one function a fault may land in and be this defect's: the defective access as
+        # ASan's own access stack names it, from our native run -- an independent measurement,
+        # never the Capstone fault it will admit. ONE function, not the stack: `execute`,
+        # `main` and the libc routine under the access are on every script's stack and would
+        # make any fault this case's. A libc leaf (strlen under xbuf_format_converter) is
+        # named in the reason and deliberately NOT declared: a fault in strlen is attributable
+        # only through its caller, which the launcher does not report.
+        "fault_sites": [func],
+        "fault_sites_why": (f"ASan's access stack in our native run (results-ours-asan-default.json, sha256 "
+                            f"{oracle_shas['asan'][:12]}) has {func} at {path}:{line} as its first frame inside "
+                            f"PHP's tree (frame #{site['index']}"
+                            + (f", under the libc leaf {leaf['func']} at frame #0, which is not declared: a fault "
+                               f"there can be tied to this case only through its caller, and the launcher reports "
+                               f"no return address" if leaf else "")
+                            + "); the stack's remaining frames are the interpreter's dispatch and are not sites"),
         "arms": {arm: {"oracle": text} for arm, text in ARMS.items()},
         "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
         "note": f"population: {pop} -- {why}. Collected by the corpus as {m['how_collected']['origin_stream']} ({m['how_collected']['history_status']}, confidence {m['how_collected']['confidence']}).",
@@ -215,6 +286,31 @@ def self_test():
     checks.append(("the frame rule takes the first PHP frame", (frame.group(1), frame.group(2), frame.group(3)),
                    ("user_tick_function_call", "ext/standard/basic_functions.c", "2135")))
     checks.append(("a frame outside PHP's tree is not a site", ASAN_FRAME.search("    #0 0x55 in free /lib/libasan.so\n"), None))
+    # The access stack: the FIRST stack only, PHP frames with their site, a libc leaf named as
+    # outside PHP. The free and allocation stacks that follow are not taken -- a frame from
+    # those is where the object was released, which a fault at any free() would match.
+    report = ("==1==ERROR: AddressSanitizer: heap-use-after-free on address 0x1 at pc 0x2\n"
+              "READ of size 3 at 0x1 thread T0\n"
+              "    #0 0x3 in strlen ../../src/libsanitizer/sanitizer_common_interceptors.inc:425\n"
+              "    #1 0x4 in xbuf_format_converter /b/php-5.0.0/main/spprintf.c:518:7\n"
+              "    #2 0x5 in execute /b/php-5.0.0/Zend/zend_execute.c:1391:3\n"
+              "\n"
+              "0x1 is located 0 bytes inside of 2-byte region\n"
+              "freed by thread T0 here:\n"
+              "    #0 0x6 in free ../../src/libsanitizer/asan_malloc_linux.cpp:52\n"
+              "    #1 0x7 in zend_register_constant /b/php-5.0.0/Zend/zend_constants.c:320:4\n")
+    checks.append(("the access stack is the first stack, in order, leaf marked as outside PHP",
+                   access_stack(report),
+                   [{"index": 0, "func": "strlen", "outside": "../../src/libsanitizer/sanitizer_common_interceptors.inc:425"},
+                    {"index": 1, "func": "xbuf_format_converter", "file": "main/spprintf.c", "line": 518},
+                    {"index": 2, "func": "execute", "file": "Zend/zend_execute.c", "line": 1391}]))
+    checks.append(("the free stack is not taken", any(f["func"] == "zend_register_constant" for f in access_stack(report)), False))
+    checks.append(("no stack, no frames", access_stack("nothing here\n"), []))
+    checks.append(("an ASAN_OPTIONS requirement is a detector option",
+                   requires_kind("ASAN_OPTIONS detect_stack_use_after_return=1"), "detector-option"))
+    checks.append(("a loopback requirement is an execution requirement",
+                   requires_kind("network: working loopback"), "execution"))
+    checks.append(("no requirement, no kind", requires_kind(""), ""))
     checks.append(("the fix id is the first 12 hex digits", fix_id("4f161fe28997f5d1f818fc6ae95a8131066cf1a2"), "4f161fe28997"))
     checks.append(("an 11-digit fix id stays as given", fix_id("b599e434add"), "b599e434add"))
     bad = [(n, g, w) for n, g, w in checks if g != w]

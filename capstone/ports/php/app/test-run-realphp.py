@@ -15,7 +15,8 @@ from pathlib import Path
 # Case directories as bug-corpora/php/engine-repros names them: NN_<fix>_<id>. The runner keys
 # cases by that name (it is what derive-verdicts.py keys case.json arms by); the suite keeps the
 # corpus id in its own vocabulary and maps through K().
-NUM = {"CRASH-057": 1, "CRASH-062": 2, "CRASH-086": 3, "CRASH-092": 4, "CRASH-110": 5, "CRASH-999": 6}
+NUM = {"CRASH-057": 1, "CRASH-062": 2, "CRASH-086": 3, "CRASH-092": 4, "CRASH-110": 5, "CRASH-999": 6,
+       "CRASH-052": 7}
 def K(cid):
     return f"{NUM.get(cid, 99):02d}_fix_{cid.lower()}"
 
@@ -37,12 +38,16 @@ def check(name, got, want):
         print(f"  ok   {name}")
 
 
-FAULT = ("capstone-exec: domain fault cause=24 pc=0x3f904e7f90 address=0x3f909c8074 "
+FAULT = ("capstone-exec: domain fault cause=25 pc=0x3f904e7f90 address=0x3f909c8074 "
          "entry=0x3f904009a0 code=0x3f90400000-0x3f90800000 last=0x39 preparing=0x39 "
          "sha256=%s image=php-real-seam.dom")
 # The same fault line with the RESOURCE cause: the node table ran out, which lands at an
 # arbitrary pc and must never be read as a catch.
-FAULT30 = FAULT.replace("cause=24", "cause=30")
+FAULT30 = FAULT.replace("cause=25", "cause=30")
+# ...and with the TAG cause: an untagged value used as a capability. That is the program
+# dereferencing its own corrupted pointer, not the mechanism catching anything, and arms.json
+# does not list it among the PHP configurations' protective causes.
+FAULT24 = FAULT.replace("cause=25", "cause=24")
 SHA = "a" * 64
 # The bound probe is a DIFFERENT image by design, so its transcript carries its own
 # sha and the guard has to know that without being blinded to a stale probe.
@@ -51,13 +56,26 @@ STATS = ("CAPSTONE_VM_STATS arenas=16 pages=1778 peak=1994 nodes=%d steps=1943 f
          "collections=0 reclaimed=0 rounds=54 bytes_in=544 bytes_out=21229 node_bytes=225280 "
          "node_capacity=%d node_growths=3 launch_ns=1 elapsed_ns=2")
 
-SPEC = {"cwe": "CWE-416", "requires": "", "asan_func": "user_tick_function_call",
+SITE = "user_tick_function_call"
+SPEC = {"cwe": "CWE-416", "requires": "", "requires_kind": "", "asan_func": SITE,
         "asan_file": "ext/standard/basic_functions.c", "asan_line": 2135,
+        "asan_stack": [{"index": 0, "func": SITE, "file": "ext/standard/basic_functions.c", "line": 2135},
+                       {"index": 1, "func": "execute", "file": "Zend/zend_execute.c", "line": 1391}],
+        "fault_sites": [SITE],
         "pristine_stdout": "done\n", "pristine_outcome": "OK"}
+# A case whose ASan leaf is a libc routine (CRASH-068's shape: strlen under
+# xbuf_format_converter). The declared site is the PHP caller; the leaf is named in the stack
+# and deliberately not declared.
+LEAF_SPEC = dict(SPEC, asan_func="xbuf_format_converter", asan_file="main/spprintf.c", asan_line=518,
+                 asan_stack=[{"index": 0, "func": "strlen", "outside": "sanitizer_common_interceptors.inc:425"},
+                             {"index": 1, "func": "xbuf_format_converter", "file": "main/spprintf.c", "line": 518}],
+                 fault_sites=["xbuf_format_converter"])
 
 
-def fake_symbolize(path, line):
-    return lambda llvm_bin, image, fault, text: (path, line)
+def fake_symbolize(path, line, func=SITE):
+    """What the symbolizer would say: (function, file, line). The default function is the
+    fixture case's declared site, so a test that only moves the FILE tests the file rule."""
+    return lambda llvm_bin, image, fault, text: (func, path, line)
 
 
 def controls(sanity="complete", probe="fault"):
@@ -82,7 +100,7 @@ def observation_cases():
                     139, controls(), True, "/x", "/y")
     v, reason, ev = verdicts.judge(obs, exact)
     check("caught at ASAN's own line", (v, reason), (verdicts.CAUGHT, None))
-    check("the evidence says 'its own line'", "its own line" in ev, True)
+    check("the evidence says 'ASan's own line'", "ASan's own line" in ev, True)
 
     # A neighbouring line in the same file is still the catch, and says so.
     R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2137)
@@ -90,7 +108,7 @@ def observation_cases():
                     controls(), True, "/x", "/y")
     v, _, ev = verdicts.judge(obs, exact)
     check("caught at a neighbouring line", v, verdicts.CAUGHT)
-    check("the evidence names ASAN's line", "ASAN: line 2135" in ev, True)
+    check("the evidence names ASan's line", "ASan: line 2135" in ev, True)
 
     # A fault in a DIFFERENT file is not this case's defect.
     R.symbolize = fake_symbolize("Zend/zend_hash.c", 400)
@@ -115,11 +133,14 @@ def observation_cases():
     check("allocator-site case is unattributed", reason, "unattributed")
     check("and asks for the audit arm", "audit arm" in ev, True)
 
-    # Faulted, but the trigger was never shown to run: setup-fault, NOT a catch.
-    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
+    # Faulted somewhere else, and the trigger was never shown to run: setup-fault, NOT a
+    # catch and not `unattributed` either -- there is no reading to attribute. (A fault IN
+    # the declared function is its own proof of reach; that case is below.)
+    R.symbolize = fake_symbolize("Zend/zend_hash.c", 400, func="zend_hash_find")
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
                     controls(), False, "/x", "/y")
-    check("fault without reach is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
+    check("fault elsewhere without reach is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
 
     # Silent, trigger live, controls held: MISSED is a real reading.
     obs = R.observe("CRASH-086", SPEC, "php-real-stock", SHA, "done\n" + STATS % (100, 9216),
@@ -155,38 +176,88 @@ def observation_cases():
                     "ZEND_CAP_FAIL code=3 unknown key 0x40\n", 139, controls(), True, "/x", "/y")
     check("a seam failure is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
 
-    # Caught on the STOCK arm, so no control arm completed and stock_reached is False. Without
-    # the site licence this is `setup-fault` -- the instrument blamed for the platform's
-    # clearest result -- which is what CRASH-022 and CRASH-102 actually did.
+    # Caught on the STOCK arm, so no control arm completed and stock_reached is False. The
+    # fault in the declared function is itself the proof the trigger ran: without that route
+    # this is `setup-fault` -- the instrument blamed for the platform's clearest result --
+    # which is what CRASH-022 and CRASH-102 actually did.
     R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
     obs = R.observe("CRASH-022", SPEC, "php-real-stock", SHA, FAULT % SHA, 139,
-                    controls(probe=None), False, "/x", "/y", True, False)
-    check("no licence: a stock-arm catch reads as setup-fault",
-          verdicts.judge(obs, arms["php-real-stock"])[1], "setup-fault")
-    obs = R.observe("CRASH-022", SPEC, "php-real-stock", SHA, FAULT % SHA, 139,
-                    controls(probe=None), False, "/x", "/y", True, True)
-    check("a fault at ASAN's own site licenses reach",
+                    controls(probe=None), False, "/x", "/y")
+    check("a fault in the declared function licenses its own reach",
           verdicts.judge(obs, arms["php-real-stock"])[0], verdicts.CAUGHT)
     check("and says which route licensed it",
-          "own ASAN-recorded site" in obs.reach_evidence, True)
+          "own declared site" in obs.reach_evidence, True)
 
-    # THE LICENCE MUST NOT RESCUE A FAULT SOMEWHERE ELSE. It is granted by a fault at the
-    # case's own site on SOME arm; an arm that faulted in the seam, or at an unrelated line,
-    # still reports unattributed on its own account.
-    R.symbolize = fake_symbolize("ext/standard/url.c", 132)
+    # THE LICENCE IS THE OBSERVATION'S OWN, NEVER ANOTHER ARM'S. Until 2026-10-27 a site hit
+    # on SOME arm licensed reach on every arm of the case, so a fault elsewhere on a second
+    # arm read `unattributed` and a silence there read MISSED. Now a fault somewhere else,
+    # with no completing control, is what it is: a fault before the trigger was shown to run.
+    R.symbolize = fake_symbolize("ext/standard/url.c", 132, func="php_url_parse_ex")
     obs = R.observe("CRASH-022", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
-                    controls(), False, "/x", "/y", True, True)
-    check("the licence does not attribute a fault elsewhere",
-          verdicts.judge(obs, exact)[1], "unattributed")
+                    controls(), False, "/x", "/y")
+    check("another arm's catch does not license a fault elsewhere",
+          verdicts.judge(obs, exact)[1], "setup-fault")
+    obs = R.observe("CRASH-022", SPEC, "php-real-exact", SHA, "done\n", 0,
+                    controls(), False, "/x", "/y")
+    check("nor a silence", verdicts.judge(obs, exact)[1], "not-reached")
     R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
 
-    # AND THE LICENCE DOES NOT CREATE A PREMISE. A case the pristine build itself crashes on
-    # has no pair to read; where the trigger got to is beside the point. main() withholds the
-    # licence for those, and the offline suite drives that path in main_path_cases().
+    # QUALIFIED ATTRIBUTION: the declared FUNCTION in its file, not any line of the file.
+    # Each of these is a shape the old rule admitted or the review asked to see refused.
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 900, func="php_getenv")
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("another function in ASan's file is unattributed", (v, reason),
+          (verdicts.NO_READING, "unattributed"))
+    check("and the evidence says the old rule would have admitted it",
+          "any-line-in-the-file" in ev, True)
+    R.symbolize = fake_symbolize("Zend/zend_execute.c", 1391, func="execute")
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    check("a frame of ASan's stack that is not the declared site is unattributed",
+          verdicts.judge(obs, exact)[1], "unattributed")
+    R.symbolize = fake_symbolize("ext/standard/other.c", 2135)
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("the declared function in another file is unattributed", reason, "unattributed")
+    check("and says so", "same-named routine elsewhere" in ev, True)
+    # The tag cause: the program's own corrupted pointer, dereferenced. Site and function
+    # match; it is still not the mechanism catching anything.
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
+    obs = R.observe("CRASH-064", SPEC, "php-real-exact", SHA, FAULT24 % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a cause-24 tag fault is unattributed even at the declared site", reason, "unattributed")
+    check("and the evidence says it did land there", "did land in the declared function" in ev, True)
+    check("the fault carries its symbol into the bundle", obs.fault.symbol, SITE)
+    # The libc leaf: a fault in strlen, the routine ASan's frame #0 names for CRASH-068, with
+    # no line table. Consistent with the defect, and not attributable without the caller.
+    R.symbolize = fake_symbolize("", 0, func="strlen")
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a fault in the libc leaf ASan names is unattributed", reason, "unattributed")
+    check("and says it is unresolved for want of a return address",
+          "unresolved" in ev and "return address" in ev, True)
+    # An unrelated strlen -- a case whose ASan leaf is NOT strlen -- gets no such sentence.
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a strlen fault on a case whose leaf is not strlen is plainly unattributed",
+          (reason, "unresolved" in ev), ("unattributed", False))
+    # And the leaf case caught in its declared caller IS a catch.
+    R.symbolize = fake_symbolize("main/spprintf.c", 518, func="xbuf_format_converter")
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
+                    controls(), True, "/x", "/y")
+    check("the leaf case faulting in its declared caller is CAUGHT",
+          verdicts.judge(obs, exact)[0], verdicts.CAUGHT)
+    R.symbolize = fake_symbolize("ext/standard/basic_functions.c", 2135)
 
-    # A `requires` case still needs the precondition: the licence and the precondition are the
-    # same fact, so a case with neither is refused exactly as before.
-    req = dict(SPEC, requires="network: working loopback")
+    # A `requires` case still needs the precondition: an execution requirement is confirmed
+    # by nothing a silent run can show, so a silence is refused exactly as before.
+    req = dict(SPEC, requires="network: working loopback", requires_kind="execution")
     obs = R.observe("CRASH-092", req, "php-real-stock", SHA, "done\n" + STATS % (100, 9216), 0,
                     [verdicts.Control(name=R.SANITY, observed="complete")], True, "/x", "/y",
                     False, False)
@@ -285,6 +356,13 @@ def helper_cases():
           "999999999999999")
     check("a stats line standing alone leaves no blank line",
           R.app_output(["done", "CAPSTONE_VM_STATS arenas=1 nodes=1 node_capacity=2"]), "done")
+    # The launcher's grant diagnostics share the console with PHP; thousands of them on a
+    # large case. They reached the oracle comparison and reported two matching outputs as
+    # diverging (CRASH-084, CRASH-139, 2026-10-27).
+    check("the launcher's grant lines are not PHP's output",
+          R.app_output(["CAPSTONE_VM_ADD_OK slot=0 base=0x3faa000000 bytes=4194304 reg=3 perms=7 linear=0",
+                        "v", "CAPSTONE_VM_ADD_OK slot=1 base=0x3faa500000 bytes=1048576 reg=2 perms=6 linear=0",
+                        "end"]), "v\nend")
     # And the indentation var_dump emits must survive, or every indented case reads not-reached.
     check("leading whitespace is data, not noise",
           R.app_output(["array(2) {", '  ["scheme"]=>', "}"]),
@@ -306,22 +384,35 @@ def fake_corpus(root, ids=("CRASH-086", "CRASH-110")):
     """A corpus of case directories as tools/build-cases.py writes them: trigger.php and
     oracle.json per case, the population decided there and recorded."""
     root.mkdir(parents=True, exist_ok=True)
-    def case(cid, pop, *, pristine="OK", rc=0, stdout="done\n", requires="", stock="OK"):
+    def case(cid, pop, *, pristine="OK", rc=0, stdout="done\n", requires="", stock="OK",
+             requires_kind=None):
         d = root / K(cid); d.mkdir(exist_ok=True)
         (d / "trigger.php").write_text("<?php echo \"done\\n\";\n")
         (d / "oracle.json").write_text(json.dumps({
             "id": cid, "population": pop, "cwe": "CWE-416", "requires": requires,
-            "asan": {"class": "ASAN:heap-use-after-free", "func": "user_tick_function_call",
-                     "file": "ext/standard/basic_functions.c", "line": 2135},
+            "requires_kind": requires_kind if requires_kind is not None else ("execution" if requires else ""),
+            "asan": {"class": "ASAN:heap-use-after-free", "func": SITE,
+                     "file": "ext/standard/basic_functions.c", "line": 2135,
+                     "stack": SPEC["asan_stack"]},
             "stockalloc": stock,
             "pristine": {"outcome": pristine, "rc": rc, "stdout": stdout},
             "crashes_on_pristine_build": pristine.startswith("SIGNAL:")}))
+        # The framework's record, where the declared site lives (SCHEMA.md fault_sites).
+        (d / "case.json").write_text(json.dumps({
+            "case": NUM.get(cid, 99), "trigger": "trigger.php",
+            "fault_sites": [SITE],
+            "fault_sites_why": "the fixture's ASan frame #0, written by the builder from the native run"}))
     for cid in ids:
         case(cid, "asan-blind")
     # A case with a DECLARED PRECONDITION. CRASH-092's shape: it echoes its marker whether or
     # not its own listener came up, so a silence cannot be told from a platform that caught
     # nothing -- unless some arm faults at ASAN's site and thereby proves the precondition held.
     case("CRASH-092", "asan-blind", requires="network: working loopback")
+    # A case whose requirement is a DETECTOR OPTION: what ASan needs to report it, not what
+    # the trigger needs to run. CRASH-052's shape. It must not be refused for Capstone
+    # lacking an ASan knob.
+    case("CRASH-052", "asan-blind", requires="ASAN_OPTIONS detect_stack_use_after_return=1",
+         requires_kind="detector-option")
     # A case the PRISTINE build already crashes on: there is no silence to interpret, so it must
     # read not-reached however the arms behave. This is CRASH-057's situation.
     case("CRASH-057", "asan-blind", pristine="SIGNAL:11", rc=-11)
@@ -340,7 +431,8 @@ def population_cases():
         fake_corpus(root)
         pop = R.population(root)
         check("only the ASAN-blind cases are in the denominator",
-              sorted(pop), [K("CRASH-057"), K("CRASH-062"), K("CRASH-086"), K("CRASH-092"), K("CRASH-110")])
+              sorted(pop), [K("CRASH-057"), K("CRASH-062"), K("CRASH-086"), K("CRASH-092"), K("CRASH-110"),
+                            K("CRASH-052")])
         check("the expected site comes from ASAN's own frame",
               (pop[K("CRASH-086")]["asan_file"], pop[K("CRASH-086")]["asan_line"]),
               ("ext/standard/basic_functions.c", 2135))
@@ -400,8 +492,12 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
     fake_corpus(root)
     out = tmp / "out"
     out.mkdir(exist_ok=True)
-    cases = [K("CRASH-057"), K("CRASH-086"), K("CRASH-092"), K("CRASH-110")]
+    cases = [K("CRASH-057"), K("CRASH-086"), K("CRASH-092"), K("CRASH-110"), K("CRASH-052")]
     faults = faults or {}
+    # The platform record the booting pass writes beside its transcripts; a --from-record
+    # judge reads it rather than hashing this host.
+    (out / "platform.json").write_text(json.dumps(
+        {k: "unrecorded (offline suite)" for k in verdicts.PLATFORM_KEYS}))
     declared = [verdicts.load_arms()[a]["mode"] for a in R.ARMS]
     modes = modes or declared
     for arm, mode, rev in zip(R.ARMS, modes, revokes):
@@ -430,7 +526,7 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
         elif "clang" in prog:
             text = "clang version test\n"
         elif "symbolizer" in prog:
-            text = "??\n/b/ext/standard/basic_functions.c:2135:9\n"
+            text = f"{SITE}\n/b/ext/standard/basic_functions.c:2135:9\n"
         elif "readelf" in prog:
             text = "  LOAD           0x000000 0x0000000000010000 0x0000000000010000\n"
         elif prog.endswith("llvm-nm"):
@@ -463,8 +559,18 @@ def main_path_cases():
         b = tmp / "out" / f"bundle-{R.FRAMEWORK_ARM['php-real-exact']}" / "verdicts.jsonl"
         check("the bundle is written", b.is_file(), True)
         rows = [json.loads(l) for l in b.read_text().splitlines()]
-        check("every case is judged", len(rows), 5)
+        check("every case is judged", len(rows), 6)
         by_case = {r["observation"]["case"]: r for r in rows}
+        # A detector-option requirement is not a precondition here: the silent stock arm
+        # reads the case as a plain MISSED instead of refusing it for an ASan knob.
+        stock_rows = {json.loads(l)["observation"]["case"]: json.loads(l) for l in
+                      (tmp / "out" / "bundle-php-real-stock" / "verdicts.jsonl").read_text().splitlines()}
+        check("an ASAN_OPTIONS requirement does not refuse the case",
+              (stock_rows[K("CRASH-052")]["verdict"], stock_rows[K("CRASH-052")]["reason"]),
+              (verdicts.MISSED, None))
+        check("the bundle says how it was scored",
+              json.loads((tmp / "out" / "bundle-php-real-stock" / "inputs.json").read_text())
+              ["scoring"]["score_oracle_crashes"], False)
         check("the fault arm caught the two with a premise",
               sorted(by_case[c]["verdict"] for c in (K("CRASH-086"), K("CRASH-110"))),
               [verdicts.CAUGHT, verdicts.CAUGHT])
@@ -559,6 +665,7 @@ def stale_guard(label, *, sha=SHA, probe_sha=PROBE_SHA, want_refused=True):
         tmp = Path(d)
         root = tmp / "corpus-root"; fake_corpus(root)
         out = tmp / "out"; out.mkdir()
+        (out / "platform.json").write_text(json.dumps({k: "unrecorded (offline suite)" for k in verdicts.PLATFORM_KEYS}))
         for arm in R.ARMS:
             probe = True if R.BOUND_PROBE in verdicts.load_arms()[arm]["controls"] else None
             rec = synth_record([K("CRASH-086"), K("CRASH-110")], verdicts.load_arms()[arm]["mode"], 77,

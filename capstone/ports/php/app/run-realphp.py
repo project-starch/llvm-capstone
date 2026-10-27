@@ -208,9 +208,24 @@ def population(corpus, kind="asan-blind"):
             continue
         if not (d / "trigger.php").is_file():
             sys.exit(f"{d.name}: no trigger.php")
+        # The DECLARED site comes from case.json, the framework's record (SCHEMA.md
+        # `fault_sites`): the one function a fault may land in and be this defect's, with the
+        # reason it was chosen written from the native run and not from any fault here. The
+        # oracle's own frame is carried beside it for the file and line the function was seen
+        # at; the two are written by the same builder and must agree.
+        c = json.loads((d / "case.json").read_text())
+        sites = list(c.get("fault_sites") or [])
+        if not sites or not c.get("fault_sites_why"):
+            sys.exit(f"{d.name}: case.json declares no fault_sites (with fault_sites_why); nothing "
+                     f"can attribute a fault to this case, so it cannot be measured")
+        stack = o["asan"].get("stack") or []
+        if o["asan"]["func"] not in sites:
+            sys.exit(f"{d.name}: fault_sites {sites} do not name ASan's own frame {o['asan']['func']}")
         cases[d.name] = {
             "id": o["id"], "cwe": o["cwe"], "requires": o.get("requires", ""),
+            "requires_kind": o.get("requires_kind", "execution" if o.get("requires", "").strip() else ""),
             "asan_func": o["asan"]["func"], "asan_file": o["asan"]["file"], "asan_line": int(o["asan"]["line"]),
+            "asan_stack": stack, "fault_sites": sites,
             "pristine_stdout": o["pristine"].get("stdout", ""), "pristine_outcome": o["pristine"]["outcome"],
             "pristine_rc": o["pristine"].get("rc", 0),
         }
@@ -225,7 +240,7 @@ def population(corpus, kind="asan-blind"):
                      f"behind out-of-denominator cannot be checked -- refusing to run.")
     if not cases:
         sys.exit(f"no case directory under {corpus} is in population {kind!r}")
-    recorded = {"asan-blind": 46, "temporal-asan-visible": 22}.get(kind)
+    recorded = {"asan-blind": 46, "temporal-asan-visible": 20}.get(kind)
     if recorded is not None and len(cases) != recorded:
         print(f"NOTE: the {kind} population is {len(cases)} today, not the {recorded} the plan "
               f"records. That is a change in the corpus, not in this runner.", file=sys.stderr)
@@ -242,11 +257,19 @@ STATS_ANYWHERE = re.compile(r"CAPSTONE_VM_STATS .*$")
 
 
 def app_output(lines):
-    """The application's own stdout: kernel console lines and the VM's stats line removed."""
+    """The application's own stdout: kernel console lines, the VM's stats line and the
+    launcher's own diagnostics removed.
+
+    The launcher prints one CAPSTONE_VM_ADD_OK line per grant it makes -- thousands on a
+    large case -- onto the same console. They are the platform talking, not PHP, and they
+    were reaching the oracle comparison: a case whose PHP output matched the pristine record
+    exactly was reported as diverging, and the divergence note then stood beside its verdict
+    (CRASH-084 and CRASH-139 in the 2026-10-27 run). The stats line is parsed from the RAW
+    transcript by the callers that need it, never from this."""
     out = []
     for raw in lines:
         line = STATS_ANYWHERE.sub("", raw.rstrip("\r"))
-        if KERNEL_LINE.match(line):
+        if KERNEL_LINE.match(line) or line.startswith("CAPSTONE_VM_"):
             continue
         if not line and STATS_ANYWHERE.search(raw):
             continue                      # the stats line stood alone
@@ -322,25 +345,32 @@ def image_base(llvm_bin, image):
 
 
 def symbolize(llvm_bin, image, fault, text):
-    """(file, line) for a fault, from the image's line tables. ('', 0) when there are none."""
+    """(function, file, line) for a fault, from the image's symbols and line tables. The
+    function is '' when the symbolizer has none, and (file, line) is ('', 0) when there are no
+    line tables for it -- musl's routines in this image, say, which have a symbol and no
+    source. The function used to be discarded here, which left every libc fault a bare
+    pc: the judge could not even say "this is strlen"."""
     m = re.search(r"code=(0x[0-9a-f]+)-", text)
     if not m or fault is None:
-        return "", 0
+        return "", "", 0
     static = fault.pc - int(m.group(1), 16) + image_base(llvm_bin, image)
     out = subprocess.run([str(Path(llvm_bin) / "llvm-symbolizer"), "--obj", str(image),
                           "--functions=short", f"{static:#x}"],
                          capture_output=True, text=True).stdout.splitlines()
+    func = out[0].strip() if out else ""
+    if func in ("??", "<invalid>"):
+        func = ""
     where = out[1].strip() if len(out) > 1 else ""
     m2 = re.match(r"(.+?):(\d+):\d+$", where)
     if not m2:
-        return "", 0
+        return func, "", 0
     # Returned WHOLE and compared by suffix, not trimmed against a list of known build prefixes.
     # The symbolizer's path depends on where the tree was mirrored and on whether a file came
     # from the read-only corpus mount, and a prefix list silently stops matching when either
     # changes -- which turns a catch into `unattributed` for a reason that has nothing to do
     # with the program. ASAN's own site is repo-relative, so a suffix match is the comparison
     # that is actually being asked for.
-    return m2.group(1), int(m2.group(2))
+    return func, m2.group(1), int(m2.group(2))
 
 
 def arm_controls(arm, sanity_ok, probe_ok, arms):
@@ -354,8 +384,15 @@ def arm_controls(arm, sanity_ok, probe_ok, arms):
 
 
 def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached, llvm_bin,
-            image, precondition_met=True, site_licensed=False, score_oracle_crashes=False):
+            image, precondition_met=True, score_oracle_crashes=False, protective_causes=(25, 28),
+            raw=None):
+    """One case on one arm, as an Observation. `text` is the application's own output
+    (app_output); `raw` the transcript before that filter, for the launcher's counters, which
+    the filter removes -- read from `text` they were never found, so the node-pressure note
+    below reached no bundle until 2026-10-27."""
     obs = verdicts.Observation(case=case, arm=arm, image_sha256=image_sha, controls=controls)
+    native = spec["pristine_outcome"]
+    note(obs, f"native PHP: {native}")
     # NO PREMISE, SO NO PAIR. The corpus's own pristine record says native PHP does not
     # complete this case -- it crashes with no capability platform anywhere near it -- so there
     # is nothing here for an arm to catch or miss and the cell is out of the denominator.
@@ -413,7 +450,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                      f"ran out, which lands at an arbitrary pc and is not a reading about the "
                      f"program")
         return obs
-    pressure = node_pressure(text)
+    pressure = node_pressure(raw if raw is not None else text)
     if pressure:
         note(obs, f"nodes allocated {pressure[0]}, table capacity {pressure[1]} "
                   f"(cumulative, not a high-water: reported, not gated)")
@@ -428,6 +465,75 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # CRASH-070 unreadable. Inert for an OK oracle, so the published 31 are unaffected.
     want_rc = 0 if spec["pristine_outcome"] == "OK" else spec["pristine_rc"]
     obs.completed = (exit_code == want_rc and fault is None)
+    # ATTRIBUTION FIRST, because reach can rest on it. A fault is this defect's when it lands
+    # in the ONE function the case declares (case.json fault_sites: ASan's first PHP frame in
+    # our native run, chosen from that run and never from a fault here) AND in the file that
+    # frame was seen in, AND with a cause the configuration declares protective. Until
+    # 2026-10-27 the rule was "any line in ASan's file", which the second run's reading of the
+    # 2026-10-26 corpus showed to be wider than its evidence: zend_execute.c is on every
+    # script's path, and a fault anywhere in it read as the case's catch. Now the function
+    # has to match, and the evidence names which frame it is.
+    qualified = False
+    if fault is not None:
+        obs.fault = fault
+        func, path, line = symbolize(llvm_bin, image, fault, text)
+        fault.symbol = func or None
+        site = next((f for f in spec.get("asan_stack", []) if f.get("func") == spec["asan_func"]), None)
+        site_file = (site or {}).get("file") or spec["asan_file"]
+        leaf = (spec.get("asan_stack") or [{}])[0]
+        if any(own in path for own in SEAM_OWN):
+            obs.attribution_evidence = (f"the fault is in the seam's own source ({path}:{line}) "
+                                        f"-- a port artefact, not the program")
+        elif spec["asan_file"].endswith(ALLOCATOR_SITE):
+            obs.attribution_evidence = (
+                f"ASAN's own site for this case is {ALLOCATOR_SITE}:{spec['asan_line']}, so a "
+                f"fault there cannot be told from the port breaking; it needs the diagnostic "
+                f"audit arm (observed {func or '?'} at {path}:{line})")
+        elif fault.cause not in protective_causes:
+            # The configuration says which causes its mechanism produces (arms.json
+            # protective_causes). Cause 24 -- an untagged value used as a capability -- is the
+            # program dereferencing its own corrupted pointer, the same value native PHP dies
+            # on; CRASH-064 carried the identical 0x3f00000001 on every arm. Its SITE may well
+            # be the declared one; it is still not the mechanism catching anything.
+            obs.attribution_evidence = (
+                f"cause {fault.cause} in {func or '?'} at {path or '?'}:{line} is not one of this "
+                f"configuration's protective causes {list(protective_causes)}: an untagged or "
+                f"otherwise invalid value the program itself formed, not a revoked (25) or "
+                f"out-of-bounds (28) access"
+                + (" -- and it did land in the declared function" if func in spec["fault_sites"] else ""))
+        elif func in spec["fault_sites"] and path.endswith(site_file):
+            qualified = True
+            obs.attribution = "function"
+            obs.attribution_evidence = (
+                f"{func} at {site_file}:{line} is the function this case declares (fault_sites, "
+                f"ASan frame #{(site or {}).get('index', 0)} of our native run)"
+                + (", at ASan's own line" if line == spec["asan_line"] else
+                   f" (ASan: line {spec['asan_line']}; a capability fault can land on a "
+                   f"neighbouring instruction)"))
+        elif func in spec["fault_sites"]:
+            obs.attribution_evidence = (
+                f"{func} is the declared function but the fault is at {path or '?'}:{line}, not in "
+                f"{site_file}: a same-named routine elsewhere, or no line table for it")
+        elif path.endswith(site_file):
+            obs.attribution_evidence = (
+                f"{path}:{line} is ASan's file for this case but the fault is in {func or '?'}, not "
+                f"the declared {spec['fault_sites']}: another routine of the same file, which "
+                f"the old any-line-in-the-file rule would have admitted")
+        elif not path and leaf.get("outside") and func and func == leaf.get("func"):
+            # A libc leaf: the fault is in the routine ASan's own frame #0 names (strlen under
+            # xbuf_format_converter, CRASH-068). That is consistent with the defect and proves
+            # nothing: strlen is on many paths, and whether THIS call came from the declared
+            # caller needs the return address, which the launcher does not report
+            # (runtime/virtual/wire.h cv_step carries cause, pc and address only). Unresolved,
+            # said so, and not promoted.
+            obs.attribution_evidence = (
+                f"the fault is in {func}, the libc routine ASan's own frame #0 names for this "
+                f"case, with no line table; whether this call came from the declared "
+                f"{spec['fault_sites']} is not observable without a return address -- unresolved")
+        else:
+            obs.attribution_evidence = (f"faulted in {func or '?'} at {path or '?'}:{line} but the "
+                                        f"declared site is {spec['fault_sites']} in {site_file}")
+
     # TWO ROUTES TO `reached`, AND THE SECOND IS NOT A CONCESSION -- IT IS THE RULE THE FIRST
     # ONE IS A PROXY FOR. The question is only ever "did the trigger run", and the control arm
     # completing with the oracle's output is evidence for that, not the definition of it.
@@ -439,15 +545,16 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # the judge would report `setup-fault` -- a fault blamed on the instrument -- for the one
     # shape of case the platform handles best. CRASH-022 and CRASH-102 both did exactly that.
     #
-    # The second route is the argument already written below for `requires` cases, applied
-    # where it is just as true: a fault at the case's OWN ASAN-recorded source line cannot be
-    # reached without the trigger having run. Which route licensed a given reading is recorded
-    # in reach_evidence rather than left for a reader to reconstruct.
-    obs.reached = bool(site_licensed) or (bool(stock_reached) and bool(precondition_met))
-    if site_licensed:
-        obs.reach_evidence = (f"some arm of this run faulted at {spec['asan_file']}, the case's "
-                              f"own ASAN-recorded site, which cannot be reached without the "
-                              f"trigger having run")
+    # The second route: a fault in THIS run that the rule above attributed -- the declared
+    # function, in its file, with a protective cause -- cannot have happened without the
+    # trigger running. It licenses THIS observation only. Until 2026-10-27 a site hit on ANY
+    # arm licensed reach on every arm of the case, which let a silence elsewhere read as
+    # MISSED on the strength of another configuration's fault; that transfer is gone.
+    obs.reached = qualified or (bool(stock_reached) and bool(precondition_met))
+    if qualified:
+        obs.reach_evidence = (f"this run faulted in {spec['fault_sites'][0]}, the case's own "
+                              f"declared site, which cannot be reached without the trigger "
+                              f"having run")
     elif obs.reached:
         obs.reach_evidence = ("the stock arm ran this case to its normal end, the corpus's "
                               "pristine record says it completes, and revocation-sanity "
@@ -455,41 +562,14 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     else:
         obs.reach_evidence = ""
     if stock_reached and not precondition_met:
-        # A case with a declared environmental precondition that NOTHING in this measurement
+        # A case with a declared EXECUTION precondition that nothing in this measurement
         # confirmed was met. CRASH-092 is the shape of the problem: it creates its own loopback
         # listener and then echoes "done" WHETHER OR NOT the listener came up, so a silence here
         # cannot be told apart from a platform that caught nothing. Refusing it is the only
         # honest option; a MISSED would be a claim about revocation drawn from a socket.
-        note(obs, f"declared precondition {spec['requires']!r} was not confirmed met by any "
-                  f"arm in this run, so a silence here is not a reading")
-
+        note(obs, f"declared precondition {spec['requires']!r} was not confirmed met in this "
+                  f"run, so a silence here is not a reading")
     if fault is not None:
-        obs.fault = fault
-        path, line = symbolize(llvm_bin, image, fault, text)
-        if any(own in path for own in SEAM_OWN):
-            obs.attribution = None
-            obs.attribution_evidence = (f"the fault is in the seam's own source ({path}:{line}) "
-                                        f"-- a port artefact, not the program")
-            return obs
-        if spec["asan_file"].endswith(ALLOCATOR_SITE):
-            obs.attribution = None
-            obs.attribution_evidence = (
-                f"ASAN's own site for this case is {ALLOCATOR_SITE}:{spec['asan_line']}, so a "
-                f"fault there cannot be told from the port breaking; it needs the diagnostic "
-                f"audit arm (observed {path}:{line})")
-            return obs
-        if path.endswith(spec["asan_file"]):
-            exact = (line == spec["asan_line"])
-            obs.attribution = "function"
-            obs.attribution_evidence = (
-                f"{spec['asan_file']}:{line} is ASAN's own file for this case"
-                + (f", and its own line" if exact else
-                   f" (ASAN: line {spec['asan_line']}; a capability fault can land on a "
-                   f"neighbouring instruction)"))
-        else:
-            obs.attribution = None
-            obs.attribution_evidence = (f"faulted at {path or '?'}:{line} but ASAN's site is "
-                                        f"{spec['asan_file']}:{spec['asan_line']}")
         return obs
 
     # normalise_paths, for the SAME reason the stock-arm comparison below applies it: PHP prints
@@ -707,12 +787,28 @@ def main():
     # that is not the pin the superproject records, so no bundle written that way can say
     # which kernel it ran on. rootfs.ext2 in particular is WRITTEN BY THE GUEST, so a hash
     # taken after the arms have run is not the filesystem that was booted.
-    platform = platform_record(args)
-
-    if not args.from_record:
+    # RE-JUDGING KEEPS THE RUN'S PROVENANCE. A --from-record pass judges transcripts a boot
+    # produced earlier; hashing this host's binaries at re-judge time would stamp the bundle
+    # with whatever is on disk NOW, which the 2026-10-27 sensitivity re-scoring did. The
+    # record of the platform is written beside the transcripts by the pass that booted them,
+    # and a re-judge reads that or refuses.
+    platform_file = args.out / "platform.json"
+    if args.from_record:
+        if not platform_file.is_file():
+            sys.exit(f"--from-record: no {platform_file} beside the stored runs; the platform "
+                     f"that produced them is not known and cannot be hashed from this host")
+        platform = json.loads(platform_file.read_text())
+    else:
+        platform = platform_record(args)
+        args.out.mkdir(parents=True, exist_ok=True)
+        platform_file.write_text(json.dumps(platform, indent=2, sort_keys=True) + "\n")
         stage_inputs(args, cases)
+    for arm in ARMS:
+        if not arms[arm].get("protective_causes"):
+            sys.exit(f"{arm}: tools/arms.json declares no protective_causes for this "
+                     f"configuration; the judge cannot tell a revocation from a corrupted pointer")
 
-    per_arm, texts = {}, {}
+    per_arm, texts, raws = {}, {}, {}
     for arm in ARMS:
         mode = arms[arm]["mode"]
         wants_probe = BOUND_PROBE in arms[arm]["controls"]
@@ -752,6 +848,7 @@ def main():
                 sys.exit(f"{arm}/{name}: the transcript reports PHP_CAP_MODE {seen.group(1)}, "
                          f"not this arm's {mode}")
         texts[arm] = {n: app_output(l) for n, l in rec["output"].items()}
+        raws[arm] = {n: "\n".join(l) for n, l in rec["output"].items()}
         sanity_text = texts[arm].get(SANITY, "")
         sanity_ok = (rec["exits"].get(SANITY) == 0
                      and verdicts.domain_fault(sanity_text, None) is None)
@@ -803,49 +900,32 @@ def main():
                   f"({len(said.splitlines())} lines vs "
                   f"{len(spec['pristine_stdout'].splitlines())})")
 
-    # PASS ONE: where did each run fault? A fault at the case's OWN ASAN site is proof that the
-    # case's declared precondition (a writable /tmp, a working loopback) was met -- you cannot
-    # reach that line otherwise -- and that proof then licenses reading a SILENCE on the other
-    # arms of the same case. Without it, every `requires` case would be refused on every arm,
-    # including the ones that plainly caught it.
-    precondition_met, site_licensed = {}, {}
+    # DECLARED REQUIREMENTS, by kind (oracle.json requires_kind, classified by the corpus
+    # builder from the declaration's text). A DETECTOR OPTION -- CRASH-052's "ASAN_OPTIONS
+    # detect_stack_use_after_return=1" -- is what ASan needs to report the defect, not what
+    # the trigger needs to run here; until 2026-10-27 it was treated as an unmet precondition
+    # and the case refused on every arm, which is unsound: Capstone not having enabled an
+    # ASan option says nothing about reach. It is recorded as not applicable, not as "met".
+    # An EXECUTION requirement (a writable /tmp, a working loopback) is confirmed by nothing
+    # this run can see: CRASH-092 prints its marker whether or not its listener came up, so
+    # the stock arm completing with the oracle's output is not evidence the requirement held.
+    # A fault on some arm at the case's site used to confirm it for every arm of the case;
+    # that cross-arm transfer is gone (see observe). An arm's own attributed fault licenses
+    # that arm, and a silence on any arm of such a case is not a reading.
+    precondition_met = {}
     for case, spec in cases.items():
-        hit = False
-        for arm in ARMS:
-            text = texts[arm].get(case, "")
-            f = verdicts.domain_fault(text, None)
-            if f is None:
-                continue
-            path, _ = symbolize(args.llvm_bin, args.image, f, text)
-            if path.endswith(spec["asan_file"]):
-                hit = True
-                break
-        # THE LICENCE ANSWERS "DID THE TRIGGER RUN", NOT "IS THERE A PAIR TO READ". Those are
-        # different questions, and until 2026-10-26 the line below folded them together while
-        # this comment said not to: it read `hit and not oracle_crashes(spec)`.
-        #
-        # In the DEFAULT scoring that conjunct is dead code: observe() returns
-        # `out-of-denominator` for an oracle-crashing case before `reached` is ever consulted,
-        # and for every other case `not oracle_crashes(spec)` is already true. So removing it
-        # cannot move a published cell, which is checked by re-judging, not asserted.
-        #
-        # Under --score-oracle-crashes it was actively wrong, and wrong in the one direction
-        # that misattributes a catch to a port bug: it made `reached` false BY CONSTRUCTION for
-        # exactly the 19 cases that flag exists to score. The judge tests `reached` before
-        # attribution (verdicts.py:125), so all 19 read `setup-fault` -- our instrument blamed
-        # for faults that had already landed at the case's own ASAN-recorded file, by
-        # revoked-capability load, with attribution=function established. The oracle's premise
-        # belongs in that early return, which is now where it lives alone.
-        site_licensed[case] = hit
-        precondition_met[case] = hit if spec["requires"] else True
-        if spec["requires"]:
-            print(f"    {case}: precondition {spec['requires']!r} "
-                  + ("confirmed by a fault at ASAN's own site" if hit
-                     else "NOT confirmed -- a silence on this case is not a reading"))
-        elif hit and not stock_reached[case]:
-            # The case the control-arm rule cannot describe: caught even on the weakest arm.
-            print(f"    {case}: the stock arm did not complete it, but an arm faulted at "
-                  f"{spec['asan_file']} -- the trigger ran")
+        kind = spec["requires_kind"]
+        if not kind:
+            precondition_met[case] = True
+        elif kind == "detector-option":
+            precondition_met[case] = True
+            print(f"    {case}: requirement {spec['requires']!r} is a detector option, not a "
+                  f"precondition on this platform -- not applicable")
+        else:
+            precondition_met[case] = False
+            print(f"    {case}: precondition {spec['requires']!r} cannot be confirmed by this "
+                  f"run -- a silence on this case is not a reading; an arm's own fault in the "
+                  f"declared function licenses that arm alone")
 
     rows, table = {arm: [] for arm in ARMS}, {}
     for arm in ARMS:
@@ -855,8 +935,8 @@ def main():
             obs = observe(case, spec, arm, image_sha, text,
                           per_arm[arm]["rec"]["exits"].get(case),
                           controls, stock_reached[case], args.llvm_bin, args.image,
-                          precondition_met[case], site_licensed[case],
-                          args.score_oracle_crashes)
+                          precondition_met[case], args.score_oracle_crashes,
+                          tuple(arms[arm]["protective_causes"]), raws[arm].get(case))
             if case in output_diverged:
                 note(obs, "the stock arm's output differs from the corpus's pristine record "
                           "(reported, not gated: see the module docstring on the deviation)")
@@ -892,7 +972,17 @@ def main():
                                          "image_sha256": image_sha, "allocator": "seam",
                                          "mode": arms[arm]["mode"]},
                                "pre_registration": args.prereg,
-                               "population": args.population})
+                               "population": args.population,
+                               # How the rows were scored, so a reader of the bundle alone can
+                               # tell a default run from a sensitivity one, and which
+                               # attribution rule judged it.
+                               "scoring": {
+                                   "score_oracle_crashes": bool(args.score_oracle_crashes),
+                                   "attribution": ("declared function (case.json fault_sites) in "
+                                                   "its file, with a protective cause "
+                                                   "(arms.json protective_causes); own fault "
+                                                   "licenses own reach; 2026-10-27"),
+                                   "protective_causes": arms[arm]["protective_causes"]}})
     print(f"\nbundles written under {args.out}")
 
 

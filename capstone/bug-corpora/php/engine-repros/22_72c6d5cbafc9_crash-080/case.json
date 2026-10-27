@@ -8,6 +8,10 @@
  "live_in_pin": true,
  "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-use-after-free at Zend/zend_execute_API.c:389 in _zval_ptr_dtor when trigger.php runs; the corpus records the fix as php-src 72c6d5cbafc9, which postdates the release, and names the defect at ext/standard/array.c:3804",
  "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build completes it natively, so an arm that completes it saw nothing. ",
+ "fault_sites": [
+  "_zval_ptr_dtor"
+ ],
+ "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has _zval_ptr_dtor at Zend/zend_execute_API.c:389 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
  "arms": {
   "virtual-malloc": {
    "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"

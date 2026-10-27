@@ -3,7 +3,66 @@
   "class": "ASAN:heap-use-after-free",
   "file": "Zend/zend_execute.c",
   "func": "zend_pzval_lock_func",
-  "line": 59
+  "line": 59,
+  "stack": [
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_pzval_lock_func",
+    "index": 0,
+    "line": 59
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_fetch_var_address",
+    "index": 1,
+    "line": 798
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_fetch_r_handler",
+    "index": 2,
+    "line": 1996
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "execute",
+    "index": 3,
+    "line": 1391
+   },
+   {
+    "file": "Zend/zend.c",
+    "func": "zend_execute_scripts",
+    "index": 4,
+    "line": 1061
+   },
+   {
+    "file": "main/main.c",
+    "func": "php_execute_script",
+    "index": 5,
+    "line": 1627
+   },
+   {
+    "file": "sapi/cli/php_cli.c",
+    "func": "main",
+    "index": 6,
+    "line": 943
+   },
+   {
+    "func": "__libc_start_call_main",
+    "index": 7,
+    "outside": "../sysdeps/nptl/libc_start_call_main.h:59"
+   },
+   {
+    "func": "__libc_start_main_impl",
+    "index": 8,
+    "outside": "../csu/libc-start.c:360"
+   },
+   {
+    "func": "_start",
+    "index": 9,
+    "outside": "(/tmp/php-oracle/php-5.0.0-bug-corpus/build/php-5.0.0-asan/sapi/cli/php+0x93134) (BuildId: 4aefa467883ec720be150eacfb20c09975a136da)"
+   }
+  ]
  },
  "category": "use-after-free",
  "collaborator_population": "asan-blind",
@@ -17,6 +76,7 @@
   "stdout": "NULL\n"
  },
  "requires": "",
+ "requires_kind": "",
  "sources": {
   "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
   "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",

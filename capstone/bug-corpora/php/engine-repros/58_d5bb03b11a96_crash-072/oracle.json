@@ -3,7 +3,102 @@
   "class": "ASAN:heap-use-after-free",
   "file": "main/streams/streams.c",
   "func": "_php_stream_free",
-  "line": 350
+  "line": 350,
+  "stack": [
+   {
+    "file": "main/streams/streams.c",
+    "func": "_php_stream_free",
+    "index": 0,
+    "line": 350
+   },
+   {
+    "file": "main/streams/streams.c",
+    "func": "stream_resource_regular_dtor",
+    "index": 1,
+    "line": 1343
+   },
+   {
+    "file": "Zend/zend_list.c",
+    "func": "list_entry_destructor",
+    "index": 2,
+    "line": 178
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_del_key_or_index",
+    "index": 3,
+    "line": 490
+   },
+   {
+    "file": "Zend/zend_list.c",
+    "func": "_zend_list_delete",
+    "index": 4,
+    "line": 58
+   },
+   {
+    "file": "Zend/zend_variables.c",
+    "func": "_zval_dtor",
+    "index": 5,
+    "line": 69
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "_zval_ptr_dtor",
+    "index": 6,
+    "line": 391
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_apply_deleter",
+    "index": 7,
+    "line": 574
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_graceful_reverse_destroy",
+    "index": 8,
+    "line": 640
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "shutdown_executor",
+    "index": 9,
+    "line": 210
+   },
+   {
+    "file": "Zend/zend.c",
+    "func": "zend_deactivate",
+    "index": 10,
+    "line": 819
+   },
+   {
+    "file": "main/main.c",
+    "func": "php_request_shutdown",
+    "index": 11,
+    "line": 1212
+   },
+   {
+    "file": "sapi/cli/php_cli.c",
+    "func": "main",
+    "index": 12,
+    "line": 1046
+   },
+   {
+    "func": "__libc_start_call_main",
+    "index": 13,
+    "outside": "../sysdeps/nptl/libc_start_call_main.h:59"
+   },
+   {
+    "func": "__libc_start_main_impl",
+    "index": 14,
+    "outside": "../csu/libc-start.c:360"
+   },
+   {
+    "func": "_start",
+    "index": 15,
+    "outside": "(/tmp/php-oracle/php-5.0.0-bug-corpus/build/php-5.0.0-asan/sapi/cli/php+0x93134) (BuildId: 4aefa467883ec720be150eacfb20c09975a136da)"
+   }
+  ]
  },
  "category": "use-after-free",
  "collaborator_population": "temporal-asan-visible",
@@ -17,6 +112,7 @@
   "stdout": ""
  },
  "requires": "",
+ "requires_kind": "",
  "sources": {
   "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
   "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",

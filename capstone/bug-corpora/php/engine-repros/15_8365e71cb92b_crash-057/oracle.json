@@ -3,7 +3,77 @@
   "class": "ASAN:heap-use-after-free",
   "file": "Zend/zend_alloc.c",
   "func": "_estrndup",
-  "line": 403
+  "line": 403,
+  "stack": [
+   {
+    "func": "memcpy",
+    "index": 0,
+    "outside": "../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors_memintrinsics.inc:117"
+   },
+   {
+    "file": "Zend/zend_alloc.c",
+    "func": "_estrndup",
+    "index": 1,
+    "line": 403
+   },
+   {
+    "file": "Zend/zend_variables.c",
+    "func": "_zval_copy_ctor",
+    "index": 2,
+    "line": 137
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_assign_to_variable",
+    "index": 3,
+    "line": 654
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_assign_handler",
+    "index": 4,
+    "line": 2234
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "execute",
+    "index": 5,
+    "line": 1391
+   },
+   {
+    "file": "Zend/zend.c",
+    "func": "zend_execute_scripts",
+    "index": 6,
+    "line": 1061
+   },
+   {
+    "file": "main/main.c",
+    "func": "php_execute_script",
+    "index": 7,
+    "line": 1627
+   },
+   {
+    "file": "sapi/cli/php_cli.c",
+    "func": "main",
+    "index": 8,
+    "line": 943
+   },
+   {
+    "func": "__libc_start_call_main",
+    "index": 9,
+    "outside": "../sysdeps/nptl/libc_start_call_main.h:59"
+   },
+   {
+    "func": "__libc_start_main_impl",
+    "index": 10,
+    "outside": "../csu/libc-start.c:360"
+   },
+   {
+    "func": "_start",
+    "index": 11,
+    "outside": "(/tmp/php-oracle/php-5.0.0-bug-corpus/build/php-5.0.0-asan/sapi/cli/php+0x93134) (BuildId: 4aefa467883ec720be150eacfb20c09975a136da)"
+   }
+  ]
  },
  "category": "use-after-free",
  "collaborator_population": "asan-blind",
@@ -17,6 +87,7 @@
   "stdout": "string(1) \"p\"\n"
  },
  "requires": "",
+ "requires_kind": "",
  "sources": {
   "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
   "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",

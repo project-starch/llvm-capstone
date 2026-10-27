@@ -3,7 +3,108 @@
   "class": "ASAN:heap-use-after-free",
   "file": "Zend/zend_execute_API.c",
   "func": "_zval_ptr_dtor",
-  "line": 392
+  "line": 392,
+  "stack": [
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "_zval_ptr_dtor",
+    "index": 0,
+    "line": 392
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "_zend_hash_quick_add_or_update",
+    "index": 1,
+    "line": 294
+   },
+   {
+    "file": "Zend/zend_object_handlers.c",
+    "func": "zend_std_write_property",
+    "index": 2,
+    "line": 371
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_assign_to_object",
+    "index": 3,
+    "line": 435
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_assign_obj_handler",
+    "index": 4,
+    "line": 2191
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "execute",
+    "index": 5,
+    "line": 1391
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "zend_call_function",
+    "index": 6,
+    "line": 835
+   },
+   {
+    "file": "Zend/zend_interfaces.c",
+    "func": "zend_call_method",
+    "index": 7,
+    "line": 79
+   },
+   {
+    "file": "Zend/zend_objects.c",
+    "func": "zend_objects_destroy_object",
+    "index": 8,
+    "line": 78
+   },
+   {
+    "file": "Zend/zend_objects_API.c",
+    "func": "zend_objects_store_call_destructors",
+    "index": 9,
+    "line": 54
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "shutdown_executor",
+    "index": 10,
+    "line": 209
+   },
+   {
+    "file": "Zend/zend.c",
+    "func": "zend_deactivate",
+    "index": 11,
+    "line": 819
+   },
+   {
+    "file": "main/main.c",
+    "func": "php_request_shutdown",
+    "index": 12,
+    "line": 1212
+   },
+   {
+    "file": "sapi/cli/php_cli.c",
+    "func": "main",
+    "index": 13,
+    "line": 1046
+   },
+   {
+    "func": "__libc_start_call_main",
+    "index": 14,
+    "outside": "../sysdeps/nptl/libc_start_call_main.h:59"
+   },
+   {
+    "func": "__libc_start_main_impl",
+    "index": 15,
+    "outside": "../csu/libc-start.c:360"
+   },
+   {
+    "func": "_start",
+    "index": 16,
+    "outside": "(/tmp/php-oracle/php-5.0.0-bug-corpus/build/php-5.0.0-asan/sapi/cli/php+0x93134) (BuildId: 4aefa467883ec720be150eacfb20c09975a136da)"
+   }
+  ]
  },
  "category": "use-after-free",
  "collaborator_population": "temporal-asan-visible",
@@ -17,6 +118,7 @@
   "stdout": "ok\n"
  },
  "requires": "",
+ "requires_kind": "",
  "sources": {
   "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
   "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",

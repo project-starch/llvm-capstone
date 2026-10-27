@@ -3,7 +3,150 @@
   "class": "ASAN:heap-use-after-free",
   "file": "Zend/zend_hash.c",
   "func": "zend_hash_find",
-  "line": 850
+  "line": 850,
+  "stack": [
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_find",
+    "index": 0,
+    "line": 850
+   },
+   {
+    "file": "Zend/zend_object_handlers.c",
+    "func": "zend_std_get_method",
+    "index": 1,
+    "line": 673
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "zend_call_function",
+    "index": 2,
+    "line": 687
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "call_user_function_ex",
+    "index": 3,
+    "line": 550
+   },
+   {
+    "file": "ext/standard/user_filters.c",
+    "func": "userfilter_dtor",
+    "index": 4,
+    "line": 128
+   },
+   {
+    "file": "main/streams/filter.c",
+    "func": "php_stream_filter_free",
+    "index": 5,
+    "line": 306
+   },
+   {
+    "file": "main/streams/filter.c",
+    "func": "php_stream_filter_remove",
+    "index": 6,
+    "line": 421
+   },
+   {
+    "file": "main/streams/streams.c",
+    "func": "_php_stream_free",
+    "index": 7,
+    "line": 344
+   },
+   {
+    "file": "main/streams/streams.c",
+    "func": "stream_resource_regular_dtor",
+    "index": 8,
+    "line": 1343
+   },
+   {
+    "file": "Zend/zend_list.c",
+    "func": "list_entry_destructor",
+    "index": 9,
+    "line": 178
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_del_key_or_index",
+    "index": 10,
+    "line": 490
+   },
+   {
+    "file": "Zend/zend_list.c",
+    "func": "_zend_list_delete",
+    "index": 11,
+    "line": 58
+   },
+   {
+    "file": "Zend/zend_variables.c",
+    "func": "_zval_dtor",
+    "index": 12,
+    "line": 69
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "_zval_ptr_dtor",
+    "index": 13,
+    "line": 391
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_destroy",
+    "index": 14,
+    "line": 519
+   },
+   {
+    "file": "Zend/zend_objects.c",
+    "func": "zend_objects_free_object_storage",
+    "index": 15,
+    "line": 88
+   },
+   {
+    "file": "Zend/zend_objects_API.c",
+    "func": "zend_objects_store_free_object_storage",
+    "index": 16,
+    "line": 72
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "shutdown_executor",
+    "index": 17,
+    "line": 272
+   },
+   {
+    "file": "Zend/zend.c",
+    "func": "zend_deactivate",
+    "index": 18,
+    "line": 819
+   },
+   {
+    "file": "main/main.c",
+    "func": "php_request_shutdown",
+    "index": 19,
+    "line": 1212
+   },
+   {
+    "file": "sapi/cli/php_cli.c",
+    "func": "main",
+    "index": 20,
+    "line": 1046
+   },
+   {
+    "func": "__libc_start_call_main",
+    "index": 21,
+    "outside": "../sysdeps/nptl/libc_start_call_main.h:59"
+   },
+   {
+    "func": "__libc_start_main_impl",
+    "index": 22,
+    "outside": "../csu/libc-start.c:360"
+   },
+   {
+    "func": "_start",
+    "index": 23,
+    "outside": "(/tmp/php-oracle/php-5.0.0-bug-corpus/build/php-5.0.0-asan/sapi/cli/php+0x93134) (BuildId: 4aefa467883ec720be150eacfb20c09975a136da)"
+   }
+  ]
  },
  "category": "use-after-free",
  "collaborator_population": "temporal-asan-visible",
@@ -17,6 +160,7 @@
   "stdout": "boom\n"
  },
  "requires": "",
+ "requires_kind": "",
  "sources": {
   "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
   "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",
