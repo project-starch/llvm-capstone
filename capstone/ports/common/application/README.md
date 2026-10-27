@@ -9,7 +9,7 @@ Rebuild applications and their SDK together.
 
 The application ports are Perl, mruby, CPython, the PostgreSQL single-user
 backend, SQLite's in-memory SQL application, the configured FFmpeg decoder,
-and offline tshark. Standalone allocator and FPGA instruction tests are
+offline tshark, and the PHP 5.0.0 command-line interpreter. Standalone allocator and FPGA instruction tests are
 separate targets; their historical HostCall transport is not an application ABI.
 
 ## Virtual source builds
@@ -29,9 +29,9 @@ passes 46/46 checks with SQLite, mruby and Perl. These results qualify the
 existing configured ports on one hart; broader upstream features remain
 separate work.
 
-All eight ports with a nested allocator build on the virtual profile through
-one entry, `build-virtual.sh`: CPython, PostgreSQL, FFmpeg, tshark, memcached,
-Perl, mruby and SQLite. Select the gp-free/image-gp compiler before sourcing
+All eight ports with a nested allocator, and PHP, build on the virtual profile
+through one entry, `build-virtual.sh`: CPython, PostgreSQL, FFmpeg, tshark,
+memcached, Perl, mruby, SQLite and PHP. Select the gp-free/image-gp compiler before sourcing
 `capstone/tests/capstone-test-env.sh`. Use fresh output directories: relinking
 physically compiled objects cannot convert their addressing convention.
 Virtual is the default profile of every builder here and of the port recipes
@@ -50,7 +50,7 @@ bash capstone/ports/common/application/build-virtual.sh cpython \
   "$CAPSTONE_TMP_ROOT/cpython-virtual"
 ```
 
-Replace `cpython` with any of the other seven. The image is
+Replace `cpython` with any of the other eight. The image is
 `OUTPUT/image/APP.dom`; run it with `capstone-vexec`, not the physical launcher.
 The existing source recipes retain their dependency requirements, including
 the PostgreSQL source archive and host Meson for GLib. CPython's distribution
@@ -63,16 +63,21 @@ port's nested allocator managed lifetimes -- `CDERIVE` on handout, `CREVOKE` on
 release -- and `0`, the default, builds it as released, its blocks from virtual
 mallocng. The entry translates that into the variable the port's own recipe
 reads (`CPY_SUBLET`, `PGSU_NESTED`, `FFAPP_SUBLET`, `TSAPP_SUBLET`,
-`PERLD_SUBLET`, `MRBD_SUBLET`, `SQLITE_HEAP`); those still work, and one that
-contradicts the selector is refused rather than silently losing. memcached is
+`PERLD_SUBLET`, `MRBD_SUBLET`, `SQLITE_HEAP`, `PHP_REALPHP_ALLOC`); those still
+work, and one that contradicts the selector is refused rather than silently
+losing. For PHP, `1` is the allocator seam of `ports/php/app/patches/0003` with
+its arm baked in (mode 6: a lifetime per `emalloc` object, PHP's own bounds;
+`PHP_REALPHP_DEFAULT_MODE=7` adds exact bounds), because the generic runners set
+no `PHP_CAP_MODE`; the port's own measurement images name their arm per run and
+have no default. memcached is
 the exception: its recipe builds every arm into one output directory, so it
 takes no selector.
 
-Two of the eight -- mruby and SQLite -- have recipes that take an SDK rather
-than building one, and the entry builds it for them, so every image under one
+Three -- mruby, SQLite and PHP -- have recipes that take an SDK rather than
+building one, and the entry builds it for them, so every image under one
 output directory shares one SDK identity. The other six still build an SDK
 inside their own recipe; `pipeline.json`'s `shared_sdk` says which, because
-that is the remaining difference between the eight.
+that is the remaining difference between them.
 
 FFmpeg's pools are protected by the buffer-pool
 port's patch 0003 and measured as a component (`bug-corpora/ffmpeg/pool-repros`).

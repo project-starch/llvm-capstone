@@ -5,8 +5,8 @@
 #
 #   build-virtual.sh [--dry-run] APP NEW_OUTPUT
 #
-#   APP   cpython | postgres | ffmpeg | tshark | memcached | perl | mruby | sqlite
-#         -- the eight ports with a nested allocator.
+#   APP   cpython | postgres | ffmpeg | tshark | memcached | perl | mruby | sqlite | php
+#         -- the eight ports with a nested allocator, and PHP 5.0.0 with its allocator seam.
 #
 # WHY ONE ENTRY. Each port keeps its own recipe, because each upstream build is
 # its own problem: perl needs perl-cross, tshark needs seven dependencies,
@@ -43,11 +43,11 @@ HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 source "$HERE/../../../tests/capstone-test-env.sh" >/dev/null
 DRY=0
 [[ ${1:-} != --dry-run ]] || { DRY=1; shift; }
-[[ $# == 2 ]] || { echo 'usage: build-virtual.sh [--dry-run] {cpython|postgres|ffmpeg|tshark|memcached|perl|mruby|sqlite} NEW_OUTPUT' >&2; exit 2; }
+[[ $# == 2 ]] || { echo 'usage: build-virtual.sh [--dry-run] {cpython|postgres|ffmpeg|tshark|memcached|perl|mruby|sqlite|php} NEW_OUTPUT' >&2; exit 2; }
 APP=$1
 OUT=$(realpath -m "$2")
 [[ ! -e "$OUT" ]] || { echo "use a fresh output directory: $OUT" >&2; exit 2; }
-case "$APP" in cpython|postgres|ffmpeg|tshark|memcached|perl|mruby|sqlite) ;;
+case "$APP" in cpython|postgres|ffmpeg|tshark|memcached|perl|mruby|sqlite|php) ;;
   *) echo "unsupported application: $APP" >&2; exit 2;; esac
 
 # ---- the selector, and the port variable it stands for ----------------------
@@ -62,6 +62,9 @@ case "$APP" in
   perl)      PORT_VAR=PERLD_SUBLET; PORT_OFF=0; PORT_ON=1 ;;
   mruby)     PORT_VAR=MRBD_SUBLET;  PORT_OFF=0; PORT_ON=1 ;;
   sqlite)    PORT_VAR=SQLITE_HEAP;  PORT_OFF=memsys5; PORT_ON=memsys5-sublet ;;
+  # php: stock is PHP's own zend_alloc.c over virtual mallocng; seam is that file with the
+  # allocator seam patched in (ports/php/app/patches/0003), its arm baked in below.
+  php)       PORT_VAR=PHP_REALPHP_ALLOC; PORT_OFF=stock; PORT_ON=seam ;;
   # memcached's recipe builds both arms into one output directory -- stock,
   # safety fixtures and managed lifetimes are separate images, not separate
   # builds -- so there is nothing for the selector to choose.
@@ -81,7 +84,7 @@ elif [[ $LIFETIMES == 1 ]]; then
 fi
 
 # Ports that take an SDK rather than building one.
-case "$APP" in mruby|sqlite) SHARED_SDK=1 ;; *) SHARED_SDK=0 ;; esac
+case "$APP" in mruby|sqlite|php) SHARED_SDK=1 ;; *) SHARED_SDK=0 ;; esac
 export CAPSTONE_APPLICATION_PROFILE=virtual
 PORTS=$CAPSTONE_REPO_ROOT/capstone/ports
 NESTED=none
@@ -100,7 +103,7 @@ report() {
   cat "$OUT/pipeline.json"
 }
 if [[ $DRY == 1 ]]; then
-  case "$APP" in memcached|perl|mruby|sqlite) RELINK=0 ;; esac
+  case "$APP" in memcached|perl|mruby|sqlite|php) RELINK=0 ;; esac
   report
   exit 0
 fi
@@ -181,6 +184,22 @@ case "$APP" in
     # musl's unix VFS. Not the freestanding ../build-sqlite-capstone.sh image.
     SQ_SRC=$(bash "$PORTS/sqlite/app/prepare-sources.sh" "$OUT/source" | tail -1)
     bash "$PORTS/sqlite/app/build-domain.sh" "$SDK" "$SQ_SRC" "$OUT/image"
+    RELINK=0
+    ;;
+  php)
+    # PHP's recipe takes its SDK from PHP_VIRTUAL_OUT/sdk, which is the one built above, and
+    # links the image itself. prepare-sources.sh is the release tarball by hash, configured,
+    # with the tree patches (ports/php/app/patches/README.md).
+    PHP_SRC=$(bash "$PORTS/php/app/prepare-sources.sh" "$OUT/source" | tail -1)
+    export PHP_SRC PHP_VIRTUAL_OUT=$OUT
+    # The protected image bakes its arm in: the generic runners (run.py, run-ports.py) set no
+    # PHP_CAP_MODE, and the seam refuses to guess one. Mode 6 is the selector's meaning -- a
+    # lifetime per object, PHP's own bounds; PHP_REALPHP_DEFAULT_MODE=7 adds exact bounds. A
+    # measurement image (run-realphp.py's) is built without a default and names its arm per run.
+    [[ $LIFETIMES != 1 ]] || export PHP_REALPHP_DEFAULT_MODE=${PHP_REALPHP_DEFAULT_MODE:-6}
+    bash "$PORTS/php/app/build-virtual.sh" realphp
+    mkdir -p "$OUT/image"
+    ln -sfn "$OUT/realphp/php-real-$PORT_VALUE.dom" "$OUT/image/php.dom"
     RELINK=0
     ;;
 esac

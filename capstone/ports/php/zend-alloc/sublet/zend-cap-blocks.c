@@ -94,8 +94,20 @@ unsigned int zend_cap_mode(void)
     if (!cap_mode_set) {
         const char *s = getenv("PHP_CAP_MODE");
         if (!s || !*s) {
+#ifdef ZEND_CAP_DEFAULT_MODE
+            /* The common application build (ports/common/application/build-virtual.sh php,
+             * CAPSTONE_VIRTUAL_LIFETIMES=1) bakes the selector's arm in, because the generic
+             * runners set no PHP_CAP_MODE. A MEASUREMENT build never defines this, so there an
+             * unset mode stays the refusal above: a run that chose its own arm means nothing.
+             * The line says the mode was defaulted, so no record can pass it off as chosen. */
+            fprintf(stderr, "ZEND_CAP_MODE_DEFAULTED %u\n", (unsigned int) ZEND_CAP_DEFAULT_MODE);
+            fflush(stderr);
+            zend_cap_set_mode((unsigned int) ZEND_CAP_DEFAULT_MODE);
+            return cap_mode;
+#else
             zend_cap_fail(ZEND_CAP_FAIL_GEOMETRY,
                           "PHP_CAP_MODE is unset: refusing to pick an arm", 0, 0);
+#endif
         }
         zend_cap_set_mode((unsigned int) strtoul(s, (char **)0, 0));
     }

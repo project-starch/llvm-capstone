@@ -517,6 +517,8 @@ case "$WHAT" in
       SUP=("$SEAM/zend-cap-blocks.c" "$SEAM/zend-cap-backing.c" "$HERE/php_virtual_lower.c")
       echo "  allocator: SEAM -- zend_alloc.c patched (8 guarded hunks), per-emalloc lifetimes"
     else
+      [ -z "${PHP_REALPHP_DEFAULT_MODE:-}" ] \
+        || { echo "  PHP_REALPHP_DEFAULT_MODE has no meaning for the stock image (no seam)" >&2; exit 2; }
       echo "  allocator: STOCK -- pristine zend_alloc.c over mallocng, the honest-gap column"
     fi
     # Only the files we deliberately replaced may be real; everything else must still BE the
@@ -572,6 +574,16 @@ case "$WHAT" in
     # children with CDERIVE/CREVOKE since the nested loan ABI was removed on 2026-10-25.
     if [ "$MODE" = seam ]; then
       CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" -I"$R/capstone/runtime/include")
+      # The common entry's protected image bakes its arm in (PHP_REALPHP_DEFAULT_MODE, see
+      # ports/common/application/build-virtual.sh): without PHP_CAP_MODE the seam then takes
+      # that mode and says so (ZEND_CAP_MODE_DEFAULTED). A measurement build leaves this unset,
+      # so an unset mode stays a refusal there and no record can pass a default off as an arm.
+      if [ -n "${PHP_REALPHP_DEFAULT_MODE:-}" ]; then
+        case "$PHP_REALPHP_DEFAULT_MODE" in 0|4|6|7) ;;
+          *) echo "  PHP_REALPHP_DEFAULT_MODE=$PHP_REALPHP_DEFAULT_MODE? (0|4|6|7)" >&2; exit 2 ;; esac
+        CF+=(-DZEND_CAP_DEFAULT_MODE="$PHP_REALPHP_DEFAULT_MODE")
+        echo "  default arm: PHP_CAP_MODE=$PHP_REALPHP_DEFAULT_MODE when the environment names none"
+      fi
     fi
     # SHRINK-STACK: its own variable, as the plan requires. The 4 MiB domain ceiling that
     # forced it off physically is gone, and it is what makes a stack-object defect (CRASH-100,

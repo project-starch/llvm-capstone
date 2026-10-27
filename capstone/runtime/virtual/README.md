@@ -335,12 +335,15 @@ bash capstone/ports/sqlite/app/prepare-sources.sh "$out/sqlite-source"
 bash capstone/ports/sqlite/app/build-domain.sh "$out/sdk" "$out/sqlite-source" "$out/sqlite"
 MRBD_ROOT="$out/mruby" MRBD_SDK="$out/sdk" MRBD_PIN=4.0.0-rc2 \
   bash capstone/ports/mruby/app/build-mruby-domain.sh
+PHP_SRC=$(bash capstone/ports/php/app/prepare-sources.sh "$out/php-source" | tail -1) \
+  PHP_VIRTUAL_OUT="$out" bash capstone/ports/php/app/build-virtual.sh realphp   # $out/realphp/php-real-stock.dom
 
 python3 capstone/runtime/virtual/run.py \
   --qemu capstone/capstone-qemu/build/qemu-system-riscv64 \
   --images /path/to/images --adapter "$out/adapter" \
   --application "$out/contract.dom" --sqlite "$out/sqlite/sqlite3.dom" \
-  --mruby "$out/mruby/src/mruby/build/capstone/bin/mruby" --record "$out/result.json"
+  --mruby "$out/mruby/src/mruby/build/capstone/bin/mruby" --record "$out/result.json" \
+  --php "$out/realphp/php-real-stock.dom"      # optional, like --perl: one sort-and-file check
 ```
 
 The runner uses one hart and
