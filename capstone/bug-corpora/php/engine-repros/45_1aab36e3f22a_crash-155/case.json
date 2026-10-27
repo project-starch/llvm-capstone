@@ -7,30 +7,18 @@
  "trigger": "trigger.php",
  "live_in_pin": true,
  "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-use-after-free at Zend/zend_builtin_functions.c:621 in is_a_impl when trigger.php runs; the corpus records the fix as php-src 1aab36e3f22a, which postdates the release, and names the defect at Zend/zend_builtin_functions.c:621 (and :619 for is_subclass_of) - deref of the argument-stack-resident `obj` after the userland-re-entrant zend_lookup_class() at :615",
- "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build crashes on it natively, so a silence on an arm is not a MISSED: the judge reads such a case out of the denominator unless an arm faults at the ASan site. ",
+ "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build crashes on it natively, so a silence on an arm is not a MISSED: under the judge's default scoring the case reads out-of-denominator on every arm; the sensitivity scoring (run-realphp.py --score-oracle-crashes) reads it by fault site instead. ",
  "arms": {
   "virtual-malloc": {
-   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
-   "verdict": "NO-READING",
-   "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:11': native PHP dies on a signal, so there is no pair to read",
-   "verdict_from": "results/2026-10-27-first-run/virtual-malloc",
-   "verdict_reason": "out-of-denominator"
+   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"
   },
   "virtual-nested-pools": {
-   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
-   "verdict": "NO-READING",
-   "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:11': native PHP dies on a signal, so there is no pair to read",
-   "verdict_from": "results/2026-10-27-first-run/virtual-nested-pools",
-   "verdict_reason": "out-of-denominator"
+   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)"
   },
   "virtual-nested-exact": {
-   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
-   "verdict": "NO-READING",
-   "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:11': native PHP dies on a signal, so there is no pair to read",
-   "verdict_from": "results/2026-10-27-first-run/virtual-nested-exact",
-   "verdict_reason": "out-of-denominator"
+   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)"
   }
  },
- "status": "built 2026-10-27 from the corpus and our native oracle; not yet run on the virtual profile from this corpus",
- "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK, so emalloc's cache or rounding hides it from any detector at free(). Collected by the corpus as history-5x-roundE-nofault-reaudit (historical-known, confidence high)."
+ "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
+ "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as history-5x-roundE-nofault-reaudit (historical-known, confidence high)."
 }

@@ -68,7 +68,11 @@ def populations(asan, stock, meta):
         blind = e["outcome"] != "OK" and stock.get(cid, {}).get("outcome") == "OK"
         if blind:
             out[cid] = "asan-blind"
-        elif meta[cid]["cwe"] == "CWE-416" and e["outcome"].startswith("ASAN:"):
+        elif meta[cid]["cwe"] == "CWE-416" and stock.get(cid, {}).get("outcome", "").startswith("ASAN:"):
+            # Visible means ASan REPORTS it with the allocator as shipped -- the stockalloc run,
+            # not the patched one. A case the as-shipped build ends with PHP's own fatal error
+            # (EXIT:255, no report) is visible to nobody and belongs to neither population; the
+            # first build of this corpus tested the patched run here and admitted two such.
             out[cid] = "temporal-asan-visible"
     return out
 
@@ -122,10 +126,10 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
                     "results-ours-pristine-default.json": oracle_shas["pristine"]},
     }
     why = ("ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with "
-           "zend_alloc.c as shipped the run reads OK, so emalloc's cache or rounding hides it from "
-           "any detector at free()" if pop == "asan-blind" else
-           "a CWE-416 that ASan reports with zend_alloc.c as shipped: efree reached free(), so a "
-           "detector at the libc boundary sees it; the control population")
+           "zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which "
+           "mechanism hides it, and which arm sees it, is what the arms record" if pop == "asan-blind" else
+           "a CWE-416 that ASan reports with zend_alloc.c as shipped (the stockalloc run): efree "
+           "reached free(), so a detector at the libc boundary sees it; the control population")
     case = {
         "case": number,
         "upstream_fix": fix,
@@ -142,11 +146,12 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
                      "ext/standard only, the port's 145 translation units) rather than reduced to a C "
                      "model. What it does NOT establish is which arm ought to catch it. "
                      + ("The pristine build crashes on it natively, so a silence on an arm is not a MISSED: "
-                        "the judge reads such a case out of the denominator unless an arm faults at the ASan site. "
+                        "under the judge's default scoring the case reads out-of-denominator on every arm; the "
+                        "sensitivity scoring (run-realphp.py --score-oracle-crashes) reads it by fault site instead. "
                         if crashed else "The pristine build completes it natively, so an arm that completes it saw nothing. ")
                      + (f"Needs: {m['requires']}. " if m["requires"] else "")),
         "arms": {arm: {"oracle": text} for arm, text in ARMS.items()},
-        "status": "built 2026-10-27 from the corpus and our native oracle; not yet run on the virtual profile from this corpus",
+        "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
         "note": f"population: {pop} -- {why}. Collected by the corpus as {m['how_collected']['origin_stream']} ({m['how_collected']['history_status']}, confidence {m['how_collected']['confidence']}).",
     }
     disagreements = []
@@ -190,7 +195,38 @@ Hence **{pop}**: {why}.
     return name, oracle, case, prov
 
 
+def self_test():
+    """The population rule and the frame rule on synthetic entries; the derivations the offline
+    suite of run-realphp.py no longer exercises since its fixture became case directories."""
+    meta = {k: {"cwe": v} for k, v in {"A": "CWE-416", "B": "CWE-416", "C": "CWE-416", "D": "CWE-125", "E": "CWE-416", "F": "CWE-416"}.items()}
+    asan = {"A": {"outcome": "ASAN:heap-use-after-free"}, "B": {"outcome": "ASAN:heap-use-after-free"},
+            "C": {"outcome": "ASAN:heap-use-after-free"}, "D": {"outcome": "ASAN:heap-buffer-overflow"},
+            "E": {"outcome": "OK"}, "F": {"outcome": "ASAN:heap-use-after-free"}}
+    stock = {"A": {"outcome": "OK"},                              # blind: patched reports, as shipped OK
+             "B": {"outcome": "ASAN:heap-use-after-free"},        # visible: as shipped reports
+             "C": {"outcome": "EXIT:255"},                        # PHP's own fatal error as shipped: neither
+             "D": {"outcome": "OK"},                              # blind, spatial
+             "E": {"outcome": "OK"},                              # nothing anywhere: neither
+             "F": {"outcome": "SIGNAL:11"}}                       # crashes as shipped, no report: neither
+    got = populations(asan, stock, meta)
+    want = {"A": "asan-blind", "B": "temporal-asan-visible", "D": "asan-blind"}
+    checks = [("the population rule", got, want)]
+    frame = ASAN_FRAME.search("    #0 0x55 in user_tick_function_call /x/y/ext/standard/basic_functions.c:2135\n")
+    checks.append(("the frame rule takes the first PHP frame", (frame.group(1), frame.group(2), frame.group(3)),
+                   ("user_tick_function_call", "ext/standard/basic_functions.c", "2135")))
+    checks.append(("a frame outside PHP's tree is not a site", ASAN_FRAME.search("    #0 0x55 in free /lib/libasan.so\n"), None))
+    checks.append(("the fix id is the first 12 hex digits", fix_id("4f161fe28997f5d1f818fc6ae95a8131066cf1a2"), "4f161fe28997"))
+    checks.append(("an 11-digit fix id stays as given", fix_id("b599e434add"), "b599e434add"))
+    bad = [(n, g, w) for n, g, w in checks if g != w]
+    for n, g, w in bad:
+        print(f"  FAIL {n}: got {g!r}, want {w!r}")
+    print(f"self-test: {len(checks) - len(bad)} of {len(checks)} pass")
+    return 0 if not bad else 1
+
+
 def main():
+    if sys.argv[1:] == ["--self-test"]:
+        return self_test()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--corpus", type=Path, required=True, help="the unpacked php-5.0.0-bug-corpus directory")
     ap.add_argument("--corpus-zip", type=Path, required=True, help="the zip it was unpacked from, for its sha256")

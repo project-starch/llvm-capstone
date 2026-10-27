@@ -1,0 +1,24 @@
+{
+ "case": 55,
+ "upstream_fix": "8db238b075e7",
+ "title": "CRASH-064: ze1 object self assign decref frees then clones freed zval (use-after-free)",
+ "consumer": "Zend/zend_execute.c:584",
+ "class": "temporal",
+ "trigger": "trigger.php",
+ "live_in_pin": true,
+ "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:SEGV at Zend/zend_object_handlers.c:898 in zend_std_object_get_class when trigger.php runs; the corpus records the fix as php-src 8db238b075e7, which postdates the release, and names the defect at Zend/zend_execute.c:584",
+ "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build crashes on it natively, so a silence on an arm is not a MISSED: under the judge's default scoring the case reads out-of-denominator on every arm; the sensitivity scoring (run-realphp.py --score-oracle-crashes) reads it by fault site instead. ",
+ "arms": {
+  "virtual-malloc": {
+   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"
+  },
+  "virtual-nested-pools": {
+   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)"
+  },
+  "virtual-nested-exact": {
+   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)"
+  }
+ },
+ "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
+ "note": "population: temporal-asan-visible -- a CWE-416 that ASan reports with zend_alloc.c as shipped (the stockalloc run): efree reached free(), so a detector at the libc boundary sees it; the control population. Collected by the corpus as history-5.x (historical-known, confidence high)."
+}

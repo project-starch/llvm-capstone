@@ -40,7 +40,7 @@ recipes: `asan` (its two `zend_alloc.c` detector patches, `-fsanitize=address`),
 `stockalloc` (the same without those two patches: PHP's allocator as shipped under ASan), and
 the plain build. `oracle.json` carries the result: ASan `ASAN:heap-use-after-free` at `Zend/zend_execute.c:290` in
 `make_real_object`, stockalloc `OK`, pristine `OK` (rc 0).
-Hence **asan-blind**: ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK, so emalloc's cache or rounding hides it from any detector at free().
+Hence **asan-blind**: ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record.
 
 **Where our run and the corpus's record disagree:** nowhere -- ASan class, pristine outcome and the crash flag all agree.
 

@@ -40,7 +40,7 @@ recipes: `asan` (its two `zend_alloc.c` detector patches, `-fsanitize=address`),
 `stockalloc` (the same without those two patches: PHP's allocator as shipped under ASan), and
 the plain build. `oracle.json` carries the result: ASan `ASAN:SEGV` at `ext/standard/array.c:1894` in
 `_phpi_pop`, stockalloc `OK`, pristine `SIGNAL:11` (rc -11).
-Hence **asan-blind**: ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK, so emalloc's cache or rounding hides it from any detector at free().
+Hence **asan-blind**: ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record.
 
 **Where our run and the corpus's record disagree:** population: the collaborator's instrument (gcc 13 ASan, 2026-10-26) placed it in 'neither', ours (gcc 15 ASan) in 'asan-blind' -- the stockalloc run decides, and that run's detector differs.
 

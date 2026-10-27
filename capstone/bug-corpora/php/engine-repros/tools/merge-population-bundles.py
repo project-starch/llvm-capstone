@@ -48,7 +48,7 @@ def main():
             if inputs is None:
                 inputs = inp
             else:
-                for key in ("platform", "configuration", "arm", "corpus", "build", "contract"):
+                for key in ("platform", "configuration", "arm", "corpus", "build", "contract", "pre_registration"):
                     if inputs.get(key) != inp.get(key):
                         sys.exit(f"{arm}: the two populations' bundles differ in {key}")
         tally = {}

@@ -214,9 +214,9 @@ def population(corpus, kind="asan-blind"):
             "pristine_stdout": o["pristine"].get("stdout", ""), "pristine_outcome": o["pristine"]["outcome"],
             "pristine_rc": o["pristine"].get("rc", 0),
         }
-        # TWO INDEPENDENT SOURCES FOR THE SAME FACT, MADE TO AGREE. oracle.json carries the crash
-        # flag AND the recorded pristine run; if they ever disagree the premise behind
-        # `out-of-denominator` is unsound, and that must stop the measurement rather than be
+        # A CONSISTENCY CHECK, not two independent sources: oracle.json's crash flag is derived
+        # from the same pristine run it records, so a disagreement means the case file was
+        # edited or generated wrongly, and that must stop the measurement rather than be
         # silently resolved in our favour.
         crashed = cases[d.name]["pristine_outcome"].startswith("SIGNAL:")
         if bool(o.get("crashes_on_pristine_build")) != crashed:
@@ -261,14 +261,16 @@ def strip_seam_noise(text):
     return "\n".join(keep)
 
 
-def normalise_paths(text, case):
-    """Replace any absolute path naming this case's file with its basename.
+def normalise_paths(text, case, cid=None):
+    """Replace any path naming this case's file -- by its directory key (the guest stages it as
+    /mnt/vm/<key>.php) or by its corpus id (native PHP ran corpus/CRASH-nnn.php) -- with one
+    token, so a path-only difference is not read as a divergence.
 
     The ONLY normalisation applied, and only for the reported comparison -- never to decide a
-    verdict. PHP prints the script's path in a warning, and the host path and the guest's
-    /mnt/vm path are both correct.
+    verdict. PHP prints the script's path in a warning, and both paths are correct.
     """
-    return re.sub(r"\S*" + re.escape(case) + r"\.php", f"{case}.php", text or "")
+    names = [re.escape(case)] + ([re.escape(cid)] if cid else [])
+    return re.sub(r"\S*(?:" + "|".join(names) + r")\.php", f"{cid or case}.php", text or "")
 
 
 def same_as_oracle(observed, expected):
@@ -494,8 +496,8 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # the script's absolute path inside its own warnings and fatal errors, and the corpus's host
     # path and the guest's /mnt/vm path are both correct. Comparing them literally reports a
     # divergence on every such case -- "2 lines vs 2", differing only in the path.
-    if said.strip() and not same_as_oracle(normalise_paths(said, case),
-                                           normalise_paths(spec["pristine_stdout"], case)):
+    if said.strip() and not same_as_oracle(normalise_paths(said, case, spec.get("id")),
+                                           normalise_paths(spec["pristine_stdout"], case, spec.get("id"))):
         note(obs, f"completed but its output differs from the corpus's pristine record "
                   f"({len(said.splitlines())} lines vs "
                   f"{len(spec['pristine_stdout'].splitlines())})")
@@ -794,8 +796,8 @@ def main():
         if not oracle_ok:
             print(f"    {case}: the corpus's pristine record is "
                   f"{spec['pristine_outcome']!r}, not OK -- no premise for a pair")
-        elif ran and not same_as_oracle(normalise_paths(said, case),
-                                        normalise_paths(spec["pristine_stdout"], case)):
+        elif ran and not same_as_oracle(normalise_paths(said, case, spec.get("id")),
+                                        normalise_paths(spec["pristine_stdout"], case, spec.get("id"))):
             output_diverged[case] = (said, spec["pristine_stdout"])
             print(f"    {case}: ran, but its output differs from the oracle's "
                   f"({len(said.splitlines())} lines vs "
