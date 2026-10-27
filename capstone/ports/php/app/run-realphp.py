@@ -483,7 +483,13 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # 2026-10-26 corpus showed to be wider than its evidence: zend_execute.c is on every
     # script's path, and a fault anywhere in it read as the case's catch. Now the function
     # has to match, and the evidence names which frame it is.
-    qualified = False
+    # Two facts are read off a fault, and they license different things. SITE: the fault is
+    # in the declared function, in its file -- the trigger ran, whatever the cause, so this
+    # observation is `reached`. QUALIFIED: site plus a protective cause (and not the seam's
+    # own source, not the allocator) -- the mechanism caught the defect, so the fault is
+    # attributed. A cause-24 fault at the site (CRASH-064) is reached and unattributed, which
+    # is what happened: the program got to its defect and dereferenced its own bad value.
+    at_site = False
     if fault is not None:
         obs.fault = fault
         func, path, line = symbolize(llvm_bin, image, fault, text)
@@ -491,6 +497,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         site = next((f for f in spec.get("asan_stack", []) if f.get("func") == spec["asan_func"]), None)
         site_file = (site or {}).get("file") or spec["asan_file"]
         leaf = (spec.get("asan_stack") or [{}])[0]
+        at_site = bool(func) and func in spec["fault_sites"] and path.endswith(site_file)
         if any(own in path for own in SEAM_OWN):
             obs.attribution_evidence = (f"the fault is in the seam's own source ({path}:{line}) "
                                         f"-- a port artefact, not the program")
@@ -512,7 +519,6 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                 f"out-of-bounds (28) access"
                 + (" -- and it did land in the declared function" if func in spec["fault_sites"] else ""))
         elif func in spec["fault_sites"] and path.endswith(site_file):
-            qualified = True
             obs.attribution = "function"
             obs.attribution_evidence = (
                 f"{func} at {site_file}:{line} is the function this case declares (fault_sites, "
@@ -560,8 +566,8 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # trigger running. It licenses THIS observation only. Until 2026-10-27 a site hit on ANY
     # arm licensed reach on every arm of the case, which let a silence elsewhere read as
     # MISSED on the strength of another configuration's fault; that transfer is gone.
-    obs.reached = qualified or (bool(stock_reached) and bool(precondition_met))
-    if qualified:
+    obs.reached = at_site or (bool(stock_reached) and bool(precondition_met))
+    if at_site:
         obs.reach_evidence = (f"this run faulted in {spec['fault_sites'][0]}, the case's own "
                               f"declared site, which cannot be reached without the trigger "
                               f"having run")

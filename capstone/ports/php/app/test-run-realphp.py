@@ -232,6 +232,12 @@ def observation_cases():
     check("a cause-24 tag fault is unattributed even at the declared site", reason, "unattributed")
     check("and the evidence says it did land there", "did land in the declared function" in ev, True)
     check("the fault carries its symbol into the bundle", obs.fault.symbol, SITE)
+    # ...and with no completing control it is still `unattributed`, not `setup-fault`: the
+    # fault IS at the declared site, so the trigger ran; it is the cause that disqualifies it.
+    obs = R.observe("CRASH-064", SPEC, "php-real-exact", SHA, FAULT24 % SHA, 139,
+                    controls(), False, "/x", "/y")
+    check("a cause-24 fault at the site reaches but does not attribute",
+          verdicts.judge(obs, exact)[1], "unattributed")
     # The libc leaf: a fault in strlen, the routine ASan's frame #0 names for CRASH-068, with
     # no line table. Consistent with the defect, and not attributable without the caller.
     R.symbolize = fake_symbolize("", 0, func="strlen")
