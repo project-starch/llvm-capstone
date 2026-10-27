@@ -264,7 +264,7 @@ fix is in silicon, from "never dereference" to "never leave the window"). **Refi
 **R-60's predicate in closed form (recorded 2026-10-21; capstone-ariane 1b6f9c446, proof r60-window-equality.py at 0d842cec9, reproduced independently by the semantics owner).** The first implementation computed the ruling literally, decompress_bounds(compress_bounds(fat), c_new) != fat, twice per pack, and did not synthesise (trial B: technology mapping at 94-96 GB against 5.4 GB). The ruling is unchanged; its implementation is: with E read from the source's stored word (E = iE ? E : 0) and start the decoded base, the cursors that decode to the same bounds form ONE window [w_lo, w_lo + 2^(E+14)) with w_lo = (start & ~(2^(E+11) - 1)) - 2^(E+11) mod 2^64, so the tag clears iff E + 14 < 64 and (c_new - w_lo) mod 2^64 >= 2^(E+14). It equals the round-trip form on 2.26 million cases (random decoded regions over E 0..49 at both window edges and one byte past each, inexact sources, B3 = 0, starts within a span of 2^64, E + 14 >= 64), and re-encoding a decoded fat changes neither E nor iE (0 of 149,238). One instance suffices: a register never holds a cursor outside the window of its own decode (the register file holds the compressed word and every read decodes it at the register's own cursor), so the rs1 slot can fire only when rd == rs1, where it carries the result; the round-trip form stays in the RTL as a simulation-only oracle that stops the run on any disagreement or on an out-of-window unmoved rs1 slot, and it stayed silent on every arm.
 
 **Capability addresses: `x-capstone-addr` (proposed 2026-10-25; QEMU at capstone-qemu
-`isa/v39-address-policy` 49a225e408, not in the RTL and not yet pinned here).** A TAGGED capability's cursor must be an address the machine's address
+`isa/v39-address-policy` 49a225e408, capstone-qemu #31, the superproject's pin; not in the RTL).** A TAGGED capability's cursor must be an address the machine's address
 policy allows: `sv39` (the default: bits 63:39 equal bit 38), `sv48`, `sv57` (the same at bits 47 and 56), `phys56`
 (bits 63:56 clear) or `off`. Only the cursor is restricted; bounds may end at, start beyond or span refused addresses,
 as the reset root does. The 128-bit encoding is unchanged: this is the first step toward giving cursor[63:39] to a wider
@@ -287,13 +287,13 @@ or reply at a refused pc (tval 0, before the context or the reply slot changes).
 refused takes no H-interrupt; it stays pending in cis. Until the RTL enforces the rule, QEMU's default predicts a check
 silicon does not make; it differs only where a tagged cursor, a sealed capability's frame base, or the target of a
 jump, return or fetch lies outside the allowed range. `x-capstone-addr=off` keeps
-the pin's behaviour except for the fixes in the same series, which hold under every policy: CBNZ looks its target up
-on every execution, RETURN to the handler with an untagged cepc faults 29 (the pin aborts on an assertion), CAPENTER
+the behaviour of b290f5656600 except for the fixes in the same series, which hold under every policy: CBNZ looks its target up
+on every execution, RETURN to the handler with an untagged cepc faults 29 (b290f5656600 aborts on an assertion), CAPENTER
 always flushes the TLB and ends its translation block, a refused debug mint leaves rd unchanged, a semihosting
 result in a0 is untagged, and CALL, RETURN and the H-interrupt check look at the frame's pc slot before the exchange
 reads it, so a frame must be stable RAM (an untagged slot is read from memory one extra time, which an MMIO frame
 would see). Evidence (p12): capstone-qemu `tests/capstone-addr-policy` 89/89, with negative controls
-(the rule off, and the unchanged pin, which aborts on the RETURN and CALL cases; 2026-10-25), and on the series above
+(the rule off, and the unchanged b290f5656600, which aborts on the RETURN and CALL cases; 2026-10-25), and on the series above
 (2026-10-26) every commit builds, the suite passes 89/89 with each case's verdict lines identical to the first
 version, and the Tier 0 suites keep their recorded counts. Known untested paths are listed in that suite's README.
 
@@ -414,11 +414,13 @@ suites (`virtual-capstone-m1`, `movc-untagged-source`, `trusted-linux-u-access`,
 capabilities into registers from S; it is a test scaffold with no silicon equivalent, no production
 kit sets it, and their passes say nothing about trusted S. The follow-up that retires the property
 is rewriting that bootstrap onto the `CSRUNV` route. The reference QEMU for the virtual profile is
-capstone-qemu `virtual-capstone-v7` b290f5656600 (four commits on d35af47b163c: descriptor v7 and the
+capstone-qemu 49a225e408 (`isa/v39-address-policy`, capstone-qemu #31): `x-capstone-addr` ("Capability
+addresses" above) on `virtual-capstone-v7` b290f5656600 (four commits on d35af47b163c: descriptor v7 and the
 scalar-S gate at f2f15f8fc70c; strict DELIN and `x-capstone-supervisor-slots`, default 1 as on
 silicon, clamped 1..32, at 852c5bc76774; `scapctl` and `urevavail` illegal by default under
 `x-capstone-test-csrs` at 3b8040d5ff6e; the escape writing the frame's register slots and the resume
-loading them, Q-30, at b290f5656600). Tier 0 on it at the suites' own settings: virtual-capstone-m1
+loading them, Q-30, at b290f5656600). Tier 0 on it at the suites' own settings, the same on b290f5656600 and on
+49a225e408: virtual-capstone-m1
 74/74, movc 67/67, sublet-lifetimes 119/119, runtime run.sh 71/71 (69 + frame_slots ×2), index8 PASS,
 fp 60/60 (three isolation cases set 32 slots explicitly), exact-bounds 4/4, trusted-linux-u-access
 71/71 (m1, movc and trusted-linux set `x-capstone-test-s-ldc` and `x-capstone-test-csrs`: their
@@ -529,21 +531,22 @@ a 30-bit node id with no address-space bits. On silicon the id is {generation, i
 width is the bitstream's: 16 bits on vp2 and the batch bitstream ({generation[29:16], index[15:0]}, the
 generation ruling of 2026-10-20 above), 18 bits on bitstream 2 ({generation[29:18], index[17:0]}, in
 both namespaces), and the module's `CAPSTONE_VM_INDEX_BITS` build define must match it. The superproject's
-QEMU pin (b290f5656600) carries no generation: its virtual ids are bare indices, recycled after a tag
+QEMU pin (49a225e408, on b290f5656600) carries no generation: its virtual ids are bare indices, recycled after a tag
 sweep; bitstream-2 predictions use the 18-bit build on capstone-qemu `virtual/flat-index-18`.
 The RTL has the same field split (capstone-ariane since d34c26002), but different raw type codes
 (RTL LINEAR 1, NONLIN 2; QEMU LIN 0, NONLIN 1), so the two encodings are not binary-interchangeable;
-the RTL also renormalises bounds where the pinned QEMU (b290f5656600) does not (Q-16).
+the RTL also renormalises bounds where the pinned QEMU (49a225e408) does not (Q-16).
 Moreover, some QEMU data paths retain uncompressed bounds beside the tag.
 Exact minting alone does not settle general SHRINK/SPLIT/store/load
 representability. [Encoding conformance remains open](guarantees.md).
 
 Implementation at the original interface revision: [decoder][decode], [CSRs][csr], [mint/retire][table],
 [context and collection][supervisor], [instruction policy and translation][translate]. The
-superproject's QEMU pin is capstone-qemu `virtual-capstone-v7` [b290f5656600][qemu-ref].
+superproject's QEMU pin is capstone-qemu [49a225e408][qemu-ref] (`isa/v39-address-policy`, on `virtual-capstone-v7`
+b290f5656600).
 
 [qemu]: https://github.com/project-starch/capstone-qemu/tree/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9
-[qemu-ref]: https://github.com/project-starch/capstone-qemu/tree/b290f5656600
+[qemu-ref]: https://github.com/project-starch/capstone-qemu/tree/49a225e408
 [spec-patch]: https://github.com/project-starch/llvm-capstone/blob/e0313149630450c1a906cc3506b317add64266e0/capstone/docs/plans/virtual-capstone-isa.patch
 [decode]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/insn32.decode
 [csr]: https://github.com/project-starch/capstone-qemu/blob/9bf9c1f28653632c2ce93a10d4bdd69eb26e04b9/target/riscv/csr.c
