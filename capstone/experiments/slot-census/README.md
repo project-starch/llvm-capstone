@@ -32,7 +32,9 @@ programs' own allocation behaviour is measured, not a port's.
                  run-mimalloc-bench.sh  mimalloc-bench (allocator stress tests)
     analysis     summarize.py       one pass: per-process and per-cell peaks, verdicts; "no data" is an error
                  pack.py            packs a pass into results/<pass>/ (five files) with host paths removed
-                 report.py          every pass in results/ -> REPORT.md, figures/ (slots, rates, peak-rate), captions
+                 report.py          every pass in results/ -> REPORT.md, and figures.py's figures
+                 suites.py          what a cell is: suite, program, dataset, class; the figures' suite columns
+                 figures.py         figures/ (slots, rates, peak-rate) and their caption drafts
     data         results/<pass>/    one directory per pass, result lines only
 
 ## The suites
@@ -158,7 +160,7 @@ axes are log2 from 2^0 with one power of two as long on each, and y ends at 2^25
 split into 25 slot and 30 generation bits. The figure draws no model: with i slot bits and g generation bits a slot
 retires after 2^g uses, so a process with peak L can run out of slots only after (2^i - L) x 2^g allocations, and the
 caption turns the closest run's margin into instructions and into years at 10^9, 10^10 and 10^11 instructions per
-second. The middle rate (`IPS` in `report.py`) is above every measured RISC-V core we found (2026-10): CVA6 runs at up
+second (`figures.py`). The middle rate is above every measured RISC-V core we found (2026-10): CVA6 runs at up
 to 1.7 GHz in 22 nm with an IPC of 0.82 to 0.99 (arXiv 1904.05442), the SG2044 at 2.6 GHz (arXiv 2508.13840), SiFive's
 P550 at 1.4 GHz with an IPC above 2 on its best SPEC programs (Chips and Cheese). The years scale as 1/rate: a
 process twice as fast, or a multi-threaded process whose threads share its ids on several cores, halves them. For

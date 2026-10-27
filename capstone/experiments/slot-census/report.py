@@ -2,73 +2,36 @@
 """Aggregate every pass in results/ into one report: REPORT.md and, when matplotlib is available, figures/.
 
 usage: report.py [RESULTS_DIR] [OUT_DIR]   (defaults: results/ and this directory)
-Each valid cell becomes one row: suite, program, dataset, the cell's peak (the maximum over its measured processes)
-and which slot counts it fits. Cells are classed by what the allocator below would see:
-  application  every heap object is a malloc (SPEC, Redis on libc malloc, SQLite with lookaside off, CPython with
-               PYTHONMALLOC=malloc)
-  hidden       the program's own allocator carves objects from blocks it mallocs (memcached's slabs,
-               PostgreSQL's memory contexts, RocksDB's memtable arena, nginx's and Apache's pools, SpiderMonkey's
-               garbage-collected heap in Firefox, SQLite's lookaside, CPython's pymalloc):
-               the census counts the blocks, so the row is the count the allocator below sees with the program
-               unmodified, not the number of objects
-  stress       allocator stress tests (mimalloc-bench), reported apart
-A cell that is not valid, or has no census line, is listed under "Excluded cells" with its reason, never as a zero.
+A census pass gives each valid cell one row: suite, program, dataset and class (suites.py), the cell's peak (the
+maximum over its measured processes) and which slot counts it fits. An instruction pass (SLOTCENSUS_MEASURE=
+instructions) gives each valid cell its allocations per 1,000 instructions, the rates figures.py draws. A cell that
+is not valid, or has no census line, is listed under "Excluded cells" with its reason, never as a zero.
 The slot counts are 2^16, 2^20 and 2^24; "half" is a cell at or below half of a count."""
 import os
-import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from figures import write_figures  # noqa: E402
+from suites import classify, columns, dataset_order, pairs  # noqa: E402
 from summarize import cells, processes  # noqa: E402
 
 SLOTS = (16, 20, 24)
 
 
-def classify(pass_name, provenance, cell):
-    """(suite, program, dataset, class) for one cell"""
-    if m := re.match(r"sqlite-(lookaside|nolookaside)-(\d+)$", cell):
-        on = m[1] == "lookaside"
-        return ("SQLite 3.22.0 speedtest1", "speedtest1, lookaside " + ("on" if on else "off"), f"size {m[2]}",
-                "hidden" if on else "application")
-    if m := re.match(r"ycsb-(redis|memcached)-(\d+)$", cell):
-        if m[1] == "redis":
-            return "Redis 7.2.16 (MALLOC=libc), YCSB", "redis-server", f"{int(m[2]):,} records", "application"
-        return "memcached 1.6.45, YCSB", "memcached", f"{int(m[2]):,} records", "hidden"
-    if cell in ("nginx", "httpd"):
-        return ({"nginx": "nginx 1.20.2, wrk", "httpd": "Apache httpd 2.4.58, ab"}[cell], cell, "published setup",
-                "hidden")
-    if m := re.match(r"speedometer-([\d.]+)$", cell):
-        return f"Firefox Nightly, Speedometer {m[1]}", "firefox", f"Speedometer {m[1]}", "hidden"
-    if m := re.match(r"rocksdb-(\d+)$", cell):
-        return "RocksDB db_bench", "db_bench", f"{int(m[1]):,} keys", "hidden"
-    if m := re.match(r"parsec-(\w+)-(\w+)$", cell):
-        return "PARSEC 3.0", m[2], m[1], "application"
-    if m := re.match(r"memcached-(\d+)(?:-r(\d+))?$", cell):
-        mix = int(m[2] or 20000)
-        return "memcached 1.6.45, memtier", "memcached", f"{int(m[1]):,} items, mix {mix:,}/client", "hidden"
-    if m := re.match(r"postgres-(\d+)$", cell):
-        return "PostgreSQL 17.6 pgbench", "postgres", f"scale {m[1]}", "hidden"
-    if m := re.match(r"py-(pymalloc|malloc)-(.+)$", cell):
-        return ("pyperformance (CPython 3.13.7)", m[2], f"PYTHONMALLOC={m[1]}",
-                "hidden" if m[1] == "pymalloc" else "application")
-    if m := re.match(r"octane-(.+)$", cell):
-        return "Octane on QuickJS 2026-06-04", m[1], "Octane", "application"
-    if m := re.match(r"mb-(.+)$", cell):
-        return "mimalloc-bench", m[1], "bench.sh arguments", "stress"
-    if re.match(r"\d{3}\.\w+_r$", cell):
-        size = re.search(r"^size (\w+)$", provenance, re.M)
-        return "SPEC CPU2017 rate", cell, size[1] if size else "?", "application"
-    return "unclassified", cell, pass_name, "unclassified"
-
-
-def fits(peak):
-    return {i: peak <= 2 ** i for i in SLOTS} | {f"half{i}": peak <= 2 ** (i - 1) for i in SLOTS}
+def passes(results):
+    """(name, directory, provenance, instruction pass?) for every pass, by name"""
+    for name in sorted(os.listdir(results)):
+        d = os.path.join(results, name)
+        if not os.path.isdir(d):
+            continue
+        path = os.path.join(d, "provenance.txt")
+        provenance = open(path).read() if os.path.exists(path) else ""
+        yield name, d, provenance, "measure instructions" in provenance
 
 
 def note(d, cell):
     """the runner's own note on a cell (input-missing, exit codes), from cells.tsv's fourth column"""
-    path = os.path.join(d, "cells.tsv")
-    for line in open(path) if os.path.exists(path) else []:
+    for line in open(os.path.join(d, "cells.tsv")):
         f = line.rstrip("\n").split("\t")
         if f[0] == cell and len(f) > 3:
             return f[3]
@@ -76,67 +39,55 @@ def note(d, cell):
 
 
 def collect(results):
+    """the census rows of every valid cell, and (pass, cell, reason, note) for every other one"""
     rows, excluded = [], []
-    for p in sorted(os.listdir(results)):
-        d = os.path.join(results, p)
-        if not os.path.isdir(d):
-            continue
-        prov_path = os.path.join(d, "provenance.txt")
-        prov = open(prov_path).read() if os.path.exists(prov_path) else ""
-        if "measure instructions" in prov:   # slotins passes are figure 2's denominators, not census passes
+    for name, d, provenance, instructions in passes(results):
+        if instructions:
             continue
         for cell, keep, verdict in cells(d):
             procs = processes(d, cell, keep)
-            suite, program, dataset, klass = classify(p, prov, cell)
             if verdict != "valid" or not procs:
-                excluded.append((p, cell, verdict if verdict != "valid" else "no census line", note(d, cell)))
+                excluded.append((name, cell, verdict if verdict != "valid" else "no census line", note(d, cell)))
                 continue
-            top = max(procs, key=lambda r: r["peak_live"])
-            rows.append({"pass": p, "cell": cell, "suite": suite, "program": program, "dataset": dataset,
-                         "class": klass, "peak": top["peak_live"], "processes": len(procs),
+            suite, program, dataset, klass = classify(name, provenance, cell)
+            rows.append({"pass": name, "cell": cell, "suite": suite, "program": program, "dataset": dataset,
+                         "class": klass, "peak": max(r["peak_live"] for r in procs), "processes": len(procs),
                          "bytes": max(r["peak_live_bytes"] for r in procs)})
     return rows, excluded
 
 
-def dataset_order(dataset):
-    """test < train < ref, else the number in the label"""
-    if dataset in ("test", "train", "ref"):
-        return ("test", "train", "ref").index(dataset), ""
-    m = re.search(r"[\d,]+", dataset)
-    return int(m[0].replace(",", "")) if m else 0, dataset
+def collect_rates(results):
+    """per valid cell of an instruction pass, allocations per 1,000 instructions over its measured processes
+    (allocations and instructions from the same run, slotins.c)"""
+    rows = []
+    for name, d, provenance, instructions in passes(results):
+        if not instructions:
+            continue
+        for cell, keep, verdict in cells(d):
+            procs = processes(d, cell, keep)
+            insns = sum(r["instructions"] for r in procs)
+            if verdict != "valid" or insns == 0:
+                continue
+            suite, program, dataset, klass = classify(name, provenance, cell)
+            allocs = sum(r["allocs"] for r in procs)
+            rows.append({"pass": name, "cell": cell, "suite": suite, "program": program, "dataset": dataset,
+                         "class": klass, "rate": 1000 * allocs / insns, "allocs": allocs, "instructions": insns})
+    return rows
+
+
+def fits(peak):
+    return {i: peak <= 2 ** i for i in SLOTS}
 
 
 def mark(ok):
     return "yes" if ok else "**no**"
 
 
-def collect_rates(results):
-    """figure 2's rows: per cell of an instruction pass, allocations per 1,000 instructions over its measured
-    processes (allocations and instructions from the same run, slotins.c)"""
-    rows = []
-    for p in sorted(os.listdir(results)):
-        d = os.path.join(results, p)
-        prov_path = os.path.join(d, "provenance.txt")
-        prov = open(prov_path).read() if os.path.exists(prov_path) else ""
-        if not os.path.isdir(d) or "measure instructions" not in prov:
-            continue
-        for cell, keep, verdict in cells(d):
-            procs = processes(d, cell, keep)
-            insns = sum(r["instructions"] for r in procs)
-            if verdict != "valid" or not procs or insns == 0:
-                continue
-            suite, program, dataset, klass = classify(p, prov, cell)
-            allocs = sum(r["allocs"] for r in procs)
-            rows.append({"pass": p, "cell": cell, "suite": suite, "program": program, "dataset": dataset,
-                         "class": klass, "peak": 1000 * allocs / insns, "allocs": allocs, "instructions": insns})
-    return rows
-
-
-def write_report(rows, excluded, out, pairs=()):
+def write_report(rows, excluded, both, out):
     lines = ["# Slot census report", "",
              "Generated by `report.py` from `results/`; every number is a cell's peak of simultaneously live heap "
              "objects in one process (the maximum over the cell's measured processes). Classes are defined in "
-             "`report.py`: *application* cells count every object, *hidden* cells count the blocks a program's own "
+             "`suites.py`: *application* cells count every object, *hidden* cells count the blocks a program's own "
              "allocator mallocs, *stress* cells are allocator stress tests.", ""]
     lines += ["## Across suites", "",
               "| class | cells | max peak | above 2^16 | above 2^20 | above 2^24 | above half of 2^24 |",
@@ -163,360 +114,21 @@ def write_report(rows, excluded, out, pairs=()):
             f = fits(r["peak"])
             lines.append(f"| {r['program']} | {r['dataset']} | {r['class']} | {r['peak']:,} | {r['bytes']:,} | "
                          f"{mark(f[16])} | {mark(f[20])} | {mark(f[24])} | {r['pass']} |")
-    if pairs:   # the peak-rate figure's points, as a table (its marks carry no value labels)
+    if both:   # the peak-rate figure's points, as a table (its marks carry no value labels)
         lines += ["", "## Peak against allocation rate", "",
                   "Every cell with a census peak and an instruction pass, as drawn in `figures/peak-rate.pdf`.", "",
                   "| suite | program | dataset | peak live objects | allocations per 1,000 instructions |",
                   "|---|---|---|---:|---:|"]
-        lines += [f"| {p[0]} | {p[1]} | {p[2]} | {p[3]:,} | {p[4]:.3g} |"
-                  for p in sorted(pairs, key=lambda p: (p[0], p[1], dataset_order(p[2])))]
+        lines += [f"| {p.suite} | {p.program} | {p.dataset} | {p.peak:,} | {p.rate:.3g} |"
+                  for p in sorted(both, key=lambda p: (p.suite, p.program, dataset_order(p.dataset)))]
     lines += ["", "## Excluded cells", ""]
     valid = {(r["cell"], r["pass"]) for r in rows}
-    for p, c, why, extra in excluded:
-        again = sorted(q for cc, q in valid if cc == c)
-        lines.append(f"- {p} {c}: {why}" + (f" ({extra})" if extra else "")
+    for name, cell, why, extra in excluded:
+        again = sorted(q for c, q in valid if c == cell)
+        lines.append(f"- {name} {cell}: {why}" + (f" ({extra})" if extra else "")
                      + (f", valid in {', '.join(again)}" if again else ""))
     lines += [] if excluded else ["- none"]
     open(os.path.join(out, "REPORT.md"), "w").write("\n".join(lines) + "\n")
-
-
-# The figure: one message, one panel. Every benchmark program's peak lies below 2^24 slots and a handful lie above
-# 2^20. Suites are columns: programs are dots, scripts on one interpreter or data set sizes of one program are ticks
-# with a diamond at the maximum. Redis is a column of its data set sizes, the one thing that crosses 2^24. No value
-# labels (the caption carries the numbers), black and grays only, so it prints and reads without colour.
-COLUMNS = (   # label, input shown in the caption, unit, row filter
-    ("SPEC CPU2017", "ref", "programs",
-     lambda r: r["suite"] == "SPEC CPU2017 rate" and r["dataset"] == "ref"),
-    ("PARSEC", None, "programs", lambda r: r["suite"] == "PARSEC 3.0"),
-    ("pyperformance", "CPython 3.13, PYTHONMALLOC=malloc", "scripts",
-     lambda r: r["suite"].startswith("pyperformance") and r["class"] == "application"),
-    ("Octane", "QuickJS", "scripts", lambda r: r["suite"].startswith("Octane")),
-    ("Firefox", "Nightly, Speedometer 2.1 and 3.1 (its largest process each), a lower bound: SpiderMonkey's heap is "
-     "not counted", "runs",
-     lambda r: r["suite"].startswith("Firefox")),
-    ("speedtest1", "SQLite 3.22.0, lookaside off", "sizes",   # columns carry benchmark names (user, 2026-10-27)
-     lambda r: r["suite"].startswith("SQLite") and r["class"] == "application"),
-    ("Redis", "libc malloc, YCSB load + A + C, 10^5 to 1.6x10^7 records", "sizes",
-     lambda r: r["suite"].startswith("Redis") and "YCSB" in r["suite"]),
-)
-INK, GRAY, LIGHT = "#000000", "#7a7a7a", "#efefef"
-# Times-like text and mathematics (STIX ships with matplotlib), to sit beside a Times body (USENIX, IEEE)
-FONT = {"font.family": "serif", "font.serif": ["STIXGeneral", "Times New Roman", "DejaVu Serif"],
-        "mathtext.fontset": "stix"}
-
-
-def figure_data(rows):
-    cols = []
-    for label, shown, unit, keep in COLUMNS:
-        sel = [r for r in rows if keep(r)]
-        if label == "PARSEC":   # each program at its largest measured input: native where intact, else simlarge
-            native = {r["program"] for r in sel if r["dataset"] == "native"}
-            sel = [r for r in sel if r["dataset"] == "native" or r["program"] not in native]
-            fallback = sorted({r["program"] for r in sel if r["dataset"] != "native"})
-            shown = "native" + (f" (simlarge for {', '.join(fallback)}: native input lost)" if fallback else "")
-        best = {}   # a benchmark rerun in a second pass (the network ones run alone) counts once, at its maximum
-        for r in sel:
-            key = (r["program"], r["dataset"])
-            if key not in best or r["peak"] > best[key]["peak"]:
-                best[key] = r
-        cols.append({"label": label, "shown": shown, "unit": unit,
-                     "points": sorted(((r["program"], r["peak"], r["dataset"]) for r in best.values()),
-                                      key=lambda t: t[1])})
-    return cols
-
-
-def beeswarm(values, x0, ax_in, xspan_in, d_in, ymin, ymax, height_in):
-    """deterministic offsets: each point takes the free x nearest the column centre, in inches on the page"""
-    from math import log10
-    per_decade = height_in / (log10(ymax) - log10(ymin))
-    placed, xs = [], []
-    for v in values:
-        y = log10(max(v, 1)) * per_decade
-        for k in range(200):
-            dx = (k + 1) // 2 * d_in * (1 if k % 2 else -1)
-            if abs(dx) > xspan_in:
-                dx = 0.0
-                break
-            if all((dx - px) ** 2 + (y - py) ** 2 >= d_in ** 2 for px, py in placed):
-                break
-        placed.append((dx, y))
-        xs.append(x0 + dx / ax_in)
-    return xs
-
-
-def write_caption(cols, path):
-    """the caption draft, every number taken from the data the figure draws (no semicolons, as the paper's style)"""
-    programs = [c for c in cols if c["points"] and c["label"] != "Redis"]
-    top = max((p for c in programs for p in c["points"]), key=lambda p: p[1])
-    over20 = sum(p[1] > 2 ** 20 for c in programs for p in c["points"])
-    marks = sum(len(c["points"]) for c in programs)
-    lines = [
-        "Peak number of simultaneously live heap objects in one process over a whole run, measured natively on x86 "
-        "with an exact allocation tracer. Dots are benchmark programs. Ticks are scripts on one interpreter, data "
-        "set sizes or benchmark runs of one program, with a diamond at the maximum. Marks at the same value overlap.",
-        " ".join(f"{c['label']}: {c['shown']}, {len(c['points'])} {c['unit']}"
-                 f"{'' if c['unit'] == 'programs' else ' of one program'}." for c in cols if c["points"]),
-        f"Without Redis, {over20} of {marks} marks exceed 2^20 slots and none reaches 2^24. The largest is {top[0]} "
-        f"({top[1]:,} objects, {100 * top[1] / 2 ** 24:.0f}% of 2^24).",
-    ]
-    redis = next((c for c in cols if c["label"] == "Redis" and c["points"]), None)
-    if redis:
-        ks = [int(re.search(r"([\d,]+) records", p[2])[1].replace(",", "")) for p in redis["points"]]
-        vs = [p[1] for p in redis["points"]]
-        k_mean, v_mean = sum(ks) / len(ks), sum(vs) / len(vs)
-        a = sum((k - k_mean) * (v - v_mean) for k, v in zip(ks, vs)) / sum((k - k_mean) ** 2 for k in ks)
-        b = v_mean - a * k_mean
-        lines.append(f"Redis holds {a:.2f} live objects per record plus {b:,.0f} (a fit to the {len(ks)} sizes), so "
-                     f"it passes 2^24 at about {(2 ** 24 - b) / a / 1e6:.2f} M records. At {ks[-1]:,} records it "
-                     f"holds {vs[-1]:,} objects.")
-    open(path, "w").write("\n\n".join(lines) + "\n")
-
-
-def strip_figure(cols, ylabel, thresholds, base):
-    """one panel, suites as columns: programs as dots, scripts, sizes or runs of one program as ticks with a diamond
-    at the maximum; thresholds are 2^i lines (the band between them shaded), drawn when given"""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from math import ceil, floor, log10
-    from matplotlib.lines import Line2D
-    from matplotlib.offsetbox import AnchoredOffsetbox, DrawingArea, HPacker, TextArea
-    plt.rcParams.update({**FONT, "font.size": 8, "pdf.fonttype": 42, "ps.fonttype": 42,
-                         "axes.linewidth": 0.6, "xtick.major.width": 0.6, "ytick.major.width": 0.6})
-    n = len(cols)
-    W, H, AX_W, AX_H = 7.4, 3.1, 6.3, 2.6   # double-column width: up to seven bold suite titles side by side
-    fig = plt.figure(figsize=(W, H))
-    ax = fig.add_axes((0.55 / W, 0.3 / H, AX_W / W, AX_H / H))
-    vals_all = [p[1] for c in cols for p in c["points"] if p[1] > 0]
-    lo, hi = min(vals_all, default=1), max(vals_all, default=1)
-    if thresholds:   # counts: from 1 up, every mark inside (Redis's largest data set included)
-        ymin, ymax = 1, 10.0 ** max(8, ceil(log10(hi * 1.5)))
-    else:            # rates: the decades the marks span
-        ymin, ymax = 10.0 ** floor(log10(lo / 1.5)), 10.0 ** ceil(log10(hi * 1.5))
-    ax.set_yscale("log")
-    ax.set_ylim(ymin, ymax)
-    ax.set_xlim(-0.5, n - 0.5)
-    if thresholds:
-        a, b = thresholds
-        ax.axhspan(2 ** a, 2 ** b, color=LIGHT, lw=0, zorder=0)
-        ax.axhline(2 ** a, color=INK, lw=0.8, ls=(0, (4, 2.5)), zorder=1)
-        ax.axhline(2 ** b, color=INK, lw=1.3, zorder=1)
-        for i in (a, b):   # named just outside the right edge, level with their lines
-            ax.annotate(f"$2^{{{i}}}$ slots", (1, 2 ** i), xycoords=("axes fraction", "data"), xytext=(4, 0),
-                        textcoords="offset points", ha="left", va="center", fontsize=9)
-    ax.grid(axis="y", which="major", color="#dddddd", lw=0.3, zorder=0)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.tick_params(labelsize=8, length=3)
-    k0, k1 = round(log10(ymin)), round(log10(ymax))
-    step = 3 if k1 - k0 > 8 else 2 if k1 - k0 > 4 else 1
-    ks = range(k0, k1 + 1, step)
-    ax.set_yticks([10.0 ** k for k in ks], [f"$10^{{{k}}}$" for k in ks])
-    ax.minorticks_off()
-    ax.set_ylabel(ylabel, fontsize=9)
-    col_in = AX_W / n
-    for x, c in enumerate(cols):
-        vals = [max(p[1], ymin) for p in c["points"]]
-        if not vals:
-            continue
-        if c["unit"] == "programs":
-            xs = beeswarm(vals, x, col_in, 0.25 * col_in, 4.6 / 72, ymin, ymax, AX_H)   # a dot plus 1 pt apart
-            ax.scatter(xs, vals, s=3.6 ** 2, color=INK, lw=0, zorder=3)
-        else:
-            ax.plot([x] * len(vals), vals, ls="none", marker="_", ms=6, mew=0.6, color=GRAY, zorder=2)
-            ax.plot([x], [vals[-1]], ls="none", marker="D", ms=4.5, color=INK, mew=0, zorder=3)
-    ax.set_xticks(range(n), [f"$\\bf{{{c['label'].replace(' ', '~')}}}$" for c in cols], fontsize=8)
-    ax.tick_params(axis="x", length=0, pad=4)
-
-    def item(marker, size, color, mew, text):   # the key, laid out from the measured text widths
-        da = DrawingArea(8, 8, 0, 0)
-        da.add_artist(Line2D([4], [4], ls="none", marker=marker, ms=size, color=color, mew=mew))
-        return HPacker(children=[da, TextArea(text, textprops=dict(fontsize=8))], align="center", pad=0, sep=2)
-    key = HPacker(children=[item("o", 3.6, INK, 0, "program"), item("_", 6, GRAY, 0.6, "script, size or run"),
-                            item("D", 4.5, INK, 0, "maximum")], align="center", pad=0, sep=10)
-    ax.add_artist(AnchoredOffsetbox(loc="lower right", child=key, frameon=False, pad=0.3, borderpad=0.4))
-    fig.savefig(base + ".pdf", bbox_inches="tight", pad_inches=0.03)
-    # the PDF is the figure (vector), the PNG a screen preview small enough for a terminal image viewer
-    fig.savefig(base + ".png", dpi=120, bbox_inches="tight", pad_inches=0.03)
-    plt.close(fig)
-
-
-def write_rate_caption(cols, path):
-    marks = [(c["label"], p) for c in cols for p in c["points"]]
-    label, top = max(marks, key=lambda m: m[1][1])
-    per_gen = 2 ** SPLIT / (top[1] / 1000)
-    lines = [
-        "Heap allocations per 1,000 instructions in one process over a whole benchmark run, natively on x86. "
-        "Allocations and instructions are counted in the same run under DynamoRIO 11.3 (slotins.c: every basic "
-        "block's instructions, every successful malloc-family allocation and realloc move), so benchmarks that run "
-        "for a fixed time are paired with their own work. Marks as in the peak figure.",
-        " ".join(f"{c['label']}: {c['shown']}, {len(c['points'])} {c['unit']}"
-                 f"{'' if c['unit'] == 'programs' else ' of one program'}." for c in cols if c["points"]),
-        f"The highest is {top[0]} ({label}) at {top[1]:.2f} allocations per 1,000 instructions. At that rate one "
-        f"generation of 2^{SPLIT} slots lasts {per_gen / 1e9:.1f} billion instructions, and each generation bit doubles "
-        f"that.",
-    ]
-    open(path, "w").write("\n\n".join(lines) + "\n")
-
-
-# The third figure: each cell with both measurements is one point, its instructions per heap allocation (x, the
-# mean allocation interarrival time Zorn and Grunwald measure in instructions, CU-CS-604-92, 1992) against its census
-# peak (y), both measured. With i slot bits and g generation bits a slot retires after 2^g uses, so a process with
-# peak L survives at least (2^i - L) * 2^g allocations. The caption turns the closest run's margin into years at three
-# instruction rates (review 2026-10-27: Astra, Gemini and Fable put the measurement on the axes and the model
-# elsewhere; lines for the lifetimes and the slot ceiling were tried and dropped, user).
-# Suites are colour and shape: five hues without blue or yellow, each at least 3:1 on white, the set with the widest
-# all-pairs separation validate_palette.js found among the Okabe-Ito and reference hues (normal vision 16.4,
-# colour-blind 7.6, so every suite also has its own marker).
-# A program's data set sizes are joined by a line in its suite's colour.
-SUITE_STYLE = {   # column label of COLUMNS: colour, marker
-    "SPEC CPU2017": ("#d55e00", "o"), "PARSEC": ("#009e73", "s"), "pyperformance": ("#7b2d8e", "^"),
-    "Octane": ("#cc79a7", "X"), "speedtest1": ("#8c2d04", "D"), "Redis": (INK, "*"),
-}
-DENSE = ("pyperformance", "speedtest1")   # many runs at one spot (41 scripts at the interpreter's peak, 6 sizes)
-LEGEND_ORDER = ("SPEC CPU2017", "PARSEC", "speedtest1", "pyperformance", "Octane")   # compiled, then interpreted
-ID_BITS = 55                   # slot + generation bits of the lifetime id
-SPLIT = 25                     # the drawn split: slot bits (generation bits = ID_BITS - SPLIT)
-SCATTER_LEAVE_OUT = ("Redis",)   # not in this figure or its caption (user, 2026-10-27)
-IPS = 1e10                     # instructions per second per process, an upper bound for RISC-V cores (see README)
-YEAR = 365.25 * 86400
-TICK_STEP = 5                  # both log2 axes tick at every TICK_STEP-th power of two (2^25 is a tick)
-AXES_WIDTH = 2.55              # inches: with labels the figure is one column wide, at most 3.3 in
-
-
-def scatter_pairs(cols, rcols):
-    """(label, program, dataset, peak, rate) for every cell with a census peak and an allocation rate"""
-    rate = {(c["label"], p[0], p[2]): p[1] for c in rcols for p in c["points"]}
-    return [(c["label"], p[0], p[2], p[1], rate[(c["label"], p[0], p[2])])
-            for c in cols for p in c["points"] if (c["label"], p[0], p[2]) in rate]
-
-
-def instructions_left(peak, rate):
-    """log2 of the instructions after which a process with this peak and rate can run out of slots"""
-    from math import log2
-    return log2((2.0 ** SPLIT - peak) * 2.0 ** (ID_BITS - SPLIT) / (rate / 1000))
-
-
-def log_ticks(axis, lo, hi, base, step=None):
-    """ticks at base^k, at multiples of the step (by default the smallest giving at most 9 ticks); returns the limits
-    they span"""
-    from math import ceil, floor, log
-    k0, k1 = floor(log(lo, base) + 1e-9), ceil(log(hi, base) - 1e-9)
-    steps = (1, 2, 4, 8, 16) if base == 2 else (1, 2, 3, 4, 5)   # base 2: 2^20 and 2^24 on ticks
-    step = step or next(s for s in steps if (k1 - k0) / s <= 8)
-    k0, k1 = k0 // step * step, -(-k1 // step) * step
-    axis.set_ticks([float(base) ** k for k in range(k0, k1 + 1, step)],
-                   [f"${base}^{{{k}}}$" for k in range(k0, k1 + 1, step)])
-    return float(base) ** k0, float(base) ** k1
-
-
-def scatter_figure(pairs, base):
-    """both axes log2 from 2^0 (the origin), one power of two as long on both: x instructions per heap allocation,
-    the mean allocation interarrival time Zorn and Grunwald measure in instructions (CU-CS-604-92, 1992), y the peak.
-    No lines: the slot limit and the lifetimes are in the caption (lines for them were tried and dropped, user
-    2026-10-27)"""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-    from math import log2
-    plt.rcParams.update({**FONT, "font.size": 8, "pdf.fonttype": 42, "ps.fonttype": 42,
-                         "axes.linewidth": 0.6, "xtick.major.width": 0.6, "ytick.major.width": 0.6})
-    pts = [p[:3] + (1000 / p[4], p[3]) for p in pairs if p[0] not in SCATTER_LEAVE_OUT]   # (.., x, y)
-    xlo, xhi = 1.0, 2.0 ** (-(-log2(max(p[3] for p in pts) * 1.05) // TICK_STEP) * TICK_STEP)
-    ylo, yhi = 1.0, 2.0 ** SPLIT   # the y axis ends at the slots, the limit every peak must stay under
-    w = AXES_WIDTH
-    h = w * log2(yhi / ylo) / log2(xhi / xlo)
-    fig = plt.figure(figsize=(w + 0.7, h + 0.55))
-    ax = fig.add_axes((0.55 / (w + 0.7), 0.45 / (h + 0.55), w / (w + 0.7), h / (h + 0.55)))
-    ax.set_xscale("log", base=2)
-    ax.set_yscale("log", base=2)
-    log_ticks(ax.xaxis, xlo, xhi, 2, TICK_STEP)
-    log_ticks(ax.yaxis, ylo, yhi, 2, TICK_STEP)
-    ax.set_xlim(xlo, xhi)
-    ax.set_ylim(ylo, yhi)
-    ax.spines[["top", "right"]].set_visible(False)
-    ax.tick_params(labelsize=9.5, length=3)   # mathtext sets exponents at 0.7: 6.65 pt
-    ax.minorticks_off()
-    ax.set_xlabel("Instructions per heap allocation", fontsize=10)
-    ax.set_ylabel("Peak live heap objects", fontsize=10)
-    for label, (color, marker) in SUITE_STYLE.items():
-        sel = [p for p in pts if p[0] == label]
-        if not sel:
-            continue
-        for program in {p[1] for p in sel}:   # a program's data set sizes, in size order
-            run = sorted((p for p in sel if p[1] == program), key=lambda p: dataset_order(p[2]))
-            if len(run) > 1:
-                ax.plot([p[3] for p in run], [p[4] for p in run], color=color, lw=0.8, zorder=2)
-        dense = label in DENSE   # many runs at one spot: smaller, translucent and underneath the others
-        ax.scatter([p[3] for p in sel], [p[4] for p in sel], s=(5.5 if marker == "*" else 2.6 if dense else 3.6) ** 2,
-                   marker=marker, color=color, alpha=0.5 if dense else 1, linewidths=0, zorder=2.5 if dense else 3,
-                   label=label)
-    # above the panel: no corner inside is free of runs, lines and the ceiling's label
-    handles, names = ax.get_legend_handles_labels()
-    order = sorted(range(len(names)), key=lambda k: LEGEND_ORDER.index(names[k]))
-    rows = [order[k:k + 3] for k in range(0, len(order), 3)]   # row by row, though matplotlib fills columns
-    order = [r[c] for c in range(3) for r in rows if c < len(r)]
-    legend = ax.legend([handles[k] for k in order], [names[k] for k in order], loc="lower center",
-                       bbox_to_anchor=(0.5, 1.04), ncol=3, frameon=False, fontsize=8.5, handletextpad=0.2,
-                       columnspacing=1.0, borderaxespad=0, labelspacing=0.3)
-    for handle in legend.legend_handles:   # the key at full strength, though dense suites are translucent
-        handle.set_alpha(1)
-    fig.savefig(base + ".pdf", bbox_inches="tight", pad_inches=0.03)
-    fig.savefig(base + ".png", dpi=200, bbox_inches="tight", pad_inches=0.03)
-    plt.close(fig)
-
-
-
-
-def write_scatter_caption(pairs, path, peaks):
-    """the caption draft, every number from the drawn data (reviewed 2026-10-27: the points measured, the lifetimes
-    the only assumption, a sensitivity in instruction rates; y as Zorn and Grunwald, CU-CS-604-92, 1992)"""
-    shown = [p for p in pairs if p[0] not in SCATTER_LEAVE_OUT]
-    g = ID_BITS - SPLIT
-    fits = [p for p in shown if p[3] < 2 ** SPLIT]
-    worst = min(fits, key=lambda p: instructions_left(p[3], p[4]))
-    n = instructions_left(worst[3], worst[4])
-    widest = max(fits, key=lambda p: p[3])
-    stack = {s: sorted(p[3] for p in shown if p[0] == s) for s in DENSE[:1]}   # the outlined suites' overlapping peaks
-    stack = {s: [x for x in v if x <= 1.25 * v[0]] for s, v in stack.items() if v}
-    from math import log2
-    years = lambda ips: 2.0 ** n / ips / YEAR
-    lines = [
-        f"Instructions per heap allocation of one process (x, the mean allocation interarrival time in instructions "
-        f"as Zorn and Grunwald measure it, all its threads, under DynamoRIO in one run) against its peak live heap "
-        f"objects (y, measured natively with an exact allocation tracer). A {ID_BITS}-bit lifetime id with "
-        f"{SPLIT} slot and {g} generation bits supports at least (2^{SPLIT} - y)·2^{g} allocations before a process "
-        f"can run out of slots, and the y axis ends at the 2^{SPLIT} slots. "
-        f"The closest run to that limit, {worst[1]} ({worst[0]}, one allocation every "
-        f"{1000 / worst[4]:,.0f} instructions), can run out only after 2^{n:.2f} instructions: about "
-        f"{years(1e9):,.0f}, {years(1e10):,.0f} or {years(1e11):,.1f} years at 10^9, 10^10 or 10^11 instructions "
-        f"per second. The largest peak, {widest[1]} ({widest[3]:,} objects), is {SPLIT - log2(widest[3]):.1f} bits "
-        f"short of 2^{SPLIT} slots. "
-        + f"{len(shown)} runs" + "".join(f", {len(v)} of them {s} scripts that overlap near {v[0]:,} objects"
-                                         for s, v in stack.items() if len(v) > 1) + ".",
-    ]
-    open(path, "w").write("\n\n".join(lines) + "\n")
-
-
-def write_figures(rows, rate_rows, out):
-    try:
-        import matplotlib  # noqa: F401
-    except ImportError:
-        print("report: matplotlib not available, figures skipped")
-        return
-    os.makedirs(os.path.join(out, "figures"), exist_ok=True)
-    cols = figure_data(rows)
-    write_caption(cols, os.path.join(out, "figures", "slots-caption.txt"))
-    strip_figure(cols, "Peak live heap objects per process", (20, 24), os.path.join(out, "figures", "slots"))
-    if rate_rows:
-        rcols = [c for c in figure_data(rate_rows) if c["points"]]
-        write_rate_caption(rcols, os.path.join(out, "figures", "rates-caption.txt"))
-        strip_figure(rcols, "Allocations per 1,000 instructions", None, os.path.join(out, "figures", "rates"))
-        pairs = scatter_pairs(cols, rcols)
-        if pairs:
-            scatter_figure(pairs, os.path.join(out, "figures", "peak-rate"))
-            write_scatter_caption(pairs, os.path.join(out, "figures", "peak-rate-caption.txt"),
-                                  [(c["label"], p[0], p[2]) for c in cols for p in c["points"]])
-            print(f"report: peak-rate figure, {len(pairs)} cells with both a peak and a rate")
 
 
 def main():
@@ -527,10 +139,11 @@ def main():
     if not rows:
         print(f"report: no valid cells under {results}", file=sys.stderr)
         return 1
-    rate_rows = collect_rates(results)
-    write_report(rows, excluded, out,
-                 scatter_pairs(figure_data(rows), [c for c in figure_data(rate_rows) if c["points"]]))
-    write_figures(rows, rate_rows, out)
+    peak_cols = columns(rows, "peak")
+    rate_cols = [c for c in columns(collect_rates(results), "rate") if c["points"]]
+    both = pairs(peak_cols, rate_cols)
+    write_report(rows, excluded, both, out)
+    write_figures(peak_cols, rate_cols, both, out)
     print(f"report: {len(rows)} cells, {len(excluded)} excluded -> {os.path.join(out, 'REPORT.md')}")
     return 0
 

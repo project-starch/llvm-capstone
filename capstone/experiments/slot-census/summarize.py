@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Summarise one pass: the measured processes' census lines and each cell's validation verdict.
 
-usage: summarize.py OUT_DIR [JSON_OUT]
+usage: summarize.py OUT_DIR
 A pass is a set of cells, each with a census file OUT_DIR/<cell>.jsonl while it runs (pack.py merges them into
 OUT_DIR/processes.jsonl, one line per measured process with its cell). A pass with OUT_DIR/cells.tsv lists its cells
 there as <cell> <selector> <verdict> [note], and a cell's measured processes are those its selector picks: an
@@ -11,8 +11,7 @@ benchmark process (selector spec) is one whose executable name contains "_base.c
 <exe>_base.<label>) and is not one of SPEC's image validators (imagevalidate_<n>, built with the same label, run on
 511, 525, 526 and 538 outputs); the shells, specinvoke, specdiff and validator lines in the same file are dropped. 525.x264_r's ldecod_r, which decodes the input, stays and is reported as its own executable. Prints one
 row per benchmark process (an invocation of one input) and one per cell (the maximum over its processes, which is
-what sizes the slots), and with JSON_OUT writes the same as JSON there (derived data stays out of the pass
-directory). Exit 1 if any cell has no census line or no valid verdict: "no data" is an error, never a zero."""
+what sizes the slots). Exit 1 if any cell has no census line or no valid verdict: "no data" is an error, never a zero."""
 import json
 import os
 import re
@@ -101,49 +100,48 @@ def instruction_pass(out, todo):
     return False
 
 
+def show_instructions(out, todo):
+    """a slotins pass (SLOTCENSUS_MEASURE=instructions): instructions per process and their sum per cell"""
+    ok = True
+    print(f"{'cell':<24} {'executable':<24} {'instructions':>17} fork  arguments")
+    for b, keep, v in todo:
+        rows = processes(out, b, keep)
+        ok &= bool(rows) and v == "valid"
+        for r in rows:
+            print(f"{b:<24} {r['exe']:<24} {r['instructions']:>17,} {r['forked']:>4}  {r['args'][:60]}")
+        print(f"{b:<24} {'= sum (' + v + ')':<24} {sum(r['instructions'] for r in rows):>17,}" if rows
+              else f"{b:<24} NO DATA ({v})")
+    print("SUMMARY OK" if ok else "SUMMARY INCOMPLETE: a cell lacks instruction lines or a valid verdict")
+    return ok
+
+
+def show_census(out, todo):
+    """a census pass: peak live objects, allocations and peak bytes per process, and the cell's maximum"""
+    ok = True
+    print(f"{'cell':<24} {'executable':<24} {'peak_live':>11} {'allocs':>13} {'peak_bytes':>14} fork  arguments")
+    for b, keep, v in todo:
+        rows = processes(out, b, keep)
+        ok &= bool(rows) and v == "valid"
+        for r in rows:
+            print(f"{b:<24} {r['exe']:<24} {r['peak_live']:>11,} {r['allocs']:>13,} {r['peak_live_bytes']:>14,} "
+                  f"{r['forked']:>4}  {r['args'][:60]}")
+        if rows:
+            print(f"{b:<24} {'= max (' + v + ')':<24} {max(r['peak_live'] for r in rows):>11,} "
+                  f"{sum(r['allocs'] for r in rows):>13,} {max(r['peak_live_bytes'] for r in rows):>14,}")
+        else:
+            print(f"{b:<24} NO DATA ({v})")
+    print("SUMMARY OK" if ok else "SUMMARY INCOMPLETE: a cell lacks census lines or a valid verdict")
+    return ok
+
+
 def main():
     out = sys.argv[1]
     todo = cells(out)
     if not todo:
         print(f"summarize: no cells in {out}", file=sys.stderr)
         return 1
-    ok, summary = True, []
-    if instruction_pass(out, todo):   # a slotins pass (SLOTCENSUS_MEASURE=instructions): instructions per process
-        print(f"{'cell':<24} {'executable':<24} {'instructions':>17} fork  arguments")
-        for b, keep, v in todo:
-            rows = processes(out, b, keep)
-            ok &= bool(rows) and v == "valid"
-            for r in rows:
-                print(f"{b:<24} {r['exe']:<24} {r['instructions']:>17,} {r['forked']:>4}  {r['args'][:60]}")
-            print(f"{b:<24} {'= sum (' + v + ')':<24} {sum(r['instructions'] for r in rows):>17,}" if rows
-                  else f"{b:<24} NO DATA ({v})")
-        print("SUMMARY OK" if ok else "SUMMARY INCOMPLETE: a cell lacks instruction lines or a valid verdict")
-        return 0 if ok else 1
-    print(f"{'cell':<24} {'executable':<24} {'peak_live':>11} {'allocs':>13} {'peak_bytes':>14} fork  arguments")
-    for b, keep, v in todo:
-        rows = processes(out, b, keep)
-        if not rows or v != "valid":
-            ok = False
-        for r in rows:
-            print(f"{b:<24} {r['exe']:<24} {r['peak_live']:>11,} {r['allocs']:>13,} {r['peak_live_bytes']:>14,} "
-                  f"{r['forked']:>4}  {r['args'][:60]}")
-        top = max(rows, key=lambda r: r["peak_live"]) if rows else None
-        if top:
-            print(f"{b:<24} {'= max (' + v + ')':<24} {top['peak_live']:>11,} {sum(r['allocs'] for r in rows):>13,} "
-                  f"{max(r['peak_live_bytes'] for r in rows):>14,}")
-        else:
-            print(f"{b:<24} NO DATA ({v})")
-        summary.append({"cell": b, "validation": v, "processes": len(rows),
-                        "peak_live": top["peak_live"] if top else None,
-                        "peak_live_bytes": max((r["peak_live_bytes"] for r in rows), default=None),
-                        "allocs": sum(r["allocs"] for r in rows),
-                        "invocations": [{k: r[k] for k in ("exe", "args", "forked", "peak_live", "end_live", "allocs",
-                                                           "frees", "realloc_moved", "realloc_inplace", "failed",
-                                                           "peak_live_bytes", "size_log2")} for r in rows]})
-    if len(sys.argv) > 2:
-        json.dump(summary, open(sys.argv[2], "w"), indent=1)
-    print("SUMMARY OK" if ok else "SUMMARY INCOMPLETE: a cell lacks census lines or a valid verdict")
-    return 0 if ok else 1
+    show = show_instructions if instruction_pass(out, todo) else show_census
+    return 0 if show(out, todo) else 1
 
 
 if __name__ == "__main__":
