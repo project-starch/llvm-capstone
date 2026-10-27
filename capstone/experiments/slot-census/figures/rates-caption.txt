@@ -1,5 +1,5 @@
 Heap allocations per 1,000 instructions in one process over a whole benchmark run, natively on x86. Allocations and instructions are counted in the same run under DynamoRIO 11.3 (slotins.c: every basic block's instructions, every successful malloc-family allocation and realloc move), so benchmarks that run for a fixed time are paired with their own work. Marks as in the peak figure.
 
-SPEC CPU2017: ref, 16 programs. PARSEC: native (simlarge for canneal, dedup, x264: native input lost), 12 programs. pyperformance: CPython 3.13, PYTHONMALLOC=malloc, 93 scripts of one program. Octane: QuickJS, 15 scripts of one program. SQLite: speedtest1, lookaside off, 6 sizes of one program. Redis: libc malloc, YCSB load + A + C, 10^5 to 1.6x10^7 records, 4 sizes of one program.
+SPEC CPU2017: ref, 16 programs. PARSEC: native (simlarge for canneal, dedup, x264: native input lost), 12 programs. pyperformance: CPython 3.13, PYTHONMALLOC=malloc, 93 scripts of one program. Octane: QuickJS, 15 scripts of one program. speedtest1: SQLite 3.22.0, lookaside off, 6 sizes of one program. Redis: libc malloc, YCSB load + A + C, 10^5 to 1.6x10^7 records, 4 sizes of one program.
 
 The highest is redis-server (Redis) at 2.02 allocations per 1,000 instructions. At that rate one generation of 2^25 slots lasts 16.6 billion instructions, and each generation bit doubles that.

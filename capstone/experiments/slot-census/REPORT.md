@@ -467,12 +467,6 @@ Every cell with a census peak and an instruction pass, as drawn in `figures/peak
 | SPEC CPU2017 | 541.leela_r | ref | 25,627 | 0.0193 |
 | SPEC CPU2017 | 544.nab_r | ref | 80,151 | 0.000182 |
 | SPEC CPU2017 | 557.xz_r | ref | 21 | 6.14e-08 |
-| SQLite | speedtest1, lookaside off | size 25 | 1,147 | 0.135 |
-| SQLite | speedtest1, lookaside off | size 50 | 1,147 | 0.125 |
-| SQLite | speedtest1, lookaside off | size 100 | 1,163 | 0.112 |
-| SQLite | speedtest1, lookaside off | size 200 | 1,164 | 0.0984 |
-| SQLite | speedtest1, lookaside off | size 400 | 1,163 | 0.0845 |
-| SQLite | speedtest1, lookaside off | size 800 | 1,164 | 0.0699 |
 | pyperformance | argparse | PYTHONMALLOC=malloc | 90,881 | 0.633 |
 | pyperformance | argparse_subparsers | PYTHONMALLOC=malloc | 125,402 | 0.649 |
 | pyperformance | async_generators | PYTHONMALLOC=malloc | 301,069 | 0.715 |
@@ -566,6 +560,12 @@ Every cell with a census peak and an instruction pass, as drawn in `figures/peak
 | pyperformance | unpickle_pure_python | PYTHONMALLOC=malloc | 85,556 | 0.371 |
 | pyperformance | xdsl | PYTHONMALLOC=malloc | 251,236 | 0.632 |
 | pyperformance | xml_etree | PYTHONMALLOC=malloc | 136,981 | 0.555 |
+| speedtest1 | speedtest1, lookaside off | size 25 | 1,147 | 0.135 |
+| speedtest1 | speedtest1, lookaside off | size 50 | 1,147 | 0.125 |
+| speedtest1 | speedtest1, lookaside off | size 100 | 1,163 | 0.112 |
+| speedtest1 | speedtest1, lookaside off | size 200 | 1,164 | 0.0984 |
+| speedtest1 | speedtest1, lookaside off | size 400 | 1,163 | 0.0845 |
+| speedtest1 | speedtest1, lookaside off | size 800 | 1,164 | 0.0699 |
 
 ## Excluded cells
 

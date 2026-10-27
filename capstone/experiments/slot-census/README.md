@@ -151,14 +151,20 @@ DynamoRIO's skip-thread-exit-at-exit option fails it. control.c and control_cxx.
 expected allocation counts. Cross-check: on SQLite speedtest1 the DynamoRIO allocation counts match the census's to
 within 0.5%.
 
-The third figure (`figures/peak-rate.pdf`) plots each run with both measurements as its peak against its allocations
-per year, and draws how long a 55-bit lifetime id split into slot and generation bits lasts: with i slot bits and g
-generation bits a slot retires after 2^g uses, so a process with peak L lasts until it has made (2^i - L) x 2^g
-allocations. Allocations per year need an instruction rate, which the figure assumes: 10^10 instructions per second
-per process (`IPS` in `report.py`). That is above every measured RISC-V core we found (2026-10): CVA6 runs at up to
-1.7 GHz in 22 nm with an IPC of 0.82 to 0.99 (arXiv 1904.05442), the SG2044 at 2.6 GHz (arXiv 2508.13840), SiFive's
+The third figure (`figures/peak-rate.pdf`) plots each run with both measurements as its instructions per heap
+allocation (x, the inverse of the second figure's rate: the mean allocation interarrival time in instructions, the
+measure Zorn and Grunwald use for allocation-intensive C programs, CU-CS-604-92, 1992) against its peak (y). Both
+axes are log2 from 2^0 with one power of two as long on each, and y ends at 2^25, the slots of a 55-bit lifetime id
+split into 25 slot and 30 generation bits. The figure draws no model: with i slot bits and g generation bits a slot
+retires after 2^g uses, so a process with peak L can run out of slots only after (2^i - L) x 2^g allocations, and the
+caption turns the closest run's margin into instructions and into years at 10^9, 10^10 and 10^11 instructions per
+second. The middle rate (`IPS` in `report.py`) is above every measured RISC-V core we found (2026-10): CVA6 runs at up
+to 1.7 GHz in 22 nm with an IPC of 0.82 to 0.99 (arXiv 1904.05442), the SG2044 at 2.6 GHz (arXiv 2508.13840), SiFive's
 P550 at 1.4 GHz with an IPC above 2 on its best SPEC programs (Chips and Cheese). The years scale as 1/rate: a
-process twice as fast, or a multi-threaded process whose threads share its ids on several cores, halves them.
+process twice as fast, or a multi-threaded process whose threads share its ids on several cores, halves them. For
+scale: Zorn and Grunwald's six programs allocated once every 295 to 3,273 instructions on average, and the most
+allocation-intensive run here (pyperformance spectral_norm with `PYTHONMALLOC=malloc`) once every 573. Redis is not
+in this figure.
 
 ## Running
 

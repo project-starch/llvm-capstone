@@ -194,12 +194,15 @@ COLUMNS = (   # label, input shown in the caption, unit, row filter
     ("Firefox", "Nightly, Speedometer 2.1 and 3.1 (its largest process each), a lower bound: SpiderMonkey's heap is "
      "not counted", "runs",
      lambda r: r["suite"].startswith("Firefox")),
-    ("SQLite", "speedtest1, lookaside off", "sizes",
+    ("speedtest1", "SQLite 3.22.0, lookaside off", "sizes",   # columns carry benchmark names (user, 2026-10-27)
      lambda r: r["suite"].startswith("SQLite") and r["class"] == "application"),
     ("Redis", "libc malloc, YCSB load + A + C, 10^5 to 1.6x10^7 records", "sizes",
      lambda r: r["suite"].startswith("Redis") and "YCSB" in r["suite"]),
 )
 INK, GRAY, LIGHT = "#000000", "#7a7a7a", "#efefef"
+# Times-like text and mathematics (STIX ships with matplotlib), to sit beside a Times body (USENIX, IEEE)
+FONT = {"font.family": "serif", "font.serif": ["STIXGeneral", "Times New Roman", "DejaVu Serif"],
+        "mathtext.fontset": "stix"}
 
 
 def figure_data(rows):
@@ -278,7 +281,7 @@ def strip_figure(cols, ylabel, thresholds, base):
     from math import ceil, floor, log10
     from matplotlib.lines import Line2D
     from matplotlib.offsetbox import AnchoredOffsetbox, DrawingArea, HPacker, TextArea
-    plt.rcParams.update({"font.family": "sans-serif", "font.size": 8, "pdf.fonttype": 42, "ps.fonttype": 42,
+    plt.rcParams.update({**FONT, "font.size": 8, "pdf.fonttype": 42, "ps.fonttype": 42,
                          "axes.linewidth": 0.6, "xtick.major.width": 0.6, "ytick.major.width": 0.6})
     n = len(cols)
     W, H, AX_W, AX_H = 7.4, 3.1, 6.3, 2.6   # double-column width: up to seven bold suite titles side by side
@@ -355,35 +358,29 @@ def write_rate_caption(cols, path):
     open(path, "w").write("\n\n".join(lines) + "\n")
 
 
-# The third figure: each cell with both measurements is one point, its census peak (x) against the allocations it
-# would make in a year (y), the two inputs of the lifetime-id sizing: with i slot bits and g generation bits a slot
-# retires after 2^g uses, so a process with peak L survives A allocations while A <= (2^i - L) * 2^g. A split's
-# capacity is a curve: flat at 2^(i+g) while L << 2^i, falling to a wall at L = 2^i. Divided by Y years it is the
-# same curve lower by log2(Y): the gray bands between Y = 1, 10, 100 and 1,000 years show, for the shaded split,
-# how long until a process at that point runs out of slots (darker is sooner). The instruction rate that turns
-# allocations per instruction into allocations per year is an assumption, stated in the caption (IPS).
+# The third figure: each cell with both measurements is one point, its instructions per heap allocation (x, the
+# mean allocation interarrival time Zorn and Grunwald measure in instructions, CU-CS-604-92, 1992) against its census
+# peak (y), both measured. With i slot bits and g generation bits a slot retires after 2^g uses, so a process with
+# peak L survives at least (2^i - L) * 2^g allocations. The caption turns the closest run's margin into years at three
+# instruction rates (review 2026-10-27: Astra, Gemini and Fable put the measurement on the axes and the model
+# elsewhere; lines for the lifetimes and the slot ceiling were tried and dropped, user).
 # Suites are colour and shape: five hues without blue or yellow, each at least 3:1 on white, the set with the widest
 # all-pairs separation validate_palette.js found among the Okabe-Ito and reference hues (normal vision 16.4,
-# colour-blind 7.6, so every suite also has its own marker), and black for Redis, the one suite that crosses 2^24.
+# colour-blind 7.6, so every suite also has its own marker).
 # A program's data set sizes are joined by a line in its suite's colour.
 SUITE_STYLE = {   # column label of COLUMNS: colour, marker
     "SPEC CPU2017": ("#d55e00", "o"), "PARSEC": ("#009e73", "s"), "pyperformance": ("#7b2d8e", "^"),
-    "Octane": ("#cc79a7", "v"), "SQLite": ("#8c2d04", "D"), "Redis": (INK, "*"),
+    "Octane": ("#cc79a7", "X"), "speedtest1": ("#8c2d04", "D"), "Redis": (INK, "*"),
 }
+DENSE = ("pyperformance", "speedtest1")   # many runs at one spot (41 scripts at the interpreter's peak, 6 sizes)
+LEGEND_ORDER = ("SPEC CPU2017", "PARSEC", "speedtest1", "pyperformance", "Octane")   # compiled, then interpreted
 ID_BITS = 55                   # slot + generation bits of the lifetime id
 SPLIT = 25                     # the drawn split: slot bits (generation bits = ID_BITS - SPLIT)
-OTHER_SPLITS = ()              # drawn as one-year lines (28 would hold Redis at 5 M records)
-SCATTER_LEAVE_OUT = ("Redis",)   # left out of this figure for now (2026-10-26, to be looked at again)
+SCATTER_LEAVE_OUT = ("Redis",)   # not in this figure or its caption (user, 2026-10-27)
 IPS = 1e10                     # instructions per second per process, an upper bound for RISC-V cores (see README)
 YEAR = 365.25 * 86400
-BANDS = ()                     # years of the gray bands, e.g. (1, 10, 100, 1000); none: one line, the one-year limit
-TICK_STEP = 8                  # both log2 axes tick at the same powers of two (every TICK_STEP-th)
-# A square panel with unequal scales (review 2026-10-26: equal log2 scaling would only give the 45-degree direction,
-# allocations per live object, a meaning the figure does not use, at 1.8x the height or with x run out to 2^58)
-EQUAL_SCALE = False            # True: one power of two as long on y as on x (the figure's height follows)
-AXES_WIDTH = 2.85              # inches (and the height of the square panel)
-X_TOP = 2.0 ** 28              # x axis end: a little past the wall (None: from the data)
-BAND_GRAYS = ("#c4c4c4", "#d6d6d6", "#e4e4e4", "#f0f0f0")   # < 1, 1-10, 10-100, 100-1,000 years; white beyond
+TICK_STEP = 5                  # both log2 axes tick at every TICK_STEP-th power of two (2^25 is a tick)
+AXES_WIDTH = 2.55              # inches: with labels the figure is one column wide, at most 3.3 in
 
 
 def scatter_pairs(cols, rcols):
@@ -393,14 +390,10 @@ def scatter_pairs(cols, rcols):
             for c in cols for p in c["points"] if (c["label"], p[0], p[2]) in rate]
 
 
-def per_year(rate_per_1000):
-    return rate_per_1000 / 1000 * IPS * YEAR
-
-
-def years_left(peak, rate_per_1000, i):
-    """years until a process with this peak and rate runs out of slots with i slot bits (0 when its peak alone
-    does not fit)"""
-    return max(0.0, (2 ** i - peak) * 2.0 ** (ID_BITS - i)) / per_year(rate_per_1000)
+def instructions_left(peak, rate):
+    """log2 of the instructions after which a process with this peak and rate can run out of slots"""
+    from math import log2
+    return log2((2.0 ** SPLIT - peak) * 2.0 ** (ID_BITS - SPLIT) / (rate / 1000))
 
 
 def log_ticks(axis, lo, hi, base, step=None):
@@ -416,80 +409,35 @@ def log_ticks(axis, lo, hi, base, step=None):
     return float(base) ** k0, float(base) ** k1
 
 
-def scatter_figure(pairs, base, xlog=True, ylog=True):
-    """log axes are base 2 from 2^0, linear ones from 0: the origin is always the first value"""
+def scatter_figure(pairs, base):
+    """both axes log2 from 2^0 (the origin), one power of two as long on both: x instructions per heap allocation,
+    the mean allocation interarrival time Zorn and Grunwald measure in instructions (CU-CS-604-92, 1992), y the peak.
+    No lines: the slot limit and the lifetimes are in the caption (lines for them were tried and dropped, user
+    2026-10-27)"""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    import numpy as np
-    plt.rcParams.update({"font.family": "sans-serif", "font.size": 8, "pdf.fonttype": 42, "ps.fonttype": 42,
+    from math import log2
+    plt.rcParams.update({**FONT, "font.size": 8, "pdf.fonttype": 42, "ps.fonttype": 42,
                          "axes.linewidth": 0.6, "xtick.major.width": 0.6, "ytick.major.width": 0.6})
-    pts = [p[:4] + (per_year(p[4]),) for p in pairs if p[0] not in SCATTER_LEAVE_OUT]
-    fig = plt.figure(figsize=(4.6, 3.0))
-    ax = fig.add_axes((0.11, 0.14, 0.62, 0.8))
-    xmax = max([max(p[3] for p in pts) * 1.5, 2.0 ** (SPLIT + 4) if xlog else 2.0 ** SPLIT * 1.15]
-               + [2.0 ** i for i in OTHER_SPLITS])
-    if xlog:
-        ax.set_xscale("log", base=2)
-        xlo, xhi = log_ticks(ax.xaxis, 1.0, X_TOP or xmax, 2, TICK_STEP)
-        xhi = X_TOP or xhi
-    else:
-        xlo, xhi = 0.0, xmax
-    if ylog:
-        ax.set_yscale("log", base=2)
-        ylo, _ = log_ticks(ax.yaxis, 1.0, 2.0 ** (ID_BITS + 3), 2, TICK_STEP)
-        yhi = 2.0 ** (ID_BITS + 3)   # a little above the capacity, not a whole tick step
-    else:
-        ylo, yhi = 0.0, 2.0 ** ID_BITS * 1.1
+    pts = [p[:3] + (1000 / p[4], p[3]) for p in pairs if p[0] not in SCATTER_LEAVE_OUT]   # (.., x, y)
+    xlo, xhi = 1.0, 2.0 ** (-(-log2(max(p[3] for p in pts) * 1.05) // TICK_STEP) * TICK_STEP)
+    ylo, yhi = 1.0, 2.0 ** SPLIT   # the y axis ends at the slots, the limit every peak must stay under
+    w = AXES_WIDTH
+    h = w * log2(yhi / ylo) / log2(xhi / xlo)
+    fig = plt.figure(figsize=(w + 0.7, h + 0.55))
+    ax = fig.add_axes((0.55 / (w + 0.7), 0.45 / (h + 0.55), w / (w + 0.7), h / (h + 0.55)))
+    ax.set_xscale("log", base=2)
+    ax.set_yscale("log", base=2)
+    log_ticks(ax.xaxis, xlo, xhi, 2, TICK_STEP)
+    log_ticks(ax.yaxis, ylo, yhi, 2, TICK_STEP)
     ax.set_xlim(xlo, xhi)
     ax.set_ylim(ylo, yhi)
-    from math import log2
-    ah = AXES_WIDTH * log2(yhi / ylo) / log2(xhi / xlo) if xlog and ylog and EQUAL_SCALE else AXES_WIDTH
-    fig.set_size_inches(AXES_WIDTH + 0.7, ah + 0.6)   # the legend sits inside the panel
-    ax.set_position((0.55 / (AXES_WIDTH + 0.7), 0.45 / (ah + 0.6), AXES_WIDTH / (AXES_WIDTH + 0.7), ah / (ah + 0.6)))
-    if ylog:   # the ceiling, named where it is (the nearest tick is another power of two)
-        ax.annotate(f"$2^{{{ID_BITS}}}$", (xlo, 2.0 ** ID_BITS), xytext=(3, -2), textcoords="offset points",
-                    ha="left", va="top", fontsize=8)
-    L = (np.logspace(0, SPLIT * np.log10(2), 600) if xlog else np.linspace(0, 2.0 ** SPLIT, 600))[:-1]
-    cap = (2.0 ** SPLIT - L) * 2.0 ** (ID_BITS - SPLIT)
-    if not BANDS:   # one line: the split's capacity for one year, and the gap to the run closest to it, in years
-        ax.plot(np.append(L, 2.0 ** SPLIT), np.append(cap, ylo), color=INK, lw=1.3, zorder=1)
-        fits = [p for p in pts if p[3] < 2 ** SPLIT]
-        near = min(fits, key=lambda p: (2.0 ** SPLIT - p[3]) * 2.0 ** (ID_BITS - SPLIT) / p[4])
-        line = (2.0 ** SPLIT - near[3]) * 2.0 ** (ID_BITS - SPLIT)
-        ax.annotate("", (near[3], line), xytext=(near[3], near[4] * 1.4 if ylog else near[4]), zorder=2,
-                    arrowprops=dict(arrowstyle="<->", color=INK, lw=0.7, shrinkA=0, shrinkB=0))
-        mid = (line * near[4]) ** 0.5 if ylog else (line + near[4]) / 2
-        gap = line / near[4]   # the margin in years, and in bits on the log2 axis
-        ax.annotate(f"{gap:,.0f} years ({np.log2(gap):.1f} bits)", (near[3], mid), xytext=(-4, 0),
-                    textcoords="offset points", ha="right", va="center", fontsize=8)
-    else:           # the bands, painted from the top: the axes are the < 1 year gray (above it, right of the wall)
-        ax.set_facecolor(BAND_GRAYS[0])
-        for years, gray in zip(BANDS, BAND_GRAYS[1:] + ("white",)):
-            ax.fill_between(L, ylo, cap / years, color=gray, lw=0, zorder=0)
-        # each band named by its range, at the left where the bands are level (the middle of each band in log2)
-        names = (["< 1 year"] + [f"{a:,}\u2013{b:,} years" for a, b in zip(BANDS, BANDS[1:])]
-                 + [f"> {BANDS[-1]:,} years"])
-        mids = ([2.0 ** ID_BITS * (yhi / 2.0 ** ID_BITS) ** 0.5]
-                + [2.0 ** ID_BITS / (a * b) ** 0.5 for a, b in zip(BANDS, BANDS[1:])]
-                + [2.0 ** ID_BITS / BANDS[-1] / 10 ** 0.5])
-        for name, y in zip(names, mids):
-            ax.annotate(name, (xlo, y), xytext=(3, 0), textcoords="offset points", ha="left", va="center",
-                        fontsize=7, color="#444444")
-    for i in OTHER_SPLITS:   # other splits' capacity for one year, and the shaded split's split label
-        Li = np.logspace(0, i * np.log10(2), 600)[:-1]
-        ax.plot(Li, (2.0 ** i - Li) * 2.0 ** (ID_BITS - i), color=INK, lw=0.7, ls=(0, (3, 2)), zorder=1)
-    for i in (SPLIT,) + OTHER_SPLITS:
-        ax.annotate(f"{i} slot + {ID_BITS - i} generation bits", (2.0 ** i, ylo), xytext=(-2, 3),
-                    textcoords="offset points", ha="right", va="bottom", fontsize=7, rotation=90)
     ax.spines[["top", "right"]].set_visible(False)
-    ax.tick_params(labelsize=8, length=3)
+    ax.tick_params(labelsize=9.5, length=3)   # mathtext sets exponents at 0.7: 6.65 pt
     ax.minorticks_off()
-    for axis, log in ((ax.xaxis, xlog), (ax.yaxis, ylog)):
-        if not log:   # linear: 0 at the origin, powers of ten as one offset label
-            axis.get_major_formatter().set_powerlimits((0, 0))
-    ax.set_xlabel("Peak live heap objects per process", fontsize=9)
-    ax.set_ylabel("Modeled allocations per year", fontsize=9)
+    ax.set_xlabel("Instructions per heap allocation", fontsize=10)
+    ax.set_ylabel("Peak live heap objects", fontsize=10)
     for label, (color, marker) in SUITE_STYLE.items():
         sel = [p for p in pts if p[0] == label]
         if not sel:
@@ -498,47 +446,53 @@ def scatter_figure(pairs, base, xlog=True, ylog=True):
             run = sorted((p for p in sel if p[1] == program), key=lambda p: dataset_order(p[2]))
             if len(run) > 1:
                 ax.plot([p[3] for p in run], [p[4] for p in run], color=color, lw=0.8, zorder=2)
-        ax.scatter([p[3] for p in sel], [p[4] for p in sel], s=(6.5 if marker == "*" else 4.2) ** 2, marker=marker,
-                   color=color, edgecolors="white", linewidths=0.4, zorder=3, label=label)
-    # inside the empty lower right, left of the wall and its label
-    wall = log2(2.0 ** SPLIT / xlo) / log2(xhi / xlo) if xlog else 2.0 ** SPLIT / xhi
-    ax.legend(loc="lower right", bbox_to_anchor=(wall - 0.06, 0.02), frameon=False, fontsize=7,
-              handletextpad=0.2, borderaxespad=0, labelspacing=0.3)
+        dense = label in DENSE   # many runs at one spot: smaller, translucent and underneath the others
+        ax.scatter([p[3] for p in sel], [p[4] for p in sel], s=(5.5 if marker == "*" else 2.6 if dense else 3.6) ** 2,
+                   marker=marker, color=color, alpha=0.5 if dense else 1, linewidths=0, zorder=2.5 if dense else 3,
+                   label=label)
+    # above the panel: no corner inside is free of runs, lines and the ceiling's label
+    handles, names = ax.get_legend_handles_labels()
+    order = sorted(range(len(names)), key=lambda k: LEGEND_ORDER.index(names[k]))
+    rows = [order[k:k + 3] for k in range(0, len(order), 3)]   # row by row, though matplotlib fills columns
+    order = [r[c] for c in range(3) for r in rows if c < len(r)]
+    legend = ax.legend([handles[k] for k in order], [names[k] for k in order], loc="lower center",
+                       bbox_to_anchor=(0.5, 1.04), ncol=3, frameon=False, fontsize=8.5, handletextpad=0.2,
+                       columnspacing=1.0, borderaxespad=0, labelspacing=0.3)
+    for handle in legend.legend_handles:   # the key at full strength, though dense suites are translucent
+        handle.set_alpha(1)
     fig.savefig(base + ".pdf", bbox_inches="tight", pad_inches=0.03)
-    fig.savefig(base + ".png", dpi=120, bbox_inches="tight", pad_inches=0.03)
+    fig.savefig(base + ".png", dpi=200, bbox_inches="tight", pad_inches=0.03)
     plt.close(fig)
 
 
+
+
 def write_scatter_caption(pairs, path, peaks):
-    """the caption draft, every number from the drawn data (reviewed 2026-10-26: the limit is a sufficient bound, the
-    rate an assumption per process, the left-out suites named)"""
+    """the caption draft, every number from the drawn data (reviewed 2026-10-27: the points measured, the lifetimes
+    the only assumption, a sensitivity in instruction rates; y as Zorn and Grunwald, CU-CS-604-92, 1992)"""
     shown = [p for p in pairs if p[0] not in SCATTER_LEAVE_OUT]
-    left_out = sorted({p[0] for p in pairs if p[0] in SCATTER_LEAVE_OUT})
     g = ID_BITS - SPLIT
     fits = [p for p in shown if p[3] < 2 ** SPLIT]
-    worst = min(fits, key=lambda p: years_left(p[3], p[4], SPLIT))
-    past = sorted((p for p in shown if p[3] >= 2 ** SPLIT), key=lambda p: p[3])
-    rated = {p[:3] for p in pairs}
-    no_rate = [(s, n) for s in dict.fromkeys(q[0] for q in peaks)   # suites in figure order, runs without a rate
-               if (n := sum(q[0] == s and q not in rated for q in peaks))]
-    ips = f"{IPS:.0e}".replace("1e+10", "10^10")
+    worst = min(fits, key=lambda p: instructions_left(p[3], p[4]))
+    n = instructions_left(worst[3], worst[4])
+    widest = max(fits, key=lambda p: p[3])
+    stack = {s: sorted(p[3] for p in shown if p[0] == s) for s in DENSE[:1]}   # the outlined suites' overlapping peaks
+    stack = {s: [x for x in v if x <= 1.25 * v[0]] for s, v in stack.items() if v}
+    from math import log2
+    years = lambda ips: 2.0 ** n / ips / YEAR
     lines = [
-        f"Peak live heap objects in one process against the heap allocations it would make in a year at {ips} "
-        f"instructions per second (per process, summed over its threads, 365.25-day years). Allocations per "
-        f"instruction are measured under DynamoRIO. A {ID_BITS}-bit lifetime id with {SPLIT} slot and {g} "
-        f"generation bits supports at least (2^{SPLIT} - peak) x 2^{g} allocations before a process can run out of "
-        f"slots. "
-        + (f"The gray bands show how many years that lasts ({', '.join(f'{y:,}' for y in BANDS)}), darker is sooner."
-           if BANDS else "The line is that bound for one year, the arrow the gap to the run closest to it.")
-        + (f" The dashed curve is the one-year bound of the "
-           f"{' and '.join(f'{i}/{ID_BITS - i}' for i in OTHER_SPLITS)} split." if OTHER_SPLITS else ""),
-        f"The {len(shown)} runs shown are those of the {len(peaks)} in the census with a measured allocation rate "
-        f"as well" + (f" ({', '.join(left_out)} left out)" if left_out else "") + ". "
-        + (f"Without a rate: " + ", ".join(f"{s} ({n})" for s, n in no_rate) + ". " if no_rate else "")
-        + f"With {SPLIT} slot and {g} generation bits the shortest bound among them is about "
-        f"{years_left(worst[3], worst[4], SPLIT):,.0f} years, for {worst[1]} ({worst[0]}, {worst[2]}). "
-        + (f"{len(past)} runs need more than 2^{SPLIT} slots: "
-           + ", ".join(f"{p[1]} at {p[2]} ({p[3]:,} objects)" for p in past) + "." if past else ""),
+        f"Instructions per heap allocation of one process (x, the mean allocation interarrival time in instructions "
+        f"as Zorn and Grunwald measure it, all its threads, under DynamoRIO in one run) against its peak live heap "
+        f"objects (y, measured natively with an exact allocation tracer). A {ID_BITS}-bit lifetime id with "
+        f"{SPLIT} slot and {g} generation bits supports at least (2^{SPLIT} - y)·2^{g} allocations before a process "
+        f"can run out of slots, and the y axis ends at the 2^{SPLIT} slots. "
+        f"The closest run to that limit, {worst[1]} ({worst[0]}, one allocation every "
+        f"{1000 / worst[4]:,.0f} instructions), can run out only after 2^{n:.2f} instructions: about "
+        f"{years(1e9):,.0f}, {years(1e10):,.0f} or {years(1e11):,.1f} years at 10^9, 10^10 or 10^11 instructions "
+        f"per second. The largest peak, {widest[1]} ({widest[3]:,} objects), is {SPLIT - log2(widest[3]):.1f} bits "
+        f"short of 2^{SPLIT} slots. "
+        + f"{len(shown)} runs" + "".join(f", {len(v)} of them {s} scripts that overlap near {v[0]:,} objects"
+                                         for s, v in stack.items() if len(v) > 1) + ".",
     ]
     open(path, "w").write("\n\n".join(lines) + "\n")
 
