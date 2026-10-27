@@ -1,0 +1,43 @@
+{
+ "booted": true,
+ "reached_script": true,
+ "completed": true,
+ "panic": false,
+ "exits": {
+  "int": 139,
+  "char": 139,
+  "memcpy": 139
+ },
+ "output": {
+  "int": [
+   "mode=int before=11,22",
+   "swapped, tag0=0 tag1=0",
+   "[CAPSTONE] Cap mem access requires capability: pc = 3f8768ffa4, rs1 = x12, imm = 0, value = 3f8773e040, value_hi = 8388112040",
+   "capstone-exec: domain fault cause=24 pc=0x3f8768ffa4 address=0x3f8773e040 entry=0x3f87680838 code=0x3f87680000-0x3f87700000 last=0x42 preparing=0x42 sha256=bbcc81f8efba8d1e1801167c647dc2d5c13ca52917d4e04a30bd5ab78c4b6265 image=swap.dom",
+   "Segmentation fault"
+  ],
+  "char": [
+   "mode=char before=11,22",
+   "swapped, tag0=0 tag1=0",
+   "[CAPSTONE] Cap mem access requires capability: pc = 3fa548ffa4, rs1 = x12, imm = 0, value = 3fa5510040, value_hi = 8388110040",
+   "capstone-exec: domain fault cause=24 pc=0x3fa548ffa4 address=0x3fa5510040 entry=0x3fa5480838 code=0x3fa5480000-0x3fa5500000 last=0x42 preparing=0x42 sha256=bbcc81f8efba8d1e1801167c647dc2d5c13ca52917d4e04a30bd5ab78c4b6265 image=swap.dom",
+   "Segmentation fault"
+  ],
+  "memcpy": [
+   "mode=memcpy before=11,22",
+   "swapped, tag0=1 tag1=0",
+   "[CAPSTONE] Cap mem access requires capability: pc = 3fa920ffa4, rs1 = x12, imm = 0, value = 3fa92a5040, value_hi = 8388111040",
+   "capstone-exec: domain fault cause=24 pc=0x3fa920ffa4 address=0x3fa92a5040 entry=0x3fa9200838 code=0x3fa9200000-0x3fa9280000 last=0x42 preparing=0x42 sha256=bbcc81f8efba8d1e1801167c647dc2d5c13ca52917d4e04a30bd5ab78c4b6265 image=swap.dom",
+   "Segmentation fault"
+  ]
+ },
+ "serial_log": "swap.serial",
+ "filtered": {
+  "what": "CAPSTONE_VM_ADD_OK launcher mapping lines and kernel console lines removed from output; exits and every other line kept",
+  "removed_per_run": {
+   "int": 11,
+   "char": 11,
+   "memcpy": 11
+  }
+ }
+}

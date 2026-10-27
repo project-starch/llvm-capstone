@@ -1,0 +1,53 @@
+{
+ "booted": true,
+ "reached_script": true,
+ "completed": true,
+ "panic": false,
+ "exits": {
+  "version": 1,
+  "hello-m0": 0,
+  "churn-m0": 0,
+  "sanity-m0": 0,
+  "sort-ok": 0
+ },
+ "output": {
+  "version": [
+   "PHP 5.0.0 (cli) (built: Nov 14 2023 22:13:20)",
+   "Copyright (c) 1997-2004 The PHP Group",
+   "Zend Engine v2.0.0, Copyright (c) 1998-2004 Zend Technologies",
+   "CAPSTONE_VM_STATS arenas=15 pages=974 peak=1184 nodes=3644 steps=876 faults=486 collections=0 reclaimed=0 rounds=19 bytes_in=338 bytes_out=16 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=56784100 elapsed_ns=1162640400"
+  ],
+  "hello-m0": [
+   "hello from PHP 5.0.0",
+   "3,CAPSTONE_VM_ADD_OK slot=123 base=0x3fb306c000 bytes=4096 reg=10 perms=6 linear=1",
+   "3,1,2 OK [    3.711865] remote fence extension is not available in SBI v1.0",
+   "ca72431bf6bc7729c82dbb19ed7a9f2c",
+   "CAPSTONE_VM_STATS arenas=15 pages=983 peak=1199 nodes=3758 steps=936 faults=512 collections=0 reclaimed=0 rounds=56 bytes_in=353 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=30753500 elapsed_ns=618426700"
+  ],
+  "churn-m0": [
+   "churn 197900",
+   "CAPSTONE_VM_STATS arenas=17 pages=995 peak=1209 nodes=112443 steps=11452 faults=2622 collections=0 reclaimed=0 rounds=48 bytes_in=301 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=35132100 elapsed_ns=30118025100"
+  ],
+  "sanity-m0": [
+   "sanity 573 200 17 abc CAPSTONE_VM_ADD_OK slot=151 base=0x3fa73a2000 bytes=4096 reg=10 perms=6 linear=1",
+   "0,1,2,3,4,5,6,7,8,9",
+   "CAPSTONE_VM_STATS arenas=16 pages=1076 peak=1338 nodes=7176 steps=1323 faults=722 collections=0 reclaimed=0 rounds=56 bytes_in=330 bytes_out=29239 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=38171300 elapsed_ns=1082201600"
+  ],
+  "sort-ok": [
+   "sorted CAPSTONE_VM_ADD_OK slot=123 base=0x3fbb079000 bytes=4096 reg=10 perms=6 linear=1",
+   "1,2,3",
+   "CAPSTONE_VM_STATS arenas=15 pages=982 peak=1199 nodes=3746 steps=902 faults=511 collections=0 reclaimed=0 rounds=48 bytes_in=301 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=37396400 elapsed_ns=459569400"
+  ]
+ },
+ "serial_log": "/tmp/php-kit/smoke/smoke-stock.serial",
+ "filtered": {
+  "what": "CAPSTONE_VM_ADD_OK launcher mapping lines and kernel console lines removed from output; exits and every other line kept",
+  "removed_per_run": {
+   "version": 123,
+   "hello-m0": 127,
+   "churn-m0": 2230,
+   "sanity-m0": 194,
+   "sort-ok": 127
+  }
+ }
+}

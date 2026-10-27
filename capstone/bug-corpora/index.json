@@ -1878,8 +1878,8 @@
       "upstream": {
         "version": "5.0.0",
         "pin_source": {
-          "file": "capstone/ports/php/app/build-virtual.sh",
-          "grep": "P=${PHP_SRC:-/corpus/build/php-5.0.0}"
+          "file": "capstone/ports/php/app/prepare-sources.sh",
+          "grep": "VERSION=5.0.0"
         }
       },
       "targets": [
@@ -1887,6 +1887,7 @@
       ],
       "workload": "the 31-case population ASAN misses and the 29-case population it sees, each trigger a .php script on stdin, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the corpus's ASAN and pristine records; php -n -v exits 1 as native PHP does and the stock arm's output matches the native glibc build",
       "evidence": [
+        "capstone/ports/php/app/results/2026-10-27-requalification",
         "capstone/ports/php/app/results/2026-10-26",
         "capstone/ports/php/app/results/platform-qualification-2026-10-26"
       ],
@@ -1895,8 +1896,8 @@
         "capstone/ports/php/engine",
         "capstone/tests/cheri-php-blind"
       ],
-      "status": "recorded results are from images on the VM-image ABI before dev's v7-only loader; not yet rebuilt or re-run on the merged tree",
-      "note": "PHP's source tree and the oracle it is scored against (results-asan-default.json, results-asan-stockalloc.json, results-pristine-default.json and the case metadata) are read from an external read-only mount, /corpus, which is not in this repository; there is no bug-corpora/php yet. The Zend allocator seam the protected arms use is ports/php/zend-alloc/sublet.",
+      "status": "rebuilt from scratch and smoke-tested on dev 0b0b3414dca5 (results/2026-10-27-requalification): php -n -v, a hello script, an allocation churn and the runner's sorting sanity script run to completion on the stock image and on seam modes 0, 4, 6 and 7. The 2026-10-26 populations are NOT re-run (the corpus scripts and oracles are external); their README carries the 2026-10-27 correction for CRASH-022/078",
+      "note": "PHP's source is the tree app/prepare-sources.sh prepares: the museum php-5.0.0.tar.gz by SHA-256, configured --disable-all, with the tree patches of app/patches (0001 compile fix, 0002 qsort swap). The oracle it is scored against (results-asan-default.json, results-asan-stockalloc.json, results-pristine-default.json and the case metadata) still comes from an external corpus not in this repository; there is no bug-corpora/php yet. The Zend allocator seam the protected arms use is ports/php/zend-alloc/sublet, applied as patch 0003.",
       "where": "capstone/ports/php/app"
     },
     {
