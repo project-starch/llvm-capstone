@@ -20,9 +20,11 @@ so the comparator's first `f->pData` (or `f->nKeyLength`) load traps before any 
 
 **Which cells.** CRASH-022's trigger is a `usort`; its ASAN line, `array.c:546`, is that first
 load in `array_user_compare`. CRASH-078's is a `ksort`; its recorded site, `array.c:162`, is the
-same load in `array_key_compare`. Every one of their cells, on all four arms and in all four
-populations below, records cause 24 and never cause 25, and they are the only cause-24 catches
-in `asan-blind` and (with CRASH-064, a different mechanism) in the temporal populations. The
+same load in `array_key_compare`. Every one of their cells, on all four arms and in every
+population below, records cause 24 and never cause 25. CRASH-022 is the only cause-24 catch in
+`asan-blind` on every arm; in the temporal populations the other cause-24 catches are CRASH-064
+(every arm of the sensitivity table) and CRASH-159 (its `stock` and `block` cells), both at
+sites that are not a sort comparator, and they stand as recorded. The
 fault lands before CRASH-022's comparator has done a single `unset()`, so "its freed block is
 reused and overwritten with scalar data, which clears the tag" (this file, the plan at its
 CRASH-022 passages, and the pre-registration's "faults on any build") describes an execution
@@ -37,7 +39,7 @@ this held for those runs too.
 |---|---|---|---|---|---|
 | `asan-blind` CAUGHT | 1 | 7 | 20 | **24** | 27 (CRASH-022 leaves it) |
 | `temporal-asan-visible` CAUGHT | 0 | 6 | 6 | 6 | 6 scoreable (CRASH-078 leaves it) |
-| `temporal-scored-with-oracle-crashes` CAUGHT | 3 | 17 | 25 | 25 | as before, less CRASH-078 |
+| `temporal-scored-with-oracle-crashes` CAUGHT | 3 | 17 | 25 | 25 | 28 (the 29 inputs less CRASH-078) |
 
 The arm ordering stays monotone. `exact` becomes 24 of 27, not 25 of 28; "the two `stock`
 catches ... faulting on any build" is one catch (CRASH-102, cause 28, a bounds fault, which

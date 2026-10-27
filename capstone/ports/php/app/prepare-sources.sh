@@ -41,7 +41,10 @@ PATCH_HASH=$({ for p in "${TREE_PATCHES[@]}"; do printf '%s ' "$(basename "$p")"
              | sha256sum | cut -d' ' -f1)
 
 if [ -d "$TREE" ]; then
-  if [ "$(cat "$TREE/patchset.sha256" 2>/dev/null)" = "$PATCH_HASH" ] && [ -f "$TREE/Makefile" ]; then
+  # patchset.sha256 is written LAST, after every other output, so its presence means the whole
+  # preparation finished; the outputs it vouches for are still checked, not assumed.
+  if [ "$(cat "$TREE/patchset.sha256" 2>/dev/null)" = "$PATCH_HASH" ] \
+     && [ -f "$TREE/Makefile" ] && [ -f "$TREE/main/php_config.h" ] && [ -f "$TREE/PROVENANCE.txt" ]; then
     echo "already prepared: $TREE" >&2
     echo "$TREE"
     exit 0
@@ -77,12 +80,13 @@ for f in Makefile main/php_config.h main/build-defs.h Zend/zend_config.h TSRM/ts
   [ -f "$TREE/$f" ] || { echo "configure left no $f" >&2; exit 2; }
 done
 # The TU list is the whole point of the configured tree; a different count is a different port.
-TUS=$(cd "$TREE" && make -s -p -n 2>/dev/null | grep -E '^(PHP_GLOBAL_OBJS|PHP_CLI_OBJS) =' \
-      | tr ' ' '\n' | grep -c '\.lo$' || true)
+# Read from the Makefile the way build-virtual.sh reads it (the two assignments, their .lo
+# entries), not through `make -p`, whose failure the pipeline could not tell from a count.
+TUS=$({ sed -n '/^PHP_GLOBAL_OBJS *=/p' "$TREE/Makefile"; sed -n '/^PHP_CLI_OBJS *=/p' "$TREE/Makefile"; } \
+      | grep -o '[A-Za-z_0-9/]*\.lo' | LC_ALL=C sort -u | wc -l)
 [ "$TUS" = 145 ] || { echo "the configured tree lists $TUS translation units, expected 145" >&2; exit 2; }
 
-# ---- the record -------------------------------------------------------------------------
-echo "$PATCH_HASH" > "$TREE/patchset.sha256"
+# ---- the record (the stamp last) ---------------------------------------------------------
 {
   echo "PHP ${VERSION}, prepared by capstone/ports/php/app/prepare-sources.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   echo "tarball: $URL  sha256 $SHA256"
@@ -93,5 +97,6 @@ echo "$PATCH_HASH" > "$TREE/patchset.sha256"
   echo "The seam patch (0003) is not in this tree; build-virtual.sh applies it to a copy of"
   echo "Zend/zend_alloc.c for the seam arms only."
 } > "$TREE/PROVENANCE.txt"
+echo "$PATCH_HASH" > "$TREE/patchset.sha256"
 echo "prepared: $TREE ($TUS translation units)" >&2
 echo "$TREE"

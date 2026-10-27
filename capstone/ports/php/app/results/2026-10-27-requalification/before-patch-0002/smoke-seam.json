@@ -1,0 +1,126 @@
+{
+ "booted": true,
+ "reached_script": true,
+ "completed": true,
+ "panic": false,
+ "exits": {
+  "version": 1,
+  "hello-m0": 0,
+  "churn-m0": 0,
+  "hello-m4": 0,
+  "churn-m4": 0,
+  "hello-m6": 0,
+  "churn-m6": 0,
+  "hello-m7": 0,
+  "churn-m7": 0,
+  "sort-faults": 139
+ },
+ "output": {
+  "version": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "PHP 5.0.0 (cli) (built: Nov 14 2023 22:13:20)",
+   "Copyright (c) 1997-2004 The PHP Group",
+   "Zend Engine v2.0.0, Copyright (c) 1998-2004 Zend Technologies",
+   "PHP_VIRTUAL SEAM blocks=209 frees=209 issues=209 retires=0 revokes=0 splits=209 reallocs=37 live=0",
+   "PHP_VIRTUAL SEAM records_live=209 records_peak=209 slabs=1 lookups=736",
+   "CAPSTONE_VM_STATS arenas=35 pages=1186 peak=1345 nodes=4070 steps=1239 faults=641 collections=0 reclaimed=0 rounds=24 bytes_in=569 bytes_out=16 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=62668600 elapsed_ns=1252510700"
+  ],
+  "hello-m0": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "hello from PHP 5.0.0",
+   "3,CAPSTONE_VM_ADD_OK slot=128 base=0x3fa63d2000 bytes=8192 reg=10 perms=6 linear=1",
+   "3,1,2 OK [    3.927940] remote fence extension is not available in SBI v1.0",
+   "ca72431bf6bc7729c82dbb19ed7a9f2c",
+   "PHP_VIRTUAL SEAM blocks=287 frees=287 issues=287 retires=0 revokes=0 splits=287 reallocs=37 live=0",
+   "PHP_VIRTUAL SEAM records_live=287 records_peak=287 slabs=1 lookups=1028",
+   "CAPSTONE_VM_STATS arenas=41 pages=1212 peak=1374 nodes=4343 steps=1373 faults=675 collections=0 reclaimed=0 rounds=61 bytes_in=585 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=31368500 elapsed_ns=668996500"
+  ],
+  "churn-m0": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "churn 197900",
+   "PHP_VIRTUAL SEAM blocks=99218 frees=99218 issues=99218 retires=0 revokes=0 splits=99218 reallocs=9466 live=0",
+   "PHP_VIRTUAL SEAM records_live=99218 records_peak=99218 slabs=25 lookups=808284",
+   "CAPSTONE_VM_STATS arenas=4890 pages=15798 peak=15960 nodes=315734 steps=120139 faults=15261 collections=0 reclaimed=0 rounds=53 bytes_in=550 bytes_out=29241 node_bytes=5132288 node_capacity=319488 node_growths=14 launch_ns=38877800 elapsed_ns=44949282900"
+  ],
+  "hello-m4": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "hello from PHP 5.0.0",
+   "3,CAPSTONE_VM_ADD_OK slot=125 base=0x3fbb0b9000 bytes=4096 reg=10 perms=6 linear=1",
+   "3,1,2 OK ca72431bf6bc7729c82dbb19ed7a9f2c",
+   "PHP_VIRTUAL SEAM blocks=287 frees=287 issues=287 retires=0 revokes=0 splits=287 reallocs=37 live=0",
+   "PHP_VIRTUAL SEAM records_live=0 records_peak=235 slabs=1 lookups=1028",
+   "CAPSTONE_VM_STATS arenas=16 pages=1153 peak=1370 nodes=4337 steps=1394 faults=686 collections=0 reclaimed=0 rounds=61 bytes_in=583 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=48735200 elapsed_ns=575579700"
+  ],
+  "churn-m4": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 4 exact=0 revoke=0",
+   "churn 197900",
+   "PHP_VIRTUAL SEAM blocks=99218 frees=99218 issues=99218 retires=0 revokes=0 splits=99218 reallocs=9466 live=0",
+   "PHP_VIRTUAL SEAM records_live=0 records_peak=322 slabs=1 lookups=808284",
+   "CAPSTONE_VM_STATS arenas=18 pages=1169 peak=1384 nodes=316880 steps=101081 faults=803 collections=1 reclaimed=257104 rounds=53 bytes_in=543 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=49148700 elapsed_ns=43600847300"
+  ],
+  "hello-m6": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "hello from PHP 5.0.0",
+   "3,CAPSTONE_VM_ADD_OK slot=125 base=0x3f99300000 bytes=4096 reg=10 perms=6 linear=1",
+   "3,1,2 OK ca72431bf6bc7729c82dbb19ed7a9f2c",
+   "PHP_VIRTUAL SEAM blocks=287 frees=287 issues=352 retires=315 revokes=602 splits=287 reallocs=37 live=0",
+   "PHP_VIRTUAL SEAM records_live=0 records_peak=235 slabs=1 lookups=1343",
+   "CAPSTONE_VM_STATS arenas=16 pages=1153 peak=1370 nodes=4402 steps=1459 faults=686 collections=0 reclaimed=0 rounds=61 bytes_in=587 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=47808300 elapsed_ns=555761100"
+  ],
+  "churn-m6": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 6 exact=0 revoke=1",
+   "churn 197900",
+   "PHP_VIRTUAL SEAM blocks=99218 frees=99218 issues=349800 retires=340334 revokes=439552 splits=99218 reallocs=9466 live=0",
+   "PHP_VIRTUAL SEAM records_live=0 records_peak=322 slabs=1 lookups=1148618",
+   "CAPSTONE_VM_STATS arenas=18 pages=1169 peak=1384 nodes=567462 steps=351671 faults=803 collections=2 reclaimed=514396 rounds=53 bytes_in=555 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=48664100 elapsed_ns=54406531600"
+  ],
+  "hello-m7": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "hello from PHP 5.0.0",
+   "3,CAPSTONE_VM_ADD_OK slot=125 base=0x3f9abcb000 bytes=4096 reg=10 perms=6 linear=1",
+   "3,1,2 OK ca72431bf6bc7729c82dbb19ed7a9f2c",
+   "PHP_VIRTUAL SEAM blocks=287 frees=287 issues=352 retires=315 revokes=602 splits=287 reallocs=37 live=0",
+   "PHP_VIRTUAL SEAM records_live=0 records_peak=235 slabs=1 lookups=1343",
+   "CAPSTONE_VM_STATS arenas=16 pages=1153 peak=1370 nodes=4402 steps=1459 faults=686 collections=0 reclaimed=0 rounds=61 bytes_in=587 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=42219800 elapsed_ns=480802000"
+  ],
+  "churn-m7": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 7 exact=1 revoke=1",
+   "churn 197900",
+   "PHP_VIRTUAL SEAM blocks=99218 frees=99218 issues=349800 retires=340334 revokes=439552 splits=99218 reallocs=9466 live=0",
+   "PHP_VIRTUAL SEAM records_live=0 records_peak=322 slabs=1 lookups=1148618",
+   "CAPSTONE_VM_STATS arenas=18 pages=1169 peak=1384 nodes=567462 steps=351662 faults=803 collections=2 reclaimed=514396 rounds=53 bytes_in=555 bytes_out=29241 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=41801700 elapsed_ns=50944500400"
+  ],
+  "sort-faults": [
+   "PHP_VIRTUAL SEAM armed rc=0",
+   "ZEND_CAP_MODE 0 exact=0 revoke=0",
+   "[CAPSTONE] Cap mem access requires capability: pc = 3f974be02c, rs1 = x11, imm = 16, value = 3f96b49400, value_hi = 424f89201400",
+   "capstone-exec: domain fault cause=24 pc=0x3f974be02c address=0x3f96b49410 entry=0x3f97400948 code=0x3f97400000-0x3f97800000 last=0x39 preparing=0x39 sha256=e1139df2f53d51190a6e5e639abfbc1ad49353d5cdcac43bce4de173450c6c81 image=php-real-seam.dom",
+   "Segmentation fault"
+  ]
+ },
+ "serial_log": "/tmp/php-kit/smoke/smoke-seam.serial",
+ "filtered": {
+  "what": "lines beginning with CAPSTONE_VM_ADD_OK (launcher mappings) or a kernel timestamp removed from output; fragments the console interleaved mid-line remain; exits and every other line kept",
+  "removed_per_run": {
+   "version": 126,
+   "hello-m0": 131,
+   "churn-m0": 4981,
+   "hello-m4": 129,
+   "churn-m4": 231,
+   "hello-m6": 129,
+   "churn-m6": 231,
+   "hello-m7": 129,
+   "churn-m7": 231,
+   "sort-faults": 130
+  }
+ }
+}

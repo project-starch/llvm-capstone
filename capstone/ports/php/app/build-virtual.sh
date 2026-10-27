@@ -33,6 +33,21 @@ export SOURCE_DATE_EPOCH=${SOURCE_DATE_EPOCH:-1700000000}
 
 OUT=${PHP_VIRTUAL_OUT:-$CAPSTONE_TMP_ROOT/virtual-runtime}
 SDK="$OUT/sdk"
+
+# The PHP tree must carry the TREE patches (prepare-sources.sh applies them; patches/README.md
+# says which). Checked the way build-sdk.sh checks musl: each must apply in reverse. A tree
+# without 0001 fails 113 of 145 TUs; one without 0002 builds an image whose every sort()
+# faults -- and reads that fault as a catch, as CRASH-022 and CRASH-078 did until 2026-10-27.
+# Every case that compiles PHP calls this, so a collaborator-style /corpus tree is refused by
+# all of them, not only by realphp.
+assert_tree_patches() {
+  local _tree=$1 _tp
+  for _tp in "$HERE"/patches/php-5.0.0-*.patch; do
+    case "$_tp" in *-zend-alloc-sublet-hooks.patch) continue ;; esac
+    patch -d "$_tree" -p1 -R --dry-run -s -f < "$_tp" > /dev/null 2>&1 \
+      || { echo "  $_tree does not carry $(basename "$_tp") -- run prepare-sources.sh" >&2; exit 2; }
+  done
+}
 CC="$SDK/capstone-cc"
 export MUSL_CACHE_ROOT=${MUSL_CACHE_ROOT:-$OUT/musl-source}
 
@@ -134,6 +149,7 @@ case "$WHAT" in
     # check fail for a reason that has nothing to do with the patch.
     P=${PHP_SRC:-$CAPSTONE_TMP_ROOT/php-source/php-5.0.0}
     [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
+    assert_tree_patches "$P"
     SEAM="$R/capstone/ports/php/zend-alloc/sublet"
     PATCHES="$HERE/patches"
     W="$OUT/php-virtual/inert"
@@ -161,7 +177,7 @@ case "$WHAT" in
       exit 1
     fi
     # And the positive control: WITH the define it must differ, or the check above is vacuous.
-    "$CC" "${ICF[@]}" -DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" \
+    "$CC" "${ICF[@]}" -DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" -I"$R/capstone/runtime/include" \
       -c "$W/patched/Zend/zend_alloc.c" -o "$W/sublet.o" 2>"$W/sublet.log" \
       || { echo "  patched zend_alloc.c did not compile WITH the define" >&2
            tail -5 "$W/sublet.log" >&2; exit 1; }
@@ -196,6 +212,7 @@ case "$WHAT" in
     # replaces them -- and engine/ keeps them, because it is still the comparison column.
     P=${PHP_SRC:-$CAPSTONE_TMP_ROOT/php-source/php-5.0.0}
     [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
+    assert_tree_patches "$P"
     E="$R/capstone/ports/php/engine"
     MODE=${PHP_CAP_ALLOC_MODE:-hier}
     case "$MODE" in
@@ -291,7 +308,9 @@ case "$WHAT" in
       # start_memory_manager itself. This seam KEEPS zend_alloc.c -- that is the whole point --
       # so those definitions must come from PHP, and PHP's AG(cache) stays live. ZEND_CAP_SUBLET
       # is the only flag the seam needs.
-      CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone")
+      # runtime/include for <capstone/capability.h>, which zend-cap-port.h includes since the
+      # block provider moved onto CDERIVE/CREVOKE (fa8902138ab0); the SDK does not add it.
+      CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" -I"$R/capstone/runtime/include")
       ZEND_ALLOC_RENAME=()          # the seam calls PHP's own entry points; nothing is renamed
       echo "  allocator: SEAM -- zend_alloc.c patched (8 guarded hunks), per-emalloc lifetimes"
     else
@@ -418,15 +437,7 @@ case "$WHAT" in
     P=${PHP_SRC:-$CAPSTONE_TMP_ROOT/php-source/php-5.0.0}
     [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
     [ -f "$P/Makefile" ] || { echo "no $P/Makefile -- the TU list has no source of truth" >&2; exit 2; }
-    # The tree must carry the TREE patches (prepare-sources.sh applies them; patches/README.md
-    # says which). Checked the way build-sdk.sh checks musl: each must apply in reverse. A tree
-    # without 0001 fails 113 of 145 TUs; one without 0002 builds an image whose every sort()
-    # faults -- and reads that fault as a catch, as CRASH-022 and CRASH-078 did until 2026-10-27.
-    for _tp in "$HERE"/patches/php-5.0.0-*.patch; do
-      case "$_tp" in *-zend-alloc-sublet-hooks.patch) continue ;; esac
-      patch -d "$P" -p1 -R --dry-run -s -f < "$_tp" > /dev/null 2>&1 \
-        || { echo "  $P does not carry $(basename "$_tp") -- run prepare-sources.sh" >&2; exit 2; }
-    done
+    assert_tree_patches "$P"
     SEAM="$R/capstone/ports/php/zend-alloc/sublet"
     PATCHES="$HERE/patches"
     MODE=${PHP_REALPHP_ALLOC:-seam}

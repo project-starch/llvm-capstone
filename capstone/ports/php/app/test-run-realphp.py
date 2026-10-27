@@ -723,18 +723,37 @@ def provenance_cases():
               [k for k in verdicts.PLATFORM_KEYS if k not in rec], [])
 
 
+def sanity_text_cases():
+    """The sanity control's script is what every arm must complete; pin what it must contain."""
+    print("\n-- the sanity script --")
+    text = R.SANITY_TEXT
+    check("the sanity script sorts three ways (ksort, sort, usort)",
+          [f in text for f in ("ksort(", "sort(", "usort(")], [True, True, True])
+    check("its comparator touches nothing but its arguments",
+          "function phpb_cmp($x, $y) { return ($x < $y) ? -1 : 1; }" in text, True)
+    check("the sorted array is not clobbered by the later foreach",
+          "foreach ($a as $w)" in text, False)
+    check("its one output line names every quantity it computes",
+          "echo 'sanity ', strlen($s), ' ', count($u['k']), ' ', $u['n'], ' '," in text
+          and "implode('', $k), ' ', implode(',', $w)" in text, True)
+
+
 def lint():
     print("\n-- lint --")
     for mod in ("pyflakes", "flake8"):
         p = subprocess.run([sys.executable, "-m", mod, str(HERE / "run-realphp.py"),
                             str(Path(__file__))], capture_output=True, text=True)
-        if p.returncode != 127 and (p.stdout or p.stderr or p.returncode == 0):
-            if p.stdout.strip():
-                print(p.stdout.strip())
-                FAILURES.append(f"{mod} reported findings")
-            else:
-                print(f"  ok   {mod} clean")
-            return
+        # `python -m X` with X not installed exits 1 and says so on stderr; that is "not
+        # available", not "clean". Only exit 0 with nothing to report is clean: an empty stdout
+        # with a non-zero status used to read as "ok pyflakes clean" when pyflakes was absent.
+        if "No module named" in p.stderr:
+            continue
+        if p.returncode == 0 and not p.stdout.strip():
+            print(f"  ok   {mod} clean")
+        else:
+            print((p.stdout + p.stderr).strip())
+            FAILURES.append(f"{mod} reported findings (exit {p.returncode})")
+        return
     print("  NOTE: neither pyflakes nor flake8 is installed, so NO linter ran. This is reported "
           "rather than skipped silently: an absent check reads exactly like a passing one.")
 
@@ -748,6 +767,7 @@ if __name__ == "__main__":
     node_table_cases()
     cap_insn_cases()
     provenance_cases()
+    sanity_text_cases()
     lint()
     print()
     if FAILURES:
