@@ -333,3 +333,43 @@ read T2/T1 at 1.003 or below with equal instret.
 
 **Analysis.** parse-board.py, then perf-analyze.py `report --arms` for T1,T3 / T3,T2 / T1,T2, as for the first T3
 run; the checks above by a script committed with the results.
+
+## The 15 allocating programs on bitstream 3: every program on one bitstream (2026-10-28, before any of these boots)
+
+**Why.** The lead asked for one figure with three groups, BEEBS, RV8 and CoreMark, each showing T1, T3 and T2.
+A suite geomean must come from one bitstream. The 88 programs have all three arms on bitstream 3; the 15 that
+allocate inside the timed region have them only on bitstream 2. RV8 and BEEBS-libc are split across the two. This
+run puts the 15 on bitstream 3, so all 103 programs have T1, T3 and T2 there.
+
+**Kits.** The T3 kits `perf/main3b/t3k{1,2,3}`, unchanged: the same images, launcher and run scripts as the
+bitstream-2 T3 run. Run-script sha256/16: t3k1 0ecbbc7c4c9f5ec8, t3k2 fc24bc09d77351fc, t3k3 37861b84fca1ac04;
+launcher 978c09d61f774315. Each kit's SHA256SUMS verifies against its stage (62 files each) on 2026-10-28.
+Platform as for the T3-all run: bitstream 3 (caplifive_vp2c_e7af48457), the board lane's bitstream-3 perf platform.
+Board 1 runs t3k1 then t3k3, board 2 runs t3k2.
+
+**Predictions.** The 15 are integer programs; bitstream 3 differs from bitstream 2 by the divsqrt fix.
+1. **Correctness.** Every process exits 0 with no VERIFY-FAILED. Within each program check= is one value across the
+   three arms, and it equals the bitstream-2 T3 run's value.
+2. **instret.** Per program and arm, the median instret per iteration equals the bitstream-2 T3 run's within 0.1 %.
+3. **Cycles, replicate across bitstreams.** Per program, each of T3/T1, T2/T3 and T2/T1 has a Welch interval that
+   overlaps the bitstream-2 T3 run's interval for that pair. A pair whose intervals are disjoint is reported with
+   both. miniz-libc is the one program already seen to move between boots: its T2/T1 read 2.1653 [2.1563, 2.1743] in
+   the main run and 2.1819 [2.1751, 2.1886] in the T3 run.
+4. **Suite geomeans on bitstream 3, all 103 programs** (this run's 15 with the T3-all run's 88). Composed from the
+   current per-program point estimates (15 from bitstream 2, 88 from bitstream 3), each suite geomean lies within
+   0.005 of:
+
+   | suite | n | T3/T1 | T2/T3 | T2/T1 |
+   |---|---|---|---|---|
+   | beebs (upstream) | 80 | 1.0001 | 0.9999 | 1.0000 |
+   | beebs-libc | 13 | 1.0265 | 1.0775 | 1.1061 |
+   | rv8 | 7 | 0.9997 | 1.0247 | 1.0244 |
+   | coremark | 1 | 1.0004 | 0.9998 | 1.0003 |
+   | ctl | 2 | 0.9980 | 1.0156 | 1.0136 |
+
+   CoreMark's three arms come from the T3-all run alone; it is listed for completeness, not as a prediction.
+
+**Analysis.** parse-board.py on each transcript; perf-analyze.py `report --arms` for T1,T3 / T3,T2 / T1,T2 on this
+run's rows (per-program replicate); then on this run's rows plus the T3-all run's rows (suite geomeans over all
+103 programs). The checks above by a script committed with the results. Nothing from bitstream 2 enters a
+bitstream-3 geomean.
