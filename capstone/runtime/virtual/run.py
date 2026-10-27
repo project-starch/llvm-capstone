@@ -88,8 +88,10 @@ echo VM_EXIT:mruby:$?
 cat /tmp/mruby.out
 if [ -f php.dom ]; then
   # PHP 5.0.0 (ports/php/app): sorts, so PHP's own qsort swap keeping its capabilities is on
-  # the gate; writes and reads a file through the delegated syscalls.
-  ./capstone-vexec php.dom -n -r '$a = array(3, 1, 2); sort($a); $f = fopen("/tmp/virtual-php", "w"); fwrite($f, "virtual"); fclose($f); echo "PHP_VIRTUAL_OK sorted=", implode(",", $a), " md5=", md5("capstone"), " file=", file_get_contents("/tmp/virtual-php"), "\n";' > /tmp/php.out 2>&1
+  # the gate; writes and reads a file through the delegated syscalls. The line is built first
+  # and written once: echo with several arguments writes each one, and the launcher's
+  # diagnostics (2>&1) landed between "file=" and the file's contents (2026-10-27).
+  ./capstone-vexec php.dom -n -r '$a = array(3, 1, 2); sort($a); $f = fopen("/tmp/virtual-php", "w"); fwrite($f, "virtual"); fclose($f); $s = "PHP_VIRTUAL_OK sorted=" . implode(",", $a) . " md5=" . md5("capstone") . " file=" . file_get_contents("/tmp/virtual-php") . "\n"; echo $s;' > /tmp/php.out 2>&1
   echo VM_EXIT:php:$?
   cat /tmp/php.out
 fi
