@@ -337,11 +337,15 @@ def node_pressure(text):
 _SYMBOLS = {}
 
 
-def image_base(llvm_bin, image):
+def symbols_of(llvm_bin, image):
     key = str(image)
     if key not in _SYMBOLS:
         _SYMBOLS[key] = verdicts.Symbols(llvm_bin, image)
-    return _SYMBOLS[key].base
+    return _SYMBOLS[key]
+
+
+def image_base(llvm_bin, image):
+    return symbols_of(llvm_bin, image).base
 
 
 def symbolize(llvm_bin, image, fault, text):
@@ -353,14 +357,20 @@ def symbolize(llvm_bin, image, fault, text):
     m = re.search(r"code=(0x[0-9a-f]+)-", text)
     if not m or fault is None:
         return "", "", 0
-    static = fault.pc - int(m.group(1), 16) + image_base(llvm_bin, image)
+    code = int(m.group(1), 16)
+    static = fault.pc - code + image_base(llvm_bin, image)
+    # THE FUNCTION COMES FROM THE SYMBOL TABLE, NOT FROM THE SYMBOLIZER. This image keeps its
+    # local symbols, and llvm-symbolizer's function line then names whatever symbol is nearest
+    # -- `.Lpcrel_hi9`, an assembler label -- or `??`. The first judge built on that line read
+    # every fault as "not the declared function" (corpus-run3, 2026-10-27: zero CAUGHT on 66
+    # cases). verdicts.Symbols walks nm's sized function symbols, which is what Fault.symbol
+    # was always meant to carry; the symbolizer supplies only the line table's file:line.
+    func, _ = symbols_of(llvm_bin, image).lookup(fault.pc, code)
+    func = func or ""
     out = subprocess.run([str(Path(llvm_bin) / "llvm-symbolizer"), "--obj", str(image),
-                          "--functions=short", f"{static:#x}"],
+                          "--functions=none", f"{static:#x}"],
                          capture_output=True, text=True).stdout.splitlines()
-    func = out[0].strip() if out else ""
-    if func in ("??", "<invalid>"):
-        func = ""
-    where = out[1].strip() if len(out) > 1 else ""
+    where = out[0].strip() if out else ""
     m2 = re.match(r"(.+?):(\d+):\d+$", where)
     if not m2:
         return func, "", 0

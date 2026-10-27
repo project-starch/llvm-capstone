@@ -526,11 +526,16 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
         elif "clang" in prog:
             text = "clang version test\n"
         elif "symbolizer" in prog:
-            text = f"{SITE}\n/b/ext/standard/basic_functions.c:2135:9\n"
+            # --functions=none: the location only. The function comes from nm below.
+            text = "/b/ext/standard/basic_functions.c:2135:9\n"
         elif "readelf" in prog:
             text = "  LOAD           0x000000 0x0000000000010000 0x0000000000010000\n"
         elif prog.endswith("llvm-nm"):
-            text = "0000000000010000 00000010 T main\n"
+            # Sized symbols, one covering the fixture fault's static pc (FAULT's
+            # pc - code + base = 0xf7f90), so the function is read from the symbol table as
+            # it is on the real image, where the symbolizer's function line is a local label.
+            text = ("0000000000010000 0000000000000010 T main\n"
+                    f"00000000000f7f00 0000000000000100 T {SITE}\n")
         return types.SimpleNamespace(stdout=text, stderr="", returncode=0)
     subprocess.run, subprocess.call = fake_run, (lambda *a, **k: 0)
     argv = sys.argv
