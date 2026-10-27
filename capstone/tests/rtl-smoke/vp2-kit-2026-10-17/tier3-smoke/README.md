@@ -10433,3 +10433,121 @@ exiting 0, and readings 0.
 - **What this does not cover:** the runtime lane's predictions (check= and instret equal to the bitstream-2 T3 run's,
   interval overlap, and the suite geomeans over 103 programs). Those are graded by that lane on these transcripts.
 - **Records:** `records/b3bs-perfmain6-t3k{1,3}-b1.result-lines.txt` and `records/b3bs-perfmain6-t3k2-b2.result-lines.txt`.
+
+### The corpus on bitstream 3, first arms: cpython lt1 (board 1), postgres sql0 then cpython lt0 (board 2), pre-registered (2026-10-27 22:3x, before any boot)
+
+- **Why:** a corpus regression read on the bitstream that fixes R-62 and R-63. Bitstream 3 is bitstream 2 plus the
+  divider's new normaliser, and nothing else in the core changes. These are the three arms bitstream 2 read first.
+  Each repeated exactly at bitstream 2's N=2 (lt1 and sql0), so any difference is evidence about the change.
+- **What runs:** `tier3-corpus-b3.sh`. Board 1 runs lt1; board 2 runs sql0 and then lt0. Each arm is its own cold boot,
+  so lt0 runs once sql0's script returns, whatever its status.
+  - **`tier3-pg-b3-arm.sh` and `tier3-cpy-b3-arm.sh`** are the bitstream-2 runners with only the board side changed:
+    - kits bkit11-b3-b2, bkit11-b3-mb2 (measure-only), bkit11-b3-nb1 and bkit11-b3-nb2 (norandmaps). These are
+      make-b3-kit.sh copies of the bitstream-2 kits made tonight: every file hash equal except board.env, which
+      differs only in BOARD_BITSTREAM=caplifive_vp2c_e7af48457, and module 215a09be5a89360c is unchanged. The driver
+      HARD STOPs unless the resident bitstream is that name.
+    - output `t3-run-b3-e7af48457-b<board>/{sql0,cpy-lt1,cpy-lt0}`; pg results filed under RESULTS_DIR
+      2026-10-27-b3-e7af48457-b2;
+    - lab-hub bookings of 240 min (pg; the bitstream-2 pg runner had none) and 480 min (cpython; bitstream 2's lt1
+      ran over 6 h).
+  - **Unchanged from bitstream 2:**
+    - images: sql0 cf61cb43, lt1 8bcc40cf, lt0 7b871db7;
+    - runners: pg 7ce203f9, cpython dc606bd1 with appvm-arm 666d920e;
+    - the trimmed fixture 956173e0;
+    - the references batch-refs-b2/ref-b2/{sql0,lt1,lt0}, on the 18-bit twin qkit7-b2twin3-q8(-nr). Their stamps and
+      SWITCHES are checked as before.
+  - **Graders:** pg by score-arm.sh against ref-b2/sql0/bundle, after the measured firmware passes the 26,000,000 B
+    cap and the must-fire lines fire. cpython by verdicts-compare.py against ref-b2/<tag>/out on (verdict,
+    attribution, cause, symbol, offset).
+  - Dry run: `records/dryrun-corpus-b3.txt`, every external call stubbed. It covers:
+    - every arm's armed path;
+    - the firmware-cap, busy, bad-tag and missing-kit stops;
+    - the grade's positive control, one lt1 verdict flipped, which reads 31 of 32 with rc=1;
+    - the orchestrator with sql0 passing and failing.
+- **Checked against bitstream 3's open ISSUES rows:**
+  - R-64, R-65 and R-66 remain, and were present on bitstream 2 too.
+  - Q-31 (cause 4 where QEMU reads 24) is not in the FPU.
+  - Neither changes a prediction.
+- **Predictions: each arm reads what bitstream 2's board read.**
+  - **sql0: 9 of 9 as ref-b2/sql0**, CAUGHT 2 and MISSED 7, with must-fire OK and the readings 0.
+  - **lt1: verdicts-compare 32 of 32** against ref-b2/lt1: CAUGHT 27, MISSED 3, not-reached 1, unattributed 1.
+    The ten capacity cells are CAUGHT at their declared sites.
+  - **lt0: 31 of 32** against ref-b2/lt0. The one difference is case 01, CAUGHT at set_dealloc+284 with cause 4
+    where QEMU reads 24 (Q-31, as on bitstream 2 and the batch). Case 18 is CAUGHT with cause 28 in
+    mmap_ass_subscript, and case 09 is at dict_traverse.
+  - norandmaps is in the cpython command lines, and every reading is 0.
+- **Any other difference** is a finding about bitstream 3, reported cell by cell. Its first suspect is a
+  division-dependent path. The orchestrator's END rc says only whether a script ran; the grade is the compare and score
+  lines.
+
+### The corpus on bitstream 3, first arms, result: sql0, lt1 and lt0 each read exactly what bitstream 2 read (2026-10-28)
+
+The pre-registration is the section "The corpus on bitstream 3, first arms" above, lane commit 7ef0107888b7. Every
+prediction holds.
+
+| arm | board | booking | ran | prediction | read |
+|---|---|---|---|---|---|
+| sql0 | 2 | 468 | 22:24-00:28 | 9 of 9 as ref-b2/sql0, CAUGHT 2, MISSED 7 | 9 of 9 the same, CAUGHT 2 (memcpy+220, cause 28), MISSED 7 |
+| lt1 | 1 | 467 | 22:24-04:42 | 32 of 32 as ref-b2/lt1 | 32 of 32 the same: CAUGHT 27, MISSED 3, not-reached 1, unattributed 1 |
+| lt0 | 2 | 469 | 00:28-06:26 | 31 of 32, the difference case 01 (Q-31) | 31 of 32; the one DIFF is case 01, cause 4 at set_dealloc+284 where the reference reads 24 |
+
+- **Resident bitstream:** every SEQ reads caplifive_vp2c_e7af48457. Each firmware is 25,856,520 B, under the 26,000,000
+  B cap.
+- **sql0:**
+  - both positive controls fault in corpus_control_write and corpus_control_read;
+  - must-fire OK;
+  - the readings FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped are all 0.
+- **lt1:**
+  - the ten capacity cells are CAUGHT at the declared sites and causes, the same lines as bitstream 2's N=2 run;
+  - case 10, the `divmod` cell, is CAUGHT at cause 28 in l_divmod;
+  - readings 0, and norandmaps is in the command line.
+  - The arm finished inside the runner's 12 h limit in 6 h 18 min, so no salvage was needed. Bitstream 2's 6 h limit
+    had needed one.
+- **lt0:**
+  - case 18 is CAUGHT with cause 28 in mmap_ass_subscript, and case 09 with cause 24 in dict_traverse;
+  - the three NO-READINGs (11 not-reached, 13 infra, 32 unattributed) are the reference's;
+  - readings 0, and norandmaps is present.
+- **Reading:** on these three arms, bitstream 3's fdiv/fsqrt fix (R-62/R-63) changes no corpus verdict, attribution,
+  cause, symbol or offset. Q-31 reads on bitstream 3 as it did on bitstream 2.
+- **Records:**
+  - `records/b3bs-sql0-b2.result-lines.txt` and `records/b3-sql0-b2.board.txt`, the latter being score-arm.sh's per-cell
+    lines;
+  - `records/b3bs-cpy-lt1-b1.result-lines.txt` and `records/b3bs-cpy-lt0-b2.result-lines.txt`, each holding the
+    wrapper's lines, verdicts-compare's non-SAME lines, the SEQ lines and, for lt1, the capacity cells.
+
+### The corpus on bitstream 3: postgres pg-pools on board 1, pre-registered (2026-10-28 05:5x, before the boot)
+
+- **Why:** the next corpus arm bitstream 2 read. Board 1 is free once main6's t3k1 and t3k3 have run, and board 2 is
+  still on lt0. It is repeated as on bitstream 2, so any difference is evidence about the change.
+- **What runs:** `tier3-pg-b3-arm.sh 1 <log> pg-pools`, the same runner as sql0 above (2496f8d8df4aa09d), on kits
+  bkit11-b3-b1 and bkit11-b3-mb1.
+  - bkit11-b3-mb1 is new tonight. make-b3-kit.sh copied it from bkit9-b2-mb1, and only board.env's BOARD_BITSTREAM
+    changes. Its file hashes, board.env aside, equal bkit11-b3-mb2's.
+  - Unchanged from bitstream 2:
+    - image dc2a1356dce735e0;
+    - runner 7ce203f9;
+    - the trimmed fixture 956173e0;
+    - the reference batch-refs-b2/pgp-trim/bundle, with its stamp checked.
+  - Results are filed under RESULTS_DIR 2026-10-27-b3-e7af48457-b1, with a 240-min lab-hub booking.
+- **Dry run:** `records/dryrun-pools-b3.txt`. The kit gates and the stamp check run live; every board call is stubbed.
+  It covers the armed path and the busy stop.
+- **Prediction:** what bitstream 2's board read. That is 9 of 9 cells as pgp-trim (CAUGHT 5, MISSED 2, NO-READING
+  unattributed 2), with the firmware under the 26,000,000 B cap, must-fire OK, and the readings 0. Any other difference
+  is a finding about bitstream 3, reported cell by cell.
+
+### The corpus on bitstream 3, result: postgres pg-pools 9 of 9, as bitstream 2 read (board 1, 2026-10-28 05:56-07:54)
+
+Pre-registered at lane commit 90227d3792f0; the prediction holds.
+- **Cells:** 9 of 9 the same as batch-refs-b2/pgp-trim, with CAUGHT 5, MISSED 2 and NO-READING unattributed 2.
+  - The five catches are at __stpcpy+44, memcpy+220 (twice), oidvectorout+56 and pg_wchar2utf_with_len+140, all
+    cause 28.
+  - The two unattributed cells read cause 28 at pg_popcount_optimized+292 and memcpy+220.
+- **Run checks:**
+  - all four controls fault: bounds and uaf, malloc and palloc;
+  - must-fire OK;
+  - fixture 956173e0 and image dc2a1356 as recorded;
+  - firmware 25,856,520 B, under the cap;
+  - readings 0;
+  - SEQ reads caplifive_vp2c_e7af48457, and the booking was 472.
+- **Records:** `records/b3bs-pg-pools-b1.result-lines.txt` and `records/b3-pg-pools-b1.board.txt`, the latter being
+  score-arm.sh's per-cell lines.

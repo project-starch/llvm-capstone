@@ -1,0 +1,17 @@
+# tier3-pg-b3-arm.sh 2496f8d8df4aa09d, board 1, tag pg-pools: dry run 2026-10-28 05:55, before the boot. The kits' gates (bkit11-b3-b1, the new bkit11-b3-mb1) and the
+# reference stamp check run live; the runner, its QEMU check, busy, the lab hub and scoring are stubbed (the runner writes a MEASURE-ONLY SEQ for the -mb kit, else copies
+# the pgp-trim reference bundle as its output). poolsbusy: the busy check returns false.
+## poolsb1
+PG MEASURE: firmware 25000000 B against 26000000
+T3PG dry-poolsb1 BEGIN 05:55:11 booking 91
+UNBOOK-STUB 91
+T3PG dry-poolsb1 END 05:55:11 rc=0 :: --- stub: arm virtual-pg-pools image postgres-lt1
+PG inputs as recorded: fixture 956173e054762e91, image dc2a1356dce735e0
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x0
+SCORE-STUB dry-poolsb1 <mnt-hdd>/capstone/batch-refs-b2/pgp-trim/bundle <scratch>/drypp/r-poolsb1 <scratch>/drypp/poolsb1.out
+PG DONE 05:55:11
+## poolsb1 rc=0
+## poolsbusy
+PG STOP: board 1 is busy
+## poolsbusy rc=1

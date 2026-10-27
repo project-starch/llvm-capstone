@@ -7513,6 +7513,9 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
   (`core/fpu_div_sqrt_fix/norm_div_sqrt_mvp.sv`). Outside verif/ nothing else changes, and the memory map is identical.
   - It was sealed with sha256 d6ed97b6…b423b and graded by the rtl lane: 0 loops, 0 routing errors, WNS −10.047
     against bitstream 2's −9.790.
+  - From the synthesis artifact synth-e7af48457-exit0.tar.gz (sha256 48c5596b21ed…2effec), read in its reports: TNS
+    −44,010.926 ns over 13,396 of 188,701 endpoints, WHS +0.029; placed 169,061 LUT and 63,647 FF; 215,406 of 215,406
+    routable nets fully routed, 0 with routing errors.
   - Both boards were flashed on the lead's word, and each read `caplifive_vp2c_e7af48457.bit` back from nv_bitstream_name.
   - R-64, R-65 and R-66 remain in this bitstream.
 - **R-62 is fixed on silicon.** The rtl lane's fp-all bare image (512 fdiv.d and 512 fsqrt.d cases against
@@ -7528,6 +7531,13 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
   - hold 100000, high_water 105,569 of 262,144;
   - R-61 and R-61 arming on the fixed vectors;
   - all six images of the R-58 / R-59 / Q-24 kit.
+- **The bug corpus reads as on bitstream 2** (2026-10-28, pre-registered at vp2-tier12 7ef0107888b7 and
+  90227d3792f0):
+  - postgres sql0 9 of 9 and pg-pools 9 of 9;
+  - cpython lt1 32 of 32, with the ten capacity cells CAUGHT at their declared sites;
+  - cpython lt0 31 of 32. The one difference is case 01's Q-31 cause (4 where QEMU reads 24), as on bitstream 2.
+  - The fdiv/fsqrt fix changes no verdict, attribution, cause, symbol or offset in these arms. Readings are 0.
+  - Records: `records/b3bs-sql0-b2`, `b3bs-cpy-lt1-b1`, `b3bs-cpy-lt0-b2` and `b3bs-pg-pools-b1`.
 - The perf consequence (ludcmp, st and minver now correct) is the section above, "ludcmp, st and minver on
   bitstream 3".
 - Records: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/bs3-e7af48457-b1` and `-b2`, and
