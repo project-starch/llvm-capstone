@@ -542,19 +542,32 @@ def stage_inputs(args, cases):
         if not src.is_file():
             sys.exit(f"no case file at {src}")
         (args.scratch / f"{case}.php").write_bytes(src.read_bytes())
-    # The sanity workload must allocate and free heavily through emalloc/efree and contain NO
-    # defect, so that "revocation is sound on a clean workload" is what it actually measures.
-    (args.scratch / SANITY_SCRIPT).write_text(
+    (args.scratch / SANITY_SCRIPT).write_text(SANITY_TEXT)
+
+
+# The sanity workload must allocate and free heavily through emalloc/efree and contain NO
+# defect, so that "revocation is sound on a clean workload" is what it actually measures. A
+# module constant, so a smoke run outside this runner can execute the very same script.
+SANITY_TEXT = (
         "<?php\n"
         "// revocation-sanity: a benign workload. Every arm must run this to its normal end;\n"
         "// an arm that cannot is not a column, and a silence on it is not a MISSED.\n"
+        "// It sorts, three ways, with a comparator that touches nothing: PHP's own\n"
+        "// _zend_qsort_swap moved Bucket* elements through int and char stores, which\n"
+        "// strips their tags, so every sort faulted at its first comparison (patch 0002).\n"
+        "// Before this control existed, CRASH-022 and CRASH-078 read that fault as a catch.\n"
+        "function phpb_cmp($x, $y) { return ($x < $y) ? -1 : 1; }\n"
+        "$k = array(3 => 'c', 1 => 'a', 2 => 'b'); ksort($k);\n"
+        "$w = array(5, 3, 8, 1, 9, 2, 7, 4, 6, 0); sort($w); usort($w, 'phpb_cmp');\n"
         "$a = array();\n"
         "for ($i = 0; $i < 400; $i++) { $a[] = str_repeat('x', ($i % 23) + 1); }\n"
         "for ($i = 0; $i < 400; $i += 2) { unset($a[$i]); }\n"
         "$s = '';\n"
         "foreach ($a as $v) { $s .= substr($v, 0, 3); }\n"
         "$u = unserialize(serialize(array('k' => $a, 'n' => 17)));\n"
-        "echo 'sanity ', strlen($s), ' ', count($u['k']), ' ', $u['n'], \"\\n\";\n")
+        "echo 'sanity ', strlen($s), ' ', count($u['k']), ' ', $u['n'], ' ',\n"
+        "     implode('', $k), ' ', implode(',', $w), \"\\n\";\n"
+)
 
 
 def seam_counters(text):
