@@ -2,11 +2,17 @@
 """Run one PoisonCap build (build-cases.py) in one boot: controls first, then the cases.
 
     run-cases.py OUT --build DIR --expect published|spatial [--cases temporal|all|NN,NN]
-                 [--controls-only] [--platform DIR] [--port PORT]
+                 [--libc-revocation off|run] [--controls-only] [--platform DIR] [--port PORT]
 
 The guest boots single-user with security.cheri.runtime_revocation_default=0 before sshd
 (platform/poisoncap_guest.py says why). The build's binaries are copied in unchanged and each runs
 as its own process, `./NAME TAG`, under a timeout.
+
+--libc-revocation run turns the C library's revocation on for the measured processes only, as the
+speedtest1 runs' "on from the run": the command that runs a binary sets the default to 1, execs
+`timeout` and the binary under it, and sets it back to 0, so the next ssh session's processes are
+exec'd without it (with it on from boot, their kernel fails the copy into the guest). The default,
+off, keeps it 0 throughout, as every run before 2026-10-27.
 
 Per process, OUT/results.jsonl gets one line: the exit status and signal, whether BEGIN and RETURNED
 were printed, the REPRO_FAULT line (signal, si_code, address, PC offset; repro322_common.h), the
@@ -16,6 +22,8 @@ repro lines (heap_perm_poison, lookaside), and the console lines the run added t
 THE GATE. The controls run first and must behave as --expect says, or nothing else runs and the
 exit status is 3:
   every control   prints heap_perm_poison=0 (the heap SQLite got cannot bypass poison checks);
+  libc_revoke     prints libc_revoke_enabled=1 with --libc-revocation run, 0 otherwise (the
+                  process's own malloc_revoke_enabled()); required with run, checked if built;
   reuse_clean     returns, on both arms;
   uaf_read        published: SIGPROT with code 3 (PROT_CHERI_SEALED, the cause their QEMU raises
                   for poison) and a poison line on the console; spatial: returns.
@@ -37,11 +45,13 @@ import poisoncap_guest  # noqa: E402
 
 CORPUS = poisoncap_guest.REPO / 'capstone/bug-corpora/sqlite/engine-repros'
 SIGNALS = {34: 'SIGPROT', 11: 'SIGSEGV', 10: 'SIGBUS', 6: 'SIGABRT'}
+REVOCATION_DEFAULT = 'security.cheri.runtime_revocation_default'
 CONTROLS = (('reuse_clean', 'ctlreuse'), ('uaf_read', 'ctluaf'))
+LIBC_CONTROL = ('libc_revoke', 'ctllibc')
 # Recorded after the gate, never gating: what the heap's poison permission does (controls/uaf_keepperm.c),
-# and what case 15's access pattern does (the other three).
+# what case 15's access pattern does (the next three), and what the C library's layer does (uaf_libc).
 EVIDENCE = (('uaf_keepperm', 'ctlkeepperm'), ('uaf_interior', 'ctlinterior'), ('uaf_read_before_free', 'ctlrbf'),
-            ('uaf_offsets', 'ctloffsets'))
+            ('uaf_offsets', 'ctloffsets'), ('uaf_libc', 'ctllibcuaf'))
 
 
 def temporal_cases():
@@ -75,6 +85,7 @@ def parse(stdout, exit_status):
         'returned': bool(re.search(r' RETURNED$', stdout, re.M)),
         'fault': dict(zip(('sig', 'code', 'addr', 'pc_off', 'obj'), fault.groups())) if fault else None,
         'heap_perm_poison': (re.search(r'^repro heap_perm_poison=(\d)', stdout, re.M) or [None, None])[1],
+        'libc_revoke_enabled': (re.search(r'^repro libc_revoke_enabled=(\d)', stdout, re.M) or [None, None])[1],
         'lookaside_off': bool(re.search(r'^repro lookaside=off rc=0', stdout, re.M)),
         'control_failed': bool(re.search(r'CONTROL-FAILED', stdout)),
         # FAILRC and the cases' own stage reports: `<stage> rc=N`; N != 0 means a step failed.
@@ -84,13 +95,17 @@ def parse(stdout, exit_status):
     }
 
 
-def gate(controls, expect):
+def gate(controls, expect, libc_revocation):
     """The gate's checks on the control rows (name -> results row), by name; the run proceeds only if
     every one holds."""
     checks = {
         'heap_perm_poison=0 in every control': all(r['heap_perm_poison'] == '0' for r in controls.values()),
         'reuse_clean returns': controls['reuse_clean']['returned'] and controls['reuse_clean']['exit'] == 0,
     }
+    if 'libc_revoke' in controls:
+        want = '1' if libc_revocation == 'run' else '0'
+        checks[f'libc_revoke_enabled={want}'] = (controls['libc_revoke']['libc_revoke_enabled'] == want
+                                                 and controls['libc_revoke']['returned'])
     u = controls['uaf_read']
     if expect == 'published':
         checks['uaf_read faults with SIGPROT code 3 and a poison console line'] = (
@@ -110,8 +125,9 @@ def write_payload(build_dir, names, payload):
 class ProcessRunner:
     """Runs one binary per call in the started guest and appends its row to results.jsonl."""
 
-    def __init__(self, guest, serial, results, timeout):
+    def __init__(self, guest, serial, results, timeout, libc_revocation):
         self.guest, self.serial, self.results, self.timeout = guest, serial, results, timeout
+        self.libc_revocation = libc_revocation
         self.rows = []
 
     def console_since(self, offset):
@@ -123,8 +139,13 @@ class ProcessRunner:
         time.sleep(0.5)
         before = self.serial.stat().st_size if self.serial.exists() else 0
         t0 = time.monotonic()
-        r = self.guest.ssh(f'cd /tmp/allocator-tests && timeout {self.timeout} ./{shlex.quote(name)} '
-                           f'{shlex.quote(tag)} 2>&1; echo "__EXIT=$?"', timeout=self.timeout + 120)
+        command = f'timeout {self.timeout} ./{shlex.quote(name)} {shlex.quote(tag)} 2>&1; st=$?'
+        if self.libc_revocation == 'run':
+            command = (f'sysctl -q {REVOCATION_DEFAULT}=1 > /dev/null; {command}; '
+                       f'sysctl -q {REVOCATION_DEFAULT}=0 > /dev/null')
+        elif self.libc_revocation != 'off':
+            raise ValueError(f'libc_revocation {self.libc_revocation!r}')
+        r = self.guest.ssh(f'cd /tmp/allocator-tests && {command}; echo "__EXIT=$st"', timeout=self.timeout + 120)
         seconds = round(time.monotonic() - t0, 1)
         time.sleep(1.0)
         console = self.console_since(before)
@@ -150,14 +171,21 @@ def main():
     p.add_argument('--cases', default='temporal')
     p.add_argument('--controls-only', action='store_true')
     p.add_argument('--timeout', type=int, default=300)
+    p.add_argument('--libc-revocation', choices=('off', 'run'), default='off',
+                   help="off: the C library's revocation off throughout (as booted); run: on for each "
+                        "measured process only")
     poisoncap_guest.add_platform_arguments(p, port=10087)
     a = p.parse_args()
     poisoncap_guest.use_generous_budgets()
     build = json.loads((a.build / 'build.json').read_text())
     cases = select_cases(build, a.cases)
     controls = [(n, t) for n, t in CONTROLS if n in build.get('controls', [])]
+    if LIBC_CONTROL[0] in build.get('controls', []):
+        controls.append(LIBC_CONTROL)
+    elif a.libc_revocation == 'run':
+        sys.exit('--libc-revocation run needs the libc_revoke control; rebuild with build-cases.py')
     evidence = [(n, t) for n, t in EVIDENCE if n in build.get('controls', [])]
-    if len(controls) != len(CONTROLS):
+    if len([n for n, _ in controls if n != LIBC_CONTROL[0]]) != len(CONTROLS):
         sys.exit('the build lacks a control; rebuild with build-cases.py')
 
     a.out.mkdir(parents=True, exist_ok=False)
@@ -165,7 +193,8 @@ def main():
     payload = a.out / 'payload.tar.gz'
     write_payload(a.build, [name for name, _ in controls + evidence + cases], payload)
     guest = poisoncap_guest.new_guest(a.platform, a.out / 'vm', a.port)
-    meta = {'build': str(a.build), 'expect': a.expect, 'cases': [c for c, _ in cases],
+    meta = {'build': str(a.build), 'expect': a.expect, 'libc_revocation': a.libc_revocation,
+            'cases': [c for c, _ in cases],
             'started_utc': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
     gate_ok = False
     results = (a.out / 'results.jsonl').open('w')
@@ -176,8 +205,9 @@ def main():
         meta['unpacked'] = unpack.stdout.strip()
         meta['sysctl'] = guest.ssh('sysctl security.cheri.runtime_revocation_default '
                                    'kern.features.cheri_revoke').stdout.strip()
-        runner = ProcessRunner(guest, a.out / 'vm/serial.log', results, a.timeout)
-        checks = gate({name: runner.run('control', name, tag) for name, tag in controls}, a.expect)
+        runner = ProcessRunner(guest, a.out / 'vm/serial.log', results, a.timeout, a.libc_revocation)
+        checks = gate({name: runner.run('control', name, tag) for name, tag in controls}, a.expect,
+                      a.libc_revocation)
         meta['gate'] = checks
         gate_ok = all(checks.values())
         print('GATE ' + ('PASS' if gate_ok else 'FAIL') + ': ' + '; '.join(f'{k}={v}' for k, v in checks.items()))
