@@ -267,8 +267,9 @@ fix is in silicon, from "never dereference" to "never leave the window"). **Refi
 `isa/v39-address-policy` 49a225e408, capstone-qemu #31, the superproject's pin; not in the RTL).** A TAGGED capability's cursor must be an address the machine's address
 policy allows: `sv39` (the default: bits 63:39 equal bit 38), `sv48`, `sv57` (the same at bits 47 and 56), `phys56`
 (bits 63:56 clear) or `off`. Only the cursor is restricted; bounds may end at, start beyond or span refused addresses,
-as the reset root does. The 128-bit encoding is unchanged: this is the first step toward giving cursor[63:39] to a wider
-lifetime id, and it makes those bits carry no information first. The policy is a CPU property fixed when the machine
+as the reset root does. The policy leaves the 128-bit encoding unchanged: this is the first step toward giving cursor[63:39] to a wider
+lifetime id, and it makes those bits carry no information first (the 55-bit id format under "Lifetime storage
+and encoding" spends them). The policy is a CPU property fixed when the machine
 starts, the same on every hart, and never derived from `satp.MODE`. An operation whose result would carry a refused
 cursor gives the integer cursor, untagged, with a ZERO metadata half, exactly R-60's cleared result; returning to an
 allowed address does not restore the tag (except through the physical profile's legacy gp fabrication, which builds a
@@ -506,7 +507,8 @@ any node mutation; this includes fresh candidates straddling a page boundary.
 Sublet changes the node record and capability encoding together. The
 [shared format header](../../../capstone-qemu/target/riscv/cap_rev_table_abi.h)
 is used by the QEMU backend and copied into the Linux module build.
-The module's namespace and page quotas use that header's 30-bit limit.
+The module's namespace and page quotas use that header's 30-bit limit, or the
+2^25 records of 55-bit ids in a module built with `-DCAPSTONE_VM_IDS=55` (below).
 Rebuild the module with this QEMU; old node/capability layouts are incompatible.
 The paged magic rejects the old layout. The flat test layout has no version
 magic and must be initialized afresh by matching software.
@@ -539,6 +541,66 @@ the RTL also renormalises bounds where the pinned QEMU (49a225e408) does not (Q-
 Moreover, some QEMU data paths retain uncompressed bounds beside the tag.
 Exact minting alone does not settle general SHRINK/SPLIT/store/load
 representability. [Encoding conformance remains open](guarantees.md).
+
+**55-bit lifetime ids (ruled by the project lead: the format 2026-10-26, the capacity refusal 2026-10-27; QEMU
+`x-capstone-ids=55` at capstone-qemu `isa/v39-lifetime-ids`, opt-in, 30 the default; not in the RTL and not
+pinned here).** The record and cursor descriptions above are the 30-bit format's. Under the `sv39` address
+policy a tagged cursor's bits 63:39 repeat bit 38, so 25 bits of every stored capability carry nothing. The
+virtual profile's id is `generation[29:0] << 25 | slot[24:0]`, 55 bits:
+
+- *Capability.* Low word `slot[24:0] << 39 | address[38:0]`; the architectural cursor is `sext39(address)`, except
+  a SEALEDRET's, whose low 39 bits keep `async | reg << 1`. High word: the field positions of silicon's (bounds,
+  type and permissions; the raw type codes still differ, above), with the generation in the 30-bit node field.
+  The format needs `x-capstone-addr=sv39` (QEMU refuses any other policy at startup) and one width on every hart.
+  R-60 (SEALED and SEALEDRET outside it, as before) decodes a moved capability at all 64 bits of its new cursor.
+  CSMINT returns and CSRETIRE takes the id as that 55-bit integer; an id with a bit above 54 names nothing.
+  Every liveness check, and every cache of one, keys the FULL 55-bit id (the generations ruling's "all 30 bits"
+  is all 55 here): a key truncated to 32 bits would let a stale generation alias a live one.
+- *Record* (16 bytes): word 0 `{depth[13:0] at 63:50, next[49:25], prev[24:0]}`, word 1 `{reserved[63],
+  FREE/LINEAR/VALID[62:60], generation[59:30], parent[29:5], depth[18:14] at 4:0}`. Depth is 19 bits, a stated
+  limit refused before any write like every depth limit. A FREE record keeps its generation, every other field
+  zero, word 0 the next free slot.
+- *Generations.* Every table, flat or paged, carries them. A fresh record is at generation 0, the pop increments,
+  and in a RECYCLE table (bit 63) the hardware push on CREVOKE, REVOKE, CSRETIRE and CSKILL returns an
+  invalidated record to the free list at once, as the generations ruling does; a record at 2^30 - 1 is never
+  pushed. So a slot of a recycling table has 2^30 lifetimes and is then retired for good, and a slot of a
+  non-recycling table has one. Nothing is swept at this width: the tag-sweep collection described above does not
+  apply, and a collection request (CSRUNV action 3) reclaims nothing and answers 0.
+- *Capacity.* A table indexes at most 2^25 records. One that publishes more is INVALID, never cut down: CSRUNV
+  refuses it at entry and at every resume with 29, tval 0, as it refuses a misaligned root (R-59), before anything
+  of the context changes, and every other use (protected U, S, CSMINT, action 3) fails closed. On the Linux kit
+  that refusal is a trap the kernel does not handle, so the trusted module must never publish such a table: its
+  55-bit build bounds growth and request checks at 2^25 and refuses a larger `node_max_pages`. The refusal is the
+  invariant's alarm, not a recovery path. (An earlier QEMU experiment clamped instead, and the module's pressure
+  rule then counted records QEMU never issued and retried forever.)
+- *Silicon.* The 30-bit format (`{generation, index}` at the bitstream's index width) stays every bitstream's and
+  every prediction kit's; their kits are frozen. Every RTL path that indexes by the node field must take the slot
+  from the cursor word under this format.
+
+Proposed with it and NOT ruled, each with the evidence it needs:
+
+1. *An integer or FP load reads, of the bytes it covers in a tagged granule's first doubleword, those of
+   `sext39(address)`*, partial and misaligned loads included (QEMU implements it: compiled code compares stored
+   pointers with a plain `ld`, and without it every domain dies at startup). Untagged granules, device memory,
+   LR/AMOs, vector and Zcmp loads read raw, as does a load through the translation a legacy M-mode STC under MPRV
+   tagged; LDC bypasses the projection (a tagged LDC decodes the capability). An integer copy therefore copies
+   the address, not the stored representation. Before it is an ISA rule: the RTL's integer load path must see the
+   tag, and FP, atomic and vector loads and whether tag and data are one observed access must be settled; the
+   alternative is the compiler reading address words with `ld` and a sign extension from bit 38, or with LDC.
+2. *The implemented slot count is implementation-defined*, a power of two up to 2^25, reported by a mandatory
+   read-only CSR `{ABI id, log2 implemented slots}` (as `vlenb` reports VLEN). The module reads it once, checks
+   the ABI id against its compiled header and bounds its tables by it, which replaces `CAPSTONE_VM_INDEX_BITS`,
+   `node_flat_records` and `node_max_records`; `node_max_pages` stays a memory budget that may lower the bound,
+   never raise it. Needs the RTL side's agreement.
+3. *The table layout for 2^25 slots on silicon.* A flat table of 2^25 records is 512 MiB contiguous per context,
+   beyond the maximum order of the one `__get_free_pages` allocation the module's flat table is; the current
+   `4:9:9:8` walk traverses a root level whose selector is always zero for 25-bit slots. Candidate: one
+   level of 2 MiB chunks (`8:17`, a 2 KiB root), pending the RTL's timing and area.
+4. *Whether 25 slot bits suffice.* 2^25 is 33.5 M slots. Measured native peaks of live heap objects
+   (llvm-capstone `experiments/slot-census` 2b8af6063a8a): the 16 C/C++ SPEC CPU2017 rate benchmarks at ref at
+   most 2.4 M; Redis 7.2.16 built with `MALLOC=libc` under its command mix 8.5 M at 10^6 keys and 48.9 M at 10^7
+   keys. The last exceeds the format, which no table layout changes. Neither is a general workload ceiling, and
+   records per object are not measured.
 
 Implementation at the original interface revision: [decoder][decode], [CSRs][csr], [mint/retire][table],
 [context and collection][supervisor], [instruction policy and translation][translate]. The
