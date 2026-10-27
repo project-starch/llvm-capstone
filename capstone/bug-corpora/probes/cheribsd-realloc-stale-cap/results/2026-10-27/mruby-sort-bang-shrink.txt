@@ -1,0 +1,7 @@
+# Array#sort! stale-base-after-shrink (eb398971b, #6649), measured 2026-10-27, scenario
+# mruby-sort-bang-shrink of probe.c / probe-capstone.c (512 -> 256 B, read index 504).
+# Controls fired in each boot (ABI pointer_bytes=16 runtime_revocation=1; bounds exit 162;
+# REVOCATION_CONTROL tag_after_sweep=0 reissued=1; virtual fixed completed, freed faulted).
+revocation=1 mruby-sort-bang-shrink  same_addr=1 old_len=512 new_len=512 old_tag=1  -> ACCESS completed value=0x5a
+revocation=0 mruby-sort-bang-shrink  same_addr=0 old_len=512 new_len=256 old_tag=1  -> ACCESS completed value=0x5a
+virtual mruby-sort-bang-shrink  same_addr=0 old=[..ffa050,..ffa250) new=[..ffa850,..ffa950) index=504  revoked-capability fault at the READ label (pc ..0730, cursor old+504, old bounds 512)

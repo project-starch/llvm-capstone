@@ -1,0 +1,6 @@
+# Gv_AMupdate stale HvAUX interior pointer (4547997058, RT #121362), measured 2026-10-27, scenario
+# perl-hsplit-aux-grow of probe.c / probe-capstone.c (200 -> 224 B, interior write at 192).
+# Controls as above.
+revocation=1 perl-hsplit-aux-grow  same_addr=1 old_len=224 new_len=224 old_tag=1  -> stale_write_seen_through_new=1 value=0xa5
+revocation=0 perl-hsplit-aux-grow  same_addr=1 old_len=224 new_len=224 old_tag=1  -> stale_write_seen_through_new=1 value=0xa5
+virtual perl-hsplit-aux-grow  same_addr=1 old=[..c41040,..c41108) new=[..c41040,..c41120) index=192  revoked-capability fault at the STORE label (pc ..073c, cursor old+192, old bounds 200)

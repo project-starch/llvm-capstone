@@ -1105,6 +1105,30 @@
       "where": "capstone/bug-corpora/postgres/sql-repros"
     },
     {
+      "program": "mruby and perl",
+      "boundary": "the platform allocator's own bound -- a direct realloc (libc), with no interpreter arena between it and the request",
+      "title": "The same-address realloc stale-capability shape, as two upstream reductions (mruby Array#sort!, Perl HvAUX)",
+      "cases": 2,
+      "case_schema": "case-json",
+      "status": "measured",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "false": 2
+      },
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "required_arms": [
+        "cheribsd-revocation",
+        "virtual-malloc"
+      ],
+      "evidence": [
+        "capstone/bug-corpora/probes/cheribsd-realloc-stale-cap/README.md",
+        "capstone/bug-corpora/probes/cheribsd-realloc-stale-cap/results/2026-10-27"
+      ],
+      "advisories": [],
+      "note": "The realloc stale-capability probe (probe.c on CheriBSD, probe-capstone.c on the Capstone virtual profile) measures, in both platforms, what happens to a pointer kept across a realloc that keeps the same address. These two cases are the upstream defects of that exact shape, each a standalone case.c reduction with its fix predating the ported pin (mruby eb398971b in 4.0.0-rc2; Perl 4547997058 in 5.36.3), so live_in_pin is false like the FFmpeg fixed-before-pin corpora. Two arms carry measured verdicts (CheriBSD silent under both layers; the Capstone virtual revoking arm faults at the stale access); probe.c / probe-capstone.c are the runnable multi-platform instruments and this folder's README records every scenario's result lines.",
+      "where": "capstone/bug-corpora/probes/cheribsd-realloc-stale-cap"
+    },
+    {
       "program": "sqlite",
       "boundary": "the SQLite C API, as host bindings hold it",
       "title": "Pointer-lifetime defects in host bindings over SQLite's C API",
@@ -2348,6 +2372,7 @@
     "capstone/bug-corpora/postgres/c-repros": 5,
     "capstone/bug-corpora/postgres/mmgr-repros": 5,
     "capstone/bug-corpora/postgres/sql-repros": 9,
+    "capstone/bug-corpora/probes/cheribsd-realloc-stale-cap": 2,
     "capstone/bug-corpora/sqlite/capi-repros": 19,
     "capstone/bug-corpora/sqlite/engine-repros": 33,
     "capstone/bug-corpora/wireshark/plain-heap-repros": 12,
@@ -2358,11 +2383,11 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 297,
+  "cases_here": 299,
   "cases_xlang": 30,
-  "cases_total": 327,
+  "cases_total": 329,
   "live_true": 149,
-  "live_false": 120,
+  "live_false": 122,
   "live_not": 28,
   "advisories_total": 22,
   "renames": {
@@ -2439,6 +2464,7 @@
     "`capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.",
     "`capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/probes/cheribsd-realloc-stale-cap` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/sqlite/capi-repros`: liveness deliberately not asserted for 19 cases.",
     "`capstone/bug-corpora/sqlite/capi-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/sqlite/engine-repros` has no triage inventory under docs/ref/.",
@@ -2459,6 +2485,7 @@
     "`capstone/bug-corpora/memcached/plain-temporal-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/postgres/c-repros` is not referenced by any port.json.",
     "`capstone/bug-corpora/postgres/sql-repros` is not referenced by any port.json.",
+    "`capstone/bug-corpora/probes/cheribsd-realloc-stale-cap` is not referenced by any port.json.",
     "`capstone/bug-corpora/wireshark/plain-temporal-repros` is not referenced by any port.json."
   ]
 }

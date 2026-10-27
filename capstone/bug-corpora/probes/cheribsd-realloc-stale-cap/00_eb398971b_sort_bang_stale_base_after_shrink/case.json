@@ -1,0 +1,33 @@
+{
+  "case": 0,
+  "upstream_fix": "eb398971b",
+  "title": "mruby Array#sort! uses the captured backing-store base after a comparison block shrinks the array, so a same-address realloc leaves it reading the trimmed tail",
+  "consumer": "mruby src/array.c, sort_cmp / ary_shrink_capa",
+  "object": "the Array's heap backing store (struct RArray as.heap.ptr), from mrb_realloc",
+  "lifetime_ender": "ary_shrink_capa's mrb_realloc to a smaller capacity, which may return the same address",
+  "shape": "a base pointer captured before a shrinking realloc, used after it past the new size",
+  "allocator_layer": "the platform allocator itself: mruby's default allocf is libc realloc/free (src/allocf.c), a direct allocation with no GC slab or pool between it and the request",
+  "nested": false,
+  "nested_why": "the array backing store comes straight from mrb_realloc -> libc realloc, not from mruby's GC object arena",
+  "fidelity": "allocator-level reduction: the capture, the shrinking realloc and the stale read are mruby's own, as a standalone case.c; it does NOT reproduce the VM path to sort_cmp. The measured instrument is probe.c / probe-capstone.c, scenario mruby-sort-bang-shrink",
+  "live_in_pin": false,
+  "live_proof": "fix eb398971b (2025-10-27, #6649) is an ancestor of mruby 4.0.0-rc2 (9d523e2f74f2), checked with git merge-base --is-ancestor, so the defect is fixed in that pin; src/array.c:2134 at the pin carries `RARRAY_PTR(ary) != p || RARRAY_LEN(ary) != n`. This case reconstructs the pre-fix allocator shape",
+  "distinguishing": "the realloc SHRINKS and may keep its address, so unlike the FFmpeg move-and-rebase realloc cases (ffmpeg/plain-temporal-repros 02, 03) the defect does not need the block to move; the pre-fix guard was pointer-equality, so the same-address branch is exactly where it lived",
+  "status": "two arms measured 2026-10-27 (results/2026-10-27/mruby-sort-bang-shrink.txt)",
+  "arms": {
+    "cheribsd-revocation": {
+      "oracle": "stock CheriBSD purecap, the old backing-store capability read at the old index after the shrinking realloc. A SIGPROT is a catch; completion is the stale capability still usable.",
+      "platform": "stock CheriBSD riscv64-purecap, one boot 2026-10-27; abi/bounds/revocation controls PASSED in the same boot",
+      "verdict": "NOT CAUGHT",
+      "verdict_note": "revocation on: the shim's shrink shortcut keeps the address with the full 512 B bounds, old tag set, the read completes (0x5a). revocation off: jemalloc moves (different size classes) but the old capability still reads its block. Silent under both layers.",
+      "verdict_from": "results/2026-10-27/mruby-sort-bang-shrink.txt"
+    },
+    "virtual-malloc": {
+      "oracle": "Capstone virtual profile (musl mallocng behind runtime/virtual/heap.c, publish() revokes the old child on every realloc): a fault at the labelled read is a catch.",
+      "platform": "p13, flat v7 gate platform (platform-sdev) with the dev control SDK runtime (heap-v6/sdk-control); fixed completed and freed faulted in the same run",
+      "verdict": "CAUGHT",
+      "verdict_note": "revoked-capability fault at the READ label (pc minus code base 0x10730), cursor = old base + 504, old child's 512 B bounds; the block moved under our musl and still faulted",
+      "verdict_from": "results/2026-10-27/mruby-sort-bang-shrink.txt"
+    }
+  }
+}

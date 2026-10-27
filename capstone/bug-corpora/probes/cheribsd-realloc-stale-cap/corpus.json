@@ -1,0 +1,15 @@
+{
+  "program": "mruby and perl",
+  "boundary": "the platform allocator's own bound -- a direct realloc (libc), with no interpreter arena between it and the request",
+  "title": "The same-address realloc stale-capability shape, as two upstream reductions (mruby Array#sort!, Perl HvAUX)",
+  "cases": 2,
+  "case_schema": "case-json",
+  "status": "measured",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {"false": 2},
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "required_arms": ["cheribsd-revocation", "virtual-malloc"],
+  "evidence": ["capstone/bug-corpora/probes/cheribsd-realloc-stale-cap/README.md", "capstone/bug-corpora/probes/cheribsd-realloc-stale-cap/results/2026-10-27"],
+  "advisories": [],
+  "note": "The realloc stale-capability probe (probe.c on CheriBSD, probe-capstone.c on the Capstone virtual profile) measures, in both platforms, what happens to a pointer kept across a realloc that keeps the same address. These two cases are the upstream defects of that exact shape, each a standalone case.c reduction with its fix predating the ported pin (mruby eb398971b in 4.0.0-rc2; Perl 4547997058 in 5.36.3), so live_in_pin is false like the FFmpeg fixed-before-pin corpora. Two arms carry measured verdicts (CheriBSD silent under both layers; the Capstone virtual revoking arm faults at the stale access); probe.c / probe-capstone.c are the runnable multi-platform instruments and this folder's README records every scenario's result lines."
+}

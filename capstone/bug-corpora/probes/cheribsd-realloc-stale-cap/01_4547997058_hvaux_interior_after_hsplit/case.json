@@ -1,0 +1,33 @@
+{
+  "case": 1,
+  "upstream_fix": "4547997058",
+  "title": "Perl Gv_AMupdate writes a flag through the interior HvAUX pointer after S_hsplit's Renew, so a same-address grow leaves the stale interior pointer corrupting live buckets",
+  "consumer": "perl gv.c, Perl_Gv_AMupdate (aux from HvAUX, split by S_hsplit in hv.c)",
+  "object": "the hash's bucket array HvARRAY, with the xpvhv_aux struct at its tail; from Renew (saferealloc -> realloc)",
+  "lifetime_ender": "S_hsplit's Renew of the bucket array, which relocates the aux struct and may keep the array's address",
+  "shape": "an interior pointer captured before a growing realloc, written through after it",
+  "allocator_layer": "the platform allocator itself: Perl's Renew is saferealloc -> PerlMem_realloc -> libc realloc with usemymalloc off, a direct allocation with no arena between it and the request",
+  "nested": false,
+  "nested_why": "the bucket array comes straight from Renew -> libc realloc, not from Perl's SV-head or body arenas",
+  "fidelity": "allocator-level reduction: the interior capture, the growing Renew and the stale interior write are Perl's own, as a standalone case.c; it does NOT reproduce the overload-cache path to Gv_AMupdate. The measured instrument is probe.c / probe-capstone.c, scenario perl-hsplit-aux-grow",
+  "live_in_pin": false,
+  "live_proof": "fix 4547997058 (2014-03-04, RT #121362) predates perl 5.36.3 by years and is an ancestor of it (git merge-base --is-ancestor), so the defect is fixed in that pin; gv.c at the pin writes HvAUX(stash)->xhv_aux_flags, the re-read form. This case reconstructs the pre-fix allocator shape",
+  "distinguishing": "the stale pointer is INTERIOR (into the bucket-array tail) and the realloc GROWS and can stay in place, so the defect needs neither a base pointer nor a move; on CheriBSD malloc(200) already yields a 224 B block, so realloc(.,224) kept its address under both layers",
+  "status": "two arms measured 2026-10-27 (results/2026-10-27/perl-hsplit-aux-grow.txt)",
+  "arms": {
+    "cheribsd-revocation": {
+      "oracle": "stock CheriBSD purecap, the interior aux capability written at offset 192 after the growing Renew, then read through the new pointer. A SIGPROT is a catch; completion with the stale write seen through the new object is a silent live-object corruption.",
+      "platform": "stock CheriBSD riscv64-purecap, one boot 2026-10-27; abi/bounds/revocation controls PASSED in the same boot",
+      "verdict": "NOT CAUGHT",
+      "verdict_note": "both layers kept the address (malloc(200) yields a 224 B block, so realloc(.,224) is size<=old_size: the shim takes its shrink shortcut and jemalloc stays in place), the old interior capability kept its tag, and the stale write at 192 landed in the live grown object (read back as 0xa5). Silent live-object corruption.",
+      "verdict_from": "results/2026-10-27/perl-hsplit-aux-grow.txt"
+    },
+    "virtual-malloc": {
+      "oracle": "Capstone virtual profile (publish() revokes the old child on every realloc): a fault at the labelled interior store is a catch.",
+      "platform": "p13, flat v7 gate platform (platform-sdev) with the dev control SDK runtime (heap-v6/sdk-control); fixed completed and freed faulted in the same run",
+      "verdict": "CAUGHT",
+      "verdict_note": "revoked-capability fault at the STORE label (pc minus code base 0x1073c), cursor = old base + 192, old child's 200 B bounds; the grow stayed in place under our musl (same_addr=1) and still faulted",
+      "verdict_from": "results/2026-10-27/perl-hsplit-aux-grow.txt"
+    }
+  }
+}
