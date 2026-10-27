@@ -10333,3 +10333,48 @@ Tool: `r64-census.py`.
   first suspects. A T3-only failure would be a finding about the T3 build, not the board.
 - **What goes back to the runtime lane:** each kit's reassembled console transcript (`guest/board.txt`) and the
   resident bitstream.
+
+### The perf evaluation's T3 arm on the other 88 programs, bitstream 3, result: all four kits PASS, t3a1 after a post-hoc reader repair (2026-10-27 19:08-22:11)
+
+- Records: `records/b3bs-perfmain5-t3a1-b1`, `-t3a2-b2`, `-t3a3-b1` and `-t3a4-b2` `.result-lines.txt`. Each carries the
+  live reader's lines, the step text's counts, the firmware hash, and the repaired reader's `--reread` lines.
+- **Every kit ran to its end on bitstream 3.** Every boot completed with `caplifive_vp2c_e7af48457` resident (the
+  driver HARD STOPs otherwise). pc=0, DRT1, FRTY, Oops, INJS and INJL were all 0.
+
+| kit | board | booking | span | @@PERF-END | rc≠0 | last line | live reader | re-read | mid-line @@HB |
+|---|---|---|---|---|---|---|---|---|---|
+| t3a1 | 1 | 464 | 19:08:39–20:36:13 | 285 | 0 | `@@PERF-T3A1-DONE` | 284 of 285 | 285 of 285 | 1 |
+| t3a2 | 2 | 463 | 19:08:39–20:43:17 | 285 | 0 | `@@PERF-T3A2-DONE` | 285 of 285 | 285 of 285 | 1 |
+| t3a3 | 1 | 465 | 20:36:13–22:07:25 | 285 | 0 | `@@PERF-T3A3-DONE` | 285 of 285 | 285 of 285 | 0 |
+| t3a4 | 2 | 466 | 20:43:17–22:11:45 | 264 | 0 | `@@PERF-T3A4-DONE` | 264 of 264 | 264 of 264 | 1 |
+
+- **t3a1 failed the criterion as pre-registered and passes only after a repair made after the run.** The pre-registered
+  criterion includes "tier3-perfpilot.py reads every process". The live reader read t3a1 as 284 of 285.
+  - The miss is lcdnum T1 0 K0, with `5 with check=` against 6 wanted. boardvm's heartbeat landed inside the process's
+    w0 BENCH line, in its `ns` field, and split the line.
+  - The repaired reader reads all 285. So does perfmain-table.py, which removed heartbeats before this run. It was the
+    bitstream-2 cross-check, but this pre-registration did not name it.
+  - This handling is POST HOC relative to the pre-registration (92df2b3d4fa3).
+- **Two passes were right by accident.** The live reader's strict count passed t3a2 and t3a4, but both had a heartbeat
+  inside a line:
+  - t3a2: rv8-dhrystone T3 it=1, in `check`. The line was cut to `check=0x1`, which still matches a hex pattern. Rejoined,
+    it is `0x1fbda00054142`, the value of that program's other processes.
+  - t3a4: the `@@PERF-END` line of stringsearch1 T3 3, inside `stderr_lines`, after its `rc=0`.
+  - With main1-k3's frac w0 (in `entries`, bitstream 2), that makes four mid-line heartbeats.
+- **The reader repair (tier3-perfpilot.py):**
+  - every `@@HB` is removed with its newline before parsing, and the mid-line ones are counted (`READ heartbeats`);
+  - a process passes only if all its check= values agree, and each program+arm's set is compared (`READ CHECKS
+    DIFFER`, `READ checks`);
+  - `--reread <pilot.txt>` re-reads a saved transcript with no board call, and exits 1 unless every process passes.
+    The live path's exit status is unchanged.
+  - Controls on copies of t3a2's transcript:
+    - the cut without its heartbeat tag gives `CHECKS DIFFER rv8-dhrystone T3`, 284 of 285, exit 1;
+    - one hex digit of a crc T1 check changed gives `CHECKS DIFFER crc T1`, 284 of 285, exit 1;
+    - the transcript truncated at 200,000 B gives 125 of 285 and no DONE, exit 2.
+  - No regression on bitstream 2's transcripts: main1-k3 re-reads 214 of 214 (1 mid-line) and t3k1 81 of 81.
+  - Every input's summary lines and exit status: `records/perfpilot-reread-controls.txt`.
+- **Checks agree everywhere:** in every kit, 66 of 66 program+arm sets agree, and 22 of 22 programs agree across T1, T2
+  and T3.
+- **The functional prediction holds:** every process passes, and on none of these 88 programs does one arm's check=
+  differ from the other two. Comparing check= against bitstream 2's main-run values is the runtime lane's reading, as
+  is the timing analysis.

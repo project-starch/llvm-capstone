@@ -1,0 +1,41 @@
+# tier3-perfpilot.py --reread (2026-10-27, after the main5 run): heartbeat repair and check agreement. Summary lines per input, then exit status.
+# ctl-cut: t3a2's transcript with the mid-line heartbeat tag removed, leaving check=0x1; ctl-hash: one hex digit of a crc T1 it=2 check changed; ctl-trunc: t3a2's transcript cut at 200,000 B.
+## t3a1
+READ heartbeats: 1 mid-line, removed with every other @@HB before parsing
+READ checks: 66 of 66 program+arm sets agree; 22 of 22 programs agree across arms
+READ summary: 285 of 285 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; T3A1-DONE present
+## t3a2
+READ heartbeats: 1 mid-line, removed with every other @@HB before parsing
+READ checks: 66 of 66 program+arm sets agree; 22 of 22 programs agree across arms
+READ summary: 285 of 285 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; T3A2-DONE present
+## t3a3
+READ heartbeats: 0 mid-line, removed with every other @@HB before parsing
+READ checks: 66 of 66 program+arm sets agree; 22 of 22 programs agree across arms
+READ summary: 285 of 285 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; T3A3-DONE present
+## t3a4
+READ heartbeats: 1 mid-line, removed with every other @@HB before parsing
+READ checks: 66 of 66 program+arm sets agree; 22 of 22 programs agree across arms
+READ summary: 264 of 264 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; T3A4-DONE present
+## k3
+READ heartbeats: 1 mid-line, removed with every other @@HB before parsing
+READ checks: 50 of 50 program+arm sets agree; 25 of 25 programs agree across arms
+READ summary: 214 of 214 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; K3-DONE present
+## t3k1
+READ heartbeats: 0 mid-line, removed with every other @@HB before parsing
+READ checks: 15 of 15 program+arm sets agree; 5 of 5 programs agree across arms
+READ summary: 81 of 81 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; T3K1-DONE present
+## ctlcut
+READ heartbeats: 0 mid-line, removed with every other @@HB before parsing
+READ CHECKS DIFFER rv8-dhrystone T3: ['0x1', '0x1fbda00054142']
+READ checks: 65 of 66 program+arm sets agree; 21 of 22 programs agree across arms
+READ summary: 284 of 285 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; T3A2-DONE present
+## ctlhash
+READ heartbeats: 1 mid-line, removed with every other @@HB before parsing
+READ CHECKS DIFFER crc T1: ['0x1346a0ec4fb53df1', '0xb346a0ec4fb53df1']
+READ checks: 65 of 66 program+arm sets agree; 21 of 22 programs agree across arms
+READ summary: 284 of 285 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; T3A2-DONE present
+## ctltrunc
+READ heartbeats: 0 mid-line, removed with every other @@HB before parsing
+READ checks: 33 of 33 program+arm sets agree; 11 of 11 programs agree across arms
+READ summary: 125 of 285 processes rc 0, W+I BENCH lines, no VERIFY-FAILED or BENCH-ERROR, BENCH-DONE failed=0 and a new quote; T3A2-DONE ABSENT
+## exit status: t3a1 0, t3a2 0, t3a3 0, t3a4 0, k3 0, t3k1 0, ctlcut 1, ctlhash 1, ctltrunc 2
