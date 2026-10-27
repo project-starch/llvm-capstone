@@ -19,8 +19,8 @@ clear. For a 20-element array `zend_qsort` swaps slots 0 and 9 *before* the firs
 so the comparator's first `f->pData` (or `f->nKeyLength`) load traps before any user code runs.
 
 **Which cells.** CRASH-022's trigger is a `usort`; its ASAN line, `array.c:546`, is that first
-load in `array_user_compare`. CRASH-078's is a `ksort`; its recorded site, `array.c:162`, is the
-same load in `array_key_compare`. Every one of their cells, on all four arms and in every
+load in `array_user_compare`. CRASH-078's is an `array_diff_assoc($GLOBALS, ...)`, whose key comparison sorts; its recorded
+site, `array.c:162`, is the same load in `array_key_compare`. Every one of their cells, on all four arms and in every
 population below, records cause 24 and never cause 25. CRASH-022 is the only cause-24 catch in
 `asan-blind` on every arm; in the temporal populations the other cause-24 catches are CRASH-064
 (every arm of the sensitivity table) and CRASH-159 (its `stock` and `block` cells), both at

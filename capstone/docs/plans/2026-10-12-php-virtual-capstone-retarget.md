@@ -1357,7 +1357,7 @@ somewhere" is that the fault must land in the defect's own file.
 > load in `array_user_compare` after `zend_qsort` has swapped two `Bucket *` through int and
 > char stores, which strips their tags; it traps on any `usort`, defect or not, before the
 > comparator runs. "Lands in the defect's own file" is exactly what this artefact does, which
-> is why a file-level attribution could not see it. Same for CRASH-078 (`ksort`, `array.c:162`).
+> is why a file-level attribution could not see it. Same for CRASH-078 (`array_diff_assoc`'s key sort, `array.c:162`).
 > Fixed by `app/patches/php-5.0.0-0002`; the sanity control now sorts. Details in
 > `ports/php/app/results/2026-10-26/README.md`, "Correction".
 
