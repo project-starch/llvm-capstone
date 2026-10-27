@@ -1,0 +1,25 @@
+{
+  "program": "php",
+  "role": "allocator-component",
+  "title": "PHP 5.0.0's Zend allocator (zend_alloc.c) with a Capstone seam: per-object bounds on the recorded request size, and the sublet/ adapter that splits each emalloc block into a header and a CDERIVE/CREVOKE payload region the app port's protected arms run on",
+  "upstream": {
+    "version": "5.0.0",
+    "pin_source": {
+      "file": "capstone/ports/php/zend-alloc/run-crash008.sh",
+      "grep": "CRASH-008 matched pair: PHP 5.0.0's Zend allocator, unpatched, in a Capstone domain."
+    }
+  },
+  "targets": [
+    "capstone-domain",
+    "capstone-virtual"
+  ],
+  "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-seam.c and sublet/probe-derive-split.c on the virtual profile, which qualify the seam before the app port's arms are believed",
+  "evidence": [
+    "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26"
+  ],
+  "related": [
+    "capstone/ports/php/app",
+    "capstone/ports/php/engine"
+  ],
+  "note": "Not historical: patches/php-5.0.0-0001-zend-alloc-sublet-hooks.patch and sublet/ are what the app port's build applies to zend_alloc.c for its block, object and exact arms (PHP_CAP_MODE 4, 6 and 7); only the domain runners here are from the physical-profile phase. The block provider was moved onto CDERIVE/CREVOKE on 2026-10-26 after the nested loan ABI was removed upstream."
+}

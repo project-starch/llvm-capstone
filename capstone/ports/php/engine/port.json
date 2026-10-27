@@ -1,0 +1,25 @@
+{
+  "program": "php",
+  "role": "full-application",
+  "title": "PHP 5.0.0's Zend engine in a physical Capstone domain under a hand-written SAPI and a stub libc, one image per corpus trigger (-DRUNG_E_CRASHnnn); the comparison column the virtual app port was retargeted from",
+  "upstream": {
+    "version": "5.0.0",
+    "pin_source": {
+      "file": "capstone/ports/php/engine/build-engine.sh",
+      "grep": "P=${PHP_SRC:-/corpus/build/php-5.0.0}"
+    }
+  },
+  "targets": [
+    "capstone-domain"
+  ],
+  "workload": "the corpus triggers compiled into the image through rung_E_domain.c, run by run-triggers.sh; FINDINGS.md holds the measurement in the order it was learned",
+  "evidence": [
+    "capstone/ports/php/engine/FINDINGS.md"
+  ],
+  "related": [
+    "capstone/ports/php/app",
+    "capstone/ports/php/zend-alloc"
+  ],
+  "status": "historical: the physical-profile port, kept unchanged as the comparison column; the app port supersedes it for every measurement since 2026-10-15",
+  "note": "Reads PHP's source from the same external /corpus mount as the app port. app/triggers is the trigger text lifted out of this port's #ifdef ladder (extract-triggers.py --check keeps the two equal)."
+}
