@@ -2117,7 +2117,7 @@ untested.
     misses 43,591, every one an R-54 shape.
 
 
-## Q-16 — dev's pinned QEMU (capstone-qemu d35af47b163c, the head of `virtual-capstone`) does NOT renormalise compressed bounds; both resident bitstreams do (R-54) `OPEN — QEMU divergence, filed 2026-10-16 by the RTL audit; the fix exists on an unlanded branch`
+## Q-16 — dev's pinned QEMU (capstone-qemu d35af47b163c, the head of `virtual-capstone`) does NOT renormalise compressed bounds; both resident bitstreams do (R-54) `FIXED in the pin 2026-10-27: capstone-qemu #32 (ef66e67707, ec84544130) landed the renormalisation on virtual-capstone, and the pin moved to a9936e7037; filed 2026-10-16 by the RTL audit`
 
 The RTL fix for R-54 (capstone-ariane 2a3a87dfc, sum form; afcd19bea, residue form) is in caplifive_sublet_d93a8d66b
 and caplifive_fpb_afcd19bea. The matching QEMU change exists only on capstone-qemu 4a21b485b01f (branch
@@ -2144,6 +2144,13 @@ the scope is wider.**
 
 Fix: land the renormalisation on the QEMU shared branch and bump the pin
 (helper lane); until then every physical-profile differential cites which encoder it ran against.
+
+**FIXED in the pin 2026-10-27.** capstone-qemu #32 (generations-v7, merged as bf5329b1b1) carries ef66e67707 (take the
+next exponent when the rounded-up top no longer fits T) and ec84544130 (the same test in residues, as the RTL's
+afcd19bea computes it). `git diff 4a21b485b01f a9936e7037 -- target/riscv/cap_compress.c` keeps the renormalisation
+block unchanged; its other hunks are the 55-bit format (#33) and R-60's window. The pin moved to a9936e7037 (#34 on
+virtual-capstone 14e680fe75). Not re-measured here: the 43,591 R-54 shapes of Q-15's box and the bit-identity with the
+RTL encoder through the shared model; runs on b290f5656600 or 49a225e408 keep citing the unrenormalised encoder.
 ## Q-17 — CDERIVE's check order: silicon tested the size window (29) BEFORE the parent's liveness (25), QEMU the reverse `FIXED on virtual-profile 4b958dc3f (2026-10-16): the liveness query precedes the window test; q17-order.S reads 25 on the fixed tree and 29 on capstone-sublet b7e3287e4 in simulation (the positive control), the window-inside case 25 on both; carried by bitstream 1 of the virtual profile, not yet on silicon`
 
 `capstone_dyn_unit.anvil:246-259` (d93a8d66b): operands 24, type 26, then the size/window test (29) at :251, and only then
@@ -2390,6 +2397,11 @@ CSRUNV), so action 3 never reaches commit. QEMU d35af47b163c `capstone_superviso
 call frees identities and writes rd; without one it raises 29. The plan's row for item D says action 3 is illegal and
 collection is software; QEMU's arm is the odd one. No kit issues action 3 today; a one-line QEMU change (action > 2
 illegal) when the next QEMU commit is cut, or a ruling if the collector is wanted in the reference.
+
+**Partly resolved in the pin 2026-10-27 (a9936e7037, from capstone-qemu #32 and #33).** With a paused context, action 3
+on a 30-bit generation table (FLAT, at most 65,536 records: the silicon's table) raises illegal instruction, as the RTL
+does; on a 55-bit table it answers 0 without collecting; only a table without generations (paged 30-bit, or flat
+with more than 65,536 records) is still collected. Without a paused context QEMU still raises 29 where the RTL raises 2.
 
 ## Q-28 — the trap return register under capability mode: the RTL keeps ONE cursor (CEPC's cursor is mepc) and returns through mepc; QEMU under cap_mem keeps CEPC and mepc as two registers, writes only CEPC on a trap and returns through CEPC `OPEN — low priority, filed 2026-10-18 by the RTL lane; the shared monitor entry avoids it by using CCSRRW CEPC on both targets, and the next monitor author will meet it`
 
