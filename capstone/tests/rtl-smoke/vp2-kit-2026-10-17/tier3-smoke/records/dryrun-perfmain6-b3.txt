@@ -1,0 +1,93 @@
+# tier3-perfmain6-b3.sh dry run (2026-10-28 01:13, before any boot). Every boot is stubbed; A, B, C and E stub the whole wrapper (PM6_RUNKIT),
+# D runs the real tier3-perfpilot-b3.sh with its kit gates live and its busy check, booking and runner stubbed (PP_BUSY/PP_BOOK/PP_RUN/PP_ROOT).
+# The corpus log is a stub with both END lines (free), or empty with lt1's END appended after 3 s and lt0's never (E, PM6_WAITMAX 8 s).
+== A: armed, both boards free
+CHECK t3k1 runner 0ecbbc7c4c9f5ec8: 81 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k2 runner fc24bc09d77351fc: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k3 runner 37861b84fca1ac04: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+PM6 board 1 WAIT for corpus lt1 END 01:12:59
+PM6 board 2 WAIT for corpus lt0 END 01:12:59
+PM6 board 1 FREE: CO lt1 on board 1 END rc=0 06:00:00
+PM6 board 2 FREE: CO lt0 on board 2 END rc=0 06:10:00
+PM6 t3k1 on board 1 BEGIN 01:12:59
+PM6 t3k2 on board 2 BEGIN 01:12:59
+PM6 t3k1 on board 1 END rc=0 01:13:00 :: READ summary: stub t3k1
+PM6 t3k2 on board 2 END rc=0 01:13:00 :: READ summary: stub t3k2
+PM6 t3k3 on board 1 BEGIN 01:13:00
+PM6 t3k3 on board 1 END rc=0 01:13:01 :: READ summary: stub t3k3
+PM6 DONE 01:13:01
+A rc=0
+== B: t3k1's boot fails: board 1 holds t3k3, board 2 runs on
+CHECK t3k1 runner 0ecbbc7c4c9f5ec8: 81 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k2 runner fc24bc09d77351fc: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k3 runner 37861b84fca1ac04: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+PM6 board 1 WAIT for corpus lt1 END 01:13:01
+PM6 board 2 WAIT for corpus lt0 END 01:13:01
+PM6 board 1 FREE: CO lt1 on board 1 END rc=0 06:00:00
+PM6 board 2 FREE: CO lt0 on board 2 END rc=0 06:10:00
+PM6 t3k1 on board 1 BEGIN 01:13:01
+PM6 t3k2 on board 2 BEGIN 01:13:01
+PM6 t3k1 on board 1 END rc=1 01:13:01 :: 
+  PP STOP: stub failure
+PM6 t3k2 on board 2 END rc=0 01:13:01 :: READ summary: stub t3k2
+PM6 board 1 HOLD: t3k1 ended rc!=0; t3k3 was not run
+PM6 DONE 01:13:01
+B rc=0
+== C: t3k3 replaced by t3k2's kit (positive control of the pre-launch check)
+CHECK t3k1 runner 0ecbbc7c4c9f5ec8: 81 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k2 runner fc24bc09d77351fc: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+FAIL t3k3: run-t3k2.sh is not 37861b84fca1ac04
+FAIL t3k3: run-t3k2.sh does not end in @@PERF-T3K3-DONE
+CHECK t3k3 runner 37861b84fca1ac04: 60 processes, 5 programs, main-run reference from 5 plans: 2 FAILURE(S)
+PM6 STOP: a kit failed perfmain3-check.py; nothing launched
+C rc=1
+== E: board 1 waits for lt1's END, board 2's lt0 never ends
+CHECK t3k1 runner 0ecbbc7c4c9f5ec8: 81 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k2 runner fc24bc09d77351fc: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k3 runner 37861b84fca1ac04: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+PM6 board 1 WAIT for corpus lt1 END 01:13:01
+PM6 board 2 WAIT for corpus lt0 END 01:13:01
+PM6 board 1 FREE: CO lt1 on board 1 END rc=0 01:13:04
+PM6 t3k1 on board 1 BEGIN 01:13:04
+PM6 t3k1 on board 1 END rc=0 01:13:05 :: READ summary: stub t3k1
+PM6 t3k3 on board 1 BEGIN 01:13:05
+PM6 t3k3 on board 1 END rc=0 01:13:06 :: READ summary: stub t3k3
+PM6 board 2 STOP: corpus lt0 did not end within 8 s; nothing launched
+PM6 DONE 01:13:10
+E rc=0
+== D: the real wrapper (kit gates live)
+CHECK t3k1 runner 0ecbbc7c4c9f5ec8: 81 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k2 runner fc24bc09d77351fc: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+CHECK t3k3 runner 37861b84fca1ac04: 60 processes, 5 programs, main-run reference from 5 plans: PASS
+PM6 board 1 WAIT for corpus lt1 END 01:13:10
+PM6 board 2 WAIT for corpus lt0 END 01:13:10
+PM6 board 1 FREE: CO lt1 on board 1 END rc=0 06:00:00
+PM6 board 2 FREE: CO lt0 on board 2 END rc=0 06:10:00
+PM6 t3k1 on board 1 BEGIN 01:13:10
+PM6 t3k2 on board 2 BEGIN 01:13:10
+PM6 t3k1 on board 1 END rc=0 01:13:10 :: READ summary: stub
+PM6 t3k2 on board 2 END rc=0 01:13:10 :: READ summary: stub
+PM6 t3k3 on board 1 BEGIN 01:13:10
+PM6 t3k3 on board 1 END rc=0 01:13:10 :: READ summary: stub
+PM6 DONE 01:13:10
+D rc=0
+-- bookings
+BOOK-STUB book 1 75 vp2 bitstream 3 perf-eval main6-t3k1 (board 1)
+BOOK-STUB book 2 75 vp2 bitstream 3 perf-eval main6-t3k2 (board 2)
+BOOK-STUB unbook 999
+BOOK-STUB unbook 999
+BOOK-STUB book 1 75 vp2 bitstream 3 perf-eval main6-t3k3 (board 1)
+BOOK-STUB unbook 999
+-- the last runner argv
+RUN-STUB argv: --board-kit <mnt-hdd>/capstone/t3-smoke/bkit12-perf-b3-b1 --pilot-dir <mnt-hdd>/capstone/perf/main3b/t3k3 --runner run-t3k3.sh --runner-sha 37861b84fca1ac04 --done T3K3 --step-s 3600 <scratch>/dry-pm6/root-D
+READ summary: stub
+-- wrapper lines
+PP BEGIN 01:13:10 board 1 kit bkit12-perf-b3-b1 booking 999
+PP END rc=0 01:13:10
+PP board1 DONE 01:13:10
+PP BEGIN 01:13:10 board 2 kit bkit12-perf-b3-b2 booking 999
+PP END rc=0 01:13:10
+PP board2 DONE 01:13:10
+PP BEGIN 01:13:10 board 1 kit bkit12-perf-b3-b1 booking 999
+PP END rc=0 01:13:10
+PP board1 DONE 01:13:10

@@ -10424,3 +10424,39 @@ Tool: `r64-census.py`.
 - **Any other difference** is a finding about bitstream 3, reported cell by cell. Its first suspect is a
   division-dependent path. The orchestrator's END rc says only whether a script ran; the grade is the compare and score
   lines.
+
+### The 15 allocating programs' T3 kits on bitstream 3 (main3b t3k1..t3k3), pre-registered (2026-10-28 01:1x, before any boot)
+
+- **Why:** the runtime lane's request. The 15 programs that allocate in the timed region have T1, T3 and T2 only on
+  bitstream 2. After this run, all 103 programs have all three arms on bitstream 3. The analysis and its predictions
+  are the runtime lane's, pre-registered on runtime/perf-t3-all 811dc7a43eb3 (PREREG-t1-t2-sampling.md, last
+  section). This section pre-registers the board side.
+- **What runs:** `tier3-perfmain6-b3.sh`, which is tier3-perfmain3-b2.sh with these changes:
+  - tier3-perfpilot-b3.sh, which runs the bitstream-3 perf kits bkit12-perf-b3-b<board> as main5 did;
+  - output `t3-run-b3-e7af48457-b<board>/main6-<kit>`, with the transcript in `guest/board.txt`;
+  - t3k3 runs only after t3k1 ends rc=0, as in tier3-perfmain5-b3.sh.
+- **Kits:** perf/main3b/t3k1..t3k3, unchanged from the bitstream-2 T3 run.
+  - Runner sha256/16: t3k1 0ecbbc7c4c9f5ec8 (81 processes), t3k2 fc24bc09d77351fc (60), t3k3 37861b84fca1ac04 (60).
+  - perfmain3-check.py passes on all three tonight, and must pass again before any board is booked.
+- **Boards:** one kit per boot, never split. Board 1 runs t3k1 then t3k3; board 2 runs t3k2. Each kit has a 75-min
+  booking and a 3600 s step.
+  - Both boards are mid-run in the corpus arms. Each board waits for its own arm's END line in the corpus log: lt1
+    for board 1, lt0 for board 2.
+  - A board whose arm has not ended within 14 h launches nothing. The wrapper's busy check still runs before booking.
+- **Dry run:** `records/dryrun-perfmain6-b3.txt`, every boot stubbed. It covers:
+  - armed;
+  - t3k1 failing, so board 1 holds t3k3;
+  - a substituted kit, which STOPs before any booking;
+  - the wait, released by lt1's END and timing out for lt0;
+  - the real wrapper with its kit gates live.
+- **Pass, per kit:**
+  - the step text ends in `@@PERF-T3K<n>-DONE`;
+  - there are 81/60/60 @@PERF-END lines, all rc=0;
+  - `tier3-perfpilot.py --reread` on the transcript exits 0, so every process passes and check= agrees across each
+    program's iterations and arms;
+  - the readings (pc=0, DRT1, FRTY, Oops, INJS, INJL) are 0.
+  - The wrapper's rc=0 is not the grade. It reflects boot completion and the DONE/END counts, not the per-process
+    verdict (main5, above), so each kit is graded by the reread.
+- **Predictions:** the runtime lane's, quoted, not mine. Every process exits 0, check= equals the bitstream-2 T3 run's,
+  and instret per iteration is within 0.1 % of it. Bitstream 3 differs from bitstream 2 only in fpnew's divide/sqrt unit
+  (R-62/R-63), and these are integer programs.
