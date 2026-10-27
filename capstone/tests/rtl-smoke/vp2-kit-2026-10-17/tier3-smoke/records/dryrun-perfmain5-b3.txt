@@ -1,0 +1,66 @@
+# tier3-perfmain5-b3.sh dry run (2026-10-27 19:07, before any boot). Every boot is stubbed; A-C stub the whole wrapper (PM5_RUNKIT),
+# D runs the real tier3-perfpilot-b3.sh with its busy check, booking and runner stubbed (PP_BUSY/PP_BOOK/PP_RUN/PP_ROOT).
+== A: armed, every boot stubbed: rc=0
+CHECK t3a1 runner 95581eee5424dd8d: 285 processes, 22 programs, main-run reference from 5 plans: PASS
+CHECK t3a2 runner bd4ef4ee77c21fc6: 285 processes, 22 programs, main-run reference from 5 plans: PASS
+CHECK t3a3 runner 8d7f4b3cec3b260c: 285 processes, 22 programs, main-run reference from 5 plans: PASS
+CHECK t3a4 runner c2f7cc1b012f7c57: 264 processes, 22 programs, main-run reference from 5 plans: PASS
+PM5 t3a1 on board 1 BEGIN 19:07:03
+PM5 t3a2 on board 2 BEGIN 19:07:03
+PM5 t3a2 on board 2 END rc=0 19:07:04 :: READ summary: stub t3a2
+PM5 t3a1 on board 1 END rc=0 19:07:04 :: READ summary: stub t3a1
+PM5 t3a4 on board 2 BEGIN 19:07:04
+PM5 t3a3 on board 1 BEGIN 19:07:04
+PM5 t3a3 on board 1 END rc=0 19:07:05 :: READ summary: stub t3a3
+PM5 t3a4 on board 2 END rc=0 19:07:05 :: READ summary: stub t3a4
+PM5 DONE 19:07:05
+== B: t3a1's boot fails: board 1 holds t3a3, board 2 runs on
+PM5 t3a1 on board 1 BEGIN 19:07:05
+PM5 t3a2 on board 2 BEGIN 19:07:05
+PM5 t3a1 on board 1 END rc=1 19:07:05 :: 
+PM5 t3a2 on board 2 END rc=0 19:07:05 :: READ summary: stub t3a2
+  PP STOP: stub failure
+PM5 board 1 HOLD: t3a1 ended rc!=0; t3a3 was not run
+PM5 t3a4 on board 2 BEGIN 19:07:05
+PM5 t3a4 on board 2 END rc=0 19:07:05 :: READ summary: stub t3a4
+PM5 DONE 19:07:05
+== C: t3a3 replaced by t3a4's kit (positive control of the pre-launch check): rc=1, nothing launched
+FAIL t3a3: run-t3a4.sh is not 8d7f4b3cec3b260c
+FAIL t3a3: run-t3a4.sh does not end in @@PERF-T3A3-DONE
+CHECK t3a3 runner 8d7f4b3cec3b260c: 264 processes, 22 programs, main-run reference from 5 plans: 2 FAILURE(S)
+PM5 STOP: a kit failed perfmain3-check.py; nothing launched
+== D: the real wrapper (kit gates live): rc=0
+PM5 t3a2 on board 2 BEGIN 19:07:23
+PM5 t3a1 on board 1 BEGIN 19:07:23
+PM5 t3a2 on board 2 END rc=0 19:07:23 :: READ summary: stub
+PM5 t3a1 on board 1 END rc=0 19:07:23 :: READ summary: stub
+PM5 t3a4 on board 2 BEGIN 19:07:23
+PM5 t3a3 on board 1 BEGIN 19:07:23
+PM5 t3a4 on board 2 END rc=0 19:07:23 :: READ summary: stub
+PM5 t3a3 on board 1 END rc=0 19:07:23 :: READ summary: stub
+PM5 DONE 19:07:23
+-- bookings
+BOOK-STUB book 2 180 vp2 bitstream 3 perf-eval main5-t3a2 (board 2)
+BOOK-STUB book 1 180 vp2 bitstream 3 perf-eval main5-t3a1 (board 1)
+BOOK-STUB unbook 999
+BOOK-STUB unbook 999
+BOOK-STUB book 2 180 vp2 bitstream 3 perf-eval main5-t3a4 (board 2)
+BOOK-STUB book 1 180 vp2 bitstream 3 perf-eval main5-t3a3 (board 1)
+BOOK-STUB unbook 999
+BOOK-STUB unbook 999
+-- the last runner argv
+RUN-STUB argv: --board-kit <mnt-hdd>/capstone/t3-smoke/bkit12-perf-b3-b1 --pilot-dir <mnt-hdd>/capstone/perf/main5/t3a3 --runner run-t3a3.sh --runner-sha 8d7f4b3cec3b260c --done T3A3 --step-s 10800 <scratch>/root-D
+READ summary: stub
+-- wrapper lines
+PP BEGIN 19:07:23 board 1 kit bkit12-perf-b3-b1 booking 999
+PP END rc=0 19:07:23
+PP board1 DONE 19:07:23
+PP BEGIN 19:07:23 board 2 kit bkit12-perf-b3-b2 booking 999
+PP END rc=0 19:07:23
+PP board2 DONE 19:07:23
+PP BEGIN 19:07:23 board 2 kit bkit12-perf-b3-b2 booking 999
+PP END rc=0 19:07:23
+PP board2 DONE 19:07:23
+PP BEGIN 19:07:23 board 1 kit bkit12-perf-b3-b1 booking 999
+PP END rc=0 19:07:23
+PP board1 DONE 19:07:23

@@ -10301,3 +10301,35 @@ Tool: `r64-census.py`.
 - **N=2:** each image's SR/SV lines compare equal across the two boards (`cmp`; 31, 23, 41, 11 and 57 lines).
 - Against the pre-registration (df6bfa10eef4): every reading holds. These are the baseline readings for the bitstream
   that carries r64-flags, where each image must read its fixed-core vector.
+
+### The perf evaluation's T3 arm on the other 88 programs, bitstream 3: pre-registration (2026-10-27 19:0x, before any boot)
+
+- **What runs:** the runtime lane's four kits `perf/main5/t3a1..t3a4`. The runtime lane pre-registered them, with its
+  predictions, on runtime/perf-t3-all `92e59181f84d` (PREREG-t1-t2-sampling.md, last section). The run was asked for
+  on the lead's word in the runtime lane's conversation.
+  - Each kit holds 22 programs with all three arms in one boot: 285, 285, 285 and 264 processes.
+  - Runners: `run-t3a1.sh` 95581eee5424dd8d, `run-t3a2.sh` bd4ef4ee77c21fc6, `run-t3a3.sh` 8d7f4b3cec3b260c,
+    `run-t3a4.sh` c2f7cc1b012f7c57. Launcher 978c09d61f774315.
+  - Stages of 15,740,529, 16,047,625, 15,983,150 and 15,969,573 B, under the 26,000,000 B firmware cap.
+- **Checked here before booking:** `perfmain3-check.py <kit> <runner> T3A<n> T1,T2,T3`, the same checks as the
+  bitstream-2 T3 kits. All four PASS, with args equal to the main run's (5 plans). Its positive control in the dry run is
+  t3a3 replaced by t3a4's kit, which fails on the runner hash and the done marker, and launches nothing.
+- **How:** `tier3-perfmain5-b3.sh`.
+  - Board 1 runs t3a1 then t3a3; board 2 runs t3a2 then t3a4. One kit per boot, never split, nothing else in the boot.
+  - Each kit is one `tier3-perfpilot-b3.sh` boot on bkit12-perf-b3-b<board>: bitstream 3 caplifive_vp2c_e7af48457
+    (the driver HARD STOPs unless the resident name equals it exactly), module 9c60fb53f80ce67e.
+  - Output `main5-<kit>`; step 10,800 s; booked 180 min each. The runtime lane's model gives 1.5 h per kit. t3k1's 81
+    processes took 33 min, and these kits are 3.5x that, so the budget is wider than the model.
+  - A board's second kit runs only if its first ended rc=0.
+  - Dry run: `records/dryrun-perfmain5-b3.txt`, every boot stubbed: the armed order, a failed first kit holding that
+    board's second, the check's positive control, and the real wrapper's kit gates on both boards.
+- **Pass per kit (the runtime lane's criterion):**
+  - the last line is `@@PERF-T3A<n>-DONE`;
+  - 285 / 285 / 285 / 264 `@@PERF-END` lines, all rc=0;
+  - tier3-perfpilot.py reads every planned process.
+- **Prediction (functional only; the timing predictions are the runtime lane's):** every process passes. Bitstream 2
+  read these 88 programs' T1 and T2 processes as passing in the main run, and b3k1 passed on bitstream 3. A
+  check= difference from the twin is the runtime lane's reading; R-64, R-65 and R-66 remain in bitstream 3 and are its
+  first suspects. A T3-only failure would be a finding about the T3 build, not the board.
+- **What goes back to the runtime lane:** each kit's reassembled console transcript (`guest/board.txt`) and the
+  resident bitstream.
