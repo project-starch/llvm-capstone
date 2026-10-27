@@ -64,33 +64,32 @@ def beeswarm(values, x0, ax_in, xspan_in, d_in, ymin, ymax, height_in):
     return xs
 
 
-def strip_figure(cols, ylabel, thresholds, base):
-    """one panel, suites as columns: programs as dots, scripts, sizes or runs of one program as ticks with a diamond
-    at the maximum; thresholds are 2^i lines (the band between them shaded), drawn when given"""
-    plt = pyplot()
-    from matplotlib.lines import Line2D
-    from matplotlib.offsetbox import AnchoredOffsetbox, DrawingArea, HPacker, TextArea
-    n = len(cols)
-    W, H, AX_W, AX_H = 7.4, 3.1, 6.3, 2.6   # double-column width: up to seven bold suite titles side by side
-    fig = plt.figure(figsize=(W, H))
-    ax = fig.add_axes((0.55 / W, 0.3 / H, AX_W / W, AX_H / H))
-    vals_all = [p.value for c in cols for p in c["points"] if p.value > 0]
-    lo, hi = min(vals_all, default=1), max(vals_all, default=1)
-    if thresholds:   # counts: from 1 up, every mark inside (Redis's largest data set included)
-        ymin, ymax = 1, 10.0 ** max(8, ceil(log10(hi * 1.5)))
-    else:            # rates: the decades the marks span
-        ymin, ymax = 10.0 ** floor(log10(lo / 1.5)), 10.0 ** ceil(log10(hi * 1.5))
-    ax.set_yscale("log")
-    ax.set_ylim(ymin, ymax)
-    ax.set_xlim(-0.5, n - 0.5)
-    if thresholds:
-        a, b = thresholds
-        ax.axhspan(2 ** a, 2 ** b, color=LIGHT, lw=0, zorder=0)
-        ax.axhline(2 ** a, color=INK, lw=0.8, ls=(0, (4, 2.5)), zorder=1)
-        ax.axhline(2 ** b, color=INK, lw=1.3, zorder=1)
-        for i in (a, b):   # named just outside the right edge, level with their lines
-            ax.annotate(f"$2^{{{i}}}$ slots", (1, 2 ** i), xycoords=("axes fraction", "data"), xytext=(4, 0),
-                        textcoords="offset points", ha="left", va="center", fontsize=9)
+FIG_W, FIG_H, AX_W, AX_H = 7.4, 3.1, 6.3, 2.6   # double-column width: up to seven bold suite titles side by side
+
+
+def strip_range(cols, counts):
+    """the log y range: counts from 1 up, every mark inside (Redis's largest data set included); rates the decades
+    the marks span"""
+    values = [p.value for c in cols for p in c["points"] if p.value > 0]
+    lo, hi = min(values, default=1), max(values, default=1)
+    if counts:
+        return 1, 10.0 ** max(8, ceil(log10(hi * 1.5)))
+    return 10.0 ** floor(log10(lo / 1.5)), 10.0 ** ceil(log10(hi * 1.5))
+
+
+def draw_slot_lines(ax, thresholds):
+    """2^a dashed and 2^b solid, the band between them shaded, each named just outside the right edge"""
+    a, b = thresholds
+    ax.axhspan(2 ** a, 2 ** b, color=LIGHT, lw=0, zorder=0)
+    ax.axhline(2 ** a, color=INK, lw=0.8, ls=(0, (4, 2.5)), zorder=1)
+    ax.axhline(2 ** b, color=INK, lw=1.3, zorder=1)
+    for i in (a, b):
+        ax.annotate(f"$2^{{{i}}}$ slots", (1, 2 ** i), xycoords=("axes fraction", "data"), xytext=(4, 0),
+                    textcoords="offset points", ha="left", va="center", fontsize=9)
+
+
+def style_strip_axes(ax, ymin, ymax, ylabel):
+    """light horizontal grid, no top or right spine, a tick per decade or per two or three decades"""
     ax.grid(axis="y", which="major", color="#dddddd", lw=0.3, zorder=0)
     ax.spines[["top", "right"]].set_visible(False)
     ax.tick_params(labelsize=8, length=3)
@@ -100,7 +99,12 @@ def strip_figure(cols, ylabel, thresholds, base):
     ax.set_yticks([10.0 ** k for k in ks], [f"$10^{{{k}}}$" for k in ks])
     ax.minorticks_off()
     ax.set_ylabel(ylabel, fontsize=9)
-    col_in = AX_W / n
+
+
+def draw_columns(ax, cols, ymin, ymax):
+    """per column: programs as dots spread sideways, or scripts, sizes or runs as ticks with a diamond at the
+    maximum; the suite names below, in bold"""
+    col_in = AX_W / len(cols)
     for x, c in enumerate(cols):
         vals = [max(p.value, ymin) for p in c["points"]]
         if not vals:
@@ -111,16 +115,38 @@ def strip_figure(cols, ylabel, thresholds, base):
         else:
             ax.plot([x] * len(vals), vals, ls="none", marker="_", ms=6, mew=0.6, color=GRAY, zorder=2)
             ax.plot([x], [vals[-1]], ls="none", marker="D", ms=4.5, color=INK, mew=0, zorder=3)
-    ax.set_xticks(range(n), [f"$\\bf{{{c['label'].replace(' ', '~')}}}$" for c in cols], fontsize=8)
+    ax.set_xticks(range(len(cols)), [f"$\\bf{{{c['label'].replace(' ', '~')}}}$" for c in cols], fontsize=8)
     ax.tick_params(axis="x", length=0, pad=4)
 
-    def item(marker, size, color, mew, text):   # the key, laid out from the measured text widths
+
+def add_mark_key(ax):
+    """the key in one row at the lower right, laid out from the measured text widths"""
+    from matplotlib.lines import Line2D
+    from matplotlib.offsetbox import AnchoredOffsetbox, DrawingArea, HPacker, TextArea
+
+    def item(marker, size, color, mew, text):
         da = DrawingArea(8, 8, 0, 0)
         da.add_artist(Line2D([4], [4], ls="none", marker=marker, ms=size, color=color, mew=mew))
         return HPacker(children=[da, TextArea(text, textprops=dict(fontsize=8))], align="center", pad=0, sep=2)
     key = HPacker(children=[item("o", 3.6, INK, 0, "program"), item("_", 6, GRAY, 0.6, "script, size or run"),
                             item("D", 4.5, INK, 0, "maximum")], align="center", pad=0, sep=10)
     ax.add_artist(AnchoredOffsetbox(loc="lower right", child=key, frameon=False, pad=0.3, borderpad=0.4))
+
+
+def strip_figure(cols, ylabel, thresholds, base):
+    """one panel, suites as columns; thresholds (i, j) draw the 2^i and 2^j slot lines"""
+    plt = pyplot()
+    fig = plt.figure(figsize=(FIG_W, FIG_H))
+    ax = fig.add_axes((0.55 / FIG_W, 0.3 / FIG_H, AX_W / FIG_W, AX_H / FIG_H))
+    ymin, ymax = strip_range(cols, counts=bool(thresholds))
+    ax.set_yscale("log")
+    ax.set_ylim(ymin, ymax)
+    ax.set_xlim(-0.5, len(cols) - 0.5)
+    if thresholds:
+        draw_slot_lines(ax, thresholds)
+    style_strip_axes(ax, ymin, ymax, ylabel)
+    draw_columns(ax, cols, ymin, ymax)
+    add_mark_key(ax)
     save(plt, fig, base, png_dpi=120)   # small enough for a terminal image viewer
 
 
@@ -205,11 +231,14 @@ def log2_ticks(axis, lo, hi):
     axis.set_ticks([2.0 ** k for k in ks], [f"$2^{{{k}}}$" for k in ks])
 
 
-def peak_rate_figure(pairs, base):
-    plt = pyplot()
-    runs = [p for p in pairs if p.suite not in LEAVE_OUT]
-    x = lambda p: 1000 / p.rate   # instructions per allocation
-    xlo, xhi = 1.0, 2.0 ** (-(-log2(max(x(p) for p in runs) * 1.05) // TICK_STEP) * TICK_STEP)
+def instructions_per_allocation(p):
+    return 1000 / p.rate
+
+
+def peak_rate_axes(plt, runs):
+    """a figure whose log2 axes run from 2^0, one power of two as long on both, y up to the 2^SPLIT slots"""
+    top = max(instructions_per_allocation(p) for p in runs) * 1.05
+    xlo, xhi = 1.0, 2.0 ** (-(-log2(top) // TICK_STEP) * TICK_STEP)
     ylo, yhi = 1.0, 2.0 ** SPLIT   # the y axis ends at the slots, the limit every peak must stay under
     w, h = AXES_WIDTH, AXES_WIDTH * log2(yhi / ylo) / log2(xhi / xlo)
     fig = plt.figure(figsize=(w + 0.7, h + 0.55))
@@ -225,11 +254,18 @@ def peak_rate_figure(pairs, base):
     ax.minorticks_off()
     ax.set_xlabel("Instructions per heap allocation", fontsize=10)
     ax.set_ylabel("Peak live heap objects", fontsize=10)
+    return fig, ax
+
+
+def draw_suites(ax, runs):
+    """each suite in its colour and marker, a program's data set sizes joined in size order; dense suites smaller,
+    translucent and underneath"""
+    x = instructions_per_allocation
     for label, (color, marker) in SUITE_STYLE.items():
         sel = [p for p in runs if p.suite == label]
         if not sel:
             continue
-        for program in {p.program for p in sel}:   # a program's data set sizes, in size order
+        for program in {p.program for p in sel}:
             sizes = sorted((p for p in sel if p.program == program), key=lambda p: dataset_order(p.dataset))
             if len(sizes) > 1:
                 ax.plot([x(p) for p in sizes], [p.peak for p in sizes], color=color, lw=0.8, zorder=2)
@@ -237,7 +273,10 @@ def peak_rate_figure(pairs, base):
         ax.scatter([x(p) for p in sel], [p.peak for p in sel], s=(5.5 if marker == "*" else 2.6 if dense else 3.6) ** 2,
                    marker=marker, color=color, alpha=0.5 if dense else 1, linewidths=0, zorder=2.5 if dense else 3,
                    label=label)
-    # above the panel, row by row: no corner inside is free of runs
+
+
+def add_suite_legend(ax):
+    """above the panel (no corner inside is free of runs), in LEGEND_ORDER row by row, every key at full strength"""
     handles, names = ax.get_legend_handles_labels()
     order = sorted(range(len(names)), key=lambda k: LEGEND_ORDER.index(names[k]))
     rows = [order[k:k + 3] for k in range(0, len(order), 3)]
@@ -245,8 +284,16 @@ def peak_rate_figure(pairs, base):
     legend = ax.legend([handles[k] for k in order], [names[k] for k in order], loc="lower center",
                        bbox_to_anchor=(0.5, 1.04), ncol=3, frameon=False, fontsize=8.5, handletextpad=0.2,
                        columnspacing=1.0, borderaxespad=0, labelspacing=0.3)
-    for handle in legend.legend_handles:   # the key at full strength, though dense suites are translucent
+    for handle in legend.legend_handles:
         handle.set_alpha(1)
+
+
+def peak_rate_figure(pairs, base):
+    plt = pyplot()
+    runs = [p for p in pairs if p.suite not in LEAVE_OUT]
+    fig, ax = peak_rate_axes(plt, runs)
+    draw_suites(ax, runs)
+    add_suite_legend(ax)
     save(plt, fig, base, png_dpi=200)
 
 
@@ -267,7 +314,7 @@ def write_peak_rate_caption(pairs, path):
         f"{SPLIT} slot and {g} generation bits supports at least (2^{SPLIT} - y)·2^{g} allocations before a process "
         f"can run out of slots, and the y axis ends at the 2^{SPLIT} slots. "
         f"The closest run to that limit, {closest.program} ({closest.suite}, one allocation every "
-        f"{1000 / closest.rate:,.0f} instructions), can run out only after 2^{n:.2f} instructions: about "
+        f"{instructions_per_allocation(closest):,.0f} instructions), can run out only after 2^{n:.2f} instructions: about "
         f"{years(1e9):,.0f}, {years(1e10):,.0f} or {years(1e11):,.1f} years at 10^9, 10^10 or 10^11 instructions "
         f"per second. The largest peak, {widest.program} ({widest.peak:,} objects), is "
         f"{SPLIT - log2(widest.peak):.1f} bits short of 2^{SPLIT} slots. {len(runs)} runs"

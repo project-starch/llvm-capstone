@@ -62,7 +62,7 @@ cp "$CFG" "$OUT/slotcensus.cfg"
 # 5. build every benchmark once (the compilers run under the tracer too; census_out is /dev/null here)
 s=$(date +%s)
 runcpu --config=slotcensus --action=build --define build_ncpus=32 "${BENCH[@]}" > "$OUT/logs/build.log" 2>&1
-echo "build rc=$? $(( $(date +%s) - s ))s" | tee -a "$OUT/provenance.txt"
+echo "build rc=$? $(took $s)" | tee -a "$OUT/provenance.txt"
 # runcpu exits 0 even when a benchmark fails to build; it says so in the log
 grep -E '^Build errors' "$OUT/logs/build.log" | tee -a "$OUT/provenance.txt"
 
@@ -72,8 +72,8 @@ for b in "${BENCH[@]}"; do
   ( t=$(date +%s)
     runcpu --config=slotcensus --nobuild --action=run --size="$SIZE" --iterations=1 --noreportable \
            --define census_out="$OUT/$b.jsonl" "$b" > "$OUT/logs/$b.log" 2>&1
-    echo "$b rc=$? $(( $(date +%s) - t ))s" >> "$OUT/runs.txt" ) &
+    echo "$b rc=$? $(took $t)" >> "$OUT/runs.txt" ) &
 done
 wait
-echo "runs $(( $(date +%s) - s ))s" | tee -a "$OUT/provenance.txt"
-echo CENSUS_DONE >> "$OUT/runs.txt"
+echo "runs $(took $s)" | tee -a "$OUT/provenance.txt"
+finish_pass runs.txt

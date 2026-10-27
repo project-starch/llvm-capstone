@@ -19,7 +19,7 @@ BENCH=("$@")
 start_pass
 
 for a in quickjs-$VERSION.tar.xz quickjs-extras-$VERSION.tar.xz; do
-  [ -s "$CACHE/$a" ] || curl -fsSL -o "$CACHE/$a" "https://bellard.org/quickjs/$a" || exit 1
+  cached "$a" "https://bellard.org/quickjs/$a"
   tar xJf "$CACHE/$a" -C "$TOOL" || exit 1
 done
 Q=$TOOL/quickjs-$VERSION
@@ -40,6 +40,6 @@ for b in "${BENCH[@]}"; do
   measured "$OUT/$cell.jsonl" ./qjs tests/octane/run.js "$b" > "$OUT/$cell.out" 2>&1
   rc=$?
   v=INVALID; [ $rc = 0 ] && grep -q '^Score (version' "$OUT/$cell.out" && v=valid
-  record_cell "$cell" qjs "$v" "rc=$rc $(( $(date +%s) - t ))s"
+  record_cell "$cell" qjs "$v" "rc=$rc $(took $t)"
 done
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+finish_pass

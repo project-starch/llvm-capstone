@@ -17,7 +17,7 @@ start_pass
 
 # SQLite 3.22.0 and speedtest1 from the same release
 for z in sqlite-amalgamation-3220000.zip sqlite-src-3220000.zip; do
-  [ -s "$CACHE/$z" ] || curl -fsSL -o "$CACHE/$z" "https://www.sqlite.org/2018/$z" || exit 1
+  cached "$z" "https://www.sqlite.org/2018/$z"
 done
 SRC=$TOOL/sqlite; mkdir -p "$SRC"
 unzip -q -o -j "$CACHE/sqlite-amalgamation-3220000.zip" -d "$SRC" || exit 1
@@ -43,8 +43,8 @@ for size in "${SIZES[@]}"; do
       "$TOOL/speedtest1" --size "$size" --stats "${look[@]}" "$OUT/$cell.db" > "$OUT/$cell.out" 2>&1
     rc=$?
     v=INVALID; [ $rc = 0 ] && grep -q 'TOTAL' "$OUT/$cell.out" && v=valid
-    record_cell "$cell" speedtest1 "$v" "rc=$rc $(( $(date +%s) - t ))s"
+    record_cell "$cell" speedtest1 "$v" "rc=$rc $(took $t)"
     rm -f "$OUT/$cell.db"
   done
 done
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+finish_pass

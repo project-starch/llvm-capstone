@@ -69,6 +69,6 @@ for t in "${TESTS[@]}"; do
     > "$OUT/logs/$cell.log" 2>&1
   rc=$?
   v=INVALID; [ $rc = 0 ] && v=valid
-  record_cell "$cell" "$exe" "$v" "rc=$rc $(( $(date +%s) - s ))s"
+  record_cell "$cell" "$exe" "$v" "rc=$rc $(took $s)"
 done
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+finish_pass

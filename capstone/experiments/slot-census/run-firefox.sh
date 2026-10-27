@@ -27,8 +27,7 @@ start_pass
 F_T=firefox-nightly.tar.xz G_T=geckodriver-v$GECKO-linux64.tar.gz
 curl -fsSL -o "$TOOL/$F_T" "https://download.mozilla.org/?product=firefox-nightly-latest-ssl&os=linux64&lang=en-US" \
   && tar xJf "$TOOL/$F_T" -C "$TOOL" || { echo "run-firefox: firefox download failed" >&2; exit 1; }
-[ -s "$CACHE/$G_T" ] || curl -fsSL -o "$CACHE/$G_T" \
-  "https://github.com/mozilla/geckodriver/releases/download/v$GECKO/$G_T" || exit 1
+cached "$G_T" "https://github.com/mozilla/geckodriver/releases/download/v$GECKO/$G_T"
 tar xzf "$CACHE/$G_T" -C "$TOOL" || exit 1
 REV=$(sed -n 's/^SourceStamp=//p' "$TOOL/firefox/platform.ini")
 [ -n "$REV" ] || { echo "run-firefox: no SourceStamp in platform.ini" >&2; exit 1; }
@@ -85,14 +84,12 @@ FFCENSUS_DIR=$OUT/control/ff-arena "$TOOL/ffcontrol" arena > "$OUT/control/ff-ar
 "$TOOL/ffcontrol" > "$OUT/control/ff-negative.expect"
 for k in c arena; do
   python3 "$HERE/ffcensus-dump.py" "$OUT/control/ff-$k" > "$OUT/control/ff-$k.jsonl" &&
-  python3 "$HERE/check-control.py" "$OUT/control/ff-$k.expect" "$OUT/control/ff-$k.jsonl" > "$OUT/control/ff-$k.check" \
-    && echo "control ff-$k: as expected (pass)" \
-    || { echo "control ff-$k: NOT as expected"; cat "$OUT/control/ff-$k.check"; exit 75; }
+    python3 "$HERE/check-control.py" "$OUT/control/ff-$k.expect" "$OUT/control/ff-$k.jsonl" > "$OUT/control/ff-$k.check"
+  control_verdict "ff-$k" pass $? "$OUT/control/ff-$k.check"
 done
-if python3 "$HERE/ffcensus-dump.py" "$OUT/control/ff-negative" > /dev/null 2>&1; then
-  echo "control ff-negative: NOT as expected (a census without FFCENSUS_DIR)"; exit 75
-fi
-echo "control ff-negative: as expected (fail)"
+# without FFCENSUS_DIR there is no census: the dump must fail (exit 1)
+python3 "$HERE/ffcensus-dump.py" "$OUT/control/ff-negative" > /dev/null 2> "$OUT/control/ff-negative.check"
+control_verdict ff-negative fail $? "$OUT/control/ff-negative.check"
 
 # Speedometer, Selenium
 python3 -m venv "$TOOL/sel" && "$TOOL/sel/bin/pip" -q install "selenium==$SELENIUM" > "$OUT/logs/pip.log" 2>&1 \
@@ -126,6 +123,6 @@ for v in "${VERSIONS[@]}"; do
   python3 "$HERE/ffcensus-dump.py" "$D" > "$OUT/$cell.jsonl"; dump=$?
   procs=$(grep -c . "$OUT/$cell.jsonl"); content=$(grep -c -- "-contentproc" "$OUT/$cell.jsonl")
   v_=INVALID; [ $rc = 0 ] && [ $dump = 0 ] && [ "$content" -ge 1 ] && grep -q '^score ' "$OUT/$cell.out" && v_=valid
-  record_cell "$cell" 're:firefox' "$v_" "rc=$rc processes=$procs content=$content $(( $(date +%s) - t ))s"
+  record_cell "$cell" 're:firefox' "$v_" "rc=$rc processes=$procs content=$content $(took $t)"
 done
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+finish_pass

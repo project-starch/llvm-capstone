@@ -21,7 +21,8 @@ programs' own allocation behaviour is measured, not a port's.
                  insctl.c           slotins's control: loops of known instruction counts, threads and a fork
                  check-instructions.py  compares insctl's instruction counts with what its loops must add
                  tracer.sh          sourced by every runner: start_pass (pass directory, tools, controls),
-                                    measured (one measured command in either mode), record_cell (one cells.tsv row)
+                                    measured (one measured command in either mode), record_cell (one cells.tsv row),
+                                    finish_pass, cached (a download, once), control_verdict
     runners      run-spec.sh        SPEC CPU2017 rate
                  run-parsec.sh      PARSEC 3.0
                  run-pyperformance.sh  pyperformance on CPython

@@ -6,8 +6,7 @@ LIBEVENT=2.1.12-stable
 
 build_libevent() {   # into $TOOL/libevent, static; sets LIBEVENT_SHA
   local E=libevent-$LIBEVENT.tar.gz
-  [ -s "$CACHE/$E" ] || curl -fsSL -o "$CACHE/$E" \
-    "https://github.com/libevent/libevent/releases/download/release-$LIBEVENT/$E" || exit 1
+  cached "$E" "https://github.com/libevent/libevent/releases/download/release-$LIBEVENT/$E"
   tar xzf "$CACHE/$E" -C "$TOOL" || exit 1
   (cd "$TOOL/libevent-$LIBEVENT" && ./configure --prefix="$TOOL/libevent" --disable-shared --disable-openssl \
      > "$OUT/logs/libevent-build.log" 2>&1 && make -j16 install >> "$OUT/logs/libevent-build.log" 2>&1) \

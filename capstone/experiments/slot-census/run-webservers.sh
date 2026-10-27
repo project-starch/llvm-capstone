@@ -21,8 +21,8 @@ PORT_N=${SLOTCENSUS_NGINX_PORT:-18080} PORT_A=${SLOTCENSUS_HTTPD_PORT:-18081}
 . "$HERE/tracer.sh"
 start_pass
 
-fetch() {   # file url
-  [ -s "$CACHE/$1" ] || curl -fsSL -o "$CACHE/$1" "$2" || { echo "run-webservers: download of $1 failed" >&2; exit 1; }
+fetch() {   # file url: downloaded once, unpacked into $TOOL
+  cached "$1" "$2"
   tar xzf "$CACHE/$1" -C "$TOOL" || exit 1
 }
 fetch nginx-$NGINX.tar.gz https://nginx.org/download/nginx-$NGINX.tar.gz
@@ -75,7 +75,7 @@ v=INVALID
 [ $load = 0 ] && [ $stopped = 0 ] && [ "$workers" -ge 16 ] && ! grep -qE "Socket errors|Non-2xx" "$OUT/nginx.out" \
   && v=valid
 record_cell nginx 're:^nginx: (master|worker) process' "$v" \
-  "wrk=$load stopped=$stopped workers=$workers $(( $(date +%s) - t ))s"
+  "wrk=$load stopped=$stopped workers=$workers $(took $t)"
 
 # httpd: its stock configuration with the port and the 64-byte file
 H=$TOOL/httpd
@@ -92,5 +92,5 @@ stopped=1; [ -e "$H/logs/httpd.pid" ] || stopped=0
 failed=$(sed -n 's/^Failed requests: *//p' "$OUT/httpd.out"); non2xx=$(grep -c "Non-2xx" "$OUT/httpd.out")
 v=INVALID
 [ $load = 0 ] && [ $stopped = 0 ] && [ "${failed:-x}" = 0 ] && [ "$non2xx" = 0 ] && v=valid
-record_cell httpd httpd "$v" "ab=$load failed=${failed:-?} stopped=$stopped $(( $(date +%s) - t ))s"
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+record_cell httpd httpd "$v" "ab=$load failed=${failed:-?} stopped=$stopped $(took $t)"
+finish_pass

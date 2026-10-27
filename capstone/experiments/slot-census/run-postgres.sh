@@ -23,7 +23,7 @@ SECONDS_RUN=${SLOTCENSUS_PG_SECONDS:-120}
 start_pass
 
 T=postgresql-$VERSION.tar.bz2
-[ -s "$CACHE/$T" ] || curl -fsSL -o "$CACHE/$T" "https://ftp.postgresql.org/pub/source/v$VERSION/$T" || exit 1
+cached "$T" "https://ftp.postgresql.org/pub/source/v$VERSION/$T"
 tar xjf "$CACHE/$T" -C "$TOOL" || exit 1
 (cd "$TOOL/postgresql-$VERSION" &&
  ./configure --prefix="$TOOL/pg" --without-icu --without-readline > "$OUT/logs/build.log" 2>&1 &&
@@ -56,7 +56,7 @@ for scale in "${SCALES[@]}"; do
   v=INVALID
   grep -q '^init rc=0' "$OUT/$cell.out" && grep -q '^run rc=0' "$OUT/$cell.out" &&
     grep -q 'number of failed transactions: 0' "$OUT/$cell.out" && [ $stop = 0 ] && v=valid
-  record_cell "$cell" 're:^(\S*/)?postgres(:|\s|$)' "$v" "stop=$stop $(( $(date +%s) - t ))s"
+  record_cell "$cell" 're:^(\S*/)?postgres(:|\s|$)' "$v" "stop=$stop $(took $t)"
   rm -rf "$D"
 done
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+finish_pass

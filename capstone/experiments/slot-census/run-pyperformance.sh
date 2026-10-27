@@ -21,7 +21,7 @@ JOBS=${SLOTCENSUS_PY_JOBS:-16}
 start_pass
 
 T=Python-$VERSION.tgz
-[ -s "$CACHE/$T" ] || curl -fsSL -o "$CACHE/$T" "https://www.python.org/ftp/python/$VERSION/$T" || exit 1
+cached "$T" "https://www.python.org/ftp/python/$VERSION/$T"
 tar xzf "$CACHE/$T" -C "$TOOL" || exit 1
 (cd "$TOOL/Python-$VERSION" && ./configure --prefix="$TOOL/python" > "$OUT/logs/build.log" 2>&1 &&
  make -j32 >> "$OUT/logs/build.log" 2>&1 && make install >> "$OUT/logs/build.log" 2>&1) \
@@ -104,7 +104,7 @@ run_cell() {   # arm benchmark
     --inherit-environ PYTHONMALLOC,LD_PRELOAD,SLOTCENSUS_OUT > "$OUT/logs/$cell.log" 2>&1
   rc=$?
   v=INVALID; [ $rc = 0 ] && [ -s "$OUT/logs/$cell.json" ] && v=valid
-  printf '%s\tre:--worker\t%s\trc=%s %ss\n' "$cell" "$v" "$rc" "$(( $(date +%s) - t ))" >> "$OUT/cells-$arm.tsv"
+  CELLS=$OUT/cells-$arm.tsv record_cell "$cell" re:--worker "$v" "rc=$rc $(took $t)" > /dev/null
 }
 # $JOBS cells at a time (the counts do not depend on timing; one cell after another takes hours)
 for b in "${BENCH[@]}"; do
@@ -115,4 +115,4 @@ for b in "${BENCH[@]}"; do
 done
 wait
 for arm in "${ARMS[@]}"; do cat "$OUT/cells-$arm.tsv"; done > "$OUT/cells.tsv"
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+finish_pass

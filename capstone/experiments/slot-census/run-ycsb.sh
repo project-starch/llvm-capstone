@@ -30,15 +30,12 @@ PORT_M=${SLOTCENSUS_MEMCACHED_PORT:-21213}
 . "$HERE/libevent.sh"
 start_pass
 
-fetch() {   # file url
-  [ -s "$CACHE/$1" ] || curl -fsSL -o "$CACHE/$1" "$2" || { echo "run-ycsb: download of $1 failed" >&2; exit 1; }
-}
 Y_T=ycsb-$YCSB.tar.gz J_T=OpenJDK11U-jdk_x64_linux_hotspot_$JDK.tar.gz R_T=redis-$REDIS.tar.gz
 M_T=memcached-$MEMCACHED.tar.gz
-fetch "$Y_T" "https://github.com/brianfrankcooper/YCSB/releases/download/$YCSB/$Y_T"
-fetch "$J_T" "https://github.com/adoptium/temurin11-binaries/releases/download/jdk-${JDK/_/%2B}/$J_T"
-fetch "$R_T" "https://download.redis.io/releases/$R_T"
-fetch "$M_T" "https://memcached.org/files/$M_T"
+cached "$Y_T" "https://github.com/brianfrankcooper/YCSB/releases/download/$YCSB/$Y_T"
+cached "$J_T" "https://github.com/adoptium/temurin11-binaries/releases/download/jdk-${JDK/_/%2B}/$J_T"
+cached "$R_T" "https://download.redis.io/releases/$R_T"
+cached "$M_T" "https://memcached.org/files/$M_T"
 tar xzf "$CACHE/$Y_T" -C "$TOOL" ycsb-$YCSB/lib ycsb-$YCSB/workloads ycsb-$YCSB/redis-binding \
   ycsb-$YCSB/memcached-binding || exit 1
 mkdir -p "$TOOL/jdk" && tar xzf "$CACHE/$J_T" -C "$TOOL/jdk" --strip-components=1 || exit 1
@@ -88,40 +85,57 @@ mc_say() {   # port command
   exec 3<&-
 }
 
+# use_server SERVER: its port, measured executable, YCSB binding, client class and connection properties
+use_server() {
+  if [ "$1" = redis ]; then
+    port=$PORT_R exe=redis-server binding=redis-binding class=site.ycsb.db.RedisClient
+    props=(-p redis.host=127.0.0.1 -p "redis.port=$PORT_R")
+  else
+    port=$PORT_M exe=memcached binding=memcached-binding class=site.ycsb.db.MemcachedClient
+    props=(-p "memcached.hosts=127.0.0.1:$PORT_M")
+  fi
+}
+
+# start_server SERVER CELL: the measured server in the background (srv its pid), once its port answers
+start_server() {
+  up $port && { echo "run-ycsb: port $port is taken" >&2; exit 1; }
+  if [ "$1" = redis ]; then
+    measured "$OUT/$2.jsonl" \
+      "$R/src/redis-server" --port $port --bind 127.0.0.1 --save "" --appendonly no --set-proc-title no \
+      --dir "$OUT" > "$OUT/logs/$2.server" 2>&1 &
+  else
+    measured "$OUT/$2.jsonl" \
+      "$M/memcached" -l 127.0.0.1 -p $port -U 0 -m 65536 -t 4 -c 4096 -A > "$OUT/logs/$2.server" 2>&1 &
+  fi
+  srv=$!
+  for _ in $(seq 1 100); do up $port && break; sleep 0.1; done
+}
+
+# stop_server SERVER RECORDS: the items it holds (n) against what it must hold (want), then a clean shutdown
+stop_server() {
+  if [ "$1" = redis ]; then
+    n=$("$R/src/redis-cli" -p $port dbsize); want=$(($2 + 1))
+    "$R/src/redis-cli" -p $port shutdown nosave > /dev/null 2>&1
+  else
+    n=$(mc_say $port stats | tr -d '\r' | sed -n 's/^STAT curr_items //p'); want=$2
+    mc_say $port shutdown > /dev/null 2>&1
+  fi
+}
+
 : > "$OUT/cells.tsv"
 for records in "${RECORDS[@]}"; do
   for server in redis memcached; do
     cell=ycsb-$server-$records
     t=$(date +%s)
-    if [ $server = redis ]; then
-      port=$PORT_R binding=redis-binding class=site.ycsb.db.RedisClient
-      props=(-p redis.host=127.0.0.1 -p "redis.port=$PORT_R")
-      up $port && { echo "run-ycsb: port $port is taken" >&2; exit 1; }
-      measured "$OUT/$cell.jsonl" \
-        "$R/src/redis-server" --port $port --bind 127.0.0.1 --save "" --appendonly no --set-proc-title no \
-        --dir "$OUT" > "$OUT/logs/$cell.server" 2>&1 &
-    else
-      port=$PORT_M binding=memcached-binding class=site.ycsb.db.MemcachedClient
-      props=(-p "memcached.hosts=127.0.0.1:$PORT_M")
-      up $port && { echo "run-ycsb: port $port is taken" >&2; exit 1; }
-      measured "$OUT/$cell.jsonl" \
-        "$M/memcached" -l 127.0.0.1 -p $port -U 0 -m 65536 -t 4 -c 4096 -A > "$OUT/logs/$cell.server" 2>&1 &
-    fi
-    srv=$!
-    for _ in $(seq 1 100); do up $port && break; sleep 0.1; done
+    use_server $server
+    start_server $server "$cell"
     ycsb -load "$binding" "$class" workloada "$records" "$OUT/logs/$cell.load" "${props[@]}"; load=$?
     ycsb -t "$binding" "$class" workloada "$records" "$OUT/logs/$cell.a" "${props[@]}"; a=$?
     ycsb -t "$binding" "$class" workloadc "$records" "$OUT/logs/$cell.c" "${props[@]}"; c=$?
     ok_count "$OUT/logs/$cell.load" "$records"; okl=$?
     ok_count "$OUT/logs/$cell.a" "$OPS"; oka=$?
     ok_count "$OUT/logs/$cell.c" "$OPS"; okc=$?
-    if [ $server = redis ]; then
-      n=$("$R/src/redis-cli" -p $port dbsize); want=$((records + 1))
-      "$R/src/redis-cli" -p $port shutdown nosave > /dev/null 2>&1
-    else
-      n=$(mc_say $port stats | tr -d '\r' | sed -n 's/^STAT curr_items //p'); want=$records
-      mc_say $port shutdown > /dev/null 2>&1
-    fi
+    stop_server $server "$records"
     wait $srv; rc=$?
     {
       for ph in load a c; do
@@ -132,8 +146,7 @@ for records in "${RECORDS[@]}"; do
     } > "$OUT/$cell.out"
     v=INVALID
     [ "$rc$load$a$c$okl$oka$okc" = 0000000 ] && [ "${n:-x}" = "$want" ] && v=valid
-    record_cell "$cell" "$([ $server = redis ] && echo redis-server || echo memcached)" "$v" \
-      "rc=$rc phases=$load$a$c ok=$okl$oka$okc items=${n:-?} $(( $(date +%s) - t ))s"
+    record_cell "$cell" "$exe" "$v" "rc=$rc phases=$load$a$c ok=$okl$oka$okc items=${n:-?} $(took $t)"
   done
 done
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+finish_pass

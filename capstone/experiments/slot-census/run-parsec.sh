@@ -135,8 +135,8 @@ for input in "${INPUTS[@]}"; do
       > "$OUT/logs/$cell.log" 2>&1
     rc=$(cat "$OUT/$cell.rc" 2>/dev/null || echo none)
     v=INVALID; [ "$rc" = 0 ] && v=valid
-    record_cell "$cell" "${EXE[$pkg]:-$pkg}" "$v" "rc=$rc $(( $(date +%s) - t ))s"
+    record_cell "$cell" "${EXE[$pkg]:-$pkg}" "$v" "rc=$rc $(took $t)"
     rm -rf "$P"/pkgs/*/"$pkg"/run   # the unpacked input and outputs; native inputs reach gigabytes
   done
 done
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+finish_pass

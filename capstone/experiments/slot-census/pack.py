@@ -21,48 +21,67 @@ import sys
 from summarize import cells
 
 
+def text(src, *path):
+    p = os.path.join(src, *path)
+    return open(p, errors="replace").read() if os.path.exists(p) else ""
+
+
+def provenance(src):
+    """the runner's provenance, and a SPEC pass's generated runcpu config"""
+    cfg = text(src, "slotcensus.cfg")
+    return text(src, "provenance.txt") + (
+        "\n== slotcensus.cfg (the runcpu config this pass generated)\n" + cfg if cfg else "")
+
+
+def spec_row(src, cell, verdict, runs):
+    """a SPEC benchmark's cells.tsv row: its note is the exit code and run time (runs.txt) and runcpu's
+    Success:/Error: lines"""
+    found = [l.strip() for l in text(src, "logs", cell + ".log").splitlines() if re.match(r"(Success|Error): ", l)]
+    note = " | ".join(x for x in [runs.get(cell, "").strip()] + found if x)
+    return "\t".join((cell, "spec", verdict, note)) + "\n"
+
+
+def measured_lines(src, cell, keep):
+    """the cell's census lines of the processes its selector measures, each with "cell" first"""
+    cmd = lambda line: json.loads(line)["cmdline"]
+    return [f'{{"cell": {json.dumps(cell)}, ' + line.lstrip()[1:]
+            for line in text(src, cell + ".jsonl").splitlines(keepends=True)
+            if keep(os.path.basename(cmd(line).split(" ")[0]), cmd(line))]
+
+
+def control_checks(src):
+    """every control's checker lines, one block per control"""
+    control = os.path.join(src, "control")
+    return "".join(f"== {f[:-6]}\n" + text(control, f) for f in sorted(os.listdir(control)) if f.endswith(".check"))
+
+
+def host_paths(dest):
+    """file:line of every line in DEST that still names a home directory"""
+    return [f"{f}:{n}" for f in sorted(os.listdir(dest))
+            for n, l in enumerate(open(os.path.join(dest, f), errors="replace"), 1)
+            if re.search(r"/home/|/Users/|/root/", l)]
+
+
 def main():
     src, dest = os.path.realpath(sys.argv[1]), sys.argv[2]
     home = os.path.realpath(os.path.expanduser("~"))
-    scrub = lambda s: s.replace(src, "<PASS>").replace(home, "<HOME>")
-    read = lambda *f: open(os.path.join(src, *f), errors="replace").read()
     os.makedirs(dest)
-    write = lambda f, text: open(os.path.join(dest, f), "w").write(scrub(text))
+    write = lambda f, t: open(os.path.join(dest, f), "w").write(t.replace(src, "<PASS>").replace(home, "<HOME>"))
     spec = not os.path.exists(os.path.join(src, "cells.tsv"))
-    provenance = read("provenance.txt") if os.path.exists(os.path.join(src, "provenance.txt")) else ""
-    if os.path.exists(os.path.join(src, "slotcensus.cfg")):
-        provenance += "\n== slotcensus.cfg (the runcpu config this pass generated)\n" + read("slotcensus.cfg")
-    write("provenance.txt", provenance)
-    runs = {}   # a SPEC pass's runs.txt: <benchmark> rc=<n> <seconds>s
-    if spec and os.path.exists(os.path.join(src, "runs.txt")):
-        runs = dict(l.split(" ", 1) for l in read("runs.txt").splitlines() if " " in l)
+    runs = dict(l.split(" ", 1) for l in text(src, "runs.txt").splitlines() if " " in l)   # SPEC: rc=<n> <s>s
     rows, census, outputs = [], [], []
     for cell, keep, verdict in cells(src):
-        cmd = lambda l: json.loads(l)["cmdline"]
-        path = os.path.join(src, cell + ".jsonl")
-        for line in open(path) if os.path.exists(path) else []:
-            if keep(os.path.basename(cmd(line).split(" ")[0]), cmd(line)):
-                census.append(f'{{"cell": {json.dumps(cell)}, ' + line.lstrip()[1:])
-        if os.path.exists(os.path.join(src, cell + ".out")):   # the program's own output (server runners)
-            outputs += [f"{cell}\t{l}\n" for l in read(cell + ".out").splitlines() if l.strip()]
+        census += measured_lines(src, cell, keep)
+        outputs += [f"{cell}\t{l}\n" for l in text(src, cell + ".out").splitlines() if l.strip()]
         if spec:
-            log = os.path.join(src, "logs", cell + ".log")
-            found = [l.strip() for l in open(log, errors="replace") if re.match(r"(Success|Error): ", l)] \
-                if os.path.exists(log) else []
-            note = " | ".join(x for x in [runs.get(cell, "").strip()] + found if x)
-            rows.append("\t".join((cell, "spec", verdict, note)) + "\n")
-    write("cells.tsv", "".join(rows) if spec else read("cells.tsv"))
+            rows.append(spec_row(src, cell, verdict, runs))
+    write("provenance.txt", provenance(src))
+    write("cells.tsv", "".join(rows) if spec else text(src, "cells.tsv"))
     write("processes.jsonl", "".join(census))
     if outputs:
         write("outputs.txt", "".join(outputs))
-    control = os.path.join(src, "control")
-    write("control.txt", "".join(f"== {f[:-6]}\n" + read("control", f)
-                                 for f in sorted(os.listdir(control)) if f.endswith(".check")))
-    bad = []
-    for f in sorted(os.listdir(dest)):
-        for n, l in enumerate(open(os.path.join(dest, f), errors="replace"), 1):
-            if re.search(r"/home/|/Users/|/root/", l):
-                bad.append(f"{f}:{n}")
+    write("control.txt", control_checks(src))
+    bad = host_paths(dest)
     if bad:
         print("pack: host paths survive:\n  " + "\n  ".join(bad[:20]), file=sys.stderr)
         return 1

@@ -52,7 +52,7 @@ for keys in "${KEYS[@]}"; do
     > "$OUT/$cell.out" 2>&1
   rc=$?
   v=INVALID; [ $rc = 0 ] && v=valid
-  record_cell "$cell" db_bench "$v" "rc=$rc $(( $(date +%s) - t ))s"
+  record_cell "$cell" db_bench "$v" "rc=$rc $(took $t)"
   rm -rf "$TOOL/db"
 done
-echo CENSUS_DONE >> "$OUT/cells.tsv"
+finish_pass
