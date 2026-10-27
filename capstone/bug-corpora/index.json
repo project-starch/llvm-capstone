@@ -1948,7 +1948,7 @@
         "capstone/ports/php/app",
         "capstone/ports/php/engine"
       ],
-      "note": "Not historical: patches/php-5.0.0-0001-zend-alloc-sublet-hooks.patch and sublet/ are what the app port's build applies to zend_alloc.c for its block, object and exact arms (PHP_CAP_MODE 4, 6 and 7); only the domain runners here are from the physical-profile phase. The block provider was moved onto CDERIVE/CREVOKE on 2026-10-26 after the nested loan ABI was removed upstream.",
+      "note": "Not historical: sublet/ is the adapter the app port's seam arms link, and app/patches/php-5.0.0-0003-zend-alloc-sublet-hooks.patch is what its build applies to zend_alloc.c for its block, object and exact arms (PHP_CAP_MODE 4, 6 and 7); only the domain runners here are from the physical-profile phase. The block provider was moved onto CDERIVE/CREVOKE on 2026-10-26 after the nested loan ABI was removed upstream.",
       "where": "capstone/ports/php/zend-alloc"
     },
     {

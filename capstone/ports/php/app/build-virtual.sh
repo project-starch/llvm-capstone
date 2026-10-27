@@ -132,14 +132,14 @@ case "$WHAT" in
     # files necessarily live at different paths (/corpus is read-only, so the patched copy is
     # under $OUT) -- that difference is not codegen, and comparing with it in would make the
     # check fail for a reason that has nothing to do with the patch.
-    P=${PHP_SRC:-/corpus/build/php-5.0.0}
-    [ -d "$P/Zend" ] || { echo "PHP source not at $P -- corpus not mounted?" >&2; exit 2; }
+    P=${PHP_SRC:-$CAPSTONE_TMP_ROOT/php-source/php-5.0.0}
+    [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
     SEAM="$R/capstone/ports/php/zend-alloc/sublet"
-    PATCHES="$R/capstone/ports/php/zend-alloc/patches"
+    PATCHES="$HERE/patches"
     W="$OUT/php-virtual/inert"
     rm -rf "$W"; mkdir -p "$W/patched/Zend"
     cp "$P/Zend/zend_alloc.c" "$W/patched/Zend/zend_alloc.c"
-    patch -s -p1 -d "$W/patched" < "$PATCHES/php-5.0.0-0001-zend-alloc-sublet-hooks.patch" \
+    patch -s -p1 -d "$W/patched" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
       || { echo "  the patch does not apply" >&2; exit 1; }
     ICF=(-O0 -std=gnu89 -fno-common -g0 -mllvm -capstone-shrink-stack=false
          -I"$P" -I"$P/Zend" -I"$P/main" -I"$P/TSRM" -I"$P/ext" -I"$P/ext/standard")
@@ -194,8 +194,8 @@ case "$WHAT" in
     # capstone-application.cmake is explicit that restating any of them is a second source of
     # truth. The 29-header stubinc farm and five of the six libc/ files are not ported -- musl
     # replaces them -- and engine/ keeps them, because it is still the comparison column.
-    P=${PHP_SRC:-/corpus/build/php-5.0.0}
-    [ -d "$P/Zend" ] || { echo "PHP source not at $P -- corpus not mounted?" >&2; exit 2; }
+    P=${PHP_SRC:-$CAPSTONE_TMP_ROOT/php-source/php-5.0.0}
+    [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
     E="$R/capstone/ports/php/engine"
     MODE=${PHP_CAP_ALLOC_MODE:-hier}
     case "$MODE" in
@@ -203,7 +203,7 @@ case "$WHAT" in
       *) echo "  PHP_CAP_ALLOC_MODE=$MODE? (hier|seam)" >&2; exit 2 ;;
     esac
     SEAM="$R/capstone/ports/php/zend-alloc/sublet"
-    PATCHES="$R/capstone/ports/php/zend-alloc/patches"
+    PATCHES="$HERE/patches"
 
     # Per-arm object and log directories. One shared obj/ would have the second build
     # overwrite the first's objects, and a pair assembled from whichever came last is not a
@@ -281,7 +281,7 @@ case "$WHAT" in
       rm -rf "$PATCHED"
       mkdir -p "$PATCHED/Zend"
       cp "$P/Zend/zend_alloc.c" "$PATCHED/Zend/zend_alloc.c"
-      patch -s -p1 -d "$PATCHED" < "$PATCHES/php-5.0.0-0001-zend-alloc-sublet-hooks.patch" \
+      patch -s -p1 -d "$PATCHED" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
       ZEND_ALLOC_SRC="$PATCHED/Zend/zend_alloc.c"
       # -I the seam for zend-cap-port.h, and -I capstone for <sublet/sublet.h>, which is the
@@ -415,11 +415,20 @@ case "$WHAT" in
     # needed, because this profile is a Linux process and the SDK's musl has fork, vfork,
     # posix_spawn, popen, system, mmap, munmap AND fopencookie. Those are asserted below rather
     # than assumed -- an SDK that loses one should fail here, not at link.
-    P=${PHP_SRC:-/corpus/build/php-5.0.0}
-    [ -d "$P/Zend" ] || { echo "PHP source not at $P -- corpus not mounted?" >&2; exit 2; }
+    P=${PHP_SRC:-$CAPSTONE_TMP_ROOT/php-source/php-5.0.0}
+    [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
     [ -f "$P/Makefile" ] || { echo "no $P/Makefile -- the TU list has no source of truth" >&2; exit 2; }
+    # The tree must carry the TREE patches (prepare-sources.sh applies them; patches/README.md
+    # says which). Checked the way build-sdk.sh checks musl: each must apply in reverse. A tree
+    # without 0001 fails 113 of 145 TUs; one without 0002 builds an image whose every sort()
+    # faults -- and reads that fault as a catch, as CRASH-022 and CRASH-078 did until 2026-10-27.
+    for _tp in "$HERE"/patches/php-5.0.0-*.patch; do
+      case "$_tp" in *-zend-alloc-sublet-hooks.patch) continue ;; esac
+      patch -d "$P" -p1 -R --dry-run -s -f < "$_tp" > /dev/null 2>&1 \
+        || { echo "  $P does not carry $(basename "$_tp") -- run prepare-sources.sh" >&2; exit 2; }
+    done
     SEAM="$R/capstone/ports/php/zend-alloc/sublet"
-    PATCHES="$R/capstone/ports/php/zend-alloc/patches"
+    PATCHES="$HERE/patches"
     MODE=${PHP_REALPHP_ALLOC:-seam}
     case "$MODE" in
       seam|stock) ;;
@@ -492,7 +501,7 @@ case "$WHAT" in
     if [ "$MODE" = seam ]; then
       rm "$T/Zend/zend_alloc.c"
       cp "$P/Zend/zend_alloc.c" "$T/Zend/zend_alloc.c"
-      patch -s -p1 -d "$T" < "$PATCHES/php-5.0.0-0001-zend-alloc-sublet-hooks.patch" \
+      patch -s -p1 -d "$T" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
       SUP=("$SEAM/zend-cap-blocks.c" "$SEAM/zend-cap-backing.c" "$HERE/php_virtual_lower.c")
       echo "  allocator: SEAM -- zend_alloc.c patched (8 guarded hunks), per-emalloc lifetimes"

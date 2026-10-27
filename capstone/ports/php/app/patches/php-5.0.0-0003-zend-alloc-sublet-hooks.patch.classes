@@ -1,4 +1,4 @@
-What each hunk of php-5.0.0-0001-zend-alloc-sublet-hooks.patch does, and why it is there.
+What each hunk of php-5.0.0-0003-zend-alloc-sublet-hooks.patch does, and why it is there.
 
 The patch is INERT without -DZEND_CAP_SUBLET: the three macros then expand to exactly the
 arithmetic they replace, and zend_alloc.c compiles to the same object as the pristine source.
