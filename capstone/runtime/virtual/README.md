@@ -136,7 +136,9 @@ remain pinned because a PCC has no tag to clear. Teardown discards the context
 and clears tags before freeing all table pages and its saved frame.
 
 `node_initial_pages` (default 4), `node_batch_pages` (16) and `node_max_pages`
-(0 means the 30-bit ID limit) count record pages and are read-only module
+(0 means the id format's limit: 2^30 records, or 2^25 in a module built with
+`-DCAPSTONE_VM_IDS=55` for QEMU's `x-capstone-ids=55`, where a larger value is
+refused) count record pages and are read-only module
 parameters; directory pages are accounted separately in `node_bytes`. Existing free
 IDs are used first. Pressure can collect a substantial retired population or
 append initialized pages, then retry the original instruction. At a quota or
