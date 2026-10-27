@@ -49,6 +49,10 @@ every case whose oracle is `OK`.
 - **`stock` — MISSED for all 10.** Mode 0 takes one capability per block and never retires it.
   If any case reads CAUGHT here it is a case that faults on any build, as CRASH-022 and
   CRASH-102 do among the 31, and it says nothing about the protections.
+  (CORRECTED 2026-10-27: CRASH-022 "faults on any build" because PHP's `_zend_qsort_swap`
+  strips the tags of the array it sorts, a port artefact fixed by patch 0002, not because of
+  its defect; CRASH-078 in this population is the same artefact. See the results README's
+  "Correction".)
 - **`object` and `exact` — CAUGHT for all 10.** The seam retires at `_efree`, which these
   cases reach by construction. This is the prediction most likely to be wrong in an
   interesting way: a fault that lands outside the case's own ASAN site reads `unattributed`,

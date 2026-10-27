@@ -4,6 +4,57 @@ Answers the pre-registration at **`7437d8ffb35861aec45aa8a6e381a3bae7440ead`**, 
 bundle's `inputs.json` names in its `prereg` field. The platform these ran on is qualified:
 `run.py` 42/42, recorded under `ports/php/app/results/platform-qualification-2026-10-26/`.
 
+## Correction, 2026-10-27: CRASH-022 and CRASH-078 are a port artefact, not catches
+
+The tables below are left as recorded. Eight of their CAUGHT cells are wrong, and the
+explanation this file and the plan gave for two of them is wrong too.
+
+**What was found.** Re-qualifying the port on dev `0b0b3414dca5`, a plain `sort(array(3,1,2))`
+on a healthy program faulted with cause 24 (an untagged pointer used as a capability) in
+`array_data_compare` at `ext/standard/array.c:324`, on the stock image and on every seam mode.
+The cause is PHP's own `Zend/zend_qsort.c`: `_zend_qsort_swap` moves the `Bucket *` elements of
+`zend_hash_sort`'s array as `int`s and then `char`s, which strips their tags; a 20-line probe
+swapping two `malloc`'d pointers through `int` stores, then `char` stores, leaves both tags
+clear. For a 20-element array `zend_qsort` swaps slots 0 and 9 *before* the first comparison,
+so the comparator's first `f->pData` (or `f->nKeyLength`) load traps before any user code runs.
+
+**Which cells.** CRASH-022's trigger is a `usort`; its ASAN line, `array.c:546`, is that first
+load in `array_user_compare`. CRASH-078's is a `ksort`; its recorded site, `array.c:162`, is the
+same load in `array_key_compare`. Every one of their cells, on all four arms and in all four
+populations below, records cause 24 and never cause 25, and they are the only cause-24 catches
+in `asan-blind` and (with CRASH-064, a different mechanism) in the temporal populations. The
+fault lands before CRASH-022's comparator has done a single `unset()`, so "its freed block is
+reused and overwritten with scalar data, which clears the tag" (this file, the plan at its
+CRASH-022 passages, and the pre-registration's "faults on any build") describes an execution
+that never happens. The platform the collaborator ran on differs from today's only in build
+hashes; the pinned QEMU clears tags on scalar stores (`op_helper.c:3482` at `b290f565`), so
+this held for those runs too.
+
+**Corrected counts**, holding everything else fixed and reading the eight cells as
+`NO-READING` (the instrument faulted before the defect):
+
+| population | stock | block | object | exact | denominator |
+|---|---|---|---|---|---|
+| `asan-blind` CAUGHT | 1 | 7 | 20 | **24** | 27 (CRASH-022 leaves it) |
+| `temporal-asan-visible` CAUGHT | 0 | 6 | 6 | 6 | 6 scoreable (CRASH-078 leaves it) |
+| `temporal-scored-with-oracle-crashes` CAUGHT | 3 | 17 | 25 | 25 | as before, less CRASH-078 |
+
+The arm ordering stays monotone. `exact` becomes 24 of 27, not 25 of 28; "the two `stock`
+catches ... faulting on any build" is one catch (CRASH-102, cause 28, a bounds fault, which
+stands) and one artefact.
+
+**What changed so it cannot recur.** `app/patches/php-5.0.0-0002-zend-qsort-swap-keeps-the-capability.patch`
+swaps pointer-sized units when the elements allow it (the PostgreSQL port's rule for
+`sort_template.h`), so `sort`, `usort` and `ksort` work on every arm; and the runner's
+`revocation-sanity` control now sorts three ways with a comparator that touches nothing, so an
+arm whose sort faults reads "did not complete" on its control instead of catching. CRASH-022 and
+CRASH-078 become measurable for the first time with that patch; their readings are owed by a
+rerun of both populations on the prepared tree, and are not in this file.
+
+The judge cannot tell this artefact from a detection on its own: attribution is by the ASAN
+*file* (`run-realphp.py`, `verdicts.py`), and cause 24 is a legitimate detection class elsewhere
+(CRASH-064), so the cause alone cannot be made a rule. The control is what carries the weight.
+
 ## `asan-blind` -- 31 cases: a cell-for-cell reproduction of the published result
 
 | arm | CAUGHT | MISSED | unattributed | out-of-denominator | infra |

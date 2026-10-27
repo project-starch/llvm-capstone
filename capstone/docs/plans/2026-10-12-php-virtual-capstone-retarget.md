@@ -1173,7 +1173,14 @@ seam-bound-probe faulted as declared on both spatial arms
 The temporal triple separates three ways on real PHP: 2 → 8 → 21. The stock arm's two catches
 are not an anomaly and were predicted — CRASH-022's freed block is overwritten with scalar data,
 so the tag is gone whoever revokes, and CRASH-102 overruns past `REAL_SIZE`, which every arm
-bounds. The spatial pair adds four more at `exact` (CRASH-016, 066, 091, 110), each of which
+bounds.
+
+> **CORRECTED 2026-10-27.** The CRASH-022 half of this is wrong. Its fault is PHP's own
+> `_zend_qsort_swap` stripping the tags of the `Bucket *` array it sorts (int and char stores);
+> the swap of slots 0 and 9 precedes the first comparison, so `array.c:546` traps before the
+> comparator's first `unset()`. Every arm's cell is cause 24; a plain `sort()` faults the same
+> way. The triple is 1 → 7 → 20 with CRASH-022 out of the denominator (24/27 at `exact`).
+> See `ports/php/app/results/2026-10-26/README.md`, "Correction", and patch 0002. The spatial pair adds four more at `exact` (CRASH-016, 066, 091, 110), each of which
 lives inside PHP's own `REAL_SIZE` rounding slack and is therefore invisible to any arm that
 reproduces PHP's rounding — which is the whole reason the ASAN-blind population exists.
 
@@ -1345,6 +1352,14 @@ line ASAN names. Its freed block is reused and overwritten with scalar data, whi
 tag, so the stale capability load faults whether or not anything was revoked. The physical
 column reached the same conclusion for the same case; what keeps it from being "it faulted
 somewhere" is that the fault must land in the defect's own file.
+
+> **CORRECTED 2026-10-27.** Not a catch on any column. `array.c:546` is the first `f->pData`
+> load in `array_user_compare` after `zend_qsort` has swapped two `Bucket *` through int and
+> char stores, which strips their tags; it traps on any `usort`, defect or not, before the
+> comparator runs. "Lands in the defect's own file" is exactly what this artefact does, which
+> is why a file-level attribution could not see it. Same for CRASH-078 (`ksort`, `array.c:162`).
+> Fixed by `app/patches/php-5.0.0-0002`; the sanity control now sorts. Details in
+> `ports/php/app/results/2026-10-26/README.md`, "Correction".
 
 **CRASH-057 is out of the denominator, on evidence.** The pair has a premise — that stock,
 unsanitised PHP runs the script to completion, so a control that completes reproduces
