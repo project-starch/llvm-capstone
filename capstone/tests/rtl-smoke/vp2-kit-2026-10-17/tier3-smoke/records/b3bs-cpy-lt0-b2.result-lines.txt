@@ -1,0 +1,12 @@
+# cpython lt0 on bitstream 3 (e7af48457), board 2 (tier3-corpus-b3.sh -> tier3-cpy-b3-arm.sh): result lines, verdicts-compare's non-SAME lines, and the SEQ lines.
+CB lt0 BEGIN 00:28:31 board 2 kit bkit11-b3-nb2 booking 469
+UNBOOK 469: 200
+CB lt0 ARM END rc=0 06:26:23 :: APPVM read rc=0 06:26:23 :: --- vp2-malloc (virtual-cpython): {'CAUGHT': 16, 'MISSED': 13, 'NO-READING:infra': 1, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 1}
+CB lt0 COMPARE vs reference rc=1 :: 31 of 32 cells the same
+CB lt0 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt0 DONE 06:26:23
+DIFF 01_gh-139071_heap-overflow-in-set-dealloc-setobject: reference ('CAUGHT', 'function', 24, 'set_dealloc', 284) board ('CAUGHT', 'function', 4, 'set_dealloc', 284)
+31 of 32 cells the same
+SEQ: BOARD_RUN_START 00:28:33 bitstream caplifive_vp2c_e7af48457 monitor d9da397
+SEQ: bootargs earlycon console=ttyS0,57600 norandmaps (dtb 4e7541a04e62fd2f)
+SEQ: firmware 0ca7acc959c1de50 25856520 B

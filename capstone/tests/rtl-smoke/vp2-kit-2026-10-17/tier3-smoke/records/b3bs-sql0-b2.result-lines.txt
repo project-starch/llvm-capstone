@@ -1,0 +1,11 @@
+# postgres sql0 on bitstream 3 (e7af48457), board 2 (tier3-corpus-b3.sh -> tier3-pg-b3-arm.sh): result lines only. Resident bitstream from SEQ: BOARD_RUN_START 22:24:58 bitstream caplifive_vp2c_e7af48457; the per-cell lines are in b3-sql0-b2.board.txt.
+PG MEASURE: firmware 25856520 B against 26000000
+T3PG b3-sql0-b2 BEGIN 22:24:58 booking 468
+UNBOOK 468: 200
+T3PG b3-sql0-b2 END 00:28:31 rc=0 :: --- vp2-malloc (virtual-mallocng): {'CAUGHT': 2, 'MISSED': 7}
+PG inputs as recorded: fixture 956173e054762e91, image cf61cb4333d35cb6
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x1
+b3-sql0-b2: bundle -> wt-gate/capstone/bug-corpora/postgres/sql-repros/results/2026-10-27-b3-e7af48457-b2/vp2-malloc-nomovc
+b3-sql0-b2: 9 of 9 cells the same (rc 0)
+PG DONE 00:28:31

@@ -10480,3 +10480,38 @@ Tool: `r64-census.py`.
 - **Prediction:** what bitstream 2's board read. That is 9 of 9 cells as pgp-trim (CAUGHT 5, MISSED 2, NO-READING
   unattributed 2), with the firmware under the 26,000,000 B cap, must-fire OK, and the readings 0. Any other difference
   is a finding about bitstream 3, reported cell by cell.
+
+### The corpus on bitstream 3, first arms, result: sql0, lt1 and lt0 each read exactly what bitstream 2 read (2026-10-28)
+
+The pre-registration is the section "The corpus on bitstream 3, first arms" above, lane commit 7ef0107888b7. Every
+prediction holds.
+
+| arm | board | booking | ran | prediction | read |
+|---|---|---|---|---|---|
+| sql0 | 2 | 468 | 22:24-00:28 | 9 of 9 as ref-b2/sql0, CAUGHT 2, MISSED 7 | 9 of 9 the same, CAUGHT 2 (memcpy+220, cause 28), MISSED 7 |
+| lt1 | 1 | 467 | 22:24-04:42 | 32 of 32 as ref-b2/lt1 | 32 of 32 the same: CAUGHT 27, MISSED 3, not-reached 1, unattributed 1 |
+| lt0 | 2 | 469 | 00:28-06:26 | 31 of 32, the difference case 01 (Q-31) | 31 of 32; the one DIFF is case 01, cause 4 at set_dealloc+284 where the reference reads 24 |
+
+- **Resident bitstream:** every SEQ reads caplifive_vp2c_e7af48457. Each firmware is 25,856,520 B, under the 26,000,000
+  B cap.
+- **sql0:**
+  - both positive controls fault in corpus_control_write and corpus_control_read;
+  - must-fire OK;
+  - the readings FRTY, FRTC, DRT1, INJS, INJL, Oops, pc=0 and collect-skipped are all 0.
+- **lt1:**
+  - the ten capacity cells are CAUGHT at the declared sites and causes, the same lines as bitstream 2's N=2 run;
+  - case 10, the `divmod` cell, is CAUGHT at cause 28 in l_divmod;
+  - readings 0, and norandmaps is in the command line.
+  - The arm finished inside the runner's 12 h limit in 6 h 18 min, so no salvage was needed. Bitstream 2's 6 h limit
+    had needed one.
+- **lt0:**
+  - case 18 is CAUGHT with cause 28 in mmap_ass_subscript, and case 09 with cause 24 in dict_traverse;
+  - the three NO-READINGs (11 not-reached, 13 infra, 32 unattributed) are the reference's;
+  - readings 0, and norandmaps is present.
+- **Reading:** on these three arms, bitstream 3's fdiv/fsqrt fix (R-62/R-63) changes no corpus verdict, attribution,
+  cause, symbol or offset. Q-31 reads on bitstream 3 as it did on bitstream 2.
+- **Records:**
+  - `records/b3bs-sql0-b2.result-lines.txt` and `records/b3-sql0-b2.board.txt`, the latter being score-arm.sh's per-cell
+    lines;
+  - `records/b3bs-cpy-lt1-b1.result-lines.txt` and `records/b3bs-cpy-lt0-b2.result-lines.txt`, each holding the
+    wrapper's lines, verdicts-compare's non-SAME lines, the SEQ lines and, for lt1, the capacity cells.

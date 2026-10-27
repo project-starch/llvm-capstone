@@ -1,0 +1,21 @@
+# cpython lt1 on bitstream 3 (e7af48457), board 1 (tier3-corpus-b3.sh -> tier3-cpy-b3-arm.sh): result lines, verdicts-compare's non-SAME lines, and the SEQ lines.
+CB lt1 BEGIN 22:24:06 board 1 kit bkit11-b3-nb1 booking 467
+UNBOOK 467: 200
+CB lt1 ARM END rc=0 04:42:21 :: APPVM read rc=0 04:42:21 :: --- vp2-nested-pools (virtual-cpython-pools): {'CAUGHT': 27, 'MISSED': 3, 'NO-READING:not-reached': 1, 'NO-READING:unattributed': 1}
+CB lt1 COMPARE vs reference rc=0 :: 32 of 32 cells the same
+CB lt1 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 norandmaps-in-cmdline 1
+CB lt1 DONE 04:42:21
+32 of 32 cells the same
+SEQ: BOARD_RUN_START 22:24:10 bitstream caplifive_vp2c_e7af48457 monitor d9da397
+SEQ: bootargs earlycon console=ttyS0,57600 norandmaps (dtb 4e7541a04e62fd2f)
+SEQ: firmware d166bada4630ea94 25856520 B
+capacity cell 02_gh-140471_fix-buffer-overflow-in-ast-node: CAUGHT cause 28 in memcpy, by control
+capacity cell 10_gh-142554_avoid-divmod-crashes-due-to-bad: CAUGHT cause 28 in l_divmod, by function
+capacity cell 13_gh-144169_fix-three-crashes-in-ast-object: CAUGHT cause 28 in unicode_fromformat_write_str, by function
+capacity cell 18_gh-157335_fix-out-of-bounds-write-in: CAUGHT cause 28 in mmap_ass_subscript, by function
+capacity cell 19_gh-142664_fix-uaf-in-memoryview-hash-via: CAUGHT cause 25 in fnv, by control
+capacity cell 23_gh-142560_bytearray-search-realloc: CAUGHT cause 25 in memchr, by function
+capacity cell 27_gh-143004_counter-update-borrowed-value: CAUGHT cause 25 in slot_nb_add, by function
+capacity cell 28_gh-143543_groupby-reentrant-eq: CAUGHT cause 25 in _PyEval_Vector, by function
+capacity cell 30_gh-146613_grouper-parent-key: CAUGHT cause 25 in PyObject_RichCompare, by function
+capacity cell 31_gh-148660_odict-copy-stale-link: CAUGHT cause 25 in odict_copy, by function
