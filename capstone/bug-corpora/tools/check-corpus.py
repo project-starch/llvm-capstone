@@ -127,6 +127,10 @@ ARM_ORACLES = {
     "virtual-pg-pools": {"oracle"},
     # A nested allocator's own pool port on the virtual profile, for ports other than PostgreSQL.
     "virtual-nested-pools": {"oracle"},
+    # virtual-nested-pools with each object bounded to the caller's request rather than the nested
+    # allocator's rounding: PHP's zend_alloc rounds every emalloc to 8, and 7 of its ASan-blind
+    # cases live in that slack (ports/php/app, arms.json php-real-exact).
+    "virtual-nested-exact": {"oracle"},
     "vp2-malloc": {"oracle"},
     "vp2-pg-pools": {"oracle"},
     "vp2-nested-pools": {"oracle"},

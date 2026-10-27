@@ -103,6 +103,10 @@ import verdicts                                                          # noqa:
 
 ARMS = ("php-real-stock", "php-real-block", "php-real-object", "php-real-exact")
 STOCK = "php-real-stock"
+# The corpus's arm names (bug-corpora/SCHEMA.md "Arms") for the three measured configurations;
+# the stock arm is the control the judge reads `reached` from and stays under its own name.
+FRAMEWORK_ARM = {"php-real-block": "virtual-malloc", "php-real-object": "virtual-nested-pools",
+                 "php-real-exact": "virtual-nested-exact", "php-real-stock": "php-real-stock"}
 SPATIAL = ("php-real-object", "php-real-exact")      # control, fault -- the bound alone
 TEMPORAL = ("php-real-stock", "php-real-block", "php-real-object")
 
@@ -177,57 +181,51 @@ POPULATIONS = ("asan-blind", "temporal-asan-visible")
 
 
 def population(corpus, kind="asan-blind"):
-    """The measured set, recomputed from the corpus's own files.
+    """The measured set, read from the corpus's own case directories.
+
+    `corpus` is bug-corpora/php/engine-repros. Each NN_<fix>_<id>/ holds trigger.php and
+    oracle.json, written by that corpus's tools/build-cases.py from the PHP 5.0.0 bug corpus and
+    OUR native runs of it (ASan with PHP's allocator patched, ASan with it as shipped, and the
+    plain build). The population is decided there, once, and recorded per case:
 
     asan-blind              detected with PHP's allocator PATCHED, missed with it as shipped.
     temporal-asan-visible   CWE-416 that ASAN finds unaided -- the complement, on the temporal
                             axis. These are not blind BECAUSE `efree` reaches `free()`, which
                             is the same fact that makes them the interesting control: a
                             detector that interposes at `free` should get them.
+
+    Cases are keyed by their DIRECTORY NAME, which is what tools/derive-verdicts.py keys the
+    case.json arms by; the corpus id (CRASH-nnn) is in the spec as `id`.
     """
-    default = json.loads((corpus / "results-asan-default.json").read_text())["results"]
-    stock = json.loads((corpus / "results-asan-stockalloc.json").read_text())["results"]
-    pristine = json.loads((corpus / "results-pristine-default.json").read_text())["results"]
-    stock_outcome = {e["id"]: e.get("outcome", "") for e in stock}
-    pris = {e["id"]: e for e in pristine}
+    if kind not in POPULATIONS:
+        sys.exit(f"unknown population {kind!r}; choose from {POPULATIONS}")
     cases = {}
-    meta = {m["id"]: m for m in
-            json.loads((corpus / "metadata" / "corpus.json").read_text())}
-    for e in default:
-        blind = e.get("outcome") != "OK" and stock_outcome.get(e["id"]) == "OK"
-        if kind == "asan-blind":
-            if not blind:
-                continue
-        elif kind == "temporal-asan-visible":
-            if blind or meta.get(e["id"], {}).get("cwe") != "CWE-416":
-                continue
-        else:
-            sys.exit(f"unknown population {kind!r}; choose from {POPULATIONS}")
-        frames = ASAN_FRAME.findall(e.get("stderr", ""))
-        if not frames:
-            sys.exit(f"{e['id']}: ASAN's stderr has no PHP source frame; the oracle cannot "
-                     f"supply an expected site and a site of our own would be a table to bend")
-        fn, path, line = frames[0]
-        p = pris.get(e["id"])
-        if p is None:
-            sys.exit(f"{e['id']}: no entry in results-pristine-default.json; `reached` has no oracle")
-        cases[e["id"]] = {
-            "cwe": e.get("cwe", ""), "requires": e.get("requires", ""),
-            "asan_func": fn, "asan_file": path, "asan_line": int(line),
-            "pristine_stdout": p.get("stdout", ""), "pristine_outcome": p.get("outcome", ""),
-            "pristine_rc": p.get("rc", 0),
+    for d in sorted(Path(corpus).glob("[0-9][0-9]_*")):
+        if not (d / "oracle.json").is_file():
+            continue
+        o = json.loads((d / "oracle.json").read_text())
+        if o["population"] != kind:
+            continue
+        if not (d / "trigger.php").is_file():
+            sys.exit(f"{d.name}: no trigger.php")
+        cases[d.name] = {
+            "id": o["id"], "cwe": o["cwe"], "requires": o.get("requires", ""),
+            "asan_func": o["asan"]["func"], "asan_file": o["asan"]["file"], "asan_line": int(o["asan"]["line"]),
+            "pristine_stdout": o["pristine"].get("stdout", ""), "pristine_outcome": o["pristine"]["outcome"],
+            "pristine_rc": o["pristine"].get("rc", 0),
         }
-        # TWO INDEPENDENT SOURCES FOR THE SAME FACT, MADE TO AGREE. The corpus publishes
-        # `crashes_on_pristine_build` per case AND a recorded pristine run; this runner reads
-        # the run. If they ever disagree the premise behind `out-of-denominator` is unsound,
-        # and that must stop the measurement rather than be silently resolved in our favour.
-        flag = str(meta.get(e["id"], {}).get("crashes_on_pristine_build", ""))
-        crashed = cases[e["id"]]["pristine_outcome"].startswith("SIGNAL:")
-        if flag.startswith(("True", "False")) and (flag.startswith("True") != crashed):
-            sys.exit(f"{e['id']}: the corpus says crashes_on_pristine_build={flag!r} but its "
-                     f"recorded pristine run is {cases[e['id']]['pristine_outcome']!r}. The "
-                     f"premise behind out-of-denominator cannot be checked -- refusing to run.")
-    recorded = {"asan-blind": 31, "temporal-asan-visible": 29}.get(kind)
+        # TWO INDEPENDENT SOURCES FOR THE SAME FACT, MADE TO AGREE. oracle.json carries the crash
+        # flag AND the recorded pristine run; if they ever disagree the premise behind
+        # `out-of-denominator` is unsound, and that must stop the measurement rather than be
+        # silently resolved in our favour.
+        crashed = cases[d.name]["pristine_outcome"].startswith("SIGNAL:")
+        if bool(o.get("crashes_on_pristine_build")) != crashed:
+            sys.exit(f"{d.name}: oracle.json says crashes_on_pristine_build={o.get('crashes_on_pristine_build')!r} "
+                     f"but its recorded pristine run is {cases[d.name]['pristine_outcome']!r}. The premise "
+                     f"behind out-of-denominator cannot be checked -- refusing to run.")
+    if not cases:
+        sys.exit(f"no case directory under {corpus} is in population {kind!r}")
+    recorded = {"asan-blind": 46, "temporal-asan-visible": 22}.get(kind)
     if recorded is not None and len(cases) != recorded:
         print(f"NOTE: the {kind} population is {len(cases)} today, not the {recorded} the plan "
               f"records. That is a change in the corpus, not in this runner.", file=sys.stderr)
@@ -538,7 +536,7 @@ def stage_inputs(args, cases):
     """Copy the corpus's case files VERBATIM, plus the benign workload the sanity control runs."""
     args.scratch.mkdir(parents=True, exist_ok=True)
     for case in cases:
-        src = args.corpus / "corpus" / f"{case}.php"
+        src = args.corpus / case / "trigger.php"
         if not src.is_file():
             sys.exit(f"no case file at {src}")
         (args.scratch / f"{case}.php").write_bytes(src.read_bytes())
@@ -879,12 +877,18 @@ def main():
             counts[key] = counts.get(key, 0) + 1
         print(f"  {arm:18} " + "  ".join(f"{k}={v}" for k, v in sorted(counts.items())))
 
+    # One bundle per arm, named by the FRAMEWORK arm (what corpus.json's verdict_bundles and
+    # derive-verdicts.py key on) and recording the arms.json configuration it measured. The
+    # stock arm is the judge's control, not a case arm; its bundle keeps its own name.
     for arm in ARMS:
-        verdicts.write_bundle(args.out / f"bundle-{arm}", "php-5.0.0-bug-corpus", arm, rows[arm],
-                              {"platform": platform, "image_sha256": image_sha,
+        verdicts.write_bundle(args.out / f"bundle-{FRAMEWORK_ARM[arm]}", "php/engine-repros",
+                              FRAMEWORK_ARM[arm], rows[arm],
+                              {"platform": platform, "configuration": arm,
+                               "build": {"application": "php", "profile": "virtual",
+                                         "image_sha256": image_sha, "allocator": "seam",
+                                         "mode": arms[arm]["mode"]},
                                "pre_registration": args.prereg,
-                               "population": "ASAN-blind, recomputed from the corpus",
-                               "cases": len(cases)})
+                               "population": args.population})
     print(f"\nbundles written under {args.out}")
 
 

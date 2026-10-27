@@ -916,6 +916,46 @@
       "where": "capstone/bug-corpora/perl/release-differential"
     },
     {
+      "program": "php",
+      "boundary": "which layer makes a PHP 5.0.0 defect visible: emalloc's cache and 8-byte rounding hide it from any detector at free() (asan-blind, the nested allocator), or efree reaches free() and the libc boundary sees it (temporal-asan-visible). Decided per case by MEASUREMENT: ASan with the allocator patched versus ASan with it as shipped, both run here",
+      "title": "PHP 5.0.0 memory-safety defects in the engine and ext/standard, as script triggers through the real interpreter, split by whether the Zend allocator hides them",
+      "upstream": {
+        "version": "5.0.0",
+        "port": "capstone/ports/php/app"
+      },
+      "cases": 68,
+      "case_schema": "script-trigger",
+      "case_number_base": 1,
+      "required_arms": [
+        "virtual-malloc",
+        "virtual-nested-pools",
+        "virtual-nested-exact"
+      ],
+      "status": "built",
+      "live_in_pin_recorded": true,
+      "expect_live_in_pin": {
+        "true": 68
+      },
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "related": [
+        "capstone/ports/php/app",
+        "capstone/ports/php/zend-alloc",
+        "capstone/ports/php/app/results/2026-10-26"
+      ],
+      "advisories": [],
+      "runners": [
+        "capstone/ports/php/app/run-realphp.py",
+        "capstone/bug-corpora/php/engine-repros/tools/build-cases.py"
+      ],
+      "arm_configurations": {
+        "virtual-malloc": "php-real-block",
+        "virtual-nested-pools": "php-real-object",
+        "virtual-nested-exact": "php-real-exact"
+      },
+      "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 46 asan-blind and 22 temporal-asan-visible here against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases are placed differently and one (CRASH-100, needs an HTTP listener) is absent, each said in its PROVENANCE.md. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The 59 default-build cases outside both populations (30 spatial ASan sees unaided, NULL dereferences, type confusions) are not here yet.",
+      "where": "capstone/bug-corpora/php/engine-repros"
+    },
+    {
       "program": "postgres",
       "boundary": "C reductions that drive the real upstream function, compiled verbatim from the 17.5 pin, with no server in the process",
       "title": "Memory-safety defects in PostgreSQL 17.5 reduced to C against the real upstream function",
@@ -1909,7 +1949,7 @@
       "targets": [
         "capstone-virtual"
       ],
-      "workload": "the 31-case population ASAN misses and the 29-case population it sees, each trigger a .php script on stdin, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the corpus's ASAN and pristine records; php -n -v exits 1 as native PHP does and the stock arm's output matches the native glibc build",
+      "workload": "the two populations of bug-corpora/php/engine-repros (46 asan-blind, 22 temporal-asan-visible), each trigger a .php script staged into the guest, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the case's own oracle.json (our native ASan and pristine runs); php -n -v exits 1 as native PHP does and the stock arm's output matches the native build",
       "evidence": [
         "capstone/ports/php/app/results/2026-10-27-common-entry",
         "capstone/ports/php/app/results/2026-10-27-requalification",
@@ -1923,6 +1963,9 @@
       ],
       "status": "builds through ports/common/application/build-virtual.sh php for both selector values and passes runtime/virtual/run.py --php 44/44 on dev 0b0b3414dca5 (results/2026-10-27-common-entry); rebuilt from scratch and smoke-tested the same day (results/2026-10-27-requalification). The 2026-10-26 corpus populations are NOT re-run (the corpus scripts and oracles are external); their README carries the 2026-10-27 correction for CRASH-022/078",
       "note": "PHP's source is the tree app/prepare-sources.sh prepares: the museum php-5.0.0.tar.gz by SHA-256, configured --disable-all, with the tree patches of app/patches (0001 compile fix, 0002 qsort swap). The oracle it is scored against (results-asan-default.json, results-asan-stockalloc.json, results-pristine-default.json and the case metadata) still comes from an external corpus not in this repository; there is no bug-corpora/php yet. The Zend allocator seam the protected arms use is ports/php/zend-alloc/sublet, applied as patch 0003.",
+      "corpora": [
+        "capstone/bug-corpora/php/engine-repros"
+      ],
       "where": "capstone/ports/php/app"
     },
     {
@@ -2369,6 +2412,7 @@
     "capstone/bug-corpora/mruby/gc-slot-repros": 0,
     "capstone/bug-corpora/mruby/release-differential": 23,
     "capstone/bug-corpora/perl/release-differential": 11,
+    "capstone/bug-corpora/php/engine-repros": 68,
     "capstone/bug-corpora/postgres/c-repros": 5,
     "capstone/bug-corpora/postgres/mmgr-repros": 5,
     "capstone/bug-corpora/postgres/sql-repros": 9,
@@ -2383,10 +2427,10 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 299,
+  "cases_here": 367,
   "cases_xlang": 30,
-  "cases_total": 329,
-  "live_true": 149,
+  "cases_total": 397,
+  "live_true": 217,
   "live_false": 122,
   "live_not": 28,
   "advisories_total": 22,
@@ -2461,6 +2505,8 @@
     "`capstone/bug-corpora/mruby/gc-slot-repros` does not record live_in_pin: No cases yet. The xlang rows are pinned to their own vulnerable upstream commits, all older than 4.0.0-rc2, so none of them is live in the ported release; what belongs here is the shape, re-run in the real interpreter.",
     "`capstone/bug-corpora/mruby/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/php/engine-repros` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/php/engine-repros` commits no result bundle of its own.",
     "`capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.",
     "`capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.",
@@ -2476,7 +2522,6 @@
     "`xlang/toctou-double-fetch` is triage only -- nothing built.",
     "`xlang/toctou-double-fetch` does not record live_in_pin: Nothing is built, so there is no case to place in a pin.",
     "`capstone/ports/micropython` is a complete application with no corpus.",
-    "`capstone/ports/php/app` is a complete application with no corpus.",
     "`capstone/ports/php/engine` is a complete application with no corpus.",
     "`capstone/ports/postgres/app` is a complete application with no corpus.",
     "`capstone/ports/sqlite/app` is a complete application with no corpus.",

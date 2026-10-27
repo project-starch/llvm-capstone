@@ -1,0 +1,26 @@
+{
+ "asan": {
+  "class": "ASAN:heap-use-after-free",
+  "file": "ext/standard/array.c",
+  "func": "array_key_compare",
+  "line": 171
+ },
+ "category": "use-after-free",
+ "collaborator_population": "temporal-asan-visible",
+ "crashes_on_pristine_build": false,
+ "cwe": "CWE-416",
+ "id": "CRASH-078",
+ "population": "temporal-asan-visible",
+ "pristine": {
+  "outcome": "OK",
+  "rc": 0,
+  "stdout": "array(0) {\n}\nNULL\ndone\n"
+ },
+ "requires": "",
+ "sources": {
+  "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
+  "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",
+  "results-ours-pristine-default.json": "92451b6e0c9a89a751e38ac2343400e6cd79d757c3f4613fe161dbcb339c851f"
+ },
+ "stockalloc": "ASAN:heap-use-after-free"
+}

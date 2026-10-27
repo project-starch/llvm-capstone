@@ -12,6 +12,13 @@ import importlib.util
 import io, json, re, subprocess, sys, tempfile, types
 from pathlib import Path
 
+# Case directories as bug-corpora/php/engine-repros names them: NN_<fix>_<id>. The runner keys
+# cases by that name (it is what derive-verdicts.py keys case.json arms by); the suite keeps the
+# corpus id in its own vocabulary and maps through K().
+NUM = {"CRASH-057": 1, "CRASH-062": 2, "CRASH-086": 3, "CRASH-092": 4, "CRASH-110": 5, "CRASH-999": 6}
+def K(cid):
+    return f"{NUM.get(cid, 99):02d}_fix_{cid.lower()}"
+
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("runreal", HERE / "run-realphp.py")
 R = importlib.util.module_from_spec(spec)
@@ -296,60 +303,34 @@ def helper_cases():
 
 
 def fake_corpus(root, ids=("CRASH-086", "CRASH-110")):
-    """A corpus with the two files the population is defined by, plus the pristine oracle."""
+    """A corpus of case directories as tools/build-cases.py writes them: trigger.php and
+    oracle.json per case, the population decided there and recorded."""
     root.mkdir(parents=True, exist_ok=True)
-    (root / "corpus").mkdir(exist_ok=True)
-    stderr = ("==1==ERROR: AddressSanitizer: heap-use-after-free\n"
-              "    #0 0x55 in user_tick_function_call /b/ext/standard/basic_functions.c:2135\n")
-    default, stock, pristine = [], [], []
-    for i, cid in enumerate(ids):
-        (root / "corpus" / f"{cid}.php").write_text("<?php echo \"done\\n\";\n")
-        default.append({"id": cid, "cwe": "CWE-416", "requires": "",
-                        "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
-        stock.append({"id": cid, "outcome": "OK"})
-        pristine.append({"id": cid, "outcome": "OK", "stdout": "done\n"})
+    def case(cid, pop, *, pristine="OK", rc=0, stdout="done\n", requires="", stock="OK"):
+        d = root / K(cid); d.mkdir(exist_ok=True)
+        (d / "trigger.php").write_text("<?php echo \"done\\n\";\n")
+        (d / "oracle.json").write_text(json.dumps({
+            "id": cid, "population": pop, "cwe": "CWE-416", "requires": requires,
+            "asan": {"class": "ASAN:heap-use-after-free", "func": "user_tick_function_call",
+                     "file": "ext/standard/basic_functions.c", "line": 2135},
+            "stockalloc": stock,
+            "pristine": {"outcome": pristine, "rc": rc, "stdout": stdout},
+            "crashes_on_pristine_build": pristine.startswith("SIGNAL:")}))
+    for cid in ids:
+        case(cid, "asan-blind")
     # A case with a DECLARED PRECONDITION. CRASH-092's shape: it echoes its marker whether or
     # not its own listener came up, so a silence cannot be told from a platform that caught
     # nothing -- unless some arm faults at ASAN's site and thereby proves the precondition held.
-    (root / "corpus" / "CRASH-092.php").write_text("<?php echo \"done\\n\";\n")
-    default.append({"id": "CRASH-092", "cwe": "CWE-416",
-                    "requires": "network: working loopback",
-                    "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
-    stock.append({"id": "CRASH-092", "outcome": "OK"})
-    pristine.append({"id": "CRASH-092", "outcome": "OK", "stdout": "done\n"})
+    case("CRASH-092", "asan-blind", requires="network: working loopback")
     # A case the PRISTINE build already crashes on: there is no silence to interpret, so it must
     # read not-reached however the arms behave. This is CRASH-057's situation.
-    (root / "corpus" / "CRASH-057.php").write_text("<?php echo \"done\\n\";\n")
-    default.append({"id": "CRASH-057", "cwe": "CWE-416", "requires": "",
-                    "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
-    stock.append({"id": "CRASH-057", "outcome": "OK"})
-    pristine.append({"id": "CRASH-057", "outcome": "SIGNAL:11", "stdout": "done\n"})
-    # A case that is NOT ASAN-blind (ASAN catches it with the stock allocator too) must be
-    # excluded, or the denominator silently grows.
-    default.append({"id": "CRASH-999", "cwe": "CWE-416", "requires": "",
-                    "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
-    stock.append({"id": "CRASH-999", "outcome": "ASAN:heap-use-after-free"})
-    pristine.append({"id": "CRASH-999", "outcome": "OK", "stdout": ""})
-    # A case PHP ends with its OWN fatal error: exit 255, a deterministic diagnostic, no
-    # crash. It has a perfectly good oracle and MUST stay in the denominator. The old test
-    # `pristine_outcome != "OK"` threw cases like this out as "native PHP crashes on it".
-    (root / "corpus" / "CRASH-062.php").write_text("<?php echo \"done\\n\";\n")
-    default.append({"id": "CRASH-062", "cwe": "CWE-416", "requires": "",
-                    "outcome": "ASAN:heap-use-after-free", "stderr": stderr})
-    stock.append({"id": "CRASH-062", "outcome": "OK"})
-    pristine.append({"id": "CRASH-062", "outcome": "EXIT:255", "rc": 255,
-                     "stdout": "\nFatal error: Class declarations may not be nested\n"})
-    for e in pristine:
-        e.setdefault("rc", -11 if e["outcome"].startswith("SIGNAL:") else 0)
-    (root / "results-asan-default.json").write_text(json.dumps({"results": default}))
-    (root / "results-asan-stockalloc.json").write_text(json.dumps({"results": stock}))
-    (root / "results-pristine-default.json").write_text(json.dumps({"results": pristine}))
-    # The corpus's OWN view of the same fact, which population() gates against the runs.
-    (root / "metadata").mkdir(exist_ok=True)
-    (root / "metadata" / "corpus.json").write_text(json.dumps(
-        [{"id": e["id"], "cwe": "CWE-416",
-          "crashes_on_pristine_build": "True" if e["outcome"].startswith("SIGNAL:") else "False"}
-         for e in pristine]))
+    case("CRASH-057", "asan-blind", pristine="SIGNAL:11", rc=-11)
+    # A case that is NOT ASAN-blind (ASAN catches it with the stock allocator too) is the
+    # complement population's member, never the ASAN-blind one.
+    case("CRASH-999", "temporal-asan-visible", stock="ASAN:heap-use-after-free", stdout="")
+    # A case PHP ends with its OWN fatal error (exit 255) completes in PHP's terms.
+    case("CRASH-062", "asan-blind", pristine="EXIT:255", rc=255,
+         stdout="\nFatal error: Class declarations may not be nested\n")
 
 
 def population_cases():
@@ -359,26 +340,25 @@ def population_cases():
         fake_corpus(root)
         pop = R.population(root)
         check("only the ASAN-blind cases are in the denominator",
-              sorted(pop), ["CRASH-057", "CRASH-062", "CRASH-086", "CRASH-092", "CRASH-110"])
+              sorted(pop), [K("CRASH-057"), K("CRASH-062"), K("CRASH-086"), K("CRASH-092"), K("CRASH-110")])
         check("the expected site comes from ASAN's own frame",
-              (pop["CRASH-086"]["asan_file"], pop["CRASH-086"]["asan_line"]),
+              (pop[K("CRASH-086")]["asan_file"], pop[K("CRASH-086")]["asan_line"]),
               ("ext/standard/basic_functions.c", 2135))
-        check("the pristine oracle is carried", pop["CRASH-086"]["pristine_stdout"], "done\n")
+        check("the pristine oracle is carried", pop[K("CRASH-086")]["pristine_stdout"], "done\n")
         check("a case PHP ends with its own fatal error stays in the denominator",
-              "CRASH-062" in pop, True)
+              K("CRASH-062") in pop, True)
         # The complement population: CWE-416 that ASAN finds unaided. CRASH-999 is the fixture's
         # not-blind case, so it is the one and only member here -- and must NOT appear above.
         tpop = R.population(root, "temporal-asan-visible")
         check("the temporal-asan-visible population is the complement",
-              sorted(tpop), ["CRASH-999"])
+              sorted(tpop), [K("CRASH-999")])
         check("and it does not overlap the ASAN-blind one",
               sorted(set(tpop) & set(pop)), [])
-        # THE GATE MUST BE ABLE TO FIRE. Make the corpus's own field disagree with its own run.
-        meta = json.loads((root / "metadata" / "corpus.json").read_text())
-        for m in meta:
-            if m["id"] == "CRASH-086":
-                m["crashes_on_pristine_build"] = "True"       # but its run says OK
-        (root / "metadata" / "corpus.json").write_text(json.dumps(meta))
+        # THE GATE MUST BE ABLE TO FIRE. Make the case's own flag disagree with its own run.
+        op = root / K("CRASH-086") / "oracle.json"
+        o = json.loads(op.read_text())
+        o["crashes_on_pristine_build"] = True                 # but its run says OK
+        op.write_text(json.dumps(o))
         try:
             R.population(root)
             check("a corpus whose crash flag contradicts its own run is refused", "ran", "refused")
@@ -420,7 +400,7 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
     fake_corpus(root)
     out = tmp / "out"
     out.mkdir(exist_ok=True)
-    cases = ["CRASH-057", "CRASH-086", "CRASH-092", "CRASH-110"]
+    cases = [K("CRASH-057"), K("CRASH-086"), K("CRASH-092"), K("CRASH-110")]
     faults = faults or {}
     declared = [verdicts.load_arms()[a]["mode"] for a in R.ARMS]
     modes = modes or declared
@@ -474,30 +454,33 @@ def main_path_cases():
     print("\n-- main() end to end, and every gate shown FIRING --")
     with tempfile.TemporaryDirectory() as d:
         tmp = Path(d)
-        rc = drive(tmp, faults={"php-real-exact": ("CRASH-086", "CRASH-110", "CRASH-057",
-                                                   "CRASH-092"),
-                                "php-real-object": ("CRASH-086",)})
+        rc = drive(tmp, faults={"php-real-exact": (K("CRASH-086"), K("CRASH-110"), K("CRASH-057"),
+                                                   K("CRASH-092")),
+                                "php-real-object": (K("CRASH-086"),)})
         check("a clean measurement completes", rc, 0)
-        b = tmp / "out" / "bundle-php-real-exact" / "verdicts.jsonl"
+        b = tmp / "out" / f"bundle-{R.FRAMEWORK_ARM['php-real-exact']}" / "verdicts.jsonl"
         check("the bundle is written", b.is_file(), True)
         rows = [json.loads(l) for l in b.read_text().splitlines()]
         check("every case is judged", len(rows), 5)
         by_case = {r["observation"]["case"]: r for r in rows}
         check("the fault arm caught the two with a premise",
-              sorted(by_case[c]["verdict"] for c in ("CRASH-086", "CRASH-110")),
+              sorted(by_case[c]["verdict"] for c in (K("CRASH-086"), K("CRASH-110"))),
               [verdicts.CAUGHT, verdicts.CAUGHT])
         # The oracle says the pristine build crashes on CRASH-057, so even a fault at ASAN's own
         # site is not a reading: there is no silence on the control arm to compare it against,
         # and the reason names the oracle rather than blaming our setup for a native crash.
         check("a case the pristine build crashes on is not a reading",
-              (by_case["CRASH-057"]["verdict"], by_case["CRASH-057"]["reason"]),
+              (by_case[K("CRASH-057")]["verdict"], by_case[K("CRASH-057")]["reason"]),
               (verdicts.NO_READING, "out-of-denominator"))
         # CRASH-092 faults at ASAN's site on the exact arm here, so its precondition is proved
         # and that licenses the catch.
         check("a precondition case that faults at ASAN's site is CAUGHT",
-              by_case["CRASH-092"]["verdict"], verdicts.CAUGHT)
-        inputs = json.loads((tmp / "out" / "bundle-php-real-exact" / "inputs.json").read_text())
+              by_case[K("CRASH-092")]["verdict"], verdicts.CAUGHT)
+        inputs = json.loads((tmp / "out" / f"bundle-{R.FRAMEWORK_ARM['php-real-exact']}" / "inputs.json").read_text())
         check("the pre-registration is recorded", inputs["pre_registration"], "deadbeef")
+        check("the bundle names the arms.json configuration it measured", inputs["configuration"], "php-real-exact")
+        check("and the framework arm derive-verdicts.py keys on", inputs["arm"], "virtual-nested-exact")
+        check("and the corpus it belongs to", inputs["corpus"], "php/engine-repros")
 
     # THE POSITIVE CONTROL FOR --score-oracle-crashes, which it did not have on 2026-10-26 and
     # which is why the flag shipped doing nothing. It lifts the out-of-denominator refusal above
@@ -514,36 +497,36 @@ def main_path_cases():
     # unit test passing site_licensed=True by hand would have stayed green throughout.
     with tempfile.TemporaryDirectory() as d3:
         tmp3 = Path(d3)
-        rc = drive(tmp3, faults={"php-real-exact": ("CRASH-086", "CRASH-110", "CRASH-057",
-                                                    "CRASH-092"),
-                                 "php-real-object": ("CRASH-086",)},
+        rc = drive(tmp3, faults={"php-real-exact": (K("CRASH-086"), K("CRASH-110"), K("CRASH-057"),
+                                                    K("CRASH-092")),
+                                 "php-real-object": (K("CRASH-086"),)},
                    extra_argv=("--score-oracle-crashes",))
         check("scoring the oracle-crashing cases completes", rc, 0)
         rows3 = [json.loads(l) for l in
-                 (tmp3 / "out" / "bundle-php-real-exact" / "verdicts.jsonl").read_text().splitlines()]
+                 (tmp3 / "out" / f"bundle-{R.FRAMEWORK_ARM['php-real-exact']}" / "verdicts.jsonl").read_text().splitlines()]
         got3 = {r["observation"]["case"]: (r["verdict"], r["reason"]) for r in rows3}
         check("--score-oracle-crashes reads the fault SITE, not setup-fault",
-              got3["CRASH-057"], (verdicts.CAUGHT, None))
+              got3[K("CRASH-057")], (verdicts.CAUGHT, None))
         obs3 = {r["observation"]["case"]: r["observation"] for r in rows3}
         check("and the licence is the trigger having run, not the oracle's premise",
-              obs3["CRASH-057"]["reached"], True)
+              obs3[K("CRASH-057")]["reached"], True)
         check("the cell still carries the warning that native PHP dies on it too",
-              "NOT evidence" in (obs3["CRASH-057"]["notes"] or ""), True)
+              "NOT evidence" in (obs3[K("CRASH-057")]["notes"] or ""), True)
         # The flag must not leak into the default scoring: same records, no flag, still refused.
         check("without the flag the same record is still out-of-denominator",
-              by_case["CRASH-057"]["reason"], "out-of-denominator")
+              by_case[K("CRASH-057")]["reason"], "out-of-denominator")
 
     # ... and when NOTHING faults for it, its silence must be refused rather than read as MISSED.
     with tempfile.TemporaryDirectory() as d2:
         tmp2 = Path(d2)
-        drive(tmp2, faults={"php-real-exact": ("CRASH-086",)})
+        drive(tmp2, faults={"php-real-exact": (K("CRASH-086"),)})
         rows2 = [json.loads(l) for l in
-                 (tmp2 / "out" / "bundle-php-real-stock" / "verdicts.jsonl").read_text().splitlines()]
+                 (tmp2 / "out" / f"bundle-{R.FRAMEWORK_ARM['php-real-stock']}" / "verdicts.jsonl").read_text().splitlines()]
         got = {r["observation"]["case"]: (r["verdict"], r["reason"]) for r in rows2}
         check("an unconfirmed precondition refuses the silence",
-              got["CRASH-092"], (verdicts.NO_READING, "not-reached"))
+              got[K("CRASH-092")], (verdicts.NO_READING, "not-reached"))
         check("a case with no precondition still reads MISSED",
-              got["CRASH-086"][0], verdicts.MISSED)
+              got[K("CRASH-086")][0], verdicts.MISSED)
 
     with tempfile.TemporaryDirectory() as d:
         rc = drive(Path(d), revokes=(0, 0, 0, 0))
@@ -576,8 +559,8 @@ def stale_guard(label, *, sha=SHA, probe_sha=PROBE_SHA, want_refused=True):
         out = tmp / "out"; out.mkdir()
         for arm in R.ARMS:
             probe = True if R.BOUND_PROBE in verdicts.load_arms()[arm]["controls"] else None
-            rec = synth_record(["CRASH-086", "CRASH-110"], verdicts.load_arms()[arm]["mode"], 77,
-                               case_faults=("CRASH-086",), probe=probe, sha=sha,
+            rec = synth_record([K("CRASH-086"), K("CRASH-110")], verdicts.load_arms()[arm]["mode"], 77,
+                               case_faults=(K("CRASH-086"),), probe=probe, sha=sha,
                                probe_sha=probe_sha)
             (out / f"{arm}-run.json").write_text(json.dumps(rec))
         img = tmp / "php-real-seam.dom"; img.write_bytes(b"\x7fELF")
@@ -625,7 +608,7 @@ def node_table_cases():
     spec = importlib.util.spec_from_file_location("rv", HERE / "run-virtual.py")
     rv = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(rv)
-    runs = [("CRASH-001", "img 1")]
+    runs = [(K("CRASH-001"), "img 1")]
     text = rv.guest_script(runs)
     check("the guest insmods the module with a pre-grown node table",
           "insmod capstone_vm.ko node_initial_pages=1024 supervisor_slots=32 || exit 1" in text,

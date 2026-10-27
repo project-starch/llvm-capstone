@@ -1,0 +1,39 @@
+{
+  "program": "php",
+  "boundary": "which layer makes a PHP 5.0.0 defect visible: emalloc's cache and 8-byte rounding hide it from any detector at free() (asan-blind, the nested allocator), or efree reaches free() and the libc boundary sees it (temporal-asan-visible). Decided per case by MEASUREMENT: ASan with the allocator patched versus ASan with it as shipped, both run here",
+  "title": "PHP 5.0.0 memory-safety defects in the engine and ext/standard, as script triggers through the real interpreter, split by whether the Zend allocator hides them",
+  "upstream": {
+    "version": "5.0.0",
+    "port": "capstone/ports/php/app"
+  },
+  "cases": 68,
+  "case_schema": "script-trigger",
+  "case_number_base": 1,
+  "required_arms": [
+    "virtual-malloc",
+    "virtual-nested-pools",
+    "virtual-nested-exact"
+  ],
+  "status": "built",
+  "live_in_pin_recorded": true,
+  "expect_live_in_pin": {
+    "true": 68
+  },
+  "checker": "capstone/bug-corpora/tools/check-corpus.py",
+  "related": [
+    "capstone/ports/php/app",
+    "capstone/ports/php/zend-alloc",
+    "capstone/ports/php/app/results/2026-10-26"
+  ],
+  "advisories": [],
+  "runners": [
+    "capstone/ports/php/app/run-realphp.py",
+    "capstone/bug-corpora/php/engine-repros/tools/build-cases.py"
+  ],
+  "arm_configurations": {
+    "virtual-malloc": "php-real-block",
+    "virtual-nested-pools": "php-real-object",
+    "virtual-nested-exact": "php-real-exact"
+  },
+  "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 46 asan-blind and 22 temporal-asan-visible here against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases are placed differently and one (CRASH-100, needs an HTTP listener) is absent, each said in its PROVENANCE.md. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The 59 default-build cases outside both populations (30 spatial ASan sees unaided, NULL dereferences, type confusions) are not here yet."
+}
