@@ -9,7 +9,7 @@ AND WHY EACH GATE IS SHOWN FIRING. A gate that has never failed is not known to 
 cross-arm checks below are each driven to FAIL on purpose and asserted to refuse the run.
 """
 import importlib.util
-import io, json, re, subprocess, sys, tempfile, types
+import io, json, os, re, subprocess, sys, tempfile, types
 from pathlib import Path
 
 # Case directories as bug-corpora/php/engine-repros names them: NN_<fix>_<id>. The runner keys
@@ -53,6 +53,59 @@ FAULT24 = FAULT.replace("cause=25", "cause=24")
 # image; the ra is inside xbuf_format_converter.
 FAULT_RA = FAULT.replace("pc=0x3f904e7f90 address=0x3f909c8074",
                          "pc=0x3f90411888 address=0x3f90a0ba20 ra=0x3f90508d7c fp=0x3f80a01f00")
+# ...and with the cause the ADDRESS POLICY raises (QEMU pin 49a225e408): a control transfer to
+# a refused address. Not a protective cause either.
+FAULT29 = FAULT.replace("cause=25", "cause=29")
+# The bound probe's own fault: the EXACT read past a 9-byte request, the BOUNDS cause.
+PROBE_FAULT = FAULT.replace("cause=25", "cause=28")
+PROBE_ROUNDED = "S7 rounded arm read index 9 = 0x00 -- the slack is reachable, as stock PHP"
+PROBE_EXACT = "S7 exact arm now reading index 9 (expect a fault)"
+PROBE_NO_FAULT = ("S7 RESULT: NO FAULT -- read 0x00 past a 9-byte request on the EXACT arm. "
+                  "The bound is not being applied.")
+# The probe's own report of the exact capability, printed before the exact read, as the real
+# transcript carries it (run5: `exact    cursor=0x3faa5fe080 bounds=[0x3faa5fe080,0x3faa5fe089) tag=1`
+# before a fault at address=0x3faa5fe089). The fixture fault's address, 0x3f909c8074, is this end.
+PROBE_EXACT_REPORT = "exact    cursor=0x3f909c806b bounds=[0x3f909c806b,0x3f909c8074) tag=1"
+
+
+def probe_transcript(shape, probe_sha=None):
+    """The bound probe's transcript and exit in each shape the control must tell apart.
+
+    Only "declared" is the bound firing: both reads announced, then cause 28. Every other
+    shape is a probe that did something else -- read past the bound, faulted with another
+    cause on the free/re-allocate/report path between the reads, or faulted before the exact
+    read was announced -- and must read as the control NOT met."""
+    probe_sha = probe_sha or PROBE_SHA
+    f = PROBE_FAULT % probe_sha
+    # The probe reports the exact capability before it reads: the fixture fault's address,
+    # 0x3f909c8074, is that capability's end, cursor + 9.
+    R, X = PROBE_ROUNDED, PROBE_EXACT
+    E = PROBE_EXACT_REPORT
+    shapes = {
+        "declared": ([R, E, X, f], 139),
+        "no-fault": ([R, E, X, PROBE_NO_FAULT], 1),
+        "cause-24": ([R, E, X, FAULT24 % probe_sha], 139),
+        "cause-25": ([R, E, X, FAULT % probe_sha], 139),
+        "cause-29": ([R, E, X, FAULT29 % probe_sha], 139),
+        "no-exact-line": ([R, E, f], 139),
+        "no-rounded-line": ([E, X, f], 139),
+        "fault-before-exact": ([R, E, f, X], 139),
+        "rounded-after-fault": ([E, X, f, R], 139),
+        # cause 28, both lines in order, but the pc is not the exact read in main(): in
+        # report() (the probe's own bounds printer, static 0xf7e10 under the test's symbol
+        # table), and outside the image altogether.
+        "fault-in-report": ([R, E, X, f.replace("pc=0x3f904e7f90", "pc=0x3f904e7e10")], 139),
+        "pc-outside-image": ([R, E, X, f.replace("pc=0x3f904e7f90", "pc=0x1234")], 139),
+        # cause 28 in main() after both lines, but not the byte the exact capability ends at:
+        # another load in main() faulting on another address, under the same symbol.
+        "wrong-address": ([R, E, X, f.replace("address=0x3f909c8074", "address=0x3f909c8070")], 139),
+        # the probe never reported the exact capability, so there is no end to check against
+        "no-exact-report": ([R, X, f], 139),
+        # the declared shape followed by a second fault line: a transcript that contradicts
+        # itself is not the bound firing once
+        "second-fault": ([R, E, X, f, FAULT29 % probe_sha], 139),
+    }
+    return shapes[shape]
 SHA = "a" * 64
 # The bound probe is a DIFFERENT image by design, so its transcript carries its own
 # sha and the guard has to know that without being blinded to a stale probe.
@@ -537,9 +590,10 @@ def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=
                      "sanity 600 200 17" if sanity_ok else "", stats]
     exits[R.SANITY] = 0 if sanity_ok else 139
     if probe is not None:
-        out[R.BOUND_PROBE] = ["S7 rounded arm read index 9 = 0x00 -- the slack is reachable",
-                              FAULT % probe_sha] if probe else ["S7 rounded arm read index 9 = 0x00"]
-        exits[R.BOUND_PROBE] = 139 if probe else 0
+        # probe: True = the bound firing as declared, False = the probe read past the bound,
+        # or a shape name from probe_transcript().
+        shape = {True: "declared", False: "no-fault"}.get(probe, probe)
+        out[R.BOUND_PROBE], exits[R.BOUND_PROBE] = probe_transcript(shape, probe_sha)
     for c in cases:
         if c in case_faults:
             out[c] = [seam, FAULT % sha, stats]
@@ -552,11 +606,12 @@ def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=
 
 
 def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None,
-          defaulted=False, probe_mode_line=False):
+          defaulted=False, probe_mode_line=False, probe_shape=True):
     """Run main() end to end over stored records, with the toolchain stubbed out.
 
     defaulted: the first arm's sanity transcript carries ZEND_CAP_MODE_DEFAULTED, as an image
-    built with a baked-in arm prints when no PHP_CAP_MODE named one."""
+    built with a baked-in arm prints when no PHP_CAP_MODE named one.
+    probe_shape: the bound probe's transcript on the arms that declare it (probe_transcript)."""
     root = tmp / "corpus-root"
     fake_corpus(root)
     out = tmp / "out"
@@ -570,7 +625,7 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
     declared = [verdicts.load_arms()[a]["mode"] for a in R.ARMS]
     modes = modes or declared
     for arm, mode, rev in zip(R.ARMS, modes, revokes):
-        probe = True if R.BOUND_PROBE in verdicts.load_arms()[arm]["controls"] else None
+        probe = probe_shape if R.BOUND_PROBE in verdicts.load_arms()[arm]["controls"] else None
         rec = synth_record(cases, mode, rev, case_faults=faults.get(arm, ()), probe=probe)
         if defaulted and arm == R.ARMS[0]:
             rec["output"][R.SANITY].insert(0, f"ZEND_CAP_MODE_DEFAULTED {mode}")
@@ -603,8 +658,14 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
             # Sized symbols, one covering the fixture fault's static pc (FAULT's
             # pc - code + base = 0xf7f90), so the function is read from the symbol table as
             # it is on the real image, where the symbolizer's function line is a local label.
-            text = ("0000000000010000 0000000000000010 T main\n"
-                    f"00000000000f7f00 0000000000000100 T {SITE}\n")
+            # The PROBE image (p.dom) is its own program: its stage-7 reads are in main(),
+            # which is what covers that pc there; report() sits below it.
+            if str(cmd[-1]).endswith("p.dom"):
+                text = ("00000000000f7e00 0000000000000100 T report\n"
+                        "00000000000f7f00 0000000000000100 T main\n")
+            else:
+                text = ("0000000000010000 0000000000000010 T main\n"
+                        f"00000000000f7f00 0000000000000100 T {SITE}\n")
         return types.SimpleNamespace(stdout=text, stderr="", returncode=0)
     subprocess.run, subprocess.call = fake_run, (lambda *a, **k: 0)
     argv = sys.argv
@@ -724,6 +785,68 @@ def main_path_cases():
         check("GATE: a mode word disagreeing with arms.json is refused", rc != 0, True)
 
 
+def probe_predicate_cases():
+    print("\n-- the bound probe counts only when the EXACT read faults 28 --")
+    # The predicate on every shape, the declared one positive and each broken one negative:
+    # a control that only ever saw the declared shape has never been shown to fire. The
+    # probe image's symbol table, as drive()'s nm stub serves it for p.dom: main() covers the
+    # fixture's exact-read pc, report() sits below it.
+    class ProbeSymbols:
+        base = 0x10000
+        funcs = [(0xf7e00, 0x100, "report"), (0xf7f00, 0x100, "main")]
+        lookup = verdicts.Symbols.lookup
+    symbols = ProbeSymbols()
+    check("the test's symbol table puts the fixture's exact read in main()",
+          symbols.lookup(0x3f904e7f90, 0x3f90400000), ("main", 0x90))
+    for shape in ("declared", "no-fault", "cause-24", "cause-25", "cause-29",
+                  "no-exact-line", "no-rounded-line", "fault-before-exact", "rounded-after-fault",
+                  "fault-in-report", "pc-outside-image", "wrong-address", "no-exact-report",
+                  "second-fault"):
+        lines, _ = probe_transcript(shape)
+        check(f"probe transcript '{shape}' reads {'as declared' if shape == 'declared' else 'NOT met'}",
+              R.bound_probe_faulted_as_declared("\n".join(lines), symbols), shape == "declared")
+    # End to end: a probe that faulted with the policy's cause voids the spatial arms' rows as
+    # control-failed, while a temporal arm, which declares no probe, judges as before.
+    with tempfile.TemporaryDirectory() as d:
+        tmp = Path(d)
+        rc = drive(tmp, faults={"php-real-exact": (K("CRASH-086"),), "php-real-object": (K("CRASH-086"),)},
+                   probe_shape="cause-29")
+        check("a broken probe does not stop the run", rc, 0)
+        exact = [json.loads(l) for l in (tmp / "out" / f"bundle-{R.FRAMEWORK_ARM['php-real-exact']}"
+                                         / "verdicts.jsonl").read_text().splitlines()]
+        by = {r["observation"]["case"]: (r["verdict"], r["reason"]) for r in exact}
+        # The case that faulted at its site would have been CAUGHT; the broken probe voids it.
+        # Rows that are infra or out-of-denominator keep those reasons (they rank first), so
+        # the arm-wide claim is that no row survives as a verdict.
+        check("the exact arm's catch is voided by a cause-29 probe fault",
+              by[K("CRASH-086")], (verdicts.NO_READING, "control-failed"))
+        check("no row of the exact arm survives as a verdict",
+              sorted({v for v, _ in by.values()}), [verdicts.NO_READING])
+        block = [json.loads(l) for l in (tmp / "out" / f"bundle-{R.FRAMEWORK_ARM['php-real-block']}"
+                                         / "verdicts.jsonl").read_text().splitlines()]
+        check("the block arm, which declares no probe, is not voided",
+              "control-failed" in {r["reason"] for r in block}, False)
+
+
+def policy_cases():
+    print("\n-- the address policy is named in QEMU_CPU, and only sv39 or off --")
+    # run-virtual.py reads PHP_VIRTUAL_ADDR_POLICY once at import, so the launch and the
+    # platform record (which imports QEMU_CPU) cannot disagree. Loaded in a child so the env
+    # is the only input.
+    load = ("import importlib.util, sys; s = importlib.util.spec_from_file_location('rv', sys.argv[1]); "
+            "m = importlib.util.module_from_spec(s); s.loader.exec_module(m); print(m.QEMU_CPU)")
+    rv = str(Path(R.__file__).with_name("run-virtual.py"))
+    for policy, want_rc, want_text in (("sv39", 0, "x-capstone-addr=sv39"), ("off", 0, "x-capstone-addr=off"),
+                                        ("bogus", 1, "PHP_VIRTUAL_ADDR_POLICY='bogus'")):
+        env = dict(os.environ, PHP_VIRTUAL_ADDR_POLICY=policy)
+        p = subprocess.run([sys.executable, "-c", load, rv], env=env, capture_output=True, text=True)
+        check(f"PHP_VIRTUAL_ADDR_POLICY={policy}: rc {want_rc} and the policy named",
+              (p.returncode, want_text in p.stdout + p.stderr), (want_rc, True))
+    env = dict(os.environ); env.pop("PHP_VIRTUAL_ADDR_POLICY", None)
+    p = subprocess.run([sys.executable, "-c", load, rv], env=env, capture_output=True, text=True)
+    check("unset: the measurement policy sv39", p.stdout.strip().endswith("x-capstone-addr=sv39"), True)
+
+
 def stale_guard(label, *, sha=SHA, probe_sha=PROBE_SHA, want_refused=True):
     # Asserted on the REASON, not on the exit status: these records trip other gates too (the
     # synthetic arms all report the same revoke count), so "it exited non-zero" would pass
@@ -748,9 +871,19 @@ def stale_guard(label, *, sha=SHA, probe_sha=PROBE_SHA, want_refused=True):
             (out / f"{arm}-run.json").write_text(json.dumps(rec))
         img = tmp / "php-real-seam.dom"; img.write_bytes(b"\x7fELF")
         real_run, real_call = subprocess.run, subprocess.call
-        subprocess.run = lambda cmd, *a, **k: types.SimpleNamespace(
-            stdout=((PROBE_SHA if str(cmd[1]).endswith("p.dom") else SHA) + "  x\n")
-            if "sha256sum" in str(cmd[0]) else "revoke\n", stderr="", returncode=0)
+        def stub(cmd, *a, **k):
+            prog = str(cmd[0])
+            if "sha256sum" in prog:
+                text = (PROBE_SHA if str(cmd[1]).endswith("p.dom") else SHA) + "  x\n"
+            elif prog.endswith("llvm-nm"):
+                # the bound-probe control reads the probe image's symbol table
+                text = "00000000000f7f00 0000000000000100 T main\n"
+            elif "readelf" in prog:
+                text = "  LOAD           0x000000 0x0000000000010000 0x0000000000010000\n"
+            else:
+                text = "revoke\n"
+            return types.SimpleNamespace(stdout=text, stderr="", returncode=0)
+        subprocess.run = stub
         subprocess.call = lambda *a, **k: 0
         argv = sys.argv
         sys.argv = ["x", "--qemu", "/q", "--images", str(tmp), "--adapter", str(tmp),
@@ -956,6 +1089,8 @@ if __name__ == "__main__":
     population_cases()
     observation_cases()
     main_path_cases()
+    probe_predicate_cases()
+    policy_cases()
     stale_image_case()
     node_table_cases()
     cap_insn_cases()

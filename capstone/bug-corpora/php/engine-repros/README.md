@@ -11,7 +11,7 @@ reading the defect: ASan with PHP's allocator patched against ASan with it as sh
 | population | cases | what it is | who can catch it |
 |---|--:|---|---|
 | `asan-blind` | 46 | ASan reports it only with the allocator patched; as shipped the run reads OK. By CWE: 30 use-after-free, 10 out-of-bounds reads and 2 writes, 2 stack-address escapes, 1 free of non-heap memory, 1 uninitialised read; 7 of the 46 crash natively | selected by measurement, not by mechanism: what each arm sees is in the arms' records. The first run has the seam arms (`virtual-nested-pools`, `virtual-nested-exact`) at 26 and 30, the outer allocator alone (`virtual-malloc`) at 13 -- 8 use-after-frees whose block does reach `free()` plus 5 bounds catches the platform gives every arm |
-| `temporal-asan-visible` | 20 | CWE-416 that ASan reports with the allocator as shipped (the `stockalloc` run): the block reached `free()`; 18 of the 20 crash natively, so the judge's default denominator holds few of them | the outer allocator by itself, `virtual-malloc` (musl mallocng, a lifetime per block); the seam arms add nothing |
+| `temporal-asan-visible` | 19 | CWE-416 that ASan reports with the allocator as shipped (the `stockalloc` run) AND that the patched build classifies as a use-after-free: the block reached `free()`; 17 of the 19 crash natively, so the judge's default denominator holds two of them and the `--score-oracle-crashes` sensitivity scoring reads the rest | the outer allocator by itself, `virtual-malloc` (musl mallocng, a lifetime per block), for a block that reaches `free()` and is not parked in `AG(cache)`; the seam arms for the parked ones. Which is which is in the arms' records |
 
 The two do not overlap. Every case is a client defect in PHP's own code; none is a bug in
 libc or in `zend_alloc.c`, which is witness, not culprit.
@@ -27,9 +27,12 @@ tarball by the corpus's recipes: `asan` (its two `zend_alloc.c` detector patches
 (the same without those patches -- the allocator as shipped under ASan; the corpus does not
 ship this run, and the populations are *defined* by it) and the plain build.
 
-The result is 66 cases where the collaborator's instrument measured 60 (31 + 29): **16 cases
-sit in a different population on our ASan than on theirs**, two of theirs end as shipped in PHP's
-own fatal error with no report and so are in neither population here -- on gcc 13's ASan the freed block
+The result is 65 cases (46 + 19) where the collaborator's instrument measured 60 (31 + 29):
+**16 cases sit in a different population on our ASan than on theirs**, CRASH-064 (a
+handle-after-free that both ASan builds report only as SEGV, so no build names it a
+use-after-free) is in neither population, two of theirs end as
+shipped in PHP's own fatal error with no report and so are in neither population here -- on
+gcc 13's ASan the freed block
 of CRASH-081 (for one) reached `free()` and was reported; on gcc 15's it reads OK with the
 allocator as shipped -- and CRASH-100 (needs an HTTP listener) is absent. "ASan-blind" is a
 property of the detector build as much as of the defect, which is one more reason the

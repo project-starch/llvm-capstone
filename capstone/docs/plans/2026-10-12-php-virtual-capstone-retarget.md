@@ -1283,6 +1283,99 @@ port must use stderr and should not rest on a single hook.
 - **CRASH-092's hang is unexplained**, with the cheapest explanation eliminated rather than
   confirmed.
 
+### PRE-REGISTRATION — the same measurement at dev's QEMU pin (written 2026-10-27, before run6 and run7)
+
+The qualified judge's run of 2026-10-27 (run5, tree 07c5aa8fb329, 65 cases) booted a QEMU at
+bd561fbdbd: capstone-qemu `virtual-capstone-v7` b290f5656600 plus two refactors, BEFORE the
+address policy. dev's pin moved the same day to 49a225e408 (`x-capstone-addr`: a tagged
+capability's cursor must be Sv39-canonical; an operation whose result would carry a refused
+cursor gives the untagged integer; a control transfer or fetch to a refused address faults 29).
+The branch is rebased onto that dev (its runtime half, the `ra`/`fp` words of the fault record,
+sits underneath as its own commit) and the corpus is re-measured on a kit at the pin: QEMU built
+from the tree's own `capstone/capstone-qemu` submodule, the module at the default 30-bit ids,
+`run-virtual.py` naming `x-capstone-addr=sv39` in `QEMU_CPU` so the record says which policy
+ran and a pre-policy binary refuses to boot. The PHP images are reused: no file they are built
+from differs between the base, dev and the rebased head (empty `git diff` on `llvm/`,
+`capstone/sdk`, `capstone/ports/php`, `capstone/runtime/include`, the domain runtime and the
+musl patches); their sha256 is in every bundle.
+
+**run6, at 49a225e408, read run5 in every cell** (13:08-13:20Z on p13's clock: 184 + 76 + 76
+cells under the default and sensitivity scorings, 184 blind cells under the sensitivity scoring
+against control A; manifest check passed). Before its results were recorded, dev's pin moved
+again, to a9936e7037: sixteen commits on 49a225e408 -- generations in the node ids (#32, with
+R-54's renormalisation in `cap_compress`, R-59's refusal of a misaligned table root, and R-60:
+CINCOFFSET, CINCOFFSETIMM, SCC and INIT write an UNTAGGED result when the new cursor is not
+representable), the opt-in 55-bit ids (#33, not used here), and #34, the policy bounding the
+MMU with its satp checks at CSRUNV and domain switches. The module's ABI header
+(`cap_rev_table_abi.h`) changed with it, so the module is rebuilt from the tree's submodule at
+that pin; the kit's compiler carries the R-60 InstCombine fix (3970fd5e3980, 2026-10-22) the
+pin bump names as the one that keeps musl's `fmt_fp` whole. **run7 is the same measurement at
+a9936e7037**, same prediction, same controls (A against run5's records, B's manifest at the new
+hashes, C's `off` run if any cell moves). R-60 itself cannot move a cell here: its
+representability check sits behind `!capstone_exact_bounds` in the pin's `op_helper.c`
+(`capstone_set_moved_cap`: "under exact bounds there is no window and the result keeps its
+tag"), and this runner boots every arm and the `off` control with `x-capstone-exact-bounds=true`.
+The one tag-loss path that does apply is the address policy's, declared above; a cell that
+moved would be reported as a difference with its evidence, not re-scored.
+
+**Predicted, cell for cell:** run6 reads exactly as run5. The frozen expectation is run5's own
+bundles (re-judged by this tree as control A below, identical in every cell), which tally:
+default scoring, asan-blind (46): stock 5 / block 13 / object 26 / exact 30 CAUGHT, 2 infra
+(075, 092) and 7 out-of-denominator on every arm; default scoring, temporal-asan-visible (19):
+2 readings -- 068 CAUGHT on all four arms, 078 MISSED on stock and CAUGHT on the other three --
+and 17 out-of-denominator; sensitivity scoring, temporal-asan-visible: stock 2 CAUGHT + 1
+MISSED + 7 not-reached + 8 setup-fault + 1 unattributed, block 10 CAUGHT + 8 setup-fault + 1
+unattributed, object 19 CAUGHT, exact 19 CAUGHT; sensitivity scoring, asan-blind (scored for
+the first time on run5's records, never booted under it before): stock 5 / block 17 / object
+30 / exact 34 CAUGHT. The reason: the corpus's faults are loads and stores through revoked or
+out-of-bounds capabilities whose cursors are ordinary Sv39 addresses, which the policy does
+not touch. The revocation-sanity and bound-probe controls read as before (the probe: cause 28
+in main() after the exact-read line, on object and exact).
+
+**What a difference would mean, declared now:** a case that read cause 24 on run5 may read 24
+at another pc, or 29, under the policy, because a forged integer pointer can lose its tag
+earlier. CRASH-159 is the cell to watch: under the sensitivity scoring it reads cause 24
+(`zend_binary_assign_op_obj_helper`, unattributed) on stock and block and cause 25 CAUGHT at
+the same function on object and exact. Causes 24 and 29 are NOT protective causes
+(`arms.json`) and stay outside the catch criterion whatever run6 shows: a cause-24 fault is a
+pointer that lost its tag before the access, formed by the program or untagged by the policy;
+29 is an illegal operand value -- a lifetime instruction's size or node (op_helper.c raises it
+for a zero-sized or out-of-bounds CDERIVE under any policy), or, under the policy, a transfer
+to a refused address -- and the cause alone does not say which. Both read `unattributed` or
+`setup-fault` by reach, with their raw cause, pc and site kept. The protective set is not
+widened after the run.
+
+**Controls.** (A) run5's own records, re-judged by the rebased tree without a boot, must
+reproduce run5's bundles cell for cell: verdict, reason, cause, function and the fault's
+offset within it (so a pc that moves inside the same function is seen), attribution, reach,
+and the arm's control outcomes -- so a cell that moves between run5 and run6 moved on the
+platform, not in the judge. The same fields compare run6 against run5. (B) run6's platform
+record carries the new QEMU's sha256 and `x-capstone-addr=sv39`; a manifest beside the run
+names the seam, stock and probe images, module, launcher and boot images by sha256, and every
+fault line's `sha256=` is checked against it. (C) If any cell differs from run5, both
+populations run once more on the same QEMU with `PHP_VIRTUAL_ADDR_POLICY=off`, the one other
+value `run-virtual.py` takes, which names `x-capstone-addr=off` in the record; that separates
+the policy's four commits from the three standalone fixes between bd561fbdbd and the pin
+(CSDEBUGGENCAP's mint aside, semihosting's untagged a0, RETURN with an untagged cepc faulting
+29 instead of aborting). A difference that survives that stays unexplained in the record
+rather than attributed. run5 (same day, old platform, judge of 07c5aa8fb329) is the
+old-platform control; the old adapter and platform directory are kept beside the new ones,
+not overwritten.
+
+**The judge changes made in the same step, each with a test that fails without it:** the bound
+probe counts only when the rounded line, the probe's own report of the exact capability
+(`exact cursor=.. bounds=[base,end)`), the EXACT line and then ONE cause-28 fault appear in
+that order, the fault's pc is in the probe's main() by the probe image's own symbol table, its
+address is that reported end -- cursor + 9, the byte no other load in main() touches -- and
+the probe did not report reading past the bound (it previously accepted any fault after the
+rounded line: a cause-24 or 29 fault on the free/re-allocate/report path, a fault in report()
+or libc, a pc outside the image, another load in main(), a second fault line); the merge of
+the two populations' bundles refuses bundles
+scored differently or filed under the wrong population; `FAULT_LINE`'s four groups are what
+every runner reads, the `ra`/`fp` words are parsed by their own pattern, and the three readers
+that required `address=` and `entry=` adjacent take the words; the physical launcher, which
+has no registers to report, prints none.
+
 ## Phase B — real PHP
 
 The corpus tree is **already configured** (`main/php_config.h`, `main/build-defs.h`,

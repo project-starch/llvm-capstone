@@ -394,6 +394,52 @@ def symbolize_at(llvm_bin, image, pc, text):
     return func, m2.group(1), int(m2.group(2))
 
 
+# What the bound probe (probes/probe-seam stage 7) prints when it faults AS DECLARED. It reads
+# index 9 of a 9-byte request twice: ROUNDED first, which must succeed and prints the first
+# line, then EXACT, which announces the read and must then fault with the BOUNDS cause -- the
+# protective cause of the spatial mechanism. Between the two reads the probe frees,
+# re-allocates, reports (report(), its own function) and writes, and after the exact line it
+# flushes stdout and, on an overread, calls printf, so "some fault after the rounded line" is
+# not the bound firing: a cause-24 or cause-29 fault on that path, a fault in report(), say()
+# or libc, or any fault before the exact read was announced, is a broken probe. The reads
+# themselves are in main(), where the probe's symbol table puts the pc of a fault that is
+# the bound; a pc anywhere else, or outside the image, is not. And the probe reports the
+# exact capability before it reads (`exact    cursor=.. bounds=[base,end) tag=1`), so the
+# fault that IS the bound is the one whose address is that end -- the byte at index 9 of the
+# 9-byte request -- which no other load in main() touches. A probe that read past the bound
+# says so in its own words.
+PROBE_ROUNDED = "rounded arm read index 9"
+PROBE_EXACT = "exact arm now reading index 9"
+PROBE_NO_FAULT = "S7 RESULT: NO FAULT"
+PROBE_EXACT_REPORT = re.compile(r"^exact\s+cursor=(0x[0-9a-f]+) bounds=\[(0x[0-9a-f]+),(0x[0-9a-f]+)\) tag=1", re.M)
+PROBE_REQUEST = 9
+PROBE_FUNCTION = "main"
+BOUNDS_CAUSE = 28
+
+
+def bound_probe_faulted_as_declared(text, symbols):
+    """True when the probe's transcript shows the exact-bound read, and only it, faulting 28:
+    the rounded line, then the exact capability's report, then the exact line, then ONE fault
+    line, cause 28, its pc in main() by the probe image's symbol table (`symbols`, a
+    verdicts.Symbols), its address the reported capability's end: cursor + 9."""
+    faults = list(verdicts.FAULT_LINE.finditer(text))
+    if len(faults) != 1:
+        return False
+    fault = verdicts.domain_fault(text, symbols)
+    if fault is None or fault.cause != BOUNDS_CAUSE or fault.symbol != PROBE_FUNCTION:
+        return False
+    if PROBE_NO_FAULT in text or PROBE_ROUNDED not in text or PROBE_EXACT not in text:
+        return False
+    rounded, exact = text.index(PROBE_ROUNDED), text.index(PROBE_EXACT)
+    if not rounded < exact < faults[0].start():
+        return False
+    report = PROBE_EXACT_REPORT.search(text, rounded, exact)
+    if report is None:
+        return False
+    cursor, base, end = (int(v, 16) for v in report.groups())
+    return base == cursor and end == cursor + PROBE_REQUEST and int(faults[0].group(3), 16) == end
+
+
 def arm_controls(arm, sanity_ok, probe_ok, arms):
     """The Control list for an arm, naming only what arms.json declares for it."""
     declared = arms[arm]["controls"]
@@ -519,15 +565,24 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                 f"audit arm (observed {func or '?'} at {path}:{line})")
         elif fault.cause not in protective_causes:
             # The configuration says which causes its mechanism produces (arms.json
-            # protective_causes). Cause 24 -- an untagged value used as a capability -- is the
-            # program dereferencing its own corrupted pointer, the same value native PHP dies
-            # on; CRASH-064 carried the identical 0x3f00000001 on every arm. Its SITE may well
-            # be the declared one; it is still not the mechanism catching anything.
+            # protective_causes). Cause 24 -- an untagged value used as a capability -- is a
+            # pointer that lost its tag before the access: the program's own corrupted value
+            # (CRASH-064 carried the identical 0x3f00000001 on every arm, the value native PHP
+            # dies on too), or, since the QEMU pin 49a225e408, a cursor the machine's address
+            # policy (x-capstone-addr) refused and untagged. Cause 29 is an illegal operand
+            # value: a lifetime instruction given a bad size or node (op_helper.c raises it for
+            # CDERIVE out of bounds or zero-sized, under any policy) or, under the policy, a
+            # control transfer or fetch to a refused address; the cause alone does not say
+            # which. Neither is a revoked or out-of-bounds access, so neither is the mechanism
+            # catching anything, whatever the site; the raw cause, pc and site stay in the
+            # evidence, and the protective set is not widened after a run.
             obs.attribution_evidence = (
                 f"cause {fault.cause} in {func or '?'} at {path or '?'}:{line} is not one of this "
-                f"configuration's protective causes {list(protective_causes)}: an untagged or "
-                f"otherwise invalid value the program itself formed, not a revoked (25) or "
-                f"out-of-bounds (28) access"
+                f"configuration's protective causes {list(protective_causes)}: not a revoked (25) "
+                f"or out-of-bounds (28) access but an untagged value used as a capability (24: "
+                f"formed by the program, or a cursor the address policy refused) or an illegal "
+                f"operand value (29: a lifetime instruction's size or node, or a transfer the "
+                f"address policy refused -- the cause alone does not say which)"
                 + (" -- and it did land in the declared function" if func in spec["fault_sites"] else ""))
         elif func in spec["fault_sites"] and path.endswith(site_file):
             obs.attribution = "function"
@@ -904,8 +959,7 @@ def main():
         probe_ok = True
         if wants_probe:
             probe_text = texts[arm].get(BOUND_PROBE, "")
-            probe_ok = (verdicts.domain_fault(probe_text, None) is not None
-                        and "rounded arm read index 9" in probe_text)
+            probe_ok = bound_probe_faulted_as_declared(probe_text, symbols_of(args.llvm_bin, args.probe))
         mode_word, revokes = seam_counters(sanity_text)
         per_arm[arm] = {"rec": rec, "sanity_ok": sanity_ok, "probe_ok": probe_ok,
                         "mode_word": mode_word, "revokes": revokes,

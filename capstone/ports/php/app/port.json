@@ -12,7 +12,7 @@
   "targets": [
     "capstone-virtual"
   ],
-  "workload": "the two populations of bug-corpora/php/engine-repros (46 asan-blind, 22 temporal-asan-visible), each trigger a .php script staged into the guest, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the case's own oracle.json (our native ASan and pristine runs); php -n -v exits 1 as native PHP does and the stock arm's output matches the native build",
+  "workload": "the two populations of bug-corpora/php/engine-repros (46 asan-blind, 19 temporal-asan-visible), each trigger a .php script staged into the guest, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the case's own oracle.json (our native ASan and pristine runs); php -n -v exits 1 as native PHP does and the stock arm's output matches the native build",
   "evidence": [
     "capstone/ports/php/app/results/2026-10-27-common-entry",
     "capstone/ports/php/app/results/2026-10-27-requalification",

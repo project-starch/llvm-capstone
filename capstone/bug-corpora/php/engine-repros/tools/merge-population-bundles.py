@@ -43,12 +43,21 @@ def main():
                 seen.add(case)
             rows += lines
             inp = json.loads((b / "inputs.json").read_text())
+            # A bundle is merged as the population its directory names, so it must say it is
+            # that population: a sensitivity re-scoring or another population's bundle copied
+            # into the slot would otherwise merge silently.
+            if inp.get("population") != pop:
+                sys.exit(f"{arm}: {b} records population {inp.get('population')!r}, not {pop!r}")
             sources[pop] = {"verdicts.jsonl": sha(b / "verdicts.jsonl"), "inputs.json": sha(b / "inputs.json"),
                             "cases": inp["cases"], "tally": inp["tally"]}
             if inputs is None:
                 inputs = inp
             else:
-                for key in ("platform", "configuration", "arm", "corpus", "build", "contract", "pre_registration"):
+                # "scoring" is in the list because the default and the --score-oracle-crashes
+                # re-scoring write bundles of the same shape: rows scored two ways must never
+                # share a merged bundle.
+                for key in ("platform", "configuration", "arm", "corpus", "build", "contract",
+                            "pre_registration", "scoring"):
                     if inputs.get(key) != inp.get(key):
                         sys.exit(f"{arm}: the two populations' bundles differ in {key}")
         tally = {}

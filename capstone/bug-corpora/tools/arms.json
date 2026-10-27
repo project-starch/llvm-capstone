@@ -741,7 +741,7 @@
         25,
         28
       ],
-      "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is the program's own corrupted pointer -- the value native PHP dies on too -- and is not the mechanism catching anything; the judge reads it as unattributed. Declared here, per configuration, because other corpora's platforms encode faults differently",
+      "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is a pointer that lost its tag before the access: the program's own corrupted value (native PHP dies on it too) or, since the QEMU pin 49a225e408, a cursor the machine's address policy refused; cause 29 is an illegal operand value -- a lifetime instruction's size or node, or, under the policy, a transfer to a refused address; the cause alone does not say which. Neither is the mechanism catching anything; the judge reads them as unattributed and keeps their raw cause and site. The set is declared before a run and not widened after one. Declared here, per configuration, because other corpora's platforms encode faults differently",
       "controls": {
         "revocation-sanity": "complete"
       },
@@ -758,7 +758,7 @@
         25,
         28
       ],
-      "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is the program's own corrupted pointer -- the value native PHP dies on too -- and is not the mechanism catching anything; the judge reads it as unattributed. Declared here, per configuration, because other corpora's platforms encode faults differently",
+      "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is a pointer that lost its tag before the access: the program's own corrupted value (native PHP dies on it too) or, since the QEMU pin 49a225e408, a cursor the machine's address policy refused; cause 29 is an illegal operand value -- a lifetime instruction's size or node, or, under the policy, a transfer to a refused address; the cause alone does not say which. Neither is the mechanism catching anything; the judge reads them as unattributed and keeps their raw cause and site. The set is declared before a run and not widened after one. Declared here, per configuration, because other corpora's platforms encode faults differently",
       "controls": {
         "revocation-sanity": "complete"
       },
@@ -775,7 +775,7 @@
         25,
         28
       ],
-      "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is the program's own corrupted pointer -- the value native PHP dies on too -- and is not the mechanism catching anything; the judge reads it as unattributed. Declared here, per configuration, because other corpora's platforms encode faults differently",
+      "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is a pointer that lost its tag before the access: the program's own corrupted value (native PHP dies on it too) or, since the QEMU pin 49a225e408, a cursor the machine's address policy refused; cause 29 is an illegal operand value -- a lifetime instruction's size or node, or, under the policy, a transfer to a refused address; the cause alone does not say which. Neither is the mechanism catching anything; the judge reads them as unattributed and keeps their raw cause and site. The set is declared before a run and not widened after one. Declared here, per configuration, because other corpora's platforms encode faults differently",
       "controls": {
         "revocation-sanity": "complete",
         "seam-bound-probe": "fault"
@@ -794,7 +794,7 @@
         25,
         28
       ],
-      "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is the program's own corrupted pointer -- the value native PHP dies on too -- and is not the mechanism catching anything; the judge reads it as unattributed. Declared here, per configuration, because other corpora's platforms encode faults differently",
+      "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is a pointer that lost its tag before the access: the program's own corrupted value (native PHP dies on it too) or, since the QEMU pin 49a225e408, a cursor the machine's address policy refused; cause 29 is an illegal operand value -- a lifetime instruction's size or node, or, under the policy, a transfer to a refused address; the cause alone does not say which. Neither is the mechanism catching anything; the judge reads them as unattributed and keeps their raw cause and site. The set is declared before a run and not widened after one. Declared here, per configuration, because other corpora's platforms encode faults differently",
       "controls": {
         "revocation-sanity": "complete",
         "seam-bound-probe": "fault"
