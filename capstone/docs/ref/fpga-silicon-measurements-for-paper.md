@@ -7577,8 +7577,10 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
   - postgres sql0 9 of 9 and pg-pools 9 of 9;
   - cpython lt1 32 of 32, with the ten capacity cells CAUGHT at their declared sites;
   - cpython lt0 31 of 32. The one difference is case 01's Q-31 cause (4 where QEMU reads 24), as on bitstream 2.
+  - The 23-arm re-read (pre-registered at f1cb1f9d347c): every cell equal to the bitstream-2 batch references
+    except sq0d's three Q-31 cells (19 and 20 cause 4, 22 cause 13, where QEMU reads 24), as on bitstream 2.
   - The fdiv/fsqrt fix changes no verdict, attribution, cause, symbol or offset in these arms. Readings are 0.
-  - Records: `records/b3bs-sql0-b2`, `b3bs-cpy-lt1-b1`, `b3bs-cpy-lt0-b2` and `b3bs-pg-pools-b1`.
+  - Records: `records/b3bs-sql0-b2`, `b3bs-cpy-lt1-b1`, `b3bs-cpy-lt0-b2`, `b3bs-pg-pools-b1` and `b3bs-reread-b1`/`-b2`.
 - The perf consequence (ludcmp, st and minver now correct) is the section above, "ludcmp, st and minver on
   bitstream 3".
 - Records: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/bs3-e7af48457-b1` and `-b2`, and

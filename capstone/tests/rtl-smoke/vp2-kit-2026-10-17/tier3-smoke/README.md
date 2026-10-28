@@ -10551,3 +10551,54 @@ Pre-registered at lane commit 90227d3792f0; the prediction holds.
   - SEQ reads caplifive_vp2c_e7af48457, and the booking was 472.
 - **Records:** `records/b3bs-pg-pools-b1.result-lines.txt` and `records/b3-pg-pools-b1.board.txt`, the latter being
   score-arm.sh's per-cell lines.
+
+### The corpus on bitstream 3: the 23-arm re-read on both boards, pre-registered (2026-10-28 06:3x, before the boots)
+
+- **Why:** the next corpus arms bitstream 2 read, repeated on the bitstream with the fdiv/fsqrt fix.
+- **What runs:** `tier3-reread-b3.sh` (8a3a681ef9f54a22). It is tier3-reread-b2.sh with only the board side changed:
+  - kit bkit11-b3-b<board>;
+  - BOARD_BITSTREAM=caplifive_vp2c_e7af48457 checked;
+  - output `t3-run-b3-e7af48457-b<board>/rr-<tag>`;
+  - "bitstream 3" in the booking text.
+  - The specs are bitstream 2's, unchanged: rr-b1 27beeb2ce188edaa (13 arms) and rr-b2 f58053f1c2d877fb (10 arms).
+    So are the references, batch-refs-b2/ref-b2/<tag>, and the images, runners, SDK and grade (compare-pilot.py and
+    verdicts-compare.py).
+- **Order:**
+  - Board 1 runs the board-1 spec once pg-pools's wrapper has returned, whatever its status, since each arm is its own
+    cold boot.
+  - Board 2 runs the board-2 spec once tier3-perfmain6-b3.sh writes PM6 DONE, after t3k2.
+  - Within a board, a boot that does not complete stops the sequence.
+- **Dry run:** `records/dryrun-reread-b3.txt`. The board run, busy check and hub are stubbed. The kit, clean-tree,
+  runner-stamp, mimic and SDK gates run live against the real references.
+  - Both specs read every tag's reference.
+  - Its controls fire: a flipped verdict reads 24 of 25 with rc=1, an incomplete transcript stops the sequence, and
+    a busy board stops it.
+  - The sequence's DONE does not mean the arms passed. The grade is the COMPARE and VCOMPARE lines.
+- **Predictions:** every arm reads what bitstream 2's board read.
+  - **Board 1**, every field equal:
+    - fph 25, fpt 13, fca 13, fcs 13, fso 9, mph 9, mpt 3, wph 12, wpt 10, pgc 5, pgm0 5, pgm1 5;
+    - sq0a-c and sq0e 6 each, sq0f 3;
+    - sq0d 3 of 6. Cells 19 and 20 read cause 4 at nodeRelease+144, and cell 22 reads cause 13 at
+      editDist3FindLang+244, where QEMU reads 24 (Q-31). Verdicts and sites are equal.
+  - **Board 2**, every cell equal in every field:
+    - pym0 20, pym1 20, pb9 4, pb12 9, pb10 4, wm0 23, pb13q15 9, pgm1q15 5, wm1q15 23;
+    - sq1q15a-f: 6, 6, 6, 6, 6 and 3.
+  - Readings 0 throughout.
+  - Any other difference is a finding about bitstream 3, reported cell by cell. Its first suspect is an FP divide or
+    square-root path.
+
+### The corpus on bitstream 3, result: the 23-arm re-read, every arm as bitstream 2 read it (board 2 07:04-10:34, board 1 07:55-11:21)
+
+Records: `records/b3bs-reread-b1.result-lines.txt` and `records/b3bs-reread-b2.result-lines.txt`.
+- **Board 1, 13 arms (spec 27beeb2ce188edaa), compare-pilot and verdicts-compare equal in every cell:**
+  - fph 25, fpt 13, fca 13, fcs 13, fso 9, mph 9, mpt 3, wph 12, wpt 10, pgc 5, pgm0 5 and pgm1 5;
+  - sq0a-c and sq0e at 6 each, sq0f 3;
+  - **sq0d 3 of 6, the three pre-registered Q-31 cells:** 19 and 20 read cause 4 at nodeRelease+144, and 22 reads
+    cause 13 at editDist3FindLang+244, where QEMU reads 24. Verdicts and sites are equal, as on bitstream 2 and the
+    batch.
+- **Board 2, 10 arms (spec f58053f1c2d877fb), equal in every cell:** pym0 20, pym1 20, pb9 4, pb12 9, pb10 4, wm0 23,
+  pb13q15 9, pgm1q15 5, wm1q15 23; sq1q15a-f 6, 6, 6, 6, 6 and 3.
+- Every boot completed on the bitstream-3 kits (bookings 474-510). Readings 0 throughout.
+- **Against the pre-registration (f1cb1f9d347c): every reading holds.**
+- With the first arms and pg-pools, every arm bitstream 2 read in its first phase now reads the same on bitstream 3.
+  The second wave (mruby, perl, the new arms and Juliet; pre-registered at 2e0bde4ca772) started as each board freed.
