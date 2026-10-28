@@ -415,7 +415,7 @@ def observation_cases():
                                {"index": 1, "func": "_estrndup", "file": "Zend/zend_alloc.c", "line": 403}],
                    fault_sites=["_estrndup", "php_var_dump"],
                    site_files={"_estrndup": "Zend/zend_alloc.c", "php_var_dump": "ext/standard/var.c"})
-    R.symbolize = fake_symbolize("", 0, func="")                     # the delegate: no symbol, no line
+    R.symbolize = fake_symbolize("", 0, func="dl_call_once")         # the delegate's call, as the real record names it: a symbol, no line
     R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
     obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
                     controls(probe=None), False, "/x", "/y")
@@ -519,6 +519,37 @@ def observation_cases():
     check("probe: a duplicate call line is no result, not the last line's reading",
           R.putenv_probe_outcome("PUTENV_PROBE empty-name retained=1 rc=0 errno=0 (ok)\n" + absent2), None)
     check("probe: the same transcript without the duplicate reads absent", R.putenv_probe_outcome(absent2), False)
+    # THE THIRD REVIEW (2026-10-28): the FAULTING frame classified like a chain frame; the
+    # digest read only off the launcher's own lines; exactly one completion record; the exit
+    # line out of the application's output.
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    for sym, what in (("zend_cap_reblock", "the seam's own source"), ("_emalloc", "PHP's own allocator"),
+                      ("capstone_delegate_pack", "a routine not known to forward a caller's buffer")):
+        R.symbolize = fake_symbolize("", 0, func=sym)
+        obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                        controls(probe=None), True, "/x", "/y")
+        v, reason, ev = verdicts.judge(obs, pools)
+        check(f"a fault IN {sym} (symbol, no line table) is not walked to its callers", (v, reason, obs.attribution),
+              (verdicts.NO_READING, "unattributed", None))
+        check(f"and the evidence says why", what in ev, True)
+    R.symbolize = fake_symbolize("", 0, func="")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("a fault at an address nobody can name is not walked either", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and says so", "an address nobody can name" in ev, True)
+    R.symbolize = fake_symbolize("", 0, func="dl_call_once")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    check("a fault in a forwarding routine (dl_call_once, CRASH-057's) is walked and CAUGHT", verdicts.judge(obs, pools)[0], verdicts.CAUGHT)
+    check("transcript_image: a digest on a line that is not the launcher's is nobody's",
+          R.transcript_image("expected sha256=" + "a" * 64 + "\nPUTENV_PROBE DONE failures=0\n"), None)
+    check("transcript_image: the fault record's digest counts",
+          R.transcript_image(FAULT % ("b" * 64)), "b" * 64)
+    check("probe: two DONE lines are no result", R.putenv_probe_outcome(absent2 + "PUTENV_PROBE DONE failures=1\n"), None)
+    check("app_output drops the launcher's exit line and keeps its fault record",
+          R.app_output(["done", "capstone-exec: exit image=x.dom sha256=" + "a" * 64, FAULT % SHA]).splitlines(),
+          ["done", FAULT % SHA])
     # A LEAF under line tables (CRASH-068's shape once musl carries them): strlen has a path now,
     # so the old `not path` branch no longer applies; and a leaf keeps no frame, so the chain's
     # first entry is the caller's CALLER (vspprintf) -- the caller itself is only in ra. The walk

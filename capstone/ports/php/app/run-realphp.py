@@ -130,9 +130,9 @@ def putenv_probe_outcome(text):
     retained with rc 0 either way. Anything else -- an EFAULT, a missing line, a retained call
     that returned -1 -- is a probe that did not behave as declared and reads as no result, so
     an unexpected failure can never read as the precondition being absent (review 2026-10-28)."""
-    done = PUTENV_DONE.search(text or "")
-    if not done or int(done.group(1)) != 0:
-        return None
+    dones = PUTENV_DONE.findall(text or "")
+    if len(dones) != 1 or int(dones[0]) != 0:
+        return None                       # exactly one completion record, and a clean one
     found = [(m.group(1), (m.group(2) == "1", int(m.group(3)), int(m.group(4))))
              for m in PUTENV_LINE.finditer(text)]
     # each call reported exactly once: a second line for the same call is a transcript the
@@ -157,13 +157,17 @@ def probe_run_name(name):
     return f"{name}-probe"
 
 
-IMAGE_DIGEST = re.compile(r"sha256=([0-9a-f]{64})")
+# The LAUNCHER's own lines only: its exit line (`capstone-exec: exit image=... sha256=...`) and
+# its fault record (`capstone-exec: domain fault ... sha256=...`). A digest anywhere else in a
+# transcript -- a program printing "expected sha256=..." -- is not the platform naming the image
+# (third review, 2026-10-28).
+IMAGE_DIGEST = re.compile(r"^capstone-exec: (?:exit image=\S+|domain fault) .*?\bsha256=([0-9a-f]{64})\b", re.M)
 
 
 def transcript_image(raw):
-    """The image digest a transcript names for itself -- the launcher's exit line
-    (`capstone-exec: exit image=... sha256=...`) or its fault record -- or None when it names
-    none. One digest: a transcript naming two images is nobody's."""
+    """The image digest a transcript names for itself, on the launcher's own exit line or
+    fault record, or None when it names none. One digest: a transcript naming two images is
+    nobody's."""
     found = sorted(set(IMAGE_DIGEST.findall(raw or "")))
     return found[0] if len(found) == 1 else None
 SANITY_SCRIPT = "phpb-sanity.php"
@@ -440,6 +444,12 @@ def app_output(lines):
     for raw in lines:
         line = STATS_ANYWHERE.sub("", raw.rstrip("\r"))
         if KERNEL_LINE.match(line) or line.startswith("CAPSTONE_VM_"):
+            continue
+        # The launcher's exit line (`capstone-exec: exit image=... sha256=...`) is the
+        # platform naming the image, read from the RAW transcript by transcript_image(); in
+        # the application's output it made every matching run read as diverging by one line
+        # (run15, third review). The fault record stays: the judge reads it from here.
+        if line.startswith("capstone-exec: exit "):
             continue
         if not line and STATS_ANYWHERE.search(raw):
             continue                      # the stats line stood alone
@@ -750,10 +760,14 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         site_file = (site or {}).get("file") or spec["asan_file"]
         leaf = (spec.get("asan_stack") or [{}])[0]
         at_site = bool(func) and func in spec["fault_sites"] and at_file(path, site_file)
-        if any(own in path for own in SEAM_OWN):
-            obs.attribution_evidence = (f"the fault is in the seam's own source ({path}:{line}) "
-                                        f"-- a port artefact, not the program")
-        elif path.endswith(ALLOCATOR_SITE):
+        # THE FAULTING FRAME IS CLASSIFIED LIKE A CHAIN FRAME, by symbol as well as by path
+        # (frame_kind): a fault pc in zend_cap_reblock or _emalloc with no line table used to
+        # reach the chain rule and be attributed through its callers (third review, 2026-10-28).
+        fkind = frame_kind(func, path)
+        if fkind == "seam":
+            obs.attribution_evidence = (f"the fault is in the seam's own source ({func or '?'} at "
+                                        f"{path or '?'}:{line}) -- a port artefact, not the program")
+        elif fkind == "allocator":
             # The OBSERVED fault is inside PHP's own allocator: it cannot be told from the port
             # breaking (the seam is a patch to that very file), so it needs the diagnostic audit
             # arm. Until 2026-10-28 this keyed on the case's DECLARED site instead, which refused
@@ -802,7 +816,17 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                 f"{path}:{line} is ASan's file for this case but the fault is in {func or '?'}, not "
                 f"the declared {spec['fault_sites']}: another routine of the same file, which "
                 f"the old any-line-in-the-file rule would have admitted")
-        elif (fault.chain or fault.ra) and not in_php_tree(path) and (path or fault.chain):
+        elif (fault.chain or fault.ra) and not in_php_tree(path) and fkind != "forwarding":
+            # Outside PHP's tree and NOT a routine known to forward a caller's buffer (or an
+            # address nobody can name): its callers cannot own its access, so the chain is
+            # not walked, whatever it would reach.
+            obs.attribution_evidence = (
+                f"the fault is in {func or '?'} ({path or '?'}:{line}), "
+                + ("a routine not known to forward a caller's buffer" if fkind == "other"
+                   else "an address nobody can name")
+                + ": not attributable through its callers")
+        elif (fault.chain or fault.ra) and fkind == "forwarding" and (path or fault.chain):
+            # (a leaf with no line table and no chain, only ra, is the leaf rule's below)
             # THE CHAIN RULE. The fault is outside PHP's tree (the libc, the runtime's delegate
             # copying a syscall buffer), and the launcher printed the frame chain it walked
             # (runtime/virtual/exec.c frame_chain, 2026-10-28). The access belongs to the first
