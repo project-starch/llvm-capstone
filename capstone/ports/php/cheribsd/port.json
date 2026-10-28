@@ -1,0 +1,29 @@
+{
+  "program": "php",
+  "role": "platform-build",
+  "title": "PHP 5.0.0 cross-built for CheriBSD purecap: the CHERI baseline arm of the two php bug corpora",
+  "upstream": {
+    "version": "5.0.0",
+    "pin_source": {
+      "file": "capstone/ports/php/cheribsd/build.sh",
+      "grep": "VERSION=5.0.0"
+    }
+  },
+  "targets": [
+    "cheribsd-purecap"
+  ],
+  "workload": "the 56 trigger scripts of capstone/bug-corpora/php/{plain-temporal,zend-alloc}-repros, run by run-cheribsd-cases.py in one guest boot per revocation setting, against the same corpus case.json oracles the virtual arms use",
+  "evidence": [
+    "capstone/ports/php/cheribsd/results/20261028-smoke"
+  ],
+  "corpora": [
+    "capstone/bug-corpora/php/plain-temporal-repros",
+    "capstone/bug-corpora/php/zend-alloc-repros"
+  ],
+  "related": [
+    "capstone/ports/php/app",
+    "capstone/tests/cheri-php-blind"
+  ],
+  "status": "builds and RUNS: the whole CLI SAPI cross-compiles clean against the CheriBSD 26.07 sysroot, the ELF is asserted cheriabi + capability mode by the build script, and in the guest on 2026-10-28 `php -n -v` printed its banner and a script that sorts ran to a correct result (results/20261028-smoke). That is the gate the Perl purecap port did not pass, so this port can host a corpus arm. No corpus case has been measured yet.",
+  "note": "This port exists because capstone/tests/cheri-php-blind can only model the mechanism: its rows are a distilled copy of PHP's allocator, not PHP, and its own Scope section says running the real triggers needs a full PHP 5.0.0 purecap build, gated separately. This is that build. Four configure answers and two configure probes had to be pre-answered because PHP 5.0.0 settles them by RUNNING a program; each is a fact readable from CheriBSD's own headers or from the ABI, and build.sh records which and why. The one with a result worth remembering outside this port: the ZEND_MM alignment probe answers 16, not 8, because a purecap pointer is a 128-bit capability -- the same doubling that shows up wherever a release assumes sizeof(void*) == sizeof(long). The guest never writes the shared 9.5 GB image: run-cheribsd-cases.py boots a qcow2 overlay over our own copy and hands the files in over virtio-9p."
+}

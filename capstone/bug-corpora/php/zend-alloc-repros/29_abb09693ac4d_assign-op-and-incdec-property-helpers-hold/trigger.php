@@ -1,0 +1,21 @@
+<?php
+$bar = new Bar;
+$foo = new Foo;
+class Bar {
+	public function __get($x) {
+		global $foo;
+		return $foo->foo;
+	}
+}
+class Foo {
+	public function __get($x) {
+		global $bar;
+		return $bar->bar;
+	}
+}
+$foo->blah += 1;
+++$foo->blah;
+$foo->blah++;
+$foo->blah--;
+--$foo->blah;
+echo "okey";

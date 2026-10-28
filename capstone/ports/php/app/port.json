@@ -1,29 +1,33 @@
 {
-  "program": "php",
-  "role": "full-application",
-  "title": "Real PHP 5.0.0 (PHP's own main(), 145 translation units) as a Linux process on the virtual profile, one image serving four allocator arms selected at run time by PHP_CAP_MODE",
-  "upstream": {
-    "version": "5.0.0",
-    "pin_source": {
-      "file": "capstone/ports/php/app/prepare-sources.sh",
-      "grep": "VERSION=5.0.0"
-    }
-  },
-  "targets": [
-    "capstone-virtual"
-  ],
-  "workload": "the 31-case population ASAN misses and the 29-case population it sees, each trigger a .php script on stdin, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the corpus's ASAN and pristine records; php -n -v exits 1 as native PHP does and the stock arm's output matches the native glibc build",
-  "evidence": [
-    "capstone/ports/php/app/results/2026-10-27-common-entry",
-    "capstone/ports/php/app/results/2026-10-27-requalification",
-    "capstone/ports/php/app/results/2026-10-26",
-    "capstone/ports/php/app/results/platform-qualification-2026-10-26"
-  ],
-  "related": [
-    "capstone/ports/php/zend-alloc",
-    "capstone/ports/php/engine",
-    "capstone/tests/cheri-php-blind"
-  ],
-  "status": "builds through ports/common/application/build-virtual.sh php for both selector values and passes runtime/virtual/run.py --php 44/44 on dev 0b0b3414dca5 (results/2026-10-27-common-entry); rebuilt from scratch and smoke-tested the same day (results/2026-10-27-requalification). The 2026-10-26 corpus populations are NOT re-run (the corpus scripts and oracles are external); their README carries the 2026-10-27 correction for CRASH-022/078",
-  "note": "PHP's source is the tree app/prepare-sources.sh prepares: the museum php-5.0.0.tar.gz by SHA-256, configured --disable-all, with the tree patches of app/patches (0001 compile fix, 0002 qsort swap). The oracle it is scored against (results-asan-default.json, results-asan-stockalloc.json, results-pristine-default.json and the case metadata) still comes from an external corpus not in this repository; there is no bug-corpora/php yet. The Zend allocator seam the protected arms use is ports/php/zend-alloc/sublet, applied as patch 0003."
+ "program": "php",
+ "role": "full-application",
+ "title": "Real PHP 5.0.0 (PHP's own main(), 145 translation units) as a Linux process on the virtual profile, one image serving four allocator arms selected at run time by PHP_CAP_MODE",
+ "upstream": {
+  "version": "5.0.0",
+  "pin_source": {
+   "file": "capstone/ports/php/app/prepare-sources.sh",
+   "grep": "VERSION=5.0.0"
+  }
+ },
+ "targets": [
+  "capstone-virtual"
+ ],
+ "workload": "the 31-case population ASAN misses and the 29-case population it sees, each trigger a .php script on stdin, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the corpus's ASAN and pristine records; php -n -v exits 1 as native PHP does and the stock arm's output matches the native glibc build",
+ "evidence": [
+  "capstone/ports/php/app/results/2026-10-27-common-entry",
+  "capstone/ports/php/app/results/2026-10-27-requalification",
+  "capstone/ports/php/app/results/2026-10-26",
+  "capstone/ports/php/app/results/platform-qualification-2026-10-26"
+ ],
+ "corpora": [
+  "capstone/bug-corpora/php/plain-temporal-repros",
+  "capstone/bug-corpora/php/zend-alloc-repros"
+ ],
+ "related": [
+  "capstone/ports/php/zend-alloc",
+  "capstone/ports/php/engine",
+  "capstone/tests/cheri-php-blind"
+ ],
+ "status": "builds through ports/common/application/build-virtual.sh php for both selector values and passes runtime/virtual/run.py --php 44/44 on dev 0b0b3414dca5 (results/2026-10-27-common-entry); rebuilt from scratch and smoke-tested the same day (results/2026-10-27-requalification). The 2026-10-26 corpus populations are NOT re-run (the corpus scripts and oracles are external); their README carries the 2026-10-27 correction for CRASH-022/078",
+ "note": "PHP's source is the tree app/prepare-sources.sh prepares: the museum php-5.0.0.tar.gz by SHA-256, configured --disable-all, with the tree patches of app/patches (0001 compile fix, 0002 qsort swap). The oracle it is scored against (results-asan-default.json, results-asan-stockalloc.json, results-pristine-default.json and the case metadata) still comes from an external corpus not in this repository; there is no bug-corpora/php yet. The Zend allocator seam the protected arms use is ports/php/zend-alloc/sublet, applied as patch 0003."
 }
