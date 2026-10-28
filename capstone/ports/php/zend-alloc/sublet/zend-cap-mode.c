@@ -71,41 +71,23 @@ unsigned int zend_cap_mode(void)
 /* ---- the exit report ---------------------------------------------------------------------
  * The runner reads the PHP_VIRTUAL SEAM line as its arm-ordering gate (a revoking arm must
  * revoke strictly more than its control). stderr, because by the time this runs PHP has shut
- * its own streams down; the runner reads both. Two routes, atexit and a destructor, because
- * the first attempt at this printed nothing: app/probe-atexit.c shows this platform running
- * both, and they are different mechanisms, so one failing does not silence the other. */
-static int cap_reported;
-static void cap_report_once(void)
+ * its own streams down. One route, a destructor: app/probe-atexit.c showed this platform runs
+ * destructors at exit, and the gate refuses any run whose line is missing, so a silent route
+ * cannot pass for a working one. (An atexit route beside it, with an "armed" line nothing read,
+ * was dropped 2026-10-28.) */
+__attribute__((destructor)) static void cap_report(void)
 {
-    if (cap_reported) { return; }
-    cap_reported = 1;
     fprintf(stderr, "PHP_VIRTUAL SEAM blocks=%lu frees=%lu issues=%lu retires=%lu revokes=%lu "
             "splits=0 reallocs=%lu live=%lu\n",
             st_blocks, st_frees, st_issues, st_retires, st_retires, st_reallocs,
             st_issues - st_retires);
     fflush(stderr);
 }
-__attribute__((destructor)) static void cap_report_dtor(void) { cap_report_once(); }
-
-static void cap_arm_report(void)
-{
-    static int armed;
-    if (armed) { return; }
-    armed = 1;
-    fprintf(stderr, "PHP_VIRTUAL SEAM armed rc=%d\n", atexit(cap_report_once));
-    fflush(stderr);
-}
 
 void zend_cap_stats(unsigned long out[8])
 {
-    out[ZEND_CAP_STAT_BLOCKS]   = st_blocks;
-    out[ZEND_CAP_STAT_FREES]    = st_frees;
-    out[ZEND_CAP_STAT_ISSUES]   = st_issues;
-    out[ZEND_CAP_STAT_RETIRES]  = st_retires;
-    out[ZEND_CAP_STAT_REVOKES]  = st_retires;
-    out[ZEND_CAP_STAT_SPLITS]   = 0;
-    out[ZEND_CAP_STAT_REALLOCS] = st_reallocs;
-    out[ZEND_CAP_STAT_LIVE]     = st_issues - st_retires;
+    out[0] = st_blocks;  out[1] = st_frees;   out[2] = st_issues;   out[3] = st_retires;
+    out[4] = st_retires; out[5] = 0;          out[6] = st_reallocs; out[7] = st_issues - st_retires;
 }
 
 /* ---- the seam calls ------------------------------------------------------------------------ */
@@ -115,7 +97,6 @@ void *zend_cap_block(size_t bytes)
 {
     unsigned long want;
     void *p;
-    cap_arm_report();
     if (bytes > ~0UL - ZEND_CAP_GRAIN) { return (void *)0; }   /* the rounding would wrap */
     want = ZEND_CAP_ROUND(bytes);
     if (want < 48UL + ZEND_CAP_GRAIN) { want = 48UL + ZEND_CAP_GRAIN; }

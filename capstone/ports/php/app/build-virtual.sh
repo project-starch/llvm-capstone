@@ -526,7 +526,10 @@ case "$WHAT" in
       cp "$P/Zend/zend_alloc.c" "$T/Zend/zend_alloc.c"
       patch -s -p1 -d "$T" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
-      SUP=("$SEAM/zend-cap-mode.c" "$HERE/php_virtual_lower.c")
+      # The seam alone. php_virtual_lower.c (zend_cap_widen, php_fault_report) was linked here
+      # too until 2026-10-28; nothing in the real-PHP image calls it -- only the Phase A SAPI's
+      # hierarchical wrapper and probe-hier-widen.c do.
+      SUP=("$SEAM/zend-cap-mode.c")
       echo "  allocator: SEAM -- zend_alloc.c patched (7 guarded hunks), per-emalloc lifetimes"
     else
       [ -z "${PHP_REALPHP_DEFAULT_MODE:-}" ] \

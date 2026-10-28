@@ -78,16 +78,10 @@ void *zend_cap_reclaim(void *ptr, size_t hdr);                 /* ZEND_CAP_RECLA
 void *zend_cap_reblock(void *p, size_t bytes, size_t oldbytes); /* ZEND_DO_REALLOC: a fresh block, the copy, the old released */
 void  zend_cap_release(void *p);                               /* ZEND_DO_FREE: free(p), or nothing without RETURN */
 
-/* How much the seam did, for the gate that requires a revoking arm to revoke strictly more than
- * its control. Printed at exit as the PHP_VIRTUAL SEAM line. */
+/* How much the seam did, for the probes; the same counters are printed at exit as the
+ * PHP_VIRTUAL SEAM line, the runner's gate that a revoking arm revokes more than its control.
+ * out[] = blocks taken, frees (returned or leaked), payloads issued, lifetimes retired, revokes
+ * (== retired), splits (always 0), reallocs, live (issued - retired). */
 void zend_cap_stats(unsigned long out[8]);
-#define ZEND_CAP_STAT_BLOCKS   0   /* blocks taken from the heap */
-#define ZEND_CAP_STAT_FREES    1   /* ZEND_DO_FREE calls and realloc's old blocks, returned or leaked */
-#define ZEND_CAP_STAT_ISSUES   2   /* payloads issued, fresh or from the cache, every arm */
-#define ZEND_CAP_STAT_RETIRES  3   /* lifetimes ended by this layer: reclaims, and realloc's old blocks in the revoking arms */
-#define ZEND_CAP_STAT_REVOKES  4   /* == RETIRES: one CREVOKE per reclaim, one free per old block */
-#define ZEND_CAP_STAT_SPLITS   5   /* always 0: there is no split any more */
-#define ZEND_CAP_STAT_REALLOCS 6   /* reblocks */
-#define ZEND_CAP_STAT_LIVE     7   /* issues - retires */
 
 #endif
