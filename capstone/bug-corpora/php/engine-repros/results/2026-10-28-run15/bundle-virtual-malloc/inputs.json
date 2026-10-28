@@ -30,7 +30,7 @@
   "populations": {
     "asan-blind": {
       "cases": 46,
-      "inputs.json": "3ccbf0caeca2680bb9ac3ac2d78014b323f5abb8d86d8736933970ba532311da",
+      "inputs.json": "d513fba6a5029cd37995c5c322c7df2dca595eb44edff03486473d47a6b1e360",
       "tally": {
         "CAUGHT": 13,
         "MISSED": 21,
@@ -43,17 +43,17 @@
     },
     "temporal-asan-visible": {
       "cases": 19,
-      "inputs.json": "69e27e4ecedc0e4886ffd7833a82c1627e94b297833ad5905527e2daa3d7e430",
+      "inputs.json": "f2f18bac6c41b62dc3330675bc348db718cac4c4c331d22e9817beab487a6b97",
       "tally": {
         "CAUGHT": 2,
         "NO-READING:out-of-denominator": 17
       },
-      "verdicts.jsonl": "7a27d9c230c3f91039fffd6e90b6583b084f2f603f7ca2b56d4255f393277703"
+      "verdicts.jsonl": "3c0ee8816bc46a1a183ce3a25bbedf12d2feb9f08ddd6e43fbec7492891d0c92"
     }
   },
-  "pre_registration": "f9079b6f1e8ee48318d2496c1a74ab8823f28e05",
+  "pre_registration": "b11a186ebde351996ee85776e643b124382a6e45",
   "scoring": {
-    "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27",
+    "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27; a catch through a forwarding routine's call path is the chain class, counted apart; 2026-10-28",
     "protective_causes": [
       25,
       28

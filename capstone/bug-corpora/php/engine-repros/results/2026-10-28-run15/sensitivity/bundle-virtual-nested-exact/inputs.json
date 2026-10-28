@@ -30,7 +30,7 @@
   "populations": {
     "asan-blind": {
       "cases": 46,
-      "inputs.json": "06dcc24a7955c33e0142575c4a98fcc177ed969813083349bb8546d5a0ebadbe",
+      "inputs.json": "c7d0fd3dc9c24bc35b3b7826ccdac78b1994fe86f8c2377b072a2b6a0527bed1",
       "tally": {
         "CAUGHT": 37,
         "MISSED": 3,
@@ -38,20 +38,20 @@
         "NO-READING:out-of-denominator": 1,
         "NO-READING:unattributed": 3
       },
-      "verdicts.jsonl": "585f8bd33003802ef3fa49105d5d08546deb47702b0156b382e60508e7b33768"
+      "verdicts.jsonl": "c0686a09eb4a041ac1a87723c63c792f97652c6b110c7017270bae2ff7c3d4ae"
     },
     "temporal-asan-visible": {
       "cases": 19,
-      "inputs.json": "50ae984d03b529ecae3e1b9b839c5392b3f243060d96eeb96a52460dfca17a56",
+      "inputs.json": "0fc4cb6c7835ae5fce0e8ffe03926a04adce0da271a39d86eb550623f574d893",
       "tally": {
         "CAUGHT": 19
       },
-      "verdicts.jsonl": "65b831598120f721db114e7cfbd9018ad5d8d98e8f2f7c905f54a8da0e3d5086"
+      "verdicts.jsonl": "abb1f407528820f5a667d768f8e8710305dbc850bc93b53c33ba88b621f4c720"
     }
   },
-  "pre_registration": "f9079b6f1e8ee48318d2496c1a74ab8823f28e05",
+  "pre_registration": "b11a186ebde351996ee85776e643b124382a6e45",
   "scoring": {
-    "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27",
+    "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27; a catch through a forwarding routine's call path is the chain class, counted apart; 2026-10-28",
     "protective_causes": [
       25,
       28

@@ -2682,3 +2682,10 @@ tree 2494fc52120d).** Every verdict, reason and attribution identical to `result
 in both scorings and populations; the reach evidence of exactly the twelve chain cells reads "faulted
 in <routine>, whose call path reaches <site>"; every bundle's scoring description carries the chain
 mark; the putenv probe reads absent on every arm from its archived transcript. Nothing else moves.
+
+### run15 re-judged a third time (`corpus-run15-judged3`, tree b11a186ebde3): as pre-registered
+
+Four passes (10:27 UTC). Against the second re-judge: no verdict, reason or attribution differs
+(520 cells); the twelve chain cells' reach evidence reads "faulted in <routine>, whose call path
+reaches <site>"; all sixteen bundles carry the scoring mark; the putenv probe reads absent on every
+arm. The run15 record carries these bundles. The derived verdicts are unchanged.
