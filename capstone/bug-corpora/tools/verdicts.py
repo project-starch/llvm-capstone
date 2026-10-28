@@ -46,8 +46,14 @@ REASONS = {
 
 # How a fault is tied to the defect, strongest first. `control` is a separate run of the same
 # image on the same input minus the defect; it is what a case without a labelled instruction or
-# a single faulting function relies on.
-ATTRIBUTIONS = ("probe", "function", "control")
+# a single faulting function relies on. `chain` is the weakest: the fault is in a routine known
+# to forward a caller's buffer (a libc copy or scan, a write path) and the declared function is
+# reached by walking its callers -- the return address, or the frame chain the launcher records.
+# It ties the fault to the declared function by the call path alone, not by the operand: a
+# fault that routine makes on its own state would be attributed the same way, which is why a
+# chain catch is counted apart (result tables, "of which by chain") and never silently with the
+# function catches (PHP, 2026-10-28, fourth review).
+ATTRIBUTIONS = ("probe", "function", "control", "chain")
 
 ARMS_FILE = Path(__file__).resolve().parent / "arms.json"
 

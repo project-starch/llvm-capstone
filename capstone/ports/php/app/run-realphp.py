@@ -117,8 +117,10 @@ BOUND_PROBE = "seam-bound-probe"
 # never a silent zero: the behaviour proven ABSENT (the case is out of the denominator on this
 # arm), proven PRESENT (judged normally), or the probe failed (judged normally, with a note).
 # A probe's guest run is named `<name>-probe`; its reader turns the output into True/False/None.
-PUTENV_LINE = re.compile(r"PUTENV_PROBE (\S+) retained=(\d) rc=(-?\d+) errno=(\d+)")
-PUTENV_DONE = re.compile(r"PUTENV_PROBE DONE failures=(\d+)")
+# Whole records only: retained is 0 or 1, every field ends the token, the line ends the record;
+# `retained=2` or `failures=0garbage` is a transcript the probe did not write (fourth review).
+PUTENV_LINE = re.compile(r"^PUTENV_PROBE (\S+) retained=([01]) rc=(-?\d+) errno=(\d+) \([^)]*\)\s*$", re.M)
+PUTENV_DONE = re.compile(r"^PUTENV_PROBE DONE failures=(\d+)\s*$", re.M)
 EINVAL = 22
 
 
@@ -757,9 +759,15 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         func, path, line = symbolize(llvm_bin, image, fault, text)
         fault.symbol = func or None
         site = next((f for f in spec.get("asan_stack", []) if f.get("func") == spec["asan_func"]), None)
-        site_file = (site or {}).get("file") or spec["asan_file"]
+        # EACH declared site has its own file (site_files): the direct rule compared every
+        # declared function against ASan's primary file, so CRASH-057's second site
+        # php_var_dump (ext/standard/var.c) could never match directly (fourth review).
+        site_file_of = spec.get("site_files", {})
+        primary_file = (site or {}).get("file") or spec["asan_file"]
+        site_file = site_file_of.get(func) or primary_file
         leaf = (spec.get("asan_stack") or [{}])[0]
         at_site = bool(func) and func in spec["fault_sites"] and at_file(path, site_file)
+        matched_site = func if at_site else None
         # THE FAULTING FRAME IS CLASSIFIED LIKE A CHAIN FRAME, by symbol as well as by path
         # (frame_kind): a fault pc in zend_cap_reblock or _emalloc with no line table used to
         # reach the chain rule and be attributed through its callers (third review, 2026-10-28).
@@ -850,12 +858,14 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
             elif owner and owner[0] in spec["fault_sites"] and owner[0] in site_file_of \
                     and at_file(owner[1], site_file_of[owner[0]]):
                 at_site = True
-                obs.attribution = "function"
+                matched_site = owner[0]
+                obs.attribution = "chain"
                 obs.attribution_evidence = (
                     f"{here}; the frame chain climbs through {', '.join(owner[3]) or 'nothing'} "
                     f"to {owner[0]} at {owner[1].rsplit('/', 1)[-1]}:{owner[2]}, the function this case "
                     f"declares (fault_sites) in its declared file -- the first frame of PHP's tree "
-                    f"above the output plumbing")
+                    f"above the forwarding routines; attributed by the call path (chain), not by "
+                    f"the operand")
             elif owner and owner[0] in spec["fault_sites"]:
                 obs.attribution_evidence = (
                     f"{here}; the frame chain reaches {owner[0]}, a declared function, but at "
@@ -881,14 +891,25 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
             # not be read this way (its frame #0 would carry a line table or a deeper stack).
             if fault.ra:
                 cfunc, cpath, cline = symbolize_at(llvm_bin, image, fault.ra - 2, text)
-                if cfunc in spec["fault_sites"] and at_file(cpath, site_file):
-                    at_site = True
-                    obs.attribution = "function"
+                ckind = frame_kind(cfunc, cpath)
+                if ckind in ("seam", "allocator"):
+                    # the caller is the port's own code: the same barrier the chain walk
+                    # applies (fourth review: memcpy with ra into _estrndup read as a catch)
                     obs.attribution_evidence = (
                         f"the fault is in {func}, the libc routine ASan's own frame #0 names for "
-                        f"this case, called from {cfunc} at {site_file}:{cline} (ra={fault.ra:#x}), "
+                        f"this case, but its caller (ra={fault.ra:#x}) is "
+                        + ("the seam's own source" if ckind == "seam" else "PHP's allocator")
+                        + f" ({cfunc or '?'}@{(cpath or '?').rsplit('/', 1)[-1]}:{cline}): the fault "
+                        f"may be the port's, and no site beyond it counts")
+                elif cfunc in spec["fault_sites"] and at_file(cpath, site_file_of.get(cfunc) or primary_file):
+                    at_site = True
+                    matched_site = cfunc
+                    obs.attribution = "chain"
+                    obs.attribution_evidence = (
+                        f"the fault is in {func}, the libc routine ASan's own frame #0 names for "
+                        f"this case, called from {cfunc} at {(cpath or '?').rsplit('/', 1)[-1]}:{cline} (ra={fault.ra:#x}), "
                         f"the function this case declares (fault_sites, ASan frame "
-                        f"#{(site or {}).get('index', 1)})"
+                        f"#{(site or {}).get('index', 1)}); attributed by the call path (chain), not by the operand"
                         + (", at ASan's own line" if cline == spec["asan_line"] else
                            f" (ASan: line {spec['asan_line']})"))
                 else:
@@ -924,7 +945,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # MISSED on the strength of another configuration's fault; that transfer is gone.
     obs.reached = at_site or (bool(stock_reached) and bool(precondition_met))
     if at_site:
-        obs.reach_evidence = (f"this run faulted in {spec['fault_sites'][0]}, the case's own "
+        obs.reach_evidence = (f"this run faulted in {matched_site or spec['fault_sites'][0]}, the case's own "
                               f"declared site, which cannot be reached without the trigger "
                               f"having run")
     elif obs.reached:

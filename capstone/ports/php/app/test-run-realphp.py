@@ -550,6 +550,46 @@ def observation_cases():
     check("app_output drops the launcher's exit line and keeps its fault record",
           R.app_output(["done", "capstone-exec: exit image=x.dom sha256=" + "a" * 64, FAULT % SHA]).splitlines(),
           ["done", FAULT % SHA])
+    # THE FOURTH REVIEW (2026-10-28): a catch through the call path is its own attribution
+    # class, `chain`; the one-hop leaf rule applies the barriers to the caller; the direct rule
+    # uses each declared site's own file; the probe reader takes whole records only.
+    R.symbolize = fake_symbolize("", 0, func="dl_call_once")
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    check("a catch through the frame chain is attributed as `chain`, and says so",
+          (verdicts.judge(obs, pools)[0], obs.attribution, "by the call path (chain)" in obs.attribution_evidence),
+          (verdicts.CAUGHT, "chain", True))
+    check("and its reach evidence names the site the chain reached", "faulted in php_var_dump" in obs.reach_evidence, True)
+    # the leaf rule: memcpy with no chain, ra into the allocator (CRASH-073's shape) is refused
+    SPEC73 = dict(VD_SPEC, fault_sites=["_estrndup"], site_files={"_estrndup": "Zend/zend_alloc.c"},
+                  asan_stack=[{"index": 0, "func": "memcpy", "outside": "memintrinsics.inc:117"},
+                              {"index": 1, "func": "_estrndup", "file": "Zend/zend_alloc.c", "line": 403}])
+    R.symbolize = fake_symbolize("", 0, func="memcpy")
+    R.symbolize_at = by_pc({RA - 2: ("_estrndup", "/b/Zend/zend_alloc.c", 403)})
+    obs = R.observe("CRASH-073", SPEC73, "php-real-exact", SHA, FAULT_RA.replace("cause=25", "cause=28") % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a leaf fault whose ra caller is the allocator is refused like a chain barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and says so", "its caller" in ev and "PHP's allocator" in ev, True)
+    # the leaf rule's catch is a chain attribution too (one hop by ra)
+    R.symbolize = fake_symbolize("", 0, func="strlen")
+    R.symbolize_at = by_pc({RA - 2: ("xbuf_format_converter", "/b/main/spprintf.c", 518)})
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_RA % SHA, 139, controls(), False, "/x", "/y")
+    check("a leaf catch through ra is attributed as `chain`", (verdicts.judge(obs, exact)[0], obs.attribution), (verdicts.CAUGHT, "chain"))
+    # the direct rule with a second declared site in its own file
+    R.symbolize = fake_symbolize("/b/ext/standard/var.c", 126, func="php_var_dump")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT % SHA, 139, controls(probe=None), False, "/x", "/y")
+    check("a fault directly in a second declared site, in that site's own file, is CAUGHT by function",
+          (verdicts.judge(obs, pools)[0], obs.attribution), (verdicts.CAUGHT, "function"))
+    R.symbolize = fake_symbolize("/b/Zend/zend_alloc.c", 126, func="php_var_dump")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT % SHA, 139, controls(probe=None), True, "/x", "/y")
+    check("the same function in the primary site's file is not that site", verdicts.judge(obs, pools)[1], "unattributed")
+    # the state the tests after the chain section expect (a fault inside PHP's tree)
+    R.symbolize = fake_symbolize("/b/Zend/zend_execute.c", 700, func="zend_do_fcall_common_helper")
+    check("probe: retained=2 is no result", R.putenv_probe_outcome(absent2.replace("empty-name retained=0", "empty-name retained=2")), None)
+    check("probe: a DONE line with trailing garbage is no result", R.putenv_probe_outcome(absent2.replace("failures=0", "failures=0garbage")), None)
+    check("probe: the clean absent transcript still reads absent", R.putenv_probe_outcome(absent2), False)
     # A LEAF under line tables (CRASH-068's shape once musl carries them): strlen has a path now,
     # so the old `not path` branch no longer applies; and a leaf keeps no frame, so the chain's
     # first entry is the caller's CALLER (vspprintf) -- the caller itself is only in ra. The walk

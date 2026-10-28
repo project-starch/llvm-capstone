@@ -55,15 +55,19 @@ def tables(scoring_dir, known, title):
         for c, r in tallies[arm].items():
             if pick(c):
                 t[r["verdict"] if r["verdict"] != "NO-READING" else f"NO-READING/{r.get('reason')}"] += 1
+                # a catch attributed by the call path alone (verdicts.py ATTRIBUTIONS "chain")
+                # is counted inside CAUGHT and shown apart: it is the weakest attribution
+                if r["verdict"] == "CAUGHT" and r["observation"].get("attribution") == "chain":
+                    t["CAUGHT/chain"] += 1
         return t
     for name, pick in (("all 65 cases", lambda c: True),
                        ("the CWE-416 cases", lambda c: known[c][0] == "CWE-416")):
         n = sum(1 for c in known if pick(c))
-        lines += [f"**{name}** ({n}):", "", "| arm | CAUGHT | MISSED | NO-READING |", "|---|--:|--:|---|"]
+        lines += [f"**{name}** ({n}):", "", "| arm | CAUGHT | of which by chain | MISSED | NO-READING |", "|---|--:|--:|--:|---|"]
         for arm in ARMS:
             t = tally(arm, pick)
             nr = ", ".join(f"{k.split('/', 1)[1]} {v}" for k, v in sorted(t.items()) if k.startswith("NO-READING/"))
-            lines.append(f"| {LABEL[arm]} | {t['CAUGHT']} | {t['MISSED']} | {nr or '0'} |")
+            lines.append(f"| {LABEL[arm]} | {t['CAUGHT']} | {t['CAUGHT/chain']} | {t['MISSED']} | {nr or '0'} |")
         lines.append("")
     lines += ["**CWE-416 catches by native population** (temporal-asan-visible / asan-blind):", ""]
     for arm in ARMS:
