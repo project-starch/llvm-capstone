@@ -171,3 +171,22 @@ Not in this wave:
 - **perlbench train:** waits for the twin check of the lib-trimmed stage and its negative control.
 - **gcc train T3:** 816k live objects against 262,144 records.
 - **perlbench test T1/T3:** waits for the twin re-run of the relative-`$^X` stage.
+
+## Addendum 3 (2026-10-28 21:20, before any train boot): steps resized to CPI 7
+
+lbm test read CPI 5.07 on the board, against the 2.7-3.75 the estimates assumed. At that CPI lbm train needs 6.1 h,
+and its 21600 s step would have cut it off. Every train step and the x264 test steps are now sized at CPI 7, capped
+at 84600 s (23.5 h, bookings 1440 min):
+
+| boot | step s | booking min |
+|---|---|---|
+| lbm train | 32400 | 570 |
+| mcf train | 54000 | 930 |
+| x264 train | 72000 | 1230 |
+| x264 test | 84600 | 1440 |
+| gcc train T1 | 68400 | 1170 |
+| imagick train | 84600 | 1440 |
+| nab train | 84600 | 1440 |
+
+At the cap, imagick fits up to CPI 5.35 and nab up to CPI 4.37. P12 (±35 % of the CPI-3.75 estimate) stands as
+registered: lbm's CPI already predicts that it misses for lbm.
