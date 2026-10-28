@@ -1,0 +1,68 @@
+{
+  "arm": "virtual-malloc",
+  "build": {
+    "allocator": "seam",
+    "application": "php",
+    "image_sha256": "c7309c906a68a79da70a3aaed6f97be2ea1b5280087b5fc9a120db184554339f",
+    "mode": 4,
+    "profile": "virtual"
+  },
+  "cases": 65,
+  "configuration": "php-real-block",
+  "contract": "verdicts-v1",
+  "corpus": "php/engine-repros",
+  "platform": {
+    "compiler": "clang version 22.0.0git (https://github.com/project-starch/llvm-capstone 500f854f46a6eeca25455c0cc414ef5380141398)",
+    "firmware": "4dd4a2ade361a8bdb9cc45aeca02c6b7309b60d1e8701c2a4ed91c117a495f16  /tmp/php-kit/platform/images/fw_jump.elf",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b  /tmp/php-kit/platform/images/Image",
+    "launcher": "d7d32d82a31e1aad8168aae00c9a66489a0198fd6ca1bb9ec80d386de2e06561  /tmp/php-kit/platform/adapter/capstone-vexec",
+    "module": "d0d98d815558c959a06c45dee6a4f6736d0602fb59a3df6f156800cffb99379a  /tmp/php-kit/platform/adapter/module/capstone_vm.ko",
+    "module_args": "node_initial_pages=1024 supervisor_slots=32",
+    "qemu": "28b9ae0fb42adb9f97477ef9d1267dfcb411b7bf6d5753173444da09f894f42c  /tmp/php-kit/platform/qemu-system-riscv64",
+    "qemu_cpu": "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true,x-capstone-test-csrs=true,x-capstone-supervisor-slots=32",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845  /tmp/php-kit/platform/images/rootfs.ext2",
+    "runner": "ports/php/app/run-realphp.py"
+  },
+  "population": "asan-blind + temporal-asan-visible, one boot per population; see populations",
+  "populations": {
+    "asan-blind": {
+      "cases": 46,
+      "inputs.json": "ee35177a54905a16adee2c4c1cce9cc0695754b6c1884896e4297a3fc25f44dc",
+      "tally": {
+        "CAUGHT": 13,
+        "MISSED": 22,
+        "NO-READING:infra": 2,
+        "NO-READING:not-reached": 1,
+        "NO-READING:out-of-denominator": 7,
+        "NO-READING:unattributed": 1
+      },
+      "verdicts.jsonl": "eca94179ee797086d5ff07a6f04102cd7d41a7fd5bcfcc69988c387aac5b45e0"
+    },
+    "temporal-asan-visible": {
+      "cases": 19,
+      "inputs.json": "c0e7e1081aef2b870867c1bb6ec741ebfab057ef861939a3c6228be0261215f4",
+      "tally": {
+        "CAUGHT": 2,
+        "NO-READING:out-of-denominator": 17
+      },
+      "verdicts.jsonl": "3f6b3ef1220f701b4de78e2024aa8bf4d3c37f6b57c0593167ee8dcd28594368"
+    }
+  },
+  "pre_registration": "672a0deffaa2304fa590bd74a776b7eb7e399018",
+  "scoring": {
+    "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27",
+    "protective_causes": [
+      25,
+      28
+    ],
+    "score_oracle_crashes": false
+  },
+  "tally": {
+    "CAUGHT": 15,
+    "MISSED": 22,
+    "NO-READING:infra": 2,
+    "NO-READING:not-reached": 1,
+    "NO-READING:out-of-denominator": 24,
+    "NO-READING:unattributed": 1
+  }
+}

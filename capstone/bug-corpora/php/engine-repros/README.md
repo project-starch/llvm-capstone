@@ -93,9 +93,56 @@ mechanism, so that a surprise is a surprise:
 - The 16 cases placed differently from the collaborator's populations carry no prediction
   beyond the mechanism above; whatever they read is a reading of this instrument.
 
-## The first run
+## Results
 
-`results/2026-10-27-first-run/`: both populations on dev `0b0b3414dca5` with the patched port, one bundle per arm (the two populations merged by `tools/merge-population-bundles.py`, sources by hash). Its README has the tables; `derive-verdicts.py` wrote the verdicts into every `case.json` from those bundles, and `check-corpus.py` re-judges them.
+Three records, each a run of the whole corpus on the virtual profile, one bundle per arm with the two
+populations merged (`tools/merge-population-bundles.py`), every table computed from the bundles by
+`tools/result-tables.py` and written into that record's README, never typed:
+
+- `results/2026-10-27-run7/`: lane B's measurement (the corpus at `672a0deffaa2`; runs 5, 6 and 7 agree cell for cell).
+- `results/2026-10-28-run10/`: lane C's measurement (the seam on the libc's reclaim, `8569fb7194dc`): against run7 no CAUGHT changed.
+- `results/2026-10-28-run14/`: the follow-up lane's measurement (`1ed7d8c601e2`): the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain, the putenv probe. **This is the current record:** `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them. run14 is cell-identical to run13, which it replaces only because run13's two boots recorded different probe lists and could not be merged.
+
+Over the 49 CWE-416 cases, from `results/2026-10-28-run14/README.md`:
+
+**Default scoring** (the 23 native crashers out of the denominator):
+
+| arm | CAUGHT | MISSED | NO-READING |
+|---|--:|--:|---|
+| stock | 1 | 21 | infra 1, not-reached 2, out-of-denominator 24 |
+| system allocator | 10 | 11 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
+| nested | 23 | 0 | infra 2, out-of-denominator 24 |
+| nested exact | 23 | 0 | infra 2, out-of-denominator 24 |
+
+**CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
+
+- stock: 1 of 19 / 0 of 30
+- system allocator: 2 of 19 / 8 of 30
+- nested: 2 of 19 / 21 of 30
+- nested exact: 2 of 19 / 21 of 30
+
+**Sensitivity scoring** (every case scored by fault site; reported beside the default, never instead):
+
+| arm | CAUGHT | MISSED | NO-READING |
+|---|--:|--:|---|
+| stock | 2 | 21 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 3 |
+| system allocator | 23 | 11 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 2 |
+| nested | 46 | 0 | infra 2, out-of-denominator 1 |
+| nested exact | 46 | 0 | infra 2, out-of-denominator 1 |
+
+**CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
+
+- stock: 2 of 19 / 0 of 30
+- system allocator: 10 of 19 / 13 of 30
+- nested: 19 of 19 / 27 of 30
+- nested exact: 19 of 19 / 27 of 30
+
+Read with the plan document (`docs/plans/2026-10-12-php-virtual-capstone-retarget.md`, runs 8 to 14):
+the system allocator's catches are a strict subset of the nested arms'; CRASH-084 is out of the
+denominator because this libc's putenv never creates the dangling reference the defect needs (checked
+by a probe whose hash the record carries); CRASH-075 and CRASH-092 are `infra` (the 40 s watchdog; 075's
+separate 600 s record is a catch at `php_array_walk`, 092 hangs on uninitialised stack contents before
+its defect); the native population does not predict the measured boundary, 22 of 49 cases differ.
 
 ## Not here
 

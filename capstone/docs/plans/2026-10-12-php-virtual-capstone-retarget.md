@@ -2536,3 +2536,12 @@ part of the platform, not of the population: the record now lists every probe su
 command line (run-realphp.py, this commit). Nothing in the judge changes. run14 = run13's
 platform, images, probe and tree plus this fix. Prediction: identical to run13 cell for cell, both
 populations, both scorings, with both boots' platform records equal.
+
+### run14 (`corpus-run14`, tree 1ed7d8c601e2): cell-identical to run13, both boots' records equal
+
+Against run13, both scorings, both populations: 0 of 520 cells differ, and the two boots' platform
+records are equal (the putenv probe's hash in both), so merge-population-bundles.py merges them.
+run14 is recorded as `results/2026-10-28-run14/` (default and sensitivity bundles per arm, README
+with the tables from `tools/result-tables.py`), and corpus.json names its three arm bundles as the
+current verdicts; `derive-verdicts.py` wrote them into every case.json. Lane B's run7 and lane C's
+run10 are recorded beside it as `results/2026-10-27-run7/` and `results/2026-10-28-run10/`.
