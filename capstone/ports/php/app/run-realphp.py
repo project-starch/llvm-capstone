@@ -123,7 +123,7 @@ KERNEL_LINE = re.compile(r"^\[\s*\d+\.\d+\]")
 # A fault in the seam's own sources is a port artefact and never a catch. The physical column
 # learned this the expensive way: with only a pc, a fault in the allocator looks exactly like a
 # fault in the program.
-SEAM_OWN = ("zend-cap-blocks.c", "zend-cap-backing.c", "php_virtual_lower.c")
+SEAM_OWN = ("zend-cap-mode.c", "php_virtual_lower.c")
 # Cases whose ASAN site is PHP's own allocator. A fault there cannot be attributed by site --
 # it is indistinguishable from the port breaking -- so these need the diagnostic audit arm that
 # run-cases.py drives for CRASH-073, and are `unattributed` until it is wired up here.

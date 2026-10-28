@@ -56,11 +56,10 @@ SEAM_LINE = re.compile(r"PHP_VIRTUAL SEAM blocks=(\d+) frees=(\d+) issues=(\d+) 
                        r"retires=(\d+) revokes=(\d+)")
 # The seam's own failures, which are instrument failures and never verdicts.
 SEAM_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
-SEAM_DOUBLE_FREE = re.compile(r"ZEND_CAP_DOUBLE_FREE key=(0x[0-9a-f]+)")
 # A fault inside the seam's own code is a port artefact, not a catch. Named here because the
 # physical column learned it the expensive way: a fault in the allocator looks exactly like a
 # fault in the program when all you have is a pc.
-SEAM_OWN_FILES = ("zend-cap-blocks.c", "zend-cap-backing.c", "zend_alloc.c")
+SEAM_OWN_FILES = ("zend-cap-mode.c", "zend_alloc.c")
 
 
 def suite_text():
@@ -352,15 +351,6 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
     if revokes is not None:
         obs.notes = f"revokes={revokes} retires={retires}"
 
-    double = SEAM_DOUBLE_FREE.search(text)
-    if double:
-        # Two efrees of the same pointer with no allocation between: CWE-415, caught by name at
-        # a labelled site rather than left to corrupt AG(cache).
-        obs.fault = verdicts.Fault(cause=0, pc=0, symbol="zend_cap_retire")
-        obs.attribution = "probe"
-        obs.attribution_evidence = (f"ZEND_CAP_DOUBLE_FREE at {double.group(1)}: the same block "
-                                    f"retired twice with no issue in between")
-        return obs
 
     fault = verdicts.domain_fault(text, sites.symbols)
     if fault is not None:
@@ -369,7 +359,16 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
         func, where = sites.locate(fault.pc, int(m.group(1), 16)) if m else ("", "")
         obs.notes = (obs.notes + "; " if obs.notes else "") + (f"{func} at {where}" if where else "")
         at_site = bool(expect) and expect in (where or "")
-        if any(f in (where or "") for f in SEAM_OWN_FILES):
+        if func == "reclaim_child":
+            # The libc's reclaim refused the pointer efree was given, at cap_malloc_reclaim
+            # (runtime/virtual/heap.c): a block ended twice with no issue between (CWE-415,
+            # cause 25) or a pointer that is not the issued child (cause 29). Caught by the
+            # instruction's own identity check, at a labelled site in the allocator.
+            obs.attribution = "probe"
+            obs.attribution_evidence = (f"the libc refused the reclaim at cap_malloc_reclaim "
+                                        f"(cause {fault.cause}): the same block ended twice, or "
+                                        f"a pointer that is not the issued child")
+        elif any(f in (where or "") for f in SEAM_OWN_FILES):
             obs.attribution_evidence = (f"fault at {where} is inside the port's own allocator, "
                                         f"not in the program under test")
         elif stock_completed:

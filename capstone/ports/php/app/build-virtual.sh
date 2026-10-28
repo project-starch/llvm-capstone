@@ -195,7 +195,7 @@ case "$WHAT" in
     IMG="$OUT/probe-seam.dom"
     echo "  compiling the seam probe ..."
     "$CC" -O1 -I"$R/capstone" -I"$R/capstone/runtime/include" -I"$SEAM" \
-      "$SEAM/probe-seam.c" "$SEAM/zend-cap-blocks.c" "$SEAM/zend-cap-backing.c" \
+      "$SEAM/probe-seam.c" "$SEAM/zend-cap-mode.c" \
       -o "$IMG" || { echo "seam probe build FAILED" >&2; exit 1; }
     echo "  built $IMG"
     ;;
@@ -301,18 +301,18 @@ case "$WHAT" in
       patch -s -p1 -d "$PATCHED" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
       ZEND_ALLOC_SRC="$PATCHED/Zend/zend_alloc.c"
-      # -I the seam for zend-cap-port.h, and -I capstone for <sublet/sublet.h>, which is the
+      # -I the seam for zend-cap-mode.h, and -I capstone for <sublet/sublet.h>, which is the
       # same header the virtual heap itself uses.
       # NOT -DPHP_CAP_ALLOC_SEAM: that is the PHYSICAL port's flag for "zend_alloc.c is
       # dropped", under which libc/php_capstone_php_stubs.c supplies alloc_globals and
       # start_memory_manager itself. This seam KEEPS zend_alloc.c -- that is the whole point --
       # so those definitions must come from PHP, and PHP's AG(cache) stays live. ZEND_CAP_SUBLET
       # is the only flag the seam needs.
-      # runtime/include for <capstone/capability.h>, which zend-cap-port.h includes since the
+      # runtime/include for <capstone/capability.h>, which the seam includes since the
       # block provider moved onto CDERIVE/CREVOKE (fa8902138ab0); the SDK does not add it.
       CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" -I"$R/capstone/runtime/include")
       ZEND_ALLOC_RENAME=()          # the seam calls PHP's own entry points; nothing is renamed
-      echo "  allocator: SEAM -- zend_alloc.c patched (8 guarded hunks), per-emalloc lifetimes"
+      echo "  allocator: SEAM -- zend_alloc.c patched (7 guarded hunks), per-emalloc lifetimes"
     else
       echo "  allocator: HIERARCHICAL -- zend_alloc.c renamed aside and re-bounded"
     fi
@@ -350,7 +350,7 @@ case "$WHAT" in
       # The seam serves PHP's allocator from below instead of wrapping it from above, so the
       # re-bounding wrapper is not linked at all: there is nothing to re-bound, because
       # ZEND_CAP_PAYLOAD already hands out a capability bounded to the caller's object.
-      SUP+=("$SEAM/zend-cap-blocks.c" "$SEAM/zend-cap-backing.c")
+      SUP+=("$SEAM/zend-cap-mode.c")
     else
       SUP+=("$E/libc/php_capstone_zend_hier.c")
     fi
@@ -514,8 +514,8 @@ case "$WHAT" in
       cp "$P/Zend/zend_alloc.c" "$T/Zend/zend_alloc.c"
       patch -s -p1 -d "$T" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
-      SUP=("$SEAM/zend-cap-blocks.c" "$SEAM/zend-cap-backing.c" "$HERE/php_virtual_lower.c")
-      echo "  allocator: SEAM -- zend_alloc.c patched (8 guarded hunks), per-emalloc lifetimes"
+      SUP=("$SEAM/zend-cap-mode.c" "$HERE/php_virtual_lower.c")
+      echo "  allocator: SEAM -- zend_alloc.c patched (7 guarded hunks), per-emalloc lifetimes"
     else
       [ -z "${PHP_REALPHP_DEFAULT_MODE:-}" ] \
         || { echo "  PHP_REALPHP_DEFAULT_MODE has no meaning for the stock image (no seam)" >&2; exit 2; }

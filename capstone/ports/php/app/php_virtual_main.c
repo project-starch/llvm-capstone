@@ -81,7 +81,7 @@ PHP_VIRTUAL_ASSERT(header_padding_is_0, MEM_HEADER_PADDING == 0);
  * of a pair and they cannot differ in anything else. zend_cap_mode() reads PHP_CAP_MODE and
  * echoes what it resolved, and REFUSES to pick an arm if the variable is absent -- a run that
  * silently chose is a run whose result means nothing. */
-#  include "zend-cap-port.h"
+#  include "zend-cap-mode.h"
 #  define PHP_VIRTUAL_ARM "seam (allocator mode is runtime: see the ZEND_CAP_MODE line)"
 #elif defined(ZEND_CAP_BOUNDS_REAL_SIZE)
 #  define PHP_VIRTUAL_ARM "bounds=real-size (CONTROL: stock PHP's rounding is reachable)"
@@ -444,14 +444,11 @@ int main(int argc, char **argv)
      * pair whose arms were secretly the same would report a clean sweep. sublet_stats is static
      * per translation unit, so the heap's counters do not see this layer's. */
     {
-        unsigned long cs[8], bs[4];
+        unsigned long cs[8];
         zend_cap_stats(cs);
-        zend_cap_backing_stats(bs);
         printf("PHP_VIRTUAL SEAM blocks=%lu frees=%lu issues=%lu retires=%lu revokes=%lu "
                "splits=%lu reallocs=%lu live=%lu\n",
                cs[0], cs[1], cs[2], cs[3], cs[4], cs[5], cs[6], cs[7]);
-        printf("PHP_VIRTUAL SEAM records_live=%lu records_peak=%lu slabs=%lu lookups=%lu\n",
-               bs[0], bs[1], bs[2], bs[3]);
         fflush(stdout);
     }
 #endif

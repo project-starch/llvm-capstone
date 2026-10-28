@@ -175,7 +175,7 @@ def observation_cases():
     check("wrong file is unattributed", verdicts.judge(obs, exact)[1], "unattributed")
 
     # A fault in the seam's OWN source is a port artefact, never a catch.
-    R.symbolize = fake_symbolize("capstone/ports/php/zend-alloc/sublet/zend-cap-blocks.c", 120)
+    R.symbolize = fake_symbolize("capstone/ports/php/zend-alloc/sublet/zend-cap-mode.c", 120)
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
                     controls(), True, "/x", "/y")
     v, reason, ev = verdicts.judge(obs, exact)

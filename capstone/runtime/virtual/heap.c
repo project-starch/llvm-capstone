@@ -440,6 +440,56 @@ void free(void *p)
     errno = e;
 }
 void __libc_free(void *p) { free(p); }
+
+/* THE NESTED-ALLOCATOR PAIR: what an allocator layered on malloc needs at its own alloc and free,
+ * and nothing else. An application allocator that hands out sub-objects of a malloc'd block (PHP's
+ * emalloc: a 48-byte header, then the payload) must at ITS free find the block's own authority
+ * from the caller's pointer and keep a live reference to the block after the caller's lifetime
+ * has ended. Both are in this heap's slot record already -- the issued object with MANAGE, indexed
+ * by address -- so every such allocator was rebuilding this index for itself (ports/php's seam
+ * carried 886 lines of it). These two calls are the index, exported.
+ *
+ * derive: a child of the issued object `object`, over [object + offset, + size), on this heap's
+ * node budget (the same ensure_ids/take_id path malloc's own child takes, so a nested allocator
+ * cannot exhaust the table the heap reserved against). NULL when the table cannot be grown, never
+ * a fault: the caller decides what an unprotected object means in its arm.
+ *
+ * reclaim: the caller's child ends, and the issued object that holds it comes back, cursor at its
+ * start. The block is found by the child's BASE minus `offset`, the same offset derive was given,
+ * so a child that was narrowed from below (its base moved) misses the index and is refused like an
+ * interior free. CREVOKE's direct-parent rule is the identity check: a grandchild the client
+ * derived for itself is cause 29, a child already ended is cause 25, both at cap_malloc_reclaim.
+ * The parent is the record's issued object, never the caller's reference, so the authority that
+ * ends the child is the heap's. */
+void *__capstone_malloc_derive(void *object, size_t offset, size_t size)
+{
+    if (!object || !size) return NULL;
+    lock_heap();
+    int ok = ensure_ids(1) == 0;
+    if (ok) take_id();
+    unlock_heap();
+    if (!ok) return NULL;
+    return capstone_cap_derive(object, offset, size);
+}
+__attribute__((noinline)) static void reclaim_child(void *parent, void *child)
+{
+    __asm__ volatile(".global cap_malloc_reclaim\ncap_malloc_reclaim:" ::: "memory");
+    capstone_cap_revoke_child(parent, child);
+}
+void *__capstone_malloc_reclaim(void *child, size_t offset)
+{
+    if (!child) return NULL;
+    size_t key = __builtin_capstone_cap_get_base(child) - offset;
+    lock_heap();
+    struct capstone_malloc_slot *r = NULL;
+    for (struct capstone_malloc_slot *q = index_heads[bucket(key)]; q; q = q->next)
+        if (q->key == key) { r = q; break; }
+    void *object = (r && r->kind == SLOT_PUBLIC) ? r->issued : NULL;
+    unlock_heap();
+    if (!object) invalid_free();
+    reclaim_child(object, child);
+    return object;
+}
 void *calloc(size_t n, size_t size)
 {
     if (size && n > SIZE_MAX / size) { errno = ENOMEM; return NULL; }
