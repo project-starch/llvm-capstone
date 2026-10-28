@@ -25,7 +25,7 @@
 +# define ZEND_DO_MALLOC(size)       zend_cap_block(size)
 +# define ZEND_DO_FREE(ptr)          zend_cap_release(ptr)
 +/* The old block's request is still in p->size when _erealloc reallocates: the copy length. */
-+# define ZEND_DO_REALLOC(ptr, size) zend_cap_reblock((ptr), (size), ZEND_CAP_HDR + ((zend_mem_header *)(ptr))->size)
++# define ZEND_DO_REALLOC(ptr, bytes) zend_cap_reblock((ptr), (bytes), ZEND_CAP_HDR + ((zend_mem_header *)(ptr))->size)
 +/* p -> the caller's pointer over the payload; ptr -> the block, by LOOKUP rather than arithmetic,
 + * since the caller's capability cannot reach the header. _efree's lookup also ENDS the caller's
 + * lifetime (RECLAIM); _erealloc's and _mem_block_check's do not (HEADER). */
