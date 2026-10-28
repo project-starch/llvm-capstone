@@ -225,6 +225,52 @@ int main(void) {
       assert(strstr(big, " image=image.dom chain=0x80001100,0x80001000,0x80000f00\n"));
     }
   }
+  /* THE WALK ITSELF, on a buffer standing in for the domain's stack. A frame is
+     {fp-32: the caller's fp, fp-16: the return address}; the walk must give the
+     chain for a well-formed stack and STOP, never read outside the buffer, on
+     every malformed one: misaligned fp, fp outside the stack, a zero return
+     address, a caller's fp not above this frame, and the frame cap. */
+  {
+    static uint64_t words[128] __attribute__((aligned(16)));
+    uint64_t lo = (uint64_t)(uintptr_t)words, hi = lo + sizeof words;
+    uint64_t chain[20];
+#define FRAME(fp_, ra_, prev_) do { uint64_t ra__ = (ra_), prev__ = (prev_); \
+      memcpy((void *)(uintptr_t)((fp_) - 16), &ra__, 8); memcpy((void *)(uintptr_t)((fp_) - 32), &prev__, 8); } while (0)
+    memset(words, 0, sizeof words);
+    /* three frames at lo+64, lo+128, lo+192, the outermost with no caller */
+    FRAME(lo + 64, 0x80001100, lo + 128);
+    FRAME(lo + 128, 0x80001000, lo + 192);
+    FRAME(lo + 192, 0x80000f00, 0);
+    assert(capstone_delegate_frame_chain(lo + 64, lo, hi, chain, 16) == 3);
+    assert(chain[0] == 0x80001100 && chain[1] == 0x80001000 && chain[2] == 0x80000f00);
+    /* a misaligned fp, an fp below the first readable frame, above the stack, no stack */
+    assert(capstone_delegate_frame_chain(lo + 72, lo, hi, chain, 16) == 0);
+    assert(capstone_delegate_frame_chain(lo + 16, lo, hi, chain, 16) == 0);
+    assert(capstone_delegate_frame_chain(hi + 16, lo, hi, chain, 16) == 0);
+    assert(capstone_delegate_frame_chain(lo + 64, 0, 0, chain, 16) == 0);
+    assert(capstone_delegate_frame_chain(lo + 64, lo, lo, chain, 16) == 0);
+    /* a zero return address ends the chain before that frame */
+    FRAME(lo + 128, 0, lo + 192);
+    assert(capstone_delegate_frame_chain(lo + 64, lo, hi, chain, 16) == 1 && chain[0] == 0x80001100);
+    /* a caller's fp not above this frame (a loop, or garbage) ends it after that frame */
+    FRAME(lo + 128, 0x80001000, lo + 128);
+    assert(capstone_delegate_frame_chain(lo + 64, lo, hi, chain, 16) == 2);
+    FRAME(lo + 128, 0x80001000, lo + 64);
+    assert(capstone_delegate_frame_chain(lo + 64, lo, hi, chain, 16) == 2);
+    /* a caller's fp that is above but misaligned or outside the stack ends it there */
+    FRAME(lo + 128, 0x80001000, lo + 200);
+    assert(capstone_delegate_frame_chain(lo + 64, lo, hi, chain, 16) == 2);
+    FRAME(lo + 128, 0x80001000, hi + 64);
+    assert(capstone_delegate_frame_chain(lo + 64, lo, hi, chain, 16) == 2);
+    /* the cap: twenty well-formed frames, sixteen reported */
+    memset(words, 0, sizeof words);
+    for (unsigned k = 1; k <= 20; k++)
+      FRAME(lo + 32 * k, 0x80000000 + k, k < 20 ? lo + 32 * (k + 1) : 0);
+    assert(capstone_delegate_frame_chain(lo + 32, lo, hi, chain, 16) == 16);
+    assert(chain[0] == 0x80000001 && chain[15] == 0x80000010);
+    assert(capstone_delegate_frame_chain(lo + 32, lo, hi, chain, 20) == 20);
+#undef FRAME
+  }
   /* spawn through the service, then wait4 through the service: the status
      must land in the exchange region where the entry pointed */
   {

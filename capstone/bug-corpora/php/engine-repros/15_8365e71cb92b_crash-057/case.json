@@ -1,29 +1,33 @@
 {
- "arms": {
-  "virtual-malloc": {
-   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"
-  },
-  "virtual-nested-exact": {
-   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)"
-  },
-  "virtual-nested-pools": {
-   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)"
-  }
- },
  "case": 15,
- "class": "temporal",
+ "upstream_fix": "8365e71cb92b",
+ "title": "CRASH-057: tmp value reused after freed in string offset assign (use-after-free)",
  "consumer": "Zend/zend_execute.c:535",
+ "class": "temporal",
+ "trigger": "trigger.php",
+ "live_in_pin": true,
+ "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-use-after-free at Zend/zend_alloc.c:403 in _estrndup when trigger.php runs; the corpus records the fix as php-src 8365e71cb92b, which postdates the release, and names the defect at Zend/zend_execute.c:535",
+ "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build crashes on it natively, so a silence on an arm is not a MISSED: under the judge's default scoring the case reads out-of-denominator on every arm; the sensitivity scoring (run-realphp.py --score-oracle-crashes) reads it by fault site instead. ",
  "fault_sites": [
   "_estrndup",
   "php_var_dump"
  ],
  "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has _estrndup at Zend/zend_alloc.c:403 as its first frame inside PHP's tree (frame #1, under the libc leaf memcpy at frame #0, which is not declared: a fault there can be tied to this case only through its caller, and the launcher reports no return address); the stack's remaining frames are the interpreter's dispatch and are not sites On this platform the access is not the copy: the assignment keeps the temporary's buffer as the result's (the trigger's own account: the freed IS_TMP_VAR is reused as the assignment's result value), and var_dump($x) prints it -- php_var_dump, ext/standard/var.c:126, the PHPWRITE of Z_STRVAL -- through main/output.c and the CLI's write, which pass the buffer through. php_var_dump is therefore a declared site: the print of the reused temporary that the trigger documents, read off the source, with the nested arm's frame chain (residues/057-chain, 2026-10-28) as the confirming reading, not the admitting one.",
- "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build crashes on it natively, so a silence on an arm is not a MISSED: under the judge's default scoring the case reads out-of-denominator on every arm; the sensitivity scoring (run-realphp.py --score-oracle-crashes) reads it by fault site instead. ",
- "live_in_pin": true,
- "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-use-after-free at Zend/zend_alloc.c:403 in _estrndup when trigger.php runs; the corpus records the fix as php-src 8365e71cb92b, which postdates the release, and names the defect at Zend/zend_execute.c:535",
- "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as history-5.x (historical-known, confidence high).",
+ "arms": {
+  "virtual-malloc": {
+   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"
+  },
+  "virtual-nested-pools": {
+   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)"
+  },
+  "virtual-nested-exact": {
+   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)"
+  }
+ },
  "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
- "title": "CRASH-057: tmp value reused after freed in string offset assign (use-after-free)",
- "trigger": "trigger.php",
- "upstream_fix": "8365e71cb92b"
+ "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as history-5.x (historical-known, confidence high).",
+ "fault_site_files": {
+  "_estrndup": "Zend/zend_alloc.c",
+  "php_var_dump": "ext/standard/var.c"
+ }
 }

@@ -70,7 +70,7 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
-                 "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of",
+                 "citation_constraint", "fault_sites", "fault_sites_why", "fault_site_files", "duplicate_of",
                  "control_probe", "control_probe_why",
                  "memory_error_is_the_defect", "memory_error_is_the_defect_why",
                  "platform_precondition", "platform_precondition_why"}
@@ -338,8 +338,21 @@ def check_cases(corpus, decl, dirs, problems):
                 problems.append(f"{where}: fault_sites must be a non-empty list of function names")
             if not str(case.get("fault_sites_why", "")).strip():
                 problems.append(f"{where}: fault_sites without fault_sites_why")
+            # The file each site must be seen in, so a judge matches a site by function AND file
+            # (a same-named routine elsewhere is not the site): an object from site to path, every
+            # key a declared site, every value a non-empty repo-relative path.
+            files = case.get("fault_site_files")
+            if files is not None:
+                if not (isinstance(files, dict) and files
+                        and all(isinstance(k, str) and isinstance(v, str) and v for k, v in files.items())):
+                    problems.append(f"{where}: fault_site_files must be a non-empty object of site -> file")
+                elif isinstance(sites, list) and set(files) - set(sites):
+                    problems.append(f"{where}: fault_site_files names {sorted(set(files) - set(sites))}, "
+                                    f"not in fault_sites")
         elif "fault_sites_why" in case:
             problems.append(f"{where}: fault_sites_why without fault_sites")
+        elif "fault_site_files" in case:
+            problems.append(f"{where}: fault_site_files without fault_sites")
         # A platform precondition is a libc behaviour the defect needs; it must say which, name the
         # probe that checks it, give the probe's two readings, and say why -- from the libc's code.
         if "platform_precondition" in case:

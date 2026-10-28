@@ -119,7 +119,7 @@ SPEC = {"cwe": "CWE-416", "requires": "", "requires_kind": "", "asan_func": SITE
         "asan_file": "ext/standard/basic_functions.c", "asan_line": 2135,
         "asan_stack": [{"index": 0, "func": SITE, "file": "ext/standard/basic_functions.c", "line": 2135},
                        {"index": 1, "func": "execute", "file": "Zend/zend_execute.c", "line": 1391}],
-        "fault_sites": [SITE],
+        "fault_sites": [SITE], "site_files": {SITE: "ext/standard/basic_functions.c"},
         "pristine_stdout": "done\n", "pristine_outcome": "OK"}
 # A case whose ASan leaf is a libc routine (CRASH-068's shape: strlen under
 # xbuf_format_converter). The declared site is the PHP caller; the leaf is named in the stack
@@ -127,7 +127,7 @@ SPEC = {"cwe": "CWE-416", "requires": "", "requires_kind": "", "asan_func": SITE
 LEAF_SPEC = dict(SPEC, asan_func="xbuf_format_converter", asan_file="main/spprintf.c", asan_line=518,
                  asan_stack=[{"index": 0, "func": "strlen", "outside": "sanitizer_common_interceptors.inc:425"},
                              {"index": 1, "func": "xbuf_format_converter", "file": "main/spprintf.c", "line": 518}],
-                 fault_sites=["xbuf_format_converter"])
+                 fault_sites=["xbuf_format_converter"], site_files={"xbuf_format_converter": "main/spprintf.c"})
 
 
 def fake_symbolize(path, line, func=SITE):
@@ -255,13 +255,20 @@ def observation_cases():
     check("probe: not retained with the control retained reads absent", R.putenv_probe_outcome(absent), False)
     check("probe: a failed control reads as no result", R.putenv_probe_outcome(broken), None)
     check("probe: no output reads as no result", R.putenv_probe_outcome(""), None)
-    tv_present = "TIMEVAL_PROBE control rc=0 errno=0 ms=0\nTIMEVAL_PROBE out-of-range-usec rejected=1 rc=-1 errno=22 (Invalid argument) ms=0\nTIMEVAL_PROBE DONE failures=0\n"
-    tv_absent = "TIMEVAL_PROBE control rc=0 errno=0 ms=0\nTIMEVAL_PROBE out-of-range-usec rejected=0 rc=-1 errno=4 (Interrupted system call) ms=2000\nTIMEVAL_PROBE DONE failures=0\n"
-    tv_broken = "TIMEVAL_PROBE control rc=1 errno=0 ms=0\nTIMEVAL_PROBE FAIL the zero timeout did not return 0\nTIMEVAL_PROBE out-of-range-usec rejected=0 rc=0 errno=0 (ok) ms=2000\nTIMEVAL_PROBE DONE failures=1\n"
-    check("timeval probe: EINVAL at once reads present", R.timeval_probe_outcome(tv_present), True)
-    check("timeval probe: the alarm interrupting a sleep reads absent", R.timeval_probe_outcome(tv_absent), False)
-    check("timeval probe: a failed control reads as no result", R.timeval_probe_outcome(tv_broken), None)
-    check("the runner knows both probes by name", sorted(R.PLATFORM_PROBES), ["putenv", "timeval"])
+    # ABSENT is a whole pattern, never "anything but retained": an unexpected failure of the
+    # call (EFAULT, a retained=0 with rc 0, a missing second call) is a probe that did not
+    # behave as declared and reads as no result (review 2026-10-28: every other result read
+    # as absence, so a broken probe could take a case out of the denominator).
+    efault = absent.replace("rc=-1 errno=22 (Invalid argument)", "rc=-1 errno=14 (Bad address)")
+    check("probe: an unexpected errno is no result, not absence", R.putenv_probe_outcome(efault), None)
+    rc0 = absent.replace("empty-name retained=0 rc=-1 errno=22", "empty-name retained=0 rc=0 errno=0")
+    check("probe: not retained with rc 0 is no result", R.putenv_probe_outcome(rc0), None)
+    one_call = "\n".join(l for l in absent.splitlines() if "empty-name-value" not in l) + "\n"
+    check("probe: a missing second call is no result", R.putenv_probe_outcome(one_call), None)
+    mixed = absent.replace("empty-name-value retained=0 rc=-1 errno=22 (Invalid argument)",
+                           "empty-name-value retained=1 rc=0 errno=0 (ok)")
+    check("probe: the two calls disagreeing is no result", R.putenv_probe_outcome(mixed), None)
+    check("the runner knows the one probe by name (timeval retracted 2026-10-28)", sorted(R.PLATFORM_PROBES), ["putenv"])
     pp_spec = dict(SPEC, platform_precondition={"needs": "putenv keeps an empty-name string referenced from environ",
                                                 "probe": "putenv", "present": "x", "absent": "y"})
     obs = R.observe("CRASH-084", pp_spec, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
@@ -404,7 +411,8 @@ def observation_cases():
     VD_SPEC = dict(SPEC, asan_func="_estrndup", asan_file="Zend/zend_alloc.c", asan_line=403,
                    asan_stack=[{"index": 0, "func": "memcpy", "outside": "memintrinsics.inc:117"},
                                {"index": 1, "func": "_estrndup", "file": "Zend/zend_alloc.c", "line": 403}],
-                   fault_sites=["_estrndup", "php_var_dump"])
+                   fault_sites=["_estrndup", "php_var_dump"],
+                   site_files={"_estrndup": "Zend/zend_alloc.c", "php_var_dump": "ext/standard/var.c"})
     R.symbolize = fake_symbolize("", 0, func="")                     # the delegate: no symbol, no line
     R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
     obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
@@ -429,13 +437,47 @@ def observation_cases():
     obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN5 % SHA, 139,
                     controls(probe=None), True, "/x", "/y")
     check("a declared site behind an undeclared frame is not reached", verdicts.judge(obs, pools)[0], verdicts.NO_READING)
-    # a chain that never enters PHP's tree
-    R.symbolize_at = by_pc(PLUMB)
+    # a chain that never enters PHP's tree, every frame of it resolved (an unresolved one would
+    # be a barrier, below)
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("__libc_start_main", "/tmp/k/tmp/musl-src/musl-1.2.5/src/env/__libc_start_main.c", 95)})
     obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
                     controls(probe=None), True, "/x", "/y")
     v, reason, ev = verdicts.judge(obs, pools)
     check("a chain that reaches no PHP frame is unattributed", reason, "unattributed")
     check("and says so", "reaches no frame of PHP's tree" in ev, True)
+    # BARRIERS (review 2026-10-28, which built a CAUGHT out of a memcpy fault whose chain ran
+    # through zend_cap_reblock): a frame in the seam's own source, in PHP's allocator, or one
+    # that resolves to nothing stops the walk, and no declared site beyond it counts. Each is
+    # driven here with the declared site php_var_dump right behind the barrier.
+    def chain_with(third, fourth=("php_var_dump", "/b/ext/standard/var.c", 126), spec=VD_SPEC):
+        R.symbolize_at = by_pc({**PLUMB, 0x3f90a00030 - 2: third, 0x3f90a00040 - 2: fourth})
+        # stock reached its marker, so a fault the chain cannot attribute is `unattributed`,
+        # not a fault before the defect
+        o = R.observe("CRASH-057", spec, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                      controls(probe=None), True, "/x", "/y")
+        return verdicts.judge(o, pools)
+    v, reason, ev = chain_with(("zend_cap_reblock", "/b/Zend/sublet/zend-cap-mode.c", 88))
+    check("a seam frame in the chain is a barrier: unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence names it", "the seam's own source (zend_cap_reblock@zend-cap-mode.c:88)" in ev, True)
+    v, reason, ev = chain_with(("_estrndup", "/b/Zend/zend_alloc.c", 437))
+    check("an allocator frame in the chain is a barrier, declared site or not (CRASH-073's memcpy <- _estrndup)",
+          (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence names the allocator", "PHP's allocator (_estrndup@zend_alloc.c:437)" in ev, True)
+    v, reason, ev = chain_with(("", "", 0))
+    check("an unresolved chain frame is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence names its address", "an unresolved frame (0x3f90a00030)" in ev, True)
+    v, reason, ev = chain_with(("php_output_write", "/b/main/output.c", 119),
+                               ("php_var_dump", "/b/ext/standard/other.c", 126))
+    check("a same-named function in another file is not the site", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence says which file was declared", "not in its declared file ext/standard/var.c" in ev, True)
+    v, reason, ev = chain_with(("php_output_write", "/b/main/output.c", 119),
+                               spec=dict(VD_SPEC, site_files={"_estrndup": "Zend/zend_alloc.c"}))
+    check("a site with no declared file cannot be matched by the chain", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and says so", "(none declared)" in ev, True)
+    # the ra register resolving to nothing is NOT a barrier: a leaf may use it as scratch
+    v, reason, ev = chain_with(("php_output_write", "/b/main/output.c", 119))
+    check("with ra=0xa unresolved the chain still decides (CRASH-057)", v, verdicts.CAUGHT)
+    check("and the evidence says the ra was skipped as a leaf's scratch", "ra=0xa (unresolved, a leaf's scratch register)" in ev, True)
     # A LEAF under line tables (CRASH-068's shape once musl carries them): strlen has a path now,
     # so the old `not path` branch no longer applies; and a leaf keeps no frame, so the chain's
     # first entry is the caller's CALLER (vspprintf) -- the caller itself is only in ra. The walk

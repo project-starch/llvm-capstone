@@ -705,19 +705,11 @@ static size_t domain_stack_bytes;
  * gets no chain rather than a wrong one. Diagnostic: nothing here decides on it. */
 static unsigned frame_chain(uint64_t fp, uint64_t *out, unsigned max)
 {
-    uint64_t lo = (uint64_t)(uintptr_t)domain_stack, hi = lo + domain_stack_bytes;
-    unsigned n = 0;
+    uint64_t lo = (uint64_t)(uintptr_t)domain_stack;
     if (!domain_stack) return 0;
-    while (n < max && fp >= lo + 32 && fp <= hi && (fp & 15) == 0) {
-        uint64_t ra, prev;
-        memcpy(&ra, (const void *)(uintptr_t)(fp - 16), sizeof ra);
-        memcpy(&prev, (const void *)(uintptr_t)(fp - 32), sizeof prev);
-        if (!ra) break;
-        out[n++] = ra;
-        if (prev <= fp) break;
-        fp = prev;
-    }
-    return n;
+    /* the walk itself lives in the delegate service, where a native test can hand it a
+     * buffer (runtime/tests/application/delegate-service-test.c) */
+    return capstone_delegate_frame_chain(fp, lo, lo + domain_stack_bytes, out, max);
 }
 
 static void fault(const struct cv_step *step)

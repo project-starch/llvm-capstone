@@ -100,6 +100,11 @@ unsigned capstone_delegate_seccomp_program(const uint16_t *allow, unsigned n,
 /* The fault record line, written without blocking. `image` may be NULL. `chain` is the
  * return addresses up the domain's stack from the faulting frame, as the launcher read them
  * (runtime/virtual/exec.c frame_chain), printed last as ` chain=0x..,0x..`; NULL/0 for none. */
+/* Walk a frame-pointer chain from `fp` within the stack [stack_lo, stack_hi):
+   the return address of each frame, outermost last, at most `max`. Pure: it
+   reads only the stack it is given, so a test can hand it a buffer. */
+unsigned capstone_delegate_frame_chain(uint64_t fp, uint64_t stack_lo, uint64_t stack_hi,
+                                       uint64_t *out, unsigned max);
 void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host *host,
                                     const char *image, uint64_t cause, uint64_t pc,
                                     uint64_t address, uint64_t ra, uint64_t fp,

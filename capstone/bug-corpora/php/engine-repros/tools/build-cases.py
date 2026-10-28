@@ -75,19 +75,22 @@ DETECTOR_OPTION = re.compile(r"^\s*ASAN_OPTIONS\b")
 # CRASH-057: natively the copy at assignment reads the freed temporary (_estrndup); here the
 # assignment keeps the temporary's buffer and var_dump prints it (php_var_dump, var.c:126).
 EXTRA_FAULT_SITES = {
-    "CRASH-057": (["php_var_dump"], " On this platform the access is not the copy: the assignment keeps the temporary's buffer as the result's (the trigger's own account: the freed IS_TMP_VAR is reused as the assignment's result value), and var_dump($x) prints it -- php_var_dump, ext/standard/var.c:126, the PHPWRITE of Z_STRVAL -- through main/output.c and the CLI's write, which pass the buffer through. php_var_dump is therefore a declared site: the print of the reused temporary that the trigger documents, read off the source, with the nested arm's frame chain (residues/057-chain, 2026-10-28) as the confirming reading, not the admitting one."),
+    "CRASH-057": ({"php_var_dump": "ext/standard/var.c"}, " On this platform the access is not the copy: the assignment keeps the temporary's buffer as the result's (the trigger's own account: the freed IS_TMP_VAR is reused as the assignment's result value), and var_dump($x) prints it -- php_var_dump, ext/standard/var.c:126, the PHPWRITE of Z_STRVAL -- through main/output.c and the CLI's write, which pass the buffer through. php_var_dump is therefore a declared site: the print of the reused temporary that the trigger documents, read off the source, with the nested arm's frame chain (residues/057-chain, 2026-10-28) as the confirming reading, not the admitting one."),
 }
 
+# RETRACTED 2026-10-28, same day it was declared: a precondition for CRASH-092, "select() rejects
+# a timeval whose tv_usec is out of range (EINVAL) rather than sleeping on it". PHP 5.0.0's
+# liveness check (main/streams/xp_socket.c, PHP_STREAM_OPTION_CHECK_LIVENESS) hands select() a
+# timeval with only tv_sec set, and musl 1.2.5 folds an out-of-range tv_usec into the seconds
+# (`s += us/1000000`), so the script can hang before its defect. The declaration said Linux
+# rejects such a timeval with EINVAL. It does not: fs/select.c (v6.12, kern_select) computes
+# `tv.tv_sec + (tv.tv_usec / USEC_PER_SEC)` and rejects only a NEGATIVE value, so glibc's select
+# folds a positive overflow exactly as musl does. The hang is therefore not a libc behaviour the
+# defect needs but whatever uninitialised stack contents the run happens to pass, on either
+# libc; a probe with a fixed value cannot read that. CRASH-092 carries no precondition: a run
+# that hangs is `infra`, one that completes without reaching the defect is `not-reached`, and
+# the case stays in the denominator. The probe (probe-timeval.c) was removed with the declaration.
 PLATFORM_PRECONDITIONS = {
-    "CRASH-092": {
-        "platform_precondition": {
-            "needs": "select() rejects a timeval whose tv_usec is out of range (EINVAL) rather than sleeping on it",
-            "probe": "timeval",
-            "present": "TIMEVAL_PROBE out-of-range-usec rejected=1",
-            "absent": "TIMEVAL_PROBE out-of-range-usec rejected=0"
-        },
-        "platform_precondition_why": "PHP 5.0.0's liveness check (main/streams/xp_socket.c, PHP_STREAM_OPTION_CHECK_LIVENESS) sets only tv.tv_sec of the timeval it hands to select(); tv_usec is whatever the stack held. Linux rejects such a timeval: glibc passes it to the kernel, which answers EINVAL, PHP reads the socket as alive and the script runs to its end, where the use-after-free this case records is reached (the corpus's native oracle). musl 1.2.5's select (src/select/select.c) folds an out-of-range tv_usec into the seconds instead -- `s += us/1000000` -- so a positive garbage tv_usec becomes a timeout of hours or days and the script hangs before its defect, on whichever arms and images leave such a value on the stack (measured 2026-10-28: the un-instrumented image hangs on the nested arms, a diagnostic image with extra stack use completes and the nested arms catch the defect at ASan's own site, _zval_ptr_dtor). Checked, not asserted: ports/php/app/probe-timeval.c runs on every arm.",
-    },
     "CRASH-084": {
         "platform_precondition": {
             "needs": "putenv keeps an empty-name string referenced from environ",
@@ -274,10 +277,18 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
         "note": f"population: {pop} -- {why}. Collected by the corpus as {m['how_collected']['origin_stream']} ({m['how_collected']['history_status']}, confidence {m['how_collected']['confidence']}).",
     }
     case.update(PLATFORM_PRECONDITIONS.get(cid, {}))
+    # The file each declared site must be seen in: ASan's own frame for the main site, the table
+    # above for a site declared beyond ASan's stack. A judge matches a site by function AND file,
+    # so a same-named routine in another file is never the site (review 2026-10-28).
+    case["fault_site_files"] = {func: path}
     if cid in EXTRA_FAULT_SITES:
-        extra, why = EXTRA_FAULT_SITES[cid]
+        # `extra_why`, not `why`: the population's reason is still needed by PROVENANCE.md below,
+        # and reusing its name here wrote the second site's reason into CRASH-057's population
+        # line (caught on the 2026-10-28 regeneration).
+        extra, extra_why = EXTRA_FAULT_SITES[cid]
         case["fault_sites"] = case["fault_sites"] + [s for s in extra if s not in case["fault_sites"]]
-        case["fault_sites_why"] = case["fault_sites_why"] + why
+        case["fault_site_files"].update(extra)
+        case["fault_sites_why"] = case["fault_sites_why"] + extra_why
     disagreements = []
     t = theirs
     if t["asan"].get(cid, {}).get("outcome") != a["outcome"]:
@@ -370,13 +381,14 @@ def self_test():
     checks.append(("CRASH-084 declares its libc precondition with a probe and its two readings",
                    sorted(PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition"]), ["absent", "needs", "present", "probe"]))
     checks.append(("CRASH-057 declares var_dump's print of the reused temporary as a second site",
-                   EXTRA_FAULT_SITES["CRASH-057"][0], ["php_var_dump"]))
+                   list(EXTRA_FAULT_SITES["CRASH-057"][0]), ["php_var_dump"]))
+    checks.append(("with the file the site must be seen in",
+                   EXTRA_FAULT_SITES["CRASH-057"][0]["php_var_dump"], "ext/standard/var.c"))
     checks.append(("and says why, naming the source line",
                    "var.c:126" in EXTRA_FAULT_SITES["CRASH-057"][1], True))
-    checks.append(("CRASH-092 declares the select timeval precondition with the timeval probe",
-                   PLATFORM_PRECONDITIONS["CRASH-092"]["platform_precondition"]["probe"], "timeval"))
-    checks.append(("and says why, naming musl's select arithmetic",
-                   "us/1000000" in PLATFORM_PRECONDITIONS["CRASH-092"]["platform_precondition_why"], True))
+    checks.append(("CRASH-092 declares no precondition (retracted 2026-10-28: Linux folds a positive tv_usec too)",
+                   "CRASH-092" in PLATFORM_PRECONDITIONS, False))
+    checks.append(("only CRASH-084 declares one", sorted(PLATFORM_PRECONDITIONS), ["CRASH-084"]))
     checks.append(("and says why, naming the musl branch",
                    "unsetenv" in PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition_why"], True))
     checks.append(("the fix id is the first 12 hex digits", fix_id("4f161fe28997f5d1f818fc6ae95a8131066cf1a2"), "4f161fe28997"))

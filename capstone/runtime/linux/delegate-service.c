@@ -1013,6 +1013,34 @@ static void hex(char *out, uint64_t v) {
   *out = 0;
 }
 
+unsigned capstone_delegate_frame_chain(uint64_t fp, uint64_t stack_lo, uint64_t stack_hi,
+                                       uint64_t *out, unsigned max) {
+  /* A frame is {fp-32: the caller's fp, fp-16: the return address} (the
+   * compiler's prologue: `sd ra, 0x40(sp); stc s0, 0x30(sp); s0 = sp + 0x50`,
+   * a capability slot's low word being its cursor). Both reads of a frame lie
+   * inside [stack_lo, stack_hi) by the entry test, so a corrupt fp can send the
+   * walk nowhere outside the stack; what it CAN do is end the chain early or
+   * fill it with whatever the stack held, which is why the record is
+   * diagnostic and no judge decides on an address nobody can name. Stops at a
+   * frame outside the stack or misaligned, a zero return address, a caller's
+   * fp not above this one, or `max` frames. */
+  unsigned n = 0;
+  if (!stack_lo || stack_hi <= stack_lo)
+    return 0;
+  while (n < max && fp >= stack_lo + 32 && fp <= stack_hi && (fp & 15) == 0) {
+    uint64_t ra, prev;
+    memcpy(&ra, (const void *)(uintptr_t)(fp - 16), sizeof ra);
+    memcpy(&prev, (const void *)(uintptr_t)(fp - 32), sizeof prev);
+    if (!ra)
+      break;
+    out[n++] = ra;
+    if (prev <= fp)
+      break;
+    fp = prev;
+  }
+  return n;
+}
+
 void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host *host,
                                     const char *image, uint64_t cause, uint64_t pc,
                                     uint64_t address, uint64_t ra, uint64_t fp,

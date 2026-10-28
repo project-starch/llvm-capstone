@@ -24,5 +24,8 @@
   }
  },
  "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
- "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as carried-from-4.0.2 (historical-known, confidence high)."
+ "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as carried-from-4.0.2 (historical-known, confidence high).",
+ "fault_site_files": {
+  "zend_assign_to_variable_reference": "Zend/zend_execute.c"
+ }
 }
