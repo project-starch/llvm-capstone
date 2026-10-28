@@ -1,0 +1,34 @@
+# httpd on bitstream 3 (e7af48457), board 1 (tier3-httpd-b3.sh): result lines.
+HT apr-pool-repros virtual-malloc BEGIN 17:21:00 board 1 images defect-00=557eb658eaf61b74 ctl 1ab83cb44a1b7e5f booking 524
+HT apr-pool-repros virtual-malloc END rc=0 17:35:13 :: --- vp2-malloc (virtual-aprpool-stock): {'MISSED': 1}
+    virtual boot: completed; serial <mnt-hdd>/capstone/t3-run-b3-e7af48457-b1/httpd/apr-pool-repros-virtual-malloc/raw/guest/board.txt
+    control bounds-malloc    fault     (expected fault)
+    control uaf-malloc       fault     (expected fault)
+    control node-released-90 complete  (expected complete)
+HT apr-pool-repros virtual-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+HT apr-pool-repros virtual-malloc readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT apr-pool-repros virtual-nested-pools BEGIN 17:35:13 board 1 images defect-00=e8d64f56c1cc64c1 ctl 9a91407b685983f7 booking 525
+HT apr-pool-repros virtual-nested-pools END rc=0 17:42:45 :: --- vp2-nested-pools (virtual-aprpool-sublet): {'CAUGHT': 1}
+    virtual boot: completed; serial <mnt-hdd>/capstone/t3-run-b3-e7af48457-b1/httpd/apr-pool-repros-virtual-nested-pools/raw/guest/board.txt
+    control bounds-malloc    fault     (expected fault)
+    control uaf-malloc       fault     (expected fault)
+    control node-released-90 fault     (expected fault)
+HT apr-pool-repros virtual-nested-pools COMPARE vs reference rc=0 :: 1 of 1 cells the same
+HT apr-pool-repros virtual-nested-pools readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT bucket-repros virtual-malloc BEGIN 17:42:45 board 1 images defect-00=e99403d2ed6d274a defect-01=1bfbefa29b758ea2 defect-02=31b05fdb2f9c4371 defect-03=67e04b6976a70b0d defect-04=eaf059ff9036fe40 defect-05=2879cd5cb81442ce defect-06=4907128b64ec3027 defect-07=4d462eae3e1f8b21 ctl e0f9649489ee2966 booking 526
+HT bucket-repros virtual-malloc END rc=0 17:52:17 :: --- vp2-malloc (virtual-aprbucket-stock): {'MISSED': 8}
+    virtual boot: completed; serial <mnt-hdd>/capstone/t3-run-b3-e7af48457-b1/httpd/bucket-repros-virtual-malloc/raw/guest/board.txt
+    control bounds-malloc    fault     (expected fault)
+    control uaf-malloc       fault     (expected fault)
+    control piece-filed-90   complete  (expected complete)
+HT bucket-repros virtual-malloc COMPARE vs reference rc=0 :: 8 of 8 cells the same
+HT bucket-repros virtual-malloc readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT bucket-repros virtual-nested-pools BEGIN 17:52:17 board 1 images defect-00=1de59e74d375ec39 defect-01=61191d55c9571e57 defect-02=ed8dfb70b31b508d defect-03=2e0801807a31319c defect-04=22abcc8028e9d920 defect-05=0b5b574c9cebdb2e defect-06=14c4919e0db03069 defect-07=40bcc58163b70c20 ctl a954023b05d09ff7 booking 527
+HT bucket-repros virtual-nested-pools END rc=0 18:02:43 :: --- vp2-nested-pools (virtual-aprbucket-sublet): {'CAUGHT': 8}
+    virtual boot: completed; serial <mnt-hdd>/capstone/t3-run-b3-e7af48457-b1/httpd/bucket-repros-virtual-nested-pools/raw/guest/board.txt
+    control bounds-malloc    fault     (expected fault)
+    control uaf-malloc       fault     (expected fault)
+    control piece-filed-90   fault     (expected fault)
+HT bucket-repros virtual-nested-pools COMPARE vs reference rc=0 :: 8 of 8 cells the same
+HT bucket-repros virtual-nested-pools readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0
+HT board1 DONE 18:02:43

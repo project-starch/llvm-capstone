@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build the two virtual-profile SDKs of the microbenchmark comparison, one per arm:
 #   T1  Sublet spatial only:   -DCAPSTONE_HEAP_LIFETIMES=OFF -DCAPSTONE_HEAP_SCRUB_FREE=OFF
-#   T2  spatial + temporal:    the defaults (both ON)
+#   T2  spatial + temporal:    -DCAPSTONE_HEAP_SCRUB_FREE=ON (lifetimes at their default, ON)
 # Both with CAPSTONE_VIRTUAL_MOVC_KEEP=0 (board images carry -movc-keeps-integer-source, C-32).
 # Both arms share ONE prepared musl tree, so sdk.json's "musl" field and every libc object agree.
 #
@@ -34,6 +34,7 @@ musl=$(MUSL_CACHE_ROOT=$out/musl-cache bash capstone/ports/musl-capstone/prepare
 for arm in T1 T2; do
   extra=()
   [[ $arm == T1 ]] && extra=(-DCAPSTONE_HEAP_LIFETIMES=OFF -DCAPSTONE_HEAP_SCRUB_FREE=OFF)
+  [[ $arm == T2 ]] && extra=(-DCAPSTONE_HEAP_SCRUB_FREE=ON)
   rm -rf "$out/sdk-$arm"
   bash capstone/runtime/virtual/build-sdk.sh "$out/sdk-$arm" "$musl" "${extra[@]}" > "$out/sdk-$arm.log" 2>&1 \
     || { echo "SDK $arm failed (see $out/sdk-$arm.log)" >&2; exit 1; }

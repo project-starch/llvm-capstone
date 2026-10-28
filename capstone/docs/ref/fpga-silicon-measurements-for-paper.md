@@ -7465,12 +7465,98 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
 - Skipping the scrub for a free that is about to unmap was not built or measured. That is the runtime improvement the
   miniz-libc reading suggests.
 
+## T3 on the other 88 programs: neither lifetimes nor scrub costs anything measurable where the timed region does not allocate (caplifive_vp2c_e7af48457, both boards, 2026-10-27)
+
+- **What ran.** T1, T3 and T2 for each of the 88 programs that the section above left out, so all 103 programs now
+  have the three arms. All three arms of a program ran in one boot, at the main run's dimensions.
+  - 1119 of 1119 processes pass, over four boots: kits t3a1–t3a4.
+  - The 88 ran on bitstream 3 and the 15 on bitstream 2. The two sets are reported side by side and never pooled.
+  - Pre-registration 92e59181f84d, pushed before any boot. The checks script was committed before any transcript
+    was read.
+  - Data and regeneration recipe: `capstone/benchmarks/virtual/results/2026-10-27-t3all-bitstream3/`.
+- **Geomean over the 88** (cycles; two-level bootstrap 95 %):
+  - T3/T1 (lifetimes) 1.0000 [0.9997, 1.0004];
+  - T2/T3 (scrub) 1.0002 [0.9996, 1.0010];
+  - T2/T1 1.0003 [0.9996, 1.0011].
+- **Per program.**
+  - Every T3/T1 and T2/T3 point lies within 1 %, except lcdnum and ctl-empty, whose intervals contain 1 (below).
+  - Five programs have a Welch interval that excludes 1 in some pair, none by more than 0.34 %:
+    - sglib-rbtree and trio-snprintf read T3/T1 1.0034 and 1.0017 and T2/T3 0.9967 and 0.9981, so their T2/T1 holds
+      at 1.000. That is a property of the T3 images, not a cost.
+    - wikisort T3/T1 0.9998;
+    - rv8-sha512 T2/T3 1.0001;
+    - stringsearch1 T2/T1 1.0007.
+- **Pre-registered checks.**
+  1. check= is one value across the three arms for all 88. It equals the QEMU twin's hash for all 50 programs that
+     have one.
+  2. instret agrees within 0.025 % (crc32 the largest), against 0.1 %.
+  3. Two misses of the 1 % per-program band:
+     - **lcdnum** T2/T3 0.9846 [0.964, 1.006]. It is the noisiest program: single iterations read 7–17 % below
+       their process's median, in every arm.
+     - **ctl-empty** T2/T3 1.0315 [0.935, 1.138]. One T2 process read about 15 % high in all five iterations.
+       Its timed region is 0.3 M cycles, and its instret and entries equal the other processes'.
+     - Both geomeans lie inside [0.995, 1.005].
+  4. This run's T2/T1 interval overlaps the main run's for all 88.
+- **Reading.**
+  - The cost of temporal safety in these benchmarks is confined to the 15 programs that call the runtime's
+    malloc/free in the timed region.
+  - Where they do not, enabling per-object lifetimes and the scrub changes nothing measurable. All three geomeans'
+    intervals contain 1 and lie within 0.11 % of it.
+- **Instruments.** The driver's heartbeat split guest lines four times, once inside a `check=` field.
+  - parse-board.py now rejoins them, and t3all-checks.py keys the twin's table by suite as well as name
+    (b729deaf33d2).
+  - On bitstream 2 the only split was a warm-up row, so no committed ratio changes.
+
+## Every program on one bitstream: the 15 allocating programs rerun on bitstream 3, and the suite figure BEEBS / RV8 / CoreMark (caplifive_vp2c_e7af48457, both boards, 2026-10-28)
+
+- **What ran.** The bitstream-2 T3 kits `perf/main3b/t3k1..3`, unchanged (same images, launcher and run scripts), on
+  bitstream 3. With the section above, all 103 programs now have T1, T3 and T2 on bitstream 3, each program's three
+  arms in one boot.
+  - 201 of 201 processes pass, over three boots.
+  - Why: the lead asked for one figure with three groups, BEEBS, RV8 and CoreMark, each with T1, T3 and T2. A suite
+    geomean must not mix bitstreams.
+  - Pre-registration 811dc7a43eb3, pushed before any boot. Every check was shown to fire on tampered inputs.
+  - Data and regeneration recipe: `capstone/benchmarks/virtual/results/2026-10-28-t3heap-bitstream3/`.
+- **Suite geomeans over all 103 programs, bitstream 3** (cycles; two-level bootstrap 95 %):
+
+  | group | programs | T3/T1 (lifetimes) | T2/T3 (scrub) | T2/T1 |
+  |---|---|---|---|---|
+  | BEEBS | 93 | 1.0038 [1.0034, 1.0042] | 1.0104 [1.0099, 1.0108] | 1.0142 [1.0137, 1.0147] |
+  | — upstream | 80 | 1.0001 [0.9997, 1.0004] | 0.9999 [0.9994, 1.0003] | 1.0000 [0.9995, 1.0004] |
+  | — on libc malloc | 13 | 1.0273 [1.0257, 1.0288] | 1.0772 [1.0755, 1.0788] | 1.1065 [1.1050, 1.1081] |
+  | RV8 | 7 | 0.9999 [0.9984, 1.0014] | 1.0248 [1.0234, 1.0263] | 1.0247 [1.0231, 1.0263] |
+  | CoreMark | 1 | 1.0004 [0.9992, 1.0021] | 0.9998 [0.9980, 1.0019] | 1.0003 [0.9990, 1.0022] |
+
+  - BEEBS here is the lead's grouping for the summary figure: the 80 upstream programs and the 13 that allocate
+    through libc malloc, together. The 13 are variants of upstream programs, so those programs enter the group twice,
+    once per allocator. All of BEEBS's cost comes from the 13; upstream BEEBS allocates from its own bump allocator
+    and never reaches the runtime's malloc.
+  - The two controls (ctl) are not in any group.
+- **Pre-registered checks: every prediction holds.**
+  1. check= is one value across the three arms for each of the 15, equal to the bitstream-2 T3 run's.
+  2. instret equals the bitstream-2 T3 run's within 0.01 % for every program and arm.
+  3. All 45 program-pair Welch intervals overlap their bitstream-2 intervals. The largest point move is
+     huffbench-libc, T3/T1 1.0049 against 0.9971.
+  4. Each suite geomean lies within 0.005 of the value composed beforehand from the per-program estimates (largest
+     difference beebs-libc T3/T1, 1.0273 against 1.0265).
+- **Per program** (15 allocating, bitstream 3; "measurably" means the bootstrap interval excludes 1):
+  - Lifetimes cost measurably in 8 of 15, the sglib and ctl programs on libc malloc, at 1.8–6.6 %.
+  - The scrub costs measurably in 13 of 15, up to miniz-libc's ×2.18; miniz-libc's T3/T1 is 1.0009. By the Welch
+    interval it is 12: rv8-primes's T2/T3 1.0065 has a Welch interval from 0.9993.
+  - rv8-primes and rv8-qsort show no measurable T2/T1.
+- **Reading.** Across the three suites the cost of temporal safety is 1.4 % on BEEBS, 2.5 % on RV8 and 0 on CoreMark.
+  The scrub carries most of it: RV8's lifetimes cost nothing, and BEEBS's scrub is 1.0 % against 0.4 % for lifetimes.
+  The cost exists only where a program calls the runtime's malloc/free in its timed region.
+
 ## R-62 and R-63 fixed on silicon at N=2, with every bitstream-2 regression reading unchanged (caplifive_vp2c_e7af48457, both boards, 2026-10-27)
 
 - **The bitstream.** capstone-ariane e7af48457 is bitstream 2 (dcc6daf6e) plus the divider's new normaliser
   (`core/fpu_div_sqrt_fix/norm_div_sqrt_mvp.sv`). Outside verif/ nothing else changes, and the memory map is identical.
   - It was sealed with sha256 d6ed97b6…b423b and graded by the rtl lane: 0 loops, 0 routing errors, WNS −10.047
     against bitstream 2's −9.790.
+  - From the synthesis artifact synth-e7af48457-exit0.tar.gz (sha256 48c5596b21ed…2effec), read in its reports: TNS
+    −44,010.926 ns over 13,396 of 188,701 endpoints, WHS +0.029; placed 169,061 LUT and 63,647 FF; 215,406 of 215,406
+    routable nets fully routed, 0 with routing errors.
   - Both boards were flashed on the lead's word, and each read `caplifive_vp2c_e7af48457.bit` back from nv_bitstream_name.
   - R-64, R-65 and R-66 remain in this bitstream.
 - **R-62 is fixed on silicon.** The rtl lane's fp-all bare image (512 fdiv.d and 512 fsqrt.d cases against
@@ -7486,6 +7572,28 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
   - hold 100000, high_water 105,569 of 262,144;
   - R-61 and R-61 arming on the fixed vectors;
   - all six images of the R-58 / R-59 / Q-24 kit.
+- **The bug corpus reads as on bitstream 2** (2026-10-28, pre-registered at vp2-tier12 7ef0107888b7 and
+  90227d3792f0):
+  - postgres sql0 9 of 9 and pg-pools 9 of 9;
+  - cpython lt1 32 of 32, with the ten capacity cells CAUGHT at their declared sites;
+  - cpython lt0 31 of 32. The one difference is case 01's Q-31 cause (4 where QEMU reads 24), as on bitstream 2.
+  - The 23-arm re-read (pre-registered at f1cb1f9d347c): every cell equal to the bitstream-2 batch references
+    except sq0d's three Q-31 cells (19 and 20 cause 4, 22 cause 13, where QEMU reads 24), as on bitstream 2.
+  - The second wave (pre-registered at 2e0bde4ca772), each as on bitstream 2:
+    - mruby stock and Sublet 23 of 23 each; perl stock and Sublet 11 of 11 each;
+    - the new arms (xlang, plane, capi) as predicted;
+    - Juliet temporal census 729 of 735, only rand-driven `_12` draws differing, and seeded 56 of 56;
+    - Juliet spatial 1513 of 1513.
+  - httpd (pre-registered at efe7a1c36a32) at N=2 across the boards: malloc 9 of 9 MISSED, nested pools 9 of 9 CAUGHT
+    (cause 25 in read_probe). Every cell is as the reference, and board 2 is 0 different from board 1.
+  - Every arm of bitstream 2's corpus pass now reads the same on bitstream 3. Not re-run on bitstream 3:
+    - the Juliet spatial remainder, which stopped on silicon by the lead's decision;
+    - bitstream 2's single-case variants and investigation runs (the pb08 fill pair, the capacity-cell replays, and the
+      census, misal and uaf-repeat runs).
+  - The fdiv/fsqrt fix changes no verdict, attribution, cause, symbol or offset in these arms. Readings are 0.
+  - Records: `records/b3bs-sql0-b2`, `b3bs-cpy-lt1-b1`, `b3bs-cpy-lt0-b2`, `b3bs-pg-pools-b1`, `b3bs-reread-b1`/`-b2`,
+    `b3bs-mp-b1`, `b3bs-newarms-b2`, `b3bs-juliet-temporal-b1`, `b3bs-juliet-spatial-b2`, `b3bs-httpd-b1` and
+    `b3bs-httpd-n2-b2`.
 - The perf consequence (ludcmp, st and minver now correct) is the section above, "ludcmp, st and minver on
   bitstream 3".
 - Records: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/bs3-e7af48457-b1` and `-b2`, and

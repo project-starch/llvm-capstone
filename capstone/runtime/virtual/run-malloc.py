@@ -43,9 +43,12 @@ def main():
     p.add_argument('--sdk', type=Path, help='the SDK the application was built with: its sdk.json '
                    '(heap_lifetimes, heap_scrub_free) selects the denial expectations and is recorded')
     a = p.parse_args()
-    # The qualified heap gives every object a lifetime; an SDK built with
+    # The default heap gives every object a lifetime; an SDK built with
     # CAPSTONE_HEAP_LIFETIMES=OFF cannot deny a stale object, and its expectations say so.
-    heap = dict(lifetimes=True, scrub_free=True)
+    # The scrub does not change an expectation and is only recorded: without --sdk it is
+    # unknown (null), never assumed. An SDK from before the switches has neither field and
+    # was built with both ON.
+    heap = dict(lifetimes=True, scrub_free=None)
     if a.sdk:
         config = json.loads((a.sdk / 'sdk.json').read_text())
         heap = dict(lifetimes=bool(config.get('heap_lifetimes', True)),

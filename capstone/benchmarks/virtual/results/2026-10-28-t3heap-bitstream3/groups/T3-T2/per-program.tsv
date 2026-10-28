@@ -1,0 +1,104 @@
+suite	program	procs	ratio	lo	hi	blo	bhi	ins_ratio	ins_const	verdict
+beebs	aha-compress	4/4	1.0019	0.9985	1.0053	1.0000	1.0042	1.0000	no	no measurable difference
+beebs	aha-mont64	4/4	0.9995	0.9979	1.0011	0.9981	1.0003	1.0000	no	no measurable difference
+beebs	bs	4/4	1.0002	0.9992	1.0011	0.9994	1.0010	1.0000	no	no measurable difference
+beebs	bubblesort	4/4	1.0010	0.9972	1.0048	0.9994	1.0036	1.0000	no	no measurable difference
+beebs	cnt	4/4	1.0003	0.9975	1.0030	0.9983	1.0024	1.0000	no	no measurable difference
+beebs	compress	4/4	0.9998	0.9993	1.0002	0.9993	1.0001	1.0000	no	no measurable difference
+beebs	cover	4/4	1.0000	0.9998	1.0002	0.9999	1.0001	1.0000	no	no measurable difference
+beebs	crc	4/4	1.0000	0.9991	1.0010	0.9991	1.0009	1.0000	no	no measurable difference
+beebs	crc32	11/11	1.0037	0.9931	1.0144	0.9973	1.0141	0.9998	no	no measurable difference
+beebs	ctl-stack	4/4	1.0009	0.9980	1.0039	0.9999	1.0031	1.0000	no	no measurable difference
+beebs	ctl-stack-libc	4/4	1.0288	1.0212	1.0365	1.0234	1.0342	1.0141	no	T2 slower
+beebs	ctl-string	4/4	0.9999	0.9981	1.0017	0.9983	1.0015	1.0000	no	no measurable difference
+beebs	ctl-string-libc	4/4	1.0121	1.0037	1.0206	1.0058	1.0183	1.0086	no	T2 slower
+beebs	ctl-vector	4/4	1.0006	0.9984	1.0029	0.9989	1.0025	1.0000	no	no measurable difference
+beebs	ctl-vector-libc	4/4	1.0301	1.0213	1.0389	1.0237	1.0362	1.0149	no	T2 slower
+beebs	cubic	4/4	1.0000	0.9968	1.0032	0.9975	1.0024	1.0000	no	no measurable difference
+beebs	dijkstra	4/4	1.0005	0.9983	1.0026	0.9986	1.0023	1.0000	no	no measurable difference
+beebs	dtoa	4/4	1.0001	0.9986	1.0017	0.9986	1.0015	1.0000	no	no measurable difference
+beebs	dtoa-libc	4/4	0.9982	0.9913	1.0051	0.9938	1.0010	1.0000	no	no measurable difference
+beebs	duff	4/4	1.0054	0.9786	1.0330	0.9870	1.0251	1.0000	no	no measurable difference
+beebs	edn	4/4	1.0002	0.9949	1.0055	0.9960	1.0039	1.0000	no	no measurable difference
+beebs	expint	4/4	0.9998	0.9979	1.0018	0.9983	1.0014	1.0000	no	no measurable difference
+beebs	fac	4/4	0.9994	0.9967	1.0021	0.9975	1.0003	1.0000	no	no measurable difference
+beebs	fasta	4/4	0.9991	0.9962	1.0020	0.9971	1.0002	1.0000	no	no measurable difference
+beebs	fdct	4/4	1.0011	0.9989	1.0032	0.9996	1.0028	1.0000	no	no measurable difference
+beebs	fibcall	4/4	0.9998	0.9991	1.0006	0.9991	1.0002	1.0000	no	no measurable difference
+beebs	fir	4/4	0.9994	0.9971	1.0017	0.9972	1.0003	1.0000	no	no measurable difference
+beebs	frac	4/4	1.0006	0.9995	1.0017	1.0000	1.0015	1.0000	no	no measurable difference
+beebs	huffbench	11/11	1.0001	1.0000	1.0003	1.0000	1.0003	1.0000	no	no measurable difference
+beebs	huffbench-libc	11/11	1.0020	0.9928	1.0112	0.9932	1.0094	1.0012	no	no measurable difference
+beebs	insertsort	4/4	1.0003	0.9994	1.0013	0.9999	1.0012	1.0000	no	no measurable difference
+beebs	janne_complex	4/4	1.0001	0.9985	1.0016	0.9988	1.0013	1.0000	no	no measurable difference
+beebs	jfdctint	4/4	1.0001	0.9986	1.0015	0.9988	1.0013	1.0000	no	no measurable difference
+beebs	lcdnum	4/4	0.9846	0.9636	1.0061	0.9560	1.0082	1.0000	no	no measurable difference
+beebs	levenshtein	4/4	0.9994	0.9975	1.0012	0.9979	1.0000	1.0000	no	no measurable difference
+beebs	ludcmp	4/4	0.9995	0.9977	1.0012	0.9982	1.0002	1.0000	no	no measurable difference
+beebs	matmult-float	4/4	0.9999	0.9977	1.0020	0.9982	1.0016	1.0000	no	no measurable difference
+beebs	matmult-int	4/4	0.9991	0.9970	1.0012	0.9971	1.0001	1.0000	no	no measurable difference
+beebs	mergesort	4/4	0.9999	0.9963	1.0036	0.9969	1.0030	1.0000	no	no measurable difference
+beebs	miniz	4/4	1.0001	0.9992	1.0010	0.9993	1.0009	1.0000	no	no measurable difference
+beebs	miniz-libc	4/4	2.1800	2.1699	2.1901	2.1675	2.1906	1.2647	no	T2 slower
+beebs	minver	4/4	1.0000	0.9986	1.0015	0.9988	1.0013	1.0000	no	no measurable difference
+beebs	nbody	4/4	1.0002	0.9985	1.0020	0.9987	1.0017	1.0000	no	no measurable difference
+beebs	ndes	4/4	0.9994	0.9975	1.0013	0.9978	1.0002	1.0000	no	no measurable difference
+beebs	nettle-aes	4/4	0.9999	0.9994	1.0003	0.9995	1.0003	1.0000	no	no measurable difference
+beebs	nettle-arcfour	4/4	1.0001	0.9985	1.0017	0.9988	1.0014	1.0000	no	no measurable difference
+beebs	nettle-cast128	4/4	1.0003	0.9941	1.0064	0.9959	1.0049	1.0000	no	no measurable difference
+beebs	nettle-des	4/4	1.0000	0.9997	1.0003	0.9997	1.0003	1.0000	no	no measurable difference
+beebs	nettle-md5	4/4	0.9995	0.9978	1.0012	0.9981	1.0004	1.0000	no	no measurable difference
+beebs	nettle-sha256	4/4	0.9994	0.9973	1.0015	0.9977	1.0005	1.0000	no	no measurable difference
+beebs	newlib-exp	4/4	1.0003	0.9987	1.0019	0.9991	1.0017	1.0000	no	no measurable difference
+beebs	newlib-log	4/4	0.9993	0.9973	1.0014	0.9980	1.0000	1.0000	no	no measurable difference
+beebs	newlib-mod	4/4	1.0005	0.9981	1.0028	0.9986	1.0022	1.0000	no	no measurable difference
+beebs	newlib-sqrt	4/4	1.0009	0.9987	1.0030	0.9999	1.0025	1.0000	no	no measurable difference
+beebs	ns	4/4	0.9999	0.9978	1.0021	0.9980	1.0017	1.0000	no	no measurable difference
+beebs	nsichneu	4/4	0.9998	0.9989	1.0007	0.9989	1.0007	1.0000	no	no measurable difference
+beebs	picojpeg	4/4	0.9998	0.9989	1.0006	0.9990	1.0001	1.0000	no	no measurable difference
+beebs	prime	4/4	1.0002	0.9993	1.0011	0.9994	1.0009	1.0000	no	no measurable difference
+beebs	qrduino	4/4	0.9995	0.9985	1.0005	0.9984	1.0001	1.0000	no	no measurable difference
+beebs	qsort	4/4	0.9996	0.9983	1.0009	0.9985	1.0001	1.0000	no	no measurable difference
+beebs	qurt	4/4	1.0000	0.9985	1.0014	0.9986	1.0013	1.0000	no	no measurable difference
+beebs	recursion	4/4	1.0000	0.9993	1.0007	0.9993	1.0007	1.0000	no	no measurable difference
+beebs	rijndael	4/4	1.0019	0.9960	1.0078	0.9999	1.0059	1.0000	no	no measurable difference
+beebs	select	4/4	1.0001	0.9966	1.0037	0.9975	1.0026	1.0000	no	no measurable difference
+beebs	sglib-arraybinsearch	4/4	0.9996	0.9986	1.0005	0.9986	1.0000	1.0000	no	no measurable difference
+beebs	sglib-arrayheapsort	4/4	1.0000	0.9999	1.0002	0.9999	1.0002	1.0000	no	no measurable difference
+beebs	sglib-arrayquicksort	4/4	1.0014	0.9990	1.0039	1.0000	1.0033	1.0000	no	no measurable difference
+beebs	sglib-dllist	4/4	0.9989	0.9973	1.0006	0.9969	1.0010	1.0000	no	no measurable difference
+beebs	sglib-dllist-libc	4/4	1.0238	1.0138	1.0340	1.0158	1.0315	1.0263	no	T2 slower
+beebs	sglib-hashtable	4/4	1.0008	0.9982	1.0034	0.9983	1.0031	1.0000	no	no measurable difference
+beebs	sglib-hashtable-libc	4/4	1.0245	1.0192	1.0298	1.0195	1.0295	1.0252	no	T2 slower
+beebs	sglib-listinsertsort	4/4	1.0005	0.9995	1.0015	0.9992	1.0018	1.0000	no	no measurable difference
+beebs	sglib-listinsertsort-libc	4/4	1.0206	1.0143	1.0269	1.0148	1.0262	1.0238	no	T2 slower
+beebs	sglib-listsort	4/4	1.0001	0.9983	1.0020	0.9985	1.0018	1.0000	no	no measurable difference
+beebs	sglib-listsort-libc	4/4	1.0262	1.0230	1.0294	1.0229	1.0298	1.0244	no	T2 slower
+beebs	sglib-queue	4/4	0.9998	0.9993	1.0002	0.9993	1.0000	1.0000	no	no measurable difference
+beebs	sglib-rbtree	4/4	0.9967	0.9965	0.9969	0.9941	0.9989	1.0000	no	T2 faster
+beebs	sglib-rbtree-libc	4/4	1.0228	1.0168	1.0288	1.0162	1.0298	1.0218	no	T2 slower
+beebs	slre	4/4	0.9997	0.9978	1.0016	0.9978	1.0014	1.0000	no	no measurable difference
+beebs	sqrt	4/4	1.0000	0.9999	1.0000	0.9999	1.0000	1.0000	no	no measurable difference
+beebs	st	4/4	0.9995	0.9980	1.0009	0.9983	1.0000	1.0000	no	no measurable difference
+beebs	statemate	4/4	0.9999	0.9998	1.0000	0.9993	1.0005	1.0000	no	no measurable difference
+beebs	stb_perlin	4/4	0.9999	0.9986	1.0011	0.9986	1.0010	1.0000	no	no measurable difference
+beebs	stringsearch1	4/4	1.0003	0.9996	1.0010	0.9995	1.0011	1.0000	no	no measurable difference
+beebs	strstr	4/4	0.9993	0.9978	1.0008	0.9981	1.0001	1.0000	no	no measurable difference
+beebs	tarai	4/4	1.0001	0.9996	1.0007	0.9995	1.0007	1.0000	no	no measurable difference
+beebs	trio-snprintf	4/4	0.9981	0.9975	0.9987	0.9970	0.9992	1.0000	no	T2 faster
+beebs	trio-snprintf-libc	4/4	1.0003	0.9986	1.0020	0.9993	1.0017	1.0000	no	no measurable difference
+beebs	trio-sscanf	4/4	0.9999	0.9989	1.0009	0.9989	1.0009	1.0000	no	no measurable difference
+beebs	trio-sscanf-libc	4/4	0.9999	0.9991	1.0006	0.9992	1.0006	1.0000	no	no measurable difference
+beebs	ud	4/4	1.0002	0.9987	1.0016	0.9993	1.0013	1.0000	no	no measurable difference
+beebs	whetstone	4/4	1.0001	0.9999	1.0002	0.9999	1.0002	1.0000	no	no measurable difference
+beebs	wikisort	11/11	1.0001	0.9999	1.0002	0.9999	1.0002	1.0000	no	no measurable difference
+coremark	coremark	4/4	0.9998	0.9977	1.0020	0.9980	1.0019	1.0000	no	no measurable difference
+ctl	ctl-empty	4/4	1.0315	0.9350	1.1380	0.9938	1.0990	1.0000	no	no measurable difference
+ctl	ctl-loop	4/4	1.0000	0.9985	1.0014	0.9988	1.0011	1.0000	no	no measurable difference
+rv8	rv8-aes	4/4	1.0349	1.0314	1.0385	1.0315	1.0372	1.0044	no	T2 slower
+rv8	rv8-dhrystone	4/4	1.0000	0.9993	1.0007	0.9993	1.0007	1.0000	no	no measurable difference
+rv8	rv8-miniz	4/4	1.0548	1.0475	1.0621	1.0472	1.0619	1.0080	no	T2 slower
+rv8	rv8-norx	4/4	1.0805	1.0766	1.0845	1.0761	1.0844	1.0096	no	T2 slower
+rv8	rv8-primes	4/4	1.0065	0.9993	1.0137	1.0031	1.0123	1.0004	no	no measurable difference
+rv8	rv8-qsort	4/4	0.9999	0.9984	1.0014	0.9987	1.0013	1.0000	no	no measurable difference
+rv8	rv8-sha512	4/4	1.0001	1.0000	1.0003	1.0000	1.0003	1.0000	no	T2 slower

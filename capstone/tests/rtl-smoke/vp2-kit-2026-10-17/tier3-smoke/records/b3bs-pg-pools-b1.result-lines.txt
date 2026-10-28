@@ -1,0 +1,11 @@
+# postgres pg-pools (trimmed) on bitstream 3 (e7af48457), board 1 (tier3-pg-b3-arm.sh): result lines only. Resident bitstream from SEQ: BOARD_RUN_START 05:56:49 bitstream caplifive_vp2c_e7af48457; the per-cell lines are in b3-pg-pools-b1.board.txt.
+PG MEASURE: firmware 25856520 B against 26000000
+T3PG b3-pg-pools-b1 BEGIN 05:56:48 booking 472
+UNBOOK 472: 200
+T3PG b3-pg-pools-b1 END 07:54:58 rc=0 :: --- vp2-pg-pools (virtual-mallocng-pg-pools): {'CAUGHT': 5, 'MISSED': 2, 'NO-READING:unattributed': 2}
+PG inputs as recorded: fixture 956173e054762e91, image dc2a1356dce735e0
+PG MUST-FIRE OK: no directory-open FATAL in any session; positive control answered
+PG readings: FRTY 0 FRTC 0 DRT1 0 INJS 0 INJL 0 Oops 0 pc=0 0 collect-skipped 0 banner gen-push x1
+b3-pg-pools-b1: bundle -> wt-gate/capstone/bug-corpora/postgres/sql-repros/results/2026-10-27-b3-e7af48457-b1/vp2-pg-pools
+b3-pg-pools-b1: 9 of 9 cells the same (rc 0)
+PG DONE 07:54:58

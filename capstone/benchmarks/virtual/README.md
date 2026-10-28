@@ -6,7 +6,7 @@ silicon comparison of two heap configurations:
 | arm | SDK switches (`runtime/application/CMakeLists.txt`) | meaning |
 |---|---|---|
 | T1 | `-DCAPSTONE_HEAP_LIFETIMES=OFF -DCAPSTONE_HEAP_SCRUB_FREE=OFF` | Sublet spatial safety only |
-| T2 | defaults (both `ON`) | spatial + temporal |
+| T2 | `-DCAPSTONE_HEAP_SCRUB_FREE=ON` (lifetimes at their default, `ON`) | spatial + temporal |
 
 Both SDKs are built with `CAPSTONE_VIRTUAL_MOVC_KEEP=0` (`sdk.json` codegen carries
 `-movc-keeps-integer-source`, as board images must until the bitstream has Q-04 (b); C-32).

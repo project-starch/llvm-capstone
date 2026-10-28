@@ -1,0 +1,2 @@
+suite	programs	geomean	lo	hi	T3_slower	T3_faster	no_difference
+all	88	1.0000	0.9997	1.0004	2	1	85
