@@ -58,6 +58,8 @@ class Fault:
     pc: int
     symbol: str = None          # function the pc lies in, from the image's own symbols
     offset: int = None
+    ra: int = None              # return address at the fault, when the platform reported one
+    fp: int = None
 
 
 @dataclass
@@ -157,6 +159,11 @@ def sha256(path):
 
 # The host's line for an application-domain fault, as capstone-exec prints it.
 FAULT_LINE = re.compile(r"domain fault cause=(\d+) pc=(0x[0-9a-f]+) address=(0x[0-9a-f]+).*?code=(0x[0-9a-f]+)-")
+# The register words the launcher prints after the address since 2026-10-27 (` ra=0x.. fp=0x..`),
+# read from the matched line by their own pattern so FAULT_LINE's four groups stay what every
+# runner reads them as (run-capstone-domain.py and run-virtual-cases.py take group(4) as the
+# code base).
+FAULT_REGS = re.compile(r" ra=(0x[0-9a-f]+) fp=(0x[0-9a-f]+)")
 
 
 def llvm_bin_dir(path):
@@ -202,8 +209,13 @@ def domain_fault(text, symbols=None):
     if not m:
         return None
     cause, pc, code = int(m.group(1)), int(m.group(2), 16), int(m.group(4), 16)
+    # ra/fp are printed since 2026-10-27 and read 0 when the platform wrote no slot; either
+    # way a missing or zero value is None, so nothing downstream can mistake it for an address.
+    regs = FAULT_REGS.search(m.group(0))
+    ra = int(regs.group(1), 16) if regs and int(regs.group(1), 16) else None
+    fp = int(regs.group(2), 16) if regs and int(regs.group(2), 16) else None
     fn, off = symbols.lookup(pc, code) if symbols else (None, None)
-    return Fault(cause=cause, pc=pc, symbol=fn, offset=off)
+    return Fault(cause=cause, pc=pc, symbol=fn, offset=off, ra=ra, fp=fp)
 
 
 # ---- the bundle ----------------------------------------------------------------------------

@@ -78,9 +78,11 @@ def main():
         fields = line.split()
         if len(fields) == 3:
             symbols[fields[2]] = int(fields[0], 16)
+    # the launcher prints ` ra= fp=` after the address when the platform wrote the register
+    # slots (2026-10-27); the site is the pc either way
     stale_sites = re.findall(
         r'^capstone-exec: domain fault cause=24 pc=(0x[0-9a-f]+) '
-        r'address=0x[0-9a-f]+ entry=(0x[0-9a-f]+)', log, re.M)
+        r'address=0x[0-9a-f]+(?: ra=0x[0-9a-f]+ fp=0x[0-9a-f]+)? entry=(0x[0-9a-f]+)', log, re.M)
     checks = {'completed': run.returncode == 0,
               'growth': 'NODE_EXIT:growth:0' in log and 'NODE_GROWTH_OK' in log,
               'two_live_populations': (log.count('NODE_LIVE:0:%d' % a.node_count) == 2 and

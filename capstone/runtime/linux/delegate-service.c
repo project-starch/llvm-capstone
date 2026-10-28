@@ -1015,7 +1015,7 @@ static void hex(char *out, uint64_t v) {
 
 void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host *host,
                                     const char *image, uint64_t cause, uint64_t pc,
-                                    uint64_t address) {
+                                    uint64_t address, uint64_t ra, uint64_t fp) {
   /* No stdio: this can run after a closed or full pipe, and must not block. */
   char line[512], number[24];
   size_t n = 0;
@@ -1030,6 +1030,14 @@ void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host 
   }
   PUT(" pc="); PUTHEX(pc);
   PUT(" address="); PUTHEX(address);
+  /* The faulting instruction's return address and frame pointer, as the
+   * platform left them in the frame (wire.h cv_step). A platform that wrote
+   * no register slot passes zeros, and the line then reads as it always has:
+   * the words are the platform's reading, not padding. */
+  if (ra || fp) {
+    PUT(" ra="); PUTHEX(ra);
+    PUT(" fp="); PUTHEX(fp);
+  }
   /* HELLO's code range and the image digest are the first context's */
   const struct capstone_delegate_host *first = host && host->owner ? host->owner : host;
   if (first && first->hello_seen) {

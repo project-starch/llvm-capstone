@@ -2131,13 +2131,16 @@ thread_unwind:
         }
         r.kind = t->frame[2]; r.cause = t->frame[3];
         r.pc = t->frame[4]; r.address = t->frame[5];
+        /* The low word of register slots 1 and 8 (byte 80 and 192: x1 = ra,
+         * x8 = fp; see wire.h cv_step). The escape writes them on a terminal
+         * step; otherwise they hold what ENTRY left, zero. */
+        r.ra = t->frame[10]; r.fp = t->frame[24];
         /* Eight loads and stores: for 64 aligned bytes the kernel's memcpy is
          * a call around a four-byte loop. */
         r.args[0] = t->frame[72]; r.args[1] = t->frame[73];
         r.args[2] = t->frame[74]; r.args[3] = t->frame[75];
         r.args[4] = t->frame[76]; r.args[5] = t->frame[77];
         r.args[6] = t->frame[78]; r.args[7] = t->frame[79];
-        r.reserved[0] = r.reserved[1] = 0;
         r.thread = t->id;
         t->terminal = r.kind == 2;
         if (r.kind == 4 && !resolved && !text_fault(c, r.address)) ++c->stats.faults;

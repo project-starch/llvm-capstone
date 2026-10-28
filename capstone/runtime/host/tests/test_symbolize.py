@@ -28,6 +28,16 @@ class SymbolizeTest(unittest.TestCase):
         self.assertEqual(record["image"], "/mnt/host/contract-v2.dom")
         self.assertIsNone(symbolize.parse("capstone-exec: delegate rounds=3"))
 
+    def test_register_words(self):
+        # The virtual launcher prints ` ra= fp=` after the address when the platform wrote the
+        # register slots (2026-10-27); the record reads the same with or without them.
+        with_regs = LINE.replace(" address=0x0 ", " address=0x0 ra=0xe0204700 fp=0x3f00 ")
+        record = symbolize.parse(with_regs)
+        self.assertEqual((record["cause"], record["pc"], record["entry"], record["ra"], record["fp"]),
+                         (24, 0xe0204764, 0xe02006c8, 0xe0204700, 0x3f00))
+        self.assertEqual(symbolize.parse(LINE)["ra"], None)
+        self.assertIn("main+0x840", symbolize.symbolize(record, "image.dom", run=fake_run))
+
     def test_slide_and_lookup(self):
         record = symbolize.parse(LINE)
         text = symbolize.symbolize(record, "image.dom", run=fake_run)

@@ -26,8 +26,10 @@ import verdicts as v  # noqa: E402
 
 BLOCK = re.compile(r"CTL_BEGIN:(?P<arm>[^:\r\n]+):(?P<mode>\w+)\r?\n(?P<out>.*?)CTL_STDERR:(?P=arm):(?P=mode)\r?\n"
                    r"(?P<err>.*?)CTL_END:(?P=arm):(?P=mode):(?P<rc>\d+):(?P<s>[\d.]+):(?P<e>[\d.]+)", re.S)
-FAULT = re.compile(r"domain fault cause=(\d+) pc=(0x[0-9a-f]+) address=(0x[0-9a-f]+) entry=\S+ "
-                   r"code=(0x[0-9a-f]+)-")
+# the launcher prints ` ra= fp=` after the address when the platform wrote the register slots
+# (2026-10-27); the four groups are what they were
+FAULT = re.compile(r"domain fault cause=(\d+) pc=(0x[0-9a-f]+) address=(0x[0-9a-f]+)"
+                   r"(?: ra=0x[0-9a-f]+ fp=0x[0-9a-f]+)? entry=\S+ code=(0x[0-9a-f]+)-")
 
 
 def source_line(llvm_bin, image, link_pc):

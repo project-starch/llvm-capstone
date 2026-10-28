@@ -11,7 +11,9 @@ PRED = [("normal", 0), ("threads", 1), ("vm", 1), ("nested", 0), ("nested-stale"
         ("vm-padding", 139), ("preempt", 143), ("parallel_one", 0), ("parallel_two", 0), ("sqlite_write", 0),
         ("sqlite_read", 0), ("mruby", 0), ("cleanup", 1)]
 KIT = ["SQLITE_SUM=5050", "SQLITE_PERSIST=100", "MRUBY_SUM=5050", "MRUBY_FILE=virtual"]
-FAULT = re.compile(r"domain fault cause=(\d+) pc=0x([0-9a-f]+) address=0x([0-9a-f]+) entry=0x([0-9a-f]+) code=0x([0-9a-f]+)-")
+# the virtual launcher prints ` ra= fp=` after the address when the platform wrote the register
+# slots (2026-10-27); a board record carries none, and either shape parses to the same groups
+FAULT = re.compile(r"domain fault cause=(\d+) pc=0x([0-9a-f]+) address=0x([0-9a-f]+)(?: ra=0x[0-9a-f]+ fp=0x[0-9a-f]+)? entry=0x([0-9a-f]+) code=0x([0-9a-f]+)-")
 
 
 def segment(path):

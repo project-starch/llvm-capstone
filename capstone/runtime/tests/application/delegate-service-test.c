@@ -192,18 +192,26 @@ int main(void) {
       ;
     fcntl(full[1], F_SETFL, flags);
   }
-  capstone_delegate_fault_record(full[1], &host, "image.dom", 24, 0x80001300, 0x1234);
+  capstone_delegate_fault_record(full[1], &host, "image.dom", 24, 0x80001300, 0x1234, 0, 0);
   {
     char line[512];
     int out[2];
     assert(!pipe(out));
-    capstone_delegate_fault_record(out[1], &host, "image.dom", 24, 0x80001300, 0x1234);
+    capstone_delegate_fault_record(out[1], &host, "image.dom", 24, 0x80001300, 0x1234, 0x80001200, 0x3f00);
     long n = read(out[0], line, sizeof line - 1);
     assert(n > 0);
     line[n] = 0;
-    assert(strstr(line, "cause=24 pc=0x80001300 address=0x1234 entry=0x80001234"));
+    assert(strstr(line, "cause=24 pc=0x80001300 address=0x1234 ra=0x80001200 fp=0x3f00 entry=0x80001234"));
     assert(strstr(line, "code=0x80000000-0x80010000 last=0x"));
     assert(strstr(line, " image=image.dom"));
+    /* a platform that wrote no register slot (the physical launcher) passes
+       zeros, and the line carries no register words at all */
+    capstone_delegate_fault_record(out[1], &host, "image.dom", 24, 0x80001300, 0x1234, 0, 0);
+    n = read(out[0], line, sizeof line - 1);
+    assert(n > 0);
+    line[n] = 0;
+    assert(strstr(line, "cause=24 pc=0x80001300 address=0x1234 entry=0x80001234 code=0x80000000-"));
+    assert(!strstr(line, " ra="));
   }
   /* spawn through the service, then wait4 through the service: the status
      must land in the exchange region where the entry pointed */
