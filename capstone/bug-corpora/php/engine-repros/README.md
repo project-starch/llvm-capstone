@@ -97,59 +97,55 @@ mechanism, so that a surprise is a surprise:
 
 ## Results
 
-Three records, each a run of the whole corpus on the virtual profile, one bundle per arm with the two
+Five records, each a run of the whole corpus on the virtual profile, one bundle per arm with the two
 populations merged (`tools/merge-population-bundles.py`), every table computed from the bundles by
 `tools/result-tables.py` and written into that record's README, never typed:
 
-- `results/2026-10-27-run7/`: lane B's measurement (the corpus at `672a0deffaa2`; runs 5, 6 and 7 agree cell for cell).
+- `results/2026-10-27-run7/`: lane B's measurement (the corpus at `672a0deffaa2`, 65 cases).
 - `results/2026-10-28-run10/`: lane C's measurement (the seam on the libc's reclaim, `8569fb7194dc`): against run7 no CAUGHT changed.
-- `results/2026-10-28-run14/` and `results/2026-10-28-run15/`: the follow-up lane's measurement (`1ed7d8c601e2`, then `009ca7b34b00` with the launcher that names its image when a run ends): the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain, the putenv probe. run15's verdicts and reasons are cell-identical to run14's. **run15 is the current record:** `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them. run14 is cell-identical to run13, which it replaces only because run13's two boots recorded different probe lists and could not be merged.
+- `results/2026-10-28-run14/` and `results/2026-10-28-run15/`: the follow-up lane's measurement (the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain and, from run15, names its image on exit, the putenv probe); run15's verdicts and reasons are cell-identical to run14's.
+- `results/2026-10-28-run16/`: **the current record**, the merged corpus measured whole (70 cases): the first 65 exactly as in run15, the five merged cases measured for the first time. `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them.
 
-Over the 49 CWE-416 cases, from `results/2026-10-28-run15/README.md` (every verdict and reason identical to run14's; the chain column exists only since run15's re-judge):
+Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415), from `results/2026-10-28-run16/README.md`:
 
-**Default scoring** (the 23 native crashers out of the denominator):
+**Default scoring** (the native crashers out of the denominator):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 1 | 1 | 21 | infra 1, not-reached 2, out-of-denominator 24 |
-| system allocator | 10 | 1 | 11 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
-| nested | 23 | 1 | 0 | infra 2, out-of-denominator 24 |
-| nested exact | 23 | 1 | 0 | infra 2, out-of-denominator 24 |
-
-**CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
-
-- stock: 1 of 19 / 0 of 30
-- system allocator: 2 of 19 / 8 of 30
-- nested: 2 of 19 / 21 of 30
-- nested exact: 2 of 19 / 21 of 30
+| stock | 1 | 1 | 24 | infra 1, not-reached 2, out-of-denominator 27 |
+| system allocator | 12 | 1 | 12 | infra 1, not-reached 2, out-of-denominator 27, unattributed 1 |
+| nested | 25 | 1 | 0 | infra 2, out-of-denominator 27, unattributed 1 |
+| nested exact | 25 | 1 | 0 | infra 2, out-of-denominator 27, unattributed 1 |
 
 **Sensitivity scoring** (every case scored by fault site; reported beside the default, never instead):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 2 | 1 | 21 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 3 |
-| system allocator | 23 | 1 | 11 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 2 |
-| nested | 46 | 2 | 0 | infra 2, out-of-denominator 1 |
-| nested exact | 46 | 2 | 0 | infra 2, out-of-denominator 1 |
+| stock | 2 | 1 | 24 | infra 3, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 5 |
+| system allocator | 25 | 1 | 12 | infra 2, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 4 |
+| nested | 48 | 2 | 0 | infra 3, out-of-denominator 1, unattributed 3 |
+| nested exact | 48 | 2 | 0 | infra 3, out-of-denominator 1, unattributed 3 |
 
-**CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
+Read with the plan document (`docs/plans/2026-10-12-php-virtual-capstone-retarget.md`, runs 8 to 16):
+the system allocator's catches are a strict subset of the nested arms'; a catch "by chain" is attributed
+through the call path alone (a fault in a libc copy, scan or write routine, the declared function reached
+by walking its callers: CRASH-068 through ra on every arm, CRASH-057 through the frame chain on the
+nested arms) and is the weakest attribution class, shown apart and never counted silently. CRASH-084 is
+out of the denominator because this libc's putenv never creates the dangling reference the defect needs
+(checked by a probe whose transcript names its image and whose hash the record carries). CRASH-012 and
+-148 free a symbol table malloc never returned: the seam refuses the pointer on every arm, which the
+judge reads as `unattributed` (their declared site is PHP's allocator). CRASH-075 and CRASH-161 are
+`infra` on every arm (the 40 s watchdog; the plan document records a separate 600 s run of 075, not
+archived here, as a catch at `php_array_walk`); CRASH-092 is `infra` on the nested arms and
+`not-reached` on stock and the system allocator (it hangs, or completes short of its defect, on
+uninitialised stack contents).
 
-- stock: 2 of 19 / 0 of 30
-- system allocator: 10 of 19 / 13 of 30
-- nested: 19 of 19 / 27 of 30
-- nested exact: 19 of 19 / 27 of 30
-
-Read with the plan document (`docs/plans/2026-10-12-php-virtual-capstone-retarget.md`, runs 8 to 14):
-the system allocator's catches are a strict subset of the nested arms'; a catch "by chain" is attributed through the call path alone (a fault in a libc copy, scan or write routine, the declared function reached by walking its callers: CRASH-068 through ra on every arm, CRASH-057 through the frame chain on the nested arms) and is the weakest attribution class, shown apart and never counted silently; CRASH-084 is out of the
-denominator because this libc's putenv never creates the dangling reference the defect needs (checked
-by a probe whose transcript names its image and whose hash the record carries); CRASH-075 is `infra` on
-every arm (the 40 s watchdog; the plan document records a separate 600 s run of it, not archived here,
-as a catch at `php_array_walk`); CRASH-092 is `infra` on the nested arms and `not-reached` on stock and
-the system allocator (it hangs, or completes short of its defect, on uninitialised stack contents).
-The native population and the system allocator's column disagree on 22 of the 49 cases: 13 asan-blind
-cases the system allocator catches, and 9 temporal-asan-visible cases it does not read (8 `setup-fault`,
-1 `unattributed`), which are not measured misses and not a second reading of where the block's release
-went. The native cohort is a selection by one detector build, not a prediction of this column.
+The native population and the system allocator's column disagree on 24 of the 51 CWE-416 cases: 15
+asan-blind cases the system allocator catches, and 9 temporal-asan-visible cases it does not read (8
+`setup-fault`, 1 `unattributed`), which are not measured misses and not a second reading of where the
+block's release went. The native cohort is a selection by one detector build, not a prediction of this
+column: the sibling corpus's own ASan measurement of the same 47 shared cases placed 16 of them on the
+other side.
 
 ## Not here
 

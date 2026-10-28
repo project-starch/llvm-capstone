@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """The tables a results record's README carries, computed from its bundles and nothing else.
     result-tables.py <results dir>          # bundle-<arm>/ (default scoring), sensitivity/bundle-<arm>/
-Per scoring and arm: CAUGHT, MISSED and every NO-READING reason, over all 65 cases and over the
-CWE-416 cases (the CWE from each case's oracle.json), then the CWE-416 catches split by native
-population. Every case must have a row in every arm's bundle, or the run exits 1 and prints
-which are missing: a table with a hole in it is not printed as if it were complete. The stock
+Per scoring and arm: CAUGHT, MISSED and every NO-READING reason, over every case the record
+measured, over its temporal cases (CWE-416/415/590) and over its CWE-416 cases (the CWE from
+each case's oracle.json), then the CWE-416 catches split by native population. Every case one
+arm measured must have a row in every arm's bundle, or the run exits 1 and prints which are
+missing: a table with a hole in it is not printed as if it were complete. The stock
 configuration is the judge's control and is tabulated like the arms so the record is whole.
 """
 import collections, json, sys
 from pathlib import Path
 
+TEMPORAL = ("CWE-416", "CWE-415", "CWE-590")
 HERE = Path(__file__).resolve().parent
 CORPUS = HERE.parent
 ARMS = ("php-real-stock", "virtual-malloc", "virtual-nested-pools", "virtual-nested-exact")
@@ -44,10 +46,20 @@ def tables(scoring_dir, known, title):
             if c in seen:
                 missing.append(f"{arm}: two rows for {c}; a bundle states each cell once")
             seen[c] = r
-        for c in known:
-            if c not in seen:
-                missing.append(f"{arm}: no row for {c}")
+        for c in seen:
+            if c not in known:
+                missing.append(f"{arm}: a row for {c}, which is not a case of this corpus")
         tallies[arm] = seen
+    if missing:
+        return lines, missing
+    # THE RECORD'S OWN CASE SET: every case any arm measured, and every arm must have every one
+    # of them. A record taken before the corpus grew (run7 to run15: 65 cases; the merge added
+    # five, 2026-10-28) is complete over the cases it measured, and says how many; a hole
+    # between arms is still refused.
+    measured = set().union(*(set(s) for s in tallies.values()))
+    for arm in ARMS:
+        for c in sorted(measured - set(tallies[arm])):
+            missing.append(f"{arm}: no row for {c}")
     if missing:
         return lines, missing
     # Was this record judged with the `chain` attribution class at all? A bundle judged before
@@ -69,9 +81,11 @@ def tables(scoring_dir, known, title):
                 if r["verdict"] == "CAUGHT" and r["observation"].get("attribution") == "chain":
                     t["CAUGHT/chain"] += 1
         return t
-    for name, pick in (("all 65 cases", lambda c: True),
+    present = sorted(measured)
+    for name, pick in ((f"all {len(present)} cases", lambda c: True),
+                       ("the temporal cases (CWE-416, CWE-415, CWE-590)", lambda c: known[c][0] in TEMPORAL),
                        ("the CWE-416 cases", lambda c: known[c][0] == "CWE-416")):
-        n = sum(1 for c in known if pick(c))
+        n = sum(1 for c in present if pick(c))
         lines += [f"**{name}** ({n}):", "", "| arm | CAUGHT | of which by chain | MISSED | NO-READING |", "|---|--:|--:|--:|---|"]
         for arm in ARMS:
             t = tally(arm, pick)
@@ -86,7 +100,7 @@ def tables(scoring_dir, known, title):
     for arm in ARMS:
         parts = []
         for pop in ("temporal-asan-visible", "asan-blind"):
-            sel = [c for c in known if known[c][0] == "CWE-416" and known[c][1] == pop]
+            sel = [c for c in present if known[c][0] == "CWE-416" and known[c][1] == pop]
             caught = sum(1 for c in sel if tallies[arm][c]["verdict"] == "CAUGHT")
             parts.append(f"{caught} of {len(sel)}")
         lines.append(f"- {LABEL[arm]}: {' / '.join(parts)}")

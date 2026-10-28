@@ -20,6 +20,15 @@ Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cel
 | nested | 28 | not classified | 10 | infra 2, out-of-denominator 24, unattributed 1 |
 | nested exact | 32 | not classified | 4 | infra 2, out-of-denominator 24, unattributed 3 |
 
+**the temporal cases (CWE-416, CWE-415, CWE-590)** (50):
+
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 1 | not classified | 23 | infra 1, not-reached 2, out-of-denominator 23 |
+| system allocator | 10 | not classified | 13 | infra 1, not-reached 2, out-of-denominator 23, unattributed 1 |
+| nested | 23 | not classified | 1 | infra 2, out-of-denominator 23, unattributed 1 |
+| nested exact | 23 | not classified | 1 | infra 2, out-of-denominator 23, unattributed 1 |
+
 **the CWE-416 cases** (49):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
@@ -48,6 +57,15 @@ Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cel
 | system allocator | 27 | not classified | 22 | infra 1, not-reached 2, setup-fault 10, unattributed 3 |
 | nested | 49 | not classified | 10 | infra 2, setup-fault 2, unattributed 2 |
 | nested exact | 53 | not classified | 4 | infra 2, setup-fault 2, unattributed 4 |
+
+**the temporal cases (CWE-416, CWE-415, CWE-590)** (50):
+
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 2 | not classified | 23 | infra 1, not-reached 13, setup-fault 8, unattributed 3 |
+| system allocator | 22 | not classified | 13 | infra 1, not-reached 2, setup-fault 10, unattributed 2 |
+| nested | 44 | not classified | 1 | infra 2, setup-fault 2, unattributed 1 |
+| nested exact | 44 | not classified | 1 | infra 2, setup-fault 2, unattributed 1 |
 
 **the CWE-416 cases** (49):
 

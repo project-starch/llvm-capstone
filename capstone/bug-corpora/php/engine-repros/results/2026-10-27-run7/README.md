@@ -20,6 +20,15 @@ Lane B's measurement: the corpus at its own head, run7 (the plan document's lane
 | nested | 28 | not classified | 11 | infra 2, out-of-denominator 24 |
 | nested exact | 32 | not classified | 5 | infra 2, out-of-denominator 24, unattributed 2 |
 
+**the temporal cases (CWE-416, CWE-415, CWE-590)** (50):
+
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 1 | not classified | 23 | infra 2, not-reached 1, out-of-denominator 23 |
+| system allocator | 10 | not classified | 13 | infra 2, not-reached 1, out-of-denominator 23, unattributed 1 |
+| nested | 23 | not classified | 2 | infra 2, out-of-denominator 23 |
+| nested exact | 23 | not classified | 2 | infra 2, out-of-denominator 23 |
+
 **the CWE-416 cases** (49):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |

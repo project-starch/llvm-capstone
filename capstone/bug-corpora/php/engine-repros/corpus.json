@@ -38,8 +38,8 @@
   },
   "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 46 asan-blind and 19 temporal-asan-visible here against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases are placed differently, one (CRASH-100, needs an HTTP listener) is absent, two of theirs (CRASH-062, CRASH-070) end as shipped in PHP's own fatal error with no report, and one (CRASH-064) is a use-after-free NEITHER ASan build reports as one -- it dereferences an integer read from a reused object-store bucket, ASan:SEGV on both -- so these three are in neither population here; each said in its PROVENANCE.md. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The 59 default-build cases outside both populations (30 spatial ASan sees unaided, NULL dereferences, type confusions) are not here yet.",
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-28-run15/bundle-virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-28-run15/bundle-virtual-nested-pools",
-    "virtual-nested-exact": "results/2026-10-28-run15/bundle-virtual-nested-exact"
+    "virtual-malloc": "results/2026-10-28-run16/bundle-virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-28-run16/bundle-virtual-nested-pools",
+    "virtual-nested-exact": "results/2026-10-28-run16/bundle-virtual-nested-exact"
   }
 }

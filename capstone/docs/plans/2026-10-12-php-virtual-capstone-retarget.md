@@ -2715,3 +2715,29 @@ watchdog 40 s; both populations, both scorings, the whole corpus).**
 - Invariants for the five: stock catches no use-after-free (it revokes nothing); every CAUGHT is at
   a declared site in its declared file, by function or by chain, never in the allocator or the seam;
   the system allocator's catches are a subset of the nested arms'. A violation voids the reading.
+
+### run16 (`corpus-run16`, tree d68539a6da2e): as pre-registered
+
+Both boots rc 0 (12:34-12:49 UTC; the temporal-asan-visible boot took five minutes, not three,
+with its three new cases). The first 65 cases: 520 cells, every verdict, reason and attribution
+identical to run15's third re-judge. The five merged cases, both scorings:
+
+| case | stock | system allocator | nested | nested exact |
+|---|---|---|---|---|
+| CRASH-062 | MISSED | CAUGHT | CAUGHT | CAUGHT |
+| CRASH-070 | MISSED | CAUGHT | CAUGHT | CAUGHT |
+| CRASH-012, -148 | out-of-denominator / unattributed | same | same | same |
+| CRASH-161 | out-of-denominator / infra | same | same | same |
+
+062 and 070 are caught by function at ASan's own line (`_php_stream_free` at streams.c:276 and
+`zend_do_begin_class_member_function_call` at zend_compile.c:1321), cause 25, on every revoking
+arm: both blocks reached free() on this platform, although our native ASan as shipped reads
+PHP's own fatal error for both. 012 and 148: the seam refuses the pointer efree is given on every
+arm, stock included ("code=4 free of a pointer this heap did not issue"), which the judge reads as
+unattributed; no CAUGHT, as pre-registered. 161: the 40 s watchdog on every arm, stock included,
+before any output of the script (its trigger fills a 5,000,000-element array and relies on a 1 s
+CPU-time limit firing mid-copy); a first measurement, inside the invariants. Every invariant
+holds: stock catches no use-after-free, every CAUGHT is at a declared site in its file, the system
+allocator's catches are a subset of the nested arms'. run16 is `results/2026-10-28-run16/`, the
+current record; over the 55 temporal cases, sensitivity scoring: stock 2, system allocator 25,
+nested 48, nested exact 48 CAUGHT.

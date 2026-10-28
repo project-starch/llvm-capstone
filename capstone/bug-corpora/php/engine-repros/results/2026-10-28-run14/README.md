@@ -20,6 +20,15 @@ The follow-up lane's measurement, replacing run12 and run13 (run14 is cell-ident
 | nested | 28 | not classified | 9 | infra 2, out-of-denominator 25, unattributed 1 |
 | nested exact | 33 | not classified | 3 | infra 2, out-of-denominator 25, unattributed 2 |
 
+**the temporal cases (CWE-416, CWE-415, CWE-590)** (50):
+
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 1 | not classified | 22 | infra 1, not-reached 2, out-of-denominator 24 |
+| system allocator | 10 | not classified | 12 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
+| nested | 23 | not classified | 0 | infra 2, out-of-denominator 24, unattributed 1 |
+| nested exact | 23 | not classified | 0 | infra 2, out-of-denominator 24, unattributed 1 |
+
 **the CWE-416 cases** (49):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
@@ -48,6 +57,15 @@ The follow-up lane's measurement, replacing run12 and run13 (run14 is cell-ident
 | system allocator | 28 | not classified | 21 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 3 |
 | nested | 51 | not classified | 9 | infra 2, out-of-denominator 1, unattributed 2 |
 | nested exact | 56 | not classified | 3 | infra 2, out-of-denominator 1, unattributed 3 |
+
+**the temporal cases (CWE-416, CWE-415, CWE-590)** (50):
+
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 2 | not classified | 22 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 3 |
+| system allocator | 23 | not classified | 12 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 2 |
+| nested | 46 | not classified | 0 | infra 2, out-of-denominator 1, unattributed 1 |
+| nested exact | 46 | not classified | 0 | infra 2, out-of-denominator 1, unattributed 1 |
 
 **the CWE-416 cases** (49):
 
