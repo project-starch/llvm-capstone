@@ -2666,3 +2666,19 @@ sensitivity scoring, CRASH-008 on virtual-nested-exact in both -- and on none ot
 `results/2026-10-28-run15/` carries these bundles; every record's README and the corpus README now
 show "of which by chain" (run7's and run10's columns read 0: their bundles were judged before the
 class existed, and are kept as judged).
+
+### The fifth review (after ea32f9ed64b4): READY WITH CHANGES, made at 2494fc52120d; a third re-judge pre-registered
+
+The fifth review found the `chain` class an honest disclosure of weaker evidence, which narrows the
+forwarding finding without claiming operand-level soundness, and asked for three changes: the
+putenv reader must void a transcript on any malformed PUTENV_PROBE line (it counted the well-formed
+records and ignored the rest); the records judged before the class show "not classified" rather
+than 0 chain catches; a chain catch's reach evidence must not say the run "faulted in" the site.
+2494fc52120d makes them (and marks the judge's scoring description with the class, so a later record
+with no chain catch still reads as classified).
+
+**Pre-registration: run15 re-judged a third time (`run15-judged3`, the same transcripts, no boot,
+tree 2494fc52120d).** Every verdict, reason and attribution identical to `results/2026-10-28-run15/`
+in both scorings and populations; the reach evidence of exactly the twelve chain cells reads "faulted
+in <routine>, whose call path reaches <site>"; every bundle's scoring description carries the chain
+mark; the putenv probe reads absent on every arm from its archived transcript. Nothing else moves.
