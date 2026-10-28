@@ -12,17 +12,20 @@
 #include <capstone/representable.h>
 
 /* The two switches of the spatial-versus-temporal measurement (runtime/application CMake
- * options CAPSTONE_HEAP_LIFETIMES and CAPSTONE_HEAP_SCRUB_FREE, recorded in sdk.json). Both
- * at 1 is the profile as qualified. LIFETIMES=0: a public object, and a nested group, is a
- * SHRINK copy of the slot's authority over the same bytes instead of a CDERIVE child, so
- * free revokes nothing and only a mapping's retirement (munmap, mremap) ends a stale
- * capability; the lifetime per mapping (mapping_group) remains, so ensure_ids stays.
- * SCRUB_FREE=0: free leaves the payload's bytes and tags in place (calloc still zeroes). */
+ * options CAPSTONE_HEAP_LIFETIMES and CAPSTONE_HEAP_SCRUB_FREE, recorded in sdk.json). The
+ * default, LIFETIMES=1 and SCRUB_FREE=0, is the profile. LIFETIMES=0: a public object, and a
+ * nested group, is a SHRINK copy of the slot's authority over the same bytes instead of a
+ * CDERIVE child, so free revokes nothing and only a mapping's retirement (munmap, mremap)
+ * ends a stale capability; the lifetime per mapping (mapping_group) remains, so ensure_ids
+ * stays. SCRUB_FREE=0: free leaves the payload's bytes and tags in place (calloc still
+ * zeroes), so a reused slot's previous contents are the next owner's to read; a stale
+ * capability among them still faults on use, because its lifetime ended. SCRUB_FREE=1 zeroes
+ * the payload before the CREVOKE. */
 #ifndef CAPSTONE_HEAP_LIFETIMES
 #define CAPSTONE_HEAP_LIFETIMES 1
 #endif
 #ifndef CAPSTONE_HEAP_SCRUB_FREE
-#define CAPSTONE_HEAP_SCRUB_FREE 1
+#define CAPSTONE_HEAP_SCRUB_FREE 0
 #endif
 
 #define INDEX_BUCKETS 4096U

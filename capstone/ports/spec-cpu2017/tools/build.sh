@@ -60,6 +60,14 @@ done < <(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));[print(b,p,d
 for label in "${LABELS[@]}"; do
   sdk=${SDK[$label]}
   note "sdk $label $sdk profile $(python3 -c "import json,sys;d=json.load(open(sys.argv[1]));print(d.get('profile'),'heap_lifetimes',d.get('heap_lifetimes',True),'heap_scrub_free',d.get('heap_scrub_free',True))" "$sdk/sdk.json")"
+  # An SDK serving an arm of the manifest has that arm's heap switches; an SDK from before the
+  # switches has neither field and was built with both ON.
+  if m "arms.$label.heap_scrub_free" > /dev/null 2>&1; then
+    for field in heap_lifetimes heap_scrub_free; do
+      got=$(python3 -c "import json,sys;print(str(json.load(open(sys.argv[1])).get(sys.argv[2],True)).lower())" "$sdk/sdk.json" "$field")
+      [ "$got" = "$(m "arms.$label.$field" | tr 'A-Z' 'a-z')" ] || fail "$label: sdk.json $field is $got, the manifest's arm says $(m "arms.$label.$field")"
+    done
+  fi
   ( cd "$sdk" && find -L . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum ) > "$REC/sdk-inventory-$label.sha256"
   note "sdk-inventory $label $(sha256sum "$REC/sdk-inventory-$label.sha256" | cut -c1-64) ($(wc -l < "$REC/sdk-inventory-$label.sha256") files)"
 done

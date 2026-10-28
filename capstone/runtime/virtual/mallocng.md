@@ -57,9 +57,10 @@ mapping ancestor (retained by the kernel)
 
 The application receives only the requested object bounds. The allocator's
 bounded group copies permit its private prefix/footer operations. `free`
-validates the supplied capability before looking up internal authority,
-clears payload tags and revokes the lifetime before the upstream backend
-publishes the slot as free. A successful in-place realloc rotates the
+validates the supplied capability before looking up internal authority and
+revokes the lifetime before the upstream backend publishes the slot as free.
+It leaves the payload's bytes and tags in place unless the SDK is built with
+`CAPSTONE_HEAP_SCRUB_FREE=ON` ([Measurement switches](#measurement-switches)). A successful in-place realloc rotates the
 lifetime; a failed realloc preserves the original. Moving realloc uses the
 existing Capstone memcpy, which copies non-linear tags and consumes linear
 ones. Inner allocators use ordinary malloc/free and derive their own children
@@ -94,8 +95,8 @@ qualification separately checks behavior, lifetimes and the service boundary.
 
 Two CMake options of `runtime/application` build the arms of the spatial-versus-temporal
 comparison; `sdk.json` records them as `heap_lifetimes` and `heap_scrub_free`, and
-`build-sdk.sh` forwards them (`-DCAPSTONE_HEAP_LIFETIMES=OFF`). Both ON is the heap
-described above and the only qualified configuration.
+`build-sdk.sh` forwards them (`-DCAPSTONE_HEAP_LIFETIMES=OFF`). The defaults, lifetimes
+ON and scrub OFF, are the heap described above.
 
 - `CAPSTONE_HEAP_LIFETIMES=OFF`: a public object, and a nested group, is a SHRINK copy of
   the slot's authority over the same bytes instead of a CDERIVE child. Bounds and rights
@@ -104,16 +105,21 @@ described above and the only qualified configuration.
   `mremap`). The lifetime per mapping remains, as does the node reserve request. This is
   the virtual counterpart of level0 without `CAPSTONE_LEVEL0_LIFETIMES`, the paper's
   "spatial" arm: public heap object lifetimes off, mapping and thread retirement unchanged.
-- `CAPSTONE_HEAP_SCRUB_FREE=OFF`: `free` leaves the payload's bytes and tags in place
-  (`calloc` still zeroes). Residual capabilities in a reused slot are then the next owner's
-  to read.
+- `CAPSTONE_HEAP_SCRUB_FREE` (default OFF): `free` leaves the payload's bytes and tags in
+  place (`calloc` still zeroes), so residual data and capabilities in a reused slot are the
+  next owner's to read. A residual capability to a freed object still faults on use, because
+  its lifetime ended; one to a live object stays usable, which is outside what lifetimes
+  protect. A mapping that `free` unmaps is cleared of tags by the module's retirement
+  either way. `CAPSTONE_HEAP_SCRUB_FREE=ON` zeroes the object's current extent before the
+  CREVOKE, the hygiene arm of the comparison. It does not reach the tail an in-place
+  `realloc` shrink gave up, so it does not make every reused slot clean.
 
 `run-malloc.py --sdk DIR` reads the SDK's switches and expects, without lifetimes, exactly
 these readings from the anchored denial cases: `bounds` still faults with cause 28,
 `remap-stale` still with cause 25 (the module retired the old mapping), `stale-free` and
 `interior-free` with cause 2 at `cap_malloc_invalid_free` (no slot record), and `stale`,
 `inplace-stale`, `reuse-stale` and `reuse-free` survive and say `MALLOC_SURVIVED`. The
-same harness on the qualified SDK must still read the lifetimes table, which is what shows
+same harness on an SDK with lifetimes must still read the lifetimes table, which is what shows
 the survive checks can fail.
 
 ## VM remapping
@@ -124,7 +130,7 @@ mapping holds at most `CV_MAX_REGION_BYTES` (2 GiB) and a process's mappings
 `CV_MAX_BYTES` (4 GiB), from `vm-abi.h`. A malloc needs `IB + UNIT` bytes above
 its payload, so the largest payload is a little under 2 GiB. Pages are backed and
 pinned as they are first touched, so only what a program touches counts against
-guest RAM; `free` clears the whole payload and so touches every page of it. QEMU's exact-bounds metadata for a page that has held a capability
+guest RAM; with `CAPSTONE_HEAP_SCRUB_FREE=ON`, `free` clears the whole payload and so touches every page of it. QEMU's exact-bounds metadata for a page that has held a capability
 also costs host memory, about 6 KiB per 4 KiB page.
 The native launcher invokes Linux `mremap(MREMAP_MAYMOVE)`; it does not run
 mallocng. The module's BEGIN/END transaction:
@@ -171,7 +177,7 @@ python3 capstone/runtime/virtual/run-malloc.py \
   --adapter "$out/adapter" --application "$out/malloc.dom" \
   --native /path/to/native-musl-malloc-contract \
   --qemu /path/to/qemu-system-riscv64 --images /path/to/images \
-  --work "$out/malloc-gate"
+  --sdk "$out/sdk" --work "$out/malloc-gate"
 ```
 
 Build the same contract with a native RV64 musl toolchain for the reference

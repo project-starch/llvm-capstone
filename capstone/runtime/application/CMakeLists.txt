@@ -24,13 +24,14 @@ else()
   set(sdk_allocator level0)
   set(sdk_codegen "[]")
 endif()
-# The virtual heap's measurement switches (runtime/virtual/heap.c). Both ON is the profile as
-# qualified; OFF builds the arms of the spatial-versus-temporal comparison: LIFETIMES=OFF gives
-# every object exact bounds but no lifetime of its own, SCRUB_FREE=OFF leaves a freed payload's
-# bytes and tags in place. The physical profile's level0 has its own switches.
+# The virtual heap's measurement switches (runtime/virtual/heap.c). The defaults, LIFETIMES=ON
+# and SCRUB_FREE=OFF, are the profile; the other settings build the arms of the
+# spatial-versus-temporal comparison: LIFETIMES=OFF gives every object exact bounds but no
+# lifetime of its own, SCRUB_FREE=ON zeroes a freed payload before its lifetime ends. The
+# physical profile's level0 has its own switches and takes these only at their defaults.
 option(CAPSTONE_HEAP_LIFETIMES "Virtual heap: a lifetime per object, CDERIVE on malloc and CREVOKE on free" ON)
-option(CAPSTONE_HEAP_SCRUB_FREE "Virtual heap: zero a payload on free" ON)
-if(NOT CAPSTONE_APPLICATION_VIRTUAL AND NOT (CAPSTONE_HEAP_LIFETIMES AND CAPSTONE_HEAP_SCRUB_FREE))
+option(CAPSTONE_HEAP_SCRUB_FREE "Virtual heap: zero a payload on free" OFF)
+if(NOT CAPSTONE_APPLICATION_VIRTUAL AND (NOT CAPSTONE_HEAP_LIFETIMES OR CAPSTONE_HEAP_SCRUB_FREE))
   message(FATAL_ERROR "CAPSTONE_HEAP_LIFETIMES and CAPSTONE_HEAP_SCRUB_FREE are switches of the virtual heap")
 endif()
 foreach(switch IN ITEMS CAPSTONE_HEAP_LIFETIMES CAPSTONE_HEAP_SCRUB_FREE)
