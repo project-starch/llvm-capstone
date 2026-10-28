@@ -2132,3 +2132,14 @@ No CAUGHT cell changed in either scoring. The two cells the pre-registration lef
 
 The design claim of this section therefore holds as measured: the seam on the libc's own slot
 record reproduces the 2026-10-27 measurement cell for cell, with the index gone.
+
+### run10 (03:08Z, tree 8569fb7194dc): the geometry checks and the reclassification, measured
+
+The same platform, the SDK, both images and the probe rebuilt from 8569fb7194dc; inert PASS,
+probe stages 0-12 as before, malloc gate as before (the kit's mremap check alone), manifest
+PASSED. Cells against run7's `final/`: default temporal 0 of 76; default asan-blind 4 of 184
+(CRASH-139 object+exact MISSED -> NO-READING `unattributed`, CRASH-092 stock+block infra ->
+not-reached); sensitivity temporal 1 of 76 (CRASH-118 stock: the refusal's label, setup-fault ->
+unattributed); sensitivity asan-blind 9 of 184 (the four above, CRASH-057 stock's label the same
+way, and CRASH-081's symbol rename on all four arms). No CAUGHT cell changed in any comparison.
+The geometry checks fired on no case: no `ZEND_CAP_FAIL code=5` in any record.
