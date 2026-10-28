@@ -2741,3 +2741,16 @@ holds: stock catches no use-after-free, every CAUGHT is at a declared site in it
 allocator's catches are a subset of the nested arms'. run16 is `results/2026-10-28-run16/`, the
 current record; over the 55 temporal cases, sensitivity scoring: stock 2, system allocator 25,
 nested 48, nested exact 48 CAUGHT.
+
+### CRASH-161 with a 600 s watchdog (`residues/161-600s`, tree d68539a6da2e): too big for this harness
+
+The trigger fills a 5,000,000-element array and relies on a 1 s CPU-time limit firing while PHP
+copies it; natively the whole script takes about a second. On the virtual profile neither arm that
+finished reached the script's first output: stock was killed by the guest's OOM killer at 380 s
+(`capstone-vexec` at 1.9 GB resident in the 2 GB guest; the stock arm keeps every freed block by
+design), the system allocator hit the 600 s watchdog after 217,000 region grants. The nested arms
+were stopped after these two readings: they do strictly more work per allocation, and two arms
+already say the case does not reach its defect within this harness's memory and time. CRASH-161
+stays `infra` in the population run. What would settle it is a guest with more memory and a
+watchdog of an hour, or a smaller array with the CPU limit scaled to the emulated speed, which
+changes the trigger and so needs its own provenance note; neither is done here.
