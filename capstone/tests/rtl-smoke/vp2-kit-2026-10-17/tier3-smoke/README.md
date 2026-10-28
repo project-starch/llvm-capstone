@@ -10636,3 +10636,19 @@ Pre-registered at lane commit 90227d3792f0; the prediction holds.
   - Readings 0 elsewhere.
 - **Any other difference** is a finding about bitstream 3, reported cell by cell. Its first suspect is a
   division-dependent path. The coordinator's END rc says only whether a script ran; the grade is the compare lines.
+
+### The corpus on bitstream 3, result: the 23-arm re-read, every arm as bitstream 2 read it (board 2 07:04-10:34, board 1 07:55-11:21)
+
+Records: `records/b3bs-reread-b1.result-lines.txt` and `records/b3bs-reread-b2.result-lines.txt`.
+- **Board 1, 13 arms (spec 27beeb2ce188edaa), compare-pilot and verdicts-compare equal in every cell:**
+  - fph 25, fpt 13, fca 13, fcs 13, fso 9, mph 9, mpt 3, wph 12, wpt 10, pgc 5, pgm0 5 and pgm1 5;
+  - sq0a-c and sq0e at 6 each, sq0f 3;
+  - **sq0d 3 of 6, the three pre-registered Q-31 cells:** 19 and 20 read cause 4 at nodeRelease+144, and 22 reads
+    cause 13 at editDist3FindLang+244, where QEMU reads 24. Verdicts and sites are equal, as on bitstream 2 and the
+    batch.
+- **Board 2, 10 arms (spec f58053f1c2d877fb), equal in every cell:** pym0 20, pym1 20, pb9 4, pb12 9, pb10 4, wm0 23,
+  pb13q15 9, pgm1q15 5, wm1q15 23; sq1q15a-f 6, 6, 6, 6, 6 and 3.
+- Every boot completed on the bitstream-3 kits (bookings 474-510). Readings 0 throughout.
+- **Against the pre-registration (f1cb1f9d347c): every reading holds.**
+- With the first arms and pg-pools, every arm bitstream 2 read in its first phase now reads the same on bitstream 3.
+  The second wave (mruby, perl, the new arms and Juliet; pre-registered at 2e0bde4ca772) started as each board freed.
