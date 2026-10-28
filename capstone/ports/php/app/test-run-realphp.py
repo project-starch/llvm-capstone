@@ -430,6 +430,27 @@ def observation_cases():
     v, reason, ev = verdicts.judge(obs, pools)
     check("a chain that reaches no PHP frame is unattributed", reason, "unattributed")
     check("and says so", "reaches no frame of PHP's tree" in ev, True)
+    # A LEAF under line tables (CRASH-068's shape once musl carries them): strlen has a path now,
+    # so the old `not path` branch no longer applies; and a leaf keeps no frame, so the chain's
+    # first entry is the caller's CALLER (vspprintf) -- the caller itself is only in ra. The walk
+    # starts at ra.
+    FAULT_LEAF = FAULT_RA + " image=php.dom chain=0x3f90a00050,0x3f90a00060"
+    R.symbolize = fake_symbolize("/tmp/k/musl-src/musl-1.2.5/src/string/strlen.c", 7, func="strlen")
+    R.symbolize_at = by_pc({RA - 2: ("xbuf_format_converter", "/b/main/spprintf.c", 518),
+                            0x3f90a00050 - 2: ("vspprintf", "/b/main/spprintf.c", 725),
+                            0x3f90a00060 - 2: ("php_error_cb", "/b/main/main.c", 624)})
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_LEAF % SHA, 139,
+                    controls(), False, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a leaf with a line table is attributed through ra first, then the chain", v, verdicts.CAUGHT)
+    check("and the evidence names the caller from ra", "xbuf_format_converter at spprintf.c:518" in ev, True)
+    # the same with ra clobbered: the chain alone reaches vspprintf, undeclared -> no catch
+    FAULT_LEAF_BADRA = FAULT_LEAF.replace("ra=0x3f90508d7c", "ra=0xa")
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_LEAF_BADRA % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("with ra clobbered the chain's first PHP frame decides, and it is undeclared", (v, reason), (verdicts.NO_READING, "unattributed"))
+
     # the OBSERVED fault inside the allocator is what needs the audit arm, not the declared site
     R.symbolize = fake_symbolize("/b/Zend/zend_alloc.c", 403, func="_estrndup")
     obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,

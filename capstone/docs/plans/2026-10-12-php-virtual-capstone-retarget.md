@@ -2359,3 +2359,35 @@ population watchdog at 40 seconds, runner and corpus at this commit. Against run
   strlen a path now, so the `not path` leaf branch no longer applies to it and the chain rule
   must carry it instead; if 068 moves, the chain rule is wrong and run12 is void.
 - every other cell: equal to run11.
+
+### run12 (06:35Z, tree 39e7cf5a5b45): two movers as pre-registered, one as feared, two unpredicted
+
+Both probes read ABSENT on every arm (`putenv-probe`, `timeval-probe`: control held). Against run11:
+
+| scoring | population | cells | differ | which |
+|---|---|---|---|---|
+| default | temporal | 76 | 4 | **CRASH-068 on every arm: CAUGHT -> setup-fault** |
+| default | asan-blind | 184 | 4 | CRASH-092 stock+virtual-malloc not-reached -> out-of-denominator (pre-registered); CRASH-008 and CRASH-073 on virtual-nested-exact: unattributed -> CAUGHT (not predicted) |
+| sensitivity | temporal | 76 | 4 | CRASH-068 as above |
+| sensitivity | asan-blind | 184 | 6 | 092 as above; **CRASH-057 CAUGHT on both nested arms (pre-registered)**; 008 and 073 as above |
+
+**CRASH-068 moved, exactly the way the pre-registration said would void the run.** Its evidence:
+"the fault is in strlen outside PHP's tree; the frame chain reaches vspprintf at spprintf.c:725
+first, which is not a declared site". The mechanism: strlen is a leaf and keeps no frame, so fp
+still names its caller's frame and the chain's first entry is the caller's CALLER; the caller,
+xbuf_format_converter, is only in ra -- which the chain rule did not read, and the old `not path`
+leaf branch no longer applied because the musl objects now carry line tables. The rule is wrong
+as written and corrected: the walk starts at the fault's own ra, then the chain; a clobbered ra
+(057's 0xa) symbolizes to nothing and is skipped like a libc frame. Tests: the leaf shape with a
+line table (CAUGHT through ra), the same with ra clobbered (unattributed through the chain).
+run12's records are re-judged under the corrected rule (`corpus-run12-judged`, no boot), with the
+prediction: 068 CAUGHT on every arm in both scorings, as in run11; nothing else moves.
+
+**CRASH-008 and CRASH-073 on virtual-nested-exact, unpredicted, explained:** both are cause-28
+bounds faults in a libc routine whose chain reaches the case's declared site through libc frames
+only -- 008: `__stpcpy <- strcpy <- strcat <- php_date` at datetime.c:440; 073: `memcpy <-
+_estrndup` at zend_alloc.c:437, ASan's own path for the case. run11 read them unattributed because
+no chain existed; the chain rule now attributes them, which the pre-registration did not foresee
+because it was written for CRASH-057's shape. Both are the exact-bounds arm's spatial catches,
+the class the four earlier extra catches of that arm belong to. They are accepted as catches with
+this note; the sensitivity CAUGHT count of virtual-nested-exact rises by two on asan-blind.

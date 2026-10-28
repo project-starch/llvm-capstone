@@ -183,11 +183,16 @@ def in_php_tree(path):
 
 
 def chain_owner(llvm_bin, image, fault, text):
-    """Walk the fault's frame chain outward: (function, file, line, frames skipped) of the first
-    frame in PHP's tree that is not output plumbing, or None. Each return address is symbolized
-    two bytes back, inside its call instruction, as the ra rule does."""
+    """Walk outward from the fault: (function, file, line, frames skipped) of the first frame in
+    PHP's tree that is not output plumbing, or None. The walk starts at the fault's own return
+    address when the record has one, THEN takes the frame chain: a leaf routine (musl's strlen,
+    memcpy) keeps no frame of its own, so fp still names its caller's frame and the chain's first
+    entry is the caller's caller -- the caller itself is only in ra. A clobbered ra (CRASH-057's
+    0xa) symbolizes to nothing outside the tree and is skipped like any libc frame. Each address
+    is symbolized two bytes back, inside its call instruction."""
     skipped = []
-    for ret in fault.chain:
+    starts = ([fault.ra] if fault.ra else []) + list(fault.chain)
+    for ret in starts:
         cfunc, cpath, cline = symbolize_at(llvm_bin, image, ret - 2, text)
         if not in_php_tree(cpath) or any(p in cpath for p in OUTPUT_PLUMBING):
             skipped.append(f"{cfunc or '?'}@{(cpath or '?').rsplit('/', 1)[-1]}:{cline}")
@@ -695,7 +700,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                 f"{path}:{line} is ASan's file for this case but the fault is in {func or '?'}, not "
                 f"the declared {spec['fault_sites']}: another routine of the same file, which "
                 f"the old any-line-in-the-file rule would have admitted")
-        elif fault.chain and not in_php_tree(path):
+        elif (fault.chain or fault.ra) and not in_php_tree(path) and (path or fault.chain):
             # THE CHAIN RULE. The fault is outside PHP's tree (the libc, the runtime's delegate
             # copying a syscall buffer), and the launcher printed the frame chain it walked
             # (runtime/virtual/exec.c frame_chain, 2026-10-28). The access belongs to the first
