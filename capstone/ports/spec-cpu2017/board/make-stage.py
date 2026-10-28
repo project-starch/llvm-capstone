@@ -209,7 +209,13 @@ def main():
         prog = argv[0]
         args = " ".join('"$S/' + x[3:] + '"' if x.startswith("$S/") else q(x) for x in argv[1:])
         c = dict(c, output=c["output"] and c["output"].replace("ARM", arm), error=c["error"] and c["error"].replace("ARM", arm))
-        if wrap:
+        if wrap and tag == "run" and a.bench == "500.perlbench_r":
+            # perl's t/TEST starts each test as '../'.$^X through sh, so $^X must be a RELATIVE path that sh can
+            # execute: the board kernel has no binfmt_misc to start an image directly. The launcher's
+            # --application-argv sets the application's argv[0] (perl's $^X) apart from the image, and ../sw/perl,
+            # outside the hashed run directory, is a native script that starts the same image with the same argv[0].
+            cmd = f'"$V" --application-argv "$S/bin/{arm}/{prog}" -- ../sw/perl {args}'
+        elif wrap:
             cmd = f'"$V" "$S/bin/{arm}/{prog}" {args}'
         else:
             cmd = f'"$S/ldecod" {args}'
@@ -223,6 +229,11 @@ def main():
 
     for arm in arms:
         L += [f'echo "@@SPEC-ARM-BEGIN {arm}"', "cd / && rm -rf /tmp/sr && mkdir -p /tmp/sr && cp -a \"$S/in/.\" /tmp/sr/ && cd /tmp/sr || exit 1"]
+        if a.bench == "500.perlbench_r":
+            img = f"$S/bin/{arm}/" + p["cmds"][0]["argv"][0].replace("ARM", arm)
+            L += ["rm -rf /tmp/sw && mkdir -p /tmp/sw || exit 1",
+                  f"printf '#!/bin/sh\\nexec \"%s\" --application-argv \"%s\" -- \"$0\" \"$@\"\\n' \"$V\" \"{img}\" > /tmp/sw/perl",
+                  "chmod 755 /tmp/sw/perl || exit 1"]
         for i, c in enumerate(p["gen"]):
             L += run_line("gen", arm, i, dict(c, argv=["ldecod"] + c["argv"][1:]), wrap=False)
         for i, c in enumerate(p["cmds"]):
@@ -235,7 +246,7 @@ def main():
             L += [f'if [ -f {q(f)} ] && [ $(wc -c < {q(f)}) -le ${{SPEC_INBAND_MAX:-{a.inband_max}}} ]; then echo "@@SPEC-FILE {arm} {f}"; '
                   f'gzip -9c {q(f)} | base64; echo "@@SPEC-FILE-END"; fi']
         L += [f'echo "@@SPEC-ARM-END {arm}"']
-    L += ["cd / && rm -rf /tmp/sr", f'echo "@@SPEC-DONE {a.bench} {a.size}"', ""]
+    L += ["cd / && rm -rf /tmp/sr /tmp/sw", f'echo "@@SPEC-DONE {a.bench} {a.size}"', ""]
     (stage / "run.sh").write_text("\n".join(L))
     (stage / "run.sh").chmod(0o755)
     meta = dict(bench=a.bench, size=a.size, arms=arms, commands=p["cmds"], generation=p["gen"], target_validation=tgt_val,

@@ -1,0 +1,726 @@
+[
+ {
+  "bench": "519.lbm_r",
+  "size": "test",
+  "arm": "capstone-spatial",
+  "run": "519.lbm_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 7278938612,
+    "cycles": 7278831772,
+    "entries": 106840,
+    "seconds": 8.27,
+    "peak_pages": 105143,
+    "nodes": 34
+   }
+  ],
+  "outputs": {
+   "lbm.out": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5"
+  },
+  "validation": [
+   {
+    "cmd": "lbm.out",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "519.lbm_r",
+  "size": "test",
+  "arm": "capstone-lifetimes",
+  "run": "519.lbm_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 7278939204,
+    "cycles": 7278832364,
+    "entries": 106840,
+    "seconds": 8.27,
+    "peak_pages": 105143,
+    "nodes": 40
+   }
+  ],
+  "outputs": {
+   "lbm.out": "7ab5463219d503a3cb54d5bd75b69c6620109b560058de7a20a719796433cdc5"
+  },
+  "validation": [
+   {
+    "cmd": "lbm.out",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "538.imagick_r",
+  "size": "test",
+  "arm": "capstone-spatial",
+  "run": "538.imagick_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 108677371,
+    "cycles": 108676075,
+    "entries": 1296,
+    "seconds": 0.15,
+    "peak_pages": 1335,
+    "nodes": 160
+   },
+   {
+    "tag": "val",
+    "i": 0,
+    "rc": 0,
+    "instret": 82925280,
+    "cycles": 82923953,
+    "entries": 1327,
+    "seconds": 0.11,
+    "peak_pages": 1154,
+    "nodes": 205
+   }
+  ],
+  "outputs": {
+   "test_convert.out": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "test_validate.out": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a"
+  },
+  "validation": [
+   {
+    "cmd": "test_validate.out",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "538.imagick_r",
+  "size": "test",
+  "arm": "capstone-lifetimes",
+  "run": "538.imagick_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 108697798,
+    "cycles": 108696494,
+    "entries": 1304,
+    "seconds": 0.15,
+    "peak_pages": 1335,
+    "nodes": 1039
+   },
+   {
+    "tag": "val",
+    "i": 0,
+    "rc": 0,
+    "instret": 82945626,
+    "cycles": 82944295,
+    "entries": 1331,
+    "seconds": 0.11,
+    "peak_pages": 1154,
+    "nodes": 1195
+   }
+  ],
+  "outputs": {
+   "test_convert.out": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "test_validate.out": "c3bfd816afd261fd4a1d4b6c8a4ed639f0872229ea26cbcaed127b04a5425a1a"
+  },
+  "validation": [
+   {
+    "cmd": "test_validate.out",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "502.gcc_r",
+  "size": "test",
+  "arm": "capstone-spatial",
+  "run": "502.gcc_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 30520991,
+    "cycles": 30518112,
+    "entries": 2879,
+    "seconds": 0.21,
+    "peak_pages": 6143,
+    "nodes": 1199
+   }
+  ],
+  "outputs": {
+   "t1.opts-O3_-finline-limit_50000.out": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "t1.opts-O3_-finline-limit_50000.s": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324"
+  },
+  "validation": [
+   {
+    "cmd": "t1.opts-O3_-finline-limit_50000.s",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "502.gcc_r",
+  "size": "test",
+  "arm": "capstone-lifetimes",
+  "run": "502.gcc_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 30629201,
+    "cycles": 30626303,
+    "entries": 2898,
+    "seconds": 0.21,
+    "peak_pages": 6143,
+    "nodes": 5993
+   }
+  ],
+  "outputs": {
+   "t1.opts-O3_-finline-limit_50000.out": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+   "t1.opts-O3_-finline-limit_50000.s": "58111208509dd871223ae195a33304bd6b24afd29458f37c976556cbad506324"
+  },
+  "validation": [
+   {
+    "cmd": "t1.opts-O3_-finline-limit_50000.s",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "544.nab_r",
+  "size": "test",
+  "arm": "capstone-spatial",
+  "run": "544.nab_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 7991860754,
+    "cycles": 7991858440,
+    "entries": 2314,
+    "seconds": 8.03,
+    "peak_pages": 954,
+    "nodes": 504
+   }
+  ],
+  "outputs": {
+   "hkrdenq.out": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd"
+  },
+  "validation": [
+   {
+    "cmd": "hkrdenq.out",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "544.nab_r",
+  "size": "test",
+  "arm": "capstone-lifetimes",
+  "run": "544.nab_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 7992016799,
+    "cycles": 7992014467,
+    "entries": 2332,
+    "seconds": 8.03,
+    "peak_pages": 954,
+    "nodes": 7194
+   }
+  ],
+  "outputs": {
+   "hkrdenq.out": "2d580a95e2e596f2e06485149e9d91880bf47ded5a5495a366a80d4cea2a9afd"
+  },
+  "validation": [
+   {
+    "cmd": "hkrdenq.out",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "557.xz_r",
+  "size": "test",
+  "arm": "capstone-spatial",
+  "run": "557.xz_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 2982208525,
+    "cycles": 2982070696,
+    "entries": 137829,
+    "seconds": 4.34,
+    "peak_pages": 132826,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 1,
+    "rc": 0,
+    "instret": 2965457853,
+    "cycles": 2965318450,
+    "entries": 139403,
+    "seconds": 4.33,
+    "peak_pages": 132826,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 2,
+    "rc": 0,
+    "instret": 3062082070,
+    "cycles": 3061940587,
+    "entries": 141483,
+    "seconds": 4.45,
+    "peak_pages": 134687,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 3,
+    "rc": 0,
+    "instret": 11487817105,
+    "cycles": 11487667851,
+    "entries": 149254,
+    "seconds": 12.96,
+    "peak_pages": 142025,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 4,
+    "rc": 0,
+    "instret": 5050285966,
+    "cycles": 5050136727,
+    "entries": 149239,
+    "seconds": 6.51,
+    "peak_pages": 142010,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 5,
+    "rc": 0,
+    "instret": 12868683223,
+    "cycles": 12868533961,
+    "entries": 149262,
+    "seconds": 14.34,
+    "peak_pages": 142025,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 6,
+    "rc": 0,
+    "instret": 1528113216,
+    "cycles": 1527977217,
+    "entries": 135999,
+    "seconds": 2.86,
+    "peak_pages": 132826,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 7,
+    "rc": 0,
+    "instret": 1534637525,
+    "cycles": 1534500154,
+    "entries": 137371,
+    "seconds": 2.88,
+    "peak_pages": 132826,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 8,
+    "rc": 0,
+    "instret": 1539759091,
+    "cycles": 1539621206,
+    "entries": 137885,
+    "seconds": 2.89,
+    "peak_pages": 133018,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 9,
+    "rc": 0,
+    "instret": 2843383458,
+    "cycles": 2843243479,
+    "entries": 139979,
+    "seconds": 4.22,
+    "peak_pages": 135111,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 10,
+    "rc": 0,
+    "instret": 1933148117,
+    "cycles": 1933008003,
+    "entries": 139941,
+    "seconds": 3.31,
+    "peak_pages": 135073,
+    "nodes": 81
+   },
+   {
+    "tag": "run",
+    "i": 11,
+    "rc": 0,
+    "instret": 3026119756,
+    "cycles": 3025979775,
+    "entries": 139981,
+    "seconds": 4.4,
+    "peak_pages": 135111,
+    "nodes": 81
+   }
+  ],
+  "outputs": {
+   "cpu2006docs.tar-1-0.out": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+   "cpu2006docs.tar-1-1.out": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+   "cpu2006docs.tar-1-2.out": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+   "cpu2006docs.tar-1-3e.out": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+   "cpu2006docs.tar-1-4.out": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+   "cpu2006docs.tar-1-4e.out": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+   "cpu2006docs.tar-4-0.out": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+   "cpu2006docs.tar-4-1.out": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+   "cpu2006docs.tar-4-2.out": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+   "cpu2006docs.tar-4-3e.out": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+   "cpu2006docs.tar-4-4.out": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+   "cpu2006docs.tar-4-4e.out": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579"
+  },
+  "validation": [
+   {
+    "cmd": "cpu2006docs.tar-1-0.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-1.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-2.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-3e.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-4.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-4e.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-0.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-1.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-2.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-3e.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-4.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-4e.out",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "557.xz_r",
+  "size": "test",
+  "arm": "capstone-lifetimes",
+  "run": "557.xz_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 2982210334,
+    "cycles": 2982072505,
+    "entries": 137829,
+    "seconds": 4.34,
+    "peak_pages": 132826,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 1,
+    "rc": 0,
+    "instret": 2965457866,
+    "cycles": 2965318463,
+    "entries": 139403,
+    "seconds": 4.33,
+    "peak_pages": 132826,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 2,
+    "rc": 0,
+    "instret": 3062083647,
+    "cycles": 3061942164,
+    "entries": 141483,
+    "seconds": 4.45,
+    "peak_pages": 134687,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 3,
+    "rc": 0,
+    "instret": 11487819195,
+    "cycles": 11487669941,
+    "entries": 149254,
+    "seconds": 12.96,
+    "peak_pages": 142025,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 4,
+    "rc": 0,
+    "instret": 5050287024,
+    "cycles": 5050137785,
+    "entries": 149239,
+    "seconds": 6.52,
+    "peak_pages": 142010,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 5,
+    "rc": 0,
+    "instret": 12868684801,
+    "cycles": 12868535539,
+    "entries": 149262,
+    "seconds": 14.34,
+    "peak_pages": 142025,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 6,
+    "rc": 0,
+    "instret": 1528114679,
+    "cycles": 1527978680,
+    "entries": 135999,
+    "seconds": 2.86,
+    "peak_pages": 132826,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 7,
+    "rc": 0,
+    "instret": 1534639680,
+    "cycles": 1534502309,
+    "entries": 137371,
+    "seconds": 2.88,
+    "peak_pages": 132826,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 8,
+    "rc": 0,
+    "instret": 1539759689,
+    "cycles": 1539621804,
+    "entries": 137885,
+    "seconds": 2.9,
+    "peak_pages": 133018,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 9,
+    "rc": 0,
+    "instret": 2843385727,
+    "cycles": 2843245748,
+    "entries": 139979,
+    "seconds": 4.22,
+    "peak_pages": 135111,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 10,
+    "rc": 0,
+    "instret": 1933148023,
+    "cycles": 1933008082,
+    "entries": 139941,
+    "seconds": 3.3,
+    "peak_pages": 135073,
+    "nodes": 143
+   },
+   {
+    "tag": "run",
+    "i": 11,
+    "rc": 0,
+    "instret": 3026122025,
+    "cycles": 3025982044,
+    "entries": 139981,
+    "seconds": 4.4,
+    "peak_pages": 135111,
+    "nodes": 143
+   }
+  ],
+  "outputs": {
+   "cpu2006docs.tar-1-0.out": "211f54ac64f8a7efe5a61f1a476363c64e6eb7493cb917353b144a9df5982e5b",
+   "cpu2006docs.tar-1-1.out": "c74343902f42ca10bf9569e9a6a65968aff0867f12cb4b732a69ffc63b5a420d",
+   "cpu2006docs.tar-1-2.out": "10ae9343a2dd8d81da44d44e737fc2940af0349ad89e0de7a86f65ea240c3a58",
+   "cpu2006docs.tar-1-3e.out": "8d5b873c430087cb3f0d13e20075b6521f939926ed69c09cfcd7aeb4be922ca3",
+   "cpu2006docs.tar-1-4.out": "02f8d81e89fa6b1add13f9305a0b79d3d31c4587a267037483b77ba290c423ef",
+   "cpu2006docs.tar-1-4e.out": "c43cf718699a474ba763d32930ee9daacbe488ed3c70bedeaa4ea19e44776102",
+   "cpu2006docs.tar-4-0.out": "80b9e98184e536eafd18ad059278c304f3f59b3673e4c71203a305441740e264",
+   "cpu2006docs.tar-4-1.out": "d57fb0b14ee67557acea66f34a1a73ef0c7c55dbaf4c1f8d46ff14a1885cf7bf",
+   "cpu2006docs.tar-4-2.out": "5225a92bffeaa6e61e86a136f92bcff31b03a2ab1c71f76cec6d365a99940327",
+   "cpu2006docs.tar-4-3e.out": "3522866056b5ae84c19cae75e2bce8bfd9b5d055b86ccf7a3c7847f9a696189d",
+   "cpu2006docs.tar-4-4.out": "a854805559ca63152d290f3953664818b86e84e05dca29e9b09646f1c9e04cb1",
+   "cpu2006docs.tar-4-4e.out": "2a5b52fd57239898203d16a3c8f0e7346f0d12124cfbb95d9a9971b72c647579"
+  },
+  "validation": [
+   {
+    "cmd": "cpu2006docs.tar-1-0.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-1.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-2.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-3e.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-4.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-1-4e.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-0.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-1.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-2.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-3e.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-4.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "cpu2006docs.tar-4-4e.out",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "505.mcf_r",
+  "size": "test",
+  "arm": "capstone-spatial",
+  "run": "505.mcf_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 35301316585,
+    "cycles": 35300922611,
+    "entries": 393974,
+    "seconds": 38.91,
+    "peak_pages": 174250,
+    "nodes": 812
+   }
+  ],
+  "outputs": {
+   "inp.out": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+   "mcf.out": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530"
+  },
+  "validation": [
+   {
+    "cmd": "inp.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "mcf.out",
+    "verdict": "PASS"
+   }
+  ]
+ },
+ {
+  "bench": "505.mcf_r",
+  "size": "test",
+  "arm": "capstone-lifetimes",
+  "run": "505.mcf_r-test",
+  "commands": [
+   {
+    "tag": "run",
+    "i": 0,
+    "rc": 0,
+    "instret": 35302835720,
+    "cycles": 35302441543,
+    "entries": 394177,
+    "seconds": 38.91,
+    "peak_pages": 174250,
+    "nodes": 64004
+   }
+  ],
+  "outputs": {
+   "inp.out": "b8a0d3ecba350c7f07063bb58799fa579fe46a2e5911b12fdfffdbf7f1895a6c",
+   "mcf.out": "b272028fe374deea3865a5d29e71762a6c974558e97606b40292ed9744010530"
+  },
+  "validation": [
+   {
+    "cmd": "inp.out",
+    "verdict": "PASS"
+   },
+   {
+    "cmd": "mcf.out",
+    "verdict": "PASS"
+   }
+  ]
+ }
+]
