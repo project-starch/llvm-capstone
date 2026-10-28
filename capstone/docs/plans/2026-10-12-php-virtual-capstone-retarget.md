@@ -2625,3 +2625,33 @@ reads absent on every arm from its archived transcript; the stock arm's output-d
 are run14's four rows again (run15's bundles carried 33, the launcher's exit line). The re-judged
 bundles are now `results/2026-10-28-run15/`; the derived verdicts are unchanged (derive-verdicts
 --check current, 195 cells).
+
+### The fourth review (after 106ed1abca74), answered at 4fefe40638e2; a second re-judge pre-registered
+
+The fourth review held the lane NOT READY on: (P1) a forwarding routine is passed through as a
+whole function, and `dl_call_once` stores to the runtime's own entry before it copies the
+caller's buffer, so a cause-25 fault on that store would be attributed to the PHP caller like the
+fault on the copy -- the judge has no operand evidence to tell them apart; (P1) the one-hop leaf
+rule read the caller off ra without the seam and allocator barriers; (P2) the direct rule compared
+every declared function against ASan's primary file, so a fault directly in CRASH-057's second
+site could not match, and the reach evidence named fault_sites[0]; (P2) the putenv reader took
+`retained=2` and `failures=0garbage`. 4fefe40638e2 answers each: the P1 on forwarding is answered
+by CLASSIFICATION, not by a claim of soundness -- a catch through the call path is its own
+attribution class, `chain`, the weakest, shown apart in every table and never counted silently
+with the function catches; the operand-level evidence that would promote a chain catch (the
+faulting capability's bounds matched against the seam's own issue record) is a measurement this
+lane does not make. The other three are fixed as described in the commit.
+
+Two counts corrected: run15's pre-fix bundles (e9c5abcc4ba8) carried the launcher's exit line as an
+output divergence on 33 stock rows in the default scoring and 44 in the sensitivity scoring (the
+earlier entry said 33 without naming the scoring; the fourth review counted 34 by another method).
+
+**Pre-registration: run15 re-judged a second time (`run15-judged2`, the same transcripts, no boot,
+tree 4fefe40638e2).** Every verdict and reason identical to `results/2026-10-28-run15/` in both
+scorings and populations. The attribution class changes from `function` to `chain` on exactly
+these CAUGHT cells and no others: CRASH-068 on all four arms (both scorings; the fault in strlen,
+the site through ra), CRASH-057 on virtual-nested-pools and virtual-nested-exact (sensitivity; the
+frame chain), CRASH-008 on virtual-nested-exact (both scorings; the chain through strcpy and
+strcat). The tables' "of which by chain" column therefore reads, over the 49 CWE-416 cases in the
+sensitivity scoring: stock 1, system allocator 1, nested 2, nested exact 2 (068 and 057), and over
+all 65: nested exact 3 (008 besides). Nothing else moves.
