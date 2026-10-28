@@ -2500,3 +2500,28 @@ platform probe, putenv. Watchdog 40 s. Both populations, default and sensitivity
 Expected sensitivity totals over the 49 CWE-416 cases, if every "iff" above holds: stock 2,
 system allocator 23, nested 46, nested exact 45 CAUGHT; 1 excluded (084); 092 and 075
 NO-READING.
+
+### run13 (`corpus-run13`, tree 90adc195fe1b, platform-res2, out-lt8, putenv probe): as pre-registered
+
+Both boots rc 0 (temporal-asan-visible 08:35-08:38 UTC, asan-blind 08:38-08:48), the sensitivity
+re-scoring from copies. Against `corpus-run12-judged`, cell for cell, both scorings: temporal 0
+of 76 differ; asan-blind 5 of 184, the same five in both scorings, every one pre-registered and
+none other:
+
+- CRASH-092: `not-reached` on stock and the system allocator (the run completed short of the
+  defect), `infra` on both nested arms (the watchdog). Back in the denominator.
+- CRASH-073 on virtual-nested-exact: CAUGHT becomes `unattributed`, the evidence "its frame chain
+  passes PHP's allocator (_estrndup@zend_alloc.c:437) before any declared site".
+- CRASH-008 stays CAUGHT on virtual-nested-exact (every frame between `__stpcpy` and `php_date`
+  resolved, `php_date` in `ext/standard/datetime.c`); CRASH-057 stays CAUGHT on both nested arms
+  in the sensitivity scoring, its chain fully resolved: "ra=0xa (unresolved, a leaf's scratch
+  register), dl_call, dl_transfer, __capstone_delegate_call, write@write.c:6, sapi_cli_single_write
+  ... php_var_dump at var.c:126". CRASH-084 `out-of-denominator` on all four arms, the putenv
+  probe's hash (5d65c6d7f446886b) in platform.json.
+
+Sensitivity totals over the 49 CWE-416 cases: stock 2, system allocator 23, nested 46, nested
+exact 46 CAUGHT; 084 excluded; 075 and 092 NO-READING (infra). The pre-registration's "nested
+exact 45" was wrong arithmetic, not a mover: CRASH-073 is CWE-125 and CRASH-008 CWE-787, the
+exact-bounds arm's spatial catches, so 073's move shows only in the all-65 count (virtual-nested-
+exact 57 to 56 CAUGHT, sensitivity). Images and platform by hash in `corpus-run13/images.sha256`.
+This is the follow-up lane's measurement, replacing run12-judged.
