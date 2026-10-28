@@ -2170,3 +2170,42 @@ Pre-registration of the three diagnostics launched 2026-10-28 (p13, run10's plat
   retained=0 rc=-1 errno=22`, `DONE failures=0` -- the behaviour absent, with the control proving
   the probe sees retention. If `empty-name retained=1`, the whole CRASH-084 reading above is wrong
   and the declaration must come out.
+
+### The three diagnostics, measured (2026-10-28, p13, run10's platform)
+
+- **putenv probe** (`residues/putenv-probe`, image efa8059626a6): `control retained=1 rc=0`,
+  `empty-name retained=0 rc=-1 errno=22`, `empty-name-value retained=0 rc=-1 errno=22`,
+  `DONE failures=0`. Exactly the pre-registered reading: this libc does not keep an empty-name
+  putenv string in environ, and the probe can see retention. CRASH-084's declared precondition is
+  absent on this platform; with `--putenv-probe` the case leaves the denominator on every arm.
+- **CRASH-075 with a 600-second watchdog** (`residues/075-600s`, 8 minutes for the four arms):
+  stock MISSED (ran to its normal end, reach established), virtual-malloc, virtual-nested-pools and
+  virtual-nested-exact CAUGHT, each with cause 25 in `php_array_walk` at ext/standard/array.c:1036,
+  the declared function at ASan's own line. The population's 40-second watchdog was the whole
+  reason for the infra reading.
+- **CRASH-081 on the 8 MiB-stack SDK** (`residues/081-stack8`, image 27834e340816, SDK
+  `STACK_BYTES=8388608 DATA_BYTES=16777216`): the stack-bound fault before the marker is gone, as
+  pre-registered. Default scoring: out-of-denominator on every arm (native SIGSEGV), as before.
+  Sensitivity scoring (`residues/081-stack8-sens`, re-judged from the same records): virtual-malloc,
+  virtual-nested-pools and virtual-nested-exact CAUGHT, cause 25 in `zif_array_filter` at
+  ext/standard/array.c:3938, the declared function at ASan's own line; stock: the 40-second
+  watchdog (deep(4000) under mode 0, which keeps every block).
+
+So of the 49 CWE-416 cases: 48 apply on this libc; the nested arms catch 46 of the 48 when
+CRASH-075 is given the time it needs and CRASH-081 the stack native PHP has; CRASH-057 is a
+cause-25 fault on the freed temporary that the judge cannot attribute (unresolved, above), and
+CRASH-092 is the select() loop (open). None of the five was a lifetime that stayed accessible.
+
+### Pre-registration of run11 (written before the run)
+
+The whole corpus, both populations, both scorings, on the 8 MiB-stack SDK's images
+(`out-stack8`: php-real-seam.dom 27834e340816, probe-seam.dom 9e8b4e6baa3f) with the putenv probe
+(`--putenv-probe`, built against the same SDK), the population watchdog unchanged at 40 seconds,
+runner and corpus at 52a40b6da2d6. Against run10 (`corpus-run10`):
+
+- CRASH-084: NO-READING out-of-denominator on every arm in BOTH scorings (was MISSED).
+- CRASH-081, sensitivity: virtual-malloc, virtual-nested-pools, virtual-nested-exact CAUGHT (was
+  setup-fault / NO-READING); stock stays NO-READING (infra, the watchdog). Default: unchanged.
+- CRASH-075: unchanged (the 40-second watchdog is kept; its catch is the separate record above).
+- every other cell: equal to run10. A stack eight times larger changes the layout of nothing on the
+  heap, and the probe runs before the cases; any other move must be explained before any claim.
