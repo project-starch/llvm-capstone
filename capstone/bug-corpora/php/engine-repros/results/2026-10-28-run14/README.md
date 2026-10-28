@@ -15,19 +15,21 @@ The follow-up lane's measurement, replacing run12 and run13 (run14 is cell-ident
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 6 | 0 | 31 | infra 1, not-reached 2, out-of-denominator 25 |
-| system allocator | 15 | 0 | 21 | infra 1, not-reached 2, out-of-denominator 25, unattributed 1 |
-| nested | 28 | 0 | 9 | infra 2, out-of-denominator 25, unattributed 1 |
-| nested exact | 33 | 0 | 3 | infra 2, out-of-denominator 25, unattributed 2 |
+| stock | 6 | not classified | 31 | infra 1, not-reached 2, out-of-denominator 25 |
+| system allocator | 15 | not classified | 21 | infra 1, not-reached 2, out-of-denominator 25, unattributed 1 |
+| nested | 28 | not classified | 9 | infra 2, out-of-denominator 25, unattributed 1 |
+| nested exact | 33 | not classified | 3 | infra 2, out-of-denominator 25, unattributed 2 |
 
 **the CWE-416 cases** (49):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 1 | 0 | 21 | infra 1, not-reached 2, out-of-denominator 24 |
-| system allocator | 10 | 0 | 11 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
-| nested | 23 | 0 | 0 | infra 2, out-of-denominator 24 |
-| nested exact | 23 | 0 | 0 | infra 2, out-of-denominator 24 |
+| stock | 1 | not classified | 21 | infra 1, not-reached 2, out-of-denominator 24 |
+| system allocator | 10 | not classified | 11 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
+| nested | 23 | not classified | 0 | infra 2, out-of-denominator 24 |
+| nested exact | 23 | not classified | 0 | infra 2, out-of-denominator 24 |
+
+("not classified": this record was judged before the `chain` attribution class existed, 2026-10-28; its chain catches are carried as `function` and are not re-labelled)
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
@@ -42,19 +44,21 @@ The follow-up lane's measurement, replacing run12 and run13 (run14 is cell-ident
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 7 | 0 | 31 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 4 |
-| system allocator | 28 | 0 | 21 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 3 |
-| nested | 51 | 0 | 9 | infra 2, out-of-denominator 1, unattributed 2 |
-| nested exact | 56 | 0 | 3 | infra 2, out-of-denominator 1, unattributed 3 |
+| stock | 7 | not classified | 31 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 4 |
+| system allocator | 28 | not classified | 21 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 3 |
+| nested | 51 | not classified | 9 | infra 2, out-of-denominator 1, unattributed 2 |
+| nested exact | 56 | not classified | 3 | infra 2, out-of-denominator 1, unattributed 3 |
 
 **the CWE-416 cases** (49):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 2 | 0 | 21 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 3 |
-| system allocator | 23 | 0 | 11 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 2 |
-| nested | 46 | 0 | 0 | infra 2, out-of-denominator 1 |
-| nested exact | 46 | 0 | 0 | infra 2, out-of-denominator 1 |
+| stock | 2 | not classified | 21 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 3 |
+| system allocator | 23 | not classified | 11 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 2 |
+| nested | 46 | not classified | 0 | infra 2, out-of-denominator 1 |
+| nested exact | 46 | not classified | 0 | infra 2, out-of-denominator 1 |
+
+("not classified": this record was judged before the `chain` attribution class existed, 2026-10-28; its chain catches are carried as `function` and are not re-labelled)
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
@@ -62,4 +66,3 @@ The follow-up lane's measurement, replacing run12 and run13 (run14 is cell-ident
 - system allocator: 10 of 19 / 13 of 30
 - nested: 19 of 19 / 27 of 30
 - nested exact: 19 of 19 / 27 of 30
-

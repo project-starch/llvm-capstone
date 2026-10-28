@@ -50,6 +50,15 @@ def tables(scoring_dir, known, title):
         tallies[arm] = seen
     if missing:
         return lines, missing
+    # Was this record judged with the `chain` attribution class at all? A bundle judged before
+    # the class existed (run7, run10, run14) carries its chain catches as `function`, and a
+    # column reading 0 there would be false; it reads "not classified" instead. The judge marks
+    # its scoring since the class exists; a record without the mark and without a chain row is
+    # unclassified (fifth review, 2026-10-28).
+    classified = any("chain" in str(json.loads((scoring_dir / f"bundle-{arm}" / "inputs.json").read_text())
+                                    .get("scoring", {}).get("attribution", ""))
+                     or any(r["observation"].get("attribution") == "chain" for r in tallies[arm].values())
+                     for arm in ARMS)
     def tally(arm, pick):
         t = collections.Counter()
         for c, r in tallies[arm].items():
@@ -67,8 +76,12 @@ def tables(scoring_dir, known, title):
         for arm in ARMS:
             t = tally(arm, pick)
             nr = ", ".join(f"{k.split('/', 1)[1]} {v}" for k, v in sorted(t.items()) if k.startswith("NO-READING/"))
-            lines.append(f"| {LABEL[arm]} | {t['CAUGHT']} | {t['CAUGHT/chain']} | {t['MISSED']} | {nr or '0'} |")
+            chain = t["CAUGHT/chain"] if classified else "not classified"
+            lines.append(f"| {LABEL[arm]} | {t['CAUGHT']} | {chain} | {t['MISSED']} | {nr or '0'} |")
         lines.append("")
+    if not classified:
+        lines += ["(\"not classified\": this record was judged before the `chain` attribution class existed, "
+                  "2026-10-28; its chain catches are carried as `function` and are not re-labelled)", ""]
     lines += ["**CWE-416 catches by native population** (temporal-asan-visible / asan-blind):", ""]
     for arm in ARMS:
         parts = []
@@ -101,7 +114,7 @@ def main():
     if problems:
         print("\n".join(problems), file=sys.stderr)
         return 1
-    print("\n".join(out))
+    print("\n".join(out).rstrip("\n"))   # one newline at the end, so a README built from this has no trailing blank line
     return 0
 
 

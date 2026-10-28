@@ -15,19 +15,21 @@ Lane B's measurement: the corpus at its own head, run7 (the plan document's lane
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 6 | 0 | 32 | infra 2, not-reached 1, out-of-denominator 24 |
-| system allocator | 15 | 0 | 22 | infra 2, not-reached 1, out-of-denominator 24, unattributed 1 |
-| nested | 28 | 0 | 11 | infra 2, out-of-denominator 24 |
-| nested exact | 32 | 0 | 5 | infra 2, out-of-denominator 24, unattributed 2 |
+| stock | 6 | not classified | 32 | infra 2, not-reached 1, out-of-denominator 24 |
+| system allocator | 15 | not classified | 22 | infra 2, not-reached 1, out-of-denominator 24, unattributed 1 |
+| nested | 28 | not classified | 11 | infra 2, out-of-denominator 24 |
+| nested exact | 32 | not classified | 5 | infra 2, out-of-denominator 24, unattributed 2 |
 
 **the CWE-416 cases** (49):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 1 | 0 | 22 | infra 2, not-reached 1, out-of-denominator 23 |
-| system allocator | 10 | 0 | 12 | infra 2, not-reached 1, out-of-denominator 23, unattributed 1 |
-| nested | 23 | 0 | 1 | infra 2, out-of-denominator 23 |
-| nested exact | 23 | 0 | 1 | infra 2, out-of-denominator 23 |
+| stock | 1 | not classified | 22 | infra 2, not-reached 1, out-of-denominator 23 |
+| system allocator | 10 | not classified | 12 | infra 2, not-reached 1, out-of-denominator 23, unattributed 1 |
+| nested | 23 | not classified | 1 | infra 2, out-of-denominator 23 |
+| nested exact | 23 | not classified | 1 | infra 2, out-of-denominator 23 |
+
+("not classified": this record was judged before the `chain` attribution class existed, 2026-10-28; its chain catches are carried as `function` and are not re-labelled)
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
@@ -35,4 +37,3 @@ Lane B's measurement: the corpus at its own head, run7 (the plan document's lane
 - system allocator: 2 of 19 / 8 of 30
 - nested: 2 of 19 / 21 of 30
 - nested exact: 2 of 19 / 21 of 30
-

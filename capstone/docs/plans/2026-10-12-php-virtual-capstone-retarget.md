@@ -2520,7 +2520,8 @@ none other:
   probe's hash (5d65c6d7f446886b) in platform.json.
 
 Sensitivity totals over the 49 CWE-416 cases: stock 2, system allocator 23, nested 46, nested
-exact 46 CAUGHT; 084 excluded; 075 and 092 NO-READING (infra). The pre-registration's "nested
+exact 46 CAUGHT; 084 excluded; 075 NO-READING (infra) on every arm, 092 NO-READING (infra on the
+nested arms, not-reached on stock and the system allocator). The pre-registration's "nested
 exact 45" was wrong arithmetic, not a mover: CRASH-073 is CWE-125 and CRASH-008 CWE-787, the
 exact-bounds arm's spatial catches, so 073's move shows only in the all-65 count (virtual-nested-
 exact 57 to 56 CAUGHT, sensitivity). Images and platform by hash in `corpus-run13/images.sha256`.

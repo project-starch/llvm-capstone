@@ -132,11 +132,20 @@ def putenv_probe_outcome(text):
     retained with rc 0 either way. Anything else -- an EFAULT, a missing line, a retained call
     that returned -1 -- is a probe that did not behave as declared and reads as no result, so
     an unexpected failure can never read as the precondition being absent (review 2026-10-28)."""
+    # EVERY line the probe's protocol prefix introduces must be a whole record of a known kind;
+    # a malformed or unexpected PUTENV_PROBE line (a FAIL line, `retained=2`, `failures=1garbage`)
+    # is a transcript the probe did not write as declared, whatever else it contains (fifth
+    # review, 2026-10-28: the parser counted the well-formed records and ignored the rest).
+    records = [l.rstrip("\r") for l in (text or "").splitlines() if l.startswith("PUTENV_PROBE")]
+    if any(not (PUTENV_LINE.match(l) or PUTENV_DONE.match(l)) for l in records):
+        return None
     dones = PUTENV_DONE.findall(text or "")
     if len(dones) != 1 or int(dones[0]) != 0:
         return None                       # exactly one completion record, and a clean one
     found = [(m.group(1), (m.group(2) == "1", int(m.group(3)), int(m.group(4))))
              for m in PUTENV_LINE.finditer(text)]
+    if sorted(label for label, _ in found) != ["control", "empty-name", "empty-name-value"]:
+        return None                       # the three calls, each once, and no other
     # each call reported exactly once: a second line for the same call is a transcript the
     # probe did not write as declared, not a reading to keep the last of
     if len({label for label, _ in found}) != len(found):
@@ -944,7 +953,14 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # arm licensed reach on every arm of the case, which let a silence elsewhere read as
     # MISSED on the strength of another configuration's fault; that transfer is gone.
     obs.reached = at_site or (bool(stock_reached) and bool(precondition_met))
-    if at_site:
+    if at_site and obs.attribution == "chain":
+        # the fault is NOT in the site: it is in a forwarding routine whose call path reaches
+        # the site, which is weaker, and the wording must not read stronger (fifth review)
+        obs.reach_evidence = (f"this run faulted in {fault.symbol or '?'}, whose call path reaches "
+                              f"{matched_site or spec['fault_sites'][0]}, the case's own declared site "
+                              f"(attributed by chain); that path cannot be on the stack without "
+                              f"the trigger having run")
+    elif at_site:
         obs.reach_evidence = (f"this run faulted in {matched_site or spec['fault_sites'][0]}, the case's own "
                               f"declared site, which cannot be reached without the trigger "
                               f"having run")
@@ -1454,7 +1470,9 @@ def main():
                                    "attribution": ("declared function (case.json fault_sites) in "
                                                    "its file, with a protective cause "
                                                    "(arms.json protective_causes); own fault "
-                                                   "licenses own reach; 2026-10-27"),
+                                                   "licenses own reach; 2026-10-27; a catch through "
+                                                   "a forwarding routine's call path is the chain "
+                                                   "class, counted apart; 2026-10-28"),
                                    "protective_causes": arms[arm]["protective_causes"]}})
     print(f"\nbundles written under {args.out}")
 

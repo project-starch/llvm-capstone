@@ -560,7 +560,9 @@ def observation_cases():
     check("a catch through the frame chain is attributed as `chain`, and says so",
           (verdicts.judge(obs, pools)[0], obs.attribution, "by the call path (chain)" in obs.attribution_evidence),
           (verdicts.CAUGHT, "chain", True))
-    check("and its reach evidence names the site the chain reached", "faulted in php_var_dump" in obs.reach_evidence, True)
+    check("and its reach evidence says the FAULT is in the forwarding routine and the site is reached by the call path",
+          ("faulted in dl_call_once, whose call path reaches php_var_dump" in obs.reach_evidence,
+           "faulted in php_var_dump" in obs.reach_evidence), (True, False))
     # the leaf rule: memcpy with no chain, ra into the allocator (CRASH-073's shape) is refused
     SPEC73 = dict(VD_SPEC, fault_sites=["_estrndup"], site_files={"_estrndup": "Zend/zend_alloc.c"},
                   asan_stack=[{"index": 0, "func": "memcpy", "outside": "memintrinsics.inc:117"},
@@ -590,6 +592,16 @@ def observation_cases():
     check("probe: retained=2 is no result", R.putenv_probe_outcome(absent2.replace("empty-name retained=0", "empty-name retained=2")), None)
     check("probe: a DONE line with trailing garbage is no result", R.putenv_probe_outcome(absent2.replace("failures=0", "failures=0garbage")), None)
     check("probe: the clean absent transcript still reads absent", R.putenv_probe_outcome(absent2), False)
+    # the fifth review: a malformed or unexpected PUTENV_PROBE line ANYWHERE voids the transcript,
+    # even beside a complete well-formed pattern
+    check("probe: an extra malformed DONE line voids the transcript",
+          R.putenv_probe_outcome(absent2 + "PUTENV_PROBE DONE failures=1garbage\n"), None)
+    check("probe: an extra malformed call line voids the transcript",
+          R.putenv_probe_outcome(absent2 + "PUTENV_PROBE empty-name retained=2 rc=-1 errno=22 (Invalid argument)\n"), None)
+    check("probe: the probe's own FAIL line voids the transcript",
+          R.putenv_probe_outcome("PUTENV_PROBE FAIL the control variable was not retained\n" + absent2), None)
+    check("probe: an unexpected fourth call voids the transcript",
+          R.putenv_probe_outcome(absent2 + "PUTENV_PROBE other retained=0 rc=-1 errno=22 (Invalid argument)\n"), None)
     # A LEAF under line tables (CRASH-068's shape once musl carries them): strlen has a path now,
     # so the old `not path` branch no longer applies; and a leaf keeps no frame, so the chain's
     # first entry is the caller's CALLER (vspprintf) -- the caller itself is only in ra. The walk

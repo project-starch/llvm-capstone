@@ -15,19 +15,21 @@ Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cel
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 6 | 0 | 32 | infra 1, not-reached 2, out-of-denominator 24 |
-| system allocator | 15 | 0 | 22 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
-| nested | 28 | 0 | 10 | infra 2, out-of-denominator 24, unattributed 1 |
-| nested exact | 32 | 0 | 4 | infra 2, out-of-denominator 24, unattributed 3 |
+| stock | 6 | not classified | 32 | infra 1, not-reached 2, out-of-denominator 24 |
+| system allocator | 15 | not classified | 22 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
+| nested | 28 | not classified | 10 | infra 2, out-of-denominator 24, unattributed 1 |
+| nested exact | 32 | not classified | 4 | infra 2, out-of-denominator 24, unattributed 3 |
 
 **the CWE-416 cases** (49):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 1 | 0 | 22 | infra 1, not-reached 2, out-of-denominator 23 |
-| system allocator | 10 | 0 | 12 | infra 1, not-reached 2, out-of-denominator 23, unattributed 1 |
-| nested | 23 | 0 | 1 | infra 2, out-of-denominator 23 |
-| nested exact | 23 | 0 | 1 | infra 2, out-of-denominator 23 |
+| stock | 1 | not classified | 22 | infra 1, not-reached 2, out-of-denominator 23 |
+| system allocator | 10 | not classified | 12 | infra 1, not-reached 2, out-of-denominator 23, unattributed 1 |
+| nested | 23 | not classified | 1 | infra 2, out-of-denominator 23 |
+| nested exact | 23 | not classified | 1 | infra 2, out-of-denominator 23 |
+
+("not classified": this record was judged before the `chain` attribution class existed, 2026-10-28; its chain catches are carried as `function` and are not re-labelled)
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
@@ -42,19 +44,21 @@ Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cel
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 7 | 0 | 32 | infra 1, not-reached 13, setup-fault 8, unattributed 4 |
-| system allocator | 27 | 0 | 22 | infra 1, not-reached 2, setup-fault 10, unattributed 3 |
-| nested | 49 | 0 | 10 | infra 2, setup-fault 2, unattributed 2 |
-| nested exact | 53 | 0 | 4 | infra 2, setup-fault 2, unattributed 4 |
+| stock | 7 | not classified | 32 | infra 1, not-reached 13, setup-fault 8, unattributed 4 |
+| system allocator | 27 | not classified | 22 | infra 1, not-reached 2, setup-fault 10, unattributed 3 |
+| nested | 49 | not classified | 10 | infra 2, setup-fault 2, unattributed 2 |
+| nested exact | 53 | not classified | 4 | infra 2, setup-fault 2, unattributed 4 |
 
 **the CWE-416 cases** (49):
 
 | arm | CAUGHT | of which by chain | MISSED | NO-READING |
 |---|--:|--:|--:|---|
-| stock | 2 | 0 | 22 | infra 1, not-reached 13, setup-fault 8, unattributed 3 |
-| system allocator | 22 | 0 | 12 | infra 1, not-reached 2, setup-fault 10, unattributed 2 |
-| nested | 44 | 0 | 1 | infra 2, setup-fault 2 |
-| nested exact | 44 | 0 | 1 | infra 2, setup-fault 2 |
+| stock | 2 | not classified | 22 | infra 1, not-reached 13, setup-fault 8, unattributed 3 |
+| system allocator | 22 | not classified | 12 | infra 1, not-reached 2, setup-fault 10, unattributed 2 |
+| nested | 44 | not classified | 1 | infra 2, setup-fault 2 |
+| nested exact | 44 | not classified | 1 | infra 2, setup-fault 2 |
+
+("not classified": this record was judged before the `chain` attribution class existed, 2026-10-28; its chain catches are carried as `function` and are not re-labelled)
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
@@ -62,4 +66,3 @@ Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cel
 - system allocator: 10 of 19 / 12 of 30
 - nested: 19 of 19 / 25 of 30
 - nested exact: 19 of 19 / 25 of 30
-
