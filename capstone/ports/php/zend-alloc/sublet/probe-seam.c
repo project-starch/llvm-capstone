@@ -20,10 +20,10 @@
  *   3  AG(cache)'s shape: reclaim, re-issue to a new tenant, then use the OLD alias   FAULT
  *   4  the intrusive list: three blocks, reclaim the middle, walk the neighbours' headers
  *   5  realloc moves the payload: contents preserved, the old alias dead              FAULT
- *   6  the CONTROL arm (revoke off): the same stale use must COMPLETE
+ *   6  the STOCK arm (revoke off): the same stale use must COMPLETE
  *   7  the bound: one byte past the request, exact vs stock rounding
- *   8  the PLATFORM column on a CACHE-ABSORBED free: must NOT fault
- *   9  the PLATFORM column on a REAL free: must fault
+ *   8  the SYSTEM-ALLOCATOR arm on a CACHE-ABSORBED free: must NOT fault
+ *   9  the SYSTEM-ALLOCATOR arm on a REAL free: must fault
  *  10  a double efree: the second reclaim faults INSIDE the libc, at cap_malloc_reclaim
  *  11  a grandchild the caller derived for itself is refused by the reclaim (cause 29)
  *  12  an interior pointer handed to efree is refused by name (ZEND_CAP_FAIL code=4)
@@ -34,7 +34,7 @@
  *
  * Stages 8 and 9 answer the question stage 6 cannot: whether a catch belongs to the SEAM or to
  * mallocng underneath it. The platform revokes a block when the block is freed, and PHP's
- * cache means most blocks never are -- so on the platform arm a cache-absorbed free must
+ * cache means most blocks never are -- so on the system-allocator arm a cache-absorbed free must
  * survive (stage 8) while a real one must not (stage 9). Without that pair, every temporal
  * catch here would be unattributable between the two layers.
  *
@@ -90,9 +90,9 @@ int main(int argc, char **argv)
     fflush(stdout);
 
     /* The arm under test is the full seam: exact bounds, a child per object, and the block
-     * returned so mallocng revokes it too. Stage 6 is the STOCK column (nothing revoked
-     * anywhere, the block leaked); stages 8 and 9 are the PLATFORM column (the block returned,
-     * no child per object), which is what makes a seam catch attributable to the seam. */
+     * returned so mallocng revokes it too. Stage 6 is the STOCK arm (nothing revoked
+     * anywhere, the block leaked); stages 8 and 9 are the SYSTEM-ALLOCATOR arm (the block returned,
+     * no child per object), which is what makes a nested-arm catch attributable to the per-object lifetime. */
     zend_cap_set_mode(stage == 6 ? ZEND_CAP_MODE_EXACT
                     : (stage == 8 || stage == 9)
                         ? (ZEND_CAP_MODE_EXACT | ZEND_CAP_MODE_RETURN)
@@ -269,9 +269,9 @@ int main(int argc, char **argv)
     }
 
     if (stage == 6) {
-        /* The control arm: identical code, revocation off. */
+        /* The stock arm: identical code, revocation off. */
         efree_like(pay, 0);
-        say("S6 payload reclaimed on the CONTROL arm (revoke off); writing through the alias");
+        say("S6 payload reclaimed on the STOCK arm (revoke off); writing through the alias");
         ((char *)pay)[0] = 'x';
         if (((char *)pay)[0] != 'x') { say("S6 FAIL: write did not land"); return 1; }
         say("S6 RESULT: PASS -- with revocation off the stale alias is still usable, so the\n"
@@ -283,18 +283,18 @@ int main(int argc, char **argv)
     }
 
     if (stage == 8) {
-        /* THE PLATFORM COLUMN, on a block AG(cache) absorbed. mallocng revokes a block when it
+        /* THE SYSTEM-ALLOCATOR ARM, on a block AG(cache) absorbed. mallocng revokes a block when it
          * is FREED, and PHP's cache means most blocks are never freed -- which is precisely why
          * so many of the corpus's use-after-frees are invisible to ASAN. With the block returned
          * but no child per object, a use-after-free of a CACHED block must therefore survive. If
          * this stage faulted, the seam's catches could be the platform's and there would be no
          * way to tell them apart. */
         efree_like(pay, 0);                 /* the park: reclaim (a no-op here), do not free */
-        say("S8 cached-block free on the PLATFORM arm; using the alias (expect NO fault)");
+        say("S8 cached-block free on the SYSTEM-ALLOCATOR arm; using the alias (expect NO fault)");
         ((char *)pay)[0] = 'x';
         if (((char *)pay)[0] != 'x') { say("S8 FAIL: the write did not land"); return 1; }
         say("S8 RESULT: PASS -- the platform alone does NOT see a free that AG(cache) absorbed,\n"
-            "           so a catch on the seam arm is the seam's and not mallocng's.");
+            "           so a catch on the nested arm is the nested lifetime's and not mallocng's.");
         return 0;
     }
 
@@ -303,7 +303,7 @@ int main(int argc, char **argv)
          * saying so is what keeps stage 8 honest rather than a claim that mallocng does
          * nothing. */
         efree_like(pay, 1);                 /* reclaim (no-op) AND return the block */
-        say("S9 real block free on the PLATFORM arm; using the alias (expect a FAULT)");
+        say("S9 real block free on the SYSTEM-ALLOCATOR arm; using the alias (expect a FAULT)");
         ((char *)pay)[0] = 'x';
         say("S9 RESULT: NO FAULT -- returning the block did not revoke it. The platform's\n"
             "           own lifetime is not firing, so the three columns are not distinct.");

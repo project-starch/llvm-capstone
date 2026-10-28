@@ -2058,12 +2058,12 @@ run8 on the tree 98f4544dfdbe read 0 of 76 cells different on temporal-asan-visi
 five P1) named the causes before the cells were read, and the cells agree:
 
 - `emalloc(0)`: the block was the 48-byte header alone and the one-byte child lay outside it --
-  cause 29 in `__capstone_malloc_derive` on CRASH-031/069/083/086/097 (seam arms). The previous
+  cause 29 in `__capstone_malloc_derive` on CRASH-031/069/083/086/097 (the nested arms). The previous
   seam rounded every block to a 16-byte grain, at least 64 bytes. Restored.
-- the control arms' bounds: modes 0 and 4 handed out `p + 48` with the BLOCK's bounds, mode 6 a
+- the stock and system-allocator arms' bounds: modes 0 and 4 handed out `p + 48` with the BLOCK's bounds, mode 6 a
   child bounded to the payload, so the temporal pair no longer differed in revocation alone
   (CRASH-097 read a cause-28 catch on stock and block). Restored: every arm narrows the caller's
-  pointer to the payload; the controls recover the header by a non-ending lookup
+  pointer to the payload; those two arms recover the header by a non-ending lookup
   (`__capstone_malloc_object`).
 - mode 0 revoked through `realloc`: the libc's realloc ends the old issued child, so stock read
   cause-25 catches on CRASH-046/083/117/155 and a cause-25 setup-fault on CRASH-038. Restored:
@@ -2079,7 +2079,7 @@ five P1) named the causes before the cells were read, and the cells agree:
 Two run8 differences are not yet explained and are the open questions run9 must answer, with a
 new diagnostic line (`CAPSTONE_RECLAIM_MISS`, printed by heap.c before an invalid-free refusal):
 
-- CRASH-139 on the seam arms: run7 completed (MISSED), run8 died at startup in
+- CRASH-139 on the nested arms: run7 completed (MISSED), run8 died at startup in
   `cap_malloc_invalid_free`, before the script's first output. The refusal now prints the pointer.
 - CRASH-092 on stock and block: run7's watchdog killed it (infra), run8 completed (not-reached).
   Possibly the run-time behaviour of the previous stock arm's per-efree lookup; possibly timing.
@@ -2106,13 +2106,13 @@ reach, infra, precondition, controls):
 | scoring | population | cells | differ | which |
 |---|---|---|---|---|
 | default | temporal-asan-visible | 76 | 0 | |
-| default | asan-blind | 184 | 4 | CRASH-139 object+exact, CRASH-092 stock+block |
+| default | asan-blind | 184 | 4 | CRASH-139 nested-pools+nested-exact, CRASH-092 stock+virtual-malloc |
 | sensitivity | temporal-asan-visible | 76 | 0 | |
 | sensitivity | asan-blind | 184 | 8 | the same four, plus CRASH-081 on all arms: the fault's symbol reads `zend_cap_block` where it read `zend_cap_block_alloc` (the function was renamed; verdict, cause, reason unchanged) |
 
 No CAUGHT cell changed in either scoring. The two cells the pre-registration left open:
 
-- **CRASH-139** (seam arms, both scorings): MISSED -> NO-READING setup-fault, `ZEND_CAP_FAIL code=3
+- **CRASH-139** (the nested arms, both scorings): MISSED -> NO-READING setup-fault, `ZEND_CAP_FAIL code=3
   free of a pointer this heap did not issue, or not at its start a=0x..6df7`. The address is odd and
   in no block; the trigger's own header says zend_read_property() points a stack zval at a static
   C string literal with dup=0 and never refcount-initialises it, so whether PHP efrees the literal
@@ -2120,10 +2120,10 @@ No CAUGHT cell changed in either scoring. The two cells the pre-registration lef
   would have refused the same free; the free did not happen in run7's build and does in this one.
   That is the mechanism the trigger documents, read off the trigger, not measured in the guest.
   The case's native record is OK (its invalid free does not crash pristine PHP), so it IS in the
-  default denominator: on object and exact it moves from MISSED to NO-READING. Codex's re-review
+  default denominator: on the two nested arms it moves from MISSED to NO-READING. Codex's re-review
   ruled the classification: a refusal by name of a pointer in no block (code 3) or not at its
   start (code 4) is the program's own invalid free observed, not the instrument failing, but
-  nothing ties it to the declared site -- `unattributed`, never `setup-fault` and never a catch.
+  nothing ties it to the declared site -- `unattributed`, never `setup-fault` and never a catch. Arm names throughout are the study's: stock, virtual-malloc (the system allocator), virtual-nested-pools (nested), virtual-nested-exact.
   run-realphp.py and run-cases.py read it so since c333d1afad25's successor.
 - **CRASH-092** (stock and block, both scorings): infra -> not-reached. run7's 40-second watchdog
   killed the run (`VM_EXIT_TIMEOUT`); run9's completed (`done`, exit 0). The case is the select()
@@ -2138,7 +2138,7 @@ record reproduces the 2026-10-27 measurement cell for cell, with the index gone.
 The same platform, the SDK, both images and the probe rebuilt from 8569fb7194dc; inert PASS,
 probe stages 0-12 as before, malloc gate as before (the kit's mremap check alone), manifest
 PASSED. Cells against run7's `final/`: default temporal 0 of 76; default asan-blind 4 of 184
-(CRASH-139 object+exact MISSED -> NO-READING `unattributed`, CRASH-092 stock+block infra ->
+(CRASH-139 nested-pools+nested-exact MISSED -> NO-READING `unattributed`, CRASH-092 stock+virtual-malloc infra ->
 not-reached); sensitivity temporal 1 of 76 (CRASH-118 stock: the refusal's label, setup-fault ->
 unattributed); sensitivity asan-blind 9 of 184 (the four above, CRASH-057 stock's label the same
 way, and CRASH-081's symbol rename on all four arms). No CAUGHT cell changed in any comparison.

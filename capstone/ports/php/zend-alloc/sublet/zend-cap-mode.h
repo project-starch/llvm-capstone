@@ -44,14 +44,19 @@
  * dies whatever this layer does. "No inner revocation" is therefore NOT "stock PHP lifetimes"
  * here, and the temporal axis has three columns:
  *
- *   mode 0  (stock)     nothing revoked anywhere: no child, and a block is never returned to the
+ *   mode 0  stock                    nothing revoked anywhere: no child, and a block is never returned to the
  *                       heap, realloc included (a fresh block, a copy, the old one kept). A freed
  *                       block stays readable exactly as on stock PHP -- what ASAN sees.
- *   mode 4  (libc)      the block is returned, so mallocng revokes per BLOCK, but no child per
- *                       object. Catches a use-after-free on a block PHP actually freed; MISSES one
- *                       on a block AG(cache) absorbed.
- *   mode 6  (seam)      both: a child per issue, ended at every efree, cache-absorbed or not.
- *   mode 7  (exact)     as 6, bounded to the request instead of REAL_SIZE(n).
+ *   mode 4  system allocator         the block is returned, so mallocng revokes per BLOCK, but no child per
+ *           (virtual-malloc)         object. Catches a use-after-free on a block PHP actually freed; MISSES one
+ *                                    on a block AG(cache) absorbed.
+ *   mode 6  nested allocator         both: a child per issue, ended at every efree, cache-absorbed or not.
+ *           (virtual-nested-pools)
+ *   mode 7  nested, exact bounds     as 6, bounded to the request instead of REAL_SIZE(n).
+ *           (virtual-nested-exact)
+ *
+ * These are the study's four arms under the names every corpus uses (bug-corpora/SCHEMA.md,
+ * run-realphp.py FRAMEWORK_ARM); the seam is the code that builds the nested arms, not an arm.
  *
  * The leak in mode 0 is bounded by one trigger's allocation volume and is the price of a faithful
  * control: a control that revokes is not a control. */
