@@ -2143,3 +2143,30 @@ not-reached); sensitivity temporal 1 of 76 (CRASH-118 stock: the refusal's label
 unattributed); sensitivity asan-blind 9 of 184 (the four above, CRASH-057 stock's label the same
 way, and CRASH-081's symbol rename on all four arms). No CAUGHT cell changed in any comparison.
 The geometry checks fired on no case: no `ZEND_CAP_FAIL code=5` in any record.
+
+## 2026-10-28 — the five CWE-416 cases the nested arms do not catch (follow-up lane php/five-residues)
+
+Of the 49 CWE-416 cases the nested arms catch 44 (sensitivity scoring). The five others were read
+from their records on 2026-10-28 and taken to a Codex consultation (scratchpad codex/five-cases-*):
+every one is the port, the judge, the harness or the corpus, none a lifetime that stayed accessible.
+Codex's ruling, followed here: lane C (php/seam-reclaim) keeps its frozen verdicts; these are a
+follow-up, each with its own record, and any image or platform change gets the whole corpus rerun
+under both scorings with the movers pre-registered.
+
+| case | reading | mechanism, from the record and the source | what is done |
+|---|---|---|---|
+| CRASH-084 | MISSED | musl's putenv takes the unsetenv branch for an empty name (`src/env/putenv.c`: `if (!l \|\| !s[l]) return unsetenv(s);`), so the string the defect needs referenced from environ is never stored; the use-after-free exists only under glibc, the corpus's native oracle | a declared, PROBED platform precondition: `platform_precondition` in case.json (kept by build-cases.py, documented in SCHEMA.md, checked by check-corpus.py), `probe-putenv.c` run once per arm by run-realphp.py (`--putenv-probe`); the case is out of the denominator on an arm only when the probe proves the behaviour absent with its control retained; judged normally otherwise. Tests in test-run-realphp.py |
+| CRASH-057 | NO-READING setup-fault | the nested record faults with cause 25 on an 8-byte object while var_dump prints (`string(1) "` then the fault): the freed temporary string. The pc is in a libc routine without a symbol (nearest `dl_call_once`) and ra is the scalar 0xa, so neither the symbol nor the one-hop ra rule can tie it to the declared site, and the marker that establishes reach prints after the trigger returns | unresolved: Codex's (a) line tables for the libc (`MUSL_CAPSTONE_EXTRA_CFLAGS=-gline-tables-only`, a fresh SDK) is cheap and diagnostic but changes the `not path` libc-leaf branch (CRASH-068 must be re-judged); (b) a frame-chain capture in the launcher is more work; (c) a per-case access-path declaration needs independent evidence; (d) the frozen record stays |
+| CRASH-081 | NO-READING setup-fault | a frame store 80 bytes below the stack's base (`rs1 = x8, addr = ..5fffb0, bounds = (..600000, ...)`, cause 28): the domain's 1 MiB stack (`CAPSTONE_APPLICATION_STACK_BYTES`, runtime/application/CMakeLists.txt:64) overflows under the trigger's deep(4000), which recurses zend_execute in C per PHP call; native has 8 MiB | a second SDK (`PHP_VIRTUAL_SDK_ARGS=-DCAPSTONE_APPLICATION_STACK_BYTES=8388608 -DCAPSTONE_APPLICATION_DATA_BYTES=16777216`) in its own output directory, the seam image rebuilt, the case alone on every arm (`residues/081-stack8`): does deep(4000) return to array_filter. If it does, a full rerun under that SDK, pre-registered: 081's sensitivity cells may move; its default cells stay excluded (native SIGSEGV); every other move must be explained |
+| CRASH-075 | NO-READING infra | the 40-second watchdog kills it after ~13,300 output lines, almost all `CAPSTONE_VM_ADD_OK` mapping lines (exec.c prints one per grant): one 500,000-element argument vector (`call_user_func_array('many', array_fill(0, 500000, 7))`), on every arm | the case alone with a 600-second guest watchdog, every arm, its own record (`residues/075-600s`); a further timeout stays infra; completion needs qualified reach, a catch needs the `php_array_walk` attribution |
+| CRASH-092 | NO-READING infra / not-reached | the select() loop (`php_sock_stream_wait_for_data` spins on a persistent error); probe-select.c's four stages pass on an AF_UNIX socketpair, the case uses a TCP loopback listener | follow-up diagnostic: extend the probe to the TCP topology and trace PHP's actual select arguments and result; watchdog runs stay infra, completions stay not-reached until reach is qualified |
+
+Pre-registration of the three diagnostics launched 2026-10-28 (p13, run10's platform):
+- `residues/075-600s`: not predicted; either a timeout (infra, as before) or a completed run; a catch
+  only with the declared attribution.
+- `residues/081-stack8`: the stack-bound fault before the marker is predicted to disappear; what
+  the case then reads on each arm is not predicted.
+- the putenv probe, run alone on this platform: predicted `control retained=1`, `empty-name
+  retained=0 rc=-1 errno=22`, `DONE failures=0` -- the behaviour absent, with the control proving
+  the probe sees retention. If `empty-name retained=1`, the whole CRASH-084 reading above is wrong
+  and the declaration must come out.

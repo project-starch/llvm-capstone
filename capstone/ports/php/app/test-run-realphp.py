@@ -242,6 +242,36 @@ def observation_cases():
         check(f"a named refusal (code {code}) is unattributed, not infra",
               verdicts.judge(obs, exact)[:2], (verdicts.NO_READING, "unattributed"))
 
+    # A declared PLATFORM precondition (CRASH-084: putenv keeps an empty-name string in environ).
+    # The probe's reading decides, never the declaration alone.
+    present = ("PUTENV_PROBE control retained=1 rc=0 errno=0 (ok)\nPUTENV_PROBE empty-name retained=1 rc=0 errno=0 (ok)\n"
+               "PUTENV_PROBE empty-name-value retained=1 rc=0 errno=0 (ok)\nPUTENV_PROBE DONE failures=0\n")
+    absent = ("PUTENV_PROBE control retained=1 rc=0 errno=0 (ok)\nPUTENV_PROBE empty-name retained=0 rc=-1 errno=22 (Invalid argument)\n"
+              "PUTENV_PROBE empty-name-value retained=0 rc=-1 errno=22 (Invalid argument)\nPUTENV_PROBE DONE failures=0\n")
+    broken = ("PUTENV_PROBE control retained=0 rc=0 errno=0 (ok)\nPUTENV_PROBE FAIL the control variable was not retained\n"
+              "PUTENV_PROBE empty-name retained=0 rc=-1 errno=22 (Invalid argument)\nPUTENV_PROBE DONE failures=1\n")
+    check("probe: retained reads present", R.putenv_probe_outcome(present), True)
+    check("probe: not retained with the control retained reads absent", R.putenv_probe_outcome(absent), False)
+    check("probe: a failed control reads as no result", R.putenv_probe_outcome(broken), None)
+    check("probe: no output reads as no result", R.putenv_probe_outcome(""), None)
+    pp_spec = dict(SPEC, platform_precondition={"needs": "putenv keeps an empty-name string referenced from environ",
+                                                "probe": "putenv", "present": "x", "absent": "y"})
+    obs = R.observe("CRASH-084", pp_spec, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
+                    platform_present=False)
+    check("precondition proven absent: out of the denominator",
+          verdicts.judge(obs, exact)[:2], (verdicts.NO_READING, "out-of-denominator"))
+    check("and the note says the probe found it absent", "probe found it absent" in obs.notes, True)
+    obs = R.observe("CRASH-084", pp_spec, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
+                    platform_present=True)
+    check("precondition present: judged normally (a completed run is MISSED)", verdicts.judge(obs, exact)[0], verdicts.MISSED)
+    obs = R.observe("CRASH-084", pp_spec, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
+                    platform_present=None)
+    check("precondition unchecked: judged normally, with a note",
+          (verdicts.judge(obs, exact)[0], "not checked" in obs.notes), (verdicts.MISSED, True))
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
+                    platform_present=False)
+    check("a case without the declaration ignores the probe", verdicts.judge(obs, exact)[0], verdicts.MISSED)
+
     # Caught on the STOCK arm, so no control arm completed and stock_reached is False. The
     # fault in the declared function is itself the proof the trigger ran: without that route
     # this is `setup-fault` -- the instrument blamed for the platform's clearest result --

@@ -63,6 +63,26 @@ PHP_PATH = re.compile(r"((?:Zend|main|ext|sapi|TSRM|regex)/[\w./]+):(\d+)")
 DETECTOR_OPTION = re.compile(r"^\s*ASAN_OPTIONS\b")
 
 
+# A PLATFORM PRECONDITION a case declares beyond its execution requirement: a libc behaviour the
+# defect needs. CRASH-084's use-after-free exists only where putenv keeps an empty-name string in
+# environ (glibc); musl's putenv does not, so on this platform the dangling reference never comes
+# to be. The declaration is checked by a probe every run (ports/php/app/probe-putenv.c), never
+# asserted: the runner excludes the case only when the probe PROVES the behaviour absent, and
+# judges it normally when the probe is missing or fails. Kept here, with the generator, so that
+# regenerating the corpus keeps it; the schema is bug-corpora/SCHEMA.md "platform_precondition".
+PLATFORM_PRECONDITIONS = {
+    "CRASH-084": {
+        "platform_precondition": {
+            "needs": "putenv keeps an empty-name string referenced from environ",
+            "probe": "putenv",
+            "present": "PUTENV_PROBE empty-name retained=1",
+            "absent": "PUTENV_PROBE empty-name retained=0"
+        },
+        "platform_precondition_why": "musl 1.2.5's putenv (src/env/putenv.c) takes the unsetenv branch for an empty name -- `if (!l || !s[l]) return unsetenv(s);` -- and unsetenv refuses a name containing '=' with EINVAL, so the string is never stored in environ. The use-after-free this case records needs that stored reference: the second empty-name putenv frees the string and the following environ scan reads it (the corpus's native oracle, glibc). Without the reference there is nothing dangling, so a run that completes on this libc is not a miss of the protection; it is a defect whose precondition this platform does not meet. Checked, not asserted: ports/php/app/probe-putenv.c runs on every arm and says what this libc retains, with a control that proves it can see retention at all.",
+    },
+}
+
+
 def requires_kind(text):
     if not text.strip():
         return ""
@@ -236,6 +256,7 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
         "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
         "note": f"population: {pop} -- {why}. Collected by the corpus as {m['how_collected']['origin_stream']} ({m['how_collected']['history_status']}, confidence {m['how_collected']['confidence']}).",
     }
+    case.update(PLATFORM_PRECONDITIONS.get(cid, {}))
     disagreements = []
     t = theirs
     if t["asan"].get(cid, {}).get("outcome") != a["outcome"]:
@@ -325,6 +346,10 @@ def self_test():
     checks.append(("a loopback requirement is an execution requirement",
                    requires_kind("network: working loopback"), "execution"))
     checks.append(("no requirement, no kind", requires_kind(""), ""))
+    checks.append(("CRASH-084 declares its libc precondition with a probe and its two readings",
+                   sorted(PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition"]), ["absent", "needs", "present", "probe"]))
+    checks.append(("and says why, naming the musl branch",
+                   "unsetenv" in PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition_why"], True))
     checks.append(("the fix id is the first 12 hex digits", fix_id("4f161fe28997f5d1f818fc6ae95a8131066cf1a2"), "4f161fe28997"))
     checks.append(("an 11-digit fix id stays as given", fix_id("b599e434add"), "b599e434add"))
     bad = [(n, g, w) for n, g, w in checks if g != w]

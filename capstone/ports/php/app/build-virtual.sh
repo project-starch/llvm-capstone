@@ -125,6 +125,18 @@ case "$WHAT" in
       || { echo "atexit probe build FAILED" >&2; exit 1; }
     echo "  built $IMG"
     ;;
+  putenv-probe)
+    # Does this libc keep an empty-name putenv string in environ? CRASH-084's use-after-free needs
+    # it to; musl's putenv takes the unsetenv branch for an empty name (src/env/putenv.c), so on
+    # this platform the dangling reference may not exist at all. The probe says, with a control
+    # that proves it can see retention. No seam sources, no capability builtins: the question is
+    # the libc's alone. See probe-putenv.c.
+    IMG="$OUT/probe-putenv.dom"
+    echo "  compiling the putenv probe ..."
+    "$CC" -O1 "$HERE/probe-putenv.c" -o "$IMG" \
+      || { echo "putenv probe build FAILED" >&2; exit 1; }
+    echo "  built $IMG"
+    ;;
   select-probe)
     # Is select() usable on this profile at all? CRASH-092 hangs, and PHP 5.0.0's
     # php_sock_stream_wait_for_data turns one persistent select() error into an infinite loop,
@@ -674,5 +686,5 @@ case "$WHAT" in
     fi
     sha256sum "$IMG"
     ;;
-  *) echo "usage: build-virtual.sh [probe|hier-probe|atexit-probe|select-probe|seam-probe|inert|php|realphp]" >&2; exit 2 ;;
+  *) echo "usage: build-virtual.sh [probe|hier-probe|atexit-probe|select-probe|putenv-probe|seam-probe|inert|php|realphp]" >&2; exit 2 ;;
 esac
