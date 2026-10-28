@@ -16,13 +16,13 @@
   "virtual-malloc": {
    "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
    "verdict": "MISSED",
-   "verdict_note": "reached (the stock arm ran this case to its normal end, the corpus's pristine record says it completes, and revocation-sanity completed on this arm) and completed with no fault; native PHP: OK; nodes allocated 3715, table capacity 262144 (cumulative, not a high-water: reported, not gated); completed but its output differs from the corpus's pristine record (7 lines vs 6); the stock arm's output differs from the corpus's pristine record (reported, not gated: see the module docstring on the deviation)",
+   "verdict_note": "reached (the stock arm ran this case to its normal end, the corpus's pristine record says it completes, and revocation-sanity completed on this arm) and completed with no fault; native PHP: OK; nodes allocated 3715, table capacity 262144 (cumulative, not a high-water: reported, not gated)",
    "verdict_from": "results/2026-10-28-run15/bundle-virtual-malloc"
   },
   "virtual-nested-pools": {
    "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
    "verdict": "MISSED",
-   "verdict_note": "reached (the stock arm ran this case to its normal end, the corpus's pristine record says it completes, and revocation-sanity completed on this arm) and completed with no fault; native PHP: OK; nodes allocated 4029, table capacity 262144 (cumulative, not a high-water: reported, not gated); completed but its output differs from the corpus's pristine record (7 lines vs 6); the stock arm's output differs from the corpus's pristine record (reported, not gated: see the module docstring on the deviation)",
+   "verdict_note": "reached (the stock arm ran this case to its normal end, the corpus's pristine record says it completes, and revocation-sanity completed on this arm) and completed with no fault; native PHP: OK; nodes allocated 4029, table capacity 262144 (cumulative, not a high-water: reported, not gated)",
    "verdict_from": "results/2026-10-28-run15/bundle-virtual-nested-pools"
   },
   "virtual-nested-exact": {

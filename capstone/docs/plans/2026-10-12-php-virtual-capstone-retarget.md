@@ -2616,3 +2616,12 @@ the output-divergence notes on the stock arm return to run14's set (4 rows, not 
 note changes except the evidence wording of chain attributions. The re-judged bundles replace
 run15's in `results/2026-10-28-run15/` (the record is the same measurement; the pre-fix bundles
 stay in git history at e9c5abcc4ba8).
+
+### run15 re-judged (`corpus-run15-judged`, tree bbfa6e77dfbf): as pre-registered
+
+The four passes from the stored transcripts (09:56-09:57 UTC): against run15's bundles every
+verdict and reason is identical, both scorings, both populations (520 cells); the putenv probe
+reads absent on every arm from its archived transcript; the stock arm's output-divergence notes
+are run14's four rows again (run15's bundles carried 33, the launcher's exit line). The re-judged
+bundles are now `results/2026-10-28-run15/`; the derived verdicts are unchanged (derive-verdicts
+--check current, 195 cells).
