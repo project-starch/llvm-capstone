@@ -292,7 +292,9 @@
     "capstone-virtual": {
       "arm": "virtual-mallocng",
       "sdk": "sdk",
-      "options": [],
+      "options": [
+        "-DCAPSTONE_HEAP_SCRUB_FREE=ON"
+      ],
       "heap_lifetimes": true,
       "heap_scrub_free": true,
       "what": "the profile as qualified: a lifetime per public object (CDERIVE on malloc, CREVOKE on free) and the payload zeroed on free"
@@ -301,7 +303,8 @@
       "arm": "virtual-mallocng-spatial-scrub",
       "sdk": "sdk-spatial-scrub",
       "options": [
-        "-DCAPSTONE_HEAP_LIFETIMES=OFF"
+        "-DCAPSTONE_HEAP_LIFETIMES=OFF",
+        "-DCAPSTONE_HEAP_SCRUB_FREE=ON"
       ],
       "heap_lifetimes": false,
       "heap_scrub_free": true,

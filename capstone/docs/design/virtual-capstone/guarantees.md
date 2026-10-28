@@ -49,8 +49,13 @@ cross-process tagged sharing.
 Sublet child lifetimes (`CDERIVE`/`CREVOKE`, virtual profile only) weaken two
 properties that linear carving gave by construction. Live children may overlap,
 so disjointness is an allocator duty. And `CREVOKE` ends a child without the
-re-initialization result legacy `REVOKE` reports, so payload scrubbing before
-reuse is an allocator duty too; only non-linear nodes can be ended this way.
+re-initialization result legacy `REVOKE` reports; only non-linear nodes can be
+ended this way. A reused range therefore still holds its previous owner's bytes
+and tags. A stale capability among them faults on use, because its lifetime
+ended, but one to a live object stays usable by the next owner. The default
+heap does not scrub on free, so that residue is outside what this profile
+guarantees; an allocator that wants it gone scrubs before reuse
+(`CAPSTONE_HEAP_SCRUB_FREE=ON`, [mallocng.md](../../../runtime/virtual/mallocng.md#measurement-switches)).
 See [isa.md](isa.md) for the allocator invariant on MANAGE.
 
 The node-growth extension replaces the fixed 65,536-slot / 1-MiB table with
