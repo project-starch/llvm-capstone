@@ -86,7 +86,8 @@ mechanism, so that a surprise is a surprise:
 - `virtual-nested-exact`: `virtual-nested-pools` plus the slack overflows; the highest count.
 - CRASH-022 and CRASH-078, whose earlier "catches" were PHP's own `qsort` swap, read for the
   first time; a CAUGHT there is at the ASan site or it is not a catch.
-- The 7 + 18 cases that crash natively read `out-of-denominator` on every arm under the
+- The 7 + 17 cases that crash natively (7 of the 46 asan-blind, 17 of the 19 temporal-asan-visible,
+  counted from the oracle files; 23 of them CWE-416, the 24th is CRASH-153, CWE-457) read `out-of-denominator` on every arm under the
   judge's default scoring, whatever the arm did; the sensitivity scoring
   (`--score-oracle-crashes`) reads them by fault site and is reported beside, never instead.
 - The 16 cases placed differently from the collaborator's populations carry no prediction

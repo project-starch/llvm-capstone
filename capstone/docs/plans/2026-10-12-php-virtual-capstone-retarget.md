@@ -2410,3 +2410,93 @@ Against run11, both scorings: temporal 0 of 76; asan-blind 6 (default) and 8 (se
 reorder, their hang being the absent behaviour's own symptom), CRASH-057 CAUGHT on both nested
 arms in the sensitivity scoring, CRASH-008 and CRASH-073 CAUGHT on virtual-nested-exact. Nothing
 else. This is the follow-up lane's measurement.
+
+## 2026-10-28, evening: the lane review, a retraction, and run13
+
+### RETRACTED: CRASH-092's platform precondition (declared 39e7cf5a5b45, withdrawn c97713073a01)
+
+The declaration "select() rejects a timeval whose tv_usec is out of range (EINVAL) rather than
+sleeping on it" was wrong the day it was made. Linux fs/select.c (v6.12, `kern_select`) computes
+`tv.tv_sec + (tv.tv_usec / USEC_PER_SEC)` and rejects only a NEGATIVE value, so glibc's select
+folds a positive overflow exactly as musl's does; the sentence "Linux rejects such a timeval" in
+the declaration, the probe's header and this document's run12 sections was inferred from the
+native run completing, never read off the kernel. Whether the trigger hangs is decided by whatever
+uninitialised stack contents PHP's liveness check passes to select, on either libc, and a probe
+with a fixed value cannot read that. Consequences: the probe (probe-timeval.c), its build target,
+its runner reader and its tests are removed; CRASH-092 declares no precondition and stays in the
+denominator (48 applicable CWE-416 cases under the sensitivity scoring, not 47); its reading on an
+arm is the run's own: a watchdog kill is `infra`, a completion short of the defect `not-reached`.
+run12-judged's "CRASH-092 out of the denominator on all four arms" is withdrawn with it. The
+mechanism of the hang stands as measured (diag3 completes and the nested arms catch at
+`_zval_ptr_dtor`); only its classification changes.
+
+A second correction, of a number this document and the session's reports used: the native
+crashers among the 49 CWE-416 cases are **23**, not 24. 24 is the count over all 65 cases; the
+24th is CRASH-153, CWE-457. The corpus README's "7 + 18" (asan-blind + temporal-asan-visible) was
+7 + 17, as its own population table says, and is corrected.
+
+### The adversarial review of the follow-up lane, and what was done (c97713073a01)
+
+The review (the whole lane, ca7274a244d1..1d40d28425ce) held it NOT READY on six findings. Each
+is closed with a control that fires, in the offline suite (test-run-realphp.py, 194 ok) or the
+native one (delegate-service-test):
+
+1. **The chain rule passed through every frame outside PHP's tree**, the seam's own source and
+   unresolved addresses included, and matched the owner by function name alone. Now a frame in
+   the seam's source or in PHP's allocator is a barrier (no declared site beyond it counts), a
+   chain frame that resolves to nothing is a barrier, only the fault's own ra register may be
+   skipped when unresolved (a leaf's scratch register, named as such in the evidence), and the
+   owner must match by function AND file, as the direct rule does.
+2. **CRASH-073's `memcpy <- _estrndup` catch bypassed the allocator rule**, which keyed on the
+   physical fault path while the chain attributed the logical caller. The allocator barrier
+   closes it: 073 reads `unattributed` until an operand-level audit says otherwise. The
+   "accepted as catches with this note" of the run12 section is withdrawn for 073 and narrowed
+   for 008: both were unpredicted movers, both are amended analysis, and 008 is a catch only if
+   it survives the file-qualified rule in run13.
+3. **The frame walker had no direct test.** It moves into the delegate service as
+   `capstone_delegate_frame_chain(fp, lo, hi, out, max)`, unchanged in what it does, and the
+   native test drives it on a buffer: a well-formed chain, a misaligned fp, an fp outside the
+   stack, a zero return address, a caller's fp not above the frame, the sixteen-frame cap.
+4. **Every unexpected probe result read as "absent".** The putenv reading is now a whole
+   pattern (present: both empty-name calls retained with rc 0; absent: both not retained with
+   rc -1 and EINVAL; the control retained either way) and anything else is no result; a reading
+   counts only from a probe run that exited 0 without a domain fault.
+5. **Probe images carried no hash in the record.** Every platform probe's sha256 is written to
+   platform.json before the boot; a re-judge checks each probe transcript against it and reads a
+   probe the record cannot vouch for as no result. run12's record carries none, which is one
+   reason run13 boots rather than re-judges.
+6. **The timeval precondition**, retracted above.
+
+Every declared site now carries the file it must be seen in (schema field `fault_site_files`,
+written by build-cases.py for all 65 cases from ASan's own frame; CRASH-057's second site names
+`ext/standard/var.c`). The regeneration also caught build-cases.py reusing the population's `why`
+for the extra site's reason.
+
+### run13 pre-registration (tree c97713073a01 plus this record)
+
+**Platform.** `platform-res2`: run7's QEMU (qemu-pin2) and images-v7, with the adapter rebuilt
+from this tree (the launcher's frame walk now calls the delegate service's function; the record
+line is byte-for-byte the same). **Images:** `out-lt8` unchanged: the PHP image, the bound probe
+and the putenv probe at the hashes run12 recorded (run13.sh writes them beside the bundle). One
+platform probe, putenv. Watchdog 40 s. Both populations, default and sensitivity scorings.
+
+**Predictions, against `corpus-run12-judged` (final), cell by cell:**
+
+- CRASH-092: no longer `out-of-denominator` on any arm. The nested arms read `infra` (the
+  watchdog, as run11 read them); stock and the system allocator read whatever their run gives,
+  `not-reached` or `MISSED`, and that reading is reported, not judged in advance.
+- CRASH-073 on virtual-nested-exact: CAUGHT becomes `unattributed` (the allocator barrier), in
+  every scoring that scores it.
+- CRASH-008 on virtual-nested-exact: stays CAUGHT iff every chain frame between `__stpcpy` and
+  `php_date` resolves and `php_date` is seen in `ext/standard/datetime.c`; a barrier reads
+  `unattributed` and is reported as such, not repaired.
+- CRASH-057 on both nested arms (sensitivity): stays CAUGHT iff every chain frame (the
+  delegate, musl's write, the CLI's write, output.c) resolves; an unresolved runtime frame reads
+  `unattributed` and is reported, not repaired.
+- CRASH-084: `out-of-denominator` on all four arms, now with the probe's hash in the record.
+- Everything else identical to run12-judged in both scorings and both populations. Any other
+  mover voids the run's reading until it is explained in this document.
+
+Expected sensitivity totals over the 49 CWE-416 cases, if every "iff" above holds: stock 2,
+system allocator 23, nested 46, nested exact 45 CAUGHT; 1 excluded (084); 092 and 075
+NO-READING.
