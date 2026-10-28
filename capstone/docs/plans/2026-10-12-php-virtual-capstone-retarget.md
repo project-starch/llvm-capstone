@@ -2209,3 +2209,96 @@ runner and corpus at 52a40b6da2d6. Against run10 (`corpus-run10`):
 - CRASH-075: unchanged (the 40-second watchdog is kept; its catch is the separate record above).
 - every other cell: equal to run10. A stack eight times larger changes the layout of nothing on the
   heap, and the probe runs before the cases; any other move must be explained before any claim.
+
+### run11 (05:35Z, tree c890c88828fe, out-stack8 images + the putenv probe): the pre-registration held
+
+Both populations booted (rc 0/0), the putenv probe read "empty-name string NOT retained
+(precondition absent; control retained)" on all four arms, images recorded in
+`corpus-run11/images.sha256` (php-real-seam.dom 27834e340816, probe-seam.dom 9e8b4e6baa3f,
+probe-putenv.dom 8c0500dc96b6, QEMU e8a89c014e5a, run7's adapter). Cells against run10:
+
+| scoring | population | cells | differ | which |
+|---|---|---|---|---|
+| default | temporal-asan-visible | 76 | 0 | |
+| default | asan-blind | 184 | 4 | CRASH-084 on every arm: MISSED -> NO-READING out-of-denominator |
+| sensitivity | temporal-asan-visible | 76 | 0 | |
+| sensitivity | asan-blind | 184 | 8 | CRASH-084 as above; CRASH-081: virtual-malloc, virtual-nested-pools, virtual-nested-exact NO-READING setup-fault -> CAUGHT (cause 25 in `zif_array_filter`, attribution `function`), stock setup-fault -> infra (the watchdog) |
+
+Exactly the pre-registered movers and nothing else: the 8 MiB stack moved no other cell, and
+the probe decided 084 on every arm. The platform going forward is this one (8 MiB stack, the
+probe in every run); run10 stays the record of the seam-equivalence claim on run7's platform.
+
+### CRASH-057 on the line-table SDK (`residues/057-lt8`, musl objects built with -gline-tables-only)
+
+The nested arms' cause-25 fault symbolizes to `ports/musl-capstone/runtime/delegate.c` (line 0: the
+runtime is compiled by the application CMake, whose flags `PHP_VIRTUAL_SDK_ARGS` cannot carry a
+space-separated value to; the musl objects have their tables, the runtime does not yet). So the
+revoked 8-byte read is the DELEGATE's own copy of a syscall buffer: PHP writes var_dump's output of
+`$x`, the buffer is the freed temporary string, and the copy that "checks liveness at each access"
+(delegate.c, dl_buffer_ok's comment) faults on it. `ra` reads 0xa because the copy routine's x1 is
+not a return address at that point. The access path is therefore write(2) of the printed value,
+not `_estrndup`'s copy that ASan reported natively (zend_alloc.c:403), and the judge's
+allocator-site rule (ASan's own site is PHP's allocator) refuses attribution before any libc rule
+applies. The stock arm on this image reads `unattributed`: the seam refused, by name, an efree of a
+pointer not at its payload's start (code 4), the defect's own invalid free.
+
+What a proper catch needs, and none of it is a weaker judge: a bounded frame chain in the fault
+record (the launcher walks fp and prints the return addresses it can validate), so the judge can
+see write <- PHP's stream write <- var_dump <- execute; and for this case a second declared access
+path -- var_dump printing the reused temporary -- with the evidence the chain gives (the dead
+object is the one the trigger documents). Both are follow-up work on the runtime record and the
+corpus declaration; the record stays NO-READING until then.
+
+### CRASH-092 with a 600-second watchdog (`residues/092-600s`)
+
+stock and virtual-malloc complete (not-reached: the `done` echo is unconditional, so completion
+proves nothing about the HTTP path); virtual-nested-pools and virtual-nested-exact still hit the
+watchdog at 600 seconds. Not time, then: on the nested arms the case loops. The delegate's select
+path (ports/musl-capstone/runtime/delegate.c SYS_pselect6) answers EFAULT only for a bounds or
+rights mismatch of the fd_set capability -- its copy runs through the capability and would fault
+with cause 25 on a revoked one -- so the loop's persistent -1, if that is what it is, is not a
+revoked buffer. A diagnostic image (PHP's loop printing its first five select results, built from
+a copy of the source, never a measurement image) is the next reading.
+
+### The frame chain (commit 64068c09d054)
+
+The 057 reading above showed the limit of the one-hop ra rule: a fault in a routine whose x1 is
+not a return address. The virtual launcher now walks the domain's frames itself (ra at fp-16, the
+caller's fp at fp-32, each checked against the stack's bounds, sixteen at most) and prints them
+last on the record line as ` chain=`; verdicts.Fault carries them; nothing decides on them yet.
+CRASH-057 is being rerun on the line-table images with this launcher (`residues/057-chain`) to
+read who called the delegate's copy.
+
+### CRASH-057's chain, and the rule it needed (`residues/057-chain`, launcher 64068c09d054, lt8 images)
+
+The nested arm's record now ends `chain=` with sixteen return addresses, symbolized on the
+line-table image: three frames of `delegate.c` (the runtime's copy of the write(2) buffer),
+musl `write.c:6`, `sapi_cli_ub_write` (php_cli.c:184, :205), `main/output.c:684` and `:119`,
+`php_var_dump` at **ext/standard/var.c:126** (the PHPWRITE of Z_STRVAL), var.c:191, then the
+engine (zend_execute.c:2700, :2828, :1391), zend.c:1061, main.c:1627, php_cli.c:944. The dead
+8-byte object is the reused freed temporary, printed by var_dump, exactly as the trigger's own
+header documents. The judge could not say so for three reasons, each fixed on this lane:
+
+- the allocator-site refusal keyed on the case's DECLARED site (ASan's `_estrndup` in
+  zend_alloc.c), refusing every fault of the case wherever it lay. It now keys on the OBSERVED
+  fault's file: a fault inside PHP's allocator needs the audit arm; a fault elsewhere is judged.
+- no rule read a chain. THE CHAIN RULE: for a fault outside PHP's tree, the access belongs to the
+  first frame of PHP's tree above the output plumbing (sapi/, main/output.c, main/streams/,
+  main/snprintf.c, which pass a buffer through unchanged). A declared site there is a catch; any
+  other frame there is not, whatever lies deeper; a chain that never enters the tree is not.
+  Tests: the 057 shape through the plumbing to php_var_dump (CAUGHT), an undeclared engine frame
+  first (unattributed, named), a declared site behind it (not reached), no PHP frame, a fault
+  observed inside the allocator (audit arm), a fault inside the tree (its own site rules, not the
+  chain). CRASH-068's ra rule and its tests are unchanged.
+- the case declared one site. `php_var_dump` is its second, with the reason read off the source
+  and the trigger (build-cases.py EXTRA_FAULT_SITES, so a regeneration keeps it; the chain is the
+  confirming reading, not the admitting one).
+
+### CRASH-092: the diagnostic image's reading (`residues/092-diag`)
+
+stock and virtual-malloc: two `SELECT_DIAG nfds=8 retval=0 errno=115 tv=1.000000` lines, then
+`done` -- select times out after its second, PHP's loop breaks with timeout_event set, the HTTP
+request fails, the script ends. virtual-nested-pools and virtual-nested-exact: NO diagnostic line
+at all before the watchdog: the hang is BEFORE the select loop, with the same ~130 mapping grants
+as stock. A boundary trace of the nested arm (`residues/092-trace`, CAPSTONE_VM_TRACE=1, 60 s) is
+the next reading: whether it spins in delegated calls, and which, or in user code.

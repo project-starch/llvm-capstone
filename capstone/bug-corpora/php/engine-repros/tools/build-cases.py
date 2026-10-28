@@ -70,6 +70,14 @@ DETECTOR_OPTION = re.compile(r"^\s*ASAN_OPTIONS\b")
 # asserted: the runner excludes the case only when the probe PROVES the behaviour absent, and
 # judges it normally when the probe is missing or fails. Kept here, with the generator, so that
 # regenerating the corpus keeps it; the schema is bug-corpora/SCHEMA.md "platform_precondition".
+# A SECOND DECLARED SITE a case carries beyond ASan's first PHP frame: the access path this
+# platform takes to the same dead object, read off the source and the trigger's own account.
+# CRASH-057: natively the copy at assignment reads the freed temporary (_estrndup); here the
+# assignment keeps the temporary's buffer and var_dump prints it (php_var_dump, var.c:126).
+EXTRA_FAULT_SITES = {
+    "CRASH-057": (["php_var_dump"], " On this platform the access is not the copy: the assignment keeps the temporary's buffer as the result's (the trigger's own account: the freed IS_TMP_VAR is reused as the assignment's result value), and var_dump($x) prints it -- php_var_dump, ext/standard/var.c:126, the PHPWRITE of Z_STRVAL -- through main/output.c and the CLI's write, which pass the buffer through. php_var_dump is therefore a declared site: the print of the reused temporary that the trigger documents, read off the source, with the nested arm's frame chain (residues/057-chain, 2026-10-28) as the confirming reading, not the admitting one."),
+}
+
 PLATFORM_PRECONDITIONS = {
     "CRASH-084": {
         "platform_precondition": {
@@ -257,6 +265,10 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
         "note": f"population: {pop} -- {why}. Collected by the corpus as {m['how_collected']['origin_stream']} ({m['how_collected']['history_status']}, confidence {m['how_collected']['confidence']}).",
     }
     case.update(PLATFORM_PRECONDITIONS.get(cid, {}))
+    if cid in EXTRA_FAULT_SITES:
+        extra, why = EXTRA_FAULT_SITES[cid]
+        case["fault_sites"] = case["fault_sites"] + [s for s in extra if s not in case["fault_sites"]]
+        case["fault_sites_why"] = case["fault_sites_why"] + why
     disagreements = []
     t = theirs
     if t["asan"].get(cid, {}).get("outcome") != a["outcome"]:
@@ -348,6 +360,10 @@ def self_test():
     checks.append(("no requirement, no kind", requires_kind(""), ""))
     checks.append(("CRASH-084 declares its libc precondition with a probe and its two readings",
                    sorted(PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition"]), ["absent", "needs", "present", "probe"]))
+    checks.append(("CRASH-057 declares var_dump's print of the reused temporary as a second site",
+                   EXTRA_FAULT_SITES["CRASH-057"][0], ["php_var_dump"]))
+    checks.append(("and says why, naming the source line",
+                   "var.c:126" in EXTRA_FAULT_SITES["CRASH-057"][1], True))
     checks.append(("and says why, naming the musl branch",
                    "unsetenv" in PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition_why"], True))
     checks.append(("the fix id is the first 12 hex digits", fix_id("4f161fe28997f5d1f818fc6ae95a8131066cf1a2"), "4f161fe28997"))

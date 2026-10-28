@@ -150,6 +150,7 @@ def observation_cases():
     print("\n-- observe() and the judge --")
     arms = verdicts.load_arms()
     exact = arms["php-real-exact"]
+    pools = arms["php-real-object"]
     orig = R.symbolize
 
     # A fault at ASAN's own file AND line, with the trigger shown live: CAUGHT.
@@ -377,6 +378,66 @@ def observation_cases():
                     controls(), True, "/x", "/y")
     check("a caller in the declared file but not the declared function is unattributed",
           verdicts.judge(obs, exact)[1], "unattributed")
+
+    # THE CHAIN RULE (2026-10-28). The fault is outside PHP's tree -- the runtime's delegate copying
+    # a write(2) buffer (CRASH-057's shape: the reused freed temporary printed by var_dump) -- and
+    # the launcher printed the frame chain. The access belongs to the first frame of PHP's tree
+    # above the output plumbing; a declared site there is a catch, anything else is not.
+    FAULT_CHAIN = (FAULT_RA.replace("ra=0x3f90508d7c", "ra=0xa")
+                   + " image=php.dom chain=0x3f90a00010,0x3f90a00020,0x3f90a00030,0x3f90a00040")
+    PLUMB = {0x3f90a00010 - 2: ("", "/tmp/k/tmp/musl-src/musl-1.2.5/src/unistd/write.c", 6),
+             0x3f90a00020 - 2: ("sapi_cli_ub_write", "/b/sapi/cli/php_cli.c", 205),
+             0x3f90a00030 - 2: ("php_output_write", "/b/main/output.c", 119)}
+    VD_SPEC = dict(SPEC, asan_func="_estrndup", asan_file="Zend/zend_alloc.c", asan_line=403,
+                   asan_stack=[{"index": 0, "func": "memcpy", "outside": "memintrinsics.inc:117"},
+                               {"index": 1, "func": "_estrndup", "file": "Zend/zend_alloc.c", "line": 403}],
+                   fault_sites=["_estrndup", "php_var_dump"])
+    R.symbolize = fake_symbolize("", 0, func="")                     # the delegate: no symbol, no line
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("chain through the output plumbing to a declared site is CAUGHT", v, verdicts.CAUGHT)
+    check("and the evidence names the skipped plumbing and the owner",
+          "php_var_dump at var.c:126" in ev and "sapi_cli_ub_write" in ev, True)
+    check("and it licensed its own reach", obs.reached, True)
+    check("the chain is in the bundle", obs.fault.chain, (0x3f90a00010, 0x3f90a00020, 0x3f90a00030, 0x3f90a00040))
+    # the first non-plumbing frame is NOT declared: no catch, whatever lies deeper
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("zend_assign_to_variable", "/b/Zend/zend_execute.c", 654)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("chain reaching an undeclared engine frame first is unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and names that frame", "zend_assign_to_variable" in ev and "not a declared site" in ev, True)
+    # a declared site BEYOND an undeclared engine frame does not count: the walk stops there
+    FAULT_CHAIN5 = FAULT_CHAIN + ",0x3f90a00050"
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("zend_assign_to_variable", "/b/Zend/zend_execute.c", 654),
+                                          0x3f90a00050 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN5 % SHA, 139,
+                    controls(probe=None), True, "/x", "/y")
+    check("a declared site behind an undeclared frame is not reached", verdicts.judge(obs, pools)[0], verdicts.NO_READING)
+    # a chain that never enters PHP's tree
+    R.symbolize_at = by_pc(PLUMB)
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("a chain that reaches no PHP frame is unattributed", reason, "unattributed")
+    check("and says so", "reaches no frame of PHP's tree" in ev, True)
+    # the OBSERVED fault inside the allocator is what needs the audit arm, not the declared site
+    R.symbolize = fake_symbolize("/b/Zend/zend_alloc.c", 403, func="_estrndup")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("a fault observed inside the allocator still needs the audit arm", (reason, "audit arm" in ev), ("unattributed", True))
+    # the chain rule does not apply to a fault INSIDE PHP's tree: the site rules decide
+    R.symbolize = fake_symbolize("/b/Zend/zend_execute.c", 700, func="zend_do_fcall_common_helper")
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("a fault inside PHP's tree is judged by its own site, not by the chain",
+          (v, "declared site is" in obs.attribution_evidence, "frame chain" in obs.attribution_evidence),
+          (verdicts.NO_READING, True, False))
     R.symbolize_at = orig_at
 
     # An unrelated strlen -- a case whose ASan leaf is NOT strlen -- gets no such sentence.

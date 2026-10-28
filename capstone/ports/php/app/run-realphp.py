@@ -147,6 +147,31 @@ SEAM_OWN = ("zend-cap-mode.c", "php_virtual_lower.c")
 # it is indistinguishable from the port breaking -- so these need the diagnostic audit arm that
 # run-cases.py drives for CRASH-073, and are `unattributed` until it is wired up here.
 ALLOCATOR_SITE = "Zend/zend_alloc.c"
+# PHP's own tree, by directory: a frame whose file lies in none of these is the libc, the runtime
+# or the SAPI's host, not the program. And PHP's output plumbing: the SAPI's write, the output
+# layer and the stream layer pass a buffer through unchanged, so an access they make on it belongs
+# to whoever handed it in -- the first frame above them. A chain rule skips them and stops at the
+# first other frame of PHP's tree: that frame is the access's owner, declared or not.
+PHP_TREE = ("/Zend/", "/ext/", "/main/", "/sapi/", "/TSRM/", "/regex/")
+OUTPUT_PLUMBING = ("/sapi/", "/main/output.c", "/main/streams/", "/main/php_output", "/main/snprintf.c")
+
+
+def in_php_tree(path):
+    return bool(path) and any(d in path for d in PHP_TREE)
+
+
+def chain_owner(llvm_bin, image, fault, text):
+    """Walk the fault's frame chain outward: (function, file, line, frames skipped) of the first
+    frame in PHP's tree that is not output plumbing, or None. Each return address is symbolized
+    two bytes back, inside its call instruction, as the ra rule does."""
+    skipped = []
+    for ret in fault.chain:
+        cfunc, cpath, cline = symbolize_at(llvm_bin, image, ret - 2, text)
+        if not in_php_tree(cpath) or any(p in cpath for p in OUTPUT_PLUMBING):
+            skipped.append(f"{cfunc or '?'}@{(cpath or '?').rsplit('/', 1)[-1]}:{cline}")
+            continue
+        return cfunc, cpath, cline, skipped
+    return None
 
 # The per-run watchdog in run-virtual.py fired on this run. A run that was KILLED is not
 # an observation of the program at all -- it is the harness giving up -- so it is reported
@@ -599,11 +624,17 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         if any(own in path for own in SEAM_OWN):
             obs.attribution_evidence = (f"the fault is in the seam's own source ({path}:{line}) "
                                         f"-- a port artefact, not the program")
-        elif spec["asan_file"].endswith(ALLOCATOR_SITE):
+        elif path.endswith(ALLOCATOR_SITE):
+            # The OBSERVED fault is inside PHP's own allocator: it cannot be told from the port
+            # breaking (the seam is a patch to that very file), so it needs the diagnostic audit
+            # arm. Until 2026-10-28 this keyed on the case's DECLARED site instead, which refused
+            # every fault of a case whose ASan frame was _estrndup (CRASH-057) wherever the fault
+            # actually lay -- including the print of the reused temporary, three frames away.
             obs.attribution_evidence = (
-                f"ASAN's own site for this case is {ALLOCATOR_SITE}:{spec['asan_line']}, so a "
-                f"fault there cannot be told from the port breaking; it needs the diagnostic "
-                f"audit arm (observed {func or '?'} at {path}:{line})")
+                f"the fault is inside PHP's own allocator ({path}:{line}, {func or '?'}), which "
+                f"cannot be told from the port breaking; it needs the diagnostic audit arm"
+                + (f" (ASan's own site for this case is {ALLOCATOR_SITE}:{spec['asan_line']})"
+                   if spec["asan_file"].endswith(ALLOCATOR_SITE) else ""))
         elif fault.cause not in protective_causes:
             # The configuration says which causes its mechanism produces (arms.json
             # protective_causes). Cause 24 -- an untagged value used as a capability -- is a
@@ -642,6 +673,33 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                 f"{path}:{line} is ASan's file for this case but the fault is in {func or '?'}, not "
                 f"the declared {spec['fault_sites']}: another routine of the same file, which "
                 f"the old any-line-in-the-file rule would have admitted")
+        elif fault.chain and not in_php_tree(path):
+            # THE CHAIN RULE. The fault is outside PHP's tree (the libc, the runtime's delegate
+            # copying a syscall buffer), and the launcher printed the frame chain it walked
+            # (runtime/virtual/exec.c frame_chain, 2026-10-28). The access belongs to the first
+            # frame of PHP's tree above the output plumbing: if that frame is a declared site,
+            # the fault is the defect's; if it is anything else, it is not, whatever lies deeper.
+            # CRASH-057: the delegate's copy of a write(2) buffer <- musl write <- the CLI's
+            # write <- main/output.c <- php_var_dump (var.c:126) printing the reused freed
+            # temporary. The plumbing passed the buffer through; var_dump owns the access.
+            owner = chain_owner(llvm_bin, image, fault, text)
+            if owner and owner[0] in spec["fault_sites"]:
+                at_site = True
+                obs.attribution = "function"
+                obs.attribution_evidence = (
+                    f"the fault is in {func or '?'} ({(path or '?').rsplit('/', 1)[-1]}:{line}), "
+                    f"outside PHP's tree; the frame chain climbs through {', '.join(owner[3]) or 'nothing'} "
+                    f"to {owner[0]} at {owner[1].rsplit('/', 1)[-1]}:{owner[2]}, the function this case "
+                    f"declares (fault_sites) -- the first frame of PHP's tree above the output plumbing")
+            elif owner:
+                obs.attribution_evidence = (
+                    f"the fault is in {func or '?'} outside PHP's tree; the frame chain reaches "
+                    f"{owner[0] or '?'} at {owner[1].rsplit('/', 1)[-1]}:{owner[2]} first (above "
+                    f"{', '.join(owner[3]) or 'nothing'}), which is not a declared site {spec['fault_sites']}")
+            else:
+                obs.attribution_evidence = (
+                    f"the fault is in {func or '?'} outside PHP's tree and its frame chain "
+                    f"({len(fault.chain)} frames) reaches no frame of PHP's tree")
         elif not path and leaf.get("outside") and func and func == leaf.get("func"):
             # A libc leaf: the fault is in the routine ASan's own frame #0 names (strlen under
             # xbuf_format_converter, CRASH-068). That is consistent with the defect and proves
