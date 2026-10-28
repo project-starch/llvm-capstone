@@ -2525,3 +2525,14 @@ exact 45" was wrong arithmetic, not a mover: CRASH-073 is CWE-125 and CRASH-008 
 exact-bounds arm's spatial catches, so 073's move shows only in the all-65 count (virtual-nested-
 exact 57 to 56 CAUGHT, sensitivity). Images and platform by hash in `corpus-run13/images.sha256`.
 This is the follow-up lane's measurement, replacing run12-judged.
+
+### run14 pre-registration: the platform record carries every supplied probe
+
+run13's two boots cannot be merged into one bundle per arm: the platform record listed only the
+probes the population's cases DECLARE, so the temporal-asan-visible boot (which declares none)
+wrote `platform_probes: {}` and the asan-blind boot wrote the putenv hash, and
+merge-population-bundles.py refuses two boots whose platform differs, as it should. The probe is
+part of the platform, not of the population: the record now lists every probe supplied on the
+command line (run-realphp.py, this commit). Nothing in the judge changes. run14 = run13's
+platform, images, probe and tree plus this fix. Prediction: identical to run13 cell for cell, both
+populations, both scorings, with both boots' platform records equal.

@@ -1104,8 +1104,12 @@ def main():
         # is its own statically linked image: that it ran in the same boot says nothing about
         # which libc it carries, and until 2026-10-28 its hash reached no record, so a probe
         # transcript could exclude a case without any way to tie it to the libc PHP ran on.
+        # Every probe SUPPLIED, not only the ones this population's cases declare: the probe
+        # is part of the platform the boot ran on, and a population that declares none must
+        # write the same record as one that does, or merge-population-bundles.py rightly
+        # refuses to merge the two boots (run13, 2026-10-28, which this re-run replaces).
         platform["platform_probes"] = {name: f"{sha256_file(path)}  {path}"
-                                       for name, path in platform_probes}
+                                       for name, path in sorted(supplied.items())}
         args.out.mkdir(parents=True, exist_ok=True)
         platform_file.write_text(json.dumps(platform, indent=2, sort_keys=True) + "\n")
         stage_inputs(args, cases)
