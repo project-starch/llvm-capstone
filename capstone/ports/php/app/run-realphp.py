@@ -507,8 +507,16 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         return obs
     fail = SEAM_FAIL.search(text)
     if fail:
-        obs.infra = "setup-fault"
-        obs.notes = f"the seam failed: code={fail.group(1)} {fail.group(2)[:90]}"
+        # Codes 3 and 4 are the seam refusing a pointer PHP handed to efree -- one in no block
+        # of this heap, or not at its payload's start -- by name, before anything ends. That is
+        # consistent with the program's own invalid free (CRASH-139 efrees a static string
+        # literal) and is not the instrument breaking; but it is software validation followed by
+        # abort(), not a capability fault at a declared site, so nothing ties it to the defect
+        # and it reads as unattributed, never as a catch. Every other code is the instrument.
+        code = int(fail.group(1))
+        obs.infra = "unattributed" if code in (3, 4) else "setup-fault"
+        obs.notes = ((f"the seam refused the pointer efree was given, by name: " if code in (3, 4)
+                      else f"the seam failed: ") + f"code={code} {fail.group(2)[:90]}")
         return obs
     fault = verdicts.domain_fault(text, None)
     if fault is not None and fault.cause == CAUSE_RESOURCE:

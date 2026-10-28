@@ -337,9 +337,12 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
 
     fail = SEAM_FAIL.search(text)
     if fail:
-        # The instrument ran out or found its own invariant broken. Never a verdict.
-        obs.infra = "infra"
-        obs.notes = f"the seam failed: code={fail.group(1)} {fail.group(2)[:80]}"
+        # Codes 3 and 4: the seam refused the pointer efree was given, by name (in no block of
+        # this heap, or not at its start) -- the program's own invalid free, unattributed. Every
+        # other code: the instrument ran out or found its own invariant broken. Never a verdict.
+        code = int(fail.group(1))
+        obs.infra = "unattributed" if code in (3, 4) else "infra"
+        obs.notes = f"the seam {'refused the pointer' if code in (3, 4) else 'failed'}: code={code} {fail.group(2)[:80]}"
         return obs
     if rc is None:
         obs.infra = "infra"

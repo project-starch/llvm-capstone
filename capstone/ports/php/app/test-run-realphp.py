@@ -231,8 +231,16 @@ def observation_cases():
 
     # The seam itself failed: an instrument failure, never a verdict.
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
-                    "ZEND_CAP_FAIL code=3 unknown key 0x40\n", 139, controls(), True, "/x", "/y")
+                    "ZEND_CAP_FAIL code=2 the heap could not grow its node table\n", 139, controls(), True, "/x", "/y")
     check("a seam failure is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
+    # The seam refused the pointer efree was given (code 3: in no block; code 4: not at its
+    # start): the program's invalid free, named, but nothing ties it to the declared site.
+    for code in (3, 4):
+        obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
+                        f"ZEND_CAP_FAIL code={code} free of a pointer this heap did not issue a=0x40 b=0x0\n",
+                        134, controls(), True, "/x", "/y")
+        check(f"a named refusal (code {code}) is unattributed, not infra",
+              verdicts.judge(obs, exact)[:2], (verdicts.NO_READING, "unattributed"))
 
     # Caught on the STOCK arm, so no control arm completed and stock_reached is False. The
     # fault in the declared function is itself the proof the trigger ran: without that route

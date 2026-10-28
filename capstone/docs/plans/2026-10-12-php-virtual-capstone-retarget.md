@@ -2091,3 +2091,44 @@ stages 0-11 as before, stage 12 (an interior pointer to efree) exits 134 after `
 code=4`. The malloc gate: as in kit4 (every case, nested included; `real_linux_mremap_growth_and_
 shrink` fails on this kit's platform, shown by the A/B with an SDK from the base tree 672a0deffaa2,
 which fails the same one check and no other).
+
+### run9 (02:36Z, tree c333d1afad25): the pre-registration held
+
+Both PHP images, the seam probe and the SDK rebuilt from c333d1afad25 on run7's platform (QEMU
+pin a9936e7037, adapter-pin2, kernel e833dfb1, firmware 4dd4a2ad, rootfs 62049800); manifest
+written and checked (PASSED). Inert check: PATCH IS INERT, control differs. Probe stages 0-12 as
+pre-registered (12 exits 134 after `ZEND_CAP_FAIL code=4`). Malloc gate: every case, nested
+included; `real_linux_mremap_growth_and_shrink` fails, as it does with the base tree's SDK.
+
+Cells against run7's `final/`, every field (verdict, reason, cause, symbol, offset, attribution,
+reach, infra, precondition, controls):
+
+| scoring | population | cells | differ | which |
+|---|---|---|---|---|
+| default | temporal-asan-visible | 76 | 0 | |
+| default | asan-blind | 184 | 4 | CRASH-139 object+exact, CRASH-092 stock+block |
+| sensitivity | temporal-asan-visible | 76 | 0 | |
+| sensitivity | asan-blind | 184 | 8 | the same four, plus CRASH-081 on all arms: the fault's symbol reads `zend_cap_block` where it read `zend_cap_block_alloc` (the function was renamed; verdict, cause, reason unchanged) |
+
+No CAUGHT cell changed in either scoring. The two cells the pre-registration left open:
+
+- **CRASH-139** (seam arms, both scorings): MISSED -> NO-READING setup-fault, `ZEND_CAP_FAIL code=3
+  free of a pointer this heap did not issue, or not at its start a=0x..6df7`. The address is odd and
+  in no block; the trigger's own header says zend_read_property() points a stack zval at a static
+  C string literal with dup=0 and never refcount-initialises it, so whether PHP efrees the literal
+  depends on uninitialised stack residue. run7's seam keyed its lookup on the cursor too and
+  would have refused the same free; the free did not happen in run7's build and does in this one.
+  That is the mechanism the trigger documents, read off the trigger, not measured in the guest.
+  The case's native record is OK (its invalid free does not crash pristine PHP), so it IS in the
+  default denominator: on object and exact it moves from MISSED to NO-READING. Codex's re-review
+  ruled the classification: a refusal by name of a pointer in no block (code 3) or not at its
+  start (code 4) is the program's own invalid free observed, not the instrument failing, but
+  nothing ties it to the declared site -- `unattributed`, never `setup-fault` and never a catch.
+  run-realphp.py and run-cases.py read it so since c333d1afad25's successor.
+- **CRASH-092** (stock and block, both scorings): infra -> not-reached. run7's 40-second watchdog
+  killed the run (`VM_EXIT_TIMEOUT`); run9's completed (`done`, exit 0). The case is the select()
+  loop probe-select.c was written for; what changed its timing is not known. Both readings are
+  NO-READING.
+
+The design claim of this section therefore holds as measured: the seam on the libc's own slot
+record reproduces the 2026-10-27 measurement cell for cell, with the index gone.

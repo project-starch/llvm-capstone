@@ -24,6 +24,7 @@ static unsigned long st_blocks, st_frees, st_issues, st_retires, st_reallocs;
 #define ZEND_CAP_FAIL_NODES     2   /* the heap could not grow its node table for a child */
 #define ZEND_CAP_FAIL_UNKNOWN   3   /* a pointer PHP frees or reallocs that is in no block of this heap */
 #define ZEND_CAP_FAIL_INTERIOR  4   /* a pointer whose cursor is not at its payload's start */
+#define ZEND_CAP_FAIL_GEOMETRY  5   /* a request or bound that does not fit the block (an overflowing size) */
 static void cap_fail(int code, const char *what, unsigned long a, unsigned long b)
 {
     fflush(stdout);
@@ -112,9 +113,11 @@ void zend_cap_stats(unsigned long out[8])
 /* ZEND_DO_MALLOC(bytes). A 16-grained block, at least a header plus a grain. */
 void *zend_cap_block(size_t bytes)
 {
-    unsigned long want = ZEND_CAP_ROUND(bytes);
+    unsigned long want;
     void *p;
     cap_arm_report();
+    if (bytes > ~0UL - ZEND_CAP_GRAIN) { return (void *)0; }   /* the rounding would wrap */
+    want = ZEND_CAP_ROUND(bytes);
     if (want < 48UL + ZEND_CAP_GRAIN) { want = 48UL + ZEND_CAP_GRAIN; }
     p = malloc((size_t)want);
     if (p) { ++st_blocks; }
@@ -141,9 +144,17 @@ void *zend_cap_issue(void *p, size_t hdr, size_t size)
 {
     unsigned int mode = zend_cap_mode();
     size_t bound = cap_bound(mode, size);
-    unsigned long start;
+    unsigned long start, extent;
     void *child;
     if (!p) { return (void *)0; }
+    /* The request and the bound must fit the block. PHP's REAL_SIZE wraps on a request near
+     * SIZE_MAX and its size field is 31 bits, so a hostile request can reach here with a block
+     * that is the minimum and a size that is not; refused by name rather than derived past the
+     * block (cause 29) or copied past it later by reblock. */
+    extent = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_base(p);
+    if (hdr > extent || size > extent - hdr || bound > extent - hdr) {
+        cap_fail(ZEND_CAP_FAIL_GEOMETRY, "request does not fit the block", size, extent);
+    }
     ++st_issues;
     if (mode & ZEND_CAP_MODE_REVOKE) {
         child = __capstone_malloc_derive(p, hdr, bound);
@@ -210,8 +221,10 @@ void *zend_cap_reblock(void *p, size_t bytes, size_t oldbytes)
     unsigned int mode = zend_cap_mode();
     void *fresh;
     if (!p) { return zend_cap_block(bytes); }
+    unsigned long extent = __builtin_capstone_cap_get_end(p) - __builtin_capstone_cap_get_base(p);
     fresh = zend_cap_block(bytes);
     if (!fresh) { return (void *)0; }
+    if (oldbytes > extent) { oldbytes = extent; }   /* never past the old block, whatever p->size says */
     memcpy(fresh, p, oldbytes < bytes ? oldbytes : bytes);
     ++st_reallocs;
     if (mode & ZEND_CAP_MODE_REVOKE) { ++st_retires; }   /* the old child ends with its block */
