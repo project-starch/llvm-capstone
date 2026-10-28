@@ -25,8 +25,8 @@ the bug corpora's "spatial" arm and the paper's "Capstone spatial" column are th
 
 ## The switches
 
-`runtime/application` options `CAPSTONE_HEAP_LIFETIMES` and `CAPSTONE_HEAP_SCRUB_FREE`, both ON by
-default, compiled into `heap.c`, recorded in `sdk.json` as `heap_lifetimes` and `heap_scrub_free`,
+`runtime/application` options `CAPSTONE_HEAP_LIFETIMES` and `CAPSTONE_HEAP_SCRUB_FREE`, lifetimes ON and
+the scrub OFF by default since PR #290 (both ON before it), compiled into `heap.c`, recorded in `sdk.json` as `heap_lifetimes` and `heap_scrub_free`,
 forwarded by `build-sdk.sh`; `mallocng.md` describes them. With lifetimes off a public object and a
 nested group are SHRINK copies of the slot's authority (same bounds, same rights, the slot's
 lifetime): nothing below a VM mapping is ever revoked. With the scrub off, `free` leaves bytes and tags.
@@ -39,7 +39,8 @@ Arms, in the bug corpora's vocabulary:
 | `virtual-mallocng-spatial-scrub` | off | on | temporal minus this = the lifetime machinery alone |
 | `virtual-mallocng-spatial` | off | off | spatial-scrub minus this = the free-time zeroing alone |
 
-The fourth combination (lifetimes on, scrub off) builds too and is used only by the contract gate.
+The fourth combination (lifetimes on, scrub off) is the default heap since PR #290; the kit builds it as
+`capstone-lifetimes`, and the silicon comparison is `capstone-spatial` against it.
 
 ## Controls: the arm must lose exactly the temporal catches
 

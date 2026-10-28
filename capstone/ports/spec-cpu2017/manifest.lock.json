@@ -320,6 +320,14 @@
       "heap_lifetimes": false,
       "heap_scrub_free": false,
       "what": "exact bounds only: against capstone-spatial-scrub it isolates the free-time zeroing, against capstone-virtual the mechanism as shipped"
+    },
+    "capstone-lifetimes": {
+      "arm": "virtual-mallocng-lifetimes",
+      "sdk": "sdk-lifetimes",
+      "options": [],
+      "heap_lifetimes": true,
+      "heap_scrub_free": false,
+      "what": "the default heap since PR #290: a lifetime per public object (CDERIVE on malloc, CREVOKE on free), no zeroing on free; against capstone-spatial it isolates the lifetime machinery as shipped"
     }
   },
   "arms_note": "runcpu label -> SDK of recipes/sdks.sh; the key is the label and the SPEC executable suffix; capstone-virtual is the qualified configuration of q4 up to heap.c.obj",
