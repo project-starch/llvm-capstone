@@ -137,6 +137,16 @@ case "$WHAT" in
       || { echo "putenv probe build FAILED" >&2; exit 1; }
     echo "  built $IMG"
     ;;
+  timeval-probe)
+    # Does this libc's select() reject an out-of-range tv_usec (EINVAL) or sleep on it? PHP 5.0.0's
+    # liveness check sets only tv_sec; musl's select folds the rest into the timeout, so CRASH-092
+    # hangs before its defect on some stacks. See probe-timeval.c.
+    IMG="$OUT/probe-timeval.dom"
+    echo "  compiling the timeval probe ..."
+    "$CC" -O1 "$HERE/probe-timeval.c" -o "$IMG" \
+      || { echo "timeval probe build FAILED" >&2; exit 1; }
+    echo "  built $IMG"
+    ;;
   select-probe)
     # Is select() usable on this profile at all? CRASH-092 hangs, and PHP 5.0.0's
     # php_sock_stream_wait_for_data turns one persistent select() error into an infinite loop,
@@ -686,5 +696,5 @@ case "$WHAT" in
     fi
     sha256sum "$IMG"
     ;;
-  *) echo "usage: build-virtual.sh [probe|hier-probe|atexit-probe|select-probe|putenv-probe|seam-probe|inert|php|realphp]" >&2; exit 2 ;;
+  *) echo "usage: build-virtual.sh [probe|hier-probe|atexit-probe|select-probe|putenv-probe|timeval-probe|seam-probe|inert|php|realphp]" >&2; exit 2 ;;
 esac

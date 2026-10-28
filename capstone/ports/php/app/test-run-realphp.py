@@ -255,6 +255,13 @@ def observation_cases():
     check("probe: not retained with the control retained reads absent", R.putenv_probe_outcome(absent), False)
     check("probe: a failed control reads as no result", R.putenv_probe_outcome(broken), None)
     check("probe: no output reads as no result", R.putenv_probe_outcome(""), None)
+    tv_present = "TIMEVAL_PROBE control rc=0 errno=0 ms=0\nTIMEVAL_PROBE out-of-range-usec rejected=1 rc=-1 errno=22 (Invalid argument) ms=0\nTIMEVAL_PROBE DONE failures=0\n"
+    tv_absent = "TIMEVAL_PROBE control rc=0 errno=0 ms=0\nTIMEVAL_PROBE out-of-range-usec rejected=0 rc=-1 errno=4 (Interrupted system call) ms=2000\nTIMEVAL_PROBE DONE failures=0\n"
+    tv_broken = "TIMEVAL_PROBE control rc=1 errno=0 ms=0\nTIMEVAL_PROBE FAIL the zero timeout did not return 0\nTIMEVAL_PROBE out-of-range-usec rejected=0 rc=0 errno=0 (ok) ms=2000\nTIMEVAL_PROBE DONE failures=1\n"
+    check("timeval probe: EINVAL at once reads present", R.timeval_probe_outcome(tv_present), True)
+    check("timeval probe: the alarm interrupting a sleep reads absent", R.timeval_probe_outcome(tv_absent), False)
+    check("timeval probe: a failed control reads as no result", R.timeval_probe_outcome(tv_broken), None)
+    check("the runner knows both probes by name", sorted(R.PLATFORM_PROBES), ["putenv", "timeval"])
     pp_spec = dict(SPEC, platform_precondition={"needs": "putenv keeps an empty-name string referenced from environ",
                                                 "probe": "putenv", "present": "x", "absent": "y"})
     obs = R.observe("CRASH-084", pp_spec, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",

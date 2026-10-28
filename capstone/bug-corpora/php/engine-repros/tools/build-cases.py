@@ -79,6 +79,15 @@ EXTRA_FAULT_SITES = {
 }
 
 PLATFORM_PRECONDITIONS = {
+    "CRASH-092": {
+        "platform_precondition": {
+            "needs": "select() rejects a timeval whose tv_usec is out of range (EINVAL) rather than sleeping on it",
+            "probe": "timeval",
+            "present": "TIMEVAL_PROBE out-of-range-usec rejected=1",
+            "absent": "TIMEVAL_PROBE out-of-range-usec rejected=0"
+        },
+        "platform_precondition_why": "PHP 5.0.0's liveness check (main/streams/xp_socket.c, PHP_STREAM_OPTION_CHECK_LIVENESS) sets only tv.tv_sec of the timeval it hands to select(); tv_usec is whatever the stack held. Linux rejects such a timeval: glibc passes it to the kernel, which answers EINVAL, PHP reads the socket as alive and the script runs to its end, where the use-after-free this case records is reached (the corpus's native oracle). musl 1.2.5's select (src/select/select.c) folds an out-of-range tv_usec into the seconds instead -- `s += us/1000000` -- so a positive garbage tv_usec becomes a timeout of hours or days and the script hangs before its defect, on whichever arms and images leave such a value on the stack (measured 2026-10-28: the un-instrumented image hangs on the nested arms, a diagnostic image with extra stack use completes and the nested arms catch the defect at ASan's own site, _zval_ptr_dtor). Checked, not asserted: ports/php/app/probe-timeval.c runs on every arm.",
+    },
     "CRASH-084": {
         "platform_precondition": {
             "needs": "putenv keeps an empty-name string referenced from environ",
@@ -364,6 +373,10 @@ def self_test():
                    EXTRA_FAULT_SITES["CRASH-057"][0], ["php_var_dump"]))
     checks.append(("and says why, naming the source line",
                    "var.c:126" in EXTRA_FAULT_SITES["CRASH-057"][1], True))
+    checks.append(("CRASH-092 declares the select timeval precondition with the timeval probe",
+                   PLATFORM_PRECONDITIONS["CRASH-092"]["platform_precondition"]["probe"], "timeval"))
+    checks.append(("and says why, naming musl's select arithmetic",
+                   "us/1000000" in PLATFORM_PRECONDITIONS["CRASH-092"]["platform_precondition_why"], True))
     checks.append(("and says why, naming the musl branch",
                    "unsetenv" in PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition_why"], True))
     checks.append(("the fix id is the first 12 hex digits", fix_id("4f161fe28997f5d1f818fc6ae95a8131066cf1a2"), "4f161fe28997"))

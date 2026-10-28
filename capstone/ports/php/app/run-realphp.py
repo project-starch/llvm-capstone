@@ -112,13 +112,15 @@ TEMPORAL = ("php-real-stock", "php-real-block", "php-real-object")
 
 SANITY = "revocation-sanity"
 BOUND_PROBE = "seam-bound-probe"
-# The platform-precondition probe (ports/php/app/probe-putenv.c), run once per arm when a case
-# declares `platform_precondition.probe == "putenv"` (bug-corpora/SCHEMA.md). Three outcomes and
+# The platform-precondition probes (ports/php/app/probe-*.c), each run once per arm when a case
+# declares `platform_precondition.probe` with its name (bug-corpora/SCHEMA.md). Three outcomes and
 # never a silent zero: the behaviour proven ABSENT (the case is out of the denominator on this
 # arm), proven PRESENT (judged normally), or the probe failed (judged normally, with a note).
-PUTENV_PROBE = "putenv-probe"
+# A probe's guest run is named `<name>-probe`; its reader turns the output into True/False/None.
 PUTENV_LINE = re.compile(r"PUTENV_PROBE (\S+) retained=(\d) rc=(-?\d+) errno=(\d+)")
 PUTENV_DONE = re.compile(r"PUTENV_PROBE DONE failures=(\d+)")
+TIMEVAL_LINE = re.compile(r"TIMEVAL_PROBE (\S+) (?:rc=(-?\d+)|rejected=(\d))")
+TIMEVAL_DONE = re.compile(r"TIMEVAL_PROBE DONE failures=(\d+)")
 
 
 def putenv_probe_outcome(text):
@@ -131,6 +133,26 @@ def putenv_probe_outcome(text):
     if seen.get("control") is not True or "empty-name" not in seen:
         return None
     return seen["empty-name"]
+
+
+def timeval_probe_outcome(text):
+    """True: select() rejects an out-of-range tv_usec with EINVAL at once; False: proven to sleep
+    on it instead (the zero-timeout control returned 0 at once); None: no usable probe result."""
+    done = TIMEVAL_DONE.search(text or "")
+    if not done or int(done.group(1)) != 0:
+        return None
+    control = re.search(r"TIMEVAL_PROBE control rc=(-?\d+)", text)
+    verdict = re.search(r"TIMEVAL_PROBE out-of-range-usec rejected=(\d)", text)
+    if not control or control.group(1) != "0" or not verdict:
+        return None
+    return verdict.group(1) == "1"
+
+
+PLATFORM_PROBES = {"putenv": putenv_probe_outcome, "timeval": timeval_probe_outcome}
+
+
+def probe_run_name(name):
+    return f"{name}-probe"
 SANITY_SCRIPT = "phpb-sanity.php"
 
 MODE_LINE = re.compile(r"ZEND_CAP_MODE (\d+) exact=(\d) revoke=(\d)")
@@ -789,13 +811,13 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
 
 # ---- the runs ------------------------------------------------------------------------------
 
-def run_arm(args, arm, mode, cases, record, serial, wants_probe, wants_putenv=False):
-    """One guest boot: the sanity control, the bound probe, the platform probe when a case
-    declares one, then every case, all at `mode`."""
+def run_arm(args, arm, mode, cases, record, serial, wants_probe, platform_probes=()):
+    """One guest boot: the sanity control, the bound probe, each platform probe a case declares
+    (and the command line supplies), then every case, all at `mode`."""
     img = args.image.name
     runs = [(SANITY, f"PHP_CAP_MODE={mode} {img} -d memory_limit=512M /mnt/vm/{SANITY_SCRIPT}")]
-    if wants_putenv:
-        runs.append((PUTENV_PROBE, args.putenv_probe.name))
+    for name, path in platform_probes:
+        runs.append((probe_run_name(name), path.name))
     if wants_probe:
         # probe-seam stage 7 sets its OWN modes internally (rounded, read index 9, then exact,
         # read index 9), so it is not parameterised by the arm. See arms.json on what that does
@@ -809,8 +831,8 @@ def run_arm(args, arm, mode, cases, record, serial, wants_probe, wants_putenv=Fa
            "--timeout", str(args.timeout), "--run-timeout", str(args.run_timeout)]
     if wants_probe:
         cmd += ["--image", str(args.probe)]
-    if wants_putenv:
-        cmd += ["--image", str(args.putenv_probe)]
+    for _, path in platform_probes:
+        cmd += ["--image", str(path)]
     cmd += ["--extra", str(args.scratch / SANITY_SCRIPT)]
     for case in cases:
         cmd += ["--extra", str(args.scratch / f"{case}.php")]
@@ -952,10 +974,11 @@ def main():
     p.add_argument("--run-timeout", type=int, default=40,
                    help="GUEST seconds for one run before the watchdog kills it")
     p.add_argument("--case", action="append", help="restrict to these cases (debugging)")
-    p.add_argument("--putenv-probe", type=Path,
-                   help="probe-putenv.dom: run once per arm when a case declares platform_precondition "
-                        "probe 'putenv' (CRASH-084); without it such a case is judged as if the "
-                        "precondition were met, with a note")
+    p.add_argument("--platform-probe", action="append", default=[], metavar="NAME=PATH",
+                   help="a platform-precondition probe image by its name (putenv=probe-putenv.dom, "
+                        "timeval=probe-timeval.dom), run once per arm when a case declares that probe; "
+                        "a declared probe not supplied leaves its case judged as if the precondition "
+                        "were met, with a note")
     p.add_argument("--from-record", action="store_true",
                    help="re-judge stored runs without booting")
     p.add_argument("--prereg", default="", help="the pre-registration commit this run answers")
@@ -1021,12 +1044,22 @@ def main():
                      f"configuration; the judge cannot tell a revocation from a corrupted pointer")
 
     per_arm, texts, raws = {}, {}, {}
-    declares_putenv = any((spec.get("platform_precondition") or {}).get("probe") == "putenv"
-                          for spec in cases.values())
-    wants_putenv = declares_putenv and args.putenv_probe is not None
-    if declares_putenv and not wants_putenv:
-        print("    NOTE: a case declares the putenv platform precondition and no --putenv-probe was "
-              "given: it is judged as if the precondition were met", flush=True)
+    declared_probes = sorted({(spec.get("platform_precondition") or {}).get("probe")
+                              for spec in cases.values()} - {None, ""})
+    supplied = {}
+    for word in args.platform_probe:
+        name, _, path = word.partition("=")
+        if name not in PLATFORM_PROBES or not path:
+            sys.exit(f"--platform-probe {word!r}: known probes are {sorted(PLATFORM_PROBES)}, as NAME=PATH")
+        supplied[name] = Path(path)
+    for name in declared_probes:
+        if name not in PLATFORM_PROBES:
+            sys.exit(f"a case declares platform_precondition probe {name!r}, which this runner cannot read")
+    platform_probes = [(name, supplied[name]) for name in declared_probes if name in supplied]
+    for name in declared_probes:
+        if name not in supplied:
+            print(f"    NOTE: a case declares the {name} platform precondition and no --platform-probe "
+                  f"{name}=... was given: it is judged as if the precondition were met", flush=True)
     for arm in ARMS:
         mode = arms[arm]["mode"]
         wants_probe = BOUND_PROBE in arms[arm]["controls"]
@@ -1038,7 +1071,7 @@ def main():
                 sys.exit(f"--from-record: no stored run at {record}")
             rec = json.loads(record.read_text())
         else:
-            _, rec = run_arm(args, arm, mode, cases, record, serial, wants_probe, wants_putenv)
+            _, rec = run_arm(args, arm, mode, cases, record, serial, wants_probe, platform_probes)
         # A stored run from a DIFFERENT image must not be re-judged as this one's. Each run is
         # checked against the image it was supposed to be, which for the bound probe is the
         # probe's own.
@@ -1075,15 +1108,16 @@ def main():
             probe_text = texts[arm].get(BOUND_PROBE, "")
             probe_ok = bound_probe_faulted_as_declared(probe_text, symbols_of(args.llvm_bin, args.probe))
         mode_word, revokes = seam_counters(sanity_text)
-        putenv_present = putenv_probe_outcome(texts[arm].get(PUTENV_PROBE, "")) if declares_putenv else None
+        present = {name: PLATFORM_PROBES[name](texts[arm].get(probe_run_name(name), ""))
+                   for name in declared_probes}
         per_arm[arm] = {"rec": rec, "sanity_ok": sanity_ok, "probe_ok": probe_ok,
                         "mode_word": mode_word, "revokes": revokes,
                         "declared_mode": mode, "wants_probe": wants_probe,
-                        "putenv_present": putenv_present}
-        if declares_putenv:
-            print(f"    {PUTENV_PROBE}: " + {True: "empty-name string RETAINED in environ (precondition present)",
-                                             False: "empty-name string NOT retained (precondition absent; control retained)",
-                                             None: "no usable result"}[putenv_present])
+                        "platform_present": present}
+        for name in declared_probes:
+            print(f"    {probe_run_name(name)}: " + {True: "behaviour PRESENT (precondition met)",
+                                                   False: "behaviour ABSENT (precondition not met; control held)",
+                                                   None: "no usable result"}[present[name]])
         print(f"    {SANITY}: {'complete' if sanity_ok else 'DID NOT COMPLETE'} "
               f"(mode={mode_word} revokes={revokes})")
         if wants_probe:
@@ -1156,7 +1190,7 @@ def main():
         for case, spec in cases.items():
             text = texts[arm].get(case, "")
             pp = spec.get("platform_precondition")
-            platform_present = per_arm[arm]["putenv_present"] if pp and pp.get("probe") == "putenv" else None
+            platform_present = per_arm[arm]["platform_present"].get(pp.get("probe")) if pp else None
             obs = observe(case, spec, arm, image_sha, text,
                           per_arm[arm]["rec"]["exits"].get(case),
                           controls, stock_reached[case], args.llvm_bin, args.image,

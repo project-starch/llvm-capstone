@@ -1,28 +1,35 @@
 {
- "case": 30,
- "upstream_fix": "09881626498d",
- "title": "CRASH-092: http fopen request fulluri separate zval then ptr dtor frees shared context option uaf (use-after-free)",
- "consumer": "ext/standard/http_fopen_wrapper.c:197-201",
- "class": "temporal",
- "trigger": "trigger.php",
- "live_in_pin": true,
- "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-use-after-free at Zend/zend_execute_API.c:389 in _zval_ptr_dtor when trigger.php runs; the corpus records the fix as php-src 09881626498d, which postdates the release, and names the defect at ext/standard/http_fopen_wrapper.c:197-201 (free at :201). Claimed \":263\" is the line number in the 2005 fix commit's tree, NOT in php-5.0.0.",
- "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build completes it natively, so an arm that completes it saw nothing. Needs: network: working loopback. ",
- "fault_sites": [
-  "_zval_ptr_dtor"
- ],
- "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has _zval_ptr_dtor at Zend/zend_execute_API.c:389 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
  "arms": {
   "virtual-malloc": {
    "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"
   },
-  "virtual-nested-pools": {
-   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)"
-  },
   "virtual-nested-exact": {
    "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)"
+  },
+  "virtual-nested-pools": {
+   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)"
   }
  },
+ "case": 30,
+ "class": "temporal",
+ "consumer": "ext/standard/http_fopen_wrapper.c:197-201",
+ "fault_sites": [
+  "_zval_ptr_dtor"
+ ],
+ "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has _zval_ptr_dtor at Zend/zend_execute_API.c:389 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
+ "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build completes it natively, so an arm that completes it saw nothing. Needs: network: working loopback. ",
+ "live_in_pin": true,
+ "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-use-after-free at Zend/zend_execute_API.c:389 in _zval_ptr_dtor when trigger.php runs; the corpus records the fix as php-src 09881626498d, which postdates the release, and names the defect at ext/standard/http_fopen_wrapper.c:197-201 (free at :201). Claimed \":263\" is the line number in the 2005 fix commit's tree, NOT in php-5.0.0.",
+ "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as history-5x-stdext (historical-known, confidence high).",
+ "platform_precondition": {
+  "absent": "TIMEVAL_PROBE out-of-range-usec rejected=0",
+  "needs": "select() rejects a timeval whose tv_usec is out of range (EINVAL) rather than sleeping on it",
+  "present": "TIMEVAL_PROBE out-of-range-usec rejected=1",
+  "probe": "timeval"
+ },
+ "platform_precondition_why": "PHP 5.0.0's liveness check (main/streams/xp_socket.c, PHP_STREAM_OPTION_CHECK_LIVENESS) sets only tv.tv_sec of the timeval it hands to select(); tv_usec is whatever the stack held. Linux rejects such a timeval: glibc passes it to the kernel, which answers EINVAL, PHP reads the socket as alive and the script runs to its end, where the use-after-free this case records is reached (the corpus's native oracle). musl 1.2.5's select (src/select/select.c) folds an out-of-range tv_usec into the seconds instead -- `s += us/1000000` -- so a positive garbage tv_usec becomes a timeout of hours or days and the script hangs before its defect, on whichever arms and images leave such a value on the stack (measured 2026-10-28: the un-instrumented image hangs on the nested arms, a diagnostic image with extra stack use completes and the nested arms catch the defect at ASan's own site, _zval_ptr_dtor). Checked, not asserted: ports/php/app/probe-timeval.c runs on every arm.",
  "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
- "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as history-5x-stdext (historical-known, confidence high)."
+ "title": "CRASH-092: http fopen request fulluri separate zval then ptr dtor frees shared context option uaf (use-after-free)",
+ "trigger": "trigger.php",
+ "upstream_fix": "09881626498d"
 }

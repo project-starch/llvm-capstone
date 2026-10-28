@@ -2302,3 +2302,60 @@ request fails, the script ends. virtual-nested-pools and virtual-nested-exact: N
 at all before the watchdog: the hang is BEFORE the select loop, with the same ~130 mapping grants
 as stock. A boundary trace of the nested arm (`residues/092-trace`, CAPSTONE_VM_TRACE=1, 60 s) is
 the next reading: whether it spins in delegated calls, and which, or in user code.
+
+### CRASH-057 re-judged under the chain rule (`residues/057-chain-judged`, from the same records)
+
+virtual-nested-pools and virtual-nested-exact: **CAUGHT**, attribution `function`, evidence: "the
+fault is in dl_call_once, outside PHP's tree; the frame chain climbs through dl_call,
+dl_transfer, __capstone_delegate_call, write@write.c:6, sapi_cli_single_write@php_cli.c:184,
+sapi_cli_ub_write@php_cli.c:205, php_ub_body_write_no_header@output.c:684,
+php_body_write@output.c:119 to php_var_dump at var.c:126, the function this case declares --
+the first frame of PHP's tree above the output plumbing". virtual-malloc: a different fault,
+`_zval_ptr_dtor` at zend_execute_API.c:389, inside the tree and undeclared: setup-fault, as
+before. stock: the refusal of the interior efree, unattributed. So the nested arms catch
+CRASH-057, and the cell moves from NO-READING to CAUGHT in the sensitivity scoring (the case is a
+native crasher, so the default scoring keeps it out of the denominator).
+
+Of the 49 CWE-416 cases, then: 48 apply on this libc, the nested arms catch 47 of 48, and the
+one left is CRASH-092, whose hang on the nested arms lies before its select loop
+(`residues/092-diag`); a second diagnostic image with markers in the stream read path is the
+next reading.
+
+### CRASH-092: the mechanism, the catch, the declaration
+
+Two more diagnostic images (`residues/092-diag2`, `092-diag3`, markers in the stream read path
+and around the liveness select) read: both arms reach `php_stream_eof` after sending the request;
+on the third image every arm runs to `done`, and the nested arms then fault with cause 25 in
+`_zval_ptr_dtor` at zend_execute_API.c:389, ASan's own site -- **CAUGHT** on virtual-nested-pools
+and virtual-nested-exact (the diag3 record; stock and virtual-malloc complete, not-reached).
+The hang on the un-instrumented image is PHP's own: the liveness check sets only `tv.tv_sec`
+(xp_socket.c:240) and leaves tv_usec as the stack had it; Linux answers such a timeval with
+EINVAL (the native oracle's path), musl's select folds it into the seconds (`s += us/1000000`,
+src/select/select.c) and sleeps for hours. Which arms and images hang depends on the stack's
+leftover, which is exactly the pattern of run7 to run11 and the three diagnostic images.
+
+So, like CRASH-084, a libc precondition the defect needs to be reached: declared on the case
+(`platform_precondition`, probe `timeval`), checked on every arm by `probe-timeval.c` (a zero
+timeout must return at once, then an out-of-range tv_usec under a two-second alarm: EINVAL at
+once is present, a sleep is absent), carried by build-cases.py. The runner's probes are now
+general (`--platform-probe NAME=PATH`, readers per name); the putenv path is unchanged in
+behaviour and tests.
+
+### Pre-registration of run12 (written before the run)
+
+The whole corpus, both populations, both scorings, on the line-table images (`out-lt8`:
+php-real-seam.dom, probe-seam.dom, probe-putenv.dom, probe-timeval.dom, all against the 8 MiB
+stack SDK; the musl objects carry line tables, debug info only) with the chain launcher
+(`platform-res`: run7's QEMU and images, adapter-res built from this tree), both probes, the
+population watchdog at 40 seconds, runner and corpus at this commit. Against run11:
+
+- the timeval probe alone first: predicted `control rc=0`, `out-of-range-usec rejected=0` with
+  errno 4 after about 2000 ms, `DONE failures=0`. If it reads rejected=1, the CRASH-092 reading
+  above is wrong and the declaration comes out.
+- CRASH-092: NO-READING out-of-denominator on every arm in BOTH scorings (was infra / not-reached).
+- CRASH-057, sensitivity: virtual-nested-pools and virtual-nested-exact CAUGHT (the chain rule;
+  was setup-fault); stock and virtual-malloc unchanged. Default: unchanged (native crasher).
+- CRASH-068 (the libc leaf, ra rule): unchanged on every arm -- the line tables give musl's
+  strlen a path now, so the `not path` leaf branch no longer applies to it and the chain rule
+  must carry it instead; if 068 moves, the chain rule is wrong and run12 is void.
+- every other cell: equal to run11.
