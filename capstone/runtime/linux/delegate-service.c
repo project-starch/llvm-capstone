@@ -1015,9 +1015,10 @@ static void hex(char *out, uint64_t v) {
 
 void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host *host,
                                     const char *image, uint64_t cause, uint64_t pc,
-                                    uint64_t address, uint64_t ra, uint64_t fp) {
+                                    uint64_t address, uint64_t ra, uint64_t fp,
+                                    const uint64_t *chain, unsigned chain_len) {
   /* No stdio: this can run after a closed or full pipe, and must not block. */
-  char line[512], number[24];
+  char line[1024], number[24];
   size_t n = 0;
   int flags;
 #define PUT(text) do { const char *t_ = (text); while (*t_ && n + 1 < sizeof line) line[n++] = *t_++; } while (0)
@@ -1053,6 +1054,14 @@ void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host 
     if (first->image_sha256[0]) { PUT(" sha256="); PUT(first->image_sha256); }
   }
   if (image) { PUT(" image="); PUT(image); }
+  /* The frame chain, LAST on the line: every reader of the record anchors on words before
+   * it (`code=`, `entry=`, `sha256=`), so a trailing word changes no reading; verdicts.py's
+   * FAULT_CHAIN reads it. Diagnostic: the judge may cite it as evidence, never decide on it
+   * alone. */
+  if (chain && chain_len) {
+    PUT(" chain=");
+    for (unsigned i = 0; i < chain_len; ++i) { if (i) PUT(","); PUTHEX(chain[i]); }
+  }
   PUT("\n");
 #undef PUT
 #undef PUTHEX

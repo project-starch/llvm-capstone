@@ -97,9 +97,12 @@ unsigned capstone_delegate_seccomp_allowlist(uint16_t *allow, unsigned capacity)
 unsigned capstone_delegate_seccomp_program(const uint16_t *allow, unsigned n,
                                            struct sock_filter *program);
 
-/* The fault record line, written without blocking. `image` may be NULL. */
+/* The fault record line, written without blocking. `image` may be NULL. `chain` is the
+ * return addresses up the domain's stack from the faulting frame, as the launcher read them
+ * (runtime/virtual/exec.c frame_chain), printed last as ` chain=0x..,0x..`; NULL/0 for none. */
 void capstone_delegate_fault_record(int fd, const struct capstone_delegate_host *host,
                                     const char *image, uint64_t cause, uint64_t pc,
-                                    uint64_t address, uint64_t ra, uint64_t fp);
+                                    uint64_t address, uint64_t ra, uint64_t fp,
+                                    const uint64_t *chain, unsigned chain_len);
 
 #endif

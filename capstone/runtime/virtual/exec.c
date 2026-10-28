@@ -688,21 +688,55 @@ static long exec_in_place(void) {
   return -error;
 }
 
+/* The domain's main stack, as reserved and granted in main(): the bounds the frame walk below
+ * checks every read against. */
+static void *domain_stack;
+static size_t domain_stack_bytes;
+
+/* THE FRAME CHAIN: the return addresses up the domain's stack from the faulting frame, read by
+ * the launcher (the stack is this process's own mapping, granted to the domain, and the domain
+ * is stopped on a terminal step), each frame validated before it is read, bounded. The
+ * compiler's prologue stores ra as a scalar at fp-16 and the caller's fp as a capability at
+ * fp-32 (`sd ra, 0x40(sp); stc s0, 0x30(sp); s0 = sp + 0x50`), and a capability slot's low word
+ * is its cursor, which is how the module reads the register slots (capstone_vm.c `r.fp =
+ * t->frame[24]`). So a frame is {fp-32: the caller's fp, fp-16: the return address}. The chain
+ * stops at a frame outside the stack or misaligned, a zero return address, a caller's fp not
+ * above this one, or the 16th frame. A thread's stack is not this mapping, so a worker's fault
+ * gets no chain rather than a wrong one. Diagnostic: nothing here decides on it. */
+static unsigned frame_chain(uint64_t fp, uint64_t *out, unsigned max)
+{
+    uint64_t lo = (uint64_t)(uintptr_t)domain_stack, hi = lo + domain_stack_bytes;
+    unsigned n = 0;
+    if (!domain_stack) return 0;
+    while (n < max && fp >= lo + 32 && fp <= hi && (fp & 15) == 0) {
+        uint64_t ra, prev;
+        memcpy(&ra, (const void *)(uintptr_t)(fp - 16), sizeof ra);
+        memcpy(&prev, (const void *)(uintptr_t)(fp - 32), sizeof prev);
+        if (!ra) break;
+        out[n++] = ra;
+        if (prev <= fp) break;
+        fp = prev;
+    }
+    return n;
+}
+
 static void fault(const struct cv_step *step)
 {
     struct capstone_delegate_host *h = worker_host ? worker_host : &host;
+    uint64_t chain[16];
+    unsigned chain_len = step->fp ? frame_chain(step->fp, chain, 16) : 0;
     if (!h->image_sha256[0] && image_fd >= 0)
         capstone_application_hash(image_fd, h->image_sha256);
     const char *record = getenv("CAPSTONE_FAULT_RECORD");
     int fd = record && *record ? open(record, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600) : -1;
     if (fd >= 0) {
         capstone_delegate_fault_record(fd, h, image_path, step->cause, step->pc, step->address,
-                                       step->ra, step->fp);
+                                       step->ra, step->fp, chain, chain_len);
         close(fd);
     }
     if (isatty(2) || getenv("CAPSTONE_EXEC_DIAGNOSTICS"))
         capstone_delegate_fault_record(2, h, image_path, step->cause, step->pc, step->address,
-                                       step->ra, step->fp);
+                                       step->ra, step->fp, chain, chain_len);
     /* Signal death stops the process before Linux releases shared mappings. */
     capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, NULL, NULL);
 }
@@ -1013,6 +1047,7 @@ int main(int argc, char **argv)
      * so the launcher runs on the default profile. The bit may still be set; it is not read. */
     if (grant(image, image_bytes, 3, 7, entry, 0, 0, image_rx)) { munmap(image, image_bytes); return die("image grant"); }
     void *stack = reserve(stack_bytes);
+    domain_stack = stack; domain_stack_bytes = stack_bytes;
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);
     size_t exchange_bytes = rounded(desc.exchange_bytes);
     void *exchange = exchange_bytes ? reserve(exchange_bytes) : NULL;
