@@ -96,10 +96,11 @@ def read(a):
                  instret=int(bl["instret"]) if fresh and "instret" in bl else None,
                  entries=int(bl["entries"]) if fresh and "entries" in bl else None,
                  bench_line_fresh=fresh, body=text[begins.get(n, m.start()):m.start()].strip()[-400:])
-        if scy is not None:
+        if scy is not None and int(sin) > 0:
             # The module's cumulative counters, read before and after the command: every context it ran, children
             # included (perlbench's test harness runs ~300), and no staleness question. Stages from before 2026-10-29
-            # print no sys= and keep the bench line.
+            # print no sys= and keep the bench line, as does a zero delta: run.sh prints 0 when the sysfs files are
+            # absent, and no data must not read as zero instructions.
             e.update(cycles=int(scy), instret=int(sin), entries=int(sen), counters="sysfs-delta")
         res["arms"].setdefault(arm, dict(commands=[], hashes={}, files={}))["commands"].append(e)
     for m in re.finditer(r"^@@SPEC-HASH-BEGIN (\S+)\n(.*?)^@@SPEC-HASH-END \1$", text, re.M | re.S):
