@@ -269,3 +269,33 @@ is therefore the leading reading. It is UNRESOLVED and is not yet an ISSUES entr
   - every other sub-test reads `ok`.
 
 The perlbench test boots are added to the lists after their twin references (census-perl) are read.
+
+## Addendum 7 (2026-10-29 06:40): RETRACTION of Addendum 6's localization
+
+Addendum 6 attributed the `cause=2` trap at .text+0x11eb0 (perl) / +0x10f94 (gcc) to `lock_heap`'s `__builtin_trap()`
+(heap.c:39). **That is wrong.** The two traps share one `unimp`.
+
+**What the trace shows.** An exec trace of japh/abigail.t on the twin (kit-q34-trace: every translated block in the
+domain range, 70.2M blocks) shows the following:
+- `unimp` was reached once, at trace line 81477757.
+- The lock-wait path (`jalr` at +0x11ea8, `beqz` at +0x11eac) never ran.
+- The trap was reached from `bne a5, a3, <unimp>` at ELF 0x2239c, in realloc's inlined `publish()` →
+  `issue_child()`. That branch compares the base of the child it just shrank (`lcc a5, a0, 3`) with the requested
+  start (`ld a3, 0x40(r)`, the slot key).
+
+**The check that fires** is issue_child's exactness check in the spatial arm (heap.c:207-210):
+`__builtin_capstone_cap_shrink(at, start, start + size)` followed by
+`if (get_base(child) != start || get_end(child) != start + size) __builtin_trap();`.
+
+So realloc published a block whose `[key, key + capstone_repr_round(n))` is not exactly representable at that key: the
+SHRINK rounded the base.
+
+**Not established:**
+- which mallocng realloc path returned the under-aligned key (in-place growth inside the slot's slack, or the
+  mremap path);
+- what the lifetimes arm does there. It takes the `capstone_cap_derive` path instead of SHRINK, and CDERIVE refuses
+  inexact bounds with cause 29.
+
+**What changes.** P18 and P19 keep their observable predictions: the same rc 139 and the same fault line at the same
+pc. Only Addendum 6's reading of the cause is withdrawn. How it was missed: the first localization took the
+`__builtin_trap` nearest the `unimp` in the disassembly, and never asked which branches target it.
