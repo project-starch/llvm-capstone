@@ -405,9 +405,11 @@ def observation_cases():
     # above the output plumbing; a declared site there is a catch, anything else is not.
     FAULT_CHAIN = (FAULT_RA.replace("ra=0x3f90508d7c", "ra=0xa")
                    + " image=php.dom chain=0x3f90a00010,0x3f90a00020,0x3f90a00030,0x3f90a00040")
-    PLUMB = {0x3f90a00010 - 2: ("", "/tmp/k/tmp/musl-src/musl-1.2.5/src/unistd/write.c", 6),
+    # the real chain's names (run13): musl's write with its line table, the CLI's ub_write, and
+    # PHP 5.0.0's php_body_write (output.c:119) -- every one on the forwarding list by name
+    PLUMB = {0x3f90a00010 - 2: ("write", "/tmp/k/tmp/musl-src/musl-1.2.5/src/unistd/write.c", 6),
              0x3f90a00020 - 2: ("sapi_cli_ub_write", "/b/sapi/cli/php_cli.c", 205),
-             0x3f90a00030 - 2: ("php_output_write", "/b/main/output.c", 119)}
+             0x3f90a00030 - 2: ("php_body_write", "/b/main/output.c", 119)}
     VD_SPEC = dict(SPEC, asan_func="_estrndup", asan_file="Zend/zend_alloc.c", asan_line=403,
                    asan_stack=[{"index": 0, "func": "memcpy", "outside": "memintrinsics.inc:117"},
                                {"index": 1, "func": "_estrndup", "file": "Zend/zend_alloc.c", "line": 403}],
@@ -439,7 +441,7 @@ def observation_cases():
     check("a declared site behind an undeclared frame is not reached", verdicts.judge(obs, pools)[0], verdicts.NO_READING)
     # a chain that never enters PHP's tree, every frame of it resolved (an unresolved one would
     # be a barrier, below)
-    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("__libc_start_main", "/tmp/k/tmp/musl-src/musl-1.2.5/src/env/__libc_start_main.c", 95)})
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("fwrite", "/tmp/k/tmp/musl-src/musl-1.2.5/src/stdio/fwrite.c", 20)})
     obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
                     controls(probe=None), True, "/x", "/y")
     v, reason, ev = verdicts.judge(obs, pools)
@@ -466,18 +468,57 @@ def observation_cases():
     v, reason, ev = chain_with(("", "", 0))
     check("an unresolved chain frame is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
     check("and the evidence names its address", "an unresolved frame (0x3f90a00030)" in ev, True)
-    v, reason, ev = chain_with(("php_output_write", "/b/main/output.c", 119),
+    v, reason, ev = chain_with(("php_body_write", "/b/main/output.c", 119),
                                ("php_var_dump", "/b/ext/standard/other.c", 126))
     check("a same-named function in another file is not the site", (v, reason), (verdicts.NO_READING, "unattributed"))
     check("and the evidence says which file was declared", "not in its declared file ext/standard/var.c" in ev, True)
-    v, reason, ev = chain_with(("php_output_write", "/b/main/output.c", 119),
+    v, reason, ev = chain_with(("php_body_write", "/b/main/output.c", 119),
                                spec=dict(VD_SPEC, site_files={"_estrndup": "Zend/zend_alloc.c"}))
     check("a site with no declared file cannot be matched by the chain", (v, reason), (verdicts.NO_READING, "unattributed"))
     check("and says so", "(none declared)" in ev, True)
     # the ra register resolving to nothing is NOT a barrier: a leaf may use it as scratch
-    v, reason, ev = chain_with(("php_output_write", "/b/main/output.c", 119))
+    v, reason, ev = chain_with(("php_body_write", "/b/main/output.c", 119))
     check("with ra=0xa unresolved the chain still decides (CRASH-057)", v, verdicts.CAUGHT)
     check("and the evidence says the ra was skipped as a leaf's scratch", "ra=0xa (unresolved, a leaf's scratch register)" in ev, True)
+    # THE SECOND REVIEW'S COUNTEREXAMPLES (2026-10-28): a frame with a SYMBOL and no line table
+    # used to pass every barrier (they keyed on the path), and a directory used to pass as
+    # plumbing. Now a frame passes by NAME, from the list of routines known to forward the
+    # buffer, and everything else is a barrier or the owner.
+    v, reason, ev = chain_with(("zend_cap_reblock", "", 0))
+    check("a seam frame with a symbol and no line table is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and is named as the seam", "the seam's own source (zend_cap_reblock@?:0)" in ev, True)
+    v, reason, ev = chain_with(("_estrndup", "", 0))
+    check("an allocator frame with a symbol and no line table is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and is named as the allocator", "PHP's allocator (_estrndup@?:0)" in ev, True)
+    v, reason, ev = chain_with(("zend_mm_alloc", "", 0))
+    check("the allocator's internal layer too", "PHP's allocator (zend_mm_alloc@?:0)" in ev, True)
+    v, reason, ev = chain_with(("capstone_delegate_pack", "", 0))
+    check("a runtime routine not on the forwarding list is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and says it is not known to forward", "a routine not known to forward the buffer (capstone_delegate_pack@?:0)" in ev, True)
+    v, reason, ev = chain_with(("php_start_ob_buffer", "/b/main/output.c", 200))
+    check("a routine of output.c that is not on the forwarding list is the owner, and undeclared", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence names it", "php_start_ob_buffer at output.c:200 first" in ev, True)
+    v, reason, ev = chain_with(("php_body_write", "/b/main/output.c", 119),
+                               ("php_var_dump", "/b/ext/other/notext/standard/var.c", 126))
+    check("a declared file matched by suffix across a directory boundary is not the file", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("at_file: the whole path or after a slash only",
+          (R.at_file("/b/ext/standard/var.c", "ext/standard/var.c"), R.at_file("ext/standard/var.c", "ext/standard/var.c"),
+           R.at_file("/b/ext/other/notext/standard/var.c", "ext/standard/var.c"), R.at_file("", "ext/standard/var.c")),
+          (True, True, False, False))
+    check("frame kinds", tuple(R.frame_kind(f, p) for f, p in (("strcat", "/m/strcat.c"), ("zend_cap_issue", ""),
+                                                                  ("_efree", ""), ("", ""), ("dl_transfer", ""),
+                                                                  ("php_var_dump", "/b/ext/standard/var.c"),
+                                                                  ("capstone_delegate_pack", ""), ("foo", "/b/main/output.c"))),
+          ("forwarding", "seam", "allocator", "unresolved", "forwarding", "php", "other", "php"))
+    # the probe transcript must NAME its image: the launcher's exit line or fault record
+    check("transcript_image: the exit line's digest", R.transcript_image("x\ncapstone-exec: exit image=probe-putenv.dom sha256=" + "a" * 64 + "\n"), "a" * 64)
+    check("transcript_image: no digest is None", R.transcript_image("PUTENV_PROBE DONE failures=0\n"), None)
+    check("transcript_image: two digests are nobody's", R.transcript_image("sha256=" + "a" * 64 + "\nsha256=" + "b" * 64), None)
+    absent2 = ("PUTENV_PROBE control retained=1 rc=0 errno=0 (ok)\nPUTENV_PROBE empty-name retained=0 rc=-1 errno=22 (Invalid argument)\n"
+               "PUTENV_PROBE empty-name-value retained=0 rc=-1 errno=22 (Invalid argument)\nPUTENV_PROBE DONE failures=0\n")
+    check("probe: a duplicate call line is no result, not the last line's reading",
+          R.putenv_probe_outcome("PUTENV_PROBE empty-name retained=1 rc=0 errno=0 (ok)\n" + absent2), None)
+    check("probe: the same transcript without the duplicate reads absent", R.putenv_probe_outcome(absent2), False)
     # A LEAF under line tables (CRASH-068's shape once musl carries them): strlen has a path now,
     # so the old `not path` branch no longer applies; and a leaf keeps no frame, so the chain's
     # first entry is the caller's CALLER (vspprintf) -- the caller itself is only in ra. The walk

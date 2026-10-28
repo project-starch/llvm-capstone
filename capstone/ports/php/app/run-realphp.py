@@ -133,8 +133,13 @@ def putenv_probe_outcome(text):
     done = PUTENV_DONE.search(text or "")
     if not done or int(done.group(1)) != 0:
         return None
-    seen = {m.group(1): (m.group(2) == "1", int(m.group(3)), int(m.group(4)))
-            for m in PUTENV_LINE.finditer(text)}
+    found = [(m.group(1), (m.group(2) == "1", int(m.group(3)), int(m.group(4))))
+             for m in PUTENV_LINE.finditer(text)]
+    # each call reported exactly once: a second line for the same call is a transcript the
+    # probe did not write as declared, not a reading to keep the last of
+    if len({label for label, _ in found}) != len(found):
+        return None
+    seen = dict(found)
     if seen.get("control") != (True, 0, 0):
         return None
     calls = [seen.get("empty-name"), seen.get("empty-name-value")]
@@ -150,6 +155,17 @@ PLATFORM_PROBES = {"putenv": putenv_probe_outcome}
 
 def probe_run_name(name):
     return f"{name}-probe"
+
+
+IMAGE_DIGEST = re.compile(r"sha256=([0-9a-f]{64})")
+
+
+def transcript_image(raw):
+    """The image digest a transcript names for itself -- the launcher's exit line
+    (`capstone-exec: exit image=... sha256=...`) or its fault record -- or None when it names
+    none. One digest: a transcript naming two images is nobody's."""
+    found = sorted(set(IMAGE_DIGEST.findall(raw or "")))
+    return found[0] if len(found) == 1 else None
 SANITY_SCRIPT = "phpb-sanity.php"
 
 MODE_LINE = re.compile(r"ZEND_CAP_MODE (\d+) exact=(\d) revoke=(\d)")
@@ -172,11 +188,66 @@ ALLOCATOR_SITE = "Zend/zend_alloc.c"
 # to whoever handed it in -- the first frame above them. A chain rule skips them and stops at the
 # first other frame of PHP's tree: that frame is the access's owner, declared or not.
 PHP_TREE = ("/Zend/", "/ext/", "/main/", "/sapi/", "/TSRM/", "/regex/")
-OUTPUT_PLUMBING = ("/sapi/", "/main/output.c", "/main/streams/", "/main/php_output", "/main/snprintf.c")
+# THE ROUTINES A FRAME CHAIN MAY PASS THROUGH, BY NAME. Each is known from its source to hand the
+# buffer it was given on unchanged, so an access it makes on that buffer belongs to whoever
+# handed it in. Nothing else is passed through: not a directory (main/output.c holds routines
+# that own buffers too), not "outside PHP's tree" (the seam and the allocator can lack line
+# tables), not a symbol nobody can justify. The second review (2026-10-28) built a CAUGHT out
+# of each of those. A frame not on this list is a barrier when it is not PHP's, and the access's
+# owner when it is.
+FORWARDING = {
+    # musl: copies and scans of the caller's buffer (CRASH-008's __stpcpy <- strcpy <- strcat,
+    # CRASH-068's strlen), the write path to the file descriptor
+    "memcpy", "memmove", "memset", "memcmp", "memchr", "strlen", "strnlen", "strcpy", "stpcpy",
+    "__stpcpy", "strncpy", "strcat", "strncat", "strcmp", "strncmp", "strchr", "strrchr", "strstr",
+    "write", "writev", "__stdio_write", "__fwritex", "fwrite", "fputs", "fputc", "putc", "__towrite",
+    "__overflow", "fflush", "__fflush_unlocked", "vfprintf", "fprintf", "printf", "vsnprintf", "snprintf",
+    # the virtual runtime's delegate: the syscall's buffer, copied for the host to write (CRASH-057)
+    "dl_call", "dl_call_once", "dl_transfer", "__capstone_delegate_call", "capstone_delegate_call",
+    # PHP 5.0.0's output layer and CLI SAPI, each a pass-through of the (buf, len) it was given:
+    # main/output.c php_body_write -> php_ub_body_write(_no_header) -> sapi_module.ub_write, the
+    # CLI's sapi_cli_ub_write -> sapi_cli_single_write -> write (sapi/cli/php_cli.c). NOT
+    # php_printf, which formats into a buffer of its own: a stale read there is the formatter's
+    # (xbuf_format_converter, CRASH-068's declared site), not the caller's.
+    "php_body_write", "php_ub_body_write_no_header", "php_ub_body_write",
+    "sapi_cli_ub_write", "sapi_cli_single_write",
+}
+# The seam's and the allocator's own routines, by name, for a frame that has a symbol and no
+# line table: `zend_cap_*` is the seam (zend-cap-mode.c), and these are zend_alloc.c's entry
+# points in PHP 5.0.0 plus its internal zend_mm_* layer.
+SEAM_FUNC_PREFIX = "zend_cap_"
+ALLOCATOR_FUNCS = {"_emalloc", "_efree", "_erealloc", "_ecalloc", "_safe_emalloc", "_estrdup",
+                   "_estrndup", "zend_mem_block", "shutdown_memory_manager", "start_memory_manager"}
+ALLOCATOR_FUNC_PREFIXES = ("zend_mm_", "_zend_mm_", "zend_debug_alloc", "__zend_malloc", "zend_memory_")
 
 
 def in_php_tree(path):
     return bool(path) and any(d in path for d in PHP_TREE)
+
+
+def at_file(path, site_file):
+    """Is this symbolized path the declared repo-relative file? A whole path, or the file
+    after a '/': `.../ext/other/notext/standard/var.c` is not `ext/standard/var.c`, which a
+    bare suffix match accepted (second review, 2026-10-28)."""
+    return bool(path) and bool(site_file) and (path == site_file or path.endswith("/" + site_file))
+
+
+def frame_kind(cfunc, cpath):
+    """What a chain frame is, for the walk: 'forwarding' (passed through), 'seam', 'allocator',
+    'unresolved' (barriers), 'php' (a candidate owner), or 'other' (a barrier: a routine that is
+    not PHP's and not known to forward the buffer)."""
+    if any(own in (cpath or "") for own in SEAM_OWN) or (cfunc or "").startswith(SEAM_FUNC_PREFIX):
+        return "seam"
+    if (cpath or "").endswith(ALLOCATOR_SITE) or cfunc in ALLOCATOR_FUNCS \
+            or any((cfunc or "").startswith(p) for p in ALLOCATOR_FUNC_PREFIXES):
+        return "allocator"
+    if not cfunc and not cpath:
+        return "unresolved"
+    if cfunc in FORWARDING:
+        return "forwarding"
+    if in_php_tree(cpath):
+        return "php"
+    return "other"
 
 
 def chain_owner(llvm_bin, image, fault, text):
@@ -204,18 +275,21 @@ def chain_owner(llvm_bin, image, fault, text):
     for ret, is_ra in starts:
         cfunc, cpath, cline = symbolize_at(llvm_bin, image, ret - 2, text)
         where = f"{cfunc or '?'}@{(cpath or '?').rsplit('/', 1)[-1]}:{cline}"
-        if any(own in (cpath or "") for own in SEAM_OWN):
+        kind = frame_kind(cfunc, cpath)
+        if kind == "seam":
             return "", f"the seam's own source ({where})", 0, skipped
-        if (cpath or "").endswith(ALLOCATOR_SITE):
+        if kind == "allocator":
             return "", f"PHP's allocator ({where})", 0, skipped
-        if not cfunc and not cpath:
+        if kind == "unresolved":
             if is_ra:
                 skipped.append(f"ra={ret:#x} (unresolved, a leaf's scratch register)")
                 continue
             return "", f"an unresolved frame ({ret:#x})", 0, skipped
-        if not in_php_tree(cpath) or any(p in cpath for p in OUTPUT_PLUMBING):
+        if kind == "forwarding":
             skipped.append(where)
             continue
+        if kind == "other":
+            return "", f"a routine not known to forward the buffer ({where})", 0, skipped
         return cfunc, cpath, cline, skipped
     return None
 
@@ -675,7 +749,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         site = next((f for f in spec.get("asan_stack", []) if f.get("func") == spec["asan_func"]), None)
         site_file = (site or {}).get("file") or spec["asan_file"]
         leaf = (spec.get("asan_stack") or [{}])[0]
-        at_site = bool(func) and func in spec["fault_sites"] and path.endswith(site_file)
+        at_site = bool(func) and func in spec["fault_sites"] and at_file(path, site_file)
         if any(own in path for own in SEAM_OWN):
             obs.attribution_evidence = (f"the fault is in the seam's own source ({path}:{line}) "
                                         f"-- a port artefact, not the program")
@@ -711,7 +785,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                 f"operand value (29: a lifetime instruction's size or node, or a transfer the "
                 f"address policy refused -- the cause alone does not say which)"
                 + (" -- and it did land in the declared function" if func in spec["fault_sites"] else ""))
-        elif func in spec["fault_sites"] and path.endswith(site_file):
+        elif func in spec["fault_sites"] and at_file(path, site_file):
             obs.attribution = "function"
             obs.attribution_evidence = (
                 f"{func} at {site_file}:{line} is the function this case declares (fault_sites, "
@@ -723,7 +797,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
             obs.attribution_evidence = (
                 f"{func} is the declared function but the fault is at {path or '?'}:{line}, not in "
                 f"{site_file}: a same-named routine elsewhere, or no line table for it")
-        elif path.endswith(site_file):
+        elif at_file(path, site_file):
             obs.attribution_evidence = (
                 f"{path}:{line} is ASan's file for this case but the fault is in {func or '?'}, not "
                 f"the declared {spec['fault_sites']}: another routine of the same file, which "
@@ -750,7 +824,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                     f"which no access can be attributed (above {', '.join(owner[3]) or 'nothing'}): "
                     f"the fault may be the port's, whatever lies deeper")
             elif owner and owner[0] in spec["fault_sites"] and owner[0] in site_file_of \
-                    and owner[1].endswith(site_file_of[owner[0]]):
+                    and at_file(owner[1], site_file_of[owner[0]]):
                 at_site = True
                 obs.attribution = "function"
                 obs.attribution_evidence = (
@@ -783,7 +857,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
             # not be read this way (its frame #0 would carry a line table or a deeper stack).
             if fault.ra:
                 cfunc, cpath, cline = symbolize_at(llvm_bin, image, fault.ra - 2, text)
-                if cfunc in spec["fault_sites"] and cpath.endswith(site_file):
+                if cfunc in spec["fault_sites"] and at_file(cpath, site_file):
                     at_site = True
                     obs.attribution = "function"
                     obs.attribution_evidence = (
@@ -1194,6 +1268,13 @@ def main():
             text = texts[arm].get(run, "")
             if name not in probe_shas or rec["exits"].get(run) != 0 \
                     or verdicts.domain_fault(text, None) is not None:
+                return None
+            # POSITIVE IDENTITY, not the absence of a contradiction: the transcript must
+            # itself name the image it ran (the launcher's exit line, `capstone-exec: exit
+            # image=... sha256=...`, or its fault record) and that digest must be the one the
+            # record holds for this probe. A transcript with no digest could be any image's
+            # (second review, 2026-10-28).
+            if transcript_image(raws[arm].get(run, "")) != probe_shas[name]:
                 return None
             return PLATFORM_PROBES[name](text)
         present = {name: probe_reading(name) for name in declared_probes}

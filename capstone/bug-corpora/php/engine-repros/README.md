@@ -140,9 +140,14 @@ Over the 49 CWE-416 cases, from `results/2026-10-28-run14/README.md`:
 Read with the plan document (`docs/plans/2026-10-12-php-virtual-capstone-retarget.md`, runs 8 to 14):
 the system allocator's catches are a strict subset of the nested arms'; CRASH-084 is out of the
 denominator because this libc's putenv never creates the dangling reference the defect needs (checked
-by a probe whose hash the record carries); CRASH-075 and CRASH-092 are `infra` (the 40 s watchdog; 075's
-separate 600 s record is a catch at `php_array_walk`, 092 hangs on uninitialised stack contents before
-its defect); the native population does not predict the measured boundary, 22 of 49 cases differ.
+by a probe whose transcript names its image and whose hash the record carries); CRASH-075 is `infra` on
+every arm (the 40 s watchdog; the plan document records a separate 600 s run of it, not archived here,
+as a catch at `php_array_walk`); CRASH-092 is `infra` on the nested arms and `not-reached` on stock and
+the system allocator (it hangs, or completes short of its defect, on uninitialised stack contents).
+The native population and the system allocator's column disagree on 22 of the 49 cases: 13 asan-blind
+cases the system allocator catches, and 9 temporal-asan-visible cases it does not read (8 `setup-fault`,
+1 `unattributed`), which are not measured misses and not a second reading of where the block's release
+went. The native cohort is a selection by one detector build, not a prediction of this column.
 
 ## Not here
 

@@ -888,6 +888,16 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                     (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
                     stats.node_bytes, stats.node_capacity, stats.node_growths,
                     launch_ns, now_ns() - start_ns);
+            /* The image's identity on a run that ENDS, not only on one that faults: a
+             * transcript that carries no digest cannot be tied to the image it claims to be
+             * from, and a judge that reads a probe's successful run (the putenv probe) has
+             * nothing else to check it against. Same gate as the fault record. */
+            if (tid == 0 && (isatty(2) || getenv("CAPSTONE_EXEC_DIAGNOSTICS"))) {
+                if (!host.image_sha256[0] && image_fd >= 0)
+                    capstone_application_hash(image_fd, host.image_sha256);
+                fprintf(stderr, "capstone-exec: exit image=%s sha256=%s\n",
+                        image_path ? image_path : "?", host.image_sha256);
+            }
             /* exit_group stops all native workers before Linux releases
              * mappings and the adapter fd. Unmapping here would race a
              * worker completing its blocked delegated read. */

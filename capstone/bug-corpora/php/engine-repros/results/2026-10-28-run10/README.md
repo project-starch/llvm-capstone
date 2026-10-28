@@ -1,6 +1,6 @@
 # 2026-10-28-run10
 
-Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT changed. Platform: the same SDK and launcher as run7.
+Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cell changed (only CRASH-139, MISSED to unattributed, and CRASH-092, watchdog to completed, moved, both explained in the plan document). Platform: the 1 MiB-stack SDK and the PHP image rebuilt from lane C's tree (the seam is a patch to that image), the launcher and module rebuilt from the same tree, and a different QEMU build than run7's (every hash below differs from run7's record; the plan document's lane C section says which pins), no frame chain, no platform probe.
 
 - pre-registration (the lane commit the run answers): `8569fb7194dc5e436a089788ec3133fc1c851e64`
 - PHP image (php-real-seam.dom) sha256 `a1aa15dae7ca5eb13056abeb2f9895d478859b3ce5ed26af0fed49c6a3acfc61`

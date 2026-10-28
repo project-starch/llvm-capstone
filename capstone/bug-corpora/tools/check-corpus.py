@@ -346,6 +346,9 @@ def check_cases(corpus, decl, dirs, problems):
                 if not (isinstance(files, dict) and files
                         and all(isinstance(k, str) and isinstance(v, str) and v for k, v in files.items())):
                     problems.append(f"{where}: fault_site_files must be a non-empty object of site -> file")
+                elif any(v.startswith("/") or ".." in v.split("/") or "/" not in v for v in files.values()):
+                    problems.append(f"{where}: fault_site_files values must be repo-relative paths with a "
+                                    f"directory (ext/standard/var.c), not absolute, not containing '..'")
                 elif isinstance(sites, list) and set(files) - set(sites):
                     problems.append(f"{where}: fault_site_files names {sorted(set(files) - set(sites))}, "
                                     f"not in fault_sites")

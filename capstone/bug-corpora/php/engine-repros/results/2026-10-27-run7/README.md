@@ -1,6 +1,6 @@
 # 2026-10-27-run7
 
-Lane B's measurement: the corpus at its own head, run7 (the third identical run: runs 5, 6 and 7 agree cell for cell). Platform: the 1 MiB-stack SDK, the launcher without a frame chain, no platform probe.
+Lane B's measurement: the corpus at its own head, run7 (the plan document's lane B sections record runs 5 and 6 of the same tree agreeing with it cell for cell; only run7 is archived here). Platform: the 1 MiB-stack SDK, the launcher without a frame chain, no platform probe.
 
 - pre-registration (the lane commit the run answers): `672a0deffaa2304fa590bd74a776b7eb7e399018`
 - PHP image (php-real-seam.dom) sha256 `c7309c906a68a79da70a3aaed6f97be2ea1b5280087b5fc9a120db184554339f`

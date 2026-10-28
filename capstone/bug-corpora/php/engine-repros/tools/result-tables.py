@@ -38,7 +38,12 @@ def tables(scoring_dir, known, title):
         if not (b / "verdicts.jsonl").is_file():
             missing.append(f"{b}: no bundle")
             continue
-        seen = {r["observation"]["case"]: r for r in rows(b)}
+        seen = {}
+        for r in rows(b):
+            c = r["observation"]["case"]
+            if c in seen:
+                missing.append(f"{arm}: two rows for {c}; a bundle states each cell once")
+            seen[c] = r
         for c in known:
             if c not in seen:
                 missing.append(f"{arm}: no row for {c}")
@@ -76,13 +81,16 @@ def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     root = Path(sys.argv[1]).resolve()
+    if not root.is_dir():
+        print(f"{root}: no such results directory", file=sys.stderr)
+        return 1
     known = cases()
     out, problems = [], []
     for sub, title in (("", "Default scoring (native crashers out of the denominator)"),
                        ("sensitivity", "Sensitivity scoring (every case scored by fault site)")):
         d = root / sub if sub else root
-        if not d.is_dir():
-            continue
+        if sub and not d.is_dir():
+            continue  # a record without a sensitivity re-scoring says so in its README
         lines, missing = tables(d, known, title)
         out += lines
         problems += missing
