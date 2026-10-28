@@ -137,9 +137,10 @@ def read(a):
     outs = {x for x in plan["outputs"]}
     def outhash(arm):
         h = res["arms"].get(arm, {}).get("hashes", {})
-        # .err files carry the launcher's stats line (launch and elapsed ns), which differs on every run.
+        # .err files carry the launcher's stats line (launch and elapsed ns), which differs on every run; log.dec is
+        # x264's input generator's log, which ldecod stamps with the date and time (ldecod.c:546-549).
         return {k.replace(arm, "ARM"): v for k, v in h.items()
-                if (k.replace(arm, "ARM") in outs or k not in plan["inputs"]) and not k.endswith(".err")}
+                if (k.replace(arm, "ARM") in outs or k not in plan["inputs"]) and not k.endswith(".err") and k != "log.dec"}
     base = outhash(arms[0])
     res["cross_arm"] = {arm: sorted(k for k in set(base) | set(outhash(arm)) if base.get(k) != outhash(arm).get(k)) for arm in arms[1:]}
     if a.twin:
@@ -148,7 +149,7 @@ def read(a):
         for arm in arms:
             th = {k.replace(arm, "ARM"): v for k, v in tw["arms"].get(arm, {}).get("hashes", {}).items()}
             mine = outhash(arm)
-            th = {k: v for k, v in th.items() if not k.endswith(".err") and (k in outs or k not in plan["inputs"])}
+            th = {k: v for k, v in th.items() if not k.endswith(".err") and k != "log.dec" and (k in outs or k not in plan["inputs"])}
             res["vs_twin"][arm] = sorted(k for k in set(mine) | set(th) if mine.get(k) != th.get(k))
     # Verdict lines.
     ncmd = len(plan["commands"]) + len(plan["target_validation"]) + len(plan["generation"])

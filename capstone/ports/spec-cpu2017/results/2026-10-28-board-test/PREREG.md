@@ -207,3 +207,28 @@ counted 394k entries for mcf test.
 - The bounded run's directory is kept as `505.mcf_r-test-capstone-spatial.bound12000`.
 
 **P16.** mcf test completes within 30000 s per arm. Its outputs equal the twin's, and T1 equals T3.
+
+## Addendum 5 (2026-10-28 23:35, before any x264 boot): x264's count, and log.dec
+
+**x264 test on the twin.**
+- Both arms: rc 0, imagevalidate specdiff 3/3 PASS, no domain fault.
+- The run command is **543,659,713,729 instructions** per arm.
+- That is 1.95 × the native x86 count of 278e9. The native-ratio estimate used the median of 1.1, so x264's estimates
+  in Addendum 2 were low by about 1.8×. x264 is likely the program x86's vector units shorten most; that is a
+  reading, not a measurement.
+- Rescaled with x264's own ratio, x264 train is about 439e9 instructions.
+
+**New steps.** The booking hub now accepts up to 48 h (fpga-lab 63e78a0). The steps are:
+
+| boot | step s | covers up to CPI | booking min |
+|---|---|---|---|
+| x264 test | 129600 | 5.9 | 2190 |
+| x264 train | 100800 | 5.7 | 1710 |
+
+**log.dec.** T1 and T3 differed in `log.dec` on the twin. That file is the log of x264's input generator, ldecod,
+which runs outside the context. ldecod stamps it with the date and time (`ldecod.c:546-549`), so it differs on every
+run. run-stage.py now leaves `log.dec` out of the cross-arm and twin comparisons, as it does `.err`. Re-reading the
+twin's x264 transcript gives T1 = T3 identical.
+
+**P17.** x264 test completes on the board within 129600 s per arm. Its frame and output hashes equal the twin's, and
+T1 equals T3.
