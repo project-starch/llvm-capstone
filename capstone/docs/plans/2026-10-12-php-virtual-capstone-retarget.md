@@ -2579,3 +2579,11 @@ ext/standard/var.c); CRASH-008 stays CAUGHT on virtual-nested-exact (strcpy, str
 in ext/standard/datetime.c); CRASH-068 stays CAUGHT through ra; CRASH-073 stays unattributed;
 CRASH-084 stays out of the denominator, now on a probe transcript that names its image. Any mover
 voids the reading until explained here. The two boots' platform records must be equal.
+
+### run15 (`corpus-run15`, tree 009ca7b34b00, platform-res3): cell-identical to run14, as pre-registered
+
+Both boots rc 0 (09:27-09:40 UTC). Against run14, both scorings, both populations: 0 of 520 cells
+differ; the two boots' platform records are equal; the putenv probe's transcript ends in
+`capstone-exec: exit image=probe-putenv.dom sha256=5d65c6d7...`, the digest the record holds, and
+CRASH-084 is excluded on that. CRASH-057's and CRASH-008's chains pass by name as predicted. run15
+is `results/2026-10-28-run15/`, the current record in corpus.json; run14 stays archived beside it.
