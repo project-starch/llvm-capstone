@@ -1,9 +1,9 @@
 /* Does an atexit handler run on this profile, and which stream still works when it does?
  *
- * The seam's revoke counters are the measurement's strongest gate -- stock 0, block 0, object
+ * The nested layer's revoke counters are the measurement's strongest gate -- stock 0, block 0, object
  * more than 0 -- and on real PHP there is nowhere to print them from except an exit hook,
  * because PHP owns main(). The first attempt registered one through atexit() and produced
- * NOTHING: the image references atexit (llvm-nm says `U atexit` in the object), the seam is
+ * NOTHING: the image references atexit (llvm-nm says `U atexit` in the object), the nested layer is
  * demonstrably live in the same run (it printed its mode line and the platform reported
  * collections=3 reclaimed=28255 against the control's 0/0), and still not one line appeared.
  *

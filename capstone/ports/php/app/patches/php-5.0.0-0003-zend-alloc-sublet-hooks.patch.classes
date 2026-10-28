@@ -10,8 +10,8 @@ the list macros, not the cache policy, not the control flow of any function. The
 statement to the file: it is seven substitutions of an expression.
 
   hunk 1  after the ZEND_DO_* macro chain
-          Adds the seam's own block: the include of zend-cap-mode.h, the three ZEND_DO_*
-          macros redirected to the seam's counted 16-grained malloc, its arm-dependent free
+          Adds the nested layer's own block: the include of zend-cap-mode.h, the three ZEND_DO_*
+          macros redirected to the nested layer's counted 16-grained malloc, its arm-dependent free
           and its move-always realloc, and the three ZEND_CAP_* macros with their inert
           fallbacks. This is the only hunk that adds more than one line of code.
           ZEND_DO_REALLOC reads the old request from p->size, which _erealloc overwrites only
@@ -42,7 +42,7 @@ statement to the file: it is seven substitutions of an expression.
           hoisted REMOVE_POINTER_FROM_LIST above the revoke and made it unconditional -- a
           change to PHP's own _efree that cost four false CAUGHT verdicts to find and still
           costs CRASH-057 a NO-READING. The child bounded to the payload makes it unnecessary.
-          The previous seam (2026-10-12 to 2026-10-28) did the same with a lookup in its own
+          The previous nested (2026-10-12 to 2026-10-28) did the same with a lookup in its own
           index and a separate retire statement placed after CALCULATE_REAL_SIZE_AND_CACHE_INDEX;
           the libc's reclaim returns the block, so the statement is gone and the ordering is
           no longer a concern.

@@ -696,7 +696,7 @@
         "emalloc-overread"
       ]
     },
-    "php-virtual-seam-stock": {
+    "php-virtual-stock": {
       "target": "capstone-virtual",
       "summary": "PHP 5.0.0's own Zend/zend_alloc.c, patched with eight guarded hunks so that each emalloc's block is split into a 48-byte header and a payload region (ports/php/zend-alloc/sublet, -DZEND_CAP_SUBLET), running as a Linux process on virtual Capstone. PHP_CAP_MODE=0: NOTHING is revoked -- no per-object retire, and a freed block's loan is deliberately LEAKED rather than returned, because returning it would have mallocng revoke the block and catch the defect for us. A freed block therefore stays readable exactly as it does on stock PHP, and AG(cache) is live and absorbing most frees. The honest-gap column: what ASAN sees",
       "mechanism": "none: a freed block stays readable, and the cache absorbs most frees anyway",
@@ -708,9 +708,9 @@
         "revocation-sanity"
       ]
     },
-    "php-virtual-seam-block": {
+    "php-virtual-block": {
       "target": "capstone-virtual",
-      "summary": "the same single image, PHP_CAP_MODE=4: the loan is returned on a real free, so musl's mallocng revokes per BLOCK underneath (runtime/virtual/heap.c), but this layer performs no per-object retire. Catches a use-after-free on a block PHP actually handed back; MISSES one on a block AG(cache) absorbed, which is the mechanism hiding 23 of the 31 cases from ASAN. This column exists so that a catch on the object arm is attributable to the SEAM rather than to the allocator underneath it",
+      "summary": "the same single image, PHP_CAP_MODE=4: the loan is returned on a real free, so musl's mallocng revokes per BLOCK underneath (runtime/virtual/heap.c), but this layer performs no per-object retire. Catches a use-after-free on a block PHP actually handed back; MISSES one on a block AG(cache) absorbed, which is the mechanism hiding 23 of the 31 cases from ASAN. This column exists so that a catch on the object arm is attributable to the NESTED rather than to the allocator underneath it",
       "mechanism": "per-block, in the level below: mallocng revokes a block when the block is freed",
       "mode": 4,
       "controls": {
@@ -720,9 +720,9 @@
         "revocation-sanity"
       ]
     },
-    "php-virtual-seam-object": {
+    "php-virtual-object": {
       "target": "capstone-virtual",
-      "summary": "the same single image, PHP_CAP_MODE=6: the payload region is revoked at EVERY _efree, cache-absorbed or not, and re-taken under a fresh node when AG(cache) hands the block to its next tenant -- so the previous tenant's capability stays dead even though the bytes are live again. The header is never revoked, so zend_alloc.c keeps its own control flow byte for byte: the cache park still writes p->cached and REMOVE_POINTER_FROM_LIST still walks neighbour headers, all live. Differs from php-virtual-seam-block in the per-object retire alone",
+      "summary": "the same single image, PHP_CAP_MODE=6: the payload region is revoked at EVERY _efree, cache-absorbed or not, and re-taken under a fresh node when AG(cache) hands the block to its next tenant -- so the previous tenant's capability stays dead even though the bytes are live again. The header is never revoked, so zend_alloc.c keeps its own control flow byte for byte: the cache park still writes p->cached and REMOVE_POINTER_FROM_LIST still walks neighbour headers, all live. Differs from php-virtual-block in the per-object retire alone",
       "mechanism": "per-object: sublet_give on the payload region at every efree, over a block the virtual heap lends",
       "mode": 6,
       "controls": {
@@ -734,7 +734,7 @@
     },
     "php-real-stock": {
       "target": "capstone-virtual",
-      "summary": "PHP 5.0.0 built as a capability application from the Makefile's own PHP_GLOBAL_OBJS plus PHP_CLI_OBJS -- 145 translation units including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/, all 65 of ext/standard and 39 of Zend/, with no SAPI of ours and no stubbed libc. Zend/ and ext/ are byte-identical to the read-only corpus (the build tree is a symlink mirror); the only real files are a php_config.h with two configure answers corrected for musl and, here, the patched zend_alloc.c. ONE IMAGE serves every arm: zend_cap_mode() reads PHP_CAP_MODE from the environment. PHP_CAP_MODE=0: the block the virtual heap lends is never returned, so NOTHING is revoked -- not by the seam and not by mallocng underneath it. This is the honest-gap column: stock PHP lifetimes, and the only arm in which a use-after-free is expected to go unseen. It exists because without it a catch cannot be attributed to revocation at all",
+      "summary": "PHP 5.0.0 built as a capability application from the Makefile's own PHP_GLOBAL_OBJS plus PHP_CLI_OBJS -- 145 translation units including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/, all 65 of ext/standard and 39 of Zend/, with no SAPI of ours and no stubbed libc. Zend/ and ext/ are byte-identical to the read-only corpus (the build tree is a symlink mirror); the only real files are a php_config.h with two configure answers corrected for musl and, here, the patched zend_alloc.c. ONE IMAGE serves every arm: zend_cap_mode() reads PHP_CAP_MODE from the environment. PHP_CAP_MODE=0: the block the virtual heap lends is never returned, so NOTHING is revoked -- not by the nested layer and not by mallocng underneath it. This is the honest-gap column: stock PHP lifetimes, and the only arm in which a use-after-free is expected to go unseen. It exists because without it a catch cannot be attributed to revocation at all",
       "mechanism": "stock: no revocation anywhere; a block is never returned to the heap, realloc included (a fresh block, a copy, the old one kept); the caller's pointer is bounded to REAL_SIZE(n) like every arm's",
       "mode": 0,
       "protective_causes": [
@@ -751,7 +751,7 @@
     },
     "php-real-block": {
       "target": "capstone-virtual",
-      "summary": "PHP 5.0.0 built as a capability application from the Makefile's own PHP_GLOBAL_OBJS plus PHP_CLI_OBJS -- 145 translation units including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/, all 65 of ext/standard and 39 of Zend/, with no SAPI of ours and no stubbed libc. Zend/ and ext/ are byte-identical to the read-only corpus (the build tree is a symlink mirror); the only real files are a php_config.h with two configure answers corrected for musl and, here, the patched zend_alloc.c. ONE IMAGE serves every arm: zend_cap_mode() reads PHP_CAP_MODE from the environment. PHP_CAP_MODE=4: the loan is returned, so mallocng revokes PER BLOCK on free -- but PHP's AG(cache) parks most freed blocks and returns without calling free() at all (11 buckets x 256 entries, index REAL_SIZE(size)>>3), so an efree the cache absorbs reaches no allocator that could revoke it. Differs from php-real-object in the per-object retire alone, which is what makes a catch here attributable to the PLATFORM rather than to the seam",
+      "summary": "PHP 5.0.0 built as a capability application from the Makefile's own PHP_GLOBAL_OBJS plus PHP_CLI_OBJS -- 145 translation units including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/, all 65 of ext/standard and 39 of Zend/, with no SAPI of ours and no stubbed libc. Zend/ and ext/ are byte-identical to the read-only corpus (the build tree is a symlink mirror); the only real files are a php_config.h with two configure answers corrected for musl and, here, the patched zend_alloc.c. ONE IMAGE serves every arm: zend_cap_mode() reads PHP_CAP_MODE from the environment. PHP_CAP_MODE=4: the loan is returned, so mallocng revokes PER BLOCK on free -- but PHP's AG(cache) parks most freed blocks and returns without calling free() at all (11 buckets x 256 entries, index REAL_SIZE(size)>>3), so an efree the cache absorbs reaches no allocator that could revoke it. Differs from php-real-object in the per-object retire alone, which is what makes a catch here attributable to the PLATFORM rather than to the nested layer",
       "mechanism": "system allocator (virtual-malloc): PHP returns its blocks to musl mallocng, which ends each block's lifetime at free and realloc (runtime/virtual/heap.c); no lifetime per object, so a free that AG(cache) absorbs is invisible",
       "mode": 4,
       "protective_causes": [
@@ -768,7 +768,7 @@
     },
     "php-real-object": {
       "target": "capstone-virtual",
-      "summary": "PHP 5.0.0 built as a capability application from the Makefile's own PHP_GLOBAL_OBJS plus PHP_CLI_OBJS -- 145 translation units including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/, all 65 of ext/standard and 39 of Zend/, with no SAPI of ours and no stubbed libc. Zend/ and ext/ are byte-identical to the read-only corpus (the build tree is a symlink mirror); the only real files are a php_config.h with two configure answers corrected for musl and, here, the patched zend_alloc.c. ONE IMAGE serves every arm: zend_cap_mode() reads PHP_CAP_MODE from the environment. PHP_CAP_MODE=6: the payload region is revoked at EVERY _efree, cache-absorbed or not, and re-taken under a fresh node when AG(cache) hands the block to its next tenant. The header is never revoked, so zend_alloc.c keeps its own control flow byte for byte -- the cache park still writes p->cached and REMOVE_POINTER_FROM_LIST still walks neighbour headers, all live. The bound is PHP's own REAL_SIZE rounding, which makes this the CONTROL of the spatial pair as well as the fault arm of the temporal triple INSTRUMENT CONTROL: seam-bound-probe is probes/probe-seam stage 7, built from the same zend-cap-blocks.c and zend-cap-backing.c as this image. It emalloc's 9 bytes, reads index 9 under PHP's REAL_SIZE rounding (which must SUCCEED, proving the slack is reachable exactly as in stock PHP), then re-bounds exactly and reads index 9 again (which must FAULT). It therefore ends in a fault BY DESIGN and is declared identically on both spatial arms: it establishes that the seam's bound logic distinguishes the two arms, NOT that this particular image is running a particular arm. What establishes the arm is the ZEND_CAP_MODE line the image itself prints, which the runner gates on.",
+      "summary": "PHP 5.0.0 built as a capability application from the Makefile's own PHP_GLOBAL_OBJS plus PHP_CLI_OBJS -- 145 translation units including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/, all 65 of ext/standard and 39 of Zend/, with no SAPI of ours and no stubbed libc. Zend/ and ext/ are byte-identical to the read-only corpus (the build tree is a symlink mirror); the only real files are a php_config.h with two configure answers corrected for musl and, here, the patched zend_alloc.c. ONE IMAGE serves every arm: zend_cap_mode() reads PHP_CAP_MODE from the environment. PHP_CAP_MODE=6: the payload region is revoked at EVERY _efree, cache-absorbed or not, and re-taken under a fresh node when AG(cache) hands the block to its next tenant. The header is never revoked, so zend_alloc.c keeps its own control flow byte for byte -- the cache park still writes p->cached and REMOVE_POINTER_FROM_LIST still walks neighbour headers, all live. The bound is PHP's own REAL_SIZE rounding, which makes this the CONTROL of the spatial pair as well as the fault arm of the temporal triple INSTRUMENT CONTROL: nested-bound-probe is probes/probe-nested stage 7, built from the same zend-cap-blocks.c and zend-cap-backing.c as this image. It emalloc's 9 bytes, reads index 9 under PHP's REAL_SIZE rounding (which must SUCCEED, proving the slack is reachable exactly as in stock PHP), then re-bounds exactly and reads index 9 again (which must FAULT). It therefore ends in a fault BY DESIGN and is declared identically on both spatial arms: it establishes that the nested layer's bound logic distinguishes the two arms, NOT that this particular image is running a particular arm. What establishes the arm is the ZEND_CAP_MODE line the image itself prints, which the runner gates on.",
       "mechanism": "nested allocator (virtual-nested-pools): as the system-allocator arm, plus a lifetime per object -- every emalloc payload a CDERIVE child of its block (__capstone_malloc_derive), ended at every efree through the libc's reclaim (__capstone_malloc_reclaim), cache-absorbed or not; bounded to REAL_SIZE(n)",
       "mode": 6,
       "protective_causes": [
@@ -778,16 +778,16 @@
       "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is a pointer that lost its tag before the access: the program's own corrupted value (native PHP dies on it too) or, since the QEMU pin 49a225e408, a cursor the machine's address policy refused; cause 29 is an illegal operand value -- a lifetime instruction's size or node, or, under the policy, a transfer to a refused address; the cause alone does not say which. Neither is the mechanism catching anything; the judge reads them as unattributed and keeps their raw cause and site. The set is declared before a run and not widened after one. Declared here, per configuration, because other corpora's platforms encode faults differently",
       "controls": {
         "revocation-sanity": "complete",
-        "seam-bound-probe": "fault"
+        "nested-bound-probe": "fault"
       },
       "controls_for_missed": [
         "revocation-sanity",
-        "seam-bound-probe"
+        "nested-bound-probe"
       ]
     },
     "php-real-exact": {
       "target": "capstone-virtual",
-      "summary": "PHP 5.0.0 built as a capability application from the Makefile's own PHP_GLOBAL_OBJS plus PHP_CLI_OBJS -- 145 translation units including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/, all 65 of ext/standard and 39 of Zend/, with no SAPI of ours and no stubbed libc. Zend/ and ext/ are byte-identical to the read-only corpus (the build tree is a symlink mirror); the only real files are a php_config.h with two configure answers corrected for musl and, here, the patched zend_alloc.c. ONE IMAGE serves every arm: zend_cap_mode() reads PHP_CAP_MODE from the environment. PHP_CAP_MODE=7: as php-real-object, plus every capability handed to PHP bounded to the CALLER's request rather than to REAL_SIZE(size) = (size+7)&~7. The rounding is one of the corpus's two masking mechanisms and gives up to 7 bytes of slack, so this is the fault arm of the spatial pair and php-real-object is its control. Revocation is ON in both, so the control also exercises the machinery revocation-sanity exists to validate INSTRUMENT CONTROL: seam-bound-probe is probes/probe-seam stage 7, built from the same zend-cap-blocks.c and zend-cap-backing.c as this image. It emalloc's 9 bytes, reads index 9 under PHP's REAL_SIZE rounding (which must SUCCEED, proving the slack is reachable exactly as in stock PHP), then re-bounds exactly and reads index 9 again (which must FAULT). It therefore ends in a fault BY DESIGN and is declared identically on both spatial arms: it establishes that the seam's bound logic distinguishes the two arms, NOT that this particular image is running a particular arm. What establishes the arm is the ZEND_CAP_MODE line the image itself prints, which the runner gates on.",
+      "summary": "PHP 5.0.0 built as a capability application from the Makefile's own PHP_GLOBAL_OBJS plus PHP_CLI_OBJS -- 145 translation units including main/ (PHP's runtime host), main/streams/, sapi/cli, TSRM/, regex/, all 65 of ext/standard and 39 of Zend/, with no SAPI of ours and no stubbed libc. Zend/ and ext/ are byte-identical to the read-only corpus (the build tree is a symlink mirror); the only real files are a php_config.h with two configure answers corrected for musl and, here, the patched zend_alloc.c. ONE IMAGE serves every arm: zend_cap_mode() reads PHP_CAP_MODE from the environment. PHP_CAP_MODE=7: as php-real-object, plus every capability handed to PHP bounded to the CALLER's request rather than to REAL_SIZE(size) = (size+7)&~7. The rounding is one of the corpus's two masking mechanisms and gives up to 7 bytes of slack, so this is the fault arm of the spatial pair and php-real-object is its control. Revocation is ON in both, so the control also exercises the machinery revocation-sanity exists to validate INSTRUMENT CONTROL: nested-bound-probe is probes/probe-nested stage 7, built from the same zend-cap-blocks.c and zend-cap-backing.c as this image. It emalloc's 9 bytes, reads index 9 under PHP's REAL_SIZE rounding (which must SUCCEED, proving the slack is reachable exactly as in stock PHP), then re-bounds exactly and reads index 9 again (which must FAULT). It therefore ends in a fault BY DESIGN and is declared identically on both spatial arms: it establishes that the nested layer's bound logic distinguishes the two arms, NOT that this particular image is running a particular arm. What establishes the arm is the ZEND_CAP_MODE line the image itself prints, which the runner gates on.",
       "mechanism": "nested allocator, exact bounds (virtual-nested-exact): as virtual-nested-pools, the payload bounded to the request n instead of REAL_SIZE(n)",
       "mode": 7,
       "protective_causes": [
@@ -797,11 +797,11 @@
       "protective_causes_why": "the causes a fault must carry to be this configuration's protective fault: 25 is a load or store through a revoked capability (the lifetime mechanism), 28 a bounds violation. Cause 24, an untagged value used as a capability, is a pointer that lost its tag before the access: the program's own corrupted value (native PHP dies on it too) or, since the QEMU pin 49a225e408, a cursor the machine's address policy refused; cause 29 is an illegal operand value -- a lifetime instruction's size or node, or, under the policy, a transfer to a refused address; the cause alone does not say which. Neither is the mechanism catching anything; the judge reads them as unattributed and keeps their raw cause and site. The set is declared before a run and not widened after one. Declared here, per configuration, because other corpora's platforms encode faults differently",
       "controls": {
         "revocation-sanity": "complete",
-        "seam-bound-probe": "fault"
+        "nested-bound-probe": "fault"
       },
       "controls_for_missed": [
         "revocation-sanity",
-        "seam-bound-probe"
+        "nested-bound-probe"
       ]
     }
   }

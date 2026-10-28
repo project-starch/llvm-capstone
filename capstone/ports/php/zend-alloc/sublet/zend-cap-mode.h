@@ -1,14 +1,14 @@
-/* The PHP allocator seam: the arm, the counters, and the calls the patched zend_alloc.c makes.
+/* The PHP nested allocator layer: the arm, the counters, and the calls the patched zend_alloc.c makes.
  * There is no state per block: the block's authority lives in the libc's slot record, and
  * __capstone_malloc_{derive,object,reclaim} are the libc using it (runtime/virtual/heap.c). The
- * previous seam rebuilt that record for itself -- a hash index, a record heap and six failure
+ * previous layer rebuilt that record for itself -- a hash index, a record heap and six failure
  * codes, 886 lines -- which the measurement of 2026-10-27 (520 cells, three runs, identical) was
  * taken on; this is the same shape with the index gone.
  *
- * WHAT THE SEAM IS. PHP 5.0.0 is not a chunk allocator -- Zend/zend_mm.h unconditionally
+ * WHAT THE NESTED LAYER IS. PHP 5.0.0 is not a chunk allocator -- Zend/zend_mm.h unconditionally
  * undefines ZEND_MM -- so ZEND_DO_MALLOC is plain malloc and the structure is flat: one malloc
  * per emalloc, a 48-byte zend_mem_header in front of the payload. The block is rounded up to a
- * 16-byte grain, at least 64 bytes, as the previous seam did, so that a payload bounded to
+ * 16-byte grain, at least 64 bytes, as the previous layer did, so that a payload bounded to
  * REAL_SIZE(n) -- or to n -- always lies inside it, emalloc(0) included. The caller's pointer is
  * bounded to the payload in EVERY arm, so no capability the caller holds spans the header:
  *
@@ -56,7 +56,7 @@
  *           (virtual-nested-exact)
  *
  * These are the study's four arms under the names every corpus uses (bug-corpora/SCHEMA.md,
- * run-realphp.py FRAMEWORK_ARM); the seam is the code that builds the nested arms, not an arm.
+ * run-realphp.py FRAMEWORK_ARM); the nested layer is the code that builds the nested arms, not an arm.
  *
  * The leak in mode 0 is bounded by one trigger's allocation volume and is the price of a faithful
  * control: a control that revokes is not a control. */
@@ -69,7 +69,7 @@
 unsigned int zend_cap_mode(void);
 void zend_cap_set_mode(unsigned int mode);
 
-/* The seam calls, from the patched zend_alloc.c's macros. `hdr` is sizeof(zend_mem_header) plus
+/* The nested layer calls, from the patched zend_alloc.c's macros. `hdr` is sizeof(zend_mem_header) plus
  * its padding, passed by the macros so this file never includes PHP's headers. */
 void *zend_cap_block(size_t bytes);                            /* ZEND_DO_MALLOC: a 16-grained block, counted */
 void *zend_cap_issue(void *p, size_t hdr, size_t size);        /* ZEND_CAP_PAYLOAD: the caller's pointer over the payload */
@@ -78,8 +78,8 @@ void *zend_cap_reclaim(void *ptr, size_t hdr);                 /* ZEND_CAP_RECLA
 void *zend_cap_reblock(void *p, size_t bytes, size_t oldbytes); /* ZEND_DO_REALLOC: a fresh block, the copy, the old released */
 void  zend_cap_release(void *p);                               /* ZEND_DO_FREE: free(p), or nothing without RETURN */
 
-/* How much the seam did, for the probes; the same counters are printed at exit as the
- * PHP_VIRTUAL SEAM line, the runner's gate that a revoking arm revokes more than its control.
+/* How much the nested layer did, for the probes; the same counters are printed at exit as the
+ * PHP_VIRTUAL NESTED line, the runner's gate that a revoking arm revokes more than its control.
  * out[] = blocks taken, frees (returned or leaked), payloads issued, lifetimes retired, revokes
  * (== retired), splits (always 0), reallocs, live (issued - retired). */
 void zend_cap_stats(unsigned long out[8]);

@@ -89,7 +89,7 @@ def cap_insn_counter():
     """count-cap-insns.py's counter, IMPORTED rather than reimplemented.
 
     There used to be two copies of this gate -- one here and one in build-virtual.sh -- and on
-    2026-10-26 they drifted: the build's copy was moved to the instruction ENCODING when the seam
+    2026-10-26 they drifted: the build's copy was moved to the instruction ENCODING when the nested layer
     went to CDERIVE/CREVOKE, and this one was left counting a `revoke` MNEMONIC that
     llvm-objdump does not emit for either instruction. The build passed and this refused the
     whole measurement after all eight guest sessions had run. One implementation, imported."""
@@ -111,7 +111,7 @@ SPATIAL = ("php-real-object", "php-real-exact")      # control, fault -- the bou
 TEMPORAL = ("php-real-stock", "php-real-block", "php-real-object")
 
 SANITY = "revocation-sanity"
-BOUND_PROBE = "seam-bound-probe"
+BOUND_PROBE = "nested-bound-probe"
 # The platform-precondition probes (ports/php/app/probe-*.c), each run once per arm when a case
 # declares `platform_precondition.probe` with its name (bug-corpora/SCHEMA.md). Three outcomes and
 # never a silent zero: the behaviour proven ABSENT (the case is out of the denominator on this
@@ -184,15 +184,15 @@ def transcript_image(raw):
 SANITY_SCRIPT = "phpb-sanity.php"
 
 MODE_LINE = re.compile(r"ZEND_CAP_MODE (\d+) exact=(\d) revoke=(\d)")
-SEAM_LINE = re.compile(r"PHP_VIRTUAL SEAM blocks=(\d+) frees=(\d+) issues=(\d+) "
+NESTED_LINE = re.compile(r"PHP_VIRTUAL NESTED blocks=(\d+) frees=(\d+) issues=(\d+) "
                        r"retires=(\d+) revokes=(\d+)")
-SEAM_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
+NESTED_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
 STATS_LINE = re.compile(r"CAPSTONE_VM_STATS .*?\bnodes=(\d+).*?\bnode_capacity=(\d+)")
 KERNEL_LINE = re.compile(r"^\[\s*\d+\.\d+\]")
-# A fault in the seam's own sources is a port artefact and never a catch. The physical column
+# A fault in the nested layer's own sources is a port artefact and never a catch. The physical column
 # learned this the expensive way: with only a pc, a fault in the allocator looks exactly like a
 # fault in the program.
-SEAM_OWN = ("zend-cap-mode.c", "php_virtual_lower.c")
+NESTED_OWN = ("zend-cap-mode.c", "php_virtual_lower.c")
 # Cases whose ASAN site is PHP's own allocator. A fault there cannot be attributed by site --
 # it is indistinguishable from the port breaking -- so these need the diagnostic audit arm that
 # run-cases.py drives for CRASH-073, and are `unattributed` until it is wired up here.
@@ -206,7 +206,7 @@ PHP_TREE = ("/Zend/", "/ext/", "/main/", "/sapi/", "/TSRM/", "/regex/")
 # THE ROUTINES A FRAME CHAIN MAY PASS THROUGH, BY NAME. Each is known from its source to hand the
 # buffer it was given on unchanged, so an access it makes on that buffer belongs to whoever
 # handed it in. Nothing else is passed through: not a directory (main/output.c holds routines
-# that own buffers too), not "outside PHP's tree" (the seam and the allocator can lack line
+# that own buffers too), not "outside PHP's tree" (the nested layer and the allocator can lack line
 # tables), not a symbol nobody can justify. The second review (2026-10-28) built a CAUGHT out
 # of each of those. A frame not on this list is a barrier when it is not PHP's, and the access's
 # owner when it is.
@@ -227,10 +227,10 @@ FORWARDING = {
     "php_body_write", "php_ub_body_write_no_header", "php_ub_body_write",
     "sapi_cli_ub_write", "sapi_cli_single_write",
 }
-# The seam's and the allocator's own routines, by name, for a frame that has a symbol and no
-# line table: `zend_cap_*` is the seam (zend-cap-mode.c), and these are zend_alloc.c's entry
+# The nested layer's and the allocator's own routines, by name, for a frame that has a symbol and no
+# line table: `zend_cap_*` is the nested layer (zend-cap-mode.c), and these are zend_alloc.c's entry
 # points in PHP 5.0.0 plus its internal zend_mm_* layer.
-SEAM_FUNC_PREFIX = "zend_cap_"
+NESTED_FUNC_PREFIX = "zend_cap_"
 ALLOCATOR_FUNCS = {"_emalloc", "_efree", "_erealloc", "_ecalloc", "_safe_emalloc", "_estrdup",
                    "_estrndup", "zend_mem_block", "shutdown_memory_manager", "start_memory_manager"}
 ALLOCATOR_FUNC_PREFIXES = ("zend_mm_", "_zend_mm_", "zend_debug_alloc", "__zend_malloc", "zend_memory_")
@@ -248,11 +248,11 @@ def at_file(path, site_file):
 
 
 def frame_kind(cfunc, cpath):
-    """What a chain frame is, for the walk: 'forwarding' (passed through), 'seam', 'allocator',
+    """What a chain frame is, for the walk: 'forwarding' (passed through), 'nested', 'allocator',
     'unresolved' (barriers), 'php' (a candidate owner), or 'other' (a barrier: a routine that is
     not PHP's and not known to forward the buffer)."""
-    if any(own in (cpath or "") for own in SEAM_OWN) or (cfunc or "").startswith(SEAM_FUNC_PREFIX):
-        return "seam"
+    if any(own in (cpath or "") for own in NESTED_OWN) or (cfunc or "").startswith(NESTED_FUNC_PREFIX):
+        return "nested"
     if (cpath or "").endswith(ALLOCATOR_SITE) or cfunc in ALLOCATOR_FUNCS \
             or any((cfunc or "").startswith(p) for p in ALLOCATOR_FUNC_PREFIXES):
         return "allocator"
@@ -278,7 +278,7 @@ def chain_owner(llvm_bin, image, fault, text):
     What may be passed through and what may not (review 2026-10-28, which built a CAUGHT out of
     a memcpy fault whose chain ran through zend_cap_reblock): a frame is PASSED THROUGH only when
     it is known to hand the buffer on unchanged -- PHP's output plumbing, the libc and the
-    runtime's delegate, each resolved to a symbol or a source file. A frame in the seam's own
+    runtime's delegate, each resolved to a symbol or a source file. A frame in the nested layer's own
     source or in PHP's allocator is a BARRIER: the fault may be the port's, and no declared site
     above it can say otherwise. A chain frame that resolves to NOTHING (no symbol, no line) is a
     barrier too: an address nobody can name licenses nothing. The one exception is the fault's
@@ -291,8 +291,8 @@ def chain_owner(llvm_bin, image, fault, text):
         cfunc, cpath, cline = symbolize_at(llvm_bin, image, ret - 2, text)
         where = f"{cfunc or '?'}@{(cpath or '?').rsplit('/', 1)[-1]}:{cline}"
         kind = frame_kind(cfunc, cpath)
-        if kind == "seam":
-            return "", f"the seam's own source ({where})", 0, skipped
+        if kind == "nested":
+            return "", f"the nested layer's own source ({where})", 0, skipped
         if kind == "allocator":
             return "", f"PHP's allocator ({where})", 0, skipped
         if kind == "unresolved":
@@ -468,10 +468,10 @@ def app_output(lines):
     return "\n".join(out)
 
 
-def strip_seam_noise(text):
-    """What PHP itself printed: the seam's own mode and stats lines removed."""
+def strip_nested_noise(text):
+    """What PHP itself printed: the nested layer's own mode and stats lines removed."""
     keep = [l for l in text.splitlines()
-            if not l.startswith("ZEND_CAP_MODE") and not l.startswith("PHP_VIRTUAL SEAM")]
+            if not l.startswith("ZEND_CAP_MODE") and not l.startswith("PHP_VIRTUAL NESTED")]
     return "\n".join(keep)
 
 
@@ -585,7 +585,7 @@ def symbolize_at(llvm_bin, image, pc, text):
     return func, m2.group(1), int(m2.group(2))
 
 
-# What the bound probe (probes/probe-seam stage 7) prints when it faults AS DECLARED. It reads
+# What the bound probe (probes/probe-nested stage 7) prints when it faults AS DECLARED. It reads
 # index 9 of a 9-byte request twice: ROUNDED first, which must succeed and prints the first
 # line, then EXACT, which announces the read and must then fault with the BOUNDS cause -- the
 # protective cause of the spatial mechanism. Between the two reads the probe frees,
@@ -713,9 +713,9 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         obs.notes = ("no exit status was observed for this run -- the guest session ended "
                      "before it reported, so there is nothing here to judge")
         return obs
-    fail = SEAM_FAIL.search(text)
+    fail = NESTED_FAIL.search(text)
     if fail:
-        # Codes 3 and 4 are the seam refusing a pointer PHP handed to efree -- one in no block
+        # Codes 3 and 4 are the nested layer refusing a pointer PHP handed to efree -- one in no block
         # of this heap, or not at its payload's start -- by name, before anything ends. That is
         # consistent with the program's own invalid free (CRASH-139 efrees a static string
         # literal) and is not the instrument breaking; but it is software validation followed by
@@ -723,8 +723,8 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         # and it reads as unattributed, never as a catch. Every other code is the instrument.
         code = int(fail.group(1))
         obs.infra = "unattributed" if code in (3, 4) else "setup-fault"
-        obs.notes = ((f"the seam refused the pointer efree was given, by name: " if code in (3, 4)
-                      else f"the seam failed: ") + f"code={code} {fail.group(2)[:90]}")
+        obs.notes = ((f"the nested layer refused the pointer efree was given, by name: " if code in (3, 4)
+                      else f"the nested layer failed: ") + f"code={code} {fail.group(2)[:90]}")
         return obs
     fault = verdicts.domain_fault(text, None)
     if fault is not None and fault.cause == CAUSE_RESOURCE:
@@ -737,7 +737,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     if pressure:
         note(obs, f"nodes allocated {pressure[0]}, table capacity {pressure[1]} "
                   f"(cumulative, not a high-water: reported, not gated)")
-    said = strip_seam_noise(text)
+    said = strip_nested_noise(text)
     # COMPLETED MEANS "ENDED THE WAY THE ORACLE DID", NOT "EXITED ZERO". Hardcoding 0 is wrong
     # for any case whose pristine record is an EXIT, and PHP 5.0.0 has four of them: its own
     # fatal errors leave status 255 after printing a diagnostic, which is the case behaving
@@ -758,7 +758,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # has to match, and the evidence names which frame it is.
     # Two facts are read off a fault, and they license different things. SITE: the fault is
     # in the declared function, in its file -- the trigger ran, whatever the cause, so this
-    # observation is `reached`. QUALIFIED: site plus a protective cause (and not the seam's
+    # observation is `reached`. QUALIFIED: site plus a protective cause (and not the nested layer's
     # own source, not the allocator) -- the mechanism caught the defect, so the fault is
     # attributed. A cause-24 fault at the site (CRASH-064) is reached and unattributed, which
     # is what happened: the program got to its defect and dereferenced its own bad value.
@@ -781,12 +781,12 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         # (frame_kind): a fault pc in zend_cap_reblock or _emalloc with no line table used to
         # reach the chain rule and be attributed through its callers (third review, 2026-10-28).
         fkind = frame_kind(func, path)
-        if fkind == "seam":
-            obs.attribution_evidence = (f"the fault is in the seam's own source ({func or '?'} at "
+        if fkind == "nested":
+            obs.attribution_evidence = (f"the fault is in the nested layer's own source ({func or '?'} at "
                                         f"{path or '?'}:{line}) -- a port artefact, not the program")
         elif fkind == "allocator":
             # The OBSERVED fault is inside PHP's own allocator: it cannot be told from the port
-            # breaking (the seam is a patch to that very file), so it needs the diagnostic audit
+            # breaking (the nested layer is a patch to that very file), so it needs the diagnostic audit
             # arm. Until 2026-10-28 this keyed on the case's DECLARED site instead, which refused
             # every fault of a case whose ASan frame was _estrndup (CRASH-057) wherever the fault
             # actually lay -- including the print of the reused temporary, three frames away.
@@ -855,7 +855,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
             # The owner must match BY FUNCTION AND FILE, as the direct rule does: a same-named
             # routine in another file is not the declared site (site_files, from ASan's own
             # stack frame for that function or the case's fault_site_files). And the walk may
-            # not have passed a barrier -- the seam, the allocator, a frame nobody can name.
+            # not have passed a barrier -- the nested layer, the allocator, a frame nobody can name.
             owner = chain_owner(llvm_bin, image, fault, text)
             here = f"the fault is in {func or '?'} ({(path or '?').rsplit('/', 1)[-1]}:{line}), outside PHP's tree"
             site_file_of = spec.get("site_files", {})
@@ -901,13 +901,13 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
             if fault.ra:
                 cfunc, cpath, cline = symbolize_at(llvm_bin, image, fault.ra - 2, text)
                 ckind = frame_kind(cfunc, cpath)
-                if ckind in ("seam", "allocator"):
+                if ckind in ("nested", "allocator"):
                     # the caller is the port's own code: the same barrier the chain walk
                     # applies (fourth review: memcpy with ra into _estrndup read as a catch)
                     obs.attribution_evidence = (
                         f"the fault is in {func}, the libc routine ASan's own frame #0 names for "
                         f"this case, but its caller (ra={fault.ra:#x}) is "
-                        + ("the seam's own source" if ckind == "seam" else "PHP's allocator")
+                        + ("the nested layer's own source" if ckind == "nested" else "PHP's allocator")
                         + f" ({cfunc or '?'}@{(cpath or '?').rsplit('/', 1)[-1]}:{cline}): the fault "
                         f"may be the port's, and no site beyond it counts")
                 elif cfunc in spec["fault_sites"] and at_file(cpath, site_file_of.get(cfunc) or primary_file):
@@ -1003,7 +1003,7 @@ def run_arm(args, arm, mode, cases, record, serial, wants_probe, platform_probes
     for name, path in platform_probes:
         runs.append((probe_run_name(name), path.name))
     if wants_probe:
-        # probe-seam stage 7 sets its OWN modes internally (rounded, read index 9, then exact,
+        # probe-nested stage 7 sets its OWN modes internally (rounded, read index 9, then exact,
         # read index 9), so it is not parameterised by the arm. See arms.json on what that does
         # and does not establish.
         runs.append((BOUND_PROBE, f"{args.probe.name} 7"))
@@ -1064,8 +1064,8 @@ SANITY_TEXT = (
 )
 
 
-def seam_counters(text):
-    m = SEAM_LINE.search(text or "")
+def nested_counters(text):
+    m = NESTED_LINE.search(text or "")
     mode = MODE_LINE.search(text or "")
     return (int(mode.group(1)) if mode else None,
             int(m.group(5)) if m else None)
@@ -1097,7 +1097,7 @@ def cross_arm_gates(args, per_arm, llvm_bin):
     s, b, o = (rev[a] for a in TEMPORAL)
     if not (s == 0 and b == 0 and (o or 0) > 0):
         problems.append(f"revokes did not order stock==0, block==0, object>0: {rev}. Without "
-                        f"that ordering a temporal catch cannot be attributed to the seam "
+                        f"that ordering a temporal catch cannot be attributed to the nested layer "
                         f"rather than to the allocator underneath it")
     return problems, derives_in_image, revokes_in_image
 
@@ -1145,8 +1145,8 @@ def main():
     p.add_argument("--qemu", type=Path, required=True)
     p.add_argument("--images", type=Path, required=True)
     p.add_argument("--adapter", type=Path, required=True)
-    p.add_argument("--image", type=Path, required=True, help="php-real-seam.dom")
-    p.add_argument("--probe", type=Path, required=True, help="probe-seam.dom, for the bound control")
+    p.add_argument("--image", type=Path, required=True, help="php-real-nested.dom")
+    p.add_argument("--probe", type=Path, required=True, help="probe-nested.dom, for the bound control")
     p.add_argument("--corpus", type=Path, required=True, help="the php-5.0.0-bug-corpus root")
     p.add_argument("--population", default="asan-blind", choices=POPULATIONS,
                    help="which set to measure (default: the ASAN-blind cases)")
@@ -1194,7 +1194,7 @@ def main():
 
     image_sha = subprocess.run(["sha256sum", str(args.image)], capture_output=True,
                                text=True).stdout.split()[0]
-    # The bound probe is a DIFFERENT image on purpose -- probe-seam.dom, built from the seam's
+    # The bound probe is a DIFFERENT image on purpose -- probe-nested.dom, built from the nested layer's
     # sources without PHP -- so its transcript reports its own sha256 and must be checked
     # against its own file. Exempting it instead would make the guard unable to notice a stale
     # probe transcript, which is the one run in the session whose image can change on its own.
@@ -1320,7 +1320,7 @@ def main():
         if wants_probe:
             probe_text = texts[arm].get(BOUND_PROBE, "")
             probe_ok = bound_probe_faulted_as_declared(probe_text, symbols_of(args.llvm_bin, args.probe))
-        mode_word, revokes = seam_counters(sanity_text)
+        mode_word, revokes = nested_counters(sanity_text)
         # A probe reading counts only from a probe run that EXITED 0 with no domain fault and
         # whose image hash the record vouches for; a probe that faulted or was killed printed
         # whatever it printed before, and that is not a reading of the libc.
@@ -1364,7 +1364,7 @@ def main():
     stock_reached, output_diverged = {}, {}
     for case, spec in cases.items():
         text = texts[STOCK].get(case, "")
-        said = strip_seam_noise(text)
+        said = strip_nested_noise(text)
         # The control must reproduce the ORACLE'S end, which is exit 0 for a case that
         # completes and 255 for one PHP ends with its own fatal error. For every case whose
         # oracle is "OK" this is exactly the old `== 0`, so the published ASAN-blind
@@ -1458,7 +1458,7 @@ def main():
                               FRAMEWORK_ARM[arm], rows[arm],
                               {"platform": platform, "configuration": arm,
                                "build": {"application": "php", "profile": "virtual",
-                                         "image_sha256": image_sha, "allocator": "seam",
+                                         "image_sha256": image_sha, "allocator": "nested",
                                          "mode": arms[arm]["mode"]},
                                "pre_registration": args.prereg,
                                "population": args.population,

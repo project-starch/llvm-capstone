@@ -43,7 +43,7 @@ from pathlib import Path
 # and no mention of a CSR. `qemu -d int` is what shows the real chain.
 #
 # The PAGED table is a deliberate choice over flat, not an accident of the default: flat caps
-# the lifetime table at CV_FLAT_RECORDS (65,536) and this seam's measured node high-water is
+# the lifetime table at CV_FLAT_RECORDS (65,536) and this nested layer's measured node high-water is
 # 64,587-90,218, so flat would exhaust it mid-run and a cause-30 resource fault lands at an
 # arbitrary pc -- indistinguishable from a catch.
 #
@@ -85,7 +85,7 @@ def guest_script(runs, env=(), run_timeout=0, node_pages=NODE_PAGES):
     """runs: list of (name, argv-string). One capstone-vexec invocation each.
 
     env: NAME=VALUE pairs exported before the runs. This is how an arm that is a RUNTIME mode
-    reaches the application when the application is real PHP: Phase A's SAPI took the seam mode
+    reaches the application when the application is real PHP: Phase A's SAPI took the nested layer mode
     as argv[3], but sapi/cli owns argv, so zend_cap_mode()'s other source -- PHP_CAP_MODE in the
     environment -- is the only route. One guest per arm, so the exports cannot leak across arms.
 
@@ -104,13 +104,13 @@ def guest_script(runs, env=(), run_timeout=0, node_pages=NODE_PAGES):
     # node_initial_pages: THE NODE TABLE IS A MEASURED CEILING, NOT A FORMALITY. The module
     # defaults to 4 pages and grows in batches of 16 (module/capstone_vm.c:59), and
     # heap.c's every linear loan opens with ensure_ids(256) -- so a workload that mints
-    # nodes faster than the table grows gets a NULL from the heap, which this port's seam
+    # nodes faster than the table grows gets a NULL from the heap, which this port's nested layer
     # reports as "the heap would not lend a block" and the judge refuses as setup-fault.
     # That is exactly what happened to CRASH-046 (12,646 live blocks) and CRASH-075
     # (8,038): not memory, node IDs, with `collections=0 reclaimed=0` showing retired IDs
     # are never swept, so demand only ever grows. One page carries 256 nodes
     # (node_add_page(c, pages * 256)), so 1024 pages is 262,144 -- against the ~4 per
-    # block this seam mints. The retarget plan prescribed exactly this value and the
+    # block this nested layer mints. The retarget plan prescribed exactly this value and the
     # reason: "load the module with node_initial_pages=1024 so startup does not provoke a
     # growth-and-sweep storm".
     lines = ["#!/bin/sh", "cd /mnt/vm || exit 1",

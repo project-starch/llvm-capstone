@@ -5,7 +5,7 @@
  #endif
  
 +#ifdef ZEND_CAP_SUBLET
-+/* THE CAPABILITY SEAM. The caller's pointer is bounded to its own object in every arm -- a
++/* THE CAPABILITY NESTED. The caller's pointer is bounded to its own object in every arm -- a
 + * CDERIVE child of the malloc'd block with a lifetime of its own in the revoking arms -- so no
 + * capability the caller holds spans the 48-byte header. _efree ends that child through the
 + * libc's reclaim, which hands back the block's own reference at the header, so everything below

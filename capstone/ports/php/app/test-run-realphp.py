@@ -40,7 +40,7 @@ def check(name, got, want):
 
 FAULT = ("capstone-exec: domain fault cause=25 pc=0x3f904e7f90 address=0x3f909c8074 "
          "entry=0x3f904009a0 code=0x3f90400000-0x3f90800000 last=0x39 preparing=0x39 "
-         "sha256=%s image=php-real-seam.dom")
+         "sha256=%s image=php-real-nested.dom")
 # The same fault line with the RESOURCE cause: the node table ran out, which lands at an
 # arbitrary pc and must never be read as a catch.
 FAULT30 = FAULT.replace("cause=25", "cause=30")
@@ -175,12 +175,12 @@ def observation_cases():
                     controls(), True, "/x", "/y")
     check("wrong file is unattributed", verdicts.judge(obs, exact)[1], "unattributed")
 
-    # A fault in the seam's OWN source is a port artefact, never a catch.
+    # A fault in the nested layer's OWN source is a port artefact, never a catch.
     R.symbolize = fake_symbolize("capstone/ports/php/zend-alloc/sublet/zend-cap-mode.c", 120)
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
                     controls(), True, "/x", "/y")
     v, reason, ev = verdicts.judge(obs, exact)
-    check("a fault in the seam is unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("a fault in the nested layer is unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
     check("and says it is a port artefact", "port artefact" in ev, True)
 
     # A case whose ASAN site IS the allocator cannot be attributed by site.
@@ -230,11 +230,11 @@ def observation_cases():
           verdicts.judge(obs, exact)[0], verdicts.CAUGHT)
     check("and the counters are in the notes", "cumulative, not a high-water" in obs.notes, True)
 
-    # The seam itself failed: an instrument failure, never a verdict.
+    # The nested layer itself failed: an instrument failure, never a verdict.
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
                     "ZEND_CAP_FAIL code=2 the heap could not grow its node table\n", 139, controls(), True, "/x", "/y")
-    check("a seam failure is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
-    # The seam refused the pointer efree was given (code 3: in no block; code 4: not at its
+    check("a nested layer failure is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
+    # The nested layer refused the pointer efree was given (code 3: in no block; code 4: not at its
     # start): the program's invalid free, named, but nothing ties it to the declared site.
     for code in (3, 4):
         obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
@@ -448,7 +448,7 @@ def observation_cases():
     check("a chain that reaches no PHP frame is unattributed", reason, "unattributed")
     check("and says so", "reaches no frame of PHP's tree" in ev, True)
     # BARRIERS (review 2026-10-28, which built a CAUGHT out of a memcpy fault whose chain ran
-    # through zend_cap_reblock): a frame in the seam's own source, in PHP's allocator, or one
+    # through zend_cap_reblock): a frame in the nested layer's own source, in PHP's allocator, or one
     # that resolves to nothing stops the walk, and no declared site beyond it counts. Each is
     # driven here with the declared site php_var_dump right behind the barrier.
     def chain_with(third, fourth=("php_var_dump", "/b/ext/standard/var.c", 126), spec=VD_SPEC):
@@ -459,8 +459,8 @@ def observation_cases():
                       controls(probe=None), True, "/x", "/y")
         return verdicts.judge(o, pools)
     v, reason, ev = chain_with(("zend_cap_reblock", "/b/Zend/sublet/zend-cap-mode.c", 88))
-    check("a seam frame in the chain is a barrier: unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
-    check("and the evidence names it", "the seam's own source (zend_cap_reblock@zend-cap-mode.c:88)" in ev, True)
+    check("a nested layer frame in the chain is a barrier: unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence names it", "the nested layer's own source (zend_cap_reblock@zend-cap-mode.c:88)" in ev, True)
     v, reason, ev = chain_with(("_estrndup", "/b/Zend/zend_alloc.c", 437))
     check("an allocator frame in the chain is a barrier, declared site or not (CRASH-073's memcpy <- _estrndup)",
           (v, reason), (verdicts.NO_READING, "unattributed"))
@@ -485,8 +485,8 @@ def observation_cases():
     # plumbing. Now a frame passes by NAME, from the list of routines known to forward the
     # buffer, and everything else is a barrier or the owner.
     v, reason, ev = chain_with(("zend_cap_reblock", "", 0))
-    check("a seam frame with a symbol and no line table is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
-    check("and is named as the seam", "the seam's own source (zend_cap_reblock@?:0)" in ev, True)
+    check("a nested layer frame with a symbol and no line table is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and is named as the nested layer", "the nested layer's own source (zend_cap_reblock@?:0)" in ev, True)
     v, reason, ev = chain_with(("_estrndup", "", 0))
     check("an allocator frame with a symbol and no line table is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
     check("and is named as the allocator", "PHP's allocator (_estrndup@?:0)" in ev, True)
@@ -509,7 +509,7 @@ def observation_cases():
                                                                   ("_efree", ""), ("", ""), ("dl_transfer", ""),
                                                                   ("php_var_dump", "/b/ext/standard/var.c"),
                                                                   ("capstone_delegate_pack", ""), ("foo", "/b/main/output.c"))),
-          ("forwarding", "seam", "allocator", "unresolved", "forwarding", "php", "other", "php"))
+          ("forwarding", "nested", "allocator", "unresolved", "forwarding", "php", "other", "php"))
     # the probe transcript must NAME its image: the launcher's exit line or fault record
     check("transcript_image: the exit line's digest", R.transcript_image("x\ncapstone-exec: exit image=probe-putenv.dom sha256=" + "a" * 64 + "\n"), "a" * 64)
     check("transcript_image: no digest is None", R.transcript_image("PUTENV_PROBE DONE failures=0\n"), None)
@@ -523,7 +523,7 @@ def observation_cases():
     # digest read only off the launcher's own lines; exactly one completion record; the exit
     # line out of the application's output.
     R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
-    for sym, what in (("zend_cap_reblock", "the seam's own source"), ("_emalloc", "PHP's own allocator"),
+    for sym, what in (("zend_cap_reblock", "the nested layer's own source"), ("_emalloc", "PHP's own allocator"),
                       ("capstone_delegate_pack", "a routine not known to forward a caller's buffer")):
         R.symbolize = fake_symbolize("", 0, func=sym)
         obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
@@ -788,16 +788,16 @@ def helper_cases():
     check("leading whitespace is data, not noise",
           R.app_output(["array(2) {", '  ["scheme"]=>', "}"]),
           'array(2) {\n  ["scheme"]=>\n}')
-    check("strip_seam_noise keeps only PHP's own output",
-          R.strip_seam_noise("ZEND_CAP_MODE 6 exact=0 revoke=1\ndone\nPHP_VIRTUAL SEAM blocks=1 "
+    check("strip_nested_noise keeps only PHP's own output",
+          R.strip_nested_noise("ZEND_CAP_MODE 6 exact=0 revoke=1\ndone\nPHP_VIRTUAL NESTED blocks=1 "
                              "frees=1 issues=1 retires=1 revokes=1"), "done")
     check("same_as_oracle ignores a trailing newline", R.same_as_oracle("done", "done\n"), True)
     check("same_as_oracle is otherwise exact", R.same_as_oracle("done!", "done"), False)
     check("node_pressure takes the high-water",
           R.node_pressure(R.STATS_LINE.pattern and (STATS % (10, 99) + "\n" + STATS % (40, 99))),
           (40, 99))
-    check("seam_counters reads the mode and the revokes",
-          R.seam_counters("ZEND_CAP_MODE 6 exact=0 revoke=1\nPHP_VIRTUAL SEAM blocks=3 frees=2 "
+    check("nested_counters reads the mode and the revokes",
+          R.nested_counters("ZEND_CAP_MODE 6 exact=0 revoke=1\nPHP_VIRTUAL NESTED blocks=3 frees=2 "
                           "issues=4 retires=2 revokes=77"), (6, 77))
 
 
@@ -882,10 +882,10 @@ def population_cases():
 
 def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=True,
                  stdout="done", sha=SHA, probe_sha=PROBE_SHA):
-    seam = f"ZEND_CAP_MODE {mode} exact={1 if mode & 1 else 0} revoke={1 if mode & 2 else 0}"
+    nested = f"ZEND_CAP_MODE {mode} exact={1 if mode & 1 else 0} revoke={1 if mode & 2 else 0}"
     stats = STATS % (100, 9216)
     out, exits = {}, {}
-    out[R.SANITY] = [seam, f"PHP_VIRTUAL SEAM blocks=9 frees=9 issues=9 retires=9 revokes={revokes}",
+    out[R.SANITY] = [nested, f"PHP_VIRTUAL NESTED blocks=9 frees=9 issues=9 retires=9 revokes={revokes}",
                      "sanity 600 200 17" if sanity_ok else "", stats]
     exits[R.SANITY] = 0 if sanity_ok else 139
     if probe is not None:
@@ -895,10 +895,10 @@ def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=
         out[R.BOUND_PROBE], exits[R.BOUND_PROBE] = probe_transcript(shape, probe_sha)
     for c in cases:
         if c in case_faults:
-            out[c] = [seam, FAULT % sha, stats]
+            out[c] = [nested, FAULT % sha, stats]
             exits[c] = 139
         else:
-            out[c] = [seam, stdout, stats]
+            out[c] = [nested, stdout, stats]
             exits[c] = 0
     return {"booted": True, "reached_script": True, "completed": True, "panic": False,
             "exits": exits, "output": out, "serial_log": "x"}
@@ -931,7 +931,7 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
         if probe_mode_line and R.BOUND_PROBE in rec["output"]:
             rec["output"][R.BOUND_PROBE].insert(0, "ZEND_CAP_MODE 7 exact=1 revoke=1")
         (out / f"{arm}-run.json").write_text(json.dumps(rec))
-    img = tmp / "php-real-seam.dom"
+    img = tmp / "php-real-nested.dom"
     img.write_bytes(b"\x7fELF" + b"\0" * 64)
 
     real_run, real_call = subprocess.run, subprocess.call
@@ -1168,7 +1168,7 @@ def stale_guard(label, *, sha=SHA, probe_sha=PROBE_SHA, want_refused=True):
                                case_faults=(K("CRASH-086"),), probe=probe, sha=sha,
                                probe_sha=probe_sha)
             (out / f"{arm}-run.json").write_text(json.dumps(rec))
-        img = tmp / "php-real-seam.dom"; img.write_bytes(b"\x7fELF")
+        img = tmp / "php-real-nested.dom"; img.write_bytes(b"\x7fELF")
         real_run, real_call = subprocess.run, subprocess.call
         def stub(cmd, *a, **k):
             prog = str(cmd[0])
@@ -1250,10 +1250,10 @@ def node_table_cases():
 def cap_insn_cases():
     """The image gate reads instruction WORDS, not a mnemonic.
 
-    This gate decides whether the whole measurement is believed: the seam is a runtime mode, so
+    This gate decides whether the whole measurement is believed: the nested layer is a runtime mode, so
     an image that cannot revoke would make all three temporal columns read alike. It was a
     `grep -c '\\brevoke\\b'` over objdump until 2026-10-26, and llvm-objdump prints both CDERIVE
-    and CREVOKE as <unknown> -- so after the seam moved onto them the gate read zero on a
+    and CREVOKE as <unknown> -- so after the nested layer moved onto them the gate read zero on a
     CORRECT image. It existed in two copies, which drifted: the build's was fixed, the runner's
     was not, and the runner refused a whole 29-case measurement after all four arms had run.
     These pin the encoding so a third copy cannot drift silently."""

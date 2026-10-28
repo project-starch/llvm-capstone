@@ -2782,3 +2782,25 @@ rc 0. Against run16: 560 cells, every verdict, reason and attribution identical;
 sanity run prints the seam's exit line (revokes 0 on stock and the system allocator, 6375 on both
 nested arms), the cross-arm gates pass, and no transcript carries the "armed" line, which 292 of
 run16's 296 transcripts did. run17 is the current record.
+
+## 2026-10-28: "seam" renamed "nested" (the nested allocator layer), and run18
+
+The arms were named stock / system allocator / nested / nested exact on 2026-10-28 morning; the code
+that builds the nested arms kept the name "seam", so one thing had two words. It is renamed in the
+real-PHP port, its corpus, runners, tests and arms.json: the layer is the nested allocator layer;
+the build mode PHP_REALPHP_ALLOC=nested (was seam), the image php-real-nested.dom, the probe
+probe-nested.c / probe-nested.dom (build target nested-probe), the control nested-bound-probe (was
+seam-bound-probe), the exit line PHP_VIRTUAL NESTED (was PHP_VIRTUAL SEAM), the run-cases
+configurations php-virtual-{stock,block,object} (were php-virtual-seam-*). One version, no aliases:
+a record keeps the names of the tree it was taken on, which every record names by hash, so run7 to
+run17 are re-judged, if ever, on their own trees. Untouched: ports/php/engine (Phase A, where
+"seam" names a different mode, zend_alloc.c dropped), other ports' own seams, archived results,
+this log. Until run18 lands, the current record (run17) cannot be re-judged under the new names --
+the judge refuses its control name as undeclared, which is the gate working.
+
+**run18 pre-registration (tree: this commit; out-lt8n = out-lt8s with the image and probe rebuilt
+under the new names, same SDK; the putenv probe; platform-res3; watchdog 40 s; both populations,
+both scorings, 70 cases).** Every verdict, reason and attribution identical to run17 (560 cells);
+every exact-arm observation carries the control nested-bound-probe and none seam-bound-probe;
+every arm's sanity run prints PHP_VIRTUAL NESTED and no transcript carries PHP_VIRTUAL SEAM; the
+cross-arm gates pass. Any mover voids the rename until explained here.

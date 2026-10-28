@@ -75,14 +75,14 @@ PHP_VIRTUAL_ASSERT(header_padding_is_0, MEM_HEADER_PADDING == 0);
  * of a pair report DIFFERENT mode lines -- a pair that silently built the same way is the
  * cheapest way to manufacture a result, and the physical port's own gate exists because of it.
  * In hier mode the arm is still a compile-time flag, exactly as it is physically; the runtime
- * mode bits arrive with the allocator seam. */
+ * mode bits arrive with the nested allocator layer. */
 #ifdef ZEND_CAP_SUBLET
-/* SEAM MODE: the arm is a RUNTIME word, not a compile-time flag, so one image serves both runs
+/* NESTED MODE: the arm is a RUNTIME word, not a compile-time flag, so one image serves both runs
  * of a pair and they cannot differ in anything else. zend_cap_mode() reads PHP_CAP_MODE and
  * echoes what it resolved, and REFUSES to pick an arm if the variable is absent -- a run that
  * silently chose is a run whose result means nothing. */
 #  include "zend-cap-mode.h"
-#  define PHP_VIRTUAL_ARM "seam (allocator mode is runtime: see the ZEND_CAP_MODE line)"
+#  define PHP_VIRTUAL_ARM "nested (allocator mode is runtime: see the ZEND_CAP_MODE line)"
 #elif defined(ZEND_CAP_BOUNDS_REAL_SIZE)
 #  define PHP_VIRTUAL_ARM "bounds=real-size (CONTROL: stock PHP's rounding is reachable)"
 #else
@@ -146,11 +146,11 @@ static int  ub_stream_open(const char *fn, zend_file_handle *h TSRMLS_DC)
  *
  *   hierarchical  _efree reaches the level below, which frees a pointer it did issue -- it came
  *                 from the same musl heap -- so the mistake is invisible;
- *   the seam      _efree asks the seam for the header of a pointer the seam never issued, and
- *                 the seam refuses rather than guessing. CRASH-035 failed exactly there, with
+ *   the nested layer      _efree asks the nested layer for the header of a pointer the nested layer never issued, and
+ *                 the nested layer refuses rather than guessing. CRASH-035 failed exactly there, with
  *                 ZEND_CAP_FOREIGN naming an address inside no block this layer owns.
  *
- * So the seam found a porting defect that the looser arrangement hid, which is the fourth time
+ * So the nested layer found a porting defect that the looser arrangement hid, which is the fourth time
  * this port's own substitute layer has been the thing under test rather than PHP. PHP's real
  * vspprintf (main/snprintf.c) allocates with emalloc; this now matches it.
  *
@@ -439,14 +439,14 @@ int main(int argc, char **argv)
     if (err_count) { stage |= ST_ERRORS; }
 
 #ifdef ZEND_CAP_SUBLET
-    /* WHAT THE SEAM ACTUALLY DID. The pair's gate is that the fault run reports strictly more
+    /* WHAT THE NESTED LAYER ACTUALLY DID. The pair's gate is that the fault run reports strictly more
      * revokes than the control; without these counters that gate cannot be evaluated, and a
      * pair whose arms were secretly the same would report a clean sweep. sublet_stats is static
      * per translation unit, so the heap's counters do not see this layer's. */
     {
         unsigned long cs[8];
         zend_cap_stats(cs);
-        printf("PHP_VIRTUAL SEAM blocks=%lu frees=%lu issues=%lu retires=%lu revokes=%lu "
+        printf("PHP_VIRTUAL NESTED blocks=%lu frees=%lu issues=%lu retires=%lu revokes=%lu "
                "splits=%lu reallocs=%lu live=%lu\n",
                cs[0], cs[1], cs[2], cs[3], cs[4], cs[5], cs[6], cs[7]);
         fflush(stdout);

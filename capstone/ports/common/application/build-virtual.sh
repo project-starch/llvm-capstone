@@ -6,7 +6,7 @@
 #   build-virtual.sh [--dry-run] APP NEW_OUTPUT
 #
 #   APP   cpython | postgres | ffmpeg | tshark | memcached | perl | mruby | sqlite | php
-#         -- the eight ports with a nested allocator, and PHP 5.0.0 with its allocator seam.
+#         -- the eight ports with a nested allocator, and PHP 5.0.0 with its nested allocator layer.
 #
 # WHY ONE ENTRY. Each port keeps its own recipe, because each upstream build is
 # its own problem: perl needs perl-cross, tshark needs seven dependencies,
@@ -62,9 +62,9 @@ case "$APP" in
   perl)      PORT_VAR=PERLD_SUBLET; PORT_OFF=0; PORT_ON=1 ;;
   mruby)     PORT_VAR=MRBD_SUBLET;  PORT_OFF=0; PORT_ON=1 ;;
   sqlite)    PORT_VAR=SQLITE_HEAP;  PORT_OFF=memsys5; PORT_ON=memsys5-sublet ;;
-  # php: stock is PHP's own zend_alloc.c over virtual mallocng; seam is that file with the
-  # allocator seam patched in (ports/php/app/patches/0003), its arm baked in below.
-  php)       PORT_VAR=PHP_REALPHP_ALLOC; PORT_OFF=stock; PORT_ON=seam ;;
+  # php: stock is PHP's own zend_alloc.c over virtual mallocng; nested is that file with the
+  # nested allocator layer patched in (ports/php/app/patches/0003), its arm baked in below.
+  php)       PORT_VAR=PHP_REALPHP_ALLOC; PORT_OFF=stock; PORT_ON=nested ;;
   # memcached's recipe builds both arms into one output directory -- stock,
   # safety fixtures and managed lifetimes are separate images, not separate
   # builds -- so there is nothing for the selector to choose.
@@ -82,7 +82,7 @@ elif [[ $LIFETIMES == 1 ]]; then
   echo "memcached builds every arm in one output; leave CAPSTONE_VIRTUAL_LIFETIMES at 0" >&2
   exit 2
 fi
-# php's protected image bakes its arm in (the generic runners set no PHP_CAP_MODE and the seam
+# php's protected image bakes its arm in (the generic runners set no PHP_CAP_MODE and the nested layer
 # refuses to guess). Resolved HERE, before the dry-run report, so pipeline.json records it; and
 # only 6 or 7 is the selector's meaning -- 0 revokes nothing and leaks, 4 revokes per block.
 if [[ $APP == php && $LIFETIMES == 1 ]]; then

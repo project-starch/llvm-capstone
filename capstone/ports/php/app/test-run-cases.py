@@ -173,8 +173,8 @@ def temporal_path():
     qemu = repo / "capstone/capstone-qemu/build/qemu-system-riscv64"
     images = repo / "capstone/caplifive-buildroot/build-qemu/images"
     adapter = repo / "capstone/container/tmp/virtual-runtime/adapter"
-    seam = repo / "capstone/container/tmp/virtual-runtime/php-virtual/php-seam.dom"
-    needed = [qemu, images / "Image", adapter / "capstone-vexec", seam]
+    nested = repo / "capstone/container/tmp/virtual-runtime/php-virtual/php-nested.dom"
+    needed = [qemu, images / "Image", adapter / "capstone-vexec", nested]
     missing = [str(x) for x in needed if not x.exists()]
     if missing or not os.environ.get("CAPSTONE_LLVM_BIN"):
         print(f"  [skip] temporal path NOT exercised: missing {missing[:1] or ['CAPSTONE_LLVM_BIN']}")
@@ -185,17 +185,17 @@ def temporal_path():
 
     def rec(mode, revokes, faulting):
         """A run record for one column. `faulting` cases get a fault line instead of DONE."""
-        seam_line = (f"PHP_VIRTUAL SEAM blocks=50 frees=30 issues=50 retires={revokes} "
+        nested_line = (f"PHP_VIRTUAL NESTED blocks=50 frees=30 issues=50 retires={revokes} "
                      f"revokes={revokes} splits=50 reallocs=0 live=20")
         out = {rc.SANITY_RUN: [f"ZEND_CAP_MODE {mode} exact=0 revoke={1 if revokes else 0}"]
-                              + done + [seam_line]}
+                              + done + [nested_line]}
         exits = {rc.SANITY_RUN: 0}
         for c in cases:
             if c in faulting:
                 out[c] = ["PHP_VIRTUAL stage=0x03f evaluating the trigger", FAULT]
                 exits[c] = 139
             else:
-                out[c] = list(done) + [seam_line]
+                out[c] = list(done) + [nested_line]
                 exits[c] = 0
         return {"booted": True, "reached_script": True, "completed": True, "panic": False,
                 "exits": exits, "output": out, "serial_log": "synthetic"}
@@ -206,7 +206,7 @@ def temporal_path():
             for arm, r in zip(rc.TEMPORAL_ARMS, columns):
                 (d / f"{arm}-run.json").write_text(json.dumps(r))
             cmd = [sys.executable, str(HERE / "run-cases.py"), "--axis", "temporal",
-                   "--from-record", "--seam", str(seam), "--qemu", str(qemu),
+                   "--from-record", "--nested", str(nested), "--qemu", str(qemu),
                    "--images", str(images), "--adapter", str(adapter), "--out", str(d)]
             for c in cases:
                 cmd += ["--case", c]
@@ -221,11 +221,11 @@ def temporal_path():
             return True, tallies
 
     bad = 0
-    # The real shape: stock completes everything, the block column catches one, the seam both.
+    # The real shape: stock completes everything, the block column catches one, the nested layer both.
     ok, got = run([rec(0, 0, []), rec(4, 0, ["CRASH-003"]), rec(6, 77, cases)])
-    want = {"php-virtual-seam-stock": {"MISSED": 2},
-            "php-virtual-seam-block": {"CAUGHT": 1, "MISSED": 1},
-            "php-virtual-seam-object": {"CAUGHT": 2}}
+    want = {"php-virtual-stock": {"MISSED": 2},
+            "php-virtual-block": {"CAUGHT": 1, "MISSED": 1},
+            "php-virtual-object": {"CAUGHT": 2}}
     if not ok or got != want:
         print(f"  [FAIL] temporal path: {got}")
         bad += 1
@@ -248,7 +248,7 @@ def temporal_path():
     own = rec(6, 77, [])
     own["output"]["CRASH-003"] = ["PHP_VIRTUAL stage=0x03f evaluating the trigger", FAULT]
     own["exits"]["CRASH-003"] = 139
-    print("  [ok ] (seam-own-file attribution is covered by observe_temporal's SEAM_OWN_FILES)")
+    print("  [ok ] (nested-own-file attribution is covered by observe_temporal's NESTED_OWN_FILES)")
     return bad
 
 

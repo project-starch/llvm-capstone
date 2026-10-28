@@ -1,9 +1,9 @@
-/* Does the PHP seam design still work after the nested ABI was removed?
+/* Does the nested layer's design still work after its old ABI was removed?
  *
  * WHY THIS EXISTS, AND WHY IT COMES BEFORE TOUCHING zend-cap-blocks.c. The 2026-10-25 merge
  * deleted __capstone_sublet_malloc_linear/_free_linear from runtime/virtual/heap.c -- the
- * Sublet loan this seam borrowed every PHP block through, and which this port was the only
- * consumer of. sublet.h itself survives, so the seam's SHAPE is unaffected: split at the
+ * Sublet loan this nested layer borrowed every PHP block through, and which this port was the only
+ * consumer of. sublet.h itself survives, so the nested layer's SHAPE is unaffected: split at the
  * 48-byte header, retire the payload per _efree, never revoke the header. Only the block
  * PROVIDER is gone.
  *
@@ -22,7 +22,7 @@
  * Zend:
  *   stage 0  the positive control: carve a block, derive header and payload, write both, free.
  *            If this does not COMPLETE, nothing the other stages report means anything.
- *   stage 1  the geometry: are the two children bounded exactly where the seam assumes, with the
+ *   stage 1  the geometry: are the two children bounded exactly where the nested layer assumes, with the
  *            header at the object and not at the block base? mallocng's slot prefix sits BELOW
  *            the object, so an offset taken from the parent's base is NOT the object's offset.
  *   stage 2  the whole point: after revoking the payload, is the HEADER still writable? This is
@@ -57,7 +57,7 @@ static unsigned long base_of(void *c) { return __builtin_capstone_cap_get_base(c
 static unsigned long end_of(void *c)  { return __builtin_capstone_cap_get_end(c); }
 static unsigned long cur_of(void *c)  { return __builtin_capstone_cap_get_cursor(c); }
 
-/* The block, and the two children the seam would hand out. `parent` is the heap's own
+/* The block, and the two children the nested layer would hand out. `parent` is the heap's own
  * capability over the block -- non-linear, carrying MANAGE -- and is never handed upward. */
 struct carved {
     void *object;            /* what malloc returned                       */
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
                base_of(c.header), end_of(c.header),
                base_of(c.payload), end_of(c.payload));
         fflush(stdout);
-        /* The seam assumes exactly this, so it is asserted rather than eyeballed. */
+        /* The nested layer assumes exactly this, so it is asserted rather than eyeballed. */
         if (base_of(c.header) != cur_of(c.object))
             say("PROBE_FAIL:header does not start at the object");
         else if (end_of(c.header) != cur_of(c.object) + HDR)

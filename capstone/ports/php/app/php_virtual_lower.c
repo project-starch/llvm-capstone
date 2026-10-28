@@ -59,7 +59,7 @@
  * assuming which one the caller holds: _efree and _erealloc pass the OBJECT pointer, and a
  * pointer that is already the block must still widen correctly. Reading the cursor of
  * `p - HEADER` is safe even though it lies below that capability's base -- it is metadata, not
- * a dereference, which app/probe-hier-widen.c stage 4 of the seam probe also measured.
+ * a dereference, which app/probe-hier-widen.c stage 4 of the nested layer probe also measured.
  */
 void *zend_cap_widen(void *p)
 {

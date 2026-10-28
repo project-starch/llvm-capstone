@@ -86,14 +86,14 @@ fi
 # ---- 3. what to build -----------------------------------------------------------------
 case "$WHAT" in
   probe)
-    # The seam probe: can a lent block be split so that retiring the payload leaves PHP's
+    # The nested layer probe: can a lent block be split so that retiring the payload leaves PHP's
     # header live? Everything in the allocator plan depends on the answer.
     # probe-derive-split.c, not probe-sublet-split.c: the latter probed the Sublet loan
     # (__capstone_sublet_malloc_linear) that upstream deleted on 2026-10-25, so it cannot
     # link at all. The new probe settles the same questions for CDERIVE/CREVOKE.
     SRC="$R/capstone/ports/php/zend-alloc/sublet/probe-derive-split.c"
     IMG="$OUT/probe-derive-split.dom"
-    echo "  compiling the seam probe ..."
+    echo "  compiling the nested layer probe ..."
     # -I $R/capstone so <sublet/sublet.h> resolves to capstone/sublet/sublet.h, which is the
     # header the virtual heap itself uses (runtime/virtual/vm.h includes ../../sublet/sublet.h).
     "$CC" -O1 -I"$R/capstone" -I"$R/capstone/runtime/include" "$SRC" -o "$IMG" \
@@ -117,7 +117,7 @@ case "$WHAT" in
     echo "  built $IMG"
     ;;
   atexit-probe)
-    # Does an exit hook run here, and on which stream? The seam's revoke counters have no other
+    # Does an exit hook run here, and on which stream? The nested layer's revoke counters have no other
     # way off the machine once PHP owns main(), and the first attempt printed nothing.
     IMG="$OUT/probe-atexit.dom"
     echo "  compiling the atexit probe ..."
@@ -129,7 +129,7 @@ case "$WHAT" in
     # Does this libc keep an empty-name putenv string in environ? CRASH-084's use-after-free needs
     # it to; musl's putenv takes the unsetenv branch for an empty name (src/env/putenv.c), so on
     # this platform the dangling reference may not exist at all. The probe says, with a control
-    # that proves it can see retention. No seam sources, no capability builtins: the question is
+    # that proves it can see retention. No nested-layer sources, no capability builtins: the question is
     # the libc's alone. See probe-putenv.c.
     IMG="$OUT/probe-putenv.dom"
     echo "  compiling the putenv probe ..."
@@ -143,7 +143,7 @@ case "$WHAT" in
     # so the hang alone does not say which of the two is at fault. The probe does.
     IMG="$OUT/probe-select.dom"
     echo "  compiling the select probe ..."
-    # No seam sources and no capability builtins: the question is about ordinary blocking I/O
+    # No nested-layer sources and no capability builtins: the question is about ordinary blocking I/O
     # through CSRUNV, and anything else linked in would be a second explanation for a failure.
     "$CC" -O1 "$HERE/probe-select.c" -o "$IMG" \
       || { echo "select probe build FAILED" >&2; exit 1; }
@@ -162,7 +162,7 @@ case "$WHAT" in
     P=${PHP_SRC:-$CAPSTONE_TMP_ROOT/php-source/php-5.0.0}
     [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
     assert_tree_patches "$P"
-    SEAM="$R/capstone/ports/php/zend-alloc/sublet"
+    NESTED="$R/capstone/ports/php/zend-alloc/sublet"
     PATCHES="$HERE/patches"
     W="$OUT/php-virtual/inert"
     rm -rf "$W"; mkdir -p "$W/patched/Zend"
@@ -189,7 +189,7 @@ case "$WHAT" in
       exit 1
     fi
     # And the positive control: WITH the define it must differ, or the check above is vacuous.
-    "$CC" "${ICF[@]}" -DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" -I"$R/capstone/runtime/include" \
+    "$CC" "${ICF[@]}" -DZEND_CAP_SUBLET -I"$NESTED" -I"$R/capstone" -I"$R/capstone/runtime/include" \
       -c "$W/patched/Zend/zend_alloc.c" -o "$W/sublet.o" 2>"$W/sublet.log" \
       || { echo "  patched zend_alloc.c did not compile WITH the define" >&2
            tail -5 "$W/sublet.log" >&2; exit 1; }
@@ -199,16 +199,16 @@ case "$WHAT" in
     fi
     echo "  control: with -DZEND_CAP_SUBLET the object DOES differ, so the hunks are live"
     ;;
-  seam-probe)
-    # The seam allocator, driven directly through the hooks the patched zend_alloc.c calls,
+  nested-probe)
+    # The nested layer allocator, driven directly through the hooks the patched zend_alloc.c calls,
     # before any of PHP is pointed at it. Links the REAL zend-cap-*.c: a probe with its own
     # copy of the logic would pass while the engine broke.
-    SEAM="$R/capstone/ports/php/zend-alloc/sublet"
-    IMG="$OUT/probe-seam.dom"
-    echo "  compiling the seam probe ..."
-    "$CC" -O1 -I"$R/capstone" -I"$R/capstone/runtime/include" -I"$SEAM" \
-      "$SEAM/probe-seam.c" "$SEAM/zend-cap-mode.c" \
-      -o "$IMG" || { echo "seam probe build FAILED" >&2; exit 1; }
+    NESTED="$R/capstone/ports/php/zend-alloc/sublet"
+    IMG="$OUT/probe-nested.dom"
+    echo "  compiling the nested layer probe ..."
+    "$CC" -O1 -I"$R/capstone" -I"$R/capstone/runtime/include" -I"$NESTED" \
+      "$NESTED/probe-nested.c" "$NESTED/zend-cap-mode.c" \
+      -o "$IMG" || { echo "nested probe build FAILED" >&2; exit 1; }
     echo "  built $IMG"
     ;;
   php)
@@ -228,17 +228,17 @@ case "$WHAT" in
     E="$R/capstone/ports/php/engine"
     MODE=${PHP_CAP_ALLOC_MODE:-hier}
     case "$MODE" in
-      hier|seam) ;;
-      *) echo "  PHP_CAP_ALLOC_MODE=$MODE? (hier|seam)" >&2; exit 2 ;;
+      hier|nested) ;;
+      *) echo "  PHP_CAP_ALLOC_MODE=$MODE? (hier|nested)" >&2; exit 2 ;;
     esac
-    SEAM="$R/capstone/ports/php/zend-alloc/sublet"
+    NESTED="$R/capstone/ports/php/zend-alloc/sublet"
     PATCHES="$HERE/patches"
 
     # Per-arm object and log directories. One shared obj/ would have the second build
     # overwrite the first's objects, and a pair assembled from whichever came last is not a
     # pair -- the two images would be byte-identical and the suite's own gate would refuse them.
     #
-    # SEAM MODE IS THE EXCEPTION, and deliberately so: there the arm is a RUNTIME mode
+    # NESTED MODE IS THE EXCEPTION, and deliberately so: there the arm is a RUNTIME mode
     # (PHP_CAP_MODE, read by zend_cap_mode()), so ONE image serves both runs and the two arms
     # cannot differ in anything but the mode word. The byte-identical check that guards the
     # hierarchical pair would be exactly wrong here -- see the plan's Verification 5, which
@@ -249,7 +249,7 @@ case "$WHAT" in
       *" -DZEND_CAP_BOUNDS_REAL_SIZE "*) _arm=control ;;
       *) _arm=fault ;;
     esac
-    [ "$MODE" = seam ] && _arm=seam
+    [ "$MODE" = nested ] && _arm=nested
     OBJ="$OUT/php-virtual/$_arm/obj"; LOG="$OUT/php-virtual/$_arm/log"
     mkdir -p "$OBJ" "$LOG"
 
@@ -300,12 +300,12 @@ case "$WHAT" in
                        -D_estrdup=php_raw_estrdup -D_estrndup=php_raw_estrndup
                        -D_efree=php_raw_efree)
 
-    # ---- the allocator seam ----------------------------------------------------------
+    # ---- the nested allocator layer ----------------------------------------------------------
     # zend_alloc.c is PATCHED rather than renamed aside: the six derivation sites have to go
     # through a lookup, which no -D can do. The corpus is mounted read-only, so the patch is
     # applied to a copy and the pristine tree is never touched.
     ZEND_ALLOC_SRC="$P/Zend/zend_alloc.c"
-    if [ "$MODE" = seam ]; then
+    if [ "$MODE" = nested ]; then
       PATCHED="$OUT/php-virtual/$_arm/patched"
       rm -rf "$PATCHED"
       mkdir -p "$PATCHED/Zend"
@@ -313,18 +313,18 @@ case "$WHAT" in
       patch -s -p1 -d "$PATCHED" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
       ZEND_ALLOC_SRC="$PATCHED/Zend/zend_alloc.c"
-      # -I the seam for zend-cap-mode.h, and -I capstone for <sublet/sublet.h>, which is the
+      # -I the nested layer for zend-cap-mode.h, and -I capstone for <sublet/sublet.h>, which is the
       # same header the virtual heap itself uses.
-      # NOT -DPHP_CAP_ALLOC_SEAM: that is the PHYSICAL port's flag for "zend_alloc.c is
+      # NOT -DPHP_CAP_ALLOC_NESTED: that is the PHYSICAL port's flag for "zend_alloc.c is
       # dropped", under which libc/php_capstone_php_stubs.c supplies alloc_globals and
-      # start_memory_manager itself. This seam KEEPS zend_alloc.c -- that is the whole point --
+      # start_memory_manager itself. This nested layer KEEPS zend_alloc.c -- that is the whole point --
       # so those definitions must come from PHP, and PHP's AG(cache) stays live. ZEND_CAP_SUBLET
-      # is the only flag the seam needs.
-      # runtime/include for <capstone/capability.h>, which the seam includes since the
+      # is the only flag the nested layer needs.
+      # runtime/include for <capstone/capability.h>, which the nested layer includes since the
       # block provider moved onto CDERIVE/CREVOKE (fa8902138ab0); the SDK does not add it.
-      CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" -I"$R/capstone/runtime/include")
-      ZEND_ALLOC_RENAME=()          # the seam calls PHP's own entry points; nothing is renamed
-      echo "  allocator: SEAM -- zend_alloc.c patched (7 guarded hunks), per-emalloc lifetimes"
+      CF+=(-DZEND_CAP_SUBLET -I"$NESTED" -I"$R/capstone" -I"$R/capstone/runtime/include")
+      ZEND_ALLOC_RENAME=()          # the nested layer calls PHP's own entry points; nothing is renamed
+      echo "  allocator: NESTED -- zend_alloc.c patched (7 guarded hunks), per-emalloc lifetimes"
     else
       echo "  allocator: HIERARCHICAL -- zend_alloc.c renamed aside and re-bounded"
     fi
@@ -358,11 +358,11 @@ case "$WHAT" in
     #   php_virtual_main.c        a real main(), the trigger on stdin
     SUP=("$E/libc/php_capstone_php_stubs.c" "$E/libc/php_capstone_ext_stubs.c"
          "$HERE/php_virtual_lower.c" "$HERE/php_virtual_main.c")
-    if [ "$MODE" = seam ]; then
-      # The seam serves PHP's allocator from below instead of wrapping it from above, so the
+    if [ "$MODE" = nested ]; then
+      # The nested layer serves PHP's allocator from below instead of wrapping it from above, so the
       # re-bounding wrapper is not linked at all: there is nothing to re-bound, because
       # ZEND_CAP_PAYLOAD already hands out a capability bounded to the caller's object.
-      SUP+=("$SEAM/zend-cap-mode.c")
+      SUP+=("$NESTED/zend-cap-mode.c")
     else
       SUP+=("$E/libc/php_capstone_zend_hier.c")
     fi
@@ -414,7 +414,7 @@ case "$WHAT" in
       *" -DZEND_CAP_BOUNDS_REAL_SIZE "*) ARM=control ;;
       *) ARM=fault ;;
     esac
-    [ "$MODE" = seam ] && ARM=seam
+    [ "$MODE" = nested ] && ARM=nested
     IMG="$OUT/php-virtual/php-$ARM.dom"
     echo "  arm: $ARM"
     echo "  linking ..."
@@ -450,12 +450,12 @@ case "$WHAT" in
     [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
     [ -f "$P/Makefile" ] || { echo "no $P/Makefile -- the TU list has no source of truth" >&2; exit 2; }
     assert_tree_patches "$P"
-    SEAM="$R/capstone/ports/php/zend-alloc/sublet"
+    NESTED="$R/capstone/ports/php/zend-alloc/sublet"
     PATCHES="$HERE/patches"
-    MODE=${PHP_REALPHP_ALLOC:-seam}
+    MODE=${PHP_REALPHP_ALLOC:-nested}
     case "$MODE" in
-      seam|stock) ;;
-      *) echo "  PHP_REALPHP_ALLOC=$MODE? (seam|stock)" >&2; exit 2 ;;
+      nested|stock) ;;
+      *) echo "  PHP_REALPHP_ALLOC=$MODE? (nested|stock)" >&2; exit 2 ;;
     esac
     B="$OUT/realphp/$MODE"
     OBJ="$B/obj"; LOG="$B/log"; T="$B/tree"
@@ -513,27 +513,27 @@ case "$WHAT" in
     [ "$_delta" -eq 8 ] || { echo "  php_config.h: corrected $_delta answers, expected 8 (4 duplicate defines each) -- the config's shape changed" >&2; exit 2; }
     echo "  php_config.h: 2 configure answers corrected (8 defines), everything else symlinked"
 
-    # ---- the allocator seam ----------------------------------------------------------
-    # The seam patches Zend/zend_alloc.c, which in the mirror means replacing one symlink with
+    # ---- the nested allocator layer ----------------------------------------------------------
+    # The nested layer patches Zend/zend_alloc.c, which in the mirror means replacing one symlink with
     # the patched copy. ONE IMAGE SERVES EVERY ARM: zend_cap_mode() reads PHP_CAP_MODE from the
     # environment, so the spatial pair (bound rounded vs exact) and the three temporal columns
     # (nothing revoked / per block / per object) are all runtime modes over these same bytes.
     # Phase A needed a different image per spatial arm; this does not, so an arm cannot differ
     # in anything but the mode word.
     SUP=()
-    if [ "$MODE" = seam ]; then
+    if [ "$MODE" = nested ]; then
       rm "$T/Zend/zend_alloc.c"
       cp "$P/Zend/zend_alloc.c" "$T/Zend/zend_alloc.c"
       patch -s -p1 -d "$T" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
-      # The seam alone. php_virtual_lower.c (zend_cap_widen, php_fault_report) was linked here
+      # The nested layer alone. php_virtual_lower.c (zend_cap_widen, php_fault_report) was linked here
       # too until 2026-10-28; nothing in the real-PHP image calls it -- only the Phase A SAPI's
       # hierarchical wrapper and probe-hier-widen.c do.
-      SUP=("$SEAM/zend-cap-mode.c")
-      echo "  allocator: SEAM -- zend_alloc.c patched (7 guarded hunks), per-emalloc lifetimes"
+      SUP=("$NESTED/zend-cap-mode.c")
+      echo "  allocator: NESTED -- zend_alloc.c patched (7 guarded hunks), per-emalloc lifetimes"
     else
       [ -z "${PHP_REALPHP_DEFAULT_MODE:-}" ] \
-        || { echo "  PHP_REALPHP_DEFAULT_MODE has no meaning for the stock image (no seam)" >&2; exit 2; }
+        || { echo "  PHP_REALPHP_DEFAULT_MODE has no meaning for the stock image (no nested layer)" >&2; exit 2; }
       echo "  allocator: STOCK -- pristine zend_alloc.c over mallocng, the honest-gap column"
     fi
     # Only the files we deliberately replaced may be real; everything else must still BE the
@@ -585,12 +585,12 @@ case "$WHAT" in
         -Wno-implicit-int -Wno-implicit-function-declaration -Wno-format-security
         -I"$T" -I"$T/Zend" -I"$T/main" -I"$T/TSRM" -I"$T/ext" -I"$T/ext/standard"
         -I"$T/regex" -I"$T/sapi/cli")
-    # runtime/include for <capstone/capability.h>: the seam cuts its header and payload
+    # runtime/include for <capstone/capability.h>: the nested layer cuts its header and payload
     # children with CDERIVE/CREVOKE since the nested loan ABI was removed on 2026-10-25.
-    if [ "$MODE" = seam ]; then
-      CF+=(-DZEND_CAP_SUBLET -I"$SEAM" -I"$R/capstone" -I"$R/capstone/runtime/include")
+    if [ "$MODE" = nested ]; then
+      CF+=(-DZEND_CAP_SUBLET -I"$NESTED" -I"$R/capstone" -I"$R/capstone/runtime/include")
       # The common entry's protected image bakes its arm in (PHP_REALPHP_DEFAULT_MODE, see
-      # ports/common/application/build-virtual.sh): without PHP_CAP_MODE the seam then takes
+      # ports/common/application/build-virtual.sh): without PHP_CAP_MODE the nested layer then takes
       # that mode and says so (ZEND_CAP_MODE_DEFAULTED). A measurement build leaves this unset,
       # so an unset mode stays a refusal there and no record can pass a default off as an arm.
       if [ -n "${PHP_REALPHP_DEFAULT_MODE:-}" ]; then
@@ -672,22 +672,22 @@ case "$WHAT" in
       echo "  UNDEFINED WEAK symbols (C-56 will refuse this image):" >&2
       printf '    %s\n' $undef_weak >&2; exit 1
     fi
-    # The seam is a runtime mode, so the image must at least CONTAIN the revoke encoding --
+    # The nested layer is a runtime mode, so the image must at least CONTAIN the revoke encoding --
     # otherwise every temporal column would read the same and all three would look like
     # "nothing revoked". The same gate run-cases.py applies before it believes a pair.
-    if [ "$MODE" = seam ]; then
+    if [ "$MODE" = nested ]; then
       # BY ENCODING, NOT BY MNEMONIC. This was `grep -c '\brevoke\b'` until 2026-10-26, when the
-      # seam moved onto CDERIVE/CREVOKE: llvm-objdump knows neither and prints both as
+      # nested moved onto CDERIVE/CREVOKE: llvm-objdump knows neither and prints both as
       # <unknown>, so the mnemonic is absent from a CORRECT image. The gate failing closed is how
       # that was caught, and count-cap-insns.py reads the instruction words instead.
       _rev=$(cd "$R" && "$CAPSTONE_LLVM_BIN/llvm-objdump" -d "$IMG" 2>/dev/null \
              | python3 -I capstone/ports/php/app/count-cap-insns.py --require) || {
         echo "  $_rev" >&2
-        echo "  the seam image cannot issue or cannot revoke -- every temporal column would read alike" >&2
+        echo "  the nested layer image cannot issue or cannot revoke -- every temporal column would read alike" >&2
         exit 1; }
-      echo "  seam capability instructions: $_rev"
+      echo "  nested capability instructions: $_rev"
     fi
     sha256sum "$IMG"
     ;;
-  *) echo "usage: build-virtual.sh [probe|hier-probe|atexit-probe|select-probe|putenv-probe|seam-probe|inert|php|realphp]" >&2; exit 2 ;;
+  *) echo "usage: build-virtual.sh [probe|hier-probe|atexit-probe|select-probe|putenv-probe|nested-probe|inert|php|realphp]" >&2; exit 2 ;;
 esac

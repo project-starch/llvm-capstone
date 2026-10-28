@@ -143,8 +143,8 @@ def access_stack(stderr):
 TEMPORAL = {"CWE-416": "temporal", "CWE-415": "temporal", "CWE-590": "temporal"}
 SPATIAL = {"CWE-125": "spatial", "CWE-787": "spatial", "CWE-190": "spatial"}
 ARMS = {
-    "virtual-malloc": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
-    "virtual-nested-pools": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
+    "virtual-malloc": "the case on the virtual profile with the nested layer present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
+    "virtual-nested-pools": "the same image with the nested allocator layer retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
     "virtual-nested-exact": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
 }
 

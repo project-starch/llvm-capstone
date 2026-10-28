@@ -2,10 +2,10 @@
 """Count CDERIVE and CREVOKE in a disassembly, by ENCODING rather than by mnemonic.
 
 WHY NOT grep FOR A MNEMONIC. The build's gate used to be `objdump -d | grep -c '\\brevoke\\b'`,
-and it was load-bearing: the seam is a RUNTIME mode, so an image that cannot revoke at all would
+and it was load-bearing: the nested layer is a RUNTIME mode, so an image that cannot revoke at all would
 make every temporal column read the same and all three arms would look like "nothing revoked".
 
-That grep silently stopped meaning anything on 2026-10-26, when the seam moved off the deleted
+That grep silently stopped meaning anything on 2026-10-26, when the nested layer moved off the deleted
 Sublet loan onto capability.h's CDERIVE/CREVOKE. This llvm-objdump does not know either
 instruction -- both print as `<unknown>` -- so the mnemonic is simply absent from a correct
 image, and the gate failed closed. It failing closed is the only reason this was noticed.
@@ -49,7 +49,7 @@ def main():
         # BOTH, not either: an image that can issue but not revoke is exactly the shape that
         # would report a clean sweep with no revocation having happened.
         if derive == 0 or revoke == 0:
-            print("the image is missing a capability instruction the seam needs",
+            print("the image is missing a capability instruction the nested layer needs",
                   file=sys.stderr)
             return 1
     return 0

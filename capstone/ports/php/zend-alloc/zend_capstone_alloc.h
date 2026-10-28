@@ -118,7 +118,7 @@ extern void php_fault_report(unsigned long);
  * never happened here". Read by the domain after the eval and reported through the fault channel. */
 #if defined(ZEND_CAP_LIFECYCLE_TRACE)
 static unsigned long zc_n_emalloc, zc_n_efree, zc_n_revoke, zc_n_cachehit;
-unsigned long zc_n_estrndup;   /* non-static: the seam's _estrndup lives in another TU */
+unsigned long zc_n_estrndup;   /* non-static: the nested layer's _estrndup lives in another TU */
 
 /* A ring of the most recently FREED block ranges. _estrndup consults it to answer the one question
  * the counters cannot: did the copy read a region that had already been freed? A completing run
