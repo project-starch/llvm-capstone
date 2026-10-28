@@ -190,3 +190,20 @@ at 84600 s (23.5 h, bookings 1440 min):
 
 At the cap, imagick fits up to CPI 5.35 and nab up to CPI 4.37. P12 (±35 % of the CPI-3.75 estimate) stands as
 registered: lbm's CPI already predicts that it misses for lbm.
+
+## Addendum 4 (2026-10-28 23:20, before the reruns it names): mcf test outlived its step
+
+**What happened.** mcf test T1 (board 2, image 8fbf5fe40f1fe8e2) was cut at its 12000 s step, still inside its only
+command. The known-good control passed, so the boot is valid. It carries no SPEC verdict.
+
+**What the run's own diagnostics show.** The module's stall line, `@@STALL spec mod 2 sfences=260748
+satp=372469/0 busy=0`, shows that it was still taking escapes when it was cut. Each escape is a satp write, which
+flushes the TLB. On lbm, wall time beyond the in-context cycles came to about 5.2 ms per CSRUNV entry, and the twin
+counted 394k entries for mcf test.
+
+**What changes.**
+- mcf test T1 is rerun with step 30000 s; mcf test T3 is raised to 30000 s before its boot.
+- mcf train goes to the 84600 s cap.
+- The bounded run's directory is kept as `505.mcf_r-test-capstone-spatial.bound12000`.
+
+**P16.** mcf test completes within 30000 s per arm. Its outputs equal the twin's, and T1 equals T3.
