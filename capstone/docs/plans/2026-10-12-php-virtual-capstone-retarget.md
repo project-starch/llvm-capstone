@@ -2754,3 +2754,19 @@ already say the case does not reach its defect within this harness's memory and 
 stays `infra` in the population run. What would settle it is a guest with more memory and a
 watchdog of an hour, or a smaller array with the CPU limit scaled to the emulated speed, which
 changes the trigger and so needs its own provenance note; neither is done here.
+
+### The seam reduced to what the arms need (cdfbff0e4e57), and run17 pre-registered
+
+The real-PHP seam image no longer links php_virtual_lower.c (nothing in it calls that file),
+reports its counters on one route (the destructor; the atexit route and its "armed" line are
+gone), and the header drops the unused stat index names. Nothing that decides a reading changes:
+the mode bits, the grain, the geometry, interior and unknown-pointer refusals, issue, header,
+reclaim, release and reblock are byte-for-byte the same source.
+
+**run17 pre-registration (tree: this commit; the seam image and the seam probe rebuilt from it in
+`out-lt8s`, a copy of out-lt8 with the same SDK, the putenv probe unchanged; platform-res3;
+watchdog 40 s; both populations, both scorings, all 70 cases).** Predictions against run16, cell
+for cell: every verdict, reason and attribution identical (560 cells per scoring pair); every
+arm's sanity run still prints the PHP_VIRTUAL SEAM line and the arm-ordering gate passes; no
+transcript carries "PHP_VIRTUAL SEAM armed". The image and probe hashes differ, which is the
+change. Any mover voids the simplification until explained here.
