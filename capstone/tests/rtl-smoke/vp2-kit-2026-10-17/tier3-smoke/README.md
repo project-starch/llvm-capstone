@@ -10652,3 +10652,34 @@ Records: `records/b3bs-reread-b1.result-lines.txt` and `records/b3bs-reread-b2.r
 - **Against the pre-registration (f1cb1f9d347c): every reading holds.**
 - With the first arms and pg-pools, every arm bitstream 2 read in its first phase now reads the same on bitstream 3.
   The second wave (mruby, perl, the new arms and Juliet; pre-registered at 2e0bde4ca772) started as each board freed.
+
+### The corpus on bitstream 3, third arm: httpd (APR pools and apr-util buckets), both virtual arms, board 1 then board 2 (N=2), pre-registered (2026-10-28 17:2x, before any boot)
+
+- **Why:** httpd is the one corpus arm bitstream 2 read (board 1, b86eff8b49e4) that neither bitstream-3 wave carries.
+  Board 1 is free: the second wave's board-1 arms have ended.
+- **What runs:** `tier3-httpd-b3.sh <board> <log>`. It is tier3-httpd-b2.sh with only the board side changed
+  (scratch mkhttpdb3.py, five substitutions on code lines, each asserted at its count):
+  - the kit bkit11-b3-b<board> with BOARD_BITSTREAM=caplifive_vp2c_e7af48457;
+  - output `t3-run-b3-e7af48457-b<board>/<HT_SUB:-httpd>`;
+  - "bitstream 3" in the booking text.
+  - The worktree (clean 6d9e397df3ca, runner e464b106), the prebuilt images (each equal to its REFS.txt STAMP line), the
+    SDK (f5145cbb), llvm-bin, the QEMU references and verdicts-compare are bitstream 2's, unchanged.
+  - Four boots, one per corpus x arm; a boot that does not complete stops the run.
+- **Dry run:** `records/dryrun-httpd-b3.txt`, on board 1's real kit, worktree, SDK, images and references, with only the
+  runner, busy check and booking stubbed. The runner stub replays bitstream 2's real board-1 reading.
+  - full: every cell the same, DONE;
+  - a flipped nested-pools verdict fires the comparator (7 of 8);
+  - a dropped vbatch END line STOPs the run;
+  - an existing output root STOPs before any boot.
+- **Order:**
+  - board 1 now, output `t3-run-b3-e7af48457-b1/httpd`;
+  - board 2 after the second wave's coordinator prints `C2 DONE` (the Juliet spatial sample ends), HT_SUB `httpd-n2`.
+    Graded against the reference and, by n2-grade.py, against board 1's reading.
+- **Predictions, each as bitstream 2 read them:**
+  - **virtual-malloc: 9 of 9 MISSED** (apr-pool 1, buckets 8);
+  - **virtual-nested-pools: 9 of 9 CAUGHT, cause 25 in read_probe**, attributed by probe;
+  - every cell the same as the reference (1 of 1, 1 of 1, 8 of 8, 8 of 8), and board 2 0 different from board 1;
+  - controls: bounds-malloc and uaf-malloc fault on every arm. node-released-90 and piece-filed-90 complete on malloc and
+    fault on nested pools. The uaf-malloc control may read the silicon-only cause 13; it is a control, not a cell;
+  - all four boots complete on each board; readings 0.
+- Any other reading is a finding about bitstream 3.
