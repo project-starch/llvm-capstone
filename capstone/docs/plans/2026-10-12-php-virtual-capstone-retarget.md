@@ -2391,3 +2391,14 @@ no chain existed; the chain rule now attributes them, which the pre-registration
 because it was written for CRASH-057's shape. Both are the exact-bounds arm's spatial catches,
 the class the four earlier extra catches of that arm belong to. They are accepted as catches with
 this note; the sensitivity CAUGHT count of virtual-nested-exact rises by two on asan-blind.
+
+### run12 re-judged under the corrected rule (`corpus-run12-judged`, the same records, no boot)
+
+Against run11: default temporal 0 of 76 and sensitivity temporal 0 of 76 -- CRASH-068 reads
+CAUGHT on every arm again, through ra, as predicted. default asan-blind 4 of 184 and sensitivity
+asan-blind 6 of 184: CRASH-092 out of the denominator on every arm (pre-registered), CRASH-057
+CAUGHT on virtual-nested-pools and virtual-nested-exact in the sensitivity scoring
+(pre-registered), CRASH-008 and CRASH-073 CAUGHT on virtual-nested-exact (the two explained
+exact-arm catches). Nothing else moved. This is the follow-up lane's measurement; the platform
+it was taken on is the one every later PHP run uses: the 8 MiB-stack SDK with line tables for the
+musl objects, the launcher that records the frame chain, both platform probes in every run.

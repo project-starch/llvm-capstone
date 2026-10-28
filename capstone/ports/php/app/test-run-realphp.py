@@ -279,6 +279,12 @@ def observation_cases():
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
                     platform_present=False)
     check("a case without the declaration ignores the probe", verdicts.judge(obs, exact)[0], verdicts.MISSED)
+    # the precondition decides BEFORE the run's outcome: a watchdog kill (the hang the absent
+    # behaviour causes, CRASH-092) is out of the denominator, not infra
+    obs = R.observe("CRASH-092", pp_spec, "php-real-object", SHA, "VM_EXIT_TIMEOUT:30_x_crash-092\nKilled\n", 137,
+                    controls(probe=None), False, "/x", "/y", platform_present=False)
+    check("a watchdog kill with the precondition proven absent is out of the denominator",
+          verdicts.judge(obs, pools)[:2], (verdicts.NO_READING, "out-of-denominator"))
 
     # Caught on the STOCK arm, so no control arm completed and stock_reached is False. The
     # fault in the declared function is itself the proof the trigger ran: without that route

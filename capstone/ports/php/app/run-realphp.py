@@ -532,6 +532,22 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     obs = verdicts.Observation(case=case, arm=arm, image_sha256=image_sha, controls=controls)
     native = spec["pristine_outcome"]
     note(obs, f"native PHP: {native}")
+    # THE PLATFORM PRECONDITION FIRST, before the run's own outcome is read: it is a statement
+    # about applicability, not about this run. The defect needs a libc behaviour this arm's probe
+    # PROVED absent -- putenv keeping an empty-name string (CRASH-084), select rejecting an
+    # out-of-range tv_usec (CRASH-092) -- so what the run did, complete, hang or fault, is not a
+    # reading of the protection; a hang in particular is the absent behaviour's own symptom.
+    # Not a crash and not infra: the case declares it cannot run on this platform.
+    pp = spec.get("platform_precondition")
+    if pp and platform_present is False:
+        obs.infra = "out-of-denominator"
+        obs.notes = (f"declared platform precondition not met on this libc: {pp['needs']}; the "
+                     f"{pp['probe']} probe found it absent on this arm (control held), so the "
+                     f"behaviour the defect needs does not exist here -- not a reading of the protection")
+        return obs
+    if pp and platform_present is None:
+        note(obs, f"declared platform precondition {pp['needs']!r} was not checked in this run "
+                  f"(no usable {pp['probe']} probe result); judged as if met")
     # NO PREMISE, SO NO PAIR. The corpus's own pristine record says native PHP does not
     # complete this case -- it crashes with no capability platform anywhere near it -- so there
     # is nothing here for an arm to catch or miss and the cell is out of the denominator.
@@ -590,19 +606,6 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         obs.notes = ((f"the seam refused the pointer efree was given, by name: " if code in (3, 4)
                       else f"the seam failed: ") + f"code={code} {fail.group(2)[:90]}")
         return obs
-    pp = spec.get("platform_precondition")
-    if pp and platform_present is False:
-        # The defect needs a libc behaviour this arm's probe PROVED absent: the dangling
-        # reference it is about never comes to be here, so there is no protection to read.
-        # Not a crash and not infra: the case declares it cannot run on this platform.
-        obs.infra = "out-of-denominator"
-        obs.notes = (f"declared platform precondition not met on this libc: {pp['needs']}; the "
-                     f"{pp['probe']} probe found it absent on this arm (control retained), so the "
-                     f"defect's dangling reference cannot exist here -- not a reading of the protection")
-        return obs
-    if pp and platform_present is None:
-        note(obs, f"declared platform precondition {pp['needs']!r} was not checked in this run "
-                  f"(no usable {pp['probe']} probe result); judged as if met")
     fault = verdicts.domain_fault(text, None)
     if fault is not None and fault.cause == CAUSE_RESOURCE:
         obs.infra = "infra"
