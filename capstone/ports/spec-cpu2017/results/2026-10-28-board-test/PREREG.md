@@ -124,3 +124,50 @@ T1, with step 12000 s and twin census-q34/505.mcf_r-test.
 
 kit-q34-16, which set `node_flat_records=65536` through sysfs, cannot test the old P9 anyway: the parameter is
 read-only after insmod (0444), so the batch refuses it.
+
+## Addendum 2 (2026-10-28, before any boot it names): x264 test, and the first train wave
+
+**Infrastructure changed for these boots.** Neither change touches the board, the kit or the images.
+- The booking hub accepts bookings of up to 24 h (fpga-lab f0e0654; the old limit was 8 h). A train command that
+  cannot be split runs longer than 8 h.
+- Both consoles' upload limits go to 256 MiB (fpga1 B15, fpga2 B20).
+- The project's 26,000,000-byte bake cap is unchanged, and every stage below fits under it.
+
+**Correctness oracles.**
+- Unmodified train commands use host specdiff against SPEC's own train references. The outputs come back in-band,
+  gzip+base64 over the UART; gcc's `.s` files go in-band with `--inband-max 8388608`.
+- imagick and x264 train also run imagevalidate on the target against the staged references.
+- x264 test, one arm per boot, is staged without its references, which would push it over the cap. Its verdict is
+  the frame hashes against the twin's `census-q34/525.x264_r-test`, plus T1 = T3. The run reads host specdiff 0/3
+  there by construction.
+
+**Boot list.** One arm per boot, the known-good control first. Steps are sized from the native-ratio estimate at
+CPI 4.5, which is above the 3.6-3.7 the board read on imagick test, capped below the 24 h booking.
+
+| boot | step s | booking min | estimate at CPI 3.75 |
+|---|---|---|---|
+| 538.imagick_r train T1 / T3 | 75600 | 1290 | 16.5 h |
+| 519.lbm_r train T1 / T3 | 21600 | 390 | 4.5 h |
+| 525.x264_r train T1 / T3 | 50400 | 870 | 10.3 h |
+| 525.x264_r test T1 / T3 | 61200 | 1050 | 12.8 h |
+| 505.mcf_r train T1 / T3 | 36000 | 630 | 7.4 h |
+| 502.gcc_r train T1 | 46800 | 810 | 9.6 h |
+| 544.nab_r train T1 / T3 | 82800 | 1410 | 20.2 h |
+
+nab is last on each board: at CPI 4.27 or above, its 439e9-instruction command outlives the booking.
+
+**Predictions, train wave:**
+- **P11.** Every command ends with rc 0, every specdiff and imagevalidate PASSes, and T1 and T3 outputs are
+  byte-identical.
+- **P12.** The board time per arm falls within ±35 % of the CPI-3.75 estimate above. The estimate is native x86
+  train/test instruction ratio × the twin's exact test count, good to tens of percent.
+- **P13.** mcf train fits in memory: native peak 613 MiB, and mcf test pinned 681 MiB on the twin.
+- **P14.** gcc train T1 completes. Its native peak is 693 MiB for 200.c, the largest of the three commands. A pin or
+  OOM failure there is a capacity reading, not a correctness one.
+- **P15.** T3/T1 of in-context cycles is within 0.97-1.05 for lbm, imagick, nab and x264.
+
+Not in this wave:
+- **xz train:** 24 MB of input exceeds the bake cap.
+- **perlbench train:** waits for the twin check of the lib-trimmed stage and its negative control.
+- **gcc train T3:** 816k live objects against 262,144 records.
+- **perlbench test T1/T3:** waits for the twin re-run of the relative-`$^X` stage.
