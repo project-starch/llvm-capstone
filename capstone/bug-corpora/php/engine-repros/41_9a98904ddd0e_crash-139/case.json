@@ -17,20 +17,20 @@
    "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
    "verdict": "MISSED",
    "verdict_note": "reached (the stock arm ran this case to its normal end, the corpus's pristine record says it completes, and revocation-sanity completed on this arm) and completed with no fault; native PHP: OK; nodes allocated 3833, table capacity 262144 (cumulative, not a high-water: reported, not gated)",
-   "verdict_from": "results/2026-10-28-run16/bundle-virtual-malloc"
+   "verdict_from": "results/2026-10-28-run17/bundle-virtual-malloc"
   },
   "virtual-nested-pools": {
    "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
    "verdict": "NO-READING",
-   "verdict_note": "the seam refused the pointer efree was given, by name: code=3 free of a pointer this heap did not issue, or not at its start a=0x3fbd646f5b b=0x0 (block",
-   "verdict_from": "results/2026-10-28-run16/bundle-virtual-nested-pools",
+   "verdict_note": "the seam refused the pointer efree was given, by name: code=3 free of a pointer this heap did not issue, or not at its start a=0x3f85e469f2 b=0x0 (block",
+   "verdict_from": "results/2026-10-28-run17/bundle-virtual-nested-pools",
    "verdict_reason": "unattributed"
   },
   "virtual-nested-exact": {
    "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
    "verdict": "NO-READING",
-   "verdict_note": "the seam refused the pointer efree was given, by name: code=3 free of a pointer this heap did not issue, or not at its start a=0x3f9da46f5b b=0x0 (block",
-   "verdict_from": "results/2026-10-28-run16/bundle-virtual-nested-exact",
+   "verdict_note": "the seam refused the pointer efree was given, by name: code=3 free of a pointer this heap did not issue, or not at its start a=0x3fb6e469f2 b=0x0 (block",
+   "verdict_from": "results/2026-10-28-run17/bundle-virtual-nested-exact",
    "verdict_reason": "unattributed"
   }
  },

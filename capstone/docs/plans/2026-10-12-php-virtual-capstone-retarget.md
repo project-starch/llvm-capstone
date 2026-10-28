@@ -2770,3 +2770,15 @@ for cell: every verdict, reason and attribution identical (560 cells per scoring
 arm's sanity run still prints the PHP_VIRTUAL SEAM line and the arm-ordering gate passes; no
 transcript carries "PHP_VIRTUAL SEAM armed". The image and probe hashes differ, which is the
 change. Any mover voids the simplification until explained here.
+
+### run17 (`corpus-run17`, tree 1891bea735e9, out-lt8s): as pre-registered
+
+The seam image rebuilt from the reduced seam on out-lt8's SDK (image afd3e239 -> 1ddce979, seam
+probe 331a7c30 -> 813898ae; the old image carried cap_arm_report, cap_report_once and
+cap_report_dtor, the new one cap_report alone). Neither image contains zend_cap_widen,
+php_fault_report or zend_cap_block_end: the linker had already discarded php_virtual_lower.c's
+functions, so dropping it from the link changes what the port brings, not the binary. Both boots
+rc 0. Against run16: 560 cells, every verdict, reason and attribution identical; every arm's
+sanity run prints the seam's exit line (revokes 0 on stock and the system allocator, 6375 on both
+nested arms), the cross-arm gates pass, and no transcript carries the "armed" line, which 292 of
+run16's 296 transcripts did. run17 is the current record.
