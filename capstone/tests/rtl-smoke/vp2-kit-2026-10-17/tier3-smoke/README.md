@@ -10586,3 +10586,53 @@ Pre-registered at lane commit 90227d3792f0; the prediction holds.
   - SEQ reads caplifive_vp2c_e7af48457, and the booking was 472.
 - **Records:** `records/b3bs-pg-pools-b1.result-lines.txt` and `records/b3-pg-pools-b1.board.txt`, the latter being
   score-arm.sh's per-cell lines.
+
+### The corpus on bitstream 3, second wave: mruby, perl and Juliet temporal (board 1), the new arms and the Juliet spatial sample (board 2), pre-registered (2026-10-28 10:2x, before any boot)
+
+- **Why:** the rest of the corpus regression on the bitstream that fixes R-62 and R-63. These are the arms bitstream 2
+  read after its re-read, each at N=2 there, equal cell for cell across boards except the rand-driven Juliet `_12`
+  draws and one uaf-control step. So any difference here is evidence about bitstream 3.
+- **What runs:** `tier3-corpus2-b3.sh <log> <re-read log b1> <re-read log b2>`.
+  - Each board starts when its 23-arm re-read (`tier3-reread-b3.sh`, pre-registered at f1cb1f9d347c) prints
+    `RR seq-<board> DONE`. A re-read that STOPs or HOLDs, or has not ended within 6 h, holds that board.
+  - **Board 1:** mruby stock, mruby Sublet, perl stock and Sublet, then Juliet temporal.
+  - **Board 2:** the new arms (xlang, plane-malloc, plane-nested, capi in six groups, each boot preceded by its
+    measure-only bake under the 26,000,000 B cap and the image gate), then the Juliet spatial sample.
+  - Within a board, each runner starts only when the previous returned 0, as on bitstream 2.
+- **The runners** are the bitstream-2 runners with only the board side changed:
+  - `tier3-mp-stock-b3.sh`, `tier3-mp-sublet-b3.sh`, `tier3-mp-perl-b3.sh`, `tier3-newarms-b3.sh`,
+    `tier3-juliet-b3.sh` and `tier3-juliet-spatial-b3.sh`;
+  - each generated from its `-b2` version by asserted substitutions on code lines only: the kits bkit11-b3-b<board>
+    (and bkit11-b3-mb<board> for the measure-only bakes), BOARD_BITSTREAM=caplifive_vp2c_e7af48457, the output root
+    `t3-run-b3-e7af48457-b<board>/`, the kit-identity messages and "bitstream 3" in the booking text;
+  - module 215a09be, the references (the bitstream-2 twin's, batch-refs-b2/rest), images, runner trees (wt-ref
+    6764d96229f6, wt-ref2 15ced322c824, wt-newarms bcf5f1724110), SDK and grades are bitstream 2's, unchanged.
+- **Dry runs**, every board call stubbed:
+  - `records/dryrun-w2-b3.txt`, against the real references. A planted cell fires each comparator (mruby 22 of 23,
+    plane 0 of 1, Juliet temporal 734 of 735, spatial 1512 of 1513). A failed control reads VOID. perl-sublet fed
+    perl-stock's matrix reads 7 of 11. An over-cap measure refuses, and so does the real image gate on an empty bake.
+  - `records/dryrun-corpus2-b3.txt`, the coordinator: both re-reads done, board 1's re-read stopped, a runner
+    returning 1, and board 2's re-read past the wait limit.
+- **Checked against bitstream 3's open ISSUES rows:**
+  - R-64 and R-66: the static census over every bitstream-2 corpus image (`records/b2bs-r64-r66-census.txt`) covers
+    these arms' images, and finds no site that can observe either. R-65 cannot be counted statically.
+  - Q-31 and Q-34 are not in the FPU, and their bitstream-2 readings are the predictions below.
+  - None changes a prediction.
+- **Predictions: each arm reads what bitstream 2's board read.**
+  - mruby stock 23 of 23 (fault 20, completed 3) and mruby Sublet 23 of 23 (fault 23), both "control smoke ok";
+  - perl stock 11 of 11 and perl Sublet 11 of 11, controls eval and shim True;
+  - xlang: verdicts-compare 15 of 15 (repro) and 13 of 13 (lua-cdp). compare-pilot reads repro 4 of 15 on its
+    no-image cells.
+  - plane 1 of 1 on each arm;
+  - capi: verdicts-compare equal in all six groups. compare-pilot reads 13-16 as 3 of 4. The 13-16 boot's pc=0 count
+    is 1, row 13's predicted `cause=12 pc=0x0`.
+  - Every measured firmware under the cap.
+  - **Juliet temporal**, juliet-obs-compare against the reference:
+    - census differences only in rand-driven `_12` draws (bitstream 2 read 9) and uaf-control steps at the
+      silicon-only cause 13;
+    - **seeded 56 of 56.**
+  - **Juliet spatial:** 1513 of 1513, the three tolerated CWE170 cases reported. The one named exception is a
+    `controls:ctl-uaf` cell differing by cause 13 at control_read_probe+0x38 (1 of 48 steps on bitstream 2's N=2).
+  - Readings 0 elsewhere.
+- **Any other difference** is a finding about bitstream 3, reported cell by cell. Its first suspect is a
+  division-dependent path. The coordinator's END rc says only whether a script ran; the grade is the compare lines.
