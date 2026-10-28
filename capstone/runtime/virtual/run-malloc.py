@@ -57,7 +57,7 @@ def main():
     symbols = {name: int(value, 16) for value, _, name in
                (line.split() for line in subprocess.check_output([str(nm), str(a.application)],
                                                                 text=True).splitlines() if len(line.split()) == 3)}
-    required = {'cap_malloc_fault_store', 'cap_malloc_validate', 'cap_malloc_invalid_free'}
+    required = {'cap_malloc_fault_store', 'cap_malloc_validate', 'cap_malloc_invalid_free', 'cap_malloc_reclaim'}
     if not required <= symbols.keys():
         p.error('application lacks current safety sites; rebuild its SDK and relink')
     elf = a.application.read_bytes()
@@ -103,7 +103,7 @@ CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot
 echo MALLOC_HOT_EXIT:$?
 CAPSTONE_VM_TRACE=1 ./capstone-vexec malloc.dom hot-service-control
 echo MALLOC_HOT_CONTROL_EXIT:$?
-for case in stale inplace-stale remap-stale bounds stale-free reuse-stale reuse-free interior-free; do
+for case in stale inplace-stale remap-stale bounds stale-free reuse-stale reuse-free interior-free nested-ok nested-stale nested-grandchild nested-double; do
   ./capstone-vexec malloc.dom "$case"''' + survive + '''
   echo MALLOC_DENIAL_EXIT:$case:$?
 done
@@ -161,6 +161,12 @@ echo VIRTUAL_STAGED_DONE
         sites = {'reuse-stale': None, 'reuse-free': None, 'stale': None, 'inplace-stale': None,
                  'remap-stale': (25, 'cap_malloc_fault_store'), 'bounds': (28, 'cap_malloc_fault_store'),
                  'stale-free': (2, 'cap_malloc_invalid_free'), 'interior-free': (2, 'cap_malloc_invalid_free')}
+    # The nested-allocator trio (heap.c derive/object/reclaim, the shape PHP's emalloc uses) is
+    # explicit CDERIVE/CREVOKE and so is judged under BOTH heap configurations: the control
+    # completes; a reclaimed child faults when used; a grandchild the caller derived is not the
+    # heap's child (29 at the CREVOKE); a child reclaimed twice is dead the second time (25 there).
+    sites.update({'nested-ok': None, 'nested-stale': (25, 'cap_malloc_fault_store'),
+                  'nested-grandchild': (29, 'cap_malloc_reclaim'), 'nested-double': (25, 'cap_malloc_reclaim')})
     for name, site in sites.items():
         if site is None:
             match = re.search(r'MALLOC_FAULT_READY:' + re.escape(name) + r'\n(.*?)MALLOC_DENIAL_EXIT:' +

@@ -1966,3 +1966,180 @@ mount; that is the whole basis of the result and nothing here changes it.
 `ports/musl-capstone/{prepare-musl-capstone.sh,runtime/string_bounds_safe.c}`,
 `bug-corpora/tools/verdicts.py`, `runtime/host/capstone_vm/cli.py`, `capstone/sublet/sublet.h`.
 (`borrow-aligned-block.h` is deliberately *not* on this list — see the allocator section.)
+
+
+## 2026-10-28 — the seam on the libc's reclaim
+
+### What changed, and why
+
+The seam measured on 2026-10-27 (run5, run6, run7, 520 cells identical) carried 886 lines beside
+its 41-line patch: a hash index and a record heap (`zend-cap-backing.c`, 189 lines), a record
+per block with eleven fields, three hook functions, six failure codes and a double-free report
+(`zend-cap-blocks.c`, 496 lines), and the geometry and mode header (`zend-cap-port.h`, 201
+lines). All of it answered one question at `_efree`: given the caller's pointer, which block is
+it, and how does PHP keep a live reference to that block after the caller's lifetime has ended.
+
+That question is already answered inside the libc. `runtime/virtual/heap.c` keeps a slot record
+per object -- the issued child with MANAGE, indexed by address (`__capstone_malloc_find`) -- and
+every nested allocator in the tree (pymalloc, mruby, memsys5, memcached, postgres, perl, wmem)
+re-derived the same answer in its own way. The seam's index was a duplicate of the heap's.
+
+An ISA extension was considered first (`CREVOKE rd, ancestor, child` returning the parent) and
+reviewed by Codex (SOUND WITH CHANGES, two P1: the compact-bounds result can decode out of
+window, R-60's class; and a client can derive a grandchild at the same address, so an ancestor
+reclaim cannot replace the allocator's identity check). The decisive fact was
+`runtime/virtual/mallocng.md`: the lifetime forest is mapping ancestor (kernel-retained) ->
+managed group -> issued object, so no single user-space ancestor exists and the ancestor rule
+buys a wrapper allocator nothing the libc's direct parent does not. No ISA change.
+
+The replacement is two libc calls, `runtime/virtual/heap.c`:
+
+- `__capstone_malloc_derive(object, offset, size)`: a child of a malloc'd object on the heap's own
+  node budget (`ensure_ids`/`take_id`, the path malloc's own child takes); NULL when the table
+  cannot grow.
+- `__capstone_malloc_reclaim(child, offset)`: ends the caller's child and returns the issued
+  object, cursor at its start. The block is found by the child's BASE minus `offset`; a key that
+  is in no slot record is refused like an interior free (`cap_malloc_invalid_free`). The
+  revocation is `CREVOKE(issued object, child)` at the labelled site `cap_malloc_reclaim`, so
+  CREVOKE's direct-parent rule IS the identity check: a grandchild the client derived is cause
+  29, a child already ended (a double efree) cause 25, both inside the allocator.
+
+The PHP seam becomes `zend-cap-mode.{h,c}` (the arm, four counters, the atexit lines, and the
+three calls the macros make) and the patch loses its one added statement: `ZEND_CAP_HEADER(ptr)`
+is the reclaim, so the payload's lifetime ends in the first line of `_efree` and everything
+below it runs on the block's own reference. Seven hunks, 31 added lines, no `ZEND_CAP_RETIRE`.
+
+Two semantics are NOT kept, recorded here rather than discovered later:
+
+- `_erealloc` with `allow_failure` (PHP's `erealloc_recoverable`): the caller's child ends before
+  the `realloc`; on failure the caller legally holds its old pointer, which is now dead. The
+  previous seam allocated first and retired on success. The corpus's triggers do not reach
+  `erealloc_recoverable`; if one did, it would read as a cause-25 fault in the caller.
+- The double-free report by name (`ZEND_CAP_DOUBLE_FREE`) is gone; a double efree is a cause-25
+  fault at `cap_malloc_reclaim`, which `run-realphp.py` does not attribute (the fault is in the
+  libc, two frames from PHP, and the one-hop `ra` rule reads leaves only). run7 showed no
+  double-free line on any arm, so no cell depends on it. `run-cases.py` reads the new shape.
+
+### Pre-registration (written before the run)
+
+Platform: the p13 kit at dev's QEMU pin a9936e7037 (`qemu-pin2-build`), the adapter of run7,
+the SDK rebuilt from this tree (`PHP_VIRTUAL_FRESH_SDK=1`, because `heap.c` is in it), both
+PHP images and `probe-seam.dom` rebuilt. The corpus run is run7's command line.
+
+1. `build-virtual.sh inert`: PATCH IS INERT, and the control differs.
+2. `probe-seam.dom` stages: 0, 4, 6, 8 exit 0 with their PASS lines; 1, 2, 3, 5, 9 exit 139 with
+   cause 25 after their `expect a fault` line; 7 prints the `rounded`/`exact` report lines, the
+   rounded read survives, the exact read faults with cause 28 at index 9; 10 exits 139 with cause
+   25 at `cap_malloc_reclaim`; 11 exits 139 with cause 29 at `cap_malloc_reclaim`. Stage 6's
+   counters read retires=0 revokes=0.
+3. `run-malloc.py` on `malloc.dom` from this tree's `malloc-contract.c`: every prior case as
+   recorded, plus `nested-ok` survives, `nested-stale` 25 at `cap_malloc_fault_store`,
+   `nested-grandchild` 29 at `cap_malloc_reclaim`, `nested-double` 25 at `cap_malloc_reclaim`.
+4. The corpus, default scoring: all 520 cells (verdict, reason, cause, symbol, offset,
+   attribution, reach, infra, precondition, controls) equal to run7's `final/default`.
+5. The corpus, sensitivity scoring (`--score-oracle-crashes`): equal to run7's `final/sens` except
+   the cells the old seam's OWN failure decided. In run7 the stock arm printed
+   `ZEND_CAP_FAIL code=3 header of a pointer this layer did not issue` on CRASH-057 (asan-blind)
+   and CRASH-118 (temporal-asan-visible): the old seam looked every efree up even with nothing
+   revoked, and a pointer PHP frees that it did not emalloc missed the index. The new stock arm
+   is upstream arithmetic, so those two runs now read what pristine PHP does on the virtual
+   platform. Predicted to change: CRASH-057 on all four arms (run7: NO-READING, reason
+   setup-fault on each, the stock failure voiding the pair) and CRASH-118 on stock and block
+   (run7: NO-READING setup-fault; object and exact CAUGHT, unchanged). What they become is NOT
+   predicted beyond "not setup-fault": the native record for both is SIGNAL:11.
+6. The SEAM line: `issues` and `retires` on the object and exact arms equal run7's `issues` and
+   `retires` per case (one child per issue, one reclaim per efree); `revokes` equals `retires`
+   (one CREVOKE each, where the old seam counted the same); `splits` and `reallocs` read 0.
+
+### run8 (02:08Z), what it found, and the pre-registration of run9
+
+run8 on the tree 98f4544dfdbe read 0 of 76 cells different on temporal-asan-visible (default) and
+10 / 21 / 6 different on the other three comparisons. Codex's review of the same commit (NOT READY,
+five P1) named the causes before the cells were read, and the cells agree:
+
+- `emalloc(0)`: the block was the 48-byte header alone and the one-byte child lay outside it --
+  cause 29 in `__capstone_malloc_derive` on CRASH-031/069/083/086/097 (the nested arms). The previous
+  seam rounded every block to a 16-byte grain, at least 64 bytes. Restored.
+- the stock and system-allocator arms' bounds: modes 0 and 4 handed out `p + 48` with the BLOCK's bounds, mode 6 a
+  child bounded to the payload, so the temporal pair no longer differed in revocation alone
+  (CRASH-097 read a cause-28 catch on stock and block). Restored: every arm narrows the caller's
+  pointer to the payload; those two arms recover the header by a non-ending lookup
+  (`__capstone_malloc_object`).
+- mode 0 revoked through `realloc`: the libc's realloc ends the old issued child, so stock read
+  cause-25 catches on CRASH-046/083/117/155 and a cause-25 setup-fault on CRASH-038. Restored:
+  `ZEND_DO_REALLOC` is a fresh block, a copy, and the old block released or, in mode 0, kept.
+- `_erealloc` ended the caller's child before the realloc could fail. Restored: `_erealloc`'s
+  derivation is the lookup alone (`ZEND_CAP_HEADER`), only `_efree`'s ends (`ZEND_CAP_RECLAIM`).
+- the stock arm's foreign-pointer refusal (CRASH-057, CRASH-118: `ZEND_CAP_FAIL code=3`) was
+  predicted above to change and did (not-reached / cause 24). The refusal is restored in every
+  arm, by name, so those cells are now predicted UNCHANGED from run7: the prediction above was
+  wrong about what the right stock arm is, not about what the run would read.
+- also moved under the lock in heap.c: the CDERIVE of derive and the CREVOKE of reclaim.
+
+Two run8 differences are not yet explained and are the open questions run9 must answer, with a
+new diagnostic line (`CAPSTONE_RECLAIM_MISS`, printed by heap.c before an invalid-free refusal):
+
+- CRASH-139 on the nested arms: run7 completed (MISSED), run8 died at startup in
+  `cap_malloc_invalid_free`, before the script's first output. The refusal now prints the pointer.
+- CRASH-092 on stock and block: run7's watchdog killed it (infra), run8 completed (not-reached).
+  Possibly the run-time behaviour of the previous stock arm's per-efree lookup; possibly timing.
+
+Pre-registration of run9 (tree: the commit after 98f4544dfdbe): every cell of both scorings and
+both populations equal to run7's `final/`, with the exception of CRASH-139 and CRASH-092, whose
+reading is not predicted and will be explained from the diagnostic before any claim. Probe
+stages 0-11 as before, stage 12 (an interior pointer to efree) exits 134 after `ZEND_CAP_FAIL
+code=4`. The malloc gate: as in kit4 (every case, nested included; `real_linux_mremap_growth_and_
+shrink` fails on this kit's platform, shown by the A/B with an SDK from the base tree 672a0deffaa2,
+which fails the same one check and no other).
+
+### run9 (02:36Z, tree c333d1afad25): the pre-registration held
+
+Both PHP images, the seam probe and the SDK rebuilt from c333d1afad25 on run7's platform (QEMU
+pin a9936e7037, adapter-pin2, kernel e833dfb1, firmware 4dd4a2ad, rootfs 62049800); manifest
+written and checked (PASSED). Inert check: PATCH IS INERT, control differs. Probe stages 0-12 as
+pre-registered (12 exits 134 after `ZEND_CAP_FAIL code=4`). Malloc gate: every case, nested
+included; `real_linux_mremap_growth_and_shrink` fails, as it does with the base tree's SDK.
+
+Cells against run7's `final/`, every field (verdict, reason, cause, symbol, offset, attribution,
+reach, infra, precondition, controls):
+
+| scoring | population | cells | differ | which |
+|---|---|---|---|---|
+| default | temporal-asan-visible | 76 | 0 | |
+| default | asan-blind | 184 | 4 | CRASH-139 nested-pools+nested-exact, CRASH-092 stock+virtual-malloc |
+| sensitivity | temporal-asan-visible | 76 | 0 | |
+| sensitivity | asan-blind | 184 | 8 | the same four, plus CRASH-081 on all arms: the fault's symbol reads `zend_cap_block` where it read `zend_cap_block_alloc` (the function was renamed; verdict, cause, reason unchanged) |
+
+No CAUGHT cell changed in either scoring. The two cells the pre-registration left open:
+
+- **CRASH-139** (the nested arms, both scorings): MISSED -> NO-READING setup-fault, `ZEND_CAP_FAIL code=3
+  free of a pointer this heap did not issue, or not at its start a=0x..6df7`. The address is odd and
+  in no block; the trigger's own header says zend_read_property() points a stack zval at a static
+  C string literal with dup=0 and never refcount-initialises it, so whether PHP efrees the literal
+  depends on uninitialised stack residue. run7's seam keyed its lookup on the cursor too and
+  would have refused the same free; the free did not happen in run7's build and does in this one.
+  That is the mechanism the trigger documents, read off the trigger, not measured in the guest.
+  The case's native record is OK (its invalid free does not crash pristine PHP), so it IS in the
+  default denominator: on the two nested arms it moves from MISSED to NO-READING. Codex's re-review
+  ruled the classification: a refusal by name of a pointer in no block (code 3) or not at its
+  start (code 4) is the program's own invalid free observed, not the instrument failing, but
+  nothing ties it to the declared site -- `unattributed`, never `setup-fault` and never a catch. Arm names throughout are the study's: stock, virtual-malloc (the system allocator), virtual-nested-pools (nested), virtual-nested-exact.
+  run-realphp.py and run-cases.py read it so since c333d1afad25's successor.
+- **CRASH-092** (stock and block, both scorings): infra -> not-reached. run7's 40-second watchdog
+  killed the run (`VM_EXIT_TIMEOUT`); run9's completed (`done`, exit 0). The case is the select()
+  loop probe-select.c was written for; what changed its timing is not known. Both readings are
+  NO-READING.
+
+The design claim of this section therefore holds as measured: the seam on the libc's own slot
+record reproduces the 2026-10-27 measurement cell for cell, with the index gone.
+
+### run10 (03:08Z, tree 8569fb7194dc): the geometry checks and the reclassification, measured
+
+The same platform, the SDK, both images and the probe rebuilt from 8569fb7194dc; inert PASS,
+probe stages 0-12 as before, malloc gate as before (the kit's mremap check alone), manifest
+PASSED. Cells against run7's `final/`: default temporal 0 of 76; default asan-blind 4 of 184
+(CRASH-139 nested-pools+nested-exact MISSED -> NO-READING `unattributed`, CRASH-092 stock+virtual-malloc infra ->
+not-reached); sensitivity temporal 1 of 76 (CRASH-118 stock: the refusal's label, setup-fault ->
+unattributed); sensitivity asan-blind 9 of 184 (the four above, CRASH-057 stock's label the same
+way, and CRASH-081's symbol rename on all four arms). No CAUGHT cell changed in any comparison.
+The geometry checks fired on no case: no `ZEND_CAP_FAIL code=5` in any record.

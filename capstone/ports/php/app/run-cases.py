@@ -56,11 +56,12 @@ SEAM_LINE = re.compile(r"PHP_VIRTUAL SEAM blocks=(\d+) frees=(\d+) issues=(\d+) 
                        r"retires=(\d+) revokes=(\d+)")
 # The seam's own failures, which are instrument failures and never verdicts.
 SEAM_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
-SEAM_DOUBLE_FREE = re.compile(r"ZEND_CAP_DOUBLE_FREE key=(0x[0-9a-f]+)")
 # A fault inside the seam's own code is a port artefact, not a catch. Named here because the
 # physical column learned it the expensive way: a fault in the allocator looks exactly like a
-# fault in the program when all you have is a pc.
-SEAM_OWN_FILES = ("zend-cap-blocks.c", "zend-cap-backing.c", "zend_alloc.c")
+# fault in the program when all you have is a pc. heap.c is on the list since the seam's reclaim
+# moved into the libc: a refusal at cap_malloc_reclaim (a double efree, a pointer that is not the
+# issued child) is the allocator refusing, which this runner does not credit as a catch.
+SEAM_OWN_FILES = ("zend-cap-mode.c", "zend_alloc.c", "runtime/virtual/heap.c")
 
 
 def suite_text():
@@ -336,9 +337,12 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
 
     fail = SEAM_FAIL.search(text)
     if fail:
-        # The instrument ran out or found its own invariant broken. Never a verdict.
-        obs.infra = "infra"
-        obs.notes = f"the seam failed: code={fail.group(1)} {fail.group(2)[:80]}"
+        # Codes 3 and 4: the seam refused the pointer efree was given, by name (in no block of
+        # this heap, or not at its start) -- the program's own invalid free, unattributed. Every
+        # other code: the instrument ran out or found its own invariant broken. Never a verdict.
+        code = int(fail.group(1))
+        obs.infra = "unattributed" if code in (3, 4) else "infra"
+        obs.notes = f"the seam {'refused the pointer' if code in (3, 4) else 'failed'}: code={code} {fail.group(2)[:80]}"
         return obs
     if rc is None:
         obs.infra = "infra"
@@ -352,15 +356,6 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
     if revokes is not None:
         obs.notes = f"revokes={revokes} retires={retires}"
 
-    double = SEAM_DOUBLE_FREE.search(text)
-    if double:
-        # Two efrees of the same pointer with no allocation between: CWE-415, caught by name at
-        # a labelled site rather than left to corrupt AG(cache).
-        obs.fault = verdicts.Fault(cause=0, pc=0, symbol="zend_cap_retire")
-        obs.attribution = "probe"
-        obs.attribution_evidence = (f"ZEND_CAP_DOUBLE_FREE at {double.group(1)}: the same block "
-                                    f"retired twice with no issue in between")
-        return obs
 
     fault = verdicts.domain_fault(text, sites.symbols)
     if fault is not None:

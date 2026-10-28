@@ -6,6 +6,7 @@
 #include <errno.h>
 #ifdef __CAPSTONE_PURECAP__
 #include "vm.h"
+#include <malloc_capstone.h>
 #endif
 static void *volatile saved;
 /* Keeps the denial cases' size class populated, so that freeing the probed object never
@@ -348,6 +349,56 @@ int main(int argc, char **argv)
     anchored = malloc(100); require(anchored != NULL, "anchor allocation");
     char *p = malloc(100); require(p != NULL, "fault allocation"); saved = p;
     anchored_with(p);
+#ifdef __CAPSTONE_PURECAP__
+    /* THE NESTED-ALLOCATOR PAIR (heap.c __capstone_malloc_derive / _reclaim), in the shape PHP's
+     * emalloc uses it: a 48-byte header the allocator keeps, a payload child the caller gets.
+     * nested-ok is the positive control and must complete: derive, write, reclaim gives the object
+     * back at its own address, the header is still writable, a fresh child over the same bytes
+     * works, and the object frees. The three denials: the reclaimed child faults when used
+     * (nested-stale, 25 at the store); a grandchild the caller derived for itself is not the
+     * allocator's child and is refused (nested-grandchild, 29 at cap_malloc_reclaim); a child
+     * reclaimed twice is dead the second time (nested-double, 25 at cap_malloc_reclaim). */
+    if (!strncmp(mode, "nested-", 7)) {
+        char *child = __capstone_malloc_derive(p, 48, 40);
+        require(child != NULL, "nested derive");
+        require(__builtin_capstone_cap_get_base(child) == (uintptr_t)p + 48 &&
+                __builtin_capstone_cap_get_end(child) == (uintptr_t)p + 88, "nested child bounds");
+        memset(child, 'c', 40);
+        if (!strcmp(mode, "nested-grandchild")) {
+            char *grand = __capstone_malloc_derive(child, 0, 16);
+            require(grand != NULL, "nested grandchild derive");
+            puts("MALLOC_FAULT_READY:nested-grandchild"); fflush(stdout);
+            __capstone_malloc_reclaim(grand, 48);
+            return survived(mode, may_survive);
+        }
+        require(__capstone_malloc_object(child, 48) == p, "nested object lookup finds the block");
+        char *back = __capstone_malloc_reclaim(child, 48);
+        require(back != NULL && __builtin_capstone_cap_get_cursor(back) == (uintptr_t)p,
+                "nested reclaim returns the object at its start");
+        if (!strcmp(mode, "nested-stale")) {
+            puts("MALLOC_FAULT_READY:nested-stale"); fflush(stdout); fault_store(child);
+            return survived(mode, may_survive);
+        }
+        if (!strcmp(mode, "nested-double")) {
+            puts("MALLOC_FAULT_READY:nested-double"); fflush(stdout);
+            __capstone_malloc_reclaim(child, 48);
+            return survived(mode, may_survive);
+        }
+        if (!strcmp(mode, "nested-ok")) {
+            char *again;
+            puts("MALLOC_FAULT_READY:nested-ok"); fflush(stdout);
+            memset(back, 'h', 48);                        /* the header, after the child ended */
+            again = __capstone_malloc_derive(back, 48, 40); /* the cache hit: a fresh child */
+            require(again != NULL, "nested re-derive");
+            memset(again, 'd', 40);
+            require(__capstone_malloc_reclaim(again, 48) == back, "nested second reclaim");
+            free(back);
+            puts("MALLOC_SURVIVED:nested-ok"); fflush(stdout);
+            return 0;
+        }
+        return 2;
+    }
+#endif
     if (!strcmp(mode, "inplace-stale")) {
         uintptr_t old = (uintptr_t)p;
         p = realloc(p, 101);
