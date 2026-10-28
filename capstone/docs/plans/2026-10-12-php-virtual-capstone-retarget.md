@@ -2655,3 +2655,13 @@ frame chain), CRASH-008 on virtual-nested-exact (both scorings; the chain throug
 strcat). The tables' "of which by chain" column therefore reads, over the 49 CWE-416 cases in the
 sensitivity scoring: stock 1, system allocator 1, nested 2, nested exact 2 (068 and 057), and over
 all 65: nested exact 3 (008 besides). Nothing else moves.
+
+### run15 re-judged a second time (`corpus-run15-judged2`, tree f9079b6f1e8e): as pre-registered
+
+Four passes from the stored transcripts (10:13 UTC). Against the first re-judge: no verdict or
+reason differs (520 cells); the attribution class changes to `chain` on exactly the twelve cells
+pre-registered -- CRASH-068 on all four arms in both scorings, CRASH-057 on both nested arms in the
+sensitivity scoring, CRASH-008 on virtual-nested-exact in both -- and on none other. The record
+`results/2026-10-28-run15/` carries these bundles; every record's README and the corpus README now
+show "of which by chain" (run7's and run10's columns read 0: their bundles were judged before the
+class existed, and are kept as judged).

@@ -107,12 +107,12 @@ Over the 49 CWE-416 cases, from `results/2026-10-28-run15/README.md` (identical 
 
 **Default scoring** (the 23 native crashers out of the denominator):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 1 | 21 | infra 1, not-reached 2, out-of-denominator 24 |
-| system allocator | 10 | 11 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
-| nested | 23 | 0 | infra 2, out-of-denominator 24 |
-| nested exact | 23 | 0 | infra 2, out-of-denominator 24 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 1 | 1 | 21 | infra 1, not-reached 2, out-of-denominator 24 |
+| system allocator | 10 | 1 | 11 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
+| nested | 23 | 1 | 0 | infra 2, out-of-denominator 24 |
+| nested exact | 23 | 1 | 0 | infra 2, out-of-denominator 24 |
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
@@ -123,12 +123,12 @@ Over the 49 CWE-416 cases, from `results/2026-10-28-run15/README.md` (identical 
 
 **Sensitivity scoring** (every case scored by fault site; reported beside the default, never instead):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 2 | 21 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 3 |
-| system allocator | 23 | 11 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 2 |
-| nested | 46 | 0 | infra 2, out-of-denominator 1 |
-| nested exact | 46 | 0 | infra 2, out-of-denominator 1 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 2 | 1 | 21 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 3 |
+| system allocator | 23 | 1 | 11 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 2 |
+| nested | 46 | 2 | 0 | infra 2, out-of-denominator 1 |
+| nested exact | 46 | 2 | 0 | infra 2, out-of-denominator 1 |
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
@@ -138,7 +138,7 @@ Over the 49 CWE-416 cases, from `results/2026-10-28-run15/README.md` (identical 
 - nested exact: 19 of 19 / 27 of 30
 
 Read with the plan document (`docs/plans/2026-10-12-php-virtual-capstone-retarget.md`, runs 8 to 14):
-the system allocator's catches are a strict subset of the nested arms'; CRASH-084 is out of the
+the system allocator's catches are a strict subset of the nested arms'; a catch "by chain" is attributed through the call path alone (a fault in a libc copy, scan or write routine, the declared function reached by walking its callers: CRASH-068 through ra on every arm, CRASH-057 through the frame chain on the nested arms) and is the weakest attribution class, shown apart and never counted silently; CRASH-084 is out of the
 denominator because this libc's putenv never creates the dangling reference the defect needs (checked
 by a probe whose transcript names its image and whose hash the record carries); CRASH-075 is `infra` on
 every arm (the 40 s watchdog; the plan document records a separate 600 s run of it, not archived here,

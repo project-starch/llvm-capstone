@@ -13,21 +13,21 @@ Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cel
 
 **all 65 cases** (65):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 6 | 32 | infra 1, not-reached 2, out-of-denominator 24 |
-| system allocator | 15 | 22 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
-| nested | 28 | 10 | infra 2, out-of-denominator 24, unattributed 1 |
-| nested exact | 32 | 4 | infra 2, out-of-denominator 24, unattributed 3 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 6 | 0 | 32 | infra 1, not-reached 2, out-of-denominator 24 |
+| system allocator | 15 | 0 | 22 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
+| nested | 28 | 0 | 10 | infra 2, out-of-denominator 24, unattributed 1 |
+| nested exact | 32 | 0 | 4 | infra 2, out-of-denominator 24, unattributed 3 |
 
 **the CWE-416 cases** (49):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 1 | 22 | infra 1, not-reached 2, out-of-denominator 23 |
-| system allocator | 10 | 12 | infra 1, not-reached 2, out-of-denominator 23, unattributed 1 |
-| nested | 23 | 1 | infra 2, out-of-denominator 23 |
-| nested exact | 23 | 1 | infra 2, out-of-denominator 23 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 1 | 0 | 22 | infra 1, not-reached 2, out-of-denominator 23 |
+| system allocator | 10 | 0 | 12 | infra 1, not-reached 2, out-of-denominator 23, unattributed 1 |
+| nested | 23 | 0 | 1 | infra 2, out-of-denominator 23 |
+| nested exact | 23 | 0 | 1 | infra 2, out-of-denominator 23 |
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
@@ -40,21 +40,21 @@ Lane C's measurement: the seam on the libc's reclaim; against run7 no CAUGHT cel
 
 **all 65 cases** (65):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 7 | 32 | infra 1, not-reached 13, setup-fault 8, unattributed 4 |
-| system allocator | 27 | 22 | infra 1, not-reached 2, setup-fault 10, unattributed 3 |
-| nested | 49 | 10 | infra 2, setup-fault 2, unattributed 2 |
-| nested exact | 53 | 4 | infra 2, setup-fault 2, unattributed 4 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 7 | 0 | 32 | infra 1, not-reached 13, setup-fault 8, unattributed 4 |
+| system allocator | 27 | 0 | 22 | infra 1, not-reached 2, setup-fault 10, unattributed 3 |
+| nested | 49 | 0 | 10 | infra 2, setup-fault 2, unattributed 2 |
+| nested exact | 53 | 0 | 4 | infra 2, setup-fault 2, unattributed 4 |
 
 **the CWE-416 cases** (49):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 2 | 22 | infra 1, not-reached 13, setup-fault 8, unattributed 3 |
-| system allocator | 22 | 12 | infra 1, not-reached 2, setup-fault 10, unattributed 2 |
-| nested | 44 | 1 | infra 2, setup-fault 2 |
-| nested exact | 44 | 1 | infra 2, setup-fault 2 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 2 | 0 | 22 | infra 1, not-reached 13, setup-fault 8, unattributed 3 |
+| system allocator | 22 | 0 | 12 | infra 1, not-reached 2, setup-fault 10, unattributed 2 |
+| nested | 44 | 0 | 1 | infra 2, setup-fault 2 |
+| nested exact | 44 | 0 | 1 | infra 2, setup-fault 2 |
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 

@@ -13,21 +13,21 @@ Lane B's measurement: the corpus at its own head, run7 (the plan document's lane
 
 **all 65 cases** (65):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 6 | 32 | infra 2, not-reached 1, out-of-denominator 24 |
-| system allocator | 15 | 22 | infra 2, not-reached 1, out-of-denominator 24, unattributed 1 |
-| nested | 28 | 11 | infra 2, out-of-denominator 24 |
-| nested exact | 32 | 5 | infra 2, out-of-denominator 24, unattributed 2 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 6 | 0 | 32 | infra 2, not-reached 1, out-of-denominator 24 |
+| system allocator | 15 | 0 | 22 | infra 2, not-reached 1, out-of-denominator 24, unattributed 1 |
+| nested | 28 | 0 | 11 | infra 2, out-of-denominator 24 |
+| nested exact | 32 | 0 | 5 | infra 2, out-of-denominator 24, unattributed 2 |
 
 **the CWE-416 cases** (49):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 1 | 22 | infra 2, not-reached 1, out-of-denominator 23 |
-| system allocator | 10 | 12 | infra 2, not-reached 1, out-of-denominator 23, unattributed 1 |
-| nested | 23 | 1 | infra 2, out-of-denominator 23 |
-| nested exact | 23 | 1 | infra 2, out-of-denominator 23 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 1 | 0 | 22 | infra 2, not-reached 1, out-of-denominator 23 |
+| system allocator | 10 | 0 | 12 | infra 2, not-reached 1, out-of-denominator 23, unattributed 1 |
+| nested | 23 | 0 | 1 | infra 2, out-of-denominator 23 |
+| nested exact | 23 | 0 | 1 | infra 2, out-of-denominator 23 |
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 

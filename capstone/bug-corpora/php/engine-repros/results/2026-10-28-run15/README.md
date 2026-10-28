@@ -1,6 +1,6 @@
 # 2026-10-28-run15
 
-The follow-up lane's measurement and the current record. These bundles are run15's transcripts re-judged under the third review's tree (bbfa6e77dfbf: the faulting frame classified like a chain frame, the launcher's exit line out of the application's output); every verdict and reason is the one the original judge gave, pre-registered and checked cell for cell. Cell-identical to run14 (both scorings, both populations, 520 cells), on an adapter rebuilt from the tree whose launcher names its image when a run ends, so the putenv probe's exclusion of CRASH-084 rests on a transcript that names the recorded image. Platform: the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain and prints its image on exit, the putenv probe. run14 (`../2026-10-28-run14/`) is kept as the record it was; run13 could not be merged (its two boots recorded different probe lists).
+The follow-up lane's measurement and the current record. These bundles are run15's transcripts re-judged under the third review's tree (bbfa6e77dfbf: the faulting frame classified like a chain frame, the launcher's exit line out of the application's output) and again under the fourth's (f9079b6f1e8e: a catch through the call path carries the attribution class `chain`, shown apart below); every verdict and reason is the one the original judge gave, pre-registered and checked cell for cell. Cell-identical to run14 (both scorings, both populations, 520 cells), on an adapter rebuilt from the tree whose launcher names its image when a run ends, so the putenv probe's exclusion of CRASH-084 rests on a transcript that names the recorded image. Platform: the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain and prints its image on exit, the putenv probe. run14 (`../2026-10-28-run14/`) is kept as the record it was; run13 could not be merged (its two boots recorded different probe lists).
 
 - pre-registration (the lane commit the run answers): `009ca7b34b006c0cb51e8d16e6b15deb201bc45b`
 - PHP image (php-real-seam.dom) sha256 `afd3e23961ee69522e6f03007e5db00584940dd29aa7cb2a8c39fd29bcda75ef`
@@ -13,21 +13,21 @@ The follow-up lane's measurement and the current record. These bundles are run15
 
 **all 65 cases** (65):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 6 | 31 | infra 1, not-reached 2, out-of-denominator 25 |
-| system allocator | 15 | 21 | infra 1, not-reached 2, out-of-denominator 25, unattributed 1 |
-| nested | 28 | 9 | infra 2, out-of-denominator 25, unattributed 1 |
-| nested exact | 33 | 3 | infra 2, out-of-denominator 25, unattributed 2 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 6 | 1 | 31 | infra 1, not-reached 2, out-of-denominator 25 |
+| system allocator | 15 | 1 | 21 | infra 1, not-reached 2, out-of-denominator 25, unattributed 1 |
+| nested | 28 | 1 | 9 | infra 2, out-of-denominator 25, unattributed 1 |
+| nested exact | 33 | 2 | 3 | infra 2, out-of-denominator 25, unattributed 2 |
 
 **the CWE-416 cases** (49):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 1 | 21 | infra 1, not-reached 2, out-of-denominator 24 |
-| system allocator | 10 | 11 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
-| nested | 23 | 0 | infra 2, out-of-denominator 24 |
-| nested exact | 23 | 0 | infra 2, out-of-denominator 24 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 1 | 1 | 21 | infra 1, not-reached 2, out-of-denominator 24 |
+| system allocator | 10 | 1 | 11 | infra 1, not-reached 2, out-of-denominator 24, unattributed 1 |
+| nested | 23 | 1 | 0 | infra 2, out-of-denominator 24 |
+| nested exact | 23 | 1 | 0 | infra 2, out-of-denominator 24 |
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
@@ -40,21 +40,21 @@ The follow-up lane's measurement and the current record. These bundles are run15
 
 **all 65 cases** (65):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 7 | 31 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 4 |
-| system allocator | 28 | 21 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 3 |
-| nested | 51 | 9 | infra 2, out-of-denominator 1, unattributed 2 |
-| nested exact | 56 | 3 | infra 2, out-of-denominator 1, unattributed 3 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 7 | 1 | 31 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 4 |
+| system allocator | 28 | 1 | 21 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 3 |
+| nested | 51 | 2 | 9 | infra 2, out-of-denominator 1, unattributed 2 |
+| nested exact | 56 | 3 | 3 | infra 2, out-of-denominator 1, unattributed 3 |
 
 **the CWE-416 cases** (49):
 
-| arm | CAUGHT | MISSED | NO-READING |
-|---|--:|--:|---|
-| stock | 2 | 21 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 3 |
-| system allocator | 23 | 11 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 2 |
-| nested | 46 | 0 | infra 2, out-of-denominator 1 |
-| nested exact | 46 | 0 | infra 2, out-of-denominator 1 |
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 2 | 1 | 21 | infra 2, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 3 |
+| system allocator | 23 | 1 | 11 | infra 1, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 2 |
+| nested | 46 | 2 | 0 | infra 2, out-of-denominator 1 |
+| nested exact | 46 | 2 | 0 | infra 2, out-of-denominator 1 |
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 

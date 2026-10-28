@@ -30,7 +30,7 @@
   "populations": {
     "asan-blind": {
       "cases": 46,
-      "inputs.json": "16c807a6d7383a1a16fa2a2adfad5fe686f0487f49055dbfb00b96eed6731f00",
+      "inputs.json": "8e8139fd429cc22300834a0558a44b94259cc24917a1ad3088fe80d68798a2fd",
       "tally": {
         "CAUGHT": 18,
         "MISSED": 21,
@@ -44,16 +44,16 @@
     },
     "temporal-asan-visible": {
       "cases": 19,
-      "inputs.json": "07a51a58a17b85f68e69c526494c55e9d2d4f1f1863658ed459908c5a74fb38e",
+      "inputs.json": "182d58ac84fbae499a2a108879a11cfd2209d685800868e331c4c7dc366a38ae",
       "tally": {
         "CAUGHT": 10,
         "NO-READING:setup-fault": 8,
         "NO-READING:unattributed": 1
       },
-      "verdicts.jsonl": "45ff4eabc72d139d028486707a7f58e82b47506b756f0bf86f4bb567508bddde"
+      "verdicts.jsonl": "f8962f3d50c40a9473b662c3d200acb170a8aa5d7bd9bb1af6ce11c71f42b968"
     }
   },
-  "pre_registration": "bbfa6e77dfbf2e8979a2ee0603306b157333358f",
+  "pre_registration": "f9079b6f1e8ee48318d2496c1a74ab8823f28e05",
   "scoring": {
     "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27",
     "protective_causes": [

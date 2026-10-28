@@ -16,19 +16,19 @@
   "virtual-malloc": {
    "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
    "verdict": "CAUGHT",
-   "verdict_note": "cause=25 pc=0x3f83001888 in strlen; by function: the fault is in strlen (?:0), outside PHP's tree; the frame chain climbs through nothing to xbuf_format_converter at spprintf.c:518, the function this case declares (fault_sites) in its declared file -- the first frame of PHP's tree above the output plumbing",
+   "verdict_note": "cause=25 pc=0x3f83001888 in strlen; by chain: the fault is in strlen (?:0), outside PHP's tree; the frame chain climbs through nothing to xbuf_format_converter at spprintf.c:518, the function this case declares (fault_sites) in its declared file -- the first frame of PHP's tree above the forwarding routines; attributed by the call path (chain), not by the operand",
    "verdict_from": "results/2026-10-28-run15/bundle-virtual-malloc"
   },
   "virtual-nested-pools": {
    "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
    "verdict": "CAUGHT",
-   "verdict_note": "cause=25 pc=0x3f90001888 in strlen; by function: the fault is in strlen (?:0), outside PHP's tree; the frame chain climbs through nothing to xbuf_format_converter at spprintf.c:518, the function this case declares (fault_sites) in its declared file -- the first frame of PHP's tree above the output plumbing",
+   "verdict_note": "cause=25 pc=0x3f90001888 in strlen; by chain: the fault is in strlen (?:0), outside PHP's tree; the frame chain climbs through nothing to xbuf_format_converter at spprintf.c:518, the function this case declares (fault_sites) in its declared file -- the first frame of PHP's tree above the forwarding routines; attributed by the call path (chain), not by the operand",
    "verdict_from": "results/2026-10-28-run15/bundle-virtual-nested-pools"
   },
   "virtual-nested-exact": {
    "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
    "verdict": "CAUGHT",
-   "verdict_note": "cause=25 pc=0x3f9b801888 in strlen; by function: the fault is in strlen (?:0), outside PHP's tree; the frame chain climbs through nothing to xbuf_format_converter at spprintf.c:518, the function this case declares (fault_sites) in its declared file -- the first frame of PHP's tree above the output plumbing",
+   "verdict_note": "cause=25 pc=0x3f9b801888 in strlen; by chain: the fault is in strlen (?:0), outside PHP's tree; the frame chain climbs through nothing to xbuf_format_converter at spprintf.c:518, the function this case declares (fault_sites) in its declared file -- the first frame of PHP's tree above the forwarding routines; attributed by the call path (chain), not by the operand",
    "verdict_from": "results/2026-10-28-run15/bundle-virtual-nested-exact"
   }
  },
