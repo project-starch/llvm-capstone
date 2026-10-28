@@ -2587,3 +2587,32 @@ differ; the two boots' platform records are equal; the putenv probe's transcript
 `capstone-exec: exit image=probe-putenv.dom sha256=5d65c6d7...`, the digest the record holds, and
 CRASH-084 is excluded on that. CRASH-057's and CRASH-008's chains pass by name as predicted. run15
 is `results/2026-10-28-run15/`, the current record in corpus.json; run14 stays archived beside it.
+
+### The third review (after e9c5abcc4ba8), closed at 51cf4509c6db; two corrections; the re-judge of run15 pre-registered
+
+The third review held the lane NOT READY on one P1 and three P2: (1) the FAULTING frame was
+classified by path only, so a fault pc in `zend_cap_reblock`, `_emalloc` or
+`capstone_delegate_pack` with no line table reached the chain rule and was attributed to its
+callers; (2) the image digest was read anywhere in a transcript, and two DONE lines passed the
+putenv reader; (3) the launcher's new exit line reached the application's output, so 34 stock
+runs of run15 carried a one-line divergence note that run14's did not (verdicts unaffected); (4)
+run10's README said every hash differs from run7's (the kernel's is the same), and the run13/run15
+pre-registrations named "run7's QEMU". 51cf4509c6db closes (1) to (3) and the README; the controls are
+in test-run-realphp.py.
+
+**Correction to the run13 and run15 pre-registrations' platform naming.** Both say "run7's QEMU
+(qemu-pin2)". The archived records say otherwise: run7 ran on QEMU `28b9ae0fb42a` (lane B's
+pre-registration, dev's pin at the time) and run10, run13, run14 and run15 on `e8a89c014e5a`
+(the pin2 build). The QEMU each run used is the one its record names; the pre-registrations'
+phrase was a mislabel, not a different platform, and every run since run10 used the same QEMU.
+
+**Pre-registration: run15 re-judged (`run15-judged`, the same transcripts, no boot, tree
+51cf4509c6db).** The judge changed (the faulting frame classified; the digest read off the
+launcher's lines; one DONE line; the exit line out of the application's output), so run15's
+records are re-judged from the stored transcripts under this tree. Predictions, cell for cell
+against run15's bundles: every verdict and reason identical, both scorings, both populations; the
+putenv probe reads absent on every arm as before (its transcript's exit line is the launcher's);
+the output-divergence notes on the stock arm return to run14's set (4 rows, not 34), and no other
+note changes except the evidence wording of chain attributions. The re-judged bundles replace
+run15's in `results/2026-10-28-run15/` (the record is the same measurement; the pre-fix bundles
+stay in git history at e9c5abcc4ba8).
