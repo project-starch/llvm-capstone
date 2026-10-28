@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdio.h>
+#include <unistd.h>
 #include <malloc_capstone.h>
 #include <capstone/capability.h>
 #include "vm.h"
@@ -441,35 +443,54 @@ void free(void *p)
 }
 void __libc_free(void *p) { free(p); }
 
-/* THE NESTED-ALLOCATOR PAIR: what an allocator layered on malloc needs at its own alloc and free,
+/* THE NESTED-ALLOCATOR TRIO: what an allocator layered on malloc needs at its own alloc and free,
  * and nothing else. An application allocator that hands out sub-objects of a malloc'd block (PHP's
  * emalloc: a 48-byte header, then the payload) must at ITS free find the block's own authority
  * from the caller's pointer and keep a live reference to the block after the caller's lifetime
  * has ended. Both are in this heap's slot record already -- the issued object with MANAGE, indexed
  * by address -- so every such allocator was rebuilding this index for itself (ports/php's seam
- * carried 886 lines of it). These two calls are the index, exported.
+ * carried 886 lines of it). These calls are the index, exported.
  *
  * derive: a child of the issued object `object`, over [object + offset, + size), on this heap's
  * node budget (the same ensure_ids/take_id path malloc's own child takes, so a nested allocator
  * cannot exhaust the table the heap reserved against). NULL when the table cannot be grown, never
  * a fault: the caller decides what an unprotected object means in its arm.
  *
- * reclaim: the caller's child ends, and the issued object that holds it comes back, cursor at its
- * start. The block is found by the child's BASE minus `offset`, the same offset derive was given,
- * so a child that was narrowed from below (its base moved) misses the index and is refused like an
- * interior free. CREVOKE's direct-parent rule is the identity check: a grandchild the client
- * derived for itself is cause 29, a child already ended is cause 25, both at cap_malloc_reclaim.
- * The parent is the record's issued object, never the caller's reference, so the authority that
- * ends the child is the heap's. */
+ * object: the issued object that holds `child`, cursor at its start, or NULL when no slot record
+ * has that block. Nothing ends. The block is found by the child's BASE minus `offset`, the same
+ * offset derive was given, so a child narrowed from below (its base moved) is not found.
+ *
+ * reclaim: object, and the caller's child ends. A missing block is refused like an interior free
+ * (cap_malloc_invalid_free), after one diagnostic line. CREVOKE's direct-parent rule is the
+ * identity check: a grandchild the client derived for itself is cause 29, a child already ended is
+ * cause 25, both at cap_malloc_reclaim. The parent is the record's issued object, never the
+ * caller's reference, so the authority that ends the child is the heap's. Lookup, validation and
+ * the CREVOKE run under the heap lock, so a concurrent free or realloc of the same object cannot
+ * end the parent between the two. */
+static struct capstone_malloc_slot *slot_of_child(void *child, size_t offset)
+{
+    size_t key = __builtin_capstone_cap_get_base(child) - offset;
+    for (struct capstone_malloc_slot *q = index_heads[bucket(key)]; q; q = q->next)
+        if (q->key == key) return (q->kind == SLOT_PUBLIC && q->issued) ? q : NULL;
+    return NULL;
+}
 void *__capstone_malloc_derive(void *object, size_t offset, size_t size)
 {
     if (!object || !size) return NULL;
     lock_heap();
-    int ok = ensure_ids(1) == 0;
-    if (ok) take_id();
+    void *child = NULL;
+    if (ensure_ids(1) == 0) { take_id(); child = capstone_cap_derive(object, offset, size); }
     unlock_heap();
-    if (!ok) return NULL;
-    return capstone_cap_derive(object, offset, size);
+    return child;
+}
+void *__capstone_malloc_object(void *child, size_t offset)
+{
+    if (!child) return NULL;
+    lock_heap();
+    struct capstone_malloc_slot *r = slot_of_child(child, offset);
+    void *object = r ? r->issued : NULL;
+    unlock_heap();
+    return object;
 }
 __attribute__((noinline)) static void reclaim_child(void *parent, void *child)
 {
@@ -479,15 +500,24 @@ __attribute__((noinline)) static void reclaim_child(void *parent, void *child)
 void *__capstone_malloc_reclaim(void *child, size_t offset)
 {
     if (!child) return NULL;
-    size_t key = __builtin_capstone_cap_get_base(child) - offset;
     lock_heap();
-    struct capstone_malloc_slot *r = NULL;
-    for (struct capstone_malloc_slot *q = index_heads[bucket(key)]; q; q = q->next)
-        if (q->key == key) { r = q; break; }
-    void *object = (r && r->kind == SLOT_PUBLIC) ? r->issued : NULL;
+    struct capstone_malloc_slot *r = slot_of_child(child, offset);
+    void *object = r ? r->issued : NULL;
+    if (object) reclaim_child(object, child);
     unlock_heap();
-    if (!object) invalid_free();
-    reclaim_child(object, child);
+    if (!object) {
+        /* One line before the refusal, so a run that dies here says which pointer: a free of a
+         * pointer this heap did not issue reads otherwise exactly like a port defect. */
+        char line[160];
+        int n = snprintf(line, sizeof line,
+                         "CAPSTONE_RECLAIM_MISS base=0x%lx cursor=0x%lx end=0x%lx offset=%lu tag=%d\n",
+                         (unsigned long)__builtin_capstone_cap_get_base(child),
+                         (unsigned long)__builtin_capstone_cap_get_cursor(child),
+                         (unsigned long)__builtin_capstone_cap_get_end(child), (unsigned long)offset,
+                         (int)__builtin_capstone_cap_get_tag(child));
+        if (n > 0) write(2, line, (size_t)n < sizeof line ? (size_t)n : sizeof line - 1);
+        invalid_free();
+    }
     return object;
 }
 void *calloc(size_t n, size_t size)

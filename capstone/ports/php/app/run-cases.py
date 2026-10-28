@@ -58,8 +58,10 @@ SEAM_LINE = re.compile(r"PHP_VIRTUAL SEAM blocks=(\d+) frees=(\d+) issues=(\d+) 
 SEAM_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
 # A fault inside the seam's own code is a port artefact, not a catch. Named here because the
 # physical column learned it the expensive way: a fault in the allocator looks exactly like a
-# fault in the program when all you have is a pc.
-SEAM_OWN_FILES = ("zend-cap-mode.c", "zend_alloc.c")
+# fault in the program when all you have is a pc. heap.c is on the list since the seam's reclaim
+# moved into the libc: a refusal at cap_malloc_reclaim (a double efree, a pointer that is not the
+# issued child) is the allocator refusing, which this runner does not credit as a catch.
+SEAM_OWN_FILES = ("zend-cap-mode.c", "zend_alloc.c", "runtime/virtual/heap.c")
 
 
 def suite_text():
@@ -359,16 +361,7 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
         func, where = sites.locate(fault.pc, int(m.group(1), 16)) if m else ("", "")
         obs.notes = (obs.notes + "; " if obs.notes else "") + (f"{func} at {where}" if where else "")
         at_site = bool(expect) and expect in (where or "")
-        if func == "reclaim_child":
-            # The libc's reclaim refused the pointer efree was given, at cap_malloc_reclaim
-            # (runtime/virtual/heap.c): a block ended twice with no issue between (CWE-415,
-            # cause 25) or a pointer that is not the issued child (cause 29). Caught by the
-            # instruction's own identity check, at a labelled site in the allocator.
-            obs.attribution = "probe"
-            obs.attribution_evidence = (f"the libc refused the reclaim at cap_malloc_reclaim "
-                                        f"(cause {fault.cause}): the same block ended twice, or "
-                                        f"a pointer that is not the issued child")
-        elif any(f in (where or "") for f in SEAM_OWN_FILES):
+        if any(f in (where or "") for f in SEAM_OWN_FILES):
             obs.attribution_evidence = (f"fault at {where} is inside the port's own allocator, "
                                         f"not in the program under test")
         elif stock_completed:

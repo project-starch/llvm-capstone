@@ -26,6 +26,7 @@
  *   9  the PLATFORM column on a REAL free: must fault
  *  10  a double efree: the second reclaim faults INSIDE the libc, at cap_malloc_reclaim
  *  11  a grandchild the caller derived for itself is refused by the reclaim (cause 29)
+ *  12  an interior pointer handed to efree is refused by name (ZEND_CAP_FAIL code=4)
  *
  * Stage 6 is what makes 1, 2, 3 and 5 mean anything: it is the same access on an arm whose
  * only difference is that efree does not revoke. If stage 6 faulted too, the faults above
@@ -181,11 +182,12 @@ int main(int argc, char **argv)
         memset(pay, 'z', 32);
         report("before  ", pay);
         say("S5 realloc to 96 bytes");
-        /* What _erealloc does: reclaim (which ends the caller's child), realloc the block,
-         * issue the new payload. */
-        hdr = zend_cap_reclaim(pay, HDR);
-        grown = realloc(hdr, (size_t)BLOCK_FOR(96));
-        if (!grown) { say("S5 FAIL: realloc returned NULL"); return 1; }
+        /* What _erealloc does: recover the block WITHOUT ending anything, take a fresh block
+         * with the old contents (the old block released, which ends the caller's child with
+         * it), issue the new payload. */
+        hdr = zend_cap_header(pay, HDR);
+        grown = zend_cap_reblock(hdr, (size_t)BLOCK_FOR(96), HDR + 32);
+        if (!grown) { say("S5 FAIL: reblock returned NULL"); return 1; }
         {
             void *newpay = zend_cap_issue(grown, HDR, 96);
             unsigned long i;
@@ -325,6 +327,13 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    say("usage: probe-seam 0|1|2|3|4|5|6|7|8|9|10|11");
+    if (stage == 12) {
+        say("S12 handing an INTERIOR pointer (payload + 1) to efree (expect ZEND_CAP_FAIL code=4, exit 134)");
+        efree_like((char *)pay + 1, 0);
+        say("S12 RESULT: NO REFUSAL -- an interior pointer was accepted as the issued payload.");
+        return 1;
+    }
+
+    say("usage: probe-seam 0|1|2|3|4|5|6|7|8|9|10|11|12");
     return 2;
 }

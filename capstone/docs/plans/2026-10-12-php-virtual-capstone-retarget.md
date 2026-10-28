@@ -2050,3 +2050,44 @@ PHP images and `probe-seam.dom` rebuilt. The corpus run is run7's command line.
 6. The SEAM line: `issues` and `retires` on the object and exact arms equal run7's `issues` and
    `retires` per case (one child per issue, one reclaim per efree); `revokes` equals `retires`
    (one CREVOKE each, where the old seam counted the same); `splits` and `reallocs` read 0.
+
+### run8 (02:08Z), what it found, and the pre-registration of run9
+
+run8 on the tree 98f4544dfdbe read 0 of 76 cells different on temporal-asan-visible (default) and
+10 / 21 / 6 different on the other three comparisons. Codex's review of the same commit (NOT READY,
+five P1) named the causes before the cells were read, and the cells agree:
+
+- `emalloc(0)`: the block was the 48-byte header alone and the one-byte child lay outside it --
+  cause 29 in `__capstone_malloc_derive` on CRASH-031/069/083/086/097 (seam arms). The previous
+  seam rounded every block to a 16-byte grain, at least 64 bytes. Restored.
+- the control arms' bounds: modes 0 and 4 handed out `p + 48` with the BLOCK's bounds, mode 6 a
+  child bounded to the payload, so the temporal pair no longer differed in revocation alone
+  (CRASH-097 read a cause-28 catch on stock and block). Restored: every arm narrows the caller's
+  pointer to the payload; the controls recover the header by a non-ending lookup
+  (`__capstone_malloc_object`).
+- mode 0 revoked through `realloc`: the libc's realloc ends the old issued child, so stock read
+  cause-25 catches on CRASH-046/083/117/155 and a cause-25 setup-fault on CRASH-038. Restored:
+  `ZEND_DO_REALLOC` is a fresh block, a copy, and the old block released or, in mode 0, kept.
+- `_erealloc` ended the caller's child before the realloc could fail. Restored: `_erealloc`'s
+  derivation is the lookup alone (`ZEND_CAP_HEADER`), only `_efree`'s ends (`ZEND_CAP_RECLAIM`).
+- the stock arm's foreign-pointer refusal (CRASH-057, CRASH-118: `ZEND_CAP_FAIL code=3`) was
+  predicted above to change and did (not-reached / cause 24). The refusal is restored in every
+  arm, by name, so those cells are now predicted UNCHANGED from run7: the prediction above was
+  wrong about what the right stock arm is, not about what the run would read.
+- also moved under the lock in heap.c: the CDERIVE of derive and the CREVOKE of reclaim.
+
+Two run8 differences are not yet explained and are the open questions run9 must answer, with a
+new diagnostic line (`CAPSTONE_RECLAIM_MISS`, printed by heap.c before an invalid-free refusal):
+
+- CRASH-139 on the seam arms: run7 completed (MISSED), run8 died at startup in
+  `cap_malloc_invalid_free`, before the script's first output. The refusal now prints the pointer.
+- CRASH-092 on stock and block: run7's watchdog killed it (infra), run8 completed (not-reached).
+  Possibly the run-time behaviour of the previous stock arm's per-efree lookup; possibly timing.
+
+Pre-registration of run9 (tree: the commit after 98f4544dfdbe): every cell of both scorings and
+both populations equal to run7's `final/`, with the exception of CRASH-139 and CRASH-092, whose
+reading is not predicted and will be explained from the diagnostic before any claim. Probe
+stages 0-11 as before, stage 12 (an interior pointer to efree) exits 134 after `ZEND_CAP_FAIL
+code=4`. The malloc gate: as in kit4 (every case, nested included; `real_linux_mremap_growth_and_
+shrink` fails on this kit's platform, shown by the A/B with an SDK from the base tree 672a0deffaa2,
+which fails the same one check and no other).

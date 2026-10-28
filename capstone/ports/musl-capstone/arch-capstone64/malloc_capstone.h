@@ -28,9 +28,11 @@ void __capstone_malloc_slot_release(struct capstone_malloc_slot *);
 void __capstone_malloc_nested_release(struct capstone_malloc_slot *);
 void *__capstone_malloc_prepare_free(void *);
 struct capstone_malloc_slot *__capstone_malloc_find(const void *);
-/* The nested-allocator pair (heap.c): a child of a malloc'd object on the heap's node budget, and
- * the object back from one of its children after ending that child. See heap.c for the contract. */
+/* The nested-allocator trio (heap.c): a child of a malloc'd object on the heap's node budget; the
+ * object back from one of its children (NULL when no slot record has it, nothing ends); the same
+ * after ending that child (a missing block is refused). See heap.c for the contract. */
 void *__capstone_malloc_derive(void *object, size_t offset, size_t size);
+void *__capstone_malloc_object(void *child, size_t offset);
 void *__capstone_malloc_reclaim(void *child, size_t offset);
 void *__capstone_mallocng_malloc(size_t);
 void *__capstone_mallocng_realloc(void *, size_t);

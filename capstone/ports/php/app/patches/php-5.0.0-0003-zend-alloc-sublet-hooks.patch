@@ -1,39 +1,47 @@
 --- a/Zend/zend_alloc.c	2026-10-12 23:52:28.171295147 +0100
 +++ b/Zend/zend_alloc.c	2026-10-12 23:52:28.171295147 +0100
-@@ -57,6 +57,32 @@
+@@ -57,6 +57,40 @@
  #define ZEND_DO_REALLOC(ptr, size)	realloc(ptr, size)
  #endif
  
 +#ifdef ZEND_CAP_SUBLET
-+/* THE CAPABILITY SEAM. The caller's pointer is a CDERIVE child of the malloc'd block, bounded to
-+ * its own object, so no capability spans the 48-byte header and the payload. _efree ends that
-+ * child through the libc's reclaim, which hands back the block's own reference at the header, so
-+ * everything below the first line of _efree -- p->size, p->cached, the AG(cache) park,
-+ * REMOVE_POINTER_FROM_LIST -- runs on live memory exactly as upstream. The arm (PHP_CAP_MODE),
-+ * the counters and the three calls live in zend-cap-mode.h; there is no state per block.
++/* THE CAPABILITY SEAM. The caller's pointer is bounded to its own object in every arm -- a
++ * CDERIVE child of the malloc'd block with a lifetime of its own in the revoking arms -- so no
++ * capability the caller holds spans the 48-byte header. _efree ends that child through the
++ * libc's reclaim, which hands back the block's own reference at the header, so everything below
++ * the first line of _efree -- p->size, p->cached, the AG(cache) park, REMOVE_POINTER_FROM_LIST --
++ * runs on live memory exactly as upstream. _erealloc recovers the block without ending anything,
++ * takes a fresh block, and releases the old one only once the copy is made. The arm
++ * (PHP_CAP_MODE), the counters and the calls live in zend-cap-mode.h; there is no state per block.
 + *
-+ * EVERY HUNK IN THIS FILE IS BEHIND THIS DEFINE. With it absent the three macros below expand
-+ * to exactly the arithmetic they replace and the file compiles to the same object as the
-+ * pristine source, which the build asserts with cmp rather than trusting. */
++ * EVERY HUNK IN THIS FILE IS BEHIND THIS DEFINE. With it absent the macros below expand to
++ * exactly the arithmetic they replace and the file compiles to the same object as the pristine
++ * source, which the build asserts with cmp rather than trusting. */
 +# include "zend-cap-mode.h"
 +# undef ZEND_DO_MALLOC
 +# undef ZEND_DO_FREE
++# undef ZEND_DO_REALLOC
++# define ZEND_CAP_HDR               (sizeof(zend_mem_header) + MEM_HEADER_PADDING)
 +# define ZEND_DO_MALLOC(size)       zend_cap_block(size)
 +# define ZEND_DO_FREE(ptr)          zend_cap_release(ptr)
-+# define ZEND_CAP_HDR               (sizeof(zend_mem_header) + MEM_HEADER_PADDING)
-+/* p -> the caller's child over the payload; ptr -> the block, by RECLAIM rather than arithmetic:
-+ * the caller's capability cannot reach the header, and ends in that same call. */
++/* The old block's request is still in p->size when _erealloc reallocates: the copy length. */
++# define ZEND_DO_REALLOC(ptr, size) zend_cap_reblock((ptr), (size), ZEND_CAP_HDR + ((zend_mem_header *)(ptr))->size)
++/* p -> the caller's pointer over the payload; ptr -> the block, by LOOKUP rather than arithmetic,
++ * since the caller's capability cannot reach the header. _efree's lookup also ENDS the caller's
++ * lifetime (RECLAIM); _erealloc's and _mem_block_check's do not (HEADER). */
 +# define ZEND_CAP_PAYLOAD(p, size)  zend_cap_issue((p), ZEND_CAP_HDR, (size))
-+# define ZEND_CAP_HEADER(ptr)       ((zend_mem_header *) zend_cap_reclaim((ptr), ZEND_CAP_HDR))
++# define ZEND_CAP_HEADER(ptr)       ((zend_mem_header *) zend_cap_header((ptr), ZEND_CAP_HDR))
++# define ZEND_CAP_RECLAIM(ptr)      ((zend_mem_header *) zend_cap_reclaim((ptr), ZEND_CAP_HDR))
 +#else
 +# define ZEND_CAP_PAYLOAD(p, size)  ((void *)((char *)(p) + sizeof(zend_mem_header) + MEM_HEADER_PADDING))
 +# define ZEND_CAP_HEADER(ptr)       ((zend_mem_header *) ((char *)(ptr) - sizeof(zend_mem_header) - MEM_HEADER_PADDING))
++# define ZEND_CAP_RECLAIM(ptr)      ZEND_CAP_HEADER(ptr)
 +#endif
 +
  #if ZEND_DEBUG
  # define END_MAGIC_SIZE sizeof(long)
  static long mem_block_end_magic = MEM_BLOCK_END_MAGIC;
-@@ -165,7 +191,7 @@
+@@ -165,7 +199,7 @@
  #endif
  		p->cached = 0;
  		p->size = size;
@@ -42,7 +50,7 @@
  	} else {
  #endif
  #if ZEND_DEBUG
-@@ -213,7 +239,7 @@
+@@ -213,7 +247,7 @@
  #endif
  
  	HANDLE_UNBLOCK_INTERRUPTIONS();
@@ -51,16 +59,16 @@
  }
  
  #include "zend_multiply.h"
-@@ -247,7 +273,7 @@
+@@ -247,7 +281,7 @@
  
  ZEND_API void _efree(void *ptr ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
  {
 -	zend_mem_header *p = (zend_mem_header *) ((char *)ptr - sizeof(zend_mem_header) - MEM_HEADER_PADDING);
-+	zend_mem_header *p = ZEND_CAP_HEADER(ptr);
++	zend_mem_header *p = ZEND_CAP_RECLAIM(ptr);
  	DECLARE_CACHE_VARS();
  	TSRMLS_FETCH();
  
-@@ -317,7 +343,7 @@
+@@ -317,7 +351,7 @@
  		return _emalloc(size ZEND_FILE_LINE_RELAY_CC ZEND_FILE_LINE_ORIG_RELAY_CC);
  	}
  
@@ -69,7 +77,7 @@
  
  #if defined(ZTS) && TSRM_DEBUG
  	if (p->thread_id != tsrm_thread_id()) {
-@@ -367,7 +393,7 @@
+@@ -367,7 +401,7 @@
  	p->size = size;
  
  	HANDLE_UNBLOCK_INTERRUPTIONS();
@@ -78,7 +86,7 @@
  }
  
  
-@@ -657,7 +683,7 @@
+@@ -657,7 +691,7 @@
  
  ZEND_API int _mem_block_check(void *ptr, int silent ZEND_FILE_LINE_DC ZEND_FILE_LINE_ORIG_DC)
  {

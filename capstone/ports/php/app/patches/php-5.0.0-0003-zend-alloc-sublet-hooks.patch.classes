@@ -10,11 +10,12 @@ the list macros, not the cache policy, not the control flow of any function. The
 statement to the file: it is seven substitutions of an expression.
 
   hunk 1  after the ZEND_DO_* macro chain
-          Adds the seam's own block: the include of zend-cap-mode.h, ZEND_DO_MALLOC and
-          ZEND_DO_FREE redirected to the seam's counted malloc and its arm-dependent free, and
-          the two ZEND_CAP_* macros with their inert fallbacks. This is the only hunk that adds
-          more than one line of code. ZEND_DO_REALLOC is NOT redirected: realloc is reclaim
-          (hunk 6) then realloc then issue (hunk 7), and the libc's realloc is what moves bytes.
+          Adds the seam's own block: the include of zend-cap-mode.h, the three ZEND_DO_*
+          macros redirected to the seam's counted 16-grained malloc, its arm-dependent free
+          and its move-always realloc, and the three ZEND_CAP_* macros with their inert
+          fallbacks. This is the only hunk that adds more than one line of code.
+          ZEND_DO_REALLOC reads the old request from p->size, which _erealloc overwrites only
+          AFTER the realloc: that is the copy length of the fresh block.
 
   hunk 2  _emalloc, the AG(cache) HIT return
           (void *)((char *)p + sizeof(zend_mem_header) + MEM_HEADER_PADDING)
@@ -27,14 +28,15 @@ statement to the file: it is seven substitutions of an expression.
   hunk 3  _emalloc, the FRESH return -- same substitution.
 
   hunk 4  _efree, the header derivation
-          (zend_mem_header *)((char *)ptr - 48) -> ZEND_CAP_HEADER(ptr)
+          (zend_mem_header *)((char *)ptr - 48) -> ZEND_CAP_RECLAIM(ptr)
           By RECLAIM, not arithmetic: the caller's capability is bounded to its own object and
           cannot reach the header at all, which is what makes an under-read below the object
           catchable. The reclaim is the libc's (__capstone_malloc_reclaim): it ends the caller's
           child and returns the block from its own slot record. So the payload's lifetime ends in
           the FIRST line of _efree, and everything below it -- p->size, p->cached = 1, the park
           itself, REMOVE_POINTER_FROM_LIST and ZEND_DO_FREE -- runs against the block's own
-          reference, live, exactly as upstream.
+          reference, live, exactly as upstream. An interior pointer, or one in no block of this
+          heap, is refused by name before anything ends (ZEND_CAP_FAIL code 4 / 3).
           THIS IS WHERE THE PHYSICAL PORT HAD TO DEVIATE. With one capability spanning header
           and payload, revoking the caller's pointer killed the header too, so that port
           hoisted REMOVE_POINTER_FROM_LIST above the revoke and made it unconditional -- a
@@ -46,13 +48,12 @@ statement to the file: it is seven substitutions of an expression.
           no longer a concern.
 
   hunk 5  _erealloc, the header derivation (p = orig = ...) -> ZEND_CAP_HEADER(ptr).
-          The caller's child ends HERE, before the realloc. `orig` is load-bearing in upstream:
-          the failure path does ADD_POINTER_TO_LIST(orig), so the old block must still be alive
-          after a failed realloc -- it is, because orig is the block's own reference. What is
-          NOT preserved on that path is the caller's old pointer: a recoverable realloc that
-          fails leaves the caller holding a child that has already ended. PHP 5.0.0 takes that
-          path only through erealloc_recoverable, which the corpus's triggers do not reach;
-          it is recorded here as the one semantic the seam does not keep.
+          The LOOKUP alone: nothing ends here. `orig` is load-bearing in upstream: the failure
+          path does ADD_POINTER_TO_LIST(orig), so the old block must still be alive after a
+          failed realloc, and so must the caller's pointer into it. ZEND_DO_REALLOC (hunk 1)
+          takes a fresh block, copies, and releases the old one only then -- which, in the
+          arms that return blocks to the heap, is what ends the caller's old child, with the
+          block. On failure nothing has changed.
 
   hunk 6  _erealloc, the payload return -- same substitution as hunks 2 and 3. Note the
           upstream text here has no spaces around the + signs, which is why it is a separate

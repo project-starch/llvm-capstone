@@ -371,6 +371,7 @@ int main(int argc, char **argv)
             __capstone_malloc_reclaim(grand, 48);
             return survived(mode, may_survive);
         }
+        require(__capstone_malloc_object(child, 48) == p, "nested object lookup finds the block");
         char *back = __capstone_malloc_reclaim(child, 48);
         require(back != NULL && __builtin_capstone_cap_get_cursor(back) == (uintptr_t)p,
                 "nested reclaim returns the object at its start");
