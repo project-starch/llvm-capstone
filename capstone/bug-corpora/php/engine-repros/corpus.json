@@ -6,7 +6,7 @@
     "version": "5.0.0",
     "port": "capstone/ports/php/app"
   },
-  "cases": 65,
+  "cases": 70,
   "case_schema": "script-trigger",
   "case_number_base": 1,
   "required_arms": [
@@ -17,7 +17,7 @@
   "status": "built",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
-    "true": 65
+    "true": 70
   },
   "checker": "capstone/bug-corpora/tools/check-corpus.py",
   "related": [

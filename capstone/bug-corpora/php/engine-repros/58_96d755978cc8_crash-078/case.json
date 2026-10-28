@@ -33,7 +33,7 @@
   }
  },
  "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
- "note": "population: temporal-asan-visible -- a CWE-416 that ASan reports with zend_alloc.c as shipped (the stockalloc run): efree reached free(), so a detector at the libc boundary sees it; the control population. Collected by the corpus as history-5x-stdext (historical-known, confidence high).",
+ "note": "population: temporal-asan-visible -- a temporal defect (CWE-416) that ASan reports with zend_alloc.c as shipped (the stockalloc run, ASAN:heap-use-after-free) and that the patched build reports as ASAN:heap-use-after-free: the release reached free(), so a detector at the libc boundary sees it; the control population. Collected by the corpus as history-5x-stdext (historical-known, confidence high).",
  "fault_site_files": {
   "array_key_compare": "ext/standard/array.c"
  }
