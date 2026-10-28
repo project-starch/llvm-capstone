@@ -2545,3 +2545,37 @@ run14 is recorded as `results/2026-10-28-run14/` (default and sensitivity bundle
 with the tables from `tools/result-tables.py`), and corpus.json names its three arm bundles as the
 current verdicts; `derive-verdicts.py` wrote them into every case.json. Lane B's run7 and lane C's
 run10 are recorded beside it as `results/2026-10-27-run7/` and `results/2026-10-28-run10/`.
+
+### The second review (after c97713073a01), closed at 6dcdb1d92414, and run15's pre-registration
+
+The second adversarial review held the lane NOT READY on two P1 and two P2 findings, each
+reproduced with a counterexample: (1) a chain frame with a symbol and no line table passed every
+barrier, which keyed on the path (`zend_cap_reblock@?:0`, `_estrndup@?:0`,
+`capstone_delegate_pack@?:0`), and a routine of main/output.c that owns buffers
+(`php_start_ob_buffer`) passed as plumbing by directory; (2) a probe transcript that named no image
+could still exclude a case, since the guard rejected only a digest that was present and wrong;
+(3) a probe transcript reporting a call twice kept the last line; (4) the declared file matched by
+bare suffix across a directory boundary, and the records' prose claimed more than the bundles hold
+(run10 "the same launcher as run7", the archived records "runs 5, 6 and 7 agree", "22 of 49 differ"
+read as a boundary measurement). 6dcdb1d92414 closes each; the controls are in test-run-realphp.py.
+
+The chain rule now passes a frame through BY NAME only (FORWARDING in run-realphp.py: musl's copies,
+scans and write path, the delegate's call path, PHP 5.0.0's php_body_write ->
+php_ub_body_write(_no_header) -> sapi_cli_ub_write -> sapi_cli_single_write); the seam and the
+allocator are recognised by symbol as well as by path; any other frame outside PHP's tree is a
+barrier, and any other frame inside it is the owner. A probe reading needs the transcript to name
+exactly the recorded image, which needs the launcher to print its image on a run that ends
+(`capstone-exec: exit image=... sha256=...`, runtime/virtual/exec.c, under the diagnostics gate
+the fault record uses). That is a launcher change, so run15 boots on an adapter rebuilt from this
+tree; the images stay out-lt8's.
+
+**run15 pre-registration (tree: this commit; platform-res3 = run7's QEMU and images-v7 with the
+adapter from this tree; out-lt8 images; the putenv probe; watchdog 40 s; both populations, both
+scorings).** Predictions against run14, cell for cell: identical, both scorings, both populations.
+In particular CRASH-057 stays CAUGHT on both nested arms (its chain is dl_call, dl_transfer,
+__capstone_delegate_call, write, sapi_cli_single_write, sapi_cli_ub_write,
+php_ub_body_write_no_header, php_body_write, all on the forwarding list, then php_var_dump in
+ext/standard/var.c); CRASH-008 stays CAUGHT on virtual-nested-exact (strcpy, strcat, then php_date
+in ext/standard/datetime.c); CRASH-068 stays CAUGHT through ra; CRASH-073 stays unattributed;
+CRASH-084 stays out of the denominator, now on a probe transcript that names its image. Any mover
+voids the reading until explained here. The two boots' platform records must be equal.
