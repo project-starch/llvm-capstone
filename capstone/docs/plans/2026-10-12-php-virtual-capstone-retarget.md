@@ -2402,3 +2402,11 @@ CAUGHT on virtual-nested-pools and virtual-nested-exact in the sensitivity scori
 exact-arm catches). Nothing else moved. This is the follow-up lane's measurement; the platform
 it was taken on is the one every later PHP run uses: the 8 MiB-stack SDK with line tables for the
 musl objects, the launcher that records the frame chain, both platform probes in every run.
+
+### The final re-judge (`corpus-run12-judged`, tree 334c49ca47c1): the precondition decides first
+
+Against run11, both scorings: temporal 0 of 76; asan-blind 6 (default) and 8 (sensitivity) of
+184 -- CRASH-092 out of the denominator on all four arms (the nested arms read infra before the
+reorder, their hang being the absent behaviour's own symptom), CRASH-057 CAUGHT on both nested
+arms in the sensitivity scoring, CRASH-008 and CRASH-073 CAUGHT on virtual-nested-exact. Nothing
+else. This is the follow-up lane's measurement.
