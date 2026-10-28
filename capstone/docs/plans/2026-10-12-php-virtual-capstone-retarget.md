@@ -2689,3 +2689,29 @@ Four passes (10:27 UTC). Against the second re-judge: no verdict, reason or attr
 (520 cells); the twelve chain cells' reach evidence reads "faulted in <routine>, whose call path
 reaches <site>"; all sixteen bundles carry the scoring mark; the putenv probe reads absent on every
 arm. The run15 record carries these bundles. The derived verdicts are unchanged.
+
+## 2026-10-28: one PHP corpus, and run16
+
+The sibling corpus (corpus/php-5-temporal, 56 temporal cases from the same source corpus) and this
+one are merged into this one at df8210de5774: 47 cases were in both, five more default-build temporal
+cases are admitted as 66 to 70 (CRASH-012, -062, -070, -148, -161), the sibling's four fullext
+cases stay out. 70 cases, 55 temporal.
+
+**run16 pre-registration (tree: this commit; platform-res3 and out-lt8 as run15; the putenv probe;
+watchdog 40 s; both populations, both scorings, the whole corpus).**
+
+- The first 65 cases: every verdict, reason and attribution identical to `results/2026-10-28-run15/`
+  (the third re-judge), both scorings. Any mover voids the reading until explained here.
+- CRASH-012 and -148 (invalid free of the globals symbol table): native PHP aborts (SIGNAL:6), so
+  the default scoring reads them out-of-denominator on every arm. Their declared site is ASan's first
+  PHP frame, `_efree` in Zend/zend_alloc.c, PHP's allocator, which the judge never attributes, so
+  under the sensitivity scoring no arm can read CAUGHT: every cell is NO-READING, its reason reported.
+- CRASH-161 (double free): native PHP crashes (SIGNAL:11), out-of-denominator by default. Under the
+  sensitivity scoring the declared site is `zend_hash_destroy` (Zend/zend_hash.c). No arm-level
+  prediction beyond the invariants below: this is its first measurement.
+- CRASH-062 and -070 (use-after-free, native PHP ends in its own fatal error, EXIT:255): scored by
+  default. Sites `_php_stream_free` (main/streams/streams.c) and
+  `zend_do_begin_class_member_function_call` (Zend/zend_compile.c). First measurement; invariants only.
+- Invariants for the five: stock catches no use-after-free (it revokes nothing); every CAUGHT is at
+  a declared site in its declared file, by function or by chain, never in the allocator or the seam;
+  the system allocator's catches are a subset of the nested arms'. A violation voids the reading.
