@@ -2,7 +2,7 @@
 
 Real PHP 5.0.0 -- PHP's own `main()`, the Zend engine, `ext/standard` and the bundled regex,
 145 translation units, nothing stubbed -- built as a capability application and run as a
-Linux process on the virtual profile, stock or with an allocator seam in `Zend/zend_alloc.c`.
+Linux process on the virtual profile, stock or with a nested allocator layer in `Zend/zend_alloc.c`.
 `port.json` is the declaration; `patches/README.md` the three patches and who applies them.
 
 What it is not: `--disable-all`, so no extension beyond `ext/standard`; the CLI SAPI only; no
@@ -23,7 +23,7 @@ CAPSTONE_VIRTUAL_LIFETIMES=1 bash capstone/ports/common/application/build-virtua
 `CFLAGS=-std=gnu89 ./configure --disable-all`, the tree patches), with `PROVENANCE.txt`.
 
 - `0`: `zend_alloc.c` as released, every `emalloc` block from virtual mallocng.
-- `1`: the seam (patch 0003 applied to `zend_alloc.c`, adapter `../zend-alloc/sublet`), its arm
+- `1`: the nested layer (patch 0003 applied to `zend_alloc.c`, adapter `../zend-alloc/sublet`), its arm
   baked in as mode 6 -- a lifetime per `emalloc` object, `CDERIVE` on handout and `CREVOKE` at
   every `efree`, PHP's own bounds. `PHP_REALPHP_DEFAULT_MODE=7` adds exact bounds. The image
   prints `ZEND_CAP_MODE_DEFAULTED 6` when it takes that default; `PHP_CAP_MODE` in the
@@ -37,9 +37,9 @@ to the platform gate, or this port's own `run-virtual.py` for one boot with many
 
 `build-virtual.sh realphp` on its own builds the images `run-realphp.py` measures with. Two
 "stock"s are in play and are not the same thing: `PHP_REALPHP_ALLOC=stock` is the UNPATCHED
-image above (no seam at all), the honest-gap column of the spatial pair; the arm
-`php-real-stock` is the SEAM image at `PHP_CAP_MODE=0` (nothing revoked, the loan leaked).
-The runner uses one seam image for all four of its arms, modes 0, 4, 6 and 7
+image above (no nested layer at all), the honest-gap column of the spatial pair; the arm
+`php-real-stock` is the NESTED image at `PHP_CAP_MODE=0` (nothing revoked, the loan leaked).
+The runner uses one nested image for all four of its arms, modes 0, 4, 6 and 7
 (`tools/arms.json` `php-real-*`), named per run and never defaulted: a transcript that says
 `ZEND_CAP_MODE_DEFAULTED` is refused. The corpus it is scored against is external; see
 `results/2026-10-26/README.md` for the recorded result and its 2026-10-27 correction, and
@@ -52,7 +52,7 @@ pointers as `int`s and `char`s and so stripped their tags (patch 0002, ~20 lines
 compiler flag, `-fno-common` (a COMMON symbol has no section for the backend to bound).
 Patch 0001 (one include) is 2004 code against any current compiler, not capabilities. Two
 configure answers and one type alias are musl against glibc. Nothing in PHP's logic changed.
-The seam, the protection being measured, is ~100 patch lines in `zend_alloc.c` plus the
+The nested layer, the protection being measured, is ~100 patch lines in `zend_alloc.c` plus the
 adapter.
 
 ## Layout
@@ -60,7 +60,7 @@ adapter.
 ```
 build-virtual.sh        the port's own build: probes, the Phase A/B engine image, realphp
 prepare-sources.sh      the PHP tree: tarball by hash, configure, tree patches, provenance
-patches/                0001 compile fix, 0002 qsort swap (tree); 0003 the seam (a mode)
+patches/                0001 compile fix, 0002 qsort swap (tree); 0003 the nested layer (a mode)
 run-virtual.py          one guest boot, many runs; the transport run-realphp.py uses
 run-realphp.py          the corpus instrument: arms, populations, the judge's controls
 test-run-realphp.py     its offline suite; test-run-cases.py the Phase A runner's

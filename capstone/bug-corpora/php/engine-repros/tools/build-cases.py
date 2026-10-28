@@ -23,11 +23,17 @@ Populations (the port's two measured sets, recomputed here, never retyped):
 
   asan-blind              ASan reports the defect with PHP's allocator PATCHED (cache off, no
                           rounding) and reads OK with it AS SHIPPED: emalloc's cache or its
-                          8-byte rounding hides the defect from any detector at free().
-  temporal-asan-visible   CWE-416 that ASan reports unaided (as shipped) and classifies as a
-                          use-after-free (patched build): efree reached free(), so a detector
-                          at the libc boundary sees it. The control population. A case no
-                          build reports as a use-after-free is neither (CRASH-064).
+                          8-byte rounding hides the defect from any detector at free(). A
+                          temporal defect (CWE-416/415/590) whose as-shipped run ends in PHP's
+                          own fatal error, with no report, is blind in the same sense.
+  temporal-asan-visible   a temporal defect (CWE-416/415/590) that ASan reports unaided (as
+                          shipped) and that the patched build reports as a use-after-free or an
+                          invalid free: the release reached free(), so a detector at the libc
+                          boundary sees it. The control population. A case no build reports as
+                          a lifetime defect is neither (CRASH-064).
+
+The first build admitted 65 cases; five more temporal ones, from the merge with the sibling
+corpus, are numbered after them (APPENDED below), so no number moved.
 
 Each case directory holds trigger.php (the corpus script, byte for byte), oracle.json (what
 run-realphp.py needs: population, ASan's first PHP frame and its whole ACCESS stack, the kind
@@ -61,6 +67,46 @@ PHP_PATH = re.compile(r"((?:Zend|main|ext|sapi|TSRM|regex)/[\w./]+):(\d+)")
 # enabled an ASan option would be unsound. Classified here, from the declaration's text, never
 # from a run.
 DETECTOR_OPTION = re.compile(r"^\s*ASAN_OPTIONS\b")
+
+
+# A PLATFORM PRECONDITION a case declares beyond its execution requirement: a libc behaviour the
+# defect needs. CRASH-084's use-after-free exists only where putenv keeps an empty-name string in
+# environ (glibc); musl's putenv does not, so on this platform the dangling reference never comes
+# to be. The declaration is checked by a probe every run (ports/php/app/probe-putenv.c), never
+# asserted: the runner excludes the case only when the probe PROVES the behaviour absent, and
+# judges it normally when the probe is missing or fails. Kept here, with the generator, so that
+# regenerating the corpus keeps it; the schema is bug-corpora/SCHEMA.md "platform_precondition".
+# A SECOND DECLARED SITE a case carries beyond ASan's first PHP frame: the access path this
+# platform takes to the same dead object, read off the source and the trigger's own account.
+# CRASH-057: natively the copy at assignment reads the freed temporary (_estrndup); here the
+# assignment keeps the temporary's buffer and var_dump prints it (php_var_dump, var.c:126).
+EXTRA_FAULT_SITES = {
+    "CRASH-057": ({"php_var_dump": "ext/standard/var.c"}, " On this platform the access is not the copy: the assignment keeps the temporary's buffer as the result's (the trigger's own account: the freed IS_TMP_VAR is reused as the assignment's result value), and var_dump($x) prints it -- php_var_dump, ext/standard/var.c:126, the PHPWRITE of Z_STRVAL -- through main/output.c and the CLI's write, which pass the buffer through. php_var_dump is therefore a declared site: the print of the reused temporary that the trigger documents, read off the source, with the nested arm's frame chain (residues/057-chain, 2026-10-28) as the confirming reading, not the admitting one."),
+}
+
+# RETRACTED 2026-10-28, same day it was declared: a precondition for CRASH-092, "select() rejects
+# a timeval whose tv_usec is out of range (EINVAL) rather than sleeping on it". PHP 5.0.0's
+# liveness check (main/streams/xp_socket.c, PHP_STREAM_OPTION_CHECK_LIVENESS) hands select() a
+# timeval with only tv_sec set, and musl 1.2.5 folds an out-of-range tv_usec into the seconds
+# (`s += us/1000000`), so the script can hang before its defect. The declaration said Linux
+# rejects such a timeval with EINVAL. It does not: fs/select.c (v6.12, kern_select) computes
+# `tv.tv_sec + (tv.tv_usec / USEC_PER_SEC)` and rejects only a NEGATIVE value, so glibc's select
+# folds a positive overflow exactly as musl does. The hang is therefore not a libc behaviour the
+# defect needs but whatever uninitialised stack contents the run happens to pass, on either
+# libc; a probe with a fixed value cannot read that. CRASH-092 carries no precondition: a run
+# that hangs is `infra`, one that completes without reaching the defect is `not-reached`, and
+# the case stays in the denominator. The probe (probe-timeval.c) was removed with the declaration.
+PLATFORM_PRECONDITIONS = {
+    "CRASH-084": {
+        "platform_precondition": {
+            "needs": "putenv keeps an empty-name string referenced from environ",
+            "probe": "putenv",
+            "present": "PUTENV_PROBE empty-name retained=1",
+            "absent": "PUTENV_PROBE empty-name retained=0"
+        },
+        "platform_precondition_why": "musl 1.2.5's putenv (src/env/putenv.c) takes the unsetenv branch for an empty name -- `if (!l || !s[l]) return unsetenv(s);` -- and unsetenv refuses a name containing '=' with EINVAL, so the string is never stored in environ. The use-after-free this case records needs that stored reference: the second empty-name putenv frees the string and the following environ scan reads it (the corpus's native oracle, glibc). Without the reference there is nothing dangling, so a run that completes on this libc is not a miss of the protection; it is a defect whose precondition this platform does not meet. Checked, not asserted: ports/php/app/probe-putenv.c runs on every arm and says what this libc retains, with a control that proves it can see retention at all.",
+    },
+}
 
 
 def requires_kind(text):
@@ -97,8 +143,8 @@ def access_stack(stderr):
 TEMPORAL = {"CWE-416": "temporal", "CWE-415": "temporal", "CWE-590": "temporal"}
 SPATIAL = {"CWE-125": "spatial", "CWE-787": "spatial", "CWE-190": "spatial"}
 ARMS = {
-    "virtual-malloc": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
-    "virtual-nested-pools": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
+    "virtual-malloc": "the case on the virtual profile with the nested layer present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
+    "virtual-nested-pools": "the same image with the nested allocator layer retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
     "virtual-nested-exact": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
 }
 
@@ -111,15 +157,43 @@ def load(path):
     return json.loads(Path(path).read_text())
 
 
+# What the PATCHED run must report for a temporal case to be visible to a detector at free():
+# a use-after-free, or a free of something malloc never returned (CWE-590's report). A SEGV or
+# a buffer overflow is not a lifetime report, whatever the CWE.
+TEMPORAL_REPORTS = ("ASAN:heap-use-after-free", "ASAN:attempting free", "ASAN:attempting double-free")
+
+# THE ONE CORPUS (2026-10-28). The PHP corpora were two: this one, and a sibling built from the
+# same source corpus by another lane (bug-corpora/php on corpus/php-5-temporal: 56 temporal
+# cases, CWE-416/415/590). 47 cases were in both. The five below are temporal, run on the
+# default build, are in our own three native runs, and were left out here only by the rules of
+# the first build: CWE-415 and CWE-590 were not admitted to the visible population (CRASH-012,
+# -148: a free of the globals symbol table, reported on both builds; CRASH-161: a double free,
+# a use-after-free with the cache off and a SEGV as shipped), and a temporal case whose
+# as-shipped run ends in PHP's own fatal error, with no report, was in neither population
+# (CRASH-062, -070). Admitted now, by the rule, and NUMBERED AFTER the first 65 so that every
+# case number, directory name and archived bundle stays valid. The sibling's four fullext
+# cases (CRASH-125, -129, -131, -132: mbstring and pcre) need a build this corpus does not
+# make and stay out. The widening is to TEMPORAL CWEs only: the same widening for any CWE
+# would also admit CRASH-005 (a global-buffer-overflow) and CRASH-087 (an uninitialised read),
+# which nobody asked to merge and which are not about an allocator's lifetimes.
+APPENDED = ("CRASH-012", "CRASH-062", "CRASH-070", "CRASH-148", "CRASH-161")
+
+
 def populations(asan, stock, meta):
     """{id: population} over the cases the default build runs, from the three result files."""
     out = {}
     for cid, e in asan.items():
-        blind = e["outcome"] != "OK" and stock.get(cid, {}).get("outcome") == "OK"
+        s = stock.get(cid, {}).get("outcome", "")
+        temporal = meta[cid]["cwe"] in TEMPORAL
+        blind = e["outcome"] != "OK" and s == "OK"
         if blind:
             out[cid] = "asan-blind"
-        elif (meta[cid]["cwe"] == "CWE-416" and stock.get(cid, {}).get("outcome", "").startswith("ASAN:")
-              and e["outcome"] == "ASAN:heap-use-after-free"):
+        elif temporal and e["outcome"].startswith("ASAN:") and not s.startswith("ASAN:"):
+            # A temporal defect the patched build reports and the as-shipped build does not:
+            # it ends in PHP's own fatal error instead (CRASH-062, -070), no detector report.
+            # Blind in the same sense as a run that reads OK.
+            out[cid] = "asan-blind"
+        elif (temporal and s.startswith("ASAN:") and e["outcome"].startswith(TEMPORAL_REPORTS)):
             # Visible means ASan REPORTS it with the allocator as shipped -- the stockalloc run,
             # not the patched one. A case the as-shipped build ends with PHP's own fatal error
             # (EXIT:255, no report) is visible to nobody and belongs to neither population; the
@@ -192,11 +266,15 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
                     "results-ours-asan-stockalloc.json": oracle_shas["stock"],
                     "results-ours-pristine-default.json": oracle_shas["pristine"]},
     }
-    why = ("ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with "
-           "zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which "
-           "mechanism hides it, and which arm sees it, is what the arms record" if pop == "asan-blind" else
-           "a CWE-416 that ASan reports with zend_alloc.c as shipped (the stockalloc run): efree "
-           "reached free(), so a detector at the libc boundary sees it; the control population")
+    shipped = stock[cid]["outcome"]
+    why = (("ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with "
+            "zend_alloc.c as shipped the run reads " + ("OK" if shipped == "OK" else
+            f"{shipped}, PHP's own fatal error, with no detector report") + ". That is the selection, by "
+            "measurement; which mechanism hides it, and which arm sees it, is what the arms record")
+           if pop == "asan-blind" else
+           f"a temporal defect ({m['cwe']}) that ASan reports with zend_alloc.c as shipped (the stockalloc "
+           f"run, {shipped}) and that the patched build reports as {a['outcome']}: the release reached "
+           f"free(), so a detector at the libc boundary sees it; the control population")
     case = {
         "case": number,
         "upstream_fix": fix,
@@ -236,6 +314,19 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
         "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
         "note": f"population: {pop} -- {why}. Collected by the corpus as {m['how_collected']['origin_stream']} ({m['how_collected']['history_status']}, confidence {m['how_collected']['confidence']}).",
     }
+    case.update(PLATFORM_PRECONDITIONS.get(cid, {}))
+    # The file each declared site must be seen in: ASan's own frame for the main site, the table
+    # above for a site declared beyond ASan's stack. A judge matches a site by function AND file,
+    # so a same-named routine in another file is never the site (review 2026-10-28).
+    case["fault_site_files"] = {func: path}
+    if cid in EXTRA_FAULT_SITES:
+        # `extra_why`, not `why`: the population's reason is still needed by PROVENANCE.md below,
+        # and reusing its name here wrote the second site's reason into CRASH-057's population
+        # line (caught on the 2026-10-28 regeneration).
+        extra, extra_why = EXTRA_FAULT_SITES[cid]
+        case["fault_sites"] = case["fault_sites"] + [s for s in extra if s not in case["fault_sites"]]
+        case["fault_site_files"].update(extra)
+        case["fault_sites_why"] = case["fault_sites_why"] + extra_why
     disagreements = []
     t = theirs
     if t["asan"].get(cid, {}).get("outcome") != a["outcome"]:
@@ -280,21 +371,29 @@ Hence **{pop}**: {why}.
 def self_test():
     """The population rule and the frame rule on synthetic entries; the derivations the offline
     suite of run-realphp.py no longer exercises since its fixture became case directories."""
-    meta = {k: {"cwe": v} for k, v in {"A": "CWE-416", "B": "CWE-416", "C": "CWE-416", "D": "CWE-125", "E": "CWE-416", "F": "CWE-416", "G": "CWE-416", "H": "CWE-416"}.items()}
+    meta = {k: {"cwe": v} for k, v in {"A": "CWE-416", "B": "CWE-416", "C": "CWE-416", "D": "CWE-125", "E": "CWE-416", "F": "CWE-416", "G": "CWE-416", "H": "CWE-416",
+                                       "I": "CWE-590", "J": "CWE-415", "K": "CWE-125", "L": "CWE-908"}.items()}
     asan = {"A": {"outcome": "ASAN:heap-use-after-free"}, "B": {"outcome": "ASAN:heap-use-after-free"},
             "C": {"outcome": "ASAN:heap-use-after-free"}, "D": {"outcome": "ASAN:heap-buffer-overflow"},
             "E": {"outcome": "OK"}, "F": {"outcome": "ASAN:heap-use-after-free"}, "G": {"outcome": "ASAN:SEGV"},
-            "H": {"outcome": "ASAN:heap-use-after-free"}}
+            "H": {"outcome": "ASAN:heap-use-after-free"}, "I": {"outcome": "ASAN:attempting free on address"},
+            "J": {"outcome": "ASAN:heap-use-after-free"}, "K": {"outcome": "ASAN:global-buffer-overflow"},
+            "L": {"outcome": "ASAN:SEGV"}}
     stock = {"A": {"outcome": "OK"},                              # blind: patched reports, as shipped OK
              "B": {"outcome": "ASAN:heap-use-after-free"},        # visible: as shipped reports
-             "C": {"outcome": "EXIT:255"},                        # PHP's own fatal error as shipped: neither
+             "C": {"outcome": "EXIT:255"},                        # temporal, fatal error as shipped, no report: blind (CRASH-062)
              "D": {"outcome": "OK"},                              # blind, spatial
              "E": {"outcome": "OK"},                              # nothing anywhere: neither
-             "F": {"outcome": "SIGNAL:11"},                       # crashes as shipped, no report: neither
+             "F": {"outcome": "SIGNAL:11"},                       # temporal, crashes as shipped with no report: blind
              "G": {"outcome": "ASAN:SEGV"},                       # SEGV on both builds (CRASH-064): neither
-             "H": {"outcome": "ASAN:SEGV"}}                       # SEGV as shipped, UAF patched: visible
+             "H": {"outcome": "ASAN:SEGV"},                       # SEGV as shipped, UAF patched: visible
+             "I": {"outcome": "ASAN:attempting free on address"}, # CWE-590 reported on both: visible (CRASH-012)
+             "J": {"outcome": "ASAN:SEGV"},                       # CWE-415, UAF patched, SEGV shipped: visible (CRASH-161)
+             "K": {"outcome": "EXIT:255"},                        # NOT temporal, no report shipped: neither (CRASH-005)
+             "L": {"outcome": "ASAN"}}                            # NOT temporal: neither (CRASH-087)
     got = populations(asan, stock, meta)
-    want = {"A": "asan-blind", "B": "temporal-asan-visible", "D": "asan-blind", "H": "temporal-asan-visible"}
+    want = {"A": "asan-blind", "B": "temporal-asan-visible", "C": "asan-blind", "D": "asan-blind", "F": "asan-blind",
+            "H": "temporal-asan-visible", "I": "temporal-asan-visible", "J": "temporal-asan-visible"}
     checks = [("the population rule", got, want)]
     frame = ASAN_FRAME.search("    #0 0x55 in user_tick_function_call /x/y/ext/standard/basic_functions.c:2135\n")
     checks.append(("the frame rule takes the first PHP frame", (frame.group(1), frame.group(2), frame.group(3)),
@@ -325,6 +424,19 @@ def self_test():
     checks.append(("a loopback requirement is an execution requirement",
                    requires_kind("network: working loopback"), "execution"))
     checks.append(("no requirement, no kind", requires_kind(""), ""))
+    checks.append(("CRASH-084 declares its libc precondition with a probe and its two readings",
+                   sorted(PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition"]), ["absent", "needs", "present", "probe"]))
+    checks.append(("CRASH-057 declares var_dump's print of the reused temporary as a second site",
+                   list(EXTRA_FAULT_SITES["CRASH-057"][0]), ["php_var_dump"]))
+    checks.append(("with the file the site must be seen in",
+                   EXTRA_FAULT_SITES["CRASH-057"][0]["php_var_dump"], "ext/standard/var.c"))
+    checks.append(("and says why, naming the source line",
+                   "var.c:126" in EXTRA_FAULT_SITES["CRASH-057"][1], True))
+    checks.append(("CRASH-092 declares no precondition (retracted 2026-10-28: Linux folds a positive tv_usec too)",
+                   "CRASH-092" in PLATFORM_PRECONDITIONS, False))
+    checks.append(("only CRASH-084 declares one", sorted(PLATFORM_PRECONDITIONS), ["CRASH-084"]))
+    checks.append(("and says why, naming the musl branch",
+                   "unsetenv" in PLATFORM_PRECONDITIONS["CRASH-084"]["platform_precondition_why"], True))
     checks.append(("the fix id is the first 12 hex digits", fix_id("4f161fe28997f5d1f818fc6ae95a8131066cf1a2"), "4f161fe28997"))
     checks.append(("an 11-digit fix id stays as given", fix_id("b599e434add"), "b599e434add"))
     bad = [(n, g, w) for n, g, w in checks if g != w]
@@ -356,7 +468,12 @@ def main():
     # asan-default run is that build, so its id set is the denominator of the whole corpus here.
     default_ids = set(theirs["asan"])
     pops = {cid: p for cid, p in populations({i: asan[i] for i in default_ids}, stock, meta).items()}
-    order = sorted(pops, key=lambda c: (POPULATIONS.index(pops[c]), c))
+    missing = [c for c in APPENDED if c not in pops]
+    if missing:
+        raise SystemExit(f"APPENDED names cases the rule does not admit: {missing}")
+    # the first build's cases in their first order, then the appended ones: no number moves
+    order = (sorted((c for c in pops if c not in APPENDED), key=lambda c: (POPULATIONS.index(pops[c]), c))
+             + list(APPENDED))
     counts = {p: sum(1 for c in pops.values() if c == p) for p in POPULATIONS}
     print(f"populations from our oracle: {counts} over {len(default_ids)} default-build cases")
     tp = theirs["pops"]

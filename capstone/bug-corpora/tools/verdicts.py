@@ -46,8 +46,14 @@ REASONS = {
 
 # How a fault is tied to the defect, strongest first. `control` is a separate run of the same
 # image on the same input minus the defect; it is what a case without a labelled instruction or
-# a single faulting function relies on.
-ATTRIBUTIONS = ("probe", "function", "control")
+# a single faulting function relies on. `chain` is the weakest: the fault is in a routine known
+# to forward a caller's buffer (a libc copy or scan, a write path) and the declared function is
+# reached by walking its callers -- the return address, or the frame chain the launcher records.
+# It ties the fault to the declared function by the call path alone, not by the operand: a
+# fault that routine makes on its own state would be attributed the same way, which is why a
+# chain catch is counted apart (result tables, "of which by chain") and never silently with the
+# function catches (PHP, 2026-10-28, fourth review).
+ATTRIBUTIONS = ("probe", "function", "control", "chain")
 
 ARMS_FILE = Path(__file__).resolve().parent / "arms.json"
 
@@ -60,6 +66,7 @@ class Fault:
     offset: int = None
     ra: int = None              # return address at the fault, when the platform reported one
     fp: int = None
+    chain: tuple = ()           # return addresses up the stack from the faulting frame, when printed
 
 
 @dataclass
@@ -164,6 +171,11 @@ FAULT_LINE = re.compile(r"domain fault cause=(\d+) pc=(0x[0-9a-f]+) address=(0x[
 # runner reads them as (run-capstone-domain.py and run-virtual-cases.py take group(4) as the
 # code base).
 FAULT_REGS = re.compile(r" ra=(0x[0-9a-f]+) fp=(0x[0-9a-f]+)")
+# The frame chain the virtual launcher prints LAST on the line since 2026-10-28 (` chain=0x..,0x..`,
+# runtime/virtual/exec.c frame_chain): the return addresses up the domain's stack from the
+# faulting frame, each frame validated before it was read. Read from the whole line, not from
+# FAULT_LINE's match, which ends at `code=`.
+FAULT_CHAIN = re.compile(r" chain=((?:0x[0-9a-f]+,?)+)")
 
 
 def llvm_bin_dir(path):
@@ -214,8 +226,12 @@ def domain_fault(text, symbols=None):
     regs = FAULT_REGS.search(m.group(0))
     ra = int(regs.group(1), 16) if regs and int(regs.group(1), 16) else None
     fp = int(regs.group(2), 16) if regs and int(regs.group(2), 16) else None
+    end = text.find("\n", m.end())
+    line = text[m.start():end if end >= 0 else len(text)]
+    chained = FAULT_CHAIN.search(line)
+    chain = tuple(int(w, 16) for w in chained.group(1).split(",") if w) if chained else ()
     fn, off = symbols.lookup(pc, code) if symbols else (None, None)
-    return Fault(cause=cause, pc=pc, symbol=fn, offset=off, ra=ra, fp=fp)
+    return Fault(cause=cause, pc=pc, symbol=fn, offset=off, ra=ra, fp=fp, chain=chain)
 
 
 # ---- the bundle ----------------------------------------------------------------------------

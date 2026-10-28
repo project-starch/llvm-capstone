@@ -1,0 +1,69 @@
+{
+  "arm": "virtual-nested-pools",
+  "build": {
+    "allocator": "seam",
+    "application": "php",
+    "image_sha256": "afd3e23961ee69522e6f03007e5db00584940dd29aa7cb2a8c39fd29bcda75ef",
+    "mode": 6,
+    "profile": "virtual"
+  },
+  "cases": 65,
+  "configuration": "php-real-object",
+  "contract": "verdicts-v1",
+  "corpus": "php/engine-repros",
+  "platform": {
+    "compiler": "clang version 22.0.0git (https://github.com/project-starch/llvm-capstone 500f854f46a6eeca25455c0cc414ef5380141398)",
+    "firmware": "4dd4a2ade361a8bdb9cc45aeca02c6b7309b60d1e8701c2a4ed91c117a495f16  /tmp/php-kit/platform-res3/images/fw_jump.elf",
+    "kernel": "e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b  /tmp/php-kit/platform-res3/images/Image",
+    "launcher": "b533a0689e31cb828caae954a64da770d0a12e9d27ab5ababc520e040ed9dcc2  /tmp/php-kit/platform-res3/adapter/capstone-vexec",
+    "module": "da3d0e5f9be7fc24528b2cf8f05d0976d6017c6ecdff13648a36f74808f8aa8d  /tmp/php-kit/platform-res3/adapter/module/capstone_vm.ko",
+    "module_args": "node_initial_pages=1024 supervisor_slots=32",
+    "platform_probes": {
+      "putenv": "5d65c6d7f446886b47f99789b73291dc9c42e17ca2dcbd4b7e328b3fade658f5  /tmp/php-kit/out-lt8/probe-putenv.dom"
+    },
+    "qemu": "e8a89c014e5aa627b294cdf0b7d366610cf4334adc1f9d1579c498f33e4fee23  /tmp/php-kit/platform-res3/qemu-system-riscv64",
+    "qemu_cpu": "rv64,sstc=false,h=false,sv48=false,sv57=false,x-capstone-u-mode=true,x-capstone-exact-bounds=true,x-capstone-test-csrs=true,x-capstone-supervisor-slots=32,x-capstone-addr=sv39",
+    "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845  /tmp/php-kit/platform-res3/images/rootfs.ext2",
+    "runner": "ports/php/app/run-realphp.py"
+  },
+  "population": "asan-blind + temporal-asan-visible, one boot per population; see populations",
+  "populations": {
+    "asan-blind": {
+      "cases": 46,
+      "inputs.json": "c3d343c087dcbe3eab1a2ea829115acdf33e50a0ece7b3b36ad04930ae88a24e",
+      "tally": {
+        "CAUGHT": 26,
+        "MISSED": 9,
+        "NO-READING:infra": 2,
+        "NO-READING:out-of-denominator": 8,
+        "NO-READING:unattributed": 1
+      },
+      "verdicts.jsonl": "510d7af024e43a270fb7e7569d71553c543c96965678e5fbc108d8434392449d"
+    },
+    "temporal-asan-visible": {
+      "cases": 19,
+      "inputs.json": "afbb92bbede675143e7021ca5eb8fd02aab0bc010e1ed9ed8ecd6ea3d9df677e",
+      "tally": {
+        "CAUGHT": 2,
+        "NO-READING:out-of-denominator": 17
+      },
+      "verdicts.jsonl": "54247571bf052053fee8302469adf06b34213651d566d82a361303b70c60dc8f"
+    }
+  },
+  "pre_registration": "b11a186ebde351996ee85776e643b124382a6e45",
+  "scoring": {
+    "attribution": "declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27; a catch through a forwarding routine's call path is the chain class, counted apart; 2026-10-28",
+    "protective_causes": [
+      25,
+      28
+    ],
+    "score_oracle_crashes": false
+  },
+  "tally": {
+    "CAUGHT": 28,
+    "MISSED": 9,
+    "NO-READING:infra": 2,
+    "NO-READING:out-of-denominator": 25,
+    "NO-READING:unattributed": 1
+  }
+}

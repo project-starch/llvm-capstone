@@ -2143,3 +2143,676 @@ not-reached); sensitivity temporal 1 of 76 (CRASH-118 stock: the refusal's label
 unattributed); sensitivity asan-blind 9 of 184 (the four above, CRASH-057 stock's label the same
 way, and CRASH-081's symbol rename on all four arms). No CAUGHT cell changed in any comparison.
 The geometry checks fired on no case: no `ZEND_CAP_FAIL code=5` in any record.
+
+## 2026-10-28 — the five CWE-416 cases the nested arms do not catch (follow-up lane php/five-residues)
+
+Of the 49 CWE-416 cases the nested arms catch 44 (sensitivity scoring). The five others were read
+from their records on 2026-10-28 and taken to a Codex consultation (scratchpad codex/five-cases-*):
+every one is the port, the judge, the harness or the corpus, none a lifetime that stayed accessible.
+Codex's ruling, followed here: lane C (php/seam-reclaim) keeps its frozen verdicts; these are a
+follow-up, each with its own record, and any image or platform change gets the whole corpus rerun
+under both scorings with the movers pre-registered.
+
+| case | reading | mechanism, from the record and the source | what is done |
+|---|---|---|---|
+| CRASH-084 | MISSED | musl's putenv takes the unsetenv branch for an empty name (`src/env/putenv.c`: `if (!l \|\| !s[l]) return unsetenv(s);`), so the string the defect needs referenced from environ is never stored; the use-after-free exists only under glibc, the corpus's native oracle | a declared, PROBED platform precondition: `platform_precondition` in case.json (kept by build-cases.py, documented in SCHEMA.md, checked by check-corpus.py), `probe-putenv.c` run once per arm by run-realphp.py (`--putenv-probe`); the case is out of the denominator on an arm only when the probe proves the behaviour absent with its control retained; judged normally otherwise. Tests in test-run-realphp.py |
+| CRASH-057 | NO-READING setup-fault | the nested record faults with cause 25 on an 8-byte object while var_dump prints (`string(1) "` then the fault): the freed temporary string. The pc is in a libc routine without a symbol (nearest `dl_call_once`) and ra is the scalar 0xa, so neither the symbol nor the one-hop ra rule can tie it to the declared site, and the marker that establishes reach prints after the trigger returns | unresolved: Codex's (a) line tables for the libc (`MUSL_CAPSTONE_EXTRA_CFLAGS=-gline-tables-only`, a fresh SDK) is cheap and diagnostic but changes the `not path` libc-leaf branch (CRASH-068 must be re-judged); (b) a frame-chain capture in the launcher is more work; (c) a per-case access-path declaration needs independent evidence; (d) the frozen record stays |
+| CRASH-081 | NO-READING setup-fault | a frame store 80 bytes below the stack's base (`rs1 = x8, addr = ..5fffb0, bounds = (..600000, ...)`, cause 28): the domain's 1 MiB stack (`CAPSTONE_APPLICATION_STACK_BYTES`, runtime/application/CMakeLists.txt:64) overflows under the trigger's deep(4000), which recurses zend_execute in C per PHP call; native has 8 MiB | a second SDK (`PHP_VIRTUAL_SDK_ARGS=-DCAPSTONE_APPLICATION_STACK_BYTES=8388608 -DCAPSTONE_APPLICATION_DATA_BYTES=16777216`) in its own output directory, the seam image rebuilt, the case alone on every arm (`residues/081-stack8`): does deep(4000) return to array_filter. If it does, a full rerun under that SDK, pre-registered: 081's sensitivity cells may move; its default cells stay excluded (native SIGSEGV); every other move must be explained |
+| CRASH-075 | NO-READING infra | the 40-second watchdog kills it after ~13,300 output lines, almost all `CAPSTONE_VM_ADD_OK` mapping lines (exec.c prints one per grant): one 500,000-element argument vector (`call_user_func_array('many', array_fill(0, 500000, 7))`), on every arm | the case alone with a 600-second guest watchdog, every arm, its own record (`residues/075-600s`); a further timeout stays infra; completion needs qualified reach, a catch needs the `php_array_walk` attribution |
+| CRASH-092 | NO-READING infra / not-reached | the select() loop (`php_sock_stream_wait_for_data` spins on a persistent error); probe-select.c's four stages pass on an AF_UNIX socketpair, the case uses a TCP loopback listener | follow-up diagnostic: extend the probe to the TCP topology and trace PHP's actual select arguments and result; watchdog runs stay infra, completions stay not-reached until reach is qualified |
+
+Pre-registration of the three diagnostics launched 2026-10-28 (p13, run10's platform):
+- `residues/075-600s`: not predicted; either a timeout (infra, as before) or a completed run; a catch
+  only with the declared attribution.
+- `residues/081-stack8`: the stack-bound fault before the marker is predicted to disappear; what
+  the case then reads on each arm is not predicted.
+- the putenv probe, run alone on this platform: predicted `control retained=1`, `empty-name
+  retained=0 rc=-1 errno=22`, `DONE failures=0` -- the behaviour absent, with the control proving
+  the probe sees retention. If `empty-name retained=1`, the whole CRASH-084 reading above is wrong
+  and the declaration must come out.
+
+### The three diagnostics, measured (2026-10-28, p13, run10's platform)
+
+- **putenv probe** (`residues/putenv-probe`, image efa8059626a6): `control retained=1 rc=0`,
+  `empty-name retained=0 rc=-1 errno=22`, `empty-name-value retained=0 rc=-1 errno=22`,
+  `DONE failures=0`. Exactly the pre-registered reading: this libc does not keep an empty-name
+  putenv string in environ, and the probe can see retention. CRASH-084's declared precondition is
+  absent on this platform; with `--putenv-probe` the case leaves the denominator on every arm.
+- **CRASH-075 with a 600-second watchdog** (`residues/075-600s`, 8 minutes for the four arms):
+  stock MISSED (ran to its normal end, reach established), virtual-malloc, virtual-nested-pools and
+  virtual-nested-exact CAUGHT, each with cause 25 in `php_array_walk` at ext/standard/array.c:1036,
+  the declared function at ASan's own line. The population's 40-second watchdog was the whole
+  reason for the infra reading.
+- **CRASH-081 on the 8 MiB-stack SDK** (`residues/081-stack8`, image 27834e340816, SDK
+  `STACK_BYTES=8388608 DATA_BYTES=16777216`): the stack-bound fault before the marker is gone, as
+  pre-registered. Default scoring: out-of-denominator on every arm (native SIGSEGV), as before.
+  Sensitivity scoring (`residues/081-stack8-sens`, re-judged from the same records): virtual-malloc,
+  virtual-nested-pools and virtual-nested-exact CAUGHT, cause 25 in `zif_array_filter` at
+  ext/standard/array.c:3938, the declared function at ASan's own line; stock: the 40-second
+  watchdog (deep(4000) under mode 0, which keeps every block).
+
+So of the 49 CWE-416 cases: 48 apply on this libc; the nested arms catch 46 of the 48 when
+CRASH-075 is given the time it needs and CRASH-081 the stack native PHP has; CRASH-057 is a
+cause-25 fault on the freed temporary that the judge cannot attribute (unresolved, above), and
+CRASH-092 is the select() loop (open). None of the five was a lifetime that stayed accessible.
+
+### Pre-registration of run11 (written before the run)
+
+The whole corpus, both populations, both scorings, on the 8 MiB-stack SDK's images
+(`out-stack8`: php-real-seam.dom 27834e340816, probe-seam.dom 9e8b4e6baa3f) with the putenv probe
+(`--putenv-probe`, built against the same SDK), the population watchdog unchanged at 40 seconds,
+runner and corpus at 52a40b6da2d6. Against run10 (`corpus-run10`):
+
+- CRASH-084: NO-READING out-of-denominator on every arm in BOTH scorings (was MISSED).
+- CRASH-081, sensitivity: virtual-malloc, virtual-nested-pools, virtual-nested-exact CAUGHT (was
+  setup-fault / NO-READING); stock stays NO-READING (infra, the watchdog). Default: unchanged.
+- CRASH-075: unchanged (the 40-second watchdog is kept; its catch is the separate record above).
+- every other cell: equal to run10. A stack eight times larger changes the layout of nothing on the
+  heap, and the probe runs before the cases; any other move must be explained before any claim.
+
+### run11 (05:35Z, tree c890c88828fe, out-stack8 images + the putenv probe): the pre-registration held
+
+Both populations booted (rc 0/0), the putenv probe read "empty-name string NOT retained
+(precondition absent; control retained)" on all four arms, images recorded in
+`corpus-run11/images.sha256` (php-real-seam.dom 27834e340816, probe-seam.dom 9e8b4e6baa3f,
+probe-putenv.dom 8c0500dc96b6, QEMU e8a89c014e5a, run7's adapter). Cells against run10:
+
+| scoring | population | cells | differ | which |
+|---|---|---|---|---|
+| default | temporal-asan-visible | 76 | 0 | |
+| default | asan-blind | 184 | 4 | CRASH-084 on every arm: MISSED -> NO-READING out-of-denominator |
+| sensitivity | temporal-asan-visible | 76 | 0 | |
+| sensitivity | asan-blind | 184 | 8 | CRASH-084 as above; CRASH-081: virtual-malloc, virtual-nested-pools, virtual-nested-exact NO-READING setup-fault -> CAUGHT (cause 25 in `zif_array_filter`, attribution `function`), stock setup-fault -> infra (the watchdog) |
+
+Exactly the pre-registered movers and nothing else: the 8 MiB stack moved no other cell, and
+the probe decided 084 on every arm. The platform going forward is this one (8 MiB stack, the
+probe in every run); run10 stays the record of the seam-equivalence claim on run7's platform.
+
+### CRASH-057 on the line-table SDK (`residues/057-lt8`, musl objects built with -gline-tables-only)
+
+The nested arms' cause-25 fault symbolizes to `ports/musl-capstone/runtime/delegate.c` (line 0: the
+runtime is compiled by the application CMake, whose flags `PHP_VIRTUAL_SDK_ARGS` cannot carry a
+space-separated value to; the musl objects have their tables, the runtime does not yet). So the
+revoked 8-byte read is the DELEGATE's own copy of a syscall buffer: PHP writes var_dump's output of
+`$x`, the buffer is the freed temporary string, and the copy that "checks liveness at each access"
+(delegate.c, dl_buffer_ok's comment) faults on it. `ra` reads 0xa because the copy routine's x1 is
+not a return address at that point. The access path is therefore write(2) of the printed value,
+not `_estrndup`'s copy that ASan reported natively (zend_alloc.c:403), and the judge's
+allocator-site rule (ASan's own site is PHP's allocator) refuses attribution before any libc rule
+applies. The stock arm on this image reads `unattributed`: the seam refused, by name, an efree of a
+pointer not at its payload's start (code 4), the defect's own invalid free.
+
+What a proper catch needs, and none of it is a weaker judge: a bounded frame chain in the fault
+record (the launcher walks fp and prints the return addresses it can validate), so the judge can
+see write <- PHP's stream write <- var_dump <- execute; and for this case a second declared access
+path -- var_dump printing the reused temporary -- with the evidence the chain gives (the dead
+object is the one the trigger documents). Both are follow-up work on the runtime record and the
+corpus declaration; the record stays NO-READING until then.
+
+### CRASH-092 with a 600-second watchdog (`residues/092-600s`)
+
+stock and virtual-malloc complete (not-reached: the `done` echo is unconditional, so completion
+proves nothing about the HTTP path); virtual-nested-pools and virtual-nested-exact still hit the
+watchdog at 600 seconds. Not time, then: on the nested arms the case loops. The delegate's select
+path (ports/musl-capstone/runtime/delegate.c SYS_pselect6) answers EFAULT only for a bounds or
+rights mismatch of the fd_set capability -- its copy runs through the capability and would fault
+with cause 25 on a revoked one -- so the loop's persistent -1, if that is what it is, is not a
+revoked buffer. A diagnostic image (PHP's loop printing its first five select results, built from
+a copy of the source, never a measurement image) is the next reading.
+
+### The frame chain (commit 64068c09d054)
+
+The 057 reading above showed the limit of the one-hop ra rule: a fault in a routine whose x1 is
+not a return address. The virtual launcher now walks the domain's frames itself (ra at fp-16, the
+caller's fp at fp-32, each checked against the stack's bounds, sixteen at most) and prints them
+last on the record line as ` chain=`; verdicts.Fault carries them; nothing decides on them yet.
+CRASH-057 is being rerun on the line-table images with this launcher (`residues/057-chain`) to
+read who called the delegate's copy.
+
+### CRASH-057's chain, and the rule it needed (`residues/057-chain`, launcher 64068c09d054, lt8 images)
+
+The nested arm's record now ends `chain=` with sixteen return addresses, symbolized on the
+line-table image: three frames of `delegate.c` (the runtime's copy of the write(2) buffer),
+musl `write.c:6`, `sapi_cli_ub_write` (php_cli.c:184, :205), `main/output.c:684` and `:119`,
+`php_var_dump` at **ext/standard/var.c:126** (the PHPWRITE of Z_STRVAL), var.c:191, then the
+engine (zend_execute.c:2700, :2828, :1391), zend.c:1061, main.c:1627, php_cli.c:944. The dead
+8-byte object is the reused freed temporary, printed by var_dump, exactly as the trigger's own
+header documents. The judge could not say so for three reasons, each fixed on this lane:
+
+- the allocator-site refusal keyed on the case's DECLARED site (ASan's `_estrndup` in
+  zend_alloc.c), refusing every fault of the case wherever it lay. It now keys on the OBSERVED
+  fault's file: a fault inside PHP's allocator needs the audit arm; a fault elsewhere is judged.
+- no rule read a chain. THE CHAIN RULE: for a fault outside PHP's tree, the access belongs to the
+  first frame of PHP's tree above the output plumbing (sapi/, main/output.c, main/streams/,
+  main/snprintf.c, which pass a buffer through unchanged). A declared site there is a catch; any
+  other frame there is not, whatever lies deeper; a chain that never enters the tree is not.
+  Tests: the 057 shape through the plumbing to php_var_dump (CAUGHT), an undeclared engine frame
+  first (unattributed, named), a declared site behind it (not reached), no PHP frame, a fault
+  observed inside the allocator (audit arm), a fault inside the tree (its own site rules, not the
+  chain). CRASH-068's ra rule and its tests are unchanged.
+- the case declared one site. `php_var_dump` is its second, with the reason read off the source
+  and the trigger (build-cases.py EXTRA_FAULT_SITES, so a regeneration keeps it; the chain is the
+  confirming reading, not the admitting one).
+
+### CRASH-092: the diagnostic image's reading (`residues/092-diag`)
+
+stock and virtual-malloc: two `SELECT_DIAG nfds=8 retval=0 errno=115 tv=1.000000` lines, then
+`done` -- select times out after its second, PHP's loop breaks with timeout_event set, the HTTP
+request fails, the script ends. virtual-nested-pools and virtual-nested-exact: NO diagnostic line
+at all before the watchdog: the hang is BEFORE the select loop, with the same ~130 mapping grants
+as stock. A boundary trace of the nested arm (`residues/092-trace`, CAPSTONE_VM_TRACE=1, 60 s) is
+the next reading: whether it spins in delegated calls, and which, or in user code.
+
+### CRASH-057 re-judged under the chain rule (`residues/057-chain-judged`, from the same records)
+
+virtual-nested-pools and virtual-nested-exact: **CAUGHT**, attribution `function`, evidence: "the
+fault is in dl_call_once, outside PHP's tree; the frame chain climbs through dl_call,
+dl_transfer, __capstone_delegate_call, write@write.c:6, sapi_cli_single_write@php_cli.c:184,
+sapi_cli_ub_write@php_cli.c:205, php_ub_body_write_no_header@output.c:684,
+php_body_write@output.c:119 to php_var_dump at var.c:126, the function this case declares --
+the first frame of PHP's tree above the output plumbing". virtual-malloc: a different fault,
+`_zval_ptr_dtor` at zend_execute_API.c:389, inside the tree and undeclared: setup-fault, as
+before. stock: the refusal of the interior efree, unattributed. So the nested arms catch
+CRASH-057, and the cell moves from NO-READING to CAUGHT in the sensitivity scoring (the case is a
+native crasher, so the default scoring keeps it out of the denominator).
+
+Of the 49 CWE-416 cases, then: 48 apply on this libc, the nested arms catch 47 of 48, and the
+one left is CRASH-092, whose hang on the nested arms lies before its select loop
+(`residues/092-diag`); a second diagnostic image with markers in the stream read path is the
+next reading.
+
+### CRASH-092: the mechanism, the catch, the declaration
+
+Two more diagnostic images (`residues/092-diag2`, `092-diag3`, markers in the stream read path
+and around the liveness select) read: both arms reach `php_stream_eof` after sending the request;
+on the third image every arm runs to `done`, and the nested arms then fault with cause 25 in
+`_zval_ptr_dtor` at zend_execute_API.c:389, ASan's own site -- **CAUGHT** on virtual-nested-pools
+and virtual-nested-exact (the diag3 record; stock and virtual-malloc complete, not-reached).
+The hang on the un-instrumented image is PHP's own: the liveness check sets only `tv.tv_sec`
+(xp_socket.c:240) and leaves tv_usec as the stack had it; Linux answers such a timeval with
+EINVAL (the native oracle's path), musl's select folds it into the seconds (`s += us/1000000`,
+src/select/select.c) and sleeps for hours. Which arms and images hang depends on the stack's
+leftover, which is exactly the pattern of run7 to run11 and the three diagnostic images.
+
+So, like CRASH-084, a libc precondition the defect needs to be reached: declared on the case
+(`platform_precondition`, probe `timeval`), checked on every arm by `probe-timeval.c` (a zero
+timeout must return at once, then an out-of-range tv_usec under a two-second alarm: EINVAL at
+once is present, a sleep is absent), carried by build-cases.py. The runner's probes are now
+general (`--platform-probe NAME=PATH`, readers per name); the putenv path is unchanged in
+behaviour and tests.
+
+### Pre-registration of run12 (written before the run)
+
+The whole corpus, both populations, both scorings, on the line-table images (`out-lt8`:
+php-real-seam.dom, probe-seam.dom, probe-putenv.dom, probe-timeval.dom, all against the 8 MiB
+stack SDK; the musl objects carry line tables, debug info only) with the chain launcher
+(`platform-res`: run7's QEMU and images, adapter-res built from this tree), both probes, the
+population watchdog at 40 seconds, runner and corpus at this commit. Against run11:
+
+- the timeval probe alone first: predicted `control rc=0`, `out-of-range-usec rejected=0` with
+  errno 4 after about 2000 ms, `DONE failures=0`. If it reads rejected=1, the CRASH-092 reading
+  above is wrong and the declaration comes out.
+- CRASH-092: NO-READING out-of-denominator on every arm in BOTH scorings (was infra / not-reached).
+- CRASH-057, sensitivity: virtual-nested-pools and virtual-nested-exact CAUGHT (the chain rule;
+  was setup-fault); stock and virtual-malloc unchanged. Default: unchanged (native crasher).
+- CRASH-068 (the libc leaf, ra rule): unchanged on every arm -- the line tables give musl's
+  strlen a path now, so the `not path` leaf branch no longer applies to it and the chain rule
+  must carry it instead; if 068 moves, the chain rule is wrong and run12 is void.
+- every other cell: equal to run11.
+
+### run12 (06:35Z, tree 39e7cf5a5b45): two movers as pre-registered, one as feared, two unpredicted
+
+Both probes read ABSENT on every arm (`putenv-probe`, `timeval-probe`: control held). Against run11:
+
+| scoring | population | cells | differ | which |
+|---|---|---|---|---|
+| default | temporal | 76 | 4 | **CRASH-068 on every arm: CAUGHT -> setup-fault** |
+| default | asan-blind | 184 | 4 | CRASH-092 stock+virtual-malloc not-reached -> out-of-denominator (pre-registered); CRASH-008 and CRASH-073 on virtual-nested-exact: unattributed -> CAUGHT (not predicted) |
+| sensitivity | temporal | 76 | 4 | CRASH-068 as above |
+| sensitivity | asan-blind | 184 | 6 | 092 as above; **CRASH-057 CAUGHT on both nested arms (pre-registered)**; 008 and 073 as above |
+
+**CRASH-068 moved, exactly the way the pre-registration said would void the run.** Its evidence:
+"the fault is in strlen outside PHP's tree; the frame chain reaches vspprintf at spprintf.c:725
+first, which is not a declared site". The mechanism: strlen is a leaf and keeps no frame, so fp
+still names its caller's frame and the chain's first entry is the caller's CALLER; the caller,
+xbuf_format_converter, is only in ra -- which the chain rule did not read, and the old `not path`
+leaf branch no longer applied because the musl objects now carry line tables. The rule is wrong
+as written and corrected: the walk starts at the fault's own ra, then the chain; a clobbered ra
+(057's 0xa) symbolizes to nothing and is skipped like a libc frame. Tests: the leaf shape with a
+line table (CAUGHT through ra), the same with ra clobbered (unattributed through the chain).
+run12's records are re-judged under the corrected rule (`corpus-run12-judged`, no boot), with the
+prediction: 068 CAUGHT on every arm in both scorings, as in run11; nothing else moves.
+
+**CRASH-008 and CRASH-073 on virtual-nested-exact, unpredicted, explained:** both are cause-28
+bounds faults in a libc routine whose chain reaches the case's declared site through libc frames
+only -- 008: `__stpcpy <- strcpy <- strcat <- php_date` at datetime.c:440; 073: `memcpy <-
+_estrndup` at zend_alloc.c:437, ASan's own path for the case. run11 read them unattributed because
+no chain existed; the chain rule now attributes them, which the pre-registration did not foresee
+because it was written for CRASH-057's shape. Both are the exact-bounds arm's spatial catches,
+the class the four earlier extra catches of that arm belong to. They are accepted as catches with
+this note; the sensitivity CAUGHT count of virtual-nested-exact rises by two on asan-blind.
+
+### run12 re-judged under the corrected rule (`corpus-run12-judged`, the same records, no boot)
+
+Against run11: default temporal 0 of 76 and sensitivity temporal 0 of 76 -- CRASH-068 reads
+CAUGHT on every arm again, through ra, as predicted. default asan-blind 4 of 184 and sensitivity
+asan-blind 6 of 184: CRASH-092 out of the denominator on every arm (pre-registered), CRASH-057
+CAUGHT on virtual-nested-pools and virtual-nested-exact in the sensitivity scoring
+(pre-registered), CRASH-008 and CRASH-073 CAUGHT on virtual-nested-exact (the two explained
+exact-arm catches). Nothing else moved. This is the follow-up lane's measurement; the platform
+it was taken on is the one every later PHP run uses: the 8 MiB-stack SDK with line tables for the
+musl objects, the launcher that records the frame chain, both platform probes in every run.
+
+### The final re-judge (`corpus-run12-judged`, tree 334c49ca47c1): the precondition decides first
+
+Against run11, both scorings: temporal 0 of 76; asan-blind 6 (default) and 8 (sensitivity) of
+184 -- CRASH-092 out of the denominator on all four arms (the nested arms read infra before the
+reorder, their hang being the absent behaviour's own symptom), CRASH-057 CAUGHT on both nested
+arms in the sensitivity scoring, CRASH-008 and CRASH-073 CAUGHT on virtual-nested-exact. Nothing
+else. This is the follow-up lane's measurement.
+
+## 2026-10-28, evening: the lane review, a retraction, and run13
+
+### RETRACTED: CRASH-092's platform precondition (declared 39e7cf5a5b45, withdrawn c97713073a01)
+
+The declaration "select() rejects a timeval whose tv_usec is out of range (EINVAL) rather than
+sleeping on it" was wrong the day it was made. Linux fs/select.c (v6.12, `kern_select`) computes
+`tv.tv_sec + (tv.tv_usec / USEC_PER_SEC)` and rejects only a NEGATIVE value, so glibc's select
+folds a positive overflow exactly as musl's does; the sentence "Linux rejects such a timeval" in
+the declaration, the probe's header and this document's run12 sections was inferred from the
+native run completing, never read off the kernel. Whether the trigger hangs is decided by whatever
+uninitialised stack contents PHP's liveness check passes to select, on either libc, and a probe
+with a fixed value cannot read that. Consequences: the probe (probe-timeval.c), its build target,
+its runner reader and its tests are removed; CRASH-092 declares no precondition and stays in the
+denominator (48 applicable CWE-416 cases under the sensitivity scoring, not 47); its reading on an
+arm is the run's own: a watchdog kill is `infra`, a completion short of the defect `not-reached`.
+run12-judged's "CRASH-092 out of the denominator on all four arms" is withdrawn with it. The
+mechanism of the hang stands as measured (diag3 completes and the nested arms catch at
+`_zval_ptr_dtor`); only its classification changes.
+
+A second correction, of a number this document and the session's reports used: the native
+crashers among the 49 CWE-416 cases are **23**, not 24. 24 is the count over all 65 cases; the
+24th is CRASH-153, CWE-457. The corpus README's "7 + 18" (asan-blind + temporal-asan-visible) was
+7 + 17, as its own population table says, and is corrected.
+
+### The adversarial review of the follow-up lane, and what was done (c97713073a01)
+
+The review (the whole lane, ca7274a244d1..1d40d28425ce) held it NOT READY on six findings. Each
+is closed with a control that fires, in the offline suite (test-run-realphp.py, 194 ok) or the
+native one (delegate-service-test):
+
+1. **The chain rule passed through every frame outside PHP's tree**, the seam's own source and
+   unresolved addresses included, and matched the owner by function name alone. Now a frame in
+   the seam's source or in PHP's allocator is a barrier (no declared site beyond it counts), a
+   chain frame that resolves to nothing is a barrier, only the fault's own ra register may be
+   skipped when unresolved (a leaf's scratch register, named as such in the evidence), and the
+   owner must match by function AND file, as the direct rule does.
+2. **CRASH-073's `memcpy <- _estrndup` catch bypassed the allocator rule**, which keyed on the
+   physical fault path while the chain attributed the logical caller. The allocator barrier
+   closes it: 073 reads `unattributed` until an operand-level audit says otherwise. The
+   "accepted as catches with this note" of the run12 section is withdrawn for 073 and narrowed
+   for 008: both were unpredicted movers, both are amended analysis, and 008 is a catch only if
+   it survives the file-qualified rule in run13.
+3. **The frame walker had no direct test.** It moves into the delegate service as
+   `capstone_delegate_frame_chain(fp, lo, hi, out, max)`, unchanged in what it does, and the
+   native test drives it on a buffer: a well-formed chain, a misaligned fp, an fp outside the
+   stack, a zero return address, a caller's fp not above the frame, the sixteen-frame cap.
+4. **Every unexpected probe result read as "absent".** The putenv reading is now a whole
+   pattern (present: both empty-name calls retained with rc 0; absent: both not retained with
+   rc -1 and EINVAL; the control retained either way) and anything else is no result; a reading
+   counts only from a probe run that exited 0 without a domain fault.
+5. **Probe images carried no hash in the record.** Every platform probe's sha256 is written to
+   platform.json before the boot; a re-judge checks each probe transcript against it and reads a
+   probe the record cannot vouch for as no result. run12's record carries none, which is one
+   reason run13 boots rather than re-judges.
+6. **The timeval precondition**, retracted above.
+
+Every declared site now carries the file it must be seen in (schema field `fault_site_files`,
+written by build-cases.py for all 65 cases from ASan's own frame; CRASH-057's second site names
+`ext/standard/var.c`). The regeneration also caught build-cases.py reusing the population's `why`
+for the extra site's reason.
+
+### run13 pre-registration (tree c97713073a01 plus this record)
+
+**Platform.** `platform-res2`: run7's QEMU (qemu-pin2) and images-v7, with the adapter rebuilt
+from this tree (the launcher's frame walk now calls the delegate service's function; the record
+line is byte-for-byte the same). **Images:** `out-lt8` unchanged: the PHP image, the bound probe
+and the putenv probe at the hashes run12 recorded (run13.sh writes them beside the bundle). One
+platform probe, putenv. Watchdog 40 s. Both populations, default and sensitivity scorings.
+
+**Predictions, against `corpus-run12-judged` (final), cell by cell:**
+
+- CRASH-092: no longer `out-of-denominator` on any arm. The nested arms read `infra` (the
+  watchdog, as run11 read them); stock and the system allocator read whatever their run gives,
+  `not-reached` or `MISSED`, and that reading is reported, not judged in advance.
+- CRASH-073 on virtual-nested-exact: CAUGHT becomes `unattributed` (the allocator barrier), in
+  every scoring that scores it.
+- CRASH-008 on virtual-nested-exact: stays CAUGHT iff every chain frame between `__stpcpy` and
+  `php_date` resolves and `php_date` is seen in `ext/standard/datetime.c`; a barrier reads
+  `unattributed` and is reported as such, not repaired.
+- CRASH-057 on both nested arms (sensitivity): stays CAUGHT iff every chain frame (the
+  delegate, musl's write, the CLI's write, output.c) resolves; an unresolved runtime frame reads
+  `unattributed` and is reported, not repaired.
+- CRASH-084: `out-of-denominator` on all four arms, now with the probe's hash in the record.
+- Everything else identical to run12-judged in both scorings and both populations. Any other
+  mover voids the run's reading until it is explained in this document.
+
+Expected sensitivity totals over the 49 CWE-416 cases, if every "iff" above holds: stock 2,
+system allocator 23, nested 46, nested exact 45 CAUGHT; 1 excluded (084); 092 and 075
+NO-READING.
+
+### run13 (`corpus-run13`, tree 90adc195fe1b, platform-res2, out-lt8, putenv probe): as pre-registered
+
+Both boots rc 0 (temporal-asan-visible 08:35-08:38 UTC, asan-blind 08:38-08:48), the sensitivity
+re-scoring from copies. Against `corpus-run12-judged`, cell for cell, both scorings: temporal 0
+of 76 differ; asan-blind 5 of 184, the same five in both scorings, every one pre-registered and
+none other:
+
+- CRASH-092: `not-reached` on stock and the system allocator (the run completed short of the
+  defect), `infra` on both nested arms (the watchdog). Back in the denominator.
+- CRASH-073 on virtual-nested-exact: CAUGHT becomes `unattributed`, the evidence "its frame chain
+  passes PHP's allocator (_estrndup@zend_alloc.c:437) before any declared site".
+- CRASH-008 stays CAUGHT on virtual-nested-exact (every frame between `__stpcpy` and `php_date`
+  resolved, `php_date` in `ext/standard/datetime.c`); CRASH-057 stays CAUGHT on both nested arms
+  in the sensitivity scoring, its chain fully resolved: "ra=0xa (unresolved, a leaf's scratch
+  register), dl_call, dl_transfer, __capstone_delegate_call, write@write.c:6, sapi_cli_single_write
+  ... php_var_dump at var.c:126". CRASH-084 `out-of-denominator` on all four arms, the putenv
+  probe's hash (5d65c6d7f446886b) in platform.json.
+
+Sensitivity totals over the 49 CWE-416 cases: stock 2, system allocator 23, nested 46, nested
+exact 46 CAUGHT; 084 excluded; 075 NO-READING (infra) on every arm, 092 NO-READING (infra on the
+nested arms, not-reached on stock and the system allocator). The pre-registration's "nested
+exact 45" was wrong arithmetic, not a mover: CRASH-073 is CWE-125 and CRASH-008 CWE-787, the
+exact-bounds arm's spatial catches, so 073's move shows only in the all-65 count (virtual-nested-
+exact 57 to 56 CAUGHT, sensitivity). Images and platform by hash in `corpus-run13/images.sha256`.
+This is the follow-up lane's measurement, replacing run12-judged.
+
+### run14 pre-registration: the platform record carries every supplied probe
+
+run13's two boots cannot be merged into one bundle per arm: the platform record listed only the
+probes the population's cases DECLARE, so the temporal-asan-visible boot (which declares none)
+wrote `platform_probes: {}` and the asan-blind boot wrote the putenv hash, and
+merge-population-bundles.py refuses two boots whose platform differs, as it should. The probe is
+part of the platform, not of the population: the record now lists every probe supplied on the
+command line (run-realphp.py, this commit). Nothing in the judge changes. run14 = run13's
+platform, images, probe and tree plus this fix. Prediction: identical to run13 cell for cell, both
+populations, both scorings, with both boots' platform records equal.
+
+### run14 (`corpus-run14`, tree 1ed7d8c601e2): cell-identical to run13, both boots' records equal
+
+Against run13, both scorings, both populations: 0 of 520 cells differ, and the two boots' platform
+records are equal (the putenv probe's hash in both), so merge-population-bundles.py merges them.
+run14 is recorded as `results/2026-10-28-run14/` (default and sensitivity bundles per arm, README
+with the tables from `tools/result-tables.py`), and corpus.json names its three arm bundles as the
+current verdicts; `derive-verdicts.py` wrote them into every case.json. Lane B's run7 and lane C's
+run10 are recorded beside it as `results/2026-10-27-run7/` and `results/2026-10-28-run10/`.
+
+### The second review (after c97713073a01), closed at 6dcdb1d92414, and run15's pre-registration
+
+The second adversarial review held the lane NOT READY on two P1 and two P2 findings, each
+reproduced with a counterexample: (1) a chain frame with a symbol and no line table passed every
+barrier, which keyed on the path (`zend_cap_reblock@?:0`, `_estrndup@?:0`,
+`capstone_delegate_pack@?:0`), and a routine of main/output.c that owns buffers
+(`php_start_ob_buffer`) passed as plumbing by directory; (2) a probe transcript that named no image
+could still exclude a case, since the guard rejected only a digest that was present and wrong;
+(3) a probe transcript reporting a call twice kept the last line; (4) the declared file matched by
+bare suffix across a directory boundary, and the records' prose claimed more than the bundles hold
+(run10 "the same launcher as run7", the archived records "runs 5, 6 and 7 agree", "22 of 49 differ"
+read as a boundary measurement). 6dcdb1d92414 closes each; the controls are in test-run-realphp.py.
+
+The chain rule now passes a frame through BY NAME only (FORWARDING in run-realphp.py: musl's copies,
+scans and write path, the delegate's call path, PHP 5.0.0's php_body_write ->
+php_ub_body_write(_no_header) -> sapi_cli_ub_write -> sapi_cli_single_write); the seam and the
+allocator are recognised by symbol as well as by path; any other frame outside PHP's tree is a
+barrier, and any other frame inside it is the owner. A probe reading needs the transcript to name
+exactly the recorded image, which needs the launcher to print its image on a run that ends
+(`capstone-exec: exit image=... sha256=...`, runtime/virtual/exec.c, under the diagnostics gate
+the fault record uses). That is a launcher change, so run15 boots on an adapter rebuilt from this
+tree; the images stay out-lt8's.
+
+**run15 pre-registration (tree: this commit; platform-res3 = run7's QEMU and images-v7 with the
+adapter from this tree; out-lt8 images; the putenv probe; watchdog 40 s; both populations, both
+scorings).** Predictions against run14, cell for cell: identical, both scorings, both populations.
+In particular CRASH-057 stays CAUGHT on both nested arms (its chain is dl_call, dl_transfer,
+__capstone_delegate_call, write, sapi_cli_single_write, sapi_cli_ub_write,
+php_ub_body_write_no_header, php_body_write, all on the forwarding list, then php_var_dump in
+ext/standard/var.c); CRASH-008 stays CAUGHT on virtual-nested-exact (strcpy, strcat, then php_date
+in ext/standard/datetime.c); CRASH-068 stays CAUGHT through ra; CRASH-073 stays unattributed;
+CRASH-084 stays out of the denominator, now on a probe transcript that names its image. Any mover
+voids the reading until explained here. The two boots' platform records must be equal.
+
+### run15 (`corpus-run15`, tree 009ca7b34b00, platform-res3): cell-identical to run14, as pre-registered
+
+Both boots rc 0 (09:27-09:40 UTC). Against run14, both scorings, both populations: 0 of 520 cells
+differ; the two boots' platform records are equal; the putenv probe's transcript ends in
+`capstone-exec: exit image=probe-putenv.dom sha256=5d65c6d7...`, the digest the record holds, and
+CRASH-084 is excluded on that. CRASH-057's and CRASH-008's chains pass by name as predicted. run15
+is `results/2026-10-28-run15/`, the current record in corpus.json; run14 stays archived beside it.
+
+### The third review (after e9c5abcc4ba8), closed at 51cf4509c6db; two corrections; the re-judge of run15 pre-registered
+
+The third review held the lane NOT READY on one P1 and three P2: (1) the FAULTING frame was
+classified by path only, so a fault pc in `zend_cap_reblock`, `_emalloc` or
+`capstone_delegate_pack` with no line table reached the chain rule and was attributed to its
+callers; (2) the image digest was read anywhere in a transcript, and two DONE lines passed the
+putenv reader; (3) the launcher's new exit line reached the application's output, so 34 stock
+runs of run15 carried a one-line divergence note that run14's did not (verdicts unaffected); (4)
+run10's README said every hash differs from run7's (the kernel's is the same), and the run13/run15
+pre-registrations named "run7's QEMU". 51cf4509c6db closes (1) to (3) and the README; the controls are
+in test-run-realphp.py.
+
+**Correction to the run13 and run15 pre-registrations' platform naming.** Both say "run7's QEMU
+(qemu-pin2)". The archived records say otherwise: run7 ran on QEMU `28b9ae0fb42a` (lane B's
+pre-registration, dev's pin at the time) and run10, run13, run14 and run15 on `e8a89c014e5a`
+(the pin2 build). The QEMU each run used is the one its record names; the pre-registrations'
+phrase was a mislabel, not a different platform, and every run since run10 used the same QEMU.
+
+**Pre-registration: run15 re-judged (`run15-judged`, the same transcripts, no boot, tree
+51cf4509c6db).** The judge changed (the faulting frame classified; the digest read off the
+launcher's lines; one DONE line; the exit line out of the application's output), so run15's
+records are re-judged from the stored transcripts under this tree. Predictions, cell for cell
+against run15's bundles: every verdict and reason identical, both scorings, both populations; the
+putenv probe reads absent on every arm as before (its transcript's exit line is the launcher's);
+the output-divergence notes on the stock arm return to run14's set (4 rows, not 34), and no other
+note changes except the evidence wording of chain attributions. The re-judged bundles replace
+run15's in `results/2026-10-28-run15/` (the record is the same measurement; the pre-fix bundles
+stay in git history at e9c5abcc4ba8).
+
+### run15 re-judged (`corpus-run15-judged`, tree bbfa6e77dfbf): as pre-registered
+
+The four passes from the stored transcripts (09:56-09:57 UTC): against run15's bundles every
+verdict and reason is identical, both scorings, both populations (520 cells); the putenv probe
+reads absent on every arm from its archived transcript; the stock arm's output-divergence notes
+are run14's four rows again (run15's bundles carried 33, the launcher's exit line). The re-judged
+bundles are now `results/2026-10-28-run15/`; the derived verdicts are unchanged (derive-verdicts
+--check current, 195 cells).
+
+### The fourth review (after 106ed1abca74), answered at 4fefe40638e2; a second re-judge pre-registered
+
+The fourth review held the lane NOT READY on: (P1) a forwarding routine is passed through as a
+whole function, and `dl_call_once` stores to the runtime's own entry before it copies the
+caller's buffer, so a cause-25 fault on that store would be attributed to the PHP caller like the
+fault on the copy -- the judge has no operand evidence to tell them apart; (P1) the one-hop leaf
+rule read the caller off ra without the seam and allocator barriers; (P2) the direct rule compared
+every declared function against ASan's primary file, so a fault directly in CRASH-057's second
+site could not match, and the reach evidence named fault_sites[0]; (P2) the putenv reader took
+`retained=2` and `failures=0garbage`. 4fefe40638e2 answers each: the P1 on forwarding is answered
+by CLASSIFICATION, not by a claim of soundness -- a catch through the call path is its own
+attribution class, `chain`, the weakest, shown apart in every table and never counted silently
+with the function catches; the operand-level evidence that would promote a chain catch (the
+faulting capability's bounds matched against the seam's own issue record) is a measurement this
+lane does not make. The other three are fixed as described in the commit.
+
+Two counts corrected: run15's pre-fix bundles (e9c5abcc4ba8) carried the launcher's exit line as an
+output divergence on 33 stock rows in the default scoring and 44 in the sensitivity scoring (the
+earlier entry said 33 without naming the scoring; the fourth review counted 34 by another method).
+
+**Pre-registration: run15 re-judged a second time (`run15-judged2`, the same transcripts, no boot,
+tree 4fefe40638e2).** Every verdict and reason identical to `results/2026-10-28-run15/` in both
+scorings and populations. The attribution class changes from `function` to `chain` on exactly
+these CAUGHT cells and no others: CRASH-068 on all four arms (both scorings; the fault in strlen,
+the site through ra), CRASH-057 on virtual-nested-pools and virtual-nested-exact (sensitivity; the
+frame chain), CRASH-008 on virtual-nested-exact (both scorings; the chain through strcpy and
+strcat). The tables' "of which by chain" column therefore reads, over the 49 CWE-416 cases in the
+sensitivity scoring: stock 1, system allocator 1, nested 2, nested exact 2 (068 and 057), and over
+all 65: nested exact 3 (008 besides). Nothing else moves.
+
+### run15 re-judged a second time (`corpus-run15-judged2`, tree f9079b6f1e8e): as pre-registered
+
+Four passes from the stored transcripts (10:13 UTC). Against the first re-judge: no verdict or
+reason differs (520 cells); the attribution class changes to `chain` on exactly the twelve cells
+pre-registered -- CRASH-068 on all four arms in both scorings, CRASH-057 on both nested arms in the
+sensitivity scoring, CRASH-008 on virtual-nested-exact in both -- and on none other. The record
+`results/2026-10-28-run15/` carries these bundles; every record's README and the corpus README now
+show "of which by chain" (run7's and run10's columns read 0: their bundles were judged before the
+class existed, and are kept as judged).
+
+### The fifth review (after ea32f9ed64b4): READY WITH CHANGES, made at 2494fc52120d; a third re-judge pre-registered
+
+The fifth review found the `chain` class an honest disclosure of weaker evidence, which narrows the
+forwarding finding without claiming operand-level soundness, and asked for three changes: the
+putenv reader must void a transcript on any malformed PUTENV_PROBE line (it counted the well-formed
+records and ignored the rest); the records judged before the class show "not classified" rather
+than 0 chain catches; a chain catch's reach evidence must not say the run "faulted in" the site.
+2494fc52120d makes them (and marks the judge's scoring description with the class, so a later record
+with no chain catch still reads as classified).
+
+**Pre-registration: run15 re-judged a third time (`run15-judged3`, the same transcripts, no boot,
+tree 2494fc52120d).** Every verdict, reason and attribution identical to `results/2026-10-28-run15/`
+in both scorings and populations; the reach evidence of exactly the twelve chain cells reads "faulted
+in <routine>, whose call path reaches <site>"; every bundle's scoring description carries the chain
+mark; the putenv probe reads absent on every arm from its archived transcript. Nothing else moves.
+
+### run15 re-judged a third time (`corpus-run15-judged3`, tree b11a186ebde3): as pre-registered
+
+Four passes (10:27 UTC). Against the second re-judge: no verdict, reason or attribution differs
+(520 cells); the twelve chain cells' reach evidence reads "faulted in <routine>, whose call path
+reaches <site>"; all sixteen bundles carry the scoring mark; the putenv probe reads absent on every
+arm. The run15 record carries these bundles. The derived verdicts are unchanged.
+
+## 2026-10-28: one PHP corpus, and run16
+
+The sibling corpus (corpus/php-5-temporal, 56 temporal cases from the same source corpus) and this
+one are merged into this one at df8210de5774: 47 cases were in both, five more default-build temporal
+cases are admitted as 66 to 70 (CRASH-012, -062, -070, -148, -161), the sibling's four fullext
+cases stay out. 70 cases, 55 temporal.
+
+**run16 pre-registration (tree: this commit; platform-res3 and out-lt8 as run15; the putenv probe;
+watchdog 40 s; both populations, both scorings, the whole corpus).**
+
+- The first 65 cases: every verdict, reason and attribution identical to `results/2026-10-28-run15/`
+  (the third re-judge), both scorings. Any mover voids the reading until explained here.
+- CRASH-012 and -148 (invalid free of the globals symbol table): native PHP aborts (SIGNAL:6), so
+  the default scoring reads them out-of-denominator on every arm. Their declared site is ASan's first
+  PHP frame, `_efree` in Zend/zend_alloc.c, PHP's allocator, which the judge never attributes, so
+  under the sensitivity scoring no arm can read CAUGHT: every cell is NO-READING, its reason reported.
+- CRASH-161 (double free): native PHP crashes (SIGNAL:11), out-of-denominator by default. Under the
+  sensitivity scoring the declared site is `zend_hash_destroy` (Zend/zend_hash.c). No arm-level
+  prediction beyond the invariants below: this is its first measurement.
+- CRASH-062 and -070 (use-after-free, native PHP ends in its own fatal error, EXIT:255): scored by
+  default. Sites `_php_stream_free` (main/streams/streams.c) and
+  `zend_do_begin_class_member_function_call` (Zend/zend_compile.c). First measurement; invariants only.
+- Invariants for the five: stock catches no use-after-free (it revokes nothing); every CAUGHT is at
+  a declared site in its declared file, by function or by chain, never in the allocator or the seam;
+  the system allocator's catches are a subset of the nested arms'. A violation voids the reading.
+
+### run16 (`corpus-run16`, tree d68539a6da2e): as pre-registered
+
+Both boots rc 0 (12:34-12:49 UTC; the temporal-asan-visible boot took five minutes, not three,
+with its three new cases). The first 65 cases: 520 cells, every verdict, reason and attribution
+identical to run15's third re-judge. The five merged cases, both scorings:
+
+| case | stock | system allocator | nested | nested exact |
+|---|---|---|---|---|
+| CRASH-062 | MISSED | CAUGHT | CAUGHT | CAUGHT |
+| CRASH-070 | MISSED | CAUGHT | CAUGHT | CAUGHT |
+| CRASH-012, -148 | out-of-denominator / unattributed | same | same | same |
+| CRASH-161 | out-of-denominator / infra | same | same | same |
+
+062 and 070 are caught by function at ASan's own line (`_php_stream_free` at streams.c:276 and
+`zend_do_begin_class_member_function_call` at zend_compile.c:1321), cause 25, on every revoking
+arm: both blocks reached free() on this platform, although our native ASan as shipped reads
+PHP's own fatal error for both. 012 and 148: the seam refuses the pointer efree is given on every
+arm, stock included ("code=4 free of a pointer this heap did not issue"), which the judge reads as
+unattributed; no CAUGHT, as pre-registered. 161: the 40 s watchdog on every arm, stock included,
+before any output of the script (its trigger fills a 5,000,000-element array and relies on a 1 s
+CPU-time limit firing mid-copy); a first measurement, inside the invariants. Every invariant
+holds: stock catches no use-after-free, every CAUGHT is at a declared site in its file, the system
+allocator's catches are a subset of the nested arms'. run16 is `results/2026-10-28-run16/`, the
+current record; over the 55 temporal cases, sensitivity scoring: stock 2, system allocator 25,
+nested 48, nested exact 48 CAUGHT.
+
+### CRASH-161 with a 600 s watchdog (`residues/161-600s`, tree d68539a6da2e): too big for this harness
+
+The trigger fills a 5,000,000-element array and relies on a 1 s CPU-time limit firing while PHP
+copies it; natively the whole script takes about a second. On the virtual profile neither arm that
+finished reached the script's first output: stock was killed by the guest's OOM killer at 380 s
+(`capstone-vexec` at 1.9 GB resident in the 2 GB guest; the stock arm keeps every freed block by
+design), the system allocator hit the 600 s watchdog after 217,000 region grants. The nested arms
+were stopped after these two readings: they do strictly more work per allocation, and two arms
+already say the case does not reach its defect within this harness's memory and time. CRASH-161
+stays `infra` in the population run. What would settle it is a guest with more memory and a
+watchdog of an hour, or a smaller array with the CPU limit scaled to the emulated speed, which
+changes the trigger and so needs its own provenance note; neither is done here.
+
+### The seam reduced to what the arms need (cdfbff0e4e57), and run17 pre-registered
+
+The real-PHP seam image no longer links php_virtual_lower.c (nothing in it calls that file),
+reports its counters on one route (the destructor; the atexit route and its "armed" line are
+gone), and the header drops the unused stat index names. Nothing that decides a reading changes:
+the mode bits, the grain, the geometry, interior and unknown-pointer refusals, issue, header,
+reclaim, release and reblock are byte-for-byte the same source.
+
+**run17 pre-registration (tree: this commit; the seam image and the seam probe rebuilt from it in
+`out-lt8s`, a copy of out-lt8 with the same SDK, the putenv probe unchanged; platform-res3;
+watchdog 40 s; both populations, both scorings, all 70 cases).** Predictions against run16, cell
+for cell: every verdict, reason and attribution identical (560 cells per scoring pair); every
+arm's sanity run still prints the PHP_VIRTUAL SEAM line and the arm-ordering gate passes; no
+transcript carries "PHP_VIRTUAL SEAM armed". The image and probe hashes differ, which is the
+change. Any mover voids the simplification until explained here.
+
+### run17 (`corpus-run17`, tree 1891bea735e9, out-lt8s): as pre-registered
+
+The seam image rebuilt from the reduced seam on out-lt8's SDK (image afd3e239 -> 1ddce979, seam
+probe 331a7c30 -> 813898ae; the old image carried cap_arm_report, cap_report_once and
+cap_report_dtor, the new one cap_report alone). Neither image contains zend_cap_widen,
+php_fault_report or zend_cap_block_end: the linker had already discarded php_virtual_lower.c's
+functions, so dropping it from the link changes what the port brings, not the binary. Both boots
+rc 0. Against run16: 560 cells, every verdict, reason and attribution identical; every arm's
+sanity run prints the seam's exit line (revokes 0 on stock and the system allocator, 6375 on both
+nested arms), the cross-arm gates pass, and no transcript carries the "armed" line, which 292 of
+run16's 296 transcripts did. run17 is the current record.
+
+## 2026-10-28: "seam" renamed "nested" (the nested allocator layer), and run18
+
+The arms were named stock / system allocator / nested / nested exact on 2026-10-28 morning; the code
+that builds the nested arms kept the name "seam", so one thing had two words. It is renamed in the
+real-PHP port, its corpus, runners, tests and arms.json: the layer is the nested allocator layer;
+the build mode PHP_REALPHP_ALLOC=nested (was seam), the image php-real-nested.dom, the probe
+probe-nested.c / probe-nested.dom (build target nested-probe), the control nested-bound-probe (was
+seam-bound-probe), the exit line PHP_VIRTUAL NESTED (was PHP_VIRTUAL SEAM), the run-cases
+configurations php-virtual-{stock,block,object} (were php-virtual-seam-*). One version, no aliases:
+a record keeps the names of the tree it was taken on, which every record names by hash, so run7 to
+run17 are re-judged, if ever, on their own trees. Untouched: ports/php/engine (Phase A, where
+"seam" names a different mode, zend_alloc.c dropped), other ports' own seams, archived results,
+this log. Until run18 lands, the current record (run17) cannot be re-judged under the new names --
+the judge refuses its control name as undeclared, which is the gate working.
+
+**run18 pre-registration (tree: this commit; out-lt8n = out-lt8s with the image and probe rebuilt
+under the new names, same SDK; the putenv probe; platform-res3; watchdog 40 s; both populations,
+both scorings, 70 cases).** Every verdict, reason and attribution identical to run17 (560 cells);
+every exact-arm observation carries the control nested-bound-probe and none seam-bound-probe;
+every arm's sanity run prints PHP_VIRTUAL NESTED and no transcript carries PHP_VIRTUAL SEAM; the
+cross-arm gates pass. Any mover voids the rename until explained here.
+
+### run18 (`corpus-run18`, tree e61721e2fb38, out-lt8n): as pre-registered
+
+The image and probe rebuilt under the new names on the same SDK: the image carries the string
+PHP_VIRTUAL NESTED and not PHP_VIRTUAL SEAM (the old image, as control, carries SEAM). Both boots
+rc 0. Against run17: 560 cells, every verdict, reason and attribution identical. The differences
+are the rename's own: every exact-arm observation's control is nested-bound-probe (280, run17
+seam-bound-probe), 93 transcripts carry PHP_VIRTUAL NESTED and none PHP_VIRTUAL SEAM (run17: 93
+SEAM), the image hash, the fault addresses of the rebuilt binary, and the build path in 13 pieces
+of evidence (realphp/seam/tree became realphp/nested/tree). The cross-arm gates pass. run18 is the
+current record; the case files are regenerated with the new wording and derive-verdicts and
+check-corpus are clean again over all 30 corpora.

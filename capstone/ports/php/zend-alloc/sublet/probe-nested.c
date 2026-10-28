@@ -1,4 +1,4 @@
-/* Does the seam behave, BEFORE any of PHP is pointed at it?
+/* Does the nested layer behave, BEFORE any of PHP is pointed at it?
  *
  * WHY THIS COMES FIRST. Phase A's lesson, paid for twice: a probe that exercises the real code
  * in the shape the real caller uses it finds in one second what a 2.3 MB PHP image finds in
@@ -32,13 +32,13 @@
  * only difference is that efree does not revoke. If stage 6 faulted too, the faults above
  * would not be about revocation at all.
  *
- * Stages 8 and 9 answer the question stage 6 cannot: whether a catch belongs to the SEAM or to
+ * Stages 8 and 9 answer the question stage 6 cannot: whether a catch belongs to the NESTED or to
  * mallocng underneath it. The platform revokes a block when the block is freed, and PHP's
  * cache means most blocks never are -- so on the system-allocator arm a cache-absorbed free must
  * survive (stage 8) while a real one must not (stage 9). Without that pair, every temporal
  * catch here would be unattributable between the two layers.
  *
- * Stages 10 and 11 are the identity checks the previous seam did in software (its issued flag
+ * Stages 10 and 11 are the identity checks the previous nested did in software (its issued flag
  * and its index) and that the libc's CREVOKE now does in hardware: the fault is in the
  * allocator, at a named site, which the judge attributes through the record's return address. */
 #include "zend-cap-mode.h"
@@ -86,10 +86,10 @@ int main(int argc, char **argv)
     unsigned long stats[8];
     void *hdr = 0, *pay;
 
-    printf("PROBE-SEAM stage=%d\n", stage);
+    printf("PROBE-NESTED stage=%d\n", stage);
     fflush(stdout);
 
-    /* The arm under test is the full seam: exact bounds, a child per object, and the block
+    /* The arm under test is the full nested: exact bounds, a child per object, and the block
      * returned so mallocng revokes it too. Stage 6 is the STOCK arm (nothing revoked
      * anywhere, the block leaked); stages 8 and 9 are the SYSTEM-ALLOCATOR arm (the block returned,
      * no child per object), which is what makes a nested-arm catch attributable to the per-object lifetime. */
@@ -242,7 +242,7 @@ int main(int argc, char **argv)
         efree_like(pay, 0);
         say("S1 payload reclaimed; WRITING through the stale alias (expect a fault)");
         ((char *)pay)[0] = 'x';
-        say("S1 RESULT: NO FAULT -- the stale payload alias is still writable. SEAM BROKEN.");
+        say("S1 RESULT: NO FAULT -- the stale payload alias is still writable. NESTED BROKEN.");
         return 1;
     }
 
@@ -251,7 +251,7 @@ int main(int argc, char **argv)
         efree_like(pay, 0);
         say("S2 payload reclaimed; READING through the stale alias (expect a fault)");
         for (i = 0; i < 16; i++) { acc += (unsigned char)((char *)pay)[i]; }
-        printf("S2 RESULT: NO FAULT -- read 0x%lx through a reclaimed alias. SEAM BROKEN.\n", acc);
+        printf("S2 RESULT: NO FAULT -- read 0x%lx through a reclaimed alias. NESTED BROKEN.\n", acc);
         return 1;
     }
 
@@ -264,7 +264,7 @@ int main(int argc, char **argv)
                again, pay);
         say("S3 now writing through the OLD alias (expect a fault)");
         ((char *)pay)[0] = 'x';
-        say("S3 RESULT: NO FAULT -- the cache hand-back resurrected the old alias. SEAM BROKEN.");
+        say("S3 RESULT: NO FAULT -- the cache hand-back resurrected the old alias. NESTED BROKEN.");
         return 1;
     }
 
@@ -287,7 +287,7 @@ int main(int argc, char **argv)
          * is FREED, and PHP's cache means most blocks are never freed -- which is precisely why
          * so many of the corpus's use-after-frees are invisible to ASAN. With the block returned
          * but no child per object, a use-after-free of a CACHED block must therefore survive. If
-         * this stage faulted, the seam's catches could be the platform's and there would be no
+         * this stage faulted, the nested layer's catches could be the platform's and there would be no
          * way to tell them apart. */
         efree_like(pay, 0);                 /* the park: reclaim (a no-op here), do not free */
         say("S8 cached-block free on the SYSTEM-ALLOCATOR arm; using the alias (expect NO fault)");
@@ -334,6 +334,6 @@ int main(int argc, char **argv)
         return 1;
     }
 
-    say("usage: probe-seam 0|1|2|3|4|5|6|7|8|9|10|11|12");
+    say("usage: probe-nested 0|1|2|3|4|5|6|7|8|9|10|11|12");
     return 2;
 }

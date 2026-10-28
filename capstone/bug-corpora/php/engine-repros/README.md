@@ -10,8 +10,8 @@ reading the defect: ASan with PHP's allocator patched against ASan with it as sh
 
 | population | cases | what it is | who can catch it |
 |---|--:|---|---|
-| `asan-blind` | 46 | ASan reports it only with the allocator patched; as shipped the run reads OK. By CWE: 30 use-after-free, 10 out-of-bounds reads and 2 writes, 2 stack-address escapes, 1 free of non-heap memory, 1 uninitialised read; 7 of the 46 crash natively | selected by measurement, not by mechanism: what each arm sees is in the arms' records. The first run has the seam arms (`virtual-nested-pools`, `virtual-nested-exact`) at 26 and 30, the outer allocator alone (`virtual-malloc`) at 13 -- 8 use-after-frees whose block does reach `free()` plus 5 bounds catches the platform gives every arm |
-| `temporal-asan-visible` | 19 | CWE-416 that ASan reports with the allocator as shipped (the `stockalloc` run) AND that the patched build classifies as a use-after-free: the block reached `free()`; 17 of the 19 crash natively, so the judge's default denominator holds two of them and the `--score-oracle-crashes` sensitivity scoring reads the rest | the outer allocator by itself, `virtual-malloc` (musl mallocng, a lifetime per block), for a block that reaches `free()` and is not parked in `AG(cache)`; the seam arms for the parked ones. Which is which is in the arms' records |
+| `asan-blind` | 48 | ASan reports it only with the allocator patched; as shipped the run reads OK, or for a temporal defect ends in PHP's own fatal error with no report (CRASH-062, -070). By CWE: 32 use-after-free, 10 out-of-bounds reads and 2 writes, 2 stack-address escapes, 1 free of non-heap memory, 1 uninitialised read; 7 of the 48 crash natively | selected by measurement, not by mechanism: what each arm sees is in the arms' records. The first run has the nested layer arms (`virtual-nested-pools`, `virtual-nested-exact`) at 26 and 30, the outer allocator alone (`virtual-malloc`) at 13 -- 8 use-after-frees whose block does reach `free()` plus 5 bounds catches the platform gives every arm |
+| `temporal-asan-visible` | 22 | a temporal defect (19 CWE-416, 2 CWE-590, 1 CWE-415) that ASan reports with the allocator as shipped (the `stockalloc` run) AND that the patched build reports as a use-after-free or an invalid free: the block reached `free()`; 20 of the 22 crash natively, so the judge's default denominator holds two of them and the `--score-oracle-crashes` sensitivity scoring reads the rest | the outer allocator by itself, `virtual-malloc` (musl mallocng, a lifetime per block), for a block that reaches `free()` and is not parked in `AG(cache)`; the nested layer arms for the parked ones. Which is which is in the arms' records |
 
 The two do not overlap. Every case is a client defect in PHP's own code; none is a bug in
 libc or in `zend_alloc.c`, which is witness, not culprit.
@@ -27,7 +27,9 @@ tarball by the corpus's recipes: `asan` (its two `zend_alloc.c` detector patches
 (the same without those patches -- the allocator as shipped under ASan; the corpus does not
 ship this run, and the populations are *defined* by it) and the plain build.
 
-The result is 65 cases (46 + 19) where the collaborator's instrument measured 60 (31 + 29):
+**One PHP corpus (2026-10-28).** A sibling corpus built from the same source by another lane (56 temporal cases) is merged into this one: 47 of its cases were already here, and five more that run on the default build are admitted by the widened temporal rule and numbered 66 to 70 after the first 65, so no number moved -- CRASH-012 and -148 (a free of the globals symbol table, CWE-590), CRASH-161 (a double free, CWE-415), CRASH-062 and -070 (use-after-free whose as-shipped run ends in PHP's own fatal error). Its four fullext cases (CRASH-125, -129, -131, -132: mbstring, pcre) need a build this corpus does not make and are not here. 70 cases, 55 of them temporal (51 CWE-416, 3 CWE-590, 1 CWE-415).
+
+The first build gave 65 cases (46 + 19) where the collaborator's instrument measured 60 (31 + 29):
 **16 cases sit in a different population on our ASan than on theirs**, CRASH-064 (a
 handle-after-free that both ASan builds report only as SEGV, so no build names it a
 use-after-free) is in neither population, two of theirs end as
@@ -57,12 +59,12 @@ The directory prefix is the php-src fix commit (12 hex digits); the suffix the c
 
 ```sh
 python3 capstone/ports/php/app/run-realphp.py --corpus capstone/bug-corpora/php/engine-repros \
-  --population asan-blind --image php-real-seam.dom --probe probe-seam.dom --llvm-bin "$CAPSTONE_LLVM_BIN" \
+  --population asan-blind --image php-real-nested.dom --probe probe-nested.dom --llvm-bin "$CAPSTONE_LLVM_BIN" \
   --qemu ... --images ... --adapter ... --out results/<stamp>/asan-blind
 ```
 
 One guest boot per arm, every case its own `capstone-vexec` process. The runner drives four
-configurations of one seam image (`tools/arms.json` `php-real-stock|block|object|exact`,
+configurations of one nested image (`tools/arms.json` `php-real-stock|block|object|exact`,
 `PHP_CAP_MODE` 0/4/6/7) and writes one bundle per arm under the framework's names
 (`virtual-malloc` = block, `virtual-nested-pools` = object, `virtual-nested-exact` = exact);
 the stock run is the judge's control for `reached` and keeps its own name. A run whose
@@ -86,15 +88,66 @@ mechanism, so that a surprise is a surprise:
 - `virtual-nested-exact`: `virtual-nested-pools` plus the slack overflows; the highest count.
 - CRASH-022 and CRASH-078, whose earlier "catches" were PHP's own `qsort` swap, read for the
   first time; a CAUGHT there is at the ASan site or it is not a catch.
-- The 7 + 18 cases that crash natively read `out-of-denominator` on every arm under the
+- The 7 + 17 cases that crash natively (7 of the 46 asan-blind, 17 of the 19 temporal-asan-visible,
+  counted from the oracle files; 23 of them CWE-416, the 24th is CRASH-153, CWE-457) read `out-of-denominator` on every arm under the
   judge's default scoring, whatever the arm did; the sensitivity scoring
   (`--score-oracle-crashes`) reads them by fault site and is reported beside, never instead.
 - The 16 cases placed differently from the collaborator's populations carry no prediction
   beyond the mechanism above; whatever they read is a reading of this instrument.
 
-## The first run
+## Results
 
-`results/2026-10-27-first-run/`: both populations on dev `0b0b3414dca5` with the patched port, one bundle per arm (the two populations merged by `tools/merge-population-bundles.py`, sources by hash). Its README has the tables; `derive-verdicts.py` wrote the verdicts into every `case.json` from those bundles, and `check-corpus.py` re-judges them.
+Seven records, each a run of the whole corpus on the virtual profile, one bundle per arm with the two
+populations merged (`tools/merge-population-bundles.py`), every table computed from the bundles by
+`tools/result-tables.py` and written into that record's README, never typed:
+
+- `results/2026-10-27-run7/`: lane B's measurement (the corpus at `672a0deffaa2`, 65 cases).
+- `results/2026-10-28-run10/`: lane C's measurement (the nested layer on the libc's reclaim, `8569fb7194dc`): against run7 no CAUGHT changed.
+- `results/2026-10-28-run14/` and `results/2026-10-28-run15/`: the follow-up lane's measurement (the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain and, from run15, names its image on exit, the putenv probe); run15's verdicts and reasons are cell-identical to run14's.
+- `results/2026-10-28-run16/`: the merged corpus measured whole (70 cases): the first 65 exactly as in run15, the five merged cases measured for the first time.
+- `results/2026-10-28-run17/`: the same 70 cases on the reduced nested layer, every cell identical to run16.
+- `results/2026-10-28-run18/`: **the current record**, the same 70 cases under the renamed layer ("seam" is now "nested"), every cell identical to run17. `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them.
+
+Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415), from `results/2026-10-28-run18/README.md` (identical to run16's and run17's):
+
+**Default scoring** (the native crashers out of the denominator):
+
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 1 | 1 | 24 | infra 1, not-reached 2, out-of-denominator 27 |
+| system allocator | 12 | 1 | 12 | infra 1, not-reached 2, out-of-denominator 27, unattributed 1 |
+| nested | 25 | 1 | 0 | infra 2, out-of-denominator 27, unattributed 1 |
+| nested exact | 25 | 1 | 0 | infra 2, out-of-denominator 27, unattributed 1 |
+
+**Sensitivity scoring** (every case scored by fault site; reported beside the default, never instead):
+
+| arm | CAUGHT | of which by chain | MISSED | NO-READING |
+|---|--:|--:|--:|---|
+| stock | 2 | 1 | 24 | infra 3, not-reached 13, out-of-denominator 1, setup-fault 7, unattributed 5 |
+| system allocator | 25 | 1 | 12 | infra 2, not-reached 2, out-of-denominator 1, setup-fault 9, unattributed 4 |
+| nested | 48 | 2 | 0 | infra 3, out-of-denominator 1, unattributed 3 |
+| nested exact | 48 | 2 | 0 | infra 3, out-of-denominator 1, unattributed 3 |
+
+Read with the plan document (`docs/plans/2026-10-12-php-virtual-capstone-retarget.md`, runs 8 to 16):
+the system allocator's catches are a strict subset of the nested arms'; a catch "by chain" is attributed
+through the call path alone (a fault in a libc copy, scan or write routine, the declared function reached
+by walking its callers: CRASH-068 through ra on every arm, CRASH-057 through the frame chain on the
+nested arms) and is the weakest attribution class, shown apart and never counted silently. CRASH-084 is
+out of the denominator because this libc's putenv never creates the dangling reference the defect needs
+(checked by a probe whose transcript names its image and whose hash the record carries). CRASH-012 and
+-148 free a symbol table malloc never returned: the nested layer refuses the pointer on every arm, which the
+judge reads as `unattributed` (their declared site is PHP's allocator). CRASH-075 and CRASH-161 are
+`infra` on every arm (the 40 s watchdog; the plan document records a separate 600 s run of 075, not
+archived here, as a catch at `php_array_walk`); CRASH-092 is `infra` on the nested arms and
+`not-reached` on stock and the system allocator (it hangs, or completes short of its defect, on
+uninitialised stack contents).
+
+The native population and the system allocator's column disagree on 24 of the 51 CWE-416 cases: 15
+asan-blind cases the system allocator catches, and 9 temporal-asan-visible cases it does not read (8
+`setup-fault`, 1 `unattributed`), which are not measured misses and not a second reading of where the
+block's release went. The native cohort is a selection by one detector build, not a prediction of this
+column: the sibling corpus's own ASan measurement of the same 47 shared cases placed 16 of them on the
+other side.
 
 ## Not here
 

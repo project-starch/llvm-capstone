@@ -88,8 +88,8 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 `distinguishing` (why this case is not a duplicate of its siblings),
 `sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
 `allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
-`fault_sites_why`, `duplicate_of`, `control_probe`, `control_probe_why`, `memory_error_is_the_defect`,
-`memory_error_is_the_defect_why`. Optional means
+`fault_sites_why`, `fault_site_files`, `duplicate_of`, `control_probe`, `control_probe_why`, `memory_error_is_the_defect`,
+`memory_error_is_the_defect_why`, `platform_precondition`, `platform_precondition_why`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -136,6 +136,20 @@ stale access has no labelled probe -- a double free faults inside the manager, a
 inside `memcpy`. It needs `fault_sites_why`, and the reason must come from the source or from an
 earlier independent run, never from the fault it is about to admit: a site chosen after seeing where
 a run faulted would turn every crash into a catch.
+
+`fault_site_files` is an object from each declared site to the repo-relative file it must be seen in,
+so that a judge matches a site by function AND file: a same-named routine in another file is not the
+site. Its keys are a subset of `fault_sites`. A judge that attributes a fault through a frame chain
+(PHP's run-realphp.py) refuses a site it has no file for. First use: PHP's engine-repros, where the
+main site's file is ASan's own frame and CRASH-057's second site names `ext/standard/var.c`.
+
+`platform_precondition` (an object `{needs, probe, present, absent}`, with `platform_precondition_why`) declares a
+behaviour of the platform's libc that the defect needs to exist at all -- `needs` says which, `probe` names the
+probe program a runner executes on every arm to check it, `present` and `absent` are the probe's two readings.
+A runner excludes the case (`out-of-denominator`) only when the probe PROVES the behaviour absent on that
+arm, judges it normally when the probe was not run or failed, and never when the declaration alone says so.
+The worked example is PHP's CRASH-084: a use-after-free that needs glibc's putenv to keep an empty-name
+string in environ, which musl's does not. The reason must name the libc code that decides it.
 
 `memory_error_is_the_defect` (`true`, with `memory_error_is_the_defect_why`) declares that a `MemoryError` the case's
 trigger raises is the defect's own access running uncaught -- a length read past an object, say, that the arm's

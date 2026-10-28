@@ -13,10 +13,10 @@ that must agree and live in two files is how a port quietly stops being the same
 its comparison column.
 
 ONLY THE SPATIAL AXIS IS IN SCOPE HERE, and that is a property of Phase A rather than of the
-profile. The physical suite measures the temporal axis in `seam` mode -- PHP's allocator
+profile. The physical suite measures the temporal axis in `nested` mode -- PHP's allocator
 dropped, the port's arena serving emalloc directly, with revocation per object. That arena is
 physical-profile code; replacing it with Sublet regions over a block the virtual heap lends is
-the allocator-seam work the plan treats as its own design question. Of the 24 reachable cases,
+the allocator-nested work the plan treats as its own design question. Of the 24 reachable cases,
 6 are on the spatial axis (axis_of says `heap`); for the other 18 this runner reports nothing
 at all, which is not the same as reporting a miss.
 
@@ -47,21 +47,21 @@ CONTROL_RUN = "emalloc-overread"      # must match arms.json's `controls` key
 # The temporal axis: THREE columns from ONE image, differing only in a runtime mode word, so a
 # catch can be attributed to the per-object retire rather than to the allocator underneath it.
 # The modes themselves live in arms.json, so the runner cannot quietly disagree with the judge.
-TEMPORAL_ARMS = ("php-virtual-seam-stock", "php-virtual-seam-block", "php-virtual-seam-object")
+TEMPORAL_ARMS = ("php-virtual-stock", "php-virtual-block", "php-virtual-object")
 SANITY_RUN = "revocation-sanity"      # must match arms.json's `controls` key
 SANITY_CASE = "CRASH-110"             # a benign workload for the temporal axis: its only defect
                                       # is spatial, and these arms hold the bound at REAL_SIZE
 MODE_LINE = re.compile(r"ZEND_CAP_MODE (\d+) exact=(\d) revoke=(\d)")
-SEAM_LINE = re.compile(r"PHP_VIRTUAL SEAM blocks=(\d+) frees=(\d+) issues=(\d+) "
+NESTED_LINE = re.compile(r"PHP_VIRTUAL NESTED blocks=(\d+) frees=(\d+) issues=(\d+) "
                        r"retires=(\d+) revokes=(\d+)")
-# The seam's own failures, which are instrument failures and never verdicts.
-SEAM_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
-# A fault inside the seam's own code is a port artefact, not a catch. Named here because the
+# The nested layer's own failures, which are instrument failures and never verdicts.
+NESTED_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
+# A fault inside the nested layer's own code is a port artefact, not a catch. Named here because the
 # physical column learned it the expensive way: a fault in the allocator looks exactly like a
-# fault in the program when all you have is a pc. heap.c is on the list since the seam's reclaim
+# fault in the program when all you have is a pc. heap.c is on the list since the nested layer's reclaim
 # moved into the libc: a refusal at cap_malloc_reclaim (a double efree, a pointer that is not the
 # issued child) is the allocator refusing, which this runner does not credit as a catch.
-SEAM_OWN_FILES = ("zend-cap-mode.c", "zend_alloc.c", "runtime/virtual/heap.c")
+NESTED_OWN_FILES = ("zend-cap-mode.c", "zend_alloc.c", "runtime/virtual/heap.c")
 
 
 def suite_text():
@@ -305,9 +305,9 @@ def read_pristine(path):
             and str(r.get("crashes_on_pristine_build", "")).lower() == "true"}
 
 
-def seam_counters(text):
+def nested_counters(text):
     """(mode, revokes, retires) a run reported about itself, or (None, None, None)."""
-    m, s = MODE_LINE.search(text or ""), SEAM_LINE.search(text or "")
+    m, s = MODE_LINE.search(text or ""), NESTED_LINE.search(text or "")
     return (int(m.group(1)) if m else None,
             int(s.group(5)) if s else None,
             int(s.group(4)) if s else None)
@@ -335,14 +335,14 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
                      "control that completes would show the port NOT reproducing the defect")
         return obs
 
-    fail = SEAM_FAIL.search(text)
+    fail = NESTED_FAIL.search(text)
     if fail:
-        # Codes 3 and 4: the seam refused the pointer efree was given, by name (in no block of
+        # Codes 3 and 4: the nested layer refused the pointer efree was given, by name (in no block of
         # this heap, or not at its start) -- the program's own invalid free, unattributed. Every
         # other code: the instrument ran out or found its own invariant broken. Never a verdict.
         code = int(fail.group(1))
         obs.infra = "unattributed" if code in (3, 4) else "infra"
-        obs.notes = f"the seam {'refused the pointer' if code in (3, 4) else 'failed'}: code={code} {fail.group(2)[:80]}"
+        obs.notes = f"the nested layer {'refused the pointer' if code in (3, 4) else 'failed'}: code={code} {fail.group(2)[:80]}"
         return obs
     if rc is None:
         obs.infra = "infra"
@@ -352,7 +352,7 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
     obs.reached = "evaluating the trigger" in text
     obs.reach_evidence = "stage line 'evaluating the trigger' printed"
     obs.completed = "PHP_VIRTUAL_DONE" in text and rc == 0
-    _, revokes, retires = seam_counters(text)
+    _, revokes, retires = nested_counters(text)
     if revokes is not None:
         obs.notes = f"revokes={revokes} retires={retires}"
 
@@ -364,7 +364,7 @@ def observe_temporal(case, arm, image_sha, exits, chunks, sites, control,
         func, where = sites.locate(fault.pc, int(m.group(1), 16)) if m else ("", "")
         obs.notes = (obs.notes + "; " if obs.notes else "") + (f"{func} at {where}" if where else "")
         at_site = bool(expect) and expect in (where or "")
-        if any(f in (where or "") for f in SEAM_OWN_FILES):
+        if any(f in (where or "") for f in NESTED_OWN_FILES):
             obs.attribution_evidence = (f"fault at {where} is inside the port's own allocator, "
                                         f"not in the program under test")
         elif stock_completed:
@@ -411,18 +411,18 @@ def run_temporal(args, cases, manifest, arms, expect_file):
         print(f"    the corpus records stock PHP crashing on {len(inside)} of these cases"
               + (f": {' '.join(inside)} -- out of the pair's denominator" if inside else ""))
     """Three columns from one image. Returns the exit status."""
-    sha = verdicts.sha256(args.seam)
+    sha = verdicts.sha256(args.nested)
     llvm_bin = os.environ["CAPSTONE_LLVM_BIN"]
-    sites = Sites(llvm_bin, args.seam)
+    sites = Sites(llvm_bin, args.nested)
 
     # GATE (a): the image must contain the revoke encoding at all. The byte-identical check that
     # guards a compile-time pair cannot apply to one image with a runtime mode, so this replaces
     # it -- see the plan's Verification 5.
-    dis = subprocess.run([str(Path(llvm_bin) / "llvm-objdump"), "-d", str(args.seam)],
+    dis = subprocess.run([str(Path(llvm_bin) / "llvm-objdump"), "-d", str(args.nested)],
                          capture_output=True, text=True).stdout
     revokes_in_image = len(re.findall(r"\brevoke\b", dis))
     if not revokes_in_image:
-        sys.exit(f"{args.seam.name} contains no revoke instruction: every arm would be the "
+        sys.exit(f"{args.nested.name} contains no revoke instruction: every arm would be the "
                  f"stock column and a clean sweep would mean nothing")
     print(f"image carries {revokes_in_image} revoke instructions, "
           f"{len(re.findall(chr(92) + 'bmrev' + chr(92) + 'b', dis))} mrev")
@@ -438,11 +438,11 @@ def run_temporal(args, cases, manifest, arms, expect_file):
     stock_completed = set()
     for arm in TEMPORAL_ARMS:
         mode = arms[arm]["mode"]
-        print(f"\n==> {arm}  (PHP_CAP_MODE={mode}, {args.seam.name})", flush=True)
-        runs = [(SANITY_RUN, f"{args.seam.name} expr {SANITY_CASE} {mode} "
+        print(f"\n==> {arm}  (PHP_CAP_MODE={mode}, {args.nested.name})", flush=True)
+        runs = [(SANITY_RUN, f"{args.nested.name} expr {SANITY_CASE} {mode} "
                              f"< /mnt/vm/{SANITY_CASE}.php")]
         for case in cases:
-            runs.append((case, f"{args.seam.name} {manifest[case]['mode']} {case} {mode} "
+            runs.append((case, f"{args.nested.name} {manifest[case]['mode']} {case} {mode} "
                                f"< /mnt/vm/{case}.php"))
         record = args.out / f"{arm}-run.json"
         if args.from_record:
@@ -450,13 +450,13 @@ def run_temporal(args, cases, manifest, arms, expect_file):
                 sys.exit(f"--from-record: no stored run at {record}")
             rc, rec = 0, json.loads(record.read_text())
         else:
-            rc, rec = run_guest(args, args.seam, runs, record,
+            rc, rec = run_guest(args, args.nested, runs, record,
                                 args.out / f"{arm}-serial.log", extra=[SANITY_CASE])
         worst = max(worst, rc)
         records[arm] = rec
 
         stext = "\n".join(rec["output"].get(SANITY_RUN, []))
-        smode, srevokes, _ = seam_counters(stext)
+        smode, srevokes, _ = nested_counters(stext)
         seen_modes[arm] = smode
         seen_revokes[arm] = srevokes
         sanity_ok = ("PHP_VIRTUAL_DONE" in stext and rec["exits"].get(SANITY_RUN) == 0)
@@ -476,7 +476,7 @@ def run_temporal(args, cases, manifest, arms, expect_file):
     # GATE (c): revocation must be STRICTLY ordered, or the columns are not what they claim.
     stock, block, obj = (seen_revokes[a] for a in TEMPORAL_ARMS)
     if None in (stock, block, obj):
-        sys.exit(f"an arm reported no seam counters: {seen_revokes}")
+        sys.exit(f"an arm reported no nested counters: {seen_revokes}")
     if not (stock == 0 and block == 0 and obj > 0):
         sys.exit(f"revoke counts are not ordered stock=0, block=0, object>0: "
                  f"stock={stock} block={block} object={obj}. The per-object retire is the only "
@@ -511,7 +511,7 @@ def run_temporal(args, cases, manifest, arms, expect_file):
             {"platform": platform, "judge": verdicts.sha256(TOOLS / "verdicts.py"),
              "image": sha, "axis": "temporal", "mode": arms[arm]["mode"],
              "revokes": seen_revokes[arm],
-             "phase": "the Sublet allocator seam; one image, three runtime columns"})
+             "phase": "the Sublet nested allocator layer; one image, three runtime columns"})
         print(f"    bundle: {args.out / arm}  tally={bundle['tally']}")
     return worst
 
@@ -526,8 +526,8 @@ def main():
     p.add_argument("--fault", type=Path, help="php-fault.dom (exact bounds), spatial axis")
     p.add_argument("--axis", choices=("spatial", "temporal"), default="spatial",
                    help="spatial: the hierarchical bound pair (two images). temporal: the "
-                        "Sublet seam's three runtime columns (one image)")
-    p.add_argument("--seam", type=Path, help="php-seam.dom, for --axis temporal")
+                        "Sublet nested layer's three runtime columns (one image)")
+    p.add_argument("--nested", type=Path, help="php-nested.dom, for --axis temporal")
     p.add_argument("--pristine", type=Path, default=Path("/corpus/results-pristine-default.json"),
                    help="the corpus's pristine-build results; cases it records as crashing on "
                         "stock PHP are out of the pair's denominator")
@@ -551,8 +551,8 @@ def main():
     arms_all = verdicts.load_arms()
 
     if args.axis == "temporal":
-        if not args.seam:
-            sys.exit("--axis temporal needs --seam php-seam.dom")
+        if not args.nested:
+            sys.exit("--axis temporal needs --nested php-nested.dom")
         temporal = [c for c in reachable if axis.get(c) == "temporal"]
         if args.only:
             unknown = [c for c in args.only if c not in temporal]
@@ -592,7 +592,7 @@ def main():
 
     print(f"reachable={len(reachable)} spatial={len(spatial)}: {' '.join(spatial)}")
     print(f"not in scope on this axis: {off_axis} temporal cases "
-          f"(they need the allocator seam, not this pair)"
+          f"(they need the nested allocator layer, not this pair)"
           + (f"; --case narrowed this run to {len(spatial)}" if args.only else ""))
 
     copycases = read_copycases(text)
@@ -679,7 +679,7 @@ def main():
                                        {"platform": platform,
                                         "judge": verdicts.sha256(TOOLS / "verdicts.py"),
                                         "image": sha[arm], "axis": "spatial",
-                                        "phase": "A (hier mode; the temporal axis needs the seam)"})
+                                        "phase": "A (hier mode; the temporal axis needs the nested layer)"})
         print(f"    bundle: {args.out / arm}  tally={bundle['tally']}")
         worst = max(worst, rc)
     return worst

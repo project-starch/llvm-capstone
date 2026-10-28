@@ -70,9 +70,10 @@ CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
-                 "citation_constraint", "fault_sites", "fault_sites_why", "duplicate_of",
+                 "citation_constraint", "fault_sites", "fault_sites_why", "fault_site_files", "duplicate_of",
                  "control_probe", "control_probe_why",
-                 "memory_error_is_the_defect", "memory_error_is_the_defect_why"}
+                 "memory_error_is_the_defect", "memory_error_is_the_defect_why",
+                 "platform_precondition", "platform_precondition_why"}
 # `duplicate_of` names a sibling case directory that records the SAME upstream defect -- e.g. a
 # release-branch backport of the fix another case already carries (`git patch-id` equal). The case
 # stays in the corpus, so its numbering and every record that cites it stay valid, and
@@ -337,8 +338,34 @@ def check_cases(corpus, decl, dirs, problems):
                 problems.append(f"{where}: fault_sites must be a non-empty list of function names")
             if not str(case.get("fault_sites_why", "")).strip():
                 problems.append(f"{where}: fault_sites without fault_sites_why")
+            # The file each site must be seen in, so a judge matches a site by function AND file
+            # (a same-named routine elsewhere is not the site): an object from site to path, every
+            # key a declared site, every value a non-empty repo-relative path.
+            files = case.get("fault_site_files")
+            if files is not None:
+                if not (isinstance(files, dict) and files
+                        and all(isinstance(k, str) and isinstance(v, str) and v for k, v in files.items())):
+                    problems.append(f"{where}: fault_site_files must be a non-empty object of site -> file")
+                elif any(v.startswith("/") or ".." in v.split("/") or "/" not in v for v in files.values()):
+                    problems.append(f"{where}: fault_site_files values must be repo-relative paths with a "
+                                    f"directory (ext/standard/var.c), not absolute, not containing '..'")
+                elif isinstance(sites, list) and set(files) - set(sites):
+                    problems.append(f"{where}: fault_site_files names {sorted(set(files) - set(sites))}, "
+                                    f"not in fault_sites")
         elif "fault_sites_why" in case:
             problems.append(f"{where}: fault_sites_why without fault_sites")
+        elif "fault_site_files" in case:
+            problems.append(f"{where}: fault_site_files without fault_sites")
+        # A platform precondition is a libc behaviour the defect needs; it must say which, name the
+        # probe that checks it, give the probe's two readings, and say why -- from the libc's code.
+        if "platform_precondition" in case:
+            pp = case["platform_precondition"]
+            if not (isinstance(pp, dict) and all(isinstance(pp.get(k), str) and pp.get(k) for k in ("needs", "probe", "present", "absent"))):
+                problems.append(f"{where}: platform_precondition must be an object with non-empty needs, probe, present, absent")
+            if not str(case.get("platform_precondition_why", "")).strip():
+                problems.append(f"{where}: platform_precondition without platform_precondition_why")
+        elif "platform_precondition_why" in case:
+            problems.append(f"{where}: platform_precondition_why without platform_precondition")
         if "memory_error_is_the_defect" in case:
             if case["memory_error_is_the_defect"] is not True:
                 problems.append(f"{where}: memory_error_is_the_defect must be true when present")

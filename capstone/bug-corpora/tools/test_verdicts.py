@@ -115,7 +115,17 @@ class Parser(unittest.TestCase):
     TAIL = " entry=0x3f904009a0 code=0x3f90400000-0x3f90800000 last=0x39"
     LINES = {"old": BASE + TAIL,
              "regs": BASE + " ra=0x3f90508d7c fp=0x3f80a01f00" + TAIL,
-             "zero": BASE + " ra=0x0 fp=0x0" + TAIL}
+             "zero": BASE + " ra=0x0 fp=0x0" + TAIL,
+             "chain": BASE + " ra=0x3f90508d7c fp=0x3f80a01f00" + TAIL
+                      + " sha256=ab image=x.dom chain=0x3f90508d7c,0x3f90412000,0x3f90400aaa"}
+
+    def test_frame_chain(self):
+        # Printed last on the line since 2026-10-28; read as a tuple of addresses, empty when
+        # absent, and never from the next line.
+        with_chain = v.domain_fault(self.LINES["chain"] + "\ncapstone-vm: application exited 139")
+        self.assertEqual(with_chain.chain, (0x3f90508d7c, 0x3f90412000, 0x3f90400aaa))
+        self.assertEqual((with_chain.ra, with_chain.fp), (0x3f90508d7c, 0x3f80a01f00))
+        self.assertEqual(v.domain_fault(self.LINES["regs"]).chain, ())
 
     def test_register_words(self):
         # Read when present and non-zero, None otherwise, so nothing downstream can mistake a

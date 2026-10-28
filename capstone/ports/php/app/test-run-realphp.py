@@ -40,7 +40,7 @@ def check(name, got, want):
 
 FAULT = ("capstone-exec: domain fault cause=25 pc=0x3f904e7f90 address=0x3f909c8074 "
          "entry=0x3f904009a0 code=0x3f90400000-0x3f90800000 last=0x39 preparing=0x39 "
-         "sha256=%s image=php-real-seam.dom")
+         "sha256=%s image=php-real-nested.dom")
 # The same fault line with the RESOURCE cause: the node table ran out, which lands at an
 # arbitrary pc and must never be read as a catch.
 FAULT30 = FAULT.replace("cause=25", "cause=30")
@@ -119,7 +119,7 @@ SPEC = {"cwe": "CWE-416", "requires": "", "requires_kind": "", "asan_func": SITE
         "asan_file": "ext/standard/basic_functions.c", "asan_line": 2135,
         "asan_stack": [{"index": 0, "func": SITE, "file": "ext/standard/basic_functions.c", "line": 2135},
                        {"index": 1, "func": "execute", "file": "Zend/zend_execute.c", "line": 1391}],
-        "fault_sites": [SITE],
+        "fault_sites": [SITE], "site_files": {SITE: "ext/standard/basic_functions.c"},
         "pristine_stdout": "done\n", "pristine_outcome": "OK"}
 # A case whose ASan leaf is a libc routine (CRASH-068's shape: strlen under
 # xbuf_format_converter). The declared site is the PHP caller; the leaf is named in the stack
@@ -127,7 +127,7 @@ SPEC = {"cwe": "CWE-416", "requires": "", "requires_kind": "", "asan_func": SITE
 LEAF_SPEC = dict(SPEC, asan_func="xbuf_format_converter", asan_file="main/spprintf.c", asan_line=518,
                  asan_stack=[{"index": 0, "func": "strlen", "outside": "sanitizer_common_interceptors.inc:425"},
                              {"index": 1, "func": "xbuf_format_converter", "file": "main/spprintf.c", "line": 518}],
-                 fault_sites=["xbuf_format_converter"])
+                 fault_sites=["xbuf_format_converter"], site_files={"xbuf_format_converter": "main/spprintf.c"})
 
 
 def fake_symbolize(path, line, func=SITE):
@@ -150,6 +150,7 @@ def observation_cases():
     print("\n-- observe() and the judge --")
     arms = verdicts.load_arms()
     exact = arms["php-real-exact"]
+    pools = arms["php-real-object"]
     orig = R.symbolize
 
     # A fault at ASAN's own file AND line, with the trigger shown live: CAUGHT.
@@ -174,12 +175,12 @@ def observation_cases():
                     controls(), True, "/x", "/y")
     check("wrong file is unattributed", verdicts.judge(obs, exact)[1], "unattributed")
 
-    # A fault in the seam's OWN source is a port artefact, never a catch.
+    # A fault in the nested layer's OWN source is a port artefact, never a catch.
     R.symbolize = fake_symbolize("capstone/ports/php/zend-alloc/sublet/zend-cap-mode.c", 120)
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, FAULT % SHA, 139,
                     controls(), True, "/x", "/y")
     v, reason, ev = verdicts.judge(obs, exact)
-    check("a fault in the seam is unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("a fault in the nested layer is unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
     check("and says it is a port artefact", "port artefact" in ev, True)
 
     # A case whose ASAN site IS the allocator cannot be attributed by site.
@@ -229,11 +230,11 @@ def observation_cases():
           verdicts.judge(obs, exact)[0], verdicts.CAUGHT)
     check("and the counters are in the notes", "cumulative, not a high-water" in obs.notes, True)
 
-    # The seam itself failed: an instrument failure, never a verdict.
+    # The nested layer itself failed: an instrument failure, never a verdict.
     obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
                     "ZEND_CAP_FAIL code=2 the heap could not grow its node table\n", 139, controls(), True, "/x", "/y")
-    check("a seam failure is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
-    # The seam refused the pointer efree was given (code 3: in no block; code 4: not at its
+    check("a nested layer failure is a setup-fault", verdicts.judge(obs, exact)[1], "setup-fault")
+    # The nested layer refused the pointer efree was given (code 3: in no block; code 4: not at its
     # start): the program's invalid free, named, but nothing ties it to the declared site.
     for code in (3, 4):
         obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA,
@@ -241,6 +242,56 @@ def observation_cases():
                         134, controls(), True, "/x", "/y")
         check(f"a named refusal (code {code}) is unattributed, not infra",
               verdicts.judge(obs, exact)[:2], (verdicts.NO_READING, "unattributed"))
+
+    # A declared PLATFORM precondition (CRASH-084: putenv keeps an empty-name string in environ).
+    # The probe's reading decides, never the declaration alone.
+    present = ("PUTENV_PROBE control retained=1 rc=0 errno=0 (ok)\nPUTENV_PROBE empty-name retained=1 rc=0 errno=0 (ok)\n"
+               "PUTENV_PROBE empty-name-value retained=1 rc=0 errno=0 (ok)\nPUTENV_PROBE DONE failures=0\n")
+    absent = ("PUTENV_PROBE control retained=1 rc=0 errno=0 (ok)\nPUTENV_PROBE empty-name retained=0 rc=-1 errno=22 (Invalid argument)\n"
+              "PUTENV_PROBE empty-name-value retained=0 rc=-1 errno=22 (Invalid argument)\nPUTENV_PROBE DONE failures=0\n")
+    broken = ("PUTENV_PROBE control retained=0 rc=0 errno=0 (ok)\nPUTENV_PROBE FAIL the control variable was not retained\n"
+              "PUTENV_PROBE empty-name retained=0 rc=-1 errno=22 (Invalid argument)\nPUTENV_PROBE DONE failures=1\n")
+    check("probe: retained reads present", R.putenv_probe_outcome(present), True)
+    check("probe: not retained with the control retained reads absent", R.putenv_probe_outcome(absent), False)
+    check("probe: a failed control reads as no result", R.putenv_probe_outcome(broken), None)
+    check("probe: no output reads as no result", R.putenv_probe_outcome(""), None)
+    # ABSENT is a whole pattern, never "anything but retained": an unexpected failure of the
+    # call (EFAULT, a retained=0 with rc 0, a missing second call) is a probe that did not
+    # behave as declared and reads as no result (review 2026-10-28: every other result read
+    # as absence, so a broken probe could take a case out of the denominator).
+    efault = absent.replace("rc=-1 errno=22 (Invalid argument)", "rc=-1 errno=14 (Bad address)")
+    check("probe: an unexpected errno is no result, not absence", R.putenv_probe_outcome(efault), None)
+    rc0 = absent.replace("empty-name retained=0 rc=-1 errno=22", "empty-name retained=0 rc=0 errno=0")
+    check("probe: not retained with rc 0 is no result", R.putenv_probe_outcome(rc0), None)
+    one_call = "\n".join(l for l in absent.splitlines() if "empty-name-value" not in l) + "\n"
+    check("probe: a missing second call is no result", R.putenv_probe_outcome(one_call), None)
+    mixed = absent.replace("empty-name-value retained=0 rc=-1 errno=22 (Invalid argument)",
+                           "empty-name-value retained=1 rc=0 errno=0 (ok)")
+    check("probe: the two calls disagreeing is no result", R.putenv_probe_outcome(mixed), None)
+    check("the runner knows the one probe by name (timeval retracted 2026-10-28)", sorted(R.PLATFORM_PROBES), ["putenv"])
+    pp_spec = dict(SPEC, platform_precondition={"needs": "putenv keeps an empty-name string referenced from environ",
+                                                "probe": "putenv", "present": "x", "absent": "y"})
+    obs = R.observe("CRASH-084", pp_spec, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
+                    platform_present=False)
+    check("precondition proven absent: out of the denominator",
+          verdicts.judge(obs, exact)[:2], (verdicts.NO_READING, "out-of-denominator"))
+    check("and the note says the probe found it absent", "probe found it absent" in obs.notes, True)
+    obs = R.observe("CRASH-084", pp_spec, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
+                    platform_present=True)
+    check("precondition present: judged normally (a completed run is MISSED)", verdicts.judge(obs, exact)[0], verdicts.MISSED)
+    obs = R.observe("CRASH-084", pp_spec, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
+                    platform_present=None)
+    check("precondition unchecked: judged normally, with a note",
+          (verdicts.judge(obs, exact)[0], "not checked" in obs.notes), (verdicts.MISSED, True))
+    obs = R.observe("CRASH-086", SPEC, "php-real-exact", SHA, "", 0, controls(), True, "/x", "/y",
+                    platform_present=False)
+    check("a case without the declaration ignores the probe", verdicts.judge(obs, exact)[0], verdicts.MISSED)
+    # the precondition decides BEFORE the run's outcome: a watchdog kill (the hang the absent
+    # behaviour causes, CRASH-092) is out of the denominator, not infra
+    obs = R.observe("CRASH-092", pp_spec, "php-real-object", SHA, "VM_EXIT_TIMEOUT:30_x_crash-092\nKilled\n", 137,
+                    controls(probe=None), False, "/x", "/y", platform_present=False)
+    check("a watchdog kill with the precondition proven absent is out of the denominator",
+          verdicts.judge(obs, pools)[:2], (verdicts.NO_READING, "out-of-denominator"))
 
     # Caught on the STOCK arm, so no control arm completed and stock_reached is False. The
     # fault in the declared function is itself the proof the trigger ran: without that route
@@ -347,6 +398,246 @@ def observation_cases():
                     controls(), True, "/x", "/y")
     check("a caller in the declared file but not the declared function is unattributed",
           verdicts.judge(obs, exact)[1], "unattributed")
+
+    # THE CHAIN RULE (2026-10-28). The fault is outside PHP's tree -- the runtime's delegate copying
+    # a write(2) buffer (CRASH-057's shape: the reused freed temporary printed by var_dump) -- and
+    # the launcher printed the frame chain. The access belongs to the first frame of PHP's tree
+    # above the output plumbing; a declared site there is a catch, anything else is not.
+    FAULT_CHAIN = (FAULT_RA.replace("ra=0x3f90508d7c", "ra=0xa")
+                   + " image=php.dom chain=0x3f90a00010,0x3f90a00020,0x3f90a00030,0x3f90a00040")
+    # the real chain's names (run13): musl's write with its line table, the CLI's ub_write, and
+    # PHP 5.0.0's php_body_write (output.c:119) -- every one on the forwarding list by name
+    PLUMB = {0x3f90a00010 - 2: ("write", "/tmp/k/tmp/musl-src/musl-1.2.5/src/unistd/write.c", 6),
+             0x3f90a00020 - 2: ("sapi_cli_ub_write", "/b/sapi/cli/php_cli.c", 205),
+             0x3f90a00030 - 2: ("php_body_write", "/b/main/output.c", 119)}
+    VD_SPEC = dict(SPEC, asan_func="_estrndup", asan_file="Zend/zend_alloc.c", asan_line=403,
+                   asan_stack=[{"index": 0, "func": "memcpy", "outside": "memintrinsics.inc:117"},
+                               {"index": 1, "func": "_estrndup", "file": "Zend/zend_alloc.c", "line": 403}],
+                   fault_sites=["_estrndup", "php_var_dump"],
+                   site_files={"_estrndup": "Zend/zend_alloc.c", "php_var_dump": "ext/standard/var.c"})
+    R.symbolize = fake_symbolize("", 0, func="dl_call_once")         # the delegate's call, as the real record names it: a symbol, no line
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("chain through the output plumbing to a declared site is CAUGHT", v, verdicts.CAUGHT)
+    check("and the evidence names the skipped plumbing and the owner",
+          "php_var_dump at var.c:126" in ev and "sapi_cli_ub_write" in ev, True)
+    check("and it licensed its own reach", obs.reached, True)
+    check("the chain is in the bundle", obs.fault.chain, (0x3f90a00010, 0x3f90a00020, 0x3f90a00030, 0x3f90a00040))
+    # the first non-plumbing frame is NOT declared: no catch, whatever lies deeper
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("zend_assign_to_variable", "/b/Zend/zend_execute.c", 654)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("chain reaching an undeclared engine frame first is unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and names that frame", "zend_assign_to_variable" in ev and "not a declared site" in ev, True)
+    # a declared site BEYOND an undeclared engine frame does not count: the walk stops there
+    FAULT_CHAIN5 = FAULT_CHAIN + ",0x3f90a00050"
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("zend_assign_to_variable", "/b/Zend/zend_execute.c", 654),
+                                          0x3f90a00050 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN5 % SHA, 139,
+                    controls(probe=None), True, "/x", "/y")
+    check("a declared site behind an undeclared frame is not reached", verdicts.judge(obs, pools)[0], verdicts.NO_READING)
+    # a chain that never enters PHP's tree, every frame of it resolved (an unresolved one would
+    # be a barrier, below)
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("fwrite", "/tmp/k/tmp/musl-src/musl-1.2.5/src/stdio/fwrite.c", 20)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("a chain that reaches no PHP frame is unattributed", reason, "unattributed")
+    check("and says so", "reaches no frame of PHP's tree" in ev, True)
+    # BARRIERS (review 2026-10-28, which built a CAUGHT out of a memcpy fault whose chain ran
+    # through zend_cap_reblock): a frame in the nested layer's own source, in PHP's allocator, or one
+    # that resolves to nothing stops the walk, and no declared site beyond it counts. Each is
+    # driven here with the declared site php_var_dump right behind the barrier.
+    def chain_with(third, fourth=("php_var_dump", "/b/ext/standard/var.c", 126), spec=VD_SPEC):
+        R.symbolize_at = by_pc({**PLUMB, 0x3f90a00030 - 2: third, 0x3f90a00040 - 2: fourth})
+        # stock reached its marker, so a fault the chain cannot attribute is `unattributed`,
+        # not a fault before the defect
+        o = R.observe("CRASH-057", spec, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                      controls(probe=None), True, "/x", "/y")
+        return verdicts.judge(o, pools)
+    v, reason, ev = chain_with(("zend_cap_reblock", "/b/Zend/sublet/zend-cap-mode.c", 88))
+    check("a nested layer frame in the chain is a barrier: unattributed", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence names it", "the nested layer's own source (zend_cap_reblock@zend-cap-mode.c:88)" in ev, True)
+    v, reason, ev = chain_with(("_estrndup", "/b/Zend/zend_alloc.c", 437))
+    check("an allocator frame in the chain is a barrier, declared site or not (CRASH-073's memcpy <- _estrndup)",
+          (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence names the allocator", "PHP's allocator (_estrndup@zend_alloc.c:437)" in ev, True)
+    v, reason, ev = chain_with(("", "", 0))
+    check("an unresolved chain frame is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence names its address", "an unresolved frame (0x3f90a00030)" in ev, True)
+    v, reason, ev = chain_with(("php_body_write", "/b/main/output.c", 119),
+                               ("php_var_dump", "/b/ext/standard/other.c", 126))
+    check("a same-named function in another file is not the site", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence says which file was declared", "not in its declared file ext/standard/var.c" in ev, True)
+    v, reason, ev = chain_with(("php_body_write", "/b/main/output.c", 119),
+                               spec=dict(VD_SPEC, site_files={"_estrndup": "Zend/zend_alloc.c"}))
+    check("a site with no declared file cannot be matched by the chain", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and says so", "(none declared)" in ev, True)
+    # the ra register resolving to nothing is NOT a barrier: a leaf may use it as scratch
+    v, reason, ev = chain_with(("php_body_write", "/b/main/output.c", 119))
+    check("with ra=0xa unresolved the chain still decides (CRASH-057)", v, verdicts.CAUGHT)
+    check("and the evidence says the ra was skipped as a leaf's scratch", "ra=0xa (unresolved, a leaf's scratch register)" in ev, True)
+    # THE SECOND REVIEW'S COUNTEREXAMPLES (2026-10-28): a frame with a SYMBOL and no line table
+    # used to pass every barrier (they keyed on the path), and a directory used to pass as
+    # plumbing. Now a frame passes by NAME, from the list of routines known to forward the
+    # buffer, and everything else is a barrier or the owner.
+    v, reason, ev = chain_with(("zend_cap_reblock", "", 0))
+    check("a nested layer frame with a symbol and no line table is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and is named as the nested layer", "the nested layer's own source (zend_cap_reblock@?:0)" in ev, True)
+    v, reason, ev = chain_with(("_estrndup", "", 0))
+    check("an allocator frame with a symbol and no line table is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and is named as the allocator", "PHP's allocator (_estrndup@?:0)" in ev, True)
+    v, reason, ev = chain_with(("zend_mm_alloc", "", 0))
+    check("the allocator's internal layer too", "PHP's allocator (zend_mm_alloc@?:0)" in ev, True)
+    v, reason, ev = chain_with(("capstone_delegate_pack", "", 0))
+    check("a runtime routine not on the forwarding list is a barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and says it is not known to forward", "a routine not known to forward the buffer (capstone_delegate_pack@?:0)" in ev, True)
+    v, reason, ev = chain_with(("php_start_ob_buffer", "/b/main/output.c", 200))
+    check("a routine of output.c that is not on the forwarding list is the owner, and undeclared", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and the evidence names it", "php_start_ob_buffer at output.c:200 first" in ev, True)
+    v, reason, ev = chain_with(("php_body_write", "/b/main/output.c", 119),
+                               ("php_var_dump", "/b/ext/other/notext/standard/var.c", 126))
+    check("a declared file matched by suffix across a directory boundary is not the file", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("at_file: the whole path or after a slash only",
+          (R.at_file("/b/ext/standard/var.c", "ext/standard/var.c"), R.at_file("ext/standard/var.c", "ext/standard/var.c"),
+           R.at_file("/b/ext/other/notext/standard/var.c", "ext/standard/var.c"), R.at_file("", "ext/standard/var.c")),
+          (True, True, False, False))
+    check("frame kinds", tuple(R.frame_kind(f, p) for f, p in (("strcat", "/m/strcat.c"), ("zend_cap_issue", ""),
+                                                                  ("_efree", ""), ("", ""), ("dl_transfer", ""),
+                                                                  ("php_var_dump", "/b/ext/standard/var.c"),
+                                                                  ("capstone_delegate_pack", ""), ("foo", "/b/main/output.c"))),
+          ("forwarding", "nested", "allocator", "unresolved", "forwarding", "php", "other", "php"))
+    # the probe transcript must NAME its image: the launcher's exit line or fault record
+    check("transcript_image: the exit line's digest", R.transcript_image("x\ncapstone-exec: exit image=probe-putenv.dom sha256=" + "a" * 64 + "\n"), "a" * 64)
+    check("transcript_image: no digest is None", R.transcript_image("PUTENV_PROBE DONE failures=0\n"), None)
+    check("transcript_image: two digests are nobody's", R.transcript_image("sha256=" + "a" * 64 + "\nsha256=" + "b" * 64), None)
+    absent2 = ("PUTENV_PROBE control retained=1 rc=0 errno=0 (ok)\nPUTENV_PROBE empty-name retained=0 rc=-1 errno=22 (Invalid argument)\n"
+               "PUTENV_PROBE empty-name-value retained=0 rc=-1 errno=22 (Invalid argument)\nPUTENV_PROBE DONE failures=0\n")
+    check("probe: a duplicate call line is no result, not the last line's reading",
+          R.putenv_probe_outcome("PUTENV_PROBE empty-name retained=1 rc=0 errno=0 (ok)\n" + absent2), None)
+    check("probe: the same transcript without the duplicate reads absent", R.putenv_probe_outcome(absent2), False)
+    # THE THIRD REVIEW (2026-10-28): the FAULTING frame classified like a chain frame; the
+    # digest read only off the launcher's own lines; exactly one completion record; the exit
+    # line out of the application's output.
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    for sym, what in (("zend_cap_reblock", "the nested layer's own source"), ("_emalloc", "PHP's own allocator"),
+                      ("capstone_delegate_pack", "a routine not known to forward a caller's buffer")):
+        R.symbolize = fake_symbolize("", 0, func=sym)
+        obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                        controls(probe=None), True, "/x", "/y")
+        v, reason, ev = verdicts.judge(obs, pools)
+        check(f"a fault IN {sym} (symbol, no line table) is not walked to its callers", (v, reason, obs.attribution),
+              (verdicts.NO_READING, "unattributed", None))
+        check(f"and the evidence says why", what in ev, True)
+    R.symbolize = fake_symbolize("", 0, func="")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("a fault at an address nobody can name is not walked either", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and says so", "an address nobody can name" in ev, True)
+    R.symbolize = fake_symbolize("", 0, func="dl_call_once")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    check("a fault in a forwarding routine (dl_call_once, CRASH-057's) is walked and CAUGHT", verdicts.judge(obs, pools)[0], verdicts.CAUGHT)
+    check("transcript_image: a digest on a line that is not the launcher's is nobody's",
+          R.transcript_image("expected sha256=" + "a" * 64 + "\nPUTENV_PROBE DONE failures=0\n"), None)
+    check("transcript_image: the fault record's digest counts",
+          R.transcript_image(FAULT % ("b" * 64)), "b" * 64)
+    check("probe: two DONE lines are no result", R.putenv_probe_outcome(absent2 + "PUTENV_PROBE DONE failures=1\n"), None)
+    check("app_output drops the launcher's exit line and keeps its fault record",
+          R.app_output(["done", "capstone-exec: exit image=x.dom sha256=" + "a" * 64, FAULT % SHA]).splitlines(),
+          ["done", FAULT % SHA])
+    # THE FOURTH REVIEW (2026-10-28): a catch through the call path is its own attribution
+    # class, `chain`; the one-hop leaf rule applies the barriers to the caller; the direct rule
+    # uses each declared site's own file; the probe reader takes whole records only.
+    R.symbolize = fake_symbolize("", 0, func="dl_call_once")
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    check("a catch through the frame chain is attributed as `chain`, and says so",
+          (verdicts.judge(obs, pools)[0], obs.attribution, "by the call path (chain)" in obs.attribution_evidence),
+          (verdicts.CAUGHT, "chain", True))
+    check("and its reach evidence says the FAULT is in the forwarding routine and the site is reached by the call path",
+          ("faulted in dl_call_once, whose call path reaches php_var_dump" in obs.reach_evidence,
+           "faulted in php_var_dump" in obs.reach_evidence), (True, False))
+    # the leaf rule: memcpy with no chain, ra into the allocator (CRASH-073's shape) is refused
+    SPEC73 = dict(VD_SPEC, fault_sites=["_estrndup"], site_files={"_estrndup": "Zend/zend_alloc.c"},
+                  asan_stack=[{"index": 0, "func": "memcpy", "outside": "memintrinsics.inc:117"},
+                              {"index": 1, "func": "_estrndup", "file": "Zend/zend_alloc.c", "line": 403}])
+    R.symbolize = fake_symbolize("", 0, func="memcpy")
+    R.symbolize_at = by_pc({RA - 2: ("_estrndup", "/b/Zend/zend_alloc.c", 403)})
+    obs = R.observe("CRASH-073", SPEC73, "php-real-exact", SHA, FAULT_RA.replace("cause=25", "cause=28") % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a leaf fault whose ra caller is the allocator is refused like a chain barrier", (v, reason), (verdicts.NO_READING, "unattributed"))
+    check("and says so", "its caller" in ev and "PHP's allocator" in ev, True)
+    # the leaf rule's catch is a chain attribution too (one hop by ra)
+    R.symbolize = fake_symbolize("", 0, func="strlen")
+    R.symbolize_at = by_pc({RA - 2: ("xbuf_format_converter", "/b/main/spprintf.c", 518)})
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_RA % SHA, 139, controls(), False, "/x", "/y")
+    check("a leaf catch through ra is attributed as `chain`", (verdicts.judge(obs, exact)[0], obs.attribution), (verdicts.CAUGHT, "chain"))
+    # the direct rule with a second declared site in its own file
+    R.symbolize = fake_symbolize("/b/ext/standard/var.c", 126, func="php_var_dump")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT % SHA, 139, controls(probe=None), False, "/x", "/y")
+    check("a fault directly in a second declared site, in that site's own file, is CAUGHT by function",
+          (verdicts.judge(obs, pools)[0], obs.attribution), (verdicts.CAUGHT, "function"))
+    R.symbolize = fake_symbolize("/b/Zend/zend_alloc.c", 126, func="php_var_dump")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT % SHA, 139, controls(probe=None), True, "/x", "/y")
+    check("the same function in the primary site's file is not that site", verdicts.judge(obs, pools)[1], "unattributed")
+    # the state the tests after the chain section expect (a fault inside PHP's tree)
+    R.symbolize = fake_symbolize("/b/Zend/zend_execute.c", 700, func="zend_do_fcall_common_helper")
+    check("probe: retained=2 is no result", R.putenv_probe_outcome(absent2.replace("empty-name retained=0", "empty-name retained=2")), None)
+    check("probe: a DONE line with trailing garbage is no result", R.putenv_probe_outcome(absent2.replace("failures=0", "failures=0garbage")), None)
+    check("probe: the clean absent transcript still reads absent", R.putenv_probe_outcome(absent2), False)
+    # the fifth review: a malformed or unexpected PUTENV_PROBE line ANYWHERE voids the transcript,
+    # even beside a complete well-formed pattern
+    check("probe: an extra malformed DONE line voids the transcript",
+          R.putenv_probe_outcome(absent2 + "PUTENV_PROBE DONE failures=1garbage\n"), None)
+    check("probe: an extra malformed call line voids the transcript",
+          R.putenv_probe_outcome(absent2 + "PUTENV_PROBE empty-name retained=2 rc=-1 errno=22 (Invalid argument)\n"), None)
+    check("probe: the probe's own FAIL line voids the transcript",
+          R.putenv_probe_outcome("PUTENV_PROBE FAIL the control variable was not retained\n" + absent2), None)
+    check("probe: an unexpected fourth call voids the transcript",
+          R.putenv_probe_outcome(absent2 + "PUTENV_PROBE other retained=0 rc=-1 errno=22 (Invalid argument)\n"), None)
+    # A LEAF under line tables (CRASH-068's shape once musl carries them): strlen has a path now,
+    # so the old `not path` branch no longer applies; and a leaf keeps no frame, so the chain's
+    # first entry is the caller's CALLER (vspprintf) -- the caller itself is only in ra. The walk
+    # starts at ra.
+    FAULT_LEAF = FAULT_RA + " image=php.dom chain=0x3f90a00050,0x3f90a00060"
+    R.symbolize = fake_symbolize("/tmp/k/musl-src/musl-1.2.5/src/string/strlen.c", 7, func="strlen")
+    R.symbolize_at = by_pc({RA - 2: ("xbuf_format_converter", "/b/main/spprintf.c", 518),
+                            0x3f90a00050 - 2: ("vspprintf", "/b/main/spprintf.c", 725),
+                            0x3f90a00060 - 2: ("php_error_cb", "/b/main/main.c", 624)})
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_LEAF % SHA, 139,
+                    controls(), False, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("a leaf with a line table is attributed through ra first, then the chain", v, verdicts.CAUGHT)
+    check("and the evidence names the caller from ra", "xbuf_format_converter at spprintf.c:518" in ev, True)
+    # the same with ra clobbered: the chain alone reaches vspprintf, undeclared -> no catch
+    FAULT_LEAF_BADRA = FAULT_LEAF.replace("ra=0x3f90508d7c", "ra=0xa")
+    obs = R.observe("CRASH-068", LEAF_SPEC, "php-real-exact", SHA, FAULT_LEAF_BADRA % SHA, 139,
+                    controls(), True, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, exact)
+    check("with ra clobbered the chain's first PHP frame decides, and it is undeclared", (v, reason), (verdicts.NO_READING, "unattributed"))
+
+    # the OBSERVED fault inside the allocator is what needs the audit arm, not the declared site
+    R.symbolize = fake_symbolize("/b/Zend/zend_alloc.c", 403, func="_estrndup")
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("a fault observed inside the allocator still needs the audit arm", (reason, "audit arm" in ev), ("unattributed", True))
+    # the chain rule does not apply to a fault INSIDE PHP's tree: the site rules decide
+    R.symbolize = fake_symbolize("/b/Zend/zend_execute.c", 700, func="zend_do_fcall_common_helper")
+    R.symbolize_at = by_pc({**PLUMB, 0x3f90a00040 - 2: ("php_var_dump", "/b/ext/standard/var.c", 126)})
+    obs = R.observe("CRASH-057", VD_SPEC, "php-real-object", SHA, FAULT_CHAIN % SHA, 139,
+                    controls(probe=None), False, "/x", "/y")
+    v, reason, ev = verdicts.judge(obs, pools)
+    check("a fault inside PHP's tree is judged by its own site, not by the chain",
+          (v, "declared site is" in obs.attribution_evidence, "frame chain" in obs.attribution_evidence),
+          (verdicts.NO_READING, True, False))
     R.symbolize_at = orig_at
 
     # An unrelated strlen -- a case whose ASan leaf is NOT strlen -- gets no such sentence.
@@ -497,16 +788,16 @@ def helper_cases():
     check("leading whitespace is data, not noise",
           R.app_output(["array(2) {", '  ["scheme"]=>', "}"]),
           'array(2) {\n  ["scheme"]=>\n}')
-    check("strip_seam_noise keeps only PHP's own output",
-          R.strip_seam_noise("ZEND_CAP_MODE 6 exact=0 revoke=1\ndone\nPHP_VIRTUAL SEAM blocks=1 "
+    check("strip_nested_noise keeps only PHP's own output",
+          R.strip_nested_noise("ZEND_CAP_MODE 6 exact=0 revoke=1\ndone\nPHP_VIRTUAL NESTED blocks=1 "
                              "frees=1 issues=1 retires=1 revokes=1"), "done")
     check("same_as_oracle ignores a trailing newline", R.same_as_oracle("done", "done\n"), True)
     check("same_as_oracle is otherwise exact", R.same_as_oracle("done!", "done"), False)
     check("node_pressure takes the high-water",
           R.node_pressure(R.STATS_LINE.pattern and (STATS % (10, 99) + "\n" + STATS % (40, 99))),
           (40, 99))
-    check("seam_counters reads the mode and the revokes",
-          R.seam_counters("ZEND_CAP_MODE 6 exact=0 revoke=1\nPHP_VIRTUAL SEAM blocks=3 frees=2 "
+    check("nested_counters reads the mode and the revokes",
+          R.nested_counters("ZEND_CAP_MODE 6 exact=0 revoke=1\nPHP_VIRTUAL NESTED blocks=3 frees=2 "
                           "issues=4 retires=2 revokes=77"), (6, 77))
 
 
@@ -591,10 +882,10 @@ def population_cases():
 
 def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=True,
                  stdout="done", sha=SHA, probe_sha=PROBE_SHA):
-    seam = f"ZEND_CAP_MODE {mode} exact={1 if mode & 1 else 0} revoke={1 if mode & 2 else 0}"
+    nested = f"ZEND_CAP_MODE {mode} exact={1 if mode & 1 else 0} revoke={1 if mode & 2 else 0}"
     stats = STATS % (100, 9216)
     out, exits = {}, {}
-    out[R.SANITY] = [seam, f"PHP_VIRTUAL SEAM blocks=9 frees=9 issues=9 retires=9 revokes={revokes}",
+    out[R.SANITY] = [nested, f"PHP_VIRTUAL NESTED blocks=9 frees=9 issues=9 retires=9 revokes={revokes}",
                      "sanity 600 200 17" if sanity_ok else "", stats]
     exits[R.SANITY] = 0 if sanity_ok else 139
     if probe is not None:
@@ -604,10 +895,10 @@ def synth_record(cases, mode, revokes, *, case_faults=(), sanity_ok=True, probe=
         out[R.BOUND_PROBE], exits[R.BOUND_PROBE] = probe_transcript(shape, probe_sha)
     for c in cases:
         if c in case_faults:
-            out[c] = [seam, FAULT % sha, stats]
+            out[c] = [nested, FAULT % sha, stats]
             exits[c] = 139
         else:
-            out[c] = [seam, stdout, stats]
+            out[c] = [nested, stdout, stats]
             exits[c] = 0
     return {"booted": True, "reached_script": True, "completed": True, "panic": False,
             "exits": exits, "output": out, "serial_log": "x"}
@@ -640,7 +931,7 @@ def drive(tmp, *, revokes=(0, 0, 77, 77), faults=None, extra_argv=(), modes=None
         if probe_mode_line and R.BOUND_PROBE in rec["output"]:
             rec["output"][R.BOUND_PROBE].insert(0, "ZEND_CAP_MODE 7 exact=1 revoke=1")
         (out / f"{arm}-run.json").write_text(json.dumps(rec))
-    img = tmp / "php-real-seam.dom"
+    img = tmp / "php-real-nested.dom"
     img.write_bytes(b"\x7fELF" + b"\0" * 64)
 
     real_run, real_call = subprocess.run, subprocess.call
@@ -877,7 +1168,7 @@ def stale_guard(label, *, sha=SHA, probe_sha=PROBE_SHA, want_refused=True):
                                case_faults=(K("CRASH-086"),), probe=probe, sha=sha,
                                probe_sha=probe_sha)
             (out / f"{arm}-run.json").write_text(json.dumps(rec))
-        img = tmp / "php-real-seam.dom"; img.write_bytes(b"\x7fELF")
+        img = tmp / "php-real-nested.dom"; img.write_bytes(b"\x7fELF")
         real_run, real_call = subprocess.run, subprocess.call
         def stub(cmd, *a, **k):
             prog = str(cmd[0])
@@ -959,10 +1250,10 @@ def node_table_cases():
 def cap_insn_cases():
     """The image gate reads instruction WORDS, not a mnemonic.
 
-    This gate decides whether the whole measurement is believed: the seam is a runtime mode, so
+    This gate decides whether the whole measurement is believed: the nested layer is a runtime mode, so
     an image that cannot revoke would make all three temporal columns read alike. It was a
     `grep -c '\\brevoke\\b'` over objdump until 2026-10-26, and llvm-objdump prints both CDERIVE
-    and CREVOKE as <unknown> -- so after the seam moved onto them the gate read zero on a
+    and CREVOKE as <unknown> -- so after the nested layer moved onto them the gate read zero on a
     CORRECT image. It existed in two copies, which drifted: the build's was fixed, the runner's
     was not, and the runner refused a whole 29-case measurement after all four arms had run.
     These pin the encoding so a third copy cannot drift silently."""

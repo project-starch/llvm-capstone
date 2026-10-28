@@ -40,7 +40,7 @@ recipes: `asan` (its two `zend_alloc.c` detector patches, `-fsanitize=address`),
 `stockalloc` (the same without those two patches: PHP's allocator as shipped under ASan), and
 the plain build. `oracle.json` carries the result: ASan `ASAN:heap-use-after-free` at `main/spprintf.c:518` in
 `xbuf_format_converter`, stockalloc `ASAN:heap-use-after-free`, pristine `OK` (rc 0).
-Hence **temporal-asan-visible**: a CWE-416 that ASan reports with zend_alloc.c as shipped (the stockalloc run): efree reached free(), so a detector at the libc boundary sees it; the control population.
+Hence **temporal-asan-visible**: a temporal defect (CWE-416) that ASan reports with zend_alloc.c as shipped (the stockalloc run, ASAN:heap-use-after-free) and that the patched build reports as ASAN:heap-use-after-free: the release reached free(), so a detector at the libc boundary sees it; the control population.
 
 **Where our run and the corpus's record disagree:** nowhere -- ASan class, pristine outcome and the crash flag all agree.
 

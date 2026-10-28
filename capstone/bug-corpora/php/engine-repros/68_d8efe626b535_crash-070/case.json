@@ -1,0 +1,40 @@
+{
+ "case": 68,
+ "upstream_fix": "d8efe626b535",
+ "title": "CRASH-070: begin class member fcall indirect static last_op stale after opcode array erealloc uaf (use-after-free)",
+ "consumer": "Zend/zend_compile.c:1321",
+ "class": "temporal",
+ "trigger": "trigger.php",
+ "live_in_pin": true,
+ "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-use-after-free at Zend/zend_compile.c:1321 in zend_do_begin_class_member_function_call when trigger.php runs; the corpus records the fix as php-src d8efe626b5359a76c5d631fd67316aef7997db14, which postdates the release, and names the defect at Zend/zend_compile.c:1321",
+ "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build completes it natively, so an arm that completes it saw nothing. ",
+ "fault_sites": [
+  "zend_do_begin_class_member_function_call"
+ ],
+ "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has zend_do_begin_class_member_function_call at Zend/zend_compile.c:1321 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
+ "arms": {
+  "virtual-malloc": {
+   "oracle": "the case on the virtual profile with the nested layer present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
+   "verdict": "CAUGHT",
+   "verdict_note": "cause=25 pc=0x3fa3c34e70 in zend_do_begin_class_member_function_call; by function: zend_do_begin_class_member_function_call at Zend/zend_compile.c:1321 is the function this case declares (fault_sites, ASan frame #0 of our native run), at ASan's own line",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-malloc"
+  },
+  "virtual-nested-pools": {
+   "oracle": "the same image with the nested allocator layer retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
+   "verdict": "CAUGHT",
+   "verdict_note": "cause=25 pc=0x3f8b434e70 in zend_do_begin_class_member_function_call; by function: zend_do_begin_class_member_function_call at Zend/zend_compile.c:1321 is the function this case declares (fault_sites, ASan frame #0 of our native run), at ASan's own line",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-pools"
+  },
+  "virtual-nested-exact": {
+   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
+   "verdict": "CAUGHT",
+   "verdict_note": "cause=25 pc=0x3f99034e70 in zend_do_begin_class_member_function_call; by function: zend_do_begin_class_member_function_call at Zend/zend_compile.c:1321 is the function this case declares (fault_sites, ASan frame #0 of our native run), at ASan's own line",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-exact"
+  }
+ },
+ "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
+ "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads EXIT:255, PHP's own fatal error, with no detector report. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as fuzz (historical-known, confidence high).",
+ "fault_site_files": {
+  "zend_do_begin_class_member_function_call": "Zend/zend_compile.c"
+ }
+}

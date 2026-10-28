@@ -89,7 +89,7 @@ def cap_insn_counter():
     """count-cap-insns.py's counter, IMPORTED rather than reimplemented.
 
     There used to be two copies of this gate -- one here and one in build-virtual.sh -- and on
-    2026-10-26 they drifted: the build's copy was moved to the instruction ENCODING when the seam
+    2026-10-26 they drifted: the build's copy was moved to the instruction ENCODING when the nested layer
     went to CDERIVE/CREVOKE, and this one was left counting a `revoke` MNEMONIC that
     llvm-objdump does not emit for either instruction. The build passed and this refused the
     whole measurement after all eight guest sessions had run. One implementation, imported."""
@@ -111,23 +111,202 @@ SPATIAL = ("php-real-object", "php-real-exact")      # control, fault -- the bou
 TEMPORAL = ("php-real-stock", "php-real-block", "php-real-object")
 
 SANITY = "revocation-sanity"
-BOUND_PROBE = "seam-bound-probe"
+BOUND_PROBE = "nested-bound-probe"
+# The platform-precondition probes (ports/php/app/probe-*.c), each run once per arm when a case
+# declares `platform_precondition.probe` with its name (bug-corpora/SCHEMA.md). Three outcomes and
+# never a silent zero: the behaviour proven ABSENT (the case is out of the denominator on this
+# arm), proven PRESENT (judged normally), or the probe failed (judged normally, with a note).
+# A probe's guest run is named `<name>-probe`; its reader turns the output into True/False/None.
+# Whole records only: retained is 0 or 1, every field ends the token, the line ends the record;
+# `retained=2` or `failures=0garbage` is a transcript the probe did not write (fourth review).
+PUTENV_LINE = re.compile(r"^PUTENV_PROBE (\S+) retained=([01]) rc=(-?\d+) errno=(\d+) \([^)]*\)\s*$", re.M)
+PUTENV_DONE = re.compile(r"^PUTENV_PROBE DONE failures=(\d+)\s*$", re.M)
+EINVAL = 22
+
+
+def putenv_probe_outcome(text):
+    """True: the libc keeps an empty-name putenv string in environ; False: proven not to; None:
+    no usable probe result. PRESENT and ABSENT are each a whole expected pattern, not one bit:
+    present is both empty-name calls retained with rc 0, absent is both NOT retained with rc -1
+    and EINVAL (musl's unsetenv branch refusing a name that contains '='), and the control
+    retained with rc 0 either way. Anything else -- an EFAULT, a missing line, a retained call
+    that returned -1 -- is a probe that did not behave as declared and reads as no result, so
+    an unexpected failure can never read as the precondition being absent (review 2026-10-28)."""
+    # EVERY line the probe's protocol prefix introduces must be a whole record of a known kind;
+    # a malformed or unexpected PUTENV_PROBE line (a FAIL line, `retained=2`, `failures=1garbage`)
+    # is a transcript the probe did not write as declared, whatever else it contains (fifth
+    # review, 2026-10-28: the parser counted the well-formed records and ignored the rest).
+    records = [l.rstrip("\r") for l in (text or "").splitlines() if l.startswith("PUTENV_PROBE")]
+    if any(not (PUTENV_LINE.match(l) or PUTENV_DONE.match(l)) for l in records):
+        return None
+    dones = PUTENV_DONE.findall(text or "")
+    if len(dones) != 1 or int(dones[0]) != 0:
+        return None                       # exactly one completion record, and a clean one
+    found = [(m.group(1), (m.group(2) == "1", int(m.group(3)), int(m.group(4))))
+             for m in PUTENV_LINE.finditer(text)]
+    if sorted(label for label, _ in found) != ["control", "empty-name", "empty-name-value"]:
+        return None                       # the three calls, each once, and no other
+    # each call reported exactly once: a second line for the same call is a transcript the
+    # probe did not write as declared, not a reading to keep the last of
+    if len({label for label, _ in found}) != len(found):
+        return None
+    seen = dict(found)
+    if seen.get("control") != (True, 0, 0):
+        return None
+    calls = [seen.get("empty-name"), seen.get("empty-name-value")]
+    if all(c == (True, 0, 0) for c in calls):
+        return True
+    if all(c == (False, -1, EINVAL) for c in calls):
+        return False
+    return None
+
+
+PLATFORM_PROBES = {"putenv": putenv_probe_outcome}
+
+
+def probe_run_name(name):
+    return f"{name}-probe"
+
+
+# The LAUNCHER's own lines only: its exit line (`capstone-exec: exit image=... sha256=...`) and
+# its fault record (`capstone-exec: domain fault ... sha256=...`). A digest anywhere else in a
+# transcript -- a program printing "expected sha256=..." -- is not the platform naming the image
+# (third review, 2026-10-28).
+IMAGE_DIGEST = re.compile(r"^capstone-exec: (?:exit image=\S+|domain fault) .*?\bsha256=([0-9a-f]{64})\b", re.M)
+
+
+def transcript_image(raw):
+    """The image digest a transcript names for itself, on the launcher's own exit line or
+    fault record, or None when it names none. One digest: a transcript naming two images is
+    nobody's."""
+    found = sorted(set(IMAGE_DIGEST.findall(raw or "")))
+    return found[0] if len(found) == 1 else None
 SANITY_SCRIPT = "phpb-sanity.php"
 
 MODE_LINE = re.compile(r"ZEND_CAP_MODE (\d+) exact=(\d) revoke=(\d)")
-SEAM_LINE = re.compile(r"PHP_VIRTUAL SEAM blocks=(\d+) frees=(\d+) issues=(\d+) "
+NESTED_LINE = re.compile(r"PHP_VIRTUAL NESTED blocks=(\d+) frees=(\d+) issues=(\d+) "
                        r"retires=(\d+) revokes=(\d+)")
-SEAM_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
+NESTED_FAIL = re.compile(r"ZEND_CAP_FAIL code=(\d+) ([^\n]*)")
 STATS_LINE = re.compile(r"CAPSTONE_VM_STATS .*?\bnodes=(\d+).*?\bnode_capacity=(\d+)")
 KERNEL_LINE = re.compile(r"^\[\s*\d+\.\d+\]")
-# A fault in the seam's own sources is a port artefact and never a catch. The physical column
+# A fault in the nested layer's own sources is a port artefact and never a catch. The physical column
 # learned this the expensive way: with only a pc, a fault in the allocator looks exactly like a
 # fault in the program.
-SEAM_OWN = ("zend-cap-mode.c", "php_virtual_lower.c")
+NESTED_OWN = ("zend-cap-mode.c", "php_virtual_lower.c")
 # Cases whose ASAN site is PHP's own allocator. A fault there cannot be attributed by site --
 # it is indistinguishable from the port breaking -- so these need the diagnostic audit arm that
 # run-cases.py drives for CRASH-073, and are `unattributed` until it is wired up here.
 ALLOCATOR_SITE = "Zend/zend_alloc.c"
+# PHP's own tree, by directory: a frame whose file lies in none of these is the libc, the runtime
+# or the SAPI's host, not the program. And PHP's output plumbing: the SAPI's write, the output
+# layer and the stream layer pass a buffer through unchanged, so an access they make on it belongs
+# to whoever handed it in -- the first frame above them. A chain rule skips them and stops at the
+# first other frame of PHP's tree: that frame is the access's owner, declared or not.
+PHP_TREE = ("/Zend/", "/ext/", "/main/", "/sapi/", "/TSRM/", "/regex/")
+# THE ROUTINES A FRAME CHAIN MAY PASS THROUGH, BY NAME. Each is known from its source to hand the
+# buffer it was given on unchanged, so an access it makes on that buffer belongs to whoever
+# handed it in. Nothing else is passed through: not a directory (main/output.c holds routines
+# that own buffers too), not "outside PHP's tree" (the nested layer and the allocator can lack line
+# tables), not a symbol nobody can justify. The second review (2026-10-28) built a CAUGHT out
+# of each of those. A frame not on this list is a barrier when it is not PHP's, and the access's
+# owner when it is.
+FORWARDING = {
+    # musl: copies and scans of the caller's buffer (CRASH-008's __stpcpy <- strcpy <- strcat,
+    # CRASH-068's strlen), the write path to the file descriptor
+    "memcpy", "memmove", "memset", "memcmp", "memchr", "strlen", "strnlen", "strcpy", "stpcpy",
+    "__stpcpy", "strncpy", "strcat", "strncat", "strcmp", "strncmp", "strchr", "strrchr", "strstr",
+    "write", "writev", "__stdio_write", "__fwritex", "fwrite", "fputs", "fputc", "putc", "__towrite",
+    "__overflow", "fflush", "__fflush_unlocked", "vfprintf", "fprintf", "printf", "vsnprintf", "snprintf",
+    # the virtual runtime's delegate: the syscall's buffer, copied for the host to write (CRASH-057)
+    "dl_call", "dl_call_once", "dl_transfer", "__capstone_delegate_call", "capstone_delegate_call",
+    # PHP 5.0.0's output layer and CLI SAPI, each a pass-through of the (buf, len) it was given:
+    # main/output.c php_body_write -> php_ub_body_write(_no_header) -> sapi_module.ub_write, the
+    # CLI's sapi_cli_ub_write -> sapi_cli_single_write -> write (sapi/cli/php_cli.c). NOT
+    # php_printf, which formats into a buffer of its own: a stale read there is the formatter's
+    # (xbuf_format_converter, CRASH-068's declared site), not the caller's.
+    "php_body_write", "php_ub_body_write_no_header", "php_ub_body_write",
+    "sapi_cli_ub_write", "sapi_cli_single_write",
+}
+# The nested layer's and the allocator's own routines, by name, for a frame that has a symbol and no
+# line table: `zend_cap_*` is the nested layer (zend-cap-mode.c), and these are zend_alloc.c's entry
+# points in PHP 5.0.0 plus its internal zend_mm_* layer.
+NESTED_FUNC_PREFIX = "zend_cap_"
+ALLOCATOR_FUNCS = {"_emalloc", "_efree", "_erealloc", "_ecalloc", "_safe_emalloc", "_estrdup",
+                   "_estrndup", "zend_mem_block", "shutdown_memory_manager", "start_memory_manager"}
+ALLOCATOR_FUNC_PREFIXES = ("zend_mm_", "_zend_mm_", "zend_debug_alloc", "__zend_malloc", "zend_memory_")
+
+
+def in_php_tree(path):
+    return bool(path) and any(d in path for d in PHP_TREE)
+
+
+def at_file(path, site_file):
+    """Is this symbolized path the declared repo-relative file? A whole path, or the file
+    after a '/': `.../ext/other/notext/standard/var.c` is not `ext/standard/var.c`, which a
+    bare suffix match accepted (second review, 2026-10-28)."""
+    return bool(path) and bool(site_file) and (path == site_file or path.endswith("/" + site_file))
+
+
+def frame_kind(cfunc, cpath):
+    """What a chain frame is, for the walk: 'forwarding' (passed through), 'nested', 'allocator',
+    'unresolved' (barriers), 'php' (a candidate owner), or 'other' (a barrier: a routine that is
+    not PHP's and not known to forward the buffer)."""
+    if any(own in (cpath or "") for own in NESTED_OWN) or (cfunc or "").startswith(NESTED_FUNC_PREFIX):
+        return "nested"
+    if (cpath or "").endswith(ALLOCATOR_SITE) or cfunc in ALLOCATOR_FUNCS \
+            or any((cfunc or "").startswith(p) for p in ALLOCATOR_FUNC_PREFIXES):
+        return "allocator"
+    if not cfunc and not cpath:
+        return "unresolved"
+    if cfunc in FORWARDING:
+        return "forwarding"
+    if in_php_tree(cpath):
+        return "php"
+    return "other"
+
+
+def chain_owner(llvm_bin, image, fault, text):
+    """Walk outward from the fault to the frame that OWNS the access. Returns (function, file,
+    line, frames skipped) for the first frame in PHP's tree that is not output plumbing, or
+    ("", barrier, 0, skipped) when the walk hit a frame no access may be attributed through, or
+    None when it reached no frame of PHP's tree. The walk starts at the fault's own return
+    address when the record has one, THEN takes the frame chain: a leaf routine (musl's strlen,
+    memcpy) keeps no frame of its own, so fp still names its caller's frame and the chain's first
+    entry is the caller's caller -- the caller itself is only in ra. Each address is symbolized
+    two bytes back, inside its call instruction.
+
+    What may be passed through and what may not (review 2026-10-28, which built a CAUGHT out of
+    a memcpy fault whose chain ran through zend_cap_reblock): a frame is PASSED THROUGH only when
+    it is known to hand the buffer on unchanged -- PHP's output plumbing, the libc and the
+    runtime's delegate, each resolved to a symbol or a source file. A frame in the nested layer's own
+    source or in PHP's allocator is a BARRIER: the fault may be the port's, and no declared site
+    above it can say otherwise. A chain frame that resolves to NOTHING (no symbol, no line) is a
+    barrier too: an address nobody can name licenses nothing. The one exception is the fault's
+    own ra register, which a leaf routine may use as scratch (CRASH-057's 0xa): when it resolves
+    to nothing it is skipped, named as such, and the chain decides."""
+    skipped = []
+    starts = [(fault.ra, True)] if fault.ra else []
+    starts += [(ret, False) for ret in fault.chain]
+    for ret, is_ra in starts:
+        cfunc, cpath, cline = symbolize_at(llvm_bin, image, ret - 2, text)
+        where = f"{cfunc or '?'}@{(cpath or '?').rsplit('/', 1)[-1]}:{cline}"
+        kind = frame_kind(cfunc, cpath)
+        if kind == "nested":
+            return "", f"the nested layer's own source ({where})", 0, skipped
+        if kind == "allocator":
+            return "", f"PHP's allocator ({where})", 0, skipped
+        if kind == "unresolved":
+            if is_ra:
+                skipped.append(f"ra={ret:#x} (unresolved, a leaf's scratch register)")
+                continue
+            return "", f"an unresolved frame ({ret:#x})", 0, skipped
+        if kind == "forwarding":
+            skipped.append(where)
+            continue
+        if kind == "other":
+            return "", f"a routine not known to forward the buffer ({where})", 0, skipped
+        return cfunc, cpath, cline, skipped
+    return None
 
 # The per-run watchdog in run-virtual.py fired on this run. A run that was KILLED is not
 # an observation of the program at all -- it is the harness giving up -- so it is reported
@@ -226,8 +405,14 @@ def population(corpus, kind="asan-blind"):
             "requires_kind": o.get("requires_kind", "execution" if o.get("requires", "").strip() else ""),
             "asan_func": o["asan"]["func"], "asan_file": o["asan"]["file"], "asan_line": int(o["asan"]["line"]),
             "asan_stack": stack, "fault_sites": sites,
+            # The file each declared site must be seen in: ASan's own frame for that function,
+            # or the case's fault_site_files for a site declared beyond ASan's stack. A site
+            # with no file cannot be matched by the chain rule, which asks for both.
+            "site_files": {**{f["func"]: f["file"] for f in stack if f.get("func") and f.get("file")},
+                           **(c.get("fault_site_files") or {})},
             "pristine_stdout": o["pristine"].get("stdout", ""), "pristine_outcome": o["pristine"]["outcome"],
             "pristine_rc": o["pristine"].get("rc", 0),
+            "platform_precondition": c.get("platform_precondition") or None,
         }
         # A CONSISTENCY CHECK, not two independent sources: oracle.json's crash flag is derived
         # from the same pristine run it records, so a disagreement means the case file was
@@ -271,16 +456,22 @@ def app_output(lines):
         line = STATS_ANYWHERE.sub("", raw.rstrip("\r"))
         if KERNEL_LINE.match(line) or line.startswith("CAPSTONE_VM_"):
             continue
+        # The launcher's exit line (`capstone-exec: exit image=... sha256=...`) is the
+        # platform naming the image, read from the RAW transcript by transcript_image(); in
+        # the application's output it made every matching run read as diverging by one line
+        # (run15, third review). The fault record stays: the judge reads it from here.
+        if line.startswith("capstone-exec: exit "):
+            continue
         if not line and STATS_ANYWHERE.search(raw):
             continue                      # the stats line stood alone
         out.append(line)
     return "\n".join(out)
 
 
-def strip_seam_noise(text):
-    """What PHP itself printed: the seam's own mode and stats lines removed."""
+def strip_nested_noise(text):
+    """What PHP itself printed: the nested layer's own mode and stats lines removed."""
     keep = [l for l in text.splitlines()
-            if not l.startswith("ZEND_CAP_MODE") and not l.startswith("PHP_VIRTUAL SEAM")]
+            if not l.startswith("ZEND_CAP_MODE") and not l.startswith("PHP_VIRTUAL NESTED")]
     return "\n".join(keep)
 
 
@@ -394,7 +585,7 @@ def symbolize_at(llvm_bin, image, pc, text):
     return func, m2.group(1), int(m2.group(2))
 
 
-# What the bound probe (probes/probe-seam stage 7) prints when it faults AS DECLARED. It reads
+# What the bound probe (probes/probe-nested stage 7) prints when it faults AS DECLARED. It reads
 # index 9 of a 9-byte request twice: ROUNDED first, which must succeed and prints the first
 # line, then EXACT, which announces the read and must then fault with the BOUNDS cause -- the
 # protective cause of the spatial mechanism. Between the two reads the probe frees,
@@ -452,7 +643,7 @@ def arm_controls(arm, sanity_ok, probe_ok, arms):
 
 def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached, llvm_bin,
             image, precondition_met=True, score_oracle_crashes=False, protective_causes=(25, 28),
-            raw=None):
+            raw=None, platform_present=None):
     """One case on one arm, as an Observation. `text` is the application's own output
     (app_output); `raw` the transcript before that filter, for the launcher's counters, which
     the filter removes -- read from `text` they were never found, so the node-pressure note
@@ -460,6 +651,23 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     obs = verdicts.Observation(case=case, arm=arm, image_sha256=image_sha, controls=controls)
     native = spec["pristine_outcome"]
     note(obs, f"native PHP: {native}")
+    # THE PLATFORM PRECONDITION FIRST, before the run's own outcome is read: it is a statement
+    # about applicability, not about this run. The defect needs a libc behaviour this arm's probe
+    # PROVED absent -- putenv keeping an empty-name string (CRASH-084) -- so what the run did,
+    # complete, hang or fault, is not a reading of the protection. Not a crash and not infra:
+    # the case declares it cannot run on this platform. (A second declaration, CRASH-092's
+    # "select rejects an out-of-range tv_usec", was retracted the day it was made: Linux folds
+    # a positive tv_usec exactly as musl does, see build-cases.py.)
+    pp = spec.get("platform_precondition")
+    if pp and platform_present is False:
+        obs.infra = "out-of-denominator"
+        obs.notes = (f"declared platform precondition not met on this libc: {pp['needs']}; the "
+                     f"{pp['probe']} probe found it absent on this arm (control held), so the "
+                     f"behaviour the defect needs does not exist here -- not a reading of the protection")
+        return obs
+    if pp and platform_present is None:
+        note(obs, f"declared platform precondition {pp['needs']!r} was not checked in this run "
+                  f"(no usable {pp['probe']} probe result); judged as if met")
     # NO PREMISE, SO NO PAIR. The corpus's own pristine record says native PHP does not
     # complete this case -- it crashes with no capability platform anywhere near it -- so there
     # is nothing here for an arm to catch or miss and the cell is out of the denominator.
@@ -505,9 +713,9 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         obs.notes = ("no exit status was observed for this run -- the guest session ended "
                      "before it reported, so there is nothing here to judge")
         return obs
-    fail = SEAM_FAIL.search(text)
+    fail = NESTED_FAIL.search(text)
     if fail:
-        # Codes 3 and 4 are the seam refusing a pointer PHP handed to efree -- one in no block
+        # Codes 3 and 4 are the nested layer refusing a pointer PHP handed to efree -- one in no block
         # of this heap, or not at its payload's start -- by name, before anything ends. That is
         # consistent with the program's own invalid free (CRASH-139 efrees a static string
         # literal) and is not the instrument breaking; but it is software validation followed by
@@ -515,8 +723,8 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         # and it reads as unattributed, never as a catch. Every other code is the instrument.
         code = int(fail.group(1))
         obs.infra = "unattributed" if code in (3, 4) else "setup-fault"
-        obs.notes = ((f"the seam refused the pointer efree was given, by name: " if code in (3, 4)
-                      else f"the seam failed: ") + f"code={code} {fail.group(2)[:90]}")
+        obs.notes = ((f"the nested layer refused the pointer efree was given, by name: " if code in (3, 4)
+                      else f"the nested layer failed: ") + f"code={code} {fail.group(2)[:90]}")
         return obs
     fault = verdicts.domain_fault(text, None)
     if fault is not None and fault.cause == CAUSE_RESOURCE:
@@ -529,7 +737,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     if pressure:
         note(obs, f"nodes allocated {pressure[0]}, table capacity {pressure[1]} "
                   f"(cumulative, not a high-water: reported, not gated)")
-    said = strip_seam_noise(text)
+    said = strip_nested_noise(text)
     # COMPLETED MEANS "ENDED THE WAY THE ORACLE DID", NOT "EXITED ZERO". Hardcoding 0 is wrong
     # for any case whose pristine record is an EXIT, and PHP 5.0.0 has four of them: its own
     # fatal errors leave status 255 after printing a diagnostic, which is the case behaving
@@ -550,7 +758,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # has to match, and the evidence names which frame it is.
     # Two facts are read off a fault, and they license different things. SITE: the fault is
     # in the declared function, in its file -- the trigger ran, whatever the cause, so this
-    # observation is `reached`. QUALIFIED: site plus a protective cause (and not the seam's
+    # observation is `reached`. QUALIFIED: site plus a protective cause (and not the nested layer's
     # own source, not the allocator) -- the mechanism caught the defect, so the fault is
     # attributed. A cause-24 fault at the site (CRASH-064) is reached and unattributed, which
     # is what happened: the program got to its defect and dereferenced its own bad value.
@@ -560,17 +768,33 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
         func, path, line = symbolize(llvm_bin, image, fault, text)
         fault.symbol = func or None
         site = next((f for f in spec.get("asan_stack", []) if f.get("func") == spec["asan_func"]), None)
-        site_file = (site or {}).get("file") or spec["asan_file"]
+        # EACH declared site has its own file (site_files): the direct rule compared every
+        # declared function against ASan's primary file, so CRASH-057's second site
+        # php_var_dump (ext/standard/var.c) could never match directly (fourth review).
+        site_file_of = spec.get("site_files", {})
+        primary_file = (site or {}).get("file") or spec["asan_file"]
+        site_file = site_file_of.get(func) or primary_file
         leaf = (spec.get("asan_stack") or [{}])[0]
-        at_site = bool(func) and func in spec["fault_sites"] and path.endswith(site_file)
-        if any(own in path for own in SEAM_OWN):
-            obs.attribution_evidence = (f"the fault is in the seam's own source ({path}:{line}) "
-                                        f"-- a port artefact, not the program")
-        elif spec["asan_file"].endswith(ALLOCATOR_SITE):
+        at_site = bool(func) and func in spec["fault_sites"] and at_file(path, site_file)
+        matched_site = func if at_site else None
+        # THE FAULTING FRAME IS CLASSIFIED LIKE A CHAIN FRAME, by symbol as well as by path
+        # (frame_kind): a fault pc in zend_cap_reblock or _emalloc with no line table used to
+        # reach the chain rule and be attributed through its callers (third review, 2026-10-28).
+        fkind = frame_kind(func, path)
+        if fkind == "nested":
+            obs.attribution_evidence = (f"the fault is in the nested layer's own source ({func or '?'} at "
+                                        f"{path or '?'}:{line}) -- a port artefact, not the program")
+        elif fkind == "allocator":
+            # The OBSERVED fault is inside PHP's own allocator: it cannot be told from the port
+            # breaking (the nested layer is a patch to that very file), so it needs the diagnostic audit
+            # arm. Until 2026-10-28 this keyed on the case's DECLARED site instead, which refused
+            # every fault of a case whose ASan frame was _estrndup (CRASH-057) wherever the fault
+            # actually lay -- including the print of the reused temporary, three frames away.
             obs.attribution_evidence = (
-                f"ASAN's own site for this case is {ALLOCATOR_SITE}:{spec['asan_line']}, so a "
-                f"fault there cannot be told from the port breaking; it needs the diagnostic "
-                f"audit arm (observed {func or '?'} at {path}:{line})")
+                f"the fault is inside PHP's own allocator ({path}:{line}, {func or '?'}), which "
+                f"cannot be told from the port breaking; it needs the diagnostic audit arm"
+                + (f" (ASan's own site for this case is {ALLOCATOR_SITE}:{spec['asan_line']})"
+                   if spec["asan_file"].endswith(ALLOCATOR_SITE) else ""))
         elif fault.cause not in protective_causes:
             # The configuration says which causes its mechanism produces (arms.json
             # protective_causes). Cause 24 -- an untagged value used as a capability -- is a
@@ -592,7 +816,7 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
                 f"operand value (29: a lifetime instruction's size or node, or a transfer the "
                 f"address policy refused -- the cause alone does not say which)"
                 + (" -- and it did land in the declared function" if func in spec["fault_sites"] else ""))
-        elif func in spec["fault_sites"] and path.endswith(site_file):
+        elif func in spec["fault_sites"] and at_file(path, site_file):
             obs.attribution = "function"
             obs.attribution_evidence = (
                 f"{func} at {site_file}:{line} is the function this case declares (fault_sites, "
@@ -604,11 +828,66 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
             obs.attribution_evidence = (
                 f"{func} is the declared function but the fault is at {path or '?'}:{line}, not in "
                 f"{site_file}: a same-named routine elsewhere, or no line table for it")
-        elif path.endswith(site_file):
+        elif at_file(path, site_file):
             obs.attribution_evidence = (
                 f"{path}:{line} is ASan's file for this case but the fault is in {func or '?'}, not "
                 f"the declared {spec['fault_sites']}: another routine of the same file, which "
                 f"the old any-line-in-the-file rule would have admitted")
+        elif (fault.chain or fault.ra) and not in_php_tree(path) and fkind != "forwarding":
+            # Outside PHP's tree and NOT a routine known to forward a caller's buffer (or an
+            # address nobody can name): its callers cannot own its access, so the chain is
+            # not walked, whatever it would reach.
+            obs.attribution_evidence = (
+                f"the fault is in {func or '?'} ({path or '?'}:{line}), "
+                + ("a routine not known to forward a caller's buffer" if fkind == "other"
+                   else "an address nobody can name")
+                + ": not attributable through its callers")
+        elif (fault.chain or fault.ra) and fkind == "forwarding" and (path or fault.chain):
+            # (a leaf with no line table and no chain, only ra, is the leaf rule's below)
+            # THE CHAIN RULE. The fault is outside PHP's tree (the libc, the runtime's delegate
+            # copying a syscall buffer), and the launcher printed the frame chain it walked
+            # (runtime/virtual/exec.c frame_chain, 2026-10-28). The access belongs to the first
+            # frame of PHP's tree above the output plumbing: if that frame is a declared site,
+            # the fault is the defect's; if it is anything else, it is not, whatever lies deeper.
+            # CRASH-057: the delegate's copy of a write(2) buffer <- musl write <- the CLI's
+            # write <- main/output.c <- php_var_dump (var.c:126) printing the reused freed
+            # temporary. The plumbing passed the buffer through; var_dump owns the access.
+            # The owner must match BY FUNCTION AND FILE, as the direct rule does: a same-named
+            # routine in another file is not the declared site (site_files, from ASan's own
+            # stack frame for that function or the case's fault_site_files). And the walk may
+            # not have passed a barrier -- the nested layer, the allocator, a frame nobody can name.
+            owner = chain_owner(llvm_bin, image, fault, text)
+            here = f"the fault is in {func or '?'} ({(path or '?').rsplit('/', 1)[-1]}:{line}), outside PHP's tree"
+            site_file_of = spec.get("site_files", {})
+            if owner and not owner[0]:
+                obs.attribution_evidence = (
+                    f"{here}; its frame chain passes {owner[1]} before any declared site, through "
+                    f"which no access can be attributed (above {', '.join(owner[3]) or 'nothing'}): "
+                    f"the fault may be the port's, whatever lies deeper")
+            elif owner and owner[0] in spec["fault_sites"] and owner[0] in site_file_of \
+                    and at_file(owner[1], site_file_of[owner[0]]):
+                at_site = True
+                matched_site = owner[0]
+                obs.attribution = "chain"
+                obs.attribution_evidence = (
+                    f"{here}; the frame chain climbs through {', '.join(owner[3]) or 'nothing'} "
+                    f"to {owner[0]} at {owner[1].rsplit('/', 1)[-1]}:{owner[2]}, the function this case "
+                    f"declares (fault_sites) in its declared file -- the first frame of PHP's tree "
+                    f"above the forwarding routines; attributed by the call path (chain), not by "
+                    f"the operand")
+            elif owner and owner[0] in spec["fault_sites"]:
+                obs.attribution_evidence = (
+                    f"{here}; the frame chain reaches {owner[0]}, a declared function, but at "
+                    f"{owner[1].rsplit('/', 1)[-1]}:{owner[2]}, not in its declared file "
+                    f"{site_file_of.get(owner[0]) or '(none declared)'}: a same-named routine elsewhere")
+            elif owner:
+                obs.attribution_evidence = (
+                    f"{here}; the frame chain reaches "
+                    f"{owner[0] or '?'} at {owner[1].rsplit('/', 1)[-1]}:{owner[2]} first (above "
+                    f"{', '.join(owner[3]) or 'nothing'}), which is not a declared site {spec['fault_sites']}")
+            else:
+                obs.attribution_evidence = (
+                    f"{here} and its frame chain ({len(fault.chain)} frames) reaches no frame of PHP's tree")
         elif not path and leaf.get("outside") and func and func == leaf.get("func"):
             # A libc leaf: the fault is in the routine ASan's own frame #0 names (strlen under
             # xbuf_format_converter, CRASH-068). That is consistent with the defect and proves
@@ -621,14 +900,25 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
             # not be read this way (its frame #0 would carry a line table or a deeper stack).
             if fault.ra:
                 cfunc, cpath, cline = symbolize_at(llvm_bin, image, fault.ra - 2, text)
-                if cfunc in spec["fault_sites"] and cpath.endswith(site_file):
-                    at_site = True
-                    obs.attribution = "function"
+                ckind = frame_kind(cfunc, cpath)
+                if ckind in ("nested", "allocator"):
+                    # the caller is the port's own code: the same barrier the chain walk
+                    # applies (fourth review: memcpy with ra into _estrndup read as a catch)
                     obs.attribution_evidence = (
                         f"the fault is in {func}, the libc routine ASan's own frame #0 names for "
-                        f"this case, called from {cfunc} at {site_file}:{cline} (ra={fault.ra:#x}), "
+                        f"this case, but its caller (ra={fault.ra:#x}) is "
+                        + ("the nested layer's own source" if ckind == "nested" else "PHP's allocator")
+                        + f" ({cfunc or '?'}@{(cpath or '?').rsplit('/', 1)[-1]}:{cline}): the fault "
+                        f"may be the port's, and no site beyond it counts")
+                elif cfunc in spec["fault_sites"] and at_file(cpath, site_file_of.get(cfunc) or primary_file):
+                    at_site = True
+                    matched_site = cfunc
+                    obs.attribution = "chain"
+                    obs.attribution_evidence = (
+                        f"the fault is in {func}, the libc routine ASan's own frame #0 names for "
+                        f"this case, called from {cfunc} at {(cpath or '?').rsplit('/', 1)[-1]}:{cline} (ra={fault.ra:#x}), "
                         f"the function this case declares (fault_sites, ASan frame "
-                        f"#{(site or {}).get('index', 1)})"
+                        f"#{(site or {}).get('index', 1)}); attributed by the call path (chain), not by the operand"
                         + (", at ASan's own line" if cline == spec["asan_line"] else
                            f" (ASan: line {spec['asan_line']})"))
                 else:
@@ -663,8 +953,15 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
     # arm licensed reach on every arm of the case, which let a silence elsewhere read as
     # MISSED on the strength of another configuration's fault; that transfer is gone.
     obs.reached = at_site or (bool(stock_reached) and bool(precondition_met))
-    if at_site:
-        obs.reach_evidence = (f"this run faulted in {spec['fault_sites'][0]}, the case's own "
+    if at_site and obs.attribution == "chain":
+        # the fault is NOT in the site: it is in a forwarding routine whose call path reaches
+        # the site, which is weaker, and the wording must not read stronger (fifth review)
+        obs.reach_evidence = (f"this run faulted in {fault.symbol or '?'}, whose call path reaches "
+                              f"{matched_site or spec['fault_sites'][0]}, the case's own declared site "
+                              f"(attributed by chain); that path cannot be on the stack without "
+                              f"the trigger having run")
+    elif at_site:
+        obs.reach_evidence = (f"this run faulted in {matched_site or spec['fault_sites'][0]}, the case's own "
                               f"declared site, which cannot be reached without the trigger "
                               f"having run")
     elif obs.reached:
@@ -698,12 +995,15 @@ def observe(case, spec, arm, image_sha, text, exit_code, controls, stock_reached
 
 # ---- the runs ------------------------------------------------------------------------------
 
-def run_arm(args, arm, mode, cases, record, serial, wants_probe):
-    """One guest boot: the sanity control, the bound probe, then every case, all at `mode`."""
+def run_arm(args, arm, mode, cases, record, serial, wants_probe, platform_probes=()):
+    """One guest boot: the sanity control, the bound probe, each platform probe a case declares
+    (and the command line supplies), then every case, all at `mode`."""
     img = args.image.name
     runs = [(SANITY, f"PHP_CAP_MODE={mode} {img} -d memory_limit=512M /mnt/vm/{SANITY_SCRIPT}")]
+    for name, path in platform_probes:
+        runs.append((probe_run_name(name), path.name))
     if wants_probe:
-        # probe-seam stage 7 sets its OWN modes internally (rounded, read index 9, then exact,
+        # probe-nested stage 7 sets its OWN modes internally (rounded, read index 9, then exact,
         # read index 9), so it is not parameterised by the arm. See arms.json on what that does
         # and does not establish.
         runs.append((BOUND_PROBE, f"{args.probe.name} 7"))
@@ -715,6 +1015,8 @@ def run_arm(args, arm, mode, cases, record, serial, wants_probe):
            "--timeout", str(args.timeout), "--run-timeout", str(args.run_timeout)]
     if wants_probe:
         cmd += ["--image", str(args.probe)]
+    for _, path in platform_probes:
+        cmd += ["--image", str(path)]
     cmd += ["--extra", str(args.scratch / SANITY_SCRIPT)]
     for case in cases:
         cmd += ["--extra", str(args.scratch / f"{case}.php")]
@@ -762,8 +1064,8 @@ SANITY_TEXT = (
 )
 
 
-def seam_counters(text):
-    m = SEAM_LINE.search(text or "")
+def nested_counters(text):
+    m = NESTED_LINE.search(text or "")
     mode = MODE_LINE.search(text or "")
     return (int(mode.group(1)) if mode else None,
             int(m.group(5)) if m else None)
@@ -795,7 +1097,7 @@ def cross_arm_gates(args, per_arm, llvm_bin):
     s, b, o = (rev[a] for a in TEMPORAL)
     if not (s == 0 and b == 0 and (o or 0) > 0):
         problems.append(f"revokes did not order stock==0, block==0, object>0: {rev}. Without "
-                        f"that ordering a temporal catch cannot be attributed to the seam "
+                        f"that ordering a temporal catch cannot be attributed to the nested layer "
                         f"rather than to the allocator underneath it")
     return problems, derives_in_image, revokes_in_image
 
@@ -843,8 +1145,8 @@ def main():
     p.add_argument("--qemu", type=Path, required=True)
     p.add_argument("--images", type=Path, required=True)
     p.add_argument("--adapter", type=Path, required=True)
-    p.add_argument("--image", type=Path, required=True, help="php-real-seam.dom")
-    p.add_argument("--probe", type=Path, required=True, help="probe-seam.dom, for the bound control")
+    p.add_argument("--image", type=Path, required=True, help="php-real-nested.dom")
+    p.add_argument("--probe", type=Path, required=True, help="probe-nested.dom, for the bound control")
     p.add_argument("--corpus", type=Path, required=True, help="the php-5.0.0-bug-corpus root")
     p.add_argument("--population", default="asan-blind", choices=POPULATIONS,
                    help="which set to measure (default: the ASAN-blind cases)")
@@ -856,6 +1158,11 @@ def main():
     p.add_argument("--run-timeout", type=int, default=40,
                    help="GUEST seconds for one run before the watchdog kills it")
     p.add_argument("--case", action="append", help="restrict to these cases (debugging)")
+    p.add_argument("--platform-probe", action="append", default=[], metavar="NAME=PATH",
+                   help="a platform-precondition probe image by its name (putenv=probe-putenv.dom), "
+                        "run once per arm when a case declares that probe, its sha256 recorded in "
+                        "platform.json before the boot; a declared probe not supplied leaves its case "
+                        "judged as if the precondition were met, with a note")
     p.add_argument("--from-record", action="store_true",
                    help="re-judge stored runs without booting")
     p.add_argument("--prereg", default="", help="the pre-registration commit this run answers")
@@ -887,7 +1194,7 @@ def main():
 
     image_sha = subprocess.run(["sha256sum", str(args.image)], capture_output=True,
                                text=True).stdout.split()[0]
-    # The bound probe is a DIFFERENT image on purpose -- probe-seam.dom, built from the seam's
+    # The bound probe is a DIFFERENT image on purpose -- probe-nested.dom, built from the nested layer's
     # sources without PHP -- so its transcript reports its own sha256 and must be checked
     # against its own file. Exempting it instead would make the guard unable to notice a stale
     # probe transcript, which is the one run in the session whose image can change on its own.
@@ -904,6 +1211,22 @@ def main():
     # with whatever is on disk NOW, which the 2026-10-27 sensitivity re-scoring did. The
     # record of the platform is written beside the transcripts by the pass that booted them,
     # and a re-judge reads that or refuses.
+    declared_probes = sorted({(spec.get("platform_precondition") or {}).get("probe")
+                              for spec in cases.values()} - {None, ""})
+    supplied = {}
+    for word in args.platform_probe:
+        name, _, path = word.partition("=")
+        if name not in PLATFORM_PROBES or not path:
+            sys.exit(f"--platform-probe {word!r}: known probes are {sorted(PLATFORM_PROBES)}, as NAME=PATH")
+        supplied[name] = Path(path)
+    for name in declared_probes:
+        if name not in PLATFORM_PROBES:
+            sys.exit(f"a case declares platform_precondition probe {name!r}, which this runner cannot read")
+    platform_probes = [(name, supplied[name]) for name in declared_probes if name in supplied]
+    for name in declared_probes:
+        if name not in supplied:
+            print(f"    NOTE: a case declares the {name} platform precondition and no --platform-probe "
+                  f"{name}=... was given: it is judged as if the precondition were met", flush=True)
     platform_file = args.out / "platform.json"
     if args.from_record:
         if not platform_file.is_file():
@@ -912,9 +1235,28 @@ def main():
         platform = json.loads(platform_file.read_text())
     else:
         platform = platform_record(args)
+        # EVERY PLATFORM PROBE BY CONTENT, BEFORE THE BOOT, beside the other binaries. A probe
+        # is its own statically linked image: that it ran in the same boot says nothing about
+        # which libc it carries, and until 2026-10-28 its hash reached no record, so a probe
+        # transcript could exclude a case without any way to tie it to the libc PHP ran on.
+        # Every probe SUPPLIED, not only the ones this population's cases declare: the probe
+        # is part of the platform the boot ran on, and a population that declares none must
+        # write the same record as one that does, or merge-population-bundles.py rightly
+        # refuses to merge the two boots (run13, 2026-10-28, which this re-run replaces).
+        platform["platform_probes"] = {name: f"{sha256_file(path)}  {path}"
+                                       for name, path in sorted(supplied.items())}
         args.out.mkdir(parents=True, exist_ok=True)
         platform_file.write_text(json.dumps(platform, indent=2, sort_keys=True) + "\n")
         stage_inputs(args, cases)
+    # The probe hashes the RECORD holds, never this host's files: a re-judge checks each probe
+    # transcript against the hash written by the pass that booted it. A record without them (a
+    # bundle from before the hashes were recorded) has no probe reading the judge may use.
+    probe_shas = {name: entry.split()[0] for name, entry in platform.get("platform_probes", {}).items()
+                  if not entry.startswith("MISSING:")}
+    for name in declared_probes:
+        if name in supplied and name not in probe_shas:
+            print(f"    NOTE: the record carries no hash for the {name} probe; its transcript cannot be "
+                  f"tied to this platform and is read as no result", flush=True)
     for arm in ARMS:
         if not arms[arm].get("protective_causes"):
             sys.exit(f"{arm}: tools/arms.json declares no protective_causes for this "
@@ -932,12 +1274,22 @@ def main():
                 sys.exit(f"--from-record: no stored run at {record}")
             rec = json.loads(record.read_text())
         else:
-            _, rec = run_arm(args, arm, mode, cases, record, serial, wants_probe)
+            _, rec = run_arm(args, arm, mode, cases, record, serial, wants_probe, platform_probes)
         # A stored run from a DIFFERENT image must not be re-judged as this one's. Each run is
         # checked against the image it was supposed to be, which for the bound probe is the
         # probe's own.
+        probe_runs = {probe_run_name(n): n for n in declared_probes}
         for name, lines in rec["output"].items():
-            want = probe_sha if name == BOUND_PROBE else image_sha
+            if name == BOUND_PROBE:
+                want = probe_sha
+            elif name in probe_runs:
+                # A platform probe is its own image: its transcript must match the hash the
+                # record holds for it, and a record that holds none cannot vouch for it.
+                want = probe_shas.get(probe_runs[name])
+                if want is None:
+                    continue
+            else:
+                want = image_sha
             got = re.search(r"sha256=([0-9a-f]{64})", "\n".join(lines))
             if got and got.group(1) != want:
                 sys.exit(f"{arm}/{name}: the stored transcript is from image {got.group(1)[:12]}, "
@@ -968,10 +1320,33 @@ def main():
         if wants_probe:
             probe_text = texts[arm].get(BOUND_PROBE, "")
             probe_ok = bound_probe_faulted_as_declared(probe_text, symbols_of(args.llvm_bin, args.probe))
-        mode_word, revokes = seam_counters(sanity_text)
+        mode_word, revokes = nested_counters(sanity_text)
+        # A probe reading counts only from a probe run that EXITED 0 with no domain fault and
+        # whose image hash the record vouches for; a probe that faulted or was killed printed
+        # whatever it printed before, and that is not a reading of the libc.
+        def probe_reading(name):
+            run = probe_run_name(name)
+            text = texts[arm].get(run, "")
+            if name not in probe_shas or rec["exits"].get(run) != 0 \
+                    or verdicts.domain_fault(text, None) is not None:
+                return None
+            # POSITIVE IDENTITY, not the absence of a contradiction: the transcript must
+            # itself name the image it ran (the launcher's exit line, `capstone-exec: exit
+            # image=... sha256=...`, or its fault record) and that digest must be the one the
+            # record holds for this probe. A transcript with no digest could be any image's
+            # (second review, 2026-10-28).
+            if transcript_image(raws[arm].get(run, "")) != probe_shas[name]:
+                return None
+            return PLATFORM_PROBES[name](text)
+        present = {name: probe_reading(name) for name in declared_probes}
         per_arm[arm] = {"rec": rec, "sanity_ok": sanity_ok, "probe_ok": probe_ok,
                         "mode_word": mode_word, "revokes": revokes,
-                        "declared_mode": mode, "wants_probe": wants_probe}
+                        "declared_mode": mode, "wants_probe": wants_probe,
+                        "platform_present": present}
+        for name in declared_probes:
+            print(f"    {probe_run_name(name)}: " + {True: "behaviour PRESENT (precondition met)",
+                                                   False: "behaviour ABSENT (precondition not met; control held)",
+                                                   None: "no usable result"}[present[name]])
         print(f"    {SANITY}: {'complete' if sanity_ok else 'DID NOT COMPLETE'} "
               f"(mode={mode_word} revokes={revokes})")
         if wants_probe:
@@ -989,7 +1364,7 @@ def main():
     stock_reached, output_diverged = {}, {}
     for case, spec in cases.items():
         text = texts[STOCK].get(case, "")
-        said = strip_seam_noise(text)
+        said = strip_nested_noise(text)
         # The control must reproduce the ORACLE'S end, which is exit 0 for a case that
         # completes and 255 for one PHP ends with its own fatal error. For every case whose
         # oracle is "OK" this is exactly the old `== 0`, so the published ASAN-blind
@@ -1043,11 +1418,14 @@ def main():
         controls = arm_controls(arm, per_arm[arm]["sanity_ok"], per_arm[arm]["probe_ok"], arms)
         for case, spec in cases.items():
             text = texts[arm].get(case, "")
+            pp = spec.get("platform_precondition")
+            platform_present = per_arm[arm]["platform_present"].get(pp.get("probe")) if pp else None
             obs = observe(case, spec, arm, image_sha, text,
                           per_arm[arm]["rec"]["exits"].get(case),
                           controls, stock_reached[case], args.llvm_bin, args.image,
                           precondition_met[case], args.score_oracle_crashes,
-                          tuple(arms[arm]["protective_causes"]), raws[arm].get(case))
+                          tuple(arms[arm]["protective_causes"]), raws[arm].get(case),
+                          platform_present=platform_present)
             if case in output_diverged:
                 note(obs, "the stock arm's output differs from the corpus's pristine record "
                           "(reported, not gated: see the module docstring on the deviation)")
@@ -1080,7 +1458,7 @@ def main():
                               FRAMEWORK_ARM[arm], rows[arm],
                               {"platform": platform, "configuration": arm,
                                "build": {"application": "php", "profile": "virtual",
-                                         "image_sha256": image_sha, "allocator": "seam",
+                                         "image_sha256": image_sha, "allocator": "nested",
                                          "mode": arms[arm]["mode"]},
                                "pre_registration": args.prereg,
                                "population": args.population,
@@ -1092,7 +1470,9 @@ def main():
                                    "attribution": ("declared function (case.json fault_sites) in "
                                                    "its file, with a protective cause "
                                                    "(arms.json protective_causes); own fault "
-                                                   "licenses own reach; 2026-10-27"),
+                                                   "licenses own reach; 2026-10-27; a catch through "
+                                                   "a forwarding routine's call path is the chain "
+                                                   "class, counted apart; 2026-10-28"),
                                    "protective_causes": arms[arm]["protective_causes"]}})
     print(f"\nbundles written under {args.out}")
 

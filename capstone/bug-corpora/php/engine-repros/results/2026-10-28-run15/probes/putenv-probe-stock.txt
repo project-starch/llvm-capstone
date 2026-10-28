@@ -1,0 +1,7 @@
+# the putenv probe's transcript on arm stock (php-real-stock), asan-blind boot of run15; exit 0; CAPSTONE_VM_ADD_OK grant lines dropped
+PUTENV_PROBE control retained=1 rc=0 errno=0 (ok)
+PUTENV_PROBE empty-name retained=0 rc=-1 errno=22 (Invalid argument)
+PUTENV_PROBE empty-name-value retained=0 rc=-1 errno=22 (Invalid argument)
+PUTENV_PROBE DONE failures=0
+CAPSTONE_VM_STATS arenas=11 pages=2250 peak=2250 nodes=30 steps=50 faults=20 collections=0 reclaimed=0 rounds=7 bytes_in=287 bytes_out=64 node_bytes=4210688 node_capacity=262144 node_growths=0 launch_ns=69560800 elapsed_ns=147255600
+capstone-exec: exit image=probe-putenv.dom sha256=5d65c6d7f446886b47f99789b73291dc9c42e17ca2dcbd4b7e328b3fade658f5

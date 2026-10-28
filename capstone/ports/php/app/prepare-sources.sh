@@ -29,8 +29,8 @@ TARBALL=$CACHE/php-${VERSION}.tar.gz
 TREE=$ROOT/php-${VERSION}
 mkdir -p "$ROOT" "$CACHE"
 
-# ---- the tree patches: everything in patches/ except the seam, which is a build MODE -------
-# (applied by build-virtual.sh to a copy of zend_alloc.c, seam arms only; see patches/README.md)
+# ---- the tree patches: everything in patches/ except the nested layer, which is a build MODE -------
+# (applied by build-virtual.sh to a copy of zend_alloc.c, nested arms only; see patches/README.md)
 TREE_PATCHES=()
 for p in "$SCRIPT_DIR"/patches/php-${VERSION}-*.patch; do
   case "$p" in *-zend-alloc-sublet-hooks.patch) continue ;; esac
@@ -94,8 +94,8 @@ TUS=$({ sed -n '/^PHP_GLOBAL_OBJS *=/p' "$TREE/Makefile"; sed -n '/^PHP_CLI_OBJS
   echo "tree patches, in order:"
   for p in "${TREE_PATCHES[@]}"; do echo "  $(basename "$p")  $(sha256sum < "$p" | cut -c1-16)"; done
   echo "patch set: $PATCH_HASH"
-  echo "The seam patch (0003) is not in this tree; build-virtual.sh applies it to a copy of"
-  echo "Zend/zend_alloc.c for the seam arms only."
+  echo "The nested layer patch (0003) is not in this tree; build-virtual.sh applies it to a copy of"
+  echo "Zend/zend_alloc.c for the nested layer arms only."
 } > "$TREE/PROVENANCE.txt"
 echo "$PATCH_HASH" > "$TREE/patchset.sha256"
 echo "prepared: $TREE ($TUS translation units)" >&2

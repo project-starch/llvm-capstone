@@ -227,13 +227,13 @@ static void fault(struct execution *e, struct capstone_delegate_host *host,
     /* The physical step record carries no registers: ra and fp read 0. */
     capstone_delegate_fault_record(fd, host, e->path,
                                    step ? step->cause : 0, step ? step->pc : 0,
-                                   step ? step->address : 0, 0, 0);
+                                   step ? step->address : 0, 0, 0, NULL, 0);
     close(fd);
   }
   if (isatty(2) || getenv("CAPSTONE_EXEC_DIAGNOSTICS"))
     capstone_delegate_fault_record(2, host, e->path,
                                    step ? step->cause : 0, step ? step->pc : 0,
-                                   step ? step->address : 0, 0, 0);
+                                   step ? step->address : 0, 0, 0, NULL, 0);
   report_stats(e);
   capstone_spawner_stop(&e->spawner);
   capstone_domain_exit_on_fault(CAPSTONE_DOMAIN_FAULT_RETVAL, NULL, NULL);

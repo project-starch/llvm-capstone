@@ -1,0 +1,80 @@
+{
+ "asan": {
+  "class": "ASAN:heap-use-after-free",
+  "file": "Zend/zend_compile.c",
+  "func": "zend_do_begin_class_member_function_call",
+  "line": 1321,
+  "stack": [
+   {
+    "file": "Zend/zend_compile.c",
+    "func": "zend_do_begin_class_member_function_call",
+    "index": 0,
+    "line": 1321
+   },
+   {
+    "file": "Zend/zend_language_parser.c",
+    "func": "zendparse",
+    "index": 1,
+    "line": 3049
+   },
+   {
+    "file": "Zend/zend_language_scanner.c",
+    "func": "compile_file",
+    "index": 2,
+    "line": 3141
+   },
+   {
+    "file": "Zend/zend.c",
+    "func": "zend_execute_scripts",
+    "index": 3,
+    "line": 1057
+   },
+   {
+    "file": "main/main.c",
+    "func": "php_execute_script",
+    "index": 4,
+    "line": 1627
+   },
+   {
+    "file": "sapi/cli/php_cli.c",
+    "func": "main",
+    "index": 5,
+    "line": 943
+   },
+   {
+    "func": "__libc_start_call_main",
+    "index": 6,
+    "outside": "../sysdeps/nptl/libc_start_call_main.h:59"
+   },
+   {
+    "func": "__libc_start_main_impl",
+    "index": 7,
+    "outside": "../csu/libc-start.c:360"
+   },
+   {
+    "func": "_start",
+    "index": 8,
+    "outside": "(/tmp/php-oracle/php-5.0.0-bug-corpus/build/php-5.0.0-asan/sapi/cli/php+0x93134) (BuildId: 4aefa467883ec720be150eacfb20c09975a136da)"
+   }
+  ]
+ },
+ "category": "use-after-free",
+ "collaborator_population": "temporal-asan-visible",
+ "crashes_on_pristine_build": false,
+ "cwe": "CWE-416",
+ "id": "CRASH-070",
+ "population": "asan-blind",
+ "pristine": {
+  "outcome": "EXIT:255",
+  "rc": 255,
+  "stdout": "\nWarning: main(soap12-test.inc): failed to open stream: No such file or directory in /tmp/php-oracle/php-5.0.0-bug-corpus/corpus/CRASH-070.php on line 21\n\nWarning: main(): Failed opening 'soap12-test.inc' for inclusion (include_path='.:') in /tmp/php-oracle/php-5.0.0-bug-corpus/corpus/CRASH-070.php on line 21\nglobal_func\n\nFatal error: Call to undefined method foo::global_func() in /tmp/php-oracle/php-5.0.0-bug-corpus/corpus/CRASH-070.php on line 65\n"
+ },
+ "requires": "",
+ "requires_kind": "",
+ "sources": {
+  "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
+  "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",
+  "results-ours-pristine-default.json": "92451b6e0c9a89a751e38ac2343400e6cd79d757c3f4613fe161dbcb339c851f"
+ },
+ "stockalloc": "EXIT:255"
+}

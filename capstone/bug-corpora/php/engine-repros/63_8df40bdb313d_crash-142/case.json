@@ -14,15 +14,30 @@
  "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has debug_backtrace_get_args at Zend/zend_builtin_functions.c:1420 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
  "arms": {
   "virtual-malloc": {
-   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"
+   "oracle": "the case on the virtual profile with the nested layer present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
+   "verdict": "NO-READING",
+   "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:6': native PHP dies on a signal, so there is no pair to read",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-malloc",
+   "verdict_reason": "out-of-denominator"
   },
   "virtual-nested-pools": {
-   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)"
+   "oracle": "the same image with the nested allocator layer retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
+   "verdict": "NO-READING",
+   "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:6': native PHP dies on a signal, so there is no pair to read",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-pools",
+   "verdict_reason": "out-of-denominator"
   },
   "virtual-nested-exact": {
-   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)"
+   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
+   "verdict": "NO-READING",
+   "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:6': native PHP dies on a signal, so there is no pair to read",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-exact",
+   "verdict_reason": "out-of-denominator"
   }
  },
  "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
- "note": "population: temporal-asan-visible -- a CWE-416 that ASan reports with zend_alloc.c as shipped (the stockalloc run): efree reached free(), so a detector at the libc boundary sees it; the control population. Collected by the corpus as history-5x-core3 (historical-known, confidence high)."
+ "note": "population: temporal-asan-visible -- a temporal defect (CWE-416) that ASan reports with zend_alloc.c as shipped (the stockalloc run, ASAN:SEGV) and that the patched build reports as ASAN:heap-use-after-free: the release reached free(), so a detector at the libc boundary sees it; the control population. Collected by the corpus as history-5x-core3 (historical-known, confidence high).",
+ "fault_site_files": {
+  "debug_backtrace_get_args": "Zend/zend_builtin_functions.c"
+ }
 }
