@@ -232,3 +232,40 @@ twin's x264 transcript gives T1 = T3 identical.
 
 **P17.** x264 test completes on the board within 129600 s per arm. Its frame and output hashes equal the twin's, and
 T1 equals T3.
+
+## Addendum 6 (2026-10-29 05:50, before gcc train or any perlbench boot): a heap-lock trap in realloc, seen on the twin
+
+**gcc train T1 on the twin (kit-q34)** (`census-train/stages-trainT1-502.gcc_r-train`):
+- train01.c completes, with specdiff PASS.
+- 200.c and scilab.c end with rc 139 after 9.86e9 and 5.92e9 instructions.
+
+**perlbench test on the twin, with the native harness:**
+- 315 of 318 sub-tests pass.
+- Failing in one run: japh/abigail, re/reg_email, re/pat_rt_report.
+- In a later run, re/reg_email passes. (That run's lib/deprecate failure was a gap in the trimmed lib list, since fixed.)
+
+**The fault is the same for every one of them:**
+- `capstone-exec: domain fault cause=2 ... address=0xc0001073`, which is `unimp`.
+- The pc is the single `unimp` inside `realloc` (gcc .text+0x10f94, perl .text+0x11eb0). It is the `__builtin_trap()` of
+  `lock_heap` (`runtime/virtual/heap.c:39`).
+- The disassembly is `amoswap.w.aq a0,s5,(s4)`; `beqz a0,taken`; `jalr __capstone_vm_wait`; `beqz a0,retry`; `unimp`.
+- No other branch reaches that `unimp`.
+
+**Reading.** realloc found the heap lock already held, in a single-threaded program. Two parts of this are not
+established:
+- why the lock is held;
+- why the wait path traps. The wait service sets no result, so a0 may still carry the amoswap's 1 (exec.c:876-882,
+  module 2010-2011).
+
+The SPEC kit's own QEMU qualification, on the older runtime, passed gcc train and perlbench test. A runtime regression
+is therefore the leading reading. It is UNRESOLVED and is not yet an ISSUES entry.
+
+**Predictions:**
+- **P18.** gcc train T1 on the board: train01 completes with specdiff PASS. 200.c and scilab.c end with rc 139 and the
+  same `cause=2 ... 0xc0001073` fault at .text+0x10f94.
+- **P19.** perlbench test on the board, with the native harness and the trimmed lib:
+  - makerand passes;
+  - at most japh/abigail, re/reg_email and re/pat_rt_report fail, each with this fault;
+  - every other sub-test reads `ok`.
+
+The perlbench test boots are added to the lists after their twin references (census-perl) are read.
