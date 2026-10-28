@@ -7480,7 +7480,7 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
   - T2/T1 1.0003 [0.9996, 1.0011].
 - **Per program.**
   - Every T3/T1 and T2/T3 point lies within 1 %, except lcdnum and ctl-empty, whose intervals contain 1 (below).
-  - Five programs have an interval that excludes 1 in some pair, none by more than 0.34 %:
+  - Five programs have a Welch interval that excludes 1 in some pair, none by more than 0.34 %:
     - sglib-rbtree and trio-snprintf read T3/T1 1.0034 and 1.0017 and T2/T3 0.9967 and 0.9981, so their T2/T1 holds
       at 1.000. That is a property of the T3 images, not a cost.
     - wikisort T3/T1 0.9998;
@@ -7506,6 +7506,47 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
   - parse-board.py now rejoins them, and t3all-checks.py keys the twin's table by suite as well as name
     (b729deaf33d2).
   - On bitstream 2 the only split was a warm-up row, so no committed ratio changes.
+
+## Every program on one bitstream: the 15 allocating programs rerun on bitstream 3, and the suite figure BEEBS / RV8 / CoreMark (caplifive_vp2c_e7af48457, both boards, 2026-10-28)
+
+- **What ran.** The bitstream-2 T3 kits `perf/main3b/t3k1..3`, unchanged (same images, launcher and run scripts), on
+  bitstream 3. With the section above, all 103 programs now have T1, T3 and T2 on bitstream 3, each program's three
+  arms in one boot.
+  - 201 of 201 processes pass, over three boots.
+  - Why: the lead asked for one figure with three groups, BEEBS, RV8 and CoreMark, each with T1, T3 and T2. A suite
+    geomean must not mix bitstreams.
+  - Pre-registration 811dc7a43eb3, pushed before any boot. Every check was shown to fire on tampered inputs.
+  - Data and regeneration recipe: `capstone/benchmarks/virtual/results/2026-10-28-t3heap-bitstream3/`.
+- **Suite geomeans over all 103 programs, bitstream 3** (cycles; two-level bootstrap 95 %):
+
+  | group | programs | T3/T1 (lifetimes) | T2/T3 (scrub) | T2/T1 |
+  |---|---|---|---|---|
+  | BEEBS | 93 | 1.0038 [1.0034, 1.0042] | 1.0104 [1.0099, 1.0108] | 1.0142 [1.0137, 1.0147] |
+  | — upstream | 80 | 1.0001 [0.9997, 1.0004] | 0.9999 [0.9994, 1.0003] | 1.0000 [0.9995, 1.0004] |
+  | — on libc malloc | 13 | 1.0273 [1.0257, 1.0288] | 1.0772 [1.0755, 1.0788] | 1.1065 [1.1050, 1.1081] |
+  | RV8 | 7 | 0.9999 [0.9984, 1.0014] | 1.0248 [1.0234, 1.0263] | 1.0247 [1.0231, 1.0263] |
+  | CoreMark | 1 | 1.0004 [0.9992, 1.0021] | 0.9998 [0.9980, 1.0019] | 1.0003 [0.9990, 1.0022] |
+
+  - BEEBS here is the lead's grouping for the summary figure: the 80 upstream programs and the 13 that allocate
+    through libc malloc, together. The 13 are variants of upstream programs, so those programs enter the group twice,
+    once per allocator. All of BEEBS's cost comes from the 13; upstream BEEBS allocates from its own bump allocator
+    and never reaches the runtime's malloc.
+  - The two controls (ctl) are not in any group.
+- **Pre-registered checks: every prediction holds.**
+  1. check= is one value across the three arms for each of the 15, equal to the bitstream-2 T3 run's.
+  2. instret equals the bitstream-2 T3 run's within 0.01 % for every program and arm.
+  3. All 45 program-pair Welch intervals overlap their bitstream-2 intervals. The largest point move is
+     huffbench-libc, T3/T1 1.0049 against 0.9971.
+  4. Each suite geomean lies within 0.005 of the value composed beforehand from the per-program estimates (largest
+     difference beebs-libc T3/T1, 1.0273 against 1.0265).
+- **Per program** (15 allocating, bitstream 3; "measurably" means the bootstrap interval excludes 1):
+  - Lifetimes cost measurably in 8 of 15, the sglib and ctl programs on libc malloc, at 1.8–6.6 %.
+  - The scrub costs measurably in 13 of 15, up to miniz-libc's ×2.18; miniz-libc's T3/T1 is 1.0009. By the Welch
+    interval it is 12: rv8-primes's T2/T3 1.0065 has a Welch interval from 0.9993.
+  - rv8-primes and rv8-qsort show no measurable T2/T1.
+- **Reading.** Across the three suites the cost of temporal safety is 1.4 % on BEEBS, 2.5 % on RV8 and 0 on CoreMark.
+  The scrub carries most of it: RV8's lifetimes cost nothing, and BEEBS's scrub is 1.0 % against 0.4 % for lifetimes.
+  The cost exists only where a program calls the runtime's malloc/free in its timed region.
 
 ## R-62 and R-63 fixed on silicon at N=2, with every bitstream-2 regression reading unchanged (caplifive_vp2c_e7af48457, both boards, 2026-10-27)
 

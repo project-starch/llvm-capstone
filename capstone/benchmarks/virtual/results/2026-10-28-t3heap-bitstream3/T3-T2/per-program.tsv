@@ -1,0 +1,16 @@
+suite	program	procs	ratio	lo	hi	blo	bhi	ins_ratio	ins_const	verdict
+beebs-libc	ctl-stack-libc	4/4	1.0288	1.0212	1.0365	1.0234	1.0341	1.0141	no	T2 slower
+beebs-libc	ctl-string-libc	4/4	1.0121	1.0037	1.0206	1.0061	1.0185	1.0086	no	T2 slower
+beebs-libc	ctl-vector-libc	4/4	1.0301	1.0213	1.0389	1.0238	1.0366	1.0149	no	T2 slower
+beebs-libc	huffbench-libc	11/11	1.0020	0.9928	1.0112	0.9933	1.0095	1.0012	no	no measurable difference
+beebs-libc	miniz-libc	4/4	2.1800	2.1699	2.1901	2.1677	2.1905	1.2647	no	T2 slower
+beebs-libc	sglib-dllist-libc	4/4	1.0238	1.0138	1.0340	1.0157	1.0314	1.0263	no	T2 slower
+beebs-libc	sglib-hashtable-libc	4/4	1.0245	1.0192	1.0298	1.0196	1.0298	1.0252	no	T2 slower
+beebs-libc	sglib-listinsertsort-libc	4/4	1.0206	1.0143	1.0269	1.0148	1.0263	1.0238	no	T2 slower
+beebs-libc	sglib-listsort-libc	4/4	1.0262	1.0230	1.0294	1.0228	1.0299	1.0244	no	T2 slower
+beebs-libc	sglib-rbtree-libc	4/4	1.0228	1.0168	1.0288	1.0162	1.0297	1.0218	no	T2 slower
+rv8	rv8-aes	4/4	1.0349	1.0314	1.0385	1.0315	1.0372	1.0044	no	T2 slower
+rv8	rv8-miniz	4/4	1.0548	1.0475	1.0621	1.0472	1.0618	1.0080	no	T2 slower
+rv8	rv8-norx	4/4	1.0805	1.0766	1.0845	1.0762	1.0844	1.0096	no	T2 slower
+rv8	rv8-primes	4/4	1.0065	0.9993	1.0137	1.0032	1.0126	1.0004	no	no measurable difference
+rv8	rv8-qsort	4/4	0.9999	0.9984	1.0014	0.9987	1.0012	1.0000	no	no measurable difference

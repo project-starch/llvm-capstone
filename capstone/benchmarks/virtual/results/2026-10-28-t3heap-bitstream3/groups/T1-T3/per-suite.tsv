@@ -1,0 +1,5 @@
+suite	programs	geomean	lo	hi	T3_slower	T3_faster	no_difference
+beebs	93	1.0038	1.0034	1.0042	10	1	82
+coremark	1	1.0004	0.9992	1.0021	0	0	1
+ctl	2	0.9980	0.9946	1.0018	0	0	2
+rv8	7	0.9999	0.9984	1.0014	0	0	7

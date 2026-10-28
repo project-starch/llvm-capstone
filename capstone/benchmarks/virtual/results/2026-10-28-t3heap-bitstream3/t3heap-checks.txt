@@ -1,0 +1,35 @@
+program	check	ref_check	ins_dev_max	T1-T3	T1-T3_ref	overlap	T3-T2	T3-T2_ref	overlap	T1-T2	T1-T2_ref	overlap
+ctl-stack-libc	0x185fc22	0x185fc22	0.00000	1.0200	1.0195	yes	1.0288	1.0290	yes	1.0494	1.0491	yes
+ctl-string-libc	0x15	0x15	0.00001	1.0193	1.0195	yes	1.0121	1.0120	yes	1.0317	1.0317	yes
+ctl-vector-libc	0x185c11b	0x185c11b	0.00001	1.0184	1.0178	yes	1.0301	1.0301	yes	1.0491	1.0484	yes
+huffbench-libc	0x9a067eb61cddb63b	0x9a067eb61cddb63b	0.00007	1.0049	0.9971	yes	1.0020	1.0028	yes	1.0069	0.9999	yes
+miniz-libc	0x0	0x0	0.00009	1.0009	1.0019	yes	2.1800	2.1776	yes	2.1820	2.1819	yes
+rv8-aes	0x17b4434fc90257db	0x17b4434fc90257db	0.00001	1.0006	0.9997	yes	1.0349	1.0366	yes	1.0355	1.0363	yes
+rv8-miniz	0x21c700	0x21c700	0.00001	1.0009	0.9997	yes	1.0548	1.0557	yes	1.0557	1.0554	yes
+rv8-norx	0x5cb7f3e677b56ab2	0x5cb7f3e677b56ab2	0.00002	0.9994	1.0001	yes	1.0805	1.0801	yes	1.0798	1.0802	yes
+rv8-primes	0x2bf1f	0x2bf1f	0.00001	0.9977	0.9975	yes	1.0065	1.0037	yes	1.0041	1.0012	yes
+rv8-qsort	0xffcfceca598ca4c0	0xffcfceca598ca4c0	0.00000	0.9997	0.9999	yes	0.9999	0.9998	yes	0.9996	0.9996	yes
+sglib-dllist-libc	0x0	0x0	0.00001	1.0611	1.0617	yes	1.0238	1.0257	yes	1.0864	1.0890	yes
+sglib-hashtable-libc	0x0	0x0	0.00007	1.0590	1.0580	yes	1.0245	1.0244	yes	1.0849	1.0838	yes
+sglib-listinsertsort-libc	0x1348	0x1348	0.00002	1.0655	1.0639	yes	1.0206	1.0232	yes	1.0874	1.0886	yes
+sglib-listsort-libc	0x1356	0x1356	0.00002	1.0612	1.0622	yes	1.0262	1.0273	yes	1.0890	1.0912	yes
+sglib-rbtree-libc	0x1356	0x1356	0.00001	1.0492	1.0485	yes	1.0228	1.0220	yes	1.0731	1.0715	yes
+
+suite geomeans over all 103 programs, bitstream 3 (predicted in parentheses)
+  beebs	T1-T3	n=80	1.0001 [0.9997, 1.0004]	(1.0001)
+  beebs-libc	T1-T3	n=13	1.0273 [1.0257, 1.0288]	(1.0265)
+  coremark	T1-T3	n=1	1.0004 [0.9992, 1.0021]	(not predicted)
+  ctl	T1-T3	n=2	0.9980 [0.9946, 1.0018]	(0.9980)
+  rv8	T1-T3	n=7	0.9999 [0.9984, 1.0014]	(0.9997)
+  beebs	T3-T2	n=80	0.9999 [0.9994, 1.0003]	(0.9999)
+  beebs-libc	T3-T2	n=13	1.0772 [1.0755, 1.0788]	(1.0775)
+  coremark	T3-T2	n=1	0.9998 [0.9980, 1.0019]	(not predicted)
+  ctl	T3-T2	n=2	1.0156 [0.9969, 1.0482]	(1.0156)
+  rv8	T3-T2	n=7	1.0248 [1.0234, 1.0263]	(1.0247)
+  beebs	T1-T2	n=80	1.0000 [0.9995, 1.0004]	(1.0000)
+  beebs-libc	T1-T2	n=13	1.1065 [1.1050, 1.1081]	(1.1061)
+  coremark	T1-T2	n=1	1.0003 [0.9990, 1.0022]	(not predicted)
+  ctl	T1-T2	n=2	1.0136 [0.9951, 1.0464]	(1.0136)
+  rv8	T1-T2	n=7	1.0247 [1.0231, 1.0263]	(1.0244)
+
+every pre-registered prediction holds

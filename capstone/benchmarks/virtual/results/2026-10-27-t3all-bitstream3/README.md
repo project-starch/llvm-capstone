@@ -54,7 +54,7 @@ per arm, and P = 11 × (0, 1) for crc32, huffbench and wikisort, which are not r
 - Every T3/T1 and T2/T3 point lies within 1 %, except two noise cases, which are the misses below.
   - Beyond 0.5 % lie only crc32's T3/T1 (0.9926), duff's (1.0065 and 1.0054), and the two misses.
   - All of their intervals contain 1.
-- Five programs have an interval that excludes 1 in some pair, none by more than 0.34 %:
+- Five programs have a Welch interval that excludes 1 in some pair, none by more than 0.34 %:
   - sglib-rbtree and trio-snprintf, discussed next;
   - wikisort, with T3/T1 0.9998;
   - rv8-sha512, with T2/T3 1.0001 (T2/T1 1.0001);

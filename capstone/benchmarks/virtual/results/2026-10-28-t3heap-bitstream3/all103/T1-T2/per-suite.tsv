@@ -1,0 +1,6 @@
+suite	programs	geomean	lo	hi	T2_slower	T2_faster	no_difference
+beebs	80	1.0000	0.9995	1.0004	1	0	79
+beebs-libc	13	1.1065	1.1050	1.1081	10	0	3
+coremark	1	1.0003	0.9990	1.0022	0	0	1
+ctl	2	1.0136	0.9951	1.0464	0	0	2
+rv8	7	1.0247	1.0231	1.0263	4	0	3
