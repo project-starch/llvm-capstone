@@ -101,9 +101,9 @@ populations merged (`tools/merge-population-bundles.py`), every table computed f
 
 - `results/2026-10-27-run7/`: lane B's measurement (the corpus at `672a0deffaa2`; runs 5, 6 and 7 agree cell for cell).
 - `results/2026-10-28-run10/`: lane C's measurement (the seam on the libc's reclaim, `8569fb7194dc`): against run7 no CAUGHT changed.
-- `results/2026-10-28-run14/` and `results/2026-10-28-run15/`: the follow-up lane's measurement (`1ed7d8c601e2`, then `009ca7b34b00` with the launcher that names its image when a run ends): the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain, the putenv probe. run15 is cell-identical to run14. **run15 is the current record:** `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them. run14 is cell-identical to run13, which it replaces only because run13's two boots recorded different probe lists and could not be merged.
+- `results/2026-10-28-run14/` and `results/2026-10-28-run15/`: the follow-up lane's measurement (`1ed7d8c601e2`, then `009ca7b34b00` with the launcher that names its image when a run ends): the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain, the putenv probe. run15's verdicts and reasons are cell-identical to run14's. **run15 is the current record:** `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them. run14 is cell-identical to run13, which it replaces only because run13's two boots recorded different probe lists and could not be merged.
 
-Over the 49 CWE-416 cases, from `results/2026-10-28-run15/README.md` (identical to run14's):
+Over the 49 CWE-416 cases, from `results/2026-10-28-run15/README.md` (every verdict and reason identical to run14's; the chain column exists only since run15's re-judge):
 
 **Default scoring** (the 23 native crashers out of the denominator):
 

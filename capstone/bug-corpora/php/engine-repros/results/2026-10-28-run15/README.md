@@ -5,7 +5,7 @@ The follow-up lane's measurement and the current record. These bundles are run15
 - pre-registration (the lane commit the run answers): `009ca7b34b006c0cb51e8d16e6b15deb201bc45b`
 - PHP image (php-real-seam.dom) sha256 `afd3e23961ee69522e6f03007e5db00584940dd29aa7cb2a8c39fd29bcda75ef`
 - QEMU `e8a89c014e5aa627b294cdf0b7d366610cf4334adc1f9d1579c498f33e4fee23`, launcher `b533a0689e31cb828caae954a64da770d0a12e9d27ab5ababc520e040ed9dcc2`, module `da3d0e5f9be7fc24528b2cf8f05d0976d6017c6ecdff13648a36f74808f8aa8d`, kernel `e833dfb12bccf8a39bd6a81e8e42e4622f0e76bcc6cc09624a1fbe7198c18a4b`; probes {"putenv": "5d65c6d7f446886b47f99789b73291dc9c42e17ca2dcbd4b7e328b3fade658f5"}
-- judge: declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27; protective causes [25, 28]
+- judge: declared function (case.json fault_sites) in its file, with a protective cause (arms.json protective_causes); own fault licenses own reach; 2026-10-27; a catch through a forwarding routine's call path is the chain class, counted apart; 2026-10-28; protective causes [25, 28]
 - one bundle per arm (`bundle-<arm>/verdicts.jsonl`, `inputs.json`), the two populations merged by `tools/merge-population-bundles.py`; `sensitivity/` holds the same records re-scored with `--score-oracle-crashes`
 - every cell below is computed by `tools/result-tables.py` from these bundles; nothing is typed by hand
 
