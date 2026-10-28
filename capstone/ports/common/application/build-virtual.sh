@@ -90,6 +90,11 @@ if [[ $APP == php && $LIFETIMES == 1 ]]; then
   case "$PHP_REALPHP_DEFAULT_MODE" in 6|7) ;;
     *) echo "PHP_REALPHP_DEFAULT_MODE=$PHP_REALPHP_DEFAULT_MODE is not a protected arm; CAPSTONE_VIRTUAL_LIFETIMES=1 means 6 (lifetimes) or 7 (lifetimes and exact bounds)" >&2; exit 2 ;;
   esac
+elif [[ -n ${PHP_REALPHP_DEFAULT_MODE:-} ]]; then
+  # Only php's protected image has an arm to bake in. Anywhere else the variable means nothing,
+  # and report() would still record it in pipeline.json as if it had selected something.
+  echo "PHP_REALPHP_DEFAULT_MODE=$PHP_REALPHP_DEFAULT_MODE selects php's protected arm; unset it to build $APP with CAPSTONE_VIRTUAL_LIFETIMES=$LIFETIMES" >&2
+  exit 2
 fi
 
 # Ports that take an SDK rather than building one.

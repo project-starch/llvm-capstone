@@ -63,7 +63,10 @@ same SDK as the images: `capstone-cc -O0 -std=gnu89 swap-probe.c`.
 | guest | Image `e833dfb1…`, `fw_jump.elf` `4dd4a2ad…`, `rootfs.ext2` `62049800…` (the gate lanes' images-v7 set) |
 | PHP source | `prepared-tree-PROVENANCE.txt`: the museum release tarball by SHA-256, `CFLAGS=-std=gnu89 ./configure --disable-all`, tree patches 0001 and 0002; the patched `zend_qsort.c` `50bf9f08…`, `zend_modules.h` `ea159e5e…`, the configured `php_config.h` `c4dcf576…` and `Makefile` `31d6611b…` |
 
-`hashes.sha256` holds the full SHA-256 of every component named here; the table abbreviates. The collaborator's 2026-10-26 runs used the
+`hashes.sha256` holds the full SHA-256 of every component named here; the table abbreviates. Its paths are relative to the run's
+work root, except the four platform files, which lay outside it and appear under the run host's own path (`~/v6gate/...`). In a
+virtual kit's layout they are `qemu-system-riscv64`, `images/Image`, `images/fw_jump.elf` and `images/rootfs.ext2`. The digests
+are the record and are left as taken. The collaborator's 2026-10-26 runs used the
 same QEMU source pin and cpu string but their own builds of QEMU and the guest images.
 
 ## What this does not say
