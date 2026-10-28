@@ -105,3 +105,22 @@ Board 2 was held by another lane when this was written. Its chain waits for the 
   - a VOID control, which stops the chain;
   - `--twin` passed through.
 - **The twin comparison fires:** a forged lbm.out hash reads DIFFER.
+
+## Addendum 1 (2026-10-28, before any mcf boot): P9 RETRACTED
+
+P9 rested on a 16-bit flat table. That is the table of vp2 and the batch bitstream, not bitstream 3's.
+
+- The kit's module 9c60fb53 is the 18-bit build. It carries the `index_bits` parameter, which the source exposes only
+  when the width is not 16 (`runtime/virtual/module/capstone_vm.c:180-203`).
+- The board's own stats line in the imagick boot reads `node_capacity=262144`.
+- Bitstream 3 is built on bitstream 2, whose index is 18 bits.
+- Bitstream 2 pushes a retired record onto the table's free list. So the bound is likely the LIVE set, not the
+  lifetime allocation count. For bitstream 3 this is inferred from its base, not measured.
+- The `nodes=` field of the stats line is the context's allocation total (`table[3]`). mcf T3's 64,004 is therefore
+  an allocation count, while native mcf test holds at most 5,995 objects live.
+
+**New P9: mcf T3 completes on test**, with the same outputs as T1 and the twin. mcf T3 joins board 2's list after mcf
+T1, with step 12000 s and twin census-q34/505.mcf_r-test.
+
+kit-q34-16, which set `node_flat_records=65536` through sysfs, cannot test the old P9 anyway: the parameter is
+read-only after insmod (0444), so the batch refuses it.
