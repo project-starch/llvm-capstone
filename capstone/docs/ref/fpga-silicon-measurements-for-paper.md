@@ -7579,8 +7579,21 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
   - cpython lt0 31 of 32. The one difference is case 01's Q-31 cause (4 where QEMU reads 24), as on bitstream 2.
   - The 23-arm re-read (pre-registered at f1cb1f9d347c): every cell equal to the bitstream-2 batch references
     except sq0d's three Q-31 cells (19 and 20 cause 4, 22 cause 13, where QEMU reads 24), as on bitstream 2.
+  - The second wave (pre-registered at 2e0bde4ca772), each as on bitstream 2:
+    - mruby stock and Sublet 23 of 23 each; perl stock and Sublet 11 of 11 each;
+    - the new arms (xlang, plane, capi) as predicted;
+    - Juliet temporal census 729 of 735, only rand-driven `_12` draws differing, and seeded 56 of 56;
+    - Juliet spatial 1513 of 1513.
+  - httpd (pre-registered at efe7a1c36a32) at N=2 across the boards: malloc 9 of 9 MISSED, nested pools 9 of 9 CAUGHT
+    (cause 25 in read_probe). Every cell is as the reference, and board 2 is 0 different from board 1.
+  - Every arm of bitstream 2's corpus pass now reads the same on bitstream 3. Not re-run on bitstream 3:
+    - the Juliet spatial remainder, which stopped on silicon by the lead's decision;
+    - bitstream 2's single-case variants and investigation runs (the pb08 fill pair, the capacity-cell replays, and the
+      census, misal and uaf-repeat runs).
   - The fdiv/fsqrt fix changes no verdict, attribution, cause, symbol or offset in these arms. Readings are 0.
-  - Records: `records/b3bs-sql0-b2`, `b3bs-cpy-lt1-b1`, `b3bs-cpy-lt0-b2`, `b3bs-pg-pools-b1` and `b3bs-reread-b1`/`-b2`.
+  - Records: `records/b3bs-sql0-b2`, `b3bs-cpy-lt1-b1`, `b3bs-cpy-lt0-b2`, `b3bs-pg-pools-b1`, `b3bs-reread-b1`/`-b2`,
+    `b3bs-mp-b1`, `b3bs-newarms-b2`, `b3bs-juliet-temporal-b1`, `b3bs-juliet-spatial-b2`, `b3bs-httpd-b1` and
+    `b3bs-httpd-n2-b2`.
 - The perf consequence (ludcmp, st and minver now correct) is the section above, "ludcmp, st and minver on
   bitstream 3".
 - Records: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/bs3-e7af48457-b1` and `-b2`, and

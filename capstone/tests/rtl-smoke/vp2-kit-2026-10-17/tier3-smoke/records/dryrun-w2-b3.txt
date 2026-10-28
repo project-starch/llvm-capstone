@@ -1,0 +1,240 @@
+# Dry runs of the bitstream-3 second-wave runners, 2026-10-28 10:13, against the REAL bitstream-2 references; every board call stubbed
+# (busy, the hub, the arm script / runner / run.py / probe.py / judge.py; the bitstream-2 dry runs' stubs). Runners:
+#   tier3-mp-stock-b3.sh 8e07d451cd2cbc71
+#   tier3-mp-sublet-b3.sh 7f8911f71f63970b
+#   tier3-mp-perl-b3.sh fbb79d2d2fd015e1
+#   tier3-newarms-b3.sh 95f8a20a5f8ad9c9
+#   tier3-juliet-b3.sh 0c5b7adeb6326da5
+#   tier3-juliet-spatial-b3.sh 05d82f6546a0878d
+# Cases: st-ok, st-flip (FLIP=1 changes one mruby cell: 22 of 23), su-ok, su-ctl (a failed control reads VOID), pl-ok (perl-stock's
+# matrix fed to both tags: perl-sublet reads 7 of 11, the comparator firing); new arms full1, flipp (one plane verdict flipped: 0 of 1),
+# big (an over-cap measure refuses), realgate (the REAL images-gate.py refuses the stub's empty bake); Juliet temporal ok / flip
+# (FLIP=s001: 734 of 735) and Juliet spatial ok / flip (1512 of 1513). Kit checks pass on the real bkit11-b3 kits.
+
+## st-ok
+MB BEGIN 10:13:04 board 1 kit bkit11-b3-b1 booking 41
+UNBOOK 41: 200 (stub)
+MB END 10:13:04 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: control smoke ok; --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-b1 --arm virtual-malloc 
+MB COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB board1 DONE 10:13:04
+(rc=0)
+
+## st-flip
+MB BEGIN 10:13:04 board 2 kit bkit11-b3-b2 booking 42
+UNBOOK 42: 200 (stub)
+MB END 10:13:04 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: control smoke ok; --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-b2 --arm virtual-malloc 
+MB COMPARE vs reference rc=1 :: 22 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB board2 DONE 10:13:04
+(rc=0)
+
+## su-ok
+MB BEGIN 10:13:05 board 2 kit bkit11-b3-b2 booking 42
+UNBOOK 42: 200 (stub)
+MB END 10:13:05 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: control smoke ok; --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-b2 --arm virtual-nested-pools 
+MB COMPARE vs reference rc=0 :: 23 of 23 cells the same
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB board2 DONE 10:13:05
+(rc=0)
+
+## su-ctl
+MB BEGIN 10:13:05 board 1 kit bkit11-b3-b1 booking 41
+UNBOOK 41: 200 (stub)
+MB END 10:13:05 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: control smoke FAILED; --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-b1 --arm virtual-nested-pools 
+MB VOID: the board run's own controls did not pass :: APPVM read rc=0 00:00:00 :: --- stub: control smoke FAILED; --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-b1 --arm virtual-nested-
+MB readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 banner gen-push x0
+MB board1 DONE 10:13:05
+(rc=0)
+
+## pl-ok
+MP perl-stock BEGIN 10:13:06 board 1 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 41
+UNBOOK 41: 200 (stub)
+MP perl-stock END 10:13:06 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': True, 'shim': True}; --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-b1 --arm virtual-malloc 
+MP perl-stock COMPARE vs reference rc=0 :: 11 of 11 cells the same
+MP perl-stock readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP perl-sublet BEGIN 10:13:07 board 1 runner aabfa66858b2c35e appvm-arm 11967b378bda73c8 wt-ref 15ced322c824 booking 41
+UNBOOK 41: 200 (stub)
+MP perl-sublet END 10:13:07 rc=0 :: APPVM read rc=0 00:00:00 :: --- stub: controls {'eval': True, 'shim': True}; --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-b1 --arm virtual-nested-poo
+MP perl-sublet COMPARE vs reference rc=1 :: 7 of 11 cells the same
+MP perl-sublet readings: pc=0 0 DRT1 0 FRTY 0 Oops 0 INJS 0 INJL 0 banner node-floor-2 x0
+MP board1 DONE 10:13:07
+(rc=0)
+
+## full1
+NA START 10:13:07 board 2 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 22000000 B against 26000000
+NA xlang IMAGE GATE rc=0 :: 
+NA xlang BEGIN 10:13:07 board 2 booking 42
+UNBOOK 42: 200 (stub)
+NA xlang END 10:13:07 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --board-kit <mnt-hdd>/capstone/t3-smoke/bkit11-b3-
+NA xlang repro COMPARE vs reference rc=1 :: 4 of 15 cells the same
+NA xlang repro VCOMPARE rc=0 :: 15 of 15 cells the same
+NA xlang lua-cdp COMPARE vs reference rc=0 :: 13 of 13 cells the same
+NA xlang lua-cdp VCOMPARE rc=0 :: 13 of 13 cells the same
+NA xlang readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA plane-malloc MEASURE firmware 22000000 B against 26000000
+NA plane-malloc IMAGE GATE rc=0 :: 
+NA plane-malloc BEGIN 10:13:07 board 2 booking 42
+UNBOOK 42: 200 (stub)
+NA plane-malloc END 10:13:07 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-malloc plane-malloc COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-malloc plane-malloc VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-malloc readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA plane-nested MEASURE firmware 22000000 B against 26000000
+NA plane-nested IMAGE GATE rc=0 :: 
+NA plane-nested BEGIN 10:13:07 board 2 booking 42
+UNBOOK 42: 200 (stub)
+NA plane-nested END 10:13:07 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-nested plane-nested COMPARE vs reference rc=0 :: 1 of 1 cells the same
+NA plane-nested plane-nested VCOMPARE rc=0 :: 1 of 1 cells the same
+NA plane-nested readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-1-2-3 MEASURE rows 1,2,3 firmware 22000000 B against 26000000
+NA capi-1-2-3 IMAGE GATE rc=0 :: 
+NA capi-1-2-3 BEGIN 10:13:07 board 2 rows 1,2,3 booking 42
+UNBOOK 42: 200 (stub)
+NA capi-1-2-3 END 10:13:07 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 1,2,3 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-1-2-3 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-1-2-3 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-4-5-6 MEASURE rows 4,5,6 firmware 22000000 B against 26000000
+NA capi-4-5-6 IMAGE GATE rc=0 :: 
+NA capi-4-5-6 BEGIN 10:13:08 board 2 rows 4,5,6 booking 42
+UNBOOK 42: 200 (stub)
+NA capi-4-5-6 END 10:13:08 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 4,5,6 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-4-5-6 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-4-5-6 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-7-8-9 MEASURE rows 7,8,9 firmware 22000000 B against 26000000
+NA capi-7-8-9 IMAGE GATE rc=0 :: 
+NA capi-7-8-9 BEGIN 10:13:08 board 2 rows 7,8,9 booking 42
+UNBOOK 42: 200 (stub)
+NA capi-7-8-9 END 10:13:08 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 7,8,9 --board-kit <mnt-hdd>/capstone/t3-smo
+NA capi-7-8-9 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-7-8-9 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-10-11-12 MEASURE rows 10,11,12 firmware 22000000 B against 26000000
+NA capi-10-11-12 IMAGE GATE rc=0 :: 
+NA capi-10-11-12 BEGIN 10:13:08 board 2 rows 10,11,12 booking 42
+UNBOOK 42: 200 (stub)
+NA capi-10-11-12 END 10:13:08 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 10,11,12 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-10-11-12 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-10-11-12 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-13-14-15-16 MEASURE rows 13,14,15,16 firmware 22000000 B against 26000000
+NA capi-13-14-15-16 IMAGE GATE rc=0 :: 
+NA capi-13-14-15-16 BEGIN 10:13:08 board 2 rows 13,14,15,16 booking 42
+UNBOOK 42: 200 (stub)
+NA capi-13-14-15-16 END 10:13:08 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 13,14,15,16 --board-kit <mnt-hdd>/capstone/
+NA capi-13-14-15-16 capi COMPARE vs reference rc=1 :: 3 of 4 cells the same
+NA capi-13-14-15-16 capi VCOMPARE rc=0 :: 4 of 4 cells the same
+NA capi-13-14-15-16 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA capi-17-18-19 MEASURE rows 17,18,19 firmware 22000000 B against 26000000
+NA capi-17-18-19 IMAGE GATE rc=0 :: 
+NA capi-17-18-19 BEGIN 10:13:08 board 2 rows 17,18,19 booking 42
+UNBOOK 42: 200 (stub)
+NA capi-17-18-19 END 10:13:08 rc=0 :: --- stub argv: --arm virtual-malloc --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --only 17,18,19 --board-kit <mnt-hdd>/capstone/t3-
+NA capi-17-18-19 capi COMPARE vs reference rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 capi VCOMPARE rc=0 :: 3 of 3 cells the same
+NA capi-17-18-19 readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA seq-2 DONE 10:13:08
+(rc=0)
+
+## flipp
+NA START 10:13:08 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA plane-malloc MEASURE firmware 22000000 B against 26000000
+NA plane-malloc IMAGE GATE rc=0 :: 
+NA plane-malloc BEGIN 10:13:08 board 1 booking 41
+UNBOOK 41: 200 (stub)
+NA plane-malloc END 10:13:08 rc=0 :: --- stub argv: --sdk <mnt-hdd>/capstone/t3-freeze-nb-nomovc-cw-r60/sdk --llvm-bin /tmp/capstone/vp2-prep/llvm-bin-v6 --corpus /tmp/capstone/wt-newarms/capstone/bug-corpora/ffmpeg/plane-repros --
+NA plane-malloc plane-malloc COMPARE vs reference rc=1 :: 0 of 1 cells the same
+NA plane-malloc plane-malloc VCOMPARE rc=1 :: 0 of 1 cells the same
+NA plane-malloc readings: pc=0 0 DRT1 0 FRTY 0 FRTC 0 Oops 0 INJS 0 INJL 0 collect-skipped 0 cause=29 0
+NA seq-1 DONE 10:13:08
+(rc=0)
+
+## big
+NA START 10:13:08 board 2 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA xlang MEASURE firmware 26000001 B against 26000000
+NA STOP: xlang's measured firmware is not under the cap; no boot
+(rc=1)
+
+## realgate
+NA START 10:13:09 board 1 tree bcf5f1724110 capi groups 1,2,3 4,5,6 7,8,9 10,11,12 13,14,15,16 17,18,19
+NA plane-nested MEASURE firmware 22000000 B against 26000000
+NA plane-nested IMAGE GATE rc=2 :: NO DATA: 1 reference images, 0 built images in <scratch>/dry-w2b3/na/realgate/na-plane-nested-measure/raw/bin
+NA STOP: plane-nested's built images are not the reference's; no boot
+(rc=1)
+
+## ok
+JF run BEGIN 10:13:09 board 1 booking 51
+UNBOOK 51: 200 (stub)
+JF run END rc=0 10:13:09 :: 1 batches completed, 0 not :: batch000 completed=True
+JF run-seeded BEGIN 10:13:09 board 1 booking 51
+UNBOOK 51: 200 (stub)
+JF run-seeded END rc=0 10:13:09 :: 1 batches completed, 0 not :: batch000 completed=True
+JF probe BEGIN 10:13:09 board 1 booking 51
+UNBOOK 51: 200 (stub)
+JF probe END rc=0 10:13:09 :: 1 batches completed, 0 not :: batch000 completed=True
+JF judge rc=0 :: judge stub 
+JF verdicts: 366 {('CAUGHT', 'CORRECT', '25'): 366}
+JF MISSED rows: 0
+JF COMPARE batch QEMU -> board: cases 366/366 differ 0
+JF OBS-COMPARE census rc=0 :: 735 of 735 cells the same, 0 different, 0 tolerated
+JF OBS-COMPARE seeded rc=0 :: 56 of 56 cells the same, 0 different, 0 tolerated
+JF readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JF board1 DONE 10:13:17
+(rc=0)
+
+## flip
+JF run BEGIN 10:13:17 board 2 booking 52
+UNBOOK 52: 200 (stub)
+JF run END rc=0 10:13:17 :: 1 batches completed, 0 not :: batch000 completed=True
+JF run-seeded BEGIN 10:13:17 board 2 booking 52
+UNBOOK 52: 200 (stub)
+JF run-seeded END rc=0 10:13:17 :: 1 batches completed, 0 not :: batch000 completed=True
+JF probe BEGIN 10:13:17 board 2 booking 52
+UNBOOK 52: 200 (stub)
+JF probe END rc=0 10:13:17 :: 1 batches completed, 0 not :: batch000 completed=True
+JF judge rc=0 :: judge stub 
+JF verdicts: 366 {('CAUGHT', 'CORRECT', '25'): 366}
+JF MISSED rows: 0
+JF COMPARE batch QEMU -> board: cases 366/366 differ 0
+JF OBS-COMPARE census rc=1 :: 734 of 735 cells the same, 1 different, 0 tolerated
+JF OBS-COMPARE seeded rc=0 :: 56 of 56 cells the same, 0 different, 0 tolerated
+JF readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JF board2 DONE 10:13:21
+(rc=0)
+
+## ok
+JS run BEGIN 10:13:21 board 2 booking 52
+UNBOOK 52: 200 (stub)
+JS run END rc=0 10:13:21 :: 1 batches completed, 0 not :: batch000 completed=True
+JS probe BEGIN 10:13:21 board 2 booking 52
+UNBOOK 52: 200 (stub)
+JS probe END rc=0 10:13:21 :: 1 batches completed, 0 not :: batch000 completed=True
+JS judge rc=0 :: judge stub 
+JS verdicts: 755 {('CAUGHT', 'CORRECT', '28'): 716, ('MISSED', 'CORRECT', ''): 22, ('INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)', 'CORRECT', '28'): 4, ('INTRA-OBJECT:NO-READING:unexpected-cause', 'CORRECT', '24'): 4, ('NOT-TRIGGERED:sizeof-ptr', 'CORRECT', ''): 9}
+JS MISSED rows: 22 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_01
+JS COMPARE batch QEMU -> board: cases 755/755 differ 0
+JS OBS-COMPARE rc=0 :: 1513 of 1513 cells the same, 0 different, 0 tolerated
+JS readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board2 DONE 10:13:31
+(rc=0)
+
+## flip
+JS run BEGIN 10:13:31 board 1 booking 51
+UNBOOK 51: 200 (stub)
+JS run END rc=0 10:13:31 :: 1 batches completed, 0 not :: batch000 completed=True
+JS probe BEGIN 10:13:31 board 1 booking 51
+UNBOOK 51: 200 (stub)
+JS probe END rc=0 10:13:31 :: 1 batches completed, 0 not :: batch000 completed=True
+JS judge rc=0 :: judge stub 
+JS verdicts: 755 {('CAUGHT', 'CORRECT', '28'): 716, ('MISSED', 'CORRECT', ''): 22, ('INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:size-32)', 'CORRECT', '28'): 4, ('INTRA-OBJECT:NO-READING:unexpected-cause', 'CORRECT', '24'): 4, ('NOT-TRIGGERED:sizeof-ptr', 'CORRECT', ''): 9}
+JS MISSED rows: 22 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_01
+JS COMPARE batch QEMU -> board: cases 755/755 differ 0
+JS OBS-COMPARE rc=1 :: 1512 of 1513 cells the same, 1 different, 0 tolerated
+JS readings: 0 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board1 DONE 10:13:37
+(rc=0)
+

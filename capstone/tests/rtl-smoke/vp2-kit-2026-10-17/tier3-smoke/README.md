@@ -10602,3 +10602,133 @@ Records: `records/b3bs-reread-b1.result-lines.txt` and `records/b3bs-reread-b2.r
 - **Against the pre-registration (f1cb1f9d347c): every reading holds.**
 - With the first arms and pg-pools, every arm bitstream 2 read in its first phase now reads the same on bitstream 3.
   The second wave (mruby, perl, the new arms and Juliet; pre-registered at 2e0bde4ca772) started as each board freed.
+
+### The corpus on bitstream 3, second wave: mruby, perl and Juliet temporal (board 1), the new arms and the Juliet spatial sample (board 2), pre-registered (2026-10-28 10:2x, before any boot)
+
+- **Why:** the rest of the corpus regression on the bitstream that fixes R-62 and R-63. These are the arms bitstream 2
+  read after its re-read, each at N=2 there, equal cell for cell across boards except the rand-driven Juliet `_12`
+  draws and one uaf-control step. So any difference here is evidence about bitstream 3.
+- **What runs:** `tier3-corpus2-b3.sh <log> <re-read log b1> <re-read log b2>`.
+  - Each board starts when its 23-arm re-read (`tier3-reread-b3.sh`, pre-registered at f1cb1f9d347c) prints
+    `RR seq-<board> DONE`. A re-read that STOPs or HOLDs, or has not ended within 6 h, holds that board.
+  - **Board 1:** mruby stock, mruby Sublet, perl stock and Sublet, then Juliet temporal.
+  - **Board 2:** the new arms (xlang, plane-malloc, plane-nested, capi in six groups, each boot preceded by its
+    measure-only bake under the 26,000,000 B cap and the image gate), then the Juliet spatial sample.
+  - Within a board, each runner starts only when the previous returned 0, as on bitstream 2.
+- **The runners** are the bitstream-2 runners with only the board side changed:
+  - `tier3-mp-stock-b3.sh`, `tier3-mp-sublet-b3.sh`, `tier3-mp-perl-b3.sh`, `tier3-newarms-b3.sh`,
+    `tier3-juliet-b3.sh` and `tier3-juliet-spatial-b3.sh`;
+  - each generated from its `-b2` version by asserted substitutions on code lines only: the kits bkit11-b3-b<board>
+    (and bkit11-b3-mb<board> for the measure-only bakes), BOARD_BITSTREAM=caplifive_vp2c_e7af48457, the output root
+    `t3-run-b3-e7af48457-b<board>/`, the kit-identity messages and "bitstream 3" in the booking text;
+  - module 215a09be, the references (the bitstream-2 twin's, batch-refs-b2/rest), images, runner trees (wt-ref
+    6764d96229f6, wt-ref2 15ced322c824, wt-newarms bcf5f1724110), SDK and grades are bitstream 2's, unchanged.
+- **Dry runs**, every board call stubbed:
+  - `records/dryrun-w2-b3.txt`, against the real references. A planted cell fires each comparator (mruby 22 of 23,
+    plane 0 of 1, Juliet temporal 734 of 735, spatial 1512 of 1513). A failed control reads VOID. perl-sublet fed
+    perl-stock's matrix reads 7 of 11. An over-cap measure refuses, and so does the real image gate on an empty bake.
+  - `records/dryrun-corpus2-b3.txt`, the coordinator: both re-reads done, board 1's re-read stopped, a runner
+    returning 1, and board 2's re-read past the wait limit.
+- **Checked against bitstream 3's open ISSUES rows:**
+  - R-64 and R-66: the static census over every bitstream-2 corpus image (`records/b2bs-r64-r66-census.txt`) covers
+    these arms' images, and finds no site that can observe either. R-65 cannot be counted statically.
+  - Q-31 and Q-34 are not in the FPU, and their bitstream-2 readings are the predictions below.
+  - None changes a prediction.
+- **Predictions: each arm reads what bitstream 2's board read.**
+  - mruby stock 23 of 23 (fault 20, completed 3) and mruby Sublet 23 of 23 (fault 23), both "control smoke ok";
+  - perl stock 11 of 11 and perl Sublet 11 of 11, controls eval and shim True;
+  - xlang: verdicts-compare 15 of 15 (repro) and 13 of 13 (lua-cdp). compare-pilot reads repro 4 of 15 on its
+    no-image cells.
+  - plane 1 of 1 on each arm;
+  - capi: verdicts-compare equal in all six groups. compare-pilot reads 13-16 as 3 of 4. The 13-16 boot's pc=0 count
+    is 1, row 13's predicted `cause=12 pc=0x0`.
+  - Every measured firmware under the cap.
+  - **Juliet temporal**, juliet-obs-compare against the reference:
+    - census differences only in rand-driven `_12` draws (bitstream 2 read 9) and uaf-control steps at the
+      silicon-only cause 13;
+    - **seeded 56 of 56.**
+  - **Juliet spatial:** 1513 of 1513, the three tolerated CWE170 cases reported. The one named exception is a
+    `controls:ctl-uaf` cell differing by cause 13 at control_read_probe+0x38 (1 of 48 steps on bitstream 2's N=2).
+  - Readings 0 elsewhere.
+- **Any other difference** is a finding about bitstream 3, reported cell by cell. Its first suspect is a
+  division-dependent path. The coordinator's END rc says only whether a script ran; the grade is the compare lines.
+
+### The corpus on bitstream 3, third arm: httpd (APR pools and apr-util buckets), both virtual arms, board 1 then board 2 (N=2), pre-registered (2026-10-28 17:2x, before any boot)
+
+- **Why:** httpd is the one corpus arm bitstream 2 read (board 1, b86eff8b49e4) that neither bitstream-3 wave carries.
+  Board 1 is free: the second wave's board-1 arms have ended.
+- **What runs:** `tier3-httpd-b3.sh <board> <log>`. It is tier3-httpd-b2.sh with only the board side changed
+  (scratch mkhttpdb3.py, five substitutions on code lines, each asserted at its count):
+  - the kit bkit11-b3-b<board> with BOARD_BITSTREAM=caplifive_vp2c_e7af48457;
+  - output `t3-run-b3-e7af48457-b<board>/<HT_SUB:-httpd>`;
+  - "bitstream 3" in the booking text.
+  - The worktree (clean 6d9e397df3ca, runner e464b106), the prebuilt images (each equal to its REFS.txt STAMP line), the
+    SDK (f5145cbb), llvm-bin, the QEMU references and verdicts-compare are bitstream 2's, unchanged.
+  - Four boots, one per corpus x arm; a boot that does not complete stops the run.
+- **Dry run:** `records/dryrun-httpd-b3.txt`, on board 1's real kit, worktree, SDK, images and references, with only the
+  runner, busy check and booking stubbed. The runner stub replays bitstream 2's real board-1 reading.
+  - full: every cell the same, DONE;
+  - a flipped nested-pools verdict fires the comparator (7 of 8);
+  - a dropped vbatch END line STOPs the run;
+  - an existing output root STOPs before any boot.
+- **Order:**
+  - board 1 now, output `t3-run-b3-e7af48457-b1/httpd`;
+  - board 2 after the second wave's coordinator prints `C2 DONE` (the Juliet spatial sample ends), HT_SUB `httpd-n2`.
+    Graded against the reference and, by n2-grade.py, against board 1's reading.
+- **Predictions, each as bitstream 2 read them:**
+  - **virtual-malloc: 9 of 9 MISSED** (apr-pool 1, buckets 8);
+  - **virtual-nested-pools: 9 of 9 CAUGHT, cause 25 in read_probe**, attributed by probe;
+  - every cell the same as the reference (1 of 1, 1 of 1, 8 of 8, 8 of 8), and board 2 0 different from board 1;
+  - controls: bounds-malloc and uaf-malloc fault on every arm. node-released-90 and piece-filed-90 complete on malloc and
+    fault on nested pools. The uaf-malloc control may read the silicon-only cause 13; it is a control, not a cell;
+  - all four boots complete on each board; readings 0.
+- Any other reading is a finding about bitstream 3.
+
+### The corpus on bitstream 3, second wave, result: every arm as bitstream 2 read it (board 1 11:22-17:02, board 2 10:34-19:03)
+
+Records:
+- `records/b3bs-mp-b1.result-lines.txt`;
+- `records/b3bs-newarms-b2.result-lines.txt`;
+- `records/b3bs-juliet-temporal-b1.result-lines.txt`;
+- `records/b3bs-juliet-spatial-b2.result-lines.txt`.
+
+The coordinator (`tier3-corpus2-b3.sh`) ran every step to `C2 DONE` with rc=0 on each, and no board held. Bookings 503-523 and 528 (524-527 are httpd's, below).
+
+- **mruby stock:** 23 of 23 cells the same (fault 20, completed 3), "control smoke ok".
+- **mruby Sublet:** 23 of 23 (fault 23), "control smoke ok".
+- **perl stock:** 11 of 11 (fault 6, exit255 1, completed 4).
+- **perl Sublet:** 11 of 11 (fault 8, completed 3).
+- Both perl arms read controls eval and shim True.
+- **The new arms (board 2):**
+  - **xlang:** gate 17 of 17. repro reads COMPARE 4 of 15, as predicted, and VCOMPARE 15 of 15; lua-cdp reads 13 of 13 on both.
+  - **plane-malloc and plane-nested:** 1 of 1 each (MISSED, as the reference).
+  - **capi:** VCOMPARE equal in every group. Groups 1-12 and 17-19 read COMPARE equal; 13-16 reads 3 of 4, as predicted.
+  - The 13-16 boot's pc=0 count of 1 is row 13's own predicted fault (cause=12 pc=0x0 address=0x0).
+  - capi-17-18-19 ended rc=75, as on bitstream 2: all three rows are out of the denominator.
+  - Firmware peaked at 25,856,520 B, under the 26,000,000 B cap.
+- **Juliet temporal:**
+  - census 729 of 735 the same. All 6 differences are rand-driven `_12` draws (bitstream 2 read 9). No uaf-control step differed.
+  - **Seeded 56 of 56.**
+- **Juliet spatial: 1513 of 1513, 0 different, 0 tolerated**, as on bitstream 2. The pre-registered controls:ctl-uaf exception did not occur.
+- **Readings 0** on every arm.
+- **Against the pre-registration (2e0bde4ca772): every reading holds.** Bitstream 3 changes no reading in the second wave.
+
+### httpd on bitstream 3, result: every cell as bitstream 2 and the reference on both boards; malloc 9 of 9 MISSED, nested pools 9 of 9 CAUGHT (board 1 17:21-18:03, board 2 19:05-19:42)
+
+Records:
+- `records/b3bs-httpd-b1.result-lines.txt`;
+- `records/b3bs-httpd-n2-b2.result-lines.txt`.
+
+Bookings 524-527 and 529.
+
+- **apr-pool-repros:** virtual-malloc 1 of 1 MISSED; virtual-nested-pools 1 of 1 CAUGHT.
+- **bucket-repros:** virtual-malloc 8 of 8 MISSED; virtual-nested-pools 8 of 8 CAUGHT.
+  - The nested-pools CAUGHTs are cause 25 in read_probe, attributed by probe.
+- **Against the reference:** every cell the same on both boards (1, 1, 8 and 8 of the same).
+- **Board 2 against board 1:** n2-grade reads 0 different on all four arms. A control pairing board 1's malloc with board 2's
+  nested pools exits 1.
+- **Controls:**
+  - bounds-malloc and uaf-malloc fault on every arm; uaf-malloc read no cause 13.
+  - node-released-90 and piece-filed-90 complete on malloc and fault on nested pools.
+- All eight boots completed; readings 0.
+- **Against the pre-registration (efe7a1c36a32): every reading holds.**

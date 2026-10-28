@@ -1,0 +1,84 @@
+# tier3-corpus2-b3.sh e7206e2bec5e227e dry run, 2026-10-28 10:14: every runner stubbed (C2_RUN writes one STUB line to the
+# runner's log, and exits 1 for FAILON), the re-read logs planted: both DONE (full); board 1's re-read STOPped (stop1); mruby Sublet
+# returning 1 (fail); board 2's re-read still running past C2_WAITMAX=3 s (timeout). Two boards write one log, so lines interleave.
+
+## full
+C2 board 1 WAIT for re-read DONE 10:14:33
+C2 board 2 WAIT for re-read DONE 10:14:33
+C2 board 1 FREE: RR seq-1 DONE 11:00:00
+C2 board 2 FREE: RR seq-2 DONE 11:00:00
+C2 tier3-mp-stock-b3.sh on board 1 BEGIN 10:14:33 
+C2 tier3-newarms-b3.sh on board 2 BEGIN 10:14:33 
+C2 tier3-mp-stock-b3.sh on board 1 END rc=0 10:14:33
+C2 tier3-newarms-b3.sh on board 2 END rc=0 10:14:33
+  STUB tier3-mp-stock-b3.sh board 1 args c2b3-tier3-mp-stock-b3-b1.out
+  STUB tier3-newarms-b3.sh board 2 args - x c2b3-tier3-newarms-b3-b2.out
+C2 tier3-mp-sublet-b3.sh on board 1 BEGIN 10:14:33 
+C2 tier3-juliet-spatial-b3.sh on board 2 BEGIN 10:14:33 
+C2 tier3-mp-sublet-b3.sh on board 1 END rc=0 10:14:33
+C2 tier3-juliet-spatial-b3.sh on board 2 END rc=0 10:14:33
+  STUB tier3-mp-sublet-b3.sh board 1 args c2b3-tier3-mp-sublet-b3-b1.out
+  STUB tier3-juliet-spatial-b3.sh board 2 args c2b3-tier3-juliet-spatial-b3-b2.out
+C2 tier3-mp-perl-b3.sh on board 1 BEGIN 10:14:33 perl-stock perl-sublet
+C2 tier3-mp-perl-b3.sh on board 1 END rc=0 10:14:33
+  STUB tier3-mp-perl-b3.sh board 1 args c2b3-tier3-mp-perl-b3-b1.out perl-stock perl-sublet
+C2 tier3-juliet-b3.sh on board 1 BEGIN 10:14:33 
+C2 tier3-juliet-b3.sh on board 1 END rc=0 10:14:33
+  STUB tier3-juliet-b3.sh board 1 args c2b3-tier3-juliet-b3-b1.out
+C2 DONE 10:14:33
+rc=0
+
+## stop1
+C2 board 1 WAIT for re-read DONE 10:14:33
+C2 board 2 WAIT for re-read DONE 10:14:33
+C2 board 2 FREE: RR seq-2 DONE 11:00:00
+C2 board 1 HOLD: the re-read stopped :: RR STOP after fph: the boot did not complete
+C2 tier3-newarms-b3.sh on board 2 BEGIN 10:14:33 
+C2 tier3-newarms-b3.sh on board 2 END rc=0 10:14:33
+  STUB tier3-newarms-b3.sh board 2 args - x c2b3-tier3-newarms-b3-b2.out
+C2 tier3-juliet-spatial-b3.sh on board 2 BEGIN 10:14:33 
+C2 tier3-juliet-spatial-b3.sh on board 2 END rc=0 10:14:33
+  STUB tier3-juliet-spatial-b3.sh board 2 args c2b3-tier3-juliet-spatial-b3-b2.out
+C2 DONE 10:14:33
+rc=0
+
+## fail
+C2 board 1 WAIT for re-read DONE 10:14:33
+C2 board 2 WAIT for re-read DONE 10:14:33
+C2 board 1 FREE: RR seq-1 DONE 11:00:00
+C2 board 2 FREE: RR seq-2 DONE 11:00:00
+C2 tier3-mp-stock-b3.sh on board 1 BEGIN 10:14:33 
+C2 tier3-newarms-b3.sh on board 2 BEGIN 10:14:33 
+C2 tier3-mp-stock-b3.sh on board 1 END rc=0 10:14:33
+C2 tier3-newarms-b3.sh on board 2 END rc=0 10:14:33
+  STUB tier3-mp-stock-b3.sh board 1 args c2b3-tier3-mp-stock-b3-b1.out
+  STUB tier3-newarms-b3.sh board 2 args - x c2b3-tier3-newarms-b3-b2.out
+C2 tier3-mp-sublet-b3.sh on board 1 BEGIN 10:14:33 
+C2 tier3-juliet-spatial-b3.sh on board 2 BEGIN 10:14:33 
+C2 tier3-mp-sublet-b3.sh on board 1 END rc=1 10:14:33
+C2 tier3-juliet-spatial-b3.sh on board 2 END rc=0 10:14:33
+  STUB tier3-mp-sublet-b3.sh board 1 args c2b3-tier3-mp-sublet-b3-b1.out
+C2 board 1 HOLD after tier3-mp-sublet-b3.sh (rc=1): nothing further runs on this board
+  STUB tier3-juliet-spatial-b3.sh board 2 args c2b3-tier3-juliet-spatial-b3-b2.out
+C2 DONE 10:14:33
+rc=0
+
+## timeout
+C2 board 1 WAIT for re-read DONE 10:14:33
+C2 board 2 WAIT for re-read DONE 10:14:33
+C2 board 1 FREE: RR seq-1 DONE 11:00:00
+C2 tier3-mp-stock-b3.sh on board 1 BEGIN 10:14:33 
+C2 tier3-mp-stock-b3.sh on board 1 END rc=0 10:14:33
+  STUB tier3-mp-stock-b3.sh board 1 args c2b3-tier3-mp-stock-b3-b1.out
+C2 tier3-mp-sublet-b3.sh on board 1 BEGIN 10:14:33 
+C2 tier3-mp-sublet-b3.sh on board 1 END rc=0 10:14:33
+  STUB tier3-mp-sublet-b3.sh board 1 args c2b3-tier3-mp-sublet-b3-b1.out
+C2 tier3-mp-perl-b3.sh on board 1 BEGIN 10:14:33 perl-stock perl-sublet
+C2 tier3-mp-perl-b3.sh on board 1 END rc=0 10:14:33
+  STUB tier3-mp-perl-b3.sh board 1 args c2b3-tier3-mp-perl-b3-b1.out perl-stock perl-sublet
+C2 tier3-juliet-b3.sh on board 1 BEGIN 10:14:33 
+C2 tier3-juliet-b3.sh on board 1 END rc=0 10:14:33
+  STUB tier3-juliet-b3.sh board 1 args c2b3-tier3-juliet-b3-b1.out
+C2 board 2 HOLD: the re-read did not end within 3 s
+C2 DONE 10:14:37
+rc=0
