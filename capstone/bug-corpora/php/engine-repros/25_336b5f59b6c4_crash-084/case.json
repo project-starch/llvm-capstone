@@ -1,0 +1,28 @@
+{
+ "case": 25,
+ "upstream_fix": "336b5f59b6c4",
+ "title": "CRASH-084: putenv empty key string freed via hash del still in environ uaf (use-after-free)",
+ "consumer": "ext/standard/basic_functions.c:1381",
+ "class": "temporal",
+ "trigger": "trigger.php",
+ "live_in_pin": true,
+ "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-use-after-free at ext/standard/basic_functions.c:1381 in zif_putenv when trigger.php runs; the corpus records the fix as php-src 336b5f59b6c4, which postdates the release, and names the defect at ext/standard/basic_functions.c:1381 (UAF read); enabling missing guard at ext/standard/basic_functions.c:1333, free at 1376 -> php_putenv_destructor:922",
+ "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build completes it natively, so an arm that completes it saw nothing. ",
+ "fault_sites": [
+  "zif_putenv"
+ ],
+ "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has zif_putenv at ext/standard/basic_functions.c:1381 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
+ "arms": {
+  "virtual-malloc": {
+   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"
+  },
+  "virtual-nested-pools": {
+   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)"
+  },
+  "virtual-nested-exact": {
+   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)"
+  }
+ },
+ "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
+ "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as history-5x-stdext (historical-known, confidence high)."
+}

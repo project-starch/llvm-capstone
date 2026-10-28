@@ -50,12 +50,27 @@ from pathlib import Path
 # x-capstone-supervisor-slots: 1 by default, which is what silicon holds (csr_regfile.sv has a
 # single slot). Every thread and shared-heap check in runtime/virtual/run.py fails at 1.
 #
+# x-capstone-addr: the machine's address policy (in the superproject's capstone-qemu pin since
+# 49a225e408, 2026-10-27): a tagged capability's cursor must be Sv39-canonical, a control
+# transfer to a refused address faults 29. It is QEMU's default when unset; it is named here
+# so the platform record says which policy the run had, and so a pre-policy QEMU binary
+# refuses the property instead of running silently without it.
+#
 # Named here and imported by run-realphp.py's platform_record so the two cannot drift:
 # runtime/virtual/run.py records input paths and hashes but DELIBERATELY not argv, so two runs
 # differing only in these properties are otherwise indistinguishable in the record.
+#
+# PHP_VIRTUAL_ADDR_POLICY=off is the one other value this runner takes: the control that
+# separates the policy from the rest of a QEMU build. It is read here, once, so the launch
+# and the platform record see the same string; anything else is refused before a boot.
+ADDR_POLICY = os.environ.get("PHP_VIRTUAL_ADDR_POLICY", "sv39")
+if ADDR_POLICY not in ("sv39", "off"):
+    sys.exit(f"PHP_VIRTUAL_ADDR_POLICY={ADDR_POLICY!r}: this runner boots the measurement policy "
+             f"sv39 or its control off, nothing else")
 QEMU_CPU = ("rv64,sstc=false,h=false,sv48=false,sv57=false,"
             "x-capstone-u-mode=true,x-capstone-exact-bounds=true,"
-            "x-capstone-test-csrs=true,x-capstone-supervisor-slots=32")
+            "x-capstone-test-csrs=true,x-capstone-supervisor-slots=32,"
+            f"x-capstone-addr={ADDR_POLICY}")
 MODULE_ARGS = "supervisor_slots=32"
 
 MARK = "VM_EXIT"

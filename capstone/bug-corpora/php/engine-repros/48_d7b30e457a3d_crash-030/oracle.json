@@ -1,0 +1,208 @@
+{
+ "asan": {
+  "class": "ASAN:heap-use-after-free",
+  "file": "Zend/zend_object_handlers.c",
+  "func": "zend_std_object_get_class",
+  "line": 898,
+  "stack": [
+   {
+    "file": "Zend/zend_object_handlers.c",
+    "func": "zend_std_object_get_class",
+    "index": 0,
+    "line": 898
+   },
+   {
+    "file": "Zend/zend_API.c",
+    "func": "zend_get_class_entry",
+    "index": 1,
+    "line": 205
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "zend_call_function",
+    "index": 2,
+    "line": 625
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "call_user_function_ex",
+    "index": 3,
+    "line": 550
+   },
+   {
+    "file": "main/streams/userspace.c",
+    "func": "php_userstreamop_flush",
+    "index": 4,
+    "line": 600
+   },
+   {
+    "file": "main/streams/streams.c",
+    "func": "_php_stream_flush",
+    "index": 5,
+    "line": 985
+   },
+   {
+    "file": "main/streams/streams.c",
+    "func": "_php_stream_free",
+    "index": 6,
+    "line": 306
+   },
+   {
+    "file": "main/streams/streams.c",
+    "func": "stream_resource_regular_dtor",
+    "index": 7,
+    "line": 1343
+   },
+   {
+    "file": "Zend/zend_list.c",
+    "func": "list_entry_destructor",
+    "index": 8,
+    "line": 178
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_del_key_or_index",
+    "index": 9,
+    "line": 490
+   },
+   {
+    "file": "Zend/zend_list.c",
+    "func": "_zend_list_delete",
+    "index": 10,
+    "line": 58
+   },
+   {
+    "file": "Zend/zend_variables.c",
+    "func": "_zval_dtor",
+    "index": 11,
+    "line": 69
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "_zval_ptr_dtor",
+    "index": 12,
+    "line": 391
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_destroy",
+    "index": 13,
+    "line": 519
+   },
+   {
+    "file": "Zend/zend_variables.c",
+    "func": "_zval_dtor",
+    "index": 14,
+    "line": 52
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "_zval_ptr_dtor",
+    "index": 15,
+    "line": 391
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_destroy",
+    "index": 16,
+    "line": 519
+   },
+   {
+    "file": "Zend/zend_variables.c",
+    "func": "_zval_dtor",
+    "index": 17,
+    "line": 52
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "_zval_ptr_dtor",
+    "index": 18,
+    "line": 391
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_destroy",
+    "index": 19,
+    "line": 519
+   },
+   {
+    "file": "Zend/zend_variables.c",
+    "func": "_zval_dtor",
+    "index": 20,
+    "line": 52
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "_zval_ptr_dtor",
+    "index": 21,
+    "line": 391
+   },
+   {
+    "file": "Zend/zend_hash.c",
+    "func": "zend_hash_destroy",
+    "index": 22,
+    "line": 519
+   },
+   {
+    "file": "Zend/zend_objects.c",
+    "func": "zend_objects_free_object_storage",
+    "index": 23,
+    "line": 88
+   },
+   {
+    "file": "Zend/zend_objects_API.c",
+    "func": "zend_objects_store_free_object_storage",
+    "index": 24,
+    "line": 72
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "shutdown_executor",
+    "index": 25,
+    "line": 272
+   },
+   {
+    "file": "Zend/zend.c",
+    "func": "zend_deactivate",
+    "index": 26,
+    "line": 819
+   },
+   {
+    "file": "main/main.c",
+    "func": "php_request_shutdown",
+    "index": 27,
+    "line": 1212
+   },
+   {
+    "file": "sapi/cli/php_cli.c",
+    "func": "main",
+    "index": 28,
+    "line": 1046
+   },
+   {
+    "func": "__libc_start_call_main",
+    "index": 29,
+    "outside": "../sysdeps/nptl/"
+   }
+  ]
+ },
+ "category": "use-after-free",
+ "collaborator_population": "temporal-asan-visible",
+ "crashes_on_pristine_build": true,
+ "cwe": "CWE-416",
+ "id": "CRASH-030",
+ "population": "temporal-asan-visible",
+ "pristine": {
+  "outcome": "SIGNAL:11",
+  "rc": -11,
+  "stdout": "\nWarning: feof(): wrapper::stream_eof is not implemented! Assuming EOF in /tmp/php-oracle/php-5.0.0-bug-corpus/corpus/CRASH-030.php on line 10\n\nFatal error: Uncaught exception 'Exception' in /tmp/php-oracle/php-5.0.0-bug-corpus/corpus/CRASH-030.php:4\nStack trace:\n#0 /tmp/php-oracle/php-5.0.0-bug-corpus/corpus/CRASH-030.php(8): wrapper->stream_eof()\n#1 /tmp/php-oracle/php-5.0.0-bug-corpus/corpus/CRASH-030.php(8): feof(Resource id #6)\n#2 {main}\n  thrown in /tmp/php-oracle/php-5.0.0-bug-corpus/corpus/CRASH-030.php on line 4\n"
+ },
+ "requires": "",
+ "requires_kind": "",
+ "sources": {
+  "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
+  "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",
+  "results-ours-pristine-default.json": "92451b6e0c9a89a751e38ac2343400e6cd79d757c3f4613fe161dbcb339c851f"
+ },
+ "stockalloc": "ASAN:SEGV"
+}

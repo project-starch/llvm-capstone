@@ -19,8 +19,8 @@ clear. For a 20-element array `zend_qsort` swaps slots 0 and 9 *before* the firs
 so the comparator's first `f->pData` (or `f->nKeyLength`) load traps before any user code runs.
 
 **Which cells.** CRASH-022's trigger is a `usort`; its ASAN line, `array.c:546`, is that first
-load in `array_user_compare`. CRASH-078's is a `ksort`; its recorded site, `array.c:162`, is the
-same load in `array_key_compare`. Every one of their cells, on all four arms and in every
+load in `array_user_compare`. CRASH-078's is an `array_diff_assoc($GLOBALS, ...)`, whose key comparison sorts; its recorded
+site, `array.c:162`, is the same load in `array_key_compare`. Every one of their cells, on all four arms and in every
 population below, records cause 24 and never cause 25. CRASH-022 is the only cause-24 catch in
 `asan-blind` on every arm; in the temporal populations the other cause-24 catches are CRASH-064
 (every arm of the sensitivity table) and CRASH-159 (its `stock` and `block` cells), both at
@@ -50,8 +50,9 @@ swaps pointer-sized units when the elements allow it (the PostgreSQL port's rule
 `sort_template.h`), so `sort`, `usort` and `ksort` work on every arm; and the runner's
 `revocation-sanity` control now sorts three ways with a comparator that touches nothing, so an
 arm whose sort faults reads "did not complete" on its control instead of catching. CRASH-022 and
-CRASH-078 become measurable for the first time with that patch; their readings are owed by a
-rerun of both populations on the prepared tree, and are not in this file.
+CRASH-078 became measurable with that patch and were read on 2026-10-27 from the framework's
+corpus, `bug-corpora/php/engine-repros/results/2026-10-27-first-run/`: both MISSED on the stock
+control and CAUGHT by revocation (cause 25) at ASan's own line on every protected arm.
 
 The judge cannot tell this artefact from a detection on its own: attribution is by the ASAN
 *file* (`run-realphp.py`, `verdicts.py`), and cause 24 is a legitimate detection class elsewhere

@@ -1,0 +1,28 @@
+{
+ "case": 33,
+ "upstream_fix": "b90d985a23a5",
+ "title": "CRASH-099: stream select convert to long ex force separates byvalue sec arg double free (use-after-free)",
+ "consumer": "ext/standard/streamsfuncs.c:681",
+ "class": "temporal",
+ "trigger": "trigger.php",
+ "live_in_pin": true,
+ "live_proof": "measured, not asserted: our native ASan build of the pinned 5.0.0 tarball (p12, gcc 15.2.0, libasan from gcc 15, 2026-10-27) reports ASAN:heap-use-after-free at Zend/zend_execute_API.c:389 in _zval_ptr_dtor when trigger.php runs; the corpus records the fix as php-src b90d985a23a5, which postdates the release, and names the defect at ext/standard/streamsfuncs.c:681",
+ "fidelity": "the corpus's own trigger script, run through the real interpreter (PHP's cli SAPI, ext/standard only, the port's 145 translation units) rather than reduced to a C model. What it does NOT establish is which arm ought to catch it. The pristine build completes it natively, so an arm that completes it saw nothing. ",
+ "fault_sites": [
+  "_zval_ptr_dtor"
+ ],
+ "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has _zval_ptr_dtor at Zend/zend_execute_API.c:389 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
+ "arms": {
+  "virtual-malloc": {
+   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)"
+  },
+  "virtual-nested-pools": {
+   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)"
+  },
+  "virtual-nested-exact": {
+   "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)"
+  }
+ },
+ "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
+ "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads OK. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as history-5x-stdext (historical-known, confidence high)."
+}

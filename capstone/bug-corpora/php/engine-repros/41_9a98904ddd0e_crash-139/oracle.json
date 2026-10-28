@@ -1,0 +1,146 @@
+{
+ "asan": {
+  "class": "ASAN:global-buffer-overflow",
+  "file": "Zend/zend_alloc.c",
+  "func": "_efree",
+  "line": 263,
+  "stack": [
+   {
+    "file": "Zend/zend_alloc.c",
+    "func": "_efree",
+    "index": 0,
+    "line": 263
+   },
+   {
+    "file": "Zend/zend_variables.c",
+    "func": "_zval_dtor",
+    "index": 1,
+    "line": 45
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "_zval_ptr_dtor",
+    "index": 2,
+    "line": 391
+   },
+   {
+    "file": "Zend/zend_execute.h",
+    "func": "zend_ptr_stack_clear_multiple",
+    "index": 3,
+    "line": 124
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "zend_call_function",
+    "index": 4,
+    "line": 856
+   },
+   {
+    "file": "Zend/zend_execute_API.c",
+    "func": "call_user_function_ex",
+    "index": 5,
+    "line": 550
+   },
+   {
+    "file": "Zend/zend_object_handlers.c",
+    "func": "zend_std_call_getter",
+    "index": 6,
+    "line": 78
+   },
+   {
+    "file": "Zend/zend_object_handlers.c",
+    "func": "zend_std_read_property",
+    "index": 7,
+    "line": 293
+   },
+   {
+    "file": "Zend/zend_API.c",
+    "func": "zend_read_property",
+    "index": 8,
+    "line": 1966
+   },
+   {
+    "file": "Zend/zend_exceptions.c",
+    "func": "_default_exception_get_entry",
+    "index": 9,
+    "line": 139
+   },
+   {
+    "file": "Zend/zend_exceptions.c",
+    "func": "zif_exception_getMessage",
+    "index": 10,
+    "line": 163
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_do_fcall_common_helper",
+    "index": 11,
+    "line": 2699
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_do_fcall_by_name_handler",
+    "index": 12,
+    "line": 2810
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "execute",
+    "index": 13,
+    "line": 1391
+   },
+   {
+    "file": "Zend/zend.c",
+    "func": "zend_execute_scripts",
+    "index": 14,
+    "line": 1061
+   },
+   {
+    "file": "main/main.c",
+    "func": "php_execute_script",
+    "index": 15,
+    "line": 1627
+   },
+   {
+    "file": "sapi/cli/php_cli.c",
+    "func": "main",
+    "index": 16,
+    "line": 943
+   },
+   {
+    "func": "__libc_start_call_main",
+    "index": 17,
+    "outside": "../sysdeps/nptl/libc_start_call_main.h:59"
+   },
+   {
+    "func": "__libc_start_main_impl",
+    "index": 18,
+    "outside": "../csu/libc-start.c:360"
+   },
+   {
+    "func": "_start",
+    "index": 19,
+    "outside": "(/tmp/php-oracle/php-5.0.0-bug-corpus/build/php-5.0.0-asan/sapi/cli/php+0x93134) (BuildId: 4aefa467883ec720be150eacfb20c09975a136da)"
+   }
+  ]
+ },
+ "category": "invalid-free",
+ "collaborator_population": "neither",
+ "crashes_on_pristine_build": false,
+ "cwe": "CWE-590",
+ "id": "CRASH-139",
+ "population": "asan-blind",
+ "pristine": {
+  "outcome": "OK",
+  "rc": 0,
+  "stdout": "v\nend\n"
+ },
+ "requires": "",
+ "requires_kind": "",
+ "sources": {
+  "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
+  "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",
+  "results-ours-pristine-default.json": "92451b6e0c9a89a751e38ac2343400e6cd79d757c3f4613fe161dbcb339c851f"
+ },
+ "stockalloc": "OK"
+}

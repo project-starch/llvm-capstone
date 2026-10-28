@@ -1,0 +1,110 @@
+{
+ "asan": {
+  "class": "ASAN:heap-use-after-free",
+  "file": "ext/standard/basic_functions.c",
+  "func": "user_tick_function_call",
+  "line": 2135,
+  "stack": [
+   {
+    "file": "ext/standard/basic_functions.c",
+    "func": "user_tick_function_call",
+    "index": 0,
+    "line": 2135
+   },
+   {
+    "file": "Zend/zend_llist.c",
+    "func": "zend_llist_apply",
+    "index": 1,
+    "line": 191
+   },
+   {
+    "file": "ext/standard/basic_functions.c",
+    "func": "run_user_tick_functions",
+    "index": 2,
+    "line": 2143
+   },
+   {
+    "file": "main/php_ticks.c",
+    "func": "php_tick_iterator",
+    "index": 3,
+    "line": 64
+   },
+   {
+    "file": "Zend/zend_llist.c",
+    "func": "zend_llist_apply_with_argument",
+    "index": 4,
+    "line": 234
+   },
+   {
+    "file": "main/php_ticks.c",
+    "func": "php_run_ticks",
+    "index": 5,
+    "line": 71
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "zend_ticks_handler",
+    "index": 6,
+    "line": 4184
+   },
+   {
+    "file": "Zend/zend_execute.c",
+    "func": "execute",
+    "index": 7,
+    "line": 1391
+   },
+   {
+    "file": "Zend/zend.c",
+    "func": "zend_execute_scripts",
+    "index": 8,
+    "line": 1061
+   },
+   {
+    "file": "main/main.c",
+    "func": "php_execute_script",
+    "index": 9,
+    "line": 1627
+   },
+   {
+    "file": "sapi/cli/php_cli.c",
+    "func": "main",
+    "index": 10,
+    "line": 943
+   },
+   {
+    "func": "__libc_start_call_main",
+    "index": 11,
+    "outside": "../sysdeps/nptl/libc_start_call_main.h:59"
+   },
+   {
+    "func": "__libc_start_main_impl",
+    "index": 12,
+    "outside": "../csu/libc-start.c:360"
+   },
+   {
+    "func": "_start",
+    "index": 13,
+    "outside": "(/tmp/php-oracle/php-5.0.0-bug-corpus/build/php-5.0.0-asan/sapi/cli/php+0x93134) (BuildId: 4aefa467883ec720be150eacfb20c09975a136da)"
+   }
+  ]
+ },
+ "category": "use-after-free",
+ "collaborator_population": "asan-blind",
+ "crashes_on_pristine_build": false,
+ "cwe": "CWE-416",
+ "id": "CRASH-086",
+ "population": "asan-blind",
+ "pristine": {
+  "outcome": "OK",
+  "rc": 0,
+  "stdout": "done\n"
+ },
+ "requires": "",
+ "requires_kind": "",
+ "sources": {
+  "results-ours-asan-default.json": "045e3366bfc52f8c40a089f45d9a06240a531821792b0c558974809851626c65",
+  "results-ours-asan-stockalloc.json": "b141ea9e753adf8fc8ab3c97be9640b2ac3c14d6eb39a2ef237429eeee718149",
+  "results-ours-pristine-default.json": "92451b6e0c9a89a751e38ac2343400e6cd79d757c3f4613fe161dbcb339c851f"
+ },
+ "stockalloc": "OK"
+}

@@ -11,7 +11,7 @@ faults; a 20-line probe swapping two malloc'd pointers through int stores, then 
 stores, leaves both tags clear.
 
 The collaborator's recorded result read exactly this fault as a catch: CRASH-022 (usort,
-ext/standard/array.c:546) CAUGHT on all four arms and CRASH-078 (ksort, array.c:162) the
+ext/standard/array.c:546) CAUGHT on all four arms and CRASH-078 (array_diff_assoc's key sort, array.c:162) the
 same, every cell cause 24, none cause 25. Those eight cells are this swap, not the defect.
 
 Same rule as the PostgreSQL port's 0013 for sort_template.h: an element that holds a
