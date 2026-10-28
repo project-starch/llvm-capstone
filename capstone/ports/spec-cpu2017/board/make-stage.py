@@ -97,6 +97,14 @@ def main():
     ap.add_argument("--strip", type=Path, metavar="LLVM_OBJCOPY",
                     help="strip every staged executable's symbol table with this llvm-objcopy, keeping the .capstone_* "
                     "sections (502.gcc_r's 24 MB image is 8.5 MB of symbols; the code and data are unchanged)")
+    ap.add_argument("--native-harness", type=Path, metavar="PERL",
+                    help="500.perlbench_r test only: run test.pl under this plain (non-Capstone) static riscv64 perl, its "
+                    "$^X set to the Capstone wrapper, so each t/ test runs as its own top-level context. vp2 has one saved-"
+                    "context slot, so a Capstone parent waiting on a Capstone child deadlocks (twin, 2026-10-29)")
+    ap.add_argument("--keep-lib", type=Path, metavar="LIST",
+                    help="stage only the lib/ files this list names, one run-directory path per line (perlbench's lib/ is "
+                    "54 MB and its train commands open 70 files of it; the list comes from tracing the native build); "
+                    "every other lib/ file joins the excluded ones, so a missing module fails its command, never silently")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     arms = a.arms.split(",")
@@ -135,6 +143,12 @@ def main():
         if files[arm] != files[first]:
             diff = sorted(set(files[arm].items()) ^ set(files[first].items()))[:10]
             sys.exit(f"make-stage: {arm}'s run directory differs from {first}'s: {diff}")
+    if a.keep_lib:
+        keep = {x.strip() for x in a.keep_lib.read_text().splitlines() if x.strip()}
+        absent = sorted(keep - set(files[first]))
+        if absent:
+            sys.exit(f"make-stage: --keep-lib names files the run directory lacks: {absent[:10]}")
+        excl |= {rel for rel in files[first] if rel.startswith("lib/") and rel not in keep}
     missing = sorted(excl - set(files[first]))
     if missing:
         sys.exit(f"make-stage: EXCLUDE names files the run directory lacks: {missing}")
@@ -146,6 +160,9 @@ def main():
         dst = stage / "in" / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(runs[first] / rel, dst)
+    if a.native_harness:
+        shutil.copy2(a.native_harness, stage / "natperl")
+        (stage / "natperl").chmod(0o755)
     stub = None
     if a.bench == "500.perlbench_r" and (stage / "in/t/op/pack.t").exists():
         stub = json.loads(subprocess.run([sys.executable, str(HERE.parent / "tools/perl-pack-stub.py"), str(stage / "in/t/op/pack.t")],
@@ -202,6 +219,8 @@ def main():
          "bench() { dmesg | grep 'capstone_vm: bench' | tail -1 | sed 's/.*capstone_vm: //'; }",
          "nbench() { dmesg | grep -c 'capstone_vm: bench'; }",
          "up() { cut -d' ' -f1 /proc/uptime; }",
+         "# the module's cumulative in-context counters (sysfs, 0444): their delta over a command sums every context it ran",
+         "sysb() { for f in cycles instret entries; do cat /sys/module/capstone_vm/parameters/bench_$f 2>/dev/null || echo 0; done | tr '\\n' ' '; }",
          f"echo \"@@SPEC-STAGE {a.bench} {a.size} arms={','.join(arms)} commands={len(p['cmds'])} validations={len(tgt_val)}\""]
 
     def run_line(tag, arm, i, c, wrap):
@@ -209,7 +228,10 @@ def main():
         prog = argv[0]
         args = " ".join('"$S/' + x[3:] + '"' if x.startswith("$S/") else q(x) for x in argv[1:])
         c = dict(c, output=c["output"] and c["output"].replace("ARM", arm), error=c["error"] and c["error"].replace("ARM", arm))
-        if wrap and tag == "run" and a.bench == "500.perlbench_r":
+        if wrap and tag == "run" and a.bench == "500.perlbench_r" and a.native_harness and argv[-1] == "test.pl":
+            hargs = " ".join(q(x) for x in argv[1:-1])
+            cmd = f'"$S/natperl" {hargs} -e \'$^X="../sw/perl"; do "./test.pl"; die $@ if $@\''
+        elif wrap and tag == "run" and a.bench == "500.perlbench_r":
             # perl's t/TEST starts each test as '../'.$^X through sh, so $^X must be a RELATIVE path that sh can
             # execute: the board kernel has no binfmt_misc to start an image directly. The launcher's
             # --application-argv sets the application's argv[0] (perl's $^X) apart from the image, and ../sw/perl,
@@ -222,9 +244,10 @@ def main():
         redir = (f" < {q(c['input'])}" if c["input"] else "") + (f" > {q(c['output'])}" if c["output"] else "") + \
                 (f" 2>> {q(c['error'])}" if c["error"] else "")
         err = q(c["error"]) if c["error"] else "/dev/null"
-        return [f'echo "@@SPEC-BEGIN $n {tag} {arm} {i}"', "u0=$(up)",
-                f"{cmd}{redir}", "rc=$?", "u1=$(up)",
-                f'echo "@@SPEC-END $n {tag} {arm} {i} rc=$rc up0=$u0 up1=$u1 nbench=$(nbench) '
+        return [f'echo "@@SPEC-BEGIN $n {tag} {arm} {i}"', "s0=$(sysb)", "u0=$(up)",
+                f"{cmd}{redir}", "rc=$?", "u1=$(up)", "s1=$(sysb)",
+                "sys=$(echo $s0 $s1 | awk '{printf \"%.0f,%.0f,%.0f\", $4-$1, $5-$2, $6-$3}')",
+                f'echo "@@SPEC-END $n {tag} {arm} {i} rc=$rc up0=$u0 up1=$u1 sys=$sys nbench=$(nbench) '
                 f'$(grep -a CAPSTONE_VM_STATS {err} 2>/dev/null | tail -1) :: $(bench)"', "n=$((n+1))"]
 
     for arm in arms:

@@ -77,10 +77,11 @@ def read(a):
     rc = 0
     res = dict(bench=plan["bench"], size=plan["size"], arms={}, done=bool(re.search(rf"^@@SPEC-DONE {re.escape(plan['bench'])} ", text, re.M)))
     begins = {m.group(1): m.end() for m in re.finditer(r"^@@SPEC-BEGIN (\d+) .*$", text, re.M)}
-    ends = list(re.finditer(r"^@@SPEC-END (\d+) (\w+) (\S+) (\d+) rc=(\d+) up0=(\S+) up1=(\S+) nbench=(\d+) ?(.*?) :: (.*)$", text, re.M))
+    ends = list(re.finditer(r"^@@SPEC-END (\d+) (\w+) (\S+) (\d+) rc=(\d+) up0=(\S+) up1=(\S+) (?:sys=(\d+),(\d+),(\d+) )?"
+                            r"nbench=(\d+) ?(.*?) :: (.*)$", text, re.M))
     prev_bench = None
     for m in ends:
-        n, tag, arm, i, r, u0, u1, nb, stats, bench = m.groups()
+        n, tag, arm, i, r, u0, u1, scy, sin, sen, nb, stats, bench = m.groups()
         st = dict(re.findall(r"(\w+)=(\d+)", stats)) if "CAPSTONE_VM_STATS" in stats else {}
         bl = dict(re.findall(r"(\w+)=(-?\d+)", bench))
         # The bench line is the module's LAST in dmesg; a command that printed none would quote the previous one. The
@@ -95,6 +96,11 @@ def read(a):
                  instret=int(bl["instret"]) if fresh and "instret" in bl else None,
                  entries=int(bl["entries"]) if fresh and "entries" in bl else None,
                  bench_line_fresh=fresh, body=text[begins.get(n, m.start()):m.start()].strip()[-400:])
+        if scy is not None:
+            # The module's cumulative counters, read before and after the command: every context it ran, children
+            # included (perlbench's test harness runs ~300), and no staleness question. Stages from before 2026-10-29
+            # print no sys= and keep the bench line.
+            e.update(cycles=int(scy), instret=int(sin), entries=int(sen), counters="sysfs-delta")
         res["arms"].setdefault(arm, dict(commands=[], hashes={}, files={}))["commands"].append(e)
     for m in re.finditer(r"^@@SPEC-HASH-BEGIN (\S+)\n(.*?)^@@SPEC-HASH-END \1$", text, re.M | re.S):
         h = dict((p.split(None, 1)[1].strip().removeprefix("./"), p.split()[0]) for p in m.group(2).splitlines() if len(p.split()) == 2)
