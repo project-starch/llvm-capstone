@@ -1,0 +1,13 @@
+# Juliet spatial sample on bitstream 3 (e7af48457), board 2 (tier3-juliet-spatial-b3.sh): result lines; the judge-field compare's per-case lines are omitted
+# (judge.py cannot read CAUGHT on a board; its 720 'differ' are no-oob-line). THE GRADE is the OBS-COMPARE line.
+JS run BEGIN 12:21:14 board 2 booking 519
+JS run END rc=0 18:55:39 :: 24 batches completed, 0 not :: 24 batches in 23664.5 s -> <mnt-hdd>/capstone/t3-run-b3-e7af48457-b2/juliet-spatial/run/observations.json
+JS probe BEGIN 18:55:39 board 2 booking 528
+JS probe END rc=0 19:03:14 :: 0 batches completed, 0 not :: {"sizeof-ptr": {"double*": "16", "double": "8", "int64_t*": "16", "int64_t": "8", "struct*": "16", "struct": "8"}}
+JS judge rc=0 :: CWE-127: caught 0 missed 0; bad {'NO-READING:unattributed(STRICT-FAIL:no-oob-line)': 93}; good {'CORRECT': 93}; strict {} runs: {'census': (24, 24)} 
+JS verdicts: 755 {('NO-READING:unattributed(STRICT-FAIL:no-oob-line)', 'CORRECT', '28'): 716, ('MISSED', 'CORRECT', ''): 22, ('INTRA-OBJECT:NO-READING:unattributed(STRICT-FAIL:no-oob-line)', 'CORRECT', '28'): 4, ('INTRA-OBJECT:NO-READING:unexpected-cause', 'CORRECT', '24'): 4, ('NOT-TRIGGERED:sizeof-ptr', 'CORRECT', ''): 9}
+JS MISSED rows: 22 TWINS-NEEDED CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE805_wchar_t_declare_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_01 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_54 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_alloca_snprintf_67 CWE121_Stack_Based_Buffer_Overflow__CWE806_wchar_t_declare_snprintf_01
+JS COMPARE batch QEMU -> board: cases 755/755 differ 720
+JS OBS-COMPARE rc=0 :: 1513 of 1513 cells the same, 0 different, 0 tolerated
+JS readings: 25 boot transcripts, 0 with a nonzero pc=0/DRT1/FRTY/Oops/INJS/INJL count
+JS board2 DONE 19:03:35

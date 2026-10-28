@@ -10683,3 +10683,52 @@ Records: `records/b3bs-reread-b1.result-lines.txt` and `records/b3bs-reread-b2.r
     fault on nested pools. The uaf-malloc control may read the silicon-only cause 13; it is a control, not a cell;
   - all four boots complete on each board; readings 0.
 - Any other reading is a finding about bitstream 3.
+
+### The corpus on bitstream 3, second wave, result: every arm as bitstream 2 read it (board 1 11:22-17:02, board 2 10:34-19:03)
+
+Records:
+- `records/b3bs-mp-b1.result-lines.txt`;
+- `records/b3bs-newarms-b2.result-lines.txt`;
+- `records/b3bs-juliet-temporal-b1.result-lines.txt`;
+- `records/b3bs-juliet-spatial-b2.result-lines.txt`.
+
+The coordinator (`tier3-corpus2-b3.sh`) ran every step to `C2 DONE` with rc=0 on each, and no board held. Bookings 503-523 and 528 (524-527 are httpd's, below).
+
+- **mruby stock:** 23 of 23 cells the same (fault 20, completed 3), "control smoke ok".
+- **mruby Sublet:** 23 of 23 (fault 23), "control smoke ok".
+- **perl stock:** 11 of 11 (fault 6, exit255 1, completed 4).
+- **perl Sublet:** 11 of 11 (fault 8, completed 3).
+- Both perl arms read controls eval and shim True.
+- **The new arms (board 2):**
+  - **xlang:** gate 17 of 17. repro reads COMPARE 4 of 15, as predicted, and VCOMPARE 15 of 15; lua-cdp reads 13 of 13 on both.
+  - **plane-malloc and plane-nested:** 1 of 1 each (MISSED, as the reference).
+  - **capi:** VCOMPARE equal in every group. Groups 1-12 and 17-19 read COMPARE equal; 13-16 reads 3 of 4, as predicted.
+  - The 13-16 boot's pc=0 count of 1 is row 13's own predicted fault (cause=12 pc=0x0 address=0x0).
+  - capi-17-18-19 ended rc=75, as on bitstream 2: all three rows are out of the denominator.
+  - Firmware peaked at 25,856,520 B, under the 26,000,000 B cap.
+- **Juliet temporal:**
+  - census 729 of 735 the same. All 6 differences are rand-driven `_12` draws (bitstream 2 read 9). No uaf-control step differed.
+  - **Seeded 56 of 56.**
+- **Juliet spatial: 1513 of 1513, 0 different, 0 tolerated**, as on bitstream 2. The pre-registered controls:ctl-uaf exception did not occur.
+- **Readings 0** on every arm.
+- **Against the pre-registration (2e0bde4ca772): every reading holds.** Bitstream 3 changes no reading in the second wave.
+
+### httpd on bitstream 3, result: every cell as bitstream 2 and the reference on both boards; malloc 9 of 9 MISSED, nested pools 9 of 9 CAUGHT (board 1 17:21-18:03, board 2 19:05-19:42)
+
+Records:
+- `records/b3bs-httpd-b1.result-lines.txt`;
+- `records/b3bs-httpd-n2-b2.result-lines.txt`.
+
+Bookings 524-527 and 529.
+
+- **apr-pool-repros:** virtual-malloc 1 of 1 MISSED; virtual-nested-pools 1 of 1 CAUGHT.
+- **bucket-repros:** virtual-malloc 8 of 8 MISSED; virtual-nested-pools 8 of 8 CAUGHT.
+  - The nested-pools CAUGHTs are cause 25 in read_probe, attributed by probe.
+- **Against the reference:** every cell the same on both boards (1, 1, 8 and 8 of the same).
+- **Board 2 against board 1:** n2-grade reads 0 different on all four arms. A control pairing board 1's malloc with board 2's
+  nested pools exits 1.
+- **Controls:**
+  - bounds-malloc and uaf-malloc fault on every arm; uaf-malloc read no cause 13.
+  - node-released-90 and piece-filed-90 complete on malloc and fault on nested pools.
+- All eight boots completed; readings 0.
+- **Against the pre-registration (efe7a1c36a32): every reading holds.**
