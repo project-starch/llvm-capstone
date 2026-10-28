@@ -14,24 +14,24 @@
  "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has zend_pzval_lock_func at Zend/zend_execute.c:59 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
  "arms": {
   "virtual-malloc": {
-   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
+   "oracle": "the case on the virtual profile with the nested layer present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
    "verdict": "NO-READING",
    "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:6': native PHP dies on a signal, so there is no pair to read",
-   "verdict_from": "results/2026-10-28-run17/bundle-virtual-malloc",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-malloc",
    "verdict_reason": "out-of-denominator"
   },
   "virtual-nested-pools": {
-   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
+   "oracle": "the same image with the nested allocator layer retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
    "verdict": "NO-READING",
    "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:6': native PHP dies on a signal, so there is no pair to read",
-   "verdict_from": "results/2026-10-28-run17/bundle-virtual-nested-pools",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-pools",
    "verdict_reason": "out-of-denominator"
   },
   "virtual-nested-exact": {
    "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
    "verdict": "NO-READING",
    "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:6': native PHP dies on a signal, so there is no pair to read",
-   "verdict_from": "results/2026-10-28-run17/bundle-virtual-nested-exact",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-exact",
    "verdict_reason": "out-of-denominator"
   }
  },

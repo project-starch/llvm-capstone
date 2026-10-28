@@ -14,22 +14,22 @@
  "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has _zval_ptr_dtor at Zend/zend_execute_API.c:389 as its first frame inside PHP's tree (frame #0); the stack's remaining frames are the interpreter's dispatch and are not sites",
  "arms": {
   "virtual-malloc": {
-   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
+   "oracle": "the case on the virtual profile with the nested layer present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
    "verdict": "MISSED",
    "verdict_note": "reached (the stock arm ran this case to its normal end, the corpus's pristine record says it completes, and revocation-sanity completed on this arm) and completed with no fault; native PHP: OK; nodes allocated 3818, table capacity 262144 (cumulative, not a high-water: reported, not gated)",
-   "verdict_from": "results/2026-10-28-run17/bundle-virtual-malloc"
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-malloc"
   },
   "virtual-nested-pools": {
-   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
+   "oracle": "the same image with the nested allocator layer retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
    "verdict": "CAUGHT",
-   "verdict_note": "cause=25 pc=0x3f8545f820 in _zval_ptr_dtor; by function: _zval_ptr_dtor at Zend/zend_execute_API.c:389 is the function this case declares (fault_sites, ASan frame #0 of our native run), at ASan's own line",
-   "verdict_from": "results/2026-10-28-run17/bundle-virtual-nested-pools"
+   "verdict_note": "cause=25 pc=0x3fbd05f820 in _zval_ptr_dtor; by function: _zval_ptr_dtor at Zend/zend_execute_API.c:389 is the function this case declares (fault_sites, ASan frame #0 of our native run), at ASan's own line",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-pools"
   },
   "virtual-nested-exact": {
    "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
    "verdict": "CAUGHT",
-   "verdict_note": "cause=25 pc=0x3fbe85f820 in _zval_ptr_dtor; by function: _zval_ptr_dtor at Zend/zend_execute_API.c:389 is the function this case declares (fault_sites, ASan frame #0 of our native run), at ASan's own line",
-   "verdict_from": "results/2026-10-28-run17/bundle-virtual-nested-exact"
+   "verdict_note": "cause=25 pc=0x3f9f05f820 in _zval_ptr_dtor; by function: _zval_ptr_dtor at Zend/zend_execute_API.c:389 is the function this case declares (fault_sites, ASan frame #0 of our native run), at ASan's own line",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-exact"
   }
  },
  "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",

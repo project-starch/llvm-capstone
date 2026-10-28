@@ -2804,3 +2804,15 @@ both scorings, 70 cases).** Every verdict, reason and attribution identical to r
 every exact-arm observation carries the control nested-bound-probe and none seam-bound-probe;
 every arm's sanity run prints PHP_VIRTUAL NESTED and no transcript carries PHP_VIRTUAL SEAM; the
 cross-arm gates pass. Any mover voids the rename until explained here.
+
+### run18 (`corpus-run18`, tree e61721e2fb38, out-lt8n): as pre-registered
+
+The image and probe rebuilt under the new names on the same SDK: the image carries the string
+PHP_VIRTUAL NESTED and not PHP_VIRTUAL SEAM (the old image, as control, carries SEAM). Both boots
+rc 0. Against run17: 560 cells, every verdict, reason and attribution identical. The differences
+are the rename's own: every exact-arm observation's control is nested-bound-probe (280, run17
+seam-bound-probe), 93 transcripts carry PHP_VIRTUAL NESTED and none PHP_VIRTUAL SEAM (run17: 93
+SEAM), the image hash, the fault addresses of the rebuilt binary, and the build path in 13 pieces
+of evidence (realphp/seam/tree became realphp/nested/tree). The cross-arm gates pass. run18 is the
+current record; the case files are regenerated with the new wording and derive-verdicts and
+check-corpus are clean again over all 30 corpora.

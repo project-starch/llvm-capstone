@@ -97,7 +97,7 @@ mechanism, so that a surprise is a surprise:
 
 ## Results
 
-Six records, each a run of the whole corpus on the virtual profile, one bundle per arm with the two
+Seven records, each a run of the whole corpus on the virtual profile, one bundle per arm with the two
 populations merged (`tools/merge-population-bundles.py`), every table computed from the bundles by
 `tools/result-tables.py` and written into that record's README, never typed:
 
@@ -105,9 +105,10 @@ populations merged (`tools/merge-population-bundles.py`), every table computed f
 - `results/2026-10-28-run10/`: lane C's measurement (the nested layer on the libc's reclaim, `8569fb7194dc`): against run7 no CAUGHT changed.
 - `results/2026-10-28-run14/` and `results/2026-10-28-run15/`: the follow-up lane's measurement (the 8 MiB-stack SDK with line tables for the musl objects, the launcher that records the frame chain and, from run15, names its image on exit, the putenv probe); run15's verdicts and reasons are cell-identical to run14's.
 - `results/2026-10-28-run16/`: the merged corpus measured whole (70 cases): the first 65 exactly as in run15, the five merged cases measured for the first time.
-- `results/2026-10-28-run17/`: **the current record**, the same 70 cases on the reduced nested layer, every cell identical to run16. `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them.
+- `results/2026-10-28-run17/`: the same 70 cases on the reduced nested layer, every cell identical to run16.
+- `results/2026-10-28-run18/`: **the current record**, the same 70 cases under the renamed layer ("seam" is now "nested"), every cell identical to run17. `corpus.json`'s `verdict_bundles` names its arm bundles, `derive-verdicts.py` wrote their verdicts into every `case.json`, and `check-corpus.py` re-judges them.
 
-Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415), from `results/2026-10-28-run17/README.md` (identical to run16's):
+Over the 55 temporal cases (51 CWE-416, 3 CWE-590, 1 CWE-415), from `results/2026-10-28-run18/README.md` (identical to run16's and run17's):
 
 **Default scoring** (the native crashers out of the denominator):
 

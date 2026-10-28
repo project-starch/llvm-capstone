@@ -15,24 +15,24 @@
  "fault_sites_why": "ASan's access stack in our native run (results-ours-asan-default.json, sha256 045e3366bfc5) has _estrndup at Zend/zend_alloc.c:403 as its first frame inside PHP's tree (frame #1, under the libc leaf memcpy at frame #0, which is not declared: a fault there can be tied to this case only through its caller, and the launcher reports no return address); the stack's remaining frames are the interpreter's dispatch and are not sites On this platform the access is not the copy: the assignment keeps the temporary's buffer as the result's (the trigger's own account: the freed IS_TMP_VAR is reused as the assignment's result value), and var_dump($x) prints it -- php_var_dump, ext/standard/var.c:126, the PHPWRITE of Z_STRVAL -- through main/output.c and the CLI's write, which pass the buffer through. php_var_dump is therefore a declared site: the print of the reused temporary that the trigger documents, read off the source, with the nested arm's frame chain (residues/057-chain, 2026-10-28) as the confirming reading, not the admitting one.",
  "arms": {
   "virtual-malloc": {
-   "oracle": "the case on the virtual profile with the seam present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
+   "oracle": "the case on the virtual profile with the nested layer present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
    "verdict": "NO-READING",
    "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:11': native PHP dies on a signal, so there is no pair to read",
-   "verdict_from": "results/2026-10-28-run17/bundle-virtual-malloc",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-malloc",
    "verdict_reason": "out-of-denominator"
   },
   "virtual-nested-pools": {
-   "oracle": "the same image with the allocator seam retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
+   "oracle": "the same image with the nested allocator layer retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
    "verdict": "NO-READING",
    "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:11': native PHP dies on a signal, so there is no pair to read",
-   "verdict_from": "results/2026-10-28-run17/bundle-virtual-nested-pools",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-pools",
    "verdict_reason": "out-of-denominator"
   },
   "virtual-nested-exact": {
    "oracle": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
    "verdict": "NO-READING",
    "verdict_note": "the corpus's pristine record for this case is 'SIGNAL:11': native PHP dies on a signal, so there is no pair to read",
-   "verdict_from": "results/2026-10-28-run17/bundle-virtual-nested-exact",
+   "verdict_from": "results/2026-10-28-run18/bundle-virtual-nested-exact",
    "verdict_reason": "out-of-denominator"
   }
  },
