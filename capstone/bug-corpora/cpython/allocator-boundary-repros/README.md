@@ -81,11 +81,12 @@ Three things that had to be got right for those runs to mean anything:
   replaces every trigger with a stub, which the three arms of 2026-10-06 (the
   physical `spatial` and `sublet`, and `cheribsd-revocation`) pass, and a strong
   per-case one that keeps the allocation traffic and makes only the offending
-  access valid, which exists for 18 of the 32 cases and has been run on all three
-  arms of 2026-10-06. It qualifies every detection the two physical Capstone arms report
+  access valid, which exists for 20 of the 32 cases, 18 of them when the three
+  arms of 2026-10-06 were run -- this change adds the controls for 06 and 32, which have
+  therefore not been run on those arms. It qualifies every detection the two physical Capstone arms report
   on those cases -- base 11 of 11, Sublet 17 of 17 -- and 2 of the 6 on CheriBSD, where
   the other 4 were measured on an earlier binary than the control could be run against.
-  For the remaining 14 cases the defect is not one invalid access in an otherwise
+  For the remaining 12 cases the defect is not one invalid access in an otherwise
   ordinary program, and three of those 14 are the cases no arm delivers. What each
   control settles, and what neither does, is in `results/20261006/README.md`. On the
   virtual arms `runners/virtual/run-virtual.py` runs a case's strong control when the
@@ -142,7 +143,8 @@ into one declared bundle set.
     cheribsd-revocation   32 of 32 rows, and a negative-control pass in which
                           nothing faulted
 
-**Thirteen of those cells are withdrawn by review.** A cell counts when the
+**Fourteen of those cells are withdrawn by review**, as the per-arm table below adds up to
+(6 + 0 + 8). A cell counts when the
 mechanism REJECTED the defective access, not when the access succeeded and the
 program faulted afterwards on what it fetched. Which code that is depends on
 the axis, and the guest's own `sicode` selftest establishes the CheriBSD pair
@@ -162,9 +164,16 @@ required -- is a consequence on either axis.
 | `virtual-nested-pools` | **0** | every one of its 27 catches carries its axis's code |
 | `cheribsd-revocation` | 8 | 01, 05, 09, 10, 13, 14 (spatial, `si_code=2`), 31 (temporal, `si_code=2`, decided by `si_addr` -- see below), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
 
-Counting them the arms read 15 / 31, 27 / 31 and 12 / 31; withdrawn, **9 / 31,
-27 / 31 and 4 / 31**. On the **nested** rows, 20 of the 31, ③ is 0 in both
-cells and ① is 0 in the spatial one.
+**The arms read 15 / 31, 27 / 31 and 12 / 31.** That is what the declared bundle and the
+CheriBSD record say, every cell of it derived by the judge or, for ③, taken from that run's
+record, and it is the figure to quote.
+
+With the fourteen withdrawals above applied the same cells read 9 / 31, 27 / 31 and 4 / 31. **That
+is this review's reading, not a measurement**: no tool enforces the withdrawal rule, so nothing in
+the tree recomputes those three numbers. `catch_causes` (`SCHEMA.md`) is the key that would, for the
+two Capstone arms, and no configuration declares it; for ③ it would not be enough either, because
+those cells come from a run's record and prose rather than from a judge. On the **nested** rows, 20
+of the 31, that reading puts ③ at 0 in both cells and ① at 0 in the spatial one.
 
 **On the temporal axis the fault code alone cannot decide a CheriBSD cell.**
 Revocation clearing a tag and dereferencing a recycled non-capability value both

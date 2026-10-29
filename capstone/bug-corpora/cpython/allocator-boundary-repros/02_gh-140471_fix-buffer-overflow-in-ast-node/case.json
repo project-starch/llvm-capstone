@@ -33,7 +33,7 @@
     "_copy_characters"
   ],
   "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-buffer-overflow (READ 4) at _copy_characters Objects/unicodeobject.c:1606. That run uses no Capstone arm and was recorded before any virtual arm ran.",
-  "note": "The declared bundle reads (1) MISSED, (2) MISSED and (3) silent. The defect is a type confusion -- a bytes object read through the PyUnicode layout, so the copy's length comes out of the wrong field -- and the over-read that follows is what (2) rejects.c.",
+  "note": "The declared bundle reads (1) MISSED, (2) MISSED and (3) silent. The defect is a type confusion -- a bytes object read through the PyUnicode layout, so the copy's length comes out of the wrong field -- and the over-read that follows is what (2) rejects on cases 03 and 04. It does NOT reject it here: 02's (2) cell is MISSED in the declared bundle, with the trigger reaching the marker and ending EXIT 1 and no fault recorded. EXIT 1 is the ordinary signature of an over-read nobody stopped: six of virtual-malloc's MISSED cells end that way, 03 and 04 among them, and both of those do fault on (2) -- so it is not evidence that the access did not run. What distinguishes 02 from 03 on (2) is not established here; the two differ in upstream fix (gh-140471 against gh-140492) and so in the object the misread length is taken from.",
   "nested": true,
   "nested_why": "the object is a pymalloc block, so the allocator below bounds the arena it came from, not the block"
 }
