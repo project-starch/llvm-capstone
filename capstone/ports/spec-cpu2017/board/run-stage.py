@@ -42,7 +42,8 @@ def run(a):
         dom = Path(a.control[0])
         ctl = b.put("control/" + dom.name, dom)
         b.step("control", f"{root}/capstone-vexec {ctl} {' '.join(shlex.quote(x) for x in a.control[1:])}")
-    inband = "" if a.backend == "board" else "SPEC_INBAND_MAX=67108864 "   # the twin carries every output
+    # The twin carries every output by default; perlbench train's 26 MB splitmail.out outlasts the step bound in transfer.
+    inband = "" if a.backend == "board" else f"SPEC_INBAND_MAX={a.twin_inband_max} "
     b.step("spec", f"{inband}SPEC_VEXEC={root}/capstone-vexec sh {spec}/run.sh")
     b.bounds = {"spec": a.step_s / 20, "control": 60}
     runs, transcript, completed = b.execute(a.kit, a.out / "guest", timeout=a.step_s + 600)
@@ -220,6 +221,7 @@ def main():
     r.add_argument("--twin", type=Path, help="the twin's result.json")
     r.add_argument("--control", nargs="+", help="a known-good image and its arguments, run first")
     r.add_argument("--step-s", type=int, default=7200)
+    r.add_argument("--twin-inband-max", type=int, default=67108864, help="the qemu backend's in-band size limit")
     d = sub.add_parser("read")
     d.add_argument("--stage", type=Path, required=True)
     d.add_argument("--tree", type=Path)
