@@ -17,6 +17,7 @@ line, an arm without its hashes, or a missing SPEC-DONE makes the exit status no
 import argparse
 import base64
 import gzip
+import hashlib
 import json
 import re
 import shlex
@@ -132,7 +133,15 @@ def read(a):
             missing = [x for x in argv[2:] if "/" not in x and not x.startswith("-") and not re.match(r"^[0-9.e+-]+$", x)
                        and not (fdir / arm / x).exists()]
             if missing:
-                d["validation"].append(dict(cmd=" ".join(argv[-2:]), verdict=f"NO-OUTPUT {missing}"))
+                # An output too large for the UART (perlbench train's splitmail.out is 26 MB) still has its hash: one equal
+                # to the hash of the SPEC reference file the specdiff names is a byte-exact match, stronger than specdiff.
+                refs = [spec / x[5:] for x in argv if x.startswith("SPEC/") and "/output/" in x]
+                exact = [x for x in missing if any(r.name == x and r.is_file()
+                         and hashlib.sha256(r.read_bytes()).hexdigest() == d["hashes"].get(x) for r in refs)]
+                if exact and exact == missing:
+                    d["validation"].append(dict(cmd=" ".join(argv[-2:]), verdict="PASS", how="sha256 = reference"))
+                else:
+                    d["validation"].append(dict(cmd=" ".join(argv[-2:]), verdict=f"NO-OUTPUT {missing}"))
                 continue
             full = [str(spec / x[5:]) if x.startswith("SPEC/") else (str(fdir / arm / x) if x in local else x) for x in argv]
             p = subprocess.run(full, capture_output=True, text=True, env=env)
@@ -186,7 +195,14 @@ def read(a):
         print(f"READ outputs {arm} vs twin: {'identical' if not diff else 'DIFFER ' + str(diff[:8])}")
     if not res["done"]:
         print("READ: SPEC-DONE ABSENT"); rc = 2
-    if re.search(r"Oops|Unable to handle|BUG:|Out of memory|oom-kill", text):
+    # Searched without the in-band files' base64 lines, which spell "Oops" by chance (perlbench train, 2026-10-29). Only
+    # pure base64 lines go, so a kernel line inside a block a timeout cut short is still seen.
+    kept, inb = [], False
+    for line in text.splitlines():
+        inb = line.startswith("@@SPEC-FILE ") or (inb and line != "@@SPEC-FILE-END")
+        if not (inb and re.fullmatch(r"[A-Za-z0-9+/]+={0,2}", line)):
+            kept.append(line)
+    if re.search(r"Oops|Unable to handle|BUG:|Out of memory|oom-kill", "\n".join(kept)):
         print("READ: KERNEL OOPS/OOM in the step's text"); rc = 2
     (out / "result.json").write_text(json.dumps(res, indent=1) + "\n")
     return rc
