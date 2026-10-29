@@ -10,7 +10,7 @@
 
 | sort | where | count | what it is |
 |---|---|---:|---|
-| third-party defects, as cases | `capstone/bug-corpora/` | 372 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
+| third-party defects, as cases | `capstone/bug-corpora/` | 373 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 31 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 166 open, 77 resolved | the registry, not reproduced cases |
@@ -21,7 +21,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 
 | corpus | program | pinned version | cases | liveness in that pin | advisories | schema | status |
 |---|---|---|---:|---|---:|---|---|
-| [`capstone/bug-corpora/cpython/allocator-boundary-repros`](cpython/allocator-boundary-repros) | cpython | 3.13.7 | 35 | 35 live | 0 | script-trigger | measured |
+| [`capstone/bug-corpora/cpython/allocator-boundary-repros`](cpython/allocator-boundary-repros) | cpython | 3.13.7 | 36 | 36 live | 0 | script-trigger | measured |
 | [`capstone/bug-corpora/cpython/pymalloc-repros`](cpython/pymalloc-repros) | cpython | 3.13.7 | 20 | 20 live | 0 | case-json | measured |
 | [`capstone/bug-corpora/ffmpeg/carved-repros`](ffmpeg/carved-repros) | ffmpeg | n9.0.1 | 13 | 1 live, 12 fixed before the pin | 1 | case-json | measured |
 | [`capstone/bug-corpora/ffmpeg/plain-heap-repros`](ffmpeg/plain-heap-repros) | ffmpeg | n9.0.1 | 25 | 25 fixed before the pin | 0 | case-json | measured |
@@ -52,14 +52,14 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
 | [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**402 cases in 30 corpora**, of which 222 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
+**403 cases in 30 corpora**, of which 223 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
 | component | role | pinned version | targets | corpora | cases |
 |---|---|---|---|---|---:|
 | `capstone/ports/apr/pools` | allocator-component | 1.7.4 | capstone-domain, cheribsd-purecap, native | `apr-pool-repros`, `bucket-repros` | 9 |
-| `capstone/ports/cpython/app` | full-application | 3.13.7 | capstone-virtual, cheribsd-purecap | `pymalloc-repros`, `allocator-boundary-repros` | 55 |
+| `capstone/ports/cpython/app` | full-application | 3.13.7 | capstone-virtual, cheribsd-purecap | `pymalloc-repros`, `allocator-boundary-repros` | 56 |
 | `capstone/ports/cpython/pymalloc` | allocator-component | 3.13.7 | capstone-virtual, cheribsd-purecap, native | `pymalloc-repros` | 20 |
 | `capstone/ports/ffmpeg/app` | full-application | 9.0.1 | capstone-domain | `plain-heap-repros`, `plane-repros`, `subobject-repros` | 35 |
 | `capstone/ports/ffmpeg/buffer-pool` | allocator-component | 9.0.1 | capstone-domain, cheribsd-purecap, native | `pool-repros` | 4 |

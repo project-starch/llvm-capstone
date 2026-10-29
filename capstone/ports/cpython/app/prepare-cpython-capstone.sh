@@ -171,6 +171,42 @@ if "$CC" -O1 "$LC/has.c" -lz -o "$LC/hasz.dom" >"$LC/hasz.log" 2>&1; then
 fi
 log "link check: strlen links, an undefined function and -lz are refused"
 
+# ---- 4b. zlib, cross-built for the target --------------------------------
+# The port used to have no zlib, so configure left _zlib out. zlib is plain C
+# that cross-compiles for capstone64 unchanged, and the allocator-boundary
+# corpus's gh-148395 decompressor case needs _zlib to run in the interpreter.
+# Built here as a static archive and handed to configure by -I/-L: the link
+# check above still proves the BASE SDK refuses a bare -lz, so nothing but this
+# explicit archive can satisfy it.
+ZLIB_VERSION=1.3.1
+ZLIB_SHA256=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$SCRIPT_DIR/toolchain/zlib-upstream.json")
+ZLIB_URL=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["url"])' "$SCRIPT_DIR/toolchain/zlib-upstream.json")
+ZLIB_ARCHIVE=${CPY_ZLIB_ARCHIVE:-$CPY_ROOT/download/zlib-$ZLIB_VERSION.tar.gz}
+ZDIR=$CPY_ROOT/zlib
+[[ -f "$ZLIB_ARCHIVE" ]] || curl -fL "$ZLIB_URL" -o "$ZLIB_ARCHIVE"
+zgot=$(sha256sum "$ZLIB_ARCHIVE" | cut -d' ' -f1)
+[[ "$zgot" == "$ZLIB_SHA256" ]] || { echo "zlib archive SHA-256 mismatch: $zgot" >&2; exit 2; }
+rm -rf "$ZDIR"; mkdir -p "$ZDIR"
+tar -xzf "$ZLIB_ARCHIVE" -C "$ZDIR"
+ZSRC=$ZDIR/zlib-$ZLIB_VERSION
+# No ./configure: the shipped zconf.h fits a static build. Z_HAVE_UNISTD_H is
+# the only knob musl needs. The object set is zlib's own Makefile.in OBJZ+OBJG.
+ZOBJS=""
+for zc in adler32 crc32 deflate infback inffast inflate inftrees trees zutil \
+          compress uncompr gzclose gzlib gzread gzwrite; do
+  "$CC" -O1 -DZ_HAVE_UNISTD_H -I"$ZSRC" -c "$ZSRC/$zc.c" -o "$ZDIR/$zc.o" 2>"$ZDIR/$zc.err" \
+    || { cat "$ZDIR/$zc.err" >&2; echo "zlib: $zc.c did not cross-compile" >&2; exit 2; }
+  ZOBJS="$ZOBJS $ZDIR/$zc.o"
+done
+# shellcheck disable=SC2086
+"$LLVM_AR" rcs "$ZDIR/libz.a" $ZOBJS
+cp "$ZSRC/zlib.h" "$ZSRC/zconf.h" "$ZDIR/"
+# -lz now resolves, but only with this -L: prove it, so a silently-empty archive
+# cannot pass as a working zlib later.
+"$CC" -O1 -I"$ZDIR" -L"$ZDIR" "$LC/has.c" -lz -o "$ZDIR/haslz.dom" >"$ZDIR/haslz.log" 2>&1 \
+  || { cat "$ZDIR/haslz.log" >&2; echo "zlib: -lz does not resolve against the cross-built libz.a" >&2; exit 2; }
+log "zlib $ZLIB_VERSION cross-built: $ZDIR/libz.a, header in $ZDIR"
+
 # ---- 5. configure -------------------------------------------------------
 rm -rf "$BUILD_DIR"; mkdir -p "$BUILD_DIR"
 # Answers configure cannot get by running a program on the target. Each is a
@@ -217,9 +253,14 @@ SUBLET_CPPFLAGS=
 #   It does not make fork without exec possible.
 # Thread-locals are C11 thread-locals: with threads (C-47 fixed) patch 0006 and
 #   -D_Py_THREAD_LOCAL_AS_GLOBAL are gone, and the check below refuses them.
+# -I$ZDIR/-L$ZDIR let configure find zlib.h and resolve -lz to the cross-built
+#   libz.a; without -L a bare -lz still fails (the link check above), so this is
+#   the only zlib the build can see. CONFIGURE_CPPFLAGS/LDFLAGS carry both into
+#   the Makefile, so zlibmodule.c compiles and the module link finds libz.a.
 (cd "$BUILD_DIR" && \
   CONFIG_SITE="$BUILD_DIR/config.site" MODULE_BUILDTYPE=static \
-  CPPFLAGS="-D_Py_FORK_EXEC_POSIX_SPAWN ${SUBLET_CPPFLAGS:-}" \
+  CPPFLAGS="-D_Py_FORK_EXEC_POSIX_SPAWN -I$ZDIR ${SUBLET_CPPFLAGS:-}" \
+  LDFLAGS="-L$ZDIR" \
   CC="$CC" AR="$LLVM_AR" RANLIB="$LLVM_AR s" READELF=: \
   "$CPY_SRC/configure" \
     --host=riscv64-unknown-linux-musl \
@@ -247,6 +288,10 @@ grep -q "loading site script $BUILD_DIR/config.site" "$BUILD_DIR/configure.log" 
   || { echo "configure did not read $BUILD_DIR/config.site" >&2; exit 2; }
 grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_FORK_EXEC_POSIX_SPAWN' "$BUILD_DIR/Makefile" \
   || { echo "configure did not enable patch 0015 (posix_spawn)" >&2; exit 2; }
+# zlib must have been found: the whole point of the cross-build above is _zlib,
+# and a silent miss would leave the module out exactly as before.
+grep -q '^MODULE_ZLIB_STATE=yes' "$BUILD_DIR/Makefile" \
+  || { echo "configure did not find the cross-built zlib (MODULE_ZLIB_STATE not yes)" >&2; exit 2; }
 if grep -qE '^CONFIGURE_CPPFLAGS=.*-D_Py_THREAD_LOCAL_AS_GLOBAL' "$BUILD_DIR/Makefile"; then
   echo "threading requires real thread-locals" >&2; exit 2
 fi
@@ -299,16 +344,23 @@ if [[ ${CPY_TEST_CAPI:-0} == 1 ]]; then
            list long object pyos set sys tuple unicode vectorcall_limited file; do
     limited+=" _testlimitedcapi/$f.c"
   done
-  printf '\n*static*\n%s\n%s\n' \
+  # _capstone_nomemory is the pyfailmalloc hook (CPython's _testcapi.set_nomemory),
+  # copied verbatim into its own module (toolchain/capstone-nomemory.c) because the
+  # full _testcapi is 32 files the domain does not need. gh-148395's decompressor
+  # case uses it to force the MemoryError its defect lives on. Staged into the
+  # source Modules dir so makesetup resolves it like any module source.
+  cp "$SCRIPT_DIR/toolchain/capstone-nomemory.c" "$CPY_SRC/Modules/capstone-nomemory.c"
+  printf '\n*static*\n%s\n%s\n%s\n' \
     "_testinternalcapi _testinternalcapi.c _testinternalcapi/test_lock.c _testinternalcapi/pytime.c _testinternalcapi/set.c _testinternalcapi/test_critical_sections.c" \
-    "$limited" >> "$BUILD_DIR/Modules/Setup.local"
+    "$limited" \
+    "_capstone_nomemory capstone-nomemory.c" >> "$BUILD_DIR/Modules/Setup.local"
   (cd "$BUILD_DIR" && make Makefile > make-makefile.log 2>&1) \
     || { tail -12 "$BUILD_DIR/make-makefile.log" >&2; echo "make Makefile failed" >&2; exit 2; }
-  for m in _testinternalcapi _testlimitedcapi; do
+  for m in _testinternalcapi _testlimitedcapi _capstone_nomemory; do
     grep -q "$m" "$BUILD_DIR/Makefile" \
       || { echo "CPY_TEST_CAPI=1 but $m is not in the Makefile" >&2; exit 2; }
   done
-  log "test C-API modules built in: _testinternalcapi, _testlimitedcapi"
+  log "test C-API modules built in: _testinternalcapi, _testlimitedcapi, _capstone_nomemory"
 fi
 
 # sysconfig's build-time variables, the module the interpreter imports as

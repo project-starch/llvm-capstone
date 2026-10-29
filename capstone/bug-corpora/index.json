@@ -8,7 +8,7 @@
         "version": "3.13.7",
         "port": "capstone/ports/cpython/pymalloc"
       },
-      "cases": 35,
+      "cases": 36,
       "case_schema": "script-trigger",
       "case_number_base": 1,
       "required_arms": [
@@ -19,7 +19,7 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "true": 35
+        "true": 36
       },
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "related": [
@@ -27,7 +27,7 @@
         "capstone/ports/cpython/pymalloc"
       ],
       "advisories": [],
-      "note": "A sibling of pymalloc-repros. That corpus is scoped to consumer-side TEMPORAL defects whose memory comes from pymalloc and asserts completeness for that cell (20 cases, expect_live_in_pin {true: 20}, a shape_prose regex on \"[Tt]wenty reports\"), so cases here were not added there. 35 cases from 34 upstream fixes (03 and 04 are two triggers for gh-140492). Cases 01-21 are the three cells pymalloc-repros does not cover: 13 spatial/nested, 5 spatial/non-nested, 3 temporal/non-nested. Cases 22-32 are 11 temporal/nested defects, the same upstream issues pymalloc-repros holds as C models (each carries a sibling_issue pointer), here because a C model and an interpreter run of one defect are not the same measurement -- on the base arm the C models all complete while three of the eleven fault, all with cause 24; the two corpora's numbers must not be pooled. Cases 33-35 (2026-10-29) are three more of pymalloc-repros' issues run whole the same way (its cases 06, 16 and 19): the remaining nine had no interpreter form, and of those nine these three are the ones live at the pin and reachable on the Capstone build (results/2026-10-29-asan/README.md says why the other six are not). Liveness and the nested/non-nested side are both measured on the pinned ASan build. The Capstone arms are virtual-malloc and virtual-nested-pools on the virtual profile, where CPython's one heap is musl mallocng: pymalloc stock, and pymalloc on its lifetime port (tools/arms.json virtual-cpython, virtual-cpython-pools). Their faults are attributed through fault_sites from a host ASan run (results/2026-10-10-asan). The physical arms spatial and sublet (level0 heap) measured 2026-10-06 to 2026-10-09 are superseded; their record stays in results/20261006, whose tables probe/counts.py derives. results/20261006/ also carries the negative controls measured on the physical arms: a weak one that passes on all three, and a strong per-case one (negative_control.py, 18 of the 32 cases), run on all three arms of 2026-10-06, qualifying base 11/11 and sublet 17/17 of the detections they report on those cases and 2 of cheribsd-revocation's 6; what each settles and what neither does is in that README. On the virtual arms the runner runs the strong control for a fault outside the case's fault_sites (runners/virtual/README.md).",
+      "note": "A sibling of pymalloc-repros. That corpus is scoped to consumer-side TEMPORAL defects whose memory comes from pymalloc and asserts completeness for that cell (20 cases, expect_live_in_pin {true: 20}, a shape_prose regex on \"[Tt]wenty reports\"), so cases here were not added there. 35 cases from 34 upstream fixes (03 and 04 are two triggers for gh-140492). Cases 01-21 are the three cells pymalloc-repros does not cover: 13 spatial/nested, 5 spatial/non-nested, 3 temporal/non-nested. Cases 22-32 are 11 temporal/nested defects, the same upstream issues pymalloc-repros holds as C models (each carries a sibling_issue pointer), here because a C model and an interpreter run of one defect are not the same measurement -- on the base arm the C models all complete while three of the eleven fault, all with cause 24; the two corpora's numbers must not be pooled. Cases 33-36 (2026-10-29) are four more of pymalloc-repros' issues run whole the same way (its cases 06, 16, 19 and 07): the remaining nine had no interpreter form, and of those nine these four are the ones live at the pin and reachable on the Capstone build (06/16/19 need nothing new; 07, the zlib decompressor, needed zlib cross-built into the port and the pyfailmalloc injector as _capstone_nomemory). results/2026-10-29-asan/README.md says why the other five are not. Liveness and the nested/non-nested side are both measured on the pinned ASan build. The Capstone arms are virtual-malloc and virtual-nested-pools on the virtual profile, where CPython's one heap is musl mallocng: pymalloc stock, and pymalloc on its lifetime port (tools/arms.json virtual-cpython, virtual-cpython-pools). Their faults are attributed through fault_sites from a host ASan run (results/2026-10-10-asan). The physical arms spatial and sublet (level0 heap) measured 2026-10-06 to 2026-10-09 are superseded; their record stays in results/20261006, whose tables probe/counts.py derives. results/20261006/ also carries the negative controls measured on the physical arms: a weak one that passes on all three, and a strong per-case one (negative_control.py, 18 of the 32 cases), run on all three arms of 2026-10-06, qualifying base 11/11 and sublet 17/17 of the detections they report on those cases and 2 of cheribsd-revocation's 6; what each settles and what neither does is in that README. On the virtual arms the runner runs the strong control for a fault outside the case's fault_sites (runners/virtual/README.md).",
       "runners": [
         "capstone/bug-corpora/cpython/allocator-boundary-repros/runners/virtual/run-virtual.py",
         "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/asan-sites.py",
@@ -2402,7 +2402,7 @@
     "whisper/ggml-context"
   ],
   "cases_by_corpus": {
-    "capstone/bug-corpora/cpython/allocator-boundary-repros": 35,
+    "capstone/bug-corpora/cpython/allocator-boundary-repros": 36,
     "capstone/bug-corpora/cpython/pymalloc-repros": 20,
     "capstone/bug-corpora/ffmpeg/carved-repros": 13,
     "capstone/bug-corpora/ffmpeg/plain-heap-repros": 25,
@@ -2433,10 +2433,10 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 372,
+  "cases_here": 373,
   "cases_xlang": 30,
-  "cases_total": 402,
-  "live_true": 222,
+  "cases_total": 403,
+  "live_true": 223,
   "live_false": 122,
   "live_not": 28,
   "advisories_total": 22,
