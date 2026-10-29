@@ -1,5 +1,20 @@
 # Evidence behind RESULTS.md that is not a result line
 
+## Commits
+
+The pre-registration and the first results were committed on 2026-10-24. The lane branch
+`sqlite-poisoncap-corpus` was later rebased twice: on 2026-10-25, and on 2026-10-29 as
+`corpus/sqlite-poisoncap` to land on dev. Each copy keeps the author date but gets a new committer
+date and hash. The timing argument below rests on the ORIGINAL commits. GitHub keeps them under
+these tags:
+
+| commit | tag | 2026-10-25 copy | 2026-10-29 copy |
+|---|---|---|---|
+| 3cd43d008369, the case build, runner, verdicts and predictions | `prereg/sqlite-poisoncap-predictions` | baaeeb3c4b89 | c8ac17df6abc |
+| 378c8ea8f8bf, review of the predictions, before any result was read | `prereg/sqlite-poisoncap-review` | e76c8a96c6f4 | b8b865890334 |
+| 62a3999c6241, the temporal cases measured twice | `evidence/sqlite-poisoncap-first-results` | 78a66b4edf78 | afa18dde944b |
+| 80bd2f91f051, all five non-catches explained | `evidence/sqlite-poisoncap-explained` | 4eb7188bff8a | ef9f819a3a00 |
+
 ## Chronology: the run host's clock
 
 The `started_utc`/`finished_utc` fields in `runs/*/run.json` are the run host's clock, and that clock

@@ -64,15 +64,25 @@ def temporal_cases():
 
 
 def select_cases(build, spec):
-    """(name, tag) of the built cases SPEC names: temporal, all, or comma-separated number prefixes."""
+    """(name, tag) of the cases SPEC names: temporal, all, or comma-separated number prefixes.
+    A requested case that the build did not build, a number no case of the build has, and an empty
+    selection are errors, never a shorter run: a run over a silent subset reads like a run over all."""
     if spec == 'temporal':
         wanted = temporal_cases()
     elif spec == 'all':
         wanted = set(build['cases'])
     else:
         prefixes = set(spec.split(','))
+        unknown = sorted(n for n in prefixes if not any(c[:2] == n for c in build['cases']))
+        if unknown:
+            sys.exit(f'--cases {spec}: no case of this build has the number {" ".join(unknown)}')
         wanted = {c for c in build['cases'] if c[:2] in prefixes}
-    return [(c, build['cases'][c]['tag']) for c in sorted(build['cases']) if c in wanted and c in build['built']]
+    missing = sorted(wanted - set(build['built']))
+    if missing:
+        sys.exit(f'requested but not built: {" ".join(missing)}')
+    if not wanted:
+        sys.exit(f'--cases {spec} selects no case')
+    return [(c, build['cases'][c]['tag']) for c in sorted(wanted)]
 
 
 def parse(stdout, exit_status):

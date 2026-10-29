@@ -3,7 +3,7 @@
   "upstream_fix": "f932f7145e",
   "title": "pwithbackport",
   "kind": "backport",
-  "backport_note": "A real use-after-free that shipped in released SQLite 3.8.4-3.8.8, reverted into the 3.22.0 engine by removing the one line its upstream fix f932f7145e added (ports/sqlite/sqlite-pwith-backport.py). Stock 3.22.0 carries the fix and is NOT vulnerable, so this is a backport, reported on its own line and never counted as a native 3.22.0 defect. Deliberately excluded from results/matrix.tsv, so the default temporal corpus runs (the counted rows) never include it; it runs only under an explicit --cases 33 against an engine built from the backported amalgamation.",
+  "backport_note": "A real use-after-free that shipped in released SQLite 3.8.4-3.8.8, reverted into the 3.22.0 engine by removing the one line its upstream fix f932f7145e added (ports/sqlite/sqlite-pwith-backport.py). Stock 3.22.0 carries the fix and is NOT vulnerable, so this is a backport, reported on its own line and never counted as a native 3.22.0 defect. Kept outside the corpus (ports/sqlite/poisoncap/backport/), so no corpus run includes it; a builder takes it only when --extra-case names its directory, and it runs under --cases 33 against an engine built from the backported amalgamation.",
   "consumer": "sqlite3.c (sqlite3WithDelete via clearSelect)",
   "live_in_pin": false,
   "live_proof": "the defect is absent from stock 3.22.0: convertCompoundSelectToSubquery carries p->pWith = 0; (select.c). The backport removes it. Reproduced natively on 3.22.0 with the line removed: lookaside off + ASan gives heap-use-after-free in sqlite3WithDelete; lookaside on, the stale p->pWith lies inside [db->lookaside.pStart, db->lookaside.pEnd) (slot size 1200) and the process exits 0.",

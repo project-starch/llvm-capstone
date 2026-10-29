@@ -62,6 +62,9 @@ import sys
 
 REPO = Path(__file__).resolve().parents[4]
 CORPUS = REPO / 'capstone/bug-corpora/sqlite/engine-repros'
+# Demonstrations built with the corpus's machinery that are not corpus cases (not in its denominator):
+# the backported f932f7145e use-after-free. A build takes one only when --extra-case names it.
+DEMOS = REPO / 'capstone/ports/sqlite/poisoncap/backport'
 REPRO = REPO / 'capstone/ports/sqlite/repro322'
 DRIVER = REPO / 'capstone/ports/sqlite/repro322/corpus322.sh'
 # What configure defines on Linux and the one configuration the application
@@ -88,8 +91,17 @@ def group_flags():
     return groups
 
 
-def case_groups():
-    """{case directory: (group, extra flags)}, by the tag the case declares."""
+def case_dir(name):
+    """The directory of the case or demonstration NAME: the corpus first, then DEMOS."""
+    for root in (CORPUS, DEMOS):
+        if (root / name / 'case.json').is_file():
+            return root / name
+    return None
+
+
+def case_groups(extra=()):
+    """{case directory: (group, extra flags)}, by the tag the case declares. EXTRA adds
+    demonstration directories (DEMOS) to the corpus's cases."""
     manifest = {}
     text = DRIVER.read_text()
     for group, block in re.findall(r'^\s*([a-zA-Z0-9]+)\)\s*cat <<EOF\n(.*?)^EOF\n',
@@ -99,7 +111,7 @@ def case_groups():
             if len(words) >= 2:
                 manifest[words[1]] = (group, words[2:])
     cases = {}
-    for case in sorted(CORPUS.glob('[0-9][0-9]_*')):
+    for case in sorted([*CORPUS.glob('[0-9][0-9]_*'), *(Path(e).resolve() for e in extra)]):
         source = case / 'case.c'
         if not source.is_file():
             continue
@@ -151,6 +163,9 @@ def main():
     p.add_argument('--ext-src', type=Path,
                    help='SQLite 3.22.0 full source tree, for the two ext cases')
     p.add_argument('--only', help='comma-separated case number prefixes')
+    p.add_argument('--extra-case', type=Path, action='append', default=[],
+                   help='also build this demonstration directory (not a corpus case), e.g. '
+                        'ports/sqlite/poisoncap/backport/33_f932f7145e_compound_cte_backport_pwith')
     p.add_argument('--observe', type=Path, action='append', default=[],
                    help='An instrument, not a case: built against the same '
                         'engine object and the same arm as the cases, with the '
@@ -172,7 +187,7 @@ def main():
         sys.exit(f'no capstone-cc in {a.sdk}')
     if not (a.amalgamation / 'sqlite3.c').is_file():
         sys.exit(f'no sqlite3.c in {a.amalgamation}')
-    flags, cases = group_flags(), case_groups()
+    flags, cases = group_flags(), case_groups(a.extra_case)
     if a.only:
         keep = {w.zfill(2) for w in a.only.split(',')}
         cases = {c: v for c, v in cases.items() if c.name[:2] in keep}

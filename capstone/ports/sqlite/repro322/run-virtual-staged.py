@@ -32,6 +32,7 @@ import sys
 HERE = Path(__file__).resolve()
 REPO = HERE.parents[4]
 CORPUS = REPO / 'capstone/bug-corpora/sqlite/engine-repros'
+DEMOS = REPO / 'capstone/ports/sqlite/poisoncap/backport'  # demonstrations, not corpus cases (build-virtual.py)
 sys.path.insert(0, str(REPO / 'capstone/bug-corpora/tools'))
 import verdicts as v  # noqa: E402
 
@@ -68,10 +69,16 @@ def main():
     elif a.cases == 'all':
         wanted = set(build['cases'])
     else:
-        wanted = {c for c in build['cases'] if c[:2] in set(a.cases.split(','))}
+        prefixes = set(a.cases.split(','))
+        unknown = sorted(n for n in prefixes if not any(c[:2] == n for c in build['cases']))
+        if unknown:
+            sys.exit(f'--cases {a.cases}: no case of this build has the number {" ".join(unknown)}')
+        wanted = {c for c in build['cases'] if c[:2] in prefixes}
     missing = sorted(wanted - set(build['built']))
     if missing:
         sys.exit(f'requested but not built: {" ".join(missing)}')
+    if not wanted:
+        sys.exit(f'--cases {a.cases} selects no case')
     runs = [(n, t) for n, t in CONTROLS if (a.build / f'{n}.dom').exists()]
     if len(runs) != len(CONTROLS):
         sys.exit('the build lacks its controls (build-virtual.py --observe controls/control_*_mem5.c)')
@@ -131,8 +138,9 @@ def main():
                 text, rc = m.group(1), int(m.group(2))
                 fault = v.domain_fault(text, v.Symbols(a.llvm_bin, a.build / f'{name}.dom'))
                 sites = set()
-                if (CORPUS / name / 'case.json').exists():
-                    sites = set(json.loads((CORPUS / name / 'case.json').read_text()).get('fault_sites') or [])
+                case = next((r / name for r in (CORPUS, DEMOS) if (r / name / 'case.json').exists()), None)
+                if case:
+                    sites = set(json.loads((case / 'case.json').read_text()).get('fault_sites') or [])
                 # The whole process window, without the module's per-slot setup lines, so a reader can
                 # see how far a case got: REPRO322_MAIN ignores run_case()'s result, so an exit status
                 # of 0 and RETURNED alone do not show that the case did its work.

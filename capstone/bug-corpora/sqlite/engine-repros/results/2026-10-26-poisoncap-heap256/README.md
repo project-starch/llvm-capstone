@@ -113,7 +113,8 @@ the paper presents.
 ## Files
 
 `runs/<run>/`: `results.jsonl`, `build.json` of the build it ran, and `run.json` (PoisonCap) or
-`run-staged.out` and `cpu.txt` (Sublet). `verdicts/<run>/`: PoisonCap's scoring
+`cpu.txt`, the guest's `-cpu` string (Sublet). The staged runner's own output (`run-staged.out`) is not kept:
+it repeated that string beside lock messages and a path to a serial log that is not committed. `verdicts/<run>/`: PoisonCap's scoring
 (`corpus/score-cases.py`). `scripts/`: the drivers as run on p13 (`heap256-driver.sh`: both systems
 in the driver configuration; `block-port.sh`: the block port and its ablation; `diag-1617.sh`;
 `heap256-run.sh`: the static 256 MiB PoisonCap runs; `tabulate.py`). `kit-log.txt`: the kit

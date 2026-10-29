@@ -129,6 +129,8 @@ def main():
     p.add_argument('--no-lookaside', action='store_true')
     p.add_argument('--opt', default='-O0')
     p.add_argument('--only', help='comma-separated case number prefixes')
+    p.add_argument('--extra-case', type=Path, action='append', default=[],
+                   help='also build this demonstration directory (not a corpus case), as build-virtual.py does')
     p.add_argument('--heap-bytes', type=int,
                    help='every case\'s memsys5 heap at this size (a power of two), overriding the '
                         'corpus\'s sizes; the main row uses 268435456, the heap their speedtest1 '
@@ -150,7 +152,7 @@ def main():
     (a.out / 'obj').mkdir()
     compiler = Compiler(cc, [*PURECAP, f'--sysroot={sysroot}'], a.opt, a.amalgamation, a.no_lookaside)
 
-    flags, cases = build_virtual.group_flags(), build_virtual.case_groups()
+    flags, cases = build_virtual.group_flags(), build_virtual.case_groups(a.extra_case)
     if a.only:
         keep = set(a.only.split(','))
         cases = {c: v for c, v in cases.items() if c.name[:2] in keep}

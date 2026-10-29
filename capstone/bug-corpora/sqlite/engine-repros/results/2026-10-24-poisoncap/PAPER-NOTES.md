@@ -3,6 +3,14 @@
 Material for the paper, not paper text. Every figure here is from `RESULTS.md` and `EVIDENCE.md` in
 this directory, and each row names its evidence. Temporal axis only.
 
+**Superseded headline (2026-10-26).** This note records the first comparison, run with the corpus's
+1 MiB memsys5 heap. In PoisonCap's own configuration, the one their speedtest1 driver sets up
+(256 MiB heap, minimum request 16), PoisonCap faults at the site on **13** of 17, not 12. Sublet does
+on 17, and the Sublet block port's ablation on 16. The results and the explanation of case 12 are in
+`../2026-10-26-poisoncap-heap256/README.md`. The C library's revocation was also tried, and stopped:
+`../2026-10-27-poisoncap-libc/README.md`. The commit hashes below are the original commits, kept by
+the tags listed in `EVIDENCE.md` ("Commits").
+
 ## The claim, in one line
 
 On the 17 temporal SQLite 3.22.0 engine defects whose stale access fires, Capstone with Sublet faults
@@ -16,7 +24,9 @@ at the defect's site on all 17. PoisonCap's published artifact faults on 12.
   on, on virtual Capstone (QEMU). Recorded: `results/2026-10-20-q15-repair/run-B`. Rerun on the dev-v6
   platform on 2026-10-24 (`runs/v6-sublet`), equal to run-B in every case.
 - **Theirs:** the PoisonCap CCS 2026 artifact, as published (repository commit 731c5720, archive
-  sha256 c5e8b07d), unmodified. It provides their memsys5, SQLite tree, QEMU, CheriBSD and LLVM, built
+  sha256 c5e8b07d). Their memsys5 and C library are unmodified. The SQLite amalgamation gets the same
+  two source fixes every arm compiles, for null-pointer arithmetic in FTS5 and FTS3
+  (`ports/sqlite/poisoncap/corpus/build-cases.py`, `FIXES`). It provides their memsys5, SQLite tree, QEMU, CheriBSD and LLVM, built
   from its own pins. Run on their QEMU, booted single-user with `runtime_revocation_default=0`. Their
   four cheribsdtest poison tests pass on it (`platform-smoke.json`).
 - **Same on both sides:** case sources (`*/case.c`), the 1 MiB memsys5 heap, `-O0`, and a positive
@@ -99,7 +109,7 @@ How to report each:
 - Diagnostic only, never counted: `runs/diag-hooks-la` and `runs/diag3-la` ran a copy of their SQLite
   with print statements added (`corpus/make-diag-amalgamation.py`), to locate the array in 12 and the
   read address in 15. Every counted
-  run uses their code unmodified.
+  run uses their memsys5 and C library unmodified, with only the two shared source fixes above.
 
 ## Their own SQLite evaluation (speedtest1), for related work
 

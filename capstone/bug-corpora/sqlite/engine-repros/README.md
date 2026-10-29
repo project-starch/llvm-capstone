@@ -153,3 +153,17 @@ every script and the provenance kept only the database id, so the SQL has to be
 re-derived by replay. Eight more entries in the collection are instruments
 rather than defects — five baseline probes and three allocator demonstrators —
 and stay in the port.
+
+## Side comparison: PoisonCap's published memsys5
+
+The temporal cases were also run on PoisonCap's published artifact. That is a side comparison, not an
+arm (`SCHEMA.md`, "Side comparisons"), and its bundles are separate from the verdicts above:
+* `results/2026-10-24-poisoncap/`: the first comparison, with the corpus's 1 MiB heap. Its
+  `PAPER-NOTES.md` records the headline then measured.
+* `results/2026-10-26-poisoncap-heap256/`: PoisonCap's own configuration (256 MiB, minimum
+  request 16), giving 13 of 17 at the site against Sublet's 17, and the Sublet block port with its
+  ablation.
+* `results/2026-10-27-poisoncap-libc/`: the C library's revocation switched on, stopped.
+
+The harness is `ports/sqlite/poisoncap/` (platform, corpus, speedtest1, reuse), and a backported
+lookaside use-after-free that is not a case of this corpus is under `ports/sqlite/poisoncap/backport/`.

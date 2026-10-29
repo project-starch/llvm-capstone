@@ -30,6 +30,7 @@ import subprocess
 
 REPO = Path(__file__).resolve().parents[5]
 CORPUS = REPO / 'capstone/bug-corpora/sqlite/engine-repros'
+DEMOS = REPO / 'capstone/ports/sqlite/poisoncap/backport'  # demonstrations, not corpus cases (build-virtual.py)
 
 
 def load(run):
@@ -113,7 +114,8 @@ def gates_passed(published_meta, spatial_meta):
 def judge(case, published, spatial, nm, rootfs):
     """One case's row: its tiers on the published run and, given a spatial run, on that one too.
     PUBLISHED and SPATIAL are (build dir, rows by name); SPATIAL is None without a spatial run."""
-    sites = json.loads((CORPUS / case / 'case.json').read_text()).get('fault_sites') or []
+    root = next(r for r in (CORPUS, DEMOS) if (r / case / 'case.json').exists())
+    sites = json.loads((root / case / 'case.json').read_text()).get('fault_sites') or []
     p_rec = score(published[1].get(case), published[0], nm, sites, rootfs)
     s_rec = score(spatial[1].get(case), spatial[0], nm, sites, rootfs) if spatial else None
     row = {'case': case, 'qualified': bool(sites), 'fault_sites': sites, 'published': p_rec, 'spatial': s_rec}

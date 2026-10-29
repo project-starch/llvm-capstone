@@ -97,7 +97,7 @@ case_writable_schema.c wschema
 case_mem5tagmap.c   mem5tag
 case_lookaside_tagmap.c latag
 case_lookaside_uaf.c    lauaf
-case_compound_cte_pwith.c pwithbackport
+../poisoncap/backport/33_f932f7145e_compound_cte_backport_pwith/case.c pwithbackport
 case_fz09_searchwith.c  fz09
 case_fz08_cursormoveto.c fz08
 ../sqlite_blobclose_domain.c blobclose

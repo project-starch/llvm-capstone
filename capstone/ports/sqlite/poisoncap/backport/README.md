@@ -8,9 +8,14 @@ slot reuse; Sublet's port issues and revokes every slot as its own child lifetim
 The case is a **backport**: a use-after-free that shipped in released SQLite 3.8.4-3.8.8, reverted
 into the 3.22.0 engine by removing the one line its upstream fix added. Stock 3.22.0 carries the fix
 and is not vulnerable, so this is never counted as a native 3.22.0 defect. The counted corpus stays
-stock: the case is left out of `results/matrix.tsv`, so the default `temporal` runs never include it.
+stock: the case lives here, not in `bug-corpora/sqlite/engine-repros/`, and the builders take it only when
+`--extra-case` names its directory, so no corpus run includes it.
 
-- Case: `bug-corpora/sqlite/engine-repros/33_f932f7145e_compound_cte_backport_pwith/` (case.json, PROVENANCE.md)
+Proven natively only (2026-10-26). Neither platform run below has been made; their `expect` lines are
+predictions, not results.
+
+- Case: `33_f932f7145e_compound_cte_backport_pwith/` here (case.c, case.json, PROVENANCE.md); in
+  `repro322/tags.tsv` it is the probe `pwithbackport`
 - Patch (reverts upstream fix f932f7145e): `ports/sqlite/sqlite-pwith-backport.py`
 - Prior art, constructed probes of the same layer (not counted): `repro322/case_lookaside_uaf.c`, `case_lookaside_tagmap.c`
 
@@ -34,10 +39,11 @@ python3 ports/sqlite/sqlite-pwith-backport.py <backport-amalgamation-dir>/sqlite
 ```
 python3 ports/sqlite/poisoncap/corpus/build-cases.py \
     --platform ~/poisoncap-platform --amalgamation <backport-amalgamation-dir> \
-    --ext-src <sqlite-3.22.0-src> --out <builds>/backport-pwith --only 33
+    --ext-src <sqlite-3.22.0-src> --out <builds>/backport-pwith --only 33 \
+    --extra-case ports/sqlite/poisoncap/backport/33_f932f7145e_compound_cte_backport_pwith
 python3 ports/sqlite/poisoncap/corpus/run-cases.py <runs>/backport-pwith \
     --build <builds>/backport-pwith --expect published --cases 33
-# expect: controls gate passes; case 33 MISSED (returns, no poison report)
+# predicted: controls gate passes; case 33 MISSED (returns, no poison report)
 ```
 
 ## Sublet arm (virtual paged platform)
@@ -46,9 +52,10 @@ python3 ports/sqlite/poisoncap/corpus/run-cases.py <runs>/backport-pwith \
 python3 ports/sqlite/repro322/build-virtual.py --sublet \
     --sdk <virtual-sdk> --amalgamation <backport-amalgamation-dir> \
     --observe bug-corpora/sqlite/engine-repros/controls/control_uaf_mem5.c --observe bug-corpora/sqlite/engine-repros/controls/control_bounds_mem5.c \
-    --out <builds>/backport-pwith-sublet --only 33
+    --out <builds>/backport-pwith-sublet --only 33 \
+    --extra-case ports/sqlite/poisoncap/backport/33_f932f7145e_compound_cte_backport_pwith
 python3 ports/sqlite/repro322/run-virtual-staged.py \
     --build <builds>/backport-pwith-sublet --platform <paged-platform> \
     --work <runs>/backport-pwith-sublet --llvm-bin <llvm-bin> --cases 33
-# expect: controls read their causes; case 33 CAUGHT (cause 25 at sqlite3WithDelete)
+# predicted: controls read their causes; case 33 CAUGHT (cause 25 at sqlite3WithDelete)
 ```

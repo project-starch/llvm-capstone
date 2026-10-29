@@ -314,6 +314,25 @@ its results under one contract, implemented in `tools/verdicts.py` and tested in
   `check-corpus.py` fails when either differs from what it would write -- re-judging every stored
   Observation, so a change to the judge or to `arms.json` cannot leave an old verdict standing.
 
+### Side comparisons: results that are not an arm
+
+A side comparison runs a corpus's cases on another system's published artifact. It is not an arm of
+the corpus or of the allocator study. It has no entry in `arm_configurations`, `verdict_bundles` or
+`results/matrix.tsv`, it gives no case a `verdict`, and `check-corpus.py` does not read it. Its bundle
+is `results/<stamp>-<system>/` with:
+* a README that states the configuration, what was compared and the result. The first PoisonCap
+  bundle predates this form: its `RESULTS.md`, `EVIDENCE.md` and `PLAN.md` take the README's place;
+* `runs/<run>/results.jsonl`: one row per case run;
+* the run's `run.json`, or `build.json` with `cpu.txt`;
+* `verdicts/<run>/`: the scoring of that system's tool.
+A run stopped before it was complete keeps what it wrote and says why in the README. The C
+library revocation run of 2026-10-27 is one: it has no `run.json` and no verdicts.
+
+The one today is SQLite's engine corpus on PoisonCap's published memsys5 (`sqlite/engine-repros/results/
+2026-10-24-poisoncap/` and its follow-ups), scored by `ports/sqlite/poisoncap/corpus/score-cases.py`.
+Results are still summaries: a raw capture is kept only when it is the evidence of a failure, such as a
+panic, and then scrubbed.
+
 ## The corpus declaration: `corpus.json`
 
 One per corpus, at its root. It is what makes a corpus findable, countable and
