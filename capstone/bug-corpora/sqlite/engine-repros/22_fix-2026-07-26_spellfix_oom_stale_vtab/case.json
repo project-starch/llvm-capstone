@@ -45,6 +45,10 @@
       "verdict_note": "cause=13 pc=0x3fa4c1ff6c in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
       "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
+    },
+    "virtual-platform": {
+      "status": "not written",
+      "note": "declared 2026-10-29: this case configures sqlite_heap itself, so it has no non-nested form -- build-virtual.py without --memsys5 reports it not applicable and the run scores NO-READING:out-of-denominator. Not yet run"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b65c0; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; clean exit, no defect-site probe in that run",

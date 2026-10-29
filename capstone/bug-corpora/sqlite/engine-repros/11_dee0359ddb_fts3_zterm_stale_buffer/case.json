@@ -7,9 +7,9 @@
   "live_proof": "inspection with a line number in the 3.22.0 tree: fts3SegReaderNext() points pReader->zTerm straight into the pending-terms hash key memory at fts3_write.c:1333. Fixed upstream in 3.37.0",
   "allocator_layer": "memsys5",
   "object": "the pending-terms hash key memory that pReader->zTerm aliases",
-  "lifetime_ender": "an optimize() during the scan frees the pending-terms hash",
+  "lifetime_ender": "optimize() mid-scan frees the pending-terms hash the reader's zTerm aliases, and matchinfo() on the same row restarts those readers over the freed term",
   "shape": "free / stale read",
-  "fidelity": "real consumer, real allocator: a non-empty pending hash, a SELECT scan open over it, and optimize() run mid-scan. Built in the fts3 group",
+  "fidelity": "real consumer, real allocator: one row inserted inside an open transaction, so the pending hash is non-empty and the scan borrows a pointer into it, then optimize() and matchinfo() in that order on the same row. Built in the fts3 group",
   "arms": {
     "spatial": {
       "oracle": "completes"
@@ -45,8 +45,12 @@
       "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
       "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
+    },
+    "virtual-platform": {
+      "status": "not written",
+      "note": "declared 2026-10-29: the non-nested measurement, memsys5 out of the build (ports/sqlite/repro322/build-virtual.py without --memsys5, build.json arm 'platform', configuration virtual-mallocng). Not yet run"
     }
   },
   "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
-  "note": "Trigger does not reach the defect (2026-10-11, gdb on the host -O0 build): each INSERT auto-commits, so sqlite3Fts3PendingTermsClear runs three times before the SELECT opens and the pending-terms hash is already empty; the mid-scan optimize() runs, but no zTerm aliased at fts3_write.c:1333 is read after a clear. Upstream dee0359ddb copies the term instead of aliasing the hash key, and its test/fts3f.test keeps the inserts inside BEGIN/COMMIT so the hash is still non-empty when the scan starts -- the element this trigger lacks."
+  "note": "Trigger replaced 2026-10-29 and the defect is now reached. The old trigger auto-committed its three INSERTs, so sqlite3Fts3PendingTermsClear had already emptied the hash before the SELECT opened. Putting the inserts inside BEGIN is necessary but not sufficient: in 3.22.0 no pending reader that survives across rows ever reads zTerm again -- an exact-term reader snapshots one hash element plus a NULL sentinel (sqlite3Fts3SegReaderPending), and a prefix reader is consumed eagerly by fts3TermSelect and freed before the first row (traced with probes on PendingTermsClear, the zTerm alias and sqlite3Fts3SegReaderFree). The read comes from a RESTART instead: optimize() frees the hash through sqlite3VtabSavepoint -> fts3SavepointMethod -> fts3SyncMethod -> PendingTermsFlush -> PendingTermsClear, then matchinfo() reaches fts3EvalGatherStats -> fts3EvalRestart and re-starts the readers built before the clear. Host ASan (shared/run-host-asan.py, both controls satisfied): heap-use-after-free, a 3-byte read in sqlite3Fts3SegReaderStep under fts3TermSelect <- fts3EvalPhraseLoad, freed by fts3HashFree under sqlite3Fts3PendingTermsClear. Swapping the two aux-function columns, or dropping matchinfo(), is silent."
 }

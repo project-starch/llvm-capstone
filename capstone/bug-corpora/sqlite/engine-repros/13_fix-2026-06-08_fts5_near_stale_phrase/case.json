@@ -7,9 +7,9 @@
   "live_proof": "inspection with line numbers in the 3.22.0 tree: fts5ExprNearIsMatch holds a lookahead reader into a poslist buffer at fts5_expr.c:560, :596 and :627 while WriterAppend rewrites that same buffer in place and may reallocate it. Fixed upstream in 3.53.3 (b677c5afd4, 2026-06-08)",
   "allocator_layer": "memsys5",
   "object": "the poslist buffer a lookahead reader is positioned in",
-  "lifetime_ender": "WriterAppend rewrites the same buffer in place and the append reallocates it",
+  "lifetime_ender": "the in-place rewrite's own append grows the buffer: sqlite3Fts5PoslistWriterAppend opens with fts5BufferGrow(pBuf, 5+5+5), so once the output passes nSpace-15 sqlite3Fts5BufferSize reallocs the buffer the lookahead reader is positioned in",
   "shape": "free / stale read",
-  "fidelity": "real consumer, real allocator: a NEAR/phrase query that drives fts5ExprNearIsMatch. Built in the fts5 group",
+  "fidelity": "real consumer, real allocator: NEAR(a b, 1) over one row of sixty 'a b' pairs, a 62-byte poslist per phrase, which is inside the nSpace=64 realloc window. Built in the fts5 group",
   "arms": {
     "spatial": {
       "oracle": "completes"
@@ -45,8 +45,12 @@
       "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
       "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
+    },
+    "virtual-platform": {
+      "status": "not written",
+      "note": "declared 2026-10-29: the non-nested measurement, memsys5 out of the build (ports/sqlite/repro322/build-virtual.py without --memsys5, build.json arm 'platform', configuration virtual-mallocng). Not yet run"
     }
   },
   "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
-  "note": "Trigger not established (2026-10-11, gdb on the host -O0 build): fts5ExprNearIsMatch runs twice and calls sqlite3Fts5PoslistWriterAppend 4 and 6 times, so the in-place rewrite does run under live lookahead readers, but whether any append grows the buffer past its allocation -- the reallocation the stale read needs -- is not established. Upstream b677c5afd4 replaces that call with sqlite3Fts5PoslistSafeAppend, and its ext/fts5/test/fts5near.test 2.x uses tokenize=trigram over a 64-character run, a far longer poslist than this trigger builds."
+  "note": "Trigger replaced 2026-10-29 and the defect is now reached. The old trigger ran NEAR(quick brown, 3) over two short rows; the in-place rewrite did run under live lookahead readers, but nSpace doubles from 64 and sqlite3Fts5PoslistWriterAppend only reallocs when the output length passes nSpace-15, so the poslist has to land in (nSpace-15, nSpace]. Swept on the host: poslists of 56-66, 120-130 and 252-256 bytes report heap-use-after-free and every other length is silent. 'a b' sixty times puts 'a' on positions 0,2,4,... and 'b' on 1,3,5,..., so each phrase poslist is 3 bytes for the first entry plus one per delta = 62, and NEAR/1 keeps every entry so the writer tracks the reader byte for byte. Host ASan (shared/run-host-asan.py, both controls satisfied): heap-use-after-free, a 1-byte read 52 bytes inside the freed 64-byte region in sqlite3Fts5PoslistNext64 under fts5LookaheadReaderNext, freed by sqlite3_realloc under sqlite3Fts5PoslistWriterAppend -- the read and the free are both inside fts5ExprNearIsMatch."
 }

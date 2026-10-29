@@ -4,12 +4,12 @@
   "title": "row15",
   "consumer": "sqlite3.c",
   "live_in_pin": true,
-  "live_proof": "inspection with line numbers in the 3.22.0 tree: sqlite3_backup caches raw Btree* at backup.c:23 and :29, resolved by findBtree at :82, and ATTACH reallocates db->aDb at attach.c:113. Fixed upstream in 3.53.3 by storing db indices and re-deriving the Btree each step",
+  "live_proof": "host ASan on 2026-10-26: heap-use-after-free, an 8-byte READ 8 bytes inside a freed 72-byte region, access sqlite3BtreePager <- sqlite3_backup_step, freed by sqlite3BtreeClose <- detachFunc. Fixed upstream in 3.53.3 by storing db indices and re-deriving the Btree each step.",
   "allocator_layer": "memsys5",
   "object": "the Btree the backup cached for its source or destination database",
-  "lifetime_ender": "ATTACH on the same connection reallocates db->aDb, moving or freeing the cached Btree",
+  "lifetime_ender": "DETACH on the destination connection closes that database's Btree (attach.c detachFunc -> sqlite3BtreeClose, sqlite3.c:101061), freeing the 72-byte object the backup cached. detachFunc's two guards are sqlite3BtreeIsInReadTrans and sqlite3BtreeIsInBackup; the second reads nBackup, which backup.c increments on p->pSrc ONLY (sqlite3.c:70592), so a backup's DESTINATION is unguarded.",
   "shape": "free / stale read",
-  "fidelity": "real consumer, real allocator: the public backup API driven against a connection that ATTACHes mid-backup",
+  "fidelity": "real consumer, real allocator: the public backup API driven against a connection that DETACHes the backup's destination database mid-backup. Nothing may step the backup before the DETACH -- the first step opens a write transaction on the destination and detachFunc then refuses on sqlite3BtreeIsInReadTrans -- and backup_init has already cached both Btree* through findBtree, which is all the defect needs.",
   "arms": {
     "spatial": {
       "oracle": "capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10280b794"
@@ -20,9 +20,8 @@
       "verdict_from": "results/matrix.tsv case 2 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
-      "verdict": "CAUGHT",
-      "verdict_from": "results/matrix.tsv case 2 cheribsd-revocation: detected"
+      "status": "not written",
+      "note": "awaiting the 2026-10-29 re-run. The 2026-10-04/05 reading was taken on the broken trigger and is void with the rest (see this case's status). One run was made on the corrected trigger -- 2026-10-26, shared/run-cheribsd.py --mode nested --only 02, positive-control gate satisfied (exit 162, revocation=1) -- and its SIGPROT is NOT a reading of this mechanism, so no verdict is recorded from it: Host ASan puts the defective access in sqlite3BtreePager, one call earlier; sqlite3PagerSetPagesize is where the pager pointer READ OUT of the freed Btree is used, so this is the consequence and not the rejection. It cannot be revocation either: under memsys5 sqlite3BtreeClose returns the Btree to memsys5's own pool and the platform sees no free, so nothing was revoked. What cleared the tag is memsys5 writing Mem5Link{next,prev} over the freed block's first 8 bytes -- the same mechanism as cases 19 and 20. The run's positive-control gate was satisfied (exit 162, revocation=1)."
     },
     "virtual-malloc": {
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
@@ -47,11 +46,15 @@
       "verdict_note": "cause=24 pc=0x3f9c826bc4 in sqlite3BtreeUpdateMeta; by function: sqlite3BtreeUpdateMeta is where host ASan reported it",
       "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
+    },
+    "virtual-platform": {
+      "status": "not written",
+      "note": "declared 2026-10-29: the non-nested measurement, memsys5 out of the build (ports/sqlite/repro322/build-virtual.py without --memsys5, build.json arm 'platform', configuration virtual-mallocng). Not yet run"
     }
   },
-  "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10280b794; sublet run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x10200b994; cheribsd-revocation run 2026-10-04/05: no verdict: backup step1 rc=0",
+  "status": "TRIGGER CORRECTED 2026-10-26; EVERY ARM READING BELOW PREDATES IT AND IS VOID. The trigger up to that date did a single ATTACH, which frees nothing in 3.22.0 (attach.c takes sqlite3DbMallocRawNN plus memcpy while db->aDb is still db->aDbStatic), and reallocating db->aDb would not free the cached Btree in any case. Host ASan scored the old trigger SEGV -- the corpus's only SEGV, with no freed-by and no allocated-by chain -- while case.c claimed it reported heap-use-after-free. The arms were scoring a NULL dereference. Re-measurement on every arm is required before any cell here is read again.",
   "fault_sites": [
-    "sqlite3BtreeUpdateMeta"
+    "sqlite3BtreePager"
   ],
-  "fault_sites_why": "The stale access is the backup step's use of the cached destination Btree: sqlite3_backup_step calls sqlite3BtreeUpdateMeta(p->pDest, 1, ...) (sqlite3.c:70842, 3.22.0) on the Btree* ATTACH has moved or freed (PROVENANCE.md). Declared 2026-10-10 after the virtual runs resolved faults there; the reason is the source and PROVENANCE.md cited, which predate those runs."
+  "fault_sites_why": "Host ASan on the corrected trigger reports the stale read in sqlite3BtreePager (sqlite3.c:69480) under sqlite3_backup_step (:70753), an 8-byte read 8 bytes into the freed 72-byte Btree, freed by sqlite3BtreeClose under detachFunc. The former declaration, sqlite3BtreeUpdateMeta, belonged to the broken trigger: nothing was freed there and the fault was a NULL dereference of pBt->pPage1."
 }
