@@ -10,7 +10,7 @@
 
 | sort | where | count | what it is |
 |---|---|---:|---|
-| third-party defects, as cases | `capstone/bug-corpora/` | 373 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
+| third-party defects, as cases | `capstone/bug-corpora/` | 374 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 31 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 166 open, 77 resolved | the registry, not reproduced cases |
@@ -40,7 +40,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/php/engine-repros`](php/engine-repros) | php | 5.0.0 | 70 | 70 live | 0 | script-trigger | built |
 | [`capstone/bug-corpora/postgres/c-repros`](postgres/c-repros) | postgres | 17.5 | 5 | 5 live | 3 | case-json | measured |
 | [`capstone/bug-corpora/postgres/mmgr-repros`](postgres/mmgr-repros) | postgres | 17.5 | 5 | 5 live | 0 | case-json | measured |
-| [`capstone/bug-corpora/postgres/sql-repros`](postgres/sql-repros) | postgres | 17.5 | 10 | 10 live | 4 | script-trigger | measured |
+| [`capstone/bug-corpora/postgres/sql-repros`](postgres/sql-repros) | postgres | 17.5 | 11 | 11 live | 4 | script-trigger | measured |
 | [`capstone/bug-corpora/probes/cheribsd-realloc-stale-cap`](probes/cheribsd-realloc-stale-cap) | mruby and perl | per row | 2 | 2 fixed before the pin | 0 | case-json | measured |
 | [`capstone/bug-corpora/sqlite/capi-repros`](sqlite/capi-repros) | sqlite | 3.53.3 amalgamation, for the host ASan arm | 19 | 19 not asserted | 2 | sqlite-row | measured |
 | [`capstone/bug-corpora/sqlite/engine-repros`](sqlite/engine-repros) | sqlite | 3.22.0 amalgamation | 33 | 33 live | 0 | case-json | measured |
@@ -52,7 +52,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
 | [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**403 cases in 30 corpora**, of which 223 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
+**404 cases in 30 corpora**, of which 224 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 

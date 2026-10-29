@@ -1095,7 +1095,7 @@
         "version": "17.5",
         "port": "capstone/ports/postgres/memory-contexts"
       },
-      "cases": 10,
+      "cases": 11,
       "case_schema": "script-trigger",
       "case_number_base": 1,
       "required_arms": [
@@ -1106,7 +1106,7 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "true": 10
+        "true": 11
       },
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "related": [
@@ -1118,7 +1118,7 @@
         "CVE-2026-2003",
         "CVE-2026-2005"
       ],
-      "note": "Narrowed 2026-10-05 to the four categories the study measures -- temporal and spatial, each nested or not -- and the 14 cases outside them were removed: 4 integer, 5 invariant, 2 type-confusion, 1 wrong-answer, 1 authz, 1 null-deref. They were real defects, reproduced and measured on all three arms, and they are recoverable from commit 607802a0421e; they are gone from here because they do not exercise an allocator and so say nothing about nesting. Of the five that remain, all five allocate through palloc, so all five are nested clients. Two of them (02, 03) overflow by ~32 KB and ~65 KB and therefore leave the underlying malloc block, which a malloc-granular mechanism can see; the other three stay inside the palloc chunk. One removed case is worth re-collecting rather than replacing: 05_levenshtein carried CVE-2026-15742, whose upstream description is an arbitrary-address WRITE via integer wraparound, but our trigger only reached the wrong-answer path -- the case's own fidelity said 'an integer wraparound with no memory error'. The extension, the scaffolding and the fix commit c4d51b62748f are all in hand; what is missing is a trigger that reaches the write. Sibling of mmgr-repros, which pins 17.0 and reduces memory-manager defects to C programs. Our own constructed demonstrators are not here: they are fixtures, which README.md places under ports/*/security-tests. Renamed from sql-repros on 2026-10-06. The old name said WHERE the code lives, and that reads as a claim about the allocator which does not hold: src/backend has 193 direct libc call sites against 2940 palloc-family ones, and a defect on one of those objects would be non-nested in the backend -- 2aa6be6e64 is exactly that, a double free of an EVP_CIPHER_CTX that came from OpenSSL's allocator. The name now says how the defect is REACHED, which is what actually distinguishes this corpus from its two siblings and is what its results can be read as evidence for. Whether a case is nested is decided per case by allocator_layer, not by which directory it sits in. 2026-10-11: the physical spatial/sublet pair is removed; virtual-pg-pools is now the memory-context port's patch 0003 (CDERIVE/CREVOKE) instead of the lifetime adapter. 2026-10-29: case 10 is the first temporal case, mmgr-repros' tuplestore double free (its case 00) reached whole through upstream's own reproducer; of mmgr-repros' other four live defects none can run in the single-user backend (results/2026-10-29-host/README.md).",
+      "note": "Narrowed 2026-10-05 to the four categories the study measures -- temporal and spatial, each nested or not -- and the 14 cases outside them were removed: 4 integer, 5 invariant, 2 type-confusion, 1 wrong-answer, 1 authz, 1 null-deref. They were real defects, reproduced and measured on all three arms, and they are recoverable from commit 607802a0421e; they are gone from here because they do not exercise an allocator and so say nothing about nesting. Of the five that remain, all five allocate through palloc, so all five are nested clients. Two of them (02, 03) overflow by ~32 KB and ~65 KB and therefore leave the underlying malloc block, which a malloc-granular mechanism can see; the other three stay inside the palloc chunk. One removed case is worth re-collecting rather than replacing: 05_levenshtein carried CVE-2026-15742, whose upstream description is an arbitrary-address WRITE via integer wraparound, but our trigger only reached the wrong-answer path -- the case's own fidelity said 'an integer wraparound with no memory error'. The extension, the scaffolding and the fix commit c4d51b62748f are all in hand; what is missing is a trigger that reaches the write. Sibling of mmgr-repros, which pins 17.0 and reduces memory-manager defects to C programs. Our own constructed demonstrators are not here: they are fixtures, which README.md places under ports/*/security-tests. Renamed from sql-repros on 2026-10-06. The old name said WHERE the code lives, and that reads as a claim about the allocator which does not hold: src/backend has 193 direct libc call sites against 2940 palloc-family ones, and a defect on one of those objects would be non-nested in the backend -- 2aa6be6e64 is exactly that, a double free of an EVP_CIPHER_CTX that came from OpenSSL's allocator. The name now says how the defect is REACHED, which is what actually distinguishes this corpus from its two siblings and is what its results can be read as evidence for. Whether a case is nested is decided per case by allocator_layer, not by which directory it sits in. 2026-10-11: the physical spatial/sublet pair is removed; virtual-pg-pools is now the memory-context port's patch 0003 (CDERIVE/CREVOKE) instead of the lifetime adapter. 2026-10-29: cases 10 and 11 are the first temporal cases: mmgr-repros' tuplestore double free (its 00) through upstream's own reproducer, and its reorderbuffer stale read (its 04) through a transaction sized to reach it without upstream's recompiled threshold; mmgr-repros' other three cannot run in the single-user backend (results/2026-10-29-host/README.md).",
       "evidence": [
         "capstone/bug-corpora/postgres/sql-repros/results/spatial-20261006-165125",
         "capstone/bug-corpora/postgres/sql-repros/results/sublet-20261006-171331",
@@ -2421,7 +2421,7 @@
     "capstone/bug-corpora/php/engine-repros": 70,
     "capstone/bug-corpora/postgres/c-repros": 5,
     "capstone/bug-corpora/postgres/mmgr-repros": 5,
-    "capstone/bug-corpora/postgres/sql-repros": 10,
+    "capstone/bug-corpora/postgres/sql-repros": 11,
     "capstone/bug-corpora/probes/cheribsd-realloc-stale-cap": 2,
     "capstone/bug-corpora/sqlite/capi-repros": 19,
     "capstone/bug-corpora/sqlite/engine-repros": 33,
@@ -2433,10 +2433,10 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 373,
+  "cases_here": 374,
   "cases_xlang": 30,
-  "cases_total": 403,
-  "live_true": 223,
+  "cases_total": 404,
+  "live_true": 224,
   "live_false": 122,
   "live_not": 28,
   "advisories_total": 22,
