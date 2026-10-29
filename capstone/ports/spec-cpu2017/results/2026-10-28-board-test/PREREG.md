@@ -442,3 +442,21 @@ is 32,400 s and the booking 570 min.
 
 **Placement.** One successor chain per board runs after that board's continuation list ends, with SB_KITROOT set to
 the fw33 kits: T1 on board 1, and T3 on board 2 after its twin PASS.
+
+## Addendum 12 (2026-10-30 02:25): perlbench test T1 on board 1, and a RETRACTION of Addendum 11's reading of re/reg_email
+
+**perlbench test T1, board 1.**
+- makerand: specdiff PASS.
+- test.pl fails three sub-tests: japh/abigail, re/pat_rt_report and re/reg_email.
+- The only difference from the twin's test.out is re/reg_email.
+- Its sub-run stops at 0.7523e9 instructions; the twin's runs 5.813e9. T3 on board 2 stopped at 0.7527e9.
+- Every other sub-run except one is within 5 % of the twin. That one, index 4, is +10 %, as it was in T3.
+
+**Withdrawn.** Addendum 11 read T3's re/reg_email failure as "a nondeterministic member of the known realloc-fault
+set". Both arms, on two boards, stop at the same point, within 0.05 %. The pinned twin passes the sub-test in both
+arms. So this is a **deterministic silicon-vs-twin divergence**, and nothing yet connects it to the realloc defect. The
+reading rested on a single pre-pin twin run, and it was written before the second arm could test it.
+
+**P20 does not hold in either arm.** The cause is unresolved. The next step is off the board:
+- run re/reg_email alone on the twin with the silicon-mimic switches;
+- then capture the sub-run's fault line in a directed boot.
