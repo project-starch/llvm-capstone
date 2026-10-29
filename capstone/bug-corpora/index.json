@@ -8,7 +8,7 @@
         "version": "3.13.7",
         "port": "capstone/ports/cpython/pymalloc"
       },
-      "cases": 32,
+      "cases": 35,
       "case_schema": "script-trigger",
       "case_number_base": 1,
       "required_arms": [
@@ -19,7 +19,7 @@
       "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "true": 32
+        "true": 35
       },
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "related": [
@@ -27,7 +27,7 @@
         "capstone/ports/cpython/pymalloc"
       ],
       "advisories": [],
-      "note": "A sibling of pymalloc-repros. That corpus is scoped to consumer-side TEMPORAL defects whose memory comes from pymalloc and asserts completeness for that cell (20 cases, expect_live_in_pin {true: 20}, a shape_prose regex on \"[Tt]wenty reports\"), so cases here were not added there. 32 cases from 31 upstream fixes (03 and 04 are two triggers for gh-140492). Cases 01-21 are the three cells pymalloc-repros does not cover: 13 spatial/nested, 5 spatial/non-nested, 3 temporal/non-nested. Cases 22-32 are 11 temporal/nested defects, the same upstream issues pymalloc-repros holds as C models (each carries a sibling_issue pointer), here because a C model and an interpreter run of one defect are not the same measurement -- on the base arm the C models all complete while three of the eleven fault, all with cause 24; the two corpora's numbers must not be pooled. Liveness and the nested/non-nested side are both measured on the pinned ASan build. The Capstone arms are virtual-malloc and virtual-nested-pools on the virtual profile, where CPython's one heap is musl mallocng: pymalloc stock, and pymalloc on its lifetime port (tools/arms.json virtual-cpython, virtual-cpython-pools). Their faults are attributed through fault_sites from a host ASan run (results/2026-10-10-asan). The physical arms spatial and sublet (level0 heap) measured 2026-10-06 to 2026-10-09 are superseded; their record stays in results/20261006, whose tables probe/counts.py derives. results/20261006/ also carries the negative controls measured on the physical arms: a weak one that passes on all three, and a strong per-case one (negative_control.py, 18 of the 32 cases), run on all three arms of 2026-10-06, qualifying base 11/11 and sublet 17/17 of the detections they report on those cases and 2 of cheribsd-revocation's 6; what each settles and what neither does is in that README. On the virtual arms the runner runs the strong control for a fault outside the case's fault_sites (runners/virtual/README.md).",
+      "note": "A sibling of pymalloc-repros. That corpus is scoped to consumer-side TEMPORAL defects whose memory comes from pymalloc and asserts completeness for that cell (20 cases, expect_live_in_pin {true: 20}, a shape_prose regex on \"[Tt]wenty reports\"), so cases here were not added there. 35 cases from 34 upstream fixes (03 and 04 are two triggers for gh-140492). Cases 01-21 are the three cells pymalloc-repros does not cover: 13 spatial/nested, 5 spatial/non-nested, 3 temporal/non-nested. Cases 22-32 are 11 temporal/nested defects, the same upstream issues pymalloc-repros holds as C models (each carries a sibling_issue pointer), here because a C model and an interpreter run of one defect are not the same measurement -- on the base arm the C models all complete while three of the eleven fault, all with cause 24; the two corpora's numbers must not be pooled. Cases 33-35 (2026-10-29) are three more of pymalloc-repros' issues run whole the same way (its cases 06, 16 and 19): the remaining nine had no interpreter form, and of those nine these three are the ones live at the pin and reachable on the Capstone build (results/2026-10-29-asan/README.md says why the other six are not). Liveness and the nested/non-nested side are both measured on the pinned ASan build. The Capstone arms are virtual-malloc and virtual-nested-pools on the virtual profile, where CPython's one heap is musl mallocng: pymalloc stock, and pymalloc on its lifetime port (tools/arms.json virtual-cpython, virtual-cpython-pools). Their faults are attributed through fault_sites from a host ASan run (results/2026-10-10-asan). The physical arms spatial and sublet (level0 heap) measured 2026-10-06 to 2026-10-09 are superseded; their record stays in results/20261006, whose tables probe/counts.py derives. results/20261006/ also carries the negative controls measured on the physical arms: a weak one that passes on all three, and a strong per-case one (negative_control.py, 18 of the 32 cases), run on all three arms of 2026-10-06, qualifying base 11/11 and sublet 17/17 of the detections they report on those cases and 2 of cheribsd-revocation's 6; what each settles and what neither does is in that README. On the virtual arms the runner runs the strong control for a fault outside the case's fault_sites (runners/virtual/README.md).",
       "runners": [
         "capstone/bug-corpora/cpython/allocator-boundary-repros/runners/virtual/run-virtual.py",
         "capstone/bug-corpora/cpython/allocator-boundary-repros/probe/asan-sites.py",
@@ -923,7 +923,7 @@
         "version": "5.0.0",
         "port": "capstone/ports/php/app"
       },
-      "cases": 65,
+      "cases": 70,
       "case_schema": "script-trigger",
       "case_number_base": 1,
       "required_arms": [
@@ -934,7 +934,7 @@
       "status": "built",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "true": 65
+        "true": 70
       },
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "related": [
@@ -954,6 +954,11 @@
         "virtual-nested-exact": "php-real-exact"
       },
       "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 46 asan-blind and 19 temporal-asan-visible here against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases are placed differently, one (CRASH-100, needs an HTTP listener) is absent, two of theirs (CRASH-062, CRASH-070) end as shipped in PHP's own fatal error with no report, and one (CRASH-064) is a use-after-free NEITHER ASan build reports as one -- it dereferences an integer read from a reused object-store bucket, ASan:SEGV on both -- so these three are in neither population here; each said in its PROVENANCE.md. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The 59 default-build cases outside both populations (30 spatial ASan sees unaided, NULL dereferences, type confusions) are not here yet.",
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-28-run18/bundle-virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-28-run18/bundle-virtual-nested-pools",
+        "virtual-nested-exact": "results/2026-10-28-run18/bundle-virtual-nested-exact"
+      },
       "where": "capstone/bug-corpora/php/engine-repros"
     },
     {
@@ -1963,7 +1968,7 @@
         "capstone/tests/cheri-php-blind"
       ],
       "status": "builds through ports/common/application/build-virtual.sh php for both selector values and passes runtime/virtual/run.py --php 44/44 on dev 0b0b3414dca5 (results/2026-10-27-common-entry); rebuilt from scratch and smoke-tested the same day (results/2026-10-27-requalification). The 2026-10-26 corpus populations are NOT re-run (the corpus scripts and oracles are external); their README carries the 2026-10-27 correction for CRASH-022/078",
-      "note": "PHP's source is the tree app/prepare-sources.sh prepares: the museum php-5.0.0.tar.gz by SHA-256, configured --disable-all, with the tree patches of app/patches (0001 compile fix, 0002 qsort swap). Its cases and their oracle are bug-corpora/php/engine-repros, derived by that corpus's tools/build-cases.py from the external php-5.0.0-bug-corpus and our native ASan runs of it. The Zend allocator seam the protected arms use is ports/php/zend-alloc/sublet, applied as patch 0003.",
+      "note": "PHP's source is the tree app/prepare-sources.sh prepares: the museum php-5.0.0.tar.gz by SHA-256, configured --disable-all, with the tree patches of app/patches (0001 compile fix, 0002 qsort swap). Its cases and their oracle are bug-corpora/php/engine-repros, derived by that corpus's tools/build-cases.py from the external php-5.0.0-bug-corpus and our native ASan runs of it. The Zend nested allocator layer the protected arms use is ports/php/zend-alloc/sublet, applied as patch 0003.",
       "corpora": [
         "capstone/bug-corpora/php/engine-repros"
       ],
@@ -1998,7 +2003,7 @@
     {
       "program": "php",
       "role": "allocator-component",
-      "title": "PHP 5.0.0's Zend allocator (zend_alloc.c) with a Capstone seam: per-object bounds on the recorded request size, and the sublet/ adapter that splits each emalloc block into a header and a CDERIVE/CREVOKE payload region the app port's protected arms run on",
+      "title": "PHP 5.0.0's Zend allocator (zend_alloc.c) with a Capstone nested layer: per-object bounds on the recorded request size, and the sublet/ adapter that splits each emalloc block into a header and a CDERIVE/CREVOKE payload region the app port's protected arms run on",
       "upstream": {
         "version": "5.0.0",
         "pin_source": {
@@ -2010,7 +2015,7 @@
         "capstone-domain",
         "capstone-virtual"
       ],
-      "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-seam.c and sublet/probe-derive-split.c on the virtual profile, which qualify the seam before the app port's arms are believed",
+      "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-nested.c and sublet/probe-derive-split.c on the virtual profile, which qualify the nested layer before the app port's arms are believed",
       "evidence": [
         "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26"
       ],
@@ -2018,7 +2023,7 @@
         "capstone/ports/php/app",
         "capstone/ports/php/engine"
       ],
-      "note": "Not historical: sublet/ is the adapter the app port's seam arms link, and app/patches/php-5.0.0-0003-zend-alloc-sublet-hooks.patch is what its build applies to zend_alloc.c for its block, object and exact arms (PHP_CAP_MODE 4, 6 and 7); only the domain runners here are from the physical-profile phase. The block provider was moved onto CDERIVE/CREVOKE on 2026-10-26 after the nested loan ABI was removed upstream.",
+      "note": "Not historical: sublet/ is the adapter the app port's nested arms link, and app/patches/php-5.0.0-0003-zend-alloc-sublet-hooks.patch is what its build applies to zend_alloc.c for its block, object and exact arms (PHP_CAP_MODE 4, 6 and 7); only the domain runners here are from the physical-profile phase. The block provider was moved onto CDERIVE/CREVOKE on 2026-10-26 after the nested loan ABI was removed upstream.",
       "where": "capstone/ports/php/zend-alloc"
     },
     {
@@ -2397,7 +2402,7 @@
     "whisper/ggml-context"
   ],
   "cases_by_corpus": {
-    "capstone/bug-corpora/cpython/allocator-boundary-repros": 32,
+    "capstone/bug-corpora/cpython/allocator-boundary-repros": 35,
     "capstone/bug-corpora/cpython/pymalloc-repros": 20,
     "capstone/bug-corpora/ffmpeg/carved-repros": 13,
     "capstone/bug-corpora/ffmpeg/plain-heap-repros": 25,
@@ -2413,7 +2418,7 @@
     "capstone/bug-corpora/mruby/gc-slot-repros": 0,
     "capstone/bug-corpora/mruby/release-differential": 23,
     "capstone/bug-corpora/perl/release-differential": 11,
-    "capstone/bug-corpora/php/engine-repros": 65,
+    "capstone/bug-corpora/php/engine-repros": 70,
     "capstone/bug-corpora/postgres/c-repros": 5,
     "capstone/bug-corpora/postgres/mmgr-repros": 5,
     "capstone/bug-corpora/postgres/sql-repros": 9,
@@ -2428,10 +2433,10 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 364,
+  "cases_here": 372,
   "cases_xlang": 30,
-  "cases_total": 394,
-  "live_true": 214,
+  "cases_total": 402,
+  "live_true": 222,
   "live_false": 122,
   "live_not": 28,
   "advisories_total": 22,

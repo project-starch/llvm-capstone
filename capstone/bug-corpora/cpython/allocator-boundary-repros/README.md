@@ -63,10 +63,12 @@ inside one of its blocks.
 Every case is live at the pin and the proof is a measurement, never an
 assertion: the trigger is upstream's own reproducer from the issue, and running
 it on the pinned 3.13.7 ASan build produces the sanitizer report quoted in
-`live_proof`. All 32 reproduce from their case directory with the oracle
+`live_proof`. All 35 reproduce from their case directory with the oracle
 recorded for them -- the 21 filling the three cells `pymalloc-repros`
-does not cover, and the 11 temporal/nested cases that re-measure its
-issues through the interpreter.
+does not cover, and the 14 temporal/nested cases that re-measure its
+issues through the interpreter (22-32, and 33-35 added 2026-10-29, whose
+record and the six of its issues that cannot run whole are in
+`results/2026-10-29-asan/README.md`).
 
 Three things that had to be got right for those runs to mean anything:
 
@@ -111,7 +113,9 @@ How to build and run the two Capstone arms is in
 lies in one of the case's `fault_sites`, which come from a host ASan run recorded before any arm
 ran (`probe/asan-sites.py`, `results/2026-10-10-asan/sites.tsv`). That run locates 31 of the 32
 cases; case 17 produced no report there, although the 2026-10-07 ASan build recorded one, so a
-Capstone fault in case 17 cannot be attributed.
+Capstone fault in case 17 cannot be attributed. Cases 33-35 take theirs from the same tool's run of
+2026-10-29 (`results/2026-10-29-asan/sites.tsv`), which locates all three; case 28 rode along in
+that run as a control and gave exactly its 2026-10-10 sites.
 
 **Superseded: the physical arms.** Until 2026-10-10 the Capstone arms ran on the physical
 application domain, `spatial` (the level0 heap with per-object bounds, pymalloc stock) and `sublet`

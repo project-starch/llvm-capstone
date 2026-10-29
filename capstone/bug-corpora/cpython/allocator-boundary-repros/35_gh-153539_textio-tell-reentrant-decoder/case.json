@@ -1,0 +1,32 @@
+{
+  "case": 35,
+  "upstream_fix": "gh-153539",
+  "title": "[3.13] gh-153539: Fix use-after-free in TextIOWrapper.tell() with a reentrant decoder (GH-153540) (GH-156195)",
+  "consumer": "Objects/obmalloc.c (the freed block's pool); see the C-model sibling",
+  "class": "temporal",
+  "trigger": "trigger.py",
+  "live_in_pin": true,
+  "live_proof": "measured 2026-10-29 on the pinned 3.13.7 ASan build (--with-address-sanitizer, gcc 15.2, p13) with PYTHONMALLOC=malloc and ASAN_OPTIONS=detect_leaks=0: ASAN:heap-use-after-free in a 41-byte region. Running the trigger is the proof. Case 28's trigger reported its recorded 328-byte heap-use-after-free in the same build.",
+  "fidelity": "interpreter-trigger, real allocator. The body of upstream's regression test CTextIOWrapperTest.test_reentrant_seek_during_tell (Lib/test/test_io.py at the fix) on the C io classes, with addCleanup and asserts written as plain code, driven through the real CPython. The SAME defect exists in ../pymalloc-repros as a C model consumer against the same allocator; that one locates the faulting instruction with a labelled probe and this one does not, so for attribution the C model is the stronger of the two. This one exists so the defect is also measured where it lives, in the whole interpreter.",
+  "allocator_layer": "L1-pymalloc-pool",
+  "allocator_consumed": "yes",
+  "arms": {
+    "virtual-malloc": {
+      "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it"
+    },
+    "virtual-nested-pools": {
+      "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc"
+    },
+    "cheribsd-revocation": {
+      "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."
+    }
+  },
+  "status": "live and its layer measured on the host (2026-10-29); the Capstone and CheriBSD arms have not run on it",
+  "sibling_issue": "../pymalloc-repros/19_gh-153539_textio_tell_reentrant_decoder",
+  "layer_note": "measured 2026-10-29: ASan reported a 41-byte region, at or under the 512 B SMALL_REQUEST_THRESHOLD, and the heap report does not survive PYTHONMALLOC=pymalloc on a second 3.13.7 build with ASan and pymalloc both on (CFLAGS/LDFLAGS -fsanitize=address, because configure's --with-address-sanitizer forces pymalloc off): under PYTHONMALLOC=pymalloc the run completes, tell() returns, and there is no report: the stale read lands inside a pymalloc block",
+  "fault_sites": [
+    "memcpy",
+    "PyBytes_FromStringAndSize"
+  ],
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-29-asan/sites.tsv) reports heap-use-after-free (READ 5) at memcpy ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors_memintrinsics.inc:117 | memcpy /usr/include/x86_64-linux-gnu/bits/string_fortified.h:29 | PyBytes_FromStringAndSize Objects/bytesobject.c:159. That run uses no Capstone arm and was recorded before any virtual arm ran."
+}

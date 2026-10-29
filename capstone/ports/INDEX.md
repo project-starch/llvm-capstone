@@ -35,7 +35,7 @@
 | `ffmpeg/buffer-pool` | 9.0.1 | capstone-domain, cheribsd-purecap, native | -- | `pool-repros` |
 | `memcached/allocators` | 1.6.45 | capstone-domain, cheribsd-purecap, native | -- | `allocator-repros` |
 | `nginx` | 1.28.0 | capstone-domain, native | -- | -- |
-| `php/zend-alloc` | 5.0.0 | capstone-domain, capstone-virtual | run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-seam.c and sublet/probe-derive-split.c on the virtual profile, which qualify the seam before the app port's arms are believed | -- |
+| `php/zend-alloc` | 5.0.0 | capstone-domain, capstone-virtual | run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-nested.c and sublet/probe-derive-split.c on the virtual profile, which qualify the nested layer before the app port's arms are believed | -- |
 | `postgres/memory-contexts` | 17.0 | capstone-virtual, cheribsd-purecap, native | -- | `mmgr-repros` |
 | `whisper/ggml-context` | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | -- |
 | `wireshark/wmem` | 4.6.8 | capstone-virtual, cheribsd-purecap, native | -- | `wmem-repros` |
