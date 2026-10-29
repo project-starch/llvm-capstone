@@ -2,6 +2,7 @@
 /* Trusted OS adapter: one shared-mm namespace and explicit C contexts. */
 #include <linux/module.h>
 #include <linux/miscdevice.h>
+#include <linux/dma-mapping.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
 #include <linux/uaccess.h>
@@ -92,6 +93,8 @@ struct context {
     struct list_head link;
     struct mm_struct *mm;
     unsigned long *frame, *table;
+    phys_addr_t table_pa;   /* the table's physical root (select_root, the frame); from CMA when it is above the buddy limit */
+    dma_addr_t table_dma;   /* nonzero only for a CMA table: the handle dma_free_coherent needs */
     struct cv_thread *main_thread;
     struct list_head threads;
     u64 next_thread;
@@ -187,8 +190,8 @@ MODULE_PARM_DESC(node_max_records,
 #ifndef CAPSTONE_VM_INDEX_BITS
 #define CAPSTONE_VM_INDEX_BITS 16
 #endif
-#if CAPSTONE_VM_INDEX_BITS != 16 && CAPSTONE_VM_INDEX_BITS != 18
-#error "CAPSTONE_VM_INDEX_BITS: 16 (vp2, batch) or 18 (option A)"
+#if CAPSTONE_VM_INDEX_BITS != 16 && CAPSTONE_VM_INDEX_BITS != 18 && CAPSTONE_VM_INDEX_BITS != 20
+#error "CAPSTONE_VM_INDEX_BITS: 16 (vp2, batch), 18 (bitstreams 2/3) or 20 (ids20, {generation[29:20], index[19:0]})"
 #endif
 #define CV_FLAT_RECORDS_MAX (1UL << CAPSTONE_VM_INDEX_BITS)
 #if CV_FLAT_RECORDS_MAX > CV_ID_RECORDS_MAX
@@ -317,10 +320,20 @@ static unsigned long node_available(const struct context *c)
  * __GFP_RETRY_MAYFAIL tries hard without inviting the OOM killer; failing here is a clean
  * ENOMEM at context creation, which is strictly better than the paged path's failure
  * part-way through a running domain. */
+/* ids20: a table above the buddy allocator's largest block (MAX_ORDER - 1: 4 MiB = 262,144 records on these
+ * kernels) comes from CMA through the misc device (dma_alloc_coherent zeroes it; dma == phys without an IOMMU). The
+ * kernel needs a CMA area at least that large: the board and its twin boot with cma=256M. */
+static struct miscdevice device;
 static unsigned long *node_new_flat_table(struct context *c)
 {
-    unsigned long *p = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO | __GFP_RETRY_MAYFAIL,
-                                                get_order(CV_FLAT_BYTES));
+    unsigned long *p;
+    if (get_order(CV_FLAT_BYTES) >= MAX_ORDER) {
+        p = dma_alloc_coherent(device.this_device, CV_FLAT_BYTES, &c->table_dma, GFP_KERNEL);
+        if (p) c->table_pa = (phys_addr_t)c->table_dma;
+    } else {
+        p = (void *)__get_free_pages(GFP_KERNEL | __GFP_ZERO | __GFP_RETRY_MAYFAIL, get_order(CV_FLAT_BYTES));
+        if (p) c->table_pa = virt_to_phys(p);
+    }
     if (p) c->stats.node_bytes += CV_FLAT_BYTES;
     return p;
 }
@@ -375,8 +388,9 @@ static void node_free_table(struct context *c)
 {
     if (!c->table) return;
     if (node_table_flat) {
-        free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
-        c->table = NULL;
+        if (c->table_dma) dma_free_coherent(device.this_device, CV_FLAT_BYTES, c->table, c->table_dma);
+        else free_pages((unsigned long)c->table, get_order(CV_FLAT_BYTES));
+        c->table = NULL; c->table_dma = 0;
         return;
     }
     for (unsigned i = 0; i < CAP_REV_TABLE_ROOT_ENTRIES; ++i) {
@@ -866,7 +880,7 @@ static unsigned long select_root(struct context *c)
 {
     unsigned long old;
     asm volatile("csrr %0, 0x5c1\ncsrw 0x5c1, %1"
-                 : "=&r"(old) : "r"(virt_to_phys(c->table)) : "memory");
+                 : "=&r"(old) : "r"(c->table_pa) : "memory");
     return old;
 }
 /* 0, not the `root` select_root returned: outside a window S is in the physical namespace, so the
@@ -1893,7 +1907,7 @@ retry:
         /* The kernel owns the process address space and lifetime root. The
          * application supplies only the entry/register capabilities. */
         t->frame[0] = csr_read(CSR_SATP);
-        t->frame[1] = virt_to_phys(c->table);
+        t->frame[1] = c->table_pa;
         t->frame[2] = t->frame[3] = t->frame[4] = t->frame[5] = t->frame[6] = 0;
         t->frame[7] = 3;
         t->frame[80] = t->frame[81] = 0;
@@ -2041,7 +2055,7 @@ thread_unwind:
             TEST_ENTRY();
             if (!t->started) {
                 t->frame[0] = csr_read(CSR_SATP);
-                t->frame[1] = virt_to_phys(c->table);
+                t->frame[1] = c->table_pa;
                 t->frame[7] = 3;
             }
             if (t->sfence_pending) {
@@ -2192,6 +2206,7 @@ static int vm_open(struct inode *inode, struct file *f)
     if (!t) { kvfree(c); return -ENOMEM; }
     c->frame = (void *)get_zeroed_page(GFP_KERNEL);
     c->table = node_table_flat ? node_new_flat_table(c) : node_new_page(c);
+    if (c->table && !node_table_flat) c->table_pa = virt_to_phys(c->table);
     if (!c->frame || !c->table) {
         if (c->frame) free_page((unsigned long)c->frame);
         node_free_table(c);
@@ -2256,7 +2271,7 @@ static int vm_open(struct inode *inode, struct file *f)
       asm volatile("csrr %0, 0x5c0" : "=r"(profile));
       c->exact_bounds = !!(profile & 0x100); }
 #endif
-    c->frame[1] = virt_to_phys(c->table);
+    c->frame[1] = c->table_pa;
     t->context = c; t->id = 0; t->frame = c->frame;
     t->frame_pa = virt_to_phys(c->frame); t->user_frame = false;
     c->main_thread = t;
@@ -2385,6 +2400,12 @@ static int __init init(void)
         int rc = misc_register(&device);
         if (rc)
             return rc;
+        /* ids20: the CMA path of node_new_flat_table allocates through this device */
+        if (get_order(CV_FLAT_BYTES) >= MAX_ORDER &&
+            dma_coerce_mask_and_coherent(device.this_device, DMA_BIT_MASK(64))) {
+            misc_deregister(&device);
+            return -EIO;
+        }
         /* Always KERN_EMERG, independent of diag_emerg: this is the line that tells a reader
          * whether the module loaded at all, so it must survive the quieted console even when the
          * rest are being read through dmesg. One line per insmod, before the rungs begin. */
