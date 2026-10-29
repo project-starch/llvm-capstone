@@ -384,3 +384,12 @@ has already read (offsets 868 and 566, checked in /proc), so the running boots a
 
 **Step:** 54000 s at CPI 7 plus 15 ms per entry, booking 930 min. It is appended to board 2's list, after nab
 train T3.
+
+## Addendum 10 (2026-10-29 15:00): the two boards split the work, nothing is repeated
+
+- **mcf train T1** moves from board 2 to board 1, before nab train T1. The two lists then need about 95 h and 91 h of
+  expected board time, so both finish around 2 November.
+- **No boot repeats a run.**
+  - Where a runtime fix (the realloc defect) produces new images before a queued boot starts, that boot's line is
+    swapped to the new stage. It is pre-registered here before it runs, and the run carries the new image hash.
+  - A finished run on the old images stays the record for those images and is not rerun.
