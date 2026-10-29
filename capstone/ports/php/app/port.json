@@ -25,7 +25,7 @@
     "capstone/tests/cheri-php-blind"
   ],
   "status": "builds through ports/common/application/build-virtual.sh php for both selector values and passes runtime/virtual/run.py --php 44/44 on dev 0b0b3414dca5 (results/2026-10-27-common-entry); rebuilt from scratch and smoke-tested the same day (results/2026-10-27-requalification). The 2026-10-26 corpus populations are NOT re-run (the corpus scripts and oracles are external); their README carries the 2026-10-27 correction for CRASH-022/078",
-  "note": "PHP's source is the tree app/prepare-sources.sh prepares: the museum php-5.0.0.tar.gz by SHA-256, configured --disable-all, with the tree patches of app/patches (0001 compile fix, 0002 qsort swap). Its cases and their oracle are bug-corpora/php/engine-repros, derived by that corpus's tools/build-cases.py from the external php-5.0.0-bug-corpus and our native ASan runs of it. The Zend nested allocator layer the protected arms use is ports/php/zend-alloc/sublet, applied as patch 0003.",
+  "note": "PHP's source is the tree app/prepare-sources.sh prepares: the museum php-5.0.0.tar.gz by SHA-256, configured --disable-all, with the tree patches of app/patches/5.0.0 (0001 compile fix, 0002 qsort swap). Its cases and their oracle are bug-corpora/php/engine-repros, derived by that corpus's tools/build-cases.py from the external php-5.0.0-bug-corpus and our native ASan runs of it. The Zend nested allocator layer the protected arms use is ports/php/zend-alloc/sublet, whose patches/5.0.0/0001-zend-alloc-sublet-hooks.patch the build applies to a copy of zend_alloc.c.",
   "corpora": [
     "capstone/bug-corpora/php/engine-repros"
   ]

@@ -40,13 +40,19 @@ SDK="$OUT/sdk"
 # faults -- and reads that fault as a catch, as CRASH-022 and CRASH-078 did until 2026-10-27.
 # Every case that compiles PHP calls this, so a collaborator-style /corpus tree is refused by
 # all of them, not only by realphp.
+TREE_PATCHES_DIR="$HERE/patches/5.0.0"
+# The nested layer is a build MODE, not a tree patch: it lives with its adapter and is applied to a
+# copy of Zend/zend_alloc.c by the cases below that build a nested image (inert, php, realphp).
+NESTED_PATCH="$R/capstone/ports/php/zend-alloc/sublet/patches/5.0.0/0001-zend-alloc-sublet-hooks.patch"
 assert_tree_patches() {
-  local _tree=$1 _tp
-  for _tp in "$HERE"/patches/php-5.0.0-*.patch; do
-    case "$_tp" in *-zend-alloc-sublet-hooks.patch) continue ;; esac
+  local _tree=$1 _tp _n=0
+  for _tp in "$TREE_PATCHES_DIR"/*.patch; do
+    [ -f "$_tp" ] || continue
+    _n=$((_n + 1))
     patch -d "$_tree" -p1 -R --dry-run -s -f < "$_tp" > /dev/null 2>&1 \
       || { echo "  $_tree does not carry $(basename "$_tp") -- run prepare-sources.sh" >&2; exit 2; }
   done
+  [ "$_n" -gt 0 ] || { echo "  no tree patches under $TREE_PATCHES_DIR" >&2; exit 2; }
 }
 CC="$SDK/capstone-cc"
 export MUSL_CACHE_ROOT=${MUSL_CACHE_ROOT:-$OUT/musl-source}
@@ -163,11 +169,10 @@ case "$WHAT" in
     [ -d "$P/Zend" ] || { echo "PHP source not at $P -- run prepare-sources.sh <root> (or set PHP_SRC)" >&2; exit 2; }
     assert_tree_patches "$P"
     NESTED="$R/capstone/ports/php/zend-alloc/sublet"
-    PATCHES="$HERE/patches"
     W="$OUT/php-virtual/inert"
     rm -rf "$W"; mkdir -p "$W/patched/Zend"
     cp "$P/Zend/zend_alloc.c" "$W/patched/Zend/zend_alloc.c"
-    patch -s -p1 -d "$W/patched" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
+    patch -s -p1 -d "$W/patched" < "$NESTED_PATCH" \
       || { echo "  the patch does not apply" >&2; exit 1; }
     ICF=(-O0 -std=gnu89 -fno-common -g0 -mllvm -capstone-shrink-stack=false
          -I"$P" -I"$P/Zend" -I"$P/main" -I"$P/TSRM" -I"$P/ext" -I"$P/ext/standard")
@@ -232,7 +237,6 @@ case "$WHAT" in
       *) echo "  PHP_CAP_ALLOC_MODE=$MODE? (hier|nested)" >&2; exit 2 ;;
     esac
     NESTED="$R/capstone/ports/php/zend-alloc/sublet"
-    PATCHES="$HERE/patches"
 
     # Per-arm object and log directories. One shared obj/ would have the second build
     # overwrite the first's objects, and a pair assembled from whichever came last is not a
@@ -310,7 +314,7 @@ case "$WHAT" in
       rm -rf "$PATCHED"
       mkdir -p "$PATCHED/Zend"
       cp "$P/Zend/zend_alloc.c" "$PATCHED/Zend/zend_alloc.c"
-      patch -s -p1 -d "$PATCHED" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
+      patch -s -p1 -d "$PATCHED" < "$NESTED_PATCH" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
       ZEND_ALLOC_SRC="$PATCHED/Zend/zend_alloc.c"
       # -I the nested layer for zend-cap-mode.h, and -I capstone for <sublet/sublet.h>, which is the
@@ -451,7 +455,6 @@ case "$WHAT" in
     [ -f "$P/Makefile" ] || { echo "no $P/Makefile -- the TU list has no source of truth" >&2; exit 2; }
     assert_tree_patches "$P"
     NESTED="$R/capstone/ports/php/zend-alloc/sublet"
-    PATCHES="$HERE/patches"
     MODE=${PHP_REALPHP_ALLOC:-nested}
     case "$MODE" in
       nested|stock) ;;
@@ -524,7 +527,7 @@ case "$WHAT" in
     if [ "$MODE" = nested ]; then
       rm "$T/Zend/zend_alloc.c"
       cp "$P/Zend/zend_alloc.c" "$T/Zend/zend_alloc.c"
-      patch -s -p1 -d "$T" < "$PATCHES/php-5.0.0-0003-zend-alloc-sublet-hooks.patch" \
+      patch -s -p1 -d "$T" < "$NESTED_PATCH" \
         || { echo "  the sublet patch does not apply to this tree" >&2; exit 1; }
       # The nested layer alone. php_virtual_lower.c (zend_cap_widen, php_fault_report) was linked here
       # too until 2026-10-28; nothing in the real-PHP image calls it -- only the Phase A SAPI's

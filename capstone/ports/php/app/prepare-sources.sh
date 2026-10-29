@@ -2,7 +2,7 @@
 # Prepare PHP 5.0.0 for the virtual build (build-virtual.sh realphp) under <root>:
 #   <root>/cache/php-5.0.0.tar.gz   the release, pinned by SHA-256
 #   <root>/php-5.0.0                the release unpacked, configured for the cli SAPI with every
-#                                   extension off, with the TREE patches of patches/ applied
+#                                   extension off, with the TREE patches of patches/5.0.0/ applied
 #   <root>/php-5.0.0/PROVENANCE.txt what this tree is, and patchset.sha256 which patches made it
 #
 # This stands where the collaborator's /corpus/build/php-5.0.0 stood: an already-configured
@@ -29,14 +29,15 @@ TARBALL=$CACHE/php-${VERSION}.tar.gz
 TREE=$ROOT/php-${VERSION}
 mkdir -p "$ROOT" "$CACHE"
 
-# ---- the tree patches: everything in patches/ except the nested layer, which is a build MODE -------
-# (applied by build-virtual.sh to a copy of zend_alloc.c, nested arms only; see patches/README.md)
+# ---- the tree patches: every patch of patches/<version>/ -------------------------------------
+# The nested layer is not one of them: it is a build MODE, kept with its adapter in
+# ports/php/zend-alloc/sublet/patches/ and applied by build-virtual.sh to a copy of zend_alloc.c
+# for the nested arms only (see patches/README.md).
 TREE_PATCHES=()
-for p in "$SCRIPT_DIR"/patches/php-${VERSION}-*.patch; do
-  case "$p" in *-zend-alloc-sublet-hooks.patch) continue ;; esac
-  TREE_PATCHES+=("$p")
+for p in "$SCRIPT_DIR"/patches/${VERSION}/*.patch; do
+  [ -f "$p" ] && TREE_PATCHES+=("$p")
 done
-[ "${#TREE_PATCHES[@]}" -gt 0 ] || { echo "no tree patches under $SCRIPT_DIR/patches" >&2; exit 2; }
+[ "${#TREE_PATCHES[@]}" -gt 0 ] || { echo "no tree patches under $SCRIPT_DIR/patches/${VERSION}" >&2; exit 2; }
 PATCH_HASH=$({ for p in "${TREE_PATCHES[@]}"; do printf '%s ' "$(basename "$p")"; sha256sum < "$p"; done; } \
              | sha256sum | cut -d' ' -f1)
 
@@ -94,8 +95,8 @@ TUS=$({ sed -n '/^PHP_GLOBAL_OBJS *=/p' "$TREE/Makefile"; sed -n '/^PHP_CLI_OBJS
   echo "tree patches, in order:"
   for p in "${TREE_PATCHES[@]}"; do echo "  $(basename "$p")  $(sha256sum < "$p" | cut -c1-16)"; done
   echo "patch set: $PATCH_HASH"
-  echo "The nested layer patch (0003) is not in this tree; build-virtual.sh applies it to a copy of"
-  echo "Zend/zend_alloc.c for the nested layer arms only."
+  echo "The nested layer patch (ports/php/zend-alloc/sublet/patches/) is not in this tree; build-virtual.sh"
+  echo "applies it to a copy of Zend/zend_alloc.c for the nested layer arms only."
 } > "$TREE/PROVENANCE.txt"
 echo "$PATCH_HASH" > "$TREE/patchset.sha256"
 echo "prepared: $TREE ($TUS translation units)" >&2

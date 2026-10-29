@@ -63,7 +63,7 @@ case "$APP" in
   mruby)     PORT_VAR=MRBD_SUBLET;  PORT_OFF=0; PORT_ON=1 ;;
   sqlite)    PORT_VAR=SQLITE_HEAP;  PORT_OFF=memsys5; PORT_ON=memsys5-sublet ;;
   # php: stock is PHP's own zend_alloc.c over virtual mallocng; nested is that file with the
-  # nested allocator layer patched in (ports/php/app/patches/0003), its arm baked in below.
+  # nested allocator layer patched in (ports/php/zend-alloc/sublet/patches/), its arm baked in below.
   php)       PORT_VAR=PHP_REALPHP_ALLOC; PORT_OFF=stock; PORT_ON=nested ;;
   # memcached's recipe builds both arms into one output directory -- stock,
   # safety fixtures and managed lifetimes are separate images, not separate
