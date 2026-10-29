@@ -368,3 +368,19 @@ has already read (offsets 868 and 566, checked in /proc), so the running boots a
   7. mcf train T3;
   8. nab train T3.
 - perlbench train T3 waits for its twin run, which started at 10:45.
+
+## Addendum 9 (2026-10-29 12:15, before the boot it names): perlbench train T3
+
+**Twin** (kit-q34, lib-trimmed stage, image b05dcf06469c2024):
+- diffmail, perfect, suns, validate: rc 0, specdiff PASS.
+- scrabbl (rc 1) and splitmail (rc 1) print perl's `Out of memory!` with only 19,047 and 27,114 pages pinned.
+- **Classified by the table, not the error.** Both stats lines read `node_capacity=262144 node_growths=0`. scrabbl
+  stops at nodes=261,089, which is the lifetime table, not RAM.
+- Total: 170.76e9 instructions.
+
+**P22.** perlbench train T3 on the board:
+- diffmail, perfect, suns and validate give rc 0, with outputs sha256-equal to the twin's;
+- scrabbl and splitmail end with rc 1 and `Out of memory!` at the table's capacity.
+
+**Step:** 54000 s at CPI 7 plus 15 ms per entry, booking 930 min. It is appended to board 2's list, after nab
+train T3.
