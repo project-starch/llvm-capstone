@@ -1,6 +1,6 @@
 {
   "arm": "virtual-pg-pools",
-  "cases": 10,
+  "cases": 11,
   "configuration": "virtual-mallocng-pg-pools",
   "contract": "verdicts-v1",
   "corpus": "postgres/sql-repros",
@@ -28,7 +28,7 @@
   "image": {
     "heap": "virtual-mallocng",
     "nested": "sublet",
-    "sha256": "7cb1f5c13c90c0c7e4d654b9a224611bcb72b50dbbbc1a3ac0848876a73cdb8d"
+    "sha256": "0f026782cfb9b99b94be01b86179dfae470b96e9913c4c29c7bb8376fc65f680"
   },
   "platform": {
     "compiler": "2236d7f34ca381d80ff60156f3618ef5253143d435f8c66645aa600c2e80d19d",
@@ -40,10 +40,10 @@
     "profile": "virtual",
     "qemu": "e8a89c014e5aa627b294cdf0b7d366610cf4334adc1f9d1579c498f33e4fee23",
     "rootfs": "62049800ed0fa8827959c0060bbd74f0435aacb577dd521e14a14a099d167845",
-    "runner": "7ce203f9fd6a3ccee109f3453f6bccbdc10fea149237898551f74a689d7477f0"
+    "runner": "4185d65239a30225f3e08c4202cdc9c75c6b881163f5533a1e52300d356d6294"
   },
   "tally": {
-    "CAUGHT": 8,
+    "CAUGHT": 9,
     "MISSED": 1,
     "NO-READING:unattributed": 1
   }
