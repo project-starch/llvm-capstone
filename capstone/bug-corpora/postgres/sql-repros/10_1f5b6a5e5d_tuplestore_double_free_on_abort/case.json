@@ -1,0 +1,31 @@
+{
+ "case": 10,
+ "upstream_fix": "1f5b6a5e5d",
+ "title": "a FETCH result's tuples freed by a failed spill and freed again when its portal drops -- tuplestore double free",
+ "consumer": "FETCH BACKWARD ALL into the unnamed portal's tuplestore, then ROLLBACK",
+ "class": "temporal",
+ "allocator_layer": "aset",
+ "trigger": "trigger.sql",
+ "live_in_pin": true,
+ "live_proof": "measured 2026-10-29 on p13: PostgreSQL 17.5 (the port's tarball, sha256 fcb7ab38...28d8), configured --enable-debug CFLAGS='-O1 -g' CPPFLAGS=-DUSE_VALGRIND (no cassert, as the port), trigger.sql through `postgres --single` under Valgrind 3.26 with src/tools/valgrind.supp: one error, 'Invalid free()' at pfree (mcxt.c:1531) by tuplestore_end (tuplestore.c:462) by PortalDrop (portalmem.c:585) by CreatePortal (portalmem.c:193) by exec_simple_query -- the report's own backtrace, on the ROLLBACK. control.sql on the same build: no error. Natively the second pfree is silent: the backend completes and answers `survived`, as upstream's commit message says of v16 and v17 (\"the specific test case submitted failed to fail there\").",
+ "fidelity": "real server, core. Upstream bug #19438's own reproducer with MOVE ALL for the forward FETCH ALL whose output the report discarded. The same defect is ../../mmgr-repros/00_1f5b6a5e5d_tuplestore_double_free as a C program against the real memory contexts; this one reaches it in the whole backend, and the two must not be counted twice.",
+ "nested": true,
+ "nested_why": "the freed tuples are palloc chunks in the portal's aset context: the spill's pfree and the second one both stay inside an aset block that malloc never sees freed",
+ "fault_sites": [
+  "pfree",
+  "tuplestore_end"
+ ],
+ "fault_sites_why": "Valgrind with PostgreSQL's own mempool annotations (USE_VALGRIND) on the host, recorded before any Capstone arm ran: the invalid free is at pfree (mcxt.c:1531) called from tuplestore_end (tuplestore.c:462). A fault in another function counts through control.sql.",
+ "arms": {
+  "virtual-malloc": {
+   "oracle": "virtual profile, PostgreSQL's contexts stock (tools/arms.json virtual-mallocng): a fault after the trigger started that its control.sql or a justified fault_sites ties to the defect, or the trigger completes and this arm did not see it"
+  },
+  "virtual-pg-pools": {
+   "oracle": "virtual profile with the memory-context port's patch 0003: every palloc chunk a child lifetime of its block (CDERIVE), revoked by pfree and repalloc (CREVOKE) (tools/arms.json virtual-mallocng-pg-pools): as virtual-malloc"
+  },
+  "cheribsd-revocation": {
+   "oracle": "completes: both frees are inside an aset block, which libc's revocation never sees freed, so the platform has nothing to revoke"
+  }
+ },
+ "status": "live at the pin, measured on the host under Valgrind (2026-10-29); no Capstone or CheriBSD arm has run it"
+}
