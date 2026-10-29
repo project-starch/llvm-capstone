@@ -460,3 +460,33 @@ reading rested on a single pre-pin twin run, and it was written before the secon
 **P20 does not hold in either arm.** The cause is unresolved. The next step is off the board:
 - run re/reg_email alone on the twin with the silicon-mimic switches;
 - then capture the sub-run's fault line in a directed boot.
+
+## Addendum 13 (2026-10-30 05:40, before the boot it names): a directed boot for re/reg_email
+
+**Stage.** `spec/stages-directed/500.perlbench_r-regemail-both`. Its run.sh is hand-written; make-stage.py does not
+produce it.
+- Inputs and images are the perlbench test stages' (T1 6b1a30a5b1e71f58, T3 371553e3b5adffa7). The inputs are
+  identical across the arms.
+- Per arm it runs japh/abigail.t and then re/reg_email.t alone, exactly as t/TEST runs them: cwd t/,
+  `../../sw/perl -I.. -MTestInit <test>`.
+- It prints:
+  - each sub-run's rc and bench line;
+  - its stderr lines matching capstone-exec / capstone_vm / Segmentation / Killed / panic / Out of memory /
+    recursion;
+  - the last 40 lines of its stderr, its stdout tail, and dmesg.
+
+**Twin reference** (kit-q34, `census-directed/500.perlbench_r-regemail-both`). The first run's capture lines were
+void, because a sed delimiter broke on the `t/` names. The control showed this, and the rerun is the reference:
+- T1 abigail: rc 139, `domain fault cause=2` at code+0x11eb0, address 0xc0001073.
+- T3 abigail: rc 139, `domain fault cause=29` at code+0x124c4.
+- reg_email, both arms: rc 0, 13/13 ok, 5.813e9 instructions.
+
+**P24, on board 1 (bitstream 3):**
+- **Control.** abigail reads the twin's cause and code offset in both arms. If it does not, the capture is broken
+  and the boot says nothing about reg_email.
+- **reg_email.** It ends after about 0.752e9 instructions, as in both full runs, and is NOT `ok` 13/13. Its stderr
+  names the end: a domain fault line (cause, pc offset, address), a signal, or a perl error. That line is the
+  reading. No cause is predicted; this boot exists to observe it.
+
+**Placement.** The line goes on board 1's continuation list, right after the x264 test T1 boot that is running now,
+with step 3600 s and booking 90 min. Board 1 stays on bitstream 3.
