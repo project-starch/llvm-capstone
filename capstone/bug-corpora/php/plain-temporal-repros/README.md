@@ -35,7 +35,7 @@ split comes from the run.
 | `virtual-nested-pools` | `php-real-exact` (`PHP_CAP_MODE=7`) | every `emalloc` block a `CDERIVE` child bounded at the caller's size, `CREVOKE`d at `efree` |
 | `cheribsd-revocation` | `cheribsd-default` | stock CheriBSD purecap: bounds in `malloc`, quarantine and revocation after `free` |
 
-`host-asan` is measured. The other three are declared and not yet run.
+`host-asan` and `cheribsd-revocation` are measured. The two virtual arms are declared and not yet run.
 
 ## Run it
 
@@ -97,3 +97,53 @@ It boots twice, with `security.cheri.runtime_revocation_default` at 1 and then 0
 | 25 | [`25_1aab36e3f22a_is-a-impl-autoload-reentry-arg-stack-realloc`](25_1aab36e3f22a_is-a-impl-autoload-reentry-arg-stack-realloc) | CRASH-155 | ASAN:heap-use-after-free | realloc(), through _erealloc |
 | 26 | [`26_ed4c0245c7ca_zval-copy-ctor-array-hands-over-hashtable`](26_ed4c0245c7ca_zval-copy-ctor-array-hands-over-hashtable) | CRASH-161 | ASAN:heap-use-after-free | free(), through _efree |
 
+## What counts as caught
+
+One rule for both corpora, and it is narrower than "something went wrong":
+
+- the verdict comes from the **platform default** boot only (`runtime_revocation_default=1`,
+  `..._every_free_default=0`). That is the configuration CheriBSD ships;
+- a `SIGPROT` there is caught. Its cause is attributed by the paired revocation-**off** boot,
+  because a purecap `SIGPROT` carries no symbol: off-also-faults means bounds or an already-cleared
+  tag, off-completes means revocation;
+- a `SIGABRT` there is caught as well. It is CheriBSD's allocator consistency check, not a
+  capability fault, and it is counted because the check is **capability-enabled**: a hybrid-ABI
+  build in the same guest against the same jemalloc survives the same double free that aborts under
+  purecap, so the ABI is the only variable (`ports/php/cheribsd/results/20261029-hybrid-ab`);
+- a fault that appears **only** under every-free revocation is **not** counted. It is recorded as
+  `NOT-REISSUED` in the notes with the place it lands, because it says the stale pointer is
+  followed and the chunk sits in the quarantine -- but the deployed policy does not sweep in time,
+  so the program runs on.
+
+Where a fault lands is read from a marker, not inferred: `auto_prepend_file` prints
+`PHPB_TRIGGER_START` and `auto_append_file` prints `PHPB_TRIGGER_END`, so a fault with no END line
+is inside the script body and one after it is in request shutdown. The runner refuses to place a
+fault in a boot where **no** case printed END -- without that check a record predating the marker
+reads as "every case faulted in the script body", a placement that was never measured.
+
+## What the CHERI arm measured (2026-10-29)
+
+Three boots of one purecap binary: the platform default, the same binary with revocation off, and
+a third at every-free. The control `bounds-malloc` faulted in all three, and the sysctl read-backs
+are in the bundle's `inputs.json`.
+
+| verdict | cases | which |
+|---|---:|---|
+| CAUGHT | 3 | 10, 12, 17 |
+| NO-READING: inconclusive | 14 | 01, 02, 03, 05, 06, 08, 16, 18, 19, 20, 21, 22, 23, 24 |
+| MISSED | 8 | 04, 07, 09, 11, 13, 14, 15, 25 |
+| NO-READING: infra | 1 | 26 |
+
+**Counted as caught: 14 of 26** -- the 3 `SIGPROT` plus the 11 `SIGABRT`.
+
+| group | cases | which | what fired |
+|---|---:|---|---|
+| A | 3 | 10, 12, 17 | `SIGPROT` at the default. **Only 12 is revocation's**: it completes with revocation off. 10 and 17 fault with revocation off as well, so bounds or a tag already cleared by PHP itself |
+| B | 11 | 01, 02, 05, 16, 18, 19, 20, 21, 22, 23, 24 | the allocator's consistency check (`SIGABRT`), capability-enabled per the hybrid A/B |
+| C | 3 | 03, 06, 08 | exit 255 at the default, with no fault and no clean end |
+| D | 8 | 04, 07, 09, 11, 13, 14, 15, 25 | silent at the default. **7 of the 8 fault under every-free** -- 6 inside the script body, 1 in request shutdown -- so the chunk is in the quarantine and the stale pointer is followed; the deferred sweep is what lets the access through. **07 is silent in all three configurations: the only true miss in either corpus** |
+| E | 1 | 26 | the guest watchdog kills it in all three. No reading |
+
+One reversal is worth recording rather than smoothing over: **17 completes under every-free** while
+faulting at both the default and off. Every-free changes when chunks are reissued, so it is not a
+strictly stronger configuration, which is a second reason it is context and not a verdict.

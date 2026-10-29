@@ -19,7 +19,7 @@ directory and the console is told to run that one file. Driving 56 cases by send
 serial console costs a round trip each and leaves the transcript interleaved with the shell's own
 echo; a script writes its own markers and the parse is unambiguous.
 """
-import argparse, glob, json, re, shlex, sys
+import argparse, glob, json, os, re, shlex, sys
 from pathlib import Path
 
 MARK = "CHERI_RUN"
@@ -156,7 +156,12 @@ def main():
         if not argv:
             sys.exit(f"--run wants NAME=ARGV, got {spec!r}")
         runs.append((name, argv))
-    script = a.stage / "run-cases.sh"
+    # The script name carries this run's pid. sh reads a script INCREMENTALLY, so a second run
+    # that writes the same path while the first is executing it makes the first continue from the
+    # same byte offset into the NEW file -- the guest then runs a mixture of the two. That is not
+    # hypothetical: it corrupted the eager boot of a 30-case arm on 2026-10-29, and the transcript
+    # shows the seam as garbage ("UN_EXUN_EXUN_EX..."). One file per run, never a shared name.
+    script = a.stage / f"run-cases-{os.getpid()}.sh"
     script.write_text(guest_script(runs, a.env, a.run_timeout, a.copy))
     script.chmod(0o755)
 
@@ -208,7 +213,7 @@ def main():
         mounted = q.after.strip() == "MOUNT_OK"
         q.expect(r"# ", timeout=60)
         if mounted:
-            q.sendline(f"sh {GUEST_DIR}/run-cases.sh")
+            q.sendline(f"sh {GUEST_DIR}/{script.name}")
             q.expect(DONE, timeout=a.timeout)
             completed = True
             q.expect(r"# ", timeout=120)

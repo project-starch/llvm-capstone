@@ -17,6 +17,15 @@
 # about the target that is checkable without running anything -- from CheriBSD's own headers or
 # from the ABI -- and none of them is a guess about PHP.
 #
+# PHP_CHERI_CONFIGURE_EXTRA appends configure arguments, so a second binary can carry the
+# bundled extensions four corpus cases need (mbstring, pcre) without changing the default one:
+# the 52 cases that do not need them keep the --disable-all build they were measured on.
+# PHP_CHERI_EXTRA_CFLAGS appends CFLAGS for the same reason. The extensions build needs
+# -DHAVE_STDARG_PROTOTYPES=1: bundled oniguruma still carries the pre-C89 varargs spelling
+# (va_dcl and <varargs.h>) behind that guard, and clang 17 rejects it outright. The macro is
+# not a guess about the target -- every compiler that can build this tree has stdarg
+# prototypes; it is a configure answer PHP 5.0.0 derives by compiling a program.
+#
 #   usage: CHERI_SDK=... CHERI_SYSROOT=... build.sh [out-dir]
 set -euo pipefail
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
@@ -122,14 +131,27 @@ done
 # port, 2026-10-06). CPP carries NO linker flag: autoconf 2.13 reads any stderr output from the
 # preprocessor as a failed header check, so one clang warning about an unused -fuse-ld makes every
 # <netinet/in.h>, <pwd.h>, <locale.h> check answer "no" and the build then fails in five files.
-TARGET="--target=riscv64-unknown-freebsd13 --sysroot=$SYSROOT -march=rv64imafdcxcheri -mabi=l64pc128d -mno-relax -cheri-tgot-tls"
+# PHP_CHERI_HYBRID=1 builds the SAME source for the SAME guest and the SAME allocator with the
+# capability ABI OFF. It exists to isolate one variable: when a case ends differently here than
+# under purecap, the difference is CHERI's and not the operating system's or jemalloc's. The
+# hybrid world lives in the purecap rootfs's lib64 tree, with its own rtld.
+if [ "${PHP_CHERI_HYBRID:-0}" = 1 ]; then
+  TARGET="--target=riscv64-unknown-freebsd13 --sysroot=$SYSROOT -march=rv64gc -mabi=lp64d -mno-relax"
+  LINKFLAGS="-L$SYSROOT/usr/lib64 -B$SYSROOT/usr/lib64 -Wl,-dynamic-linker,/libexec/ld-elf64.so.1"
+  WANT_ABI=hybrid
+else
+  TARGET="--target=riscv64-unknown-freebsd13 --sysroot=$SYSROOT -march=rv64imafdcxcheri -mabi=l64pc128d -mno-relax -cheri-tgot-tls"
+  LINKFLAGS=""
+  WANT_ABI=purecap
+fi
 cd "$T"
-CC="$SDK/bin/clang $TARGET -fuse-ld=lld -B$SDK/bin -Qunused-arguments" \
+CC="$SDK/bin/clang $TARGET $LINKFLAGS -fuse-ld=lld -B$SDK/bin -Qunused-arguments" \
 CPP="$SDK/bin/clang $TARGET -E" \
-CFLAGS="-O0 -g -std=gnu89 -fcommon -Wno-everything" \
+CFLAGS="-O0 -g -std=gnu89 -fcommon -Wno-everything ${PHP_CHERI_EXTRA_CFLAGS:-}" \
   ./configure --cache-file=./config.cache \
     --host=riscv64-unknown-freebsd --build="$(./config.guess 2>/dev/null || echo x86_64-pc-linux-gnu)" \
-    --disable-all --enable-cli --disable-cgi --disable-debug > "$OUT/configure.log" 2>&1 \
+    --disable-all --enable-cli --disable-cgi --disable-debug ${PHP_CHERI_CONFIGURE_EXTRA:-} \
+    > "$OUT/configure.log" 2>&1 \
   || { echo "configure FAILED -- tail:"; tail -20 "$OUT/configure.log"; exit 1; }
 
 # The shipped parser/scanner stay shipped: .y/.l older than the .c they produced.
@@ -149,8 +171,10 @@ make -j"${JOBS:-16}" > "$OUT/make.log" 2>&1 \
 
 # A BUILD THAT IS NOT PURECAP WOULD BUILD AND RUN, AND MEASURE NOTHING. The ABI is asserted.
 flags=$("$SDK/bin/llvm-readelf" -h sapi/cli/php | sed -n 's/^  Flags: *//p')
-case "$flags" in
-  *cheriabi*capability\ mode*) ;;
+case "$WANT_ABI:$flags" in
+  purecap:*cheriabi*capability\ mode*) ;;
+  hybrid:*cheriabi*) echo "asked for hybrid, built purecap: flags = $flags" >&2; exit 1;;
+  hybrid:*) ;;
   *) echo "sapi/cli/php is not purecap: flags = $flags" >&2; exit 1;;
 esac
 echo "--> built $T/sapi/cli/php"

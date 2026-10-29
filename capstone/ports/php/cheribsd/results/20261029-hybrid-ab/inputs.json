@@ -1,0 +1,39 @@
+{
+  "question": "Is the SIGABRT that ends 14 of the 56 corpus cases a capability-enabled check, or would any allocator raise it?",
+  "design": "controls/abort-probe.c built twice from the same source, purecap and hybrid, run in ONE boot of the same guest against the same jemalloc at the platform default. The ABI is the only variable.",
+  "population": "5 stages x 2 ABIs = 10 runs",
+  "binaries": {
+    "abort-probe": {
+      "sha256": "87c37be8d284cc8072fc0c2962546093da13dd92381559ee1085b30454004a7c",
+      "elf_flags": "0x30005, RVC, double-float ABI, cheriabi, capability mode"
+    },
+    "abort-probe-hybrid": {
+      "sha256": "927cc15f118963e56aa5f36c558d1ca8d744a9be921177b9b1567c1868d38521",
+      "elf_flags": "0x5, RVC, double-float ABI"
+    }
+  },
+  "platform": {
+    "runner": "capstone/ports/php/cheribsd/run-cheribsd-cases.py",
+    "kernel": "the CheriBSD purecap rootfs kernel",
+    "qemu": "cheri-qemu, booted on a qcow2 overlay over the shared image"
+  },
+  "revocation": [
+    {
+      "set": "security.cheri.runtime_revocation_default=1",
+      "read_back": "1"
+    },
+    {
+      "set": "security.cheri.runtime_revocation_every_free_default=0",
+      "read_back": "0"
+    }
+  ],
+  "boot": {
+    "booted": true,
+    "mounted": true,
+    "completed": true,
+    "panic": false
+  },
+  "internal_controls": "p0 returns 0 under both ABIs, so the probe can report a survival; p2 and p3 return 0 under both, so the abort is specific to an invalid free and is not raised by any use-after-free. Without those three a purecap-only abort could not be read.",
+  "supersedes": "An earlier run of this experiment left no record on disk, so the claim it supported could not be re-read. This folder replaces that citation.",
+  "note": "The serial transcript is not committed."
+}

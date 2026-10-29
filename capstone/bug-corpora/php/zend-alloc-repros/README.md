@@ -35,7 +35,7 @@ split comes from the run.
 | `virtual-nested-pools` | `php-real-exact` (`PHP_CAP_MODE=7`) | every `emalloc` block a `CDERIVE` child bounded at the caller's size, `CREVOKE`d at `efree` |
 | `cheribsd-revocation` | `cheribsd-default` | stock CheriBSD purecap: bounds in `malloc`, quarantine and revocation after `free` |
 
-`host-asan` is measured. The other three are declared and not yet run.
+`host-asan` and `cheribsd-revocation` are measured. The two virtual arms are declared and not yet run.
 
 ## Run it
 
@@ -101,3 +101,83 @@ It boots twice, with `security.cheri.runtime_revocation_default` at 1 and then 0
 | 29 | [`29_abb09693ac4d_assign-op-and-incdec-property-helpers-hold`](29_abb09693ac4d_assign-op-and-incdec-property-helpers-hold) | CRASH-159 | ASAN:SEGV | free(), through _efree |
 | 30 | [`30_c3a317117ad8_hash-add-or-update-runs-destructor-on-still`](30_c3a317117ad8_hash-add-or-update-runs-destructor-on-still) | CRASH-160 | OK | free(), through _efree |
 
+## What counts as caught
+
+One rule for both corpora, and it is narrower than "something went wrong":
+
+- the verdict comes from the **platform default** boot only (`runtime_revocation_default=1`,
+  `..._every_free_default=0`). That is the configuration CheriBSD ships;
+- a `SIGPROT` there is caught. Its cause is attributed by the paired revocation-**off** boot,
+  because a purecap `SIGPROT` carries no symbol: off-also-faults means bounds or an already-cleared
+  tag, off-completes means revocation;
+- a `SIGABRT` there is caught as well. It is CheriBSD's allocator consistency check, not a
+  capability fault, and it is counted because the check is **capability-enabled**: a hybrid-ABI
+  build in the same guest against the same jemalloc survives the same double free that aborts under
+  purecap, so the ABI is the only variable (`ports/php/cheribsd/results/20261029-hybrid-ab`);
+- a fault that appears **only** under every-free revocation is **not** counted. It is recorded as
+  `NOT-REISSUED` in the notes with the place it lands, because it says the stale pointer is
+  followed and the chunk sits in the quarantine -- but the deployed policy does not sweep in time,
+  so the program runs on.
+
+Where a fault lands is read from a marker, not inferred: `auto_prepend_file` prints
+`PHPB_TRIGGER_START` and `auto_append_file` prints `PHPB_TRIGGER_END`, so a fault with no END line
+is inside the script body and one after it is in request shutdown. The runner refuses to place a
+fault in a boot where **no** case printed END -- without that check a record predating the marker
+reads as "every case faulted in the script body", a placement that was never measured.
+
+## What the CHERI arm measured (2026-10-29)
+
+Three boots of one purecap binary: the platform default, the same binary with revocation off, and
+a third at every-free. The control `bounds-malloc` faulted in all three, and the sysctl read-backs
+are in the bundle's `inputs.json`.
+
+| verdict | cases | which |
+|---|---:|---|
+| CAUGHT | 7 | 07, 10, 12, 13, 15, 25, 29 |
+| MISSED | 20 | 01, 02, 03, 05, 06, 08, 11, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 30 |
+| NO-READING: inconclusive | 3 | 04, 09, 28 |
+
+**Counted as caught: 10 of 30** -- the 7 `SIGPROT` plus the 3 `SIGABRT`.
+
+| group | cases | which | what fired |
+|---|---:|---|---|
+| A | 7 | 07, 10, 12, 13, 15, 25, 29 | `SIGPROT` at the default -- but **all seven fault with revocation off too**, so none of them is revocation's. The tag is cleared by PHP writing a non-capability value over a capability slot |
+| B | 3 | 04, 09, 28 | the allocator's consistency check (`SIGABRT`), at the shutdown cache drain where `shutdown_memory_manager` hands every cached block to real `free()` (`Zend/zend_alloc.c:478-495`). 04 prints its last line first, then aborts |
+| C | 7 | 01, 02, 06, 08, 17, 26, 30 | silent at the default and off, **faulting under every-free inside the script body**. Not counted, and the reason matters -- see below |
+| D | 13 | the rest | silent in all three configurations |
+
+### Group C: the ABI pushes the object out of Zend's cache
+
+This corpus exists because `_efree` parks a block of at most 80 bytes in `AG(cache)` and never
+calls `free()`. For these seven that premise **fails on purecap**, and the measurement says so:
+
+- the fault is `CHERI fault (type 0x2)`, a tag violation, on a capability the register dump marks
+  `(invalid)`. The control in the same boot produced `type 0x1`, a length violation, so the two are
+  distinguishable here;
+- it appears only under every-free while the default and off boots both complete, so **revocation**
+  cleared that tag -- which it can only do to a chunk libc was given back;
+- the faulting `sepcc`, with the load bias validated against the control (`bounds-malloc.c:26`,
+  its declared faulting line), resolves to the defect's own dereference site in every case:
+  `zend_assign_to_variable`, `zend_assign_to_variable_reference`, `zend_std_write_property`,
+  `make_real_object`, `zend_hash_internal_pointer_reset_ex`, `_zval_ptr_dtor`;
+- the revoked block is **192 bytes** in all of them. `sizeof(zend_mem_header)` is 48 on purecap
+  (DWARF) and `MEM_HEADER_PADDING` is 0, so the Zend payload is 144 bytes, `REAL_SIZE >> 3` is 18,
+  and `MAX_CACHED_MEMORY` is 11 -- the block went to real `free()`.
+
+The same objects on the host are a 24-byte header over a 24-77 byte payload, index 10 or less, so
+they stay in the cache forever, which is exactly why the host's stock-allocator run reports nothing
+for all seven. `MAX_CACHED_MEMORY = 11` is an 80-byte ceiling fixed in 2004 for an ABI where a
+pointer was 8 bytes; under the capability ABI every pointer field doubles and the same object lands
+several classes above it.
+
+Two consequences, both of which belong to whoever writes this up:
+
+1. these seven are missed at the platform default, but **not because the nested allocator hid them**
+   -- the chunk was in libc's quarantine and the deferred sweep is what let the access through;
+2. the split between this corpus and `../plain-temporal-repros` was measured on x86-64 and **does
+   not transfer unchanged to purecap**: at least 7 of these 30 do reach the system allocator there.
+
+One loose end: the exact C type of the 144-byte payload is not pinned. `Bucket` fits the arithmetic
+(DWARF: 128 bytes purecap against 72 on the host, allocated `sizeof(Bucket)-1+nKeyLength`, so a
+10-17 byte key lands in 137-144), but the fit is not unique and case 26's faulting register is used
+as a `HashTable *`. It does not affect the conclusion above: every candidate is above index 11.
