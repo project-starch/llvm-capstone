@@ -126,6 +126,11 @@ ARM_ORACLES = {
     "spatial": {"oracle"},
     "sublet": {"oracle"},
     "cheribsd-revocation": {"oracle"},
+    # The same CheriBSD guest with the program's nested allocator REMOVED, so every object is a
+    # malloc object the quarantine knows: shared/run-cheribsd.py --mode non-nested, built
+    # SYSALLOC=1 and run NOMEM5=1. The counterpart of virtual-platform on the CHERI side, and the
+    # arm where revocation can act at all -- nested, it never sees a sub-allocation end.
+    "cheribsd-platform": {"oracle"},
     # The system-allocator arms of docs/ref/runtime-terms-glossary.md section 6:
     # the first-fit heap without per-object bounds, and as applications get it today.
     "sysalloc-none": {"oracle"},

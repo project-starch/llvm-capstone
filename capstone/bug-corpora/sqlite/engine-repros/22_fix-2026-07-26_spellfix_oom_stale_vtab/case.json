@@ -20,35 +20,45 @@
       "verdict_from": "results/matrix.tsv case 22 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "oracle": "CheriBSD 15.0-CURRENT riscv64-purecap, memsys5 over the case's static arena (shared/run-cheribsd.py --mode nested). Revocation acts on a guest malloc free, and under memsys5 there is none: sqlite3_free returns the block to memsys5's own pool inside one array the guest allocator sees as a single live object. So a tag fault here is NOT revocation reporting -- SIGPROT(34) with si_code=2 at the function host ASan reported (fault_sites) is recorded as a catch by the same rule the virtual arms use, and the note says what actually cleared the tag. A fault anywhere else is not tied to the defect",
       "verdict": "CAUGHT",
-      "verdict_from": "results/matrix.tsv case 22 cheribsd-revocation: detected"
+      "verdict_note": "SIGPROT(34) si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x69ffc -> editDist3FindLang+0x40 in spellfixoom (Executable, load base 0x0); by function: editDist3FindLang is where host ASan reported it; the run's poscontrol gate FAULTed (exit=162, revocation_default=1) before any case ran",
+      "verdict_from": "results/2026-10-29-cheribsd/nested (run 2026-10-29, --mode nested)"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=24 pc=0x3f9941ffb0 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
-      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-malloc"
+      "verdict_note": "cause=24 pc=0x3fad41f2b0 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
+      "verdict_from": "results/2026-10-29-virtual/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3faa81ff64 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
-      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3faa01f2f0 in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
+      "verdict_from": "results/2026-10-29-virtual/virtual-nested-pools"
     },
     "silicon-sqlite-stock": {
       "status": "not written",
       "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
     },
     "vp2-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "CAUGHT",
       "verdict_note": "cause=13 pc=0x3fa4c1ff6c in editDist3FindLang; by function: editDist3FindLang is where host ASan reported it",
-      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
-      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc"
     },
     "virtual-platform": {
-      "status": "not written",
-      "note": "declared 2026-10-29: this case configures sqlite_heap itself, so it has no non-nested form -- build-virtual.py without --memsys5 reports it not applicable and the run scores NO-READING:out-of-denominator. Not yet run"
+      "oracle": "the same build without memsys5, where this case has no form at all: it reaches for sqlite_heap to engineer its OOM, and that array exists only when memsys5 is configured, so the builder reports it not applicable and the run scores NO-READING:out-of-denominator",
+      "verdict": "NO-READING",
+      "verdict_note": "the builder marks it not applicable to this arm (it configures sqlite_heap itself)",
+      "verdict_from": "results/2026-10-29-virtual/virtual-platform",
+      "verdict_reason": "out-of-denominator"
+    },
+    "cheribsd-platform": {
+      "oracle": "the same guest with memsys5 left OUT (shared/run-cheribsd.py --mode non-nested: the _sys binaries, SYSALLOC=1, run NOMEM5=1, which also forces a revoke at SQLite's allocator boundary). Every SQLite object is one of the guest malloc's, so its end IS a free the quarantine sees and revocation can act. SIGPROT(34) at the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "SIGPROT(34) si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x6a08c -> editDist3FindLang+0x40 in spellfixoom_sys (Executable, load base 0x0); by function: editDist3FindLang is where host ASan reported it; the run's poscontrol gate FAULTed (exit=162, revocation_default=1) before any case ran",
+      "verdict_from": "results/2026-10-29-cheribsd/non-nested (run 2026-10-29, --mode non-nested)"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1025b65c0; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: completes; clean exit, no defect-site probe in that run",

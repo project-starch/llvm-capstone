@@ -16,7 +16,8 @@
     "virtual-nested-pools",
     "silicon-sqlite-stock",
     "vp2-malloc",
-    "virtual-platform"
+    "virtual-platform",
+    "cheribsd-platform"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -51,9 +52,10 @@
     "virtual-platform": "virtual-mallocng"
   },
   "verdict_bundles": {
-    "virtual-malloc": "results/2026-10-11-virtual-request-bounds/virtual-malloc",
-    "virtual-nested-pools": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools",
+    "virtual-malloc": "results/2026-10-29-virtual/virtual-malloc",
+    "virtual-nested-pools": "results/2026-10-29-virtual/virtual-nested-pools",
     "silicon-sqlite-stock": "results/2026-10-16-silicon/silicon-sqlite-stock",
-    "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc"
+    "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",
+    "virtual-platform": "results/2026-10-29-virtual/virtual-platform"
   }
 }

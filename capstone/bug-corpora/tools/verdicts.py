@@ -147,14 +147,14 @@ def judge(obs, arm_spec):
         # base arm's apparent catches was cause 24, an untagged dereference -- the
         # architecture's baseline tag check firing on the CONSEQUENCE of an access it had
         # already allowed. Every Sublet catch on those arms is cause 25 (lifetime) or 28
-        # (bounds), the mechanism itself, with ONE exception: engine-repros case 02 faults
-        # cause=24 in sqlite3BtreeUpdateMeta on every Capstone arm it ran on, base and Sublet
-        # alike, so there the protected arm is reporting the same consequence as the
-        # unprotected one. An earlier revision of this comment said "every Sublet catch",
-        # without the exception. The exception is not a property of Sublet: that case's trigger
-        # was found not to end the lifetime it names, so all four of its cells are readings of a
-        # program that never reached the defect, and the re-measurement is pending (see the
-        # corpus README). A configuration that does not declare the key behaves as before.
+        # (bounds), the mechanism itself. Until 2026-10-29 there was ONE exception --
+        # engine-repros case 02 faulted cause=24 in sqlite3BtreeUpdateMeta on base and Sublet
+        # alike -- and it was not a property of Sublet: that case's trigger did not end the
+        # lifetime it names, so every cell was a reading of a program that never reached the
+        # defect. With the corrected trigger (a DETACH of the backup's destination) the
+        # 2026-10-29 run reads cause=25 in sqlite3BtreePager on the Sublet arm and leaves the
+        # base arm's fault unattributed, and the exception is gone.
+        # A configuration that does not declare the key behaves as before.
         allowed = arm_spec.get("catch_causes")
         if allowed is not None and obs.fault.cause not in allowed:
             required = set(arm_spec.get("controls_for_missed", []))

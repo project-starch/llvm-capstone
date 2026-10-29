@@ -25,9 +25,19 @@
  * PendingTermsFlush -> PendingTermsClear), then matchinfo() restarts over the
  * freed term. Swapping the two columns, or dropping matchinfo(), is silent.
  *
- * CONTROL arm: one row inserted inside an open transaction, then
- * SELECT docid, optimize(ft), matchinfo(ft) over MATCH 'one'. Host ASan reports
- * heap-use-after-free, a 3-byte read of the freed hash key in
+ * matchinfo()'s format matters and so does the data. The restart comes from the
+ * 'x' directive (per-phrase, per-column hit counts), which is why the default
+ * format pcx reports and 'p', 'c', 'n', 'a' and 'l' are each silent. And
+ * fts3EvalGatherStats walks every row of the table after the restart: with only
+ * the pending row to walk, that walk does not terminate on an arm that does not
+ * stop the read, so the case hung instead of returning (measured 2026-10-29, the
+ * first form of this trigger timed out on virtual-malloc and on CheriBSD
+ * nested). One COMMITTED row gives the walk a real on-disk segment and it ends:
+ * the same trigger then reports under host ASan and RETURNS without it.
+ *
+ * CONTROL arm: one committed row, one row inserted inside an open transaction,
+ * then SELECT docid, optimize(ft), matchinfo(ft) over MATCH 'one'. Host ASan
+ * reports heap-use-after-free, a 3-byte read of the freed hash key in
  * sqlite3Fts3SegReaderStep under fts3EvalRestart, freed by fts3HashFree under
  * sqlite3Fts3PendingTermsClear.
  * NOTE: build in fts3 group. */
@@ -37,7 +47,11 @@ static int run_case(void){
   sqlite3 *db=0; int rc=sqlite3_open(":memory:",&db); if(rc)return FAILRC("open",rc);
   rc=sqlite3_exec(db,"CREATE VIRTUAL TABLE ft USING fts3(x);",0,0,0);
   if(rc)return FAILRC("fts3zterm create",rc);
-  /* no COMMIT: the term stays in the pending-terms hash, so the scan below
+  /* a committed row first: fts3EvalGatherStats walks the table after the restart
+   * and needs a real on-disk segment to walk, or the walk never ends */
+  rc=sqlite3_exec(db,"BEGIN;INSERT INTO ft VALUES('a one');COMMIT;",0,0,0);
+  if(rc)return FAILRC("fts3zterm committed",rc);
+  /* no COMMIT here: the term stays in the pending-terms hash, so the scan below
    * borrows a pointer into it */
   rc=sqlite3_exec(db,"BEGIN;INSERT INTO ft VALUES('d one');",0,0,0);
   if(rc)return FAILRC("fts3zterm pending",rc);

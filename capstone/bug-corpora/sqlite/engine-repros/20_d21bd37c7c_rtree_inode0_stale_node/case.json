@@ -20,37 +20,47 @@
       "verdict_from": "results/matrix.tsv case 20 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "SIGPROT(34) -- CHERI-DETECTED. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
-      "verdict": "CAUGHT",
-      "verdict_from": "results/matrix.tsv case 20 cheribsd-revocation: detected"
+      "oracle": "CheriBSD 15.0-CURRENT riscv64-purecap, memsys5 over the case's static arena (shared/run-cheribsd.py --mode nested). Revocation acts on a guest malloc free, and under memsys5 there is none: sqlite3_free returns the block to memsys5's own pool inside one array the guest allocator sees as a single live object. So a tag fault here is NOT revocation reporting -- SIGPROT(34) with si_code=2 at the function host ASan reported (fault_sites) is recorded as a catch by the same rule the virtual arms use, and the note says what actually cleared the tag. A fault anywhere else is not tied to the defect",
+      "verdict": "NO-READING",
+      "verdict_reason": "unattributed",
+      "verdict_note": "SIGPROT(34) si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x1d09a4 -> nodeRelease+0x2e in rtreeinode0 (SharedObject, load base 0x100000); NOT where host ASan reported it (['nodeAcquire', 'nodeHashLookup']), so the fault is on a value the access already returned, not the access being refused; the run's poscontrol gate FAULTed (exit=162, revocation_default=1) before any case ran",
+      "verdict_from": "results/2026-10-29-cheribsd/nested (run 2026-10-29, --mode nested)"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "NO-READING",
-      "verdict_note": "cause=24 pc=0x3f81a17800 in nodeRelease; in nodeRelease; ASan site ['nodeAcquire', 'nodeHashLookup']",
-      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-malloc",
+      "verdict_note": "cause=24 pc=0x3fb2216148 in nodeRelease; in nodeRelease; ASan site ['nodeAcquire', 'nodeHashLookup']",
+      "verdict_from": "results/2026-10-29-virtual/virtual-malloc",
       "verdict_reason": "unattributed"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fb4a1b378 in nodeHashLookup; by function: nodeHashLookup is where host ASan reported it",
-      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3fa9a1a5e8 in nodeHashLookup; by function: nodeHashLookup is where host ASan reported it",
+      "verdict_from": "results/2026-10-29-virtual/virtual-nested-pools"
     },
     "silicon-sqlite-stock": {
       "status": "not written",
       "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
     },
     "vp2-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "NO-READING",
       "verdict_note": "cause=4 pc=0x3f92615548 in nodeRelease; in nodeRelease; ASan site ['nodeAcquire', 'nodeHashLookup']",
       "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
-      "verdict_reason": "unattributed",
-      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
+      "verdict_reason": "unattributed"
     },
     "virtual-platform": {
-      "status": "not written",
-      "note": "declared 2026-10-29: the non-nested measurement, memsys5 out of the build (ports/sqlite/repro322/build-virtual.py without --memsys5, build.json arm 'platform', configuration virtual-mallocng). Not yet run"
+      "oracle": "virtual profile with memsys5 left OUT of the build (tools/arms.json virtual-mallocng, ports/sqlite/repro322/build-virtual.py without --memsys5, build.json arm 'platform'): every SQLite object is its own mallocng object, bounded to its request and retired on free, so there is no arena to hide it inside. A fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3f926177dc in nodeHashLookup; by function: nodeHashLookup is where host ASan reported it",
+      "verdict_from": "results/2026-10-29-virtual/virtual-platform"
+    },
+    "cheribsd-platform": {
+      "oracle": "the same guest with memsys5 left OUT (shared/run-cheribsd.py --mode non-nested: the _sys binaries, SYSALLOC=1, run NOMEM5=1, which also forces a revoke at SQLite's allocator boundary). Every SQLite object is one of the guest malloc's, so its end IS a free the quarantine sees and revocation can act. SIGPROT(34) at the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "SIGPROT(34) si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x1d203c -> nodeHashLookup+0x5c in rtreeinode0_sys (SharedObject, load base 0x100000); by function: nodeHashLookup is where host ASan reported it; the run's poscontrol gate FAULTed (exit=162, revocation_default=1) before any case ran",
+      "verdict_from": "results/2026-10-29-cheribsd/non-nested (run 2026-10-29, --mode non-nested)"
     }
   },
   "status": "spatial run 2026-10-04/05: capability fault delivered, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x1029b34d8; sublet run 2026-10-04/05: VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4; cheribsd-revocation run 2026-10-04/05: no verdict: rtreeinode0 before dangling-hash query",

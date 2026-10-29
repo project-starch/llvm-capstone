@@ -20,37 +20,53 @@
       "verdict_from": "results/matrix.tsv case 11 sublet: not-detected"
     },
     "cheribsd-revocation": {
-      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "oracle": "CheriBSD 15.0-CURRENT riscv64-purecap, memsys5 over the case's static arena (shared/run-cheribsd.py --mode nested). Revocation acts on a guest malloc free, and under memsys5 there is none: sqlite3_free returns the block to memsys5's own pool inside one array the guest allocator sees as a single live object. So a tag fault here is NOT revocation reporting -- SIGPROT(34) with si_code=2 at the function host ASan reported (fault_sites) is recorded as a catch by the same rule the virtual arms use, and the note says what actually cleared the tag. A fault anywhere else is not tied to the defect",
       "verdict": "MISSED",
-      "verdict_from": "results/matrix.tsv case 11 cheribsd-revocation: not-detected"
+      "verdict_note": "the case RETURNED (exit 0) and this arm reported nothing; the run's poscontrol gate FAULTed (exit=162, revocation_default=1) before any case ran",
+      "verdict_from": "results/2026-10-29-cheribsd/nested (run 2026-10-29, --mode nested)"
     },
     "virtual-malloc": {
       "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
-      "verdict": "MISSED",
-      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
-      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-malloc"
+      "verdict": "NO-READING",
+      "verdict_note": "runner timeout",
+      "verdict_from": "results/2026-10-29-virtual/virtual-malloc",
+      "verdict_reason": "infra"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, memsys5 on its Sublet port (tools/arms.json virtual-sqlite-memsys5-pools): as virtual-malloc",
-      "verdict": "MISSED",
-      "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
-      "verdict_from": "results/2026-10-11-virtual-request-bounds/virtual-nested-pools"
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3fb0685a7c in memcmp; by function: memcmp is where host ASan reported it",
+      "verdict_from": "results/2026-10-29-virtual/virtual-nested-pools"
     },
     "silicon-sqlite-stock": {
       "status": "not written",
       "note": "not in the silicon control arm's batch: tests/rtl-smoke/repro322-silicon-2026-10-16 runs the eight cases of the 2026-10-01 batch, whose README gives why the others were left out"
     },
     "vp2-malloc": {
+      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
       "verdict": "MISSED",
       "verdict_note": "reached (the case began (BEGIN line; no marker at the access on this harness)) and completed with no fault",
-      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc",
-      "oracle": "virtual profile, memsys5 stock over its static arena (tools/arms.json virtual-sqlite-memsys5): a fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it"
+      "verdict_from": "results/2026-10-18-vp2-rdx0/vp2-malloc"
     },
     "virtual-platform": {
-      "status": "not written",
-      "note": "declared 2026-10-29: the non-nested measurement, memsys5 out of the build (ports/sqlite/repro322/build-virtual.py without --memsys5, build.json arm 'platform', configuration virtual-mallocng). Not yet run"
+      "oracle": "virtual profile with memsys5 left OUT of the build (tools/arms.json virtual-mallocng, ports/sqlite/repro322/build-virtual.py without --memsys5, build.json arm 'platform'): every SQLite object is its own mallocng object, bounded to its request and retired on free, so there is no arena to hide it inside. A fault in the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "CAUGHT",
+      "verdict_note": "cause=25 pc=0x3fb4a82ab8 in memcmp; by function: memcmp is where host ASan reported it",
+      "verdict_from": "results/2026-10-29-virtual/virtual-platform"
+    },
+    "cheribsd-platform": {
+      "oracle": "the same guest with memsys5 left OUT (shared/run-cheribsd.py --mode non-nested: the _sys binaries, SYSALLOC=1, run NOMEM5=1, which also forces a revoke at SQLite's allocator boundary). Every SQLite object is one of the guest malloc's, so its end IS a free the quarantine sees and revocation can act. SIGPROT(34) at the function host ASan reported (fault_sites), or the case returns and this arm did not see it",
+      "verdict": "NO-READING",
+      "verdict_reason": "unattributed",
+      "verdict_note": "SIGPROT(34) si_code=2 (PROT_CHERI_TAG/untagged-deref) pc=0x40436a98, which is outside fts3zterm_sys (SharedObject, load base 0x100000) -- the pc is in a shared object and the record does not carry that object's load base, so the faulting function cannot be named from it. This case's declared site is ['fts3SegReaderCmp', 'memcmp'], a libc routine among them, which is consistent with the fault but not established by it; the run's poscontrol gate FAULTed (exit=162, revocation_default=1) before any case ran The guest has ASLR enabled (kern.elf64.aslr.enable=1), and a shared object's base depends on the library set loaded before it, so the base cannot be reconstructed after the fact either: recording it in the run would be the one change that closes this cell.",
+      "verdict_from": "results/2026-10-29-cheribsd/non-nested (run 2026-10-29, --mode non-nested)"
     }
   },
   "status": "all three arms run; spatial and sublet 2026-10-04 with the gaps closed 2026-10-05, cheribsd-revocation 2026-10-04 with the 12 missing cases built and run 2026-10-05",
-  "note": "Trigger replaced 2026-10-29 and the defect is now reached. The old trigger auto-committed its three INSERTs, so sqlite3Fts3PendingTermsClear had already emptied the hash before the SELECT opened. Putting the inserts inside BEGIN is necessary but not sufficient: in 3.22.0 no pending reader that survives across rows ever reads zTerm again -- an exact-term reader snapshots one hash element plus a NULL sentinel (sqlite3Fts3SegReaderPending), and a prefix reader is consumed eagerly by fts3TermSelect and freed before the first row (traced with probes on PendingTermsClear, the zTerm alias and sqlite3Fts3SegReaderFree). The read comes from a RESTART instead: optimize() frees the hash through sqlite3VtabSavepoint -> fts3SavepointMethod -> fts3SyncMethod -> PendingTermsFlush -> PendingTermsClear, then matchinfo() reaches fts3EvalGatherStats -> fts3EvalRestart and re-starts the readers built before the clear. Host ASan (shared/run-host-asan.py, both controls satisfied): heap-use-after-free, a 3-byte read in sqlite3Fts3SegReaderStep under fts3TermSelect <- fts3EvalPhraseLoad, freed by fts3HashFree under sqlite3Fts3PendingTermsClear. Swapping the two aux-function columns, or dropping matchinfo(), is silent."
+  "note": "Trigger replaced 2026-10-29 and the defect is now reached. The old trigger auto-committed its three INSERTs, so sqlite3Fts3PendingTermsClear had already emptied the hash before the SELECT opened. Putting the inserts inside BEGIN is necessary but not sufficient: in 3.22.0 no pending reader that survives across rows ever reads zTerm again -- an exact-term reader snapshots one hash element plus a NULL sentinel (sqlite3Fts3SegReaderPending), and a prefix reader is consumed eagerly by fts3TermSelect and freed before the first row (traced with probes on PendingTermsClear, the zTerm alias and sqlite3Fts3SegReaderFree). The read comes from a RESTART instead: optimize() frees the hash through sqlite3VtabSavepoint -> fts3SavepointMethod -> fts3SyncMethod -> PendingTermsFlush -> PendingTermsClear, then matchinfo() reaches fts3EvalGatherStats -> fts3EvalRestart and re-starts the readers built before the clear. Host ASan (shared/run-host-asan.py, both controls satisfied): heap-use-after-free, a 3-byte read in fts3SegReaderCmp under fts3SegReaderSort <- fts3SegReaderStart, freed by fts3HashFree under sqlite3Fts3PendingTermsClear. Swapping the two aux-function columns, or dropping matchinfo(), is silent, and so is any matchinfo format without the 'x' directive ('p', 'c', 'n', 'a', 'l' each measured clean) -- 'x' is what reaches fts3EvalGatherStats. One COMMITTED row is also required: fts3EvalGatherStats walks the table after the restart, and with only the pending row that walk does not terminate, so the first form of this trigger timed out on virtual-malloc and on CheriBSD nested instead of returning.",
+  "fault_sites": [
+    "fts3SegReaderCmp",
+    "memcmp"
+  ],
+  "fault_sites_why": "Declared 2026-10-29 from the host ASan reference run on the corrected trigger (shared/run-host-asan.py, both controls satisfied): heap-use-after-free, a 3-byte read of the freed pending-terms hash key in fts3SegReaderCmp under fts3SegReaderSort <- fts3SegReaderStart <- fts3TermSelect <- fts3EvalPhraseLoad <- fts3EvalRestart. fts3SegReaderCmp compares the two readers' borrowed terms with memcmp, so the libc primitive is declared beside the SQLite function, as cases 16 and 17 do for binCollFunc/memcmp and case 23 for sqlite3VdbeSerialPut/memcpy; on the virtual arms the fault lands in memcmp. An earlier form of this trigger, with no committed row, had one reader instead of two and reported the same read from sqlite3Fts3SegReaderStep's own comparison -- the same borrowed term, one frame along. The case carried no fault_sites before, because the trigger replaced on 2026-10-29 never reached the defect."
 }
