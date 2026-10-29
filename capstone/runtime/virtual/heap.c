@@ -10,6 +10,18 @@
 #include "vm.h"
 #include "vm-abi.h"
 #include <capstone/representable.h>
+#include <unistd.h>
+/* TRACE BUILD ONLY (spec-realloc-trace, never landed): a ring of the last heap events, dumped to fd 2 by
+ * prepare_free just before its trap. */
+#define TR_N 128
+static unsigned long tr_bind_bad, tr_bind_first[4][8], tr_bind_total;
+static unsigned long tr_ring[TR_N][5]; static unsigned tr_i; static unsigned long tr_moved, tr_events;
+static void tr(unsigned long t, unsigned long a, unsigned long b, unsigned long c, unsigned long d)
+{ unsigned long *e = tr_ring[tr_i++ % TR_N]; e[0]=t; e[1]=a; e[2]=b; e[3]=c; e[4]=d; tr_events++; }
+static void tr_hex(char **o, unsigned long v)
+{ char b[17]; int n=0; do { b[n++]="0123456789abcdef"[v&15]; v>>=4; } while (v); *(*o)++=' '; while (n) *(*o)++=b[--n]; }
+static void tr_line(const char *tag, const unsigned long *v, int k)
+{ char buf[200], *o=buf; for (const char *t=tag; *t; ) *o++=*t++; for (int i=0;i<k;i++) tr_hex(&o, v[i]); *o++='\n'; write(2, buf, o-buf); }
 
 /* The two switches of the spatial-versus-temporal measurement (runtime/application CMake
  * options CAPSTONE_HEAP_LIFETIMES and CAPSTONE_HEAP_SCRUB_FREE, recorded in sdk.json). Both
@@ -37,6 +49,26 @@ static void lock_heap(void)
 }
 static void unlock_heap(void)
 { __atomic_store_n(&heap_mutex, 0, __ATOMIC_RELEASE); }
+static void tr_dump_ring(void)
+{
+    for (unsigned j = 0; j < TR_N; j++) { unsigned long *e = tr_ring[(tr_i + j) % TR_N]; if (!e[0]) continue;
+        char tag[16] = "@@HTRACE-EV ?"; tag[12] = (char)e[0]; tr_line(tag, e + 1, 4); }
+}
+static void tr_chk(struct capstone_malloc_slot *r, unsigned long where)
+{
+    if (!r || !r->parent) return;
+    if (__builtin_capstone_cap_get_cursor(r->parent) == __builtin_capstone_cap_get_base(r->parent)) return;
+    unsigned long h[10] = {where, r->key, r->nominal, r->kind, r->index,
+        __builtin_capstone_cap_get_cursor(r->parent), __builtin_capstone_cap_get_base(r->parent),
+        __builtin_capstone_cap_get_end(r->parent), (unsigned long)r->prefix[0] | (unsigned long)r->prefix[1] << 8
+        | (unsigned long)r->prefix[2] << 16 | (unsigned long)r->prefix[3] << 24, tr_events};
+    tr_line("@@HTRACE-CHK where key nominal kind index pcur pbase pend prefix events", h, 10);
+    if (r->issued) { unsigned long v[3] = {__builtin_capstone_cap_get_cursor(r->issued),
+        __builtin_capstone_cap_get_base(r->issued), __builtin_capstone_cap_get_end(r->issued)};
+        tr_line("@@HTRACE-CHK-ISSUED cur base end", v, 3); }
+    tr_dump_ring();
+    __builtin_trap();
+}
 static unsigned bucket(size_t key)
 { return ((key >> 4) * 11400714819323198485UL) >> 52; }
 static void unindex(struct capstone_malloc_slot *r)
@@ -58,6 +90,7 @@ struct capstone_malloc_slot *__capstone_malloc_find(const void *p)
 void __capstone_malloc_slot_key(struct capstone_malloc_slot *r, void *p, size_t n)
 {
     unindex(r);
+    tr_chk(r, 0x51); tr('K', __builtin_capstone_cap_get_cursor(p), n, r->kind, 0);
     r->key = __builtin_capstone_cap_get_cursor(p); r->nominal = n;
     unsigned b = bucket(r->key);
     r->next = index_heads[b]; index_heads[b] = r;
@@ -186,6 +219,13 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
             }
         }
         slots[i].issued = NULL;
+        tr_bind_total++;
+        if (__builtin_capstone_cap_get_cursor(slots[i].parent) != start) {
+            if (tr_bind_bad < 4) { unsigned long *b = tr_bind_first[tr_bind_bad];
+                b[0]=i; b[1]=start; b[2]=end; b[3]=__builtin_capstone_cap_get_cursor(slots[i].parent);
+                b[4]=__builtin_capstone_cap_get_base(slots[i].parent); b[5]=base; b[6]=stride; b[7]=hdr; }
+            tr_bind_bad++;
+        }
     }
     return group;
 }
@@ -288,7 +328,7 @@ void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
     size_t base = parent->key;
     parent->issued = issue_child(parent->parent,
         base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
-    parent->kind = SLOT_NESTED;
+    parent->kind = SLOT_NESTED; tr('N', parent->key, stride, count, 0);
     return bind_slots(slots, parent->issued, stride, count);
 }
 void *__capstone_malloc_slot_take(struct capstone_malloc_slot *r)
@@ -304,7 +344,7 @@ void *__capstone_malloc_slot_start(struct capstone_malloc_slot *r)
 static void *backend_pointer(struct capstone_malloc_slot *r)
 { return (char *)r->parent + (r->key - __builtin_capstone_cap_get_base(r->parent)); }  /* offset first; see bind_slots */
 void __capstone_malloc_slot_release(struct capstone_malloc_slot *r)
-{ unindex(r); r->kind = SLOT_INTERNAL; }
+{ tr('L', r->key, r->kind, r->nominal, 0); unindex(r); r->kind = SLOT_INTERNAL; }
 void __capstone_malloc_nested_release(struct capstone_malloc_slot *r)
 {
     end_child(r->parent, r->issued);
@@ -314,7 +354,26 @@ void __capstone_malloc_nested_release(struct capstone_malloc_slot *r)
 void *__capstone_malloc_prepare_free(void *p)
 {
     struct capstone_malloc_slot *r = __capstone_malloc_find(p);
-    if (!r || r->kind == SLOT_NESTED) __builtin_trap();
+    tr_chk(r, 0x53);
+    tr('P', __builtin_capstone_cap_get_cursor(p), r ? r->key : 0, r ? r->kind : 9, r ? r->nominal : 0);
+    if (!r || r->kind == SLOT_NESTED) {
+        unsigned long cur = __builtin_capstone_cap_get_cursor(p);
+        unsigned long h[5] = {cur, __builtin_capstone_cap_get_base(p), __builtin_capstone_cap_get_end(p), tr_events, tr_moved};
+        tr_line("@@HTRACE-FAIL cursor base end events moved", h, 5);
+        for (unsigned i = 0; i < INDEX_BUCKETS; i++)
+            for (struct capstone_malloc_slot *q = index_heads[i]; q; q = q->next)
+                if (q->key <= cur + 65536 && cur < q->key + q->nominal + 65536) {
+                    unsigned long v[4] = {q->key, q->nominal, q->kind, (unsigned long)(q->issued != 0)};
+                    tr_line("@@HTRACE-NEAR key nominal kind issued", v, 4);
+                }
+        for (unsigned j = 0; j < TR_N; j++) {
+            unsigned long *e = tr_ring[(tr_i + j) % TR_N];
+            if (!e[0]) continue;
+            char tag[16] = "@@HTRACE-EV ?"; tag[12] = (char)e[0];
+            tr_line(tag, e + 1, 4);
+        }
+        __builtin_trap();
+    }
     if (r->kind == SLOT_PUBLIC) {
 #if CAPSTONE_HEAP_SCRUB_FREE
         /* Remove residual payload capabilities before returning ownership.
@@ -372,6 +431,7 @@ void *__capstone_malloc_group_remap(struct capstone_malloc_slot *slots,
         errno = ENOMEM;
         return MAP_FAILED;
     }
+    tr('G', r->key, old, bytes, offset);
     unindex(r);
     /* bytes - group_header(bytes), NOT bytes - 16, for the same reason as group_attach: the slot
      * begins after a granule-sized header, so a stride measured from a 16-byte one runs past the
@@ -394,7 +454,7 @@ static void *publish(void *p, size_t n)
     /* Successful in-place realloc replaces the public lifetime; failure
      * never reaches here. Remapping already retired the old mapping. */
     if (r->issued) end_child(r->parent, r->issued);
-    r->kind = SLOT_PUBLIC; r->nominal = n;
+    tr_chk(r, 0x52); r->kind = SLOT_PUBLIC; r->nominal = n;
     r->issued = issue_child(r->parent,
         r->key - __builtin_capstone_cap_get_base(r->parent), n ? n : 1);
     return r->issued;
@@ -430,13 +490,25 @@ __attribute__((noinline)) static struct capstone_malloc_slot *checked(void *p)
                      : : "r"(p) : "memory");
     struct capstone_malloc_slot *r = __capstone_malloc_find(p);
     if (!r || r->kind != SLOT_PUBLIC) invalid_free();
+    tr_chk(r, 0x54);
     return r;
 }
 void free(void *p)
 {
     if (!p) return;
     int e = errno;
-    lock_heap(); __capstone_mallocng_free(backend_pointer(checked(p))); unlock_heap();
+    lock_heap(); { struct capstone_malloc_slot *fr = checked(p); tr('F', fr->key, fr->nominal, fr->kind, 0);
+    if (__builtin_capstone_cap_get_cursor(fr->parent) != __builtin_capstone_cap_get_base(fr->parent)) {
+        unsigned long h[8] = {fr->key, fr->nominal, __builtin_capstone_cap_get_cursor(fr->parent),
+            __builtin_capstone_cap_get_base(fr->parent), __builtin_capstone_cap_get_end(fr->parent),
+            tr_bind_total, tr_bind_bad, tr_moved};
+        tr_line("@@HTRACE-PARENT key nominal pcursor pbase pend binds bindbad moved", h, 8);
+        for (unsigned k = 0; k < 4 && k < tr_bind_bad; k++) tr_line("@@HTRACE-BINDBAD i start end cursor base gbase stride hdr", tr_bind_first[k], 8);
+        for (unsigned j = 0; j < TR_N; j++) { unsigned long *e = tr_ring[(tr_i + j) % TR_N]; if (!e[0]) continue;
+            char tag[16] = "@@HTRACE-EV ?"; tag[12] = (char)e[0]; tr_line(tag, e + 1, 4); }
+        __builtin_trap();
+    }
+    __capstone_mallocng_free(backend_pointer(fr)); } unlock_heap();
     errno = e;
 }
 void __libc_free(void *p) { free(p); }
@@ -466,9 +538,11 @@ static void *exact_or_moved(void *raw, size_t want, size_t old)
     if (!raw) return NULL;
     struct capstone_malloc_slot *r = __capstone_malloc_find(raw);
     if (!r) __builtin_trap();
+    tr('X', __builtin_capstone_cap_get_cursor(raw), r->key, r->kind, capstone_repr_ok(r->key, want));
     if (capstone_repr_ok(r->key, want)) return raw;
     void *fresh = __capstone_mallocng_malloc(want);
     if (!fresh) { __capstone_malloc_ng_null++; return NULL; }
+    tr('M', __builtin_capstone_cap_get_cursor(fresh), __builtin_capstone_cap_get_cursor(raw), want, old); tr_moved++;
     memcpy(fresh, raw, old < want ? old : want);
     __capstone_mallocng_free(raw);
     return fresh;
@@ -485,6 +559,7 @@ void *realloc(void *p, size_t n)
     size_t want = capstone_repr_round(n ? n : 1);
     if (want < n) { unlock_heap(); errno = ENOMEM; return NULL; }
     size_t old = r->nominal;
+    tr('R', r->key, want, old, r->kind);
     void *q = ensure_ids(IDS_PER_CALL) ? NULL
             : publish(exact_or_moved(__capstone_mallocng_realloc(backend_pointer(r), want), want, old), want);
     unlock_heap(); return q;
