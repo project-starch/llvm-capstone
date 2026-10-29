@@ -65,7 +65,7 @@ mallocng. The entry translates that into the variable the port's own recipe
 reads (`CPY_SUBLET`, `PGSU_NESTED`, `FFAPP_SUBLET`, `TSAPP_SUBLET`,
 `PERLD_SUBLET`, `MRBD_SUBLET`, `SQLITE_HEAP`, `PHP_REALPHP_ALLOC`); those still
 work, and one that contradicts the selector is refused rather than silently
-losing. For PHP, `1` is the nested allocator layer of `ports/php/app/patches/0003` with
+losing. For PHP, `1` is the nested allocator layer of `ports/php/zend-alloc/sublet/patches/` with
 its arm baked in (mode 6: a lifetime per `emalloc` object, PHP's own bounds;
 `PHP_REALPHP_DEFAULT_MODE=7` adds exact bounds), because the generic runners set
 no `PHP_CAP_MODE`; the port's own measurement images name their arm per run and

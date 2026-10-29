@@ -3,7 +3,7 @@
 Real PHP 5.0.0 -- PHP's own `main()`, the Zend engine, `ext/standard` and the bundled regex,
 145 translation units, nothing stubbed -- built as a capability application and run as a
 Linux process on the virtual profile, stock or with a nested allocator layer in `Zend/zend_alloc.c`.
-`port.json` is the declaration; `patches/README.md` the three patches and who applies them.
+`port.json` is the declaration; `patches/README.md` the tree patches, the nested layer's patch and who applies them.
 
 What it is not: `--disable-all`, so no extension beyond `ext/standard`; the CLI SAPI only; no
 dynamic loading, no threads; compiled at `-O0` so a fault attributes to a line. It is PHP from
@@ -23,7 +23,7 @@ CAPSTONE_VIRTUAL_LIFETIMES=1 bash capstone/ports/common/application/build-virtua
 `CFLAGS=-std=gnu89 ./configure --disable-all`, the tree patches), with `PROVENANCE.txt`.
 
 - `0`: `zend_alloc.c` as released, every `emalloc` block from virtual mallocng.
-- `1`: the nested layer (patch 0003 applied to `zend_alloc.c`, adapter `../zend-alloc/sublet`), its arm
+- `1`: the nested layer (its patch applied to `zend_alloc.c`, patch and adapter in `../zend-alloc/sublet`), its arm
   baked in as mode 6 -- a lifetime per `emalloc` object, `CDERIVE` on handout and `CREVOKE` at
   every `efree`, PHP's own bounds. `PHP_REALPHP_DEFAULT_MODE=7` adds exact bounds. The image
   prints `ZEND_CAP_MODE_DEFAULTED 6` when it takes that default; `PHP_CAP_MODE` in the
@@ -60,7 +60,8 @@ adapter.
 ```
 build-virtual.sh        the port's own build: probes, the Phase A/B engine image, realphp
 prepare-sources.sh      the PHP tree: tarball by hash, configure, tree patches, provenance
-patches/                0001 compile fix, 0002 qsort swap (tree); 0003 the nested layer (a mode)
+patches/5.0.0/          the tree patches: 0001 compile fix, 0002 qsort swap (the nested layer's
+                        patch, a mode, is ../zend-alloc/sublet/patches/5.0.0/)
 run-virtual.py          one guest boot, many runs; the transport run-realphp.py uses
 run-realphp.py          the corpus instrument: arms, populations, the judge's controls
 test-run-realphp.py     its offline suite; test-run-cases.py the Phase A runner's
