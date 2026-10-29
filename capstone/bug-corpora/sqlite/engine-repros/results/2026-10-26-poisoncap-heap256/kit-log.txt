@@ -1,0 +1,4 @@
+0580a6b block port: sublet-3220000-memsys5-block.patch, --block-port and --realloc-keeps-lifetime, realloc controls
+e8ab6ed --heap-malloc on both builders (REPRO322_HEAP_MALLOC), tolerant guest output decoding
+0967f36 --heap-min on both builders, SQLITE_HEAP_MIN_REQ in repro322_common.h
+929c104 kit heap256 from sqlite-poisoncap-corpus d319f672 plus --heap-bytes for build-virtual.py

@@ -1,0 +1,376 @@
+Subject: [PATCH] memsys5 blocks and lookaside slots as Sublet lifetimes, block bounds, realloc renews
+Upstream: sqlite 3.22.0 amalgamation
+Upstream-SHA256: 7fc92e19a3af61f3961b83447a91f1e1dec06646e343037dfd96a397167700b2 (sqlite3.c)
+Applies-To: sqlite3-capstone.c, the copy ports/sqlite/repro322/build-virtual.py
+  stages (sqlite3.c with fts5-azarg-patch.py and fts3-doclist-null-patch.py),
+  with patch -F0 -p1
+
+The block port (2026-10-26). Every block memsys5 hands out is a child
+lifetime of its pool, bounded to the whole power-of-two block, as stock
+memsys5 hands it out and reports it; sqlite3_free revokes it, so every
+copy of the caller's pointer dies with it. Every successful realloc ends
+the old allocation and returns a new lifetime, also when the block stays:
+realloc's contract (C11 7.22.3.5, SQLite's sqlite3_realloc) frees the old
+allocation whether or not the address changes. The lookaside does the
+same for its slots. Placement, sizes, rounding and heap geometry are
+stock memsys5's; the only extra operations are a CREVOKE and a CDERIVE
+per realloc that keeps its block.
+
+# Two instructions do the work. CDERIVE makes a child capability of a
+# non-linear parent, bounded to a sub-range and carrying MANAGE over its own
+# children; CREVOKE(parent, child) ends a direct child and everything below
+# it, and faults when the child is not a live direct child.
+#
+# memsys5Init derives the heap's lifetime from the configured heap and the
+# pool below it, with stock geometry (nByte/(szAtom+1) atoms). The heap
+# pointer itself carries no MANAGE, so the pool needs a parent that does.
+# memsys5MallocUnsafe returns a child of the pool bounded to the block,
+# memsys5FreeUnsafe revokes it before the buddy code runs, and
+# memsys5Shutdown revokes the pool. Split and merge are unchanged: they only
+# move indices, and memsys5 reaches every block, the in-band free-list links
+# included, through the pool. A block is a power-of-two number of atoms at an
+# index that is a multiple of its size, and the pool base carries the heap's
+# granule alignment (repro322_common.h), so every child is representable
+# without a pad.
+#
+# realloc. A realloc that fits the block reaches memsys5Realloc's in-place
+# branch, which now calls memsys5Renew: CREVOKE the old child, then CDERIVE
+# a new child of the pool over the same block. The new child is a sibling,
+# so revoking the old one first keeps the pool's children disjoint. SQLite's
+# own shortcut in sqlite3Realloc (same rounded size: return the old pointer
+# without calling the allocator) is removed, so that case reaches
+# memsys5Renew as well. sqlite3DbRealloc's lookaside branch (the slot still
+# fits) renews the slot the same way (lookasideRenew). A realloc that moves
+# is unchanged: allocate, copy, then free the old block, which revokes it.
+# A failed realloc leaves the old allocation and its lifetime as they were.
+# Growth into a block's unused bytes without a realloc, which SQLite does
+# after asking sqlite3MallocSize, is no lifetime boundary and changes
+# nothing.
+#
+# The ablation: -DSUBLET_REALLOC_KEEPS_LIFETIME returns the old child from
+# every realloc that keeps its block and restores SQLite's shortcut, so a
+# stale pointer across an in-place realloc goes undetected, as on a
+# mechanism that sees only frees.
+#
+# What it gives up: an overrun inside a block's power-of-two rounding is not
+# caught, as on PoisonCap's memsys5. A block carries the heap's data rights.
+#
+# setupLookaside derives the buffer's lifetime and a generation below it,
+# from a memsys5 block or a buffer the application supplied alike.
+# sqlite3DbMallocRawNN returns a child of the generation bounded to the slot
+# (lookasideIssue); sqlite3DbFreeNN revokes it before pushing the slot on the
+# free list through pStart (lookasideRelease), and trashes it, under
+# SQLITE_DEBUG, through pStart as well. A new setup and the close of the
+# connection revoke the generation (sqlite3LookasideEnd). The bounds are the
+# slot, lookaside.sz, which sqlite3DbMallocSize reports as usable. Q-15 rounds
+# the lookaside buffer's sz*cnt up to its granule (tail pad only, counted).
+#
+# Not covered: the page cache. pcache1 recycles pages, and a bulk-local page
+# goes back on its own free list without a free.
+#
+# Generated from sublet-3220000-memsys5.patch (the request-bounds port) by
+# make-sublet-block-port.py beside this file.
+--- a/sqlite3-capstone.c
++++ b/sqlite3-capstone.c
+@@ -19,6 +19,8 @@
+ */
+ #define SQLITE_CORE 1
+ #define SQLITE_AMALGAMATION 1
++#include <capstone/capability.h>
++#include <capstone/representable.h>
+ #ifndef SQLITE_PRIVATE
+ # define SQLITE_PRIVATE static
+ #endif
+@@ -15141,6 +15143,8 @@
+   LookasideSlot *pFree;   /* List of available buffers */
+   void *pStart;           /* First byte of available memory space */
+   void *pEnd;             /* First byte past end of available space */
++  void *pBlock;           /* Sublet: the buffer's lifetime, parent of pLife */
++  void *pLife;            /* Sublet: parent of every slot handed out */
+ };
+ struct LookasideSlot {
+   LookasideSlot *pNext;    /* Next buffer in the list of free buffers */
+@@ -22955,6 +22959,16 @@
+ #ifdef SQLITE_ENABLE_MEMSYS5
+ 
+ /*
++** Sublet lifetimes.  The pool is a child lifetime of the configured heap
++** (CDERIVE), and every block goes out as a child of the pool, bounded to
++** the block.  A free revokes the caller's block (CREVOKE) before memsys5
++** touches it: every copy of the caller's pointer dies, and a pointer that
++** is not a live block of this pool faults.  memsys5 keeps reaching the
++** block through the pool, so the free-list links stay in the freed block.
++** Shutdown revokes the pool and every block below it.
++*/
++
++/*
+ ** A minimum allocation is an instance of the following structure.
+ ** Larger allocations are an array of these structures where the
+ ** size of the array is a power of 2.
+@@ -22994,6 +23008,7 @@
+   int szAtom;      /* Smallest possible allocation in bytes */
+   int nBlock;      /* Number of szAtom sized blocks in zPool */
+   u8 *zPool;       /* Memory available to be allocated */
++  void *pHeap;     /* The heap's lifetime, parent of zPool */
+   
+   /*
+   ** Mutex to control access to the memory allocation subsystem.
+@@ -23026,8 +23041,41 @@
+   ** of each block.  One byte per block.
+   */
+   u8 *aCtrl;
++
++  /*
++  ** Q-15 (option iii): on the compact bounds format a child must be
++  ** representable, so its length is rounded up to its granule (tail pad
++  ** only, inside the block).  Counted, and read by sqlite3CapstoneQ15Pad.
++  */
++  u64 q15Items, q15Padded, q15PadBytes, q15PadMax;
+ 
+ } mem5;
++
++/* CAPSTONE_Q15_TRACE=1 in the environment prints every padded derive as it
++** happens, so a case that faults still shows which pads it had: a case with
++** none cannot be pad-masked.  Read once; inert when unset. */
++static void capstoneQ15Note(u64 pad){
++  static int trace = -1;
++  mem5.q15Items++;
++  if( pad ){
++    mem5.q15Padded++;
++    mem5.q15PadBytes += pad;
++    if( mem5.q15PadMax<pad ) mem5.q15PadMax = pad;
++    if( trace<0 ){
++      const char *z = getenv("CAPSTONE_Q15_TRACE");
++      trace = z && z[0]=='1';
++    }
++    if( trace ){
++      fprintf(stderr, "Q15_PADDED item=%llu pad=%llu\n",
++              (unsigned long long)mem5.q15Items, (unsigned long long)pad);
++    }
++  }
++}
++/* items, padded, pad_bytes_total, pad_bytes_max: the Q15_PAD line's fields */
++SQLITE_API void sqlite3CapstoneQ15Pad(unsigned long *aOut){
++  aOut[0] = mem5.q15Items; aOut[1] = mem5.q15Padded;
++  aOut[2] = mem5.q15PadBytes; aOut[3] = mem5.q15PadMax;
++}
+ 
+ /*
+ ** Access the static variable through a macro for SQLITE_OMIT_WSD.
+@@ -23178,8 +23226,13 @@
+   memset(&mem5.zPool[i*mem5.szAtom], 0xAA, iFullSz);
+ #endif
+ 
+-  /* Return a pointer to the allocated memory. */
+-  return (void*)&mem5.zPool[i*mem5.szAtom];
++  /* Return the block as a child of the pool, bounded to the whole block,
++  ** as stock memsys5 hands it out and reports it.  A block is a power-of-two
++  ** number of atoms at an index that is a multiple of its size, and the pool
++  ** base carries the heap's granule alignment, so the child is representable
++  ** without a pad (Q-15 counts it with pad 0). */
++  capstoneQ15Note(0);
++  return capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, iFullSz);
+ }
+ 
+ /*
+@@ -23189,6 +23242,9 @@
+   u32 size, iLogsize;
+   int iBlock;
+ 
++  /* End the caller's block (CREVOKE); faults on a pointer that is not live. */
++  capstone_cap_revoke_child(mem5.zPool, pOld);
++
+   /* Set iBlock to the index of the block pointed to by pOld in 
+   ** the array of mem5.szAtom byte blocks pointed to by mem5.zPool.
+   */
+@@ -23275,6 +23331,31 @@
+ }
+ 
+ /*
++** Sublet: a realloc that keeps its block still ends the old allocation, as
++** realloc's contract says, so the block goes out again as a new child of
++** the pool: every copy of the old pointer faults, and the returned pointer
++** reaches the same bytes at the same address.  The old child is revoked
++** before the new one is derived, so the pool's children stay disjoint; the
++** new one is a sibling, not a child of the old one.  With
++** SUBLET_REALLOC_KEEPS_LIFETIME (the ablation) the old child is returned.
++*/
++static void *memsys5Renew(void *pPrior){
++#ifdef SUBLET_REALLOC_KEEPS_LIFETIME
++  return pPrior;
++#else
++  int i, iSize;
++  void *p;
++  memsys5Enter();
++  i = (int)(((u8 *)pPrior-mem5.zPool)/mem5.szAtom);
++  iSize = memsys5Size(pPrior);
++  capstone_cap_revoke_child(mem5.zPool, pPrior);
++  p = capstone_cap_derive(mem5.zPool, (unsigned long)i*mem5.szAtom, iSize);
++  memsys5Leave();
++  return p;
++#endif
++}
++
++/*
+ ** Change the size of an existing memory allocation.
+ **
+ ** The outer layer memory allocator prevents this routine from
+@@ -23297,7 +23378,7 @@
+   }
+   nOld = memsys5Size(pPrior);
+   if( nBytes<=nOld ){
+-    return pPrior;
++    return memsys5Renew(pPrior);
+   }
+   p = memsys5Malloc(nBytes);
+   if( p ){
+@@ -23374,7 +23455,9 @@
+   }
+ 
+   mem5.nBlock = (nByte / (mem5.szAtom+sizeof(u8)));
+-  mem5.zPool = zByte;
++  mem5.pHeap = capstone_cap_derive(zByte,
++      (uptr)zByte - __builtin_capstone_cap_get_base(zByte), nByte);
++  mem5.zPool = capstone_cap_derive(mem5.pHeap, 0, nByte);
+   mem5.aCtrl = (u8 *)&mem5.zPool[mem5.nBlock*mem5.szAtom];
+ 
+   for(ii=0; ii<=LOGMAX; ii++){
+@@ -23406,6 +23489,10 @@
+ static void memsys5Shutdown(void *NotUsed){
+   UNUSED_PARAMETER(NotUsed);
+   mem5.mutex = 0;
++  if( mem5.zPool ){
++    capstone_cap_revoke_child(mem5.pHeap, mem5.zPool);
++    mem5.zPool = 0;
++  }
+   return;
+ }
+ 
+@@ -25411,6 +25498,29 @@
+ #ifndef SQLITE_OMIT_LOOKASIDE
+ static int isLookaside(sqlite3 *db, void *p){
+   return SQLITE_WITHIN(p, db->lookaside.pStart, db->lookaside.pEnd);
++}
++
++/*
++** Sublet lifetimes.  A slot goes out as a child of pLife bounded to the
++** slot (CDERIVE); freeing it revokes the child (CREVOKE), and the lookaside
++** keeps reaching the slot, its free-list link included, through pStart.
++*/
++static void *lookasideIssue(sqlite3 *db, LookasideSlot *pBuf){
++  return capstone_cap_derive(db->lookaside.pLife,
++      (unsigned long)((u8*)pBuf - (u8*)db->lookaside.pStart), db->lookaside.sz);
++}
++static LookasideSlot *lookasideRelease(sqlite3 *db, void *p){
++  capstone_cap_revoke_child(db->lookaside.pLife, p);
++  return (LookasideSlot*)&((u8*)db->lookaside.pStart)[(u8*)p-(u8*)db->lookaside.pStart];
++}
++/* A realloc that keeps its slot ends the old lifetime and issues the slot
++** again (memsys5Renew says why); the ablation returns the old child. */
++static void *lookasideRenew(sqlite3 *db, void *p){
++#ifdef SUBLET_REALLOC_KEEPS_LIFETIME
++  return p;
++#else
++  return lookasideIssue(db, lookasideRelease(db, p));
++#endif
+ }
+ #else
+ #define isLookaside(A,B) 0
+@@ -25488,10 +25598,10 @@
+       return;
+     }
+     if( isLookaside(db, p) ){
+-      LookasideSlot *pBuf = (LookasideSlot*)p;
++      LookasideSlot *pBuf = lookasideRelease(db, p);
+ #ifdef SQLITE_DEBUG
+       /* Trash all content in the buffer being freed */
+-      memset(p, 0xaa, db->lookaside.sz);
++      memset(pBuf, 0xaa, db->lookaside.sz);
+ #endif
+       pBuf->pNext = db->lookaside.pFree;
+       db->lookaside.pFree = pBuf;
+@@ -25533,9 +25643,15 @@
+   ** argument to xRealloc is always a value returned by a prior call to
+   ** xRoundup. */
+   nNew = sqlite3GlobalConfig.m.xRoundup((int)nBytes);
++  /* Sublet: no shortcut when the rounded size is unchanged.  The realloc
++  ** still ends the old allocation, so it goes to xRealloc, which issues the
++  ** block again (memsys5Renew).  The ablation keeps the shortcut. */
++#ifdef SUBLET_REALLOC_KEEPS_LIFETIME
+   if( nOld==nNew ){
+     pNew = pOld;
+-  }else if( sqlite3GlobalConfig.bMemstat ){
++  }else
++#endif
++  if( sqlite3GlobalConfig.bMemstat ){
+     sqlite3_mutex_enter(mem0.mutex);
+     sqlite3StatusHighwater(SQLITE_STATUS_MALLOC_SIZE, (int)nBytes);
+     nDiff = nNew - nOld;
+@@ -25658,11 +25774,11 @@
+     }else if( (pBuf = db->lookaside.pFree)!=0 ){
+       db->lookaside.pFree = pBuf->pNext;
+       db->lookaside.anStat[0]++;
+-      return (void*)pBuf;
++      return lookasideIssue(db, pBuf);
+     }else if( (pBuf = db->lookaside.pInit)!=0 ){
+       db->lookaside.pInit = pBuf->pNext;
+       db->lookaside.anStat[0]++;
+-      return (void*)pBuf;
++      return lookasideIssue(db, pBuf);
+     }else{
+       db->lookaside.anStat[2]++;
+     }
+@@ -25691,7 +25807,7 @@
+   assert( db!=0 );
+   if( p==0 ) return sqlite3DbMallocRawNN(db, n);
+   assert( sqlite3_mutex_held(db->mutex) );
+-  if( isLookaside(db,p) && n<=db->lookaside.sz ) return p;
++  if( isLookaside(db,p) && n<=db->lookaside.sz ) return lookasideRenew(db, p);
+   return dbReallocFinish(db, p, n);
+ }
+ static SQLITE_NOINLINE void *dbReallocFinish(sqlite3 *db, void *p, u64 n){
+@@ -144023,6 +144139,13 @@
+ ** If pStart is not NULL then it is sz*cnt bytes of memory to use for
+ ** the lookaside memory.
+ */
++/* End every slot this connection's lookaside has handed out. */
++SQLITE_PRIVATE void sqlite3LookasideEnd(sqlite3 *db){
++  if( db->lookaside.pLife ){
++    capstone_cap_revoke_child(db->lookaside.pBlock, db->lookaside.pLife);
++    db->lookaside.pLife = 0;
++  }
++}
+ static int setupLookaside(sqlite3 *db, void *pBuf, int sz, int cnt){
+ #ifndef SQLITE_OMIT_LOOKASIDE
+   void *pStart;
+@@ -144030,6 +144153,7 @@
+   if( sqlite3LookasideUsed(db,0)>0 ){
+     return SQLITE_BUSY;
+   }
++  sqlite3LookasideEnd(db);
+   /* Free any existing lookaside buffer for this handle before
+   ** allocating a new one so we don't have to have space for 
+   ** both at the same time.
+@@ -144072,6 +144196,14 @@
+     db->lookaside.pEnd = p;
+     db->lookaside.bDisable = 0;
+     db->lookaside.bMalloced = pBuf==0 ?1:0;
++    /* Q-15: sz*cnt rounded up to its granule (tail pad only), inside pStart,
++    ** whose memsys5 block is a power of two at least that large. */
++    db->lookaside.pBlock = capstone_cap_derive(pStart,
++        (uptr)pStart - __builtin_capstone_cap_get_base(pStart),
++        capstone_repr_round((u64)sz*cnt));
++    db->lookaside.pLife = capstone_cap_derive(db->lookaside.pBlock, 0,
++        capstone_repr_round((u64)sz*cnt));
++    capstoneQ15Note(capstone_repr_round((u64)sz*cnt) - (u64)sz*cnt);
+   }else{
+     db->lookaside.pStart = db;
+     db->lookaside.pEnd = db;
+@@ -144599,6 +144731,7 @@
+   db->magic = SQLITE_MAGIC_CLOSED;
+   sqlite3_mutex_free(db->mutex);
+   assert( sqlite3LookasideUsed(db,0)==0 );
++  sqlite3LookasideEnd(db);
+   if( db->lookaside.bMalloced ){
+     sqlite3_free(db->lookaside.pStart);
+   }

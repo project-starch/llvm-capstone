@@ -1,0 +1,34 @@
+{
+  "case": 33,
+  "upstream_fix": "f932f7145e",
+  "title": "pwithbackport",
+  "kind": "backport",
+  "backport_note": "A real use-after-free that shipped in released SQLite 3.8.4-3.8.8, reverted into the 3.22.0 engine by removing the one line its upstream fix f932f7145e added (ports/sqlite/sqlite-pwith-backport.py). Stock 3.22.0 carries the fix and is NOT vulnerable, so this is a backport, reported on its own line and never counted as a native 3.22.0 defect. Kept outside the corpus (ports/sqlite/poisoncap/backport/), so no corpus run includes it; a builder takes it only when --extra-case names its directory, and it runs under --cases 33 against an engine built from the backported amalgamation.",
+  "consumer": "sqlite3.c (sqlite3WithDelete via clearSelect)",
+  "live_in_pin": false,
+  "live_proof": "the defect is absent from stock 3.22.0: convertCompoundSelectToSubquery carries p->pWith = 0; (select.c). The backport removes it. Reproduced natively on 3.22.0 with the line removed: lookaside off + ASan gives heap-use-after-free in sqlite3WithDelete; lookaside on, the stale p->pWith lies inside [db->lookaside.pStart, db->lookaside.pEnd) (slot size 1200) and the process exits 0.",
+  "allocator_layer": "lookaside",
+  "object": "the With object of the CTE, aliased by p and the shallow copy pNew after convertCompoundSelectToSubquery; a lookaside slot (sqlite3DbMallocZero, ~48 bytes for one CTE)",
+  "lifetime_ender": "parse teardown frees the With through one Select (sqlite3SelectDelete -> clearSelect -> sqlite3WithDelete -> sqlite3DbFreeNN), then the other Select reads it again through sqlite3WithDelete",
+  "shape": "free / stale read (double ownership after a shallow struct copy)",
+  "fidelity": "real released defect, real engine object, real SQL trigger (upstream test/with1.test 14.1). The object is a genuine lookaside slot, not a planted buffer as in the repro322 probes case_lookaside_uaf.c / case_lookaside_tagmap.c (tags.tsv: probe).",
+  "trigger_sql": "CREATE TABLE t(a,b); WITH x AS (SELECT * FROM t) SELECT 0 EXCEPT SELECT 0 ORDER BY 1 COLLATE binary;",
+  "affected_releases": ["3.8.4","3.8.4.1","3.8.5","3.8.6","3.8.7","3.8.7.1","3.8.8"],
+  "fault_sites": [
+    "sqlite3WithDelete"
+  ],
+  "fault_sites_why": "host ASan (lookaside off) reports the heap-use-after-free read in sqlite3WithDelete, reached from clearSelect from sqlite3SelectDelete on parse teardown. On the capability platforms the stale access is at the same function.",
+  "arms": {
+    "poisoncap-published": {
+      "oracle": "PoisonCap published memsys5, lookaside on: a poison report (SIGPROT code 3 with a poison console line) at the fault site, or the case returns",
+      "prediction": "MISSED -- the With is a lookaside slot, and PoisonCap's mem5.c acts only on memsys5 blocks; lookaside is one sqlite3Malloc block it never revokes within",
+      "verdict": null
+    },
+    "sublet": {
+      "oracle": "Sublet memsys5 lookaside port (sublet-3220000-memsys5.patch), lookaside on: a capability fault (cause 25) at the fault site, or the case returns",
+      "prediction": "CAUGHT -- every lookaside slot is a child lifetime revoked by sqlite3DbFreeNN (lookasideRelease), so the second sqlite3WithDelete read of the revoked slot faults",
+      "verdict": null
+    }
+  },
+  "status": "constructed and proven natively 2026-10-26; platform runs pending"
+}

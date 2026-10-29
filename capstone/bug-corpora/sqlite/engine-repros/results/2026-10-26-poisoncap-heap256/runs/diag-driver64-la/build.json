@@ -1,0 +1,53 @@
+{
+  "compiler": "~/poisoncap-platform/work/sdk/bin/clang",
+  "target": [
+    "--target=riscv64-unknown-freebsd",
+    "-march=rv64imafdcxcheri",
+    "-mabi=l64pc128d",
+    "-mno-relax",
+    "-fuse-ld=lld",
+    "--sysroot=~/poisoncap-platform/work/output/rootfs-riscv64-purecap"
+  ],
+  "amalgamation": "sqlite/amalgamation-published-diag",
+  "opt": "-O0",
+  "heap_bytes": 268435456,
+  "heap_min": 64,
+  "heap_malloc": true,
+  "no_lookaside": false,
+  "groups": {
+    "core": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_PREUPDATE_HOOK",
+      "-DSQLITE_COUNTOFVIEW_OPTIMIZATION"
+    ],
+    "json": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_JSON1"
+    ]
+  },
+  "cases": {
+    "16_unfixed_json_each_root_stale_key": {
+      "tag": "jsoneachroot",
+      "group": "json",
+      "extra": []
+    },
+    "17_28001204f4_json_each_static_stale_key": {
+      "tag": "jsoneachstatic",
+      "group": "json",
+      "extra": []
+    }
+  },
+  "built": [
+    "16_unfixed_json_each_root_stale_key",
+    "17_28001204f4_json_each_static_stale_key"
+  ],
+  "controls": [
+    "reuse_clean",
+    "uaf_interior",
+    "uaf_keepperm",
+    "uaf_offsets",
+    "uaf_read",
+    "uaf_read_before_free"
+  ],
+  "failed": []
+}

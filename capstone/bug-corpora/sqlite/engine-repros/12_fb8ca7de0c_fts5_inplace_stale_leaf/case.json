@@ -4,10 +4,10 @@
   "title": "row10",
   "consumer": "sqlite3.c (fts5SegIterNextPage)",
   "live_in_pin": true,
-  "live_proof": "inspection with line numbers in the 3.22.0 tree: fts5StructureAddLevel() edits the Fts5Structure in place at fts5_index.c:925, and the reference count it ignores is at :339. Fixed upstream in 3.37.0",
+  "live_proof": "inspection with line numbers in the 3.22.0 tree: fts5StructureAddLevel() edits the Fts5Structure in place at fts5_index.c:925, and the reference count it ignores is at :339. Fixed upstream in 3.37.0. The free host ASan reports is fts5StructureExtendLevel's realloc of aSeg, not the add-level's realloc of the structure (corrected 2026-10-26 from results/2026-10-11-host-asan and results/2026-10-24-poisoncap/RESULTS.md)",
   "allocator_layer": "memsys5",
-  "object": "the shared Fts5Structure an fts5vocab cursor is scanning (nRef > 1)",
-  "lifetime_ender": "an in-place add-level reallocates the structure while another holder still reads it",
+  "object": "the aSeg array of one level of the shared Fts5Structure (nRef > 1), into which the fts5vocab cursor's segment iterator points",
+  "lifetime_ender": "fts5StructureExtendLevel (fts5_index.c:962, called from fts5FlushOneHash) reallocates aSeg while the cursor still reads it; host ASan reports this free and the stale read in fts5SegIterNextPage (results/2026-10-11-host-asan). Under memsys5's power-of-two rounding the array grows in place: the address stays, and the old allocation still ends (C11 7.22.3.5)",
   "shape": "free / stale read",
   "fidelity": "real consumer, real allocator: an fts5vocab scan cursor holding a reference, with inserts driving segment merges mid-scan. Two build constraints that are part of the case, not incidental: -DSQLITE_DQS=0 means SQL string literals must be single-quoted, and the heap stays at the 256 KiB default because raising it inflates the in-image sqlite_heap[] until the domain exceeds the buddy allocator's maximum order and DOM_CREATE fails before a single instruction runs",
   "arms": {

@@ -1,0 +1,32 @@
+{
+ "artifact": {
+  "repository": "https://github.com/Yuecheng-CAM/Ajs38RO4Vz-p",
+  "commit": "731c5720d1a6321d436a8d7b85bf3aa2e4971fe0",
+  "sha256": "c5e8b07d4f70ed8cc1ecf04193ceacc5266553a2cbd233e6fa51fb8f0d190b9c",
+  "archive_sha256_local": "c5e8b07d4f70ed8cc1ecf04193ceacc5266553a2cbd233e6fa51fb8f0d190b9c"
+ },
+ "sqlite_files": 1703,
+ "environment": {
+  "PATH": "/usr/bin:/bin",
+  "LC_ALL": "C",
+  "HOME": "/nonexistent"
+ },
+ "tools": {
+  "cc": "cc (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+  "make": "GNU Make 4.4.1",
+  "tclsh": "8.6.17"
+ },
+ "mem5_sha256": "d8cb4c0e688350992c480b7956b5b6d47496700447ded6386e4c02e12d338df8",
+ "amalgamations": {
+  "published": {
+   "sqlite3.c": "23a5692948a2845d847edc71a4c5ad6a959be5e9d6ca79006e750e79f16c291e",
+   "sqlite3.h": "b02de0ea4b36a59136b6ec33abfa05fc229f21a6e2a951617490711a25608cd2",
+   "sqlite3ext.h": "f446a85a9b71a20eef1f6bc5eb2201c020462a17839a3fe4a606231bdef1c229"
+  },
+  "spatial": {
+   "sqlite3.c": "05799d282aa8fc8b553723126f543644b5ecabe14fbcd7e9f27622cd5c15e95b",
+   "sqlite3.h": "b02de0ea4b36a59136b6ec33abfa05fc229f21a6e2a951617490711a25608cd2",
+   "sqlite3ext.h": "f446a85a9b71a20eef1f6bc5eb2201c020462a17839a3fe4a606231bdef1c229"
+  }
+ }
+}

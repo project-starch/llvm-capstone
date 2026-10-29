@@ -1,0 +1,42 @@
+== block-port
+PASS [block-port] all five processes present
+PASS [block-port] test-wrapped exit 0
+PASS [block-port] test-traced exit 0
+PASS [block-port] test-plain exit 0
+PASS [block-port] test-traced stdout equals test-wrapped stdout
+PASS [block-port] test programs: check-wrapper.py ALL PASS
+PASS [block-port] pilot: both exit 0
+PASS [block-port] pilot: same 20 tests completed
+PASS [block-port] pilot: wrapper report at exit
+PASS [block-port] pilot: installed=1 error=0
+PASS [block-port] pilot: the observer saw the workload (>= 1000 allocations issued, none failed, >= 100 reuses)
+PASS [block-port] pilot: attempts == issues + failed
+PASS [block-port] pilot: issues == distinct + reuses
+PASS [block-port] pilot: sum(bins) == reuses
+PASS [block-port] pilot: live == issues - releases
+  [block-port] pilot: attempts=1180 reuses=982 distinct=198 failed=0 live=0 moved=189 bins=[217, 161, 197, 188, 80, 46, 44, 17, 4, 28, 0, 0, 0, 0, 0, 0]
+PASS [block-port] pilot: no SQL step or reset error
+PASS [block-port] pilot: SQL calls were counted (>= 1000 steps)
+ALL PASS
+rc=0
+== block-port-spatial
+PASS [block-port-spatial] all five processes present
+PASS [block-port-spatial] test-wrapped exit 0
+PASS [block-port-spatial] test-traced exit 0
+PASS [block-port-spatial] test-plain exit 0
+PASS [block-port-spatial] test-traced stdout equals test-wrapped stdout
+PASS [block-port-spatial] test programs: check-wrapper.py ALL PASS
+PASS [block-port-spatial] pilot: both exit 0
+PASS [block-port-spatial] pilot: same 20 tests completed
+PASS [block-port-spatial] pilot: wrapper report at exit
+PASS [block-port-spatial] pilot: installed=1 error=0
+PASS [block-port-spatial] pilot: the observer saw the workload (>= 1000 allocations issued, none failed, >= 100 reuses)
+PASS [block-port-spatial] pilot: attempts == issues + failed
+PASS [block-port-spatial] pilot: issues == distinct + reuses
+PASS [block-port-spatial] pilot: sum(bins) == reuses
+PASS [block-port-spatial] pilot: live == issues - releases
+  [block-port-spatial] pilot: attempts=1180 reuses=982 distinct=198 failed=0 live=0 moved=189 bins=[217, 161, 197, 188, 80, 46, 44, 17, 4, 28, 0, 0, 0, 0, 0, 0]
+PASS [block-port-spatial] pilot: no SQL step or reset error
+PASS [block-port-spatial] pilot: SQL calls were counted (>= 1000 steps)
+ALL PASS
+rc=0

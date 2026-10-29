@@ -1,0 +1,280 @@
+{
+  "arm": "memsys5-sublet-block-port-realloc-keeps-lifetime",
+  "sdk": "~/poisoncap-platform/sdk-v6",
+  "amalgamation": "~/pg-virtual-kit/inputs/sqlite-amalg",
+  "opt": "-O0",
+  "heap_bytes": 268435456,
+  "heap_min": 16,
+  "heap_malloc": true,
+  "sublet_port": "block",
+  "realloc_keeps_lifetime": true,
+  "groups": {
+    "core": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_PREUPDATE_HOOK",
+      "-DSQLITE_COUNTOFVIEW_OPTIMIZATION"
+    ],
+    "coreT": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-USQLITE_OMIT_TEMPDB"
+    ],
+    "ext": [
+      "-USQLITE_OMIT_INCRBLOB"
+    ],
+    "fts3": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_FTS3",
+      "-DSQLITE_ENABLE_FTS4"
+    ],
+    "fts3P": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_FTS3",
+      "-DSQLITE_ENABLE_FTS4",
+      "-DSQLITE_ENABLE_FTS3_PARENTHESIS"
+    ],
+    "fts5": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_FTS5"
+    ],
+    "json": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_JSON1"
+    ],
+    "memfs3": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_FTS3",
+      "-DSQLITE_ENABLE_FTS4"
+    ],
+    "memfs5": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_FTS5"
+    ],
+    "memfsdb": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_DBSTAT_VTAB"
+    ],
+    "memfsp": [
+      "-USQLITE_OMIT_INCRBLOB"
+    ],
+    "rtree": [
+      "-USQLITE_OMIT_INCRBLOB",
+      "-DSQLITE_ENABLE_RTREE",
+      "-DSQLITE_RTREE_INT_ONLY",
+      "-USQLITE_OMIT_SHARED_CACHE"
+    ]
+  },
+  "cases": {
+    "00_adfb203a7d_fts5_getvarint_stale_read": {
+      "tag": "adfb203a7d_0",
+      "group": "memfs5",
+      "extra": []
+    },
+    "01_5e4233a9e4_agginfo_stale_after_realloc": {
+      "tag": "agginfo",
+      "group": "core",
+      "extra": []
+    },
+    "02_b9e0f62c3a_backup_pager_after_detach": {
+      "tag": "backupattach",
+      "group": "core",
+      "extra": []
+    },
+    "03_e464802d49_blob_close_after_db_close": {
+      "tag": "blobclose",
+      "group": "core",
+      "extra": []
+    },
+    "04_8504d37b99_blob_write_after_reopen": {
+      "tag": "blobwrite",
+      "group": "core",
+      "extra": []
+    },
+    "05_6397a78b2b_detach_with_pending_trigger": {
+      "tag": "detachtrig",
+      "group": "coreT",
+      "extra": []
+    },
+    "06_0c8c9a64b3_expert_rem_ctx_freed": {
+      "tag": "expertrem",
+      "group": "ext",
+      "extra": [
+        "-DSQLITE_HEAP_SIZE=1048576"
+      ]
+    },
+    "07_129371553c_fts3_destroy_oom_stale_table": {
+      "tag": "fts3destroyoom",
+      "group": "fts3",
+      "extra": []
+    },
+    "08_51dd67080a_fts3_offsets_stale_buffer": {
+      "tag": "fts3offsets",
+      "group": "fts3",
+      "extra": []
+    },
+    "09_fix-2026-08-17_fts3_snippet_stale_buffer": {
+      "tag": "fts3snip",
+      "group": "fts3",
+      "extra": []
+    },
+    "10_becd68ba0d_fts3_snippet_or_stale_iter": {
+      "tag": "fts3snipor",
+      "group": "fts3P",
+      "extra": []
+    },
+    "11_dee0359ddb_fts3_zterm_stale_buffer": {
+      "tag": "fts3zterm",
+      "group": "fts3",
+      "extra": []
+    },
+    "12_fb8ca7de0c_fts5_inplace_stale_leaf": {
+      "tag": "fts5inplace",
+      "group": "fts5",
+      "extra": []
+    },
+    "13_fix-2026-06-08_fts5_near_stale_phrase": {
+      "tag": "fts5near",
+      "group": "fts5",
+      "extra": []
+    },
+    "14_25e3073741_fts5_structure_release_refcount": {
+      "tag": "fts5structwrite",
+      "group": "fts5",
+      "extra": []
+    },
+    "15_2639ddc474_fts5_vocab_eof_stale_poslist": {
+      "tag": "fts5vocabeof",
+      "group": "fts5",
+      "extra": []
+    },
+    "16_unfixed_json_each_root_stale_key": {
+      "tag": "jsoneachroot",
+      "group": "json",
+      "extra": []
+    },
+    "17_28001204f4_json_each_static_stale_key": {
+      "tag": "jsoneachstatic",
+      "group": "json",
+      "extra": []
+    },
+    "18_mem5-design_memsys5_inband_freelist_overwrite": {
+      "tag": "mem5design",
+      "group": "core",
+      "extra": []
+    },
+    "19_c8c9cdd9dd_rtree_cursor_stale_node": {
+      "tag": "rtreecursor",
+      "group": "rtree",
+      "extra": []
+    },
+    "20_d21bd37c7c_rtree_inode0_stale_node": {
+      "tag": "rtreeinode0",
+      "group": "rtree",
+      "extra": []
+    },
+    "21_eab0e10304_rtree_static_bind_stale_text": {
+      "tag": "rtreestatic",
+      "group": "rtree",
+      "extra": []
+    },
+    "22_fix-2026-07-26_spellfix_oom_stale_vtab": {
+      "tag": "spellfixoom",
+      "group": "ext",
+      "extra": []
+    },
+    "23_eab0e10304_fts3_static_bind_stale_text": {
+      "tag": "staticbind",
+      "group": "fts3",
+      "extra": []
+    },
+    "24_d4b646997a_writable_schema_stale_table": {
+      "tag": "wschema",
+      "group": "core",
+      "extra": []
+    },
+    "25_415540ddaa_fts5_getvarint_overread": {
+      "tag": "415540ddaa_0",
+      "group": "memfs5",
+      "extra": []
+    },
+    "26_8f5b14a5c2_fts5_decode_getvarint32_overread": {
+      "tag": "8f5b14a5c2_0",
+      "group": "memfs5",
+      "extra": []
+    },
+    "27_a783931794_fts3_getvarint_overread": {
+      "tag": "a783931794_0",
+      "group": "memfs3",
+      "extra": []
+    },
+    "28_c7def600bd_fts3_matchinfo_overread": {
+      "tag": "c7def600bd_0",
+      "group": "memfs3",
+      "extra": []
+    },
+    "29_fz02_btree_get4byte_page_overread": {
+      "tag": "fz02",
+      "group": "memfsdb",
+      "extra": []
+    },
+    "30_fz06_recordcompareint_overread": {
+      "tag": "fz06",
+      "group": "memfsp",
+      "extra": []
+    },
+    "31_fz10_dbstat_decodepage_overflow": {
+      "tag": "fz10",
+      "group": "memfsdb",
+      "extra": []
+    },
+    "32_fz11_dbstat_freechain_overflow": {
+      "tag": "fz11",
+      "group": "memfsdb",
+      "extra": []
+    }
+  },
+  "built": [
+    "00_adfb203a7d_fts5_getvarint_stale_read",
+    "01_5e4233a9e4_agginfo_stale_after_realloc",
+    "02_b9e0f62c3a_backup_pager_after_detach",
+    "03_e464802d49_blob_close_after_db_close",
+    "04_8504d37b99_blob_write_after_reopen",
+    "05_6397a78b2b_detach_with_pending_trigger",
+    "06_0c8c9a64b3_expert_rem_ctx_freed",
+    "07_129371553c_fts3_destroy_oom_stale_table",
+    "08_51dd67080a_fts3_offsets_stale_buffer",
+    "09_fix-2026-08-17_fts3_snippet_stale_buffer",
+    "10_becd68ba0d_fts3_snippet_or_stale_iter",
+    "11_dee0359ddb_fts3_zterm_stale_buffer",
+    "12_fb8ca7de0c_fts5_inplace_stale_leaf",
+    "13_fix-2026-06-08_fts5_near_stale_phrase",
+    "14_25e3073741_fts5_structure_release_refcount",
+    "15_2639ddc474_fts5_vocab_eof_stale_poslist",
+    "16_unfixed_json_each_root_stale_key",
+    "17_28001204f4_json_each_static_stale_key",
+    "18_mem5-design_memsys5_inband_freelist_overwrite",
+    "19_c8c9cdd9dd_rtree_cursor_stale_node",
+    "20_d21bd37c7c_rtree_inode0_stale_node",
+    "21_eab0e10304_rtree_static_bind_stale_text",
+    "22_fix-2026-07-26_spellfix_oom_stale_vtab",
+    "23_eab0e10304_fts3_static_bind_stale_text",
+    "24_d4b646997a_writable_schema_stale_table",
+    "25_415540ddaa_fts5_getvarint_overread",
+    "26_8f5b14a5c2_fts5_decode_getvarint32_overread",
+    "27_a783931794_fts3_getvarint_overread",
+    "28_c7def600bd_fts3_matchinfo_overread",
+    "29_fz02_btree_get4byte_page_overread",
+    "30_fz06_recordcompareint_overread",
+    "31_fz10_dbstat_decodepage_overflow",
+    "32_fz11_dbstat_freechain_overflow"
+  ],
+  "failed": [],
+  "not_applicable": [],
+  "instruments": [
+    "control_uaf_mem5",
+    "control_bounds_mem5",
+    "control_realloc_same_mem5",
+    "control_realloc_shrink_mem5",
+    "control_realloc_fail_mem5",
+    "control_capacity_mem5"
+  ]
+}

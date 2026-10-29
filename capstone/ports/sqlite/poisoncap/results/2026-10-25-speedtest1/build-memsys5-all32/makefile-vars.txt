@@ -1,0 +1,4 @@
+CFLAGS =   -target riscv64-unknown-freebsd13 --sysroot=~/poisoncap-platform/work/output/rootfs-riscv64-purecap -B~/poisoncap-platform/work/sdk/bin -march=rv64imafdcxcheri -mabi=l64pc128d -mno-relax -Wno-error=unused-command-line-argument -Werror=implicit-function-declaration -Werror=format -Werror=incompatible-pointer-types -Werror=cheri-capability-misuse -Werror=cheri-bitwise-operations -Werror=pass-failed -Werror=cheri-prototypes -Werror=undefined-internal -Wno-error=cheri-capability-misuse -DSQLITE_OS_UNIX=1
+TCC = ${CC} ${CFLAGS} -I. -I${TOP}/src -I${TOP}/ext/rtree -I${TOP}/ext/icu
+TLIBS = -lz -lpthread  $(LIBS)
+OPT_FEATURE_FLAGS = -DSQLITE_OMIT_LOAD_EXTENSION=1 -DSQLITE_ENABLE_MEMSYS5 -DSQLITE_ENABLE_COLUMN_METADATA=1

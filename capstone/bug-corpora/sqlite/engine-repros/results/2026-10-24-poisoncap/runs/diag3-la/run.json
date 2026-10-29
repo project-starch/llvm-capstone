@@ -1,0 +1,16 @@
+{
+ "build": "builds/diag2-la",
+ "expect": "published",
+ "cases": [
+  "15_2639ddc474_fts5_vocab_eof_stale_poslist"
+ ],
+ "started_utc": "2026-10-24T09:41:51Z",
+ "unpacked": "5",
+ "sysctl": "security.cheri.runtime_revocation_default: 0\nkern.features.cheri_revoke: 1",
+ "gate": {
+  "heap_perm_poison=0 in every control": true,
+  "reuse_clean returns": true,
+  "uaf_read faults with SIGPROT code 3 and a poison console line": true
+ },
+ "finished_utc": "2026-10-24T09:43:23Z"
+}

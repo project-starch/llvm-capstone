@@ -1,0 +1,32 @@
+v6-sublet-driver             at site 17/17  not: {}
+v6-sublet-driver-rep2        at site 17/17  not: {}
+v6-sublet-block              at site 17/17  not: {}
+    control_realloc_same_mem5: ['CONTROL realloc-same block=64 same_address=1 kept=1']
+    control_realloc_shrink_mem5: ['CONTROL realloc-shrink block=64 same_address=1 kept=1']
+    control_realloc_fail_mem5: ['CONTROL realloc-fail failed=1 kept=1']
+    control_capacity_mem5: ['CONTROL capacity block=64']
+v6-sublet-block-rep2         at site 17/17  not: {}
+    control_realloc_same_mem5: ['CONTROL realloc-same block=64 same_address=1 kept=1']
+    control_realloc_shrink_mem5: ['CONTROL realloc-shrink block=64 same_address=1 kept=1']
+    control_realloc_fail_mem5: ['CONTROL realloc-fail failed=1 kept=1']
+    control_capacity_mem5: ['CONTROL capacity block=64']
+v6-sublet-block-keeps        at site 16/17  not: {'12': ('returned', None, None)}
+    control_realloc_same_mem5: ['CONTROL realloc-same block=64 same_address=1 kept=1']
+    control_realloc_shrink_mem5: ['CONTROL realloc-shrink block=64 same_address=1 kept=1']
+    control_realloc_fail_mem5: ['CONTROL realloc-fail failed=1 kept=1']
+    control_capacity_mem5: ['CONTROL capacity block=64']
+v6-sublet-block-keeps-rep2   at site 16/17  not: {'12': ('returned', None, None)}
+    control_realloc_same_mem5: ['CONTROL realloc-same block=64 same_address=1 kept=1']
+    control_realloc_shrink_mem5: ['CONTROL realloc-shrink block=64 same_address=1 kept=1']
+    control_realloc_fail_mem5: ['CONTROL realloc-fail failed=1 kept=1']
+    control_capacity_mem5: ['CONTROL capacity block=64']
+heap256-la                   at site 15/17  not: ['12', '15']
+heap256-la-rep2              at site 15/17  not: ['12', '15']
+driver-la                    at site 13/17  not: ['12', '15', '16', '17']
+driver-la-rep2               at site 13/17  not: ['12', '15', '16', '17']
+reps equal v6-sublet-driver: True
+reps equal v6-sublet-block: True
+reps equal v6-sublet-block-keeps: True
+reps equal heap256-la: True
+reps equal driver-la: True
+case 12: {'v6-sublet-driver': ('AT', 25, 'fts5SegIterNextPage'), 'v6-sublet-driver-rep2': ('AT', 25, 'fts5SegIterNextPage'), 'v6-sublet-block': ('AT', 25, 'fts5SegIterNextPage'), 'v6-sublet-block-rep2': ('AT', 25, 'fts5SegIterNextPage'), 'v6-sublet-block-keeps': ('returned', None, None), 'v6-sublet-block-keeps-rep2': ('returned', None, None), 'heap256-la': 'returned', 'heap256-la-rep2': 'returned', 'driver-la': 'returned', 'driver-la-rep2': 'returned'}

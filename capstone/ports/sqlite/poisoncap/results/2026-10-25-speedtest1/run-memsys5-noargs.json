@@ -1,0 +1,40 @@
+{
+ "binary": "~/poisoncap-platform/speedtest1/memsys5/speedtest1",
+ "command": "./speedtest1",
+ "timeout": 14400,
+ "started_utc": "2026-10-24T16:43:07Z",
+ "sysctl": "security.cheri.runtime_revocation_default: 1\nkern.features.cheri_revoke: 1",
+ "finished_utc": "2026-10-24T16:44:59Z",
+ "tests": [],
+ "console_from_serial": [
+  "KDB: debugger backends: ddb",
+  "KDB: current backend: ddb",
+  "<user>@<host>:~/poisoncap-platform/work/build/cheribsd-riscv64-purecap-build~/poisoncap-platform/work/source/cheribsd/riscv.riscv64c/sys/CHERI-PURECAP-QEMU-POISON riscv",
+  "root@:/ # exclusive lock of (sx) vm map (user) @ ~/poisoncap-platform/work/source/cheribsd/sys/vm/vm_map.c:6103",
+  "while share locked from ~/poisoncap-platform/work/source/cheribsd/sys/vm/vm_map.c:5978",
+  "panic: share->excl",
+  "KDB: stack backtrace:",
+  "kdb_backtrace() at kdb_backtrace+0x30",
+  "vpanic() at vpanic+0x18a",
+  "panic() at panic+0x4a",
+  "vm_fault_trap() at vm_fault_trap+0x6e",
+  "do_trap_supervisor() at do_trap_supervisor+0xa48",
+  "do_trap_supervisor() at do_trap_supervisor+0x6c",
+  "cpu_exception_handler_supervisor() at cpu_exception_handler_supervisor+0x88",
+  "--- exception 13, tval = 0x402a2670",
+  "KDB: enter: panic",
+  "Stopped at      kdb_enter+0x50:"
+ ],
+ "runner_log_tail": [
+  "Traceback (most recent call last):",
+  "  File \"~/poisoncap-platform/repo/capstone/ports/sqlite/poisoncap/speedtest1-guest.py\", line 86, in <module>",
+  "    sys.exit(main())",
+  "             ~~~~^^",
+  "  File \"~/poisoncap-platform/repo/capstone/ports/sqlite/poisoncap/speedtest1-guest.py\", line 57, in main",
+  "    guest.copy(a.binary, 'root@127.0.0.1:/tmp/st/speedtest1')",
+  "    ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^",
+  "  File \"~/poisoncap-platform/repo/capstone/ports/common/host/cheribsd/guest.py\", line 121, in copy",
+  "    raise RuntimeError(f\"guest copy failed ({result.returncode}): {detail}\")",
+  "RuntimeError: guest copy failed (1): "
+ ]
+}

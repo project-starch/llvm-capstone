@@ -1,0 +1,9 @@
+# Sublet arms on two SDK kits, --size 20, same host (p12), same platform (paged, QEMU b290f565), run side by side
+# old: the kit of every result run (llvm-capstone f4f58b02 of 2026-10-20, its musl libc and runtime): images 6bfe4d1b (block-bounds), 9836684d (spatial)
+# new: dev 9c779890 built by PR #281's recipes/toolchain.sh (clang eca2f562, libc d00a1844), SDK with the old kit's options (virtual, 2 MiB data): images 83315d75, ec5a3c01
+# kit  run  rc  tests  total_s  test160_s  issues  reuses  bins
+old bb-size20 0 20 1737.2 1436.4 8470 7835 2603,3883,606,399,134,30,33,21,3,61,16,15,30,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+old spatial-size20 0 20 1626.3 1336.2 8470 7835 2603,3883,606,399,134,30,33,21,3,61,16,15,30,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+new bb-size20 0 20 1735.5 1439.5 8470 7835 2603,3883,606,399,134,30,33,21,3,61,16,15,30,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+new spatial-size20 0 20 1630.2 1342.5 8470 7835 2603,3883,606,399,134,30,33,21,3,61,16,15,30,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+# new kit qualification (qualify-reuse.py capstone, both arms): ALL PASS, pilot bins equal to the old kit's

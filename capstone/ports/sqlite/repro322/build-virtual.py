@@ -62,6 +62,9 @@ import sys
 
 REPO = Path(__file__).resolve().parents[4]
 CORPUS = REPO / 'capstone/bug-corpora/sqlite/engine-repros'
+# Demonstrations built with the corpus's machinery that are not corpus cases (not in its denominator):
+# the backported f932f7145e use-after-free. A build takes one only when --extra-case names it.
+DEMOS = REPO / 'capstone/ports/sqlite/poisoncap/backport'
 REPRO = REPO / 'capstone/ports/sqlite/repro322'
 DRIVER = REPO / 'capstone/ports/sqlite/repro322/corpus322.sh'
 # What configure defines on Linux and the one configuration the application
@@ -88,8 +91,17 @@ def group_flags():
     return groups
 
 
-def case_groups():
-    """{case directory: (group, extra flags)}, by the tag the case declares."""
+def case_dir(name):
+    """The directory of the case or demonstration NAME: the corpus first, then DEMOS."""
+    for root in (CORPUS, DEMOS):
+        if (root / name / 'case.json').is_file():
+            return root / name
+    return None
+
+
+def case_groups(extra=()):
+    """{case directory: (group, extra flags)}, by the tag the case declares. EXTRA adds
+    demonstration directories (DEMOS) to the corpus's cases."""
     manifest = {}
     text = DRIVER.read_text()
     for group, block in re.findall(r'^\s*([a-zA-Z0-9]+)\)\s*cat <<EOF\n(.*?)^EOF\n',
@@ -99,7 +111,7 @@ def case_groups():
             if len(words) >= 2:
                 manifest[words[1]] = (group, words[2:])
     cases = {}
-    for case in sorted(CORPUS.glob('[0-9][0-9]_*')):
+    for case in sorted([*CORPUS.glob('[0-9][0-9]_*'), *(Path(e).resolve() for e in extra)]):
         source = case / 'case.c'
         if not source.is_file():
             continue
@@ -132,6 +144,17 @@ def main():
                         "own Sublet port: a page's data is a child lifetime of the pin, revoked "
                         "when the last reference goes away. The page is neither freed nor "
                         "reassigned there, so no malloc-level mechanism can see that end")
+    p.add_argument('--block-bounds', action='store_true',
+                   help="With --sublet: a COMPARISON arm with memsys5's stock rounding -- each child bounded "
+                        "to its whole power-of-two block, sizes reported as blocks -- applied by "
+                        "sublet/sublet-block-bounds.py after the patch. Every Sublet lifetime is kept.")
+    p.add_argument('--block-port', action='store_true',
+                   help="With --sublet: the block port, sublet/sublet-3220000-memsys5-block.patch, instead of "
+                        "the request-bounds port: every block bounded to its whole power-of-two block with "
+                        "stock rounding and heap geometry, and every successful realloc a new lifetime")
+    p.add_argument('--realloc-keeps-lifetime', action='store_true',
+                   help="With --block-port: the ablation, -DSUBLET_REALLOC_KEEPS_LIFETIME on the engine, "
+                        "so a realloc that keeps its block returns the old lifetime")
     p.add_argument('--no-lookaside', action='store_true',
                    help="With --sublet: turn SQLite's SECOND nested allocator off, so "
                         "the small allocations it would take go to memsys5, which this "
@@ -140,11 +163,23 @@ def main():
     p.add_argument('--ext-src', type=Path,
                    help='SQLite 3.22.0 full source tree, for the two ext cases')
     p.add_argument('--only', help='comma-separated case number prefixes')
+    p.add_argument('--extra-case', type=Path, action='append', default=[],
+                   help='also build this demonstration directory (not a corpus case), e.g. '
+                        'ports/sqlite/poisoncap/backport/33_f932f7145e_compound_cte_backport_pwith')
     p.add_argument('--observe', type=Path, action='append', default=[],
                    help='An instrument, not a case: built against the same '
                         'engine object and the same arm as the cases, with the '
                         'core group flags, and reported separately')
     p.add_argument('--opt', default='-O0')
+    p.add_argument('--heap-bytes', type=int,
+                   help="every case's memsys5 heap at this size (a power of two), overriding the "
+                        "corpus's sizes, as poisoncap/corpus/build-cases.py --heap-bytes does")
+    p.add_argument('--heap-min', type=int,
+                   help="memsys5's minimum request (SQLITE_HEAP_MIN_REQ, default 64), as "
+                        "poisoncap/corpus/build-cases.py --heap-min does")
+    p.add_argument('--heap-malloc', action='store_true',
+                   help="take every case's memsys5 heap from malloc before main() instead of a static "
+                        "array (REPRO322_HEAP_MALLOC), as PoisonCap's speedtest1 main() does")
     a = p.parse_args()
 
     cc = a.sdk / 'capstone-cc'
@@ -152,7 +187,7 @@ def main():
         sys.exit(f'no capstone-cc in {a.sdk}')
     if not (a.amalgamation / 'sqlite3.c').is_file():
         sys.exit(f'no sqlite3.c in {a.amalgamation}')
-    flags, cases = group_flags(), case_groups()
+    flags, cases = group_flags(), case_groups(a.extra_case)
     if a.only:
         keep = {w.zfill(2) for w in a.only.split(',')}
         cases = {c: v for c, v in cases.items() if c.name[:2] in keep}
@@ -165,6 +200,20 @@ def main():
         a.memsys5 = True
     arm = ('memsys5-sublet-pagecache' if a.pagecache else
            'memsys5-sublet' if a.sublet else 'memsys5' if a.memsys5 else 'platform')
+    if a.block_bounds:
+        if not a.sublet:
+            sys.exit('--block-bounds needs --sublet')
+        if a.block_port:
+            sys.exit('--block-bounds edits the request-bounds port; --block-port is already block bounds')
+        arm += '-block-bounds'
+    if a.block_port:
+        if not a.sublet:
+            sys.exit('--block-port needs --sublet')
+        arm += '-block-port'
+    if a.realloc_keeps_lifetime:
+        if not a.block_port:
+            sys.exit('--realloc-keeps-lifetime needs --block-port')
+        arm += '-realloc-keeps-lifetime'
     if a.no_lookaside:
         arm += '-no-lookaside'
     a.out.mkdir(parents=True, exist_ok=True)
@@ -194,7 +243,8 @@ def main():
         print('  applied fts3-doclist-null-patch.py to the copy')
     sublet_includes = []
     if a.sublet:
-        patches = ['sublet/sublet-3220000-memsys5.patch']
+        patches = ['sublet/sublet-3220000-memsys5-block.patch' if a.block_port
+                   else 'sublet/sublet-3220000-memsys5.patch']
         if a.pagecache:
             patches.append('sublet/sublet-3220000-pagecache.patch')
         for name in patches:
@@ -204,6 +254,12 @@ def main():
             if done.returncode:
                 sys.exit(f'{patch.name} did not apply: {done.stdout}{done.stderr}')
             print(f'  patched {source.name} with {patch.name}')
+        if a.block_bounds:
+            done = subprocess.run([sys.executable, str(REPO / 'capstone/ports/sqlite/sublet/sublet-block-bounds.py'),
+                                   str(source)], capture_output=True, text=True)
+            if done.returncode:
+                sys.exit(f'sublet-block-bounds.py failed: {done.stdout}{done.stderr}')
+            print('  ' + done.stdout.strip())
         sublet_includes = [f'-I{REPO}/capstone/runtime/include']
     engine = {}
     for group in sorted({g for _, g, _ in cases.values()}):
@@ -212,6 +268,7 @@ def main():
         obj = a.out / 'obj' / f'sqlite3-{group}.o'
         command = [str(cc), a.opt, *CONFIG, *flags[group],
                    *(['-DSQLITE_ENABLE_MEMSYS5'] if a.memsys5 else []),
+                   *(['-DSUBLET_REALLOC_KEEPS_LIFETIME'] if a.realloc_keeps_lifetime else []),
                    *sublet_includes,
                    f'-I{a.amalgamation}', '-c', str(source), '-o', str(obj)]
         log = a.out / f'engine-{group}.log'
@@ -254,6 +311,12 @@ def main():
             sources.append(str(a.ext_src / 'ext' / relative))
             extra_inc = [o if not o.startswith('-I') else f'-I{a.ext_src}/ext/{o[2:]}'
                          for o in options]
+        if a.heap_bytes:
+            extra = [e for e in extra if not e.startswith('-DSQLITE_HEAP_SIZE=')] + [f'-DSQLITE_HEAP_SIZE={a.heap_bytes}']
+        if a.heap_min:
+            extra = [e for e in extra if not e.startswith('-DSQLITE_HEAP_MIN_REQ=')] + [f'-DSQLITE_HEAP_MIN_REQ={a.heap_min}']
+        if a.heap_malloc:
+            extra = [*extra, '-DREPRO322_HEAP_MALLOC']
         image = a.out / f'{case.name}.dom'
         command = [str(cc), a.opt, '-DREPRO322_VIRTUAL',
                    *(['-DREPRO322_VIRTUAL_MEMSYS5'] if a.memsys5 else []),
@@ -306,7 +369,9 @@ def main():
                                      if 'error' in l.lower())[:600])
     (a.out / 'build.json').write_text(json.dumps(dict(
         arm=arm, sdk=str(a.sdk), amalgamation=str(a.amalgamation), opt=a.opt,
-        groups={g: flags[g] for g in sorted(engine)},
+        heap_bytes=a.heap_bytes, heap_min=a.heap_min, heap_malloc=a.heap_malloc,
+        sublet_port='block' if a.block_port else 'request' if a.sublet else None,
+        realloc_keeps_lifetime=a.realloc_keeps_lifetime, groups={g: flags[g] for g in sorted(engine)},
         cases={c.name: dict(tag=t, group=g, extra=e) for c, (t, g, e) in cases.items()},
         built=built, failed=failed, not_applicable=skipped,
         instruments=observed), indent=2) + '\n')
