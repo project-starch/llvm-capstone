@@ -105,6 +105,8 @@ def main():
                     help="stage only the lib/ files this list names, one run-directory path per line (perlbench's lib/ is "
                     "54 MB and its train commands open 70 files of it; the list comes from tracing the native build); "
                     "every other lib/ file joins the excluded ones, so a missing module fails its command, never silently")
+    ap.add_argument("--link-inputs", action="store_true",
+                    help="link the run directory's inputs to the stage instead of copying them (saves their size in RAM)")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     arms = a.arms.split(",")
@@ -251,7 +253,15 @@ def main():
                 f'$(grep -a CAPSTONE_VM_STATS {err} 2>/dev/null | tail -1) :: $(bench)"', "n=$((n+1))"]
 
     for arm in arms:
-        L += [f'echo "@@SPEC-ARM-BEGIN {arm}"', "cd / && rm -rf /tmp/sr && mkdir -p /tmp/sr && cp -a \"$S/in/.\" /tmp/sr/ && cd /tmp/sr || exit 1"]
+        if a.link_inputs:
+            # The inputs stay in the stage (the board's initramfs) and the run directory links to them: on the board the
+            # initramfs already holds them in RAM, so a copy would hold them twice (xz train: 24 MB). The commands read
+            # their inputs and write only new files, which land in /tmp/sr itself; `find -type f` hashes outputs only.
+            L += [f'echo "@@SPEC-ARM-BEGIN {arm}"', "cd / && rm -rf /tmp/sr && mkdir -p /tmp/sr && cd \"$S/in\" && "
+                  "find . -type d | while read -r d; do mkdir -p \"/tmp/sr/$d\"; done && "
+                  "find . -type f | while read -r f; do ln -s \"$S/in/$f\" \"/tmp/sr/$f\"; done && cd /tmp/sr || exit 1"]
+        else:
+            L += [f'echo "@@SPEC-ARM-BEGIN {arm}"', "cd / && rm -rf /tmp/sr && mkdir -p /tmp/sr && cp -a \"$S/in/.\" /tmp/sr/ && cd /tmp/sr || exit 1"]
         if a.bench == "500.perlbench_r":
             img = f"$S/bin/{arm}/" + p["cmds"][0]["argv"][0].replace("ARM", arm)
             L += ["rm -rf /tmp/sw && mkdir -p /tmp/sw || exit 1",
