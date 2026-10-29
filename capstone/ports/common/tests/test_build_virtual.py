@@ -4,9 +4,10 @@ build-virtual.sh is the only way in to a virtual application build, and its
 --dry-run resolves the whole pipeline without running a recipe -- which is what
 makes the dispatch testable on a host with no Capstone toolchain. What is
 checked is the part a caller gets wrong: that one selector reaches the right
-port variable for all eight ports, that a contradicting port variable is
-refused instead of silently losing, and that memcached, whose recipe builds
-every arm in one output, says so rather than accepting a selector it ignores.
+port variable for all nine ports, that a contradicting port variable is
+refused instead of silently losing, that memcached, whose recipe builds
+every arm in one output, says so rather than accepting a selector it ignores,
+and that php's baked-in arm is recorded only where it means something.
 """
 
 import json
@@ -28,10 +29,12 @@ DISPATCH = {
     "perl": ("PERLD_SUBLET=0", "PERLD_SUBLET=1"),
     "mruby": ("MRBD_SUBLET=0", "MRBD_SUBLET=1"),
     "sqlite": ("SQLITE_HEAP=memsys5", "SQLITE_HEAP=memsys5-sublet"),
+    # php's protected image bakes its arm in; with no PHP_REALPHP_DEFAULT_MODE it is 6.
+    "php": ("PHP_REALPHP_ALLOC=stock", "PHP_REALPHP_ALLOC=nested PHP_REALPHP_DEFAULT_MODE=6"),
     "memcached": (None, None),
 }
-# The two ports whose recipe takes an SDK rather than building one.
-SHARED_SDK = {"mruby", "sqlite"}
+# The ports whose recipe takes an SDK rather than building one.
+SHARED_SDK = {"mruby", "sqlite", "php"}
 
 
 class Dispatch(unittest.TestCase):
@@ -107,6 +110,25 @@ class Dispatch(unittest.TestCase):
         done = self.resolve("cpython", 0, output=used)
         self.assertNotEqual(done.returncode, 0)
         self.assertIn("fresh output directory", done.stderr)
+
+    def test_php_default_mode_is_only_the_protected_arm(self):
+        resolved = self.pipeline("php", 1, output=self.root / "php-nested-7",
+                                 environment={"PHP_REALPHP_DEFAULT_MODE": "7"})
+        self.assertEqual(resolved["port_variable"],
+                         "PHP_REALPHP_ALLOC=nested PHP_REALPHP_DEFAULT_MODE=7")
+        done = self.resolve("php", 1, environment={"PHP_REALPHP_DEFAULT_MODE": "4"})
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("is not a protected arm", done.stderr)
+        # Anywhere else the variable selects nothing, so it is refused before pipeline.json
+        # could record it: php's stock image, and every other application.
+        for application, lifetimes in (("php", 0), ("sqlite", 0), ("sqlite", 1), ("cpython", 0)):
+            with self.subTest(application=application, lifetimes=lifetimes):
+                output = self.root / f"stray-{application}-{lifetimes}"
+                done = self.resolve(application, lifetimes, output=output,
+                                    environment={"PHP_REALPHP_DEFAULT_MODE": "6"})
+                self.assertNotEqual(done.returncode, 0)
+                self.assertIn("selects php's protected arm", done.stderr)
+                self.assertFalse((output / "pipeline.json").exists())
 
     def test_an_invalid_selector_is_refused(self):
         done = self.resolve("cpython", "yes")
