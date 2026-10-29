@@ -299,3 +299,72 @@ SHRINK rounded the base.
 **What changes.** P18 and P19 keep their observable predictions: the same rc 139 and the same fault line at the same
 pc. Only Addendum 6's reading of the cause is withdrawn. How it was missed: the first localization took the
 `__builtin_trap` nearest the `unimp` in the disassembly, and never asked which branches target it.
+
+## Addendum 8 (2026-10-29 11:00, before any perlbench boot): perlbench references, the realloc mechanism, list order
+
+**perlbench test, twin references** (kit-q34, native harness, trimmed lib; `census-perl/500.perlbench_r-test-<arm>`):
+
+| arm | image (stripped) | makerand | test.pl | instret (makerand, test) | entries |
+|---|---|---|---|---|---|
+| T1 | 6b1a30a5b1e71f58 | specdiff PASS | 2 of 316 fail | 4.654e9, 115.966e9 | 1,063,661 |
+| T3 | 371553e3b5adffa7 | specdiff PASS | 2 of 316 fail | 4.654e9, 116.460e9 | 1,136,493 |
+
+The two failures are t/japh/abigail and t/re/pat_rt_report in both arms. Each ends in one fault: T1
+`cause=2` at code offset 0x11eb0, T3 `cause=29` at code offset 0x124c4. re/reg_email passes in both.
+
+**perlbench train T1, twin** (lib-trimmed stage, image 2c073498b100b0ca): all 5 commands rc 0, 300.46e9
+instructions, 380,232 entries. All six output files' sha256 equal SPEC's reference files. The negative control
+(lib/Date/Format.pm removed) fails the two commands that load it, rc 2. The reader's "OOPS/OOM" line on that run
+matched base64 and is fixed (b46e45a00ca5).
+
+**The realloc mechanism, from a directed probe on the twin** (`realloc-probe/RESULT.md`): this answers Addendum 7's
+first open line.
+- realloc keeps an object's offset in two routes: the in-place branch, and the no-op mremap of a sizeclass-63
+  mapping.
+- In both routes it publishes `[p, p + repr_round(n))`. But enframe aligned p only to the granule of the original
+  size.
+- The pairs 32720→32768 and 261888→262144 fault on exactly the rounds whose base is not a multiple of the new
+  granule: T1 with cause=2, T3 with cause=29. The aligned rounds and the moved control pass.
+- Which route the SPEC traps take is not established.
+
+**Predictions:**
+- **P20, perlbench test on the board.** For each arm:
+  - makerand: specdiff PASS;
+  - test.pl: exactly japh/abigail and re/pat_rt_report fail, each with the twin's fault (cause and code offset as
+    above);
+  - every output's hash equals the twin's;
+  - instret within +0.3 % of the twin.
+  
+  This sharpens P19 now that the twin is pinned.
+- **P21, perlbench train T1 on the board.**
+  - All 5 commands rc 0.
+  - All six outputs' sha256 equal SPEC's references. splitmail.out (26 MB) is judged by hash alone.
+  - instret within +0.3 % of 300.46e9.
+
+**Steps, at CPI 7 plus 15 ms per entry** (Addendum 3's rule):
+
+| boot | step | booking |
+|---|---|---|
+| perlbench test (either arm) | 50400 s | 870 min |
+| perlbench train T1 | 93600 s | 1590 min |
+
+**List order.** Test boots now precede the remaining train boots. Each list's tail is rewritten after the line its chain
+has already read (offsets 868 and 566, checked in /proc), so the running boots are untouched.
+- **Board 1**, after imagick train T1:
+  1. perlbench test T1;
+  2. x264 test T1;
+  3. perlbench train T1;
+  4. lbm train T1;
+  5. x264 train T1;
+  6. gcc train T1;
+  7. nab train T1.
+- **Board 2**, after mcf test T1:
+  1. perlbench test T3;
+  2. x264 test T3;
+  3. imagick train T3;
+  4. lbm train T3;
+  5. x264 train T3;
+  6. mcf train T1;
+  7. mcf train T3;
+  8. nab train T3.
+- perlbench train T3 waits for its twin run, which started at 10:45.
