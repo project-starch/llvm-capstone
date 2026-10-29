@@ -1,0 +1,4 @@
+case	kind	access	sites	frames	status
+33_gh-151295_bytes-join-reentrant-buffer	heap-use-after-free	READ 4	Py_INCREF,_Py_NewRef,slot_bf_getbuffer	Py_INCREF Include/object.h:824 | _Py_NewRef Include/object.h:1058 | slot_bf_getbuffer Objects/typeobject.c:9973	rc=1
+34_gh-151403_fork-exec-fspath	heap-use-after-free	READ 8	Py_TYPE,PyOS_FSPath	Py_TYPE Include/object.h:336 | PyOS_FSPath Modules/posixmodule.c:16475 | PyOS_FSPath Modules/posixmodule.c:16449	rc=1
+35_gh-153539_textio-tell-reentrant-decoder	heap-use-after-free	READ 5	memcpy,PyBytes_FromStringAndSize	memcpy ../../../../src/libsanitizer/sanitizer_common/sanitizer_common_interceptors_memintrinsics.inc:117 | memcpy /usr/include/x86_64-linux-gnu/bits/string_fortified.h:29 | PyBytes_FromStringAndSize Objects/bytesobject.c:159	rc=1
