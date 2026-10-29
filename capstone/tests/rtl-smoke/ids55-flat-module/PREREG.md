@@ -115,3 +115,29 @@ Predictions, each read against F0's twin reading (test CSRs off, the silicon's c
 
 The boot ORDER follows the skill's rule: everything expected to return runs first. live 1100000 runs last, because it
 is the step that drives the table to exhaustion.
+
+## Addendum 1 (2026-10-30, before the run): perlbench train T3 on F0, at real churn
+
+The runtime lane asked for one more arm. The flat table at 2^20 has headroom only if freed records recycle: perlbench
+train's scrabbl command creates 14,753,501 records, while its paged table grew only to 435,200. So the arm that SPEC train
+depends on is recycling under a real workload. F0s exercises it only with a synthetic fill.
+
+Run after the grid (`.grid-done`), on kit-f55-nocsr (F0): the stage `stages-trainT1/500.perlbench_r-train-capstone-lifetimes`
+(image b05dcf06469c2024), `run-stage.py run --backend qemu --step-s 28800 --twin-inband-max 1048576`, as
+`spec/census-w55/chain.sh` ran it on kit-w55. The reference is that run (W, paged 55): 5 of 5 rc 0, specdiff 6/6. Its
+per-command `nodes` / `node_capacity` read 7,893,537/123,904; 1,047,762/13,312; 14,753,501/435,200 (scrabbl);
+2,230,218/431,104; 998,956/177,152.
+
+Predictions:
+
+1. Commands and output. All 5 commands return rc 0, and specdiff passes 6 of 6.
+2. Allocation counts. Each command's `nodes` equals W's within 0.1 %. Both count the header's allocations, pops
+   included, from the same image and inputs.
+3. Table shape. On F0 every command reads `node_capacity=1048576`, `collections=0` and `reclaimed=0`. Its node_bytes is
+   16,777,216.
+4. No exhaustion. No command meets ENOMEM or a domain fault from the table. W's largest grown table, 435,200, is below
+   1,048,576 less the 1,024-record floor and the 256-record reserve.
+5. Instructions. Each command's instret is within 0.1 % of W's.
+
+Reading 2 together with reading 4 is the evidence that freed records recycle through the wide flat free list: scrabbl
+creates 14x the table's records and still completes.
