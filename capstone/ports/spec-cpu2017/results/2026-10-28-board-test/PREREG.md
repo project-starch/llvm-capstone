@@ -393,3 +393,52 @@ train T3.
   - Where a runtime fix (the realloc defect) produces new images before a queued boot starts, that boot's line is
     swapped to the new stage. It is pre-registered here before it runs, and the run carries the new image hash.
   - A finished run on the old images stays the record for those images and is not rerun.
+
+## Addendum 11 (2026-10-30 00:55, before any xz train boot): xz train on the board, and perlbench test T3's reading
+
+**perlbench test T3, board 2 (recorded here because it bears on P20).**
+- makerand: specdiff PASS.
+- test.pl: three sub-tests fail: japh/abigail, re/pat_rt_report and re/reg_email. P20 predicted exactly the first two.
+  - re/reg_email is the extra one. Its sub-run stopped at 0.753e9 instructions against the twin's 5.813e9. No other
+    sub-run differs from the twin's instret by more than 2.5 %.
+  - The same sub-test failed in one of the earlier twin runs (Addendum 6, before the twin was pinned), with the
+    realloc fault.
+  - The board console does not carry a sub-run's fault line, so this boot cannot show which fault ended it.
+- **P20 does not hold for T3.** The reading is: a nondeterministic member of the known realloc-fault set,
+  unconfirmed on the board. Its cause is not established by this boot.
+
+**xz train T1, twin** (kit-q34, `--link-inputs` stage, 936 MiB guest = 963 − 24 MiB of inputs − 3 MiB margin):
+- both commands rc 0, specdiff 2/2 PASS;
+- peak 222,921 pages;
+- 112.65e9 + 50.97e9 instructions.
+
+A T3 twin run at 936 MiB is queued (`census-train/557.xz_r-train-capstone-lifetimes-link-mem936M`). The T3 board boot
+goes on the list only after it reads PASS.
+
+**Firmware size.** The stage is 24,427,799 B raw and its inputs do not compress. The firmware is about 2 MiB plus the
+Image, and the Image is about 4.9 MB plus the raw stage, so this boot needs about 31.5 MB. That is above the
+26,000,000 B cap in the perf kits' board.env. Two bounds set the cap for this one benchmark:
+- **Layout.** OpenSBI places the payload at 0x80200000 and the FDT at 0x82200000, and nothing is reserved in
+  between. The kernel's footprint, from the Image header's image_size, is the file size plus 357,888 B. A cap of
+  33,000,000 B keeps that footprint below 31.27 MB, under the 32 MiB to the FDT.
+- **Load.** The JTAG load runs at about 131 KB/s, measured over 12 loads, so 31.5 MB takes about 240 s against the
+  driver's 300 s load budget.
+
+The kits are copies, `t3-smoke-fw33/bkit12-perf-b3-b{1,2}`. Each differs from its original only in
+`BOARD_FW_CAP=33000000`, with SHA256SUMS regenerated for board.env. They are used only for the xz train lines, via
+SB_KITROOT.
+
+**P23. xz train on the board, per arm** (T1 image 961dd14555f0b041, T3 c2f39e5811e45ac2):
+- the firmware is below 33,000,000 B and loads within the 300 s budget;
+- both commands rc 0, specdiff 2/2 PASS, and output hashes equal to the twin's;
+- no OOM kill;
+- instret within +0.3 % of the twin's.
+
+If input.combined is OOM-killed (rc 137), the fallback is the reduced first command. That is pre-registered
+separately before any further boot.
+
+**Step and booking.** CPI on xz test was 2.8 to 3.3 on the board, so 163.6e9 instructions take about 6 h. The step
+is 32,400 s and the booking 570 min.
+
+**Placement.** One successor chain per board runs after that board's continuation list ends, with SB_KITROOT set to
+the fw33 kits: T1 on board 1, and T3 on board 2 after its twin PASS.
