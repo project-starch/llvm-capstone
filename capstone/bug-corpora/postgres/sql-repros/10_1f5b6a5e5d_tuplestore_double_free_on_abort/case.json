@@ -27,5 +27,5 @@
    "oracle": "completes: both frees are inside an aset block, which libc's revocation never sees freed, so the platform has nothing to revoke"
   }
  },
- "status": "live at the pin, measured on the host under Valgrind (2026-10-29); no Capstone or CheriBSD arm has run it"
+ "status": "live at the pin, measured on the host under Valgrind (2026-10-29); first Capstone reading in results/2026-10-29-virtual, beside the corpus's verdict_bundles and not derived into this file: virtual-malloc MISSED, virtual-pg-pools CAUGHT (cause 25 in SubletRelease, by control). cheribsd-revocation has not run it"
 }
