@@ -101,23 +101,36 @@ It boots twice, with `security.cheri.runtime_revocation_default` at 1 and then 0
 | 29 | [`29_abb09693ac4d_assign-op-and-incdec-property-helpers-hold`](29_abb09693ac4d_assign-op-and-incdec-property-helpers-hold) | CRASH-159 | ASAN:SEGV | free(), through _efree |
 | 30 | [`30_c3a317117ad8_hash-add-or-update-runs-destructor-on-still`](30_c3a317117ad8_hash-add-or-update-runs-destructor-on-still) | CRASH-160 | OK | free(), through _efree |
 
-## What counts as caught
+## Verdict and protection are two different readings
 
-One rule for both corpora, and it is narrower than "something went wrong":
+The corpus keeps them apart, because conflating them is how an arm gets credit for a fault that
+had nothing to do with the defect.
 
-- the verdict comes from the **platform default** boot only (`runtime_revocation_default=1`,
-  `..._every_free_default=0`). That is the configuration CheriBSD ships;
-- a `SIGPROT` there is caught. Its cause is attributed by the paired revocation-**off** boot,
-  because a purecap `SIGPROT` carries no symbol: off-also-faults means bounds or an already-cleared
-  tag, off-completes means revocation;
-- a `SIGABRT` there is caught as well. It is CheriBSD's allocator consistency check, not a
-  capability fault, and it is counted because the check is **capability-enabled**: a hybrid-ABI
-  build in the same guest against the same jemalloc survives the same double free that aborts under
-  purecap, so the ABI is the only variable (`ports/php/cheribsd/results/20261029-hybrid-ab`);
-- a fault that appears **only** under every-free revocation is **not** counted. It is recorded as
-  `NOT-REISSUED` in the notes with the place it lands, because it says the stale pointer is
-  followed and the chunk sits in the quarantine -- but the deployed policy does not sweep in time,
-  so the program runs on.
+**The verdict** is what the arm measured at the **platform default** boot
+(`runtime_revocation_default=1`, `..._every_free_default=0`) -- the configuration CheriBSD ships.
+It is formed by the shared judge from one `Observation` per case and written to
+`results/20261029/cheribsd-revocation/verdicts.jsonl`; nothing is tallied into it by hand.
+
+**Protection** asks a different question -- *does CHERI stop this program on this defect at all,
+in any configuration the platform supports* -- and it is an **attribution**, so it needs more than
+the default boot:
+
+- a **`SIGPROT` at the default** is attributed by the paired revocation-**off** boot, because a
+  purecap `SIGPROT` carries no symbol: off-completes means revocation fired, off-also-faults means
+  bounds or a tag PHP had already cleared itself;
+- a **`SIGABRT` at the default** is CheriBSD's allocator consistency check rather than a capability
+  fault, and it still counts, because the check is **capability-enabled**: a hybrid-ABI build in
+  the same guest against the same jemalloc survives the same double free that aborts under purecap,
+  so the ABI is the only variable (`ports/php/cheribsd/results/20261029-hybrid-ab`);
+- a fault that appears **only under every-free revocation** is recorded as `NOT-REISSUED`, with the
+  place it lands. It does not change the verdict -- at the default the chunk sits in the quarantine
+  unswept and the program runs on -- but it does answer the protection question, because the stale
+  pointer *is* followed and the capability *is* revoked when the sweep happens. Every-free is a
+  supported CheriBSD policy (`security.cheri.runtime_revocation_every_free_default`), not a switch
+  invented here;
+- a case with **no usable reading at the default** -- the trigger's own ending is a fatal PHP error,
+  or the guest watchdog kills it -- is excluded from the protection denominator rather than scored,
+  and so is a case that is **silent in all three configurations**.
 
 Where a fault lands is read from a marker, not inferred: `auto_prepend_file` prints
 `PHPB_TRIGGER_START` and `auto_append_file` prints `PHPB_TRIGGER_END`, so a fault with no END line
@@ -137,7 +150,24 @@ are in the bundle's `inputs.json`.
 | MISSED | 20 | 01, 02, 03, 05, 06, 08, 11, 14, 16, 17, 18, 19, 20, 21, 22, 23, 24, 26, 27, 30 |
 | NO-READING: inconclusive | 3 | 04, 09, 28 |
 
-**Counted as caught: 10 of 30** -- the 7 `SIGPROT` plus the 3 `SIGABRT`.
+### Protection: CHERI protects 0 of the 30
+
+The same mechanical partition that yields 21 of 26 on the sibling corpus picks up 17 rows here --
+and **not one of them is CHERI protecting a defect whose release stopped at Zend's cache**. Each has
+an attribution that disqualifies it, and the evidence for each is in
+`results/20261029/cheribsd-revocation/verdicts.jsonl` beside the row it belongs to:
+
+| cases | what the row looks like | why it is not protection of this corpus's boundary |
+|---|---:|---|
+| 07, 10, 12, 13, 15, 25, 29 | `SIGPROT` at the default | **all seven fault with revocation off as well.** No revocation was involved: PHP wrote a non-capability value over a capability slot and cleared the tag itself. CHERI reports a program that had already destroyed its own pointer, which is not a temporal catch |
+| 04, 09, 28 | `SIGABRT` at the default | the abort is at **request shutdown**, where `shutdown_memory_manager` hands every cached block to real `free()` (`Zend/zend_alloc.c:478-495`). The block reaches libc only because the request ended -- long after the defect's access, and never at it |
+| 01, 02, 06, 08, 17, 26, 30 | `SIGPROT` under every-free only | the fault *is* at the defect's own dereference site, but only because the block **left Zend's cache**: under the capability ABI it is too large for `AG(cache)` and `_efree` called real `free()`. See below. CHERI saw an object that escaped the nested allocator, not through it -- and at the platform default it is missed anyway |
+| the remaining 13 | silent, or exit 255 in all three | nothing fired |
+
+**Zero of thirty.** For a temporal defect whose freed block genuinely stays inside Zend's cache,
+nothing in CheriBSD's purecap stack -- bounds, quarantine, revocation at either policy, or the
+allocator's own consistency check -- observes the stale access. The allocator interposes at
+`malloc`, and these blocks never go there within the defect's window.
 
 | group | cases | which | what fired |
 |---|---:|---|---|

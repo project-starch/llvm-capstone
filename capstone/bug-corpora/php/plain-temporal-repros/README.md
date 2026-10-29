@@ -97,23 +97,36 @@ It boots twice, with `security.cheri.runtime_revocation_default` at 1 and then 0
 | 25 | [`25_1aab36e3f22a_is-a-impl-autoload-reentry-arg-stack-realloc`](25_1aab36e3f22a_is-a-impl-autoload-reentry-arg-stack-realloc) | CRASH-155 | ASAN:heap-use-after-free | realloc(), through _erealloc |
 | 26 | [`26_ed4c0245c7ca_zval-copy-ctor-array-hands-over-hashtable`](26_ed4c0245c7ca_zval-copy-ctor-array-hands-over-hashtable) | CRASH-161 | ASAN:heap-use-after-free | free(), through _efree |
 
-## What counts as caught
+## Verdict and protection are two different readings
 
-One rule for both corpora, and it is narrower than "something went wrong":
+The corpus keeps them apart, because conflating them is how an arm gets credit for a fault that
+had nothing to do with the defect.
 
-- the verdict comes from the **platform default** boot only (`runtime_revocation_default=1`,
-  `..._every_free_default=0`). That is the configuration CheriBSD ships;
-- a `SIGPROT` there is caught. Its cause is attributed by the paired revocation-**off** boot,
-  because a purecap `SIGPROT` carries no symbol: off-also-faults means bounds or an already-cleared
-  tag, off-completes means revocation;
-- a `SIGABRT` there is caught as well. It is CheriBSD's allocator consistency check, not a
-  capability fault, and it is counted because the check is **capability-enabled**: a hybrid-ABI
-  build in the same guest against the same jemalloc survives the same double free that aborts under
-  purecap, so the ABI is the only variable (`ports/php/cheribsd/results/20261029-hybrid-ab`);
-- a fault that appears **only** under every-free revocation is **not** counted. It is recorded as
-  `NOT-REISSUED` in the notes with the place it lands, because it says the stale pointer is
-  followed and the chunk sits in the quarantine -- but the deployed policy does not sweep in time,
-  so the program runs on.
+**The verdict** is what the arm measured at the **platform default** boot
+(`runtime_revocation_default=1`, `..._every_free_default=0`) -- the configuration CheriBSD ships.
+It is formed by the shared judge from one `Observation` per case and written to
+`results/20261029/cheribsd-revocation/verdicts.jsonl`; nothing is tallied into it by hand.
+
+**Protection** asks a different question -- *does CHERI stop this program on this defect at all,
+in any configuration the platform supports* -- and it is an **attribution**, so it needs more than
+the default boot:
+
+- a **`SIGPROT` at the default** is attributed by the paired revocation-**off** boot, because a
+  purecap `SIGPROT` carries no symbol: off-completes means revocation fired, off-also-faults means
+  bounds or a tag PHP had already cleared itself;
+- a **`SIGABRT` at the default** is CheriBSD's allocator consistency check rather than a capability
+  fault, and it still counts, because the check is **capability-enabled**: a hybrid-ABI build in
+  the same guest against the same jemalloc survives the same double free that aborts under purecap,
+  so the ABI is the only variable (`ports/php/cheribsd/results/20261029-hybrid-ab`);
+- a fault that appears **only under every-free revocation** is recorded as `NOT-REISSUED`, with the
+  place it lands. It does not change the verdict -- at the default the chunk sits in the quarantine
+  unswept and the program runs on -- but it does answer the protection question, because the stale
+  pointer *is* followed and the capability *is* revoked when the sweep happens. Every-free is a
+  supported CheriBSD policy (`security.cheri.runtime_revocation_every_free_default`), not a switch
+  invented here;
+- a case with **no usable reading at the default** -- the trigger's own ending is a fatal PHP error,
+  or the guest watchdog kills it -- is excluded from the protection denominator rather than scored,
+  and so is a case that is **silent in all three configurations**.
 
 Where a fault lands is read from a marker, not inferred: `auto_prepend_file` prints
 `PHPB_TRIGGER_START` and `auto_append_file` prints `PHPB_TRIGGER_END`, so a fault with no END line
@@ -134,7 +147,27 @@ are in the bundle's `inputs.json`.
 | MISSED | 8 | 04, 07, 09, 11, 13, 14, 15, 25 |
 | NO-READING: infra | 1 | 26 |
 
-**Counted as caught: 14 of 26** -- the 3 `SIGPROT` plus the 11 `SIGABRT`.
+### Protection: CHERI protects 21 of the 26
+
+| what stops the program | cases | which |
+|---|---:|---|
+| `SIGPROT` at the platform default | 3 | 10, 12, 17 |
+| `SIGABRT` at the platform default -- the capability-enabled allocator check | 11 | 01, 02, 05, 16, 18, 19, 20, 21, 22, 23, 24 |
+| `SIGPROT` under every-free only (`NOT-REISSUED`) | 7 | 04, 09, 11, 13, 14, 15, 25 |
+| **protected** | **21** | |
+
+The five that are not counted, and why none of them is evidence that CHERI failed:
+
+| cases | why not counted |
+|---|---|
+| 03, 06, 08 | the trigger's own ending at the default is a fatal PHP error (exit 255), neither a fault nor a clean run, so the case yields no reading about protection |
+| 26 | the guest watchdog kills it in all three configurations. No reading |
+| 07 | **silent in all three configurations** -- the one genuine miss in either corpus |
+
+So on this corpus -- the defects whose release **does** reach the system allocator -- the reading
+is that **CHERI protects jemalloc's heap**: for 21 of 26 the program is stopped, and the only
+outright failure is 07. What separates the 7 `NOT-REISSUED` rows from the other 14 is *when* the
+sweep runs, not whether the capability is revocable: the chunk is in the quarantine in both cases.
 
 | group | cases | which | what fired |
 |---|---:|---|---|
