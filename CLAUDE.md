@@ -25,7 +25,14 @@ auto-mode rules of `~/.claude-kisp/settings.json`. None of these needs permissio
 - edits to this file, the skills and the docs;
 - bitstream **reflashes** (granted 2026-10-30): flash whatever bitstream the plan needs, then report it. The
   procedure does not relax: a sealed bitstream only, its sha256 checked locally before the flash, the resident
-  name read back after it, a known-good fallback still registered, and the flash recorded in the run's log.
+  name read back after it, a known-good fallback still registered, and the flash recorded in the run's log;
+- launching a **synthesis** (granted 2026-10-30), a full build or a synthesis-only gate, with no approval step,
+  **but never without a memory watchdog.** Run it under `synth-guard.sh` (capstone-ariane) with an explicit RSS
+  ceiling that kills the run's OWN process group when crossed and records an `exit=` line: a ceiling of about twice
+  the reference envelope (full builds measured in August-September peaked near 21 GB in synthesis; 40 GB for a synthesis-only gate), and
+  below what the host can spare. After launch, confirm the watchdog is sampling (its log advances) and check it
+  again when the run ends. An unguarded synthesis is forbidden: pathological RTL has driven `synth_design` past
+  100 GB and once to 343 GB, which takes the shared host down with every lane on it.
 
 Only two things still wait for the lead's OWN word in the current conversation (a confirmation
 relayed by another lane does not count):
