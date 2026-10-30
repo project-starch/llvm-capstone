@@ -648,3 +648,37 @@ stay disarmed: the chain stops at p1 (SB STOP, CB STOP), and chain-xz.sh does no
 gate, VOID rules and predictions above are unchanged. Stubbed dry run: `board/plain/dryrun/waiter-dryrun.txt`. PASS
 arms the six stages; trapped, wedge, hold and failed-control each leave them disarmed; a chain gone without a pp1 END
 stops the waiter.
+
+### Plain addendum 1 (2026-10-30 ~22:00, after the pilot, before any main Plain kit runs): the pilot read HOLD; an exclusion rule, and the main kits armed
+
+**What the pilot read** (board 1, bitstream 3, pp1, 19:36-20:12; out dir spec/board/out/perf-plain-pp1). The gate,
+`check-plain-boot.py --pilot`, exited 4 (HOLD) on P4 alone:
+- P1, P2, P3 held: no ILLX/INJS/INJL line; `PLAINPROBE access=ok`; cycles_per_us 24.997, 202 gaps in 2 s (101/s),
+  proc_interrupts_delta 202. The user-mode counters work on this board.
+- P4: ctl-loop k_ins 10,637 instructions per interrupt (a mean over 20 iterations, 3,675..29,262) against the probe's
+  gap_instret median 3,817 (mean 3,810).
+
+**Why.** User-mode rdcycle/rdinstret count the whole hart, not the process. In a few iterations another task ran: the
+timer count is far above the program's median and the involuntary context switches (nivcsw) jump. Examples: ctl-loop
+425 ticks against a median of 134, nivcsw 157-162; rv8-miniz 466-475 against 152, nivcsw 163-172; coremark 194
+against 83; sglib-rbtree-libc's iterations 0 and 1 in every process, 80-91 ticks against 45.5 with nivcsw 69-90, which
+its 29-36 page faults (~0.8 M cycles at the probe's fault cost) cannot account for. The Capstone arms count inside their
+own context only, so the other task's work does not reach their counters. On the 15 ctl-loop iterations outside those
+events, k_ins is 3,978 (3,899..4,027): +4.2 % against the probe, and every iteration within ±3 %.
+
+**The change. Written after reading the pilot and stated as such: it is a re-scoping of P4 and an exclusion rule
+the original section did not have.**
+1. *Contaminated iteration.* A Plain iteration is excluded when its `timer` count exceeds its program's median Plain
+   `timer` count in the same kit by more than 10 % plus 2 ticks. The same iteration indices of that program are
+   excluded from the MapLife and ObjLife rows of the same kit, so every ratio compares the same iterations. Excluded
+   counts are reported per program; a program with more than 2 of its 5 timed iterations excluded in any process is
+   reported, not used in a suite geomean.
+2. *P4, re-scoped.* k_ins is the median over ctl-loop's non-excluded Plain iterations of (instret - ctl-empty median -
+   20,000,002) / irq. It must lie within 15 % of the probe's gap_instret median, and each non-excluded iteration within
+   ±10 % of k_ins. On pp1: 3,978 against 3,817, every iteration within ±3 %: PASS.
+3. Everything else in the Plain section stands: the fault correction, the bias statement, the VOID rules C1-C6, the
+   predictions.
+
+**Consequence.** p1..p6 are armed now (`make-plain-stages.py --arm`), before board 1's chain reaches p1. Their rows are
+read under rules 1-2. Rule 1 cannot remove a uniform cost: miniz's and aes's steady ~14 switches per iteration stay in.
+That bias is in the direction the section already states (raw <= corrected <= true).
