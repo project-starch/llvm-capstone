@@ -43,6 +43,7 @@
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-28-run18/bundle-virtual-malloc",
     "virtual-nested-pools": "results/2026-10-28-run18/bundle-virtual-nested-pools",
-    "virtual-nested-exact": "results/2026-10-28-run18/bundle-virtual-nested-exact"
+    "virtual-nested-exact": "results/2026-10-28-run18/bundle-virtual-nested-exact",
+    "cheribsd-revocation": "results/2026-10-30-cheribsd/bundle-cheribsd-revocation"
   }
 }

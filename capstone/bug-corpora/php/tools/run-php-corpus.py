@@ -420,6 +420,19 @@ def cheri_outcome(rec, name, host_row=None):
     return faulted, ran_to_its_end(rc, host_row), None, own
 
 
+def vehicle_platform(vehicle):
+    """The guest runner's vehicle block, under the key names verdicts.PLATFORM_KEYS uses.
+
+    The compiler key was spelled `clang` for the first records written with a vehicle block, and
+    those records are on disk and get re-judged. Reading both spellings keeps the real version
+    string in the bundle instead of the honest-but-useless "unrecorded" the fallback would give.
+    """
+    v = dict(vehicle or {})
+    if "compiler" not in v and "clang" in v:
+        v["compiler"] = v.pop("clang")
+    return v
+
+
 def run_cheribsd_arm(args, decl, cases, arm, rows, out):
     """The arm, plus its revocation-off twin -- the pair is what ties a fault to the defect."""
     spec = verdicts.load_arms()[decl["arm_configurations"][arm]]
@@ -542,7 +555,12 @@ def run_cheribsd_arm(args, decl, cases, arm, rows, out):
         # two tables can only be set side by side if this one does the same. They already differ
         # (that recipe runs a 7.2.0 QEMU fork with -cpu rv64,sstc=false; this one 7.1.0, which has
         # no such property), which is exactly why the pins belong in the bundle.
-        "platform": dict(on.get("vehicle") or {"unrecorded": "this boot wrote no vehicle block"},
+        # verdicts.write_bundle refuses a bundle whose platform omits one of PLATFORM_KEYS,
+        # and it runs AFTER every boot -- so a key missing here is three boots wasted. It accepts
+        # "unrecorded" as an answer, so any key the vehicle block does not carry is said rather
+        # than left out, and the refusal cannot be reached from this path at all.
+        "platform": dict({k: "unrecorded" for k in verdicts.PLATFORM_KEYS},
+                         **vehicle_platform(on.get("vehicle")),
                          runner=str(Path(__file__).resolve().relative_to(REPO))),
         "revocation": {"default": on.get("sysctl"), "off": off.get("sysctl"),
                        "eager": eager.get("sysctl") if eager else "not run"},

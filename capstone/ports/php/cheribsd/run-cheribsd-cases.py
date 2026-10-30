@@ -111,7 +111,7 @@ def vehicle(a):
     st = img.stat() if img.is_file() else None
     return {
         "qemu": version(qemu_binary(a)),
-        "clang": version(a.sdk / "bin/clang"),
+        "compiler": version(a.sdk / "bin/clang"),
         "firmware": {"file": fw.name, "bytes": fw.stat().st_size if fw.is_file() else None},
         "kernel": str(a.rootfs / "boot/kernel/kernel"),
         "image": {"path": str(img), "bytes": st.st_size if st else None,

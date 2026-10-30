@@ -1,0 +1,75 @@
+{
+  "arm": "cheribsd-revocation",
+  "binaries": {
+    "php": "b389e2399540f5e5449bff7c58c8112f73cba65be7639db941791dd1ad86f442",
+    "php-fullext": "not staged",
+    "which_cases_use_fullext": []
+  },
+  "boot": {
+    "booted": true,
+    "completed": true,
+    "mounted": true,
+    "panic": false
+  },
+  "cases": 70,
+  "configuration": "cheribsd-default",
+  "contract": "verdicts-v1",
+  "corpus": "engine-repros",
+  "note": "boots: the arm at the platform default, the same binary with revocation off, and (when --eager) a third at every-free. The default is the only one a verdict comes from; off is what attributes a fault, since a purecap SIGPROT carries no symbol here; eager only separates a quarantined-but-never-reissued chunk from a genuine miss, and is recorded in the notes rather than scored",
+  "platform": {
+    "compiler": "clang version 17.0.0 (https://github.com/CTSRD-CHERI/llvm-project.git 7e122876ee01a7a82585f7674c94f12fc1cc7689)",
+    "cpu_flags": "the machine default: no -cpu override (see qemu_argv)",
+    "firmware": {
+      "bytes": 37520,
+      "file": "bbl-riscv64cheri-virt-fw_jump.bin"
+    },
+    "image": {
+      "bytes": 9519007232,
+      "mtime": "2026-10-29T18:59:38Z",
+      "path": "/home/zephyr/cheriBSD/cheri/output/cheribsd-riscv64-purecap.img"
+    },
+    "kernel": "/home/zephyr/cheriBSD/cheri/output/rootfs-riscv64-purecap/boot/kernel/kernel",
+    "qemu": "QEMU emulator version 7.1.0",
+    "runner": "capstone/bug-corpora/php/tools/run-php-corpus.py"
+  },
+  "population": "the 70 cases of php/engine-repros",
+  "revocation": {
+    "default": [
+      {
+        "read_back": "1",
+        "set": "security.cheri.runtime_revocation_default=1"
+      },
+      {
+        "read_back": "0",
+        "set": "security.cheri.runtime_revocation_every_free_default=0"
+      }
+    ],
+    "eager": [
+      {
+        "read_back": "1",
+        "set": "security.cheri.runtime_revocation_default=1"
+      },
+      {
+        "read_back": "1",
+        "set": "security.cheri.runtime_revocation_every_free_default=1"
+      }
+    ],
+    "off": [
+      {
+        "read_back": "0",
+        "set": "security.cheri.runtime_revocation_default=0"
+      },
+      {
+        "read_back": "0",
+        "set": "security.cheri.runtime_revocation_every_free_default=0"
+      }
+    ]
+  },
+  "scoring": "sensitivity: the same observations with that gate lifted, scored by fault site. Reported BESIDE the default reading and never instead of it (bug-corpora/php/engine-repros pre-registration); the two bundles are written from ONE set of boots, so nothing differs but the scoring",
+  "tally": {
+    "CAUGHT": 14,
+    "MISSED": 42,
+    "NO-READING:inconclusive": 13,
+    "NO-READING:infra": 1
+  }
+}

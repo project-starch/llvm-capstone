@@ -222,6 +222,96 @@ block's release went. The native cohort is a selection by one detector build, no
 column: the sibling corpus's own ASan measurement of the same 47 shared cases placed 16 of them on the
 other side.
 
+### The `cheribsd-revocation` arm, measured (2026-10-30)
+
+`results/2026-10-30-cheribsd/`: the 70 cases on stock CheriBSD purecap, three boots of one image
+(`php` sha256 `b389e239…`) driven by `ports/php/cheribsd/run-cheribsd-cases.py` through
+`php/tools/run-php-corpus.py`. `corpus.json`'s `verdict_bundles` names the default-scoring bundle,
+`derive-verdicts.py` wrote its verdicts into every `case.json` and into `results/verdicts.tsv`, and
+`check-corpus.py` re-judges them. The sensitivity bundle sits beside it under
+`results/2026-10-30-cheribsd/sensitivity/`, written from the SAME boots, and is not declared as a
+verdict source.
+
+**The controls held.** `bounds-malloc` faulted in all three boots, so bounds are enforced on this
+vehicle and a MISS means something. Each boot has its revocation-off twin, which is what attributes a
+fault. The eager boot printed the request-shutdown marker for 31 of the 70 cases, so a fault's
+placement is a reading and not the one answer an uninstrumented boot can give.
+
+| scoring | CAUGHT | MISSED | NO-READING |
+|---|--:|--:|---|
+| default | 6 | 36 | out-of-denominator 27, inconclusive 1 |
+| sensitivity | 14 | 42 | inconclusive 13, infra 1 |
+
+**Every capability fault on this arm is bounds, not revocation.** All six default-scoring catches are
+`cause=34`, and for all six the paired boot with `runtime_revocation_default=0` faults as well, so the
+check that fired is not revocation. Across both scorings the corpus contains exactly **one**
+revocation-attributed catch — CRASH-081, silent with revocation off — and its pristine record is a
+`SIGNAL`, so it is out of the default denominator and appears only in the sensitivity column. The
+headline for revocation over the 43-case default denominator is **0**.
+
+#### The pre-registration, checked group by group
+
+| group | predicted | measured | |
+|---|---|---|---|
+| temporal, release stops in `AG(cache)` (20) | 0 CAUGHT | 0 CAUGHT (19 MISSED, 1 no-reading) | holds |
+| temporal, release reaches system `malloc` (6) | 0–2 CAUGHT | 1 CAUGHT (CRASH-075, bounds) | holds |
+| temporal, in neither of our corpora (3) | no prediction | 3 MISSED | — |
+| spatial, rounding-slack overflow (12) | MISSED | **3 CAUGHT** (CRASH-089, -090, -097) | **refuted** |
+| stack-address-escape, CWE-562 (2) | MISSED | **2 CAUGHT** (CRASH-051, -052) | **refuted** |
+
+and the headline **"0 to 2 CAUGHT of the 43" is refuted at 6**.
+
+**RETRACTED: that `cheri-php-blind`'s `c1_stack_after_return` MISS transfers to the real
+interpreter.** It does not. The row model is right about its own row — a returned stack capability
+stays tagged and in bounds — and that was used to predict both real CWE-562 cases, which is the whole
+of that group; both fault, and both fault with revocation off, so the access leaves the bounds it was
+given rather than surviving them. What the row measured was one dereference of an escaped frame
+address; what PHP does with one is not that, and the prediction should not have been stated without a
+reading from the interpreter. The spatial prediction was hedged in advance ("a CAUGHT here means the
+over-read left the block, which is a finding about that case and not about CHERI") and the three
+catches are read that way; the stack prediction carried no such hedge.
+
+#### What the eager boot adds
+
+26 cases are **NOT-REISSUED**: silent at the platform default, faulting under
+`runtime_revocation_every_free_default=1`, so the stale pointer is followed and the block was
+quarantined rather than missed. 23 of those faults land inside the script body and 3 in request
+shutdown — the three (CRASH-057, -072, -142) are all cases that yield no reading at the default, so
+the placement prediction holds for every case that fed a verdict. 12 of the 26 are still inside the
+default denominator. This is context and decides no verdict: every-free also faults on accesses
+nothing is meant to catch.
+
+#### The two axes, beside the `virtual-nested-exact` arm
+
+`boundary` splits the 55 temporal cases by where release goes. Both columns are CAUGHT / MISSED /
+NO-READING from the bundles of the same 70 cases.
+
+Sensitivity scoring, all 55:
+
+| release | cases | `virtual-nested-exact` | `cheribsd-revocation` | of which revocation | NOT-REISSUED |
+|---|--:|---|---|--:|--:|
+| through `free()` (`temporal-asan-visible`) | 22 | 19 / 0 / 3 | 6 / 4 / 12 | 0 | 10 |
+| inside a live block (`asan-blind`) | 33 | 29 / 0 / 4 | 2 / 29 / 2 | 1 | 16 |
+
+Default scoring, the 29 that remain:
+
+| release | cases | `virtual-nested-exact` | `cheribsd-revocation` | of which revocation | NOT-REISSUED |
+|---|--:|---|---|--:|--:|
+| through `free()` | 2 | 2 / 0 / 0 | 0 / 2 / 0 | 0 | 1 |
+| inside a live block | 27 | 23 / 0 / 4 | 1 / 25 / 1 | 0 | 11 |
+
+**The gate is not neutral between the axes**: it removes 20 of the 22 cases released through `free()`
+and 6 of the 33 released inside a live block, because a defect that reaches libc is the kind the
+unprotected interpreter tends to die on by itself. A row quoted from the default column alone states
+almost nothing about the `free()` side, so either column may be quoted but the denominator has to be
+quoted with it.
+
+**11 of the 14 sensitivity no-readings are CheriBSD's allocator aborting** (`SIGABRT`, rc 134), the
+signature `ports/php/cheribsd/controls/abort-probe.c` reproduces from a plain double free. It is an
+allocator consistency check that any allocator could carry, not a capability fault, and it is recorded
+and never scored as a catch on an arm that measures CHERI. 9 of the 11 are cases released through
+`free()`, which is where a libc-level check can see anything at all.
+
 ## Not here
 
 The 59 default-build cases outside both populations: 30 spatial defects ASan sees unaided
