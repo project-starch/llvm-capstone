@@ -141,3 +141,51 @@ Predictions:
 
 Reading 2 together with reading 4 is the evidence that freed records recycle through the wide flat free list: scrabbl
 creates 14x the table's records and still completes.
+
+## Addendum 2 (2026-10-30, before the bake): the board build, the bitstream, and the grid read so far
+
+Written before the board kit is baked and before the module's first board boot (section 2).
+
+**What runs.**
+
+- Board module: `capstone_vm.ko` sha256 `6422805f49533ea5494b943421e3a4cb8901405a3e8fade8f5f36c9edf841438`. Built from
+  `module-ids55` 3523f8833531; its `capstone_vm.c` is byte-identical to that commit's. Built against `build-fpga`
+  linux-6.4.14 with `-DCAPSTONE_VM_FLAT_TABLE=1 -DCAPSTONE_VM_IDS=55 -DCAPSTONE_VM_INDEX_BITS=25
+  -DCAPSTONE_VM_BENCH_COUNTERS=1`, and `-march=rv64g -mabi=lp64d` after the kernel's own `-march`. objdump counts 0 16-bit
+  instructions of 5,267. Its `cap_rev_table_abi.h`, `vm-abi.h` and `wire.h` are the QEMU build's.
+- Bitstream: `caplifive_vp2c_325966ee4.bit`, sha256 `f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8cc`,
+  11,443,722 bytes. The hash was re-read here from the board-side copy. It is built from capstone-ariane 325966ee4, the
+  successor of `rtl-ids55` 567e6ee02 named above. The runtime lane reports it sealed and graded PASS by the rtl lane, and
+  reports that the virtual-slot guard (a slot bounded at the latched header capacity) is not in this build. Both are that
+  lane's reports, not checked here.
+- The launcher and the Tier 1 images are the twin grid's, by hash, as section 2 says: launcher 62753dd693cc4a25. The
+  perf evaluation's board kits carry a different launcher, 978c09d61f774315; this boot does not use it.
+- ISSUES.md on origin/dev has no row for this bitstream at the time of writing.
+
+**The twin grid, read so far (W, F, F0; F0s and the perlbench arm have not finished).**
+
+- Tier 1: 34 of 45 on all three arms, with the same 11 failures. No cell differs between W and F, or between W and F0.
+- Prediction 1: F's `sparse_recycling` reads false with nodes 600,041, collections 0, reclaimed 0 and node_bytes
+  16,777,216, as predicted. **Not predicted:** W's `sparse_recycling` cell is false too, so W and F are equal in that cell
+  as well. The cause is the check's metadata bound (run.py at 69fb6cae3db4, line 344): a hardware run needs
+  `node_bytes <= 16 * capacity`, and W's paged table reads node_bytes 28,672 against capacity 1,024 (16,384). This W cell
+  does not involve the flat module.
+- Prediction 2 (F0 = F): holds in every cell.
+- Predictions 4-7 (parameters, live 1000, 400000 and 1100000) hold on every arm. At 1100000, F and F0 read LIVE-NULL at
+  1,011,158, rc 3, nodes 1,046,942, and no fault line. W reads LIVE-OK, bad=0.
+- **Prediction 8 MISSED on the mapping word.** F and F0 each print the predicted line once, with `from CMA` and pa
+  0xb0100000, which lies inside 0xb0000000-0xc0000000. But it reads `NON-LINEAR mapping` where `linear mapping` was
+  predicted.
+  - The cause is a kernel difference between the twin and the board, read from the source of both kernels.
+  - The QEMU guest is 6.1. Its `dma_default_coherent` is a bare `bool` (kernel/dma/mapping.c:20) with no RISC-V writer,
+    and its .config has no `CONFIG_ARCH_DMA_DEFAULT_COHERENT`. So the misc device, which has no DT node, is non-coherent,
+    and `dma_direct_alloc` remaps the CMA pages through a vmap alias (kernel/dma/direct.c:248, `CONFIG_DMA_DIRECT_REMAP=y`).
+  - The board kernel, 6.4.14, has `dma_default_coherent = IS_ENABLED(CONFIG_ARCH_DMA_DEFAULT_COHERENT)`
+    (mapping.c:23), and its .config sets that option, so the same call returns `page_address(page)` (direct.c:296).
+  - The prediction applied the board's configuration to the twin. Section 2's board prediction, `linear mapping`, stands
+    and is the one the 6.4.14 source gives. The module uses the alias only for header writes, and the table's root is
+    `table_pa` from the DMA handle in both cases.
+- Both kernels zero the buffer in `dma_direct_alloc` (`memset(ret, 0, size)`: direct.c:302 on 6.1, :301 on 6.4.14). The
+  buddy path asks for `__GFP_ZERO` (capstone_vm.c:358). Every open allocates a fresh table, and none is reused.
+
+Section 2's predictions are unchanged. F0's reading, which they are read against, is the one above.
