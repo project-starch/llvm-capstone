@@ -72,6 +72,26 @@ transcript shows a defaulted arm (`ZEND_CAP_MODE_DEFAULTED`) or another arm's mo
 `corpus.json`'s `verdict_bundles` names the current bundles, `derive-verdicts.py` writes the
 verdicts into each `case.json`, and `check-corpus.py` re-judges them.
 
+The fourth arm runs on a different platform and so has its own runner, which reports into the
+same judge and writes the same bundle contract:
+
+```sh
+bash capstone/ports/php/cheribsd/build.sh                 # once: the purecap interpreter
+python3 capstone/bug-corpora/php/tools/run-php-corpus.py \
+  --corpus capstone/bug-corpora/php/engine-repros \
+  --arm cheribsd-revocation --eager \
+  --scratch /tmp/capstone/php-cheribsd/stage \
+  --out capstone/bug-corpora/php/engine-repros/results/<stamp>
+```
+
+Three boots, not one: the platform default is the only configuration a verdict comes from, the
+same binary with revocation off is the pair that attributes a fault (a purecap `SIGPROT` carries
+no symbol, so the pair is what ties it to revocation), and `--eager` adds a third at
+revoke-on-every-free whose only job is to tell a quarantined-but-never-reissued chunk apart from
+a genuine miss. Both scorings are written from those same boots -- the default one under
+`<arm>/`, the sensitivity one under `sensitivity/<arm>/` -- because the two readings have to
+travel together and re-booting for the second would cost three more boots.
+
 ## Pre-registration, before the first run from this corpus (2026-10-27)
 
 Written before any arm ran over these 68 cases on the patched port (`ports/php` at this
@@ -94,6 +114,59 @@ mechanism, so that a surprise is a surprise:
   (`--score-oracle-crashes`) reads them by fault site and is reported beside, never instead.
 - The 16 cases placed differently from the collaborator's populations carry no prediction
   beyond the mechanism above; whatever they read is a reading of this instrument.
+
+## Pre-registration for the `cheribsd-revocation` arm, before it ran (2026-10-30)
+
+A fourth arm, declared in `corpus.json` and written into every case by `tools/build-cases.py`:
+the same triggers on **stock CheriBSD purecap**, with no nested layer at all, so the only
+mechanism is the platform's -- `malloc` bounds each object, `free` quarantines it, and a later
+sweep revokes. The port is `capstone/ports/php/cheribsd` (`build.sh` cross-builds the real
+interpreter; `run-cheribsd-cases.py` boots the guest), driven by
+`bug-corpora/php/tools/run-php-corpus.py`.
+
+Written before this arm ran over these 70 cases. The prior is not a guess: the same vehicle has
+already measured 56 of these defects in `../plain-temporal-repros` and `../zend-alloc-repros`,
+and `capstone/tests/cheri-php-blind` has measured the mechanism in C rows. Both are cited per
+group, and the case numbers are this corpus's.
+
+**The vehicles are not identical, which is why each bundle now records its own.** That row-model
+measurement ran a 7.2.0 CHERI-QEMU fork with `-cpu rv64,sstc=false`; this port runs 7.1.0, which
+has no such property. `run-cheribsd-cases.py` reads the QEMU and CHERI-LLVM versions, the
+firmware and the image's size and mtime from the tools at run time into the record, so a reader
+can tell whether two tables share a vehicle instead of assuming it.
+
+| group | cases in the default denominator | prediction at the platform default | what it rests on |
+|---|---|---|---|
+| temporal, release stops in `AG(cache)` | 20: 01 02 04 06 07 08 09 10 12 16 18 20 22 26 33 35 37 42 43 46 | **0 CAUGHT.** Some abort in CheriBSD's allocator consistency check (`SIGABRT`, rc 134), which is recorded and never scored as a capability catch | `../zend-alloc-repros` measured 30 such defects on this vehicle: 0 protected at the default. `cheri-php-blind` caught 0 of its 4 cache-hidden UAF rows in the stock arm |
+| temporal, release reaches system `malloc` | 6: 21 38 55 58 67 68 | **0-2 CAUGHT**, and at most a minority | `../plain-temporal-repros`: of 26, three faulted `SIGPROT` at the default and only ONE of those completes with revocation off, so only one was revocation's |
+| temporal, in neither of our corpora | 3: 25 30 41 | no prediction beyond the mechanism above | nothing measured |
+| spatial (rounding-slack overflow) | 12: 03 05 17 19 27 28 29 31 32 34 36 40 | **MISSED.** A CAUGHT here means the over-read left the block, which is a finding about that case and not about CHERI | `cheri-php-blind`'s `z1_bounds_probe` read the capability directly: the `emalloc`'d pointer carries the whole block's base and length, and removing PHP's rounding does not help because `malloc` rounds by the same amount -- 6 readable bytes past the object at n=26, 232 at n=1048 |
+| stack-address-escape (CWE-562) | 2: 13 14 | **MISSED** | `cheri-php-blind`'s `c1_stack_after_return` is MISS in all three configurations and both arms: a returned stack capability stays tagged and in bounds, and CheriBSD does not revoke stack capabilities on return |
+
+So **0 to 2 CAUGHT of the 43** in the default denominator, and a headline at or near zero. A
+count above that is a surprise and is to be read as one.
+
+**The every-free (eager) configuration is context and may never decide a verdict.** The
+prediction there is specific, because it is the one place our own 56-case run found something
+the default cannot see: a group of the cache-absorbed cases above will fault under every-free
+while the default and the revocation-off boots both complete, because the capability ABI pushes
+the payload past `MAX_CACHED_MEMORY`'s 80-byte ceiling and the block reaches a real `free()`
+after all. Seven of thirty did exactly that in `../zend-alloc-repros`, every one on a 192-byte
+block -- a 48-byte purecap `zend_mem_header` over a 144-byte payload, `REAL_SIZE >> 3` = 18
+against a ceiling of 11 -- as tag violations at the defect's own dereference site. Those eager
+faults are predicted to land **inside the script body**, not in request shutdown.
+
+**Controls, without which the run is void.** `bounds-malloc` must fault in every boot, or bounds
+are not enforced on this vehicle and no MISS means anything. The revocation-off twin of each boot
+is run as the pair that attributes a fault: a fault that appears with revocation off too is not
+revocation's, and is recorded as such. The eager boot must print the request-shutdown marker for
+at least one case, or a fault's placement reads `unplaced` rather than "inside the script body".
+
+**The 27 cases whose pristine record is a `SIGNAL`** read `out-of-denominator` under the default
+scoring, whatever this arm did -- the same gate, and the same test
+(`pristine_outcome.startswith("SIGNAL:")`), that `run-realphp.py` applies. The sensitivity
+reading is written beside it in `sensitivity/` from the SAME boots, so nothing differs between
+the two bundles but the scoring.
 
 ## Results
 

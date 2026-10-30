@@ -35,7 +35,7 @@ licensed it:
 
 A fault inside the seam's own sources is never a catch: it is the port faulting, not the program.
 """
-import argparse, importlib.util, json, os, re, shutil, subprocess, sys
+import argparse, copy, importlib.util, json, os, re, shutil, subprocess, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -78,22 +78,41 @@ def load_corpus(path):
 
 
 def host_record(path):
-    """{case directory: the host reading}, from the corpus's own host-asan bundle.
+    """{source id: the host reading}, from whichever form the corpus keeps it in.
 
-    `pristine` is what route A needs: whether the case completes with no sanitizer and no
-    protection. It is a column of the committed matrix.tsv, so the runner cannot invent it.
+    `pristine` is what route A needs, and what the out-of-denominator gate reads: whether the
+    case completes with no sanitizer and no protection. The runner never invents it.
+
+    Two corpora here record the same three readings in two shapes, and both are committed
+    measurements rather than anything derived at run time:
+
+      plain-temporal-repros, zend-alloc-repros   one results/*-host-asan/matrix.tsv for the
+                                                 corpus, a row per case
+      engine-repros                              one oracle.json per case directory
+
+    A corpus with neither is an error, not an empty oracle: without the pristine column route A
+    cannot run and the gate cannot fire, and a silent default there would read as a clean result.
     """
     bundles = sorted((path / "results").glob("*-host-asan"))
-    if not bundles:
-        sys.exit(f"{path}: no host-asan bundle under results/, so `reached` has no oracle")
-    rows, head = {}, None
-    for line in (bundles[-1] / "matrix.tsv").read_text().splitlines():
-        cells = line.split("\t")
-        if head is None:
-            head = cells
-            continue
-        rows[cells[head.index("source_id")]] = dict(zip(head, cells))
-    return bundles[-1], rows
+    if bundles:
+        rows, head = {}, None
+        for line in (bundles[-1] / "matrix.tsv").read_text().splitlines():
+            cells = line.split("\t")
+            if head is None:
+                head = cells
+                continue
+            rows[cells[head.index("source_id")]] = dict(zip(head, cells))
+        return bundles[-1], rows
+    oracles = sorted(path.glob("*/oracle.json"))
+    if not oracles:
+        sys.exit(f"{path}: no host-asan bundle under results/ and no per-case oracle.json, "
+                 f"so `reached` has no oracle")
+    rows = {}
+    for f in oracles:
+        o = json.loads(f.read_text())
+        rows[o["id"]] = {"source_id": o["id"], "host-asan": o["asan"]["class"],
+                         "stockalloc": o["stockalloc"], "pristine": o["pristine"]["outcome"]}
+    return path, rows
 
 
 def designed_exit(host_row):
@@ -127,10 +146,59 @@ def host_ends_normally(host_row):
     return p == "OK" or re.match(r"EXIT:\d+$", p) is not None
 
 
-def case_host_row(case, rows):
-    """The host row for a case, found by the source id its note records."""
+SCORING_DEFAULT = ("default: a case whose pristine record is a SIGNAL reads out-of-denominator "
+                   "on every arm, whatever the arm did -- the unprotected program dies anyway, so "
+                   "there is no pair to read")
+SCORING_SENSITIVITY = ("sensitivity: the same observations with that gate lifted, scored by fault "
+                       "site. Reported BESIDE the default reading and never instead of it "
+                       "(bug-corpora/php/engine-repros pre-registration); the two bundles are "
+                       "written from ONE set of boots, so nothing differs but the scoring")
+
+
+def oracle_crashes(host_row):
+    """Did the unprotected, unsanitised build die on a SIGNAL for this case?
+
+    The premise behind `out-of-denominator`, and NOT the same question as "did the oracle exit
+    zero": PHP exits 255 on its own fatal error having printed a deterministic diagnostic and
+    shut down cleanly, so such a case has a perfectly good pair to read. Only a case the program
+    cannot survive has none. Same test, same reason, as ports/php/app/run-realphp.py's
+    oracle_crashes, so that the two runners' columns mean the same thing.
+    """
+    return (host_row or {}).get("pristine", "").startswith("SIGNAL:")
+
+
+def out_of_denominator(obs, host_row, score_oracle_crashes):
+    """Apply the default scoring's gate, after the arm's own facts are recorded.
+
+    engine-repros scores a case whose native run dies on a signal as out-of-denominator on every
+    arm, whatever the arm did, and reports the other reading beside it rather than instead of it
+    (that corpus's pre-registration). --score-oracle-crashes lifts the gate, which is the
+    sensitivity scoring. The arm's observation is left intact underneath either way: the gate
+    changes the verdict, never the record of what was seen.
+    """
+    if score_oracle_crashes or not oracle_crashes(host_row):
+        return
+    obs.infra = "out-of-denominator"
+    obs.notes = ((obs.notes + "; ") if obs.notes else "") + (
+        "out-of-denominator under the default scoring: the corpus's pristine record for this "
+        "case is " + (host_row or {}).get("pristine", "?") + ", so the unprotected program dies "
+        "anyway and there is no pair to read. Run again with --score-oracle-crashes for the "
+        "reading by fault site")
+
+
+def case_host_row(case, rows, name=""):
+    """The host row for a case, found by its source id.
+
+    Two corpora spell the id in two places: ours writes "source corpus id CRASH-NNN" into the
+    case's note, engine-repros puts it in the directory name (NN_<fix>_crash-NNN). Both are
+    tried, and a case whose id matches no row gets None, which route A and the gate both read
+    as "unrecorded" rather than as a pass.
+    """
     m = re.search(r"source corpus id (CRASH-\d+)", case.get("note", ""))
-    return rows.get(m.group(1)) if m else None
+    if m:
+        return rows.get(m.group(1))
+    m = re.search(r"crash-(\d+)$", name, re.I)
+    return rows.get("CRASH-%03d" % int(m.group(1))) if m else None
 
 
 # ---- one arm -------------------------------------------------------------------------------
@@ -361,11 +429,11 @@ def run_cheribsd_arm(args, decl, cases, arm, rows, out):
     c_fault, _, c_infra, _ = cheri_outcome(on, CHERI_CONTROL)
     controls = [verdicts.Control(CHERI_CONTROL, "fault" if c_fault else ("none" if c_infra else "complete"),
                                  "a read 4096 bytes past a 32-byte malloc'd block")]
-    rows_out = []
+    rows_out, sensitivity = [], []
     for name, case in cases:
         obs = verdicts.Observation(case=name, arm=arm, controls=controls,
                                    image_sha256=verdicts.sha256(args.scratch / "php"))
-        host = case_host_row(case, rows)
+        host = case_host_row(case, rows, name)
         faulted, completed, infra, own = cheri_outcome(on, name, host)
         off_fault, off_completed, _, _ = cheri_outcome(off, name, host)
         # REACH FIRST, AND INDEPENDENTLY OF THE OUTCOME. A run that printed the trigger's own
@@ -460,15 +528,21 @@ def run_cheribsd_arm(args, decl, cases, arm, rows, out):
                     f"which is what tells a revoked object apart from the allocator's cache being "
                     f"drained back to libc at shutdown. Context, not a verdict: every-free also "
                     f"faults on accesses nothing is meant to catch")
-        rows_out.append((obs, verdicts.judge(obs, spec)))
+        sensitivity.append((obs, verdicts.judge(obs, spec)))
+        strict = copy.deepcopy(obs)
+        out_of_denominator(strict, host, False)
+        rows_out.append((strict, verdicts.judge(strict, spec)))
     inputs = {
         "configuration": decl["arm_configurations"][arm],
+        "scoring": SCORING_DEFAULT,
         "population": f"the {len(cases)} cases of {decl['program']}/{Path(args.corpus).name}",
-        "platform": {"compiler": "the CheriBSD SDK clang that built ports/php/cheribsd",
-                     "qemu": "cheri-qemu, ports/php/cheribsd/run-cheribsd-cases.py",
-                     "firmware": "bbl purecap (the SDK's own)",
-                     "kernel": "the CheriBSD purecap rootfs kernel",
-                     "runner": str(Path(__file__).resolve().relative_to(REPO))},
+        # READ from the tools by run-cheribsd-cases.py's vehicle(), not described: the sibling
+        # row-model measurement in capstone/tests/cheri-php-blind pins its own vehicle, and the
+        # two tables can only be set side by side if this one does the same. They already differ
+        # (that recipe runs a 7.2.0 QEMU fork with -cpu rv64,sstc=false; this one 7.1.0, which has
+        # no such property), which is exactly why the pins belong in the bundle.
+        "platform": dict(on.get("vehicle") or {"unrecorded": "this boot wrote no vehicle block"},
+                         runner=str(Path(__file__).resolve().relative_to(REPO))),
         "revocation": {"default": on.get("sysctl"), "off": off.get("sysctl"),
                        "eager": eager.get("sysctl") if eager else "not run"},
         "boot": {k: on.get(k) for k in ("booted", "mounted", "completed", "panic")},
@@ -483,6 +557,8 @@ def run_cheribsd_arm(args, decl, cases, arm, rows, out):
                  "genuine miss, and is recorded in the notes rather than scored"),
     }
     verdicts.write_bundle(out / arm, Path(args.corpus).name, arm, rows_out, inputs)
+    verdicts.write_bundle(out / "sensitivity" / arm, Path(args.corpus).name, arm, sensitivity,
+                          dict(inputs, scoring=SCORING_SENSITIVITY))
     return {n: o.completed for (n, _), (o, _) in zip(cases, rows_out)}, rows_out
 
 
@@ -509,12 +585,16 @@ def run_arm(args, decl, cases, arm, rows, baseline):
     symbols = verdicts.Symbols(args.llvm_bin, args.image) if args.llvm_bin else None
     image_sha = verdicts.sha256(args.image)
 
-    rows_out, completed = [], {}
+    rows_out, sensitivity, completed = [], [], {}
     for name, case in cases:
-        obs = observe(name, case, rec, arm, symbols, case_host_row(case, rows),
+        host = case_host_row(case, rows, name)
+        obs = observe(name, case, rec, arm, symbols, host,
                       baseline.get(name, False), controls, image_sha)
         completed[name] = obs.completed
-        rows_out.append((obs, verdicts.judge(obs, spec)))
+        sensitivity.append((obs, verdicts.judge(obs, spec)))
+        strict = copy.deepcopy(obs)
+        out_of_denominator(strict, host, False)
+        rows_out.append((strict, verdicts.judge(strict, spec)))
     inputs = {
         "configuration": config,
         "population": f"the {len(cases)} cases of {decl['program']}/{Path(args.corpus).name}",
@@ -533,6 +613,8 @@ def run_arm(args, decl, cases, arm, rows, baseline):
                  "PHP_CAP_MODE. The trigger files are the corpus's own, staged verbatim"),
     }
     verdicts.write_bundle(out, Path(args.corpus).name, arm, rows_out, inputs)
+    verdicts.write_bundle(out.parent / "sensitivity" / arm, Path(args.corpus).name, arm,
+                          sensitivity, dict(inputs, scoring=SCORING_SENSITIVITY))
     return completed, rows_out
 
 
@@ -578,24 +660,46 @@ def self_test():
         # "neither a fault nor a clean exit"
         "05_deadbeef0004_designed_end": {"fault_sites": ["zend_hash_destroy"],
                                          "note": "source corpus id CRASH-069"},
+        # caught at its declared site, but the native build dies on a signal: the gate the
+        # default scoring applies must turn this into no reading, and --score-oracle-crashes
+        # must turn it back into the catch. A gate that cannot produce both answers is not a
+        # gate, so both are asserted below.
+        "06_deadbeef0005_native_crash": {"fault_sites": ["zend_assign_to_variable"],
+                                         "note": "source corpus id CRASH-900"},
     }
     SYNTHETIC["exits"]["04_deadbeef0003_setup"] = 134
     SYNTHETIC["exits"]["05_deadbeef0004_designed_end"] = 255
     SYNTHETIC["output"]["05_deadbeef0004_designed_end"] = ["Fatal error: Uncaught exception"]
     SYNTHETIC["output"]["04_deadbeef0003_setup"] = SYNTHETIC["output"]["03_deadbeef0002_elsewhere"]
+    # the gate's control gets the SAME fault as case 01, at the site it declares, so the only
+    # thing that differs between them is the pristine column the gate reads
+    SYNTHETIC["exits"]["06_deadbeef0005_native_crash"] = SYNTHETIC["exits"]["01_deadbeef0000_caught"]
+    SYNTHETIC["output"]["06_deadbeef0005_native_crash"] = SYNTHETIC["output"]["01_deadbeef0000_caught"]
     rows = {"CRASH-004": {"pristine": "OK"}, "CRASH-005": {"pristine": "OK"},
-            "CRASH-069": {"pristine": "EXIT:255", "stockalloc": "EXIT:255"}}
+            "CRASH-069": {"pristine": "EXIT:255", "stockalloc": "EXIT:255"},
+            "CRASH-900": {"pristine": "SIGNAL:11"}}
     got = {}
     for name, case in cases.items():
+        host = case_host_row(case, rows, name)
         obs = observe(name, case, SYNTHETIC, "virtual-nested-pools", FakeSymbols(),
-                      case_host_row(case, rows), True, controls, "0" * 64)
+                      host, True, controls, "0" * 64)
+        out_of_denominator(obs, host, False)
         got[name] = verdicts.judge(obs, spec)[:2]
     expect = {"01_deadbeef0000_caught": (verdicts.CAUGHT, None),
               "02_deadbeef0001_silent": (verdicts.MISSED, None),
               "03_deadbeef0002_elsewhere": (verdicts.NO_READING, "unattributed"),
               "04_deadbeef0003_setup": (verdicts.NO_READING, "setup-fault"),
-              "05_deadbeef0004_designed_end": (verdicts.MISSED, None)}
+              "05_deadbeef0004_designed_end": (verdicts.MISSED, None),
+              "06_deadbeef0005_native_crash": (verdicts.NO_READING, "out-of-denominator")}
     bad = {k: (got[k], expect[k]) for k in expect if got[k] != expect[k]}
+    # the same case with the gate lifted: the sensitivity reading, which must be the catch
+    lifted = cases["06_deadbeef0005_native_crash"]
+    host = case_host_row(lifted, rows, "06_deadbeef0005_native_crash")
+    obs = observe("06_deadbeef0005_native_crash", lifted, SYNTHETIC, "virtual-nested-pools",
+                  FakeSymbols(), host, True, controls, "0" * 64)
+    out_of_denominator(obs, host, True)
+    if verdicts.judge(obs, spec)[:2] != (verdicts.CAUGHT, None):
+        bad["--score-oracle-crashes"] = (verdicts.judge(obs, spec)[:2], (verdicts.CAUGHT, None))
     # and a control that misbehaves must void the whole arm, not just fail to fire
     broken = observe("01_deadbeef0000_caught", cases["01_deadbeef0000_caught"], SYNTHETIC,
                      "virtual-nested-pools", FakeSymbols(), None, True,

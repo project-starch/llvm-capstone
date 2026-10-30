@@ -146,6 +146,7 @@ ARMS = {
     "virtual-malloc": "the case on the virtual profile with the nested layer present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
     "virtual-nested-pools": "the same image with the nested allocator layer retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
     "virtual-nested-exact": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
+    "cheribsd-revocation": "the same trigger on stock CheriBSD purecap -- no nested layer at all, the real interpreter cross-built by ports/php/cheribsd/build.sh -- in the boot at the platform default (security.cheri.runtime_revocation_default=1, every_free=0): a SIGPROT at the ASan site with the bounds-malloc control faulting in the same boot, the same binary run with revocation off as the pair that attributes the fault, or the trigger ends and this arm did not see it (tools/arms.json cheribsd-default)",
 }
 
 

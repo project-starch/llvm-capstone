@@ -12,11 +12,12 @@
   "targets": [
     "cheribsd-purecap"
   ],
-  "workload": "the 56 trigger scripts of capstone/bug-corpora/php/{plain-temporal,zend-alloc}-repros, run by run-cheribsd-cases.py in one guest boot per revocation setting, against the same corpus case.json oracles the virtual arms use",
+  "workload": "the trigger scripts of capstone/bug-corpora/php/engine-repros (70 cases, the corpus the virtual arms measure) and of php/{plain-temporal,zend-alloc}-repros (56, this port's first two), run by run-cheribsd-cases.py in one guest boot per revocation setting -- the platform default, the same binary with revocation off as the pair that attributes a fault, and revoke-on-every-free as context -- against each corpus's own case.json oracles and host record",
   "evidence": [
     "capstone/ports/php/cheribsd/results/20261028-smoke"
   ],
   "corpora": [
+    "capstone/bug-corpora/php/engine-repros",
     "capstone/bug-corpora/php/plain-temporal-repros",
     "capstone/bug-corpora/php/zend-alloc-repros"
   ],

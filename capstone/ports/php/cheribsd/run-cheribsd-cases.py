@@ -19,7 +19,7 @@ directory and the console is told to run that one file. Driving 56 cases by send
 serial console costs a round trip each and leaves the transcript interleaved with the shell's own
 echo; a script writes its own markers and the parse is unambiguous.
 """
-import argparse, glob, json, os, re, shlex, sys
+import argparse, glob, json, os, re, shlex, subprocess, sys, time
 from pathlib import Path
 
 MARK = "CHERI_RUN"
@@ -74,14 +74,56 @@ def disk(a, own_copy):
     return overlay
 
 
-def qemu_argv(a, overlay):
+def qemu_firmware(a):
     fw = sorted(glob.glob(str(a.sdk / "share/qemu/bbl-riscv64*cheri*-virt-fw_jump.bin"))) \
         or sorted(glob.glob(str(a.sdk / "share/qemu/bbl-riscv64*fw_jump*.bin")))
     if not fw:
         sys.exit(f"no bbl purecap firmware under {a.sdk}/share/qemu")
+    return fw[0]
+
+
+def qemu_binary(a):
     qemu = a.sdk / "bin/qemu-system-riscv64xcheri"
-    if not qemu.is_file():
-        qemu = a.sdk / "bin/qemu-system-riscv64cheri"
+    return qemu if qemu.is_file() else a.sdk / "bin/qemu-system-riscv64cheri"
+
+
+def vehicle(a):
+    """What this boot ran ON, in the detail another table needs to be compared with ours.
+
+    capstone/tests/cheri-php-blind pins its CheriBSD release, CHERI-LLVM, CHERI-QEMU and boot
+    flag in RESULTS.md. Without the same pins here nobody can say whether that measurement and
+    this one share a vehicle, which is the first thing a reader would ask -- and they do NOT:
+    qemu_argv's own comment records that this QEMU is 7.1.0 and has no sstc property, while that
+    recipe passes -cpu rv64,sstc=false to a 7.2.0 fork. A difference that matters is worth
+    recording mechanically rather than in a comment, so these are READ from the tools at run
+    time; a pin nobody re-reads drifts in silence. The image is identified by size and mtime,
+    not by hash: it is ~8 GB and hashing it would cost more than the boot it describes.
+    """
+    def version(exe):
+        try:
+            out = subprocess.run([str(exe), "--version"], stdout=subprocess.PIPE,
+                                 stderr=subprocess.STDOUT, timeout=120,
+                                 universal_newlines=True).stdout
+        except (OSError, subprocess.SubprocessError) as e:
+            return f"unreadable: {e}"
+        return out.strip().splitlines()[0] if out.strip() else "no output"
+    fw, img = Path(qemu_firmware(a)), Path(a.img)
+    st = img.stat() if img.is_file() else None
+    return {
+        "qemu": version(qemu_binary(a)),
+        "clang": version(a.sdk / "bin/clang"),
+        "firmware": {"file": fw.name, "bytes": fw.stat().st_size if fw.is_file() else None},
+        "kernel": str(a.rootfs / "boot/kernel/kernel"),
+        "image": {"path": str(img), "bytes": st.st_size if st else None,
+                  "mtime": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(st.st_mtime))
+                           if st else None},
+        "cpu_flags": "the machine default: no -cpu override (see qemu_argv)",
+    }
+
+
+def qemu_argv(a, overlay):
+    fw = [qemu_firmware(a)]
+    qemu = qemu_binary(a)
     kernel = a.rootfs / "boot/kernel/kernel"
     for p in (qemu, Path(fw[0]), kernel, a.img):
         if not Path(p).exists():
@@ -235,6 +277,7 @@ def main():
               "panic": "panic:" in text, "exits": exits, "output": output,
               "serial_log": str(a.log), "env": a.env, "run_timeout": a.run_timeout,
               "sysctl": [{"set": k, "read_back": v} for k, v in applied],
+              "vehicle": vehicle(a),
               "disk": "our own copy of the image" if own_copy else "an overlay over the shared image"}
     a.record.write_text(json.dumps(record, indent=2) + "\n")
     print(f"booted={booted} mounted={mounted} completed={completed} panic={record['panic']}")

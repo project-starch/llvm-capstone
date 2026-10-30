@@ -923,18 +923,19 @@
         "version": "5.0.0",
         "port": "capstone/ports/php/app"
       },
-      "cases": 65,
+      "cases": 70,
       "case_schema": "script-trigger",
       "case_number_base": 1,
       "required_arms": [
         "virtual-malloc",
         "virtual-nested-pools",
-        "virtual-nested-exact"
+        "virtual-nested-exact",
+        "cheribsd-revocation"
       ],
       "status": "built",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "true": 65
+        "true": 70
       },
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "related": [
@@ -946,15 +947,126 @@
       "runners": [
         "capstone/ports/php/app/run-realphp.py",
         "capstone/bug-corpora/php/engine-repros/tools/build-cases.py",
-        "capstone/bug-corpora/php/engine-repros/tools/merge-population-bundles.py"
+        "capstone/bug-corpora/php/engine-repros/tools/merge-population-bundles.py",
+        "capstone/bug-corpora/php/tools/run-php-corpus.py"
       ],
       "arm_configurations": {
         "virtual-malloc": "php-real-block",
         "virtual-nested-pools": "php-real-object",
-        "virtual-nested-exact": "php-real-exact"
+        "virtual-nested-exact": "php-real-exact",
+        "cheribsd-revocation": "cheribsd-default"
       },
       "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 46 asan-blind and 19 temporal-asan-visible here against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases are placed differently, one (CRASH-100, needs an HTTP listener) is absent, two of theirs (CRASH-062, CRASH-070) end as shipped in PHP's own fatal error with no report, and one (CRASH-064) is a use-after-free NEITHER ASan build reports as one -- it dereferences an integer read from a reused object-store bucket, ASan:SEGV on both -- so these three are in neither population here; each said in its PROVENANCE.md. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The 59 default-build cases outside both populations (30 spatial ASan sees unaided, NULL dereferences, type confusions) are not here yet.",
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-28-run18/bundle-virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-28-run18/bundle-virtual-nested-pools",
+        "virtual-nested-exact": "results/2026-10-28-run18/bundle-virtual-nested-exact"
+      },
       "where": "capstone/bug-corpora/php/engine-repros"
+    },
+    {
+      "program": "php",
+      "boundary": "the system allocator: temporal defects in PHP 5.0.0 whose freed block does reach libc -- free() past Zend's cache ceiling, realloc() through erealloc, or a block malloc'd outside Zend altogether",
+      "title": "Twenty-six temporal defects live in PHP 5.0.0 whose release reaches the system allocator, so a detector interposing at malloc can still see them",
+      "upstream": {
+        "version": "5.0.0",
+        "port": "capstone/ports/php/app"
+      },
+      "cases": 26,
+      "case_schema": "script-trigger",
+      "case_number_base": 1,
+      "status": "built",
+      "live_in_pin_recorded": true,
+      "live_in_pin_note": "Liveness is measured at the pin, not inferred from a date: every case's trigger was run on a build of php-5.0.0 from the museum tarball (sha256 5783e0c0ba94f165633a565fe73a83e59cf17b6880ef95fa8f936dc6301d6919) and reported under ASan, and the defective construct is quoted from the pin's own source in each PROVENANCE.md. What is NOT established in this tree is the upstream side of the pair: php-src's history is not on this host, so each fix is cited by hash and its hunk is not quoted.",
+      "expect_live_in_pin": {
+        "true": 26
+      },
+      "required_arms": [
+        "host-asan",
+        "virtual-malloc",
+        "virtual-nested-pools",
+        "cheribsd-revocation"
+      ],
+      "arm_configurations": {
+        "virtual-malloc": "php-real-stock",
+        "virtual-nested-pools": "php-real-exact",
+        "cheribsd-revocation": "cheribsd-default"
+      },
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "runners": [
+        "capstone/bug-corpora/php/tools/run-php-corpus.py",
+        "capstone/ports/php/app/build-virtual.sh",
+        "capstone/ports/php/app/run-virtual.py",
+        "capstone/ports/php/app/prepare-sources.sh",
+        "capstone/ports/php/cheribsd/build.sh",
+        "capstone/ports/php/cheribsd/run-cheribsd-cases.py"
+      ],
+      "evidence": [
+        "capstone/bug-corpora/php/plain-temporal-repros/results/20261028-host-asan",
+        "capstone/bug-corpora/php/plain-temporal-repros/results/20261029/cheribsd-revocation"
+      ],
+      "advisories": [],
+      "related": [
+        "capstone/bug-corpora/php/zend-alloc-repros",
+        "capstone/ports/php/app",
+        "capstone/ports/php/cheribsd",
+        "capstone/ports/php/zend-alloc",
+        "capstone/tests/cheri-php-blind"
+      ],
+      "note": "THIS CORPUS IS THE CONTROL FOR ITS SIBLING, and the two were separated by a measurement rather than by a rule. Each trigger was run twice on this host, on two builds of the same source differing only in two defines in Zend/zend_alloc.c: the source corpus's detector build (ZEND_DISABLE_MEMORY_CACHE 1, REAL_SIZE unrounded) and Zend's allocator AS SHIPPED. All twenty-six here keep their temporal report on BOTH -- the release reaches libc, so anything that interposes at malloc can read it -- while all thirty of zend-alloc-repros lose it on the second. Four routes put a case here, and matrix.tsv's `released_by` column says which. Twelve are released by _efree and still reach free(); seven are released by _erealloc, which never consults the cache and calls realloc() whatever the size; two were never Zend's to begin with -- 07_1ea22c90046b is a constant name from zend_strndup (a bare malloc, freed by the bare free at Zend/zend_constants.c:320) and 09_d5bb03b11a96 is a persistent hash table built with zend_hash_init(..., persistent=1) and released with pefree() -- and those two are the only cases in either corpus whose object is not a sub-allocation of Zend's allocator, the only two with nested=false. For the remaining five (source ids CRASH-012, 030, 113, 142, 148) ASan's report carries no free stack at all, so no route is named and what puts them here is the reading itself: a temporal verdict that survives the stock allocator. A size rule alone would NOT have produced this set -- ten of the twelve _efree cases have a payload of 80 bytes or less and reach free() anyway, because the per-class cache holds 256 entries and falls back to free() once full. That is why the corpus is split by the stock-allocator run and not by a threshold. THE ARMS. virtual-malloc is php-real-stock, PHP_CAP_MODE=0 -- musl mallocng's own per-object bounds with the lifetime retired at free, nothing revoked by the seam: the baseline a catch is measured against, and the arm this corpus predicts will CATCH, unlike its sibling. virtual-nested-pools is php-real-exact, PHP_CAP_MODE=7. cheribsd-revocation is stock CheriBSD purecap. The prediction this corpus carries, written before any of the three ran: these twenty-six are caught on all three arms, and that is what makes the sibling's silences mean something. THE CHERI ARM IS MEASURED (results/20261029/cheribsd-revocation) AND ITS CRITERION IS NARROW: the verdict comes from the platform-default boot only; a fault that appears only under every-free revocation is recorded as NOT-REISSUED in the notes and does NOT change the verdict, because the deployed policy defers the sweep and the program runs on. THE VERDICT AND THE PROTECTION QUESTION ARE KEPT APART: on this corpus CHERI protects 21 of the 26 (3 SIGPROT at the default, 11 capability-enabled allocator aborts, 7 NOT-REISSUED), and the 5 left out are 3 whose own ending at the default is a fatal PHP error, 1 the watchdog kills, and case 07, the only genuine miss in either corpus. The revocation-off boot is what attributes a default fault, since a purecap SIGPROT carries no symbol. The per-corpus README holds the group-by-group attribution.",
+      "where": "capstone/bug-corpora/php/plain-temporal-repros"
+    },
+    {
+      "program": "php",
+      "boundary": "Zend's allocator: temporal defects in PHP 5.0.0 whose freed block never reaches libc, because _efree parks it in AG(cache) and a later emalloc hands the same bytes to the next object",
+      "title": "Thirty temporal defects live in PHP 5.0.0 that a detector interposing at malloc cannot see, because the release stops at the nested allocator",
+      "upstream": {
+        "version": "5.0.0",
+        "port": "capstone/ports/php/app"
+      },
+      "cases": 30,
+      "case_schema": "script-trigger",
+      "case_number_base": 1,
+      "status": "built",
+      "live_in_pin_recorded": true,
+      "live_in_pin_note": "Liveness is measured at the pin, not inferred from a date: every case's trigger was run on a build of php-5.0.0 from the museum tarball (sha256 5783e0c0ba94f165633a565fe73a83e59cf17b6880ef95fa8f936dc6301d6919) and reported under ASan, and the defective construct is quoted from the pin's own source in each PROVENANCE.md. What is NOT established in this tree is the upstream side of the pair: php-src's history is not on this host, so each fix is cited by hash and its hunk is not quoted.",
+      "expect_live_in_pin": {
+        "true": 30
+      },
+      "required_arms": [
+        "host-asan",
+        "virtual-malloc",
+        "virtual-nested-pools",
+        "cheribsd-revocation"
+      ],
+      "arm_configurations": {
+        "virtual-malloc": "php-real-stock",
+        "virtual-nested-pools": "php-real-exact",
+        "cheribsd-revocation": "cheribsd-default"
+      },
+      "checker": "capstone/bug-corpora/tools/check-corpus.py",
+      "runners": [
+        "capstone/bug-corpora/php/tools/run-php-corpus.py",
+        "capstone/ports/php/app/build-virtual.sh",
+        "capstone/ports/php/app/run-virtual.py",
+        "capstone/ports/php/app/prepare-sources.sh",
+        "capstone/ports/php/cheribsd/build.sh",
+        "capstone/ports/php/cheribsd/run-cheribsd-cases.py"
+      ],
+      "evidence": [
+        "capstone/bug-corpora/php/zend-alloc-repros/results/20261028-host-asan",
+        "capstone/bug-corpora/php/zend-alloc-repros/results/20261029/cheribsd-revocation"
+      ],
+      "advisories": [],
+      "related": [
+        "capstone/bug-corpora/php/plain-temporal-repros",
+        "capstone/ports/php/app",
+        "capstone/ports/php/cheribsd",
+        "capstone/ports/php/zend-alloc",
+        "capstone/tests/cheri-php-blind"
+      ],
+      "note": "THE SPLIT BETWEEN THIS CORPUS AND ITS SIBLING IS MEASURED, NOT ARGUED. Both hold temporal defects of the same release; what separates them is one reading. Each trigger was run twice on this host, on two builds of the same source that differ only in two defines in Zend/zend_alloc.c: the source corpus's detector build (ZEND_DISABLE_MEMORY_CACHE 1, REAL_SIZE unrounded), where every efree reaches free() and ASan sees every lifetime end, and the allocator AS SHIPPED. All thirty cases here keep a temporal report on the first and lose it on the second -- 21 go completely silent (exit 0), 7 degrade to a SEGV ASan cannot attribute to a heap event, one to EXIT:255 and one to a heap-buffer-overflow in an unrelated region. The sibling corpus's twenty-six keep it on both. That is the whole claim this corpus exists to carry: detector blindness is a property of WHERE a detector interposes, not of how strong it is, and both ASan and CHERI interpose below the nested allocator. The mechanism is in the source, not inferred: _efree pushes a block whose payload is at most 80 bytes onto AG(cache) and returns (Zend/zend_alloc.c:270-282, MAX_CACHED_MEMORY 11 over an 8-byte index), so free() is never called and the libc block stays live and in bounds for the whole window. Size alone does not decide it -- the per-class cache holds 256 entries and _erealloc never uses the cache at all -- which is why the split comes from the run and not from a size rule. CASE SELECTION: the two corpora together are 56 of the source corpus's 185 cases. Only temporal defects were taken (CWE-416, CWE-415, CWE-590, plus two the source corpus labels by symptom -- CWE-822 and CWE-476 -- whose recorded root cause is a use after free); leaks, refcount-only defects, reference bindings, uninitialised reads, type confusions, null dereferences and every spatial class were left out. Five stack-use-after-return cases (CWE-562) are temporal but cross neither allocator and are left out too. Six more were dropped because neither build produced a temporal verdict for them (CRASH-026, 034, 064, 071, 139) or because the trigger needs a loopback listener this host does not provide (CRASH-092). THE ARMS. virtual-malloc is php-real-stock, PHP_CAP_MODE=0: the seam image with nothing revoked, so the only protection is musl mallocng's own per-object bounds and its retirement of a lifetime at free -- the baseline a catch is measured against, and the arm this corpus predicts will read MISSED. virtual-nested-pools is php-real-exact, PHP_CAP_MODE=7: every emalloc block a CDERIVE child bounded at the caller's own size and CREVOKEd at efree, which is the only arm that sees a release Zend's cache absorbs. cheribsd-revocation is stock CheriBSD purecap, which interposes where mallocng does and is predicted to read like virtual-malloc. Four cases need bundled extensions the app port does not build (--disable-all), and two need a writable /tmp; each says so in its own fidelity. THE CHERI ARM IS MEASURED (results/20261029/cheribsd-revocation) AND ITS CRITERION IS NARROW: the verdict comes from the platform-default boot only; a fault that appears only under every-free revocation is recorded as NOT-REISSUED in the notes and does NOT change the verdict, because the deployed policy defers the sweep and the program runs on. THE VERDICT AND THE PROTECTION QUESTION ARE KEPT APART, AND THEY DIVERGE HERE: the verdict tally has 7 CAUGHT and 3 inconclusive, but CHERI protects 0 of the 30. The 7 SIGPROT rows fault with revocation off as well, so PHP cleared the tag itself; the 3 aborts are at request shutdown where the allocator cache is drained back to libc, not at the defect; and the 7 every-free faults happen only because the capability ABI pushed those blocks out of AG(cache) into real free(). For a block that genuinely stays in the cache, nothing in the purecap stack observes the stale access. The revocation-off boot is what attributes a default fault, since a purecap SIGPROT carries no symbol. The per-corpus README holds the group-by-group attribution.",
+      "where": "capstone/bug-corpora/php/zend-alloc-repros"
     },
     {
       "program": "postgres",
@@ -1971,6 +2083,37 @@
     },
     {
       "program": "php",
+      "role": "platform-build",
+      "title": "PHP 5.0.0 cross-built for CheriBSD purecap: the CHERI baseline arm of the two php bug corpora",
+      "upstream": {
+        "version": "5.0.0",
+        "pin_source": {
+          "file": "capstone/ports/php/cheribsd/build.sh",
+          "grep": "VERSION=5.0.0"
+        }
+      },
+      "targets": [
+        "cheribsd-purecap"
+      ],
+      "workload": "the trigger scripts of capstone/bug-corpora/php/engine-repros (70 cases, the corpus the virtual arms measure) and of php/{plain-temporal,zend-alloc}-repros (56, this port's first two), run by run-cheribsd-cases.py in one guest boot per revocation setting -- the platform default, the same binary with revocation off as the pair that attributes a fault, and revoke-on-every-free as context -- against each corpus's own case.json oracles and host record",
+      "evidence": [
+        "capstone/ports/php/cheribsd/results/20261028-smoke"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/php/engine-repros",
+        "capstone/bug-corpora/php/plain-temporal-repros",
+        "capstone/bug-corpora/php/zend-alloc-repros"
+      ],
+      "related": [
+        "capstone/ports/php/app",
+        "capstone/tests/cheri-php-blind"
+      ],
+      "status": "builds and RUNS: the whole CLI SAPI cross-compiles clean against the CheriBSD 26.07 sysroot, the ELF is asserted cheriabi + capability mode by the build script, and in the guest on 2026-10-28 `php -n -v` printed its banner and a script that sorts ran to a correct result (results/20261028-smoke). That is the gate the Perl purecap port did not pass, so this port can host a corpus arm. No corpus case has been measured yet.",
+      "note": "This port exists because capstone/tests/cheri-php-blind can only model the mechanism: its rows are a distilled copy of PHP's allocator, not PHP, and its own Scope section says running the real triggers needs a full PHP 5.0.0 purecap build, gated separately. This is that build. Four configure answers and two configure probes had to be pre-answered because PHP 5.0.0 settles them by RUNNING a program; each is a fact readable from CheriBSD's own headers or from the ABI, and build.sh records which and why. The one with a result worth remembering outside this port: the ZEND_MM alignment probe answers 16, not 8, because a purecap pointer is a 128-bit capability -- the same doubling that shows up wherever a release assumes sizeof(void*) == sizeof(long). The guest never writes the shared 9.5 GB image: run-cheribsd-cases.py boots a qcow2 overlay over our own copy and hands the files in over virtio-9p.",
+      "where": "capstone/ports/php/cheribsd"
+    },
+    {
+      "program": "php",
       "role": "full-application",
       "title": "PHP 5.0.0's Zend engine in a physical Capstone domain under a hand-written SAPI and a stub libc, one image per corpus trigger (-DRUNG_E_CRASHnnn); the comparison column the virtual app port was retargeted from",
       "upstream": {
@@ -1998,7 +2141,7 @@
     {
       "program": "php",
       "role": "allocator-component",
-      "title": "PHP 5.0.0's Zend allocator (zend_alloc.c) with a Capstone seam: per-object bounds on the recorded request size, and the sublet/ adapter that splits each emalloc block into a header and a CDERIVE/CREVOKE payload region the app port's protected arms run on",
+      "title": "PHP 5.0.0's Zend allocator (zend_alloc.c) with a Capstone nested layer: per-object bounds on the recorded request size, and the sublet/ adapter that splits each emalloc block into a header and a CDERIVE/CREVOKE payload region the app port's protected arms run on",
       "upstream": {
         "version": "5.0.0",
         "pin_source": {
@@ -2010,9 +2153,13 @@
         "capstone-domain",
         "capstone-virtual"
       ],
-      "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-seam.c and sublet/probe-derive-split.c on the virtual profile, which qualify the seam before the app port's arms are believed",
+      "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-nested.c and sublet/probe-derive-split.c on the virtual profile, which qualify the nested layer before the app port's arms are believed",
       "evidence": [
         "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26"
+      ],
+      "corpora": [
+        "capstone/bug-corpora/php/plain-temporal-repros",
+        "capstone/bug-corpora/php/zend-alloc-repros"
       ],
       "related": [
         "capstone/ports/php/app",
@@ -2413,7 +2560,9 @@
     "capstone/bug-corpora/mruby/gc-slot-repros": 0,
     "capstone/bug-corpora/mruby/release-differential": 23,
     "capstone/bug-corpora/perl/release-differential": 11,
-    "capstone/bug-corpora/php/engine-repros": 65,
+    "capstone/bug-corpora/php/engine-repros": 70,
+    "capstone/bug-corpora/php/plain-temporal-repros": 26,
+    "capstone/bug-corpora/php/zend-alloc-repros": 30,
     "capstone/bug-corpora/postgres/c-repros": 5,
     "capstone/bug-corpora/postgres/mmgr-repros": 5,
     "capstone/bug-corpora/postgres/sql-repros": 9,
@@ -2428,10 +2577,10 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 364,
+  "cases_here": 425,
   "cases_xlang": 30,
-  "cases_total": 394,
-  "live_true": 214,
+  "cases_total": 455,
+  "live_true": 275,
   "live_false": 122,
   "live_not": 28,
   "advisories_total": 22,
@@ -2508,6 +2657,8 @@
     "`capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/php/engine-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/php/engine-repros` commits no result bundle of its own.",
+    "`capstone/bug-corpora/php/plain-temporal-repros` has no triage inventory under docs/ref/.",
+    "`capstone/bug-corpora/php/zend-alloc-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.",
     "`capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.",
     "`capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.",
