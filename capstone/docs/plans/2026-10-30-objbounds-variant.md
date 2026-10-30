@@ -229,7 +229,41 @@ from a removed `work-ver/` after the Anvil prologue, and every PROVENANCE reads 
    - Every non-cycle position is equal across the trees.
    - objb-stale and objb-pcc separate the two bitstreams.
    - The cost shapes read the same pattern as the arms.
-7. **95-test sweep, both trees:** (pending; a precondition of the flash, not of synthesis).
+7. **95-test sweep, both trees** (testlist_capstone.yaml, seed 20260922, memory delay 12; vp9 `.sup/sweep-b-off`,
+   vp8 `.sup/sweep-b-on`; each tree SWEEP-RAN 95, 184 logs, `rtl_dirty=no`).
+   - **The control equals bitstream 3's own sweep** (vp9 `.sup/sweepr62`, e7af48457). 92 tests are identical in
+     exceptions, readings and retired count; 0 differ; 3 random-generator entries are missing on both sides, as
+     always. The cycle counts are identical in all 92 tests that have an end line on both sides.
+   - **The variant against the control:** 88 identical, 4 differ, 3 missing. 11 of 92 tests differ in cycles, and every
+     one is faster on the variant: stc-counter-pair −93,886, cap-tag-cache −1,948, excode-base-audit −130, the three
+     stc-ldc-sbpressure arms −75, s07-wbuf-tag-reorder(-ctl) −32, s07-wbuf-liveness −20, s06-mechanism-probe −10,
+     cap-pointer −5.
+   - **The four that differ, each read from a traced re-run** (SUP_TRACE, the sweep's seed, delay and time_out;
+     vp9 `.sup/sw4-off`, vp8 `.sup/sw4-on`; the re-runs reproduce the sweep's end lines to the cycle):
+     - **excode-base-audit.** ARM I's LDC through a revoked capability (0x800000c0) raises INVALID_CAPABILITY on the
+       control and completes on the variant. The test exists to pin that 25, so the variant fails it at TESTNUM 2. It
+       is a 25-deny now completing, at site (e).
+     - **data-sharing.** The LDC after REVOKE (0x80000088) raises INVALID_CAPABILITY on the control. On the variant it
+       completes, loading 0x80003010, the shared region capability's cursor, and prints it. Then the harness's capmode
+       exit store traps, and both trees park at the cycle limit. It is a 25-deny now completing.
+     - **s07-ldc-chain-forward.** Both trees take the same single trap, the LCC control's UNEXPECTED_OPERAND at
+       0x80000050, and both park in the same plain-load loop at the cycle limit. The variant enters that loop 204
+       cycles earlier (4,180 against 4,384) and so retires 511 more instructions by the limit. This is timing only.
+     - **cap-tag-cache. NOT a 25-deny: the T4 eviction arm's positive control fails on the variant** (tohost 42).
+       - The control reads hot LDC 9 cycles and swept LDC 88. The variant reads 5 and 2, and the arm requires
+         swept ≥ hot + 8.
+       - The trace shows why. On the variant the swept LDC (0x800001c4) writes back at cycle 334,980, the cycle the
+         window's first `csrr mcycle` commits. Its miss ran in the shadow of the sweep loop's last missing `ld`, which
+         wrote back at 334,975.
+       - On the control the same LDC writes back at 335,066, 86 cycles after the window opens. Its query's record read
+         and its data load are two serialised misses.
+       - The loaded value is correct on both trees: 0x80003000, type check 41 passes. So the tag survives the refill.
+         What fails is the arm's assumption that the swept LDC's latency lands inside its mcycle window.
+       - The pre-registered criterion ("each difference is a 25-deny now completing") is NOT met for this test, by
+         the letter. The difference is explained by trace as timing, with every value correct.
+   - **Instrument note.** This lane's cycle column read the `.log` until today, and the end line is in the
+     `.log.iss`. It printed 0 everywhere, and the retraction is dev b71a4db444f0. The readings above come from the
+     fixed script. Its positive control is this variant's 11 differing tests.
 
 ## Synthesis pre-registration (objbounds-b 603528b8b; written and pushed before the gate request)
 
