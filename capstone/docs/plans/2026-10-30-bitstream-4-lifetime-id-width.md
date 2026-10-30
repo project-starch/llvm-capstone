@@ -100,7 +100,17 @@ lane branch first. The readings are synth's; the grades are this lane's.
   - By source (`core/capstone_dom_switcher.anvil.sv`), `_init_0` is set in reset (:7812) and cleared on every later clock
     (:9455, unconditional inside the else at :8138). So a path that starts at it carries one transition per reset.
   - It is ORed with `_thread_0_event_counter_870_1_q` into the same event (:7673, :6488), so the same downstream cone is
-    live from that flop. That flop's slack has not been read. These paths are not called false or harmless here.
+    live from that flop.
+  - **The cone is live: B's worst path is about −11.93 after reset** (synth's follow-up query on the routed checkpoint).
+    | Start | Worst slack | Levels |
+    |---|---|---|
+    | `_thread_0_event_counter_870_1_q` | −11.929 | 119 |
+    | every other dom_switcher flop (1,293); worst `req_en_q[0]` | −11.933 | |
+    | `_init_0`, the control | −11.964 | 119 |
+    - All three end at issue_read_operands `fu_data_q[0].cap_data.cap_metadata_b[25]`.
+    - The worst 500 count 0 paths from the counter only because the query keeps one path per endpoint, and `_init_0` is a
+      few ps worse at each of those endpoints. By start family the worst 500 are `_init_0` 496 and csr 4.
+    - Bitstream 2's worst 20 also ran from the domain switcher into fu_data_q, from `cur_idx_q`, at −9.790.
 
 **Flash gate, the non-cacheable tag: closed.**
 - The question: a refill's tag is the adapter's user lane (wt_dcache_mem.sv:355-358), and that lane is loaded from
@@ -134,8 +144,10 @@ The id is {gen[29:20], idx[19:0]}; word1 carries gen at [59:50] and parent at [4
 - 95-sweep: 92 identical, 0 differ, 3 missing on both sides.
 - Full build, sealed: PASS on every pre-registered key.
   - Placed LUT 168,935 against 169,061 ±2,000; FF 63,681 against 63,647 ±300.
-  - Congestion: no window above level 5 (the placer's maximum is level 4, as on b3). That grade used the placer's reading
-    only. A's router level has been asked of the synthesis lane so that both options carry the same reading.
+  - Congestion: no window above level 5 (the placer's maximum is level 4, as on b3). The first grade used only the
+    placer's reading. The router's reading, from the follow-up query, is hotspot max level 4 and per-direction max ≤ 90.09 %
+    (N 86.21, S 90.09, E 88.60, W 85.66). That is also a PASS. For comparison, B reads 4 and ≤ 90.22 %, and b3 reads 3 and
+    ≤ 90.09 %.
   - 0 routing errors; check_timing 0 loops.
   - TIMING-23 0 and LUTLP-1 0. Both matchers fire on other rules.
   - Widened compares on the worst 500: 0. rvc_* and rd_ctag by membership with POS 1. cpmp_tracked and pc_revnode by
@@ -159,7 +171,5 @@ The id is {gen[29:20], idx[19:0]}; word1 carries gen at [59:50] and parent at [4
 - The first boots, and what they read, are the runtime lane's to choose.
 - A (741aff6a6) is kept, sealed, as the fallback and is not flashed.
 - Owed, none of it gating:
-  - the synthesis lane's reading of `_thread_0_event_counter_870_1_q`'s worst slack;
-  - A's router congestion level;
   - `design/virtual-capstone/isa.md`'s "not in the RTL" and "Silicon" paragraphs, which become untrue once B is flashed
     (the semantics owner's document).
