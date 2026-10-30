@@ -118,6 +118,22 @@ spatial** -- case 00 among the spatial, which is what its `class` now says and w
   2026-10-06 in one boot whose positive-control gate was satisfied before any case ran. It is the
   one column with no bundle.
 
+**The temporal row depends on which cases the "trigger does not reach" rule withdraws, and the rule
+is not applied uniformly yet.** 01 and 09 are withdrawn for it; 08 and 11 carry the same 2026-10-11
+gdb finding and stay counted, and 02 is counted although its trigger did not reach its defect
+either (see "Case 02's cells are under correction" below). 09's defect is real (upstream
+a87bd2471a9c fixes a use-after-free in fts3 snippet()), so "the defect is real" does not separate
+them. Recomputed with `catch-tables.py --all --board` under each reading:
+
+| rule | cases | (1) base | (2) Sublet | (3) CheriBSD |
+|---|---:|---:|---:|---:|
+| as declared (01, 09 withdrawn) | 20 | 5 / 17 (+3) | 17 / 20 | 5 / 20 |
+| also 02, 08, 11 withdrawn | 17 | 4 / 14 (+3) | 16 / 17 | 4 / 17 |
+| 01 and 09 counted | 22 | 5 / 19 (+3) | 17 / 22 | 5 / 22 |
+
+Quote the row together with the rule it uses. Settling it needs the replaced triggers for 02, 08, 09
+and 11 re-run, not a different reading of these bundles.
+
 The retired physical arms `spatial` and `sublet` read differently over the same 28 -- 6/20 and 2/8,
 19/20 and 7/8 -- and are superseded (see the note above). A column that mixes them with the virtual
 arms is not a measurement of anything.
@@ -163,10 +179,14 @@ neighbour that had just been freed. The directory name keeps `stale_read`: the r
 refer to the case by that name and renaming it would orphan the measurements that cite it.
 No arm's verdict changes -- only the axis.
 
-**Two cases are duplicates and now say so in the schema rather than only in prose.** 09 records
-the same upstream defect as 10, and 25 the same as 00; each declares `duplicate_of`, and
-`tools/catch-tables.py` leaves both out of every table (`../../SCHEMA.md`, "Optional fields").
-They are kept so numbering and citations stay valid.
+**One case is a duplicate and now says so in the schema rather than only in prose.** 25 records
+the same upstream defect as 00 and declares `duplicate_of`, and `tools/catch-tables.py` leaves it
+out of every table (`../../SCHEMA.md`, "Optional fields"). It is kept so numbering and citations
+stay valid. The duplicate is plausible, not cross-checked: 415540ddaa and adfb203a7d are two guards
+on one read, and both pools cells are cause 28 in `sqlite3Fts5GetVarint` at the same in-image offset (pc ...224c,
+differing only in load base), but neither
+fix's corrupt image has been run against the other fix. (09 was earlier declared a duplicate of 10;
+that is withdrawn, and 09 now carries `withdrawn` instead.)
 
 **`catch_causes` exists but is NOT declared for these two configurations, deliberately.**
 `tools/verdicts.py` now takes an optional `catch_causes` on a configuration and refuses to call
