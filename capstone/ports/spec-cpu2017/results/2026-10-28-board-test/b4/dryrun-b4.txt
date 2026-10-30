@@ -1,0 +1,357 @@
+# b4-first.sh stubbed dry run (2026-10-30); every board and console call stubbed; make-b4-kit.sh and both judges real.
+MK4-ALONE MK4 kit /mnt/hdd/<user>/capstone/spec/dryrun-b4/kit-try from bkit11-b3-b2: changed [./adapter/capstone-vexec ./adapter/module/capstone_vm.ko ./board.env ]; board.env diff:
+MK4-ALONE < BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+MK4-ALONE > BOARD_BITSTREAM=caplifive_vp2c_325966ee4
+MK4-ALONE MK4 kit-try DONE
+MK4-ALONE rc=0
+MK4-ALONE MK4 STOP: /mnt/hdd/<user>/capstone/spec/dryrun-b4/kit-try exists
+MK4-ALONE rc=1 (existing destination)
+MK4-ALONE MK4 STOP: source kit /mnt/hdd/<user>/capstone/t3-smoke/bkit9-b2-b2 does not verify or is not a bitstream-3 kit
+MK4-ALONE rc=1 (bitstream-2 source)
+== pass rc=0
+   FB board 2's chain ended 08:35:45: 2026-10-30 13:00:00 continue b2: chain rc=0
+   FB board 2 free 08:35:45
+   STUB STORE missing no-such-bitstream-3959754.bit
+   STUB STORE has caplifive_vp2c_e7af48457.bit
+   FB FLASH BEGIN 08:35:45 board 2 booking 999
+   STUB FLASH caplifive_vp2c_325966ee4.bit /mnt/hdd/<user>/capstone/bitstreams/caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8
+   STUB unbook 999
+   FB FLASH END rc=0 08:35:45
+   STUB NVRB caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8cc
+   FB READBACK name matches; the console exposes no sha256
+   MK4 kit /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-pass/kits/bkit13-b4-b2 from bkit11-b3-b2: changed [./adapter/capstone-vexec ./adapter/module/capstone_vm.ko ./board
+   < BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+   > BOARD_BITSTREAM=caplifive_vp2c_325966ee4
+   MK4 bkit13-b4-b2 DONE
+   FB BOOT1 BEGIN 08:35:46
+   SB BEGIN 08:35:46 board 2 kit bkit13-b4-b2 stage b4-t1a booking 999
+   SB END rc=0 08:35:46
+   RUN backend board (STUB) stage b4-t1a out /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-pass/out/t1a
+   FB BOOT1 END rc=0 08:35:46
+       OK  param ids: 55
+       OK  param index_bits: 25
+       OK  param node_flat_records: 1048576
+       --- CMA region [0xac000000, 0xbc000000) from the kernel's reserved-mem line
+       OK  allocation line present, one distinct: [('1048576', '16777216', 'CMA', 'ac100000', 'linear')]
+       OK  allocation records/bytes: ('1048576', '16777216')
+       OK  allocation from CMA: CMA
+       OK  allocation pa inside the CMA region: 0xac100000
+       OK  allocation mapping word (NON-LINEAR on the board is a STOP): linear
+       OK  no ALLOCATION FAILED line: 0
+       OK  Tier 1 contract (ok exit 0 + VIRTUAL_APPLICATION_OK; stale exit 139 + cause 25): 0
+       OK  live 1000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 1111
+       OK  live 400000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 414217
+       OK  live 400000 nodes in [400000, 430000], capacity 1048576: (414217, 1048576)
+       OK  live 1100000 LIVE-NULL index in [990000, 1047000]: 1011158
+       OK  live 1100000 rc 3: 3
+       OK  live 1100000 nodes in [1040000, 1048576]: 1046942
+       OK  live 1100000 no domain fault: 0
+     B4-T1A AS PREDICTED
+   FB JUDGE1 rc=0
+   FB BOOT2 BEGIN 08:35:46
+   SB BEGIN 08:35:46 board 2 kit bkit13-b4-b2 stage b4-t1b booking 999
+   SB END rc=0 08:35:46
+   RUN backend board (STUB) stage b4-t1b out /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-pass/out/t1b
+   FB BOOT2 END rc=0 08:35:46
+       OK  bounds                       board True twin True
+       OK  cleanup                      board False twin True   (cleanup: false by construction)
+       OK  completed                    board True twin True
+       OK  fault_causes                 board False twin False
+       OK  heap-threads                 board False twin False
+       OK  heap_threads                 board False twin False
+       OK  linux_demand_faults          board True twin True
+       OK  linux_pages_released         board True twin True
+       OK  mruby                        board True twin True
+       OK  mruby_results                board True twin True
+       OK  nested                       board True twin True
+       OK  nested-stale                 board True twin True
+       OK  nested_denial_site           board True twin True
+       OK  nested_output                board True twin True
+       OK  normal                       board True twin True
+       OK  normal_output                board True twin True
+       OK  parallel_one                 board True twin True
+       OK  parallel_two                 board True twin True
+       OK  preempt                      board True twin True
+       OK  retired                      board True twin True
+       OK  same_va_reuse                board True twin True
+       OK  shared_heap_pages_released   board False twin False
+       OK  sparse-churn                 board True twin True
+       OK  sparse-stale                 board True twin True
+       OK  sparse_recycling             board False twin False
+       OK  spin_entered                 board True twin True
+       OK  sqlite_read                  board True twin True
+       OK  sqlite_results               board True twin True
+       OK  sqlite_write                 board True twin True
+       OK  stale                        board True twin True
+       OK  threads                      board False twin False
+       OK  threads_output               board False twin False
+       OK  unused_pages_not_populated   board True twin True
+       OK  vm                           board False twin False
+       OK  vm-guard                     board True twin True
+       OK  vm-large                     board False twin False
+       OK  vm-mappings                  board True twin True
+       OK  vm-none-read                 board True twin True
+       OK  vm-padding                   board True twin True
+       OK  vm-ro-write                  board True twin True
+       OK  vm_contract                  board False twin False
+       OK  vm_denial_operations         board True twin True
+       OK  vm_denial_sites              board True twin True
+       OK  vm_large_contract            board False twin False
+       OK  vm_mappings_contract         board True twin True
+     B4-T1B 33 of 45 true; twin F0 34 of 45; AS PREDICTED (every cell equals F0's, cleanup false)
+   FB JUDGE2 rc=0
+   FB DONE 08:35:46
+== flashfail rc=1
+   FB board 2's chain ended 08:35:49: 2026-10-30 13:00:00 continue b2: chain rc=0
+   FB board 2 free 08:35:49
+   STUB STORE missing no-such-bitstream-3959931.bit
+   STUB STORE has caplifive_vp2c_e7af48457.bit
+   FB FLASH BEGIN 08:35:49 board 2 booking 999
+   STUB FLASH caplifive_vp2c_325966ee4.bit /mnt/hdd/<user>/capstone/bitstreams/caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8
+   STUB unbook 999
+   FB FLASH END rc=1 08:35:49
+   FB STOP: the flash did not read back caplifive_vp2c_325966ee4.bit
+== storectl rc=1
+   FB board 2's chain ended 08:35:52: 2026-10-30 13:00:00 continue b2: chain rc=0
+   FB board 2 free 08:35:52
+   STUB STORE missing no-such-bitstream-3960037.bit
+   FB STOP: store-has control read rc=0, not 1
+== nvrbmismatch rc=1
+   FB board 2's chain ended 08:35:55: 2026-10-30 13:00:00 continue b2: chain rc=0
+   FB board 2 free 08:35:55
+   STUB STORE missing no-such-bitstream-3960134.bit
+   STUB STORE has caplifive_vp2c_e7af48457.bit
+   FB FLASH BEGIN 08:35:55 board 2 booking 999
+   STUB FLASH caplifive_vp2c_325966ee4.bit /mnt/hdd/<user>/capstone/bitstreams/caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8
+   STUB unbook 999
+   FB FLASH END rc=0 08:35:55
+   STUB NVRB caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8cc
+   FB STOP: readback rc=1
+== nvrbfull rc=0
+   FB board 2's chain ended 08:35:58: 2026-10-30 13:00:00 continue b2: chain rc=0
+   FB board 2 free 08:35:58
+   STUB STORE missing no-such-bitstream-3960238.bit
+   STUB STORE has caplifive_vp2c_e7af48457.bit
+   FB FLASH BEGIN 08:35:58 board 2 booking 999
+   STUB FLASH caplifive_vp2c_325966ee4.bit /mnt/hdd/<user>/capstone/bitstreams/caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8
+   STUB unbook 999
+   FB FLASH END rc=0 08:35:58
+   STUB NVRB caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8cc
+   FB READBACK name and sha256 match
+   MK4 kit /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-nvrbfull/kits/bkit13-b4-b2 from bkit11-b3-b2: changed [./adapter/capstone-vexec ./adapter/module/capstone_vm.ko ./b
+   < BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+   > BOARD_BITSTREAM=caplifive_vp2c_325966ee4
+   MK4 bkit13-b4-b2 DONE
+   FB BOOT1 BEGIN 08:35:58
+   SB BEGIN 08:35:58 board 2 kit bkit13-b4-b2 stage b4-t1a booking 999
+   SB END rc=0 08:35:58
+   RUN backend board (STUB) stage b4-t1a out /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-nvrbfull/out/t1a
+   FB BOOT1 END rc=0 08:35:58
+       OK  param ids: 55
+       OK  param index_bits: 25
+       OK  param node_flat_records: 1048576
+       --- CMA region [0xac000000, 0xbc000000) from the kernel's reserved-mem line
+       OK  allocation line present, one distinct: [('1048576', '16777216', 'CMA', 'ac100000', 'linear')]
+       OK  allocation records/bytes: ('1048576', '16777216')
+       OK  allocation from CMA: CMA
+       OK  allocation pa inside the CMA region: 0xac100000
+       OK  allocation mapping word (NON-LINEAR on the board is a STOP): linear
+       OK  no ALLOCATION FAILED line: 0
+       OK  Tier 1 contract (ok exit 0 + VIRTUAL_APPLICATION_OK; stale exit 139 + cause 25): 0
+       OK  live 1000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 1111
+       OK  live 400000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 414217
+       OK  live 400000 nodes in [400000, 430000], capacity 1048576: (414217, 1048576)
+       OK  live 1100000 LIVE-NULL index in [990000, 1047000]: 1011158
+       OK  live 1100000 rc 3: 3
+       OK  live 1100000 nodes in [1040000, 1048576]: 1046942
+       OK  live 1100000 no domain fault: 0
+     B4-T1A AS PREDICTED
+   FB JUDGE1 rc=0
+   FB BOOT2 BEGIN 08:35:58
+   SB BEGIN 08:35:58 board 2 kit bkit13-b4-b2 stage b4-t1b booking 999
+   SB END rc=0 08:35:58
+   RUN backend board (STUB) stage b4-t1b out /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-nvrbfull/out/t1b
+   FB BOOT2 END rc=0 08:35:58
+       OK  bounds                       board True twin True
+       OK  cleanup                      board False twin True   (cleanup: false by construction)
+       OK  completed                    board True twin True
+       OK  fault_causes                 board False twin False
+       OK  heap-threads                 board False twin False
+       OK  heap_threads                 board False twin False
+       OK  linux_demand_faults          board True twin True
+       OK  linux_pages_released         board True twin True
+       OK  mruby                        board True twin True
+       OK  mruby_results                board True twin True
+       OK  nested                       board True twin True
+       OK  nested-stale                 board True twin True
+       OK  nested_denial_site           board True twin True
+       OK  nested_output                board True twin True
+       OK  normal                       board True twin True
+       OK  normal_output                board True twin True
+       OK  parallel_one                 board True twin True
+       OK  parallel_two                 board True twin True
+       OK  preempt                      board True twin True
+       OK  retired                      board True twin True
+       OK  same_va_reuse                board True twin True
+       OK  shared_heap_pages_released   board False twin False
+       OK  sparse-churn                 board True twin True
+       OK  sparse-stale                 board True twin True
+       OK  sparse_recycling             board False twin False
+       OK  spin_entered                 board True twin True
+       OK  sqlite_read                  board True twin True
+       OK  sqlite_results               board True twin True
+       OK  sqlite_write                 board True twin True
+       OK  stale                        board True twin True
+       OK  threads                      board False twin False
+       OK  threads_output               board False twin False
+       OK  unused_pages_not_populated   board True twin True
+       OK  vm                           board False twin False
+       OK  vm-guard                     board True twin True
+       OK  vm-large                     board False twin False
+       OK  vm-mappings                  board True twin True
+       OK  vm-none-read                 board True twin True
+       OK  vm-padding                   board True twin True
+       OK  vm-ro-write                  board True twin True
+       OK  vm_contract                  board False twin False
+       OK  vm_denial_operations         board True twin True
+       OK  vm_denial_sites              board True twin True
+       OK  vm_large_contract            board False twin False
+       OK  vm_mappings_contract         board True twin True
+     B4-T1B 33 of 45 true; twin F0 34 of 45; AS PREDICTED (every cell equals F0's, cleanup false)
+   FB JUDGE2 rc=0
+   FB DONE 08:35:58
+== nonlinear rc=1
+   FB board 2's chain ended 08:36:01: 2026-10-30 13:00:00 continue b2: chain rc=0
+   FB board 2 free 08:36:01
+   STUB STORE missing no-such-bitstream-3960412.bit
+   STUB STORE has caplifive_vp2c_e7af48457.bit
+   FB FLASH BEGIN 08:36:01 board 2 booking 999
+   STUB FLASH caplifive_vp2c_325966ee4.bit /mnt/hdd/<user>/capstone/bitstreams/caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8
+   STUB unbook 999
+   FB FLASH END rc=0 08:36:01
+   STUB NVRB caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8cc
+   FB READBACK name matches; the console exposes no sha256
+   MK4 kit /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-nonlinear/kits/bkit13-b4-b2 from bkit11-b3-b2: changed [./adapter/capstone-vexec ./adapter/module/capstone_vm.ko ./
+   < BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+   > BOARD_BITSTREAM=caplifive_vp2c_325966ee4
+   MK4 bkit13-b4-b2 DONE
+   FB BOOT1 BEGIN 08:36:01
+   SB BEGIN 08:36:01 board 2 kit bkit13-b4-b2 stage b4-t1a booking 999
+   SB END rc=0 08:36:01
+   RUN backend board (STUB) stage b4-t1a out /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-nonlinear/out/t1a
+   FB BOOT1 END rc=0 08:36:01
+       OK  param ids: 55
+       OK  param index_bits: 25
+       OK  param node_flat_records: 1048576
+       --- CMA region [0xac000000, 0xbc000000) from the kernel's reserved-mem line
+       OK  allocation line present, one distinct: [('1048576', '16777216', 'CMA', 'ac100000', 'NON-LINEAR')]
+       OK  allocation records/bytes: ('1048576', '16777216')
+       OK  allocation from CMA: CMA
+       OK  allocation pa inside the CMA region: 0xac100000
+       OFF allocation mapping word (NON-LINEAR on the board is a STOP): NON-LINEAR
+       OK  no ALLOCATION FAILED line: 0
+       OK  Tier 1 contract (ok exit 0 + VIRTUAL_APPLICATION_OK; stale exit 139 + cause 25): 0
+       OK  live 1000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 1111
+       OK  live 400000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 414217
+       OK  live 400000 nodes in [400000, 430000], capacity 1048576: (414217, 1048576)
+       OK  live 1100000 LIVE-NULL index in [990000, 1047000]: 1011158
+       OK  live 1100000 rc 3: 3
+       OK  live 1100000 nodes in [1040000, 1048576]: 1046942
+       OK  live 1100000 no domain fault: 0
+     B4-T1A OFF THE PREDICTION: allocation mapping word (NON-LINEAR on the board is a STOP)
+   FB JUDGE1 rc=1
+   FB HOLD: boot 1 did not read as predicted; boot 2 not booted
+   FB DONE 08:36:01
+== t1boff rc=1
+   FB board 2's chain ended 08:36:04: 2026-10-30 13:00:00 continue b2: chain rc=0
+   FB board 2 free 08:36:04
+   STUB STORE missing no-such-bitstream-3960553.bit
+   STUB STORE has caplifive_vp2c_e7af48457.bit
+   FB FLASH BEGIN 08:36:04 board 2 booking 999
+   STUB FLASH caplifive_vp2c_325966ee4.bit /mnt/hdd/<user>/capstone/bitstreams/caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8
+   STUB unbook 999
+   FB FLASH END rc=0 08:36:04
+   STUB NVRB caplifive_vp2c_325966ee4.bit f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8cc
+   FB READBACK name matches; the console exposes no sha256
+   MK4 kit /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-t1boff/kits/bkit13-b4-b2 from bkit11-b3-b2: changed [./adapter/capstone-vexec ./adapter/module/capstone_vm.ko ./boa
+   < BOARD_BITSTREAM=caplifive_vp2c_e7af48457
+   > BOARD_BITSTREAM=caplifive_vp2c_325966ee4
+   MK4 bkit13-b4-b2 DONE
+   FB BOOT1 BEGIN 08:36:04
+   SB BEGIN 08:36:04 board 2 kit bkit13-b4-b2 stage b4-t1a booking 999
+   SB END rc=0 08:36:04
+   RUN backend board (STUB) stage b4-t1a out /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-t1boff/out/t1a
+   FB BOOT1 END rc=0 08:36:04
+       OK  param ids: 55
+       OK  param index_bits: 25
+       OK  param node_flat_records: 1048576
+       --- CMA region [0xac000000, 0xbc000000) from the kernel's reserved-mem line
+       OK  allocation line present, one distinct: [('1048576', '16777216', 'CMA', 'ac100000', 'linear')]
+       OK  allocation records/bytes: ('1048576', '16777216')
+       OK  allocation from CMA: CMA
+       OK  allocation pa inside the CMA region: 0xac100000
+       OK  allocation mapping word (NON-LINEAR on the board is a STOP): linear
+       OK  no ALLOCATION FAILED line: 0
+       OK  Tier 1 contract (ok exit 0 + VIRTUAL_APPLICATION_OK; stale exit 139 + cause 25): 0
+       OK  live 1000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 1111
+       OK  live 400000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 414217
+       OK  live 400000 nodes in [400000, 430000], capacity 1048576: (414217, 1048576)
+       OK  live 1100000 LIVE-NULL index in [990000, 1047000]: 1011158
+       OK  live 1100000 rc 3: 3
+       OK  live 1100000 nodes in [1040000, 1048576]: 1046942
+       OK  live 1100000 no domain fault: 0
+     B4-T1A AS PREDICTED
+   FB JUDGE1 rc=0
+   FB BOOT2 BEGIN 08:36:04
+   SB BEGIN 08:36:04 board 2 kit bkit13-b4-b2 stage b4-t1b booking 999
+   SB END rc=0 08:36:04
+   RUN backend board (STUB) stage b4-t1b out /mnt/hdd/<user>/capstone/spec/dryrun-b4/run-t1boff/out/t1b
+   FB BOOT2 END rc=0 08:36:04
+       OK  bounds                       board True twin True
+       OK  cleanup                      board False twin True   (cleanup: false by construction)
+       OK  completed                    board True twin True
+       OK  fault_causes                 board False twin False
+       OK  heap-threads                 board False twin False
+       OK  heap_threads                 board False twin False
+       OK  linux_demand_faults          board True twin True
+       OK  linux_pages_released         board True twin True
+       OFF mruby                        board False twin True
+       OK  mruby_results                board True twin True
+       OK  nested                       board True twin True
+       OK  nested-stale                 board True twin True
+       OK  nested_denial_site           board True twin True
+       OK  nested_output                board True twin True
+       OK  normal                       board True twin True
+       OK  normal_output                board True twin True
+       OK  parallel_one                 board True twin True
+       OK  parallel_two                 board True twin True
+       OK  preempt                      board True twin True
+       OK  retired                      board True twin True
+       OK  same_va_reuse                board True twin True
+       OK  shared_heap_pages_released   board False twin False
+       OK  sparse-churn                 board True twin True
+       OK  sparse-stale                 board True twin True
+       OK  sparse_recycling             board False twin False
+       OK  spin_entered                 board True twin True
+       OK  sqlite_read                  board True twin True
+       OK  sqlite_results               board True twin True
+       OK  sqlite_write                 board True twin True
+       OK  stale                        board True twin True
+       OK  threads                      board False twin False
+       OK  threads_output               board False twin False
+       OK  unused_pages_not_populated   board True twin True
+       OK  vm                           board False twin False
+       OK  vm-guard                     board True twin True
+       OK  vm-large                     board False twin False
+       OK  vm-mappings                  board True twin True
+       OK  vm-none-read                 board True twin True
+       OK  vm-padding                   board True twin True
+       OK  vm-ro-write                  board True twin True
+       OK  vm_contract                  board False twin False
+       OK  vm_denial_operations         board True twin True
+       OK  vm_denial_sites              board True twin True
+       OK  vm_large_contract            board False twin False
+       OK  vm_mappings_contract         board True twin True
+     B4-T1B 32 of 45 true; twin F0 34 of 45; OFF THE PREDICTION in 1 cells: ['mruby']
+   FB JUDGE2 rc=1
+   FB DONE 08:36:04

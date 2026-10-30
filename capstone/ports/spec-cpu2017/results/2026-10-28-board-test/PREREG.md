@@ -490,3 +490,101 @@ void, because a sed delimiter broke on the `t/` names. The control showed this, 
 
 **Placement.** The line goes on board 1's continuation list, right after the x264 test T1 boot that is running now,
 with step 3600 s and booking 90 min. Board 1 stays on bitstream 3.
+
+## Addendum 14 (2026-10-30 08:45, before the flash and the boots it names): bitstream 4 (B) on board 2
+
+**The lead's word.** In this lane's session the lead approved the reflash ("Даю добро на перепрошивку, как будет
+готово") and ruled that WNS is not an acceptance criterion ("Wns не важен").
+
+**The bitstream.**
+- `caplifive_vp2c_325966ee4.bit` is capstone-ariane 325966ee4, option B: 55-bit lifetime ids with a 25-bit slot.
+- sha256 `f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8cc`, 11,443,722 B. The hash was checked again
+  after the copy to this host.
+- The rtl lane graded it PASS on every pre-registered key (dev b0046d1c5b84). Routed WNS is -11.964; it was reported
+  and not graded.
+- `ariane_pkg.sv` diff e7af48457..325966ee4: no memory constant changes; the diff touches only types and comments.
+  So the firmware recipe and its DTB stand, with 256 MiB of reusable CMA at 0xac000000. A board boot on bitstream 3
+  prints `created CMA memory pool at 0x00000000ac000000, size 256 MiB`.
+- Board 1 stays on bitstream 3. Bitstream 3 must still be registered on board 2's console as the fallback.
+
+**The queue change, made before this addendum.**
+- Board 2's list was cut in place at its chain's read offset, so its chain ends after the x264 test T3 boot that is
+  running now.
+- Its six remaining bitstream-3 T3 train lines (imagick, lbm, x264, mcf, nab, perlbench-T1-split) and xz train T3 now
+  sit at the end of board 1's xz list. A stubbed dry run read all 8 lines on kit bkit12-perf-b3-b1, rc 0.
+- So every bitstream-3 train boot of both arms runs on board 1 and on the same bitstream. Nothing is repeated
+  (Addendum 10).
+
+**The kit.**
+- `bkit13-b4-b2` is `make-b4-kit.sh`'s copy of bkit11-b3-b2 with exactly three changes, checked by hash:
+  - board.env names `caplifive_vp2c_325966ee4`;
+  - `adapter/module/capstone_vm.ko` is the flat ids55 board module, 6422805f49533ea5 (module-ids55 3523f8833531,
+    named in that branch's PREREG addendum 2 at e08dfaa95f22). It has 0 of 5,268 instructions in 16-bit form, read
+    here; the same count reads 572 of 792 on a kernel object, so the count can fire;
+  - `adapter/capstone-vexec` is the twin grid's launcher, 62753dd693cc4a25.
+- The b0 controls' /capstone.ko (BAKE_REPLACE_KO) is unchanged.
+
+**The procedure.** `b4/b4-first.sh` (0e8d766a954ce205) runs these steps, each gating the next:
+1. Wait for board 2's chain to end and for the board to be free.
+2. Check the console's bitstream store: the negative control (a missing name reads 1), then that bitstream 3 is
+   registered.
+3. Check the local hash.
+4. Flash with `flash-bitstream.py` (book, flash, mandatory power cycle, name read back on the same session).
+5. Read the resident record back on a fresh session (`nv-readback.py`: name, and sha256 if the console exposes it).
+6. Make the kit.
+7. Boot 1, then boot 2 only if boot 1 reads as predicted.
+
+**Boot 1** (stage `b4-t1a`, run.sh 5d9a56a00d93ce64, judge `b4-judge-t1a.py` 27a13f080fd30591). In order:
+- the kit's board controls b0-stats and b0-hello;
+- the module's parameters and load lines;
+- Tier 1 contract: contract.dom 00428f273c653d9f, `ok` then `stale`;
+- the twin grid's live smoke (live-T3 1eb994b5fb979862) at N = 1000, 400000 and 1100000, with 1100000 LAST;
+- the ring buffer's CMA and allocation lines.
+
+Predictions are module-ids55 PREREG section 2 (1 and 3) as amended by its addendum 2, read against the twin's F0:
+- **Load and allocation.**
+  - The parameters read ids=55, index_bits=25, node_flat_records=1048576.
+  - Exactly one allocation line: `flat table 1048576 records, 16777216 bytes, from CMA, pa X, linear mapping`. X lies
+    inside the CMA region the boot's own reserved-mem line names.
+  - There is no `ALLOCATION FAILED` line.
+  - **NON-LINEAR on the board contradicts the 6.4.14 source and is a STOP.**
+- **Contract.** `ok` prints VIRTUAL_APPLICATION_OK and exits 0. `stale` is denied with cause 25 and exits 139.
+- **live 1000 and 400000.** LIVE-OK, bad=0, rc 0, no fault line. At 400000, nodes is in [400000, 430000] (F0: 414,217)
+  and capacity is 1048576.
+  - **This is the bitstream-identity reading.** Records above 2^18 = 262,144 need slots that bitstream 3's 18-bit
+    index cannot hold, so this reading is possible only on the new silicon.
+- **live 1100000.** LIVE-NULL at an index in [990000, 1047000] (F0: 1,011,158), rc 3, nodes in [1040000, 1048576]
+  (F0: 1,046,942), and no domain fault.
+
+**Boot 2** (stage `b4-t1b`, run.sh 1c2ff626569baa81, judge `b4-check-t1b.py` 8d4cfa27d35b4bc8).
+- What runs: b0-stats, b0-hello, then the guest SCRIPT of run.py@69fb6cae3db4 (11c47d62fe9f34ae), the twin's own Tier 1.
+  It was generated by `gen-t1b.py` with three asserted substitutions:
+  - the working directory is a tmpfs copy of the stage;
+  - the launcher is the batch's;
+  - insmod is guarded.
+- Images, by hash: contract 00428f273c653d9f, sqlite3 5494c1c306b1f1c3, mruby 152ae8dc725d59c7.
+- The judge executes run.py's own analysis block over the board transcript.
+- **Prediction 2 of section 2:** every one of the 45 cells equals the twin's F0 cell
+  (`f55/t1-F0/result.json`: 34 of 45, with 11 named failures). The one exception is `cleanup`, which is false on the
+  board by construction, because the board kernel cannot unload a module.
+
+**Dry run** (`b4/dryrun-b4.txt`). Every board and console call was stubbed. The kit maker and the judges ran for real.
+- **The pass branch** reaches both judges and reads AS PREDICTED twice. The fixtures are F0's transcripts with only
+  the board-side differences applied: the contract section, the linear mapping, and the reserved-mem line for boot 1;
+  cleanup for boot 2.
+- **Branches that stop or hold:**
+  - a failed flash → STOP;
+  - a store control that reads present → STOP;
+  - a readback mismatch → STOP;
+  - NON-LINEAR → HOLD, and boot 2 does not boot;
+  - one flipped Tier 1 cell (mruby) → that one cell is named off.
+- **Faults the dry run caught:**
+  - The boot runner tripped `set -u` on a variable referenced in the same `local` statement that declares it. This is
+    fixed.
+  - Both judges read NO DATA on a missing or truncated transcript.
+  - The twin's own F0 serial log, judged as the board, reads off in exactly `cleanup`.
+
+**Not covered, said here.**
+- The board console may not expose `nv_bitstream_sha256`. Then the readback is by name only, and the bitstream's
+  identity rests on boot 1's 400000 reading.
+- `preempt` waits 5 s for the spin child. On bitstream 3 the board's older vm-suite passed that cell.
