@@ -78,6 +78,8 @@ def main():
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--set', action='append', default=[], help='LABEL=build dir (capstone images)')
     p.add_argument('--native', type=Path, help='build dir of the native references (label "native")')
+    p.add_argument('--native-set', action='append', default=[],
+                   help='LABEL=build dir of plain (non-Capstone) executables, run directly like --native')
     p.add_argument('--walltime', type=Path, required=True, help='the static walltime helper')
     p.add_argument('--args', default='1 5', help='W I passed to every image')
     p.add_argument('--only', help='comma-separated names')
@@ -103,6 +105,10 @@ def main():
     sets = [load_set(s) for s in a.set]
     if a.native:
         sets.append(('native',) + load_set('native=' + str(a.native))[1:])
+    plain_labels = {'native'}
+    for spec in a.native_set:
+        sets.append(load_set(spec))
+        plain_labels.add(sets[-1][0])
     lines = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1', 'insmod capstone_vm.ko || { echo INSMOD-FAILED; exit 1; }',
              'echo GATE-START', 'dmesg -c > /dev/null']
     plan = []
@@ -111,7 +117,7 @@ def main():
         for n in names:
             if only and n not in only:
                 continue
-            native = label == 'native'
+            native = label in plain_labels
             src = path / (n if native else n + '.dom')
             dst = stage / label / src.name
             shutil.copy2(src, dst)

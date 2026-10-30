@@ -1,0 +1,9 @@
+plain-gate-waiter.sh stubbed dry run, 2026-10-30 18:26 (PG_LOG/PG_ROOT/PG_STAGES stubbed; chain END line appended 3 s after launch;
+pilot out dir + chain stage log from this dryrun/<case>/out; stages = a copy of the REAL stages/ (pp1 armed, p1..p6 disarmed); real gate and real make-plain-stages.py --arm)
+== pos      rc=0 armed=7 disarmed=0   PG pilot PASS: p1..p6 armed
+== trapped  rc=1 armed=1 disarmed=6   pilot gate exit 3 (STOP counters)
+== wedge    rc=1 armed=1 disarmed=6   pilot gate exit 3, C6
+== hold     rc=1 armed=1 disarmed=6   pilot gate exit 4 (HOLD)
+== control  rc=1 armed=1 disarmed=6   pilot gate exit 1 (VOID, C1)
+== stale END before launch, chain pid gone: rc=2 armed unchanged   PG STOP: chain pid gone with no pp1 END
+(A first attempt copied the pos case's already-armed stages and omitted the chain stage log: its "armed=7" for every case was the copy, not the waiter. Rerun as above.)

@@ -1,0 +1,13 @@
+# Board-1 list for the Plain boots (bitstream 3, bkit12-perf-b3-b1). $CAPSTONE_WORK = /mnt/hdd/$USER/capstone; the live
+# list is written with it expanded. Line: stage step_s booking_min twin. Run it with plain-chain.sh, never chain-board.sh
+# alone: the pilot goes first and alone, and p1..p6 are disarmed until its gate passes.
+# pilot pp1: 96 processes, est 0.54 h; the campaign's t3k kits (60-81 processes) took 24-29 min of step, 33-38 min wall.
+$CAPSTONE_WORK/perf/T0b/board/stages/perf-plain-pp1 3600 90 -
+# main p1..p6: 228-249 processes, est 1.26-1.33 h; the campaign's t3a kits (285 processes) took 78-84 min of step,
+# 87-94 min wall; step bound as the campaign's t3a (10800 s)
+$CAPSTONE_WORK/perf/T0b/board/stages/perf-plain-p1 10800 210 -
+$CAPSTONE_WORK/perf/T0b/board/stages/perf-plain-p2 10800 210 -
+$CAPSTONE_WORK/perf/T0b/board/stages/perf-plain-p3 10800 210 -
+$CAPSTONE_WORK/perf/T0b/board/stages/perf-plain-p4 10800 210 -
+$CAPSTONE_WORK/perf/T0b/board/stages/perf-plain-p5 10800 210 -
+$CAPSTONE_WORK/perf/T0b/board/stages/perf-plain-p6 10800 210 -
