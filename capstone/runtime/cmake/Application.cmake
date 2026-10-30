@@ -107,7 +107,7 @@ function(capstone_configure_application target)
     set(heap "${capstone}/runtime/virtual/heap.c")
     target_include_directories(${target} PRIVATE "${capstone}/sublet" "${PORT_MUSL_ROOT}/arch/capstone64")
     # heap.c's measurement switches: a caller that never set them gets the qualified heap.
-    foreach(switch IN ITEMS CAPSTONE_HEAP_LIFETIMES CAPSTONE_HEAP_SCRUB_FREE)
+    foreach(switch IN ITEMS CAPSTONE_HEAP_LIFETIMES CAPSTONE_HEAP_SCRUB_FREE CAPSTONE_HEAP_OBJECT_BOUNDS)
       if(DEFINED ${switch} AND NOT ${switch})
         target_compile_definitions(${target} PRIVATE ${switch}=0)
       else()

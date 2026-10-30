@@ -1,0 +1,11 @@
+# Board-1 list for the Caps boots. $CAPSTONE_WORK = /mnt/hdd/$USER/capstone; the live list is written with it expanded.
+# Caps perf kits on board 1, bitstream 3 (bkit12-perf-b3-b1), through chain-board.sh. Line: stage step_s booking_min twin.
+# heap15 (the 15 allocating programs): campaign t3k1..3 spans 24-29 min of step, 33-38 min wall; step bound as the campaign's (3600 s)
+$CAPSTONE_WORK/perf/T0a/board/stages/perf-caps-capsh1 3600 90 -
+$CAPSTONE_WORK/perf/T0a/board/stages/perf-caps-capsh2 3600 90 -
+$CAPSTONE_WORK/perf/T0a/board/stages/perf-caps-capsh3 3600 90 -
+# other88: campaign t3a1..4 spans 78-84 min of step, 87-94 min wall; step bound as the campaign's (10800 s)
+$CAPSTONE_WORK/perf/T0a/board/stages/perf-caps-capsa1 10800 210 -
+$CAPSTONE_WORK/perf/T0a/board/stages/perf-caps-capsa2 10800 210 -
+$CAPSTONE_WORK/perf/T0a/board/stages/perf-caps-capsa3 10800 210 -
+$CAPSTONE_WORK/perf/T0a/board/stages/perf-caps-capsa4 10800 210 -

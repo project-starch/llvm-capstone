@@ -24,6 +24,21 @@
 #ifndef CAPSTONE_HEAP_SCRUB_FREE
 #define CAPSTONE_HEAP_SCRUB_FREE 1
 #endif
+/* The third switch (CMake option CAPSTONE_HEAP_OBJECT_BOUNDS, sdk.json heap_object_bounds), for the
+ * T0a arm of the microbenchmark study. OBJECT_BOUNDS=0: malloc, calloc, realloc and aligned_alloc
+ * return the GROUP's authority -- the capability bind_slots was handed, over the whole mapping (or the
+ * whole nested group) -- with its cursor moved to the object, instead of a child over the object's
+ * own bytes. No per-object or per-slot bounds reach the program. Under LIFETIMES=0 a slot's `issued`
+ * field is otherwise dead, so it holds that group capability for the slot's whole life: bind_slots
+ * sets it, and nothing clears it. The slot parents, the index key (the object's cursor) and every
+ * pointer mallocng sees are unchanged, so free and realloc find the object exactly as before. At 1
+ * (the default) this file compiles to the same object as before the switch existed. */
+#ifndef CAPSTONE_HEAP_OBJECT_BOUNDS
+#define CAPSTONE_HEAP_OBJECT_BOUNDS 1
+#endif
+#if !CAPSTONE_HEAP_OBJECT_BOUNDS && CAPSTONE_HEAP_LIFETIMES
+#error "CAPSTONE_HEAP_OBJECT_BOUNDS=0 requires CAPSTONE_HEAP_LIFETIMES=0: a per-object lifetime is a CDERIVE child, which has bounds of its own"
+#endif
 
 #define INDEX_BUCKETS 4096U
 static struct capstone_malloc_slot *index_heads[INDEX_BUCKETS];
@@ -185,7 +200,11 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
                     __builtin_capstone_cap_get_end(group);
             }
         }
+#if CAPSTONE_HEAP_OBJECT_BOUNDS
         slots[i].issued = NULL;
+#else
+        slots[i].issued = group;
+#endif
     }
     return group;
 }
@@ -286,10 +305,18 @@ void *__capstone_malloc_group_nested(struct capstone_malloc_slot *slots,
                                     struct capstone_malloc_slot *parent)
 {
     size_t base = parent->key;
+#if CAPSTONE_HEAP_OBJECT_BOUNDS
     parent->issued = issue_child(parent->parent,
         base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
     parent->kind = SLOT_NESTED;
     return bind_slots(slots, parent->issued, stride, count);
+#else
+    /* The host slot keeps its group authority in `issued`; the nested group is a fresh shrink. */
+    void *nested = issue_child(parent->parent,
+        base - __builtin_capstone_cap_get_base(parent->parent), 16 + stride * count);
+    parent->kind = SLOT_NESTED;
+    return bind_slots(slots, nested, stride, count);
+#endif
 }
 void *__capstone_malloc_slot_take(struct capstone_malloc_slot *r)
 {
@@ -307,8 +334,10 @@ void __capstone_malloc_slot_release(struct capstone_malloc_slot *r)
 { unindex(r); r->kind = SLOT_INTERNAL; }
 void __capstone_malloc_nested_release(struct capstone_malloc_slot *r)
 {
+#if CAPSTONE_HEAP_OBJECT_BOUNDS
     end_child(r->parent, r->issued);
     r->issued = NULL;
+#endif
     __capstone_malloc_slot_release(r);
 }
 void *__capstone_malloc_prepare_free(void *p)
@@ -321,8 +350,10 @@ void *__capstone_malloc_prepare_free(void *p)
          * The slot prefix and musl's offset-cycle state are preserved. */
         memset(backend_pointer(r), 0, r->nominal);
 #endif
+#if CAPSTONE_HEAP_OBJECT_BOUNDS
         end_child(r->parent, r->issued);
         r->issued = NULL;
+#endif
         r->kind = SLOT_INTERNAL;
     }
     return p;
@@ -393,11 +424,17 @@ static void *publish(void *p, size_t n)
     if (!r) __builtin_trap();
     /* Successful in-place realloc replaces the public lifetime; failure
      * never reaches here. Remapping already retired the old mapping. */
+#if CAPSTONE_HEAP_OBJECT_BOUNDS
     if (r->issued) end_child(r->parent, r->issued);
     r->kind = SLOT_PUBLIC; r->nominal = n;
     r->issued = issue_child(r->parent,
         r->key - __builtin_capstone_cap_get_base(r->parent), n ? n : 1);
     return r->issued;
+#else
+    /* The group's authority, cursor at the object (offset in integers first; see bind_slots). */
+    r->kind = SLOT_PUBLIC; r->nominal = n;
+    return (char *)r->issued + (r->key - __builtin_capstone_cap_get_base(r->issued));
+#endif
 }
 void *malloc(size_t n)
 {

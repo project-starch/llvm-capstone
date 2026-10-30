@@ -30,10 +30,16 @@ endif()
 # bytes and tags in place. The physical profile's level0 has its own switches.
 option(CAPSTONE_HEAP_LIFETIMES "Virtual heap: a lifetime per object, CDERIVE on malloc and CREVOKE on free" ON)
 option(CAPSTONE_HEAP_SCRUB_FREE "Virtual heap: zero a payload on free" ON)
-if(NOT CAPSTONE_APPLICATION_VIRTUAL AND NOT (CAPSTONE_HEAP_LIFETIMES AND CAPSTONE_HEAP_SCRUB_FREE))
-  message(FATAL_ERROR "CAPSTONE_HEAP_LIFETIMES and CAPSTONE_HEAP_SCRUB_FREE are switches of the virtual heap")
+# OBJECT_BOUNDS=OFF (the T0a arm): malloc returns the group's authority, cursor at the object, instead
+# of a capability over the object alone. It needs LIFETIMES=OFF (a lifetime per object is a bounded child).
+option(CAPSTONE_HEAP_OBJECT_BOUNDS "Virtual heap: a capability over each object's own bytes" ON)
+if(NOT CAPSTONE_APPLICATION_VIRTUAL AND NOT (CAPSTONE_HEAP_LIFETIMES AND CAPSTONE_HEAP_SCRUB_FREE AND CAPSTONE_HEAP_OBJECT_BOUNDS))
+  message(FATAL_ERROR "CAPSTONE_HEAP_LIFETIMES, CAPSTONE_HEAP_SCRUB_FREE and CAPSTONE_HEAP_OBJECT_BOUNDS are switches of the virtual heap")
 endif()
-foreach(switch IN ITEMS CAPSTONE_HEAP_LIFETIMES CAPSTONE_HEAP_SCRUB_FREE)
+if(NOT CAPSTONE_HEAP_OBJECT_BOUNDS AND CAPSTONE_HEAP_LIFETIMES)
+  message(FATAL_ERROR "CAPSTONE_HEAP_OBJECT_BOUNDS=OFF requires CAPSTONE_HEAP_LIFETIMES=OFF")
+endif()
+foreach(switch IN ITEMS CAPSTONE_HEAP_LIFETIMES CAPSTONE_HEAP_SCRUB_FREE CAPSTONE_HEAP_OBJECT_BOUNDS)
   if(${switch})
     set(sdk_${switch} true)
   else()
@@ -106,6 +112,7 @@ if(CAPSTONE_APPLICATION_SDK)
   \"allocator\": \"${sdk_allocator}\",
   \"heap_lifetimes\": ${sdk_CAPSTONE_HEAP_LIFETIMES},
   \"heap_scrub_free\": ${sdk_CAPSTONE_HEAP_SCRUB_FREE},
+  \"heap_object_bounds\": ${sdk_CAPSTONE_HEAP_OBJECT_BOUNDS},
   \"codegen\": ${sdk_codegen},
   \"cc\": \"${CMAKE_C_COMPILER}\",
   \"ld\": \"${CMAKE_LINKER}\",

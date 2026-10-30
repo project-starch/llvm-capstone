@@ -18,8 +18,8 @@ import re
 import sys
 from pathlib import Path
 
-BEGIN = re.compile(r'@@PERF-BEGIN (\d+) (\S+) (T[123]) (\d+) K(\d+)')
-END = re.compile(r'@@PERF-END (\d+) (\S+) (T[123]) (\d+) K(\d+) rc=(\d+)(.*)')
+BEGIN = re.compile(r'@@PERF-BEGIN (\d+) (\S+) (T[123]|Caps|MapLife|ObjLife) (\d+) K(\d+)')
+END = re.compile(r'@@PERF-END (\d+) (\S+) (T[123]|Caps|MapLife|ObjLife) (\d+) K(\d+) rc=(\d+)(.*)')
 INFO = re.compile(r'BENCH-INFO (\S+)/(\S+) counters=(\S+) warmup=(\d+) iterations=(\d+)')
 BENCH = re.compile(r'BENCH (\S+)/(\S+) it=(w?\d+) cycles=(\d+) instret=(\d+) entries=(\d+) ns=(-?\d+) '
                    r'check=(0x[0-9a-f]+)( VERIFY-FAILED)?')

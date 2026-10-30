@@ -67,7 +67,7 @@ def main():
                     v1, v2 = str(j1.get(k)), str(j2.get(k))
                     pathonly = v1.replace(str(r1), '<ROOT>') == v2.replace(str(r2), '<ROOT>')
                     report.append(f"SDK.JSON {f}:{k} {v1} | {v2}" + (" (output path only)" if pathonly else ""))
-                    if k not in ('heap_lifetimes', 'heap_scrub_free') and not pathonly:
+                    if k not in ('heap_lifetimes', 'heap_scrub_free', 'heap_object_bounds') and not pathonly:
                         unexpected.append(f"{f}:{k}")
             continue
         try:
@@ -80,7 +80,7 @@ def main():
         import difflib
         d = [l for l in difflib.unified_diff(t1.splitlines(), t2.splitlines(), lineterm='', n=0)
              if l[:1] in '+-' and not l.startswith(('+++', '---'))]
-        heaponly = all(('HEAP_LIFETIMES' in l or 'HEAP_SCRUB_FREE' in l) for l in d)
+        heaponly = all(('HEAP_LIFETIMES' in l or 'HEAP_SCRUB_FREE' in l or 'HEAP_OBJECT_BOUNDS' in l) for l in d)
         if f.endswith('.ninja_log') or f.endswith('.ninja_deps'):
             report.append(f"BUILD-LOG {f} ({len(d)} lines; timestamps/hashes)")
             continue
