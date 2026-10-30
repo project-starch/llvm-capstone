@@ -864,3 +864,185 @@ the original section did not have.**
 **Consequence.** p1..p6 are armed now (`make-plain-stages.py --arm`), before board 1's chain reaches p1. Their rows are
 read under rules 1-2. Rule 1 cannot remove a uniform cost: miniz's and aes's steady ~14 switches per iteration stay in.
 That bias is in the direction the section already states (raw <= corrected <= true).
+
+## ObjBounds: per-object bounds without the per-access lifetime check (2026-10-30, before the flash and any ObjBounds boot)
+
+**Why.** The ladder Plain → Caps → ObjBounds → MapLife → ObjLife needs the rung where a program has per-object bounds
+and the hardware does no lifetime check. "The cost of temporal safety" is ObjLife / ObjBounds; MapLife / ObjBounds is
+what the per-access lifetime check alone costs. Arm names: ObjBounds is new. It is not a new image: it is MapLife's
+images (this document's T1) run on a bitstream without the check.
+
+**Bitstream.** capstone-ariane objbounds-b 603528b8b; control objbounds-off-b 1782d20bd, which is bitstream 3
+(e7af48457) by preprocessed tokens and by its five generated Anvil units' hashes. The record and the synthesis
+pre-registration are rtl's, land/rtl-objb c8be354d28ef (`capstone/docs/plans/2026-10-30-objbounds-variant.md`).
+`git diff 1782d20bd 603528b8b -- core` is the config package's `CAPSTONE_NO_LIFETIME_CHECK` define and two lines of
+the DYN unit's Anvil source. What the variant removes, by consumer (rtl's audit by call site):
+- the LSU verdict on plain loads, stores and AMOs: a hit in the 256-node cache cost 0 cycles; a miss cost a replay and a
+  record probe through D-cache port 2, and the cache is emptied at every context entry and escape;
+- the PC tracker's cause 25 on fetch (cost 0);
+- the DYN unit's uncached node query on EVERY LDC and STC: 3.96 cycles per LDC and 4.67 per STC on a resident node
+  (simulation, memory delay 12: a pattern, not a silicon value), more when the record read misses.
+
+What it keeps: the DYN unit's 25s on CDERIVE, CREVOKE, DROP, REVOKE, MREV, SPLIT, DELIN, TIGHTEN and LCC operands (the
+ISA semantics, so the same SDKs and images run), the CPMP trackers, and the node query on CALL, RETURN and CSSUPERVISE:
+ObjBounds still pays one query per domain entry. A stale access on this bitstream is NOT refused. It is a measurement
+platform, not a safe one.
+
+The sealed .bit's sha256 and name are synth's; this section is pushed before they exist. objb-first.sh takes both as
+arguments and stops on a mismatch. rtl's board pre-registration is land/rtl-objb beb5384abb3b
+(`capstone/tests/rtl-smoke/objb-bare-2026-10-30/PREREG.md`: ten bare images and their vectors), with its Addendum 1
+at 177c6fd9f6e9 (both arms on board 2, one verdict per arm). Its identity kit runs before this run's pilot, below.
+
+**Images and kits.** No new image. Every T1 and T3 image is byte-identical to the bitstream-3 campaign's
+(`perf/build2/T1`; `perf/build3/T3` for the 15 allocating programs, `perf/build4/T3` for the 88): 296 images, 0 differ.
+Launcher 978c09d61f774315 (`perf/main3b/t3k1/stage/capstone-vexec`).
+- Seven kits, `perf/objb/kits/heap15/objbh{1,2,3}` and `perf/objb/kits/other88/objba{1,2,3,4}`, from dev's
+  `make-kits.py`.
+- Arms `T1,T3`, alternating ABBA; P = 4 × (W = 1, I = 5) per arm; huffbench-libc, crc32, huffbench and wikisort at
+  P = 11 × (0, 1); an allocating program's four processes take K0 to K3; seed 20261026.
+- Each kit holds exactly the programs of the campaign kit and the Caps kit at its position (t3k1..3 / capsh1..3,
+  t3a1..4 / capsa1..4). The arm labels stay T1 and T3, so dev's parse-board.py reads them unchanged. The bitstream is
+  what makes T1 ObjBounds.
+
+| kit | programs | processes | run script | SHA256SUMS | stage wrapper run.sh |
+|---|---|---|---|---|---|
+| objbh1 (pilot) | 5 | 54 | 201e1ee4b2cf920b | 00b9a5a3f89b593a | 8fc116b3ebcdcd61 |
+| objbh2 | 5 | 40 | d978f4f7c674b382 | 028c6c13477f5f98 | 5c08babdf34c1f04 |
+| objbh3 | 5 | 40 | dae6215c7b3c78cc | 66148da740684d52 | 98466d960267338f |
+| objba1 | 22 | 190 | 298561a522889952 | 9c92f9c66ef1534b | 884d5b22ecb1d636 |
+| objba2 | 22 | 190 | 2292eccab4798f61 | 8f12b118961ffb2d | 5c3cd4d7ef80da8c |
+| objba3 | 22 | 190 | 007b7ee3dc4afa95 | 6eecb237da40c589 | 1eae273ad57f7bb2 |
+| objba4 | 22 | 176 | c4432903c97046f7 | cabf8c78de4c086a | 5a83af83f5fa078b |
+
+objbh1 holds huffbench-libc, rv8-aes, rv8-primes, sglib-hashtable-libc and sglib-rbtree-libc.
+
+**Boots** (`board/objb/`). Board 2, after B's third check boot (b4-t1c) ends. `objb-first.sh <log> <sealed .bit>
+<sha256>`:
+- waits for b4-t1c's `TC DONE`, then for the .bit file, and checks its sha256;
+- checks the stages (pilot armed, six main kits disarmed) and every kit's SHA256SUMS;
+- waits for the board, checks that bitstream 3 stays registered as the fallback, flashes, and reads the resident name
+  back on a fresh session;
+- runs rtl's bare identity kit before any Linux boot (`objb-bare.sh 2 <sealed name> <out>/bare`):
+  - the ten images, in order: objb-pcc-ctrl, objb-stale, objb-perf-s1..s7, objb-pcc;
+  - each one is its own boot through `sup-bare-2026-10-03-ladder/run_sup_bare.py` (102ab84e762cba50), with the images
+    checked against beb5384abb3b's SHA256SUMS (8dd2a4812c9da608);
+  - graded by value with `objb-bare-grade.py` under the RTL lane's rules:
+    - CONFIRMED: objb-stale reads the ObjBounds vector, objb-pcc returns `0xbb5 0x0 0x0`, AND every cost shape's
+      non-cycle positions (minstret, value, trap count, cause) equal the table. The last condition is the
+      coordinator's ruling of 2026-10-30, as on the bitstream-3 arm: if ObjBounds changes anything but cycles, the
+      rung measures the wrong thing;
+    - VOID: the control objb-pcc-ctrl, or a returning image's SR;
+    - STOP: objb-stale reads bitstream 3's vector, so the variant is not on the board;
+    - FINDING: any other mismatch, the cost-shape one included;
+  - only CONFIRMED goes on, and every other verdict stops the driver with its grade in the log.
+  The bitstream-3 arm of the same kit runs on board 2 before the reflash to ObjBounds (Addendum 1: board 2 against
+  board 2, one variable). There objb-pcc wedges the core, so it is alone in the last boot, ended by the runner's
+  timeout, with the board powered off and released. `objb-bare-grade.py --compare <bs3 out> <objb out>` reads the cost
+  pattern;
+- makes the board kit `bkit15-objb-b2`: bkit12-perf-b3-b2 with exactly one change, `BOARD_BITSTREAM=<sealed name>`.
+  The module (9c60fb53f80ce67e, bench counters), launcher, firmware recipe, defines and DTB stay. The variant changes no
+  memory constant (ariane_pkg.sv's generated hash equals e7af48457's);
+- boots through `board/objb/chain-board.sh` and `spec-board.sh`. These are copies of the SPEC lane's chain.
+  `spec-board.sh` takes the kit and the bitstream name as parameters, refuses bitstream 3's name, and runs the SPEC
+  lane's run-stage.py by hash (734ad25cf901d4da). The known-good control is crc.K0 T1 (bd909cc6eba4bf2d), as in every
+  bitstream-3 perf boot. Every boot's driver HARD-STOPs unless the resident name equals the kit's;
+- the stage wrapper hashes every kit file on the board against SHA256SUMS and exits 3 on a mismatch, before any
+  process; then it runs the kit's run script unchanged.
+
+**The pilot goes first and alone.**
+- objbh1 boots on its own. `check-objb-boot.py` (C1-C6 below) must read it VALID before
+  `make-objb-stages.py --arm` arms the six main kits and the rest of the list runs.
+- Otherwise the run stops with the main kits disarmed. spec-board.sh refuses a stage without plan.json, so a chain
+  started by hand stops at the first main kit too.
+- List lines: objbh1..3 at step 3600 s and 90 min booked; objba1..4 at 10800 s and 210 min (the campaign's bounds).
+- make-kits estimates 0.26 + 0.23 + 0.23 h and 1.02, 1.02, 1.02, 0.99 h of steps, about 6 h of board time with the
+  boots. The campaign's three-arm kits took 24-29 and 78-84 min of step; these have two arms.
+
+**Dry run** (`board/objb/dryrun/`, record `dryrun-objb.txt`). The real objb-first.sh, make-objb-kit.sh, chain-board.sh,
+spec-board.sh, run-stage.py, check-objb-boot.py and make-objb-stages.py --arm ran. The busy checks, store, hub, flash,
+readback and board were stubbed, and the stub transcripts are the campaign's bitstream-3 blocks for the same program,
+arm and process.
+- **Positive.** All seven boots ended rc 0 with `RUN control PASSED`, and every gate read VALID: 54, 40, 40, 190, 190,
+  190 and 176 processes, each equal to its steps.tsv.
+- **Bare kit** (`run-bare-dryrun.sh`, the runner stubbed with the PREREG's vectors):
+  - ObjBounds: CONFIRMED 0, STOP 3 (stale reads bitstream 3's vector), VOID 1 (pcc-ctrl wrong), FINDING 4 (identity
+    confirmed, s3's minstret off by one);
+  - bitstream 3: AS EXPECTED 0 (objb-pcc does not return), FINDING 4 (stale off), STOP 3 (objb-pcc returns);
+  - the compare reads 9 of 9 on the PREREG's vectors and 2 of 9 with the arms swapped (rc 1);
+  - an empty output reads NO DATA.
+  In the driver, a bare STOP, a bare VOID and the s3-minstret FINDING each stopped it before any Linux boot, with the
+  main kits disarmed.
+- **Negatives:**
+  - a wrong sha256: STOP before the flash;
+  - the .bit never appears: STOP;
+  - b4-t1c never ends: STOP;
+  - the flash fails: STOP;
+  - a pilot cut after 20 processes: VOID C2/C3/C5, HOLD, main kits disarmed;
+  - a failed control: CB STOP, VOID C1, HOLD;
+  - the chain run by hand without the gate: SB STOP at the first disarmed kit;
+  - a kit copy with one byte flipped: the wrapper exits 3 with no process run.
+
+**VOID.** A boot is VOID, and none of its rows enter any ratio, unless `check-objb-boot.py` passes all of:
+- C1 `RUN control PASSED`;
+- C2 `@@OBJB-SUMS OK`, and the board-side hash block equal to the kit's SHA256SUMS line for line;
+- C3 `@@PERF-<KIT>-DONE` and `@@SPEC-DONE objb-<kit>`;
+- C4 parse-board.py exit 0;
+- C5 the parsed processes exactly the kit's steps.tsv;
+- C6 no `@@STEP-BOUND`, runner TIMEOUT, kernel oops or OOM.
+Also VOID: any boot whose resident bitstream is not the sealed name. A run in which prediction 2 misses by more than
+0.1 % on more than one program is held: the platform is not the one this section describes, and no ratio from it is
+used until that is explained.
+
+**Predictions.** "MapLife" means the bitstream-3 T1 rows already on record (`results/2026-10-27-t3all-bitstream3/`
+for the 88, `results/2026-10-28-t3heap-bitstream3/` for the 15); "ObjBounds" and "ObjLife-v" mean this run's T1 and
+T3 rows. Cycles are per timed iteration, medians as in perf-analyze.
+1. **Correctness.** Every process in both arms exits 0, with W + I BENCH lines, no VERIFY-FAILED and BENCH-DONE
+   failed=0. Within each program check= is one value across the arms, and it equals the bitstream-3 records'. A
+   correct program does no stale access, so removing the check changes no value.
+2. **instret.** Per program and arm, the median instret per iteration equals the bitstream-3 run's for the same image
+   within 0.1 %. Same images, same instructions; a replayed access retires once on bitstream 3, so the replays it saves
+   are not instructions.
+3. **Cycles: ObjBounds ≤ MapLife.** The variant can only remove stalls, so MapLife/ObjBounds ≥ 0.99 on every program
+   (point estimate; the 1 % allows for cross-board and boot-to-boot placement of the heap and of the kernel).
+   - **The model.** Per iteration, MapLife − ObjBounds ≈ 3.96 × N_LDC + 4.67 × N_STC + R. N_LDC and N_STC are the
+     dynamic capability loads and stores. R is the replays of plain loads and stores whose node missed the 256-entry
+     cache (after every escape, and on working sets above 256 live nodes). The per-op numbers are rtl's simulation
+     at memory delay 12 on a resident node: a pattern, not a silicon value. A record read that misses costs more.
+   - **No dynamic LDC/STC census exists.** So the bands below come from program class, not from counts. Static counts
+     are not used: in one image (sglib-listsort) 2,694 ldc and 2,444 stc sit mostly in libc and the runtime.
+   - **Pointer-chasing programs move most.** Each node visit loads a pointer with LDC and each link with STC: sglib
+     upstream and -libc, dijkstra, ctl-*, wikisort, levenshtein, rv8-qsort, huffbench. At the campaign's CPI of 4.5 to
+     5.5 and ~10-20 instructions per node, ~4 cycles per LDC is 4 to 9 %. Band per program: MapLife/ObjBounds
+     in [1.01, 1.15].
+   - **Integer and FP kernels move least.** These have few pointers loaded from memory: crc32, matmult-int, nettle-*,
+     aha-mont64, rv8 sha512/primes/norx, the FP kernels. Band: [0.995, 1.01].
+   - **Suite geomeans of MapLife/ObjBounds:**
+     - BEEBS upstream (80): [1.000, 1.04];
+     - BEEBS -libc (13): [1.01, 1.10];
+     - RV8 (7): [1.000, 1.04];
+     - CoreMark: [1.000, 1.04] (its list phase chases pointers).
+   - **Falsifiers.**
+     - Any program below 0.99 means ObjBounds is slower somewhere. That is reported as a finding.
+     - Any program above 1.25 means the check cost more than its queries and replays could. It is reported, with
+       instret checked first.
+4. **ObjLife-v / ObjBounds, in the same boot: the software side of per-object lifetimes.** It isolates the CDERIVE per
+   malloc and CREVOKE per free from the hardware check.
+   - For each of the 15 allocating programs, it lies at or below bitstream 3's ObjLife/MapLife point estimate. On
+     bitstream 3 ObjLife also pays the LDC/STC query, and the LSU replays on its many per-object nodes, which overflow
+     the 256-entry cache.
+   - For the five sglib-*-libc, it is expected 0.5 to 3 points lower (bitstream 3: 1.047 to 1.064).
+   - For the 88 programs, it lies within [0.995, 1.005].
+5. **The ladder's headline, ObjLife (bitstream 3) / ObjBounds.**
+   - For every program it is ≥ bitstream 3's ObjLife/MapLife. It is that ratio times MapLife/ObjBounds, and the
+     second factor is ≥ 0.99 by prediction 3.
+   - For the 8 allocation-heavy programs (≥ 1,400 heap calls per iteration), its geomean exceeds 1.044.
+   - This is a cross-bitstream, cross-board ratio of identical images. Its interval is reported with that named.
+
+**Analysis.**
+- Per boot: `check-objb-boot.py <out>/perf-objb-<kit> perf/objb/kits/<group>/<kit>` writes `runs-<kit>.tsv` (dev's
+  parse-board.py).
+- In-boot: `perf-analyze.py report --arms T1,T3` on this run's rows, giving prediction 4.
+- Cross-bitstream (predictions 2, 3 and 5): this run's T1/T3 rows are relabelled ObjBounds/ObjLife-v by a script
+  committed BEFORE the first main kit's results are read. They are joined with the bitstream-3 rows by (program, arm
+  image, process, K), and reported per program with Welch intervals and per suite as geomeans. Nothing from this
+  bitstream enters a bitstream-3 geomean, and the reverse.

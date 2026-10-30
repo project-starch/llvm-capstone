@@ -1,0 +1,1098 @@
+ratio	kind	suite	program	procs	point	lo	hi	ins_ratio
+ObjLife/MapLife rec	in-boot	beebs	aha-compress	4/4	0.9989	0.9959	1.0020	1.0000
+ObjLife/MapLife rec	in-boot	beebs	aha-mont64	4/4	1.0006	0.9990	1.0022	1.0000
+ObjLife/MapLife rec	in-boot	beebs	bs	4/4	0.9998	0.9989	1.0007	1.0000
+ObjLife/MapLife rec	in-boot	beebs	bubblesort	4/4	0.9999	0.9990	1.0009	1.0000
+ObjLife/MapLife rec	in-boot	beebs	cnt	4/4	1.0006	0.9983	1.0029	1.0000
+ObjLife/MapLife rec	in-boot	beebs	compress	4/4	0.9996	0.9990	1.0003	1.0000
+ObjLife/MapLife rec	in-boot	coremark	coremark	4/4	1.0004	0.9985	1.0024	1.0000
+ObjLife/MapLife rec	in-boot	beebs	cover	4/4	1.0000	0.9999	1.0001	1.0000
+ObjLife/MapLife rec	in-boot	beebs	crc	4/4	1.0002	0.9993	1.0012	1.0000
+ObjLife/MapLife rec	in-boot	beebs	crc32	11/11	0.9926	0.9793	1.0060	1.0002
+ObjLife/MapLife rec	in-boot	beebs	ctl-stack	4/4	0.9996	0.9980	1.0012	1.0000
+ObjLife/MapLife rec	in-boot	beebs	ctl-stack-libc	4/4	1.0200	1.0117	1.0284	1.0070
+ObjLife/MapLife rec	in-boot	beebs	ctl-string	4/4	1.0002	0.9985	1.0020	1.0000
+ObjLife/MapLife rec	in-boot	beebs	ctl-string-libc	4/4	1.0193	1.0116	1.0270	1.0056
+ObjLife/MapLife rec	in-boot	beebs	ctl-vector	4/4	0.9993	0.9968	1.0017	1.0000
+ObjLife/MapLife rec	in-boot	beebs	ctl-vector-libc	4/4	1.0184	1.0095	1.0275	1.0074
+ObjLife/MapLife rec	in-boot	beebs	cubic	4/4	1.0010	0.9979	1.0041	1.0000
+ObjLife/MapLife rec	in-boot	beebs	dijkstra	4/4	0.9998	0.9979	1.0018	1.0000
+ObjLife/MapLife rec	in-boot	beebs	dtoa	4/4	0.9998	0.9984	1.0011	1.0000
+ObjLife/MapLife rec	in-boot	beebs	dtoa-libc	4/4	1.0000	0.9990	1.0010	1.0000
+ObjLife/MapLife rec	in-boot	beebs	duff	4/4	1.0065	0.9864	1.0270	1.0000
+ObjLife/MapLife rec	in-boot	beebs	edn	4/4	1.0017	0.9963	1.0072	1.0000
+ObjLife/MapLife rec	in-boot	beebs	expint	4/4	1.0007	0.9988	1.0026	1.0000
+ObjLife/MapLife rec	in-boot	beebs	fac	4/4	0.9999	0.9969	1.0029	1.0000
+ObjLife/MapLife rec	in-boot	beebs	fasta	4/4	1.0006	0.9978	1.0034	1.0000
+ObjLife/MapLife rec	in-boot	beebs	fdct	4/4	1.0002	0.9993	1.0011	1.0000
+ObjLife/MapLife rec	in-boot	beebs	fibcall	4/4	1.0002	0.9995	1.0010	1.0000
+ObjLife/MapLife rec	in-boot	beebs	fir	4/4	1.0007	0.9985	1.0030	1.0000
+ObjLife/MapLife rec	in-boot	beebs	frac	4/4	0.9997	0.9990	1.0003	1.0000
+ObjLife/MapLife rec	in-boot	beebs	huffbench	11/11	1.0000	0.9999	1.0002	1.0000
+ObjLife/MapLife rec	in-boot	beebs	huffbench-libc	11/11	1.0049	0.9962	1.0136	1.0002
+ObjLife/MapLife rec	in-boot	beebs	insertsort	4/4	0.9989	0.9958	1.0020	1.0000
+ObjLife/MapLife rec	in-boot	beebs	janne_complex	4/4	0.9998	0.9981	1.0016	1.0000
+ObjLife/MapLife rec	in-boot	beebs	jfdctint	4/4	0.9993	0.9975	1.0012	1.0000
+ObjLife/MapLife rec	in-boot	beebs	lcdnum	4/4	1.0031	0.9880	1.0185	1.0000
+ObjLife/MapLife rec	in-boot	beebs	levenshtein	4/4	0.9995	0.9972	1.0017	1.0000
+ObjLife/MapLife rec	in-boot	beebs	ludcmp	4/4	1.0002	0.9984	1.0021	1.0000
+ObjLife/MapLife rec	in-boot	beebs	matmult-float	4/4	1.0003	0.9982	1.0023	1.0000
+ObjLife/MapLife rec	in-boot	beebs	matmult-int	4/4	0.9973	0.9912	1.0034	1.0000
+ObjLife/MapLife rec	in-boot	beebs	mergesort	4/4	1.0001	0.9964	1.0037	1.0000
+ObjLife/MapLife rec	in-boot	beebs	miniz	4/4	0.9997	0.9989	1.0004	1.0000
+ObjLife/MapLife rec	in-boot	beebs	miniz-libc	4/4	1.0009	0.9965	1.0054	1.0001
+ObjLife/MapLife rec	in-boot	beebs	minver	4/4	1.0000	0.9987	1.0013	1.0000
+ObjLife/MapLife rec	in-boot	beebs	nbody	4/4	1.0004	0.9988	1.0020	1.0000
+ObjLife/MapLife rec	in-boot	beebs	ndes	4/4	1.0000	0.9979	1.0021	1.0000
+ObjLife/MapLife rec	in-boot	beebs	nettle-aes	4/4	1.0003	0.9999	1.0007	1.0000
+ObjLife/MapLife rec	in-boot	beebs	nettle-arcfour	4/4	1.0001	0.9985	1.0016	1.0000
+ObjLife/MapLife rec	in-boot	beebs	nettle-cast128	4/4	1.0013	0.9965	1.0061	1.0000
+ObjLife/MapLife rec	in-boot	beebs	nettle-des	4/4	0.9994	0.9972	1.0017	1.0000
+ObjLife/MapLife rec	in-boot	beebs	nettle-md5	4/4	1.0006	0.9989	1.0024	1.0000
+ObjLife/MapLife rec	in-boot	beebs	nettle-sha256	4/4	1.0000	0.9974	1.0027	1.0000
+ObjLife/MapLife rec	in-boot	beebs	newlib-exp	4/4	1.0004	0.9997	1.0012	1.0000
+ObjLife/MapLife rec	in-boot	beebs	newlib-log	4/4	0.9996	0.9972	1.0021	1.0000
+ObjLife/MapLife rec	in-boot	beebs	newlib-mod	4/4	1.0007	0.9987	1.0027	1.0000
+ObjLife/MapLife rec	in-boot	beebs	newlib-sqrt	4/4	0.9994	0.9972	1.0016	1.0000
+ObjLife/MapLife rec	in-boot	beebs	ns	4/4	1.0006	0.9984	1.0027	1.0000
+ObjLife/MapLife rec	in-boot	beebs	nsichneu	4/4	1.0000	0.9991	1.0009	1.0000
+ObjLife/MapLife rec	in-boot	beebs	picojpeg	4/4	1.0003	0.9995	1.0012	1.0000
+ObjLife/MapLife rec	in-boot	beebs	prime	4/4	1.0000	0.9991	1.0008	1.0000
+ObjLife/MapLife rec	in-boot	beebs	qrduino	4/4	1.0006	0.9996	1.0016	1.0000
+ObjLife/MapLife rec	in-boot	beebs	qsort	4/4	0.9998	0.9982	1.0014	1.0000
+ObjLife/MapLife rec	in-boot	beebs	qurt	4/4	0.9999	0.9985	1.0013	1.0000
+ObjLife/MapLife rec	in-boot	beebs	recursion	4/4	1.0000	0.9992	1.0009	1.0000
+ObjLife/MapLife rec	in-boot	beebs	rijndael	4/4	0.9996	0.9986	1.0005	1.0000
+ObjLife/MapLife rec	in-boot	rv8	rv8-aes	4/4	1.0006	0.9964	1.0047	1.0000
+ObjLife/MapLife rec	in-boot	rv8	rv8-dhrystone	4/4	1.0013	0.9998	1.0029	1.0000
+ObjLife/MapLife rec	in-boot	rv8	rv8-miniz	4/4	1.0009	0.9932	1.0088	1.0000
+ObjLife/MapLife rec	in-boot	rv8	rv8-norx	4/4	0.9994	0.9954	1.0033	1.0000
+ObjLife/MapLife rec	in-boot	rv8	rv8-primes	4/4	0.9977	0.9923	1.0031	1.0000
+ObjLife/MapLife rec	in-boot	rv8	rv8-qsort	4/4	0.9997	0.9986	1.0008	1.0000
+ObjLife/MapLife rec	in-boot	rv8	rv8-sha512	4/4	1.0000	0.9999	1.0001	1.0000
+ObjLife/MapLife rec	in-boot	beebs	select	4/4	1.0008	0.9974	1.0041	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-arraybinsearch	4/4	0.9999	0.9985	1.0012	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-arrayheapsort	4/4	0.9987	0.9958	1.0017	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-arrayquicksort	4/4	1.0000	0.9997	1.0003	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-dllist	4/4	1.0012	0.9998	1.0027	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-dllist-libc	4/4	1.0611	1.0543	1.0680	1.0131
+ObjLife/MapLife rec	in-boot	beebs	sglib-hashtable	4/4	0.9993	0.9969	1.0017	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-hashtable-libc	4/4	1.0590	1.0535	1.0645	1.0142
+ObjLife/MapLife rec	in-boot	beebs	sglib-listinsertsort	4/4	0.9999	0.9987	1.0011	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-listinsertsort-libc	4/4	1.0655	1.0564	1.0747	1.0136
+ObjLife/MapLife rec	in-boot	beebs	sglib-listsort	4/4	0.9997	0.9978	1.0016	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-listsort-libc	4/4	1.0612	1.0567	1.0657	1.0139
+ObjLife/MapLife rec	in-boot	beebs	sglib-queue	4/4	0.9990	0.9967	1.0013	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-rbtree	4/4	1.0034	1.0033	1.0035	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sglib-rbtree-libc	4/4	1.0492	1.0423	1.0561	1.0108
+ObjLife/MapLife rec	in-boot	beebs	slre	4/4	0.9999	0.9981	1.0017	1.0000
+ObjLife/MapLife rec	in-boot	beebs	sqrt	4/4	1.0000	0.9999	1.0001	1.0000
+ObjLife/MapLife rec	in-boot	beebs	st	4/4	1.0000	0.9981	1.0019	1.0000
+ObjLife/MapLife rec	in-boot	beebs	statemate	4/4	1.0000	0.9999	1.0001	1.0000
+ObjLife/MapLife rec	in-boot	beebs	stb_perlin	4/4	0.9995	0.9972	1.0019	1.0000
+ObjLife/MapLife rec	in-boot	beebs	stringsearch1	4/4	1.0004	0.9997	1.0011	1.0000
+ObjLife/MapLife rec	in-boot	beebs	strstr	4/4	1.0000	0.9984	1.0016	1.0000
+ObjLife/MapLife rec	in-boot	beebs	tarai	4/4	1.0000	0.9995	1.0006	1.0000
+ObjLife/MapLife rec	in-boot	beebs	trio-snprintf	4/4	1.0017	1.0011	1.0022	1.0000
+ObjLife/MapLife rec	in-boot	beebs	trio-snprintf-libc	4/4	0.9991	0.9979	1.0004	1.0000
+ObjLife/MapLife rec	in-boot	beebs	trio-sscanf	4/4	1.0005	0.9997	1.0014	1.0000
+ObjLife/MapLife rec	in-boot	beebs	trio-sscanf-libc	4/4	0.9999	0.9991	1.0008	1.0000
+ObjLife/MapLife rec	in-boot	beebs	ud	4/4	0.9996	0.9980	1.0013	1.0000
+ObjLife/MapLife rec	in-boot	beebs	whetstone	4/4	0.9988	0.9963	1.0012	1.0000
+ObjLife/MapLife rec	in-boot	beebs	wikisort	11/11	0.9998	0.9997	1.0000	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	aha-compress	4/4	1.0000	0.9998	1.0002	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	bs	4/4	1.0001	0.9991	1.0010	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	bubblesort	4/4	1.0004	0.9988	1.0020	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	cnt	4/4	0.9986	0.9961	1.0012	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	compress	4/4	1.0002	0.9993	1.0011	1.0000
+ObjLife/MapLife plainkits	in-boot	coremark	coremark	4/4	0.9998	0.9991	1.0005	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	cover	4/4	0.9993	0.9979	1.0007	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	crc32	11/11	1.0063	0.9970	1.0157	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	ctl-stack	4/4	1.0002	0.9997	1.0007	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	ctl-stack-libc	4/4	1.0205	1.0136	1.0274	1.0069
+ObjLife/MapLife plainkits	in-boot	beebs	ctl-string-libc	4/4	1.0197	1.0125	1.0269	1.0056
+ObjLife/MapLife plainkits	in-boot	beebs	ctl-vector	4/4	0.9998	0.9976	1.0020	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	ctl-vector-libc	4/4	1.0178	1.0082	1.0276	1.0073
+ObjLife/MapLife plainkits	in-boot	beebs	dtoa-libc	4/4	0.9994	0.9986	1.0003	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	duff	4/4	1.0068	0.9802	1.0340	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	edn	4/4	1.0003	0.9974	1.0033	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	fac	4/4	1.0007	0.9984	1.0031	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	fasta	4/4	0.9990	0.9969	1.0010	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	fdct	4/4	1.0003	0.9985	1.0020	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	fibcall	4/4	0.9994	0.9977	1.0010	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	fir	4/4	1.0008	0.9956	1.0061	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	frac	4/4	0.9997	0.9987	1.0007	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	huffbench	10/10	0.9957	0.9907	1.0008	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	huffbench-libc	10/10	1.0000	0.9957	1.0043	1.0002
+ObjLife/MapLife plainkits	in-boot	beebs	insertsort	4/4	0.9992	0.9970	1.0015	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	janne_complex	4/4	0.9999	0.9992	1.0006	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	lcdnum	4/4	1.0004	0.9633	1.0389	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	levenshtein	4/4	0.9985	0.9959	1.0012	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	matmult-float	4/4	1.0008	0.9993	1.0024	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	matmult-int	4/4	0.9968	0.9911	1.0026	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	mergesort	4/4	0.9999	0.9968	1.0030	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	miniz	4/4	0.9986	0.9984	0.9988	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	miniz-libc	4/4	1.0037	1.0023	1.0050	1.0001
+ObjLife/MapLife plainkits	in-boot	beebs	nbody	4/4	1.0011	0.9990	1.0032	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	ndes	4/4	1.0002	0.9997	1.0007	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	nettle-arcfour	4/4	0.9996	0.9982	1.0009	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	nettle-cast128	4/4	1.0010	0.9958	1.0063	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	nettle-des	4/4	1.0001	0.9999	1.0003	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	nettle-md5	4/4	0.9991	0.9963	1.0020	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	nettle-sha256	4/4	1.0009	0.9963	1.0055	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	newlib-exp	4/4	1.0005	0.9989	1.0022	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	newlib-log	4/4	1.0011	0.9990	1.0032	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	newlib-sqrt	4/4	1.0001	0.9999	1.0002	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	ns	4/4	0.9985	0.9956	1.0015	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	picojpeg	4/4	1.0001	0.9999	1.0002	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	prime	4/4	0.9996	0.9986	1.0006	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	qsort	4/4	0.9990	0.9971	1.0008	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	recursion	4/4	1.0001	0.9993	1.0009	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	rijndael	4/4	0.9999	0.9997	1.0002	1.0000
+ObjLife/MapLife plainkits	in-boot	rv8	rv8-dhrystone	4/4	1.0028	1.0020	1.0035	1.0000
+ObjLife/MapLife plainkits	in-boot	rv8	rv8-miniz	4/4	1.0003	0.9913	1.0094	1.0000
+ObjLife/MapLife plainkits	in-boot	rv8	rv8-norx	4/4	0.9994	0.9968	1.0021	1.0000
+ObjLife/MapLife plainkits	in-boot	rv8	rv8-primes	4/4	0.9991	0.9859	1.0126	1.0000
+ObjLife/MapLife plainkits	in-boot	rv8	rv8-qsort	4/4	1.0001	0.9991	1.0011	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	select	4/4	1.0007	0.9990	1.0023	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	sglib-arrayquicksort	4/4	1.0016	0.9987	1.0044	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	sglib-dllist	4/4	0.9997	0.9964	1.0029	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	sglib-hashtable	4/4	1.0001	0.9998	1.0003	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	sglib-hashtable-libc	4/4	1.0588	1.0501	1.0675	1.0142
+ObjLife/MapLife plainkits	in-boot	beebs	sglib-listinsertsort	4/4	0.9990	0.9976	1.0003	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	sglib-listinsertsort-libc	4/4	1.0639	1.0558	1.0722	1.0135
+ObjLife/MapLife plainkits	in-boot	beebs	sglib-listsort-libc	4/4	1.0599	1.0562	1.0637	1.0138
+ObjLife/MapLife plainkits	in-boot	beebs	sglib-rbtree	4/4	1.0002	0.9958	1.0047	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	slre	4/4	0.9997	0.9977	1.0017	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	sqrt	4/4	1.0002	0.9995	1.0008	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	st	4/4	1.0002	0.9990	1.0014	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	statemate	4/4	1.0000	0.9993	1.0008	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	stb_perlin	4/4	0.9999	0.9958	1.0040	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	stringsearch1	4/4	0.9997	0.9990	1.0004	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	strstr	4/4	0.9996	0.9978	1.0014	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	tarai	4/4	1.0003	0.9997	1.0009	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	trio-snprintf	4/4	1.0002	0.9979	1.0025	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	trio-snprintf-libc	4/4	1.0011	0.9993	1.0028	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	trio-sscanf	4/4	1.0000	0.9989	1.0011	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	trio-sscanf-libc	4/4	1.0001	0.9990	1.0011	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	ud	4/4	0.9991	0.9971	1.0011	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	whetstone	4/4	0.9987	0.9966	1.0009	1.0000
+ObjLife/MapLife plainkits	in-boot	beebs	wikisort	9/9	1.0006	0.9964	1.0047	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	aha-compress	4/4	1.0000	0.9999	1.0001	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	aha-mont64	4/4	1.0002	1.0000	1.0003	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	bs	4/4	0.9999	0.9994	1.0004	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	bubblesort	4/4	1.0002	0.9975	1.0029	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	cnt	4/4	1.0004	0.9987	1.0020	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	compress	4/4	1.0001	0.9995	1.0007	1.0000
+ObjLife/MapLife capskits	in-boot	coremark	coremark	4/4	1.0000	0.9979	1.0022	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	cover	4/4	1.0000	0.9998	1.0002	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	crc	4/4	0.9999	0.9989	1.0009	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	crc32	11/11	1.0081	0.9910	1.0255	1.0002
+ObjLife/MapLife capskits	in-boot	beebs	ctl-stack	4/4	1.0001	0.9990	1.0012	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	ctl-stack-libc	4/4	1.0204	1.0135	1.0273	1.0070
+ObjLife/MapLife capskits	in-boot	beebs	ctl-string	4/4	0.9995	0.9976	1.0013	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	ctl-string-libc	4/4	1.0188	1.0131	1.0245	1.0056
+ObjLife/MapLife capskits	in-boot	beebs	ctl-vector	4/4	1.0004	0.9976	1.0033	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	ctl-vector-libc	4/4	1.0197	1.0122	1.0273	1.0073
+ObjLife/MapLife capskits	in-boot	beebs	cubic	4/4	0.9982	0.9947	1.0017	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	dijkstra	4/4	0.9994	0.9975	1.0014	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	dtoa	4/4	0.9999	0.9993	1.0004	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	dtoa-libc	4/4	1.0036	0.9976	1.0096	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	duff	4/4	1.0062	0.9806	1.0325	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	edn	4/4	1.0006	0.9956	1.0055	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	expint	4/4	0.9997	0.9978	1.0015	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	fac	4/4	1.0011	0.9982	1.0040	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	fasta	4/4	0.9999	0.9998	1.0001	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	fdct	4/4	0.9997	0.9979	1.0015	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	fibcall	4/4	1.0002	0.9999	1.0006	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	fir	4/4	0.9999	0.9957	1.0042	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	frac	4/4	0.9997	0.9988	1.0005	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	huffbench	11/11	1.0001	0.9999	1.0003	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	huffbench-libc	11/11	0.9983	0.9877	1.0090	1.0002
+ObjLife/MapLife capskits	in-boot	beebs	insertsort	4/4	1.0001	0.9997	1.0005	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	janne_complex	4/4	1.0001	0.9984	1.0018	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	jfdctint	4/4	0.9992	0.9965	1.0018	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	lcdnum	4/4	1.0006	0.9660	1.0364	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	levenshtein	4/4	1.0007	0.9979	1.0034	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	ludcmp	4/4	0.9996	0.9979	1.0013	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	matmult-float	4/4	1.0003	0.9982	1.0024	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	matmult-int	4/4	0.9987	0.9929	1.0046	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	mergesort	4/4	0.9999	0.9967	1.0032	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	miniz	4/4	1.0002	0.9992	1.0011	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	miniz-libc	4/4	1.0005	0.9968	1.0042	1.0001
+ObjLife/MapLife capskits	in-boot	beebs	minver	4/4	0.9997	0.9984	1.0009	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	nbody	4/4	0.9999	0.9990	1.0008	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	ndes	4/4	1.0000	0.9998	1.0002	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	nettle-aes	4/4	1.0001	0.9996	1.0005	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	nettle-arcfour	4/4	0.9998	0.9986	1.0011	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	nettle-cast128	4/4	1.0021	0.9955	1.0088	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	nettle-des	4/4	0.9975	0.9923	1.0027	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	nettle-md5	4/4	1.0009	0.9990	1.0027	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	nettle-sha256	4/4	1.0016	0.9988	1.0043	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	newlib-exp	4/4	1.0001	0.9985	1.0018	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	newlib-log	4/4	0.9996	0.9982	1.0010	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	newlib-mod	4/4	0.9994	0.9972	1.0016	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	newlib-sqrt	4/4	1.0001	0.9999	1.0003	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	ns	4/4	1.0019	0.9987	1.0051	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	nsichneu	4/4	0.9998	0.9988	1.0008	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	picojpeg	4/4	1.0004	0.9970	1.0039	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	prime	4/4	1.0001	0.9994	1.0008	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	qrduino	4/4	1.0003	0.9982	1.0023	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	qsort	4/4	0.9999	0.9995	1.0003	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	qurt	4/4	1.0000	0.9987	1.0014	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	recursion	4/4	1.0000	0.9992	1.0008	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	rijndael	4/4	0.9994	0.9939	1.0050	1.0000
+ObjLife/MapLife capskits	in-boot	rv8	rv8-aes	4/4	1.0003	0.9955	1.0051	1.0000
+ObjLife/MapLife capskits	in-boot	rv8	rv8-dhrystone	4/4	1.0007	0.9990	1.0023	1.0000
+ObjLife/MapLife capskits	in-boot	rv8	rv8-miniz	4/4	0.9996	0.9930	1.0062	1.0000
+ObjLife/MapLife capskits	in-boot	rv8	rv8-norx	4/4	1.0000	0.9947	1.0053	1.0000
+ObjLife/MapLife capskits	in-boot	rv8	rv8-primes	4/4	0.9991	0.9950	1.0031	1.0000
+ObjLife/MapLife capskits	in-boot	rv8	rv8-qsort	4/4	0.9994	0.9985	1.0003	1.0000
+ObjLife/MapLife capskits	in-boot	rv8	rv8-sha512	4/4	1.0011	0.9991	1.0030	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	select	4/4	0.9998	0.9982	1.0014	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-arraybinsearch	4/4	1.0012	0.9977	1.0047	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-arrayheapsort	4/4	0.9992	0.9965	1.0020	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-arrayquicksort	4/4	1.0001	0.9975	1.0027	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-dllist	4/4	1.0012	0.9991	1.0033	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-dllist-libc	4/4	1.0589	1.0534	1.0644	1.0131
+ObjLife/MapLife capskits	in-boot	beebs	sglib-hashtable	4/4	1.0000	0.9976	1.0025	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-hashtable-libc	4/4	1.0595	1.0572	1.0619	1.0142
+ObjLife/MapLife capskits	in-boot	beebs	sglib-listinsertsort	4/4	0.9996	0.9982	1.0010	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-listinsertsort-libc	4/4	1.0688	1.0605	1.0772	1.0136
+ObjLife/MapLife capskits	in-boot	beebs	sglib-listsort	4/4	1.0003	0.9985	1.0020	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-listsort-libc	4/4	1.0663	1.0607	1.0719	1.0138
+ObjLife/MapLife capskits	in-boot	beebs	sglib-queue	4/4	0.9995	0.9977	1.0014	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-rbtree	4/4	1.0015	0.9984	1.0046	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sglib-rbtree-libc	4/4	1.0495	1.0422	1.0568	1.0108
+ObjLife/MapLife capskits	in-boot	beebs	slre	4/4	0.9999	0.9976	1.0022	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	sqrt	4/4	1.0000	0.9998	1.0001	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	st	4/4	1.0005	0.9990	1.0019	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	statemate	4/4	1.0000	0.9998	1.0002	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	stb_perlin	4/4	1.0004	0.9992	1.0016	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	stringsearch1	4/4	0.9996	0.9988	1.0004	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	strstr	4/4	0.9997	0.9984	1.0011	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	tarai	4/4	1.0000	0.9994	1.0006	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	trio-snprintf	4/4	1.0009	1.0000	1.0018	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	trio-snprintf-libc	4/4	0.9982	0.9977	0.9987	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	trio-sscanf	4/4	1.0007	1.0000	1.0014	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	trio-sscanf-libc	4/4	1.0004	0.9998	1.0010	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	ud	4/4	1.0000	0.9986	1.0015	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	whetstone	4/4	0.9995	0.9979	1.0011	1.0000
+ObjLife/MapLife capskits	in-boot	beebs	wikisort	11/11	1.0001	1.0000	1.0002	1.0000
+MapLife/Caps	in-boot	beebs	aha-compress	4/4	1.0000	0.9999	1.0000	1.0000
+MapLife/Caps	in-boot	beebs	aha-mont64	4/4	1.0000	0.9998	1.0001	1.0000
+MapLife/Caps	in-boot	beebs	bs	4/4	1.0001	0.9996	1.0006	1.0000
+MapLife/Caps	in-boot	beebs	bubblesort	4/4	1.0007	0.9985	1.0029	1.0000
+MapLife/Caps	in-boot	beebs	cnt	4/4	1.0003	0.9990	1.0015	1.0000
+MapLife/Caps	in-boot	beebs	compress	4/4	1.0006	1.0000	1.0011	1.0000
+MapLife/Caps	in-boot	coremark	coremark	4/4	0.9997	0.9978	1.0017	1.0000
+MapLife/Caps	in-boot	beebs	cover	4/4	1.0000	0.9999	1.0002	1.0000
+MapLife/Caps	in-boot	beebs	crc	4/4	0.9998	0.9989	1.0008	1.0000
+MapLife/Caps	in-boot	beebs	crc32	11/11	0.9913	0.9732	1.0098	0.9998
+MapLife/Caps	in-boot	beebs	ctl-stack	4/4	0.9994	0.9965	1.0023	1.0000
+MapLife/Caps	in-boot	beebs	ctl-stack-libc	4/4	1.0034	0.9963	1.0107	1.0016
+MapLife/Caps	in-boot	beebs	ctl-string	4/4	1.0000	0.9980	1.0021	1.0000
+MapLife/Caps	in-boot	beebs	ctl-string-libc	4/4	1.0058	1.0014	1.0102	1.0015
+MapLife/Caps	in-boot	beebs	ctl-vector	4/4	1.0002	0.9988	1.0015	1.0000
+MapLife/Caps	in-boot	beebs	ctl-vector-libc	4/4	1.0061	1.0009	1.0113	1.0017
+MapLife/Caps	in-boot	beebs	cubic	4/4	1.0010	0.9977	1.0043	1.0000
+MapLife/Caps	in-boot	beebs	dijkstra	4/4	1.0002	0.9983	1.0021	1.0000
+MapLife/Caps	in-boot	beebs	dtoa	4/4	0.9992	0.9975	1.0009	1.0000
+MapLife/Caps	in-boot	beebs	dtoa-libc	4/4	0.9964	0.9906	1.0023	1.0000
+MapLife/Caps	in-boot	beebs	duff	4/4	1.0000	0.9815	1.0189	1.0000
+MapLife/Caps	in-boot	beebs	edn	4/4	1.0010	0.9967	1.0053	1.0000
+MapLife/Caps	in-boot	beebs	expint	4/4	0.9998	0.9977	1.0019	1.0000
+MapLife/Caps	in-boot	beebs	fac	4/4	1.0003	0.9991	1.0014	1.0000
+MapLife/Caps	in-boot	beebs	fasta	4/4	0.9989	0.9966	1.0012	1.0000
+MapLife/Caps	in-boot	beebs	fdct	4/4	1.0001	0.9980	1.0021	1.0000
+MapLife/Caps	in-boot	beebs	fibcall	4/4	0.9997	0.9987	1.0006	1.0000
+MapLife/Caps	in-boot	beebs	fir	4/4	1.0000	0.9956	1.0044	1.0000
+MapLife/Caps	in-boot	beebs	frac	4/4	1.0003	0.9993	1.0012	1.0000
+MapLife/Caps	in-boot	beebs	huffbench	11/11	0.9987	0.9957	1.0017	1.0000
+MapLife/Caps	in-boot	beebs	huffbench-libc	11/11	1.0068	0.9967	1.0170	1.0001
+MapLife/Caps	in-boot	beebs	insertsort	4/4	0.9990	0.9960	1.0020	1.0000
+MapLife/Caps	in-boot	beebs	janne_complex	4/4	0.9999	0.9983	1.0016	1.0000
+MapLife/Caps	in-boot	beebs	jfdctint	4/4	1.0001	0.9973	1.0028	1.0000
+MapLife/Caps	in-boot	beebs	lcdnum	4/4	0.9897	0.9536	1.0272	1.0000
+MapLife/Caps	in-boot	beebs	levenshtein	4/4	1.0008	0.9984	1.0032	1.0000
+MapLife/Caps	in-boot	beebs	ludcmp	4/4	1.0001	0.9984	1.0018	1.0000
+MapLife/Caps	in-boot	beebs	matmult-float	4/4	0.9999	0.9978	1.0019	1.0000
+MapLife/Caps	in-boot	beebs	matmult-int	4/4	0.9998	0.9938	1.0058	1.0000
+MapLife/Caps	in-boot	beebs	mergesort	4/4	1.0000	0.9966	1.0033	1.0000
+MapLife/Caps	in-boot	beebs	miniz	4/4	1.0001	0.9991	1.0011	1.0000
+MapLife/Caps	in-boot	beebs	miniz-libc	4/4	1.0010	0.9953	1.0067	1.0000
+MapLife/Caps	in-boot	beebs	minver	4/4	1.0001	0.9987	1.0016	1.0000
+MapLife/Caps	in-boot	beebs	nbody	4/4	0.9999	0.9984	1.0014	1.0000
+MapLife/Caps	in-boot	beebs	ndes	4/4	0.9976	0.9930	1.0022	1.0000
+MapLife/Caps	in-boot	beebs	nettle-aes	4/4	0.9999	0.9994	1.0004	1.0000
+MapLife/Caps	in-boot	beebs	nettle-arcfour	4/4	1.0002	0.9988	1.0016	1.0000
+MapLife/Caps	in-boot	beebs	nettle-cast128	4/4	0.9981	0.9940	1.0023	1.0000
+MapLife/Caps	in-boot	beebs	nettle-des	4/4	1.0026	0.9974	1.0078	1.0000
+MapLife/Caps	in-boot	beebs	nettle-md5	4/4	0.9990	0.9967	1.0014	1.0000
+MapLife/Caps	in-boot	beebs	nettle-sha256	4/4	0.9992	0.9975	1.0008	1.0000
+MapLife/Caps	in-boot	beebs	newlib-exp	4/4	1.0005	0.9990	1.0020	1.0000
+MapLife/Caps	in-boot	beebs	newlib-log	4/4	0.9992	0.9971	1.0012	1.0000
+MapLife/Caps	in-boot	beebs	newlib-mod	4/4	1.0000	0.9976	1.0024	1.0000
+MapLife/Caps	in-boot	beebs	newlib-sqrt	4/4	1.0000	0.9999	1.0002	1.0000
+MapLife/Caps	in-boot	beebs	ns	4/4	1.0000	0.9998	1.0002	1.0000
+MapLife/Caps	in-boot	beebs	nsichneu	4/4	0.9999	0.9989	1.0008	1.0000
+MapLife/Caps	in-boot	beebs	picojpeg	4/4	0.9993	0.9957	1.0030	1.0000
+MapLife/Caps	in-boot	beebs	prime	4/4	0.9999	0.9991	1.0007	1.0000
+MapLife/Caps	in-boot	beebs	qrduino	4/4	0.9993	0.9972	1.0015	1.0000
+MapLife/Caps	in-boot	beebs	qsort	4/4	0.9992	0.9975	1.0010	1.0000
+MapLife/Caps	in-boot	beebs	qurt	4/4	0.9999	0.9987	1.0012	1.0000
+MapLife/Caps	in-boot	beebs	recursion	4/4	1.0000	0.9993	1.0008	1.0000
+MapLife/Caps	in-boot	beebs	rijndael	4/4	1.0019	0.9961	1.0078	1.0000
+MapLife/Caps	in-boot	rv8	rv8-aes	4/4	1.0008	0.9966	1.0049	1.0000
+MapLife/Caps	in-boot	rv8	rv8-dhrystone	4/4	0.9997	0.9980	1.0013	1.0000
+MapLife/Caps	in-boot	rv8	rv8-miniz	4/4	0.9999	0.9937	1.0062	1.0000
+MapLife/Caps	in-boot	rv8	rv8-norx	4/4	1.0001	0.9946	1.0055	1.0000
+MapLife/Caps	in-boot	rv8	rv8-primes	4/4	0.9990	0.9924	1.0057	1.0000
+MapLife/Caps	in-boot	rv8	rv8-qsort	4/4	1.0003	0.9990	1.0016	1.0000
+MapLife/Caps	in-boot	rv8	rv8-sha512	4/4	0.9991	0.9971	1.0011	1.0000
+MapLife/Caps	in-boot	beebs	select	4/4	0.9999	0.9980	1.0019	1.0000
+MapLife/Caps	in-boot	beebs	sglib-arraybinsearch	4/4	0.9992	0.9968	1.0016	1.0000
+MapLife/Caps	in-boot	beebs	sglib-arrayheapsort	4/4	1.0007	0.9979	1.0034	1.0000
+MapLife/Caps	in-boot	beebs	sglib-arrayquicksort	4/4	1.0008	0.9987	1.0029	1.0000
+MapLife/Caps	in-boot	beebs	sglib-dllist	4/4	0.9989	0.9969	1.0008	1.0000
+MapLife/Caps	in-boot	beebs	sglib-dllist-libc	4/4	1.0027	0.9964	1.0091	1.0047
+MapLife/Caps	in-boot	beebs	sglib-hashtable	4/4	0.9996	0.9972	1.0020	1.0000
+MapLife/Caps	in-boot	beebs	sglib-hashtable-libc	4/4	1.0069	1.0039	1.0100	1.0054
+MapLife/Caps	in-boot	beebs	sglib-listinsertsort	4/4	1.0001	0.9986	1.0015	1.0000
+MapLife/Caps	in-boot	beebs	sglib-listinsertsort-libc	4/4	1.0066	0.9986	1.0146	1.0050
+MapLife/Caps	in-boot	beebs	sglib-listsort	4/4	0.9994	0.9974	1.0015	1.0000
+MapLife/Caps	in-boot	beebs	sglib-listsort-libc	4/4	1.0016	0.9934	1.0099	1.0052
+MapLife/Caps	in-boot	beebs	sglib-queue	4/4	1.0000	0.9979	1.0021	1.0000
+MapLife/Caps	in-boot	beebs	sglib-rbtree	4/4	0.9983	0.9952	1.0015	1.0000
+MapLife/Caps	in-boot	beebs	sglib-rbtree-libc	4/4	1.0029	0.9960	1.0097	1.0039
+MapLife/Caps	in-boot	beebs	slre	4/4	1.0000	0.9977	1.0024	1.0000
+MapLife/Caps	in-boot	beebs	sqrt	4/4	0.9999	0.9999	1.0000	1.0000
+MapLife/Caps	in-boot	beebs	st	4/4	0.9996	0.9977	1.0015	1.0000
+MapLife/Caps	in-boot	beebs	statemate	4/4	1.0001	1.0000	1.0003	1.0000
+MapLife/Caps	in-boot	beebs	stb_perlin	4/4	0.9986	0.9947	1.0025	1.0000
+MapLife/Caps	in-boot	beebs	stringsearch1	4/4	0.9996	0.9988	1.0004	1.0000
+MapLife/Caps	in-boot	beebs	strstr	4/4	0.9996	0.9978	1.0014	1.0000
+MapLife/Caps	in-boot	beebs	tarai	4/4	1.0001	0.9994	1.0007	1.0000
+MapLife/Caps	in-boot	beebs	trio-snprintf	4/4	0.9988	0.9977	1.0000	1.0000
+MapLife/Caps	in-boot	beebs	trio-snprintf-libc	4/4	1.0015	1.0013	1.0017	1.0000
+MapLife/Caps	in-boot	beebs	trio-sscanf	4/4	0.9993	0.9980	1.0005	1.0000
+MapLife/Caps	in-boot	beebs	trio-sscanf-libc	4/4	1.0001	0.9995	1.0007	1.0000
+MapLife/Caps	in-boot	beebs	ud	4/4	1.0000	0.9987	1.0013	1.0000
+MapLife/Caps	in-boot	beebs	whetstone	4/4	1.0001	0.9984	1.0018	1.0000
+MapLife/Caps	in-boot	beebs	wikisort	11/11	0.9998	0.9997	0.9999	1.0000
+ObjLife/Caps	in-boot	beebs	aha-compress	4/4	1.0000	0.9999	1.0000	1.0000
+ObjLife/Caps	in-boot	beebs	aha-mont64	4/4	1.0001	1.0000	1.0003	1.0000
+ObjLife/Caps	in-boot	beebs	bs	4/4	1.0000	0.9999	1.0001	1.0000
+ObjLife/Caps	in-boot	beebs	bubblesort	4/4	1.0009	0.9982	1.0036	1.0000
+ObjLife/Caps	in-boot	beebs	cnt	4/4	1.0006	0.9990	1.0022	1.0000
+ObjLife/Caps	in-boot	beebs	compress	4/4	1.0007	1.0004	1.0009	1.0000
+ObjLife/Caps	in-boot	coremark	coremark	4/4	0.9998	0.9977	1.0019	1.0000
+ObjLife/Caps	in-boot	beebs	cover	4/4	1.0000	0.9999	1.0002	1.0000
+ObjLife/Caps	in-boot	beebs	crc	4/4	0.9998	0.9989	1.0006	1.0000
+ObjLife/Caps	in-boot	beebs	crc32	11/11	0.9994	0.9767	1.0226	1.0000
+ObjLife/Caps	in-boot	beebs	ctl-stack	4/4	0.9995	0.9966	1.0023	1.0000
+ObjLife/Caps	in-boot	beebs	ctl-stack-libc	4/4	1.0239	1.0164	1.0314	1.0085
+ObjLife/Caps	in-boot	beebs	ctl-string	4/4	0.9995	0.9975	1.0015	1.0000
+ObjLife/Caps	in-boot	beebs	ctl-string-libc	4/4	1.0247	1.0192	1.0302	1.0071
+ObjLife/Caps	in-boot	beebs	ctl-vector	4/4	1.0006	0.9977	1.0035	1.0000
+ObjLife/Caps	in-boot	beebs	ctl-vector-libc	4/4	1.0259	1.0182	1.0336	1.0090
+ObjLife/Caps	in-boot	beebs	cubic	4/4	0.9991	0.9975	1.0007	1.0000
+ObjLife/Caps	in-boot	beebs	dijkstra	4/4	0.9996	0.9978	1.0014	1.0000
+ObjLife/Caps	in-boot	beebs	dtoa	4/4	0.9990	0.9974	1.0007	1.0000
+ObjLife/Caps	in-boot	beebs	dtoa-libc	4/4	1.0000	0.9990	1.0010	1.0000
+ObjLife/Caps	in-boot	beebs	duff	4/4	1.0063	0.9816	1.0315	1.0000
+ObjLife/Caps	in-boot	beebs	edn	4/4	1.0015	0.9970	1.0061	1.0000
+ObjLife/Caps	in-boot	beebs	expint	4/4	0.9995	0.9974	1.0015	1.0000
+ObjLife/Caps	in-boot	beebs	fac	4/4	1.0014	0.9983	1.0044	1.0000
+ObjLife/Caps	in-boot	beebs	fasta	4/4	0.9988	0.9965	1.0011	1.0000
+ObjLife/Caps	in-boot	beebs	fdct	4/4	0.9998	0.9980	1.0015	1.0000
+ObjLife/Caps	in-boot	beebs	fibcall	4/4	0.9999	0.9990	1.0008	1.0000
+ObjLife/Caps	in-boot	beebs	fir	4/4	0.9999	0.9957	1.0041	1.0000
+ObjLife/Caps	in-boot	beebs	frac	4/4	0.9999	0.9992	1.0006	1.0000
+ObjLife/Caps	in-boot	beebs	huffbench	11/11	0.9988	0.9958	1.0018	1.0000
+ObjLife/Caps	in-boot	beebs	huffbench-libc	11/11	1.0051	1.0004	1.0099	1.0003
+ObjLife/Caps	in-boot	beebs	insertsort	4/4	0.9991	0.9962	1.0021	1.0000
+ObjLife/Caps	in-boot	beebs	janne_complex	4/4	1.0001	0.9983	1.0018	1.0000
+ObjLife/Caps	in-boot	beebs	jfdctint	4/4	0.9992	0.9969	1.0015	1.0000
+ObjLife/Caps	in-boot	beebs	lcdnum	4/4	0.9903	0.9616	1.0199	1.0000
+ObjLife/Caps	in-boot	beebs	levenshtein	4/4	1.0014	0.9988	1.0041	1.0000
+ObjLife/Caps	in-boot	beebs	ludcmp	4/4	0.9998	0.9987	1.0008	1.0000
+ObjLife/Caps	in-boot	beebs	matmult-float	4/4	1.0002	0.9979	1.0024	1.0000
+ObjLife/Caps	in-boot	beebs	matmult-int	4/4	0.9985	0.9941	1.0030	1.0000
+ObjLife/Caps	in-boot	beebs	mergesort	4/4	0.9999	0.9966	1.0032	1.0000
+ObjLife/Caps	in-boot	beebs	miniz	4/4	1.0003	0.9992	1.0014	1.0000
+ObjLife/Caps	in-boot	beebs	miniz-libc	4/4	1.0015	0.9958	1.0072	1.0001
+ObjLife/Caps	in-boot	beebs	minver	4/4	0.9998	0.9985	1.0012	1.0000
+ObjLife/Caps	in-boot	beebs	nbody	4/4	0.9998	0.9983	1.0013	1.0000
+ObjLife/Caps	in-boot	beebs	ndes	4/4	0.9975	0.9929	1.0021	1.0000
+ObjLife/Caps	in-boot	beebs	nettle-aes	4/4	1.0000	0.9996	1.0003	1.0000
+ObjLife/Caps	in-boot	beebs	nettle-arcfour	4/4	1.0000	0.9985	1.0015	1.0000
+ObjLife/Caps	in-boot	beebs	nettle-cast128	4/4	1.0002	0.9939	1.0066	1.0000
+ObjLife/Caps	in-boot	beebs	nettle-des	4/4	1.0000	0.9996	1.0004	1.0000
+ObjLife/Caps	in-boot	beebs	nettle-md5	4/4	0.9999	0.9975	1.0022	1.0000
+ObjLife/Caps	in-boot	beebs	nettle-sha256	4/4	1.0007	0.9981	1.0034	1.0000
+ObjLife/Caps	in-boot	beebs	newlib-exp	4/4	1.0006	0.9992	1.0021	1.0000
+ObjLife/Caps	in-boot	beebs	newlib-log	4/4	0.9988	0.9967	1.0010	1.0000
+ObjLife/Caps	in-boot	beebs	newlib-mod	4/4	0.9994	0.9972	1.0016	1.0000
+ObjLife/Caps	in-boot	beebs	newlib-sqrt	4/4	1.0001	0.9999	1.0003	1.0000
+ObjLife/Caps	in-boot	beebs	ns	4/4	1.0019	0.9987	1.0051	1.0000
+ObjLife/Caps	in-boot	beebs	nsichneu	4/4	0.9997	0.9987	1.0006	1.0000
+ObjLife/Caps	in-boot	beebs	picojpeg	4/4	0.9997	0.9959	1.0036	1.0000
+ObjLife/Caps	in-boot	beebs	prime	4/4	1.0000	0.9992	1.0008	1.0000
+ObjLife/Caps	in-boot	beebs	qrduino	4/4	0.9996	0.9972	1.0020	1.0000
+ObjLife/Caps	in-boot	beebs	qsort	4/4	0.9991	0.9973	1.0009	1.0000
+ObjLife/Caps	in-boot	beebs	qurt	4/4	1.0000	0.9988	1.0012	1.0000
+ObjLife/Caps	in-boot	beebs	recursion	4/4	1.0000	0.9993	1.0007	1.0000
+ObjLife/Caps	in-boot	beebs	rijndael	4/4	1.0013	0.9976	1.0050	1.0000
+ObjLife/Caps	in-boot	rv8	rv8-aes	4/4	1.0010	0.9968	1.0053	1.0000
+ObjLife/Caps	in-boot	rv8	rv8-dhrystone	4/4	1.0004	0.9996	1.0012	1.0000
+ObjLife/Caps	in-boot	rv8	rv8-miniz	4/4	0.9995	0.9925	1.0066	1.0000
+ObjLife/Caps	in-boot	rv8	rv8-norx	4/4	1.0000	0.9951	1.0051	1.0000
+ObjLife/Caps	in-boot	rv8	rv8-primes	4/4	0.9981	0.9914	1.0048	1.0000
+ObjLife/Caps	in-boot	rv8	rv8-qsort	4/4	0.9997	0.9984	1.0010	1.0000
+ObjLife/Caps	in-boot	rv8	rv8-sha512	4/4	1.0002	0.9980	1.0024	1.0000
+ObjLife/Caps	in-boot	beebs	select	4/4	0.9998	0.9979	1.0016	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-arraybinsearch	4/4	1.0004	0.9970	1.0038	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-arrayheapsort	4/4	0.9999	0.9996	1.0002	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-arrayquicksort	4/4	1.0009	0.9984	1.0034	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-dllist	4/4	1.0000	0.9978	1.0023	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-dllist-libc	4/4	1.0618	1.0547	1.0689	1.0179
+ObjLife/Caps	in-boot	beebs	sglib-hashtable	4/4	0.9996	0.9972	1.0020	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-hashtable-libc	4/4	1.0669	1.0637	1.0700	1.0196
+ObjLife/Caps	in-boot	beebs	sglib-listinsertsort	4/4	0.9997	0.9983	1.0010	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-listinsertsort-libc	4/4	1.0759	1.0662	1.0857	1.0186
+ObjLife/Caps	in-boot	beebs	sglib-listsort	4/4	0.9997	0.9975	1.0019	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-listsort-libc	4/4	1.0680	1.0593	1.0768	1.0190
+ObjLife/Caps	in-boot	beebs	sglib-queue	4/4	0.9996	0.9977	1.0014	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-rbtree	4/4	0.9998	0.9964	1.0033	1.0000
+ObjLife/Caps	in-boot	beebs	sglib-rbtree-libc	4/4	1.0525	1.0477	1.0573	1.0148
+ObjLife/Caps	in-boot	beebs	slre	4/4	0.9999	0.9977	1.0022	1.0000
+ObjLife/Caps	in-boot	beebs	sqrt	4/4	0.9999	0.9998	1.0001	1.0000
+ObjLife/Caps	in-boot	beebs	st	4/4	1.0001	0.9981	1.0021	1.0000
+ObjLife/Caps	in-boot	beebs	statemate	4/4	1.0001	0.9999	1.0003	1.0000
+ObjLife/Caps	in-boot	beebs	stb_perlin	4/4	0.9990	0.9952	1.0028	1.0000
+ObjLife/Caps	in-boot	beebs	stringsearch1	4/4	0.9992	0.9989	0.9996	1.0000
+ObjLife/Caps	in-boot	beebs	strstr	4/4	0.9994	0.9977	1.0010	1.0000
+ObjLife/Caps	in-boot	beebs	tarai	4/4	1.0001	0.9994	1.0007	1.0000
+ObjLife/Caps	in-boot	beebs	trio-snprintf	4/4	0.9997	0.9985	1.0009	1.0000
+ObjLife/Caps	in-boot	beebs	trio-snprintf-libc	4/4	0.9997	0.9992	1.0002	1.0000
+ObjLife/Caps	in-boot	beebs	trio-sscanf	4/4	1.0000	0.9987	1.0012	1.0000
+ObjLife/Caps	in-boot	beebs	trio-sscanf-libc	4/4	1.0005	0.9998	1.0012	1.0000
+ObjLife/Caps	in-boot	beebs	ud	4/4	1.0001	0.9988	1.0013	1.0000
+ObjLife/Caps	in-boot	beebs	whetstone	4/4	0.9996	0.9982	1.0011	1.0000
+ObjLife/Caps	in-boot	beebs	wikisort	11/11	0.9999	0.9997	1.0000	1.0000
+MapLife/Plain	in-boot	beebs	aha-compress	4/4	1.0670	1.0560	1.0781	1.0235
+MapLife/Plain	in-boot	beebs	bs	4/4	4.9549	4.9302	4.9796	3.0082
+MapLife/Plain	in-boot	beebs	bubblesort	4/4	1.0179	1.0151	1.0208	1.2340
+MapLife/Plain	in-boot	beebs	cnt	4/4	1.0592	1.0561	1.0624	1.0398
+MapLife/Plain	in-boot	beebs	compress	4/4	1.1002	1.0892	1.1114	1.1820
+MapLife/Plain	in-boot	coremark	coremark	4/4	2.0612	2.0583	2.0641	1.1027
+MapLife/Plain	in-boot	beebs	cover	4/4	2.2012	2.1974	2.2051	1.9550
+MapLife/Plain	in-boot	beebs	crc32	11/11	1.5111	1.5019	1.5203	1.0016
+MapLife/Plain	in-boot	beebs	ctl-stack	4/4	1.0652	1.0640	1.0664	1.0121
+MapLife/Plain	in-boot	beebs	ctl-stack-libc	4/4	5.7251	5.6713	5.7795	2.8435
+MapLife/Plain	in-boot	beebs	ctl-string-libc	4/4	5.5876	5.5737	5.6015	2.7233
+MapLife/Plain	in-boot	beebs	ctl-vector	4/4	1.2803	1.2777	1.2830	1.0581
+MapLife/Plain	in-boot	beebs	ctl-vector-libc	4/4	5.6522	5.6072	5.6974	3.0758
+MapLife/Plain	in-boot	beebs	dtoa-libc	4/4	1.4792	1.4732	1.4852	1.2252
+MapLife/Plain	in-boot	beebs	duff	4/4	1.2361	1.2246	1.2478	1.0456
+MapLife/Plain	in-boot	beebs	edn	4/4	1.3527	1.3492	1.3562	1.2265
+MapLife/Plain	in-boot	beebs	fac	4/4	1.2335	1.2317	1.2353	1.1091
+MapLife/Plain	in-boot	beebs	fasta	4/4	1.0144	1.0121	1.0168	1.0031
+MapLife/Plain	in-boot	beebs	fdct	4/4	1.0239	1.0228	1.0250	1.0883
+MapLife/Plain	in-boot	beebs	fibcall	4/4	4.4334	4.4115	4.4554	2.7846
+MapLife/Plain	in-boot	beebs	fir	4/4	2.7293	2.7190	2.7397	1.0925
+MapLife/Plain	in-boot	beebs	frac	4/4	1.1327	1.1314	1.1339	1.1082
+MapLife/Plain	in-boot	beebs	huffbench	10/10	1.4560	1.4485	1.4636	1.3660
+MapLife/Plain	in-boot	beebs	huffbench-libc	10/10	1.0794	1.0743	1.0846	1.2255
+MapLife/Plain	in-boot	beebs	insertsort	4/4	2.2792	2.2729	2.2854	1.8360
+MapLife/Plain	in-boot	beebs	janne_complex	4/4	5.8636	5.8527	5.8744	3.0084
+MapLife/Plain	in-boot	beebs	lcdnum	4/4	3.7920	3.6599	3.9288	2.7700
+MapLife/Plain	in-boot	beebs	levenshtein	4/4	1.5307	1.5269	1.5345	1.4051
+MapLife/Plain	in-boot	beebs	matmult-float	4/4	1.0426	1.0416	1.0435	1.0387
+MapLife/Plain	in-boot	beebs	matmult-int	4/4	1.3679	1.3604	1.3755	1.2567
+MapLife/Plain	in-boot	beebs	mergesort	4/4	3.0653	3.0565	3.0741	1.8329
+MapLife/Plain	in-boot	beebs	miniz	4/4	5.9204	5.8343	6.0077	3.7931
+MapLife/Plain	in-boot	beebs	miniz-libc	4/4	0.8563	0.8533	0.8593	0.8598
+MapLife/Plain	in-boot	beebs	nbody	4/4	1.5089	1.5078	1.5101	1.5437
+MapLife/Plain	in-boot	beebs	ndes	4/4	1.2901	1.2859	1.2942	1.1162
+MapLife/Plain	in-boot	beebs	nettle-arcfour	4/4	1.0232	1.0217	1.0247	1.0129
+MapLife/Plain	in-boot	beebs	nettle-cast128	4/4	1.3977	1.3887	1.4068	1.0818
+MapLife/Plain	in-boot	beebs	nettle-des	4/4	1.2733	1.2720	1.2746	1.0386
+MapLife/Plain	in-boot	beebs	nettle-md5	4/4	1.2045	1.2012	1.2079	1.0312
+MapLife/Plain	in-boot	beebs	nettle-sha256	4/4	1.0616	1.0595	1.0637	1.0168
+MapLife/Plain	in-boot	beebs	newlib-exp	4/4	3.2322	3.2229	3.2415	2.1307
+MapLife/Plain	in-boot	beebs	newlib-log	4/4	1.5960	1.5922	1.5997	1.2632
+MapLife/Plain	in-boot	beebs	newlib-sqrt	4/4	1.0622	1.0544	1.0701	1.0327
+MapLife/Plain	in-boot	beebs	ns	4/4	1.0513	1.0484	1.0542	1.0151
+MapLife/Plain	in-boot	beebs	picojpeg	4/4	1.5948	1.5891	1.6005	1.3110
+MapLife/Plain	in-boot	beebs	prime	4/4	1.0160	1.0150	1.0170	1.0143
+MapLife/Plain	in-boot	beebs	qsort	4/4	1.6941	1.6908	1.6975	1.1688
+MapLife/Plain	in-boot	beebs	recursion	4/4	2.3842	2.2601	2.5151	1.8001
+MapLife/Plain	in-boot	beebs	rijndael	4/4	1.2214	1.2201	1.2228	1.0109
+MapLife/Plain	in-boot	rv8	rv8-dhrystone	4/4	1.3952	1.3682	1.4227	1.3641
+MapLife/Plain	in-boot	rv8	rv8-miniz	4/4	0.9788	0.9706	0.9871	0.9940
+MapLife/Plain	in-boot	rv8	rv8-norx	4/4	1.0648	1.0618	1.0679	1.0007
+MapLife/Plain	in-boot	rv8	rv8-primes	4/4	1.0907	1.0804	1.1012	1.0009
+MapLife/Plain	in-boot	rv8	rv8-qsort	4/4	2.2975	2.2947	2.3002	1.5195
+MapLife/Plain	in-boot	beebs	select	4/4	1.4302	1.4285	1.4319	1.2347
+MapLife/Plain	in-boot	beebs	sglib-arrayquicksort	4/4	1.4747	1.4718	1.4776	1.1547
+MapLife/Plain	in-boot	beebs	sglib-dllist	4/4	1.5020	1.4966	1.5075	1.0900
+MapLife/Plain	in-boot	beebs	sglib-hashtable	4/4	1.4580	1.4553	1.4608	1.1039
+MapLife/Plain	in-boot	beebs	sglib-hashtable-libc	4/4	8.9641	8.8820	9.0469	4.8785
+MapLife/Plain	in-boot	beebs	sglib-listinsertsort	4/4	3.3695	3.3622	3.3767	1.1808
+MapLife/Plain	in-boot	beebs	sglib-listinsertsort-libc	4/4	9.6295	9.4957	9.7652	4.1958
+MapLife/Plain	in-boot	beebs	sglib-listsort-libc	4/4	8.2163	8.1734	8.2593	4.3651
+MapLife/Plain	in-boot	beebs	sglib-rbtree	4/4	1.5280	1.5216	1.5345	1.1953
+MapLife/Plain	in-boot	beebs	slre	4/4	1.6222	1.6150	1.6294	1.2653
+MapLife/Plain	in-boot	beebs	sqrt	4/4	1.0116	1.0101	1.0131	1.0030
+MapLife/Plain	in-boot	beebs	st	4/4	1.0227	1.0218	1.0236	1.0132
+MapLife/Plain	in-boot	beebs	statemate	4/4	1.2396	1.2384	1.2408	1.4473
+MapLife/Plain	in-boot	beebs	stb_perlin	4/4	1.3121	1.3070	1.3172	1.0406
+MapLife/Plain	in-boot	beebs	stringsearch1	4/4	1.2720	1.2701	1.2739	1.2642
+MapLife/Plain	in-boot	beebs	strstr	4/4	1.1654	1.1626	1.1682	1.0151
+MapLife/Plain	in-boot	beebs	tarai	4/4	2.5967	2.5941	2.5994	2.1005
+MapLife/Plain	in-boot	beebs	trio-snprintf	4/4	1.5833	1.5757	1.5909	1.4241
+MapLife/Plain	in-boot	beebs	trio-snprintf-libc	4/4	1.5799	1.5712	1.5888	1.4241
+MapLife/Plain	in-boot	beebs	trio-sscanf	4/4	1.6031	1.6003	1.6059	1.5101
+MapLife/Plain	in-boot	beebs	trio-sscanf-libc	4/4	1.6026	1.6008	1.6044	1.5098
+MapLife/Plain	in-boot	beebs	ud	4/4	1.2564	1.2538	1.2591	1.1893
+MapLife/Plain	in-boot	beebs	whetstone	4/4	1.0892	1.0869	1.0915	1.0117
+MapLife/Plain	in-boot	beebs	wikisort	9/9	1.0831	1.0803	1.0858	1.0502
+ObjLife/Plain	in-boot	beebs	aha-compress	4/4	1.0670	1.0560	1.0781	1.0235
+ObjLife/Plain	in-boot	beebs	bs	4/4	4.9552	4.9306	4.9799	3.0082
+ObjLife/Plain	in-boot	beebs	bubblesort	4/4	1.0183	1.0155	1.0211	1.2340
+ObjLife/Plain	in-boot	beebs	cnt	4/4	1.0578	1.0549	1.0608	1.0398
+ObjLife/Plain	in-boot	beebs	compress	4/4	1.1004	1.0894	1.1116	1.1820
+ObjLife/Plain	in-boot	coremark	coremark	4/4	2.0608	2.0577	2.0639	1.1027
+ObjLife/Plain	in-boot	beebs	cover	4/4	2.1997	2.1958	2.2036	1.9550
+ObjLife/Plain	in-boot	beebs	crc32	11/11	1.5206	1.5054	1.5360	1.0016
+ObjLife/Plain	in-boot	beebs	ctl-stack	4/4	1.0654	1.0643	1.0666	1.0121
+ObjLife/Plain	in-boot	beebs	ctl-stack-libc	4/4	5.8424	5.7893	5.8961	2.8632
+ObjLife/Plain	in-boot	beebs	ctl-string-libc	4/4	5.6976	5.6570	5.7385	2.7386
+ObjLife/Plain	in-boot	beebs	ctl-vector	4/4	1.2801	1.2779	1.2823	1.0581
+ObjLife/Plain	in-boot	beebs	ctl-vector-libc	4/4	5.7530	5.7021	5.8043	3.0984
+ObjLife/Plain	in-boot	beebs	dtoa-libc	4/4	1.4784	1.4724	1.4844	1.2252
+ObjLife/Plain	in-boot	beebs	duff	4/4	1.2445	1.2102	1.2798	1.0456
+ObjLife/Plain	in-boot	beebs	edn	4/4	1.3531	1.3496	1.3566	1.2265
+ObjLife/Plain	in-boot	beebs	fac	4/4	1.2344	1.2315	1.2373	1.1091
+ObjLife/Plain	in-boot	beebs	fasta	4/4	1.0134	1.0112	1.0156	1.0031
+ObjLife/Plain	in-boot	beebs	fdct	4/4	1.0242	1.0224	1.0260	1.0883
+ObjLife/Plain	in-boot	beebs	fibcall	4/4	4.4306	4.4081	4.4532	2.7846
+ObjLife/Plain	in-boot	beebs	fir	4/4	2.7315	2.7176	2.7456	1.0925
+ObjLife/Plain	in-boot	beebs	frac	4/4	1.1323	1.1311	1.1335	1.1082
+ObjLife/Plain	in-boot	beebs	huffbench	10/10	1.4497	1.4476	1.4519	1.3660
+ObjLife/Plain	in-boot	beebs	huffbench-libc	10/10	1.0794	1.0764	1.0824	1.2257
+ObjLife/Plain	in-boot	beebs	insertsort	4/4	2.2775	2.2713	2.2836	1.8360
+ObjLife/Plain	in-boot	beebs	janne_complex	4/4	5.8632	5.8519	5.8745	3.0084
+ObjLife/Plain	in-boot	beebs	lcdnum	4/4	3.7935	3.6699	3.9214	2.7700
+ObjLife/Plain	in-boot	beebs	levenshtein	4/4	1.5284	1.5271	1.5298	1.4051
+ObjLife/Plain	in-boot	beebs	matmult-float	4/4	1.0434	1.0419	1.0450	1.0387
+ObjLife/Plain	in-boot	beebs	matmult-int	4/4	1.3636	1.3609	1.3663	1.2567
+ObjLife/Plain	in-boot	beebs	mergesort	4/4	3.0650	3.0576	3.0723	1.8329
+ObjLife/Plain	in-boot	beebs	miniz	4/4	5.9121	5.8261	5.9993	3.7931
+ObjLife/Plain	in-boot	beebs	miniz-libc	4/4	0.8594	0.8564	0.8625	0.8599
+ObjLife/Plain	in-boot	beebs	nbody	4/4	1.5106	1.5075	1.5137	1.5437
+ObjLife/Plain	in-boot	beebs	ndes	4/4	1.2903	1.2862	1.2944	1.1162
+ObjLife/Plain	in-boot	beebs	nettle-arcfour	4/4	1.0228	1.0214	1.0242	1.0129
+ObjLife/Plain	in-boot	beebs	nettle-cast128	4/4	1.3992	1.3897	1.4088	1.0818
+ObjLife/Plain	in-boot	beebs	nettle-des	4/4	1.2734	1.2721	1.2747	1.0386
+ObjLife/Plain	in-boot	beebs	nettle-md5	4/4	1.2034	1.2026	1.2043	1.0312
+ObjLife/Plain	in-boot	beebs	nettle-sha256	4/4	1.0626	1.0578	1.0674	1.0167
+ObjLife/Plain	in-boot	beebs	newlib-exp	4/4	3.2339	3.2251	3.2427	2.1307
+ObjLife/Plain	in-boot	beebs	newlib-log	4/4	1.5977	1.5938	1.6016	1.2632
+ObjLife/Plain	in-boot	beebs	newlib-sqrt	4/4	1.0623	1.0545	1.0702	1.0327
+ObjLife/Plain	in-boot	beebs	ns	4/4	1.0498	1.0478	1.0517	1.0151
+ObjLife/Plain	in-boot	beebs	picojpeg	4/4	1.5949	1.5892	1.6006	1.3110
+ObjLife/Plain	in-boot	beebs	prime	4/4	1.0156	1.0150	1.0161	1.0143
+ObjLife/Plain	in-boot	beebs	qsort	4/4	1.6924	1.6894	1.6954	1.1688
+ObjLife/Plain	in-boot	beebs	recursion	4/4	2.3844	2.2604	2.5153	1.8001
+ObjLife/Plain	in-boot	beebs	rijndael	4/4	1.2213	1.2200	1.2227	1.0109
+ObjLife/Plain	in-boot	rv8	rv8-dhrystone	4/4	1.3991	1.3720	1.4267	1.3641
+ObjLife/Plain	in-boot	rv8	rv8-miniz	4/4	0.9791	0.9716	0.9867	0.9940
+ObjLife/Plain	in-boot	rv8	rv8-norx	4/4	1.0642	1.0616	1.0668	1.0007
+ObjLife/Plain	in-boot	rv8	rv8-primes	4/4	1.0898	1.0755	1.1043	1.0009
+ObjLife/Plain	in-boot	rv8	rv8-qsort	4/4	2.2977	2.2952	2.3003	1.5195
+ObjLife/Plain	in-boot	beebs	select	4/4	1.4311	1.4288	1.4335	1.2347
+ObjLife/Plain	in-boot	beebs	sglib-arrayquicksort	4/4	1.4770	1.4728	1.4812	1.1547
+ObjLife/Plain	in-boot	beebs	sglib-dllist	4/4	1.5015	1.4956	1.5074	1.0900
+ObjLife/Plain	in-boot	beebs	sglib-hashtable	4/4	1.4581	1.4553	1.4608	1.1039
+ObjLife/Plain	in-boot	beebs	sglib-hashtable-libc	4/4	9.4912	9.4138	9.5691	4.9480
+ObjLife/Plain	in-boot	beebs	sglib-listinsertsort	4/4	3.3659	3.3587	3.3732	1.1808
+ObjLife/Plain	in-boot	beebs	sglib-listinsertsort-libc	4/4	10.2452	10.1005	10.3920	4.2526
+ObjLife/Plain	in-boot	beebs	sglib-listsort-libc	4/4	8.7087	8.6642	8.7534	4.4255
+ObjLife/Plain	in-boot	beebs	sglib-rbtree	4/4	1.5284	1.5211	1.5357	1.1953
+ObjLife/Plain	in-boot	beebs	slre	4/4	1.6216	1.6144	1.6289	1.2653
+ObjLife/Plain	in-boot	beebs	sqrt	4/4	1.0118	1.0103	1.0133	1.0030
+ObjLife/Plain	in-boot	beebs	st	4/4	1.0229	1.0217	1.0241	1.0132
+ObjLife/Plain	in-boot	beebs	statemate	4/4	1.2396	1.2385	1.2408	1.4473
+ObjLife/Plain	in-boot	beebs	stb_perlin	4/4	1.3120	1.3076	1.3164	1.0406
+ObjLife/Plain	in-boot	beebs	stringsearch1	4/4	1.2716	1.2698	1.2735	1.2642
+ObjLife/Plain	in-boot	beebs	strstr	4/4	1.1649	1.1622	1.1676	1.0151
+ObjLife/Plain	in-boot	beebs	tarai	4/4	2.5975	2.5947	2.6002	2.1005
+ObjLife/Plain	in-boot	beebs	trio-snprintf	4/4	1.5836	1.5762	1.5910	1.4241
+ObjLife/Plain	in-boot	beebs	trio-snprintf-libc	4/4	1.5816	1.5731	1.5901	1.4241
+ObjLife/Plain	in-boot	beebs	trio-sscanf	4/4	1.6031	1.6003	1.6059	1.5101
+ObjLife/Plain	in-boot	beebs	trio-sscanf-libc	4/4	1.6027	1.6009	1.6046	1.5098
+ObjLife/Plain	in-boot	beebs	ud	4/4	1.2553	1.2545	1.2561	1.1893
+ObjLife/Plain	in-boot	beebs	whetstone	4/4	1.0878	1.0871	1.0885	1.0117
+ObjLife/Plain	in-boot	beebs	wikisort	9/9	1.0837	1.0792	1.0882	1.0503
+MapLife/Plain raw	in-boot	beebs	aha-compress	4/4	0.9674	0.9575	0.9775	1.0011
+MapLife/Plain raw	in-boot	beebs	bs	4/4	4.4868	4.4659	4.5079	2.9238
+MapLife/Plain raw	in-boot	beebs	bubblesort	4/4	0.9232	0.9207	0.9257	1.1973
+MapLife/Plain raw	in-boot	beebs	cnt	4/4	0.9608	0.9581	0.9634	1.0062
+MapLife/Plain raw	in-boot	beebs	compress	4/4	0.9982	0.9883	1.0083	1.0613
+MapLife/Plain raw	in-boot	coremark	coremark	4/4	1.8685	1.8661	1.8710	1.0704
+MapLife/Plain raw	in-boot	beebs	cover	4/4	1.9957	1.9926	1.9988	1.8730
+MapLife/Plain raw	in-boot	beebs	crc32	11/11	1.2913	1.2853	1.2973	0.9634
+MapLife/Plain raw	in-boot	beebs	ctl-stack	4/4	0.9659	0.9648	0.9671	0.9874
+MapLife/Plain raw	in-boot	beebs	ctl-stack-libc	4/4	5.1095	5.0637	5.1558	2.7102
+MapLife/Plain raw	in-boot	beebs	ctl-string-libc	4/4	5.0221	5.0096	5.0345	2.6169
+MapLife/Plain raw	in-boot	beebs	ctl-vector	4/4	1.1613	1.1589	1.1637	1.0253
+MapLife/Plain raw	in-boot	beebs	ctl-vector-libc	4/4	5.0513	5.0105	5.0924	2.9077
+MapLife/Plain raw	in-boot	beebs	dtoa-libc	4/4	1.3420	1.3367	1.3473	1.1625
+MapLife/Plain raw	in-boot	beebs	duff	4/4	1.1210	1.1105	1.1316	1.0211
+MapLife/Plain raw	in-boot	beebs	edn	4/4	1.2266	1.2234	1.2297	1.1942
+MapLife/Plain raw	in-boot	beebs	fac	4/4	1.1186	1.1169	1.1202	1.0779
+MapLife/Plain raw	in-boot	beebs	fasta	4/4	0.9198	0.9177	0.9220	0.9727
+MapLife/Plain raw	in-boot	beebs	fdct	4/4	0.9288	0.9278	0.9298	1.0475
+MapLife/Plain raw	in-boot	beebs	fibcall	4/4	4.0152	3.9945	4.0360	2.7051
+MapLife/Plain raw	in-boot	beebs	fir	4/4	2.4747	2.4653	2.4841	1.0681
+MapLife/Plain raw	in-boot	beebs	frac	4/4	1.0277	1.0265	1.0289	1.0473
+MapLife/Plain raw	in-boot	beebs	huffbench	10/10	1.3155	1.3087	1.3224	1.3104
+MapLife/Plain raw	in-boot	beebs	huffbench-libc	10/10	0.9488	0.9443	0.9533	1.1503
+MapLife/Plain raw	in-boot	beebs	insertsort	4/4	2.0645	2.0587	2.0702	1.7959
+MapLife/Plain raw	in-boot	beebs	janne_complex	4/4	5.3040	5.2981	5.3100	2.9354
+MapLife/Plain raw	in-boot	beebs	lcdnum	4/4	3.4366	3.3166	3.5609	2.6528
+MapLife/Plain raw	in-boot	beebs	levenshtein	4/4	1.3886	1.3851	1.3921	1.3604
+MapLife/Plain raw	in-boot	beebs	matmult-float	4/4	0.9458	0.9449	0.9467	0.9942
+MapLife/Plain raw	in-boot	beebs	matmult-int	4/4	1.2403	1.2334	1.2472	1.2166
+MapLife/Plain raw	in-boot	beebs	mergesort	4/4	2.7782	2.7702	2.7862	1.7792
+MapLife/Plain raw	in-boot	beebs	miniz	4/4	5.3651	5.2889	5.4425	3.5904
+MapLife/Plain raw	in-boot	beebs	miniz-libc	4/4	0.5704	0.5690	0.5718	0.6796
+MapLife/Plain raw	in-boot	beebs	nbody	4/4	1.3682	1.3673	1.3692	1.4817
+MapLife/Plain raw	in-boot	beebs	ndes	4/4	1.1662	1.1589	1.1735	1.0858
+MapLife/Plain raw	in-boot	beebs	nettle-arcfour	4/4	0.9284	0.9271	0.9297	0.9705
+MapLife/Plain raw	in-boot	beebs	nettle-cast128	4/4	1.2673	1.2589	1.2757	1.0580
+MapLife/Plain raw	in-boot	beebs	nettle-des	4/4	1.1541	1.1532	1.1550	1.0178
+MapLife/Plain raw	in-boot	beebs	nettle-md5	4/4	1.0922	1.0892	1.0953	1.0056
+MapLife/Plain raw	in-boot	beebs	nettle-sha256	4/4	0.9628	0.9609	0.9648	0.9765
+MapLife/Plain raw	in-boot	beebs	newlib-exp	4/4	2.9262	2.9174	2.9351	2.0827
+MapLife/Plain raw	in-boot	beebs	newlib-log	4/4	1.4471	1.4441	1.4502	1.2291
+MapLife/Plain raw	in-boot	beebs	newlib-sqrt	4/4	0.9631	0.9561	0.9702	1.0081
+MapLife/Plain raw	in-boot	beebs	ns	4/4	0.9534	0.9507	0.9560	0.9847
+MapLife/Plain raw	in-boot	beebs	picojpeg	4/4	1.4463	1.4417	1.4510	1.2572
+MapLife/Plain raw	in-boot	beebs	prime	4/4	0.9220	0.9211	0.9229	0.9557
+MapLife/Plain raw	in-boot	beebs	qsort	4/4	1.5360	1.5331	1.5389	1.1403
+MapLife/Plain raw	in-boot	beebs	recursion	4/4	2.1626	2.0501	2.2812	1.6715
+MapLife/Plain raw	in-boot	beebs	rijndael	4/4	1.1076	1.1068	1.1084	0.9883
+MapLife/Plain raw	in-boot	rv8	rv8-dhrystone	4/4	1.2652	1.2368	1.2942	1.2340
+MapLife/Plain raw	in-boot	rv8	rv8-miniz	4/4	0.8503	0.8431	0.8575	0.9342
+MapLife/Plain raw	in-boot	rv8	rv8-norx	4/4	0.8461	0.8438	0.8484	0.9448
+MapLife/Plain raw	in-boot	rv8	rv8-primes	4/4	0.9759	0.9666	0.9852	0.9746
+MapLife/Plain raw	in-boot	rv8	rv8-qsort	4/4	1.8543	1.8523	1.8563	1.3925
+MapLife/Plain raw	in-boot	beebs	select	4/4	1.2970	1.2957	1.2982	1.2058
+MapLife/Plain raw	in-boot	beebs	sglib-arrayquicksort	4/4	1.3367	1.3339	1.3395	1.1238
+MapLife/Plain raw	in-boot	beebs	sglib-dllist	4/4	1.3629	1.3581	1.3678	1.0286
+MapLife/Plain raw	in-boot	beebs	sglib-hashtable	4/4	1.3232	1.3208	1.3257	1.0504
+MapLife/Plain raw	in-boot	beebs	sglib-hashtable-libc	4/4	8.0801	8.0125	8.1482	4.6326
+MapLife/Plain raw	in-boot	beebs	sglib-listinsertsort	4/4	3.0558	3.0495	3.0623	1.1444
+MapLife/Plain raw	in-boot	beebs	sglib-listinsertsort-libc	4/4	8.6747	8.5654	8.7855	4.0212
+MapLife/Plain raw	in-boot	beebs	sglib-listsort-libc	4/4	7.4103	7.3736	7.4472	4.1556
+MapLife/Plain raw	in-boot	beebs	sglib-rbtree	4/4	1.3855	1.3805	1.3905	1.1242
+MapLife/Plain raw	in-boot	beebs	slre	4/4	1.4715	1.4651	1.4779	1.1828
+MapLife/Plain raw	in-boot	beebs	sqrt	4/4	0.9179	0.9165	0.9192	0.9549
+MapLife/Plain raw	in-boot	beebs	st	4/4	0.9279	0.9271	0.9287	0.9693
+MapLife/Plain raw	in-boot	beebs	statemate	4/4	1.1253	1.1243	1.1264	1.2389
+MapLife/Plain raw	in-boot	beebs	stb_perlin	4/4	1.1897	1.1850	1.1944	1.0195
+MapLife/Plain raw	in-boot	beebs	stringsearch1	4/4	1.1543	1.1525	1.1560	1.1463
+MapLife/Plain raw	in-boot	beebs	strstr	4/4	1.0568	1.0543	1.0592	0.9820
+MapLife/Plain raw	in-boot	beebs	tarai	4/4	2.3558	2.3532	2.3585	1.9345
+MapLife/Plain raw	in-boot	beebs	trio-snprintf	4/4	1.4367	1.4297	1.4437	1.3255
+MapLife/Plain raw	in-boot	beebs	trio-snprintf-libc	4/4	1.4341	1.4262	1.4420	1.3251
+MapLife/Plain raw	in-boot	beebs	trio-sscanf	4/4	1.4547	1.4521	1.4572	1.3896
+MapLife/Plain raw	in-boot	beebs	trio-sscanf-libc	4/4	1.4540	1.4523	1.4557	1.3897
+MapLife/Plain raw	in-boot	beebs	ud	4/4	1.1393	1.1370	1.1417	1.1424
+MapLife/Plain raw	in-boot	beebs	whetstone	4/4	0.9881	0.9860	0.9901	0.9817
+MapLife/Plain raw	in-boot	beebs	wikisort	9/9	0.9800	0.9776	0.9824	1.0121
+ObjLife/Plain raw	in-boot	beebs	aha-compress	4/4	0.9674	0.9575	0.9775	1.0011
+ObjLife/Plain raw	in-boot	beebs	bs	4/4	4.4871	4.4662	4.5082	2.9238
+ObjLife/Plain raw	in-boot	beebs	bubblesort	4/4	0.9235	0.9211	0.9260	1.1973
+ObjLife/Plain raw	in-boot	beebs	cnt	4/4	0.9595	0.9571	0.9618	1.0062
+ObjLife/Plain raw	in-boot	beebs	compress	4/4	0.9985	0.9885	1.0085	1.0613
+ObjLife/Plain raw	in-boot	coremark	coremark	4/4	1.8682	1.8656	1.8708	1.0704
+ObjLife/Plain raw	in-boot	beebs	cover	4/4	1.9943	1.9914	1.9973	1.8730
+ObjLife/Plain raw	in-boot	beebs	crc32	11/11	1.2994	1.2872	1.3118	0.9634
+ObjLife/Plain raw	in-boot	beebs	ctl-stack	4/4	0.9661	0.9651	0.9672	0.9874
+ObjLife/Plain raw	in-boot	beebs	ctl-stack-libc	4/4	5.2142	5.1698	5.2590	2.7290
+ObjLife/Plain raw	in-boot	beebs	ctl-string-libc	4/4	5.1210	5.0845	5.1577	2.6316
+ObjLife/Plain raw	in-boot	beebs	ctl-vector	4/4	1.1610	1.1591	1.1630	1.0253
+ObjLife/Plain raw	in-boot	beebs	ctl-vector-libc	4/4	5.1414	5.0955	5.1877	2.9290
+ObjLife/Plain raw	in-boot	beebs	dtoa-libc	4/4	1.3412	1.3359	1.3466	1.1625
+ObjLife/Plain raw	in-boot	beebs	duff	4/4	1.1286	1.0975	1.1606	1.0211
+ObjLife/Plain raw	in-boot	beebs	edn	4/4	1.2270	1.2238	1.2301	1.1942
+ObjLife/Plain raw	in-boot	beebs	fac	4/4	1.1194	1.1168	1.1220	1.0779
+ObjLife/Plain raw	in-boot	beebs	fasta	4/4	0.9189	0.9168	0.9209	0.9727
+ObjLife/Plain raw	in-boot	beebs	fdct	4/4	0.9291	0.9274	0.9307	1.0475
+ObjLife/Plain raw	in-boot	beebs	fibcall	4/4	4.0126	3.9914	4.0340	2.7051
+ObjLife/Plain raw	in-boot	beebs	fir	4/4	2.4767	2.4641	2.4894	1.0682
+ObjLife/Plain raw	in-boot	beebs	frac	4/4	1.0274	1.0263	1.0286	1.0473
+ObjLife/Plain raw	in-boot	beebs	huffbench	10/10	1.3099	1.3077	1.3121	1.3104
+ObjLife/Plain raw	in-boot	beebs	huffbench-libc	10/10	0.9488	0.9463	0.9513	1.1505
+ObjLife/Plain raw	in-boot	beebs	insertsort	4/4	2.0629	2.0572	2.0686	1.7959
+ObjLife/Plain raw	in-boot	beebs	janne_complex	4/4	5.3037	5.2976	5.3098	2.9354
+ObjLife/Plain raw	in-boot	beebs	lcdnum	4/4	3.4380	3.3257	3.5542	2.6528
+ObjLife/Plain raw	in-boot	beebs	levenshtein	4/4	1.3865	1.3852	1.3879	1.3604
+ObjLife/Plain raw	in-boot	beebs	matmult-float	4/4	0.9466	0.9452	0.9480	0.9942
+ObjLife/Plain raw	in-boot	beebs	matmult-int	4/4	1.2364	1.2339	1.2388	1.2166
+ObjLife/Plain raw	in-boot	beebs	mergesort	4/4	2.7779	2.7712	2.7846	1.7792
+ObjLife/Plain raw	in-boot	beebs	miniz	4/4	5.3576	5.2815	5.4349	3.5904
+ObjLife/Plain raw	in-boot	beebs	miniz-libc	4/4	0.5725	0.5711	0.5739	0.6797
+ObjLife/Plain raw	in-boot	beebs	nbody	4/4	1.3698	1.3670	1.3726	1.4817
+ObjLife/Plain raw	in-boot	beebs	ndes	4/4	1.1664	1.1591	1.1737	1.0858
+ObjLife/Plain raw	in-boot	beebs	nettle-arcfour	4/4	0.9280	0.9268	0.9291	0.9705
+ObjLife/Plain raw	in-boot	beebs	nettle-cast128	4/4	1.2686	1.2598	1.2774	1.0580
+ObjLife/Plain raw	in-boot	beebs	nettle-des	4/4	1.1542	1.1533	1.1551	1.0178
+ObjLife/Plain raw	in-boot	beebs	nettle-md5	4/4	1.0913	1.0906	1.0919	1.0056
+ObjLife/Plain raw	in-boot	beebs	nettle-sha256	4/4	0.9637	0.9594	0.9680	0.9765
+ObjLife/Plain raw	in-boot	beebs	newlib-exp	4/4	2.9278	2.9195	2.9362	2.0827
+ObjLife/Plain raw	in-boot	beebs	newlib-log	4/4	1.4487	1.4454	1.4521	1.2291
+ObjLife/Plain raw	in-boot	beebs	newlib-sqrt	4/4	0.9632	0.9561	0.9703	1.0081
+ObjLife/Plain raw	in-boot	beebs	ns	4/4	0.9520	0.9502	0.9537	0.9847
+ObjLife/Plain raw	in-boot	beebs	picojpeg	4/4	1.4464	1.4418	1.4510	1.2572
+ObjLife/Plain raw	in-boot	beebs	prime	4/4	0.9216	0.9210	0.9222	0.9557
+ObjLife/Plain raw	in-boot	beebs	qsort	4/4	1.5344	1.5320	1.5369	1.1403
+ObjLife/Plain raw	in-boot	beebs	recursion	4/4	2.1628	2.0503	2.2814	1.6715
+ObjLife/Plain raw	in-boot	beebs	rijndael	4/4	1.1075	1.1067	1.1084	0.9883
+ObjLife/Plain raw	in-boot	rv8	rv8-dhrystone	4/4	1.2687	1.2402	1.2978	1.2341
+ObjLife/Plain raw	in-boot	rv8	rv8-miniz	4/4	0.8506	0.8440	0.8571	0.9342
+ObjLife/Plain raw	in-boot	rv8	rv8-norx	4/4	0.8456	0.8437	0.8475	0.9448
+ObjLife/Plain raw	in-boot	rv8	rv8-primes	4/4	0.9750	0.9621	0.9881	0.9746
+ObjLife/Plain raw	in-boot	rv8	rv8-qsort	4/4	1.8545	1.8527	1.8562	1.3925
+ObjLife/Plain raw	in-boot	beebs	select	4/4	1.2978	1.2957	1.2999	1.2059
+ObjLife/Plain raw	in-boot	beebs	sglib-arrayquicksort	4/4	1.3388	1.3350	1.3427	1.1238
+ObjLife/Plain raw	in-boot	beebs	sglib-dllist	4/4	1.3625	1.3572	1.3678	1.0286
+ObjLife/Plain raw	in-boot	beebs	sglib-hashtable	4/4	1.3233	1.3209	1.3258	1.0504
+ObjLife/Plain raw	in-boot	beebs	sglib-hashtable-libc	4/4	8.5552	8.4964	8.6144	4.6985
+ObjLife/Plain raw	in-boot	beebs	sglib-listinsertsort	4/4	3.0527	3.0462	3.0591	1.1444
+ObjLife/Plain raw	in-boot	beebs	sglib-listinsertsort-libc	4/4	9.2294	9.1125	9.3477	4.0757
+ObjLife/Plain raw	in-boot	beebs	sglib-listsort-libc	4/4	7.8545	7.8168	7.8923	4.2131
+ObjLife/Plain raw	in-boot	beebs	sglib-rbtree	4/4	1.3858	1.3797	1.3919	1.1242
+ObjLife/Plain raw	in-boot	beebs	slre	4/4	1.4710	1.4645	1.4775	1.1828
+ObjLife/Plain raw	in-boot	beebs	sqrt	4/4	0.9180	0.9167	0.9194	0.9549
+ObjLife/Plain raw	in-boot	beebs	st	4/4	0.9281	0.9270	0.9291	0.9693
+ObjLife/Plain raw	in-boot	beebs	statemate	4/4	1.1254	1.1243	1.1264	1.2389
+ObjLife/Plain raw	in-boot	beebs	stb_perlin	4/4	1.1896	1.1855	1.1936	1.0195
+ObjLife/Plain raw	in-boot	beebs	stringsearch1	4/4	1.1539	1.1522	1.1556	1.1463
+ObjLife/Plain raw	in-boot	beebs	strstr	4/4	1.0563	1.0540	1.0587	0.9820
+ObjLife/Plain raw	in-boot	beebs	tarai	4/4	2.3565	2.3537	2.3593	1.9345
+ObjLife/Plain raw	in-boot	beebs	trio-snprintf	4/4	1.4369	1.4301	1.4438	1.3255
+ObjLife/Plain raw	in-boot	beebs	trio-snprintf-libc	4/4	1.4356	1.4279	1.4432	1.3251
+ObjLife/Plain raw	in-boot	beebs	trio-sscanf	4/4	1.4546	1.4521	1.4572	1.3896
+ObjLife/Plain raw	in-boot	beebs	trio-sscanf-libc	4/4	1.4541	1.4524	1.4559	1.3897
+ObjLife/Plain raw	in-boot	beebs	ud	4/4	1.1383	1.1376	1.1390	1.1424
+ObjLife/Plain raw	in-boot	beebs	whetstone	4/4	0.9868	0.9861	0.9875	0.9817
+ObjLife/Plain raw	in-boot	beebs	wikisort	9/9	0.9805	0.9765	0.9845	1.0121
+ObjLife-v/ObjBounds	in-boot	beebs	aha-compress	4/4	1.0001	0.9999	1.0003	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	aha-mont64	4/4	1.0001	0.9996	1.0006	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	bs	4/4	1.0005	0.9987	1.0024	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	bubblesort	4/4	0.9983	0.9946	1.0021	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	cnt	4/4	0.9997	0.9978	1.0016	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	compress	4/4	1.0003	0.9996	1.0009	1.0000
+ObjLife-v/ObjBounds	in-boot	coremark	coremark	4/4	0.9998	0.9966	1.0029	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	cover	4/4	1.0001	0.9984	1.0018	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	crc	4/4	0.9997	0.9986	1.0009	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	crc32	11/11	1.0036	0.9846	1.0229	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	ctl-stack	4/4	0.9991	0.9968	1.0015	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	ctl-stack-libc	4/4	1.0183	1.0097	1.0270	1.0069
+ObjLife-v/ObjBounds	in-boot	beebs	ctl-string	4/4	1.0023	0.9906	1.0142	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	ctl-string-libc	4/4	1.0192	1.0122	1.0263	1.0057
+ObjLife-v/ObjBounds	in-boot	beebs	ctl-vector	4/4	0.9997	0.9974	1.0020	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	ctl-vector-libc	4/4	1.0167	1.0090	1.0245	1.0073
+ObjLife-v/ObjBounds	in-boot	beebs	cubic	4/4	1.0010	0.9979	1.0041	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	dijkstra	4/4	0.9997	0.9978	1.0016	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	dtoa	4/4	0.9995	0.9980	1.0009	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	dtoa-libc	4/4	0.9957	0.9871	1.0043	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	duff	4/4	1.0001	0.9984	1.0017	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	edn	4/4	1.0011	0.9976	1.0045	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	expint	4/4	1.0010	0.9992	1.0028	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	fac	4/4	0.9996	0.9970	1.0022	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	fasta	4/4	1.0008	0.9984	1.0031	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	fdct	4/4	0.9999	0.9980	1.0018	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	fibcall	4/4	1.0003	0.9991	1.0014	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	fir	4/4	1.0016	0.9965	1.0069	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	frac	4/4	1.0000	0.9999	1.0001	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	huffbench	11/11	0.9996	0.9993	1.0000	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	huffbench-libc	11/11	0.9991	0.9957	1.0025	1.0002
+ObjLife-v/ObjBounds	in-boot	beebs	insertsort	4/4	0.9989	0.9956	1.0022	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	janne_complex	4/4	0.9999	0.9982	1.0017	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	jfdctint	4/4	0.9995	0.9975	1.0015	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	lcdnum	4/4	0.9896	0.9593	1.0209	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	levenshtein	4/4	1.0006	0.9986	1.0026	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	ludcmp	4/4	0.9998	0.9979	1.0017	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	matmult-float	4/4	0.9996	0.9975	1.0017	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	matmult-int	4/4	0.9999	0.9944	1.0055	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	mergesort	4/4	1.0004	0.9975	1.0033	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	miniz	4/4	1.0000	0.9988	1.0012	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	miniz-libc	4/4	1.0031	0.9979	1.0084	1.0001
+ObjLife-v/ObjBounds	in-boot	beebs	minver	4/4	0.9994	0.9980	1.0008	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	nbody	4/4	1.0005	0.9985	1.0025	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	ndes	4/4	0.9995	0.9973	1.0016	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	nettle-aes	4/4	1.0000	0.9993	1.0007	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	nettle-arcfour	4/4	1.0002	0.9989	1.0015	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	nettle-cast128	4/4	0.9986	0.9938	1.0035	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	nettle-des	4/4	0.9993	0.9946	1.0039	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	nettle-md5	4/4	1.0005	0.9981	1.0029	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	nettle-sha256	4/4	1.0000	0.9977	1.0023	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	newlib-exp	4/4	1.0007	0.9987	1.0027	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	newlib-log	4/4	1.0001	0.9982	1.0021	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	newlib-mod	4/4	0.9993	0.9970	1.0016	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	newlib-sqrt	4/4	1.0000	0.9999	1.0002	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	ns	4/4	0.9991	0.9960	1.0022	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	nsichneu	4/4	1.0006	0.9999	1.0013	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	picojpeg	4/4	0.9999	0.9958	1.0041	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	prime	4/4	1.0002	0.9992	1.0011	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	qrduino	4/4	1.0004	0.9978	1.0030	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	qsort	4/4	1.0010	0.9988	1.0032	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	qurt	4/4	1.0002	0.9991	1.0013	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	recursion	4/4	1.0000	0.9989	1.0010	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	rijndael	4/4	0.9977	0.9923	1.0032	1.0000
+ObjLife-v/ObjBounds	in-boot	rv8	rv8-aes	4/4	0.9989	0.9944	1.0034	1.0000
+ObjLife-v/ObjBounds	in-boot	rv8	rv8-dhrystone	4/4	0.9976	0.9928	1.0025	1.0000
+ObjLife-v/ObjBounds	in-boot	rv8	rv8-miniz	4/4	0.9998	0.9987	1.0009	1.0000
+ObjLife-v/ObjBounds	in-boot	rv8	rv8-norx	4/4	1.0007	0.9958	1.0057	1.0000
+ObjLife-v/ObjBounds	in-boot	rv8	rv8-primes	4/4	0.9973	0.9856	1.0092	1.0000
+ObjLife-v/ObjBounds	in-boot	rv8	rv8-qsort	4/4	1.0003	0.9993	1.0012	1.0000
+ObjLife-v/ObjBounds	in-boot	rv8	rv8-sha512	4/4	1.0001	0.9998	1.0004	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	select	4/4	1.0001	0.9974	1.0029	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-arraybinsearch	4/4	1.0009	0.9990	1.0028	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-arrayheapsort	4/4	1.0004	0.9989	1.0020	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-arrayquicksort	4/4	0.9991	0.9967	1.0016	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-dllist	4/4	0.9999	0.9977	1.0021	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-dllist-libc	4/4	1.0627	1.0530	1.0725	1.0131
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-hashtable	4/4	0.9997	0.9974	1.0021	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-hashtable-libc	4/4	1.0642	1.0568	1.0716	1.0143
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-listinsertsort	4/4	1.0002	0.9984	1.0020	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-listinsertsort-libc	4/4	1.0666	1.0599	1.0733	1.0135
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-listsort	4/4	1.0000	0.9999	1.0002	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-listsort-libc	4/4	1.0644	1.0587	1.0702	1.0138
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-queue	4/4	0.9992	0.9965	1.0019	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-rbtree	4/4	1.0108	0.9877	1.0344	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sglib-rbtree-libc	4/4	1.0487	1.0382	1.0593	1.0109
+ObjLife-v/ObjBounds	in-boot	beebs	slre	4/4	1.0007	0.9980	1.0034	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	sqrt	4/4	0.9998	0.9991	1.0005	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	st	4/4	1.0000	0.9984	1.0017	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	statemate	4/4	1.0001	1.0000	1.0002	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	stb_perlin	4/4	0.9989	0.9949	1.0028	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	stringsearch1	4/4	0.9991	0.9990	0.9993	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	strstr	4/4	0.9991	0.9971	1.0011	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	tarai	4/4	0.9999	0.9993	1.0005	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	trio-snprintf	4/4	1.0003	0.9979	1.0027	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	trio-snprintf-libc	4/4	0.9994	0.9979	1.0009	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	trio-sscanf	4/4	0.9997	0.9991	1.0002	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	trio-sscanf-libc	4/4	1.0002	0.9993	1.0011	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	ud	4/4	0.9997	0.9985	1.0009	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	whetstone	4/4	0.9999	0.9984	1.0015	1.0000
+ObjLife-v/ObjBounds	in-boot	beebs	wikisort	11/11	1.0018	0.9990	1.0045	1.0000
+MapLife/ObjBounds	cross	beebs	aha-compress	4/4	1.0264	1.0233	1.0296	1.0000
+MapLife/ObjBounds	cross	beebs	aha-mont64	4/4	1.0078	1.0075	1.0081	1.0000
+MapLife/ObjBounds	cross	beebs	bs	4/4	1.3871	1.3858	1.3884	1.0000
+MapLife/ObjBounds	cross	beebs	bubblesort	4/4	0.9988	0.9952	1.0024	1.0000
+MapLife/ObjBounds	cross	beebs	cnt	4/4	1.0114	1.0095	1.0133	1.0000
+MapLife/ObjBounds	cross	beebs	compress	4/4	1.0033	1.0026	1.0040	1.0000
+MapLife/ObjBounds	cross	coremark	coremark	4/4	1.2743	1.2704	1.2781	1.0000
+MapLife/ObjBounds	cross	beebs	cover	4/4	1.1999	1.1980	1.2018	1.0000
+MapLife/ObjBounds	cross	beebs	crc	4/4	1.4393	1.4378	1.4408	1.0001
+MapLife/ObjBounds	cross	beebs	crc32	11/11	1.0105	0.9945	1.0267	0.9998
+MapLife/ObjBounds	cross	beebs	ctl-stack	4/4	1.0048	1.0025	1.0071	1.0000
+MapLife/ObjBounds	cross	beebs	ctl-stack-libc	4/4	1.0241	1.0150	1.0333	1.0000
+MapLife/ObjBounds	cross	beebs	ctl-string	4/4	1.2092	1.2013	1.2172	1.0000
+MapLife/ObjBounds	cross	beebs	ctl-string-libc	4/4	1.0801	1.0758	1.0844	1.0000
+MapLife/ObjBounds	cross	beebs	ctl-vector	4/4	1.1259	1.1228	1.1290	1.0000
+MapLife/ObjBounds	cross	beebs	ctl-vector-libc	4/4	1.0308	1.0239	1.0378	1.0000
+MapLife/ObjBounds	cross	beebs	cubic	4/4	1.1472	1.1472	1.1473	1.0000
+MapLife/ObjBounds	cross	beebs	dijkstra	4/4	1.3142	1.3116	1.3168	1.0000
+MapLife/ObjBounds	cross	beebs	dtoa	4/4	1.0631	1.0615	1.0646	1.0000
+MapLife/ObjBounds	cross	beebs	dtoa-libc	4/4	1.0748	1.0743	1.0752	1.0000
+MapLife/ObjBounds	cross	beebs	duff	4/4	0.9839	0.9632	1.0051	1.0000
+MapLife/ObjBounds	cross	beebs	edn	4/4	1.0105	1.0103	1.0107	1.0000
+MapLife/ObjBounds	cross	beebs	expint	4/4	1.0228	1.0225	1.0230	1.0000
+MapLife/ObjBounds	cross	beebs	fac	4/4	1.0674	1.0642	1.0706	1.0000
+MapLife/ObjBounds	cross	beebs	fasta	4/4	1.0005	0.9998	1.0013	1.0000
+MapLife/ObjBounds	cross	beebs	fdct	4/4	1.0050	1.0030	1.0069	1.0000
+MapLife/ObjBounds	cross	beebs	fibcall	4/4	1.3702	1.3700	1.3705	1.0000
+MapLife/ObjBounds	cross	beebs	fir	4/4	1.4258	1.4254	1.4262	1.0000
+MapLife/ObjBounds	cross	beebs	frac	4/4	1.0441	1.0434	1.0447	1.0000
+MapLife/ObjBounds	cross	beebs	huffbench	11/11	1.1767	1.1764	1.1770	1.0000
+MapLife/ObjBounds	cross	beebs	huffbench-libc	11/11	1.1376	1.1330	1.1422	1.0001
+MapLife/ObjBounds	cross	beebs	insertsort	4/4	1.0196	1.0160	1.0231	1.0000
+MapLife/ObjBounds	cross	beebs	janne_complex	4/4	1.3872	1.3846	1.3899	1.0000
+MapLife/ObjBounds	cross	beebs	jfdctint	4/4	1.0185	1.0163	1.0207	1.0000
+MapLife/ObjBounds	cross	beebs	lcdnum	4/4	1.1924	1.1606	1.2251	1.0000
+MapLife/ObjBounds	cross	beebs	levenshtein	4/4	1.0883	1.0859	1.0906	1.0000
+MapLife/ObjBounds	cross	beebs	ludcmp	4/4	1.0287	1.0267	1.0307	1.0000
+MapLife/ObjBounds	cross	beebs	matmult-float	4/4	1.0051	1.0029	1.0073	1.0000
+MapLife/ObjBounds	cross	beebs	matmult-int	4/4	1.0380	1.0313	1.0446	1.0000
+MapLife/ObjBounds	cross	beebs	mergesort	4/4	1.1619	1.1581	1.1657	1.0000
+MapLife/ObjBounds	cross	beebs	miniz	4/4	1.4599	1.4584	1.4614	1.0001
+MapLife/ObjBounds	cross	beebs	miniz-libc	4/4	1.0246	1.0192	1.0301	1.0000
+MapLife/ObjBounds	cross	beebs	minver	4/4	1.1040	1.1024	1.1056	1.0000
+MapLife/ObjBounds	cross	beebs	nbody	4/4	1.0879	1.0877	1.0881	1.0000
+MapLife/ObjBounds	cross	beebs	ndes	4/4	1.0512	1.0488	1.0536	1.0000
+MapLife/ObjBounds	cross	beebs	nettle-aes	4/4	1.0057	1.0051	1.0064	1.0000
+MapLife/ObjBounds	cross	beebs	nettle-arcfour	4/4	0.9792	0.9778	0.9805	1.0000
+MapLife/ObjBounds	cross	beebs	nettle-cast128	4/4	1.0669	1.0620	1.0718	1.0000
+MapLife/ObjBounds	cross	beebs	nettle-des	4/4	1.0090	1.0043	1.0137	1.0000
+MapLife/ObjBounds	cross	beebs	nettle-md5	4/4	1.0097	1.0091	1.0102	1.0000
+MapLife/ObjBounds	cross	beebs	nettle-sha256	4/4	1.0159	1.0132	1.0185	1.0000
+MapLife/ObjBounds	cross	beebs	newlib-exp	4/4	1.2188	1.2181	1.2195	1.0000
+MapLife/ObjBounds	cross	beebs	newlib-log	4/4	1.0820	1.0795	1.0846	1.0000
+MapLife/ObjBounds	cross	beebs	newlib-mod	4/4	1.2181	1.2152	1.2209	1.0000
+MapLife/ObjBounds	cross	beebs	newlib-sqrt	4/4	1.0244	1.0221	1.0267	1.0000
+MapLife/ObjBounds	cross	beebs	ns	4/4	1.0091	1.0059	1.0123	1.0000
+MapLife/ObjBounds	cross	beebs	nsichneu	4/4	1.1318	1.1309	1.1326	1.0000
+MapLife/ObjBounds	cross	beebs	picojpeg	4/4	1.1006	1.0964	1.1048	1.0000
+MapLife/ObjBounds	cross	beebs	prime	4/4	1.0031	1.0022	1.0040	1.0000
+MapLife/ObjBounds	cross	beebs	qrduino	4/4	1.3187	1.3164	1.3211	1.0000
+MapLife/ObjBounds	cross	beebs	qsort	4/4	1.1204	1.1186	1.1222	1.0000
+MapLife/ObjBounds	cross	beebs	qurt	4/4	1.0397	1.0384	1.0410	1.0000
+MapLife/ObjBounds	cross	beebs	recursion	4/4	1.0009	1.0001	1.0017	1.0000
+MapLife/ObjBounds	cross	beebs	rijndael	4/4	1.0219	1.0164	1.0274	1.0000
+MapLife/ObjBounds	cross	rv8	rv8-aes	4/4	1.0574	1.0524	1.0623	1.0000
+MapLife/ObjBounds	cross	rv8	rv8-dhrystone	4/4	0.9938	0.9895	0.9981	1.0000
+MapLife/ObjBounds	cross	rv8	rv8-miniz	4/4	1.0228	1.0156	1.0300	1.0000
+MapLife/ObjBounds	cross	rv8	rv8-norx	4/4	1.0105	1.0064	1.0145	1.0000
+MapLife/ObjBounds	cross	rv8	rv8-primes	4/4	1.0006	0.9895	1.0118	1.0000
+MapLife/ObjBounds	cross	rv8	rv8-qsort	4/4	1.2413	1.2402	1.2425	1.0000
+MapLife/ObjBounds	cross	rv8	rv8-sha512	4/4	1.0005	1.0003	1.0008	1.0000
+MapLife/ObjBounds	cross	beebs	select	4/4	1.0696	1.0667	1.0726	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-arraybinsearch	4/4	1.0025	1.0011	1.0039	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-arrayheapsort	4/4	1.0018	0.9989	1.0048	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-arrayquicksort	4/4	1.1440	1.1412	1.1469	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-dllist	4/4	1.2845	1.2819	1.2871	1.0001
+MapLife/ObjBounds	cross	beebs	sglib-dllist-libc	4/4	1.0498	1.0412	1.0584	0.9999
+MapLife/ObjBounds	cross	beebs	sglib-hashtable	4/4	1.1673	1.1643	1.1704	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-hashtable-libc	4/4	1.0470	1.0397	1.0544	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-listinsertsort	4/4	1.6477	1.6453	1.6501	1.0001
+MapLife/ObjBounds	cross	beebs	sglib-listinsertsort-libc	4/4	1.0736	1.0644	1.0829	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-listsort	4/4	1.3858	1.3833	1.3883	1.0001
+MapLife/ObjBounds	cross	beebs	sglib-listsort-libc	4/4	1.0553	1.0505	1.0601	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-queue	4/4	1.1853	1.1820	1.1885	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-rbtree	4/4	1.0599	1.0348	1.0857	1.0000
+MapLife/ObjBounds	cross	beebs	sglib-rbtree-libc	4/4	1.0479	1.0379	1.0580	1.0000
+MapLife/ObjBounds	cross	beebs	slre	4/4	1.0729	1.0703	1.0755	1.0000
+MapLife/ObjBounds	cross	beebs	sqrt	4/4	1.0001	0.9993	1.0008	1.0000
+MapLife/ObjBounds	cross	beebs	st	4/4	1.0051	1.0031	1.0070	1.0000
+MapLife/ObjBounds	cross	beebs	statemate	4/4	1.0099	1.0098	1.0101	1.0000
+MapLife/ObjBounds	cross	beebs	stb_perlin	4/4	1.0221	1.0183	1.0260	1.0000
+MapLife/ObjBounds	cross	beebs	stringsearch1	4/4	1.0846	1.0845	1.0847	1.0000
+MapLife/ObjBounds	cross	beebs	strstr	4/4	1.0650	1.0630	1.0671	1.0000
+MapLife/ObjBounds	cross	beebs	tarai	4/4	1.0499	1.0493	1.0506	1.0000
+MapLife/ObjBounds	cross	beebs	trio-snprintf	4/4	1.0767	1.0750	1.0784	1.0000
+MapLife/ObjBounds	cross	beebs	trio-snprintf-libc	4/4	1.0772	1.0755	1.0790	1.0000
+MapLife/ObjBounds	cross	beebs	trio-sscanf	4/4	1.0646	1.0638	1.0653	1.0000
+MapLife/ObjBounds	cross	beebs	trio-sscanf-libc	4/4	1.0676	1.0666	1.0686	1.0000
+MapLife/ObjBounds	cross	beebs	ud	4/4	1.0305	1.0288	1.0323	1.0000
+MapLife/ObjBounds	cross	beebs	whetstone	4/4	1.0054	1.0030	1.0077	1.0000
+MapLife/ObjBounds	cross	beebs	wikisort	11/11	1.0288	1.0287	1.0290	1.0000
+ObjLife/ObjBounds	cross	beebs	aha-compress	4/4	1.0253	1.0250	1.0257	1.0000
+ObjLife/ObjBounds	cross	beebs	aha-mont64	4/4	1.0084	1.0068	1.0101	1.0000
+ObjLife/ObjBounds	cross	beebs	bs	4/4	1.3868	1.3859	1.3877	1.0000
+ObjLife/ObjBounds	cross	beebs	bubblesort	4/4	0.9987	0.9951	1.0024	1.0000
+ObjLife/ObjBounds	cross	beebs	cnt	4/4	1.0120	1.0097	1.0143	1.0000
+ObjLife/ObjBounds	cross	beebs	compress	4/4	1.0030	1.0024	1.0036	1.0000
+ObjLife/ObjBounds	cross	coremark	coremark	4/4	1.2748	1.2710	1.2786	1.0000
+ObjLife/ObjBounds	cross	beebs	cover	4/4	1.1999	1.1980	1.2018	1.0000
+ObjLife/ObjBounds	cross	beebs	crc	4/4	1.4396	1.4381	1.4412	1.0001
+ObjLife/ObjBounds	cross	beebs	crc32	11/11	1.0030	0.9925	1.0135	1.0000
+ObjLife/ObjBounds	cross	beebs	ctl-stack	4/4	1.0044	1.0020	1.0068	1.0000
+ObjLife/ObjBounds	cross	beebs	ctl-stack-libc	4/4	1.0446	1.0350	1.0543	1.0070
+ObjLife/ObjBounds	cross	beebs	ctl-string	4/4	1.2095	1.2016	1.2174	1.0000
+ObjLife/ObjBounds	cross	beebs	ctl-string-libc	4/4	1.1010	1.0928	1.1092	1.0057
+ObjLife/ObjBounds	cross	beebs	ctl-vector	4/4	1.1251	1.1225	1.1276	1.0000
+ObjLife/ObjBounds	cross	beebs	ctl-vector-libc	4/4	1.0498	1.0411	1.0587	1.0074
+ObjLife/ObjBounds	cross	beebs	cubic	4/4	1.1484	1.1449	1.1519	1.0000
+ObjLife/ObjBounds	cross	beebs	dijkstra	4/4	1.3140	1.3112	1.3168	1.0000
+ObjLife/ObjBounds	cross	beebs	dtoa	4/4	1.0628	1.0612	1.0644	1.0000
+ObjLife/ObjBounds	cross	beebs	dtoa-libc	4/4	1.0748	1.0737	1.0759	1.0000
+ObjLife/ObjBounds	cross	beebs	duff	4/4	0.9903	0.9816	0.9991	1.0000
+ObjLife/ObjBounds	cross	beebs	edn	4/4	1.0123	1.0068	1.0178	1.0000
+ObjLife/ObjBounds	cross	beebs	expint	4/4	1.0235	1.0215	1.0254	1.0000
+ObjLife/ObjBounds	cross	beebs	fac	4/4	1.0672	1.0641	1.0704	1.0000
+ObjLife/ObjBounds	cross	beebs	fasta	4/4	1.0011	0.9983	1.0040	1.0000
+ObjLife/ObjBounds	cross	beebs	fdct	4/4	1.0052	1.0033	1.0070	1.0000
+ObjLife/ObjBounds	cross	beebs	fibcall	4/4	1.3705	1.3695	1.3715	1.0000
+ObjLife/ObjBounds	cross	beebs	fir	4/4	1.4268	1.4236	1.4301	1.0001
+ObjLife/ObjBounds	cross	beebs	frac	4/4	1.0437	1.0436	1.0438	1.0000
+ObjLife/ObjBounds	cross	beebs	huffbench	11/11	1.1768	1.1765	1.1770	1.0000
+ObjLife/ObjBounds	cross	beebs	huffbench-libc	11/11	1.1431	1.1331	1.1532	1.0003
+ObjLife/ObjBounds	cross	beebs	insertsort	4/4	1.0184	1.0151	1.0218	1.0000
+ObjLife/ObjBounds	cross	beebs	janne_complex	4/4	1.3870	1.3846	1.3894	1.0000
+ObjLife/ObjBounds	cross	beebs	jfdctint	4/4	1.0179	1.0159	1.0199	1.0000
+ObjLife/ObjBounds	cross	beebs	lcdnum	4/4	1.1962	1.1650	1.2282	1.0000
+ObjLife/ObjBounds	cross	beebs	levenshtein	4/4	1.0877	1.0856	1.0897	1.0000
+ObjLife/ObjBounds	cross	beebs	ludcmp	4/4	1.0289	1.0268	1.0311	1.0000
+ObjLife/ObjBounds	cross	beebs	matmult-float	4/4	1.0054	1.0032	1.0076	1.0000
+ObjLife/ObjBounds	cross	beebs	matmult-int	4/4	1.0351	1.0302	1.0401	1.0000
+ObjLife/ObjBounds	cross	beebs	mergesort	4/4	1.1620	1.1579	1.1661	1.0000
+ObjLife/ObjBounds	cross	beebs	miniz	4/4	1.4594	1.4579	1.4609	1.0001
+ObjLife/ObjBounds	cross	beebs	miniz-libc	4/4	1.0256	1.0200	1.0312	1.0001
+ObjLife/ObjBounds	cross	beebs	minver	4/4	1.1040	1.1024	1.1056	1.0000
+ObjLife/ObjBounds	cross	beebs	nbody	4/4	1.0883	1.0866	1.0901	1.0000
+ObjLife/ObjBounds	cross	beebs	ndes	4/4	1.0512	1.0488	1.0536	1.0000
+ObjLife/ObjBounds	cross	beebs	nettle-aes	4/4	1.0061	1.0054	1.0067	1.0000
+ObjLife/ObjBounds	cross	beebs	nettle-arcfour	4/4	0.9792	0.9778	0.9807	1.0000
+ObjLife/ObjBounds	cross	beebs	nettle-cast128	4/4	1.0683	1.0626	1.0740	1.0000
+ObjLife/ObjBounds	cross	beebs	nettle-des	4/4	1.0084	1.0034	1.0134	1.0000
+ObjLife/ObjBounds	cross	beebs	nettle-md5	4/4	1.0103	1.0086	1.0120	1.0000
+ObjLife/ObjBounds	cross	beebs	nettle-sha256	4/4	1.0159	1.0135	1.0182	1.0000
+ObjLife/ObjBounds	cross	beebs	newlib-exp	4/4	1.2193	1.2184	1.2202	1.0000
+ObjLife/ObjBounds	cross	beebs	newlib-log	4/4	1.0816	1.0794	1.0839	1.0000
+ObjLife/ObjBounds	cross	beebs	newlib-mod	4/4	1.2190	1.2161	1.2219	1.0000
+ObjLife/ObjBounds	cross	beebs	newlib-sqrt	4/4	1.0238	1.0236	1.0239	1.0000
+ObjLife/ObjBounds	cross	beebs	ns	4/4	1.0096	1.0066	1.0127	1.0000
+ObjLife/ObjBounds	cross	beebs	nsichneu	4/4	1.1318	1.1309	1.1327	1.0000
+ObjLife/ObjBounds	cross	beebs	picojpeg	4/4	1.1010	1.0969	1.1051	1.0000
+ObjLife/ObjBounds	cross	beebs	prime	4/4	1.0030	1.0021	1.0039	1.0000
+ObjLife/ObjBounds	cross	beebs	qrduino	4/4	1.3195	1.3173	1.3217	1.0000
+ObjLife/ObjBounds	cross	beebs	qsort	4/4	1.1202	1.1187	1.1217	1.0000
+ObjLife/ObjBounds	cross	beebs	qurt	4/4	1.0396	1.0384	1.0409	1.0000
+ObjLife/ObjBounds	cross	beebs	recursion	4/4	1.0010	1.0003	1.0016	1.0000
+ObjLife/ObjBounds	cross	beebs	rijndael	4/4	1.0214	1.0159	1.0270	1.0000
+ObjLife/ObjBounds	cross	rv8	rv8-aes	4/4	1.0580	1.0532	1.0627	1.0000
+ObjLife/ObjBounds	cross	rv8	rv8-dhrystone	4/4	0.9951	0.9906	0.9996	1.0000
+ObjLife/ObjBounds	cross	rv8	rv8-miniz	4/4	1.0237	1.0165	1.0310	1.0000
+ObjLife/ObjBounds	cross	rv8	rv8-norx	4/4	1.0098	1.0058	1.0139	1.0000
+ObjLife/ObjBounds	cross	rv8	rv8-primes	4/4	0.9983	0.9865	1.0101	1.0000
+ObjLife/ObjBounds	cross	rv8	rv8-qsort	4/4	1.2410	1.2396	1.2424	1.0000
+ObjLife/ObjBounds	cross	rv8	rv8-sha512	4/4	1.0005	1.0003	1.0008	1.0000
+ObjLife/ObjBounds	cross	beebs	select	4/4	1.0704	1.0668	1.0741	1.0000
+ObjLife/ObjBounds	cross	beebs	sglib-arraybinsearch	4/4	1.0024	1.0014	1.0033	1.0000
+ObjLife/ObjBounds	cross	beebs	sglib-arrayheapsort	4/4	1.0005	1.0004	1.0007	1.0000
+ObjLife/ObjBounds	cross	beebs	sglib-arrayquicksort	4/4	1.1441	1.1412	1.1469	1.0000
+ObjLife/ObjBounds	cross	beebs	sglib-dllist	4/4	1.2861	1.2836	1.2886	1.0001
+ObjLife/ObjBounds	cross	beebs	sglib-dllist-libc	4/4	1.1139	1.1043	1.1235	1.0131
+ObjLife/ObjBounds	cross	beebs	sglib-hashtable	4/4	1.1665	1.1635	1.1694	1.0001
+ObjLife/ObjBounds	cross	beebs	sglib-hashtable-libc	4/4	1.1088	1.1011	1.1166	1.0143
+ObjLife/ObjBounds	cross	beebs	sglib-listinsertsort	4/4	1.6475	1.6452	1.6498	1.0001
+ObjLife/ObjBounds	cross	beebs	sglib-listinsertsort-libc	4/4	1.1439	1.1363	1.1516	1.0135
+ObjLife/ObjBounds	cross	beebs	sglib-listsort	4/4	1.3853	1.3831	1.3876	1.0001
+ObjLife/ObjBounds	cross	beebs	sglib-listsort-libc	4/4	1.1199	1.1158	1.1239	1.0139
+ObjLife/ObjBounds	cross	beebs	sglib-queue	4/4	1.1841	1.1810	1.1872	1.0000
+ObjLife/ObjBounds	cross	beebs	sglib-rbtree	4/4	1.0635	1.0383	1.0894	1.0000
+ObjLife/ObjBounds	cross	beebs	sglib-rbtree-libc	4/4	1.0994	1.0892	1.1098	1.0109
+ObjLife/ObjBounds	cross	beebs	slre	4/4	1.0729	1.0703	1.0755	1.0000
+ObjLife/ObjBounds	cross	beebs	sqrt	4/4	1.0001	0.9993	1.0008	1.0000
+ObjLife/ObjBounds	cross	beebs	st	4/4	1.0050	1.0034	1.0067	1.0000
+ObjLife/ObjBounds	cross	beebs	statemate	4/4	1.0099	1.0098	1.0101	1.0000
+ObjLife/ObjBounds	cross	beebs	stb_perlin	4/4	1.0217	1.0178	1.0255	1.0000
+ObjLife/ObjBounds	cross	beebs	stringsearch1	4/4	1.0851	1.0843	1.0859	1.0000
+ObjLife/ObjBounds	cross	beebs	strstr	4/4	1.0650	1.0629	1.0671	1.0000
+ObjLife/ObjBounds	cross	beebs	tarai	4/4	1.0500	1.0493	1.0506	1.0000
+ObjLife/ObjBounds	cross	beebs	trio-snprintf	4/4	1.0785	1.0769	1.0802	1.0000
+ObjLife/ObjBounds	cross	beebs	trio-snprintf-libc	4/4	1.0763	1.0746	1.0780	1.0000
+ObjLife/ObjBounds	cross	beebs	trio-sscanf	4/4	1.0652	1.0643	1.0660	1.0000
+ObjLife/ObjBounds	cross	beebs	trio-sscanf-libc	4/4	1.0675	1.0667	1.0683	1.0000
+ObjLife/ObjBounds	cross	beebs	ud	4/4	1.0302	1.0289	1.0314	1.0000
+ObjLife/ObjBounds	cross	beebs	whetstone	4/4	1.0041	1.0027	1.0055	1.0000
+ObjLife/ObjBounds	cross	beebs	wikisort	11/11	1.0286	1.0285	1.0288	1.0000

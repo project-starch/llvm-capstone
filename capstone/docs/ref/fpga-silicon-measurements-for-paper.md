@@ -7636,3 +7636,59 @@ a6c75c1f0343).
     runtime lane's main kits and is reported separately.
   - It is N=1, board 2 only.
   - The simulated ratios (memory delay 12) are patterns, not silicon values.
+
+## The microbenchmark ladder on silicon: Plain, Caps, ObjBounds, MapLife, ObjLife on the 103 programs, and what temporal safety costs (caplifive_vp2c_e7af48457 and caplifive_vp2c_603528b8b, both boards, 2026-10-30/31)
+
+Five configurations of the same 103 programs (BEEBS 80 + 13 on libc malloc, RV8 7, CoreMark, two controls), each
+pre-registered before its boots.
+- **Plain.** The programs as plain RISC-V Linux processes, counted with user-mode rdcycle/rdinstret. 6 boots, board 1,
+  bitstream 3.
+- **Caps.** The Capstone build with an allocator that returns its group's authority, so there are no per-object
+  bounds. 7 boots, board 1, bitstream 3.
+- **ObjBounds.** MapLife's images on bitstream 3 without the per-access lifetime check. 7 boots, board 2.
+- **MapLife (T1) and ObjLife (T3).** The bitstream-3 campaign records, and the same arms inside every Plain and Caps
+  boot.
+
+Every boot is VALID by its own gate. Record: `capstone/benchmarks/virtual/results/2026-10-31-ladder/`. Analysis:
+`ladder.py`, committed before any cross-bitstream ratio was read.
+
+Cycles per timed iteration, geomean of per-program ratios (two-level bootstrap intervals within ±0.3 points):
+
+| group (programs) | MapLife / Caps | ObjLife / MapLife | MapLife / ObjBounds | ObjLife / ObjBounds | ObjLife / Plain (raw) |
+|---|---|---|---|---|---|
+| BEEBS upstream (80) | 0.9996 | 1.0001 | 1.0992 | 1.0993 | 1.554 (1.408), 61 programs |
+| BEEBS -libc (13) | 1.0032 | 1.0273 | 1.0604 | 1.0893 | 3.333 (2.916), 11 |
+| RV8 (7) | 0.9998 | 0.9999 | 1.0438 | 1.0437 | 1.296 (1.105), 5 |
+| CoreMark | 0.9997 | 1.0004 | 1.2743 | 1.2748 | 2.061 (1.868) |
+| allocation-heavy (8) | 1.0045 | 1.0440 | 1.0509 | 1.0972 | 7.38 (6.63), 6 |
+
+- **Per-object bounds in the allocator (MapLife / Caps) cost nothing measurable.** No program is above 1.02.
+- **Per-object lifetimes (ObjLife / MapLife)** cost 0 where the timed region does not allocate, and 4.4 % on the 8
+  programs that allocate at least 1,400 times per iteration. This is unchanged from the T3 records.
+- **The hardware lifetime check is most of what temporal safety costs.**
+  - MapLife / ObjBounds compares the same images, with instret equal within 0.02 % on 101 of 101 programs.
+  - The pre-registered bands were [1.000, 1.04] for most suites, so this is a miss.
+  - Controls: MapLife against MapLife across boards and days reads 1.000; board 2 alone reads BEEBS 1.098 over 41
+    programs.
+- **The per-op cost is as measured on the bare kit** (entry above: 4.00 cycles per LDC, 5.00 per STC). The model
+  missed the count: compiled code loads and stores capabilities through the stack (frame spills, store-then-reload
+  pairs).
+  - fibcall's workload is constant-folded, so an iteration is the harness frame: 2 STC + 2 LDC, 18 cycles predicted,
+    18.09 measured.
+  - crc: 36 predicted, 36.16 measured.
+  - Per program the ratio runs from about 1.00 (rv8-sha512 1.0005) to 1.65 (sglib-listinsertsort), with 12 programs
+    above 1.25.
+- **ObjLife / Plain is the cost of Capstone as a whole.**
+  - Plain is corrected for timer ticks with each boot's own probe. The raw ratio is lower, and the true
+    interrupt-free ratio lies at or above the corrected one.
+  - On the allocation-heavy programs Capstone executes 2.7-4.9 times Plain's instructions, at about twice the CPI.
+- **Do not cite:**
+  - **Plain's set-aside programs.** User-mode counters count the whole hart, so iterations in which another task ran
+    are excluded in all three arms (Plain addendum 1). 23 programs are set aside, and the ObjLife / Plain column covers
+    the rest.
+  - **fibcall's and crc's ratios as fibonacci or CRC costs.** They measure call frames.
+  - **ObjBounds as purely "minus the check".** nettle-arcfour (0.979) and rv8-dhrystone (0.994) are slower without it,
+    with intervals excluding 1. This record does not explain it; it is too small to move a geomean.
+  - **ObjLife / ObjBounds as a single-board figure.** It is cross-board and cross-day (bitstream-3 records against
+    board 2), with the controls above.
+  - **25 MHz cycles.** DRAM is near in cycles, and a GHz part weighs stalls differently.

@@ -1,0 +1,14 @@
+perf-plain-p5: 39 of 380 Plain timed iterations excluded (timer > 1.1 x median + 2), 117 rows dropped across arms; 4 program(s) set aside: ['crc', 'newlib-mod', 'qrduino', 'sglib-queue']
+  aha-compress: median timer 65.5; excluded 1 (proc 3 it 4)
+  crc: median timer 38; excluded 3 (proc 1 it 0, proc 1 it 1, proc 1 it 2)  SET ASIDE
+  ctl-vector-libc: median timer 51; excluded 2 (proc 0 it 0, proc 0 it 1)
+  fir: median timer 63; excluded 1 (proc 0 it 0)
+  nettle-cast128: median timer 64; excluded 2 (proc 2 it 0, proc 2 it 1)
+  newlib-mod: median timer 33; excluded 5 (proc 0 it 0, proc 0 it 1, proc 0 it 2, proc 3 it 3, proc 3 it 4)  SET ASIDE
+  qrduino: median timer 61; excluded 5 (proc 1 it 4, proc 2 it 0, proc 2 it 1, proc 2 it 2, proc 2 it 3)  SET ASIDE
+  rv8-dhrystone: median timer 211; excluded 2 (proc 3 it 1, proc 3 it 2)
+  select: median timer 59; excluded 1 (proc 1 it 0)
+  sglib-hashtable: median timer 142; excluded 4 (proc 1 it 0, proc 1 it 1, proc 3 it 0, proc 3 it 1)
+  sglib-queue: median timer 65; excluded 7 (proc 1 it 0, proc 1 it 1, proc 1 it 2, proc 1 it 3, proc 3 it 0, proc 3 it 1, proc 3 it 2)  SET ASIDE
+  statemate: median timer 350; excluded 3 (proc 2 it 1, proc 3 it 3, proc 3 it 4)
+  trio-snprintf-libc: median timer 162; excluded 3 (proc 0 it 4, proc 1 it 3, proc 1 it 4)

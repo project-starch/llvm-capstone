@@ -1,0 +1,14 @@
+perf-plain-p2: 33 of 371 Plain timed iterations excluded (timer > 1.1 x median + 2), 99 rows dropped across arms; 3 program(s) set aside: ['ctl-string', 'dtoa', 'nsichneu']
+  compress: median timer 294; excluded 1 (proc 1 it 3)
+  ctl-loop: median timer 134; excluded 2 (proc 0 it 3, proc 0 it 4)
+  ctl-string: median timer 52.5; excluded 4 (proc 0 it 0, proc 0 it 1, proc 0 it 2, proc 0 it 3)  SET ASIDE
+  dtoa: median timer 122; excluded 3 (proc 3 it 1, proc 3 it 2, proc 3 it 3)  SET ASIDE
+  huffbench: median timer 93; excluded 1 (proc 6 it 0)
+  ndes: median timer 75; excluded 4 (proc 0 it 0, proc 0 it 1, proc 2 it 4, proc 3 it 0)
+  nettle-sha256: median timer 125; excluded 2 (proc 3 it 3, proc 3 it 4)
+  nsichneu: median timer 52; excluded 3 (proc 0 it 0, proc 0 it 1, proc 0 it 2)  SET ASIDE
+  recursion: median timer 128; excluded 1 (proc 0 it 4)
+  sglib-arrayquicksort: median timer 71; excluded 1 (proc 3 it 0)
+  sglib-listinsertsort-libc: median timer 24; excluded 8 (proc 0 it 0, proc 0 it 1, proc 1 it 0, proc 1 it 1, proc 2 it 0, proc 2 it 1, proc 3 it 0, proc 3 it 1)
+  slre: median timer 167; excluded 2 (proc 0 it 3, proc 0 it 4)
+  ud: median timer 105; excluded 1 (proc 0 it 0)
