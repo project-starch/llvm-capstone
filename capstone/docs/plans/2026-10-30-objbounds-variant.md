@@ -361,6 +361,45 @@ The control for every key is bitstream 3's own build of e7af48457, read by the s
     - FF: placed lsu_i falls by ≥ 700 and commit_stage by ≥ 25, against b3's placed checkpoint by the same query.
     - The core and top FF totals are reported, not graded.
 
+**Full build: SEALED 2026-10-30 (synth). Graded here: PASS on every graded key.**
+- **The run.** Exit 0 in 1 h 33 m 11 s. The guard's peak was 21.85 GB and the watchdog's 21.91 GB; collection exit 0
+  at a peak of 6.90 GB.
+  - write_bitstream completed, and PROVENANCE reads 603528b8bce2.
+  - Synthesis matched the gate: the mapping peak was 4,950.0 MB, Synth 8-326 0, timing-loop headers 0, and retiming
+    100 / 169 / 1,280 / 281, identical to the gate's.
+- **Key 5 (as restated before launch): PASS.**
+  - Placed LUT 167,258 against a limit of 171,061.
+  - lsu_i FF 7,341 against b3's placed 8,146: −805, which meets ≥ 700.
+  - commit_stage FF 210 against 242: −32, which meets ≥ 25.
+  - Reported only: core FF 40,782 (−641), top FF 63,006, core LUT 142,174 (b3 143,978), fpu_i FF 2,210, slices
+    47,860 (93.94 %).
+  - Control: b3's placed totals read 169,061 / 63,647, the numbers on record.
+- **Key 6: PASS.** The placer's largest window is level 4 (16×16, east, global). The router's effective maximum is 3.
+- **Key 7: PASS.** Failed, unrouted and partially routed nets 0 / 0 / 0. Overlaps went 74,820 → 0.
+- **Key 8: PASS.** check_timing on the routed dcp reads 0 loops. LUTLP-1 is 0, with its control PDRC-138 firing at 275
+  (b3 288). TIMING-23 is 0, with its control TIMING-16 firing at 1,001 (b3 1,001).
+- **Key 9: PASS.** On the ROUTED dcp all nine names read 0, and NEG `cpmp_revnode_valid_q` reads 179. b3's routed dcp
+  is above 0 on every name: occ 654, nodeval 1,124, rr 414, g_rvc_tag 817, and so on.
+- **Key 10, reported and not graded.**
+
+  | | ObjBounds | b3 |
+  |---|---|---|
+  | WNS | −9.433 | −10.047 |
+  | TNS | −49,930.352 | −44,010.926 |
+  | failing endpoints | 11,182 of 183,832 | 13,396 of 188,701 |
+  | WHS | +0.054 | +0.029 |
+  | THS | 0 | 0 |
+
+  The synthesis lane flags every build with WNS < 0 as NOT FLASHABLE; that is its standing rule. WNS is not an
+  acceptance criterion: that is the lead's ruling, recorded in the SPEC board PREREG's Addendum 14. Bitstream 3, at
+  −10.047, is in service on both boards.
+- **Key 11.** `ariane_xilinx.bit`, 11,443,722 B, sha256
+  0f03b097bbd1693bdc3424a872eb2c88f086d5d5fc3d771b29d4945490ec18c1. It is in the synthesis host's
+  `~/scratch/capstone-ob/corev_apu/fpga/work-fpga/`. The tarball `synth-603528b8b-exit0.tar.gz` (376,010,792 B,
+  sha256 40039facf9c1f182…) holds the routed dcp, TIMING-FORENSICS and PROVENANCE, and its .bit hashes identically.
+- **Grade: a flash candidate.** Before the flash, the board side checks its copy's sha256 against the line above, and
+  then runs the kit's ObjBounds arm (PREREG addendum 1).
+
 **Failure branches.**
 - A mapping blowup (a single process > 9 GB, or the 34 GB watchdog) is graded by genome and Synth 8-326 targets, with
   no retry.
