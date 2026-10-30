@@ -191,10 +191,24 @@ MODULE_PARM_DESC(node_max_records,
 #ifndef CAPSTONE_VM_INDEX_BITS
 #define CAPSTONE_VM_INDEX_BITS 16
 #endif
-#if CAPSTONE_VM_INDEX_BITS != 16 && CAPSTONE_VM_INDEX_BITS != 18 && CAPSTONE_VM_INDEX_BITS != 20
-#error "CAPSTONE_VM_INDEX_BITS: 16 (vp2, batch), 18 (bitstreams 2/3) or 20 (ids20, {generation[29:20], index[19:0]})"
+/* 25 is option B's RTL (capstone-ariane rtl-ids55): a 55-bit id {generation[54:25], slot[24:0]}, so a flat table
+ * indexes records by the 25-bit slot, in QEMU's wide record format (cap_rev_table_abi.h, CAP_REV_WIDE_*). It
+ * exists only with CAPSTONE_VM_IDS=55, and a flat 55 build has no other width: the RTL walks a flat table by slot. */
+#if CAPSTONE_VM_INDEX_BITS != 16 && CAPSTONE_VM_INDEX_BITS != 18 && CAPSTONE_VM_INDEX_BITS != 20 && \
+    CAPSTONE_VM_INDEX_BITS != 25
+#error "CAPSTONE_VM_INDEX_BITS: 16 (vp2, batch), 18 (bitstreams 2/3), 20 (ids20, {generation[29:20], index[19:0]}) or 25 (ids55)"
+#endif
+#if (CAPSTONE_VM_INDEX_BITS == 25) != (CAPSTONE_VM_IDS == 55 && defined(CAPSTONE_VM_FLAT_TABLE))
+#error "CAPSTONE_VM_INDEX_BITS=25 is the flat CAPSTONE_VM_IDS=55 build's width, and that build's only one"
 #endif
 #define CV_FLAT_RECORDS_MAX (1UL << CAPSTONE_VM_INDEX_BITS)
+#if CAPSTONE_VM_INDEX_BITS == 25
+/* 2^25 records is 512 MiB per context, more than the 256 MiB CMA pool the board and its twin reserve, so the
+ * default is 2^20 (16 MiB of CMA; gcc train T3 holds ~816k live) and a larger value is the kit's to ask for. */
+#define CV_FLAT_RECORDS_DEFAULT (1UL << 20)
+#else
+#define CV_FLAT_RECORDS_DEFAULT CV_FLAT_RECORDS_MAX
+#endif
 #if CV_FLAT_RECORDS_MAX > CV_ID_RECORDS_MAX
 #error "the flat table's index width exceeds the lifetime id's"
 #endif
@@ -218,11 +232,14 @@ module_param(index_bits, ulong, 0444);
  * lifetime. The board kit and the prediction kit load with this UNSET; the recorded value comes
  * from the module's own published capacity (table[0] below, via node_capacity() into
  * stats.node_capacity), never from the invocation. */
-static unsigned long node_flat_records = CV_FLAT_RECORDS_MAX;
+static unsigned long node_flat_records = CV_FLAT_RECORDS_DEFAULT;
 module_param(node_flat_records, ulong, 0444);
 #if CAPSTONE_VM_INDEX_BITS == 16
 MODULE_PARM_DESC(node_flat_records,
     "vp2 flat table records (default and maximum 65536; a larger value is refused at insmod)");
+#elif CAPSTONE_VM_INDEX_BITS == 25
+MODULE_PARM_DESC(node_flat_records,
+    "ids55 flat table records (default 2^20, maximum 2^25; a larger value is refused at insmod)");
 #else
 MODULE_PARM_DESC(node_flat_records,
     "flat table records (default and maximum 2^index_bits; a larger value is refused at insmod)");
@@ -333,6 +350,13 @@ static unsigned long node_available(const struct context *c)
 #define CV_BUDDY_MAX_ORDER (MAX_ORDER - 1)
 #endif
 static struct miscdevice device;
+#if CAPSTONE_VM_INDEX_BITS == 25
+/* ids55 only: the first table this load allocates, and every failure up to a budget, are one KERN_EMERG line each,
+ * so the module's first board boot records where its table came from (pa inside the CMA pool, linear or not) and why
+ * an open failed. The other widths' objects are unchanged: their kits' parsers have never seen this line. */
+#define CV_TABLE_NOTE_BUDGET 4U
+static unsigned table_notes;
+#endif
 static unsigned long *node_new_flat_table(struct context *c)
 {
     unsigned long *p;
@@ -344,6 +368,19 @@ static unsigned long *node_new_flat_table(struct context *c)
         if (p) c->table_pa = virt_to_phys(p);
     }
     if (p) c->stats.node_bytes += CV_FLAT_BYTES;
+#if CAPSTONE_VM_INDEX_BITS == 25
+    if (table_notes < CV_TABLE_NOTE_BUDGET && (!p || !table_notes)) {
+        const char *from = get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER ? "CMA" : "buddy";
+        ++table_notes;
+        if (p)
+            pr_emerg("capstone_vm: flat table %lu records, %lu bytes, from %s, pa %llx, %s mapping\n",
+                     CV_FLAT_RECORDS, CV_FLAT_BYTES, from, (unsigned long long)c->table_pa,
+                     virt_addr_valid(p) && virt_to_phys(p) == c->table_pa ? "linear" : "NON-LINEAR");
+        else
+            pr_emerg("capstone_vm: flat table %lu records, %lu bytes, from %s: ALLOCATION FAILED\n",
+                     CV_FLAT_RECORDS, CV_FLAT_BYTES, from);
+    }
+#endif
     return p;
 }
 
