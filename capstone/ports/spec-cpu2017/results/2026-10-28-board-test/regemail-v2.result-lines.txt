@@ -1,0 +1,41 @@
+# Directed perlbench re/reg_email boot v2 (PREREG Addenda 13, 15, 16; P26) on board 1, bitstream 3 (e7af48457),
+# kit bkit12-perf-b3-b1, 2026-10-30 18:23-19:36. Result lines only; transcript board.txt sha256 af3a335224540d3e.
+
+  @@SPEC-END 0 run capstone-spatial 0 rc=139 up0=203.95 up1=273.74 sys=542961398,71348557,2237 nbench=2  :: bench cycles=542961398 instret=71348557 entries=2237
+  @@DIR capstone-spatial japh/abigail err-bytes=22726 out-lines=0
+  @@DIR-ERR capstone-spatial japh/abigail: capstone-exec: domain fault cause=2 pc=0x3fa1c11eb0 address=0xc0001073 entry=0x3fa1c00974 code=0x3fa1c00000-0x3fa2000000 last=0x19 preparing=0x19 sha256=6b1a30a5b1e71f58 image=/test-domains
+  @@DIR-ERR capstone-spatial japh/abigail: Segmentation fault
+  @@SPEC-END 1 run capstone-spatial 1 rc=139 up0=297.10 up1=498.61 sys=3155451006,752338028,6069 nbench=3  :: bench cycles=3155451006 instret=752338028 entries=6069
+  @@DIR capstone-spatial re/reg_email err-bytes=26647 out-lines=0
+  @@DIR-ERR capstone-spatial re/reg_email: capstone-exec: domain fault cause=2 pc=0x3f92011eb0 address=0xc0001073 entry=0x3f92000974 code=0x3f92000000-0x3f92400000 last=0x3f preparing=0x3f sha256=6b1a30a5b1e71f58 image=/test-domains
+  @@DIR-ERR capstone-spatial re/reg_email: Segmentation fault
+  @@SPEC-END 2 run capstone-lifetimes 0 rc=139 up0=558.23 up1=628.66 sys=555377142,71713884,2291 nbench=4  :: bench cycles=555377142 instret=71713884 entries=2291
+  @@DIR capstone-lifetimes japh/abigail err-bytes=22733 out-lines=0
+  @@DIR-ERR capstone-lifetimes japh/abigail: capstone-exec: domain fault cause=29 pc=0x3f934124c4 address=0x3f928237d0 entry=0x3f93400974 code=0x3f93400000-0x3f93800000 last=0x19 preparing=0x19 sha256=371553e3b5adffa7 image=/test-do
+  @@DIR-ERR capstone-lifetimes japh/abigail: Segmentation fault
+  @@SPEC-END 3 run capstone-lifetimes 1 rc=139 up0=651.93 up1=857.31 sys=3168238307,752682676,6125 nbench=5  :: bench cycles=3168238307 instret=752682676 entries=6125
+  @@DIR capstone-lifetimes re/reg_email err-bytes=26654 out-lines=0
+  @@DIR-ERR capstone-lifetimes re/reg_email: capstone-exec: domain fault cause=29 pc=0x3f894124c4 address=0x3f88506500 entry=0x3f89400974 code=0x3f89400000-0x3f89800000 last=0x3f preparing=0x3f sha256=371553e3b5adffa7 image=/test-do
+  @@DIR-ERR capstone-lifetimes re/reg_email: Segmentation fault
+  @@DIRV-END camp-k5 rc=0 up0=913.02 up1=1046.08 sys=2358608502,566559995,3456 nbench=6 CAPSTONE_VM_STATS arenas=180 pages=1726 peak=1761 nodes=818 steps=3456 faults=1831 collections=0 r...
+  @@DIRV-SUM camp-k5 err-bytes=22753 out-lines=6 ok=5 notok=0 plan=1..5
+  @@DIRV-END camp-k6 rc=139 up0=1107.22 up1=1308.58 sys=3154018667,752337154,6042 nbench=7  :: bench cycles=3154018667 instret=752337154 entries=6042
+  @@DIRV-SUM camp-k6 err-bytes=26645 out-lines=0 ok=0 notok=0 plan=
+  @@DIRV-ERR camp-k6: capstone-exec: domain fault cause=2 pc=0x3fb7811eb0 address=0xc0001073 entry=0x3fb7800974 code=0x3fb7800000-0x3fb7c00000 last=0x3f preparing=0x3f sha256=6b1a30a5b1e71f58 image=/test-domains/vbatch/spec/bin/caps
+  @@DIRV-ERR camp-k6: Segmentation fault
+  @@DIRV-END camp-e6 rc=0 up0=1369.62 up1=2070.04 sys=14012618139,3392743888,12178 nbench=8 CAPSTONE_VM_STATS arenas=180 pages=1770 peak=1860 nodes=974 steps=12178 faults=4642 collections=0 ...
+  @@DIRV-SUM camp-e6 err-bytes=27069 out-lines=2 ok=1 notok=0 plan=1..1
+  @@DIRV-END fix2-e6 rc=0 up0=2131.28 up1=2831.98 sys=14010290627,3392851728,12175 nbench=9 CAPSTONE_VM_STATS arenas=180 pages=1770 peak=1860 nodes=974 steps=12175 faults=4642 collections=0 ...
+  @@DIRV-SUM fix2-e6 err-bytes=27069 out-lines=2 ok=1 notok=0 plan=1..1
+  @@DIRV-END fix2-full rc=0 up0=2889.89 up1=4022.13 sys=23008050537,5812734644,16892 nbench=10 CAPSTONE_VM_STATS arenas=180 pages=1771 peak=1864 nodes=1013 steps=16892 faults=4903 collections=0...
+  @@DIRV-SUM fix2-full err-bytes=28152 out-lines=14 ok=13 notok=0 plan=1..13
+
+## P26, row by row
+- abigail (control): T1 cause 2 at code +0x11eb0, T3 cause 29 at +0x124c4: the twin's cause and offset. HOLDS.
+- reg_email T1 / T3: end at 0.752338e9 / 0.752683e9 instret, cause 2 at +0x11eb0 / cause 29 at +0x124c4 (band 0.7505-0.7535e9). HOLDS (the 'end' branch).
+- camp-k6: end at 0.752337e9, cause 2 at +0x11eb0. HOLDS (the 'end' branch).
+- camp-k5: 1..5 (ok 5) at 0.566560e9 (~0.567e9). HOLDS.
+- camp-e6: 1..1 at 3.392744e9 (~3.393e9); no end, so the model is not refuted. HOLDS.
+- fix2-e6: 1..1 at 3.392852e9; fix2-full: 1..13 (ok 13, notok 0) at 5.812735e9 (~5.813e9); no fault line in either. HOLDS.
+P26: AS PREDICTED in every row. On silicon, reg_email's end is the realloc exactness trap named in Addendum 16, and the
+fixed heap (spec-realloc-fix fec598c8c32c + a5ad85f49dca) runs the whole sub-test to 13/13 at the twin's instruction count.
