@@ -35,7 +35,11 @@ word0 = {depth[13:0]@63:50, next[49:25], prev[24:0]}. rev_node_t is 137 bits.
 **Gates on 325966ee4:**
 - Lint s12 PASS at REF: LATCH 44, MULTIDRIVEN 3, UNOPTFLAT 39 (names identical), UNUSEDSIGNAL 1479 (REF 1480; +48
   attributed by name), every other counter at baseline.
-- 95-sweep vs e7af48457: 92 identical, 0 differ, 3 missing on both sides.
+- 95-sweep vs e7af48457: 92 identical, 0 differ, 3 missing on both sides. These counts compare exceptions, readings
+  and retired instructions.
+  - Cycles were re-read 2026-10-31 with the repaired reader (dev b71a4db444f0) from the same run directories, both
+    sides at time_out 400,000. 3 of 92 differ: untagged-ldc-stc-fixup 4,810 -> 4,812 (+2),
+    s07-wbuf-forward-residual 13,765 -> 13,698 (-67), and its -ctl 29,105 -> 29,036 (-69). Not yet explained.
 - 16 wide-record arms are EQUAL to their narrow builds on e7af48457, value by value.
 - The va-runv family (23 builds) is EQUAL.
 - GEN_HI 41, CSNODE_HI 0x40020, CSNODE_FULL 30, POOL_PROBE 25 and CAP_A1 read as pre-registered.
@@ -141,7 +145,8 @@ first test of csbi-batch d9da397's capstone_csmint.S.
 The id is {gen[29:20], idx[19:0]}; word1 carries gen at [59:50] and parent at [49:30].
 - Size gate PASS: core +90 LUT / +35 FF, mapping 5,003.7 MB, 0 loops, presence OK.
 - vp3-idx20.S: three arms read as pre-registered on 741aff6a6, and fail on e7af48457.
-- 95-sweep: 92 identical, 0 differ, 3 missing on both sides.
+- 95-sweep: 92 identical, 0 differ, 3 missing on both sides. Cycles, re-read 2026-10-31 with the repaired reader:
+  0 of 92 differ.
 - Full build, sealed: PASS on every pre-registered key.
   - Placed LUT 168,935 against 169,061 ±2,000; FF 63,681 against 63,647 ±300.
   - Congestion: no window above level 5 (the placer's maximum is level 4, as on b3). The first grade used only the
