@@ -653,3 +653,57 @@ changes:
     decides:
     - cause 4 or 6 is a misaligned access (Q-34);
     - another cause at a pc outside heap code is a silicon-vs-twin divergence in that code.
+
+## Addendum 16 (2026-10-30 18:10, before the directed reg_email boot runs): the twin reproduces the end; cause named
+
+**Finding, offline, from the QEMU twin (kit-q34), not from the board.** The campaign T1 image (6b1a30a5) ends re/reg_email
+with `domain fault cause=2` at code+0x11eb0 (`realloc+0x7c`, an `unimp` trap) in 14 of 15 invocation variants run on
+the twin. Those are: the launcher run directly, a harness-like environment, board paths, ASLR off/on, and environment
+padding of 8-512 B. The fault comes at 0.75107e9-0.75251e9 instructions; the board read 0.75233e9 (T1) and 0.75266e9 (T3).
+With 1024 B of padding it passes. The fix2 image (2d7952ad, the spec-realloc-fix SDK) completes all 15 at
+5.8103e9-5.8118e9. Record: spec/perl-regemail/sweep1/guest/serial.log, FINDINGS.md.
+
+**Mechanism** (a model of mallocng's arithmetic, native/sim63.py, checked against a native allocation trace).
+- perl's savestack grows by exact-size realloc (scope.c:129-130).
+- Its entries are 16 B on Capstone, so it reaches mallocng's large class early in email 6 and crosses 2^18 B there.
+- The realloc to 261,888 B moves it to a fresh mapping. Its offset comes from ctx.mmap_counter, stepped to a multiple
+  of 256.
+- The next realloc, to 263,680 B (granule 512), keeps that offset. A key that is 256 mod 512 cannot be published
+  exactly, so the heap's exactness check traps. In T3, CDERIVE refuses the same thing (cause 29, realloc+0x5c8).
+- Whether it fires depends on the process's allocation history, which shifts mmap_counter. It does not depend on the
+  kernel or ASLR: heap mappings are reserved aligned to their own granule.
+
+So the board/twin difference is environmental, NOT silicon. The census and Addendum-13 twin references passed only
+because of their environments.
+
+**Corrections to Addendum 15.**
+1. Its candidate "the board kernel (6.4.14) and the twin's (6.1) may place the heap differently" is refuted, as above.
+2. The slot-granule fix (a5ad85f49dca) is folded into musl patch 0009, not a patch 0011.
+3. P25's "camp-k6 ... ok=5" cannot be read. perl's stdout is block-buffered and lost at the fault, so an ending row
+   has 0 output lines.
+4. camp-e6 alone does not reach the trapping sequence (its fresh mapping lands at 262,144 B, already granule-512), so
+   P25's "camp-e6 ends" branch is not expected.
+
+**Twin references for the v2 stage** (spec/perl-regemail/v2-twin-b; every row passes on the twin, with the twin's
+environment). On the twin both T1 abigail and T3 abigail fault as before.
+
+| row | twin result |
+|---|---|
+| abigail T1 | cause 2 at +0x11eb0, 0.07138e9 |
+| abigail T3 | cause 29 at +0x124c4, 0.07175e9 |
+| reg_email T1 | `1..13`, 5.8128e9 |
+| reg_email T3 | `1..13`, 5.8131e9 |
+| camp-k5 | `1..5`, 0.56689e9 |
+| camp-k6 | `1..6`, 3.89734e9 |
+| camp-e6 | `1..1`, 3.39312e9 |
+| fix2-e6 | `1..1`, 3.39323e9 |
+| fix2-full | `1..13`, 5.81282e9 |
+
+**P26, on board 1, replacing P25's predictions for the DIRV rows:**
+- abigail as P24.
+- reg_email T1/T3 and camp-k6: either `1..13`/`1..6`, or an end at 0.7505e9-0.7535e9 with cause 2 at +0x11eb0 (T1)
+  and cause 29 at +0x124c4 (T3). The board environment decides which. If it ends, the fault line in its stderr is
+  the reading that ties the board to this mechanism.
+- camp-k5 `1..5` at ~0.567e9.
+- camp-e6 `1..1` at ~3.393e9; an end here would refute the model.
+- fix2-e6 `1..1` and fix2-full `1..13` at ~5.813e9, with no fault line in any variant.
