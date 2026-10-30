@@ -91,7 +91,7 @@ main() {
     0) echo "OB BARE CONFIRMED: the variant's identity reads on board 2" >> "$O";;
     1) echo "OB STOP: bare kit VOID (the control failed or an image did not read its SR)" >> "$O"; touch "$ROOT/.objb-stopped"; return 1;;
     3) echo "OB STOP: bare kit STOP: board 2 reads bitstream 3's objb-stale vector; the variant is not on the board" >> "$O"; touch "$ROOT/.objb-stopped"; return 3;;
-    4) echo "OB STOP: bare kit FINDING (identity not confirmed); the reading goes to the RTL lane" >> "$O"; touch "$ROOT/.objb-stopped"; return 4;;
+    4) echo "OB STOP: bare kit FINDING (identity not confirmed, or a cost shape changed something other than cycles); the main kits stay disarmed and the reading goes to the RTL lane" >> "$O"; touch "$ROOT/.objb-stopped"; return 4;;
     *) echo "OB STOP: bare kit not run or no data (rc=$r)" >> "$O"; touch "$ROOT/.objb-stopped"; return 1;;
   esac
   # 6. The kit.

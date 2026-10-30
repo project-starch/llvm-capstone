@@ -14,8 +14,9 @@ Rules (Addendum 1's verdicts; each one but the passing one stops the driver):
   ObjBounds, all but objb-pcc on bitstream 3) returned and reads its table SR.
 - ObjBounds: STOP if objb-stale reads bitstream 3's vector (the variant is not on the board, or the macro did not
   reach it). CONFIRMED when objb-stale reads the ObjBounds vector exactly AND objb-pcc returns `0xbb5 0x0 0x0`.
-  Any other identity reading is a FINDING. A cost shape whose non-cycle positions differ is listed as a FINDING line
-  and its cycles are not read; CONFIRMED is the identity verdict, as the PREREG grades it.
+  Any other identity reading is a FINDING. So is a cost shape whose non-cycle positions (minstret, value, trap count,
+  cause) differ from the table: if ObjBounds changes anything but cycles, the rung measures the wrong thing (the
+  coordinator's ruling, 2026-10-30). CONFIRMED needs the identity AND every cost shape's non-cycle positions.
 - Bitstream 3: AS EXPECTED only when the control holds, every returning image reads its SR, objb-stale reads
   bitstream 3's vector, every cost shape's non-cycle positions equal the table, and objb-pcc does NOT return.
   STOP (wrong bitstream) if objb-stale reads the ObjBounds vector or objb-pcc returns; FINDING for any other mismatch.
@@ -101,10 +102,12 @@ def grade(out, arm):
             verdict, rc = "STOP: objb-stale reads bitstream 3's vector on the ObjBounds board", 3
         elif void:
             verdict, rc = 'VOID: a returning image did not read its SR', 1
-        elif stale == T['objb-stale'][2] and R['objb-pcc'][0] and R['objb-pcc'][2] == [0xbb5, 0, 0]:
-            verdict, rc = 'CONFIRMED', 0
-        else:
+        elif not (stale == T['objb-stale'][2] and R['objb-pcc'][0] and R['objb-pcc'][2] == [0xbb5, 0, 0]):
             verdict, rc = f'FINDING: identity not confirmed (objb-stale {h(stale)}, objb-pcc returned={R["objb-pcc"][0]} {h(R["objb-pcc"][2])})', 4
+        elif find:
+            verdict, rc = 'FINDING: identity confirmed, but a cost shape changed something other than cycles', 4
+        else:
+            verdict, rc = 'CONFIRMED', 0
     else:
         if stale == T['objb-stale'][2]:
             stop.append("objb-stale reads the ObjBounds vector on the bitstream-3 board")

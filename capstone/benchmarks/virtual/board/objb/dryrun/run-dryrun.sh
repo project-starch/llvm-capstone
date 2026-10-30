@@ -7,7 +7,7 @@
 #  OB_FLASH  -> flash-stub.sh (rc $OB_FLASH_RC, default 0);   OB_NVRB -> exits 3 (name matches, no sha256 exposed);
 #  SB_RUN    -> sbrun-stub.sh: the REAL run-stage.py with BOARDVM_STUB_TRANSCRIPT = the stage's stub.
 # Usage: run-dryrun.sh <case> <scratch dir>. Cases: pos, neg-sha, neg-nobit, neg-b4, neg-flash, neg-bare-stop,
-# neg-bare-void, neg-void, neg-control. The bare kit (objb-bare.sh) runs with supbare-stub.py as its runner (OBB_SCEN).
+# neg-bare-void, neg-bare-s3, neg-void, neg-control. The bare kit (objb-bare.sh) runs with supbare-stub.py as its runner (OBB_SCEN).
 main() {
   set -u
   local CASE=${1:?case} T=${2:?scratch dir} D H
@@ -30,7 +30,7 @@ main() {
   case $CASE in neg-void|neg-control) export OB_PILOT_VARIANT=$CASE;; esac
   # the bare identity kit: the REAL objb-bare.sh and grader; the runner, busy check and hub stubbed
   export OBB_RUN="python3 $D/supbare-stub.py" OBB_BUSY=true OBB_BOOK="bash $D/book-stub.sh" OBB_SCEN=objb-confirmed
-  case $CASE in neg-bare-stop) export OBB_SCEN=objb-stop;; neg-bare-void) export OBB_SCEN=objb-void;; esac
+  case $CASE in neg-bare-stop) export OBB_SCEN=objb-stop;; neg-bare-void) export OBB_SCEN=objb-void;; neg-bare-s3) export OBB_SCEN=objb-s3-minstret;; esac
   unset BOARDVM_STUB_TRANSCRIPT
   taskset -c 16-31,48-63 bash "$D/../objb-first.sh" "$T/objb.log" "$BIT" "$SHA"; local rc=$?
   echo "== $CASE: objb-first rc=$rc"

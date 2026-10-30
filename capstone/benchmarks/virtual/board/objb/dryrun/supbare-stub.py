@@ -2,7 +2,7 @@
 """OBB_RUN for the dry run: stands in for run_sup_bare.py. No console call. Writes <SUP_OUT>/uart.txt and run.log as
 the runner does, with the vector the RTL lane's PREREG tables give for this image under scenario $OBB_SCEN, and exits
 0 (SUPTEST END seen) or 2 (no return: the runner's timeout path).
-Scenarios: objb-confirmed, objb-stop (objb-stale reads bitstream 3's vector), objb-void (objb-pcc-ctrl reads wrong),
+Scenarios: objb-confirmed, objb-stop (objb-stale reads bitstream 3's vector), objb-void (objb-pcc-ctrl reads wrong), objb-s3-minstret (identity confirmed, s3's minstret off by one),
 bs3-pass (bitstream-3 vectors, objb-pcc does not return), bs3-finding (bitstream 3, objb-stale off by one word),
 bs3-stop (bitstream 3, objb-pcc returns)."""
 import os, sys, importlib.util
@@ -18,6 +18,7 @@ ret = not (arm == 'bs3' and img == 'objb-pcc')
 if scen == 'objb-stop' and img == 'objb-stale': vec = list(v3)
 if scen == 'objb-void' and img == 'objb-pcc-ctrl': vec = [0xbb5, 0x19, 0]
 if scen == 'bs3-finding' and img == 'objb-stale': vec[7] = 0x3333
+if scen == 'objb-s3-minstret' and img == 'objb-perf-s3': vec[1] += 1
 if scen == 'bs3-stop' and img == 'objb-pcc': ret, vec = True, list(vo)
 txt = f'SUPTEST BEGIN {img}\nSB1\n'
 if ret:
