@@ -183,8 +183,10 @@ from a removed `work-ver/` after the Anvil prologue, and every PROVENANCE reads 
    - Per op, on one resident node: 3.96 cycles per LDC (s6) and 4.67 per STC (s7). These are the query's sim cost
      under memory delay 12, and a pattern, not a silicon value.
 3. **The FIRE arms.**
-   - `stale-access` reads 0x19 ×4, 0, 0x19 ×2, 0x77, 6 on the control. That is `sublet-bare`'s bitstream-3 silicon
-     vector. On the variant it reads 0 ×7, 0x3333, 0: every 25 is gone and the stale store lands.
+   - `stale-access` reads 0x19 ×4, 0, 0x19 ×2, 0x77, 6 on the control. That is the vector `sublet-bare` read on
+     silicon on the Sublet bitstream (`caplifive_sublet_d93a8d66b`, 2026-10-16). On e7af48457 it has not been read on
+     silicon yet; the kit's board 1 boot is the first. On the variant it reads 0 ×7, 0x3333, 0: every 25 is gone and
+     the stale store lands.
    - `r43-evict-live`: every 0x19 on the control reads 0 on the variant. Both trees end at the test's own capmode
      RVTEST_PASS (rc 1), as on every earlier tree.
    - `objb-pcc` completes on the variant (0xbb5 0 0). On the control it loops in its trap handler (76,882 trap lines)
@@ -199,8 +201,10 @@ from a removed `work-ver/` after the Anvil prologue, and every PROVENANCE reads 
        rvc_dead_tmo_q. Each is read only by the verdict that the macro removes.
      - The generated DYN unit 311 -> 309 (−2). Its wire names renumber with any source change, so this part is
        attributed by count only.
-   - 603528b8b sets the REF to 1435, verif/ only. The control's lint, on its own tree and REF 1431, is the paired
-     reading: (pending).
+   - 603528b8b sets the REF to 1435, verif/ only.
+   - The paired reading is the control's lint, on its own tree with REF 1431 (vp9 `.sup/lint-b-off.txt`): PASS, every
+     counter at baseline. Its 1,431 UNUSEDSIGNAL warnings equal the bitstream-3-era lint's as a multiset, by file and
+     by full message.
 5. **claim-auditor over the diff: SUPPORTED** for no new latch, loop, multi-driven or undriven signal, and for what
    the macro does. Its readings:
    - Every variable the removed arms assigned is defaulted at the top of `cap_violation_detection`:
@@ -221,7 +225,10 @@ from a removed `work-ver/` after the Anvil prologue, and every PROVENANCE reads 
    - "The cache keeps filling and is never read" is true in simulation only. In synthesis the cache has no observer
      and should be trimmed, together with its four `(* ram_style = "distributed" *)` tag arrays
      (load_store_unit.sv:1168-1174, 4 × 64 × 30 bits). That is key 3.
-6. **Kit image sims:** `objb-bare-2026-10-30/PREREG.md`.
+6. **Kit image sims** (vp8 `.sup/kit-b-on`, vp9 `.sup/kit-b-off`): `objb-bare-2026-10-30/PREREG.md`.
+   - Every non-cycle position is equal across the trees.
+   - objb-stale and objb-pcc separate the two bitstreams.
+   - The cost shapes read the same pattern as the arms.
 7. **95-test sweep, both trees:** (pending; a precondition of the flash, not of synthesis).
 
 ## Synthesis pre-registration (objbounds-b 603528b8b; written and pushed before the gate request)
@@ -274,6 +281,11 @@ The control for every key is bitstream 3's own build of e7af48457, read by the s
 - A routing failure gives the placed area and keys 1-5 plus a congestion census, and no WNS.
 
 ## Corrections
+
+- **Corrected 2026-10-30, the same evening, on the lane only.** c8be354d28ef's Gates section called stale-access's
+  control vector "sublet-bare's bitstream-3 silicon vector". sublet-bare read it on `caplifive_sublet_d93a8d66b`, not
+  on e7af48457 (`sublet-bare-2026-10-15/PREREG.md`, the board section). No bare stale-access reading on e7af48457 is
+  on record. Found while writing the kit's PREREG, by checking the claim against that file.
 
 - **Retracted 2026-10-30, the same day, before anything went to synthesis.** The first cost analysis sent to the runtime
   lane said that the check's cost is set by misses and that a hit is free. It listed four consumers, with every DYN-unit
