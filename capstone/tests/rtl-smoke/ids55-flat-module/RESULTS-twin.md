@@ -50,4 +50,33 @@ Against the predictions:
 - The stage image was b05dcf06469c2024, hashed directly. The record's BEGIN line has an empty image field because its
   script hashed a directory.
 
-The board boot (section 2) is run by the runtime lane under spec-silicon c9ee688c8629, Addendum 14.
+## F0r: F0's Tier 1 with resolve_dirty=1 (addendum 3)
+
+- **The prediction holds.** F0r equals F0 in all 45 cells: 34/45, with the same 11 failures, `vm` exit 1, and an
+  identical final stats line.
+- The twin never takes resolve_dirty's branch, so this shows only that the parameter changes nothing there. The silicon
+  evidence for the branch is S-24's r13 reading.
+- The record's `END rc=0` is the status of `date`, not of run.py; the reading is result.json, status FAIL.
+
+## Board: bitstream 325966ee4, board 2 (section 2 and addendum 3)
+
+The runtime lane ran the boots: spec-silicon Addendum 14 (c9ee688c8629) and Addendum 17 (cd44551c2ae4). Their result lines
+are under `ports/spec-cpu2017/results/2026-10-28-board-test/b4/`. The readings below were re-read from the raw transcripts.
+
+- **Boot 1: module and table.** The module hash was 6422805f, and the launcher was 62753dd6. The allocation line read
+  `CMA, pa ac100000, linear mapping`, inside the board's CMA window 0xac000000..0xbbffffff. That is prediction 8's board
+  half. The live counts equal F0's.
+- **Boot 2: Tier 1, module loaded bare.** 28/45. `vm` read 139 because of S-24: its fix, resolve_dirty, defaults off.
+  Section 2 had wrongly taken F0 as the board reference. Addendum 3 repairs that.
+- **Boot 3 (b4-t1c): Tier 1 with resolve_dirty=1 resolve_pte=1, kit bkit14-b4r-b2.** The kit's .ko is 6422805f, and
+  both parameters read back Y three times.
+  - Every cell equals F0r's except the two the addendum pre-registered: cleanup, false on the board by construction, and
+    spin_entered, excluded. That is 33/45 against 34/45. The twin column of the runtime lane's judge matches
+    `t1-F0r/result.json` in all 45 cells.
+  - `VM_EXIT:vm:1`, the twin's status. The S-24 bound line (`... with no change`) is absent. As a control, the same grep
+    finds it once in boot 2's transcript.
+  - The allocation line again reads CMA, pa ac100000, linear.
+  - Transcript: spec.txt sha256 d3dc5c8b0b10be20.
+
+**So the flat ids55 module matches its twin reference on silicon, provided it is loaded with resolve_dirty=1.** B's
+kits load it that way. S-24's D=0 PTE value is still unread: with the fix on, the loop never forms.
