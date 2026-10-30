@@ -91,8 +91,11 @@
 ## readings (not predictions; written after the boot)
 - 4 of the 5 OFF cells come from the vm step. It exits 139 with cause 15 at its arena 0x3fb8500000 + 0x2000
   (p[8192]), and the module's own S-24 bound line ("resolved 65 times with no change") is in the step text.
-  That is S-24 (ISSUES.md), which the twin cannot show. Its fix (resolve_dirty) defaults off, and the kit loaded
-  the module with no parameters. The extra fault shifts fault_sites by one (nested_denial_site, vm_denial_sites);
+  CORRECTED (Addendum 17): the attribution to S-24 (ISSUES.md) is by shape and bound line only. The bound line reads
+  `pte rc=-38 ... dirty=-1` because resolve_pte was off, so S-24's defining value (a PTE with V R W A set and D = 0)
+  was not read. Boot b4-t1c (resolve_dirty=1 resolve_pte=1) settles it. The twin cannot show S-24. Its fix
+  (resolve_dirty) defaults off, and the kit loaded the module with no parameters.
+  The extra fault shifts fault_sites by one (nested_denial_site, vm_denial_sites);
   the missing vm stats line leaves 10 CAPSTONE_VM_STATS lines where 11 are expected (linux_pages_released,
   linux_demand_faults). The pre-registration's error: a twin reference for a step with a known silicon-only issue.
 - spin_entered: OPEN. run.sh kills the spin child after a QEMU-sized 'sleep 5', and /tmp/spin.out is empty. Candidate:

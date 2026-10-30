@@ -1,0 +1,121 @@
+b4-t1c stubbed dry run (PREREG Addendum 17), 2026-10-30 18:37:34.
+The REAL b4-t1c.sh -> b4r-boot.sh -> run-stage.py -> boardvm ran; stubbed: the busy check (SB_BUSY=true), the hub
+(book stub), the resident read-back (TC_NVRB, rc 3 = name matches) and the board (BOARDVM_STUB_TRANSCRIPT = a case
+from build-t1c-stubs.py, made from t1b's real board.txt and F0r's runpy.log). Kit bkit14-b4r-b2 (params ff33a066fb679956).
+
+== case pos
+TC inputs checked 18:37:12: run.py 11c47d62fe9f34ae, run.sh df5b86a3fea4a245, F0r b7acfc11080f400c
+TC RESIDENT board 2 holds caplifive_vp2c_325966ee4.bit (rc=3)
+TC BOOT BEGIN 18:37:12
+SB BEGIN 18:37:12 board 2 kit bkit14-b4r-b2 stage b4-t1c booking stub-booking
+SB END rc=1 18:37:12
+TC BOOT END rc=1 18:37:12
+    OK  read-back @@PARAM resolve_dirty (board.txt) ['Y']
+    OK  read-back @@T1C-RD resolve_dirty ['Y']
+    OK  read-back @@T1C-RD2 resolve_dirty ['Y']
+    OK  read-back @@PARAM resolve_pte (board.txt) ['Y']
+    OK  read-back @@T1C-RD resolve_pte ['Y']
+    OK  read-back @@T1C-RD2 resolve_pte ['Y']
+    EXC spin_entered                 board False twin True   (excluded from the prediction; reported)
+    OK  P2 (S-24) vm: ['VM_EXIT:vm:1'], execute-through-PCC lines 1, S-24 bound lines 0
+    OK  P3 fault causes [25, 25, 28, 25, 15, 13, 13, 28, 25] (predicted [25, 25, 28, 25, 15, 13, 13, 28, 25])
+    REP spin pair: wait 5 s rc=143 ready=0; wait 15 s rc=143 ready=1 -> reading A: slow start -- the 5 s wait is shorter than a spin launch on this board; spin works on B
+    REP Tier 1 spin_entered (its own 5 s wait): False
+    REP clock: ok rc=0 wall(date) 7.1 s, wall(uptime) 7.099999999999909 s, launcher elapsed 6.38255464 s, launch 3.78154344 s; elapsed/uptime 0.899
+  B4-T1C 32 of 45 true; twin F0r 34 of 45; AS PREDICTED (every cell equals F0r's but cleanup false and spin_entered excluded; P2, P3 hold)
+TC JUDGE rc=0
+TC DONE 18:37:12
+
+== case noparam
+TC inputs checked 18:37:12: run.py 11c47d62fe9f34ae, run.sh df5b86a3fea4a245, F0r b7acfc11080f400c
+TC RESIDENT board 2 holds caplifive_vp2c_325966ee4.bit (rc=3)
+TC BOOT BEGIN 18:37:12
+SB BEGIN 18:37:12 board 2 kit bkit14-b4r-b2 stage b4-t1c booking stub-booking
+SB END rc=1 18:37:12
+TC BOOT END rc=1 18:37:12
+  READBACK FAIL: no step text, and <dryrun>/dr-noparam/t1c/guest/board.txt reads {'resolve_dirty': [], 'resolve_pte': []} (boardvm refuses a run whose parameters do not read back): the boot did not run resolve_dirty=Y resolve_pte=
+TC JUDGE rc=3
+TC DONE 18:37:12
+
+== case paramN
+TC inputs checked 18:37:12: run.py 11c47d62fe9f34ae, run.sh df5b86a3fea4a245, F0r b7acfc11080f400c
+TC RESIDENT board 2 holds caplifive_vp2c_325966ee4.bit (rc=3)
+TC BOOT BEGIN 18:37:12
+SB BEGIN 18:37:12 board 2 kit bkit14-b4r-b2 stage b4-t1c booking stub-booking
+SB END rc=1 18:37:12
+TC BOOT END rc=1 18:37:12
+  READBACK FAIL: no step text, and <dryrun>/dr-paramN/t1c/guest/board.txt reads {'resolve_dirty': ['N'], 'resolve_pte': ['Y']} (boardvm refuses a run whose parameters do not read back): the boot did not run resolve_dirty=Y resolve
+TC JUDGE rc=3
+TC DONE 18:37:12
+
+== case pteN
+TC inputs checked 18:37:12: run.py 11c47d62fe9f34ae, run.sh df5b86a3fea4a245, F0r b7acfc11080f400c
+TC RESIDENT board 2 holds caplifive_vp2c_325966ee4.bit (rc=3)
+TC BOOT BEGIN 18:37:12
+SB BEGIN 18:37:12 board 2 kit bkit14-b4r-b2 stage b4-t1c booking stub-booking
+SB END rc=1 18:37:12
+TC BOOT END rc=1 18:37:12
+  READBACK FAIL: no step text, and <dryrun>/dr-pteN/t1c/guest/board.txt reads {'resolve_dirty': ['Y'], 'resolve_pte': ['N']} (boardvm refuses a run whose parameters do not read back): the boot did not run resolve_dirty=Y resolve_p
+TC JUDGE rc=3
+TC DONE 18:37:12
+
+== case s24
+TC inputs checked 18:37:12: run.py 11c47d62fe9f34ae, run.sh df5b86a3fea4a245, F0r b7acfc11080f400c
+TC RESIDENT board 2 holds caplifive_vp2c_325966ee4.bit (rc=3)
+TC BOOT BEGIN 18:37:12
+SB BEGIN 18:37:12 board 2 kit bkit14-b4r-b2 stage b4-t1c booking stub-booking
+SB END rc=1 18:37:12
+TC BOOT END rc=1 18:37:12
+    OK  read-back @@PARAM resolve_dirty (board.txt) ['Y']
+    OK  read-back @@T1C-RD resolve_dirty ['Y']
+    OK  read-back @@T1C-RD2 resolve_dirty ['Y']
+    OK  read-back @@PARAM resolve_pte (board.txt) ['Y']
+    OK  read-back @@T1C-RD resolve_pte ['Y']
+    OK  read-back @@T1C-RD2 resolve_pte ['Y']
+    OFF linux_demand_faults          board False twin True
+    OFF linux_pages_released         board False twin True
+    OFF nested_denial_site           board False twin True
+    EXC spin_entered                 board False twin True   (excluded from the prediction; reported)
+    OFF vm_denial_sites              board False twin True
+    OFF P2 (S-24) vm: ['VM_EXIT:vm:139'], execute-through-PCC lines 0, S-24 bound lines 1
+    OFF P3 fault causes [15, 25, 25, 28, 25, 15, 13, 13, 28, 25] (predicted [25, 25, 28, 25, 15, 13, 13, 28, 25])
+    REP spin pair: wait 5 s rc=143 ready=0; wait 15 s rc=143 ready=1 -> reading A: slow start -- the 5 s wait is shorter than a spin launch on this board; spin works on B
+    REP Tier 1 spin_entered (its own 5 s wait): False
+    REP clock: ok rc=0 wall(date) 7.1 s, wall(uptime) 7.099999999999909 s, launcher elapsed 6.38255464 s, launch 3.78154344 s; elapsed/uptime 0.899
+  B4-T1C 28 of 45 true; twin F0r 34 of 45; OFF THE PREDICTION: cells ['linux_demand_faults', 'linux_pages_released', 'nested_denial_site', 'vm_denial_sites']; P2 OFF; P3 OFF
+TC JUDGE rc=1
+TC DONE 18:37:12
+
+== case nospin
+TC inputs checked 18:37:13: run.py 11c47d62fe9f34ae, run.sh df5b86a3fea4a245, F0r b7acfc11080f400c
+TC RESIDENT board 2 holds caplifive_vp2c_325966ee4.bit (rc=3)
+TC BOOT BEGIN 18:37:13
+SB BEGIN 18:37:13 board 2 kit bkit14-b4r-b2 stage b4-t1c booking stub-booking
+SB END rc=1 18:37:13
+TC BOOT END rc=1 18:37:13
+    OK  read-back @@PARAM resolve_dirty (board.txt) ['Y']
+    OK  read-back @@T1C-RD resolve_dirty ['Y']
+    OK  read-back @@T1C-RD2 resolve_dirty ['Y']
+    OK  read-back @@PARAM resolve_pte (board.txt) ['Y']
+    OK  read-back @@T1C-RD resolve_pte ['Y']
+    OK  read-back @@T1C-RD2 resolve_pte ['Y']
+    EXC spin_entered                 board False twin True   (excluded from the prediction; reported)
+    OK  P2 (S-24) vm: ['VM_EXIT:vm:1'], execute-through-PCC lines 1, S-24 bound lines 0
+    OK  P3 fault causes [25, 25, 28, 25, 15, 13, 13, 28, 25] (predicted [25, 25, 28, 25, 15, 13, 13, 28, 25])
+    REP spin pair: NO DATA (lines for waits [])
+    REP Tier 1 spin_entered (its own 5 s wait): False
+    REP clock: NO DATA (0 @@T1C-CLOCK lines)
+  B4-T1C 32 of 45 true; twin F0r 34 of 45; AS PREDICTED (every cell equals F0r's but cleanup false and spin_entered excluded; P2, P3 hold)
+TC JUDGE rc=0
+TC DONE 18:37:13
+
+== judge only: the step text's RD2 reads resolve_pte=N while @@PARAM read Y (exit 3)
+  BAD read-back @@T1C-RD2 resolve_pte ['N']
+B4-T1C 32 of 45 true; twin F0r 34 of 45; READBACK FAIL: the boot did not run resolve_dirty=Y resolve_pte=Y; no reading
+
+== built artifacts (pos case's batch)
+10:[ -f /sys/module/capstone_vm/parameters/resolve_dirty ] && echo 1 > /sys/module/capstone_vm/parameters/resolve_dirty 
+11:[ -f /sys/module/capstone_vm/parameters/resolve_pte ] && echo 1 > /sys/module/capstone_vm/parameters/resolve_pte && e
+3:# gen-t1b.py's three substitutions (a tmpfs copy of this stage, the batch's launcher, a guarded insmod, here with
+10:grep -q "^capstone_vm " /proc/modules || insmod "$(dirname "$V")/capstone_vm.ko" resolve_dirty=1 resolve_pte=1 || exit 1
+spec/run.sh sha256 df5b86a3fea4a245; step bound in gate.sh: b -gt 5400 ] && b=5400

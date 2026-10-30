@@ -707,3 +707,82 @@ environment). On the twin both T1 abigail and T3 abigail fault as before.
 - camp-k5 `1..5` at ~0.567e9.
 - camp-e6 `1..1` at ~3.393e9; an end here would refute the model.
 - fix2-e6 `1..1` and fix2-full `1..13` at ~5.813e9, with no fault line in any variant.
+
+## Addendum 17 (2026-10-30 19:00, before the boot it names): B check boot 3 (b4-t1c), Tier 1 with the S-24 fix on
+
+**What boot 2 left.** b4-t1b (results in b4/b4-boots-1-2.result-lines.txt, 24769c569df0) read 40 of 45 cells equal to the
+twin F0. Four of the five off cells came from the vm step: it exited 139 with cause 15 at arena + 0x2000, and the step
+text carries S-24's bound line. The fifth, spin_entered, is open. That bound line reads `pte rc=-38 val=0x0
+present=-1 ... dirty=-1`: resolve_pte was off (its default; `int prc = -ENOSYS` stands), so S-24's defining value,
+a PTE with V R W A set and D = 0, was NOT read. **Correction to b4-boots-1-2.result-lines.txt** (its readings paragraph
+is amended in the same commit): the attribution to S-24 rests on the shape (cause 15 at arena + 0x2000, exit 139)
+and the bound line, with the mechanism's value unread. This boot settles it.
+
+**What changes: the kit, nothing else.**
+- t3-smoke/bkit14-b4r-b2 (make-b4r-kit.sh) is bkit13-b4-b2 plus one file, adapter/module/params (ff33a066fb679956):
+  `resolve_dirty=1` and `resolve_pte=1`. boardvm writes each through sysfs right after insmod, prints
+  `@@PARAM <name>=<read back>` and refuses the run unless both read Y. The module (6422805f49533ea5), launcher
+  (62753dd693cc4a25), board.env and recipe are bkit13's, by hash.
+- resolve_dirty=1 is the S-24 fix, two-sided on vp2 r13 and the module owner's decision (compiler lane, 2026-10-30).
+- resolve_pte=1 only adds the PTE value to S-24's bound line when that line fires (capstone_vm.c, the bound branch).
+  It changes no control flow, so it adds no second variable. If the loop still fires, its line now carries the value.
+- The stage b4-t1c (gen-t1c.py, run.sh df5b86a3fea4a245) is t1b's Tier 1 SCRIPT byte for byte except:
+  - the stage marker reads t1c;
+  - the guarded insmod (a fallback; boardvm has already loaded the module) carries both arguments;
+  - a must-fire read-back of both parameters (`@@T1C-RD`) follows it.
+  After the Tier 1 script's VIRTUAL_RUNTIME_DONE, every line is prefixed `@@T1C-` so the Tier 1 analysis cannot count
+  it:
+  - a second read-back (`@@T1C-RD2`);
+  - a clock check: `date +%s%N` and /proc/uptime, raw, around one `ok` launch, beside its launch_ns/elapsed_ns (R-52);
+  - the spin pair: the spin step with a 5 s wait, then with a 15 s wait, each killed with TERM and printing its own
+    `@@T1C-SPIN wait=<w> rc=<rc> ready=<count>`.
+- The reference is the twin F0r: F0's kit and module with resolve_dirty=1 (module-ids55 PREREG addendum 3,
+  3160e7d8e147). It equals F0 in all 45 cells, and vm exits 1 at `VM_CONTRACT_FAIL:execute through mapping PCC`. The
+  twin never takes the resolve_dirty branch (QEMU's guest kernel handles the D-clear fault), so F0r shows only that the
+  parameter changes nothing there. The silicon evidence for the branch is r13.
+
+**Boot.** Board 2, bitstream 4 resident (read back by name before the boot), no flash: `b4-t1c.sh <log>` ->
+`b4r-boot.sh 2 stages-directed/b4-t1c spec/b4-t1c/t1c 5400 120`. t1b's step ran ~46 min (91 heartbeats). Boot timeout =
+step + 600 s, inside the 120 min booking. The judge is b4-check-t1c.py.
+
+**Predictions** (exit 0 only if R, P1, P2 and P3 hold):
+- R: `@@PARAM resolve_dirty=Y` and `@@PARAM resolve_pte=Y` once each, and both `@@T1C-RD` and `@@T1C-RD2` read Y for
+  both. Otherwise READBACK FAIL, and the boot is no record of this configuration.
+- P1: every Tier 1 cell equals F0r's, except cleanup (false by construction) and spin_entered (excluded, reported).
+- P2, S-24's prediction for this boot:
+  - vm reads F0r's own status, exit 1 at `VM_CONTRACT_FAIL:execute through mapping PCC`;
+  - the four cells t1b's fault moved (nested_denial_site, vm_denial_sites, linux_pages_released, linux_demand_faults)
+    return to F0r's values (inside P1);
+  - no S-24 bound line fires.
+  Any other vm reading reopens t1b's attribution. If a bound line fires, its PTE value is the reading.
+- P3: the board's domain-fault causes are t1b's minus its leading cause 15: [25, 25, 28, 25, 15, 13, 13, 28, 25].
+
+**Spin pair: reported, not predicted.** The readings, fixed before the boot:
+
+| wait 5 s ready | wait 15 s ready | reading |
+|---|---|---|
+| 0 | 1 | A: slow start. The 5 s wait is shorter than a spin launch here (t1b's launch_ns 3.7-8.4 s against the twin's 8-22 ms); spin works on B, and t1b's spin_entered is a harness timing miss |
+| 1 | 1 | B: not a fixed start-up cost. t1b's miss needs another account |
+| 0 | 0 | C: no readiness within 15 s. Either still slower (read the clock line) or spin does not reach readiness on B; open, and next is a directed spin run |
+| 1 | 0 | D: inconsistent; read the outputs |
+
+Against A: vp2 boots b4c and b5 read spin_entered true with the same 5 s wait. The Tier 1 script's own
+spin_entered is reported beside the pair. The clock line is read as elapsed_ns against the uptime delta. A launcher
+elapsed time well above the wall time would make launch_ns, and so reading A's premise, a clock artifact (R-52).
+
+**VOID.** The boot is VOID, with no reading, if:
+- the kit or stage fails its hash checks (b4-t1c.sh/b4r-boot.sh STOP before booking);
+- the resident bitstream does not read back as caplifive_vp2c_325966ee4;
+- the board controls b0-stats/b0-hello fail;
+- the step is cut by its bound (@@STEP-BOUND);
+- the step text lacks VIRTUAL_RUNTIME_DONE (judge NO DATA).
+A READBACK FAIL is not VOID: it is a record that the configuration did not take, and no cell is read from it.
+
+**Dry run** (b4/dryrun-t1c.txt): the real b4-t1c.sh, b4r-boot.sh, run-stage.py and boardvm ran on stub transcripts
+built from t1b's board.txt (build-t1c-stubs.py):
+- pos: AS PREDICTED, exit 0, spin reading A;
+- no @@PARAM lines, resolve_dirty N, resolve_pte N: boardvm refuses, the judge reads READBACK FAIL, exit 3;
+- t1b's S-24 lines kept: OFF in the four cells, P2 and P3, exit 1;
+- no spin and clock lines: graded AS PREDICTED, both reported NO DATA;
+- the step's RD2 reading N under a passing @@PARAM (judge only): READBACK FAIL, exit 3.
+The built batch carries both sysfs writes in gate.sh and both insmod arguments in spec/run.sh.
