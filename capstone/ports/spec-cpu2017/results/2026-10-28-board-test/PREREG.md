@@ -588,3 +588,68 @@ Predictions are module-ids55 PREREG section 2 (1 and 3) as amended by its addend
 - The board console may not expose `nv_bitstream_sha256`. Then the readback is by name only, and the bitstream's
   identity rests on boot 1's 400000 reading.
 - `preempt` waits 5 s for the spin child. On bitstream 3 the board's older vm-suite passed that cell.
+
+## Addendum 15 (2026-10-30 12:35, before the boot it names): the directed reg_email boot, v2
+
+**What changed since Addendum 13.** Off the board, re/reg_email's end is localized to one input. The native x86 perl
+(perlbench_r_base.native-x86, `perf stat -e instructions:u`) runs the test with the first k emails:
+- k=5: 0.4246e9 instructions;
+- k=6: 3.0345e9 instructions;
+- all 13: 4.5332e9 instructions;
+- email 6 alone: 2.6394e9 instructions.
+
+The twin/native ratio over the whole test is 5.813e9 / 4.533e9 = 1.28, so on RISC-V k=5 is about 0.54e9 and k=6
+about 3.9e9. Both board arms ended at 0.752e9, early in email 6: `bammbamm (bam! bam! (bam! bam! (bam!)) bam!) @
+flintstones.org`, the only input with nested comments. That makes it the deepest `(?&comment)` recursion. The test
+prints its plan last (`done_testing`), so "no leader found" means the process ended before the end of the test,
+probably after `ok 1`..`ok 5`. t/TEST does not print subtest stdout. perl grows the regex save stack with `Renew`
+(realloc) under `regcppush` (scope.c `savestack_grow`, regexec.c:294 `SSGROW`).
+
+**Candidate, not a finding.** The campaign SDKs carry the two heap defects that the realloc fork fixed on
+spec-realloc-fix: realloc kept an offset that was not representable, and free() slots in the power-of-two-stride
+classes were bound half a granule off. Whether either fires depends on how the heap address is aligned, and the board
+kernel (6.4.14) and the twin's (6.1) may place the heap differently.
+
+**Stage.** `spec/stages-directed/500.perlbench_r-regemail-both-v2`. It is a copy of Addendum 13's stage with these
+changes:
+- **run.sh.** 0a9aaeb1820a6a60, was 43edc93047b4a535. Its Addendum 13 rows (both arms: abigail, then reg_email)
+  are unchanged and run first. After them come `@@DIRV` rows with their own markers, so the runner reads exactly the
+  Addendum 13 rows. In order:
+  1. camp-k5: the campaign T1 image (6b1a30a5b1e71f58) on `re/regemail_k5.t`, the first 5 emails;
+  2. camp-k6: the same image on `re/regemail_k6.t`, the first 6;
+  3. camp-e6: the same image on `re/regemail_e6.t`, email 6 alone;
+  4. fix2-e6: the fix2 T1 image (2d7952ad24af6bb6) on `re/regemail_e6.t`;
+  5. fix2-full: the fix2 T1 image on the full `re/reg_email.t`.
+- **The variant tests** are `head -n` cuts of reg_email.t: the same text up to `__DATA__`, then the chosen lines.
+- **The fix2 image.** It is tree-fix2's perlbench_r_base.capstone-spatial, stripped the way make-stage.py strips.
+  That method reproduces the staged campaign hash 6b1a30a5b1e71f58 exactly. Its SDK is perf-fix2/sdk-T1, built from
+  spec-realloc-fix. Against the campaign SDK perf/sdk-T1, compared member by member with llvm-ar x and cmp:
+  - libapplication-runtime.a: 26/26 members, only `heap.c.obj` differs;
+  - libc-capstone-virtual.a: 1361/1361 members, only `src_malloc_mallocng_malloc.o` differs (musl patch 0011,
+    the slot-granule header).
+
+  So the pair varies the heap fixes as one unit. There is no twin reference for the fix2 image; its reading is the
+  test's own TAP.
+- **Size and placement.** The stage is 6,394,467 B gzip -9, up from 4,826,982. The last perl test bake was
+  21,662,216 B with a stage 1.63 MB smaller, so this one is estimated at about 23.4 MB, under BOARD_FW_CAP
+  26,000,000. board-run.sh stops before the boot if it is over. The line replaces Addendum 13's on board 1's
+  continuation list, in place, with step 5400 s and booking 120 min.
+- **Host check.** The script was run with its /tmp paths moved and a fake launcher running native perl. Every row
+  returned: k5 `1..5`, k6 `1..6`, e6 `1..1`, fix2-full `1..13`.
+
+**P25, on board 1 (bitstream 3):**
+- **Addendum 13's rows read first, and P24 stands as written.** That includes the abigail control: if abigail does
+  not read the twin's cause and offset, the capture is broken and the boot says nothing.
+- **camp-k5:** rc 0, `1..5`, ok=5, 0.4e9-0.7e9 instructions. The first five inputs pass on silicon.
+- **camp-k6:** ends like the full test: no plan line, ok=5, and instret within 1% of 0.7523e9.
+- **camp-e6:** no cause is predicted, but both outcomes are informative.
+  - It ends before `1..1`, at about 0.2e9-0.35e9: the defect lies in email 6's own processing.
+  - It passes `1..1`: the end needs state built by emails 1-5, which points to heap history.
+- **Readings that name a cause:**
+  - **The heap defects.** fix2-full reads `1..13` with ok=13 at about 5.6e9-6.1e9, and fix2-e6 reads `1..1`, while
+    the campaign rows end. The campaign rows' stderr then names a fault in heap code (prepare_free, realloc, malloc).
+    A fix2 pass alone does not prove it, because the fix2 images also move the heap layout.
+  - **Not the heap defects.** fix2-e6 and fix2-full end at the same point as camp-e6 and camp-k6. The stderr line
+    decides:
+    - cause 4 or 6 is a misaligned access (Q-34);
+    - another cause at a pc outside heap code is a silicon-vs-twin divergence in that code.
