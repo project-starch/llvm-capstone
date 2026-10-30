@@ -100,7 +100,17 @@ lane branch first. The readings are synth's; the grades are this lane's.
   - By source (`core/capstone_dom_switcher.anvil.sv`), `_init_0` is set in reset (:7812) and cleared on every later clock
     (:9455, unconditional inside the else at :8138). So a path that starts at it carries one transition per reset.
   - It is ORed with `_thread_0_event_counter_870_1_q` into the same event (:7673, :6488), so the same downstream cone is
-    live from that flop. That flop's slack has not been read. These paths are not called false or harmless here.
+    live from that flop.
+  - **The cone is live: B's worst path is about −11.93 after reset** (synth's follow-up query on the routed checkpoint).
+    | Start | Worst slack | Levels |
+    |---|---|---|
+    | `_thread_0_event_counter_870_1_q` | −11.929 | 119 |
+    | every other dom_switcher flop (1,293); worst `req_en_q[0]` | −11.933 | |
+    | `_init_0`, the control | −11.964 | 119 |
+    - All three end at issue_read_operands `fu_data_q[0].cap_data.cap_metadata_b[25]`.
+    - The worst 500 count 0 paths from the counter only because the query keeps one path per endpoint, and `_init_0` is a
+      few ps worse at each of those endpoints. By start family the worst 500 are `_init_0` 496 and csr 4.
+    - Bitstream 2's worst 20 also ran from the domain switcher into fu_data_q, from `cur_idx_q`, at −9.790.
 
 **Flash gate, the non-cacheable tag: closed.**
 - The question: a refill's tag is the adapter's user lane (wt_dcache_mem.sv:355-358), and that lane is loaded from
@@ -134,8 +144,10 @@ The id is {gen[29:20], idx[19:0]}; word1 carries gen at [59:50] and parent at [4
 - 95-sweep: 92 identical, 0 differ, 3 missing on both sides.
 - Full build, sealed: PASS on every pre-registered key.
   - Placed LUT 168,935 against 169,061 ±2,000; FF 63,681 against 63,647 ±300.
-  - Congestion: no window above level 5 (the placer's maximum is level 4, as on b3). That grade used the placer's reading
-    only. A's router level has been asked of the synthesis lane so that both options carry the same reading.
+  - Congestion: no window above level 5 (the placer's maximum is level 4, as on b3). The first grade used only the
+    placer's reading. The router's reading, from the follow-up query, is hotspot max level 4 and per-direction max ≤ 90.09 %
+    (N 86.21, S 90.09, E 88.60, W 85.66). That is also a PASS. For comparison, B reads 4 and ≤ 90.22 %, and b3 reads 3 and
+    ≤ 90.09 %.
   - 0 routing errors; check_timing 0 loops.
   - TIMING-23 0 and LUTLP-1 0. Both matchers fire on other rules.
   - Widened compares on the worst 500: 0. rvc_* and rd_ctag by membership with POS 1. cpmp_tracked and pc_revnode by
@@ -159,7 +171,51 @@ The id is {gen[29:20], idx[19:0]}; word1 carries gen at [59:50] and parent at [4
 - The first boots, and what they read, are the runtime lane's to choose.
 - A (741aff6a6) is kept, sealed, as the fallback and is not flashed.
 - Owed, none of it gating:
-  - the synthesis lane's reading of `_thread_0_event_counter_870_1_q`'s worst slack;
-  - A's router congestion level;
   - `design/virtual-capstone/isa.md`'s "not in the RTL" and "Silicon" paragraphs, which become untrue once B is flashed
     (the semantics owner's document).
+
+## On silicon: board 2, 2026-10-30
+
+- **Flash.** The runtime lane flashed B on board 2 at 16:39-16:42, on the lead's word in its own session (SPEC board
+  PREREG Addendum 14, spec-silicon c9ee688c8629).
+  - The board copy's sha256 equals the seal: checked by the runtime lane before the flash and recomputed here.
+  - The readback is by name only, `caplifive_vp2c_325966ee4.bit`, because the console exposes no sha256. So B's
+    identity on silicon rests on boot 1's 400,000 reading.
+- **Result lines:** spec-silicon 24769c569df0, `b4/b4-boots-1-2.result-lines.txt`. The transcripts stay on the host:
+  t1a spec.txt sha256 752bf2af830bc647, t1b d5c58498bb868f7a.
+- **Graded here by script.**
+  - The three pre-registered scripts are unchanged at 24769c569df0: b4-judge-t1a 27a13f080fd30591, b4-check-t1b
+    8d4cfa27d35b4bc8, b4-first.sh 0e8d766a954ce205.
+  - Boot 2's judge was re-run on the raw transcript, with run.py 11c47d62fe9f34ae, contract.dom 00428f273c653d9f and F0's
+    result.json cbf03d2a77740ea5. It reproduces the committed block line for line.
+- **Boot 1 (b4-t1a): AS PREDICTED, 13 of 13.**
+  - The parameters read ids 55, index bits 25, 1,048,576 records. There is one allocation, from CMA at pa 0xac100000,
+    with a linear mapping.
+  - Contract: `ok` exits 0 and `stale` takes 25.
+  - live 400,000: LIVE-OK with 414,217 nodes and capacity 1,048,576. Records above 2^18 = 262,144 need slots that
+    bitstream 3 cannot hold, so this is the bitstream-identity reading.
+  - live 1,100,000: LIVE-NULL at 1,011,158, rc 3, 1,046,942 nodes, no domain fault.
+- **Boot 2 (b4-t1b, Tier 1 against the twin's F0): NOT AS PREDICTED by the letter.** 40 of 45 cells equal F0's, with
+  `cleanup` excepted as pre-registered. Off: linux_demand_faults, linux_pages_released, nested_denial_site,
+  vm_denial_sites and spin_entered.
+  - **The first four come from one step**, through run.py's own analysis (11c47d62, :285-320):
+    - `vm` exits 139 with cause 15 at its arena + 0x2000 (spec.txt:193). That fault is the first `fault_sites` entry, so
+      it falsifies nested_denial_site and vm_denial_sites.
+    - Its CAPSTONE_VM_STATS line is missing, so 10 lines are read where 11 are expected. That falsifies the two linux_*
+      cells.
+  - **That step has S-24's shape, but not its value.**
+    - The module's bound line is present: "resolved 65 times with no change" at 0x3fb8502000 (spec.txt:14111).
+    - Its PTE fields read `rc=-38 val=0x0`, with every flag −1. That is the module's default: the PTE is read only with
+      `resolve_pte=1`, and otherwise `prc = -ENOSYS` (capstone_vm.c:1544-1545 and :1720-1721 at module-ids55
+      3523f8833531). So S-24's mechanism value, D = 0 with V, R, W and A set (read at boot r13), is NOT read on this boot.
+    - S-24's fix, `resolve_dirty`, also defaults off, and the kit loaded the module with no parameters.
+    - The twin reference cannot show S-24. That is the pre-registration's error, and it is the runtime lane's reading.
+    - It is settled by the next B Tier 1 boot (b4-t1c), against the reference F0r (module-ids55 addendum 3,
+      3160e7d8e147). That boot loads `resolve_dirty=1 resolve_pte=1` and reads both back from sysfs.
+    - S-24 predicts three things there: `vm` reads F0r's status (exit 1, VM_CONTRACT_FAIL execute through mapping
+      PCC), the four cells return to F0's values, and no bound line fires. Any other reading reopens S-24, and a bound
+      line would now carry the PTE value.
+  - **spin_entered: OPEN.** VIRTUAL_SPIN_READY is absent: run.sh killed preempt's spin child after its 5 s wait, and the
+    step exits 143.
+  - **No off cell needs the id/slot path.** sparse-churn (600,041 nodes through the 2^20-record table), sparse-stale,
+    stale, retired and bounds all equal F0's. This rests on one boot.
