@@ -184,9 +184,9 @@ from a removed `work-ver/` after the Anvil prologue, and every PROVENANCE reads 
      under memory delay 12, and a pattern, not a silicon value.
 3. **The FIRE arms.**
    - `stale-access` reads 0x19 ×4, 0, 0x19 ×2, 0x77, 6 on the control. That is the vector `sublet-bare` read on
-     silicon on the Sublet bitstream (`caplifive_sublet_d93a8d66b`, 2026-10-16). On e7af48457 it has not been read on
-     silicon yet; the kit's board 1 boot is the first. On the variant it reads 0 ×7, 0x3333, 0: every 25 is gone and
-     the stale store lands.
+     silicon on the Sublet bitstream (`caplifive_sublet_d93a8d66b`, 2026-10-16). On e7af48457 it had not been read on
+     silicon before this kit's bitstream-3 arm, which read it on board 2 (Silicon, below). On the variant it reads
+     0 ×7, 0x3333, 0: every 25 is gone and the stale store lands.
    - `r43-evict-live`: every 0x19 on the control reads 0 on the variant. Both trees end at the test's own capmode
      RVTEST_PASS (rc 1), as on every earlier tree.
    - `objb-pcc` completes on the variant (0xbb5 0 0). On the control it loops in its trap handler (76,882 trap lines)
@@ -404,6 +404,67 @@ The control for every key is bitstream 3's own build of e7af48457, read by the s
 - A mapping blowup (a single process > 9 GB, or the 34 GB watchdog) is graded by genome and Synth 8-326 targets, with
   no retry.
 - A routing failure gives the placed area and keys 1-5 plus a congestion census, and no WNS.
+
+## Silicon (board 2, both arms; kit `capstone/tests/rtl-smoke/objb-bare-2026-10-30`)
+
+Every reading below was graded here by script (`objb-grade.py`, `objb-wgrade.py`) from the raw run directories, against
+the kit's PREREG and its addenda: image hashes recomputed, the resident name read from each run.log, SR/SV by value.
+The runtime lane ran the boots and graded both arms with its own script; the two grades agree. For the witness it
+relayed the numbers only, and the verdict below is this lane's.
+
+**The flash (runtime lane, 2026-10-31 00:43-00:46).**
+- The local copy's sha256 is the seal's: 0f03b097…c18c1. The runtime lane checked it before the flash, and it was
+  recomputed here.
+- After the mandatory power cycle the resident name read back `caplifive_vp2c_603528b8b.bit`. The console does not
+  expose a sha256.
+- The simulated RTL is the flashed RTL: the kit's variant sims ran on 24e588199, and 24e588199 → 603528b8b changes
+  only the config package's comment and `verif/sim/rtl-lint.REF.txt`.
+
+**Bitstream-3 arm (e7af48457, 2026-10-30 19:50-20:01): AS EXPECTED, 10 of 10.**
+- objb-pcc-ctrl read `0xbb5 0x0 0x0`.
+- objb-stale read `0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x77 0x6`, its first bare reading on e7af48457.
+- Every cost shape's non-cycle positions equal the table.
+- objb-pcc entered and did not return, which is its expected reading.
+
+**ObjBounds arm (603528b8b, 2026-10-31 00:46-00:55): CONFIRMED, 10 of 10.**
+- objb-stale read `0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x3333 0x0`. objb-pcc returned `0xbb5 0x0 0x0`, equal to its control.
+- Every cost shape's non-cycle positions equal the table.
+- The cost pattern, board 2 against board 2, same images. Silicon cycles; the simulated ratio under memory delay 12 is
+  for reference and is not graded:
+
+  | shape | bitstream 3 | ObjBounds | ratio | predicted | sim ratio |
+  |---|---|---|---|---|---|
+  | s1: 4,096 ld, one capability | 16,535 | 16,535 | 1.000 | equal within 1 % | 1.000 |
+  | s2: 64-node ldc chase | 9,262 | 5,163 | 0.557 | lower | 0.564 |
+  | s3: 1,024-node ldc chase | 94,864 | 76,125 | 0.802 | lower | 0.793 |
+  | s4: 64 nodes after a flush, pass 1 | 622 | 389 | 0.625 | lower | 0.707 |
+  | s4: pass 2 | 634 | 391 | 0.617 | lower | 0.655 |
+  | s5: churn over 1,024 objects | 203,210 | 203,722 | 1.003 | equal within 1 % | 1.000 |
+  | s5: two passes | 190,224 | 136,745 | 0.719 | lower | 0.760 |
+  | s6: 1,024 ldc, one node | 9,232 | 5,131 | 0.556 | lower | 0.556 |
+  | s7: 1,024 stc, one node | 11,269 | 6,153 | 0.546 | lower | 0.557 |
+
+  Every prediction holds. On one resident node the query costs 4.00 cycles per LDC (s6) and 5.00 per STC (s7) on
+  silicon; the simulation read 4.01 and 4.92.
+
+**What the identity reading separates, and the witness.**
+- objb-stale rules out a probe that never reaches the check. The hash-identical image took 25 at all six stale
+  accesses on bitstream 3, on the same board, and on ObjBounds stale store #7 retired and wrote 0x3333.
+- It cannot rule out that the revocations themselves were ineffective on the ObjBounds bitstream. Every ObjBounds
+  reading fits that hypothesis as well as a removed check.
+- Its datum covers one access of six.
+- The witness `objb-stale-w` (PREREG addendum 2, pre-registered at land/rtl-objb a6c75c1f0343 before the boot) runs
+  TIGHTEN, whose node query the variant keeps, on each revoked node. It also reads path B's store back.
+- **The witness on board 2 (2026-10-31 06:22-06:23): WITNESSED.** The image named in run.log hashes to ae0e1cb3…,
+  which is addendum 2's hash. The resident name is `caplifive_vp2c_603528b8b.bit`, and SR is 15. The vector is
+  `0x0 ×7 0x3333 0x0 0x0 0x19 0x19 0x19 0x2222 0x3`, the ObjBounds row exactly.
+  - TIGHTEN on the live node (#10) reads 0, so the op runs to completion.
+  - TIGHTEN on path A's child, path B's piece and path C's reloaded capability (#11-13) reads 25 on each. On the
+    ObjBounds silicon all three revocations took effect, so the zeros at positions 0-6 come from the removed check.
+  - Path B's stale store landed 0x2222 (#14), so two of the six stale accesses now have a value witness. The trap
+    count (#15) is 3: the three TIGHTENs.
+  - This is N=1, on board 2 only. The witness ran as a boot of its own after the ObjBounds arm, and board 2 then
+    went back to bitstream 3 (the runtime lane's reflash).
 
 ## Corrections
 
