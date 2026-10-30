@@ -275,6 +275,58 @@ The control for every key is bitstream 3's own build of e7af48457, read by the s
 10. **WNS.** Reported, not graded (the lead's ruling). b3 is −10.047.
 11. **The bitstream.** .bit sha256, size and path.
 
+**Size gate readings (synth, 2026-10-30, synthesised dcp, ObjBounds against b3; graded here).**
+- **Key 1: PASS.** The mapping peak at the marker is 4,951.7 MB (b3 5,004.9). The whole-run peak is 22.24 GB, and the
+  largest single process 4.95 GB.
+- **Key 2: PASS.** "Found timing loop" 0, Synth 8-326 0, check_timing 0. The matcher's control, vp3g, reads 7 and 73.
+- **Key 3: PASS.** Cells, ObjBounds / b3:
+
+  | Name | ObjBounds | b3 |
+  |---|---|---|
+  | rvc_occ_q | 0 | 655 |
+  | rvc_nodeval_q | 0 | 1,124 |
+  | rvc_rr_q | 0 | 414 |
+  | rvc_ok_q | 0 | 19 |
+  | rvc_dead_q | 0 | 10 |
+  | rvc_pend_q | 0 | 2 |
+  | rvc_den_v_q | 0 | 20 |
+  | pc_revnode_valid_q | 0 | 14 |
+  | g_rvc_tag | 0 | 817 |
+  | rvc_ok_id_q | 0 | 63 |
+  | LUTs named `*lsu*rvc*` | 0 | 1,980 |
+  | NEG `cpmp_revnode_valid_q` | 179 | 238 |
+
+  b3's routed dcp gives the same counts, apart from one carry cell in occ (654), so key 9's control is ready.
+- **Key 3b: PASS.** The generated DYN unit in synth's tree is 131818fb…9d1f, and b3's is 7accda6a…d2b2: both equal
+  this lane's.
+- **Key 4, LUT and ex+issue: PASS.**
+  - Core LUT 142,909 (−1,675 against 144,584). That includes LUTRAM −480 (870 → 390).
+  - ex+issue LUT +1,962 (ex −6,318, issue +8,280, the re-homing A showed). ex+issue FF −605.
+  - In b3, the removed cells were 1,679 LUTs, 600 distributed-RAM cells (120 RAM64M + 480 RAMD64E) and 645 named FF.
+- **Key 4, core FF ≥ 700: NOT MET by the letter.** The core reads 40,782 FF, −641.
+  - Where it moved:
+    - lsu_i −805, of which its own cells −790;
+    - commit −32, the PC tracker's 31;
+    - ex_stage's own cells −54; issue −14; csr +10;
+    - the FPU **+284**, in opgroup_block[0] / fmt_slice[1].
+  - The FPU's RTL is unchanged. Synthesis retiming flipped:
+    - b3: forward 2, backward 42, registers added 146, deleted 31;
+    - ObjBounds: forward 100, backward 169, added 1,280, deleted 281.
+
+    1,085 of the 1,179 retimed register names are under the FPU.
+  - **The clause was mis-scoped.** It was written at the core total, where retiming in an untouched module moves
+    hundreds of flops. It set its threshold 120 below an estimate (~820) that proved high: b3's named flops are 645,
+    because the tags are distributed RAM.
+  - What the clause existed to show is that the removal reached synthesis. That is shown by key 3, with its POS and
+    NEG controls, and in flop terms by the stems: lsu_i −805 and commit −32.
+  - This is a re-scoping made after the reading, so it is recorded as one and carries less weight than a
+    pre-registered key. The same lesson was recorded earlier for A's ex_stage band: grade the stem, not the total.
+- **GO for the full flow on that basis** (this lane's ruling). Before launch, key 5's FF clause is restated the same way:
+  - **Key 5, as restated before the full build:**
+    - Placed LUT ≤ 169,061 + 2,000, unchanged.
+    - FF: placed lsu_i falls by ≥ 700 and commit_stage by ≥ 25, against b3's placed checkpoint by the same query.
+    - The core and top FF totals are reported, not graded.
+
 **Failure branches.**
 - A mapping blowup (a single process > 9 GB, or the 34 GB watchdog) is graded by genome and Synth 8-326 targets, with
   no retry.
