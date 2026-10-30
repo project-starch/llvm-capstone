@@ -5,6 +5,7 @@
 #include <linux/dma-mapping.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
+#include <linux/version.h>
 #include <linux/uaccess.h>
 #include <linux/sched/signal.h>
 #include <linux/mutex.h>
@@ -337,9 +338,17 @@ static unsigned long node_available(const struct context *c)
  * __GFP_RETRY_MAYFAIL tries hard without inviting the OOM killer; failing here is a clean
  * ENOMEM at context creation, which is strictly better than the paged path's failure
  * part-way through a running domain. */
-/* ids20: a table above the buddy allocator's largest block (MAX_ORDER - 1: 4 MiB = 262,144 records on these
- * kernels) comes from CMA through the misc device (dma_alloc_coherent zeroes it; dma == phys without an IOMMU). The
- * kernel needs a CMA area at least that large: the board and its twin boot with cma=256M. */
+/* ids20: a table above the buddy allocator's largest block (order 10, 4 MiB = 262,144 records on these kernels)
+ * comes from CMA through the misc device (dma_alloc_coherent zeroes it; dma == phys without an IOMMU). The kernel
+ * needs a CMA area at least that large: the board and its twin boot with cma=256M.
+ * The largest buddy order is MAX_ORDER - 1 before 6.4 and MAX_ORDER from 6.4 on, which made MAX_ORDER inclusive
+ * (board 6.4.14 mmzone.h: MAX_ORDER 10, MAX_ORDER_NR_PAGES 1 << MAX_ORDER; twin 6.1: MAX_ORDER 11). Comparing against
+ * MAX_ORDER on both sent a 4 MiB table, bitstream 3's 18-bit size, to CMA on the board only. */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+#define CV_BUDDY_MAX_ORDER MAX_ORDER
+#else
+#define CV_BUDDY_MAX_ORDER (MAX_ORDER - 1)
+#endif
 static struct miscdevice device;
 #if CAPSTONE_VM_INDEX_BITS == 25
 /* ids55 only: the first table this load allocates, and every failure up to a budget, are one KERN_EMERG line each,
@@ -351,7 +360,7 @@ static unsigned table_notes;
 static unsigned long *node_new_flat_table(struct context *c)
 {
     unsigned long *p;
-    if (get_order(CV_FLAT_BYTES) >= MAX_ORDER) {
+    if (get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER) {
         p = dma_alloc_coherent(device.this_device, CV_FLAT_BYTES, &c->table_dma, GFP_KERNEL);
         if (p) c->table_pa = (phys_addr_t)c->table_dma;
     } else {
@@ -361,7 +370,7 @@ static unsigned long *node_new_flat_table(struct context *c)
     if (p) c->stats.node_bytes += CV_FLAT_BYTES;
 #if CAPSTONE_VM_INDEX_BITS == 25
     if (table_notes < CV_TABLE_NOTE_BUDGET && (!p || !table_notes)) {
-        const char *from = get_order(CV_FLAT_BYTES) >= MAX_ORDER ? "CMA" : "buddy";
+        const char *from = get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER ? "CMA" : "buddy";
         ++table_notes;
         if (p)
             pr_emerg("capstone_vm: flat table %lu records, %lu bytes, from %s, pa %llx, %s mapping\n",
@@ -2441,7 +2450,7 @@ static int __init init(void)
         if (rc)
             return rc;
         /* ids20: the CMA path of node_new_flat_table allocates through this device */
-        if (get_order(CV_FLAT_BYTES) >= MAX_ORDER &&
+        if (get_order(CV_FLAT_BYTES) > CV_BUDDY_MAX_ORDER &&
             dma_coerce_mask_and_coherent(device.this_device, DMA_BIT_MASK(64))) {
             misc_deregister(&device);
             return -EIO;
