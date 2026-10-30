@@ -35,11 +35,38 @@ word0 = {depth[13:0]@63:50, next[49:25], prev[24:0]}. rev_node_t is 137 bits.
 **Gates on 325966ee4:**
 - Lint s12 PASS at REF: LATCH 44, MULTIDRIVEN 3, UNOPTFLAT 39 (names identical), UNUSEDSIGNAL 1479 (REF 1480; +48
   attributed by name), every other counter at baseline.
-- 95-sweep vs e7af48457: 92 identical, 0 differ, 3 missing on both sides. These counts compare exceptions, readings
-  and retired instructions.
-  - Cycles were re-read 2026-10-31 with the repaired reader (dev b71a4db444f0) from the same run directories, both
-    sides at time_out 400,000. 3 of 92 differ: untagged-ldc-stc-fixup 4,810 -> 4,812 (+2),
-    s07-wbuf-forward-residual 13,765 -> 13,698 (-67), and its -ctl 29,105 -> 29,036 (-69). Not yet explained.
+- 95-sweep vs e7af48457: 92 identical, 0 differ, 3 missing on both sides. These counts compare exceptions, CAPPRINT
+  readings and retired instructions, and nothing else.
+  - **CORRECTED 2026-10-31: B's behaviour is not identical to e7af48457's on those 92.**
+    - The retirement traces were compared line by line (pc, rd value, memory address and data), from the same run
+      directories. 8 of 92 differ on B.
+    - The comparator's null control is e7af48457 against itself at two time-outs: 92 of 92 identical. Option A
+      also reads 92 of 92 identical.
+    - Every difference is a raw read of a stored capability's word, which B's memory format predicts. That format
+      is lo = slot << 39 | addr (above), and hi with the node field [63:34] holding the generation alone (QEMU
+      cap_compress.c).
+    - linear-clear-audit, s06-query-route, s06-lcc-total-query, fixup-tag-survival, parse-tail-roundtrip: a plain
+      ld of a stored capability's second doubleword reads that node field as generation 0, where e7af48457 holds
+      the whole id 2: 0x1d0401000 against 0x9d0401000.
+    - untagged-ldc-stc-fixup, s07-wbuf-forward-residual and its -ctl: an LDC of a granule whose tag a plain store
+      has cleared returns the first doubleword raw, slot [63:39] included: 0x0000010080001000 where e7af48457
+      reads 0x80001000.
+      - untagged-ldc-stc-fixup then loads through that value, from 0x100_8000_1000, and gets the error slave's
+        0xca11ab1ebadcab1e where e7af48457 reads 0x0123456789abcdef.
+      - Each test prints the same readings on both, so every test passes.
+    - QEMU at a9936e7037 has the same rule: helper_capstone_wide_load patches only TAGGED granules, and the low
+      word stores slot << 39. Read from source; the tests were not run on QEMU here.
+    - The consequence for software: a stored pointer whose granule loses its tag to a partial overwrite reads back
+      as integer with the slot in bits [63:39]. On e7af48457 it reads back as the plain address.
+  - **Cycles,** re-read with the repaired reader (dev b71a4db444f0), with both sides at time_out 400,000. 3 of 92
+    differ, all among the eight above:
+    - untagged-ldc-stc-fixup 4,810 -> 4,812 (+2): its load from 0x100_8000_1000 takes 26 cycles more, and a
+      later wait absorbs 24 of them;
+    - s07-wbuf-forward-residual 13,765 -> 13,698 (-67), and its -ctl 29,105 -> 29,036 (-69): after the first leg
+      whose LDC reads raw, a plain lw in the trap handler waits for a D-cache grant on e7af48457 (67 cycles; 69 in
+      -ctl) and not at all on B. Its cache-level cause was not traced.
+    - These were read from traced re-runs (SUP_TRACE + R43_TRACE, the sweep's seed). The re-runs reproduce the
+      sweep's cycle counts exactly, and the test images are identical in code and data.
 - 16 wide-record arms are EQUAL to their narrow builds on e7af48457, value by value.
 - The va-runv family (23 builds) is EQUAL.
 - GEN_HI 41, CSNODE_HI 0x40020, CSNODE_FULL 30, POOL_PROBE 25 and CAP_A1 read as pre-registered.
@@ -145,8 +172,8 @@ first test of csbi-batch d9da397's capstone_csmint.S.
 The id is {gen[29:20], idx[19:0]}; word1 carries gen at [59:50] and parent at [49:30].
 - Size gate PASS: core +90 LUT / +35 FF, mapping 5,003.7 MB, 0 loops, presence OK.
 - vp3-idx20.S: three arms read as pre-registered on 741aff6a6, and fail on e7af48457.
-- 95-sweep: 92 identical, 0 differ, 3 missing on both sides. Cycles, re-read 2026-10-31 with the repaired reader:
-  0 of 92 differ.
+- 95-sweep: 92 identical, 0 differ, 3 missing on both sides. Re-read 2026-10-31: the cycles (repaired reader)
+  differ in 0 of 92, and the retirement traces are identical in all 92.
 - Full build, sealed: PASS on every pre-registered key.
   - Placed LUT 168,935 against 169,061 ±2,000; FF 63,681 against 63,647 ±300.
   - Congestion: no window above level 5 (the placer's maximum is level 4, as on b3). The first grade used only the
