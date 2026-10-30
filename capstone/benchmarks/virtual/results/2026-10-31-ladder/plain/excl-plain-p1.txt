@@ -1,0 +1,11 @@
+perf-plain-p1: 24 of 371 Plain timed iterations excluded (timer > 1.1 x median + 2), 72 rows dropped across arms; 4 program(s) set aside: ['dijkstra', 'qurt', 'sglib-arrayheapsort', 'sglib-rbtree-libc']
+  ctl-stack-libc: median timer 47; excluded 2 (proc 2 it 0, proc 2 it 1)
+  dijkstra: median timer 71; excluded 3 (proc 0 it 1, proc 0 it 2, proc 0 it 3)  SET ASIDE
+  insertsort: median timer 36; excluded 1 (proc 3 it 0)
+  matmult-float: median timer 131; excluded 2 (proc 1 it 0, proc 1 it 1)
+  nbody: median timer 80; excluded 2 (proc 0 it 0, proc 0 it 1)
+  qurt: median timer 108; excluded 3 (proc 3 it 1, proc 3 it 2, proc 3 it 3)  SET ASIDE
+  sglib-arrayheapsort: median timer 85; excluded 3 (proc 3 it 0, proc 3 it 1, proc 3 it 2)  SET ASIDE
+  sglib-rbtree-libc: median timer 81; excluded 3 (proc 3 it 2, proc 3 it 3, proc 3 it 4)  SET ASIDE
+  stringsearch1: median timer 248; excluded 2 (proc 1 it 3, proc 3 it 1)
+  trio-sscanf-libc: median timer 172; excluded 3 (proc 0 it 4, proc 1 it 0, proc 1 it 1)

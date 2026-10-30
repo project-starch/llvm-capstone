@@ -1,0 +1,15 @@
+perf-plain-p6: 49 of 380 Plain timed iterations excluded (timer > 1.1 x median + 2), 147 rows dropped across arms; 6 program(s) set aside: ['aha-mont64', 'cubic', 'expint', 'ludcmp', 'minver', 'sglib-arraybinsearch']
+  aha-mont64: median timer 59; excluded 3 (proc 2 it 0, proc 2 it 1, proc 2 it 2)  SET ASIDE
+  bubblesort: median timer 75; excluded 2 (proc 2 it 3, proc 2 it 4)
+  ctl-loop: median timer 134; excluded 2 (proc 0 it 0, proc 0 it 1)
+  cubic: median timer 104; excluded 5 (proc 0 it 0, proc 0 it 1, proc 1 it 1, proc 1 it 2, proc 1 it 3)  SET ASIDE
+  expint: median timer 80; excluded 3 (proc 2 it 0, proc 2 it 1, proc 2 it 2)  SET ASIDE
+  frac: median timer 157; excluded 2 (proc 0 it 3, proc 0 it 4)
+  ludcmp: median timer 96.5; excluded 4 (proc 3 it 1, proc 3 it 2, proc 3 it 3, proc 3 it 4)  SET ASIDE
+  minver: median timer 99; excluded 4 (proc 0 it 2, proc 0 it 3, proc 0 it 4, proc 1 it 0)  SET ASIDE
+  nettle-des: median timer 59; excluded 2 (proc 0 it 0, proc 3 it 4)
+  rv8-miniz: median timer 152; excluded 3 (proc 0 it 0, proc 2 it 2, proc 2 it 3)
+  sglib-arraybinsearch: median timer 81; excluded 3 (proc 2 it 0, proc 2 it 1, proc 2 it 2)  SET ASIDE
+  sglib-hashtable-libc: median timer 24; excluded 8 (proc 0 it 0, proc 0 it 1, proc 1 it 0, proc 1 it 1, proc 2 it 0, proc 2 it 1, proc 3 it 0, proc 3 it 1)
+  sglib-rbtree: median timer 163; excluded 4 (proc 0 it 1, proc 0 it 2, proc 1 it 0, proc 1 it 1)
+  trio-sscanf: median timer 172; excluded 4 (proc 0 it 3, proc 0 it 4, proc 3 it 3, proc 3 it 4)

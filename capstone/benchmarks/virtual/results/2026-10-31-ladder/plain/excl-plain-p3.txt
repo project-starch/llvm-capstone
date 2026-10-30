@@ -1,0 +1,13 @@
+perf-plain-p3: 29 of 371 Plain timed iterations excluded (timer > 1.1 x median + 2), 87 rows dropped across arms; 3 program(s) set aside: ['jfdctint', 'nettle-aes', 'sglib-listsort']
+  ctl-loop: median timer 134; excluded 3 (proc 3 it 2, proc 3 it 3, proc 3 it 4)
+  dtoa-libc: median timer 130; excluded 2 (proc 1 it 0, proc 3 it 4)
+  fdct: median timer 108; excluded 1 (proc 0 it 0)
+  huffbench-libc: median timer 139; excluded 1 (proc 4 it 0)
+  jfdctint: median timer 91; excluded 5 (proc 0 it 2, proc 0 it 3, proc 0 it 4, proc 2 it 0, proc 2 it 1)  SET ASIDE
+  nettle-aes: median timer 57; excluded 4 (proc 0 it 2, proc 0 it 3, proc 0 it 4, proc 3 it 0)  SET ASIDE
+  picojpeg: median timer 99; excluded 1 (proc 2 it 0)
+  rijndael: median timer 69; excluded 3 (proc 0 it 0, proc 3 it 0, proc 3 it 1)
+  rv8-qsort: median timer 111; excluded 1 (proc 3 it 0)
+  sglib-dllist: median timer 166; excluded 3 (proc 2 it 3, proc 2 it 4, proc 3 it 4)
+  sglib-listsort: median timer 129.5; excluded 3 (proc 3 it 2, proc 3 it 3, proc 3 it 4)  SET ASIDE
+  sqrt: median timer 152; excluded 2 (proc 2 it 2, proc 2 it 3)

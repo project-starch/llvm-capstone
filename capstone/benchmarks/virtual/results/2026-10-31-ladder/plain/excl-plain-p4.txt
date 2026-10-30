@@ -1,0 +1,12 @@
+perf-plain-p4: 45 of 351 Plain timed iterations excluded (timer > 1.1 x median + 2), 135 rows dropped across arms; 3 program(s) set aside: ['rv8-aes', 'rv8-sha512', 'sglib-dllist-libc']
+  ctl-empty: median timer 2; excluded 4 (proc 3 it 0, proc 3 it 1, proc 3 it 2, proc 3 it 4)
+  ctl-loop: median timer 134; excluded 4 (proc 2 it 3, proc 2 it 4, proc 3 it 0, proc 3 it 1)
+  lcdnum: median timer 47; excluded 2 (proc 3 it 0, proc 3 it 1)
+  nettle-arcfour: median timer 130; excluded 4 (proc 0 it 3, proc 0 it 4, proc 1 it 0, proc 1 it 1)
+  rv8-aes: median timer 80; excluded 5 (proc 1 it 3, proc 1 it 4, proc 2 it 2, proc 2 it 3, proc 2 it 4)  SET ASIDE
+  rv8-sha512: median timer 64; excluded 3 (proc 0 it 1, proc 0 it 2, proc 0 it 3)  SET ASIDE
+  sglib-dllist-libc: median timer 27; excluded 9 (proc 0 it 0, proc 0 it 1, proc 1 it 0, proc 1 it 1, proc 1 it 2, proc 2 it 0, proc 2 it 1, proc 3 it 0, proc 3 it 1)  SET ASIDE
+  sglib-listsort-libc: median timer 27; excluded 8 (proc 0 it 0, proc 0 it 1, proc 1 it 0, proc 1 it 1, proc 2 it 0, proc 2 it 1, proc 3 it 0, proc 3 it 1)
+  st: median timer 133; excluded 2 (proc 3 it 2, proc 3 it 3)
+  trio-snprintf: median timer 162; excluded 2 (proc 0 it 0, proc 3 it 4)
+  wikisort: median timer 106; excluded 2 (proc 10 it 0, proc 9 it 0)
