@@ -11,13 +11,16 @@ loads, stores and fetches take no lifetime verdict, and everything else is bitst
     so the image does not return; it is the LAST image of any boot.
   - `objb-pcc-ctrl`, the same stream revoking a data node instead, reads the same on both bitstreams. It is the
     boot's control.
+  - `objb-stale-w` (PREREG addendum 2) is objb-stale plus one block: TIGHTEN, whose node query ObjBounds keeps, on
+    each revoked node, so it reads 25 there on both bitstreams if the revocations took effect. It is a boot of its
+    own, after the ObjBounds arm, and the only test here that is not in capstone-ariane (`tests/objb-stale-w.S`).
 - **Reads the per-access lifetime check's cost on silicon,** shape by shape (`objb-perf-s1..s7`), on both
   bitstreams. These images print cycle counts. The pre-registration predicts the PATTERN per shape: equal, or
   higher on bitstream 3. Their simulated values are under memory delay 12 and are not silicon values.
 
 Siblings: R-43 (the cache and replay that shapes 1 and 5 exercise), R-35 (why the cache exists), and
 `sublet-bare-2026-10-15`'s `stale-access` (the same source under an older wrapper). The vector it read on silicon,
-on the Sublet bitstream, equals this kit's bitstream-3 vector, which has not been read on e7af48457 yet.
+on the Sublet bitstream, equals this kit's bitstream-3 vector, which board 2 read on e7af48457 on 2026-10-30 (addendum 1).
 
 `build.sh` rebuilds the images from `tests/` (capstone-ariane verif/tests/custom/capstone/ at 0af4307fc, unchanged at 603528b8b, checked
 against `VP_SRC` when given) with `va-alloc-bare-2026-10-23`'s wrapper (inc/). `images/SHA256SUMS` pins them.

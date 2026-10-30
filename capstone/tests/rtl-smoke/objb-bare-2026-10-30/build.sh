@@ -34,4 +34,5 @@ build objb-perf-s5  objb-perf.S  146 -DSHAPE=5    # ObjLife-style churn over 1,0
 build objb-perf-s6  objb-perf.S  148 -DSHAPE=6    # 1,024 ldc through one capability
 build objb-perf-s7  objb-perf.S  149 -DSHAPE=7    # 1,024 stc through one capability
 build objb-pcc      objb-pcc.S   147              # fetch face: completes on ObjBounds only (LAST)
+build objb-stale-w  objb-stale-w.S 150           # addendum 2 witness: stale-access + the DYN TIGHTEN query on each node (its own boot)
 (cd "$B/images" && sha256sum *.bin > SHA256SUMS)

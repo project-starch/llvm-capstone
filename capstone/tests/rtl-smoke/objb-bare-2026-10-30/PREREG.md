@@ -183,3 +183,71 @@ is no longer part of the grade, and is not needed.
 **objb-pcc on bitstream 3 wedges the core.** It loops in its own trap handler and never returns. In the
 bitstream-3 arm it is the last image of the BOOT, not just of the kit, and any measurement kit after it needs a fresh
 boot. On ObjBounds it returns, so a measurement kit may follow it in the same boot.
+
+## Addendum 2 (2026-10-31, before the boot): the witness image `objb-stale-w`
+
+**Why.** The ObjBounds arm read CONFIRMED on board 2 (2026-10-31 00:46-00:55, 10 of 10, graded by script against this
+file). Its objb-stale vector rules out "the probe does not reach the check": the hash-identical image took 25 at all six
+stale accesses on bitstream 3 on the same board, and the stale store #7 retired and wrote 0x3333 on ObjBounds. It does
+NOT witness the premise on silicon: that the crevoke and the revoke took effect on the ObjBounds bitstream. Every
+ObjBounds reading fits "check removed" and "revocations ineffective" equally: the seven 0s, the 0x3333, trap count 0,
+and objb-pcc's arm returning. The evidence against the second was source (the variant's diff touches no revocation
+path), simulation and silicon = simulation on this image; none of it was a silicon reading. The datum also covers one
+access of six: #2's 0x1111 is overwritten by #7, #4's 0x2222 is never read back, and #1, #3 and #6 rest on mcause 0 and
+the trap count. CONFIRMED stands as graded; this image upgrades the attribution, it does not re-grade the arm.
+
+**The image.** `tests/objb-stale-w.S` is `stale-access.S` with one block after #9; `diff` against it shows the title, the
+header paragraph and that block, nothing else. Positions 0-8 are therefore stale-access's. The block runs TIGHTEN rd,
+rs1, x0 on each node, then reads path B's datum and the trap count:
+
+| position | op | what it reads |
+|---|---|---|
+| 9 | tighten of the park s3 (never revoked) | the op's control: 0 on both trees |
+| 10 | tighten of path A's child s5 (crevoked) | 25 if the crevoke took effect |
+| 11 | tighten of path B's piece s11 (revoked through its handle) | 25 if the revoke took effect |
+| 12 | tighten of path C's reloaded s8 | 25 if the ldc carried the dead node |
+| 13 | ld of region+128 through a fresh capability | path B's store #4: 0x2222 if it landed, 0 if refused |
+| 14 | the trap count | |
+
+Why TIGHTEN. Its handler (`capstone_dyn_unit.anvil` func TIGHTEN, :416 on 603528b8b) checks the type (LINEAR and NONLIN
+pass), then the rights (an immediate of x0 = 0 is a subset of any rights), then calls `get_node_query_validity` on rs1's
+node (:432) and raises 25 on a dead node before any write. That query is outside the variant's diff: the variant
+differs from its control (objbounds-off-b 1782d20bd) only in the config package's define and the LDC (:685) and STC
+(:753) query lines. The ELF carries exactly four TIGHTEN words (opcode 0x5b, funct3 1, funct7 2, rd x29, rs2 x0) on
+x19, x21, x27 and x24; objb-stale carries none.
+
+`build.sh` gains one line, and rebuilding reproduces the ten frozen images' SHA256SUMS lines unchanged; the file gains
+one line.
+
+| image | sha256 | board_rec | SR |
+|---|---|---|---|
+| `images/objb-stale-w.bin` | `ae0e1cb35dcc42d3c7bf5e370c6b1ec68a1ed1b9d2305b0a9e9f94191357e582` | 0x80003540 | 15 |
+
+**Predicted from source, then read in simulation** (the image's own ELF, testharness at memory delay 12, time_out
+3,000,000, through `objb-kit-inner3.sh` with its Anvil prologue; the frozen objb-stale ran in the same model as a
+control and read its table vector on both trees):
+
+| tree | run | SR | vector, positions 0-14 |
+|---|---|---|---|
+| bitstream 3's RTL: objbounds-off-b 1782d20bd, the control | vp9 `.sup/kit-w-off`, PROVENANCE rtl 1782d20bd dirty=no | 15 | `0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x77 0x6 0x0 0x19 0x19 0x19 0x0 0x9` |
+| ObjBounds: 24e588199 (603528b8b's core; 13c772ee4 is a comment) | vp8 `.sup/kit-w-on`, PROVENANCE rtl 24e588199 dirty=no | 15 | `0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x3333 0x0 0x0 0x19 0x19 0x19 0x2222 0x3` |
+
+Both rows equal the predictions written from source before the sims read. Positions 0-8 equal objb-stale's table
+vectors on each tree. Positions 9-12 are the same on both trees, which is the point: TIGHTEN's query is bitstream 3's
+on both. Positions 13 and 14 differ as path B's store and the removed check predict.
+
+**The board run.** Runtime's `spec/board/objb-witness.sh`, on board 2 after the ObjBounds main kits and before the
+reflash back to bitstream 3, one image, `run_sup_bare.py` 102ab84e762cba50, SUP_TIMEOUT 90. The reflash power-cycles
+the board whatever the image does. No wedge is expected on either tree: the trap handler runs under a live PC
+capability, and every refused TIGHTEN resumes at mepc + 4 as the stale accesses do.
+
+**Grading (ObjBounds, board 2):**
+- **VOID** if the image's sha256 or the resident name (`caplifive_vp2c_603528b8b.bit`) differs, the image does not
+  return, SR is not 15, or position 9 is not 0.
+- **STOP: wrong bitstream** if positions 0-8 read bitstream 3's objb-stale vector.
+- **WITNESSED** when every position reads the ObjBounds row above: the crevoke and the revoke took effect on the
+  ObjBounds silicon, so the ObjBounds arm's seven 0s are the removed check and not a dead revocation; and path B's
+  stale store landed (position 13).
+- **FINDING** for any other reading. In particular 0 at any of positions 10-12 means that node was live on ObjBounds
+  silicon: the arm's identity reading for that path is then attributable to an ineffective revocation, and the
+  ObjBounds cost readings are re-examined before they are used.
