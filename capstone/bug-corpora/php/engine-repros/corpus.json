@@ -14,7 +14,7 @@
     "virtual-nested-pools",
     "virtual-nested-exact"
   ],
-  "status": "built",
+  "status": "measured",
   "live_in_pin_recorded": true,
   "expect_live_in_pin": {
     "true": 70
