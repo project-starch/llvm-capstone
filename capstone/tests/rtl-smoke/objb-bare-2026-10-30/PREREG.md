@@ -158,3 +158,28 @@ They are equal across the two trees in simulation, at every position.
   - The simulated ratios above are for reference only.
 - **One boot per board, graded exactly.** A second boot on the same bitstream must read every non-cycle position the
   same as the first.
+
+## Addendum 1 (2026-10-30 19:30, before any board run): both arms on board 2
+
+The runtime lane changed the plan: board 2 is reflashed to bitstream 3 (e7af48457) at about 20:00. That gives
+both arms one board, so the pair differs in one variable: this kit runs on board 2 on bitstream 3 first, and on
+ObjBounds after the seal. The cost pattern above is therefore graded **board 2 against board 2**. Board 1's reading
+is no longer part of the grade, and is not needed.
+
+**One verdict per arm, for the driver.**
+- **Bitstream-3 arm: AS EXPECTED** when all of these hold:
+  - objb-pcc-ctrl reads `0xbb5 0x0 0x0` and every returning image reads its SR;
+  - objb-stale reads `0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x77 0x6`;
+  - every cost shape's non-cycle positions equal the table;
+  - objb-pcc does not return.
+
+  Otherwise the arm reads one of these, and every one of them stops the driver:
+  - **VOID** if the control fails;
+  - **STOP: wrong bitstream** if objb-stale reads the ObjBounds vector or objb-pcc returns;
+  - **FINDING** for any other mismatch.
+- **ObjBounds arm: CONFIRMED** as graded above. Otherwise **VOID**, **STOP** (bitstream 3's objb-stale vector), or
+  **FINDING**, and the driver stops on each.
+
+**objb-pcc on bitstream 3 wedges the core.** It loops in its own trap handler and never returns. In the
+bitstream-3 arm it is the last image of the BOOT, not just of the kit, and any measurement kit after it needs a fresh
+boot. On ObjBounds it returns, so a measurement kit may follow it in the same boot.
