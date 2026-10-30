@@ -7599,3 +7599,40 @@ free. So T3/T1 is the lifetimes' cost, T2/T3 the scrub's, and their product is T
 - Records: `capstone/tests/rtl-smoke/vp2-kit-2026-10-17/tier3-smoke/records/bs3-e7af48457-b1` and `-b2`, and
   `bs3-perf-b3k1-b2`. Pre-registered on vp2-tier12 at 1c58f863f1d7 (amended at 5c758b0cfbab and 4820b8fcd219); result
   2f6c97ffd6d5.
+
+## The per-access lifetime check on silicon: what removing it saves per shape, and the ObjBounds bitstream's identity read by value (caplifive_vp2c_603528b8b against caplifive_vp2c_e7af48457, board 2, 2026-10-30/31)
+
+The ObjBounds bitstream (capstone-ariane objbounds-b 603528b8b) is bitstream 3 with no lifetime verdict on capability
+loads, stores and fetches. The DYN unit's node query on LDC/STC is also removed. Every other check is bitstream 3's.
+It is the perf ladder's ObjBounds rung. The full design and the gates are in `docs/plans/2026-10-30-objbounds-variant.md`,
+and the kit is `capstone/tests/rtl-smoke/objb-bare-2026-10-30`. Both arms ran the same images on board 2, and every
+reading was graded by value against the kit's PREREG (pre-registered at land/rtl-objb beb5384abb3b, 177c6fd9f6e9 and
+a6c75c1f0343).
+
+- **Cost by shape, silicon cycles**, bitstream 3 → ObjBounds:
+
+  | shape | bitstream 3 | ObjBounds | ratio |
+  |---|---|---|---|
+  | 4,096 plain ld through one capability | 16,535 | 16,535 | 1.000 |
+  | 64-node ldc pointer chase | 9,262 | 5,163 | 0.557 |
+  | 1,024-node ldc pointer chase | 94,864 | 76,125 | 0.802 |
+  | 64 nodes after a flush, pass 1 / pass 2 | 622 / 634 | 389 / 391 | 0.625 / 0.617 |
+  | churn over 1,024 objects | 203,210 | 203,722 | 1.003 |
+  | churn, two passes | 190,224 | 136,745 | 0.719 |
+  | 1,024 ldc, one resident node | 9,232 | 5,131 | 0.556 |
+  | 1,024 stc, one resident node | 11,269 | 6,153 | 0.546 |
+
+  - Every shape reads as pre-registered: the two "equal" shapes are within 1 %, and the seven "lower" shapes are
+    lower.
+  - On one resident node the check costs 4.00 cycles per LDC and 5.00 per STC.
+- **Identity, by value.**
+  - The hash-identical stale-access image takes cause 25 at all six stale accesses on bitstream 3. On ObjBounds it
+    reads 0 at all six, and a stale store lands (0x3333). The witness image reads a second one landed (0x2222).
+  - The witness image adds TIGHTEN, whose node query ObjBounds keeps, on each revoked node. It reads 25 on all three
+    and 0 on a live control node, so the revocations took effect and only the per-access check is gone.
+  - A revoked PC capability completes on ObjBounds. On bitstream 3 it faults in its own trap handler and never returns.
+- **Do not cite:**
+  - These are microbenchmark shapes, not program costs. The ladder's ObjLife / ObjBounds figure comes from the
+    runtime lane's main kits and is reported separately.
+  - It is N=1, board 2 only.
+  - The simulated ratios (memory delay 12) are patterns, not silicon values.
