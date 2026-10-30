@@ -1,0 +1,13 @@
+/* State check for a BEEBS program whose verify_benchmark returns -1 (no verification upstream).
+ * Appended to the program's own translation unit by build.py and called after the bracket; the value
+ * is compared against the native build. It reads the program's output state, or re-calls a pure
+ * function of it with the arguments benchmark() used when benchmark() discards the result. */
+#include "bench-harness.h"
+unsigned long long beebs_state_check(int result) {
+  /* benchmark() discards both CRCs; recompute them as it does. */
+  unsigned short i1 = icrc(0, 40, (short)0, 1);
+  unsigned short i2 = icrc(i1, 42, (short)0, 1);
+  unsigned short v[2] = {i1, i2};
+  unsigned long long h = bench_fnv(BENCH_FNV_INIT, v, sizeof v);
+  return bench_fnv(h, &result, sizeof result);
+}
