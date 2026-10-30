@@ -189,3 +189,25 @@ Written before the board kit is baked and before the module's first board boot (
   buddy path asks for `__GFP_ZERO` (capstone_vm.c:358). Every open allocates a fresh table, and none is reused.
 
 Section 2's predictions are unchanged. F0's reading, which they are read against, is the one above.
+
+## Addendum 3 (2026-10-30, before the run): the twin reference for a board Tier 1 with resolve_dirty=1
+
+**Why.** Section 2 took F0's Tier 1 cells as the board reference, cell for cell. That missed S-24 (ISSUES.md), a
+silicon-only fault that the twin cannot show. On silicon, `vm`'s store after `mprotect(RW)` loops on cause 15 unless the
+module loads with `resolve_dirty=1`, whose default is off (capstone_vm.c:1577). The runtime lane's boot 2 on bitstream
+325966ee4 (spec-silicon c9ee688c8629, Addendum 14) loaded the module with no parameters.
+- It read `vm` 139, with S-24's bound line at the launcher's fault address.
+- It read 5 cells off F0's: linux_demand_faults, linux_pages_released, nested_denial_site, vm_denial_sites and
+  spin_entered. The first four are that lane's attribution to the `vm` step, not checked cell by cell here.
+- The miss is this file's: section 2 did not check S-24's row against the boot.
+
+**The arm.** F0r: kit-f55-nocsr (F0's kit, module 3fe888d9c595b80c), Tier 1 only, `run.py --module-args
+"resolve_dirty=1"`, with everything else as the grid's F0.
+
+**Prediction.** F0r equals F0 in every one of the 45 cells: 34 of 45, with the same 11 failures.
+- On QEMU the guest kernel handles a D-clear store fault itself, so `resolve_dirty`'s branch either never runs or runs
+  without effect. The branch ignores fixup_user_fault's return value (capstone_vm.c:1768-1772) and changes no result.
+- vp2's QEMU control with resolve_dirty=1 was byte-identical to its baseline (vp2-kit-2026-10-17 README, the r13
+  pre-registration).
+- A cell that differs is a reading about the branch on the twin, and is reported before any board boot uses F0r as its
+  reference.
