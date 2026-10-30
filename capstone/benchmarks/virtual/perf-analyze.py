@@ -36,7 +36,7 @@ def die(msg):
     sys.exit(1)
 
 
-KNOWN = ('T1', 'T2', 'T3')
+KNOWN = ('T1', 'T2', 'T3', 'Caps', 'MapLife', 'ObjLife')
 NAMES = {'T1': 'T1', 'T2': 'T2'}   # slot -> printed arm name; set from --arms
 
 

@@ -373,3 +373,185 @@ Board 1 runs t3k1 then t3k3, board 2 runs t3k2.
 run's rows (per-program replicate); then on this run's rows plus the T3-all run's rows (suite geomeans over all
 103 programs). The checks above by a script committed with the results. Nothing from bitstream 2 enters a
 bitstream-3 geomean.
+
+## Caps: the allocator without per-object bounds, bitstream 3 (2026-10-30, before any Caps boot)
+
+**Why.** MapLife's malloc returns a capability over the object's own bytes. It is a SHRINK of the slot's authority,
+checked to have come out exact. Caps returns the group's authority instead, cursor at the object. That authority is
+the whole mapping, or the whole nested group. So MapLife/Caps is what per-object spatial bounds cost inside the
+allocator. With the existing arms it completes the chain Caps → MapLife (per-object bounds) → ObjLife (plus
+per-object lifetimes).
+
+Arm names: Caps is new. MapLife is this document's T1, and ObjLife its T3 (lifetimes, no scrub). The campaign's
+directories keep the T1 and T3 labels.
+
+**Images.**
+- **The switch.** `CAPSTONE_HEAP_OBJECT_BOUNDS=0`, together with LIFETIMES=0 and SCRUB_FREE=0. It lives in
+  heap.c, CMake, Application.cmake and sdk.json `heap_object_bounds`; the worktree is `perf-t0a` at 4f054964a7d8,
+  the campaign SDKs' source commit.
+  - At the default (1) the edited tree rebuilds the campaign SDKs byte for byte. Whole `libapplication-runtime.a`:
+    sdk-T1 ab0c38405c8b740c, sdk-T3 3d74dc21d4ec4f4b, sdk-T2 5a79a20fdf806bfb. Every libc and builtins object is
+    equal too.
+  - The strict comparison fires on the Caps SDK (heap.c.obj only).
+- **The Caps SDK.** `perf/sdk-T0a`: runtime 49b443f93d8328ad, heap.c.obj 9a8b75f2675b4129 (text 12548 B).
+  - The 4-arm layout record `perf/heap-layout-4arm.json` keeps the regions at 13376 and 65792.
+  - Caps images: `perf/T0a/build/Caps`, 103 programs and 148 images, from the campaign's build.py recipe.
+- **Layout gate.**
+  - `check-arms.py` against `build2/T1`: 148 of 148 pairs PASS, 0 objects differ.
+  - Against `build3/T3`: 60 of 60; against `build4/T3`: 88 of 88.
+  - The default-link.ld negative control fails 148 of 148.
+  - Every input section outside heap.c sits at the same address in the three arms.
+- **QEMU twin.**
+  - Caps runs every program checked, with rc 0 and check= equal to MapLife and `twin-checks.tsv` (18 of 18 images).
+  - The must-fire control holds: one byte past a 48-byte malloc faults with cause 28 in MapLife and ObjLife. In
+    Caps it does not fault, and the same capability reaches the next object.
+  - Under `--icount`, MapLife − Caps is ~10.3 instructions per malloc+free pair (sglib).
+
+**Kits.**
+- Seven kits, `perf/T0a/kits/heap15/capsh{1,2,3}` and `perf/T0a/kits/other88/capsa{1,2,3,4}`, from `make-kits.py`.
+- Arms are `Caps,MapLife,ObjLife`, alternating ABC CBA (Caps MapLife ObjLife ObjLife MapLife Caps), starting with C
+  at odd positions.
+- Dimensions are the T3 runs':
+  - P = 4 × (W = 1, I = 5) per arm;
+  - huffbench-libc, crc32, huffbench and wikisort at P = 11 × (0, 1);
+  - an allocating program's four processes take K0 to K3;
+  - seed 20261026.
+- Each kit's plan equals the campaign kit's (t3k1..3 and t3a1..4) position for position, with the arms renamed
+  T1 → Caps, T3 → MapLife and T2 → ObjLife.
+- Every MapLife and ObjLife image is byte-identical to the campaign kits' T1 and T3 images (299 files, 0 differ).
+- Launcher 978c09d61f774315.
+
+| kit | programs | processes | run script | SHA256SUMS | stage wrapper run.sh |
+|---|---|---|---|---|---|
+| capsh1 | 5 | 81 | a9cf7a545a94fabd | 3144ed7b4aa66277 | 7f294b3a8ddbadf3 |
+| capsh2 | 5 | 60 | 924c389068df6cf4 | 73b2dcb9ff7bb6f7 | b811333d3465bfdb |
+| capsh3 | 5 | 60 | d397aeef95eec45a | bb61c5c122b12e81 | 9bd1538bc9a9df89 |
+| capsa1 | 22 | 285 | 6c70804efc06228a | b0034c8472d4f462 | 2427a8891d5d1a2c |
+| capsa2 | 22 | 285 | 8ce971358f3285f4 | 388fcc005c31fdf8 | 0e4e4d25517dc3b9 |
+| capsa3 | 22 | 285 | b47b07cc743c83af | 16c52874f44e8e51 | 52ebedb323fe2e35 |
+| capsa4 | 22 | 264 | 7dc69f214d0f301e | 6456ab2224df7fa1 | 0d0cda42c40599dc |
+
+**Boots.**
+- **Board and route.** Board 1, bitstream 3 (caplifive_vp2c_e7af48457), through the SPEC lane's chain:
+  `chain-board.sh 1 caps-b1.list`, which runs `spec-board.sh`, which runs `run-stage.py run --backend board`.
+- **Board kit.** `bkit12-perf-b3-b1` (launcher 978c09d61f774315, module 9c60fb53f80ce67e). spec-board.sh checks
+  both by hash.
+- **Control.** Each boot first runs the known-good control: crc.K0 T1, bd909cc6eba4bf2d, W 1 and I 5.
+- **The stage.** `perf/T0a/board/stages/perf-caps-<kit>/` is a thin wrapper (`make-caps-stages.py`).
+  - Its run.sh hashes every kit file ON THE BOARD and compares the hashes with the kit's SHA256SUMS; a mismatch ends
+    the step before the first process.
+  - It then runs the kit's own run-<kit>.sh unchanged, so the @@PERF and BENCH lines reach the transcript as in the
+    campaign.
+- **List lines** (stage, step_s, booking_min, twin):
+  - capsh1..3 at 3600 s and 90 min.
+  - capsa1..4 at 10800 s and 210 min.
+  - The step bounds are the campaign's own (its t3k gate bound 3600 s, its t3a bound 10800 s).
+  - The measured spans were 24 to 29 min of step for t3k1..3 (33 to 38 min wall), and 78 to 84 min for t3a1..4 (87
+    to 94 min wall). Caps replaces the scrub arm (T2), so no Caps kit should run longer than its campaign kit.
+- **Firmware size.** The stages are 15.6 to 17.2 MB, against 16.95 MB for the largest campaign t3a stage.
+  - The payload pads in steps of 2 MiB, and a 16.7 to 16.95 MB stage gave 23,759,368 B.
+  - The next step, 25,856,520 B, is still under BOARD_FW_CAP 26,000,000.
+- **Dry run.** A stubbed dry run (`perf/T0a/board/dryrun/`) took all seven lines to END rc 0, with `RUN control
+  PASSED` and the real run-stage.py.
+  - Stubs: busy checks, hub, and BOARDVM_STUB_TRANSCRIPT built from the campaign's own bitstream-3 transcripts
+    relabelled by position.
+  - The runner was invoked with this kit and each line's stage. Each staged kit verified against its SHA256SUMS.
+  - parse-board.py read 81/60/60/285/285/285/264 processes, each set equal to the kit's steps.tsv.
+  - capsh1..3 parsed to the campaign's committed rows value for value.
+  - A failed control stopped the chain (CB STOP, VOID).
+
+**Predictions.** Ratios are MapLife/Caps (perf-analyze `--arms Caps,MapLife`); above 1 means Caps is cheaper.
+1. **Correctness.**
+   - Every process in every arm exits 0, with W + I BENCH lines, no VERIFY-FAILED and BENCH-DONE failed=0.
+   - Within each program check= is one value across the three arms, and it equals the bitstream-3 T3 runs' value.
+2. **instret, the 15 allocating programs.**
+   - MapLife − Caps per timed iteration is the QEMU twin's `--icount` difference, within 0.05 % of MapLife's instret.
+     The difference comes from ~10 instructions per malloc+free pair: 9 on malloc's path (a SHRINK, two `lcc`, two
+     compare-and-branches, three ALU ops, one capability store) and one store in free.
+   - Predicted MapLife/Caps instret:
+
+   | program | heap calls / it | Δ instr / it | MapLife/Caps instret | MapLife/Caps cycles band | (T3/T1 cycles, b3) |
+   |---|---|---|---|---|---|
+   | sglib-dllist-libc | 4,200 | 43,772 | 1.0047 | 1.0009 – 1.0052 | 1.0604 |
+   | sglib-hashtable-libc | 4,600 | 47,480 | 1.0053 | 1.0010 – 1.0061 | 1.0594 |
+   | sglib-listinsertsort-libc | 4,455 | 45,998 | 1.0050 | 1.0009 – 1.0056 | 1.0630 |
+   | sglib-listsort-libc | 4,500 | 46,448 | 1.0051 | 1.0010 – 1.0059 | 1.0640 |
+   | sglib-rbtree-libc | 3,600 | 37,520 | 1.0039 | 1.0007 – 1.0043 | 1.0467 |
+   | ctl-stack-libc | 1,400 | 18,059 | 1.0016 | 1.0003 – 1.0018 | 1.0198 |
+   | ctl-string-libc | 1,400 | 16,808 | 1.0015 | 1.0003 – 1.0019 | 1.0193 |
+   | ctl-vector-libc | 1,480 | 19,248 | 1.0017 | 1.0003 – 1.0018 | 1.0193 |
+   | huffbench-libc | 76 | 844 | 1.0001 | 1.0000 – 1.0002 | 1.0015 |
+   | miniz-libc | 36 | 541 | 1.0001 | 1.0000 – 1.0001 | 1.0000 |
+   | rv8 aes, miniz, norx, primes, qsort | ≤ 6 | ≤ 52 | 1.0000 | 1.0000 | ≤ 1.0012 |
+
+   ctl-stack-libc's and ctl-vector-libc's per-iteration instret varies by up to ~25 k within an arm on the twin,
+   so their rows are ±0.0003.
+3. **Cycles, the 15.**
+   - **Direction: Caps ≤ MapLife.** MapLife/Caps ≥ 0.999 (point estimate) on every program.
+   - **Size.** The band in the table assumes each removed instruction costs 1 to 6 cycles. The bounds are:
+     - 1: CVA6 issues one instruction per cycle at best.
+     - 6: the programs' own average CPI on bitstream 3 is 4.5 to 5.5 for sglib and ctl. The removed instructions are
+       register operations and two stores to lines the allocator has just touched, so they should cost no more than
+       the average.
+   - **sglib.** The geomean of MapLife/Caps over the five sglib-*-libc lies in [1.000, 1.008], with point estimate
+     1.001 to 1.006.
+     - A single program's Welch interval is NOT predicted to exclude 1. The T3 runs' per-program intervals on these
+       programs are ±0.5 to 0.6 %, the same size as the effect.
+   - **Far below ObjLife/MapLife.** On each sglib program, MapLife/Caps is about an order of magnitude smaller in
+     log terms than the same boot's ObjLife/MapLife (the band's top, 1.006, against 1.047 to 1.064). A CDERIVE plus a CREVOKE costs ~600 cycles per allocation; this
+     difference is ~10 to 60.
+   - **Falsifier.** A MapLife/Caps above 1.02 on any program means a SHRINK or an `lcc` is not cheap on silicon. It
+     is reported as a finding, not explained away. A MapLife/Caps below 0.99 on an sglib or ctl program means Caps
+     is slower. With byte-identical layout outside heap.c, that would point at heap.c's own placement (K pads) or
+     the group-sized capability's effect on the hardware, and is reported with the K split.
+4. **The 88 that do not allocate in the timed region.**
+   - Per program, MapLife and Caps instret agree within 0.01 %.
+   - The geomean of MapLife/Caps over the 88 lies in [0.995, 1.005], and each per-program point estimate lies within
+     1 % of 1.000.
+5. **Replicate of the existing arms on board 1.**
+   - Per program, the median instret per iteration of MapLife and of ObjLife equals the bitstream-3 T1 and T3
+     runs' within 0.1 %. Those are `results/2026-10-28-t3heap-bitstream3/` (the 15) and
+     `results/2026-10-27-t3all-bitstream3/` (the 88).
+   - ObjLife/MapLife has a Welch interval that overlaps that run's T3/T1 interval.
+   - capsh2, capsa2 and capsa4 move programs that ran on board 2 in the campaign to board 1. A cross-board
+     difference is reported, and the within-boot ratios stand.
+
+**VOID.** A boot is VOID, and none of its rows enter any ratio, unless `check-caps-boot.py` passes. It requires:
+- C1 `RUN control PASSED`;
+- C2 `@@CAPS-SUMS OK`, and the board-side hash block equal to the kit's SHA256SUMS line for line;
+- C3 `@@PERF-<KIT>-DONE` and `@@SPEC-DONE`;
+- C4 parse-board.py exit 0;
+- C5 the parsed processes exactly the kit's steps.tsv;
+- C6 no `@@STEP-BOUND`, no runner TIMEOUT, no kernel oops or OOM.
+
+C5 is needed because parse-board.py alone passes a boot cut short: the dry run cut a transcript after process 40 of
+60, parse-board exited 0, and the gate returned VOID.
+
+Also VOID:
+- a boot in which `spec-board.sh` printed `SB STOP` (wrong board kit, bitstream or control hash);
+- a boot whose MapLife instret misses prediction 5 by more than 0.1 % on more than one program. That means the
+  platform is not the T3 runs', and the Caps ratios from it are not used until it is explained.
+
+Each check was shown to fire on tampered inputs before any boot:
+- a failed control;
+- a cut transcript;
+- a missing out dir (NO DATA, exit 2);
+- a kit with one image byte changed: the wrapper, run on the host, exited 3 with nothing run.
+
+**Analysis.**
+```
+cd <work root holding perf/> || exit 1; G=perf/T0a/board; K=perf/T0a/kits; O=<chain out root>
+V=<tree with the Caps parse-board.py / perf-analyze.py edits>/capstone/benchmarks/virtual
+for k in capsh1 capsh2 capsh3; do python3 $G/check-caps-boot.py $O/perf-caps-$k $K/heap15/$k --runs $G/runs-$k.tsv; done
+for k in capsa1 capsa2 capsa3 capsa4; do python3 $G/check-caps-boot.py $O/perf-caps-$k $K/other88/$k --runs $G/runs-$k.tsv; done
+# only VALID boots: concatenate (one header) per group
+python3 $V/perf-analyze.py report heap15.tsv --arms Caps,MapLife  --out caps-heap15/Caps-MapLife
+python3 $V/perf-analyze.py report heap15.tsv --arms Caps,ObjLife  --out caps-heap15/Caps-ObjLife
+python3 $V/perf-analyze.py report heap15.tsv --arms MapLife,ObjLife --out caps-heap15/MapLife-ObjLife
+(the same three for other88.tsv)
+```
+- The instret and replicate checks (predictions 2, 4 and 5) are made by a script committed with the results. It is
+  written after the boots and before any transcript is read, and each check is shown to fire on tampered inputs.
+- perf-analyze.py reports TEST/BASE, so `--arms Caps,MapLife` gives MapLife/Caps.
+- The Caps arm names need the parse-board.py regex (`T[123]|Caps|MapLife|ObjLife`) and perf-analyze.py KNOWN edits
+  from `perf-t0a`. dev's parse-board.py reads a Caps transcript as "no @@PERF steps".

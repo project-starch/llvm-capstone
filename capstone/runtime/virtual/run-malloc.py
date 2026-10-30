@@ -51,6 +51,10 @@ def main():
     heap = dict(lifetimes=True, scrub_free=None)
     if a.sdk:
         config = json.loads((a.sdk / 'sdk.json').read_text())
+        # CAPSTONE_HEAP_OBJECT_BOUNDS=OFF (the Caps arm) hands out the group's authority, so the contract's
+        # spatial-denial expectations do not hold. Refuse it rather than report them as passes or failures.
+        if config.get('heap_object_bounds', True) is False:
+            sys.exit(f'{a.sdk}: heap_object_bounds is false; the malloc contract has no expectations for it')
         heap = dict(lifetimes=bool(config.get('heap_lifetimes', True)),
                     scrub_free=bool(config.get('heap_scrub_free', True)))
     nm = Path(os.environ.get('CAPSTONE_LLVM_BIN', '')) / 'llvm-nm'

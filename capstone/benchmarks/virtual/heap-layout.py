@@ -104,6 +104,7 @@ def main():
         bss = packed([s for s in alloc if isbss(s['name'])])
         rec['objects'][hashlib.sha256(obj).hexdigest()] = dict(
             sdk=str(sdk.resolve()), heap_lifetimes=cfg.get('heap_lifetimes'), heap_scrub_free=cfg.get('heap_scrub_free'),
+            heap_object_bounds=cfg.get('heap_object_bounds', True),
             text_bytes=text, bss_bytes=bss)
         texts.append(text)
         bsses.append(bss)
