@@ -93,6 +93,45 @@ own executable ran in the guest, and every guest invocation exited 0.
 
 `recipes/integration.sh` recomputes the toolchain tree from public commits and the bundle.
 
+### Code layout across the arms (`CAPSTONE_SPEC_LAYOUT`)
+
+capstone-cc links the runtime archive whole and first, and the SDK's `link.ld` places every `.text` input in link
+order, so the runtime's `heap.c.obj`, the one file the arms differ in, sits early in `.text`. Every benchmark function
+after it, libc's mallocng and all of `.rodata`, `.data` and `.bss` move by the difference of the two heap.c sizes: in
+the campaign build of 2026-10-28, 505.mcf_r's `main` is at 0x212ec in capstone-spatial and 0x21414 in
+capstone-lifetimes, and `tools/layout-check.py` fails all 13 executable pairs of that build. A cycle ratio between the
+arms then carries a code-placement term, which on the microbenchmarks reached ~8 % at identical instructions.
+
+`CAPSTONE_SPEC_LAYOUT=heap-last` (default `sdk`, the SDK's own link.ld, which reproduces the campaign images byte for
+byte) links each arm through `tools/layout-sdk.py`'s view of its SDK: the same capstone-cc and sdk.json, with a link
+script that moves heap.c.obj's input sections to the end of `.text`, `.data` and `.bss`, and its read-only data into an
+output section of its own (`.rodata.heap`: lld merges strings across one output section, so heap.c's strings inside
+`.rodata` would resize the shared pool), each in a region of fixed size (`REGIONS`, the same for every SDK, with
+link-time ASSERTs). Every other input section keeps its order, so every benchmark function and object, every libc and
+runtime function (mallocng among them) and every output section sits at the same address in both arms; heap.c's
+regions start at the same address in both. `tools/build.sh` then runs `tools/layout-check.py` over every executable
+pair and fails the build on any difference; it also works on its own (`--rec REC --tree SPEC17`, or `--pair`).
+
+What it does not equalise:
+- heap.c's own code: its size, its functions' offsets inside the region (`malloc` at 0x386f0 against 0x38758 in mcf),
+  and so their cache lines and predictor indices and how they alias the benchmark's. That is the arm;
+- the run-time addresses of heap objects and heap metadata, and the stack depth inside heap.c;
+- the placement itself: both arms share one placement, which is not the campaign images' placement, so a reading of a
+  controlled image is comparable with the other arm's controlled image and not with an uncontrolled one;
+- a pair whose SDKs differ outside heap.c.obj. libc is linked after the benchmark, so another libc leaves the
+  benchmark lined up and moves libc; another runtime member moves everything after it. layout-check fails either way.
+Only SDKs that link the same `link.ld` content are accepted together.
+
+The layout view of each arm's SDK is `$REC/layout-sdk/<arm>`, and `arms.json` names it. Anything that runs runcpu on
+the tree afterwards, the `--fake --action=run` that `board/make-stage.py` reads among them, passes that directory as
+`--define sdk=`, exactly as the build did:
+
+```bash
+CAPSTONE_SPEC_LAYOUT=heap-last bash $K/tools/build.sh $K $W/l/tree/SPEC17 $W/sdks $W/l/build capstone-spatial capstone-lifetimes
+runcpu --config=capstone-virtual --tune=base --define sdk=$W/l/build/layout-sdk/capstone-spatial --define kit=$K \
+  --define arm_label=capstone-spatial --fake --action=run --size=test --noreportable --iterations=1 505.mcf_r
+```
+
 ## Qualification
 
 Of the previous toolchain (manifest `toolchain_previous`, 193d4495): run q4 on the build host, 2026-10-17

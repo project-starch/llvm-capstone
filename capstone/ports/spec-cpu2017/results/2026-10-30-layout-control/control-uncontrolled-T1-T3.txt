@@ -1,0 +1,729 @@
+[502.gcc_r] FAIL cpugcc_r_base.capstone-spatial vs cpugcc_r_base.capstone-lifetimes: compared bench functions 12467, bench data 3384, libc+runtime functions 604, libc+runtime data 127, sections 12 (uncontrolled); not compared: heap.c 14 functions 17 data, ambiguous names 5 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_data: 203
+      BIN2CHAR 0xdd0320/4001 vs 0xdd0450/4001
+      BIN2DPD 0xdcf350/2000 vs 0xdcf480/2000
+      COMBEXP 0xdd1344/128 vs 0xdd1474/128
+      COMBMSD 0xdd12c4/128 vs 0xdd13f4/128
+      DECPOWERS 0xdcf328/40 vs 0xdcf458/40
+      DECSTICKYTAB 0xdcf31c/10 vs 0xdcf44c/10
+      DPD2BIN 0xdcfb20/2048 vs 0xdcfc50/2048
+      LNnn 0xdd140a/180 vs 0xdd153a/180
+      _cpp_trigraph_map 0xdf0df9/256 vs 0xdf0f29/256
+      _hex_value 0xdd1cec/256 vs 0xdd1e1c/256
+      _sch_istable 0xdf01d0/512 vs 0xdf0300/512
+      _sch_tolower 0xdf03d0/256 vs 0xdf0500/256
+   MISMATCH bench_func: 12285
+      main 0x21510/48 vs 0x21638/48
+      AT_string_form 0x2959d0/456 vs 0x295af8/456
+      VEC_bitmap_set_t_heap_safe_grow_cleared 0xbb2b48/260 vs 0xbb2c70/260
+      VEC_ce_s_heap_safe_push 0xbf4570/188 vs 0xbf4698/188
+      VEC_expr_hash_elt_t_heap_safe_push 0xb57960/184 vs 0xb57a88/184
+      VEC_int_heap_safe_push 0x445460/140 vs 0x445588/140
+      VEC_micro_operation_heap_safe_push 0xcac9c8/176 vs 0xcacaf0/176
+      VEC_operand_entry_t_heap_safe_push 0xbd10e4/132 vs 0xbd120c/132
+      VEC_rtx_gc_safe_push 0x27fde8/184 vs 0x27ff10/184
+      VEC_tree_heap_safe_push 0x567d4/132,0xb57a18/168 vs 0x568fc/132,0xb57b40/168
+      VEC_vn_reference_op_s_heap_copy 0xbdbc18/164 vs 0xbdbd40/164
+      VEC_vn_reference_op_s_heap_safe_grow 0xbd52b8/144 vs 0xbd53e0/144
+   MISMATCH sdk_data: 24
+      __c_locale 0xdf1370/96 vs 0xdf14a0/96
+      __fsmu8 0xdf126c/204 vs 0xdf139c/204
+      __malloc_size_classes 0xdf11ee/96 vs 0xdf131e/96
+      __month_to_secs.secs_through_month 0xdf1e24/48 vs 0xdf1f54/48
+      __secs_to_tm.days_in_month 0xdf1ddb/12 vs 0xdf1f0b/12
+      __utc 0xdf1de7/4 vs 0xdf1f17/4
+      a_ctz_32.debruijn32 0xdef6c0/32,0xdef6c0/32 vs 0xdef7f0/32,0xdef7f0/32
+      all_mask 0xdf1338/8 vs 0xdf1468/8
+      app_mask 0xdf1340/8 vs 0xdf1470/8
+      c_messages 0xdf1dc8/19 vs 0xdf1ef8/19
+      c_numeric 0xdf1c89/3 vs 0xdf1db9/3
+      c_time 0xdf1c8c/316 vs 0xdf1dbc/316
+   MISMATCH sdk_func: 302
+      _Exit 0xd31ae0/112 vs 0xd31c08/112
+      _IO_ferror_unlocked 0xd37320/152 vs 0xd37448/152
+      _IO_getc 0xd38808/140 vs 0xd38930/140
+      _IO_putc 0xd39258/180 vs 0xd39380/180
+      ___errno_location 0xd317f0/44 vs 0xd31918/44
+      __addtf3 0xd496a0/1980 vs 0xd497c8/1980
+      __aio_close 0xd398fc/36 vs 0xd39a24/36
+      __asctime_r 0xd46040/300 vs 0xd46168/300
+      __block_all_sigs 0xd3626c/100 vs 0xd36394/100
+      __block_app_sigs 0xd362d0/100 vs 0xd363f8/100
+      __capstone_cap_init 0x12258/64,0x1c87c/6852,0x283b0/376,0x2ab04/96,0x2f6a4/272,0x35880/68,0x3a514/180,0x3a5ec/2604,0x431f0/776,0x64c2c/352,0xb97f8/10772,0xc8340/14936,0xef6f4/96,0xfd0a4/180,0x10cd5c/956,0x11a70c/152,0x128164/80,0x131370/244,0x149b5c/760,0x150498/1216,0x151668/224,0x158ba8/180,0x17ac8c/192,0x17bd7c/96,0x184b58/704,0x18e428/5548,0x1a0bc8/7472,0x1a92b4/1064,0x1af6ec/2964,0x1b80ec/340,0x1bc7c4/372,0x1d7088/376,0x1dd310/136,0x1eb708/724,0x1ec118/1416,0x1efd90/260,0x1f36ac/324,0x2100c8/244,0x21f118/1344,0x22d8ac/112,0x232490/500,0x236438/128,0x246bf8/168,0x249aec/3508,0x29656c/2436,0x2a8d70/712,0x2b2060/652,0x2b6cfc/96,0x2e8558/100,0x2f2ba4/296,0x2f9f50/1464,0x3571a8/800,0x35b2f8/168,0x367218/356,0x37fb7c/1364,0x385448/80,0x3a964c/64,0x3aaba8/96,0x3c4150/4244,0x3d8308/48,0x3d9f0c/88,0x3da8a0/96,0x42abd4/60052,0x447760/264,0x448b14/208,0x4490ec/96,0x617314/13400,0x6a5d0c/3388,0x6bb518/466000,0x7f3e70/80,0x7f7ed8/160,0x7feaa0/484,0x80a784/224,0x80fd24/240,0x81c140/96,0x821d58/96,0x8243ec/172,0x82c348/1088,0x854b68/80,0x864860/92,0x86543c/592,0x87f640/168,0x8906c8/172,0x891568/312,0x894cf8/176,0x8986c0/112,0x8a15b8/96,0x8a9574/96,0x8b0124/156,0x8b0780/48,0x8c2454/48,0x8dd63c/400,0x8f8e0c/160,0x90240c/105924,0x9234dc/272,0x932558/292,0x934488/900,0x938a54/96,0x93c4e4/96,0x944ac4/1220,0x94b668/64,0x95f594/512,0x969d64/152,0x96cc08/96,0x9748a8/624,0x9781b4/3328,0x97bd5c/96,0x980a34/316,0x9985d0/372,0x9b23a8/184,0x9b3c0c/9600,0x9c2258/156,0x9d6b6c/176,0x9e4960/456,0x9e8ae0/284,0xa051c8/576,0xa2ad64/372,0xa3f46c/80,0xa50990/140,0xa53ef0/96,0xa549cc/100,0xa54fec/1128,0xa57700/132,0xa5bc18/96,0xa6289c/96,0xa7d958/872,0xa813a4/96,0xa8d55c/156,0xaa3d2c/80,0xaaaaf8/1300,0xab8e14/432,0xabcaec/96,0xada618/80,0xadb080/64,0xadf5b8/96,0xae600c/552,0xaed7e0/96,0xaee974/168,0xaf3f4c/80,0xaf4e8c/540,0xaffa50/100,0xb01340/68,0xb165e8/520,0xb2025c/100,0xb2d048/260,0xb30034/96,0xb329c0/96,0xb439dc/164,0xb4ba94/96,0xb4ca54/96,0xb52200/248,0xb5d22c/172,0xb5e814/96,0xb678f8/96,0xb6b054/96,0xb6fd58/96,0xba1fd8/1692,0xba6e1c/268,0xbb0644/180,0xbb269c/96,0xbc4254/180,0xbc7674/116,0xbd2638/96,0xbe3ecc/96,0xbf8090/400,0xc00afc/96,0xc06ad4/228,0xc076e4/80,0xc0b6c8/96,0xc0f87c/168,0xc11f60/296,0xc15aec/96,0xc597d0/184,0xc781ec/96,0xc9a5dc/10648,0xca4694/64,0xcbe9d8/448,0xcc0980/192,0xcd78a8/1736,0xcda04c/96,0xcda250/64,0xcda4b4/64,0xce08a8/600,0xce7194/788,0xce7570/64,0xce7664/92,0xce7ca0/64,0xce835c/11108,0xcf1628/11468,0xd0ba40/37972,0xd1f6e8/1252,0xd2f890/80,0xd38558/96,0xd38d3c/64,0xd3984c/176,0xd39cb4/180,0xd48e40/124 vs 0x12258/64,0x1c87c/6852,0x284d8/376,0x2ac2c/96,0x2f7cc/272,0x359a8/68,0x3a63c/180,0x3a714/2604,0x43318/776,0x64d54/352,0xb9920/10772,0xc8468/14936,0xef81c/96,0xfd1cc/180,0x10ce84/956,0x11a834/152,0x12828c/80,0x131498/244,0x149c84/760,0x1505c0/1216,0x151790/224,0x158cd0/180,0x17adb4/192,0x17bea4/96,0x184c80/704,0x18e550/5548,0x1a0cf0/7472,0x1a93dc/1064,0x1af814/2964,0x1b8214/340,0x1bc8ec/372,0x1d71b0/376,0x1dd438/136,0x1eb830/724,0x1ec240/1416,0x1efeb8/260,0x1f37d4/324,0x2101f0/244,0x21f240/1344,0x22d9d4/112,0x2325b8/500,0x236560/128,0x246d20/168,0x249c14/3508,0x296694/2436,0x2a8e98/712,0x2b2188/652,0x2b6e24/96,0x2e8680/100,0x2f2ccc/296,0x2fa078/1464,0x3572d0/800,0x35b420/168,0x367340/356,0x37fca4/1364,0x385570/80,0x3a9774/64,0x3aacd0/96,0x3c4278/4244,0x3d8430/48,0x3da034/88,0x3da9c8/96,0x42acfc/60052,0x447888/264,0x448c3c/208,0x449214/96,0x61743c/13400,0x6a5e34/3388,0x6bb640/466000,0x7f3f98/80,0x7f8000/160,0x7febc8/484,0x80a8ac/224,0x80fe4c/240,0x81c268/96,0x821e80/96,0x824514/172,0x82c470/1088,0x854c90/80,0x864988/92,0x865564/592,0x87f768/168,0x8907f0/172,0x891690/312,0x894e20/176,0x8987e8/112,0x8a16e0/96,0x8a969c/96,0x8b024c/156,0x8b08a8/48,0x8c257c/48,0x8dd764/400,0x8f8f34/160,0x902534/105924,0x923604/272,0x932680/292,0x9345b0/900,0x938b7c/96,0x93c60c/96,0x944bec/1220,0x94b790/64,0x95f6bc/512,0x969e8c/152,0x96cd30/96,0x9749d0/624,0x9782dc/3328,0x97be84/96,0x980b5c/316,0x9986f8/372,0x9b24d0/184,0x9b3d34/9600,0x9c2380/156,0x9d6c94/176,0x9e4a88/456,0x9e8c08/284,0xa052f0/576,0xa2ae8c/372,0xa3f594/80,0xa50ab8/140,0xa54018/96,0xa54af4/100,0xa55114/1128,0xa57828/132,0xa5bd40/96,0xa629c4/96,0xa7da80/872,0xa814cc/96,0xa8d684/156,0xaa3e54/80,0xaaac20/1300,0xab8f3c/432,0xabcc14/96,0xada740/80,0xadb1a8/64,0xadf6e0/96,0xae6134/552,0xaed908/96,0xaeea9c/168,0xaf4074/80,0xaf4fb4/540,0xaffb78/100,0xb01468/68,0xb16710/520,0xb20384/100,0xb2d170/260,0xb3015c/96,0xb32ae8/96,0xb43b04/164,0xb4bbbc/96,0xb4cb7c/96,0xb52328/248,0xb5d354/172,0xb5e93c/96,0xb67a20/96,0xb6b17c/96,0xb6fe80/96,0xba2100/1692,0xba6f44/268,0xbb076c/180,0xbb27c4/96,0xbc437c/180,0xbc779c/116,0xbd2760/96,0xbe3ff4/96,0xbf81b8/400,0xc00c24/96,0xc06bfc/228,0xc0780c/80,0xc0b7f0/96,0xc0f9a4/168,0xc12088/296,0xc15c14/96,0xc598f8/184,0xc78314/96,0xc9a704/10648,0xca47bc/64,0xcbeb00/448,0xcc0aa8/192,0xcd79d0/1736,0xcda174/96,0xcda378/64,0xcda5dc/64,0xce09d0/600,0xce72bc/788,0xce7698/64,0xce778c/92,0xce7dc8/64,0xce8484/11108,0xcf1750/11468,0xd0bb68/37972,0xd1f810/1252,0xd2f9b8/80,0xd38680/96,0xd38e64/64,0xd39974/176,0xd39ddc/180,0xd48f68/124
+      __capstone_mallocng_free 0xd31cd0/1236 vs 0xd31df8/1236
+   MISMATCH sections: 8
+      .capstone_application 0xdf1e58+0x38 vs 0xdf1f88+0x38
+      .capstone_cap_init 0xdf1e90+0x628 vs 0xdf1fc0+0x628
+      .fini_array 0xdf1e90+0x0 vs 0xdf1fc0+0x0
+      .gct 0xdf24c0+0x3160f vs 0xdf25f0+0x3160f
+      .init_array 0xdf1e90+0x0 vs 0xdf1fc0+0x0
+      .rodata 0xd4bc40+0xa6214 vs 0xd4bd70+0xa6214
+      .text 0x10000+0xd3bc40 vs 0x10000+0xd3bd68
+      .text_end 0xe23acf+0x531 vs 0xe23bff+0x401
+   hot: main 0x21510 | 0x21638; malloc 0x206e8 | 0x20750; free 0x20ca8 | 0x20d70; realloc 0x20f18 | 0x20fe0; calloc 0x20e70 | 0x20f38; __capstone_mallocng_malloc 0xd32e4c | 0xd32f74; __capstone_mallocng_free 0xd31cd0 | 0xd31df8; __capstone_mallocng_realloc 0xd34e78 | 0xd34fa0
+[525.x264_r] FAIL imagevalidate_525_base.capstone-spatial vs imagevalidate_525_base.capstone-lifetimes: compared bench functions 14, bench data 0, libc+runtime functions 243, libc+runtime data 80, sections 12 (uncontrolled); not compared: heap.c 13 functions 17 data, ambiguous names 3 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_func: 14
+      main 0x23c70/7304 vs 0x23d38/7304
+      computeSSIM 0x214e4/5172 vs 0x215ac/5172
+      covariance 0x229dc/120 vs 0x22aa4/120
+      dump_header 0x258f8/1732 vs 0x259c0/1732
+      dump_tga 0x21134/944 vs 0x211fc/944
+      get_version 0x20348/1036 vs 0x20410/1036
+      init_targa 0x20d4c/1000 vs 0x20e14/1000
+      load_image_file 0x2095c/1008 vs 0x20a24/1008
+      mean 0x22918/92 vs 0x229e0/92
+      printUsage 0x20888/212 vs 0x20950/212
+      read_tga_file 0x233a4/2252 vs 0x2346c/2252
+      read_yuv_file 0x22a54/2384 vs 0x22b1c/2384
+   MISMATCH sdk_data: 14
+      __c_locale 0x38940/96 vs 0x38a10/96
+      __malloc_size_classes 0x38858/96 vs 0x38928/96
+      a_ctz_32.debruijn32 0x388f4/32 vs 0x389c4/32
+      decfloat.p10s 0x388d4/32 vs 0x389a4/32
+      descriptor 0x39788/56 vs 0x39858/56
+      empty_mo 0x38920/20 vs 0x389f0/20
+      errmsgidx 0x39572/264 vs 0x39642/264
+      errmsgstr 0x38df8/1914 vs 0x38ec8/1914
+      hc_report_list.more 0x37e8a/5 vs 0x37f5a/5
+      magic 0x3879d/8,0x387a5/8 vs 0x3886d/8,0x38875/8
+      med_cnt_tab 0x38914/4 vs 0x389e4/4
+      small_cnt_tab 0x388b8/27 vs 0x38988/27
+   MISMATCH sdk_func: 142
+      _Exit 0x268d0/112 vs 0x26998/112
+      ___errno_location 0x26774/44 vs 0x2683c/44
+      __addtf3 0x34c2c/1980 vs 0x34cf4/1980
+      __aio_close 0x2b72c/36 vs 0x2b7f4/36
+      __capstone_cap_init 0x11dd4/64,0x1c334/6852,0x2abc8/96,0x2b1e0/64,0x2b67c/176,0x2bae4/180 vs 0x11dd4/64,0x1c334/6852,0x2ac90/96,0x2b2a8/64,0x2b744/176,0x2bbac/180
+      __capstone_mallocng_free 0x26940/1236 vs 0x26a08/1236
+      __capstone_mallocng_malloc 0x27abc/2020 vs 0x27b84/2020
+      __cmptf2 0x35b78/224 vs 0x35c40/224
+      __copy_tls 0x2620c/300 vs 0x262d4/300
+      __divtf3 0x362dc/2420 vs 0x363a4/2420
+      __eqtf2 0x35b78/224 vs 0x35c40/224
+      __errno_location 0x26774/44 vs 0x2683c/44
+   MISMATCH sections: 8
+      .capstone_application 0x39788+0x38 vs 0x39858+0x38
+      .capstone_cap_init 0x397c0+0x30 vs 0x39890+0x30
+      .fini_array 0x397c0+0x0 vs 0x39890+0x0
+      .gct 0x397f0+0x0 vs 0x398c0+0x0
+      .init_array 0x397c0+0x0 vs 0x39890+0x0
+      .rodata 0x371d0+0x25b4 vs 0x372a0+0x25b4
+      .text 0x10000+0x271cc vs 0x10000+0x27294
+      .text_end 0x397f0+0x810 vs 0x398c0+0x740
+   hot: main 0x23c70 | 0x23d38; malloc 0x1fb30 | 0x1fb98; free 0x200c0 | 0x20188; calloc 0x20288 | 0x20350; __capstone_mallocng_malloc 0x27abc | 0x27b84; __capstone_mallocng_free 0x26940 | 0x26a08
+[538.imagick_r] FAIL imagevalidate_538_base.capstone-spatial vs imagevalidate_538_base.capstone-lifetimes: compared bench functions 14, bench data 0, libc+runtime functions 243, libc+runtime data 80, sections 12 (uncontrolled); not compared: heap.c 13 functions 17 data, ambiguous names 3 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_func: 14
+      main 0x23c70/7304 vs 0x23d38/7304
+      computeSSIM 0x214e4/5172 vs 0x215ac/5172
+      covariance 0x229dc/120 vs 0x22aa4/120
+      dump_header 0x258f8/1732 vs 0x259c0/1732
+      dump_tga 0x21134/944 vs 0x211fc/944
+      get_version 0x20348/1036 vs 0x20410/1036
+      init_targa 0x20d4c/1000 vs 0x20e14/1000
+      load_image_file 0x2095c/1008 vs 0x20a24/1008
+      mean 0x22918/92 vs 0x229e0/92
+      printUsage 0x20888/212 vs 0x20950/212
+      read_tga_file 0x233a4/2252 vs 0x2346c/2252
+      read_yuv_file 0x22a54/2384 vs 0x22b1c/2384
+   MISMATCH sdk_data: 14
+      __c_locale 0x38940/96 vs 0x38a10/96
+      __malloc_size_classes 0x38858/96 vs 0x38928/96
+      a_ctz_32.debruijn32 0x388f4/32 vs 0x389c4/32
+      decfloat.p10s 0x388d4/32 vs 0x389a4/32
+      descriptor 0x39788/56 vs 0x39858/56
+      empty_mo 0x38920/20 vs 0x389f0/20
+      errmsgidx 0x39572/264 vs 0x39642/264
+      errmsgstr 0x38df8/1914 vs 0x38ec8/1914
+      hc_report_list.more 0x37e8a/5 vs 0x37f5a/5
+      magic 0x3879d/8,0x387a5/8 vs 0x3886d/8,0x38875/8
+      med_cnt_tab 0x38914/4 vs 0x389e4/4
+      small_cnt_tab 0x388b8/27 vs 0x38988/27
+   MISMATCH sdk_func: 142
+      _Exit 0x268d0/112 vs 0x26998/112
+      ___errno_location 0x26774/44 vs 0x2683c/44
+      __addtf3 0x34c2c/1980 vs 0x34cf4/1980
+      __aio_close 0x2b72c/36 vs 0x2b7f4/36
+      __capstone_cap_init 0x11dd4/64,0x1c334/6852,0x2abc8/96,0x2b1e0/64,0x2b67c/176,0x2bae4/180 vs 0x11dd4/64,0x1c334/6852,0x2ac90/96,0x2b2a8/64,0x2b744/176,0x2bbac/180
+      __capstone_mallocng_free 0x26940/1236 vs 0x26a08/1236
+      __capstone_mallocng_malloc 0x27abc/2020 vs 0x27b84/2020
+      __cmptf2 0x35b78/224 vs 0x35c40/224
+      __copy_tls 0x2620c/300 vs 0x262d4/300
+      __divtf3 0x362dc/2420 vs 0x363a4/2420
+      __eqtf2 0x35b78/224 vs 0x35c40/224
+      __errno_location 0x26774/44 vs 0x2683c/44
+   MISMATCH sections: 8
+      .capstone_application 0x39788+0x38 vs 0x39858+0x38
+      .capstone_cap_init 0x397c0+0x30 vs 0x39890+0x30
+      .fini_array 0x397c0+0x0 vs 0x39890+0x0
+      .gct 0x397f0+0x0 vs 0x398c0+0x0
+      .init_array 0x397c0+0x0 vs 0x39890+0x0
+      .rodata 0x371d0+0x25b4 vs 0x372a0+0x25b4
+      .text 0x10000+0x271cc vs 0x10000+0x27294
+      .text_end 0x397f0+0x810 vs 0x398c0+0x740
+   hot: main 0x23c70 | 0x23d38; malloc 0x1fb30 | 0x1fb98; free 0x200c0 | 0x20188; calloc 0x20288 | 0x20350; __capstone_mallocng_malloc 0x27abc | 0x27b84; __capstone_mallocng_free 0x26940 | 0x26a08
+[538.imagick_r] FAIL imagick_r_base.capstone-spatial vs imagick_r_base.capstone-lifetimes: compared bench functions 1877, bench data 179, libc+runtime functions 448, libc+runtime data 165, sections 12 (uncontrolled); not compared: heap.c 14 functions 17 data, ambiguous names 7 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_data: 38
+      AcquireResizeFilter.jinc_zeros 0x307aa0/128 vs 0x307c20/128
+      AcquireResizeFilter.mapping 0x3079a8/248 vs 0x307b28/248
+      AcquireUniqueFileResource.portable_filename 0x30220c/65 vs 0x30238c/65
+      BackgroundColor 0x307718/8 vs 0x307898/8
+      Base64 0x307c80/65 vs 0x307e00/65
+      BorderColor 0x307720/8 vs 0x3078a0/8
+      DecodeGamma.powers_of_two 0x307838/40 vs 0x3079b8/40
+      DefaultResolution 0x3077a0/8 vs 0x307920/8
+      DefaultTileFrame 0x307728/10 vs 0x3078a8/10
+      DefaultTileGeometry 0x307732/13 vs 0x3078b2/13
+      DefaultTileLabel 0x30773f/9 vs 0x3078bf/9
+      DespeckleImage.X 0x307598/32 vs 0x307718/32
+   MISMATCH bench_func: 1865
+      main 0x1d2fd4/256 vs 0x1d315c/256
+      AccelerateAddNoiseImage 0x257e8/40 vs 0x25970/40
+      AccelerateBlurImage 0x25608/40 vs 0x25790/40
+      AccelerateCompositeImage 0x25680/40 vs 0x25808/40
+      AccelerateContrastImage 0x256a8/40 vs 0x25830/40
+      AccelerateContrastStretchImageChannel 0x256d0/40 vs 0x25858/40
+      AccelerateConvolveImage 0x25860/40 vs 0x259e8/40
+      AccelerateConvolveImageChannel 0x255b8/40 vs 0x25740/40
+      AccelerateDespeckleImage 0x25720/40 vs 0x258a8/40
+      AccelerateEqualizeImage 0x256f8/40 vs 0x25880/40
+      AccelerateFunctionImage 0x255e0/40 vs 0x25768/40
+      AccelerateGrayscaleImage 0x257c0/40 vs 0x25948/40
+   MISMATCH sdk_data: 64
+      PIo2 0x30c480/64 vs 0x30c600/64
+      __c_locale 0x3089d0/96 vs 0x308b50/96
+      __exp_data 0x308ab0/2160 vs 0x308c30/2160
+      __fsmu8 0x30c5c0/204 vs 0x30c740/204
+      __log_data 0x3098e0/4240 vs 0x309a60/4240
+      __malloc_size_classes 0x308a30/96 vs 0x308bb0/96
+      __month_to_secs.secs_through_month 0x30cd58/48 vs 0x30ced8/48
+      __pow_log_data 0x30a970/4168 vs 0x30aaf0/4168
+      __rsqrt_tab 0x30c4c0/256 vs 0x30c640/256
+      __secs_to_tm.days_in_month 0x30cd12/12 vs 0x30ce92/12
+      __utc 0x30cd1e/4 vs 0x30ce9e/4
+      a_ctz_32.debruijn32 0x307638/32,0x307638/32 vs 0x3077b8/32,0x3077b8/32
+   MISMATCH sdk_func: 319
+      _Exit 0x2cd848/112 vs 0x2cd9d0/112
+      _IO_feof_unlocked 0x2db228/152 vs 0x2db3b0/152
+      _IO_ferror_unlocked 0x2db2c0/152 vs 0x2db448/152
+      _IO_getc 0x2dc6d4/140 vs 0x2dc85c/140
+      _IO_putc 0x2dd460/180 vs 0x2dd5e8/180
+      ___errno_location 0x2cd5c4/44 vs 0x2cd74c/44
+      __addtf3 0x2ed054/1980 vs 0x2ed1dc/1980
+      __aio_close 0x2dda5c/36 vs 0x2ddbe4/36
+      __block_all_sigs 0x2da848/100 vs 0x2da9d0/100
+      __block_app_sigs 0x2da8ac/100 vs 0x2daa34/100
+      __capstone_cap_init 0x12258/64,0x1c87c/6852,0x47384/8980,0x4f960/35112,0xccce8/80,0xf1654/5340,0x107e34/596,0x1153c0/8640,0x11c670/80,0x130f94/70180,0x162ef4/13384,0x18bee8/348,0x1b45a4/604,0x1c65b4/356,0x1d2e90/324,0x224530/14020,0x2c4804/13968,0x2ce5bc/64,0x2ce984/96,0x2dd030/64,0x2dd8f8/176,0x2dd9a8/180,0x2dde14/180,0x2ec874/124 vs 0x12258/64,0x1c87c/6852,0x4750c/8980,0x4fae8/35112,0xcce70/80,0xf17dc/5340,0x107fbc/596,0x115548/8640,0x11c7f8/80,0x13111c/70180,0x16307c/13384,0x18c070/348,0x1b472c/604,0x1c673c/356,0x1d3018/324,0x2246b8/14020,0x2c498c/13968,0x2ce744/64,0x2ceb0c/96,0x2dd1b8/64,0x2dda80/176,0x2ddb30/180,0x2ddf9c/180,0x2ec9fc/124
+      __capstone_mallocng_aligned_alloc 0x2ce9e4/1480 vs 0x2ceb6c/1480
+   MISMATCH sections: 8
+      .capstone_application 0x30cd88+0x38 vs 0x30cf08+0x38
+      .capstone_cap_init 0x30cdc0+0xc0 vs 0x30cf40+0xc0
+      .fini_array 0x30cdc0+0x0 vs 0x30cf40+0x0
+      .gct 0x30ce80+0x1418f vs 0x30d000+0x1418f
+      .init_array 0x30cdc0+0x0 vs 0x30cf40+0x0
+      .rodata 0x2ef600+0x1d788 vs 0x2ef780+0x1d788
+      .text 0x10000+0x2df5f4 vs 0x10000+0x2df77c
+      .text_end 0x32100f+0xff1 vs 0x32118f+0xe71
+   hot: main 0x1d2fd4 | 0x1d315c; malloc 0x206e8 | 0x20750; free 0x20ca8 | 0x20d70; realloc 0x20f18 | 0x20fe0; calloc 0x20e70 | 0x20f38; __capstone_mallocng_malloc 0x2d0128 | 0x2d02b0; __capstone_mallocng_free 0x2cefac | 0x2cf134; __capstone_mallocng_realloc 0x2d2154 | 0x2d22dc
+[519.lbm_r] FAIL lbm_r_base.capstone-spatial vs lbm_r_base.capstone-lifetimes: compared bench functions 18, bench data 2, libc+runtime functions 226, libc+runtime data 81, sections 12 (uncontrolled); not compared: heap.c 14 functions 17 data, ambiguous names 4 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_func: 18
+      main 0x23710/988 vs 0x23838/988
+      LBM_allocateGrid 0x20f38/168 vs 0x21060/168
+      LBM_compareVelocityField 0x23204/1292 vs 0x2332c/1292
+      LBM_freeGrid 0x20fe0/84 vs 0x21108/84
+      LBM_handleInOutFlow 0x22470/1920 vs 0x22598/1920
+      LBM_initializeGrid 0x21034/244 vs 0x2115c/244
+      LBM_initializeSpecialCellsForChannel 0x21440/232 vs 0x21568/232
+      LBM_initializeSpecialCellsForLDC 0x212d8/360 vs 0x21400/360
+      LBM_loadObstacleFile 0x2115c/380 vs 0x21284/380
+      LBM_performStreamCollideBGK 0x21528/1792 vs 0x21650/1792
+      LBM_performStreamCollideTRT 0x21c28/2120 vs 0x21d50/2120
+      LBM_showGridStatistics 0x22bf0/576 vs 0x22d18/576
+   MISMATCH sdk_data: 15
+      __c_locale 0x373b0/96 vs 0x374d0/96
+      __fsmu8 0x372c4/204 vs 0x373e4/204
+      __malloc_size_classes 0x37208/96 vs 0x37328/96
+      a_ctz_32.debruijn32 0x372a4/32,0x372a4/32 vs 0x373c4/32,0x373c4/32
+      decfloat.p10s 0x37284/32 vs 0x373a4/32
+      descriptor 0x383f0/56 vs 0x38510/56
+      empty_mo 0x37390/20 vs 0x374b0/20
+      errmsgidx 0x37fe2/264 vs 0x38102/264
+      errmsgstr 0x37868/1914 vs 0x37988/1914
+      hc_report_list.more 0x36ac5/5 vs 0x36be5/5
+      magic 0x37050/8,0x37058/8 vs 0x37170/8,0x37178/8
+      med_cnt_tab 0x37140/4 vs 0x37260/4
+   MISMATCH sdk_func: 128
+      _Exit 0x24a38/112 vs 0x24b60/112
+      ___errno_location 0x248dc/44 vs 0x24a04/44
+      __addtf3 0x34114/1980 vs 0x3423c/1980
+      __aio_close 0x2a650/36 vs 0x2a778/36
+      __capstone_cap_init 0x11d74/64,0x1c2d4/6852,0x29c14/96,0x2a22c/64,0x2aa08/180 vs 0x11d74/64,0x1c2d4/6852,0x29d3c/96,0x2a354/64,0x2ab30/180
+      __capstone_mallocng_free 0x24aa8/1236 vs 0x24bd0/1236
+      __capstone_mallocng_malloc 0x25c24/2020 vs 0x25d4c/2020
+      __capstone_mallocng_realloc 0x27c50/3220 vs 0x27d78/3220
+      __cmptf2 0x35060/224 vs 0x35188/224
+      __copy_tls 0x24374/300 vs 0x2449c/300
+      __divtf3 0x357c4/2420 vs 0x358ec/2420
+      __eqtf2 0x35060/224 vs 0x35188/224
+   MISMATCH sections: 8
+      .capstone_application 0x383f0+0x38 vs 0x38510+0x38
+      .capstone_cap_init 0x38430+0x28 vs 0x38550+0x28
+      .fini_array 0x38430+0x0 vs 0x38550+0x0
+      .gct 0x38460+0x0 vs 0x38580+0x0
+      .init_array 0x38430+0x0 vs 0x38550+0x0
+      .rodata 0x366c0+0x1d2e vs 0x367e0+0x1d2e
+      .text 0x10000+0x266b4 vs 0x10000+0x267dc
+      .text_end 0x38460+0xba0 vs 0x38580+0xa80
+   hot: main 0x23710 | 0x23838; malloc 0x20140 | 0x201a8; free 0x206d0 | 0x20798; realloc 0x20940 | 0x20a08; calloc 0x20898 | 0x20960; __capstone_mallocng_malloc 0x25c24 | 0x25d4c; __capstone_mallocng_free 0x24aa8 | 0x24bd0; __capstone_mallocng_realloc 0x27c50 | 0x27d78
+[525.x264_r] FAIL ldecod_r_base.capstone-spatial vs ldecod_r_base.capstone-lifetimes: compared bench functions 676, bench data 141, libc+runtime functions 330, libc+runtime data 115, sections 12 (uncontrolled); not compared: heap.c 14 functions 17 data, ambiguous names 5 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_data: 105
+      A 0xd2e30/64 vs 0xd2f50/64
+      AC_next_state_LPS_64 0xd509c/64 vs 0xd51bc/64
+      AC_next_state_MPS_64 0xd505c/64 vs 0xd517c/64
+      ALPHA_TABLE 0xcf720/52,0xd45b0/52 vs 0xcf840/52,0xd46d0/52
+      BETA_TABLE 0xcf754/52,0xd45e4/52 vs 0xcf874/52,0xd4704/52
+      BLOCK_STEP 0xd27d4/64,0xd3304/64 vs 0xd28f4/64,0xd3424/64
+      CLIP_TAB 0xcf788/260,0xd4618/260 vs 0xcf8a8/260,0xd4738/260
+      Coef 0xd2a58/216 vs 0xd2b78/216
+      FIELD_SCAN 0xcf98c/32 vs 0xcfaac/32
+      FIELD_SCAN8x8 0xd3544/128 vs 0xd3664/128
+      INIT_ABS_I 0xd0320/220 vs 0xd0440/220
+      INIT_ABS_P 0xd2058/660 vs 0xd2178/660
+   MISMATCH bench_func: 663
+      main 0x51f78/1620 vs 0x520a0/1620
+      AllocNALU 0x57c50/224 vs 0x57d78/224
+      AllocPPS 0x967cc/124 vs 0x968f4/124
+      AllocPartition 0x779d4/1288 vs 0x77afc/1288
+      AllocSPS 0x96848/124 vs 0x96970/124
+      AllocateFrameMemory 0xac7b4/276 vs 0xac8dc/276
+      CalculateQuant4x4Param 0xa78f8/1436 vs 0xa7a20/1436
+      CalculateQuant8x8Param 0xa7e94/1492 vs 0xa7fbc/1492
+      CeilLog2 0xa8ee8/176 vs 0xa9010/176
+      CeilLog2_sf 0xa8f98/176 vs 0xa90c0/176
+      CheckAvailabilityOfNeighbors 0x2a288/1080 vs 0x2a3b0/1080
+      CheckAvailabilityOfNeighborsCABAC 0x47b70/400 vs 0x47c98/400
+   MISMATCH sdk_data: 24
+      __c_locale 0xd5ac0/96 vs 0xd5be0/96
+      __exp_data 0xd5158/2160 vs 0xd5278/2160
+      __fsmu8 0xd59c8/204 vs 0xd5ae8/204
+      __malloc_size_classes 0xd50dc/96 vs 0xd51fc/96
+      __month_to_secs.secs_through_month 0xd6cb8/48 vs 0xd6dd8/48
+      __secs_to_tm.days_in_month 0xd69fe/12 vs 0xd6b1e/12
+      __utc 0xd6ce8/4 vs 0xd6e08/4
+      a_ctz_32.debruijn32 0xcf96c/32,0xcf96c/32 vs 0xcfa8c/32,0xcfa8c/32
+      a_ctz_64.debruijn64 0xd69be/64 vs 0xd6ade/64
+      c_messages 0xd6ca3/19 vs 0xd6dc3/19
+      c_numeric 0xd6b64/3 vs 0xd6c84/3
+      c_time 0xd6b67/316 vs 0xd6c87/316
+   MISMATCH sdk_func: 219
+      _Exit 0xada20/112 vs 0xadb48/112
+      ___errno_location 0xad8c4/44 vs 0xad9ec/44
+      __addtf3 0xc49a8/1980 vs 0xc4ad0/1980
+      __aio_close 0xb4330/36 vs 0xb4458/36
+      __capstone_cap_init 0x12258/64,0x1c87c/6852,0x47830/716,0x4cfd8/716,0xa6978/352,0xb33b4/96,0xb39cc/64,0xb4280/176,0xb46e8/180,0xc4014/124 vs 0x12258/64,0x1c87c/6852,0x47958/716,0x4d100/716,0xa6aa0/352,0xb34dc/96,0xb3af4/64,0xb43a8/176,0xb4810/180,0xc413c/124
+      __capstone_mallocng_free 0xadbb4/1236 vs 0xadcdc/1236
+      __capstone_mallocng_malloc 0xaed30/2020 vs 0xaee58/2020
+      __capstone_mallocng_realloc 0xb0d5c/3220 vs 0xb0e84/3220
+      __clock_gettime 0xc19f4/224 vs 0xc1b1c/224
+      __cmptf2 0xc58f4/224 vs 0xc5a1c/224
+      __copy_tls 0xad35c/300 vs 0xad484/300
+      __divtf3 0xc6058/2420 vs 0xc6180/2420
+   MISMATCH sections: 8
+      .capstone_application 0xd6d28+0x38 vs 0xd6e48+0x38
+      .capstone_cap_init 0xd6d60+0x50 vs 0xd6e80+0x50
+      .fini_array 0xd6d60+0x0 vs 0xd6e80+0x0
+      .gct 0xd6db0+0x1bf4 vs 0xd6ed0+0x1bf4
+      .init_array 0xd6d60+0x0 vs 0xd6e80+0x0
+      .rodata 0xc6f50+0xfdd2 vs 0xc7070+0xfdd2
+      .text 0x10000+0xb6f48 vs 0x10000+0xb7070
+      .text_end 0xd89a4+0x65c vs 0xd8ac4+0x53c
+   hot: main 0x51f78 | 0x520a0; malloc 0x206e8 | 0x20750; free 0x20ca8 | 0x20d70; realloc 0x20f18 | 0x20fe0; calloc 0x20e70 | 0x20f38; __capstone_mallocng_malloc 0xaed30 | 0xaee58; __capstone_mallocng_free 0xadbb4 | 0xadcdc; __capstone_mallocng_realloc 0xb0d5c | 0xb0e84
+[505.mcf_r] FAIL mcf_r_base.capstone-spatial vs mcf_r_base.capstone-lifetimes: compared bench functions 37, bench data 6, libc+runtime functions 234, libc+runtime data 83, sections 12 (uncontrolled); not compared: heap.c 14 functions 17 data, ambiguous names 4 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_func: 37
+      main 0x212ec/856 vs 0x21414/856
+      arc_compare 0x22bc8/96 vs 0x22cf0/96
+      bea_is_dual_infeasible 0x258a8/76 vs 0x259d0/76
+      calculate_max_redcost 0x22f64/96 vs 0x2308c/96
+      cost_compare 0x258f4/104 vs 0x25a1c/104
+      dual_feasible 0x21c10/292 vs 0x21d38/292
+      flow_cost 0x21710/288 vs 0x21838/288
+      flow_org_cost 0x218e4/376 vs 0x21a0c/376
+      getArcPosition 0x21858/100 vs 0x21980/100
+      getOriginalArcPosition 0x218bc/40 vs 0x219e4/40
+      getfree 0x21d34/164 vs 0x21e5c/164
+      global_opt 0x20f94/856 vs 0x210bc/856
+   MISMATCH sdk_data: 15
+      __c_locale 0x3a080/96 vs 0x3a1a0/96
+      __fsmu8 0x39f88/204 vs 0x3a0a8/204
+      __malloc_size_classes 0x39ec8/96 vs 0x39fe8/96
+      a_ctz_32.debruijn32 0x39f64/32,0x39f64/32 vs 0x3a084/32,0x3a084/32
+      decfloat.p10s 0x39f44/32 vs 0x3a064/32
+      descriptor 0x3b0c0/56 vs 0x3b1e0/56
+      empty_mo 0x3a060/20 vs 0x3a180/20
+      errmsgidx 0x3acb2/264 vs 0x3add2/264
+      errmsgstr 0x3a538/1914 vs 0x3a658/1914
+      hc_report_list.more 0x398b1/5 vs 0x399d1/5
+      magic 0x39e88/8,0x39e90/8 vs 0x39fa8/8,0x39fb0/8
+      med_cnt_tab 0x39f84/4 vs 0x3a0a4/4
+   MISMATCH sdk_func: 133
+      _Exit 0x274cc/112 vs 0x275f4/112
+      ___errno_location 0x27370/44 vs 0x27498/44
+      __addtf3 0x36f38/1980 vs 0x37060/1980
+      __aio_close 0x2d00c/36 vs 0x2d134/36
+      __capstone_cap_init 0x11dd0/64,0x1c330/6852,0x2c100/96,0x2c718/64,0x2cf5c/176,0x2d3c4/180 vs 0x11dd0/64,0x1c330/6852,0x2c228/96,0x2c840/64,0x2d084/176,0x2d4ec/180
+      __capstone_mallocng_free 0x2753c/1236 vs 0x27664/1236
+      __capstone_mallocng_malloc 0x286b8/2020 vs 0x287e0/2020
+      __capstone_mallocng_realloc 0x2a6e4/3220 vs 0x2a80c/3220
+      __cmptf2 0x37e84/224 vs 0x37fac/224
+      __copy_tls 0x26e08/300 vs 0x26f30/300
+      __divtf3 0x385e8/2420 vs 0x38710/2420
+      __eqtf2 0x37e84/224 vs 0x37fac/224
+   MISMATCH sections: 8
+      .capstone_application 0x3b0c0+0x38 vs 0x3b1e0+0x38
+      .capstone_cap_init 0x3b100+0x30 vs 0x3b220+0x30
+      .fini_array 0x3b100+0x0 vs 0x3b220+0x0
+      .gct 0x3b130+0x0 vs 0x3b250+0x0
+      .init_array 0x3b100+0x0 vs 0x3b220+0x0
+      .rodata 0x394e0+0x1bde vs 0x39600+0x1bde
+      .text 0x10000+0x294d8 vs 0x10000+0x29600
+      .text_end 0x3b130+0xed0 vs 0x3b250+0xdb0
+   hot: main 0x212ec | 0x21414; malloc 0x2019c | 0x20204; free 0x2072c | 0x207f4; realloc 0x2099c | 0x20a64; calloc 0x208f4 | 0x209bc; __capstone_mallocng_malloc 0x286b8 | 0x287e0; __capstone_mallocng_free 0x2753c | 0x27664; __capstone_mallocng_realloc 0x2a6e4 | 0x2a80c
+[544.nab_r] FAIL nab_r_base.capstone-spatial vs nab_r_base.capstone-lifetimes: compared bench functions 221, bench data 104, libc+runtime functions 316, libc+runtime data 92, sections 12 (uncontrolled); not compared: heap.c 14 functions 17 data, ambiguous names 4 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_func: 221
+      main 0x2141c/2276 vs 0x21544/2276
+      AddColumnType 0x58954/304 vs 0x58a7c/304
+      CompactDataBase 0x51458/1180 vs 0x51580/1180
+      ConcatString 0x58a84/320 vs 0x58bac/320
+      ConstructDataHeader 0x543e0/600 vs 0x54508/600
+      DBClose 0x58bc4/436 vs 0x58cec/436
+      DBPopPrefix 0x58e58/108 vs 0x58f80/108
+      DBPushPrefix 0x58d78/224 vs 0x58ea0/224
+      DBPushZeroPrefix 0x58ef0/156 vs 0x59018/156
+      DBPutTable 0x56714/8768 vs 0x5683c/8768
+      DBPutValue 0x536c8/2820 vs 0x537f0/2820
+      DBRndLoopEntryWithPrefix 0x523cc/208 vs 0x524f4/208
+   MISMATCH sdk_data: 21
+      PIo2 0x822c8/64 vs 0x823f8/64
+      __c_locale 0x82500/96 vs 0x82630/96
+      __exp_data 0x7ff00/2160 vs 0x80030/2160
+      __fsmu8 0x82408/204 vs 0x82538/204
+      __log_data 0x80770/4240 vs 0x808a0/4240
+      __malloc_size_classes 0x7fe40/96 vs 0x7ff70/96
+      __rsqrt_tab 0x82308/256 vs 0x82438/256
+      a_ctz_32.debruijn32 0x7fedc/32,0x7fedc/32 vs 0x8000c/32,0x8000c/32
+      a_ctz_64.debruijn64 0x833fe/64 vs 0x8352e/64
+      decfloat.p10s 0x7febc/32 vs 0x7ffec/32
+      descriptor 0x83440/56 vs 0x83570/56
+      empty_mo 0x824e0/20 vs 0x82610/20
+   MISMATCH sdk_func: 207
+      _Exit 0x64fa8/112 vs 0x650d0/112
+      _IO_feof_unlocked 0x6bb94/152 vs 0x6bcbc/152
+      _IO_getc 0x6d558/140 vs 0x6d680/140
+      ___errno_location 0x64e4c/44 vs 0x64f74/44
+      __addtf3 0x7a040/1980 vs 0x7a168/1980
+      __aio_close 0x6e5b4/36 vs 0x6e6dc/36
+      __capstone_cap_init 0x12258/64,0x1c7b8/6852,0x39c88/64,0x5eab8/4864,0x6041c/1332,0x6d2a8/96,0x6da8c/64,0x6e450/176,0x6e500/180,0x6e96c/180 vs 0x12258/64,0x1c7b8/6852,0x39db0/64,0x5ebe0/4864,0x60544/1332,0x6d3d0/96,0x6dbb4/64,0x6e578/176,0x6e628/180,0x6ea94/180
+      __capstone_mallocng_free 0x65018/1236 vs 0x65140/1236
+      __capstone_mallocng_malloc 0x66194/2020 vs 0x662bc/2020
+      __capstone_mallocng_realloc 0x681c0/3220 vs 0x682e8/3220
+      __cmptf2 0x7af8c/224 vs 0x7b0b4/224
+      __copy_tls 0x648e4/300 vs 0x64a0c/300
+   MISMATCH sections: 8
+      .capstone_application 0x83440+0x38 vs 0x83570+0x38
+      .capstone_cap_init 0x83480+0x50 vs 0x835b0+0x50
+      .fini_array 0x83480+0x0 vs 0x835b0+0x0
+      .gct 0x834d0+0x0 vs 0x83600+0x0
+      .init_array 0x83480+0x0 vs 0x835b0+0x0
+      .rodata 0x7c5e0+0x6e5e vs 0x7c710+0x6e5e
+      .text 0x10000+0x6c5e0 vs 0x10000+0x6c708
+      .text_end 0x834d0+0xb30 vs 0x83600+0xa00
+   hot: main 0x2141c | 0x21544; malloc 0x20624 | 0x2068c; free 0x20bb4 | 0x20c7c; realloc 0x20e24 | 0x20eec; calloc 0x20d7c | 0x20e44; __capstone_mallocng_malloc 0x66194 | 0x662bc; __capstone_mallocng_free 0x65018 | 0x65140; __capstone_mallocng_realloc 0x681c0 | 0x682e8
+[500.perlbench_r] FAIL perlbench_r_base.capstone-spatial vs perlbench_r_base.capstone-lifetimes: compared bench functions 2430, bench data 361, libc+runtime functions 507, libc+runtime data 130, sections 12 (uncontrolled); not compared: heap.c 14 functions 17 data, ambiguous names 6 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_data: 141
+      ASCII_invlist 0x30bc30/40 vs 0x30bd50/40
+      AboveLatin1_invlist 0x32d9b0/40,0x3392d8/40 vs 0x32dad0/40,0x3393f8/40
+      Cased_invlist 0x310a18/2064 vs 0x310b38/2064
+      DD_dump.sizes 0x338c20/24 vs 0x338d40/24
+      Grapheme_Cluster_Break_invlist 0x31e2e0/11896 vs 0x31e400/11896
+      Grapheme_Cluster_Break_invmap 0x32e5d8/5936,0x339f00/5936 vs 0x32e6f8/5936,0x33a020/5936
+      H0384 0x338cd0/64 vs 0x338df0/64
+      H0512 0x338d10/64 vs 0x338e30/64
+      H0512224 0x338d50/64 vs 0x338e70/64
+      H0512256 0x338d90/64 vs 0x338eb0/64
+      K512 0x338dd0/640 vs 0x338ef0/640
+      Latin1_invlist 0x32d9d8/40,0x339300/40 vs 0x32daf8/40,0x339420/40
+   MISMATCH bench_func: 2364
+      main 0xc623c/760 vs 0xc6364/760
+      ASCII_TO_NEED 0x1fd1d0/40 vs 0x1fd2f8/40
+      DD_dump 0x20448c/19724 vs 0x2045b4/19724
+      HUF_add_uvar_magic 0x2c386c/108 vs 0x2c3994/108
+      HUF_ask_trigger 0x2c3cd4/136 vs 0x2c3dfc/136
+      HUF_destroy_obj 0x2c3928/540 vs 0x2c3a50/540
+      HUF_fix_objects 0x2c46e0/740 vs 0x2c4808/740
+      HUF_fix_trigger 0x2c4484/604 vs 0x2c45ac/604
+      HUF_func_2mode 0x2c432c/88 vs 0x2c4454/88
+      HUF_get_ob_reg 0x2c3484/636 vs 0x2c35ac/636
+      HUF_get_status 0x2c43e4/160 vs 0x2c450c/160
+      HUF_get_trigger 0x2c3e24/200 vs 0x2c3f4c/200
+   MISMATCH sdk_data: 28
+      PIo2 0x3437e0/64 vs 0x343900/64
+      __c_locale 0x343860/96 vs 0x343980/96
+      __exp_data 0x3403d0/2160 vs 0x3404f0/2160
+      __log_data 0x340c40/4240 vs 0x340d60/4240
+      __malloc_size_classes 0x340270/96 vs 0x340390/96
+      __month_to_secs.secs_through_month 0x343d68/48 vs 0x343e88/48
+      __pow_log_data 0x341cd0/4168 vs 0x341df0/4168
+      __secs_to_tm.days_in_month 0x343d22/12 vs 0x343e42/12
+      __utc 0x343d2e/4 vs 0x343e4e/4
+      a_ctz_32.debruijn32 0x340390/32,0x340390/32 vs 0x3404b0/32,0x3404b0/32
+      a_ctz_64.debruijn64 0x343bd8/64 vs 0x343cf8/64
+      all_mask 0x343830/8 vs 0x343950/8
+   MISMATCH sdk_func: 360
+      _Exit 0x2d4318/112 vs 0x2d4440/112
+      _Fork 0x2dc2ec/548 vs 0x2dc414/548
+      _IO_feof_unlocked 0x2dd8b4/152 vs 0x2dd9dc/152
+      _IO_ferror_unlocked 0x2dd94c/152 vs 0x2dda74/152
+      ___errno_location 0x2d3f00/44 vs 0x2d4028/44
+      __acquire_ptc 0x2ea8ec/76 vs 0x2eaa14/76
+      __addtf3 0x2efbe4/1980 vs 0x2efd0c/1980
+      __aio_atfork 0x2dbd70/36 vs 0x2dbe98/36
+      __aio_close 0x2dfa80/36 vs 0x2dfba8/36
+      __block_all_sigs 0x2dc6e4/100 vs 0x2dc80c/100
+      __block_app_sigs 0x2dc748/100 vs 0x2dc870/100
+      __capstone_cap_init 0x12308/64,0x1d5c0/6852,0x3ce1c/6940,0x3e938/64120,0x5a108/2676,0xb73d4/192,0xc59f8/1948,0x103634/188,0x13a688/668,0x166bf0/7360,0x1abf44/156,0x1d8d9c/408,0x1dff90/2868,0x1eaa4c/324,0x1fb4fc/80,0x209888/128,0x20c0d0/96,0x23f554/996,0x24f0e8/1420,0x2520e8/80,0x252734/224,0x29d460/1188,0x2ba624/432,0x2bcec0/448,0x2c1090/520,0x2dc090/192,0x2dea34/96,0x2df04c/64,0x2df91c/176,0x2df9cc/180,0x2dfe38/180,0x2edcd4/124 vs 0x12308/64,0x1d5c0/6852,0x3cf44/6940,0x3ea60/64120,0x5a230/2676,0xb74fc/192,0xc5b20/1948,0x10375c/188,0x13a7b0/668,0x166d18/7360,0x1ac06c/156,0x1d8ec4/408,0x1e00b8/2868,0x1eab74/324,0x1fb624/80,0x2099b0/128,0x20c1f8/96,0x23f67c/996,0x24f210/1420,0x252210/80,0x25285c/224,0x29d588/1188,0x2ba74c/432,0x2bcfe8/448,0x2c11b8/520,0x2dc1b8/192,0x2deb5c/96,0x2df174/64,0x2dfa44/176,0x2dfaf4/180,0x2dff60/180,0x2eddfc/124
+   MISMATCH sections: 8
+      .capstone_application 0x343d98+0x38 vs 0x343eb8+0x38
+      .capstone_cap_init 0x343dd0+0x100 vs 0x343ef0+0x100
+      .fini_array 0x343dd0+0x0 vs 0x343ef0+0x0
+      .gct 0x343ed0+0x27d3a vs 0x343ff0+0x27d3a
+      .init_array 0x343dd0+0x0 vs 0x343ef0+0x0
+      .rodata 0x2f2190+0x51c08 vs 0x2f22b0+0x51c08
+      .text 0x10000+0x2e2184 vs 0x10000+0x2e22ac
+      .text_end 0x36bc0a+0x3f6 vs 0x36bd2a+0x2d6
+   hot: main 0xc623c | 0xc6364; malloc 0x214f0 | 0x21558; free 0x21ab0 | 0x21b78; realloc 0x21e34 | 0x21efc; calloc 0x21d8c | 0x21e54; __capstone_mallocng_malloc 0x2d5a74 | 0x2d5b9c; __capstone_mallocng_free 0x2d48f8 | 0x2d4a20; __capstone_mallocng_realloc 0x2d7aa0 | 0x2d7bc8
+[997.specrand_fr] FAIL specrand_fr_base.capstone-spatial vs specrand_fr_base.capstone-lifetimes: compared bench functions 13, bench data 2, libc+runtime functions 179, libc+runtime data 76, other symbols 0, sections 12 (uncontrolled); not compared: heap.c 13 functions 17 data, ambiguous names 3 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_func: 13
+      main 0x202e8/204 vs 0x203b0/204
+      run_sequence 0x203b4/1332 vs 0x2047c/1332
+      spec_genrand_int31 0x20ff4/52 vs 0x210bc/52
+      spec_genrand_int32 0x20a90/776 vs 0x20b58/776
+      spec_genrand_real1 0x21028/72 vs 0x210f0/72
+      spec_genrand_real2 0x21070/72 vs 0x21138/72
+      spec_genrand_real3 0x210b8/88 vs 0x21180/88
+      spec_genrand_res53 0x21110/124 vs 0x211d8/124
+      spec_init_by_array 0x20dcc/552 vs 0x20e94/552
+      spec_init_genrand 0x20998/176 vs 0x20a60/176
+      spec_lrand48 0x20d98/52 vs 0x20e60/52
+      spec_rand 0x20a48/72 vs 0x20b10/72
+   MISMATCH sdk_data: 12
+      __c_locale 0x2c710/96 vs 0x2c7e0/96
+      __malloc_size_classes 0x2c650/96 vs 0x2c720/96
+      a_ctz_32.debruijn32 0x2c6cb/32 vs 0x2c79b/32
+      descriptor 0x2d310/56 vs 0x2d3e0/56
+      empty_mo 0x2c6f0/20 vs 0x2c7c0/20
+      errmsgidx 0x2d202/264 vs 0x2d2d2/264
+      errmsgstr 0x2ca88/1914 vs 0x2cb58/1914
+      hc_report_list.more 0x2c10b/5 vs 0x2c1db/5
+      magic 0x2c536/8,0x2c53e/8 vs 0x2c606/8,0x2c60e/8
+      med_cnt_tab 0x2c6eb/4 vs 0x2c7bb/4
+      small_cnt_tab 0x2c6b0/27 vs 0x2c780/27
+      states 0x2c8b8/464 vs 0x2c988/464
+   MISMATCH sdk_func: 82
+      _Exit 0x21aa0/112 vs 0x21b68/112
+      ___errno_location 0x21944/44 vs 0x21a0c/44
+      __addtf3 0x2a7cc/1980 vs 0x2a894/1980
+      __aio_close 0x257e8/36 vs 0x258b0/36
+      __capstone_cap_init 0x11d74/64,0x1c2d4/6852,0x24e4c/96,0x25734/180,0x25f10/64 vs 0x11d74/64,0x1c2d4/6852,0x24f14/96,0x257fc/180,0x25fd8/64
+      __capstone_mallocng_free 0x21b10/1236 vs 0x21bd8/1236
+      __capstone_mallocng_malloc 0x22c8c/2020 vs 0x22d54/2020
+      __cmptf2 0x2b718/224 vs 0x2b7e0/224
+      __copy_tls 0x213dc/300 vs 0x214a4/300
+      __eqtf2 0x2b718/224 vs 0x2b7e0/224
+      __errno_location 0x21944/44 vs 0x21a0c/44
+      __extenddftf2 0x2b858/388 vs 0x2b920/388
+   MISMATCH sections: 8
+      .capstone_application 0x2d310+0x38 vs 0x2d3e0+0x38
+      .capstone_cap_init 0x2d350+0x28 vs 0x2d420+0x28
+      .fini_array 0x2d350+0x0 vs 0x2d420+0x0
+      .gct 0x2d380+0x0 vs 0x2d450+0x0
+      .init_array 0x2d350+0x0 vs 0x2d420+0x0
+      .rodata 0x2bda0+0x156a vs 0x2be70+0x156a
+      .text 0x10000+0x1bda0 vs 0x10000+0x1be68
+      .text_end 0x2d380+0xc80 vs 0x2d450+0xbb0
+   hot: main 0x202e8 | 0x203b0; malloc 0x1fad0 | 0x1fb38; free 0x20060 | 0x20128; calloc 0x20228 | 0x202f0; __capstone_mallocng_malloc 0x22c8c | 0x22d54; __capstone_mallocng_free 0x21b10 | 0x21bd8
+[999.specrand_ir] FAIL specrand_ir_base.capstone-spatial vs specrand_ir_base.capstone-lifetimes: compared bench functions 13, bench data 2, libc+runtime functions 179, libc+runtime data 76, other symbols 0, sections 12 (uncontrolled); not compared: heap.c 13 functions 17 data, ambiguous names 3 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_func: 13
+      main 0x202e8/204 vs 0x203b0/204
+      run_sequence 0x203b4/1332 vs 0x2047c/1332
+      spec_genrand_int31 0x20ff4/52 vs 0x210bc/52
+      spec_genrand_int32 0x20a90/776 vs 0x20b58/776
+      spec_genrand_real1 0x21028/72 vs 0x210f0/72
+      spec_genrand_real2 0x21070/72 vs 0x21138/72
+      spec_genrand_real3 0x210b8/88 vs 0x21180/88
+      spec_genrand_res53 0x21110/124 vs 0x211d8/124
+      spec_init_by_array 0x20dcc/552 vs 0x20e94/552
+      spec_init_genrand 0x20998/176 vs 0x20a60/176
+      spec_lrand48 0x20d98/52 vs 0x20e60/52
+      spec_rand 0x20a48/72 vs 0x20b10/72
+   MISMATCH sdk_data: 12
+      __c_locale 0x2c710/96 vs 0x2c7e0/96
+      __malloc_size_classes 0x2c650/96 vs 0x2c720/96
+      a_ctz_32.debruijn32 0x2c6cb/32 vs 0x2c79b/32
+      descriptor 0x2d310/56 vs 0x2d3e0/56
+      empty_mo 0x2c6f0/20 vs 0x2c7c0/20
+      errmsgidx 0x2d202/264 vs 0x2d2d2/264
+      errmsgstr 0x2ca88/1914 vs 0x2cb58/1914
+      hc_report_list.more 0x2c10b/5 vs 0x2c1db/5
+      magic 0x2c536/8,0x2c53e/8 vs 0x2c606/8,0x2c60e/8
+      med_cnt_tab 0x2c6eb/4 vs 0x2c7bb/4
+      small_cnt_tab 0x2c6b0/27 vs 0x2c780/27
+      states 0x2c8b8/464 vs 0x2c988/464
+   MISMATCH sdk_func: 82
+      _Exit 0x21aa0/112 vs 0x21b68/112
+      ___errno_location 0x21944/44 vs 0x21a0c/44
+      __addtf3 0x2a7cc/1980 vs 0x2a894/1980
+      __aio_close 0x257e8/36 vs 0x258b0/36
+      __capstone_cap_init 0x11d74/64,0x1c2d4/6852,0x24e4c/96,0x25734/180,0x25f10/64 vs 0x11d74/64,0x1c2d4/6852,0x24f14/96,0x257fc/180,0x25fd8/64
+      __capstone_mallocng_free 0x21b10/1236 vs 0x21bd8/1236
+      __capstone_mallocng_malloc 0x22c8c/2020 vs 0x22d54/2020
+      __cmptf2 0x2b718/224 vs 0x2b7e0/224
+      __copy_tls 0x213dc/300 vs 0x214a4/300
+      __eqtf2 0x2b718/224 vs 0x2b7e0/224
+      __errno_location 0x21944/44 vs 0x21a0c/44
+      __extenddftf2 0x2b858/388 vs 0x2b920/388
+   MISMATCH sections: 8
+      .capstone_application 0x2d310+0x38 vs 0x2d3e0+0x38
+      .capstone_cap_init 0x2d350+0x28 vs 0x2d420+0x28
+      .fini_array 0x2d350+0x0 vs 0x2d420+0x0
+      .gct 0x2d380+0x0 vs 0x2d450+0x0
+      .init_array 0x2d350+0x0 vs 0x2d420+0x0
+      .rodata 0x2bda0+0x156a vs 0x2be70+0x156a
+      .text 0x10000+0x1bda0 vs 0x10000+0x1be68
+      .text_end 0x2d380+0xc80 vs 0x2d450+0xbb0
+   hot: main 0x202e8 | 0x203b0; malloc 0x1fad0 | 0x1fb38; free 0x20060 | 0x20128; calloc 0x20228 | 0x202f0; __capstone_mallocng_malloc 0x22c8c | 0x22d54; __capstone_mallocng_free 0x21b10 | 0x21bd8
+[525.x264_r] FAIL x264_r_base.capstone-spatial vs x264_r_base.capstone-lifetimes: compared bench functions 534, bench data 209, libc+runtime functions 331, libc+runtime data 99, sections 12 (uncontrolled); not compared: heap.c 14 functions 17 data, ambiguous names 4 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_data: 99
+      block_idx_xy_fdec 0xdd274/32,0xdd274/32,0xdd274/32 vs 0xdd3a4/32,0xdd3a4/32,0xdd3a4/32
+      block_residual_write_cavlc.count_cat 0xdfac2/5,0xe0a58/5 vs 0xdfbf2/5,0xe0b88/5
+      block_residual_write_cavlc.ctz_index 0xde768/8,0xde768/8 vs 0xde898/8,0xde898/8
+      block_residual_write_cavlc_escape.next_suffix 0xdfac8/14,0xe0a5e/14 vs 0xdfbf8/14,0xe0b8e/14
+      cached_hadamard.hadamard_offset 0xde6ec/4 vs 0xde81c/4
+      cached_hadamard.hadamard_shift_x 0xde6f0/4 vs 0xde820/4
+      cached_hadamard.hadamard_shift_y 0xde708/4 vs 0xde838/4
+      cached_satd.satd_offset 0xdfad9/3 vs 0xdfc09/3
+      cached_satd.satd_shift_x 0xdfad6/3 vs 0xdfc06/3
+      cached_satd.satd_shift_y 0xda22f/3 vs 0xda35f/3
+      coeff_abs_level1_ctx 0xde930/8,0xde930/8 vs 0xdea60/8,0xdea60/8
+      coeff_abs_level_m1_offset 0xdf998/12,0xe0780/12 vs 0xdfac8/12,0xe08b0/12
+   MISMATCH bench_func: 505
+      main 0xb32fc/16752 vs 0xb3424/16752
+      Help 0xb74b4/9064 vs 0xb75dc/9064
+      SigIntHandler 0xb746c/72 vs 0xb7594/72
+      _getopt_internal 0xbbbd0/5732 vs 0xbbcf8/5732
+      ac_energy_mb 0x7c454/432 vs 0x7c57c/432
+      add16x16_idct 0x37300/280 vs 0x37428/280
+      add16x16_idct8 0x37c08/140 vs 0x37d30/140
+      add16x16_idct_dc 0x37418/284 vs 0x37540/284
+      add4x4_idct 0x36648/1212 vs 0x36770/1212
+      add4x4_idct_dc 0x3a15c/440 vs 0x3a284/440
+      add8x8_idct 0x37080/140 vs 0x371a8/140
+      add8x8_idct8 0x37844/796 vs 0x3796c/796
+   MISMATCH sdk_data: 24
+      __c_locale 0xe4400/96 vs 0xe4530/96
+      __exp2f_data 0xe3170/328 vs 0xe32a0/328
+      __exp_data 0xe0d98/2160 vs 0xe0ec8/2160
+      __fsmu8 0xe4300/204 vs 0xe4430/204
+      __log2_data 0xe1728/2192 vs 0xe1858/2192
+      __log2f_data 0xe1608/288 vs 0xe1738/288
+      __log_data 0xe1fb8/4240 vs 0xe20e8/4240
+      __malloc_size_classes 0xe0d18/96 vs 0xe0e48/96
+      __pow_log_data 0xe32b8/4168 vs 0xe33e8/4168
+      __powf_log2_data 0xe3048/296 vs 0xe3178/296
+      a_ctz_32.debruijn32 0xdd234/32,0xdd234/32 vs 0xdd364/32,0xdd364/32
+      all_mask 0xe43d0/8 vs 0xe4500/8
+   MISMATCH sdk_func: 211
+      _Exit 0xbdee0/112 vs 0xbe008/112
+      ___errno_location 0xbdb8c/44 vs 0xbdcb4/44
+      __addtf3 0xd1dec/1980 vs 0xd1f14/1980
+      __aio_close 0xc6ac8/36 vs 0xc6bf0/36
+      __assert_fail 0xbdbb8/100 vs 0xbdce0/100
+      __block_all_sigs 0xc3bac/100 vs 0xc3cd4/100
+      __block_app_sigs 0xc3c10/100 vs 0xc3d38/100
+      __capstone_cap_init 0x121f8/64,0x1c758/6852,0x24e10/128,0x42a0c/1748,0x43584/416,0x735a8/124,0x8ef4c/160,0xaab98/180,0xad4c8/112,0xad9e0/128,0xae550/128,0xae7d4/112,0xaede8/112,0xb224c/112,0xb328c/112,0xb981c/9140,0xc5a3c/96,0xc6054/64,0xc6964/176,0xc6a14/180,0xc6e80/180 vs 0x121f8/64,0x1c758/6852,0x24f38/128,0x42b34/1748,0x436ac/416,0x736d0/124,0x8f074/160,0xaacc0/180,0xad5f0/112,0xadb08/128,0xae678/128,0xae8fc/112,0xaef10/112,0xb2374/112,0xb33b4/112,0xb9944/9140,0xc5b64/96,0xc617c/64,0xc6a8c/176,0xc6b3c/180,0xc6fa8/180
+      __capstone_mallocng_free 0xbdf50/1236 vs 0xbe078/1236
+      __capstone_mallocng_malloc 0xbf0cc/2020 vs 0xbf1f4/2020
+      __capstone_mallocng_realloc 0xc10f8/3220 vs 0xc1220/3220
+      __cmptf2 0xd2d38/224 vs 0xd2e60/224
+   MISMATCH sections: 8
+      .capstone_application 0xe5300+0x38 vs 0xe5430+0x38
+      .capstone_cap_init 0xe5340+0xa8 vs 0xe5470+0xa8
+      .fini_array 0xe5340+0x0 vs 0xe5470+0x0
+      .gct 0xe53f0+0x28e8 vs 0xe5520+0x28e8
+      .init_array 0xe5340+0x0 vs 0xe5470+0x0
+      .rodata 0xd4390+0x10f6e vs 0xd44c0+0x10f6e
+      .text 0x10000+0xc438c vs 0x10000+0xc44b4
+      .text_end 0xe7cd8+0x328 vs 0xe7e08+0x1f8
+   hot: main 0xb32fc | 0xb3424; malloc 0x205c4 | 0x2062c; free 0x20b54 | 0x20c1c; realloc 0x20dc4 | 0x20e8c; calloc 0x20d1c | 0x20de4; __capstone_mallocng_malloc 0xbf0cc | 0xbf1f4; __capstone_mallocng_free 0xbdf50 | 0xbe078; __capstone_mallocng_realloc 0xc10f8 | 0xc1220
+[557.xz_r] FAIL xz_r_base.capstone-spatial vs xz_r_base.capstone-lifetimes: compared bench functions 304, bench data 44, libc+runtime functions 224, libc+runtime data 81, sections 12 (uncontrolled); not compared: heap.c 14 functions 17 data, ambiguous names 4 ['__libc_free', '__libc_malloc', '__libc_realloc', '__simple_malloc', 'aligned_alloc', 'calloc', 'free', 'malloc']
+   MISMATCH bench_data: 14
+      SHA256_K 0x59560/256 vs 0x59680/256
+      features 0x55370/240 vs 0x55490/240
+      ia64_code.BRANCH_TABLE 0x5b768/128 vs 0x5b888/128
+      lzma_crc32_table 0x55560/8192 vs 0x55680/8192
+      lzma_crc64_table 0x57560/8192 vs 0x57680/8192
+      lzma_decode.next_state 0x5b660/48 vs 0x5b780/48
+      lzma_fastpos 0x59660/8192 vs 0x59780/8192
+      lzma_footer_magic 0x55466/2 vs 0x55586/2
+      lzma_header_magic 0x55460/6 vs 0x55580/6
+      lzma_rc_prices 0x5b690/128 vs 0x5b7b0/128
+      message_filters_to_str.bcj_names 0x5b7e8/54 vs 0x5b908/54
+      uint64_to_nicestr.suffix 0x5b85e/20 vs 0x5b97e/20
+   MISMATCH bench_func: 304
+      main 0x21360/2592 vs 0x21488/2592
+      arm_code 0x3c53c/216 vs 0x3c664/216
+      armthumb_code 0x3c6ac/276 vs 0x3c7d4/276
+      block_decode 0x28ff8/692 vs 0x29120/692
+      block_decoder_end 0x292ac/112 vs 0x293d4/112
+      block_encode 0x26310/680 vs 0x26438/680
+      block_encoder_end 0x265b8/108 vs 0x266e0/108
+      block_encoder_update 0x26624/80 vs 0x2674c/80
+      bt_find_func 0x2f1f0/492 vs 0x2f318/492
+      compare_sum 0x409f8/240 vs 0x40b20/240
+      compressStream 0x2260c/1564 vs 0x22734/1564
+      debug_time 0x43710/40 vs 0x43838/40
+   MISMATCH sdk_data: 14
+      K 0x5b880/640 vs 0x5b9a0/640
+      __c_locale 0x5c430/96 vs 0x5c550/96
+      __malloc_size_classes 0x5c382/96 vs 0x5c4a2/96
+      a_ctz_32.debruijn32 0x5b748/32,0x5b748/32 vs 0x5b868/32,0x5b868/32
+      descriptor 0x5c8b8/56 vs 0x5c9d8/56
+      empty_mo 0x5c410/20 vs 0x5c530/20
+      errmsgidx 0x5c27a/264 vs 0x5c39a/264
+      errmsgstr 0x5bb00/1914 vs 0x5bc20/1914
+      hc_report_list.more 0x53886/5 vs 0x539a6/5
+      magic 0x5535e/8,0x55366/8 vs 0x5547e/8,0x55486/8
+      med_cnt_tab 0x5c3fd/4 vs 0x5c51d/4
+      small_cnt_tab 0x5c3e2/27 vs 0x5c502/27
+   MISMATCH sdk_func: 119
+      _Exit 0x4555c/112 vs 0x45684/112
+      ___errno_location 0x452d8/44 vs 0x45400/44
+      __addtf3 0x50c40/1980 vs 0x50d68/1980
+      __aio_close 0x4aa4c/36 vs 0x4ab74/36
+      __capstone_cap_init 0x1219c/64,0x1c6fc/6852,0x275f8/344,0x29e40/308,0x3eafc/756,0x3f804/64,0x49c24/96,0x4a1d8/64,0x4a99c/176,0x4ac8c/180 vs 0x1219c/64,0x1c6fc/6852,0x27720/344,0x29f68/308,0x3ec24/756,0x3f92c/64,0x49d4c/96,0x4a300/64,0x4aac4/176,0x4adb4/180
+      __capstone_mallocng_free 0x45780/1236 vs 0x458a8/1236
+      __capstone_mallocng_malloc 0x468fc/2020 vs 0x46a24/2020
+      __capstone_mallocng_realloc 0x48928/3220 vs 0x48a50/3220
+      __cmptf2 0x51b8c/224 vs 0x51cb4/224
+      __copy_tls 0x44d70/300 vs 0x44e98/300
+      __eqtf2 0x51b8c/224 vs 0x51cb4/224
+      __errno_location 0x452d8/44 vs 0x45400/44
+   MISMATCH sections: 8
+      .capstone_application 0x5c8b8+0x38 vs 0x5c9d8+0x38
+      .capstone_cap_init 0x5c8f0+0x50 vs 0x5ca10+0x50
+      .fini_array 0x5c8f0+0x0 vs 0x5ca10+0x0
+      .gct 0x5c940+0x0 vs 0x5ca60+0x0
+      .init_array 0x5c8f0+0x0 vs 0x5ca10+0x0
+      .rodata 0x52220+0xa692 vs 0x52340+0xa692
+      .text 0x10000+0x42214 vs 0x10000+0x4233c
+      .text_end 0x5c940+0x6c0 vs 0x5ca60+0x5a0
+   hot: main 0x21360 | 0x21488; malloc 0x20568 | 0x205d0; free 0x20af8 | 0x20bc0; realloc 0x20d68 | 0x20e30; calloc 0x20cc0 | 0x20d88; __capstone_mallocng_malloc 0x468fc | 0x46a24; __capstone_mallocng_free 0x45780 | 0x458a8; __capstone_mallocng_realloc 0x48928 | 0x48a50
+layout-check: 0 of 13 pairs PASS; compared 18618 benchmark functions, 4434 benchmark data, 4064 libc+runtime functions, 1285 libc+runtime data, 156 sections

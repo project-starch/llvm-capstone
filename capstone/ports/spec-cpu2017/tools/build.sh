@@ -11,6 +11,14 @@
 # the config runcpu uses, builds each arm under its own label, records the hashes of everything that went
 # in and came out, and then checks that the arms' builds differ only by their SDK: every object file of
 # every benchmark must be byte-identical across labels (the SDK enters at the link only).
+#
+# CAPSTONE_SPEC_LAYOUT selects the link script (default sdk):
+#   sdk        the SDK's own link.ld, as every campaign image before 2026-10-30. heap.c's code sits early in .text,
+#              so every benchmark function after it moves between the arms by the difference of the heap.c sizes.
+#   heap-last  each arm links through tools/layout-sdk.py's view of its SDK: heap.c.obj last in .text, .data and .bss
+#              and alone in .rodata.heap, each in a region of fixed size. Every input section that is not heap.c's
+#              then sits at the same address in every arm, and tools/layout-check.py proves it after the build (the
+#              build fails if any benchmark, libc or runtime symbol, or any section, differs between the arms).
 set -euo pipefail
 KIT=$(cd "$1" && pwd) SPEC_ROOT=$(cd "$2" && pwd) SDKS=$(cd "$3" && pwd) REC=$4
 shift 4
@@ -22,6 +30,8 @@ R=$REC/build-record.txt; : > "$R"
 note() { echo "$*" | tee -a "$R"; }
 fail() { echo "build: $*" >&2; note "FAILED $*"; exit 1; }
 m() { python3 -c "import json,sys;d=json.load(open(sys.argv[1]));[d:=d[k] for k in sys.argv[2].split('.')];print(d)" "$M" "$1"; }
+LAYOUT=${CAPSTONE_SPEC_LAYOUT:-sdk}
+case $LAYOUT in sdk|heap-last) ;; *) fail "CAPSTONE_SPEC_LAYOUT=$LAYOUT: sdk or heap-last";; esac
 mapfile -t BENCH < <(python3 -c "import json,sys;print('\n'.join(json.load(open(sys.argv[1]))['workloads']['benchmarks']))" "$M")
 # BENCHMARKS="502.gcc_r 538.imagick_r" restricts a build to a subset (a quick look); the record says so.
 if [ -n "${BENCHMARKS:-}" ]; then read -r -a BENCH <<< "$BENCHMARKS"; fi
@@ -76,6 +86,23 @@ for label in "${LABELS[@]}"; do
   [ "$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['cc'])" "${SDK[$label]}/sdk.json")" = "$clang" ] || fail "$label's SDK names another compiler"
 done
 note "clang $(sha256sum "$(readlink -f "$clang")" | cut -c1-64) $("$clang" --version | head -1)"
+# The link layout. heap-last: each arm's SDK is replaced, for runcpu, by a layout view of it under $REC/layout-sdk
+# (its capstone-cc, its sdk.json with only `script` changed); the arms' own link.ld files must be identical.
+if [ "$LAYOUT" = heap-last ]; then
+  [ -z "${CAPSTONE_SDK:-}" ] || fail "CAPSTONE_SDK is set: capstone-cc would read that SDK instead of the layout view"
+  scripts=""
+  for label in "${LABELS[@]}"; do
+    python3 "$KIT/tools/layout-sdk.py" --sdk "${SDK[$label]}" --out "$REC/layout-sdk/$label" > "$REC/layout-sdk-$label.txt" 2>&1 \
+      || { cat "$REC/layout-sdk-$label.txt" >&2; fail "layout-sdk.py $label"; }
+    note "layout $label $(cat "$REC/layout-sdk-$label.txt")"
+    scripts="$scripts $(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['sdk_script_sha256'])" "$REC/layout-sdk/$label/layout.json")"
+    SDK[$label]=$REC/layout-sdk/$label
+  done
+  [ "$(echo $scripts | tr ' ' '\n' | sort -u | wc -l)" = 1 ] || fail "the arms' SDKs name different link.ld files:$scripts"
+  note "layout heap-last: link.ld $(sha256sum "$REC/layout-sdk/${LABELS[0]}/link.ld" | cut -c1-64)"
+else
+  note "layout sdk: each SDK's own link.ld"
+fi
 # 525.x264_r's input generator for the host.
 CC=${HOST_CC:-cc} bash "$KIT/tools/build-host-ldecod.sh" "$SPEC_ROOT" "$REC/ldecod-host"
 note "ldecod-host $(sha256sum "$REC/ldecod-host" | cut -c1-64) cc $(${HOST_CC:-cc} --version | head -1)"
@@ -122,6 +149,16 @@ if [ ${#LABELS[@]} -gt 1 ]; then
     fi
   done
   note "integrity: every benchmark object identical across ${LABELS[*]}"
+  # The layout: with heap-last, every symbol and section outside heap.c must sit at the same address in every arm.
+  if [ "$LAYOUT" = heap-last ]; then
+    for label in "${LABELS[@]:1}"; do
+      rc=0
+      python3 "$KIT/tools/layout-check.py" --rec "$REC" --tree "$SPEC_ROOT" --labels "${LABELS[0]}" "$label" \
+        > "$REC/layout-check-$label.txt" 2>&1 || rc=$?
+      note "layout-check ${LABELS[0]} $label rc=$rc: $(tail -1 "$REC/layout-check-$label.txt")"
+      [ $rc = 0 ] || fail "layout-check ${LABELS[0]} $label (see $REC/layout-check-$label.txt)"
+    done
+  fi
 fi
 # The installed sources and inputs are still SPEC's.
 python3 "$KIT/tools/spec-extract.py" --verify "$SPEC_ROOT/.." ALL > "$REC/verify-after-build.txt" 2>&1 \

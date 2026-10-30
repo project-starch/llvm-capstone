@@ -1,0 +1,29 @@
+[pair] FAIL mcf_r_base.capstone-spatial vs mcf_shift4.lifetimes: compared bench functions 38, bench data 6, libc+runtime functions 233, libc+runtime data 83, other symbols 0, sections 13 (layout-controlled); not compared: heap.c 18 functions 17 data
+   MISMATCH bench_func: 38
+      main 0x1eb84/856 vs 0x1eb88/856
+      arc_compare 0x20460/96 vs 0x20464/96
+      bea_is_dual_infeasible 0x23140/76 vs 0x23144/76
+      calculate_max_redcost 0x207fc/96 vs 0x20800/96
+      cost_compare 0x2318c/104 vs 0x23190/104
+      dual_feasible 0x1f4a8/292 vs 0x1f4ac/292
+      flow_cost 0x1efa8/288 vs 0x1efac/288
+      flow_org_cost 0x1f17c/376 vs 0x1f180/376
+      getArcPosition 0x1f0f0/100 vs 0x1f0f4/100
+      getOriginalArcPosition 0x1f154/40 vs 0x1f158/40
+      getfree 0x1f5cc/164 vs 0x1f5d0/164
+      global_opt 0x1e82c/856 vs 0x1e830/856
+   MISMATCH sdk_func: 224
+      _Exit 0x24d64/112 vs 0x24d68/112
+      ___errno_location 0x24c08/44 vs 0x24c0c/44
+      __addtf3 0x347d0/1980 vs 0x347d4/1980
+      __aio_close 0x2a8a4/36 vs 0x2a8a8/36
+      __capstone_application_prepare 0x1e554/464 vs 0x1e558/464
+      __capstone_at_exit 0x10194/36 vs 0x10198/36
+      __capstone_call_on_stack 0x1bd7c/56 vs 0x1bd80/56
+      __capstone_cap_init 0x11dd0/64,0x1c330/6852,0x29998/96,0x29fb0/64,0x2a7f4/176,0x2ac5c/180 vs 0x11dd4/64,0x1c334/6852,0x2999c/96,0x29fb4/64,0x2a7f8/176,0x2ac60/180
+      __capstone_context_tid 0x10da8/52 vs 0x10dac/52
+      __capstone_cp_cancelled 0x1a61c/112 vs 0x1a620/112
+      __capstone_cp_result 0x1a5d8/68 vs 0x1a5dc/68
+      __capstone_delegate_call 0x13378/3540 vs 0x1337c/3540
+   hot: main 0x1eb84 | 0x1eb88; malloc 0x386f0 | 0x38758; free 0x38c80 | 0x38d48; realloc 0x38ef0 | 0x38fb8; calloc 0x38e48 | 0x38f10; __capstone_mallocng_malloc 0x25f50 | 0x25f54; __capstone_mallocng_free 0x24dd4 | 0x24dd8; __capstone_mallocng_realloc 0x27f7c | 0x27f80
+layout-check: 0 of 1 pairs PASS; compared 38 benchmark functions, 6 benchmark data, 233 libc+runtime functions, 83 libc+runtime data, 13 sections
