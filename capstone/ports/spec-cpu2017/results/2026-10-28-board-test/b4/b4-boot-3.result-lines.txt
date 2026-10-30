@@ -1,0 +1,74 @@
+# Bitstream 4 (option B, 325966ee4) check boot 3 on board 2: b4-t1c, PREREG Addendum 17 (cd44551c2ae4). Tier 1 with the module
+# loaded resolve_dirty=1 resolve_pte=1 (kit bkit14-b4r-b2), against twin F0r (module-ids55 addendum 3, 3160e7d8e147).
+# 2026-10-30 18:39-19:48. Result lines only; step text spec.txt sha256 d3dc5c8b0b10be20.
+
+## judge (b4-check-t1c.py), verbatim
+    OK  read-back @@PARAM resolve_dirty (board.txt) ['Y']
+    OK  read-back @@T1C-RD resolve_dirty ['Y']
+    OK  read-back @@T1C-RD2 resolve_dirty ['Y']
+    OK  read-back @@PARAM resolve_pte (board.txt) ['Y']
+    OK  read-back @@T1C-RD resolve_pte ['Y']
+    OK  read-back @@T1C-RD2 resolve_pte ['Y']
+    OK  bounds                       board True twin True
+    OK  cleanup                      board False twin True   (cleanup: false by construction)
+    OK  completed                    board True twin True
+    OK  fault_causes                 board False twin False
+    OK  heap-threads                 board False twin False
+    OK  heap_threads                 board False twin False
+    OK  linux_demand_faults          board True twin True
+    OK  linux_pages_released         board True twin True
+    OK  mruby                        board True twin True
+    OK  mruby_results                board True twin True
+    OK  nested                       board True twin True
+    OK  nested-stale                 board True twin True
+    OK  nested_denial_site           board True twin True
+    OK  nested_output                board True twin True
+    OK  normal                       board True twin True
+    OK  normal_output                board True twin True
+    OK  parallel_one                 board True twin True
+    OK  parallel_two                 board True twin True
+    OK  preempt                      board True twin True
+    OK  retired                      board True twin True
+    OK  same_va_reuse                board True twin True
+    OK  shared_heap_pages_released   board False twin False
+    OK  sparse-churn                 board True twin True
+    OK  sparse-stale                 board True twin True
+    OK  sparse_recycling             board False twin False
+    EXC spin_entered                 board True twin True   (excluded from the prediction; reported)
+    OK  sqlite_read                  board True twin True
+    OK  sqlite_results               board True twin True
+    OK  sqlite_write                 board True twin True
+    OK  stale                        board True twin True
+    OK  threads                      board False twin False
+    OK  threads_output               board False twin False
+    OK  unused_pages_not_populated   board True twin True
+    OK  vm                           board False twin False
+    OK  vm-guard                     board True twin True
+    OK  vm-large                     board False twin False
+    OK  vm-mappings                  board True twin True
+    OK  vm-none-read                 board True twin True
+    OK  vm-padding                   board True twin True
+    OK  vm-ro-write                  board True twin True
+    OK  vm_contract                  board False twin False
+    OK  vm_denial_operations         board True twin True
+    OK  vm_denial_sites              board True twin True
+    OK  vm_large_contract            board False twin False
+    OK  vm_mappings_contract         board True twin True
+    OK  P2 (S-24) vm: ['VM_EXIT:vm:1'], execute-through-PCC lines 1, S-24 bound lines 0
+    OK  P3 fault causes [25, 25, 28, 25, 15, 13, 13, 28, 25] (predicted [25, 25, 28, 25, 15, 13, 13, 28, 25])
+    REP spin pair: wait 5 s rc=143 ready=0; wait 15 s rc=143 ready=1 -> reading A: slow start -- the 5 s wait is shorter than a spin launch on this board; spin works on B
+    REP Tier 1 spin_entered (its own 5 s wait): True
+    REP clock: ok rc=0 wall(date) None s, wall(uptime) 9.640000000000327 s, launcher elapsed 6.40956944 s, launch 3.7968516 s; elapsed/uptime 0.665
+  B4-T1C 33 of 45 true; twin F0r 34 of 45; AS PREDICTED (every cell equals F0r's but cleanup false and spin_entered excluded; P2, P3 hold)
+
+## reading
+- AS PREDICTED: every Tier 1 cell equals F0r's (cleanup false by construction, spin_entered excluded and reported), both
+  parameters read back Y three times. S-24's prediction holds in all three parts: vm exits 1 at 'execute through mapping
+  PCC' (the twin's status), no bound line fires, and the four cells boot 2's fault moved (nested_denial_site,
+  vm_denial_sites, linux_pages_released, linux_demand_faults) are back to F0r's values. S-24 is confirmed by prediction;
+  its D=0 value itself stays unread, because with the fix on the loop never forms.
+- spin pair: 5 s wait -> not ready (rc 143, ready 0); 15 s wait -> ready (rc 143, ready 1). Reading A of the addendum: the
+  5 s wait is shorter than a spin launch on this board; spin works on B. Tier 1's own spin_entered read True this boot
+  (its 5 s wait is borderline at 25 MHz; boot 2 read False).
+- clock: launcher elapsed 6.41 s inside a 9.64 s /proc/uptime window around the same launch (ratio 0.665); 'date' gave no
+  sub-second wall time on the board. No sign of R-52's clock misreading at this scale.
