@@ -364,7 +364,11 @@ build_group() {
 
 # positive control: plain system-malloc UAF, must trap under revocation
 build_poscontrol() {
-  "$CLANG" "${PURECAP[@]}" -O0 "$C/poscontrol.c" -o "$OUT/poscontrol"
+  # -g and -I"$C": it includes repro322_fault.h now, and the handler it installs is
+  # the run's positive control for that resolver, so it is rebuilt whenever the cases
+  # are. A gate built from older source than the binaries it gates proves nothing --
+  # which is the 2026-10-05 defect one group up, in a different place.
+  "$CLANG" "${PURECAP[@]}" -O0 -g -I"$C" "$C/poscontrol.c" -o "$OUT/poscontrol"
   echo "  poscontrol       OK"
 }
 
@@ -387,6 +391,8 @@ if [ "$GROUP" = all ]; then
   # harmless: the runners take their case list from tags.tsv, which marks it
   # out of scope, so it is built and not run.
   for g in core coreT fts5 fts5S fts3 fts3P ext json rtree lbcore lbfts3 lbfts5 r2p r2db probes; do build_group "$g"; done
+elif [ "$GROUP" = poscontrol ]; then
+  build_poscontrol
 else
   build_group "$GROUP"
 fi

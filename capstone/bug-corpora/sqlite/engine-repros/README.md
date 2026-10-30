@@ -63,10 +63,14 @@ and produced b446615b…, so the bundles' input is reproducible only from that c
 
 On CheriBSD the two arms are run by `shared/run-cheribsd.py` (`--mode nested`, `--mode
 non-nested`), which writes one JSON record per run rather than a verdicts-v1 bundle:
-`results/2026-10-29-cheribsd/{nested,non-nested}`. Each run's `poscontrol` gate -- a plain
-system-allocator use-after-free -- FAULTed before any case ran, so both are readings. The cells are
-written from those records, with the fault pc attributed by subtracting the load base (0x100000 for
-the PIE case images; the one non-PIE image, `spellfixoom`, is loaded where it was linked).
+`results/2026-10-30-cheribsd/{nested,non-nested}`, both at `--case-timeout 1200`. Each run's
+`poscontrol` gate -- a plain system-allocator use-after-free -- FAULTed before any case ran, so both
+are readings, and the gate's own fault is also the positive control for the handler's `dladdr`
+resolver, which the record carries as `resolver`. `shared/fold-cheribsd.py` writes every cell of
+both arms from those records. A fault is placed by the object and base `dladdr` reported: by name
+for a pc in a shared library, and for a pc in a case image by symbolising `pc - image_base` against
+that image. The superseded `results/2026-10-29-cheribsd/` records stay as what the run before the
+resolver measured; both of today's reproduce their PASS/FAULT verdict for all 33 cases.
 
 A fault counts only in a function the case justifies (`fault_sites`): where host ASan reported it,
 or what the source and `PROVENANCE.md` name as the stale access.
@@ -132,7 +136,7 @@ object is its own object of the platform allocator, bounded to its request and r
 
 | axis | cases | (1) = (2) base = Sublet | (3) CheriBSD |
 |---|---:|---:|---:|
-| temporal | 19 | **17 / 17** (+2 out of denominator) | **12 / 12** (+5 no reading, +2 out of denominator) |
+| temporal | 19 | **17 / 17** (+2 out of denominator) | **17 / 17** (+2 out of denominator) |
 | spatial | 8 | **6 / 8** | **6 / 8** |
 
 * **(1) base** is `virtual-malloc`, configuration `virtual-sqlite-memsys5`, bundle
@@ -143,12 +147,12 @@ object is its own object of the platform allocator, bounded to its request and r
 * **(2) Sublet** is `virtual-nested-pools`, configuration `virtual-sqlite-memsys5-pools`, bundle
   `results/2026-10-29-virtual/virtual-nested-pools`. It has no temporal miss and no cell without a
   reading.
-* **(3) CheriBSD** is `cheribsd-revocation`, run `results/2026-10-29-cheribsd/nested`
+* **(3) CheriBSD** is `cheribsd-revocation`, run `results/2026-10-30-cheribsd/nested`
   (`shared/run-cheribsd.py --mode nested`, poscontrol gate FAULTed before any case ran). The two
   cells with no reading are 02 and 20: both faulted, neither at the function host ASan reported.
 * **The non-nested columns** are `virtual-platform` (configuration `virtual-mallocng`, bundle
   `results/2026-10-29-virtual/virtual-platform`) and `cheribsd-platform`
-  (`run-cheribsd.py --mode non-nested`, `results/2026-10-29-cheribsd/non-nested`, same gate). The
+  (`run-cheribsd.py --mode non-nested`, `results/2026-10-30-cheribsd/non-nested`, same gate). The
   two cases out of the non-nested denominator are 07 and 22: both reach for `sqlite_heap` to
   engineer the OOM their trigger needs, and that array exists only when memsys5 is configured.
 
@@ -197,39 +201,52 @@ revoke=on-every-free` on 31 of the 33 cases, and that arm catches 12 of the 12 i
 unattributed cells (02, 20) stay `NO-READING`, as they do on the base arm: attribution comes before
 the mechanism rule, there as here.
 
-**Five `cheribsd-platform` cells have a fault that cannot be tied to the defect** -- 11, 16, 17, 21
-and 23, whose declared access is a libc primitive (`memcmp`, `memcpy`). The fault pc lies in a
-shared object, the run record does not carry that object's load base, and the guest has ASLR enabled
-(`kern.elf64.aslr.enable=1`) so the base cannot be reconstructed afterwards. They are
-`NO-READING:unattributed`, which is why that column reads 12/12 and not 17/17. Every cell it can
-read is a catch, so 17/17 is what it would read if all five resolved that way, and 12/17 if none
-did; the tree states 12/12 and neither. It is the only gap left between this corpus and the
-figures the paper quotes.
+**The five `cheribsd-platform` cells that had no reading are CLOSED, and the prediction held.**
+11, 16, 17, 21 and 23 each declare a C library primitive as their access, and on 2026-10-29 each
+faulted at a pc in a shared object with no load base recorded and ASLR on, so none could be tied to
+its defect. Recording the base afterwards was the wrong fix -- under ASLR there is nothing to record
+it from. The handler resolves the site where it CAN be resolved, inside the faulting process, with
+`dladdr`, and prints `<<FAULT-WHERE>> obj= base= sym= symaddr= image= imagebase=`. All five now
+resolve by name: 11, 16 and 17 to `memcmp` and 21 and 23 to `memcpy`, in `/lib/libc.so.7`, which is
+what each one's `fault_sites` names. **Those `fault_sites` were written on 2026-10-10**, twenty days
+before the resolver existed, so the attribution is not fitted to the reading. The column goes from
+12 / 12 to **17 / 17**.
 
-**The instrument that closes them is in the tree, and this is its pre-registration (2026-10-30).**
-A load base recorded afterwards was the wrong fix: with ASLR on there is nothing to record it from.
-`repro322_common.h`'s fault handler now resolves the site where it CAN be resolved -- inside the
-faulting process, with `dladdr` -- and prints `<<FAULT-WHERE>> obj= base= sym= symaddr= image=
-imagebase=`, which `shared/run-cheribsd.py` records per case. The gate faults before every run, so
-the gate's own FAULT-WHERE is the resolver's positive control and the record carries it as
-`resolver`; a run whose gate faults and prints nothing has a broken resolver, and its unattributed
-cells stay NO-READING rather than turning into misses. `dladdr` takes rtld's lock and is not
-async-signal-safe, which is a deliberate trade: these faults are in the program's own code or in a
-libc string primitive, never inside rtld, and if the lock were ever held the handler blocks and the
-runner's timeout reports TIMEOUT -- a visible non-reading, not a wrong one.
+The prediction was pushed at `18d692d16529` before the run and every line of it held, including the
+arms that had to NOT move: both records reproduce 2026-10-29's PASS/FAULT verdict for all 33 cases,
+and `cheribsd-revocation` still reads 0 / 17 (+2) -- what makes that column 0 is the mechanism rule,
+not the attribution, and a better resolver must not move it.
 
-Written before the run, including the arms that must NOT move:
+**`sym=?` on a fault in a case image is the resolver working, not failing.** SQLite's amalgamation
+makes every function `static`, so nothing in a case image reaches `.dynsym` and `dladdr` can give
+only the object and its base. That is enough: `pc - image_base` is symbolised against the image,
+which carries `-g`. A pc in the C library resolves by name. The run record therefore stores the
+object, the base AND the symbol -- recording only the symbol made a working resolver and an absent
+one look identical, which is how this paragraph came to be needed.
 
-* the gate prints a `<<FAULT-WHERE>>` line, and `resolver` is non-null in both records;
-* 11, 16, 17, 21 and 23 resolve to `memcmp` or `memcpy` in the C library, which is each case's
-  declared access, so all five become CAUGHT and `cheribsd-platform` reads **17 / 17** temporal;
-* the 12 cells that already read stay exactly as they are, and so does the spatial 6 / 8;
-* on the nested record the five faults (02, 05, 19, 20, 22) resolve inside the case image, 02 and
-  20 to a function host ASan did not report, so `cheribsd-revocation` stays **0 / 17 (+2)** -- the
-  mechanism rule, not the attribution, is what makes that column 0, and a better resolver must not
-  move it.
+**The gate is the resolver's positive control, and making that true took three fixes.** As written
+on 2026-10-29 it was false: `poscontrol.c` had no fault handler at all, so the gate could never have
+printed a `<<FAULT-WHERE>>` line, and a resolver that silently did nothing would have read exactly
+like a fault that genuinely could not be placed. The handler is now its own header,
+`ports/sqlite/cheribsd/repro322_fault.h`, with no SQLite dependency, included by both
+`repro322_common.h` and `poscontrol.c`. The driver built `poscontrol` only under its `all` target,
+which this runner never calls, so the gate binary on this host was dated 2026-10-17 -- the same
+stale-binary defect the driver's own comment records from 2026-10-05, in another place; the runner
+now builds and ships it every run and refuses to start if it predates the resolver. And every case
+binary is checked for the resolver before its reading is believed, because a stale image runs,
+faults and reports perfectly well and only the missing line says otherwise.
 
-Any other reading is a finding about the instrument, not about the arm.
+**Case 23's TIMEOUT was the harness's bound, not the arm's silence, and the difference was
+measured.** At the runner's default 300 s it timed out whenever another case ran first (3 of 3) and
+faulted when run alone (2 of 2) -- `results/2026-10-30-cheribsd/non-nested-r2-case23`. That pattern
+is not a reason to quote the run that faults: a `TIMEOUT` is `NO-READING` by this corpus's own
+contract, and picking among runs for the one that reads the way the table wants is the failure the
+contract exists to prevent. The cell sat at `NO-READING:inconclusive`, and the column at 16 / 16,
+until the bound itself was tested. `run-cheribsd.py` now takes `--case-timeout` and records it: at
+1200 s case 23 faults **in sequence**, at `memcpy`+0xb6 in `/lib/libc.so.7`. The reason it is slow
+is in the configuration -- `NOMEM5=1` forces a full revocation sweep on every `free`, so a trigger
+that frees in a loop is slow by construction -- and both records of 2026-10-30 are therefore runs at
+1200 s, with no timeout in either.
 
 **Two `cheribsd-platform` cells were not measurements of that arm, and are withdrawn (2026-10-30).**
 07 and 22 ran under `--mode non-nested` and produced a silence and a fault, scored MISSED and CAUGHT.
@@ -264,11 +281,16 @@ nested and on the non-nested arms, and on `virtual-malloc` -- memsys5 recycling 
 -- it does not, so the runner's bound ends it. That is a property of the defect on an unprotected
 allocator, not of the harness, and it costs one cell in a column that reads 0 either way.
 
-**What is still hand-written.** The two CheriBSD arms are the corpus's only cells not derived from a
-verdicts-v1 bundle: `run-cheribsd.py` writes one JSON run record, and the cells are written from it
-with the fault pc attributed by subtracting the load base. Folding those records into bundles would
-put all seven arms under `derive-verdicts.py`, and it needs the guest binaries to re-symbolise, so
-it waits on the next CheriBSD run rather than being done from the tree.
+**What is still not a bundle.** The two CheriBSD arms are the corpus's only cells not derived from
+a verdicts-v1 bundle: `run-cheribsd.py` writes one JSON run record per mode, which
+`derive-verdicts.py` cannot read. Since 2026-10-30 they are at least no longer typed by hand --
+`shared/fold-cheribsd.py` writes every cell of both arms from the records, applying the shared
+judge's order (attribution first, then the mechanism rule), so the cells are a function of the run
+and nothing else. Turning the records into real bundles would need two configurations in
+`tools/arms.json` and entries in `verdict_bundles`; that is a decision for the study rather than for
+this corpus, because **no corpus in this tree folds a CheriBSD run into a bundle** -- all 24 such
+records carry no `contract` and no corpus names a CheriBSD arm in `verdict_bundles` -- so whatever
+encoding is chosen here for a SIGPROT's cause would be the one the other twelve inherit.
 
 **Provenance of the 2026-10-29 bundles.** The adapted amalgamation is stock 3.22.0 through
 `ports/sqlite/adapt-sqlite-322.sh`, which reproduces the `amalgamation_sha256` 7fc92e19... the

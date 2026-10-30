@@ -12,13 +12,24 @@
  *
  * Exits 0 only if the dangling access succeeded, which is the FAILURE case
  * for this program.
+ *
+ * It also installs the SAME fault handler the case images carry (repro322_fault.h),
+ * which makes this gate the positive control for that handler's dladdr resolver as
+ * well as for revocation: this program faults in every run by construction, so if it
+ * prints no <<FAULT-WHERE>> line the resolver is broken, and a case that faults
+ * somewhere unattributable must stay NO-READING instead of being read as a miss. A
+ * silent resolver is otherwise indistinguishable from a fault that genuinely cannot
+ * be placed. The exit status is unchanged: the handler _exit(128 + signal)s, which is
+ * the 162 the shell reports for an uncaught SIGPROT anyway.
  */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "repro322_fault.h"
 
 int main(void) {
   setvbuf(stdout, NULL, _IONBF, 0);
+  repro_install_fault_handler();
   puts("poscontrol BEGIN");
 
   /* Large enough to come from the system allocator rather than any cache. */

@@ -1,0 +1,32 @@
+{
+  "arm": "cheribsd-revocation",
+  "mode": "non-nested",
+  "revocation_default": "1",
+  "poscontrol_exit": "162",
+  "resolver": "?",
+  "skipped": {},
+  "tally": {
+    "FAULT": 1
+  },
+  "cases": {
+    "23_eab0e10304_fts3_static_bind_stale_text": {
+      "tag": "staticbind",
+      "mode": "non-nested",
+      "exit": 162,
+      "verdict": "FAULT",
+      "si_code": "2",
+      "si_meaning": "PROT_CHERI_TAG/untagged-deref",
+      "allocator": "system",
+      "revoke": "on-every-free",
+      "fault_object": "/lib/libc.so.7",
+      "fault_object_base": "0x40286000",
+      "fault_symbol": "memcpy",
+      "fault_symbol_addr": "0x4043aaba",
+      "image": "/root/corpus/staticbind_sys",
+      "image_base": "0x100000",
+      "last": [
+        "<<FAULT-WHERE>> obj=/lib/libc.so.7 base=0x40286000 sym=memcpy symaddr=0x4043aaba image=/root/corpus/staticbind_sys imagebase=0x100000"
+      ]
+    }
+  }
+}
