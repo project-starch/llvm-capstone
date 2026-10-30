@@ -923,7 +923,7 @@
         "version": "5.0.0",
         "port": "capstone/ports/php/app"
       },
-      "cases": 65,
+      "cases": 70,
       "case_schema": "script-trigger",
       "case_number_base": 1,
       "required_arms": [
@@ -931,10 +931,10 @@
         "virtual-nested-pools",
         "virtual-nested-exact"
       ],
-      "status": "built",
+      "status": "measured",
       "live_in_pin_recorded": true,
       "expect_live_in_pin": {
-        "true": 65
+        "true": 70
       },
       "checker": "capstone/bug-corpora/tools/check-corpus.py",
       "related": [
@@ -953,7 +953,12 @@
         "virtual-nested-pools": "php-real-object",
         "virtual-nested-exact": "php-real-exact"
       },
-      "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 46 asan-blind and 19 temporal-asan-visible here against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases are placed differently, one (CRASH-100, needs an HTTP listener) is absent, two of theirs (CRASH-062, CRASH-070) end as shipped in PHP's own fatal error with no report, and one (CRASH-064) is a use-after-free NEITHER ASan build reports as one -- it dereferences an integer read from a reused object-store bucket, ASan:SEGV on both -- so these three are in neither population here; each said in its PROVENANCE.md. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The 59 default-build cases outside both populations (30 spatial ASan sees unaided, NULL dereferences, type confusions) are not here yet.",
+      "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 48 asan-blind and 22 temporal-asan-visible here, 70 cases. The first build gave 65, 46 and 19, against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases were placed differently, one (CRASH-100, needs an HTTP listener) is absent, two of theirs (CRASH-062, CRASH-070) end as shipped in PHP's own fatal error with no report, and one (CRASH-064) is a use-after-free NEITHER ASan build reports as one -- it dereferences an integer read from a reused object-store bucket, ASan:SEGV on both -- so those three were in neither population; each said in its PROVENANCE.md. The merge with the sibling corpus (2026-10-28) widened the temporal rule and admitted five as cases 66 to 70: CRASH-062 and -070 as asan-blind, CRASH-012, -148 (CWE-590) and -161 (CWE-415) as temporal-asan-visible. CRASH-064 is still in neither. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The default-build cases outside both populations (spatial defects ASan sees unaided, NULL dereferences, type confusions) are not here yet.",
+      "verdict_bundles": {
+        "virtual-malloc": "results/2026-10-28-run18/bundle-virtual-malloc",
+        "virtual-nested-pools": "results/2026-10-28-run18/bundle-virtual-nested-pools",
+        "virtual-nested-exact": "results/2026-10-28-run18/bundle-virtual-nested-exact"
+      },
       "where": "capstone/bug-corpora/php/engine-repros"
     },
     {
@@ -1950,7 +1955,7 @@
       "targets": [
         "capstone-virtual"
       ],
-      "workload": "the two populations of bug-corpora/php/engine-repros (46 asan-blind, 19 temporal-asan-visible), each trigger a .php script staged into the guest, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the case's own oracle.json (our native ASan and pristine runs); php -n -v exits 1 as native PHP does and the stock arm's output matches the native build",
+      "workload": "the two populations of bug-corpora/php/engine-repros (48 asan-blind, 22 temporal-asan-visible), each trigger a .php script staged into the guest, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the case's own oracle.json (our native ASan and pristine runs); php -n -v exits 1 as native PHP does and the stock arm's output matches the native build",
       "evidence": [
         "capstone/ports/php/app/results/2026-10-27-common-entry",
         "capstone/ports/php/app/results/2026-10-27-requalification",
@@ -1998,7 +2003,7 @@
     {
       "program": "php",
       "role": "allocator-component",
-      "title": "PHP 5.0.0's Zend allocator (zend_alloc.c) with a Capstone seam: per-object bounds on the recorded request size, and the sublet/ adapter that splits each emalloc block into a header and a CDERIVE/CREVOKE payload region the app port's protected arms run on",
+      "title": "PHP 5.0.0's Zend allocator (zend_alloc.c) with a Capstone nested layer: per-object bounds on the recorded request size, and the sublet/ adapter that splits each emalloc block into a header and a CDERIVE/CREVOKE payload region the app port's protected arms run on",
       "upstream": {
         "version": "5.0.0",
         "pin_source": {
@@ -2010,7 +2015,7 @@
         "capstone-domain",
         "capstone-virtual"
       ],
-      "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-seam.c and sublet/probe-derive-split.c on the virtual profile, which qualify the seam before the app port's arms are believed",
+      "workload": "run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-nested.c and sublet/probe-derive-split.c on the virtual profile, which qualify the nested layer before the app port's arms are believed",
       "evidence": [
         "capstone/ports/php/zend-alloc/sublet/results/derive-rebase-2026-10-26"
       ],
@@ -2413,7 +2418,7 @@
     "capstone/bug-corpora/mruby/gc-slot-repros": 0,
     "capstone/bug-corpora/mruby/release-differential": 23,
     "capstone/bug-corpora/perl/release-differential": 11,
-    "capstone/bug-corpora/php/engine-repros": 65,
+    "capstone/bug-corpora/php/engine-repros": 70,
     "capstone/bug-corpora/postgres/c-repros": 5,
     "capstone/bug-corpora/postgres/mmgr-repros": 5,
     "capstone/bug-corpora/postgres/sql-repros": 9,
@@ -2428,10 +2433,10 @@
     "xlang/reuse-not-free": 2,
     "xlang/toctou-double-fetch": 0
   },
-  "cases_here": 364,
+  "cases_here": 369,
   "cases_xlang": 30,
-  "cases_total": 394,
-  "live_true": 214,
+  "cases_total": 399,
+  "live_true": 219,
   "live_false": 122,
   "live_not": 28,
   "advisories_total": 22,

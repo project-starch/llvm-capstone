@@ -19,7 +19,7 @@
 | `micropython` | 2e3304a | capstone-domain, silicon | the registered upstream test selection | -- |
 | `mruby/app` | 4.0.0-rc2 | capstone-domain, capstone-virtual, native | mrbtest, and the upstream ao-render benchmark for the study | `gc-slot-repros`, `release-differential` |
 | `perl/musl` | 5.36.3 | capstone-domain, capstone-virtual, native | scripts/smoke.pl, byte-identical to the native reference | `release-differential` |
-| `php/app` | 5.0.0 | capstone-virtual | the two populations of bug-corpora/php/engine-repros (46 asan-blind, 19 temporal-asan-visible), each trigger a .php script staged into the guest, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the case's own oracle.json (our native ASan and pristine runs); php -n -v exits 1 as native PHP does and the stock arm's output matches the native build | `engine-repros` |
+| `php/app` | 5.0.0 | capstone-virtual | the two populations of bug-corpora/php/engine-repros (48 asan-blind, 22 temporal-asan-visible), each trigger a .php script staged into the guest, judged by run-realphp.py through bug-corpora/tools/verdicts.py against the case's own oracle.json (our native ASan and pristine runs); php -n -v exits 1 as native PHP does and the stock arm's output matches the native build | `engine-repros` |
 | `php/engine` | 5.0.0 | capstone-domain | the corpus triggers compiled into the image through rung_E_domain.c, run by run-triggers.sh; FINDINGS.md holds the measurement in the order it was learned | -- |
 | `postgres/app` | 17.5 | capstone-domain, cheribsd-purecap | work.sql, checked against the native 16-byte-MAXALIGN oracle | -- |
 | `sqlite/app` | 3.22.0 | capstone-domain, native | work.sql.in and again.sql on a database file, with a second writer refused while the first holds a transaction; speedtest1 main at size 1 with the per-phase result oracle; each byte for byte against the native build of the same release | -- |
@@ -35,7 +35,7 @@
 | `ffmpeg/buffer-pool` | 9.0.1 | capstone-domain, cheribsd-purecap, native | -- | `pool-repros` |
 | `memcached/allocators` | 1.6.45 | capstone-domain, cheribsd-purecap, native | -- | `allocator-repros` |
 | `nginx` | 1.28.0 | capstone-domain, native | -- | -- |
-| `php/zend-alloc` | 5.0.0 | capstone-domain, capstone-virtual | run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-seam.c and sublet/probe-derive-split.c on the virtual profile, which qualify the seam before the app port's arms are believed | -- |
+| `php/zend-alloc` | 5.0.0 | capstone-domain, capstone-virtual | run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-nested.c and sublet/probe-derive-split.c on the virtual profile, which qualify the nested layer before the app port's arms are believed | -- |
 | `postgres/memory-contexts` | 17.0 | capstone-virtual, cheribsd-purecap, native | -- | `mmgr-repros` |
 | `whisper/ggml-context` | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | -- |
 | `wireshark/wmem` | 4.6.8 | capstone-virtual, cheribsd-purecap, native | -- | `wmem-repros` |
