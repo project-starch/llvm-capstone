@@ -101,8 +101,13 @@ was re-checked here from the rows.
   together with this compiler's capability-copy pattern.
 - **The cycle counter did not change rate.** The ns ratio tracks the cycle ratio (fibcall 1.370 cycles, 1.372 ns), and
   instret is equal.
-- **A residual the mechanism does not explain.** nettle-arcfour 0.979 [0.978, 0.981] and rv8-dhrystone 0.994
-  [0.990, 0.998] are slower without the check, with intervals excluding 1. Removing a check cannot slow code down by
-  itself, so the variant changes some other timing as well. One unverified candidate is load/store ordering once the
-  LSU verdict is gone; arcfour is load-load-store-store swaps. The effect is too small to move any geomean, but the
-  ObjBounds rung is not purely "minus the check".
+- **arcfour, slower without the check, is explained by the check itself, in simulation; dhrystone was not simulated.**
+  - nettle-arcfour 0.979 [0.978, 0.981] and rv8-dhrystone 0.994 [0.990, 0.998] read slower on ObjBounds.
+  - The RTL lane reproduced arcfour's direction in simulation (`docs/plans/2026-10-30-objbounds-variant.md`, "The
+    arcfour residual"). The loop is bound by the store-buffer drain: its `stc; ldc` pair through one stack slot waits
+    for the slot's store to drain after the iteration's byte stores.
+  - On ObjBounds the removed query's cycles become waiting, and 12 more loads catch a same-offset store still in the
+    buffer. So the variant is still bitstream 3 minus the check.
+  - The simulation reads +0.42 % on its memory model; silicon reads 2.1 %. dhrystone was not simulated.
+  - WITHDRAWN: this paragraph first read the two programs as "the variant changes some other timing besides the
+    check" (lane 003883728dc6, landed b4921b2d497c).

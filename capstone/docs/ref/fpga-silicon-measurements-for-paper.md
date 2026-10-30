@@ -7687,8 +7687,14 @@ Cycles per timed iteration, geomean of per-program ratios (two-level bootstrap i
     are excluded in all three arms (Plain addendum 1). 23 programs are set aside, and the ObjLife / Plain column covers
     the rest.
   - **fibcall's and crc's ratios as fibonacci or CRC costs.** They measure call frames.
-  - **ObjBounds as purely "minus the check".** nettle-arcfour (0.979) and rv8-dhrystone (0.994) are slower without it,
-    with intervals excluding 1. This record does not explain it; it is too small to move a geomean.
+  - **A program's ratio as the check's cost alone.**
+    - nettle-arcfour (0.979) and rv8-dhrystone (0.994) are slower without the check, with intervals excluding 1.
+    - For arcfour, simulation explains it (`docs/plans/2026-10-30-objbounds-variant.md`, "The arcfour residual"). The
+      loop is bound by the store-buffer drain, and the check's latency overlapped a wait that ObjBounds pays instead.
+      The variant is still bitstream 3 minus the check.
+    - The simulation reads +0.42 % on its memory model; silicon reads 2.1 %. dhrystone was not simulated.
+    - An earlier version of this bullet read the two programs as the variant changing some other timing. That
+      reading is withdrawn.
   - **ObjLife / ObjBounds as a single-board figure.** It is cross-board and cross-day (bitstream-3 records against
     board 2), with the controls above.
   - **25 MHz cycles.** DRAM is near in cycles, and a GHz part weighs stalls differently.
