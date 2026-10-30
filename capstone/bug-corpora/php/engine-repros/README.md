@@ -229,3 +229,24 @@ The 59 default-build cases outside both populations: 30 spatial defects ASan see
 confusions (controls, not capability claims), 5 more temporal. The 15 cases that need the
 `fullext` build. The 43 wrong-value cases (`LOGIC-*`, `BIND-*`), whose oracle is a value,
 not a fault.
+
+Four of those fifteen are **already measured on CheriBSD purecap** and are the only defects in
+this family that have a reading nowhere in this corpus: CRASH-125 and CRASH-129 (`ext/mbstring`,
+CWE-415 and CWE-416) and CRASH-131 and CRASH-132 (`ext/pcre`, both CWE-416). They live with
+their full provenance in [`../plain-temporal-repros`](../plain-temporal-repros) as cases 18 to 21,
+with a host-ASan reading in both allocator configurations and a `cheribsd-revocation` reading;
+`tools/build-cases.py` names them in `FULLEXT_NOT_ADMITTED` and prints why on every run rather
+than dropping them silently.
+
+Admitting them here needs two things, neither of them this corpus's to do:
+
+1. the oracle host must run a **fullext** build, three ways -- `results-ours-asan-default.json`,
+   `-asan-stockalloc.json` and `-pristine-default.json` all derive from the ext/standard-only
+   build today, and `build-cases.py` takes its candidate set from that build's id list on
+   purpose, so a fullext case cannot enter without widening it;
+2. `ports/php/app` must be built with `ext/mbstring` and `ext/pcre`, or the three virtual arms
+   have nothing to run: that port is 145 translation units of `ext/standard` only.
+
+`ports/php/cheribsd` has neither constraint -- it already builds a `php-fullext` binary beside
+`php` and the runner stages it for exactly the cases whose fidelity asks for it -- which is why
+the CheriBSD reading exists and the virtual ones do not.

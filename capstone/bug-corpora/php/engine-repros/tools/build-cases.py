@@ -179,6 +179,15 @@ TEMPORAL_REPORTS = ("ASAN:heap-use-after-free", "ASAN:attempting free", "ASAN:at
 # which nobody asked to merge and which are not about an allocator's lifetimes.
 APPENDED = ("CRASH-012", "CRASH-062", "CRASH-070", "CRASH-148", "CRASH-161")
 
+# Temporal defects that belong in this corpus by every rule above and CANNOT enter it yet,
+# named so that `build-cases.py` reports them on every run instead of dropping them in silence.
+# All four need the fullext build (ext/mbstring, ext/pcre), and the candidate set below is the
+# ext/standard-only build's id list by design, so no oracle this script reads can contain them.
+# They are measured: bug-corpora/php/plain-temporal-repros cases 18 to 21 carry a host-ASan
+# reading in both allocator configurations and a cheribsd-revocation reading. What is missing is
+# a fullext oracle run on the oracle host, and a fullext ports/php/app for the virtual arms.
+FULLEXT_NOT_ADMITTED = ("CRASH-125", "CRASH-129", "CRASH-131", "CRASH-132")
+
 
 def populations(asan, stock, meta):
     """{id: population} over the cases the default build runs, from the three result files."""
@@ -477,6 +486,14 @@ def main():
              + list(APPENDED))
     counts = {p: sum(1 for c in pops.values() if c == p) for p in POPULATIONS}
     print(f"populations from our oracle: {counts} over {len(default_ids)} default-build cases")
+    # NOT a zero: a declared case absent from the inputs is reported with the reason, because a
+    # silent omission of four measured defects reads exactly like a corpus that never had them.
+    held = [(c, c in default_ids, c in pris) for c in FULLEXT_NOT_ADMITTED]
+    print(f"held out, fullext oracle missing ({len(held)}): "
+          + ", ".join(f"{c} (in the default-build set: {d}, in the pristine oracle: {p})"
+                      for c, d, p in held)
+          + " -- measured in bug-corpora/php/plain-temporal-repros cases 18-21; see this corpus's"
+            " README, 'Not here'")
     tp = theirs["pops"]
     moved = sorted((c, tp.get(c, "neither"), pops[c]) for c in pops if tp.get(c, "neither") != pops[c])
     gone = sorted(c for c in tp if c not in pops)

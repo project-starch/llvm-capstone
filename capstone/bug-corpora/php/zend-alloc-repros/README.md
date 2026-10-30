@@ -5,6 +5,17 @@ Thirty temporal defects live in PHP 5.0.0 that a detector interposing at `malloc
 object, so `free()` is never called and the libc block stays live and in bounds for the whole
 window. The control is its sibling [`../plain-temporal-repros`](../plain-temporal-repros).
 
+> **Superseded for placement (2026-10-30), kept whole.**
+> [`../engine-repros`](../engine-repros) carries 70 defects of this same family -- 52 of them
+> these -- and is the live corpus; the `cheribsd-revocation` arm now runs there too. Its split is
+> decided by the same two-ASan-build measurement, on a different toolchain (gcc 15.2.0 against
+> gcc 7.5.0 / `libasan.so.4` here), and the two **disagree on 18 of the 52**: these populations
+> are a second reading of the axis, not the reading, so no count here may be added to one there.
+> Nothing is removed. Every case, every host-ASan row and every bundle stays as measured -- they
+> are what the CheriBSD arm's first run rests on, and cases 18-21 (`ext/mbstring`, `ext/pcre`)
+> have a reading nowhere else, because `engine-repros` admits only cases the ext/standard-only
+> build runs. See that corpus's README, "Not here".
+
 ## How the two corpora were split
 
 By one measurement, not by a rule. Each trigger ran twice on the same host, on two builds of the

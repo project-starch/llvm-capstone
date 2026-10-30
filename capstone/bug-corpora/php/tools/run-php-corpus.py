@@ -390,6 +390,7 @@ def cheribsd_guest(args, cases, out, config):
            "--log", str(record.with_suffix(".serial.log")),
            "--copy", "bounds-malloc",
            "--run-timeout", str(args.eager_timeout if config == "eager" else args.run_timeout),
+           "--timeout", str(args.boot_timeout),
            "--sysctl", f"security.cheri.runtime_revocation_default={revocation}",
            "--sysctl", f"security.cheri.runtime_revocation_every_free_default={every_free}"]
     if args.php_fullext:
@@ -734,6 +735,11 @@ def main():
     p.add_argument("--scratch", type=Path, help="where triggers are staged (default: --out/stage)")
     p.add_argument("--timeout", type=int, default=4200)
     p.add_argument("--run-timeout", type=int, default=40)
+    p.add_argument("--boot-timeout", type=int, default=14400,
+                   help="the whole boot-to-done budget for ONE guest boot. It must exceed the "
+                        "per-case ceiling times the cases that reach it, because a boot killed "
+                        "part way loses every case after the kill -- and those read as infra, "
+                        "which is indistinguishable from a silent arm without reading the record")
     p.add_argument("--cheri-img", type=Path,
                    help="the CheriBSD image for the cheribsd-revocation arm (default: the SDK's)")
     p.add_argument("--php-fullext", action="store_true",
