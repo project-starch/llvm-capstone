@@ -67,13 +67,28 @@ CASE_REQUIRED = {
 CASE_OPTIONAL = {"live_in_pin", "live_proof", "live_note", "distinguishing",
                  "sibling_issue", "size_class", "size_note", "layer_note", "note",
                  "advisory", "shape", "object", "capstone_column", "comparison",
-                 "taxonomy_class", "allocator_layer", "lifetime_ender",
+                 "class", "taxonomy_class", "allocator_layer", "lifetime_ender",
                  "allocator_consumed", "channel", "harness_limit",
                  "oracle_is_recording", "nested", "nested_why",
                  "citation_constraint", "fault_sites", "fault_sites_why", "fault_site_files", "duplicate_of",
+                 "withdrawn", "withdrawn_why",
                  "control_probe", "control_probe_why",
                  "memory_error_is_the_defect", "memory_error_is_the_defect_why",
-                 "platform_precondition", "platform_precondition_why"}
+                 "platform_precondition", "platform_precondition_why",
+                 "arena_bytes", "arena_bytes_why"}
+# `class` states the defect's AXIS outright. The case-json schema used to leave it to be read
+# out of `lifetime_ender`'s English (tools/catch-tables.py extra_kind), which cannot be corrected
+# by a review without rewriting the sentence that describes the defect. A case whose axis the
+# review changed says so here, and the key wins over the inference.
+#
+# `withdrawn` takes a case OUT OF THE DENOMINATOR while keeping its directory and its number, so
+# every record written against them stays resolvable and the bundles keyed to the numbering are not
+# broken. It is for a case the review found is not a measurement of what it names -- a trigger that
+# does not reach its defect, or a positive control counted as a case -- and it is NOT `duplicate_of`,
+# which asserts something much narrower: the same upstream defect as a sibling. A case carries one or
+# the other, never both, and `withdrawn` requires `withdrawn_why` because a row that leaves the
+# denominator unexplained is indistinguishable from one dropped by accident.
+#
 # `duplicate_of` names a sibling case directory that records the SAME upstream defect -- e.g. a
 # release-branch backport of the fix another case already carries (`git patch-id` equal). The case
 # stays in the corpus, so its numbering and every record that cites it stay valid, and
@@ -317,6 +332,22 @@ def check_cases(corpus, decl, dirs, problems):
                 problems.append(f"{where}: unknown field {key!r} -- add it to "
                                 f"SCHEMA.md and to this checker, or drop it")
 
+        # A POWER OF TWO, and the reason is not memsys5's. memsys5Init computes
+        # nBlock = nByte / (szAtom + 1) and then carves descending powers of two greedily, so it
+        # uses any size and wastes only the tail below one atom -- which is why this check used to
+        # require a multiple of 4096 and no more. The arm's BUILD is the binding constraint:
+        # ports/sqlite/repro322/repro322_common.h:75 and :181 carry
+        # CAPSTONE_REPR_ASSERT_POW2(SQLITE_HEAP_SIZE), because memsys5 derives its pool over the
+        # WHOLE arena and the compressed capability encoder cannot represent a base and length that
+        # are not granule-aligned -- it truncates downward and the pool gains authority below
+        # itself. So a value this checker accepts and the build rejects is a declaration no arm can
+        # ever measure, which is exactly what 786432 was.
+        arena = case.get("arena_bytes")
+        if arena is not None and not (isinstance(arena, int) and not isinstance(arena, bool)
+                                      and arena >= 65536 and arena & (arena - 1) == 0):
+            problems.append(f"{where}: arena_bytes must be an integer, at least 65536 and a power "
+                            f"of two (repro322_common.h CAPSTONE_REPR_ASSERT_POW2) -- got {arena!r}")
+
         number, fix = case.get("case"), case.get("upstream_fix")
         if isinstance(number, int) and fix:
             prefix = f"row{number}_" if decl["case_schema"] == "sqlite-row" \
@@ -438,6 +469,14 @@ def check_cases(corpus, decl, dirs, problems):
                 for key in sorted(arm_keys[name] - set(arm)):
                     problems.append(f"{where}: arm {name!r} lacks {key!r}")
 
+        withdrawn = case.get("withdrawn")
+        if withdrawn and not str(case.get("withdrawn_why", "")).strip():
+            problems.append(f"{where}: withdrawn without withdrawn_why")
+        if case.get("withdrawn_why") and not withdrawn:
+            problems.append(f"{where}: withdrawn_why without withdrawn")
+        if withdrawn and case.get("duplicate_of"):
+            problems.append(f"{where}: both withdrawn and duplicate_of -- a case leaves the "
+                            f"denominator for one reason, and the two are not the same claim")
         dup = case.get("duplicate_of")
         if dup is not None:
             sib = path.parent / str(dup)
@@ -603,14 +642,27 @@ def self_test():
          lambda c: c["arms"].update({"sysalloc-sublet": {"status": "not written"}})),
         # A duplicate leaves every table, so one naming nothing would silently drop a case.
         ("duplicate_of naming no sibling case", lambda c: c.update(duplicate_of="99_no_such_case")),
+        # A withdrawal leaves every table too, so an unexplained one would drop a case as silently
+        # as a duplicate naming nothing, and the two claims must not be made at once.
+        ("withdrawn with no reason", lambda c: c.update(withdrawn=True)),
+        ("a withdrawal reason with no withdrawal", lambda c: c.update(withdrawn_why="test")),
+        # This one takes the sibling, because naming a case that does not exist would be
+        # rejected by the duplicate_of rule above and would say nothing about the conjunction.
+        ("withdrawn and duplicate_of at once",
+         lambda c, sib: c.update(withdrawn=True, withdrawn_why="test", duplicate_of=sib)),
+        # 786432 is a multiple of 4096 and not a power of two: the value the old check accepted and
+        # the virtual memsys5 build rejects.
+        ("an arena no arm can build", lambda c: c.update(arena_bytes=786432, arena_bytes_why="test")),
     )
     for label, mutate in corruptions:
         with tempfile.TemporaryDirectory() as tmp:
             copy = Path(tmp) / "corpus"
             shutil.copytree(victim, copy, ignore=shutil.ignore_patterns("results", ".git"))
-            target = sorted(copy.glob("[0-9][0-9]_*"))[1]
+            dirs = sorted(copy.glob("[0-9][0-9]_*"))
+            target = dirs[1]
             case = json.loads((target / "case.json").read_text())
-            mutate(case)
+            # A corruption that needs a REAL sibling case takes its name as a second argument.
+            mutate(case, dirs[0].name) if mutate.__code__.co_argcount == 2 else mutate(case)
             (target / "case.json").write_text(json.dumps(case, indent=2))
             problems = []
             decl = json.loads((copy / "corpus.json").read_text())

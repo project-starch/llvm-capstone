@@ -12,15 +12,15 @@
   "fidelity": "real consumer, real allocator: upstream's own regression image, run statement by statement through the in-domain memfs",
   "arms": {
     "spatial": {
-      "oracle": "completes"
+      "oracle": "completes ARENA NOT COMPARABLE WITH THE VIRTUAL ARMS: this physical reading was taken at corpus322.sh:216's hard-coded -DSQLITE_HEAP_SIZE=262144, while the case declares arena_bytes 1048576 and the virtual arms were built at it. This arm is arena-granular -- the arena IS the bound -- so the arena decides the spatial result and this cell is not comparable with theirs. The arm is superseded (see README.md) and is not re-run."
     },
     "sublet": {
-      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4",
+      "oracle": "VM HALTED on a capability fault, cause 24 untagged dereference (temporal: revoked, or never a capability) pc=0x800239e4 -- taken outside the domain, so cooperative recovery has no frame to return through; all 28 halts in this arm are at the same kernel pc 0x800239e4 BUILT AT A DIFFERENT ARENA: corpus322.sh:216 hard-codes -DSQLITE_HEAP_SIZE=262144 while the case declares arena_bytes 1048576. Per-block bounds mean the arena is not this arm's bound, so the reading is not void for that reason, but it is a different build from the one the case declares and from the virtual arms', and at 262144 some fts cases exhaust memsys5 outright. The arm is superseded (see README.md) and is not re-run.",
       "verdict": "CAUGHT",
       "verdict_from": "results/matrix.tsv case 27 sublet: detected"
     },
     "cheribsd-revocation": {
-      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran",
+      "oracle": "completes, the mechanism reports nothing. 2026-10-06, CheriBSD 15.0-CURRENT riscv64-purecap, memsys5, one boot; the run's positive control gate was satisfied before any case ran ARENA NOT COMPARABLE WITH THE VIRTUAL ARMS: this reading was taken with the CheriBSD builder's then hard-coded -DSQLITE_HEAP_SIZE=262144, while the case declares arena_bytes 1048576 and the virtual arms were built at it. On an arena-granular arm the arena IS the bound, so this cell is not comparable with those until CheriBSD is re-run at the declared arena. The builder now honours arena_bytes; the recorded cell predates that and has not been re-measured.",
       "verdict": "MISSED",
       "verdict_from": "results/matrix.tsv case 27 cheribsd-revocation: not-detected"
     },
@@ -51,5 +51,7 @@
   "fault_sites": [
     "sqlite3Fts3GetVarint"
   ],
-  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in sqlite3Fts3GetVarint (live_proof); that run is independent of the Capstone arms and predates them."
+  "fault_sites_why": "Host ASan, running the same case source on stock 3.22.0, reports the invalid access in sqlite3Fts3GetVarint (live_proof); that run is independent of the Capstone arms and predates them.",
+  "arena_bytes": 1048576,
+  "arena_bytes_why": "the three builders disagreed about this until 2026-10-19 -- the virtual arms used a 1 MiB header default against CheriBSD's 262144 -- and on an arena-granular arm the arena IS the bound, so the spatial row was comparing arenas rather than mechanisms"
 }

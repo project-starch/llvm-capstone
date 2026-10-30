@@ -12,9 +12,12 @@ THE THREE VERDICTS, and what each one needs:
   CAUGHT      the case reached its defective access, the arm faulted, and the fault is tied to
               the defect -- by the labelled probe, by the function the case declares, or by a
               paired control that ran the same statement without the defect and completed.
-  MISSED      the case reached its defective access, ran to completion without a fault, and
-              every control this run declared for the arm behaved as the arm says it must. A
-              silence on an arm whose controls did not run says nothing about the arm.
+  MISSED      the case reached its defective access, every control this run declared for the arm
+              behaved as the arm says it must, and the arm did not reject the access: either the
+              run completed with no fault, or -- where the configuration declares catch_causes --
+              it faulted with a cause outside that set, which is a consequence of the access and
+              not a rejection of it. A silence on an arm whose controls did not run says nothing
+              about the arm.
   NO-READING  anything else, always with one reason from REASONS. Never counted as either.
 
 The judge is a pure function of the Observation and the arm's declaration (tools/arms.json), so
@@ -137,6 +140,33 @@ def judge(obs, arm_spec):
             return NO_READING, "unattributed", (
                 f"cause={obs.fault.cause} pc={obs.fault.pc:#x} in {obs.fault.symbol or '?'}"
                 f"; {obs.attribution_evidence or 'no probe, declared function or control'}")
+        # OPTIONAL, per configuration: which fault causes this arm's MECHANISM can report.
+        # Without it a fault anywhere in a declared function counts, and that cannot tell a
+        # rejected access from a crash two frames later inside the same function, on a value
+        # the program read out of the dead object. On SQLite's memsys5 arms every one of the
+        # base arm's apparent catches was cause 24, an untagged dereference -- the
+        # architecture's baseline tag check firing on the CONSEQUENCE of an access it had
+        # already allowed. Every Sublet catch on those arms is cause 25 (lifetime) or 28
+        # (bounds), the mechanism itself, with ONE exception: engine-repros case 02 faults
+        # cause=24 in sqlite3BtreeUpdateMeta on every Capstone arm it ran on, base and Sublet
+        # alike, so there the protected arm is reporting the same consequence as the
+        # unprotected one. An earlier revision of this comment said "every Sublet catch",
+        # without the exception. The exception is not a property of Sublet: that case's trigger
+        # was found not to end the lifetime it names, so all four of its cells are readings of a
+        # program that never reached the defect, and the re-measurement is pending (see the
+        # corpus README). A configuration that does not declare the key behaves as before.
+        allowed = arm_spec.get("catch_causes")
+        if allowed is not None and obs.fault.cause not in allowed:
+            required = set(arm_spec.get("controls_for_missed", []))
+            if not required <= {c.name for c in obs.controls}:
+                return NO_READING, "control-failed", (
+                    "the arm's controls did not run: missing "
+                    + ", ".join(sorted(required - {c.name for c in obs.controls})))
+            return MISSED, None, (
+                f"reached, and faulted with cause={obs.fault.cause} in "
+                f"{obs.fault.symbol or '?'} -- not one of this arm's mechanism causes "
+                f"{allowed}, so the defective access was allowed and this is a later "
+                f"consequence of it, not a catch")
         return CAUGHT, None, (f"cause={obs.fault.cause} pc={obs.fault.pc:#x} in "
                               f"{obs.fault.symbol or '?'}; by {obs.attribution}: "
                               f"{obs.attribution_evidence}")

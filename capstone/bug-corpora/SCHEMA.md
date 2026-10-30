@@ -86,10 +86,12 @@ arms, `live_in_pin` with a `live_proof` -- is as for `case-json`.
 ## Optional fields
 
 `distinguishing` (why this case is not a duplicate of its siblings),
-`sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`,
+`sibling_issue`, `size_class`, `size_note`, `layer_note`, `note`, `class`,
+`withdrawn`, `withdrawn_why`,
 `allocator_consumed`, `channel`, `nested`, `nested_why`, `citation_constraint`, `fault_sites`,
 `fault_sites_why`, `fault_site_files`, `duplicate_of`, `control_probe`, `control_probe_why`, `memory_error_is_the_defect`,
-`memory_error_is_the_defect_why`, `platform_precondition`, `platform_precondition_why`. Optional means
+`memory_error_is_the_defect_why`, `platform_precondition`, `platform_precondition_why`, `arena_bytes`,
+`arena_bytes_why`. Optional means
 optional:
 the checker does not invent them, and absence is not a defect.
 
@@ -106,10 +108,48 @@ points — the unanswered probe was reading as "not nested". A tally that a
 headline depends on should come from a field, not from a substring match over
 sentences that are free to be reworded.
 
-`duplicate_of` names a sibling case directory recording the SAME upstream defect -- a backport of a fix another case
-already carries, equal by `git patch-id`. The case is kept, so numbering and citations stay valid; the checker
-requires the sibling to exist and not to be a duplicate itself, and `tools/catch-tables.py` leaves the case out of
-every table. First use: ffmpeg/plain-heap-repros 13 (2026-10-10 audit).
+`class` states the defect's **axis** outright: `temporal` or `spatial`. The `sqlite-row` and
+`script-trigger` schemas require it; on a `case-json` case it is optional, because the axis was
+originally read out of `lifetime_ender`'s English -- `tools/catch-tables.py` `extra_kind()` treats a
+sentence beginning "not a lifetime defect", "n/a" or "none" as spatial. That inference cannot be
+corrected by a review without rewriting the sentence that describes the defect, which is the wrong
+thing to rewrite. Where the key is present it **wins over the inference**, and a case whose axis a
+review changed carries it. Same lesson as `nested` above: a tally a headline depends on comes from a
+field, not from a substring match over prose.
+
+`withdrawn` is a **boolean** and `withdrawn_why` its one-sentence reason. It takes the case **out of
+the denominator** while keeping its directory and its number, so every record written against them
+stays resolvable and bundles keyed to the numbering are not broken; `tools/catch-tables.py` leaves it
+out of every table and lists it. It is for a case the review found is **not a measurement of what it
+names** -- a trigger that does not reach the defect it cites, or the corpus's own positive control
+counted as a case. It is deliberately **not** `duplicate_of`, whose claim is much narrower and often
+false of a withdrawal: that the case records the same upstream defect as a sibling. The checker
+requires the reason, rejects a reason without the boolean, and rejects both keys on one case --
+a row that leaves the denominator unexplained cannot be told from one dropped by accident, and a
+withdrawal dressed as a duplication asserts something about a sibling that was never established.
+
+`duplicate_of` names a sibling case directory recording the SAME defect. Equality of `git patch-id` is
+sufficient and not necessary; what is required is that both rows reach the same defective access, and the
+case's `note` must name the shape and carry the evidence. Three shapes qualify:
+
+* a backport of a fix the sibling already carries, equal by `git patch-id` -- the original use;
+* one defect whose upstream fix arrived as MORE THAN ONE commit, so the patch-ids differ and the argument
+  is that the commits are one guard chain and not two defects;
+* one defect where a row has no upstream commit to compare at all -- its `upstream_fix` is a placeholder --
+  and the sibling carries the real fix.
+
+The case is kept, so numbering and citations stay valid; the checker requires the sibling to exist and not
+to be a duplicate itself, and `tools/catch-tables.py` leaves the case out of every table. First use:
+ffmpeg/plain-heap-repros 13 (2026-10-10 audit). sqlite/engine-repros 25 -> 00 is the second shape, with the
+guard chain `iOff <= szLeaf <= nn` added by 415540ddaa and then adfb203a7d.
+
+The third shape has no instance here any more. sqlite/engine-repros 09 declared it against case 10,
+and the declaration contradicted the rest of 09's own record: its `fidelity`, its `case.c` header and
+its `PROVENANCE.md` all read "Distinct from becd68ba0d", and its `live_proof` names a different
+upstream fix (a87bd2471a9c, trunk-only) for a different defect -- 09 dangles the snippet scorer's
+saved `pHead`/`pTail` across a restart, 10 keeps evaluating a node whose doclist is already freed.
+They share the `fts3EvalRestart` site and nothing else. 09's measured finding is that its trigger
+never reaches its defect, so it is `withdrawn`, which is what that finding supports.
 
 `citation_constraint` records that a case's upstream commit cannot be quoted freely — in practice
 that its **subject line names a person**, so the fix may be cited **by hash and path only**. The
@@ -163,6 +203,43 @@ defect when the full trigger also exercises other defects, so a runner can pair
 that probe with the safe control. `control_probe_why` is required and explains
 why the full trigger cannot provide that pairing. A control probe does not by
 itself declare a fault site or change a recorded verdict.
+
+`arena_bytes` is the size of the nested allocator's arena this case must be built with, in
+bytes. It is **a property of the case, not of the arm**, and every arm must use the same value
+or the arms are not comparable: on an arena-granular arm the arena IS the bound an over-read
+has to leave to be seen. One SQLite spatial case is CAUGHT on two arms at 262144 and MISSED on
+both at 1048576, from one source. For a temporal case the size cannot change a verdict -- a
+use-after-free inside the arena is invisible at that granularity whatever the size -- so it
+matters there only for whether the trigger has the memory to reach the defect, which is why
+most cases leave it out. Added 2026-10-19, after SQLite's three builders were found to be
+passing three different values with nothing recording any of them. `arena_bytes_why` carries
+the one-sentence reason; a size set without one is a value nobody can later check.
+
+Two things about the value, both checked against 3.22.0's own `memsys5Init` rather than assumed.
+**It must be a power of two, and the reason is the build and not memsys5.** memsys5 itself does not
+care: it computes `nBlock = nByte / (szAtom + 1)` -- one control byte per atom -- and then carves
+descending powers of two greedily
+(`for(ii=LOGMAX; ii>=0; ii--){ nAlloc = 1<<ii; if( iOffset+nAlloc <= nBlock ) ... }`), so any size
+is used, just split into several buddy groups, and only the tail below one atom is wasted. That is
+what this said until 2026-10-28, when the checker required a multiple of 4096 and no more, and it
+accepted `786432`. The arm's build rejects that value:
+`ports/sqlite/repro322/repro322_common.h:75` and `:181` carry
+`CAPSTONE_REPR_ASSERT_POW2(SQLITE_HEAP_SIZE)`, because memsys5 derives `mem5.pHeap` and `mem5.zPool`
+over the WHOLE arena and the compressed capability encoder cannot hold a base and length that are
+not granule-aligned -- it truncates downward and the pool gains authority below itself. A value the
+checker accepts and no arm can build is a declaration that can never be measured, so the checker
+now requires an integer, at least 65536, and a power of two.
+**And the declared value is the `SQLITE_HEAP_SIZE`, not the usable arena**, which is smaller by the
+control bytes; a reader comparing a bound against `arena_bytes` should expect that gap.
+
+**A case that does not declare it is NOT comparable across arms today.** The two builders default
+differently -- `ports/sqlite/repro322/build-virtual.py` `HEAP_BYTES_DEFAULT = 1048576`, and
+`ports/sqlite/cheribsd/build-corpus-cheri.sh` `local arena=262144` -- so an undeclared case is
+built at 1 MiB on the virtual arms and at 256 KiB on CheriBSD. For a temporal case that cannot
+change the verdict, which is why most leave it out; for a spatial one it can, and this corpus
+records exactly that (one case CAUGHT on two arms at 262144 and MISSED on both at 1048576).
+Closing it needs either a declaration on every case whose axis is spatial, or one default in
+`ports/`, and the second is the ports lane's to make.
 
 ## Arms
 
@@ -296,13 +373,34 @@ its results under one contract, implemented in `tools/verdicts.py` and tested in
   and what ties the fault to the defect (`probe`, a declared `fault_sites` function, or a paired
   `control` run). The verdict comes from the shared judge.
 * **Three verdicts.** `CAUGHT` needs reached, a fault, and an attribution. `MISSED` needs reached,
-  completed, and the configuration's controls behaving in the same invocation. Anything else is
+  the configuration's controls behaving in the same invocation, and the arm not having rejected the
+  defective access -- either the run completed with no fault, or, where the configuration declares
+  `catch_causes`, it faulted with a cause outside that set, which is a consequence of the access and
+  not a rejection of it (see that bullet below). Anything else is
   `NO-READING` with one closed reason (`infra`, `build-failed`, `not-reached`, `setup-fault`,
   `control-failed`, `unattributed`, `out-of-denominator`, `inconclusive`) and counts as neither.
 * **An arm name is a label; the configuration is the thing measured.** `tools/arms.json` describes
   each configuration and the controls a run of it must show -- a use-after-free control that
   COMPLETES is what shows an arm does not revoke. `arm_configurations` maps the corpus's arm names
   onto it, so two corpora whose `spatial` differ cannot be summed as one.
+* **`catch_causes`, optional per configuration, says which fault causes that arm's MECHANISM can
+  report.** Without it a fault anywhere in a declared `fault_sites` function counts, and that
+  cannot tell a rejected access from a crash two frames later inside the same function, on a value
+  the program was allowed to read out of a dead or overrun object. With it, a fault outside the set
+  scores `MISSED` -- and `NO-READING:control-failed` if the configuration's `controls_for_missed`
+  did not run, because a MISSED needs the controls behaving. The Capstone causes that are a
+  mechanism are `25` `INVALID_CAP` (a lifetime ended) and `28` `CAP_OOB` (a bounds check); `24`
+  `UNEXP_OP_TYPE` is an untagged value used where a capability was required, which is a
+  consequence on either axis. Declaring it RE-JUDGES every stored Observation, so it must land
+  together with a re-fold of each affected corpus's bundle. What "re-fold" means concretely, and
+  why a declaration cannot land on its own: `tools/derive-verdicts.py` compares each bundle's
+  RECORDED verdict against the current judge, reports a problem for every cell where they differ,
+  and writes the recorded verdict into `case.json` regardless -- so declaring the key alone makes
+  the gate fail and changes no cell. Measured on sqlite/engine-repros, 2026-10-28: declaring
+  `[25, 28]` on the three sqlite configurations fails 13 cells across the four bundles. The
+  bundle's verdict field has to be re-derived from its Observations first, and no tool does that
+  today. Implemented in `tools/verdicts.py`, tested in `tools/test_verdicts.py`; as of 2026-10-28 no
+  configuration in `tools/arms.json` declares it.
 * **The bundle is the only original.** `results/<stamp>/<arm>/` holds `verdicts.jsonl` (each
   Observation with its verdict) and `inputs.json` (configuration, and the compiler, QEMU, firmware,
   kernel and runner hashes, each said or said to be `unrecorded`). **`platform.compiler` is the sha256 of
