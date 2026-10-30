@@ -1,0 +1,104 @@
+# Bitstream 4 (option B, capstone-ariane 325966ee4, caplifive_vp2c_325966ee4.bit) on board 2: flash and the two
+# check boots pre-registered in PREREG Addendum 14 (c9ee688c8629). Result lines only; transcripts stay on the host.
+# Bitstream sha256 f0893218dcdb53f4ad0b9fe452571f9e5c3bc5fa7ffade0025657c662c4da8cc (checked locally before the flash;
+# the console exposes no sha256, so the readback is by name). Kit bkit13-b4-b2, module capstone_vm.ko 6422805f49533ea5.
+
+## flash (b4-first.log)
+  FB FLASH BEGIN 16:39:46 board 2 booking 550
+  [flash 16:39:46] local sha256 matches the synth lane's sealed hash
+  FB FLASH END rc=0 16:42:08
+  NVRB name 'caplifive_vp2c_325966ee4.bit' sha256 NOT EXPOSED
+  FB READBACK name matches; the console exposes no sha256
+
+## boot 1: b4-t1a (live 1000 / 400000 / 1100000), spec.txt sha256 752bf2af830bc647
+    OK  param ids: 55
+    OK  param index_bits: 25
+    OK  param node_flat_records: 1048576
+    --- CMA region [0xac000000, 0xbc000000) from the kernel's reserved-mem line
+    OK  allocation line present, one distinct: [('1048576', '16777216', 'CMA', 'ac100000', 'linear')]
+    OK  allocation records/bytes: ('1048576', '16777216')
+    OK  allocation from CMA: CMA
+    OK  allocation pa inside the CMA region: 0xac100000
+    OK  allocation mapping word (NON-LINEAR on the board is a STOP): linear
+    OK  no ALLOCATION FAILED line: 0
+    OK  Tier 1 contract (ok exit 0 + VIRTUAL_APPLICATION_OK; stale exit 139 + cause 25): 0
+    OK  live 1000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 1111
+    OK  live 400000 LIVE-OK bad=0 rc 0, no fault line: rc 0 faults 0 nodes 414217
+    OK  live 400000 nodes in [400000, 430000], capacity 1048576: (414217, 1048576)
+    OK  live 1100000 LIVE-NULL index in [990000, 1047000]: 1011158
+    OK  live 1100000 rc 3: 3
+    OK  live 1100000 nodes in [1040000, 1048576]: 1046942
+    OK  live 1100000 no domain fault: 0
+  B4-T1A AS PREDICTED
+
+## boot 2: b4-t1b (Tier 1, run.py@69fb6cae3db4 SCRIPT, vs twin F0 f55/t1-F0), spec.txt sha256 d5c58498bb868f7a
+    OK  bounds                       board True twin True
+    OK  cleanup                      board False twin True   (cleanup: false by construction)
+    OK  completed                    board True twin True
+    OK  fault_causes                 board False twin False
+    OK  heap-threads                 board False twin False
+    OK  heap_threads                 board False twin False
+    OFF linux_demand_faults          board False twin True
+    OFF linux_pages_released         board False twin True
+    OK  mruby                        board True twin True
+    OK  mruby_results                board True twin True
+    OK  nested                       board True twin True
+    OK  nested-stale                 board True twin True
+    OFF nested_denial_site           board False twin True
+    OK  nested_output                board True twin True
+    OK  normal                       board True twin True
+    OK  normal_output                board True twin True
+    OK  parallel_one                 board True twin True
+    OK  parallel_two                 board True twin True
+    OK  preempt                      board True twin True
+    OK  retired                      board True twin True
+    OK  same_va_reuse                board True twin True
+    OK  shared_heap_pages_released   board False twin False
+    OK  sparse-churn                 board True twin True
+    OK  sparse-stale                 board True twin True
+    OK  sparse_recycling             board False twin False
+    OFF spin_entered                 board False twin True
+    OK  sqlite_read                  board True twin True
+    OK  sqlite_results               board True twin True
+    OK  sqlite_write                 board True twin True
+    OK  stale                        board True twin True
+    OK  threads                      board False twin False
+    OK  threads_output               board False twin False
+    OK  unused_pages_not_populated   board True twin True
+    OK  vm                           board False twin False
+    OK  vm-guard                     board True twin True
+    OK  vm-large                     board False twin False
+    OK  vm-mappings                  board True twin True
+    OK  vm-none-read                 board True twin True
+    OK  vm-padding                   board True twin True
+    OK  vm-ro-write                  board True twin True
+    OK  vm_contract                  board False twin False
+    OK  vm_denial_operations         board True twin True
+    OFF vm_denial_sites              board False twin True
+    OK  vm_large_contract            board False twin False
+    OK  vm_mappings_contract         board True twin True
+  B4-T1B 28 of 45 true; twin F0 34 of 45; OFF THE PREDICTION in 5 cells: ['linux_demand_faults', 'linux_pages_released', 'nested_denial_site', 'spin_entered', 'vm_denial_sites']
+
+## boot 2: the lines the readings below rest on (spec.txt)
+  193:capstone-exec: domain fault cause=15 pc=0x3fb8411a48 address=0x3fb8502000 entry=0x3fb8400948 code=0x3fb8400000-0x3fb8500000 last=0xc0de0001 preparing=0xc0de0001 sha256=00428f273c653d9f2992d594c7a0edf431aa16fde23400186ebf0092cf
+  311:capstone-exec: domain fault cause=15 pc=0x3f8a1133c0 address=0x3f8a0f8000 entry=0x3f8a100948 code=0x3f8a100000-0x3f8a200000 last=0x42 preparing=0x42 sha256=00428f273c653d9f2992d594c7a0edf431aa16fde23400186ebf0092cf9a4dc2 image
+    (line 311 is vm-ro-write\'s pre-registered cause 15, in the twin too; line 193 is the vm step)
+  14111:KMSG:[  148.280563] capstone_vm: fault at 0x3fb8502000 cause 15 resolved 65 times with no change; the page is pinned and the PTE is untouched by this module; pte rc=-38 val=0x0 present=-1 write=-1 young=-1 dirty=-1 pfn=0x0
+  192:CAPSTONE_VM_ADD_OK slot=9 base=0x3fb8500000 bytes=16384 reg=10 perms=7 linear=1
+  13928-Terminated
+  13929-VM_EXIT:preempt:143
+
+## readings (not predictions; written after the boot)
+- 4 of the 5 OFF cells come from the vm step. It exits 139 with cause 15 at its arena 0x3fb8500000 + 0x2000
+  (p[8192]), and the module's own S-24 bound line ("resolved 65 times with no change") is in the step text.
+  That is S-24 (ISSUES.md), which the twin cannot show. Its fix (resolve_dirty) defaults off, and the kit loaded
+  the module with no parameters. The extra fault shifts fault_sites by one (nested_denial_site, vm_denial_sites);
+  the missing vm stats line leaves 10 CAPSTONE_VM_STATS lines where 11 are expected (linux_pages_released,
+  linux_demand_faults). The pre-registration's error: a twin reference for a step with a known silicon-only issue.
+- spin_entered: OPEN. run.sh kills the spin child after a QEMU-sized 'sleep 5', and /tmp/spin.out is empty. Candidate:
+  launches on this board take 3.7-8.4 s (launch_ns), against 8-22 ms on the twin. Against it: vp2 boots b4c and b5
+  read spin_entered true with the same sleep. Settled by a rerun with a longer wait.
+- The other 40 cells equal the twin F0's, including sparse_recycling and sparse-churn (600,041 nodes through the
+  2^20-record table). Nothing points at the 55-bit id or slot path.
+- Next B Tier 1 boot: module loaded with resolve_dirty=1 (module owner's decision; read back from sysfs), against
+  the twin reference F0r (module-ids55 PREREG addendum 3, 3160e7d8e147).
