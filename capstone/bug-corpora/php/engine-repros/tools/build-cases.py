@@ -146,6 +146,7 @@ ARMS = {
     "virtual-malloc": "the case on the virtual profile with the nested layer present but returning every freed block's loan, so only musl mallocng revokes, per BLOCK, when PHP's cache hands a block back to free(): a fault at the ASan site, or the trigger ends and this arm did not see it (tools/arms.json php-real-block)",
     "virtual-nested-pools": "the same image with the nested allocator layer retiring the payload at EVERY _efree, cache-absorbed or not, and re-deriving it under a fresh node when the cache hands the block to its next tenant: a fault at the ASan site, or the trigger ends and this arm did not see it (php-real-object)",
     "virtual-nested-exact": "virtual-nested-pools with each payload bounded to the caller's request instead of REAL_SIZE(n): the arm that can see a defect inside PHP's own rounding slack (php-real-exact)",
+    "cheribsd-revocation": "the same trigger on stock CheriBSD purecap -- no nested layer at all, the real interpreter cross-built by ports/php/cheribsd/build.sh -- in the boot at the platform default (security.cheri.runtime_revocation_default=1, every_free=0): a SIGPROT at the ASan site with the bounds-malloc control faulting in the same boot, the same binary run with revocation off as the pair that attributes the fault, or the trigger ends and this arm did not see it (tools/arms.json cheribsd-default)",
 }
 
 
@@ -177,6 +178,15 @@ TEMPORAL_REPORTS = ("ASAN:heap-use-after-free", "ASAN:attempting free", "ASAN:at
 # would also admit CRASH-005 (a global-buffer-overflow) and CRASH-087 (an uninitialised read),
 # which nobody asked to merge and which are not about an allocator's lifetimes.
 APPENDED = ("CRASH-012", "CRASH-062", "CRASH-070", "CRASH-148", "CRASH-161")
+
+# Temporal defects that belong in this corpus by every rule above and CANNOT enter it yet,
+# named so that `build-cases.py` reports them on every run instead of dropping them in silence.
+# All four need the fullext build (ext/mbstring, ext/pcre), and the candidate set below is the
+# ext/standard-only build's id list by design, so no oracle this script reads can contain them.
+# They are measured: bug-corpora/php/plain-temporal-repros cases 18 to 21 carry a host-ASan
+# reading in both allocator configurations and a cheribsd-revocation reading. What is missing is
+# a fullext oracle run on the oracle host, and a fullext ports/php/app for the virtual arms.
+FULLEXT_NOT_ADMITTED = ("CRASH-125", "CRASH-129", "CRASH-131", "CRASH-132")
 
 
 def populations(asan, stock, meta):
@@ -476,6 +486,14 @@ def main():
              + list(APPENDED))
     counts = {p: sum(1 for c in pops.values() if c == p) for p in POPULATIONS}
     print(f"populations from our oracle: {counts} over {len(default_ids)} default-build cases")
+    # NOT a zero: a declared case absent from the inputs is reported with the reason, because a
+    # silent omission of four measured defects reads exactly like a corpus that never had them.
+    held = [(c, c in default_ids, c in pris) for c in FULLEXT_NOT_ADMITTED]
+    print(f"held out, fullext oracle missing ({len(held)}): "
+          + ", ".join(f"{c} (in the default-build set: {d}, in the pristine oracle: {p})"
+                      for c, d, p in held)
+          + " -- measured in bug-corpora/php/plain-temporal-repros cases 18-21; see this corpus's"
+            " README, 'Not here'")
     tp = theirs["pops"]
     moved = sorted((c, tp.get(c, "neither"), pops[c]) for c in pops if tp.get(c, "neither") != pops[c])
     gone = sorted(c for c in tp if c not in pops)

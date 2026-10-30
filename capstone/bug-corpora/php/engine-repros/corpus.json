@@ -12,7 +12,8 @@
   "required_arms": [
     "virtual-malloc",
     "virtual-nested-pools",
-    "virtual-nested-exact"
+    "virtual-nested-exact",
+    "cheribsd-revocation"
   ],
   "status": "measured",
   "live_in_pin_recorded": true,
@@ -29,17 +30,20 @@
   "runners": [
     "capstone/ports/php/app/run-realphp.py",
     "capstone/bug-corpora/php/engine-repros/tools/build-cases.py",
-    "capstone/bug-corpora/php/engine-repros/tools/merge-population-bundles.py"
+    "capstone/bug-corpora/php/engine-repros/tools/merge-population-bundles.py",
+    "capstone/bug-corpora/php/tools/run-php-corpus.py"
   ],
   "arm_configurations": {
     "virtual-malloc": "php-real-block",
     "virtual-nested-pools": "php-real-object",
-    "virtual-nested-exact": "php-real-exact"
+    "virtual-nested-exact": "php-real-exact",
+    "cheribsd-revocation": "cheribsd-default"
   },
   "note": "Derived, not retyped: tools/build-cases.py writes every case from the collaborator's php-5.0.0-bug-corpus (185 cases; zip sha256 31d22a3b468e96e0ff9f991d8667e78a..., not in this repository) and from OUR three native runs of its 127 default-build cases (ASan with PHP's allocator patched, ASan with it as shipped, the plain build), on which each case's population and oracle.json rest. 48 asan-blind and 22 temporal-asan-visible here, 70 cases. The first build gave 65, 46 and 19, against the collaborator's 31 and 29 on its gcc-13 ASan: 16 cases were placed differently, one (CRASH-100, needs an HTTP listener) is absent, two of theirs (CRASH-062, CRASH-070) end as shipped in PHP's own fatal error with no report, and one (CRASH-064) is a use-after-free NEITHER ASan build reports as one -- it dereferences an integer read from a reused object-store bucket, ASan:SEGV on both -- so those three were in neither population; each said in its PROVENANCE.md. The merge with the sibling corpus (2026-10-28) widened the temporal rule and admitted five as cases 66 to 70: CRASH-062 and -070 as asan-blind, CRASH-012, -148 (CWE-590) and -161 (CWE-415) as temporal-asan-visible. CRASH-064 is still in neither. The fourth configuration run-realphp.py drives, php-real-stock, is the judge's control (nothing revoked), not a case arm. The default-build cases outside both populations (spatial defects ASan sees unaided, NULL dereferences, type confusions) are not here yet.",
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-28-run18/bundle-virtual-malloc",
     "virtual-nested-pools": "results/2026-10-28-run18/bundle-virtual-nested-pools",
-    "virtual-nested-exact": "results/2026-10-28-run18/bundle-virtual-nested-exact"
+    "virtual-nested-exact": "results/2026-10-28-run18/bundle-virtual-nested-exact",
+    "cheribsd-revocation": "results/2026-10-30-cheribsd/bundle-cheribsd-revocation"
   }
 }

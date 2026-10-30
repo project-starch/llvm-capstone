@@ -14,9 +14,40 @@ from pathlib import Path
 TEMPORAL = ("CWE-416", "CWE-415", "CWE-590")
 HERE = Path(__file__).resolve().parent
 CORPUS = HERE.parent
-ARMS = ("php-real-stock", "virtual-malloc", "virtual-nested-pools", "virtual-nested-exact")
 LABEL = {"php-real-stock": "stock", "virtual-malloc": "system allocator",
-         "virtual-nested-pools": "nested", "virtual-nested-exact": "nested exact"}
+         "virtual-nested-pools": "nested", "virtual-nested-exact": "nested exact",
+         "cheribsd-revocation": "CheriBSD revocation"}
+# ORDER, for the tables; a record is tabulated over the arms IT HOLDS, not over this list.
+ARM_ORDER = ("php-real-stock", "virtual-malloc", "virtual-nested-pools", "virtual-nested-exact",
+             "cheribsd-revocation")
+
+
+def arms_of(scoring_dir):
+    """The arms this record measured, and the refusals a half-written record earns.
+
+    A HARDCODED ARM LIST IS THE SUBSET FAILURE. This list was the four virtual arms, so the
+    CheriBSD record added on 2026-10-30 could not be tabulated at all, and adding a fifth name to
+    the tuple would instead have made every earlier record fail for lacking it. Neither is a
+    reading. So the arm set is the record's own, and the three ways that could go quiet are each
+    refused rather than tabulated: a bundle directory with no verdicts.jsonl is HALF WRITTEN, not
+    absent; an arm this corpus does not declare is a typo, not a new arm; and a record with no
+    bundle at all is not an empty table. What a record does NOT hold is named in the output, so a
+    short table reads as short instead of looking complete.
+    """
+    found, problems = [], []
+    for b in sorted(scoring_dir.glob("bundle-*")):
+        if not b.is_dir():
+            continue
+        arm = b.name[len("bundle-"):]
+        if arm not in LABEL:
+            problems.append(f"{b}: {arm!r} is not an arm this corpus declares (known: {sorted(LABEL)})")
+        elif not (b / "verdicts.jsonl").is_file():
+            problems.append(f"{b}: a bundle directory with no verdicts.jsonl -- half written, not absent")
+        else:
+            found.append(arm)
+    if not found and not problems:
+        problems.append(f"{scoring_dir}: no bundle-<arm>/ at all; a record with no bundles is not an empty table")
+    return [a for a in ARM_ORDER if a in found], problems
 
 
 def cases():
@@ -34,12 +65,15 @@ def rows(bundle):
 
 def tables(scoring_dir, known, title):
     missing, lines = [], [f"### {title}", ""]
+    arms, missing = arms_of(scoring_dir)
+    if missing:
+        return lines, missing
+    absent = [LABEL[a] for a in ARM_ORDER if a not in arms]
+    lines += [f"Arms in this record: {', '.join(LABEL[a] for a in arms)}."
+              + (f" Not measured here: {', '.join(absent)}." if absent else ""), ""]
     tallies = {}
-    for arm in ARMS:
+    for arm in arms:
         b = scoring_dir / f"bundle-{arm}"
-        if not (b / "verdicts.jsonl").is_file():
-            missing.append(f"{b}: no bundle")
-            continue
         seen = {}
         for r in rows(b):
             c = r["observation"]["case"]
@@ -57,7 +91,7 @@ def tables(scoring_dir, known, title):
     # five, 2026-10-28) is complete over the cases it measured, and says how many; a hole
     # between arms is still refused.
     measured = set().union(*(set(s) for s in tallies.values()))
-    for arm in ARMS:
+    for arm in arms:
         for c in sorted(measured - set(tallies[arm])):
             missing.append(f"{arm}: no row for {c}")
     if missing:
@@ -67,10 +101,21 @@ def tables(scoring_dir, known, title):
     # column reading 0 there would be false; it reads "not classified" instead. The judge marks
     # its scoring since the class exists; a record without the mark and without a chain row is
     # unclassified (fifth review, 2026-10-28).
-    classified = any("chain" in str(json.loads((scoring_dir / f"bundle-{arm}" / "inputs.json").read_text())
-                                    .get("scoring", {}).get("attribution", ""))
+    # inputs.scoring is an OBJECT. A bundle whose `scoring` is prose is refused by name rather than
+    # raising AttributeError here: on 2026-10-30 the CheriBSD runner wrote a sentence, and a reader
+    # of someone else's corpus gets a traceback instead of a sentence saying which file is wrong.
+    def attribution_of(arm):
+        s = json.loads((scoring_dir / f"bundle-{arm}" / "inputs.json").read_text()).get("scoring", {})
+        if not isinstance(s, dict):
+            missing.append(f"bundle-{arm}/inputs.json: scoring is {type(s).__name__}, not an object "
+                           f"with an `attribution` key; this tool cannot read it")
+            return ""
+        return str(s.get("attribution", ""))
+    classified = any("chain" in attribution_of(arm)
                      or any(r["observation"].get("attribution") == "chain" for r in tallies[arm].values())
-                     for arm in ARMS)
+                     for arm in arms)
+    if missing:
+        return lines, missing
     def tally(arm, pick):
         t = collections.Counter()
         for c, r in tallies[arm].items():
@@ -87,17 +132,26 @@ def tables(scoring_dir, known, title):
                        ("the CWE-416 cases", lambda c: known[c][0] == "CWE-416")):
         n = sum(1 for c in present if pick(c))
         lines += [f"**{name}** ({n}):", "", "| arm | CAUGHT | of which by chain | MISSED | NO-READING |", "|---|--:|--:|--:|---|"]
-        for arm in ARMS:
+        for arm in arms:
             t = tally(arm, pick)
             nr = ", ".join(f"{k.split('/', 1)[1]} {v}" for k, v in sorted(t.items()) if k.startswith("NO-READING/"))
             chain = t["CAUGHT/chain"] if classified else "not classified"
             lines.append(f"| {LABEL[arm]} | {t['CAUGHT']} | {chain} | {t['MISSED']} | {nr or '0'} |")
         lines.append("")
     if not classified:
-        lines += ["(\"not classified\": this record was judged before the `chain` attribution class existed, "
-                  "2026-10-28; its chain catches are carried as `function` and are not re-labelled)", ""]
+        # DO NOT ASSERT A REASON THE BUNDLE DOES NOT CARRY. This used to say the record was judged
+        # before the `chain` class existed, which is false for a record whose arm does not
+        # attribute by call path at all -- the CheriBSD arm attributes by a paired boot, and the
+        # sentence appeared in its generated README as a statement about a date (2026-10-30). The
+        # two causes are not distinguishable from a bundle: run7 predates the class and its
+        # attribution string is non-empty too. So the fact is stated and the reason is left open.
+        lines += ["(\"not classified\": no catch in this record carries the `chain` attribution "
+                  "class. Either the record was judged before the class existed (2026-10-28), in "
+                  "which case its chain catches are carried as `function` and are not re-labelled, "
+                  "or its arms do not attribute by call path at all. The bundles do not say which, "
+                  "so neither is claimed here)", ""]
     lines += ["**CWE-416 catches by native population** (temporal-asan-visible / asan-blind):", ""]
-    for arm in ARMS:
+    for arm in arms:
         parts = []
         for pop in ("temporal-asan-visible", "asan-blind"):
             sel = [c for c in present if known[c][0] == "CWE-416" and known[c][1] == pop]

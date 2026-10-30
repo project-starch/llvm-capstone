@@ -1,0 +1,36 @@
+{
+ "case": 22,
+ "upstream_fix": "b90d985a23a5",
+ "title": "stream-select-convert-to-long-ex-force-separates-byvalue-sec-arg-double-free (CWE-416 use-after-free) in ext/standard/streamsfuncs.c",
+ "consumer": "ext/standard/streamsfuncs.c",
+ "class": "temporal",
+ "trigger": "trigger.php",
+ "live_in_pin": true,
+ "live_proof": "measured at the pin, not inferred: on a build of php-5.0.0 from the museum tarball (sha256-pinned by the source corpus's src/) the trigger reports ASAN:heap-use-after-free with the detector patches, and OK with Zend's allocator as shipped (results/20261028-host-asan/matrix.tsv, run 2026-10-28). The defective construct is in the pin's own source at ext/standard/streamsfuncs.c:681, quoted in PROVENANCE.md. Upstream fixed it in b90d985a23a5, the commit the source corpus records; php-src's history is not available on this host, so the fix hunk is cited by hash and not quoted",
+ "fidelity": "the trigger is the source corpus's own script for this defect, carried over byte for byte from its corpus/CRASH-099.php; it is upstream-report-derived rather than a reduction of ours, and it drives the defect through the CLI SAPI on the whole interpreter, so it does not isolate the defective construct from the rest of the request. What it does NOT establish is which arm ought to catch it",
+ "arms": {
+  "host-asan": {
+   "oracle": "the report ASan produces on a build of the pin with the source corpus's two detector patches (Zend's size-class cache off, REAL_SIZE unrounded): heap-use-after-free, first frame _zval_ptr_dtor (Zend/zend_execute_API.c:389)"
+  },
+  "virtual-malloc": {
+   "oracle": "a capability fault at one of this case's fault_sites, in an invocation whose configuration controls behaved (php-real-stock: revocation-sanity COMPLETES). A run that reaches the trigger and completes is the opposite reading, not a missing one"
+  },
+  "virtual-nested-pools": {
+   "oracle": "a capability fault at one of this case's fault_sites, in an invocation whose configuration controls behaved (php-real-exact: revocation-sanity COMPLETES and seam-bound-probe FAULTS). A run that reaches the trigger and completes is the opposite reading, not a missing one"
+  },
+  "cheribsd-revocation": {
+   "oracle": "SIGPROT at one of this case's fault_sites, with the bounds-malloc control faulting in the same boot; the same binary with revocation off is run as the pair that controls the knob. A run that completes is the opposite reading, not a missing one"
+  }
+ },
+ "status": "host-asan measured 2026-10-28 on this host, both allocator configurations (results/20261028-host-asan); virtual-malloc, virtual-nested-pools and cheribsd-revocation are declared and not yet run",
+ "allocator_layer": "Zend's allocator, nested inside libc malloc: _efree parks the block in AG(cache) (zend_alloc.c:270-282, payload <= 80 bytes) and free() is never called, so the system allocator never sees the lifetime end",
+ "nested": true,
+ "nested_why": "the object is a sub-allocation of Zend's allocator: emalloc carves it out of its own malloc'd block (zend_alloc.c:182, header + payload)",
+ "layer_note": "with Zend's allocator as shipped the host reading is OK, against ASAN:heap-use-after-free with the cache disabled -- which is what places this case in the Zend-allocator corpus",
+ "fault_sites": [
+  "_zval_ptr_dtor",
+  "zend_hash_apply_deleter"
+ ],
+ "fault_sites_why": "host ASan on the pin, our run of 2026-10-28, recorded before any Capstone or CheriBSD run: the report's own access stack is _zval_ptr_dtor (Zend/zend_execute_API.c:389), zend_hash_apply_deleter (Zend/zend_hash.c:574). The interpreter's dispatch frames (execute, zend_do_fcall_common_helper, zend_execute_scripts) are not sites",
+ "note": "source corpus id CRASH-099; defect site as the source corpus records it: ext/standard/streamsfuncs.c:681"
+}

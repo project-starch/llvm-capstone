@@ -35,7 +35,7 @@
 | `ffmpeg/buffer-pool` | 9.0.1 | capstone-domain, cheribsd-purecap, native | -- | `pool-repros` |
 | `memcached/allocators` | 1.6.45 | capstone-domain, cheribsd-purecap, native | -- | `allocator-repros` |
 | `nginx` | 1.28.0 | capstone-domain, native | -- | -- |
-| `php/zend-alloc` | 5.0.0 | capstone-domain, capstone-virtual | run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-nested.c and sublet/probe-derive-split.c on the virtual profile, which qualify the nested layer before the app port's arms are believed | -- |
+| `php/zend-alloc` | 5.0.0 | capstone-domain, capstone-virtual | run-crash008.sh (spatial, a corpus case) and run-uaf.sh (temporal, synthetic) in a physical domain; sublet/probe-nested.c and sublet/probe-derive-split.c on the virtual profile, which qualify the nested layer before the app port's arms are believed | `plain-temporal-repros`, `zend-alloc-repros` |
 | `postgres/memory-contexts` | 17.0 | capstone-virtual, cheribsd-purecap, native | -- | `mmgr-repros` |
 | `whisper/ggml-context` | 1.9.4 | capstone-domain, cheribsd-purecap, native | -- | -- |
 | `wireshark/wmem` | 4.6.8 | capstone-virtual, cheribsd-purecap, native | -- | `wmem-repros` |
@@ -46,6 +46,7 @@
 |---|---|---|---|---|
 | `mruby/cheribsd` | 4.0.0-rc2 | cheribsd-purecap | the 23 cases of the release corpus, plus its own controls: the interpreter evaluates, and 40- and 500-frame recursion survives revocation | `release-differential` |
 | `perl/cheribsd` | 5.36.3 | cheribsd-purecap | the 17-section smoke, under both libc revocation switches | -- |
+| `php/cheribsd` | 5.0.0 | cheribsd-purecap | the trigger scripts of capstone/bug-corpora/php/engine-repros (70 cases, the corpus the virtual arms measure) and of php/{plain-temporal,zend-alloc}-repros (56, this port's first two), run by run-cheribsd-cases.py in one guest boot per revocation setting -- the platform default, the same binary with revocation off as the pair that attributes a fault, and revoke-on-every-free as context -- against each corpus's own case.json oracles and host record | `engine-repros`, `plain-temporal-repros`, `zend-alloc-repros` |
 | `sqlite/cheribsd` | 3.22.0 | cheribsd-purecap | the 33 cases of sqlite/engine-repros, plus poscontrol.c, which must fault or the run is void | `engine-repros` |
 
 ## domain-libc -- the libc the domain images link against
@@ -65,7 +66,7 @@ A directory under `ports/` is an upstream **program**; a directory inside it is 
 | memcached | `memcached/allocators` · `memcached/app` | 1.6.45 |
 | mruby | `mruby/app` · `mruby/cheribsd` | 4.0.0-rc2 |
 | perl | `perl/cheribsd` · `perl/musl` | 5.36.3 |
-| php | `php/app` · `php/engine` · `php/zend-alloc` | 5.0.0 |
+| php | `php/app` · `php/cheribsd` · `php/engine` · `php/zend-alloc` | 5.0.0 |
 | postgres | `postgres/app` (17.5) · `postgres/memory-contexts` (17.0) | **differs, see the note in its port.json** |
 | sqlite | `sqlite/app` (3.22.0) · `sqlite/cheribsd` (3.22.0) · `sqlite` (3.53.3, 3.22.0) | **differs, see the note in its port.json** |
 | wireshark | `wireshark/app` · `wireshark/wmem` | 4.6.8 |

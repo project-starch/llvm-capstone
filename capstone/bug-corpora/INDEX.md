@@ -10,7 +10,7 @@
 
 | sort | where | count | what it is |
 |---|---|---:|---|
-| third-party defects, as cases | `capstone/bug-corpora/` | 369 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
+| third-party defects, as cases | `capstone/bug-corpora/` | 425 | one directory per case, `case.json` + `PROVENANCE.md`, a runner per corpus |
 | the same, cross-language | `xlang/` | 30 | distilled C shims with their own row tables and measured columns |
 | our own silicon defects | `capstone/tests/fpga-repros/` | 31 | one self-contained report per defect, the folder is the report |
 | our own compiler and runtime defects | `docs/ref/ISSUES.md` | 166 open, 77 resolved | the registry, not reproduced cases |
@@ -38,6 +38,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`capstone/bug-corpora/mruby/release-differential`](mruby/release-differential) | mruby | 4.0.0-rc2 | 23 | 23 live | 0 | script-trigger | measured |
 | [`capstone/bug-corpora/perl/release-differential`](perl/release-differential) | perl | 5.36.3 | 11 | 11 live | 0 | script-trigger | measured |
 | [`capstone/bug-corpora/php/engine-repros`](php/engine-repros) | php | 5.0.0 | 70 | 70 live | 0 | script-trigger | measured |
+| [`capstone/bug-corpora/php/plain-temporal-repros`](php/plain-temporal-repros) | php | 5.0.0 | 26 | 26 live | 0 | script-trigger | built |
+| [`capstone/bug-corpora/php/zend-alloc-repros`](php/zend-alloc-repros) | php | 5.0.0 | 30 | 30 live | 0 | script-trigger | built |
 | [`capstone/bug-corpora/postgres/c-repros`](postgres/c-repros) | postgres | 17.5 | 5 | 5 live | 3 | case-json | measured |
 | [`capstone/bug-corpora/postgres/mmgr-repros`](postgres/mmgr-repros) | postgres | 17.5 | 5 | 5 live | 0 | case-json | measured |
 | [`capstone/bug-corpora/postgres/sql-repros`](postgres/sql-repros) | postgres | 17.5 | 9 | 9 live | 4 | script-trigger | measured |
@@ -52,7 +54,7 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | [`xlang/reuse-not-free`](../../xlang/reuse-not-free) | sqlite | per row | 2 | not recorded | 0 | xlang-row | built |
 | [`xlang/toctou-double-fetch`](../../xlang/toctou-double-fetch) | various (sandbox and host boundaries) | per row | 0 | not recorded | 0 | xlang-row | triaged |
 
-**399 cases in 30 corpora**, of which 219 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
+**455 cases in 32 corpora**, of which 275 are recorded live in the version their corpus pins, 122 were fixed upstream before it, and 28 carry an explicit decision not to assert liveness. 22 advisories are cited across all corpora.
 
 ## Every port component, and what bug material it has
 
@@ -73,8 +75,9 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 | `capstone/ports/perl/cheribsd` | platform-build | 5.36.3 | cheribsd-purecap | -- | 0 |
 | `capstone/ports/perl/musl` | full-application | 5.36.3 | capstone-domain, capstone-virtual, native | `release-differential` | 11 |
 | `capstone/ports/php/app` | full-application | 5.0.0 | capstone-virtual | `engine-repros` | 70 |
+| `capstone/ports/php/cheribsd` | platform-build | 5.0.0 | cheribsd-purecap | `engine-repros`, `plain-temporal-repros`, `zend-alloc-repros` | 126 |
 | `capstone/ports/php/engine` | full-application | 5.0.0 | capstone-domain | -- | 0 |
-| `capstone/ports/php/zend-alloc` | allocator-component | 5.0.0 | capstone-domain, capstone-virtual | -- | 0 |
+| `capstone/ports/php/zend-alloc` | allocator-component | 5.0.0 | capstone-domain, capstone-virtual | `plain-temporal-repros`, `zend-alloc-repros` | 56 |
 | `capstone/ports/postgres/app` | full-application | 17.5 | capstone-domain, cheribsd-purecap | -- | 0 |
 | `capstone/ports/postgres/memory-contexts` | allocator-component | 17.0 | capstone-virtual, cheribsd-purecap, native | `mmgr-repros` | 5 |
 | `capstone/ports/sqlite/app` | full-application | 3.22.0 | capstone-domain, native | -- | 0 |
@@ -98,6 +101,8 @@ Protection fixtures under `capstone/ports/*/security-tests/` are **not** bug mat
 - `capstone/bug-corpora/perl/release-differential` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/php/engine-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/php/engine-repros` commits no result bundle of its own.
+- `capstone/bug-corpora/php/plain-temporal-repros` has no triage inventory under docs/ref/.
+- `capstone/bug-corpora/php/zend-alloc-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/c-repros` has no triage inventory under docs/ref/.
 - `capstone/bug-corpora/postgres/mmgr-repros`: 3 of 5 cases have a PROVENANCE.md.
 - `capstone/bug-corpora/postgres/sql-repros` has no triage inventory under docs/ref/.

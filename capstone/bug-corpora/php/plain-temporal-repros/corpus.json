@@ -1,0 +1,52 @@
+{
+ "program": "php",
+ "boundary": "the system allocator: temporal defects in PHP 5.0.0 whose freed block does reach libc -- free() past Zend's cache ceiling, realloc() through erealloc, or a block malloc'd outside Zend altogether",
+ "title": "Twenty-six temporal defects live in PHP 5.0.0 whose release reaches the system allocator, so a detector interposing at malloc can still see them",
+ "upstream": {
+  "version": "5.0.0",
+  "port": "capstone/ports/php/app"
+ },
+ "cases": 26,
+ "case_schema": "script-trigger",
+ "case_number_base": 1,
+ "status": "built",
+ "live_in_pin_recorded": true,
+ "live_in_pin_note": "Liveness is measured at the pin, not inferred from a date: every case's trigger was run on a build of php-5.0.0 from the museum tarball (sha256 5783e0c0ba94f165633a565fe73a83e59cf17b6880ef95fa8f936dc6301d6919) and reported under ASan, and the defective construct is quoted from the pin's own source in each PROVENANCE.md. What is NOT established in this tree is the upstream side of the pair: php-src's history is not on this host, so each fix is cited by hash and its hunk is not quoted.",
+ "expect_live_in_pin": {
+  "true": 26
+ },
+ "required_arms": [
+  "host-asan",
+  "virtual-malloc",
+  "virtual-nested-pools",
+  "cheribsd-revocation"
+ ],
+ "arm_configurations": {
+  "virtual-malloc": "php-real-stock",
+  "virtual-nested-pools": "php-real-exact",
+  "cheribsd-revocation": "cheribsd-default"
+ },
+ "checker": "capstone/bug-corpora/tools/check-corpus.py",
+ "runners": [
+  "capstone/bug-corpora/php/tools/run-php-corpus.py",
+  "capstone/ports/php/app/build-virtual.sh",
+  "capstone/ports/php/app/run-virtual.py",
+  "capstone/ports/php/app/prepare-sources.sh",
+  "capstone/ports/php/cheribsd/build.sh",
+  "capstone/ports/php/cheribsd/run-cheribsd-cases.py"
+ ],
+ "evidence": [
+  "capstone/bug-corpora/php/plain-temporal-repros/results/20261028-host-asan",
+  "capstone/bug-corpora/php/plain-temporal-repros/results/20261029/cheribsd-revocation"
+ ],
+ "advisories": [],
+ "related": [
+  "capstone/bug-corpora/php/engine-repros",
+  "capstone/bug-corpora/php/zend-alloc-repros",
+  "capstone/ports/php/app",
+  "capstone/ports/php/cheribsd",
+  "capstone/ports/php/zend-alloc",
+  "capstone/tests/cheri-php-blind"
+ ],
+ "note": "THIS CORPUS IS THE CONTROL FOR ITS SIBLING, and the two were separated by a measurement rather than by a rule. Each trigger was run twice on this host, on two builds of the same source differing only in two defines in Zend/zend_alloc.c: the source corpus's detector build (ZEND_DISABLE_MEMORY_CACHE 1, REAL_SIZE unrounded) and Zend's allocator AS SHIPPED. All twenty-six here keep their temporal report on BOTH -- the release reaches libc, so anything that interposes at malloc can read it -- while all thirty of zend-alloc-repros lose it on the second. Four routes put a case here, and matrix.tsv's `released_by` column says which. Twelve are released by _efree and still reach free(); seven are released by _erealloc, which never consults the cache and calls realloc() whatever the size; two were never Zend's to begin with -- 07_1ea22c90046b is a constant name from zend_strndup (a bare malloc, freed by the bare free at Zend/zend_constants.c:320) and 09_d5bb03b11a96 is a persistent hash table built with zend_hash_init(..., persistent=1) and released with pefree() -- and those two are the only cases in either corpus whose object is not a sub-allocation of Zend's allocator, the only two with nested=false. For the remaining five (source ids CRASH-012, 030, 113, 142, 148) ASan's report carries no free stack at all, so no route is named and what puts them here is the reading itself: a temporal verdict that survives the stock allocator. A size rule alone would NOT have produced this set -- ten of the twelve _efree cases have a payload of 80 bytes or less and reach free() anyway, because the per-class cache holds 256 entries and falls back to free() once full. That is why the corpus is split by the stock-allocator run and not by a threshold. THE ARMS. virtual-malloc is php-real-stock, PHP_CAP_MODE=0 -- musl mallocng's own per-object bounds with the lifetime retired at free, nothing revoked by the seam: the baseline a catch is measured against, and the arm this corpus predicts will CATCH, unlike its sibling. virtual-nested-pools is php-real-exact, PHP_CAP_MODE=7. cheribsd-revocation is stock CheriBSD purecap. The prediction this corpus carries, written before any of the three ran: these twenty-six are caught on all three arms, and that is what makes the sibling's silences mean something. THE CHERI ARM IS MEASURED (results/20261029/cheribsd-revocation) AND ITS CRITERION IS NARROW: the verdict comes from the platform-default boot only; a fault that appears only under every-free revocation is recorded as NOT-REISSUED in the notes and does NOT change the verdict, because the deployed policy defers the sweep and the program runs on. THE VERDICT AND THE PROTECTION QUESTION ARE KEPT APART: on this corpus CHERI protects 21 of the 26 (3 SIGPROT at the default, 11 capability-enabled allocator aborts, 7 NOT-REISSUED), and the 5 left out are 3 whose own ending at the default is a fatal PHP error, 1 the watchdog kills, and case 07, the only genuine miss in either corpus. The revocation-off boot is what attributes a default fault, since a purecap SIGPROT carries no symbol. The per-corpus README holds the group-by-group attribution. SUPERSEDED FOR PLACEMENT, 2026-10-30, and kept whole: php/engine-repros carries 70 defects of this same family, 52 of them these, and is the live corpus. Its split is decided by the same two-ASan-build measurement as this one but on a different toolchain (gcc 15.2.0 against gcc 7.5.0 / libasan.so.4 here), and the two disagree on 18 of the 52 -- so these populations are a second reading of the axis, not the reading, and no count here may be added to one there. Nothing is removed: every case, every host-ASan row and every cheribsd-revocation bundle stays as measured, because they are the records the CheriBSD arm's first run rests on and four of these cases (18-21, ext/mbstring and ext/pcre) have a reading nowhere else."
+}
