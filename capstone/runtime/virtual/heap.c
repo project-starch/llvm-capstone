@@ -530,6 +530,32 @@ void *calloc(size_t n, size_t size)
     if (p) memset(p, 0, n * size);
     return p;
 }
+/* mallocng keeps an object's offset when it grows it in place, or through the remap of a
+ * single-slot mapping (the no-op one included). enframe aligned that offset only to the granule of
+ * the size the object was allocated at, and the size published here can have a larger one, so the
+ * child would not be exactly representable: the spatial heap's exactness check traps (cause 2)
+ * and CDERIVE refuses it (cause 29). Measured on the twin, both arms: 32720 -> 32768 in place from
+ * a base = 32 mod 64, and 261888 -> 262144 through the no-op remap from a base = 256 mod 512,
+ * faulted on every misaligned round and passed on every aligned one; SPEC's gcc train (200.c,
+ * scilab.c) and perlbench test (japh/abigail, re/pat_rt_report) stop on the same instructions.
+ * Such a block is moved here, malloc-copy-free as mallocng's own moving path does, to a slot
+ * enframed at the new size. Done in the runtime and not in realloc.c because
+ * check-mallocng-policy.py holds mallocng's in-place decision token-identical to upstream, and
+ * the decision is not wrong: only the published bounds are. The copy reads the old block through
+ * its slot, which spans it whichever route kept it. If the new block cannot be had, NULL: the
+ * caller keeps the old object, which a remap has already moved and whose old child is dead. */
+static void *exact_or_moved(void *raw, size_t want, size_t old)
+{
+    if (!raw) return NULL;
+    struct capstone_malloc_slot *r = __capstone_malloc_find(raw);
+    if (!r) __builtin_trap();
+    if (capstone_repr_ok(r->key, want)) return raw;
+    void *fresh = __capstone_mallocng_malloc(want);
+    if (!fresh) { __capstone_malloc_ng_null++; return NULL; }
+    memcpy(fresh, raw, old < want ? old : want);
+    __capstone_mallocng_free(raw);
+    return fresh;
+}
 void *realloc(void *p, size_t n)
 {
     if (!p) return malloc(n);
@@ -541,8 +567,9 @@ void *realloc(void *p, size_t n)
      * unrounded block would hand out a capability past the allocation. */
     size_t want = capstone_repr_round(n ? n : 1);
     if (want < n) { unlock_heap(); errno = ENOMEM; return NULL; }
+    size_t old = r->nominal;
     void *q = ensure_ids(IDS_PER_CALL) ? NULL
-            : publish(__capstone_mallocng_realloc(backend_pointer(r), want), want);
+            : publish(exact_or_moved(__capstone_mallocng_realloc(backend_pointer(r), want), want, old), want);
     unlock_heap(); return q;
 }
 void *__libc_realloc(void *p, size_t n) { return realloc(p, n); }
