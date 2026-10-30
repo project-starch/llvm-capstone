@@ -67,6 +67,12 @@ def main():
     ap.add_argument('--probe', help='the boot transcript holding its PLAINPROBE lines (one boot per invocation)')
     ap.add_argument('--ols-cycles', action='store_true', help='k_cyc from the ctl-loop slope (no probe); flagged')
     ap.add_argument('--raw', action='store_true', help='no correction: only rename the controls per boot')
+    ap.add_argument('--k-ins-median', action='store_true',
+                    help='Plain addendum 1 rule 2: k_ins = median over ctl-loop iterations of excess/irq (run on '
+                         'plain-exclude.py output), with the 15 %% probe and 10 %% per-iteration checks printed')
+    ap.add_argument('--k-cyc', type=float, default=None,
+                    help='k_cyc given, not read from this boot\'s probe (FLAGGED in the report): for a boot whose '
+                         'probe was itself disturbed')
     a = ap.parse_args()
     rows = list(csv.DictReader(open(a.runs), delimiter='\t'))
     if not rows:
@@ -133,7 +139,8 @@ def main():
         excess = [int(r['instret']) - e_ins - (2 * N_LOOP + 2) for r in loop]
         if sum(irq) <= 0:
             die(f'boot {b}: Plain ctl-loop saw no interrupts; the per-tick cost cannot be estimated')
-        k_ins = sum(excess) / sum(irq)
+        per = [e / i for e, i in zip(excess, irq) if i]
+        k_ins = st.median(per) if a.k_ins_median else sum(excess) / sum(irq)
         if k_ins <= 0:
             die(f'boot {b}: k_ins={k_ins:.1f} is not positive (excess {excess}, irq {irq})')
         cyc = [int(r['cycles']) for r in loop]
@@ -144,15 +151,21 @@ def main():
         slope = sum((x - mx) * (y - my) for x, y in zip(irq, cyc)) / sxx
         resid = [y - my - slope * (x - mx) for x, y in zip(irq, cyc)]
         se = (sum(r * r for r in resid) / max(1, len(cyc) - 2) / sxx) ** 0.5
-        per = [e / i for e, i in zip(excess, irq) if i]
-        k_cyc = probe[0] if probe else slope
+        k_cyc = a.k_cyc if a.k_cyc is not None else probe[0] if probe else slope
+        p4 = ''
+        if a.k_ins_median:
+            off = max(abs(x / k_ins - 1) for x in per)
+            ok = (probe is not None and abs(k_ins / probe[1] - 1) <= 0.15) and off <= 0.10
+            p4 = (f'; P4 (addendum 1): median k_ins {k_ins:.1f} vs probe {probe[1] if probe else "-"}'
+                  f', worst iteration {off * 100:.1f} % off: {"PASS" if ok else "FAIL"}')
         cal[b] = (k_ins, k_cyc)
         report.append(f'boot {b[0]}/{b[1]}: k_ins={k_ins:.1f} instr/irq from ctl-loop (per-iteration {min(per):.1f}..{max(per):.1f})'
                       + (f', probe gap_instret median {probe[1]}' if probe else '')
-                      + f'; k_cyc={k_cyc:.1f} cycles/irq from {"the probe gap median" if probe else "the OLS slope (FLAGGED: --ols-cycles)"}'
+                      + f'; k_cyc={k_cyc:.1f} cycles/irq from {"--k-cyc (FLAGGED: not this boot\'s probe)" if a.k_cyc is not None else "the probe gap median" if probe else "the OLS slope (FLAGGED: --ols-cycles)"}'
                       f'; cross-check OLS slope {slope:.1f} +- {se:.1f} (SE, {len(loop)} iterations, irq {min(irq)}..{max(irq)})'
                       f'; Plain ctl-empty median cycles={e_cyc:.0f} instret={e_ins:.0f}'
-                      + (f'; per fault {a.fault_cycles:.0f} cycles, {a.fault_instret:.0f} instret' if a.fault_cycles is not None else ''))
+                      + (f'; per fault {a.fault_cycles:.0f} cycles, {a.fault_instret:.0f} instret' if a.fault_cycles is not None else '')
+                      + p4)
     if not cal:
         die('no boot has Plain rows')
     empties = {}
