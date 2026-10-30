@@ -466,6 +466,49 @@ relayed the numbers only, and the verdict below is this lane's.
   - This is N=1, on board 2 only. The witness ran as a boot of its own after the ObjBounds arm, and board 2 then
     went back to bitstream 3 (the runtime lane's reflash).
 
+## The arcfour residual: the loop is bound by the store-buffer drain (simulation, 2026-10-31)
+
+On the ladder, MapLife (bitstream 3) / ObjBounds reads 0.979 for nettle-arcfour and 0.994 for rv8-dhrystone
+(perf-objb 003883728dc6, "Mechanism"). So removing the check made those two slower.
+
+**The loop.** The compiled inner loop is arcfour_crypt in the T1 image b285d9cea65ffe70, 0x1e850-0x1e8a8. Per byte it
+does 4 lbu and 3 sb through capabilities. Then comes the compiler's capability-copy pattern: `stc t0, -0x30(s0)`
+followed at once by `ldc a3, -0x30(s0)` from the same stack slot.
+
+**The test.** `objb-arcfour.S` (capstone-ariane objbounds-b 00ada3758, the same commit on objbounds-off-b as 1cf5c6687;
+tests only) has four arms. The hypothesis and the per-arm predictions are in its header, committed and pushed before
+the run. Each arm runs 512 iterations, traced (SUP_TRACE + R43_TRACE, memory delay 12), on both trees with dirty=no.
+Instructions and every value are equal on both trees in every arm.
+
+| arm | bitstream 3 (1cf5c6687) | ObjBounds (00ada3758) | predicted | read |
+|---|---|---|---|---|
+| 1, the compiled loop | 106,321 | 106,770 (+449, +0.42 %) | ObjBounds >= bitstream 3 | holds |
+| 2, the loop with the pair replaced by a movc | 90,262 | 90,262 | equal within 1 % | holds |
+| 3, the stc/ldc pair alone | 10,490 | 5,903 | ObjBounds >= bitstream 3 | REFUTED: 9.0 cycles per iteration faster |
+| 4, the pair with six ALU ops between | 10,776 | 7,206 | ObjBounds faster | holds |
+
+So the pair alone is the query's saving, and the loss needs the byte stores around it. The mechanism, read from
+arm 1's trace:
+- The ldc waits in the load unit's WAIT_PAGE_OFFSET state until no buffered store matches its page offset. The stc
+  to its own slot always does, and with the write-through D-cache it drains after the iteration's byte stores.
+  Which store matched in each episode was not traced.
+- WAIT_PAGE_OFFSET totals 63,704 cycles over 397 episodes on bitstream 3, and 67,553 over 409 on ObjBounds.
+- Charged by the instruction whose commit it delays (the commit streams aligned), the stc commits 3,061 cycles
+  sooner on ObjBounds and the ldc 2,981 later. Most of the rest is the keystream lbu (`lbu a7, 0(a7)`), +497.
+- So the drain bounds the loop. The removed query's cycles become waiting, and on ObjBounds 12 more loads arrive
+  while a same-offset store is still buffered.
+- R-29's write-buffer holds are not the cause: 521 on bitstream 3 against 187 on ObjBounds, 1 cycle each.
+
+**What this does not settle.**
+- Why the earlier stc lets 12 more loads catch a buffered store was not traced to a signal.
+- The size on silicon (2.1 %) differs from the simulation (0.42 %), whose memory model is not the board's DDR; only
+  the direction is shared.
+- rv8-dhrystone was not simulated. Its 0.994 is a candidate for the same class (frame spills and reloads through one
+  slot), not a reading.
+
+The ObjBounds rung is still bitstream 3 minus the check. In this loop the check's latency overlapped a store-buffer
+wait that the variant then pays instead.
+
 ## Corrections
 
 - **Corrected 2026-10-30, the same evening, on the lane only.** c8be354d28ef's Gates section called stale-access's
