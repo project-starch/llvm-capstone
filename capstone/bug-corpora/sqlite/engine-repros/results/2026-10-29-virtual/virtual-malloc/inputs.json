@@ -80,9 +80,19 @@
     "runner": "933632f966eed596da1c14c8e94aa28346f50a9a401e12298a56fe0bbb8e1ac2"
   },
   "predicted": "MISSED",
+  "refolds": [
+    {
+      "cells": [
+        "05_6397a78b2b_detach_with_pending_trigger: CAUGHT/None -> MISSED/None (cause=24)",
+        "19_c8c9cdd9dd_rtree_cursor_stale_node: CAUGHT/None -> MISSED/None (cause=24)",
+        "22_fix-2026-07-26_spellfix_oom_stale_vtab: CAUGHT/None -> MISSED/None (cause=24)"
+      ],
+      "tool": "derive-verdicts.py --refold",
+      "why": "virtual-sqlite-memsys5, virtual-sqlite-memsys5-pools and silicon-sqlite-memsys5 declared catch_causes [25, 28] on 2026-10-30: only INVALID_CAP and CAP_OOB are a Capstone mechanism reporting, so a fault with any other cause is a consequence of an access the arm had already allowed, not a rejection of it. The observations are unchanged."
+    }
+  ],
   "tally": {
-    "CAUGHT": 3,
-    "MISSED": 26,
+    "MISSED": 29,
     "NO-READING:inconclusive": 1,
     "NO-READING:infra": 1,
     "NO-READING:unattributed": 2

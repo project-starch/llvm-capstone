@@ -394,15 +394,18 @@ its results under one contract, implemented in `tools/verdicts.py` and tested in
   mechanism are `25` `INVALID_CAP` (a lifetime ended) and `28` `CAP_OOB` (a bounds check); `24`
   `UNEXP_OP_TYPE` is an untagged value used where a capability was required, which is a
   consequence on either axis. Declaring it RE-JUDGES every stored Observation, so it must land
-  together with a re-fold of each affected corpus's bundle. What "re-fold" means concretely, and
-  why a declaration cannot land on its own: `tools/derive-verdicts.py` compares each bundle's
-  RECORDED verdict against the current judge, reports a problem for every cell where they differ,
-  and writes the recorded verdict into `case.json` regardless -- so declaring the key alone makes
-  the gate fail and changes no cell. Measured on sqlite/engine-repros, 2026-10-28: declaring
-  `[25, 28]` on the three sqlite configurations fails 13 cells across the four bundles. The
-  bundle's verdict field has to be re-derived from its Observations first, and no tool does that
-  today. Implemented in `tools/verdicts.py`, tested in `tools/test_verdicts.py`; as of 2026-10-28 no
-  configuration in `tools/arms.json` declares it.
+  together with a **re-fold** of each affected corpus's bundle, in one change. Without one the
+  declaration only breaks the gate: `tools/derive-verdicts.py` compares each bundle's RECORDED
+  verdict against the current judge, reports a problem for every cell where they differ, and writes
+  the recorded verdict into `case.json` regardless. The re-fold is
+  `tools/derive-verdicts.py --refold --why <reason> <corpus>`: it re-judges each stored Observation,
+  writes the new verdict beside it, **refuses to alter the Observation** (a row whose observation
+  would change aborts the whole re-fold), and appends to the bundle's `inputs.json` a `refolds`
+  entry naming every cell it re-scored and why. Nothing is re-measured and nothing needs re-running;
+  a board bundle is re-folded exactly like a QEMU one. Implemented in `tools/verdicts.py`, tested in
+  `tools/test_verdicts.py`. Declared as of 2026-10-30 by `virtual-sqlite-memsys5`,
+  `virtual-sqlite-memsys5-pools` and `silicon-sqlite-memsys5`, all three `[25, 28]`, which re-scored
+  10 cells across four bundles of `sqlite/engine-repros` and 0 on the protected arm.
 * **The bundle is the only original.** `results/<stamp>/<arm>/` holds `verdicts.jsonl` (each
   Observation with its verdict) and `inputs.json` (configuration, and the compiler, QEMU, firmware,
   kernel and runner hashes, each said or said to be `unrecorded`). **`platform.compiler` is the sha256 of
