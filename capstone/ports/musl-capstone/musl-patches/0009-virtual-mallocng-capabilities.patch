@@ -480,7 +480,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	} else {
  		return UNIT*size_classes[g->sizeclass];
  	}
-@@ -190,19 +245,92 @@
+@@ -190,19 +245,101 @@
  		end[-5] = 0;
  		reserved = 5;
  	}
@@ -502,9 +502,18 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
 + * cap_hdr_fits() asserts it rather than trusting it, and a future table or cnt change fails loudly
 + * instead of overrunning the group.
 + */
++/* The granule is the one of the whole STRIDE, which is the length of the slot capability the
++ * runtime binds (heap.c bind_slots), and not of stride - IB, the largest object. The two differ
++ * exactly at the power-of-two strides, classes 39, 43 and 47 (32768, 65536, 131072), where
++ * stride - IB falls one binade lower and its granule is half. Taking that one left every slot of a
++ * multi-slot group in those classes half a granule off: the encoder widened the slot's capability
++ * downward, and free() was handed the object's address plus the shift (gcc train on the twin
++ * trapped in free on a fresh class-43 slot bound as [start - 64, start + 65600)). Single-slot
++ * groups are unaffected, their header being granule(bytes - IB). The page slack still covers the
++ * larger pads: 4080 bytes against 48, 112 and 240. */
 +static inline size_t cap_hdr_pad(size_t stride)
 +{
-+	size_t gr = __capstone_malloc_granule(stride > IB ? stride - IB : 1);
++	size_t gr = __capstone_malloc_granule(stride);
 +	return gr > UNIT ? gr - UNIT : 0;
 +}
 +/* The SINGLE-SLOT shapes have no slack at all, unlike the multi-slot path above: alloc_group's
@@ -577,7 +586,7 @@ one un-reversible -- the SDK build then refuses with "musl source is not current
  	if (off > slack) {
  		size_t m = slack;
  		m |= m>>1; m |= m>>2; m |= m>>4;
-@@ -210,19 +338,43 @@
+@@ -210,19 +347,43 @@
  		if (off > slack) off -= slack+1;
  		assert(off <= slack);
  	}
