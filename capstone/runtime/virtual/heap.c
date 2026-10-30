@@ -164,8 +164,16 @@ static void *bind_slots(struct capstone_malloc_slot *slots, void *group,
      * so each slot's base is a multiple of its own bounds granule and the capability derived over
      * an object in it is exactly representable. mallocng's enframe pads identically
      * (meta.h cap_hdr_pad), and the pad fits in the page rounding alloc_group already does --
-     * asserted there, because the margin is exact for some class and count pairs. */
-    size_t granule = capstone_repr_granule(stride > 4 ? stride - 4 : 1);
+     * asserted there, because the margin is exact for some class and count pairs.
+     *
+     * The granule of the STRIDE, the length of the slot capability shrunk below, not of stride - 4,
+     * the largest object. They differ at the power-of-two strides (32768, 65536, 131072), where the
+     * old rule left every slot of a multi-slot group half a granule off: the encoder widened the slot
+     * downward, the bounds check below counted it without refusing, and backend_pointer() -- which
+     * takes the slot's base as its start -- handed mallocng the object's address plus the shift, so
+     * free() trapped (gcc train on the twin, a class-43 slot bound as [start - 64, start + 65600)).
+     * meta.h cap_hdr_pad (musl patch 0009) takes the same granule. */
+    size_t granule = capstone_repr_granule(stride);
     size_t hdr = granule > 16 ? granule : 16;
     for (unsigned i = 0; i < count; ++i) {
         size_t start = base + hdr + i * stride;
