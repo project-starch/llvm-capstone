@@ -1,0 +1,290 @@
+# ObjBounds: bitstream 3 without the per-access lifetime check
+
+*RTL lane, 2026-10-30. The performance ladder's ObjBounds rung. Runtime lane's request on the lead's word ("Если нужен
+новый битстрим, то делай его"); scope ruled by the runtime lane the same day. The flash is the runtime lane's, on
+the lead's word in that session (board 2, after B's two check boots).*
+
+## Why
+
+The microbenchmark ladder (103 programs, BEEBS/RV8/CoreMark, results on dev) has these rungs:
+
+| Rung | What it has |
+|---|---|
+| Plain | native RV64 |
+| Caps | an allocator with coarse bounds |
+| ObjBounds | per-object bounds, no lifetime hardware |
+| MapLife (T1) | per-object bounds, plus the per-access lifetime check and per-mapping lifetimes |
+| ObjLife (T2) | MapLife, plus a lifetime per malloc object |
+
+"The cost of temporal safety" is ObjLife / ObjBounds. It needs a bitstream on which a capability access skips the
+lifetime check and nothing else changes. That bitstream is bitstream 3 (capstone-ariane e7af48457), because every
+microbench cycle count was measured on it.
+
+## What the check costs on e7af48457 (from source)
+
+There are two different mechanisms, by which functional unit the access goes through. The first analysis sent to
+the runtime lane described only the first, and was retracted the same day ("Corrections" below).
+
+**Plain loads and stores (fu LOAD/STORE): a cached check.**
+
+- **Hit: free.** The verdict is a same-cycle lookup in the `cap_violation_detection` chain, after NOT_CAP, type,
+  permission and bounds (`load_store_unit.sv:1366-1403`). It looks up a registered 4-way x 64-set cache of node ids:
+  the set is index[5:0] and the tag is all 30 bits. The cache is filled only by watching the rev-node unit's writes
+  (a CDERIVE, SPLIT or MREV child is resident from birth) and its reads (LCC, a probe). A hit reads no record and
+  stalls nothing.
+- **Miss: a replay.** On a miss:
+  1. The access takes an internal replay marker on the registered exception path.
+  2. A probe goes to the rev-node unit, which reads the record through D-cache port 2: its own read port
+     (`cva6.sv`, `dcache_req_to_cache[2] = rev_rd`). Its writes share port 3 with the store unit. The record read
+     can hit L1D or miss to DRAM.
+  3. Commit holds the marked head until the probe resolves, then flushes and re-fetches the same pc.
+  4. The re-executed access hits.
+
+  The two probe timeouts bound the wait, and the check fails closed.
+- **The namespace flush empties the cache** at every context entry and escape. After each escape, every distinct node
+  a context touches misses once.
+
+**Capability loads and stores (LDC, STC): an uncached query on every access.** The decoder sends LDC and STC to the
+DYN unit (`decoder.sv:1402/1410`, fu CAPSTONE_DYN), so they never reach the LSU's check. After its type, permission,
+bounds and alignment checks, the DYN unit asks the rev-node unit for rs1's node validity on every LDC and every STC
+(`capstone_dyn_unit.anvil:685/:753`, `get_node_query_validity`). The rev-node unit reads the record
+(`capstone_rev_node.anvil:423-432`) and the instruction waits for the answer. No cache sits in front of it.
+
+**Fetch: free.**
+
+- **Fetch costs nothing.** The PC tracker is one id and one valid bit (`commit_stage.sv:389`). It adopts a new PC
+  capability's id as live and is cleared by a broadcast. It never stalls and reads no record.
+
+So a plain load or store pays only on a miss: a working set of at most ~256 live nodes pays one replay per node per
+escape, and a larger one pays a replay per access. Every LDC and STC pays a record query, whatever the working set.
+
+### Every lifetime consumer on e7af48457
+
+Enumerated by the call sites of the check, not by the cause number. The rev-node unit's query site says which ops it
+fronts (`capstone_rev_node.anvil:428`: LCC, SPLIT, REVOKE, TIGHTEN, CALL, RETURN, LDC, STC), and every
+`ex_code::INVALID_CAPABILITY` in the DYN unit was mapped to its op:
+
+| Consumer | Per access? | In the variant |
+|---|---|---|
+| (a) LSU verdict, plain loads/stores, AMOs | yes, cached | removed (macro) |
+| (b) PC tracker's 25 at commit (fetch) | yes, free | removed (macro) |
+| (e) DYN query on LDC/STC | yes, uncached | removed (DYN Anvil source; not under the macro) |
+| (c) CPMP trackers (integer-mode accesses) | no cost; physical broadcasts only | unchanged |
+| (d) DYN: DROP, REVOKE, MREV, SPLIT, CDERIVE, CREVOKE (both operands), DELIN, TIGHTEN, CALL, RETURN, CSSUPERVISE, and LCC's query | per op | unchanged (ISA semantics) |
+
+The domain switcher (including CSRUNV entry) takes no lifetime verdict (no node reference in
+`capstone_dom_switcher.anvil`), and the FLU unit only copies ids.
+
+## The change (capstone-ariane; the variant is `objbounds-b`, its control `objbounds-off-b`)
+
+**The variant to synthesise is objbounds-b 603528b8b. Its control is objbounds-off-b 1782d20bd** (the runtime lane's
+ruling, option B).
+- 603528b8b is 24e588199 plus two commits that change no RTL token:
+  - 13c772ee4 corrects the comment beside the define in the config package. It had said every other behaviour is
+    e7af48457's, which ignored the DYN-unit change. With comments stripped, the file has the same 374 tokens.
+  - 603528b8b re-baselines the lint REF (UNUSEDSIGNAL 1431 -> 1435, attributed under Gates). It is verif/ only.
+- Every simulation gate below ran on 24e588199.
+
+`git diff 1782d20bd 603528b8b -- core` is exactly:
+- the config package's `define CAPSTONE_NO_LIFETIME_CHECK` and its comment (5 lines);
+- in `capstone_dyn_unit.anvil`, LDC's and STC's `let validity = call get_node_query_validity(rs1_v.metadata.revnode_id)`
+  becomes `let validity = 1'd1` (two lines, each with a comment naming what bitstream 3 does there).
+
+Anvil has no preprocessor, so site (e) is not under the macro. The control's identity with e7af48457 therefore rests
+on two facts:
+- its core/ preprocesses to e7af48457's tokens with the macro undefined;
+- its DYN source is e7af48457's (core/ against e7af48457: only the `ifndef` wrappers of load_store_unit.sv and
+  commit_stage.sv).
+
+How it got here, all on the lane branches:
+
+
+- **c7b020d7b** puts `ifndef CAPSTONE_NO_LIFETIME_CHECK` around two sites:
+  - the LSU verdict (all six arms: hit-dead, same-cycle invalidation, ALLOW, probe DEAD, replay marker, tie-off
+    deny);
+  - the PC check's `!pc_revnode_valid_d -> 25`.
+
+  With the macro defined, an access that passed NOT_CAP, type, permission and bounds is allowed. It gets no 25 and no
+  replay marker, so no probe starts and no record is read (the probe starts only from `rvc_miss_now`). The cache keeps
+  filling and is never read (in simulation; synthesis should trim it, Gates 5), and the R-43 refusal record
+  (apertures 204-208) reads 0.
+- **0af4307fc (option A, measured and not taken)** adds site (e): while the DYN unit's in-flight op is LDC or STC, ex_stage.sv answers the DYN unit's
+  query itself, live, without reaching the rev-node unit.
+  - The op is latched at dispatch; the unit serialises ops, so the latched op is the one that queries.
+  - The request is accepted at once and the answer comes one cycle later. There is no record read and no wait for one,
+    only the channel handshake (its residual is measured below).
+  - Every other op's query passes through unchanged, and the generated DYN unit is untouched.
+  - A flush drops an owed answer, the R-27 rule.
+- **3c5c43996** defines the macro beside `CAPSTONE_ITFC_EN` in
+  `capstone_cv64a6_imafdc_sv39_config_pkg.sv`. That is the mechanism the target already uses for that macro, so the
+  synthesis flow is unchanged.
+- **objbounds-off f32ecccb1** is the define-off twin: c7b020d7b with 0af4307fc's changes, and nothing else. It is the
+  control tree for the A/B and the sweep. `git diff f32ecccb1 0af4307fc` is the config package's define, 3 lines.
+- **objbounds-noquery 233e0e81d** is a SIM-ONLY measurement tree, never to be synthesised: 0af4307fc with the DYN
+  unit's two LDC/STC query calls replaced by a constant. It measured option A's residual, and it is option B's
+  behaviour: B differs from it only by the removal of A's ex_stage answer, which goes idle once LDC/STC stop
+  querying.
+- **Why B and not A.** A's answer is accepted in the request cycle and given the next, the minimum. The rest of the
+  call's sequencing (set waiting >> send >> recv >> set validity) stays inside the DYN unit. On one resident node
+  (sim, memory delay 12) it kept 1.98 of the LDC query's 3.96 cycles and 2.95 of the STC query's 4.67: about half of
+  what the variant exists to remove. B's residual is the constant's own `>>`, 0-1 cycle per op. The runtime lane's
+  reason: "a residual that keeps 50-63 % of the LDC/STC query on resident nodes would make ObjBounds read too slow
+  and the cost of temporal safety read too low".
+- **objbounds-b 24e588199** is 0af4307fc with site (e) moved into the DYN source and ex_stage.sv back to e7af48457's
+  text; 13c772ee4 corrects its config-package comment and 603528b8b re-baselines lint. **objbounds-off-b 1782d20bd** is f32ecccb1 with ex_stage.sv
+  back likewise.
+- **Scope**, as ruled by the runtime lane:
+
+  | Site | Under the macro? |
+  |---|---|
+  | (a) the LSU verdict | in |
+  | (b) the PC tracker's 25 | in |
+  | (c) the CPMP trackers (integer-mode accesses, physical broadcasts only, zero cycles) | out, unchanged |
+  | (d) the DYN unit's 25s on CDERIVE, CREVOKE, CSRETIRE and LCC operands | out: the ISA semantics, so the same SDKs and kits run |
+
+- **Off-equality at source.** With the macro undefined, both files preprocess (`verilator -E -P
+  +define+CAPSTONE_ITFC_EN`) to e7af48457's token stream exactly: load_store_unit 3,044 tokens, commit_stage 2,412.
+  Defined, 79 and 11 tokens drop out, the lifetime arms only. ex_stage.sv (site e) is likewise token-identical
+  undefined (4,118 tokens) and adds 99 defined.
+- **Batched with it: nothing.** r64-flags (R-64/65/66) is gate-complete, but it changes the FPU netlist, and this build
+  exists only for cycle comparability with e7af48457.
+
+## Gates
+
+All on the pair: variant 24e588199 (vp8; 603528b8b by tokens) and control 1782d20bd (vp9). Each model was rebuilt
+from a removed `work-ver/` after the Anvil prologue, and every PROVENANCE reads `rtl_dirty=no`.
+
+1. **The control is bitstream 3 by its generated units.** The prologue's sha256 prefixes for the control's five
+   generated Anvil units, ex_stage.sv and ariane_pkg.sv equal e7af48457's own clean runs (vp8 `.sup/r62ud`, vp9
+   `.sup/sweepr62`). The variant differs in one of them:
+
+   | Unit | e7af48457 = 1782d20bd | 24e588199 |
+   |---|---|---|
+   | anvil_dyn_unit | 7accda6a28c7bf08 | 131818fb5bfda03c |
+   | csr_unit, dom_switcher, flu_unit, rev_node, ex_stage, ariane_pkg | same | same |
+
+2. **Arms** (memory delay 12, R43_TRACE; vp8 `.sup/arms-b-on`, vp9 `.sup/arms-b-off`; the no-query column is
+   objbounds-noquery 233e0e81d, `rtl-base-wt/.sup/objbnq`). Cycles:
+
+   | Shape | Control 1782d20bd | Variant 24e588199 | No-query 233e0e81d |
+   |---|---|---|---|
+   | s1: 4,096 plain ld through one capability | 16,770 | 16,770 | not run |
+   | s2: 64-node chase, 1,024 ldc | 9,251 | 5,215 | 5,215 |
+   | s3: 1,024-node chase, 2,048 ldc | 174,952 | 145,274 | 145,274 |
+   | s4: 64 nodes after a namespace flush, pass 1 / pass 2 | 656 / 708 | 464 / 464 | 464 / 464 |
+   | s5: churn / passes | 663,679 / 285,921 | 663,618 / 235,396 | 663,618 / 235,396 |
+   | s6: 1,024 ldc, one node | 9,264 | 5,205 | 5,205 |
+   | s7: 1,024 stc, one node | 11,378 | 6,592 | 6,592 |
+
+   - The variant equals the no-query tree on every cycle count. The control equals the earlier define-off twin
+     f32ecccb1 on every value and every cycle count.
+   - Probes: s5 2,049 on the control, 0 on the variant; s3 and s4 1 each on the control, 0 on the variant.
+   - Every other CAPPRINT value is equal across the pair.
+   - Per op, on one resident node: 3.96 cycles per LDC (s6) and 4.67 per STC (s7). These are the query's sim cost
+     under memory delay 12, and a pattern, not a silicon value.
+3. **The FIRE arms.**
+   - `stale-access` reads 0x19 ×4, 0, 0x19 ×2, 0x77, 6 on the control. That is `sublet-bare`'s bitstream-3 silicon
+     vector. On the variant it reads 0 ×7, 0x3333, 0: every 25 is gone and the stale store lands.
+   - `r43-evict-live`: every 0x19 on the control reads 0 on the variant. Both trees end at the test's own capmode
+     RVTEST_PASS (rc 1), as on every earlier tree.
+   - `objb-pcc` completes on the variant (0xbb5 0 0). On the control it loops in its trap handler (76,882 trap lines)
+     until the cycle limit.
+   - `objb-pcc-ctrl` reads 0xbb5 0 0 on both.
+4. **Lint** (`verif/sim/rtl-lint-gate.sh` on 24e588199, vp8 `.sup/lint-b-on.txt`).
+   - Every counter equals e7af48457's except one: LATCH 44, MULTIDRIVEN 3, ALWCOMBORDER 0, COMBDLY 0, UNOPTFLAT 39
+     (the REF's 39 names exactly), BLKSEQ 2, UNDRIVEN 25, CASEOVERLAP 2, SELRANGE 100, ANVIL_UNOPTFLAT 0.
+   - UNUSEDSIGNAL is 1435 against REF 1431, so the gate FAILed on the ceiling alone. The delta is attributed by file
+     against the bitstream-3-era lint (a73a7c670, 1431):
+     - load_store_unit.sv 9 -> 15 (+6): rvc_inv_now, rvc_lu_hit, rvc_lu_nodeval, rvc_ok_match, rvc_dead_match and
+       rvc_dead_tmo_q. Each is read only by the verdict that the macro removes.
+     - The generated DYN unit 311 -> 309 (−2). Its wire names renumber with any source change, so this part is
+       attributed by count only.
+   - 603528b8b sets the REF to 1435, verif/ only. The control's lint, on its own tree and REF 1431, is the paired
+     reading: (pending).
+5. **claim-auditor over the diff: SUPPORTED** for no new latch, loop, multi-driven or undriven signal, and for what
+   the macro does. Its readings:
+   - Every variable the removed arms assigned is defaulted at the top of `cap_violation_detection`:
+     `cap_exception = '0`, `rvc_miss_now = 1'b0`, `rvc_den_arm_now = 4'b0000` (load_store_unit.sv:1321-1324).
+     commit_stage's chain has no trailing `else` after the 25 arm, and its defaults are at :371-372.
+   - So `rvc_miss_now` and `rvc_den_arm_now` are constant 0. The probe, the ALLOW/DEAD records and the refusal record
+     stay at reset, and the LSU's probe and refusal ports are driven by constants.
+   - The define reaches both files by `CAPSTONE_ITFC_EN`'s path. Flist.cva6:62-63 puts the config package before
+     :125 and :141; the Makefile's fpga target writes add_sources.tcl from that Flist (`target ?=
+     capstone_cv64a6_imafdc_sv39`); run.tcl has no verilog_define. Both sites sit inside `ifdef CAPSTONE_ITFC_EN`.
+     The synthesis host's launcher was not read.
+   - The Anvil edit removes both halves of `get_node_query_validity`'s send/recv pair (:173-180). Ten call sites
+     remain, so the channel stays live. In the generated unit, `_rev_node_ep_query_res_0` has 10 consumers against
+     the control's 12; only the query request, its valid and the response ack change shape, two sites each. Port
+     lists are identical. An undriven-signal scan (positive control injected) reads the same set on both trees.
+   - What it adds to the scope: CALL, RETURN and CSSUPERVISE still query the node they enter (scope d), so the rung
+     pays one query per domain entry. The CPMP trackers still gate CPMP-region permission (scope c).
+   - "The cache keeps filling and is never read" is true in simulation only. In synthesis the cache has no observer
+     and should be trimmed, together with its four `(* ram_style = "distributed" *)` tag arrays
+     (load_store_unit.sv:1168-1174, 4 × 64 × 30 bits). That is key 3.
+6. **Kit image sims:** `objb-bare-2026-10-30/PREREG.md`.
+7. **95-test sweep, both trees:** (pending; a precondition of the flash, not of synthesis).
+
+## Synthesis pre-registration (objbounds-b 603528b8b; written and pushed before the gate request)
+
+The control for every key is bitstream 3's own build of e7af48457, read by the same query from its own checkpoints.
+
+**Size gate** (synthesis only, existing settings, 40 GB guard):
+1. **Mapping.** Technology mapping peak at the marker is in bitstream 3's class: 4.8-5.6 GB (b3 5,004.9 MB). The
+   whole-run peak is under the 34 GB watchdog. No single Vivado process goes above 9 GB.
+2. **Loops.** "Found timing loop" headers 0, Synth 8-326 0, check_timing 0 combinational loops (b3: 0 / 0 / 0).
+3. **The macro reached synthesis.** On the synthesised checkpoint, the cells named `*rvc_occ_q*`, `*rvc_nodeval_q*`,
+   `*rvc_rr_q*`, `*rvc_ok_q*`, `*rvc_dead_q*`, `*rvc_pend_q*`, `*rvc_den_v_q*` and `*pc_revnode_valid_q*` number 0, and
+   so do the tag arrays' cells, `*g_rvc_tag*`.
+   - Positive control: the same query on bitstream 3's synthesised checkpoint reads > 0.
+   - Negative control: `*cpmp_revnode_valid_q*` (the CPMP trackers, ruled out of scope) reads > 0 on both.
+3b. **The DYN-unit change reached synthesis.** Site (e) is in the Anvil source, not under the macro, so key 3 cannot
+   see it.
+   - The `core/capstone_dyn_unit.anvil.sv` that the synthesis tree generates has sha256
+     131818fb5bfda03c24490cf3f8d4cf6867c2cd7a93936a3067fe93f8632e9d1f. That is this lane's prologue reading for
+     24e588199, and 603528b8b's Anvil source is the same.
+   - Control: the same file in bitstream 3's synthesis tree reads `7accda6a28c7bf08…`
+     (7accda6a28c7bf0863ee16166d8f28c1eb437101cdd38ca3f9e479bca941d2b2).
+   - If synth's anvilc output differs from this lane's at both commits, the key is instead read as a diff: synth's
+     603528b8b file against synth's e7af48457 file must differ only in LDC's and STC's query paths.
+   - The DYN unit's own LUT/FF rows (variant against b3) are reported, not graded.
+4. **Size.**
+   - The core's FF count falls by at least 700. The named flops alone are about 820: occ 256, nodeval 256, rr 128,
+     the ALLOW/DEAD/pending records about 95, the probe wait counter 20, the refusal record 35, the PC tracker 31.
+   - The core's LUT count does not rise above b3's 144,584 by more than the ±2,000 top-level floor.
+   - The LUT fall itself (the tag storage and its compares) is reported, not graded. The 7,680 tag bits are
+     requested as distributed RAM (load_store_unit.sv:1168-1174), but bitstream 3's mapping of them is not on record
+     here. Synth's b3 reading of the matched cells goes beside it.
+   - ex+issue rises by no more than 2,500 over b3's, read on the same checkpoints. This key is one-sided: the cache
+     sits inside ex_stage (lsu_i), so a large fall is the expected direction, not a failure.
+
+**Full build** (on a gate pass):
+5. **Placed area.** LUT ≤ 169,061 + 2,000; FF ≤ 63,647 − 700 + 300.
+6. **Congestion.** The placer's final estimate has no window above level 5. The router's level is ≤ 5 if the router
+   reports one (b3's routed `-congestion` report segfaulted twice; its placed reading is the control).
+7. **Routing.** 0 routing errors, 0 overlaps.
+8. **Loops and warnings.** check_timing 0 loops; TIMING-23 0 and LUTLP-1 0, each with its b3 control firing.
+9. **The macro reached the routed netlist.** Key 3's query on the routed checkpoint reads 0, with b3's routed
+   checkpoint > 0 as the control.
+10. **WNS.** Reported, not graded (the lead's ruling). b3 is −10.047.
+11. **The bitstream.** .bit sha256, size and path.
+
+**Failure branches.**
+- A mapping blowup (a single process > 9 GB, or the 34 GB watchdog) is graded by genome and Synth 8-326 targets, with
+  no retry.
+- A routing failure gives the placed area and keys 1-5 plus a congestion census, and no WNS.
+
+## Corrections
+
+- **Retracted 2026-10-30, the same day, before anything went to synthesis.** The first cost analysis sent to the runtime
+  lane said that the check's cost is set by misses and that a hit is free. It listed four consumers, with every DYN-unit
+  25 under "semantic ops' operands". The first variant (3c5c43996) followed that list.
+  - **What it missed:** LDC and STC are DYN-unit ops, which query the node on every access. The variant as first built
+    left that query in place.
+  - **Found by the first A/B.** The pointer chases (shapes 2-4, built on ldc) read equal cycles on both trees and
+    printed zero LSU verdict lines.
+  - **The slip:** the consumers were enumerated from `grep d25` over core/*.sv plus the blocks already read. The DYN
+    unit raises `ex_code::INVALID_CAPABILITY`, an Anvil enum, and its prints were seen and not broken down by op.
+  - **The fix:** site (e), ruled IN by the runtime lane: first in ex_stage (0af4307fc, option A), then in the DYN
+    source (24e588199, option B), after A's residual was measured.
+  - **The method now:** a check's consumers are enumerated by the call sites of the function that implements it, and
+    by the decoder's fu routing.
