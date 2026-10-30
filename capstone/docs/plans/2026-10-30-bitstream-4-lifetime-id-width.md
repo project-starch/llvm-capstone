@@ -219,3 +219,18 @@ The id is {gen[29:20], idx[19:0]}; word1 carries gen at [59:50] and parent at [4
     step exits 143.
   - **No off cell needs the id/slot path.** sparse-churn (600,041 nodes through the 2^20-record table), sparse-stale,
     stale, retired and bounds all equal F0's. This rests on one boot.
+- **Boot 3 (b4-t1c, SPEC board PREREG Addendum 17 cd44551c2ae4): AS PREDICTED.** Result lines are at spec-silicon
+  66c0efe4a384, `b4/b4-boot-3.result-lines.txt`.
+  - **Graded here by script.** The pre-registered judge (b4-check-t1c.py 08b4149574dff5c4, unchanged at the result
+    commit) was re-run on the raw step text, spec.txt d3dc5c8b0b10be20, against F0r's result.json b7acfc11080f400c.
+    It exits 0 and reproduces the committed judge block line for line.
+  - **The module loaded `resolve_dirty=1 resolve_pte=1`**, and both read back Y three times.
+  - **Every Tier 1 cell equals F0r's.** cleanup is excepted by construction, and spin_entered is excluded and reported.
+  - **S-24's prediction holds in all three parts.**
+    - `vm` exits 1 at VM_CONTRACT_FAIL execute through mapping PCC, the twin's status.
+    - No bound line fires.
+    - The four cells that boot 2's fault moved return to F0r's values.
+    - So S-24 is confirmed by prediction. Its D = 0 value stays unread, because with the fix on the loop never forms.
+  - **spin_entered: slow start-up.** The spin pair reads not ready after a 5 s wait and ready after 15 s. Tier 1's own
+    5 s wait read True this boot, so it is borderline at this clock.
+  - **Still nothing on the id/slot path,** over three boots.
