@@ -1,0 +1,44 @@
+spec_root $CAPSTONE_WORK/spec/tree-hfl/SPEC17 version 1.0.2
+benchmarks 500.perlbench_r 505.mcf_r 519.lbm_r 525.x264_r 538.imagick_r 544.nab_r 557.xz_r (SUBSET via BENCHMARKS)
+kit c1b3cc5d7c7a30c450d4a7265f599a52686c4c47 clean
+srcalt 500.perlbench_r 02d434e4140bbf6699a14e4806f1831761afc00579e42207c4fb8da1d91b3ee8 500.perlbench_r.capstone.cpu2017.v1.0.tar.xz
+srcalt 502.gcc_r 7df4c247746b252226e3f53d2603db2134493a1f52d9093a27b04b8a426b334a 502.gcc_r.capstone.cpu2017.v1.0.tar.xz
+srcalt 505.mcf_r 0affe861fa0db7baeb829598c0b4179d8cfa3faa3c629990a037aeb8c0eac4fd 505.mcf_r.capstone.cpu2017.v1.0.tar.xz
+sdk capstone-spatial $CAPSTONE_WORK/spec/sdks-heapfix/sdk-spatial profile virtual heap_lifetimes False heap_scrub_free False
+sdk-inventory capstone-spatial e29e8e7f55cce573ebfb5a32f4a7344e54f189451d1707062fb4b7b828badaae (103 files)
+sdk capstone-lifetimes $CAPSTONE_WORK/spec/sdks-heapfix/sdk-lifetimes profile virtual heap_lifetimes True heap_scrub_free False
+sdk-inventory capstone-lifetimes 77f53a7fb944e6403c6c8467a8ad190d24087f393c261bd6b200a14ddad8b9c1 (103 files)
+clang b90e13006a016791271486e7f5c40f70f70b18a9f4bbf49347f2a9160ab6da43 clang version 22.0.0git (https://github.com/project-starch/llvm-capstone.git fca004e7e063e8947c643f79201bda4d673da578)
+layout capstone-spatial layout-sdk $CAPSTONE_WORK/spec/rec-hfl/layout-sdk/capstone-spatial: heap.c.obj bff217eb30b6ceee text 14536/32768 rodata 75/4096 data 0/4096 bss 65744/98304 link.ld 24d1fee6182ba0fe
+layout capstone-lifetimes layout-sdk $CAPSTONE_WORK/spec/rec-hfl/layout-sdk/capstone-lifetimes: heap.c.obj 1deeb1859d744288 text 14928/32768 rodata 75/4096 data 0/4096 bss 65744/98304 link.ld 24d1fee6182ba0fe
+layout heap-last: link.ld 24d1fee6182ba0fe02a0eb1daa943cc8cb69c2a7170aac848da635882173bdf1
+ldecod-host 050b215a5078734bfcd60e691ad6a9c8f29bc8f50eb34dbe26577bc59a6e4d9c cc cc (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0
+config 352d13f7cdc83e3fae9722907fcf43ffa8ae76f4cedd64db674e7191086a38cc config/capstone-virtual.cfg
+runcpu build capstone-spatial rc=0
+exe capstone-spatial 13d99c3cfb5ff80338320f08f6b2fb6c49b06aad7b9158058a9e23dc540bab72 benchspec/CPU/500.perlbench_r/exe/perlbench_r_base.capstone-spatial
+exe capstone-spatial e29f5bf9808d4f5e76bc810aa0fb11ab2abed6f894777777ab50f38694c65941 benchspec/CPU/505.mcf_r/exe/mcf_r_base.capstone-spatial
+exe capstone-spatial 8698cd834f0b139de5405974f954e7d66b274651d3657e0a6b03e5958fe70435 benchspec/CPU/519.lbm_r/exe/lbm_r_base.capstone-spatial
+exe capstone-spatial 058701b8171975845c2f727371109c7b6385573de7f573d67494be8a069afa42 benchspec/CPU/525.x264_r/exe/imagevalidate_525_base.capstone-spatial
+exe capstone-spatial 1c4513a07129401fee332a85301513d5ff2827b7944538bad0ba6dff41c55636 benchspec/CPU/525.x264_r/exe/ldecod_r_base.capstone-spatial
+exe capstone-spatial ef04ec09fab01572461c175aff3edbc41452eb6d062565c96b36c5fca5e466f5 benchspec/CPU/525.x264_r/exe/x264_r_base.capstone-spatial
+exe capstone-spatial 058701b8171975845c2f727371109c7b6385573de7f573d67494be8a069afa42 benchspec/CPU/538.imagick_r/exe/imagevalidate_538_base.capstone-spatial
+exe capstone-spatial 1ad8e4ec5eac7e17996853fd98fdae73492798f0a52ede5c6ede1a0a1d044363 benchspec/CPU/538.imagick_r/exe/imagick_r_base.capstone-spatial
+exe capstone-spatial a027892a2d34405cb04778e704ee70b3e7f71923eb68b58f40bf846e19742a49 benchspec/CPU/544.nab_r/exe/nab_r_base.capstone-spatial
+exe capstone-spatial 6f12dfe4ff05e9cd86ffee5734bfed5904253c96cfc9ef6805aa72c71064961f benchspec/CPU/557.xz_r/exe/xz_r_base.capstone-spatial
+runcpu build capstone-lifetimes rc=0
+exe capstone-lifetimes 05044fa04bc2275da250d9c4af9fc45491a1a720be0d22450a419399d0920abb benchspec/CPU/500.perlbench_r/exe/perlbench_r_base.capstone-lifetimes
+exe capstone-lifetimes c9bb655c5550d1e6d83b1318aa8d448df5e9e4d450ee4e51c4e96d8cc22230b0 benchspec/CPU/505.mcf_r/exe/mcf_r_base.capstone-lifetimes
+exe capstone-lifetimes 719af4fde88c23f9d5da358547563c71dc25645e77d73a241faa10c8cc6fdaab benchspec/CPU/519.lbm_r/exe/lbm_r_base.capstone-lifetimes
+exe capstone-lifetimes 5675010c762a7c7d0edc9779791f0ddf618f897623908695428663abcfdb9e8d benchspec/CPU/525.x264_r/exe/imagevalidate_525_base.capstone-lifetimes
+exe capstone-lifetimes 1e6ab0874a1ff922ebfbea088793d394130ddfa333c076b79ed72d87c042321b benchspec/CPU/525.x264_r/exe/ldecod_r_base.capstone-lifetimes
+exe capstone-lifetimes 352d9af44c927ea4cba98ba0874af28227701ac7a37754c43e2405a3927a6493 benchspec/CPU/525.x264_r/exe/x264_r_base.capstone-lifetimes
+exe capstone-lifetimes 5675010c762a7c7d0edc9779791f0ddf618f897623908695428663abcfdb9e8d benchspec/CPU/538.imagick_r/exe/imagevalidate_538_base.capstone-lifetimes
+exe capstone-lifetimes ff733eb6d46fc845b2eafa29bc01ab2ed76e1571763f549680575929d8d92ef3 benchspec/CPU/538.imagick_r/exe/imagick_r_base.capstone-lifetimes
+exe capstone-lifetimes c90722ccacc0bf62bec77ec78146fcde2ea0ae40edd3911bc000387c7d2af255 benchspec/CPU/544.nab_r/exe/nab_r_base.capstone-lifetimes
+exe capstone-lifetimes c51256d3a3e4760f89b772252e46832c56760f5f0065765989af791401f94a59 benchspec/CPU/557.xz_r/exe/xz_r_base.capstone-lifetimes
+objects capstone-spatial 387 files 9d5043dd0860eac7fd431a055d6ded3f1739e82604b752130e711d931429509b
+objects capstone-lifetimes 387 files 9d5043dd0860eac7fd431a055d6ded3f1739e82604b752130e711d931429509b
+integrity: every benchmark object identical across capstone-spatial capstone-lifetimes
+layout-check capstone-spatial capstone-lifetimes rc=0: layout-check: 10 of 10 pairs PASS; compared 6256 benchmark functions, 1052 benchmark data, 2971 libc+runtime functions, 1000 libc+runtime data, 130 sections
+verify-after-build spec-extract: bench_ok=18467 other_ok=1554 bench_missing=0 other_missing=10297 mismatch=0 (ALL)
+BUILD_DONE

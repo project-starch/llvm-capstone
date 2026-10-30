@@ -1,0 +1,91 @@
+# regeneration control: make-stages-hfl.sh on the campaign tree (tree-board) vs the queued campaign stages; run.sh differs where the campaign stage predates make-stage.py 38be9119 (sys= counters)
+  differs: run.sh
+SAME-OPTIONS 500.perlbench_r-train-capstone-lifetimes vs $CAPSTONE_WORK/spec/stages-trainT1/500.perlbench_r-train-capstone-lifetimes (117 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 500.perlbench_r-train-capstone-spatial vs $CAPSTONE_WORK/spec/stages-trainT1/500.perlbench_r-train-capstone-spatial (117 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 505.mcf_r-train-capstone-lifetimes vs $CAPSTONE_WORK/spec/stages-train/505.mcf_r-train-capstone-lifetimes (4 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 505.mcf_r-train-capstone-spatial vs $CAPSTONE_WORK/spec/stages-train/505.mcf_r-train-capstone-spatial (4 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 519.lbm_r-train-capstone-lifetimes vs $CAPSTONE_WORK/spec/stages-train/519.lbm_r-train-capstone-lifetimes (4 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 519.lbm_r-train-capstone-spatial vs $CAPSTONE_WORK/spec/stages-train/519.lbm_r-train-capstone-spatial (4 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 525.x264_r-train-capstone-lifetimes vs $CAPSTONE_WORK/spec/stages-train/525.x264_r-train-capstone-lifetimes (9 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 525.x264_r-train-capstone-spatial vs $CAPSTONE_WORK/spec/stages-train/525.x264_r-train-capstone-spatial (9 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 538.imagick_r-train-capstone-lifetimes vs $CAPSTONE_WORK/spec/stages-train/538.imagick_r-train-capstone-lifetimes (6 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 538.imagick_r-train-capstone-spatial vs $CAPSTONE_WORK/spec/stages-train/538.imagick_r-train-capstone-spatial (6 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 544.nab_r-train-capstone-lifetimes vs $CAPSTONE_WORK/spec/stages-train/544.nab_r-train-capstone-lifetimes (7 files, 1 differ)
+  differs: run.sh
+SAME-OPTIONS 544.nab_r-train-capstone-spatial vs $CAPSTONE_WORK/spec/stages-train/544.nab_r-train-capstone-spatial (7 files, 1 differ)
+SAME-OPTIONS 557.xz_r-train-capstone-lifetimes-link vs $CAPSTONE_WORK/spec/stages-train/557.xz_r-train-capstone-lifetimes-link (5 files, 0 differ)
+SAME-OPTIONS 557.xz_r-train-capstone-spatial-link vs $CAPSTONE_WORK/spec/stages-train/557.xz_r-train-capstone-spatial-link (5 files, 0 differ)
+
+# new tree (tree-hfl) vs the regenerated campaign stages: only bin/ and plan.executables may differ (--expect-images-differ)
+  differs: bin/capstone-lifetimes/perlbench_r_base.capstone-lifetimes
+  plan.executables differs
+SAME-OPTIONS 500.perlbench_r-train-capstone-lifetimes vs <scratch>/ctl-train/500.perlbench_r-train-capstone-lifetimes (117 files, 1 differ)
+  differs: bin/capstone-spatial/perlbench_r_base.capstone-spatial
+  plan.executables differs
+SAME-OPTIONS 500.perlbench_r-train-capstone-spatial vs <scratch>/ctl-train/500.perlbench_r-train-capstone-spatial (117 files, 1 differ)
+  differs: bin/capstone-lifetimes/mcf_r_base.capstone-lifetimes
+  plan.executables differs
+SAME-OPTIONS 505.mcf_r-train-capstone-lifetimes vs <scratch>/ctl-train/505.mcf_r-train-capstone-lifetimes (4 files, 1 differ)
+  differs: bin/capstone-spatial/mcf_r_base.capstone-spatial
+  plan.executables differs
+SAME-OPTIONS 505.mcf_r-train-capstone-spatial vs <scratch>/ctl-train/505.mcf_r-train-capstone-spatial (4 files, 1 differ)
+  differs: bin/capstone-lifetimes/lbm_r_base.capstone-lifetimes
+  plan.executables differs
+SAME-OPTIONS 519.lbm_r-train-capstone-lifetimes vs <scratch>/ctl-train/519.lbm_r-train-capstone-lifetimes (4 files, 1 differ)
+  differs: bin/capstone-spatial/lbm_r_base.capstone-spatial
+  plan.executables differs
+SAME-OPTIONS 519.lbm_r-train-capstone-spatial vs <scratch>/ctl-train/519.lbm_r-train-capstone-spatial (4 files, 1 differ)
+  differs: bin/capstone-lifetimes/imagevalidate_525_base.capstone-lifetimes
+  differs: bin/capstone-lifetimes/x264_r_base.capstone-lifetimes
+  differs: run.sh
+  plan.executables differs
+SAME-OPTIONS 525.x264_r-train-capstone-lifetimes vs <scratch>/ctl-train/525.x264_r-train-capstone-lifetimes (9 files, 3 differ)
+  differs: bin/capstone-spatial/imagevalidate_525_base.capstone-spatial
+  differs: bin/capstone-spatial/x264_r_base.capstone-spatial
+  differs: run.sh
+  plan.executables differs
+SAME-OPTIONS 525.x264_r-train-capstone-spatial vs <scratch>/ctl-train/525.x264_r-train-capstone-spatial (9 files, 3 differ)
+  differs: bin/capstone-lifetimes/imagevalidate_538_base.capstone-lifetimes
+  differs: bin/capstone-lifetimes/imagick_r_base.capstone-lifetimes
+  differs: run.sh
+  plan.executables differs
+SAME-OPTIONS 538.imagick_r-train-capstone-lifetimes vs <scratch>/ctl-train/538.imagick_r-train-capstone-lifetimes (6 files, 3 differ)
+  differs: bin/capstone-spatial/imagevalidate_538_base.capstone-spatial
+  differs: bin/capstone-spatial/imagick_r_base.capstone-spatial
+  differs: run.sh
+  plan.executables differs
+SAME-OPTIONS 538.imagick_r-train-capstone-spatial vs <scratch>/ctl-train/538.imagick_r-train-capstone-spatial (6 files, 3 differ)
+  differs: bin/capstone-lifetimes/nab_r_base.capstone-lifetimes
+  plan.executables differs
+SAME-OPTIONS 544.nab_r-train-capstone-lifetimes vs <scratch>/ctl-train/544.nab_r-train-capstone-lifetimes (7 files, 1 differ)
+  differs: bin/capstone-spatial/nab_r_base.capstone-spatial
+  plan.executables differs
+SAME-OPTIONS 544.nab_r-train-capstone-spatial vs <scratch>/ctl-train/544.nab_r-train-capstone-spatial (7 files, 1 differ)
+  differs: bin/capstone-lifetimes/xz_r_base.capstone-lifetimes
+  plan.executables differs
+SAME-OPTIONS 557.xz_r-train-capstone-lifetimes-link vs <scratch>/ctl-train/557.xz_r-train-capstone-lifetimes-link (5 files, 1 differ)
+  differs: bin/capstone-spatial/xz_r_base.capstone-spatial
+  plan.executables differs
+SAME-OPTIONS 557.xz_r-train-capstone-spatial-link vs <scratch>/ctl-train/557.xz_r-train-capstone-spatial-link (5 files, 1 differ)
+
+# negative control: mcf vs lbm
+  only in A: ['bin/capstone-spatial/mcf_r_base.capstone-spatial', 'in/control', 'in/inp.in']  only in B: ['bin/capstone-spatial/lbm_r_base.capstone-spatial', 'in/100_100_130_cf_b.of', 'in/lbm.in']
+  differs: run.sh
+  plan.bench differs  <-- UNEXPECTED
+  plan.commands differs  <-- UNEXPECTED
+  plan.executables differs  <-- UNEXPECTED
+  plan.host_validation differs  <-- UNEXPECTED
+  plan.inputs differs  <-- UNEXPECTED
+  plan.outputs differs  <-- UNEXPECTED
+MISMATCH 505.mcf_r-train-capstone-spatial vs <scratch>/ctl-train/519.lbm_r-train-capstone-spatial (4 files, 1 differ)
+exit 1

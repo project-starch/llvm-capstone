@@ -107,6 +107,11 @@ def main():
                     "every other lib/ file joins the excluded ones, so a missing module fails its command, never silently")
     ap.add_argument("--link-inputs", action="store_true",
                     help="link the run directory's inputs to the stage instead of copying them (saves their size in RAM)")
+    ap.add_argument("--commands", metavar="I[,J...]",
+                    help="stage only these of runcpu's run commands (speccmds.cmd order, from 0); default every one. The "
+                    "dropped commands' specdiffs and target validations go with them, and so does every input file only a "
+                    "dropped command names (557.xz_r train: --commands 0 is input.combined alone, which fits the board's "
+                    "payload cap where both inputs do not). plan.json records the selection")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     arms = a.arms.split(",")
@@ -141,6 +146,22 @@ def main():
     # Inputs: identical across arms, the executables and runcpu's own files aside.
     files = {arm: tree_files(r, lambda rel, arm=arm: is_exe(rel, arm) or RUNCPU_FILES.match(rel) is not None)
              for arm, r in runs.items()}
+    selection = None
+    if a.commands is not None:
+        sel = sorted({int(x) for x in a.commands.split(",")})
+        if not sel or sel[0] < 0 or sel[-1] >= len(p["cmds"]):
+            sys.exit(f"make-stage: --commands {a.commands}: runcpu has {len(p['cmds'])} run commands (0..{len(p['cmds']) - 1})")
+        kept, dropped = [p["cmds"][i] for i in sel], [c for i, c in enumerate(p["cmds"]) if i not in sel]
+        def names(cs):
+            return {x for c in cs for x in c["argv"][1:] + [c["input"], c["output"], c["error"]] if x}
+        mine, theirs = names(kept), names(dropped) - names(kept)
+        # A validation goes with the command whose output it reads; one that reads a kept command's output stays.
+        cmp_kept = [c for c in p["cmp"] if not (set(c["argv"][1:]) & theirs) or (set(c["argv"][1:]) & mine)]
+        gone = sorted(rel for rel in files[first] if rel in theirs)
+        excl |= set(gone)
+        selection = dict(commands=sel, of=len(p["cmds"]), dropped_inputs=gone,
+                         dropped_validations=len(p["cmp"]) - len(cmp_kept))
+        p = dict(p, cmds=kept, cmp=cmp_kept)
     for arm in arms[1:]:
         if files[arm] != files[first]:
             diff = sorted(set(files[arm].items()) ^ set(files[first].items()))[:10]
@@ -289,6 +310,8 @@ def main():
                                    for e in exes} for arm in arms},
                 ldecod=hashlib.sha256(a.ldecod.read_bytes()).hexdigest() if p["gen"] else None, stripped=bool(a.strip),
                 refs={k: os.path.relpath(v, spec_root) for k, v in refs.items()})
+    if selection:
+        meta["selection"] = selection   # absent by default, so a stage of every command keeps its plan.json byte for byte
     (a.out / "plan.json").write_text(json.dumps(meta, indent=1) + "\n")
     raw = sum(f.stat().st_size for f in stage.rglob("*") if f.is_file())
     gz = int(subprocess.run(f"tar -C {q(str(stage))} -cf - . | gzip -9 | wc -c", shell=True, check=True,

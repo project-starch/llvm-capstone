@@ -1,0 +1,15 @@
+# negative control: layout-check.py --rec spec/rec-board --tree spec/tree-board/SPEC17 (the campaign build, uncontrolled layout); exit 1
+[502.gcc_r] FAIL cpugcc_r_base.capstone-spatial vs cpugcc_r_base.capstone-lifetimes
+[525.x264_r] FAIL imagevalidate_525_base.capstone-spatial vs imagevalidate_525_base.capstone-lifetimes
+[538.imagick_r] FAIL imagevalidate_538_base.capstone-spatial vs imagevalidate_538_base.capstone-lifetimes
+[538.imagick_r] FAIL imagick_r_base.capstone-spatial vs imagick_r_base.capstone-lifetimes
+[519.lbm_r] FAIL lbm_r_base.capstone-spatial vs lbm_r_base.capstone-lifetimes
+[525.x264_r] FAIL ldecod_r_base.capstone-spatial vs ldecod_r_base.capstone-lifetimes
+[505.mcf_r] FAIL mcf_r_base.capstone-spatial vs mcf_r_base.capstone-lifetimes
+[544.nab_r] FAIL nab_r_base.capstone-spatial vs nab_r_base.capstone-lifetimes
+[500.perlbench_r] FAIL perlbench_r_base.capstone-spatial vs perlbench_r_base.capstone-lifetimes
+[997.specrand_fr] FAIL specrand_fr_base.capstone-spatial vs specrand_fr_base.capstone-lifetimes
+[999.specrand_ir] FAIL specrand_ir_base.capstone-spatial vs specrand_ir_base.capstone-lifetimes
+[525.x264_r] FAIL x264_r_base.capstone-spatial vs x264_r_base.capstone-lifetimes
+[557.xz_r] FAIL xz_r_base.capstone-spatial vs xz_r_base.capstone-lifetimes
+layout-check: 0 of 13 pairs PASS; compared 18618 benchmark functions, 4434 benchmark data, 4064 libc+runtime functions, 1285 libc+runtime data, 156 sections

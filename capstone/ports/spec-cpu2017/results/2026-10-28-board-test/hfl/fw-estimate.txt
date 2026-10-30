@@ -1,0 +1,31 @@
+# fw-estimate.py, control: past boots of the same kit (actual firmware bytes in brackets)
+519.lbm_r-test: stage gzip 259,776 B -> firmware 17,467,912..17,467,912 B, cap 26,000,000: FITS [actual 17467912]
+538.imagick_r-train-capstone-spatial: stage gzip 1,603,117 B -> firmware 19,565,064..19,565,064 B, cap 26,000,000: FITS [actual 19565064]
+500.perlbench_r-regemail-both-v2: stage gzip 6,394,654 B -> firmware 23,759,368..23,759,368 B, cap 26,000,000: FITS [actual 23759368]
+557.xz_r-test-capstone-spatial: stage gzip 1,487,958 B -> firmware 19,565,064..19,565,064 B, cap 26,000,000: FITS [actual 19565064]
+500.perlbench_r-test-capstone-spatial: stage gzip 4,697,630 B -> firmware 21,662,216..23,759,368 B, cap 26,000,000: FITS [actual 21662216]
+502.gcc_r-test-capstone-spatial: stage gzip 5,922,363 B -> firmware 23,759,368..23,759,368 B, cap 26,000,000: FITS [actual 23759368]
+525.x264_r-test-capstone-spatial: stage gzip 3,702,428 B -> firmware 21,662,216..21,662,216 B, cap 26,000,000: FITS [actual 21662216]
+538.imagick_r-test: stage gzip 3,250,873 B -> firmware 19,565,064..21,662,216 B, cap 26,000,000: FITS [actual 21662216]
+505.mcf_r-test-capstone-spatial: stage gzip 510,014 B -> firmware 17,467,912..19,565,064 B, cap 26,000,000: FITS [actual 17467912]
+544.nab_r-test: stage gzip 563,297 B -> firmware 17,467,912..19,565,064 B, cap 26,000,000: FITS [actual 17467912]
+
+# the hfl train stages (cap 26,000,000; xz against the fw33 kits' 33,000,000), and the queued campaign xz stages
+500.perlbench_r-train-capstone-lifetimes: stage gzip 5,310,351 B -> firmware 21,662,216..23,759,368 B, cap 26,000,000: FITS
+500.perlbench_r-train-capstone-spatial: stage gzip 5,310,219 B -> firmware 21,662,216..23,759,368 B, cap 26,000,000: FITS
+505.mcf_r-train-capstone-lifetimes: stage gzip 885,766 B -> firmware 17,467,912..19,565,064 B, cap 26,000,000: FITS
+505.mcf_r-train-capstone-spatial: stage gzip 885,617 B -> firmware 17,467,912..19,565,064 B, cap 26,000,000: FITS
+519.lbm_r-train-capstone-lifetimes: stage gzip 140,241 B -> firmware 17,467,912..17,467,912 B, cap 26,000,000: FITS
+519.lbm_r-train-capstone-spatial: stage gzip 140,092 B -> firmware 17,467,912..17,467,912 B, cap 26,000,000: FITS
+525.x264_r-train-capstone-lifetimes: stage gzip 6,521,418 B -> firmware 23,759,368..23,759,368 B, cap 26,000,000: FITS
+525.x264_r-train-capstone-spatial: stage gzip 6,521,076 B -> firmware 23,759,368..23,759,368 B, cap 26,000,000: FITS
+538.imagick_r-train-capstone-lifetimes: stage gzip 1,597,779 B -> firmware 19,565,064..19,565,064 B, cap 26,000,000: FITS
+538.imagick_r-train-capstone-spatial: stage gzip 1,601,937 B -> firmware 19,565,064..19,565,064 B, cap 26,000,000: FITS
+544.nab_r-train-capstone-lifetimes: stage gzip 513,910 B -> firmware 17,467,912..19,565,064 B, cap 26,000,000: FITS
+544.nab_r-train-capstone-spatial: stage gzip 513,799 B -> firmware 17,467,912..19,565,064 B, cap 26,000,000: FITS
+rc=0
+557.xz_r-train-capstone-lifetimes-link: stage gzip 24,130,510 B -> firmware 40,536,584..42,633,736 B, cap 33,000,000: OVER
+557.xz_r-train-capstone-spatial-link: stage gzip 24,130,404 B -> firmware 40,536,584..42,633,736 B, cap 33,000,000: OVER
+557.xz_r-train-capstone-lifetimes-link: stage gzip 24,130,977 B -> firmware 40,536,584..42,633,736 B, cap 33,000,000: OVER
+557.xz_r-train-capstone-spatial-link: stage gzip 24,130,808 B -> firmware 40,536,584..42,633,736 B, cap 33,000,000: OVER
+xz rc=1

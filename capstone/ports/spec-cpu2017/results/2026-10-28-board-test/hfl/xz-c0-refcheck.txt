@@ -1,0 +1,41 @@
+# run-stage.py read (unchanged, sha256 734ad25cf901d4da) on the REAL full xz train census transcripts (census-train/557.xz_r-train-<arm>-link-mem936M/spec.txt) with command 1's BEGIN/END lines, hash lines and in-band files cut out, against the c0 stage plan
+
+## spatial (a) twin = the full census result.json
+## spatial (a) text c0-spatial.txt, twin 557.xz_r-train-capstone-spatial-link-mem936M/result.json
+READ 557.xz_r train capstone-spatial: 1/1 commands ended, rc!=0: 0, hashes 2, in-band 2, specdiff 1/1 PASS
+READ outputs capstone-spatial vs twin: DIFFER ['IMG_2560.cr2-40-4.out']
+exit 0
+## spatial (b) text c0-spatial.txt, twin ref-spatial-c0/result.json
+READ 557.xz_r train capstone-spatial: 1/1 commands ended, rc!=0: 0, hashes 2, in-band 2, specdiff 1/1 PASS
+READ outputs capstone-spatial vs twin: identical
+exit 0
+## spatial (c) text c0-spatial.txt, twin xz-c0-refcheck/forged-spatial.json
+READ 557.xz_r train capstone-spatial: 1/1 commands ended, rc!=0: 0, hashes 2, in-band 2, specdiff 1/1 PASS
+READ outputs capstone-spatial vs twin: DIFFER ['input.combined-40-8.out']
+exit 0
+## spatial (d) text d-spatial.txt, twin ref-spatial-c0/result.json
+READ 557.xz_r train capstone-spatial: 1/1 commands ended, rc!=0: 0, hashes 1, in-band 1, specdiff 0/1 PASS
+   specdiff NO-OUTPUT ['input.combined-40-8.out']: SPEC/benchspec/CPU/557.xz_r/data/train/output/input.combined-40-8.out input.combined-40-8.out :: ''
+READ outputs capstone-spatial vs twin: DIFFER ['input.combined-40-8.out']
+exit 1
+
+## lifetimes (a) twin = the full census result.json
+## lifetimes (a) text c0-lifetimes.txt, twin 557.xz_r-train-capstone-lifetimes-link-mem936M/result.json
+READ 557.xz_r train capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 2, in-band 2, specdiff 1/1 PASS
+READ outputs capstone-lifetimes vs twin: DIFFER ['IMG_2560.cr2-40-4.out']
+exit 0
+## lifetimes (b) text c0-lifetimes.txt, twin ref-lifetimes-c0/result.json
+READ 557.xz_r train capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 2, in-band 2, specdiff 1/1 PASS
+READ outputs capstone-lifetimes vs twin: identical
+exit 0
+## lifetimes (c) text c0-lifetimes.txt, twin xz-c0-refcheck/forged-lifetimes.json
+READ 557.xz_r train capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 2, in-band 2, specdiff 1/1 PASS
+READ outputs capstone-lifetimes vs twin: DIFFER ['input.combined-40-8.out']
+exit 0
+## lifetimes (d) text d-lifetimes.txt, twin ref-lifetimes-c0/result.json
+READ 557.xz_r train capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 1, in-band 1, specdiff 0/1 PASS
+   specdiff NO-OUTPUT ['input.combined-40-8.out']: SPEC/benchspec/CPU/557.xz_r/data/train/output/input.combined-40-8.out input.combined-40-8.out :: ''
+READ outputs capstone-lifetimes vs twin: DIFFER ['input.combined-40-8.out']
+exit 1
+
+# (a) = the full census is NOT a usable reference for the subset (DIFFER on an output the c0 run never makes); (b) = derived reference: identical; (c) forged hash: DIFFER; (d) output missing: NO-OUTPUT, DIFFER, exit 1

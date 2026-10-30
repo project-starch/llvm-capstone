@@ -1,0 +1,178 @@
+# chain-board.sh (spec-silicon) dry run, 2026-10-30: CB_BUSY=true CB_POLL_S=1 SB_BUSY=true SB_BOOK=stub SB_RUN=stub (stub prints its argv and 'RUN control PASSED stub', exit 0)
+
+## out-b1 (board 1, train-hfl-b1 + train-hfl-b2 lines)
+22:45:15 BEGIN 500.perlbench_r-train-capstone-spatial step 93600 booking 1590 twin $CAPSTONE_WORK/spec/census-train/500.perlbench_r-train-capstone-spatial
+22:45:15 END 500.perlbench_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 500.perlbench_r-train-capstone-spatial booking STUBRUN book 1 1590 vp2 bitstream 3 SPEC 500.perlbench_r-train-capstone-spatial (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 500.perlbench_r-train-capstone-lifetimes step 93600 booking 1590 twin $CAPSTONE_WORK/spec/census-train/500.perlbench_r-train-capstone-lifetimes
+22:45:15 END 500.perlbench_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 500.perlbench_r-train-capstone-lifetimes booking STUBRUN book 1 1590 vp2 bitstream 3 SPEC 500.perlbench_r-train-capstone-lifetimes (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 544.nab_r-train-capstone-spatial step 84600 booking 1440 twin -
+22:45:15 END 544.nab_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 544.nab_r-train-capstone-spatial booking STUBRUN book 1 1440 vp2 bitstream 3 SPEC 544.nab_r-train-capstone-spatial (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 544.nab_r-train-capstone-lifetimes step 84600 booking 1440 twin -
+22:45:15 END 544.nab_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 544.nab_r-train-capstone-lifetimes booking STUBRUN book 1 1440 vp2 bitstream 3 SPEC 544.nab_r-train-capstone-lifetimes (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 519.lbm_r-train-capstone-spatial step 32400 booking 570 twin -
+22:45:15 END 519.lbm_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 519.lbm_r-train-capstone-spatial booking STUBRUN book 1 570 vp2 bitstream 3 SPEC 519.lbm_r-train-capstone-spatial (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 519.lbm_r-train-capstone-lifetimes step 32400 booking 570 twin -
+22:45:15 END 519.lbm_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 519.lbm_r-train-capstone-lifetimes booking STUBRUN book 1 570 vp2 bitstream 3 SPEC 519.lbm_r-train-capstone-lifetimes (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 505.mcf_r-train-capstone-spatial step 84600 booking 1440 twin -
+22:45:15 END 505.mcf_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 505.mcf_r-train-capstone-spatial booking STUBRUN book 1 1440 vp2 bitstream 3 SPEC 505.mcf_r-train-capstone-spatial (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 505.mcf_r-train-capstone-lifetimes step 84600 booking 1440 twin -
+22:45:15 END 505.mcf_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 505.mcf_r-train-capstone-lifetimes booking STUBRUN book 1 1440 vp2 bitstream 3 SPEC 505.mcf_r-train-capstone-lifetimes (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 525.x264_r-train-capstone-spatial step 100800 booking 1710 twin -
+22:45:15 END 525.x264_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 525.x264_r-train-capstone-spatial booking STUBRUN book 1 1710 vp2 bitstream 3 SPEC 525.x264_r-train-capstone-spatial (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 525.x264_r-train-capstone-lifetimes step 100800 booking 1710 twin -
+22:45:15 END 525.x264_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 525.x264_r-train-capstone-lifetimes booking STUBRUN book 1 1710 vp2 bitstream 3 SPEC 525.x264_r-train-capstone-lifetimes (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 538.imagick_r-train-capstone-spatial step 84600 booking 1440 twin -
+22:45:15 END 538.imagick_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 538.imagick_r-train-capstone-spatial booking STUBRUN book 1 1440 vp2 bitstream 3 SPEC 538.imagick_r-train-capstone-spatial (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 538.imagick_r-train-capstone-lifetimes step 84600 booking 1440 twin -
+22:45:15 END 538.imagick_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 538.imagick_r-train-capstone-lifetimes booking STUBRUN book 1 1440 vp2 bitstream 3 SPEC 538.imagick_r-train-capstone-lifetimes (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+
+## out-b2 (board 2, train-hfl-b2 lines)
+22:45:15 BEGIN 519.lbm_r-train-capstone-spatial step 32400 booking 570 twin -
+22:45:15 END 519.lbm_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 2 kit bkit12-perf-b3-b2 stage 519.lbm_r-train-capstone-spatial booking STUBRUN book 2 570 vp2 bitstream 3 SPEC 519.lbm_r-train-capstone-spatial (board 2)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 519.lbm_r-train-capstone-lifetimes step 32400 booking 570 twin -
+22:45:15 END 519.lbm_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 2 kit bkit12-perf-b3-b2 stage 519.lbm_r-train-capstone-lifetimes booking STUBRUN book 2 570 vp2 bitstream 3 SPEC 519.lbm_r-train-capstone-lifetimes (board 2)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 505.mcf_r-train-capstone-spatial step 84600 booking 1440 twin -
+22:45:15 END 505.mcf_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 2 kit bkit12-perf-b3-b2 stage 505.mcf_r-train-capstone-spatial booking STUBRUN book 2 1440 vp2 bitstream 3 SPEC 505.mcf_r-train-capstone-spatial (board 2)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 505.mcf_r-train-capstone-lifetimes step 84600 booking 1440 twin -
+22:45:15 END 505.mcf_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 2 kit bkit12-perf-b3-b2 stage 505.mcf_r-train-capstone-lifetimes booking STUBRUN book 2 1440 vp2 bitstream 3 SPEC 505.mcf_r-train-capstone-lifetimes (board 2)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 525.x264_r-train-capstone-spatial step 100800 booking 1710 twin -
+22:45:15 END 525.x264_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 2 kit bkit12-perf-b3-b2 stage 525.x264_r-train-capstone-spatial booking STUBRUN book 2 1710 vp2 bitstream 3 SPEC 525.x264_r-train-capstone-spatial (board 2)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 525.x264_r-train-capstone-lifetimes step 100800 booking 1710 twin -
+22:45:15 END 525.x264_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 2 kit bkit12-perf-b3-b2 stage 525.x264_r-train-capstone-lifetimes booking STUBRUN book 2 1710 vp2 bitstream 3 SPEC 525.x264_r-train-capstone-lifetimes (board 2)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 538.imagick_r-train-capstone-spatial step 84600 booking 1440 twin -
+22:45:15 END 538.imagick_r-train-capstone-spatial rc=0
+    SB BEGIN 22:45:15 board 2 kit bkit12-perf-b3-b2 stage 538.imagick_r-train-capstone-spatial booking STUBRUN book 2 1440 vp2 bitstream 3 SPEC 538.imagick_r-train-capstone-spatial (board 2)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 538.imagick_r-train-capstone-lifetimes step 84600 booking 1440 twin -
+22:45:15 END 538.imagick_r-train-capstone-lifetimes rc=0
+    SB BEGIN 22:45:15 board 2 kit bkit12-perf-b3-b2 stage 538.imagick_r-train-capstone-lifetimes booking STUBRUN book 2 1440 vp2 bitstream 3 SPEC 538.imagick_r-train-capstone-lifetimes (board 2)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+
+## out-xz (board 1, train-hfl-xz lines, SB_KITROOT=t3-smoke-fw33)
+22:45:15 BEGIN 557.xz_r-train-capstone-spatial-link step 32400 booking 570 twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-spatial-link-mem936M
+22:45:15 END 557.xz_r-train-capstone-spatial-link rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 557.xz_r-train-capstone-spatial-link booking STUBRUN book 1 570 vp2 bitstream 3 SPEC 557.xz_r-train-capstone-spatial-link (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+22:45:15 BEGIN 557.xz_r-train-capstone-lifetimes-link step 32400 booking 570 twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-lifetimes-link-mem936M
+22:45:15 END 557.xz_r-train-capstone-lifetimes-link rc=0
+    SB BEGIN 22:45:15 board 1 kit bkit12-perf-b3-b1 stage 557.xz_r-train-capstone-lifetimes-link booking STUBRUN book 1 570 vp2 bitstream 3 SPEC 557.xz_r-train-capstone-lifetimes-link (board 1)
+    RUN control PASSED stub
+    SB END rc=0 22:45:15
+    RUN control PASSED stub
+STUBRUN run --backend board --kit $CAPSTONE_WORK/t3-smoke-fw33/bkit12-perf-b3-b1 --stage $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-spatial-link --out $CAPSTONE_WORK/spec/dryrun-hfl/out-xz/557.xz_r-train-capstone-spatial-link --control $CAPSTONE_WORK/perf/build2/T1/crc.K0.dom 1 5 --step-s 32400 --twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-spatial-link-mem936M/result.json
+STUBRUN run --backend board --kit $CAPSTONE_WORK/t3-smoke-fw33/bkit12-perf-b3-b1 --stage $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-lifetimes-link --out $CAPSTONE_WORK/spec/dryrun-hfl/out-xz/557.xz_r-train-capstone-lifetimes-link --control $CAPSTONE_WORK/perf/build2/T1/crc.K0.dom 1 5 --step-s 32400 --twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-lifetimes-link-mem936M/result.json
+
+## out-neg (negative: a line naming a non-stage directory)
+22:45:15 BEGIN stages-train-hfl step 100 booking 10 twin -
+22:45:15 END stages-train-hfl rc=2
+    SB STOP: $CAPSTONE_WORK/spec/stages-train-hfl is not a make-stage.py output
+22:45:15 CB STOP after stages-train-hfl
+
+## out-xz-c0 (train-hfl-xz-c0 lines, STANDARD kit, board 1)
+00:32:37 BEGIN 557.xz_r-train-capstone-spatial-link-c0 step 32400 booking 570 twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-spatial-link-mem936M-c0
+00:32:37 END 557.xz_r-train-capstone-spatial-link-c0 rc=0
+    SB BEGIN 00:32:37 board 1 kit bkit12-perf-b3-b1 stage 557.xz_r-train-capstone-spatial-link-c0 booking STUBRUN book 1 570 vp2 bitstream 3 SPEC 557.xz_r-train-capstone-spatial-link-c0 (board 1)
+    RUN control PASSED stub
+    SB END rc=0 00:32:37
+    RUN control PASSED stub
+00:32:37 BEGIN 557.xz_r-train-capstone-lifetimes-link-c0 step 32400 booking 570 twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-lifetimes-link-mem936M-c0
+00:32:37 END 557.xz_r-train-capstone-lifetimes-link-c0 rc=0
+    SB BEGIN 00:32:37 board 1 kit bkit12-perf-b3-b1 stage 557.xz_r-train-capstone-lifetimes-link-c0 booking STUBRUN book 1 570 vp2 bitstream 3 SPEC 557.xz_r-train-capstone-lifetimes-link-c0 (board 1)
+    RUN control PASSED stub
+    SB END rc=0 00:32:37
+    RUN control PASSED stub
+STUBRUN run --backend board --kit $CAPSTONE_WORK/t3-smoke/bkit12-perf-b3-b1 --stage $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-spatial-link-c0 --out $CAPSTONE_WORK/spec/dryrun-hfl/out-xz-c0/557.xz_r-train-capstone-spatial-link-c0 --control $CAPSTONE_WORK/perf/build2/T1/crc.K0.dom 1 5 --step-s 32400 --twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-spatial-link-mem936M-c0/result.json
+STUBRUN run --backend board --kit $CAPSTONE_WORK/t3-smoke/bkit12-perf-b3-b1 --stage $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-lifetimes-link-c0 --out $CAPSTONE_WORK/spec/dryrun-hfl/out-xz-c0/557.xz_r-train-capstone-lifetimes-link-c0 --control $CAPSTONE_WORK/perf/build2/T1/crc.K0.dom 1 5 --step-s 32400 --twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-lifetimes-link-mem936M-c0/result.json
+## out-xz-c0-b2 (train-hfl-xz-c0 lines, STANDARD kit, board 2)
+00:32:37 BEGIN 557.xz_r-train-capstone-spatial-link-c0 step 32400 booking 570 twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-spatial-link-mem936M-c0
+00:32:37 END 557.xz_r-train-capstone-spatial-link-c0 rc=0
+    SB BEGIN 00:32:37 board 2 kit bkit12-perf-b3-b2 stage 557.xz_r-train-capstone-spatial-link-c0 booking STUBRUN book 2 570 vp2 bitstream 3 SPEC 557.xz_r-train-capstone-spatial-link-c0 (board 2)
+    RUN control PASSED stub
+    SB END rc=0 00:32:37
+    RUN control PASSED stub
+00:32:37 BEGIN 557.xz_r-train-capstone-lifetimes-link-c0 step 32400 booking 570 twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-lifetimes-link-mem936M-c0
+00:32:37 END 557.xz_r-train-capstone-lifetimes-link-c0 rc=0
+    SB BEGIN 00:32:37 board 2 kit bkit12-perf-b3-b2 stage 557.xz_r-train-capstone-lifetimes-link-c0 booking STUBRUN book 2 570 vp2 bitstream 3 SPEC 557.xz_r-train-capstone-lifetimes-link-c0 (board 2)
+    RUN control PASSED stub
+    SB END rc=0 00:32:37
+    RUN control PASSED stub
+STUBRUN run --backend board --kit $CAPSTONE_WORK/t3-smoke/bkit12-perf-b3-b2 --stage $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-lifetimes-link-c0 --out $CAPSTONE_WORK/spec/dryrun-hfl/out-xz-c0-b2/557.xz_r-train-capstone-lifetimes-link-c0 --control $CAPSTONE_WORK/perf/build2/T1/crc.K0.dom 1 5 --step-s 32400 --twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-lifetimes-link-mem936M-c0/result.json
+STUBRUN run --backend board --kit $CAPSTONE_WORK/t3-smoke/bkit12-perf-b3-b2 --stage $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-spatial-link-c0 --out $CAPSTONE_WORK/spec/dryrun-hfl/out-xz-c0-b2/557.xz_r-train-capstone-spatial-link-c0 --control $CAPSTONE_WORK/perf/build2/T1/crc.K0.dom 1 5 --step-s 32400 --twin $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-spatial-link-mem936M-c0/result.json

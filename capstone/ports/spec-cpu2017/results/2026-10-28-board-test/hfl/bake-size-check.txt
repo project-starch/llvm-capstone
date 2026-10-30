@@ -1,0 +1,22 @@
+# bake-size-check.py: positive controls (recompress a past Image's initramfs; then rebuild five past boots' Images from lbm test's Image and their own batch dirs)
+reference 519.lbm_r-test/guest/image/Image: Image 15,370,752 (layout 15,370,752), initramfs gz 3,700,441 at 6,349,144; recompressed -9: 3,706,123 (+5,682)
+reference 538.imagick_r-train-capstone-spatial/guest/image/Image: Image 17,467,904 (layout 17,467,904), initramfs gz 5,037,912 at 6,349,144; recompressed -9: 5,042,999 (+5,087)
+538.imagick_r-train-capstone-spatial: actual Image 17467904, firmware 19565064
+batch 538.imagick_r-train-capstone-spatial/batch: 18 entries, cpio 17,379,920, initramfs gz 5,042,963 -> Image 17,467,904, firmware 19,565,064; next 2 MiB step at gz 6,198,448 (1,155,485 B of room)
+500.perlbench_r-regemail-both-v2: actual Image 21662208, firmware 23759368
+batch 500.perlbench_r-regemail-both-v2/batch: 659 entries, cpio 26,843,088, initramfs gz 9,815,486 -> Image 21,662,208, firmware 23,759,368; next 2 MiB step at gz 10,392,752 (577,266 B of room)
+557.xz_r-test-capstone-spatial: actual Image 17467904, firmware 19565064
+batch 557.xz_r-test-capstone-spatial/batch: 15 entries, cpio 11,057,164, initramfs gz 4,934,497 -> Image 17,467,904, firmware 19,565,064; next 2 MiB step at gz 6,198,448 (1,263,951 B of room)
+525.x264_r-test-capstone-spatial: actual Image 19565056, firmware 21662216
+batch 525.x264_r-test-capstone-spatial/batch: 17 entries, cpio 14,533,780, initramfs gz 7,151,493 -> Image 19,565,056, firmware 21,662,216; next 2 MiB step at gz 8,295,600 (1,144,107 B of room)
+502.gcc_r-test-capstone-spatial: actual Image 21662208, firmware 23759368
+batch 502.gcc_r-test-capstone-spatial/batch: 15 entries, cpio 24,888,044, initramfs gz 9,361,240 -> Image 21,662,208, firmware 23,759,368; next 2 MiB step at gz 10,392,752 (1,031,512 B of room)
+
+# the xz train stages (per-arm batch dirs built by run-stage.py --backend board with a stub transcript, standard kit bkit12-perf-b3-b1)
+batch $CAPSTONE_WORK/spec/bakecheck-xz/557.xz_r-train-capstone-spatial-link-c0/batch: 15 entries, cpio 18,043,888, initramfs gz 11,902,205 -> Image 23,759,360, firmware 25,856,520; next 2 MiB step at gz 12,489,904 (587,699 B of room)
+batch $CAPSTONE_WORK/spec/bakecheck-xz/557.xz_r-train-capstone-lifetimes-link-c0/batch: 15 entries, cpio 18,043,920, initramfs gz 11,902,346 -> Image 23,759,360, firmware 25,856,520; next 2 MiB step at gz 12,489,904 (587,558 B of room)
+batch $CAPSTONE_WORK/spec/bakecheck-xz/557.xz_r-train-capstone-spatial-link/batch: 16 entries, cpio 33,743,624, initramfs gz 27,592,816 -> Image 40,536,576, firmware 42,633,736; next 2 MiB step at gz 29,267,120 (1,674,304 B of room)
+
+# fw-estimate.py on the c0 stages
+557.xz_r-train-capstone-lifetimes-link-c0: stage gzip 8,453,738 B -> firmware 25,856,520..25,856,520 B, cap 26,000,000: FITS
+557.xz_r-train-capstone-spatial-link-c0: stage gzip 8,453,625 B -> firmware 25,856,520..25,856,520 B, cap 26,000,000: FITS

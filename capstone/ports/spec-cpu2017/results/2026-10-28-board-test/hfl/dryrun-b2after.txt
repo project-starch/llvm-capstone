@@ -1,0 +1,59 @@
+# b2-after-objb2.sh and objb-witness.sh, stubbed dry runs (2026-10-31 02:2x-02:31)
+## v2
+OW-STUB
+RB-STUB
+== ok-wran rc=0
+2026-10-31 02:31:25 AO waiting for objb-first pid 1783307
+2026-10-31 02:31:27 AO ObjBounds main ended rc=0; witness
+2026-10-31 02:31:27 AO witness rc=0 (0 ran, 2 not run, 1 runner failed); reflashing bitstream 3
+2026-10-31 02:31:27 AO waiting for Addendum 18 on origin/spec-silicon
+2026-10-31 02:31:28 AO Addendum 18 registered; chain b2 on $CAPSTONE_WORK/spec/board/train-hfl-b2.lines
+CB-STUB argv: 2 $CAPSTONE_WORK/spec/board/train-hfl-b2.lines $CAPSTONE_WORK/spec/dryrun-b2after/v2/ok-wran/out
+2026-10-31 02:31:28 AO chain b2 rc=0
+OW-STUB
+RB-STUB
+== ok-wskip rc=0
+2026-10-31 02:31:28 AO waiting for objb-first pid 1783367
+2026-10-31 02:31:30 AO ObjBounds main ended rc=0; witness
+2026-10-31 02:31:30 AO witness rc=2 (0 ran, 2 not run, 1 runner failed); reflashing bitstream 3
+2026-10-31 02:31:30 AO Addendum 18 registered; chain b2 on $CAPSTONE_WORK/spec/board/train-hfl-b2.lines
+CB-STUB argv: 2 $CAPSTONE_WORK/spec/board/train-hfl-b2.lines $CAPSTONE_WORK/spec/dryrun-b2after/v2/ok-wskip/out
+2026-10-31 02:31:30 AO chain b2 rc=0
+OW-STUB
+RB-STUB
+== wfail-rbfail rc=1
+2026-10-31 02:31:30 AO waiting for objb-first pid 1783403
+2026-10-31 02:31:32 AO ObjBounds main ended rc=0; witness
+2026-10-31 02:31:32 AO witness rc=1 (0 ran, 2 not run, 1 runner failed); reflashing bitstream 3
+2026-10-31 02:31:32 AO STOP: reflash rc=1
+== obfail rc=1
+2026-10-31 02:31:32 AO waiting for objb-first pid 1783442
+2026-10-31 02:31:34 AO STOP: no 'OB MAIN END rc=0' in $CAPSTONE_WORK/spec/dryrun-b2after/v2/obfail/ob.log; board 2 left on ObjBounds
+## witness
+== ok rc=0
+OW START 2026-10-31 02:31:12 board 2 bitstream caplifive_vp2c_603528b8b
+OW IMAGE objb-stale-w BEGIN 02:31:12 prereg abcdef123456 rec 0x80001000
+OW IMAGE objb-stale-w END rc=0 02:31:12
+RUN-STUB img=$CAPSTONE_WORK/spec/dryrun-b2after/witness/kit-ok/objb-stale-w.bin rec=0x80001000 out=$CAPSTONE_WORK/spec/dryrun-b2after/witness/out-ok/objb-stale-w bs=caplifive_vp2c_603528b8b.bit board=2 url_set=yes
+== noready rc=2
+OW START 2026-10-31 02:31:12 board 2 bitstream caplifive_vp2c_603528b8b
+OW SKIP: no $CAPSTONE_WORK/spec/dryrun-b2after/witness/kit-noready/READY
+objb-stale-w.bin: FAILED
+sha256sum: WARNING: 1 computed checksum did NOT match
+== badsum rc=2
+OW START 2026-10-31 02:31:12 board 2 bitstream caplifive_vp2c_603528b8b
+OW STOP: $CAPSTONE_WORK/spec/dryrun-b2after/witness/kit-bad/SHA256SUMS does not verify or does not cover the image and its .rec
+== unreg rc=2
+OW START 2026-10-31 02:31:12 board 2 bitstream caplifive_vp2c_603528b8b
+OW STOP: abcdef123456 is not on origin/land/rtl-objb (not pre-registered)
+== busy rc=2
+OW START 2026-10-31 02:31:12 board 2 bitstream caplifive_vp2c_603528b8b
+OW STOP: board 2 busy
+== runfail rc=1
+OW START 2026-10-31 02:31:12 board 2 bitstream caplifive_vp2c_603528b8b
+OW IMAGE objb-stale-w BEGIN 02:31:12 prereg abcdef123456 rec 0x80001000
+OW IMAGE objb-stale-w END rc=3 02:31:12
+RUN-STUB img=$CAPSTONE_WORK/spec/dryrun-b2after/witness/kit-ok/objb-stale-w.bin rec=0x80001000 out=$CAPSTONE_WORK/spec/dryrun-b2after/witness/out-runfail/objb-stale-w bs=caplifive_vp2c_603528b8b.bit board=2 url_set=yes
+fatal: Not a valid object name abcdef123456
+== realpre(abcdef123456) rc=2
+OW STOP: abcdef123456 is not on origin/land/rtl-objb (not pre-registered)

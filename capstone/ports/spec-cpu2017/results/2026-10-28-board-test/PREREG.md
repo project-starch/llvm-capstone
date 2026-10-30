@@ -786,3 +786,323 @@ built from t1b's board.txt (build-t1c-stubs.py):
 - no spin and clock lines: graded AS PREDICTED, both reported NO DATA;
 - the step's RD2 reading N under a passing @@PARAM (judge only): READBACK FAIL, exit 3.
 The built batch carries both sysfs writes in gate.sh and both insmod arguments in spec/run.sh.
+
+
+## Addendum 18 (2026-10-31 04:35, before any boot it names): the train stages rebuilt on the fixed heap with the code layout controlled
+
+**What changes, and why.** Two findings made the queued train images the wrong ones to spend about 150 board-hours on.
+- **Heap defects.** The campaign SDKs carry the two heap defects named in Addendum 16. realloc kept an object's offset
+  at a base the new size cannot be published at, and power-of-two-stride slots were bound half a granule off, so free()
+  trapped. On silicon this ended perlbench's re/reg_email in both arms (Addendum 16; P26). The fixes are on dev,
+  348d9cf2c29c (realloc) and de7cdacda737 (slot header). The SDKs `perf/sdk-heapfix-T1` (MapLife: lifetimes off) and
+  `perf/sdk-heapfix-T3` (ObjLife: lifetimes on, scrub off) are built from exactly that runtime tree.
+- **Code layout.** An audit found that the campaign images do not control layout. The runtime's heap.c.obj, the one
+  file the arms differ in, sits early in `.text`. So every benchmark function after it moves between the arms: mcf's
+  main is at 0x212ec in MapLife and 0x21414 in ObjLife. Every ObjLife/MapLife cycle ratio then carries a placement
+  term, and on the microbenchmarks that term reached about 8 % at identical instructions.
+  - The layout control is on lane spec-layout c1b3cc5d7c7a (`CAPSTONE_SPEC_LAYOUT=heap-last`, tools/layout-sdk.py,
+    tools/layout-check.py).
+  - It links heap.c.obj last in `.text`, `.data` and `.bss`, and puts its read-only data in its own `.rodata.heap`.
+    Each of these goes in a region of fixed size.
+  - Every other symbol and section then sits at the same address in both arms.
+
+Nothing else changes: the bitstream (3, e7af48457), the kits (`bkit12-perf-b3-b<board>`; the fw33 copies are retired, below), the
+known-good control, and every make-stage.py option. Only the images differ, and so the stages' bin/.
+
+**Build** (`hfl/build-hfl.sh`). A fresh tree `spec/tree-hfl`, record `spec/rec-hfl`, kit = spec-layout c1b3cc5d7c7a
+(clean), the seven train benchmarks, both arms. Helpers built in each arm: x264's ldecod_r and imagevalidate_525,
+imagick's imagevalidate_538.
+- Every benchmark object is byte-identical across the arms (387 files).
+- **layout-check: 10 of 10 executable pairs PASS** (`hfl/layout-check-hfl.txt`). That covers 6256 benchmark functions,
+  1052 benchmark data, 2971 libc+runtime functions, 1000 libc+runtime data and 130 sections. mcf's main is at 0x1eb84
+  in both arms, and `__capstone_mallocng_malloc` at 0x25f50 in both.
+- **Negative control:** the campaign build (rec-board, tree-board) still FAILS, 0 of 13 pairs, exit 1. mcf's main is at
+  0x212ec against 0x21414 (`hfl/layout-check-neg-rec-board.txt`).
+- `runcpu --fake --action=run` for train and test names the layout view (`rec-hfl/layout-sdk/<arm>`) as the README
+  requires. Every staged executable's sha256 equals the build record's (36 of 36; the stripped perl test images are not
+  compared).
+
+**Images** (sha256, first 16). The `run.sh` of each stage is make-stage.py's current output, the same version that
+wrote the xz link stages; the hashes are in `hfl/stage-compare.txt`'s stages.
+
+| image | MapLife (T1, capstone-spatial) | ObjLife (T2, capstone-lifetimes) |
+|---|---|---|
+| perlbench_r | 13d99c3cfb5ff803 | 05044fa04bc2275d |
+| mcf_r | e29f5bf9808d4f5e | c9bb655c5550d1e6 |
+| lbm_r | 8698cd834f0b139d | 719af4fde88c23f9 |
+| x264_r | ef04ec09fab01572 | 352d9af44c927ea4 |
+| imagick_r | 1ad8e4ec5eac7e17 | ff733eb6d46fc845 |
+| imagevalidate (525 and 538 alike) | 058701b817197584 | 5675010c762a7c7d |
+| nab_r | a027892a2d34405c | c90722ccacc0bf62 |
+| xz_r | 6f12dfe4ff05e9cd | c51256d3a3e4760f |
+
+ldecod (x264's input generator, outside the context) is unchanged: b624ecdd5437252b.
+
+**Stages** (`hfl/make-stages-hfl.sh`, `spec/stages-train-hfl/`). Each stage mirrors one queued stage, one for one:
+- the same runcpu train commands;
+- the same options: perlbench `--keep-lib perl-train-lib.txt`, x264 `--ldecod`, xz `--link-inputs`, and none for mcf,
+  lbm, imagick and nab;
+- imagick and x264 keep their target-side imagevalidate.
+
+Proof, `hfl/stage-compare.txt`:
+- The same script run on the campaign tree reproduces all 14 queued stages file for file and plan field for plan field.
+- The only difference is run.sh, which is newer than the campaign's for 12 of them: it adds the module's sysfs counter
+  delta. The xz link stages are byte-identical.
+- The hfl stages differ from those regenerated stages only in bin/ and `plan.executables`. Staged references are
+  compared by content: their names carry the tree path.
+- Negative control: mcf against lbm reads MISMATCH.
+
+**Payload.** The firmware is the Image plus 2,097,160 B, and the stage lives in the Image's gzip'd initramfs.
+`hfl/fw-estimate.py` gives the firmware size from the stage's gzip -9 size.
+- **Fit.** The initramfs is 3,440,665 B plus the stage's gzip size. Four Images, with stages from 0.26 to 6.4 MB, match
+  that within 30 KB.
+- **Image size.** The Image rounds to 15,370,752 + k × 2 MiB.
+- **Control.** All ten past boots of this kit fall inside its range, `hfl/fw-estimate.txt`.
+
+| stage (per arm) | gzip -9 | firmware estimate | cap |
+|---|---|---|---|
+| perlbench train | 5.31 MB | 21.66-23.76 MB | 26.0 MB, FITS |
+| x264 train | 6.52 MB | 23.76 MB | 26.0 MB, FITS |
+| imagick train | 1.60 MB | 19.57 MB | 26.0 MB, FITS |
+| mcf train | 0.89 MB | 17.47-19.57 MB | 26.0 MB, FITS |
+| nab train | 0.51 MB | 17.47-19.57 MB | 26.0 MB, FITS |
+| lbm train | 0.14 MB | 17.47 MB | 26.0 MB, FITS |
+| xz train, --link-inputs, both commands | 24.13 MB | 42.63 MB | refused (see below) |
+| **xz train, --link-inputs --commands 0** (input.combined) | 8.45 MB | **25.86 MB** | 26.0 MB, FITS |
+
+**xz train: the full stage cannot be baked; the board runs command 0 (input.combined) only, in both arms.**
+
+**The bake model.** An audit of the bake path reproduces six past Images exactly with:
+- Image = 2 MiB × ceil((6,349,144 + initramfs gzip + 35,320) / 2 MiB) + 4,884,992;
+- firmware = Image + 2,097,160.
+
+The initramfs is the base rootfs (about 2.97 MB gzip), plus the batch files (about 0.47 MB), plus the stage.
+
+**The full xz train stage is refused.** It has both commands, and its inputs are already .xz, so they do not compress.
+- Its firmware is **42,633,736 B**. board-run.sh refuses it at its cap check before any boot.
+- Raising the cap is not a fix:
+  - the FDT sits 32 MiB above the payload;
+  - the documented upload hard cap is 32 MB (docs/plans/2026-10-16-board-campaign-all.md:25);
+  - the largest firmware ever uploaded is 30,050,824 B.
+
+**This corrects Addendum 11.** Its estimate ("about 31.5 MB": the Image as about 4.9 MB plus the raw stage) left out the
+kernel prefix and the base rootfs. lbm test's Image is 15,370,752 B with a 0.26 MB stage. So:
+- **P23 is withdrawn** as registered. No full xz train boot runs, on the campaign images or on these.
+- **The fw33 kits are retired.** Their 33,000,000 B cap was itself above the documented 32 MB upload cap.
+- **xz-b1.list is retired.** Its waiter was stopped before it started anything.
+
+**xz train on the board is command 0, input.combined, in both arms, on the standard kits**
+(bkit12-perf-b3-b<board>, cap 26,000,000).
+- **The stage.** make-stage.py gains `--commands` (spec-silicon, board/make-stage.py). It keeps the selected run
+  commands of runcpu's speccmds.cmd, their specdiffs, and only the input files they name; plan.json records the
+  selection.
+- **Default unchanged.** Without the option, regenerated stages are byte-identical to the existing ones: run.sh,
+  plan.json and every file of stage/, for xz link (both arms), x264 and perlbench.
+- **The new stages** are `557.xz_r-train-<arm>-link-c0`:
+  - one command (`xz_r input.combined.xz 40 ... 8`), one host specdiff;
+  - inputs `control` and `input.combined.xz`;
+  - `IMG_2560.cr2.xz` dropped;
+  - run.sh is the full stage's with command 1's lines removed;
+  - stage gzip 8,453,6xx B (spatial 8,453,625, lifetimes 8,453,738).
+
+**Firmware: 25,856,520 B in both arms,** under the 26,000,000 cap. About 0.59 MB of initramfs is left below the next
+2 MiB step. Three checks:
+- the formula above;
+- `hfl/fw-estimate.py`;
+- `hfl/bake-size-check.py`, a bake without the buildroot or the board:
+  - it builds boardvm's real per-arm batch directory (run-stage.py with a stub transcript, the standard kit);
+  - it splices that directory into a past Image's initramfs in place of that boot's batch, and recompresses with
+    gzip -9;
+  - control: it reproduces the Image and firmware of five past boots exactly. Its gzip runs 5-11 KB above the
+    kernel's, so it errs high;
+  - it gives the full stage 42,633,736.
+
+**IMG_2560.cr2.xz alone** would bake to 34,245,128 B, above every proven upload. It is a limitation recorded here, not a
+run.
+
+**Twin reference.** The c0 stage runs exactly the full stage's first command, in the same fresh run directory, first.
+- **The full census is not a usable reference.** Against it (census-train/...-link-mem936M), run-stage.py's twin
+  comparison reads `DIFFER ['IMG_2560.cr2-40-4.out']`: an output the c0 run never makes.
+  - Shown on the real full transcript with command 1's lines cut out, both arms (`hfl/xz-c0-refcheck.txt`).
+- **The derived reference.** `hfl/derive-subset-ref.py` derives one from the same run:
+  - command 0, its outputs' hashes and in-band files, and its specdiff;
+  - written to census-train/...-link-mem936M-c0, recording the full result's sha256.
+- **Against the derived reference:**
+  - the same transcript reads `identical`;
+  - a forged input.combined-40-8.out hash reads DIFFER;
+  - a transcript with that output removed reads specdiff NO-OUTPUT, DIFFER, exit 1.
+- run-stage.py is unchanged.
+
+**P23' (replaces P23), per arm.** Images 6f12dfe4ff05e9cd (MapLife) and c51256d3a3e4760f (ObjLife).
+- The firmware is 25,856,520 B and loads.
+- input.combined ends with rc 0 and specdiff 1/1 PASS.
+- The output hash equals the derived twin reference's.
+- No OOM kill.
+- instret within 0.3 % of the twin's command 0: 112.65e9 MapLife.
+
+**Twin check of the new images** (kit-q34, the campaign twin; `hfl/twin-hfl.sh`, `hfl/twin-hfl2.sh`; table
+`hfl/twin-readings.txt` from `hfl/twin-table.py`):
+
+Each row is one arm of a twin run of the new images against the campaign twin's run of the same stage (census-q34
+for test, census-heapfix for perlbench test, census-train for train), on the same twin:
+
+```
+run                                          arm                  cmds rc!=0 specdiff      instret new      instret ref  new/ref     nodes new/ref  outputs
+519.lbm_r-test                               capstone-spatial        1     0      1/1    7,278,940,293    7,278,938,612  1.00000             34/34  vs-ref identical; cross-arm identical
+519.lbm_r-test                               capstone-lifetimes      1     0      1/1    7,278,939,501    7,278,939,204  1.00000             40/40  vs-ref identical; cross-arm identical
+538.imagick_r-test                           capstone-spatial        2     0      1/1      108,675,796      108,677,371  0.99999           160/160  vs-ref identical; cross-arm identical
+538.imagick_r-test                           capstone-lifetimes      2     0      1/1      108,697,138      108,697,798  0.99999         1039/1039  vs-ref identical; cross-arm identical
+544.nab_r-test                               capstone-spatial        1     0      1/1    7,991,860,750    7,991,860,754  1.00000           504/504  vs-ref identical; cross-arm identical
+544.nab_r-test                               capstone-lifetimes      1     0      1/1    7,992,016,156    7,992,016,799  1.00000         7194/7194  vs-ref identical; cross-arm identical
+505.mcf_r-test                               capstone-spatial        1     0      2/2   35,301,304,555   35,301,316,585  1.00000           812/812  vs-ref identical; cross-arm identical
+505.mcf_r-test                               capstone-lifetimes      1     0      2/2   35,302,814,867   35,302,835,720  1.00000       64004/64004  vs-ref identical; cross-arm identical
+557.xz_r-test                                capstone-spatial       12     0    12/12   50,821,690,317   50,821,695,905  1.00000           972/972  vs-ref identical; cross-arm identical
+557.xz_r-test                                capstone-lifetimes     12     0    12/12   50,821,706,424   50,821,712,690  1.00000         1716/1716  vs-ref identical; cross-arm identical
+500.perlbench_r-test-capstone-lifetimes      capstone-lifetimes      2     0      2/2  122,111,935,520  122,111,423,984  1.00000       17161/17161  vs-ref identical
+500.perlbench_r-test-capstone-spatial        NO DATA (run has no result.json)
+525.x264_r-test-capstone-lifetimes           capstone-lifetimes      2     0      0/3  543,659,797,655  543,659,795,476  1.00000         4817/4817  vs-ref DIFFER ['imagevalidate_frame_100.out', 'imagevalidate_frame_155.out', 'imagevalidate_frame_50.out']
+525.x264_r-test-capstone-spatial             NO DATA (run has no result.json)
+519.lbm_r-train-capstone-lifetimes           NO DATA (run has no result.json)
+519.lbm_r-train-capstone-lifetimes-2         capstone-lifetimes      1     0      1/1  106,393,125,104  106,393,124,115  1.00000             40/40  vs-ref identical
+505.mcf_r-train-capstone-lifetimes           NO DATA (run has no result.json)
+500.perlbench_r-train-capstone-lifetimes-2   capstone-lifetimes      5     2      4/6  170,780,415,093  170,764,041,539  1.00010 10697283/10697283  vs-ref identical
+```
+
+- **Instruction counts.** Every run that has data reads new/ref 1.00000 to 1.00010, so the new layout moved no count
+  by more than 0.01 %. The node counts are identical, and so is every output except as noted below.
+- **x264 test: specdiff NO-OUTPUT on the imagevalidate files** in this row and in the reference comparison. The test
+  stages carry no imagevalidate, the same as both boards' x264 test boots. Every real output equals the reference's.
+- **perlbench train ObjLife: 2 of 5 commands rc 1, the same two as on the campaign image.** See P29.
+- **NO DATA (not run; deferred by the 05:00 lock guard):** perlbench test MapLife, x264 test MapLife, mcf train ObjLife,
+  and the xz command-0 pair (twin-hfl3.sh). lbm train ObjLife ran as `-2`. For those lines P32 falls back to the campaign
+  twin's count, within 1 %.
+- The exit status 2 of twin-table.py is these four NO DATA rows.
+
+**Boot lists** (`spec/board/train-hfl-b1.lines`, `train-hfl-b2.lines`, `train-hfl-xz-c0.lines`).
+
+Steps and bookings are the queued lines', benchmark by benchmark. Every instruction count the twin measured on the new
+images is within 5 % of the campaign count (above). The twin column is the queued lines': for perlbench and xz it
+compares outputs only, so it holds across images.
+
+The one exception is **perlbench train ObjLife**: 93,600 s and 1,590 min, was 54,000 s and 930 min.
+- The queued step was sized for a run cut short at 170.8e9 instructions, when scrabbl and splitmail stop at the
+  lifetime table's capacity (Addendum 9).
+- MapLife's full run is 300.5e9 instructions.
+- If ObjLife now completes, it needs MapLife's step, and an unfinished boot would cost 15 board-hours for no verdict. A
+  boot that ends early unbooks, so the larger step costs nothing.
+
+Board time per arm is the train instret (twin, or the native-ratio estimate of Addendum 2 for x264 and nab) times the
+board's own CPI on that benchmark's test or train boot:
+
+| benchmark | instret per arm | board CPI | hours per arm |
+|---|---|---|---|
+| perlbench | 300.5e9 (MapLife); ObjLife 170.8e9 if cut short as in Addendum 9 | 6.4 | 21.3 / 12.3 (21.6 if complete) |
+| mcf | 180.6e9 | 8.7 | 17.5 |
+| nab | ~439e9 | 3.06 | 14.9 |
+| imagick | 287.6e9 | 3.20 | 10.2 |
+| lbm | 106.4e9 | 5.07 | 6.0 |
+| x264 | ~247e9 | 1.99 | 5.5 |
+| xz | 163.6e9 | 2.8 | 5.1 |
+
+**Both arms of a benchmark run on the same board, back to back,** so each cycle ratio is read within one board.
+- **Board 1:** perlbench, then nab, then the xz command-0 pair. About 63 h plus 7 h for xz. They follow the Plain
+  microbenchmark boots p1-p6 in the same live list (b1-cont.list). They replace the campaign train lines, which were
+  never started; the list's unread tail was edited in place.
+- **Board 2:** lbm, then mcf, x264, imagick. About 78 h. They follow the ObjBounds microbenchmark kits on the ObjBounds
+  bitstream (land/rtl-objb) and the RTL lane's one-image witness. Then `spec/board/b2-after-objb2.sh`:
+  - reflashes bitstream 3 (b2-to-bs3.sh: local sha256 d6ed97b6..., booked flash, readback by name);
+  - waits until this addendum is on origin/spec-silicon;
+  - runs train-hfl-b2.lines.
+
+  Its stubbed dry run covers every branch (`hfl/dryrun-b2after.txt`; the scripts are copied into hfl/), and the live
+  gate read "not registered" before this push.
+- The long ones are split: perlbench on board 1, mcf and x264 on board 2. Each list is MapLife first, then ObjLife.
+- **xz:** the command-0 pair (`train-hfl-xz-c0.lines`, about 3.5 h per arm at 112.65e9 instructions and CPI 2.8)
+  runs on board 1, after nab. Step 32,400 s and booking 570 min are the queued xz lines'. The
+  full-stage xz lines (`train-hfl-xz.lines`) are not board-ready and are not queued.
+
+**Dry run** (`hfl/dryrun.txt`, the board-run skill's rule 8). chain-board.sh from spec-silicon ran on stubs (busy check,
+hub and runner; the kit, control and stage checks are real):
+- board 1, kit bkit12-perf-b3-b1, every b1 and b2 line: 12 of 12 END rc=0;
+- board 2, kit bkit12-perf-b3-b2, the b2 lines: 8 of 8;
+- the xz command-0 lines on the STANDARD kits, as board 1 (bkit12-perf-b3-b1) and as board 2 (bkit12-perf-b3-b2): 2 of
+  2 each, with the derived twin reference passed as `--twin`;
+- the twin column reaches the runner as `--twin`;
+- negative: a line naming a directory that is not a stage reads `SB STOP ... is not a make-stage.py output`, and the
+  chain stops.
+
+The stubs never bake, so the dry run cannot see the firmware cap.
+
+**Predictions.** Every boot below runs on bitstream 3 with the registered images. The verdict and VOID rules are the
+main text's and Addendum 17's, plus those listed here.
+- **P27. Control and payload.** The control passes in every boot. Each firmware lies inside its estimate above, and
+  under 26,000,000 B.
+- **P28. Correctness, MapLife, six benchmarks:** perlbench, mcf, lbm, x264, imagick and nab. xz command 0 is
+  P23' above.
+  - Every command ends with rc 0, and every host specdiff PASSes.
+  - imagick's and x264's target-side imagevalidate exit 0.
+  - No domain fault.
+  - perlbench's six outputs are sha256-equal to SPEC's references (splitmail.out by hash).
+- **P29. Correctness, ObjLife:**
+  - mcf, lbm, x264, imagick and nab: as P28. Every output is byte-identical to the same benchmark's MapLife output (.err
+    and log.dec aside).
+  - **perlbench:** on bitstream 3 the run is cut short by the lifetime table, as the campaign image's was (Addendum 9).
+    The registered ObjLife image on the twin (census-hfl/500.perlbench_r-train-capstone-lifetimes-2):
+    - diffmail, perfect and suns end rc 0, with specdiff PASS;
+    - scrabbl and splitmail end rc 1 with perl's own "Out of memory!":
+      - scrabbl at 261,089 lifetime nodes of the table's 262,144, node_growths 0;
+      - splitmail after 495,939 node allocations through the table's recycling. Its live high-water is not printed,
+        so its attribution to the table is by the same message and the same table, and is weaker than scrabbl's;
+    - outputs hash-identical to the campaign image's twin run, which ended the same two commands the same way;
+    - instret 170.78e9 against 170.76e9, ratio 1.0001; node counts identical, 10,697,283.
+
+    Prediction for the board:
+    - diffmail, perfect and suns: rc 0, specdiff PASS, outputs equal to the twin's;
+    - scrabbl and splitmail: rc != 0 with "Out of memory!", each node count within 1 % of the twin's.
+
+    Those two commands are a capacity reading of bitstream 3's 18-bit table (2^18 = 262,144 records). They carry no
+    correctness verdict, and the P31 perlbench ratio uses only the three commands that complete in both arms. The full
+    ObjLife run needs bitstream 4 (B), where the 55-bit twin passed 5 of 5 (Addendum 14). It is not part of this
+    addendum. The step stays 93,600 s, because a boot that ends early unbooks.
+- **P30. No heap trap.** Neither arm of any benchmark ends a command with a domain fault in heap code. That means no
+  cause 2 (MapLife) and no cause 29 (ObjLife) at realloc, `__capstone_malloc_prepare_free` or free. In particular,
+  perlbench train has no realloc trap in either arm.
+- **P31. Cycle ratio ObjLife/MapLife,** in-context cycles summed over the run commands.
+  - **Readings so far.** The campaign's uncontrolled test-size pairs on bitstream 3 read lbm 1.0003, xz 0.998,
+    x264 0.9987, nab 1.014, mcf 1.0255 and perlbench 1.020. imagick test's 0.4e9-cycle run read about 0.98.
+  - **What the control leaves.** Moving the benchmark's own code is now ruled out. What remains is heap.c's own code
+    and offsets, the run-time heap addresses, and the per-object lifetime nodes. On the twin, the arms' instruction
+    counts differ by under 0.01 % on test for every benchmark except perlbench.
+  - **Bands:**
+    - lbm, x264, imagick and nab, and xz command 0, which hold few lifetime nodes (test: 40, 1,039 and 7,194 against
+      34, 160 and 504; xz test 143 against 81): within **0.985-1.025**;
+    - mcf: within **0.99-1.08**. On test it read 1.0255, with 64,004 nodes against 812. On train the twin counts
+      168,412 ObjLife allocations;
+    - perlbench, per command that completes in both arms: **at least 0.99**. No upper band is registered. On train,
+      diffmail allocates 7.9 million nodes through the table's recycling, outside anything test measured.
+  - **Not comparable with the campaign's ratios.** These images share one placement, which is not the campaign
+    images', so a ratio here is compared with nothing from the campaign images.
+- **P32. instret.** Each command is within 0.3 % of the twin's count on the same images, where the twin ran them (see
+  the twin table above). Otherwise it is within 1 % of the campaign twin's count.
+
+**VOID and no-reading rules for these boots:**
+- **VOID, the known-good control fails.** The boot carries no verdict (main text).
+- **NOT RUN, no reading:**
+  - spec-board.sh stops on a kit, control or stage hash check;
+  - board-run.sh refuses the bake, the firmware build, or the firmware cap.
+- **VOID, the wrong bitstream.** The boot ran on a bitstream other than caplifive_vp2c_e7af48457, for example after a
+  reflash of its board between queueing and the run.
+- **VOID, the images are not the registered ones.** Any staged image whose sha256 differs from the table above.
+- **No verdict for the commands left unfinished:**
+  - the step is cut by its bound or by run-stage.py's timeout. Those commands carry no verdict and the pair gives no
+    ratio;
+  - SPEC-DONE is absent, or the reader exits 2 on no data.
+- **A kernel OOPS or OOM** is a capacity reading, not a correctness one, as P13 and P14 were.
+- **A ratio (P31) is read only when** both arms' boots are valid, every run command ended with rc 0 in both, and both ran
+  on the same board.
+  - A pair split across the boards is reported as cross-board and not graded against the band.
+  - perlbench ObjLife's cut-short commands, if any, are left out of its per-command ratios.
+- **No boot repeats a run** (Addendum 10).
+  - imagick train MapLife ran on the campaign image (287.6e9 instructions, PASS), and that run stays the record for that
+    image.
+  - The hfl run is a different image under a different layout, so it is not a repeat.

@@ -1,0 +1,19 @@
+run                                          arm                  cmds rc!=0 specdiff      instret new      instret ref  new/ref     nodes new/ref  outputs
+519.lbm_r-test                               capstone-spatial        1     0      1/1    7,278,940,293    7,278,938,612  1.00000             34/34  vs-ref identical; cross-arm identical
+519.lbm_r-test                               capstone-lifetimes      1     0      1/1    7,278,939,501    7,278,939,204  1.00000             40/40  vs-ref identical; cross-arm identical
+538.imagick_r-test                           capstone-spatial        2     0      1/1      108,675,796      108,677,371  0.99999           160/160  vs-ref identical; cross-arm identical
+538.imagick_r-test                           capstone-lifetimes      2     0      1/1      108,697,138      108,697,798  0.99999         1039/1039  vs-ref identical; cross-arm identical
+544.nab_r-test                               capstone-spatial        1     0      1/1    7,991,860,750    7,991,860,754  1.00000           504/504  vs-ref identical; cross-arm identical
+544.nab_r-test                               capstone-lifetimes      1     0      1/1    7,992,016,156    7,992,016,799  1.00000         7194/7194  vs-ref identical; cross-arm identical
+505.mcf_r-test                               capstone-spatial        1     0      2/2   35,301,304,555   35,301,316,585  1.00000           812/812  vs-ref identical; cross-arm identical
+505.mcf_r-test                               capstone-lifetimes      1     0      2/2   35,302,814,867   35,302,835,720  1.00000       64004/64004  vs-ref identical; cross-arm identical
+557.xz_r-test                                capstone-spatial       12     0    12/12   50,821,690,317   50,821,695,905  1.00000           972/972  vs-ref identical; cross-arm identical
+557.xz_r-test                                capstone-lifetimes     12     0    12/12   50,821,706,424   50,821,712,690  1.00000         1716/1716  vs-ref identical; cross-arm identical
+500.perlbench_r-test-capstone-lifetimes      capstone-lifetimes      2     0      2/2  122,111,935,520  122,111,423,984  1.00000       17161/17161  vs-ref identical
+500.perlbench_r-test-capstone-spatial        NO DATA (run has no result.json)
+525.x264_r-test-capstone-lifetimes           capstone-lifetimes      2     0      0/3  543,659,797,655  543,659,795,476  1.00000         4817/4817  vs-ref DIFFER ['imagevalidate_frame_100.out', 'imagevalidate_frame_155.out', 'imagevalidate_frame_50.out']
+525.x264_r-test-capstone-spatial             NO DATA (run has no result.json)
+519.lbm_r-train-capstone-lifetimes           NO DATA (run has no result.json)
+519.lbm_r-train-capstone-lifetimes-2         capstone-lifetimes      1     0      1/1  106,393,125,104  106,393,124,115  1.00000             40/40  vs-ref identical
+505.mcf_r-train-capstone-lifetimes           NO DATA (run has no result.json)
+500.perlbench_r-train-capstone-lifetimes-2   capstone-lifetimes      5     2      4/6  170,780,415,093  170,764,041,539  1.00010 10697283/10697283  vs-ref identical
