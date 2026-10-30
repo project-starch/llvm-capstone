@@ -91,8 +91,11 @@ def read(a, plan, text, rc, strict=False):   # strict (--reread): exit 1 unless 
         same = (e.group(2), e.group(3), e.group(4), e.group(5)) == (s["program"], s["arm"], s["proc"], f"K{s['K']}")
         quote = e.group(8).strip()
         errl = e.group(7)
-        repeat = quote and quote == prev_quote
-        prev_quote = quote
+        if s["arm"] == "Plain":   # a plain process has no module release line; it neither quotes nor resets the check
+            repeat = False
+        else:
+            repeat = quote and quote == prev_quote
+            prev_quote = quote
         tails = sorted({m.group(1) for m in re.finditer(r"check=0x[0-9a-f]+(.*)$", body, re.M)})
         vals = {m.group(1) for m in re.finditer(r"check=(0x[0-9a-f]+)", body)}
         per.setdefault((s["program"], s["arm"]), set()).update(vals)

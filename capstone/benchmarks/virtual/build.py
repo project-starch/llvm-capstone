@@ -4,6 +4,11 @@
   build.py --mode capstone --sdk <sdk-dir> --out <dir>    measured images, <dir>/<name>.dom
   build.py --mode count    --sdk <sdk-dir> --out <dir>    counting images (QEMU functional pass only)
   build.py --mode native   --out <dir>                    riscv64 gcc -O2 -static references
+  build.py --mode plain    --out <dir> --plain-musl <prefix> --plain-libgcc <libgcc.a>
+                                                          the Plain arm: the SDKs' clang, plain
+                                                          riscv64 (-march, default rv64gc, lp64d),
+                                                          static musl 1.2.5 (mallocng), the harness
+                                                          with user-mode rdcycle/rdinstret
 
 Upstream sources are read from the fetched trees (/tmp/capstone/{coremark,beebs,rv8}-src by
 default) and never copied into the repository. A program that needs a source adaptation gets a
@@ -38,6 +43,7 @@ LEGACY = ['-Wno-implicit-function-declaration', '-Wno-implicit-int', '-Wno-int-c
           '-Wno-incompatible-pointer-types', '-Wno-return-type', '-Wno-deprecated-non-prototype',
           '-Wno-unused-value', '-Wno-error']
 ALLOCATORS = ('malloc', 'free', 'realloc', 'calloc')
+PLAIN_K_MAX = 3   # Plain layout pads K = 0..3, 64 bytes apart (the Capstone allocator ladder's k_step)
 
 # ---- BEEBS ---------------------------------------------------------------------------------------
 # Sources and defines from each src/<name>/Makefile.am (headers dropped): the 80 programs upstream
@@ -252,7 +258,34 @@ class Builder:
         self.out = a.out.resolve()
         self.mode = a.mode
         self.sizes = read_sizes()
-        self.cc = [str(a.sdk.resolve() / 'capstone-cc')] if self.mode != 'native' else [NATIVE_CC]
+        if self.mode == 'plain':
+            # The Plain arm: the same clang binary the SDKs compile with, targeting ordinary
+            # riscv64 Linux, against a plain-riscv64 musl 1.2.5 built from the SDKs' tarball (its
+            # own headers only, as capstone-cc does with the Capstone musl).
+            musl = a.plain_musl.resolve()
+            self.plain_link = [str(musl / 'lib' / 'crt1.o'), str(musl / 'lib' / 'crti.o')]
+            self.plain_libs = [str(musl / 'lib' / 'libc.a'), str(a.plain_libgcc.resolve())]
+            self.plain_crtn = str(musl / 'lib' / 'crtn.o')
+            self.cc = [str(Path(a.plain_cc)), '--no-default-config', '--target=riscv64-unknown-linux-musl',
+                       f'-march={a.plain_march}', '-mabi=lp64d', '-nostdinc', '-isystem', str(musl / 'include')]
+            self.ld = str(Path(a.plain_cc).with_name('ld.lld'))
+            # Layout pads: a Plain image differs from the Capstone images in every address, so the code-placement
+            # effect the K ladder measured (up to ~8 % at identical instret) cannot be held equal; it is spread
+            # instead. Every program is linked at K = 0..PLAIN_K_MAX: a retained, never-executed .text section of
+            # K x 64 bytes right after musl's crt1/crti, so everything after it (the program, the harness, libc)
+            # sits K x 64 bytes later and nothing else changes. The kit spreads a program's processes over them.
+            self.plain_pads = []
+            self.log, self.warnings = [], []
+            (self.out / 'pad').mkdir(parents=True, exist_ok=True)
+            for k in range(PLAIN_K_MAX + 1):
+                s = self.out / 'pad' / f'pad-K{k}.S'
+                s.write_text('\t.section .text.bench_plain_pad,"axR",@progbits\n\t.p2align 6\n'
+                             f'\t.globl __bench_plain_pad\n__bench_plain_pad:\n\t.zero {k * 64}\n')
+                o = self.out / 'pad' / f'pad-K{k}.o'
+                self.run(self.cc + ['-c', str(s), '-o', str(o)])
+                self.plain_pads.append(str(o))
+        else:
+            self.cc = [str(a.sdk.resolve() / 'capstone-cc')] if self.mode != 'native' else [NATIVE_CC]
         # -ffp-contract=off: BEEBS's own checks compare floats EXACTLY against values computed
         # without fused multiply-add; contracted, ludcmp, matmult-float and st fail on both
         # compilers (QEMU, 2026-10-26). Same flag for every arm and the native build.
@@ -262,10 +295,12 @@ class Builder:
                      [f'-I{HERE}'] + shlex.split(a.extra_cflags))
         if self.mode == 'native':
             self.base += ['-static']
-        self.log = []
-        self.warnings = []
+        if self.mode == 'plain':
+            self.base += shlex.split(a.plain_cflags)
+        self.log = getattr(self, 'log', [])
+        self.warnings = getattr(self, 'warnings', [])
         self.kset = set()
-        if self.mode != 'native':
+        if self.mode not in ('native', 'plain'):
             sdk = a.sdk.resolve()
             self.sdk_config = json.loads((sdk / 'sdk.json').read_text())
             # capstone-cc's own link-input checks, imported from the SDK (the link itself is done
@@ -312,13 +347,26 @@ class Builder:
             self.run(self.cc + self.base + flags + ['-c', str(src), '-o', str(o)])
             objs.append(str(o))
         harness = obj / 'bench-harness.o'
-        hflags = ['-DBENCH_COUNT_ALLOCS'] if self.mode == 'count' else []
+        hflags = (['-DBENCH_COUNT_ALLOCS'] if self.mode == 'count' else
+                  ['-DBENCH_USER_COUNTERS'] if self.mode == 'plain' else [])
         self.run(self.cc + self.base + hflags + ['-c', str(HERE / 'bench-harness.c'), '-o', str(harness)])
         objs.append(str(harness))
         if self.mode == 'native':
             image = self.out / name
             self.run(self.cc + ['-O2', '-static'] + objs + ['-o', str(image), '-lm'])
             return [(name, image, 0)]
+        if self.mode == 'plain':
+            # ld.lld directly (static, --gc-sections like capstone-cc's link): musl's crt, the
+            # objects, musl's libc.a (libm included) and the buildroot gcc's libgcc.a for the
+            # compiler support routines (128-bit long double arithmetic).
+            images = []
+            for k, pad in enumerate(self.plain_pads):
+                image = self.out / f'{name}.K{k}'
+                self.run([self.ld, '-static', '--gc-sections', '-u', '__bench_plain_pad', '-o', str(image),
+                          '-Map', str(image) + '.map'] + self.plain_link + [pad] + objs +
+                         ['--start-group'] + self.plain_libs + ['--end-group', self.plain_crtn])
+                images.append((f'{name}.K{k}', image, k))
+            return images
         images = []
         for k in (range(self.layout['k_max'] + 1) if name in self.kset else [0]):
             image = self.out / f'{name}.K{k}.dom'
@@ -453,7 +501,13 @@ def verify_trees(a):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('--mode', choices=('capstone', 'count', 'native'), required=True)
+    p.add_argument('--mode', choices=('capstone', 'count', 'native', 'plain'), required=True)
+    p.add_argument('--plain-musl', type=Path, help='plain mode: install prefix of the riscv64 musl')
+    p.add_argument('--plain-libgcc', type=Path, help='plain mode: a riscv64 lp64d libgcc.a')
+    p.add_argument('--plain-cc', default=os.path.join(os.environ.get('CAPSTONE_LLVM_BIN', ''), 'clang'),
+                   help='plain mode: the clang (default $CAPSTONE_LLVM_BIN/clang, the SDKs\' compiler)')
+    p.add_argument('--plain-march', default='rv64gc')
+    p.add_argument('--plain-cflags', default='', help='plain mode: appended to every compile')
     p.add_argument('--sdk', type=Path)
     p.add_argument('--out', type=Path, required=True)
     p.add_argument('--beebs', type=Path, default=Path('/tmp/capstone/beebs-src'))
@@ -468,8 +522,10 @@ def main():
     p.add_argument('--extra-cflags', default='', help='appended to every compile (experiments only)')
     p.add_argument('--jobs', type=int, default=int(os.environ.get('JOBS', '12')))
     a = p.parse_args()
-    if a.mode != 'native' and not a.sdk:
+    if a.mode in ('capstone', 'count') and not a.sdk:
         sys.exit('--sdk is required for capstone and count builds')
+    if a.mode == 'plain' and not (a.plain_musl and a.plain_libgcc and Path(a.plain_cc).is_file()):
+        sys.exit('plain mode needs --plain-musl, --plain-libgcc and a clang (--plain-cc or $CAPSTONE_LLVM_BIN)')
     if a.jobs > 12:
         sys.exit('at most -j12 on this host')
     verify_trees(a)

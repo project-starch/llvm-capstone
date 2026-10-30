@@ -7,6 +7,9 @@ board is booked. Checks, and prints one line per failure:
   under the arm's directory that exists and is a Capstone image (ELF e_machine 259);
 - per program, the images of the given arms (default T1, T2 and T3) are distinct files, and each arm has the same number
   of processes;
+- an arm named Plain (a plain RISC-V executable run directly, `./Plain/<program>`, at K0 only) must be a RISC-V ELF
+  (e_machine 243), never a Capstone image; it is left out of the per-K distinct-image check and kept in the per-arm
+  process count;
 - **each program's args equal the args the MAIN RUN gave that program** (perf/main1/k*/steps.tsv and perf/main2/*/steps.tsv).
   A program the main run never ran is a failure, so the check cannot pass by having nothing to compare. This is the check
   that the first T3 kits (2026-10-27, voided) failed: huffbench-libc ran "1 5" where the main run gave the non-re-entrant
@@ -54,7 +57,10 @@ def main():
     text = run.read_text()
     if not re.search(rf"@@PERF-{re.escape(done)}-DONE\"?\s*$", text.rstrip()):
         bad.append(f"{run.name} does not end in @@PERF-{done}-DONE")
-    lines = re.findall(r'@@PERF-BEGIN (\d+) (\S+) (\S+) (\d+) K(\d+)"; \./capstone-vexec \./(\S+) (\d+ \d+) ', text)
+    lines = re.findall(r'@@PERF-BEGIN (\d+) (\S+) (\S+) (\d+) K(\d+)"; \./(?:capstone-vexec \./)?(\S+) (\d+ \d+) ', text)
+    if any(arm == "Plain" and not path.startswith("Plain/") or arm != "Plain" and path.startswith("Plain/")
+           for _, _, arm, _, _, path, _ in lines):
+        bad.append("a Plain step runs through the launcher, or a Capstone step runs without it")
     steps = [l.rstrip("\n").split("\t") for l in list(open(kit / "steps.tsv"))[1:]]
     if len(lines) != len(steps) or not lines:
         bad.append(f"{len(lines)} run lines vs {len(steps)} steps")
@@ -63,18 +69,20 @@ def main():
         if [n, prog, arm, proc, K, args] != s[:6]:
             bad.append(f"run line {n} {prog} {arm} {proc} K{K} '{args}' != steps row {s[:6]}")
         f = stage / path
-        if path.split("/")[0] != arm or not f.is_file() or int.from_bytes(f.read_bytes()[18:20], "little") != 259:
-            bad.append(f"line {n}: image {path} is missing, outside {arm}/, or not a Capstone image")
-        else:
+        want_machine = 243 if arm == "Plain" else 259
+        if path.split("/")[0] != arm or not f.is_file() or int.from_bytes(f.read_bytes()[18:20], "little") != want_machine:
+            bad.append(f"line {n}: image {path} is missing, outside {arm}/, or not a {'RISC-V' if arm == 'Plain' else 'Capstone'} image")
+        elif arm != "Plain":
             img[(prog, K)][arm] = hashlib.sha256(f.read_bytes()).hexdigest()
         per_arm[prog][arm] += 1
         if prog not in main_args:
             bad.append(f"line {n}: {prog} never ran in the main run, so its args have no reference")
         elif args not in main_args[prog]:
             bad.append(f"line {n}: {prog} {arm} args '{args}', the main run gave {sorted(main_args[prog])}")
+    cap_arms = arms - {"Plain"}
     for (prog, K), d in img.items():
-        if set(d) != arms or len(set(d.values())) != len(arms):
-            bad.append(f"{prog} K{K}: the {sorted(arms)} images are not {len(arms)} distinct files ({sorted(d)})")
+        if set(d) != cap_arms or len(set(d.values())) != len(cap_arms):
+            bad.append(f"{prog} K{K}: the {sorted(cap_arms)} images are not {len(cap_arms)} distinct files ({sorted(d)})")
     for prog, c in per_arm.items():
         if len(set(c.values())) != 1 or set(c) != arms:
             bad.append(f"{prog}: processes per arm {dict(c)}")

@@ -10,6 +10,11 @@ The trailing dmesg quote on @@PERF-END (the module's per-process release line) i
 that died before release would quote the previous process's line. It is only checked: a quote identical to the
 previous process's is flagged.
 
+A Plain-arm process (a plain RISC-V executable, user-mode counters) also prints one `BENCH-KERN <id> it=<label>
+timer= irq= minflt= majflt= nvcsw= nivcsw=` line per iteration; those go to <out>.kern.tsv (one row per iteration,
+keyed like the main rows), and a Plain process without one per BENCH line is a problem. Its END line has no dmesg
+quote.
+
 Exit 1 when any process is missing its END, has the wrong number of BENCH lines, a VERIFY-FAILED, counters other
 than present, a nonzero rc, or failed > 0 -- listed, and still written with rc carried, so perf-analyze refuses it.
 """
@@ -18,8 +23,11 @@ import re
 import sys
 from pathlib import Path
 
-BEGIN = re.compile(r'@@PERF-BEGIN (\d+) (\S+) (T[123]|Caps|MapLife|ObjLife) (\d+) K(\d+)')
-END = re.compile(r'@@PERF-END (\d+) (\S+) (T[123]|Caps|MapLife|ObjLife) (\d+) K(\d+) rc=(\d+)(.*)')
+ARM = r'(T[123]|Plain|Caps|MapLife|ObjLife)'
+BEGIN = re.compile(r'@@PERF-BEGIN (\d+) (\S+) ' + ARM + r' (\d+) K(\d+)')
+END = re.compile(r'@@PERF-END (\d+) (\S+) ' + ARM + r' (\d+) K(\d+) rc=(\d+)(.*)')
+KERN = re.compile(r'BENCH-KERN (\S+)/(\S+) it=(w?\d+) timer=(\d+) irq=(\d+) minflt=(-?\d+) majflt=(-?\d+) '
+                  r'nvcsw=(-?\d+) nivcsw=(-?\d+)')
 INFO = re.compile(r'BENCH-INFO (\S+)/(\S+) counters=(\S+) warmup=(\d+) iterations=(\d+)')
 BENCH = re.compile(r'BENCH (\S+)/(\S+) it=(w?\d+) cycles=(\d+) instret=(\d+) entries=(\d+) ns=(-?\d+) '
                    r'check=(0x[0-9a-f]+)( VERIFY-FAILED)?')
@@ -51,7 +59,7 @@ def main():
                 problems.append(f'step {cur["n"]}: no @@PERF-END before the next BEGIN')
                 procs.append(cur)
             cur = dict(n=int(m[1]), program=m[2], arm=m[3], proc=m[4], K=m[5], info=None, bench=[], done=None,
-                       rc=None)
+                       rc=None, kern=[])
             continue
         if cur is None:
             continue
@@ -59,15 +67,20 @@ def main():
         if m and int(m[1]) == cur['n']:
             cur['rc'] = int(m[6])
             quote = m[7].strip()
-            if quote and quote == last_quote:
-                problems.append(f'step {cur["n"]}: release quote identical to the previous step ({quote[:60]})')
-            last_quote = quote
+            if cur['arm'] != 'Plain':   # a Plain step has no module release line to quote
+                if quote and quote == last_quote:
+                    problems.append(f'step {cur["n"]}: release quote identical to the previous step ({quote[:60]})')
+                last_quote = quote
             procs.append(cur)
             cur = None
             continue
         m = INFO.search(ln)
         if m:
             cur['info'] = m
+        m = KERN.search(ln)
+        if m:
+            cur['kern'].append(m)
+            continue
         m = BENCH.search(ln)
         if m:
             cur['bench'].append(m)
@@ -93,6 +106,9 @@ def main():
             want = int(info[4]) + int(info[5])
         if want is not None and len(p['bench']) != want:
             problems.append(f'step {p["n"]} {p["program"]} {p["arm"]}: {len(p["bench"])} BENCH lines, want {want}')
+        if p['arm'] == 'Plain' and [k[3] for k in p['kern']] != [b[3] for b in p['bench']]:
+            problems.append(f'step {p["n"]} {p["program"]} Plain: {len(p["kern"])} BENCH-KERN lines for '
+                            f'{len(p["bench"])} BENCH lines')
         if any(b[9] for b in p['bench']):
             problems.append(f'step {p["n"]} {p["program"]} {p["arm"]}: VERIFY-FAILED')
         if p['done'] is None or p['done'] != 0:
@@ -107,6 +123,15 @@ def main():
         f.write('board\tboot\tsuite\tprogram\tarm\tproc\tit\tcycles\tinstret\tns\trc\tentries\tK\tcheck\tstep\n')
         for r in rows:
             f.write('\t'.join(r) + '\n')
+    kern = [[a.board, a.boot, k[1], p['program'], p['arm'], p['proc'], k[3], *k.groups()[3:], str(p['n'])]
+            for p in procs for k in p['kern']]
+    if kern:
+        kout = a.out.with_name(a.out.name + '.kern.tsv')
+        with kout.open('w') as f:
+            f.write('board\tboot\tsuite\tprogram\tarm\tproc\tit\ttimer\tirq\tminflt\tmajflt\tnvcsw\tnivcsw\tstep\n')
+            for r in kern:
+                f.write('\t'.join(map(str, r)) + '\n')
+        print(f'parse-board: {len(kern)} BENCH-KERN rows -> {kout}')
     print(f'parse-board: {len(procs)} processes, {len(rows)} iteration rows -> {a.out}')
     if problems:
         print('parse-board: PROBLEMS:\n  ' + '\n  '.join(problems), file=sys.stderr)
