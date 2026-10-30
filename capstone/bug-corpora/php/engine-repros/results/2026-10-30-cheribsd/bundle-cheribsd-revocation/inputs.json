@@ -25,7 +25,7 @@
     },
     "image": {
       "bytes": 9519007232,
-      "mtime": "2026-10-29T18:59:38Z",
+      "mtime": "2026-10-30T09:57:01Z",
       "path": "/home/zephyr/cheriBSD/cheri/output/cheribsd-riscv64-purecap.img"
     },
     "kernel": "/home/zephyr/cheriBSD/cheri/output/rootfs-riscv64-purecap/boot/kernel/kernel",
@@ -65,11 +65,16 @@
       }
     ]
   },
-  "scoring": "default: a case whose pristine record is a SIGNAL reads out-of-denominator on every arm, whatever the arm did -- the unprotected program dies anyway, so there is no pair to read",
+  "scoring": {
+    "attribution": "the paired boot of the same binary with security.cheri.runtime_revocation_default=0: a fault that appears there too is not revocation's and is recorded as such. A declared fault site is not required, because this arm has no symbols for one",
+    "gate": "default: a case whose pristine record is a SIGNAL reads out-of-denominator on every arm, whatever the arm did -- the unprotected program dies anyway, so there is no pair to read",
+    "protective_causes": [],
+    "score_oracle_crashes": false
+  },
   "tally": {
     "CAUGHT": 6,
-    "MISSED": 36,
+    "MISSED": 35,
     "NO-READING:inconclusive": 1,
-    "NO-READING:out-of-denominator": 27
+    "NO-READING:out-of-denominator": 28
   }
 }

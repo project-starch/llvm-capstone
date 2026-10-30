@@ -230,24 +230,32 @@ other side.
 `derive-verdicts.py` wrote its verdicts into every `case.json` and into `results/verdicts.tsv`, and
 `check-corpus.py` re-judges them. The sensitivity bundle sits beside it under
 `results/2026-10-30-cheribsd/sensitivity/`, written from the SAME boots, and is not declared as a
-verdict source.
+verdict source. That record's README carries the per-population tables, computed by
+`tools/result-tables.py`.
 
 **The controls held.** `bounds-malloc` faulted in all three boots, so bounds are enforced on this
 vehicle and a MISS means something. Each boot has its revocation-off twin, which is what attributes a
 fault. The eager boot printed the request-shutdown marker for 31 of the 70 cases, so a fault's
-placement is a reading and not the one answer an uninstrumented boot can give.
+placement is a reading and not the one answer an uninstrumented boot can give. The `putenv` platform
+probe ran in the default and the off boot with identical readings.
 
 | scoring | CAUGHT | MISSED | NO-READING |
 |---|--:|--:|---|
-| default | 6 | 36 | out-of-denominator 27, inconclusive 1 |
-| sensitivity | 14 | 42 | inconclusive 13, infra 1 |
+| default | 6 | 35 | out-of-denominator 28, inconclusive 1 |
+| sensitivity | 14 | 41 | inconclusive 13, infra 1, out-of-denominator 1 |
+
+**Two different exclusions, and they must not be added together as one.** 27 cases are out of the
+default denominator because their pristine record is a `SIGNAL` — that is the gate the sensitivity
+bundle lifts. CRASH-084 is out for a different reason, which no scoring lifts: it declares a platform
+precondition, and the probe proved the behaviour absent here. So the default denominator is **42**,
+and the sensitivity bundle still carries one out-of-denominator case rather than none.
 
 **Every capability fault on this arm is bounds, not revocation.** All six default-scoring catches are
 `cause=34`, and for all six the paired boot with `runtime_revocation_default=0` faults as well, so the
 check that fired is not revocation. Across both scorings the corpus contains exactly **one**
 revocation-attributed catch — CRASH-081, silent with revocation off — and its pristine record is a
 `SIGNAL`, so it is out of the default denominator and appears only in the sensitivity column. The
-headline for revocation over the 43-case default denominator is **0**.
+headline for revocation over the 42-case default denominator is **0**.
 
 #### The pre-registration, checked group by group
 
@@ -255,11 +263,13 @@ headline for revocation over the 43-case default denominator is **0**.
 |---|---|---|---|
 | temporal, release stops in `AG(cache)` (20) | 0 CAUGHT | 0 CAUGHT (19 MISSED, 1 no-reading) | holds |
 | temporal, release reaches system `malloc` (6) | 0–2 CAUGHT | 1 CAUGHT (CRASH-075, bounds) | holds |
-| temporal, in neither of our corpora (3) | no prediction | 3 MISSED | — |
+| temporal, in neither of our corpora (3) | no prediction | 2 MISSED, 1 out-of-denominator | — |
 | spatial, rounding-slack overflow (12) | MISSED | **3 CAUGHT** (CRASH-089, -090, -097) | **refuted** |
 | stack-address-escape, CWE-562 (2) | MISSED | **2 CAUGHT** (CRASH-051, -052) | **refuted** |
 
-and the headline **"0 to 2 CAUGHT of the 43" is refuted at 6**.
+The pre-registered headline, **"0 to 2 CAUGHT of the 43", is refuted at 6** — and its denominator was
+wrong as well, at 42 rather than 43, because it counted the pristine gate and did not anticipate that
+CRASH-084's declared precondition would be absent here too.
 
 **RETRACTED: that `cheri-php-blind`'s `c1_stack_after_return` MISS transfers to the real
 interpreter.** It does not. The row model is right about its own row — a returned stack capability
@@ -291,26 +301,46 @@ Sensitivity scoring, all 55:
 | release | cases | `virtual-nested-exact` | `cheribsd-revocation` | of which revocation | NOT-REISSUED |
 |---|--:|---|---|--:|--:|
 | through `free()` (`temporal-asan-visible`) | 22 | 19 / 0 / 3 | 6 / 4 / 12 | 0 | 10 |
-| inside a live block (`asan-blind`) | 33 | 29 / 0 / 4 | 2 / 29 / 2 | 1 | 16 |
+| inside a live block (`asan-blind`) | 33 | 29 / 0 / 4 | 2 / 28 / 3 | 1 | 16 |
 
-Default scoring, the 29 that remain:
+Default scoring, the 28 that remain:
 
 | release | cases | `virtual-nested-exact` | `cheribsd-revocation` | of which revocation | NOT-REISSUED |
 |---|--:|---|---|--:|--:|
 | through `free()` | 2 | 2 / 0 / 0 | 0 / 2 / 0 | 0 | 1 |
-| inside a live block | 27 | 23 / 0 / 4 | 1 / 25 / 1 | 0 | 11 |
+| inside a live block | 26 | 23 / 0 / 3 | 1 / 24 / 1 | 0 | 11 |
 
-**The gate is not neutral between the axes**: it removes 20 of the 22 cases released through `free()`
-and 6 of the 33 released inside a live block, because a defect that reaches libc is the kind the
-unprotected interpreter tends to die on by itself. A row quoted from the default column alone states
-almost nothing about the `free()` side, so either column may be quoted but the denominator has to be
-quoted with it.
+**The pristine gate is not neutral between the axes**: it removes 20 of the 22 cases released through
+`free()` and 6 of the 33 released inside a live block, because a defect that reaches libc is the kind
+the unprotected interpreter tends to die on by itself. (CRASH-084, the precondition case, is the
+twenty-seventh case to leave the live-block row, for the unrelated reason above.) A row quoted from
+the default column alone states almost nothing about the `free()` side, so either column may be
+quoted but the denominator has to be quoted with it.
 
-**11 of the 14 sensitivity no-readings are CheriBSD's allocator aborting** (`SIGABRT`, rc 134), the
+**11 of the 15 sensitivity no-readings are CheriBSD's allocator aborting** (`SIGABRT`, rc 134), the
 signature `ports/php/cheribsd/controls/abort-probe.c` reproduces from a plain double free. It is an
 allocator consistency check that any allocator could carry, not a capability fault, and it is recorded
 and never scored as a catch on an arm that measures CHERI. 9 of the 11 are cases released through
 `free()`, which is where a libc-level check can see anything at all.
+
+#### CRASH-084, and what the first run of this arm got wrong
+
+The case declares a `platform_precondition`: its use-after-free needs `putenv` to keep an empty-name
+string referenced from `environ`, which is where the freed string dangles from. The first run of this
+arm scored it **MISSED** — and `run-php-corpus.py` had no support for the declaration at all, so
+nothing had checked whether FreeBSD's libc creates that reference. A trigger that ran, completed and
+caught nothing was read as a miss of the protection.
+
+`ports/php/app/probe-putenv.c`, cross-built purecap and run in both boots, settles it: the control
+variable is retained, both empty-name calls are refused with `EINVAL` and nothing is stored. FreeBSD's
+`putenv` behaves as musl's does, so the behaviour the defect needs does not exist on this platform
+either. The case is out of the denominator on every scoring, and **both instruments now exclude the
+same 28 cases** where they differed by this one before.
+
+The runner now reads the declaration, reusing `run-realphp.py`'s reader rather than a second copy of
+it, with that reader's three outcomes: proved ABSENT takes the case out of the denominator, proved
+PRESENT judges it normally, and a probe that did not run or did not behave as declared reads as
+UNCHECKED — noted in the bundle and printed, never as ABSENT and never silently as met.
 
 ## Not here
 

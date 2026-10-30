@@ -146,6 +146,28 @@ def host_ends_normally(host_row):
     return p == "OK" or re.match(r"EXIT:\d+$", p) is not None
 
 
+# inputs.scoring IS AN OBJECT, not prose. SCHEMA.md does not fix its shape and verdicts.py does
+# not check it, so the two runners drifted: run-realphp.py writes {attribution, protective_causes,
+# score_oracle_crashes} and this one wrote a sentence. engine-repros' own result-tables.py reads
+# `scoring.attribution`, so the sentence made it raise AttributeError on a bundle from here -- a
+# consumer of a corpus cannot be expected to handle two shapes. The prose is kept, as `gate`.
+def scoring_block(spec, gate, score_oracle_crashes, attribution):
+    return {
+        "attribution": attribution,
+        "protective_causes": list(spec.get("protective_causes") or []),
+        "score_oracle_crashes": bool(score_oracle_crashes),
+        "gate": gate,
+    }
+
+
+# How a fault is tied to the mechanism, per arm. The CheriBSD arm cannot do it by cause code: a
+# purecap SIGPROT carries no symbol here, so the paired boot with revocation off IS the attribution.
+CHERI_ATTRIBUTION = ("the paired boot of the same binary with "
+                     "security.cheri.runtime_revocation_default=0: a fault that appears there too "
+                     "is not revocation's and is recorded as such. A declared fault site is not "
+                     "required, because this arm has no symbols for one")
+VIRTUAL_ATTRIBUTION = ("declared function (case.json fault_sites) in its file, with a protective "
+                       "cause (arms.json protective_causes)")
 SCORING_DEFAULT = ("default: a case whose pristine record is a SIGNAL reads out-of-denominator "
                    "on every arm, whatever the arm did -- the unprotected program dies anyway, so "
                    "there is no pair to read")
@@ -317,6 +339,75 @@ def observe(name, case, rec, arm, symbols, host_row, baseline_completed, control
 
 CHERI_ARM = "cheribsd-revocation"
 CHERI_CONTROL = "bounds-malloc"
+
+
+# ---- platform preconditions -----------------------------------------------------------------
+# A case may declare that its defect needs a LIBC behaviour, and the declaration is checked by a
+# probe rather than assumed (bug-corpora/SCHEMA.md `platform_precondition`). CRASH-084 is the one
+# such case here: it needs putenv to keep an empty-name string referenced from environ, which is
+# what its freed string dangles from, and glibc does while musl does not.
+#
+# WHY THIS IS HERE AT ALL. It was not, and the first CheriBSD run scored CRASH-084 MISSED having
+# never checked whether FreeBSD's libc creates the precondition -- a trigger that ran, completed
+# and caught nothing, read as a miss of the protection. A declaration this runner cannot read is
+# a declaration it must not silently pass: the reader is run-realphp.py's, not a second copy, and
+# the three outcomes are its three (ABSENT / PRESENT / no usable result), never a silent zero.
+# A probe binary that is not staged does not read as ABSENT; it reads as unchecked, loudly.
+def probe_run_name(name):
+    return f"{name}-probe"
+
+
+def declared_probes(cases):
+    """The platform-precondition probe names the cases declare, in a stable order."""
+    return sorted({(case.get("platform_precondition") or {}).get("probe")
+                   for _, case in cases} - {None, ""})
+
+
+def platform_outcomes(cases, rec, stage):
+    """{probe name: True / False / None} for one boot, by run-realphp.py's own readers.
+
+    None covers both ways a probe can fail to answer: its binary was never staged (so the boot
+    could not run it), and it ran but wrote a transcript it does not declare. Neither is ABSENT.
+    """
+    readers = port_module("run-realphp").PLATFORM_PROBES
+    out = {}
+    for name in declared_probes(cases):
+        if name not in readers:
+            sys.exit(f"a case declares platform_precondition probe {name!r}, which this runner "
+                     f"cannot read (known: {sorted(readers)})")
+        run = probe_run_name(name)
+        if run not in (rec.get("exits") or {}):
+            out[name] = None
+            print(f"    NOTE: a case declares the {name} platform precondition and this boot ran "
+                  f"no {run} (stage {stage / run}): judged as if the precondition were met",
+                  flush=True)
+            continue
+        out[name] = readers[name]("\n".join(rec["output"].get(run, [])))
+    return out
+
+
+def apply_precondition(obs, case, outcomes):
+    """run-realphp.py's semantics exactly: ABSENT leaves the denominator on EVERY scoring.
+
+    Set on the observation before the arm's own outcome is read, because it is a statement about
+    applicability and not about this run -- so it reaches the sensitivity bundle too, where the
+    pristine gate deliberately does not. Returns True when the case is settled here.
+    """
+    pp = case.get("platform_precondition")
+    if not pp:
+        return False
+    present = outcomes.get(pp.get("probe"))
+    if present is False:
+        obs.infra = "out-of-denominator"
+        obs.notes = (f"declared platform precondition not met on this libc: {pp['needs']}; the "
+                     f"{pp['probe']} probe found it absent on this arm (control held), so the "
+                     f"behaviour the defect needs does not exist here -- not a reading of the protection")
+        return True
+    if present is None:
+        obs.notes = ((obs.notes + "; ") if obs.notes else "") + (
+            f"declared platform precondition {pp['needs']!r} was not checked in this run "
+            f"(no usable {pp['probe']} probe result); judged as if met")
+    return False
 # PHP prints this itself, before the trigger's body, from an auto_prepend_file. It is the reach
 # evidence that does not depend on whether a trigger happens to print: a fault after it is after
 # startup. Without it a case that faults silently reads as setup-fault, which blames the harness.
@@ -378,6 +469,11 @@ def cheribsd_guest(args, cases, out, config):
     import subprocess
     revocation, every_free = CHERI_CONFIGS[config]
     runs = [(CHERI_CONTROL, "/tmp/bounds-malloc")]
+    # The declared platform probes, each from the stage dir, before the cases. A declared probe
+    # whose binary is absent is NOT run and NOT silently dropped: platform_outcomes() finds no
+    # such run in the record and says so, which reads as unchecked rather than as ABSENT.
+    probes = [n for n in declared_probes(cases) if (args.scratch / probe_run_name(n)).is_file()]
+    runs += [(probe_run_name(n), f"/tmp/{probe_run_name(n)}") for n in probes]
     for name, case in cases:
         php = "/tmp/php-fullext" if (needs_extensions(case) and args.php_fullext) else "/tmp/php"
         runs.append((name, f"{php} -n -d memory_limit=512M "
@@ -389,6 +485,7 @@ def cheribsd_guest(args, cases, out, config):
            "--stage", str(args.scratch), "--record", str(record),
            "--log", str(record.with_suffix(".serial.log")),
            "--copy", "bounds-malloc",
+           *sum((["--copy", probe_run_name(n)] for n in probes), []),
            "--run-timeout", str(args.eager_timeout if config == "eager" else args.run_timeout),
            "--timeout", str(args.boot_timeout),
            "--sysctl", f"security.cheri.runtime_revocation_default={revocation}",
@@ -440,6 +537,7 @@ def run_cheribsd_arm(args, decl, cases, arm, rows, out):
     off = cheribsd_guest(args, cases, out, "off")
     eager = cheribsd_guest(args, cases, out, "eager") if args.eager else None
 
+    platform = platform_outcomes(cases, on, args.scratch)
     c_fault, _, c_infra, _ = cheri_outcome(on, CHERI_CONTROL)
     controls = [verdicts.Control(CHERI_CONTROL, "fault" if c_fault else ("none" if c_infra else "complete"),
                                  "a read 4096 bytes past a 32-byte malloc'd block")]
@@ -448,6 +546,11 @@ def run_cheribsd_arm(args, decl, cases, arm, rows, out):
         obs = verdicts.Observation(case=name, arm=arm, controls=controls,
                                    image_sha256=verdicts.sha256(args.scratch / "php"))
         host = case_host_row(case, rows, name)
+        if apply_precondition(obs, case, platform):
+            sensitivity.append((obs, verdicts.judge(obs, spec)))
+            strict = copy.deepcopy(obs)
+            rows_out.append((strict, verdicts.judge(strict, spec)))
+            continue
         faulted, completed, infra, own = cheri_outcome(on, name, host)
         off_fault, off_completed, _, _ = cheri_outcome(off, name, host)
         # REACH FIRST, AND INDEPENDENTLY OF THE OUTCOME. A run that printed the trigger's own
@@ -548,7 +651,7 @@ def run_cheribsd_arm(args, decl, cases, arm, rows, out):
         rows_out.append((strict, verdicts.judge(strict, spec)))
     inputs = {
         "configuration": decl["arm_configurations"][arm],
-        "scoring": SCORING_DEFAULT,
+        "scoring": scoring_block(spec, SCORING_DEFAULT, False, CHERI_ATTRIBUTION),
         "population": f"the {len(cases)} cases of {decl['program']}/{Path(args.corpus).name}",
         # READ from the tools by run-cheribsd-cases.py's vehicle(), not described: the sibling
         # row-model measurement in capstone/tests/cheri-php-blind pins its own vehicle, and the
@@ -577,7 +680,8 @@ def run_cheribsd_arm(args, decl, cases, arm, rows, out):
     }
     verdicts.write_bundle(out / arm, Path(args.corpus).name, arm, rows_out, inputs)
     verdicts.write_bundle(out / "sensitivity" / arm, Path(args.corpus).name, arm, sensitivity,
-                          dict(inputs, scoring=SCORING_SENSITIVITY))
+                          dict(inputs, scoring=scoring_block(spec, SCORING_SENSITIVITY, True,
+                                                             CHERI_ATTRIBUTION)))
     return {n: o.completed for (n, _), (o, _) in zip(cases, rows_out)}, rows_out
 
 
@@ -624,6 +728,7 @@ def run_arm(args, decl, cases, arm, rows, baseline):
             "kernel": str(args.images),
             "runner": str(Path(__file__).resolve().relative_to(REPO)),
         },
+        "scoring": scoring_block(spec, SCORING_DEFAULT, False, VIRTUAL_ATTRIBUTION),
         "image_sha256": image_sha,
         "probe_sha256": verdicts.sha256(args.probe) if wants_probe else None,
         "php_cap_mode": mode,
@@ -633,7 +738,8 @@ def run_arm(args, decl, cases, arm, rows, baseline):
     }
     verdicts.write_bundle(out, Path(args.corpus).name, arm, rows_out, inputs)
     verdicts.write_bundle(out.parent / "sensitivity" / arm, Path(args.corpus).name, arm,
-                          sensitivity, dict(inputs, scoring=SCORING_SENSITIVITY))
+                          sensitivity, dict(inputs, scoring=scoring_block(spec, SCORING_SENSITIVITY,
+                                                                          True, VIRTUAL_ATTRIBUTION)))
     return completed, rows_out
 
 
@@ -726,6 +832,49 @@ def self_test():
                      "0" * 64)
     if verdicts.judge(broken, spec)[:2] != (verdicts.NO_READING, "control-failed"):
         bad["control-failed"] = (verdicts.judge(broken, spec)[:2], (verdicts.NO_READING, "control-failed"))
+    # THE PLATFORM PRECONDITION, all three outcomes, because the mechanism's whole point is that
+    # an unchecked declaration must not read like a met one. The first CheriBSD run scored
+    # CRASH-084 MISSED with no probe at all, so ABSENT is tested against a case that would
+    # otherwise be a plain CAUGHT -- if the probe's reading did not move it, the test would pass
+    # on a mechanism that does nothing.
+    pp_case = dict(cases["01_deadbeef0000_caught"],
+                   platform_precondition={"needs": "putenv keeps an empty-name string",
+                                          "probe": "putenv"})
+    for label, outcomes, want_settled, want in (
+            ("precondition-absent", {"putenv": False}, True, (verdicts.NO_READING, "out-of-denominator")),
+            ("precondition-present", {"putenv": True}, False, (verdicts.CAUGHT, None)),
+            ("precondition-unchecked", {"putenv": None}, False, (verdicts.CAUGHT, None))):
+        obs = verdicts.Observation(case="01_deadbeef0000_caught", arm=CHERI_ARM, controls=controls,
+                                   image_sha256="0" * 64)
+        settled = apply_precondition(obs, pp_case, outcomes)
+        if settled != want_settled:
+            bad[label + "/settled"] = (settled, want_settled)
+        if settled:
+            got_v = verdicts.judge(obs, spec)[:2]
+        else:
+            # not settled: the case goes on to be judged on its own facts, as case 01 is
+            full = observe("01_deadbeef0000_caught", pp_case, SYNTHETIC, "virtual-nested-pools",
+                           FakeSymbols(), None, True, controls, "0" * 64)
+            apply_precondition(full, pp_case, outcomes)
+            got_v = verdicts.judge(full, spec)[:2]
+        if got_v != want:
+            bad[label] = (got_v, want)
+    # unchecked must SAY so, or it is indistinguishable from met
+    nobs = verdicts.Observation(case="x", arm=CHERI_ARM, controls=controls, image_sha256="0" * 64)
+    apply_precondition(nobs, pp_case, {"putenv": None})
+    if "was not checked in this run" not in (nobs.notes or ""):
+        bad["precondition-unchecked/note"] = (nobs.notes, "a note saying it was not checked")
+    # a case that declares nothing is untouched by any of this
+    plain = verdicts.Observation(case="y", arm=CHERI_ARM, controls=controls, image_sha256="0" * 64)
+    if apply_precondition(plain, cases["01_deadbeef0000_caught"], {"putenv": False}) or plain.notes:
+        bad["precondition-undeclared"] = ((plain.infra, plain.notes), "untouched")
+    # and a declared probe this runner cannot read must STOP the run, not pass
+    try:
+        platform_outcomes([("c", dict(pp_case, platform_precondition={"needs": "n", "probe": "nope"}))],
+                          {"exits": {}, "output": {}}, Path("/nonexistent"))
+        bad["precondition-unknown-probe"] = ("returned", "SystemExit")
+    except SystemExit:
+        pass
     for k, (g, e) in bad.items():
         print(f"FAIL {k}: got {g}, expected {e}")
     print("self-test:", "FAILED" if bad else "every arm of the judge fired as declared")
