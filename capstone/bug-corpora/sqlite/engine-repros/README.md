@@ -203,9 +203,33 @@ shared object, the run record does not carry that object's load base, and the gu
 (`kern.elf64.aslr.enable=1`) so the base cannot be reconstructed afterwards. They are
 `NO-READING:unattributed`, which is why that column reads 12/12 and not 17/17. Every cell it can
 read is a catch, so 17/17 is what it would read if all five resolved that way, and 12/17 if none
-did; the tree states 12/12 and neither. Recording the faulting object's base in the run is the one
-change that closes them, and it is the only gap left between this corpus and the figures the paper
-quotes.
+did; the tree states 12/12 and neither. It is the only gap left between this corpus and the
+figures the paper quotes.
+
+**The instrument that closes them is in the tree, and this is its pre-registration (2026-10-30).**
+A load base recorded afterwards was the wrong fix: with ASLR on there is nothing to record it from.
+`repro322_common.h`'s fault handler now resolves the site where it CAN be resolved -- inside the
+faulting process, with `dladdr` -- and prints `<<FAULT-WHERE>> obj= base= sym= symaddr= image=
+imagebase=`, which `shared/run-cheribsd.py` records per case. The gate faults before every run, so
+the gate's own FAULT-WHERE is the resolver's positive control and the record carries it as
+`resolver`; a run whose gate faults and prints nothing has a broken resolver, and its unattributed
+cells stay NO-READING rather than turning into misses. `dladdr` takes rtld's lock and is not
+async-signal-safe, which is a deliberate trade: these faults are in the program's own code or in a
+libc string primitive, never inside rtld, and if the lock were ever held the handler blocks and the
+runner's timeout reports TIMEOUT -- a visible non-reading, not a wrong one.
+
+Written before the run, including the arms that must NOT move:
+
+* the gate prints a `<<FAULT-WHERE>>` line, and `resolver` is non-null in both records;
+* 11, 16, 17, 21 and 23 resolve to `memcmp` or `memcpy` in the C library, which is each case's
+  declared access, so all five become CAUGHT and `cheribsd-platform` reads **17 / 17** temporal;
+* the 12 cells that already read stay exactly as they are, and so does the spatial 6 / 8;
+* on the nested record the five faults (02, 05, 19, 20, 22) resolve inside the case image, 02 and
+  20 to a function host ASan did not report, so `cheribsd-revocation` stays **0 / 17 (+2)** -- the
+  mechanism rule, not the attribution, is what makes that column 0, and a better resolver must not
+  move it.
+
+Any other reading is a finding about the instrument, not about the arm.
 
 **Two `cheribsd-platform` cells were not measurements of that arm, and are withdrawn (2026-10-30).**
 07 and 22 ran under `--mode non-nested` and produced a silence and a fault, scored MISSED and CAUGHT.

@@ -44,6 +44,20 @@ neither settles anything on its own -- what settles it is WHERE the fault is.
 
 So the runner records the si_code and the pc, and attribution is a separate step: the binaries
 are PIE, so subtract the load base (0x100000 on this guest) before symbolizing.
+
+That works for a pc in the case image and NOT for one in a shared object, which is where five
+cells of the 2026-10-29 non-nested run came to rest: `kern.elf64.aslr.enable=1`, the record
+carried no load base for libc, and a fault in `memcmp` or `memcpy` could not be tied to the
+defect afterwards from the pc alone. Since 2026-10-30 the handler resolves it where it can be
+resolved -- inside the faulting process, with `dladdr` -- and prints a second line:
+
+    <<FAULT-WHERE>> obj=<path> base=<p> sym=<name> symaddr=<p> image=<path> imagebase=<p>
+
+which this runner records per case as fault_object / fault_object_base / fault_symbol /
+fault_symbol_addr / image / image_base. The gate faults before every run, so the gate's own
+FAULT-WHERE is the resolver's positive control and is recorded as `resolver`: a run whose gate
+faults and prints no FAULT-WHERE has a broken resolver, and its unattributed cells stay
+NO-READING rather than becoming misses.
 """
 import argparse
 import json
@@ -180,11 +194,19 @@ def main():
 
     # ---- gate ----
     rev, _ = guest("sysctl -n security.cheri.runtime_revocation_default")
-    pc_out, _ = guest("cd /root/corpus && ./poscontrol >/dev/null 2>&1; echo $?")
+    # 2>&1, not >/dev/null: the gate's own fault is the positive control for the
+    # handler's dladdr resolver, so what it printed has to be read, not discarded.
+    pc_out, _ = guest("cd /root/corpus && ./poscontrol 2>&1; echo $?")
     pc_code = pc_out.strip().splitlines()[-1] if pc_out.strip() else "?"
-    print(f"  gate poscontrol exit={pc_code}  revocation={rev.strip()}", flush=True)
+    pc_where = re.search(r"<<FAULT-WHERE>> obj=(\S+) base=(\S+) sym=(\S+)", pc_out)
+    print(f"  gate poscontrol exit={pc_code}  revocation={rev.strip()}  "
+          f"resolver={'fired at ' + pc_where.group(3) if pc_where else 'SILENT'}", flush=True)
     if pc_code != "162":
         sys.exit("GATE FAILED: the positive control did not fault; the run is void")
+    if not pc_where:
+        print("  WARNING: the gate faulted and printed no <<FAULT-WHERE>>; this build's "
+              "resolver is not working, so every unattributed cell stays NO-READING "
+              "and must not be read as a miss", file=sys.stderr, flush=True)
 
     # ---- run ----
     results = {}
@@ -196,6 +218,13 @@ def main():
         si = re.search(r"si_code=(\d+) \(([^)]*)\)", out)
         alloc = re.search(r"allocator=(\S+)", out)
         revoke = re.search(r"revoke=(\S+)", out)
+        # Where the fault was, as the faulting process itself resolved it (dladdr in
+        # repro322_common.h's handler). The guest runs with ASLR on, so a pc in a shared
+        # object is unattributable from the record afterwards; this is what makes it a
+        # reading. The gate faults before every run, so a run with no WHERE line at all
+        # has a broken resolver and its unattributed cells must not be read as misses.
+        where = re.search(r"<<FAULT-WHERE>> obj=(\S+) base=(\S+) sym=(\S+) symaddr=(\S+) "
+                          r"image=(\S+) imagebase=(\S+)", out)
         verdict = ("FAULT" if code == 162 else "TIMEOUT" if code == 124 else
                    "PASS" if code == 0 and "RETURNED" in out else "ERR")
         results[d.name] = {
@@ -204,10 +233,17 @@ def main():
             "si_meaning": si.group(2) if si else None,
             "allocator": alloc.group(1) if alloc else None,
             "revoke": revoke.group(1) if revoke else None,
+            "fault_object": where.group(1) if where else None,
+            "fault_object_base": where.group(2) if where else None,
+            "fault_symbol": where.group(3) if where else None,
+            "fault_symbol_addr": where.group(4) if where else None,
+            "image": where.group(5) if where else None,
+            "image_base": where.group(6) if where else None,
             "last": [l for l in out.splitlines() if l.strip() and "__EXIT" not in l][-1:],
         }
         print(f"  {d.name[:48]:<48} {verdict:<8} exit={code:<4} "
-              f"{('si_code=' + si.group(1) + ' ' + si.group(2)) if si else ''}")
+              f"{('si_code=' + si.group(1) + ' ' + si.group(2)) if si else ''}"
+              f"{(' at ' + where.group(3) + ' in ' + where.group(1)) if where else ''}")
 
     tally = {}
     for r in results.values():
@@ -216,6 +252,7 @@ def main():
     a.output.write_text(json.dumps({
         "arm": "cheribsd-revocation", "mode": a.mode,
         "revocation_default": rev.strip(), "poscontrol_exit": pc_code,
+        "resolver": pc_where.group(3) if pc_where else None,
         "skipped": dict(skipped), "tally": tally, "cases": results}, indent=2) + "\n")
     print(f"--- cheribsd-revocation ({a.mode}): {tally}   -> {a.output}", flush=True)
     return 0
