@@ -23,5 +23,5 @@ CC=("$CHERI_SDK/bin/clang" --target=riscv64-unknown-freebsd13 --sysroot="$CHERI_
 "${CC[@]}" -DSICODE_SELFTEST "$HERE/sicode.c" -o "$OUT/sicode-selftest"
 "${CC[@]}" -shared -fPIC "$PROBE" -o "$OUT/quarantine-probe.so"
 "${CC[@]}" "$HERE/capbounds.c" -o "$OUT/capbounds"
-( cd "$OUT" && sha256sum sicode.so sicode-selftest quarantine-probe.so > SHA256SUMS )
+( cd "$OUT" && sha256sum sicode.so sicode-selftest quarantine-probe.so capbounds > SHA256SUMS )
 cat "$OUT/SHA256SUMS"
