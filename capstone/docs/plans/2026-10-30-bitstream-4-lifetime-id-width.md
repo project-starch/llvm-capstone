@@ -173,3 +173,49 @@ The id is {gen[29:20], idx[19:0]}; word1 carries gen at [59:50] and parent at [4
 - Owed, none of it gating:
   - `design/virtual-capstone/isa.md`'s "not in the RTL" and "Silicon" paragraphs, which become untrue once B is flashed
     (the semantics owner's document).
+
+## On silicon: board 2, 2026-10-30
+
+- **Flash.** The runtime lane flashed B on board 2 at 16:39-16:42, on the lead's word in its own session (SPEC board
+  PREREG Addendum 14, spec-silicon c9ee688c8629).
+  - The board copy's sha256 equals the seal: checked by the runtime lane before the flash and recomputed here.
+  - The readback is by name only, `caplifive_vp2c_325966ee4.bit`, because the console exposes no sha256. So B's
+    identity on silicon rests on boot 1's 400,000 reading.
+- **Result lines:** spec-silicon 24769c569df0, `b4/b4-boots-1-2.result-lines.txt`. The transcripts stay on the host:
+  t1a spec.txt sha256 752bf2af830bc647, t1b d5c58498bb868f7a.
+- **Graded here by script.**
+  - The three pre-registered scripts are unchanged at 24769c569df0: b4-judge-t1a 27a13f080fd30591, b4-check-t1b
+    8d4cfa27d35b4bc8, b4-first.sh 0e8d766a954ce205.
+  - Boot 2's judge was re-run on the raw transcript, with run.py 11c47d62fe9f34ae, contract.dom 00428f273c653d9f and F0's
+    result.json cbf03d2a77740ea5. It reproduces the committed block line for line.
+- **Boot 1 (b4-t1a): AS PREDICTED, 13 of 13.**
+  - The parameters read ids 55, index bits 25, 1,048,576 records. There is one allocation, from CMA at pa 0xac100000,
+    with a linear mapping.
+  - Contract: `ok` exits 0 and `stale` takes 25.
+  - live 400,000: LIVE-OK with 414,217 nodes and capacity 1,048,576. Records above 2^18 = 262,144 need slots that
+    bitstream 3 cannot hold, so this is the bitstream-identity reading.
+  - live 1,100,000: LIVE-NULL at 1,011,158, rc 3, 1,046,942 nodes, no domain fault.
+- **Boot 2 (b4-t1b, Tier 1 against the twin's F0): NOT AS PREDICTED by the letter.** 40 of 45 cells equal F0's, with
+  `cleanup` excepted as pre-registered. Off: linux_demand_faults, linux_pages_released, nested_denial_site,
+  vm_denial_sites and spin_entered.
+  - **The first four come from one step**, through run.py's own analysis (11c47d62, :285-320):
+    - `vm` exits 139 with cause 15 at its arena + 0x2000 (spec.txt:193). That fault is the first `fault_sites` entry, so
+      it falsifies nested_denial_site and vm_denial_sites.
+    - Its CAPSTONE_VM_STATS line is missing, so 10 lines are read where 11 are expected. That falsifies the two linux_*
+      cells.
+  - **That step has S-24's shape, but not its value.**
+    - The module's bound line is present: "resolved 65 times with no change" at 0x3fb8502000 (spec.txt:14111).
+    - Its PTE fields read `rc=-38 val=0x0`, with every flag −1. That is the module's default: the PTE is read only with
+      `resolve_pte=1`, and otherwise `prc = -ENOSYS` (capstone_vm.c:1544-1545 and :1720-1721 at module-ids55
+      3523f8833531). So S-24's mechanism value, D = 0 with V, R, W and A set (read at boot r13), is NOT read on this boot.
+    - S-24's fix, `resolve_dirty`, also defaults off, and the kit loaded the module with no parameters.
+    - The twin reference cannot show S-24. That is the pre-registration's error, and it is the runtime lane's reading.
+    - It is settled by the next B Tier 1 boot (b4-t1c), against the reference F0r (module-ids55 addendum 3,
+      3160e7d8e147). That boot loads `resolve_dirty=1 resolve_pte=1` and reads both back from sysfs.
+    - S-24 predicts three things there: `vm` reads F0r's status (exit 1, VM_CONTRACT_FAIL execute through mapping
+      PCC), the four cells return to F0's values, and no bound line fires. Any other reading reopens S-24, and a bound
+      line would now carry the PTE value.
+  - **spin_entered: OPEN.** VIRTUAL_SPIN_READY is absent: run.sh killed preempt's spin child after its 5 s wait, and the
+    step exits 143.
+  - **No off cell needs the id/slot path.** sparse-churn (600,041 nodes through the 2^20-record table), sparse-stale,
+    stale, retired and bounds all equal F0's. This rests on one boot.
