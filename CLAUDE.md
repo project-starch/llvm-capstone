@@ -276,6 +276,14 @@ outlive the loop: a reader that exits does not end a writer blocked on a quiet i
 watched work finishes, check the task list; a task still running past its end condition is a
 defect to stop and fix the same day, not background noise.
 
+**The same holds for what a task leaves on disk.** When work is pushed or recorded, remove the scratch you made for
+it: worktrees (`git worktree remove`, then their local branches once the remote has them), review and trial-merge
+checkouts, extracted copies, build trees and run outputs that no record cites. Keep what a record still points at --
+results, the dry runs kept beside a pre-registration, kits, and any worktree an SDK was built from (grep the SDK
+dirs first) -- and what costs hours to rebuild while it may still be needed. Delete only what you created. This is a
+check at the end of a task (`git worktree list`, `du -sh` on your own dirs), not a hunt: within reason, not to the
+last file.
+
 ## Capture the lesson when it is cheap — do not wait to be asked
 
 Process improvements have so far been written only when the project lead asked for them, which
