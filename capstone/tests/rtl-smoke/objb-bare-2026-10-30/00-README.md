@@ -27,3 +27,12 @@ against `VP_SRC` when given) with `va-alloc-bare-2026-10-23`'s wrapper (inc/). `
 `PREREG.md` holds the vectors, simulated from THESE images on objbounds-off-b 1782d20bd (the control: e7af48457 by
 preprocessing, and by the hashes of its generated Anvil units) and on 24e588199 (603528b8b's tokens), and the grading rule. Runner: `sup-bare-2026-10-03-ladder/run_sup_bare.py` (`SUP_IMG` = the image, `SUP_REC_ADDR` from its `.rec`),
 the bare-boot path only.
+
+`grade/` holds the two graders the record's Silicon section was graded with.
+- `objb-grade.py <run dir> <bs3|objb> [<other arm's dir>]` grades one arm. With the other arm's directory it also
+  grades the cost pattern.
+- `objb-wgrade.py <image dir>` grades the witness against addendum 2.
+- Each hashes the image its run.log names, reads the resident name and the SR/SV lines, and exits 0 only on the
+  pre-registered verdict. It exits 2 on NO DATA.
+- Negative controls: objb-grade.py on the bitstream-3 directory with `objb` reads STOP, and objb-wgrade.py on a
+  fabricated live-node vector reads FINDING. Both exit 1.
