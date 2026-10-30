@@ -1,0 +1,6 @@
+[pair] FAIL mcf_inregion.spatial vs mcf_inregion.lifetimes: compared bench functions 38, bench data 6, libc+runtime functions 234, libc+runtime data 83, sections 13 (layout-controlled); not compared: heap.c 18 functions 17 data
+   MISMATCH heap_regions: 2
+      a: planted_in_region (bench) at 0x36d90 lies inside a heap region
+      b: planted_in_region (bench) at 0x36d90 lies inside a heap region
+   hot: main 0x1eb84 | 0x1eb84; malloc 0x386f0 | 0x38758; free 0x38c80 | 0x38d48; realloc 0x38ef0 | 0x38fb8; calloc 0x38e48 | 0x38f10; __capstone_mallocng_malloc 0x25f50 | 0x25f50; __capstone_mallocng_free 0x24dd4 | 0x24dd4; __capstone_mallocng_realloc 0x27f7c | 0x27f7c
+layout-check: 0 of 1 pairs PASS; compared 38 benchmark functions, 6 benchmark data, 234 libc+runtime functions, 83 libc+runtime data, 13 sections

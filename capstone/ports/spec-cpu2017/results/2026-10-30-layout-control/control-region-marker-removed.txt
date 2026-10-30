@@ -1,0 +1,16 @@
+[pair] FAIL mcf_nomarker.lifetimes vs mcf_nomarker.lifetimes: compared bench functions 37, bench data 6, libc+runtime functions 238, libc+runtime data 83, sections 13 (layout-controlled); not compared: heap.c 14 functions 17 data
+   MISMATCH heap_regions: 28
+      a: heap.c's __capstone_malloc_find at 0x36d80 lies outside every heap region
+      a: heap.c's __capstone_malloc_group_attach at 0x374f8 lies outside every heap region
+      a: heap.c's __capstone_malloc_group_map at 0x37844 lies outside every heap region
+      a: heap.c's __capstone_malloc_group_nested at 0x37b00 lies outside every heap region
+      a: heap.c's __capstone_malloc_group_remap at 0x380e8 lies outside every heap region
+      a: heap.c's __capstone_malloc_map at 0x36f1c lies outside every heap region
+      a: heap.c's __capstone_malloc_nested_release at 0x37f50 lies outside every heap region
+      a: heap.c's __capstone_malloc_prepare_free at 0x38024 lies outside every heap region
+      a: heap.c's __capstone_malloc_slot_key at 0x36e1c lies outside every heap region
+      a: heap.c's __capstone_malloc_slot_release at 0x37e8c lies outside every heap region
+      a: heap.c's __capstone_malloc_slot_start at 0x37e64 lies outside every heap region
+      a: heap.c's __capstone_malloc_slot_take at 0x37d5c lies outside every heap region
+   hot: main 0x1eb84 | 0x1eb84; malloc 0x38758 | 0x38758; free 0x38d48 | 0x38d48; realloc 0x38fb8 | 0x38fb8; calloc 0x38f10 | 0x38f10; __capstone_mallocng_malloc 0x25f50 | 0x25f50; __capstone_mallocng_free 0x24dd4 | 0x24dd4; __capstone_mallocng_realloc 0x27f7c | 0x27f7c
+layout-check: 0 of 1 pairs PASS; compared 37 benchmark functions, 6 benchmark data, 238 libc+runtime functions, 83 libc+runtime data, 13 sections

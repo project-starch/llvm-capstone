@@ -1,0 +1,8 @@
+RUN backend qemu kit kit-q34 completed=True transcript=serial.log control=None spec={'kind': 'exit', 'value': 0}
+READ 505.mcf_r test capstone-spatial: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 2/2 PASS
+   run0: rc 0 38.95 s instret 35301323506 cycles 35300929528 entries 393978 peak_pages 174244 nodes 812 collections 0
+READ 505.mcf_r test capstone-lifetimes: 1/1 commands ended, rc!=0: 0, hashes 5, in-band 3, specdiff 2/2 PASS
+   run0: rc 0 38.91 s instret 35302833757 cycles 35302439576 entries 394181 peak_pages 174244 nodes 64004 collections 0
+READ outputs capstone-spatial vs capstone-lifetimes: identical
+READ outputs capstone-spatial vs twin: identical
+READ outputs capstone-lifetimes vs twin: identical
