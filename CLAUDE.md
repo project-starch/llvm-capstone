@@ -22,11 +22,13 @@ auto-mode rules of `~/.claude-kisp/settings.json`. None of these needs permissio
 - reading any file or log;
 - commits, pushes of lane branches, and landing on `dev` as prescribed below;
 - messages to other lanes;
-- edits to this file, the skills and the docs.
+- edits to this file, the skills and the docs;
+- bitstream **reflashes** (granted 2026-10-30): flash whatever bitstream the plan needs, then report it. The
+  procedure does not relax: a sealed bitstream only, its sha256 checked locally before the flash, the resident
+  name read back after it, a known-good fallback still registered, and the flash recorded in the run's log.
 
-Only three things still wait for the lead's OWN word in the current conversation (a confirmation
+Only two things still wait for the lead's OWN word in the current conversation (a confirmation
 relayed by another lane does not count):
-- a bitstream **reflash**;
 - a **force-push or history rewrite of a shared branch**;
 - **paper** prose and framing (`capstone/paper/`, see Hard constraints).
 
@@ -219,8 +221,8 @@ not a permission request; turning it into one wastes a turn and, on this project
 time.
 
 Ask only when:
-- the action is a bitstream **reflash** or a **force-push / history rewrite of a shared branch**
-  that the lead has not confirmed in this conversation (see "Autonomy");
+- the action is a **force-push / history rewrite of a shared branch** that the lead has not
+  confirmed in this conversation (see "Autonomy");
 - the answer is **genuinely the project lead's** (paper framing, authorial content, project
   direction);
 - **or you have RETRACTED a conclusion.** That one is worth surfacing every time. A session
@@ -256,8 +258,8 @@ an instrument that has been producing unreadable results. If any of those is tru
 report the result when it lands.
 
 **Only these are serious enough to stop:**
-- a **reflash** or a **shared-branch force-push** that the lead has not confirmed in this
-  conversation (see "Autonomy");
+- a **shared-branch force-push** that the lead has not confirmed in this conversation (see
+  "Autonomy");
 - a question that is genuinely the **project lead's** — paper framing, project direction;
 - a **RETRACTION**, which must be surfaced;
 - **every** remaining experiment needs a resource that is provably unavailable — and *provably*
