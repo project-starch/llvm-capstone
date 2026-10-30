@@ -1,24 +1,57 @@
-objb-first.sh stubbed dry run, 2026-10-30 18:54-18:56 (run-dryrun.sh <case> <scratch>; stubs built by build-objb-stubs.py
-from the bitstream-3 campaign transcripts main5-t3a1..4 and main6-t3k1..3, frame spec/board/out/519.lbm_r-test).
-Real: objb-first.sh, make-objb-kit.sh (scratch kit root), chain-board.sh, spec-board.sh, run-stage.py 734ad25cf901d4da,
-check-objb-boot.py, make-objb-stages.py --arm (scratch copy of the stages). Stubbed: b4-t1c log, busy, store, hub, flash, readback, board.
+objb-first.sh and objb-bare.sh stubbed dry runs, 2026-10-30 (run-dryrun.sh <case> <scratch>; run-bare-dryrun.sh <scenario> <scratch>).
+Stub transcripts: build-objb-stubs.py from the bitstream-3 campaign transcripts main5-t3a1..4 and main6-t3k1..3, frame
+spec/board/out/519.lbm_r-test. Bare kit: the RTL lane's images at land/rtl-objb beb5384abb3b (SHA256SUMS 8dd2a4812c9da608),
+the runner stubbed by supbare-stub.py with the PREREG tables' vectors (Addendum 1, 177c6fd9f6e9).
+Real: objb-first.sh, objb-bare.sh, objb-bare-grade.py, make-objb-kit.sh (scratch kit root), chain-board.sh, spec-board.sh,
+run-stage.py 734ad25cf901d4da, check-objb-boot.py, make-objb-stages.py --arm (scratch copy of the stages).
+Stubbed: b4-t1c log, busy checks, store, hub, flash, readback, run_sup_bare.py, board.
 
+### objb-bare.sh alone
+== objb-confirmed: rc=0
+  OBJB-BARE objb CONFIRMED
+== objb-stop: rc=3
+  OBJB-BARE objb STOP: objb-stale reads bitstream 3's vector on the ObjBounds board
+== objb-void: rc=1
+  OBJB-BARE objb VOID: the control failed
+    VOID objb-pcc-ctrl reads returned=True SR=3 0xbb5 0x19 0x0, want SR 3 0xbb5 0x0 0x0
+== bs3-pass: rc=0
+  OBJB-BARE bs3 AS EXPECTED (objb-pcc did not return)
+== bs3-finding: rc=4
+  OBJB-BARE bs3 FINDING
+    FINDING objb-stale reads 0x19 0x19 0x19 0x19 0x0 0x19 0x19 0x3333 0x6, not the predicted bitstream-3 vector (first silicon reading on e7af48457)
+== bs3-stop: rc=3
+  OBJB-BARE bs3 STOP: wrong bitstream: objb-pcc returned on the bitstream-3 board: 0xbb5 0x0 0x0
+== compare bs3-pass vs objb-confirmed: OBJB-BARE pattern: 9 of 9 hold (rc 0); swapped: 2 of 9 hold (rc 1)
+== an empty out dir: NO DATA, rc 2
+
+### objb-first.sh
 == pos
-  OB FLASH END rc=0 18:54:38
-  OB READBACK name matches; the console exposes no sha256
-  OB PILOT END rc=0 18:54:38
-    18:54:38 END perf-objb-objbh1 rc=0
+    OBJB-BARE objb CONFIRMED
+  OB BARE END rc=0 19:29:33
+  OB BARE CONFIRMED: the variant's identity reads on board 2
+  OB PILOT END rc=0 19:29:34
+    19:29:34 END perf-objb-objbh1 rc=0
     objbh1: VALID: 54 of 54 processes parsed
   OB GATE rc=0
-  OB MAIN END rc=0 18:54:38
+  OB MAIN END rc=0 19:29:34
     objbh2: VALID: 40 of 40 processes parsed
     objbh3: VALID: 40 of 40 processes parsed
     objba1: VALID: 190 of 190 processes parsed
     objba2: VALID: 190 of 190 processes parsed
     objba3: VALID: 190 of 190 processes parsed
     objba4: VALID: 176 of 176 processes parsed
-  OB DONE 18:54:39
+  OB DONE 19:29:35
   armed: 7 disarmed: 0 runner calls: 7
+== neg-bare-stop
+    OBJB-BARE objb STOP: objb-stale reads bitstream 3's vector on the ObjBounds board
+  OB BARE END rc=3 19:29:35
+  OB STOP: bare kit STOP: board 2 reads bitstream 3's objb-stale vector; the variant is not on the board
+  armed: 1 disarmed: 6 runner calls: 0
+== neg-bare-void
+    OBJB-BARE objb VOID: the control failed
+  OB BARE END rc=1 19:29:35
+  OB STOP: bare kit VOID (the control failed or an image did not read its SR)
+  armed: 1 disarmed: 6 runner calls: 0
 == neg-sha
   OB STOP: local bitstream hash is not 0000000000000000000000000000000000000000000000000000000000000000
   armed: 1 disarmed: 6 runner calls: 0
@@ -29,33 +62,34 @@ check-objb-boot.py, make-objb-stages.py --arm (scratch copy of the stages). Stub
   OB STOP: b4-t1c did not end
   armed: 1 disarmed: 6 runner calls: 0
 == neg-flash
-  OB FLASH END rc=1 18:55:15
   OB STOP: the flash did not read back caplifive_vp2c_603528b8b.bit
   armed: 1 disarmed: 6 runner calls: 0
 == neg-void
-  OB FLASH END rc=0 18:55:15
-  OB READBACK name matches; the console exposes no sha256
-  OB PILOT END rc=0 18:55:15
-    18:55:15 END perf-objb-objbh1 rc=2
+    OBJB-BARE objb CONFIRMED
+  OB BARE END rc=0 19:29:44
+  OB BARE CONFIRMED: the variant's identity reads on board 2
+  OB PILOT END rc=0 19:29:44
+    19:29:44 END perf-objb-objbh1 rc=2
     objbh1: VOID: 20 of 54 processes parsed
       C2 board-side kit hashes absent or not equal to SHA256SUMS
       C3 @@PERF-OBJBH1-DONE or @@SPEC-DONE absent
       C5 parsed processes 20 != plan 54 (missing 34, extra 0)
   OB GATE rc=1
   OB HOLD: the pilot is not VALID (1 VOID, 2 NO DATA); the main kits stay disarmed
-  OB DONE 18:55:15
+  OB DONE 19:29:44
   armed: 1 disarmed: 6 runner calls: 1
 == neg-control
-  OB FLASH END rc=0 18:55:15
-  OB READBACK name matches; the console exposes no sha256
-  OB PILOT END rc=1 18:55:15
-    18:55:15 END perf-objb-objbh1 rc=2
-    18:55:15 CB STOP after perf-objb-objbh1
+    OBJB-BARE objb CONFIRMED
+  OB BARE END rc=0 19:29:44
+  OB BARE CONFIRMED: the variant's identity reads on board 2
+  OB PILOT END rc=1 19:29:44
+    19:29:44 END perf-objb-objbh1 rc=2
+    19:29:44 CB STOP after perf-objb-objbh1
     objbh1: VOID: 54 of 54 processes parsed
       C1 control not PASSED (<scratch>/neg-control/out/perf-objb-objbh1.log)
   OB GATE rc=1
   OB HOLD: the pilot is not VALID (1 VOID, 2 NO DATA); the main kits stay disarmed
-  OB DONE 18:55:15
+  OB DONE 19:29:44
   armed: 1 disarmed: 6 runner calls: 1
 == pos: runner argv (kit, step_s)
   objbh1 argv: run --backend board --kit bkit15-objb-b2	--step-s 3600

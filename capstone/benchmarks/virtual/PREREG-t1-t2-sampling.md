@@ -398,8 +398,9 @@ ObjBounds still pays one query per domain entry. A stale access on this bitstrea
 platform, not a safe one.
 
 The sealed .bit's sha256 and name are synth's; this section is pushed before they exist. objb-first.sh takes both as
-arguments and stops on a mismatch. rtl's board pre-registration (its kit vectors for the variant) is
-<RTL-BOARD-PREREG-HASH, pending>; its first-boot checks, if any, run before this run's pilot.
+arguments and stops on a mismatch. rtl's board pre-registration is land/rtl-objb beb5384abb3b
+(`capstone/tests/rtl-smoke/objb-bare-2026-10-30/PREREG.md`: ten bare images and their vectors), with its Addendum 1
+at 177c6fd9f6e9 (both arms on board 2, one verdict per arm). Its identity kit runs before this run's pilot, below.
 
 **Images and kits.** No new image. Every T1 and T3 image is byte-identical to the bitstream-3 campaign's
 (`perf/build2/T1`; `perf/build3/T3` for the 15 allocating programs, `perf/build4/T3` for the 88): 296 images, 0 differ.
@@ -430,6 +431,18 @@ objbh1 holds huffbench-libc, rv8-aes, rv8-primes, sglib-hashtable-libc and sglib
 - checks the stages (pilot armed, six main kits disarmed) and every kit's SHA256SUMS;
 - waits for the board, checks that bitstream 3 stays registered as the fallback, flashes, and reads the resident name
   back on a fresh session;
+- runs rtl's bare identity kit before any Linux boot (`objb-bare.sh 2 <sealed name> <out>/bare`):
+  - the ten images, in order: objb-pcc-ctrl, objb-stale, objb-perf-s1..s7, objb-pcc;
+  - each one is its own boot through `sup-bare-2026-10-03-ladder/run_sup_bare.py` (102ab84e762cba50), with the images
+    checked against beb5384abb3b's SHA256SUMS (8dd2a4812c9da608);
+  - graded by value with `objb-bare-grade.py` under the RTL lane's rules: CONFIRMED (objb-stale reads the ObjBounds
+    vector and objb-pcc returns `0xbb5 0x0 0x0`), VOID (the control objb-pcc-ctrl, or a returning image's SR), STOP
+    (objb-stale reads bitstream 3's vector: the variant is not on the board) or FINDING;
+  - only CONFIRMED goes on, and every other verdict stops the driver with its grade in the log.
+  The bitstream-3 arm of the same kit runs on board 2 before the reflash to ObjBounds (Addendum 1: board 2 against
+  board 2, one variable). There objb-pcc wedges the core, so it is alone in the last boot, ended by the runner's
+  timeout, with the board powered off and released. `objb-bare-grade.py --compare <bs3 out> <objb out>` reads the cost
+  pattern;
 - makes the board kit `bkit15-objb-b2`: bkit12-perf-b3-b2 with exactly one change, `BOARD_BITSTREAM=<sealed name>`.
   The module (9c60fb53f80ce67e, bench counters), launcher, firmware recipe, defines and DTB stay. The variant changes no
   memory constant (ariane_pkg.sv's generated hash equals e7af48457's);
@@ -455,6 +468,12 @@ readback and board were stubbed, and the stub transcripts are the campaign's bit
 arm and process.
 - **Positive.** All seven boots ended rc 0 with `RUN control PASSED`, and every gate read VALID: 54, 40, 40, 190, 190,
   190 and 176 processes, each equal to its steps.tsv.
+- **Bare kit** (`run-bare-dryrun.sh`, the runner stubbed with the PREREG's vectors):
+  - ObjBounds: CONFIRMED 0, STOP 3 (stale reads bitstream 3's vector), VOID 1 (pcc-ctrl wrong);
+  - bitstream 3: AS EXPECTED 0 (objb-pcc does not return), FINDING 4 (stale off), STOP 3 (objb-pcc returns);
+  - the compare reads 9 of 9 on the PREREG's vectors and 2 of 9 with the arms swapped (rc 1);
+  - an empty output reads NO DATA.
+  In the driver, a bare STOP and a bare VOID each stopped it before any Linux boot, with nothing armed.
 - **Negatives:**
   - a wrong sha256: STOP before the flash;
   - the .bit never appears: STOP;

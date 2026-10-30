@@ -8,7 +8,8 @@
 #   given path (synth names it; nothing about it is hardcoded but the variant check below), then for the board to be free;
 # - the fallback that must stay registered is bitstream 3, caplifive_vp2c_e7af48457.bit;
 # - the kit is make-objb-kit.sh's one-line copy of bkit12-perf-b3-b2 (BOARD_BITSTREAM = the sealed name);
-# - boot 1 is the pilot kit objbh1 through this directory's chain-board.sh/spec-board.sh, gated by check-objb-boot.py:
+# - before any Linux boot, the RTL lane's bare identity kit (objb-bare.sh, ten images) must read CONFIRMED;
+# - then boot 1 is the pilot kit objbh1 through this directory's chain-board.sh/spec-board.sh, gated by check-objb-boot.py:
 #   VALID arms objbh2..3 and objba1..4 (make-objb-stages.py --arm) and runs the whole list; anything else stops here
 #   with the main kits disarmed.
 # Each step gates the next. OB_* stub every external step for the dry run.
@@ -78,6 +79,20 @@ main() {
     0) echo "OB READBACK name and sha256 match" >> "$O";;
     3) echo "OB READBACK name matches; the console exposes no sha256" >> "$O";;
     *) echo "OB STOP: readback rc=$rc" >> "$O"; return 1;;
+  esac
+  # 5b. The RTL lane's bare identity kit (land/rtl-objb beb5384abb3b, Addendum 1 177c6fd9f6e9), before any Linux boot:
+  # objb-stale and objb-pcc must read the ObjBounds vectors. Only CONFIRMED (exit 0) goes on; VOID 1, STOP 3 (board 2
+  # reads bitstream 3's objb-stale vector) and FINDING 4 stop the driver here, with the grade in the log.
+  echo "OB BARE BEGIN $(date +%T)" >> "$O"
+  ${OB_BARE:-bash $S/objb-bare.sh} $BRD "$NAME" "$ROOT/bare" >> "$O" 2>&1; r=$?
+  sed 's/^/  /' "$ROOT/bare/grade.txt" >> "$O" 2>/dev/null
+  echo "OB BARE END rc=$r $(date +%T)" >> "$O"
+  case $r in
+    0) echo "OB BARE CONFIRMED: the variant's identity reads on board 2" >> "$O";;
+    1) echo "OB STOP: bare kit VOID (the control failed or an image did not read its SR)" >> "$O"; touch "$ROOT/.objb-stopped"; return 1;;
+    3) echo "OB STOP: bare kit STOP: board 2 reads bitstream 3's objb-stale vector; the variant is not on the board" >> "$O"; touch "$ROOT/.objb-stopped"; return 3;;
+    4) echo "OB STOP: bare kit FINDING (identity not confirmed); the reading goes to the RTL lane" >> "$O"; touch "$ROOT/.objb-stopped"; return 4;;
+    *) echo "OB STOP: bare kit not run or no data (rc=$r)" >> "$O"; touch "$ROOT/.objb-stopped"; return 1;;
   esac
   # 6. The kit.
   ${OB_KIT:-bash $S/make-objb-kit.sh} ${OB_KSRC:-$H/t3-smoke}/bkit12-perf-b3-b2 "$KIT" "$NAME" "$O" || { echo "OB STOP: kit" >> "$O"; return 1; }
