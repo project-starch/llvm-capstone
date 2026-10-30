@@ -8,20 +8,20 @@
   "live_in_pin": true,
   "live_proof": "measured on the pinned 3.13.7 ASan build with PYTHONMALLOC=malloc and ASAN_OPTIONS=detect_leaks=0: ASAN:heap-use-after-free in a 320-byte region. Running the trigger is the proof.",
   "fidelity": "interpreter-trigger, real allocator. Upstream's own reproducer driven through the real CPython. The SAME defect also exists in ../pymalloc-repros as a C model consumer against the same allocator; that one locates the faulting instruction with a labelled probe and this one does not, so for attribution the C model is the stronger of the two. This one exists because the C models cannot be built for the cheribsd-revocation arm at all: shared/corpus.h's inline asm uses \"r\" constraints that cannot hold a 128-bit capability.",
-  "allocator_layer": "L1-pymalloc-pool",
+  "allocator_layer": "libc malloc on the target (the object exceeds pymalloc's 512 B ceiling there, though not on the host)",
   "allocator_consumed": "yes",
   "arms": {
     "virtual-malloc": {
       "oracle": "virtual profile, pymalloc stock on musl mallocng (tools/arms.json virtual-cpython): a fault in one of the case's fault_sites, or the trigger ends and this arm did not see it",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3fbb1514c0 in PyObject_RichCompare; by function: PyObject_RichCompare is where host ASan reported the access",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-malloc"
+      "verdict_note": "cause=25 pc=0x3f8b146f94 in PyObject_RichCompare; by function: PyObject_RichCompare is where host ASan reported the access",
+      "verdict_from": "results/2026-10-20-review-t1800/virtual-malloc"
     },
     "virtual-nested-pools": {
       "oracle": "virtual profile, pymalloc's blocks as child lifetimes (patch 0014, CDERIVE/CREVOKE; tools/arms.json virtual-cpython-pools): as virtual-malloc",
       "verdict": "CAUGHT",
-      "verdict_note": "cause=25 pc=0x3f861514c0 in PyObject_RichCompare; by function: PyObject_RichCompare is where host ASan reported the access",
-      "verdict_from": "results/2026-10-10-sublet-isa/virtual-nested-pools"
+      "verdict_note": "cause=25 pc=0x3f8e146f94 in PyObject_RichCompare; by function: PyObject_RichCompare is where host ASan reported the access",
+      "verdict_from": "results/2026-10-20-review-t1800/virtual-nested-pools"
     },
     "cheribsd-revocation": {
       "oracle": "completion while the block's arena stays live: pymalloc links the freed block onto its own pool free list, so the platform has no free to revoke. Once pymalloc returns an emptied arena to the system allocator (insert_to_freepool, when nf == ao->ntotalpools && ao->nextarena != NULL) the platform does have a free, and after a revocation sweep the stale access faults with SIGPROT si_code=2 (PROT_CHERI_TAG). Both outcomes are admissible; which one occurs depends on arena occupancy and sweep timing rather than on the defect, so this arm does not separate these cases. A bounds fault (si_code=1) would falsify this."
@@ -35,5 +35,8 @@
     "do_richcompare",
     "PyObject_RichCompare"
   ],
-  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at Py_TYPE Include/object.h:336 | do_richcompare Objects/object.c:1015 | PyObject_RichCompare Objects/object.c:1059. That run uses no Capstone arm and was recorded before any virtual arm ran."
+  "fault_sites_why": "Host ASan (CPython 3.13.7 --with-address-sanitizer, PYTHONMALLOC=malloc, results/2026-10-10-asan/sites.tsv) reports heap-use-after-free (READ 8) at Py_TYPE Include/object.h:336 | do_richcompare Objects/object.c:1015 | PyObject_RichCompare Objects/object.c:1059. That run uses no Capstone arm and was recorded before any virtual arm ran.",
+  "note": "Both Capstone arms genuinely detect: cause=25 INVALID_CAP at the declared fault site, on the first touch of the freed object, with the two arms' pcs differing only in load base. That is the lifetime check rejecting the stale access, not a consequence of it. CheriBSD is silent, and the reason is not nesting: there the same free also reaches the system allocator, but revocation on that guest is sweep-based -- MRS flushes only when quarantined bytes reach a quarter of a heap that must already exceed 8 MiB -- so a sub-kilobyte free is three orders of magnitude short of triggering the sweep that would clear the tag. Identical allocator event on both platforms; the difference is WHEN the capability is invalidated, at free or at a sweep.",
+  "nested": false,
+  "nested_why": "RECLASSIFIED non-nested by the 2026-10-19 review. The host measurement that produced L1-pymalloc-pool is a 320-byte ASan region, under the 512 B SMALL_REQUEST_THRESHOLD. Ground (a), which is this case's own and needs no size measurement: the base arm is nested:none, patch 0014 is absent, and stock pymalloc recycles a freed block onto its own pool free list and REVOKES NOTHING, so the only thing that ends a lifetime on that arm is mallocng's free. This case's base cell is cause=25 INVALID_CAP at its declared fault site, on the first touch of the freed object. A pymalloc block cannot produce that code on that arm, so the object was served by the system allocator, which is what non-nested means here. Ground (b), the size, is NOT measured for this case. Its freed object is an instance of a class defined inside upstream's test_itertools test, so sizing it would need a probe written against that class. What IS measured, on CASE 24 and not on this one, is that the same kind of object crosses the threshold on the target: there a ZoneInfo subclass instance measures 400 bytes of struct against 208 on the host and a total request near 640 against 328. That is corroboration for the mechanism, not a measurement of this case. Read the reclassification here as resting on ground (a) alone, and as NOT ESTABLISHED: ground (a) is not strict. tools/arms.json says mallocng bounds and retires every object it hands out, including the arenas pymalloc takes, so a block whose emptied arena pymalloc returned to mallocng would also read cause=25 on the base arm. That needs the whole arena empty at the stale access, which this trigger does not establish either way. `nested` stays false as the likelier reading (case 24's measured object of the same kind crosses 512 B on the target); a target-side size probe for this case would settle it."
 }

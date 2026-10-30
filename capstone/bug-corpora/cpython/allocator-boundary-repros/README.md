@@ -81,11 +81,12 @@ Three things that had to be got right for those runs to mean anything:
   replaces every trigger with a stub, which the three arms of 2026-10-06 (the
   physical `spatial` and `sublet`, and `cheribsd-revocation`) pass, and a strong
   per-case one that keeps the allocation traffic and makes only the offending
-  access valid, which exists for 18 of the 32 cases and has been run on all three
-  arms of 2026-10-06. It qualifies every detection the two physical Capstone arms report
+  access valid, which exists for 20 of the 32 cases, 18 of them when the three
+  arms of 2026-10-06 were run -- this change adds the controls for 06 and 32, which have
+  therefore not been run on those arms. It qualifies every detection the two physical Capstone arms report
   on those cases -- base 11 of 11, Sublet 17 of 17 -- and 2 of the 6 on CheriBSD, where
   the other 4 were measured on an earlier binary than the control could be run against.
-  For the remaining 14 cases the defect is not one invalid access in an otherwise
+  For the remaining 12 cases the defect is not one invalid access in an otherwise
   ordinary program, and three of those 14 are the cases no arm delivers. What each
   control settles, and what neither does, is in `results/20261006/README.md`. On the
   virtual arms `runners/virtual/run-virtual.py` runs a case's strong control when the
@@ -119,6 +120,207 @@ application domain, `spatial` (the level0 heap with per-object bounds, pymalloc 
 expectation pre-registered for them and how it held up are in
 [`results/20261006/README.md`](results/20261006/README.md); `probe/counts.py --check` still
 re-derives that page's tables from its matrix.
+
+## Measured 2026-10-20, case by case
+
+Bundle `results/2026-10-20-review-t1800`, on the emulator this repo pins
+(`capstone/capstone-qemu d35af47b163c`) with a compiler carrying the C-80 fix,
+against images from `ports/common/application/build-virtual.sh cpython` built
+`CPY_TEST_CAPI=1` -- an image without it fails every case
+`NO-READING:control-failed`, because both controls need `_testinternalcapi`.
+`--timeout 1800`, and the budget is in the bundle's directory name because
+`runners/virtual/run-virtual.py` does not record it in `inputs.json`: two bundles
+measured at different budgets are otherwise indistinguishable from their own records.
+The 2026-10-19 attempt at `--timeout 900` lost case `21` to a runner timeout, and a
+timeout is a failed measurement and not a verdict. At 1800 s case `21` completes and
+reads `CAUGHT cause=25` in `little2_toUtf8`, so it was never a hang: it simply needed
+longer than 900 s. Both arms were re-run together at the one budget, because an arm
+measured at 1800 s beside an arm measured at 900 s would put two runner configurations
+into one declared bundle set.
+
+    virtual-malloc        CAUGHT 15  MISSED 14  NO-READING 3
+    virtual-nested-pools  CAUGHT 27  MISSED  4  NO-READING 1
+    cheribsd-revocation   32 of 32 rows, and a negative-control pass in which
+                          nothing faulted
+
+**Fourteen of those cells are withdrawn by review**, as the per-arm table below adds up to
+(6 + 0 + 8). A cell counts when the
+mechanism REJECTED the defective access, not when the access succeeded and the
+program faulted afterwards on what it fetched. Which code that is depends on
+the axis, and the guest's own `sicode` selftest establishes the CheriBSD pair
+on this build (`bounds si_code=1`, `revoked si_code=2`):
+
+| axis | Capstone, the mechanism | CheriBSD, the mechanism |
+|---|---|---|
+| spatial | `cause=28` `CAP_OOB` | `si_code=1` `PROT_CHERI_BOUNDS` |
+| temporal | `cause=25` `INVALID_CAP` | `si_code=2` `PROT_CHERI_TAG` (revocation clears the tag) |
+
+`cause=24` `UNEXP_OP_TYPE` -- an untagged value used where a capability was
+required -- is a consequence on either axis.
+
+| arm | withdrawn | cases |
+|---|---:|---|
+| `virtual-malloc` | 6 | 01, 05, 10, 15 (spatial, `cause=24`), 31 (temporal, `cause=24`), 32 (temporal, `cause=12`, an instruction page fault -- not a capability rule at all) |
+| `virtual-nested-pools` | **0** | every one of its 27 catches carries its axis's code |
+| `cheribsd-revocation` | 8 | 01, 05, 09, 10, 13, 14 (spatial, `si_code=2`), 31 (temporal, `si_code=2`, decided by `si_addr` -- see below), 32 (`si_code=5` `PROT_CHERI_PERM`, neither code) |
+
+**The arms read 15 / 31, 27 / 31 and 12 / 31.** That is what the declared bundle and the
+CheriBSD record say, every cell of it derived by the judge or, for ③, taken from that run's
+record, and it is the figure to quote.
+
+With the fourteen withdrawals above applied the same cells read 9 / 31, 27 / 31 and 4 / 31. **That
+is this review's reading, not a measurement**: no tool enforces the withdrawal rule, so nothing in
+the tree recomputes those three numbers. `catch_causes` (`SCHEMA.md`) is the key that would, for the
+two Capstone arms, and no configuration declares it; for ③ it would not be enough either, because
+those cells come from a run's record and prose rather than from a judge. On the **nested** rows, 20
+of the 31, that reading puts ③ at 0 in both cells and ① at 0 in the spatial one.
+
+**On the temporal axis the fault code alone cannot decide a CheriBSD cell.**
+Revocation clearing a tag and dereferencing a recycled non-capability value both
+report `si_code=2`; only on the spatial axis do the mechanism and the consequence
+carry different codes. `si_addr` is the tiebreaker, against two anchors: case
+`09`, a known consequence, faults at `0x69c7ca`, and case `21`, a known
+mechanism, at `0x426656a8`, a heap address. Case `31` re-ran at `0x5e5f06` --
+`09`'s shape -- so it is withdrawn, and with it the arena-return explanation its
+oracle offered, since that would have put the fault at the stale access on a
+heap address inside the freed block. Each case's own `note` records which fault was which and
+why.
+
+**The denominator is every case both Capstone arms REACHED** -- `reached` in the
+observation, the runner's own record that the trigger got to the defect before its
+defective access. Reaching it is the arm's chance at the defect; what the arm then
+did or failed to do with that chance is the measurement. So a case an arm reached
+and then could not read stays in and scores as no detection, while a case an arm
+never reached is out, because the arm was never given the chance. On this bundle
+that is **31 of 32**: `11` alone is out, not reached on either arm (the trigger
+stops on `ModuleNotFoundError` before the case).
+
+`13` is **in**, on `dev`'s rule rather than this bundle's reading. `case.json`
+declares `memory_error_is_the_defect`, which records that the `MemoryError`
+`virtual-malloc` hits is the defect's own uncaught read and not the table
+refusing; under that rule the case is reached and the arm missed it.
+`runners/virtual/run-virtual.py` applies the rule, so it takes effect on a run,
+and the declared bundle predates it: the cell still reads
+`NO-READING:infra`, and reads MISSED-pending until the arm is re-measured.
+`virtual-nested-pools` detects it, `cause=28` in `unicode_fromformat_write_str`.
+`18` is **in**: both arms reached it and both MISSED. It had been held out on `NOTIMPL` from the `spatial` and `sublet` arms
+retired on 2026-10-11, which is a verdict from arms this table no longer reports.
+Including it is the conservative direction -- it is a case both unprotected arms and
+Sublet missed, so holding it out removed evidence against Sublet.
+
+This earlier read "live upstream and reproduces on the reference ASan build", which
+is not the criterion the table uses: all 32 cases appear in
+`results/2026-10-10-asan/sites.tsv`, so that wording yields 32 and is silent on the
+third condition actually applied.
+
+*Known imprecision, not fixed here.* One denominator is shared by all three arms,
+while `SCHEMA.md` has a NO-READING "count as neither". Strictly each arm's figure
+should be taken over the cases THAT arm has a reading for, which is why ③'s
+non-nested/spatial figure below rests on four readings and not five. Moving to
+per-arm denominators would change every table in all three programs, so it belongs
+in a change made on its own terms rather than as a side effect of this one.
+
+Four changes moved two withdrawals, recovered one reading, and put a
+caveat on two rows:
+
+* **`06` and `17` are marked `◇`: counted, and the measured binary contains
+  no out-of-bounds access anyway.** On `06`, `SIZEOF_VOID_P` is 16 on both
+  capability targets, so `sizeof(PyFloatObject)` is 48 against the host's 24 and
+  `offsetof(PyASCIIObject, hash)` is 40 against 24 -- both read from the target
+  binaries' DWARF -- and the defective read lands 8 bytes *inside* the object.
+  On `17`, all three targets sink the defective load below the length check that
+  the source puts after it, so with `inleft == 1` it never executes; the plain
+  x86-64 build at the same `-O3` does perform it, so this is instruction
+  scheduling, not a flag. Both rows are counted as misses, which is the
+  conservative reading and needs no argument about where to draw a line. Each
+  gains a probe that marks the access -- `probe-140551.py`, `probe-157325.py` --
+  because upstream's reproducers mark nothing, and `06` gains a
+  `negative_control.py`.
+* **`02`, `03` and `04` read from the declared bundle like every other row.**
+  They were re-measured under `PYTHONHASHSEED=0` with five repeats per arm
+  during the review; those runs are not in the committed bundle, so they are not
+  what the table reports and the claims they carried have been dropped from the
+  notes.
+* **`16` on Sublet was `NO-READING` and is a detection, shown `D 28‖`.** It
+  had faulted `cause=28` in `advance_with_locations`, a symbol the case did not
+  declare. That symbol is `read_byte` inlined: `read_byte` is one statement,
+  `return *bounds->opaque.lo_next++;` at `codeobject.c:1077`, the exact line
+  host ASan names, and the target binary's DWARF shows every
+  `DW_TAG_inlined_subroutine` in `advance_with_locations` resolving to that
+  line, with 1077 the only line in the function that dereferences the linetable
+  pointer. `advance_with_locations` was added to `fault_sites` with that written
+  into `fault_sites_why`, and the case was **re-run** rather than re-scored, so
+  the verdict is the judge's. Attribution by symbol name is fragile across build
+  configurations -- the ASan host build and the optimised cross build inline
+  differently -- and the source line is what the comparison wants.
+* **`08` on CheriBSD is restored to a detection, shown `D 2†`.** Its
+  withdrawal had been reasoned from size-class rounding, which cannot absorb
+  `READ 1048576` out of an 8193-byte region. Re-run in the guest with only the
+  claimed length varied: `malloc(8193)` gets a capability of length 10240, so
+  10240 is the last length that does not fault, 10241 through 24576 fault
+  `si_code=1` PROT_CHERI_BOUNDS, and 32768 upward fault `si_code=2`
+  PROT_CHERI_TAG -- the flip is exactly where `tools/cheribsd/capbounds` finds
+  this block's tag going. Every fault lands at one of two addresses 118 bytes
+  apart, so the copy is stopped at the object's edge whatever is claimed. Past
+  the representable range the arithmetic clears the tag and the same rejection
+  arrives under the tag code, so **`si_code=2` is the spatial mechanism here**.
+  A capability system has three regimes, not two.
+
+**The function name cannot make this call, which is why the code has to.**
+Every withdrawn fault resolves to the case's declared `fault_sites`, because
+the defective read and the dereference of what it returned are commonly two
+lines of one function -- `set_dealloc` reads `entry->key` at `setobject.c:505`
+and dereferences it at `:507`. Disassembled at the faulting pc, the two are
+different instructions: `ldc a0, 0x0(s3)`, the capability load of the entry,
+against `ld a1, 0x0(a0)` at `address=0x7`, a plain load through what that
+returned.
+
+**`tools/verdicts.py` could enforce the Capstone half automatically.** Its
+optional `catch_causes` key, proposed in PR #259, would score a `cause=24` fault
+MISSED where a configuration declared it as `[25, 28]`. No configuration
+declares it in any tree -- `tools/arms.json` has no such key on `dev` or on any
+open branch -- and the key itself exists only in that pull request. Two things would have to happen in the same
+commit, and neither is this review's to do alone: the key lands in
+`tools/verdicts.py` **with** its entry in `SCHEMA.md` and a test, and this
+corpus's bundle is re-folded, because `derive-verdicts.py --check` re-judges
+every stored observation against the current judge and would otherwise fail on
+every cell the key re-scores. `virtual-cpython` and `virtual-cpython-pools` are
+used by this corpus alone, so no other corpus's numbers move -- but "no other
+corpus moves" is not the same as "safe to declare", and an earlier revision of
+this paragraph ran the two together.
+
+### One cell that moved for a reason worth recording
+
+**Case 02 and case 04 depend on the contents of neighbouring memory.** 02 was
+`D 5` on the pools arm in `results/2026-10-10-sublet-isa` and MISSED in the
+first full run of 2026-10-18; 04 was MISSED in that run and `cause=24` in the
+re-run, from the same image and the same trigger. `_copy_characters` copies a
+length taken from the field the overread fetched, so what the copy does depends
+on what lies past the object, and CPython randomises that per process.
+
+Both read from the declared bundle, like every other row in the table: 02 is
+MISSED on both virtual arms, 04 is MISSED on `virtual-malloc` and `CAUGHT`
+`cause=28` in `_copy_characters` on `virtual-nested-pools`. The
+`PYTHONHASHSEED=0` repeats run during the review are not in the committed
+bundle and are not what the table reports.
+
+**Case 16's fault was real and unattributable, and the reason was a symbol
+name.** The pools arm faults `cause=28` in `advance_with_locations`, which was
+not one of the ASan sites its `case.json` declared (`read_byte`), so the judge
+returned NO-READING. Naming a site after the run WOULD fit the instrument to the
+reading, which is why the site was added only on evidence that is a property of
+the binary and not of any run: `read_byte` is one statement at
+`codeobject.c:1077`, the line host ASan itself names, and the target binary's
+DWARF puts every `DW_TAG_inlined_subroutine` inside `advance_with_locations` at
+that line, which is also the only line in the function that dereferences the
+linetable pointer. `advance_with_locations` IS `read_byte`, inlined. The site
+was added with that written into `fault_sites_why`, and the case was **re-run**
+rather than re-scored, so the verdict is the judge's.
+
+The general point outlives the cell: **attribution by symbol name is fragile
+across build configurations**, because the ASan host build that produces
+`fault_sites` and the optimised cross build that produces the fault inline
+differently.
 
 ## Fidelity, stated as a limitation
 
