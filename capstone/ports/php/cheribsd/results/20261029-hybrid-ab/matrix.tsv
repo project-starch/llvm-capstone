@@ -1,0 +1,6 @@
+stage	what it does	purecap_exit	hybrid_exit	purecap_console	hybrid_console
+p0	malloc then free	0	0	PROBE 0: malloc/free only | PROBE 0: survived	PROBE 0: malloc/free only | PROBE 0: survived
+p1	free the same pointer twice	134	0	PROBE 1: double free | Abort trap	PROBE 1: double free | PROBE 1: survived
+p2	read a byte after free	0	0	PROBE 2: read after free | PROBE 2: read back a, survived	PROBE 2: read after free | PROBE 2: read back a, survived
+p3	write a byte after free	0	0	PROBE 3: write after free | PROBE 3: survived	PROBE 3: write after free | PROBE 3: survived
+p4	free an interior pointer	134	0	PROBE 4: free of an interior pointer | Abort trap	PROBE 4: free of an interior pointer | PROBE 4: survived

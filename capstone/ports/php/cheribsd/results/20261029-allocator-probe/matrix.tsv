@@ -1,0 +1,6 @@
+stage	what it does	exit	console
+p0	malloc then free	0	PROBE 0: malloc/free only | PROBE 0: survived
+p1_double_free	free the same pointer twice	134	PROBE 1: double free | Abort trap
+p2_read_after_free	read a byte after free	0	PROBE 2: read after free | PROBE 2: read back a, survived
+p3_write_after_free	write a byte after free	0	PROBE 3: write after free | PROBE 3: survived
+p4_interior_free	free an interior pointer	134	PROBE 4: free of an interior pointer | Abort trap
