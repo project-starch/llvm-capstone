@@ -1,0 +1,20 @@
+# Caps-v boots, board 2, ObjBounds bitstream caplifive_vp2c_603528b8b (check-caps-boot.py, then the bare kit's grade)
+capsa1: VALID: 285 of 285 processes parsed
+capsa2: VALID: 285 of 285 processes parsed
+capsa3: VALID: 285 of 285 processes parsed
+capsa4: VALID: 264 of 264 processes parsed
+capsh1: VALID: 81 of 81 processes parsed
+capsh2: VALID: 60 of 60 processes parsed
+capsh3: VALID: 60 of 60 processes parsed
+
+OBJB-BARE objb CONFIRMED
+  objb-pcc-ctrl   returned=True SR=3 SV=0xbb5 0x0 0x0
+  objb-stale      returned=True SR=9 SV=0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x3333 0x0
+  objb-perf-s1    returned=True SR=5 SV=0x409c 0x1403 0x5a 0x0 0x0   non-cycle positions EQUAL; cycles [0]=16540
+  objb-perf-s2    returned=True SR=5 SV=0x142b 0xc03 0x80004000 0x0 0x0   non-cycle positions EQUAL; cycles [0]=5163
+  objb-perf-s3    returned=True SR=5 SV=0x12db2 0x1804 0x80004000 0x0 0x0   non-cycle positions EQUAL; cycles [0]=77234
+  objb-perf-s4    returned=True SR=7 SV=0x185 0xc3 0x18b 0xc3 0x80004000 0x0 0x0   non-cycle positions EQUAL; cycles [0]=389 [2]=395
+  objb-perf-s5    returned=True SR=6 SV=0x31771 0x21444 0x400a 0xffc00 0x0 0x0   non-cycle positions EQUAL; cycles [0]=202609 [1]=136260
+  objb-perf-s6    returned=True SR=5 SV=0x140b 0x503 0x0 0x0 0x0   non-cycle positions EQUAL; cycles [0]=5131
+  objb-perf-s7    returned=True SR=5 SV=0x180e 0x503 0x80004000 0x0 0x0   non-cycle positions EQUAL; cycles [0]=6158
+  objb-pcc        returned=True SR=3 SV=0xbb5 0x0 0x0

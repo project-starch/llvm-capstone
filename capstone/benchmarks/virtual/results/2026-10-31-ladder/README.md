@@ -9,6 +9,7 @@ All five configurations of the ladder on the 103 microbenchmarks (BEEBS 80 + 13 
 | ObjBounds | MapLife's images on bitstream 3 without the per-access lifetime check (capstone-ariane objbounds-b 603528b8b) | board 2, kits objbh1..3, objba1..4 (T1 = ObjBounds, T3 = ObjLife-v) |
 | MapLife | per-object bounds, lifetime per mapping, hardware check on every access (T1) | bitstream-3 records `../2026-10-27-t3all-bitstream3`, `../2026-10-28-t3heap-bitstream3`, and inside every Plain and Caps boot |
 | ObjLife | MapLife + a lifetime per malloc object (T3) | same |
+| Caps-v | Caps's images on the ObjBounds bitstream: capabilities without per-object bounds or the lifetime check | board 2, kits capsh1..3, capsa1..4 (Caps = Caps-v, MapLife = an ObjBounds repeat, ObjLife = ObjLife-v); section "Caps-v" below |
 
 Pre-registrations: `PREREG-t1-t2-sampling.md` sections "Plain" (perf-t0b 3e90e15c4ffc) with Plain addendum 1 (f2dd520270d6),
 "Caps" (perf-t0a), "ObjBounds" (perf-objb afd4dacd48bb), all pushed before their boots. Analysis script `../../ladder.py`
@@ -111,3 +112,35 @@ was re-checked here from the rows.
   - The simulation reads +0.42 % on its memory model; silicon reads 2.1 %. dhrystone was not simulated.
   - WITHDRAWN: this paragraph first read the two programs as "the variant changes some other timing besides the
     check" (lane 003883728dc6, landed b4921b2d497c).
+
+## Caps-v (2026-10-31/11-01)
+
+Pre-registered in `PREREG-t1-t2-sampling.md`, section "Caps-v" (perf-objb 336ab392bd65), before the flash. The joining
+script, `ladder.py --capsv` with its grader, was committed before any Caps-v row was read (perf-objb adffb2db59e2).
+Its controls are listed in that commit's message.
+
+Run: board 2 was flashed from bitstream 3 to the ObjBounds bitstream 603528b8b at 20:27 (readback rc=3: name read,
+sha256 not exposed). The bare kit read CONFIRMED. Pilot capsh1 ran 20:38-21:13, the other six kits 21:13-04:30. Board 2
+was reflashed to bitstream 3 at 04:32, and the resident name was read back after the power cycle.
+
+Files in `capsv/`: `gates.txt` (7 of 7 VALID, the bare grade), `runs/` (7,260 rows), `main/` (ladder.py's three tables
+and `capsv-grade.txt`). check-caps-boot.py writes board=1 into every row it parses
+(`perf/T0a/board/check-caps-boot.py:46`), so the board column was set to 2 for these runs. Every row was checked to be
+new: none of the 7,260 has the cycles of the matching bitstream-3 Caps row. Without --capsv the script reproduces
+`main/` byte for byte. With it, every row of this record's `main/` tables is present unchanged.
+
+Predictions (`capsv/main/capsv-grade.txt`): 14 of 14 checks hold.
+- C1: the bare kit reads CONFIRMED.
+- C2: 7 of 7 boots VALID.
+- C3, the ObjBounds repeat against the 31 October ObjBounds boots: 0.9998, 0.9995, 0.9999, 0.9991 (BEEBS upstream,
+  -libc, RV8, CoreMark). The ObjLife-v repeat reads 1.0001, 1.0006, 1.0006, 0.9994.
+- C4, Caps-v / ObjBounds in the same boot: 1.0003, 0.9973, 0.9998, 0.9999. 101 of 101 programs are within 0.98-1.02.
+- C5: instructions equal Caps on bitstream 3 within 0.02 % for 101 of 101 programs (largest deviation crc32 0.9998).
+- C6, Caps-v / Plain: 1.427, 3.062, 1.233, 1.617, against ObjBounds / Plain 1.427, 3.069, 1.234, 1.618.
+
+Reading. Removing the lifetime check from Caps takes it to where ObjBounds is. Caps-v / Caps across bitstreams reads
+0.910, 0.943, 0.957, 0.784 (board 2 against board 1), the inverse of MapLife / ObjBounds (0.910, 0.943, 0.958, 0.785).
+Per-object bounds cost the same with or without the check: nothing measurable except BEEBS -libc, where they cost
+0.3 % (Caps-v / ObjBounds 0.9973 [0.9957, 0.9988]; bitstream 3's MapLife / Caps 1.0032). The check is the whole gap
+between Caps and ObjBounds. As the pre-registration said, this
+reading was predictable. The run completes the ladder; it was not expected to discover anything.
