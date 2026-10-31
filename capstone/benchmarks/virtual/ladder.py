@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """The microbenchmark ladder Plain -> Caps -> ObjBounds -> MapLife -> ObjLife, from four sources of board rows.
 
-  ladder.py --plain RUNS --caps RUNS... --objb RUNS... --rec RUNS... --out DIR [--plain-raw RUNS] [--boot B] [--seed S]
+  ladder.py --plain RUNS --caps RUNS... --objb RUNS... --rec RUNS... --out DIR [--plain-raw RUNS] [--capsv RUNS...]
+            [--boot B] [--seed S]
 
 Sources (each a parse-board.py runs table, .gz allowed; one row per timed iteration):
   plain  the Plain kits (board 1, bitstream 3), arms Plain, T1 (= MapLife), T3 (= ObjLife), after plain-exclude.py and
@@ -11,6 +12,10 @@ Sources (each a parse-board.py runs table, .gz allowed; one row per timed iterat
          The bitstream is what makes T1 ObjBounds (PREREG-t1-t2-sampling.md, "ObjBounds", Analysis).
   rec    the bitstream-3 campaign records (results/2026-10-27-t3all-bitstream3, results/2026-10-28-t3heap-bitstream3),
          arms T1 (= MapLife) and T3 (= ObjLife); T2 rows are set aside.
+  capsv  optional: the Caps kits (unchanged) on the ObjBounds bitstream, relabelled HERE: Caps -> Caps-v (capabilities
+         without the per-access lifetime check), MapLife -> ObjBounds (a repeat of the objb source's arm), ObjLife ->
+         ObjLife-v (PREREG-t1-t2-sampling.md, "Caps-v"). It is loaded last, so the other sources' bootstrap draws, and
+         every table row that does not involve it, are those of a run without it.
 
 Estimator, as perf-analyze.py report: per (source, program, arm), the mean of each process's mean log cycles over its
 timed iterations (it = w* dropped). A direct ratio B/A is exp(mean B - mean A) with Welch's 95 % interval on the
@@ -23,8 +28,9 @@ Groups: beebs (the 93, -libc variants included, as the figure), beebs-up (80), b
 name ends in -libc), rv8 (7), coremark (1). Controls (ctl-empty, ctl-loop, renamed per boot by plain-correct.py) enter
 no group. A program missing from a source is absent from every ratio that needs it (Plain's set-aside programs).
 
-Outputs in DIR: per-program.tsv (direct ratios), ladder.tsv (the five bars per program, normalized to Plain),
-per-group.tsv (geomeans). Exit 1 on a failed process, a program seen twice in one source, or a source with no rows:
+Outputs in DIR: per-program.tsv (direct ratios), ladder.tsv (the five bars per program, normalized to Plain; six with
+--capsv), per-group.tsv (geomeans); with --capsv also capsv-grade.txt, the Caps-v predictions C3-C6 graded against
+their pre-registered bands (C1, C2 are the bare kit's and the gate's). Exit 1 on a failed process, a program seen twice in one source, or a source with no rows:
 "no data" is an error, never an empty table.
 """
 import argparse
@@ -43,8 +49,10 @@ ARMS = {
     'caps': {'Caps': 'Caps', 'MapLife': 'MapLife', 'ObjLife': 'ObjLife'},
     'objb': {'T1': 'ObjBounds', 'T3': 'ObjLife-v'},
     'rec': {'T1': 'MapLife', 'T3': 'ObjLife'},
+    'capsv': {'Caps': 'Caps-v', 'MapLife': 'ObjBounds', 'ObjLife': 'ObjLife-v'},
 }
-SKIP = {'plain': set(), 'caps': set(), 'objb': set(), 'rec': {'T2'}}
+SKIP = {'plain': set(), 'caps': set(), 'objb': set(), 'rec': {'T2'}, 'capsv': set()}
+SUITES = ('beebs-up', 'beebs-libc', 'rv8', 'coremark')
 
 
 def die(msg):
@@ -125,6 +133,7 @@ def main():
     ap.add_argument('--caps', nargs='+', required=True)
     ap.add_argument('--objb', nargs='+', required=True)
     ap.add_argument('--rec', nargs='+', required=True)
+    ap.add_argument('--capsv', nargs='+')
     ap.add_argument('--out', type=Path, required=True)
     ap.add_argument('--boot', type=int, default=2000)
     ap.add_argument('--seed', type=int, default=20261026)
@@ -134,6 +143,8 @@ def main():
     if a.plain_raw:
         srcs['plainraw'] = [a.plain_raw]
         ARMS['plainraw'], SKIP['plainraw'] = ARMS['plain'], SKIP['plain']
+    if a.capsv:
+        srcs['capsv'] = a.capsv
     D, suite = {}, {}
     for s, paths in srcs.items():
         d, su = load(s, paths)
@@ -157,10 +168,16 @@ def main():
         ('ObjLife-v/ObjBounds', 'objb', 'ObjBounds', 'objb', 'ObjLife-v', 'in-boot'),
         ('MapLife/ObjBounds', 'objb', 'ObjBounds', 'rec', 'MapLife', 'cross'),
         ('ObjLife/ObjBounds', 'objb', 'ObjBounds', 'rec', 'ObjLife', 'cross'),
+        ('Caps-v/ObjBounds capsvkits', 'capsv', 'ObjBounds', 'capsv', 'Caps-v', 'in-boot'),
+        ('ObjBounds repeat', 'objb', 'ObjBounds', 'capsv', 'ObjBounds', 'cross-day'),
+        ('ObjLife-v repeat', 'objb', 'ObjLife-v', 'capsv', 'ObjLife-v', 'cross-day'),
+        ('Caps-v/Caps', 'caps', 'Caps', 'capsv', 'Caps-v', 'cross'),
     ]
     # Ladder bars normalized to Plain: a sum of (source, arm B, arm A) log differences, each term from one source.
     LADDER = {
         'Caps': [('caps', 'Caps', 'MapLife'), ('plain', 'MapLife', 'Plain')],
+        'Caps-v': [('capsv', 'Caps-v', 'ObjBounds'), (('objb', 'ObjBounds'), ('rec', 'MapLife')),
+                   ('plain', 'MapLife', 'Plain')],
         'ObjBounds': [(('objb', 'ObjBounds'), ('rec', 'MapLife')), ('plain', 'MapLife', 'Plain')],
         'MapLife': [('plain', 'MapLife', 'Plain')],
         'ObjLife': [('plain', 'ObjLife', 'Plain')],
@@ -226,6 +243,53 @@ def main():
                 f.write(f'{name}\t{g}\t{len(ps)}\t{gm:.4f}\t{math.exp(np.quantile(reps, 0.025)):.4f}\t'
                         f'{math.exp(np.quantile(reps, 0.975)):.4f}\n')
     print((a.out / 'per-group.tsv').read_text(), end='')
+    if a.capsv:
+        grade(a.out)
+
+
+def grade(out):
+    """capsv-grade.txt: C3-C6 of PREREG-t1-t2-sampling.md "Caps-v", read from the tables just written."""
+    G = {(r['ratio'], r['group']): r for r in rows_of(out / 'per-group.tsv')}
+    P = defaultdict(dict)
+    for r in rows_of(out / 'per-program.tsv'):
+        P[r['ratio']][r['program']] = r
+    lines, verdicts = [], []
+
+    def gm(ratio, g):
+        r = G.get((ratio, g))
+        if r is None:
+            die(f'grade: no {ratio!r} geomean for {g}: no data is an error')
+        return float(r['geomean'])
+
+    def check(name, ok, text):
+        verdicts.append(ok)
+        lines.append(f'{name} {"PASS" if ok else "MISS"}  {text}')
+
+    for g in SUITES:
+        v = gm('ObjBounds repeat', g)
+        check('C3', abs(v - 1) <= 0.003, f'{g}: ObjBounds repeat / ObjBounds {v:.4f}, band 1.000 +- 0.3 %')
+    for g in SUITES:
+        v, want = gm('Caps-v/ObjBounds capsvkits', g), 1 / gm('MapLife/Caps', g)
+        check('C4', abs(v - want) <= 0.005, f'{g}: Caps-v / ObjBounds in-boot {v:.4f}, predicted {want:.4f} +- 0.005')
+    pp = P.get('Caps-v/ObjBounds capsvkits')
+    if not pp:
+        die('grade: no per-program Caps-v/ObjBounds ratios')
+    out_of = sorted(p for p, r in pp.items() if not 0.98 <= float(r['point']) <= 1.02)
+    check('C4', not out_of, f'per program: {len(pp) - len(out_of)} of {len(pp)} within 0.98-1.02'
+          + (f'; outside: {", ".join(f"{p} {float(pp[p]["point"]):.4f}" for p in out_of)}' if out_of else ''))
+    pi = P.get('Caps-v/Caps')
+    if not pi:
+        die('grade: no per-program Caps-v/Caps ratios')
+    off = sorted(p for p, r in pi.items() if abs(float(r['ins_ratio']) - 1) > 0.0002)
+    worst = max(pi, key=lambda p: abs(float(pi[p]['ins_ratio']) - 1))
+    check('C5', not off, f'instructions Caps-v / Caps(bitstream 3): {len(pi) - len(off)} of {len(pi)} within 0.02 %, '
+          f'largest {worst} {float(pi[worst]["ins_ratio"]):.6f}' + (f'; outside: {", ".join(off)}' if off else ''))
+    for g in SUITES:
+        v, ref = gm('ladder Caps-v/Plain', g), gm('ladder ObjBounds/Plain', g)
+        check('C6', abs(v / ref - 1) <= 0.01, f'{g}: Caps-v / Plain {v:.4f}, ObjBounds / Plain {ref:.4f}, band +- 1 %')
+    lines.append(f'{sum(verdicts)} of {len(verdicts)} checks PASS')
+    (out / 'capsv-grade.txt').write_text('\n'.join(lines) + '\n')
+    print('\n'.join(lines))
 
 
 if __name__ == '__main__':
