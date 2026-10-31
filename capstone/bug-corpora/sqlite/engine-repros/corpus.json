@@ -49,13 +49,17 @@
     "virtual-nested-pools": "virtual-sqlite-memsys5-pools",
     "silicon-sqlite-stock": "silicon-sqlite-memsys5",
     "vp2-malloc": "virtual-sqlite-memsys5",
-    "virtual-platform": "virtual-mallocng"
+    "virtual-platform": "virtual-mallocng",
+    "cheribsd-revocation": "cheribsd-sqlite-memsys5",
+    "cheribsd-platform": "cheribsd-sqlite-sysalloc"
   },
   "verdict_bundles": {
     "virtual-malloc": "results/2026-10-29-virtual/virtual-malloc",
     "virtual-nested-pools": "results/2026-10-29-virtual/virtual-nested-pools",
     "silicon-sqlite-stock": "results/2026-10-16-silicon/silicon-sqlite-stock",
     "vp2-malloc": "results/2026-10-18-vp2-rdx0/vp2-malloc",
-    "virtual-platform": "results/2026-10-29-virtual/virtual-platform"
+    "virtual-platform": "results/2026-10-29-virtual/virtual-platform",
+    "cheribsd-revocation": "results/2026-10-30-cheribsd/cheribsd-revocation",
+    "cheribsd-platform": "results/2026-10-30-cheribsd/cheribsd-platform"
   }
 }

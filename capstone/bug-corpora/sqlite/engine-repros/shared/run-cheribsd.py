@@ -60,6 +60,7 @@ faults and prints no FAULT-WHERE has a broken resolver, and its unattributed cel
 NO-READING rather than becoming misses.
 """
 import argparse
+import hashlib
 import json
 import os
 import pathlib
@@ -76,6 +77,17 @@ SSH = ["-i", str(pathlib.Path.home() / ".ssh/id_ed25519"), "-o", "BatchMode=yes"
        "-o", "StrictHostKeyChecking=no", "-o", "UserKnownHostsFile=/dev/null",
        "-o", "ConnectTimeout=20"]
 PORT_NO = "10086"
+# The arm each mode measures. It used to be the nested arm's name in both, so the non-nested
+# record named an arm it was not a reading of; tools/arms.json says what each configuration is.
+ARM_OF_MODE = {"nested": "cheribsd-revocation", "non-nested": "cheribsd-platform"}
+
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
 
 
 def guest(cmd, timeout=400):
@@ -286,6 +298,10 @@ def main():
             "image_base": where.group(6) if where else None,
             # Both fault lines, not just the last one, for the same reason.
             "last": [l for l in out.splitlines() if l.strip() and "__EXIT" not in l][-2:],
+            # The image this row is a reading OF. Without it a bundle can only hash the binary
+            # afterwards and argue from its mtime that nothing rebuilt it, which is what the
+            # 2026-10-30 bundles had to do.
+            "image_sha256": sha256(binary),
         }
         print(f"  {d.name[:48]:<48} {verdict:<8} exit={code:<4} "
               f"{('si_code=' + si.group(1) + ' ' + si.group(2)) if si else ''}"
@@ -296,13 +312,13 @@ def main():
         tally[r["verdict"]] = tally.get(r["verdict"], 0) + 1
     a.output.parent.mkdir(parents=True, exist_ok=True)
     a.output.write_text(json.dumps({
-        "arm": "cheribsd-revocation", "mode": a.mode,
+        "arm": ARM_OF_MODE[a.mode], "mode": a.mode,
         "revocation_default": rev.strip(), "poscontrol_exit": pc_code,
         "case_timeout_s": a.case_timeout,
         "resolver": ({"object": pc_where.group(1), "base": pc_where.group(2),
                       "symbol": pc_where.group(3)} if pc_ok else None),
         "skipped": dict(skipped), "tally": tally, "cases": results}, indent=2) + "\n")
-    print(f"--- cheribsd-revocation ({a.mode}): {tally}   -> {a.output}", flush=True)
+    print(f"--- {ARM_OF_MODE[a.mode]} ({a.mode}): {tally}   -> {a.output}", flush=True)
     return 0
 
 

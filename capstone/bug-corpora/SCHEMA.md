@@ -405,7 +405,20 @@ its results under one contract, implemented in `tools/verdicts.py` and tested in
   a board bundle is re-folded exactly like a QEMU one. Implemented in `tools/verdicts.py`, tested in
   `tools/test_verdicts.py`. Declared as of 2026-10-30 by `virtual-sqlite-memsys5`,
   `virtual-sqlite-memsys5-pools` and `silicon-sqlite-memsys5`, all three `[25, 28]`, which re-scored
-  10 cells across four bundles of `sqlite/engine-repros` and 0 on the protected arm.
+  10 cells across four bundles of `sqlite/engine-repros` and 0 on the protected arm; and as of
+  2026-10-31 by `cheribsd-sqlite-memsys5` (`[]`) and `cheribsd-sqlite-sysalloc` (`[1, 2]`).
+  **The number's NAMESPACE is the configuration's, not the schema's.** Those last two hold FreeBSD
+  SIGPROT si_codes (`1` `PROT_CHERI_BOUNDS`, `2` `PROT_CHERI_TAG`); nothing but this key reads the
+  number, so a cause in a `cheribsd-*` configuration must never be compared or summed with the
+  `25`/`28` of a `capstone-*` one, and a configuration whose causes are not Capstone's says so in
+  `catch_causes_why`. An EMPTY set is a configuration stating that its mechanism can report no
+  cause at all -- CheriBSD's revocation has no `free` to act on under `SQLITE_CONFIG_HEAP` -- which
+  is a measurement and not a missing declaration, and the judge words it that way.
+* **`controls_owed`, optional per configuration, names a control the arm does NOT have.** A
+  configuration whose `controls_for_missed` covers one operand of a conjunction -- a use-after-free
+  control on an arm whose mechanism is bounds AND revocation -- leaves every MISSED on the other
+  operand resting on nothing, and the gap belongs beside the declaration rather than in a corpus
+  README. It is prose, read by people; the judge still requires only `controls_for_missed`.
 * **The bundle is the only original.** `results/<stamp>/<arm>/` holds `verdicts.jsonl` (each
   Observation with its verdict) and `inputs.json` (configuration, and the compiler, QEMU, firmware,
   kernel and runner hashes, each said or said to be `unrecorded`). **`platform.compiler` is the sha256 of

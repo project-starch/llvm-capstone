@@ -162,11 +162,17 @@ def judge(obs, arm_spec):
                 return NO_READING, "control-failed", (
                     "the arm's controls did not run: missing "
                     + ", ".join(sorted(required - {c.name for c in obs.controls})))
+            # An EMPTY set is a configuration saying its mechanism can report no cause at
+            # all -- CheriBSD's revocation under SQLITE_CONFIG_HEAP has no free to act on --
+            # which is a statement about the arm, not a missing declaration. Spell that out:
+            # "not one of this arm's mechanism causes []" reads like a defect in the table.
+            outside = ("this arm's mechanism can report no cause at all (catch_causes is "
+                       "empty; see catch_causes_why)" if not allowed else
+                       f"not one of this arm's mechanism causes {allowed}")
             return MISSED, None, (
                 f"reached, and faulted with cause={obs.fault.cause} in "
-                f"{obs.fault.symbol or '?'} -- not one of this arm's mechanism causes "
-                f"{allowed}, so the defective access was allowed and this is a later "
-                f"consequence of it, not a catch")
+                f"{obs.fault.symbol or '?'} -- {outside}, so the defective access was "
+                f"allowed and this is a later consequence of it, not a catch")
         return CAUGHT, None, (f"cause={obs.fault.cause} pc={obs.fault.pc:#x} in "
                               f"{obs.fault.symbol or '?'}; by {obs.attribution}: "
                               f"{obs.attribution_evidence}")
