@@ -555,3 +555,35 @@ T3 rows. Cycles are per timed iteration, medians as in perf-analyze.
   committed BEFORE the first main kit's results are read. They are joined with the bitstream-3 rows by (program, arm
   image, process, K), and reported per program with Welch intervals and per suite as geomeans. Nothing from this
   bitstream enters a bitstream-3 geomean, and the reverse.
+
+## Caps-v: capabilities without the per-access lifetime check (2026-10-31, before the flash and any Caps-v boot)
+
+**Why.** The ladder has no rung with capabilities and no temporal check: Caps runs on bitstream 3, which checks a
+lifetime on every capability load and store, and ObjBounds adds per-object bounds. The lead asked for that rung.
+Caps-v is the Caps kits (perf/T0a/kits, unchanged, the same seven kits and SHA256SUMS as the Caps section) on the
+ObjBounds bitstream (capstone-ariane 603528b8b, sha256 0f03b097bbd1693b..., the kit bkit15-objb-b2), on board 2,
+the board the ObjBounds boots used. Arms in each boot: Caps (here Caps-v), MapLife (here an ObjBounds repeat) and
+ObjLife (here ObjLife-v). Driver: board/objb/capsv-first.sh, a copy of objb-first.sh (wait for board 2's SPEC chain to
+end its current boot; local sha256; fallback registered; booked flash; readback; the RTL lane's bare identity kit,
+CONFIRMED only; pilot capsh1 gated by check-caps-boot.py; the other six kits; board 2 reflashed to bitstream 3 by
+spec/board/b2-to-bs3.sh on every exit after the flash). Stubbed dry run: board/objb/dryrun/capsv (ok, pilot VOID,
+bare FINDING, wrong hash: each branch as designed).
+
+**The expected reading is predictable from the measured ratios.** Per-object bounds cost nothing measurable on
+bitstream 3 (MapLife / Caps 1.000, 1.003, 1.000, 1.000), so Caps-v should read where ObjBounds reads. The run is for
+the ladder's completeness, at the lead's request, not to discover something.
+
+**Predictions.**
+- C1. The bare kit reads CONFIRMED (the ObjBounds vector).
+- C2. All seven boots VALID by check-caps-boot.py.
+- C3 (identity control). The in-boot MapLife arm is an ObjBounds repeat: same images, bitstream and board. Against the
+  31 October ObjBounds boots, per suite geomean 1.000 ± 0.3 % (beebs-up, beebs-libc, rv8, coremark). A miss makes
+  every cross-day Caps-v reading unreadable; the in-boot ratios (C4, C5) stand.
+- C4. In-boot Caps-v / MapLife-v (= Caps-v / ObjBounds, same boot) per suite within ±0.5 % of the inverse of
+  bitstream 3's MapLife / Caps: 1.000, 0.997, 1.000, 1.000. Per program, every ratio within 0.98-1.02.
+- C5. Instructions: Caps-v equals the Caps boots on bitstream 3 within 0.02 % for every program.
+- C6. Caps-v / Plain, chained through ObjBounds, within ±1 % of ObjBounds / Plain: 1.43, 3.07, 1.23, 1.62.
+
+**Analysis.** The estimator is ladder.py's (per program, process means of log cycles; Welch 95 % for direct ratios,
+two-level bootstrap for chained ones and suite geomeans), over the programs Plain kept for C6. The script that joins
+the Caps-v boots to the ObjBounds and Plain sources is committed before any Caps-v row is read.

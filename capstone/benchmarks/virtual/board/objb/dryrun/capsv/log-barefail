@@ -1,0 +1,15 @@
+CV START 2026-10-31 15:59:51 bitstream caplifive_vp2c_603528b8b board 2
+CV wait ended: END 519.lbm_r-train-capstone-spatial rc=0
+CV board 2 free 15:59:51
+CV FLASH BEGIN 15:59:51 board 2 booking STUB stub-ok.sh book 2 30 vp2 ObjBounds caplifive_vp2c_603528b8b REFLASH for Caps-v (board 2)
+STUB stub-ok.sh caplifive_vp2c_603528b8b.bit $CAPSTONE_WORK/bitstreams/caplifive_vp2c_603528b8b.bit 0f03b097bbd1693bdc3424a872eb2c88f086d5d5fc3d771b29d4945490ec18c1
+STUB stub-ok.sh unbook STUB stub-ok.sh book 2 30 vp2 ObjBounds caplifive_vp2c_603528b8b REFLASH for Caps-v (board 2)
+CV FLASH END rc=0 15:59:51
+STUB stub-ok.sh caplifive_vp2c_603528b8b.bit 0f03b097bbd1693bdc3424a872eb2c88f086d5d5fc3d771b29d4945490ec18c1
+CV READBACK ok rc=0
+CV BARE BEGIN 15:59:51
+  grade: CONFIRMED (stub)
+CV BARE END rc=4 15:59:51
+CV STOP: bare kit rc=4 (0 CONFIRMED only)
+CV BACK BEGIN 15:59:51
+CV BACK END rc=0 15:59:51
