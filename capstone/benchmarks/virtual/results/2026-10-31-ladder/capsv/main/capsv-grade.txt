@@ -1,0 +1,15 @@
+C3 PASS  beebs-up: ObjBounds repeat / ObjBounds 0.9998, band 1.000 +- 0.3 %
+C3 PASS  beebs-libc: ObjBounds repeat / ObjBounds 0.9995, band 1.000 +- 0.3 %
+C3 PASS  rv8: ObjBounds repeat / ObjBounds 0.9999, band 1.000 +- 0.3 %
+C3 PASS  coremark: ObjBounds repeat / ObjBounds 0.9991, band 1.000 +- 0.3 %
+C4 PASS  beebs-up: Caps-v / ObjBounds in-boot 1.0003, predicted 1.0004 +- 0.005
+C4 PASS  beebs-libc: Caps-v / ObjBounds in-boot 0.9973, predicted 0.9968 +- 0.005
+C4 PASS  rv8: Caps-v / ObjBounds in-boot 0.9998, predicted 1.0002 +- 0.005
+C4 PASS  coremark: Caps-v / ObjBounds in-boot 0.9999, predicted 1.0003 +- 0.005
+C4 PASS  per program: 101 of 101 within 0.98-1.02
+C5 PASS  instructions Caps-v / Caps(bitstream 3): 101 of 101 within 0.02 %, largest crc32 0.999800
+C6 PASS  beebs-up: Caps-v / Plain 1.4272, ObjBounds / Plain 1.4266, band +- 1 %
+C6 PASS  beebs-libc: Caps-v / Plain 3.0618, ObjBounds / Plain 3.0694, band +- 1 %
+C6 PASS  rv8: Caps-v / Plain 1.2332, ObjBounds / Plain 1.2336, band +- 1 %
+C6 PASS  coremark: Caps-v / Plain 1.6174, ObjBounds / Plain 1.6176, band +- 1 %
+14 of 14 checks PASS

@@ -1,0 +1,8 @@
+# Caps-v on board 2 (caplifive_vp2c_603528b8b): stage step_s booking_min twin; the step bounds are the Caps run's.
+$CAPSTONE_WORK/perf/capsv/stages/perf-caps-capsh1 3600 90 -
+$CAPSTONE_WORK/perf/capsv/stages/perf-caps-capsh2 3600 90 -
+$CAPSTONE_WORK/perf/capsv/stages/perf-caps-capsh3 3600 90 -
+$CAPSTONE_WORK/perf/capsv/stages/perf-caps-capsa1 10800 210 -
+$CAPSTONE_WORK/perf/capsv/stages/perf-caps-capsa2 10800 210 -
+$CAPSTONE_WORK/perf/capsv/stages/perf-caps-capsa3 10800 210 -
+$CAPSTONE_WORK/perf/capsv/stages/perf-caps-capsa4 10800 210 -
