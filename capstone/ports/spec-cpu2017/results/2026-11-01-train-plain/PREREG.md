@@ -101,3 +101,91 @@ benchmarks. To be replaced by the twin's instruction counts.
   - an ObjLife part that did not finish (stop before Plain);
   - a twin chain not done by its limit (gates on what has finished).
 - `boardvm.py`'s heartbeat follows the boot budget (903cc08e7410), so the 26 h stages are not cut at 19.5 h.
+
+## Addendum 1 (2026-11-01 13:30): Spatial replaces MapLife
+
+Written and pushed before board 2 is flashed and before any Spatial stage boots.
+
+**The set.** The project lead set SPEC train to three configurations, named after the external collaborator's three
+steps:
+
+| Name | What it is | Build and bitstream |
+|---|---|---|
+| Plain | RISC-V, no capabilities | `plain-rv64` stages, bitstream 3 |
+| Spatial (ObjBounds) | capabilities, per-object bounds checked on every access; no per-access lifetime check | the `capstone-spatial` (MapLife) stages, unchanged, on `caplifive_vp2c_603528b8b` |
+| Full (ObjLife) | Spatial plus a lifetime per malloc object and the hardware lifetime check on every capability load and store | `capstone-lifetimes` stages, bitstream 3 |
+
+The SPEC arm label `capstone-spatial` names MapLife's build, not this Spatial. Spatial is that build on the bitstream
+without the check. It still carries mapping-level lifetime state, so it is an upper bound on a Spatial with no
+temporal state at all.
+
+**What changes.**
+- The deferred MapLife stages (mcf, x264, imagick, nab, xz) are dropped. `maplife-deferred.list` is emptied before
+  `after-train.sh` reads it.
+- lbm MapLife (done) and perlbench MapLife (running on board 1) are kept. Each pairs with its Spatial run as a
+  same-image control, and they split Full / Spatial into the check and per-object lifetimes.
+- Board 2's chain is cut after mcf ObjLife: its list is truncated at the byte its reader had reached, so no running
+  stage is touched. Its `after-train.sh` is stopped while still waiting.
+
+**What `board/spatial-b2.sh` does on board 2**, in order:
+1. waits for that chain to end with its done marker;
+2. checks the bitstream's sha256 (0f03b097…) and the kit;
+3. checks the board is free, the store-has control and the bitstream-3 fallback;
+4. flashes the ObjBounds bitstream, then reads the name back;
+5. runs the RTL lane's bare identity kit. Only CONFIRMED goes on;
+6. runs lbm Spatial as the pilot, gated by `spatial-gate.py` against lbm MapLife. If the pilot passes, the other six
+   run in the order mcf, perlbench, x264, imagick, nab, xz;
+7. flashes back to bitstream 3, on every exit after the flash;
+8. hands over to `after-train.sh 2` (the ObjLife stages left, then the gated Plain stages), only once board 2 is
+   confirmed back on bitstream 3.
+
+**The kit.** `bkit15-objb-b2` is `bkit12-perf-b3-b2` file for file. Launcher 978c09d61f774315, module 9c60fb53f80ce67e,
+`board-run.sh`, base and bake manifests are equal by sha256. Only `board.env`'s `BOARD_BITSTREAM` differs.
+`spec-board.sh` takes it through `SB_KIT` and `SB_BITSTREAM`, set together. With neither set it behaves as before.
+A six-case dry run covers:
+- the default;
+- each variable alone (STOP);
+- both;
+- each kit under the other bitstream's name (STOP).
+
+**The pilot gate** (`spatial-gate.py`, the same images as MapLife):
+- G1: the run is done and every command ended rc 0.
+- G2: every specdiff passes.
+- G3: every recorded hash is equal, stderr excepted. The launcher's stderr carries ASLR bases; it differs between
+  lbm's MapLife and ObjLife runs.
+- G4: each command's in-context instret is within 0.1 %.
+- Missing data exits 2.
+
+Controls, run on the recorded lbm results:
+- MapLife against itself, and ObjLife against MapLife, both pass;
+- each of rc 1, specdiff FAIL, a changed `lbm.out`, instret +0.2 % and done=false gives MISS;
+- an empty command list and a missing file give NO DATA.
+
+`dryrun-spatial-b2.txt` runs the driver with every board call stubbed over eight branches:
+- the normal path;
+- no done marker;
+- a wrong store control;
+- a wrong bitstream hash;
+- a failed flash;
+- a bare kit not CONFIRMED;
+- a pilot gate MISS;
+- a failed flash back.
+
+**Predictions.**
+- **S1.** Every Spatial command ends rc 0, and every specdiff passes.
+- **S2.** Outputs (stderr excepted) are equal to MapLife's on the board where MapLife ran (lbm, perlbench), and to the
+  QEMU twin's for the integer benchmarks. In-context instret is within 0.1 % of MapLife's or the twin's: the images
+  are the same, and the bitstream changes timing only.
+- **S3.** Spatial is never slower. MapLife / Spatial elapsed, where both exist:
+  - lbm in [1.000, 1.02]. Its grid sweep loads and stores doubles, not capabilities, and the check costs 4 cycles per
+    capability load and 5 per capability store.
+  - perlbench in [1.03, 1.40]. An interpreter loads and stores pointers constantly. The microbenchmark range is
+    1.04-1.28.
+- **S4.** Full / Spatial per benchmark lies in [1.00, 1.50], and Spatial / Plain in [1.1, 3.5]. Microbenchmarks give
+  1.04-1.28 and 1.23-3.07, but SPEC's elapsed time includes the kernel. Full enters the kernel more often, so Full /
+  Spatial is expected at or above the microbenchmark range.
+
+**Board time.** Spatial is about MapLife's time less the check, about 95 board-hours for the seven benchmarks. Board 2
+starts it after mcf ObjLife, about 04:30 on 2 November, and ends near 6 November. Board 1 runs the remaining Full
+stages (about 68 h), then Plain (about 54 h). Board 2 joins whatever is left once it is back on bitstream 3. All three
+configurations should complete around 7 November.
