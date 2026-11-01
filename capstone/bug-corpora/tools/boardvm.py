@@ -184,6 +184,8 @@ class BoardBatch(virtualvm.Batch):
         - A heartbeat that no observe() reads keeps the driver's idle limit from cutting a long silent step.
         - The final rmmod fails on the board, harmlessly, after the last step."""
         mult = getattr(self, "step_mult", STEP_MULT)
+        hb_budget = getattr(self, "budget", None)
+        hb_beats = max(2000, hb_budget // HEARTBEAT_S + 1) if hb_budget else 2000
         lines = ["#!/bin/sh", f"cd /test-domains/{BATCH} || exit 1", "dmesg -n 1",
                  'grep -q "^capstone_vm " /proc/modules || insmod capstone_vm.ko || { echo VIRTUAL_STAGED_DONE; exit 1; }',
                  "chmod 666 /dev/capstone-vm",
@@ -195,7 +197,10 @@ class BoardBatch(virtualvm.Batch):
                  # match or count a line of it twice, and the tail so a step the boot ends before its END still shows
                  # where it was (cpython lt1 step 21, 2026-10-22: 458 lines never reached the transcript). execute()
                  # decodes the last one into such a step's text.
-                 f"( i=0; while [ $i -lt 2000 ]; do sleep {HEARTBEAT_S}; i=$((i+1)); "
+                 # The heartbeat lasts at least the script's budget: a fixed 2000 beats (~19.5 h at the board's ~35 s
+                 # a beat) stopped mid-step in perlbench train, whose 26 h boot then hit the driver's idle limit with
+                 # three of five commands done (2026-11-01). Without a budget the count stays 2000.
+                 f"( i=0; while [ $i -lt {hb_beats} ]; do sleep {HEARTBEAT_S}; i=$((i+1)); "
                  "echo \"@@HB $i out=$(wc -c < /tmp/step.out 2>/dev/null)B/$(wc -l < /tmp/step.out 2>/dev/null)L "
                  f"tail=$(tail -c {TAIL_B} /tmp/step.out 2>/dev/null | base64 | tr -d '\\n')\"; "
                  "done ) & hb=$!"]
