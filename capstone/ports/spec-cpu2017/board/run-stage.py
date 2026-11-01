@@ -81,6 +81,10 @@ def read(a):
     begins = {m.group(1): m.end() for m in re.finditer(r"^@@SPEC-BEGIN (\d+) .*$", text, re.M)}
     ends = list(re.finditer(r"^@@SPEC-END (\d+) (\w+) (\S+) (\d+) rc=(\d+) up0=(\S+) up1=(\S+) (?:sys=(\d+),(\d+),(\d+) )?"
                             r"nbench=(\d+) ?(.*?) :: (.*)$", text, re.M))
+    # A plain arm's command (make-stage.py --plain-arms) prints the hart's rdcycle/rdinstret before and after it. They are
+    # hart-wide: the kernel and every other task on the hart count too, so they are an upper bound on the command's own.
+    ctr = {m.group(1): (int(m.group(4)) - int(m.group(2)), int(m.group(5)) - int(m.group(3)))
+           for m in re.finditer(r"^@@SPEC-CTR (\d+) \S+ cycles=(\d+) instret=(\d+) cycles=(\d+) instret=(\d+)$", text, re.M)}
     prev_bench = None
     for m in ends:
         n, tag, arm, i, r, u0, u1, scy, sin, sen, nb, stats, bench = m.groups()
@@ -104,6 +108,8 @@ def read(a):
             # print no sys= and keep the bench line, as does a zero delta: run.sh prints 0 when the sysfs files are
             # absent, and no data must not read as zero instructions.
             e.update(cycles=int(scy), instret=int(sin), entries=int(sen), counters="sysfs-delta")
+        if arm in plan.get("plain_arms", []):
+            e.update(hart_cycles=ctr[n][0] if n in ctr else None, hart_instret=ctr[n][1] if n in ctr else None)
         res["arms"].setdefault(arm, dict(commands=[], hashes={}, files={}))["commands"].append(e)
     for m in re.finditer(r"^@@SPEC-HASH-BEGIN (\S+)\n(.*?)^@@SPEC-HASH-END \1$", text, re.M | re.S):
         h = dict((p.split(None, 1)[1].strip().removeprefix("./"), p.split()[0]) for p in m.group(2).splitlines() if len(p.split()) == 2)
@@ -183,7 +189,8 @@ def read(a):
         for c in cs:
             print(f"   {c['tag']}{c['i']}: rc {c['rc']} {c['seconds']} s instret {c['instret']} cycles {c['cycles']} "
                   f"entries {c['entries']} peak_pages {c['peak_pages']} nodes {c['nodes']} collections {c['collections']}"
-                  + ("" if c["bench_line_fresh"] else " (bench line NOT fresh)"))
+                  + (f" hart_cycles {c['hart_cycles']} hart_instret {c['hart_instret']}" if "hart_cycles" in c
+                     else "" if c["bench_line_fresh"] else " (bench line NOT fresh)"))
         for v in vals:
             if v["verdict"] != "PASS":
                 print(f"   specdiff {v['verdict']}: {v['cmd']} :: {v.get('tail', '')[-160:]!r}")

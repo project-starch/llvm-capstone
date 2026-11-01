@@ -112,9 +112,20 @@ def main():
                     "dropped commands' specdiffs and target validations go with them, and so does every input file only a "
                     "dropped command names (557.xz_r train: --commands 0 is input.combined alone, which fits the board's "
                     "payload cap where both inputs do not). plan.json records the selection")
+    ap.add_argument("--plain-arms", default="", metavar="A[,B]",
+                    help="arms whose executables are plain riscv64 Linux programs (the Plain baseline): their commands run "
+                    "directly, not through the launcher, quote no module bench line, and print the hart's rdcycle and "
+                    "rdinstret before and after each command (@@SPEC-CTR, from --rdctr)")
+    ap.add_argument("--rdctr", type=Path, metavar="EXE", help="a static riscv64 Linux program printing 'cycles=N instret=N' "
+                    "from rdcycle and rdinstret (needed with --plain-arms)")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args()
     arms = a.arms.split(",")
+    plain = set(x for x in a.plain_arms.split(",") if x)
+    if plain - set(arms):
+        sys.exit(f"make-stage: --plain-arms names arms not in --arms: {sorted(plain - set(arms))}")
+    if plain and not a.rdctr:
+        sys.exit("make-stage: --plain-arms needs --rdctr")
     bdir = a.tree / "benchspec/CPU" / a.bench
     if a.out.exists():
         sys.exit(f"make-stage: {a.out} exists")
@@ -183,6 +194,9 @@ def main():
         dst = stage / "in" / rel
         dst.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(runs[first] / rel, dst)
+    if plain:
+        shutil.copy2(a.rdctr, stage / "rdctr")
+        (stage / "rdctr").chmod(0o755)
     if a.native_harness:
         shutil.copy2(a.native_harness, stage / "natperl")
         (stage / "natperl").chmod(0o755)
@@ -251,7 +265,13 @@ def main():
         prog = argv[0]
         args = " ".join('"$S/' + x[3:] + '"' if x.startswith("$S/") else q(x) for x in argv[1:])
         c = dict(c, output=c["output"] and c["output"].replace("ARM", arm), error=c["error"] and c["error"].replace("ARM", arm))
-        if wrap and tag == "run" and a.bench == "500.perlbench_r" and a.native_harness and argv[-1] == "test.pl":
+        bare = wrap and arm in plain
+        if bare and tag == "run" and a.bench == "500.perlbench_r":
+            # The same argv[0] as the Capstone arms' (../sw/perl), through a link to the image (/tmp/sw below).
+            cmd = f"../sw/perl {args}"
+        elif bare:
+            cmd = f'"$S/bin/{arm}/{prog}" {args}'
+        elif wrap and tag == "run" and a.bench == "500.perlbench_r" and a.native_harness and argv[-1] == "test.pl":
             hargs = " ".join(q(x) for x in argv[1:-1])
             cmd = f'"$S/natperl" {hargs} -e \'$^X="../sw/perl"; do "./test.pl"; die $@ if $@\''
         elif wrap and tag == "run" and a.bench == "500.perlbench_r":
@@ -267,6 +287,13 @@ def main():
         redir = (f" < {q(c['input'])}" if c["input"] else "") + (f" > {q(c['output'])}" if c["output"] else "") + \
                 (f" 2>> {q(c['error'])}" if c["error"] else "")
         err = q(c["error"]) if c["error"] else "/dev/null"
+        if bare:
+            # No module line belongs to a plain command: nbench=0 and an empty bench quote, so the reader takes none
+            # (the control step's bench line would otherwise read as this command's).
+            return [f'echo "@@SPEC-BEGIN $n {tag} {arm} {i}"', 'k0=$("$S/rdctr")', "u0=$(up)",
+                    f"{cmd}{redir}", "rc=$?", "u1=$(up)", 'k1=$("$S/rdctr")',
+                    f'echo "@@SPEC-CTR $n {arm} $k0 $k1"',
+                    f'echo "@@SPEC-END $n {tag} {arm} {i} rc=$rc up0=$u0 up1=$u1 nbench=0 :: plain"', "n=$((n+1))"]
         return [f'echo "@@SPEC-BEGIN $n {tag} {arm} {i}"', "s0=$(sysb)", "u0=$(up)",
                 f"{cmd}{redir}", "rc=$?", "u1=$(up)", "s1=$(sysb)",
                 "sys=$(echo $s0 $s1 | awk '{printf \"%.0f,%.0f,%.0f\", $4-$1, $5-$2, $6-$3}')",
@@ -283,7 +310,10 @@ def main():
                   "find . -type f | while read -r f; do ln -s \"$S/in/$f\" \"/tmp/sr/$f\"; done && cd /tmp/sr || exit 1"]
         else:
             L += [f'echo "@@SPEC-ARM-BEGIN {arm}"', "cd / && rm -rf /tmp/sr && mkdir -p /tmp/sr && cp -a \"$S/in/.\" /tmp/sr/ && cd /tmp/sr || exit 1"]
-        if a.bench == "500.perlbench_r":
+        if a.bench == "500.perlbench_r" and arm in plain:
+            img = f"$S/bin/{arm}/" + p["cmds"][0]["argv"][0].replace("ARM", arm)
+            L += ["rm -rf /tmp/sw && mkdir -p /tmp/sw || exit 1", f'ln -s "{img}" /tmp/sw/perl || exit 1']
+        elif a.bench == "500.perlbench_r":
             img = f"$S/bin/{arm}/" + p["cmds"][0]["argv"][0].replace("ARM", arm)
             L += ["rm -rf /tmp/sw && mkdir -p /tmp/sw || exit 1",
                   f"printf '#!/bin/sh\\nexec \"%s\" --application-argv \"%s\" -- \"$0\" \"$@\"\\n' \"$V\" \"{img}\" > /tmp/sw/perl",
@@ -310,6 +340,9 @@ def main():
                                    for e in exes} for arm in arms},
                 ldecod=hashlib.sha256(a.ldecod.read_bytes()).hexdigest() if p["gen"] else None, stripped=bool(a.strip),
                 refs={k: os.path.relpath(v, spec_root) for k, v in refs.items()})
+    if plain:
+        meta["plain_arms"] = sorted(plain)   # absent otherwise, as selection is
+        meta["rdctr"] = hashlib.sha256(a.rdctr.read_bytes()).hexdigest()
     if selection:
         meta["selection"] = selection   # absent by default, so a stage of every command keeps its plan.json byte for byte
     (a.out / "plan.json").write_text(json.dumps(meta, indent=1) + "\n")

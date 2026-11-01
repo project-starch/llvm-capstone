@@ -1,0 +1,71 @@
+# after-train.sh stubbed dry run, 2026-11-01 11:11 (chain-board stubbed: prints its list, touches the done or stopped marker)
+## branch a
+AT START 2026-11-01 11:11:11 board 2 waiting for pid 3744758
+AT OBJLIFE BEGIN 11:11:14
+STUB chain-board 2 $CAPSTONE_WORK/spec/board/objlife-rest.list <dry>/a/o
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/500.perlbench_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/505.mcf_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/525.x264_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/538.imagick_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/544.nab_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-lifetimes-link-c0
+AT OBJLIFE END rc=0 11:11:14
+HELD 500.perlbench_r-train-plain-rv64: no twin result
+HELD 505.mcf_r-train-plain-rv64: specdiff not all PASS
+HELD 525.x264_r-train-plain-rv64: no twin result
+HELD 538.imagick_r-train-plain-rv64: no twin result
+HELD 544.nab_r-train-plain-rv64: no twin result
+HELD 557.xz_r-train-plain-rv64-link-c0: no twin result
+AT PLAIN+MAPLIFE BEGIN 11:11:14: 1 Plain stages
+STUB chain-board 2 <dry>/a/p/after-b2.list <dry>/a/p
+  would run $CAPSTONE_WORK/spec/stages-train-plain/519.lbm_r-train-plain-rv64
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/505.mcf_r-train-capstone-spatial
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/525.x264_r-train-capstone-spatial
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/538.imagick_r-train-capstone-spatial
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/544.nab_r-train-capstone-spatial
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-spatial-link-c0
+AT DONE rc=0 11:11:14
+## branch b
+AT START 2026-11-01 11:11:14 board 2 waiting for pid 3744836
+AT STOP: board 2's chain ended without .chain-b2-done; nothing launched
+## branch c
+AT START 2026-11-01 11:11:14 board 1 waiting for pid 3744845
+AT OBJLIFE BEGIN 11:11:14
+STUB chain-board (fails) 1 $CAPSTONE_WORK/spec/board/objlife-rest.list <dry>/c/o
+AT OBJLIFE END rc=0 11:11:14
+AT STOP: the ObjLife part did not finish
+## branch d
+AT START 2026-11-01 11:11:14 board 1 waiting for pid 3744860
+AT OBJLIFE BEGIN 11:11:14
+STUB chain-board 1 $CAPSTONE_WORK/spec/board/objlife-rest.list <dry>/d/o
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/500.perlbench_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/505.mcf_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/525.x264_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/538.imagick_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/544.nab_r-train-capstone-lifetimes
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-lifetimes-link-c0
+AT OBJLIFE END rc=0 11:11:14
+AT NOTE: the Plain twin chain is not done; gating on what has finished
+HELD 500.perlbench_r-train-plain-rv64: no twin result
+HELD 505.mcf_r-train-plain-rv64: specdiff not all PASS
+HELD 525.x264_r-train-plain-rv64: no twin result
+HELD 538.imagick_r-train-plain-rv64: no twin result
+HELD 544.nab_r-train-plain-rv64: no twin result
+HELD 557.xz_r-train-plain-rv64-link-c0: no twin result
+AT PLAIN+MAPLIFE BEGIN 11:11:17: 1 Plain stages
+STUB chain-board 1 <dry>/d/p/after-b1.list <dry>/d/p
+  would run $CAPSTONE_WORK/spec/stages-train-plain/519.lbm_r-train-plain-rv64
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/505.mcf_r-train-capstone-spatial
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/525.x264_r-train-capstone-spatial
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/538.imagick_r-train-capstone-spatial
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/544.nab_r-train-capstone-spatial
+  would run $CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-spatial-link-c0
+AT DONE rc=0 11:11:17
+## branch a: the generated list
+# Plain stages that passed the QEMU twin, 2026-11-01 11:11:14, then the deferred MapLife stages
+$CAPSTONE_WORK/spec/stages-train-plain/519.lbm_r-train-plain-rv64 32400 570 <dry>/cen/519.lbm_r-train-plain-rv64
+$CAPSTONE_WORK/spec/stages-train-hfl/505.mcf_r-train-capstone-spatial 84600 1440 -
+$CAPSTONE_WORK/spec/stages-train-hfl/525.x264_r-train-capstone-spatial 100800 1710 -
+$CAPSTONE_WORK/spec/stages-train-hfl/538.imagick_r-train-capstone-spatial 84600 1440 -
+$CAPSTONE_WORK/spec/stages-train-hfl/544.nab_r-train-capstone-spatial 84600 1440 -
+$CAPSTONE_WORK/spec/stages-train-hfl/557.xz_r-train-capstone-spatial-link-c0 32400 570 $CAPSTONE_WORK/spec/census-train/557.xz_r-train-capstone-spatial-link-mem936M-c0

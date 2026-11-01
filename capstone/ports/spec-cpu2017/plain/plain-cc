@@ -1,0 +1,10 @@
+#!/bin/sh
+# Plain SPEC compiler: the SDKs' clang, riscv64 Linux, static, against the Plain musl 1.2.5 (mallocng) and libgcc of
+# the microbenchmark Plain arm (perf/T0b/STATUS.md section 1). Compile-only calls get the target and musl's headers;
+# a link adds crt1/crti/crtn, libc.a and libgcc.a through lld.
+W=${CAPSTONE_WORK:-/mnt/hdd/$USER/capstone}
+CC=$W/cc-prmerged/bin/clang M=$W/perf/T0b/musl-rv64gc G=$W/perf/T0b/tools/libgcc.a
+set -- --no-default-config --target=riscv64-unknown-linux-musl -march=rv64gc -mabi=lp64d -nostdinc -isystem "$M/include" "$@"
+for x in "$@"; do case $x in -c|-E|-S|-M|-MM|--version|-v) exec "$CC" "$@";; esac; done
+exec "$CC" -static -nostdlib -fuse-ld=lld -Wl,--gc-sections "$M/lib/crt1.o" "$M/lib/crti.o" "$@" -L"$M/lib" \
+  -Wl,--start-group "$M/lib/libc.a" "$G" -Wl,--end-group "$M/lib/crtn.o"
