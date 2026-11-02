@@ -416,6 +416,20 @@ reschedule, a signal, an expired budget or `SIGKILL` at four points of
 `CV_STEP`, and a short GUP result, and checks that no `CSRUNV` and no GUP
 follows an injection, that pins and fault counts match uninjected runs, that GUP is
 never asked for more than 16 pages, and that every `FOLL_PIN` pin is released.
+Both count the pins and faults of the REGION'S arena, from the module's
+`diag_admit` lines (one per page an arena gains or loses, read with `dmesg`
+after each run), not the process's pinned-page total: since grants are admitted
+at first touch, that total also holds the program's own pages, which vary with
+placement (the allocator's address-hashed index in `.bss`) and with windows the
+quantum cuts. A module without the parameter is measured on the process total.
+
+A write the launcher makes into domain memory on the domain's behalf -- a
+thread's exit word, a worker's meta block and exchange region -- is preceded by
+`CV_TOUCH` over the span, which admits every page of it a lazily admitted arena
+does not hold yet, with the same pin and checks as a fault; otherwise the write
+would create backing the domain can store a capability into with no pin and no
+sweep. `run-pthreads.py` checks it with an exit word in an untouched page of the
+main stack.
 
 The launcher validates and loads an image without copying the file first. It
 opens the image read-only and asks the module (`CV_IMAGE`) to deny writers to

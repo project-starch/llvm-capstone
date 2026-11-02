@@ -333,10 +333,12 @@ module_param(pin_ahead_pages, ulong, 0444);
 static bool lazy_grants = true;
 module_param(lazy_grants, bool, 0444);
 MODULE_PARM_DESC(lazy_grants, "admit NONLIN grants page by page at first access (0: pin whole at mint)");
-/* One line per page admitted to a NON-linear arena (at a fault, or by the resident scan at the
- * mint): which arena, which page, the fault's cause and pc. The instrument for a run whose pinned
- * page count differs from another run of the same program, which a whole-arena pin could not
- * show and a lazy one can. Off by default; 0644 so a boot can turn it on for one run. */
+/* One line per page an arena gains or loses: `admit` at a fault (with cause and pc), `window`
+ * from a pin-ahead window, `scan` from the resident scan, `touch` from CV_TOUCH, and `retire`
+ * with the count swept. The instrument for a run whose pinned page count differs from another
+ * run of the same program (which a whole-arena pin could not show and a lazy one can), and what
+ * the pin-ahead and step-hooks gates read to count one arena's pins instead of the process's.
+ * Off by default; 0644 so a boot can turn it on for one run. */
 static bool diag_admit;
 module_param(diag_admit, bool, 0644);
 
@@ -796,7 +798,7 @@ static int pin_remaining(struct context *c, struct arena *a, unsigned int gup_fl
         if (!PageAnon(page) || page_mapcount(page) != 1 || (a->frames && !frame_insert(a, page))) {
             unpin_user_page(page); error = -EACCES; break;
         }
-        if (diag_admit && a->frames)
+        if (diag_admit)
             pr_info("capstone_vm: scan arena 0x%lx+0x%lx page %u pfn 0x%lx flags 0x%x\n",
                     a->address, a->bytes, j, page_to_pfn(page), gup_flags);
         a->pages[j] = page;
@@ -1052,7 +1054,7 @@ static void clear_page_tags(struct page *page)
 static int retire(struct context *c, struct arena *a, bool destroying)
 {
     unsigned long flags, old, status;
-    unsigned i;
+    unsigned i, swept;
     if (!destroying && arena_has_thread_frame(c, a))
         return -EBUSY;
     if (!destroying) {
@@ -1084,13 +1086,16 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     }
     /* Clear every tag before returning frames to Linux. Later collection can
      * reuse dead IDs only after sweeping all remaining namespace storage. */
-    for (i = 0; i < a->count; ++i) {
+    for (i = 0, swept = 0; i < a->count; ++i) {
         if (!a->pages[i]) continue;
         clear_page_tags(a->pages[i]);
         set_page_dirty_lock(a->pages[i]);
         unpin_user_page(a->pages[i]);
         --c->stats.pinned_pages;
+        ++swept;
     }
+    if (diag_admit)
+        pr_info("capstone_vm: retire arena 0x%lx+0x%lx swept %u\n", a->address, a->bytes, swept);
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
     xa_erase(&c->ids, a->id);
@@ -1545,6 +1550,9 @@ static void pin_ahead(struct context *c, struct arena *a,
                 }
                 return;
             }
+            if (diag_admit)
+                pr_info("capstone_vm: window arena 0x%lx+0x%lx page %lu pfn 0x%lx\n",
+                        a->address, a->bytes, (unsigned long)first + done + j, page_to_pfn(pages[j]));
             ++c->stats.pinned_pages;
         }
         if (n != batch)
@@ -1732,6 +1740,16 @@ module_param(bench_entries, ullong, 0444);
             t->last_fault_addr, t->last_fault_cause, t->fault_repeat,               \
             ##__VA_ARGS__)
 
+/* A file-backed VMA is admitted only as the image's data: add()'s image-data rule, a private,
+ * readable and writable, never executable mapping of the image file. Its pages are then admitted
+ * like any other, because the FOLL_WRITE pin breaks the copy-on-write and only an exclusive
+ * anonymous copy is ever retained. */
+static bool image_data_vma(const struct arena *a, const struct vm_area_struct *v)
+{
+    return a->rx_bytes && !(v->vm_flags & VM_EXEC) &&
+           (v->vm_flags & (VM_READ | VM_WRITE)) == (VM_READ | VM_WRITE);
+}
+
 static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
 {
     unsigned long address = t->frame[5], cause = t->frame[3];
@@ -1769,14 +1787,8 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         index = (address - a->address - a->rx_bytes) / PAGE_SIZE;
         mmap_read_lock(c->mm);
         v = find_vma(c->mm, address);
-        /* A file-backed VMA is admitted only as the image's data (add()'s image-data rule: a
-         * private, readable and writable, never executable mapping of the image file); its
-         * pages are then admitted like any other, because the FOLL_WRITE pin below breaks the
-         * copy-on-write and only an exclusive anonymous copy is ever retained. */
         if (!v || v->vm_start > address || !(v->vm_flags & required) ||
-            (v->vm_flags & VM_SHARED) ||
-            (v->vm_file && !(a->rx_bytes && !(v->vm_flags & VM_EXEC) &&
-                             (v->vm_flags & (VM_READ | VM_WRITE)) == (VM_READ | VM_WRITE)))) {
+            (v->vm_flags & VM_SHARED) || (v->vm_file && !image_data_vma(a, v))) {
             unsigned long f = v ? v->vm_flags : 0UL;
             int file = v ? !!v->vm_file : -1;
             mmap_read_unlock(c->mm);
@@ -1916,7 +1928,7 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
         t->last_fault_addr = address;
         t->last_fault_cause = cause;
         t->fault_repeat = 0;
-        if (diag_admit && a->frames)
+        if (diag_admit)
             pr_info("capstone_vm: admit arena 0x%lx+0x%lx page %u cause %lu pc 0x%lx pfn 0x%lx\n",
                     a->address, a->bytes, index, cause, t->frame[4], page_to_pfn(page));
         a->pages[index] = page;
@@ -1926,6 +1938,67 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
     }
     CV_RESOLVE_FAIL("arena", "no lazy arena covers this address");
     return -EFAULT;
+}
+
+/* Admit one absent page of a lazy arena outside a fault, for CV_TOUCH: the launcher is about to
+ * write it through Linux. The same rule as resolve()'s for a page admitted at a fault: the VMA
+ * present, readable, private, a file only as the image's data; the page pinned with FOLL_WRITE
+ * (FOLL_FORCE where the VMA is not writable) so a zero page, a shared page or a file page is
+ * replaced by an exclusive copy; then PageAnon, mapcount 1 and the frame set. Caller holds
+ * vm_lock and has checked that pages[index] is empty. */
+static int admit_page(struct context *c, struct arena *a, unsigned index)
+{
+    unsigned long address = a->address + a->rx_bytes + (unsigned long)index * PAGE_SIZE;
+    struct vm_area_struct *v;
+    struct page *page;
+    mmap_read_lock(c->mm);
+    v = find_vma(c->mm, address);
+    if (!v || v->vm_start > address || !(v->vm_flags & VM_READ) || (v->vm_flags & VM_SHARED) ||
+        (v->vm_file && !image_data_vma(a, v))) {
+        mmap_read_unlock(c->mm); return -EACCES;
+    }
+    if (pin_user_pages_remote(c->mm, address, 1,
+                              FOLL_WRITE | ((v->vm_flags & VM_WRITE) ? 0 : FOLL_FORCE),
+                              &page, NULL, NULL) != 1) {
+        mmap_read_unlock(c->mm); return -EFAULT;
+    }
+    if (!PageAnon(page) || page_mapcount(page) != 1 || (a->frames && !frame_insert(a, page))) {
+        mmap_read_unlock(c->mm); unpin_user_page(page); return -EACCES;
+    }
+    mmap_read_unlock(c->mm);
+    if (diag_admit)
+        pr_info("capstone_vm: touch arena 0x%lx+0x%lx page %u pfn 0x%lx\n",
+                a->address, a->bytes, index, page_to_pfn(page));
+    a->pages[index] = page;
+    ++c->stats.pinned_pages;
+    c->stats.peak_pages = max(c->stats.peak_pages, c->stats.pinned_pages);
+    return 0;
+}
+
+/* CV_TOUCH: every page of [address, address + bytes) inside a lazy arena is admitted before the
+ * launcher writes it. A page already held, or in an arena pinned whole, needs nothing; a page
+ * outside every arena is refused, as is one in the image's read+execute prefix, which the
+ * launcher never writes. */
+static int touch(struct context *c, const struct cv_touch *r)
+{
+    unsigned long at, end;
+    if (!r->bytes || r->address > ULONG_MAX - r->bytes) return -EINVAL;
+    at = r->address & PAGE_MASK;
+    end = PAGE_ALIGN(r->address + r->bytes);
+    if (end < at) return -EINVAL;
+    for (; at < end; at += PAGE_SIZE) {
+        struct arena *a = arena_at(c, at);
+        unsigned index;
+        int error;
+        if (!a) return -EINVAL;
+        if (at - a->address < a->rx_bytes) return -EACCES;
+        if (!a->lazy) continue;
+        index = (at - a->address - a->rx_bytes) / PAGE_SIZE;
+        if (a->pages[index]) continue;
+        error = admit_page(c, a, index);
+        if (error) return error;
+    }
+    return 0;
 }
 
 static void node_stats(struct context *c)
@@ -2339,6 +2412,10 @@ thread_unwind:
         t = find_thread(c, r.thread);
         rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
         if (!rc) t->sfence_pending = true;
+    } else if (op == CV_TOUCH) {
+        struct cv_touch r;
+        if (copy_from_user(&r, (void __user *)arg, sizeof(r))) { rc = -EFAULT; goto out; }
+        rc = touch(c, &r);
     } else if (op == CV_RETIRE) {
         u64 id;
         struct arena *a;

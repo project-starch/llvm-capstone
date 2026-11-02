@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/epoll.h>
+#include <stdint.h>
 
 extern int __clone(int (*)(void *), void *, int, void *, ...);
 
@@ -80,6 +81,25 @@ static void check_file(int fd, char *buffer, char value)
     assert(read(fd, buffer, 1) == 0);
 }
 
+/* A worker's exit word in a page of the MAIN stack that nothing has touched (exit_word_worker):
+ * the launcher stores 0 into it through Linux when the worker exits, and the main thread then
+ * stores a pointer -- a capability, with its tag -- next to it. The module must admit the page
+ * before the launcher's store (CV_TOUCH), or the tag lives in a frame nothing pins and nothing
+ * sweeps at exit. The page must stay untouched by the domain until the launcher's store: the
+ * page is inside an uninitialised stack array (a pointer derived from the array has the whole
+ * array's bounds; one derived from the frame address has the frame's and faults, cause 24), the
+ * worker is a raw virtual thread the main thread joins -- the join returns once the worker's
+ * exit protocol ran -- and a short delegated sleep follows it, since the exit service marks the
+ * thread done before it stores the word. A violated order shows as a missing `touch` line, a
+ * FAIL, never as a pass. The runner checks the module's `touch` line for this page. */
+extern _Noreturn void __capstone_vm_thread_exit_clear(uintptr_t clear, uintptr_t stack,
+                                                      size_t bytes, long status);
+static int *exit_word;
+static void *exit_word_worker(void *arg)
+{
+    (void)arg;
+    __capstone_vm_thread_exit_clear((uintptr_t)exit_word, 0, 0, 0);
+}
 static void *allocator_worker(void *arg)
 {
     for (unsigned i=0; i<8; ++i) {
@@ -165,5 +185,28 @@ int main(void)
     assert(!pthread_join(a, &result) && result == &values[0]);
     assert(!pthread_join(b, &result) && result == &values[1]);
     puts("VIRTUAL_PTHREAD_OK concurrent_allocator_remap");
+
+    {
+        volatile char slab[64 * 4096];   /* 64 pages of the main stack nothing writes */
+        /* Pointer arithmetic, never an integer cast back to a pointer: the word's pointer must
+         * carry the slab's capability, or the main thread's own read of it is refused (24). */
+        size_t align = (size_t)(-(uintptr_t)slab) & 4095;
+        exit_word = (int *)((char *)slab + align + 32 * 4096);
+        printf("VIRTUAL_PTHREAD_WORD:0x%lx\n", (unsigned long)(uintptr_t)exit_word);
+        fflush(stdout);
+        char *wstack = mmap(NULL, 65536, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+        assert(wstack != MAP_FAILED);
+        void *wtp;
+        __asm__ volatile("movc %0, tp" : "=r"(wtp));
+        long wid = capstone_virtual_thread_create(exit_word_worker, NULL, wstack + 65536, wtp);
+        assert(wid > 0);
+        assert(!capstone_virtual_thread_join(wid));
+        struct timespec pause = {0, 50000000};
+        nanosleep(&pause, NULL);
+        assert(*exit_word == 0);
+        /* The capability store: a pointer into the same page, 16 bytes past the word. */
+        *(void *volatile *)((char *)exit_word + 16) = &values[0];
+        puts("VIRTUAL_PTHREAD_OK exit_word_untouched_stack");
+    }
     return 0;
 }

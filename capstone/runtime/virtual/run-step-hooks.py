@@ -54,22 +54,30 @@ SCRIPT = '''#!/bin/sh
 cd /mnt/vm || exit 1
 export CAPSTONE_VM_STATS=1
 pins() { echo 1 > /proc/sys/vm/stat_refresh; grep -E "^nr_foll_pin_(acquired|released) " /proc/vmstat | tr "\\n" " "; }
+dmesg -n 1
+dmesg -c > /dev/null
 '''
 def app(name):
     return CONFIGS[name][3] if len(CONFIGS[name]) > 3 else 'pin'
 
 
-def script(names):
+# The accounting checks compare the pins and faults of the REGION'S arena between an injected
+# run and its reference, read from the module's diag_admit lines (dmesg, cleared after each
+# run), where a module has that parameter; the process-wide total also holds the program's own
+# pages, which since lazy NONLIN grants vary with placement and with windows cut by the
+# quantum. A module without the parameter is measured on the process total, as before.
+def script(names, instrumented):
     text = SCRIPT
     for name in names:
         params, modes = CONFIGS[name][:2]
-        text += f'''insmod capstone_vm.ko {params} || exit 1
+        text += f'''insmod capstone_vm.ko {params} {'diag_admit=1' if instrumented else ''} || exit 1
 for mode in {modes}; do
   echo "HOOK_PINS_BEFORE:{name}:$mode:$(pins)"
   ./capstone-vexec {app(name)}.dom "$mode" > /tmp/pin.out 2>&1
   echo "HOOK_EXIT:{name}:$mode:$?"
   echo "HOOK_PINS_AFTER:{name}:$mode:$(pins)"
   cat /tmp/pin.out
+  dmesg -c | grep "capstone_vm: " | grep -v "test unload" | sed "s/^/HOOK_DIAG:/"
 done
 ./capstone-vexec --stats
 rmmod capstone_vm || exit 1
@@ -82,6 +90,24 @@ dmesg | grep "capstone_vm test unload" | tail -1 | sed "s/^.*capstone_vm test un
 def pins(text):
     v = dict(re.findall(r'nr_foll_pin_(acquired|released) (\d+)', text))
     return int(v['acquired']), int(v['released'])
+
+
+DIAG = re.compile(r'capstone_vm: (admit|window|scan|touch|retire) arena 0x([0-9a-f]+)\+0x[0-9a-f]+ '
+                  r'(?:page (\d+)|swept (\d+))')
+ADD_OK = re.compile(r'CAPSTONE_VM_ADD_OK slot=\d+ base=0x([0-9a-f]+) bytes=(\d+) ')
+
+
+def region_counts(run):
+    """(pins, faults) of the arena holding the run's region, from its diag lines; (0, 0) for a
+    mode without a region (syscalls)."""
+    if run.get('region') is None:
+        return (0, 0)
+    arena = next((base for base, bytes_ in run['arenas'] if base <= run['region'] < base + bytes_), None)
+    if arena is None:
+        return None
+    pins = sum(1 for kind, base, _ in run['diag'] if base == arena and kind != 'retire')
+    faults = sum(1 for kind, base, _ in run['diag'] if base == arena and kind == 'admit')
+    return pins, faults
 
 
 def main():
@@ -110,7 +136,8 @@ def main():
                       (inputs['launcher'], 'capstone-vexec'),
                       (inputs['module'], 'capstone_vm.ko')):
         shutil.copy2(src, stage/name)
-    gate = script(names)
+    instrumented = b'diag_admit' in inputs['module'].read_bytes()
+    gate = script(names, instrumented)
     (stage/'gate.sh').write_text(gate)
     run = subprocess.run([os.environ.get('PYTHON', 'python3'),
         str(HERE/'run-staged.py'), '--qemu', str(a.qemu), '--images', str(a.images),
@@ -122,7 +149,15 @@ def main():
         m = re.match(r'HOOK_PINS_BEFORE:(\w+):(\w+):(.*)$', line)
         if m:
             current = (m.group(1), m.group(2))
-            runs[current] = {'before': pins(m.group(3)), 'stats': None, 'ok': False}
+            runs[current] = {'before': pins(m.group(3)), 'stats': None, 'ok': False,
+                             'region': None, 'arenas': [], 'diag': []}
+            continue
+        if current and line.startswith('PIN_REGION:0x'):
+            runs[current]['region'] = int(line[len('PIN_REGION:'):], 16); continue
+        if current and (m := ADD_OK.search(line)):
+            runs[current]['arenas'].append((int(m.group(1), 16), int(m.group(2)))); continue
+        if current and line.startswith('HOOK_DIAG:') and (m := DIAG.search(line)):
+            runs[current]['diag'].append((m.group(1), int(m.group(2), 16), int(m.group(3) or m.group(4))))
             continue
         m = re.match(r'HOOK_EXIT:(\w+):(\w+):(\d+)$', line)
         if m and current == (m.group(1), m.group(2)):
@@ -150,10 +185,13 @@ def main():
               'cleanup': len(census) == len(names) and all(
                   s['live_domains'] == s['live_regions'] == s['live_bytes'] == 0 for s in census)}
 
-    # Pinned pages and fault events (CSRUNV entries also count quantum
-    # preemptions, which depend on timing).
+    # Pinned pages and fault events of the region's arena (instrumented module), else of the
+    # process (CSRUNV entries also count quantum preemptions, which depend on timing).
     def counts(name, mode):
-        s = runs.get((name, mode), {}).get('stats')
+        r = runs.get((name, mode), {})
+        if instrumented:
+            return region_counts(r) if r else None
+        s = r.get('stats')
         return s and (s['pages'], s['faults'])
 
     for (name, mode), r in runs.items():
@@ -221,7 +259,7 @@ def main():
     checks['inputs_unchanged'] = hashes == {
         k: hashlib.sha256(v.read_bytes()).hexdigest() for k, v in inputs.items()}
     result = {'schema': 1, 'status': 'PASS' if all(checks.values()) else 'FAIL',
-              'checks': checks, 'reports': reports, 'pins_at_rmmod': ends,
+              'checks': checks, 'instrumented': instrumented, 'reports': reports, 'pins_at_rmmod': ends,
               'runs': {f'{n}:{m}': v for (n, m), v in runs.items()}, 'sha256': hashes,
               'source_sha256': {str(p.relative_to(HERE)): hashlib.sha256(p.read_bytes()).hexdigest()
                                 for p in [Path(__file__), HERE/'pin-ahead-contract.c',

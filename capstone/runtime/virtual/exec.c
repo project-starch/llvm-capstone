@@ -296,6 +296,18 @@ static long protect_range(uintptr_t base, size_t bytes, int prot)
     return mprotect((void *)base, bytes, prot) ? -errno : 0;
 }
 
+/* Before this launcher writes a span of domain memory through Linux on the domain's behalf, the
+ * module admits every page of it that a lazily admitted arena does not hold yet (CV_TOUCH: the
+ * same pin and checks as the domain's own fault). Without it the write would create backing the
+ * domain can store a capability into with no pin and no sweep: at exit the frame is freed with
+ * its tags before the module runs. The destinations: a thread's exit word (any registered word
+ * the exiting thread names) and a worker's meta block and exchange region (any registered spans
+ * the worker names), written for the life of the worker transport. */
+static int touch(uintptr_t address, size_t bytes)
+{
+    struct cv_touch r = {address, bytes};
+    return ioctl(device, CV_TOUCH, &r);
+}
 static int registered_span(uintptr_t p, size_t bytes)
 {
     struct mapping *m = map_floor(p);
@@ -789,7 +801,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         struct cv_thread_control request = {.thread = tid};
         int posix = step->args[7] == CV_SERVICE_PTHREAD_EXIT;
         uintptr_t clear = posix ? step->args[0] : 0;
-        if (clear && !registered_word(clear)) return -1;
+        if (clear && (!registered_word(clear) || touch(clear, sizeof(int)))) return -1;
         if (tid == 0 || ioctl(device, CV_THREAD_EXIT, &request))
             return -1;
         if (request.frame) {
@@ -845,6 +857,10 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                 if (tid) capstone_signals_attach(&h->signals);
             } else if (tid) {
                 if (!worker_host) {
+                    /* The worker's meta block (the signal block below is written at once) and
+                     * its exchange region are written by this launcher from here on. */
+                    if (touch(step->args[0], CAPSTONE_DELEGATE_META_BYTES) ||
+                        touch(step->args[1], step->args[2])) return -1;
                     worker_host = calloc(1, sizeof *worker_host);
                     if (!worker_host) return -1;
                     worker_host->exchange = (void *)(uintptr_t)step->args[1];
