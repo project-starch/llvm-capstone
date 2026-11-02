@@ -42,9 +42,9 @@ def main():
 cd /mnt/vm || exit 1
 dmesg -n 1
 insmod capstone_vm.ko ''' + ('diag_admit=1' if instrumented else '') + ''' || exit 1
-CAPSTONE_EXEC_DIAGNOSTICS=1 ./capstone-vexec pthread.dom
+CAPSTONE_EXEC_DIAGNOSTICS=1 CAPSTONE_VM_STATS=1 CAPSTONE_VM_STATS_MARK=1 ./capstone-vexec pthread.dom
 echo PTHREAD_EXIT:$?
-dmesg | grep "capstone_vm: touch" | sed "s/^/PTHREAD_DIAG:/"
+dmesg | grep -E "capstone_vm: |CAPSTONE_VM_STATS_MARK" | sed "s/^/PTHREAD_DIAG:/"
 rmmod capstone_vm
 echo PTHREAD_CLEANUP:$?
 echo VIRTUAL_STAGED_DONE
@@ -71,6 +71,35 @@ echo VIRTUAL_STAGED_DONE
         checks['exit_word_admitted'] = (int(stack.group(1), 16), index) in touched
     else:
         checks['exit_word_admitted'] = False
+    # The module's own counters against its per-arena census (the retire lines, in dmesg order,
+    # the launcher's CAPSTONE_VM_STATS_MARK written right before it read pages=): the stack
+    # arena's sweep must cover every page it admitted, the touched page included, and pages=
+    # must equal what the arenas retired after the mark still held. A module that records the
+    # touch line but drops the pages[] entry fails both.
+    retire = re.compile(r'capstone_vm: retire arena 0x([0-9a-f]+)\+0x[0-9a-f]+ admit=(\d+) window=(\d+) '
+                        r'scan=(\d+) touch=(\d+) eager=(\d+) released=(\d+) swept=(\d+)')
+    stats = re.search(r'^CAPSTONE_VM_STATS arenas=\d+ pages=(\d+) ', log, re.M)
+    if not instrumented:
+        checks['stack_sweep_complete'] = checks['pages_match_census'] = 'uninstrumented'
+    else:
+        after_mark, alive, sweep_ok, seen_stack = False, 0, None, False
+        for line in log.splitlines():
+            if 'CAPSTONE_VM_STATS_MARK' in line:
+                after_mark = True
+                continue
+            m = retire.search(line)
+            if not m:
+                continue
+            base, admit, window, scan, touch, eager, released, swept = (int(m.group(1), 16),) + tuple(
+                int(m.group(i)) for i in range(2, 9))
+            held = admit + window + scan + touch + eager - released
+            if after_mark:
+                alive += held
+            if stack and base == int(stack.group(1), 16):
+                seen_stack = True
+                sweep_ok = (swept == held and touch >= 1)
+        checks['stack_sweep_complete'] = bool(seen_stack and sweep_ok)
+        checks['pages_match_census'] = bool(stats and after_mark and int(stats.group(1)) == alive)
     checks['exit'] = log.count('PTHREAD_EXIT:0') == 1
     checks['cleanup'] = run.returncode == 0 and log.count('PTHREAD_CLEANUP:0') == 1
     record = dict(status='PASS' if all(v is True or v == 'uninstrumented' for v in checks.values()) else 'FAIL',
