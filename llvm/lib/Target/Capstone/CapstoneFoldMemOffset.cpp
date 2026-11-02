@@ -125,11 +125,15 @@ bool CapstoneFoldMemOffset::foldOffset(
             I != RegToOffsetMap.end())
           Offset += I->second;
         break;
-      // A constant cursor move accumulates its immediate, like the ADDI root.
+      // A constant cursor move downstream of the root stays in place with its
+      // own immediate (only the root is erased), so just the folded delta
+      // flows through it, as through ADD. Adding its immediate here counted
+      // it twice: 538.imagick_r CloneImageInfo then stored at s7+0x3c+0x238
+      // for s7+0x40 and faulted on bounds (cause 28).
       case Capstone::CIncOffsetImm:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
             I != RegToOffsetMap.end())
-          Offset = (uint64_t)I->second + (uint64_t)User.getOperand(2).getImm();
+          Offset = I->second;
         break;
       case Capstone::SH1ADD:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());

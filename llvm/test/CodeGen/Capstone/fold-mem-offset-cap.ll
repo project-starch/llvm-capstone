@@ -64,6 +64,29 @@ entry:
   ret void
 }
 
+; A struct pointer base + 0x4220 (lui 4 + addi 0x220, the addi is the root)
+; with one field read at +0x3c and another through the +0x3c cursor at +4.
+; Here isel collapses the intermediate cursor (rewrites 1b/2), so both loads
+; sit directly on s = base + 0x4000 after the fold: 0x3c + 0x220 = 604 and
+; 0x40 + 0x220 = 608, and no cincoffsetimm survives. The case where the
+; intermediate DOES survive to the pass is fold-mem-offset-cap-chain.mir.
+; CHECK-LABEL: chain:
+; CHECK:      cincoffset [[S:a[0-9]+]], a0, {{a[0-9]+}}
+; CHECK-NOT:  cincoffsetimm
+; CHECK-DAG:  lw {{a[0-9]+}}, 604([[S]])
+; CHECK-DAG:  lw {{a[0-9]+}}, 608([[S]])
+; CHECK:      ret
+define i32 @chain(ptr addrspace(200) %src) {
+entry:
+  %s = getelementptr inbounds i8, ptr addrspace(200) %src, i64 16928
+  %sub = getelementptr inbounds i8, ptr addrspace(200) %s, i64 60
+  %q0 = load i32, ptr addrspace(200) %sub
+  %p1 = getelementptr inbounds i8, ptr addrspace(200) %sub, i64 4
+  %q1 = load i32, ptr addrspace(200) %p1
+  %r = add i32 %q0, %q1
+  ret i32 %r
+}
+
 ; CONTROL: the combined immediate of the second load would be 255*8 + 8 = 2048,
 ; which does not fit simm12, so the whole chain bails and the constant cursor
 ; move stays (foldOffset is all-or-nothing per root).

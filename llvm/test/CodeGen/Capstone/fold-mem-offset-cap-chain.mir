@@ -1,0 +1,70 @@
+# CapstoneFoldMemOffset, capability forms: a constant cursor move DOWNSTREAM of
+# the folded root stays in place with its own immediate, so only the root's
+# delta flows through it (as through ADD). This is the shape of 538.imagick_r
+# CloneImageInfo, where the pass once counted the intermediate's 0x3c twice and
+# the store landed at s7+0x3c+0x238 instead of s7+0x40: a bounds fault
+# (cause 28). The intermediate survives isel there; a MIR test pins it.
+#
+# @chain: integer root `ADDI 544` (base + 0x4220 = lui 4 + 0x220) walked
+# through the register cincoffset; the direct load gets 60 + 544 = 604, the
+# load through the surviving `CIncOffsetImm 60` gets 4 + 544 = 548.
+# @cap_root_chain: capability root `CIncOffsetImm 112` (libm exp's shape) with
+# a surviving `CIncOffsetImm 8` downstream: both loads get +112.
+#
+# MUTATION: `Offset = map[rs1] + imm` in the pass's CIncOffsetImm case ->
+# `LW [[T]], 608` and `FLD [[U]], 120` (the fault); dropping CIncOffsetImm from
+# the root test leaves @cap_root_chain's `CIncOffsetImm 112` and `FLD ..., 0`.
+#
+# RUN: llc -mtriple=capstone64 -mattr=+m,+f,+d -run-pass=capstone-fold-mem-offset -verify-machineinstrs -o - %s | FileCheck %s
+--- |
+  target triple = "capstone64"
+  define void @chain() { ret void }
+  define void @cap_root_chain() { ret void }
+...
+---
+name: chain
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10
+    ; CHECK-LABEL: name: chain
+    ; CHECK:      [[L:%[0-9]+]]:gpr = LUI 4
+    ; CHECK-NEXT: [[S:%[0-9]+]]:gpcr = CIncOffset {{%[0-9]+}}, [[L]]
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LW [[S]], 604
+    ; CHECK-NEXT: [[T:%[0-9]+]]:gpcr = CIncOffsetImm [[S]], 60
+    ; CHECK-NEXT: {{%[0-9]+}}:gpr = LW [[T]], 548
+    %0:gpcr = COPY $c10
+    %1:gpr = LUI 4
+    %2:gpr = ADDI %1, 544
+    %3:gpcr = CIncOffset %0, %2
+    %4:gpr = LW %3, 60
+    %5:gpcr = CIncOffsetImm %3, 60
+    %6:gpr = LW %5, 4
+    %7:gpr = ADD %4, %6
+    $x10 = COPY %7
+    PseudoRET implicit $x10
+...
+---
+name: cap_root_chain
+tracksRegLiveness: true
+body: |
+  bb.0:
+    liveins: $c10, $x11
+    ; CHECK-LABEL: name: cap_root_chain
+    ; CHECK:      [[B:%[0-9]+]]:gpcr = COPY $c10
+    ; CHECK-NOT:  CIncOffsetImm [[B]]
+    ; CHECK:      [[P:%[0-9]+]]:gpcr = CIncOffset [[B]], {{%[0-9]+}}
+    ; CHECK-NEXT: {{%[0-9]+}}:fpr64 = FLD [[P]], 112
+    ; CHECK-NEXT: [[U:%[0-9]+]]:gpcr = CIncOffsetImm [[P]], 8
+    ; CHECK-NEXT: {{%[0-9]+}}:fpr64 = FLD [[U]], 112
+    %0:gpcr = COPY $c10
+    %1:gpr = COPY $x11
+    %2:gpcr = CIncOffsetImm %0, 112
+    %3:gpcr = CIncOffset %2, %1
+    %4:fpr64 = FLD %3, 0
+    %5:gpcr = CIncOffsetImm %3, 8
+    %6:fpr64 = FLD %5, 0
+    %7:fpr64 = FADD_D %4, %6, 7
+    $f10_d = COPY %7
+    PseudoRET implicit $f10_d
+...
