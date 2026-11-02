@@ -129,7 +129,7 @@ if [ -n "${CAPSTONE_SPEC_PROFRUN:-}" ]; then
   o=$(readlink -f /proc/$$/fd/1 2>/dev/null || true); e=$(readlink -f /proc/$$/fd/2 2>/dev/null || true)
   copyback=
   case "$o" in "$share"/*) redirect=">/tmp/out-$id"; copyback="cp /tmp/out-$id $(printf %q "/mnt/host/${o#"$share"/}")" ;; esac
-  case "$e" in "$share"/*) redirect="$redirect 2>/tmp/err-$id"; copyback="${copyback:+$copyback; }cp /tmp/err-$id $(printf %q "/mnt/host/${e#"$share"/}")" ;; esac
+  case "$e" in "$share"/*) redirect="$redirect 2>/tmp/err-$id"; copyback="${copyback:+$copyback && }cp /tmp/err-$id $(printf %q "/mnt/host/${e#"$share"/}")" ;; esac
   profile=(-e "CAPSTONE_PROFILE_RECORD=/mnt/host/${CAPSTONE_SPEC_RECORD#"$share"/}/image-records.txt")
   # An arm's guest environment (tools/profile.sh, arm "env"): NAME=value words, for the launcher.
   for e in ${CAPSTONE_SPEC_GUEST_ENV:-}; do profile+=(-e "$e"); done
@@ -154,8 +154,9 @@ else
   route=guest
 fi
 if [ -n "${copyback:-}" ]; then   # the guest's output files onto runcpu's, after the window
-  # all or nothing: a failed copy keeps the guest's files and fails the invocation
-  env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "${copyback//; / && } && rm -f /tmp/out-$id /tmp/err-$id" \
+  # all or nothing: a failed copy keeps the guest's files and fails the invocation. (The copies are
+  # joined with && when built: in a ${var//pat/rep} an & in rep is the matched text, not a literal.)
+  env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "$copyback && rm -f /tmp/out-$id /tmp/err-$id" \
     || refuse "copying the guest's output files back failed" "$@"
 fi
 vm=$(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['identity']))" "$CAPSTONE_VM_STATE/config.json")
