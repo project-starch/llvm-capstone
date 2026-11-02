@@ -123,6 +123,17 @@ built in another directory from compiler-identical sources). Minutes are wall ti
 and are not performance figures: for the first ~3 hours other load on the build host slowed the guests
 about 2.3x (mcf test took 53 min here, 23 min in q3).
 
+## Profiling: where the instructions go
+
+`tools/profile.sh` runs a benchmark the same way, in a guest whose QEMU carries capstone-qemu's
+capprof plugin, and counts every instruction attempt of each guest invocation per address, then
+attributes them to layers and functions (`tools/prof-report.py`), to causes (`tools/prof-buckets.py`)
+and against another run (`tools/prof-compare.py`). Counts do not depend on the host's load, so all
+benchmarks and arms run at once (`tools/profile-batch.sh`), and a test-input run of gcc, imagick, lbm
+or nab takes one to two minutes of wall clock. The arms, platform and what each run records are in
+`tools/profile.md`; the arms file format in `config/profile-arms.example.json`; the plain RISC-V arm's
+config in `config/riscv-plain.cfg`; the plugin's validation in `tools/capprof-validation/`.
+
 ## Limits
 
 - The guest kernel Image has artifact-only provenance: its source tree had no git metadata. The

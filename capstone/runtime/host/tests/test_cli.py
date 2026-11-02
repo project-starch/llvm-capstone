@@ -59,6 +59,32 @@ class TransportTests(unittest.TestCase):
             self.assertEqual(seen, arguments)
             self.assertEqual(rc, 139)
 
+    def test_run_prefix_precedes_capstone_exec(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            (state / "assets").mkdir()
+            (state / "config.json").write_text(json.dumps({"port": 2222}))
+            seen = []
+
+            def execute(command, **kwargs):
+                script = shlex.split(command[-1])[-1]
+                words = shlex.split(script.split("; exec ", 1)[1])
+                seen.extend(words)
+                result_file = state / "assets" / Path(words[1]).relative_to("/mnt/control")
+                result_file.write_text('{"version":1,"kind":"exit","value":0}')
+                class Process:
+                    def wait(self): return 0
+                    def poll(self): return 0
+                return Process()
+
+            with patch.object(cli, "running", return_value=True), patch.object(cli.subprocess, "Popen", execute):
+                rc = cli.main(["--state", directory, "run", "--prefix", "/tmp/profrun", "--", "/mnt/host/app.dom", "x"])
+            self.assertEqual(rc, 0)
+            self.assertEqual(seen[2:], ["--", "/tmp/profrun", "capstone-exec", "--", "/mnt/host/app.dom", "x"])
+            for bad in (["--bad"], ["/tmp/profrun", ""]):
+                with self.assertRaisesRegex(cli.VMError, "prefix"):
+                    cli.run_application(state, {"port": 2222}, ["/mnt/host/app.dom"], prefix=bad)
+
     def test_restart_preserves_paths_and_recorded_environment(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)

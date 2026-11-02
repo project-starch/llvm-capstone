@@ -196,13 +196,18 @@ class InterruptedRun(Exception):
         self.signum = signum
 
 
-def run_application(state: Path, config: dict, words: list[str], *, cwd: str | None = None, environment: list[str] = (), result_path: Path | None = None, user: str | None = None) -> int:
+def run_application(state: Path, config: dict, words: list[str], *, cwd: str | None = None, environment: list[str] = (), result_path: Path | None = None, user: str | None = None, prefix: list[str] = ()) -> int:
     """Forward host interruption without putting pipes through a pseudo-terminal.
 
     The short-lived PID file identifies this SSH command. Verify its random
     environment token before signalling: a stale PID must never kill a new job.
     The guest still runs an ordinary capstone-exec process, with no job daemon.
+    `prefix` is a guest command put in front of capstone-exec (a profiler's window helper such as
+    /tmp/profrun, which execs its argument), so the measured process is the launcher and the
+    application and nothing else; it must not swallow the exit status.
     """
+    if prefix and (not prefix[0] or prefix[0].startswith("-") or any(not word for word in prefix)):
+        raise VMError("A prefix starts with a guest program; its words are not empty")
     if any(not re.match(r"^[A-Za-z_][A-Za-z_0-9]*=", value) or value.startswith("CAPSTONE_JOB=")
            or value.startswith("CAPSTONE_FAULT_RECORD=") for value in environment):
         raise VMError("Environment must contain NAME=value assignments; CAPSTONE_JOB and "
@@ -219,7 +224,7 @@ def run_application(state: Path, config: dict, words: list[str], *, cwd: str | N
     script = (f"cd {shlex.quote(cwd)} || exit 125; " if cwd is not None else "")
     script += f"echo $$ > {remote}; exec " + shlex.join([
         "capstone-job", f"/mnt/control/jobs/{job_id}/result.json",
-        *(["--user", user] if user is not None else []), "--", "capstone-exec", "--", *words])
+        *(["--user", user] if user is not None else []), "--", *prefix, "capstone-exec", "--", *words])
     # The launcher writes a domain fault's record here, off the application
     # streams; it is reported on the host side and kept in the result.
     fault_record = f"/mnt/control/jobs/{job_id}/fault"
@@ -586,6 +591,8 @@ def main(argv: list[str] | None = None) -> int:
             cmd.add_argument("--user", help="Run as numeric guest UID:GID")
             cmd.add_argument("--result", type=Path, help="Write the actual guest exit/signal result as JSON")
             cmd.add_argument("-e", "--env", action="append", default=[], help="Guest NAME=value")
+            cmd.add_argument("--prefix", action="append", default=[],
+                             help="Guest program (and arguments, one per --prefix) run in front of capstone-exec, e.g. a profiler's window helper")
         cmd.add_argument("command", nargs=argparse.REMAINDER)
     args = parser.parse_args(argv)
     state = args.state.expanduser().resolve()
@@ -638,7 +645,7 @@ def main(argv: list[str] | None = None) -> int:
             if not words:
                 raise VMError("An executable and optional arguments are required")
             if args.action == "run":
-                return run_application(state, config, words, cwd=args.cwd, environment=args.env, result_path=args.result, user=args.user)
+                return run_application(state, config, words, cwd=args.cwd, environment=args.env, result_path=args.result, user=args.user, prefix=args.prefix)
             command.append("exec " + shlex.join(words))
         return subprocess.call(command)
     except (VMError, OSError, ValueError, subprocess.CalledProcessError) as error:

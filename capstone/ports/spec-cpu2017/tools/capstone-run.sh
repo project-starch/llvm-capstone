@@ -16,6 +16,14 @@
 #
 # Every invocation is recorded in $CAPSTONE_SPEC_RECORD/invocations/NNNN.json: route, argv,
 # cwd, the executable's sha256, the guest VM's identity and the guest's exit or fault record.
+#
+# Profiling (tools/profile.sh): with CAPSTONE_SPEC_PROFRUN set to the guest path of the window
+# helper (profrun, see tools/profile.sh), every guest invocation runs under it, so the capprof
+# plugin counts exactly that invocation in one window; the record carries the window's index
+# (guest invocations so far) and the launcher writes its image record to
+# $CAPSTONE_SPEC_RECORD/image-records.txt (CAPSTONE_PROFILE_RECORD) for the attribution.
+# With CAPSTONE_SPEC_PLAIN=1 (config/riscv-plain.cfg) a plain RISC-V image (e_machine 0xf3) is
+# accepted and runs in the guest directly, not through the launcher: route "guest-plain".
 set -euo pipefail
 : "${SPEC:?}" "${CAPSTONE_SPEC_RECORD:?}" "${CAPSTONE_SPEC_KIT:?}"
 inv=$CAPSTONE_SPEC_RECORD/invocations
@@ -53,7 +61,9 @@ if [ "${exe#"$spec_bin"/}" != "$exe" ] && [ "$machine" != 0301 ]; then
   record host-spec-tool "$rc" null "$@"
   exit "$rc"
 fi
-[ "$machine" = 0301 ] || refuse "not a Capstone image and not a SPEC tool" "$@"
+plain=0
+if [ "$machine" = f300 ] && [ "${CAPSTONE_SPEC_PLAIN:-0}" = 1 ]; then plain=1
+else [ "$machine" = 0301 ] || refuse "not a Capstone image and not a SPEC tool" "$@"; fi
 : "${CAPSTONE_VM_STATE:?}" "${CAPSTONE_VM_SHARE:?}" "${CAPSTONE_VM_HOST:?}"
 share=$(cd "$CAPSTONE_VM_SHARE" && pwd -P)
 case "$here" in
@@ -79,12 +89,40 @@ for i in "${!words[@]}"; do
 done
 case "${words[0]}" in /*) [ "${words[0]#/mnt/host/}" != "${words[0]}" ] || refuse "absolute program path outside the share" "$@" ;; esac
 rc=0
-# CAPSTONE_VM_STATS makes the launcher print its counters (nodes, collections, faults, launch and elapsed
-# time) on the guest's stderr at exit, which runcpu's redirection puts in the command's .err file.
-env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" \
-  run --cwd "$guest" --result "$inv/$id.guest.json" -e CAPSTONE_VM_STATS=1 -- "${words[@]}" || rc=$?
+# A profiled invocation is one capprof window; windows are numbered in order, and only guest
+# invocations open one, so this invocation's window is the count of guest invocations before it.
+window=null; profile=()
+redirect=
+if [ -n "${CAPSTONE_SPEC_PROFRUN:-}" ]; then
+  window=$(find "$inv" -maxdepth 1 -name '*.guest.json' | wc -l)   # not ls: with pipefail its "no match" exit 2 ends the script
+  case "$CAPSTONE_SPEC_RECORD" in "$share"/*) ;; *) refuse "profiling: the record directory $CAPSTONE_SPEC_RECORD is not below the share" "$@" ;; esac
+  # runcpu redirects this command's stdout and stderr to files in the run directory, on the host.
+  # Through SSH, every line the guest prints is encrypted inside the window (the launcher's 403
+  # CAPSTONE_VM_ADD_OK lines of a gcc test run cost 9.3M attempts in the SSH server alone), so the
+  # guest writes those same files itself, through the share: the channel stays silent.
+  o=$(readlink -f /proc/$$/fd/1 2>/dev/null || true); e=$(readlink -f /proc/$$/fd/2 2>/dev/null || true)
+  case "$o" in "$share"/*) redirect=">/mnt/host/${o#"$share"/}" ;; esac
+  case "$e" in "$share"/*) redirect="$redirect 2>/mnt/host/${e#"$share"/}" ;; esac
+  profile=(--prefix "$CAPSTONE_SPEC_PROFRUN" -e "CAPSTONE_PROFILE_RECORD=/mnt/host/${CAPSTONE_SPEC_RECORD#"$share"/}/image-records.txt")
+  # The shell applies the redirections and execs the launcher; it is in the window (a few hundred instructions).
+  [ -z "$redirect" ] || profile+=(--prefix sh --prefix=-c --prefix "exec \"\$0\" \"\$@\" $redirect")   # --prefix=-c: argparse would read a bare -c as an option
+fi
+if [ $plain = 1 ]; then
+  # A plain program runs as the guest's own process. The share is mounted with the host's
+  # permissions (share model none), so the image executes in place and perl's t/TEST finds $^X.
+  cmd="cd $(printf %q "$guest") && exec ${CAPSTONE_SPEC_PROFRUN:+$(printf %q "$CAPSTONE_SPEC_PROFRUN") }$(printf '%q ' "${words[@]}")$redirect"
+  env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "$cmd" || rc=$?
+  echo "{\"exit\": $rc}" > "$inv/$id.guest.json"
+  route=guest-plain
+else
+  # CAPSTONE_VM_STATS makes the launcher print its counters (nodes, collections, faults, launch and elapsed
+  # time) on the guest's stderr at exit, which runcpu's redirection puts in the command's .err file.
+  env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" \
+    run --cwd "$guest" --result "$inv/$id.guest.json" -e CAPSTONE_VM_STATS=1 "${profile[@]}" -- "${words[@]}" || rc=$?
+  route=guest
+fi
 vm=$(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['identity']))" "$CAPSTONE_VM_STATE/config.json")
 guest_result=$(cat "$inv/$id.guest.json" 2>/dev/null || echo null)
 guest_argv=$(python3 -c "import json,sys;print(json.dumps(sys.argv[1:]))" "${words[@]}")
-record guest "$rc" "{\"vm\": $vm, \"guest\": $guest_result, \"guest_argv\": $guest_argv, \"perl_pack_stub\": $stub}" "$@"
+record $route "$rc" "{\"vm\": $vm, \"guest\": $guest_result, \"guest_argv\": $guest_argv, \"perl_pack_stub\": $stub, \"window\": $window}" "$@"
 exit "$rc"
