@@ -983,13 +983,27 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         }
     }
     /* Clear every tag before returning frames to Linux. Later collection can
-     * reuse dead IDs only after sweeping all remaining namespace storage. */
-    for (i = 0; i < a->count; ++i) {
-        if (!a->pages[i]) continue;
-        clear_page_tags(a->pages[i]);
-        set_page_dirty_lock(a->pages[i]);
-        unpin_user_page(a->pages[i]);
-        --c->stats.pinned_pages;
+     * reuse dead IDs only after sweeping all remaining namespace storage.
+     * The pages are then unpinned in ONE batched call instead of one per page.
+     * unpin_user_pages_dirty_lock() runs a single sanity_check_pinned_pages over
+     * the run and, for a folio that is already dirty, skips the folio_lock +
+     * folio_mark_dirty that the per-page set_page_dirty_lock() took
+     * unconditionally. make_dirty stays true, so the dirty guarantee for a page
+     * whose PTE was cleaned while pinned is unchanged. a->pages is compacted in
+     * place (kvfree'd just below): the batched call needs its pages contiguous
+     * and non-NULL, and n<=i throughout so the compaction never overwrites an
+     * entry it has not already read. */
+    {
+        unsigned n = 0;
+        for (i = 0; i < a->count; ++i) {
+            if (!a->pages[i]) continue;
+            clear_page_tags(a->pages[i]);
+            a->pages[n++] = a->pages[i];
+        }
+        if (n) {
+            unpin_user_pages_dirty_lock(a->pages, n, true);
+            c->stats.pinned_pages -= n;
+        }
     }
     --c->stats.arenas;
     rb_erase(&a->node, &c->arenas);
