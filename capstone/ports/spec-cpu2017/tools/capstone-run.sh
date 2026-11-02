@@ -111,16 +111,22 @@ if [ -n "${CAPSTONE_SPEC_PROFRUN:-}" ]; then
   case "$CAPSTONE_SPEC_RECORD" in "$share"/*) ;; *) refuse "profiling: the record directory $CAPSTONE_SPEC_RECORD is not below the share" "$@" ;; esac
   # runcpu redirects this command's stdout and stderr to files in the run directory, on the host.
   # Through SSH, every line the guest prints is encrypted inside the window (the launcher's 403
-  # CAPSTONE_VM_ADD_OK lines of a gcc test run cost 9.3M attempts in the SSH server alone), so the
-  # guest writes those same files itself, through the share: the channel stays silent.
+  # CAPSTONE_VM_ADD_OK lines of a gcc test run cost 9.3M attempts in the SSH server alone); and
+  # written straight onto the 9p share each line is a 9p round trip (5.9M kernel attempts for the
+  # same 403 lines). So the guest writes to files on its tmpfs, where a line costs what a local
+  # file costs a deployment, and copies them onto runcpu's files after the window closes.
   o=$(readlink -f /proc/$$/fd/1 2>/dev/null || true); e=$(readlink -f /proc/$$/fd/2 2>/dev/null || true)
-  case "$o" in "$share"/*) redirect=">/mnt/host/${o#"$share"/}" ;; esac
-  case "$e" in "$share"/*) redirect="$redirect 2>/mnt/host/${e#"$share"/}" ;; esac
-  profile=(--prefix "$CAPSTONE_SPEC_PROFRUN" -e "CAPSTONE_PROFILE_RECORD=/mnt/host/${CAPSTONE_SPEC_RECORD#"$share"/}/image-records.txt")
+  copyback=
+  case "$o" in "$share"/*) redirect=">/tmp/out-$id"; copyback="cp /tmp/out-$id $(printf %q "/mnt/host/${o#"$share"/}")" ;; esac
+  case "$e" in "$share"/*) redirect="$redirect 2>/tmp/err-$id"; copyback="${copyback:+$copyback; }cp /tmp/err-$id $(printf %q "/mnt/host/${e#"$share"/}")" ;; esac
+  profile=(-e "CAPSTONE_PROFILE_RECORD=/mnt/host/${CAPSTONE_SPEC_RECORD#"$share"/}/image-records.txt")
   # An arm's guest environment (tools/profile.sh, arm "env"): NAME=value words, for the launcher.
   for e in ${CAPSTONE_SPEC_GUEST_ENV:-}; do profile+=(-e "$e"); done
-  # The shell applies the redirections and execs the launcher; it is in the window (a few hundred instructions).
-  [ -z "$redirect" ] || profile+=(--prefix sh --prefix=-c --prefix "exec \"\$0\" \"\$@\" $redirect")   # --prefix=-c: argparse would read a bare -c as an option
+  # The shell applies the redirections and execs the window helper, which execs the launcher: the
+  # shell is gone before the window opens, and the helper's own PROFRUN_RUSAGE line lands in the
+  # same stderr file. (--prefix=-c: argparse would read a bare -c as an option.)
+  [ -z "$redirect" ] || profile+=(--prefix sh --prefix=-c --prefix "exec \"\$0\" \"\$@\" $redirect")
+  profile+=(--prefix "$CAPSTONE_SPEC_PROFRUN")
 fi
 if [ $plain = 1 ]; then
   # A plain program runs as the guest's own process. The share is mounted with the host's
@@ -135,6 +141,10 @@ else
   env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" \
     run --cwd "$guest" --result "$inv/$id.guest.json" -e CAPSTONE_VM_STATS=1 "${profile[@]}" -- "${words[@]}" || rc=$?
   route=guest
+fi
+if [ -n "${copyback:-}" ]; then   # the guest's output files onto runcpu's, after the window
+  env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "$copyback; rm -f /tmp/out-$id /tmp/err-$id" \
+    || refuse "copying the guest's output files back failed" "$@"
 fi
 vm=$(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['identity']))" "$CAPSTONE_VM_STATE/config.json")
 guest_result=$(cat "$inv/$id.guest.json" 2>/dev/null || echo null)
