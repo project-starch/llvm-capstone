@@ -62,7 +62,7 @@ for field, label in (("population_upstream", "upstream corpus (gcc 13)"),
                 f"{label} / {pop} / {key}: README {m.group(1) if m else 0}, matrix {want}")
 
 # --- the cases the README names must be the cases the matrix finds misplaced ---
-seg = md.split("wrong on nine of them")[1].split("Eight are")[0]
+seg = md.split("wrong on nine cases")[1].split("Eight are")[0]
 named = sorted({"CRASH-" + n for n in re.findall(r"(?:CRASH-)?-?(\d{3})\b", seg)})
 wrong = sorted(r["source_id"] for r in tmp if r["population_here"] == "asan-blind"
                and r["release_destination"] in ("non-nested", "nested-until-teardown", "not-Zend"))
@@ -99,14 +99,26 @@ if corpus_md.is_file() and "split by where the release was MEASURED to go" in co
     chk(m and (int(m.group(1)), int(m.group(2))) == (rate(grp["reach"])[2], rate(grp["park"])[2]),
         f"corpus README, measured-axis rates: README {m.groups() if m else '?'}, "
         f"bundles ({rate(grp['reach'])[2]}, {rate(grp['park'])[2]})")
-    for field, pat in (("population", r"reads (\d+) % against (\d+) %, which does not tell"),
-                       ("collaborator_population", r"between them, (\d+) % against (\d+) %")):
+    # The correction brought this corpus's axis and the collaborator's into agreement, so the
+    # README states ONE pair of rates for both and it has to match BOTH fields -- if a later
+    # change pulled them apart again, one of these two would fail.
+    m = re.search(r"now reads \*\*(\d+) % against (\d+) %\*\*", cmd)
+    for field in ("population", "collaborator_population"):
         vis = [c for c in s48 if pop[c].get(field) == "temporal-asan-visible"]
         bld = [c for c in s48 if pop[c].get(field) == "asan-blind"]
-        m = re.search(pat, cmd)
         chk(m and (int(m.group(1)), int(m.group(2))) == (rate(vis)[2], rate(bld)[2]),
             f"corpus README, {field} rates: README {m.groups() if m else '?'}, "
             f"bundles ({rate(vis)[2]}, {rate(bld)[2]})")
+    # The pre-correction pair the README quotes as history is recomputable, and this is the whole
+    # reason matrix.tsv keeps `population_here` at what that run read instead of overwriting it.
+    here = {r["source_id"]: r["population_here"] for r in rows}
+    m = re.search(r"axis read (\d+) % against (\d+) %", cmd)
+    vis = [c for c in s48 if here.get(ids[c]) == "temporal-asan-visible"]
+    bld = [c for c in s48 if here.get(ids[c]) == "asan-blind"]
+    chk(m and (int(m.group(1)), int(m.group(2))) == (rate(vis)[2], rate(bld)[2]),
+        f"corpus README, the pre-correction rates it quotes as history: "
+        f"README {m.groups() if m else '?'}, matrix's population_here "
+        f"({rate(vis)[2]}, {rate(bld)[2]})")
     # the README now rests "48 of 48 is not an artefact" on the arm having no MISSED at all
     m = re.search(r"the\s+arm has \*\*(\d+) MISSED\*\*", cmd)
     nmiss = sum(1 for c in ids if pop[c]["cwe"] in TEMPORAL and ne[c]["verdict"] == "MISSED")

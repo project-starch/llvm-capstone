@@ -6,12 +6,16 @@ that trigger them, run through the real interpreter on the virtual profile
 visible**: the Zend allocator hides it (its size-class cache parks freed blocks so `free()`
 is never reached, or its 8-byte rounding leaves the overflow in slack), or `efree` reaches
 `free()` and the libc boundary sees it. That is decided per case by measurement, never by
-reading the defect: ASan with PHP's allocator patched against ASan with it as shipped.
+reading the defect: ASan with PHP's allocator patched against ASan with it as shipped, and --
+on the nine cases where that pair of runs reads the property wrong -- by a probe inside the
+allocator itself (`results/2026-11-02-release-destination`), which watches the release happen
+instead of inferring it from what a detector printed. Those nine carry
+`population_decided_by` in their `oracle.json`.
 
 | population | cases | what it is | who can catch it |
 |---|--:|---|---|
-| `asan-blind` | 48 | ASan reports it only with the allocator patched; as shipped the run reads OK, or for a temporal defect ends in PHP's own fatal error with no report (CRASH-062, -070). By CWE: 32 use-after-free, 10 out-of-bounds reads and 2 writes, 2 stack-address escapes, 1 free of non-heap memory, 1 uninitialised read; 7 of the 48 crash natively | selected by measurement, not by mechanism: what each arm sees is in the arms' records. The first run has the nested layer arms (`virtual-nested-pools`, `virtual-nested-exact`) at 26 and 30, the outer allocator alone (`virtual-malloc`) at 13 -- 8 use-after-frees whose block does reach `free()` plus 5 bounds catches the platform gives every arm |
-| `temporal-asan-visible` | 22 | a temporal defect (19 CWE-416, 2 CWE-590, 1 CWE-415) that ASan reports with the allocator as shipped (the `stockalloc` run) AND that the patched build reports as a use-after-free or an invalid free: the block reached `free()`; 20 of the 22 crash natively, so the judge's default denominator holds two of them and the `--score-oracle-crashes` sensitivity scoring reads the rest | the outer allocator by itself, `virtual-malloc` (musl mallocng, a lifetime per block), for a block that reaches `free()` and is not parked in `AG(cache)`; the nested layer arms for the parked ones. Which is which is in the arms' records |
+| `asan-blind` | 39 | ASan reports it only with the allocator patched; with the allocator as shipped the run reads OK, and the probe found no release to libc. By CWE: 23 use-after-free, 10 out-of-bounds reads and 2 writes, 2 stack-address escapes, 1 free of non-heap memory, 1 uninitialised read; 2 of the 39 crash natively | selected by measurement, not by mechanism: what each arm sees is in the arms' records. The first run has the nested layer arms (`virtual-nested-pools`, `virtual-nested-exact`) at 25 and 29, the outer allocator alone (`virtual-malloc`) at 12 -- 7 use-after-frees whose block does reach `free()` plus 5 bounds catches the platform gives every arm |
+| `temporal-asan-visible` | 31 | a temporal defect (28 CWE-416, 2 CWE-590, 1 CWE-415) whose released block reaches `free()`, so the libc boundary sees it, AND that the patched build reports as a use-after-free or an invalid free. For 22 the `stockalloc` run reports it directly; for the other nine the block was MEASURED reaching `free()` inside the allocator while that run reported nothing. 25 of the 31 crash natively, so the judge's default denominator holds six of them and the `--score-oracle-crashes` sensitivity scoring reads the rest | the outer allocator by itself, `virtual-malloc` (musl mallocng, a lifetime per block), for a block that reaches `free()` and is not parked in `AG(cache)`; the nested layer arms for the parked ones. Which is which is in the arms' records |
 
 The two do not overlap. Every case is a client defect in PHP's own code; none is a bug in
 libc or in `zend_alloc.c`, which is witness, not culprit.
@@ -29,17 +33,24 @@ ship this run, and the populations are *defined* by it) and the plain build.
 
 **One PHP corpus (2026-10-28).** A sibling corpus built from the same source by another lane (56 temporal cases) is merged into this one: 47 of its cases were already here, and five more that run on the default build are admitted by the widened temporal rule and numbered 66 to 70 after the first 65, so no number moved -- CRASH-012 and -148 (a free of the globals symbol table, CWE-590), CRASH-161 (a double free, CWE-415), CRASH-062 and -070 (use-after-free whose as-shipped run ends in PHP's own fatal error). Its four fullext cases (CRASH-125, -129, -131, -132: mbstring, pcre) need a build this corpus does not make and are not here. 70 cases, 55 of them temporal (51 CWE-416, 3 CWE-590, 1 CWE-415).
 
-The first build gave 65 cases (46 + 19) where the collaborator's instrument measured 60 (31 + 29):
-**16 cases sit in a different population on our ASan than on theirs**, CRASH-064 (a
-handle-after-free that both ASan builds report only as SEGV, so no build names it a
-use-after-free) is in neither population, two of theirs end as
-shipped in PHP's own fatal error with no report and so are in neither population here -- on
-gcc 13's ASan the freed block
-of CRASH-081 (for one) reached `free()` and was reported; on gcc 15's it reads OK with the
-allocator as shipped -- and CRASH-100 (needs an HTTP listener) is absent. "ASan-blind" is a
-property of the detector build as much as of the defect, which is one more reason the
-population is recomputed from recorded runs rather than carried as a list. Each `PROVENANCE.md`
-says where our run and the corpus's record disagree, case by case.
+The first build gave 65 cases (46 + 19) where the collaborator's instrument measured 60 (31 + 29),
+and **16 cases sat in a different population on our ASan than on theirs** -- on gcc 13's ASan the
+freed block of CRASH-081 (for one) reached `free()` and was reported; on gcc 15's it read OK with
+the allocator as shipped. **Nine of those 16 are now settled, and they settled against our run**:
+the probe of `results/2026-11-02-release-destination` watched the release from inside the allocator
+and the block does reach libc `free()` in every one of the nine, which is what gcc 13's ASan said
+and what `../plain-temporal-repros` records independently. Those nine carry the measurement's
+reading, and `population_decided_by` in each `oracle.json` says so.
+
+What is left is **12 cases placed differently, every one of them a case the collaborator's run
+placed in NEITHER population** -- nothing is left where both instruments place a case and disagree.
+CRASH-064 (a handle-after-free that both ASan builds report only as SEGV, so no build names it a
+use-after-free) is in neither population here, and CRASH-100 (needs an HTTP listener) is absent.
+"ASan-blind" is a property of the detector build as much as of the defect -- the nine are the
+evidence -- which is why the population is recomputed from recorded runs rather than carried as a
+list, and why the one axis that matters is now read from a measurement of the release and not from
+a detector's output. Each `PROVENANCE.md` says where our run and the corpus's record disagree, case
+by case.
 
 ## A case directory
 
@@ -115,12 +126,31 @@ mechanism, so that a surprise is a surprise:
 - The 16 cases placed differently from the collaborator's populations carry no prediction
   beyond the mechanism above; whatever they read is a reading of this instrument.
 
+**Not edited since (2026-11-02).** The counts in the two bullets above are the first build's, as
+written: 46 + 19 over 65 cases, and 16 placed differently. The corpus is 70 cases now, and the
+release-destination correction moved nine of them, so the current figures are 39 + 31, **27** cases
+that crash natively (2 of the 39, 25 of the 31) and **12** placed differently -- all 12 of them
+cases the collaborator's run placed in neither population. A pre-registration that gets its numbers
+refreshed is not one, so the bullets stay as they were and the new figures are here.
+
 ### The same arms, split by where the release was MEASURED to go
 
-The split above is `population`, which is defined by the `stockalloc` ASan run. This one is the
-measurement in `results/2026-11-02-release-destination/`: the probe in Zend's allocator says, per
-case, whether the block was parked in `AG(cache)` or passed to libc. The two axes are different
-statements and they disagree on nine cases, which is the point of having both. Generated, never
+The split above is `population`: whether a detector at the libc boundary can see the defect at all.
+This one is where the release itself was measured to go, from
+`results/2026-11-02-release-destination/`. **Be exact about what was measured.** The probe recorded
+the release at the defect's own block for **17 of the 70** cases -- the 14 `non-nested` and the 3
+`nested-until-teardown` -- and those 17 are the positive readings. `nested` is *not* a `CACHED`
+line at that block: it is read from the pair of ASan builds, the patched one proving the trigger
+reaches the use and the cache-on one reporting nothing at the libc boundary. For a parked block
+there is no address for ASan to name and so nothing for the probe's log to be joined against,
+which is why the positive readings are the ones that reach libc.
+
+The nine cases where this axis and `population` contradicted each other are the nine the
+measurement settled; `population` now carries the measurement's answer, so the two no longer
+disagree about where any block went. What they still say differently is that
+`temporal-asan-visible` is **over-inclusive**: nine of its cases rest on an `ASAN:SEGV` under the
+stock allocator, which names no use-after-free at all -- the process simply died on reused memory --
+and the probe found no release to libc for any of the nine. Generated, never
 typed: `tools/result-tables.py --by-release results/2026-11-02-release-destination/matrix.tsv
 --across results/2026-10-28-run18 results/2026-10-30-cheribsd`.
 
@@ -149,8 +179,11 @@ typed: `tools/result-tables.py --by-release results/2026-11-02-release-destinati
 What the measured axis buys is the baseline column. Over the 48 cases `nested exact` catches, a
 mechanism that sees only system-allocator events catches **13 of the 15** whose block reaches libc
 and **12 of the 33** whose block does not -- 87 % against 36 %. Split the same 48 by this corpus's
-own `population` instead and the same column reads 53 % against 52 %, which does not tell the two
-sides apart at all. The upstream reading lands between them, 67 % against 33 %.
+own `population` and the column now reads **67 % against 33 %**, which is exactly what the
+collaborator's instrument reads: the correction brought the two into agreement, and neither is
+guessing any more. Before it, this corpus's axis read 53 % against 52 % and did not tell the two
+sides apart at all -- that is the price of nine cases on the wrong side of an axis, and the reason
+the split is read from a measurement of the release rather than from a detector's output.
 
 Two things to keep straight. `nested exact` reads 48 of 48 on the 48-case subset, and that is a
 real reading rather than an artefact of how the subset was chosen: over the 55 temporal cases the
@@ -286,12 +319,16 @@ archived here, as a catch at `php_array_walk`); CRASH-092 is `infra` on the nest
 `not-reached` on stock and the system allocator (it hangs, or completes short of its defect, on
 uninitialised stack contents).
 
-The native population and the system allocator's column disagree on 24 of the 51 CWE-416 cases: 15
-asan-blind cases the system allocator catches, and 9 temporal-asan-visible cases it does not read (8
-`setup-fault`, 1 `unattributed`), which are not measured misses and not a second reading of where the
-block's release went. The native cohort is a selection by one detector build, not a prediction of this
-column: the sibling corpus's own ASan measurement of the same 47 shared cases placed 16 of them on the
-other side.
+The native population and the system allocator's column disagree on 17 of the 51 CWE-416 cases: 7
+asan-blind cases the system allocator catches, and 10 temporal-asan-visible cases it does not read (8
+`setup-fault`, 1 `unattributed`, 1 `infra`), which are not measured misses and not a second reading of
+where the block's release went. It was 24 before the release-destination correction: **eight** of the
+nine corrected cases were blind cases the system allocator caught -- which is exactly what a case on
+the wrong side of this axis looks like from this column -- so that group fell from 15 to 7, while the
+ninth (CRASH-075, `infra`) moved into the second group and took it from 9 to 10. The native cohort is
+still a selection by one detector
+build and not a prediction of this column: the sibling corpus's own ASan measurement of the same 47
+shared cases placed 16 of them on the other side.
 
 ### The `cheribsd-revocation` arm, measured (2026-10-30)
 

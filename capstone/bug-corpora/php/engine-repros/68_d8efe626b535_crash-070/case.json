@@ -39,7 +39,7 @@
   }
  },
  "status": "built 2026-10-27 from the corpus and our native oracle; what has run is in this record's arms (verdict, verdict_from) and under results/",
- "note": "population: asan-blind -- ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads EXIT:255, PHP's own fatal error, with no detector report. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record. Collected by the corpus as fuzz (historical-known, confidence high).",
+ "note": "population: temporal-asan-visible -- a temporal defect (CWE-416) whose released block was MEASURED reaching libc free() inside the allocator (results/2026-11-02-release-destination), and that the patched build reports as ASAN:heap-use-after-free: a detector at the libc boundary sees it. The stockalloc run read EXIT:255 and reported nothing, so this case is placed by the measurement and not by that run -- see population_decided_by in oracle.json. Collected by the corpus as fuzz (historical-known, confidence high).",
  "fault_site_files": {
   "zend_do_begin_class_member_function_call": "Zend/zend_compile.c"
  }

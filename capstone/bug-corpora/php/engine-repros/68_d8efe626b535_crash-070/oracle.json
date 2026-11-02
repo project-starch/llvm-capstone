@@ -63,7 +63,8 @@
  "crashes_on_pristine_build": false,
  "cwe": "CWE-416",
  "id": "CRASH-070",
- "population": "asan-blind",
+ "population": "temporal-asan-visible",
+ "population_decided_by": "results/2026-11-02-release-destination -- the block was MEASURED reaching libc free() (the probe recorded the release and ASan named the block in one run with the stock cache on). The stockalloc run on the oracle host read EXIT:255 and did not report it, which is a reading of that detector build, not of where the block went. The collaborator's gcc 13 ASan and ../plain-temporal-repros's released_by column agree with the measurement",
  "pristine": {
   "outcome": "EXIT:255",
   "rc": 255,

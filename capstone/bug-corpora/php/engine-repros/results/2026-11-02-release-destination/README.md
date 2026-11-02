@@ -60,7 +60,7 @@ brought the disagreements to zero and separated `nested-until-teardown` as its o
 
 | class | all 70 | the 55 temporal | what it means |
 |---|--:|--:|---|
-| `nested` | 32 | **31** | parked in `AG(cache)`; never reaches libc while the program runs |
+| `nested` | 32 | **31** | parked in `AG(cache)`; never reaches libc while the program runs. **Read from the pair of ASan builds, not from a `CACHED` line at the defect's block**: the patched build names the use-after-free, so the trigger reaches the use, and the decisive build with the cache on reports nothing at the libc boundary. For a parked block ASan has no address to name, so there is nothing for the probe's log to be joined against -- which is why the positive readings are the ones that reach libc |
 | `nested-until-teardown` | 3 | **3** | parked during the run; returned to libc only when the cache is drained at request shutdown |
 | `non-nested` | 14 | **14** | reaches libc `free()` during the run |
 | `not-Zend` | 2 | **2** | never a sub-allocation: a `zend_strndup` constant name freed by a bare `free()`, and a persistent hash table released with `pefree()` |
@@ -73,26 +73,48 @@ events at the moment the defect is live.** 14 are not.
 
 Over the 55 temporal cases:
 
+Both rows are the axis **as each ASan run read it**, before this measurement was applied. The
+`population_here` column of `matrix.tsv` is kept at that pre-correction reading on purpose: it is
+what that instrument said, and a record that overwrote it could not be used to check the
+instrument. The corpus's `population` field is the corrected one.
+
 | axis as read by | `asan-blind` | `temporal-asan-visible` |
 |---|---|---|
 | the upstream corpus (gcc 13) | n=23: **22 `nested`, 1 unobserved, no exceptions** | n=28: 14 non-nested, 3 until-teardown, 2 not-Zend, **9 `nested`** |
-| this corpus's run (gcc 15.2) | n=33: 22 `nested`, 2 unobserved, **9 in fact `non-nested`** | n=22: 5 non-nested, 3 until-teardown, 2 not-Zend, 9 `nested`, 3 unobserved |
+| this corpus's run (gcc 15.2), as read | n=33: 22 `nested`, 2 unobserved, **9 in fact `non-nested`** | n=22: 5 non-nested, 3 until-teardown, 2 not-Zend, 9 `nested`, 3 unobserved |
 
 (the upstream record puts a further 4 temporal cases in neither population; all 4 are unobserved
 here.)
 
 The upstream reading's `asan-blind` label is confirmed by direct measurement, with no exceptions.
-**This corpus's own reading is wrong on nine of them** -- CRASH-046, -062, -070, -075, -081, -083,
--113, -117 and -155. Eight are the ones the two instruments already disagreed about; the ninth,
-CRASH-075, sits outside the 48 because `virtual-nested-exact` records it as `infra` rather than a
-catch. The direct measurement settles every one of the nine in the upstream reading's favour, and
-they should be re-read before any count that depends on the axis is published.
+**This corpus's own run read the property wrong on nine cases** -- CRASH-046, -062, -070, -075,
+-081, -083, -113, -117 and -155. Eight are the ones the two instruments already disagreed about;
+the ninth, CRASH-075, sits outside the 48 because `virtual-nested-exact` records it as `infra`
+rather than a catch. The direct measurement settles every one of the nine in the upstream reading's
+favour.
 
-`temporal-asan-visible` is over-inclusive in both readings: 9 of its cases are parked. The label has
-been carrying the meaning "the block reached `free()`" while its own evidence supports only "the
-as-shipped run produced some ASan output" -- of the 22 cases in that population here, 2 are
-`heap-use-after-free`, 2 an invalid free, and **18 a bare SEGV**. A SEGV is not evidence that a
-block reached the system allocator.
+**APPLIED.** Those nine now carry the measurement's reading in the corpus: `population` moved from
+`asan-blind` to `temporal-asan-visible`, 48/22 became 39/31, and each of the nine records what
+placed it in `population_decided_by`. The rule is in `tools/build-cases.py`, which reads this
+record's `matrix.tsv`; `--self-test` re-decides all 70 committed cases from their own recorded
+readings and fails if any disagrees, which is the gate that holds on a host without the three
+oracle runs. Those runs are not in the repository, so the nine case directories were rewritten by
+the rule rather than by a full `--write`; **a full run on the oracle host must reproduce them byte
+for byte**, and that is the one claim here a re-run still has to confirm.
+
+With the nine corrected, this corpus's axis and the collaborator's agree on every case they both
+place -- the 12 that still differ are all cases their run placed in neither population -- and the
+baseline arm's split over the 48 reads 67 % against 33 % on both, where this corpus's own reading
+previously gave 53 % against 52 %.
+
+`temporal-asan-visible` is still over-inclusive in both readings: 9 of its cases are parked. The
+label carries the meaning "the block reached `free()`" while, for those, its evidence supports only
+"the as-shipped run produced some ASan output" -- of the 22 cases the stockalloc run placed there,
+2 are `heap-use-after-free`, 2 an invalid free, and **18 a bare SEGV**. A SEGV is not evidence that
+a block reached the system allocator, and the nine parked ones are nine of those 18. Correcting
+that would mean taking cases OUT of the visible population, which this measurement cannot do on its
+own: a parked block gives ASan no address to name, so there is no positive reading to put in place
+of the label.
 
 ## Limits
 

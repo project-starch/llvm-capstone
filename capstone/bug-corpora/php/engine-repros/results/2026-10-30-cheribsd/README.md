@@ -65,7 +65,7 @@ Arms in this record: CheriBSD revocation. Not measured here: stock, system alloc
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
-- CheriBSD revocation: 0 of 19 / 1 of 32
+- CheriBSD revocation: 1 of 28 / 0 of 23
 
 ### Sensitivity scoring (every case scored by fault site)
 
@@ -93,5 +93,5 @@ Arms in this record: CheriBSD revocation. Not measured here: stock, system alloc
 
 **CWE-416 catches by native population** (temporal-asan-visible / asan-blind):
 
-- CheriBSD revocation: 6 of 19 / 2 of 32
+- CheriBSD revocation: 8 of 28 / 0 of 23
 

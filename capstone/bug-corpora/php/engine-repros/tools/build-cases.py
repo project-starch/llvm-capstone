@@ -45,7 +45,7 @@ in and be this defect's) and PROVENANCE.md.
 would do and whether existing directories differ. Idempotent: the same inputs give the same
 bytes.
 """
-import argparse, hashlib, json, re, sys
+import argparse, csv, hashlib, json, re, sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -163,6 +163,70 @@ def load(path):
 # a buffer overflow is not a lifetime report, whatever the CWE.
 TEMPORAL_REPORTS = ("ASAN:heap-use-after-free", "ASAN:attempting free", "ASAN:attempting double-free")
 
+# WHERE THE RELEASE WAS MEASURED TO GO (2026-11-02). The axis above asks one thing: did the
+# defect's released block reach the libc boundary? The stockalloc run is a way of READING that
+# off a detector's output, and on nine cases it reads the property wrong -- the block did reach
+# free(), and that run reported nothing. results/2026-11-02-release-destination measures the
+# property itself, inside the allocator: the probe records the release and ASan names the block
+# in ONE run with the stock cache on, so a `non-nested` reading is an observation of the block
+# arriving at free(), not an opinion about whether a detector would have seen it. Where that
+# record has a positive reading it decides, and `population_decided_by` says so in the case's
+# oracle.json. Two further readings agree with the measurement on all nine: the collaborator's
+# gcc 13 ASan (`collaborator_population`) and ../plain-temporal-repros's `released_by` column.
+# `not-Zend` counts as reaching libc -- those blocks are freed by a bare free()/pefree() and
+# never enter Zend's cache at all. `nested`, `nested-until-teardown` and `no-release-observed`
+# change nothing here: the first two are not a release to libc during the run, and the third is
+# an absence of evidence, which must never move a case.
+RELEASE_RECORD = Path("results/2026-11-02-release-destination/matrix.tsv")
+REACHES_LIBC = ("non-nested", "not-Zend")
+
+
+def measured_reaches_libc(path=None):
+    """{id, ...} of the cases the release-destination record MEASURED to reach libc free()."""
+    path = CORPUS_DIR / RELEASE_RECORD if path is None else path
+    with open(path, newline="") as fh:
+        return {r["source_id"] for r in csv.DictReader(fh, delimiter="\t")
+                if r["release_destination"] in REACHES_LIBC}
+
+
+def population_reason(pop, cwe, shipped, asan_class):
+    """(why, decided_by) for a case: the population's reason, as PROVENANCE.md and case.json's
+    note carry it, and -- when the release-destination measurement placed the case rather than
+    the stockalloc run -- what placed it, as oracle.json's population_decided_by.
+
+    Pure, and the one place this wording lives: the three oracle runs are not in the repository,
+    so a correction applied to the committed case files has to be able to produce exactly what
+    --write would, from the case's own recorded readings.
+    """
+    # A case is in the visible population on the MEASUREMENT rather than on the stockalloc run
+    # exactly when it is visible and that run reported nothing. Derived, never a typed list.
+    overridden = pop == "temporal-asan-visible" and not shipped.startswith("ASAN:")
+    decided_by = None
+    if overridden:
+        decided_by = (
+            "results/2026-11-02-release-destination -- the block was MEASURED reaching libc free() "
+            "(the probe recorded the release and ASan named the block in one run with the stock "
+            f"cache on). The stockalloc run on the oracle host read {shipped} and did not report it, "
+            "which is a reading of that detector build, not of where the block went. The "
+            "collaborator's gcc 13 ASan and ../plain-temporal-repros's released_by column agree "
+            "with the measurement")
+    if pop == "asan-blind":
+        why = ("ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with "
+               "zend_alloc.c as shipped the run reads " + ("OK" if shipped == "OK" else
+               f"{shipped}, PHP's own fatal error, with no detector report") + ". That is the selection, by "
+               "measurement; which mechanism hides it, and which arm sees it, is what the arms record")
+    elif overridden:
+        why = (f"a temporal defect ({cwe}) whose released block was MEASURED reaching libc free() "
+               f"inside the allocator (results/2026-11-02-release-destination), and that the patched "
+               f"build reports as {asan_class}: a detector at the libc boundary sees it. The "
+               f"stockalloc run read {shipped} and reported nothing, so this case is placed by the "
+               f"measurement and not by that run -- see population_decided_by in oracle.json")
+    else:
+        why = (f"a temporal defect ({cwe}) that ASan reports with zend_alloc.c as shipped (the stockalloc "
+               f"run, {shipped}) and that the patched build reports as {asan_class}: the release reached "
+               f"free(), so a detector at the libc boundary sees it; the control population")
+    return why, decided_by
+
 # THE ONE CORPUS (2026-10-28). The PHP corpora were two: this one, and a sibling built from the
 # same source corpus by another lane (bug-corpora/php on corpus/php-5-temporal: 56 temporal
 # cases, CWE-416/415/590). 47 cases were in both. The five below are temporal, run on the
@@ -189,14 +253,25 @@ APPENDED = ("CRASH-012", "CRASH-062", "CRASH-070", "CRASH-148", "CRASH-161")
 FULLEXT_NOT_ADMITTED = ("CRASH-125", "CRASH-129", "CRASH-131", "CRASH-132")
 
 
-def populations(asan, stock, meta):
-    """{id: population} over the cases the default build runs, from the three result files."""
+def populations(asan, stock, meta, reaches_libc=frozenset()):
+    """{id: population} over the cases the default build runs, from the three result files.
+
+    `reaches_libc` is the release-destination record's positive readings. Called without it the
+    rule is the stockalloc reading alone, which is what NUMBERED the case directories and is
+    kept for that: see main().
+    """
     out = {}
     for cid, e in asan.items():
         s = stock.get(cid, {}).get("outcome", "")
         temporal = meta[cid]["cwe"] in TEMPORAL
         blind = e["outcome"] != "OK" and s == "OK"
-        if blind:
+        if temporal and cid in reaches_libc and e["outcome"].startswith(TEMPORAL_REPORTS):
+            # MEASURED to reach libc free(), whatever the stockalloc run read. The defect still
+            # has to BE a use-after-free as ASan classifies one -- the patched run names the
+            # class -- so a spatial defect or a bare SEGV in a block that happens to reach
+            # free() is not promoted by its block's destination.
+            out[cid] = "temporal-asan-visible"
+        elif blind:
             out[cid] = "asan-blind"
         elif temporal and e["outcome"].startswith("ASAN:") and not s.startswith("ASAN:"):
             # A temporal defect the patched build reports and the as-shipped build does not:
@@ -277,14 +352,9 @@ def one_case(number, cid, pop, meta, asan, stock, pris, theirs, corpus_sha, orac
                     "results-ours-pristine-default.json": oracle_shas["pristine"]},
     }
     shipped = stock[cid]["outcome"]
-    why = (("ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with "
-            "zend_alloc.c as shipped the run reads " + ("OK" if shipped == "OK" else
-            f"{shipped}, PHP's own fatal error, with no detector report") + ". That is the selection, by "
-            "measurement; which mechanism hides it, and which arm sees it, is what the arms record")
-           if pop == "asan-blind" else
-           f"a temporal defect ({m['cwe']}) that ASan reports with zend_alloc.c as shipped (the stockalloc "
-           f"run, {shipped}) and that the patched build reports as {a['outcome']}: the release reached "
-           f"free(), so a detector at the libc boundary sees it; the control population")
+    why, decided_by = population_reason(pop, m["cwe"], shipped, a["outcome"])
+    if decided_by:
+        oracle["population_decided_by"] = decided_by
     case = {
         "case": number,
         "upstream_fix": fix,
@@ -405,6 +475,37 @@ def self_test():
     want = {"A": "asan-blind", "B": "temporal-asan-visible", "C": "asan-blind", "D": "asan-blind", "F": "asan-blind",
             "H": "temporal-asan-visible", "I": "temporal-asan-visible", "J": "temporal-asan-visible"}
     checks = [("the population rule", got, want)]
+    # THE CORRECTION, on the same synthetic entries plus the record's positive readings. A and C
+    # are temporal, the patched build names a use-after-free and the block was measured reaching
+    # libc, so the measurement places them whatever the stockalloc run read (OK for A, PHP's own
+    # fatal error for C). D is spatial, E is reported by nobody, G is a SEGV on both builds: a
+    # block's destination promotes none of them.
+    corrected = populations(asan, stock, meta, {"A", "C", "D", "E", "G"})
+    checks.append(("the measurement places a temporal case the stockalloc run read as blind",
+                   (corrected["A"], corrected["C"]), ("temporal-asan-visible", "temporal-asan-visible")))
+    checks.append(("a spatial defect is not promoted by where its block went", corrected["D"], "asan-blind"))
+    checks.append(("a case no build reports is in neither population still", "E" in corrected, False))
+    checks.append(("a SEGV on both builds is not a use-after-free, whatever its block did",
+                   "G" in corrected, False))
+    checks.append(("called without the record the rule is the stockalloc reading alone",
+                   populations(asan, stock, meta), want))
+    # THE COMMITTED CASES AGAINST THE RULE. The three oracle runs the case directories were
+    # derived from are not in this repository, so --write cannot be re-run on every host and a
+    # hand-applied correction would otherwise go unchecked. Each oracle.json carries its own
+    # stockalloc outcome, ASan class and CWE, and the record carries the destination -- which is
+    # everything the rule needs to re-decide the case. This gate therefore holds anywhere.
+    oracles = [json.loads((d / "oracle.json").read_text()) for d in sorted(CORPUS_DIR.glob("[0-9][0-9]_*"))]
+    if oracles:
+        recomputed = populations({o["id"]: {"outcome": o["asan"]["class"]} for o in oracles},
+                                 {o["id"]: {"outcome": o["stockalloc"]} for o in oracles},
+                                 {o["id"]: {"cwe": o["cwe"]} for o in oracles},
+                                 measured_reaches_libc())
+        checks.append((f"every committed oracle.json agrees with the rule ({len(oracles)} cases)",
+                       sorted(o["id"] for o in oracles if recomputed.get(o["id"]) != o["population"]), []))
+        checks.append(("and every case the measurement placed says so in population_decided_by",
+                       sorted(o["id"] for o in oracles if "population_decided_by" in o),
+                       sorted(o["id"] for o in oracles if o["population"] == "temporal-asan-visible"
+                              and not o["stockalloc"].startswith("ASAN:"))))
     frame = ASAN_FRAME.search("    #0 0x55 in user_tick_function_call /x/y/ext/standard/basic_functions.c:2135\n")
     checks.append(("the frame rule takes the first PHP frame", (frame.group(1), frame.group(2), frame.group(3)),
                    ("user_tick_function_call", "ext/standard/basic_functions.c", "2135")))
@@ -477,15 +578,30 @@ def main():
     # Only the cases the default (ext/standard-only) build runs are candidates: the corpus's own
     # asan-default run is that build, so its id set is the denominator of the whole corpus here.
     default_ids = set(theirs["asan"])
-    pops = {cid: p for cid, p in populations({i: asan[i] for i in default_ids}, stock, meta).items()}
+    ours = {i: asan[i] for i in default_ids}
+    # TWO readings of the same axis, and they are used for different things. `numbering_pops` is
+    # the stockalloc reading alone: it is what ordered the first build, every case directory is
+    # named from that order and every archived bundle keys its cases by those names, so it must
+    # not move. `pops` is the corrected reading and is what each oracle.json carries. Correcting
+    # a case moves it between the README's tables, never between directories.
+    numbering_pops = populations(ours, stock, meta)
+    pops = populations(ours, stock, meta, measured_reaches_libc())
+    if set(numbering_pops) != set(pops):
+        raise SystemExit("the release-destination correction changed WHICH cases are in the "
+                         "corpus, not just where they sit; it may only re-place a case")
     missing = [c for c in APPENDED if c not in pops]
     if missing:
         raise SystemExit(f"APPENDED names cases the rule does not admit: {missing}")
     # the first build's cases in their first order, then the appended ones: no number moves
-    order = (sorted((c for c in pops if c not in APPENDED), key=lambda c: (POPULATIONS.index(pops[c]), c))
+    order = (sorted((c for c in numbering_pops if c not in APPENDED),
+                    key=lambda c: (POPULATIONS.index(numbering_pops[c]), c))
              + list(APPENDED))
     counts = {p: sum(1 for c in pops.values() if c == p) for p in POPULATIONS}
     print(f"populations from our oracle: {counts} over {len(default_ids)} default-build cases")
+    corrected = sorted(c for c in pops if pops[c] != numbering_pops[c])
+    print(f"corrected by the release-destination measurement: {len(corrected)} "
+          f"{{{', '.join(corrected)}}} -- stockalloc read the property wrong on these; "
+          f"the block was measured reaching libc free()")
     # NOT a zero: a declared case absent from the inputs is reported with the reason, because a
     # silent omission of four measured defects reads exactly like a corpus that never had them.
     held = [(c, c in default_ids, c in pris) for c in FULLEXT_NOT_ADMITTED]

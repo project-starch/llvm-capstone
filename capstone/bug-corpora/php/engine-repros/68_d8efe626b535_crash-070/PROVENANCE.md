@@ -40,8 +40,8 @@ recipes: `asan` (its two `zend_alloc.c` detector patches, `-fsanitize=address`),
 `stockalloc` (the same without those two patches: PHP's allocator as shipped under ASan), and
 the plain build. `oracle.json` carries the result: ASan `ASAN:heap-use-after-free` at `Zend/zend_compile.c:1321` in
 `zend_do_begin_class_member_function_call`, stockalloc `EXIT:255`, pristine `EXIT:255` (rc 255).
-Hence **asan-blind**: ASan reports it only with PHP's allocator patched (cache off, no 8-byte rounding); with zend_alloc.c as shipped the run reads EXIT:255, PHP's own fatal error, with no detector report. That is the selection, by measurement; which mechanism hides it, and which arm sees it, is what the arms record.
+Hence **temporal-asan-visible**: a temporal defect (CWE-416) whose released block was MEASURED reaching libc free() inside the allocator (results/2026-11-02-release-destination), and that the patched build reports as ASAN:heap-use-after-free: a detector at the libc boundary sees it. The stockalloc run read EXIT:255 and reported nothing, so this case is placed by the measurement and not by that run -- see population_decided_by in oracle.json.
 
-**Where our run and the corpus's record disagree:** population: the collaborator's instrument (gcc 13 ASan, 2026-10-26) placed it in 'temporal-asan-visible', ours (gcc 15 ASan) in 'asan-blind' -- the stockalloc run decides, and that run's detector differs.
+**Where our run and the corpus's record disagree:** nowhere -- ASan class, pristine outcome and the crash flag all agree.
 
 **Upstream fix.** php-src `d8efe626b5359a76c5d631fd67316aef7997db14`, the directory prefix `d8efe626b535`.
