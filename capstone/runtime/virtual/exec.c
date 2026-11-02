@@ -60,10 +60,16 @@ static int trace;
  * default: a gcc test run admits ~400 grants, and each line is an unbuffered write(2) to wherever
  * stderr goes -- a 9p file in a harness that does not redirect it. */
 static int grants;
-/* CV_STEP returns by kind (1 quantum, 3 service, 4 fault, else other) and services by number,
- * for the CAPSTONE_VM_STATS line: which exits the step protocol actually makes, and how many. A
- * retried EINTR/EAGAIN is not a return. Relaxed atomics: every virtual thread's loop counts. */
-static unsigned long step_kinds[8], step_services[16];
+/* CV_STEP returns by kind (1 quantum, 3 service, 4 fault, else other) and services by their
+ * vm-abi.h number (CV_SERVICE_DELEGATE 0 .. CV_SERVICE_REMAP 13; not Linux syscall numbers),
+ * for the CAPSTONE_VM_STEPS line: which exits the step protocol actually makes, and how many. A
+ * number above the last service counts as other. A retried EINTR/EAGAIN is not a return.
+ * Relaxed atomics on both sides: every virtual thread's loop counts, and the main thread reads
+ * at exit while a worker may still be returning. */
+#define STEP_SERVICE_COUNT (CV_SERVICE_REMAP + 1)
+static unsigned long step_kinds[8], step_services[STEP_SERVICE_COUNT + 1];
+static unsigned long step_count(const unsigned long *counter)
+{ return __atomic_load_n(counter, __ATOMIC_RELAXED); }
 static void *meta;
 static void *virtual_thread_worker(void *opaque);
 
@@ -917,21 +923,34 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         if (h->exiting) {
             struct cv_stats stats;
             if (tid == 0 && (getenv("CAPSTONE_VM_STATS") || getenv("CAPSTONE_DELEGATE_STATS")) &&
-                !ioctl(device, CV_STATS, &stats))
-                fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu"
-                                " step_returns=quantum:%lu,service:%lu,fault:%lu,other:%lu"
-                                " services=delegate:%lu,map:%lu,unmap:%lu,thread_create:%lu,thread_exit:%lu,thread_join:%lu,protect:%lu,wait:%lu,futex:%lu,pthread_exit:%lu,thread_delegate:%lu,thread_self:%lu,nodes:%lu,remap:%lu\n",
+                !ioctl(device, CV_STATS, &stats)) {
+                fprintf(stderr, "CAPSTONE_VM_STATS arenas=%llu pages=%llu peak=%llu nodes=%llu steps=%llu faults=%llu collections=%llu reclaimed=%llu rounds=%llu bytes_in=%llu bytes_out=%llu node_bytes=%llu node_capacity=%llu node_growths=%llu launch_ns=%llu elapsed_ns=%llu\n",
                     stats.arenas, stats.pinned_pages, stats.peak_pages, stats.nodes, stats.steps,
                     stats.faults, stats.collections, stats.reclaimed, (unsigned long long)host.rounds,
                     (unsigned long long)host.bytes_in, (unsigned long long)host.bytes_out,
                     stats.node_bytes, stats.node_capacity, stats.node_growths,
-                    launch_ns, now_ns() - start_ns,
-                    step_kinds[1], step_kinds[3], step_kinds[4],
-                    step_kinds[0] + step_kinds[2] + step_kinds[5] + step_kinds[6] + step_kinds[7],
-                    step_services[0], step_services[1], step_services[2], step_services[3],
-                    step_services[4], step_services[5], step_services[6], step_services[7],
-                    step_services[8], step_services[9], step_services[10], step_services[11],
-                    step_services[12], step_services[13]);
+                    launch_ns, now_ns() - start_ns);
+                /* Its own line: the STATS line's fields are all integers, and its collectors
+                 * int() every value. The service keys are vm-abi.h CV_SERVICE_* ids. */
+                fprintf(stderr, "CAPSTONE_VM_STEPS quantum=%lu service=%lu fault=%lu other=%lu"
+                                " service0_delegate=%lu service1_map=%lu service2_unmap=%lu"
+                                " service3_thread_create=%lu service4_thread_exit=%lu"
+                                " service5_thread_join=%lu service6_protect=%lu service7_wait=%lu"
+                                " service8_futex=%lu service9_pthread_exit=%lu"
+                                " service10_thread_delegate=%lu service11_thread_self=%lu"
+                                " service12_nodes=%lu service13_remap=%lu service_other=%lu\n",
+                    step_count(&step_kinds[1]), step_count(&step_kinds[3]), step_count(&step_kinds[4]),
+                    step_count(&step_kinds[0]) + step_count(&step_kinds[2]) + step_count(&step_kinds[5]) +
+                        step_count(&step_kinds[6]) + step_count(&step_kinds[7]),
+                    step_count(&step_services[0]), step_count(&step_services[1]),
+                    step_count(&step_services[2]), step_count(&step_services[3]),
+                    step_count(&step_services[4]), step_count(&step_services[5]),
+                    step_count(&step_services[6]), step_count(&step_services[7]),
+                    step_count(&step_services[8]), step_count(&step_services[9]),
+                    step_count(&step_services[10]), step_count(&step_services[11]),
+                    step_count(&step_services[12]), step_count(&step_services[13]),
+                    step_count(&step_services[STEP_SERVICE_COUNT]));
+            }
             /* The image's identity on a run that ENDS, not only on one that faults: a
              * transcript that carries no digest cannot be tied to the image it claims to be
              * from, and a judge that reads a probe's successful run (the putenv probe) has
@@ -978,8 +997,9 @@ static int virtual_service_loop(uint64_t tid)
             if (errno != EINTR && errno != EAGAIN) return die("step");
         __atomic_fetch_add(&step_kinds[step.kind < 8 ? step.kind : 7], 1, __ATOMIC_RELAXED);
         if (step.kind == 3)
-            __atomic_fetch_add(&step_services[step.args[7] < 16 ? step.args[7] : 15], 1,
-                               __ATOMIC_RELAXED);
+            __atomic_fetch_add(&step_services[step.args[7] < STEP_SERVICE_COUNT
+                                                  ? step.args[7] : STEP_SERVICE_COUNT],
+                               1, __ATOMIC_RELAXED);
         step.reply = 0;
         if (step.kind == 1) {
             /* The supervisor quantum is the preemption point. Yielding here

@@ -110,6 +110,8 @@ def main():
         sets.append(load_set(spec))
         plain_labels.add(sets[-1][0])
     lines = ['#!/bin/sh', 'cd /mnt/vm || exit 1', 'dmesg -n 1', 'insmod capstone_vm.ko || { echo INSMOD-FAILED; exit 1; }',
+             # The launcher prints its CAPSTONE_VM_ADD_OK line per grant only when asked; console-audit.py counts them.
+             'export CAPSTONE_VM_GRANTS=1',
              'echo GATE-START', 'dmesg -c > /dev/null']
     plan = []
     for label, path, names in sets:
