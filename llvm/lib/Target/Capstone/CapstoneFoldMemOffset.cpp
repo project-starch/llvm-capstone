@@ -101,22 +101,8 @@ bool CapstoneFoldMemOffset::foldOffset(
   // and cursor 0x10000, `CIncOffsetImm 2047; CIncOffset -3072; CIncOffset
   // 1025; LBU 0` visits 0x107ff, 0xfbff, 0x10000 (all representable), while
   // the folded form visits 0xf400 first, untagged, and the in-bounds load
-  // faults. The fold is therefore allowed only under a PATH argument, checked
-  // after the walk: the first use of every surviving cursor, in block order
-  // of its defining block, must be a folded access through it. On any
-  // executed path that defines the cursor that access runs before anything
-  // derived from it (a use in another block is dominated by the definition,
-  // so it comes after that access too); its effective address is unchanged
-  // by the fold, so it faults after the fold only where the cursor is outside
-  // the window, which means the access was out of bounds and faulted
-  // originally at the same instruction (possibly on bounds, cause 28, where it
-  // now faults untagged, cause 24: the fault-cause change the DAG combine in
-  // CapstoneISelLowering.cpp documents for defects); if it succeeds, the
-  // cursor is within simm12 of an in-bounds address, inside the window and
-  // tagged, and the argument repeats for each derived cursor. An access that
-  // merely EXISTS is not enough: with the same values, `LBU %p` in one
-  // successor and `LBU %q` (q derived from p) in the other, the path through
-  // the second never executes the first, and the folded form faults there.
+  // faults. The window is not the only hazard either (see the rule after the
+  // walk), so a surviving cursor may not move at all.
   DenseSet<Register> CapIntermediates;
 
   // Insert root offset into the map.
@@ -277,66 +263,39 @@ bool CapstoneFoldMemOffset::foldOffset(
     }
   }
 
-  // Per surviving cursor, three conditions (see the comment at
-  // CapIntermediates for the window argument):
+  // Soundness rule for the capability forms: NO surviving cursor may change
+  // value. The fold moves every surviving cursor by MINUS its tracked delta
+  // (the erased displacement ahead of it), and a moved cursor can lose its tag
+  // in two ways that the window argument above does not cover: a tagged
+  // cursor must also be a canonical address (isa.md, "address policy": sv39
+  // refuses [2^38, 2^64-2^38), sv48/sv57 likewise at 47/56, phys56 requires
+  // bits 63:56 clear), and a result that would carry a refused cursor is
+  // written UNTAGGED. An upward move can reach 2^38 from an object that ends
+  // just below it, which Linux can map (bounds [2^38-4096, 2^38), cursor
+  // 2^38-2048: `CIncOffsetImm -1; CIncOffset 2048; LBU 0` reads 2^38-1 tagged,
+  // the folded `LBU -1` off a cursor of 2^38 faults). A downward move is
+  // canonical under sv39/sv48/sv57 (it stays below 2^38 or wraps into the
+  // all-ones kernel half), but under phys56 a wrap below 0 is refused, and a
+  // tagged cursor near 0 is possible: the tagged physical region restricts
+  // where tags persist in MEMORY, not which addresses a tagged REGISTER may
+  // hold (the ISA permits a fabricated tagged cursor of 0, and QEMU's `none`
+  // machine maps RAM at 0): with bounds [0,16), cursor 2, `CIncOffsetImm 2;
+  // CIncOffset -3; LBU 0` reads address 1, the folded `LBU 2` off a cursor of
+  // 2^64-1 faults. This pass runs in the shared pipeline with no profile
+  // feature to tell the profiles apart, so the rule is delta == 0.
   //
-  // 1. Address policy (isa.md, "address policy"): a tagged cursor must be a
-  //    canonical address (sv39: bits 63:39 equal bit 38, so [2^38, 2^64-2^38)
-  //    is refused; sv48/sv57 likewise at 47/56; phys56: bits 63:56 clear), and
-  //    an operation whose result carries a refused cursor writes it UNTAGGED.
-  //    The representable window says nothing about this boundary. The fold
-  //    moves every surviving cursor by MINUS its tracked delta (the erased
-  //    displacement ahead of it), so require delta >= 0: the cursor only moves
-  //    DOWN, by at most 4095 (the access's new displacement and its old one
-  //    each fit simm12). A downward move of that size from a tagged user-half
-  //    address stays below 2^38 or, wrapping below 0, lands in the all-ones
-  //    kernel half, canonical under sv39/sv48/sv57; under phys56 a wrap would
-  //    be refused, but tags exist only in the tagged physical region (from
-  //    0x80000000), so no tagged cursor lies within 4095 of 0. An UPWARD move
-  //    (delta < 0) can reach 2^38 from an object that ends just below it, which
-  //    Linux can map (the top of the user half): with bounds [2^38-4096, 2^38),
-  //    cursor 2^38-2048, `CIncOffsetImm -1; CIncOffset 2048; LBU 0` reads
-  //    2^38-1 tagged, while the folded form's cursor 2^38 is refused and the
-  //    `LBU -1` at the unchanged address faults. A delta of 0 moves nothing.
-  //    An all-constant chain with no surviving cursor has no exposure: its
-  //    folded accesses use the untouched root input.
-  // 2. The path argument: the first use of the cursor in block order of its
-  //    defining block must be a folded access with the cursor as base. No use
-  //    in that block, or a first use that is anything else (a derived cursor
-  //    above all), vetoes the fold.
-  // 3. Unwinding: the scan to that first use stops at a call or inline asm,
-  //    which may leave the block through an unwind edge before the access
-  //    runs, with the derived cursor used in the landing pad; and a defining
-  //    block with an EH-pad successor is vetoed outright. A non-returning trap
-  //    is not a bypass: the launcher terminates through SIGSEGV and nothing
-  //    derived from the cursor runs afterwards.
+  // On this target every memory base is a capability, so a chain from the
+  // root to an access passes through at least one surviving cursor, which
+  // carries the root's delta: with this rule the capability forms never fold.
+  // The mechanism is kept, measured and reviewed, behind the rule; a profile
+  // feature under which delta >= 0 is sound (the sv39/sv48/sv57 address
+  // policy) would re-enable it. Because no surviving cursor changes value,
+  // the earlier path argument (first use is the folded access; no call,
+  // inline asm or EH-pad successor before it) has nothing left to establish
+  // and is gone.
   for (Register R : CapIntermediates) {
     auto D = RegToOffsetMap.find(R);
-    if (D == RegToOffsetMap.end() || D->second < 0)
-      return false;
-    const MachineInstr *Def = MRI.getVRegDef(R);
-    if (!Def)
-      return false;
-    const MachineBasicBlock *MBB = Def->getParent();
-    for (const MachineBasicBlock *Succ : MBB->successors())
-      if (Succ->isEHPad())
-        return false;
-    bool Bounded = false;
-    for (auto I = std::next(Def->getIterator()); I != MBB->end(); ++I) {
-      if (I->isCall() || I->isInlineAsm())
-        break;
-      bool Reads = false;
-      for (const MachineOperand &MO : I->uses())
-        if (MO.isReg() && MO.getReg() == R)
-          Reads = true;
-      if (!Reads)
-        continue;
-      auto F = FoldableInstrs.find(const_cast<MachineInstr *>(&*I));
-      Bounded = F != FoldableInstrs.end() && I->getOperand(1).isReg() &&
-                I->getOperand(1).getReg() == R;
-      break;
-    }
-    if (!Bounded)
+    if (D == RegToOffsetMap.end() || D->second != 0)
       return false;
   }
 
