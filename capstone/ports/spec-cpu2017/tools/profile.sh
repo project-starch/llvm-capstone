@@ -83,6 +83,13 @@ python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['comma
 # 365k attempts in one run and 999k in the next with it on).
 cp "$PL/profrun" "$OUT/profrun"
 vm exec -- sh -c "echo 0 > /proc/sys/kernel/randomize_va_space && cp /mnt/host/${OUT#"$SHARE"/}/profrun /tmp/profrun && chmod 0755 /tmp/profrun && cd /sys/module/capstone_vm/sections && for f in .* *; do [ -f \"\$f\" ] && echo \"\$f \$(cat \"\$f\")\"; done; killall syslogd klogd 2>/dev/null; echo randomize_va_space=\$(cat /proc/sys/kernel/randomize_va_space); uname -a; cat /proc/cmdline; for p in /sys/module/capstone_vm/parameters/*; do echo \"param \$(basename \$p)=\$(cat \$p)\"; done" > "$OUT/module-sections.txt"
+# Module parameters under test (arm "module_params", insmod syntax): the module is reloaded with
+# them before anything runs; the parameters file records what the guest then reads back.
+MODPARAMS=$(jopt "arms.$ARM.module_params" ""); note "module_params ${MODPARAMS:-none}"
+if [ -n "$MODPARAMS" ]; then
+  vm exec -- sh -c "rmmod capstone_vm && insmod /mnt/control/module $MODPARAMS && for p in /sys/module/capstone_vm/parameters/*; do echo \"param \$(basename \$p)=\$(cat \$p)\"; done" > "$OUT/module-params.txt" 2>&1 \
+    || { echo "profile: reloading the module with $MODPARAMS failed" >&2; cat "$OUT/module-params.txt" >&2; exit 1; }
+fi
 export CAPSTONE_SPEC_PROFRUN=/tmp/profrun
 STAGE=$(jopt "arms.$ARM.stage_image" share); note "stage_image $STAGE"
 [ "$STAGE" = share ] || export CAPSTONE_SPEC_STAGE=$STAGE

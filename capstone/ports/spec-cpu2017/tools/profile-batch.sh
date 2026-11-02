@@ -14,6 +14,13 @@ arms=(); while [ $# -gt 0 ] && [ "$1" != "--" ]; do arms+=("$1"); shift; done
 benches=("$@")
 [ ${#arms[@]} -gt 0 ] && [ ${#benches[@]} -gt 0 ] || { echo "usage: profile-batch.sh ARMS SIZE OUTROOT ARM... -- BENCH..." >&2; exit 2; }
 mkdir -p "$OUTROOT"; OUTROOT=$(cd "$OUTROOT" && pwd -P)
+# The batch runs from its own copy of the kit's tools and configs: bash reads a script as it runs,
+# so a tool replaced while a run is in it fails at the next line it reads (two seven-minute runs of
+# 2026-11-02 died that way). The copy's name records which tools produced the batch.
+SNAP=$OUTROOT/.kit-$(date -u +%Y%m%dT%H%M%SZ); mkdir -p "$SNAP"
+cp -r "$KIT/tools" "$KIT/config" "$SNAP/"; [ -f "$KIT/manifest.lock.json" ] && cp "$KIT/manifest.lock.json" "$SNAP/"
+( cd "$KIT" && git rev-parse HEAD 2>/dev/null; git status --porcelain -- . 2>/dev/null ) > "$SNAP/source.txt" || true
+KIT=$SNAP
 jobs=()
 for b in "${benches[@]}"; do for a in "${arms[@]}"; do
   [ -e "$OUTROOT/$a/$b" ] && { echo "skip $a $b (exists)"; continue; }
