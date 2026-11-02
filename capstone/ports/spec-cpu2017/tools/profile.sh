@@ -84,6 +84,8 @@ python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['comma
 cp "$PL/profrun" "$OUT/profrun"
 vm exec -- sh -c "echo 0 > /proc/sys/kernel/randomize_va_space && cp /mnt/host/${OUT#"$SHARE"/}/profrun /tmp/profrun && chmod 0755 /tmp/profrun && cd /sys/module/capstone_vm/sections && for f in .* *; do [ -f \"\$f\" ] && echo \"\$f \$(cat \"\$f\")\"; done; killall syslogd klogd 2>/dev/null; echo randomize_va_space=\$(cat /proc/sys/kernel/randomize_va_space); uname -a; cat /proc/cmdline; for p in /sys/module/capstone_vm/parameters/*; do echo \"param \$(basename \$p)=\$(cat \$p)\"; done" > "$OUT/module-sections.txt"
 export CAPSTONE_SPEC_PROFRUN=/tmp/profrun
+STAGE=$(jopt "arms.$ARM.stage_image" share); note "stage_image $STAGE"
+[ "$STAGE" = share ] || export CAPSTONE_SPEC_STAGE=$STAGE
 cd "$SPEC_ROOT"
 set +u; source ./shrc > /dev/null; set -u
 start=$(date -u +%FT%TZ); rc=0
@@ -92,6 +94,9 @@ runcpu --config="$CFG" --action=validate --nobuild --size="$SIZE" --tune=base "$
   --define vm_host="$VMHOST" --define ldecod_host="$(j ldecod_host)" --define record="$OUT" \
   "$BENCH" > "$OUT/runcpu.log" 2>&1 || rc=$?
 end=$(date -u +%FT%TZ)
+# The guest's kernel log of the run: what the module and the kernel said, and how often (the
+# kernel formats every line even when the console's level drops it).
+vm exec -- sh -c "dmesg | tail -n 400; echo ---; dmesg | wc -l; cat /proc/sys/kernel/printk" > "$OUT/dmesg.txt" 2>&1 || true
 vm down > /dev/null 2>&1 || true
 trap - EXIT
 mkdir -p "$OUT/spec"

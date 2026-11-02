@@ -286,7 +286,9 @@ summary.update({"total_attempts": grand, "classes": dict(total_classes.most_comm
                 "all_functions": [[c, f, v] for (c, f), v in total_funcs.most_common()],
                 "mix": {c: dict(m.most_common()) for c, m in total_mix.items()}})
 json.dump(summary, open(os.path.join(OUT, "profile.json"), "w"), indent=1)
-print(f"ALL WINDOWS: {grand:,} attempts")
+busy = grand - total_classes.get("kernel idle", 0)
+summary["busy_attempts"] = busy
+print(f"ALL WINDOWS: {grand:,} attempts, {busy:,} without the idle loop")
 for c, v in total_classes.most_common():
     print(f"  {c:24s} {v:>15,}  {100 * v / grand:6.2f}%")
 print("  top functions:")

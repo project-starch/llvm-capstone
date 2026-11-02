@@ -88,6 +88,19 @@ for i in "${!words[@]}"; do
   case "${words[$i]}" in "$share"/*) words[$i]=/mnt/host/${words[$i]#"$share"/} ;; esac
 done
 case "${words[0]}" in /*) [ "${words[0]#/mnt/host/}" != "${words[0]}" ] || refuse "absolute program path outside the share" "$@" ;; esac
+# CAPSTONE_SPEC_STAGE=tmpfs (profiling, tools/profile.sh): the image is copied to the guest's tmpfs
+# before the invocation and run from there, outside any window. On the 9p share the module cannot
+# deny writers to the image (EOPNOTSUPP), so the launcher copies every image into a sealed memfd
+# inside the run: 23.5 MB for gcc, most of its kernel-side cost. A local filesystem, where the
+# denial works, is what a deployment has; the plain arm is staged the same way for symmetry.
+staged=null
+if [ "${CAPSTONE_SPEC_STAGE:-}" = tmpfs ]; then
+  staged=/tmp/stage-$id-$(basename "$exe")
+  env PYTHONPATH="$CAPSTONE_VM_HOST" python3 -m capstone_vm --state "$CAPSTONE_VM_STATE" exec -- sh -c "cp $(printf %q "/mnt/host/${exe#"$share"/}") $(printf %q "$staged") && chmod 0755 $(printf %q "$staged")" \
+    || refuse "staging the image to the guest's tmpfs failed" "$@"
+  words[0]=$staged
+  staged=$(printf '"%s"' "$staged")
+fi
 rc=0
 # A profiled invocation is one capprof window; windows are numbered in order, and only guest
 # invocations open one, so this invocation's window is the count of guest invocations before it.
@@ -124,5 +137,5 @@ fi
 vm=$(python3 -c "import json,sys;print(json.dumps(json.load(open(sys.argv[1]))['identity']))" "$CAPSTONE_VM_STATE/config.json")
 guest_result=$(cat "$inv/$id.guest.json" 2>/dev/null || echo null)
 guest_argv=$(python3 -c "import json,sys;print(json.dumps(sys.argv[1:]))" "${words[@]}")
-record $route "$rc" "{\"vm\": $vm, \"guest\": $guest_result, \"guest_argv\": $guest_argv, \"perl_pack_stub\": $stub, \"window\": $window}" "$@"
+record $route "$rc" "{\"vm\": $vm, \"guest\": $guest_result, \"guest_argv\": $guest_argv, \"perl_pack_stub\": $stub, \"window\": $window, \"staged\": $staged}" "$@"
 exit "$rc"

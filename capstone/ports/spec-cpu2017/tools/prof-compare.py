@@ -34,6 +34,8 @@ ta, tb = da["total_attempts"], db["total_attempts"]
 print(f"A {A.a}: {ta:,} attempts ({len(da['windows'])} windows)")
 print(f"B {A.b}: {tb:,} attempts ({len(db['windows'])} windows)")
 print(f"B - A = {tb - ta:+,} ({(tb / ta - 1) * 100 if ta else float('nan'):+.3f}%)")
+ia, ib = da["classes"].get("kernel idle", 0), db["classes"].get("kernel idle", 0)
+print(f"without the idle loop: A {ta - ia:,}  B {tb - ib:,}  B - A = {(tb - ib) - (ta - ia):+,} ({((tb - ib) / (ta - ia) - 1) * 100 if ta - ia else float('nan'):+.3f}%)")
 classes = sorted(set(da["classes"]) | set(db["classes"]), key=lambda c: -(db["classes"].get(c, 0) + da["classes"].get(c, 0)))
 out = {"a": A.a, "b": A.b, "total_a": ta, "total_b": tb, "classes": {}}
 print(f"\n{'class':26s} {'A':>16s} {'B':>16s} {'B-A':>16s}")
