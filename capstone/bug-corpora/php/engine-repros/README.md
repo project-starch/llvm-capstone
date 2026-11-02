@@ -152,12 +152,20 @@ and **12 of the 33** whose block does not -- 87 % against 36 %. Split the same 4
 own `population` instead and the same column reads 53 % against 52 %, which does not tell the two
 sides apart at all. The upstream reading lands between them, 67 % against 33 %.
 
-Two things this table cannot do. `nested exact` reads 48 of 48 on that subset **by construction**,
-because the subset is defined as its catches; the 55-case rows above are the ones to quote. And
-there are no spatial rows: the axis is where a release lands, and a spatial defect has no temporal
-release, so all 12 spatial cases read `no release observed`. Splitting those would need a
-different measurement -- allocation origin -- and on PHP that axis is degenerate, 54 of 56 in the
-sibling corpora being sub-allocations.
+Two things to keep straight. `nested exact` reads 48 of 48 on the 48-case subset, and that is a
+real reading rather than an artefact of how the subset was chosen: over the 55 temporal cases the
+arm has **0 MISSED**. The subset is the cases that returned a reading on it, and the other seven
+returned none -- three runs the per-run watchdog killed, three where the nested layer refused by
+name the pointer `efree` was given (`code=3`/`code=4`, a free of a pointer that heap never handed
+out, which leaves the judge no fault site to attribute) and CRASH-084, whose declared platform
+precondition this libc does not meet. So quote 48 of 48 with its denominator said -- the cases that
+produced a reading -- and quote the 55-case rows when the denominator should carry the seven that
+did not.
+
+The other thing is that there are no spatial rows: the axis is where a release lands, and a spatial
+defect has no temporal release, so all 12 spatial cases read `no release observed`. Splitting those
+would need a different measurement -- allocation origin -- and on PHP that axis is degenerate, 54 of
+56 in the sibling corpora being sub-allocations.
 ## Pre-registration for the `cheribsd-revocation` arm, before it ran (2026-10-30)
 
 A fourth arm, declared in `corpus.json` and written into every case by `tools/build-cases.py`:

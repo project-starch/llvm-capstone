@@ -107,6 +107,20 @@ if corpus_md.is_file() and "split by where the release was MEASURED to go" in co
         chk(m and (int(m.group(1)), int(m.group(2))) == (rate(vis)[2], rate(bld)[2]),
             f"corpus README, {field} rates: README {m.groups() if m else '?'}, "
             f"bundles ({rate(vis)[2]}, {rate(bld)[2]})")
+    # the README now rests "48 of 48 is not an artefact" on the arm having no MISSED at all
+    m = re.search(r"the\s+arm has \*\*(\d+) MISSED\*\*", cmd)
+    nmiss = sum(1 for c in ids if pop[c]["cwe"] in TEMPORAL and ne[c]["verdict"] == "MISSED")
+    chk(m and int(m.group(1)) == nmiss,
+        f"corpus README, nested exact MISSED over the temporal cases: "
+        f"README {m.group(1) if m else '?'}, bundles {nmiss}")
+    # parse the WORD, so changing it is caught; counting occurrences of a fixed word is not a check
+    WORDS = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+             "eight": 8, "nine": 9, "ten": 10, "eleven": 11, "twelve": 12}
+    m = re.search(r"the other (\w+)\s+returned none", cmd)
+    nread = sum(1 for c in ids if pop[c]["cwe"] in TEMPORAL and ne[c]["verdict"] != "CAUGHT")
+    chk(m is not None and WORDS.get(m.group(1).lower()) == nread,
+        f"corpus README, the no-readings the text names: README {m.group(1) if m else '?'}, "
+        f"bundles {nread}")
     sp = sum(1 for c in ids if pop[c]["cwe"] in ("CWE-125", "CWE-787"))
     m = re.search(r"all (\d+) spatial cases read `no release observed`", cmd)
     chk(m and int(m.group(1)) == sp and all(cls[ids[c]] == "no-release-observed"
