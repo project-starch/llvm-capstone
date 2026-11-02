@@ -148,6 +148,13 @@ static cl::opt<bool> EnablePhiElim(
   "enable-lsr-phielim", cl::Hidden, cl::init(true),
   cl::desc("Enable LSR phi elimination"));
 
+// Keep the integer alternative selectable while measuring the pressure tradeoff
+// against an accessed capability cursor. Sharing a byte IV avoids adding a
+// capability recurrence for each base, but still needs the invariant offsets.
+static cl::opt<bool> CapabilityByteIV(
+    "lsr-capability-byte-iv", cl::Hidden, cl::init(false),
+    cl::desc("Use shared byte-index IVs for capability address groups"));
+
 // The flag adds instruction count to solutions cost comparison.
 static cl::opt<bool> InsnsCost(
   "lsr-insns-cost", cl::Hidden, cl::init(true),
@@ -7127,6 +7134,7 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
     if (!Step || Step->isZero() || Step->isNegative())
       continue;
 
+    DenseMap<uint64_t, PHINode *> ByteIVs;
     SmallVector<std::pair<Value *, Type *>, 4> Groups;
     for (User *U : Counter->users()) {
       auto *GEP = dyn_cast<GetElementPtrInst>(U);
@@ -7153,8 +7161,11 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
       bool Overflow;
       APInt ByteStep =
           Step->getValue().umul_ov(APInt(64, Size.getFixedValue()), Overflow);
-      if (Overflow || !isCapabilityStepInWindow(SE.getConstant(ByteStep)) ||
-          !capabilityAnchorAccessedEveryIteration(L, Base, ElementTy, Counter))
+      if (Overflow ||
+          (!CapabilityByteIV &&
+           (!isCapabilityStepInWindow(SE.getConstant(ByteStep)) ||
+            !capabilityAnchorAccessedEveryIteration(L, Base, ElementTy,
+                                                   Counter))))
         continue;
 
       SmallVector<std::pair<GetElementPtrInst *, SmallVector<Value *, 4>>, 16> Uses;
@@ -7173,25 +7184,58 @@ static bool reduceCapabilityIndexGroups(Loop *L, ScalarEvolution &SE,
       if (Uses.size() < 2)
         continue;
 
-      LLVM_DEBUG(dbgs() << "LSR reusing an accessed capability cursor for "
-                        << Uses.size() << " GEPs, byte step " << ByteStep
-                        << ": " << *Base << '\n');
-      auto *Cursor = PHINode::Create(Base->getType(), 2, "lsr.cap.iv",
-                                   Header->getFirstNonPHIIt());
-      Cursor->addIncoming(Base, Preheader);
-      IRBuilder<> StepBuilder(Latch->getTerminator());
-      Value *Next = StepBuilder.CreateGEP(
-          StepBuilder.getInt8Ty(), Cursor,
-          ConstantInt::get(Counter->getType(), ByteStep), "lsr.cap.next");
-      Cursor->addIncoming(Next, Latch);
+      LLVM_DEBUG(dbgs() << "LSR using "
+                        << (CapabilityByteIV ? "a shared byte index"
+                                             : "an accessed capability cursor")
+                        << " for " << Uses.size() << " GEPs, byte step "
+                        << ByteStep << ": " << *Base << '\n');
+      PHINode *IV;
+      if (CapabilityByteIV) {
+        // Integer arithmetic cannot fault or lose a capability tag. Keep every
+        // GEP at its use and share one byte counter across equal-sized groups,
+        // including groups whose conditional accesses have no common anchor.
+        PHINode *&ByteIV = ByteIVs[Size.getFixedValue()];
+        if (!ByteIV) {
+          ByteIV = PHINode::Create(Counter->getType(), 2, "lsr.byte.iv",
+                                  Header->getFirstNonPHIIt());
+          ByteIV->addIncoming(ConstantInt::get(Counter->getType(), 0), Preheader);
+          IRBuilder<> Builder(Latch->getTerminator());
+          Value *Next = Builder.CreateAdd(
+              ByteIV, ConstantInt::get(Counter->getType(), ByteStep),
+              "lsr.byte.next");
+          ByteIV->addIncoming(Next, Latch);
+        }
+        IV = ByteIV;
+      } else {
+        IV = PHINode::Create(Base->getType(), 2, "lsr.cap.iv",
+                             Header->getFirstNonPHIIt());
+        IV->addIncoming(Base, Preheader);
+        IRBuilder<> Builder(Latch->getTerminator());
+        Value *Next = Builder.CreateGEP(
+            Builder.getInt8Ty(), IV,
+            ConstantInt::get(Counter->getType(), ByteStep), "lsr.cap.next");
+        IV->addIncoming(Next, Latch);
+      }
       for (auto &[GEP, Offset] : Uses) {
         IRBuilder<> Builder(GEP);
         Value *Index = ConstantInt::get(Counter->getType(), 0);
         for (Value *Term : Offset)
           Index = Builder.CreateAdd(Index, Term, "lsr.cap.offset");
-        Value *Address = Offset.empty()
-                             ? Cursor
-                             : Builder.CreateGEP(ElementTy, Cursor, Index);
+        Value *Address;
+        if (CapabilityByteIV) {
+          if (Offset.empty()) {
+            Index = IV;
+          } else {
+            Index = Builder.CreateMul(
+                Index,
+                ConstantInt::get(Counter->getType(), Size.getFixedValue()));
+            Index = Builder.CreateAdd(IV, Index, "lsr.byte.offset");
+          }
+          Address = Builder.CreateGEP(Builder.getInt8Ty(), Base, Index);
+        } else {
+          Address = Offset.empty() ? IV
+                                   : Builder.CreateGEP(ElementTy, IV, Index);
+        }
         SE.forgetValue(GEP);
         GEP->replaceAllUsesWith(Address);
         GEP->eraseFromParent();
