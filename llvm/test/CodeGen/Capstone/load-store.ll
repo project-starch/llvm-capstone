@@ -73,10 +73,16 @@ entry:
 ; Large-offset capability load: offset 2224 matches sglib_rbtree_iterator::subcomparator
 ; on Capstone (capabilities are 16 bytes; path[128] at offset 144 pushes
 ; subcomparator to 2224, exceeding ldc's 12-bit immediate range of 2047).
-; The backend must split: cincoffset(base, 2224) then ldc at offset 0.
+; The backend must split. It materialises the hi part (lui 1 = 4096) into the
+; cursor and leaves the lo12 remainder, -1872, in the ldc immediate -- the same
+; hi/lo12 split load_int_large_offset gets for lw. CapstoneFoldMemOffset sinks
+; the `addi -1872` through the register cincoffset into the LDC (capability
+; forms added with the cursor-offset folding); before, it stayed as a separate
+; addi and the ldc was at 0.
 ; CHECK-LABEL: load_cap_large_offset:
-; CHECK: cincoffset
-; CHECK: ldc {{.*}}, 0(
+; CHECK: lui [[TMP:a[0-9]+]], 1
+; CHECK-NEXT: cincoffset a0, a0, [[TMP]]
+; CHECK-NEXT: ldc a0, -1872(a0)
 ; CHECK: cjalr zero, 0(ra)
 define ptr addrspace(200) @load_cap_large_offset(ptr addrspace(200) %ptr) {
 entry:
@@ -85,10 +91,11 @@ entry:
   ret ptr addrspace(200) %0
 }
 
-; Large-offset capability store: symmetric fix for STC.
+; Large-offset capability store: symmetric fix for STC. As for the load, the
+; lo12 remainder -1872 is in the stc immediate (CapstoneFoldMemOffset, STC sink).
 ; CHECK-LABEL: store_cap_large_offset:
 ; CHECK: cincoffset
-; CHECK: stc {{.*}}, 0(
+; CHECK: stc {{.*}}, -1872(
 ; CHECK: cjalr zero, 0(ra)
 define void @store_cap_large_offset(ptr addrspace(200) %ptr, ptr addrspace(200) %val) {
 entry:
@@ -151,11 +158,14 @@ entry:
 
 ; Large-offset truncating stores: cincoffset decomposition for SW/SH/SB.
 ; Offsets >2047 do not fit in a 12-bit immediate, so the backend must emit
-; cincoffset(base, 2224) then sw/sh/sb at offset 0 of the adjusted pointer.
+; cincoffset(base, hi) with the lo12 remainder in the store immediate: 2224 is
+; lui 1 (4096) on the cursor and -1872 on the sw/sh/sb (CapstoneFoldMemOffset
+; sinks the `addi -1872` through the register cincoffset; before, it stayed and
+; the store was at 0).
 
 ; CHECK-LABEL: store_ptrdiff_as_i32_large_offset:
 ; CHECK: cincoffset
-; CHECK: sw {{.*}}, 0(
+; CHECK: sw {{.*}}, -1872(
 ; CHECK: cjalr zero, 0(ra)
 define void @store_ptrdiff_as_i32_large_offset(ptr addrspace(200) %p1,
                                                 ptr addrspace(200) %p2,
@@ -173,7 +183,7 @@ entry:
 
 ; CHECK-LABEL: store_ptrdiff_as_i16_large_offset:
 ; CHECK: cincoffset
-; CHECK: sh {{.*}}, 0(
+; CHECK: sh {{.*}}, -1872(
 ; CHECK: cjalr zero, 0(ra)
 define void @store_ptrdiff_as_i16_large_offset(ptr addrspace(200) %p1,
                                                 ptr addrspace(200) %p2,
@@ -191,7 +201,7 @@ entry:
 
 ; CHECK-LABEL: store_ptrdiff_as_i8_large_offset:
 ; CHECK: cincoffset
-; CHECK: sb {{.*}}, 0(
+; CHECK: sb {{.*}}, -1872(
 ; CHECK: cjalr zero, 0(ra)
 define void @store_ptrdiff_as_i8_large_offset(ptr addrspace(200) %p1,
                                                ptr addrspace(200) %p2,

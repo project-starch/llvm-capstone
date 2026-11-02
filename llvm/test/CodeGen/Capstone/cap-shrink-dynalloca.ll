@@ -112,7 +112,10 @@ define void @dynalloca_maybe_zero(i64 %n) addrspace(200) {
 ; SHRINK-NEXT: addi [[END:a[0-9]+]], [[ADDR]], 16
 ; SHRINK: shrink {{a[0-9]+}}, [[ADDR]], [[END]]
 ; SHRINK: movc sp, [[BASE]]
-; NOSHRINK: cincoffsetimm {{a[0-9]+}}, sp, 0
+; With no shrink the zero-size pointer is sp itself: cincoffset(sp, 0) folds to
+; sp (performCIncOffsetCombine), and the nonlinear sp is handed over by the same
+; `movc` the prologue uses, with no +0 cursor move, spill or reload.
+; NOSHRINK: movc {{a[0-9]+}}, sp
 ; NOSHRINK-NOT: shrink
 ; CHECK: cjalr ra
 define void @dynalloca_const_zero() addrspace(200) {

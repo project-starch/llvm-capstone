@@ -21296,6 +21296,36 @@ static SDValue performCIncOffsetCombine(SDNode *N, SelectionDAG &DAG) {
   if (isa<ConstantSDNode>(Base) || Base.isUndef())
     return SDValue();
 
+  // cincoffset(x, 0) -> x. A zero cursor move is the identity: same cursor,
+  // bounds and tag. reduceLoadWidth rebuilds a narrowed capability load's
+  // pointer with getMemBasePlusOffset(ptr, 0), which for c128 is a PTRADD
+  // lowered to CIncOffset(ptr, 0); this removes it so SelectAddrRegImm folds
+  // the surviving constant level into the access (fgetc:
+  // `cincoffsetimm a2,a0,0x20; ld 0(a2)` -> `ld 0x20(a0)`). Legal and free of
+  // any representability concern: no new cursor is formed.
+  if (isNullConstant(Off))
+    return Base;
+
+  // cincoffset(cincoffset(x, C1), C2) -> cincoffset(x, C1 + C2) when both are
+  // constants, the sum still fits a cincoffsetimm, and the inner cursor has no
+  // other use (so it is removed, not duplicated). The final cursor x+(C1+C2)
+  // is exactly the one the original outer cincoffset already formed, and the
+  // only cursor dropped is the intermediate x+C1, so no cursor farther from
+  // the object than before is created: no R-60 tag loss (the window reaches
+  // x+(C1+C2) because the original formed it). Beneficial regardless of what
+  // consumes the result, so this runs before the load/store-use test below.
+  if (auto *C2N = dyn_cast<ConstantSDNode>(Off)) {
+    if (Base.getOpcode() == CapstoneISD::CIncOffset && Base.hasOneUse()) {
+      if (auto *C1N = dyn_cast<ConstantSDNode>(Base.getOperand(1))) {
+        int64_t Sum = C1N->getSExtValue() + C2N->getSExtValue();
+        if (isInt<12>(Sum))
+          return DAG.getNode(CapstoneISD::CIncOffset, DL, VT,
+                             Base.getOperand(0),
+                             DAG.getSignedConstant(Sum, DL, OffVT));
+      }
+    }
+  }
+
   // Every use of the result must be the address of a load or store.
   for (SDUse &U : N->uses()) {
     SDNode *User = U.getUser();

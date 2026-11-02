@@ -113,12 +113,23 @@ bool CapstoneFoldMemOffset::foldOffset(
       default:
         return false;
       case Capstone::ADD:
+      // A cursor add moves a capability by a register amount; the folded
+      // constant rides on whichever operand carries it (the capability base
+      // for `cincoffset cap, idx`, where the dynamic idx is not in the map).
+      // Same accumulation as ADD.
+      case Capstone::CIncOffset:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
             I != RegToOffsetMap.end())
           Offset = I->second;
         if (auto I = RegToOffsetMap.find(User.getOperand(2).getReg());
             I != RegToOffsetMap.end())
           Offset += I->second;
+        break;
+      // A constant cursor move accumulates its immediate, like the ADDI root.
+      case Capstone::CIncOffsetImm:
+        if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
+            I != RegToOffsetMap.end())
+          Offset = (uint64_t)I->second + (uint64_t)User.getOperand(2).getImm();
         break;
       case Capstone::SH1ADD:
         if (auto I = RegToOffsetMap.find(User.getOperand(1).getReg());
@@ -182,7 +193,12 @@ bool CapstoneFoldMemOffset::foldOffset(
       case Capstone::LD:
       case Capstone::FLD:
       case Capstone::SD:
-      case Capstone::FSD: {
+      case Capstone::FSD:
+      // Capability load/store (128-bit). Same operand order: dest/value, base,
+      // simm12. Every memory op on this target already takes a GPCR base, so
+      // these opcodes are the capability-addressed forms.
+      case Capstone::LDC:
+      case Capstone::STC: {
         // Can't fold into store value.
         if (User.getOperand(0).getReg() == Reg)
           return false;
@@ -246,15 +262,21 @@ bool CapstoneFoldMemOffset::runOnMachineFunction(MachineFunction &MF) {
     for (MachineInstr &MI : llvm::make_early_inc_range(MBB)) {
       // FIXME: We can support ADDIW from an LUI+ADDIW pair if the result is
       // equivalent to LUI+ADDI.
-      if (MI.getOpcode() != Capstone::ADDI)
+      // CIncOffsetImm is the capability cursor-move analogue of ADDI: same
+      // operand order (dest, base reg, simm12) and a pure constant move, so it
+      // roots a fold the same way. It lets a constant cursor offset sink past a
+      // dynamic `cincoffset` into the load/store immediate (libm exp).
+      unsigned RootOpc = MI.getOpcode();
+      if (RootOpc != Capstone::ADDI && RootOpc != Capstone::CIncOffsetImm)
         continue;
 
-      // We only want to optimize register ADDIs.
+      // We only want to optimize register roots.
       if (!MI.getOperand(1).isReg() || !MI.getOperand(2).isImm())
         continue;
 
-      // Ignore 'li'.
-      if (MI.getOperand(1).getReg() == Capstone::X0)
+      // Ignore 'li' (ADDI from x0). A cincoffsetimm base is always a capability
+      // register, never x0.
+      if (RootOpc == Capstone::ADDI && MI.getOperand(1).getReg() == Capstone::X0)
         continue;
 
       int64_t Offset = MI.getOperand(2).getImm();

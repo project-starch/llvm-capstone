@@ -4446,6 +4446,25 @@ bool CapstoneDAGToDAGISel::SelectAddrRegImm(SDValue Addr, SDValue &Base,
           CurDAG, C, "Address displacement must fit in 64 bits");
       if (isInt<12>(CVal)) {
         Base = Addr.getOperand(0);
+        // Look through one more constant cursor level, the way the integer
+        // isBaseWithConstantOffset path below folds a nested ADD, when the
+        // combined displacement still fits simm12 and the inner cursor has no
+        // other use (so no cincoffsetimm survives). cincoffset(cincoffset(x,
+        // C1), C2) is normally collapsed in performCIncOffsetCombine; this is
+        // the isel backstop for a remnant that reaches selection, e.g. the +0
+        // level reduceLoadWidth rebuilds a narrowed capability load's pointer
+        // with (fgetc). Folding only drops intermediate cursors and keeps the
+        // same final address, so no cursor farther from the object is formed.
+        if (Base.getOpcode() == CapstoneISD::CIncOffset && Base.hasOneUse()) {
+          if (auto *InnerC = dyn_cast<ConstantSDNode>(Base.getOperand(1))) {
+            int64_t InnerVal = getI128NumericValueOrFatal(
+                CurDAG, InnerC, "Address displacement must fit in 64 bits");
+            if (isInt<12>(CVal + InnerVal)) {
+              CVal += InnerVal;
+              Base = Base.getOperand(0);
+            }
+          }
+        }
         if (auto *FIN = dyn_cast<FrameIndexSDNode>(Base))
           Base = materializeFrameIndexAddrBase(CurDAG, DL, VT, FIN->getIndex());
         Offset = CurDAG->getSignedTargetConstant(CVal, DL, MVT::i64);
