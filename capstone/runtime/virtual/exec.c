@@ -59,6 +59,171 @@ static int trace;
 static void *meta;
 static void *virtual_thread_worker(void *opaque);
 
+/* PAGE-VOLUME CENSUS (CAPSTONE_VM_SMAPS=<file>): the domain lives in this process's address
+ * space, so /proc/self/smaps is the domain's resident-page picture, VMA by VMA. With the
+ * variable set, the launcher appends two snapshots to that file -- one at the first delegate
+ * round (after start.S's capability-global initializers and libc's startup, before the program's
+ * own work, so the data pages written by the initializer pass alone can be read) and one at
+ * domain exit, right before exit_group -- each preceded by its mapping table: the mappings
+ * main() made by name, every registered grant with its kind, and the arenas retired so far
+ * with the pages that were resident when they were unmapped (/proc/self/pagemap, right before
+ * munmap: those pages are gone from the exit snapshot but were faulted), and its own minor-fault
+ * count at the steps of the launch. Inert without the variable: one getenv at start, one static
+ * test at each unmap and at each sample. */
+static const char *smaps_path;
+static struct { const char *name; void *base; size_t bytes; } named_maps[8];
+static unsigned named_count;
+static struct { size_t bytes; unsigned long long count, resident; } retired_sizes[64];
+static unsigned retired_size_count;
+static unsigned long long retired_arenas, retired_resident;
+static unsigned long long smaps_snapshots;
+/* The launcher's own minor-fault count at the steps of a launch, so faults that are
+ * gone from the exit picture can still be attributed: the image validation mapping
+ * (image_fd_layout maps and unmaps the whole file), the eager pin of every non-linear grant's
+ * writable suffix at registration (module add(): image data+bss+padding, stack, meta,
+ * exchange, startup), and the first delegate round. */
+enum { FLT_MAIN, FLT_DENIED, FLT_VALIDATED, FLT_LOADED, FLT_LAUNCHED, FLT_FIRST, FLT_EXIT, FLT_COUNT };
+static long minflt_at[FLT_COUNT];
+/* From /proc/self/stat (field 10 after the command's closing parenthesis), not getrusage: the
+ * samples after the launch run under the launcher's seccomp filter, which does not allow
+ * getrusage and would leave those steps reading zero. openat and read are allowed. */
+static void sample_minflt(int step)
+{
+    char buf[512];
+    if (!smaps_path) return;
+    int fd = open("/proc/self/stat", O_RDONLY | O_CLOEXEC);
+    if (fd < 0) return;
+    ssize_t n = read(fd, buf, sizeof buf - 1);
+    close(fd);
+    if (n <= 0) return;
+    buf[n] = 0;
+    char *p = strrchr(buf, ')');
+    if (!p) return;
+    /* p points at ')': the fields after it are state ppid pgrp session tty tpgid flags minflt,
+     * each preceded by one space, so minflt starts after the eighth space. */
+    for (int field = 0; field < 8 && p; ++field) p = strchr(p + 1, ' ');
+    if (p) minflt_at[step] = strtol(p + 1, NULL, 10);
+}
+static void name_mapping(const char *name, void *base, size_t bytes)
+{
+    if (named_count >= sizeof named_maps / sizeof *named_maps) return;
+    named_maps[named_count].name = name;
+    named_maps[named_count].base = base;
+    named_maps[named_count].bytes = bytes;
+    ++named_count;
+}
+/* Resident pages of a range, from /proc/self/pagemap (bit 63 of a page's entry: present).
+ * Not mincore: the launcher's seccomp filter (delegate-service.c launcher_own) answers ENOSYS
+ * to it, which would read as zero resident pages; openat, lseek and read are allowed. */
+static unsigned long long resident_pages(void *base, size_t bytes)
+{
+    static int pagemap = -1;
+    uint64_t entry[512];
+    unsigned long long n = 0;
+    if (pagemap < 0 && (pagemap = open("/proc/self/pagemap", O_RDONLY | O_CLOEXEC)) < 0) return 0;
+    size_t pages = bytes / 4096, page = (uintptr_t)base / 4096;
+    for (size_t at = 0; at < pages; at += sizeof entry / sizeof *entry) {
+        size_t span = pages - at < sizeof entry / sizeof *entry ? pages - at : sizeof entry / sizeof *entry;
+        if (lseek(pagemap, (off_t)((page + at) * 8), SEEK_SET) < 0 ||
+            read(pagemap, entry, span * 8) != (ssize_t)(span * 8)) return n;
+        for (size_t i = 0; i < span; ++i) n += entry[i] >> 63;
+    }
+    return n;
+}
+static void note_retired(void *base, size_t bytes)
+{
+    unsigned long long r = resident_pages(base, bytes);
+    retired_arenas++; retired_resident += r;
+    unsigned i = 0;
+    while (i < retired_size_count && retired_sizes[i].bytes != bytes) ++i;
+    if (i == retired_size_count) {
+        if (i == sizeof retired_sizes / sizeof *retired_sizes) return;
+        retired_sizes[retired_size_count++].bytes = bytes;
+    }
+    retired_sizes[i].count++; retired_sizes[i].resident += r;
+}
+static void put_all(int fd, const char *s, size_t n)
+{
+    while (n) {
+        ssize_t w = write(fd, s, n);
+        if (w <= 0) return;
+        s += w; n -= (size_t)w;
+    }
+}
+/* One line per mapping: which of its pages are present in this process's page table, as a hex
+ * bitmap (page i = bit i, least significant bit of each nibble first), so a resident page can be
+ * tied to the section, symbol or arena slot it belongs to. */
+static void put_present_map(int out, const char *tag, void *base, size_t bytes)
+{
+    static int pagemap = -1;
+    uint64_t entry[512];
+    char hex[1024 + 1];
+    char line[128];
+    if (pagemap < 0 && (pagemap = open("/proc/self/pagemap", O_RDONLY | O_CLOEXEC)) < 0) return;
+    size_t pages = bytes / 4096, page = (uintptr_t)base / 4096;
+    int n = snprintf(line, sizeof line, "%s base=0x%lx pages=%zu present=", tag,
+                     (unsigned long)(uintptr_t)base, pages);
+    put_all(out, line, (size_t)n);
+    for (size_t at = 0; at < pages; at += sizeof entry / sizeof *entry) {
+        size_t span = pages - at < sizeof entry / sizeof *entry ? pages - at : sizeof entry / sizeof *entry;
+        if (lseek(pagemap, (off_t)((page + at) * 8), SEEK_SET) < 0 ||
+            read(pagemap, entry, span * 8) != (ssize_t)(span * 8)) break;
+        size_t k = 0;
+        for (size_t i = 0; i < span; i += 4) {
+            unsigned v = 0;
+            for (size_t j = 0; j < 4 && i + j < span; ++j) v |= (unsigned)(entry[i + j] >> 63) << j;
+            hex[k++] = "0123456789abcdef"[v];
+        }
+        put_all(out, hex, k);
+    }
+    put_all(out, "\n", 1);
+}
+static void smaps_dump(const char *phase)
+{
+    char line[256];
+    int out = open(smaps_path, O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
+    if (out < 0) return;
+    int n = snprintf(line, sizeof line, "CAPSTONE_VM_SMAPS phase=%s snapshot=%llu pid=%d rounds=%llu maps=%zu image=%s\n",
+                     phase, ++smaps_snapshots, (int)getpid(), (unsigned long long)host.rounds,
+                     map_count, image_path ? image_path : "?");
+    put_all(out, line, (size_t)n);
+    n = snprintf(line, sizeof line, "CAPSTONE_VM_SMAPS_MINFLT main=%ld denied=%ld validated=%ld loaded=%ld launched=%ld first=%ld exit=%ld\n",
+                 minflt_at[FLT_MAIN], minflt_at[FLT_DENIED], minflt_at[FLT_VALIDATED], minflt_at[FLT_LOADED],
+                 minflt_at[FLT_LAUNCHED], minflt_at[FLT_FIRST], minflt_at[FLT_EXIT]);
+    put_all(out, line, (size_t)n);
+    for (unsigned i = 0; i < named_count; ++i) {
+        n = snprintf(line, sizeof line, "CAPSTONE_VM_SMAPS_NAMED name=%s base=0x%lx bytes=%zu\n",
+                     named_maps[i].name, (unsigned long)(uintptr_t)named_maps[i].base, named_maps[i].bytes);
+        put_all(out, line, (size_t)n);
+        put_present_map(out, "CAPSTONE_VM_SMAPS_PRESENT", named_maps[i].base, named_maps[i].bytes);
+    }
+    for (size_t i = 0; i < map_count; ++i) {
+        n = snprintf(line, sizeof line, "CAPSTONE_VM_SMAPS_MAP base=0x%lx bytes=%zu visible=%zu kind=%d heap=%d\n",
+                     (unsigned long)(uintptr_t)maps[i].address, maps[i].bytes, maps[i].visible,
+                     maps[i].kind, maps[i].heap);
+        put_all(out, line, (size_t)n);
+        if (maps[i].heap) put_present_map(out, "CAPSTONE_VM_SMAPS_PRESENT", maps[i].address, maps[i].bytes);
+    }
+    n = snprintf(line, sizeof line, "CAPSTONE_VM_SMAPS_RETIRED arenas=%llu resident_pages=%llu sizes=%u\n",
+                 retired_arenas, retired_resident, retired_size_count);
+    put_all(out, line, (size_t)n);
+    for (unsigned i = 0; i < retired_size_count; ++i) {
+        n = snprintf(line, sizeof line, "CAPSTONE_VM_SMAPS_RETIRED_SIZE bytes=%zu count=%llu resident_pages=%llu\n",
+                     retired_sizes[i].bytes, retired_sizes[i].count, retired_sizes[i].resident);
+        put_all(out, line, (size_t)n);
+    }
+    put_all(out, "CAPSTONE_VM_SMAPS_BEGIN\n", 24);
+    int in = open("/proc/self/smaps", O_RDONLY | O_CLOEXEC);
+    if (in >= 0) {
+        char buf[4096];
+        ssize_t r;
+        while ((r = read(in, buf, sizeof buf)) > 0) put_all(out, buf, (size_t)r);
+        close(in);
+    }
+    put_all(out, "CAPSTONE_VM_SMAPS_END\n", 22);
+    close(out);
+}
+
 static int thread_add(uint64_t id)
 {
     int result = 0;
@@ -280,6 +445,7 @@ static long unmap_arena(uintptr_t base, size_t bytes)
     if (!m || m->visible != bytes || !m->heap || m->kind == CV_MAP_METADATA)
         return -EINVAL;
     if (ioctl(device, CV_RETIRE, &m->id)) return -errno;
+    if (smaps_path) note_retired(m->address, m->bytes);
     if (munmap(m->address, m->bytes)) return -errno;
     reuse_address = m->address; reuse_bytes = m->bytes;
     map_remove(m);
@@ -560,6 +726,7 @@ static int load(int fd, struct capstone_application_descriptor_v2 *desc, void **
 {
     struct image_layout l;
     if (image_fd_layout(fd, desc, &l)) return -1;
+    sample_minflt(FLT_VALIDATED);
     /* The grant's size, rounded as every grant is. The tail past the data's own pages stays
      * anonymous and zero, like bss. */
     *bytes = rounded(l.text_bytes + l.data_bytes);
@@ -872,6 +1039,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
         /* Each native worker owns its bounce buffer and signal ring. A
          * blocked epoll/read must not stop another virtual context. */
         if (separate) pthread_mutex_unlock(&service_lock);
+        if (smaps_path && tid == 0 && !smaps_snapshots) { sample_minflt(FLT_FIRST); smaps_dump("first-service"); }
         capstone_delegate_serve(h, request);
         if (separate) pthread_mutex_lock(&service_lock);
         if (trace) fprintf(stderr, "CAPSTONE_VM_SERVICE tid=%llu nr=%llu result=%lld\n",
@@ -898,6 +1066,7 @@ static int virtual_service(uint64_t tid, struct cv_step *step)
                 fprintf(stderr, "capstone-exec: exit image=%s sha256=%s\n",
                         image_path ? image_path : "?", host.image_sha256);
             }
+            if (smaps_path && tid == 0) { sample_minflt(FLT_EXIT); smaps_dump("exit"); }
             const char *profile = tid == 0 ? getenv("CAPSTONE_PROFILE_RECORD") : NULL;
             if (profile && *profile) {
                 /* No digest here: hashing a large image is most of a short run's
@@ -1029,6 +1198,9 @@ int main(int argc, char **argv)
     if (reserve_stdio(&stdio_mask)) return 125;
     start_ns = now_ns();
     trace = getenv("CAPSTONE_VM_TRACE") != NULL;
+    smaps_path = getenv("CAPSTONE_VM_SMAPS");
+    if (smaps_path && !*smaps_path) smaps_path = NULL;
+    sample_minflt(FLT_MAIN);
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];
     if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);
@@ -1051,15 +1223,19 @@ int main(int argc, char **argv)
     device = open("/dev/capstone-vm", O_RDWR | O_CLOEXEC);
     if (device < 0) return die("open");
     if (image_denied(&fd, &desc)) { perror("capstone-vexec: image"); cleanup(); return 126; }
+    sample_minflt(FLT_DENIED);
     void *image; size_t image_bytes, image_rx, stack_bytes; uintptr_t entry;
     if (load(fd, &desc, &image, &image_bytes, &image_rx, &entry, &stack_bytes)) {
         perror("capstone-vexec: image"); cleanup(); return 126;
     }
+    sample_minflt(FLT_LOADED);
     host.private_fds[host.private_count++] = fd;
     /* Option (iii): no exact-bounds profile bit is required. Bounds are representable by
      * construction -- the allocator's geometry keeps every rounded bound inside its own slot --
      * so the launcher runs on the default profile. The bit may still be set; it is not read. */
     if (grant(image, image_bytes, 3, 7, entry, 0, 0, image_rx)) { munmap(image, image_bytes); return die("image grant"); }
+    name_mapping("image-text", image, image_rx);
+    name_mapping("image-data", (char *)image + image_rx, image_bytes - image_rx);
     void *stack = reserve(stack_bytes);
     domain_stack = stack; domain_stack_bytes = stack_bytes;
     meta = reserve(CAPSTONE_DELEGATE_META_BYTES);
@@ -1067,6 +1243,10 @@ int main(int argc, char **argv)
     void *exchange = exchange_bytes ? reserve(exchange_bytes) : NULL;
     void *startup = reserve(CAPSTONE_LAUNCH_BYTES);
     if (!stack || !meta || !exchange || !startup) return die("allocate startup");
+    name_mapping("stack", stack, stack_bytes);
+    name_mapping("meta", meta, CAPSTONE_DELEGATE_META_BYTES);
+    name_mapping("exchange", exchange, exchange_bytes);
+    name_mapping("startup", startup, CAPSTONE_LAUNCH_BYTES);
     char *cwd = getcwd(NULL, 0);
     struct timespec rt, mt;
     clock_gettime(CLOCK_REALTIME, &rt); clock_gettime(CLOCK_MONOTONIC, &mt);
@@ -1087,6 +1267,7 @@ int main(int argc, char **argv)
         void *region = bytes ? reserve(bytes) : NULL;
         if (!region || grant(region, bytes, 13, 6, (uintptr_t)region, 1, 0, 0))
             return die("nested allocator grant");
+        name_mapping("nested-heap", region, bytes);
     }
     host.exchange = exchange; host.exchange_bytes = exchange_bytes;
     host.private_fds[host.private_count++] = device;
@@ -1094,6 +1275,7 @@ int main(int argc, char **argv)
     capstone_signals_init(&host.signals, (void *)((char *)meta + CAPSTONE_SIGNAL_OFFSET));
     if ((error = capstone_delegate_seccomp())) { errno = error; return die("seccomp"); }
     for (int fd = 0; fd < 3; ++fd) if (!(stdio_mask & (1u << fd))) close(fd);
+    sample_minflt(FLT_LAUNCHED);
     launch_ns = now_ns() - start_ns;
     return virtual_service_loop(0);
 }

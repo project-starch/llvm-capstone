@@ -68,6 +68,12 @@ struct arena {
      * unreachable by the domain before its first entry. A second retire is not an error, but the
      * non-destroying path reports one, so it must be skipped rather than tolerated. */
     bool ancestor_retired;
+    /* Page-volume census (module parameter fault_trace): the grant's register, the pages the
+     * eager pin at mint materialized, and the faults resolve() answered in this arena, text
+     * (the image's read+execute prefix, fault-around, no pin) and data. Summed per class into
+     * the context's ledger at retire and printed at release. */
+    unsigned reg;
+    unsigned long eager, faults, text_faults;
 };
 struct context;
 struct cv_thread {
@@ -106,6 +112,9 @@ struct context {
     struct xarray ids;
     unsigned long registered_bytes;
     struct cv_stats stats;
+    /* fault_trace: per register class (reg 0..31; 32 = linear grants, the allocator's) the arenas
+     * retired, their eager-pinned pages and their faults, accumulated as they retire. */
+    struct { unsigned long arenas, eager, faults, text_faults; } ledger[33];
     u64 next_id;
     bool exact_bounds;
     /* The flat format has no retired word: QEMU reads root+40 only under t->paged, and in a flat
@@ -299,6 +308,13 @@ MODULE_PARM_DESC(node_flat_records,
  * harmless when off, and the arm that sets it tests the pin. */
 static bool arena_pin;
 module_param(arena_pin, bool, 0644);
+
+/* Page-volume census. 0 (default): nothing. 1: at context release one line per register class
+ * with the arenas, eager-pinned pages and resolved faults (text and data) of that class. 2: also
+ * one line per arena as it retires. Diagnostic only: counts, no change of behaviour. */
+static unsigned fault_trace;
+module_param(fault_trace, uint, 0644);
+static void note_fault(struct context *c, unsigned long address);
 
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
@@ -992,12 +1008,28 @@ static int retire(struct context *c, struct arena *a, bool destroying)
         --c->stats.pinned_pages;
     }
     --c->stats.arenas;
+    if (fault_trace) {
+        unsigned k = a->lazy ? 32 : min(a->reg, 31U);
+        ++c->ledger[k].arenas; c->ledger[k].eager += a->eager;
+        c->ledger[k].faults += a->faults; c->ledger[k].text_faults += a->text_faults;
+        if (fault_trace >= 2)
+            pr_info("capstone_vm: arena id=%llu base=0x%lx bytes=%lu rx_bytes=%lu reg=%u linear=%d eager=%lu faults=%lu text_faults=%lu destroying=%d\n",
+                    (unsigned long long)a->id, a->address, a->bytes, a->rx_bytes, a->reg, a->lazy,
+                    a->eager, a->faults, a->text_faults, destroying);
+    }
     rb_erase(&a->node, &c->arenas);
     xa_erase(&c->ids, a->id);
     c->registered_bytes -= a->bytes;
     kvfree(a->pages);
     kfree(a);
     return 0;
+}
+/* A fault resolve() answered at this address: credited to its arena (text or data). */
+static void note_fault(struct context *c, unsigned long address)
+{
+    struct arena *a = arena_at(c, address);
+    if (!a) return;
+    if (address - a->address < a->rx_bytes) ++a->text_faults; else ++a->faults;
 }
 /* Slots of the duplicate check's table for n frames: a power of two of at
  * least 2n, so linear probing stays short. */
@@ -1184,6 +1216,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     a->address = r->address; a->bytes = r->bytes; a->ancestor = ancestor;
     a->rx_bytes = r->rx_bytes;
     a->pages = pages; a->count = (r->bytes - r->rx_bytes) / PAGE_SIZE; a->lazy = r->linear;
+    a->reg = r->reg; a->eager = n;
     arena_insert(c, a);
     c->registered_bytes += a->bytes;
     r->id = c->next_id = a->id;
@@ -2182,6 +2215,7 @@ thread_unwind:
                 break;
             t->sfence_pending = true;
             if (!text) ++c->stats.faults;
+            if (fault_trace) note_fault(c, t->frame[5]);
         }
         if (t->event == 5) {
             int error = ensure_nodes(c, CAP_REV_TABLE_RESERVE + 1);
@@ -2213,6 +2247,7 @@ thread_unwind:
         t = find_thread(c, r.thread);
         rc = t ? resolve(c, t, ktime_get_ns() + CV_STEP_BUDGET_NS) : -ESRCH;
         if (!rc) t->sfence_pending = true;
+        if (!rc && fault_trace) note_fault(c, t->frame[5]);
     } else if (op == CV_RETIRE) {
         u64 id;
         struct arena *a;
@@ -2384,6 +2419,12 @@ static int vm_release(struct inode *inode, struct file *f)
             retire(c, a, true);
         }
         WARN_ON(!RB_EMPTY_ROOT(&c->arenas));
+        if (fault_trace)
+            for (unsigned k = 0; k < 33; ++k)
+                if (c->ledger[k].arenas)
+                    pr_info("capstone_vm: fault_ledger class=%s%u arenas=%lu eager=%lu faults=%lu text_faults=%lu\n",
+                            k == 32 ? "linear" : "reg", k == 32 ? 1 : k, c->ledger[k].arenas,
+                            c->ledger[k].eager, c->ledger[k].faults, c->ledger[k].text_faults);
         xa_destroy(&c->ids);
         if (node_table_flat)
             pr_emerg("capstone_vm: release retires attempted=%lu succeeded=%lu pushed=%lu first_id=%lu\n",
