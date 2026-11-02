@@ -56,6 +56,10 @@ static pthread_mutex_t thread_state_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t thread_state_cond = PTHREAD_COND_INITIALIZER;
 static unsigned long long launch_ns, start_ns;
 static int trace;
+/* CAPSTONE_VM_GRANTS (or the trace): one CAPSTONE_VM_ADD_OK line per admitted grant. Off by
+ * default: a gcc test run admits ~400 grants, and each line is an unbuffered write(2) to wherever
+ * stderr goes -- a 9p file in a harness that does not redirect it. */
+static int grants;
 static void *meta;
 static void *virtual_thread_worker(void *opaque);
 
@@ -287,12 +291,16 @@ static int grant(void *base, size_t bytes, unsigned reg, unsigned perms,
         return -1;
     }
     /* Every ADMITTED grant, in order, so two modules' grant sequences can be diffed. The
-     * refusal side is already printed; without the success side a diff cannot say WHICH grant
-     * first differs, only that something did. */
+     * refusal side is always printed; without the success side a diff cannot say WHICH grant
+     * first differs, only that something did. Asked for with CAPSTONE_VM_GRANTS=1 (or the
+     * trace), unlike the refusal: at one write(2) per grant it is the launcher's largest
+     * stderr traffic, and no runtime gate parses it. The board lane's parsers and the
+     * benchmark console audit set it. */
     /* slot= is the number of mappings registered before this one: the old array slot until the
      * first unmap, so the image's grant still reads slot=0 for the board lane's parsers. */
-    fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
-            map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
+    if (grants)
+        fprintf(stderr, "CAPSTONE_VM_ADD_OK slot=%zu base=0x%lx bytes=%zu reg=%u perms=%u linear=%d\n",
+                map_count, (unsigned long)(uintptr_t)base, bytes, reg, perms, linear);
     map_insert((struct mapping){.address = base, .bytes = bytes, .visible = bytes,
                                 .id = r.id, .heap = linear,
                                 .kind = linear ? CV_MAP_HEAP : -1});
@@ -1041,6 +1049,7 @@ int main(int argc, char **argv)
     if (reserve_stdio(&stdio_mask)) return 125;
     start_ns = now_ns();
     trace = getenv("CAPSTONE_VM_TRACE") != NULL;
+    grants = trace || getenv("CAPSTONE_VM_GRANTS") != NULL;
     struct capstone_application_descriptor_v2 desc;
     char resumed_path[64];
     if (resumed.magic) snprintf(resumed_path, sizeof resumed_path, "/proc/self/fd/%d", resumed.image);

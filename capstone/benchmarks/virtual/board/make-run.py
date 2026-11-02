@@ -6,7 +6,8 @@ with alternating start, processes spread over allocator pads K for the allocatin
               [--multik a,b] [--controls ctl-empty,ctl-loop --control-procs 2] [--name pilot]
 
 Each process's STDERR goes to a tmpfs file, never the console: the launcher prints a CAPSTONE_VM_ADD_OK line per admitted
-mapping, and on the board the console is a 115,200-baud UART (the first pilot spent minutes per process on it). Only the
+mapping (asked for with CAPSTONE_VM_GRANTS=1, which the generated script sets so the console audit keeps its per-grant
+line count), and on the board the console is a 115,200-baud UART (the first pilot spent minutes per process on it). Only the
 line count is printed. Data come from stdout's BENCH lines; the dmesg release line is quoted for cross-checking only.
 """
 import argparse, random, os, shutil
@@ -49,7 +50,7 @@ with open(f'{a.out}/run-{a.name}.sh', 'w') as f:
             'stderr of every process to tmpfs; console gets stdout and the line count only.\n')
     f.write('cd "$(dirname "$0")" || exit 1\nls /sys/module/capstone_vm/parameters | grep bench\n')
     for n, (p, arm, proc, k) in enumerate(steps):
-        f.write(f'echo "@@PERF-BEGIN {n} {p} {arm} {proc} K{k}"; ./capstone-vexec ./{arm}/{p}.K{k}.dom {a.args} 2>/tmp/perf.err; rc=$?; '
+        f.write(f'echo "@@PERF-BEGIN {n} {p} {arm} {proc} K{k}"; CAPSTONE_VM_GRANTS=1 ./capstone-vexec ./{arm}/{p}.K{k}.dom {a.args} 2>/tmp/perf.err; rc=$?; '
                 f'echo "@@PERF-END {n} {p} {arm} {proc} K{k} rc=$rc stderr_lines=$(wc -l </tmp/perf.err) '
                 f'$(dmesg | grep \'capstone_vm: bench\' | tail -1 | sed \'s/.*capstone_vm: //\')"; rm -f /tmp/perf.err\n')
     f.write(f'echo "@@PERF-{a.name.upper()}-DONE"\n')
