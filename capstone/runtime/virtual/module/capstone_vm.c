@@ -300,6 +300,23 @@ MODULE_PARM_DESC(node_flat_records,
 static bool arena_pin;
 module_param(arena_pin, bool, 0644);
 
+/* EXPERIMENT (never lands): the FLOOR of the pin path. With floor=1 NO payload page is pinned
+ * and NO tag is swept: a NONLIN grant is populated through the kernel's own fault path
+ * (fixup_user_fault, one call per page, so the page volume equals the pinned arm's), a lazy
+ * arena's fault is resolved the same way, retire neither inspects nor clears nor unpins, and
+ * collection is refused. Correct only for ONE process in a guest where no page moves (no swap,
+ * compaction, KSM, fork of the domain): tags are physical, a moved page loses them and the run
+ * faults. In a multi-process system it is unsafe twice over: a freed page keeps its tags, and a
+ * later owner that does not zero it with scalar stores (DMA-filled page cache, a slab) hands
+ * them to whoever maps it; and a moved page loses its tags silently. Compiled on with
+ * `make CV_FLOOR=1`; read-only so a run's module-params.txt records which it ran. */
+#ifdef CV_FLOOR
+static bool floor = true;
+#else
+static bool floor;
+#endif
+module_param(floor, bool, 0444);
+
 /* Pages a lazy-arena fault pins, from the faulting page on, clipped to the
  * arena, the VMA and the first page already pinned. 1 pins only the page. */
 static unsigned long pin_ahead_pages = 1;
@@ -760,6 +777,8 @@ static int collect(struct context *c, struct cv_thread *owner)
     int error = -ENOMEM;
     struct cv_thread *t;
     struct arena *a;
+    /* EXPERIMENT floor: no page list exists to sweep, so no id is ever reused. */
+    if (floor) return -ENOMEM;
 #if node_table_flat
     if (++collect_skips <= CV_COLLECT_SKIP_BUDGET)
         pr_emerg("capstone_vm: collect skipped: collection is not available on bf3db3175 "
@@ -955,7 +974,7 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     unsigned i;
     if (!destroying && arena_has_thread_frame(c, a))
         return -EBUSY;
-    if (!destroying) {
+    if (!destroying && !floor) {
         int error = pin_remaining(c, a);
         if (error) return error;
     }
@@ -984,7 +1003,9 @@ static int retire(struct context *c, struct arena *a, bool destroying)
     }
     /* Clear every tag before returning frames to Linux. Later collection can
      * reuse dead IDs only after sweeping all remaining namespace storage. */
-    for (i = 0; i < a->count; ++i) {
+    /* EXPERIMENT floor: nothing was pinned, so nothing is swept or released (a->pages[] is all
+     * NULL; the loop is skipped rather than walked). */
+    for (i = 0; !floor && i < a->count; ++i) {
         if (!a->pages[i]) continue;
         clear_page_tags(a->pages[i]);
         set_page_dirty_lock(a->pages[i]);
@@ -1102,6 +1123,17 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
             mmap_read_unlock(c->mm); return -EOPNOTSUPP;
         }
 #endif
+        if (floor && !r->linear && !rx) {
+            /* EXPERIMENT floor: populate every page of a NONLIN grant through the kernel's own
+             * fault path, as pin_user_pages_fast(FOLL_WRITE) below would, but take no pin. Write
+             * access where the VMA grants it, so the PTE comes out writable and dirty as GUP's did. */
+            unsigned long next = min((unsigned long)(r->address + r->bytes), v->vm_end);
+            unsigned int flags = (v->vm_flags & VM_WRITE) ? FAULT_FLAG_WRITE : 0;
+            for (unsigned long p = at; p < next; p += PAGE_SIZE)
+                if (fixup_user_fault(c->mm, p, flags, NULL)) {
+                    mmap_read_unlock(c->mm); return -EFAULT;
+                }
+        }
         at = min(min((unsigned long)(r->address + r->bytes), v->vm_end),
                  rx ? rx_end : ULONG_MAX);
     }
@@ -1124,7 +1156,7 @@ static int add(struct context *c, struct cv_thread *t, struct cv_map *r)
     n = 0;
     /* Growing RW arenas start with absent PTEs. Linux resolves each first
      * touch through GUP, then the adapter pins that backing until retirement. */
-    if (!r->linear) {
+    if (!r->linear && !floor) {
         n = pin_user_pages_fast(r->address + r->rx_bytes, (r->bytes - r->rx_bytes) / PAGE_SIZE,
                                 FOLL_WRITE, pages);
         if (n != (r->bytes - r->rx_bytes) / PAGE_SIZE) goto unpin;
@@ -1214,7 +1246,7 @@ static int remap_begin(struct context *c, const struct cv_remap *r)
     a = xa_load(&c->ids, r->id);
     if (!a || !a->lazy || arena_has_thread_frame(c, a)) return -EINVAL;
     if (c->registered_bytes - a->bytes + r->bytes > CV_MAX_BYTES) return -ENOMEM;
-    error = pin_remaining(c, a);
+    error = floor ? 0 : pin_remaining(c, a);
     if (error) return error;
     error = ensure_nodes(c, 2 + CAP_REV_TABLE_RESERVE);
     if (error) return error;
@@ -1670,6 +1702,30 @@ static int resolve(struct context *c, struct cv_thread *t, u64 deadline)
             return -EACCES;
         }
         vmflags = v->vm_flags;
+        if (floor) {
+            /* EXPERIMENT floor: the kernel's own fault path, as the image's RX path and the
+             * resolve_dirty path use it, and no pin. Write access where the VMA grants it (GUP's
+             * FOLL_WRITE did the same), so a read fault still materializes private writable
+             * dirty backing rather than the zero page. The repeat bound stays: a resolve that
+             * changes nothing must not report success for ever. */
+            int rc;
+            if (address == t->last_fault_addr && cause == t->last_fault_cause) {
+                if (++t->fault_repeat > fault_repeat_max) {
+                    mmap_read_unlock(c->mm);
+                    CV_RESOLVE_FAIL("floor-loop", "resolved %u times with no change", t->fault_repeat);
+                    return -ELOOP;
+                }
+            } else {
+                t->last_fault_addr = address;
+                t->last_fault_cause = cause;
+                t->fault_repeat = 0;
+            }
+            rc = fixup_user_fault(c->mm, address & PAGE_MASK,
+                                  (vmflags & VM_WRITE) ? FAULT_FLAG_WRITE : 0, NULL);
+            mmap_read_unlock(c->mm);
+            if (rc) CV_RESOLVE_FAIL("floor", "fixup_user_fault=%d vm_flags 0x%lx", rc, vmflags);
+            return rc;
+        }
         /* Check actual PTE policy first. FORCE then materializes private
          * anonymous backing even for a read-only zero-page first touch. The
          * application still sees its original VMA/PTE protection. */
